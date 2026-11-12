@@ -141,6 +141,10 @@ if [ "$channel" = nightly ]; then
   release_flags=(--prerelease --latest=false)
 else
   release_flags=(--latest)
+  if download_live_feed "$stable_tag" "$work/intel" appcast-x86_64.xml; then
+    assets+=("$work/intel/appcast-x86_64.xml")
+    echo "PASS  $stable_tag's appcast-x86_64.xml moves to v$version, so Intel copies keep their feed"
+  fi
 fi
 run gh release create "v$version" -R "$REPO" "${release_flags[@]}" --verify-tag --title "Ardia $version" \
   --notes-file "$dist/release-notes.md" "${assets[@]}"

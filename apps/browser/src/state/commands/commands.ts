@@ -52,10 +52,9 @@ import { requestAutofill } from "../site/autofill";
 import { copyPageUrl, jumpToSelection } from "../site/selection";
 import { shareTab } from "../site/share";
 import { groupOf } from "../pins/tabGrouping";
-import { multiSelectedTabIds } from "../pins/organize";
-import { copyUrls } from "../sidebar/actions";
-import { showToast } from "../app/toasts";
-import { noteSelectionClosedByKey, noteSelectionCopiedByKey } from "../telemetry/usage";
+import { selectedTabIds } from "../pins/organize";
+import { copySelectedUrls } from "../sidebar/actions";
+import { noteSelectionClosedByKey } from "../telemetry/usage";
 import { noteUrlCopied } from "../telemetry/urlCopies";
 import { isSmall, mainWindowFor, newWindowProfile, originalProfile } from "../windows/small";
 import {
@@ -174,7 +173,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
       if (!focusHeroBar(windowId, tabId)) return tab ? s.openPanel(windowId, "", undefined, placement) : undefined;
       return ui?.panel.open ? s.closePanel(windowId) : undefined;
     }
-    case "closeTab": {
+    case "closeTab":
       if (targeted) return void closeTab(targeted);
       if (ui?.panel.newTab) {
         closeNewTabBar(windowId);
@@ -182,14 +181,16 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
         return void closeTab(tabId);
       }
       if (ui?.panel.open) return tabId ? closePanelToHeroBar(windowId, tabId, "closeKey") : s.closePanel(windowId);
-      const selected = multiSelectedTabIds(s, windowId);
-      if (selected.length) {
-        s.closeTabs(selected);
-        s.setSelection(windowId, []);
-        return noteSelectionClosedByKey(selected.length);
+      if ((s.selection[windowId]?.length ?? 0) > 1) {
+        const ids = selectedTabIds(s, windowId);
+        if (ids.length > 1) {
+          s.closeTabs(ids);
+          s.setSelection(windowId, []);
+          noteSelectionClosedByKey(ids.length);
+          return;
+        }
       }
       return tabId ? void closeTab(tabId) : undefined;
-    }
     case "print":
       return void web?.print();
     case "printWithSystemDialog":
@@ -210,13 +211,9 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
     case "copyUrl":
     case "copyUrlAsMarkdown": {
       const markdown = command === "copyUrlAsMarkdown";
-      const selected = targeted || peekTabId(s, windowId) ? [] : multiSelectedTabIds(s, windowId);
-      const copied = selected.length ? copyUrls(selected, markdown) : 0;
-      if (copied) {
-        showToast(windowId, `Copied ${copied} ${copied === 1 ? "URL" : "URLs"}${markdown ? " as Markdown" : ""}`, undefined, { icon: "link" });
-        return noteSelectionCopiedByKey(copied, arg === "selectedTabs");
-      }
-      if (!page) return;
+      if (!targeted && !peekTabId(s, windowId) && copySelectedUrls(windowId, markdown, arg === "selectedTabs")) return;
+      if (arg === "selectedTabs" || !page) return;
+      if (markdown) noteUrlCopied(awaitsFirstPage(page.id));
       return markdown ? copyText(markdownLink(page.customTitle || page.title, page.url)) : void copyPageUrl(page.id);
     }
     case "findInPage":

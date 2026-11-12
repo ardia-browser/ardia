@@ -148,6 +148,12 @@ of memory (two kernel watchdog panics, 2026-11-11).
 check for that slice. Intel engines are published and fetched beside the arm64 ones: `prebuilt-engines-x86_64.tsv`,
 `ArdiaCore-<key:12>-x86_64.tar.xz`. Rosetta runs the Intel app on Apple Silicon for a first check.
 
+Intel copies update from their own feed, `https://ardia.dev/appcast-x86_64.xml` (the app picks it when compiled for
+x86_64), so an arm64 update never reaches them. With `ARDIA_ARCH=x86_64`, `scripts/release.sh` writes
+`Ardia-<version>-x86_64.dmg`, `Ardia-<version>-x86_64.zip` and `appcast-x86_64.xml`, building on the published Intel
+feed. `publish.sh` then adds the DMG and zip to the arm64 build's release, which must be published first, and puts
+the merged feed on the latest stable release beside `appcast.xml`. The CLI and the Homebrew cask stay arm64-only.
+
 ## Our hooks in Chrome's code
 
 Where our patches and `engine/ardiacore/apply.sh` let ArdiaCore decide something in Chrome's code, the hook is a

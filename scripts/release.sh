@@ -149,7 +149,7 @@ if [ "$phase" != build ]; then
   fi
 fi
 
-feed_base="${APPCAST_BASE:-$LATEST_DOWNLOAD_URL/appcast.xml}"
+feed_base="${APPCAST_BASE:-$LATEST_DOWNLOAD_URL/appcast$engine_suffix.xml}"
 base_feed="$work/appcast.xml"
 case "$feed_base" in
   none) : > "$base_feed" ;;
@@ -204,7 +204,7 @@ if [ "$notarize" = 1 ]; then
   "$stages/notarize.sh" "$app" "$dist"
 fi
 "$stages/package.sh" "$dist" "$version" "$identity"
-[ "$notarize" = 1 ] && "$stages/notarize.sh" "$dist/Ardia-$version.dmg" "$dist"
+[ "$notarize" = 1 ] && "$stages/notarize.sh" "$dist/Ardia-$version$engine_suffix.dmg" "$dist"
 
 echo "==> Release notes"
 notes_args=()
@@ -225,4 +225,4 @@ echo
 [ "$channel" = nightly ] && [ "$rc" = 0 ] && echo "Nightly: publish it with .claude/skills/release/scripts/publish.sh $version (a prerelease; the feed and ardia.dev/nightly follow)."
 [ "$phase" = sign ] && echo "Not launched yet: remove the signing keys, then run the launch check (--phase check)."
 [ -n "$phased" ] && echo "Phased rollout: $phased s between steps (the appcast item has phasedRolloutInterval; the whole release takes $((phased * 7)) s)."
-du -sh "$app" "$dist/Ardia-$version.dmg" "$dist/Ardia-$version.zip" "$cli_tarball" "$dist/appcast.xml" "$dist/release-notes.md"
+du -sh "$app" "$dist/Ardia-$version$engine_suffix.dmg" "$dist/Ardia-$version$engine_suffix.zip" "$cli_tarball" "$dist/appcast$engine_suffix.xml" "$dist/release-notes.md"

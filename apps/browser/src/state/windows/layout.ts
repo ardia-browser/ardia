@@ -12,6 +12,7 @@ import { toolbarRowOf } from "../../lib/toolbarRow";
 import { SMALL_BAR_HEIGHT } from "./small";
 import type { CaptionRegion } from "../../platform/windowControls";
 import { sidebarWidthIn } from "../sidebar/shownWidth";
+import { noteSidebarFieldMoved } from "../telemetry/sidebarResizeCounts";
 
 export { frameCornerRadius, windowCornerRadius, windowFrame } from "../../platform/windows";
 
@@ -260,6 +261,7 @@ export const useUrlAnchors = create<Record<string, UrlAnchor>>()(() => ({}));
 export function setUrlAnchor(windowId: string, anchor: UrlAnchor) {
   const current = useUrlAnchors.getState()[windowId];
   if (current && current.left === anchor.left && current.top === anchor.top && current.width === anchor.width && current.sidebar?.height === anchor.sidebar?.height) return;
+  if (current?.sidebar && anchor.sidebar && current.left !== anchor.left) noteSidebarFieldMoved();
   useUrlAnchors.setState({ [windowId]: anchor });
 }
 

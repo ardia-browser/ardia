@@ -74,6 +74,7 @@ export const WHATS_SENT: { title: string; items: string[] }[] = [
       "How many pop-up windows opened as tabs because Open pop-up windows as tabs is on, summed up once an hour. Never which page or pop-up",
       "How many times you chose No Icon for a pinned tab, so it shows its title alone, summed up once an hour. Never which tab",
       "How many tab hover cards the tab strip across the top showed, and how many of those were for a tab from a profile other than the window's, summed up once an hour. Never which tab",
+      "How many times the address field in the sidebar changed place in the window (the sidebar moved to the other side, the window was resized or went full screen), summed up once an hour",
       "How many times the toolbar hid while you scrolled a page, and how many of those came less than a second after it had shown again, summed up once an hour. Never which page",
       "While a window is being resized, how many size changes its page area got and how many of them it laid out again, and how many resizes were made from the window's centre with Option held, summed up once an hour",
       "How many pinned tabs and split views an import from Arc brought over, and for an import with spaces (Arc or Zen) how many spaces came over, how many went to a profile of their own because their Zen container keeps its own cookies, how many profiles with their own data they filled, and how many Essentials came over, summed up once an hour. Never which pages or names",

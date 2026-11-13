@@ -96,7 +96,7 @@ echo "build-app: $config into ${dd#"$repo"/} (log: ${log#"$repo"/})"
   cd "$app_dir" &&
     "$repo/scripts/agent/locked" xcodebuild --wait "$wait" --as "$name" -- \
       xcodebuild -workspace macos/Ardia.xcworkspace -scheme Ardia-macOS -derivedDataPath "$dd" \
-      -destination 'platform=macOS,arch=arm64' -configuration "$config" -hideShellScriptEnvironment build
+      -destination "platform=macOS,arch=$ardia_arch" ARCHS="$ardia_arch" -configuration "$config" -hideShellScriptEnvironment build
 ) >"$log" 2>&1
 status=$?
 elapsed=$(($(date +%s) - start))

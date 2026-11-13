@@ -110,8 +110,8 @@ if [ -n "$dirty" ]; then
 fi
 
 [ -d "$framework_src" ] || die "no ArdiaCore framework at $framework_src (engine/ardiacore/apply.sh, then build chrome_framework)"
-[ "$phase" = sign ] || [[ " $(lipo -archs "$framework_src/Versions/Current/Chromium Framework" 2>/dev/null) " == *" arm64 "* ]] \
-  || die "the ArdiaCore framework at $framework_src has no arm64 slice"
+[ "$phase" = sign ] || [[ " $(lipo -archs "$framework_src/Versions/Current/Chromium Framework" 2>/dev/null) " == *" $ardia_arch "* ]] \
+  || die "the ArdiaCore framework at $framework_src has no $ardia_arch slice"
 if [ "$phase" = sign ]; then
   [ -n "$provisioning_profile" ] || die "--phase sign exports the ad hoc archive --phase build made: set RELEASE_PROVISIONING_PROFILE"
 elif [ -n "$framework_engine" ]; then
@@ -126,7 +126,7 @@ fi
 engine_source=""
 if [ "$phase" != build ]; then
   engine_tree="$("$root/engine/engine-key.sh")"
-  engine_release="$(awk -v t="$engine_tree" '$1 == t { print $2; exit }' "$ardiacore/prebuilt-engines.tsv")"
+  engine_release="$(awk -v t="$engine_tree" '$1 == t { print $2; exit }' "$ardiacore/prebuilt-engines$engine_suffix.tsv")"
   [ "$rc" = 1 ] || [ -n "$engine_release" ] \
     || die "packages/ardiacore/prebuilt-engines.tsv lists no published engine for this engine key (${engine_tree:0:12}): publish it with scripts/publish-engine.sh, commit the table line, then release"
   case "$engine_release" in engine-*) engine_tag="$engine_release" ;; *) engine_tag="v$engine_release" ;; esac

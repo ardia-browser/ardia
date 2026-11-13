@@ -12,6 +12,13 @@ export HELIUM_DIR="$CB/helium"
 export HELIUM_MACOS_DIR="$CB/helium-macos"
 export HELIUM_LINUX_TAG=0.21.2.1
 export HELIUM_LINUX_DIR="$CB/helium-linux"
+if [[ -n "${ARDIA_ARCH:-}" && "$(uname -s)" == Darwin ]]; then
+  case "$ARDIA_ARCH" in
+    arm64) export AC_TARGET_CPU=arm64 ;;
+    x86_64) export AC_TARGET_CPU=x64 ;;
+    *) echo "env.sh: ARDIA_ARCH is arm64 or x86_64, got '$ARDIA_ARCH'" >&2; return 64 2>/dev/null || exit 64 ;;
+  esac
+fi
 _ac_target_config=$(python3 "$(dirname "${BASH_SOURCE[0]:-$0}")/target_config.py" --shell) || return $?
 eval "$_ac_target_config"
 unset _ac_target_config

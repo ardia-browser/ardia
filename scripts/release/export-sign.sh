@@ -8,6 +8,7 @@ identity="${3:?$usage}"
 cli_sha="${4:?$usage}"
 provisioning_profile="${5:-}"
 . "$(dirname "$0")/lib.sh"
+. "$root/scripts/lib/paths.sh"
 app="$dist/export/Ardia.app"
 
 if [ -n "$provisioning_profile" ]; then
@@ -28,7 +29,7 @@ else
     sleep 10
   done
 fi
-[ "$(lipo -archs "$app/Contents/MacOS/Ardia")" = arm64 ] || die "the app's executable is $(lipo -archs "$app/Contents/MacOS/Ardia"), not arm64"
+[ "$(lipo -archs "$app/Contents/MacOS/Ardia")" = "$ardia_arch" ] || die "the app's executable is $(lipo -archs "$app/Contents/MacOS/Ardia"), not $ardia_arch"
 
 awk '{ print $1 }' "$cli_sha" >"$app/Contents/Resources/ardia-cli.sha256"
 

@@ -140,6 +140,14 @@ with `scripts/agent/engine-build` and the next app build picks it up. Don't call
 script caps siso's parallel jobs by RAM, and siso's defaults ran ~150 mojom generators at once and ran this 32 GB Mac out
 of memory (two kernel watchdog panics, 2026-11-11).
 
+### Intel Macs
+
+`ARDIA_ARCH=x86_64` builds everything for Intel; unset, it's `arm64`. The engine steps then write and build
+`out/Release_GN_x64` (`target_cpu="x64"`), which an Apple Silicon Mac cross-compiles like Chrome's own Intel builds.
+`pnpm macos`, `pnpm build`, `scripts/agent/build-app` and the release scripts build the app with `ARCHS=x86_64` and
+check for that slice. Intel engines are published and fetched beside the arm64 ones: `prebuilt-engines-x86_64.tsv`,
+`ArdiaCore-<key:12>-x86_64.tar.xz`. Rosetta runs the Intel app on Apple Silicon for a first check.
+
 ## Our hooks in Chrome's code
 
 Where our patches and `engine/ardiacore/apply.sh` let ArdiaCore decide something in Chrome's code, the hook is a

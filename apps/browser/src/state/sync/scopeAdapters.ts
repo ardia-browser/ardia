@@ -11,6 +11,7 @@ import { deliverSentTabs, sendLedger } from "./sentTabs";
 import { PROFILE_OPEN_TABS, profileScope } from "./records";
 import { openTabsAdapters, type OpenTabCloses, type OpenTabsMode } from "./openTabs";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
+import { removedRecordKeys } from "./profileRemoval";
 
 export const deviceName = () => SyncNative?.deviceName() ?? `This ${PLATFORM_TERMS.computerTitle}`;
 
@@ -35,13 +36,14 @@ export function appAdapters(doc: SyncDoc, retiring: boolean): Adapter[] {
   const id = doc.deviceId!;
   if (retiring) return [deviceAdapter(id, deviceName, true)];
   const enabledLinks = () => Object.fromEntries(Object.entries(doc.profiles).filter(([, l]) => l.enabled));
+  const removed = () => removedRecordKeys(doc);
   return [
     ...(doc.types.settings ? [inTodaysNames(settingsAdapter)] : []),
-    sharedDataAdapter(() => doc.profiles),
-    profilesAdapter(enabledLinks),
-    profileThemesAdapter(enabledLinks, () => doc.scopes[APP_SCOPE]?.records),
-    profileTopAppsAdapter(enabledLinks),
-    profileOpenTabsAdapter(enabledLinks),
+    sharedDataAdapter(() => doc.profiles, removed),
+    profilesAdapter(enabledLinks, removed),
+    profileThemesAdapter(enabledLinks, () => doc.scopes[APP_SCOPE]?.records, removed),
+    profileTopAppsAdapter(enabledLinks, removed),
+    profileOpenTabsAdapter(enabledLinks, removed),
     deviceAdapter(id, deviceName),
   ];
 }

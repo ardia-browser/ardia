@@ -21,7 +21,7 @@ import { settleThemeAdoption, themeChosenHere } from "./syncThemes";
 import { editClock, startEditClock } from "./editClock";
 import { addLinkedProfile, appScopeOf, linkedProfileId, linkProfiles, readyToPair, remoteProfileRecord, sharedDataChain } from "./profileLinks";
 import { summarize } from "./syncSummary";
-import { markRemoved, settleRemovals } from "./profileRemoval";
+import { markRemoved, settleRemovals, takeSyncedProfileRemovals } from "./profileRemoval";
 import { profileScope } from "./records";
 import { queueSend, sendTargetsIn } from "./sentTabs";
 import { errorText } from "../../lib/errors";
@@ -68,7 +68,7 @@ function noteSnapshot({ snapshotBytes }: { snapshotBytes: number }) {
 }
 
 export function takeSnapshotWrites() {
-  const taken = snapshotWrites;
+  const taken = { ...snapshotWrites, removedProfiles: takeSyncedProfileRemovals() };
   snapshotWrites = { count: 0, bytes: 0 };
   return taken;
 }

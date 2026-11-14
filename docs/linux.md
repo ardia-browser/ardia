@@ -52,7 +52,10 @@ Native views are drawn in the DOM (`packages/expo-linux/src/views/registry.tsx`,
 `Symbol`, `Surface`, `VisualEffect` (nearly opaque: a transparent Linux window can't blur the desktop), glass, popover
 bubbles, `FadeLabel`, the spinner, the pager's `SwipeArea`, the GL backdrop and power-up (with CSS fallbacks where WebGL2
 is blocklisted), and `WindowDragRegion`, which moves the window from main by following the cursor (so it also works
-without a window manager); a double-click maximizes. The engine's views (`ArdiaWebView`) come from
+without a window manager); a double-click maximizes. A dragged tab's floating preview (`windows/dragPreview.ts`) is an
+auxiliary window main moves; dropped into a new window it settles like the Mac's: the source window's snapshot with the
+tab's page drawn in grows to the new window in 200 ms (cubic ease-out), waits for it to show, and fades in 100 ms; any
+other drop fades it in place. Its frames run on the host's timers, since a hidden window's get 1 s ones. The engine's views (`ArdiaWebView`) come from
 `engine/modules`' `engineViews`. A text field taking or losing focus is reported to main
 (`ArdiaFocus.setTextInputFocused`) for the shortcut table; `claimFocus` and the key-responder calls take DOM nodes and
 stay in the renderer. Linux uses the Windows chrome (app-drawn window buttons), keys and copy wording through

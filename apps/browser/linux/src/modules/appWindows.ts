@@ -276,6 +276,33 @@ function hideDragPreview() {
   if (preview && !preview.isDestroyed()) preview.hide();
 }
 
+function dragPreviewBounds(): Rectangle | null {
+  const preview = auxiliaryWindow(DRAG_PREVIEW);
+  return preview && !preview.isDestroyed() && preview.isVisible() ? preview.getBounds() : null;
+}
+
+function placeDragPreview(x: number, y: number, width: number, height: number) {
+  const preview = auxiliaryWindow(DRAG_PREVIEW);
+  if (!preview || preview.isDestroyed()) return;
+  preview.setBounds({ x: Math.round(x), y: Math.round(y), width: Math.max(1, Math.round(width)), height: Math.max(1, Math.round(height)) });
+  if (!preview.isVisible()) preview.showInactive();
+}
+
+function dragPreviewTarget(id: string | null, fallback: Frame | null): { bounds: Rectangle; shown: boolean; found: boolean } | null {
+  const window = id ? appWindow(id) : undefined;
+  if (window && !window.isDestroyed()) return { bounds: window.getBounds(), shown: window.isVisible(), found: true };
+  return fallback && fallback[2] > 0 && fallback[3] > 0 ? { bounds: boundsOf(fallback), shown: false, found: false } : null;
+}
+
+async function snapshotWindow(id: string): Promise<{ url: string; width: number; height: number } | null> {
+  const window = appWindow(id);
+  if (!window || window.isDestroyed() || !window.isVisible()) return null;
+  const image = await window.webContents.capturePage();
+  if (image.isEmpty() || window.isDestroyed()) return null;
+  const { width, height } = window.getContentBounds();
+  return { url: image.toDataURL(), width, height };
+}
+
 onAppWindowCreated((id, window) => watch(id, window));
 
 defineModule(MODULE, {
@@ -287,6 +314,9 @@ defineModule(MODULE, {
     shapeDragPreview: () => shapeDragPreview(),
     moveDragPreview: (source: string, left: number, top: number, width: number, height: number) => moveDragPreview(source, left, top, width, height),
     hideDragPreview: () => hideDragPreview(),
+    dragPreviewBounds: () => dragPreviewBounds(),
+    placeDragPreview: (x: number, y: number, width: number, height: number) => placeDragPreview(x, y, width, height),
+    dragPreviewTarget: (id: string | null, fallback: Frame | null) => dragPreviewTarget(id, fallback),
     isMaximized: (id: string) => !!appWindow(id)?.isMaximized(),
     debugWindowState: (id: string) => {
       const window = appWindow(id);
@@ -307,6 +337,7 @@ defineModule(MODULE, {
     },
     frameCornerRadius: async (id: string) => (appWindow(id)?.isMaximized() || appWindow(id)?.isFullScreen() ? 0 : FRAME_CORNER_RADIUS),
     windowIds: async () => appWindowIds(),
+    snapshotWindow: async (id: string) => snapshotWindow(id),
     setWindowTitle: async (id: string, title: string) => appWindow(id)?.setTitle(title || "Ardia"),
     restoreFullScreen: async (ids: string[], focus: string | null) => restoreFullScreen(ids, focus),
     setPageFullScreen: async (id: string, on: boolean) => setPageFullScreen(id, on),

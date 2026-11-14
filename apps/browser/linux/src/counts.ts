@@ -30,9 +30,7 @@ export type LinuxCount =
   | "report_recordings_started"
   | "report_recording_failures"
   | "window_drag_area_menus"
-  | "window_moves_by_app"
-  | "meadow_scenes"
-  | "meadow_failures";
+  | "window_moves_by_app";
 
 const counts = new Map<LinuxCount, number>();
 

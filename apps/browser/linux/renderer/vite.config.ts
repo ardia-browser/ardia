@@ -33,22 +33,47 @@ function commonJsRequires(): Plugin {
   };
 }
 
-const SYSTEM_FONT_MODULE = /react-native-web\/dist\/(cjs\/)?exports\/StyleSheet\/compiler\/createReactDOMStyle\.js$/;
-const linuxSystemFont = (code: string) => code.replace(`'${REACT_NATIVE_WEB_SYSTEM_STACK}'`, JSON.stringify(LINUX_UI_FONT_STACK));
+type SourcePatch = { module: RegExp; from: string; to: string };
 
-function systemFontIsLinuxUiFont(): Plugin {
+const reactNativeWebModule = (path: string) => new RegExp(`react-native-web/dist/(cjs/)?${path.replace(/[./]/g, (c) => `\\${c}`)}$`);
+
+const REACT_NATIVE_WEB_PATCHES: SourcePatch[] = [
+  {
+    module: reactNativeWebModule("exports/StyleSheet/compiler/createReactDOMStyle.js"),
+    from: `'${REACT_NATIVE_WEB_SYSTEM_STACK}'`,
+    to: JSON.stringify(LINUX_UI_FONT_STACK),
+  },
+  {
+    module: reactNativeWebModule("exports/UIManager/index.js"),
+    from: "var height = node.offsetHeight;\n  var width = node.offsetWidth;",
+    to: "var box = node.getBoundingClientRect();\n  var height = Math.abs(box.height - node.offsetHeight) < 1 ? box.height : node.offsetHeight;\n  var width = Math.abs(box.width - node.offsetWidth) < 1 ? box.width : node.offsetWidth;",
+  },
+];
+
+function patchReactNativeWeb(code: string, id: string): string | null {
+  const patch = REACT_NATIVE_WEB_PATCHES.find((each) => each.module.test(id));
+  if (!patch) return null;
+  if (!code.includes(patch.from)) throw new Error(`ardia-linux: react-native-web changed; ${id} no longer contains the source this build patches`);
+  return code.replace(patch.from, patch.to);
+}
+
+function reactNativeWebPatches(): Plugin {
   return {
-    name: "ardia-linux:system-font",
+    name: "ardia-linux:react-native-web-patches",
     transform(code, id) {
-      return SYSTEM_FONT_MODULE.test(id) ? { code: linuxSystemFont(code), map: null } : null;
+      const patched = patchReactNativeWeb(code, id);
+      return patched === null ? null : { code: patched, map: null };
     },
   };
 }
 
-const prebundledSystemFont = {
-  name: "ardia-linux:system-font",
-  setup(build: { onLoad(options: { filter: RegExp }, callback: (args: { path: string }) => Promise<{ contents: string; loader: "js" }>): void }) {
-    build.onLoad({ filter: SYSTEM_FONT_MODULE }, async ({ path }) => ({ contents: linuxSystemFont(await readFile(path, "utf8")), loader: "js" }));
+const prebundledReactNativeWebPatches = {
+  name: "ardia-linux:react-native-web-patches",
+  setup(build: { onLoad(options: { filter: RegExp }, callback: (args: { path: string }) => Promise<{ contents: string; loader: "js" } | undefined>): void }) {
+    build.onLoad({ filter: /react-native-web\/dist\/.*\.js$/ }, async ({ path }) => {
+      const patched = patchReactNativeWeb(await readFile(path, "utf8"), path);
+      return patched === null ? undefined : { contents: patched, loader: "js" };
+    });
   },
 };
 
@@ -57,7 +82,7 @@ const dev = process.env.ARDIA_LINUX_DEV === "1";
 export default defineConfig({
   root: here("."),
   base: "./",
-  plugins: [commonJsRequires(), systemFontIsLinuxUiFont(), react()],
+  plugins: [commonJsRequires(), reactNativeWebPatches(), react()],
   define: {
     __DEV__: JSON.stringify(dev),
     global: "globalThis",
@@ -74,7 +99,7 @@ export default defineConfig({
       { find: /^expo$/, replacement: `${expoLinux}expo.ts` },
     ],
   },
-  optimizeDeps: { include: ["react-native-web", "zustand", "zustand/react/shallow", "react-dom/client"], esbuildOptions: { plugins: [prebundledSystemFont] } },
+  optimizeDeps: { include: ["react-native-web", "zustand", "zustand/react/shallow", "react-dom/client"], esbuildOptions: { plugins: [prebundledReactNativeWebPatches] } },
   server: { host: "127.0.0.1", port: Number(process.env.ARDIA_VITE_PORT ?? 5281), strictPort: false, fs: { allow: [repo] } },
   build: { outDir: process.env.ARDIA_UI_OUT || here("../ui"), emptyOutDir: true, target: "chrome140", sourcemap: true, chunkSizeWarningLimit: 20000, minify: !dev },
 });

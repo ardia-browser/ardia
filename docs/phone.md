@@ -283,6 +283,15 @@ phone is listed as unverified, even where the code is in. Audited 2026-11-14 at 
 - Archive: rows put a tile behind the favicon and day headers have no background (sticky only on iPhone, where text overlaps); both apps draw a plain favicon at 20× text size on sticky headers with a 0.92 surface tint. `ArchiveView.kt`. Small.
 - Archive: Back closes the sheet with a query typed (Compose clears the query first), and search runs on every keystroke (Compose waits 120 ms). `ArchiveView.kt`. Small.
 - Archive (iPhone): a full swipe deletes a row; SwiftUI only reveals Delete (`allowsFullSwipe: false`). `ArchiveView.swift`. Small.
+- Page: no haptic on pressing a bottom-bar control (Compose VIRTUAL_KEY, SwiftUI light impact 0.5). `BottomBar.kt` `barPress`, `BottomBar.swift`. Small.
+- Page: no tick when a tab swipe lands on the next tab. `BrowsingView.kt` `TabPager`, `BrowsingView.swift` `tabSwitchTicks`. Small.
+- Page menu: no success haptic when Pin to Mac fills the star (iPhone). `ToolbarSheet.swift`. Small.
+- Page menu: "Copied URL" in the title stays 1.5 s and swaps; SwiftUI shows it 1 s and crossfades. `BrowseSession.swift`, `ToolbarSheet.swift`. Small.
+- Page menu: at accessibility text sizes the title stays one line; SwiftUI moves it under the buttons with up to 3 lines. `ToolbarSheet.swift` `navigationCapsule`. Small.
+- Page menu: Find on Page opens at once; SwiftUI closes the menu and shows the find bar 350 ms later. `ToolbarSheet.swift` `findRow`. Small.
+- Page menu: Site Settings closes the menu and jumps to Settings; Compose opens it inside the menu sheet with a back button, and Back returns to the menu (SwiftUI has no such row). `PageMenu.kt`, `BrowsingView.kt`. Small.
+- Downloads: progress and cancel are not shown anywhere in the app (only the lab uses `downloads.progress`/`cancel`). `SystemDownloads.kt`, `DownloadManager.swift`. Small to a day.
+
 ### Needs native code on Android
 
 - Search field: no inline completion (the suggested address's rest highlighted after the caret, so Enter on "goo" opens google.com); React Native's field can't overlay a suffix or see the IME's composing text, so it needs a native field. `CompletingFieldState.kt`, `OmniboxTextField.kt`. More.
@@ -298,6 +307,13 @@ phone is listed as unverified, even where the code is in. Audited 2026-11-14 at 
 - Handoff: the current page isn't offered to other devices (incoming works). `SystemIntegrations.swift`, `AppModel+System.swift`. Small.
 - Deck bar: SwiftUI's buttons are interactive Liquid Glass (`.glassEffect(.regular.interactive())`); the look module's Frost needs a glass variant that samples the deck. `TabDeckBar.swift`. A day.
 - Context menus: SwiftUI uses system context menus (lift preview and blur) on cards, the plus button and archive rows, with ShareLink; the app draws its own. Needs a native context-menu view. `TabSwitcherView.swift`, `TabDeckBar.swift`, `ArchiveView.swift`. A day.
+- Swipe to Navigate: the page view has no `swipeNavigation`, so the setting does nothing and only WebKit's edge swipe runs; SwiftUI swipes from anywhere with snapshot parallax, a shade and a haptic at the commit point. `WebPageView.swift` `swipePan`/`handleSwipe`. A day.
+- Pull to refresh: no `pullToRefresh` on the page view; SwiftUI uses a refresh control tinted with the loading colour. `WebPageView.swift`. Small.
+- Open in Background opens in front: the module drops `inBackground` from the link callback, and the app selects every popup. `WebTab.swift`, `PhonePages.linkOpened`. Small (plus a JS line).
+- Offline pages never retry by themselves: failures carry no reason and there is no network module, so no online-again signal and no Wi-Fi-off icon. `WebTab.swift` `PageLoadFailure.network`. Small, plus an hour or two for an `NWPathMonitor` module.
+- Per-site Open App Links In: `siteOpensLinksInApps`, `appLinksDefault` and `setAppLinksDefault` are missing, and clearing a site's choice (null) can't decode. `BrowsingPreferences.swift`. Small.
+- Long-press on links and images uses WebKit's context menu (as SwiftUI does), so the app's drawn menu, Save Image and the Copied URL toast are Android-only; matching Android needs native long-press events. `WebTab.swift`. A day.
+
 ### Unverified on a phone
 
 - iPhone look views: `packages/phone/ios/LookModule.swift` is in progress (uncommitted); until it lands the iPhone draws gradients and solid fills. Check: the deck's animated backdrop and frosted controls, and Reduce Motion and Reduce Transparency switching them.
@@ -310,6 +326,15 @@ phone is listed as unverified, even where the code is in. Audited 2026-11-14 at 
 - iPhone Lock Screen widgets and Control Center controls open the right link (the app target has its own intent copies).
 - iPhone search widget follows the profile colour and Match My Mac (`WidgetExporter.swift`).
 - Android Paste and Go: "Link You Copied" for a link, "Text You Copied" for text (c872c609f).
+- iPhone page permission prompts (camera, mic, location): Allow and Don't Allow from the app's dialog reach WebKit's grant.
+- iPhone file upload: WebKit's own picker appears for a file input and Take Photo works (the module answers no file requests itself).
+- iPhone fullscreen video covers the bottom bar and hides the status bar and home indicator.
+- iPhone Share from the long-press menu is not shown under an open sheet.
+- Android notification permission requests and the download notification compared with Compose's `PageRequests.kt`.
+- Bar collapse spring and travel against Compose's `Motion.barCollapse` and SwiftUI's `BottomBar.swift`.
+- Status-bar icons stay readable over the page menu, Reader and the long-press shade on both phones.
+- iPhone Desktop Site reloads the page as SwiftUI's `toggleDesktopSite` does.
+
 ### Deliberately different
 
 - Voice screen status-bar icons: always light; Compose takes them from the light-mode tint although the screen is always dark (3a9ca2f10, `lib/statusInk.ts`).
@@ -324,6 +349,7 @@ phone is listed as unverified, even where the code is in. Audited 2026-11-14 at 
 - A suggestion whose text is an address opens that address, so a row tap does what Enter does (87bc6e89f).
 - A link that arrives during onboarding is held and only the last one runs afterwards (43753d1b5); both apps act at once.
 - The deck bar sits 6 points above a three-button navigation bar instead of on it (2db78f033); gesture navigation keeps Compose's numbers.
+- Find on Page is the app's own bar on both phones, not WebKit's find panel as in SwiftUI (e508b6dd2); the commit gives no reason, so the owner should confirm it.
 
 ## Build and run
 

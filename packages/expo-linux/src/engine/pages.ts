@@ -361,3 +361,21 @@ export async function callPage<Result = unknown>(key: string, method: string, ar
   if (!guestId || page.closed) return null;
   return pagesCall<Result>("page", page.guestId || guestId, method, args);
 }
+
+export type PageRects = { width: number; height: number; rects: { x: number; y: number; width: number; height: number }[] };
+
+export function pageRectsIn(windowId: string): PageRects | null {
+  let view: Window | null = null;
+  const rects: PageRects["rects"] = [];
+  for (const page of pages.values()) {
+    const element = page.element;
+    if (!element?.isConnected || windowIdOf(element.ownerDocument) !== windowId) continue;
+    view = element.ownerDocument.defaultView;
+    if (view?.getComputedStyle(element).visibility === "hidden") continue;
+    const box = element.getBoundingClientRect();
+    if (box.width > 0 && box.height > 0) rects.push({ x: box.left, y: box.top, width: box.width, height: box.height });
+  }
+  return view ? { width: view.innerWidth, height: view.innerHeight, rects } : { width: 0, height: 0, rects };
+}
+
+(globalThis as { ardiaLinuxPageRects?: typeof pageRectsIn }).ardiaLinuxPageRects = pageRectsIn;

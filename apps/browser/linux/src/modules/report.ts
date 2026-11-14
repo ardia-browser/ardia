@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { defineModule, emit } from "../bridge";
 import { dataDirectory } from "../paths";
+import { cancelRecording, isRecording, recordingThumbnail, startRecording, stopRecording } from "./reportRecording";
 
 const uploads = new Map<string, { abort: () => void }>();
 
@@ -80,7 +81,7 @@ defineModule("ArdiaReport", {
     draftDirectory,
     fileSize,
     removeFile: (path: string) => rmSync(path, { force: true, recursive: true }),
-    isRecording: () => false,
+    isRecording,
     cancelUploads: () => {
       for (const abort of uploads.values()) abort.abort();
       uploads.clear();
@@ -90,9 +91,9 @@ defineModule("ArdiaReport", {
     gzipFile,
     gzipText,
     upload,
-    startRecording: async () => false,
-    stopRecording: async () => false,
-    cancelRecording: async () => {},
-    recordingThumbnail: async () => false,
+    startRecording,
+    stopRecording,
+    cancelRecording,
+    recordingThumbnail,
   },
 });

@@ -147,7 +147,7 @@ export async function openLiveFolderMenu(windowId: string, folderId: string) {
     return liveFolderMenuItems(windowId, folderId);
   });
   if (choice?.startsWith("repo")) showedRepo = runRepoChoice(folderId, choice) || showedRepo;
-  if (showedRepo) void refreshFolder(folderId);
+  if (showedRepo) queueMicrotask(() => void refreshFolder(folderId));
   if (!choice) return;
   const option = FOLDER_OPTIONS.find((key) => choice === `option:${key}`);
   if (choice === "refresh") void manualRefresh(folderId);

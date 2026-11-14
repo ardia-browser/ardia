@@ -35,6 +35,7 @@ final class KeepOpenMenuRow: NSView {
     title = item.title
     checked = item.checked
     enabled = item.enabled
+    enclosingMenuItem?.state = item.checked ? .on : .off
     enclosingMenuItem?.isEnabled = item.enabled
     needsDisplay = true
   }

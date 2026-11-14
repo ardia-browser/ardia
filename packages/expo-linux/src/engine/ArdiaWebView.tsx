@@ -44,6 +44,7 @@ const ARGUMENTS: Record<string, string[]> = {
   resolvePasswordPrompt: ["answer", "username", "password"],
   resolveAutofillPrompt: ["id", "answer"],
   executeExtensionAction: ["extensionId"],
+  openBlockedPopup: ["id", "always"],
 };
 
 const UNWRAPPED: Record<string, (reply: Record<string, unknown> | null) => unknown> = {
@@ -122,7 +123,7 @@ export const ArdiaWebView = forwardRef<unknown, Props>(function ArdiaWebView(pro
                 return { data: reply.data, frame: [rect.x, rect.y, rect.width, rect.height] };
               };
             if (method === "exitPictureInPicture") return () => callPage(key, "executeJavaScript", { code: EXIT_PICTURE_IN_PICTURE }).then(() => undefined);
-            if (method === "setFrozen" || method === "notificationAction" || method === "openBlockedPopup")
+            if (method === "setFrozen" || method === "notificationAction")
               return async () => undefined;
             const names = ARGUMENTS[method];
             if (names) {

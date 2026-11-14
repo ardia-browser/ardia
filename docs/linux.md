@@ -79,8 +79,17 @@ host made draws in another window but sits in the host's frame tree, so it gets 
   (`page-preload.js`); `pageScriptBridge.ts` handles its messages (theme, scroll, selection, now playing, badges,
   notifications, Peek and split links). The same preload replaces `alert`/`confirm`/`prompt` with a synchronous ask to
   main, which shows them over the page's own window (`pageDialogs.ts`).
-- **Opening.** Links that open tabs become `openWindow` events; `window.open` with a size opens an Electron window that
-  keeps its opener (sign-in popups). Downloads (`downloads.ts`) report to the downloads panel; a test instance saves
+- **Opening.** Links that open tabs become `openWindow` events; `window.open` with a size opens a pop-up window
+  (`popupWindows.ts`) that keeps its opener (sign-in popups): a `BaseWindow` holding the page and, above it, the Mac's
+  28 px origin strip (connection glyph, origin, and "Open as Tab", which reopens the page as a tab and closes the
+  pop-up), sized from the page's features and placed 60 px below the top of the opener's window like the Mac's. Ctrl+W
+  closes it, and the shortcut table leaves its keys alone (`keepOutOfAppWindows`).
+- **Pop-up blocking.** Electron doesn't say whether `window.open` had a user gesture, so `popupBlocker.ts` keeps
+  Chrome's transient activation per page: a mouse press or a key press (not a modifier or Escape) activates the page
+  for 5 s, and each open consumes it. An open without one is denied unless the site's `popups` setting is `allow`,
+  and becomes a `popupBlocked` event, which shows the app's blocked pop-up button and prompt. `openBlockedPopup` opens
+  it later (as a pop-up window without an opener, or a tab); "Always Allow" stores `allow` for the site. A page's
+  blocked list empties when it navigates. Downloads (`downloads.ts`) report to the downloads panel; a test instance saves
   into its data dir. Permission prompts (`permissions.ts`) read and remember through `services/sites.ts`; external
   protocols ask through the page's `externalApp` prompt. The page context menu is a native menu.
 - **Widevine.** The `electron` package is castlabs' Electron for Content Security (`github:castlabs/electron-releases`,

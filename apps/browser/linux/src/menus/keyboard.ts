@@ -31,6 +31,12 @@ export function resolvePageWindowsWith(resolver: PageWindowResolver): void {
   pageWindow = resolver;
 }
 
+const outsideAppWindows = new WeakSet<WebContents>();
+
+export function keepOutOfAppWindows(contents: WebContents): void {
+  outsideAppWindows.add(contents);
+}
+
 function appWindowOrNull(window: BrowserWindow | null | undefined): BrowserWindow | null {
   return window && !window.isDestroyed() && windowIdOf(window) ? window : null;
 }
@@ -46,6 +52,7 @@ export function activeAppWindow(): BrowserWindow | null {
 }
 
 export function windowOf(contents: WebContents): BrowserWindow | null {
+  if (outsideAppWindows.has(contents)) return null;
   if (contents.getType() === "webview") {
     const embedder = contents.hostWebContents ? BrowserWindow.fromWebContents(contents.hostWebContents) : null;
     return appWindowOrNull(pageWindow(contents)) ?? appWindowOrNull(embedder) ?? activeAppWindow();

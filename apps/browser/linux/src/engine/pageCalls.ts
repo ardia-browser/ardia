@@ -9,7 +9,7 @@ import { resolvePasswordPrompt } from "../services/pagePasswords";
 import { resolveAutofillPrompt } from "../services/pageAutofill";
 
 type Args = Record<string, unknown>;
-type PageCall = (guest: Guest, args: Args) => unknown;
+export type PageCall = (guest: Guest, args: Args) => unknown;
 
 const EVALUATE_DEADLINE_MS = 30000;
 const quietly = (work: Promise<unknown>) => void work.catch(() => {});
@@ -175,6 +175,10 @@ const pageCalls: Record<string, PageCall> = {
   navigationState: (guest) => navigationOf(guest),
   resendNavigation: (guest) => tellNavigation(guest),
 };
+
+export function definePageCall(name: string, run: PageCall): void {
+  pageCalls[name] = run;
+}
 
 async function captureWindow(windowId: string) {
   const window = appWindow(windowId);

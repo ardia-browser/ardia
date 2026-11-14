@@ -6,6 +6,7 @@ import { defineModule } from "../bridge";
 import { defineDomain } from "./domains";
 import { allGuests, guestOf } from "./guests";
 import { configurePageScripts, type PageScriptConfig } from "./pageScriptBridge";
+import { popupWindowCount } from "./popupWindows";
 
 const PEEK_KEYS = ["alt", "shift", "off"];
 const SPLIT_KEYS = ["alt", "altShift"];
@@ -63,7 +64,7 @@ defineDomain("engine", {
     engine: "electron",
     chromiumVersion: process.versions.chrome,
     liveBrowsers: appWindowIds().length,
-    popupWindows: 0,
+    popupWindows: popupWindowCount(),
     chromeWindows: appWindowIds().length,
   }),
   components: () => [],

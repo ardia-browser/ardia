@@ -43,8 +43,8 @@ export function SourceStep() {
       void importModule()
         .listBrowsers()
         .then((list) => {
-          const ids = new Set(list.map((b) => b.id));
-          setTiles(detect((c) => ids.has(c.importId ?? c.id)));
+          const icons = new Map(list.map((b) => [b.id, b.iconPath ? `file://${b.iconPath}` : null]));
+          setTiles(detect((c) => icons.has(c.importId ?? c.id)).map((t) => ({ ...t, icon: t.found ? (icons.get(t.importId ?? t.id) ?? null) : null })));
         })
         .catch(() => {});
       return;

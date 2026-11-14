@@ -31,3 +31,18 @@ test("on Windows a tile is found by the import's list, has no app path, and the 
     ["edge", "Edge", true, null, null],
   ]);
 });
+
+test("on Linux the import's list also finds Chromium, Vivaldi and Opera, which the Mac never offers", async () => {
+  const { PLATFORM_FEATURES: LINUX } = await import("../../lib/platformFeatures.linux.ts");
+  const listed = new Set(["chromium", "vivaldi", "firefox"]);
+  assert.deepEqual(summary(sourceTiles((c) => listed.has(c.importId ?? c.id), LINUX)), [
+    ["arc", "Arc", false, null, null],
+    ["chrome", "Chrome", false, null, null],
+    ["firefox", "Firefox", true, null, null],
+    ["zen", "Zen", false, null, null],
+    ["brave", "Brave or Edge", false, null, null],
+    ["chromium", "Chromium", true, null, null],
+    ["vivaldi", "Vivaldi", true, null, null],
+  ]);
+  assert.ok(!sourceTiles(() => true, MAC).some((t) => ["chromium", "vivaldi", "opera"].includes(t.id)));
+});

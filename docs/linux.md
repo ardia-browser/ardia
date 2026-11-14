@@ -71,7 +71,7 @@ offered, and every row was walked. Works with a difference says what differs; th
 | Downloads (download, panel, Ctrl+J) | Works: the panel opens for a new download and lists it | |
 | History (Ctrl+H), Clear Browsing Data (Ctrl+Shift+Del) | Works | |
 | Bookmarks (Ctrl+D, Ctrl+Shift+O) | Works | |
-| mailto and other app links | Differs: the request reaches the app's prompt, but with no app registered for the scheme (this machine has no mail app) nothing opens and nothing says so, as in Chrome | |
+| mailto and other app links | Works like the Mac: a scheme with an app gets the app's prompt in the Mac's words (Open “Magnet Test”?, the site wants to open this application; Always Allow only for https or loopback sites); a scheme no app opens (mailto here, with no mail app) does nothing and says nothing, which the Mac also does since 3bb5452d9 (Chrome does the same). Before, the prompt's wording differed and offered Always Allow to any site | 2e590a97f |
 | Network error page | Works: "This site can't be reached" with the reason, the error code and Reload; the toolbar stops loading. Before, the tab was blank and kept loading | d082f20cf |
 | DevTools (F12) | Works (a detached window) | |
 | Task Manager (Shift+Esc) | Works: every process with memory, CPU and process ID, and End Process for a page's, which then offers Reload. Before, it did nothing | eff01f92a |

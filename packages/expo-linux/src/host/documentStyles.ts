@@ -2,7 +2,14 @@ const OWN_SHEET = "react-native-stylesheet";
 const BASE_ID = "ardia-linux-base";
 const MIRROR = "data-ardia-mirror";
 
+const LINUX_MONO = ["DejaVu Sans Mono", "Liberation Mono", "Noto Sans Mono", "Noto Mono", "Ubuntu Mono", "Cousine"];
+const MAC_MONO = ["Menlo", "SF Mono", "Monaco"];
+const monoFaces = (weight: 400 | 700) =>
+  MAC_MONO.map((family) => `@font-face { font-family: "${family}"; font-weight: ${weight}; src: ${LINUX_MONO.map((name) => `local("${weight === 700 ? `${name} Bold` : name}")`).join(", ")}; }`).join("\n");
+
 const BASE_CSS = `
+${monoFaces(400)}
+${monoFaces(700)}
 html, body, #root { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body { font-family: system-ui, "Inter", "Cantarell", "Ubuntu", "Noto Sans", "DejaVu Sans", sans-serif; -webkit-font-smoothing: antialiased; cursor: default; user-select: none; }

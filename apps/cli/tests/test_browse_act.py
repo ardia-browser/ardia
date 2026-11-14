@@ -267,3 +267,11 @@ class ActInChrome(unittest.TestCase):
         out = self.browse("drag", "#html5 li:nth-child(1)", "#html5 li:nth-child(3)").stdout
         self.assertIn("HTML5 drag and drop", out)
         self.assertIn("moved to 3 of 3 (was 1)", out)
+
+    def test_a_dialog_holding_the_page_still_stops_a_click_on_a_clipped_target(self):
+        self.browse("open", f"http://127.0.0.1:{self.http_port}/locked-clipped.html", "--show")
+        self.browse("click", "#open-language")
+        stuck = self.browse("click", "#currency", check=False)
+        self.assertNotEqual(stuck.returncode, 0, stuck.stdout)
+        self.assertIn('the dialog "Language and region" is open', stuck.stderr)
+        self.assertEqual(self.value("String(JSON.parse(document.querySelector('#report').textContent).clicked.length)"), "0")

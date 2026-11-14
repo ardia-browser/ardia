@@ -493,7 +493,7 @@ async def click(page, element, humanize: bool, count: int = 1, button: str = "le
             await click(page, stand_in, humanize, count, button)
             page.state.click_note = f"{element.label} is hidden and drawn by its label, so the click went to the label"
             return
-        if error.code != "outside_viewport" or count != 1 or button != "left":
+        if error.code != "outside_viewport" or count != 1 or button != "left" or (error.data or {}).get("scrollLock"):
             raise
         await dom_click(page, element, error)
         return

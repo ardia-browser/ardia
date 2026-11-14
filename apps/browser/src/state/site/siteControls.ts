@@ -5,7 +5,7 @@ import { setSiteMuted } from "../browser/actions";
 import { pageOf } from "../tabs/pageState";
 import { useBrowser } from "../browser/store";
 import { ensureLocationPermission } from "./locationAccess";
-import { noteSiteAutoplay } from "../telemetry/usage";
+import { noteSiteControls } from "../telemetry/usage";
 
 export type SitePermission = { type: SiteSettingType; title: string; icon: string; badge: string; choices: SiteSettingValue[] };
 
@@ -54,7 +54,7 @@ export async function setSitePermission(
     if (value === "block" || !sound.soundBlocked) return null;
     await setSiteSetting(page.profile, page.origin, "sound", "default", page.engine);
   } else await setSiteSetting(page.profile, page.origin, type, value, page.engine);
-  if (type === "autoplay" && value !== "default" && value !== "ask") noteSiteAutoplay(value);
+  if (type === "autoplay" && value !== "default" && value !== "ask") noteSiteControls(value === "block" ? "autoplayBlock" : "autoplayAllow");
   if (type === "location" && value === "allow") void ensureLocationPermission(useBrowser.getState().tabs[page.tabId]?.windowId);
   return readSiteSettings(page.profile, page.origin, page.engine);
 }

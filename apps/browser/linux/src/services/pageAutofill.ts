@@ -2,6 +2,7 @@ import { ipcMain, type WebContents } from "electron";
 import { emit } from "../bridge";
 import { guestById, guestOf, tell } from "../engine/guests";
 import { addresses, cardNumber, cards, saveAddress, saveCard, settingsOf } from "./autofill";
+import { frameAllows, isAutofillKind } from "./autofillFrames";
 import { definePageScript, profileOfContents } from "./guests";
 import { isPrivateProfile } from "./profiles";
 
@@ -640,9 +641,11 @@ export function resolveAutofillPrompt(webContentsId: number, id: number, answer:
 
 ipcMain.handle(`${CHANNEL}:suggest`, (event, request: { kind?: unknown; type?: unknown; typed?: unknown }) => {
   const profile = profileOfContents(event.sender);
-  if (profile === null) return [];
+  const kind = request?.kind;
+  const frame = event.senderFrame;
+  if (profile === null || !isAutofillKind(kind) || !frame || !frameAllows(frame, kind)) return [];
   try {
-    return suggestions(profile, text(request?.kind), text(request?.type), typeof request?.typed === "string" ? request.typed : "").slice(0, 8);
+    return suggestions(profile, kind, text(request?.type), typeof request?.typed === "string" ? request.typed : "").slice(0, 8);
   } catch {
     return [];
   }
@@ -650,9 +653,10 @@ ipcMain.handle(`${CHANNEL}:suggest`, (event, request: { kind?: unknown; type?: u
 
 ipcMain.handle(`${CHANNEL}:fill`, (event, request: { kind?: unknown; id?: unknown }) => {
   const profile = profileOfContents(event.sender);
-  if (profile === null) return null;
+  const kind = request?.kind;
+  if (profile === null || !isAutofillKind(kind) || !frameAllows(event.senderFrame, kind)) return null;
   try {
-    return fillValues(profile, text(request?.kind), text(request?.id));
+    return fillValues(profile, kind, text(request?.id));
   } catch {
     return null;
   }

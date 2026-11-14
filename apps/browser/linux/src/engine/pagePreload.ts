@@ -76,6 +76,9 @@ try {
   ipcRenderer.send("ardia:page-script", "scriptFailed", JSON.stringify({ message: String((error as Error)?.message ?? error) }));
 }
 
+for (const [event, active] of [["enterpictureinpicture", true], ["leavepictureinpicture", false]] as const)
+  document.addEventListener(event, () => ipcRenderer.send("ardia:page-picture-in-picture", active), true);
+
 ipcRenderer.on("ardia:page-script", (_event, kind: string, json: string) => {
   if (typeof receive === "function") receive(kind, json);
 });

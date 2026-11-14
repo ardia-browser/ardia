@@ -116,7 +116,11 @@ its window's input router). The host's and every window's preload (`engine/hostP
   override emulates "position unavailable" at once and `launch.log` says why. Chromium reports a passing "position
   unavailable" each time the override changes, so the page preload holds an empty-message unavailable error 250 ms and
   drops it when a position follows. `DBUS_SYSTEM_BUS_ADDRESS` points it at another bus (tests run a fake GeoClue).
-- **Not on Linux:** tab discarding, Picture in Picture controls beyond the page's own, and casting. Calls not implemented fail with `ERR_ENGINE` and log once.
+- **Picture in Picture.** `requestPictureInPicture` runs in the page with a user gesture (`pictureInPicture.ts`): the
+  playing video, else the largest one, in the main frame and then each subframe, into Chromium's PiP window. The page
+  preload reports `enterpictureinpicture`/`leavepictureinpicture` as `pictureInPicture` events, so the app's PiP state
+  and the tab's badge follow, whoever started it.
+- **Not on Linux:** tab discarding and casting. Calls not implemented fail with `ERR_ENGINE` and log once.
 
 ### The bridge
 

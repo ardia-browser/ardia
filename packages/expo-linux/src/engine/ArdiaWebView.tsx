@@ -45,6 +45,7 @@ const ARGUMENTS: Record<string, string[]> = {
   resolveAutofillPrompt: ["id", "answer"],
   executeExtensionAction: ["extensionId"],
   openBlockedPopup: ["id", "always"],
+  requestPictureInPicture: ["press"],
 };
 
 const UNWRAPPED: Record<string, (reply: Record<string, unknown> | null) => unknown> = {
@@ -56,10 +57,10 @@ const UNWRAPPED: Record<string, (reply: Record<string, unknown> | null) => unkno
   downloadImage: (reply) => reply ?? null,
   downloadFavicon: (reply) => reply ?? null,
   executeExtensionAction: (reply) => reply ?? null,
+  requestPictureInPicture: (reply) => (reply as unknown) === true,
 };
 
 const LOCAL_ANSWERS: Record<string, unknown> = {
-  requestPictureInPicture: false,
   takeControlPress: false,
   discard: "unsupported",
   mediaCaptureSourceId: null,

@@ -13,3 +13,4 @@ import "./pageDialogs";
 import "./widevine";
 import "./popupBlocker";
 import "./leavingPages";
+import "./pictureInPicture";

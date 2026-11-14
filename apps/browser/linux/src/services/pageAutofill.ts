@@ -5,6 +5,7 @@ import { addresses, cardNumber, cards, saveAddress, saveCard, settingsOf } from 
 import { FillGrants, frameAllows, isAutofillKind } from "./autofillFrames";
 import { definePageScript, profileOfContents } from "./guests";
 import { isPrivateProfile } from "./profiles";
+import { acceptsPage } from "../ipcSenders";
 
 const CHANNEL = "ardia:autofill";
 const SUBMISSION_KEPT_MS = 60_000;
@@ -656,6 +657,7 @@ export function resolveAutofillPrompt(webContentsId: number, id: number, answer:
 }
 
 ipcMain.handle(`${CHANNEL}:suggest`, (event, request: { kind?: unknown; type?: unknown; typed?: unknown }) => {
+  if (!acceptsPage(event, `${CHANNEL}:suggest`)) return [];
   const profile = profileOfContents(event.sender);
   const kind = request?.kind;
   const frame = event.senderFrame;
@@ -671,6 +673,7 @@ ipcMain.handle(`${CHANNEL}:suggest`, (event, request: { kind?: unknown; type?: u
 });
 
 ipcMain.handle(`${CHANNEL}:fill`, (event, request: { kind?: unknown; id?: unknown }) => {
+  if (!acceptsPage(event, `${CHANNEL}:fill`)) return null;
   const profile = profileOfContents(event.sender);
   const kind = request?.kind;
   const id = text(request?.id);
@@ -683,11 +686,13 @@ ipcMain.handle(`${CHANNEL}:fill`, (event, request: { kind?: unknown; id?: unknow
 });
 
 ipcMain.on(`${CHANNEL}:manage`, (event) => {
+  if (!acceptsPage(event, `${CHANNEL}:manage`)) return;
   const guest = guestOf(event.sender);
   emit("ArdiaMenus", "onCommand", { command: "autofill", arg: null, windowId: guest?.windowId || null, focusGeneration: null });
 });
 
 ipcMain.on(`${CHANNEL}:submitted`, (event, submitted: { address?: unknown; card?: unknown }) => {
+  if (!acceptsPage(event, `${CHANNEL}:submitted`)) return;
   const profile = profileOfContents(event.sender);
   const frame = event.senderFrame;
   if (profile === null || isPrivateProfile(profile) || !frame) return;
@@ -699,6 +704,7 @@ ipcMain.on(`${CHANNEL}:submitted`, (event, submitted: { address?: unknown; card?
 });
 
 ipcMain.on(`${CHANNEL}:gone`, (event) => {
+  if (!acceptsPage(event, `${CHANNEL}:gone`)) return;
   const frame = event.senderFrame;
   if (frame && !frame.isDestroyed() && submissions.get(event.sender.id)?.frameToken === frame.frameToken) offer(event.sender);
 });

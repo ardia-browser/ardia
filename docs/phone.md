@@ -291,6 +291,21 @@ phone is listed as unverified, even where the code is in. Audited 2026-11-14 at 
 - Page menu: Find on Page opens at once; SwiftUI closes the menu and shows the find bar 350 ms later. `ToolbarSheet.swift` `findRow`. Small.
 - Page menu: Site Settings closes the menu and jumps to Settings; Compose opens it inside the menu sheet with a back button, and Back returns to the menu (SwiftUI has no such row). `PageMenu.kt`, `BrowsingView.kt`. Small.
 - Downloads: progress and cancel are not shown anywhere in the app (only the lab uses `downloads.progress`/`cancel`). `SystemDownloads.kt`, `DownloadManager.swift`. Small to a day.
+- Long-press Copy Link says "Copied URL"; Compose says "Copied URL Without Trackers" (the app's own `COPIED_LINK`). `AppModel.kt` `copyLink`. Small.
+- Find: the bar swaps in for the bottom bar at once; Compose hides the bottom bar with its collapse animation. `BrowsingView.kt` (`barHidden || isFinding`). Small.
+- Reader: text can't be selected (Compose `SelectionContainer`), size changes jump (Compose animates them), and the lead image loads any address (Compose only http and https). `ReaderView.kt`. Small.
+- Haptics in Settings, sync and onboarding: none on clearing data, filter-list update/add/apply, Sync Now done or failed, Stop Syncing, a scanned or valid phrase, connected or failed, each onboarding step and the finish; needs a warning/error helper beside `tapHaptic`. `GeneralPages.kt`, `SyncPages.kt`, `BlockingPages.kt`, `OnboardingView.kt`, `SyncCodeScanner.kt`; `ClearBrowsingDataPage.swift`, `FilterListsPage.swift`, `SyncSettingsPage.swift`, `SyncConnectPage.swift`, `RecoveryPhraseEntryPage.swift`, `OnboardingView.swift`. Under 2 hours.
+- Toasts: enter with a fade only and leave with none; both apps slide in 24 dp from 0.92 scale on a snappy spring and slide out 16 dp, a plain fade with Reduce Motion. `Toasts.kt`, `ToastView.swift`. Small.
+- Toasts: no drag (a finger holds the toast, a fling down past 40 or a drag past 24 dismisses it, else it springs back and the timer resumes 1.2 s). `Toasts.kt`, `ToastView.swift`. Small.
+- Toasts: the same message shown again replays the entrance; both apps only extend its time. `Toasts.kt`, `ToastCenter.swift`. Small.
+- Toasts: with the keyboard up the toast sits above the keyboard; both apps move it to the top of the screen. `Toasts.kt`, `ToastView.swift`. Small.
+- Toasts (iPhone): VoiceOver doesn't announce them (`accessibilityLiveRegion` is Android only); needs `announceForAccessibility`. `ToastCenter.swift`. Small.
+- Onboarding: steps slide a full screen width in with no exit and no Reduce Motion check; both apps slide 60 dp with a fade in and out, a fade only with Reduce Motion, and hide the keyboard on each step change. `OnboardingView.kt`, `OnboardingView.swift`. Small.
+- Sync page: no pull to run a sync cycle (Compose). `SyncPages.kt`. Small.
+- Sync connect: Compose starts connecting by itself once the phrase is valid and a folder is ready; the app waits for the tap. `SyncPages.kt`. Small.
+- Settings root: at accessibility text sizes the sync card stacks its tile above the text (44 dp tile) and the Archive and Spaces buttons stack; the card's status line crossfades when it changes. `SettingsRootPage.kt`, `SettingsView.swift`. Small.
+- Profile colour: the swatch ring doesn't animate to the picked colour. `ColorChoice.kt`. Small.
+- Spaces: no swipe between profiles (the switcher slides since 616d4a43f), and no tick on switching (iPhone). `SyncedSpacesView.kt`, `SyncedSpacesView.swift`. A day.
 
 ### Needs native code on Android
 
@@ -298,6 +313,8 @@ phone is listed as unverified, even where the code is in. Audited 2026-11-14 at 
 - Search tray: no predictive back (the tray follows the back gesture down 72 dp); React Native's back handler gives no progress. `SearchTrayHost.kt` `PredictiveBackHandler`. A day.
 - Share sheet: no Send to Your Mac (Compose's ShareActivity offers Open, Search and Send). `share/ShareActivity.kt`, `ShareSheetModel.kt`, `ShareSheetView.kt`. A day.
 - Widgets: the Color setting doesn't tint them. `system/WidgetColors.kt`, `SystemSnapshotExport.kt`. Small.
+- Page permission order: Compose asks Android for camera, mic or location first and shows the site's Allow dialog only once Android grants it (a refusal ends quietly); the app shows the site dialog first. Needs a check-or-request call before the dialog. `PageRequests.kt` `PermissionRequest`. Small.
+
 ### Needs native code on iPhone
 
 - Voice search: no speech module, so the mic is hidden and voice links, the intent and the control fall back to the tray. `VoiceDictation.swift`. A day.
@@ -313,6 +330,7 @@ phone is listed as unverified, even where the code is in. Audited 2026-11-14 at 
 - Offline pages never retry by themselves: failures carry no reason and there is no network module, so no online-again signal and no Wi-Fi-off icon. `WebTab.swift` `PageLoadFailure.network`. Small, plus an hour or two for an `NWPathMonitor` module.
 - Per-site Open App Links In: `siteOpensLinksInApps`, `appLinksDefault` and `setAppLinksDefault` are missing, and clearing a site's choice (null) can't decode. `BrowsingPreferences.swift`. Small.
 - Long-press on links and images uses WebKit's context menu (as SwiftUI does), so the app's drawn menu, Save Image and the Copied URL toast are Android-only; matching Android needs native long-press events. `WebTab.swift`. A day.
+- Clear Browsing Data: cache and cookies are cleared for all time whatever range is picked; SwiftUI passes the range's start. Needs `since` on `clearWebsiteData`. `ClearBrowsingDataPage.swift`, `BrowsingPreferences.swift`. Small.
 
 ### Unverified on a phone
 
@@ -334,6 +352,11 @@ phone is listed as unverified, even where the code is in. Audited 2026-11-14 at 
 - Bar collapse spring and travel against Compose's `Motion.barCollapse` and SwiftUI's `BottomBar.swift`.
 - Status-bar icons stay readable over the page menu, Reader and the long-press shade on both phones.
 - iPhone Desktop Site reloads the page as SwiftUI's `toggleDesktopSite` does.
+- The page's bar colour follows a page whose colour changes on scroll (Compose samples again 250 ms after a load and on scroll direction or top-of-page changes, `BrowsingView.kt`).
+- A site's notification permission request, compared with Compose.
+- iPhone: a toast raised from Settings (Cleared Browsing Data) shows above the sheet, as SwiftUI's own toast window does.
+- A tab sent from the Mac shows a toast on both phones and tapping it opens the tab (SwiftUI `ReceivedTabsAnnouncer.swift`).
+- Turning Match My Mac off with a Mac custom theme keeps the colour Compose's `choiceAfterMatchToggle` keeps.
 
 ### Deliberately different
 
@@ -350,6 +373,9 @@ phone is listed as unverified, even where the code is in. Audited 2026-11-14 at 
 - A link that arrives during onboarding is held and only the last one runs afterwards (43753d1b5); both apps act at once.
 - The deck bar sits 6 points above a three-button navigation bar instead of on it (2db78f033); gesture navigation keeps Compose's numbers.
 - Find on Page is the app's own bar on both phones, not WebKit's find panel as in SwiftUI (e508b6dd2); the commit gives no reason, so the owner should confirm it.
+- Opt-in usage stats (Settings, What's Sent, onboarding's last step) exist only in the Expo app (c6ebf08a8, the owner's approval).
+- Settings has no Appearance or Downloads rows because Compose has neither (f5d1ec9f2).
+- Toasts sit above the deck bar's measured top, not a fixed 64 dp, so they never cover + (87e9ed9e6).
 
 ## Build and run
 

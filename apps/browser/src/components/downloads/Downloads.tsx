@@ -112,7 +112,7 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
             ...motion,
           }}
         >
-          <OutsidePressArea onOutsidePress={closing ? undefined : () => dismissDownloadsByPress(windowId)}>
+          <OutsidePressArea onOutsidePress={closing ? undefined : (press) => dismissDownloadsByPress(windowId, press)}>
             <PanelBackground placement={p} />
             <View style={{ marginTop: upward ? 0 : arrowRoom, marginBottom: upward ? arrowRoom : 0, paddingTop: L.padTop, paddingBottom: L.padBottom }}>
               <View style={{ flexDirection: "row", alignItems: "center", paddingLeft: PANEL.inset, paddingRight: PANEL.inset - L.textButtonPad, height: L.header }}>

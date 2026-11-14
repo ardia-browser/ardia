@@ -30,6 +30,7 @@ export function DownloadsButton({ windowId }: { windowId: string }) {
   const open = useWindowUiOf(windowId, (ui) => !!ui?.downloadsOpen);
   const hint = useShortcutHint("downloads");
   const view = useRef<View>(null);
+  const pressedAt = useRef<number | undefined>(undefined);
   useEffect(() => {
     const node = view.current;
     if (!node) return;
@@ -49,7 +50,8 @@ export function DownloadsButton({ windowId }: { windowId: string }) {
         hit={DOWNLOADS_HIT()}
         active={open}
         tooltip={open ? undefined : withShortcut("Downloads", hint)}
-        onPress={() => toggleDownloadsOpen(windowId)}
+        onPressIn={(press) => void (pressedAt.current = press.nativeEvent.timestamp)}
+        onPress={() => toggleDownloadsOpen(windowId, pressedAt.current)}
       />
     </View>
   );

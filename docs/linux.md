@@ -13,7 +13,7 @@ Walked by hand on 2026-11-14 on Ubuntu 24.04 (x86_64), in a test instance on a p
 data folder, as a user would: real X key presses, clicks and drags, a screenshot for every row. The walk started on
 commit d7a4bd789; the rows it found broken were fixed on the way and seen again after the fix (through cc0829af3),
 and those rows name the fix. Most rows were walked with no window manager; maximize, dragging, full screen, focus, menus and Peek were walked
-again under xfwm4 with its compositor. Of the 63 rows, 57 work, 5 work with a difference, none is broken, 1 is not
+again under xfwm4 with its compositor. Of the 63 rows, 58 work, 4 work with a difference, none is broken, 1 is not
 offered, and every row was walked. Works with a difference says what differs; the Mac's list is
 `docs/dia-feature-parity.md`.
 
@@ -50,7 +50,7 @@ offered, and every row was walked. Works with a difference says what differs; th
 | Closing a window with unsaved work in a page | Works: its close button, Ctrl+Shift+W and the last window ask once for the window ("Leave 127.0.0.1:8714?", Close Window, Cancel); Cancel keeps it, a window with nothing unsaved closes at once, and closing the last window then quits without asking again. Before, it closed without asking | ceec94d4d |
 | Main, Settings and Little Ardia window chrome | Works, app-drawn buttons, no system title bar | |
 | Maximize and restore | Works under xfwm4, square corners while maximized | |
-| Moving a window, edge snapping | Differs: dragging the tab strip moves the window (also with no window manager), but since Ardia moves it rather than the window manager, it doesn't snap to screen edges; a double click on the tab strip's empty space didn't maximize | |
+| Moving a window, edge snapping | Works under xfwm4: the window manager moves it from the tab strip, toolbar, sidebar header, frame margins and Settings' title bar, so it snaps to screen edges, a double click maximizes and restores, dragging a maximized window restores it, and Alt-drag works; right-clicking the empty tab strip or sidebar header still opens their menus. xfwm4 here doesn't tile on drag, a decorated window included. The empty sidebar below the tabs and Little Ardia's title still move the window themselves (they take double clicks and clicks). With no window manager, drag areas don't move the window | 72fcd4f2c |
 | Pop-up menus (the … menu, tab menus) | Works, also when no Ardia window has focus (no window manager, right after a dialog); before, the menu didn't open and its button stayed pressed; with no window manager they also open after another Ardia window or a file dialog closed, which used to leave every menu, the page's too, closing as it opened. Shortcut labels read "Ctrl+Comma" | ab87cf84a, becfcb2c6 |
 | Pin, Top Apps, groups | Works: the hover card's Pin makes a Top App tile; the tab menu's New Group with Tab makes a group and names it in place | |
 | Profiles: create, switch with Alt+1, Alt+2 | Works: Settings › Profiles › Create Profile, then Alt+2 and Alt+1 switch (the window takes the profile's colour). The sidebar header cuts "Work" to "W..." | |
@@ -149,8 +149,14 @@ focused window, `ResizeObserver` and `IntersectionObserver` observe each element
 Native views are drawn in the DOM (`packages/expo-linux/src/views/registry.tsx`, most ported from the web demo):
 `Symbol`, `Surface`, `VisualEffect` (nearly opaque: a transparent Linux window can't blur the desktop), glass, popover
 bubbles, `FadeLabel`, the spinner, the pager's `SwipeArea`, the GL backdrop and power-up (with CSS fallbacks where WebGL2
-is blocklisted), and `WindowDragRegion`, which moves the window from main by following the cursor (so it also works
-without a window manager); a double-click maximizes. A dragged tab's floating preview (`windows/dragPreview.ts`) is an
+is blocklisted), and `WindowDragRegion`. A drag region is `-webkit-app-region: drag`, so a press there starts the window
+manager's move and a double click its maximize; presses there never reach the page, so main forwards
+`system-context-menu` as a `contextmenu` at that point. Chromium applies regions in tree order and `app-region` inherits,
+so `windows/dragCover.ts` marks what lies over a region `no-drag`: controls, views with `mouseDownCanMoveWindow={false}`,
+vertical scrollers and anything with a pointer cursor; within a bar (at most 64 px tall) other layers let the drag
+through, like the Mac's title bar, and over a larger background region anything drawn on top blocks it.
+`ELECTRON_DEBUG_DRAGGABLE_REGIONS=1` paints the computed region over each window. Regions that take clicks or double
+clicks (`clickable`, `onRegionDoubleClick`) move the window from main by following the cursor instead. A dragged tab's floating preview (`windows/dragPreview.ts`) is an
 auxiliary window main moves; dropped into a new window it settles like the Mac's: the source window's snapshot with the
 tab's page drawn in grows to the new window in 200 ms (cubic ease-out), waits for it to show, and fades in 100 ms; any
 other drop fades it in place. Its frames run on the host's timers, since a hidden window's get 1 s ones. The engine's views (`ArdiaWebView`) come from

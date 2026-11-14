@@ -409,7 +409,7 @@ the main method where one is needed (`aroundMain` in `tsModules.ts`), the main p
   default folder is `Ardia Sync` in the first of `~/Dropbox`, `~/Nextcloud`, `~/OneDrive`, `~/Sync`, … that exists
   (the instance's `syncFolder` in a test instance). The Recovery Kit is the Windows TypeScript (PDF, text, QR code);
   its preview is the same layout as SVG; "Copy" puts the PDF on the clipboard as a file (`text/uri-list`). There's no
-  login password check before showing the words (`ownerCheck.ts`, below; `ARDIA_TEST=reauth=denied` refuses, for tests).
+  login password check before showing the words (`ownerCheck.ts`, under The main process; `ARDIA_TEST=reauth=denied` refuses, for tests).
   `node --test apps/browser/linux/src/services/sync/sync.test.ts` opens the Mac and Windows fixture vaults, matches
   their password seals byte for byte and checks what Linux writes with an independent WebCrypto implementation.
 - **Import.** `ArdiaImport` runs the Windows readers in main with a Node host: Chrome, Chromium, Brave, Edge, Vivaldi,

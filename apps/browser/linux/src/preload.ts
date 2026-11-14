@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld("ardiaLinux", {
   modules: () => ipcRenderer.sendSync("ardia:modules"),
   callSync: (module: string, method: string, args: unknown[]) => unwrap(module, method, ipcRenderer.sendSync("ardia:callSync", module, method, args)),
   call: async (module: string, method: string, args: unknown[]) => unwrap(module, method, await ipcRenderer.invoke("ardia:call", module, method, args)),
+  callSyncRaw: (module: string, method: string, args: unknown[]): Reply => ipcRenderer.sendSync("ardia:callSync", module, method, args),
+  callRaw: (module: string, method: string, args: unknown[]): Promise<Reply> => ipcRenderer.invoke("ardia:call", module, method, args),
   onEvent: (listener: EventListener) => {
     listeners.add(listener);
     return () => void listeners.delete(listener);

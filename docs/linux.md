@@ -68,9 +68,17 @@ type LinuxBridge = {
   modules(): Record<string, { sync: string[]; async: string[]; constants?: Record<string, unknown> }>;
   callSync(module: string, method: string, args: unknown[]): unknown;
   call(module: string, method: string, args: unknown[]): Promise<unknown>;
+  callSyncRaw(module: string, method: string, args: unknown[]): { value?: unknown; error?: string; code?: string };
+  callRaw(module: string, method: string, args: unknown[]): Promise<{ value?: unknown; error?: string; code?: string }>;
   onEvent(listener: (module: string, event: string, payload: unknown) => void): () => void;
 };
 ```
+
+`contextBridge` copies an error thrown in the preload without its own properties, so a `code` set there never reaches
+the UI. `packages/expo-linux` therefore calls `callSyncRaw`/`callRaw`, which hand back the main process's reply as it
+is, and throws in the UI's world: a `NativeCallError` with the main error's message and `code` (`ERR_ENGINE`, …, or
+`ERR_LINUX_NATIVE` when main gave none), plus `module` and `method`. `callSync`/`call` still unwrap in the preload for
+code that only needs the value.
 
 Main-process modules live one per file in `apps/browser/linux/src/modules/<Name>.ts` and register with
 `defineModule(name, { sync, async, constants })`. A module emits events with `emit(module, event, payload)`, which

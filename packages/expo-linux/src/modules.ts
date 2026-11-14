@@ -1,4 +1,4 @@
-import { bridge, mainModules } from "./bridge";
+import { bridge, invokeMain, invokeMainSync, mainModules } from "./bridge";
 import { moduleDefaults } from "./defaults";
 import { engineModules } from "./engine/modules";
 import { addNativeListener, type EventSubscription } from "./events";
@@ -15,8 +15,8 @@ function mainMember(name: string, key: string): Call | unknown {
   const shape = mainModules()[name];
   const linux = bridge();
   if (!shape || !linux) return undefined;
-  if (shape.sync.includes(key)) return (...args: unknown[]) => linux.callSync(name, key, args);
-  if (shape.async.includes(key)) return (...args: unknown[]) => linux.call(name, key, args);
+  if (shape.sync.includes(key)) return (...args: unknown[]) => invokeMainSync(linux, name, key, args);
+  if (shape.async.includes(key)) return (...args: unknown[]) => invokeMain(linux, name, key, args);
   if (shape.constants && Object.hasOwn(shape.constants, key)) return shape.constants[key];
   return undefined;
 }

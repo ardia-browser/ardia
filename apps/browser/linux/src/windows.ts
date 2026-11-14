@@ -8,12 +8,21 @@ type CreatedListener = (id: string, window: BrowserWindow) => void;
 
 const pending = new Map<string, BrowserWindowConstructorOptions>();
 const appWindows = new Map<string, BrowserWindow>();
+const auxiliaryNames = new Set<string>();
+const auxiliaryWindows = new Map<string, BrowserWindow>();
 const createdListeners = new Set<CreatedListener>();
 let hostWindow: BrowserWindow | null = null;
 
 export function shapeNextWindow(id: string, options: BrowserWindowConstructorOptions): void {
   pending.set(id, options);
 }
+
+export function shapeNextAuxiliaryWindow(name: string, options: BrowserWindowConstructorOptions): void {
+  auxiliaryNames.add(name);
+  pending.set(name, options);
+}
+
+export const auxiliaryWindow = (name: string): BrowserWindow | undefined => auxiliaryWindows.get(name);
 
 export const appWindow = (id: string): BrowserWindow | undefined => appWindows.get(id);
 export const appWindowIds = (): string[] => [...appWindows.keys()];
@@ -59,6 +68,11 @@ export function createHost(load: (window: BrowserWindow) => Promise<void>): Brow
     };
   });
   made.webContents.on("did-create-window", (child, { frameName }) => {
+    if (auxiliaryNames.has(frameName)) {
+      auxiliaryWindows.set(frameName, child);
+      child.once("closed", () => auxiliaryWindows.delete(frameName));
+      return;
+    }
     appWindows.set(frameName, child);
     child.once("closed", () => {
       if (appWindows.get(frameName) === child) appWindows.delete(frameName);

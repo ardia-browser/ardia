@@ -3,6 +3,7 @@ import { linuxInlineCompletion } from "./inlineCompletion";
 import { devPagerState, pagerState, selectPager, stepPager, switchPager } from "./web/Pager";
 import { watchSidebarEdge } from "./web/motion/sidebarEdge";
 import { animateWindowClose, closeWindow, focusWindow, openWindow, setWindowTitle } from "./windows/appWindows";
+import { dragPreviewModule } from "./windows/dragPreview";
 
 type Call = (...values: unknown[]) => unknown;
 
@@ -11,12 +12,7 @@ export const writtenInTs: Record<string, Record<string, unknown>> = {
     openWindow,
     animateWindowClose,
     watchSidebarEdge: async (id: string, on: boolean, hold: number, right: boolean) => watchSidebarEdge(id, on, hold, right),
-    dragPreviewBegin: async () => {},
-    dragPreviewPage: async () => {},
-    dragPreviewUpdate: async () => {},
-    dragPreviewCancel: async () => {},
-    dragPreviewPlaceholder: async () => {},
-    dragPreviewEnd: async () => {},
+    ...dragPreviewModule,
     raiseView: async () => {},
   },
   ArdiaFocus: linuxFocus,

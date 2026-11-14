@@ -2,7 +2,7 @@ import { BrowserWindow, Menu, screen, type BrowserWindowConstructorOptions, type
 import { defineModule, emit } from "../bridge";
 import { isBackground } from "../paths";
 import { isQuitting, replyToTerminate, requestQuit } from "../quit";
-import { appWindow, appWindowIds, onAppWindowCreated, shapeNextWindow } from "../windows";
+import { appWindow, appWindowIds, auxiliaryWindow, onAppWindowCreated, shapeNextAuxiliaryWindow, shapeNextWindow } from "../windows";
 
 type Frame = [number, number, number, number];
 type Kind = "browser" | "small" | "settings" | "import";
@@ -244,6 +244,38 @@ function setPageFullScreen(id: string, on: boolean) {
   if (window && !window.isDestroyed() && window.isFullScreen() !== on) window.setFullScreen(on);
 }
 
+const DRAG_PREVIEW = "ardia-drag-preview";
+
+function shapeDragPreview() {
+  shapeNextAuxiliaryWindow(DRAG_PREVIEW, {
+    width: 1,
+    height: 1,
+    frame: false,
+    transparent: true,
+    show: false,
+    alwaysOnTop: true,
+    focusable: false,
+    skipTaskbar: true,
+    resizable: false,
+    hasShadow: false,
+  });
+}
+
+function moveDragPreview(source: string, left: number, top: number, width: number, height: number) {
+  const preview = auxiliaryWindow(DRAG_PREVIEW);
+  const from = appWindow(source);
+  if (!preview || preview.isDestroyed() || !from || from.isDestroyed()) return;
+  const origin = from.getContentBounds();
+  preview.setIgnoreMouseEvents(true);
+  preview.setBounds({ x: Math.round(origin.x + left), y: Math.round(origin.y + top), width: Math.max(1, Math.round(width)), height: Math.max(1, Math.round(height)) });
+  if (!preview.isVisible()) preview.showInactive();
+}
+
+function hideDragPreview() {
+  const preview = auxiliaryWindow(DRAG_PREVIEW);
+  if (preview && !preview.isDestroyed()) preview.hide();
+}
+
 onAppWindowCreated((id, window) => watch(id, window));
 
 defineModule(MODULE, {
@@ -252,6 +284,9 @@ defineModule(MODULE, {
     shapeWindow: (id: string, options: OpenOptions) => shapeWindow(id, options),
     showWindow: (id: string) => showWindow(id),
     windowCornerRadius: () => CORNER_RADIUS,
+    shapeDragPreview: () => shapeDragPreview(),
+    moveDragPreview: (source: string, left: number, top: number, width: number, height: number) => moveDragPreview(source, left, top, width, height),
+    hideDragPreview: () => hideDragPreview(),
     isMaximized: (id: string) => !!appWindow(id)?.isMaximized(),
     debugWindowState: (id: string) => {
       const window = appWindow(id);

@@ -2,6 +2,7 @@ import { powerMonitor } from "electron";
 import { count } from "../counts";
 import { DBusConnection, type Message, type Variant } from "../engine/dbus";
 import { note } from "../log";
+import { hostEnvironment } from "../paths";
 
 const LOGIND = "org.freedesktop.login1";
 const LOGIND_PATH = "/org/freedesktop/login1";
@@ -76,7 +77,7 @@ async function watchScreenSavers(options: SessionLockOptions, onLock: (source: S
 }
 
 export async function watchSessionLock(onLock: (source: SessionLockSource) => void, options: SessionLockOptions = {}): Promise<SessionLockWatch> {
-  const settings = { sessionId: process.env.XDG_SESSION_ID || undefined, ...options };
+  const settings = { sessionId: hostEnvironment.sessionId ?? undefined, ...options };
   const watchers: [SessionLockSource, Promise<DBusConnection>][] = [
     ["logind", watchLogind(settings, onLock)],
     ["screenSaver", watchScreenSavers(settings, onLock)],

@@ -18,4 +18,5 @@ export const hostEnvironment = {
   appImage: env.APPIMAGE || null,
   launcher: env.ARDIA_LAUNCHER || null,
   currentDesktop: (env.XDG_CURRENT_DESKTOP ?? "").toLowerCase(),
+  sessionId: env.XDG_SESSION_ID || null,
 };

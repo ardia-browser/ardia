@@ -2,15 +2,16 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const { configFolder, emitConfigChange } = await import("../../test-native/shell.ts");
-const { startConfigFiles, reconcileConfig, resetConfigFilesForTests } = await import("./configFiles.ts");
+const { startConfigFiles, reconcileConfig, resetConfigFilesForTests, problemsToast } = await import("./configFiles.ts");
 const { useBasePalette } = await import("./basePalette.ts");
-const { useToasts } = await import("../app/toasts.ts");
+const { useToasts, showToast, hideKeyedToast } = await import("../app/toasts.ts");
 const { firstWindowCommitted } = await import("../../lib/afterFirstWindow.ts");
 const { colorRoles, font, radius, weight, lineHeight } = await import("../../components/ui/tokens.ts");
 const { layout } = await import("../../components/ui/theme.ts");
 const { activeLook, iconName } = await import("../../lib/activeLook.ts");
 const { DEFAULT_LOOK } = await import("../../lib/themeLook.ts");
 const { resetSidebarWidth } = await import("../sidebar/actions.ts");
+const { takeConfigProblemToastCounts } = await import("../telemetry/configProblemToasts.ts");
 
 const S = () => useBrowser.getState();
 const files = configFolder.files;
@@ -83,15 +84,98 @@ test("a broken file changes nothing, applies what's valid in a fixable one, and 
   startConfigFiles(colorRoles);
   await wait(10);
   assert.equal(S().settings.tabLayout, "sidebar");
-  assert.match(useToasts.getState().toasts[window].title, /^config\.json: isn't valid JSON/);
+  assert.equal(useToasts.getState().toasts[window].title, "config.json has a problem");
+  assert.match(useToasts.getState().toasts[window].message, /^isn't valid JSON/);
   writeConfig({ settings: { tabLayout: "top", selectedTabGlow: "bright" } });
   reconcileConfig();
   assert.equal(S().settings.tabLayout, "top");
-  assert.equal(useToasts.getState().toasts[window].title, "config.json: selectedTabGlow must be full, soft or off");
+  assert.equal(useToasts.getState().toasts[window].message, "selectedTabGlow must be full, soft or off");
   const shown = useToasts.getState().toasts[window].id;
   reconcileConfig();
   assert.equal(useToasts.getState().toasts[window].id, shown, "the same problem isn't toasted again");
   assert.equal(warnings.filter((w) => w.includes("selectedTabGlow")).length, 1);
+});
+
+test("the problem toast stays up while the file is wrong, stays dismissed for the same problems, and goes once they're fixed", async () => {
+  fresh();
+  const window = S().createWindow({ url: "https://a.com/" });
+  writeConfig({ settings: { selectedTabGlow: "bright" } });
+  takeConfigProblemToastCounts();
+  startConfigFiles(colorRoles);
+  await wait(10);
+  const toast = () => useToasts.getState().toasts[window];
+  assert.equal(toast().sticky, true);
+  assert.equal(toast().action.title, "Dismiss");
+  toast().action.run();
+  useToasts.setState({ toasts: { [window]: null } });
+  assert.deepEqual(takeConfigProblemToastCounts(), { config_problem_toasts: 1, config_problem_toast_dismissals: 1 });
+  reconcileConfig();
+  assert.equal(toast(), null, "dismissed, and nothing new is wrong");
+  writeConfig({ settings: { selectedTabGlow: "bright", tabLayout: "middle" } });
+  reconcileConfig();
+  assert.equal(toast().title, "config.json has 2 problems", "a new problem shows every problem again");
+  writeConfig({ settings: { tabLayout: "middle" } });
+  reconcileConfig();
+  assert.equal(toast().title, "config.json has a problem", "a fixed problem leaves the toast in place with what's left");
+  writeConfig({ settings: {} });
+  reconcileConfig();
+  assert.equal(toast(), null, "fixing the file takes the toast down");
+  assert.deepEqual(takeConfigProblemToastCounts(), { config_problem_toasts: 1, config_problem_toast_dismissals: 0 }, "updating it in place isn't another showing");
+});
+
+test("the problem toast waits for another toast to go instead of taking its slot, and comes back after one replaces it", async () => {
+  fresh();
+  const window = S().createWindow({ url: "https://a.com/" });
+  startConfigFiles(colorRoles);
+  await wait(10);
+  showToast(window, "Closed 3 tabs", undefined, { action: { title: "Undo", run() {} } });
+  writeConfig({ settings: { selectedTabGlow: "bright" } });
+  reconcileConfig();
+  assert.equal(useToasts.getState().toasts[window].title, "Closed 3 tabs", "the Undo toast keeps its slot");
+  useToasts.setState({ toasts: { [window]: null } });
+  assert.equal(useToasts.getState().toasts[window].title, "config.json has a problem", "shown once the slot is free");
+  showToast(window, "Translating", undefined, { key: "translate-progress", sticky: true });
+  hideKeyedToast(window, "translate-progress");
+  assert.equal(useToasts.getState().toasts[window].title, "config.json has a problem", "back after the toast that replaced it goes");
+});
+
+test("dismissing holds while the same problems stand, however they're reordered or trimmed", async () => {
+  fresh();
+  const window = S().createWindow({ url: "https://a.com/" });
+  writeConfig({ theme: "demo" });
+  files.set("themes/demo.json", JSON.stringify({ colours: {}, fonts: {} }));
+  startConfigFiles(colorRoles);
+  await wait(10);
+  assert.equal(useToasts.getState().toasts[window].message, "colours and fonts aren't theme keys (dark, light, type, metrics, layout, icons)");
+  useToasts.setState({ toasts: { [window]: null } });
+  files.set("themes/demo.json", JSON.stringify({ fonts: {}, colours: {} }));
+  reconcileConfig();
+  assert.equal(useToasts.getState().toasts[window], null, "reordered");
+  files.set("themes/demo.json", JSON.stringify({ fonts: {} }));
+  reconcileConfig();
+  assert.equal(useToasts.getState().toasts[window], null, "one of them fixed");
+});
+
+test("problems found before any window opens show in the first window that does", async () => {
+  fresh();
+  assert.equal(S().windowOrder.length, 0);
+  writeConfig({ settings: { selectedTabGlow: "bright" } });
+  startConfigFiles(colorRoles);
+  await wait(10);
+  const window = S().createWindow({ url: "https://a.com/" });
+  assert.equal(useToasts.getState().toasts[window]?.title, "config.json has a problem");
+});
+
+test("the problem toast names the file once and sums up the rest", () => {
+  assert.deepEqual(problemsToast(["themes/demo.json: type.family must be a font name", "themes/demo.json: metrics.rowHeight must be a number from 24 to 56", "themes/demo.json: icons.plus has \"Plus\", which isn't an SF Symbol name"]), {
+    title: "themes/demo.json has 3 problems",
+    message: "type.family must be a font name; metrics.rowHeight must be a number from 24 to 56; and 1 more (ardia config check lists them all)",
+  });
+  assert.deepEqual(problemsToast(["themes/demo.json: type.famly isn't a type key (family, mono, scale, sizes, weights)", "themes/demo.json: type.font isn't a type key (family, mono, scale, sizes, weights)", "themes/demo.json: icons isn't a theme key (dark, light)"]).message, "type.famly and type.font aren't type keys (family, mono, scale, sizes, weights); icons isn't a theme key (dark, light)");
+  assert.deepEqual(problemsToast(["config.json: tabLayout must be sidebar or top", "themes/demo.json: dark.accent isn't a colour"]), {
+    title: "Your config files have 2 problems",
+    message: "config.json: tabLayout must be sidebar or top; themes/demo.json: dark.accent isn't a colour",
+  });
 });
 
 test("the theme's roles become the base palette with a new revision, and an unparseable edit keeps the last good version", () => {

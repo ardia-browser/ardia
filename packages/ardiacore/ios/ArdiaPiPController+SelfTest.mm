@@ -209,7 +209,8 @@ using namespace ardia_pip;
 }
 
 - (void)devMouse:(NSArray<NSString *> *)args {
-  if (args.count != 2) return;
+  if (args.count != 2 && args.count != 3) return;
+  const NSInteger clicks = args.count == 3 ? MAX(1, args[2].integerValue) : 1;
   NSArray<NSString *> *xy = [args[1] componentsSeparatedByString:@","];
   if (xy.count != 2) return;
   NSWindow *window = _window;
@@ -218,12 +219,13 @@ using namespace ardia_pip;
     @"moved" : @(NSEventTypeMouseMoved),
     @"down" : @(NSEventTypeLeftMouseDown),
     @"up" : @(NSEventTypeLeftMouseUp),
+    @"dragged" : @(NSEventTypeLeftMouseDragged),
   };
   NSNumber *type = types[args[0]];
   if (!type) return;
   NSEvent *event = [NSEvent mouseEventWithType:(NSEventType)type.integerValue location:point modifierFlags:0
                                      timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
-                                       context:nil eventNumber:0 clickCount:1 pressure:type.integerValue == NSEventTypeLeftMouseDown];
+                                       context:nil eventNumber:0 clickCount:clicks pressure:type.integerValue == NSEventTypeLeftMouseDown || type.integerValue == NSEventTypeLeftMouseDragged];
   if (type.integerValue == NSEventTypeMouseMoved) [window.contentView mouseMoved:event];
   else [NSApp postEvent:event atStart:NO];
 }

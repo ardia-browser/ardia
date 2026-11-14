@@ -57,6 +57,7 @@ type NativeEvents = {
   onPictureInPicture: PictureInPictureState;
   onAutoPictureInPictureKept: { appSwitch?: boolean; reason?: string };
   onPictureInPictureDragged: PictureInPictureDrag;
+  onPictureInPictureSkip: { seconds: number };
   onMediaFault: MediaFault;
   onActivateRequest: ActivateRequest;
   onDisplayMediaRequest: DisplayMediaRequest;
@@ -105,6 +106,7 @@ const PAGE_EVENTS = {
   onPictureInPicture: "pictureInPicture",
   onAutoPictureInPictureKept: "autoPictureInPictureKept",
   onPictureInPictureDragged: "pictureInPictureDragged",
+  onPictureInPictureSkip: "pictureInPictureSkip",
   onMediaFault: "mediaFault",
   onActivateRequest: "activateRequest",
   onDisplayMediaRequest: "displayMediaRequest",
@@ -153,6 +155,7 @@ const unwrap: { [K in Handlers]: (e: NativeEvents[K]) => Parameters<NonNullable<
   onPictureInPicture: (e) => [e],
   onAutoPictureInPictureKept: (e) => [e.reason === "nothingPlaying" ? "nothingPlaying" : e.appSwitch ? "appSwitch" : "onScreen"],
   onPictureInPictureDragged: (e) => [{ held: !!e.held, slipped: !!e.slipped }],
+  onPictureInPictureSkip: (e) => [e.seconds],
   onMediaFault: (e) => [e],
   onActivateRequest: (e) => [e],
   onDisplayMediaRequest: (e) => [e],

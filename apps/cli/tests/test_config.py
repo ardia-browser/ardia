@@ -460,7 +460,7 @@ class Validation(unittest.TestCase):
             ({"dark": {"dark": True}}, "dark.dark isn't a colour role (did you mean mark?)"),
             ({"dark": []}, "dark must be an object of colour roles"),
             ({"dark": None}, "dark must be an object of colour roles"),
-            ({"drak": {}}, "drak isn't a theme key (dark, light, type, metrics, layout, icons) (did you mean dark?)"),
+            ({"drak": {}}, "drak isn't a theme key (did you mean dark?)"),
             ({"colors": {}}, "colors isn't a theme key (dark, light, type, metrics, layout, icons)"),
         ]
         for document, message in cases:
@@ -505,7 +505,7 @@ class Validation(unittest.TestCase):
             ({"type": {"weights": {"bold": 750}}}, ['type.weights.bold must be a weight from "100" to "900" in steps of 100']),
             ({"metrics": {"rowHeight": True}}, ["metrics.rowHeight must be a number from 24 to 56"]),
             ({"metrics": {"sidebarWidth": 100}}, ["metrics.sidebarWidth must be a number from 160 to 400"]),
-            ({"metrics": {"rowheight": 30}}, ["metrics.rowheight isn't a metrics key (rowHeight, rowGap, pinnedHeight, sidebarWidth, radius) (did you mean rowHeight?)"]),
+            ({"metrics": {"rowheight": 30}}, ["metrics.rowheight isn't a metrics key (did you mean rowHeight?)"]),
             ({"layout": {"newTab": None}}, ["layout.newTab must be one of top, bottom"]),
             ({"layout": {"hide": [{"a": 1}, 2.0]}}, [f'layout.hide has {{"a":1}}, which isn\'t a part ({PARTS})', f"layout.hide has 2, which isn't a part ({PARTS})"]),
             ({"layout": {"position": "left"}}, ["layout.position isn't a layout key (hide, addressField, newTab)"]),
@@ -706,6 +706,207 @@ class Themes(Sandbox):
         self.assertIn("larger than 1 MB", err)
 
 
+class ThemeKeys(Sandbox):
+    def setUp(self):
+        super().setUp()
+        self.install_schemas()
+        self.themes = self.folder / "themes"
+        self.themes.mkdir(parents=True)
+
+    def theme(self, name="nord"):
+        return json.loads((self.themes / f"{name}.json").read_text())
+
+    def write_theme(self, document, name="nord", active=True):
+        (self.themes / f"{name}.json").write_text(json.dumps(document, indent=2) + "\n")
+        if active:
+            self.write_config({"$schema": "./config.schema.json", "theme": name, "settings": {}})
+
+    def test_key_paths(self):
+        self.assertEqual(config_cli.theme_key("icons.chevron.down"), ("icons", "chevron.down"))
+        self.assertEqual(config_cli.theme_key("metrics.radius.row"), ("metrics", "radius", "row"))
+        self.assertEqual(config_cli.theme_key("dark.accent"), ("dark", "accent"))
+        self.assertEqual(config_cli.theme_key("layout"), ("layout",))
+        for bad in ("", "dark.", "metrics..row", ".dark", "icons.", "$schema"):
+            with self.subTest(key=bad):
+                with self.assertRaises(config_files.ConfigError):
+                    config_cli.theme_key(bad)
+
+    def test_set_keeps_order_and_rewrites(self):
+        self.write_theme({"$schema": "../theme.schema.json", "dark": {"accent": "#111111", "panel": "#222222"}, "note": "mine", "metrics": {"rowGap": 2}})
+        path = self.themes / "nord.json"
+        out, _ = self.ok("theme", "set", "dark.accent", "#FF9F5A")
+        self.assertEqual(out, 'dark.accent = "#FF9F5A"\n')
+        self.ok("theme", "set", "metrics.rowHeight", "40")
+        self.ok("theme", "set", "type.family", "Avenir Next")
+        document = self.theme()
+        self.assertEqual(list(document), ["$schema", "dark", "note", "metrics", "type"])
+        self.assertEqual(document["dark"], {"accent": "#FF9F5A", "panel": "#222222"})
+        self.assertEqual(document["metrics"], {"rowGap": 2, "rowHeight": 40})
+        self.assertEqual(document["type"], {"family": "Avenir Next"})
+        self.assertEqual(path.read_text(), config_files.dump(document))
+        before = path.stat().st_ino
+        self.ok("theme", "set", "metrics.rowHeight", "40")
+        self.assertNotEqual(path.stat().st_ino, before)
+        self.ok("theme", "set", "layout.hide", '["navButtons"]')
+        self.assertEqual(self.theme()["layout"], {"hide": ["navButtons"]})
+
+    def test_icons_key_with_dots(self):
+        self.write_theme({"icons": {"plus": "plus.circle"}})
+        self.ok("theme", "set", "icons.chevron.down", "chevron.down.circle")
+        self.assertEqual(self.theme()["icons"], {"plus": "plus.circle", "chevron.down": "chevron.down.circle"})
+        out, _ = self.ok("theme", "get", "icons.chevron.down")
+        self.assertEqual(out, "chevron.down.circle\n")
+        _, err = self.fails("theme", "set", "icons.chevron.down", "Not A Symbol")
+        self.assertIn("icons.chevron.down must be an SF Symbol name", err)
+        _, err = self.fails("theme", "set", "icons.Chevron", "chevron.up")
+        self.assertIn('icons has "Chevron"', err)
+        self.ok("theme", "unset", "icons.chevron.down")
+        self.assertEqual(self.theme()["icons"], {"plus": "plus.circle"})
+
+    def test_nested_radius_key(self):
+        self.write_theme({"metrics": {"rowHeight": 34}})
+        self.ok("theme", "set", "metrics.radius.row", "14")
+        self.assertEqual(self.theme()["metrics"], {"rowHeight": 34, "radius": {"row": 14}})
+        out, _ = self.ok("theme", "get", "metrics.radius.row")
+        self.assertEqual(out, "14\n")
+        out, _ = self.ok("theme", "get", "metrics.radius", "--json")
+        self.assertEqual(json.loads(out), {"row": 14})
+        _, err = self.fails("theme", "set", "metrics.radius.card", "4")
+        self.assertIn("metrics.radius.card isn't a radius key (row, pinned, tile, control, toolbar, panel, sheet)", err)
+
+    def test_invalid_value_leaves_file_unchanged(self):
+        self.write_theme({"dark": {"accent": "#4A77D4"}, "metrics": {"rowHeight": 100}})
+        path = self.themes / "nord.json"
+        before = path.read_bytes()
+        cases = [
+            (("metrics.rowHeight", "10"), "metrics.rowHeight must be a number from 24 to 56"),
+            (("dark.accent", "blue"), "dark.accent must be a colour"),
+            (("layout.hide", '["toolbar"]'), 'layout.hide has "toolbar", which isn\'t a part'),
+            (("metrics.rowheight", "30"), "metrics.rowheight isn't a metrics key (did you mean rowHeight?)"),
+            (("dark.acent", "#fff"), "dark.acent isn't a colour role (did you mean accent or onAccent?)"),
+            (("drak.accent", "#fff"), "drak isn't a theme key (did you mean dark?)"),
+            (("type.weights.bold", "750"), 'type.weights.bold must be a weight'),
+        ]
+        for (key, value), message in cases:
+            with self.subTest(key=key):
+                _, err = self.fails("theme", "set", key, value)
+                self.assertIn(message, err)
+                self.assertEqual(path.read_bytes(), before)
+        _, err = self.fails("theme", "set", "metrics.rowHeight.x", "3")
+        self.assertIn("metrics.rowHeight in themes/nord.json isn't an object", err)
+        self.assertEqual(path.read_bytes(), before)
+        self.ok("theme", "set", "dark.accent", "#FF9F5A")
+        self.assertEqual(self.theme()["metrics"], {"rowHeight": 100})
+        self.assertEqual(sorted(p.name for p in self.themes.iterdir()), ["nord.json"])
+
+    def test_set_creates_custom_when_no_theme_is_active(self):
+        out, err = self.ok("theme", "set", "metrics.rowHeight", "40")
+        self.assertEqual(out, "metrics.rowHeight = 40\n")
+        self.assertIn("created themes/custom.json and made it the active theme", err)
+        self.assertEqual(self.theme("custom"), {"$schema": "../theme.schema.json", "metrics": {"rowHeight": 40}})
+        self.assertEqual(self.config()["theme"], "custom")
+        self.ok("theme", "set", "dark.accent", "#FF9F5A")
+        self.assertEqual(self.theme("custom")["dark"], {"accent": "#FF9F5A"})
+        self.ok("theme", "check")
+
+    def test_set_takes_back_custom_when_it_cant_be_made_active(self):
+        with mock.patch.object(config_cli, "activate", side_effect=PermissionError(13, "Permission denied", str(self.folder / "config.json"))):
+            self.fails("theme", "set", "metrics.rowHeight", "40")
+        self.assertFalse((self.themes / "custom.json").exists())
+        self.ok("theme", "set", "metrics.rowHeight", "40")
+        self.assertEqual(self.config()["theme"], "custom")
+
+    def test_set_without_active_theme_refuses_bad_value_and_existing_custom(self):
+        self.write_config({"theme": None, "settings": {}})
+        self.fails("theme", "set", "metrics.rowHeight", "10")
+        self.assertFalse((self.themes / "custom.json").exists())
+        self.assertIsNone(self.config()["theme"])
+        self.write_theme({"dark": {}}, "custom", active=False)
+        _, err = self.fails("theme", "set", "metrics.rowHeight", "40")
+        self.assertIn("ardia theme use custom", err)
+        self.assertEqual(self.theme("custom"), {"dark": {}})
+
+    def test_get_and_unset_need_a_theme(self):
+        for argv in (("theme", "get", "dark.accent"), ("theme", "unset", "dark.accent"), ("theme", "get")):
+            _, err = self.fails(*argv)
+            self.assertIn("config.json names no theme; pass --theme NAME", err)
+        self.write_theme({"dark": {}})
+        _, err = self.fails("theme", "get", "dark.accent", "--theme", "nrod")
+        self.assertIn("no theme named nrod", err)
+        self.assertIn("did you mean nord", err)
+        _, err = self.fails("theme", "unset", "dark.accent", "--theme", "nrod")
+        self.assertIn("did you mean nord", err)
+        _, err = self.fails("theme", "set", "dark.accent", "#fff", "--theme", "nrod")
+        self.assertIn("did you mean nord", err)
+
+    def test_unset_drops_empty_blocks(self):
+        self.write_theme({"$schema": "../theme.schema.json", "dark": {"accent": "#111111"}, "metrics": {"radius": {"row": 12}, "rowGap": 2}})
+        out, _ = self.ok("theme", "unset", "metrics.radius.row")
+        self.assertEqual(out, "removed metrics.radius.row; Ardia uses its own value for it\n")
+        self.assertEqual(self.theme(), {"$schema": "../theme.schema.json", "dark": {"accent": "#111111"}, "metrics": {"rowGap": 2}})
+        self.ok("theme", "unset", "metrics.rowGap")
+        self.ok("theme", "unset", "dark.accent")
+        self.assertEqual(self.theme(), {"$schema": "../theme.schema.json"})
+        out, _ = self.ok("theme", "unset", "dark.accent")
+        self.assertEqual(out, "dark.accent isn't in themes/nord.json\n")
+        _, err = self.fails("theme", "unset", "metrics.rowheight")
+        self.assertIn("did you mean rowHeight", err)
+
+    def test_get_falls_back_to_default(self):
+        self.write_theme({"dark": {"accent": "#111111"}})
+        out, _ = self.ok("theme", "get", "dark.accent")
+        self.assertEqual(out, "#111111\n")
+        out, _ = self.ok("theme", "get", "dark.accent", "--json")
+        self.assertEqual(out, '"#111111"\n')
+        out, err = self.fails("theme", "get", "metrics.rowHeight")
+        self.assertEqual(out, "")
+        self.assertIn("themes/nord.json doesn't set metrics.rowHeight (Ardia's default: 34)", err)
+        _, err = self.fails("theme", "get", "light.accent")
+        self.assertIn("(Ardia's default: #6395FC)", err)
+        _, err = self.fails("theme", "get", "metrics.radius.sheet")
+        self.assertIn("(Ardia's default: 16)", err)
+        _, err = self.fails("theme", "get", "type.family")
+        self.assertTrue(err.rstrip().endswith("doesn't set type.family"), err)
+        _, err = self.fails("theme", "get", "icons.plus")
+        self.assertTrue(err.rstrip().endswith("doesn't set icons.plus"), err)
+        _, err = self.fails("theme", "get", "metrics.rowheight")
+        self.assertIn("metrics.rowheight isn't a metrics key (did you mean rowHeight?)", err)
+        out, _ = self.ok("theme", "get")
+        self.assertEqual(json.loads(out), {"dark": {"accent": "#111111"}})
+
+    def test_set_other_theme_says_it_isnt_active(self):
+        self.write_theme({}, "nord")
+        self.write_theme({}, "dracula", active=False)
+        _, err = self.ok("theme", "set", "dark.accent", "#FF9F5A", "--theme", "dracula")
+        self.assertIn("dracula isn't the active theme", err)
+        self.assertEqual(self.theme("dracula"), {"dark": {"accent": "#FF9F5A"}})
+        self.assertEqual(self.theme("nord"), {})
+        _, err = self.ok("theme", "set", "dark.accent", "#FF9F5A", "--theme", "nord")
+        self.assertNotIn("isn't the active theme", err)
+
+    def test_values_parse_as_json_else_string(self):
+        self.write_theme({})
+        self.ok("theme", "set", "type.family", "123")
+        self.ok("theme", "set", "type.weights.bold", "800")
+        self.ok("theme", "set", "dark.tabSelectedBorder", '["#ffffff", "#000000"]')
+        document = self.theme()
+        self.assertEqual(document["type"], {"family": "123", "weights": {"bold": 800}})
+        self.assertEqual(document["dark"]["tabSelectedBorder"], ["#ffffff", "#000000"])
+
+
+class ThemeKeysWithoutSchema(Sandbox):
+    def test_set_writes_unchecked_and_says_so(self):
+        themes = self.folder / "themes"
+        themes.mkdir(parents=True)
+        (themes / "nord.json").write_text("{}")
+        self.write_config({"theme": "nord", "settings": {}})
+        _, err = self.ok("theme", "set", "dark.accent", "anything")
+        self.assertIn("written without checking", err)
+        self.assertEqual(json.loads((themes / "nord.json").read_text()), {"dark": {"accent": "anything"}})
+        _, err = self.fails("theme", "get", "metrics.rowHeight")
+        self.assertIn("(Ardia's default: 34)", err)
+
+
 class Edit(Sandbox):
     def test_fallback_waits_with_open(self):
         with mock.patch("subprocess.call", return_value=0) as call:
@@ -737,11 +938,14 @@ class NoConnection(Sandbox):
             self.ok("config", "check")
             self.ok("theme", "new", "nord")
             self.ok("theme", "use", "nord")
+            self.ok("theme", "set", "metrics.rowHeight", "40")
+            self.ok("theme", "get", "metrics.rowHeight")
+            self.ok("theme", "unset", "metrics.rowHeight")
             self.ok("theme", "list")
             self.ok("theme", "check")
 
     def test_help(self):
-        for argv in (["config", "--help"], ["theme", "--help"], ["config", "set", "--help"], ["theme", "new", "--help"]):
+        for argv in (["config", "--help"], ["theme", "--help"], ["config", "set", "--help"], ["theme", "new", "--help"], ["theme", "set", "--help"], ["theme", "get", "--help"], ["theme", "unset", "--help"]):
             status, out, _ = self.run_cli(*argv)
             self.assertEqual(status, 0)
             self.assertIn("usage: ardia", out)

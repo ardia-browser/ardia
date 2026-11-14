@@ -152,4 +152,12 @@ using namespace ardia_runtime;
   [self callFrame:_reports.nowPlaying.frame ?: @"" kind:@"media" json:JSONText(@{@"action" : action ?: @"", @"seconds" : @(seconds)})];
 }
 
+- (void)seekPictureInPictureBy:(double)seconds {
+  [self thawHiddenPage];
+  NSString *json = JSONText(@{@"action" : @"seekPictureInPictureBy", @"seconds" : @(seconds)});
+  NSArray<NSString *> *frames = ScriptFramesOf(_tab).array;
+  if (!frames.count) return [self callFrame:@"" kind:@"media" json:json];
+  for (NSString *frameId in frames) [self callFrame:frameId kind:@"media" json:json];
+}
+
 @end

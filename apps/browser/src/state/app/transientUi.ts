@@ -14,7 +14,7 @@ import { useToolbarAutoHide } from "../windows/toolbarAutoHide";
 import { focusedWindowOf } from "../windows/ui";
 
 export type Surface = "menu" | "rename" | "iconPicker" | "hoverCard" | "downloads" | "popover" | "panel" | "find" | "historyMenu" | "extensionPopup";
-export type Held = "peek" | "toolbar" | "hover";
+export type Held = "peek" | "topStrip" | "toolbar" | "hover";
 type Chrome = "sidebar" | "toolbar";
 type Where = { windowId: string; chrome: Chrome | null; tab: (tabId: string) => boolean };
 type Watch = (changed: () => void) => () => void;
@@ -64,6 +64,7 @@ const SURFACES: Record<Surface, { open: (at: Where) => boolean; watch: Watch[] }
 
 export const HOLDS: Record<Held, { chrome: Chrome | null; surfaces: Surface[] }> = {
   peek: { chrome: "sidebar", surfaces: ["menu", "rename", "iconPicker", "hoverCard", "downloads", "popover", "historyMenu"] },
+  topStrip: { chrome: null, surfaces: ["menu", "downloads"] },
   toolbar: { chrome: "toolbar", surfaces: ["menu", "panel", "find", "popover", "historyMenu", "extensionPopup"] },
   hover: { chrome: null, surfaces: ["menu", "rename", "iconPicker", "downloads", "popover", "panel", "find", "historyMenu", "extensionPopup"] },
 };
@@ -91,6 +92,8 @@ export const peekHeld = (windowId: string) => {
   const field = sidebarFieldTab(windowId);
   return holds("peek", windowId, field ? (id) => id === field : noTab);
 };
+
+export const topStripPeekHeld = (windowId: string) => holds("topStrip", windowId, noTab);
 
 export const hoverHeld = (windowId: string) => holds("hover", windowId, (id) => browser().tabs[id]?.windowId === windowId);
 

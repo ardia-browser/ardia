@@ -13,8 +13,8 @@ turn that re-reads all output before it: do the most per call, print the least. 
 ## Start
 
 ```sh
-ardia browse open <url>     # a task that names a site
-ardia browse snapshot -i    # a task about the user's own page
+ardia browse open <url>  # a task that names a site
+ardia browse batch "tab active" "snapshot -i"  # the user's own page
 ```
 
 `snapshot -i` lists what you can act on with refs (`textbox "Name" [ref=e11]`). If it starts with
@@ -107,4 +107,4 @@ EOF
 - `--port N` anywhere on the line (or `ARDIA_PORT`). Write `ardia browse` out in each command. Exit 2: Ardia
   isn't reachable; its message says what to ask the user.
 - `ardia browse <command> --help`. `references/troubleshooting.md`: input that doesn't land, background tabs,
-  refused commands, sessions, exit codes. `automation.md`: tabs and groups (`ardia tabs --usage`), events, hooks. `userscripts.md`, `config.md`, `daily-reports.md`.
+  refused commands, sessions, exit codes. `automation.md`: tabs and groups (`ardia tabs --usage`), events, hooks. `userscripts.md`, `config.md` (looks: `ardia theme set`), `daily-reports.md`.

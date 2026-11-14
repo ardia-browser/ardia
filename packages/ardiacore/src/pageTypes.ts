@@ -204,6 +204,7 @@ export type WebViewProps = ViewProps & {
   onPictureInPicture?: (state: PictureInPictureState) => void;
   onAutoPictureInPictureKept?: (reason: AutoPictureInPictureHold) => void;
   onPictureInPictureDragged?: (drag: PictureInPictureDrag) => void;
+  onPictureInPictureSkip?: (seconds: number) => void;
   onMediaFault?: (fault: MediaFault) => void;
   onActivateRequest?: (request: ActivateRequest) => void;
   onDisplayMediaRequest?: (request: DisplayMediaRequest) => void;

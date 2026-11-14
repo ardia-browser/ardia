@@ -231,6 +231,18 @@ class CommandEventTest(TelemetryCase):
         self.assertNotIn("secret", self.spool_text())
         self.assertNotIn("print", self.spool_text())
 
+    def test_theme_keys_record_names_never_keys_or_values(self):
+        self.run_cli("theme", "set", "icons.zzkey", "zzvalue", "--theme", "zzname")
+        self.run_cli("theme", "get", "icons.chevron.down", "--json")
+        self.run_cli("theme", "unset", "dark.accent")
+        records = self.spool()
+        self.assertEqual([(r["properties"]["command"], r["properties"]["subcommand"]) for r in records], [("theme", "set"), ("theme", "get"), ("theme", "unset")])
+        self.assertEqual([r["properties"]["flags"] for r in records], ["--theme", "--json", ""])
+        self.assertEqual([r["properties"]["exit_code"] for r in records], [1, 1, 1])
+        text = self.spool_text()
+        for secret in ("zzkey", "zzvalue", "zzname", "chevron", "accent"):
+            self.assertNotIn(secret, text)
+
     def test_browse_records_the_command_name_and_known_flags_only(self):
         self.run_cli("browse", "--json", "session", "list", "--hunter2")
         records = self.spool()

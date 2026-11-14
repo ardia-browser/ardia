@@ -375,7 +375,7 @@ def refuse_on_borrowed(ctx: Ctx, page, what: str):
     if borrowed and borrowed == page.target_id:
         tab = ctx.state.tab_id(borrowed)
         raise BrowseError(
-            f"This session is using your tab [{tab}] (it had no tab of its own), so it won't {what} it. To drive that tab anyway, "
+            f"This session is using your tab [{tab}] (picked with `tab active`), so it won't {what} it. To drive that tab anyway, "
             f"pick it with `ardia browse tab {tab}`; to browse on your own, use `ardia browse open <url>`",
             data={"tabId": tab}, code="borrowed_tab",
         )
@@ -1288,16 +1288,14 @@ async def cmd_tab(ctx: Ctx, argv):
         state.forget_target(target_id)
         return Result({"closed": tab, "targetId": target_id}, f"✓ Tab [{tab}] closed")
     if action == "active":
-        target_id = await user_active_tab(state)
-        if not target_id:
-            raise BrowseError("The user isn't on a web page right now (New Tab or another Ardia view)", code="no_tab")
-        action = target_id
-    await state.refresh_targets()
-    target_id = await state.find_tab(action)
-    state.current = target_id
-    state.extras.pop("attached", None)
-    if state.pin_tab:
-        state.extras["pinned_target"] = target_id
+        target_id = await state.take_active()
+    else:
+        await state.refresh_targets()
+        target_id = await state.find_tab(action)
+        state.current = target_id
+        state.extras.pop("attached", None)
+        if state.pin_tab:
+            state.extras["pinned_target"] = target_id
     page = await state.page(target_id)
     if wants_show(ctx, options):
         page = await show_tab(ctx, page)
@@ -1320,21 +1318,6 @@ def tab_line(tab: dict, session: str) -> str:
     app = f" {tab['appTabId']} " if tab.get("appTabId") else ""
     extra = f" ({'; '.join(notes)})" if notes else ""
     return f"{'→' if tab['active'] else ' '} [{tab['tabId']}]{app} {tab['title'] or tab['url']} - {tab['url']}{extra}"
-
-
-async def user_active_tab(state):
-    endpoint = state.endpoint
-    if not endpoint or not endpoint.active:
-        raise BrowseError("`tab active` needs the token path (Ardia's own control server), not --port or --ws")
-    import urllib.request
-
-    def fetch():
-        direct = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-        with direct.open(endpoint.active, timeout=3) as response:
-            return json.loads(response.read(64 * 1024))
-
-    answer = await asyncio.to_thread(fetch)
-    return answer.get("targetId") if isinstance(answer, dict) else None
 
 
 @command("window")

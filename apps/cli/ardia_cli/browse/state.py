@@ -18,8 +18,12 @@ APPEAR_POLL = 0.15
 PROBE_TIMEOUT = 3.0
 UNKNOWN = object()
 NO_PAGE = (
-    "The user isn't on a web page right now (New Tab or another Ardia view) and this session has no tab yet. "
-    "Open one with `ardia browse open <url>`, or pick one with `ardia browse tab list` and `ardia browse tab <id>`"
+    "The user isn't on a web page right now (New Tab or another Ardia view). "
+    "Open a tab of this session's own with `ardia browse open <url>`, or pick one with `ardia browse tab list` and `ardia browse tab <id>`"
+)
+NO_SESSION_TAB = (
+    "This session has no tab yet, and it never takes the user's tab on its own. `ardia browse open <url>` opens a "
+    "background tab of its own; to work in the tab the user is looking at, pick it first with `ardia browse tab active`"
 )
 
 
@@ -251,10 +255,9 @@ class State:
                     data={"targetId": self.extras.get("pinned_target")},
                     code="tab_gone",
                 )
-            if self.extras.get("had_tab"):
-                target_id = await self.follow_lost_tab()
-            else:
-                target_id = await self.attach_active()
+            if not self.extras.get("had_tab"):
+                raise BrowseError(NO_SESSION_TAB, code="no_session_tab")
+            target_id = await self.follow_lost_tab()
         if target_id not in self.target_infos:
             await self.refresh_targets()
             if target_id not in self.target_infos:
@@ -305,7 +308,7 @@ class State:
         raise BrowseError(f"This session's tab{gone} is gone (closed, or Ardia replaced its page and didn't say which page took over). {fix}",
                           code="tab_gone")
 
-    async def attach_active(self) -> str:
+    async def take_active(self) -> str:
         target_id = await self.active_target()
         if target_id is UNKNOWN:
             target_id = await self.shown_target()
@@ -318,12 +321,6 @@ class State:
         self.extras["attached"] = target_id
         if self.pin_tab:
             self.extras["pinned_target"] = target_id
-        from ardia_cli.browse import tabs
-
-        await tabs.app_tab_map(self)
-        info = self.target_infos[target_id]
-        label = " - ".join(part for part in (info.get("title"), info.get("url")) if part)
-        self.extras["notice"] = f"→ This session had no tab, so it uses the active one: [{self.tab_id(target_id)}] {label}"
         return target_id
 
     async def active_target(self):

@@ -53,6 +53,7 @@ holds the rest.
 | Sync | `node packages/sync/scripts/e2e.mjs <Debug app>` | Two and three hidden instances through one folder (`docs/sync.md`) |
 | Import | `node packages/import/scripts/e2e.mjs <Debug app> <scratch dir>` | Cookies, addresses and cards from a fake Chrome home (`packages/import/README.md`) |
 | Video upscaling | `node apps/browser/scripts/video-upscaling-test.mjs <Debug app> [--keep] [check…]` (`--list`) | What the GPU process upscales in every state the gate decides (playing, paused, native size, background tab, app inactive, occluded, Low Power, thermal, PiP, HDR, full screen, Little Ardia, setting off), from its `ArdiaVSR.*` trace events and `videoUpscalingState()` |
+| PiP click to skip | `node apps/browser/scripts/pip-click-seek-test.mjs <Debug app> [--keep] [--expect-no-seek]` | A click on the left or right of the video Picture in Picture window skips 10 s back or ahead, and each click of a quick double or triple click skips again; the centre column, a drag (also one that only passes 3 pt at the release), a dead-band double-click and a stashed window never seek; the video in the window is the one that moves, even paused while another plays; a page with only a `seekto` handler is asked on the timeline it reported, kept current through repeated clicks and a pause though it reports once, also for a video in a closed shadow root; Chrome's close button still closes (#1735). `--expect-no-seek` runs it against a build from before, where no click moves the video |
 | Engine patches | `python3 engine/patches/series.py check` | The patch series reproduces the Chromium tree (`docs/engine-build.md`) |
 | Engine (ArdiaCore) | `node packages/ardiacore/scripts/acceptance.mjs <Debug app> <scratch dir> [--keep] [check…]` | The app on ArdiaCore, hidden (`docs/ardiacore-parity.md`). `--keep` leaves the instance up and `--attach <scratch dir> [check…]` re-runs checks on it in seconds; `--list` gives each check's section and what it needs (brought along automatically) |
 | Focus (ArdiaCore) | `node packages/ardiacore/scripts/activation-acceptance.mjs <Debug app> <scratch dir> [check…]` | The panes shown, Chrome's active tab and native focus agree |
@@ -143,10 +144,11 @@ Launch with `scripts/agent/ac launch <app> --data <dir> [--instance K=V] [--test
   closed, the prevents-activation tag, app activations), `hover` holds the controls up (`pip-hover.json`, `pipHover`),
   `style` runs the style self-test (`pip-selftest.json`), all in the data dir.
   `tabs.devPictureInPictureAction` also takes `alpha:<0–1>` (WindowServer alpha, so a hidden run's PiP window can be
-  captured with `screencapture -l`), `mouse:<moved|down|up>:<x>,<y>` (top-left points), `stash` and `handle` (toggles
-  the stash handle's hover), and `drag:<dx>,<dy>,<steps>,<ms per step>,<pause before release ms>,<1: come back>` (real
-  mouse events through the drag monitor, bottom-left points; acceptance `pip-window` checks the grab point stays under
-  the pointer).
+  captured with `screencapture -l`), `mouse:<moved|down|dragged|up>:<x>,<y>[:<clicks>]` (top-left points; the click
+  count defaults to 1), `stash` and `handle` (toggles the stash handle's hover), `skip` (JSON: the last click skip's
+  seconds, point and click count, and how many there were), `skip:<seconds>` (the click skip's own path), and
+  `drag:<dx>,<dy>,<steps>,<ms per step>,<pause before release ms>,<1: come back>` (real mouse events through the drag
+  monitor, bottom-left points; acceptance `pip-window` checks the grab point stays under the pointer).
 - **`allowOcclusion`**: macOS posts no occlusion change for a window a band below normal, so minimizing and
   deminiaturizing post one for it (the page goes hidden as in a user's minimized window).
 - **The `ardia` command** (`cliHome`, `cliBinDir`, `cliUrl` (`file://` works), test `cliInstallScript`): a test

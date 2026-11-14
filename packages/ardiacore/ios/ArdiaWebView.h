@@ -169,6 +169,7 @@ NS_ASSUME_NONNULL_BEGIN
            completion:(void (^)(NSDictionary<NSString *, id> *_Nullable result))completion
     NS_SWIFT_NAME(downloadImage(_:maxPixels:completion:));
 - (void)mediaCommand:(NSString *)action seconds:(double)seconds NS_SWIFT_NAME(mediaCommand(_:seconds:));
+- (void)seekPictureInPictureBy:(double)seconds;
 @end
 
 @interface ArdiaWebView (Site)

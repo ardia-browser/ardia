@@ -161,9 +161,11 @@ watcher. The watcher re-resolves the folder when it changes and notices it appea
 ### Errors
 
 A file that doesn't parse, an unknown key, a wrong value or a missing theme never breaks anything: Ardia applies what
-is valid, skips the rest (a bad value skips that whole setting), logs it and shows one toast per distinct problem
-("config.json: selectedTabGlow must be full, soft or off"). An unparseable theme file keeps the last good version of
-that theme. `ardia config check` reports the same problems.
+is valid, skips the rest (a bad value skips that whole setting), logs it and shows one toast that sums them up
+("config.json has a problem: selectedTabGlow must be full, soft or off"; past two, "and N more"). The toast stays
+until the file is fixed or you dismiss it; it comes back only for a new problem, waits for another toast (an Undo,
+say) to finish instead of replacing it, and goes away by itself once the files are clean. An unparseable theme file
+keeps the last good version of that theme. `ardia config check` reports the same problems.
 
 ## Themes
 
@@ -312,6 +314,19 @@ so. Exit codes: 0 done, 1 a check failed or the input is wrong.
 - `ardia theme use NAME|none` sets `theme` in `config.json`, creating it first if needed.
 - `ardia theme list [--json]` lists the themes and marks the active one.
 - `ardia theme check [NAME|FILE] [--json]` checks a theme (default: the active one).
+- `ardia theme set KEY VALUE [--theme NAME]` writes one key to the active theme (or NAME), the way `config set`
+  does: VALUE is parsed as JSON, else taken as a string, the whole theme is checked with the new value, and a
+  problem under that key refuses it and leaves the file as it was (problems elsewhere in the file don't block it).
+  KEY is a dotted path whose first part is the block: `dark.accent`, `type.sizes.body`, `metrics.radius.row`,
+  `layout.hide`. Under `icons` everything after `icons.` is one SF Symbol name (`icons.chevron.down`). Missing
+  blocks are created; the file keeps its key order and is rewritten even when the value is unchanged, so a running
+  Ardia re-applies it. With no active theme and no `--theme`, it creates `themes/custom.json` (`$schema` plus the
+  key) and makes it the active theme, saying so on stderr. Without a schema it writes unchecked and says so.
+- `ardia theme get [KEY] [--theme NAME] [--json]` prints one key from the theme, or the whole file. A key the file
+  doesn't set exits 1 with Ardia's default when the schema has one.
+- `ardia theme unset KEY [--theme NAME]` removes the key and the blocks it leaves empty, so Ardia's own value comes
+  back. A key the file doesn't set is a no-op (exit 0). `get` and `unset` exit 1 when no theme is active and no
+  `--theme` is given, and a theme name that doesn't exist names the closest ones.
 
 `set`, `unset` and `theme use` refuse to touch a `config.json` that doesn't parse or whose root or `settings` isn't an
 object. Writes keep the file's key order and other keys, use 2-space indents and a final newline, and go through an

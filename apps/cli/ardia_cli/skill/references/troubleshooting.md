@@ -24,8 +24,10 @@ and per-character typing.
 
 ## Background tabs
 
-`open <url>` opens a background tab of the session's own and never navigates the user's tab unless you picked it
-with `tab <id>` or `tab active`; later `open`s navigate that tab. A newer Ardia keeps the tab the CLI is attached to
+A session starts with no tab and never takes the user's: until `open <url>` (a background tab of its own) or
+`tab active` / `tab <id>`, commands that need a page fail with `no_session_tab`. `open` never navigates the user's
+tab unless you picked it with `tab <id>`; `tab active` works in it and `open` then moves to a tab of your own. Later
+`open`s navigate the session's own tab. A newer Ardia keeps the tab the CLI is attached to
 live, so input works without switching the user's view. On one that doesn't, `open` says so, and `click`, `fill`,
 `type`, `press`, `hover`, `drag` and `mouse` fail with the fix: `ardia browse tab t2 --show` (or
 `open <url> --show`), which switches Ardia's window to the tab. Snapshots, `read`, `get`, `is`, `find … text`,
@@ -71,8 +73,9 @@ command: it gives the reason (`data.reason`) and, for a tab, what Ardia has ther
 
 ## Tabs and sessions
 
-- A session with no tab uses the tab the user is looking at (stderr says which, once). `tab list` shows the user's
-  tabs too; `tab close` refuses theirs, and `close` leaves open a tab another live session uses.
+- A session never takes the user's tab on its own: until it opens one (`open`, `tab new`) or picks one (`tab active`,
+  `tab <id>`), page commands fail with `no_session_tab`. `tab list` shows the user's tabs too; `tab close` refuses
+  theirs, and `close` leaves open a tab another live session uses.
 - `tN` ids are the same in every session and never move to another tab. `tab tab-…` takes the ids `ardia windows`
   prints.
 - `tab_detached`: Ardia took the tab away mid-command (it closed, crashed or went to sleep). Run the command again;

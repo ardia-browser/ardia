@@ -8,7 +8,7 @@ const { usePages } = await import("../tabs/pageState.ts");
 const { useHistoryMenu } = await import("../tabs/navigation.ts");
 const { useExtensions } = await import("../extensions/store.ts");
 const { showMenu } = await import("../../platform/menus.ts");
-const { hoverHeld, peekHeld, toolbarHeld } = await import("./transientUi.ts");
+const { hoverHeld, peekHeld, toolbarHeld, topStripPeekHeld } = await import("./transientUi.ts");
 const { setPeekShown } = await import("../windows/dockMotion.ts");
 const { setToolbarPeek } = await import("../windows/toolbarAutoHide.ts");
 const { cardEntered, dismissHover } = await import("../sidebar/hover.ts");
@@ -98,6 +98,14 @@ test("with the address bar in the sidebar, its tab's page popover and back/forwa
     menuFromSidebar: true, menuFromToolbar: false, menuFromPage: false, menuElsewhere: false,
     rename: true, renameElsewhere: false, iconPicker: true, iconPickerElsewhere: false, deletedProfileIconPicker: false, profileIconPicker: true, hoverCard: true, downloads: true,
     popover: true, panel: false, find: false, historyMenu: true, extensionPopup: false,
+  });
+});
+
+test("the peeking tab strip stays out for a menu opened in its own window and for Downloads, not for a menu in another window", async () => {
+  assert.deepEqual(await heldWhileOpen(({ w }) => topStripPeekHeld(w), { autoHideTabs: true }), {
+    menuFromSidebar: true, menuFromToolbar: true, menuFromPage: true, menuElsewhere: false,
+    rename: false, renameElsewhere: false, iconPicker: false, iconPickerElsewhere: false, deletedProfileIconPicker: false, profileIconPicker: false, hoverCard: false, downloads: true,
+    popover: false, panel: false, find: false, historyMenu: false, extensionPopup: false,
   });
 });
 

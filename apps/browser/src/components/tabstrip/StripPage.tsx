@@ -15,10 +15,10 @@ import { chipKey, folderKey, type Strip } from "./model";
 import { NewTabButton } from "./NewTabButton";
 import { PinnedDock } from "./PinnedDock";
 import { SplitChip } from "./SplitChip";
-import { layoutDock, layoutStrip, revealOffset, tabsOf, type DragGeometry } from "./stripGroups";
+import { layoutDock, layoutStrip, newTabPinned, revealOffset, tabsOf, type DragGeometry } from "./stripGroups";
 import { StripGroup } from "./StripGroup";
 import { DraggableChip } from "./TabChip";
-import { FLARE, GAP } from "./tokens";
+import { FLARE, GAP, NEW_TAB_ROOM } from "./tokens";
 
 type Hold = { chip: number; end: number };
 
@@ -48,9 +48,11 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
     held.current ??= { chip: last.current.chip, end: last.current.end };
     closedTo.current = activeId;
   }
-  const { chip, top, targets, memberWidth, spanOf: spanInStrip } = layoutStrip(parsed, activeId, pageWidth, { groupChip: chipOf, folderChip }, dock, held.current?.chip);
+  const { chip, top, targets, memberWidth, spanOf: spanInStrip, tabsEnd, tabsShrink } = layoutStrip(parsed, activeId, pageWidth, { groupChip: chipOf, folderChip }, dock, held.current?.chip);
   last.current = { count, chip, end: stripEnd(top) };
   const spare = held.current ? Math.max(0, held.current.end - stripEnd(top)) : 0;
+  const pinned = newTabPinned(chip, tabsEnd + spare, pageWidth, tabsShrink);
+  const newTab = <NewTabButton windowId={windowId} geometry={top} pinned={pinned} />;
   const leave = () => {
     pointerIn.current = false;
     if (!held.current) return;
@@ -78,15 +80,20 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
   const latestSpan = useRef(spanOf);
   latestSpan.current = spanOf;
   const revealed = useRef(activeId);
+  const reveal = (tabId: string, animated: boolean) => {
+    const span = latestSpan.current(tabId);
+    const x = span && revealOffset(span[0], span[1], scrolled.current, viewport.current, flare + GAP);
+    if (x !== null) scroll.current?.scrollTo({ x, animated });
+  };
+  const latestReveal = useRef(() => {});
+  latestReveal.current = () => {
+    if (current && activeId && !tabDragging()) reveal(activeId, false);
+  };
   useEffect(() => {
     if (revealed.current === activeId || (held.current && closedTo.current === activeId)) return;
     revealed.current = activeId;
     if (!current || !activeId || tabDragging()) return;
-    const frame = requestAnimationFrame(() => {
-      const span = latestSpan.current(activeId);
-      const x = span && revealOffset(span[0], span[1], scrolled.current, viewport.current, flare + GAP);
-      if (x !== null) scroll.current?.scrollTo({ x, animated: true });
-    });
+    const frame = requestAnimationFrame(() => reveal(activeId, true));
     return () => cancelAnimationFrame(frame);
   }, [activeId, current, releases]);
   useEffect(() => {
@@ -113,8 +120,10 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
                   showsHorizontalScrollIndicator={false}
                   scrollEventThrottle={16}
                   onLayout={(e) => {
+                    const narrower = e.nativeEvent.layout.width < viewport.current - 0.5;
                     viewport.current = e.nativeEvent.layout.width;
                     keepInRange();
+                    if (narrower) latestReveal.current();
                   }}
                   onContentSizeChange={(width) => {
                     content.current = width;
@@ -125,8 +134,8 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
                     scrolled.current = e.nativeEvent.contentOffset.x;
                     setAtStart(scrolled.current < 0.5);
                   }}
-                  style={{ flex: 1, marginLeft: flare - inset }}
-                  contentContainerStyle={{ alignItems: "flex-start", gap: GAP, paddingLeft: inset, paddingRight: flare }}
+                  style={{ flex: 1, marginLeft: flare - inset, marginRight: pinned ? flare + NEW_TAB_ROOM : 0 }}
+                  contentContainerStyle={{ alignItems: "flex-start", gap: GAP, paddingLeft: inset, paddingRight: pinned ? Math.max(flare, GAP) : flare }}
                 >
                   {parsed.flatMap((e) => {
                     if (e.kind === "dock") return <PinnedDock key="dock" tabIds={e.ids} />;
@@ -152,9 +161,10 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
                     return [before, <DraggableChip key={e.id} tabId={e.id} width={chip} geometry={top} from={slotOf(e.id)} group={null} />];
                   })}
                   {gap(top.slots.length)}
-                  <NewTabButton windowId={windowId} geometry={top} />
+                  {pinned ? null : newTab}
                   {spare ? <View style={{ width: spare, marginLeft: -GAP }} /> : null}
                 </ScrollView>
+                {pinned ? <View style={{ position: "absolute", top: 0, right: flare }}>{newTab}</View> : null}
               </Offstage.Provider>
             </DockContext.Provider>
           </TintInk>

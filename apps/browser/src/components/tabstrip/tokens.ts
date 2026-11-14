@@ -1,5 +1,5 @@
 import { duration, spring } from "../ui/motion";
-import { concentric, radius, space } from "../ui/tokens";
+import { concentric, iconButton, radius, space } from "../ui/tokens";
 
 export const TOP_STRIP_HEIGHT = 42;
 export const MID = 21;
@@ -39,6 +39,8 @@ export const FOLDER_TITLE_GAP = space.m;
 export const FOLDER_TITLE_MAX = 110;
 export const DROP_RING_WIDTH = 1.5;
 export const NEW_TAB_ICON = 13;
+export const OVERFLOW_BUTTON = iconButton.s;
+export const NEW_TAB_ROOM = ITEM_HEIGHT + GAP + OVERFLOW_BUTTON.box;
 export const LIFT_SLOP = 12;
 export const LIGHTS_GAP = 8;
 export const ONTO_EDGE = MAX_CHIP / 4;

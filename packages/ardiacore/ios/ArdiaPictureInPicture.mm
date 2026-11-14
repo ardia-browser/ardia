@@ -2,6 +2,7 @@
 #import "ArdiaLaunchConfig.h"
 #import "ArdiaChromeWindowHost.h"
 #import "ArdiaPiPThrowMath.h"
+#import "ArdiaPiPSeekMath.h"
 
 #import <dlfcn.h>
 #import <objc/runtime.h>
@@ -29,9 +30,15 @@ NSPoint ScreenLocation(NSEvent *event) {
   return NSMakePoint(point.x, NSMaxY(NSScreen.screens.firstObject.frame) - point.y);
 }
 
+double ClickSkipSeconds(NSWindow *window, NSPoint local) {
+  ArdiaPiPController *controller = [ArdiaPiPController forWindow:window];
+  if (!controller.view || controller.stashedEdge != ArdiaPiPEdgeNone) return 0;
+  return ardia_pip_seek::SkipSecondsAt(local.x, NSWidth(window.frame));
+}
+
 BOOL GrabsWindowBackground(NSWindow *window, NSEvent *event) {
-  if (!window || ![ArdiaPiPController forWindow:window] || event.clickCount > 1 || (event.modifierFlags & NSEventModifierFlagControl))
-    return NO;
+  if (!window || ![ArdiaPiPController forWindow:window] || (event.modifierFlags & NSEventModifierFlagControl)) return NO;
+  if (event.clickCount > 1 && !ClickSkipSeconds(window, event.locationInWindow)) return NO;
   if ([window respondsToSelector:@selector(_resizeDirectionForMouseLocation:)] &&
       [window _resizeDirectionForMouseLocation:event.locationInWindow] != -1)
     return NO;
@@ -48,6 +55,14 @@ bool gDragHeld;
 NSPoint gDragPointer;
 
 __weak NSScreen *gDragHome;
+
+NSPoint gGrabMouse;
+
+double gGrabTravel;
+
+double gGrabSkip;
+
+NSInteger gGrabClicks;
 
 std::vector<ardia_pip_throw::Sample> gDragSamples;
 
@@ -70,6 +85,10 @@ void InstallDragMonitor() {
                                        [[ArdiaPiPController forWindow:window] stopMotion];
                                        NSPoint mouse = ScreenLocation(event);
                                        gGrabLocal = NSMakePoint(mouse.x - NSMinX(window.frame), mouse.y - NSMinY(window.frame));
+                                       gGrabMouse = mouse;
+                                       gGrabTravel = 0;
+                                       gGrabSkip = ClickSkipSeconds(window, event.locationInWindow);
+                                       gGrabClicks = event.clickCount;
                                        gDragHome = [[ArdiaPiPController forWindow:window] gestureHome];
                                        gDragHeld = false;
                                        gDragPointer = mouse;
@@ -86,15 +105,21 @@ void InstallDragMonitor() {
                                            gDragSamples.data(), (int)gDragSamples.size(), event.timestamp);
                                        const bool moved = gDragSamples.size() > 1;
                                        gDragSamples.clear();
-                                       const BOOL slipped = !gDragHeld && ardia_pip_throw::DragSlipped(ThrowRect(window.frame), {gGrabLocal.x, gGrabLocal.y},
-                                                                                                  {gDragPointer.x, gDragPointer.y});
                                        ArdiaPiPController *controller = [ArdiaPiPController forWindow:window];
-                                       if (moved) [controller.view emit:@"pictureInPictureDragged" payload:@{@"held" : @(gDragHeld), @"slipped" : @(slipped)}];
+                                       const NSPoint released = ScreenLocation(event);
+                                       gGrabTravel = std::max(gGrabTravel, ardia_pip_seek::Travel(released.x - gGrabMouse.x, released.y - gGrabMouse.y));
+                                       const BOOL clicked = ardia_pip_seek::IsClick(gGrabTravel);
+                                       const BOOL slipped = !gDragHeld && ardia_pip_throw::DragSlipped(ThrowRect(window.frame), {gGrabLocal.x, gGrabLocal.y},
+                                                                                                         {gDragPointer.x, gDragPointer.y});
+                                       if (moved && !clicked) [controller.view emit:@"pictureInPictureDragged" payload:@{@"held" : @(gDragHeld), @"slipped" : @(slipped)}];
                                        [controller dragReleasedAt:grabbed velocity:NSMakePoint(velocity.x, velocity.y)];
+                                       if (gGrabSkip && clicked)
+                                         [controller skipBy:gGrabSkip at:gGrabLocal clickCount:gGrabClicks];
                                        return nil;
                                      }
                                      NSPoint mouse = ScreenLocation(event);
                                      SampleDrag(event, mouse);
+                                     gGrabTravel = std::max(gGrabTravel, ardia_pip_seek::Travel(mouse.x - gGrabMouse.x, mouse.y - gGrabMouse.y));
                                      const auto screens = ThrowScreens();
                                      const auto next = ardia_pip_throw::DragTo(ThrowRect(window.frame), {gGrabLocal.x, gGrabLocal.y},
                                                                                {mouse.x, mouse.y}, screens.data(), (int)screens.size(),
@@ -180,6 +205,11 @@ NSView *DevFindView(NSView *view, NSString *className) {
   for (NSView *subview in view.subviews)
     if (NSView *found = DevFindView(subview, className)) return found;
   return nil;
+}
+
+NSString *DevJSON(NSDictionary *object) {
+  NSData *json = [NSJSONSerialization dataWithJSONObject:object options:0 error:nil];
+  return json ? [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding] : @"";
 }
 
 NSString *DevFraming(ArdiaPiPController *controller) {
@@ -330,9 +360,11 @@ void DocumentEntered(ArdiaWebView *view) {
   else if ([action hasPrefix:@"drag:"]) [controller devDrag:[[action substringFromIndex:5] componentsSeparatedByString:@","]];
   else if ([action isEqual:@"layers"]) return DevLayerTree(controller.window);
   else if ([action isEqual:@"framing"]) return DevFraming(controller);
-  else if ([action isEqual:@"throw"]) {
-    NSData *json = [NSJSONSerialization dataWithJSONObject:[controller throwInfo] options:0 error:nil];
-    return json ? [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding] : @"";
+  else if ([action isEqual:@"throw"]) return DevJSON([controller throwInfo]);
+  else if ([action isEqual:@"skip"]) return DevJSON([controller skipInfo]);
+  else if ([action hasPrefix:@"skip:"]) {
+    const NSPoint centre = NSMakePoint(NSWidth(controller.window.frame) / 2, NSHeight(controller.window.frame) / 2);
+    return [controller skipBy:[action substringFromIndex:5].doubleValue at:centre clickCount:0] ? @"started" : @"no page";
   }
   else return @"";
   return @"started";

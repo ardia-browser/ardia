@@ -389,13 +389,17 @@ class BrowseEndToEnd(unittest.TestCase):
         quiet = self.browse("click", "#name", "--no-changes", session=session).stdout
         self.assertEqual(quiet, "✓ Done\n")
 
-    def test_a_session_without_a_tab_uses_the_shown_one(self):
+    def test_a_session_without_a_tab_stays_off_the_shown_one_until_it_picks_it(self):
         self.browse("open", self.url("login.html#attach"), "--show", session="attach-src")
+        refused = self.browse("click", "button", "--json", session="attach", check=False)
+        self.assertEqual((refused.returncode, json.loads(refused.stdout)["code"]), (1, "no_session_tab"))
+        self.assertEqual(self.browse("get", "url", session="attach-src").stdout, self.url("login.html#attach") + "\n")
+        self.browse("tab", "active", session="attach")
         first = self.browse("get", "url", session="attach")
-        self.assertEqual(first.stdout, self.url("login.html#attach") + "\n")
-        self.assertIn("this session had no tab, so it uses the active one", first.stderr.lower())
-        again = self.browse("get", "title", session="attach")
-        self.assertEqual((again.stdout, again.stderr), ("Fixture Login\n", ""))
+        self.assertEqual((first.stdout, first.stderr), (self.url("login.html#attach") + "\n", ""))
+        moved = json.loads(self.browse("open", self.url("form.html"), "--json", session="attach").stdout)["data"]
+        self.assertTrue(moved["background"])
+        self.assertEqual(self.browse("get", "url", session="attach-src").stdout, self.url("login.html#attach") + "\n")
 
     def test_site_notes_show_in_snapshots(self):
         session = "notes"
@@ -481,6 +485,7 @@ class BrowseEndToEnd(unittest.TestCase):
 
     def test_inspecting_a_url_never_navigates_a_borrowed_tab(self):
         self.browse("open", self.url("login.html#mine"), "--show", session="borrowed-owner")
+        self.browse("tab", "active", session="borrowed")
         self.browse("snapshot", "-i", session="borrowed")
         checked = self.browse("vitals", self.url("form.html"), session="borrowed")
         self.assertIn("since this session uses your tab", checked.stderr)
@@ -1004,7 +1009,7 @@ class BrowseTokenPath(unittest.TestCase):
         self.assertTrue(self.alive(self.pid))
         self.assertIn("service worker", self.browse("get", "title", session=session).stdout)
 
-    def test_changes_and_auto_attach_over_the_token_policy(self):
+    def test_changes_and_tab_active_over_the_token_policy(self):
         session = "token-changes"
         self.browse("open", self.url("form.html"), "--show", session=session)
         self.browse("click", "#open", session=session)
@@ -1012,9 +1017,10 @@ class BrowseTokenPath(unittest.TestCase):
         posted = json.loads(self.browse("click", "#save", "--json", session=session).stdout)["data"]["changes"]["network"]
         self.assertEqual([(row["method"], row["status"]) for row in posted], [("POST", 501)])
         self.assertEqual(json.loads(self.browse("session", "info", "--json", session=session).stdout)["data"]["captures"], [])
-        attached = self.browse("get", "url", session="token-attach")
-        self.assertEqual(attached.stdout, self.url("form.html") + "\n")
-        self.assertIn("uses the active one", attached.stderr)
+        refused = self.browse("get", "url", "--json", session="token-attach", check=False)
+        self.assertEqual((refused.returncode, json.loads(refused.stdout)["code"]), (1, "no_session_tab"))
+        self.assertIn(self.url("form.html"), self.browse("tab", "active", session="token-attach").stdout)
+        self.assertEqual(self.browse("get", "url", session="token-attach").stdout, self.url("form.html") + "\n")
 
     def test_html5_drag_over_the_token_policy(self):
         session = "token-dnd"
@@ -1031,7 +1037,7 @@ class BrowseTokenPath(unittest.TestCase):
     def test_open_from_a_borrowed_tab_says_where_input_goes(self):
         self.browse("open", self.url("login.html"), "--show", session="token-shown")
         session = "token-borrow"
-        self.assertIn("uses the active one", self.browse("get", "url", session=session).stderr)
+        self.assertIn(self.url("login.html"), self.browse("tab", "active", session=session).stdout)
         opened = self.browse("open", self.url("probe.html"), session=session).stdout
         self.assertIn("since this session uses your tab", opened)
         clicked = self.browse("click", "#target", session=session, check=False)

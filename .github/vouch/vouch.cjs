@@ -46,6 +46,10 @@ const MEDIA_PATTERNS = [
   /github\.com\/user-attachments\/assets\//i,
   new RegExp(`https?:\\/\\/[^\\s<>()"'\\]]+\\.(?:${MEDIA_EXTENSIONS})(?:[?#][^\\s<>()"'\\]]*)?(?=$|[\\s<>()"'\\],;:!]|\\.(?:\\s|$))`, "i"),
 ];
+const REVIEW_BOT_BLOCKS = [
+  /<!--\s*greptile_comment\s*-->[\s\S]*?(?:<!--\s*\/greptile_comment\s*-->|$)/gi,
+  /<!--\s*This is an auto-generated comment\b[^>]*-->[\s\S]*?(?:<!--\s*end of auto-generated comment\b[^>]*-->|$)/gi,
+];
 const CLOSING_REFERENCE = /(?:^|[^A-Za-z0-9_])(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?[^\S\n]+#(\d+)/gim;
 const GATED_WORKFLOWS = ["ios.yml", "android.yml"];
 const GATE_JOB = "gate";
@@ -140,8 +144,12 @@ function ruleTier(status) {
   return "outsider";
 }
 
+function authorsWords(body) {
+  return REVIEW_BOT_BLOCKS.reduce((text, block) => text.replace(block, ""), String(body || "")).replace(/<!--[\s\S]*?-->/g, "");
+}
+
 function hasMedia(body) {
-  const text = String(body || "").replace(/<!--[\s\S]*?-->/g, "");
+  const text = authorsWords(body);
   return MEDIA_PATTERNS.some((pattern) => pattern.test(text));
 }
 

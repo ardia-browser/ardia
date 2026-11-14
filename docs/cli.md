@@ -81,8 +81,9 @@ the pins into `pyproject.toml`).
 - `ardia scripts new|test|install|uninstall|list` writes, tests and installs userscripts (see Userscripts).
 - `ardia config path|init|get|set|unset|list|edit|check` reads, writes and checks `config.json` (see
   `docs/config.md`, The ardia command). Never needs Ardia running.
-- `ardia theme new|use|list|check` makes, picks and checks themes: colours, type, metrics, layout and icons (see
-  `docs/config.md`, Themes).
+- `ardia theme new|use|list|check|get|set|unset` makes, picks, edits and checks themes: colours, type, metrics,
+  layout and icons. `ardia theme set KEY VALUE` changes one key of the active theme (`dark.accent`,
+  `metrics.radius.row`, `icons.chevron.down`) and a running Ardia restyles at once (see `docs/config.md`, Themes).
 - `ardia run COMMAND [ARG]` runs one of Ardia's commands over `<data dir>/ArdiaControl.sock` (see
   `docs/automation.md`).
 - `ardia commands` lists the commands `run` takes (see `docs/automation.md`).
@@ -177,8 +178,8 @@ globals and runs the commands that need no browser, `daemon.py` owns the connect
 `readurl.py`; site notes in `ardia_cli/notes.py`).
 
 An agent's loop is short: `snapshot -i` once, then actions, each of which prints what it changed, so it rarely needs
-another snapshot; repetitive work goes in one `batch` on stdin. Input is instant unless `--humanize`, a session with
-no tab uses the user's active one, and text output stops at about 12,000 characters.
+another snapshot; repetitive work goes in one `batch` on stdin. Input is instant unless `--humanize`, a session works
+in background tabs of its own until it picks the user's with `tab active`, and text output stops at about 12,000 characters.
 
 ### Process model
 
@@ -476,29 +477,34 @@ final value).
 ### Ardia etiquette
 
 `open` without a session tab opens a new background tab in the sidebar (`Target.createTarget` at `about:blank`,
-init scripts registered, then `Page.navigate`); later `open`s navigate the session's tab. A session that has
-never had a tab uses the user's active tab for any command that needs one, with the rule `tab active` uses:
-on the token path `GET /ardia/active?token=…` (the page shown in Ardia's last focused window); on `--port`/`--ws`
-test servers, or when that route fails, the page that's visible and focused, else one that's visible (each tab is
-probed through a flat session and an isolated world, then detached). It errors (`no_tab`) only when there's no such
-page, as on New Tab. Once a session's tab closes it doesn't move on to whatever the user is looking at: commands
-fail with `tab_gone` until `tab active`, `tab <id>` or `open`. The session keeps the tab it took, and the command's stderr says so once (`→ This session had no
-tab, so it uses the active one: [t1] Title - URL`). `open` never navigates a tab taken this way: it opens its own
-background tab, as with no tab; to navigate the user's tab, pick it with `tab <id>` or `tab active`. The same goes
-for every command that loads a URL (`vitals <url>`, `diff url`, `a11y <url>`, `record start <path> <url>`, and `auth
-login` when the tab isn't on the credential's origin; script's `page.goto` is `open`), while `back`, `forward`,
-`reload` and `pushstate` refuse a borrowed tab (`borrowed_tab`), and so does anything that changes its site data:
-storage set/remove/clear, cookies set/clear, every `set`, `state load`, `addinitscript` and `network route` (reads still
-work; `auth login` logs in in the session's own tab). `eval` is left alone. `open` stays in
-the background and never switches the user's view unless `--show`. When it opens a background tab it checks whether
-the tab takes input (`--json`: `tabId`, `background`, `takesInput`) and says so in its own output when the session
-borrowed the user's tab or the tab won't take input, so an agent learns it before its first click fails:
-`→ [t2] is this session's tab now, a background tab of its own, since this session uses your tab [t1] and won't
-navigate it; `tab t1` goes back; this Ardia doesn't deliver input there. use: ardia browse tab t2 --show (or open <url>
---show)`, or `…; it takes input without being shown`. It names the tab it left (`--json`: `left`) so an agent switches
-back with `tab t1` instead of running `tab list` (telemetry: `open_moved_tab`); a command that opens its own tab for the
-same reason (`vitals <url>`, say) ends its notice the same way. A tab that won't take input and wasn't a move says
-`→ Opened in its own background tab [t2]; this Ardia doesn't deliver input there…`. `close` and `tab close` close only tabs this session opened, and not one another live session
+init scripts registered, then `Page.navigate`); later `open`s navigate the session's tab. A session works in the
+background by default: it never takes the tab the user is looking at on its own. Until it has a tab (`open`, `tab
+new`, `tab active` or `tab <id>`), every command that needs a page fails with `no_session_tab` and names both ways in
+(`ardia browse open <url>`, or `ardia browse tab active` to work in the user's tab). Before #1738 such a session took
+the active tab for its first command, so an agent's first `snapshot`, click or fill landed in the page the user was
+on. `tab active` picks the page shown in Ardia's last focused window: on the token path `GET /ardia/active?token=…`;
+on `--port`/`--ws` test servers, or when that route fails, the page that's visible and focused, else one that's
+visible (each tab is probed through a flat session and an isolated world, then detached). It errors (`no_tab`) only
+when there's no such page, as on New Tab. Once a session's tab closes it doesn't move on to whatever the user is
+looking at: commands fail with `tab_gone` until `tab active`, `tab <id>` or `open`. A tab taken with `tab active` is
+the user's: the session reads it, clicks and types in it, but `open` never navigates it: it opens its own background
+tab, as with no tab; to navigate the user's tab, pick it by id with `tab <id>`. The same goes for every command that
+loads a URL (`vitals <url>`, `diff url`, `a11y <url>`, `record start <path> <url>`, and `auth login` when the tab isn't
+on the credential's origin; script's `page.goto` is `open`), while `back`, `forward`, `reload` and `pushstate` refuse
+it (`borrowed_tab`), and so does anything that changes its site data: storage set/remove/clear, cookies set/clear,
+every `set`, `state load`, `addinitscript` and `network route` (reads still work; `auth login` logs in in the
+session's own tab). `eval` is left alone. `open` stays in the background and never switches the user's view unless
+`--show`. When it opens a background tab it checks whether the tab takes input (`--json`: `tabId`, `background`,
+`takesInput`) and says so in its own output when the session was in the user's tab or the tab won't take input, so an
+agent learns it before its first click fails: `→ [t2] is this session's tab now, a background tab of its own, since
+this session uses your tab [t1] and won't navigate it; `tab t1` goes back; this Ardia doesn't deliver input there.
+use: ardia browse tab t2 --show (or open <url> --show)`, or `…; it takes input without being shown`. It names the tab
+it left (`--json`: `left`) so an agent switches back with `tab t1` instead of running `tab list` (telemetry:
+`open_moved_tab`); a command that opens its own tab for the same reason (`vitals <url>`, say) ends its notice the same
+way. A tab that won't take input and wasn't a move says `→ Opened in its own background tab [t2]; this Ardia doesn't
+deliver input there…`. Telemetry: `error_code` `no_session_tab` counts agents that tried to act before opening or
+picking a tab (it should fall as the skill's `batch "tab active" "snapshot -i"` start spreads), and `tab` commands with
+no error count the picks. `close` and `tab close` close only tabs this session opened, and not one another live session
 uses (reserved through the tab registry; the answer says which stayed open); the guard refuses `Browser.close` on every
 socket. `tab list` shows the user's tabs too (minus prewarmed `about:blank` pages, read/script tabs and tabs another
 session is closing), with the `tab-…` id `ardia windows` prints when the app reports the tab's target, and which

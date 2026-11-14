@@ -18,8 +18,8 @@ results; a cold run spends most of its time in `swift test`'s first build. Each 
 `apps/browser` runs its TypeScript under plain Node, with the real `@ardia/shell` and `@ardia/ardiacore` code:
 `src/test-loader.mjs` swaps only the native side. `expo-modules-core` becomes `src/test-native/expo.ts`, which hands
 each package the fake of every native module it asks for (`src/test-native/shell.ts`, `src/test-native/ardiacore.ts`),
-and `react-native` views that render only their children, with every `Pressable` a render passed kept in its `pressables`
-so a test can press one (`src/components/site/siteExtensionsManage.test.mjs`); the packages' `.tsx` files are transpiled with TypeScript on the way in (cached in
+and `react-native` inert views: `View` renders its children and every `Pressable` a render passes is kept in
+`pressables` so a test can press it (rendered with `react-dom/server`, `src/components/site/siteExtensionsManage.test.mjs`); the packages' `.tsx` files are transpiled with TypeScript on the way in (cached in
 `node_modules/.cache/ardia-test-tsx`). The native surface is listed once per package, in `src/nativeModules.ts`
 (`ShellNativeModules`, `ArdiaCoreNativeModules`), and the packages can only ask for modules listed there. Each fake is
 typed against that list, so `pnpm -C apps/browser typecheck` fails when a native method is added, removed or changed

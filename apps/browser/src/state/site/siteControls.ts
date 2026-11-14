@@ -5,6 +5,7 @@ import { setSiteMuted } from "../browser/actions";
 import { pageOf } from "../tabs/pageState";
 import { useBrowser } from "../browser/store";
 import { ensureLocationPermission } from "./locationAccess";
+import { noteSiteAutoplay } from "../telemetry/usage";
 
 export type SitePermission = { type: SiteSettingType; title: string; icon: string; badge: string; choices: SiteSettingValue[] };
 
@@ -15,6 +16,7 @@ const SITE_PERMISSIONS: SitePermission[] = [
   { type: "notifications", title: "Notifications", icon: "bell", badge: "bell.fill", choices: ["ask", "allow", "block"] },
   { type: "popups", title: "Pop-ups and Redirects", icon: "macwindow.on.rectangle", badge: "macwindow.on.rectangle", choices: ["allow", "block"] },
   { type: "sound", title: "Sound", icon: "speaker.wave.2", badge: "speaker.wave.2.fill", choices: ["allow", "block"] },
+  { type: "autoplay", title: "Autoplay", icon: "play.rectangle", badge: "play.rectangle.fill", choices: ["allow", "block"] },
 ];
 
 export const sitePermissionsFor = (engine: PageEngine) =>
@@ -52,6 +54,7 @@ export async function setSitePermission(
     if (value === "block" || !sound.soundBlocked) return null;
     await setSiteSetting(page.profile, page.origin, "sound", "default", page.engine);
   } else await setSiteSetting(page.profile, page.origin, type, value, page.engine);
+  if (type === "autoplay" && value !== "default" && value !== "ask") noteSiteAutoplay(value);
   if (type === "location" && value === "allow") void ensureLocationPermission(useBrowser.getState().tabs[page.tabId]?.windowId);
   return readSiteSettings(page.profile, page.origin, page.engine);
 }

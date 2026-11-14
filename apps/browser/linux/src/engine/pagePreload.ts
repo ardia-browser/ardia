@@ -86,6 +86,13 @@ try {
   ipcRenderer.send("ardia:page-script", "scriptFailed", JSON.stringify({ message: String((error as Error)?.message ?? error) }));
 }
 
+addEventListener("keydown", (event) => {
+  if (!event.isTrusted || event.key !== "Escape" || event.isComposing || event.altKey || event.ctrlKey || event.metaKey || document.fullscreenElement) return;
+  setTimeout(() => {
+    if (!event.defaultPrevented) ipcRenderer.send("ardia:page-escape");
+  }, 0);
+});
+
 const DRAG_REPORT_MS = 250;
 let draggedReportedAt = 0;
 const reportDrag = (event: DragEvent) => {

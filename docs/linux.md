@@ -7,6 +7,103 @@ the Windows port (`docs/windows.md`): an app project under `apps/browser/linux`,
 (PR #1116) so the shared platform layer (`lib/platformFeatures`, `lib/platformChrome`, `lib/platformTerms`,
 `platform/windowControls`, the app-drawn window buttons) serves both.
 
+## What works on Linux today
+
+Walked by hand on 2026-11-14 on Ubuntu 24.04 (x86_64), in a test instance on a private 1600 by 1000 Xvfb, from a fresh
+data folder, as a user would: real X key presses, clicks and drags, a screenshot for every row. The walk started on
+commit d7a4bd789; the rows it found broken were fixed on the way and seen again on eff01f92a, and those rows name the
+fix. Most rows were walked with no window manager; maximize, dragging, full screen, focus, menus and Peek were walked
+again under xfwm4 with its compositor. Of the 62 rows, 44 work, 6 work with a difference, 1 is broken, 1 does
+nothing, 1 is not offered and 9 were not walked. Works with a difference says what differs; the Mac's list is
+`docs/dia-feature-parity.md`.
+
+**Install, first launch, updates**
+
+| Feature | State | Fixed in |
+| --- | --- | --- |
+| AppImage and .deb | Not walked: the walk ran the checkout's build; CI's smoke runs the extracted AppImage | |
+| First launch | Works: onboarding, no release notes | |
+| First launch with a link | Not walked | |
+| Onboarding (source, look, last choices) | Works: six steps for Coming from Chrome (colour, frame, sharing, layout, default browser and login, welcome) | |
+| Intro animation and music | Differs: step 1 shows the app icon where the Mac plays the meadow; music not checked (no audio device) | |
+| Tour | Works: three stops for tabs across the top (search, two pages side by side, all set), Back, Next, Skip Tour, Done | |
+| Import from another browser | Not walked: no other browser's data on this machine | |
+| Check for updates | Works: "Ardia is up to date" with the version and the releases page, with the info icon | a03d8dd4a |
+| Default browser | Works: the pane then says Ardia is the default. A test instance (its own `ARDIA_DATA_DIR`) used to make the checkout's Electron the real desktop's default browser; it now writes `ardia.desktop`, `mimeapps.list` and icons under `<data>/Desktop` and runs no xdg tool | a3a39e114 |
+| Open at login | Works: the autostart entry is written (under `<data>/Desktop` in a test instance) | a3a39e114 |
+
+**Windows and tabs**
+
+| Feature | State | Fixed in |
+| --- | --- | --- |
+| New tab, close, reopen closed tab (Ctrl+Shift+T) | Works | |
+| New window | Works | |
+| Private window | Works; closing one with two tabs asks (Close 2 tabs?, Don't ask me again). The toolbar's private label is cut to "Incogn…" | |
+| Quit and relaunch with the session restored | Works: Ctrl+Q quits at once (no confirm by default); both windows, the split, the tabs and the sidebar layout came back | |
+| Little Ardia (Ctrl+Alt+N) | Works: recent pages, a page loads in it, Ctrl+W closes it. With no compositor its rounded corners are black | |
+| Search Tabs (Ctrl+Shift+A), Ctrl+Tab | Works: the switcher shows page pictures | |
+| Tabs in the sidebar or across the top (Ctrl+Shift+S), hide the sidebar (Ctrl+S) | Works | |
+| Split View (Ctrl+\) | Works: the empty pane offers open tabs and takes an address | |
+| Peek | Works: Alt-click (the Chrome preset's Peek key; Shift-click opens a window there) opens it, also under xfwm4; Escape closes it and puts focus back on the link. Escape did nothing before | 37dde4bf7 |
+| Pop-up windows from pages | Works: Ardia's pop-up window with the origin strip and Open as Tab; Ctrl+W closes it | |
+| Pop-up blocking | Works: `window.open`, a `target=_blank` link and a form opened without a click are all blocked with the prompt; with a click they open. The prompt keeps the old entries after a reload | |
+| Closing a window with unsaved work in a page | Broken: the window closes without asking (Leave site? appears only on navigation and quit) | |
+| Main, Settings and Little Ardia window chrome | Works, app-drawn buttons, no system title bar | |
+| Maximize and restore | Works under xfwm4, square corners while maximized | |
+| Moving a window, edge snapping | Differs: dragging the tab strip moves the window (also with no window manager), but since Ardia moves it rather than the window manager, it doesn't snap to screen edges; a double click on the tab strip's empty space didn't maximize | |
+| Pop-up menus (the … menu, tab menus) | Works, also when no Ardia window has focus (no window manager, right after a dialog); before, the menu didn't open and its button stayed pressed. Shortcut labels read "Ctrl+Comma" | ab87cf84a |
+| Pin, Top Apps, groups | Not walked | |
+| Profiles: create, switch with Alt+1, Alt+2 | Not walked | |
+
+**Pages**
+
+| Feature | State | Fixed in |
+| --- | --- | --- |
+| Command bar (history, open tabs, suggestions) | Works | |
+| Find in page | Works: the app's find bar with the match count | |
+| Zoom (Ctrl+=, Ctrl+0) | Works, with the zoom popover and the icon in the address bar | |
+| Print | Works: with a printer, the system print dialog; with none (CUPS has no destinations), Save as PDF into the downloads folder. Before, Ctrl+P froze the tab: Electron refuses to print without a printer and leaves the page waiting | 3b537855b |
+| JavaScript alert, confirm and prompt | Works: GTK boxes for alert and confirm, the app's prompt for prompt | |
+| Page, link and image menus | Differs: native menus with fewer items than the Mac's (link: Open in New Tab, Open in New Window, Copy Link Address, Inspect; page: Back, Forward, Reload, Save Page As, Print, Inspect) | |
+| Full screen (a page element) | Works; Escape leaves it | |
+| Picture in Picture | Differs: Chromium's PiP window | |
+| Downloads (download, panel, Ctrl+J) | Works: the panel opens for a new download and lists it | |
+| History (Ctrl+H), Clear Browsing Data (Ctrl+Shift+Del) | Works | |
+| Bookmarks (Ctrl+D, Ctrl+Shift+O) | Works | |
+| mailto and other app links | Differs: the request reaches the app's prompt, but with no app registered for the scheme (this machine has no mail app) nothing opens and nothing says so, as in Chrome | |
+| Network error page | Works: "This site can't be reached" with the reason, the error code and Reload; the toolbar stops loading. Before, the tab was blank and kept loading | d082f20cf |
+| DevTools (F12) | Works (a detached window) | |
+| Task Manager (Shift+Esc) | Works: every process with memory, CPU and process ID, and End Process for a page's, which then offers Reload. Before, it did nothing | eff01f92a |
+| Drop a link or file onto a page | Works: a link or file dropped on a page opens it in a new tab next to it; a page that takes drops gets them. Before, a link dropped on a page did nothing | e07e27d8a |
+| Drop a link onto the tab strip or sidebar | Not walked again after linux-crash's 4d95f7eff (before it, nothing happened) | |
+| Translate | Not offered | |
+
+**Passwords, permissions, extensions**
+
+| Feature | State | Fixed in |
+| --- | --- | --- |
+| Offer to save a password | Works: the app's Save password prompt (Never on This Site, Not Now, Save) | |
+| Fill a saved password | Works: the form fills when the page loads | |
+| Passwords pane: Unlock | Differs: it unlocks without asking for anything, though the pane says it asks for your login password | |
+| Notification prompt and notifications | Works: the app's prompt; the notification shows | |
+| Location prompt | Works: the app's prompt; with no GeoClue the page gets "position unavailable". Before, allowing showed the Mac's "open System Settings" dialog | a413faa20 |
+| Camera and microphone | Works with Chromium's fake camera: the app's prompt, then the stream | |
+| Chrome Web Store install | Works: Add to Chrome, the app's Add dialog listing the permissions, then the store says Remove from Chrome | |
+| Extensions pane | Works | |
+| Ad, tracker and cookie-banner blocking | Not walked | |
+| Bookmark and password export | Not walked | |
+
+**Settings**
+
+| Feature | State | Fixed in |
+| --- | --- | --- |
+| Settings window, panes | Works: all twelve panes open | |
+| Appearance: light and dark | Works | |
+| Keyboard Shortcuts pane | Works, Ctrl keys | |
+| Live Folders pane | Works (renders; no service connected) | |
+| Sync | Not walked here (see Sync below) | |
+| Report a Problem: screen recording | Does nothing: Record answers false, so the form says Ardia couldn't record the window | |
+
 ## Design
 
 | Layer | Linux |
@@ -101,6 +198,24 @@ its window's input router). The host's and every window's preload (`engine/hostP
   and becomes a `popupBlocked` event, which shows the app's blocked pop-up button and prompt. `openBlockedPopup` opens
   it later (as a pop-up window without an opener, or a tab); "Always Allow" stores `allow` for the site. A page's
   blocked list empties when it navigates.
+- **Drops.** Pages navigate on drops (`navigateOnDragDrop`): a link or file dropped where the page doesn't take drops
+  comes to the guest as a foreground-tab open with the browser's own referrer (`about:client`). The page preload
+  reports trusted drags carrying a uri-list or files (`ardia:page-drag`, at most every 250 ms), and such an open within
+  2 s of one passes the pop-up blocker (`takeDrop`); scripts' opens carry the page's referrer and still need a click.
+- **Escape.** The Mac's engine hands an Escape the page left unhandled to the UI as the page's `command` `escape`
+  (which closes a popover, Peek or Little Ardia). The page preload reports trusted Escape presses with no modifier,
+  outside IME composition and full screen, that the page's own handlers didn't prevent (`ardia:page-escape`), and
+  `pageKeys.ts` forwards them.
+- **Print.** `printing.ts` asks for the printers first: with any, Electron's system print dialog; with none (Electron
+  refuses to print then and leaves the page waiting), Save as PDF into the downloads folder through `printToPDF`. The
+  page preload replaces `window.print` with a message to main, so a page's own print takes the same path.
+- **Load errors.** Electron ships no network error page and emits no `did-navigate` for an error commit, so a
+  main-frame failure other than an abort counts as a commit of the failed URL, and when loading stops
+  `errorPages.ts` writes a Chrome-style page (what happened, the error code, Reload) into the `chrome-error` document,
+  never any other.
+- **Task Manager.** `taskManager.ts` answers `engine.openTaskManager` with one window listing `app.getAppMetrics()` by
+  Chrome's names (Tab: <titles> for page processes), refreshed every second in a stable order, with End Process for a
+  page's process. It is a sandboxed `data:` page; End Process reaches main as a token in its title.
 - **Leaving a page.** A page whose `beforeunload` asks to stay gets "Leave site?" (Leave, Cancel) over its window when
   it navigates, reloads or goes back (`leavingPages.ts`; Electron needs that answer synchronously, so the dialog is
   modal). A quit the user asks for (Ctrl+Q, the app menu) first runs each page's `beforeunload`
@@ -124,6 +239,8 @@ its window's input router). The host's and every window's preload (`engine/hostP
   override emulates "position unavailable" at once and `launch.log` says why. Chromium reports a passing "position
   unavailable" each time the override changes, so the page preload holds an empty-message unavailable error 250 ms and
   drops it when a position follows. `DBUS_SYSTEM_BUS_ADDRESS` points it at another bus (tests run a fake GeoClue).
+  `ArdiaLocation` reads as granted (Linux has no per-app location permission) unless GeoClue refused the last start,
+  which reads as `servicesOff`; its settings button opens GNOME's or KDE's location settings.
 - **Picture in Picture.** `requestPictureInPicture` runs in the page with a user gesture (`pictureInPicture.ts`): the
   playing video, else the largest one, in the main frame and then each subframe, into Chromium's PiP window. The page
   preload reports `enterpictureinpicture`/`leavepictureinpicture` as `pictureInPicture` events, so the app's PiP state
@@ -198,6 +315,8 @@ the main method where one is needed (`aroundMain` in `tsModules.ts`), the main p
   a window (`--new-window`) or reopens one, also once the UI listens; a host that reloads holds them again.
 - **Default browser and login.** `xdg-settings set default-web-browser ardia.desktop` (an AppImage first writes
   `~/.local/share/applications/ardia.desktop` and its icons); open at login is `~/.config/autostart/ardia.desktop`.
+  An instance with its own `ARDIA_DATA_DIR` never touches the user's desktop: the desktop entry, icons,
+  `mimeapps.list` and the autostart entry go under `<data>/Desktop`, and no xdg tool runs.
 - **Updates** come from the GitHub releases of the repository the build was made from (`ARDIA_UPDATE_REPOSITORY` at
   build time): Ardia checks every 6 hours and offers the release page; it doesn't update itself yet.
 - **Secrets** (`ArdiaKeychain`, passwords, card numbers) are sealed with `safeStorage`: the desktop keyring through
@@ -305,7 +424,8 @@ Data in `$XDG_DATA_HOME/ardia` (default `~/.local/share/ardia`) or `ARDIA_DATA_D
   `ARDIA_UI_OUT=<dir> pnpm -C apps/browser/linux build:ui`, then run with `ARDIA_UI_DIR=<dir>`, so one build never empties
   the `ui/` folder under another's running instance.
 - Headless: `scripts/linux/xvfb <display> -- <command>` runs a command on a virtual display (the system Xvfb, or one
-  unpacked in `~/.local/xvfb`).
+  unpacked in `~/.local/xvfb`) and a private D-Bus session bus, so file pickers (the desktop portal), notifications
+  and the keyring never reach the logged-in desktop; `ARDIA_XVFB_USER_BUS=1` keeps the user's bus.
 - `scripts/linux/test-instance <name> [--port N] [--display N] [--data DIR] [--app PATH] [-- <links>]` builds nothing,
   starts a hidden instance on its own Xvfb with its own `ARDIA_DATA_DIR` and debugging port, waits for the port and
   prints the pid; `--stop` quits it through the quit handshake and stops its Xvfb. `--app` runs a packaged build (an

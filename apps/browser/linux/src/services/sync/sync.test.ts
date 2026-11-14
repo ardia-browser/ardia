@@ -205,3 +205,25 @@ test("the recovery QR code matches the Mac's", async () => {
   }
   assert.deepEqual(rows, expected);
 });
+
+test("removing files refuses a scope folder that is a link and leaves its target alone", async () => {
+  const root = await mkdtemp(join(tmpdir(), "ardia-sync-test-"));
+  try {
+    const keys = new SyncKeys(Buffer.alloc(32, 7));
+    const folder = join(root, "vault");
+    const victim = join(root, "victim");
+    const { mkdir, symlink, writeFile } = await import("node:fs/promises");
+    await mkdir(victim);
+    const id = "aaaaaaaaaaaaaaaaaaaaaaaaaa";
+    await writeFile(join(victim, `${id}.nns`), "keep me");
+    const vault = new SyncVault(folder, keys);
+    await vault.remove("app", [id]);
+    await vault.createChain();
+    await symlink(victim, vault.scopePath("app"));
+    await assert.rejects(vault.remove("app", [id]), /link where sync data belongs/);
+    assert.equal(await readFile(join(victim, `${id}.nns`), "utf8"), "keep me");
+    await vault.remove("bookmarks", [id]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

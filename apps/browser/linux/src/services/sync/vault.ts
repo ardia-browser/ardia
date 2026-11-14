@@ -151,7 +151,8 @@ export class SyncVault {
   }
 
   async remove(scope: string, ids: string[]): Promise<void> {
-    const directory = await this.scopeDirectory(scope, false).catch(() => this.scopePath(scope));
+    if ((await kindOf(this.chainPath)) === "absent") return;
+    const directory = await this.scopeDirectory(scope, false);
     if (!directory) return;
     const failed: string[] = [];
     for (const id of ids) {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync, type Stats } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { after, afterEach, beforeEach, mock, test } from "node:test";
 import { CORRECT_PASSWORD, scriptedPrompt, stubPasswordHelper } from "./testing/ownerCheck.ts";
 
@@ -175,4 +175,17 @@ test("the helper wipes the bytes it's given whether it matches, refuses, fails o
   helper.setMode("hang");
   await runPasswordHelper(helper.path, given[3]!, 200);
   assert.ok(given.every(wiped));
+});
+
+test("a helper or any folder above it that its group can write is never trusted, even when the group is root", () => {
+  const file = join(dataDir, "fake_chkpwd");
+  writeFileSync(file, "");
+  const real = realpathSync(file);
+  const rootOwned = (mode: number, isFile: boolean) => ({ uid: 0, gid: 0, mode, isFile: () => isFile }) as unknown as Stats;
+  const statWith = (writable: string) => (path: string) =>
+    path === real ? rootOwned(path === writable ? 0o100775 : 0o100755, true) : rootOwned(path === writable ? 0o40775 : 0o40755, false);
+  assert.equal(trustedPasswordHelper(file, statWith("")), real);
+  assert.equal(trustedPasswordHelper(file, statWith(real)), null);
+  assert.equal(trustedPasswordHelper(file, statWith(dirname(real))), null);
+  assert.equal(trustedPasswordHelper(file, statWith("/")), null);
 });

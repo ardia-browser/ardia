@@ -72,15 +72,15 @@ function watchForAway() {
   powerMonitor.on("suspend", away);
 }
 
-const writableByOthers = (stats: Stats) => (stats.mode & 0o002) !== 0 || ((stats.mode & 0o020) !== 0 && stats.gid !== 0);
+const writableByOthers = (stats: Stats) => (stats.mode & 0o022) !== 0;
 
-export function trustedPasswordHelper(path: string): string | null {
+export function trustedPasswordHelper(path: string, stat: (path: string) => Stats = statSync): string | null {
   try {
     const real = realpathSync(path);
-    const file = statSync(real);
+    const file = stat(real);
     if (!file.isFile() || file.uid !== 0 || writableByOthers(file) || (file.mode & 0o111) === 0) return null;
     for (let folder = dirname(real); ; folder = dirname(folder)) {
-      const stats = statSync(folder);
+      const stats = stat(folder);
       if (stats.uid !== 0 || writableByOthers(stats)) return null;
       if (folder === dirname(folder)) return real;
     }

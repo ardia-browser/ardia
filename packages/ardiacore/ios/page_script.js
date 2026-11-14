@@ -215,6 +215,12 @@
     send("nowPlaying", state && { ...state, timestamp: Date.now() });
   }, 100);
   let blockAutoplay = false;
+  let usedHere = false;
+  const noteUse = (e) => {
+    if (e.isTrusted && !(e.type === "keydown" && (e.key === "Escape" || e.metaKey))) usedHere = true;
+  };
+  for (const type of ["pointerdown", "keydown"]) window.addEventListener(type, noteUse, true);
+  const askedToPlay = () => usedHere || (!isTop && !!(navigator.userActivation && navigator.userActivation.isActive));
   let pipTrace = false;
   let pipHandlerSet = null;
   const playingMedia = new Set();
@@ -223,7 +229,7 @@
     if (!(m instanceof HTMLMediaElement)) return;
     if (e.type === "play" || e.type === "playing") playingMedia.add(m);
     else if (e.type === "pause" || e.type === "ended" || e.type === "emptied") playingMedia.delete(m);
-    if (blockAutoplay && e.type === "play" && !(navigator.userActivation && navigator.userActivation.hasBeenActive)) {
+    if (blockAutoplay && e.type === "play" && !askedToPlay()) {
       m.pause();
       return;
     }
@@ -260,6 +266,8 @@
       for (const e of mediaEvents) self.addEventListener(e, onMediaEvent);
       for (const watch of detachedMediaWatchers) guard(watch)(self);
     }
+    if (media && blockAutoplay && !askedToPlay())
+      return Promise.reject(new DOMException("play() failed because the user didn't interact with the document first.", "NotAllowedError"));
     return apply(target, self, args);
   });
 
@@ -349,6 +357,7 @@
       return true;
     };
     const playing = session?.playbackState === "playing" || (el && !el.paused);
+    if (action === "play" || action === "toggle") usedHere = true;
     switch (action) {
       case "play":
         call("play") || el?.play();
@@ -1152,7 +1161,7 @@
     if (pipTrace && pipHandlerSet !== null)
       send("pipTrace", { event: "setActionHandler", action: "enterpictureinpicture", set: pipHandlerSet });
     if (blockAutoplay)
-      pauseUnasked([...playingMedia, ...document.querySelectorAll("video, audio")], !!(navigator.userActivation && navigator.userActivation.hasBeenActive));
+      pauseUnasked([...playingMedia, ...document.querySelectorAll("video, audio")], askedToPlay());
     if (config.displayMediaPicker) installDisplayMedia();
     else restoreDisplayMedia();
     if (config.fieldTiming) setFieldTiming(true);

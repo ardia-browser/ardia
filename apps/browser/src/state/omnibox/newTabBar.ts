@@ -78,6 +78,7 @@ export function openFromNewTabBar(windowId: string, target: NewTabTarget, url: s
 }
 
 const launchTabs = new Set<string>();
+const launchCards = new Map<string, string>();
 const shownOver = new Set<string>();
 
 export function showOnceOverEmptyCard(windowId: string, tabId: string) {
@@ -89,7 +90,17 @@ export function showOnceOverEmptyCard(windowId: string, tabId: string) {
   if (launchTabs.has(tabId) && !NEW_TAB_BAR_POLICY.showOnLaunch) return;
   if (activeTabId(s, windowId) !== tabId || s.windowUi[windowId]?.panel.open || !showNewTabBar(windowId)) return;
   const shown = store().windowUi[windowId]?.panel;
-  if (shown) shownUnasked.add(shown);
+  if (!shown) return;
+  shownUnasked.add(shown);
+  if (launchCards.get(windowId) === tabId) notePageOverlay("newTabBarOnLaunch");
+}
+
+function noteLaunchCards() {
+  const s = store();
+  for (const windowId of s.windowOrder) {
+    const tabId = activeTabId(s, windowId);
+    if (tabId) launchCards.set(windowId, tabId);
+  }
 }
 
 function dismissBars(except?: string) {
@@ -99,6 +110,7 @@ function dismissBars(except?: string) {
 
 export function startNewTabBar() {
   for (const id of Object.keys(store().tabs)) launchTabs.add(id);
+  queueMicrotask(noteLaunchCards);
   if (!NEW_TAB_BAR_POLICY.dismissOnWindowDeactivation) return;
   onAppEvent((e) => {
     if (e.type === "resignActive" || e.type === "screenLocked") dismissBars();

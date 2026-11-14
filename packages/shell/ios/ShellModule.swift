@@ -22,6 +22,7 @@ public class ShellModule: Module {
       _ = installScrollViewInsetFix
       _ = installOutsidePressMonitor
       _ = installWindowMoveFallback
+      _ = installCenteredResize
       self.lifetime.begin(self) {
         self.appearanceObservation?.invalidate()
         self.appearanceObservation = nil

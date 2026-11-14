@@ -19,7 +19,6 @@ import { SidebarDropArea } from "./SidebarDropArea";
 import { FolderPanel } from "./FolderPanel";
 import { dismissHover, dismissHoverIn } from "../../state/sidebar/hover";
 import { PinFieldZone, PinSlotZone } from "./PinnedGrid";
-import { ResizeHandle } from "./ResizeHandle";
 import { bottomFieldBand, SIDEBAR_FIELD, SIDEBAR_FIELD_BOTTOM, SIDEBAR_FOOTER_DOWNLOADS, sidebarHeaderOf } from "./geometry";
 import { useNewTabAtTop, useSidebarField, useSidebarPart } from "../../state/sidebar/chrome";
 import { closeFolderPanel } from "../../state/sidebar/tileFolderUi";
@@ -150,7 +149,6 @@ export function Sidebar({ width }: { width: number }) {
               </View>
             </TintInk>
 
-            <ResizeHandle windowId={windowId} />
             {ghost && !ghost.landing && nothingPinned ? (
               field === "top" ? (
                 <PinFieldZone top={SIDEBAR_FIELD.top} height={SIDEBAR_FIELD.height} />

@@ -111,7 +111,7 @@ export type WebNotification = {
   isMainFrame: boolean;
 };
 
-export type PictureInPictureState = { kind: "video" | "document"; active: boolean; fullScreenSpaces?: boolean; leftApp?: boolean };
+export type PictureInPictureState = { kind: "video" | "document"; active: boolean; fullScreenSpaces?: boolean; leftApp?: boolean; leftTab?: boolean };
 export type AutoPictureInPictureHold = "onScreen" | "appSwitch" | "nothingPlaying";
 export type PictureInPictureDrag = { held: boolean; slipped: boolean };
 export type MediaFault = { reason: string; muted?: boolean; blockerActive?: boolean };

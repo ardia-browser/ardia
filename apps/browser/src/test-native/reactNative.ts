@@ -62,6 +62,9 @@ class AnimatedValue {
   removeListener(id: string) {
     this.listeners.delete(id);
   }
+  removeAllListeners() {
+    this.listeners.clear();
+  }
   interpolate(config: { inputRange: number[]; outputRange: number[] }) {
     return { config, source: this };
   }

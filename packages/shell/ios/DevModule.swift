@@ -145,6 +145,18 @@ public class DevModule: Module {
       }
     }.runOnQueue(.main)
 
+    AsyncFunction("devWindowResizeProbe") { (id: String, probe: [String: Double], promise: Promise) in
+      guard let window = WindowManager.shared.window(id) else { return promise.resolve(["error": "no window \(id)"]) }
+      var modifiers: NSEvent.ModifierFlags = []
+      if (probe["option"] ?? 0) != 0 { modifiers.insert(.option) }
+      if (probe["shift"] ?? 0) != 0 { modifiers.insert(.shift) }
+      WindowResizeProbe.resize(
+        window, edgeInset: CGFloat(probe["edgeInset"] ?? 1), count: Int(probe["steps"] ?? 40), dx: CGFloat(probe["dx"] ?? 4),
+        interval: (probe["intervalMs"] ?? 16) / 1000, modifiers: modifiers, bypassFix: (probe["bypassFix"] ?? 0) != 0,
+        failEvents: (probe["failEvents"] ?? 0) != 0
+      ) { promise.resolve($0) }
+    }.runOnQueue(.main)
+
     AsyncFunction("devWindowReplayAfterMove") { (id: String, rect: [Double]) -> [String: Any] in
       guard let window = WindowManager.shared.window(id), rect.count == 4 else { return ["error": "no window \(id)"] }
       return WindowMoveProbe.replayAfterMove(window, NSRect(x: rect[0], y: rect[1], width: rect[2], height: rect[3]))

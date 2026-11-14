@@ -14,6 +14,7 @@ import { TOOLBAR_ROWS } from "../../lib/toolbarRow";
 import { setUrlAnchor } from "../../state/windows/layout";
 import { useSidebarPart } from "../../state/sidebar/chrome";
 import { SIDEBAR_FIELD } from "./geometry";
+import { noteEmptyTabSidebarExtensionPress } from "../../state/telemetry/usage";
 import { SidebarFieldFill } from "./SidebarField";
 import { SidebarUrlField, useToolbarTab } from "../toolbar/Toolbar";
 import { HistoryButton, ReloadButton } from "../toolbar/NavButtons";
@@ -116,7 +117,11 @@ export function SidebarAddressRow({ width, top }: { width: number; top: number }
       style={{ position: "absolute", left: layout.sidebarInset, right: layout.sidebarInset, top, height: SIDEBAR_FIELD.height }}
     >
       <ToolbarRowContext.Provider value={TOOLBAR_ROWS.regular}>
-        {tab?.url ? <PageField tab={tab} windowId={windowId} width={width - 2 * layout.sidebarInset} /> : <EmptyField windowId={windowId} />}
+        {tab?.url ? (
+          <PageField tab={tab} windowId={windowId} width={width - 2 * layout.sidebarInset} />
+        ) : (
+          <EmptyField windowId={windowId} tabId={tab?.id} width={width - 2 * layout.sidebarInset} />
+        )}
       </ToolbarRowContext.Provider>
     </View>
   );
@@ -126,8 +131,6 @@ const HOST_ROOM = 84;
 
 function PageField({ tab, windowId, width }: { tab: NonNullable<ReturnType<typeof useToolbarTab>>; windowId: string; width: number }) {
   const palette = toolbarPalette(useTheme(), null);
-  const limit = extensionsFitting(width - 10 - 3 - HOST_ROOM);
-  const extensionsWidth = useToolbarExtensionsWidth(windowId, limit);
   return (
     <SidebarUrlField
       tab={tab}
@@ -135,29 +138,38 @@ function PageField({ tab, windowId, width }: { tab: NonNullable<ReturnType<typeo
       windowId={windowId}
       onFocus={alreadyFocused}
       height={SIDEBAR_FIELD.height}
-      accessory={
-        extensionsWidth ? (
-          <View style={{ width: extensionsWidth - 6, height: 28 }}>
-            <ToolbarExtensions tabId={tab.id} windowId={windowId} palette={palette} top={0} right={0} limit={limit} />
-          </View>
-        ) : null
-      }
+      accessory={<FieldExtensions tabId={tab.id} windowId={windowId} width={width} palette={palette} />}
     />
   );
 }
 
-function EmptyField({ windowId }: { windowId: string }) {
+function FieldExtensions({ tabId, windowId, width, palette, onActivate }: { tabId: string; windowId: string; width: number; palette: ToolbarPalette; onActivate?: () => void }) {
+  const limit = extensionsFitting(width - 10 - 3 - HOST_ROOM);
+  const extensionsWidth = useToolbarExtensionsWidth(windowId, limit);
+  if (!extensionsWidth) return null;
+  return (
+    <View style={{ width: extensionsWidth - 6, height: 28 }}>
+      <ToolbarExtensions tabId={tabId} windowId={windowId} palette={palette} top={0} right={0} limit={limit} onActivate={onActivate} />
+    </View>
+  );
+}
+
+function EmptyField({ windowId, tabId, width }: { windowId: string; tabId: string | undefined; width: number }) {
   const theme = useTheme();
+  const palette = toolbarPalette(theme, null);
   const { hovered, hoverProps } = useHover();
   const open = () => openEmptySidebarField(windowId);
   return (
-    <View {...hoverProps}>
-      <Pressable onPress={open}>
-        <View style={{ height: SIDEBAR_FIELD.height, justifyContent: "center", paddingLeft: space.l }}>
-          <SidebarFieldFill hovered={hovered} />
-          <FadeLabel text="Search or enter address" fontSize={font.body.fontSize} color={theme.placeholder} fadeWidth={14} style={{ height: 18, marginLeft: -space.xxs }} />
-        </View>
+    <View {...hoverProps} style={{ flexDirection: "row", alignItems: "center", height: SIDEBAR_FIELD.height }}>
+      <SidebarFieldFill hovered={hovered} />
+      <Pressable onPress={open} style={{ flex: 1, height: SIDEBAR_FIELD.height, justifyContent: "center", paddingLeft: space.l }}>
+        <FadeLabel text="Search or enter address" fontSize={font.body.fontSize} color={theme.placeholder} fadeWidth={14} style={{ height: 18, marginLeft: -space.xxs }} />
       </Pressable>
+      {tabId ? (
+        <View style={{ paddingRight: space.xs }}>
+          <FieldExtensions tabId={tabId} windowId={windowId} width={width} palette={palette} onActivate={noteEmptyTabSidebarExtensionPress} />
+        </View>
+      ) : null}
     </View>
   );
 }

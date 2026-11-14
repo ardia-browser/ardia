@@ -6,6 +6,7 @@ import { awayFromPin } from "../pins/organize";
 import { pinnedGroupMembers } from "../browser/structure";
 import { shownTabIds } from "../tabs/shownTabs";
 import { repoKey } from "./rows";
+import { hideNewRepos } from "./repoFilter";
 import { SOURCES } from "./sources";
 import { applyFetch, createFolder, releaseShownRepos, finishCompleting, live, markRead, removeFolder, setStatus, unhide, useLive } from "./store";
 import { LiveError, type CompletionState, type LiveFolderKind, type LiveItem, type LiveSourceId, type PullRequestSection } from "./types";
@@ -76,6 +77,7 @@ async function run(folderId: string) {
     Object.assign(gone, await resolve(missing.filter((it) => it.source === source)).catch(() => ({})));
   }
 
+  hideNewRepos(folderId, fetched);
   const current = live();
   const prev = current.items[folderId] ?? [];
   const animating = new Set(current.completing[folderId] ?? []);

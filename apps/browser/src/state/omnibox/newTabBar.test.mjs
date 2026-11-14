@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const model = await import("../browser/model.ts");
-const { closeNewTabBar, openFromNewTabBar, showOnceOverEmptyCard, toggleNewTabBar } = await import("./newTabBar.ts");
+const { closeNewTabBar, openFromNewTabBar, showOnceOverEmptyCard, startNewTabBar, toggleNewTabBar } = await import("./newTabBar.ts");
 const { togglePinnedRows, forgetListSpots } = await import("../sidebar/movePinned.ts");
 
 const S = () => useBrowser.getState();
@@ -159,6 +159,31 @@ test("⌘T right after the bar opened on its own over an empty window keeps it; 
   assert.equal(panel(w).open, true);
   toggleNewTabBar(w);
   assert.equal(panel(w).open, false, "a bar ⌘T opened closes on the next ⌘T");
+});
+
+test("a launch whose window is an empty card shows the bar over it, as ⌘T does", () => {
+  reset("commandBar");
+  const { w, ids: [a] } = windowWith("a");
+  S().closeTab(a);
+  const empty = model.activeTabId(S(), w);
+  startNewTabBar();
+  showOnceOverEmptyCard(w, empty);
+  assert.deepEqual(panel(w), { open: true, initialText: "", newTab: { kind: "into", tabId: empty } });
+  closeNewTabBar(w);
+  showOnceOverEmptyCard(w, empty);
+  assert.equal(panel(w).open, false, "once: dismissing it keeps it down");
+});
+
+test("a link from another app after a launch's bar closes the bar and shows the link", () => {
+  reset("commandBar");
+  const { w, ids: [a] } = windowWith("a");
+  S().closeTab(a);
+  const empty = model.activeTabId(S(), w);
+  startNewTabBar();
+  showOnceOverEmptyCard(w, empty);
+  assert.equal(panel(w).open, true);
+  const link = S().newTab(w, { url: "https://link.com/", gated: true });
+  assert.deepEqual([panel(w).open, model.activeTabId(S(), w)], [false, link]);
 });
 
 test("the bar opens once over a blank tab, never over a tab a page opened that has no URL yet", () => {

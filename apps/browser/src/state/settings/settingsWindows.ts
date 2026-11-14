@@ -67,6 +67,11 @@ export function openSettings(pane?: SettingsPane, profileId?: string | null) {
   void openWindow(SETTINGS_WINDOW_ID, { kind: "settings", title: "Settings" });
 }
 
+export function openSiteSettings(origin: string, profileId: string) {
+  goToSettingsPane("privacy", profileId, origin);
+  void openWindow(SETTINGS_WINDOW_ID, { kind: "settings", title: "Settings" });
+}
+
 export const useImportRequest = create<{ source: string | null }>()(() => ({ source: null }));
 
 export function takePreferredImportSource() {

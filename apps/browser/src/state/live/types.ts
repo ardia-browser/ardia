@@ -13,6 +13,8 @@ export type LiveFolder = {
   groupStacks: boolean;
   showCompleted: boolean;
   hiddenRepos: string[];
+  showNewRepos: boolean;
+  shownRepos: string[];
   createdAt: number;
   after?: string | null;
 };

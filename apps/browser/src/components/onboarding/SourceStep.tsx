@@ -59,6 +59,8 @@ function detect(): Tile[] {
 export function SourceStep() {
   const colors = useOnboardingColors();
   const source = useOnboarding((s) => s.source);
+  const redo = useOnboarding((s) => s.redo);
+  const redoSource = useOnboarding((s) => s.redoSource);
   const [tiles, setTiles] = useState<Tile[]>(detect);
   const [importing, setImporting] = useState<BrowserSourceId | null>(null);
   const [pastingCode, setPastingCode] = useState(false);
@@ -81,7 +83,6 @@ export function SourceStep() {
   };
 
   const skip = () => {
-    const { redo, redoSource } = useOnboarding.getState();
     chooseSource(redo ? redoSource : null);
     skipStep();
   };

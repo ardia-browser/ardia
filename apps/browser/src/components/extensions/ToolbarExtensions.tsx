@@ -59,6 +59,7 @@ type ToolbarExtensionsProps = {
   top: number;
   right: number;
   limit?: number;
+  onActivate?: () => void;
 };
 
 export const ToolbarExtensions = memo(function ToolbarExtensions(props: ToolbarExtensionsProps) {
@@ -72,6 +73,7 @@ function TabToolbarExtensions({
   top,
   right,
   limit = Infinity,
+  onActivate,
 }: ToolbarExtensionsProps) {
   const { pinned, overflow, routes } = useToolbarExtensions(windowId, limit);
   const ready = usePages((p) => !!p.ready[tabId]);
@@ -80,9 +82,9 @@ function TabToolbarExtensions({
     <View style={{ position: "absolute", top, right, flexDirection: "row", gap: GAP }}>
       {routes.length ? <CastButton windowId={windowId} tabId={tabId} routes={routes} palette={palette} /> : null}
       {pinned.map((ext) => (
-        <ExtensionButton key={ext.id} ext={ext} windowId={windowId} tabId={tabId} ready={ready} palette={palette} />
+        <ExtensionButton key={ext.id} ext={ext} windowId={windowId} tabId={tabId} ready={ready} palette={palette} onActivate={onActivate} />
       ))}
-      {overflow && <OverflowButton windowId={windowId} tabId={tabId} palette={palette} />}
+      {overflow && <OverflowButton windowId={windowId} tabId={tabId} palette={palette} onActivate={onActivate} />}
     </View>
   );
 }
@@ -124,7 +126,7 @@ function useAnchor(windowId: string, tabId: string, slot: string) {
   return { ref, measure };
 }
 
-function ExtensionButton({ ext, windowId, tabId, ready, palette }: { ext: InstalledExtension; windowId: string; tabId: string; ready: boolean; palette: ToolbarPalette }) {
+function ExtensionButton({ ext, windowId, tabId, ready, palette, onActivate }: { ext: InstalledExtension; windowId: string; tabId: string; ready: boolean; palette: ToolbarPalette; onActivate?: () => void }) {
   const fetched = useExtensions((e) => (ready ? e.actions[tabId] : undefined));
   const held = useRef<ActionState | undefined>(undefined);
   if (fetched) held.current = fetched[ext.id];
@@ -149,7 +151,10 @@ function ExtensionButton({ ext, windowId, tabId, ready, palette }: { ext: Instal
           tooltip={title}
           onPressIn={pressMotion.onPressIn}
           onPressOut={pressMotion.onPressOut}
-          onPress={async () => activateExtension(windowId, ext, await measure(), fetched?.[ext.id], tabId)}
+          onPress={async () => {
+            onActivate?.();
+            return activateExtension(windowId, ext, await measure(), fetched?.[ext.id], tabId);
+          }}
           badge={badge ? <Badge text={badge.slice(0, 4)} size="s" fill={fill} color={state?.badgeTextColor ?? contrastText(fill)} style={BADGE_PLACE} /> : null}
         >
           <Animated.View pointerEvents="none" style={[{ width: GLYPH_BOX, height: GLYPH_BOX, alignItems: "center", justifyContent: "center" }, scaleStyle]}>
@@ -188,7 +193,7 @@ function CastButton({ windowId, tabId, routes, palette }: { windowId: string; ta
   );
 }
 
-function OverflowButton({ windowId, tabId, palette }: { windowId: string; tabId: string; palette: ToolbarPalette }) {
+function OverflowButton({ windowId, tabId, palette, onActivate }: { windowId: string; tabId: string; palette: ToolbarPalette; onActivate?: () => void }) {
   const { ref, measure } = useAnchor(windowId, tabId, "*");
   const onPress = async () => {
     const anchor = await measure();
@@ -198,7 +203,10 @@ function OverflowButton({ windowId, tabId, palette }: { windowId: string; tabId:
       ...(enabled.length ? [{ separator: true as const }] : []),
       ...EXTENSION_LIST_ITEMS,
     ]);
-    if (choice && typeof choice === "object") void activateExtension(windowId, choice, anchor, undefined, tabId);
+    if (choice && typeof choice === "object") {
+      onActivate?.();
+      void activateExtension(windowId, choice, anchor, undefined, tabId);
+    }
     else runExtensionListChoice(choice, windowId);
   };
   return (

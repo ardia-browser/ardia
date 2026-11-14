@@ -9,6 +9,7 @@ import { useSidebarSide, useWindowId } from "../../state/browser/hooks";
 import { useSidebarDockState } from "../../state/windows/hooks";
 import { useToolbarLightsCenter } from "../../state/windows/layout";
 import { Sidebar } from "../sidebar/Sidebar";
+import { ResizeHandle } from "../sidebar/ResizeHandle";
 import { dismissHoverIn } from "../../state/sidebar/hover";
 import { useSidebarUi } from "../../state/sidebar/sidebarUi";
 import { peekHeld, watchHolds } from "../../state/app/transientUi";
@@ -105,7 +106,8 @@ export function DockedLayout({
   const windowId = useWindowId();
   const [open, sidebarWidth, addressBar] = useSidebarDockState(windowId);
   const right = useSidebarSide(windowId) === "right";
-  const width = useSidebarUi((u) => u.dragWidth[windowId]) ?? sidebarWidth;
+  const dragWidth = useSidebarUi((u) => u.dragWidth[windowId]);
+  const width = dragWidth ?? sidebarWidth;
   const arc = addressBar && !topTabs && switchOn("sidebarSlide");
   const toolbarLights = useToolbarLightsCenter();
   const lights = addressBar && !topTabs ? ARC_LIGHTS_CENTER : toolbarLights;
@@ -166,6 +168,7 @@ export function DockedLayout({
           windowWidth={windowWidth}
         />
       )}
+      {dragWidth !== undefined && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { cursor: "col-resize" }]} />}
     </>
   );
 }
@@ -329,6 +332,7 @@ function SidebarDock({
             </Animated.View>
           )}
           <View style={[{ flex: 1 }, peeking ? { borderRadius: peekAt.radius, overflow: "hidden" } : null]}>{sidebar}</View>
+          <ResizeHandle windowId={windowId} />
         </Animated.View>
       </Animated.View>
     </>

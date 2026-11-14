@@ -1,4 +1,5 @@
 #import "ArdiaChromeWindowInternal.h"
+#import "ArdiaRuntime.h"
 #import "ArdiaWebViewInternal.h"
 
 using namespace ardia_window;
@@ -13,6 +14,20 @@ using namespace ardia_window;
 namespace {
 
 constexpr CGFloat kPopupOriginStripHeight = 28;
+
+BOOL gChromeAppWindowJoinsFullScreenSpace = NO;
+
+NSWindowCollectionBehavior JoiningFullScreenSpace(NSWindowCollectionBehavior behavior) {
+  return (behavior & ~NSWindowCollectionBehaviorFullScreenPrimary) | NSWindowCollectionBehaviorFullScreenAuxiliary;
+}
+
+NSWindow *_Nullable FrontWindowOfProfile(ArdiaCoreProfile *profile) {
+  for (NSWindow *window in NSApp.orderedWindows) {
+    ArdiaWindowController *c = [ArdiaWindowController forNSWindow:window];
+    if (c && !c.stray && c.coreWindow.activeProfile == profile) return window;
+  }
+  return nil;
+}
 
 NSMutableSet<ArdiaPopupWindow *> *PopupWindows() {
   static NSMutableSet *windows = [NSMutableSet set];
@@ -106,6 +121,17 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
   NSMutableArray<NSDictionary *> *_permissionQueue;
   NSDictionary *_shownPermission;
   NSAlert *_permissionAlert;
+}
+
++ (void)load {
+  Class chromeWindow = NSClassFromString(@"NativeWidgetMacNSWindow");
+  ardia_runtime::ReplaceMethod(chromeWindow, @selector(setCollectionBehavior:), ^id(IMP original) {
+    return ^(NSWindow *window, NSWindowCollectionBehavior behavior) {
+      if (gChromeAppWindowJoinsFullScreenSpace && !window.visible && (behavior & NSWindowCollectionBehaviorFullScreenPrimary))
+        behavior = JoiningFullScreenSpace(behavior);
+      ((void (*)(id, SEL, NSWindowCollectionBehavior))original)(window, @selector(setCollectionBehavior:), behavior);
+    };
+  });
 }
 
 - (ArdiaCoreTab *)tab {
@@ -260,6 +286,8 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
   [self updateTitle];
   [self updateOrigin];
   _shown = YES;
+  NSWindow *window = _coreWindow.window;
+  if (IsWindowFullScreen(_opener.window)) window.collectionBehavior = JoiningFullScreenSpace(window.collectionBehavior);
   if (ardia_host::Background() || _showInactive) [_coreWindow showInactive];
   else [_coreWindow.window makeKeyAndOrderFront:nil];
   [_tab focus];
@@ -380,6 +408,11 @@ ArdiaCoreWindow *PopupWindowForChromeBrowser(ArdiaCoreProfile *profile) {
   __weak ArdiaPopupWindow *weakPopup = popup;
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 20 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{ [weakPopup closeIfNeverGivenTab]; });
   return popup.coreWindow;
+}
+
+void ChromeMakesAppWindow(ArdiaCoreProfile *profile) {
+  gChromeAppWindowJoinsFullScreenSpace = IsWindowFullScreen(FrontWindowOfProfile(profile));
+  dispatch_async(dispatch_get_main_queue(), ^{ gChromeAppWindowJoinsFullScreenSpace = NO; });
 }
 
 NSUInteger PopupWindowCount() {

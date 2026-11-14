@@ -6,6 +6,7 @@ import { storeAction, useBrowser } from "../browser/store";
 import { activeTabId, bookmarkProfileId, resolveWindowId, tabTitle, viewTabIds } from "../browser/model";
 import { originalProfile } from "../windows/small";
 import { isWebPageUrl } from "../../lib/url";
+import { isBookmarklet, runBookmarklet } from "./bookmarklets";
 
 type OpenMode = "current" | "background" | "foreground" | "window" | "incognito" | "split";
 
@@ -17,6 +18,7 @@ export function openModeFor(e: { metaKey?: boolean; shiftKey?: boolean; altKey?:
 }
 
 export function openUrl(url: string, windowId: string | null | undefined, mode: OpenMode) {
+  if (isBookmarklet(url)) return void runBookmarklet(url, windowId);
   const s = useBrowser.getState();
   const id = resolveWindowId(s, windowId);
   const w = id ? s.windows[id] : undefined;
@@ -43,8 +45,9 @@ export function openFolder(folderId: string, windowId: string | null | undefined
   return openLinks(folderLinks(useBrowser.getState().bookmarks, folderId), windowId, mode, FOLDER_MANY);
 }
 
-export async function openLinks(links: { url: string }[], windowId: string | null | undefined, mode: OpenAllMode = "tabs", manyMessage = "That's a lot of pages.") {
+export async function openLinks(given: { url: string }[], windowId: string | null | undefined, mode: OpenAllMode = "tabs", manyMessage = "That's a lot of pages.") {
   const s = useBrowser.getState();
+  const links = given.filter((link) => !isBookmarklet(link.url));
   if (!links.length) return;
   if (links.length > 15) {
     const { confirmed } = await confirm({

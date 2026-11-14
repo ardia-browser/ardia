@@ -234,6 +234,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     guard let id = id(of: from), let entry = managed[id] else { return }
     NotificationCenter.default.removeObserver(self, name: nil, object: from)
     entry.window = to
+    if entry.kind == .small { ArdiaChromeWindowHost.markFloating(forWindowManagers: to) }
     if lastPlaced === from { lastPlaced = to }
     observeDelegateNotifications(to)
     observeFrame(to)

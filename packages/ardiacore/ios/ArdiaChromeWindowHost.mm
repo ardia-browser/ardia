@@ -30,11 +30,13 @@ void AnswerFloatingSubrole(Class windowClass) {
   Method method = class_getInstanceMethod(windowClass, subrole);
   if (!method) return;
   IMP original = method_getImplementation(method);
+  const char *types = method_getTypeEncoding(method);
+  if (!types) return;
   IMP floating = imp_implementationWithBlock(^NSAccessibilitySubrole(NSWindow *window) {
     if (objc_getAssociatedObject(window, kFloatsForWindowManagersKey)) return NSAccessibilitySystemFloatingWindowSubrole;
     return ((NSAccessibilitySubrole (*)(id, SEL))original)(window, subrole);
   });
-  if (!class_addMethod(windowClass, subrole, floating, method_getTypeEncoding(method))) method_setImplementation(method, floating);
+  if (!class_addMethod(windowClass, subrole, floating, types)) method_setImplementation(method, floating);
 }
 
 }

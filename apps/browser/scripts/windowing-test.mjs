@@ -329,6 +329,31 @@ try {
     if (blank.length > 1) dump("dropped-page", pages.filter((c, i) => pages.slice(Math.max(0, i - 1), i + 2).some((n) => sd(n) < 3)), page);
     assert.ok(blank.length <= 1, `${blank.length} frames of w1's page blank`);
   });
+
+  await check("Settings and Little Ardia ask window managers to float them", async () => {
+    const target = await run(`return ac.engine.call("windows.list").then((ws) => ws.find((w) => w.hasRoot)?.window ?? 0);`);
+    const subroles = () => run(`return ac.engine.call("windows.dev", { window: ${target}, action: "subroles" }).then((text) => JSON.parse(text));`);
+    await run(`ac.openSettings("general"); return true`);
+    let list = [];
+    for (let end = Date.now() + 10000; Date.now() < end; await sleep(250)) {
+      list = await subroles();
+      if (list.some((w) => w.title === "Settings")) break;
+    }
+    const settings = list.find((w) => w.title === "Settings");
+    assert.ok(settings, `no visible Settings window: ${JSON.stringify(list)}`);
+    const main = list.find((w) => w.number === target);
+    assert.ok(main, `no visible main window: ${JSON.stringify(list)}`);
+    assert.equal(main.subrole, "AXStandardWindow", "the main window stays a normal tiled window");
+    assert.equal(settings.subrole, "AXDialog", "Settings asks to float as a dialog");
+    await run(`st().createWindow({ kind: "small", url: "about:blank" }); return true`);
+    for (let end = Date.now() + 10000; Date.now() < end; await sleep(250)) {
+      list = await subroles();
+      if (list.some((w) => w.identifier === "ardia.window.small")) break;
+    }
+    const little = list.find((w) => w.identifier === "ardia.window.small");
+    assert.ok(little, `no visible Little Ardia window: ${JSON.stringify(list)}`);
+    assert.equal(little.subrole, "AXSystemFloatingWindow", "Little Ardia asks to float like a system floating window");
+  });
 } finally {
   await app?.quit();
   server.close();

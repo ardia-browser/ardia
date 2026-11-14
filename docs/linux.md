@@ -13,7 +13,7 @@ Walked by hand on 2026-11-14 on Ubuntu 24.04 (x86_64), in a test instance on a p
 data folder, as a user would: real X key presses, clicks and drags, a screenshot for every row. The walk started on
 commit d7a4bd789; the rows it found broken were fixed on the way and seen again after the fix (through cc0829af3),
 and those rows name the fix. Most rows were walked with no window manager; maximize, dragging, full screen, focus, menus and Peek were walked
-again under xfwm4 with its compositor. Of the 63 rows, 47 work, 6 work with a difference, none is broken, 1 is not
+again under xfwm4 with its compositor. Of the 63 rows, 48 work, 5 work with a difference, none is broken, 1 is not
 offered and 9 were not walked. Works with a difference says what differs; the Mac's list is
 `docs/dia-feature-parity.md`.
 
@@ -65,7 +65,7 @@ offered and 9 were not walked. Works with a difference says what differs; the Ma
 | Zoom (Ctrl+=, Ctrl+0) | Works, with the zoom popover and the icon in the address bar | |
 | Print | Works: with a printer, the system print dialog; with none (CUPS has no destinations), Save as PDF into the downloads folder. Before, Ctrl+P froze the tab: Electron refuses to print without a printer and leaves the page waiting | 3b537855b |
 | JavaScript alert, confirm and prompt | Works: GTK boxes for alert and confirm, the app's prompt for prompt | |
-| Page, link and image menus | Differs: native menus with fewer items than the Mac's (link: Open in New Tab, Open in New Window, Copy Link Address, Inspect; page: Back, Forward, Reload, Save Page As, Print, Inspect) | |
+| Page, link and image menus | Works: the Mac's items in its order (Chrome's menu as Ardia arranges it). Page: Back, Forward, Reload, Save As, Print, View Page Source, Inspect. Link: Open Link in New Tab, New Window, Incognito Window, Split View, Save Link As, Copy Link Address, Copy Link Text. Image: Open Image in New Tab, Save Image As, Copy Image, Copy Image Address. Video: Loop, Show Controls, Picture in Picture, then open, save, copy. Selection: Copy, Copy Link to Highlight, Search Google for "…", Print. A misspelled word: suggestions, Add to Dictionary, then the edit items. Split View, Incognito, Picture in Picture, a suggestion, the highlight link and View Page Source were each used. No Share items (no share sheet on Linux) and no Look Up (no system dictionary). Before, a link had four items and the page six | f38e21377 |
 | Full screen (a page element) | Works; Escape leaves it | |
 | Picture in Picture | Differs: Chromium's PiP window | |
 | Downloads (download, panel, Ctrl+J) | Works: the panel opens for a new download and lists it | |
@@ -231,7 +231,8 @@ its window's input router). The host's and every window's preload (`engine/hostP
   the Close N tabs? confirm). Closing a tab doesn't ask, like the Mac, which
   runs the page's unload handlers without a prompt. Downloads (`downloads.ts`) report to the downloads panel; a test instance saves
   into its data dir. Permission prompts (`permissions.ts`) read and remember through `services/sites.ts`; external
-  protocols ask through the page's `externalApp` prompt. The page context menu is a native menu.
+  protocols ask through the page's `externalApp` prompt. The page context menu (`contextMenu.ts`) is a native menu
+  with the Mac's items in its order: Chrome's menu as `ac_context_menu.mm` arranges it, less Share and Look Up.
 - **Widevine.** The `electron` package is castlabs' Electron for Content Security (`github:castlabs/electron-releases`,
   the `+wvcus` build nearest our Electron), a drop-in Electron with Widevine. `engine/widevine.ts` calls
   `components.whenReady()` at startup, which installs or updates the CDM under `<data>/Engine/WidevineCdm` (about a

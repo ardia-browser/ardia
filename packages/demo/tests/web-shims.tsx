@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { subscribeFrames } from "../src/shims/web/gl/clock";
 import { paletteColors } from "../src/shims/web/gl/colors";
-import { currentPointer, watchPointer } from "../src/shims/web/motion/pointer";
+import { currentPointer } from "../src/shims/web/motion/pointer";
 import { MacView } from "../src/shims/web/motion/macView";
 
 document.body.style.cssText = "margin:40px;background:#f6f5f2;color:#202020;font:18px system-ui";
@@ -33,8 +33,6 @@ document.getElementById("run")!.addEventListener("click", async (event) => {
   }
   checks.validPalette = JSON.stringify(paletteColors(["#ff0000"])) === "[[1,0,0,1]]" && paletteColors(["red"])?.length === 5;
 
-  const stopPointer = watchPointer(() => {});
-  window.dispatchEvent(new PointerEvent("pointermove", { clientX: event.clientX, clientY: event.clientY }));
   let enters = 0;
   const mount = document.getElementById("hover")!;
   mount.replaceChildren();
@@ -65,7 +63,6 @@ document.getElementById("run")!.addEventListener("click", async (event) => {
   await new Promise((resolve) => setTimeout(resolve, 500));
   stopHealthy();
   stopThrowing();
-  stopPointer();
   window.removeEventListener("error", onError);
   checks.clockSurvivesThrow = frames >= 3 && errors >= 3;
   checks.enterOnMount = enters === 1;

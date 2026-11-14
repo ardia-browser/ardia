@@ -48,6 +48,8 @@ jobs:
         run: |
           pnpm -C apps/browser/linux typecheck
           if [ -f packages/expo-linux/tsconfig.json ]; then pnpm -C packages/expo-linux typecheck; fi
+      - name: Unit tests
+        run: pnpm -C apps/browser/linux test
       - name: Build
         run: pnpm -C apps/browser/linux build
       - name: Package

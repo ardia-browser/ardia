@@ -11,6 +11,7 @@
     "dev": "node scripts/dev.mjs",
     "package": "node scripts/package.mjs",
     "start": "electron .",
+    "test": "node --import ./scripts/test-hooks.mjs --test \"src/**/*.test.ts\"",
     "typecheck": "tsc -p ."
   },
   "dependencies": {

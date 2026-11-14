@@ -165,7 +165,7 @@ inline Tile const &TileFor(std::string const &texture) {
 
 inline int TilePixels(std::string_view texture, float scale, float cellSize) noexcept {
   if (IsHash(texture)) return (std::max)(1, static_cast<int>(std::lround(HashSide * (std::max)(SmallestCell, cellSize))));
-  return (std::max)(1, static_cast<int>(std::lround(TextureTileDips * scale)));
+  return (std::max)(TextureSide, static_cast<int>(std::lround(TextureTileDips * scale)));
 }
 
 struct Border : MaterialEffects::Effect<Border> {

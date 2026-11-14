@@ -303,7 +303,9 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
   bubbles blur what is under them inside the window with a Composition backdrop brush (Gaussian blur, saturation and a
   tint). Window and theme gradients are Composition linear gradients at their real angle. The theme's grain (`grain`,
   `sand`, `denim`, `tweed`) is the Mac's `GrainLayer` tile, the same xorshift recipe and darkening byte for byte,
-  drawn once per texture and scale with Direct2D into a Composition drawing surface (64 DIPs a tile) and repeated by a
+  drawn once per texture and scale with Direct2D into a Composition drawing surface (64 DIPs a tile, as on the Mac, but
+  never fewer than its 128 pixels, so a 100 % display keeps one tile pixel per screen pixel as a Retina Mac does and
+  denim's one-pixel twill isn't averaged into a flat wash) and repeated by a
   border effect (`MaterialGrain.h`, the `ArdiaMaterialGrain` view in `MaterialGrainView.h`); it sits over the theme
   layers of the window backdrop and the swatch, at the grain amount. The plain backdrop (the release-notes postcard)
   takes the Mac shader's hash grain, `grainOpacity` darkening per `grainScale` pixel cell, as a 256-cell tile. The Mac

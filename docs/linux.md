@@ -179,7 +179,9 @@ Data in `$XDG_DATA_HOME/ardia` (default `~/.local/share/ardia`) or `ARDIA_DATA_D
 
 - `pnpm -C apps/browser/linux dev`: Vite serves the UI, Electron loads it.
 - `pnpm -C apps/browser/linux build`: the UI bundle and the main process, then `package` makes the AppImage and `.deb`
-  in `apps/browser/linux/dist`.
+  in `apps/browser/linux/dist`. Agents building in parallel give their UI bundle its own folder:
+  `ARDIA_UI_OUT=<dir> pnpm -C apps/browser/linux build:ui`, then run with `ARDIA_UI_DIR=<dir>`, so one build never empties
+  the `ui/` folder under another's running instance.
 - Headless: `scripts/linux/xvfb <display> -- <command>` runs a command on a virtual display (the system Xvfb, or one
   unpacked in `~/.local/xvfb`).
 - `scripts/linux/test-instance <name> [--port N] [--display N] [--data DIR] [--app PATH] [-- <links>]` builds nothing,

@@ -28,7 +28,7 @@ const devServer = hostEnvironment.devServer;
 
 async function loadUi(host: BrowserWindow) {
   if (devServer) await host.loadURL(devServer);
-  else await host.loadFile(join(__dirname, "../ui/index.html"));
+  else await host.loadFile(join(hostEnvironment.uiDirectory ?? join(__dirname, "../ui"), "index.html"));
 }
 
 if (!app.requestSingleInstanceLock({ dataDirectory: dataDirectory() })) {

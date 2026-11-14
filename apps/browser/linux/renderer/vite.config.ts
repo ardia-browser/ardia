@@ -55,5 +55,5 @@ export default defineConfig({
   },
   optimizeDeps: { include: ["react-native-web", "zustand", "zustand/react/shallow", "react-dom/client"] },
   server: { host: "127.0.0.1", port: Number(process.env.ARDIA_VITE_PORT ?? 5281), strictPort: false, fs: { allow: [repo] } },
-  build: { outDir: here("../ui"), emptyOutDir: true, target: "chrome140", sourcemap: true, chunkSizeWarningLimit: 20000, minify: !dev },
+  build: { outDir: process.env.ARDIA_UI_OUT || here("../ui"), emptyOutDir: true, target: "chrome140", sourcemap: true, chunkSizeWarningLimit: 20000, minify: !dev },
 });

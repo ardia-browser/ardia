@@ -13,6 +13,7 @@ export const isBackground = (): boolean => env.ARDIA_BACKGROUND === "1";
 export const hostEnvironment = {
   remoteDebuggingPort: env.ARDIA_REMOTE_DEBUGGING_PORT || null,
   devServer: env.ARDIA_DEV_SERVER || null,
+  uiDirectory: env.ARDIA_UI_DIR || null,
   sandboxReason: env.ARDIA_SANDBOX_REASON || null,
   appImage: env.APPIMAGE || null,
   launcher: env.ARDIA_LAUNCHER || null,

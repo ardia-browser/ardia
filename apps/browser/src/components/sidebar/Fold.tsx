@@ -40,7 +40,7 @@ export function useFold(collapsed: boolean): FoldState {
 export type FoldEntry = { key: string; node: ReactNode; ghost?: boolean };
 
 type Leaving = { node: ReactNode; before: string | null };
-type Turn = { value: Animated.Value; to: 0 | 1; done: boolean; at: number; from: number; height: number; leaving?: Leaving };
+type Turn = { value: Animated.Value; to: 0 | 1; done: boolean; at: number; from: number; height: number; waiting: boolean; leaving?: Leaving };
 type Shown = { settled: boolean; keys: string[]; order: string[]; turns: ReadonlyMap<string, Turn>; pad: Turn | null };
 
 const NO_TURNS: ReadonlyMap<string, Turn> = new Map();
@@ -50,12 +50,14 @@ const sameKeys = (a: string[], b: string[]) => a.length === b.length && a.every(
 const heightAt = (turn: Turn, v: number) =>
   v <= turn.at ? (turn.at ? (turn.from * v) / turn.at : 0) : turn.from + ((turn.height - turn.from) * (v - turn.at)) / (1 - turn.at);
 
-function turnTo(turn: Turn | null | undefined, to: 0 | 1, height: number): Turn {
-  if (!turn) return { value: new Animated.Value(1 - to), to, done: false, at: 1 - to, from: to ? 0 : height, height };
-  if (turn.to === to && !turn.leaving) return turn;
+function turnTo(turn: Turn | null | undefined, to: 0 | 1, height: number | undefined): Turn {
+  const waiting = to === 1 && height === undefined;
+  const full = height ?? 0;
+  if (!turn) return { value: new Animated.Value(1 - to), to, done: false, at: 1 - to, from: to ? 0 : full, height: full, waiting };
+  if (turn.to === to && !turn.leaving) return turn.waiting && !waiting ? { ...turn, height: full, waiting: false } : turn;
   const at = currentValue(turn.value);
   const from = heightAt(turn, at);
-  return { value: turn.value, to, done: false, at, from, height: to ? height : from };
+  return { value: turn.value, to, done: false, at, from, height: to ? full : from, waiting: to === 1 && waiting };
 }
 
 const foldStyle = (value: Animated.Value, height: number) => ({
@@ -67,13 +69,13 @@ const foldStyle = (value: Animated.Value, height: number) => ({
 
 type Farewell = (key: string) => { node: ReactNode; height: number } | null;
 
-function nextShown(was: Shown, settled: boolean, keys: string[], order: string[], farewell: Farewell | undefined, heightOf: (key: string) => number, lastHeight: (key: string) => number | undefined): Shown {
+function nextShown(was: Shown, settled: boolean, keys: string[], order: string[], farewell: Farewell | undefined, heightOf: (key: string) => number | undefined, lastHeight: (key: string) => number | undefined): Shown {
   if (!settled || !was.settled) return { settled, keys, order, turns: NO_TURNS, pad: null };
   const had = new Set(was.keys);
   const has = new Set(keys);
   const live = new Set(order);
   const turns = new Map(was.turns);
-  for (const key of keys) if (!had.has(key)) turns.set(key, turnTo(turns.get(key), 1, heightOf(key)));
+  for (const key of keys) if (!had.has(key) || turns.get(key)?.waiting) turns.set(key, turnTo(turns.get(key), 1, heightOf(key)));
   for (const key of was.keys) {
     if (has.has(key)) continue;
     if (live.has(key)) {
@@ -88,7 +90,7 @@ function nextShown(was: Shown, settled: boolean, keys: string[], order: string[]
     const before = was.order.slice(was.order.indexOf(key) + 1).find((k) => live.has(k)) ?? null;
     turns.set(key, { ...turnTo(turns.get(key), 0, gone.height), leaving: { node: gone.node, before } });
   }
-  for (const [key, turn] of turns) if ((turn.height <= 0 && turn.from <= 0) || turn.at === turn.to) turns.delete(key);
+  for (const [key, turn] of turns) if ((!turn.waiting && turn.height <= 0 && turn.from <= 0) || turn.at === turn.to) turns.delete(key);
   const showing = keys.length > 0;
   const wasShowing = was.pad ? was.pad.to === 1 : was.keys.length > 0;
   return { settled, keys, order, turns, pad: showing === wasShowing ? was.pad : turnTo(was.pad, showing ? 1 : 0, 1) };
@@ -139,14 +141,16 @@ export function Fold({
   const seen = useRef<ReadonlyMap<string, number>>(new Map());
   const laidOut = useRef(new Map<string, number>()).current;
   const kept = new Set([keep ?? []].flat().filter((key) => entries.some((e) => e.key === key)));
-  const heightOf = (key: string) => (typeof rowHeight === "function" ? rowHeight(key) : (rowHeight ?? measured[key] ?? estimate?.(key) ?? 0));
+  const knownHeight = (key: string) => (typeof rowHeight === "function" ? rowHeight(key) : (rowHeight ?? measured[key] ?? estimate?.(key)));
+  const heightOf = (key: string) => knownHeight(key) ?? 0;
   const order = entries.flatMap((e) => (e.ghost ? [] : [e.key]));
   const keys = order.filter((key) => kept.has(key));
   const settledShut = collapsed && !moving;
   const [tracked, setTracked] = useState<Shown>(() => ({ settled: settledShut, keys, order, turns: NO_TURNS, pad: null }));
+  const sized = [...tracked.turns].some(([key, turn]) => turn.waiting && knownHeight(key) !== undefined);
   let shown = tracked;
-  if (tracked.settled !== settledShut || (settledShut && (!sameKeys(tracked.keys, keys) || !sameKeys(tracked.order, order)))) {
-    shown = nextShown(tracked, settledShut, keys, order, farewell, heightOf, (key) => laidOut.get(key) ?? seen.current.get(key));
+  if (tracked.settled !== settledShut || (settledShut && (!sameKeys(tracked.keys, keys) || !sameKeys(tracked.order, order) || sized))) {
+    shown = nextShown(tracked, settledShut, keys, order, farewell, knownHeight, (key) => laidOut.get(key) ?? seen.current.get(key));
     setTracked(shown);
   }
   seen.current = new Map(keys.map((key) => [key, heightOf(key)]));
@@ -164,6 +168,7 @@ export function Fold({
       if (!turn.done) run.stop();
       runs.delete(turn);
     }
+    if ([...tracked.turns.values()].some((turn) => turn.waiting)) return;
     for (const turn of live) {
       if (turn.done || runs.has(turn)) continue;
       if (turn !== tracked.pad) noteSidebarCount("keptRowFolds");
@@ -227,6 +232,12 @@ export function Fold({
           const stays = kept.has(key);
           const turn = shown.turns.get(key);
           if (!stays && !mountAll && !turn) return null;
+          const recordHeight = (height: number) => {
+            const current = state.current;
+            const animating = current.turns.get(key);
+            if (current.moving || (animating && !animating.waiting) || (current.folding && !current.kept.has(key))) return;
+            setMeasured((all) => (all[key] === height ? all : { ...all, [key]: height }));
+          };
           return (
             <FoldedAway.Provider key={key} value={parentAway || ((collapsed || moving) && !stays)}>
               <Animated.View
@@ -236,11 +247,9 @@ export function Fold({
               >
                 {measuring ? (
                   <View
-                    onLayout={(e) => {
-                      if (state.current.moving || state.current.turns.has(key) || (state.current.folding && !state.current.kept.has(key))) return;
-                      const height = e.nativeEvent.layout.height;
-                      setMeasured((all) => (all[key] === height ? all : { ...all, [key]: height }));
-                    }}
+                    style={turn?.waiting ? { position: "absolute", left: 0, right: 0, top: 0 } : undefined}
+                    ref={turn?.waiting ? (view) => view?.measure((_x, _y, _width, height) => recordHeight(height)) : undefined}
+                    onLayout={(e) => recordHeight(e.nativeEvent.layout.height)}
                   >
                     {node}
                   </View>

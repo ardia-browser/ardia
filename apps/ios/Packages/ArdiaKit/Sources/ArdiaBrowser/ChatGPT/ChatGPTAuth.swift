@@ -6,16 +6,18 @@ public struct ChatGPTEndpoints: Equatable, Sendable, Codable {
   public var authorization: URL
   public var token: URL
   public var revocation: URL?
+  public var jwks: URL
   public var api: URL
 
   public static let openAIIssuer = URL(string: "https://auth.openai.com")!
   public static let openAIAPI = URL(string: "https://api.openai.com/v1")!
 
-  public init(issuer: URL, authorization: URL, token: URL, revocation: URL?, api: URL) {
+  public init(issuer: URL, authorization: URL, token: URL, revocation: URL?, jwks: URL, api: URL) {
     self.issuer = issuer
     self.authorization = authorization
     self.token = token
     self.revocation = revocation
+    self.jwks = jwks
     self.api = api
   }
 
@@ -32,11 +34,11 @@ public struct ChatGPTEndpoints: Equatable, Sendable, Codable {
       guard let value = object[key] as? String, let url = URL(string: value), url.sameOrigin(as: issuer) else { return nil }
       return url
     }
-    guard let authorization = endpoint("authorization_endpoint"), let token = endpoint("token_endpoint") else {
+    guard let authorization = endpoint("authorization_endpoint"), let token = endpoint("token_endpoint"), let jwks = endpoint("jwks_uri") else {
       throw .discoveryFailed
     }
     if object["revocation_endpoint"] != nil, endpoint("revocation_endpoint") == nil { throw .discoveryFailed }
-    return ChatGPTEndpoints(issuer: issuer, authorization: authorization, token: token, revocation: endpoint("revocation_endpoint"), api: api)
+    return ChatGPTEndpoints(issuer: issuer, authorization: authorization, token: token, revocation: endpoint("revocation_endpoint"), jwks: jwks, api: api)
   }
 }
 

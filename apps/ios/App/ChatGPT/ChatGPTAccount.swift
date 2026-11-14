@@ -74,17 +74,28 @@ final class ChatGPTAccount {
   }
 
   func disconnect() async {
+    if let refreshing { _ = try? await refreshing.value }
     guard let connection else { return }
-    refreshing?.cancel()
-    refreshing = nil
     self.connection = nil
     KeychainSecret.delete(Self.connectionKey)
-    guard let revocation = connection.endpoints.revocation else { return }
+    if await !revoke(connection) {
+      problem = String(localized: "Disconnected on this iPhone, but OpenAI didn’t confirm it. You can also remove Ardia in ChatGPT’s settings.")
+    }
+  }
+
+  private func revoke(_ connection: ChatGPTConnection) async -> Bool {
+    guard let revocation = connection.endpoints.revocation else { return false }
     var request = URLRequest(url: revocation, timeoutInterval: 10)
     request.httpMethod = "POST"
     request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
     request.httpBody = ChatGPTAuthorization.revocation(refreshToken: connection.tokens.refreshToken, clientID: connection.clientID)
-    _ = try? await ChatGPTHTTP.data(for: request)
+    for attempt in 0..<2 {
+      let status = (try? await ChatGPTHTTP.data(for: request))?.1
+      if status == 200 { return true }
+      guard attempt == 0, status.map({ $0 >= 500 }) ?? true else { return false }
+      try? await Task.sleep(for: .milliseconds(300))
+    }
+    return false
   }
 
   func validConnection(forceRefresh: Bool = false) async throws -> ChatGPTConnection {
@@ -111,6 +122,7 @@ final class ChatGPTAccount {
 
   private func authorize(using session: WebAuthenticationSession) async throws -> ChatGPTConnection {
     let endpoints = try await discover()
+    let previousSubject = connection?.identity.subject
     let server = try LoopbackCallbackServer.start()
     defer { server.stop() }
     let savedClientID = KeychainSecret.read(Self.registrationKey).map { String(decoding: $0, as: UTF8.self) }.flatMap { ChatGPTAuth.isValidClientID($0) ? $0 : nil }
@@ -145,7 +157,8 @@ final class ChatGPTAccount {
       guard status == 200 else { throw ChatGPTFailure.api(data, status: status) }
       let tokens = try ChatGPTTokens.parse(data)
       guard let idToken = tokens.idToken else { throw ChatGPTFailure.invalidIdentity }
-      let identity = try ChatGPTIdentity.verify(idToken: idToken, issuer: endpoints.issuer, clientID: clientID, nonce: authorization.nonce)
+      let identity = try await verifiedIdentity(idToken: idToken, endpoints: endpoints, clientID: clientID, nonce: authorization.nonce)
+      if let previousSubject, identity.subject != previousSubject { throw ChatGPTFailure.accountMismatch }
       let previous = connection?.chosenModel
       return ChatGPTConnection(clientID: clientID, identity: identity, tokens: tokens, endpoints: endpoints, chosenModel: previous)
     }
@@ -167,20 +180,37 @@ final class ChatGPTAccount {
     let (data, status) = try await ChatGPTHTTP.data(for: request)
     do {
       guard status == 200 else { throw ChatGPTFailure.api(data, status: status) }
-      var next = previous
-      try next.refreshed(with: ChatGPTTokens.parse(data, previousScopes: previous.tokens.scopes))
-      guard connection?.identity.subject == previous.identity.subject else { throw CancellationError() }
-      if var current = connection {
-        current.tokens = next.tokens
-        current.identity = next.identity
-        next = current
-      }
+      let tokens = try ChatGPTTokens.parse(data, previousScopes: previous.tokens.scopes)
+      var next = connection ?? previous
+      next.tokens = tokens
       save(next)
+      if let idToken = tokens.idToken {
+        do {
+          try next.confirm(await verifiedIdentity(idToken: idToken, endpoints: next.endpoints, clientID: next.clientID, nonce: nil))
+          save(next)
+        } catch ChatGPTFailure.unavailable {
+        }
+      }
       return next
     } catch let failure as ChatGPTFailure {
       if failure.requiresSignIn { signOutLocally(failure) }
       throw failure
     }
+  }
+
+  private func verifiedIdentity(idToken: String, endpoints: ChatGPTEndpoints, clientID: String, nonce: String?) async throws -> ChatGPTIdentity {
+    let keys: Data
+    do {
+      let (data, status) = try await ChatGPTHTTP.data(for: URLRequest(url: endpoints.jwks, timeoutInterval: 15))
+      guard status == 200 else { throw ChatGPTFailure.unavailable }
+      keys = data
+    } catch is CancellationError {
+      throw CancellationError()
+    } catch {
+      throw ChatGPTFailure.unavailable
+    }
+    try ChatGPTSignature.verify(idToken: idToken, jwks: keys)
+    return try ChatGPTIdentity.verify(idToken: idToken, issuer: endpoints.issuer, clientID: clientID, nonce: nonce)
   }
 
   private func loadModels() async {
@@ -203,7 +233,8 @@ final class ChatGPTAccount {
 
   private func save(_ connection: ChatGPTConnection) {
     self.connection = connection
-    if let data = try? JSONEncoder().encode(connection) { KeychainSecret.write(data, account: Self.connectionKey) }
+    guard let data = try? JSONEncoder().encode(connection) else { return }
+    if !KeychainSecret.write(data, account: Self.connectionKey) { KeychainSecret.write(data, account: Self.connectionKey) }
   }
 
   private func signOutLocally(_ failure: ChatGPTFailure) {

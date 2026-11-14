@@ -4,6 +4,8 @@ import Foundation
 
 nonisolated final class LoopbackCallbackServer: @unchecked Sendable {
   static let maximumRequestBytes = 16 * 1024
+  static let maximumClients = 8
+  static let clientDeadline: DispatchTimeInterval = .seconds(10)
 
   enum StartFailure: Error {
     case socket(Int32)
@@ -69,6 +71,10 @@ nonisolated final class LoopbackCallbackServer: @unchecked Sendable {
     while true {
       let client = accept(listenSocket, nil, nil)
       guard client >= 0 else { return }
+      guard clients.count < Self.maximumClients else {
+        Darwin.close(client)
+        continue
+      }
       var noSignal: Int32 = 1
       setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &noSignal, socklen_t(MemoryLayout<Int32>.size))
       _ = fcntl(client, F_SETFL, fcntl(client, F_GETFL) | O_NONBLOCK)
@@ -77,6 +83,10 @@ nonisolated final class LoopbackCallbackServer: @unchecked Sendable {
       source.setCancelHandler { Darwin.close(client) }
       clients[client] = (source, Data())
       source.resume()
+      queue.asyncAfter(deadline: .now() + Self.clientDeadline) { [weak self] in
+        guard let self, let entry = self.clients[client], (entry.source as AnyObject) === (source as AnyObject) else { return }
+        self.closeClient(client)
+      }
     }
   }
 

@@ -1,4 +1,5 @@
 import Foundation
+import Security
 import Testing
 @testable import ArdiaBrowser
 
@@ -130,17 +131,63 @@ import Testing
   }
 
   @Test func refreshKeepsTheSameAccount() throws {
-    let endpoints = ChatGPTEndpoints(issuer: Self.issuer, authorization: Self.issuer, token: Self.issuer, revocation: nil, api: ChatGPTEndpoints.openAIAPI)
+    let endpoints = ChatGPTEndpoints(issuer: Self.issuer, authorization: Self.issuer, token: Self.issuer, revocation: nil, jwks: Self.issuer, api: ChatGPTEndpoints.openAIAPI)
     let tokens = ChatGPTTokens(accessToken: "a", refreshToken: "r", expiresAt: .now, scopes: [], idToken: nil)
     var connection = ChatGPTConnection(clientID: "oaiapp_abc", identity: ChatGPTIdentity(subject: "user-1", email: nil, name: nil), tokens: tokens, endpoints: endpoints)
-    var next = tokens
-    next.accessToken = "b"
-    next.idToken = Self.jwt(Self.claims(["sub": "user-2"]))
-    #expect(throws: ChatGPTFailure.accountMismatch) { try connection.refreshed(with: next) }
-    next.idToken = Self.jwt(Self.claims())
-    try connection.refreshed(with: next)
-    #expect(connection.tokens.accessToken == "b")
+    #expect(throws: ChatGPTFailure.accountMismatch) { try connection.confirm(ChatGPTIdentity(subject: "user-2", email: nil, name: nil)) }
+    try connection.confirm(ChatGPTIdentity(subject: "user-1", email: "a@b.c", name: nil))
     #expect(connection.identity.email == "a@b.c")
+  }
+
+  static func derElements(_ data: Data) -> [Data] {
+    var bytes = [UInt8](data)
+    func readLength(_ index: inout Int) -> Int {
+      let first = Int(bytes[index]); index += 1
+      guard first & 0x80 != 0 else { return first }
+      var length = 0
+      for _ in 0..<(first & 0x7f) { length = length << 8 | Int(bytes[index]); index += 1 }
+      return length
+    }
+    var index = 1
+    _ = readLength(&index)
+    var elements: [Data] = []
+    while index < bytes.count {
+      index += 1
+      let length = readLength(&index)
+      elements.append(Data(bytes[index..<index + length]))
+      index += length
+    }
+    bytes = []
+    return elements
+  }
+
+  @Test func signatureMustComeFromTheIssuersKey() throws {
+    func makeKey() throws -> (SecKey, [String: String]) {
+      let attributes: [CFString: Any] = [kSecAttrKeyType: kSecAttrKeyTypeRSA, kSecAttrKeySizeInBits: 2048]
+      let key = try #require(SecKeyCreateRandomKey(attributes as CFDictionary, nil))
+      let publicKey = try #require(SecKeyCopyPublicKey(key))
+      let der = try #require(SecKeyCopyExternalRepresentation(publicKey, nil) as Data?)
+      let parts = Self.derElements(der)
+      #expect(ChatGPTSignature.publicKeyDER(modulus: parts[0], exponent: parts[1]) == der)
+      return (key, ["kty": "RSA", "kid": "k1", "use": "sig", "alg": "RS256", "n": parts[0].base64URLEncoded(), "e": parts[1].base64URLEncoded()])
+    }
+    func sign(_ claims: [String: Any], with key: SecKey, kid: String = "k1") throws -> String {
+      let header = try JSONSerialization.data(withJSONObject: ["alg": "RS256", "kid": kid])
+      let input = "\(header.base64URLEncoded()).\(try JSONSerialization.data(withJSONObject: claims).base64URLEncoded())"
+      let signature = try #require(SecKeyCreateSignature(key, .rsaSignatureMessagePKCS1v15SHA256, Data(input.utf8) as CFData, nil) as Data?)
+      return "\(input).\(signature.base64URLEncoded())"
+    }
+    let (key, jwk) = try makeKey()
+    let (otherKey, _) = try makeKey()
+    let jwks = try JSONSerialization.data(withJSONObject: ["keys": [jwk]])
+    let token = try sign(Self.claims(), with: key)
+    try ChatGPTSignature.verify(idToken: token, jwks: jwks)
+    #expect(throws: ChatGPTFailure.invalidIdentity) { try ChatGPTSignature.verify(idToken: try sign(Self.claims(), with: otherKey), jwks: jwks) }
+    #expect(throws: ChatGPTFailure.invalidIdentity) { try ChatGPTSignature.verify(idToken: try sign(Self.claims(), with: key, kid: "k2"), jwks: jwks) }
+    let parts = token.split(separator: ".")
+    let tampered = "\(parts[0]).\(try JSONSerialization.data(withJSONObject: Self.claims(["sub": "someone-else"])).base64URLEncoded()).\(parts[2])"
+    #expect(throws: ChatGPTFailure.invalidIdentity) { try ChatGPTSignature.verify(idToken: tampered, jwks: jwks) }
+    #expect(throws: ChatGPTFailure.invalidIdentity) { try ChatGPTSignature.verify(idToken: Self.jwt(Self.claims()), jwks: jwks) }
   }
 
   @Test func discoveryStaysOnTheIssuersOrigin() throws {
@@ -150,12 +197,16 @@ import Testing
       "authorization_endpoint": "https://auth.openai.com/api/accounts/authorize",
       "token_endpoint": "https://auth.openai.com/api/accounts/oauth/token",
       "revocation_endpoint": "https://auth.openai.com/api/accounts/oauth/revoke",
+      "jwks_uri": "https://auth.openai.com/.well-known/jwks.json",
     ]
     let endpoints = try ChatGPTEndpoints.fromDiscovery(json(good), issuer: Self.issuer, api: ChatGPTEndpoints.openAIAPI)
     #expect(endpoints.token.path == "/api/accounts/oauth/token")
     var elsewhere = good
     elsewhere["token_endpoint"] = "https://evil.test/token"
     #expect(throws: ChatGPTFailure.discoveryFailed) { try ChatGPTEndpoints.fromDiscovery(json(elsewhere), issuer: Self.issuer, api: ChatGPTEndpoints.openAIAPI) }
+    var noKeys = good
+    noKeys.removeValue(forKey: "jwks_uri")
+    #expect(throws: ChatGPTFailure.discoveryFailed) { try ChatGPTEndpoints.fromDiscovery(json(noKeys), issuer: Self.issuer, api: ChatGPTEndpoints.openAIAPI) }
     var otherIssuer = good
     otherIssuer["issuer"] = "https://evil.test"
     #expect(throws: ChatGPTFailure.discoveryFailed) { try ChatGPTEndpoints.fromDiscovery(json(otherIssuer), issuer: Self.issuer, api: ChatGPTEndpoints.openAIAPI) }

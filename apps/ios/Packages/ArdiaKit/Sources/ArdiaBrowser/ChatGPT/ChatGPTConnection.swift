@@ -21,12 +21,8 @@ public struct ChatGPTConnection: Codable, Equatable, Sendable {
     models.first { $0.slug == chosenModel } ?? models.first
   }
 
-  public mutating func refreshed(with next: ChatGPTTokens, now: Date = .now) throws(ChatGPTFailure) {
-    if let idToken = next.idToken {
-      let identity = try ChatGPTIdentity.verify(idToken: idToken, issuer: endpoints.issuer, clientID: clientID, nonce: nil, now: now)
-      guard identity.subject == self.identity.subject else { throw .accountMismatch }
-      self.identity = identity
-    }
-    tokens = next
+  public mutating func confirm(_ identity: ChatGPTIdentity) throws(ChatGPTFailure) {
+    guard identity.subject == self.identity.subject else { throw .accountMismatch }
+    self.identity = identity
   }
 }

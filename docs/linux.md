@@ -163,7 +163,9 @@ tab's page drawn in grows to the new window in 200 ms (cubic ease-out), waits fo
 other drop fades it in place. Its frames run on the host's timers, since a hidden window's get 1 s ones. The engine's views (`ArdiaWebView`) come from
 `engine/modules`' `engineViews`. A text field taking or losing focus is reported to main
 (`ArdiaFocus.setTextInputFocused`) for the shortcut table; `claimFocus` and the key-responder calls take DOM nodes and
-stay in the renderer. Linux uses the Windows chrome (app-drawn window buttons), keys and copy wording through
+stay in the renderer. All UI text uses one font stack (`host/uiFont.ts`: SF Pro or Inter where installed, else the
+desktop's `system-ui`); the Vite build swaps React Native Web's `System` stack, which would land on a Helvetica clone, for
+it. Linux uses the Windows chrome (app-drawn window buttons), keys and copy wording through
 `*.linux.ts` files that re-export the Windows ones, and its own `platformFeatures.linux.ts` and `platformTerms.linux.ts`.
 
 ### Pages are `<webview>` elements

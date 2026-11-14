@@ -120,7 +120,7 @@ function describe(profile: string, id: string, entry: Entry, chrome: Session | n
     sites: hosts,
     optionsUrl: options ? `chrome-extension://${id}/${options.replace(/^\//, "")}` : null,
     pinned: entry.pinned,
-    incognito: entry.incognito,
+    incognito: false,
     fileAccess: entry.fileAccess,
     mayModify: true,
     errors: entry.enabled && !loaded && !isPrivateProfile(profile) ? ["The extension didn't load"] : [],
@@ -467,7 +467,7 @@ defineDomain("extensions", {
     const registry = registryOf(profile);
     const entry = registry[id] ?? entryOf(profile, id);
     if (typeof options.pinned === "boolean") entry.pinned = options.pinned;
-    if (typeof options.incognito === "boolean") entry.incognito = options.incognito;
+    if (options.incognito === true) throw engineError("extensions can't run in private windows on Linux: Electron loads them only into sessions kept on disk");
     if (typeof options.siteAccess === "string" && options.siteAccess !== "allSites") throw engineError("extensions run on every site they ask for on Linux; site access can't be narrowed yet");
     const fileAccessChanged = typeof options.fileAccess === "boolean" && options.fileAccess !== entry.fileAccess;
     if (typeof options.fileAccess === "boolean") entry.fileAccess = options.fileAccess;

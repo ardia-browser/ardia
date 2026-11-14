@@ -178,7 +178,9 @@ the main method where one is needed (`aroundMain` in `tsModules.ts`), the main p
   out at startup as the packaged app's fallback; the libraries are `require`d so their CommonJS builds resolve their
   own preloads in a checkout. `ArdiaLinuxExtensions.executeAction(webContentsId, id)` answers a page's
   `executeExtensionAction`. Site access isn't offered: Electron can't withhold an extension's host permissions or
-  content scripts per site, so `siteAccess` is null (the pane hides the row) and narrowing it is refused.
+  content scripts per site, so `siteAccess` is null (the pane hides the row) and narrowing it is refused. They don't
+  run in private windows either: Electron loads extensions only into sessions kept on disk, and private windows' are
+  in memory, so "Allow in Incognito" is refused and hidden (`PLATFORM_FEATURES.extensionsInPrivate`).
 - **Sync.** `ArdiaSync` (`services/sync`) is the Mac's and Windows' vault in `node:crypto`, so one sync folder serves all
   three: HKDF-SHA256 keys from the 32-byte recovery entropy, base32 HMAC tags for the chain and scope folders,
   AES-256-GCM `.nns` files padded to 1 KB, synthetic-nonce password seals, the BIP-39 phrase, legacy `pw:` records

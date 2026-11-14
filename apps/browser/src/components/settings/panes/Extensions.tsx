@@ -12,6 +12,7 @@ import {
   useExtensionList,
 } from "../../../state/extensions/actions";
 import type { InstalledExtension } from "../../../state/extensions/store";
+import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { useEffect, useState } from "react";
 import { Image, View } from "react-native";
 import { currentEngineProfile, resolvedWindowId } from "../../../state/browser/current";
@@ -166,9 +167,11 @@ function ExtensionDetails({ ext, profile, onBack }: { ext: InstalledExtension; p
         <Row title="Pin to toolbar" description="Show its button next to the address.">
           <Toggle value={ext.pinned} onChange={(pinned) => void setPinned(profile, ext.id, pinned)} />
         </Row>
-        <Row title="Allow in Incognito" description="Incognito can't stop extensions from recording your browsing.">
-          <Toggle value={ext.incognito} onChange={(incognito) => void configure(profile, ext.id, { incognito })} />
-        </Row>
+        {PLATFORM_FEATURES.extensionsInPrivate ? (
+          <Row title="Allow in Incognito" description="Incognito can't stop extensions from recording your browsing.">
+            <Toggle value={ext.incognito} onChange={(incognito) => void configure(profile, ext.id, { incognito })} />
+          </Row>
+        ) : null}
         {ext.userScriptsAvailable ? (
           <Row
             title="Allow User Scripts"

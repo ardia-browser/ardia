@@ -38,7 +38,7 @@ offered, and every row was walked. Works with a difference says what differs; th
 | --- | --- | --- |
 | New tab, close, reopen closed tab (Ctrl+Shift+T) | Works | |
 | New window | Works | |
-| Private window | Works; closing one with two tabs asks (Close 2 tabs?, Don't ask me again). The toolbar's private label is cut to "Incogn…" | |
+| Private window | Works; closing one with two tabs asks (Close 2 tabs?, Don't ask me again). The private label reads "Incognito" in full; it was cut to "Incogn…" (and a profile named Team to "Tea…") because React Native Web measured labels in whole pixels | 5a369244a |
 | Quit and relaunch with the session restored | Works: Ctrl+Q quits at once (no confirm by default); both windows, the split, the tabs and the sidebar layout came back | |
 | Little Ardia (Ctrl+Alt+N) | Works: recent pages, a page loads in it, Ctrl+W closes it. With no compositor its rounded corners are black | |
 | Search Tabs (Ctrl+Shift+A), Ctrl+Tab | Works: the switcher shows page pictures | |
@@ -102,7 +102,7 @@ offered, and every row was walked. Works with a difference says what differs; th
 | Appearance: light and dark | Works | |
 | Keyboard Shortcuts pane | Works, Ctrl keys | |
 | Live Folders pane | Works (renders; no service connected) | |
-| Sync | Works: with a folder chosen (Settings › Sync › Sync folder, an advanced row), Turn On Sync writes the vault and shows Save Your Recovery Kit. Before a folder is chosen the pane says "cloud folder is off on this computer" and Turn On Sync is disabled | |
+| Sync | Works: with a folder chosen (Settings › Sync › Sync folder, in plain view since Linux has no default cloud folder), Turn On Sync writes the vault and shows Save Your Recovery Kit. Before a folder is chosen the pane says "No synced folder found on this computer" and to choose one a sync app keeps the same across computers, and Turn On Sync is disabled. Before, the picker was an advanced row and the pane said "cloud folder is off" | babe9426d |
 | Report a Problem: screen recording | Works: the recording pill (Recording 0:05, Stop) floats over the window; Stop, Escape or the 60 s limit end it; with Include web pages off every page area is black, thumbnail included. Before, Record said Ardia couldn't record the window | cc0829af3 |
 
 ## Design

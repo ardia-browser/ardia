@@ -75,7 +75,7 @@ main_process() {
   for child in $(pgrep -s "$wrapper" 2>/dev/null || true); do
     args="$(tr '\0' ' ' < "/proc/$child/cmdline" 2>/dev/null || true)"
     [[ "$args" == *--enable-logging=stderr* && "$args" != *--type=* && "$args" != *scripts/linux/xvfb* ]] || continue
-    [[ "$(readlink "/proc/$child/exe" 2>/dev/null)" == */bash ]] && continue
+    case "$(readlink "/proc/$child/exe" 2>/dev/null)" in */bash | */dbus-run-session | */dbus-daemon) continue ;; esac
     echo "$child"; return 0
   done
   return 1

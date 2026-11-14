@@ -53,6 +53,12 @@ function crx3({ archive, proofs, idKey, idBytes, omitSignedData }: Crx3): Buffer
   return Buffer.concat([Buffer.from("Cr24"), le32(3), le32(header.length), header, archive]);
 }
 
+function crx2(pair: Pair, archive: Buffer): Buffer {
+  const key = spki(pair);
+  const signature = sign("sha1", archive, pair.privateKey);
+  return Buffer.concat([Buffer.from("Cr24"), le32(2), le32(key.length), le32(signature.length), key, signature, archive]);
+}
+
 function archiveWith(manifest: Record<string, unknown>, extra: Record<string, string> = {}): Buffer {
   const zip = new AdmZip();
   zip.addFile("manifest.json", Buffer.from(JSON.stringify(manifest)));
@@ -76,8 +82,8 @@ async function freshFolders() {
 
 const MANIFEST = { manifest_version: 3, name: "Test", version: "1.2.3" };
 
-test("a signed CRX3 installs under its id and version", async () => {
-  for (const kind of ["rsa"] as const) {
+test("a signed CRX3 installs under its id and version, RSA and ECDSA alike", async () => {
+  for (const kind of ["rsa", "ecdsa"] as const) {
     const pair = kind === "rsa" ? rsa() : ecdsa();
     const { extensions } = await freshFolders();
     const installed = await unpackCrxFile(await crxFile(crx3({ archive: archiveWith(MANIFEST), proofs: [{ pair, kind }] })), extensions);
@@ -126,6 +132,49 @@ test("an archive entry that walks out of the staging folder doesn't land outside
   await unpackCrxFile(await crxFile(crx3({ archive, proofs: [{ pair, kind: "rsa" }] })), extensions).catch(() => null);
   assert.equal(existsSync(join(root, "escaped.txt")), false);
   assert.equal(existsSync(join(extensions, "escaped.txt")), false);
+});
+
+test("a CRX3 whose archive was changed after signing is refused", async () => {
+  const pair = rsa();
+  const archive = archiveWith(MANIFEST);
+  const signed = crx3({ archive, proofs: [{ pair, kind: "rsa" }] });
+  const tampered = Buffer.concat([signed.subarray(0, signed.length - archive.length), archiveWith({ ...MANIFEST, name: "Evil" })]);
+  assert.throws(() => parseCrx(tampered), /signature/);
+});
+
+test("a CRX3 with a forged signature from the id's key is refused", async () => {
+  const pair = rsa();
+  const archive = archiveWith(MANIFEST);
+  assert.throws(() => parseCrx(crx3({ archive, proofs: [{ pair, kind: "rsa", signature: Buffer.alloc(256, 7) }] })), /signature/);
+  const curve = ecdsa();
+  assert.throws(() => parseCrx(crx3({ archive, proofs: [{ pair: curve, kind: "ecdsa", signature: Buffer.from([0x30, 0x06, 0x02, 0x01, 0x01, 0x02, 0x01, 0x01]) }] })), /signature/);
+});
+
+test("a CRX3 signed only by keys other than its id's is refused", () => {
+  const owner = rsa();
+  const stranger = rsa();
+  assert.throws(() => parseCrx(crx3({ archive: archiveWith(MANIFEST), proofs: [{ pair: stranger, kind: "rsa" }], idKey: owner })), /id/);
+});
+
+test("every proof in a CRX3 has to verify, not just the id's", () => {
+  const owner = rsa();
+  const other = ecdsa();
+  const archive = archiveWith(MANIFEST);
+  const bad = crx3({ archive, proofs: [{ pair: owner, kind: "rsa" }, { pair: other, kind: "ecdsa", signature: Buffer.from([0x30, 0x06, 0x02, 0x01, 0x01, 0x02, 0x01, 0x01]) }], idKey: owner });
+  assert.throws(() => parseCrx(bad), /signature/);
+  const good = crx3({ archive, proofs: [{ pair: owner, kind: "rsa" }, { pair: other, kind: "ecdsa" }], idKey: owner });
+  assert.equal(parseCrx(good).id, idFromKey(spki(owner)));
+});
+
+test("a CRX3 with no proofs or no signed header data is refused", () => {
+  const pair = rsa();
+  const archive = archiveWith(MANIFEST);
+  assert.throws(() => parseCrx(crx3({ archive, proofs: [], idKey: pair })));
+  assert.throws(() => parseCrx(crx3({ archive, proofs: [{ pair, kind: "rsa" }], omitSignedData: true })));
+});
+
+test("a CRX2 package is refused, as Chrome has since 2019", () => {
+  assert.throws(() => parseCrx(crx2(rsa(), archiveWith(MANIFEST))), /CRX2|version 2/);
 });
 
 test("a header that claims more bytes than the file has is refused", () => {

@@ -1,5 +1,5 @@
 import AdmZip from "adm-zip";
-import { createHash } from "node:crypto";
+import { createHash, createPublicKey, verify } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
@@ -8,6 +8,10 @@ const ID_ALPHABET = "abcdefghijklmnop";
 const EXTENSION_ID = /^[a-p]{32}$/;
 const VERSION_PART = /^(?:0|[1-9]\d{0,4})$/;
 const MAX_VERSION_PART = 65535;
+const SIGNED_DATA_CONTEXT = Buffer.from("CRX3 SignedData\x00", "latin1");
+const RSA_PROOF = 2;
+const ECDSA_PROOF = 3;
+const SIGNED_HEADER_DATA = 10000;
 
 type Field = { number: number; bytes: Buffer };
 
@@ -55,27 +59,44 @@ export const idFromKey = (publicKey: Buffer) =>
 
 const idFromHex = (hex: string) => [...hex].map((digit) => ID_ALPHABET[parseInt(digit, 16)]).join("");
 
-export function parseCrx(crx: Buffer): { id: string; publicKey: Buffer; zip: Buffer } {
-  if (crx.subarray(0, 4).toString("latin1") !== MAGIC) throw new Error("not a CRX file");
-  const version = crx.readUInt32LE(4);
-  if (version === 2) {
-    const keyLength = crx.readUInt32LE(8);
-    const signatureLength = crx.readUInt32LE(12);
-    const publicKey = crx.subarray(16, 16 + keyLength);
-    return { id: idFromKey(publicKey), publicKey, zip: crx.subarray(16 + keyLength + signatureLength) };
+const firstField = (buffer: Buffer, number: number) => fields(buffer).find((field) => field.number === number)?.bytes;
+
+function proofHolds(proof: Buffer, signedPayload: Buffer): Buffer | null {
+  const publicKey = firstField(proof, 1);
+  const signature = firstField(proof, 2);
+  if (!publicKey || !signature) return null;
+  try {
+    const key = createPublicKey({ key: publicKey, format: "der", type: "spki" });
+    return verify("sha256", signedPayload, key, signature) ? publicKey : null;
+  } catch {
+    return null;
   }
+}
+
+export function parseCrx(crx: Buffer): { id: string; publicKey: Buffer; zip: Buffer } {
+  if (crx.length < 12 || crx.subarray(0, 4).toString("latin1") !== MAGIC) throw new Error("not a CRX file");
+  const version = crx.readUInt32LE(4);
+  if (version === 2) throw new Error("CRX2 packages aren't accepted, as in Chrome: repack it as CRX3");
   if (version !== 3) throw new Error(`unsupported CRX version ${version}`);
   const headerLength = crx.readUInt32LE(8);
+  if (12 + headerLength > crx.length) throw new Error("truncated CRX header");
   const header = crx.subarray(12, 12 + headerLength);
+  const archive = crx.subarray(12 + headerLength);
   const headerFields = fields(header);
-  const signed = headerFields.find((field) => field.number === 10000);
-  const crxId = signed ? fields(signed.bytes).find((field) => field.number === 1)?.bytes : undefined;
-  if (!crxId) throw new Error("the CRX has no id");
+  const signedData = headerFields.find((field) => field.number === SIGNED_HEADER_DATA)?.bytes;
+  const crxId = signedData ? firstField(signedData, 1) : undefined;
+  if (!signedData || !crxId || crxId.length !== 16) throw new Error("the CRX has no id");
   const id = idFromHex(crxId.toString("hex"));
-  const keys = headerFields.filter((field) => field.number === 2).map((proof) => fields(proof.bytes).find((field) => field.number === 1)?.bytes);
+  const proofs = headerFields.filter((field) => field.number === RSA_PROOF || field.number === ECDSA_PROOF);
+  if (!proofs.length) throw new Error("the CRX isn't signed");
+  const lengthBytes = Buffer.alloc(4);
+  lengthBytes.writeUInt32LE(signedData.length);
+  const signedPayload = Buffer.concat([SIGNED_DATA_CONTEXT, lengthBytes, signedData, archive]);
+  const keys = proofs.map((proof) => proofHolds(proof.bytes, signedPayload));
+  if (keys.some((key) => !key)) throw new Error("the CRX's signature doesn't verify");
   const publicKey = keys.find((key) => key && idFromKey(key) === id);
-  if (!publicKey) throw new Error("the CRX's key doesn't match its id");
-  return { id, publicKey, zip: crx.subarray(12 + headerLength) };
+  if (!publicKey) throw new Error("the CRX isn't signed by the key of its id");
+  return { id, publicKey, zip: archive };
 }
 
 export function isExtensionVersion(version: unknown): version is string {

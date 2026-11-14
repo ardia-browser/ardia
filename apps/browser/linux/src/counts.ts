@@ -19,6 +19,8 @@ export type LinuxCount =
   | "owner_check_cancelled"
   | "owner_check_wrong_passwords"
   | "owner_check_unavailable"
+  | "owner_check_helper_failures"
+  | "owner_check_throttled"
   | "memory_saver_discards_proactive"
   | "memory_saver_discards_urgent"
   | "location_unavailable"

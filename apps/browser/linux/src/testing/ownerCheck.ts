@@ -49,7 +49,8 @@ export type ScriptedPrompt = {
   ui: OwnerPromptUI;
   answers: (string | null)[];
   asked: string[];
-  refusals: string[];
+  openedWaiting: number[];
+  refusals: [string, number][];
   unavailable: string[];
   closed: number;
 };
@@ -58,15 +59,17 @@ export function scriptedPrompt(): ScriptedPrompt {
   const scripted: ScriptedPrompt = {
     answers: [],
     asked: [],
+    openedWaiting: [],
     refusals: [],
     unavailable: [],
     closed: 0,
     ui: {
-      ask: async (reason) => {
+      ask: async (reason, retryInMs) => {
         scripted.asked.push(reason);
+        scripted.openedWaiting.push(retryInMs);
         const prompt: OwnerPrompt = {
           answer: async () => (scripted.answers.length ? scripted.answers.shift()! : null),
-          wrongPassword: async () => void scripted.refusals.push("wrong"),
+          refuse: async (message, retryInMs) => void scripted.refusals.push([message, retryInMs]),
           focus: () => undefined,
           close: () => void scripted.closed++,
         };

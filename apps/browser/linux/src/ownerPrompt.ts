@@ -15,13 +15,15 @@ const passwordPage = (reason: string): PageText => ({
 <div class="error" id="error"></div>
 <div class="buttons"><button type="button" id="cancel">Cancel</button><button type="submit" class="primary" id="ok">OK</button></div></form>`,
   script: `const form=document.getElementById("form"),field=document.getElementById("password"),error=document.getElementById("error"),ok=document.getElementById("ok");
-let settle=null;
-window.nextAnswer=()=>new Promise((resolve)=>{settle=resolve;ok.disabled=false;field.disabled=false;field.focus();});
+let settle=null,waitUntil=0,ticker=0,said="";
+const waiting=()=>waitUntil>Date.now();
+const show=()=>{const left=Math.ceil((waitUntil-Date.now())/1000);if(left>0){error.textContent=(said?said+" ":"")+"Try again in "+left+" s.";ok.disabled=true;return;}clearInterval(ticker);ticker=0;error.textContent=said?said+" Try again.":"";ok.disabled=!settle;};
+window.nextAnswer=()=>new Promise((resolve)=>{settle=resolve;ok.disabled=waiting();field.disabled=false;field.focus();});
 const answer=(value)=>{if(!settle)return;const done=settle;settle=null;ok.disabled=true;field.disabled=true;done(value);};
-form.addEventListener("submit",(event)=>{event.preventDefault();if(field.value)answer(field.value);});
+form.addEventListener("submit",(event)=>{event.preventDefault();if(field.value&&!waiting())answer(field.value);});
 document.getElementById("cancel").addEventListener("click",()=>answer(null));
 addEventListener("keydown",(event)=>{if(event.key==="Escape")answer(null);});
-window.wrongPassword=()=>{field.value="";error.textContent="Wrong password. Try again.";form.classList.remove("shake");void form.offsetWidth;form.classList.add("shake");};`,
+window.refuse=(message,retryInMs)=>{field.value="";said=message;waitUntil=Date.now()+retryInMs;clearInterval(ticker);ticker=retryInMs>0?setInterval(show,250):0;show();if(!message)return;form.classList.remove("shake");void form.offsetWidth;form.classList.add("shake");};`,
 });
 
 const unavailablePage = (reason: string): PageText => ({
@@ -111,7 +113,7 @@ function promptIn(window: BrowserWindow): OwnerPrompt {
       );
       return Promise.race([answered, closed]);
     },
-    wrongPassword: () => run("window.wrongPassword()").then(
+    refuse: (message, retryInMs) => run(`window.refuse(${JSON.stringify(message)}, ${Math.max(0, Math.round(retryInMs))})`).then(
       () => undefined,
       () => undefined,
     ),
@@ -125,10 +127,12 @@ function promptIn(window: BrowserWindow): OwnerPrompt {
 }
 
 export const windowPrompt: OwnerPromptUI = {
-  ask: async (reason) => {
+  ask: async (reason, retryInMs) => {
     const window = openWindow(passwordPage(reason));
     await loaded(window);
-    return promptIn(window);
+    const prompt = promptIn(window);
+    if (retryInMs > 0) await prompt.refuse("", retryInMs);
+    return prompt;
   },
   tellUnavailable: async (reason) => {
     const window = openWindow(unavailablePage(reason));

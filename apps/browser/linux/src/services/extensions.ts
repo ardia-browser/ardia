@@ -1,6 +1,4 @@
 import { app, BrowserWindow, dialog, nativeImage, webContents as allContents, type Session, type WebContents } from "electron";
-import { ElectronChromeExtensions } from "electron-chrome-extensions";
-import { installChromeWebStore, installExtension } from "electron-chrome-web-store";
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
@@ -10,6 +8,7 @@ import { defineDomain, emitDomainEvent } from "../engine/domains";
 import { allGuests, onGuestAttached, windowOf, type Guest } from "../engine/guests";
 import { isBackground } from "../paths";
 import { unpackCrxFile } from "./crx";
+import { ElectronChromeExtensions, installChromeWebStore, installExtension } from "./vendorModules";
 import { database, pref, setPref } from "./database";
 import { onProfileSession } from "./guests";
 import { extensionsModulePath, webStoreModulePath } from "./vendorPreloads";

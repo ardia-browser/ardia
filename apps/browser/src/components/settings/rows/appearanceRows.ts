@@ -127,7 +127,7 @@ export const appearanceRows = {
         pageScrollBars: {
           advanced: true,
           title: "Scroll bars",
-          description: "Follow macOS uses System Settings › Appearance › Show scroll bars. Thin shows slim scroll bars over the page only while you scroll, even with a mouse.",
+          description: `Follow ${PLATFORM_TERMS.os} uses ${PLATFORM_TERMS.scrollBarsSetting}. Thin shows slim scroll bars over the page only while you scroll, even with a mouse.${PLATFORM_TERMS.scrollBarsTakeEffect}`,
           keywords: ["scrollbar", "scroll bar", "overlay", "thin", "mouse", "trackpad"],
           shown: () => PLATFORM_FEATURES.thinScrollBars,
         },

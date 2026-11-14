@@ -14,12 +14,14 @@ import { note } from "./log";
 import { dataDirectory, hostEnvironment } from "./paths";
 import { installQuitLifecycle } from "./quit";
 import { DESKTOP_FILE } from "./system/desktopEntry";
+import { applyScrollBars } from "./system/scrollBars";
 import { createHost } from "./windows";
 
 app.setName("Ardia");
 app.setDesktopName(DESKTOP_FILE);
 app.setPath("userData", join(dataDirectory(), "Engine"));
 startCrashReporter();
+applyScrollBars();
 if (hostEnvironment.remoteDebuggingPort) app.commandLine.appendSwitch("remote-debugging-port", hostEnvironment.remoteDebuggingPort);
 
 const sandboxed = !app.commandLine.hasSwitch("no-sandbox");

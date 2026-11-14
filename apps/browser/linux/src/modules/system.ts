@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { defineModule } from "../bridge";
 import { note } from "../log";
 import { isBackground } from "../paths";
+import { rememberScrollBars } from "../system/scrollBars";
 import {
   DESKTOP_FILE,
   MIME_TYPES,
@@ -128,6 +129,6 @@ defineModule("ArdiaSystem", {
     },
     fileIcon,
     runningAppIcon: async () => null,
-    setThinScrollBars: async () => {},
+    setThinScrollBars: async (thin: boolean) => rememberScrollBars(!!thin),
   },
 });

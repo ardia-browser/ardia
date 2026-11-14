@@ -9,9 +9,6 @@ body { font-family: system-ui, "Inter", "Cantarell", "Ubuntu", "Noto Sans", "Dej
 #root { display: flex; position: relative; }
 input:focus, textarea:focus, [tabindex]:focus { outline: none; }
 input, textarea { user-select: text; }
-::-webkit-scrollbar { width: 8px; height: 8px; background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(128, 128, 128, 0.35); border-radius: 4px; }
-::-webkit-scrollbar-corner { background: transparent; }
 webview { display: flex; }
 html[data-ardia-shape="round"] #root { border-radius: 12px; overflow: hidden; }
 html[data-ardia-shape="round"] #root::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 2147483647; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.14); }

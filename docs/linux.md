@@ -85,14 +85,14 @@ offered, and every row was walked. Works with a difference says what differs; th
 | --- | --- | --- |
 | Offer to save a password | Works: the app's Save password prompt (Never on This Site, Not Now, Save) | |
 | Fill a saved password | Works: the form fills when the page loads | |
-| Passwords pane: Unlock | Works: Unlock asks for the login password in a small window over Settings ("Ardia wants to show your saved passwords."), checked with PAM's `unix_chkpwd`; a wrong password says so, the next tries wait 2 s, 5 s, 30 s, then 60 s ("Try again in N s", kept when the prompt is closed and reopened), a helper that crashes or hangs says "Ardia couldn't check the password", and Cancel keeps the pane locked. With no trusted `unix_chkpwd` it stays locked and says "Ardia can't check your login password on this system". Walked with a stub helper (`ARDIA_TEST=passwordHelper`) and, for a wrong password, the system's. Showing or saving the sync recovery phrase asks the same way. Before, it unlocked without asking; then a missing helper or `ARDIA_BACKGROUND=1` let it through and wrong tries were unlimited | 2d37b85cd, 6b44832b0, 4fc0cd666, 2ccbf9633, a979208e1, 99ca89c17 |
+| Passwords pane: Unlock | Works: Unlock asks for the login password in a small window over Settings ("Ardia wants to show your saved passwords."), checked with PAM's `unix_chkpwd`; a wrong password says so, the next tries wait 2 s, 5 s, 30 s, then 60 s ("Try again in N s", kept when the prompt is closed and reopened), a helper that crashes or hangs says "Ardia couldn't check the password", and Cancel keeps the pane locked. With no trusted `unix_chkpwd` it stays locked and says "Ardia can't check your login password on this system". Walked with a stub helper (`ARDIA_TEST=passwordHelper`) and, for a wrong password, the system's. Showing or saving the sync recovery phrase asks the same way. Locking the session (logind or the desktop's screen saver on D-Bus) drops the grant, closes an open prompt and sends the app its lock events: node tests with a fake logind and screen savers on private buses, and a running instance logged the screen saver's lock (the pane relocking on that event wasn't walked again). Before, it unlocked without asking; then a missing helper or `ARDIA_BACKGROUND=1` let it through and wrong tries were unlimited; then a screen lock went unnoticed on Linux, a check that finished after a lock still granted, a group-writable helper was trusted when the group was root's, and an `ARDIA_DATA_DIR` in the live `$XDG_DATA_HOME/ardia` passed as a test instance | 2d37b85cd, 6b44832b0, 4fc0cd666, 2ccbf9633, a979208e1, 99ca89c17, c31f321fa, 1dce3f54a, 49ec7a5b7, 184b12b46 |
 | Notification prompt and notifications | Works: the app's prompt; the notification shows | |
 | Location prompt | Works: the app's prompt; with no GeoClue the page gets "position unavailable". Before, allowing showed the Mac's "open System Settings" dialog | a413faa20 |
 | Camera and microphone | Works with Chromium's fake camera: the app's prompt, then the stream | |
 | Chrome Web Store install | Works: Add to Chrome, the app's Add dialog listing the permissions, then the store says Remove from Chrome | |
 | Extensions pane | Works | |
 | Ad, tracker and cookie-banner blocking | Works: an ad script and an analytics script are blocked while a CDN script loads; EasyList's `#carbonads` is hidden on a named host (the engine finds no domain for a bare IP or localhost, so cosmetic hiding skips those). Cookie-banner lists weren't turned on | |
-| Bookmark and password export | Works: Bookmarks › Export Bookmarks writes a Netscape bookmarks file; Settings › Passwords › Export CSV (an advanced row) asks for the login password first (a check from the last 60 s counts), then writes the CSV with mode 0600. The Passwords pane's "Password manager apps" row talks about the macOS Applications folder. Before, Export CSV worked while the pane was locked | 99ca89c17 |
+| Bookmark and password export | Works: Bookmarks › Export Bookmarks writes a Netscape bookmarks file; Settings › Passwords › Export CSV (an advanced row) asks for the login password first (a check from the last 60 s counts), then writes the CSV with mode 0600; after the save dialog it checks again, so a lock while the dialog is open cancels and a dialog left open past the 60 s asks again. The Passwords pane's "Password manager apps" row talks about the macOS Applications folder. Before, Export CSV worked while the pane was locked | 99ca89c17, 49ec7a5b7 |
 
 **Settings**
 
@@ -317,8 +317,9 @@ the main method where one is needed (`aroundMain` in `tsModules.ts`), the main p
 
 - **Launch config.** `src/launch.ts` and `src/paths.ts` are the only files that read the environment (`ARDIA_DATA_DIR`,
   `ARDIA_BACKGROUND`, `ARDIA_REMOTE_DEBUGGING_PORT`, `ARDIA_INSTANCE`, `ARDIA_SWITCHES`, `ARDIA_TRACE`, `ARDIA_TEST`,
-  `ARDIA_FEEDBACK_URL`). A test instance is an `ARDIA_DATA_DIR` outside `~/.local/share/ardia` and `~/.config/ardia`;
-  only there do `ARDIA_TEST` and `ARDIA_TRACE` count. Linux adds the trace area `keys` (every key press, its
+  `ARDIA_FEEDBACK_URL`). A test instance is an `ARDIA_DATA_DIR` outside `~/.local/share/ardia`, `~/.config/ardia`,
+  `$XDG_DATA_HOME/ardia` and `$XDG_CONFIG_HOME/ardia` (compared as the nearest existing folder's real path plus the
+  part not made yet, so a symlink can't hide the live profile); only there do `ARDIA_TEST` and `ARDIA_TRACE` count. Linux adds the trace area `keys` (every key press, its
   webContents and window). The main process logs to stdout and `<data>/launch.log`.
 - **Documents.** `ArdiaDocuments` stages each write in memory (a read right after sees it) and lands it with an
   atomic replace (temp file, fsync, rename), one at a time, retrying with backoff; quitting flushes synchronously. The
@@ -344,15 +345,25 @@ the main method where one is needed (`aroundMain` in `tsModules.ts`), the main p
   recovery phrase, `ownerCheck.ts` asks for the login password in a small modal window (`ownerPrompt.ts`) and checks it
   with PAM's `unix_chkpwd` (setgid `shadow`; it only checks the calling user's own password; exit 7 is a wrong
   password, anything else a helper failure). The helper is used only from `/usr/sbin`, `/sbin`, `/usr/bin` or
-  `/run/wrappers/bin` (NixOS), and only when the file and every folder up to `/` are root-owned and writable by nobody
-  else; with none, the check is denied and says so. One prompt at a time; a correct password counts for 60 s, and
-  locking the screen or suspending drops it. Wrong passwords set a process-wide wait before the next try (0, 0, 2, 5,
+  `/run/wrappers/bin` (NixOS), and only when the file and every folder up to `/` are root-owned with no group or world
+  write bit (root's group included); with none, the check is denied and says so. One prompt at a time; a correct
+  password counts for 60 s. Locking the screen or suspending drops it: `system/screenLock.ts` hears the lock from
+  logind on the system bus (this process's session: `XDG_SESSION_ID`, else `GetSessionByPID`, else the user's
+  graphical session; its `Lock` signal or `LockedHint` turning true) and from `ActiveChanged(true)` of the freedesktop,
+  GNOME and Xfce screen savers on the session bus, besides Electron's `lock-screen`; it starts in the background and
+  gives up quietly on a bus that's missing or silent for 10 s. The same lock tells the app (`lockedOrAsleep`,
+  `screenLocked`). Going away bumps a generation: an open prompt closes and denies, an answer typed after it is wiped
+  unchecked, a check that finishes after it grants nothing, and Unlock and the recovery phrase drop a grant that
+  arrives late (`ownerPresence()`). Export checks again after its save dialog, before it opens a password, and asks
+  again if the dialog outlived the grant. Wrong passwords set a process-wide wait before the next try (0, 0, 2, 5,
   30, then 60 s), which survives closing the prompt; passwords over 512 bytes or holding NUL never reach the helper. The
   password crosses from the prompt as UTF-8 bytes, the field is cleared on submit, and main copies it once into a
   NUL-terminated Buffer that is zeroed after the write and on every error. A successful Unlock also records a
   five-minute unlock per profile in main, which `passwords.reveal` requires. Only a test instance can skip the prompt:
   `ARDIA_TEST=reauth` (`denied` refuses) or a stub helper with `ARDIA_TEST=passwordHelper=<path>`, which skips the
-  ownership check; node tests drive the check with that stub and a scripted prompt (`src/testing/ownerCheck.ts`).
+  ownership check; node tests drive the check with that stub and a scripted prompt (`src/testing/ownerCheck.ts`), and
+  the lock watch with a fake logind and screen savers on private `dbus-daemon`s (`src/testing/dbus.ts`); every test
+  process gets dead bus addresses otherwise.
 - **Secrets** (`ArdiaKeychain`, passwords, card numbers) are sealed with `safeStorage`: the desktop keyring through
   libsecret or KWallet, or, like Chrome with no keyring, the `basic_text` backend's fixed key (`v10` blobs;
   `src/secretStorage.ts` turns it on). Nothing is stored as plain base64. Each keychain secret records its backend, and

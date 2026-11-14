@@ -1,8 +1,8 @@
 import { mkdirSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { note } from "./log";
-import { configDirectory, dataDirectory, isBackground } from "./paths";
+import { configDirectory, dataDirectory, isBackground, xdgConfigHome, xdgDataHome } from "./paths";
 
 export type LaunchConfig = {
   dataDirectory: string | null;
@@ -93,19 +93,32 @@ function traceAreas(text: string): string[] {
   return [...areas];
 }
 
-const realOrSelf = (path: string) => {
-  try {
-    return realpathSync(path);
-  } catch {
-    return resolve(path);
+function canonical(path: string): string {
+  const absolute = resolve(path);
+  const missing: string[] = [];
+  for (let existing = absolute; ; existing = dirname(existing)) {
+    try {
+      return join(realpathSync(existing), ...missing);
+    } catch {
+      if (existing === dirname(existing)) return absolute;
+      missing.unshift(basename(existing));
+    }
   }
-};
+}
 
-const realDataFolders = () => [join(homedir(), ".local/share/ardia"), join(homedir(), ".config/ardia"), join(homedir(), ".config/Ardia")].map(realOrSelf);
+const realDataFolders = () =>
+  [
+    join(homedir(), ".local/share/ardia"),
+    join(homedir(), ".config/ardia"),
+    join(homedir(), ".config/Ardia"),
+    join(xdgDataHome(), "ardia"),
+    join(xdgConfigHome(), "ardia"),
+    join(xdgConfigHome(), "Ardia"),
+  ].map(canonical);
 
-function testGateRefusal(customData: string | null): string {
+export function testGateRefusal(customData: string | null): string {
   if (!customData) return "no scratch ARDIA_DATA_DIR";
-  const chosen = realOrSelf(customData);
+  const chosen = canonical(customData);
   const clash = realDataFolders().find((real) => chosen === real || chosen.startsWith(`${real}/`));
   return clash ? `ARDIA_DATA_DIR is inside the real data folder ${clash}` : "";
 }

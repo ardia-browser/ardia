@@ -351,6 +351,7 @@ defineModule(MODULE, {
     setPageFullScreen: async (id: string, on: boolean) => setPageFullScreen(id, on),
     beginWindowDrag: async (id: string, pressedX?: number, pressedY?: number) => beginWindowDrag(id, pressedX, pressedY),
     endWindowDrag: async () => endWindowDrag(),
+    noteMeadow: async (state: string) => count(state === "ready" ? "meadow_scenes" : "meadow_failures"),
     quit: async () => requestQuit(),
     replyToTerminate: async (ok: boolean) => replyToTerminate(ok),
     raiseView: async () => {},

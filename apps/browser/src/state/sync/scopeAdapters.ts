@@ -11,7 +11,7 @@ import { deliverSentTabs, sendLedger } from "./sentTabs";
 import { profileScope } from "./records";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 
-export const deviceName = () => SyncNative?.deviceName() ?? `This ${PLATFORM_TERMS.computer}`;
+export const deviceName = () => SyncNative?.deviceName() ?? `This ${PLATFORM_TERMS.computerTitle}`;
 
 const passwordAdapters = new Map<string, (forced: boolean) => Adapter>();
 const extensionAdapters = new Map<string, ExtensionsAdapter>();

@@ -29,10 +29,21 @@ public enum Radius {
 }
 
 public enum Motion {
-  public static let snappy = Animation.spring(response: 0.3, dampingFraction: 0.86)
-  public static let smooth = Animation.spring(response: 0.42, dampingFraction: 0.9)
-  public static let tabStack = Animation.spring(duration: 0.4, bounce: 0.2)
-  public static let modeToggle = Animation.spring(duration: 0.3, bounce: 0.15)
+  public static let arrive = Animation.timingCurve(0.05, 0.7, 0.1, 1, duration: 0.19)
+  public static let expand = Animation.spring(response: 0.18, dampingFraction: 1)
+  public static let leave = Animation.spring(response: 0.14, dampingFraction: 1)
+  public static let rise = Animation.timingCurve(0.2, 0, 0, 1, duration: 0.36)
+  public static let snappy = Animation.spring(response: 0.2, dampingFraction: 1)
+  public static let smooth = Animation.spring(response: 0.26, dampingFraction: 1)
+  public static let fade = Animation.easeOut(duration: 0.15)
+  public static let step = Animation.timingCurve(0.05, 0.7, 0.1, 1, duration: 0.3)
+  public static let tabStack = Animation.spring(response: 0.22, dampingFraction: 1)
+  public static let modeToggle = snappy
+
+  public static func settle(distance: Double, velocity: Double, duration: Double = 0.26) -> Animation {
+    let initial = abs(distance) > 0.001 ? velocity / distance : 0
+    return .interpolatingSpring(duration: duration, bounce: 0, initialVelocity: max(min(initial, 30), -30))
+  }
 }
 
 public enum Layout {

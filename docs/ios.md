@@ -85,6 +85,16 @@ the folder or the Mac's format changes, and a Mac that has never heard of the iP
 Arc Search's shape, measured from its App Store screenshots, preview videos and a teardown of version 1.49 (springs,
 sizes, copy), on Apple's controls, in the Mac's colours:
 
+- **Motion.** Measured from Arc Search for Android 1.12.11 on a 120 Hz phone (screen recordings, frame by frame):
+  short, front-loaded and never bouncy. `Motion` in `ArdiaDesign/Tokens.swift` holds them: `arrive` (page to tab
+  deck, cubic-bezier 0.05, 0.7, 0.1, 1 over 190 ms), `expand` (card to page, critically damped spring, response
+  0.18), `leave` (anything dismissed, spring 0.14), `rise` (sheets and the search panel without a keyboard, 0.2, 0, 0,
+  1 over 360 ms), `snappy` and `smooth` (small state changes, springs 0.2 and 0.26, no overshoot), `step`
+  (onboarding pages, 300 ms) and `depart` (a submitted search lifts 120 pt and fades over 200 ms while the keyboard
+  drops). Gesture releases keep their velocity through `Motion.settle`. Nothing animates from a second state on
+  its first frame: the deck starts at its opening pose (`TabDeck.Opening`), and the deck's bar swaps for the page's
+  in place, as Arc's does. The search panel follows the keyboard's own frame and curve from its notifications
+  (`KeyboardTracker`), not the safe area.
 - **Colours.** `ProfileLook` (`ArdiaDesign`) is the Mac's profile look: its nine profile colours with their swatches
   (plum is the default, as on the Mac) and the Mac's window tint for each (`windowTint`, the same sums as
   `lib/windowTint.ts`, checked against the Mac's values in `ProfileLookTests`). Settings › Appearance › Color picks one

@@ -44,7 +44,7 @@ struct SyncedSpacesView: View {
     }
     .presentationBackground {
       SpaceBackdrop(tones: SpaceTone.colors(for: currentProfile, scheme: colorScheme, contrast: contrast))
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.3), value: selection)
+        .animation(reduceMotion ? nil : Motion.smooth, value: selection)
         .ignoresSafeArea()
     }
     .presentationCornerRadius(MenuLayout.sheetRadius)

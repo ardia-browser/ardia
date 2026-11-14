@@ -356,7 +356,7 @@ final class PageContainerView: UIView, UIGestureRecognizerDelegate {
       view.alpha = 0
       return
     }
-    UIView.animate(withDuration: 0.25, delay: 0, options: [.curveEaseOut, .allowUserInteraction, .beginFromCurrentState]) {
+    UIView.animate(withDuration: 0.12, delay: 0, options: [.curveEaseOut, .allowUserInteraction, .beginFromCurrentState]) {
       view.alpha = 0
     }
   }

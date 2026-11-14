@@ -58,6 +58,17 @@ function remember(profile: string, origin: string, kinds: string[], decision: De
   }
 }
 
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+function trustworthy(origin: string): boolean {
+  try {
+    const url = new URL(origin);
+    return url.protocol === "https:" || url.protocol === "wss:" || LOOPBACK_HOSTS.has(url.hostname) || url.hostname.endsWith(".localhost");
+  } catch {
+    return false;
+  }
+}
+
 const originOf = (url: string) => {
   try {
     const origin = new URL(url).origin;
@@ -144,6 +155,7 @@ function askExternal(contents: WebContents, profile: string, url: string, reques
   if (!guest) return answer(false);
   const id = `external-${++nextId}`;
   pendingExternal.set(id, { id, profile, origin, scheme, url, contents, answer });
+  const remember = !!appName && !!origin && !isPrivateProfile(profile) && trustworthy(origin);
   tell(guest, "externalApp", {
     id,
     url,
@@ -152,9 +164,9 @@ function askExternal(contents: WebContents, profile: string, url: string, reques
     app: appName,
     appPath: null,
     icon: null,
-    title: appName ? `Open ${appName}?` : `Open this ${scheme}: link?`,
-    message: origin ? `${new URL(origin).host} wants to open ${appName ?? "an app"}.` : null,
-    remember: origin ? `Always allow ${new URL(origin).host} to open links of this type` : null,
+    title: appName ? `Open “${appName}”?` : "No application is set to open this link",
+    message: appName ? (origin ? `${origin} wants to open this application.` : "This page wants to open this application.") : `This computer doesn’t have an app for “${scheme}:” links.`,
+    remember: remember ? `Always allow ${origin} to open links of this type in ${appName}` : null,
   });
 }
 

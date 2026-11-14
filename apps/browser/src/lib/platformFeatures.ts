@@ -24,6 +24,7 @@ export type PlatformFeatures = {
   secretStoreProtection: boolean;
   haptics: boolean;
   launchLoad: boolean;
+  defaultCloudDrive: boolean;
 };
 
-export const PLATFORM_FEATURES: PlatformFeatures = { dock: true, appIcon: true, menuBar: true, memoryPressure: true, escapeClosesDownloads: false, dictation: true, findsBrowsersBy: "appBundle", hiddenBrowserSources: [], splitView: true, setsDefaultBrowser: true, exportsBookmarksAndPasswords: true, sync: true, calendar: true, webKit: true, contentBlocker: true, trackpadGestures: true, videoUpscaling: true, thinScrollBars: true, secretStoreProtection: false, haptics: true, launchLoad: true, sharesFiles: true, syncsWithPhone: true, syncsPasswords: true, extensionsInPrivate: true };
+export const PLATFORM_FEATURES: PlatformFeatures = { dock: true, appIcon: true, menuBar: true, memoryPressure: true, escapeClosesDownloads: false, dictation: true, findsBrowsersBy: "appBundle", hiddenBrowserSources: [], splitView: true, setsDefaultBrowser: true, exportsBookmarksAndPasswords: true, sync: true, calendar: true, webKit: true, contentBlocker: true, trackpadGestures: true, videoUpscaling: true, thinScrollBars: true, secretStoreProtection: false, haptics: true, launchLoad: true, defaultCloudDrive: true, sharesFiles: true, syncsWithPhone: true, syncsPasswords: true, extensionsInPrivate: true };

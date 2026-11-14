@@ -17,6 +17,8 @@ export type PlatformTerms = {
   loginItemsSettings: string;
   scrollBarsSetting: string;
   scrollBarsTakeEffect: string;
+  passwordManagerSetup?: string;
+  noCloudDrive?: { title: string; description: string };
 };
 
 export type PlatformIds = { report: string; otel: string };

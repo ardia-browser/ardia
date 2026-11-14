@@ -11,12 +11,13 @@ const VIBRANCY = {
   dark: { material: [68.3 / 255, 68.0 / 255, 68.4 / 255], white: 0, alpha: 0.4, gradientOpacity: 0.5 },
   light: { material: [211.2 / 255, 206.7 / 255, 206.0 / 255], white: 1, alpha: 0.8, gradientOpacity: 0.75 },
 };
+const TINT_OVER_SYSTEM_MATERIAL = { dark: 0.15, light: 0.3 };
 const DEFAULT_TINT: Rgba = [0.5, 0.5, 0.5, 1];
 const DEFAULT_THEME_ANGLE = 135;
 const OVERLAY_TURN = 45;
 const PAD_CELLS = 16;
 const THEME_REACH = 0.75;
-const WINDOW_MATERIAL = "micaAlt";
+const WINDOW_MATERIAL = "acrylic";
 
 function underColor(dark: boolean, baseAlpha?: number): Rgba {
   const look = dark ? VIBRANCY.dark : VIBRANCY.light;
@@ -27,9 +28,8 @@ function underColor(dark: boolean, baseAlpha?: number): Rgba {
 }
 
 function tintOverMaterial(dark: boolean, baseAlpha?: number): Rgba {
-  const look = dark ? VIBRANCY.dark : VIBRANCY.light;
   const white = dark ? 0 : 1;
-  return [white, white, white, baseAlpha ?? look.alpha];
+  return [white, white, white, baseAlpha ?? TINT_OVER_SYSTEM_MATERIAL[dark ? "dark" : "light"]];
 }
 
 export type WindowBackdropColors = { fallback: Rgba; tint: Rgba; gradientOpacity: number };

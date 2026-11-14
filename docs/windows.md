@@ -294,8 +294,12 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
 - Icons are the web demo's set (`packages/demo/src/shims/web/symbols`), resolved in TypeScript and drawn natively as
   Direct2D geometry in Composition shapes.
 - Materials are native views (`MaterialViews.h`, the `ArdiaMaterials` module in `MaterialsModule.h`), each with the old
-  flat drawing as its fallback. A window backdrop that covers its whole window asks the system for Mica Alt behind the
-  window on Windows 11 22H2 (build 22621) and later and draws the Mac's tint over it. Visual effects, glass and popover
+  flat drawing as its fallback. A window backdrop that covers its whole window asks the system for Acrylic behind the
+  window on Windows 11 22H2 (build 22621) and later: like the Mac's vibrancy it blurs the windows behind, where Mica
+  only tints with the wallpaper. Over it goes a lighter base tint than the Mac's (black at 15 % in dark, white at 30 %
+  in light, `TINT_OVER_SYSTEM_MATERIAL` in `views/backdrop.tsx`), because Acrylic already carries its own tint and
+  luminosity; the profile's colour bands stay as on the Mac. The flat fallback keeps the Mac's numbers, and a theme's
+  own base alpha still wins over both. Visual effects, glass and popover
   bubbles blur what is under them inside the window with a Composition backdrop brush (Gaussian blur, saturation and a
   tint). Window and theme gradients are Composition linear gradients at their real angle. Windows 10, a background
   instance and any failure keep the flat colours; the launch log says once which path each one took.

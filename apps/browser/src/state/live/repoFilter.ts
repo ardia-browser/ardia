@@ -1,5 +1,5 @@
 import { repoKey } from "./rows";
-import { live, updateFolder } from "./store";
+import { live, setRepoHidden, updateFolder } from "./store";
 import type { LiveItem } from "./types";
 
 export function folderRepos(folderId: string): string[] {
@@ -24,5 +24,5 @@ export function hideNewRepos(folderId: string, fetched: LiveItem[]) {
   if (!folder || folder.showNewRepos) return;
   const known = new Set([...folder.shownRepos, ...folder.hiddenRepos]);
   const fresh = [...new Set(fetched.flatMap((it) => repoKey(it) ?? []))].filter((r) => !known.has(r));
-  if (fresh.length) updateFolder(folderId, { hiddenRepos: [...folder.hiddenRepos, ...fresh] });
+  fresh.forEach((repo) => setRepoHidden(folderId, repo, true));
 }

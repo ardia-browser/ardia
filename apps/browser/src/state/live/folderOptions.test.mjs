@@ -8,7 +8,7 @@ const { manualRefresh, refreshFolder } = await import("./engine.ts");
 const { SOURCES } = await import("./sources.ts");
 const { folderRows, liveTabOpen, liveTabPlace, stackMembers } = await import("./rows.ts");
 const { liveFolderMenuItems } = await import("../sidebar/liveMenus.ts");
-const { setShowNewRepos, showAllRepos } = await import("./repoFilter.ts");
+const { hideNewRepos, setShowNewRepos, showAllRepos } = await import("./repoFilter.ts");
 const { applyFetch, createFolder, finishCompleting, hideItems, live, markUnread, removeFolder, setRepoHidden, showAllIn, toggleStack, updateFolder, useLive } = await import("./store.ts");
 
 const pr = (id, number, headRef, baseRef) => ({
@@ -280,6 +280,17 @@ test("hiding a repo also keeps aside its completed pull requests, so their open 
   applyFetch(id, [], { x: "merged" });
   finishCompleting(id, ["x"]);
   setRepoHidden(id, "bitbucket:me/dotfiles", true);
+  assert.deepEqual(live().completed[id], []);
+  assert.deepEqual(live().repoHidden[id].map((it) => it.id), ["x"]);
+});
+
+test("with Show New Repositories off, a repo hidden on its return keeps its completed pull requests aside too", () => {
+  const id = createFolder("p", "pullRequests", []);
+  applyFetch(id, [inRepo("x", "me/dotfiles")], {});
+  applyFetch(id, [], { x: "merged" });
+  finishCompleting(id, ["x"]);
+  setShowNewRepos(id, false);
+  hideNewRepos(id, [inRepo("y", "me/dotfiles")]);
   assert.deepEqual(live().completed[id], []);
   assert.deepEqual(live().repoHidden[id].map((it) => it.id), ["x"]);
 });

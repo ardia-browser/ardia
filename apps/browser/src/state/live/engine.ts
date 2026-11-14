@@ -58,7 +58,6 @@ async function run(folderId: string) {
     else failed.push({ source, error: r.reason });
   });
   if (!live().folders[folderId]) return;
-  hideNewRepos(folderId, fetched);
   const fromFailedSource = (it: LiveItem) => failed.some((f) => f.source === it.source);
   const listedByFilters = (it: LiveItem) => (it.section === "review" || it.section === "team" ? folder.filters.reviewRequests : folder.filters.authored);
   const repoShown = (it: LiveItem) => {
@@ -78,6 +77,7 @@ async function run(folderId: string) {
     Object.assign(gone, await resolve(missing.filter((it) => it.source === source)).catch(() => ({})));
   }
 
+  hideNewRepos(folderId, fetched);
   const current = live();
   const prev = current.items[folderId] ?? [];
   const animating = new Set(current.completing[folderId] ?? []);

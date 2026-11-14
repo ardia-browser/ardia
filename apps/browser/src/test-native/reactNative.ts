@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 
 type HostProps = { children?: ReactNode | ((state: { pressed: boolean; hovered: boolean }) => ReactNode) };
 
@@ -10,8 +10,10 @@ export const Image = () => null;
 export const ScrollView = renderedChildren;
 export const TextInput = () => null;
 
-export const pressables: Record<string, unknown>[] = [];
-export const Pressable = (props: HostProps & Record<string, unknown>) => {
+type PressableProps = ComponentProps<typeof import("react-native").Pressable>;
+
+export const pressables: PressableProps[] = [];
+export const Pressable = (props: PressableProps) => {
   pressables.push(props);
   return renderedChildren(props);
 };

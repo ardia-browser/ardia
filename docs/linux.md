@@ -13,7 +13,7 @@ Walked by hand on 2026-11-14 on Ubuntu 24.04 (x86_64), in a test instance on a p
 data folder, as a user would: real X key presses, clicks and drags, a screenshot for every row. The walk started on
 commit d7a4bd789; the rows it found broken were fixed on the way and seen again after the fix (through cc0829af3),
 and those rows name the fix. Most rows were walked with no window manager; maximize, dragging, full screen, focus, menus and Peek were walked
-again under xfwm4 with its compositor. Of the 63 rows, 46 work, 6 work with a difference, 1 is broken, 1 is not
+again under xfwm4 with its compositor. Of the 63 rows, 47 work, 6 work with a difference, none is broken, 1 is not
 offered and 9 were not walked. Works with a difference says what differs; the Mac's list is
 `docs/dia-feature-parity.md`.
 
@@ -47,7 +47,7 @@ offered and 9 were not walked. Works with a difference says what differs; the Ma
 | Peek | Works: Alt-click (the Chrome preset's Peek key; Shift-click opens a window there) opens it, also under xfwm4; Escape closes it and puts focus back on the link. Escape did nothing before | 37dde4bf7 |
 | Pop-up windows from pages | Works: Ardia's pop-up window with the origin strip and Open as Tab; Ctrl+W closes it | |
 | Pop-up blocking | Works: `window.open`, a `target=_blank` link and a form opened without a click are all blocked with the prompt; with a click they open. The prompt keeps the old entries after a reload | |
-| Closing a window with unsaved work in a page | Broken: the window closes without asking (Leave site? appears only on navigation and quit) | |
+| Closing a window with unsaved work in a page | Works: its close button, Ctrl+Shift+W and the last window ask once for the window ("Leave 127.0.0.1:8714?", Close Window, Cancel); Cancel keeps it, a window with nothing unsaved closes at once, and closing the last window then quits without asking again. Before, it closed without asking | ceec94d4d |
 | Main, Settings and Little Ardia window chrome | Works, app-drawn buttons, no system title bar | |
 | Maximize and restore | Works under xfwm4, square corners while maximized | |
 | Moving a window, edge snapping | Differs: dragging the tab strip moves the window (also with no window manager), but since Ardia moves it rather than the window manager, it doesn't snap to screen edges; a double click on the tab strip's empty space didn't maximize | |
@@ -226,7 +226,9 @@ its window's input router). The host's and every window's preload (`engine/hostP
   it navigates, reloads or goes back (`leavingPages.ts`; Electron needs that answer synchronously, so the dialog is
   modal). A quit the user asks for (Ctrl+Q, the app menu) first runs each page's `beforeunload`
   in the page (only pages the user has interacted with, as Chrome requires) and asks "Quit Ardia?" once for all of
-  them (`guardQuitWith` in `quit.ts`); signals quit without asking. Closing a tab doesn't ask, like the Mac, which
+  them (`guardQuitWith` in `quit.ts`); signals quit without asking. Closing a window asks the same way, once for the
+  pages that close with it (`mayCloseWindow`, called from the shared close path through `platform/windowPages`, after
+  the Close N tabs? confirm). Closing a tab doesn't ask, like the Mac, which
   runs the page's unload handlers without a prompt. Downloads (`downloads.ts`) report to the downloads panel; a test instance saves
   into its data dir. Permission prompts (`permissions.ts`) read and remember through `services/sites.ts`; external
   protocols ask through the page's `externalApp` prompt. The page context menu is a native menu.

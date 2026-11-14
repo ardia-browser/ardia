@@ -353,6 +353,9 @@ try {
     const little = list.find((w) => w.identifier === "ardia.window.small");
     assert.ok(little, `no visible Little Ardia window: ${JSON.stringify(list)}`);
     assert.equal(little.subrole, "AXSystemFloatingWindow", "Little Ardia asks to float like a system floating window");
+    const mainAfter = list.find((w) => w.number === target);
+    assert.ok(mainAfter, `no visible main window after Little Ardia: ${JSON.stringify(list)}`);
+    assert.equal(mainAfter.subrole, "AXStandardWindow", "the main window stays standard after Little Ardia installs the override");
   });
 } finally {
   await app?.quit();

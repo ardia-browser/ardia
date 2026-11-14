@@ -1,8 +1,10 @@
 import react from "@vitejs/plugin-react";
 import { createRequire } from "node:module";
+import { readFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vite";
+import { LINUX_UI_FONT_STACK, REACT_NATIVE_WEB_SYSTEM_STACK } from "../../../../packages/expo-linux/src/host/uiFont";
 
 const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 const repo = here("../../../../");
@@ -31,12 +33,31 @@ function commonJsRequires(): Plugin {
   };
 }
 
+const SYSTEM_FONT_MODULE = /react-native-web\/dist\/(cjs\/)?exports\/StyleSheet\/compiler\/createReactDOMStyle\.js$/;
+const linuxSystemFont = (code: string) => code.replace(`'${REACT_NATIVE_WEB_SYSTEM_STACK}'`, JSON.stringify(LINUX_UI_FONT_STACK));
+
+function systemFontIsLinuxUiFont(): Plugin {
+  return {
+    name: "ardia-linux:system-font",
+    transform(code, id) {
+      return SYSTEM_FONT_MODULE.test(id) ? { code: linuxSystemFont(code), map: null } : null;
+    },
+  };
+}
+
+const prebundledSystemFont = {
+  name: "ardia-linux:system-font",
+  setup(build: { onLoad(options: { filter: RegExp }, callback: (args: { path: string }) => Promise<{ contents: string; loader: "js" }>): void }) {
+    build.onLoad({ filter: SYSTEM_FONT_MODULE }, async ({ path }) => ({ contents: linuxSystemFont(await readFile(path, "utf8")), loader: "js" }));
+  },
+};
+
 const dev = process.env.ARDIA_LINUX_DEV === "1";
 
 export default defineConfig({
   root: here("."),
   base: "./",
-  plugins: [commonJsRequires(), react()],
+  plugins: [commonJsRequires(), systemFontIsLinuxUiFont(), react()],
   define: {
     __DEV__: JSON.stringify(dev),
     global: "globalThis",
@@ -53,7 +74,7 @@ export default defineConfig({
       { find: /^expo$/, replacement: `${expoLinux}expo.ts` },
     ],
   },
-  optimizeDeps: { include: ["react-native-web", "zustand", "zustand/react/shallow", "react-dom/client"] },
+  optimizeDeps: { include: ["react-native-web", "zustand", "zustand/react/shallow", "react-dom/client"], esbuildOptions: { plugins: [prebundledSystemFont] } },
   server: { host: "127.0.0.1", port: Number(process.env.ARDIA_VITE_PORT ?? 5281), strictPort: false, fs: { allow: [repo] } },
   build: { outDir: process.env.ARDIA_UI_OUT || here("../ui"), emptyOutDir: true, target: "chrome140", sourcemap: true, chunkSizeWarningLimit: 20000, minify: !dev },
 });

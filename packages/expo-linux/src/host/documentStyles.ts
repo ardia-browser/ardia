@@ -1,3 +1,5 @@
+import { LINUX_UI_FONT_STACK } from "./uiFont";
+
 const OWN_SHEET = "react-native-stylesheet";
 const BASE_ID = "ardia-linux-base";
 const MIRROR = "data-ardia-mirror";
@@ -12,7 +14,7 @@ ${monoFaces(400)}
 ${monoFaces(700)}
 html, body, #root { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
-body { font-family: system-ui, "Inter", "Cantarell", "Ubuntu", "Noto Sans", "DejaVu Sans", sans-serif; -webkit-font-smoothing: antialiased; cursor: default; user-select: none; }
+body { font-family: ${LINUX_UI_FONT_STACK}; -webkit-font-smoothing: antialiased; cursor: default; user-select: none; }
 #root { display: flex; position: relative; }
 input:focus, textarea:focus, [tabindex]:focus { outline: none; }
 input, textarea { user-select: text; }

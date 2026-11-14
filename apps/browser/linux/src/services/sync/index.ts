@@ -5,7 +5,8 @@ import { homedir, hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { defineModule } from "../../bridge";
-import { launchConfig, testValue } from "../../launch";
+import { launchConfig } from "../../launch";
+import { confirmDeviceOwner } from "../../ownerCheck";
 import { note } from "../../log";
 import { isBackground } from "../../paths";
 import { allLogins, putLogin } from "../passwords";
@@ -83,16 +84,9 @@ const osFormat = (format: string) => `electron application/osclipboard;format="$
 
 const kitFolder = () => join(tmpdir(), `Ardia Recovery Kit-${process.getuid?.() ?? 0}`);
 
-function ownerAllows(reason: string): boolean {
-  const answer = testValue("reauth");
-  if (answer === undefined) return true;
-  note("sync", `device owner check (${reason}) in a test instance: ${answer === "denied" ? "denied" : "granted"}`);
-  return answer !== "denied";
-}
-
-function disclosedWords(reason: string): string[] | null {
+async function disclosedWords(reason: string): Promise<string[] | null> {
   const current = unlocked();
-  if (!ownerAllows(reason)) return null;
+  if (!(await confirmDeviceOwner(reason))) return null;
   return wordsFor(current.entropy);
 }
 
@@ -197,7 +191,7 @@ defineModule("ArdiaSync", {
     },
     recoveryWords: async () => disclosedWords("show your sync recovery phrase"),
     async qrCode() {
-      const words = disclosedWords("show your sync recovery phrase");
+      const words = await disclosedWords("show your sync recovery phrase");
       return words ? qrDataUrl(words) : null;
     },
     async recoveryKitPreview(width: number) {
@@ -205,13 +199,13 @@ defineModule("ArdiaSync", {
       return kitPreview(Number(width) || 168, new Date(), deviceName());
     },
     async writeRecoveryKit(path: string, format: "pdf" | "text") {
-      const words = disclosedWords("save your sync recovery kit");
+      const words = await disclosedWords("save your sync recovery kit");
       if (!words) return null;
       await saveFile(path, kitBytes(words, format === "text" ? "text" : "pdf", deviceName()), 0o600);
       return path;
     },
     async copyRecoveryKit() {
-      const words = disclosedWords("copy your sync recovery kit");
+      const words = await disclosedWords("copy your sync recovery kit");
       if (!words) return null;
       const folder = kitFolder();
       await mkdir(folder, { recursive: true, mode: 0o700 });
@@ -223,7 +217,7 @@ defineModule("ArdiaSync", {
     },
     shareRecoveryKit: async () => false,
     async copyRecoveryPhrase() {
-      const words = disclosedWords("copy your sync recovery phrase");
+      const words = await disclosedWords("copy your sync recovery phrase");
       if (!words) return null;
       await clipboard.write([new ClipboardItem({ "text/plain": words.join(" "), [osFormat("x-kde-passwordManagerHint")]: "secret" })]);
       return true;

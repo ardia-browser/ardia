@@ -14,6 +14,11 @@ export type LinuxCount =
   | "page_context_menus"
   | "auto_pip_opened"
   | "pip_back_to_tab"
+  | "owner_check_asked"
+  | "owner_check_granted"
+  | "owner_check_cancelled"
+  | "owner_check_wrong_passwords"
+  | "owner_check_unavailable"
   | "memory_saver_discards_proactive"
   | "memory_saver_discards_urgent"
   | "location_unavailable"
@@ -25,7 +30,9 @@ export type LinuxCount =
   | "report_recordings_started"
   | "report_recording_failures"
   | "window_drag_area_menus"
-  | "window_moves_by_app";
+  | "window_moves_by_app"
+  | "meadow_scenes"
+  | "meadow_failures";
 
 const counts = new Map<LinuxCount, number>();
 

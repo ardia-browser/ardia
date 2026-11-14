@@ -7,6 +7,7 @@ import { pref, savedDatabase, setPref, transaction } from "./database";
 import { askSavePath } from "./dialogs";
 import { ensureEncryption, keyringAvailable, secretProtection, sealedWithoutKeyring } from "../secretStorage";
 import { engineError, originalProfile } from "./profiles";
+import { confirmDeviceOwner } from "../ownerCheck";
 
 export type Login = { origin: string; username: string; password: string; created: number; modified: number; used: number | null };
 type StoredLogin = { origin: string; username: string; password: Uint8Array; created: number; modified: number; used: number | null };
@@ -148,7 +149,7 @@ defineDomain("passwords", {
       (row) => ({ origin: row.origin, username: row.username, created: Math.floor(row.created), modified: Math.floor(row.modified) }),
     ),
   }),
-  unlock: () => ({ unlocked: encryptionReady() }),
+  unlock: async () => ({ unlocked: encryptionReady() && (await confirmDeviceOwner("show your saved passwords")) }),
   protection: () => secretProtection(),
   reveal: (args, profile) => {
     const origin = loginOrigin(text(args, "origin"));

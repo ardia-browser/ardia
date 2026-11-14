@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { defineModule } from "../../bridge";
 import { launchConfig } from "../../launch";
-import { confirmDeviceOwner } from "../../ownerCheck";
+import { confirmDeviceOwner, ownerPresence } from "../../ownerCheck";
 import { note } from "../../log";
 import { isBackground } from "../../paths";
 import { allLogins, putLogin } from "../passwords";
@@ -86,7 +86,8 @@ const kitFolder = () => join(tmpdir(), `Ardia Recovery Kit-${process.getuid?.() 
 
 async function disclosedWords(reason: string): Promise<string[] | null> {
   const current = unlocked();
-  if (!(await confirmDeviceOwner(reason))) return null;
+  const present = ownerPresence();
+  if (!(await confirmDeviceOwner(reason)) || !present()) return null;
   return wordsFor(current.entropy);
 }
 

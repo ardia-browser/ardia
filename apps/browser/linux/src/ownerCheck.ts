@@ -61,15 +61,42 @@ export const revokeOwnerGrant = (): void => {
 
 export const whenOwnerAway = (listener: () => void): void => void awayListeners.push(listener);
 
+let awayGeneration = 0;
+const awayWaiters = new Set<() => void>();
+
+export function ownerWentAway(): void {
+  awayGeneration++;
+  revokeOwnerGrant();
+  for (const wake of [...awayWaiters]) wake();
+  for (const listener of awayListeners) listener();
+}
+
+export function ownerPresence(): () => boolean {
+  const generation = awayGeneration;
+  return () => generation === awayGeneration;
+}
+
+function untilAway(): { away: Promise<null>; stop(): void } {
+  let wake: () => void = () => undefined;
+  const away = new Promise<null>((resolve) => {
+    wake = () => resolve(null);
+  });
+  awayWaiters.add(wake);
+  return { away, stop: () => void awayWaiters.delete(wake) };
+}
+
+async function answerUnlessAway(prompt: OwnerPrompt, away: Promise<null>): Promise<Uint8Array | null> {
+  const answer = prompt.answer();
+  const first = await Promise.race([answer, away]);
+  if (first === null) void answer.then((late) => late?.fill(0), () => undefined);
+  return first;
+}
+
 function watchForAway() {
   if (watchingForAway) return;
   watchingForAway = true;
-  const away = () => {
-    revokeOwnerGrant();
-    for (const listener of awayListeners) listener();
-  };
-  powerMonitor.on("lock-screen", away);
-  powerMonitor.on("suspend", away);
+  powerMonitor.on("lock-screen", ownerWentAway);
+  powerMonitor.on("suspend", ownerWentAway);
 }
 
 const writableByOthers = (stats: Stats) => (stats.mode & 0o022) !== 0;
@@ -164,26 +191,32 @@ async function checkAnswer(prompt: OwnerPrompt, helper: string, password: Uint8A
   return false;
 }
 
-async function askForPassword(helper: string, reason: string): Promise<boolean> {
-  const prompt = await promptUI.ask(reason, retryInMs());
-  askingPrompt = prompt;
+async function askForPassword(helper: string, reason: string, present: () => boolean): Promise<boolean> {
+  const { away, stop } = untilAway();
   try {
-    for (;;) {
-      const password = await prompt.answer();
-      if (password === null) return false;
-      try {
-        if (await checkAnswer(prompt, helper, password)) return true;
-      } finally {
-        password.fill(0);
+    const prompt = await promptUI.ask(reason, retryInMs());
+    askingPrompt = prompt;
+    try {
+      while (present()) {
+        const password = await answerUnlessAway(prompt, away);
+        if (password === null) return false;
+        try {
+          if (await checkAnswer(prompt, helper, password)) return present();
+        } finally {
+          password.fill(0);
+        }
       }
+      return false;
+    } finally {
+      askingPrompt = null;
+      prompt.close();
     }
   } finally {
-    askingPrompt = null;
-    prompt.close();
+    stop();
   }
 }
 
-async function check(reason: string): Promise<boolean> {
+async function check(reason: string, present: () => boolean): Promise<boolean> {
   const answer = testValue("reauth");
   if (answer !== undefined) {
     note("owner", `device owner check (${reason}) in a test instance: ${answer === "denied" ? "denied" : "granted"}`);
@@ -197,7 +230,7 @@ async function check(reason: string): Promise<boolean> {
     return false;
   }
   count("owner_check_asked");
-  const granted = await askForPassword(helper, reason);
+  const granted = await askForPassword(helper, reason, present);
   count(granted ? "owner_check_granted" : "owner_check_cancelled");
   return granted;
 }
@@ -208,13 +241,14 @@ export function confirmDeviceOwner(reason: string): Promise<boolean> {
     askingPrompt?.focus();
     return asking;
   }
-  asking = check(reason)
+  watchForAway();
+  const present = ownerPresence();
+  asking = check(reason, present)
     .catch(() => false)
     .then((granted) => {
-      if (!granted) return false;
+      if (!granted || !present()) return false;
       grantedAt = Date.now();
-      watchForAway();
-      return granted;
+      return true;
     })
     .finally(() => {
       asking = null;

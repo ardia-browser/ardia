@@ -11,6 +11,7 @@ cat > "$dir/received"
 echo "$*" >> "$dir/calls"
 case "$(cat "$dir/mode" 2>/dev/null)" in
   hang) exec sleep 30 ;;
+  slow) sleep 0.3 ;;
   crash) kill -9 $$ ;;
 esac
 cmp -s "$dir/received" "$dir/expected" && exit 0
@@ -19,7 +20,7 @@ exit 7
 
 export type StubHelper = {
   path: string;
-  setMode(mode: "check" | "hang" | "crash"): void;
+  setMode(mode: "check" | "hang" | "crash" | "slow"): void;
   calls(): number;
   received(): Buffer;
   hide(): void;
@@ -47,7 +48,7 @@ export function stubPasswordHelper(): StubHelper {
 
 export type ScriptedPrompt = {
   ui: OwnerPromptUI;
-  answers: (string | null)[];
+  answers: (string | null | Promise<string | null>)[];
   handedOver: Uint8Array[];
   asked: string[];
   openedWaiting: number[];
@@ -71,7 +72,7 @@ export function scriptedPrompt(): ScriptedPrompt {
         scripted.openedWaiting.push(retryInMs);
         const prompt: OwnerPrompt = {
           answer: async () => {
-            const next = scripted.answers.shift();
+            const next = await scripted.answers.shift();
             if (next === undefined || next === null) return null;
             const bytes = new TextEncoder().encode(next);
             scripted.handedOver.push(bytes);
@@ -87,4 +88,20 @@ export function scriptedPrompt(): ScriptedPrompt {
     },
   };
   return scripted;
+}
+
+export function heldAnswer(): { answer: Promise<string | null>; give(answer: string | null): void } {
+  let give: (answer: string | null) => void = () => undefined;
+  const answer = new Promise<string | null>((resolve) => {
+    give = resolve;
+  });
+  return { answer, give };
+}
+
+export async function untilHelperRuns(helper: StubHelper, before: number, deadlineMs = 5_000): Promise<void> {
+  const deadline = performance.now() + deadlineMs;
+  while (helper.calls() === before) {
+    if (performance.now() > deadline) throw new Error("the password helper never ran");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
 }

@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync, type Stat
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, afterEach, beforeEach, mock, test } from "node:test";
-import { CORRECT_PASSWORD, scriptedPrompt, stubPasswordHelper } from "./testing/ownerCheck.ts";
+import { CORRECT_PASSWORD, heldAnswer, scriptedPrompt, stubPasswordHelper, untilHelperRuns } from "./testing/ownerCheck.ts";
 
 const dataDir = mkdtempSync(join(tmpdir(), "ardia-owner-"));
 const helper = stubPasswordHelper();
@@ -14,7 +14,7 @@ after(() => {
   helper.remove();
 });
 
-const { confirmDeviceOwner, presentOwnerPromptsWith, revokeOwnerGrant, runPasswordHelper, trustedPasswordHelper } = await import("./ownerCheck.ts");
+const { confirmDeviceOwner, ownerWentAway, presentOwnerPromptsWith, revokeOwnerGrant, runPasswordHelper, trustedPasswordHelper } = await import("./ownerCheck.ts");
 
 const bytesOf = (text: string) => new TextEncoder().encode(text);
 const wiped = (bytes: Uint8Array) => bytes.every((byte) => byte === 0);
@@ -188,4 +188,34 @@ test("a helper or any folder above it that its group can write is never trusted,
   assert.equal(trustedPasswordHelper(file, statWith(real)), null);
   assert.equal(trustedPasswordHelper(file, statWith(dirname(real))), null);
   assert.equal(trustedPasswordHelper(file, statWith("/")), null);
+});
+
+test("going away closes an open password prompt and denies, and an answer typed after that is wiped unchecked", async () => {
+  const before = helper.calls();
+  const held = heldAnswer();
+  prompt.answers.push(held.answer);
+  const asked = confirmDeviceOwner("show your saved passwords");
+  await new Promise((resolve) => setImmediate(resolve));
+  ownerWentAway();
+  const verdict = await Promise.race([asked, new Promise((resolve) => setTimeout(() => resolve("still open"), 1_000))]);
+  assert.equal(verdict, false);
+  assert.equal(prompt.closed, 1);
+  held.give(CORRECT_PASSWORD);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(helper.calls(), before);
+  assert.ok(prompt.handedOver.every(wiped));
+});
+
+test("a right password whose check finishes after the owner went away grants nothing", async () => {
+  helper.setMode("slow");
+  const before = helper.calls();
+  prompt.answers.push(CORRECT_PASSWORD);
+  const asked = confirmDeviceOwner("show your saved passwords");
+  await untilHelperRuns(helper, before);
+  ownerWentAway();
+  assert.equal(await asked, false);
+  helper.setMode("check");
+  prompt.answers.push(null);
+  assert.equal(await confirmDeviceOwner("show your saved passwords"), false);
+  assert.equal(prompt.asked.length, 2);
 });

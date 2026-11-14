@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, beforeEach, mock, test } from "node:test";
-import { CORRECT_PASSWORD, scriptedPrompt, stubPasswordHelper } from "../testing/ownerCheck.ts";
+import { CORRECT_PASSWORD, scriptedPrompt, stubPasswordHelper, untilHelperRuns } from "../testing/ownerCheck.ts";
 
 const dataDir = mkdtempSync(join(tmpdir(), "ardia-passwords-"));
 const helper = stubPasswordHelper();
@@ -16,11 +16,11 @@ after(() => {
   helper.remove();
 });
 
-const { safeStorage } = await import("../testing/electron.ts");
+const { dialog, safeStorage } = await import("../testing/electron.ts");
 const { savedDatabase } = await import("./database.ts");
 const { originalProfile } = await import("./profiles.ts");
 const { allLogins, loginsFor, passwordVerbs, putLogin } = await import("./passwords.ts");
-const { presentOwnerPromptsWith, revokeOwnerGrant } = await import("../ownerCheck.ts");
+const { ownerWentAway, presentOwnerPromptsWith, revokeOwnerGrant } = await import("../ownerCheck.ts");
 
 let prompt = scriptedPrompt();
 beforeEach(() => {
@@ -85,4 +85,73 @@ test("revealing a password needs an unlock in the main process, which lasts five
   } finally {
     mock.timers.reset();
   }
+});
+
+test("an unlock whose password check finishes after the owner went away stays locked", async () => {
+  putLogin("", "https://late.example/", "me", "pw-late", true);
+  helper.setMode("slow");
+  try {
+    const before = helper.calls();
+    prompt.answers.push(CORRECT_PASSWORD);
+    const unlocking = passwordVerbs.unlock!({}, "");
+    await untilHelperRuns(helper, before);
+    ownerWentAway();
+    assert.deepEqual(await unlocking, { unlocked: false });
+    assert.throws(() => passwordVerbs.reveal!({ origin: "https://late.example", username: "me" }, ""), /locked/);
+  } finally {
+    helper.setMode("check");
+  }
+});
+
+async function exportingWithSaveDialog(choose: (path: string) => Promise<{ canceled: boolean; filePath?: string }>) {
+  const path = join(dataDir, `export-${Math.random().toString(36).slice(2)}.csv`);
+  const showSaveDialog = dialog.showSaveDialog;
+  delete process.env.ARDIA_BACKGROUND;
+  dialog.showSaveDialog = () => choose(path);
+  try {
+    return { path, result: await passwordVerbs.export!({}, "") };
+  } finally {
+    dialog.showSaveDialog = showSaveDialog;
+    process.env.ARDIA_BACKGROUND = "1";
+  }
+}
+
+test("going away while the export's save dialog is open cancels the export before a password is opened", async () => {
+  putLogin("", "https://export.example/", "me", "pw-export", true);
+  const decrypts = mock.method(safeStorage, "decryptString");
+  try {
+    prompt.answers.push(CORRECT_PASSWORD);
+    const { path, result } = await exportingWithSaveDialog(async (path) => {
+      ownerWentAway();
+      return { canceled: false, filePath: path };
+    });
+    assert.deepEqual(result, { status: "cancelled" });
+    assert.equal(existsSync(path), false);
+    assert.equal(decrypts.mock.callCount(), 0);
+  } finally {
+    decrypts.mock.restore();
+  }
+});
+
+test("a save dialog that outlives the grant makes the export ask again before it writes", async () => {
+  mock.timers.enable({ apis: ["Date"], now: Date.now() });
+  try {
+    prompt.answers.push(CORRECT_PASSWORD, null);
+    const { path, result } = await exportingWithSaveDialog(async (path) => {
+      mock.timers.tick(2 * 60_000);
+      return { canceled: false, filePath: path };
+    });
+    assert.deepEqual(result, { status: "cancelled" });
+    assert.equal(existsSync(path), false);
+    assert.deepEqual(prompt.asked, ["export your saved passwords", "export your saved passwords"]);
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test("an export the owner stays for writes the file", async () => {
+  prompt.answers.push(CORRECT_PASSWORD);
+  const { path, result } = await exportingWithSaveDialog(async (path) => ({ canceled: false, filePath: path }));
+  assert.deepEqual(result, { status: "succeeded", path });
+  assert.match(readFileSync(path, "utf8"), /pw-export/);
 });

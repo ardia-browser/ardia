@@ -7,7 +7,7 @@ import { pref, savedDatabase, setPref, transaction } from "./database";
 import { askSavePath } from "./dialogs";
 import { ensureEncryption, keyringAvailable, secretProtection, sealedWithoutKeyring } from "../secretStorage";
 import { engineError, originalProfile } from "./profiles";
-import { confirmDeviceOwner, whenOwnerAway } from "../ownerCheck";
+import { confirmDeviceOwner, ownerPresence, whenOwnerAway } from "../ownerCheck";
 
 export type Login = { origin: string; username: string; password: string; created: number; modified: number; used: number | null };
 type StoredLogin = { origin: string; username: string; password: Uint8Array; created: number; modified: number; used: number | null };
@@ -118,10 +118,13 @@ export function updateLogin(profile: string, originSpec: string, username: strin
 
 const csvField = (value: string) => (/[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value);
 
+const EXPORT_REASON = "export your saved passwords";
+
 async function exportCsv(profile: string) {
-  if (!(await confirmDeviceOwner("export your saved passwords"))) return { status: "cancelled" };
+  const present = ownerPresence();
+  if (!(await confirmDeviceOwner(EXPORT_REASON))) return { status: "cancelled" };
   const path = await askSavePath("Ardia Passwords.csv", [{ name: "CSV file", extensions: ["csv"] }], PASSWORD_FILE_WARNING);
-  if (!path) return { status: "cancelled" };
+  if (!path || !present() || !(await confirmDeviceOwner(EXPORT_REASON)) || !present()) return { status: "cancelled" };
   const rows = store(profile).prepare("SELECT * FROM logins ORDER BY origin, username").all() as StoredLogin[];
   const lines = ["name,url,username,password,note"];
   for (const row of rows) {
@@ -162,7 +165,8 @@ export const passwordVerbs: Record<string, DomainHandler> = {
     ),
   }),
   unlock: async (_args, profile) => {
-    const unlocked = encryptionReady() && (await confirmDeviceOwner("show your saved passwords"));
+    const present = ownerPresence();
+    const unlocked = encryptionReady() && (await confirmDeviceOwner("show your saved passwords")) && present();
     if (unlocked) unlockFor(profile);
     return { unlocked };
   },

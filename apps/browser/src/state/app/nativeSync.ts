@@ -30,6 +30,7 @@ import { answerQuitAfterSaves, isQuitting, setQuitting } from "./quit";
 import { menuInputsChanged, trackedMenuState, type MenuReads } from "../commands/menuState";
 import { usePages } from "../tabs/pageState";
 import { startCaptionRegionSync } from "../windows/captionRegions";
+import { startPageCornerSync } from "../windows/pageCorners";
 
 const QUIT_SAVES_WAIT_MS = 3_000;
 
@@ -136,4 +137,5 @@ export function startNativeSync() {
   });
   void windows.sweep();
   startCaptionRegionSync();
+  startPageCornerSync();
 }

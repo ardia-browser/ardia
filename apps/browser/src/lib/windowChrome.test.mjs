@@ -4,13 +4,13 @@ const { WINDOW_CHROME, captionRoom, captionClearTop } = await import("./windowCh
 const windows = (await import("./platformChrome.windows.ts")).WINDOW_CHROME;
 
 test("the Mac reserves the traffic lights' 78 points at the leading top and nothing at the trailing top", () => {
-  assert.deepEqual(WINDOW_CHROME, { leadingWidth: 78, trailingWidth: 0, titleBarHeight: 0 });
+  assert.deepEqual(WINDOW_CHROME, { leadingWidth: 78, trailingWidth: 0, titleBarHeight: 0, pageCornerRadius: null });
   for (const [fromRight, fromTop] of [[0, 0], [9, 9], [0, 40], [200, 0]]) assert.equal(captionRoom(fromRight, fromTop), 0);
   for (const row of [0, 28, 41]) assert.equal(captionClearTop(9, row, 9), 9);
 });
 
 test("Windows reserves the caption buttons' 171 by 32 at the trailing top and nothing at the leading top", () => {
-  assert.deepEqual(windows, { leadingWidth: 0, trailingWidth: 171, titleBarHeight: 32 });
+  assert.deepEqual(windows, { leadingWidth: 0, trailingWidth: 171, titleBarHeight: 32, pageCornerRadius: 8 });
   assert.equal(captionRoom(0, 0, windows), 171);
   assert.equal(captionRoom(9, 9, windows), 162);
   assert.equal(captionRoom(9, 31, windows), 162);

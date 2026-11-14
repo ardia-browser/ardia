@@ -47,3 +47,9 @@ test("a zero frame is square; a positive frame follows the window radius minus t
   assert.equal(pageFrameOf(0, 19, 12).peek.radius, 12, "the sidebar peek floats, so it keeps its rounded corners");
   assert.equal(pageFrameOf(0, 19, 20).peek.radius, 15);
 });
+
+test("a platform with a fixed page corner keeps it whatever the frame, and goes square with none", () => {
+  assert.equal(pageFrameOf(9, 19, 12, 8).radius, 8);
+  assert.equal(pageFrameOf(12, 19, 12, 8).radius, 8);
+  assert.equal(pageFrameOf(0, 19, 12, 8).radius, 0);
+});

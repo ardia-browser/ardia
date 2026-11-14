@@ -178,6 +178,11 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
   - With no lights on the left, a sidebar header with nothing in it collapses to the page frame on Windows
     (`sidebarHeaderCollapsed`), so the tabs start at the top; the downloads button then sits in the sidebar's footer.
     The header stays for a profile indicator, an incognito window, the address row, and a right sidebar.
+  - The card's corners: where the Mac keeps the card concentric with its window (window radius minus the page frame),
+    Windows rounds it to the window's own 8 px (`pageCornerRadius` in `lib/platformChrome.windows.ts`), and square with
+    no page frame (borderless mode, a frame of 0, full screen when set). The page is a window of its own above the
+    card, so `state/windows/pageCorners.ts` sends each window's radius to the engine host (`ArdiaPageCovers.setRadius`),
+    which rounds the page window to match.
   - Moving the window: a drag region is a view that moves the window when the UI's own hit-testing gives it the press,
     so a control on top of it still clicks, and the app moves the window while the button is down (Escape puts it
     back, a maximized window restores under the pointer, a release at the top edge maximizes). The UI also marks

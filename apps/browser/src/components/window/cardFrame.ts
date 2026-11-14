@@ -1,4 +1,5 @@
 import { pageFrameOf, type PageFrame } from "../../lib/windowLayout";
+import { WINDOW_CHROME } from "../../lib/windowChrome";
 import { usePageFrameInset, windowCornerRadius } from "../../state/windows/layout";
 import { perLook } from "../ui/tokens";
 import { peekRadius } from "./tokens";
@@ -11,7 +12,7 @@ const framesOfLook = perLook(() => new Map<number, CardFrame>());
 export function cardFrameOf(inset: number): CardFrame {
   const frames = framesOfLook();
   let frame = frames.get(inset);
-  if (!frame) frames.set(inset, (frame = { ...pageFrameOf(inset, windowCornerRadius(), peekRadius()), dockGap: sidebarCardGap(inset) }));
+  if (!frame) frames.set(inset, (frame = { ...pageFrameOf(inset, windowCornerRadius(), peekRadius(), WINDOW_CHROME.pageCornerRadius), dockGap: sidebarCardGap(inset) }));
   return frame;
 }
 

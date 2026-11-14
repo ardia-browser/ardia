@@ -223,10 +223,14 @@ the main method where one is needed (`aroundMain` in `tsModules.ts`), the main p
 - **Autofill** (`services/pageAutofill.ts`) finds address and card fields by `autocomplete`, then by name, id,
   placeholder and label, and shows saved entries in a dropdown under the field when it's clicked, typed in or
   ArrowDowned (a closed shadow root in the page; the values reach the page only when one is chosen). Choosing fills the
-  form's empty fields of that kind, selects included; cards only in secure contexts, never the CVC. A submitted form
-  with a street and a city or postal code, or a valid card number, gets Chrome's "Save address?", "Update address?"
-  (New/Old) or "Save card?" as the page's `autofillPrompt`, answered through `resolveAutofillPrompt`; private windows
-  fill but never offer to save. The autofill shortcut and "Manage…" open Settings › Autofill.
+  form's empty fields of that kind, selects included; never the CVC. Only trusted input opens or accepts a suggestion.
+  Main decides by the sending frame (`services/autofillFrames.ts`): addresses in the top frame and frames of its origin,
+  cards only there and on secure origins (https, loopback), and it releases saved values only for an id it suggested
+  to that frame, once (`FillGrants`, dropped when the frame navigates). A form submitted by a real click or Enter with
+  a street and a city or postal code, or a valid card number, gets Chrome's "Save address?", "Update address?"
+  (New/Old) or "Save card?" as the page's `autofillPrompt`, named for the submitting frame's origin even after a
+  redirect, answered through `resolveAutofillPrompt`; private windows fill but never offer to save. The autofill
+  shortcut and "Manage…" open Settings › Autofill.
 - **Requests.** Electron keeps one `webRequest` listener per event per session, so filters go through
   `services/requests.ts` (`onBeforeRequest`, `onHeadersReceived`), never the session directly.
 - **Content blocker.** `@ghostery/adblocker`'s engine with uBlock Origin's default lists, cached and serialized under

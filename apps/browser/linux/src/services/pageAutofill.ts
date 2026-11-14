@@ -13,7 +13,7 @@ const NETWORK_NAMES: Record<string, string> = { visa: "Visa", mastercard: "Maste
 type AddressKey = "name" | "organization" | "street" | "city" | "state" | "postalCode" | "country" | "phone" | "email";
 type AddressFields = Partial<Record<AddressKey, string>>;
 type SubmittedCard = { name?: string; number?: string; expMonth?: number; expYear?: number };
-type Submission = { profile: string; address: AddressFields | null; card: SubmittedCard | null; at: number };
+type Submission = { profile: string; origin: string; frameToken: string; address: AddressFields | null; card: SubmittedCard | null; at: number };
 type Change = { field: "name" | "address" | "email" | "phone" | "other"; from: string; to: string };
 type Prompt = {
   id: number;
@@ -345,7 +345,13 @@ function autofillPage(ipc: Electron.IpcRenderer) {
     }, 1500);
   }
 
-  document.addEventListener("submit", (event) => capture(event.target as Element), true);
+  document.addEventListener(
+    "submit",
+    (event) => {
+      if (event.isTrusted && navigator.userActivation?.isActive) capture(event.target as Element);
+    },
+    true,
+  );
   document.addEventListener(
     "keydown",
     (event) => {
@@ -382,6 +388,7 @@ function autofillPage(ipc: Electron.IpcRenderer) {
   document.addEventListener(
     "click",
     (event) => {
+      if (!event.isTrusted) return;
       const target = event.target instanceof Element ? event.target.closest('button, input[type="submit"], [role="button"]') : null;
       if (target && !(target instanceof HTMLButtonElement && target.type === "button" && !target.form)) capture(target);
     },
@@ -593,10 +600,7 @@ function offer(contents: WebContents) {
   const submission = submissions.get(contents.id);
   submissions.delete(contents.id);
   if (!submission || Date.now() - submission.at > SUBMISSION_KEPT_MS || isPrivateProfile(submission.profile)) return;
-  let origin = "";
-  try {
-    origin = new URL(contents.getURL()).origin;
-  } catch {}
+  const origin = submission.origin;
   const settings = settingsOf(submission.profile);
   const pending: Pending[] = [];
   try {
@@ -685,12 +689,16 @@ ipcMain.on(`${CHANNEL}:manage`, (event) => {
 
 ipcMain.on(`${CHANNEL}:submitted`, (event, submitted: { address?: unknown; card?: unknown }) => {
   const profile = profileOfContents(event.sender);
-  if (profile === null || isPrivateProfile(profile)) return;
-  const address = cleanAddress(submitted?.address);
-  const card = cleanCard(submitted?.card);
+  const frame = event.senderFrame;
+  if (profile === null || isPrivateProfile(profile) || !frame) return;
+  const address = frameAllows(frame, "address") ? cleanAddress(submitted?.address) : null;
+  const card = frameAllows(frame, "card") ? cleanCard(submitted?.card) : null;
   if (!address && !card) return;
   watch(event.sender);
-  submissions.set(event.sender.id, { profile, address, card, at: Date.now() });
+  submissions.set(event.sender.id, { profile, origin: frame.origin, frameToken: frame.frameToken, address, card, at: Date.now() });
 });
 
-ipcMain.on(`${CHANNEL}:gone`, (event) => offer(event.sender));
+ipcMain.on(`${CHANNEL}:gone`, (event) => {
+  const frame = event.senderFrame;
+  if (frame && !frame.isDestroyed() && submissions.get(event.sender.id)?.frameToken === frame.frameToken) offer(event.sender);
+});

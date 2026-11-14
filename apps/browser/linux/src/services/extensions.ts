@@ -14,8 +14,7 @@ import { onProfileSession } from "./guests";
 import { extensionsModulePath, webStoreModulePath } from "./vendorPreloads";
 import { engineError, isPrivateProfile, profileDirectory, sessionFor } from "./profiles";
 
-type Entry = { path: string; enabled: boolean; pinned: boolean; incognito: boolean; fileAccess: boolean; siteAccess: SiteAccess | null; location: "webstore" | "unpacked" | "crx"; installed: number };
-type SiteAccess = "ON_ALL_SITES" | "ON_SPECIFIC_SITES" | "ON_CLICK";
+type Entry = { path: string; enabled: boolean; pinned: boolean; incognito: boolean; fileAccess: boolean; location: "webstore" | "unpacked" | "crx"; installed: number };
 type Manifest = Record<string, unknown> & {
   name?: string;
   short_name?: string;
@@ -117,7 +116,7 @@ function describe(profile: string, id: string, entry: Entry, chrome: Session | n
     state: entry.enabled ? (loaded ? "ENABLED" : "TERMINATED") : "DISABLED",
     icon: iconUri(path, largestIcon(manifest.icons)),
     permissions: [...permissions, ...hosts],
-    siteAccess: entry.siteAccess ?? (hosts.length || permissions.some((permission) => permission.includes("://") || permission === "<all_urls>") ? "ON_ALL_SITES" : null),
+    siteAccess: null,
     sites: hosts,
     optionsUrl: options ? `chrome-extension://${id}/${options.replace(/^\//, "")}` : null,
     pinned: entry.pinned,
@@ -308,7 +307,6 @@ function setUp(session: Session, profile: string) {
       pinned: false,
       incognito: false,
       fileAccess: false,
-      siteAccess: null,
       location: extension.path.startsWith(folder) ? "webstore" : "unpacked",
       installed: Date.now(),
     });
@@ -398,7 +396,6 @@ async function installFrom(profile: string, path: string, location: Entry["locat
     pinned: previous?.pinned ?? false,
     incognito: previous?.incognito ?? false,
     fileAccess: previous?.fileAccess ?? false,
-    siteAccess: previous?.siteAccess ?? null,
     location,
     installed: previous?.installed ?? Date.now(),
   });
@@ -469,10 +466,9 @@ defineDomain("extensions", {
     const options = args.options && typeof args.options === "object" ? (args.options as Record<string, unknown>) : {};
     const registry = registryOf(profile);
     const entry = registry[id] ?? entryOf(profile, id);
-    const access: Record<string, SiteAccess> = { allSites: "ON_ALL_SITES", specificSites: "ON_SPECIFIC_SITES", onClick: "ON_CLICK" };
     if (typeof options.pinned === "boolean") entry.pinned = options.pinned;
     if (typeof options.incognito === "boolean") entry.incognito = options.incognito;
-    if (typeof options.siteAccess === "string" && access[options.siteAccess]) entry.siteAccess = access[options.siteAccess]!;
+    if (typeof options.siteAccess === "string" && options.siteAccess !== "allSites") throw engineError("extensions run on every site they ask for on Linux; site access can't be narrowed yet");
     const fileAccessChanged = typeof options.fileAccess === "boolean" && options.fileAccess !== entry.fileAccess;
     if (typeof options.fileAccess === "boolean") entry.fileAccess = options.fileAccess;
     saveRegistry(profile, registry);

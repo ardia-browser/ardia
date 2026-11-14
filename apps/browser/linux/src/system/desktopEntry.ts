@@ -1,7 +1,8 @@
 import { spawn } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { hostEnvironment, xdgConfigHome, xdgDataHome } from "../paths";
+import { launchConfig } from "../launch";
+import { dataDirectory, hostEnvironment, xdgConfigHome, xdgDataHome } from "../paths";
 
 export const DESKTOP_FILE = "ardia.desktop";
 export const WINDOW_CLASS = "ardia";
@@ -40,8 +41,10 @@ export function runTool(command: string, args: string[], deadlineMs: number): Pr
   });
 }
 
-const dataHome = xdgDataHome;
-const configHome = xdgConfigHome;
+export const desktopIsSandboxed = (): boolean => launchConfig().isolated;
+const sandboxDesktop = () => join(dataDirectory(), "Desktop");
+const dataHome = () => (desktopIsSandboxed() ? join(sandboxDesktop(), "share") : xdgDataHome());
+const configHome = () => (desktopIsSandboxed() ? join(sandboxDesktop(), "config") : xdgConfigHome());
 
 export const userDesktopFile = () => join(dataHome(), "applications", DESKTOP_FILE);
 export const autostartFile = () => join(configHome(), "autostart", DESKTOP_FILE);
@@ -96,10 +99,12 @@ export async function ensureUserDesktopEntry(): Promise<void> {
   mkdirSync(join(dataHome(), "applications"), { recursive: true });
   writeFileSync(userDesktopFile(), desktopEntry());
   installIcons();
+  if (desktopIsSandboxed()) return;
   await runTool("update-desktop-database", [join(dataHome(), "applications")], XDG_TOOL_MS);
 }
 
 export async function xdg(command: string, ...args: string[]): Promise<string | null> {
+  if (desktopIsSandboxed()) return null;
   const done = await runTool(command, args, args[0] === "set" || args[0] === "default" ? XDG_TOOL_MS : XDG_QUERY_MS);
   return done.ok ? done.stdout : null;
 }

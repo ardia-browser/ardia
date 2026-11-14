@@ -2,10 +2,20 @@ import { app, BrowserWindow, dialog, shell } from "electron";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineModule } from "../bridge";
-import { launchConfig } from "../launch";
 import { note } from "../log";
 import { isBackground } from "../paths";
-import { DESKTOP_FILE, MIME_TYPES, autostartFile, defaultApplicationIn, ensureUserDesktopEntry, runTool, writeAutostart, writeDefaultApplications, xdg } from "../system/desktopEntry";
+import {
+  DESKTOP_FILE,
+  MIME_TYPES,
+  autostartFile,
+  defaultApplicationIn,
+  desktopIsSandboxed,
+  ensureUserDesktopEntry,
+  runTool,
+  writeAutostart,
+  writeDefaultApplications,
+  xdg,
+} from "../system/desktopEntry";
 
 function nativePath(path: string): string {
   if (typeof path !== "string") return "";
@@ -47,9 +57,9 @@ async function setAsDefaultBrowser(): Promise<boolean> {
     return false;
   }
   await ensureUserDesktopEntry().catch((error) => note("system", `the desktop entry could not be written: ${String(error)}`));
-  const tool = await runTool("xdg-settings", ["set", "default-web-browser", DESKTOP_FILE], XDG_SET_MS);
-  if (!tool.ok) {
-    note("system", `xdg-settings ${tool.timedOut ? "timed out" : `failed: ${tool.stderr || "no output"}`}; writing mimeapps.list`);
+  const tool = desktopIsSandboxed() ? null : await runTool("xdg-settings", ["set", "default-web-browser", DESKTOP_FILE], XDG_SET_MS);
+  if (!tool?.ok) {
+    note("system", tool ? `xdg-settings ${tool.timedOut ? "timed out" : `failed: ${tool.stderr || "no output"}`}; writing mimeapps.list` : "custom data directory: the default browser is set in its own Desktop folder");
     try {
       writeDefaultApplications(DESKTOP_FILE, [...MIME_TYPES, "x-scheme-handler/about", "x-scheme-handler/unknown"]);
     } catch (error) {
@@ -63,7 +73,7 @@ async function setAsDefaultBrowser(): Promise<boolean> {
 
 async function setLaunchAtLogin(enabled: boolean): Promise<void> {
   if (isBackground()) return note("system", "background instance, not changing launch at login");
-  if (launchConfig().isolated) return note("system", "custom data directory, not changing launch at login");
+  if (desktopIsSandboxed()) note("system", "custom data directory: launch at login is set in its own Desktop folder");
   if (enabled) await ensureUserDesktopEntry();
   writeAutostart(enabled);
 }

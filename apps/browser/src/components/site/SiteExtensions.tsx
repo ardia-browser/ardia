@@ -5,6 +5,7 @@ import type { View } from "react-native";
 import { activateExtension, EXTENSION_LIST_ITEMS, openManageExtensions, openWebStore, runExtensionListChoice, showExtensionMenu, useWindowExtensions, type Anchor } from "../../state/extensions/actions";
 import { ExtensionTile, SITE_PANEL, TileGrid } from "./SiteControlsParts";
 import { SectionLabel } from "../sidebar/SectionLabel";
+import { noteSiteControls } from "../../state/telemetry/usage";
 import { Button, PANEL } from "../ui";
 
 export function SiteExtensions({ windowId, tabId, columns, onClose }: { windowId: string; tabId: string; columns: number; onClose: () => void }) {
@@ -26,6 +27,7 @@ export function SiteExtensions({ windowId, tabId, columns, onClose }: { windowId
             label="Manage Extensions"
             onPress={() => {
               onClose();
+              noteSiteControls("manageExtensions");
               openManageExtensions(windowId);
             }}
           />

@@ -1,16 +1,27 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { after, test } from "node:test";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 const { pressables } = await import("react-native");
+const stub = await import("../../test-native/index.ts");
+globalThis.fetch = async () => ({ status: 200 });
 const { windows } = await import("../../test-native/shell.ts");
+const client = await import("../../state/telemetry/client.ts");
+const usage = await import("../../state/telemetry/usage.ts");
 const { useBrowser } = await import("../../state/browser/store.ts");
 const { useSettingsNav, SETTINGS_WINDOW_ID } = await import("../../state/settings/settingsWindows.ts");
 const { SiteExtensions } = await import("./SiteExtensions.tsx");
 
 const S = () => useBrowser.getState();
+after(() => client.setSharing(false, "settings"));
+
+async function usageCounts() {
+  await client.saveQueueNow();
+  const queue = stub.docs.get("telemetry-queue.json");
+  return queue ? JSON.parse(queue).events.filter((e) => e.event === "usage_counts").map((e) => e.properties) : [];
+}
 
 function workWindowBehindDefaultWindow() {
   S().hydrate({});
@@ -34,8 +45,9 @@ function renderPanel(windowId, tabId, onClose) {
   return (label) => pressables.find((p) => p.accessibilityLabel === label);
 }
 
-test("the Extensions header has a visible Manage button that closes the panel, then opens Settings › Extensions for the panel window's profile", () => {
+test("the Extensions header has a visible Manage button that closes the panel, then opens Settings › Extensions for the panel window's profile", async () => {
   const { work, workWindow, tabId } = workWindowBehindDefaultWindow();
+  client.setSharing(true, "onboarding");
   windows.open.delete(SETTINGS_WINDOW_ID);
   useSettingsNav.setState({ pane: "general", profileId: null, detail: null, back: [], forward: [] });
   const events = [];
@@ -48,6 +60,8 @@ test("the Extensions header has a visible Manage button that closes the panel, t
   const nav = useSettingsNav.getState();
   assert.equal(nav.pane, "extensions");
   assert.equal(nav.profileId, work);
+  usage.sessionEnding();
+  assert.deepEqual((await usageCounts()).map((e) => e.extensions_manage_opens_from_site_controls), [1]);
 });
 
 test("the + tile still closes the panel and opens the Chrome Web Store in the panel's window", () => {

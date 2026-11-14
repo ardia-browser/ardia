@@ -1,4 +1,28 @@
-export const View = () => null;
+import type { ReactNode } from "react";
+
+type HostProps = { children?: ReactNode | ((state: { pressed: boolean; hovered: boolean }) => ReactNode) };
+
+const renderedChildren = ({ children }: HostProps) => (typeof children === "function" ? children({ pressed: false, hovered: false }) : (children ?? null));
+
+export const View = renderedChildren;
+export const Text = renderedChildren;
+export const Image = () => null;
+export const ScrollView = renderedChildren;
+export const TextInput = () => null;
+
+export const pressables: Record<string, unknown>[] = [];
+export const Pressable = (props: HostProps & Record<string, unknown>) => {
+  pressables.push(props);
+  return renderedChildren(props);
+};
+
+export const StyleSheet = {
+  create: <Styles,>(styles: Styles) => styles,
+  flatten: (style: unknown) => style,
+  hairlineWidth: 0.5,
+  absoluteFill: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
+  absoluteFillObject: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
+};
 
 export const NativeModules: Record<string, unknown> = {
   ACFieldTiming: { setEnabled: () => {}, markFrame: () => {}, lastInput: () => [0, 0], drain: () => [] },
@@ -136,6 +160,10 @@ function animate(value: AnimatedValue | AnimatedValueXY, toValue: number | { x: 
 
 export const Animated = {
   createAnimatedComponent: <Component>(component: Component) => component,
+  View: renderedChildren,
+  Text: renderedChildren,
+  Image: () => null,
+  ScrollView: renderedChildren,
   Value: AnimatedValue,
   ValueXY: AnimatedValueXY,
   spring: (value: AnimatedValue | AnimatedValueXY, config: { toValue: number | { x: number; y: number } }) => animate(value, config.toValue),

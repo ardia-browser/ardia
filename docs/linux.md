@@ -58,7 +58,10 @@ stay in the renderer. Linux uses the Windows chrome (app-drawn window buttons), 
 `ArdiaWebView` (`packages/expo-linux/src/engine`) renders a `<webview>` in place, so the UI draws over pages, clips
 their corners and animates them like any other element. Each page lives in a registry keyed by its tab id
 (`engine/pages.ts`); the element is made by the document of the window that shows it, never the host's: a webview the
-host made draws in another window but sits in the host's frame tree, so it gets no input.
+host made draws in another window but sits in the host's frame tree, so it gets no input, and the first time its page's
+focus changes the browser process dies on a Chromium CHECK (`TransformPointToTargetCoordSpace`: the page's view isn't in
+its window's input router). The host's and every window's preload (`engine/hostPreload.ts`) therefore refuse to attach a
+`<webview>` connected to a document other than the one that made it, and log it.
 
 - **Moving without reloading.** Removing a `<webview>` from the DOM destroys its page. Every app window gets a tiny
   preload (`window-preload.js`, from `engine/hostPreload.ts`) that adds a `connectedMoveCallback` to the window's

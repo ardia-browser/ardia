@@ -28,12 +28,12 @@ const TEST_KEYS = [
   "loginsDelay", "loginsReleaseAfter", "cdpTabsVisible",
   "pipSelfTest", "pipHover", "fakeFullScreenMs", "shadersKeyWindow", "peekStrict", "importSecret", "importDiaBundleId", "importDiaWindows",
   "cliInstallScript", "legacySource", "legacyCrashAfter", "bangsUrl", "onboarding", "whatsNew", "telemetry",
-  "liveMock", "calendarFixture", "appMenu", "appDialog", "loginsTimeout", "externalAppLaunch", "nativeDragRefused",
+  "liveMock", "calendarFixture", "appMenu", "appDialog", "loginsTimeout", "externalAppLaunch", "nativeDragRefused", "passwordHelper",
 ];
 
 const KEYS_WHOSE_VALUES_HOLD_COMMAS = [
   "chromiumSwitches", "downloadsDir", "updateFeed", "cliHome", "cliBinDir", "cliUrl", "syncFolder", "sharedFolders", "importSourceDir",
-  "importSafariHome", "importSecret", "cliInstallScript", "legacySource", "bangsUrl", "liveMock",
+  "importSafariHome", "importSecret", "cliInstallScript", "legacySource", "bangsUrl", "liveMock", "passwordHelper",
 ];
 
 const TRACE_AREAS = ["visibility", "pip", "pipZoom", "trafficLights", "profileGate", "keys", "menus"];

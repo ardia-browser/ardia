@@ -13,7 +13,7 @@ import expo.modules.ReactActivityDelegateWrapper
 class MainActivity : ReactActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(null)
-        PhoneSystemLinks.receive(intent, restored = savedInstanceState != null)
+        PhoneSystemLinks.activityStarted(intent, restored = savedInstanceState != null)
     }
 
     override fun onNewIntent(intent: Intent) {

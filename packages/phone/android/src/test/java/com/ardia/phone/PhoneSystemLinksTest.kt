@@ -102,4 +102,18 @@ class PhoneSystemLinksTest {
         assertEquals(1, first.size)
         PhoneSystemLinks.stopListening(fresh)
     }
+
+    @Test
+    fun aFreshActivityDropsLinksAnEarlierOneLeftUntakenButKeepsItsOwnAndLaterOnes() {
+        PhoneSystemLinks.receive(view("ardia://voice").putExtra(PhoneSystemLinks.SOURCE_EXTRA, "shortcut"))
+        PhoneSystemLinks.activityStarted(view("https://example.com/"), restored = false)
+        PhoneSystemLinks.receive(view("https://example.org/"))
+        assertEquals("https://example.com/", PhoneSystemLinks.takeInitial()?.get("url"))
+        assertEquals("https://example.org/", PhoneSystemLinks.takeInitial()?.get("url"))
+        assertNull(PhoneSystemLinks.takeInitial())
+        PhoneSystemLinks.receive(view("https://waiting.example/"))
+        PhoneSystemLinks.activityStarted(view("https://restored.example/"), restored = true)
+        assertEquals("https://waiting.example/", PhoneSystemLinks.takeInitial()?.get("url"))
+        assertNull(PhoneSystemLinks.takeInitial())
+    }
 }

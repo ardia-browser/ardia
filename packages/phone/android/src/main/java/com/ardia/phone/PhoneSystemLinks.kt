@@ -43,6 +43,11 @@ object PhoneSystemLinks {
         deliver(payload)
     }
 
+    fun activityStarted(intent: Intent?, restored: Boolean) {
+        if (!restored) synchronized(lock) { queued.clear() }
+        receive(intent, restored)
+    }
+
     fun takeInitial(): Map<String, Any?>? = synchronized(lock) { queued.removeFirstOrNull() }
 
     fun listen(listener: Listener): Listener {

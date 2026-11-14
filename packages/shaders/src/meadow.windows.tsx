@@ -1,6 +1,8 @@
-import { useState } from "react";
-import { Image, View, type ImageSourcePropType, type LayoutChangeEvent } from "react-native";
-import type { MeadowProps } from "./index";
+import { requireNativeViewManager } from "expo-modules-core";
+import { useState, type ComponentType } from "react";
+import { Image, StyleSheet, View, type ImageSourcePropType, type LayoutChangeEvent } from "react-native";
+import type { MeadowIntroEvent, MeadowProps } from "./index";
+import { nearestPoster as nearestOf, posterFrame } from "./meadowPage/posters";
 import posters from "../ios/Meadow/posters.json";
 
 type Poster = (typeof posters)[number];
@@ -15,29 +17,30 @@ const DAWN: Record<string, ImageSourcePropType> = {
 
 export const WINDOWS_POSTERS = posters.filter((p) => p.state === "dawn" && Object.hasOwn(DAWN, p.file));
 
-export function nearestPoster(aspect: number): Poster | null {
-  let best: Poster | null = null;
-  for (const poster of WINDOWS_POSTERS) if (!best || Math.abs(Math.log(poster.aspect / aspect)) < Math.abs(Math.log(best.aspect / aspect))) best = poster;
-  return best;
-}
+export const nearestPoster = (aspect: number): Poster | null => nearestOf(WINDOWS_POSTERS, aspect);
 
-export function posterFrame(poster: Pick<Poster, "aspect" | "horizon">, size: Size) {
-  const scale = Math.max(size.width / poster.aspect, size.height);
-  const width = poster.aspect * scale;
-  const height = scale;
-  return { left: (size.width - width) / 2, top: (size.height - height) * poster.horizon, width, height };
-}
+export { posterFrame };
 
-export function Meadow({ night, style, testID }: MeadowProps) {
+let MeadowPage: ComponentType<MeadowProps> | null = null;
+
+export function Meadow({ night, style, testID, intro, onIntro, onTone }: MeadowProps) {
   const [size, setSize] = useState<Size | null>(null);
+  const [live, setLive] = useState(false);
   const onLayout = (event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
     setSize((now) => (now && now.width === width && now.height === height ? now : { width, height }));
   };
-  const poster = !night && size && size.width > 0 && size.height > 0 ? nearestPoster(size.width / size.height) : null;
+  const told = (event: MeadowIntroEvent) => {
+    if (event.kind === "live") setLive(true);
+    if (event.kind === "fallback") setLive(false);
+    onIntro?.(event);
+  };
+  if (intro) MeadowPage ??= requireNativeViewManager<MeadowProps>("ArdiaMeadowPage");
+  const poster = !night && !live && size && size.width > 0 && size.height > 0 ? nearestPoster(size.width / size.height) : null;
   return (
     <View pointerEvents="none" testID={testID} style={[style, { overflow: "hidden" }]} onLayout={onLayout}>
       {poster && size && <Image source={DAWN[poster.file]!} fadeDuration={0} style={{ position: "absolute", ...posterFrame(poster, size) }} />}
+      {intro && MeadowPage && <MeadowPage night={night} intro={intro} onIntro={told} onTone={onTone} style={StyleSheet.absoluteFill} />}
     </View>
   );
 }

@@ -220,7 +220,7 @@
     if (e.isTrusted && !(e.type === "keydown" && (e.key === "Escape" || e.metaKey))) usedHere = true;
   };
   for (const type of ["pointerdown", "keydown"]) window.addEventListener(type, noteUse, true);
-  const askedToPlay = () => usedHere;
+  const askedToPlay = () => usedHere || (!isTop && !!(navigator.userActivation && navigator.userActivation.isActive));
   let pipTrace = false;
   let pipHandlerSet = null;
   const playingMedia = new Set();

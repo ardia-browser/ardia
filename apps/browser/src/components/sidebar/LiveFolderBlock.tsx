@@ -20,7 +20,7 @@ import { dismissHover } from "../../state/sidebar/hover";
 import { openLiveFolderMenu } from "../../state/sidebar/liveMenus";
 import { registerRow } from "../../state/sidebar/sidebarUi";
 import { TabIcon } from "./TabIcon";
-import { TAB_ROW, useSidebarTokens } from "./tokens";
+import { groupSurface, TAB_ROW, useSidebarTokens } from "./tokens";
 import { RefreshSpinner } from "./RefreshSpinner";
 import { SidebarRowLabel, SidebarRowSurface } from "./SidebarRow";
 import { MoreRow, NoteRow, SectionTitle, StackRow } from "./LiveFolderRows";
@@ -53,6 +53,7 @@ export const LiveFolderBlock = memo(function LiveFolderBlock({ folderId, windowI
   const foldedHeight = () => GROUP_BORDER * 2 + layout.rowHeight + (activeTab ? layout.rowHeight + PAD : 0);
   const { wrapper, handle, headerRef } = useDragItem(entryKey("live", folderId), { kind: "live", tabIds: NONE, section: "pinnedGroups", liveFolderId: folderId, collapsed: !!folder?.collapsed, foldedHeight });
   if (!folder) return null;
+  const box = groupSurface(folder.color, tokens);
 
   const entries: FoldEntry[] = rows.length
     ? rows.map((row) => ({ key: row.key, node: <FolderRowView row={row} folderId={folderId} windowId={windowId} /> }))
@@ -67,7 +68,7 @@ export const LiveFolderBlock = memo(function LiveFolderBlock({ folderId, windowI
 
   return (
     <Animated.View ref={wrapper.ref} style={wrapper.style}>
-      <View style={{ borderRadius: GROUP_RADIUS, backgroundColor: tokens.groupFill, borderWidth: GROUP_BORDER, borderColor: tokens.groupStroke, paddingHorizontal: PAD }}>
+      <View style={{ borderRadius: GROUP_RADIUS, backgroundColor: box.fill, borderWidth: GROUP_BORDER, borderColor: box.stroke, paddingHorizontal: PAD }}>
         <View ref={headerRef} {...handle} style={{ marginHorizontal: -PAD }}>
           <FolderHeader folderId={folderId} windowId={windowId} collapsed={collapsed} />
         </View>

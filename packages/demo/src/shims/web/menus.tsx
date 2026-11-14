@@ -3,7 +3,7 @@ import type { MenuItem } from "@ardia-real/shell";
 import { useBrowser } from "../../../../../apps/browser/src/state/browser/store";
 import { Symbol } from "./Symbol";
 
-type OpenMenu = { items: MenuItem[]; x: number; y: number; resolve: (id: string | null) => void };
+type OpenMenu = { items: MenuItem[]; x: number; y: number; resolve: (id: string | null) => void; onKeepOpenPick?: (id: string) => MenuItem[] };
 
 let open: OpenMenu | null = null;
 const watchers = new Set<() => void>();
@@ -27,10 +27,15 @@ if (typeof window !== "undefined") {
   for (const type of ["keydown", "keyup"] as const) window.addEventListener(type, (e) => (commandHeld = e.metaKey), true);
 }
 
-export function showMenu(items: MenuItem[]): Promise<string | null> {
+export function showMenu(items: MenuItem[], onKeepOpenPick?: (id: string) => MenuItem[]): Promise<string | null> {
   open?.resolve(null);
-  return new Promise((resolve) => publish({ items, x: pointer.x, y: pointer.y, resolve }));
+  return new Promise((resolve) => publish({ items, x: pointer.x, y: pointer.y, resolve, onKeepOpenPick }));
 }
+
+const pick = (id: string, keepOpen?: boolean) => {
+  if (keepOpen && open?.onKeepOpenPick) publish({ ...open, items: open.onKeepOpenPick(id) });
+  else close(id);
+};
 
 const close = (id: string | null) => {
   const menu = open;
@@ -66,7 +71,7 @@ function MenuList({ items, x, y }: { items: MenuItem[]; x: number; y: number }) 
             key={item.id + i}
             className={`ardia-menu-item${enabled ? "" : " disabled"}`}
             onPointerEnter={(e) => setSub(item.children ? { index: i, top: (e.currentTarget as HTMLElement).getBoundingClientRect().top } : null)}
-            onClick={() => enabled && !item.children && close(item.id)}
+            onClick={() => enabled && !item.children && pick(item.id, item.keepOpen)}
           >
             <span className="ardia-menu-check">{item.checked ? "✓" : ""}</span>
             {item.symbol ? <Symbol name={item.symbol} size={12} color="currentColor" style={{ width: 16, height: 16, marginRight: 6 }} /> : null}

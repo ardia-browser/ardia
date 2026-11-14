@@ -190,13 +190,16 @@ class ScopedNotifying {
 };
 
 bool IsNotifyingTabStrip();
+bool IsNotifyingAny();
 bool DeferWhileTabStripNotifies(dispatch_block_t retry);
 bool DeferWhileAnyNotifies(dispatch_block_t retry);
 void InitialMainDocumentAccessed(content::WebContents* contents);
 
 bool OnlyShowedBlank(content::WebContents* contents);
 void CloseBlankTabsBeforeWindowCloses(Browser* browser);
-void DeleteTabClosedByHost(content::WebContents* contents);
+enum class ClosedTabRecord { kRecentlyClosed, kNone };
+void DeleteTabClosedByHost(content::WebContents* contents,
+                           ClosedTabRecord record = ClosedTabRecord::kRecentlyClosed);
 
 bool HostExtensionSidePanel(content::WebContents* contents,
                             const std::string& extension_id,

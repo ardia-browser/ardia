@@ -13,7 +13,7 @@ import { Checkbox, Symbol, Text } from "../ui";
 import { capsule, space } from "../ui/tokens";
 import { ChoiceCard } from "./ChoiceCard";
 import { OptionCard } from "./OptionCard";
-import { confirmAnswer, recordDefaultBrowserTrial, setOnboardingDraft, setOnboardingExtras, skipStep, useOnboarding } from "../../state/onboarding/onboarding";
+import { confirmAnswer, confirmDefaultBrowserAnswer, recordDefaultBrowserTrial, setOnboardingDraft, setOnboardingExtras, skipStep, useOnboarding } from "../../state/onboarding/onboarding";
 import { ChoiceList, useMockFocus, type ChoiceOption } from "./ChoiceList";
 import { useOnboardingColors } from "./Parts";
 import { MockPanel, useScreen } from "./Screen";
@@ -63,8 +63,7 @@ function DefaultBrowserQuestion() {
       if (dock && !system.inDock) await addToDock();
     } finally {
       setBusy(false);
-      const { step, sub } = useOnboarding.getState();
-      if (step === "home" && sub === 0) confirmAnswer("default", {}, picked);
+      confirmDefaultBrowserAnswer(picked);
     }
   };
 

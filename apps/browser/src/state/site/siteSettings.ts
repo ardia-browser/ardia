@@ -13,12 +13,15 @@ export {
   type SiteSettingValue,
 } from "../../platform/siteSettings";
 export {
+  addFilterList,
   getContentBlocker,
   isContentBlockerAllowed,
   onContentBlockerChange,
+  removeFilterList,
   setContentBlockerAllowed,
   setContentBlockerEnabled,
   setFilterListEnabled,
+  type AddedFilterList,
   type ContentBlockerState,
   type FilterList,
   type FilterListCategory,

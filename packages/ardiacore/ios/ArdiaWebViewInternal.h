@@ -162,6 +162,7 @@ typedef NS_ENUM(NSInteger, ArdiaTransfer) {
 - (BOOL)canTake:(ArdiaCoreTab *)tab;
 - (ArdiaTransfer)takeTransferredTab;
 - (void)bindRestoreKey;
+- (void)forgetRestoreKey;
 @end
 
 @interface ArdiaWebView (TabInternal)
@@ -171,6 +172,8 @@ typedef NS_ENUM(NSInteger, ArdiaTransfer) {
 - (BOOL)holdTransferOf:(ArdiaCoreTab *)tab;
 - (void)attach:(ArdiaCoreTab *)tab;
 - (void)detach;
+@property(nonatomic, readonly) NSString *keptFromUnloadingBy;
+- (BOOL)unloadKeepingHistory;
 - (void)stashPageReports;
 - (void)takePageReports;
 - (void)placeTab;

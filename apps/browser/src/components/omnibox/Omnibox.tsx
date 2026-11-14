@@ -18,6 +18,7 @@ import { claimFocusTag, commandBarFocus, heroBarFocus } from "../../state/focus/
 import { registerHeroBar, saveNtpQuery, type BarDismissal, type BarSnapshot } from "../../state/omnibox/barState";
 import { barSplitsFrom, openFromBar, otherOpenTabs, switchFromBar, type Disposition } from "../../state/omnibox/openFromBar";
 import { openFromNewTabBar } from "../../state/omnibox/newTabBar";
+import { isBookmarklet, runBookmarklet } from "../../state/bookmarks/bookmarklets";
 import type { NewTabTarget } from "../../state/browser/types";
 import { showFieldMenu } from "../../state/omnibox/paste";
 import { SuggestionIcon, SuggestionList, isRemovable, type RowActions } from "./SuggestionRow";
@@ -173,6 +174,10 @@ export function Omnibox({
           switchFromBar(s.tabId, s.url, tabId, disposition);
           if (hero && disposition === "current") reset();
           return;
+        }
+        if (isBookmarklet(s.url)) {
+          dismiss();
+          return void runBookmarklet(s.url, windowId, tabId);
         }
         return go(s.url, disposition);
       case "search":

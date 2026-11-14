@@ -17,6 +17,8 @@ import { useStripCardHover } from "./StripHoverCard";
 import { useChipHover, useChipHovered } from "./reachableHover";
 import { TabPressArea } from "../sidebar/TabPressArea";
 import { tabTitle } from "../../state/browser/model";
+import { useStruckTitle } from "../../state/sidebar/rowState";
+import { SLEEPING_TITLE_OPACITY } from "../sidebar/tokens";
 
 export function SplitChip({ tabIds, width, geometry, from, group }: { tabIds: string[]; width: number; geometry: DragGeometry; from: number; group: string | null }) {
   const onTint = useTheme();
@@ -59,6 +61,7 @@ function SplitPart({ tabId, first, last, ink }: { tabId: string; first: boolean;
   const drag = useStripDrag({ tabId, ids: () => [tabId], pinned: false, groupId: null, geometry: NO_SLOTS, from: -1, width: 0, gap: 0, axis: "y" });
   const hover = useChipHover();
   const card = useStripCardHover(windowId, tabId, drag.ref, hover);
+  const struck = useStruckTitle(tabId);
   if (!tab) return null;
   return (
     <Animated.View ref={drag.ref} {...drag.panHandlers} {...card} {...hover.hoverProps} style={{ flex: 1, alignSelf: "stretch", opacity: drag.style.opacity }}>
@@ -76,7 +79,7 @@ function SplitPart({ tabId, first, last, ink }: { tabId: string; first: boolean;
         <View pointerEvents="none">
           <TabIcon url={tab.url} favicon={tab.favicon} icon={tab.customIcon} compact profileId={tab.profileId} />
         </View>
-        <FadeLabel text={tabTitle(tab)} fontSize={font.small.fontSize} color={ink ? (focused ? ink.text : ink.secondary) : focused ? theme.tabSelectedText : theme.textTab} style={{ flex: 1, height: 16, marginLeft: CHIP_LABEL_GAP }} />
+        <FadeLabel text={tabTitle(tab)} fontSize={font.small.fontSize} color={ink ? (focused ? ink.text : ink.secondary) : focused ? theme.tabSelectedText : theme.textTab} strikethrough={struck} style={{ flex: 1, height: 16, marginLeft: CHIP_LABEL_GAP, opacity: struck ? SLEEPING_TITLE_OPACITY : 1 }} />
       </TabPressArea>
     </Animated.View>
   );

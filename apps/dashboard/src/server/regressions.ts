@@ -14,7 +14,7 @@ const MIN_SESSIONS = 30;
 const CRASH_FREE_DROP = 0.005;
 const PEOPLE_SHOWN = 40;
 
-type Unit = "ms" | "mb" | "bytes" | "per1k" | "share";
+type Unit = "ms" | "mb" | "bytes" | "per1k" | "share" | "cpu";
 
 type MetricDef = {
   key: string;
@@ -34,6 +34,9 @@ export const REGRESSION_METRICS: MetricDef[] = [
   { key: "launch_p95", source: "launch", label: "Launch to usable, p95", group: "Launch", unit: "ms", stat: "p95", hint: "perf_launch usable_ms" },
   { key: "memory_p50", source: "memory", label: "Memory, p50", group: "Memory", unit: "mb", stat: "p50", hint: "perf_memory total_mb, every Ardia process" },
   { key: "memory_p95", source: "memory", label: "Memory, p95", group: "Memory", unit: "mb", stat: "p95", hint: "perf_memory total_mb, every Ardia process" },
+  { key: "cpu_p50", source: "cpu", label: "Main process CPU, p50", group: "Energy", unit: "cpu", stat: "p50", hint: "perf_memory browser_cpu_pct: the browser process's share of one core over the hour" },
+  { key: "cpu_p95", source: "cpu", label: "Main process CPU, p95", group: "Energy", unit: "cpu", stat: "p95", hint: "perf_memory browser_cpu_pct" },
+  { key: "wakeups_p50", source: "wakeups", label: "Main process wake-ups per second, p50", group: "Energy", unit: "per1k", stat: "p50", hint: "perf_memory browser_wakeups_per_s over the hour" },
   { key: "crash_free", source: "crash", label: "Crash-free sessions", group: "Stability", unit: "share", stat: "crash-free", hint: "1 − app crashes ÷ launches; crashes credited to the version that crashed" },
   { key: "exceptions", source: "exception", label: "JS exceptions per 1k sessions", group: "Stability", unit: "per1k", stat: "rate", hint: "$exception that isn't a crash report, per 1,000 launches" },
   { key: "gone", source: "gone", label: "Page processes gone per 1k sessions", group: "Stability", unit: "per1k", stat: "rate", hint: "page_process_gone per 1,000 launches" },
@@ -52,7 +55,7 @@ const SAMPLES = `
       arrayJoin(multiIf(
         event = 'perf_journeys', [('j2', toFloat64OrZero(properties['j2_typeable_p95'])), ('j3', toFloat64OrZero(properties['j3_total_p95'])), ('j4', toFloat64OrZero(properties['j4_fcp_p95']))],
         event = 'perf_launch', [('launch', if(properties['first_of_version'] IN ('true', 'false') AND ${USABLE} < 600000, ${USABLE}, 0))],
-        event = 'perf_memory', [('memory', toFloat64OrZero(properties['total_mb']))],
+        event = 'perf_memory', [('memory', toFloat64OrZero(properties['total_mb'])), ('cpu', toFloat64OrZero(properties['browser_cpu_pct'])), ('wakeups', toFloat64OrZero(properties['browser_wakeups_per_s']))],
         event = 'telemetry_local_store', [('store_bytes', toFloat64OrZero(properties['bytes'])), ('store_write', ${STORE_WRITE})],
         event = 'app_launched', [('sessions', 1.)],
         event = '$exception' AND properties['source'] = 'native_crash', [('crash', 1.)],

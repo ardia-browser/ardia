@@ -22,7 +22,7 @@ ALIASES = {
 MUTATING = {
     "open", "click", "dblclick", "type", "fill", "press", "keyboard", "keydown", "keyup", "hover", "check", "uncheck",
     "select", "drag", "upload", "download", "scroll", "scrollintoview", "mouse", "back", "forward", "reload", "tab",
-    "find", "auth", "pushstate", "eval", "dialog", "batch", "storage", "cookies", "set", "state", "clipboard", "close", "script",
+    "find", "auth", "pushstate", "eval", "dialog", "batch", "storage", "cookies", "set", "state", "clipboard", "close", "script", "flow",
 }
 KNOWN_SCHEMES = ("http", "https", "about", "data", "file", "blob", "chrome", "view-source")
 LOOPBACK = re.compile(r"^(localhost|127\.\d+\.\d+\.\d+|\[::1\])(:\d+)?(/|$)")
@@ -123,6 +123,15 @@ async def page_title(page) -> str:
         return ""
 
 
+async def shows_content(page, loader: str) -> bool:
+    try:
+        ready = await page.call("() => [document.readyState, (document.body && document.body.innerText || '').trim().length]",
+                                frame=page.main_frame, read=True)
+    except BrowseError:
+        return False
+    return page.loader(page.main_frame) == loader and bool(ready) and ready[0] in ("interactive", "complete") and ready[1] > 0
+
+
 async def wait_for_load(page, loader: str | None, timeout: float, until: str = "load"):
     event = {"load": "load", "domcontentloaded": "DOMContentLoaded", "networkidle": "networkIdle"}.get(until, until)
 
@@ -167,8 +176,18 @@ async def navigate(ctx: Ctx, page, url: str, until: str = "load"):
     if result.get("errorText"):
         raise BrowseError(f"Navigation to {url} failed: {result['errorText']}", code="navigation_failed")
     loader = result.get("loaderId")
+    page.state.load_note = None
     if loader:
-        await wait_for_load(page, loader, ctx.timeout, until)
+        try:
+            await wait_for_load(page, loader, ctx.timeout, until)
+        except BrowseError as error:
+            if error.code != "timeout" or until != "load" or not await shows_content(page, loader):
+                raise
+            from ardia_cli import command_metrics
+
+            command_metrics.flag("open_still_loading", True)
+            page.state.load_note = (f"The page hadn't finished loading after {ctx.timeout:g} s (something on it is still loading); "
+                                    "its content so far is here, and `wait --load load` waits for the rest")
     else:
         await readpages.after_same_document(page, before, asyncio.get_running_loop().time() + ctx.timeout)
     await page.refresh_frames()
@@ -375,7 +394,7 @@ def refuse_on_borrowed(ctx: Ctx, page, what: str):
     if borrowed and borrowed == page.target_id:
         tab = ctx.state.tab_id(borrowed)
         raise BrowseError(
-            f"This session is using your tab [{tab}] (it had no tab of its own), so it won't {what} it. To drive that tab anyway, "
+            f"This session is using your tab [{tab}] (picked with `tab active`), so it won't {what} it. To drive that tab anyway, "
             f"pick it with `ardia browse tab {tab}`; to browse on your own, use `ardia browse open <url>`",
             data={"tabId": tab}, code="borrowed_tab",
         )
@@ -418,6 +437,10 @@ async def cmd_open(ctx: Ctx, argv):
     title = await page_title(page)
     data = {"url": page.url, "title": title}
     text = f"✓ {title}\n  {page.url}" + offscreen_note(state)
+    still_loading, state.load_note = getattr(state, "load_note", None), None
+    if still_loading:
+        data["stillLoading"] = True
+        text += f"\n{still_loading}"
     if background is not None:
         tab = state.tab_id(page.target_id)
         data.update({"tabId": tab, "background": True, "takesInput": background})
@@ -503,6 +526,7 @@ async def cmd_pushstate(ctx: Ctx, argv):
 @command("snapshot")
 async def cmd_snapshot(ctx: Ctx, argv):
     from ardia_cli import notes
+    from ardia_cli.browse import flows
 
     options, args = parse(
         argv,
@@ -530,6 +554,10 @@ async def cmd_snapshot(ctx: Ctx, argv):
             body = changes.render(report)
     root = ctx.state.config.get("data_root")
     site, header = notes.header(Path(root), page.url) if root else (None, None)
+    saved = flows.hint(ctx.state, page.url)
+    if saved:
+        data["flows"] = saved
+        body = saved + "\n" + body
     if header:
         data["notes"] = {"site": site, "header": header}
         body = header + "\n" + body
@@ -593,6 +621,10 @@ def consent_note(ctx: Ctx, result: Result) -> Result:
     if note:
         result.data["dismissed"] = note
         result.text = f"{result.text or '✓ Done'}\nA consent banner was in the way: {note}"
+    fallback, ctx.state.click_note = getattr(ctx.state, "click_note", None), None
+    if fallback:
+        result.data["domClick"] = fallback
+        result.text = f"{result.text or '✓ Done'}\n{fallback}"
     return result
 
 
@@ -1095,7 +1127,7 @@ async def cmd_is(ctx: Ctx, argv):
     return Result({"origin": origin + "/" if origin else origin, what: bool(value)}, "true" if value else "false")
 
 
-FIND_ACTIONS = ("click", "fill", "type", "check", "uncheck", "select", "hover", "focus", "dblclick", "text")
+FIND_ACTIONS = ("click", "fill", "type", "press", "check", "uncheck", "select", "hover", "focus", "dblclick", "text")
 FIND_LOCATORS = ("role", "text", "label", "placeholder", "alt", "title", "testid", "first", "last", "nth")
 MAX_CANDIDATES = 8
 BATCH_DEFAULT_CAP = 6000
@@ -1194,6 +1226,16 @@ async def cmd_find(ctx: Ctx, argv):
     if action == "focus":
         _, report = await changes.observe(ctx, page, lambda: page.focus_element(element))
         return changes.attach(Result({"focused": f"@{ref}"}), report)
+    if action == "press":
+        key = rest[1] if len(rest) > 1 else "Enter"
+        frame = element.frame or page.main_frame
+
+        async def focus_and_press():
+            await page.focus_element(element)
+            return await page.input.gesture("press", lambda: page.input.press_combo(key, humanize))
+
+        _, report = await changes.observe(ctx, page, lambda: actions.expect_input(page, frame, focus_and_press, {"keydown": 1}, "The key press"), (element, None))
+        return changes.attach(Result({"pressed": key, "in": f"@{ref}"}), report)
     text = await page.call("(el) => (el.innerText != null ? el.innerText : el.textContent || '').trim()", element, frame=element.frame)
     return Result({"ref": f"@{ref}", "text": text}, text, page_content=True)
 
@@ -1288,16 +1330,14 @@ async def cmd_tab(ctx: Ctx, argv):
         state.forget_target(target_id)
         return Result({"closed": tab, "targetId": target_id}, f"✓ Tab [{tab}] closed")
     if action == "active":
-        target_id = await user_active_tab(state)
-        if not target_id:
-            raise BrowseError("The user isn't on a web page right now (New Tab or another Ardia view)", code="no_tab")
-        action = target_id
-    await state.refresh_targets()
-    target_id = await state.find_tab(action)
-    state.current = target_id
-    state.extras.pop("attached", None)
-    if state.pin_tab:
-        state.extras["pinned_target"] = target_id
+        target_id = await state.take_active()
+    else:
+        await state.refresh_targets()
+        target_id = await state.find_tab(action)
+        state.current = target_id
+        state.extras.pop("attached", None)
+        if state.pin_tab:
+            state.extras["pinned_target"] = target_id
     page = await state.page(target_id)
     if wants_show(ctx, options):
         page = await show_tab(ctx, page)
@@ -1320,21 +1360,6 @@ def tab_line(tab: dict, session: str) -> str:
     app = f" {tab['appTabId']} " if tab.get("appTabId") else ""
     extra = f" ({'; '.join(notes)})" if notes else ""
     return f"{'→' if tab['active'] else ' '} [{tab['tabId']}]{app} {tab['title'] or tab['url']} - {tab['url']}{extra}"
-
-
-async def user_active_tab(state):
-    endpoint = state.endpoint
-    if not endpoint or not endpoint.active:
-        raise BrowseError("`tab active` needs the token path (Ardia's own control server), not --port or --ws")
-    import urllib.request
-
-    def fetch():
-        direct = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-        with direct.open(endpoint.active, timeout=3) as response:
-            return json.loads(response.read(64 * 1024))
-
-    answer = await asyncio.to_thread(fetch)
-    return answer.get("targetId") if isinstance(answer, dict) else None
 
 
 @command("window")
@@ -1366,7 +1391,19 @@ async def cmd_frame(ctx: Ctx, argv):
         described = await page.send("DOM.describeNode", {"backendNodeId": element.backend_id})
         frame_id = (described.get("node") or {}).get("frameId")
         if not frame_id or frame_id not in page.frames:
-            raise BrowseError(f"{target} isn't an iframe this tab can reach (ardia browse doesn't attach cross-process iframes)")
+            box = await actions.element_box(page, element) if frame_id else None
+            if box is None:
+                raise BrowseError(f"{target} isn't an iframe this tab can reach (ardia browse doesn't attach cross-process iframes)")
+            from ardia_cli import command_metrics
+
+            command_metrics.flag("frame_cross_process_box", True)
+            left, top, right, bottom = (round(value) for value in box)
+            raise BrowseError(
+                f"{target} is a cross-process iframe, which ardia browse can't enter, but the mouse reaches it: it sits at "
+                f"{left},{top} to {right},{bottom} in the viewport. Click a point inside it with `mouse move <x> <y>`, "
+                "`mouse down` and `mouse up` (in one batch), then `screenshot` to see what changed",
+                data={"box": [left, top, right, bottom]}, code="cross_process_frame",
+            )
     ctx.state.frames[page.target_id] = frame_id
     return Result({"frame": frame_id, "url": page.frames[frame_id]["url"]})
 
@@ -2033,5 +2070,5 @@ SKIPPED = {
     "swipe": "iOS isn't supported",
     "tap": "iOS isn't supported",
     "device": "iOS isn't supported",
-    "skills": "use `ardia skills install`",
+    "skills": "use `ardia --skill` (or `ardia skills get --full`) to print the skill, `ardia skills install` to copy it",
 }

@@ -6,6 +6,7 @@ import { openOverflowMenu, openSidebarMenu } from "../../state/sidebar/menus";
 import { openNewTabInSplit } from "../../state/splits/actions";
 import { newTab } from "../../state/tabs/actions";
 import { noteTabStripMenu } from "../../state/telemetry/usage";
+import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
 import { Button, useHover, type IconPalette } from "../ui";
 import { useTheme } from "../ui/theme";
 import { perLook, radius } from "../ui/tokens";
@@ -25,6 +26,7 @@ export function openTabStripMenu(windowId: string) {
 export function NewTabButton({ windowId, geometry, pinned }: { windowId: string; geometry: DragGeometry; pinned: boolean }) {
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
+  const newTabHint = useShortcutHint("newTab");
   const palette = useMemo<IconPalette>(
     () => ({ icon: theme.textSecondary, iconDisabled: theme.iconDisabled, hover: theme.tabHover, pressed: theme.tabPressed }),
     [theme.textSecondary, theme.iconDisabled, theme.tabHover, theme.tabPressed],
@@ -45,7 +47,7 @@ export function NewTabButton({ windowId, geometry, pinned }: { windowId: string;
   };
   return (
     <Animated.View {...hoverProps} style={{ marginTop: ITEM_TOP, flexDirection: "row", transform: [{ translateX: shift }] }}>
-      <Button variant="icon" toolbar icon="plus" glyph={NEW_TAB_ICON} hit={NEW_TAB_HIT()} palette={palette} tooltip="New Tab (⌘T) — ⌥-click to open in Split View" onPress={open} onContextMenu={() => openTabStripMenu(windowId)} />
+      <Button variant="icon" toolbar icon="plus" glyph={NEW_TAB_ICON} hit={NEW_TAB_HIT()} palette={palette} tooltip={`${withShortcut("New Tab", newTabHint)} — ⌥-click to open in Split View`} onPress={open} onContextMenu={() => openTabStripMenu(windowId)} />
       <Button variant="icon" toolbar icon="chevron.down" glyph={OVERFLOW_BUTTON.glyph} weight="semibold" hit={OVERFLOW_HIT()} palette={palette} color={hovered ? theme.textSecondary : theme.textTertiary} style={OVERFLOW_STYLE} tooltip="Open and recently closed tabs" onPress={openOverflow} onContextMenu={() => openTabStripMenu(windowId)} />
     </Animated.View>
   );

@@ -73,6 +73,11 @@ export const EXPERIMENTS = {
     owner: "window",
     removeBy: "2026-12-15",
   },
+  dragRegionEveryMount: {
+    about: "With serverWindowDrag, every React Native mount rebuilds each window's title-bar drag region, as it used to, instead of only the window whose title bar the pointer is in (packages/shell ServerWindowDrag.swift).",
+    owner: "window",
+    removeBy: "2026-12-31",
+  },
   webkitSignIn: {
     about: "Moving a Chromium page to WebKit first copies the cookies that page's own address gets into the profile's WebKit store, at most 1.5 s (state/engines/engineSignIn.ts).",
     owner: "engines",

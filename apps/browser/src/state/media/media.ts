@@ -11,6 +11,7 @@ import { peekTabId } from "../peek/peek";
 import { splitOf, splitTabIdsOf } from "../splits/splits";
 import { hostOf } from "@ardia/core";
 import { capture } from "../telemetry/client";
+import { noteNowPlayingLoopRestart } from "../telemetry/mediaCardCounts";
 import { isSleeping } from "../tabs/sleepingTabs";
 
 export type Session = NowPlaying & {
@@ -38,8 +39,8 @@ const PER_TAB = Object.keys(noMedia()) as (keyof Store)[];
 
 export const useMedia = create<Store>()(noMedia);
 
-export function setPictureInPictureState(tabId: string, { kind, active, fullScreenSpaces, leftApp }: PictureInPictureState) {
-  if (active && fullScreenSpaces !== undefined) capture("pip_shown", { kind, full_screen_spaces: fullScreenSpaces, left_app: !!leftApp });
+export function setPictureInPictureState(tabId: string, { kind, active, fullScreenSpaces, leftApp, leftTab }: PictureInPictureState) {
+  if (active && fullScreenSpaces !== undefined) capture("pip_shown", { kind, full_screen_spaces: fullScreenSpaces, left_app: !!leftApp, left_tab: !!leftTab });
   useMedia.setState((s) => {
     if (active ? s.pipOpen[tabId] === kind : !s.pipOpen[tabId]) return s;
     const pipOpen = { ...s.pipOpen };
@@ -60,6 +61,7 @@ export function setNowPlaying(tabId: string, state: NowPlaying | null) {
       return { sessions };
     }
     const before = sessions[tabId];
+    if (isLoopRestart(before, state)) noteNowPlayingLoopRestart();
     const started = isControllablyPlaying(state) && !(before && isControllablyPlaying(before));
     sessions[tabId] = { ...state, playedAt: started ? Date.now() : (before?.playedAt ?? 0) };
     if (!started) return { sessions };
@@ -84,11 +86,17 @@ export const useSession = (tabId: string | undefined): Session | undefined => us
 
 export const isPlaying = (session: Session | undefined) => session?.playbackState === "playing";
 
-export function positionOf(session: Session, now = Date.now()): number {
-  const elapsed = isPlaying(session) ? ((now - session.timestamp) / 1000) * (session.playbackRate || 1) : 0;
-  const position = session.position + elapsed;
-  return session.duration ? Math.min(Math.max(0, position), session.duration) : Math.max(0, position);
+export function positionOf(session: Pick<Session, "playbackState" | "position" | "timestamp" | "playbackRate" | "duration" | "loop">, now = Date.now()): number {
+  const elapsed = session.playbackState === "playing" ? ((now - session.timestamp) / 1000) * (session.playbackRate || 1) : 0;
+  const position = Math.max(0, session.position + elapsed);
+  if (!session.duration) return position;
+  return session.loop && position >= session.duration ? position % session.duration : Math.min(position, session.duration);
 }
+
+const LOOP_RESTART_MIN_SECONDS = 1;
+
+export const isLoopRestart = (before: NowPlaying | undefined, after: NowPlaying) =>
+  !!before && !!after.loop && before.playbackState === "playing" && after.position + LOOP_RESTART_MIN_SECONDS < before.position + ((after.timestamp - before.timestamp) / 1000) * (before.playbackRate || 1);
 
 export function useTicker(active: boolean, ms = 500) {
   const [, setTick] = useState(0);

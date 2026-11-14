@@ -14,6 +14,7 @@ public class FadeLabelModule: Module {
       Prop("fontFamily") { (view: FadeLabel, v: String) in view.fontFamily = v }
       Prop("color") { (view: FadeLabel, hex: String) in view.color = RGBA(hex: hex)?.srgb ?? .labelColor }
       Prop("fadeWidth") { (view: FadeLabel, v: Double) in view.fadeWidth = v }
+      Prop("strikethrough") { (view: FadeLabel, v: Bool) in view.strikethrough = v }
     }
   }
 }

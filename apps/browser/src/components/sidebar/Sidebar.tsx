@@ -19,13 +19,13 @@ import { SidebarDropArea } from "./SidebarDropArea";
 import { FolderPanel } from "./FolderPanel";
 import { dismissHover, dismissHoverIn } from "../../state/sidebar/hover";
 import { PinFieldZone, PinSlotZone } from "./PinnedGrid";
-import { ResizeHandle } from "./ResizeHandle";
 import { bottomFieldBand, SIDEBAR_FIELD, SIDEBAR_FIELD_BOTTOM, SIDEBAR_FOOTER_DOWNLOADS, sidebarHeaderOf } from "./geometry";
 import { useNewTabAtTop, useSidebarField, useSidebarPart } from "../../state/sidebar/chrome";
 import { closeFolderPanel } from "../../state/sidebar/tileFolderUi";
 import { openSidebarMenu } from "../../state/sidebar/menus";
 import { GLOW_ROOM, rowPitch, type SidebarGeometry } from "./pageLayout";
 import { SidebarPage } from "./SidebarPage";
+import { SidebarTextScope } from "./SidebarTextScope";
 import { SidebarRowLookContext, useSidebarRowLookSource } from "./rowLook";
 import { useRevealTabs } from "./useRevealTabs";
 
@@ -79,6 +79,7 @@ export function Sidebar({ width }: { width: number }) {
       {(ghost: Ghost | null, controller) => {
         drag.current = controller;
         return (
+          <SidebarRowLookContext.Provider value={rowLook}>
           <SidebarDropArea
             ref={(v) => {
               controller.root = v;
@@ -96,8 +97,7 @@ export function Sidebar({ width }: { width: number }) {
               }}
               onLayout={(e) => setAvailable(e.nativeEvent.layout.height)}
             >
-              <SidebarRowLookContext.Provider value={rowLook}>
-                {pages.map((page) => (
+              {pages.map((page) => (
                   <SidebarPage
                     key={page.id}
                     profileId={page.id}
@@ -114,7 +114,6 @@ export function Sidebar({ width }: { width: number }) {
                     onScrollY={onScrollY}
                   />
                 ))}
-              </SidebarRowLookContext.Provider>
             </View>
 
             <TintInk>
@@ -150,7 +149,6 @@ export function Sidebar({ width }: { width: number }) {
               </View>
             </TintInk>
 
-            <ResizeHandle windowId={windowId} />
             {ghost && !ghost.landing && nothingPinned ? (
               field === "top" ? (
                 <PinFieldZone top={SIDEBAR_FIELD.top} height={SIDEBAR_FIELD.height} />
@@ -158,9 +156,12 @@ export function Sidebar({ width }: { width: number }) {
                 <PinSlotZone />
               )
             ) : null}
-            <FolderPanel windowId={windowId} />
-            {ghost ? <DragGhost ghost={ghost} /> : null}
+            <SidebarTextScope>
+              <FolderPanel windowId={windowId} />
+              {ghost ? <DragGhost ghost={ghost} /> : null}
+            </SidebarTextScope>
           </SidebarDropArea>
+          </SidebarRowLookContext.Provider>
         );
       }}
     </DragProvider>

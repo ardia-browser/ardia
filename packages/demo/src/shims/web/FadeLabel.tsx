@@ -5,9 +5,9 @@ const CELL_PADDING = 2;
 
 const WEIGHTS = { ultraLight: "100", thin: "200", light: "300", regular: "400", medium: "500", semibold: "600", bold: "700", heavy: "800", black: "900" } as const;
 
-export type FadeLabelProps = ViewProps & { text: string; fontSize?: number; weight?: keyof typeof WEIGHTS; fontFamily?: string; color?: string; fadeWidth?: number };
+export type FadeLabelProps = ViewProps & { text: string; fontSize?: number; weight?: keyof typeof WEIGHTS; fontFamily?: string; color?: string; fadeWidth?: number; strikethrough?: boolean };
 
-export function FadeLabel({ text, fontSize = 13, weight = "regular", fontFamily, color, fadeWidth = 24, style, ...props }: FadeLabelProps) {
+export function FadeLabel({ text, fontSize = 13, weight = "regular", fontFamily, color, fadeWidth = 24, strikethrough = false, style, ...props }: FadeLabelProps) {
   const field = useRef<HTMLDivElement | null>(null);
   const run = useRef<HTMLSpanElement | null>(null);
   const [overflows, setOverflows] = useState(false);
@@ -48,7 +48,9 @@ export function FadeLabel({ text, fontSize = 13, weight = "regular", fontFamily,
           cursor: "inherit",
         }}
       >
-        <span ref={run}>{text}</span>
+        <span ref={run} style={strikethrough ? { textDecorationLine: "line-through" } : undefined}>
+          {text}
+        </span>
       </div>
     </View>
   );

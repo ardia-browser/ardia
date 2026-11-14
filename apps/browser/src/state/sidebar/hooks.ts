@@ -1,6 +1,6 @@
 import { useShallow } from "zustand/react/shallow";
 import { useBrowser } from "../browser/store";
-import { activeTabId, tabTitle, viewTabIds } from "../browser/model";
+import { activeTabId, isPinnedRow, tabTitle, viewTabIds } from "../browser/model";
 import { liveTabOpen, liveTabPlace, stackMembers } from "../live/rows";
 import { useLive } from "../live/store";
 import type { Tab } from "../browser/types";
@@ -9,6 +9,9 @@ import { cleanedTabsFor } from "../pins/closedTabs";
 import { groupLabel } from "../pins/tabGrouping";
 import { offersTidyTabs } from "../pins/tidy";
 import { folderIn } from "../pins/tileFolders";
+import { ownIcon } from "../pins/rowIcons";
+import { usePage } from "../tabs/pageState";
+import { usePeekOpenedFrom } from "../peek/hooks";
 import { useStoreWhile } from "../tabs/tabWatch";
 import { splitRowPanes } from "../splits/splits";
 import { downloadsIn } from "../downloads/downloadsSlice";
@@ -34,7 +37,15 @@ export const useSplitRowPanes = (splitId: string) => useBrowser(useShallow((s) =
 export const useGroupTabIds = (groupId: string) => useBrowser(useShallow((s) => s.groups[groupId]?.tabIds ?? NO_TABS));
 
 export const useIconPickerCurrent = (kind: "tab" | "group" | "live" | "folder", id: string, liveIcon: string | null | undefined) =>
-  useBrowser((s) => (kind === "tab" ? s.tabs[id]?.customIcon : kind === "live" ? liveIcon : s.groups[id]?.icon) ?? null);
+  useBrowser((s) => (kind === "tab" ? ownIcon(s.tabs[id]) : kind === "live" ? liveIcon : s.groups[id]?.icon) ?? null);
+
+export function useTabBadged(tabId: string): boolean {
+  const capturing = usePage(tabId, (p) => !!p.mediaAccess);
+  const peeked = !!usePeekOpenedFrom(tabId);
+  return capturing || peeked;
+}
+
+export const useIsPinnedRow = (kind: "tab" | "group" | "live" | "folder", id: string) => useBrowser((s) => kind === "tab" && isPinnedRow(s.tabs[id]));
 
 export const useCapturedGroupEntries = (groupId: string, captured: Capture) =>
   useBrowser(

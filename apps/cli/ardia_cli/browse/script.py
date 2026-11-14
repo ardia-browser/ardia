@@ -7,11 +7,12 @@ from ardia_cli.browse.errors import BrowseError, ConnectionLost, OutcomeUnknown,
 from ardia_cli.browse.readpages import MAX_LIMIT
 
 DEFAULT_TIMEOUT = 90.0
+READ_HINT_OPENS = 3
 MAX_TIMEOUT = 600.0
 MAX_SOURCE = 1024 * 1024
 STATE_LIMIT = 16 * 1024 * 1024
 LOG_LIMIT = 1024 * 1024
-CONTROL_TIMEOUT = 5.0
+CONTROL_TIMEOUT = 20.0
 SOURCE_URL = "ardia-script.js"
 REFUSED = ("close", "script", "batch")
 FATAL = ("outcome_unknown", "connection_lost")
@@ -397,7 +398,7 @@ async def answer_call(ctx, argv) -> dict:
     return {"ok": True, "text": result.text, "data": json.loads(json.dumps(result.data, default=str))}
 
 
-async def drive(ctx, page, handle: str, source: str, current: dict):
+async def drive(ctx, page, handle: str, source: str, current: dict, done: list | None = None):
     await start(page, handle, source, getattr(ctx.state, "script_state", "{}"))
     while True:
         message = await control(page, handle, "function () { return this.next(); }", timeout=MAX_TIMEOUT + 30)
@@ -412,11 +413,13 @@ async def drive(ctx, page, handle: str, source: str, current: dict):
             if message.get("via") == "page.eval":
                 command_metrics.flag("script_eval_alias", True)
             answer = await answer_call(ctx, message.get("argv"))
+            if done is not None:
+                done.append((message.get("argv") or [""])[0])
         current.clear()
         await control(page, handle, "function (id, answer) { return this.reply(id, answer); }", message["id"], answer)
 
 
-def timed_out(seconds: float, current: dict, source: str, logs: list[str], kept: str = "") -> BrowseError:
+def timed_out(seconds: float, current: dict, source: str, logs: list[str], kept: str = "", done: list | None = None) -> BrowseError:
     where = ""
     if current.get("argv"):
         where = f", in `{show_argv(current['argv'])}`"
@@ -432,6 +435,13 @@ def timed_out(seconds: float, current: dict, source: str, logs: list[str], kept:
     message = f"The script timed out after {seconds:g}s{where}{unknown}. Give it longer with --timeout 3m (at most 10m), or do less per run"
     if kept:
         message += f". What it kept in state survives for the next script: {kept}"
+    else:
+        message += ". Nothing it gathered was kept: push results into `state` as you go (state.rows = [...state.rows || [], row]) so the next run picks up where this one stopped"
+    opened = sum(1 for name in (done or []) if ALIASES.get(name, name) == "open") + (1 if name == "open" else 0)
+    if opened >= READ_HINT_OPENS:
+        command_metrics.flag("script_timeout_read_hint", True)
+        message += (f". It opened {opened} pages one after another; to take text from many pages, "
+                    "`ardia browse read <url> <url> …` (or `await read(urls)` here) loads them side by side, each with its own time limit")
     return failure(message, logs, {"line": line, "command": current.get("argv")}, "timeout")
 
 
@@ -448,16 +458,17 @@ async def run(ctx, source: str, seconds: float):
     await state.connect()
     await temptabs.sweep(state)
     current: dict = {}
+    done: list[str] = []
     owned: list[str] = []
     try:
         page = await open_controller(state, owned)
         handle = await install(page)
         try:
-            message = await asyncio.wait_for(drive(ctx, page, handle, source, current), seconds)
+            message = await asyncio.wait_for(drive(ctx, page, handle, source, current, done), seconds)
         except asyncio.TimeoutError:
             stopped = await stop_worker(page, handle)
             kept = keep_state(ctx.state, stopped.get("state"))
-            raise timed_out(seconds, current, source, list(stopped.get("logs") or []), kept) from None
+            raise timed_out(seconds, current, source, list(stopped.get("logs") or []), kept, done) from None
     finally:
         await temptabs.release(state, owned)
     keep_state(ctx.state, message.get("state"))

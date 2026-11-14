@@ -106,7 +106,9 @@ function openLinksInMainWindow(urls: string[], profileId: string, adoptIds: (str
     const adoptId = asAdoptId(adoptIds[i]);
     const w = target ? s.windows[target] : undefined;
     const blank = w && w.tabIds.length === 1 ? s.tabs[w.tabIds[0]!] : undefined;
-    const intoBlank = blank && !blank.url && !navigationOf(blank) && blank.profileId === profileId && !s.windowUi[w!.id]?.panel.open;
+    const panel = w && s.windowUi[w.id]?.panel;
+    const barOverBlank = panel?.newTab?.kind === "into" && panel.newTab.tabId === blank?.id;
+    const intoBlank = blank && !blank.url && !navigationOf(blank) && blank.profileId === profileId && (!panel?.open || barOverBlank);
     if (!w) target = openWindow({ url, profileId, adoptId });
     else if (intoBlank && !adoptId) s.navigate(blank.id, url, { gated });
     else {

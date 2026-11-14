@@ -214,6 +214,11 @@ export function confirmAnswer(question: QuestionId, patch: Partial<Settings>, pi
   nextStep();
 }
 
+export function confirmDefaultBrowserAnswer(picked: string[]) {
+  const { step, sub } = useOnboarding.getState();
+  if (step === "home" && sub === 0) confirmAnswer("default", {}, picked);
+}
+
 export function skipStep() {
   const { step, sub } = useOnboarding.getState();
   const rest = questionsFor(step).slice(sub);

@@ -7,7 +7,7 @@ export type WindowEvent =
   | { type: "close"; id: string }
   | { type: "frame"; id: string; frame: [number, number, number, number] }
   | { type: "fullScreen"; id: string; on: boolean }
-  | { type: "sidebarEdge"; id: string; over: boolean; point: [number, number] }
+  | { type: "sidebarEdge"; id: string; over: boolean; point: [number, number]; screenEdge?: "stopped" | "passed" }
   | { type: "closeRequest"; id: string };
 
 export type OpenWindowOptions = {

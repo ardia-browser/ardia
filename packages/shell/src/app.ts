@@ -78,7 +78,14 @@ export type HardwareInfo = {
   hardwareDecode: { av1: boolean; vp9: boolean; hevc: boolean; h264: boolean };
 };
 
-export type DiagnosticsSample = { footprintMB?: number; freeDiskGB?: number };
+export type DiagnosticsSample = {
+  footprintMB?: number;
+  freeDiskGB?: number;
+  cpuMs?: number;
+  wakeups?: number;
+  dragRegionRebuilds?: number;
+  dragRegionStalePresses?: number;
+};
 
 type NativeFrame = { image: string; symbol?: string; symbolOffset?: number; offset?: number };
 

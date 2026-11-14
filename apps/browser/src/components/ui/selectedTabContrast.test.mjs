@@ -193,3 +193,12 @@ test("Adjust text to the colour doesn't touch built-in colours or incognito", ()
     assert.equal(scopedTheme(true, undefined, dark, "own", null, false), scopedTheme(true, undefined, dark, "own", null, true));
   }
 });
+
+test("the line under the pinned tabs keeps Dia's colour on built-in presets and reaches the selection floor on every custom colour", () => {
+  for (const dark of [true, false])
+    for (const color of Object.keys(PROFILE_COLORS)) assert.equal(profileTheme({ color }, dark).pinnedDivider, colorRoles[dark ? "dark" : "light"].divider, `${color} ${dark ? "dark" : "light"}`);
+  for (const { label, theme } of customThemes()) {
+    assert.ok(selectionLightnessDelta(theme.pinnedDivider, theme.windowTint) >= MIN_SELECTION_LIGHTNESS - 1e-9, `${label}: ${theme.pinnedDivider} on ${theme.windowTint}`);
+    if (selectionLightnessDelta(theme.divider, theme.windowTint) >= MIN_SELECTION_LIGHTNESS) assert.equal(theme.pinnedDivider, theme.divider, `${label} already shows`);
+  }
+});

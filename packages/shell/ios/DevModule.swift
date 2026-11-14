@@ -1,5 +1,7 @@
 import AppKit
 import ExpoModulesCore
+import ImageIO
+import UniformTypeIdentifiers
 
 public class DevModule: Module {
   #if DEBUG
@@ -106,6 +108,30 @@ public class DevModule: Module {
       return ServerWindowDrag.blockedRects(window)
     }.runOnQueue(.main)
 
+    AsyncFunction("devDragRegionRects") { (windowId: String) -> [[Double]] in
+      guard let window = WindowManager.shared.window(windowId) else { return [] }
+      return ServerWindowDrag.blockedRects(window, rebuilt: false)
+    }.runOnQueue(.main)
+
+    AsyncFunction("devDragRegionState") { (windowId: String) -> [String: Any] in
+      guard let window = WindowManager.shared.window(windowId) else { return [:] }
+      let counts = ServerWindowDrag.counts
+      return [
+        "stale": ServerWindowDrag.isStale(window), "rebuilds": counts.rebuilds, "deferred": counts.deferred, "stalePresses": counts.stalePresses,
+      ]
+    }.runOnQueue(.main)
+
+    AsyncFunction("devDragRegionPointer") { (windowId: String, x: Double, top: Double, on: Bool) -> Bool in
+      guard on else {
+        ServerWindowDrag.pointerOverride = nil
+        return true
+      }
+      guard let window = WindowManager.shared.window(windowId) else { return false }
+      ServerWindowDrag.pointerOverride = NSPoint(x: window.frame.minX + x, y: window.frame.maxY - top)
+      ServerWindowDrag.pointerMoved(in: window, at: NSPoint(x: x, y: window.frame.height - top))
+      return true
+    }.runOnQueue(.main)
+
     Function("devReceiveURLsWhenDetached") { (urls: [String], timeoutMs: Double) in
       DevModule.urlDelivery = ["state": "waiting"]
       let start = Date()
@@ -145,6 +171,18 @@ public class DevModule: Module {
       }
     }.runOnQueue(.main)
 
+    AsyncFunction("devWindowResizeProbe") { (id: String, probe: [String: Double], promise: Promise) in
+      guard let window = WindowManager.shared.window(id) else { return promise.resolve(["error": "no window \(id)"]) }
+      var modifiers: NSEvent.ModifierFlags = []
+      if (probe["option"] ?? 0) != 0 { modifiers.insert(.option) }
+      if (probe["shift"] ?? 0) != 0 { modifiers.insert(.shift) }
+      WindowResizeProbe.resize(
+        window, edgeInset: CGFloat(probe["edgeInset"] ?? 1), count: Int(probe["steps"] ?? 40), dx: CGFloat(probe["dx"] ?? 4),
+        interval: (probe["intervalMs"] ?? 16) / 1000, modifiers: modifiers, bypassFix: (probe["bypassFix"] ?? 0) != 0,
+        failEvents: (probe["failEvents"] ?? 0) != 0
+      ) { promise.resolve($0) }
+    }.runOnQueue(.main)
+
     AsyncFunction("devWindowReplayAfterMove") { (id: String, rect: [Double]) -> [String: Any] in
       guard let window = WindowManager.shared.window(id), rect.count == 4 else { return ["error": "no window \(id)"] }
       return WindowMoveProbe.replayAfterMove(window, NSRect(x: rect[0], y: rect[1], width: rect[2], height: rect[3]))
@@ -158,6 +196,10 @@ public class DevModule: Module {
 
     AsyncFunction("devSnapshotWindow") { (windowId: String, path: String, transparent: Bool?) -> Bool in
       return Self.snapshot(windowId: windowId, path: path, transparent: transparent ?? false)
+    }.runOnQueue(.main)
+
+    AsyncFunction("devSnapshotBurst") { (windowId: String, dir: String, rect: [Double], durationMs: Double, promise: Promise) in
+      DevSnapshotBurst.start(windowId: windowId, dir: dir, rect: rect, durationMs: durationMs, promise: promise)
     }.runOnQueue(.main)
 
     AsyncFunction("devSetPointer") { (windowId: String, x: Double, y: Double, on: Bool) -> Bool in
@@ -335,3 +377,77 @@ public class DevModule: Module {
   }
   #endif
 }
+
+#if DEBUG
+final class DevSnapshotBurst: NSObject {
+  private static var running: DevSnapshotBurst?
+
+  private let view: NSView
+  private let crop: CGRect
+  private let dir: URL
+  private let until: CFTimeInterval
+  private let promise: Promise
+  private var frames: [(CGImage, Double)] = []
+  private var link: CADisplayLink?
+
+  private init(view: NSView, crop: CGRect, dir: URL, durationMs: Double, promise: Promise) {
+    self.view = view
+    self.crop = crop
+    self.dir = dir
+    self.until = CACurrentMediaTime() + durationMs / 1000
+    self.promise = promise
+  }
+
+  static func start(windowId: String, dir: String, rect: [Double], durationMs: Double, promise: Promise) {
+    guard running == nil, rect.count == 4, let view = WindowManager.shared.window(windowId)?.contentView, view.layer != nil else {
+      promise.resolve(nil)
+      return
+    }
+    let burst = DevSnapshotBurst(
+      view: view, crop: CGRect(x: rect[0], y: rect[1], width: rect[2], height: rect[3]),
+      dir: URL(fileURLWithPath: dir), durationMs: durationMs, promise: promise)
+    running = burst
+    burst.link = view.displayLink(target: burst, selector: #selector(tick(_:)))
+    burst.link?.add(to: .main, forMode: .common)
+  }
+
+  @objc private func tick(_ link: CADisplayLink) {
+    if let image = render() { frames.append((image, Date().timeIntervalSince1970 * 1000)) }
+    guard CACurrentMediaTime() >= until else { return }
+    link.invalidate()
+    self.link = nil
+    Self.running = nil
+    promise.resolve(write())
+  }
+
+  private func render() -> CGImage? {
+    guard let layer = view.layer else { return nil }
+    let scale = view.window?.backingScaleFactor ?? 2
+    guard let cg = CGContext(
+      data: nil, width: Int(crop.width * scale), height: Int(crop.height * scale), bitsPerComponent: 8, bytesPerRow: 0,
+      space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+    cg.setFillColor((view.window?.backgroundColor ?? .windowBackgroundColor).cgColor)
+    cg.fill(CGRect(x: 0, y: 0, width: crop.width * scale, height: crop.height * scale))
+    cg.scaleBy(x: scale, y: scale)
+    if view.isFlipped || layer.isGeometryFlipped {
+      cg.translateBy(x: 0, y: crop.height)
+      cg.scaleBy(x: 1, y: -1)
+      cg.translateBy(x: -crop.minX, y: -crop.minY)
+    } else {
+      cg.translateBy(x: -crop.minX, y: -(view.bounds.height - crop.maxY))
+    }
+    layer.render(in: cg)
+    return cg.makeImage()
+  }
+
+  private func write() -> [[Any]] {
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    return frames.enumerated().compactMap { index, frame in
+      let name = String(format: "f%05d.png", index)
+      guard let dest = CGImageDestinationCreateWithURL(dir.appendingPathComponent(name) as CFURL, UTType.png.identifier as CFString, 1, nil) else { return nil }
+      CGImageDestinationAddImage(dest, frame.0, nil)
+      return CGImageDestinationFinalize(dest) ? [name, frame.1] : nil
+    }
+  }
+}
+#endif

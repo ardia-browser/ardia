@@ -1,3 +1,4 @@
+import { colorDistance } from "../../lib/color";
 import { pageHostLabel, urlTrail } from "../../lib/url";
 import { memo, useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -6,10 +7,11 @@ import { useTheme } from "../ui/theme";
 import { TOOLBAR_ROWS, urlFieldOf, type ToolbarRow } from "../../lib/toolbarRow";
 import { ToolbarRowContext } from "../ui/toolbarRowContext";
 import { activate } from "../../state/tabs/actions";
-import { openPanel as openWindowPanel, toggleSidebar } from "../../state/windows/actions";
+import { toggleSidebar } from "../../state/windows/actions";
+import { openBarFromAddress } from "../../state/omnibox/barState";
 import { useIsBookmarked, useSettings, useSidebarSide, useTab, useTabLayout, useTabLive, useTabsShown } from "../../state/browser/hooks";
 import type { Tab } from "../../state/browser/types";
-import { Button, ContextMenuArea, Divider, FadeLabel, font, ink, space, Symbol, Text, useHover, WindowDragRegion } from "../ui";
+import { Button, ContextMenuArea, Divider, FadeLabel, ink, sidebarFont, sidebarPoints, space, Symbol, Text, useHover, WindowDragRegion } from "../ui";
 import { type ToolbarGeometry } from "../window/geometry";
 import { usePage, usePages, type PageState } from "../../state/tabs/pageState";
 import { togglePopover } from "../../state/tabs/popoverDismiss";
@@ -27,12 +29,14 @@ import { showUrlBarMenu } from "../../state/omnibox/paste";
 import { ToolbarExtensions, useToolbarExtensionsWidth } from "../extensions/ToolbarExtensions";
 import { GlassFill, useGlass } from "../ui/Glass";
 import { TranslateButton } from "../site/TranslateControls";
+import { ReaderButton } from "../site/ReaderControls";
 import { ZoomIndicator } from "../site/ZoomControls";
 import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
 import { buttonMotion, curve, usePressScaleMotion } from "../ui/motion";
+import { FieldLoadFill } from "./FieldLoadFill";
+import { fieldButtonsShown } from "./fieldButtons";
 import { HistoryButton, ReloadButton } from "./NavButtons";
-import { ProgressBar, TabProgressBar } from "./ProgressBar";
-import { TOOLBAR_MOTION } from "./tokens";
+import { FIELD_LOAD, TOOLBAR_MOTION } from "./tokens";
 import { useToolbarRow } from "./useToolbarRow";
 
 type ToolbarTab = Pick<Tab, "id" | "url" | "title" | "windowId" | "zoom">;
@@ -61,6 +65,7 @@ export function Toolbar({
   inSplit,
   focused,
   bare,
+  loadFill = true,
 }: {
   tabId: string;
   geometry: ToolbarGeometry;
@@ -68,8 +73,8 @@ export function Toolbar({
   inSplit: boolean;
   focused: boolean;
   bare?: boolean;
+  loadFill?: boolean;
 }) {
-  const theme = useTheme();
   const sidebarHint = useShortcutHint("toggleSidebar");
   const tabsIcon = useTabsToggleIcon(windowId);
   const tabsShown = useTabsShown(windowId);
@@ -122,7 +127,7 @@ export function Toolbar({
         <ReloadButton place={at.reload} tab={tab} loading={isLoading} palette={palette} onFocus={focus} />
         <ToolbarExtensions tabId={tab.id} windowId={windowId} palette={palette} top={row.center - row.extensionButton / 2} right={inSplit ? 8 + 2 * row.button : 8} />
         {tab.url ? (
-          <ToolbarUrlField tab={tab} palette={palette} windowId={windowId} inSplit={inSplit} onFocus={focus} style={urlStyle} />
+          <ToolbarUrlField tab={tab} palette={palette} windowId={windowId} inSplit={inSplit} loadFill={loadFill} onFocus={focus} style={urlStyle} />
         ) : null}
         {inSplit && (
           <View style={{ position: "absolute", top: at.top, right: 8, flexDirection: "row", gap: -space.xxs }}>
@@ -133,7 +138,6 @@ export function Toolbar({
       </Animated.View>
 
       {tab.url && !bare ? <Divider color={palette.divider} style={BOTTOM_LINE} /> : null}
-      {isLoading && <TabProgressBar key={tabId} tabId={tabId} color={palette.background ? palette.icon : theme.accent} />}
     </View>
   );
 }
@@ -159,25 +163,29 @@ function useUrlField(tab: ToolbarTab, windowId: string, onFocus: () => void) {
   const popover = usePages((p) => p.popover[tab.id] ?? null);
   const { hovered: pointerOver, hoverProps } = useHover();
   const hovered = pointerOver || popover === "siteControls";
+  const buttonsShown = fieldButtonsShown(useSettings((s) => s.addressBarButtons), hovered);
   const openPanel = () => {
     onFocus();
-    openWindowPanel(windowId, tab.url);
+    openBarFromAddress(windowId, tab.url);
   };
   const toggleSiteControls = () => {
     onFocus();
     togglePopover(tab.id, "siteControls");
   };
-  return { insecure, popover, hovered, hoverProps, openPanel, toggleSiteControls, host: pageHostLabel(tab.url), trail: urlTrail(tab.url, tab.title, { hovered, showFullUrl }) };
+  return { insecure, popover, hovered, buttonsShown, hoverProps, openPanel, toggleSiteControls, host: pageHostLabel(tab.url), trail: urlTrail(tab.url, tab.title, { hovered, showFullUrl }) };
 }
+
+const loadFillColor = (palette: ToolbarPalette, accent: string) =>
+  palette.background && colorDistance(accent, palette.background) < FIELD_LOAD.accentApartFromBand ? palette.text : accent;
 
 type UrlFieldProps = { tab: ToolbarTab; palette: ToolbarPalette; windowId: string; onFocus: () => void };
 
-export const ToolbarUrlField = memo(function ToolbarUrlField({ tab, palette, windowId, inSplit, onFocus, style }: UrlFieldProps & { inSplit: boolean; style: ViewStyle }) {
+export const ToolbarUrlField = memo(function ToolbarUrlField({ tab, palette, windowId, inSplit, loadFill, onFocus, style }: UrlFieldProps & { inSplit: boolean; loadFill: boolean; style: ViewStyle }) {
   const theme = useTheme();
   const row = useToolbarRow();
   const splitHint = useShortcutHint("openSplitPane");
   const field = useUrlField(tab, windowId, onFocus);
-  const { insecure, hovered, popover, toggleSiteControls } = field;
+  const { insecure, hovered, buttonsShown, popover, toggleSiteControls } = field;
   const glass = useGlass();
   const lockPress = usePressScaleMotion(!!insecure, buttonMotion.iconPressScale);
   const lockScaleStyle = lockPress.scale ? { transform: [{ scale: lockPress.scale }] } : undefined;
@@ -187,6 +195,7 @@ export const ToolbarUrlField = memo(function ToolbarUrlField({ tab, palette, win
       {glass ? (
         <GlassFill state={hovered ? "lit" : "rest"} radius={row.fieldRadius} dark={palette.background ? palette.text.startsWith(ink.white) : undefined} />
       ) : null}
+      {loadFill && <FieldLoadFill key={tab.id} tabId={tab.id} color={loadFillColor(palette, theme.accent)} height={row.field} radius={row.fieldRadius} />}
       {insecure && (
         <Pressable onPress={toggleSiteControls} onPressIn={lockPress.onPressIn} onPressOut={lockPress.onPressOut} style={{ paddingLeft: LOCK.left }} tooltip="Connection is not secure">
           <View style={{ width: LOCK.width, height: row.field, alignItems: "center", justifyContent: "center" }}>
@@ -216,7 +225,7 @@ export const ToolbarUrlField = memo(function ToolbarUrlField({ tab, palette, win
         </Pressable>
       </ContextMenuArea>
       <FieldButtons tab={tab} palette={palette} onFocus={onFocus} popover={popover} toggleSiteControls={toggleSiteControls}>
-        {hovered && (
+        {buttonsShown && (
           <>
             <PageButton tab={tab} palette={palette} windowId={windowId} />
             {!inSplit && (
@@ -236,7 +245,7 @@ export const ToolbarUrlField = memo(function ToolbarUrlField({ tab, palette, win
   );
 });
 
-export const SidebarUrlField = memo(function SidebarUrlField({ tab, palette, windowId, onFocus, height, progress, accessory }: UrlFieldProps & { height: number; progress: number | null; accessory: ReactNode }) {
+export const SidebarUrlField = memo(function SidebarUrlField({ tab, palette, windowId, onFocus, height, accessory }: UrlFieldProps & { height: number; accessory: ReactNode }) {
   const theme = useTheme();
   const field = useUrlField(tab, windowId, onFocus);
   const { insecure, hovered, popover, toggleSiteControls } = field;
@@ -244,6 +253,7 @@ export const SidebarUrlField = memo(function SidebarUrlField({ tab, palette, win
   return (
     <View {...field.hoverProps} style={{ flexDirection: "row", alignItems: "center", height, borderRadius: SIDEBAR_FIELD.radius }}>
       <SidebarFieldFill hovered={hovered} />
+      <FieldLoadFill key={tab.id} tabId={tab.id} color={loadFillColor(palette, theme.accent)} height={height} radius={SIDEBAR_FIELD.radius} />
       <FieldSiteButton
         icon={insecure ? "lock.open.trianglebadge.exclamationmark.fill" : "slider.horizontal.3"}
         color={insecure === "certificateError" ? theme.destructive : undefined}
@@ -258,20 +268,15 @@ export const SidebarUrlField = memo(function SidebarUrlField({ tab, palette, win
             <Text numberOfLines={1} ellipsizeMode="head" weight="medium" color={palette.text} style={SHRINK}>
               {field.host}
             </Text>
-            <FadeLabel text={field.trail} fontSize={font.body.fontSize} color={palette.secondary} fadeWidth={14} style={{ flex: 1, height: 18, marginLeft: -space.xxs }} />
+            <FadeLabel text={field.trail} fontSize={sidebarFont.body.fontSize} color={palette.secondary} fadeWidth={14} style={{ flex: 1, height: sidebarPoints(18), marginLeft: -space.xxs }} />
           </View>
         </Pressable>
       </ContextMenuArea>
       <ToolbarRowContext.Provider value={TOOLBAR_ROWS.regular}>
         <FieldButtons tab={tab} palette={palette} onFocus={onFocus} popover={popover} toggleSiteControls={toggleSiteControls} accessory={accessory}>
-          {hovered && <PageButton tab={tab} palette={palette} windowId={windowId} />}
+          {field.buttonsShown && <PageButton tab={tab} palette={palette} windowId={windowId} />}
         </FieldButtons>
       </ToolbarRowContext.Provider>
-      {progress !== null ? (
-        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: SIDEBAR_FIELD.radius, overflow: "hidden" }]}>
-          <ProgressBar progress={progress} color={theme.accent} />
-        </View>
-      ) : null}
     </View>
   );
 });
@@ -321,6 +326,7 @@ function FieldButtons({
     <View style={{ flexDirection: "row", alignItems: "center", paddingRight: space.xs }}>
       {children}
       {capture && <CaptureIndicator camera={capture.camera} microphone={capture.microphone} screen={capture.screen} onPress={toggleSiteControls} />}
+      <ReaderButton tabId={tab.id} palette={palette} onFocus={onFocus} />
       <TranslateButton tabId={tab.id} palette={palette} onFocus={onFocus} />
       <ZoomIndicator tabId={tab.id} zoom={tab.zoom} palette={palette} onFocus={onFocus} />
       {popups > 0 && (

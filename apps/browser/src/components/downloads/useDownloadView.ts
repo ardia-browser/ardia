@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { fileExists } from "../../state/app/system";
 import type { Download } from "../../state/downloads/actions";
-import { awaitsKeep } from "../../state/downloads/downloadMenu";
+import { awaitsKeep } from "../../state/downloads/status";
 import { onDownloadsChanged } from "../../state/windows/downloadWatch";
 
 export function useDownloadView(d: Download) {

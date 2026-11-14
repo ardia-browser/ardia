@@ -21,6 +21,7 @@ export type ScriptCommand = { id: string } & (
   | { command: "setActiveTabIndex"; windowId: string; index: number }
   | { command: "execute"; tabId: string; code: string }
   | { command: "focusProfile"; profileId: string }
+  | { command: "reading" }
 );
 
 export type ScriptingNative = {

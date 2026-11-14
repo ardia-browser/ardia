@@ -10,6 +10,8 @@ type Face = { readonly fontFamily?: string };
 type Derived = {
   font: Record<TypeSizeName, FontStyle>;
   lineHeight: Record<keyof typeof LINE_HEIGHTS, number>;
+  sidebarFont: Record<TypeSizeName, FontStyle>;
+  sidebarLineHeight: Record<keyof typeof LINE_HEIGHTS, number>;
   prose: Record<keyof typeof PROSE_LINE_HEIGHTS, number>;
   face: Face;
   mono: { readonly fontFamily: string };
@@ -24,9 +26,14 @@ function derive(look: ThemeLook): Derived {
   const face = look.family ? { fontFamily: look.family } : NO_FACE;
   const ratio = (size: TypeSizeName) => look.sizes[size] / TYPE_SIZES[size];
   const scaled = (value: number, size: TypeSizeName) => (look === DEFAULT_LOOK ? value : Math.round(value * ratio(size)));
+  const fonts = Object.fromEntries(sizesOf.map((size) => [size, { fontSize: look.sizes[size], ...face }])) as Record<TypeSizeName, FontStyle>;
+  const lineHeights = { ...Object.fromEntries(sizesOf.map((size) => [size, scaled(LINE_HEIGHTS[size], size)])), display: scaled(LINE_HEIGHTS.display, "body") } as Derived["lineHeight"];
+  const sidebar = (value: number) => Math.round(value * look.sidebarScale);
   return {
-    font: Object.fromEntries(sizesOf.map((size) => [size, { fontSize: look.sizes[size], ...face }])) as Record<TypeSizeName, FontStyle>,
-    lineHeight: { ...Object.fromEntries(sizesOf.map((size) => [size, scaled(LINE_HEIGHTS[size], size)])), display: scaled(LINE_HEIGHTS.display, "body") } as Derived["lineHeight"],
+    font: fonts,
+    lineHeight: lineHeights,
+    sidebarFont: look.sidebarScale === 1 ? fonts : (Object.fromEntries(sizesOf.map((size) => [size, { fontSize: sidebar(look.sizes[size]), ...face }])) as Record<TypeSizeName, FontStyle>),
+    sidebarLineHeight: look.sidebarScale === 1 ? lineHeights : (Object.fromEntries(Object.entries(lineHeights).map(([size, value]) => [size, sidebar(value)])) as Derived["lineHeight"]),
     prose: { small: scaled(PROSE_LINE_HEIGHTS.small, "small"), body: scaled(PROSE_LINE_HEIGHTS.body, "body") },
     face,
     mono: { fontFamily: look.mono },
@@ -66,6 +73,37 @@ export const lineHeight = {
   get title() { return current().lineHeight.title; },
   get large() { return current().lineHeight.large; },
   get display() { return current().lineHeight.display; },
+};
+
+export const sidebarFont = {
+  get badge() { return current().sidebarFont.badge; },
+  get tiny() { return current().sidebarFont.tiny; },
+  get caption() { return current().sidebarFont.caption; },
+  get small() { return current().sidebarFont.small; },
+  get body() { return current().sidebarFont.body; },
+  get title() { return current().sidebarFont.title; },
+  get large() { return current().sidebarFont.large; },
+};
+
+export const sidebarLineHeight = {
+  get badge() { return current().sidebarLineHeight.badge; },
+  get tiny() { return current().sidebarLineHeight.tiny; },
+  get caption() { return current().sidebarLineHeight.caption; },
+  get small() { return current().sidebarLineHeight.small; },
+  get body() { return current().sidebarLineHeight.body; },
+  get title() { return current().sidebarLineHeight.title; },
+  get large() { return current().sidebarLineHeight.large; },
+  get display() { return current().sidebarLineHeight.display; },
+};
+
+export const sidebarPoints = (value: number): number => {
+  const scale = activeLook().sidebarScale;
+  return scale === 1 ? value : Math.round(value * scale);
+};
+
+export const sidebarIconSize = (value: number): number => {
+  const scale = activeLook().sidebarScale;
+  return scale === 1 ? value : Math.round((value * scale) / 2) * 2;
 };
 
 export const proseLineHeight = {

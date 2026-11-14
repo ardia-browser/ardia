@@ -136,6 +136,7 @@ const focus: Modules["ArdiaFocus"] = {
 const menus: Modules["ArdiaMenus"] = {
   addListener: shellEvents.addListener,
   showMenu: () => Promise.resolve(null),
+  updateMenu: () => Promise.resolve(),
   setMenuState: () => Promise.resolve(),
   setMenuBookmarks: () => Promise.resolve(),
   menuShortcuts: () => Promise.resolve([]),

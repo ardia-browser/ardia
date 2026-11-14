@@ -1,3 +1,4 @@
+import { Easing } from "react-native";
 import { curve, duration } from "../ui/motion";
 import { font, ink, monoFace, radius, shadow, type ShadowLevel } from "../ui/tokens";
 
@@ -58,6 +59,21 @@ export const CLI_PILL_MOTION = {
   hide: { duration: duration.base, easing: curve.exit },
 } as const;
 
+export const LOADING_PILL = {
+  width: 140,
+  height: 10,
+  top: 4,
+  leaveScale: 0.55,
+  longShowMs: 10_000,
+  track: { width: 128, height: 3, opacity: 0.4, fillOpacity: 0.8 },
+  motion: {
+    show: { duration: duration.base, easing: curve.enter },
+    hide: { duration: duration.slow, easing: curve.exit },
+    sweep: { duration: 330, easing: curve.move },
+    rest: 330,
+  },
+} as const;
+
 export const NEW_TAB_NOTICE = {
   height: 28,
   rise: 6,
@@ -73,7 +89,8 @@ export const SWIPE_MOTION = {
 
 export const SWIPE_PILL_SPRING = { response: 0.27, damping: 0.9 } as const;
 
-export const DOCK_SPRING = { response: 0.215, damping: 0.79 } as const;
+export const DOCK_SLIDE_CURVE = [0.7, 1, 0.5, 1] as const;
+export const DOCK_SLIDE = { duration: 160, easing: Easing.bezier(...DOCK_SLIDE_CURVE) } as const;
 
 export const ARC_PEEK_SPRING = { response: 0.18, damping: 0.8 } as const;
 export const ARC_PEEK_OUT_MS = 150;

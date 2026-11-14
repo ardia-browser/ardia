@@ -784,6 +784,27 @@ test("media in the description: images, videos, attachments and media links, not
   }
 });
 
+test("a review bot's block in the description is not the author's media", () => {
+  const greptile = [
+    "<!-- greptile_comment -->",
+    "<!-- greptile_summary -->",
+    '<h2><a href="https://app.greptile.com/api/retrigger?id=1"><picture><img alt="Retrigger" src="https://greptile-static-assets.s3.amazonaws.com/badges/Retrigger.svg?v=2"></picture></a>Confidence Score: 5/5</h2>',
+    "<!-- greptile_confidence_score:5 -->",
+    "<!-- /greptile_comment -->",
+  ].join("\n\n");
+  const coderabbit = [
+    "<!-- This is an auto-generated comment: release notes by coderabbit.ai -->",
+    "![walkthrough](https://example.com/diagram.png)",
+    "<!-- end of auto-generated comment: release notes by coderabbit.ai -->",
+  ].join("\n");
+  const words = "Closes #5\n\n## Verification (screenshots and videos)\n\nRan the check, it passes.";
+  assert.ok(!vouch.hasMedia(`${words}\n\n${greptile}`));
+  assert.ok(!vouch.hasMedia(`${words}\n\n${coderabbit}`));
+  assert.ok(!vouch.hasMedia(`${words}\n\n<!-- greptile_comment -->\n<img src=x>`));
+  assert.ok(vouch.hasMedia(`${words}\n\n${SHOT}\n\n${greptile}`));
+  assert.ok(vouch.hasMedia(`${greptile}\n\n${coderabbit}\n\n${SHOT}`));
+});
+
 test("closing references use linked-issue.yml's rule", () => {
   assert.deepEqual(vouch.closingIssueNumbers("Closes #12, fixes: #3\nResolved #12\nFIXED #40"), [3, 12, 40]);
   assert.deepEqual(vouch.closingIssueNumbers("prefixes #5 and closes#6 and refs #7 and fix\n#8"), []);

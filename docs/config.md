@@ -38,9 +38,13 @@ Ardia never creates the folder. `ardia config init` does, or the user does.
   (`apps/browser/src/state/settings/settings.ts`). A test makes every setting either allowlisted or deliberately
   left out, so a new setting never becomes file-writable by accident. Left out, because they grant control, send
   data somewhere or change which engine handles a site: `cliControl`, `allowJavaScriptFromAppleEvents`,
-  `extensionSearchEngines`, `defaultProfileId`, `customSearchUrl`, `customSearchEngines`, `pageEngine`,
+  `extensionSearchEngines`, `defaultProfileId`, `customSearchUrl`, `newTabUrl`, `customSearchEngines`, `pageEngine`,
   `websiteEngines`, `protectedVideoInWebKit`. `searchEngine` must name an engine that already exists (built in, or
   one the user added in Settings).
+- `sidebarTextSize` (`default`, `large`, `larger`; this Mac only, not synced) and `sidebarTextContrast` (`auto`
+  follows macOS Increase Contrast, `standard`, `high`) are Settings › Appearance › Sidebar Text. Large and Larger
+  scale the sidebar's text (13 pt titles to 15 and 17), favicons and row metrics, a theme's `metrics` included; the
+  rest of the app keeps its sizes.
 - `shortcuts` maps a command id from the command catalog to one shortcut, written `cmd+shift+t` (modifiers
   `cmd`/`command`, `opt`/`option`/`alt`, `ctrl`/`control`, `shift`, `fn`, then one key: a character, `f1`–`f20`,
   `space`, `tab`, `return`, `escape`, `delete`, `up`, `down`, `left`, `right`, `home`, `end`, `pageup`,
@@ -161,9 +165,11 @@ watcher. The watcher re-resolves the folder when it changes and notices it appea
 ### Errors
 
 A file that doesn't parse, an unknown key, a wrong value or a missing theme never breaks anything: Ardia applies what
-is valid, skips the rest (a bad value skips that whole setting), logs it and shows one toast per distinct problem
-("config.json: selectedTabGlow must be full, soft or off"). An unparseable theme file keeps the last good version of
-that theme. `ardia config check` reports the same problems.
+is valid, skips the rest (a bad value skips that whole setting), logs it and shows one toast that sums them up
+("config.json has a problem: selectedTabGlow must be full, soft or off"; past two, "and N more"). The toast stays
+until the file is fixed or you dismiss it; it comes back only for a new problem, waits for another toast (an Undo,
+say) to finish instead of replacing it, and goes away by itself once the files are clean. An unparseable theme file
+keeps the last good version of that theme. `ardia config check` reports the same problems.
 
 ## Themes
 

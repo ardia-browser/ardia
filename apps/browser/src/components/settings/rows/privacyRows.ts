@@ -13,8 +13,14 @@ export const privacyRows = {
           advanced: true,
           title: "Advanced Settings",
           description: "Block common components found across the web by using additional rules and filters.",
-          keywords: ["filter lists", "annoyances", "malware", "regional", "ad block settings"],
+          keywords: ["filter lists", "annoyances", "malware", "regional", "ad block settings", "custom filter list", "add filter list", "import list", "subscribe"],
         },
+      },
+    },
+    {
+      section: "All sites",
+      rows: {
+        blockAutoplayEverywhere: { title: "Block autoplay on every site", description: "Sites you set to Allow in Site Controls still autoplay. A click on a player always plays. Applies to pages you open or reload. Covers Chromium tabs only: WebKit tabs still autoplay for now.", keywords: ["autoplay", "auto play", "videos playing", "stop videos", "media autoplay", "muted autoplay"] },
       },
     },
     {
@@ -104,7 +110,17 @@ export const privacyRows = {
       section: "Other search engines",
       rows: { otherEngines: { advanced: true, title: "Other search engines", description: "Type a shortcut and press Tab in the command bar to search a site directly.", keywords: ["custom search", "site search", "keyword"] } },
     },
-    { section: "Suggestions", rows: { suggestions: { title: "Show search suggestions", description: "Sends what you type to your search engine to suggest searches.", keywords: ["autocomplete"] } } },
+    {
+      section: "Suggestions",
+      rows: {
+        suggestions: { title: "Show search suggestions", description: "Sends what you type to your search engine to suggest searches.", keywords: ["autocomplete"] },
+        commandBarHistory: {
+          title: "Suggest pages from history",
+          description: "Pages you visited show in the command bar as you type and complete the address for you. Off, it suggests open tabs, bookmarks, searches and actions only; your history stays in History, ⌘Y.",
+          keywords: ["history", "visited pages", "browsing history", "hide history", "autocomplete", "autofill", "inline completion", "recent pages", "command bar", "omnibox"],
+        },
+      },
+    },
     {
       section: "Text selection",
       rows: {

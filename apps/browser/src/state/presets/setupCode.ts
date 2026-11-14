@@ -47,7 +47,7 @@ export const SETTING_FIELDS: { [K in SetupSettingKey]: Field<Settings[K]> } = {
   tabLayout: { key: "t", values: ["sidebar", "top"] },
   sidebarSide: { key: "d", values: ["left", "right"] },
   addressBar: { key: "a", values: ["toolbar", "sidebar"] },
-  commandBarPlacement: { key: "c", values: ["field", "centred"] },
+  commandBarPlacement: { key: "c", values: ["field", "centred", "centredOnClick"] },
   newTabOpens: { key: "n", values: ["page", "commandBar"] },
   newTabPosition: { key: "o", values: ["top", "bottom", "nextToCurrent"] },
   newTabButtonPosition: { key: "b", values: ["top", "bottom"] },

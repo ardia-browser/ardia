@@ -99,9 +99,9 @@ export const toolRows = {
         protectedVideo: {
           advanced: true,
           title: "Open streaming sites in WebKit",
-          description: "Netflix, Disney+, Max, Prime Video, Hulu, Apple TV+, Spotify and other sites whose video is protected open in WebKit, which plays it. A website rule wins.",
+          description: "Netflix, Disney+, Max, Prime Video, Hulu, Apple TV+, Apple Music and other sites whose video is protected open in WebKit, which plays it. A website rule wins.",
           shown: (s) => s.pageEngine !== "webkit",
-          keywords: ["drm", "netflix", "disney", "hbo", "max", "prime video", "hulu", "spotify", "apple tv", "fairplay", "widevine", "streaming", "tencent video", "v.qq.com"],
+          keywords: ["drm", "netflix", "disney", "hbo", "max", "prime video", "hulu", "apple tv", "apple music", "fairplay", "widevine", "streaming", "tencent video", "v.qq.com"],
         },
       },
     },
@@ -171,6 +171,13 @@ export const toolRows = {
           description: "A profile, its extensions and its data load the first time you open it, not all at launch, so Ardia uses less memory. Takes effect the next time you open Ardia.",
           keywords: ["profiles", "memory", "ram", "startup", "launch", "extensions", "lazy", "defer", "performance"],
         },
+        unloadProfilesAfter: {
+          advanced: true,
+          title: "Unload inactive profiles",
+          description: "A profile no window has shown for this long is unloaded with its extensions once its tabs can sleep, and loads again when you open it. Tabs playing sound, holding a form you started or downloading keep it loaded. Its extensions and notifications stop until then.",
+          shown: (s) => s.memorySaver,
+          keywords: ["profiles", "unload", "idle", "inactive", "timeout", "memory", "ram", "extensions", "sleep", "performance"],
+        },
       },
     },
     {
@@ -196,6 +203,12 @@ export const toolRows = {
       rows: {
         cliControl: { advanced: true, title: "Let the ardia command control Ardia", keywords: ["cli", "command line", "terminal", "shell", "devtools", "automation", "remote debugging"] },
         cliInstall: { advanced: true, title: "The ardia command", keywords: ["cli", "command line", "terminal", "shell", "install"] },
+        compactCliPill: {
+          advanced: true,
+          title: "Show the control pill as an icon and Stop",
+          description: "While a command controls Ardia, the pill at the bottom of the page shows only the app's icon and Stop; hover it to see who is in control. It can't be hidden, because it's how you know something is driving the browser.",
+          keywords: ["cli", "control pill", "is controlling", "agent", "claude code", "codex", "hide", "smaller", "compact", "minimize", "indicator", "stop"],
+        },
       },
     },
     {
@@ -213,7 +226,12 @@ export const toolRows = {
       section: "Web engine",
       rows: {
         chromium: { advanced: true, title: "Chromium", keywords: ["engine", "version", "ardiacore"] },
-        widevine: { advanced: true, title: "Widevine (protected video)", keywords: ["drm", "netflix", "disney", "spotify"] },
+        widevine: { advanced: true, title: "Widevine (protected video)", keywords: ["drm", "netflix", "disney"] },
+        chromeSettings: {
+          title: "Chrome settings",
+          description: "Chrome's own settings page, for what Ardia has no setting for: default page zoom, font sizes, languages and accessibility.",
+          keywords: ["chrome://settings", "zoom", "page zoom", "font", "font size", "fonts", "accessibility", "languages", "default zoom"],
+        },
       },
     },
     {

@@ -19,6 +19,8 @@ enum CommandTable {
     case findInPage
     case findNext
     case findPrevious
+    case hideElement
+    case showHiddenElements
     case setAppearance
     case reload
     case forceReload
@@ -34,6 +36,7 @@ enum CommandTable {
     case toggleFullUrl
     case toggleJavaScriptFromAppleEvents
     case toggleAddressBar
+    case toggleMinimalism
     case cast
     case zoomReset
     case zoomIn
@@ -61,6 +64,7 @@ enum CommandTable {
     case restoreArcFolders
     case toggleMute
     case togglePageEngine
+    case toggleReader
     case downloads
     case mergeAllWindows
     case switchProfile
@@ -128,6 +132,8 @@ enum CommandTable {
     "findInPage": "Find…",
     "findNext": "Find Next",
     "findPrevious": "Find Previous",
+    "hideElement": "Hide Element…",
+    "showHiddenElements": "Hidden Elements on This Site…",
     "setAppearance:auto": "Automatic",
     "setAppearance:light": "Light",
     "setAppearance:dark": "Dark",
@@ -145,6 +151,7 @@ enum CommandTable {
     "toggleFullUrl": "Show Full URL",
     "toggleJavaScriptFromAppleEvents": "Allow JavaScript from Apple Events",
     "toggleAddressBar": "Show Address Bar in Sidebar",
+    "toggleMinimalism": "Minimalism Mode",
     "cast": "Cast…",
     "zoomReset": "Zoom to Actual Size",
     "zoomIn": "Zoom In",
@@ -174,6 +181,7 @@ enum CommandTable {
     "bookmarkPage": "Add to Bookmarks…",
     "toggleMute": "Mute Tab",
     "togglePageEngine": "Open Page in WebKit",
+    "toggleReader": "Show Reader",
     "downloads": "Downloads",
     "mergeAllWindows": "Merge All Windows",
     "nextProfile": "Next Profile",
@@ -242,6 +250,8 @@ enum CommandTable {
     "findInPage": [("f", [.command])],
     "findNext": [("g", [.command])],
     "findPrevious": [("g", [.shift, .command])],
+    "hideElement": [("h", [.shift, .command])],
+    "showHiddenElements": [("u", [.shift, .command])],
     "reload": [("r", [.command])],
     "forceReload": [("r", [.shift, .command])],
     "toggleTabLayout": [("s", [.shift, .command])],
@@ -252,6 +262,7 @@ enum CommandTable {
     "jumpToSelection": [("j", [.command])],
     "focusNextPane": [("]", [.control, .shift]), ("}", [.control])],
     "focusPreviousPane": [("[", [.control, .shift]), ("{", [.control])],
+    "toggleMinimalism": [("m", [.control, .command])],
     "zoomReset": [("0", [.command])],
     "zoomIn": [("+", [.command]), ("=", [.command])],
     "zoomOut": [("-", [.command])],
@@ -275,6 +286,7 @@ enum CommandTable {
     "selectLastTab": [("9", [.command])],
     "togglePinnedRow": [("d", [.option, .shift, .command])],
     "bookmarkPage": [("d", [.command])],
+    "toggleReader": [("r", [.option, .command])],
     "downloads": [("j", [.shift, .command]), ("l", [.option, .command])],
     "nextProfile": [("\u{F703}", [.option, .command])],
     "previousProfile": [("\u{F702}", [.option, .command])],

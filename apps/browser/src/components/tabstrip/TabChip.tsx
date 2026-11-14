@@ -29,6 +29,8 @@ import { TabPressArea } from "../sidebar/TabPressArea";
 import { tabTitle } from "../../state/browser/model";
 import { awayTitle } from "../../state/pins/organize";
 import { AwayTitleLabel } from "../sidebar/AwayTitle";
+import { useStruckTitle } from "../../state/sidebar/rowState";
+import { SLEEPING_TITLE_OPACITY } from "../sidebar/tokens";
 import { UnreadCount } from "../unread/UnreadBadge";
 import { useTabUnread } from "../../state/tabs/unread";
 import { titleWithoutUnread } from "../../lib/unread";
@@ -109,7 +111,7 @@ export function DraggableChip({
 
 export function useWebsiteBand(tabId: string) {
   const theme = useTheme();
-  const extend = useSettings((s) => s.extendWebsiteColor);
+  const extend = useSettings((s) => s.extendWebsiteColor && !s.minimalismMode);
   const url = useTab(tabId)?.url;
   const themeColor = useTabLive(tabId, (l) => l.themeColor);
   const palette = toolbarPalette(theme, extend && url ? themeColor : null);
@@ -131,6 +133,7 @@ export const TabChip = memo(function TabChip({ tabId, width, tuck, dragged, hove
   const ownHover = useOwnChipHover();
   const chipHover = hover ?? ownHover;
   const unread = useTabUnread(tabId);
+  const struck = useStruckTitle(tabId);
   if (!tab) return null;
   const title = tab.customTitle ? tabTitle(tab) : titleWithoutUnread(tabTitle(tab), unread);
   const away = awayTitle(tab);
@@ -171,9 +174,9 @@ export const TabChip = memo(function TabChip({ tabId, width, tuck, dragged, hove
                 <MuteToggle tabId={tab.id} mute={mute} color={onBand ? palette.icon : theme.textTab} />
               )}
               {away ? (
-                <AwayTitleLabel away={away} color={ink} fontSize={font.small.fontSize} height={16} style={{ flex: 1, marginLeft: CHIP_LABEL_GAP }} />
+                <AwayTitleLabel away={away} color={ink} fontSize={font.small.fontSize} height={16} struck={struck} style={{ flex: 1, marginLeft: CHIP_LABEL_GAP }} />
               ) : (
-                <FadeLabel text={title} fontSize={font.small.fontSize} color={ink} style={{ flex: 1, height: 16, marginLeft: CHIP_LABEL_GAP }} />
+                <FadeLabel text={title} fontSize={font.small.fontSize} color={ink} strikethrough={struck} style={{ flex: 1, height: 16, marginLeft: CHIP_LABEL_GAP, opacity: struck ? SLEEPING_TITLE_OPACITY : 1 }} />
               )}
             </ChipRow>
           )}

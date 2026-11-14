@@ -443,6 +443,40 @@ class BorrowedTab(unittest.TestCase):
         self.state.extras.pop("attached")
         self.assertEqual(self.run_command(commands.cmd_vitals, ["example.com"]), [("USER", "https://example.com")])
 
+    def picked(self, argv):
+        async def take_active():
+            self.state.current = "USER"
+            self.state.extras["attached"] = "USER"
+            return "USER"
+
+        async def find_tab(name):
+            return "USER"
+
+        async def refresh_targets():
+            return list(self.state.target_infos.values())
+
+        async def app_tab_map(state):
+            return {}
+
+        self.state.extras.pop("attached")
+        self.state.current = None
+        self.state.take_active = take_active
+        self.state.find_tab = find_tab
+        self.state.refresh_targets = refresh_targets
+        with mock.patch("ardia_cli.browse.tabs.app_tab_map", app_tab_map), \
+                mock.patch.object(commands, "page_title", mock.AsyncMock(return_value="Draft")):
+            return asyncio.run(commands.cmd_tab(commands.Ctx(self.state, {}, "/", {}, None, "tab"), argv))
+
+    def test_tab_active_takes_the_users_tab_without_letting_open_navigate_it(self):
+        result = self.picked(["active"])
+        self.assertEqual((result.data["targetId"], self.state.current, self.state.extras.get("attached")), ("USER", "USER", "USER"))
+        self.assertEqual(self.run_command(commands.cmd_vitals, ["example.com"]), [("MINE", "https://example.com")])
+
+    def test_tab_by_id_drives_the_users_tab(self):
+        self.picked(["t1"])
+        self.assertNotIn("attached", self.state.extras)
+        self.assertEqual(self.run_command(commands.cmd_vitals, ["example.com"]), [("USER", "https://example.com")])
+
     def test_script_goto_goes_through_open(self):
         self.assertIn('goto: async (url) => (await browse("open"', script.PRELUDE if hasattr(script, "PRELUDE") else Path(script.__file__).read_text())
 

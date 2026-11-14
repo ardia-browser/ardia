@@ -120,6 +120,16 @@ bool IsProfileDying(const Profile* profile) {
          });
 }
 
+Profile* DyingProfileAt(const base::FilePath& path) {
+  std::erase_if(DyingProfiles(), [](const base::WeakPtr<Profile>& p) { return !p; });
+  for (const base::WeakPtr<Profile>& dying : DyingProfiles()) {
+    if (!dying->IsOffTheRecord() && dying->GetPath() == path) {
+      return dying.get();
+    }
+  }
+  return nullptr;
+}
+
 namespace {
 class GoneNotifier : public base::SupportsUserData::Data {
  public:

@@ -1,5 +1,6 @@
 #import "ArdiaWebViewInternal.h"
 #import "ArdiaEarlyWindow.h"
+#import "ArdiaFairPlay.h"
 
 #import <objc/runtime.h>
 
@@ -350,6 +351,7 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
 
 - (void)tabWillClose:(ArdiaCoreTab *)tab {
   [ArdiaEarlyWindow dropPage:tab];
+  [ArdiaFairPlay pageGoneFromTab:tab];
   if (_life.closed() || tab != _tab) return;
   [self detach];
   [self emit:@"windowClose" payload:@{}];
@@ -370,6 +372,36 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
   if (!_tab) return @"refused";
   if (_tab.discarded) return @"already";
   return [_tab discard] && _tab.discarded ? @"discarded" : @"refused";
+}
+
+- (NSArray<NSNumber *> *)sleepIfHiddenFor:(NSTimeInterval)seconds {
+  if (!_tab || _tab.closed || _tab.discarded) return @[ @-1 ];
+  return [_tab sleepIfHiddenFor:seconds];
+}
+
+- (NSString *)keptFromUnloadingBy {
+  if (!_tab || _tab.closed || _tab.profile.offTheRecord || !_transferKey.length) return @"tab";
+  if (_visible) return @"visible";
+  if (_standalone || _temporary || _extensionHost.length) return @"ownWindow";
+  if (_life.closed() || _life.handingOff || _life.moving || _life.pendingURL) return @"moving";
+  if (_standIn.tab || _standIn.lentTo || _frameHold.holding || _frameHold.awaiting || _reveal.active) return @"transition";
+  if (_reports.capturing) return @"capture";
+  if (_reports.inPictureInPicture) return @"pictureInPicture";
+  if (_devtoolsView) return @"devTools";
+  return nil;
+}
+
+- (BOOL)unloadKeepingHistory {
+  if (self.keptFromUnloadingBy) return NO;
+  ArdiaCoreTab *tab = _tab;
+  ArdiaWindowController *controller = [ArdiaWindowController holding:tab];
+  controller.hostChanges++;
+  [self detach];
+  const BOOL unloaded = [tab unloadKeepingHistory];
+  if (unloaded) [self forgetRestoreKey];
+  else [self attach:tab];
+  controller.hostChanges--;
+  return unloaded;
 }
 
 - (void)tabDidChangeDiscarded:(ArdiaCoreTab *)tab {

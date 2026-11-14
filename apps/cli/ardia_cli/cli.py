@@ -4,7 +4,8 @@ from ardia_cli import __version__
 
 DESCRIPTION = (
     "Control a running Ardia from the terminal. ardia browse drives the browser (ardia browse --help); "
-    "ardia computer operates native Mac apps through the bundled cua-driver (ardia computer --help)."
+    "ardia computer operates native Mac apps through the bundled cua-driver (ardia computer --help). "
+    "Agents: skip if an ardia skill is already in your context; otherwise run ardia --skill."
 )
 EPILOG = """\
 Shared options go before the command or after it, for the commands that take them:
@@ -167,6 +168,7 @@ def build_parser():
 
     parser = argparse.ArgumentParser(prog="ardia", description=DESCRIPTION, epilog=EPILOG, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--version", action="version", version=f"ardia {__version__}")
+    parser.add_argument("--skill", action="store_true", help="print the agent skill that ships with this ardia (SKILL.md) and exit; same as ardia skills get")
     commands = parser.add_subparsers(dest="command", metavar="<command>")
     commands.add_parser("browse", help="drive the browser with agent-browser's commands (ardia browse --help)", add_help=False)
     commands.add_parser("notes", help="read and write notes (ardia notes --help)", add_help=False)
@@ -176,7 +178,7 @@ def build_parser():
 
     browsing_cli.add_parsers(commands, argparse.RawDescriptionHelpFormatter)
 
-    skills = commands.add_parser("skills", help="install the ardia agent skill")
+    skills = commands.add_parser("skills", help="print or install the ardia agent skill")
     skill_commands = skills.add_subparsers(dest="skills_command", metavar="<command>")
     install = skill_commands.add_parser(
         "install",
@@ -192,6 +194,9 @@ def build_parser():
     install.add_argument("--replace", action="store_true", help="replace an ardia folder that ardia didn't install (only that folder)")
     install.add_argument("--auto", action="store_true", help="install for every coding agent found on this Mac (or general when none is), skipping folders ardia didn't write and copies the user removed")
     skill_commands.add_parser("refresh", help="rewrite every copy of the skill installed before with this CLI's version")
+    get = skill_commands.add_parser("get", help="print the skill that ships with this ardia (SKILL.md) to stdout; writes nothing")
+    get.add_argument("--full", action="store_true", help="also print every file under references/, each after a --- <path> --- line")
+    skill_commands.add_parser("list", help="name and description of each skill that ships with this ardia")
 
     from ardia_cli import scripts_cli
 
@@ -271,6 +276,8 @@ def run(argv: list[str]) -> int:
         sys.stderr.write(f"ardia: {error}\n")
         return 2
     command = argv[index] if index < len(argv) else None
+    if command == "--skill":
+        argv = [*argv[:index], "skills", "get", *argv[index + 1:]]
     if command == "browse":
         return run_browse(leading, argv[index + 1:])
     if command == "notes":
@@ -306,10 +313,14 @@ def run(argv: list[str]) -> int:
 
         return browsing_cli.run(args)
     if args.command == "skills":
-        if args.skills_command not in ("install", "refresh"):
+        if args.skills_command not in ("install", "refresh", "get", "list"):
             parser.parse_args(["skills", "--help"])
         from ardia_cli import skills
 
+        if args.skills_command == "get":
+            return skills.print_skill(args.full)
+        if args.skills_command == "list":
+            return skills.list_skills()
         if args.skills_command == "refresh":
             return skills.refresh()
         if args.auto:

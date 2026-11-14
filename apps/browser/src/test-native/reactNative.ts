@@ -1,4 +1,17 @@
-export const View = () => null;
+import type { ComponentProps, PropsWithChildren } from "react";
+
+export const View = ({ children }: PropsWithChildren) => children ?? null;
+export const Text = () => null;
+export const Image = () => null;
+export const ScrollView = () => null;
+export const TextInput = () => null;
+export const StyleSheet = { create: <Styles,>(styles: Styles) => styles };
+
+export const pressables: ComponentProps<typeof import("react-native").Pressable>[] = [];
+export const Pressable = (props: (typeof pressables)[number]) => {
+  pressables.push(props);
+  return null;
+};
 
 export const NativeModules: Record<string, unknown> = {
   ACFieldTiming: { setEnabled: () => {}, markFrame: () => {}, lastInput: () => [0, 0], drain: () => [] },
@@ -61,6 +74,9 @@ class AnimatedValue {
   }
   removeListener(id: string) {
     this.listeners.delete(id);
+  }
+  removeAllListeners() {
+    this.listeners.clear();
   }
   interpolate(config: { inputRange: number[]; outputRange: number[] }) {
     return { config, source: this };
@@ -163,6 +179,7 @@ export const Easing = {
 export const AppState = { currentState: "active", addEventListener: () => ({ remove() {} }) };
 
 export const AccessibilityInfo = {
-  isReduceMotionEnabled: () => Promise.resolve(false),
+  isHighContrastEnabled: async () => false,
+  isReduceMotionEnabled: async () => false,
   addEventListener: () => ({ remove() {} }),
 };

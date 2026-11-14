@@ -15,6 +15,7 @@ import { openTabMenu } from "../../state/sidebar/menus";
 import { TabIcon } from "./TabIcon";
 import { closeFolderPanel, closeFolderPanelOnPress, closeFolderPanelWhenWindowMoves, openTileFolderMenu, useFolderPanel } from "../../state/sidebar/tileFolderUi";
 import { tailKey } from "./dragModel";
+import { useStruckTitle } from "../../state/sidebar/rowState";
 
 const PANEL_GAP = space.s;
 
@@ -92,6 +93,7 @@ function MemberRow({ tabId, windowId }: { tabId: string; windowId: string }) {
   const theme = useTheme();
   const tab = useTab(tabId);
   const active = useIsActiveTab(tabId);
+  const struck = useStruckTitle(tabId);
   const { hovered, hoverProps } = useHover();
   const { wrapper, handle } = useDragItem(`fm:${tabId}`, { kind: "row", tabIds: [tabId], section: "folder" });
   if (!tab) return null;
@@ -108,7 +110,7 @@ function MemberRow({ tabId, windowId }: { tabId: string; windowId: string }) {
             {({ pressed }) => (
               <SidebarListRow height={layout.rowHeight} padRight={TAB_ROW.contentLeft} fill={pressed ? theme.tabPressed : active ? theme.pinnedSelectedFill : hovered ? theme.tabHover : undefined}>
                 <TabIcon tabId={tabId} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} />
-                <SidebarRowLabel text={tabTitle(tab)} color={active ? theme.textPrimary : theme.textTab} />
+                <SidebarRowLabel text={tabTitle(tab)} color={active ? theme.textPrimary : theme.textTab} struck={struck} />
               </SidebarListRow>
             )}
           </Pressable>

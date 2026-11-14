@@ -9,6 +9,7 @@ import { focusHeroBar } from "./barState";
 import { isSmall } from "../windows/small";
 import type { NewTabTarget } from "../browser/types";
 import { notePageOverlay } from "../telemetry/usage";
+import { customNewTabUrl } from "../settings/settings";
 
 export { isEmptyCardTab };
 
@@ -34,7 +35,7 @@ export function showNewTabBar(windowId: string, target: NewTabTarget = IN_LIST):
 }
 
 function focusShownNewTabPage(s: BrowserState, windowId: string): boolean {
-  if (!s.settings.reuseEmptyNewTab) return false;
+  if (!s.settings.reuseEmptyNewTab || customNewTabUrl(s.settings)) return false;
   const active = activeTabId(s, windowId);
   if (!active || !isEmptyCardTab(s, s.tabs[active])) return false;
   if (s.windowUi[windowId]?.panel.open) s.closePanel(windowId);
@@ -78,6 +79,7 @@ export function openFromNewTabBar(windowId: string, target: NewTabTarget, url: s
 }
 
 const launchTabs = new Set<string>();
+const launchCards = new Map<string, string>();
 const shownOver = new Set<string>();
 
 export function showOnceOverEmptyCard(windowId: string, tabId: string) {
@@ -89,7 +91,17 @@ export function showOnceOverEmptyCard(windowId: string, tabId: string) {
   if (launchTabs.has(tabId) && !NEW_TAB_BAR_POLICY.showOnLaunch) return;
   if (activeTabId(s, windowId) !== tabId || s.windowUi[windowId]?.panel.open || !showNewTabBar(windowId)) return;
   const shown = store().windowUi[windowId]?.panel;
-  if (shown) shownUnasked.add(shown);
+  if (!shown) return;
+  shownUnasked.add(shown);
+  if (launchCards.get(windowId) === tabId) notePageOverlay("newTabBarOnLaunch");
+}
+
+function noteLaunchCards() {
+  const s = store();
+  for (const windowId of s.windowOrder) {
+    const tabId = activeTabId(s, windowId);
+    if (tabId) launchCards.set(windowId, tabId);
+  }
 }
 
 function dismissBars(except?: string) {
@@ -99,6 +111,7 @@ function dismissBars(except?: string) {
 
 export function startNewTabBar() {
   for (const id of Object.keys(store().tabs)) launchTabs.add(id);
+  queueMicrotask(noteLaunchCards);
   if (!NEW_TAB_BAR_POLICY.dismissOnWindowDeactivation) return;
   onAppEvent((e) => {
     if (e.type === "resignActive" || e.type === "screenLocked") dismissBars();

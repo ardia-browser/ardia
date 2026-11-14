@@ -74,15 +74,15 @@ struct OnboardingView: View {
     reduceMotion
       ? .opacity
       : .asymmetric(
-          insertion: .offset(x: 60).combined(with: .opacity),
-          removal: .offset(x: -60).combined(with: .opacity)
+          insertion: .offset(x: 72).combined(with: .opacity),
+          removal: .offset(x: -72).combined(with: .opacity)
         )
   }
 
   private func advance() {
     guard let next = step.next else { return finish() }
     advances += 1
-    withAnimation(reduceMotion ? .easeInOut(duration: 0.25) : Motion.smooth) {
+    withAnimation(reduceMotion ? Motion.fade : Motion.step) {
       step = next
     }
   }

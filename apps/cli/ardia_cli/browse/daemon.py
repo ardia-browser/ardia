@@ -37,9 +37,9 @@ def unreachable_message(endpoint, error) -> str:
 
 
 def load_commands():
-    from ardia_cli.browse import audit, capture, commands, media, react
+    from ardia_cli.browse import audit, capture, commands, flows, media, react
 
-    return commands, (audit, capture, media, react)
+    return commands, (audit, capture, flows, media, react)
 
 
 async def run_one(ctx, argv, options: dict | None = None):
@@ -73,7 +73,18 @@ async def dispatch(ctx, name, argv):
         from ardia_cli.browse.changes import settle_reaction
 
         await settle_reaction(ctx.state, name, argv)
-    result = await handler(ctx, argv)
+    from ardia_cli.browse import flowlog
+
+    step = await flowlog.begin(ctx, name, argv)
+    try:
+        result = await handler(ctx, argv)
+    except BrowseError as error:
+        await flowlog.end(ctx, step, error)
+        raise
+    except BaseException:
+        flowlog.abandon(ctx, step)
+        raise
+    await flowlog.end(ctx, step)
     extras = getattr(ctx.state, "extras", None)
     if name != "batch" and isinstance(extras, dict) and extras.get("top_command") != "script":
         from ardia_cli.browse.commands import note_reading
@@ -145,6 +156,7 @@ NARROWER = {
     "read": "read -s <css> (one region per page), or fewer pages",
     "eval": "return less from the script, or get text <css> / read -s <css> for one region",
     "script": "return fewer fields or rows from the script",
+    "flow": "flow run <name> --fields a,b --limit n --where field=value",
 }
 CAP_NOTICE = "[output capped at "
 NARROW_ANY = "snapshot -i, snapshot -s <css>, get text <css>, read -s <css>, find role <role> <action> --name <text>"
@@ -578,7 +590,6 @@ def main():
     sys.stderr = redact.RedactingStream(sys.stderr)
     redact.install_log_redaction()
     logging.basicConfig(level=logging.INFO if config.get("debug") else logging.WARNING, format="%(asctime)s %(name)s %(levelname)s %(message)s")
-    logging.getLogger("pydoll").setLevel(logging.CRITICAL)
     logging.getLogger("websockets").setLevel(logging.ERROR)
     load_commands()
     lease = take_lease()

@@ -2,11 +2,20 @@
 
 #include "ardia/core/ac_host_visibility.h"
 
+#include <string>
+
+#include "base/functional/bind.h"
+#include "base/memory/weak_ptr.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/time/time.h"
+#include "base/timer/timer.h"
 #include "chrome/browser/ui/tabs/public/tab_dialog_manager.h"
 #include "chrome/browser/ui/tabs/public/tab_features.h"
 #include "components/permissions/permission_request_manager.h"
 #include "components/tabs/public/tab_interface.h"
+#include "content/public/browser/visibility.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/browser/web_contents_observer.h"
 #include "content/public/browser/web_contents_user_data.h"
 #include "ardia/core/ac_browser.h"
 #include "ardia/core/ac_hooks.h"
@@ -17,18 +26,80 @@ namespace ardiacore {
 
 namespace {
 
-class HostVisibility : public content::WebContentsUserData<HostVisibility> {
+constexpr base::TimeDelta kHiddenPageWait = base::Milliseconds(400);
+
+void UpdateTabDialogs(content::WebContents* contents) {
+  if (auto* tab = tabs::TabInterface::MaybeGetFromContents(contents)) {
+    if (auto* features = tab->GetTabFeatures()) {
+      if (auto* dialogs = features->tab_dialog_manager()) {
+        if (dialogs->UpdateDialogVisibility()) {
+          dialogs->UpdateModalDialogBounds();
+        }
+      }
+    }
+  }
+}
+
+class HostVisibility : public content::WebContentsUserData<HostVisibility>,
+                       public content::WebContentsObserver {
  public:
   bool shown() const { return shown_; }
-  void set_shown(bool shown) { shown_ = shown; }
+  bool shown_until_page_hidden() const { return shown_ || awaiting_hidden_page_; }
+
+  void Note(bool shown) {
+    shown_ = shown;
+    if (shown || GetWebContents().GetVisibility() != content::Visibility::VISIBLE) {
+      StopAwaitingHiddenPage();
+      TellAutoPictureInPicture();
+      return;
+    }
+    awaiting_hidden_page_ = true;
+    hidden_page_wait_.Start(FROM_HERE, kHiddenPageWait,
+                            base::BindOnce(&HostVisibility::PageHiddenOrWaitedOut,
+                                           weak_factory_.GetWeakPtr(), "waited out"));
+  }
+
+  void OnVisibilityChanged(content::Visibility visibility) override {
+    if (!awaiting_hidden_page_ || visibility == content::Visibility::VISIBLE) {
+      return;
+    }
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(&HostVisibility::PageHiddenOrWaitedOut,
+                                  weak_factory_.GetWeakPtr(), "page hidden"));
+  }
 
  private:
   explicit HostVisibility(content::WebContents* contents)
-      : content::WebContentsUserData<HostVisibility>(*contents) {}
+      : content::WebContentsUserData<HostVisibility>(*contents),
+        content::WebContentsObserver(contents) {}
   friend class content::WebContentsUserData<HostVisibility>;
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 
+  void PageHiddenOrWaitedOut(const char* why) {
+    if (!awaiting_hidden_page_) {
+      return;
+    }
+    StopAwaitingHiddenPage();
+    TraceAutoPictureInPictureInputs(&GetWebContents(),
+                                    (std::string("host hides tab, ") + why).c_str());
+    TellAutoPictureInPicture();
+    UpdateTabDialogs(&GetWebContents());
+  }
+
+  void StopAwaitingHiddenPage() {
+    awaiting_hidden_page_ = false;
+    hidden_page_wait_.Stop();
+    weak_factory_.InvalidateWeakPtrs();
+  }
+
+  void TellAutoPictureInPicture() {
+    ArdiaAutoPictureInPictureHostVisibilityChanged(&GetWebContents());
+  }
+
   bool shown_ = false;
+  bool awaiting_hidden_page_ = false;
+  base::OneShotTimer hidden_page_wait_;
+  base::WeakPtrFactory<HostVisibility> weak_factory_{this};
 };
 
 WEB_CONTENTS_USER_DATA_KEY_IMPL(HostVisibility);
@@ -48,6 +119,11 @@ int Answer(content::WebContents* contents) {
   return shown ? *shown : -1;
 }
 
+int ShownUntilPageHidden(content::WebContents* contents) {
+  HostVisibility* state = contents ? HostVisibility::FromWebContents(contents) : nullptr;
+  return state ? state->shown_until_page_hidden() : -1;
+}
+
 }
 
 std::optional<bool> ShownByHost(content::WebContents* contents) {
@@ -60,22 +136,13 @@ void NoteTabShownByHost(content::WebContents* contents, bool shown) {
     return;
   }
   HostVisibility::CreateForWebContents(contents);
-  HostVisibility::FromWebContents(contents)->set_shown(shown);
-  VideoUpscalingInputsChanged();
   TraceAutoPictureInPictureInputs(contents, shown ? "host shows tab" : "host hides tab");
-  ArdiaAutoPictureInPictureHostVisibilityChanged(contents);
+  HostVisibility::FromWebContents(contents)->Note(shown);
+  VideoUpscalingInputsChanged();
   if (auto* prompts = permissions::PermissionRequestManager::FromWebContents(contents)) {
     prompts->OnVisibilityChanged(contents->GetVisibility());
   }
-  if (auto* tab = tabs::TabInterface::MaybeGetFromContents(contents)) {
-    if (auto* features = tab->GetTabFeatures()) {
-      if (auto* dialogs = features->tab_dialog_manager()) {
-        if (dialogs->UpdateDialogVisibility()) {
-          dialogs->UpdateModalDialogBounds();
-        }
-      }
-    }
-  }
+  UpdateTabDialogs(contents);
 }
 
 void NoteTabInShownSlot(content::WebContents* contents) {
@@ -99,7 +166,7 @@ bool InAutomationWindow(content::WebContents* contents) {
 }
 
 void StartHostVisibility() {
-  g_ardia_tab_shown_by_host = &Answer;
+  g_ardia_tab_shown_by_host = &ShownUntilPageHidden;
   g_ardia_permission_tab_shown = &Answer;
 }
 

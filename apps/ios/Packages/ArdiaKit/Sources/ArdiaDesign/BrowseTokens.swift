@@ -70,6 +70,7 @@ public enum BrowseLayout {
   public static let tabStackRadius: CGFloat = 5
   public static let tabStackTile = CGSize(width: 20, height: 26)
   public static let barBottomGap: CGFloat = 21.5
+  public static let trayDepartLift: CGFloat = 120
   public static let hitTarget: CGFloat = 44
   public static let barHeight: CGFloat = 75
   public static let barCollapseTravel: CGFloat = 30
@@ -78,25 +79,26 @@ public enum BrowseLayout {
 }
 
 public extension Motion {
-  static let searchRise = Animation.spring(response: 0.39, dampingFraction: 1)
-  static let surfaceSwap = Animation.easeOut(duration: 0.3)
-  static let surfaceFade = Animation.easeOut(duration: 0.2)
-  static let trayDim = Animation.easeInOut(duration: 0.3)
-  static let trayDismiss = Animation.spring(response: 0.32, dampingFraction: 1)
-  static let traySettle = Animation.spring(response: 0.34, dampingFraction: 0.86)
-  static let resultsIn = Animation.easeOut(duration: 0.14)
-  static let pager = Animation.spring(response: 0.3, dampingFraction: 0.9)
-  static let press = Animation.spring(response: 0.2, dampingFraction: 0.7)
-  static let barCollapse = Animation.spring(duration: 0.4, bounce: 0)
-  static let progressReveal = Animation.easeOut(duration: 0.2)
-  static let progressAdvance = Animation.easeOut(duration: 0.45)
-  static let progressFill = Animation.easeOut(duration: 0.2)
-  static let progressFade = Animation.easeOut(duration: 0.25)
-  static let progressRevealDelay: Duration = .milliseconds(150)
-  static let placeholderDelay: Duration = .milliseconds(300)
-  static let placeholderIn = Animation.easeOut(duration: 0.22)
-  static let pagerSettle = Spring(duration: 0.38, bounce: 0)
-  static let pagerFade = Animation.easeOut(duration: 0.2)
-  static let barTone = Animation.easeOut(duration: 0.25)
+  static let searchRise = rise
+  static let surfaceSwap = Animation.easeOut(duration: 0.18)
+  static let surfaceFade = fade
+  static let trayDim = Animation.easeOut(duration: 0.2)
+  static let trayDismiss = leave
+  static let depart = Animation.timingCurve(0.2, 0, 0, 1, duration: 0.2)
+  static let traySettle = smooth
+  static let resultsIn = Animation.easeOut(duration: 0.1)
+  static let pager = smooth
+  static let press = Animation.spring(response: 0.16, dampingFraction: 1)
+  static let barCollapse = smooth
+  static let progressReveal = Animation.easeOut(duration: 0.15)
+  static let progressAdvance = Animation.easeOut(duration: 0.3)
+  static let progressFill = Animation.easeOut(duration: 0.15)
+  static let progressFade = Animation.easeOut(duration: 0.2)
+  static let progressRevealDelay: Duration = .milliseconds(100)
+  static let placeholderDelay: Duration = .milliseconds(250)
+  static let placeholderIn = fade
+  static let pagerSettle = Spring(duration: 0.26, bounce: 0)
+  static let pagerFade = fade
+  static let barTone = Animation.easeOut(duration: 0.2)
   static let logoSpinDecay: Double = 2.2
 }

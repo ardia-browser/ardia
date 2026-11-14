@@ -133,6 +133,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     let window = entry.window, id = entry.id
     if let lights = lightsCenters[id] { ChromeWindows.setTrafficLightsCenter(lights.center, trailing: lights.trailing, in: window) }
     window.title = title
+    Self.identify(window, id: id, kind: entry.kind)
     if small, frame == nil { placeSmall(window, size: smallSize, pointer: smallPointer) } else if frame != nil || !window.isVisible { place(window, frame: frame) }
     relayoutRoot(window)
     managed[id] = entry
@@ -235,6 +236,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     NotificationCenter.default.removeObserver(self, name: nil, object: from)
     entry.window = to
     if entry.kind == .small { ArdiaChromeWindowHost.markFloating(forWindowManagers: to) }
+    Self.identify(to, id: id, kind: entry.kind)
     if lastPlaced === from { lastPlaced = to }
     observeDelegateNotifications(to)
     observeFrame(to)
@@ -398,6 +400,10 @@ final class WindowManager: NSObject, NSWindowDelegate {
     if let index = pending.firstIndex(where: { $0.id == id }) { pending[index].options.title = title }
     guard let window = window(id), window.title != title else { return }
     window.title = title
+  }
+
+  private static func identify(_ window: NSWindow, id: String, kind: WindowKind) {
+    if kind == .browser { window.setAccessibilityIdentifier("ardiaBrowserWindow_\(id)") }
   }
 
   func windowShouldClose(_ sender: NSWindow) -> Bool {

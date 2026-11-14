@@ -1,0 +1,18 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Fixture Focus</title>
+</head>
+<body>
+<div id="wrap" role="combobox" aria-label="Search the store" aria-expanded="false"><input id="q" aria-label="Search"></div>
+<input id="hidden-q" aria-label="Hidden search" style="visibility: hidden">
+<pre id="report">{}</pre>
+<script>
+  const state = { keys: [] };
+  const show = () => { document.getElementById("report").textContent = JSON.stringify(state); };
+  document.getElementById("q").addEventListener("keydown", (event) => { state.keys.push(event.key); show(); });
+  show();
+</script>
+</body>
+</html>

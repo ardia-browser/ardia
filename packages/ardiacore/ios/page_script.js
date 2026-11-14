@@ -131,11 +131,13 @@
   const frame = Math.random().toString(36).slice(2);
   const tracked = new WeakSet();
   let active = null;
+  let lastHeard = null;
   const heard = new WeakSet();
 
   const session = navigator.mediaSession;
   const actions = new Map();
   let positionState = null;
+  let timeline = null;
   const listening = new WeakSet();
   const LISTEN_TRIES = 20;
   const playingUnmuted = (m) => !m.paused && !m.ended && !m.muted && m.volume > 0;
@@ -147,6 +149,7 @@
     if (heard.has(m) || !playingUnmuted(m)) return listening.delete(m);
     if (decodedAudio(m)) {
       heard.add(m);
+      lastHeard = m;
       listening.delete(m);
       return reportNowPlaying();
     }
@@ -161,12 +164,14 @@
   const isPlaying = (m) => !m.paused && !m.ended;
   const pickMedia = () => {
     const all = [...document.querySelectorAll("video,audio")];
-    if (active && !all.includes(active) && tracked.has(active)) all.push(active);
+    for (const m of [active, lastHeard]) if (m && !all.includes(m) && tracked.has(m)) all.push(m);
     const current = all.includes(active) ? active : null;
+    const heardBefore = all.includes(lastHeard) ? lastHeard : null;
     return (
       all.find((m) => heard.has(m) && isPlaying(m)) ||
       (current && heard.has(current) ? current : null) ||
       all.find(isPlaying) ||
+      heardBefore ||
       current
     );
   };
@@ -184,7 +189,9 @@
     const size = (a) => Math.max(0, ...String(a.sizes || "0x0").split(/\s+/).map((s) => parseInt(s, 10) || 0));
     return absolute([...art].sort((a, b) => size(b) - size(a))[0].src);
   };
-  let lastNowPlaying = "";
+  const NOW_PLAYING_DRIFT_S = 1;
+  let lastNowPlaying = null;
+  const projectedPosition = (last, now) => last.position + (last.playing ? ((now - last.at) / 1000) * last.rate : 0);
   const reportNowPlaying = later(() => {
     const el = pickMedia();
     const md = session && session.metadata;
@@ -205,15 +212,24 @@
         hasVideo: !!el && el.tagName === "VIDEO" && el.videoWidth > 0,
         actions: [...actions.keys()],
         controllable: !!el && heard.has(el) && (sessionState !== "none" || !oneShot(el)),
+        loop: !positionState && !!el && el.loop,
       };
       if (!state.title && !el) state = null;
     }
-    const json = serialize(state && { ...state, position: Math.round(state.position) });
-    if (json === lastNowPlaying) return;
-    lastNowPlaying = json;
-    send("nowPlaying", state && { ...state, timestamp: Date.now() });
+    const now = Date.now();
+    const key = serialize(state && { ...state, position: 0 });
+    const last = lastNowPlaying;
+    if (last && key === last.key && (!state || Math.abs(state.position - projectedPosition(last, now)) < NOW_PLAYING_DRIFT_S)) return;
+    lastNowPlaying = { key, position: state ? state.position : 0, at: now, playing: !!state && state.playbackState === "playing", rate: (state && state.playbackRate) || 1 };
+    send("nowPlaying", state && { ...state, timestamp: now });
   }, 100);
   let blockAutoplay = false;
+  let usedHere = false;
+  const noteUse = (e) => {
+    if (e.isTrusted && !(e.type === "keydown" && (e.key === "Escape" || e.metaKey))) usedHere = true;
+  };
+  for (const type of ["pointerdown", "keydown"]) window.addEventListener(type, noteUse, true);
+  const askedToPlay = () => usedHere || (!isTop && !!(navigator.userActivation && navigator.userActivation.isActive));
   let pipTrace = false;
   let pipHandlerSet = null;
   const playingMedia = new Set();
@@ -222,7 +238,7 @@
     if (!(m instanceof HTMLMediaElement)) return;
     if (e.type === "play" || e.type === "playing") playingMedia.add(m);
     else if (e.type === "pause" || e.type === "ended" || e.type === "emptied") playingMedia.delete(m);
-    if (blockAutoplay && e.type === "play" && !(navigator.userActivation && navigator.userActivation.hasBeenActive)) {
+    if (blockAutoplay && e.type === "play" && !askedToPlay()) {
       m.pause();
       return;
     }
@@ -248,7 +264,7 @@
   const play = HTMLMediaElement.prototype.play;
   const pausedState = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "paused").get;
   const connectedState = Object.getOwnPropertyDescriptor(Node.prototype, "isConnected").get;
-  HTMLMediaElement.prototype.play = asNative(play, (target, self, args) => {
+  const trackDetachedMedia = (self) => {
     let media = false;
     try {
       apply(pausedState, self, []);
@@ -259,24 +275,30 @@
       for (const e of mediaEvents) self.addEventListener(e, onMediaEvent);
       for (const watch of detachedMediaWatchers) guard(watch)(self);
     }
+    return media;
+  };
+  const autoplayRefusal = () => new DOMException("play() failed because the user didn't interact with the document first.", "NotAllowedError");
+  HTMLMediaElement.prototype.play = asNative(play, (target, self, args) => {
+    if (trackDetachedMedia(self) && blockAutoplay && !askedToPlay()) return Promise.reject(autoplayRefusal());
     return apply(target, self, args);
   });
 
   const proto = session && Object.getPrototypeOf(session);
   if (proto) {
-    const wrapSetter = (name) => {
+    const wrapSetter = (name, changed) => {
       const d = Object.getOwnPropertyDescriptor(proto, name);
       if (!d || !d.set) return;
       Object.defineProperty(proto, name, {
         ...d,
         set(value) {
           d.set.call(this, value);
+          changed?.();
           reportNowPlaying();
         },
       });
     };
     wrapSetter("metadata");
-    wrapSetter("playbackState");
+    wrapSetter("playbackState", () => timeline && restartTimelineClock(clockPosition(timeline.playbackRate, timeline.clock, performance.now())));
     const setActionHandler = proto.setActionHandler;
     proto.setActionHandler = function (action, handler) {
       if (action === "enterpictureinpicture") {
@@ -291,21 +313,63 @@
     };
     const setPositionState = proto.setPositionState;
     proto.setPositionState = function (state) {
+      const result = setPositionState.apply(this, arguments);
       positionState = state || null;
+      timeline = typeof state?.duration === "number" ? { position: state.position ?? 0, duration: state.duration, playbackRate: state.playbackRate ?? 1, mediaTimes: new WeakMap(reachableMedia().map((m) => [m, m.currentTime])) } : null;
+      if (timeline) restartTimelineClock(timeline.position);
       reportNowPlaying();
-      return setPositionState.apply(this, arguments);
+      return result;
     };
   }
   const playableMedia = (all) => all.find((m) => m.currentSrc || m.srcObject || m.src || m.querySelector("source[src]")) || null;
-  handlers.media = ({ action, seconds }) => {
-    const el = pickMedia() || playableMedia([...document.querySelectorAll("video,audio")]);
+  const pictureInPictureMedia = (root) => {
+    let el = root.pictureInPictureElement || null;
+    while (el?.shadowRoot?.pictureInPictureElement) el = el.shadowRoot.pictureInPictureElement;
+    return el;
+  };
+  const mediaCommandTarget = (action, inPictureInPicture, pick) => {
+    if (action !== "seekPictureInPictureBy") return { action, el: pick() };
+    if (!inPictureInPicture) return null;
+    return { action: "seekBy", el: typeof inPictureInPicture.currentTime === "number" ? inPictureInPicture : null };
+  };
+  const reachableMedia = () => [...new Set([...document.querySelectorAll("video,audio"), active, pictureInPictureMedia(document)])].filter((m) => typeof m?.currentTime === "number");
+  const clockPosition = (rate, clock, now) => {
+    return clock.position + (clock.advancing ? ((now - clock.at) / 1000) * rate : 0);
+  };
+  const timelineNow = (reported, mediaAdvance, now) => {
+    const position = mediaAdvance == null ? clockPosition(reported.playbackRate, reported.clock, now) : reported.position + mediaAdvance;
+    return { position: Math.max(0, Math.min(reported.duration, position)), duration: reported.duration };
+  };
+  const restartTimelineClock = (position) => {
+    timeline.clock = { position, at: performance.now(), advancing: session.playbackState !== "paused" };
+  };
+  const seekByCall = (seconds, el, registered, timeline) => {
+    if (registered(seconds >= 0 ? "seekforward" : "seekbackward")) return seconds >= 0 ? ["seekforward", { seekOffset: seconds }] : ["seekbackward", { seekOffset: -seconds }];
+    const within = (position, duration) => ({ seekTime: Math.max(0, Math.min(duration || Infinity, position + seconds)) });
+    if (registered("seekto")) {
+      const at = timeline || (el && { position: el.currentTime, duration: el.duration });
+      return at ? ["seekto", within(at.position, at.duration)] : null;
+    }
+    return el ? ["currentTime", within(el.currentTime, el.duration)] : null;
+  };
+  handlers.media = ({ action: asked, seconds }) => {
+    const target = mediaCommandTarget(asked, pictureInPictureMedia(document), () => pickMedia() || playableMedia([...document.querySelectorAll("video,audio")]));
+    if (!target) return;
+    const { action, el } = target;
     const call = (name, details) => {
       const h = actions.get(name);
       if (!h) return false;
       h({ action: name, ...details });
       return true;
     };
+    const askToSeek = (name, details, landsAt) => {
+      const reported = timeline;
+      if (!call(name, details)) return false;
+      if (timeline && timeline === reported) restartTimelineClock(landsAt(timeline));
+      return true;
+    };
     const playing = session?.playbackState === "playing" || (el && !el.paused);
+    if (action === "play" || action === "toggle") usedHere = true;
     switch (action) {
       case "play":
         call("play") || el?.play();
@@ -324,12 +388,15 @@
         call("previoustrack");
         break;
       case "seekBy": {
-        const handled = seconds >= 0 ? call("seekforward", { seekOffset: seconds }) : call("seekbackward", { seekOffset: -seconds });
-        if (!handled && el) el.currentTime = Math.max(0, Math.min(el.duration || Infinity, el.currentTime + seconds));
+        const mediaAdvance = el && timeline?.mediaTimes.has(el) ? el.currentTime - timeline.mediaTimes.get(el) : null;
+        const [how, details] = seekByCall(seconds, el, (name) => actions.has(name), timeline && timelineNow(timeline, mediaAdvance, performance.now())) || [];
+        if (how === "currentTime") el.currentTime = details.seekTime;
+        else if (how === "seekto") askToSeek(how, details, () => details.seekTime);
+        else if (how) askToSeek(how, details, (reported) => clockPosition(reported.playbackRate, reported.clock, performance.now()) + seconds);
         break;
       }
       case "seekTo":
-        if (!call("seekto", { seekTime: seconds }) && el) el.currentTime = seconds;
+        if (!askToSeek("seekto", { seekTime: seconds }, () => seconds) && el) el.currentTime = seconds;
         break;
       case "stop":
         call("stop") || el?.pause();
@@ -971,6 +1038,532 @@
     addEventListener("pagehide", guard((e) => e.isTrusted && send("peekGone", {})));
   } catch (e) {}
 
+  let bridgesProtectedPlayback = () => false;
+  let reportProtectedPlayback = null;
+  try {
+    if (isTop && location.origin === "https://open.spotify.com" && typeof Navigator.prototype.requestMediaKeySystemAccess === "function") {
+      const KEY_SYSTEM = "com.apple.fps.1_0";
+      const PLAYLIST_PART = 30000;
+      const CONFIG_WAIT_MS = 3000;
+      const SEEK_GIVE_UP_MS = 2000;
+      const ENCRYPTED_DELAY_MS = 100;
+      const TICK_MS = 250;
+      const READY_GIVE_UP_MS = 45000;
+      const PLAYLIST_URL = /^data:application\/(?:vnd\.apple\.mpegurl|x-mpegurl)((?:;[^,]*)?),/i;
+      const Media = HTMLMediaElement.prototype;
+      const { defineProperty, getOwnPropertyDescriptor } = Object;
+      const { btoa, atob } = window;
+      const fromCharCode = String.fromCharCode;
+      const clock = performance;
+      const clockNow = clock.now;
+      const now = () => apply(clockNow, clock, []);
+      const encoder = new TextEncoder();
+      let enabled = null;
+      const awaitingConfig = [];
+      const configureFairPlay = (on) => {
+        enabled = on;
+        for (const resolve of awaitingConfig.splice(0)) resolve();
+      };
+      const whenConfigured = () =>
+        enabled !== null
+          ? Promise.resolve()
+          : new Promise((resolve) => {
+              awaitingConfig.push(resolve);
+              setTimeout(resolve, CONFIG_WAIT_MS);
+            });
+      const bytesOf = (b) =>
+        b instanceof ArrayBuffer ? new Uint8Array(b) : ArrayBuffer.isView(b) ? new Uint8Array(b.buffer, b.byteOffset, b.byteLength) : new Uint8Array(0);
+      const toBase64 = (bytes) => {
+        let text = "";
+        for (let i = 0; i < bytes.length; i += 0x8000) text += apply(fromCharCode, null, bytes.subarray(i, i + 0x8000));
+        return btoa(text);
+      };
+      const fromBase64 = (text) => {
+        const binary = atob(text);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return bytes;
+      };
+      const fire = (el, type) => el.dispatchEvent(new Event(type));
+
+      let certificate = "";
+      let generation = 0;
+      let media = null;
+      let pending = null;
+      let request = null;
+      let ticker = 0;
+      const tracks = new WeakMap();
+      const ownKeys = new WeakSet();
+      const keysOf = new WeakMap();
+      const everKeyed = new WeakSet();
+      let keyed = null;
+      const sessionGeneration = new WeakMap();
+      bridgesProtectedPlayback = () => {
+        const t = media && tracks.get(media);
+        return !!t && !t.failed;
+      };
+
+      const deliverRequest = () => {
+        if (!pending || !request || sessionGeneration.get(pending) !== request.gen) return;
+        const target = pending;
+        const { message } = request;
+        request = null;
+        let event;
+        try {
+          event = new MediaKeyMessageEvent("message", { messageType: "license-request", message });
+        } catch (e) {
+          event = new Event("message");
+          event.messageType = "license-request";
+          event.message = message;
+        }
+        target.dispatchEvent(event);
+      };
+      const createSession = () => {
+        const keySession = new EventTarget();
+        keySession.sessionId = "ardia-" + Math.random().toString(36).slice(2);
+        keySession.expiration = NaN;
+        keySession.keyStatuses = new Map();
+        let closeSession;
+        keySession.closed = new Promise((resolve) => (closeSession = resolve));
+        keySession.generateRequest = () => {
+          sessionGeneration.set(keySession, generation);
+          pending = keySession;
+          deliverRequest();
+          return Promise.resolve();
+        };
+        keySession.update = (response) => {
+          send("fairPlay", { op: "license", gen: sessionGeneration.get(keySession), ckc: toBase64(bytesOf(response)) });
+          keySession.keyStatuses = new Map([[new Uint8Array(16).buffer, "usable"]]);
+          keySession.dispatchEvent(new Event("keystatuseschange"));
+          return Promise.resolve();
+        };
+        keySession.load = () => Promise.resolve(false);
+        keySession.close = () => {
+          closeSession();
+          return Promise.resolve();
+        };
+        keySession.remove = () => Promise.resolve();
+        return keySession;
+      };
+      const createKeys = () => {
+        const keys = {
+          setServerCertificate(server) {
+            const bytes = bytesOf(server);
+            if (bytes.length) certificate = toBase64(bytes);
+            return Promise.resolve(true);
+          },
+          createSession,
+          getStatusForPolicy: () => Promise.resolve("usable"),
+        };
+        ownKeys.add(keys);
+        return keys;
+      };
+
+      const requestAccess = Navigator.prototype.requestMediaKeySystemAccess;
+      defineProperty(Navigator.prototype, "requestMediaKeySystemAccess", {
+        ...getOwnPropertyDescriptor(Navigator.prototype, "requestMediaKeySystemAccess"),
+        value: asNative(requestAccess, (target, self, args) => {
+          if (args[0] !== KEY_SYSTEM) {
+            if (!/^com\.(?:widevine|microsoft\.playready)(?:\.|$)/.test(String(args[0]))) return apply(target, self, args);
+            return whenConfigured().then(() =>
+              enabled === true
+                ? Promise.reject(new DOMException("Unsupported keySystem or supportedConfigurations.", "NotSupportedError"))
+                : apply(target, self, args)
+            );
+          }
+          const configurations = args[1];
+          return whenConfigured().then(() => {
+            if (enabled !== true) return apply(target, self, args);
+            const configuration = (configurations && configurations[0]) || {};
+            return { keySystem: KEY_SYSTEM, getConfiguration: () => configuration, createMediaKeys: () => Promise.resolve(createKeys()) };
+          });
+        }),
+      });
+      const mediaKeys = getOwnPropertyDescriptor(Media, "mediaKeys");
+      defineProperty(Media, "mediaKeys", {
+        ...mediaKeys,
+        get() {
+          return keysOf.has(this) ? keysOf.get(this) : apply(mediaKeys.get, this, []);
+        },
+      });
+      const setMediaKeys = Media.setMediaKeys;
+      Media.setMediaKeys = asNative(setMediaKeys, (target, self, args) => {
+        if (ownKeys.has(args[0])) {
+          keysOf.set(self, args[0]);
+          everKeyed.add(self);
+          keyed = self;
+          return Promise.resolve();
+        }
+        keysOf.delete(self);
+        return apply(target, self, args);
+      });
+
+      const positionOf = (t) =>
+        t.paused || !t.playing ? t.time : Math.min(Number.isNaN(t.duration) ? Infinity : t.duration, t.time + (now() - t.stamp) / 1000);
+      const rangesOf = (t) => ({ length: t.ready ? 1 : 0, start: () => 0, end: () => (Number.isNaN(t.duration) ? 0 : t.duration) });
+      const stopTicking = () => {
+        if (ticker) clearInterval(ticker);
+        ticker = 0;
+      };
+      const startTicking = () => {
+        if (ticker) return;
+        ticker = setInterval(
+          guard(() => {
+            const t = media && tracks.get(media);
+            if (t && !t.paused) fire(media, "timeupdate");
+            else stopTicking();
+          }),
+          TICK_MS
+        );
+      };
+      const finishSeek = (t, el) => {
+        t.seeking = 0;
+        fire(el, "seeked");
+        fire(el, "timeupdate");
+      };
+      const drives = (t) => !t.detached && !t.failed;
+      const seek = (t, el, value) => {
+        const time = +value;
+        if (!isFinite(time) || time < 0) return;
+        t.time = time;
+        t.stamp = now();
+        t.ended = false;
+        if (!drives(t)) {
+          fire(el, "seeking");
+          fire(el, "seeked");
+          fire(el, "timeupdate");
+          return;
+        }
+        const seq = ++t.seeks;
+        t.seeking = seq;
+        send("fairPlay", { op: "seek", time, seq });
+        fire(el, "seeking");
+        setTimeout(
+          guard(() => {
+            if (t.seeking === seq) finishSeek(t, el);
+          }),
+          SEEK_GIVE_UP_MS
+        );
+      };
+      const natives = {};
+      const override = (name, get, set) => {
+        const native = getOwnPropertyDescriptor(Media, name);
+        if (!native || !native.get) return;
+        natives[name] = native;
+        defineProperty(Media, name, {
+          ...native,
+          get() {
+            const t = tracks.get(this);
+            return t ? get(t) : apply(native.get, this, []);
+          },
+          set: native.set
+            ? function (value) {
+                const t = tracks.get(this);
+                if (t && set) set(t, this, value);
+                else apply(native.set, this, [value]);
+              }
+            : undefined,
+        });
+      };
+      override("readyState", (t) => t.ready);
+      override("networkState", (t) => (t.ready ? 1 : 2));
+      override("duration", (t) => t.duration);
+      override("paused", (t) => t.paused);
+      override("ended", (t) => t.ended);
+      override("error", (t) => t.error);
+      override("buffered", rangesOf);
+      override("seekable", rangesOf);
+      override("webkitAudioDecodedByteCount", (t) => (t.ready ? 1 : 0));
+      override("currentTime", positionOf, seek);
+      override("volume", (t) => t.volume, (t, el, value) => {
+        const volume = Math.min(Math.max(+value || 0, 0), 1);
+        t.volume = volume;
+        if (drives(t)) send("fairPlay", { op: "volume", volume });
+        fire(el, "volumechange");
+      });
+      override("muted", (t) => t.muted, (t, el, value) => {
+        t.muted = !!value;
+        if (drives(t)) send("fairPlay", { op: "muted", muted: t.muted });
+        fire(el, "volumechange");
+      });
+      const nativeValue = (el, name, fallback) => {
+        try {
+          return apply(natives[name].get, el, []);
+        } catch (e) {
+          return fallback;
+        }
+      };
+
+      const playMedia = Media.play;
+      Media.play = asNative(playMedia, (target, self, args) => {
+        const t = tracks.get(self);
+        if (!t) return apply(target, self, args);
+        trackDetachedMedia(self);
+        if (t.paused && blockAutoplay && !askedToPlay()) return Promise.reject(autoplayRefusal());
+        if (t.failed) return Promise.reject(new DOMException("The element has no supported sources.", "NotSupportedError"));
+        if (t.detached) {
+          attach(self, t);
+          if (t.time > 0 || t.seeks) send("fairPlay", { op: "seek", time: t.time, seq: ++t.seeks });
+        }
+        if (t.paused) {
+          if (t.ended) seek(t, self, 0);
+          t.paused = false;
+          t.ended = false;
+          t.stamp = now();
+          send("fairPlay", { op: "play" });
+          fire(self, "play");
+          startTicking();
+        }
+        return Promise.resolve();
+      });
+      const pauseMedia = Media.pause;
+      Media.pause = asNative(pauseMedia, (target, self, args) => {
+        const t = tracks.get(self);
+        if (!t) return apply(target, self, args);
+        if (t.paused) return;
+        t.time = positionOf(t);
+        t.paused = true;
+        t.playing = false;
+        send("fairPlay", { op: "pause" });
+        fire(self, "pause");
+      });
+      const loadMedia = Media.load;
+      Media.load = asNative(loadMedia, (target, self, args) => (tracks.has(self) ? undefined : apply(target, self, args)));
+
+      const sendMetadata = () => {
+        if (!media) return;
+        const md = session && session.metadata;
+        send("fairPlay", { op: "metadata", title: (md && md.title) || "", artist: (md && md.artist) || "", album: (md && md.album) || "", artwork: artworkOf(md) || "" });
+      };
+      const sessionProto = session && Object.getPrototypeOf(session);
+      const metadata = sessionProto && getOwnPropertyDescriptor(sessionProto, "metadata");
+      if (metadata && metadata.set)
+        defineProperty(sessionProto, "metadata", {
+          ...metadata,
+          set(value) {
+            apply(metadata.set, this, [value]);
+            guard(sendMetadata)();
+          },
+        });
+
+      const encryptedEvent = (skd) => {
+        const event = new Event("encrypted");
+        event.initDataType = "cbcs";
+        event.initData = encoder.encode(skd);
+        event.fromPolyfill = true;
+        return event;
+      };
+      const bridge = (el, value) => {
+        if (enabled !== true || !el || !everKeyed.has(el)) return false;
+        const url = String(value);
+        const head = url.match(PLAYLIST_URL);
+        if (!head) return false;
+        let playlist;
+        try {
+          playlist = /;base64/i.test(head[1]) ? atob(url.slice(head[0].length)) : decodeURIComponent(url.slice(head[0].length));
+        } catch (e) {
+          return false;
+        }
+        const skd = (playlist.match(/URI="(skd:\/\/[^"]+)"/) || [])[1];
+        if (!/^#EXTM3U/.test(playlist) || !skd || !certificate) return false;
+        const previous = tracks.get(el);
+        if (media && media !== el) release(media);
+        const t = {
+          gen: 0,
+          playlist,
+          cert: certificate,
+          loaded: false,
+          detached: false,
+          ready: 0,
+          time: 0,
+          stamp: now(),
+          duration: NaN,
+          paused: true,
+          playing: false,
+          ended: false,
+          error: null,
+          failed: false,
+          seeks: 0,
+          seeking: 0,
+          volume: previous ? previous.volume : nativeValue(el, "volume", 1),
+          muted: previous ? previous.muted : nativeValue(el, "muted", false),
+        };
+        tracks.set(el, t);
+        stopTicking();
+        attach(el, t);
+        setTimeout(
+          guard(() => {
+            if (tracks.get(el) === t) el.dispatchEvent(encryptedEvent(skd));
+          }),
+          ENCRYPTED_DELAY_MS
+        );
+        return true;
+      };
+      const parentMedia = (source) => (source.parentElement instanceof HTMLMediaElement ? source.parentElement : null);
+      const sourceSrc = getOwnPropertyDescriptor(HTMLSourceElement.prototype, "src");
+      defineProperty(HTMLSourceElement.prototype, "src", {
+        ...sourceSrc,
+        set(value) {
+          if (guard(bridge)(parentMedia(this) || keyed, value)) return;
+          guard(unbridge)(parentMedia(this));
+          apply(sourceSrc.set, this, [value]);
+        },
+      });
+      const mediaSrc = getOwnPropertyDescriptor(Media, "src");
+      defineProperty(Media, "src", {
+        ...mediaSrc,
+        set(value) {
+          if (guard(bridge)(this, value)) return;
+          guard(unbridge)(this);
+          apply(mediaSrc.set, this, [value]);
+        },
+      });
+      const srcObject = getOwnPropertyDescriptor(Media, "srcObject");
+      if (srcObject && srcObject.set)
+        defineProperty(Media, "srcObject", {
+          ...srcObject,
+          set(value) {
+            guard(unbridge)(this);
+            apply(srcObject.set, this, [value]);
+          },
+        });
+      const ElementProto = Element.prototype;
+      const isSrc = (name) => typeof name === "string" && name.toLowerCase() === "src";
+      defineProperty(Media, "setAttribute", {
+        ...getOwnPropertyDescriptor(ElementProto, "setAttribute"),
+        value: asNative(ElementProto.setAttribute, (target, self, args) => {
+          if (isSrc(args[0])) {
+            if (guard(bridge)(self, args[1])) return;
+            guard(unbridge)(self);
+          }
+          return apply(target, self, args);
+        }),
+      });
+      defineProperty(Media, "removeAttribute", {
+        ...getOwnPropertyDescriptor(ElementProto, "removeAttribute"),
+        value: asNative(ElementProto.removeAttribute, (target, self, args) => {
+          if (isSrc(args[0])) guard(unbridge)(self);
+          return apply(target, self, args);
+        }),
+      });
+
+      function attach(el, t) {
+        const previousGen = t.gen;
+        const gen = ++generation;
+        t.gen = gen;
+        t.detached = false;
+        t.loaded = false;
+        if (previousGen && pending && sessionGeneration.get(pending) === previousGen) sessionGeneration.set(pending, gen);
+        media = el;
+        request = null;
+        const { playlist } = t;
+        const parts = Math.max(1, Math.ceil(playlist.length / PLAYLIST_PART));
+        for (let part = 0; part < parts; part++) {
+          const chunk = playlist.slice(part * PLAYLIST_PART, (part + 1) * PLAYLIST_PART);
+          send("fairPlay", { op: "load", gen, part, parts, playlist: chunk, cert: part === 0 ? t.cert : null, volume: t.volume, muted: t.muted });
+        }
+        sendMetadata();
+        setTimeout(
+          guard(() => {
+            if (tracks.get(el) === t && t.gen === gen && !t.loaded && !t.detached) fail(el, t);
+          }),
+          READY_GIVE_UP_MS
+        );
+      }
+      function release(el) {
+        const t = tracks.get(el);
+        if (!t) return;
+        t.detached = true;
+        if (t.paused) return;
+        t.time = positionOf(t);
+        t.paused = true;
+        t.playing = false;
+        stopTicking();
+        fire(el, "pause");
+      }
+      function unbridge(el) {
+        if (!el || !tracks.has(el)) return;
+        tracks.delete(el);
+        if (media === el) {
+          media = null;
+          request = null;
+          stopTicking();
+          send("fairPlay", { op: "stop" });
+        }
+        fire(el, "emptied");
+      }
+      const fail = (el, t) => {
+        if (t.failed) return;
+        if (media === el && drives(t)) {
+          request = null;
+          send("fairPlay", { op: "stop" });
+        }
+        t.failed = true;
+        t.playing = false;
+        t.paused = true;
+        stopTicking();
+        t.error = { code: 3, message: "Protected playback failed", MEDIA_ERR_ABORTED: 1, MEDIA_ERR_NETWORK: 2, MEDIA_ERR_DECODE: 3, MEDIA_ERR_SRC_NOT_SUPPORTED: 4 };
+        fire(el, "error");
+        if (reportProtectedPlayback) reportProtectedPlayback(KEY_SYSTEM);
+      };
+      const remote = (command, time) => {
+        const t = media && tracks.get(media);
+        const action = command === "toggle" ? (t && !t.paused ? "pause" : "play") : command;
+        const handler = actions.get(action);
+        if (handler) return handler(action === "seekto" ? { action, seekTime: time } : { action });
+        if (!media) return;
+        if (action === "play") media.play();
+        else if (action === "pause") media.pause();
+        else if (action === "seekto" && isFinite(time)) media.currentTime = time;
+      };
+      handlers.fairPlay = (m) => {
+        if (m.event === "config") return configureFairPlay(m.on === true);
+        if (m.event === "remote") return remote(m.command, m.time);
+        const el = media;
+        const t = el && tracks.get(el);
+        if (!t || m.gen !== t.gen || t.failed) return;
+        if (m.event === "request") {
+          request = { gen: m.gen, message: fromBase64(m.spc).buffer };
+          deliverRequest();
+        } else if (m.event === "ready") {
+          t.loaded = true;
+          t.duration = m.duration;
+          t.ready = 4;
+          for (const type of ["loadedmetadata", "durationchange", "loadeddata", "canplay", "canplaythrough"]) fire(el, type);
+        } else if (m.event === "position") {
+          if (m.seq < t.seeks) return;
+          t.time = m.time;
+          t.stamp = now();
+          if (t.seeking) finishSeek(t, el);
+          const was = t.playing;
+          t.playing = !!m.playing && !t.paused;
+          if (t.playing && !was) fire(el, "playing");
+          else if (was && !t.playing && !t.paused) fire(el, "waiting");
+        } else if (m.event === "ended") {
+          if (!Number.isNaN(t.duration)) t.time = t.duration;
+          t.playing = false;
+          t.paused = true;
+          t.ended = true;
+          stopTicking();
+          fire(el, "timeupdate");
+          fire(el, "pause");
+          fire(el, "ended");
+        } else if (m.event === "failed") {
+          fail(el, t);
+        } else if (m.event === "stolen") {
+          release(el);
+        }
+      };
+      addEventListener(
+        "pagehide",
+        guard((e) => {
+          if (!e.isTrusted || !media) return;
+          send("fairPlay", { op: "stop" });
+          release(media);
+        })
+      );
+    }
+  } catch (e) {}
   try {
     const NavigatorType = window.Navigator;
     const requestAccess = NavigatorType && NavigatorType.prototype.requestMediaKeySystemAccess;
@@ -986,10 +1579,11 @@
       const attempted = new Set();
       const grantedOnActivation = new WeakSet();
       const needsProtectedPlayback = (keySystem) => {
-        if (drmSent) return;
+        if (drmSent || bridgesProtectedPlayback()) return;
         drmSent = true;
         send("drm", { keySystem });
       };
+      reportProtectedPlayback = needsProtectedPlayback;
       const progressed = (m) => m.readyState >= 2 && m.currentTime > 0;
       const anyProgressed = () => [...attempted, ...document.querySelectorAll("video, audio")].some(progressed);
       const after = (ms, fn) => setTimeout(guard(fn), ms);
@@ -1106,7 +1700,7 @@
     if (pipTrace && pipHandlerSet !== null)
       send("pipTrace", { event: "setActionHandler", action: "enterpictureinpicture", set: pipHandlerSet });
     if (blockAutoplay)
-      pauseUnasked([...playingMedia, ...document.querySelectorAll("video, audio")], !!(navigator.userActivation && navigator.userActivation.hasBeenActive));
+      pauseUnasked([...playingMedia, ...document.querySelectorAll("video, audio")], askedToPlay());
     if (config.displayMediaPicker) installDisplayMedia();
     else restoreDisplayMedia();
     if (config.fieldTiming) setFieldTiming(true);
@@ -1115,6 +1709,24 @@
   send("hello", { top: isTop, url: location.href });
 
   if (!isTop) return receive;
+
+  let contextMenuAt = null;
+  addEventListener(
+    "contextmenu",
+    (e) => {
+      if (e.isTrusted) contextMenuAt = { x: e.clientX, y: e.clientY, at: performance.now() };
+    },
+    { capture: true, passive: true },
+  );
+  document.addEventListener("ardia-hide-element", () => {
+    const asked = contextMenuAt;
+    contextMenuAt = null;
+    if (asked && performance.now() - asked.at < 60000) send("hideElement", { x: asked.x, y: asked.y });
+  });
+  document.addEventListener("ardia-hide-element-in-frame", () => {
+    contextMenuAt = null;
+    send("hideElement", { x: -1, y: -1 });
+  });
 
   const parse = (css) => {
     if (!css) return null;

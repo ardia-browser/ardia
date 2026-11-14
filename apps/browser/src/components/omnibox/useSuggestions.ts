@@ -71,7 +71,8 @@ export function useSuggestions({
   preventInline?: boolean;
 }): SuggestionResult {
   const allTabs = useTabs((tabs) => tabs);
-  const history = useProfileHistory(profileId);
+  const historyOn = useSettings((st) => st.commandBarHistory);
+  const history = useProfileHistory(historyOn ? profileId : null);
   const bookmarks = useBookmarks((b) => b);
   const bookmarkEngine = useBookmarkEngine(windowId);
   const engines = useSettings((st) => searchEngines(st));

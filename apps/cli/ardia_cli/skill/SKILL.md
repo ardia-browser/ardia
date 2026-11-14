@@ -13,24 +13,24 @@ turn that re-reads all output before it: do the most per call, print the least. 
 ## Start
 
 ```sh
-ardia browse open <url>     # a task that names a site
-ardia browse snapshot -i    # a task about the user's own page
+ardia browse open <url>  # a task that names a site
+ardia browse batch "tab active" "snapshot -i"  # the user's own page
 ```
 
 `snapshot -i` lists what you can act on with refs (`textbox "Name" [ref=e11]`). If it starts with
-`# notes for <site>`, follow them.
+`# notes` or `# saved flows`, use them.
 
 ## Read
 
 - This page's text: `ardia browse read`, or `read -s <sel>`. Other pages, any number, in one call:
   `read <url> <url> …`, or every link here whose URL matches: `read --links /p/ -s table.specs` (`--list`: just the
-  URLs). They load in your background tabs with the user's logins; `--http` is a plain fetch, best for a
-  site's public JSON API.
+  URLs). They load in your background tabs with the user's logins; `--http` is a plain fetch for a site's
+  public JSON API.
 - A long or scroll-loaded list (`1–40 of 200`): `read --scroll` (the main list, or `-s <list>`; `--match <text>`).
 - Blocked, CAPTCHA or 429 (`read` says so): wait 30–60 s, retry, click a captcha checkbox once, then use the
   site's own search and pages, or another source.
 - Find a control with `find role button --name Save` or `snapshot -i -s <sel>`.
-- To read pages, not `snapshot --full`, `get html`, `curl`, `eval "fetch(…)"` or a shell loop.
+- Redo a search later in one call: `flow save <name>` once done, then `flow run <name> --param k=v` (`flows.md`).
 
 ## Act
 
@@ -55,7 +55,7 @@ EOF
 
 ## Loops
 
-For steps that repeat per item, write one script, not a call per item.
+For steps that repeat per item, write one script.
 
 ```sh
 ardia browse script <<'EOF'
@@ -71,25 +71,25 @@ EOF
 - `page.goto/click/fill/select/press/text(sel)/links(pat)/snapshot('-i')`, `read(urls)`, `browse('cmd', …)`.
   The script runs outside the page (no `document`): DOM code goes in `page.evaluate((x) => …, x)`. Recipes:
   `references/script.md`.
-- Save data with `--out <file>` on `script`, `read` or `eval`, beside your deliverables, and build files from it,
-  never by retyping output. Show what you saved (`--out` prints a digest; `head` the file for more): a value that
-  never appeared in output is unverified. `state` keeps its contents between scripts and through a timeout.
-- Click with `page.click(sel)` (i-th match: `` `li >> nth=${i}` ``), not `el.click()` in `page.evaluate`: that
-  sends no pointer events; many controls miss it.
+- Save data with `--out <file>` (`script`, `read`, `eval`; `.csv` makes a table) beside your deliverables. Build
+  files from saved data, never from rows typed into code or retyped output. `--out` prints what it saved: a value
+  that never appeared in output is unverified. `state` keeps its contents between scripts.
+- Click with `page.click(sel)` (i-th: `` `li >> nth=${i}` ``), not `el.click()` in `page.evaluate` (no pointer
+  events).
 
 ## Finish
 
 - Scope first: the page's own total (`1,420 results`), every page, tab, category and `Load more`. Before answering,
-  compare your row count with it; name what's missing and why. Save each batch: partial data beats none.
+  compare your rows with it; name what's missing and why. Save each batch; partial beats none.
 - Every value comes from output this session showed or saved: never retype rows or fill gaps from memory; mark the
-  rest `unverified`. Search results are pointers: open the source.
-- Answer in the shape asked. Files you name must exist.
+  rest `unverified`. Snippets are pointers: cite and date only pages you read.
+- Answer in the shape asked; files you name must exist. Recheck each total, URL, time and status against the output.
 
 ## Memory
 
 `ardia notes` keeps one short page per site for every agent the user runs; `snapshot` prints it first.
 
-- Write it in the same call as your last action (`notes append "…"` as a batch line), never as a call of its own;
+- Write it in the same call as your last action (`notes append "…"` as a batch line), not as its own call;
   `notes set` rewrites a stale page.
 - Write what saves the next run a step: where things are, formats, defaults, pitfalls, stated preferences. Never
   secrets, personal data or the task's own content.

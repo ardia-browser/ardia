@@ -28,6 +28,7 @@ import { isLastRegularWindow, isOpenRegularWindow, isRegularWindow, isSmall, isS
 import { activated, apply, removeTabs, withNewTab } from "../tabs/tabs";
 import type { AdoptId, BrowserWindow, ClosedWindow, Frame, ParkedPins, Tab, WindowKind } from "../browser/types";
 import { emptyWindow, smallWindow, withWindow } from "./newWindow";
+import { newTabHome } from "../tabs/newTabHome";
 import { noteAutoHideTabsChosen, noteTornOffWindowKeptAutoHide } from "../telemetry/autoHideTabsChoices";
 import { lastClosedEntry, lastClosedTab, restoreTab, restoreWindow } from "./reopenClosed";
 import { groupTree, regrouped, splitsWithin, withSplitsBack } from "./groupMoves";
@@ -188,7 +189,8 @@ export const createWindowsSlice: StateCreator<BrowserState, [], [], WindowsSlice
     }
     let next = withWindow(s, w);
     if (o.tabIds?.length && !small) next = moveTabsInto(next, o.tabIds, id);
-    if (!next.windows[id]!.tabIds.length) next = withNewTab(next, id, { url: o.url, adoptId: o.adoptId })[0];
+    const home = !next.windows[id]!.tabIds.length && o.url === undefined && !small && !o.adoptId ? newTabHome(s, id, profileId) : undefined;
+    if (!next.windows[id]!.tabIds.length) next = withNewTab(next, id, { url: o.url ?? home?.url, replaced: home?.replaced, adoptId: o.adoptId })[0];
     const first = next.windows[id]!.tabIds[0]!;
     const shown = next.windows[id]!.activeTabIds[next.tabs[first]!.profileId] ?? first;
     if (!small) next = adoptParkedPins(next, id, next.tabs[shown]!.profileId);
@@ -201,6 +203,7 @@ export const createWindowsSlice: StateCreator<BrowserState, [], [], WindowsSlice
       };
     }
     set(next);
+    home?.settle(first, get, () => {});
     return id;
   },
 

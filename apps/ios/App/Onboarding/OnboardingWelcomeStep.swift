@@ -54,7 +54,7 @@ struct OnboardingWelcomeStep: View {
         .opacity(hasAppeared ? 1 : 0)
     }
     .onAppear {
-      withAnimation(reduceMotion ? .easeOut(duration: 0.3) : .spring(duration: 0.7, bounce: 0.3).delay(0.1)) {
+      withAnimation(reduceMotion ? .easeOut(duration: 0.3) : Motion.rise.delay(0.05)) {
         hasAppeared = true
       }
     }

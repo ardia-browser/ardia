@@ -326,6 +326,48 @@ class Refresh(unittest.TestCase):
         self.assertEqual((copy / "SKILL.md").read_text(encoding="utf-8"), self.current_skill())
 
 
+class Printing(Refresh):
+    def run_cli(self, *argv):
+        with contextlib.redirect_stdout(io.StringIO()) as out, contextlib.redirect_stderr(io.StringIO()) as err:
+            status = cli.main(list(argv))
+        return status, out.getvalue(), err.getvalue()
+
+    def written(self) -> list[str]:
+        return sorted(str(path.relative_to(self.root)) for folder in (self.home, self.project) for path in folder.rglob("*") if path.is_file())
+
+    def test_get_and_the_skill_flag_print_the_shipped_skill_md_and_write_nothing(self):
+        for argv in (["skills", "get"], ["--skill"]):
+            status, out, err = self.run_cli(*argv)
+            self.assertEqual((status, err), (0, ""), argv)
+            self.assertEqual(out, self.current_skill(), argv)
+        self.assertEqual(self.written(), [])
+
+    def test_get_full_adds_every_reference_after_a_line_naming_it(self):
+        status, out, err = self.run_cli("skills", "get", "--full")
+        self.assertEqual((status, err), (0, ""))
+        self.assertTrue(out.startswith(self.current_skill()))
+        source = skills.skill_source()
+        references = [name for name in skills.shipped_files() if name.startswith("references/")]
+        self.assertGreater(len(references), 3)
+        for name in references:
+            self.assertIn(f"\n--- {name} ---\n\n" + (source / name).read_text(encoding="utf-8"), out)
+        self.assertEqual(self.run_cli("--skill", "--full")[1], out)
+        self.assertEqual(self.written(), [])
+
+    def test_list_names_the_skill_and_its_description(self):
+        status, out, err = self.run_cli("skills", "list")
+        self.assertEqual((status, err), (0, ""))
+        name, description = out.rstrip("\n").split("\t")
+        self.assertEqual(name, "ardia")
+        self.assertTrue(description.startswith("Drives the user's own Ardia browser"))
+        self.assertEqual(self.written(), [])
+
+    def test_get_refuses_a_shared_option(self):
+        status, out, err = self.run_cli("--json", "--skill")
+        self.assertEqual(status, 2)
+        self.assertIn("doesn't take --json", err)
+
+
 class Contents(unittest.TestCase):
     def test_frontmatter_and_links(self):
         source = skills.skill_source()

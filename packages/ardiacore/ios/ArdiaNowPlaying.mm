@@ -47,6 +47,7 @@ NSDictionary *Sanitized(NSDictionary *d, BOOL main) {
     @"hasVideo" : @([Field<NSNumber>(d, @"hasVideo") boolValue]),
     @"actions" : actions,
     @"controllable" : @([Field<NSNumber>(d, @"controllable") boolValue]),
+    @"loop" : @([Field<NSNumber>(d, @"loop") boolValue]),
   };
 }
 

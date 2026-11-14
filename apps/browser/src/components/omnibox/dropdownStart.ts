@@ -15,7 +15,8 @@ export function useDropdownStart(enabled: boolean, tabId: string, profileId: str
   const url = useTab(tabId, (t) => (enabled ? (t?.url ?? "") : ""));
   const title = useTab(tabId, (t) => (enabled ? (t?.title ?? "") : ""));
   const favicon = useTab(tabId, (t) => (enabled ? (t?.favicon ?? null) : null));
-  const history = useProfileHistory(enabled ? profileId : null);
+  const historyOn = useSettings((st) => st.commandBarHistory);
+  const history = useProfileHistory(enabled && historyOn ? profileId : null);
   const recent = useMemo(() => {
     const seen = new Set(url ? [withoutFragment(url)] : []);
     const out: Suggestion[] = [];

@@ -60,7 +60,7 @@ const usesPageA = [
   "restore-after-close", "discard-outcomes", "memory-saver", "memory-saver-pinned", "capture-picture", "unresponsive", "permission-dismissed",
   "save-page", "activate-request", "extension-popup-and-panel", "scroll-zoom", "print-preview",
   "extension-prompts", "traffic-lights-after-profile-switch", "extension-configure",
-  "private-windows-create", "extension-private-window", "extension-installed-bubble", "popup-window", "autofill-save-prompts",
+  "private-windows-create", "extension-private-window", "extension-installed-bubble", "popup-window", "popup-window-full-screen", "autofill-save-prompts",
   "settings-services", "download-navigation", "page-events", "page-background", "external-app-answer",
   "external-app-from-extension",
   "notifications", "now-playing", "media-state", "auto-picture-in-picture", "auto-picture-in-picture-app-switch", "picture-in-picture-opt-out", "pip-window", "pip-framing", "report-recording-pip", "report-recording-guard", "report-recording-webkit-media", "page-focus",
@@ -2886,6 +2886,67 @@ try {
     return { size, opener: hasOpener, message };
   });
 
+  await check("popup-window-full-screen", async () => {
+    await evalApp(`ac.actions.switchToTab("${first.id}"); return true`);
+    const opener = await pageFor(first.id, `${base}/a`);
+    const openerWindow = await engine("tabs.devWindowNumber", { tabId: first.id });
+    const fullScreenPrimary = 1 << 7, fullScreenAuxiliary = 1 << 8;
+    const actFullScreen = async (on) => {
+      await engine("windows.dev", { window: openerWindow, action: `fakeFullScreen:${on ? 1 : 0}` });
+      await until(on ? "the opener in full screen" : "the opener out of full screen", async () => {
+        const w = JSON.parse(await engine("windows.dev", { window: openerWindow, action: "fullScreen" }));
+        return w.fullScreen === on && !w.pageFullScreen?.transitioning ? w : null;
+      }, 6000);
+    };
+    const popupBehavior = async (open) => {
+      const before = new Set([...onScreenWindows(), ...(await engine("windows.list")).map((w) => w.window)]);
+      const close = await open();
+      try {
+        const popup = await until("the popup window on screen", async () => onScreenWindows().find((w) => !before.has(w)) ?? null, 10000);
+        return JSON.parse(await engine("windows.dev", { window: popup, action: "winfo" })).collectionBehavior;
+      } finally {
+        await close();
+        await until("the popup window closed", async () => (!(await pageTarget("/popup-page")) ? true : null), 10000);
+      }
+    };
+    const fromPage = async () => {
+      await cdp(opener, "Runtime.evaluate", { expression: `window.open("${base}/popup-page", "pop", "width=480,height=360"); true`, userGesture: true });
+      const page = await until("the popup's page", () => pageTarget("/popup-page"));
+      return () => closeFromPage(page);
+    };
+    return withPopupExtension({}, async (id) => {
+      const worker = await until("the extension's worker", async () => {
+        for (const t of (await targets()).filter((t) => t.type === "service_worker" && t.url.includes(id))) {
+          const r = await cdp(t, "Runtime.evaluate", { expression: "typeof chrome?.windows?.create", returnByValue: true }).catch(() => null);
+          if (r?.result?.value === "function") return t;
+        }
+        return null;
+      }, 15000);
+      const fromExtension = async () => {
+        const created = await cdp(worker, "Runtime.evaluate", {
+          expression: `chrome.windows.create({ url: "${base}/popup-page", type: "popup", width: 480, height: 360 }).then((w) => w.id)`,
+          awaitPromise: true, returnByValue: true,
+        });
+        await until("the extension popup's page", () => pageTarget("/popup-page"));
+        return () => cdp(worker, "Runtime.evaluate", { expression: `chrome.windows.remove(${created.result.value})`, awaitPromise: true });
+      };
+      const windowed = await popupBehavior(fromPage);
+      await actFullScreen(true);
+      let page, extension;
+      try {
+        page = await popupBehavior(fromPage);
+        extension = await popupBehavior(fromExtension);
+      } finally {
+        await actFullScreen(false);
+      }
+      if (windowed & fullScreenAuxiliary) throw new Error(`a popup from a window that isn't full screen can't take full screen itself (collectionBehavior ${windowed})`);
+      const stuck = Object.entries({ page, extension }).filter(([, behavior]) => !(behavior & fullScreenAuxiliary) || behavior & fullScreenPrimary);
+      if (stuck.length)
+        throw new Error(`popups from a full-screen window that can't join its Space, so macOS shows them on another desktop (collectionBehavior): ${JSON.stringify(Object.fromEntries(stuck))}`);
+      return { windowed, page, extension };
+    });
+  });
+
   await check("download", async () => {
     await evalApp(`ac.actions.openUrls(["${base}/file.bin"], ${JSON.stringify(mainWindow)}); return true`);
     const d = await until("the finished download", async () => {
@@ -3178,7 +3239,7 @@ try {
 
   await check("download-controls", async () => {
     await evalApp(`ac.actions.openUrls(["${base}/slow.bin"], ${JSON.stringify(mainWindow)}); return true`);
-    const find = () => evalApp(`return ac.store.getState().downloads.map((d) => ({ id: d.id, state: d.state, paused: d.paused, filename: d.filename, received: d.received }))`)
+    const find = () => evalApp(`return ac.downloads.withLiveProgress(ac.store.getState().downloads).map((d) => ({ id: d.id, state: d.state, paused: d.paused, filename: d.filename, received: d.received }))`)
       .then((l) => l.find((x) => x.filename?.includes("ardiacore-slow")) ?? null);
     try {
       const d = await until("the slow download running", async () => { const x = await find(); return x?.state === "downloading" && !x.paused && x.received > 0 ? x : null; }, 15000);

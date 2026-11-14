@@ -5,9 +5,17 @@ export interface CodeLine {
   group: Group;
   commaFrom?: Group;
   lookKey?: "type" | "metrics" | "layout" | "icons";
+  cli?: { step: 1 | 2; text: string };
 }
 
 export const FILE_NAME = "themes/demo.json";
+
+export const PROMPT = "~ % ";
+
+export const COMMANDS: { command: string; output: string }[] = [
+  { command: "ardia theme set type.family Baskerville", output: 'type.family = "Baskerville"' },
+  { command: "ardia theme set dark.tabSelected '#FF9F5A80'", output: 'dark.tabSelected = "#FF9F5A80"' },
+];
 
 export const CODE: CodeLine[] = [
   { text: "{", group: 0 },
@@ -16,12 +24,12 @@ export const CODE: CodeLine[] = [
   { text: '    "accent": "#FF9F5A",', group: 1 },
   { text: '    "icon": "#FFC08A",', group: 1 },
   { text: '    "textTab": "#F6E7D2",', group: 1 },
-  { text: '    "tabSelected": "#FF9F5A38",', group: 1 },
+  { text: '    "tabSelected": "#FF9F5A38",', group: 1, cli: { step: 2, text: '    "tabSelected": "#FF9F5A80",' } },
   { text: '    "tabSelectedText": "#FFE2C2",', group: 1 },
   { text: '    "pinnedResting": "#FF9F5A24",', group: 1 },
   { text: '    "pinnedRestingStroke": "#FF9F5A52"', group: 1 },
   { text: "  }", group: 1, commaFrom: 2 },
-  { text: '  "type": { "family": "Avenir Next", "scale": 1.08 },', group: 2, lookKey: "type" },
+  { text: '  "type": { "family": "Avenir Next", "scale": 1.08 },', group: 2, lookKey: "type", cli: { step: 1, text: '  "type": { "family": "Baskerville", "scale": 1.08 },' } },
   { text: '  "metrics": {', group: 2, lookKey: "metrics" },
   { text: '    "rowHeight": 42, "rowGap": 5, "pinnedHeight": 52,', group: 2 },
   { text: '    "sidebarWidth": 250,', group: 2 },
@@ -33,9 +41,9 @@ export const CODE: CodeLine[] = [
   { text: '    "newTab": "top"', group: 2 },
   { text: "  },", group: 2 },
   { text: '  "icons": {', group: 2, lookKey: "icons" },
-  { text: '    "plus": "plus.circle.fill",', group: 2 },
-  { text: '    "sidebar.left": "rectangle.lefthalf.inset.filled",', group: 2 },
-  { text: '    "chevron.down": "chevron.down.circle"', group: 2 },
+  { text: '    "plus": "square.and.pencil",', group: 2 },
+  { text: '    "slider.horizontal.3": "switch.2",', group: 2 },
+  { text: '    "chevron.down": "ellipsis"', group: 2 },
   { text: "  }", group: 2 },
   { text: "}", group: 0 },
 ];

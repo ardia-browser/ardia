@@ -11,6 +11,7 @@ export {
   type UpdateChannel,
   type AppIcon,
   type HardwareInfo,
+  type DiagnosticsSample,
 } from "@ardia/shell";
 import { call } from "@ardia/ardiacore";
 import { nativeModule, type AppEvent, type AppearanceMode, type OpenURLSource, type UpdateChannel } from "@ardia/shell";

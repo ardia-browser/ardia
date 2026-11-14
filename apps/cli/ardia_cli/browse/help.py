@@ -8,9 +8,10 @@ Usage: ardia browse <command> [args] [options]
 Same commands, flags and output (text and --json) as agent-browser, so an agent that
 knows `agent-browser <args>` can type `ardia browse <args>`. It drives the running Ardia
 over the ardia command's control connection (Settings > "Let the ardia command control
-Ardia"), through pydoll. Input is instant unless --humanize. Actions print what they changed
-(nodes with refs, URL, title, the POSTs they caused), a session with no tab uses the user's
-active tab, and text output stops at about 12,000 characters (narrow it with snapshot -i or -s <css>).
+Ardia"), with a small CDP client of its own. Input is instant unless --humanize. Actions print what they changed
+(nodes with refs, URL, title, the POSTs they caused), a session works in background tabs of its
+own (`tab active` picks the user's tab), and text output stops at about 12,000 characters (narrow it
+with snapshot -i or -s <css>).
 
 Core Commands:
   open [url]                 Open url in a new background tab of this session (later opens reuse it)
@@ -76,6 +77,8 @@ Init:        addinitscript <js> | removeinitscript <id>   (page main world, by r
 Batch:       batch [--bail] ["cmd args" | '["cmd","arg"]' ...]  (or one command per stdin line; # comments)
 Script:      script [file.js] [--timeout 90s]   (JS on stdin: loops over pages with page.goto/click/text, read())
 Notes:       notes [get|set|append|list|rm] [site] [text|-]   (plain per-site notes, shown atop snapshot)
+Flows:       flow steps | save <name> [--param k=v] | run <name> [--param k=v] [--fields a,b] [--where f=v] [--limit n]
+             flow list [site] | show <name> | rm <name>   (do a task once, then rerun it as one request)
 Auth Vault:  auth save <name> --url <https url> --username <u> [--password-stdin]
              auth login <name> [--username-selector s] [--password-selector s] [--submit-selector s]
              auth login <name> --credential-provider <plugin> [--item ref] [--url url]
@@ -142,7 +145,7 @@ Examples:
 COMMANDS = {
     "open": "ardia browse open [url] [--enable react-devtools] [--init-script <path>] [--capture-console] [--label name]\n\n"
             "Without a tab, opens a new background tab in Ardia's sidebar (the user's own tab is never navigated\n"
-            "unless the session picked it with `tab <id>`). When the session was using the user's tab, the answer\n"
+            "unless the session picked it with `tab <id>`). When the session was using the user's tab (`tab active`), the answer\n"
             "names both: `→ [t4] is this session's tab now …; `tab t3` goes back`. Later opens navigate the\n"
             "session's tab. A URL without a\n"
             "scheme gets https:// (http:// for localhost). Prints the title and URL, then the page it landed on as a\n"
@@ -203,14 +206,16 @@ COMMANDS = {
     "scroll": "ardia browse scroll [up|down|left|right] [px] [-s <sel>] [--no-humanize]\n\nWheel scrolling with momentum, at the mouse position (moved into the page or the container first).",
     "wait": "ardia browse wait <sel|ms> [--state visible|hidden|attached|detached] | --text <t> | --url <glob> |\n"
             "  --load load|domcontentloaded|networkidle | --fn <js> [--timeout ms]\n\n--fn evaluates in the page's main world, like eval. Timeouts default to 25 s.",
-    "screenshot": "ardia browse screenshot [sel] [path] [--full] [--annotate] [--screenshot-format png|jpeg] [--screenshot-quality n]\n\n"
+    "screenshot": "ardia browse screenshot [sel] [path | --out path] [--full] [--annotate] [--screenshot-format png|jpeg] [--screenshot-quality n] [--if-changed [--threshold pct]]\n\n"
+                  "--if-changed saves nothing and says so when this view looks the same as at its last screenshot (under --threshold percent of pixels changed, 0.5 by default).\n"
                   "--annotate takes an interactive snapshot and draws the numbered labels onto the image (nothing is added\n"
                   "to the page). Without a path it saves under $TMPDIR/ardia-browse/screenshots.",
     "eval": "ardia browse eval <js> | -b <base64> | --stdin [--out <file>]\n\nRuns in the page's main world (the one place, with init scripts and the React hook, that does).\n"
             "--out <file> saves the whole value (JSON, or the text as is) and prints a short summary instead.",
     "get": "ardia browse get text|html|value|attr <name>|title|url|count|box|styles <sel>\n\ncdp-url works only with --port or --ws: the real URL carries Ardia's token.",
     "find": "ardia browse find <role|text|label|placeholder|alt|title|testid|first|last|nth> <value> [action] [text] [--name n] [--exact|--partial]\n\n"
-            "Actions: click (default), fill, type, check, uncheck, select, hover, focus, dblclick, text. The found element\n"
+            "Actions: click (default), fill, type, press [key] (Enter if none), check, uncheck, select, hover, focus, dblclick,\n"
+            "text. The found element\n"
             "gets the next ref, so later commands can use it.\n\n"
             "find role takes the role and accessible name the snapshot shows, in any order: `find role button\n"
             "click --name Save`, `find role button --name Save click` or `find role button Save click`. A name\n"
@@ -221,7 +226,10 @@ COMMANDS = {
            "list shows the user's tabs too, with the tab-… id `ardia windows` prints when the address pairs them\n"
            "up, and which session opened or uses each. A t1 id is the same in every session and never moves to\n"
            "another tab. Switching changes which tab this session acts on, not what Ardia shows (--show does).\n"
-           "`tab active` picks the tab the user is looking at. close only closes tabs this session opened, and\n"
+           "A session never takes the user's tab on its own: until it opens or picks one, commands that need a\n"
+           "page fail with no_session_tab. `tab active` picks the tab the user is looking at; the session works\n"
+           "in it but won't navigate it (open goes to a background tab of its own) unless picked by id. close only\n"
+           "closes tabs this session opened, and\n"
            "not one another session is using. When Ardia swaps a tab's page (it slept, or crashed and reloaded),\n"
            "the session follows it to the new page.",
     "console": "ardia browse console [--clear]\n\nThe first call turns on the Runtime domain for the session's tab (Chrome then replays earlier\n"
@@ -246,6 +254,20 @@ COMMANDS = {
              "Plain notes per site (host[:port]) for your own agent, in <data dir>/Notes/<site>.md (0600, 8 KB each).\n"
              "Without a site it's the session tab's (--tab <id> for another tab's). - reads stdin. snapshot prints a\n"
              "site's notes first, and so does an action that lands on another site.",
+    "flow": "ardia browse flow steps [--all]\n"
+            "ardia browse flow save <name> [--from n] [--to n] [--param k=v]... [--output s2r1] [--description text]\n"
+            "ardia browse flow run <name> [--param k=v]... [--fields a,b.c] [--where field=value]... [--limit n]\n"
+            "  [--allow-write all|w1,w2] [--tier page|replay] [--site s] [--timeout 60s]\n"
+            "ardia browse flow list [site] | show <name> [--site s] | rm <name> [--site s]\n\n"
+            "The session keeps its last 200 actions with the first-party JSON each one loaded (and JSON a page embeds:\n"
+            "__NEXT_DATA__, JSON-LD, window.x = {...}). save turns the steps since the last save (from the last open) into\n"
+            "a flow for the site, in <data dir>/Flows/<site>/<name>.json (0600): typed text and query values the requests\n"
+            "sent become params, and no cookie, auth or token header, secret field or credential query value is kept.\n"
+            "run fetches the answer from a background tab on the site (your logins stay in Ardia), then falls back to\n"
+            "replaying the commands; it checks the answer still has the recorded shape and prints the main list as\n"
+            "items. --where keeps items whose field contains the value; unknown fields fail with the valid ones.\n"
+            "Writes (POST, PUT, DELETE, a GET to /logout) are sent only with --allow-write. Codes: auth_expired, blocked,\n"
+            "rate_limited, drifted, outcome_unknown, write_not_allowed. open and snapshot list a site's flows once.",
     "read": "ardia browse read [url...] [--links <pattern>] [-s <selector>] [--stdin] [--limit n] [--timeout ms] [--http] [--list] [--out <file>]\n"
             "ardia browse read [-s <list>] --scroll [--limit rows] [--match <text>] [--timeout ms]\n\n"
             "Reads each page in a background tab of this session's own (four at a time, through your logins, after its\n"

@@ -25,7 +25,8 @@ import { patchPage, setPopover, usePage } from "../../state/tabs/pageState";
 import { dismissPopoverByPress } from "../../state/tabs/popoverDismiss";
 import { toggleCastPicker } from "../../state/media/cast";
 import { useMedia, usePictureInPicture } from "../../state/media/media";
-import { openSettings } from "../../state/settings/settingsWindows";
+import { openSettings, openSiteSettings } from "../../state/settings/settingsWindows";
+import { noteSiteControls } from "../../state/telemetry/usage";
 import { copyPageUrl } from "../../state/site/selection";
 import { clearSiteDataAfterConfirm, setSiteBlocking, siteOrigin } from "../../state/site/reloadMenu";
 import { canShare, shareTab } from "../../state/site/share";
@@ -34,6 +35,7 @@ import { SectionLabel } from "../sidebar/SectionLabel";
 import { CertificateDetails, ConnectionChip, ConnectionRow } from "./SiteConnection";
 import { SiteExtensions } from "./SiteExtensions";
 import { TranslateRows } from "./TranslateControls";
+import { ReaderRow } from "./ReaderControls";
 import { ZoomStepper } from "./ZoomControls";
 import { blockerLabel, choiceTitle, featuredPermissions, permissionValue, readSiteSettings, setSitePermission, sitePermissionsFor, type SitePermission } from "../../state/site/siteControls";
 import { isWebPageUrl } from "../../lib/url";
@@ -118,6 +120,12 @@ function SiteControlsPanel({
   const toggleBlocker = async (on: boolean) => {
     const allowed = await setSiteBlocking(tab, host, on);
     setBlocker((b) => (b ? { ...b, allowed } : b));
+  };
+  const showSiteSettings = () => {
+    if (!origin) return;
+    close();
+    noteSiteControls("siteSettings");
+    openSiteSettings(origin, tab.profileId);
   };
   const clearData = async () => {
     if (!origin) return;
@@ -269,6 +277,7 @@ function SiteControlsPanel({
             {origin ? (
               <>
                 <MenuSeparator />
+                <ReaderRow tabId={tabId} onClose={close} />
                 <TranslateRows tabId={tabId} onClose={close} />
                 {otherPermissions.map((p) => (
                   <MenuRow
@@ -278,7 +287,8 @@ function SiteControlsPanel({
                     accessory={<PopoverValue title={value(p)} onPress={() => void pickPermission(p.type, p.choices)} />}
                   />
                 ))}
-                {otherPermissions.length ? <MenuSeparator /> : null}
+                {pageEngine === "chromium" ? <MenuRow icon="slider.horizontal.3" title="Site Settings…" onPress={showSiteSettings} /> : null}
+                <MenuSeparator />
                 <MenuRow icon="trash" title="Clear Cookies and Site Data…" detail={cleared ?? undefined} onPress={() => void clearData()} />
               </>
             ) : null}

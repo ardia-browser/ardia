@@ -8,6 +8,7 @@ const { manualRefresh, refreshFolder } = await import("./engine.ts");
 const { SOURCES } = await import("./sources.ts");
 const { folderRows, liveTabOpen, liveTabPlace, stackMembers } = await import("./rows.ts");
 const { liveFolderMenuItems } = await import("../sidebar/liveMenus.ts");
+const { hideNewRepos, setShowNewRepos, showAllRepos } = await import("./repoFilter.ts");
 const { applyFetch, createFolder, finishCompleting, hideItems, live, markUnread, removeFolder, setRepoHidden, showAllIn, toggleStack, updateFolder, useLive } = await import("./store.ts");
 
 const pr = (id, number, headRef, baseRef) => ({
@@ -283,6 +284,17 @@ test("hiding a repo also keeps aside its completed pull requests, so their open 
   assert.deepEqual(live().repoHidden[id].map((it) => it.id), ["x"]);
 });
 
+test("with Show New Repositories off, a repo hidden on its return keeps its completed pull requests aside too", () => {
+  const id = createFolder("p", "pullRequests", []);
+  applyFetch(id, [inRepo("x", "me/dotfiles")], {});
+  applyFetch(id, [], { x: "merged" });
+  finishCompleting(id, ["x"]);
+  setShowNewRepos(id, false);
+  hideNewRepos(id, [inRepo("y", "me/dotfiles")]);
+  assert.deepEqual(live().completed[id], []);
+  assert.deepEqual(live().repoHidden[id].map((it) => it.id), ["x"]);
+});
+
 test("a pull request hidden until refresh stays hidden when its repo is hidden and shown again, and a manual refresh doesn't show a hidden repo's", async () => {
   const id = createFolder("p", "pullRequests", []);
   const parked = inRepo("p1", "me/dotfiles");
@@ -309,16 +321,37 @@ const repoMenu = (id) => {
 
 test("the Repositories submenu lists every repo the folder knows, sorted, and names the service only when the folder has two", () => {
   const id = createFolder("p", "pullRequests", ["github", "bitbucket"]);
-  assert.deepEqual(repoMenu(id), { enabled: false, rows: ["Show All Repositories (off)"] });
+  assert.deepEqual(repoMenu(id), { enabled: false, rows: ["Show All Repositories (off)", "Hide All Repositories (off)", "---", "[x]Show New Repositories"] });
   applyFetch(id, [inRepo("a", "zed/app"), inRepo("b", "acme/app"), inRepo("c", "me/parked")], {});
-  assert.deepEqual(repoMenu(id).rows, ["Show All Repositories (off)", "---", "[x]acme/app", "[x]me/parked", "[x]zed/app"]);
+  assert.deepEqual(repoMenu(id).rows, ["Show All Repositories (off)", "Hide All Repositories", "---", "[x]acme/app", "[x]me/parked", "[x]zed/app", "---", "[x]Show New Repositories"]);
   hideItems(id, [inRepo("c", "me/parked")]);
   setRepoHidden(id, "bitbucket:zed/app", true);
   applyFetch(id, [inRepo("b", "acme/app"), inRepo("g", "acme/app", "github")], {});
   assert.deepEqual(repoMenu(id), {
     enabled: true,
-    rows: ["Show All Repositories", "---", "[x]acme/app (Bitbucket)", "[x]acme/app (GitHub)", "[x]me/parked (Bitbucket)", "[ ]zed/app (Bitbucket)"],
+    rows: ["Show All Repositories", "Hide All Repositories", "---", "[x]acme/app (Bitbucket)", "[x]acme/app (GitHub)", "[x]me/parked (Bitbucket)", "[ ]zed/app (Bitbucket)", "---", "[x]Show New Repositories"],
   });
+});
+
+test("with Show New Repositories off, a repo the folder hasn't seen stays out, and a shown repo comes back after a gap without pull requests", async () => {
+  const id = createFolder("p", "pullRequests", ["bitbucket"]);
+  const { fetch, resolveGone } = SOURCES.bitbucket;
+  SOURCES.bitbucket.resolveGone = async () => ({});
+  try {
+    SOURCES.bitbucket.fetch = async () => [inRepo("w", "acme/app")];
+    await refreshFolder(id);
+    setShowNewRepos(id, false);
+    SOURCES.bitbucket.fetch = async () => [];
+    await refreshFolder(id);
+    showAllRepos(id);
+    SOURCES.bitbucket.fetch = async () => [inRepo("w2", "acme/app"), inRepo("m", "me/dotfiles")];
+    await refreshFolder(id);
+    assert.deepEqual(live().items[id].map((it) => it.id), ["w2"]);
+    assert.deepEqual(live().folders[id].hiddenRepos, ["bitbucket:me/dotfiles"]);
+  } finally {
+    SOURCES.bitbucket.fetch = fetch;
+    SOURCES.bitbucket.resolveGone = resolveGone;
+  }
 });
 
 test("a shown repo whose service left the folder lets its kept-aside pull requests go, so their open tabs aren't hidden for good", async () => {
@@ -376,4 +409,41 @@ test("a hidden repo's pull requests come back read when it's shown, even after t
   applyFetch(id, [stacked[2], other], {});
   assert.deepEqual(live().items[id].map((it) => it.id).sort(), ["c", "x"]);
   assert.deepEqual(live().unread[id], [], "c was in the folder before its repo was hidden, so it isn't new");
+});
+
+test("a live folder's menu has a group's Color submenu, without Match Site Color, checked at the folder's colour", () => {
+  const id = createFolder("p", "pullRequests", []);
+  const colors = () => liveFolderMenuItems("w", id).find((item) => item.id === "color")?.children ?? [];
+  const ids = colors().filter((item) => item.id).map((item) => item.id);
+  assert.deepEqual(ids.slice(0, 2), ["color:none", "color:neutral"]);
+  assert.equal(ids.length, 11, "None, Neutral and the nine colours");
+  assert.ok(!colors().some((item) => item.title === "Match Site Color"));
+  assert.equal(colors().find((item) => item.checked)?.id, "color:neutral", "a folder with no colour reads as Neutral");
+  updateFolder(id, { color: "purple" });
+  assert.equal(colors().find((item) => item.checked)?.id, "color:purple");
+  removeFolder(id);
+});
+
+test("picking a colour from a live folder's menu saves it, Neutral clears it, None saves none, and each pick is counted", async () => {
+  const { shellNativeModules } = await import("../../test-native/shell.ts");
+  const { openLiveFolderMenu } = await import("../sidebar/liveMenus.ts");
+  const { takeLiveHideCounts } = await import("../telemetry/liveHides.ts");
+  const id = createFolder("p", "pullRequests", []);
+  const shell = shellNativeModules.ArdiaMenus;
+  const real = shell.showMenu;
+  takeLiveHideCounts();
+  const pick = async (title) => {
+    shell.showMenu = (shown) => Promise.resolve(shown.find((it) => it.id === "color").children.find((it) => it.title === title).id);
+    try {
+      await openLiveFolderMenu("w", id);
+    } finally {
+      shell.showMenu = real;
+    }
+    return live().folders[id].color;
+  };
+  assert.equal(await pick("Green"), "green");
+  assert.equal(await pick("Neutral"), null);
+  assert.equal(await pick("None"), "none");
+  assert.equal(takeLiveHideCounts().live_folder_color_picks, 3);
+  removeFolder(id);
 });

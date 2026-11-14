@@ -42,6 +42,8 @@ export const COMMANDS = {
   findInPage: { title: "Find…", barTitle: "Find in Page", symbol: "text.magnifyingglass", keys: ["⌘F"], ...pageInLittleArdia },
   findNext: { title: "Find Next", keys: ["⌘G"], ...pageInLittleArdia },
   findPrevious: { title: "Find Previous", keys: ["⇧⌘G"], ...pageInLittleArdia },
+  hideElement: { title: "Hide Element…", barTitle: "Hide an Element on This Page", symbol: "eye.slash", keys: ["⇧⌘H"], ...pageInLittleArdia },
+  showHiddenElements: { title: "Hidden Elements on This Site…", barTitle: "Show Hidden Elements on This Site", symbol: "eye", keys: ["⇧⌘U"], ...pageInLittleArdia },
   setAppearance: {
     chooses: "appearance",
     variants: {
@@ -64,6 +66,7 @@ export const COMMANDS = {
   toggleFullUrl: { title: "Show Full URL", symbol: "text.alignleft", toggles: "showFullUrl" },
   toggleJavaScriptFromAppleEvents: { title: "Allow JavaScript from Apple Events", toggles: "allowJavaScriptFromAppleEvents" },
   toggleAddressBar: { title: "Show Address Bar in Sidebar", ...offInLittleArdia },
+  toggleMinimalism: { title: "Minimalism Mode", barTitle: "Toggle Minimalism Mode", symbol: "rectangle.leftthird.inset.filled", keys: ["⌃⌘M"], toggles: "minimalismMode", ...offInLittleArdia },
   cast: { title: "Cast…", littleArdia: "page" },
   zoomReset: { title: "Zoom to Actual Size", barTitle: "Actual Size", symbol: "1.magnifyingglass", keys: ["⌘0"], ...pageInLittleArdia },
   zoomIn: { title: "Zoom In", symbol: "plus.magnifyingglass", keys: ["⌘+", "⌘="], ...pageInLittleArdia },
@@ -99,6 +102,7 @@ export const COMMANDS = {
   restoreArcFolders: {},
   toggleMute: { title: "Mute Tab", symbol: "speaker.slash", ...pageInLittleArdia },
   togglePageEngine: { title: "Open Page in WebKit" },
+  toggleReader: { title: "Show Reader", barTitle: "Toggle Reading Mode", symbol: "doc.plaintext", keys: ["⌥⌘R"], ...pageInLittleArdia },
   downloads: { title: "Downloads", symbol: "arrow.down.circle", keys: ["⇧⌘J", "⌥⌘L"], scope: "window", littleArdia: "page" },
   mergeAllWindows: { title: "Merge All Windows", symbol: "rectangle.stack", ...windowOffInLittleArdia },
   switchProfile: inWindow,

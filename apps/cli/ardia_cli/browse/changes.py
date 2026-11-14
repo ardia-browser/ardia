@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from urllib.parse import parse_qsl, unquote, urlsplit
 
 from ardia_cli import command_metrics
-from ardia_cli.browse import snapshot
+from ardia_cli.browse import flowlog, snapshot
 from ardia_cli.redact import redact
 from ardia_cli.browse.errors import BrowseError, CdpError, ConnectionLost, Gated
 
@@ -605,6 +605,10 @@ class NetworkWatch:
                 record = self.records[request_id] = {
                     "method": str(request.get("method") or "GET").upper(),
                     "url": clean_url(str(request.get("url") or "")),
+                    "raw": str(request.get("url") or ""),
+                    "headers": request.get("headers") or {},
+                    "post": request.get("postData"),
+                    "has_post": bool(request.get("hasPostData")),
                     "type": params.get("type") or "Other",
                     "statuses": [],
                     "done": False,
@@ -619,6 +623,7 @@ class NetworkWatch:
                 status = (params.get("response") or {}).get("status")
                 if status is not None:
                     record["statuses"].append(status)
+                record["mime"] = (params.get("response") or {}).get("mimeType") or ""
                 record["answered"] = True
             elif method == "Network.loadingFinished":
                 record["done"] = True
@@ -811,6 +816,7 @@ async def observe(ctx, page, run, react=None):
         settling = command_metrics.clock()
         settled = await watch.settle(lambda: navigation_busy(page, navigations))
         command_metrics.spent("settle_ms", settling)
+        await flowlog.capture(page, watch)
     finally:
         await watch.stop()
     try:
@@ -845,6 +851,7 @@ async def settled(page, run):
         settling = command_metrics.clock()
         await watch.settle(lambda: navigation_busy(page, navigations))
         command_metrics.spent("settle_ms", settling)
+        await flowlog.capture(page, watch)
     finally:
         await watch.stop()
     return value
@@ -1009,11 +1016,13 @@ def arrival_notes(state, before: View | None, after: View) -> str | None:
     from pathlib import Path
 
     from ardia_cli import notes
+    from ardia_cli.browse import flows
 
     root = state.config.get("data_root") if isinstance(getattr(state, "config", None), dict) else None
     if not root or (before is not None and notes.page_site(before.url) == notes.page_site(after.url)):
         return None
-    return notes.header(Path(root), after.url)[1]
+    lines = [notes.header(Path(root), after.url)[1], flows.hint(state, after.url)]
+    return "\n".join(line for line in lines if line) or None
 
 
 def attach(result, report):

@@ -1,7 +1,7 @@
 import { hostOf } from "@ardia/core";
 import type { BrowserState } from "../browser/store";
 import type { HistoryEntry } from "../browser/types";
-import { historyOf } from "../history/history";
+import { historyOf, NO_HISTORY } from "../history/history";
 
 
 const historyHostCache = new WeakMap<HistoryEntry[], string[]>();
@@ -20,7 +20,7 @@ export function historyHosts(history: HistoryEntry[]): string[] {
 let last: { tabs: BrowserState["tabs"]; history: HistoryEntry[]; profileId: string; hosts: string[] } | null = null;
 
 export function knownHosts(s: BrowserState, profileId: string): string[] {
-  const history = historyOf(s, profileId);
+  const history = s.settings?.commandBarHistory === false ? NO_HISTORY : historyOf(s, profileId);
   if (last && last.tabs === s.tabs && last.history === history && last.profileId === profileId) return last.hosts;
   const hosts: string[] = [];
   for (const t of Object.values(s.tabs)) if (t.profileId === profileId && t.url) hosts.push(hostOf(t.url));

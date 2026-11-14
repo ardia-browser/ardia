@@ -15,7 +15,8 @@ final class ResearchSession: Identifiable {
   }
 
   enum Writer: Equatable {
-    case onDevice
+    case chatGPT(model: String)
+    case onDevice(fallback: String?)
     case excerpts(reason: String)
   }
 
@@ -23,6 +24,7 @@ final class ResearchSession: Identifiable {
   static let instructionTokens = 260
   static let charactersPerToken = 3
   static let readConcurrency = 3
+  static let chatGPTCharacterBudget = 24_000
 
   struct PageRead: Sendable {
     var index: Int
@@ -32,6 +34,7 @@ final class ResearchSession: Identifiable {
   let id = UUID()
   let query: String
   let forcesExcerpts: Bool
+  let chatGPT: ChatGPTAccount?
   private(set) var phase: Phase = .searching
   private(set) var links: [ResearchLink] = []
   private(set) var sources: [ResearchSource] = []
@@ -42,9 +45,10 @@ final class ResearchSession: Identifiable {
   @ObservationIgnored private var task: Task<Void, Never>?
   @ObservationIgnored private let loader = ResearchPageLoader()
 
-  init(query: String, forcesExcerpts: Bool = false) {
+  init(query: String, forcesExcerpts: Bool = false, chatGPT: ChatGPTAccount? = nil) {
     self.query = query
     self.forcesExcerpts = forcesExcerpts
+    self.chatGPT = chatGPT
   }
 
   var isFinished: Bool {
@@ -69,6 +73,22 @@ final class ResearchSession: Identifiable {
     writer = nil
     readAloud.reset()
     start()
+  }
+
+  func rewrite() {
+    guard !sources.isEmpty, isFinished else { return retry() }
+    task?.cancel()
+    answer = ""
+    writer = nil
+    readAloud.reset()
+    phase = .writing
+    task = Task {
+      do {
+        try await write()
+        try Task.checkCancellation()
+        finish()
+      } catch {}
+    }
   }
 
   func cancel() {
@@ -97,12 +117,16 @@ final class ResearchSession: Identifiable {
       phase = .writing
       try await write()
       try Task.checkCancellation()
-      phase = .done
-      readAloud.answerReady(ResearchAnswer.spoken(answer))
+      finish()
     } catch is CancellationError {
     } catch {
       phase = .failed(String(localized: "Couldn’t reach the web. Check your connection and try again."))
     }
+  }
+
+  private func finish() {
+    phase = .done
+    readAloud.answerReady(ResearchAnswer.spoken(answer))
   }
 
   private func readSources(_ links: [ResearchLink]) async throws -> [ResearchSource] {
@@ -152,15 +176,30 @@ final class ResearchSession: Identifiable {
       quoteSources(reason: String(localized: "Showing the most relevant lines from the pages."))
       return
     }
+    var fallback: String?
+    if let chatGPT, chatGPT.isConnected {
+      do {
+        let prompt = ResearchDigest.prompt(query: query, sources: sources, characterBudget: Self.chatGPTCharacterBudget)
+        let used = try await chatGPT.streamAnswer(instructions: ResearchDigest.instructions, prompt: prompt) { answer = $0 }
+        writer = .chatGPT(model: used.displayName)
+        return
+      } catch is CancellationError {
+        throw CancellationError()
+      } catch {
+        try Task.checkCancellation()
+        answer = ""
+        fallback = (error as? ChatGPTFailure ?? .network).message
+      }
+    }
     guard case .available = model.availability else {
-      quoteSources(reason: Self.unavailableReason(model.availability))
+      quoteSources(reason: [fallback, Self.unavailableReason(model.availability)].compactMap(\.self).joined(separator: " "))
       return
     }
     let budget = max((model.contextSize - Self.responseTokens - Self.instructionTokens) * Self.charactersPerToken, 2000)
     for share in [budget, budget / 2] {
       do {
         try await stream(model: model, characterBudget: share)
-        writer = .onDevice
+        writer = .onDevice(fallback: fallback)
         return
       } catch is CancellationError {
         throw CancellationError()
@@ -168,7 +207,7 @@ final class ResearchSession: Identifiable {
         answer = ""
       }
     }
-    quoteSources(reason: String(localized: "Apple Intelligence couldn’t answer this one, so here are the most relevant lines from the pages."))
+    quoteSources(reason: [fallback, String(localized: "Apple Intelligence couldn’t answer this one, so here are the most relevant lines from the pages.")].compactMap(\.self).joined(separator: " "))
   }
 
   private func stream(model: SystemLanguageModel, characterBudget: Int) async throws {

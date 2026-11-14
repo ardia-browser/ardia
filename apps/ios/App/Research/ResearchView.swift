@@ -9,6 +9,7 @@ struct ResearchView: View {
   @Environment(AppModel.self) private var app
   @Environment(\.dismiss) private var dismiss
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @AppStorage("ArdiaVoiceTipDismissed") private var voiceTipDismissed = false
 
   private var readAloud: ReadAloud { session.readAloud }
 
@@ -230,13 +231,61 @@ struct ResearchView: View {
   @ViewBuilder
   private func writerNote(_ writer: ResearchSession.Writer) -> some View {
     let note: String = switch writer {
-    case .onDevice: String(localized: "Written on this iPhone by Apple Intelligence from the pages above. Check them for anything important.")
+    case .chatGPT(let model): String(localized: "Written by ChatGPT (\(model)) on your plan from the pages above. Check them for anything important.")
+    case .onDevice(nil): String(localized: "Written on this iPhone by Apple Intelligence from the pages above. Check them for anything important.")
+    case .onDevice(let fallback?): String(localized: "\(fallback) Apple Intelligence wrote this on your iPhone instead.")
     case .excerpts(let reason): reason
     }
-    Label(note, systemImage: writer == .onDevice ? "apple.intelligence" : "text.quote")
-      .font(.footnote)
-      .foregroundStyle(.secondary)
-      .padding(.top, Spacing.small)
+    let symbol = switch writer {
+    case .chatGPT: "sparkles"
+    case .onDevice: "apple.intelligence"
+    case .excerpts: "text.quote"
+    }
+    VStack(alignment: .leading, spacing: Spacing.medium) {
+      Label(note, systemImage: symbol)
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+      if !app.chatGPT.isConnected, !session.forcesExcerpts {
+        VStack(alignment: .leading, spacing: Spacing.tight) {
+          ContinueWithChatGPTButton { session.rewrite() }
+          Text(app.chatGPT.problem ?? String(localized: "Better answers from your ChatGPT Plus or Pro plan. Nothing goes through a server of ours."))
+            .font(.footnote)
+            .foregroundStyle(app.chatGPT.problem == nil ? Color.secondary : Color.red)
+        }
+      }
+      if showsVoiceTip {
+        voiceTip
+      }
+    }
+    .padding(.top, Spacing.small)
+  }
+
+  private var showsVoiceTip: Bool {
+    !voiceTipDismissed && !VoiceChoice.current.isNatural
+  }
+
+  private var voiceTip: some View {
+    HStack(alignment: .top, spacing: Spacing.small) {
+      Image(systemName: "waveform")
+        .foregroundStyle(.tint)
+        .accessibilityHidden(true)
+      Text(VoiceChoice.downloadTip)
+        .font(.footnote)
+        .frame(maxWidth: .infinity, alignment: .leading)
+      Button {
+        voiceTipDismissed = true
+      } label: {
+        Image(systemName: "xmark")
+          .font(.footnote.weight(.semibold))
+          .foregroundStyle(.secondary)
+          .frame(width: 28, height: 28)
+          .contentShape(.rect)
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel(Text("Dismiss"))
+    }
+    .padding(Spacing.small)
+    .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 14, style: .continuous))
   }
 
   private var listenBar: some View {

@@ -134,6 +134,20 @@ sizes, copy), on Apple's controls, in the Mac's colours:
     it is. The speaker button plays it out loud, and raising the phone moves that to the earpiece. The rules are
     `EarListening` (tested); the earpiece needs the `.playAndRecord` session, so the microphone prompt can appear
     the first time.
+  - **Continue with ChatGPT.** Settings › Browse for Me (and a button under an on-device answer) signs in with
+    OpenAI's Sign in with ChatGPT plan-usage flow (`App/ChatGPT`, logic in `ArdiaBrowser/ChatGPT`), so answers come from
+    the user's own Plus or Pro plan. It mirrors OpenAI's devkit: discovery, `dynamic_agent_client` with
+    `agent_name_hint` on the first sign-in (the issued `oaiapp_…` client ID is saved per issuer and reused), S256 PKCE,
+    state, nonce and `resource=https://api.openai.com/v1`. The redirect is the documented loopback
+    `http://127.0.0.1:<port>/auth/callback`: a BSD socket listener in the app takes the code and answers with a 302 to
+    `ardia-chatgpt://signed-in`, which closes the `ASWebAuthenticationSession` sheet. Tokens live in the Keychain
+    (this device only, after first unlock); the hour-long access token refreshes two minutes early, one refresh at a
+    time, and rotated refresh tokens are saved at once. Answers stream from `POST /v1/responses` with exactly
+    `model`, `instructions`, `input`, `store: false` and `stream: true`, and count only on `response.completed`. Any
+    failure (limit reached, not eligible, network, a stream cut short) drops the partial text and Apple Intelligence
+    writes the answer, with the reason in the note. Voice stays Apple's: plan usage covers no audio, so the page and
+    settings suggest downloading an Enhanced or Premium voice. Disconnect revokes the refresh token. Debug builds take
+    `-ArdiaChatGPTIssuer <url>` and `-ArdiaChatGPTAPI <url>` to point at a fake server.
   - **Testing without a sensor.** The simulator has no proximity sensor, so `ProximityFeed` takes fake values two
     ways: `-ArdiaProximity "4:near,12:far,15:near"` plays near and far at those seconds after the page opens, and
     `xcrun simctl notify_post <udid> com.ardia.browser.ios.proximity.near` (or `.far`) sends one at any time

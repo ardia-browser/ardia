@@ -71,7 +71,7 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
   `ARDIA_DATA_DIR` at the copy; never write to the live profile or open it in a running app.
 - **No AI features.** This is the owner's decision. Dia's AI rows in `docs/dia-feature-parity.md`
   stay ⏸. The one exception is the iPhone's Browse for Me (`docs/ios.md`), which runs on Apple's on-device
-  model with no account and no server of ours.
+  model, or on the user's own ChatGPT plan when they connect it, with no account and no server of ours.
 
 ## Building features
 - **Conventions.** Folders, import direction, tokens, state, names, the translation layer and environment

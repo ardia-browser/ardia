@@ -18,10 +18,6 @@ export type BlockedOpen = {
 const activatedAt = new Map<number, number>();
 const blocked = new Map<string, BlockedOpen>();
 let nextId = 0;
-let blockedTotal = 0;
-let openedFromIndicator = 0;
-
-export const popupBlockerCounts = () => ({ blocked: blockedTotal, openedFromIndicator });
 
 function activates(input: Electron.InputEvent): boolean {
   if (input.type === "mouseDown" || input.type === "mouseUp") return true;
@@ -64,7 +60,6 @@ export function mayOpen(guest: Guest): boolean {
 export function block(guest: Guest, url: string, features: string, disposition: string): void {
   const origin = originOf(guest.committedUrl || guest.url);
   const id = `popup-${++nextId}`;
-  blockedTotal++;
   const mine = [...blocked.values()].filter((entry) => entry.guestId === guest.contents.id);
   for (const stale of mine.slice(0, Math.max(0, mine.length - KEPT_PER_PAGE + 1))) blocked.delete(stale.id);
   blocked.set(id, { id, guestId: guest.contents.id, url, features, disposition, origin });
@@ -75,7 +70,6 @@ export function takeBlocked(guest: Guest, id: string, always: boolean): BlockedO
   const entry = blocked.get(id);
   if (!entry || entry.guestId !== guest.contents.id) return null;
   blocked.delete(id);
-  openedFromIndicator++;
   if (always && entry.origin) rememberSiteSetting(guest.profile, entry.origin, "popups", "allow");
   return entry;
 }

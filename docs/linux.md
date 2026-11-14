@@ -135,6 +135,16 @@ the main method where one is needed (`aroundMain` in `tsModules.ts`), the main p
 - **Extensions.** `session.extensions` plus `electron-chrome-extensions` (chrome.tabs, chrome.action, …) and
   `electron-chrome-web-store` (the Web Store's install button). Their preloads are embedded in the bundle and written
   out at startup. `ArdiaLinuxExtensions.executeAction(webContentsId, id)` answers a page's `executeExtensionAction`.
+- **Sync.** `ArdiaSync` (`services/sync`) is the Mac's and Windows' vault in `node:crypto`, so one sync folder serves all
+  three: HKDF-SHA256 keys from the 32-byte recovery entropy, base32 HMAC tags for the chain and scope folders,
+  AES-256-GCM `.nns` files padded to 1 KB, synthetic-nonce password seals, the BIP-39 phrase, legacy `pw:` records
+  sealed on read and opened on write. The key is sealed with `safeStorage` in `<data>/Sync/sync-key-<device>`. The
+  default folder is `Ardia Sync` in the first of `~/Dropbox`, `~/Nextcloud`, `~/OneDrive`, `~/Sync`, … that exists
+  (the instance's `syncFolder` in a test instance). The Recovery Kit is the Windows TypeScript (PDF, text, QR code);
+  its preview is the same layout as SVG; "Copy" puts the PDF on the clipboard as a file (`text/uri-list`). There's no
+  device owner check before showing the words yet (`ARDIA_TEST=reauth=denied` refuses, for tests).
+  `node --test apps/browser/linux/src/services/sync/sync.test.ts` opens the Mac and Windows fixture vaults, matches
+  their password seals byte for byte and checks what Linux writes with an independent WebCrypto implementation.
 - **Import.** `ArdiaImport` runs the Windows readers in main with a Node host: Chrome, Chromium, Brave, Edge, Vivaldi,
   Opera, Firefox and Zen under `~/.config`, `~/.mozilla`, snap and flatpak homes; Chromium's v10/v11 keys (built-in
   key, libsecret or KWallet), Firefox's key4.db.

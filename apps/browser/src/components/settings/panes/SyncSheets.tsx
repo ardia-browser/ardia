@@ -351,5 +351,5 @@ export function folderLabel(folder: Pick<FolderInfo, "path" | "inICloud">): stri
     const rest = folder.path.split("com~apple~CloudDocs")[1]?.split("/").filter(Boolean) ?? [];
     return ["iCloud Drive", ...rest].join(" › ");
   }
-  return folder.path.replace(/^\/Users\/[^/]+/, "~");
+  return folder.path.replace(/^\/(?:Users|home)\/[^/]+/, "~");
 }

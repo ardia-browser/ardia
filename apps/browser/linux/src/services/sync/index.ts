@@ -71,8 +71,6 @@ function defaultFolder(): { path: string; cloud: string | null } {
   return { path: join(cloud ?? homedir(), FOLDER_NAME), cloud };
 }
 
-const inside = (path: string, root: string | null) => !!root && (path === root || path.startsWith(`${root.replace(/\/+$/, "")}/`));
-
 function deviceName(): string {
   try {
     const pretty = /^PRETTY_HOSTNAME=(.*)$/m.exec(readFileSync("/etc/machine-info", "utf8"))?.[1]?.replace(/^["']|["']$/g, "").trim();
@@ -132,12 +130,11 @@ defineModule("ArdiaSync", {
       const fallback = defaultFolder();
       const chosen = path ?? fallback.path;
       const state = await folderState(chosen);
-      const cloud = cloudFolder();
       return {
         path: chosen,
         defaultPath: fallback.path,
         iCloudAvailable: !!fallback.cloud,
-        inICloud: inside(chosen, testFolder() ?? cloud),
+        inICloud: false,
         exists: state.exists,
         writable: state.exists && state.writable,
         hasSyncData: state.exists && state.hasSyncData,

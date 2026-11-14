@@ -166,6 +166,8 @@ NSScreen *ScreenFor(NSRect frame);
 void PreventActivation(NSWindow *window);
 BOOL PreventsActivation(NSWindow *window);
 extern NSInteger gActivations;
+void MarkBackToTabActivation();
+BOOL ConsumeBackToTabActivation();
 void ActivateApp(NSString *why);
 BOOL ThrowEnabled();
 NSPoint PointerOf(NSEvent *event);

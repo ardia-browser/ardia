@@ -45,6 +45,13 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
+@interface ArdiaChromeWindowHost (PictureInPicture)
+
++ (BOOL)isVideoPictureInPictureWindow:(NSWindow *)window;
++ (BOOL)consumePictureInPictureActivation;
+
+@end
+
 extern NSNotificationName const ArdiaWindowSeenDidChange;
 
 NSView *_Nullable ArdiaWindowRootView(NSWindow *_Nullable window);

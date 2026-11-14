@@ -4,7 +4,7 @@ import { StyleSheet, View } from "react-native";
 import { Bands } from "./Bands";
 import { adjustingLightness, flatStops, hslToRgb, parseColor, rgbaString, type Rgba } from "./color";
 import { useAppDark } from "./appearance";
-import { NativeWindowMaterial, nativeWindowMaterial } from "./nativeMaterials";
+import { NativeMaterialGrain, nativeGrain, NativeWindowMaterial, nativeWindowMaterial, type GrainTexture } from "./nativeMaterials";
 import { finite, useFirstWindow } from "./shared";
 
 const VIBRANCY = {
@@ -18,6 +18,8 @@ const OVERLAY_TURN = 45;
 const PAD_CELLS = 16;
 const THEME_REACH = 0.75;
 const WINDOW_MATERIAL = "acrylic";
+const DEFAULT_GRAIN_OPACITY = 0.09;
+const SMALLEST_GRAIN_CELL = 0.25;
 
 function underColor(dark: boolean, baseAlpha?: number): Rgba {
   const look = dark ? VIBRANCY.dark : VIBRANCY.light;
@@ -66,6 +68,15 @@ function ThemeLayers({ stops, angle, opacity }: { stops: Rgba[]; angle: number; 
   );
 }
 
+const unit = (value: unknown, fallback: number) => Math.min(1, Math.max(0, finite(value, fallback)));
+
+const grainTexture = (texture: unknown): GrainTexture => (texture === "sand" || texture === "denim" || texture === "tweed" ? texture : "grain");
+
+function Grain({ texture, amount, cellSize }: { texture: GrainTexture; amount: number; cellSize?: number }) {
+  if (!(amount > 0) || !nativeGrain()) return null;
+  return <NativeMaterialGrain pointerEvents="none" texture={texture} amount={amount} cellSize={cellSize} style={StyleSheet.absoluteFill} />;
+}
+
 const colorList = (colors: unknown): Rgba[] => (Array.isArray(colors) ? colors.map(parseColor).filter((stop): stop is Rgba => !!stop) : []);
 
 export const WindowBackdrop = forwardRef<View, WindowBackdropProps>(function WindowBackdrop(
@@ -76,13 +87,13 @@ export const WindowBackdrop = forwardRef<View, WindowBackdropProps>(function Win
     tintAlpha,
     tintLightness,
     angle,
-    grainOpacity: _grainOpacity,
-    grainScale: _grainScale,
+    grainOpacity,
+    grainScale,
     themeColors,
     themeOpacity,
     themeBaseAlpha,
-    themeGrain: _themeGrain,
-    themeTexture: _themeTexture,
+    themeGrain,
+    themeTexture,
     themeAppearance,
     themeAngle,
     style,
@@ -103,6 +114,7 @@ export const WindowBackdrop = forwardRef<View, WindowBackdropProps>(function Win
         <>
           <MaterialBase dark={dark} baseAlpha={Math.min(1, Math.max(0, finite(themeBaseAlpha, 0)))} />
           <ThemeLayers stops={theme} angle={finite(themeAngle, DEFAULT_THEME_ANGLE)} opacity={Math.min(1, Math.max(0, finite(themeOpacity, 1)))} />
+          <Grain texture={grainTexture(themeTexture)} amount={unit(themeGrain, 0)} />
         </>
       );
     } else {
@@ -119,7 +131,12 @@ export const WindowBackdrop = forwardRef<View, WindowBackdropProps>(function Win
   } else {
     const stops = colorList(colors);
     const ends = stops.length > 1 ? [stops[0]!, stops[stops.length - 1]!] : stops;
-    layers = <Bands stops={ends} angle={finite(angle, 180)} />;
+    layers = (
+      <>
+        <Bands stops={ends} angle={finite(angle, 180)} />
+        <Grain texture="hash" amount={unit(grainOpacity, DEFAULT_GRAIN_OPACITY)} cellSize={Math.max(SMALLEST_GRAIN_CELL, finite(grainScale, 1))} />
+      </>
+    );
   }
   return (
     <View {...rest} ref={ref} pointerEvents="none" style={style}>
@@ -155,13 +172,14 @@ const ColorPad = memo(function ColorPad({ lightness }: { lightness: number }) {
   );
 });
 
-export const ThemeSwatch = forwardRef<View, ThemeSwatchProps>(function ThemeSwatch({ colors, grain: _grain, texture: _texture, padLightness, angle, style, children, ...rest }, ref) {
+export const ThemeSwatch = forwardRef<View, ThemeSwatchProps>(function ThemeSwatch({ colors, grain, texture, padLightness, angle, style, children, ...rest }, ref) {
   const stops = useMemo(() => flatStops(colors), [colors]);
   const pad = finite(padLightness, -1);
   return (
     <View {...rest} ref={ref} pointerEvents="none" style={style}>
       <ThemeLayers stops={stops} angle={finite(angle, DEFAULT_THEME_ANGLE)} />
       {pad >= 0 ? <ColorPad lightness={Math.min(1, pad)} /> : null}
+      <Grain texture={grainTexture(texture)} amount={unit(grain, 0)} />
       {children}
     </View>
   );

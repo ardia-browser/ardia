@@ -4,13 +4,17 @@ import { appDarkNow } from "../views/appearance";
 import { windowBackdropColors } from "../views/backdrop";
 import { gradientColors } from "../views/Bands";
 import type { Rgba } from "../views/color";
-import { bubblePath, NativeMaterialBlur, NativeMaterialGradient, NativeWindowMaterial, type MaterialsNative } from "../views/nativeMaterials";
+import { bubblePath, NativeMaterialBlur, NativeMaterialGradient, NativeMaterialGrain, NativeWindowMaterial, type MaterialsNative } from "../views/nativeMaterials";
 import { viewNamed } from "../views/registry";
 import { expectEqual, expectTrue, type Check } from "./check";
+import { holdOnStage } from "./stage";
 
 const materials = () => requireNativeModule<MaterialsNative>("ArdiaMaterials");
 
 const WINDOW_MATERIALS = ["micaAlt", "mica", "acrylic"];
+const MAC_TILE_ALPHA_SUMS: Record<string, number> = { grain: 287662, sand: 1429150, denim: 653735, tweed: 1227414 };
+const GRAIN_PATH_DEADLINE_MS = 3000;
+const STAGED_GRAIN_TEXTURE = "denim";
 const VIEWS_WITH_MATERIALS = ["ArdiaVisualEffect", "ArdiaGlassEffect", "ArdiaPopoverBubble", "ArdiaWindowBackdrop", "ArdiaThemeSwatch"];
 const MATERIAL_PROPS: Record<string, Record<string, unknown>> = {
   ArdiaVisualEffect: { material: "popover", cornerRadius: 12 },
@@ -28,6 +32,14 @@ function expectPath(answer: unknown, allowed: string[], what: string) {
   expectTrue(typeof path === "string" && allowed.includes(path), `${what}: path ${JSON.stringify(path)} is not one of ${allowed.join(", ")}`);
   expectTrue(typeof reason === "string", `${what}: reason is not a string`);
   console.info(`[ardia windows] materials: ${what} took ${path}${reason ? ` (${reason})` : ""}`);
+}
+
+const settled = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+async function until(condition: () => boolean, ms: number) {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline && !condition()) await settled(20);
+  return condition();
 }
 
 const linear = (channel: number) => (channel <= 0.04045 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4));
@@ -65,7 +77,7 @@ export const checks: Check[] = [
       const answer = materials().capabilities() as unknown;
       expectTrue(answer && typeof answer === "object" && !(answer instanceof Promise), "capabilities() did not answer synchronously");
       const caps = answer as Record<string, unknown>;
-      for (const key of ["systemBackdrop", "systemBackdropSupported", "inWindowBlur", "gradient", "background"]) expectTrue(typeof caps[key] === "boolean", `${key} is not a boolean`);
+      for (const key of ["systemBackdrop", "systemBackdropSupported", "inWindowBlur", "gradient", "grain", "background"]) expectTrue(typeof caps[key] === "boolean", `${key} is not a boolean`);
       const build = caps.build;
       expectTrue(typeof build === "number" && Number.isInteger(build) && build > 0, `build ${JSON.stringify(build)} is not a Windows build number`);
       expectEqual(caps.systemBackdropSupported, build >= 22621, "system backdrop support follows the build");
@@ -99,12 +111,47 @@ export const checks: Check[] = [
     },
   },
   {
+    name: "materials: grain tiles are the Mac's and draw pixel for pixel",
+    async run() {
+      for (const texture of [...Object.keys(MAC_TILE_ALPHA_SUMS), "hash"]) {
+        const probe = await materials().probeGrain(texture);
+        expectPath(probe, ["tiled", "none"], `grain ${texture}`);
+        expectEqual(probe.path, "tiled", `grain ${texture} drew no tile (${probe.reason})`);
+        const mac = MAC_TILE_ALPHA_SUMS[texture];
+        if (mac !== undefined) expectEqual(probe.tileAlphaSum, mac, `grain ${texture} tile alpha sum against the Mac's`);
+        expectEqual(probe.drawnAlphaSum, probe.tileAlphaSum, `grain ${texture} alpha read back from its ${probe.pixels} px surface`);
+        console.info(`[ardia windows] materials: grain ${texture} ${probe.pixels} px tile, alpha sum ${probe.tileAlphaSum}, read back ${probe.drawnAlphaSum}`);
+      }
+    },
+  },
+  {
+    name: "materials: the grain view mounts and reports its path",
+    async run() {
+      const release = await holdOnStage(
+        createElement(NativeMaterialGrain, { pointerEvents: "none", texture: STAGED_GRAIN_TEXTURE, amount: 0.5, style: { width: 200, height: 40 } }),
+        "ArdiaMaterialGrain",
+      );
+      try {
+        const reported = await until(() => {
+          const last = materials().grainPath();
+          return last.step === STAGED_GRAIN_TEXTURE && last.path !== "";
+        }, GRAIN_PATH_DEADLINE_MS);
+        const last = materials().grainPath();
+        expectTrue(reported, `the grain view reported nothing within ${GRAIN_PATH_DEADLINE_MS} ms: ${JSON.stringify(last)}`);
+        expectPath(last, materials().capabilities().grain ? ["tiled"] : ["none"], "mounted grain view");
+      } finally {
+        release();
+      }
+    },
+  },
+  {
     name: "materials: native view names resolve to components",
     run() {
       for (const [name, view] of [
         ["ArdiaWindowMaterial", NativeWindowMaterial],
         ["ArdiaMaterialBlur", NativeMaterialBlur],
         ["ArdiaMaterialGradient", NativeMaterialGradient],
+        ["ArdiaMaterialGrain", NativeMaterialGrain],
       ] as const) {
         expectTrue(isComponent(view), `${name} is not a host component`);
       }

@@ -7,10 +7,13 @@ export type MaterialCapabilities = {
   systemBackdropSupported: boolean;
   inWindowBlur: boolean;
   gradient: boolean;
+  grain: boolean;
   background: boolean;
 };
 
 export type MaterialPath = { path: string; reason: string; step?: string };
+
+export type GrainProbe = { path: string; reason: string; pixels: number; tileAlphaSum: number; drawnAlphaSum: number };
 
 export type MaterialsNative = {
   capabilities(): MaterialCapabilities;
@@ -18,6 +21,8 @@ export type MaterialsNative = {
   clearWindowMaterial(windowId: string): Promise<boolean>;
   probeBlur(): Promise<MaterialPath>;
   probeGradient(): Promise<MaterialPath>;
+  grainPath(): MaterialPath;
+  probeGrain(texture: string): Promise<GrainProbe>;
 };
 
 export type WindowMaterialKind = "micaAlt" | "mica" | "acrylic";
@@ -37,6 +42,10 @@ export type GradientSpan = "unit" | "base" | "corner";
 
 export type NativeMaterialGradientProps = ViewProps & { colors: number[]; angle: number; span: GradientSpan; reach: number };
 
+export type GrainTexture = "grain" | "sand" | "denim" | "tweed" | "hash";
+
+export type NativeMaterialGrainProps = ViewProps & { texture: GrainTexture; amount: number; cellSize?: number };
+
 const colorAttribute = { process: processColor as (value: never) => unknown };
 
 export const NativeWindowMaterial = NativeComponentRegistry.get<NativeWindowMaterialProps>("ArdiaWindowMaterial", () => ({
@@ -52,6 +61,11 @@ export const NativeMaterialBlur = NativeComponentRegistry.get<NativeMaterialBlur
 export const NativeMaterialGradient = NativeComponentRegistry.get<NativeMaterialGradientProps>("ArdiaMaterialGradient", () => ({
   uiViewClassName: "ArdiaMaterialGradient",
   validAttributes: { colors: true, angle: true, span: true, reach: true },
+}));
+
+export const NativeMaterialGrain = NativeComponentRegistry.get<NativeMaterialGrainProps>("ArdiaMaterialGrain", () => ({
+  uiViewClassName: "ArdiaMaterialGrain",
+  validAttributes: { texture: true, amount: true, cellSize: true },
 }));
 
 let capabilities: MaterialCapabilities | null | undefined;
@@ -74,6 +88,8 @@ export const nativeWindowMaterial = () => materialCapabilities() !== null;
 export const nativeBlur = () => materialCapabilities()?.inWindowBlur === true;
 
 export const nativeGradient = () => materialCapabilities()?.gradient === true;
+
+export const nativeGrain = () => materialCapabilities()?.grain === true;
 
 type Point = [number, number];
 

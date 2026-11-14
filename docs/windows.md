@@ -301,8 +301,15 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
   luminosity; the profile's colour bands stay as on the Mac. The flat fallback keeps the Mac's numbers, and a theme's
   own base alpha still wins over both. Visual effects, glass and popover
   bubbles blur what is under them inside the window with a Composition backdrop brush (Gaussian blur, saturation and a
-  tint). Window and theme gradients are Composition linear gradients at their real angle. Windows 10, a background
-  instance and any failure keep the flat colours; the launch log says once which path each one took.
+  tint). Window and theme gradients are Composition linear gradients at their real angle. The theme's grain (`grain`,
+  `sand`, `denim`, `tweed`) is the Mac's `GrainLayer` tile, the same xorshift recipe and darkening byte for byte,
+  drawn once per texture and scale with Direct2D into a Composition drawing surface (64 DIPs a tile) and repeated by a
+  border effect (`MaterialGrain.h`, the `ArdiaMaterialGrain` view in `MaterialGrainView.h`); it sits over the theme
+  layers of the window backdrop and the swatch, at the grain amount. The plain backdrop (the release-notes postcard)
+  takes the Mac shader's hash grain, `grainOpacity` darkening per `grainScale` pixel cell, as a 256-cell tile. The Mac
+  dims the window grain to a quarter in an inactive window; Windows keeps it full. Windows 10, a background
+  instance and any failure keep the flat colours, and a grain that fails to draw is left out; the launch log says once
+  which path each one took.
 - Switching profiles slides the sidebar's pages and crossfades the tint as on the Mac. The Mac's native pager
   (`Pager.swift`) has a TypeScript version in `packages/expo-windows/src/pager`: the `ArdiaSwipe` view and module with
   the same events (`onPagerPosition` every frame, `onPagerState` on select and settle), sequence numbers and spring

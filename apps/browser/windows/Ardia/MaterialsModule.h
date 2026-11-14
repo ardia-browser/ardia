@@ -8,6 +8,7 @@
 #include "Events.h"
 #include "Host.h"
 #include "MaterialEffects.h"
+#include "MaterialGrain.h"
 #include "MaterialSupport.h"
 #include "WindowManager.h"
 
@@ -25,6 +26,8 @@ struct MaterialCapabilities {
   bool inWindowBlur{false};
   REACT_FIELD(gradient)
   bool gradient{false};
+  REACT_FIELD(grain)
+  bool grain{false};
   REACT_FIELD(background)
   bool background{false};
 };
@@ -37,6 +40,20 @@ struct MaterialPath {
   std::string reason;
   REACT_FIELD(step)
   std::string step;
+};
+
+REACT_STRUCT(GrainProbe)
+struct GrainProbe {
+  REACT_FIELD(path)
+  std::string path;
+  REACT_FIELD(reason)
+  std::string reason;
+  REACT_FIELD(pixels)
+  double pixels{0};
+  REACT_FIELD(tileAlphaSum)
+  double tileAlphaSum{0};
+  REACT_FIELD(drawnAlphaSum)
+  double drawnAlphaSum{0};
 };
 
 REACT_MODULE(MaterialsModule, L"ArdiaMaterials")
@@ -55,6 +72,7 @@ struct MaterialsModule {
     answer.systemBackdropSupported = Materials::SystemBackdropSupported();
     answer.inWindowBlur = Materials::BlurAvailable();
     answer.gradient = Materials::GradientAvailable();
+    answer.grain = Grain::Available();
     answer.background = Materials::Background();
     return answer;
   }
@@ -133,6 +151,41 @@ struct MaterialsModule {
         }
       } catch (winrt::hresult_error const &error) {
         answer.reason = Paths::Utf8(Materials::Described(error));
+      } catch (...) {
+        answer.reason = "error";
+      }
+      promise.Resolve(answer);
+    });
+  }
+
+  REACT_SYNC_METHOD(grainPath)
+  MaterialPath grainPath() noexcept {
+    MaterialPath answer;
+    const Grain::LastPath last = Grain::Last();
+    answer.path = last.path;
+    answer.reason = last.reason;
+    answer.step = last.texture;
+    return answer;
+  }
+
+  REACT_METHOD(probeGrain)
+  void probeGrain(std::string texture, winrt::Microsoft::ReactNative::ReactPromise<GrainProbe> promise) noexcept {
+    RunOnUI(m_context, [texture = Grain::Known(texture), promise]() noexcept {
+      GrainProbe answer;
+      answer.path = "none";
+      try {
+        auto *host = Host::Current();
+        if (!host || !host->compositor) {
+          answer.reason = "no compositor";
+        } else {
+          Grain::Tile const &tile = Grain::TileFor(texture);
+          answer.pixels = tile.side;
+          answer.tileAlphaSum = static_cast<double>(tile.alphaSum);
+          const Grain::ReadBack drawn = Grain::DrawnAlphaSum(host->compositor, texture, tile.side);
+          answer.drawnAlphaSum = static_cast<double>(drawn.alphaSum);
+          answer.reason = Paths::Utf8(drawn.outcome.reason);
+          if (drawn.outcome.drawn) answer.path = "tiled";
+        }
       } catch (...) {
         answer.reason = "error";
       }

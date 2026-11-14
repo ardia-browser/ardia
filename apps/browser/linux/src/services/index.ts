@@ -12,3 +12,4 @@ import "./requests";
 import "./contentBlocker";
 import "./extensions";
 import "./import";
+import "./sync";

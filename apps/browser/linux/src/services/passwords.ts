@@ -58,6 +58,11 @@ export function loginsFor(profile: string, origin: string): Login[] {
   });
 }
 
+export function allLogins(profile: string): Login[] {
+  const rows = store(profile).prepare("SELECT * FROM logins ORDER BY origin, username").all() as StoredLogin[];
+  return rows.map((row) => ({ ...row, password: decrypt(row.password) }));
+}
+
 export function passwordsEnabled(profile: string): boolean {
   return pref(store(profile), ENABLED_PREF, true);
 }

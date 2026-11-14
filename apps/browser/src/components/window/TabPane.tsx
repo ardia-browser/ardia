@@ -97,7 +97,7 @@ export const TabPane = memo(function TabPane({
   const addressFieldShown = bar.kind !== "none" && addressFieldShownIn(mode);
   const sidebarField = useSidebarField();
   const sidebarOpen = useTabsShown(windowId);
-  const sidebarFieldShown = !!sidebarField && sidebarOpen && !fullscreen;
+  const sidebarFieldShown = !!sidebarField && sidebarOpen && !fullscreen && focused;
   const bookmarksBar = bookmarksBarShown(barMode, own.exists ? own : undefined) && !fullscreen && !inSplit && !small;
   const barHeight = useBookmarksBarHeight();
   const cardRadius = useCardFrame().radius;

@@ -1,5 +1,6 @@
 import { BrowserWindow, Menu, screen, type BrowserWindowConstructorOptions, type ContextMenuParams, type MenuItemConstructorOptions, type Rectangle, type WebContents } from "electron";
 import { defineModule, emit } from "../bridge";
+import { count } from "../counts";
 import { isBackground } from "../paths";
 import { isQuitting, replyToTerminate, requestQuit } from "../quit";
 import { appWindow, appWindowIds, auxiliaryWindow, onAppWindowCreated, shapeNextAuxiliaryWindow, shapeNextWindow } from "../windows";
@@ -156,6 +157,12 @@ function watch(id: string, window: BrowserWindow) {
   window.on("resize", () => emitFrameSoon(id, window));
   window.on("maximize", () => windowEvent({ type: "maximized", id, on: true }));
   window.on("unmaximize", () => windowEvent({ type: "maximized", id, on: false }));
+  window.on("system-context-menu", (event, point) => {
+    event.preventDefault();
+    count("window_drag_area_menus");
+    const content = window.getContentBounds();
+    emit(MODULE, "onSystemContextMenu", { id, x: point.x - content.x, y: point.y - content.y });
+  });
   window.on("enter-full-screen", () => windowEvent({ type: "fullScreen", id, on: true }));
   window.on("leave-full-screen", () => windowEvent({ type: "fullScreen", id, on: false }));
   window.on("close", (event) => {
@@ -226,6 +233,7 @@ function beginWindowDrag(id: string, pressedX?: number, pressedY?: number) {
     if (x !== nextX || y !== nextY) window.setPosition(nextX, nextY);
   }, DRAG_TICK_MS);
   drag = { id, grab, timer };
+  count("window_moves_by_app");
 }
 
 function endWindowDrag() {

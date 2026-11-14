@@ -156,7 +156,9 @@ function strip(props: MacProps) {
     onDrop: _drop,
     ...rest
   } = props;
-  return rest;
+  if (props.mouseDownCanMoveWindow !== false) return rest;
+  const dataSet = (rest as { dataSet?: Record<string, string> }).dataSet;
+  return { ...rest, dataSet: { ...dataSet, ardiaStaysPut: "" } };
 }
 
 const BaseView = WebView as unknown as ComponentType<Record<string, unknown>>;

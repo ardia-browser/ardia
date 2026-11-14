@@ -1,7 +1,9 @@
 import { forwardRef, useCallback, useEffect, useRef, type ComponentType, type ForwardedRef } from "react";
 import { View, type ViewProps } from "react-native";
 import { callMain } from "../bridge";
-import { windowIdOfNode } from "./appWindows";
+import { addNativeListener } from "../events";
+import { appWindowDocument, windowIdOfNode } from "./appWindows";
+import { INTERACTIVE, markAppDragRegion, markSystemDragRegion, openContextMenuAt } from "./dragCover";
 
 type Props = ViewProps & {
   titleBarDoubleClick?: boolean;
@@ -12,7 +14,14 @@ type Props = ViewProps & {
 
 const MODULE = "ArdiaAppWindows";
 const CLICK_SLOP = 4;
-const INTERACTIVE = "input, textarea, select, button, a[href], webview, [contenteditable='true'], [role='button'], [role='link'], [tabindex]";
+
+type SystemContextMenu = { id?: string; x?: number; y?: number };
+
+addNativeListener(MODULE, "onSystemContextMenu", (payload) => {
+  const event = payload as SystemContextMenu | null;
+  const doc = event?.id ? appWindowDocument(event.id) : null;
+  if (doc && typeof event?.x === "number" && typeof event.y === "number") openContextMenuAt(doc, event.x, event.y);
+});
 
 function assign<Value>(ref: ForwardedRef<Value>, value: Value | null) {
   if (typeof ref === "function") ref(value);
@@ -29,10 +38,18 @@ export const WindowDragRegion = forwardRef<unknown, Props>(function WindowDragRe
   const node = useRef<HTMLElement | null>(null);
   const latest = useRef({ titleBarDoubleClick, onRegionDoubleClick, clickable, onRegionClick });
   latest.current = { titleBarDoubleClick, onRegionDoubleClick, clickable, onRegionClick };
+  const appMoves = !!clickable || !!onRegionDoubleClick || !titleBarDoubleClick;
 
   useEffect(() => {
     const region = node.current;
-    if (!region) return;
+    if (!region || appMoves) return;
+    return markSystemDragRegion(region);
+  }, [appMoves]);
+
+  useEffect(() => {
+    const region = node.current;
+    if (!region || !appMoves) return;
+    const unmark = markAppDragRegion(region);
     let pressed: { x: number; y: number; pointer: number } | null = null;
     let dragging = false;
     const windowId = () => windowIdOfNode(region);
@@ -73,6 +90,7 @@ export const WindowDragRegion = forwardRef<unknown, Props>(function WindowDragRe
     region.addEventListener("dblclick", double);
     return () => {
       stop();
+      unmark();
       region.removeEventListener("pointerdown", down);
       region.removeEventListener("pointermove", move);
       region.removeEventListener("pointerup", up);
@@ -80,7 +98,7 @@ export const WindowDragRegion = forwardRef<unknown, Props>(function WindowDragRe
       region.removeEventListener("lostpointercapture", stop);
       region.removeEventListener("dblclick", double);
     };
-  }, []);
+  }, [appMoves]);
 
   const attach = useCallback(
     (value: HTMLElement | null) => {

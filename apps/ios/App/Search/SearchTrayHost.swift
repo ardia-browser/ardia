@@ -12,6 +12,9 @@ struct SearchTrayHost: View {
   @State private var isClosing = false
   @State private var isDeparting = false
   @State private var currentLift: CGFloat = 0
+  @State private var isClosingAnimationDone = true
+  @State private var keyboardMoves = 0
+  @State private var keyboardSettledMove = 0
   @State private var hasLanded = false
   @State private var keyboard = KeyboardTracker()
   @State private var keyboardHeight: CGFloat = 0
@@ -25,7 +28,8 @@ struct SearchTrayHost: View {
 
   static let keyboardThreshold: CGFloat = 120
   static let keyboardWait: Duration = .milliseconds(220)
-  static let removalGrace: Duration = .milliseconds(140)
+  static let removalPoll: Duration = .milliseconds(16)
+  static let removalDeadline: Duration = .seconds(1.5)
 
   var body: some View {
     ZStack {
@@ -95,7 +99,13 @@ struct SearchTrayHost: View {
         let overlap = keyboard.overlap
         let target = overlap > Self.keyboardThreshold ? overlap : 0
         guard target != keyboardHeight else { return }
-        withAnimation(keyboard.animation) { keyboardHeight = target }
+        keyboardMoves += 1
+        let move = keyboardMoves
+        withAnimation(keyboard.animation) {
+          keyboardHeight = target
+        } completion: {
+          keyboardSettledMove = max(keyboardSettledMove, move)
+        }
       }
       .allowsHitTesting(false)
       .accessibilityHidden(true)
@@ -126,6 +136,7 @@ struct SearchTrayHost: View {
       shown = request
       isClosing = false
       isDeparting = false
+      isClosingAnimationDone = true
       hasLanded = keyboardHeight > Self.keyboardThreshold
       dragOffset = 0
       heldLift = nil
@@ -155,27 +166,36 @@ struct SearchTrayHost: View {
     landingTask?.cancel()
     settleTask?.cancel()
     isFocused = false
+    isClosingAnimationDone = false
     if app.browse.searchEnding == .submitted, !reduceMotion {
       depart()
     } else if keyboardHeight > Self.keyboardThreshold, heldLift == nil {
       isClosing = true
+      isClosingAnimationDone = true
     } else {
       let travel = trayHeight + (heldLift ?? 0) + BrowseLayout.sheetTopRadius
       withAnimation(reduceMotion ? .easeOut(duration: 0.2) : Motion.trayDismiss) {
         isClosing = true
         if heldLift != nil, !reduceMotion { dragOffset = max(dragOffset, travel) }
+      } completion: {
+        isClosingAnimationDone = true
       }
     }
     removalTask?.cancel()
     removalTask = Task {
-      for _ in 0..<20 where keyboardHeight > Self.keyboardThreshold {
-        try? await Task.sleep(for: .milliseconds(50))
+      let deadline = ContinuousClock.now + Self.removalDeadline
+      while !hasSettledAfterClosing, ContinuousClock.now < deadline {
+        try? await Task.sleep(for: Self.removalPoll)
+        if Task.isCancelled { return }
       }
-      try? await Task.sleep(for: Self.removalGrace)
       guard !Task.isCancelled, isClosing else { return }
       finish()
       refreshRecents()
     }
+  }
+
+  private var hasSettledAfterClosing: Bool {
+    isClosingAnimationDone && keyboardHeight <= Self.keyboardThreshold && keyboardSettledMove == keyboardMoves
   }
 
   private func depart() {
@@ -187,6 +207,8 @@ struct SearchTrayHost: View {
     withAnimation(Motion.depart) {
       isClosing = true
       isDeparting = true
+    } completion: {
+      isClosingAnimationDone = true
     }
   }
 
@@ -197,6 +219,7 @@ struct SearchTrayHost: View {
       shown = nil
       isClosing = false
       isDeparting = false
+      isClosingAnimationDone = true
       hasLanded = false
       dragOffset = 0
       heldLift = nil

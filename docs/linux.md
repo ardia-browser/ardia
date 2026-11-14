@@ -181,6 +181,9 @@ the main method where one is needed (`aroundMain` in `tsModules.ts`), the main p
   content scripts per site, so `siteAccess` is null (the pane hides the row) and narrowing it is refused. They don't
   run in private windows either: Electron loads extensions only into sessions kept on disk, and private windows' are
   in memory, so "Allow in Incognito" is refused and hidden (`PLATFORM_FEATURES.extensionsInPrivate`).
+  Web Store extensions update from Google's update service a minute after the profile starts and every 5 hours
+  (`ArdiaLinuxExtensions.checkForUpdates(profile)` runs it now): a newer version is downloaded next to the old one,
+  loaded in its place, recorded in the registry, and the old folder removed.
 - **Sync.** `ArdiaSync` (`services/sync`) is the Mac's and Windows' vault in `node:crypto`, so one sync folder serves all
   three: HKDF-SHA256 keys from the 32-byte recovery entropy, base32 HMAC tags for the chain and scope folders,
   AES-256-GCM `.nns` files padded to 1 KB, synthetic-nonce password seals, the BIP-39 phrase, legacy `pw:` records

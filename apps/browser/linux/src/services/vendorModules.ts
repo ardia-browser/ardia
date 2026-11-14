@@ -5,5 +5,5 @@ const extensions = require("electron-chrome-extensions") as typeof ChromeExtensi
 const webStore = require("electron-chrome-web-store") as typeof ChromeWebStore;
 
 export const { ElectronChromeExtensions } = extensions;
-export const { installChromeWebStore, installExtension } = webStore;
+export const { downloadExtension, installChromeWebStore, installExtension } = webStore;
 export type ElectronChromeExtensions = ChromeExtensions.ElectronChromeExtensions;

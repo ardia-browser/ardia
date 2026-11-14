@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, nativeImage, webContents as allContents, type Session, type WebContents } from "electron";
+import { app, BrowserWindow, dialog, nativeImage, net, webContents as allContents, type Session, type WebContents } from "electron";
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
@@ -8,7 +8,7 @@ import { defineDomain, emitDomainEvent } from "../engine/domains";
 import { allGuests, onGuestAttached, windowOf, type Guest } from "../engine/guests";
 import { isBackground } from "../paths";
 import { unpackCrxFile } from "./crx";
-import { ElectronChromeExtensions, installChromeWebStore, installExtension } from "./vendorModules";
+import { downloadExtension, ElectronChromeExtensions, installChromeWebStore, installExtension } from "./vendorModules";
 import { database, pref, setPref } from "./database";
 import { onProfileSession } from "./guests";
 import { extensionsModulePath, webStoreModulePath } from "./vendorPreloads";
@@ -40,6 +40,10 @@ type ActionDetails = { title?: string; popup?: string; text?: string; color?: st
 const REGISTRY_PREF = "extensions.registry";
 const WEB_STORE = "https://chromewebstore.google.com/detail/";
 const ADOPT_WAIT_MS = 5000;
+const UPDATE_SERVICE = "https://update.googleapis.com/service/update2/json";
+const UPDATE_REPLY_PREFIX = ")]}'\n";
+const FIRST_UPDATE_CHECK_MS = 60_000;
+const UPDATE_CHECK_EVERY_MS = 5 * 60 * 60 * 1000;
 
 const contexts = new Map<string, { session: Session; chrome: ElectronChromeExtensions }>();
 const pendingPrompts = new Map<string, (accepted: boolean) => void>();
@@ -328,6 +332,91 @@ function setUp(session: Session, profile: string) {
     }
     load(session, entry).catch((error: unknown) => console.warn(`[ardia extensions] ${id} didn't load`, error));
   }
+  const check = () => void updateWebStoreExtensions(profile).catch((error: unknown) => console.warn("[ardia extensions] the update check failed", error));
+  setTimeout(check, FIRST_UPDATE_CHECK_MS);
+  setInterval(check, UPDATE_CHECK_EVERY_MS);
+}
+
+function isNewer(candidate: string, current: string): boolean {
+  const a = candidate.split(".").map(Number);
+  const b = current.split(".").map(Number);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const difference = (a[i] || 0) - (b[i] || 0);
+    if (difference) return difference > 0;
+  }
+  return false;
+}
+
+async function storeVersions(ids: string[]): Promise<Map<string, string>> {
+  const chrome = process.versions.chrome ?? "";
+  const response = await net.fetch(UPDATE_SERVICE, {
+    method: "POST",
+    headers: { "content-type": "application/json", "X-Goog-Update-Interactivity": "bg", "X-Goog-Update-AppId": ids.join(","), "X-Goog-Update-Updater": `chromiumcrx-${chrome}` },
+    body: JSON.stringify({
+      request: {
+        "@updater": "chromiumcrx",
+        acceptformat: "crx3",
+        app: ids.map((appid) => ({ appid, updatecheck: {} })),
+        os: { platform: "linux", arch: process.arch },
+        prodversion: chrome,
+        protocol: "3.1",
+        requestid: randomUUID(),
+        sessionid: randomUUID(),
+      },
+    }),
+  });
+  const reply = await response.text();
+  if (!response.ok || !reply.startsWith(UPDATE_REPLY_PREFIX)) throw new Error(`the update service answered ${response.status}`);
+  type App = { appid?: string; updatecheck?: { status?: string; manifest?: { version?: string } } };
+  const apps = (JSON.parse(reply.slice(UPDATE_REPLY_PREFIX.length)) as { response?: { app?: App[] } }).response?.app ?? [];
+  const versions = new Map<string, string>();
+  for (const found of apps) if (found.appid && found.updatecheck?.status === "ok" && found.updatecheck.manifest?.version) versions.set(found.appid, found.updatecheck.manifest.version);
+  return versions;
+}
+
+const updatingProfiles = new Set<string>();
+
+export async function updateWebStoreExtensions(profile: string): Promise<{ id: string; from: string; to: string }[]> {
+  if (isPrivateProfile(profile) || updatingProfiles.has(profile)) return [];
+  updatingProfiles.add(profile);
+  try {
+    const installed = new Map<string, string>();
+    for (const [id, entry] of Object.entries(registryOf(profile))) {
+      if (entry.location !== "webstore") continue;
+      try {
+        installed.set(id, readManifest(entry.path).version ?? "");
+      } catch {}
+    }
+    if (!installed.size) return [];
+    const available = await storeVersions([...installed.keys()]);
+    const updated: { id: string; from: string; to: string }[] = [];
+    for (const [id, current] of installed) {
+      const latest = available.get(id);
+      if (!latest || !isNewer(latest, current)) continue;
+      const folder = extensionsFolder(profile);
+      const path = await downloadExtension(id, folder);
+      const registry = registryOf(profile);
+      const entry = registry[id];
+      if (!entry) {
+        await rm(path, { recursive: true, force: true });
+        continue;
+      }
+      const previous = entry.path;
+      entry.path = path;
+      saveRegistry(profile, registry);
+      const { session } = contextFor(profile);
+      if (entry.enabled) {
+        unload(session, id);
+        await load(session, entry);
+      }
+      if (previous !== path && resolve(previous).startsWith(`${resolve(folder)}/`)) await rm(previous, { recursive: true, force: true });
+      changed(profile, id, "reloaded");
+      updated.push({ id, from: current, to: readManifest(path).version ?? latest });
+    }
+    return updated;
+  } finally {
+    updatingProfiles.delete(profile);
+  }
 }
 
 function contextFor(profile: string) {
@@ -530,6 +619,7 @@ defineModule("ArdiaLinuxExtensions", {
       return contents ? executeAction(contents, extensionId) : null;
     },
     actionStates: (profile: string, webContentsId: number | null, ids: string[]) => actionStates(profile, webContentsId, ids),
+    checkForUpdates: (profile: string) => updateWebStoreExtensions(profile ?? ""),
     installFromWebStore: async (profile: string, id: string) => {
       const { session } = contextFor(profile);
       const extension = await installExtension(id, { session, extensionsPath: extensionsFolder(profile) });

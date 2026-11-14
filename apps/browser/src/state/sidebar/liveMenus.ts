@@ -9,6 +9,7 @@ import { ALERT_LEADS, nowBadgeEvent } from "../live/meetings";
 import { SOURCES } from "../live/sources";
 import { dismissNowBadge, live, markRead, markUnread, setRepoHidden, updateCalendarSettings, updateFolder } from "../live/store";
 import { folderRepos, setShowNewRepos, showAllRepos } from "../live/repoFilter";
+import { noteLiveRepoMenuPick } from "../telemetry/liveHides";
 import type { LiveItem, LiveSourceId } from "../live/types";
 import { useBrowser } from "../browser/store";
 import { openSettings } from "../settings/settingsWindows";
@@ -144,6 +145,7 @@ export async function openLiveFolderMenu(windowId: string, folderId: string) {
   let showedRepo = false;
   const choice = await showMenu(liveFolderMenuItems(windowId, folderId), (picked) => {
     showedRepo = runRepoChoice(folderId, picked) || showedRepo;
+    noteLiveRepoMenuPick(picked, !!live().folders[folderId]?.showNewRepos);
     return liveFolderMenuItems(windowId, folderId);
   });
   if (choice?.startsWith("repo")) showedRepo = runRepoChoice(folderId, choice) || showedRepo;

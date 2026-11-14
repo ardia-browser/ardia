@@ -67,7 +67,7 @@ offered and 9 were not walked. Works with a difference says what differs; the Ma
 | JavaScript alert, confirm and prompt | Works: GTK boxes for alert and confirm, the app's prompt for prompt | |
 | Page, link and image menus | Works: the Mac's items in its order (Chrome's menu as Ardia arranges it). Page: Back, Forward, Reload, Save As, Print, View Page Source, Inspect. Link: Open Link in New Tab, New Window, Incognito Window, Split View, Save Link As, Copy Link Address, Copy Link Text. Image: Open Image in New Tab, Save Image As, Copy Image, Copy Image Address. Video: Loop, Show Controls, Picture in Picture, then open, save, copy. Selection: Copy, Copy Link to Highlight, Search Google for "…", Print. A misspelled word: suggestions, Add to Dictionary, then the edit items. Split View, Incognito, Picture in Picture, a suggestion, the highlight link and View Page Source were each used. No Share items (no share sheet on Linux) and no Look Up (no system dictionary). Before, a link had four items and the page six | f38e21377 |
 | Full screen (a page element) | Works; Escape leaves it | |
-| Picture in Picture | Differs: Chromium's PiP window | |
+| Picture in Picture | Differs: leaving a tab that plays audible video pops it out, coming back closes it, Back to Tab selects the tab with the video still playing, the close button pauses it, and the sidebar player follows; the menu's Picture in Picture works. The window is Chromium's own (always on top, ±10 s buttons, bottom right): Electron gives no handle on it, so the Mac's restyling, edge stash, throw to a corner, remembered frame, Keep on Top toggle and click-to-skip can't be done. Before, leaving the tab did nothing and Back to Tab only put the video back in the page | 373b0ae01 |
 | Downloads (download, panel, Ctrl+J) | Works: the panel opens for a new download and lists it | |
 | History (Ctrl+H), Clear Browsing Data (Ctrl+Shift+Del) | Works | |
 | Bookmarks (Ctrl+D, Ctrl+Shift+O) | Works | |
@@ -253,7 +253,10 @@ its window's input router). The host's and every window's preload (`engine/hostP
 - **Picture in Picture.** `requestPictureInPicture` runs in the page with a user gesture (`pictureInPicture.ts`): the
   playing video, else the largest one, in the main frame and then each subframe, into Chromium's PiP window. The page
   preload reports `enterpictureinpicture`/`leavepictureinpicture` as `pictureInPicture` events, so the app's PiP state
-  and the tab's badge follow, whoever started it.
+  and the tab's badge follow, whoever started it. A tab hidden while the UI's `autoPictureInPicture` holds (the setting,
+  and the tab audible or capturing) puts its playing video in PiP, and showing the tab closes a window opened that way.
+  Chromium's window tells Electron nothing, so a leave is reported 200 ms late with whether the video still plays:
+  Back to Tab keeps it playing (the close button pauses it), and such a leave on a hidden tab emits `activateRequest`.
 - **Memory Saver.** A page is discarded in the renderer (`pages.ts`): its history (scroll state included) is kept and
   its `<webview>` removed, which ends its page process; the UI gets `discarded`. Showing the tab, reload, a load or a
   history step builds a new element that gets the kept history through `navigationHistory.restore`, the path page

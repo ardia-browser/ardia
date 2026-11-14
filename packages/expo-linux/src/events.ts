@@ -1,4 +1,5 @@
 import { bridge } from "./bridge";
+import { announceListener } from "./launchLinks";
 
 export type EventSubscription = { remove(): void };
 
@@ -32,6 +33,7 @@ export function addNativeListener(module: string, event: string, listener: Liste
   const set = listeners.get(name) ?? new Set<Listener>();
   set.add(listener);
   listeners.set(name, set);
+  announceListener(module, event);
   const waiting = held.get(name);
   if (waiting) {
     held.delete(name);

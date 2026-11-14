@@ -11,7 +11,6 @@ const SCHEME = /^([a-z][a-z0-9+.-]+):(.*)$/is;
 const WEB_REST = /^\/*([^\s/\\?#]+)(.*)$/s;
 const BARE_HOST = /^(?:localhost|[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z][a-z0-9-]*)(?::\d{1,5})?(?:[/?#][^\s\\]*)?$/i;
 const ELECTRON_SWITCH = /^--?[a-z]/i;
-const RELEASE_AFTER_FIRST_WINDOW_MS = 250;
 
 const escapedSpaces = (text: string) => text.replace(/\s/g, (space) => encodeURIComponent(space));
 
@@ -54,21 +53,38 @@ function userArguments(argv: string[], cwd: string): string[] {
   return argv.slice(1).filter((argument) => app.isPackaged || resolve(cwd, argument) !== appPath);
 }
 
-let held: string[] | null = null;
+let listening = false;
+let heldLinks: string[] = [];
+let heldCommand: (() => void) | null = null;
+let launchLinksWaiting = 0;
 let openedAtLaunch = 0;
-let windowsOpened = false;
 
 function deliver(urls: string[]): void {
   emit("ArdiaShell", "onOpenURLs", { urls });
 }
 
-function releaseHeld(): void {
-  if (!held) return;
-  const urls = held;
-  held = null;
-  openedAtLaunch += urls.length;
-  note("launch", `launch links: ${urls.length} sent to the app`);
-  deliver(urls);
+function hold(urls: string[]): void {
+  heldLinks.push(...urls);
+  note("launch", `launch links: ${heldLinks.length} held until the app listens`);
+}
+
+export function uiListening(): void {
+  if (listening) return;
+  listening = true;
+  const urls = heldLinks;
+  const command = heldCommand;
+  heldLinks = [];
+  heldCommand = null;
+  openedAtLaunch += launchLinksWaiting;
+  launchLinksWaiting = 0;
+  if (urls.length) {
+    note("launch", `launch links: ${urls.length} sent to the app`);
+    deliver(urls);
+  } else command?.();
+}
+
+export function uiStopped(): void {
+  listening = false;
 }
 
 export function takeOpenedAtLaunch(): number {
@@ -77,25 +93,25 @@ export function takeOpenedAtLaunch(): number {
   return taken;
 }
 
+function whenListening(urls: string[], command: () => void): void {
+  if (listening) return urls.length ? deliver(urls) : command();
+  if (urls.length) hold(urls);
+  else heldCommand = command;
+}
+
 export function installLaunchLinks(): void {
   const urls = launchAddresses(userArguments(process.argv, process.cwd()), process.cwd());
   if (urls.length) {
-    held = urls;
-    note("launch", `launch links: ${urls.length} held until the first window opens`);
+    launchLinksWaiting = urls.length;
+    hold(urls);
   }
-  app.on("browser-window-created", () =>
-    setTimeout(() => {
-      if (windowsOpened || !appWindowIds().length) return;
-      windowsOpened = true;
-      releaseHeld();
-    }, RELEASE_AFTER_FIRST_WINDOW_MS),
-  );
   app.on("second-instance", (_event, argv, cwd) => {
     const opened = launchAddresses(userArguments(argv, cwd), cwd);
     note("launch", `a second launch asked for ${opened.length} link(s)`);
-    if (opened.length) deliver(opened);
-    else if (argv.includes("--new-window")) emit("ArdiaMenus", "onCommand", { command: "newWindow", arg: null, windowId: null, focusGeneration: null });
-    else emit("ArdiaShell", "onAppEvent", { type: "reopen", pastFloating: false });
+    whenListening(opened, () => {
+      if (argv.includes("--new-window")) emit("ArdiaMenus", "onCommand", { command: "newWindow", arg: null, windowId: null, focusGeneration: null });
+      else emit("ArdiaShell", "onAppEvent", { type: "reopen", pastFloating: false });
+    });
     const [first] = appWindowIds();
     if (first) focusAppWindow(first);
   });

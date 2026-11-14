@@ -1,6 +1,6 @@
 import { defineModule } from "../bridge";
-import { takeOpenedAtLaunch } from "../launchLinks";
+import { takeOpenedAtLaunch, uiListening } from "../launchLinks";
 
 defineModule("ArdiaLaunchLinks", {
-  sync: { takeOpenedAtLaunch },
+  sync: { takeOpenedAtLaunch, listening: uiListening },
 });

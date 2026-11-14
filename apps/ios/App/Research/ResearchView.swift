@@ -111,7 +111,7 @@ struct ResearchView: View {
     if !session.sources.isEmpty {
       return session.sources.map { Chip(id: $0.url.absoluteString, number: $0.id, url: $0.url, site: $0.siteName, title: $0.title) }
     }
-    return session.links.map { link in
+    return session.links.prefix(ResearchSearch.resultLimit).map { link in
       Chip(id: link.url.absoluteString, number: nil, url: link.url, site: link.url.host()?.replacingOccurrences(of: "www.", with: "") ?? "", title: link.title)
     }
   }

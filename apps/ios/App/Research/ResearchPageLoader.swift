@@ -11,6 +11,12 @@ final class ResearchPageLoader {
   static let userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 27_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) " + BrowserUserAgent.applicationName
 
   private let dataStore = WKWebsiteDataStore.nonPersistent()
+  private let blocker: ContentBlocker?
+  private let blockedResources = BlockedResourceCounter()
+
+  init(blocker: ContentBlocker?) {
+    self.blocker = blocker
+  }
 
   func searchLinks(for query: String) async throws -> [ResearchLink] {
     guard let page = ResearchSearch.resultsPage(for: query) else { return [] }
@@ -41,6 +47,7 @@ final class ResearchPageLoader {
     configuration.mediaTypesRequiringUserActionForPlayback = .all
     configuration.allowsInlineMediaPlayback = false
     configuration.defaultWebpagePreferences.preferredContentMode = .mobile
+    blocker?.install(on: configuration.userContentController, counter: blockedResources)
     return WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 844), configuration: configuration)
   }
 
@@ -50,6 +57,7 @@ final class ResearchPageLoader {
     try await withTaskCancellationHandler {
       try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
         waiter.continuation = continuation
+        blocker?.prepareNavigation(of: webView.configuration.userContentController, toHost: url.host(), isPrivate: true)
         webView.load(URLRequest(url: url, timeoutInterval: timeout.seconds))
         Task { @MainActor [weak waiter] in
           try? await Task.sleep(for: timeout)

@@ -104,6 +104,13 @@ public enum ResearchDigest {
       lines.append("- \(candidate.text) [\(candidate.source)]")
       if lines.count == extractiveLineLimit { break }
     }
+    if lines.isEmpty {
+      for source in sources.prefix(extractiveLineLimit) {
+        guard let paragraph = source.paragraphs.first(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else { continue }
+        let clipped = paragraph.count > 280 ? String(paragraph.prefix(277)).trimmingCharacters(in: .whitespaces) + "…" : paragraph
+        lines.append("- \(clipped) [\(source.id)]")
+      }
+    }
     return lines.joined(separator: "\n")
   }
 

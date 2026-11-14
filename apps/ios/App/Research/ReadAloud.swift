@@ -64,14 +64,14 @@ final class ReadAloud: NSObject {
     case .none:
       break
     case .start(let output):
-      route(output)
+      guard route(output) else { return listening.routeFailed() }
       speakFromStart()
     case .resume(let output):
-      route(output)
+      guard route(output) else { return listening.routeFailed() }
       if synthesizer.isPaused { synthesizer.continueSpeaking() } else { speakFromStart() }
     case .reroute(let output):
       synthesizer.pauseSpeaking(at: .immediate)
-      route(output)
+      guard route(output) else { return listening.routeFailed() }
       synthesizer.continueSpeaking()
     case .pause:
       synthesizer.pauseSpeaking(at: .word)
@@ -88,7 +88,7 @@ final class ReadAloud: NSObject {
     synthesizer.speak(utterance)
   }
 
-  private func route(_ output: ListeningOutput) {
+  private func route(_ output: ListeningOutput) -> Bool {
     let session = AVAudioSession.sharedInstance()
     do {
       switch output {
@@ -99,9 +99,16 @@ final class ReadAloud: NSObject {
         try session.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
       }
       try session.setActive(true)
+      return true
     } catch {
-      try? session.setCategory(.playback, mode: .spokenAudio)
-      try? session.setActive(true)
+      guard output == .speaker else { return false }
+      do {
+        try session.setCategory(.playback, mode: .spokenAudio)
+        try session.setActive(true)
+        return true
+      } catch {
+        return false
+      }
     }
   }
 

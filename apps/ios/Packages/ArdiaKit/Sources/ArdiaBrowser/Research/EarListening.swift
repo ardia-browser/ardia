@@ -93,6 +93,10 @@ public struct EarListening: Equatable, Sendable {
     state = .finished
   }
 
+  public mutating func routeFailed() {
+    if case .playing(let output) = state { state = .paused(output) }
+  }
+
   public mutating func reset() {
     state = .waiting
     isReady = false

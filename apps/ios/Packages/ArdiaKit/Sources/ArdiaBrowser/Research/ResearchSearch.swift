@@ -12,6 +12,7 @@ public struct ResearchLink: Equatable, Hashable, Sendable {
 
 public enum ResearchSearch {
   public static let resultLimit = 5
+  public static let candidateLimit = 10
 
   public struct RawResult: Equatable, Sendable {
     public var href: String
@@ -24,9 +25,13 @@ public enum ResearchSearch {
   }
 
   static let unreadableHosts: Set<String> = [
-    "youtube.com", "youtu.be", "m.youtube.com", "tiktok.com", "instagram.com", "facebook.com", "x.com", "twitter.com",
+    "youtube.com", "youtu.be", "tiktok.com", "instagram.com", "facebook.com", "x.com", "twitter.com",
     "pinterest.com", "linkedin.com",
   ]
+
+  static func isUnreadable(_ host: String) -> Bool {
+    unreadableHosts.contains { host == $0 || host.hasSuffix("." + $0) }
+  }
 
   public static func resultsPage(for query: String) -> URL? {
     var components = URLComponents(string: "https://html.duckduckgo.com/html/")
@@ -34,13 +39,13 @@ public enum ResearchSearch {
     return components?.url
   }
 
-  public static func links(from raw: [RawResult], limit: Int = resultLimit) -> [ResearchLink] {
+  public static func links(from raw: [RawResult], limit: Int = candidateLimit) -> [ResearchLink] {
     var links: [ResearchLink] = []
     var hosts: Set<String> = []
     for result in raw {
       guard let url = destination(of: result.href), let host = url.host()?.lowercased() else { continue }
       let bareHost = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
-      guard !bareHost.hasSuffix("duckduckgo.com"), !unreadableHosts.contains(bareHost), hosts.insert(bareHost).inserted else { continue }
+      guard !bareHost.hasSuffix("duckduckgo.com"), !isUnreadable(bareHost), hosts.insert(bareHost).inserted else { continue }
       let title = result.title.split(whereSeparator: \.isWhitespace).joined(separator: " ")
       links.append(ResearchLink(url: url, title: title.isEmpty ? bareHost : title))
       if links.count == limit { break }
@@ -59,7 +64,7 @@ public enum ResearchSearch {
     return components.url
   }
 
-  public static func links(fromHTML html: String, limit: Int = resultLimit) -> [ResearchLink] {
+  public static func links(fromHTML html: String, limit: Int = candidateLimit) -> [ResearchLink] {
     var raw: [RawResult] = []
     for match in html.matches(of: anchorPattern) {
       let tag = String(match.output.1)

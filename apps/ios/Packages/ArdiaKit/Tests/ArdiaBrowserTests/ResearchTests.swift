@@ -142,4 +142,29 @@ import Testing
     #expect(listening.toggleSpeaker() == .pause)
     #expect(listening.toggleSpeaker() == .resume(.speaker))
   }
+
+  @Test func aFailedEarpieceRouteLeavesSpeechPaused() {
+    var listening = EarListening()
+    _ = listening.answerReady()
+    #expect(listening.proximity(isNear: true) == .start(.earpiece))
+    listening.routeFailed()
+    #expect(listening.state == .paused(.earpiece))
+    #expect(listening.proximity(isNear: false) == .none)
+    #expect(listening.proximity(isNear: true) == .resume(.earpiece))
+  }
+
+  @Test func unreadableSitesIncludeTheirSubdomains() {
+    let raw: [ResearchSearch.RawResult] = [
+      .init(href: "https://m.facebook.com/page", title: "FB"),
+      .init(href: "https://music.youtube.com/watch", title: "YT"),
+      .init(href: "https://mobile.twitter.com/a", title: "TW"),
+      .init(href: "https://notfacebook.com/a", title: "Fine"),
+    ]
+    #expect(ResearchSearch.links(from: raw).map(\.title) == ["Fine"])
+  }
+
+  @Test func extractiveAnswerFallsBackToClippedParagraphs() {
+    let source = ResearchSource(id: 1, url: URL(string: "https://a.test")!, title: "A", siteName: "a.test", paragraphs: ["Short.", "Tiny."])
+    #expect(ResearchDigest.extractiveAnswer(query: "anything", sources: [source]) == "- Short. [1]")
+  }
 }

@@ -43,10 +43,11 @@ final class ResearchSession: Identifiable {
   let readAloud = ReadAloud()
 
   @ObservationIgnored private var task: Task<Void, Never>?
-  @ObservationIgnored private let loader = ResearchPageLoader()
+  @ObservationIgnored private let loader: ResearchPageLoader
 
-  init(query: String, forcesExcerpts: Bool = false, chatGPT: ChatGPTAccount? = nil) {
+  init(query: String, forcesExcerpts: Bool = false, chatGPT: ChatGPTAccount? = nil, blocker: ContentBlocker? = nil) {
     self.query = query
+    loader = ResearchPageLoader(blocker: blocker)
     self.forcesExcerpts = forcesExcerpts
     self.chatGPT = chatGPT
   }
@@ -125,39 +126,41 @@ final class ResearchSession: Identifiable {
   }
 
   private func finish() {
+    if case .failed = phase { return }
     phase = .done
     readAloud.answerReady(ResearchAnswer.spoken(answer))
   }
 
   private func readSources(_ links: [ResearchLink]) async throws -> [ResearchSource] {
-    phase = .reading(done: 0, total: links.count)
+    let wanted = min(ResearchSearch.resultLimit, links.count)
+    phase = .reading(done: 0, total: wanted)
     var pages: [Int: ReadableContent] = [:]
-    var done = 0
     let loader = loader
+    let concurrency = Self.readConcurrency
     await withTaskGroup(of: PageRead.self) { group in
       var next = 0
-      while next < min(Self.readConcurrency, links.count) {
-        let index = next
-        let link = links[index]
-        group.addTask { PageRead(index: index, content: await loader.read(link)) }
-        next += 1
-      }
-      while let read = await group.next() {
-        done += 1
-        phase = .reading(done: done, total: links.count)
-        if let content = read.content { pages[read.index] = content }
-        if next < links.count {
+      var inFlight = 0
+      func schedule() {
+        while next < links.count, inFlight < concurrency, pages.count + inFlight < wanted {
           let index = next
           let link = links[index]
           group.addTask { PageRead(index: index, content: await loader.read(link)) }
           next += 1
+          inFlight += 1
         }
+      }
+      schedule()
+      while let read = await group.next() {
+        inFlight -= 1
+        if let content = read.content, Self.isReadable(content) { pages[read.index] = content }
+        phase = .reading(done: min(pages.count, wanted), total: wanted)
+        schedule()
       }
     }
     try Task.checkCancellation()
     var sources: [ResearchSource] = []
     for (index, link) in links.enumerated() {
-      guard let page = pages[index], page.paragraphs.reduce(0, { $0 + $1.count }) >= ResearchDigest.minimumSourceCharacters else { continue }
+      guard let page = pages[index] else { continue }
       let host = link.url.host()?.replacingOccurrences(of: "www.", with: "") ?? link.url.absoluteString
       sources.append(ResearchSource(
         id: sources.count + 1,
@@ -168,6 +171,10 @@ final class ResearchSession: Identifiable {
       ))
     }
     return sources
+  }
+
+  static func isReadable(_ content: ReadableContent) -> Bool {
+    content.paragraphs.reduce(0) { $0 + $1.count } >= ResearchDigest.minimumSourceCharacters
   }
 
   private func write() async throws {
@@ -222,6 +229,7 @@ final class ResearchSession: Identifiable {
 
   private func quoteSources(reason: String) {
     answer = ResearchDigest.extractiveAnswer(query: query, sources: sources)
+    if answer.isEmpty { phase = .failed(String(localized: "Couldn’t read any of the pages for this search.")) }
     writer = .excerpts(reason: reason)
   }
 

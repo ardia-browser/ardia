@@ -10,7 +10,7 @@ extension AppModel {
     browse.dismissSearch()
     research?.cancel()
     let forcesExcerpts = UserDefaults.standard.string(forKey: Self.researchWriterKey) == "excerpts"
-    let session = ResearchSession(query: trimmed, forcesExcerpts: forcesExcerpts, chatGPT: chatGPT)
+    let session = ResearchSession(query: trimmed, forcesExcerpts: forcesExcerpts, chatGPT: chatGPT, blocker: blocker)
     research = session
     session.start()
   }

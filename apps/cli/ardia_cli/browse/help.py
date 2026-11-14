@@ -9,8 +9,9 @@ Same commands, flags and output (text and --json) as agent-browser, so an agent 
 knows `agent-browser <args>` can type `ardia browse <args>`. It drives the running Ardia
 over the ardia command's control connection (Settings > "Let the ardia command control
 Ardia"), through pydoll. Input is instant unless --humanize. Actions print what they changed
-(nodes with refs, URL, title, the POSTs they caused), a session with no tab uses the user's
-active tab, and text output stops at about 12,000 characters (narrow it with snapshot -i or -s <css>).
+(nodes with refs, URL, title, the POSTs they caused), a session works in background tabs of its
+own (`tab active` picks the user's tab), and text output stops at about 12,000 characters (narrow it
+with snapshot -i or -s <css>).
 
 Core Commands:
   open [url]                 Open url in a new background tab of this session (later opens reuse it)

@@ -73,8 +73,9 @@ command: it gives the reason (`data.reason`) and, for a tab, what Ardia has ther
 
 ## Tabs and sessions
 
-- A session with no tab uses the tab the user is looking at (stderr says which, once). `tab list` shows the user's
-  tabs too; `tab close` refuses theirs, and `close` leaves open a tab another live session uses.
+- A session never takes the user's tab on its own: until it opens one (`open`, `tab new`) or picks one (`tab active`,
+  `tab <id>`), page commands fail with `no_session_tab`. `tab list` shows the user's tabs too; `tab close` refuses
+  theirs, and `close` leaves open a tab another live session uses.
 - `tN` ids are the same in every session and never move to another tab. `tab tab-…` takes the ids `ardia windows`
   prints.
 - `tab_detached`: Ardia took the tab away mid-command (it closed, crashed or went to sleep). Run the command again;

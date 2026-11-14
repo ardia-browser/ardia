@@ -167,8 +167,8 @@ globals and runs the commands that need no browser, `daemon.py` owns the connect
 `readurl.py`; site notes in `ardia_cli/notes.py`).
 
 An agent's loop is short: `snapshot -i` once, then actions, each of which prints what it changed, so it rarely needs
-another snapshot; repetitive work goes in one `batch` on stdin. Input is instant unless `--humanize`, a session with
-no tab uses the user's active one, and text output stops at about 12,000 characters.
+another snapshot; repetitive work goes in one `batch` on stdin. Input is instant unless `--humanize`, a session works
+in background tabs of its own until it picks the user's with `tab active`, and text output stops at about 12,000 characters.
 
 ### Process model
 

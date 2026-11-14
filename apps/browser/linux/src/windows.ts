@@ -2,6 +2,7 @@ import { BrowserWindow, type BrowserWindowConstructorOptions } from "electron";
 import { join } from "node:path";
 import { addReceiver } from "./bridge";
 import { trustHost } from "./ipcSenders";
+import { guardAppWindow, guardHost, mayOpenFromHost } from "./navigationGuards";
 
 export const preloadPath = () => join(__dirname, "preload.js");
 export const appWindowPreloadPath = () => join(__dirname, "window-preload.js");
@@ -53,9 +54,11 @@ export function createHost(load: (window: BrowserWindow) => Promise<void>): Brow
   hostWindow = made;
   addReceiver(made.webContents);
   trustHost(made.webContents);
-  made.webContents.setWindowOpenHandler(({ frameName }) => {
-    const shaped = pending.get(frameName) ?? {};
+  guardHost(made.webContents);
+  made.webContents.setWindowOpenHandler(({ url, frameName }) => {
+    const shaped = pending.get(frameName);
     pending.delete(frameName);
+    if (!mayOpenFromHost(url, frameName, !!shaped) || !shaped) return { action: "deny" };
     return {
       action: "allow",
       outlivesOpener: false,
@@ -71,6 +74,7 @@ export function createHost(load: (window: BrowserWindow) => Promise<void>): Brow
     };
   });
   made.webContents.on("did-create-window", (child, { frameName }) => {
+    guardAppWindow(child.webContents, frameName);
     if (auxiliaryNames.has(frameName)) {
       auxiliaryWindows.set(frameName, child);
       child.once("closed", () => auxiliaryWindows.delete(frameName));

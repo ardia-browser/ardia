@@ -51,7 +51,26 @@ export const safeStorage = {
   },
 };
 
-export class BrowserWindow extends EventEmitter {}
+type OpenHandler = (details: { url: string; frameName: string }) => { action: "allow" | "deny" };
+
+export class FakeWebContents extends EventEmitter {
+  openHandler: OpenHandler | null = null;
+  readonly mainFrame = { url: "" };
+  setWindowOpenHandler(handler: OpenHandler): void {
+    this.openHandler = handler;
+  }
+}
+
+export class BrowserWindow extends EventEmitter {
+  static readonly made: BrowserWindow[] = [];
+  readonly webContents = new FakeWebContents();
+  readonly options: unknown;
+  constructor(options: unknown = {}) {
+    super();
+    this.options = options;
+    BrowserWindow.made.push(this);
+  }
+}
 export const contextBridge = { exposeInMainWorld: () => undefined, executeInMainWorld: () => undefined };
 export const ipcRenderer = new EventEmitter();
 

@@ -29,7 +29,27 @@ function finish(): void {
   app.exit(0);
 }
 
+type QuitGuard = () => Promise<boolean>;
+let quitGuard: QuitGuard | null = null;
+let guarding = false;
+
+export function guardQuitWith(guard: QuitGuard): void {
+  quitGuard = guard;
+}
+
 export function requestQuit(): void {
+  if (quitting || guarding) return;
+  if (!quitGuard) return beginQuit();
+  guarding = true;
+  void quitGuard()
+    .catch(() => true)
+    .then((proceed) => {
+      guarding = false;
+      if (proceed) beginQuit();
+    });
+}
+
+function beginQuit(): void {
   if (quitting) return;
   quitting = true;
   const mine = ++generation;
@@ -58,7 +78,7 @@ export function installQuitLifecycle(): void {
   });
   for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"] as const)
     process.on(signal, () => {
-      if (!quitting) return requestQuit();
+      if (!quitting) return beginQuit();
       note("quit", `${signal} again while quitting; quitting now`);
       finish();
     });

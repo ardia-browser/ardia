@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { BrowserWindow, dialog, ipcMain } from "electron";
 import { isBackground } from "../paths";
 import { acceptsPage } from "../ipcSenders";
 import { guestOf, windowOf } from "./guests";
@@ -102,9 +102,4 @@ ipcMain.on("ardia:page-dialog", (event, kind: unknown, message: unknown, fallbac
     .then((value) => {
       event.returnValue = value ?? null;
     });
-});
-
-app.on("web-contents-created", (_event, contents) => {
-  if (contents.getType() !== "webview") return;
-  contents.on("will-prevent-unload", (event) => event.preventDefault());
 });

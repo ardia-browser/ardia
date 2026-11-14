@@ -89,7 +89,13 @@ host made draws in another window but sits in the host's frame tree, so it gets 
   for 5 s, and each open consumes it. An open without one is denied unless the site's `popups` setting is `allow`,
   and becomes a `popupBlocked` event, which shows the app's blocked pop-up button and prompt. `openBlockedPopup` opens
   it later (as a pop-up window without an opener, or a tab); "Always Allow" stores `allow` for the site. A page's
-  blocked list empties when it navigates. Downloads (`downloads.ts`) report to the downloads panel; a test instance saves
+  blocked list empties when it navigates.
+- **Leaving a page.** A page whose `beforeunload` asks to stay gets "Leave site?" (Leave, Cancel) over its window when
+  it navigates, reloads or goes back (`leavingPages.ts`; Electron needs that answer synchronously, so the dialog is
+  modal). A quit the user asks for (Ctrl+Q, the app menu) first runs each page's `beforeunload`
+  in the page (only pages the user has interacted with, as Chrome requires) and asks "Quit Ardia?" once for all of
+  them (`guardQuitWith` in `quit.ts`); signals quit without asking. Closing a tab doesn't ask, like the Mac, which
+  runs the page's unload handlers without a prompt. Downloads (`downloads.ts`) report to the downloads panel; a test instance saves
   into its data dir. Permission prompts (`permissions.ts`) read and remember through `services/sites.ts`; external
   protocols ask through the page's `externalApp` prompt. The page context menu is a native menu.
 - **Widevine.** The `electron` package is castlabs' Electron for Content Security (`github:castlabs/electron-releases`,

@@ -16,6 +16,9 @@ after(() => {
 
 const { confirmDeviceOwner, presentOwnerPromptsWith, revokeOwnerGrant, runPasswordHelper, trustedPasswordHelper } = await import("./ownerCheck.ts");
 
+const bytesOf = (text: string) => new TextEncoder().encode(text);
+const wiped = (bytes: Uint8Array) => bytes.every((byte) => byte === 0);
+
 let prompt = scriptedPrompt();
 beforeEach(() => {
   revokeOwnerGrant();
@@ -134,11 +137,11 @@ test("a helper that crashes is reported as such, not as a wrong password", async
 test("a helper that hangs past its deadline, or can't start, fails rather than refusing the password", async () => {
   mock.timers.reset();
   helper.setMode("hang");
-  assert.equal(await runPasswordHelper(helper.path, CORRECT_PASSWORD, 300), "failed");
-  assert.equal(await runPasswordHelper(join(dataDir, "missing"), CORRECT_PASSWORD), "failed");
+  assert.equal(await runPasswordHelper(helper.path, bytesOf(CORRECT_PASSWORD), 300), "failed");
+  assert.equal(await runPasswordHelper(join(dataDir, "missing"), bytesOf(CORRECT_PASSWORD)), "failed");
   helper.setMode("check");
-  assert.equal(await runPasswordHelper(helper.path, "wrong"), "mismatch");
-  assert.equal(await runPasswordHelper(helper.path, CORRECT_PASSWORD), "match");
+  assert.equal(await runPasswordHelper(helper.path, bytesOf("wrong")), "mismatch");
+  assert.equal(await runPasswordHelper(helper.path, bytesOf(CORRECT_PASSWORD)), "match");
 });
 
 test("passwords over 512 bytes or holding NUL never reach the helper", async () => {
@@ -153,4 +156,23 @@ test("passwords over 512 bytes or holding NUL never reach the helper", async () 
   assert.equal(helper.calls() - before, 1);
   prompt.answers.push(CORRECT_PASSWORD);
   assert.equal(await confirmDeviceOwner("show your saved passwords"), true);
+});
+
+test("every password handed over is wiped once checked, and the helper reads it NUL-terminated", async () => {
+  prompt.answers.push("wrong", "x".repeat(600), CORRECT_PASSWORD);
+  assert.equal(await confirmDeviceOwner("show your saved passwords"), true);
+  assert.equal(prompt.handedOver.length, 3);
+  assert.ok(prompt.handedOver.every(wiped));
+  assert.deepEqual(helper.received(), Buffer.from(`${CORRECT_PASSWORD}\0`, "utf8"));
+});
+
+test("the helper wipes the bytes it's given whether it matches, refuses, fails or times out", async () => {
+  mock.timers.reset();
+  const given = [bytesOf(CORRECT_PASSWORD), bytesOf("wrong"), bytesOf("missing"), bytesOf("slow")];
+  await runPasswordHelper(helper.path, given[0]!);
+  await runPasswordHelper(helper.path, given[1]!);
+  await runPasswordHelper(join(dataDir, "missing"), given[2]!);
+  helper.setMode("hang");
+  await runPasswordHelper(helper.path, given[3]!, 200);
+  assert.ok(given.every(wiped));
 });

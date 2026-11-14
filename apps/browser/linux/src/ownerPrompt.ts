@@ -20,7 +20,7 @@ const waiting=()=>waitUntil>Date.now();
 const show=()=>{const left=Math.ceil((waitUntil-Date.now())/1000);if(left>0){error.textContent=(said?said+" ":"")+"Try again in "+left+" s.";ok.disabled=true;return;}clearInterval(ticker);ticker=0;error.textContent=said?said+" Try again.":"";ok.disabled=!settle;};
 window.nextAnswer=()=>new Promise((resolve)=>{settle=resolve;ok.disabled=waiting();field.disabled=false;field.focus();});
 const answer=(value)=>{if(!settle)return;const done=settle;settle=null;ok.disabled=true;field.disabled=true;done(value);};
-form.addEventListener("submit",(event)=>{event.preventDefault();if(field.value&&!waiting())answer(field.value);});
+form.addEventListener("submit",(event)=>{event.preventDefault();if(!field.value||waiting())return;const bytes=new TextEncoder().encode(field.value);field.value="";answer(bytes);setTimeout(()=>bytes.fill(0));});
 document.getElementById("cancel").addEventListener("click",()=>answer(null));
 addEventListener("keydown",(event)=>{if(event.key==="Escape")answer(null);});
 window.refuse=(message,retryInMs)=>{field.value="";said=message;waitUntil=Date.now()+retryInMs;clearInterval(ticker);ticker=retryInMs>0?setInterval(show,250):0;show();if(!message)return;form.classList.remove("shake");void form.offsetWidth;form.classList.add("shake");};`,
@@ -108,7 +108,7 @@ function promptIn(window: BrowserWindow): OwnerPrompt {
       if (window.isDestroyed()) return Promise.resolve(null);
       const closed = new Promise<null>((resolve) => window.once("closed", () => resolve(null)));
       const answered = run("window.nextAnswer()").then(
-        (value: unknown) => (typeof value === "string" && value ? value : null),
+        (value: unknown) => (value instanceof Uint8Array && value.length ? value : null),
         () => null,
       );
       return Promise.race([answered, closed]);

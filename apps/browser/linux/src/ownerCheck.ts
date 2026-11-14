@@ -8,7 +8,7 @@ import { note } from "./log";
 import { windowPrompt } from "./ownerPrompt";
 
 export type OwnerPrompt = {
-  answer(): Promise<string | null>;
+  answer(): Promise<Uint8Array | null>;
   refuse(message: string, retryInMs: number): Promise<void>;
   focus(): void;
   close(): void;
@@ -82,11 +82,16 @@ function passwordHelper(): string | null {
   return null;
 }
 
-export function runPasswordHelper(helper: string, password: string, deadlineMs = HELPER_DEADLINE_MS): Promise<HelperVerdict> {
+export function runPasswordHelper(helper: string, password: Uint8Array, deadlineMs = HELPER_DEADLINE_MS): Promise<HelperVerdict> {
+  const secret = Buffer.alloc(password.length + 1);
+  secret.set(password);
+  password.fill(0);
+  const wipe = () => void secret.fill(0);
   return new Promise((resolve) => {
     let settled = false;
     let deadline: ReturnType<typeof setTimeout> | undefined;
     const finish = (verdict: HelperVerdict) => {
+      wipe();
       if (settled) return;
       settled = true;
       clearTimeout(deadline);
@@ -100,18 +105,46 @@ export function runPasswordHelper(helper: string, password: string, deadlineMs =
       }, deadlineMs);
       child.once("error", () => finish("failed"));
       child.once("exit", (code) => finish(code === 0 ? "match" : code === WRONG_PASSWORD_EXIT ? "mismatch" : "failed"));
-      child.stdin.on("error", () => {});
-      child.stdin.end(Buffer.concat([Buffer.from(password, "utf8"), Buffer.from([0])]));
+      child.stdin.on("error", wipe);
+      child.stdin.end(secret, wipe);
     } catch {
       finish("failed");
     }
   });
 }
 
-function unusablePassword(password: string): string | null {
-  if (Buffer.byteLength(password, "utf8") > MAX_PASSWORD_BYTES) return "That password is too long to check.";
-  if (password.includes("\0")) return "That password can't be checked.";
+function unusablePassword(password: Uint8Array): string | null {
+  if (password.length > MAX_PASSWORD_BYTES) return "That password is too long to check.";
+  if (password.includes(0)) return "That password can't be checked.";
   return null;
+}
+
+async function checkAnswer(prompt: OwnerPrompt, helper: string, password: Uint8Array): Promise<boolean> {
+  const waiting = retryInMs();
+  if (waiting > 0) {
+    count("owner_check_throttled");
+    await prompt.refuse("", waiting);
+    return false;
+  }
+  const unusable = unusablePassword(password);
+  if (unusable) {
+    await prompt.refuse(unusable, 0);
+    return false;
+  }
+  const verdict = await runPasswordHelper(helper, password);
+  if (verdict === "match") {
+    noteRightPassword();
+    return true;
+  }
+  if (verdict === "failed") {
+    count("owner_check_helper_failures");
+    await prompt.refuse("Ardia couldn't check the password.", 0);
+    return false;
+  }
+  count("owner_check_wrong_passwords");
+  noteWrongPassword();
+  await prompt.refuse("Wrong password.", retryInMs());
+  return false;
 }
 
 async function askForPassword(helper: string, reason: string): Promise<boolean> {
@@ -121,30 +154,11 @@ async function askForPassword(helper: string, reason: string): Promise<boolean> 
     for (;;) {
       const password = await prompt.answer();
       if (password === null) return false;
-      const waiting = retryInMs();
-      if (waiting > 0) {
-        count("owner_check_throttled");
-        await prompt.refuse("", waiting);
-        continue;
+      try {
+        if (await checkAnswer(prompt, helper, password)) return true;
+      } finally {
+        password.fill(0);
       }
-      const unusable = unusablePassword(password);
-      if (unusable) {
-        await prompt.refuse(unusable, 0);
-        continue;
-      }
-      const verdict = await runPasswordHelper(helper, password);
-      if (verdict === "match") {
-        noteRightPassword();
-        return true;
-      }
-      if (verdict === "failed") {
-        count("owner_check_helper_failures");
-        await prompt.refuse("Ardia couldn't check the password.", 0);
-        continue;
-      }
-      count("owner_check_wrong_passwords");
-      noteWrongPassword();
-      await prompt.refuse("Wrong password.", retryInMs());
     }
   } finally {
     askingPrompt = null;

@@ -48,6 +48,7 @@ export function stubPasswordHelper(): StubHelper {
 export type ScriptedPrompt = {
   ui: OwnerPromptUI;
   answers: (string | null)[];
+  handedOver: Uint8Array[];
   asked: string[];
   openedWaiting: number[];
   refusals: [string, number][];
@@ -58,6 +59,7 @@ export type ScriptedPrompt = {
 export function scriptedPrompt(): ScriptedPrompt {
   const scripted: ScriptedPrompt = {
     answers: [],
+    handedOver: [],
     asked: [],
     openedWaiting: [],
     refusals: [],
@@ -68,7 +70,13 @@ export function scriptedPrompt(): ScriptedPrompt {
         scripted.asked.push(reason);
         scripted.openedWaiting.push(retryInMs);
         const prompt: OwnerPrompt = {
-          answer: async () => (scripted.answers.length ? scripted.answers.shift()! : null),
+          answer: async () => {
+            const next = scripted.answers.shift();
+            if (next === undefined || next === null) return null;
+            const bytes = new TextEncoder().encode(next);
+            scripted.handedOver.push(bytes);
+            return bytes;
+          },
           refuse: async (message, retryInMs) => void scripted.refusals.push([message, retryInMs]),
           focus: () => undefined,
           close: () => void scripted.closed++,

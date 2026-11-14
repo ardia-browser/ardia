@@ -8,7 +8,7 @@ public class MenusModule: Module {
 
   public func definition() -> ModuleDefinition {
     Name("ArdiaMenus")
-    Events(ShellEvents.Channel.command.rawValue, ShellEvents.Channel.menuPick.rawValue)
+    Events(ShellEvents.Channel.command.rawValue)
 
     OnCreate {
       self.lifetime.begin(self) {
@@ -16,7 +16,6 @@ public class MenusModule: Module {
         ShellEvents.retire(self)
       }
       ShellEvents.attach(.command, to: self, while: self.lifetime)
-      ShellEvents.attach(.menuPick, to: self, while: self.lifetime)
       self.lifetime.onMain { NSApp.mainMenu = MainMenu.build() }
     }
 

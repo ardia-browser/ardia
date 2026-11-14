@@ -67,8 +67,14 @@ export const DEFAULT_CALENDAR: CalendarSettings = {
 };
 
 const DOC = "live.json";
-const DOC_VERSION = 1;
-const DOC_MIGRATIONS: Migrations = { 0: unchanged };
+const DOC_VERSION = 2;
+const DOC_MIGRATIONS: Migrations = {
+  0: unchanged,
+  1: (doc) => ({
+    ...doc,
+    folders: Object.fromEntries(Object.entries((doc.folders ?? {}) as Record<string, object>).map(([id, f]) => [id, { showNewRepos: true, shownRepos: [], ...f }])),
+  }),
+};
 const PERSISTED = ["folders", "folderOrder", "items", "known", "unread", "hidden", "repoHidden", "completed", "expandedStacks", "accounts", "config", "calendar", "meetingGroups", "dismissedAlerts", "dismissedNow"] as const;
 
 function load(): Partial<LiveState> {

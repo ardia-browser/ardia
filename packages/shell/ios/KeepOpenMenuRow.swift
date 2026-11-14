@@ -58,7 +58,7 @@ final class KeepOpenMenuRow: NSView {
 
   override func mouseUp(with event: NSEvent) {
     guard enabled else { return }
-    ShellEvents.send(.menuPick, ["id": id])
+    ShellEvents.send(.command, ["command": "menu.pick", "arg": id, "windowId": NSNull()])
   }
 
   override func draw(_ dirtyRect: NSRect) {

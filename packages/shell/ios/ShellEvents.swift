@@ -4,7 +4,6 @@ import ExpoModulesCore
 enum ShellEvents {
   enum Channel: String {
     case command = "onCommand"
-    case menuPick = "onMenuPick"
     case openURLs = "onOpenURLs"
     case window = "onWindowEvent"
     case app = "onAppEvent"

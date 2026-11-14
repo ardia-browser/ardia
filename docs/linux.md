@@ -55,9 +55,37 @@ stay in the renderer. Linux uses the Windows chrome (app-drawn window buttons), 
 
 ### Pages are `<webview>` elements
 
-`ArdiaWebView` renders a `<webview>` in place, so the UI draws over pages, clips their corners and animates them like
-any other element. The main process owns each page's `webContents` (`webContents.fromId(getWebContentsId())`) and
-answers the engine domains (`tabs.*`, `history.*`, …) from it.
+`ArdiaWebView` (`packages/expo-linux/src/engine`) renders a `<webview>` in place, so the UI draws over pages, clips
+their corners and animates them like any other element. Each page lives in a registry keyed by its tab id
+(`engine/pages.ts`); the element is made by the document of the window that shows it, never the host's: a webview the
+host made draws in another window but sits in the host's frame tree, so it gets no input.
+
+- **Moving without reloading.** Removing a `<webview>` from the DOM destroys its page. Every app window gets a tiny
+  preload (`window-preload.js`, from `engine/hostPreload.ts`) that adds a `connectedMoveCallback` to the window's
+  `<webview>` definition before Electron defines it, and moves use `moveBefore`, which then keeps the page alive. Pages
+  parked for a hand-off (`ArdiaTabs.prepareTransfer`) wait in a hidden lot in their window; React's reorders are routed
+  through `moveBefore` too (`engine/pageMoves.ts`). A page moving to another window can't move its element: the new
+  element starts with no navigation (`about:blank#ardia-restores-history`, dropped in `will-attach-webview`) and gets
+  the old page's history, scroll state included, through `navigationHistory.restore`.
+- **Hidden tabs** keep their element (`visibility: hidden`); the page reports `document.hidden` as in Chrome.
+- **Main side** (`apps/browser/linux/src/engine`). `sessions.ts` sets each page's web preferences in
+  `will-attach-webview` (sandboxed, not transparent, the page preload) and sets up each partition once: profile
+  `persist:ardia[-<profile>]`, private profiles `ardia-private-<profile>`, Chrome's user agent without "Electron".
+  `guests.ts` tracks every guest and sends its events to the renderer as `ArdiaLinuxPages` `page` events keyed by
+  `webContents` id (navigation state, progress, favicons, theme colour, find, zoom per host, audio, full screen, crashes,
+  load and certificate errors, status text); the renderer attaches each guest to its tab (`ArdiaLinuxPages.attach`).
+  `pageCalls.ts` answers the view's imperative methods (`ArdiaLinuxPages.page(id, method, args)`). The page script
+  (`packages/ardiacore/ios/page_script.js`) runs in each page's main world from a sandboxed preload
+  (`page-preload.js`); `pageScriptBridge.ts` handles its messages (theme, scroll, selection, now playing, badges,
+  notifications, Peek and split links). The same preload replaces `alert`/`confirm`/`prompt` with a synchronous ask to
+  main, which shows them over the page's own window (`pageDialogs.ts`).
+- **Opening.** Links that open tabs become `openWindow` events; `window.open` with a size opens an Electron window that
+  keeps its opener (sign-in popups). Downloads (`downloads.ts`) report to the downloads panel; a test instance saves
+  into its data dir. Permission prompts (`permissions.ts`) read and remember through `services/sites.ts`; external
+  protocols ask through the page's `externalApp` prompt. The page context menu is a native menu.
+- **Not on Linux:** Widevine (stock Electron has no CDM), geolocation (no location provider key), tab discarding,
+  Picture in Picture controls beyond the page's own, and casting. Calls not implemented fail with `ERR_ENGINE` and
+  log once.
 
 ### The bridge
 

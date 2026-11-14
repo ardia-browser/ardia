@@ -48,6 +48,7 @@ enum SettingsRoute: String, Hashable {
   case siteSettings
   case connect
   case searchEngine
+  case browseForMe
   case filterLists
   case filterListDetail
   case myFilters
@@ -65,6 +66,7 @@ enum SettingsRoute: String, Hashable {
     case .siteSettings: SiteSettingsPage()
     case .connect: SyncConnectPage()
     case .searchEngine: SearchEnginePage()
+    case .browseForMe: BrowseForMePage()
     case .filterLists: FilterListsPage()
     case .filterListDetail: FilterListDetailPage(listID: "ublock-filters")
     case .myFilters: MyFiltersEditor()
@@ -143,6 +145,13 @@ private struct SettingsRootList: View {
               Text(SearchEngineNames.current(app))
             } label: {
               SettingsRowLabel("Search Engine", systemImage: "magnifyingglass", tint: SettingsTint.search)
+            }
+          }
+          NavigationLink(value: SettingsRoute.browseForMe) {
+            LabeledContent {
+              Text(app.chatGPT.isConnected ? "ChatGPT" : "On iPhone")
+            } label: {
+              SettingsRowLabel("Browse for Me", systemImage: "sparkle.magnifyingglass", tint: SettingsTint.nightShade)
             }
           }
           Toggle(isOn: $preferences.searchSuggestions) {

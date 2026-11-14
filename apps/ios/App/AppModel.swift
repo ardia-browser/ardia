@@ -40,10 +40,12 @@ final class AppModel {
   let settings = AppSettings.launch()
   let deck: TabDeckModel
   let defaultBrowser: DefaultBrowserStatus
+  let chatGPT = ChatGPTAccount()
 
   var surface: Surface = .search
   var sheet: Sheet?
   var isIncognito = false
+  var research: ResearchSession?
   @ObservationIgnored var inboxInFlight: Set<UUID> = []
   @ObservationIgnored var inboxSent: Set<UUID> = []
 

@@ -229,6 +229,32 @@ Events (service `ardia-phone`, `$lib` `ardia-phone-telemetry`, tags `app: phone`
 
 On the dashboard they are kept out of every Mac section by source and lib (`PHONE_APP_SOURCE` in `apps/dashboard/src/server/sql.ts`).
 
+## What is left before the Expo app replaces both native apps
+
+The bar is the Compose app on Android and the SwiftUI app on iPhone, screen by screen and setting by setting:
+what each tap does, what is remembered, animations and their timing. Every item is one line: what it is, where it
+lives in the native app, and its size (small: an hour or two; a day; more). Anything not yet seen working on a
+phone is listed as unverified, even where the code is in. Audited 2026-11-14 at 608a701c5.
+
+### Needs only JavaScript
+
+### Needs native code on Android
+
+### Needs native code on iPhone
+
+### Unverified on a phone
+
+### Deliberately different
+
+- Voice screen status-bar icons: light over the voice screen's always-dark cover on both phones, the top layer's ink rule (`lib/statusInk.ts`), not each native app's own.
+- Pin to Mac from the page menu: Android keeps Compose's toast, iPhone answers in the menu's title as SwiftUI does (5023ecabd).
+- Paste and Go: Android only; SwiftUI has no such row (`lib/platformCopy.ts` `offersPasteAndGo`).
+- Wording: each phone keeps its native app's words through one copy table per platform (`lib/platformCopy.ts`, 5db9a2263).
+- Settings, the Archive and Spaces share one sheet on both phones (3a9ca2f10); Compose opens Settings full screen.
+- Menus are drawn by the app (`components/ui/Menu.tsx`) on both phones, not system menus, so they match across platforms.
+- Backdrops: native look views where the module has them, CSS gradients elsewhere; no Skia (the owner's decision).
+- The code scanner is the module's own view (`ScanView`); expo-camera and its ML Kit are gone (00b9064e9).
+
 ## Build and run
 
 ```

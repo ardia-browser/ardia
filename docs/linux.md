@@ -13,7 +13,7 @@ Walked by hand on 2026-11-14 on Ubuntu 24.04 (x86_64), in a test instance on a p
 data folder, as a user would: real X key presses, clicks and drags, a screenshot for every row. The walk started on
 commit d7a4bd789; the rows it found broken were fixed on the way and seen again after the fix (through cc0829af3),
 and those rows name the fix. Most rows were walked with no window manager; maximize, dragging, full screen, focus, menus and Peek were walked
-again under xfwm4 with its compositor. Of the 63 rows, 59 work, 3 work with a difference, none is broken, 1 is not
+again under xfwm4 with its compositor. Of the 63 rows, 60 work, 2 work with a difference, none is broken, 1 is not
 offered, and every row was walked. Works with a difference says what differs; the Mac's list is
 `docs/dia-feature-parity.md`.
 
@@ -25,7 +25,7 @@ offered, and every row was walked. Works with a difference says what differs; th
 | First launch | Works: onboarding, no release notes | |
 | First launch with a link | Works: onboarding starts and the link opens in Little Ardia in front of it; closing Little Ardia leaves onboarding | |
 | Onboarding (source, look, last choices) | Works: six steps for Coming from Chrome (colour, frame, sharing, layout, default browser and login, welcome) | |
-| Intro animation and music | Differs: step 1 shows the app icon where the Mac plays the meadow; music not checked (no audio device) | |
+| Intro animation and music | Works: the Mac's meadow scene plays behind the icon and wordmark, fading in over the dawn poster on its first frame (seen with SwiftShader WebGL; with no WebGL2 the poster stays), and the intro music plays (the audio element runs; no audio device to hear it). Before, a still poster | 82038c1c6 |
 | Tour | Works: three stops for tabs across the top (search, two pages side by side, all set), Back, Next, Skip Tour, Done | |
 | Import from another browser | Works with a Chromium profile made for the walk (this machine's browsers hold no data): Import from Another Browser finds Chromium, imports 2 bookmarks (into "Imported from Chromium") and 2 history items. Passwords from a keyring weren't tried | |
 | Check for updates | Works: "Ardia is up to date" with the version and the releases page, with the info icon | a03d8dd4a |
@@ -149,7 +149,8 @@ focused window, `ResizeObserver` and `IntersectionObserver` observe each element
 Native views are drawn in the DOM (`packages/expo-linux/src/views/registry.tsx`, most ported from the web demo):
 `Symbol`, `Surface`, `VisualEffect` (nearly opaque: a transparent Linux window can't blur the desktop), glass, popover
 bubbles, `FadeLabel`, the spinner, the pager's `SwipeArea`, the GL backdrop and power-up (with CSS fallbacks where WebGL2
-is blocklisted), and `WindowDragRegion`. A drag region is `-webkit-app-region: drag`, so a press there starts the window
+is blocklisted), the intro's meadow (`views/meadow.tsx`: the Mac's `ios/Meadow/index.html` in a sandboxed `srcdoc` iframe
+whose bridge stands in for `webkit.messageHandlers.meadow`, over Windows' dawn poster), and `WindowDragRegion`. A drag region is `-webkit-app-region: drag`, so a press there starts the window
 manager's move and a double click its maximize; presses there never reach the page, so main forwards
 `system-context-menu` as a `contextmenu` at that point. Chromium applies regions in tree order and `app-region` inherits,
 so `windows/dragCover.ts` marks what lies over a region `no-drag`: controls, views with `mouseDownCanMoveWindow={false}`,

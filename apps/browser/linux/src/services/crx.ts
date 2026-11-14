@@ -1,5 +1,5 @@
 import AdmZip from "adm-zip";
-import { createHash, createPublicKey, verify } from "node:crypto";
+import { createHash, createPublicKey, randomUUID, verify } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
@@ -12,6 +12,8 @@ const SIGNED_DATA_CONTEXT = Buffer.from("CRX3 SignedData\x00", "latin1");
 const RSA_PROOF = 2;
 const ECDSA_PROOF = 3;
 const SIGNED_HEADER_DATA = 10000;
+const STORE_CRX_SERVICE = "https://clients2.google.com/service/update2/crx";
+const MAX_CRX_BYTES = 512 * 1024 * 1024;
 
 type Field = { number: number; bytes: Buffer };
 
@@ -112,9 +114,10 @@ function inside(folder: string, path: string): string {
   return resolved;
 }
 
-export async function unpackCrxFile(path: string, extensionsFolder: string): Promise<{ id: string; path: string }> {
-  const { id, publicKey, zip } = parseCrx(await readFile(path));
+export async function unpackCrx(crx: Buffer, extensionsFolder: string, expectedId?: string): Promise<{ id: string; path: string }> {
+  const { id, publicKey, zip } = parseCrx(crx);
   if (!EXTENSION_ID.test(id)) throw new Error("the CRX's id isn't an extension id");
+  if (expectedId !== undefined && id !== expectedId) throw new Error(`the CRX is for ${id}, not ${expectedId}`);
   const archive = new AdmZip(zip);
   const manifestEntry = archive.getEntry("manifest.json");
   if (!manifestEntry) throw new Error("the CRX has no manifest.json");
@@ -122,8 +125,7 @@ export async function unpackCrxFile(path: string, extensionsFolder: string): Pro
   if (!isExtensionVersion(manifest.version)) throw new Error("the extension's manifest version isn't a valid version");
   const extensionFolder = inside(extensionsFolder, join(extensionsFolder, id));
   const target = inside(extensionFolder, join(extensionFolder, `${manifest.version}_0`));
-  const staging = inside(extensionsFolder, join(extensionsFolder, `${id}.unpacking`));
-  await rm(staging, { recursive: true, force: true });
+  const staging = inside(extensionsFolder, join(extensionsFolder, `${id}.unpacking-${randomUUID()}`));
   await mkdir(staging, { recursive: true });
   try {
     archive.extractAllTo(staging, true);
@@ -137,4 +139,26 @@ export async function unpackCrxFile(path: string, extensionsFolder: string): Pro
     throw error;
   }
   return { id, path: target };
+}
+
+export const unpackCrxFile = async (path: string, extensionsFolder: string) => unpackCrx(await readFile(path), extensionsFolder);
+
+export function storeCrxUrl(id: string): string {
+  const url = new URL(STORE_CRX_SERVICE);
+  url.searchParams.set("response", "redirect");
+  url.searchParams.set("acceptformat", "crx3");
+  url.searchParams.set("prodversion", process.versions.chrome ?? "140.0.0.0");
+  url.searchParams.set("x", new URLSearchParams({ id, installsource: "ondemand", uc: "" }).toString());
+  return url.href;
+}
+
+export async function downloadStoreExtension(id: string, extensionsFolder: string, url = storeCrxUrl(id)): Promise<string> {
+  if (!EXTENSION_ID.test(id)) throw new Error("not an extension id");
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`the Chrome Web Store answered ${response.status} for ${id}`);
+  const declared = Number(response.headers.get("content-length") ?? 0);
+  if (declared > MAX_CRX_BYTES) throw new Error(`${id}'s CRX is larger than ${MAX_CRX_BYTES} bytes`);
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (bytes.length > MAX_CRX_BYTES) throw new Error(`${id}'s CRX is larger than ${MAX_CRX_BYTES} bytes`);
+  return (await unpackCrx(bytes, extensionsFolder, id)).path;
 }

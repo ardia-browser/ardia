@@ -6,7 +6,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { idFromKey, parseCrx, unpackCrxFile } from "./crx.ts";
+import { downloadStoreExtension, idFromKey, parseCrx, storeCrxUrl, unpackCrxFile } from "./crx.ts";
 
 const scratch = await mkdtemp(join(tmpdir(), "ardia-crx-"));
 after(() => rm(scratch, { recursive: true, force: true }));
@@ -184,4 +184,61 @@ test("a header that claims more bytes than the file has is refused", () => {
   lying.writeUInt32LE(good.length, 8);
   assert.throws(() => parseCrx(lying));
   assert.throws(() => parseCrx(good.subarray(0, 10)));
+});
+
+async function withStore<T>(serve: (url: string) => Response, run: (asked: string[]) => Promise<T>): Promise<T> {
+  const realFetch = globalThis.fetch;
+  const asked: string[] = [];
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    asked.push(url);
+    return serve(url);
+  }) as typeof fetch;
+  try {
+    return await run(asked);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
+test("a store install downloads the id's CRX and unpacks it only when its signature verifies", async () => {
+  const pair = rsa();
+  const id = idFromKey(spki(pair));
+  const genuine = crx3({ archive: archiveWith(MANIFEST), proofs: [{ pair, kind: "rsa" }] });
+  const { extensions } = await freshFolders();
+  const path = await withStore(
+    () => new Response(genuine),
+    async (asked) => {
+      const installed = await downloadStoreExtension(id, extensions);
+      assert.deepEqual(asked, [storeCrxUrl(id)]);
+      return installed;
+    },
+  );
+  assert.equal(path, join(extensions, id, "1.2.3_0"));
+  assert.equal(JSON.parse(await readFile(join(path, "manifest.json"), "utf8")).key, spki(pair).toString("base64"));
+});
+
+test("a tampered store CRX, or one for another id, is refused and leaves nothing behind", async () => {
+  const pair = rsa();
+  const id = idFromKey(spki(pair));
+  const archive = archiveWith(MANIFEST);
+  const genuine = crx3({ archive, proofs: [{ pair, kind: "rsa" }] });
+  const tampered = Buffer.concat([genuine.subarray(0, genuine.length - archive.length), archiveWith({ ...MANIFEST, name: "Evil" })]);
+  const { extensions } = await freshFolders();
+  await withStore(() => new Response(tampered), () => assert.rejects(downloadStoreExtension(id, extensions), /signature/));
+  const other = rsa();
+  const foreign = crx3({ archive, proofs: [{ pair: other, kind: "rsa" }] });
+  await withStore(() => new Response(foreign), () => assert.rejects(downloadStoreExtension(id, extensions), /not/));
+  const escaping = crx3({ archive: archiveWith({ ...MANIFEST, version: "../../x" }), proofs: [{ pair, kind: "rsa" }] });
+  await withStore(() => new Response(escaping), () => assert.rejects(downloadStoreExtension(id, extensions), /version/));
+  await withStore(() => new Response("nope", { status: 404 }), () => assert.rejects(downloadStoreExtension(id, extensions), /404/));
+  assert.deepEqual(await readdir(extensions), []);
+});
+
+test("the store URL asks for a CRX3 of exactly that id", async () => {
+  const url = new URL(storeCrxUrl("ddkjiahejlhfcafbddmgiahcphecmpfh"));
+  assert.equal(url.origin + url.pathname, "https://clients2.google.com/service/update2/crx");
+  assert.equal(new URLSearchParams(url.searchParams.get("x") ?? "").get("id"), "ddkjiahejlhfcafbddmgiahcphecmpfh");
+  assert.equal(url.searchParams.get("acceptformat"), "crx3");
+  await assert.rejects(downloadStoreExtension("../../etc", "/tmp/nowhere"), /not an extension id/);
 });

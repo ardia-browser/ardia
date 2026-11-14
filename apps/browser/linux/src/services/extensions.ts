@@ -7,8 +7,8 @@ import { defineModule } from "../bridge";
 import { defineDomain, emitDomainEvent } from "../engine/domains";
 import { allGuests, onGuestAttached, windowOf, type Guest } from "../engine/guests";
 import { isBackground } from "../paths";
-import { unpackCrxFile } from "./crx";
-import { downloadExtension, ElectronChromeExtensions, installChromeWebStore, installExtension } from "./vendorModules";
+import { downloadStoreExtension, unpackCrxFile } from "./crx";
+import { ElectronChromeExtensions, installChromeWebStore } from "./vendorModules";
 import { database, pref, setPref } from "./database";
 import { onProfileSession } from "./guests";
 import { extensionsModulePath, webStoreModulePath } from "./vendorPreloads";
@@ -322,7 +322,11 @@ function setUp(session: Session, profile: string) {
     loadExtensions: false,
     autoUpdate: false,
     allowUnpackedExtensions: false,
-    beforeInstall: async (details) => ({ action: (await askToInstall(profile, details as never)) ? "allow" : "deny" }),
+    beforeInstall: async (details) => {
+      if (!(await askToInstall(profile, details as never))) return { action: "deny" };
+      await downloadStoreExtension(details.id, extensionsFolder(profile));
+      return { action: "allow" };
+    },
   }).catch((error: unknown) => console.warn("[ardia extensions] the Chrome Web Store didn't set up", error));
   for (const [id, entry] of Object.entries(registryOf(profile))) {
     if (!entry.enabled) continue;
@@ -394,7 +398,7 @@ export async function updateWebStoreExtensions(profile: string): Promise<{ id: s
       const latest = available.get(id);
       if (!latest || !isNewer(latest, current)) continue;
       const folder = extensionsFolder(profile);
-      const path = await downloadExtension(id, folder);
+      const path = await downloadStoreExtension(id, folder);
       const registry = registryOf(profile);
       const entry = registry[id];
       if (!entry) {
@@ -622,7 +626,7 @@ defineModule("ArdiaLinuxExtensions", {
     checkForUpdates: (profile: string) => updateWebStoreExtensions(profile ?? ""),
     installFromWebStore: async (profile: string, id: string) => {
       const { session } = contextFor(profile);
-      const extension = await installExtension(id, { session, extensionsPath: extensionsFolder(profile) });
+      const extension = session.extensions.getExtension(id) ?? (await session.extensions.loadExtension(await downloadStoreExtension(id, extensionsFolder(profile))));
       return { id: extension.id, name: extension.name, version: extension.version };
     },
   },

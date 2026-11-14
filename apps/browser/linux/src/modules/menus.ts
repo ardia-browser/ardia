@@ -6,6 +6,7 @@ import { count } from "../counts";
 import { testFlag } from "../launch";
 import { activation, note } from "../log";
 import { dataDirectory, isBackground } from "../paths";
+import { popUpOver } from "../popupMenus";
 import { electronAccelerator, linuxComboFromStored, storedCombo } from "../menus/keys";
 import { finishRecording, keyboardState, startRecording } from "../menus/keyboard";
 import { menuStore } from "../menus/store";
@@ -185,12 +186,9 @@ function showMenu(items: MenuItem[]): Promise<string | null> {
     let chosen: string | null = null;
     const menu = Menu.buildFromTemplate(template(items, (id) => (chosen = id)));
     keyboardState.trackingMenu = true;
-    menu.popup({
-      window: owner,
-      callback: () => {
-        keyboardState.trackingMenu = false;
-        setImmediate(() => resolve(chosen));
-      },
+    popUpOver(menu, owner, () => {
+      keyboardState.trackingMenu = false;
+      setImmediate(() => resolve(chosen));
     });
   });
 }

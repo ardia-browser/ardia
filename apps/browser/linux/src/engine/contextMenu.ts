@@ -1,6 +1,7 @@
 import { app, clipboard, Menu, type ContextMenuParams, type MenuItemConstructorOptions, type WebContents, type WebFrameMain } from "electron";
 import { count } from "../counts";
 import { isBackground } from "../paths";
+import { popUpOver } from "../popupMenus";
 import { searchEngineName } from "../services/search";
 import { guestOf, tell, windowOf, type Guest } from "./guests";
 import { savePage } from "./pageCalls";
@@ -196,8 +197,7 @@ function showPageMenu(contents: WebContents, params: ContextMenuParams) {
     console.info(`[ardia linux] page context menu: ${labelsOf(items)}`);
     return;
   }
-  const window = windowOf(guest);
-  Menu.buildFromTemplate(items).popup(window ? { window } : {});
+  popUpOver(Menu.buildFromTemplate(items), windowOf(guest));
 }
 
 app.on("web-contents-created", (_event, contents) => {

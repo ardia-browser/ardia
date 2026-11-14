@@ -8,6 +8,7 @@ import { guestOf, tell, type Guest } from "./guests";
 import { isPrivateProfile } from "./partitions";
 import { onPageSession } from "./sessions";
 import { rememberSiteSetting, siteSetting, SITE_SETTING_DEFAULTS, type SiteSettingType } from "../services/sites";
+import { defineModule } from "../bridge";
 
 type Decision = "allow" | "block";
 type Stored = {
@@ -120,13 +121,26 @@ function dismissFor(contents: WebContents) {
   }
 }
 
+const externalLaunches = { opened: 0, refused: 0, automatic: 0 };
+
+function takeExternalLaunches() {
+  const taken = { ...externalLaunches };
+  externalLaunches.opened = 0;
+  externalLaunches.refused = 0;
+  externalLaunches.automatic = 0;
+  return taken;
+}
+
 function askExternal(contents: WebContents, profile: string, url: string, requestingUrl: string, answer: (granted: boolean) => void) {
   const guest = guestOf(contents);
   const scheme = url.slice(0, Math.max(0, url.indexOf(":"))).toLowerCase();
   const origin = originOf(requestingUrl) || originOf(guest?.url ?? "");
   const appName = app.getApplicationNameForProtocol(url) || null;
   const allowed = readStore().externalApps[profile]?.some((entry) => entry.origin === origin && entry.scheme === scheme);
-  if (allowed) return answer(true);
+  if (allowed) {
+    externalLaunches.automatic++;
+    return answer(true);
+  }
   if (!guest) return answer(false);
   const id = `external-${++nextId}`;
   pendingExternal.set(id, { id, profile, origin, scheme, url, contents, answer });
@@ -231,6 +245,8 @@ defineDomain("permissions", {
         list.push({ origin: request.origin, scheme: request.scheme, app: app.getApplicationNameForProtocol(request.url) || null });
       writeStore(store);
     }
+    if (open && request.contents.isDestroyed()) externalLaunches.refused++;
+    else if (open) externalLaunches.opened++;
     request.answer(open);
     return null;
   },
@@ -243,3 +259,5 @@ defineDomain("permissions", {
   },
   devExternalLaunches: () => [],
 });
+
+defineModule("ArdiaExternalAppCounts", { sync: { takeLaunches: () => takeExternalLaunches() } });

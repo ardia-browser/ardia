@@ -1,4 +1,5 @@
 import { app } from "electron";
+import { count } from "../counts";
 import { resolvePageWindowsWith } from "../menus/keyboard";
 import { guestOf, tell } from "./guests";
 import { appWindow } from "../windows";
@@ -15,6 +16,8 @@ app.on("web-contents-created", (_event, contents) => {
   contents.on("ipc-message", (_event, channel) => {
     if (channel !== PAGE_ESCAPE_CHANNEL) return;
     const guest = guestOf(contents);
-    if (guest) tell(guest, "command", { command: "escape", text: "" });
+    if (!guest) return;
+    count("page_escapes");
+    tell(guest, "command", { command: "escape", text: "" });
   });
 });

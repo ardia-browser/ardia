@@ -1,6 +1,7 @@
 import { app, dialog, type WebContents } from "electron";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { count } from "../counts";
 import { note } from "../log";
 import { isBackground } from "../paths";
 import { downloadFolderOf } from "./downloads";
@@ -56,10 +57,14 @@ export async function printPage(guest: Guest): Promise<PrintOutcome> {
   if (printing.has(id)) return "cancelled";
   printing.add(id);
   try {
-    if (await hasPrinters(guest.contents)) return await systemPrint(guest.contents);
-    return await saveAsPdf(guest);
+    const outcome = (await hasPrinters(guest.contents)) ? await systemPrint(guest.contents) : await saveAsPdf(guest);
+    if (outcome === "systemDialog") count("print_system_dialogs");
+    else if (outcome === "savedPdf") count("print_pdf_saves");
+    else if (outcome === "failed") count("print_failures");
+    return outcome;
   } catch (error) {
     note("print", `printing failed: ${String((error as Error)?.message ?? error)}`);
+    count("print_failures");
     return "failed";
   } finally {
     printing.delete(id);

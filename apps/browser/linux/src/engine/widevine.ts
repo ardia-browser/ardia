@@ -1,4 +1,5 @@
 import { app, components } from "electron";
+import { count } from "../counts";
 import { note } from "../log";
 
 type WidevineState = "unavailable" | "pending" | "ready" | "failed";
@@ -26,6 +27,7 @@ app.whenReady().then(() => {
     })
     .catch((error: unknown) => {
       state = "failed";
+      count("widevine_failures");
       note("widevine", `the CDM didn't install: ${error instanceof Error ? error.message : String(error)}`);
     });
 });

@@ -3,6 +3,7 @@ import { defineModule, emit } from "../bridge";
 import { note } from "../log";
 import { defineDomain } from "./domains";
 import { allGuests, guestById, PAGES_MODULE, type Guest } from "./guests";
+import { count } from "../counts";
 
 type Mode = "moderate" | "balanced" | "maximum";
 type Settings = { state: "on" | "off"; aggressiveness: Mode; sites: string[] };
@@ -58,6 +59,7 @@ function discard(guest: Guest, reason: Reason) {
   const hiddenMinutes = Math.round((Date.now() - (hiddenSince.get(guest.contents.id) ?? Date.now())) / MINUTE);
   hiddenSince.delete(guest.contents.id);
   note("memory", `sleeping a tab hidden ${hiddenMinutes} min (${reason})`);
+  count(reason === "urgent" ? "memory_saver_discards_urgent" : "memory_saver_discards_proactive");
   emit(PAGES_MODULE, "discard", { guest: guest.contents.id, reason });
 }
 

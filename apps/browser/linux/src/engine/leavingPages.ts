@@ -1,4 +1,5 @@
 import { app, dialog, type WebContents } from "electron";
+import { count } from "../counts";
 import { note } from "../log";
 import { isBackground } from "../paths";
 import { guardQuitWith } from "../quit";
@@ -58,7 +59,9 @@ export function askToLeave(contents: WebContents): boolean {
     cancelId: 1,
     noLink: true,
   };
+  count("leave_site_asked");
   const answer = parent && !parent.isDestroyed() ? dialog.showMessageBoxSync(parent, options) : dialog.showMessageBoxSync(options);
+  if (answer !== LEAVE) count("leave_site_stayed");
   return answer === LEAVE;
 }
 
@@ -97,7 +100,9 @@ async function mayQuit(): Promise<boolean> {
     cancelId: 1,
     noLink: true,
   };
+  count("quit_unsaved_asked");
   const { response } = parent && !parent.isDestroyed() ? await dialog.showMessageBox(parent, options) : await dialog.showMessageBox(options);
+  if (response !== QUIT) count("quit_unsaved_stayed");
   return response === QUIT;
 }
 

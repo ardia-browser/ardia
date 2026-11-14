@@ -1,4 +1,5 @@
 import { app, type WebContents } from "electron";
+import { count } from "../counts";
 import { rememberSiteSetting, siteSetting } from "../services/sites";
 import { tell, type Guest } from "./guests";
 
@@ -54,6 +55,7 @@ export function takeDrop(contents: WebContents, referrer: string): boolean {
   const at = draggedOverAt.get(contents.id);
   if (referrer !== DROP_REFERRER || at === undefined || Date.now() - at > DRAG_LIFESPAN_MS) return false;
   draggedOverAt.delete(contents.id);
+  count("page_link_drops_opened");
   return true;
 }
 

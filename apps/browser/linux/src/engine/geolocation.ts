@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { defineModule } from "../bridge";
+import { count } from "../counts";
 import { note } from "../log";
 import { DBusConnection, variant, type Message } from "./dbus";
 
@@ -52,6 +53,7 @@ function settle(fix: Fix | null) {
 }
 
 function giveUp(reason: string) {
+  count("location_unavailable");
   if (state !== "unavailable") note("geolocation", `GeoClue isn't available, so pages get "position unavailable": ${reason}`);
   state = "unavailable";
   unavailableSince = Date.now();

@@ -1,4 +1,5 @@
 import type { WebContents } from "electron";
+import { count } from "../counts";
 
 type ErrorCopy = { title: string; detail: (host: string) => string; hints?: string[] };
 
@@ -104,7 +105,9 @@ export async function renderErrorPage(contents: WebContents, code: number, text:
   const host = hostOf(url);
   const page = { title: copy.title, host, detail: copy.detail(host), hints: copy.hints ?? [], code: text || `Error ${code}` };
   try {
-    return (await contents.mainFrame.executeJavaScript(script(page), false)) === true;
+    const shown = (await contents.mainFrame.executeJavaScript(script(page), false)) === true;
+    if (shown) count("page_error_pages");
+    return shown;
   } catch {
     return false;
   }

@@ -9,6 +9,7 @@ import "./fileDrop";
 import "./focus";
 import "./keychain";
 import "./launchLinks";
+import "./linuxCounts";
 import "./menus";
 import "./notifications";
 import "./shell";

@@ -2,6 +2,7 @@ import { BrowserWindow, Menu, nativeImage, type MenuItemConstructorOptions } fro
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { defineModule } from "../bridge";
+import { count } from "../counts";
 import { testFlag } from "../launch";
 import { activation, note } from "../log";
 import { dataDirectory, isBackground } from "../paths";
@@ -149,6 +150,7 @@ onAppWindowCreated((id, window) => {
 function menuOwner(): BrowserWindow | undefined {
   const focused = BrowserWindow.getFocusedWindow();
   if (focused) return focused;
+  count("popup_menus_without_focus");
   const shown = (id: string) => {
     const window = appWindow(id);
     return window && !window.isDestroyed() && window.isVisible() && !window.isMinimized() ? window : undefined;
@@ -175,6 +177,7 @@ function showMenu(items: MenuItem[]): Promise<string | null> {
   }
   const owner = menuOwner();
   if (!owner) {
+    count("popup_menus_unshown");
     menuLog("pop-up menu not shown: no app window to show it over");
     return Promise.resolve(null);
   }

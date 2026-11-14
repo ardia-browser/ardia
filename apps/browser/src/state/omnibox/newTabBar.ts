@@ -4,6 +4,7 @@ import { webviews } from "../../platform/webviews";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { isEmptyCardTab, NEW_TAB_BAR_POLICY, newTabOpensBar } from "./newTabBarPolicy";
+import { hasPage } from "../tabs/pageSession";
 import { focusHeroBar } from "./barState";
 import { isSmall } from "../windows/small";
 import type { NewTabTarget } from "../browser/types";
@@ -81,9 +82,11 @@ const shownOver = new Set<string>();
 
 export function showOnceOverEmptyCard(windowId: string, tabId: string) {
   if (!NEW_TAB_BAR_POLICY.showOnceOverNewEmptyWindow || shownOver.has(tabId)) return;
+  const s = store();
+  const tab = s.tabs[tabId];
+  if (!tab || hasPage(tab)) return;
   shownOver.add(tabId);
   if (launchTabs.has(tabId) && !NEW_TAB_BAR_POLICY.showOnLaunch) return;
-  const s = store();
   if (activeTabId(s, windowId) !== tabId || s.windowUi[windowId]?.panel.open || !showNewTabBar(windowId)) return;
   const shown = store().windowUi[windowId]?.panel;
   if (shown) shownUnasked.add(shown);

@@ -161,6 +161,22 @@ test("⌘T right after the bar opened on its own over an empty window keeps it; 
   assert.equal(panel(w).open, false, "a bar ⌘T opened closes on the next ⌘T");
 });
 
+test("the bar opens once over a blank tab, never over a tab a page opened that has no URL yet", () => {
+  reset("commandBar");
+  const { w } = windowWith("a");
+  const opened = S().newTab(w, { adoptId: "ardiacore:site-opened" });
+  assert.equal(urlOf(opened), "");
+  assert.equal(model.activeTabId(S(), w), opened);
+  showOnceOverEmptyCard(w, opened);
+  assert.equal(panel(w).open, false, "a tab holding a page is not an empty card");
+
+  const blank = S().newTab(w);
+  assert.equal(model.activeTabId(S(), w), blank);
+  showOnceOverEmptyCard(w, blank);
+  assert.equal(panel(w).open, true, "a blank tab still gets the bar");
+  assert.deepEqual(panel(w).newTab, { kind: "into", tabId: blank });
+});
+
 test("Move to Pinned: a tab goes to the pinned rows and back to where it was, in its group", () => {
   reset();
   const { w, ids: [a, b, c, d] } = windowWith("a", "b", "c", "d");

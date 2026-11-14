@@ -363,8 +363,10 @@
     const r = eyeField.getBoundingClientRect();
     const cs = getComputedStyle(eyeField);
     const size = Math.min(24, Math.max(18, r.height - 8));
-    const inset = Math.max(4, Math.min(10, parseFloat(cs.paddingRight) || 4));
-    eyeHost.style.left = r.right - (parseFloat(cs.borderRightWidth) || 0) - inset - size + "px";
+    const rtl = cs.direction === "rtl";
+    const inset = Math.max(4, Math.min(10, parseFloat(rtl ? cs.paddingLeft : cs.paddingRight) || 4));
+    const border = parseFloat(rtl ? cs.borderLeftWidth : cs.borderRightWidth) || 0;
+    eyeHost.style.left = (rtl ? r.left + border + inset : r.right - border - inset - size) + "px";
     eyeHost.style.top = r.top + (r.height - size) / 2 + "px";
     eyeButton.style.width = eyeButton.style.height = size + "px";
     eyeButton.style.color = cs.color;
@@ -1495,6 +1497,10 @@
 
   const scrollDirection = () => {
     const DOWN = 24, UP = 12, MIN_RANGE = 120, SETTLE = 300, GESTURE = 300;
+    const paged = (snap, vertical) => {
+      const [axis, strictness] = snap.split(" ");
+      return strictness === "mandatory" && (axis === "y" || axis === "both" || axis === (vertical ? "inline" : "block"));
+    };
     let anchor = 0, last = 0, lastAt = -1e9, settleUntil = -1e9, budget = 0, height = 0, sent = null, gestureSent = false, heading = 0;
     const resized = (viewport, now) => {
       if (now >= settleUntil) budget = 0;
@@ -1519,7 +1525,7 @@
       undirected() {
         heading = 0;
       },
-      scrolled(y, range, viewport, now, user) {
+      scrolled(y, range, viewport, now, user, snap = "", vertical = false) {
         resized(viewport, now);
         if (now - lastAt > GESTURE) {
           gestureSent = false;
@@ -1537,7 +1543,7 @@
         if (y <= 2) state = "top";
         else if (!user || moved * heading < 0) anchor = y;
         else if (y - anchor >= DOWN) {
-          if (range >= MIN_RANGE) state = "down";
+          if (range >= MIN_RANGE && !paged(snap, vertical)) state = "down";
           else anchor = y;
         } else if (anchor - y >= UP) state = "up";
         else if (sent === "down" ? gestureSent && y > anchor : y < anchor) anchor = y;
@@ -1579,7 +1585,8 @@
     if (!el || !doc || (el !== doc && (el.clientHeight < innerHeight * 0.5 || el.clientWidth < innerWidth * 0.5))) return;
     if (el !== scroller) direction.rebase((scroller = el).scrollTop);
     const now = performance.now();
-    const state = direction.scrolled(el.scrollTop, el.scrollHeight - el.clientHeight, innerHeight, now, now - inputAt < 1000);
+    const style = getComputedStyle(el === doc ? document.documentElement : el);
+    const state = direction.scrolled(el.scrollTop, el.scrollHeight - el.clientHeight, innerHeight, now, now - inputAt < 1000, style.scrollSnapType, /^(vertical|sideways)/.test(style.writingMode));
     if (state) send("scroll", { state });
   });
   addEventListener(

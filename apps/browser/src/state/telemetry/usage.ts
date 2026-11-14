@@ -2,25 +2,25 @@ import { listTasks, type EngineTask } from "../../platform/performance";
 import { onExtensionsChanged } from "../../platform/extensions";
 import { currentAppIcon, onAppEvent } from "../../platform/app";
 import { useTranslate } from "../site/translate";
-import { useBrowser, type BrowserState } from "../browser/store";
+import { useBrowser } from "../browser/store";
 import { takeSnapshotWrites, useSync } from "../sync/engine";
 import { takeSyncCodeCounts } from "../sync/recoveryKit";
 import { capture, endSession, flush, isSharing, markSettingsSnapshot, settingsSnapshotDay, startClient } from "./client";
 import { reportLocalStore, startLocalStore } from "./localStoreReport";
 import { startWatchChecks } from "./watch";
-import { appIconSetting, customColorProfiles, SETTINGS_SNAPSHOT_EVENT, settingsSnapshot } from "./settingsSnapshot";
+import { appIconSetting, currentThemeFileSnapshot, customColorProfiles, SETTINGS_SNAPSHOT_EVENT, settingsSnapshot } from "./settingsSnapshot";
 import { utcDay } from "./daily";
 import { appInfo, percentile } from "./transport";
 import { reportNativeCrashes } from "./errors";
 import { emitJourneys, journeysEnding, startJourneys } from "./journeys";
-import { commandBarPlacementLabel, takeOmniboxLatency, takeSearchSuggests } from "./track";
+import { commandBarPlacementLabel, takeExternalAppRequests, takeOmniboxLatency, takeSearchSuggests } from "./track";
 import { contextProperties, contextSamples, hardwareProperties, noteAppMemory, recordContext, startContextSamples, stopContextSamples, watchHoverLost } from "./diagnostics";
 import { emitTabPresses } from "./tabPresses";
 import { switcherSwitchProperties } from "./switcherPresses";
 import type { SavedContext } from "./savedContext";
 import { splitTabIds } from "../splits/splits";
 import { windowsRealignedToAutoHideTabsAtLaunch } from "../session/persist";
-import { takeAutoHideTabsChoices } from "./autoHideTabsChoices";
+import { takeAutoHideTabsChoices, takeTornOffWindowsKeptAutoHide } from "./autoHideTabsChoices";
 import { takeTabSwitcherOpensInWebKit } from "./tabSwitcherOpens";
 import { takeTabSleepCounts } from "./tabSleepCounts";
 import { noteAutoPictureInPictureNothingPlaying, takePictureInPictureCounts } from "./pictureInPictureCounts";
@@ -28,10 +28,15 @@ import { useToolbarAutoHide } from "../windows/toolbarAutoHide";
 import { toolbarBounces } from "./toolbarBounces";
 import { takeStuckDragCounts } from "./stuckDrags";
 import { takeUrlCopyCounts } from "./urlCopies";
+import { takeWebKitMediaFaultCounts } from "./webkitMediaFaults";
+import { takeStripHoverCardCounts } from "./stripHoverCards";
 import { takeLittleArdiaEscapeCloses } from "./littleArdiaEscapes";
 import { takeLiveCompletedTabsClosed } from "./liveCompletedTabs";
 import { takeLiveHideCounts } from "./liveHides";
 import { takeTidyTabsCounts } from "./tidyTabsCounts";
+import { airTrafficSnapshot, takeAirTrafficCounts } from "./airTrafficCounts";
+import { keptTabsAdded } from "./keptTabs";
+import { takeTabStripCounts } from "./tabStripCounts";
 
 const HOUR_MS = 60 * 60_000;
 const FIRST_MEMORY_SAMPLE_MS = 10 * 60_000;
@@ -44,10 +49,10 @@ const NO_COUNTS = { tabs: 0, windows: 0, fullScreens: 0, sidebarPeeks: 0, sideba
 let counts = { ...NO_COUNTS }, countsSince = Date.now();
 
 function emitCounts() {
-  const snapshots = takeSnapshotWrites(), switcherOpensInWebKit = takeTabSwitcherOpensInWebKit(), stuckDrags = takeStuckDragCounts(), urlCopies = takeUrlCopyCounts(), tabSleeps = takeTabSleepCounts(), syncCodes = takeSyncCodeCounts(), escapeCloses = takeLittleArdiaEscapeCloses(), liveCompletedTabsClosed = takeLiveCompletedTabsClosed(), liveHides = takeLiveHideCounts(), tidyTabs = takeTidyTabsCounts();
+  const snapshots = takeSnapshotWrites(), tornOffKept = takeTornOffWindowsKeptAutoHide(), switcherOpensInWebKit = takeTabSwitcherOpensInWebKit(), stuckDrags = takeStuckDragCounts(), urlCopies = takeUrlCopyCounts(), stripHoverCards = takeStripHoverCardCounts(), externalAppRequests = takeExternalAppRequests(), tabSleeps = takeTabSleepCounts(), syncCodes = takeSyncCodeCounts(), escapeCloses = takeLittleArdiaEscapeCloses(), liveCompletedTabsClosed = takeLiveCompletedTabsClosed(), liveHides = takeLiveHideCounts(), tidyTabs = takeTidyTabsCounts(), webKitFaults = takeWebKitMediaFaultCounts(), airTraffic = takeAirTrafficCounts(), tabStrip = takeTabStripCounts();
   const { nothingPlaying: autoPictureInPictureNothingPlaying, backToTab, drags: pipDrags } = takePictureInPictureCounts();
   counts.autoHideTabsToggles += takeAutoHideTabsChoices();
-  if (Object.values(counts).some(Boolean) || Object.values(tabSleeps).some(Boolean) || Object.values(syncCodes).some(Boolean) || Object.values(stuckDrags).some(Boolean) || Object.values(escapeCloses).some(Boolean) || Object.values(liveHides).some(Boolean) || Object.values(tidyTabs).some(Boolean) || urlCopies.url_copies || liveCompletedTabsClosed || snapshots.count || switcherOpensInWebKit || autoPictureInPictureNothingPlaying || backToTab.chromium || backToTab.webkit || pipDrags.total) {
+  if (Object.values(counts).some(Boolean) || tornOffKept > 0 || Object.values(tabSleeps).some(Boolean) || Object.values(syncCodes).some(Boolean) || Object.values(stuckDrags).some(Boolean) || Object.values(escapeCloses).some(Boolean) || Object.values(liveHides).some(Boolean) || Object.values(tidyTabs).some(Boolean) || Object.values(tabStrip).some(Boolean) || Object.keys(webKitFaults).length || Object.values(airTraffic).some(Boolean) || Object.values(externalAppRequests).some(Boolean) || urlCopies.url_copies || stripHoverCards.tab_strip_hover_cards || liveCompletedTabsClosed || snapshots.count || switcherOpensInWebKit || autoPictureInPictureNothingPlaying || backToTab.chromium || backToTab.webkit || pipDrags.total) {
     capture("usage_counts", {
       tabs_opened: counts.tabs,
       windows_opened: counts.windows,
@@ -55,9 +60,8 @@ function emitCounts() {
       sidebar_peeks: counts.sidebarPeeks,
       sidebar_peek_bounces: counts.sidebarPeekBounces,
       cli_tab_edits: counts.cliTabEdits, cli_group_edits: counts.cliGroupEdits, cli_edit_failures: counts.cliEditFailures, cli_pill_shows: counts.cliPillShows,
-      ...stuckDrags, ...urlCopies, ...tabSleeps, ...syncCodes, ...liveHides, ...tidyTabs, live_completed_tabs_closed: liveCompletedTabsClosed,
-      popover_press_closes: counts.popoverPressCloses,
-      popover_escape_closes: counts.popoverEscapeCloses,
+      ...stuckDrags, ...urlCopies, ...stripHoverCards, ...externalAppRequests, ...webKitFaults, ...tabSleeps, ...syncCodes, ...liveHides, ...tidyTabs, ...airTraffic, ...tabStrip, live_completed_tabs_closed: liveCompletedTabsClosed,
+      popover_press_closes: counts.popoverPressCloses, popover_escape_closes: counts.popoverEscapeCloses,
       tab_switcher_opens: counts.tabSwitcherOpens,
       tab_switcher_opens_in_webkit: switcherOpensInWebKit,
       tab_switcher_closed_left_out: counts.tabSwitcherClosedLeftOut,
@@ -68,13 +72,11 @@ function emitCounts() {
       group_tabs_kept: counts.groupTabsKept,
       group_header_hides: counts.groupHeaderHides,
       sidebar_motion_merges: counts.sidebarMotionMerges,
-      peek_pinch_opens: counts.peekPinchOpens,
-      peek_pinch_closes: counts.peekPinchCloses,
+      peek_pinch_opens: counts.peekPinchOpens, peek_pinch_closes: counts.peekPinchCloses,
       little_ardia_pinch_opens: counts.littleArdiaPinchOpens, little_ardia_pinch_closes: counts.littleArdiaPinchCloses, ...escapeCloses, little_ardia_swipe_closes: counts.littleArdiaSwipeCloses, little_ardia_swipe_close_cancels: counts.littleArdiaSwipeCloseCancels, external_links_tab_setting_off: counts.externalLinksTabSettingOff, external_links_tab_setting_on: counts.externalLinksTabSettingOn, external_links_little_setting_on: counts.externalLinksLittleSettingOn, external_links_little_setting_off: counts.externalLinksLittleSettingOff,
       auto_hide_tabs_toggles: counts.autoHideTabsToggles,
-      windows_realigned_to_auto_hide_tabs: counts.windowsRealignedToAutoHideTabs,
-      tab_strip_peeks: counts.tabStripPeeks,
-      tab_peeks_with_auto_hide_off: counts.tabPeeksWithAutoHideOff,
+      windows_realigned_to_auto_hide_tabs: counts.windowsRealignedToAutoHideTabs, torn_off_windows_kept_auto_hide: tornOffKept,
+      tab_strip_peeks: counts.tabStripPeeks, tab_peeks_with_auto_hide_off: counts.tabPeeksWithAutoHideOff,
       imported_pinned_rows: counts.importedPinnedRows,
       imported_splits: counts.importedSplits, imported_spaces: counts.importedSpaces, imported_container_spaces: counts.importedContainerSpaces, imported_data_profiles: counts.importedDataProfiles, imported_essentials: counts.importedEssentials,
       split_pane_closes: counts.splitPaneCloses,
@@ -183,16 +185,6 @@ export const noteLinkTabWait = (wait: "matched" | "skipped" | "timedOut") => voi
 export const noteHistorySearchFocus = (step: "requested" | "focused") => void counts[step === "requested" ? "historySearchFocusRequests" : "historySearchFocused"]++;
 
 export const noteSidebarMotionMerge = () => counts.sidebarMotionMerges++;
-
-export function keptTabsAdded(groups: BrowserState["groups"], prev: BrowserState["groups"]): number {
-  const added = new Set<string>();
-  for (const id in groups) {
-    const shown = groups[id]!.shownTabIds;
-    if (!shown || shown === prev[id]?.shownTabIds) continue;
-    for (const tabId of shown) if (!prev[id]?.shownTabIds?.includes(tabId)) added.add(tabId);
-  }
-  return added.size;
-}
 
 export const noteCardResizeLayout = (applied: boolean) => counts[applied ? "cardResizeLayoutsApplied" : "cardResizeLayouts"]++;
 
@@ -324,7 +316,7 @@ function snapshotSettings() {
   if (settingsSnapshotDay() === today) return;
   markSettingsSnapshot(today);
   const state = useBrowser.getState();
-  const settings = { ...settingsSnapshot(state.settings), ...customColorProfiles(state.profiles) };
+  const settings = { ...settingsSnapshot(state.settings), ...customColorProfiles(state.profiles), ...airTrafficSnapshot(), ...currentThemeFileSnapshot() };
   void currentAppIcon()
     .catch(() => null)
     .then((icon) => capture(SETTINGS_SNAPSHOT_EVENT, { ...settings, ...appIconSetting(icon) }));

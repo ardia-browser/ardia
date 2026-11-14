@@ -1,4 +1,5 @@
-import { ipcMain, type WebContents } from "electron";
+import { ipcMain, type IpcMainEvent, type WebContents } from "electron";
+import { acceptsHost, acceptsHostNow } from "./ipcSenders";
 
 type Method = (...args: never[]) => unknown;
 export type ModuleSpec = {
@@ -39,23 +40,35 @@ function shapes(): Record<string, ModuleShape> {
 
 const failure = (error: unknown) => ({ error: error instanceof Error ? error.message : String(error), code: (error as { code?: string })?.code });
 
+const refusal = () => ({ error: "This sender can't use Ardia's native bridge", code: "ERR_LINUX_BRIDGE_SENDER" });
+
+function runSync(module: string, method: string, args: unknown[]) {
+  const run = modules.get(module)?.sync?.[method];
+  if (!run) return failure(new Error(`${module}.${method} has no sync version on Linux`));
+  try {
+    return { value: run(...(args as never[])) };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+function answerFromHost(event: IpcMainEvent, channel: string, answer: () => unknown, refused: () => unknown): void {
+  if (acceptsHostNow(event)) {
+    event.returnValue = answer();
+    return;
+  }
+  void acceptsHost(event, channel).then((accepted) => {
+    event.returnValue = accepted ? answer() : refused();
+  });
+}
+
 export function installBridge(): void {
-  ipcMain.on("ardia:modules", (event) => {
-    event.returnValue = shapes();
-  });
-  ipcMain.on("ardia:callSync", (event, module: string, method: string, args: unknown[]) => {
-    const run = modules.get(module)?.sync?.[method];
-    if (!run) {
-      event.returnValue = failure(new Error(`${module}.${method} has no sync version on Linux`));
-      return;
-    }
-    try {
-      event.returnValue = { value: run(...(args as never[])) };
-    } catch (error) {
-      event.returnValue = failure(error);
-    }
-  });
-  ipcMain.handle("ardia:call", async (_event, module: string, method: string, args: unknown[]) => {
+  ipcMain.on("ardia:modules", (event) => answerFromHost(event, "ardia:modules", shapes, () => ({})));
+  ipcMain.on("ardia:callSync", (event, module: string, method: string, args: unknown[]) =>
+    answerFromHost(event, "ardia:callSync", () => runSync(module, method, args), refusal),
+  );
+  ipcMain.handle("ardia:call", async (event, module: string, method: string, args: unknown[]) => {
+    if (!(await acceptsHost(event, "ardia:call"))) return refusal();
     const run = modules.get(module)?.async?.[method] ?? modules.get(module)?.sync?.[method];
     if (!run) return failure(new Error(`${module}.${method} is not on Linux`));
     try {

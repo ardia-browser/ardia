@@ -1,6 +1,7 @@
 import { BrowserWindow, type BrowserWindowConstructorOptions } from "electron";
 import { join } from "node:path";
 import { addReceiver } from "./bridge";
+import { trustHost } from "./ipcSenders";
 
 export const preloadPath = () => join(__dirname, "preload.js");
 export const appWindowPreloadPath = () => join(__dirname, "window-preload.js");
@@ -51,6 +52,7 @@ export function createHost(load: (window: BrowserWindow) => Promise<void>): Brow
   });
   hostWindow = made;
   addReceiver(made.webContents);
+  trustHost(made.webContents);
   made.webContents.setWindowOpenHandler(({ frameName }) => {
     const shaped = pending.get(frameName) ?? {};
     pending.delete(frameName);

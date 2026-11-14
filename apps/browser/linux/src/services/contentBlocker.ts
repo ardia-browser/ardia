@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseDomain } from "tldts-experimental";
 import { defineDomain, emitDomainEvent } from "../engine/domains";
+import { acceptsPage } from "../ipcSenders";
 import { dataDirectory } from "../paths";
 import { definePageScript } from "./guests";
 import { onBeforeRequest, onHeadersReceived } from "./requests";
@@ -332,6 +333,7 @@ definePageScript("ardia-cosmetics", cosmeticsPage);
 type CosmeticsUpdate = { classes?: string[]; ids?: string[]; hrefs?: string[]; lifecycle?: string };
 
 ipcMain.handle("ardia:cosmetics", (event, url: unknown, update: CosmeticsUpdate | undefined) => {
+  if (!acceptsPage(event, "ardia:cosmetics")) return;
   if (typeof url !== "string" || !saved.enabled || !engine || hostAllowed(pageHost(url))) return;
   const parsed = parseDomain(url);
   const first = update === undefined;

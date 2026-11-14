@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { isBackground } from "../paths";
+import { acceptsPage } from "../ipcSenders";
 import { guestOf, windowOf } from "./guests";
 
 const PROMPT_ANSWER = "ardia-prompt:";
@@ -90,6 +91,10 @@ async function answer(kind: string, url: string, parent: BrowserWindow | null, m
 }
 
 ipcMain.on("ardia:page-dialog", (event, kind: unknown, message: unknown, fallback: unknown) => {
+  if (!acceptsPage(event, "ardia:page-dialog")) {
+    event.returnValue = null;
+    return;
+  }
   const guest = guestOf(event.sender);
   const parent = guest ? windowOf(guest) : null;
   void answer(String(kind), event.sender.getURL(), parent, String(message ?? ""), typeof fallback === "string" ? fallback : null)

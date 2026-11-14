@@ -1,5 +1,6 @@
 import { ipcMain, type WebContents } from "electron";
 import { defineModule, emit } from "../bridge";
+import { acceptsPage } from "../ipcSenders";
 import { definePageScript, profileOfContents } from "./guests";
 import { loginOrigin, loginsFor, markUsed, neverSave, neverSaves, passwordsEnabled, putLogin } from "./passwords";
 
@@ -174,6 +175,7 @@ const senderOrigin = (event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent
 };
 
 ipcMain.handle("ardia:passwords:logins", (event) => {
+  if (!acceptsPage(event, "ardia:passwords:logins")) return [];
   const profile = profileOfContents(event.sender);
   const origin = senderOrigin(event);
   if (profile === null || !origin || !passwordsEnabled(profile)) return [];
@@ -181,6 +183,7 @@ ipcMain.handle("ardia:passwords:logins", (event) => {
 });
 
 ipcMain.on("ardia:passwords:submitted", (event, submitted: { username?: unknown; password?: unknown }) => {
+  if (!acceptsPage(event, "ardia:passwords:submitted")) return;
   const profile = profileOfContents(event.sender);
   const origin = senderOrigin(event);
   if (profile === null || !origin || typeof submitted?.password !== "string" || !submitted.password) return;
@@ -194,7 +197,9 @@ ipcMain.on("ardia:passwords:submitted", (event, submitted: { username?: unknown;
   });
 });
 
-ipcMain.on("ardia:passwords:gone", (event) => offer(event.sender));
+ipcMain.on("ardia:passwords:gone", (event) => {
+  if (acceptsPage(event, "ardia:passwords:gone")) offer(event.sender);
+});
 
 export function resolvePasswordPrompt(webContentsId: number, answer: string, edits: { username?: unknown; password?: unknown } = {}): void {
   const open = prompts.get(webContentsId);

@@ -54,3 +54,5 @@ export const safeStorage = {
 export class BrowserWindow extends EventEmitter {}
 export const contextBridge = { exposeInMainWorld: () => undefined, executeInMainWorld: () => undefined };
 export const ipcRenderer = new EventEmitter();
+
+export const session = { defaultSession: { name: "default" } };

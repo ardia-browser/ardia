@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { emit } from "./bridge";
+import { onHostDocumentStarted } from "./ipcSenders";
 import { note } from "./log";
 import { focusAppWindow } from "./windowFocus";
 import { appWindowIds } from "./windows";
@@ -100,6 +101,7 @@ function whenListening(urls: string[], command: () => void): void {
 }
 
 export function installLaunchLinks(): void {
+  onHostDocumentStarted(uiStopped);
   const urls = launchAddresses(userArguments(process.argv, process.cwd()), process.cwd());
   if (urls.length) {
     launchLinksWaiting = urls.length;

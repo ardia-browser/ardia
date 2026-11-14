@@ -1,5 +1,6 @@
 import { Menu, app, nativeImage, type BrowserWindow } from "electron";
 import { join } from "node:path";
+import { appDocumentUrl } from "./appDocument";
 import { installBridge } from "./bridge";
 import { pruneCrashDumps, startCrashReporter } from "./crashes";
 import "./engine";
@@ -24,11 +25,8 @@ if (hostEnvironment.remoteDebuggingPort) app.commandLine.appendSwitch("remote-de
 const sandboxed = !app.commandLine.hasSwitch("no-sandbox");
 note("launch", `${sandboxed ? "sandboxed with" : "no sandbox:"} ${hostEnvironment.sandboxReason ?? (sandboxed ? "Chromium's default" : "--no-sandbox was passed")}`);
 
-const devServer = hostEnvironment.devServer;
-
 async function loadUi(host: BrowserWindow) {
-  if (devServer) await host.loadURL(devServer);
-  else await host.loadFile(join(hostEnvironment.uiDirectory ?? join(__dirname, "../ui"), "index.html"));
+  await host.loadURL(appDocumentUrl());
 }
 
 if (!app.requestSingleInstanceLock({ dataDirectory: dataDirectory() })) {

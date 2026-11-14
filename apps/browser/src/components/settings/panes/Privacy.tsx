@@ -262,7 +262,7 @@ function SitePermissions({ shownProfileId, site }: { shownProfileId: string | nu
       closeSettingsSheet();
       replaceSettingsPlace(shownProfileId, null);
     };
-    showSettingsSheet(<SiteSheet profileId={siteProfileId} origin={site} onChanged={refresh} onClose={close} />);
+    showSettingsSheet(<SiteSheet key={`${siteProfileId}|${site}`} profileId={siteProfileId} origin={site} onChanged={refresh} onClose={close} />);
   }, [site, shownProfileId]);
 
   return (

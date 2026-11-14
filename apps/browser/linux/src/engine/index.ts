@@ -10,3 +10,4 @@ import "./hostDomains";
 import "./pageKeys";
 import "./blockedCounts";
 import "./pageDialogs";
+import "./widevine";

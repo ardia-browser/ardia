@@ -157,8 +157,8 @@ importers:
         specifier: ^5.0.4
         version: 5.2.0(vite@7.3.7(@types/node@24.13.6)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.51.2)(yaml@2.9.1))
       electron:
-        specifier: 45.3.2
-        version: 45.3.2
+        specifier: github:castlabs/electron-releases#v45.2.1+wvcus
+        version: https://codeload.github.com/castlabs/electron-releases/tar.gz/ab2120c6a5d49d412bcb2b7e3f9c9c3e74cb0243
       electron-builder:
         specifier: 26.18.0
         version: 26.18.0
@@ -2589,8 +2589,9 @@ packages:
   electron-to-chromium@1.5.438:
     resolution: {integrity: sha512-AN9xMU1hJiT65LkCUPL1DZm5TCbOPb2Qsm5pYwFLEXp6/qj9SdT4yMiqs7Qqstwvkn1zF7l36SRGt+s6XcJ0FA==}
 
-  electron@45.3.2:
-    resolution: {integrity: sha512-bPO0MMvJCdKdPfXgd3ES8zupu+ocr6XmSuRGwyZazTiigTz8jE7rwukSkck0iomS6UZeFuCwzu0uanMD/D34uw==}
+  electron@https://codeload.github.com/castlabs/electron-releases/tar.gz/ab2120c6a5d49d412bcb2b7e3f9c9c3e74cb0243:
+    resolution: {gitHosted: true, integrity: sha512-DE1clTW3UgwrGn4Sj4c006K6jTwdFklEqIDbneXXS6J6aKx2ceGjta8TU2O2/ViNDvC7O6WJ0av+nT7G5AqJUQ==, tarball: https://codeload.github.com/castlabs/electron-releases/tar.gz/ab2120c6a5d49d412bcb2b7e3f9c9c3e74cb0243}
+    version: 45.2.1
     engines: {node: '>= 22.12.0'}
     hasBin: true
 
@@ -8066,7 +8067,7 @@ snapshots:
 
   electron-to-chromium@1.5.438: {}
 
-  electron@45.3.2:
+  electron@https://codeload.github.com/castlabs/electron-releases/tar.gz/ab2120c6a5d49d412bcb2b7e3f9c9c3e74cb0243:
     dependencies:
       '@electron-internal/extract-zip': 1.0.8
       '@electron/get': 5.1.0

@@ -83,9 +83,15 @@ host made draws in another window but sits in the host's frame tree, so it gets 
   keeps its opener (sign-in popups). Downloads (`downloads.ts`) report to the downloads panel; a test instance saves
   into its data dir. Permission prompts (`permissions.ts`) read and remember through `services/sites.ts`; external
   protocols ask through the page's `externalApp` prompt. The page context menu is a native menu.
-- **Not on Linux:** Widevine (stock Electron has no CDM), geolocation (no location provider key), tab discarding,
-  Picture in Picture controls beyond the page's own, and casting. Calls not implemented fail with `ERR_ENGINE` and
-  log once.
+- **Widevine.** The `electron` package is castlabs' Electron for Content Security (`github:castlabs/electron-releases`,
+  the `+wvcus` build nearest our Electron), a drop-in Electron with Widevine. `engine/widevine.ts` calls
+  `components.whenReady()` at startup, which installs or updates the CDM under `<data>/Engine/WidevineCdm` (about a
+  second the first time) and logs its version to `launch.log`. Linux has no VMP signing, and Chrome on Linux needs none:
+  Widevine L3 plays (the shaka demo's Angel One stream, checked); services cap Linux at their L3 resolution as they do
+  for Chrome. `package.mjs` downloads other architectures from castlabs' releases. After `pnpm install`, run
+  `node node_modules/electron/install.js` if `node_modules/electron/dist` is missing.
+- **Not on Linux:** geolocation (no location provider key), tab discarding, Picture in Picture controls beyond the
+  page's own, and casting. Calls not implemented fail with `ERR_ENGINE` and log once.
 
 ### The bridge
 

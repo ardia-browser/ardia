@@ -38,6 +38,9 @@ writeFileSync(
   JSON.stringify({ name: "ardia", productName: "Ardia", desktopName: "ardia.desktop", version: appVersion, description: "Ardia, a web browser", main: "out/main.js", author: "Ardia <hello@ardia.dev>", homepage: "https://ardia.dev", license: "GPL-3.0" }, null, 2),
 );
 
+const CASTLABS_RELEASES = "https://github.com/castlabs/electron-releases/releases/download/";
+const electronVersion = JSON.parse(readFileSync(join(root, "../../../node_modules/electron/package.json"), "utf8")).version;
+
 const launcher = ["#!/usr/bin/env bash", readFileSync(join(root, "packaging/sandbox.sh"), "utf8"), readFileSync(join(root, "packaging/launcher.sh"), "utf8")].join("\n");
 
 const config = {
@@ -51,7 +54,8 @@ const config = {
   npmRebuild: false,
   nodeGypRebuild: false,
   buildDependenciesFromSource: false,
-  electronVersion: JSON.parse(readFileSync(join(root, "../../../node_modules/electron/package.json"), "utf8")).version,
+  electronVersion,
+  ...(electronVersion.includes("+wvcus") ? { electronDownload: { mirrorOptions: { mirror: CASTLABS_RELEASES } } } : {}),
   electronDist: arches.length === 1 && arches[0] === process.arch ? join(root, "../../../node_modules/electron/dist") : undefined,
   extraResources: [{ from: join(root, "packaging/apparmor-profile"), to: "apparmor-profile" }],
   artifactName: "Ardia-${version}-${arch}.${ext}",

@@ -23,9 +23,9 @@ document.getElementById("run")!.addEventListener("click", async (event) => {
   const checks: Record<string, boolean> = {};
   const button = event.currentTarget;
   if (!(button instanceof HTMLButtonElement) || !(event instanceof MouseEvent)) throw new Error("Run checks needs a mouse click");
-  button.disabled = true;
   const pointer = currentPointer();
-  checks.pointerBeforeSubscriber = pointer?.clientX === event.clientX && pointer?.clientY === event.clientY;
+  checks.pointerBeforeSubscriber = !!pointer && Math.floor(pointer.clientX) === event.clientX && Math.floor(pointer.clientY) === event.clientY;
+  button.disabled = true;
   try {
     checks.inheritedPalette = paletteColors(["toString"]) === null && paletteColors(["constructor"]) === null;
   } catch {

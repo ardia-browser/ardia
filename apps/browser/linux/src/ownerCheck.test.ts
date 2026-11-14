@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, beforeEach, test } from "node:test";
@@ -14,7 +14,7 @@ after(() => {
   helper.remove();
 });
 
-const { confirmDeviceOwner, presentOwnerPromptsWith, revokeOwnerGrant } = await import("./ownerCheck.ts");
+const { confirmDeviceOwner, presentOwnerPromptsWith, revokeOwnerGrant, trustedPasswordHelper } = await import("./ownerCheck.ts");
 
 let prompt = scriptedPrompt();
 beforeEach(() => {
@@ -52,4 +52,21 @@ test("a background instance still asks, and a cancel denies", async () => {
   } finally {
     delete process.env.ARDIA_BACKGROUND;
   }
+});
+
+test("with no password helper the check is denied and says why, without asking", async () => {
+  helper.hide();
+  try {
+    assert.equal(await confirmDeviceOwner("show your saved passwords"), false);
+    assert.deepEqual(prompt.unavailable, ["show your saved passwords"]);
+    assert.deepEqual(prompt.asked, []);
+  } finally {
+    helper.restore();
+  }
+});
+
+test("only a root-owned helper in root-owned folders nobody else can write is trusted", { skip: !existsSync("/usr/sbin/unix_chkpwd") }, () => {
+  assert.equal(trustedPasswordHelper(helper.path), null);
+  assert.equal(trustedPasswordHelper(join(dataDir, "missing")), null);
+  assert.equal(trustedPasswordHelper("/usr/sbin/unix_chkpwd"), "/usr/sbin/unix_chkpwd");
 });

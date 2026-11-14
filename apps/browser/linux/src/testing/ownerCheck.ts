@@ -50,6 +50,7 @@ export type ScriptedPrompt = {
   answers: (string | null)[];
   asked: string[];
   refusals: string[];
+  unavailable: string[];
   closed: number;
 };
 
@@ -58,6 +59,7 @@ export function scriptedPrompt(): ScriptedPrompt {
     answers: [],
     asked: [],
     refusals: [],
+    unavailable: [],
     closed: 0,
     ui: {
       ask: async (reason) => {
@@ -70,6 +72,7 @@ export function scriptedPrompt(): ScriptedPrompt {
         };
         return prompt;
       },
+      tellUnavailable: async (reason) => void scripted.unavailable.push(reason),
     },
   };
   return scripted;

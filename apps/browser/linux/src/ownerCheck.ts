@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync, statSync, type Stats } from "node:fs";
+import { dirname } from "node:path";
 import { userInfo } from "node:os";
 import { count } from "./counts";
 import { testValue } from "./launch";
@@ -15,9 +16,10 @@ export type OwnerPrompt = {
 
 export type OwnerPromptUI = {
   ask(reason: string): Promise<OwnerPrompt>;
+  tellUnavailable(reason: string): Promise<void>;
 };
 
-const PASSWORD_HELPERS = ["/usr/sbin/unix_chkpwd", "/sbin/unix_chkpwd", "/usr/bin/unix_chkpwd"];
+const PASSWORD_HELPERS = ["/usr/sbin/unix_chkpwd", "/sbin/unix_chkpwd", "/usr/bin/unix_chkpwd", "/run/wrappers/bin/unix_chkpwd"];
 const HELPER_DEADLINE_MS = 15_000;
 const GRANT_REUSE_MS = 60_000;
 
@@ -34,10 +36,31 @@ export const revokeOwnerGrant = (): void => {
   grantedAt = 0;
 };
 
+const writableByOthers = (stats: Stats) => (stats.mode & 0o002) !== 0 || ((stats.mode & 0o020) !== 0 && stats.gid !== 0);
+
+export function trustedPasswordHelper(path: string): string | null {
+  try {
+    const real = realpathSync(path);
+    const file = statSync(real);
+    if (!file.isFile() || file.uid !== 0 || writableByOthers(file) || (file.mode & 0o111) === 0) return null;
+    for (let folder = dirname(real); ; folder = dirname(folder)) {
+      const stats = statSync(folder);
+      if (stats.uid !== 0 || writableByOthers(stats)) return null;
+      if (folder === dirname(folder)) return real;
+    }
+  } catch {
+    return null;
+  }
+}
+
 function passwordHelper(): string | null {
   const testHelper = testValue("passwordHelper");
   if (testHelper !== undefined) return existsSync(testHelper) ? testHelper : null;
-  return PASSWORD_HELPERS.find((path) => existsSync(path)) ?? null;
+  for (const path of PASSWORD_HELPERS) {
+    const trusted = trustedPasswordHelper(path);
+    if (trusted) return trusted;
+  }
+  return null;
 }
 
 function passwordMatches(helper: string, password: string): Promise<boolean> {
@@ -83,8 +106,9 @@ async function check(reason: string): Promise<boolean> {
   const helper = passwordHelper();
   if (!helper) {
     count("owner_check_unavailable");
-    note("owner", `device owner check (${reason}): no unix_chkpwd on this system, so nothing can check the login password; granted`);
-    return true;
+    note("owner", `device owner check (${reason}): no trusted unix_chkpwd on this system, so nothing can check the login password; denied`);
+    await promptUI.tellUnavailable(reason);
+    return false;
   }
   count("owner_check_asked");
   const granted = await askForPassword(helper, reason);

@@ -6,7 +6,37 @@ const HEIGHT = 196;
 
 const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
-function page(reason: string, dark: boolean): string {
+type PageText = { heading: string; detail: string; form: string; script: string };
+
+const passwordPage = (reason: string): PageText => ({
+  heading: `Ardia wants to ${escapeHtml(reason)}.`,
+  detail: "Enter your login password to allow this.",
+  form: `<form id="form"><input id="password" type="password" autocomplete="current-password" aria-label="Login password" autofocus>
+<div class="error" id="error"></div>
+<div class="buttons"><button type="button" id="cancel">Cancel</button><button type="submit" class="primary" id="ok">OK</button></div></form>`,
+  script: `const form=document.getElementById("form"),field=document.getElementById("password"),error=document.getElementById("error"),ok=document.getElementById("ok");
+let settle=null;
+window.nextAnswer=()=>new Promise((resolve)=>{settle=resolve;ok.disabled=false;field.disabled=false;field.focus();});
+const answer=(value)=>{if(!settle)return;const done=settle;settle=null;ok.disabled=true;field.disabled=true;done(value);};
+form.addEventListener("submit",(event)=>{event.preventDefault();if(field.value)answer(field.value);});
+document.getElementById("cancel").addEventListener("click",()=>answer(null));
+addEventListener("keydown",(event)=>{if(event.key==="Escape")answer(null);});
+window.wrongPassword=()=>{field.value="";error.textContent="Wrong password. Try again.";form.classList.remove("shake");void form.offsetWidth;form.classList.add("shake");};`,
+});
+
+const unavailablePage = (reason: string): PageText => ({
+  heading: "Ardia can't check your login password on this system.",
+  detail: `It needs your login password to ${escapeHtml(reason)}.`,
+  form: `<form id="form"><div class="buttons"><button type="submit" class="primary" id="ok" autofocus>OK</button></div></form>`,
+  script: `const ok=document.getElementById("ok");
+let settle=null;
+window.dismissed=()=>new Promise((resolve)=>{settle=resolve;ok.focus();});
+const dismiss=()=>{if(settle)settle(true);settle=null;};
+document.getElementById("form").addEventListener("submit",(event)=>{event.preventDefault();dismiss();});
+addEventListener("keydown",(event)=>{if(event.key==="Escape")dismiss();});`,
+});
+
+function page(text: PageText, dark: boolean): string {
   const fg = dark ? "#e8eaed" : "#1d1d1f";
   const muted = dark ? "#9aa0a6" : "#6e6e73";
   return `<!doctype html><html><head><meta charset="utf-8"><title>Ardia</title><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'"><style>
@@ -24,24 +54,15 @@ button:disabled{opacity:.5}
 @keyframes shake{0%,100%{transform:none}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
 .shake{animation:shake .18s 2}
 </style></head><body>
-<h1>Ardia wants to ${escapeHtml(reason)}.</h1>
-<p>Enter your login password to allow this.</p>
-<form id="form"><input id="password" type="password" autocomplete="current-password" aria-label="Login password" autofocus>
-<div class="error" id="error"></div>
-<div class="buttons"><button type="button" id="cancel">Cancel</button><button type="submit" class="primary" id="ok">OK</button></div></form>
+<h1>${text.heading}</h1>
+<p>${text.detail}</p>
+${text.form}
 <script>
-const form=document.getElementById("form"),field=document.getElementById("password"),error=document.getElementById("error"),ok=document.getElementById("ok");
-let settle=null;
-window.nextAnswer=()=>new Promise((resolve)=>{settle=resolve;ok.disabled=false;field.disabled=false;field.focus();});
-const answer=(value)=>{if(!settle)return;const done=settle;settle=null;ok.disabled=true;field.disabled=true;done(value);};
-form.addEventListener("submit",(event)=>{event.preventDefault();if(field.value)answer(field.value);});
-document.getElementById("cancel").addEventListener("click",()=>answer(null));
-addEventListener("keydown",(event)=>{if(event.key==="Escape")answer(null);});
-window.wrongPassword=()=>{field.value="";error.textContent="Wrong password. Try again.";form.classList.remove("shake");void form.offsetWidth;form.classList.add("shake");};
+${text.script}
 </script></body></html>`;
 }
 
-function openWindow(reason: string): BrowserWindow {
+function openWindow(text: PageText): BrowserWindow {
   const parent = BrowserWindow.getFocusedWindow() ?? undefined;
   const window = new BrowserWindow({
     width: WIDTH,
@@ -62,7 +83,7 @@ function openWindow(reason: string): BrowserWindow {
   window.setMenu(null);
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event) => event.preventDefault());
-  void window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(page(reason, nativeTheme.shouldUseDarkColors))}`);
+  void window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(page(text, nativeTheme.shouldUseDarkColors))}`);
   window.once("ready-to-show", () => {
     if (window.isDestroyed()) return;
     window.show();
@@ -105,8 +126,20 @@ function promptIn(window: BrowserWindow): OwnerPrompt {
 
 export const windowPrompt: OwnerPromptUI = {
   ask: async (reason) => {
-    const window = openWindow(reason);
+    const window = openWindow(passwordPage(reason));
     await loaded(window);
     return promptIn(window);
+  },
+  tellUnavailable: async (reason) => {
+    const window = openWindow(unavailablePage(reason));
+    await loaded(window);
+    if (window.isDestroyed()) return;
+    const closed = new Promise<void>((resolve) => window.once("closed", () => resolve()));
+    const dismissed = window.webContents.executeJavaScript("window.dismissed()", true).then(
+      () => undefined,
+      () => undefined,
+    );
+    await Promise.race([dismissed, closed]);
+    if (!window.isDestroyed()) window.destroy();
   },
 };

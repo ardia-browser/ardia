@@ -5,7 +5,6 @@ import { count } from "./counts";
 import { testValue } from "./launch";
 import { note } from "./log";
 import { windowPrompt } from "./ownerPrompt";
-import { isBackground } from "./paths";
 
 export type OwnerPrompt = {
   answer(): Promise<string | null>;
@@ -80,10 +79,6 @@ async function check(reason: string): Promise<boolean> {
   if (answer !== undefined) {
     note("owner", `device owner check (${reason}) in a test instance: ${answer === "denied" ? "denied" : "granted"}`);
     return answer !== "denied";
-  }
-  if (isBackground()) {
-    note("owner", `device owner check (${reason}) in a background instance: granted`);
-    return true;
   }
   const helper = passwordHelper();
   if (!helper) {

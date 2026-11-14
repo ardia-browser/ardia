@@ -42,3 +42,14 @@ test("a grant counts for the next check without asking again", async () => {
 test("cancelling denies", async () => {
   assert.equal(await confirmDeviceOwner("show your saved passwords"), false);
 });
+
+test("a background instance still asks, and a cancel denies", async () => {
+  process.env.ARDIA_BACKGROUND = "1";
+  try {
+    prompt.answers.push(null);
+    assert.equal(await confirmDeviceOwner("show your sync recovery phrase"), false);
+    assert.deepEqual(prompt.asked, ["show your sync recovery phrase"]);
+  } finally {
+    delete process.env.ARDIA_BACKGROUND;
+  }
+});

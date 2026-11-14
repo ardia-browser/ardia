@@ -3,6 +3,7 @@ import { defineModule, emit } from "../bridge";
 import { appWindow, host } from "../windows";
 import { emitPage } from "./pages";
 import { profileOfSession } from "./sessions";
+import { renderErrorPage, showsErrorPage } from "./errorPages";
 
 export const PAGES_MODULE = "ArdiaLinuxPages";
 
@@ -191,7 +192,13 @@ function track(contents: WebContents) {
     tellProgress(guest, 0.1);
     tellNavigation(guest);
   });
+  let failedLoad: { code: number; text: string; url: string } | null = null;
+  contents.on("did-start-navigation", (details) => {
+    if (details.isMainFrame && !details.isSameDocument) failedLoad = null;
+  });
   contents.on("did-stop-loading", () => {
+    if (failedLoad) void renderErrorPage(contents, failedLoad.code, failedLoad.text, failedLoad.url);
+    failedLoad = null;
     guest.isLoading = false;
     tellProgress(guest, 1);
     tellNavigation(guest);
@@ -225,6 +232,14 @@ function track(contents: WebContents) {
       tell(guest, "security", securityOf(guest));
     }
     tell(guest, "loadError", { url, code, text });
+    failedLoad = showsErrorPage(code) ? { code, text, url } : null;
+    if (failedLoad && url) {
+      guest.url = url;
+      guest.committedUrl = url;
+      guest.committedAt = Date.now();
+      guest.httpStatus = 0;
+      tellNavigation(guest);
+    }
   });
   contents.on("found-in-page", (_event, result) => {
     tell(guest, "find", { count: result.matches, active: result.activeMatchOrdinal, final: result.finalUpdate });

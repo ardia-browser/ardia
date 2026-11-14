@@ -5,6 +5,7 @@ import { defineModule } from "../bridge";
 import { defineDomain } from "../engine/domains";
 import { pref, savedDatabase, setPref, transaction } from "./database";
 import { askSavePath } from "./dialogs";
+import { ensureEncryption, keyringAvailable, secretProtection, sealedWithoutKeyring } from "../secretStorage";
 import { engineError, originalProfile } from "./profiles";
 
 export type Login = { origin: string; username: string; password: string; created: number; modified: number; used: number | null };
@@ -26,13 +27,7 @@ export function loginOrigin(spec: string): string | null {
 
 const store = (profile: string): DatabaseSync => savedDatabase(originalProfile(profile));
 
-const KEYRINGS = new Set(["gnome_libsecret", "kwallet", "kwallet5", "kwallet6"]);
-
-export function encryptionReady(): boolean {
-  if (safeStorage.isEncryptionAvailable()) return true;
-  if (process.platform === "linux" && !KEYRINGS.has(safeStorage.getSelectedStorageBackend())) safeStorage.setUsePlainTextEncryption(true);
-  return safeStorage.isEncryptionAvailable();
-}
+export const encryptionReady = (): boolean => ensureEncryption();
 
 function encrypt(password: string): Buffer {
   if (!encryptionReady()) throw engineError("passwords can't be encrypted on this system");
@@ -47,11 +42,18 @@ function decrypt(blob: Uint8Array): string {
 const stored = (db: DatabaseSync, origin: string, username: string) =>
   db.prepare("SELECT * FROM logins WHERE origin = ? AND username = ?").get(origin, username) as StoredLogin | undefined;
 
+function opened(profile: string, row: StoredLogin): Login {
+  const password = decrypt(row.password);
+  if (sealedWithoutKeyring(row.password) && keyringAvailable())
+    store(profile).prepare("UPDATE logins SET password = ? WHERE origin = ? AND username = ?").run(encrypt(password), row.origin, row.username);
+  return { ...row, password };
+}
+
 export function loginsFor(profile: string, origin: string): Login[] {
   const rows = store(profile).prepare("SELECT * FROM logins WHERE origin = ? ORDER BY COALESCE(used, modified) DESC").all(origin) as StoredLogin[];
   return rows.flatMap((row) => {
     try {
-      return [{ ...row, password: decrypt(row.password) }];
+      return [opened(profile, row)];
     } catch {
       return [];
     }
@@ -60,7 +62,7 @@ export function loginsFor(profile: string, origin: string): Login[] {
 
 export function allLogins(profile: string): Login[] {
   const rows = store(profile).prepare("SELECT * FROM logins ORDER BY origin, username").all() as StoredLogin[];
-  return rows.map((row) => ({ ...row, password: decrypt(row.password) }));
+  return rows.map((row) => opened(profile, row));
 }
 
 export function passwordsEnabled(profile: string): boolean {
@@ -147,6 +149,7 @@ defineDomain("passwords", {
     ),
   }),
   unlock: () => ({ unlocked: encryptionReady() }),
+  protection: () => secretProtection(),
   reveal: (args, profile) => {
     const origin = loginOrigin(text(args, "origin"));
     const row = origin ? stored(store(profile), origin, text(args, "username")) : undefined;

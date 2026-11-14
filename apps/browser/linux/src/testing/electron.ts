@@ -75,3 +75,24 @@ export const contextBridge = { exposeInMainWorld: () => undefined, executeInMain
 export const ipcRenderer = new EventEmitter();
 
 export const session = { defaultSession: { name: "default" } };
+
+const inert = (): unknown => new Proxy(() => undefined, { get: (_target, key) => (key === "then" ? undefined : inert()), apply: () => undefined });
+export const dialog = inert();
+export const net = inert();
+export const Menu = inert();
+export const MenuItem = inert();
+export const nativeImage = inert();
+export const nativeTheme = inert();
+export const clipboard = inert();
+export const shell = inert();
+export const screen = inert();
+export const powerMonitor = inert();
+export const webContents = inert();
+export const protocol = inert();
+export const systemPreferences = inert();
+export const Notification = inert();
+export const crashReporter = inert();
+export const globalShortcut = inert();
+export const desktopCapturer = inert();
+export const webFrameMain = inert();
+export const WebContentsView = inert();

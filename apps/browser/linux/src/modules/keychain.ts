@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { defineModule } from "../bridge";
 import { note } from "../log";
 import { dataDirectory } from "../paths";
+import { ensureEncryption, isKeyring, keyringAvailable, secretProtection, storageBackend, type SecretProtection } from "../secretStorage";
 import { writeDocument } from "./documents";
 
 const FILE = "Secrets.json";
@@ -23,22 +24,15 @@ function load(): Record<string, Stored> {
 
 const persist = () => writeDocument(FILE, JSON.stringify(load()));
 
-const backend = () => {
-  try {
-    return safeStorage.getSelectedStorageBackend();
-  } catch {
-    return "unknown";
-  }
-};
-
 export function sealSecret(secret: string): Stored {
-  if (safeStorage.isEncryptionAvailable()) return { backend: backend(), sealed: true, value: safeStorage.encryptString(secret).toString("base64") };
-  return { backend: "none", sealed: false, value: Buffer.from(secret, "utf8").toString("base64") };
+  if (!ensureEncryption()) throw new Error("secrets can't be encrypted on this system");
+  return { backend: storageBackend(), sealed: true, value: safeStorage.encryptString(secret).toString("base64") };
 }
 
 export function openSecret(stored: Stored): string | null {
   try {
     if (!stored.sealed) return Buffer.from(stored.value, "base64").toString("utf8");
+    ensureEncryption();
     return safeStorage.decryptString(Buffer.from(stored.value, "base64"));
   } catch (error) {
     note("keychain", `a secret couldn't be opened (${stored.backend}): ${String(error)}`);
@@ -46,18 +40,36 @@ export function openSecret(stored: Stored): string | null {
   }
 }
 
-async function get(account: string): Promise<string | null> {
+const needsSealing = (stored: Stored) => !stored.sealed || (!isKeyring(stored.backend) && keyringAvailable());
+
+function resealed(account: string): void {
+  const secrets = load();
+  const stored = secrets[account];
+  if (!stored || !needsSealing(stored)) return;
+  const secret = openSecret(stored);
+  if (secret === null) return;
+  try {
+    secrets[account] = sealSecret(secret);
+    note("keychain", `a secret moved from ${stored.sealed ? stored.backend : "plain storage"} to ${secrets[account]!.backend}`);
+    persist();
+  } catch (error) {
+    note("keychain", `a secret couldn't be sealed again: ${String(error)}`);
+  }
+}
+
+export async function get(account: string): Promise<string | null> {
+  resealed(account);
   const stored = load()[account];
   return stored ? openSecret(stored) : null;
 }
 
-async function set(account: string, secret: string): Promise<boolean> {
+export async function set(account: string, secret: string): Promise<boolean> {
   load()[account] = sealSecret(String(secret));
   persist();
   return true;
 }
 
-async function remove(account: string): Promise<boolean> {
+export async function remove(account: string): Promise<boolean> {
   const secrets = load();
   if (!(account in secrets)) return true;
   delete secrets[account];
@@ -65,6 +77,8 @@ async function remove(account: string): Promise<boolean> {
   return true;
 }
 
+export const protection = async (): Promise<SecretProtection> => secretProtection();
+
 defineModule("ArdiaKeychain", {
-  async: { get, set, delete: remove, backend: async () => backend() },
+  async: { get, set, delete: remove, backend: async () => storageBackend(), protection },
 });

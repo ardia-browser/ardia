@@ -63,6 +63,9 @@ export class FakeWebContents extends EventEmitter {
 
 export class BrowserWindow extends EventEmitter {
   static readonly made: BrowserWindow[] = [];
+  static getFocusedWindow(): BrowserWindow | null {
+    return null;
+  }
   readonly webContents = new FakeWebContents();
   readonly options: unknown;
   constructor(options: unknown = {}) {

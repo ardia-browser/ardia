@@ -2,12 +2,12 @@ import { safeStorage } from "electron";
 import { writeFile } from "node:fs/promises";
 import type { DatabaseSync } from "node:sqlite";
 import { defineModule } from "../bridge";
-import { defineDomain } from "../engine/domains";
+import { defineDomain, type DomainHandler } from "../engine/domains";
 import { pref, savedDatabase, setPref, transaction } from "./database";
 import { askSavePath } from "./dialogs";
 import { ensureEncryption, keyringAvailable, secretProtection, sealedWithoutKeyring } from "../secretStorage";
 import { engineError, originalProfile } from "./profiles";
-import { confirmDeviceOwner } from "../ownerCheck";
+import { confirmDeviceOwner, whenOwnerAway } from "../ownerCheck";
 
 export type Login = { origin: string; username: string; password: string; created: number; modified: number; used: number | null };
 type StoredLogin = { origin: string; username: string; password: Uint8Array; created: number; modified: number; used: number | null };
@@ -15,6 +15,10 @@ type StoredLogin = { origin: string; username: string; password: Uint8Array; cre
 const DEFAULT_PORTS: Record<string, string> = { "http:": "80", "https:": "443" };
 const ENABLED_PREF = "passwords.enabled";
 const PASSWORD_FILE_WARNING = "Anyone who can open this file can read your passwords.";
+const UNLOCK_MS = 5 * 60_000;
+
+const unlockedUntil = new Map<string, number>();
+whenOwnerAway(() => unlockedUntil.clear());
 
 export function loginOrigin(spec: string): string | null {
   try {
@@ -115,8 +119,10 @@ export function updateLogin(profile: string, originSpec: string, username: strin
 const csvField = (value: string) => (/[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value);
 
 async function exportCsv(profile: string) {
-  const db = store(profile);
-  const rows = db.prepare("SELECT * FROM logins ORDER BY origin, username").all() as StoredLogin[];
+  if (!(await confirmDeviceOwner("export your saved passwords"))) return { status: "cancelled" };
+  const path = await askSavePath("Ardia Passwords.csv", [{ name: "CSV file", extensions: ["csv"] }], PASSWORD_FILE_WARNING);
+  if (!path) return { status: "cancelled" };
+  const rows = store(profile).prepare("SELECT * FROM logins ORDER BY origin, username").all() as StoredLogin[];
   const lines = ["name,url,username,password,note"];
   for (const row of rows) {
     let password: string;
@@ -127,8 +133,6 @@ async function exportCsv(profile: string) {
     }
     lines.push([new URL(row.origin).hostname, `${row.origin}/`, row.username, password, ""].map(csvField).join(","));
   }
-  const path = await askSavePath("Ardia Passwords.csv", [{ name: "CSV file", extensions: ["csv"] }], PASSWORD_FILE_WARNING);
-  if (!path) return { status: "cancelled" };
   try {
     await writeFile(path, `${lines.join("\n")}\n`, { encoding: "utf8", mode: 0o600 });
     return { status: "succeeded", path };
@@ -137,21 +141,34 @@ async function exportCsv(profile: string) {
   }
 }
 
+function unlockFor(profile: string) {
+  unlockedUntil.set(originalProfile(profile), Date.now() + UNLOCK_MS);
+}
+
+function requireUnlocked(profile: string) {
+  if ((unlockedUntil.get(originalProfile(profile)) ?? 0) <= Date.now()) throw engineError("Passwords are locked; unlock them first");
+}
+
 const text = (args: Record<string, unknown>, key: string) => {
   const value = args[key];
   if (typeof value !== "string") throw engineError(`${key} is missing`);
   return value;
 };
 
-defineDomain("passwords", {
+export const passwordVerbs: Record<string, DomainHandler> = {
   list: (_args, profile) => ({
     passwords: (store(profile).prepare("SELECT origin, username, created, modified FROM logins ORDER BY origin, username").all() as Omit<StoredLogin, "password">[]).map(
       (row) => ({ origin: row.origin, username: row.username, created: Math.floor(row.created), modified: Math.floor(row.modified) }),
     ),
   }),
-  unlock: async () => ({ unlocked: encryptionReady() && (await confirmDeviceOwner("show your saved passwords")) }),
+  unlock: async (_args, profile) => {
+    const unlocked = encryptionReady() && (await confirmDeviceOwner("show your saved passwords"));
+    if (unlocked) unlockFor(profile);
+    return { unlocked };
+  },
   protection: () => secretProtection(),
   reveal: (args, profile) => {
+    requireUnlocked(profile);
     const origin = loginOrigin(text(args, "origin"));
     const row = origin ? stored(store(profile), origin, text(args, "username")) : undefined;
     return { password: row ? decrypt(row.password) : null };
@@ -173,7 +190,9 @@ defineDomain("passwords", {
     setPref(store(profile), ENABLED_PREF, args.enabled === true);
     return null;
   },
-});
+};
+
+defineDomain("passwords", passwordVerbs);
 
 const ok = () => JSON.stringify({ ok: true });
 

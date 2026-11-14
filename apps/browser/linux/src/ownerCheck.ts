@@ -1,3 +1,4 @@
+import { powerMonitor } from "electron";
 import { spawn } from "node:child_process";
 import { existsSync, realpathSync, statSync, type Stats } from "node:fs";
 import { dirname } from "node:path";
@@ -51,9 +52,25 @@ export const presentOwnerPromptsWith = (ui: OwnerPromptUI): void => {
   promptUI = ui;
 };
 
+const awayListeners: (() => void)[] = [];
+let watchingForAway = false;
+
 export const revokeOwnerGrant = (): void => {
   grantedAt = 0;
 };
+
+export const whenOwnerAway = (listener: () => void): void => void awayListeners.push(listener);
+
+function watchForAway() {
+  if (watchingForAway) return;
+  watchingForAway = true;
+  const away = () => {
+    revokeOwnerGrant();
+    for (const listener of awayListeners) listener();
+  };
+  powerMonitor.on("lock-screen", away);
+  powerMonitor.on("suspend", away);
+}
 
 const writableByOthers = (stats: Stats) => (stats.mode & 0o002) !== 0 || ((stats.mode & 0o020) !== 0 && stats.gid !== 0);
 
@@ -194,7 +211,9 @@ export function confirmDeviceOwner(reason: string): Promise<boolean> {
   asking = check(reason)
     .catch(() => false)
     .then((granted) => {
-      if (granted) grantedAt = Date.now();
+      if (!granted) return false;
+      grantedAt = Date.now();
+      watchForAway();
       return granted;
     })
     .finally(() => {

@@ -85,14 +85,14 @@ offered, and every row was walked. Works with a difference says what differs; th
 | --- | --- | --- |
 | Offer to save a password | Works: the app's Save password prompt (Never on This Site, Not Now, Save) | |
 | Fill a saved password | Works: the form fills when the page loads | |
-| Passwords pane: Unlock | Works: Unlock asks for the login password in a small window over Settings ("Ardia wants to show your saved passwords."), checked with PAM's `unix_chkpwd`; a wrong password says so and Cancel keeps the pane locked. The right password wasn't typed on this machine (it's the owner's), only the helper's answer to a wrong one. Showing or saving the sync recovery phrase asks the same way. Before, it unlocked without asking | 2d37b85cd |
+| Passwords pane: Unlock | Works: Unlock asks for the login password in a small window over Settings ("Ardia wants to show your saved passwords."), checked with PAM's `unix_chkpwd`; a wrong password says so, the next tries wait 2 s, 5 s, 30 s, then 60 s ("Try again in N s", kept when the prompt is closed and reopened), a helper that crashes or hangs says "Ardia couldn't check the password", and Cancel keeps the pane locked. With no trusted `unix_chkpwd` it stays locked and says "Ardia can't check your login password on this system". Walked with a stub helper (`ARDIA_TEST=passwordHelper`) and, for a wrong password, the system's. Showing or saving the sync recovery phrase asks the same way. Before, it unlocked without asking; then a missing helper or `ARDIA_BACKGROUND=1` let it through and wrong tries were unlimited | 2d37b85cd, 6b44832b0, 4fc0cd666, 2ccbf9633, a979208e1, 99ca89c17 |
 | Notification prompt and notifications | Works: the app's prompt; the notification shows | |
 | Location prompt | Works: the app's prompt; with no GeoClue the page gets "position unavailable". Before, allowing showed the Mac's "open System Settings" dialog | a413faa20 |
 | Camera and microphone | Works with Chromium's fake camera: the app's prompt, then the stream | |
 | Chrome Web Store install | Works: Add to Chrome, the app's Add dialog listing the permissions, then the store says Remove from Chrome | |
 | Extensions pane | Works | |
 | Ad, tracker and cookie-banner blocking | Works: an ad script and an analytics script are blocked while a CDN script loads; EasyList's `#carbonads` is hidden on a named host (the engine finds no domain for a bare IP or localhost, so cosmetic hiding skips those). Cookie-banner lists weren't turned on | |
-| Bookmark and password export | Works: Bookmarks › Export Bookmarks writes a Netscape bookmarks file; Settings › Passwords › Export CSV (an advanced row) writes the CSV with mode 0600. The Passwords pane's "Password manager apps" row talks about the macOS Applications folder | |
+| Bookmark and password export | Works: Bookmarks › Export Bookmarks writes a Netscape bookmarks file; Settings › Passwords › Export CSV (an advanced row) asks for the login password first (a check from the last 60 s counts), then writes the CSV with mode 0600. The Passwords pane's "Password manager apps" row talks about the macOS Applications folder. Before, Export CSV worked while the pane was locked | 99ca89c17 |
 
 **Settings**
 
@@ -340,10 +340,19 @@ the main method where one is needed (`aroundMain` in `tsModules.ts`), the main p
   `mimeapps.list` and the autostart entry go under `<data>/Desktop`, and no xdg tool runs.
 - **Updates** come from the GitHub releases of the repository the build was made from (`ARDIA_UPDATE_REPOSITORY` at
   build time): Ardia checks every 6 hours and offers the release page; it doesn't update itself yet.
-- **Device owner check.** Before showing saved passwords (the pane's Unlock) or the sync recovery phrase, `ownerCheck.ts`
-  asks for the login password in a small modal window and checks it with PAM's `unix_chkpwd` (setgid `shadow`; it only
-  checks the calling user's own password). One prompt at a time; a correct password counts for 60 s. Background
-  instances, `ARDIA_TEST=reauth` and systems without `unix_chkpwd` skip the prompt, logged.
+- **Device owner check.** Before showing saved passwords (the pane's Unlock), exporting them or showing the sync
+  recovery phrase, `ownerCheck.ts` asks for the login password in a small modal window (`ownerPrompt.ts`) and checks it
+  with PAM's `unix_chkpwd` (setgid `shadow`; it only checks the calling user's own password; exit 7 is a wrong
+  password, anything else a helper failure). The helper is used only from `/usr/sbin`, `/sbin`, `/usr/bin` or
+  `/run/wrappers/bin` (NixOS), and only when the file and every folder up to `/` are root-owned and writable by nobody
+  else; with none, the check is denied and says so. One prompt at a time; a correct password counts for 60 s, and
+  locking the screen or suspending drops it. Wrong passwords set a process-wide wait before the next try (0, 0, 2, 5,
+  30, then 60 s), which survives closing the prompt; passwords over 512 bytes or holding NUL never reach the helper. The
+  password crosses from the prompt as UTF-8 bytes, the field is cleared on submit, and main copies it once into a
+  NUL-terminated Buffer that is zeroed after the write and on every error. A successful Unlock also records a
+  five-minute unlock per profile in main, which `passwords.reveal` requires. Only a test instance can skip the prompt:
+  `ARDIA_TEST=reauth` (`denied` refuses) or a stub helper with `ARDIA_TEST=passwordHelper=<path>`, which skips the
+  ownership check; node tests drive the check with that stub and a scripted prompt (`src/testing/ownerCheck.ts`).
 - **Secrets** (`ArdiaKeychain`, passwords, card numbers) are sealed with `safeStorage`: the desktop keyring through
   libsecret or KWallet, or, like Chrome with no keyring, the `basic_text` backend's fixed key (`v10` blobs;
   `src/secretStorage.ts` turns it on). Nothing is stored as plain base64. Each keychain secret records its backend, and

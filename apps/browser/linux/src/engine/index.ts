@@ -15,3 +15,4 @@ import "./popupBlocker";
 import "./leavingPages";
 import "./pictureInPicture";
 import "./memorySaver";
+import "./printing";

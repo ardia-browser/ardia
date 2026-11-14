@@ -2,6 +2,7 @@ import { app, clipboard, Menu, type ContextMenuParams, type MenuItemConstructorO
 import { isBackground } from "../paths";
 import { guestOf, tell, windowOf, type Guest } from "./guests";
 import { definePageCall, savePage } from "./pageCalls";
+import { printPage } from "./printing";
 import { block, consumeActivation, forgetBlocked, mayOpen, takeBlocked } from "./popupBlocker";
 import { openPopupWindow, parseFeatures, popupWindowCreator } from "./popupWindows";
 
@@ -128,7 +129,7 @@ function menuFor(guest: Guest, params: ContextMenuParams): MenuItemConstructorOp
     ]);
     section([
       { label: "Save Page As…", click: () => void savePage(guest).catch(() => {}) },
-      { label: "Print…", click: () => contents.print({}) },
+      { label: "Print…", click: () => void printPage(guest) },
     ]);
   }
   section([{ label: "Inspect", click: () => contents.inspectElement(params.x, params.y) }]);

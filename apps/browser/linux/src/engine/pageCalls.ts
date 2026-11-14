@@ -3,6 +3,7 @@ import { defineModule } from "../bridge";
 import { appWindow } from "../windows";
 import { guestById, navigationOf, securityOf, stepZoom, tell, tellNavigation, windowOf, type Guest } from "./guests";
 import { sendToPageScript } from "./pageScriptBridge";
+import { printPage } from "./printing";
 import { resolveDisplayMedia } from "./permissions";
 import { executeAction } from "../services/extensions";
 import { resolvePasswordPrompt } from "../services/pagePasswords";
@@ -110,10 +111,10 @@ const pageCalls: Record<string, PageCall> = {
     if (query) guest.contents.findInPage(query, { forward: args.forward !== false, findNext: args.findNext !== true });
   },
   stopFinding: (guest, args) => guest.contents.stopFindInPage(args.clear === true ? "clearSelection" : "keepSelection"),
-  print: (guest) => guest.contents.print({}),
+  print: (guest) => void printPage(guest),
   runPageCommand: async (guest, args) => {
     if (args.name === "savePage") await savePage(guest);
-    else if (args.name === "systemPrint") guest.contents.print({});
+    else if (args.name === "systemPrint") void printPage(guest);
   },
   showDevTools: (guest) => guest.contents.openDevTools({ mode: "detach" }),
   inspectAt: (guest, args) => guest.contents.inspectElement(Number(args.x) || 0, Number(args.y) || 0),

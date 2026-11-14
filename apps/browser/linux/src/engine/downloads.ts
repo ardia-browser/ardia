@@ -33,6 +33,8 @@ function settingsOf(profile: string): DownloadSettings {
   return { folder: saved.folder || defaultFolder(), askWhereToSave: saved.askWhereToSave === true, managed: false };
 }
 
+export const downloadFolderOf = (profile: string): string => settingsOf(profile).folder;
+
 function saveSettings(profile: string, change: Partial<DownloadSettings>): DownloadSettings {
   const all = readSettings();
   all[profile] = { ...all[profile], ...change };

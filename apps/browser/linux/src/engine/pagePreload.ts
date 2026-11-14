@@ -29,6 +29,15 @@ function replaceDialogs(ask: Ask) {
   }
 }
 
+function replacePrint(askToPrint: () => void) {
+  const native = window.print;
+  const replacement = function print() {
+    askToPrint();
+  };
+  Object.defineProperty(replacement, "toString", { value: () => native?.toString() ?? "function print() { [native code] }" });
+  Object.defineProperty(window, "print", { value: replacement, writable: true, configurable: true, enumerable: true });
+}
+
 function steadyGeolocation(settleMs: number) {
   const geolocation = navigator.geolocation;
   if (!geolocation) return;
@@ -67,6 +76,7 @@ function steadyGeolocation(settleMs: number) {
 const GEOLOCATION_SETTLE_MS = 250;
 
 if (process.isMainFrame) contextBridge.executeInMainWorld({ func: replaceDialogs, args: [ask] });
+contextBridge.executeInMainWorld({ func: replacePrint, args: [() => ipcRenderer.send("ardia:page-print")] });
 if (process.isMainFrame) contextBridge.executeInMainWorld({ func: steadyGeolocation, args: [GEOLOCATION_SETTLE_MS] });
 
 let receive: Receive | undefined;

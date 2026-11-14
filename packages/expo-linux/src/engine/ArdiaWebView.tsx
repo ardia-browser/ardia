@@ -9,6 +9,7 @@ type Props = {
   profile?: string;
   tabId?: string;
   visible?: boolean;
+  autoPictureInPicture?: boolean;
   style?: unknown;
   pageEvents?: string[];
   contentsBackgroundColor?: string;
@@ -101,7 +102,13 @@ export const ArdiaWebView = forwardRef<unknown, Props>(function ArdiaWebView(pro
     return unmount;
   }, [key]);
 
-  useLayoutEffect(() => setPageVisible(key, visible), [key, visible]);
+  const shownBefore = useRef(visible);
+  useLayoutEffect(() => {
+    setPageVisible(key, visible);
+    if (shownBefore.current === visible) return;
+    shownBefore.current = visible;
+    if (visible || latest.current.autoPictureInPicture) void callPage(key, "autoPictureInPicture", { on: !visible });
+  }, [key, visible]);
 
   useImperativeHandle(
     ref,

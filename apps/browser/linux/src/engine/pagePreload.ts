@@ -106,8 +106,17 @@ const reportDrag = (event: DragEvent) => {
 addEventListener("dragenter", reportDrag, true);
 addEventListener("dragover", reportDrag, true);
 
-for (const [event, active] of [["enterpictureinpicture", true], ["leavepictureinpicture", false]] as const)
-  document.addEventListener(event, () => ipcRenderer.send("ardia:page-picture-in-picture", active), true);
+const PICTURE_IN_PICTURE_SETTLE_MS = 200;
+
+document.addEventListener("enterpictureinpicture", () => ipcRenderer.send("ardia:page-picture-in-picture", true), true);
+document.addEventListener(
+  "leavepictureinpicture",
+  (event) => {
+    const video = event.target instanceof HTMLVideoElement ? event.target : null;
+    setTimeout(() => ipcRenderer.send("ardia:page-picture-in-picture", false, !!video && !video.paused && !video.ended), PICTURE_IN_PICTURE_SETTLE_MS);
+  },
+  true,
+);
 
 ipcRenderer.on("ardia:page-script", (_event, kind: string, json: string) => {
   if (typeof receive === "function") receive(kind, json);

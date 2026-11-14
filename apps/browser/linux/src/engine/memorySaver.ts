@@ -96,6 +96,8 @@ function shown(guestId: number, visible: boolean) {
   }
 }
 
+export const isHiddenPage = (guestId: number): boolean => hiddenSince.has(guestId);
+
 export function notePictureInPicture(guestId: number, active: boolean) {
   if (active) inPictureInPicture.add(guestId);
   else inPictureInPicture.delete(guestId);

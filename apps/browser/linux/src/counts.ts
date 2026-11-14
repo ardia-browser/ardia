@@ -12,6 +12,8 @@ export type LinuxCount =
   | "window_close_unsaved_asked"
   | "window_close_unsaved_stayed"
   | "page_context_menus"
+  | "auto_pip_opened"
+  | "pip_back_to_tab"
   | "memory_saver_discards_proactive"
   | "memory_saver_discards_urgent"
   | "location_unavailable"

@@ -41,6 +41,8 @@ const ARGUMENTS: Record<string, string[]> = {
   downloadFavicon: ["url"],
   resolveDisplayMedia: ["id", "sourceId", "audio"],
   resolveUnresponsive: ["terminate"],
+  resolvePasswordPrompt: ["answer", "username", "password"],
+  executeExtensionAction: ["extensionId"],
 };
 
 const UNWRAPPED: Record<string, (reply: Record<string, unknown> | null) => unknown> = {
@@ -51,13 +53,13 @@ const UNWRAPPED: Record<string, (reply: Record<string, unknown> | null) => unkno
   getSecurityInfo: (reply) => reply ?? null,
   downloadImage: (reply) => reply ?? null,
   downloadFavicon: (reply) => reply ?? null,
+  executeExtensionAction: (reply) => reply ?? null,
 };
 
 const LOCAL_ANSWERS: Record<string, unknown> = {
   requestPictureInPicture: false,
   takeControlPress: false,
   discard: "unsupported",
-  executeExtensionAction: null,
   mediaCaptureSourceId: null,
 };
 
@@ -119,7 +121,7 @@ export const ArdiaWebView = forwardRef<unknown, Props>(function ArdiaWebView(pro
                 return { data: reply.data, frame: [rect.x, rect.y, rect.width, rect.height] };
               };
             if (method === "exitPictureInPicture") return () => callPage(key, "executeJavaScript", { code: EXIT_PICTURE_IN_PICTURE }).then(() => undefined);
-            if (method === "setFrozen" || method === "notificationAction" || method === "resolvePasswordPrompt" || method === "resolveAutofillPrompt" || method === "openBlockedPopup")
+            if (method === "setFrozen" || method === "notificationAction" || method === "resolveAutofillPrompt" || method === "openBlockedPopup")
               return async () => undefined;
             const names = ARGUMENTS[method];
             if (names) {

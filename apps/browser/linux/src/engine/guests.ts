@@ -27,6 +27,7 @@ export type Guest = {
   zoom: number;
   nextTransition: string;
   certificateError: string | null;
+  blocked: number;
 };
 
 const guests = new Map<number, Guest>();
@@ -142,6 +143,8 @@ function committed(guest: Guest, url: string, status: number) {
   guest.scriptTheme = null;
   guest.metaTheme = null;
   guest.certificateError = null;
+  if (guest.blocked) tell(guest, "contentBlocked", { count: 0, url });
+  guest.blocked = 0;
   tellProgress(guest, 0.5);
   tellNavigation(guest);
   tell(guest, "security", securityOf(guest));
@@ -171,6 +174,7 @@ function track(contents: WebContents) {
     zoom: 1,
     nextTransition: "link",
     certificateError: null,
+    blocked: 0,
   };
   guests.set(contents.id, guest);
 

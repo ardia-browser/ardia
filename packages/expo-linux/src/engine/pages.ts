@@ -26,6 +26,7 @@ type Page = {
 };
 
 const BLANK = "about:blank";
+const PASSWORDS_MODULE = "ArdiaLinuxPasswords";
 const RESTORES_HISTORY = "about:blank#ardia-restores-history";
 const PRIVATE_MARK = "@";
 const GUEST_ID_POLL_MS = 16;
@@ -56,11 +57,18 @@ function listen() {
   if (!bridge) return;
   listening = true;
   bridge.onEvent((module, event, payload) => {
+    if (module === PASSWORDS_MODULE && event === "prompt") return promptToSave(payload);
     if (module !== PAGES_MODULE || event !== "page") return;
     const { guest, name, data } = (payload ?? {}) as { guest?: number; name?: string; data?: unknown };
     const page = typeof guest === "number" ? byGuest.get(guest) : undefined;
     if (page && typeof name === "string" && page.guestId === guest) deliver(page, name, data);
   });
+}
+
+function promptToSave(payload: unknown) {
+  const { webContentsId, prompt } = (payload ?? {}) as { webContentsId?: number; prompt?: unknown };
+  const page = typeof webContentsId === "number" ? byGuest.get(webContentsId) : undefined;
+  if (page && prompt) deliver(page, "passwordPrompt", prompt);
 }
 
 const windowIdOf = (doc: Document) => doc.defaultView?.name ?? "";

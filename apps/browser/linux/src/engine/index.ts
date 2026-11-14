@@ -8,3 +8,5 @@ import "./downloads";
 import "./permissions";
 import "./hostDomains";
 import "./pageKeys";
+import "./blockedCounts";
+import "./pageDialogs";

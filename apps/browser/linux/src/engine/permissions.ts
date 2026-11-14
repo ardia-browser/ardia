@@ -6,23 +6,22 @@ import { defineDomain, emitDomainEvent } from "./domains";
 import { guestOf, tell, type Guest } from "./guests";
 import { isPrivateProfile } from "./partitions";
 import { onPageSession } from "./sessions";
+import { rememberSiteSetting, siteSetting, SITE_SETTING_DEFAULTS, type SiteSettingType } from "../services/sites";
 
 type Decision = "allow" | "block";
 type Stored = {
-  sites: Record<string, Record<string, Record<string, Decision>>>;
   externalApps: Record<string, { origin: string; scheme: string; app: string | null }[]>;
 };
 type Pending = { id: string; profile: string; origin: string; kinds: string[]; contents: WebContents; answer: (granted: boolean) => void };
 type PendingExternal = { id: string; profile: string; origin: string; scheme: string; url: string; contents: WebContents; answer: (granted: boolean) => void };
 type PendingDisplay = { id: string; guest: Guest; sources: Map<string, Electron.DesktopCapturerSource>; answer: (streams: Electron.Streams) => void };
 
-const FILE = "permissions.json";
+const FILE = "external-apps.json";
 const ALWAYS_ALLOWED = new Set(["fullscreen", "clipboard-sanitized-write", "mediaKeySystem", "speaker-selection"]);
 
 const pending = new Map<string, Pending>();
 const pendingExternal = new Map<string, PendingExternal>();
 const pendingDisplay = new Map<string, PendingDisplay>();
-const privateDecisions = new Map<string, Decision>();
 let nextId = 0;
 
 const storePath = () => join(dataDirectory(), "Engine", FILE);
@@ -30,9 +29,9 @@ const storePath = () => join(dataDirectory(), "Engine", FILE);
 function readStore(): Stored {
   try {
     const parsed = JSON.parse(readFileSync(storePath(), "utf8")) as Partial<Stored>;
-    return { sites: parsed.sites ?? {}, externalApps: parsed.externalApps ?? {} };
+    return { externalApps: parsed.externalApps ?? {} };
   } catch {
-    return { sites: {}, externalApps: {} };
+    return { externalApps: {} };
   }
 }
 
@@ -41,22 +40,20 @@ function writeStore(store: Stored) {
   writeFileSync(storePath(), JSON.stringify(store, null, 2));
 }
 
-const decisionKey = (profile: string, origin: string, kind: string) => `${profile}\n${origin}\n${kind}`;
+const asSiteSetting = (kind: string): SiteSettingType | null => (Object.hasOwn(SITE_SETTING_DEFAULTS, kind) ? (kind as SiteSettingType) : null);
 
 function decided(profile: string, origin: string, kind: string): Decision | undefined {
-  if (isPrivateProfile(profile)) return privateDecisions.get(decisionKey(profile, origin, kind));
-  return readStore().sites[profile]?.[origin]?.[kind];
+  const type = asSiteSetting(kind);
+  if (!type) return undefined;
+  const value = siteSetting(profile, origin, type);
+  return value === "ask" ? undefined : value;
 }
 
 function remember(profile: string, origin: string, kinds: string[], decision: Decision) {
-  if (isPrivateProfile(profile)) {
-    for (const kind of kinds) privateDecisions.set(decisionKey(profile, origin, kind), decision);
-    return;
+  for (const kind of kinds) {
+    const type = asSiteSetting(kind);
+    if (type) rememberSiteSetting(profile, origin, type, decision);
   }
-  const store = readStore();
-  const site = ((store.sites[profile] ??= {})[origin] ??= {});
-  for (const kind of kinds) site[kind] = decision;
-  writeStore(store);
 }
 
 const originOf = (url: string) => {

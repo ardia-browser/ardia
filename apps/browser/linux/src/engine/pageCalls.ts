@@ -4,6 +4,8 @@ import { appWindow } from "../windows";
 import { guestById, navigationOf, securityOf, stepZoom, tell, tellNavigation, windowOf, type Guest } from "./guests";
 import { sendToPageScript } from "./pageScriptBridge";
 import { resolveDisplayMedia } from "./permissions";
+import { executeAction } from "../services/extensions";
+import { resolvePasswordPrompt } from "../services/pagePasswords";
 
 type Args = Record<string, unknown>;
 type PageCall = (guest: Guest, args: Args) => unknown;
@@ -162,6 +164,12 @@ const pageCalls: Record<string, PageCall> = {
     if (args.terminate === true) guest.contents.forcefullyCrashRenderer();
   },
   resolveDisplayMedia: (_guest, args) => resolveDisplayMedia(text(args.id), typeof args.sourceId === "string" ? args.sourceId : null, args.audio === true),
+  resolvePasswordPrompt: (guest, args) =>
+    resolvePasswordPrompt(guest.contents.id, text(args.answer), {
+      ...(typeof args.username === "string" ? { username: args.username } : {}),
+      ...(typeof args.password === "string" ? { password: args.password } : {}),
+    }),
+  executeExtensionAction: (guest, args) => executeAction(guest.contents, text(args.extensionId)),
   navigationState: (guest) => navigationOf(guest),
   resendNavigation: (guest) => tellNavigation(guest),
 };

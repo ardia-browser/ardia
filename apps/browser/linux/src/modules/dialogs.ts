@@ -72,7 +72,7 @@ async function confirm(options: ConfirmOptions) {
   return counted(async () => {
     const parent = owner(options.windowId);
     const settings: Electron.MessageBoxOptions = {
-      type: options.destructive ? "warning" : "question",
+      type: options.destructive ? "warning" : cancelTitle ? "question" : "info",
       title: options.title,
       message: options.title,
       detail: message || undefined,

@@ -8,6 +8,7 @@ import { dataDirectory, isBackground } from "../paths";
 import { electronAccelerator, linuxComboFromStored, storedCombo } from "../menus/keys";
 import { finishRecording, keyboardState, startRecording } from "../menus/keyboard";
 import { menuStore } from "../menus/store";
+import { appWindow, appWindowIds, onAppWindowCreated } from "../windows";
 
 type MenuItem = {
   separator?: boolean;
@@ -129,6 +130,40 @@ function template(items: MenuItem[], choose: (id: string) => void): MenuItemCons
   return out;
 }
 
+const focusOrder: string[] = [];
+
+onAppWindowCreated((id, window) => {
+  const bringForward = () => {
+    const at = focusOrder.indexOf(id);
+    if (at >= 0) focusOrder.splice(at, 1);
+    focusOrder.push(id);
+  };
+  bringForward();
+  window.on("focus", bringForward);
+  window.once("closed", () => {
+    const at = focusOrder.indexOf(id);
+    if (at >= 0) focusOrder.splice(at, 1);
+  });
+});
+
+function menuOwner(): BrowserWindow | undefined {
+  const focused = BrowserWindow.getFocusedWindow();
+  if (focused) return focused;
+  const shown = (id: string) => {
+    const window = appWindow(id);
+    return window && !window.isDestroyed() && window.isVisible() && !window.isMinimized() ? window : undefined;
+  };
+  for (const id of [...focusOrder].reverse()) {
+    const window = shown(id);
+    if (window) return window;
+  }
+  for (const id of appWindowIds()) {
+    const window = shown(id);
+    if (window) return window;
+  }
+  return undefined;
+}
+
 function showMenu(items: MenuItem[]): Promise<string | null> {
   menuLog(`showMenu asked: ${visible(items).length} items`);
   if (testFlag("appMenu")) return Promise.resolve(testPick(items));
@@ -138,7 +173,11 @@ function showMenu(items: MenuItem[]): Promise<string | null> {
     reportItems(items, "pop-up menu");
     return Promise.resolve(null);
   }
-  const owner = BrowserWindow.getFocusedWindow() ?? undefined;
+  const owner = menuOwner();
+  if (!owner) {
+    menuLog("pop-up menu not shown: no app window to show it over");
+    return Promise.resolve(null);
+  }
   return new Promise((resolve) => {
     let chosen: string | null = null;
     const menu = Menu.buildFromTemplate(template(items, (id) => (chosen = id)));

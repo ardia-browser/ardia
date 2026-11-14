@@ -1,5 +1,5 @@
-import { readFileSync, rmSync } from "node:fs";
-import { mkdir, open, rename, rm } from "node:fs/promises";
+import { readFileSync, renameSync, rmSync } from "node:fs";
+import { mkdir, open, rm } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { defineModule } from "../bridge";
 import { note } from "../log";
@@ -22,7 +22,7 @@ function documentPath(name: string): string | null {
   return join(dataDirectory(), last);
 }
 
-async function replaceAtomically(path: string, contents: string): Promise<void> {
+async function replaceAtomically(path: string, contents: string, stillCurrent: () => boolean): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   const temp = tempSibling(path);
   const file = await open(temp, "wx", 0o600);
@@ -33,12 +33,15 @@ async function replaceAtomically(path: string, contents: string): Promise<void> 
     await file.close();
   }
   try {
-    await rename(temp, path);
+    if (stillCurrent()) renameSync(temp, path);
+    else rmSync(temp, { force: true });
   } catch (error) {
     await rm(temp, { force: true });
     throw error;
   }
 }
+
+const isCurrent = (key: string, mine: number) => staged.get(key)?.generation === mine;
 
 const serially = (task: () => Promise<void>) => {
   chain = chain.then(task, task);
@@ -61,7 +64,7 @@ function land(key: string, mine: number, attempt: number): void {
     slot.landing = true;
     let failure: Error | null = null;
     try {
-      await replaceAtomically(slot.path, slot.contents);
+      await replaceAtomically(slot.path, slot.contents, () => isCurrent(key, mine));
     } catch (error) {
       failure = error instanceof Error ? error : new Error(String(error));
     }
@@ -125,7 +128,7 @@ function documentSaved(name: string): Promise<void> {
   return new Promise((resolve, reject) => slot.waiters.push({ resolve, reject }));
 }
 
-function removeDocument(name: string): boolean {
+export function removeDocument(name: string): boolean {
   const path = documentPath(name);
   if (!path || closed) return false;
   const key = basename(path);

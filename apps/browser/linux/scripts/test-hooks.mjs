@@ -5,7 +5,7 @@ const SOURCE_EXTENSION = /\.(?:[cm]?[jt]s|json|node)$/;
 
 registerHooks({
   resolve(specifier, context, next) {
-    if (specifier === "electron") return { url: fakeElectron, format: "module", shortCircuit: true };
+    if (specifier === "electron") return { url: fakeElectron, shortCircuit: true };
     try {
       return next(specifier, context);
     } catch (error) {

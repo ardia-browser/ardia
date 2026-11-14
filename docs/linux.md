@@ -161,7 +161,14 @@ the main method where one is needed (`aroundMain` in `tsModules.ts`), the main p
   read and write.
 - **Page scripts.** `definePageScript` registers a frame preload on every page session (`onPageSession`); the
   password manager (fill, catch submitted logins, `ArdiaLinuxPasswords` `prompt`/`resolvePrompt` keyed by the page's
-  webContents id) and the content blocker's cosmetic filtering use it.
+  webContents id), autofill and the content blocker's cosmetic filtering use it.
+- **Autofill** (`services/pageAutofill.ts`) finds address and card fields by `autocomplete`, then by name, id,
+  placeholder and label, and shows saved entries in a dropdown under the field when it's clicked, typed in or
+  ArrowDowned (a closed shadow root in the page; the values reach the page only when one is chosen). Choosing fills the
+  form's empty fields of that kind, selects included; cards only in secure contexts, never the CVC. A submitted form
+  with a street and a city or postal code, or a valid card number, gets Chrome's "Save address?", "Update address?"
+  (New/Old) or "Save card?" as the page's `autofillPrompt`, answered through `resolveAutofillPrompt`; private windows
+  fill but never offer to save. The autofill shortcut and "Manage…" open Settings › Autofill.
 - **Requests.** Electron keeps one `webRequest` listener per event per session, so filters go through
   `services/requests.ts` (`onBeforeRequest`, `onHeadersReceived`), never the session directly.
 - **Content blocker.** `@ghostery/adblocker`'s engine with uBlock Origin's default lists, cached and serialized under

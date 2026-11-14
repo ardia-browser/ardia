@@ -42,6 +42,7 @@ const ARGUMENTS: Record<string, string[]> = {
   resolveDisplayMedia: ["id", "sourceId", "audio"],
   resolveUnresponsive: ["terminate"],
   resolvePasswordPrompt: ["answer", "username", "password"],
+  resolveAutofillPrompt: ["id", "answer"],
   executeExtensionAction: ["extensionId"],
 };
 
@@ -121,7 +122,7 @@ export const ArdiaWebView = forwardRef<unknown, Props>(function ArdiaWebView(pro
                 return { data: reply.data, frame: [rect.x, rect.y, rect.width, rect.height] };
               };
             if (method === "exitPictureInPicture") return () => callPage(key, "executeJavaScript", { code: EXIT_PICTURE_IN_PICTURE }).then(() => undefined);
-            if (method === "setFrozen" || method === "notificationAction" || method === "resolveAutofillPrompt" || method === "openBlockedPopup")
+            if (method === "setFrozen" || method === "notificationAction" || method === "openBlockedPopup")
               return async () => undefined;
             const names = ARGUMENTS[method];
             if (names) {

@@ -4,6 +4,7 @@ export { savePassword, updatePassword };
 export type { SavedPassword, PasswordExportStatus };
 
 export const listPasswords = async (profile: string) => (await call("passwords.list", { profile })).passwords;
+export const passwordProtection = () => call("passwords.protection", { profile: "" });
 export const unlockPasswords = async (profile: string) => (await call("passwords.unlock", { profile })).unlocked;
 export const getPassword = async (profile: string, origin: string, username: string) =>
   (await call("passwords.reveal", { profile, origin, username })).password;

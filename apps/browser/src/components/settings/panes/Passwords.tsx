@@ -3,6 +3,7 @@ import {
   exportPasswords,
   getNeverSavePasswordOrigins,
   listPasswords,
+  passwordProtection,
   setNeverSavePasswords,
   updatePassword,
   type PasswordExportStatus,
@@ -24,6 +25,7 @@ import { Group, ProfilePicker, Row, SectionHeader, useSettingsProfile } from "..
 import { settingsLayout } from "../tokens";
 import { passwordAutofill, setPasswordAutofillFor } from "../../../state/settings/paneData";
 import { useResource } from "../../../state/settings/resources";
+import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
 
@@ -32,6 +34,26 @@ function passwordManagerAppsNote() {
   return systemInfo().inApplicationsFolder === false
     ? `${apps} For 1Password, move Ardia to your Applications folder and reopen it (1Password only connects to browsers there), then in the 1Password app open Settings › Browser › Add Browser and choose it.`
     : `${apps} For 1Password, add Ardia once: in the 1Password app, open Settings › Browser › Add Browser and choose Ardia.`;
+}
+
+type SecretProtection = { backend: string; keyring: boolean };
+
+function useSecretProtection(): SecretProtection | null {
+  const [protection, setProtection] = useState<SecretProtection | null>(null);
+  useEffect(() => {
+    if (PLATFORM_FEATURES.secretStoreProtection) void passwordProtection().then(setProtection, orWarn(null));
+  }, []);
+  return protection;
+}
+
+function NoKeyringRow({ protection }: { protection: SecretProtection | null }) {
+  if (!protection || protection.keyring) return null;
+  return (
+    <Row
+      title="Basic protection: no keyring found"
+      description={`Passwords are encrypted with a fixed key built into Chromium (${protection.backend}), so anyone who can read your files can read them. Set up GNOME Keyring or KWallet to protect them with your login.`}
+    />
+  );
 }
 
 export function PasswordsPane({ profileId: initial }: { profileId?: string | null }) {
@@ -45,6 +67,8 @@ export function PasswordsPane({ profileId: initial }: { profileId?: string | nul
   const profile = currentEngineProfile(profileId);
   const unlocked = usePasswordsUnlocked(profile);
   const [autofill = true] = useResource(passwordAutofill, profile);
+  const protection = useSecretProtection();
+  const passwordKey = protection && !protection.keyring ? "a fixed key built into Chromium" : PLATFORM_TERMS.passwordKey;
 
   const load = () => {
     void listPasswords(profile).catch(orWarn<SavedPassword[]>([])).then(setList);
@@ -81,7 +105,7 @@ export function PasswordsPane({ profileId: initial }: { profileId?: string | nul
     <View>
       <SectionHeader
         title="Passwords"
-        description={`Saved on this ${PLATFORM_TERMS.computer}, separately for each profile, and encrypted with ${PLATFORM_TERMS.passwordKey}.`}
+        description={`Saved on this ${PLATFORM_TERMS.computer}, separately for each profile, and encrypted with ${passwordKey}.`}
         action={<ProfilePicker value={profileId} onChange={setProfileId} />}
       />
       <Group>
@@ -95,6 +119,7 @@ export function PasswordsPane({ profileId: initial }: { profileId?: string | nul
           <Button title="Export CSV…" onPress={() => void exportCsv()} />
         </Row>
         <Row anchor="passwords.managerApps" description={passwordManagerAppsNote()} />
+        <NoKeyringRow protection={protection} />
       </Group>
 
       {!unlocked ? (

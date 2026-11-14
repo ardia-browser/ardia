@@ -93,6 +93,7 @@ export type EngineCalls = {
 
   "passwords.list": [Profile, { passwords: SavedPassword[] }];
   "passwords.unlock": [Profile, { unlocked: boolean }];
+  "passwords.protection": [Profile, { backend: string; keyring: boolean }];
   "passwords.reveal": [Profile & { origin: string; username: string }, { password: string | null }];
   "passwords.remove": [Profile & { origin: string; username: string }, { ok: true }];
   "passwords.neverSaveOrigins": [Profile, { origins: string[] }];

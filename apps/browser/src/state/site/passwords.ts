@@ -6,6 +6,7 @@ export {
   getNeverSavePasswordOrigins,
   getPassword,
   listPasswords,
+  passwordProtection,
   savePassword,
   setNeverSavePasswords,
   setPasswordAutofill,

@@ -1,3 +1,4 @@
+import { Easing } from "react-native";
 import { curve, duration } from "../ui/motion";
 import { font, ink, monoFace, radius, shadow, type ShadowLevel } from "../ui/tokens";
 
@@ -88,7 +89,8 @@ export const SWIPE_MOTION = {
 
 export const SWIPE_PILL_SPRING = { response: 0.27, damping: 0.9 } as const;
 
-export const DOCK_SPRING = { response: 0.215, damping: 0.79 } as const;
+export const DOCK_SLIDE_CURVE = [0.7, 1, 0.5, 1] as const;
+export const DOCK_SLIDE = { duration: 160, easing: Easing.bezier(...DOCK_SLIDE_CURVE) } as const;
 
 export const ARC_PEEK_SPRING = { response: 0.18, damping: 0.8 } as const;
 export const ARC_PEEK_OUT_MS = 150;

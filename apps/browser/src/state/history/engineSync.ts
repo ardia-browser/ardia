@@ -7,7 +7,7 @@ import { engineProfile, isIncognitoProfile } from "../browser/model";
 import type { HistoryEntry } from "../browser/types";
 import { isWebPageUrl } from "../../lib/url";
 import { engineProfiles } from "../profiles/engineProfiles";
-import { onProfilesOpened, openedEngineProfiles } from "../profiles/profileLoading";
+import { onProfilesOpened, onProfilesUnloaded, openedEngineProfiles } from "../profiles/profileLoading";
 import { migrateLegacyFile } from "../app/legacyFiles";
 
 const LEGACY_FILE = "history.json";
@@ -222,11 +222,15 @@ export function startHistory() {
   const opened = onProfilesOpened(() => {
     if (!moving) loadAll(store());
   });
+  const unloaded = onProfilesUnloaded((engines) => {
+    for (const engine of engines) loaded.delete(engine);
+  });
   return () => {
     stopped = true;
     events.remove();
     stop();
     opened();
+    unloaded();
     pending = [];
     loaded.clear();
     legacyMoved = false;

@@ -171,6 +171,13 @@ export const toolRows = {
           description: "A profile, its extensions and its data load the first time you open it, not all at launch, so Ardia uses less memory. Takes effect the next time you open Ardia.",
           keywords: ["profiles", "memory", "ram", "startup", "launch", "extensions", "lazy", "defer", "performance"],
         },
+        unloadProfilesAfter: {
+          advanced: true,
+          title: "Unload inactive profiles",
+          description: "A profile no window has shown for this long is unloaded with its extensions once its tabs can sleep, and loads again when you open it. Tabs playing sound, holding a form you started or downloading keep it loaded. Its extensions and notifications stop until then.",
+          shown: (s) => s.memorySaver,
+          keywords: ["profiles", "unload", "idle", "inactive", "timeout", "memory", "ram", "extensions", "sleep", "performance"],
+        },
       },
     },
     {

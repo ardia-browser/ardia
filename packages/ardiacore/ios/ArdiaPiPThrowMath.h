@@ -245,19 +245,17 @@ inline Rect DragStep(Rect frame, Point delta, const Screen *screens, int count, 
   return MoveWithin(frame, delta, screens, count, home);
 }
 
-inline Rect DragTo(Rect frame, Point grab, Point pointer, const Screen *screens, int count, int home = -1) {
-  return DragStep(frame, {pointer.x - grab.x - frame.x, pointer.y - grab.y - frame.y}, screens, count, home);
+inline Point GrabbedOrigin(Point pointer, Point grab) { return {std::round(pointer.x - grab.x), std::round(pointer.y - grab.y)}; }
+
+inline Rect DragTo(Rect frame, Point pointer, Point grab, const Screen *screens, int count, int home = -1) {
+  const Point origin = GrabbedOrigin(pointer, grab);
+  return MoveWithin(frame, {origin.x - frame.x, origin.y - frame.y}, screens, count, home);
 }
 
-constexpr double kDragHoldEpsilon = 1e-6, kDragSlipTolerance = 1;
-
-inline double GrabDistance(Rect frame, Point grab, Point pointer) {
-  return std::hypot(pointer.x - grab.x - frame.x, pointer.y - grab.y - frame.y);
+inline bool HeldBack(Rect placed, Point pointer, Point grab) {
+  const Point origin = GrabbedOrigin(pointer, grab);
+  return std::fabs(placed.x - origin.x) > 1e-6 || std::fabs(placed.y - origin.y) > 1e-6;
 }
-
-inline bool DragHeld(Rect requested, Point grab, Point pointer) { return GrabDistance(requested, grab, pointer) > kDragHoldEpsilon; }
-
-inline bool DragSlipped(Rect shown, Point grab, Point pointer) { return GrabDistance(shown, grab, pointer) > kDragSlipTolerance; }
 
 struct SpringState {
   double offset, velocity;

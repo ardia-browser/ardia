@@ -25,6 +25,7 @@ import { closeFolderPanel } from "../../state/sidebar/tileFolderUi";
 import { openSidebarMenu } from "../../state/sidebar/menus";
 import { GLOW_ROOM, rowPitch, type SidebarGeometry } from "./pageLayout";
 import { SidebarPage } from "./SidebarPage";
+import { SidebarTextScope } from "./SidebarTextScope";
 import { SidebarRowLookContext, useSidebarRowLookSource } from "./rowLook";
 import { useRevealTabs } from "./useRevealTabs";
 
@@ -155,8 +156,10 @@ export function Sidebar({ width }: { width: number }) {
                 <PinSlotZone />
               )
             ) : null}
-            <FolderPanel windowId={windowId} />
-            {ghost ? <DragGhost ghost={ghost} /> : null}
+            <SidebarTextScope>
+              <FolderPanel windowId={windowId} />
+              {ghost ? <DragGhost ghost={ghost} /> : null}
+            </SidebarTextScope>
           </SidebarDropArea>
           </SidebarRowLookContext.Provider>
         );

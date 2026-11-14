@@ -36,6 +36,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)deleteProfileData:(NSString *)profile completion:(void (^)(NSArray<NSString *> *remaining))completion
     NS_SWIFT_NAME(deleteProfileData(_:completion:));
 + (void)releaseProfile:(NSString *)profile;
++ (NSDictionary<NSString *, id> *)unloadIdleProfile:(NSString *)profile NS_SWIFT_NAME(unloadIdleProfile(_:));
 @property(class, readonly) NSArray<NSString *> *loadedProfiles;
 + (BOOL)stopCapture:(NSString *)tabId NS_SWIFT_NAME(stopCapture(tabId:));
 + (BOOL)showAutofillSuggestions:(NSString *)tabId passwords:(BOOL)passwords NS_SWIFT_NAME(showAutofillSuggestions(tabId:passwords:));

@@ -14,7 +14,7 @@ import { appInfo, percentile } from "./transport";
 import { reportNativeCrashes } from "./errors";
 import { emitJourneys, journeysEnding, startJourneys } from "./journeys";
 import { commandBarPlacementLabel, takeExternalAppRequests, takeOmniboxLatency, takeSearchSuggests } from "./track";
-import { contextProperties, contextSamples, hardwareProperties, noteAppMemory, recordContext, startContextSamples, stopContextSamples, watchHoverLost } from "./diagnostics";
+import { contextProperties, contextSamples, hardwareProperties, noteAppMemory, recordContext, takeMainProcessWork, startContextSamples, stopContextSamples, watchHoverLost } from "./diagnostics";
 import { emitTabPresses } from "./tabPresses";
 import { switcherSwitchProperties } from "./switcherPresses";
 import type { SavedContext } from "./savedContext";
@@ -36,7 +36,12 @@ import { takeLittleArdiaEscapeCloses } from "./littleArdiaEscapes";
 import { takeLiveCompletedTabsClosed } from "./liveCompletedTabs";
 import { takeLiveHideCounts } from "./liveHides";
 import { takeTidyTabsCounts } from "./tidyTabsCounts";
+import { takeMediaCardCounts } from "./mediaCardCounts";
+import { takeBookmarkMoveCounts } from "./bookmarkMoves";
+import { takeDownloadsPanelCounts } from "./downloadsPanelCounts";
+import { takeDownloadWork } from "./downloadWork";
 import { airTrafficSnapshot, takeAirTrafficCounts } from "./airTrafficCounts";
+import { takeDockCounts } from "./dockCounts";
 import { takeCliCounts } from "./cliCounts";
 import { keptTabsAdded } from "./keptTabs";
 import { takeTabStripCounts } from "./tabStripCounts";
@@ -46,29 +51,25 @@ import { takeSidebarResizeCounts } from "./sidebarResizeCounts";
 import { takeBookmarkletCounts } from "./bookmarkletCounts";
 
 const HOUR_MS = 60 * 60_000;
-const FIRST_MEMORY_SAMPLE_MS = 10 * 60_000;
-const FIRST_SETTINGS_SNAPSHOT_MS = 2 * 60_000;
+const FIRST_MEMORY_SAMPLE_MS = 10 * 60_000, FIRST_SETTINGS_SNAPSHOT_MS = 2 * 60_000;
 const EXTENSION_SETTLE_MS = 20_000;
 const LOCAL_STORE_LAUNCH_DELAY_MS = 20_000;
-
 const startedAt = Date.now();
-const NO_COUNTS = { tabs: 0, windows: 0, fullScreens: 0, sidebarPeeks: 0, sidebarPeekBounces: 0, cliTabEdits: 0, cliGroupEdits: 0, cliEditFailures: 0, popoverPressCloses: 0, popoverEscapeCloses: 0, siteAutoplayBlocks: 0, siteAutoplayAllows: 0, siteSettingsOpens: 0, tabSwitcherOpens: 0, tabSwitcherClosedLeftOut: 0, tabSwitcherUnseenLast: 0, approvalNoticesDeferred: 0, reopenedPages: 0, reopenedPagesWithBack: 0, backClosesToOpener: 0, groupTabsKept: 0, groupHeaderHides: 0, peekPinchOpens: 0, peekPinchCloses: 0, littleArdiaPinchOpens: 0, littleArdiaPinchCloses: 0, littleArdiaSwipeCloses: 0, littleArdiaSwipeCloseCancels: 0, externalLinksTabSettingOff: 0, externalLinksTabSettingOn: 0, externalLinksLittleSettingOn: 0, externalLinksLittleSettingOff: 0, autoHideTabsToggles: 0, windowsRealignedToAutoHideTabs: 0, tabStripPeeks: 0, tabStripMenuOpens: 0, tabStripOverflowOpens: 0, tabPeeksWithAutoHideOff: 0, toolbarScrollHides: 0, toolbarScrollHideBounces: 0, cardResizeLayouts: 0, cardResizeLayoutsApplied: 0, importedPinnedRows: 0, importedSplits: 0, importedSpaces: 0, importedContainerSpaces: 0, importedDataProfiles: 0, importedEssentials: 0, splitPaneCloses: 0, splitViewCloses: 0, windowCloseTabsKept: 0, sharesPickedTab: 0, sharesPickedWindow: 0, sharesPickedScreen: 0, screenRecordingMissing: 0, screenRecordingAsked: 0, extensionInstallPrompts: 0, privateWindowExtensionOpens: 0, emptyTabSidebarExtensionPresses: 0, contentBlockerUnavailable: 0, contentBlockerWriteFailures: 0, newTabNoticesShown: 0, newTabNoticePresses: 0, statusBubbleTopShows: 0, loadingFieldShows: 0, loadingPillShows: 0, loadingPillLongShows: 0, loadingPillSkips: 0, dockReopens: 0, dockReopensPastFloating: 0, sidebarMotionMerges: 0, webKitPagesKeptHidden: 0, newTabBarKeeps: 0, newTabBarLaunchShows: 0, newTabReuses: 0, barSplitOpens: 0, barSplitFullTabs: 0, settingsSearchKeyboardReveals: 0, settingsSearchClickReveals: 0, settingsSearches: 0, settingsSearchesEmpty: 0, settingsSearchTopPicks: 0, settingsSearchTop3Picks: 0, settingsSearchLowerPicks: 0, autoPictureInPictureKept: 0, autoPictureInPictureStayedOnAppSwitch: 0, selectionCloseKeys: 0, selectionCloseKeyTabs: 0, onboardingImports: 0, onboardingHeliumImports: 0, onboardingGlassPicks: 0, onboardingClassicPicks: 0, onboardingTintedGlassPicks: 0, onboardingStepsCompleted: 0, onboardingStepsSkipped: 0, onboardingRedoOpened: 0, onboardingRedoCompleted: 0, onboardingRedoCancelled: 0, updateChannelSwitches: 0, updateChannelSwitchOffers: 0, updateChannelSwitchUpToDate: 0, updateChannelSwitchCheckFailures: 0, cleanUpSuggestionShows: 0, cleanUpSuggestionOnce: 0, cleanUpSuggestionDaily: 0, cleanUpSuggestionNotNow: 0, cleanUpSuggestionNeverAgain: 0, cleanUpUndos: 0, linkTabsMatched: 0, linkTabWaitsSkipped: 0, linkTabWaitTimeouts: 0, historySearchFocusRequests: 0, historySearchFocused: 0 };
+const NO_COUNTS = { tabs: 0, windows: 0, fullScreens: 0, sidebarPeeks: 0, sidebarPeekBounces: 0, cliTabEdits: 0, cliGroupEdits: 0, cliEditFailures: 0, popoverPressCloses: 0, popoverEscapeCloses: 0, siteAutoplayBlocks: 0, siteAutoplayAllows: 0, siteSettingsOpens: 0, tabSwitcherOpens: 0, tabSwitcherClosedLeftOut: 0, tabSwitcherUnseenLast: 0, approvalNoticesDeferred: 0, reopenedPages: 0, reopenedPagesWithBack: 0, backClosesToOpener: 0, groupTabsKept: 0, groupHeaderHides: 0, peekPinchOpens: 0, peekPinchCloses: 0, littleArdiaPinchOpens: 0, littleArdiaPinchCloses: 0, littleArdiaSwipeCloses: 0, littleArdiaSwipeCloseCancels: 0, externalLinksTabSettingOff: 0, externalLinksTabSettingOn: 0, externalLinksLittleSettingOn: 0, externalLinksLittleSettingOff: 0, autoHideTabsToggles: 0, windowsRealignedToAutoHideTabs: 0, tabStripPeeks: 0, tabStripMenuOpens: 0, tabStripOverflowOpens: 0, tabPeeksWithAutoHideOff: 0, toolbarScrollHides: 0, toolbarScrollHideBounces: 0, cardResizeLayouts: 0, cardResizeLayoutsApplied: 0, importedPinnedRows: 0, importedSplits: 0, importedSpaces: 0, importedContainerSpaces: 0, importedDataProfiles: 0, importedEssentials: 0, splitPaneCloses: 0, splitViewCloses: 0, windowCloseTabsKept: 0, sharesPickedTab: 0, sharesPickedWindow: 0, sharesPickedScreen: 0, screenRecordingMissing: 0, screenRecordingAsked: 0, extensionInstallPrompts: 0, privateWindowExtensionOpens: 0, emptyTabSidebarExtensionPresses: 0, contentBlockerUnavailable: 0, contentBlockerWriteFailures: 0, newTabNoticesShown: 0, newTabNoticePresses: 0, statusBubbleTopShows: 0, loadingFieldShows: 0, loadingPillShows: 0, loadingPillLongShows: 0, loadingPillSkips: 0, dockReopens: 0, dockReopensPastFloating: 0, sidebarMotionMerges: 0, webKitPagesKeptHidden: 0, newTabBarKeeps: 0, newTabBarLaunchShows: 0, newTabReuses: 0, newTabLingers: 0, newTabLeavesForWebKit: 0, barSplitOpens: 0, barSplitFullTabs: 0, settingsSearchKeyboardReveals: 0, settingsSearchClickReveals: 0, settingsSearches: 0, settingsSearchesEmpty: 0, settingsSearchTopPicks: 0, settingsSearchTop3Picks: 0, settingsSearchLowerPicks: 0, autoPictureInPictureKept: 0, autoPictureInPictureStayedOnAppSwitch: 0, selectionCloseKeys: 0, selectionCloseKeyTabs: 0, onboardingImports: 0, onboardingHeliumImports: 0, onboardingGlassPicks: 0, onboardingClassicPicks: 0, onboardingTintedGlassPicks: 0, onboardingStepsCompleted: 0, onboardingStepsSkipped: 0, onboardingRedoOpened: 0, onboardingRedoCompleted: 0, onboardingRedoCancelled: 0, updateChannelSwitches: 0, updateChannelSwitchOffers: 0, updateChannelSwitchUpToDate: 0, updateChannelSwitchCheckFailures: 0, cleanUpSuggestionShows: 0, cleanUpSuggestionOnce: 0, cleanUpSuggestionDaily: 0, cleanUpSuggestionNotNow: 0, cleanUpSuggestionNeverAgain: 0, cleanUpUndos: 0, linkTabsMatched: 0, linkTabWaitsSkipped: 0, linkTabWaitTimeouts: 0, historySearchFocusRequests: 0, historySearchFocused: 0 };
 let counts = { ...NO_COUNTS }, countsSince = Date.now();
 
 function emitCounts() {
-  const snapshots = takeSnapshotWrites(), tornOffKept = takeTornOffWindowsKeptAutoHide(), switcherOpensInWebKit = takeTabSwitcherOpensInWebKit(), stuckDrags = takeStuckDragCounts(), urlCopies = takeUrlCopyCounts(), configProblemToasts = takeConfigProblemToastCounts(), stripHoverCards = takeStripHoverCardCounts(), externalAppRequests = takeExternalAppRequests(), tabSleeps = takeTabSleepCounts(), syncCodes = takeSyncCodeCounts(), escapeCloses = takeLittleArdiaEscapeCloses(), liveCompletedTabsClosed = takeLiveCompletedTabsClosed(), liveHides = takeLiveHideCounts(), tidyTabs = takeTidyTabsCounts(), webKitFaults = takeWebKitMediaFaultCounts(), airTraffic = takeAirTrafficCounts(), cliCounts = takeCliCounts(), tabStrip = takeTabStripCounts(), sidebarResizes = takeSidebarResizeCounts(), bookmarklets = takeBookmarkletCounts(), centeredResizes = takeCenteredResizeCounts(), fairPlay = takeFairPlayCounts();
-  const { nothingPlaying: autoPictureInPictureNothingPlaying, backToTab, clickSkips, drags: pipDrags } = takePictureInPictureCounts();
+  const snapshots = takeSnapshotWrites(), tornOffKept = takeTornOffWindowsKeptAutoHide(), switcherOpensInWebKit = takeTabSwitcherOpensInWebKit(), stuckDrags = takeStuckDragCounts(), urlCopies = takeUrlCopyCounts(), configProblemToasts = takeConfigProblemToastCounts(), stripHoverCards = takeStripHoverCardCounts(), externalAppRequests = takeExternalAppRequests(), tabSleeps = takeTabSleepCounts(), syncCodes = takeSyncCodeCounts(), escapeCloses = takeLittleArdiaEscapeCloses(), liveCompletedTabsClosed = takeLiveCompletedTabsClosed(), liveHides = takeLiveHideCounts(), tidyTabs = takeTidyTabsCounts(), mediaCard = takeMediaCardCounts(), bookmarkMoves = takeBookmarkMoveCounts(), downloadsPanel = takeDownloadsPanelCounts(), downloadWork = takeDownloadWork(), webKitFaults = takeWebKitMediaFaultCounts(), airTraffic = takeAirTrafficCounts(), cliCounts = takeCliCounts(), dock = takeDockCounts(), tabStrip = takeTabStripCounts(), sidebarResizes = takeSidebarResizeCounts(), bookmarklets = takeBookmarkletCounts(), centeredResizes = takeCenteredResizeCounts(), fairPlay = takeFairPlayCounts(), focusFeatures = takeFocusFeatureCounts();
+  const { nothingPlaying: autoPictureInPictureNothingPlaying, backToTab, drags: pipDrags, clickSkips } = takePictureInPictureCounts();
   counts.autoHideTabsToggles += takeAutoHideTabsChoices();
-  const focusFeatures = takeFocusFeatureCounts();
-  if (Object.values(counts).some(Boolean) || tornOffKept > 0 || Object.values(tabSleeps).some(Boolean) || Object.values(syncCodes).some(Boolean) || Object.values(stuckDrags).some(Boolean) || Object.values(escapeCloses).some(Boolean) || Object.values(liveHides).some(Boolean) || Object.values(tidyTabs).some(Boolean) || Object.values(tabStrip).some(Boolean) || Object.values(sidebarResizes).some(Boolean) || Object.values(bookmarklets).some(Boolean) || Object.keys(webKitFaults).length || Object.values(airTraffic).some(Boolean) || Object.values(cliCounts).some(Boolean) || Object.values(externalAppRequests).some(Boolean) || urlCopies.url_copies || configProblemToasts.config_problem_toasts || configProblemToasts.config_problem_toast_dismissals || stripHoverCards.tab_strip_hover_cards || liveCompletedTabsClosed || snapshots.count || switcherOpensInWebKit || autoPictureInPictureNothingPlaying || backToTab.chromium || backToTab.webkit || clickSkips.back || clickSkips.ahead || centeredResizes.window_centered_resizes || Object.values(fairPlay).some(Boolean) || Object.values(focusFeatures).some(Boolean) || pipDrags.total) {
+  if (Object.values(counts).some(Boolean) || Object.values(dock).some(Boolean) || tornOffKept > 0 || Object.values(tabSleeps).some(Boolean) || Object.values(syncCodes).some(Boolean) || Object.values(stuckDrags).some(Boolean) || Object.values(escapeCloses).some(Boolean) || Object.values(liveHides).some(Boolean) || Object.values(tidyTabs).some(Boolean) || Object.values(mediaCard).some(Boolean) || bookmarkMoves.bookmark_moves || Object.values(downloadsPanel).some(Boolean) || Object.values(downloadWork).some(Boolean) || Object.values(tabStrip).some(Boolean) || Object.values(sidebarResizes).some(Boolean) || Object.values(bookmarklets).some(Boolean) || Object.keys(webKitFaults).length || Object.values(airTraffic).some(Boolean) || Object.values(cliCounts).some(Boolean) || Object.values(externalAppRequests).some(Boolean) || urlCopies.url_copies || configProblemToasts.config_problem_toasts || configProblemToasts.config_problem_toast_dismissals || stripHoverCards.tab_strip_hover_cards || liveCompletedTabsClosed || snapshots.count || switcherOpensInWebKit || autoPictureInPictureNothingPlaying || backToTab.chromium || backToTab.webkit || pipDrags.moved || clickSkips.back || clickSkips.ahead || centeredResizes.window_centered_resizes || Object.values(fairPlay).some(Boolean) || Object.values(focusFeatures).some(Boolean)) {
     capture("usage_counts", {
-      tabs_opened: counts.tabs,
-      windows_opened: counts.windows,
+      tabs_opened: counts.tabs, windows_opened: counts.windows,
       full_screens_entered: counts.fullScreens,
       sidebar_peeks: counts.sidebarPeeks,
-      sidebar_peek_bounces: counts.sidebarPeekBounces,
+      sidebar_peek_bounces: counts.sidebarPeekBounces, ...dock,
       cli_tab_edits: counts.cliTabEdits, cli_group_edits: counts.cliGroupEdits, cli_edit_failures: counts.cliEditFailures, ...cliCounts,
-      ...focusFeatures, ...sidebarResizes, ...bookmarklets, ...centeredResizes, ...stuckDrags, ...urlCopies, ...configProblemToasts, ...stripHoverCards, ...externalAppRequests, ...webKitFaults, ...tabSleeps, ...syncCodes, ...liveHides, ...tidyTabs, ...airTraffic, ...tabStrip, ...fairPlay, live_completed_tabs_closed: liveCompletedTabsClosed,
+      ...focusFeatures, ...sidebarResizes, ...bookmarklets, ...centeredResizes, ...stuckDrags, ...urlCopies, ...configProblemToasts, ...stripHoverCards, ...externalAppRequests, ...webKitFaults, ...tabSleeps, ...syncCodes, ...liveHides, ...tidyTabs, ...mediaCard, ...bookmarkMoves, ...downloadsPanel, ...downloadWork, ...airTraffic, ...tabStrip, ...fairPlay, live_completed_tabs_closed: liveCompletedTabsClosed,
       popover_press_closes: counts.popoverPressCloses, popover_escape_closes: counts.popoverEscapeCloses, site_autoplay_blocks: counts.siteAutoplayBlocks, site_autoplay_allows: counts.siteAutoplayAllows, site_settings_opens_from_site_controls: counts.siteSettingsOpens,
       tab_switcher_opens: counts.tabSwitcherOpens,
       tab_switcher_opens_in_webkit: switcherOpensInWebKit,
@@ -91,7 +92,7 @@ function emitCounts() {
       split_view_closes: counts.splitViewCloses,
       window_close_tabs_kept: counts.windowCloseTabsKept,
       sync_snapshots_written: snapshots.count,
-      sync_snapshot_kb_written: Math.round(snapshots.bytes / 1024), auto_pip_nothing_playing: autoPictureInPictureNothingPlaying, pip_back_to_tab: backToTab.chromium, pip_back_to_tab_webkit: backToTab.webkit, pip_click_skips_back: clickSkips.back, pip_click_skips_ahead: clickSkips.ahead, pip_drags: pipDrags.total, pip_drags_held_at_edge: pipDrags.held, pip_drags_slipped: pipDrags.slipped,
+      sync_snapshot_kb_written: Math.round(snapshots.bytes / 1024), auto_pip_nothing_playing: autoPictureInPictureNothingPlaying, pip_back_to_tab: backToTab.chromium, pip_back_to_tab_webkit: backToTab.webkit, pip_drags: pipDrags.moved, pip_drags_off_cursor: pipDrags.offCursor, pip_drags_slow_move: pipDrags.slowMove, pip_click_skips_back: clickSkips.back, pip_click_skips_ahead: clickSkips.ahead,
       toolbar_scroll_hides: counts.toolbarScrollHides,
       toolbar_scroll_hide_bounces: counts.toolbarScrollHideBounces,
       card_resize_layouts: counts.cardResizeLayouts,
@@ -109,7 +110,7 @@ function emitCounts() {
       new_tab_notices_shown: counts.newTabNoticesShown,
       new_tab_notice_presses: counts.newTabNoticePresses,
       status_bubble_top_shows: counts.statusBubbleTopShows, loading_field_shows: counts.loadingFieldShows, loading_pill_shows: counts.loadingPillShows, loading_pill_long_shows: counts.loadingPillLongShows, loading_pill_skips: counts.loadingPillSkips,
-      new_tab_bar_keeps: counts.newTabBarKeeps, new_tab_bar_launch_shows: counts.newTabBarLaunchShows, new_tab_reuses: counts.newTabReuses, bar_split_opens: counts.barSplitOpens, bar_split_full_tabs: counts.barSplitFullTabs,
+      new_tab_bar_keeps: counts.newTabBarKeeps, new_tab_bar_launch_shows: counts.newTabBarLaunchShows, new_tab_reuses: counts.newTabReuses, new_tab_lingers: counts.newTabLingers, new_tab_leaves_for_webkit: counts.newTabLeavesForWebKit, bar_split_opens: counts.barSplitOpens, bar_split_full_tabs: counts.barSplitFullTabs,
       dock_reopens: counts.dockReopens, dock_reopens_past_floating: counts.dockReopensPastFloating, webkit_pages_kept_hidden: counts.webKitPagesKeptHidden,
       settings_search_keyboard_reveals: counts.settingsSearchKeyboardReveals, settings_search_click_reveals: counts.settingsSearchClickReveals, settings_searches: counts.settingsSearches, settings_searches_empty: counts.settingsSearchesEmpty, settings_search_top_picks: counts.settingsSearchTopPicks, settings_search_top3_picks: counts.settingsSearchTop3Picks, settings_search_lower_picks: counts.settingsSearchLowerPicks,
       auto_pip_kept_visible: counts.autoPictureInPictureKept, auto_pip_stayed_on_app_switch: counts.autoPictureInPictureStayedOnAppSwitch, selection_close_keys: counts.selectionCloseKeys, selection_close_key_tabs: counts.selectionCloseKeyTabs,
@@ -161,7 +162,7 @@ export function noteCliEdits(tabEdits: number, groupEdits: number, failures: num
   counts.cliEditFailures += failures;
 }
 
-const OVERLAY_COUNTS = { newTabShown: "newTabNoticesShown", newTabPressed: "newTabNoticePresses", statusAtTop: "statusBubbleTopShows", newTabBarKept: "newTabBarKeeps", newTabBarOnLaunch: "newTabBarLaunchShows", newTabReused: "newTabReuses", loadingField: "loadingFieldShows", loadingPill: "loadingPillShows", loadingPillLong: "loadingPillLongShows", loadingSkipped: "loadingPillSkips" } as const;
+const OVERLAY_COUNTS = { newTabShown: "newTabNoticesShown", newTabPressed: "newTabNoticePresses", statusAtTop: "statusBubbleTopShows", newTabBarKept: "newTabBarKeeps", newTabBarOnLaunch: "newTabBarLaunchShows", newTabReused: "newTabReuses", newTabLingered: "newTabLingers", newTabLeftForWebKit: "newTabLeavesForWebKit", loadingField: "loadingFieldShows", loadingPill: "loadingPillShows", loadingPillLong: "loadingPillLongShows", loadingSkipped: "loadingPillSkips" } as const;
 export const notePageOverlay = (event: keyof typeof OVERLAY_COUNTS) => void counts[OVERLAY_COUNTS[event]]++;
 
 export const notePopoverClosed = (by: "press" | "escape") => void counts[by === "press" ? "popoverPressCloses" : "popoverEscapeCloses"]++;
@@ -210,7 +211,6 @@ export const noteSettingsSearch = (event: "started" | "empty") => void counts[ev
 export const noteTabStripPeek = () => void (counts.tabStripPeeks++, !useBrowser.getState().settings.autoHideTabs && counts.tabPeeksWithAutoHideOff++);
 
 export const noteTabStripMenu = (menu: "tabs" | "overflow") => void counts[menu === "tabs" ? "tabStripMenuOpens" : "tabStripOverflowOpens"]++;
-
 const size = (o: object) => Object.keys(o).length;
 
 function watchStore() {
@@ -301,7 +301,7 @@ async function sampleMemory() {
     }
     if (!total) return;
     noteAppMemory(mb(total));
-    capture("perf_memory", {
+    capture("perf_memory", { ...(await takeMainProcessWork()),
       total_mb: mb(total),
       browser_mb: mb(browser),
       gpu_mb: mb(gpu),

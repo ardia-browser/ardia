@@ -57,6 +57,11 @@ NSString *ExtensionPath() {
 
 void FollowDefault(NSArray<NSString *> *profiles, void (^done)(NSString *error));
 
+NSMapTable<NSString *, ArdiaCoreProfile *> *LoadedInto() {
+  static NSMapTable *profiles = [NSMapTable strongToWeakObjectsMapTable];
+  return profiles;
+}
+
 void WhenDefaultSettled(void (^then)(void));
 
 }
@@ -78,6 +83,7 @@ void LoadIntoProfile(NSString *profile, void (^then)(NSString *error)) {
         return then(@"not loaded");
       }
       [LoadedProfiles() addObject:profile];
+      [LoadedInto() setObject:p forKey:profile];
       then(nil);
     });
   };
@@ -116,8 +122,10 @@ NSString *const kFollow =
 
 void ForgetGoneProfiles() {
   for (NSString *profile in LoadedProfiles().array) {
-    if (ardia_host::LoadedProfile(profile) && !ardia_host::IsDeletedProfile(profile)) continue;
+    ArdiaCoreProfile *now = ardia_host::LoadedProfile(profile);
+    if (now && now == [LoadedInto() objectForKey:profile] && !ardia_host::IsDeletedProfile(profile)) continue;
     [LoadedProfiles() removeObject:profile];
+    [LoadedInto() removeObjectForKey:profile];
     [Pages()[profile] fail:@"profile gone"];
     [Pages() removeObjectForKey:profile];
   }
@@ -183,6 +191,7 @@ void Inherit(NSString *profile, int attempt, void (^first)(NSString *error)) {
 }
 
 void LoadHeld(NSString *profile) {
+  ForgetGoneProfiles();
   ArdiaCoreProfile *p = ardia_host::LoadedProfile(profile);
   const bool isDefault = profile.length == 0;
   const bool firstLoad = p && ![LoadedProfiles() containsObject:profile];

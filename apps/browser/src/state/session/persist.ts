@@ -11,6 +11,8 @@ import { closedWindowEntry, MAX_CLOSED_WINDOWS } from "../pins/closedTabs";
 import { isPeekTab } from "../peek/peek";
 import type { BrowserWindow, ClosedWindow, ParkedPins, SplitView, Tab } from "../browser/types";
 import { downloadSession } from "../downloads/downloadsSlice";
+import { anyDownloadProgress, withLiveProgress } from "../downloads/progress";
+import { noteDownloadHistoryWrite } from "../telemetry/downloadWork";
 import { parseSaved, versionedJson, unchanged, type Migrations, type SavedObject } from "../../lib/savedDocument";
 import { sessionWithCleanUpMinutes } from "../settings/cleanUpAfter";
 import { parseSettingsMeta, sessionWithNewTabLinksInLittleArdia, sessionWithSettingsMeta, sessionWithUnreadCountsOffByDefault } from "../settings/settings";
@@ -33,6 +35,7 @@ const downloadsWithStagingPathOnly = (doc: SavedObject): SavedObject => ({
       })
     : doc.downloads,
 });
+const DOWNLOADS_DOCUMENT = "downloads.json";
 const DOWNLOADS_VERSION = 3;
 const DOWNLOADS_MIGRATIONS: Migrations = { 0: unchanged, 1: unchanged, 2: downloadsWithStagingPathOnly };
 
@@ -107,11 +110,11 @@ const SESSION_FIELDS = {
 
 const DOWNLOADS_FIELDS = {
   downloads: field(["downloads", "profiles"], (s) =>
-    s.downloads.filter((d) => downloadSession(s, d) === null).map((d) => (d.state === "downloading" ? { ...d, state: "failed" } : d)),
+    withLiveProgress(s.downloads.filter((d) => downloadSession(s, d) === null)).map((d) => (d.state === "downloading" ? { ...d, state: "failed" } : d)),
   ),
 };
 
-const DOCS: Doc[] = [doc("downloads.json", DOWNLOADS_VERSION, DOWNLOADS_FIELDS), doc(SESSION_DOCUMENT, SESSION_VERSION, SESSION_FIELDS)];
+const DOCS: Doc[] = [doc(DOWNLOADS_DOCUMENT, DOWNLOADS_VERSION, DOWNLOADS_FIELDS), doc(SESSION_DOCUMENT, SESSION_VERSION, SESSION_FIELDS)];
 
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter(isString) : []);
 const has = (o: SavedObject, keys: readonly string[]) => keys.every((k) => isString(o[k]));
@@ -215,7 +218,7 @@ function forgetStaging(id: string) {
 }
 
 function savedDownloads(saved: Pick<BrowserState, "profiles">): Download[] {
-  const raw = parseSaved(read("downloads.json"), DOWNLOADS_VERSION, DOWNLOADS_MIGRATIONS);
+  const raw = parseSaved(read(DOWNLOADS_DOCUMENT), DOWNLOADS_VERSION, DOWNLOADS_MIGRATIONS);
   const downloads = rows<Download>(raw?.downloads, (d) => isString(d.id) && isString(d.state));
   droppedPrivateDownloads = downloads.some((d) => downloadSession(saved, d) !== null);
   return downloads.filter((d) => downloadSession(saved, d) === null).map((d, i) => {
@@ -267,10 +270,12 @@ export function loadSession({ restoreSession }: LaunchOverrides = {}): (HydrateD
 let flush: () => void = () => {};
 let unstaged: () => boolean = () => false;
 let resume: () => void = () => {};
+let stageDownloads: () => void = () => {};
 let frozen = false;
 
 export function flushPersistence({ final = false } = {}): boolean {
   const saving = !frozen;
+  if (final && anyDownloadProgress()) stageDownloads();
   flush();
   if (final && !frozen) saveLaunchLook(useBrowser.getState());
   if (final) frozen = true;
@@ -317,7 +322,9 @@ export function startPersistence(overrides: LaunchOverrides = {}) {
     const s = useBrowser.getState();
     for (const doc of DOCS.filter((d) => dirty.has(d))) {
       const json = doc.json(s);
-      if (lastJson.get(doc.name) === json || write(doc.name, json)) {
+      const saved = lastJson.get(doc.name) === json;
+      if (saved || write(doc.name, json)) {
+        if (!saved && doc.name === DOWNLOADS_DOCUMENT) noteDownloadHistoryWrite(json.length);
         lastJson.set(doc.name, json);
         dirty.delete(doc);
       }
@@ -325,6 +332,7 @@ export function startPersistence(overrides: LaunchOverrides = {}) {
     if (dirty.size) timer = setTimeout(save, SAVE_DELAY_MS);
   };
   flush = save;
+  stageDownloads = () => dirty.add(DOCS.find((d) => d.name === DOWNLOADS_DOCUMENT)!);
   unstaged = () => [...dirty].some((d) => d.name === SESSION_DOCUMENT);
 
   const check = (s: BrowserState, initial = false) => {
@@ -341,7 +349,7 @@ export function startPersistence(overrides: LaunchOverrides = {}) {
   check(useBrowser.getState(), true);
   if (droppedPrivateDownloads) {
     droppedPrivateDownloads = false;
-    dirty.add(DOCS.find((d) => d.name === "downloads.json")!);
+    dirty.add(DOCS.find((d) => d.name === DOWNLOADS_DOCUMENT)!);
     timer ??= setTimeout(save, SAVE_DELAY_MS);
   }
   if (realignedAtLaunch) {

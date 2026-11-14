@@ -1,5 +1,6 @@
 import { hoverHeld } from "../app/transientUi";
-import { sidebarSliding } from "../windows/dockMotion";
+import { noteTabHoverCardShown } from "../telemetry/hoverCardCounts";
+import { sidebarSliding, useDockMotion } from "../windows/dockMotion";
 import { cardReach, pointInRect, type Point, type Rect } from "./hoverAim";
 import { measureRow, setSidebarUi, sidebarUi, type Target } from "./sidebarUi";
 
@@ -8,7 +9,16 @@ type Row = { windowId: string; id: string };
 type Waiting = { windowId: string; target: Target | null; arrive: () => void };
 type Card = { frame: Rect | null; pointerOn: boolean; exit: Point | null; waiting: Waiting | null; held: boolean };
 
-const DELAY_MS = { show: 500, hide: 160, aim: 200 };
+const DELAY_MS = { show: 800, hide: 160, aim: 200 };
+const EXIT_SLOP = 1;
+const PEEK_ARRIVAL_MS = 400;
+const peekArrivedAt = new Map<string, number>();
+useDockMotion.subscribe((m, prev) => {
+  if (m.peeks === prev.peeks) return;
+  for (const id of Object.keys(m.peeks)) if (!(id in prev.peeks)) peekArrivedAt.set(id, Date.now());
+  for (const id of [...peekArrivedAt.keys()]) if (!(id in m.peeks)) peekArrivedAt.delete(id);
+});
+const sliding = (windowId: string) => sidebarSliding(windowId) || Date.now() - (peekArrivedAt.get(windowId) ?? -Infinity) < PEEK_ARRIVAL_MS;
 const timers: Record<keyof typeof DELAY_MS, ReturnType<typeof setTimeout> | undefined> = { show: undefined, hide: undefined, aim: undefined };
 const card: Card = { frame: null, pointerOn: false, exit: null, waiting: null, held: false };
 const contentHeights = new Map<string, number>();
@@ -116,30 +126,32 @@ export function suppressHover(value: boolean) {
 
 async function show(windowId: string, target: Target, mine: number) {
   const anchor = await measureRow(windowId, target.id);
-  if (mine !== ticket || suppressed || !anchor || hoverHeld(windowId) || sidebarSliding(windowId)) return;
+  if (mine !== ticket || suppressed || !anchor || hoverHeld(windowId) || sliding(windowId)) return;
   if (card.pointerOn && sidebarUi().hover) return;
   card.exit = null;
   setSidebarUi({ hover: { windowId, ...target, anchor } });
+  if (target.kind === "tab" || target.kind === "folder") noteTabHoverCardShown();
 }
 
 export function hoverEnter(windowId: string, target: Target) {
-  if (suppressed || hoverHeld(windowId) || sidebarSliding(windowId)) return;
+  if (suppressed || hoverHeld(windowId) || sliding(windowId)) return;
   stop("show", "hide", "aim");
   card.waiting = null;
   const current = sidebarUi().hover;
   owner = { windowId, id: target.id };
   if (current?.id === target.id) return;
+  if (current && !card.held) hideCard();
   const mine = ++ticket;
-  if (current) void show(windowId, target, mine);
-  else start("show", () => void show(windowId, target, mine));
+  start("show", () => void show(windowId, target, mine));
 }
 
-export function hoverLeave(from?: unknown) {
+export function hoverLeave(from?: unknown, now = false) {
   if (card.held || (typeof from === "string" && from !== owner?.id)) return;
   owner = null;
   ticket++;
   stop("show", "hide");
-  start("hide", hideCard);
+  if (now) hideCard();
+  else start("hide", hideCard);
 }
 
 export const keepHover = () => stop("hide", "aim");
@@ -185,14 +197,24 @@ export function rowEntered(windowId: string, target: Target | null, event: Hover
 export function rowShown(windowId: string, target: Target | null) {
   underPointer = target?.id ?? null;
   if (target) hoverEnter(windowId, target);
-  else hoverLeave();
+  else hoverLeave(undefined, true);
+}
+
+function leftAwayFromCard(): boolean {
+  const hover = sidebarUi().hover;
+  if (!hover || !card.exit || !card.frame) return false;
+  const { x, y, width } = hover.anchor;
+  const cardOnRight = card.frame.x >= x + width;
+  const behind = cardOnRight ? card.exit.x <= x + EXIT_SLOP : card.exit.x >= x + width - EXIT_SLOP;
+  return behind || card.exit.y <= y + EXIT_SLOP;
 }
 
 export function rowLeft(windowId: string, target: Target | null, event: HoverPointerEvent, onPage: boolean) {
   forgetWaiting(windowId, target?.id);
   if (underPointer === target?.id) underPointer = null;
-  if (target && isShown(windowId, target.id)) card.exit = pointerIn(windowId, event);
-  if (target && onPage) hoverLeave(target.id);
+  const shownHere = !!target && isShown(windowId, target.id);
+  if (shownHere) card.exit = pointerIn(windowId, event);
+  if (target && onPage) hoverLeave(target.id, shownHere && leftAwayFromCard());
 }
 
 const pointedGroups = new Set<string>();

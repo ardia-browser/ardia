@@ -204,14 +204,15 @@ COMMANDS = {
     "scroll": "ardia browse scroll [up|down|left|right] [px] [-s <sel>] [--no-humanize]\n\nWheel scrolling with momentum, at the mouse position (moved into the page or the container first).",
     "wait": "ardia browse wait <sel|ms> [--state visible|hidden|attached|detached] | --text <t> | --url <glob> |\n"
             "  --load load|domcontentloaded|networkidle | --fn <js> [--timeout ms]\n\n--fn evaluates in the page's main world, like eval. Timeouts default to 25 s.",
-    "screenshot": "ardia browse screenshot [sel] [path] [--full] [--annotate] [--screenshot-format png|jpeg] [--screenshot-quality n]\n\n"
+    "screenshot": "ardia browse screenshot [sel] [path | --out path] [--full] [--annotate] [--screenshot-format png|jpeg] [--screenshot-quality n]\n\n"
                   "--annotate takes an interactive snapshot and draws the numbered labels onto the image (nothing is added\n"
                   "to the page). Without a path it saves under $TMPDIR/ardia-browse/screenshots.",
     "eval": "ardia browse eval <js> | -b <base64> | --stdin [--out <file>]\n\nRuns in the page's main world (the one place, with init scripts and the React hook, that does).\n"
             "--out <file> saves the whole value (JSON, or the text as is) and prints a short summary instead.",
     "get": "ardia browse get text|html|value|attr <name>|title|url|count|box|styles <sel>\n\ncdp-url works only with --port or --ws: the real URL carries Ardia's token.",
     "find": "ardia browse find <role|text|label|placeholder|alt|title|testid|first|last|nth> <value> [action] [text] [--name n] [--exact|--partial]\n\n"
-            "Actions: click (default), fill, type, check, uncheck, select, hover, focus, dblclick, text. The found element\n"
+            "Actions: click (default), fill, type, press [key] (Enter if none), check, uncheck, select, hover, focus, dblclick,\n"
+            "text. The found element\n"
             "gets the next ref, so later commands can use it.\n\n"
             "find role takes the role and accessible name the snapshot shows, in any order: `find role button\n"
             "click --name Save`, `find role button --name Save click` or `find role button Save click`. A name\n"

@@ -8,7 +8,7 @@ import { useSplitRowPanes } from "../../state/sidebar/hooks";
 import { muteTitle } from "../../state/tabs/mute";
 import { usePictureInPicture } from "../../state/media/media";
 import { HoverSlot } from "../ui/HoverSlot";
-import { ActivitySpinner, Button, Divider, FadeLabel, font, ink, OutsidePressArea, radius, space, Symbol, lineHeight, typeFace, useHover, withAlpha } from "../ui";
+import { ActivitySpinner, Button, Divider, FadeLabel, ink, OutsidePressArea, radius, sidebarFont, sidebarLineHeight, space, Symbol, typeFace, useHover, withAlpha } from "../ui";
 import { isPinnedRow, tabTitle } from "../../state/browser/model";
 import { awayFromPin, awayTitle } from "../../state/pins/organize";
 import { commitRename, endRename, startRename } from "../../state/sidebar/actions";
@@ -24,7 +24,7 @@ import { TabBadges } from "../media/TabBadges";
 import { UnreadCount } from "../unread/UnreadBadge";
 import { useTabUnread } from "../../state/tabs/unread";
 import { titleWithoutUnread } from "../../lib/unread";
-import { TAB_ROW, useSidebarTokens } from "./tokens";
+import { ROW_GLYPH, SIDEBAR_TYPE, TAB_ROW, useSidebarTokens } from "./tokens";
 import { useSidebarRowLook } from "./rowLook";
 import { rowTitleFrame, SidebarRowLabel, SidebarRowSurface } from "./SidebarRow";
 import { AwayTitleLabel } from "./AwayTitle";
@@ -124,8 +124,8 @@ export const TabRow = memo(function TabRow({
                 >
                   <Animated.View pointerEvents="none" style={pinActionScale}>
                     {resetting ? (
-                      <View style={{ width: 16, height: 16, alignItems: "center", justifyContent: "center" }}>
-                        <Symbol name="arrow.uturn.backward" size={11} weight="semibold" color={active ? theme.rowSelectedText : theme.textTab} style={{ width: 16, height: 16 }} />
+                      <View style={{ width: ROW_GLYPH.box, height: ROW_GLYPH.box, alignItems: "center", justifyContent: "center" }}>
+                        <Symbol name="arrow.uturn.backward" size={ROW_GLYPH.small} weight="semibold" color={active ? theme.rowSelectedText : theme.textTab} style={{ width: ROW_GLYPH.box, height: ROW_GLYPH.box }} />
                       </View>
                     ) : (
                       <View>
@@ -156,7 +156,7 @@ export const TabRow = memo(function TabRow({
                 onDone={(text) => (text === null ? endRename({ kind: "tab", id: tabId }) : commitRename({ kind: "tab", id: tabId }, text))}
               />
             ) : away ? (
-              <AwayTitleLabel away={away} color={titleColor} fontSize={quiet ? font.small.fontSize : font.body.fontSize} height={TAB_ROW.titleHeight} style={AWAY_FRAME} />
+              <AwayTitleLabel away={away} color={titleColor} fontSize={quiet ? SIDEBAR_TYPE.compact : SIDEBAR_TYPE.title} height={TAB_ROW.titleHeight} style={AWAY_FRAME} />
             ) : (
               <SidebarRowLabel text={title} color={titleColor} compact={quiet} />
             )}
@@ -184,6 +184,7 @@ const AWAY_FRAME = { flex: 1, marginLeft: TAB_ROW.titleGap } as const;
 function StatusIconButton({ icon, color, tooltip, onPress }: { icon: string; color: string; tooltip: string; onPress: (event: GestureResponderEvent) => void }) {
   const pressMotion = usePressScaleMotion(true, buttonMotion.iconPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
+  const glyphFrame = { width: ROW_GLYPH.wide, height: ROW_GLYPH.box, alignItems: "center", justifyContent: "center" } as const;
   return (
     <Pressable
       onPress={onPress}
@@ -192,20 +193,18 @@ function StatusIconButton({ icon, color, tooltip, onPress }: { icon: string; col
       style={{ marginLeft: space.s }}
       tooltip={tooltip}
     >
-      <Animated.View style={[STATUS_GLYPH, scaleStyle]}>
-        <Symbol name={icon} size={12} color={color} style={STATUS_GLYPH} />
+      <Animated.View style={[glyphFrame, scaleStyle]}>
+        <Symbol name={icon} size={ROW_GLYPH.symbol} color={color} style={glyphFrame} />
       </Animated.View>
     </Pressable>
   );
 }
 
-const STATUS_GLYPH = { width: 18, height: 16, alignItems: "center", justifyContent: "center" } as const;
-
 export function RenameField({
   initial,
   placeholder,
   color,
-  fontSize = font.body.fontSize,
+  fontSize = SIDEBAR_TYPE.title,
   weight,
   onDone,
 }: {
@@ -318,7 +317,7 @@ function SplitPane({ tabId, windowId }: { tabId: string; windowId: string }) {
             }}
           >
             <TabIcon tabId={tab.id} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} compact />
-            <FadeLabel text={tabTitle(tab)} fontSize={font.small.fontSize} color={active ? theme.rowSelectedText : theme.textTab} style={{ flex: 1, height: Math.max(16, lineHeight.small + 1), marginLeft: space.xs }} />
+            <FadeLabel text={tabTitle(tab)} fontSize={sidebarFont.small.fontSize} color={active ? theme.rowSelectedText : theme.textTab} style={{ flex: 1, height: Math.max(ROW_GLYPH.box, sidebarLineHeight.small + 1), marginLeft: space.xs }} />
             <HoverSlot
               hovered={hovered}
               reserve="hover"

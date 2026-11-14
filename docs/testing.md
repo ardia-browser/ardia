@@ -36,6 +36,7 @@ holds the rest.
 | Shortcuts | `node apps/browser/scripts/shortcuts-test.mjs <Debug app>` | Every shortcut in every focus (0.2.8: ⌘1–9 were swallowed outside a page) |
 | Profile swipes | `node apps/browser/scripts/profile-swipe-test.mjs <Debug app>` | The native pager's races (0.2.14–0.2.18 fixes) |
 | Tab dragging | `node apps/browser/scripts/tab-drag-test.mjs <Debug app>` | Dragging in the top tab strip moves the tab, never the window (0.2.18); the empty strip moves it over its whole height and a double-click zooms (0.2.25); the empty sidebar under the rows moves it too, and a double-click there still opens a tab; a chip click whose pointer drifts up to 9 pt still opens the tab, a split pane's too (#947); a tab's hover card shows under the strip after 0.5 s, moves to the next tab at once, takes no presses and leaves the tabs beside it untouched |
+| Title-bar drag regions | `node apps/browser/scripts/drag-region-test.mjs <Debug app>` (`--every-mount` runs the `dragRegionEveryMount` experiment and prints its rebuild count) | A window's drag region is rebuilt lazily (#1682): a change the pointer wasn't over leaves it stale, and it is rebuilt when the pointer reaches the title bar, when the window moves under a still pointer, or 2 s later; a change with the pointer in the title bar rebuilds at once. After a tab added, the sidebar resized, hidden and shown, and a title change, the region the pointer's arrival leaves equals a full rebuild's (`devDragRegionRects` against `devDragBlockedRects`), the empty title bar is the window server's to drag, and no drag region point is blocked; 40 title changes in 6 s cost at most 5 rebuilds |
 | Windowing | `node apps/browser/scripts/windowing-test.mjs <Debug app>` | Window frames and what the screen shows in passing |
 | ⌘-scroll | `node apps/browser/scripts/zoom-scroll-test.mjs <Debug app>` | Trackpad scrolls, mouse zooms (regressed in 0.1.4 and 0.2.12) |
 | Hidden panes | `node apps/browser/scripts/hidden-pane-test.mjs <Release app>` (a Debug app fails five `shown:` checks) | What changes while a tab is hidden (URL, title, loading, zoom, find bar, a permission prompt) is on screen the moment it is shown |
@@ -146,9 +147,7 @@ Launch with `scripts/agent/ac launch <app> --data <dir> [--instance K=V] [--test
   `tabs.devPictureInPictureAction` also takes `alpha:<0–1>` (WindowServer alpha, so a hidden run's PiP window can be
   captured with `screencapture -l`), `mouse:<moved|down|dragged|up>:<x>,<y>[:<clicks>]` (top-left points; the click
   count defaults to 1), `stash` and `handle` (toggles the stash handle's hover), `skip` (JSON: the last click skip's
-  seconds, point and click count, and how many there were), `skip:<seconds>` (the click skip's own path), and
-  `drag:<dx>,<dy>,<steps>,<ms per step>,<pause before release ms>,<1: come back>` (real mouse events through the drag
-  monitor, bottom-left points; acceptance `pip-window` checks the grab point stays under the pointer).
+  seconds, point and click count, and how many there were) and `skip:<seconds>` (the click skip's own path).
 - **`allowOcclusion`**: macOS posts no occlusion change for a window a band below normal, so minimizing and
   deminiaturizing post one for it (the page goes hidden as in a user's minimized window).
 - **The `ardia` command** (`cliHome`, `cliBinDir`, `cliUrl` (`file://` works), test `cliInstallScript`): a test

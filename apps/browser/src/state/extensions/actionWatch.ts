@@ -8,6 +8,7 @@ import { syncSidePanel, wantedSidePanels } from "./sidePanels";
 import { refreshExtensionsAfterChange } from "./actions";
 import { refreshActionStates } from "./actionStates";
 import { focusedWindowOf } from "../windows/ui";
+import { onProfilesUnloaded } from "../profiles/profileLoading";
 
 const ACTION_EVENT_COALESCE_MS = 150;
 
@@ -54,6 +55,9 @@ function flushSoon() {
 }
 
 export function startActionStates() {
+  onProfilesUnloaded((profiles) => {
+    for (const profile of profiles) loadedProfiles.delete(profile);
+  });
   onExtensionActionChanged(({ profile, id, kind }) => {
     if (kind === "registry") dirtyLists.add(profile);
     else if (showsAction(profile, id)) dirtyActions.add(profile);

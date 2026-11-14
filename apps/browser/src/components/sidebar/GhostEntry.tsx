@@ -1,7 +1,7 @@
 import { tabTitle } from "../../state/browser/model";
 import { Image, View } from "react-native";
 import { knownFaviconTheme, resolveFavicon } from "../../state/favicons/favicons";
-import { Divider, FadeLabel, font, radius, space, Symbol, Text, withAlpha } from "../ui";
+import { Divider, FadeLabel, radius, space, Symbol, Text, withAlpha } from "../ui";
 import { layout, useTheme } from "../ui/theme";
 import type { BrowserState } from "../../state/browser/store";
 import type { GroupColor } from "../../state/browser/types";
@@ -15,7 +15,7 @@ import { pointerOnGroup, pointerOnRow } from "../../state/sidebar/hover";
 import { FaviconFallback, NewTabIcon } from "../favicon/Favicon";
 import { TabIcon } from "./TabIcon";
 import { iconSymbol } from "../../lib/customIcon";
-import { groupBoxAtRest, groupSurface, TAB_ROW, TABULAR_NUMS, useSidebarTokens } from "./tokens";
+import { groupBoxAtRest, groupSurface, SIDEBAR_TYPE, TAB_ROW, TABULAR_NUMS, useSidebarTokens } from "./tokens";
 import { SidebarRowLabel } from "./SidebarRow";
 import { entryKey, parseEntry } from "../../state/sidebar/entryKey";
 
@@ -123,7 +123,7 @@ function SplitGhost({ shot }: { shot: SplitShot }) {
           {i > 0 && <Divider vertical thick length={16} />}
           <View style={{ flex: 1, minWidth: 0, height: layout.rowHeight - 6, flexDirection: "row", alignItems: "center", paddingLeft: space.s }}>
             <TabIcon url={pane.url} favicon={pane.favicon} icon={pane.icon} profileId={pane.profileId} compact />
-            <FadeLabel text={pane.title} fontSize={font.small.fontSize} color={theme.textTab} style={{ flex: 1, height: 16, marginLeft: space.xs }} />
+            <FadeLabel text={pane.title} fontSize={SIDEBAR_TYPE.compact} color={theme.textTab} style={{ flex: 1, height: 16, marginLeft: space.xs }} />
           </View>
         </View>
       ))}
@@ -146,7 +146,7 @@ function GroupGhost({ shot }: { shot: GroupShot }) {
           <Text lines={1} weight="medium" style={MEASURE_LABEL}>
             {shot.label}
           </Text>
-          <FadeLabel text={shot.label} fontSize={font.body.fontSize} weight="medium" color={tokens.groupTitle} style={{ position: "absolute", left: 0, right: 0, top: 0, height: TAB_ROW.titleHeight }} />
+          <FadeLabel text={shot.label} fontSize={SIDEBAR_TYPE.title} weight="medium" color={tokens.groupTitle} style={{ position: "absolute", left: 0, right: 0, top: 0, height: TAB_ROW.titleHeight }} />
         </View>
         <View style={{ width: 10, height: 10, transform: [{ rotate: shot.collapsed ? "-90deg" : "0deg" }] }}>
           <Symbol name="chevron.down" size={9} weight="semibold" color={withAlpha(tokens.groupTitle, 0.5)} style={{ width: 10, height: 10 }} />

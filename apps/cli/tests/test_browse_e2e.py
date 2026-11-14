@@ -122,7 +122,7 @@ class BrowseEndToEnd(unittest.TestCase):
 
     def test_core_loop(self):
         opened = self.browse("open", self.url("login.html"), "--show").stdout
-        self.assertEqual(opened, f"✓ Fixture Login\n  {self.url('login.html')}\n")
+        self.assertTrue(opened.startswith(f"✓ Fixture Login\n  {self.url('login.html')}\nchanges:\nnew document"), opened)
         snap = self.browse("snapshot", "-i").stdout
         self.assertIn('heading "Log in" [level=1, ref=', snap)
         email = ref_for(snap, 'textbox "Email"')
@@ -623,6 +623,77 @@ class BrowseEndToEnd(unittest.TestCase):
         self.assertIn('"Reject all" button was clicked (reject)', clicked)
         self.assertEqual(self.report(session), {"clicked": ["buy"], "choice": "reject"})
 
+    def test_click_dismisses_a_prompt_whose_id_names_consent(self):
+        session = "consent-id"
+        self.browse("open", self.url("consent.html"), "--show", session=session)
+        self.browse("eval", "showPrompt()", session=session)
+        said = self.browse("click", "#late-buy", session=session).stdout
+        self.assertIn('"Reject all" button was clicked (reject)', said)
+        report = self.report(session)
+        self.assertEqual(report["prompt"], "reject")
+        self.assertIn("late-buy", report["clicked"])
+
+    def test_press_on_a_wrapper_focuses_the_field_inside_and_a_hidden_one_is_explained(self):
+        session = "focus"
+        self.browse("open", self.url("focus.html"), "--show", session=session)
+        self.browse("press", "#wrap", "Enter", session=session)
+        self.assertEqual(json.loads(self.browse("get", "text", "#report", session=session).stdout), {"keys": ["Enter"]})
+        hidden = self.browse("press", "#hidden-q", "Enter", session=session, check=False)
+        self.assertNotEqual(hidden.returncode, 0)
+        self.assertIn("can't take focus", hidden.stderr)
+        self.assertNotIn("DOM.focus", hidden.stderr)
+
+    def test_a_ref_from_before_a_navigation_says_so_and_names_its_match(self):
+        session = "navigated-ref"
+        self.browse("open", self.url("focus.html"), session=session)
+        old = ref_for(self.browse("snapshot", "-i", session=session).stdout, 'textbox "Search"')
+        self.browse("open", self.url("focus.html?again=1"), session=session)
+        stale = self.browse("fill", old, "bento", session=session, check=False)
+        self.assertNotEqual(stale.returncode, 0)
+        self.assertIn("the page navigated since that snapshot", stale.stderr)
+        self.assertIn('the same textbox "Search" as @e', stale.stderr)
+
+    def test_a_click_on_a_checkbox_hidden_behind_its_label_clicks_the_label(self):
+        session = "chips"
+        self.browse("open", self.url("chips.html"), "--show", session=session)
+        said = self.browse("click", "#hvac", session=session).stdout
+        self.assertIn("so the click went to the label", said)
+        self.assertEqual(json.loads(self.browse("get", "text", "#report", session=session).stdout), {"hvac": False, "plumbing": True})
+
+    def test_open_returns_a_page_whose_load_never_ends_with_a_note(self):
+        import socket
+
+        hang = socket.socket()
+        hang.bind(("127.0.0.1", 0))
+        hang.listen(8)
+        self.addCleanup(hang.close)
+        session = "stalled"
+        opened = self.browse("open", self.url(f"stalled.html?hang={hang.getsockname()[1]}"), session=session,
+                             extra_env={"AGENT_BROWSER_DEFAULT_TIMEOUT": "3000"})
+        self.assertIn("Fixture Stalled", opened.stdout)
+        self.assertIn("hadn't finished loading after 3 s", opened.stdout)
+        self.assertEqual(self.browse("get", "text", "#ready", session=session).stdout, "Three openings are listed.\n")
+
+    def test_a_click_the_page_cannot_scroll_to_names_the_dialog_holding_it(self):
+        session = "locked"
+        self.browse("open", self.url("locked.html"), "--show", session=session)
+        self.browse("click", "#open-language", session=session)
+        stuck = self.browse("click", "#currency", session=session, check=False)
+        self.assertNotEqual(stuck.returncode, 0)
+        self.assertIn('the dialog "Language and region" is open', stuck.stderr)
+        self.assertIn("press Escape", stuck.stderr)
+        self.browse("press", "Escape", session=session)
+        self.browse("click", "#currency", session=session)
+        self.assertEqual(json.loads(self.browse("get", "text", "#report", session=session).stdout), {"clicked": ["currency"]})
+
+    def test_click_leaves_a_dialog_that_is_not_about_cookies_alone(self):
+        session = "invite"
+        self.browse("open", self.url("invite.html"), "--show", session=session)
+        covered = self.browse("click", "#target", session=session, check=False)
+        self.assertNotEqual(covered.returncode, 0)
+        self.assertIn("is covered by", covered.stderr)
+        self.assertEqual(json.loads(self.browse("get", "text", "#report", session=session).stdout), {"clicked": []})
+
     def test_click_recenters_an_element_under_a_sticky_header(self):
         session = "sticky"
         self.browse("open", self.url("consent.html"), "--show", session=session)
@@ -687,7 +758,8 @@ class BrowseEndToEnd(unittest.TestCase):
         self.assertIn(f"Saved to {target}", said)
         self.assertIn("a list of 900 items", said)
         self.assertIn("walking", said)
-        self.assertLess(len(said), 800)
+        self.assertLess(len(said), 3800)
+        self.assertIn("more rows in the file", said)
         value = self.data / "out" / "title.txt"
         self.assertIn("text starting", self.browse("eval", "document.title", "--out", str(value), session=session).stdout)
         self.assertEqual(value.read_text(), self.browse("get", "title", session=session).stdout.strip())
@@ -751,6 +823,30 @@ class BrowseEndToEnd(unittest.TestCase):
         self.assertIn('(scope: page says "1–20 of 340 results"; has a Next page link, pages up to 17)', out)
         self.browse("open", self.url("results.html"), session=session)
         self.assertTrue(self.browse("read", session=session).stdout.rstrip().endswith('[scope: page says "1–20 of 340 results"; has a Next page link, pages up to 17]'))
+
+    def test_click_falls_back_to_a_dom_click_off_the_page(self):
+        session = "carousel"
+        self.browse("open", self.url("carousel.html"), "--show", session=session)
+        said = self.browse("click", "#s2", session=session).stdout
+        self.assertIn("got a DOM click instead of a pointer click", said)
+        self.assertEqual(self.report(session), {"clicked": ["s2"]})
+
+    def test_out_writes_a_csv_from_returned_rows(self):
+        session = "csv"
+        self.browse("open", self.url("picker.html"), session=session)
+        table = self.data / "out" / "rows.csv"
+        said = self.browse("script", "--out", str(table), session=session,
+                           stdin="return [{ name: 'A, Inc', price: 3 }, { name: 'B', url: 'u' }];").stdout
+        self.assertEqual(table.read_text(), 'name,price,url\n"A, Inc",3,\nB,,u\n')
+        self.assertIn("a list of 2 items", said)
+
+    def test_find_can_press_a_key_in_what_it_found(self):
+        session = "find-press"
+        self.browse("open", self.url("picker.html"), "--show", session=session)
+        self.browse("find", "label", "To", "fill", "Lisbon", session=session)
+        said = self.browse("find", "label", "To", "press", "Enter", session=session).stdout
+        self.assertTrue(said.startswith("✓"), said)
+        self.assertEqual(self.browse("get", "value", "#to", session=session).stdout, "Lisbon\n")
 
     def test_read_reads_every_named_url_past_the_link_limit(self):
         urls = [self.url(f"picker.html?n={number}") for number in range(25)]
@@ -960,6 +1056,9 @@ class BrowseTokenPath(unittest.TestCase):
         self.assertEqual(self.browse("wait", "--text", "submitted:token@example.com").returncode, 0)
         shot = SCRATCH / "token.png"
         self.browse("screenshot", str(shot))
+        named = SCRATCH / "out-flag.png"
+        self.assertEqual(self.browse("screenshot", "--out", str(named)).stdout, f"✓ Screenshot saved to {named}\n")
+        self.assertEqual(named.read_bytes()[:8], b"\x89PNG\r\n\x1a\n")
         self.assertEqual(shot.read_bytes()[:4], b"\x89PNG")
         self.assertNotIn("about:blank", self.browse("tab").stdout)
         self.assertIn("never prints it", self.browse("get", "cdp-url", check=False).stderr)

@@ -391,7 +391,7 @@ async def target_point(page, element, humanize: bool, check_cover: bool = True):
     await scroll_into_view(page, element, humanize)
     tried = set()
     for _ in range(3):
-        box = await element_box(page, element)
+        box = await settled_box(page, element)
         if box is None:
             raise BrowseError(f"Element {element.label} has no visible box (hidden or zero-size)", code="not_visible")
         left, top, right, bottom = box
@@ -420,9 +420,19 @@ async def target_point(page, element, humanize: bool, check_cover: bool = True):
     if check_cover:
         if cover and cover.startswith("nothing"):
             vp = await viewport(page)
+            where = f"{element.label} is outside the visible page (its middle is at {cx - ox:.0f},{cy - oy:.0f} in a {vp['width']}×{vp['height']} viewport)"
+            lock = await scroll_lock(page, element)
+            if lock:
+                from ardia_cli import command_metrics
+
+                command_metrics.flag("click_scroll_locked", True)
+                raise BrowseError(
+                    f"Element {where}, and the page won't scroll to it: {lock}. Close that first (press Escape, or its close button), "
+                    "then retry",
+                    data={"point": [cx, cy], "viewport": [vp["width"], vp["height"]], "scrollLock": lock}, code="outside_viewport",
+                )
             raise BrowseError(
-                f"Element {element.label} is outside the visible page (its middle is at {cx - ox:.0f},{cy - oy:.0f} in a {vp['width']}×{vp['height']} "
-                "viewport), so a click there would land on nothing. Scroll it into view (scrollintoview), or snapshot again if the page moved",
+                f"Element {where}, so a click there would land on nothing. Scroll it into view (scrollintoview), or snapshot again if the page moved",
                 data={"point": [cx, cy], "viewport": [vp["width"], vp["height"]]}, code="outside_viewport",
             )
         if cover:
@@ -489,7 +499,21 @@ async def wait_enabled(page, element, strict: bool = True):
 
 async def click(page, element, humanize: bool, count: int = 1, button: str = "left"):
     await wait_enabled(page, element, strict=False)
-    x, y, _ = await target_point(page, element, humanize)
+    try:
+        x, y, _ = await target_point(page, element, humanize)
+    except BrowseError as error:
+        if error.code == "not_visible":
+            stand_in = await visible_label(page, element)
+            if stand_in is None:
+                raise
+            command_metrics.flag("clicked_label_of_hidden_input", True)
+            await click(page, stand_in, humanize, count, button)
+            page.state.click_note = f"{element.label} is hidden and drawn by its label, so the click went to the label"
+            return
+        if error.code != "outside_viewport" or count != 1 or button != "left":
+            raise
+        await dom_click(page, element, error)
+        return
     mouse = page.input.mouse
     which = mouse_button(button)
     async def press():
@@ -499,6 +523,31 @@ async def click(page, element, humanize: bool, count: int = 1, button: str = "le
             await mouse.click(x, y, button=which, click_count=number, humanize=False)
 
     await expect_input(page, element.frame, lambda: page.input.gesture("click", press), {"mousedown": count, "mouseup": count}, "The click", element)
+
+
+async def visible_label(page, element):
+    remote = await page.call(VISIBLE_LABEL, element, frame=element.frame, by_value=False)
+    return await page.element_from(remote, element.frame, f"the label of {element.label}")
+
+
+async def scroll_lock(page, element) -> str | None:
+    try:
+        return await page.call(SCROLL_LOCK, element, frame=element.frame)
+    except BrowseError:
+        return None
+
+
+async def dom_click(page, element, error: BrowseError):
+    from ardia_cli import command_metrics
+
+    clicked = await page.call(DOM_CLICK, element, frame=element.frame)
+    if not clicked:
+        raise error
+    command_metrics.flag("dom_click_fallback", True)
+    point = (error.data or {}).get("point") or ["?", "?"]
+    page.state.click_note = (f"{element.label} sits outside the page (at {point[0]:.0f},{point[1]:.0f}) where scrolling can't reach, so it got a "
+                             "DOM click instead of a pointer click" if isinstance(point[0], (int, float)) else
+                             f"{element.label} sits outside the page, so it got a DOM click instead of a pointer click")
 
 
 async def hover(page, element, humanize: bool):
@@ -520,8 +569,55 @@ async def focus_field(page, element, info, humanize: bool, tolerate_detach: bool
             raise
 
 
+BOX_SETTLE_POLL = 0.05
+BOX_SETTLE_LIMIT = 1.0
 CENTER = "(el) => { const before = el.getBoundingClientRect(); el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' }); const after = el.getBoundingClientRect(); return Math.abs(after.top - before.top) + Math.abs(after.left - before.left) > 1; }"
 CONSENT_SETTLE = 0.5
+VISIBLE_LABEL = """(el) => {
+  if (!(el instanceof HTMLInputElement) || !/^(checkbox|radio)$/.test(el.type)) return null;
+  const shown = (node) => {
+    const rect = node.getBoundingClientRect();
+    return rect.width >= 2 && rect.height >= 2 && (!node.checkVisibility || node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }));
+  };
+  const labels = [...(el.labels || [])];
+  const wrapping = el.closest("label");
+  if (wrapping && !labels.includes(wrapping)) labels.push(wrapping);
+  return labels.find(shown) || null;
+}"""
+SCROLL_LOCK = """(el) => {
+  const shown = (node) => node.checkVisibility ? node.checkVisibility({ checkVisibilityCSS: true }) : !!node.offsetParent;
+  const dialogs = [...document.querySelectorAll("dialog[open], [role=dialog], [role=alertdialog], [aria-modal=true]")]
+    .filter((node) => shown(node) && !node.contains(el));
+  const dialog = dialogs[dialogs.length - 1];
+  if (dialog) {
+    const labelled = dialog.getAttribute("aria-labelledby");
+    const name = (dialog.getAttribute("aria-label") || (labelled && document.getElementById(labelled)?.innerText) || dialog.innerText || "")
+      .trim().split("\\n")[0].slice(0, 60);
+    return name ? `the dialog "${name}" is open and holds the page still` : "an open dialog holds the page still";
+  }
+  const locked = (node) => {
+    const style = node && getComputedStyle(node);
+    return !!style && (style.position === "fixed" || /hidden|clip/.test(style.overflowY));
+  };
+  if (locked(document.body) || locked(document.documentElement)) return "the page's scrolling is locked, usually by an open menu or overlay";
+  return null;
+}"""
+DOM_CLICK = """(el) => {
+  if (!el.isConnected || (el.checkVisibility && !el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }))) return false;
+  const rect = el.getBoundingClientRect();
+  if (rect.width < 4 || rect.height < 4) return false;
+  const style = getComputedStyle(el);
+  if ((style.clip && style.clip !== "auto") || (style.clipPath && style.clipPath !== "none")) return false;
+  let clipped = false;
+  for (let node = el.parentElement; node && node !== document.body; node = node.parentElement) {
+    const overflow = getComputedStyle(node).overflowX + " " + getComputedStyle(node).overflow;
+    if (/hidden|auto|scroll|clip/.test(overflow)) { clipped = true; break; }
+  }
+  if (!clipped) return false;
+  el.focus && el.focus({ preventScroll: true });
+  el.click();
+  return true;
+}"""
 REPLACEMENT = """(old) => {
   const active = document.activeElement;
   if (!active || active === old || active === document.body) return null;
@@ -1104,6 +1200,19 @@ def drop_point(box: tuple, source: tuple, side: str | None) -> tuple[float, floa
     if vertical:
         return cx, top + (bottom - top) * share
     return left + (right - left) * share, cy
+
+
+async def settled_box(page, element) -> tuple | None:
+    box = await element_box(page, element)
+    deadline = asyncio.get_running_loop().time() + BOX_SETTLE_LIMIT
+    while box is not None and asyncio.get_running_loop().time() < deadline:
+        await asyncio.sleep(BOX_SETTLE_POLL)
+        now = await element_box(page, element)
+        if now is None or max(abs(before - after) for before, after in zip(box, now)) <= 1:
+            return now
+        command_metrics.flag("waited_for_box_to_settle", True)
+        box = now
+    return box
 
 
 async def element_box(page, element) -> tuple | None:

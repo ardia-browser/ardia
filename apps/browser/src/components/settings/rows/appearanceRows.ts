@@ -21,6 +21,21 @@ export const appearanceRows = {
       },
     },
     {
+      section: "Sidebar Text",
+      rows: {
+        sidebarTextSize: {
+          title: "Text size",
+          description: "Tab, folder and group titles in the sidebar, with their rows, icons and pinned tiles. Default is Dia's size.",
+          keywords: ["bigger text", "larger text", "large text", "text size", "small text", "readability", "readable", "low vision", "accessibility", "a11y", "interface size", "tab titles", "arc"],
+        },
+        sidebarTextContrast: {
+          title: "Higher contrast text",
+          description: "Full-strength tab titles, and darker or brighter labels, icons and New Tab in the sidebar. On by default when macOS Increase Contrast is on.",
+          keywords: ["contrast", "high contrast", "increase contrast", "grey text", "gray text", "light text", "faint", "readability", "readable", "low vision", "accessibility", "a11y", "wcag", "bold"],
+        },
+      },
+    },
+    {
       section: "Interface Style",
       rows: {
         interfaceStyle: {

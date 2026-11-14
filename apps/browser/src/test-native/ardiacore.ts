@@ -63,6 +63,7 @@ export const emitEvent = <E extends EventName>(name: E, data: EngineEvents[E]) =
 
 export const engineCalls: { domain: string; verb: string; profile: string }[] = [];
 export const loadedEngineProfiles = new Set<string>([""]);
+export const idleProfileUnloads = new Map<string, { status: "released" | "pending" | "busy"; tabs: string[] }>();
 export const profilesLoadedCall = { known: true };
 
 function domain<D extends string, Sync extends object>(name: D, handlers: Handlers<D>, sync?: Sync): FakeDomain & Sync {
@@ -366,6 +367,11 @@ const fakeModules = {
       return { profiles: [...loadedEngineProfiles] };
     },
     release: () => null,
+    unloadIdle: ({ profile }) => {
+      const unload = idleProfileUnloads.get(profile) ?? { status: "busy" as const, tabs: [] };
+      if (unload.status !== "busy") loadedEngineProfiles.delete(profile);
+      return unload;
+    },
     deleteData: ({ profile }) => (deletedProfileData.push(profile), { remaining: profileDataLeft.get(profile) ?? [] }),
     clearBrowsingData: () => null,
   }),

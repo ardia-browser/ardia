@@ -1,5 +1,5 @@
 import { Animated } from "react-native";
-import { Badge, FadeLabel, font, Panel, radius, space } from "../ui";
+import { Badge, FadeLabel, Panel, radius, space } from "../ui";
 import { layout, useTheme } from "../ui/theme";
 import { liveFolderIcon } from "../../state/live/sources";
 import { useLive } from "../../state/live/store";
@@ -9,7 +9,7 @@ import { useTabDrag } from "../../state/drag/tabDrag";
 import type { Ghost } from "./dragModel";
 import { FolderMosaic } from "./FolderTile";
 import { TabIcon } from "./TabIcon";
-import { SIDEBAR_SHADOW, TAB_ROW, useSidebarTokens } from "./tokens";
+import { SIDEBAR_SHADOW, SIDEBAR_TYPE, TAB_ROW, useSidebarTokens } from "./tokens";
 import { folderOf } from "./dragModel";
 
 export function DragGhost({ ghost }: { ghost: Ghost }) {
@@ -47,7 +47,7 @@ export function DragGhost({ ghost }: { ghost: Ghost }) {
         {liveIcon ? <TabIcon url={liveIcon.site} icon={liveIcon.icon} /> : null}
         {folderTile ? <FolderMosaic tabIds={item.tabIds} /> : null}
         {!folderTile && (groupIcon || tab) ? <TabIcon url={tab?.url ?? ""} favicon={tab?.favicon} icon={groupIcon ?? tab?.customIcon} profileId={tab?.profileId} /> : null}
-        {!tile ? <FadeLabel text={label} fontSize={font.body.fontSize} weight={item.kind === "group" || item.kind === "live" ? "medium" : "regular"} color={theme.textPrimary} style={{ flex: 1, height: TAB_ROW.titleHeight, marginLeft: space.m }} /> : null}
+        {!tile ? <FadeLabel text={label} fontSize={SIDEBAR_TYPE.title} weight={item.kind === "group" || item.kind === "live" ? "medium" : "regular"} color={theme.textPrimary} style={{ flex: 1, height: TAB_ROW.titleHeight, marginLeft: space.m }} /> : null}
       </Panel>
       {count > 1 && !folderTile ? (
         <Badge text={count} tone="accent" size="m" style={COUNT_BADGE} />

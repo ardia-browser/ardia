@@ -15,6 +15,7 @@ public class ProfilesModule: Module {
       ArdiaHost.releaseProfile(args.profile)
       reply.ok()
     },
+    "unloadIdle": { args, reply in reply.ok(ArdiaHost.unloadIdleProfile(args.profile)) },
     "deleteData": { args, reply in PageEngines.deleteProfileData(profile: args.profile) { reply.ok(["remaining": $0]) } },
     "clearBrowsingData": { args, reply in
       PageEngines.clearBrowsingData(profile: args.profile, types: try args.strings("types"), since: try args.optionalDouble("since") ?? 0) { reply.ok() }

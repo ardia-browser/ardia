@@ -1,6 +1,6 @@
 import { memo, useState } from "react";
 import { Animated, Pressable, View, type LayoutChangeEvent } from "react-native";
-import { Button, ContextMenuArea, perLook, radius, space, Symbol, Text, useHover, withAlpha } from "../ui";
+import { Button, ContextMenuArea, perLook, radius, sidebarPoints, space, Symbol, Text, useHover, withAlpha } from "../ui";
 import { hex, layout, useTheme } from "../ui/theme";
 import { HoverSlot } from "../ui/HoverSlot";
 import { newTab } from "../../state/tabs/actions";
@@ -11,7 +11,7 @@ import { toggleNewTabBar } from "../../state/omnibox/newTabBar";
 import { noteRowPressIn } from "../../state/sidebar/heldTabPress";
 import { modifiersOf } from "../../lib/keys";
 import { useClipped, useShift, type ClipSource } from "./EntryMotion";
-import { TAB_ROW, useSidebarTokens } from "./tokens";
+import { ROW_GLYPH, TAB_ROW, useSidebarTokens } from "./tokens";
 import { SidebarRowLabel } from "./SidebarRow";
 import { useQuietRows } from "./rowLook";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
@@ -86,7 +86,7 @@ export const NewTabRow = memo(function NewTabRow({ windowId, shift = null, clip 
               ]}
             >
               <Animated.View pointerEvents="none" style={iconScale}>
-                <Symbol name="plus" size={quiet ? 10 : 13} weight="medium" color={quiet ? quietInk : tokens.newTabIcon} style={{ width: 16, height: 16 }} />
+                <Symbol name="plus" size={quiet ? sidebarPoints(10) : ROW_GLYPH.plus} weight="medium" color={quiet ? quietInk : tokens.newTabIcon} style={{ width: ROW_GLYPH.box, height: ROW_GLYPH.box }} />
               </Animated.View>
               <SidebarRowLabel text="New Tab" color={quiet ? quietInk : tokens.newTabLabel} compact={quiet} />
             </View>

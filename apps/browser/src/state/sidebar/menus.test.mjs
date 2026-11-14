@@ -12,6 +12,7 @@ const { openMultiMenu } = await import("./multiTabMenu.ts");
 const { openGroupMenu } = await import("./groupMenu.ts");
 const { shellNativeModules } = await import("../../test-native/shell.ts");
 const { splitTabIdsOf } = await import("../splits/splits.ts");
+const { useMedia } = await import("../media/media.ts");
 
 const S = () => useBrowser.getState();
 const MODS = [
@@ -118,6 +119,7 @@ test("a Top Apps tile: unpin first, folders instead of groups, Open in New Windo
   S().pinTabs([ids[0]], true);
   assert.deepEqual(top(tabMenuItems(S(), w, S().tabs[ids[0]])), [
     "Unpin from Top Apps [pin.slash]",
+    "Reset Pinned Tab [arrow.uturn.backward] (off)",
     "Move to Pinned in Personal",
     "Edit Pinned Page ›",
     "---",
@@ -141,7 +143,6 @@ test("a Top Apps tile: unpin first, folders instead of groups, Open in New Windo
     "Mute Site [speaker.slash] ⌥ (alt)",
   ]);
   assert.deepEqual(sub(tabMenuItems(S(), w, S().tabs[ids[0]]), "pinnedPage"), [
-    "Back to Pinned URL [arrow.uturn.backward] (off)",
     "Replace Pinned URL with Current (off)",
     "---",
     "Edit Pinned URL…",
@@ -152,11 +153,30 @@ test("a pinned row offers Top Apps as its other place, and a pinned group's tab 
   const { w, ids } = windowWith("a", "b", "c");
   S().pinTabs([ids[0]], true, true);
   const row = top(tabMenuItems(S(), w, S().tabs[ids[0]]));
-  assert.deepEqual(row.slice(0, 3), ["Unpin [pin.slash]", "Move to Top Apps", "Edit Pinned Page ›"]);
+  assert.deepEqual(row.slice(0, 4), ["Unpin [pin.slash]", "Reset Pinned Tab [arrow.uturn.backward] (off)", "Move to Top Apps", "Edit Pinned Page ›"]);
   S().groupTabs([ids[1]], { name: "P" });
   const member = top(tabMenuItems(S(), w, S().tabs[ids[1]]));
-  assert.deepEqual(member.slice(0, 2), ["Unpin [pin.slash]", "Edit Pinned Page ›"]);
+  assert.deepEqual(member.slice(0, 3), ["Unpin [pin.slash]", "Reset Pinned Tab [arrow.uturn.backward] (off)", "Edit Pinned Page ›"]);
   assert.ok(!member.some((l) => l.startsWith("Remove from Group") || l.startsWith("New Group with Tab") || l.startsWith("Close")));
+});
+
+test("every hover card action is in the menu: Reset Pinned Tab once a pinned tab is away, Remove Bookmark on a saved page, Exit Picture in Picture", () => {
+  const { w, ids } = windowWith("a", "b");
+  S().pinTabs([ids[0]], true);
+  S().updateTab(ids[0], { url: "https://a.com/elsewhere" });
+  const tile = top(tabMenuItems(S(), w, S().tabs[ids[0]]));
+  assert.equal(tile[1], "Reset Pinned Tab [arrow.uturn.backward]");
+  assert.ok(!sub(tabMenuItems(S(), w, S().tabs[ids[0]]), "pinnedPage").some((l) => l.startsWith("Back to Pinned URL") || l.startsWith("Reset")), "not twice");
+  S().toggleBookmark(S().windows[w].profileId, { url: S().tabs[ids[1]].url, title: "b", favicon: null });
+  const saved = top(tabMenuItems(S(), w, S().tabs[ids[1]]));
+  const edit = saved.findIndex((l) => l.startsWith("Edit Bookmark… [bookmark.fill]"));
+  assert.ok(edit > 0);
+  assert.equal(saved[edit + 1], "Remove Bookmark");
+  assert.ok(!saved.some((l) => l.startsWith("Add to Bookmarks")));
+  assert.ok(!saved.some((l) => l.startsWith("Exit Picture in Picture")));
+  useMedia.setState((m) => ({ pipOpen: { ...m.pipOpen, [ids[1]]: "video" } }));
+  assert.ok(top(tabMenuItems(S(), w, S().tabs[ids[1]])).includes("Exit Picture in Picture [pip.exit]"));
+  useMedia.setState((m) => ({ pipOpen: {} }));
 });
 
 test("a split pane offers Remove from Split View in place of Open as Split", () => {

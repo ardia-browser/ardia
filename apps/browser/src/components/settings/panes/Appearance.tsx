@@ -15,6 +15,7 @@ import { modePreview, stylePreview } from "../tokens";
 import { useSettingsColors } from "../useSettingsColors";
 import { APP_ICON_SIZE, appIconChoices, chooseAppIcon } from "../../../state/settings/paneData";
 import { useResource } from "../../../state/settings/resources";
+import { useSidebarHighContrast } from "../../../state/sidebar/textLook";
 import { perLook } from "../../ui/tokens";
 
 const MODES: { value: Settings["appearance"]; title: string; description: string }[] = [
@@ -46,6 +47,7 @@ export function AppearancePane() {
           </Row>
         </Group>
       </Box>
+      <SidebarTextPicker />
       <InterfaceStylePicker />
       <SectionHeader title="Minimalism" description={null} />
       <Group>
@@ -204,6 +206,30 @@ function PageFramePicker() {
             accessibilityLabel="Zero in full screen when tabs are hidden"
             onChange={(on) => updateSettings({ pageFrameZeroWhenTabsHidden: on })}
           />
+        </Row>
+      </Group>
+    </>
+  );
+}
+
+const SIDEBAR_TEXT_SIZES: { value: Settings["sidebarTextSize"]; title: string }[] = [
+  { value: "default", title: "Default" },
+  { value: "large", title: "Large" },
+  { value: "larger", title: "Larger" },
+];
+
+function SidebarTextPicker() {
+  const size = useSettings((s) => s.sidebarTextSize);
+  const highContrast = useSidebarHighContrast();
+  return (
+    <>
+      <SectionHeader title="Sidebar Text" />
+      <Group>
+        <Row anchor="appearance.sidebarTextSize">
+          <PopUp value={size} options={SIDEBAR_TEXT_SIZES} onChange={(v) => updateSettings({ sidebarTextSize: v })} minWidth={120} />
+        </Row>
+        <Row anchor="appearance.sidebarTextContrast">
+          <Toggle value={highContrast} accessibilityLabel="Higher contrast sidebar text" onChange={(on) => updateSettings({ sidebarTextContrast: on ? "high" : "standard" })} />
         </Row>
       </Group>
     </>

@@ -2,6 +2,7 @@ import { SETTING_SPECS, type Settings, type SettingSpec } from "../settings/sett
 import { commandBarStartFlags } from "../omnibox/commandBarStart";
 import { lookUse, type LookBlocks } from "../../lib/themeLook";
 import { currentThemeLook } from "../config/basePalette";
+import { systemIncreaseContrast } from "../app/systemContrast";
 
 export const SETTINGS_SNAPSHOT_EVENT = "settings_snapshot";
 
@@ -30,7 +31,7 @@ export function settingsSnapshot(settings: Settings): Record<string, string> {
     out[`setting_${key}`] = value;
     out[`default_${key}`] = fallback;
   }
-  return { ...out, ...commandBarStartFlags(settings.commandBarStart), unread_hidden_sites: String(Array.isArray(settings.unreadHiddenSites) ? settings.unreadHiddenSites.length : 0) };
+  return { ...out, ...commandBarStartFlags(settings.commandBarStart), system_increase_contrast: encode(systemIncreaseContrast())!, unread_hidden_sites: String(Array.isArray(settings.unreadHiddenSites) ? settings.unreadHiddenSites.length : 0) };
 }
 
 export const appIconSetting = (icon: string | null): Record<string, string> =>

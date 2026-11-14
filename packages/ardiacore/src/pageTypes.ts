@@ -35,6 +35,7 @@ export type NowPlaying = {
   hasVideo: boolean;
   actions: string[];
   controllable: boolean;
+  loop?: boolean;
 };
 export type MediaCommand = "play" | "pause" | "toggle" | "next" | "previous" | "seekBy" | "seekTo" | "stop";
 export type MediaAccess = { camera: boolean; microphone: boolean; screen: boolean };
@@ -113,8 +114,8 @@ export type WebNotification = {
 };
 
 export type PictureInPictureState = { kind: "video" | "document"; active: boolean; fullScreenSpaces?: boolean; leftApp?: boolean; leftTab?: boolean };
+export type PictureInPictureDrag = { offCursor: boolean; slowMove: boolean };
 export type AutoPictureInPictureHold = "onScreen" | "appSwitch" | "nothingPlaying";
-export type PictureInPictureDrag = { held: boolean; slipped: boolean };
 export type MediaFault = { reason: string; muted?: boolean; blockerActive?: boolean };
 export type ControlPress = { clickAt: number; control: number };
 export type ActivateRequest = { reason: "pictureInPicture" };
@@ -272,8 +273,10 @@ export type WebViewHandle = {
 
   resolveUnresponsive(terminate: boolean): Promise<void>;
   discard(options?: { unload?: boolean }): Promise<DiscardOutcome>;
+  sleepIfHidden(seconds: number): Promise<DiscardRefusal[]>;
   setFrozen(frozen: boolean): Promise<void>;
 };
 
 export type DiscardOutcome = "discarded" | "already" | "refused" | "unsupported";
+export type DiscardRefusal = number;
 export type DiscardReason = "external" | "urgent" | "proactive" | "suggested" | "frozen";

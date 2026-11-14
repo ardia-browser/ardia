@@ -4,9 +4,17 @@ import json
 import time
 from dataclasses import dataclass, field
 
-from ardia_cli.browse.errors import BrowseError, CdpError, CdpTimeout, Gated, OutcomeUnknown
+from ardia_cli.browse.errors import BrowseError, CdpError, CdpTimeout, Gated, NotFocusable, OutcomeUnknown
 from ardia_cli.browse.inputs import Input
 from ardia_cli.browse.js import LIBRARY
+
+FOCUS_INSIDE = """(el) => {
+  const fields = 'input:not([type=hidden]):not([disabled]), textarea:not([disabled]), select:not([disabled]), [contenteditable=""], [contenteditable=true], [tabindex]:not([tabindex="-1"])';
+  const target = el.matches(fields) ? el : el.querySelector(fields) || el;
+  if (target.focus) target.focus();
+  const active = document.activeElement;
+  return !!active && active !== document.body && (active === el || el.contains(active));
+}"""
 
 WORLD_NAME = "ardia-browse"
 CONSOLE_LIMIT = 1000
@@ -384,7 +392,20 @@ class Page:
             raise BrowseError(self.show_hint(), data={"tabId": tab, "use": f"ardia browse tab {tab} --show"}, code="tab_hidden")
 
     async def focus_element(self, element: Element):
-        await self.send("DOM.focus", {"backendNodeId": element.backend_id})
+        try:
+            await self.send("DOM.focus", {"backendNodeId": element.backend_id})
+        except CdpError as error:
+            if "focusable" not in error.cdp_message:
+                raise
+            try:
+                landed = await self.call(FOCUS_INSIDE, element, frame=element.frame)
+            except BrowseError:
+                landed = False
+            if not landed:
+                raise NotFocusable(element.label) from None
+            from ardia_cli import command_metrics
+
+            command_metrics.flag("focused_inner_field", True)
 
     async def enable_runtime(self):
         if not self.runtime_on:

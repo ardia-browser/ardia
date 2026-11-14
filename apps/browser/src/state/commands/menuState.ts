@@ -1,6 +1,7 @@
 import type { MenuBookmark, MenuState } from "../../platform/commands";
 import { engineBookmarkRoots, folderChildren, isBookmarked, isWithin, ROOT_TITLES } from "../bookmarks/bookmarks";
 import type { BrowserState } from "../browser/store";
+import { changedIds } from "../browser/changes";
 import { activeTab, bookmarkProfileId, engineProfile, IDLE_LIVE, isPinnedRow, tabLabel, togglePinTitle, windowTitle, tabLayoutOf, tabsShownIn } from "../browser/model";
 import { canSwitchEngine, tabEngine } from "../engines/engines";
 import { readerState as readerFor } from "../reader/reader";
@@ -8,7 +9,7 @@ import { peekTabId } from "../peek/peek";
 import { canHideElements } from "../site/hiddenElements";
 import { splitOf } from "../splits/splits";
 import { canGoBack, canGoForward } from "../tabs/navigation";
-import type { Bookmarks, BookmarkNode } from "../browser/types";
+import type { Bookmarks, BookmarkNode, Tab } from "../browser/types";
 import { isInternalTab } from "../pages/urls";
 import { muteState, muteTitle } from "../tabs/mute";
 import { sidebarMenuState } from "../sidebar/commands";
@@ -164,7 +165,37 @@ export function trackedMenuState(s: BrowserState): { state: MenuState; reads: Me
   return { state: menuState(tracked), reads };
 }
 
+export const HIDDEN_TAB_FIELDS_IN_MENU = ["id", "windowId", "profileId", "pin"] as const satisfies readonly (keyof Tab)[];
+
+function shownOrSelected(s: BrowserState, tab: Tab): boolean {
+  const w = s.windows[tab.windowId];
+  if (!w) return true;
+  for (const profile in w.activeTabIds) if (w.activeTabIds[profile] === tab.id) return true;
+  return s.peeks[tab.windowId]?.tabId === tab.id || !!s.selection[tab.windowId]?.includes(tab.id);
+}
+
+function tabsChangedForMenu(s: BrowserState, prev: BrowserState): boolean {
+  for (const id of changedIds(s.tabs, prev.tabs)) {
+    const now = s.tabs[id];
+    const was = prev.tabs[id];
+    if (!now || !was || shownOrSelected(s, now)) return true;
+    for (const field of HIDDEN_TAB_FIELDS_IN_MENU) if (now[field] !== was[field]) return true;
+  }
+  return false;
+}
+
+function liveChangedForMenu(s: BrowserState, prev: BrowserState): boolean {
+  for (const id of changedIds(s.live, prev.live)) {
+    const tab = s.tabs[id];
+    if (tab && shownOrSelected(s, tab)) return true;
+  }
+  return false;
+}
+
 export function menuInputsChanged(reads: MenuReads, s: BrowserState, prev: BrowserState): boolean {
-  for (const key of reads) if (s[key] !== prev[key]) return true;
+  for (const key of reads) {
+    if (s[key] === prev[key]) continue;
+    if (key === "tabs" ? tabsChangedForMenu(s, prev) : key === "live" ? liveChangedForMenu(s, prev) : true) return true;
+  }
   return false;
 }

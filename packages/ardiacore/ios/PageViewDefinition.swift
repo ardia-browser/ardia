@@ -109,6 +109,8 @@ enum PageViewDefinition {
       AsyncFunction("resolveUnresponsive") { (view: V, terminate: Bool) in view.page.resolveUnresponsive(terminate: terminate) }
         .runOnQueue(.main)
       AsyncFunction("discard") { (view: V, unload: Bool?) -> String in view.page.discard(unload: unload ?? false) }.runOnQueue(.main)
+      AsyncFunction("sleepIfHidden") { (view: V, seconds: Double) -> [Int] in view.page.sleepIfHidden(for: seconds).map(\.intValue) }
+        .runOnQueue(.main)
       AsyncFunction("setFrozen") { (view: V, frozen: Bool) in view.page.frozen = frozen }.runOnQueue(.main)
 
       OnViewDidUpdateProps { (view: V) in view.propsDidUpdate() }

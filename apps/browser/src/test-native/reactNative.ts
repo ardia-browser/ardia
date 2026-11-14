@@ -166,6 +166,7 @@ export const Easing = {
 export const AppState = { currentState: "active", addEventListener: () => ({ remove() {} }) };
 
 export const AccessibilityInfo = {
-  isReduceMotionEnabled: () => Promise.resolve(false),
+  isHighContrastEnabled: async () => false,
+  isReduceMotionEnabled: async () => false,
   addEventListener: () => ({ remove() {} }),
 };

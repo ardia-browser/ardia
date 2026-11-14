@@ -632,53 +632,43 @@ int main() {
   }
 
   {
-    const Screen single[] = {{{0, 0, 1512, 982}, {0, 0, 1512, 945}}};
-    const Screen pair[] = {{{0, 0, 1512, 982}, {0, 0, 1512, 945}}, {{1512, 0, 1920, 1080}, {1512, 0, 1920, 1055}}};
-    bool lastHeld = false;
-    auto drag = [&](Rect frame, Point grab, Point pointer, const Screen *screens, int n) {
-      const Rect next = DragTo(frame, grab, pointer, screens, n);
-      lastHeld = DragHeld(next, grab, pointer);
-      return Rect{std::round(next.x), std::round(next.y), next.w, next.h};
-    };
-    auto under = [](Rect frame, Point grab, Point pointer) { return Near(frame.x + grab.x, pointer.x, 0.5) && Near(frame.y + grab.y, pointer.y, 0.5); };
-
-    const Point grab{180, 90};
-    Rect w{400, 300, 468, 263};
-    Point pointer{w.x + grab.x, w.y + grab.y};
-    for (int i = 0; i < 2000; i++) {
-      pointer = {pointer.x + (i % 7 < 4 ? 0.37 : -0.29), pointer.y + (i % 5 < 3 ? 0.23 : -0.31)};
-      w = drag(w, grab, pointer, single, 1);
-      CHECK(under(w, grab, pointer) && !lastHeld && !DragSlipped(w, grab, pointer));
+    const Screen one[] = {{{0, 0, 1512, 982}, {0, 0, 1512, 949}}};
+    const Point grab{186.5, 63};
+    auto placed = [](Rect r) { return Rect{std::round(r.x), std::round(r.y), r.w, r.h}; };
+    Rect stepped{574, 386, 373, 210}, held = stepped;
+    Point pointer{stepped.x + grab.x, stepped.y + grab.y};
+    for (int i = 0; i < 600; i++) {
+      const Point next{pointer.x - 0.5005, pointer.y + 0.3337};
+      stepped = placed(DragStep(stepped, {next.x - pointer.x, next.y - pointer.y}, one, 1));
+      held = placed(DragTo(held, next, grab, one, 1));
+      pointer = next;
     }
+    CHECK(std::fabs(stepped.x + grab.x - pointer.x) > 100 || std::fabs(stepped.y + grab.y - pointer.y) > 100);
+    CHECK(std::fabs(held.x + grab.x - pointer.x) <= 0.5 && std::fabs(held.y + grab.y - pointer.y) <= 0.5);
+    CHECK(!HeldBack(DragTo(held, pointer, grab, one, 1), pointer, grab));
 
-    const Rect start{400, 300, 468, 263};
-    for (const Point edge : {Point{-1200, 0}, Point{0, 900}, Point{0, -700}, Point{2600, 0}, Point{-500, 800}}) {
-      for (const Screen *screens : {single, pair}) {
-        const int n = screens == single ? 1 : 2;
-        w = start;
-        const Point from{start.x + grab.x, start.y + grab.y};
-        bool held = false;
-        for (int i = 1; i <= 200; i++) {
-          pointer = {from.x + edge.x * i / 200.0 + 0.3 * (i % 3), from.y + edge.y * i / 200.0 - 0.2 * (i % 4)};
-          w = drag(w, grab, pointer, screens, n);
-          held = held || lastHeld;
-        }
-        CHECK(held || n == 2);
-        for (int i = 199; i >= 0; i--) {
-          pointer = {from.x + edge.x * i / 200.0 + 0.3 * (i % 3), from.y + edge.y * i / 200.0 - 0.2 * (i % 4)};
-          w = drag(w, grab, pointer, screens, n);
-        }
-        CHECK(under(w, grab, pointer) && !lastHeld && !DragSlipped(w, grab, pointer));
-        CHECK(w.x == start.x && w.y == start.y);
-      }
+    Rect w{574, 386, 373, 210};
+    pointer = {w.x + grab.x, w.y + grab.y};
+    bool sawHeld = false;
+    for (int i = 0; i < 400; i++) {
+      pointer.x += 3.37;
+      const Rect next = DragTo(w, pointer, grab, one, 1);
+      sawHeld = sawHeld || HeldBack(next, pointer, grab);
+      w = placed(next);
     }
+    CHECK(sawHeld && w.maxX() - 1512 > 0 && 1512 - w.x >= kMinVisibleWidth - 1e-9);
+    for (int i = 0; i < 400; i++) {
+      pointer.x -= 3.37;
+      w = placed(DragTo(w, pointer, grab, one, 1));
+    }
+    CHECK(std::fabs(w.x + grab.x - pointer.x) <= 0.5 && std::fabs(w.y + grab.y - pointer.y) <= 0.5);
 
-    {
-      const Point pointer{500.49, 782.99};
-      const Rect next = DragTo({400, 600, 468, 263}, grab, pointer, single, 1);
-      const Rect shown{std::round(next.x), std::round(next.y), next.w, next.h};
-      CHECK(Near(next.y, 682) && DragHeld(next, grab, pointer) && DragSlipped(shown, grab, pointer));
-    }
+    Rect top{574, 700, 373, 210};
+    pointer = {top.x + grab.x, top.y + grab.y};
+    for (int i = 0; i < 200; i++) top = placed(DragTo(top, {pointer.x, pointer.y + 2.25 * (i + 1)}, grab, one, 1));
+    CHECK(top.maxY() <= 949 + 1e-9);
+    for (int i = 200; i >= 0; i--) top = placed(DragTo(top, {pointer.x, pointer.y + 2.25 * i}, grab, one, 1));
+    CHECK(Near(top.y, 700) && Near(top.x, 574));
   }
 
   failures += PropertyTest();

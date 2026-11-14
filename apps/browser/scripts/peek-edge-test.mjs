@@ -7,7 +7,7 @@ import { launch, reporter, session } from "../../../scripts/lib/instance.mjs";
 const args = process.argv.slice(2);
 const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
-  console.error("usage: node peek-edge-test.mjs <Debug Ardia.app> [--port=<DevTools port>] [--keep-data]\n\nThe auto-hidden sidebar's peek, through the native edge watcher: a pointer resting on the window's bottom or top edge beside the peek keeps it out instead of flicking it shut and open, one that goes well past the edge closes it, an edge crossing outside the sidebar's column never opens it, once it slides away only the window's edge brings it back, and pressing the other space's dot keeps it out.");
+  console.error("usage: node peek-edge-test.mjs <Debug Ardia.app> [--port=<DevTools port>] [--keep-data]\n\nThe auto-hidden sidebar's peek, through the native edge watcher: a pointer resting on the window's bottom or top edge beside the peek keeps it out instead of flicking it shut and open, one that goes well past the edge closes it, an edge crossing outside the sidebar's column never opens it, once it slides away only the window's edge brings it back, and pressing the other space's dot keeps it out. Also (#1297, #1393, #1679): only the last 3 pt or past the edge open it, it stays out 40 pt past its edge and closes 200 ms after the pointer leaves, a drag on its edge resizes it instead of closing it, and Reveal hidden tabs on hover off leaves the edge alone.");
   process.exit(2);
 }
 const appPath = resolve(appArg);
@@ -54,11 +54,75 @@ try {
 
   await rep.check("once it starts sliding away, only the window's edge brings it back, not the column it is leaving (#1192)", async () => {
     assert.equal(await run(`return peek();`), true);
-    const back = await run(`return at(700, 400).then(() => settle(170)).then(() => at(80, 400)).then(() => settle(700)).then(live);`);
+    const back = await run(`return at(700, 400).then(() => settle(260)).then(() => at(80, 400)).then(() => settle(700)).then(live);`);
     assert.equal(back, false, "back into the old column mid-slide");
     assert.equal(await run(`return peek();`), true);
-    const edge = await run(`return at(700, 400).then(() => settle(170)).then(() => at(2, 400)).then(() => settle(700)).then(live);`);
+    const edge = await run(`return at(700, 400).then(() => settle(260)).then(() => at(2, 400)).then(() => settle(700)).then(live);`);
     assert.equal(edge, true, "the edge mid-slide");
+    assert.equal(await run(`return away();`), false);
+  });
+
+  await rep.check("only the window's edge opens it: 5 pt in doesn't, 2 pt in and past the edge do (#1297)", async () => {
+    assert.equal(await run(`return at(300, 400).then(() => settle(300)).then(() => at(5, 400)).then(() => settle(500)).then(live);`), false, "5 pt in");
+    assert.equal(await run(`return at(2, 400).then(() => settle(500)).then(live);`), true, "2 pt in");
+    assert.equal(await run(`return away();`), false);
+  });
+
+  await rep.check("it stays out 30 pt past its edge, closes past 40 pt, and a quick overshoot within 200 ms doesn't close it (#1297)", async () => {
+    assert.equal(await run(`return peek();`), true);
+    assert.equal(await run(`return at(9 + 160 + 30, 400).then(() => settle(600)).then(live);`), true, "30 pt past the panel");
+    assert.equal(await run(`return at(9 + 160 + 80, 400).then(() => settle(120)).then(() => at(120, 400)).then(() => settle(600)).then(live);`), true, "out and back within 120 ms");
+    assert.equal(await run(`return at(9 + 160 + 45, 400).then(() => settle(600)).then(live);`), false, "45 pt past the panel");
+  });
+
+  await rep.check("a drag that starts on the peek's edge resizes it and keeps it out, even with the pointer ahead of the panel (#1679)", async () => {
+    assert.equal(await run(`return peek();`), true);
+    const out = await run(`const dev = globalThis.expo.modules.ArdiaDev; let win;
+      return ac.engine.call("windows.list", {}).then((l) => { win = l.find((x) => x.hasRoot).window; })
+        .then(() => at(9 + 160 - 2, 400)).then(() => settle(200))
+        .then(() => ac.engine.call("windows.dev", { window: win, action: "mouse:down:" + (9 + 160 - 2) + ",400" })).then(() => settle(100))
+        .then(() => ac.engine.call("windows.dev", { window: win, action: "mouse:dragged:" + (9 + 160 + 120) + ",400" })).then(() => at(9 + 160 + 400, 400))
+        .then(() => settle(600)).then(() => { const held = live(); return ac.engine.call("windows.dev", { window: win, action: "mouse:up:" + (9 + 160 + 120) + ",400" }).then(() => settle(300)).then(() => ({ held, width: st().settings.sidebarWidth })); });`);
+    assert.equal(out.held, true, "out while the button is down, the pointer 280 pt ahead of the panel's edge");
+    assert.ok(out.width > 160, `resized to ${out.width}`);
+    await run(`st().updateSettings({ sidebarWidth: 160 }); return away();`);
+  });
+
+  await rep.check("a drag that starts on a tab row keeps the peek out while the button is down, the pointer 160 pt past its edge (#1679)", async () => {
+    assert.equal(await run(`return peek();`), true);
+    const out = await run(`let win;
+      return ac.engine.call("windows.list", {}).then((l) => { win = l.find((w) => w.hasRoot).window; })
+        .then(() => at(60, 66)).then(() => settle(200))
+        .then(() => ac.engine.call("windows.dev", { window: win, action: "mouse:down:60,66" })).then(() => settle(80))
+        .then(() => ac.engine.call("windows.dev", { window: win, action: "mouse:dragged:100,66" })).then(() => at(9 + 160 + 160, 66))
+        .then(() => ac.engine.call("windows.dev", { window: win, action: "mouse:dragged:" + (9 + 160 + 160) + ",66" }))
+        .then(() => settle(700)).then(() => { const held = live(); return ac.engine.call("windows.dev", { window: win, action: "mouse:up:" + (9 + 160 + 160) + ",66" }).then(() => settle(600)).then(() => ({ held, after: live() })); });`);
+    assert.equal(out.held, true, "out while the button is down");
+    assert.equal(out.after, false, "closes once the button comes up away from it");
+    await run(`return away();`);
+  });
+
+  for (const [where, x, y] of [["the empty list", 80, 420], ["the header", 120, 20]]) {
+    await rep.check(`a press on ${where} is a window drag: the peek stays out while the button is down (#1679)`, async () => {
+      assert.equal(await run(`return peek();`), true);
+      const out = await run(`let win;
+        return ac.engine.call("windows.list", {}).then((l) => { win = l.find((w) => w.hasRoot).window; })
+          .then(() => at(${x}, ${y})).then(() => settle(200))
+          .then(() => ac.engine.call("windows.dev", { window: win, action: "mouse:down:${x},${y}" }))
+          .then((hit) => settle(700).then(() => ({ hit, held: live() })))
+          .then((r) => ac.engine.call("windows.dev", { window: win, action: "mouse:up:${x},${y}" }).then(() => settle(300)).then(() => ({ ...r, after: live() })));`);
+      assert.match(out.hit, /WindowDragRegion/, "the press lands on a window drag region");
+      assert.equal(out.held, true, "out while the button is down");
+      assert.equal(out.after, true, "still out with the pointer over it after the button comes up");
+      await run(`return away();`);
+    });
+  }
+
+  await rep.check("with Reveal hidden tabs on hover off, the edge doesn't open it (#1393)", async () => {
+    await run(`st().updateSettings({ revealTabsOnHover: false }); return settle(300);`);
+    assert.equal(await run(`return peek();`), false);
+    await run(`st().updateSettings({ revealTabsOnHover: true }); return away();`);
+    assert.equal(await run(`return peek();`), true, "back on");
     assert.equal(await run(`return away();`), false);
   });
 

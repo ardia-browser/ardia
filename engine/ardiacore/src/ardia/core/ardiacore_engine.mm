@@ -186,6 +186,12 @@ extern "C" __attribute__((visibility("default"))) int ArdiaCoreMain(
   ProfileManager* manager = g_browser_process->profile_manager();
   base::FilePath path =
       manager->user_data_dir().Append(base::SysNSStringToUTF8(directoryName));
+  if (Profile* dying = ardiacore::DyingProfileAt(path)) {
+    ardiacore::WhenProfileGone(dying, base::BindOnce(^{
+                              [self loadProfile:directoryName completion:completion];
+                            }));
+    return;
+  }
   Profile* loaded = manager->GetProfileByPath(path);
   if (IsProfileDirectoryMarkedForDeletion(path) ||
       (loaded && ardiacore::IsProfileDeleting(loaded))) {

@@ -27,6 +27,9 @@ NO_SESSION_TAB = (
 )
 
 
+NAVIGATED_REFS_KEPT = 4000
+
+
 @dataclass
 class Ref:
     id: str
@@ -57,6 +60,8 @@ class State:
         self.pages: dict[str, Page] = {}
         self.pending_reaction: dict | None = None
         self.consent_dismissed: str | None = None
+        self.click_note: str | None = None
+        self.load_note: str | None = None
         self.script_state: str = "{}"
         self.sessions: dict[str, Page] = {}
         self.tab_ids: dict[str, str] = {}
@@ -71,6 +76,7 @@ class State:
         self.refs: dict[str, Ref] = {}
         self.issued_refs = 0
         self.ref_keys: dict[tuple, str] = {}
+        self.navigated_refs: dict[str, Ref] = {}
         self.current_refs: list[str] = []
         self.generation = 0
         self.last_snapshot: str | None = None
@@ -406,7 +412,11 @@ class State:
             instance, target, frame, loader, _ = key
             if instance != self.instance or (target == page.target_id and (frame, loader) not in live):
                 del self.ref_keys[key]
-                self.refs.pop(ref_id, None)
+                gone = self.refs.pop(ref_id, None)
+                if gone is not None and instance == self.instance:
+                    self.navigated_refs[ref_id] = gone
+        while len(self.navigated_refs) > NAVIGATED_REFS_KEPT:
+            self.navigated_refs.pop(next(iter(self.navigated_refs)))
 
     def next_ref(self) -> str:
         self.issued_refs += 1
@@ -434,6 +444,8 @@ class State:
     async def resolve_ref(self, ref_id: str, follow: bool = True):
         ref = self.refs.get(ref_id)
         if ref is None:
+            if ref_id in self.navigated_refs:
+                raise StaleRef(ref_id, await self.after_navigation(self.navigated_refs[ref_id]))
             if ref_id[1:].isdigit() and int(ref_id[1:]) <= self.issued_refs:
                 raise StaleRef(ref_id, "it came from an earlier snapshot, and refs are never reused")
             raise BrowseError(f"Unknown ref: {ref_id}", code="unknown_ref")
@@ -471,6 +483,21 @@ class State:
             return found_page, found
         raise StaleRef(ref_id, f'{gone}; the page redrew it, and the same {ref.role} "{ref.name}" is now @{successor.id}')
 
+    async def after_navigation(self, old: Ref) -> str:
+        why = "the page navigated since that snapshot (an earlier step loaded a new document)"
+        if old.target not in self.pages:
+            return why
+        command_metrics.flag("stale_ref_after_navigation", True)
+        try:
+            successor = await self.redrawn(self.pages[old.target], old)
+        except ConnectionLost:
+            raise
+        except BrowseError:
+            successor = None
+        if successor is None:
+            return why
+        return f'{why}; the new page has the same {old.role} "{old.name}" as @{successor.id}, if it is the one you meant'
+
     async def redrawn(self, page: Page, ref: Ref) -> Ref | None:
         from ardia_cli.browse import snapshot
 
@@ -500,6 +527,12 @@ class State:
             try:
                 remote = await page.call("(s) => ardiaBrowse.query(s)", selector, frame=frame, by_value=False, read=True)
             except BrowseError as error:
+                if error.code in ("document_changed", "page_navigated", "frame_gone") and time.monotonic() + APPEAR_POLL < deadline:
+                    polled = True
+                    await asyncio.sleep(APPEAR_POLL)
+                    continue
+                if error.code != "page_script_error":
+                    raise
                 raise BrowseError(f"Invalid selector {selector}: {error.message}") from None
             element = await page.element_from(remote, frame, selector)
             if element is not None:

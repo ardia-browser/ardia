@@ -21,7 +21,7 @@ import { clickTab, toggleBookmarkInWindow } from "../../state/sidebar/actions";
 import { useBookmarksShown } from "../../state/bookmarks/hooks";
 import { GroupPanel } from "./GroupPanel";
 import { dismissHover, setHoverSpace } from "../../state/sidebar/hover";
-import { cardHoverProps } from "./hoverController";
+import { cardHoverProps, useCardTarget } from "./hoverController";
 import { HoverCardFrameProvider, useHoverCardMotion, useHoverCardOrigin, useHoverCardPlacement } from "./hoverMotion";
 import { hoverCardAt, sidebarEdgeOf } from "./hoverPlacement";
 import { usePeekSpan } from "../../state/windows/dockMotion";
@@ -31,12 +31,14 @@ import { useSidebarWidth } from "../../state/sidebar/hooks";
 import { TabIcon } from "./TabIcon";
 import { HoverPlayer, useShowsMiniPlayer } from "../media/HoverPlayer";
 import { useMedia, usePictureInPicture } from "../../state/media/media";
+import { noteTabHoverCardPress } from "../../state/telemetry/hoverCardCounts";
 
 const WIDTH = 264;
 
 export function HoverCard({ windowId, width, height }: { windowId: string; width: number; height: number }) {
   const hover = useSidebarUi((u) => (u.hover?.windowId === windowId ? u.hover : null));
-  const orphaned = useHoverOrphaned(windowId, hover);
+  const switchedOff = useCardTarget(hover) === null && hover !== null;
+  const orphaned = useHoverOrphaned(windowId, hover) || switchedOff;
   useLayoutEffect(() => {
     if (orphaned) dismissHover();
   }, [orphaned]);
@@ -95,13 +97,13 @@ function TabCard({ tabId, windowId, anchor }: { tabId: string; windowId: string;
         </Text>
       ) : null}
       <View style={{ flexDirection: "row", gap: space.xs, marginTop: space.m }}>
-        <ActionTile caption icon={tab.pin ? "pin.slash" : "pin"} label={tab.pin ? "Unpin" : "Pin"} onPress={() => togglePin(tabId)} />
+        <ActionTile caption icon={tab.pin ? "pin.slash" : "pin"} label={tab.pin ? "Unpin" : "Pin"} onPress={() => (noteTabHoverCardPress(false), togglePin(tabId))} />
         {tab.url && showBookmarks ? (
           <ActionTile caption
             icon={bookmarked ? "bookmark.fill" : "bookmark"}
             active={bookmarked}
             label="Bookmark"
-            onPress={() => toggleBookmarkInWindow(windowId, { url: tab.url, title: tabTitle(tab), favicon: tab.favicon })}
+            onPress={() => (noteTabHoverCardPress(false), toggleBookmarkInWindow(windowId, { url: tab.url, title: tabTitle(tab), favicon: tab.favicon }))}
           />
         ) : null}
         {!isActive && !tab.pin ? (
@@ -109,17 +111,19 @@ function TabCard({ tabId, windowId, anchor }: { tabId: string; windowId: string;
             icon="rectangle.split.2x1"
             label="Split"
             onPress={() => {
+              noteTabHoverCardPress(false);
               dismissHover();
               openInSplit(tabId);
             }}
           />
         ) : null}
-        {video ? <ActionTile caption icon={pip ? "pip.exit" : "pip.enter"} label={pip ? "Exit PiP" : "PiP"} onPress={togglePip} /> : null}
+        {video ? <ActionTile caption icon={pip ? "pip.exit" : "pip.enter"} label={pip ? "Exit PiP" : "PiP"} onPress={(press) => (noteTabHoverCardPress(false), togglePip(press))} /> : null}
         {away ? (
           <ActionTile caption
             icon="arrow.uturn.backward"
             label="Reset"
             onPress={() => {
+              noteTabHoverCardPress(true);
               dismissHover();
               returnToPinnedUrl(tabId);
             }}

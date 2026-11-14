@@ -218,7 +218,7 @@ def draw_annotations(png: bytes, rows: list, viewport: dict, full_offset: tuple[
 @command("screenshot")
 async def cmd_screenshot(ctx, argv):
     options, args = parse(argv, {"--full": "bool", "--annotate": "bool", "--screenshot-dir": "value", "--screenshot-format": "value",
-                                 "--screenshot-quality": "value"}, {"-f": "--full"})
+                                 "--screenshot-quality": "value", "--out": "value"}, {"-f": "--full"})
     for key in ("screenshot_dir", "screenshot_format", "screenshot_quality"):
         if options.get(key):
             ctx.options[key] = options[key]
@@ -232,7 +232,7 @@ async def cmd_screenshot(ctx, argv):
     quality = ctx.options.get("screenshot_quality") or ctx.env.get("AGENT_BROWSER_SCREENSHOT_QUALITY")
     quality = int(quality) if quality else None
     selector = None
-    path = None
+    path = options.get("out") or None
     for arg in args:
         if path is None and (arg.lower().endswith((".png", ".jpg", ".jpeg")) or "/" in arg and not arg.startswith("@")):
             path = arg

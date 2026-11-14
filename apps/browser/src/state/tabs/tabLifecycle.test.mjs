@@ -181,3 +181,98 @@ test("a recent pin queued for warming at launch stays closed when the user close
   assert.ok(S().tabs[warm].page.nav, "a pin left alone still warms up");
   assert.notEqual(S().tabs[warm].page.kind, "asleep");
 });
+
+test("the loaded tab budget grows with the Mac's memory, and shrinks to the mode's floor under memory pressure", async () => {
+  const { loadedTabBudget } = await import("./loadedTabBudget.ts");
+  const sys = (gib, memoryPressure = "normal") => ({ onBattery: false, batteryLevel: null, lowPowerMode: false, memoryPressure, physicalMemory: gib * 2 ** 30 });
+  const on = (memorySaverMode) => ({ memorySaver: true, memorySaverMode });
+  const minutes = (budget) => budget && { tabs: budget.tabs, minutes: budget.hiddenMs / 60_000 };
+  assert.deepEqual(minutes(loadedTabBudget(on("balanced"), sys(8))), { tabs: 10, minutes: 60 }, "an 8 GB Mac keeps Dia's ten");
+  assert.deepEqual(minutes(loadedTabBudget(on("balanced"), sys(16))), { tabs: 16, minutes: 60 });
+  assert.deepEqual(minutes(loadedTabBudget(on("balanced"), sys(64))), { tabs: 64, minutes: 60 });
+  assert.deepEqual(minutes(loadedTabBudget(on("moderate"), sys(16))), { tabs: 32, minutes: 120 });
+  assert.deepEqual(minutes(loadedTabBudget(on("maximum"), sys(16))), { tabs: 8, minutes: 30 });
+  assert.deepEqual(minutes(loadedTabBudget(on("maximum"), sys(8))), { tabs: 5, minutes: 30 });
+  assert.deepEqual(minutes(loadedTabBudget(on("balanced"), sys(32, "warning"))), { tabs: 10, minutes: 10 }, "under pressure the floor, and ten minutes hidden");
+  assert.deepEqual(minutes(loadedTabBudget(on("moderate"), sys(32, "critical"))), { tabs: 20, minutes: 10 });
+  assert.deepEqual(minutes(loadedTabBudget(on("turbo"), sys(8))), { tabs: 10, minutes: 60 }, "an unknown mode is Balanced");
+  assert.equal(loadedTabBudget({ memorySaver: false, memorySaverMode: "maximum" }, sys(8)), null, "Memory Saver off keeps every tab loaded");
+  assert.equal(loadedTabBudget(on("balanced"), null), null, "nothing sleeps before the Mac's memory is known");
+});
+
+const minute = 60_000;
+
+function windowOfHiddenTabs(count, now) {
+  S().hydrate({});
+  const w = S().createWindow({ url: "https://active.com/" });
+  const ids = Array.from({ length: count }, (_, i) => S().newTab(w, { url: `https://site${i}.com/`, background: true }));
+  ids.forEach((id, i) => S().updateTab(id, { lastActiveAt: now - (i + 1) * 10 * minute }));
+  const active = Object.keys(S().tabs).find((id) => !ids.includes(id));
+  return { ids, active };
+}
+
+test("past the budget only tabs hidden long enough sleep, oldest first; the most recently used, shown, playing and just-refused tabs stay", async () => {
+  const { tabsOverBudget } = await import("./loadedTabBudget.ts");
+  const now = Date.now() + 24 * 60 * minute;
+  const { ids, active } = windowOfHiddenTabs(14, now);
+  const loaded = [active, ...ids];
+  const budget = { tabs: 10, hiddenMs: 30 * minute };
+  const over = (b = budget, seen, refused) => tabsOverBudget(S(), loaded, b, now, seen, refused);
+  assert.deepEqual(over(), [ids[13], ids[12], ids[11], ids[10], ids[9]], "the shown tab and the 9 most recently used stay; the rest go oldest first");
+  assert.deepEqual(over({ tabs: 15, hiddenMs: 0 }), [], "at or under the budget nothing sleeps");
+  assert.deepEqual(over({ tabs: 10, hiddenMs: 125 * minute }), [ids[13], ids[12]], "a tab over the budget stays until it has been hidden long enough");
+  assert.deepEqual(over({ tabs: 2, hiddenMs: 30 * minute }), ids.slice(2).reverse(), "a tab used in the last half hour stays whatever the budget");
+  assert.deepEqual(over(budget, new Map([[ids[13], now - minute]])), [ids[12], ids[11], ids[10], ids[9], ids[8]], "a tab on screen until a minute ago counts as just used, so the next one goes");
+  assert.deepEqual(over(budget, undefined, new Map([[ids[13], now + minute]])), [ids[12], ids[11], ids[10], ids[9]], "a tab Chrome just kept isn't asked again yet, and nobody sleeps in its place");
+  assert.deepEqual(over(budget, undefined, new Map([[ids[13], now - minute]])), [ids[13], ids[12], ids[11], ids[10], ids[9]]);
+  S().updateLive(ids[12], { playingAudio: true });
+  assert.deepEqual(over(), [ids[13], ids[11], ids[10], ids[9]], "a playing tab stays, and no more recent tab sleeps in its place");
+  S().updateLive(ids[12], { playingAudio: false });
+  S().updateTab(ids[11], { url: "ardia://settings" });
+  assert.deepEqual(over(), [ids[13], ids[12], ids[10], ids[9]], "only web pages sleep");
+  lifecycle.noteDiscarded(ids[13]);
+  assert.deepEqual(over(), [ids[12], ids[10], ids[9]], "a sleeping tab doesn't count as loaded");
+  lifecycle.noteReady(ids[13]);
+  S().activate(ids[13]);
+  assert.ok(!over().includes(ids[13]), "the tab on screen never sleeps");
+});
+
+test("Chrome decides each sleep: a tab it keeps, or whose answer doesn't come in time, stays loaded and isn't asked again for ten minutes", async (t) => {
+  const { sleepTabsOverBudget } = await import("./loadedTabBudget.ts");
+  const { webviews } = await import("../../platform/webviews.ts");
+  const { takeTabSleepCounts } = await import("../telemetry/tabSleepCounts.ts");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const now = Date.now() + 48 * 60 * minute;
+  const { ids, active } = windowOfHiddenTabs(6, now);
+  const asked = [];
+  const answers = { [ids[5]]: async () => [26], [ids[4]]: () => new Promise(() => {}), [ids[3]]: async () => [7], [ids[1]]: async () => { throw new Error("view gone"); } };
+  webviews.clear();
+  for (const id of [active, ...ids]) webviews.set(id, { sleepIfHidden: (seconds) => (asked.push([id, seconds]), answers[id]?.() ?? Promise.resolve([])) });
+  takeTabSleepCounts();
+  const budget = { tabs: 1, hiddenMs: 10 * minute };
+  const sweep = async (at) => {
+    const done = sleepTabsOverBudget(budget, at);
+    for (let i = 0; i < 8; i++) {
+      await new Promise((resolve) => setImmediate(resolve));
+      t.mock.timers.tick(1500);
+    }
+    return done;
+  };
+  assert.deepEqual(await sweep(now), [ids[2]], "four tabs are asked per sweep, oldest first: form input keeps one, one never answers, one was on screen too recently, one sleeps");
+  assert.deepEqual(asked, [[ids[5], 600], [ids[4], 600], [ids[3], 600], [ids[2], 600]]);
+  lifecycle.noteDiscarded(ids[2]);
+  asked.length = 0;
+  assert.deepEqual(await sweep(now + minute), [ids[0]], "the next sweep leaves the kept tabs alone and goes on to the next oldest; a view that fails keeps its tab too");
+  assert.deepEqual(asked.map(([id]) => id), [ids[1], ids[0]]);
+  lifecycle.noteDiscarded(ids[0]);
+  asked.length = 0;
+  assert.deepEqual(await sweep(now + 12 * minute), []);
+  assert.deepEqual(asked.map(([id]) => id), [ids[5], ids[4], ids[1], ids[3]], "ten minutes later Chrome is asked again, the tab it had seen on screen as the most recent");
+  assert.equal(takeTabSleepCounts().tabs_slept_over_budget, 2);
+  lifecycle.noteReady(ids[2]);
+  assert.equal(takeTabSleepCounts().tabs_slept_over_budget_reopened, 1, "a slept tab opened again within half an hour is counted: the sign the budget is too tight");
+  lifecycle.noteReady(ids[2]);
+  lifecycle.noteGone(ids[0]);
+  assert.equal(takeTabSleepCounts().tabs_slept_over_budget_reopened, 0);
+  webviews.clear();
+});

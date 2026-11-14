@@ -346,6 +346,6 @@ struct SearchTray<Drag: Gesture>: View {
 
   private func leave() {
     isFocused = false
-    app.browse.dismissSearch()
+    app.browse.dismissSearch(submitted: true)
   }
 }

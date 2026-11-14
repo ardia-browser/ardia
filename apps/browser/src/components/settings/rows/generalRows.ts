@@ -141,6 +141,11 @@ export const generalRows = {
           description: "In every window, the tabs slide out of view and come back when you move the pointer to the window's edge. Changing it here resets every window; ⌘S and View › Auto-Hide Tabs hide or show the tabs in one window only.",
           keywords: ["hide tabs", "hide sidebar", "show sidebar", "toggle sidebar", "hide tab bar", "tab strip", "top tabs", "focus mode", "full screen", "zen"],
         },
+        revealTabsOnHover: {
+          title: "Reveal hidden tabs on hover",
+          description: "With Auto-hide tabs on, the tabs slide back over the page while the pointer is at the window's edge. Off, they come back only with ⌘S or View › Auto-Hide Tabs.",
+          keywords: ["hover", "peek", "edge", "reveal", "pop out", "floating sidebar", "compact mode", "shortcut only", "accidental", "zen"],
+        },
         sidebarSide: {
           title: "Sidebar position",
           description: "On the left, as in Dia, or on the right, as in Arc. The window buttons stay at the top left.",
@@ -183,6 +188,11 @@ export const generalRows = {
           title: "Show tab status on Top Apps",
           description: "A Top App's tile shows a speaker while its tab plays or is muted, a mark while it is in Picture in Picture, and its unread count when unread counts are on. Off, as in Dia, a tile shows only the site's icon.",
           keywords: ["pinned tiles", "favorites", "badges", "indicators", "unread count", "speaker", "audio", "muted", "playing", "clean", "dia"],
+        },
+        showTabHoverMenu: {
+          title: "Show tab hover menu",
+          description: "Rest the pointer on a tab or Top App and a card shows its title, address, and Pin, Bookmark, Split and Reset. Off, resting on a tab shows only its full title and site as a plain tooltip, and every one of those actions is in the tab's right-click menu. A playing tab's mini player still shows.",
+          keywords: ["hover", "hover card", "popup", "pop-up", "tooltip", "tab actions", "reset", "distracting", "dia"],
         },
         fadeUnloadedTabs: {
           advanced: true,

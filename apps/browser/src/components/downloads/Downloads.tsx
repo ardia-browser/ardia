@@ -2,6 +2,7 @@ import { cancelDownload, keepDownload, pauseDownload, resumeDownload, type Downl
 import {
   ContextMenuArea,
   MouseArea,
+  OutsidePressArea,
   PopoverBubble,
   Symbol,
   Button,
@@ -29,9 +30,9 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Image, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useShallow } from "zustand/react/shallow";
 import { useDownloads, useSidebarOpen, useSidebarSide, useWindowId, useWindowUi } from "../../state/browser/hooks";
-import { clearDownloads, setDownloadsOpen } from "../../state/windows/actions";
+import { clearDownloads, dismissDownloadsByPress, setDownloadsOpen } from "../../state/windows/actions";
 import { watchNewDownloads } from "../../state/windows/downloadWatch";
-import { useDownload } from "../../state/windows/hooks";
+import { useDownload } from "../../state/downloads/hooks";
 import { useAddressBarInSidebar, useTabLayout, useToolbarLightsCenter } from "../../state/windows/layout";
 import { SIDEBAR_FOOTER_DOWNLOADS } from "../sidebar/geometry";
 import { PROFILE_DOTS_HEIGHT } from "../profiles/ProfileDots";
@@ -100,8 +101,7 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
   const listMax = p ? Math.max(L.row, Math.min(L.visibleRows * L.row, p.room - L.chrome)) : L.visibleRows * L.row;
 
   return (
-    <View ref={root} collapsable={false} onLayout={onLayout} pointerEvents={closing ? "none" : "auto"} style={StyleSheet.absoluteFill}>
-      <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpen(false)} />
+    <View ref={root} collapsable={false} onLayout={onLayout} pointerEvents={closing ? "none" : "box-none"} style={StyleSheet.absoluteFill}>
       {p ? (
         <Animated.View
           style={{
@@ -112,44 +112,46 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
             ...motion,
           }}
         >
-          <PanelBackground placement={p} />
-          <View style={{ marginTop: upward ? 0 : arrowRoom, marginBottom: upward ? arrowRoom : 0, paddingTop: L.padTop, paddingBottom: L.padBottom }}>
-            <View style={{ flexDirection: "row", alignItems: "center", paddingLeft: PANEL.inset, paddingRight: PANEL.inset - L.textButtonPad, height: L.header }}>
-              <Text size="caption" weight="semibold" tone="textSecondary" style={{ flex: 1, letterSpacing: L.headerTracking }}>
-                RECENT DOWNLOADS
-              </Text>
-              {clearable && (
-                <Button
-                  variant="text"
-                  look="panel"
-                  title="Clear"
-                  onPress={() => {
-                    setOpen(false);
-                    clearDownloads(windowId);
-                  }}
-                />
-              )}
-            </View>
-            {ids.length === 0 ? (
-              <View style={{ height: PANEL.rowHeight, paddingHorizontal: PANEL.inset, justifyContent: "center" }}>
-                <Text tone="textSecondary">No downloads yet</Text>
+          <OutsidePressArea onOutsidePress={closing ? undefined : () => dismissDownloadsByPress(windowId)}>
+            <PanelBackground placement={p} />
+            <View style={{ marginTop: upward ? 0 : arrowRoom, marginBottom: upward ? arrowRoom : 0, paddingTop: L.padTop, paddingBottom: L.padBottom }}>
+              <View style={{ flexDirection: "row", alignItems: "center", paddingLeft: PANEL.inset, paddingRight: PANEL.inset - L.textButtonPad, height: L.header }}>
+                <Text size="caption" weight="semibold" tone="textSecondary" style={{ flex: 1, letterSpacing: L.headerTracking }}>
+                  RECENT DOWNLOADS
+                </Text>
+                {clearable && (
+                  <Button
+                    variant="text"
+                    look="panel"
+                    title="Clear"
+                    onPress={() => {
+                      setOpen(false);
+                      clearDownloads(windowId);
+                    }}
+                  />
+                )}
               </View>
-            ) : (
-              <ScrollView style={{ maxHeight: listMax }} showsVerticalScrollIndicator={ids.length * L.row > listMax} contentContainerStyle={{ paddingHorizontal: PANEL.rowInset }}>
-                {ids.map((id) => (
-                  <DownloadRowItem key={id} id={id} windowId={windowId} />
-                ))}
-              </ScrollView>
-            )}
-            <MenuSeparator />
-            <FooterButton
-              title="View all downloads"
-              onPress={() => {
-                setOpen(false);
-                openInternalPage("downloads", windowId);
-              }}
-            />
-          </View>
+              {ids.length === 0 ? (
+                <View style={{ height: PANEL.rowHeight, paddingHorizontal: PANEL.inset, justifyContent: "center" }}>
+                  <Text tone="textSecondary">No downloads yet</Text>
+                </View>
+              ) : (
+                <ScrollView style={{ maxHeight: listMax }} showsVerticalScrollIndicator={ids.length * L.row > listMax} contentContainerStyle={{ paddingHorizontal: PANEL.rowInset }}>
+                  {ids.map((id) => (
+                    <DownloadRowItem key={id} id={id} windowId={windowId} />
+                  ))}
+                </ScrollView>
+              )}
+              <MenuSeparator />
+              <FooterButton
+                title="View all downloads"
+                onPress={() => {
+                  setOpen(false);
+                  openInternalPage("downloads", windowId);
+                }}
+              />
+            </View>
+          </OutsidePressArea>
         </Animated.View>
       ) : null}
     </View>

@@ -10,7 +10,7 @@ import { activate } from "../../state/tabs/actions";
 import { openPanel as openWindowPanel, toggleSidebar } from "../../state/windows/actions";
 import { useIsBookmarked, useSettings, useSidebarSide, useTab, useTabLayout, useTabLive, useTabsShown } from "../../state/browser/hooks";
 import type { Tab } from "../../state/browser/types";
-import { Button, ContextMenuArea, Divider, FadeLabel, font, ink, space, Symbol, Text, useHover, WindowDragRegion } from "../ui";
+import { Button, ContextMenuArea, Divider, FadeLabel, ink, sidebarFont, sidebarPoints, space, Symbol, Text, useHover, WindowDragRegion } from "../ui";
 import { type ToolbarGeometry } from "../window/geometry";
 import { usePage, usePages, type PageState } from "../../state/tabs/pageState";
 import { togglePopover } from "../../state/tabs/popoverDismiss";
@@ -265,7 +265,7 @@ export const SidebarUrlField = memo(function SidebarUrlField({ tab, palette, win
             <Text numberOfLines={1} ellipsizeMode="head" weight="medium" color={palette.text} style={SHRINK}>
               {field.host}
             </Text>
-            <FadeLabel text={field.trail} fontSize={font.body.fontSize} color={palette.secondary} fadeWidth={14} style={{ flex: 1, height: 18, marginLeft: -space.xxs }} />
+            <FadeLabel text={field.trail} fontSize={sidebarFont.body.fontSize} color={palette.secondary} fadeWidth={14} style={{ flex: 1, height: sidebarPoints(18), marginLeft: -space.xxs }} />
           </View>
         </Pressable>
       </ContextMenuArea>

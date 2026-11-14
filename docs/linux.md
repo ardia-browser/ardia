@@ -13,8 +13,8 @@ Walked by hand on 2026-11-14 on Ubuntu 24.04 (x86_64), in a test instance on a p
 data folder, as a user would: real X key presses, clicks and drags, a screenshot for every row. The walk started on
 commit d7a4bd789; the rows it found broken were fixed on the way and seen again after the fix (through cc0829af3),
 and those rows name the fix. Most rows were walked with no window manager; maximize, dragging, full screen, focus, menus and Peek were walked
-again under xfwm4 with its compositor. Of the 63 rows, 60 work, 2 work with a difference, none is broken, 1 is not
-offered, and every row was walked. Works with a difference says what differs; the Mac's list is
+again under xfwm4 with its compositor. Of the 64 rows, 62 work, 2 work with a difference, none is broken or missing,
+and every row was walked. Works with a difference says what differs; the Mac's list is
 `docs/dia-feature-parity.md`.
 
 **Install, first launch, updates**
@@ -52,6 +52,7 @@ offered, and every row was walked. Works with a difference says what differs; th
 | Maximize and restore | Works under xfwm4, square corners while maximized | |
 | Moving a window, edge snapping | Works under xfwm4: the window manager moves it from the tab strip, toolbar, sidebar header, frame margins and Settings' title bar, so it snaps to screen edges, a double click maximizes and restores, dragging a maximized window restores it, and Alt-drag works; right-clicking the empty tab strip or sidebar header still opens their menus. xfwm4 here doesn't tile on drag, a decorated window included. The empty sidebar below the tabs and Little Ardia's title still move the window themselves (they take double clicks and clicks). With no window manager, drag areas don't move the window | 72fcd4f2c |
 | Pop-up menus (the … menu, tab menus) | Works, also when no Ardia window has focus (no window manager, right after a dialog); before, the menu didn't open and its button stayed pressed; with no window manager they also open after another Ardia window or a file dialog closed, which used to leave every menu, the page's too, closing as it opened. Shortcut labels read "Ctrl+Comma" | ab87cf84a, becfcb2c6 |
+| Keyboard focus after a dialog or window closes | Works like the Mac: after a page's alert, an Ardia confirm, a save or open picker, a page's file input or a focused Ardia window (Settings) closes, the window behind takes the keyboard again and its text field keeps typing, with no window manager and under xfwm4, wherever the pointer is. Before, with no window manager, focus fell to the desktop and keys reached Ardia only while the pointer was over it | 016992209 |
 | Pin, Top Apps, groups | Works: the hover card's Pin makes a Top App tile; the tab menu's New Group with Tab makes a group and names it in place | |
 | Profiles: create, switch with Alt+1, Alt+2 | Works: Settings › Profiles › Create Profile, then Alt+2 and Alt+1 switch (the window takes the profile's colour). The sidebar header cuts "Work" to "W..." | |
 
@@ -77,7 +78,7 @@ offered, and every row was walked. Works with a difference says what differs; th
 | Task Manager (Shift+Esc) | Works: every process with memory, CPU and process ID, and End Process for a page's, which then offers Reload. Before, it did nothing | eff01f92a |
 | Drop a link or file onto a page | Works: a link or file dropped on a page opens it in a new tab next to it; a page that takes drops gets them. Before, a link dropped on a page did nothing | e07e27d8a |
 | Drop a link onto the tab strip or sidebar | Works: a link dragged from another app onto the sidebar opens as a new tab | |
-| Translate | Not offered | |
+| Translate | Works on device, like the Mac: a French or German page shows the Translate button in the address bar; the first use downloads that language from Mozilla ("Downloading French… 45% of 26 MB"), then the page turns to English in place with links and bold kept, code and form fields left alone, and text further down translated as it scrolls in. Show Original restores it; the button's menu has Choose Another Language (German to French goes through English) and Never Translate This Site. The engine is Firefox's (Bergamot with Mozilla's released models), not Apple's, so wording differs from the Mac. Before, Translate wasn't offered | eab797e77 |
 
 **Passwords, permissions, extensions**
 
@@ -91,7 +92,7 @@ offered, and every row was walked. Works with a difference says what differs; th
 | Camera and microphone | Works with Chromium's fake camera: the app's prompt, then the stream | |
 | Chrome Web Store install | Works: Add to Chrome, the app's Add dialog listing the permissions, then the store says Remove from Chrome | |
 | Extensions pane | Works | |
-| Ad, tracker and cookie-banner blocking | Works: an ad script and an analytics script are blocked while a CDN script loads; EasyList's `#carbonads` is hidden on a named host (the engine finds no domain for a bare IP or localhost, so cosmetic hiding skips those). Cookie-banner lists weren't turned on | |
+| Ad, tracker and cookie-banner blocking | Works: an ad script and an analytics script are blocked while a CDN script loads; EasyList's `#carbonads` is hidden on a named host and on a public IP address. Not on localhost, 127.0.0.1 or LAN addresses (10.0.0.x, 192.168.x): EasyList itself turns generic hiding off there (`@@://127.0.0.1$generichide` and its neighbours), as in every browser using it. Cookie-banner lists weren't turned on | |
 | Bookmark and password export | Works: Bookmarks › Export Bookmarks writes a Netscape bookmarks file; Settings › Passwords › Export CSV (an advanced row) asks for the login password first (a check from the last 60 s counts), then writes the CSV with mode 0600; after the save dialog it checks again, so a lock while the dialog is open cancels and a dialog left open past the 60 s asks again. The Passwords pane's "Password manager apps" row talks about the macOS Applications folder. Before, Export CSV worked while the pane was locked | 99ca89c17, 49ec7a5b7 |
 
 **Settings**
@@ -102,7 +103,7 @@ offered, and every row was walked. Works with a difference says what differs; th
 | Appearance: light and dark | Works | |
 | Keyboard Shortcuts pane | Works, Ctrl keys | |
 | Live Folders pane | Works (renders; no service connected) | |
-| Sync | Works: with a folder chosen (Settings › Sync › Sync folder, in plain view since Linux has no default cloud folder), Turn On Sync writes the vault and shows Save Your Recovery Kit. Before a folder is chosen the pane says "No synced folder found on this computer" and to choose one a sync app keeps the same across computers, and Turn On Sync is disabled. Before, the picker was an advanced row and the pane said "cloud folder is off" | babe9426d |
+| Sync | Works: with a folder chosen (Settings › Sync › Sync folder, in plain view since Linux has no default cloud folder), Turn On Sync writes the vault and shows Save Your Recovery Kit. Before a folder is chosen the folder row says "No folder chosen", the pane says "No synced folder found on this computer" and to choose one a sync app keeps the same across computers, and Turn On Sync is disabled, as on the Mac with iCloud Drive off; any folder chosen, `~/Ardia Sync` included, enables it. Before, the picker was an advanced row, the pane said "cloud folder is off", and it showed `~/Ardia Sync` as the folder while Turn On Sync stayed disabled, even after choosing that folder | babe9426d, 9859cf55e |
 | Report a Problem: screen recording | Works: the recording pill (Recording 0:05, Stop) floats over the window; Stop, Escape or the 60 s limit end it; with Include web pages off every page area is black, thumbnail included. Before, Record said Ardia couldn't record the window | cc0829af3 |
 
 ## Design
@@ -315,6 +316,10 @@ the main method where one is needed (`aroundMain` in `tsModules.ts`), the main p
 
 ## The main process
 
+- **Focus after dialogs.** Every dialog main opens goes through `systemDialogs.ts`; when one closes, or a focused app
+  window closes (`focusReturn.ts`), and no app window has focus 100 ms later, the parent or the most recently focused
+  window is focused again, which a window manager has already done. A page's file input reports its `change` and
+  `cancel` events from a page script (`services/fileChooserFocus.ts`) for the same.
 - **Launch config.** `src/launch.ts` and `src/paths.ts` are the only files that read the environment (`ARDIA_DATA_DIR`,
   `ARDIA_BACKGROUND`, `ARDIA_REMOTE_DEBUGGING_PORT`, `ARDIA_INSTANCE`, `ARDIA_SWITCHES`, `ARDIA_TRACE`, `ARDIA_TEST`,
   `ARDIA_FEEDBACK_URL`). A test instance is an `ARDIA_DATA_DIR` outside `~/.local/share/ardia`, `~/.config/ardia`,
@@ -401,7 +406,20 @@ the main method where one is needed (`aroundMain` in `tsModules.ts`), the main p
 - **Requests.** Electron keeps one `webRequest` listener per event per session, so filters go through
   `services/requests.ts` (`onBeforeRequest`, `onHeadersReceived`), never the session directly.
 - **Content blocker.** `@ghostery/adblocker`'s engine with uBlock Origin's default lists, cached and serialized under
-  `<data>/ContentBlocker`.
+  `<data>/ContentBlocker`. Element hiding asks the engine with the page's hostname and its registrable domain (none for
+  an IP address, which the engine handles); EasyList's `$generichide` exceptions switch generic hiding off on
+  localhost, 127.0.0.1 and LAN addresses.
+- **Translate.** `ArdiaTranslate` (`modules/translate.ts`, `src/translate`) answers the Mac module the shared
+  `state/site/translate.ts` drives. Bergamot, Firefox's engine (the browsermt WASM build), runs in a worker thread
+  (`out/translateWorker.js` with `out/bergamot/`, unpacked from the asar), reads model files from disk and pivots through
+  English for pairs without a direct model; it exits after a minute idle. Models are Mozilla's released Firefox models
+  from its public registry (`storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json`,
+  cached for a week in `<data>/Translations/catalog.json`), downloaded gzipped per pair on first use into
+  `<data>/Translations/<from>-<to>`, the model checked against the registry's hash; until then the offered languages
+  come from a built-in list of released pairs and nothing is fetched. Firefox's Remote Settings CDN answers Chrome user
+  agents with 406, so it isn't used. A passage of several text nodes goes out as HTML, one `<span data-p>` per node,
+  and comes back mapped to the nodes in page order (`translate/pieces.ts`). CLD3 (`cld3-asm`) detects the language.
+  `onDownload` events drive the progress toast (`platform/translationDownloads.linux.ts`).
 - **Extensions.** `session.extensions` plus `electron-chrome-extensions` (chrome.tabs, chrome.action, …) and
   `electron-chrome-web-store` (the Web Store's install button). Their preloads are embedded in the bundle and written
   out at startup as the packaged app's fallback; the libraries are `require`d so their CommonJS builds resolve their
@@ -430,7 +448,8 @@ the main method where one is needed (`aroundMain` in `tsModules.ts`), the main p
   build sealed with the basic key is deleted at launch), sync reads as locked at the next launch and the pane asks for
   the recovery phrase, saying why (`keyPersists()`). The
   default folder is `Ardia Sync` in the first of `~/Dropbox`, `~/Nextcloud`, `~/OneDrive`, `~/Sync`, … that exists
-  (the instance's `syncFolder` in a test instance). The Recovery Kit is the Windows TypeScript (PDF, text, QR code);
+  (the instance's `syncFolder` in a test instance); with none of them, `folderInfo` reports no folder (an empty path)
+  until one is chosen, so the pane asks for one, as the Mac does with iCloud Drive off. The Recovery Kit is the Windows TypeScript (PDF, text, QR code);
   its preview is the same layout as SVG; "Copy" puts the PDF on the clipboard as a file (`text/uri-list`). The words
   show only after the login password check (`ownerCheck.ts`, under The main process; `ARDIA_TEST=reauth=denied` refuses, for tests).
   `node --test apps/browser/linux/src/services/sync/sync.test.ts` opens the Mac and Windows fixture vaults, matches

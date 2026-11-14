@@ -3,8 +3,18 @@
 `ardia` drives a running Ardia from the terminal. `ardia browse` is how an agent drives the browser: agent-browser's
 commands on top of [pydoll](https://pydoll.tech) 3.0. The other commands run Ardia's own commands, stream its events,
 run hooks and userscripts, edit its config and read its browsing data. It's a separate download, not part of the app
-bundle. The app ships `install.sh`, and runs it when the user opts in during onboarding or in Settings ("Let the ardia
-command control Ardia").
+bundle. The app ships `install.sh` and runs it on its own: about 8 s after the first window of a launch, when no CLI
+is installed and `ardia-cli.json` says none ever was (no `version`, `binPath` or `autoInstalledAt`), it installs one
+(at most 3 tries across launches, `autoInstallTries`, saved before each try; no try when it can't be saved) and, once
+that works, turns on "Let the ardia command control Ardia" unless the user turned it off themselves (`cliControl` in
+`settingsMeta.chosen`, not `inferred`), checked again when the install ends. A launch that finds a started auto install
+with no `autoInstalledAt` (the app quit mid-install) finishes it. A CLI the user removed after it was installed stays
+removed. An installed CLI older than the app is upgraded on the same schedule, and each upgrade installs and
+refreshes the agent skill (`ardia skills install --auto`, `ardia skills refresh`). Settings › Advanced installs or
+reinstalls it by hand. Test instances install only with `cliHome` and `cliBinDir` set (the installer's `HOME` is then
+`<cliHome>/home`, so the skill copies land there), and on their own only with a `file://` `cliUrl`; a build without a pinned digest never installs on its own (`CliInstaller.canInstallUnattended`).
+Dashboard: `usage_counts.cli_auto_installs`, `cli_auto_install_failures`, `cli_auto_enables`, `cli_upgrades`,
+`cli_upgrade_failures`, `cli_settings_installs`, `cli_settings_install_failures`.
 
 While it drives a page, a pill floats over the bottom centre of the page ("Claude Code is controlling Ardia · Stop", or
 "The ardia command is controlling Ardia" when it can't tell who runs it; Stop turns the setting off). It shows for a

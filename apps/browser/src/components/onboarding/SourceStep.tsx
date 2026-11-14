@@ -80,6 +80,12 @@ export function SourceStep() {
     setImporting(chosen.id);
   };
 
+  const skip = () => {
+    const { redo, redoSource } = useOnboarding.getState();
+    chooseSource(redo ? redoSource : null);
+    skipStep();
+  };
+
   const done = () => confirmAnswer("source", sourcePatch(), chosen ? [`Coming from ${chosen.name}`] : source === "fresh" ? ["Starting fresh"] : []);
 
   if (pastingCode) return <SetupCodeStep onBack={() => setPastingCode(false)} />;
@@ -93,7 +99,7 @@ export function SourceStep() {
           <StepActions
             disabled={!source}
             onContinue={done}
-            onSkip={() => skipStep()}
+            onSkip={skip}
           />
           {isWebDemo ? null : <SetupCodeLink onPress={() => setPastingCode(true)} />}
         </>

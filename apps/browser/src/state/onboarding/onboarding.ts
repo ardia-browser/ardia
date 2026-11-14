@@ -14,10 +14,10 @@ import { isLiquidGlass } from "../../platform/app";
 import { noteOnboarding } from "../telemetry/usage";
 import { openSettings } from "../settings/settingsWindows";
 
-import { GLASS_KEYS, QUESTIONS, QUESTION_ORDER, type OnboardingStep, type Question, type QuestionId } from "./questionList";
+import { QUESTIONS, QUESTION_ORDER, type OnboardingStep, type Question, type QuestionId } from "./questionList";
 import { markCompleted, readSaved, saveOnboarding as save, type Saved } from "./onboardingDocument";
 
-export { GLASS_KEYS, QUESTIONS, QUESTION_ORDER, type OnboardingStep, type QuestionId };
+export { QUESTIONS, QUESTION_ORDER, type OnboardingStep, type QuestionId };
 export {
   defaultBrowserCheckInDoneAt,
   defaultBrowserTrialStartedAt,
@@ -31,9 +31,9 @@ export {
 export { playIntroMusic, setIntroMusicMuted, stopIntroMusic, type IntroMusicCues } from "../../platform/introMusic";
 export { PRESET_NAMES, PRESETS, presetFor, setsUpLikeBrowser, type BrowserSourceId, type Preset } from "./presets";
 
-export const STEPS: OnboardingStep[] = stepsForThisSurface(["intro", "source", "look", "layout", "tabs", "details", "searchPrivacy", "pins", "home", "outro"]);
+export const STEPS: OnboardingStep[] = stepsForThisSurface(["intro", "source", "layout", "tabs", "look", "searchPrivacy", "pins", "home", "outro"]);
 
-export const CUSTOMIZE_STEPS: readonly OnboardingStep[] = ["layout", "tabs", "details", "searchPrivacy", "pins", "home"];
+const answeredByPreset = (q: Question, preset: Preset) => !q.askedWithPreset && q.keys.length > 0 && q.keys.every((k) => k in PRESETS[preset]);
 
 const SIDEBAR_ONLY: readonly QuestionId[] = ["address", "switcher"];
 export const liquidGlass = isLiquidGlass();
@@ -41,17 +41,16 @@ export const liquidGlass = isLiquidGlass();
 export function questionsFor(step: OnboardingStep): Question[] {
   if (step === "intro") return [];
   const state = useOnboarding.getState();
-  const list = QUESTIONS[step];
+  const preset = draftPreset(state);
+  const asked = preset && setsUpLikeBrowser(state.source) ? QUESTIONS[step].filter((q) => !answeredByPreset(q, preset)) : QUESTIONS[step];
+  const list = liquidGlass ? asked : asked.filter((q) => q.id !== "style");
   if (!list.some((q) => SIDEBAR_ONLY.includes(q.id))) return list;
   const b = useBrowser.getState();
-  const { tabLayout } = resolveDraft(["tabLayout"], state.draft, draftPreset(state), { ...b.settings, tabLayout: tabLayoutOf(b, state.windowId) }, b.settingsMeta.chosen);
+  const { tabLayout } = resolveDraft(["tabLayout"], state.draft, preset, { ...b.settings, tabLayout: tabLayoutOf(b, state.windowId) }, b.settingsMeta.chosen);
   return tabLayout === "top" ? list.filter((q) => !SIDEBAR_ONLY.includes(q.id)) : list;
 }
 
-export const activeSteps = () => {
-  const { customizing } = useOnboarding.getState();
-  return STEPS.filter((step) => step === "intro" || ((customizing || !CUSTOMIZE_STEPS.includes(step)) && questionsFor(step).length > 0));
-};
+export const activeSteps = () => STEPS.filter((step) => step === "intro" || questionsFor(step).length > 0);
 
 export const draftPreset = (s: { prefill: Prefill; preset: Preset }): Preset | null => (s.prefill === "preset" ? s.preset : null);
 
@@ -82,7 +81,6 @@ type OnboardingState = {
   redo: boolean;
   redoSource: BrowserSourceId | null;
   prefill: Prefill;
-  customizing: boolean;
   preset: Preset;
   source: BrowserSourceId | null;
   draft: Partial<Settings>;
@@ -112,7 +110,6 @@ export const useOnboarding = create<OnboardingState>()(() => ({
   redo: false,
   redoSource: null,
   prefill: "preset",
-  customizing: false,
   preset: "dia",
   source: null,
   draft: {},
@@ -152,13 +149,6 @@ export const sourcePatch = (): Partial<Settings> => {
   const { source, prefill } = useOnboarding.getState();
   return prefill === "preset" ? presetPatch(source) : {};
 };
-
-export function customizeMore() {
-  noteOnboarding("customizeMore");
-  useOnboarding.setState({ customizing: true });
-  const first = activeSteps().find((step) => CUSTOMIZE_STEPS.includes(step));
-  if (first) goToStep(first);
-}
 
 export function setOnboardingDraft(patch: Partial<Settings>) {
   useOnboarding.setState((s) => ({ draft: { ...s.draft, ...patch } }));
@@ -213,7 +203,7 @@ export function confirmAnswer(question: QuestionId, patch: Partial<Settings>, pi
   if (Object.keys(patch).length) useBrowser.getState().updateSettings(patch);
   const kept: LiveBaseline = { ...baseline };
   for (const key of Object.keys(patch)) delete kept[key as keyof LiveBaseline];
-  if (question === "look") {
+  if (question === "color") {
     delete kept.color;
     delete kept.theme;
   }
@@ -229,7 +219,7 @@ export function skipStep() {
   const rest = questionsFor(step).slice(sub);
   const keys = rest.flatMap((q) => q.keys);
   noteOnboarding("stepSkipped");
-  revertLive([...keys, ...(rest.some((q) => q.id === "look") ? (["color", "theme"] as const) : [])]);
+  revertLive([...keys, ...(rest.some((q) => q.id === "color") ? (["color", "theme"] as const) : [])]);
   useOnboarding.setState((s) => {
     const draft = { ...s.draft };
     for (const key of keys) delete draft[key];
@@ -278,7 +268,6 @@ const FRESH = {
   redo: false,
   redoSource: null,
   prefill: "preset",
-  customizing: false,
 } satisfies Partial<OnboardingState>;
 
 export function startOnboarding(windowId?: string | null, step: OnboardingStep = "intro") {
@@ -359,7 +348,7 @@ export function finishOnboarding(options: { tour?: boolean } = {}) {
 export function dismissOnboarding(session: number) {
   const { session: current, windowId, tourAfter, redo } = useOnboarding.getState();
   if (current !== session) return;
-  useOnboarding.setState({ windowId: null, step: "intro", leaving: false, tourAfter: false, redo: false, customizing: false });
+  useOnboarding.setState({ windowId: null, step: "intro", leaving: false, tourAfter: false, redo: false });
   if (tourAfter && windowId) startToolTour(windowId);
   else if (redo) openSettings("general");
 }

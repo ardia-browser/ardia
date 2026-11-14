@@ -18,10 +18,12 @@ final class CliInstaller {
     for (key, name) in [("cliHome", "ARDIA_CLI_HOME"), ("cliBinDir", "ARDIA_CLI_BIN_DIR"), ("cliUrl", "ARDIA_CLI_URL")] {
       if let value = LaunchConfig.shared.instance(key) { environment[name] = value }
     }
+    if LaunchConfig.shared.isolated, let scratchHome = home?.appendingPathComponent("home", isDirectory: true) {
+      try? FileManager.default.createDirectory(at: scratchHome, withIntermediateDirectories: true)
+      environment["HOME"] = scratchHome.path
+    }
     return environment
   }
-
-
 
   static var home: URL? {
     if let path = LaunchConfig.shared.instance("cliHome") { return URL(fileURLWithPath: path, isDirectory: true) }
@@ -51,6 +53,17 @@ final class CliInstaller {
     else { return nil }
     let digest = text.split(whereSeparator: { $0.isWhitespace }).first.map(String.init)?.lowercased() ?? ""
     return digest.range(of: digestPattern, options: .regularExpression) != nil ? digest : nil
+  }
+
+  static func canInstallUnattended() -> Bool {
+    if LaunchConfig.shared.isolated && (LaunchConfig.shared.instance("cliHome") == nil || LaunchConfig.shared.instance("cliBinDir") == nil) {
+      return false
+    }
+    guard appVersion.range(of: versionPattern, options: .regularExpression) != nil,
+      let script = script(), FileManager.default.isReadableFile(atPath: script.path)
+    else { return false }
+    if pinnedDigest() != nil { return true }
+    return LaunchConfig.shared.isolated && LaunchConfig.shared.instance("cliUrl")?.hasPrefix("file://") == true
   }
 
   private let queue = DispatchQueue(label: "dev.ardia.cli-installer")

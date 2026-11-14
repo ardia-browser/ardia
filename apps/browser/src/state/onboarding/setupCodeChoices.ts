@@ -1,5 +1,6 @@
 import type { SetupChoices } from "../presets/setupCode";
 import type { Settings } from "../settings/settings";
+import { saveOnboarding } from "./onboardingDocument";
 import { useOnboarding } from "./onboarding";
 
 export function adoptSetupChoices(choices: SetupChoices, lines: string[]) {
@@ -13,10 +14,14 @@ export function adoptSetupChoices(choices: SetupChoices, lines: string[]) {
     if (choices.color) delete baseline.color;
     return {
       preset: choices.preset ?? o.preset,
+      source: null,
+      prefill: "current" as const,
       draft,
       baseline,
       extras: choices.pins ? { ...o.extras, pins: choices.pins } : o.extras,
       picked: { ...o.picked, source: lines },
     };
   });
+  const { redo, preset } = useOnboarding.getState();
+  if (!redo) saveOnboarding({ source: null, preset });
 }

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { finishOnboarding, useOnboarding } from "../../state/onboarding/onboarding";
-import { CustomizeMoreLink } from "./OutroStep";
+import { finishOnboarding } from "../../state/onboarding/onboarding";
 import { requestAppDownload } from "../../state/onboarding/demoSteps";
 import { copySetupCode, onboardingSetupCode } from "../../state/presets/actions";
 import { StepActions, StepLayout } from "./StepLayout";
@@ -15,7 +14,6 @@ const COPIED_FOR_MS = 2400;
 
 export function SetupCodeOutro() {
   const colors = useOnboardingColors();
-  const customizing = useOnboarding((s) => s.customizing);
   const { code, lines } = useMemo(onboardingSetupCode, []);
   const [copied, setCopied] = useState(false);
 
@@ -41,7 +39,6 @@ export function SetupCodeOutro() {
           <SecondaryButton title={copied ? "Copied, downloading" : "Download & Copy"} filled onPress={downloadAndCopy} />
         </>
       }
-      footer={customizing ? null : <CustomizeMoreLink />}
       preview={<SetupLines heading="You picked:" lines={lines} />}
     >
       <ChoiceCard dashed radius={radius.panel} style={{ paddingVertical: space.xl, paddingHorizontal: space.xl }}>

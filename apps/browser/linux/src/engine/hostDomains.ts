@@ -71,8 +71,6 @@ defineDomain("engine", {
   tasks: () => tasks(),
   systemState: () => systemState(),
   batterySaver: () => ({ state: 0, active: false }),
-  memorySaver: () => ({ state: "off", aggressiveness: "balanced", active: false, sites: [], invalid: [] }),
-  validateKeepActiveSite: () => ({ valid: true }),
   trimMemory: () => ({ ok: true }),
   openTaskManager: () => ({ ok: false }),
   cliControlStatus: () => ({ state: "off", connections: 0, generation: 0, file: "" }),

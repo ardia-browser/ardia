@@ -125,7 +125,15 @@ its window's input router). The host's and every window's preload (`engine/hostP
   playing video, else the largest one, in the main frame and then each subframe, into Chromium's PiP window. The page
   preload reports `enterpictureinpicture`/`leavepictureinpicture` as `pictureInPicture` events, so the app's PiP state
   and the tab's badge follow, whoever started it.
-- **Not on Linux:** tab discarding and casting. Calls not implemented fail with `ERR_ENGINE` and log once.
+- **Memory Saver.** A page is discarded in the renderer (`pages.ts`): its history (scroll state included) is kept and
+  its `<webview>` removed, which ends its page process; the UI gets `discarded`. Showing the tab, reload, a load or a
+  history step builds a new element that gets the kept history through `navigationHistory.restore`, the path page
+  moves use; other calls on a sleeping page answer nothing rather than wake it. `discard()` asks for this directly.
+  `memorySaver.ts` in main keeps the Memory Saver settings and each page's hidden time (the renderer reports `shown`)
+  and asks the renderer to discard a page hidden 4 h (Moderate), 2 h (Balanced) or 30 min (Maximum), and, when free
+  memory is under 10%, the longest-hidden page after 5 min; never an audible page, one in Picture in Picture, one
+  with DevTools open, or a keep-active site.
+- **Not on Linux:** casting. Calls not implemented fail with `ERR_ENGINE` and log once.
 
 ### The bridge
 

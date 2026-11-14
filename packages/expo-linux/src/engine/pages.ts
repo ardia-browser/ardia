@@ -24,7 +24,12 @@ type Page = {
   history: Promise<History | null> | null;
   visible: boolean;
   started: { url: string; at: number };
+  sleeping: History | null;
+  holder: HTMLElement | null;
 };
+
+export type DiscardOutcome = "discarded" | "already" | "refused" | "unsupported";
+type DiscardReason = "external" | "proactive" | "urgent";
 
 const BLANK = "about:blank";
 const PASSWORDS_MODULE = "ArdiaLinuxPasswords";
@@ -39,6 +44,7 @@ const byGuest = new Map<number, Page>();
 let listening = false;
 
 const quietly = (work: Promise<unknown>) => void work.catch(() => {});
+const WAKING_CALLS = new Set(["reload", "forceReload", "loadUrl", "goBack", "goForward", "goToOffset"]);
 
 function fallbackPartition(profile: string) {
   if (profile.includes(PRIVATE_MARK)) return `ardia-private-${encodeURIComponent(profile)}`;
@@ -72,11 +78,18 @@ function listen() {
   listening = true;
   bridge.onEvent((module, event, payload) => {
     if (module === PASSWORDS_MODULE && event === "prompt") return promptToSave(payload);
+    if (module === PAGES_MODULE && event === "discard") return discardAsked(payload);
     if (module !== PAGES_MODULE || event !== "page") return;
     const { guest, name, data } = (payload ?? {}) as { guest?: number; name?: string; data?: unknown };
     const page = typeof guest === "number" ? byGuest.get(guest) : undefined;
     if (page && typeof name === "string" && page.guestId === guest) deliver(page, name, data);
   });
+}
+
+function discardAsked(payload: unknown) {
+  const { guest, reason } = (payload ?? {}) as { guest?: number; reason?: string };
+  const page = typeof guest === "number" ? byGuest.get(guest) : undefined;
+  if (page) void discard(page, reason === "urgent" ? "urgent" : "proactive");
 }
 
 function promptToSave(payload: unknown) {
@@ -147,6 +160,7 @@ function attached(page: Page, element: WebviewElement, guestId: number, history:
   page.guestId = guestId;
   byGuest.set(guestId, page);
   pagesCallSync("attach", guestId, page.start.tabId || page.key, page.start.windowId);
+  if (!page.visible) pagesCallSync("shown", guestId, false);
   if (history) restoreInto(page, guestId, history, fallbackUrl);
   page.settle(guestId);
   deliver(page, "ready", {});
@@ -170,6 +184,8 @@ function createPage(key: string, start: PageStart, holder: HTMLElement): Page {
     history: null,
     visible: true,
     started: { url: start.url ?? "", at: Date.now() },
+    sleeping: null,
+    holder: null,
   } as unknown as Page;
   page.attached = readyPromise(page);
   page.element = makeElement(holder.ownerDocument, page, start.url ?? "", null);
@@ -180,7 +196,10 @@ function createPage(key: string, start: PageStart, holder: HTMLElement): Page {
 function rebuildIn(page: Page, holder: HTMLElement, start: PageStart) {
   const old = page.element;
   const oldGuest = page.guestId;
-  const history = page.history ?? (oldGuest ? pagesCall<{ entries: (HistoryEntry & { current: boolean })[] }>("page", oldGuest, "navigationEntries", { withState: true }).then(asHistory) : Promise.resolve(null));
+  const asleep = page.sleeping;
+  page.sleeping = null;
+  page.holder = null;
+  const history = asleep ? Promise.resolve(asleep) : page.history ?? (oldGuest ? pagesCall<{ entries: (HistoryEntry & { current: boolean })[] }>("page", oldGuest, "navigationEntries", { withState: true }).then(asHistory) : Promise.resolve(null));
   page.start = { ...page.start, ...start, url: page.start.url };
   page.started = { url: start.url ?? "", at: Date.now() };
   page.history = null;
@@ -255,7 +274,48 @@ export function setPageVisible(key: string, visible: boolean) {
   const page = pages.get(key);
   if (!page || page.closed || page.visible === visible) return;
   page.visible = visible;
+  if (visible && page.sleeping) wake(page, null);
   applyVisibility(page);
+  if (page.guestId) pagesCallSync("shown", page.guestId, visible);
+}
+
+const currentUrl = (history: History | null) => history?.entries[history.index]?.url ?? "";
+
+async function discard(page: Page, reason: DiscardReason): Promise<DiscardOutcome> {
+  if (page.closed) return "refused";
+  if (page.sleeping) return "already";
+  if (page.visible || page.parked || !page.guestId) return "refused";
+  const guestId = page.guestId;
+  const reply = await pagesCall<{ entries: (HistoryEntry & { current: boolean })[] }>("page", guestId, "navigationEntries", { withState: true }).catch(() => null);
+  const history = asHistory(reply);
+  if (page.closed || page.visible || page.parked || page.guestId !== guestId || !history) return "refused";
+  page.sleeping = history;
+  page.holder = page.element.parentElement;
+  page.guestId = 0;
+  byGuest.delete(guestId);
+  page.attached = readyPromise(page);
+  page.element.remove();
+  deliver(page, "discarded", { url: currentUrl(history), reason });
+  return "discarded";
+}
+
+function wake(page: Page, loadInstead: string | null) {
+  const history = page.sleeping;
+  const holder = page.holder;
+  if (!history || !holder?.isConnected) return;
+  page.sleeping = null;
+  page.holder = null;
+  page.started = { url: loadInstead ?? currentUrl(history), at: Date.now() };
+  page.element = loadInstead
+    ? makeElement(holder.ownerDocument, page, loadInstead, null)
+    : makeElement(holder.ownerDocument, page, RESTORES_HISTORY, Promise.resolve(history));
+  holder.appendChild(page.element);
+  applyVisibility(page);
+}
+
+export function discardPage(key: string): Promise<DiscardOutcome> {
+  const page = pages.get(key);
+  return page ? discard(page, "external") : Promise.resolve("refused");
 }
 
 export function parkPage(key: string) {
@@ -282,6 +342,7 @@ export function pageElement(key: string): HTMLElement | null {
 export async function focusPage(key: string) {
   const page = pages.get(key);
   if (!page || page.closed) return;
+  if (page.sleeping && page.visible) wake(page, null);
   await page.attached;
   if (!page.closed && page.visible) page.element.focus();
 }
@@ -291,6 +352,11 @@ export async function callPage<Result = unknown>(key: string, method: string, ar
   if (!page || page.closed) return null;
   if (method === "loadUrl" && args.url && args.url === page.started.url && Date.now() - page.started.at < SAME_LOAD_MS) return null;
   if (method === "loadUrl") noteLoadAsked(page.opening, args.url);
+  if (page.sleeping) {
+    if (!WAKING_CALLS.has(method)) return null;
+    wake(page, method === "loadUrl" && typeof args.url === "string" ? args.url : null);
+    if (method === "reload" || method === "forceReload" || method === "loadUrl") return null;
+  }
   const guestId = await page.attached;
   if (!guestId || page.closed) return null;
   return pagesCall<Result>("page", page.guestId || guestId, method, args);

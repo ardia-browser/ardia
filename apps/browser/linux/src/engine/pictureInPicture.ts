@@ -1,5 +1,6 @@
 import { app, type WebFrameMain } from "electron";
 import { guestOf, tell, type Guest } from "./guests";
+import { notePictureInPicture } from "./memorySaver";
 import { definePageCall } from "./pageCalls";
 
 export const PICTURE_IN_PICTURE_CHANNEL = "ardia:page-picture-in-picture";
@@ -40,6 +41,8 @@ app.on("web-contents-created", (_event, contents) => {
   contents.on("ipc-message", (_event, channel, active: unknown) => {
     if (channel !== PICTURE_IN_PICTURE_CHANNEL) return;
     const guest = guestOf(contents);
-    if (guest) tell(guest, "pictureInPicture", { kind: "video", active: active === true });
+    if (!guest) return;
+    notePictureInPicture(contents.id, active === true);
+    tell(guest, "pictureInPicture", { kind: "video", active: active === true });
   });
 });

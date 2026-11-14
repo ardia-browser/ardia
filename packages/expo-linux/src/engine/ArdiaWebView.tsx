@@ -1,6 +1,6 @@
 import { createElement, forwardRef, useImperativeHandle, useLayoutEffect, useRef, type ComponentType } from "react";
 import { View } from "react-native";
-import { callPage, focusPage, mountPage, pageElement, setPageVisible } from "./pages";
+import { callPage, discardPage, focusPage, mountPage, pageElement, setPageVisible } from "./pages";
 
 type PageEvent = { name: string; data: unknown };
 
@@ -62,7 +62,6 @@ const UNWRAPPED: Record<string, (reply: Record<string, unknown> | null) => unkno
 
 const LOCAL_ANSWERS: Record<string, unknown> = {
   takeControlPress: false,
-  discard: "unsupported",
   mediaCaptureSourceId: null,
 };
 
@@ -113,6 +112,7 @@ export const ArdiaWebView = forwardRef<unknown, Props>(function ArdiaWebView(pro
           get(_target, method) {
             if (typeof method !== "string" || method === "then" || method === "$$typeof") return undefined;
             if (method === "focus") return () => focusPage(key);
+            if (method === "discard") return () => discardPage(key);
             if (method === "capturePicture")
               return async (scale: number) => {
                 const shown = () => latest.current.visible !== false;

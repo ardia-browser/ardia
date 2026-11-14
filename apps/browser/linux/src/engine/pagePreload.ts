@@ -29,7 +29,45 @@ function replaceDialogs(ask: Ask) {
   }
 }
 
+function steadyGeolocation(settleMs: number) {
+  const geolocation = navigator.geolocation;
+  if (!geolocation) return;
+  const steadied = (success: PositionCallback, failure?: PositionErrorCallback | null): [PositionCallback, PositionErrorCallback] => {
+    let held: ReturnType<typeof setTimeout> | undefined;
+    return [
+      (position) => {
+        clearTimeout(held);
+        success(position);
+      },
+      (error) => {
+        clearTimeout(held);
+        if (error.code === error.POSITION_UNAVAILABLE && !error.message) held = setTimeout(() => failure?.(error), settleMs);
+        else failure?.(error);
+      },
+    ];
+  };
+  const watch = geolocation.watchPosition;
+  const current = geolocation.getCurrentPosition;
+  const replacements: Record<string, (...args: never[]) => unknown> = {
+    watchPosition(success: PositionCallback, failure?: PositionErrorCallback | null, options?: PositionOptions) {
+      return watch.call(geolocation, ...steadied(success, failure), options);
+    },
+    getCurrentPosition(success: PositionCallback, failure?: PositionErrorCallback | null, options?: PositionOptions) {
+      return current.call(geolocation, ...steadied(success, failure), options);
+    },
+  };
+  for (const [name, replacement] of Object.entries(replacements)) {
+    const native = (geolocation as unknown as Record<string, () => unknown>)[name];
+    Object.defineProperty(replacement, "name", { value: name });
+    Object.defineProperty(replacement, "toString", { value: () => native?.toString() ?? `function ${name}() { [native code] }` });
+    Object.defineProperty(Object.getPrototypeOf(geolocation), name, { value: replacement, writable: true, configurable: true, enumerable: true });
+  }
+}
+
+const GEOLOCATION_SETTLE_MS = 250;
+
 if (process.isMainFrame) contextBridge.executeInMainWorld({ func: replaceDialogs, args: [ask] });
+if (process.isMainFrame) contextBridge.executeInMainWorld({ func: steadyGeolocation, args: [GEOLOCATION_SETTLE_MS] });
 
 let receive: Receive | undefined;
 try {

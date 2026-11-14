@@ -108,8 +108,15 @@ its window's input router). The host's and every window's preload (`engine/hostP
   Widevine L3 plays (the shaka demo's Angel One stream, checked); services cap Linux at their L3 resolution as they do
   for Chrome. `package.mjs` downloads other architectures from castlabs' releases. After `pnpm install`, run
   `node node_modules/electron/install.js` if `node_modules/electron/dist` is missing.
-- **Not on Linux:** geolocation (no location provider key), tab discarding, Picture in Picture controls beyond the
-  page's own, and casting. Calls not implemented fail with `ERR_ENGINE` and log once.
+- **Geolocation.** Chromium on Linux has no system location provider and Electron has no network location key, so
+  `geolocation.ts` asks GeoClue2 on the system bus (`dbus.ts` is a small D-Bus client: EXTERNAL auth, calls,
+  properties, signals) as desktop id `ardia` at exact accuracy, starting when a page that is allowed its location asks
+  and stopping 5 minutes after the last ask. Each fix reaches the asking pages through Chromium's own geolocation
+  override on the page's debugger, so the app's location prompt and site setting still decide. Without GeoClue the
+  override emulates "position unavailable" at once and `launch.log` says why. Chromium reports a passing "position
+  unavailable" each time the override changes, so the page preload holds an empty-message unavailable error 250 ms and
+  drops it when a position follows. `DBUS_SYSTEM_BUS_ADDRESS` points it at another bus (tests run a fake GeoClue).
+- **Not on Linux:** tab discarding, Picture in Picture controls beyond the page's own, and casting. Calls not implemented fail with `ERR_ENGINE` and log once.
 
 ### The bridge
 

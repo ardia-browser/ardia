@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { dataDirectory } from "../paths";
 import { defineDomain, emitDomainEvent } from "./domains";
+import { provideLocation } from "./geolocation";
 import { guestOf, tell, type Guest } from "./guests";
 import { isPrivateProfile } from "./partitions";
 import { onPageSession } from "./sessions";
@@ -101,6 +102,15 @@ function kindsOf(permission: string, details: Electron.PermissionRequest | Elect
   }
 }
 
+function withLocation(contents: WebContents, answer: (granted: boolean) => void): (granted: boolean) => void {
+  return (granted) => {
+    if (!granted) return answer(false);
+    void provideLocation(contents)
+      .catch(() => {})
+      .finally(() => answer(true));
+  };
+}
+
 function dismissFor(contents: WebContents) {
   for (const request of [...pending.values()]) {
     if (request.contents !== contents) continue;
@@ -135,7 +145,8 @@ function askExternal(contents: WebContents, profile: string, url: string, reques
 }
 
 function handleRequest(session: Session, profile: string) {
-  session.setPermissionRequestHandler((contents, permission, answer, details) => {
+  session.setPermissionRequestHandler((contents, permission, decide, details) => {
+    const answer = permission === "geolocation" ? withLocation(contents, decide) : decide;
     if (ALWAYS_ALLOWED.has(permission)) return answer(true);
     if (permission === "openExternal") {
       const external = details as Electron.OpenExternalPermissionRequest;

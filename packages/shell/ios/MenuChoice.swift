@@ -41,9 +41,3 @@ final class MenuChoice: NSObject {
     return ids
   }
 }
-
-extension MenuChoice: NSMenuDelegate {
-  func menu(_ menu: NSMenu, willHighlight item: NSMenuItem?) {
-    for entry in menu.items { entry.view?.needsDisplay = true }
-  }
-}

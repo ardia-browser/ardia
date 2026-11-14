@@ -81,7 +81,6 @@ public class MenusModule: Module {
   static func contextMenu(_ items: [MenuItem], target: MenuChoice) -> NSMenu {
     let menu = NSMenu()
     menu.autoenablesItems = false
-    if items.contains(where: \.keepOpen) { menu.delegate = target }
     for item in items {
       if item.separator {
         menu.addItem(.separator())

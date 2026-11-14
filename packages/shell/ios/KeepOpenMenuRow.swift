@@ -5,6 +5,9 @@ final class KeepOpenMenuRow: NSView {
   private var title: String
   private var checked: Bool
   private var enabled: Bool
+  private var highlighted = false {
+    didSet { if highlighted != oldValue { needsDisplay = true } }
+  }
 
   private static let font = NSFont.menuFont(ofSize: 0)
   private static let titleInset: CGFloat = 30
@@ -44,18 +47,27 @@ final class KeepOpenMenuRow: NSView {
     ceil(titleInset + (title as NSString).size(withAttributes: [.font: font]).width + trailingInset)
   }
 
+  override func updateTrackingAreas() {
+    super.updateTrackingAreas()
+    trackingAreas.forEach(removeTrackingArea)
+    addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
+  }
+
+  override func mouseEntered(with event: NSEvent) { highlighted = true }
+  override func mouseExited(with event: NSEvent) { highlighted = false }
+
   override func mouseUp(with event: NSEvent) {
     guard enabled else { return }
     ShellEvents.send(.menuPick, ["id": id])
   }
 
   override func draw(_ dirtyRect: NSRect) {
-    let highlighted = enabled && enclosingMenuItem?.isHighlighted == true
-    if highlighted {
+    let lit = enabled && highlighted
+    if lit {
       NSColor.controlAccentColor.setFill()
       NSBezierPath(roundedRect: bounds.insetBy(dx: Self.highlightInset, dy: 0), xRadius: 6, yRadius: 6).fill()
     }
-    let color: NSColor = highlighted ? .selectedMenuItemTextColor : enabled ? .labelColor : .disabledControlTextColor
+    let color: NSColor = lit ? .selectedMenuItemTextColor : enabled ? .labelColor : .disabledControlTextColor
     let attributes: [NSAttributedString.Key: Any] = [.font: Self.font, .foregroundColor: color]
     let size = (title as NSString).size(withAttributes: attributes)
     (title as NSString).draw(at: NSPoint(x: Self.titleInset, y: (bounds.height - size.height) / 2), withAttributes: attributes)

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, nativeImage, net, webContents as allContents, type Session, type WebContents } from "electron";
+import { app, BrowserWindow, nativeImage, net, webContents as allContents, type Session, type WebContents } from "electron";
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
@@ -14,6 +14,7 @@ import { onProfileSession } from "./guests";
 import { extensionsModulePath, webStoreModulePath } from "./vendorPreloads";
 import { engineError, isPrivateProfile, profileDirectory, sessionFor } from "./profiles";
 import { guardExtensionWorkers, withGuardedExtensionChannels } from "./extensionSenders";
+import { showOpenDialog } from "../systemDialogs";
 
 type Entry = { path: string; enabled: boolean; pinned: boolean; incognito: boolean; fileAccess: boolean; location: "webstore" | "unpacked" | "crx"; installed: number };
 type Manifest = Record<string, unknown> & {
@@ -581,7 +582,7 @@ defineDomain("extensions", {
     }
     const owner = BrowserWindow.getFocusedWindow();
     const options: Electron.OpenDialogOptions = { properties: ["openDirectory"], message: "Choose an extension folder" };
-    const { canceled, filePaths } = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options);
+    const { canceled, filePaths } = await showOpenDialog(owner, options);
     return canceled ? null : (filePaths[0] ?? null);
   },
   resolveInstallPrompt: (args) => {

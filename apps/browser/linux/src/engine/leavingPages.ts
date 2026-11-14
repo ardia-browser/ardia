@@ -1,4 +1,4 @@
-import { app, dialog, type BrowserWindow, type MessageBoxOptions, type WebContents } from "electron";
+import { app, type BrowserWindow, type MessageBoxOptions, type WebContents } from "electron";
 import { defineModule } from "../bridge";
 import { count } from "../counts";
 import { note } from "../log";
@@ -6,6 +6,7 @@ import { isBackground } from "../paths";
 import { guardQuitWith } from "../quit";
 import { appWindow } from "../windows";
 import { allGuests, guestOf, PAGES_MODULE, windowOf, type Guest } from "./guests";
+import { showMessageBox, showMessageBoxSync } from "../systemDialogs";
 
 const LEAVE = 0;
 const QUIT = 0;
@@ -63,7 +64,7 @@ export function askToLeave(contents: WebContents): boolean {
     noLink: true,
   };
   count("leave_site_asked");
-  const answer = parent && !parent.isDestroyed() ? dialog.showMessageBoxSync(parent, options) : dialog.showMessageBoxSync(options);
+  const answer = showMessageBoxSync(parent, options);
   if (answer !== LEAVE) count("leave_site_stayed");
   return answer === LEAVE;
 }
@@ -93,7 +94,7 @@ const unsavedDetail = (sites: string[]) =>
   sites.length === 1 ? `Changes you made on ${sites[0]} may not be saved.` : `Changes you made on ${sites.length} sites may not be saved.`;
 
 async function askOver(parent: BrowserWindow | null | undefined, options: MessageBoxOptions): Promise<number> {
-  const { response } = parent && !parent.isDestroyed() ? await dialog.showMessageBox(parent, options) : await dialog.showMessageBox(options);
+  const { response } = await showMessageBox(parent, options);
   return response;
 }
 

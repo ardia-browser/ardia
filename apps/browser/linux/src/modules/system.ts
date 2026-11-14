@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, shell } from "electron";
+import { app, BrowserWindow, shell } from "electron";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineModule } from "../bridge";
@@ -17,6 +17,7 @@ import {
   writeDefaultApplications,
   xdg,
 } from "../system/desktopEntry";
+import { showMessageBox } from "../systemDialogs";
 
 function nativePath(path: string): string {
   if (typeof path !== "string") return "";
@@ -49,7 +50,7 @@ function reportDefaultBrowserFailure(detail: string) {
     buttons: ["OK"],
   };
   const window = BrowserWindow.getFocusedWindow();
-  void (window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options));
+  void showMessageBox(window, options);
 }
 
 async function setAsDefaultBrowser(): Promise<boolean> {

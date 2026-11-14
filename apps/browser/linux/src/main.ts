@@ -2,6 +2,7 @@ import { Menu, app, nativeImage, type BrowserWindow } from "electron";
 import { join } from "node:path";
 import { appDocumentUrl } from "./appDocument";
 import { installBridge } from "./bridge";
+import { installFocusReturn } from "./focusReturn";
 import { pruneCrashDumps, startCrashReporter } from "./crashes";
 import "./engine";
 import "./menus/keyboard";
@@ -38,6 +39,7 @@ if (!app.requestSingleInstanceLock({ dataDirectory: dataDirectory() })) {
   launchConfig();
   installQuitLifecycle();
   installLaunchLinks();
+  installFocusReturn();
   app.on("browser-window-created", (_event, window) => {
     const icon = nativeImage.createFromPath(iconPath());
     if (!icon.isEmpty()) window.setIcon(icon);

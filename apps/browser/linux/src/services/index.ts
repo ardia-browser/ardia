@@ -10,6 +10,7 @@ import "./pagePasswords";
 import "./autofill";
 import "./pageAutofill";
 import "./requests";
+import "./fileChooserFocus";
 import "./contentBlocker";
 import "./extensions";
 import "./import";

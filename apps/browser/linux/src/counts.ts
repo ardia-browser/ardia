@@ -39,7 +39,8 @@ export type LinuxCount =
   | "meadow_failures"
   | "translate_model_downloads"
   | "translate_model_download_failures"
-  | "translate_engine_failures";
+  | "translate_engine_failures"
+  | "focus_returned";
 
 const counts = new Map<LinuxCount, number>();
 

@@ -1,7 +1,8 @@
-import { BrowserWindow, dialog, ipcMain } from "electron";
+import { BrowserWindow, ipcMain } from "electron";
 import { isBackground } from "../paths";
 import { acceptsPage } from "../ipcSenders";
 import { guestOf, windowOf } from "./guests";
+import { showMessageBox } from "../systemDialogs";
 
 const PROMPT_ANSWER = "ardia-prompt:";
 
@@ -86,7 +87,7 @@ async function answer(kind: string, url: string, parent: BrowserWindow | null, m
     cancelId: kind === "confirm" ? 1 : 0,
     noLink: true,
   };
-  const { response } = parent ? await dialog.showMessageBox(parent, options) : await dialog.showMessageBox(options);
+  const { response } = await showMessageBox(parent, options);
   return kind === "confirm" ? response === 0 : null;
 }
 

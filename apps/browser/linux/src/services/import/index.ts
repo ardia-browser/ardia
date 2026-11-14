@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog } from "electron";
+import { BrowserWindow } from "electron";
 import { readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { defineModule, emit } from "../../bridge";
@@ -10,6 +10,7 @@ import { pathFromFileUrl } from "./host";
 import { importProfile, Unlocks } from "./importer";
 import { ImportFailure, type ImportKind, type Options, type Progress } from "./model";
 import { nodeImportHost } from "./nodeHost";
+import { showOpenDialog } from "../../systemDialogs";
 
 const LARGEST_FILE_BYTES = 64 << 20;
 const NO_WRITE = { cookies: 0, cookiesRejected: 0, cookiesExisting: 0, addresses: 0, cards: 0 };
@@ -114,7 +115,7 @@ defineModule("ArdiaImport", {
       }
       const owner = BrowserWindow.getFocusedWindow();
       const options: Electron.OpenDialogOptions = { properties: ["openFile"], filters: FILE_FILTERS[kind] ?? [] };
-      const { canceled, filePaths } = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options);
+      const { canceled, filePaths } = await showOpenDialog(owner, options);
       return canceled || !filePaths[0] ? null : pathFromFileUrl(filePaths[0]);
     },
     importSafariExport: notOnLinux("Safari"),

@@ -1,4 +1,4 @@
-import { BrowserWindow, app, dialog, nativeTheme } from "electron";
+import { BrowserWindow, app, nativeTheme } from "electron";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -8,6 +8,7 @@ import { testFlag } from "../launch";
 import { activation } from "../log";
 import { dataDirectory, isBackground } from "../paths";
 import { appWindow } from "../windows";
+import { showMessageBox, showOpenDialog, showSaveDialog } from "../systemDialogs";
 
 type ConfirmOptions = { title: string; message?: string; confirmTitle?: string; cancelTitle?: string; destructive?: boolean; suppression?: string; windowId?: string };
 type PromptOptions = { title: string; message?: string; value?: string; placeholder?: string; confirmTitle?: string; windowId?: string };
@@ -83,7 +84,7 @@ async function confirm(options: ConfirmOptions) {
       checkboxLabel: options.suppression,
       checkboxChecked: false,
     };
-    const reply = parent ? await dialog.showMessageBox(parent, settings) : await dialog.showMessageBox(settings);
+    const reply = await showMessageBox(parent, settings);
     return { confirmed: reply.response === 0, suppressed: reply.response === 0 && !!options.suppression && reply.checkboxChecked };
   });
 }
@@ -177,7 +178,7 @@ async function pickFiles(): Promise<string[]> {
   return counted(async () => {
     const parent = owner();
     const settings: Electron.OpenDialogOptions = { properties: ["openFile", "multiSelections"] };
-    const reply = parent ? await dialog.showOpenDialog(parent, settings) : await dialog.showOpenDialog(settings);
+    const reply = await showOpenDialog(parent, settings);
     return reply.canceled ? [] : reply.filePaths.map((path) => pathToFileURL(path).href);
   });
 }
@@ -191,7 +192,7 @@ async function pickFolder(current: string | null, promptText: string | null): Pr
   return counted(async () => {
     const parent = owner();
     const settings: Electron.OpenDialogOptions = { title: "Choose Folder", properties: ["openDirectory", "createDirectory"], defaultPath: current ?? undefined, buttonLabel: promptText ?? undefined };
-    const reply = parent ? await dialog.showOpenDialog(parent, settings) : await dialog.showOpenDialog(settings);
+    const reply = await showOpenDialog(parent, settings);
     return reply.canceled ? null : (reply.filePaths[0] ?? null);
   });
 }
@@ -210,7 +211,7 @@ async function saveFile(name: string, extension: string, kind: string, message: 
       message: message || undefined,
       properties: ["createDirectory", "showOverwriteConfirmation"],
     };
-    const reply = parent ? await dialog.showSaveDialog(parent, settings) : await dialog.showSaveDialog(settings);
+    const reply = await showSaveDialog(parent, settings);
     return reply.canceled || !reply.filePath ? null : reply.filePath;
   });
 }

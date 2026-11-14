@@ -1,4 +1,4 @@
-import { dialog, nativeImage, type WebContents } from "electron";
+import { nativeImage, type WebContents } from "electron";
 import { defineModule } from "../bridge";
 import { appWindow } from "../windows";
 import { guestById, navigationOf, securityOf, stepZoom, tell, tellNavigation, windowOf, type Guest } from "./guests";
@@ -8,6 +8,7 @@ import { resolveDisplayMedia } from "./permissions";
 import { executeAction } from "../services/extensions";
 import { resolvePasswordPrompt } from "../services/pagePasswords";
 import { resolveAutofillPrompt } from "../services/pageAutofill";
+import { showSaveDialog } from "../systemDialogs";
 
 type Args = Record<string, unknown>;
 export type PageCall = (guest: Guest, args: Args) => unknown;
@@ -79,7 +80,7 @@ export async function savePage(guest: Guest) {
   const window = windowOf(guest);
   const name = `${(guest.title || "page").replace(/[\\/:*?"<>|]+/g, " ").trim() || "page"}.html`;
   const options = { defaultPath: name, filters: [{ name: "Web page", extensions: ["html", "htm"] }] };
-  const chosen = window ? await dialog.showSaveDialog(window, options) : await dialog.showSaveDialog(options);
+  const chosen = await showSaveDialog(window, options);
   if (chosen.canceled || !chosen.filePath) return;
   await guest.contents.savePage(chosen.filePath, "HTMLComplete");
 }

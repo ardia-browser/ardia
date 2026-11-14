@@ -1,4 +1,4 @@
-import { app, dialog, type WebContents } from "electron";
+import { app, type WebContents } from "electron";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { count } from "../counts";
@@ -6,6 +6,7 @@ import { note } from "../log";
 import { isBackground } from "../paths";
 import { downloadFolderOf } from "./downloads";
 import { guestOf, windowOf, type Guest } from "./guests";
+import { showSaveDialog } from "../systemDialogs";
 
 export const PAGE_PRINT_CHANNEL = "ardia:page-print";
 
@@ -39,7 +40,7 @@ async function chooseDestination(guest: Guest): Promise<string | null> {
   if (isBackground()) return suggested;
   const window = windowOf(guest);
   const options = { title: "Save as PDF", defaultPath: suggested, buttonLabel: "Save", filters: [{ name: "PDF", extensions: ["pdf"] }] };
-  const chosen = window ? await dialog.showSaveDialog(window, options) : await dialog.showSaveDialog(options);
+  const chosen = await showSaveDialog(window, options);
   return chosen.canceled || !chosen.filePath ? null : chosen.filePath;
 }
 

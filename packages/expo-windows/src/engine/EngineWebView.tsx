@@ -5,7 +5,7 @@ import type { AppWindowsModule } from "../nativeModuleTypes";
 import { followMotion } from "../animation/motion";
 import { noteMissing } from "../missing";
 import { requireNativeModule } from "../modules";
-import { coversIn, hiddenByFullScreen, holesFor, onCoversChange, pageRadiusIn, setFullScreenPage } from "./covers";
+import { coversIn, hiddenByFullScreen, holesFor, onCoversChange, pageRadiusOf, setFullScreenPage } from "./covers";
 import { callPage, mountPage, showPage, type PageRect, type PageShape } from "./pages";
 import { CoverAncestry } from "./usePageCover";
 import { WindowIdContext } from "./windowId";
@@ -114,7 +114,7 @@ export const EngineWebView = forwardRef<unknown, Props>(function EngineWebView(p
         ? { ...page, radius: 0, holes: [] }
         : {
             ...page,
-            radius: pageRadiusIn(windowId),
+            radius: pageRadiusOf(windowId, latest.current),
             holes: holesFor(page, coversIn(windowId, above.current), latest.current.temporary === true),
           };
       const placed = JSON.stringify(shape);

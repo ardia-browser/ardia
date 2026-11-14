@@ -54,6 +54,8 @@ export function setPageRadius(radius: number, windowId = "") {
 
 export const pageRadiusIn = (windowId: string) => radii.get(windowId) ?? defaultRadius;
 
+export const pageRadiusOf = (windowId: string, page: { tabId?: string; temporary?: boolean }) => (page.tabId && !page.temporary ? pageRadiusIn(windowId) : 0);
+
 export function setFullScreenPage(windowId: string, key: string, on: boolean) {
   if (on) {
     if (fullScreenPages.get(windowId) === key) return;

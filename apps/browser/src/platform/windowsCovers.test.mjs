@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { holesFor } from "../../../../packages/expo-windows/src/engine/covers.ts";
+import { holesFor, pageRadiusOf, setPageRadius } from "../../../../packages/expo-windows/src/engine/covers.ts";
 
 const card = { x: 100, y: 50, width: 600, height: 400, radius: 12 };
 const popover = { x: 650, y: 60, width: 200, height: 100, radius: 8 };
@@ -79,4 +79,13 @@ test("a clip that grows or moves without its surfaces laying out has them measur
   strip.box.width = 400;
   clip.moved();
   assert.equal(measured.length, 1, "a surface that stopped watching is not measured");
+});
+
+test("only a tab's own page takes the window's page corner; a Peek's page and an extension's page stay square", () => {
+  setPageRadius(8, "corners");
+  assert.equal(pageRadiusOf("corners", { tabId: "t" }), 8);
+  assert.equal(pageRadiusOf("corners", { tabId: "t", temporary: true }), 0, "a Peek's page sits under the Peek's bar");
+  assert.equal(pageRadiusOf("corners", {}), 0, "a side panel or action popup page has no tab");
+  assert.equal(pageRadiusOf("elsewhere", { tabId: "t" }), 0);
+  setPageRadius(0, "corners");
 });

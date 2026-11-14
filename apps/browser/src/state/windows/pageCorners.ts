@@ -3,7 +3,9 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { pageFrameInsetOf, pageFrameOf } from "../../lib/windowLayout";
 import { WINDOW_CHROME } from "../../lib/windowChrome";
 import { autoHidesTabsIn } from "../browser/model";
-import { windowCornerRadius } from "./layout";
+import { bookmarksShown } from "../bookmarks/visibility";
+import { isSmallWindow } from "./small";
+import { addressBarInSidebar, windowCornerRadius } from "./layout";
 
 const sent = new Map<string, number>();
 
@@ -17,7 +19,19 @@ function drawnPageFrame(s: BrowserState, windowId: string): number {
   });
 }
 
+function bookmarksBarAbovePages(s: BrowserState, windowId: string): boolean {
+  const w = s.windows[windowId];
+  return !!w && !isSmallWindow(w) && w.kind !== "private" && bookmarksShown(s.settings) && s.settings.bookmarksBar === "always";
+}
+
+function pageReachesCardTop(s: BrowserState, windowId: string): boolean {
+  const w = s.windows[windowId];
+  if (!w || bookmarksBarAbovePages(s, windowId)) return false;
+  return isSmallWindow(w) || addressBarInSidebar(s, windowId);
+}
+
 export function pageCornerRadiusIn(s: BrowserState, windowId: string, fixedRadius: number | null = WINDOW_CHROME.pageCornerRadius, windowRadius: () => number = windowCornerRadius): number {
+  if (!pageReachesCardTop(s, windowId)) return 0;
   const inset = drawnPageFrame(s, windowId);
   return pageFrameOf(inset, windowRadius(), 0, fixedRadius).radius;
 }

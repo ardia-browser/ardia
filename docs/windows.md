@@ -181,8 +181,12 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
   - The card's corners: where the Mac keeps the card concentric with its window (window radius minus the page frame),
     Windows rounds it to the window's own 8 px (`pageCornerRadius` in `lib/platformChrome.windows.ts`), and square with
     no page frame (borderless mode, a frame of 0, full screen when set). The page is a window of its own above the
-    card, so `state/windows/pageCorners.ts` sends each window's radius to the engine host (`ArdiaPageCovers.setRadius`),
-    which rounds the page window to match.
+    card, and the engine host rounds all four of its corners or none (`ArdiaPageCovers.setRadius`), so
+    `state/windows/pageCorners.ts` sends the window's radius only while a tab's page reaches its card's top (address bar
+    in the sidebar, Little Ardia) and 0 below the toolbar or an always-shown bookmarks bar, where rounded top corners
+    would cut into the card. A Peek's page sits under the Peek's bar and an extension's page has no tab, so both stay
+    square (`pageRadiusOf` in `engine/covers.ts`). Rounding only the bottom corners below the toolbar needs per-corner
+    shapes in the engine host.
   - Moving the window: a drag region is a view that moves the window when the UI's own hit-testing gives it the press,
     so a control on top of it still clicks, and the app moves the window while the button is down (Escape puts it
     back, a maximized window restores under the pointer, a release at the top edge maximizes). The UI also marks

@@ -207,7 +207,7 @@ test("a store install downloads the id's CRX and unpacks it only when its signat
   const genuine = crx3({ archive: archiveWith(MANIFEST), proofs: [{ pair, kind: "rsa" }] });
   const { extensions } = await freshFolders();
   const path = await withStore(
-    () => new Response(genuine),
+    () => new Response(new Uint8Array(genuine)),
     async (asked) => {
       const installed = await downloadStoreExtension(id, extensions);
       assert.deepEqual(asked, [storeCrxUrl(id)]);
@@ -225,12 +225,12 @@ test("a tampered store CRX, or one for another id, is refused and leaves nothing
   const genuine = crx3({ archive, proofs: [{ pair, kind: "rsa" }] });
   const tampered = Buffer.concat([genuine.subarray(0, genuine.length - archive.length), archiveWith({ ...MANIFEST, name: "Evil" })]);
   const { extensions } = await freshFolders();
-  await withStore(() => new Response(tampered), () => assert.rejects(downloadStoreExtension(id, extensions), /signature/));
+  await withStore(() => new Response(new Uint8Array(tampered)), () => assert.rejects(downloadStoreExtension(id, extensions), /signature/));
   const other = rsa();
   const foreign = crx3({ archive, proofs: [{ pair: other, kind: "rsa" }] });
-  await withStore(() => new Response(foreign), () => assert.rejects(downloadStoreExtension(id, extensions), /not/));
+  await withStore(() => new Response(new Uint8Array(foreign)), () => assert.rejects(downloadStoreExtension(id, extensions), /not/));
   const escaping = crx3({ archive: archiveWith({ ...MANIFEST, version: "../../x" }), proofs: [{ pair, kind: "rsa" }] });
-  await withStore(() => new Response(escaping), () => assert.rejects(downloadStoreExtension(id, extensions), /version/));
+  await withStore(() => new Response(new Uint8Array(escaping)), () => assert.rejects(downloadStoreExtension(id, extensions), /version/));
   await withStore(() => new Response("nope", { status: 404 }), () => assert.rejects(downloadStoreExtension(id, extensions), /404/));
   assert.deepEqual(await readdir(extensions), []);
 });

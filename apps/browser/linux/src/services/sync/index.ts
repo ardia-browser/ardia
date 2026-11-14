@@ -10,7 +10,7 @@ import { note } from "../../log";
 import { isBackground } from "../../paths";
 import { allLogins, putLogin } from "../passwords";
 import { newFileId, SyncKeys } from "./crypto.ts";
-import { deleteKey, loadKey, saveKey } from "./keyStore";
+import { deleteKey, keyPersists, loadKey, saveKey } from "./keyStore";
 import { KIT_PDF_NAME, kitBytes, kitPreview, qrDataUrl } from "./kit";
 import { hidePasswords } from "./logins.ts";
 import { entropyFrom, newEntropy, wordsFor } from "./phrase.ts";
@@ -124,6 +124,7 @@ defineModule("ArdiaSync", {
     newDeviceId: () => newFileId(),
     deviceName,
     takeFileCounts: () => ({ placeholders: 0, busy: 0, hydrated: 0 }),
+    keyPersists,
   },
   async: {
     async folderInfo(path: string | null) {

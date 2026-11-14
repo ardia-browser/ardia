@@ -216,7 +216,10 @@ the main method where one is needed (`aroundMain` in `tsModules.ts`), the main p
 - **Sync.** `ArdiaSync` (`services/sync`) is the Mac's and Windows' vault in `node:crypto`, so one sync folder serves all
   three: HKDF-SHA256 keys from the 32-byte recovery entropy, base32 HMAC tags for the chain and scope folders,
   AES-256-GCM `.nns` files padded to 1 KB, synthetic-nonce password seals, the BIP-39 phrase, legacy `pw:` records
-  sealed on read and opened on write. The key is sealed with `safeStorage` in `<data>/Sync/sync-key-<device>`. The
+  sealed on read and opened on write. With a keyring (libsecret, KWallet) the key is sealed with `safeStorage` in
+  `<data>/Sync/sync-key-<device>`; with `basic_text` or an unknown backend it stays in memory until quit (a key an older
+  build sealed with the basic key is deleted at launch), sync reads as locked at the next launch and the pane asks for
+  the recovery phrase, saying why (`keyPersists()`). The
   default folder is `Ardia Sync` in the first of `~/Dropbox`, `~/Nextcloud`, `~/OneDrive`, `~/Sync`, … that exists
   (the instance's `syncFolder` in a test instance). The Recovery Kit is the Windows TypeScript (PDF, text, QR code);
   its preview is the same layout as SVG; "Copy" puts the PDF on the clipboard as a file (`text/uri-list`). There's no

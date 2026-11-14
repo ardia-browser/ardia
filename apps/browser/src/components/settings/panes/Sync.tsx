@@ -1,6 +1,6 @@
 import { showMenu } from "../../../state/app/system";
 import { Box, Button, Dot, lineHeight, space, Symbol, Text, Toggle } from "../../ui";
-import { copyRecoveryPhrase, revealSyncFolder, type FolderInfo } from "../../../state/sync/recoveryKit";
+import { copyRecoveryPhrase, keyKeptUntilQuit, revealSyncFolder, type FolderInfo } from "../../../state/sync/recoveryKit";
 import { useEffect, useState } from "react";
 import { syncFolder } from "../../../state/settings/paneData";
 import { useResource } from "../../../state/settings/resources";
@@ -222,6 +222,11 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
             {error}
           </Text>
         </Box>
+      ) : null}
+      {keyKeptUntilQuit() ? (
+        <Text size="caption" tone="textTertiary" style={FOOTNOTE()}>
+          No keyring found, so Ardia asks for your recovery phrase after each restart.
+        </Text>
       ) : null}
 
       <SectionHeader

@@ -50,6 +50,7 @@ type SyncNative = {
   readPasswords(engineProfile: string): Promise<SealedLogin[] | null>;
   savePassword(engineProfile: string, origin: string, username: string, sealed: string, replacing: boolean): Promise<boolean>;
   takeFileCounts?(): { placeholders: number; busy: number; hydrated: number };
+  keyPersists?(): boolean;
 };
 
 export const SyncNative = requireOptionalNativeModule<SyncNative>("ArdiaSync");

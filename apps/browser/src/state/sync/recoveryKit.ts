@@ -3,6 +3,7 @@ import { SyncNative } from "../../platform/sync";
 export type { FolderInfo } from "../../platform/sync";
 
 export const recoveryWords = () => SyncNative?.recoveryWords();
+export const keyKeptUntilQuit = () => SyncNative?.keyPersists?.() === false;
 
 let codeCounts = { sync_codes_shown: 0, sync_codes_declined: 0 };
 

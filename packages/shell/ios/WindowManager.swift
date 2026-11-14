@@ -312,8 +312,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     guard let visible = screen?.visibleFrame else { return window.center() }
     let width = min(max(size?.width ?? 900, window.minSize.width), visible.width)
     let height = min(max(size?.height ?? 640, window.minSize.height), visible.height)
-    let lift = min(visible.height * 0.05, (visible.height - height) / 2)
-    let origin = NSPoint(x: (visible.midX - width / 2).rounded(), y: (visible.midY - height / 2 + lift).rounded())
+    let origin = NSPoint(x: (visible.midX - width / 2).rounded(), y: (visible.midY - height / 2).rounded())
     window.setFrame(NSRect(origin: origin, size: NSSize(width: width.rounded(), height: height.rounded())), display: false)
   }
 

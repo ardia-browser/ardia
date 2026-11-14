@@ -2,7 +2,7 @@ import { ipcMain, type WebContents } from "electron";
 import { emit } from "../bridge";
 import { guestById, guestOf, tell } from "../engine/guests";
 import { addresses, cardNumber, cards, saveAddress, saveCard, settingsOf } from "./autofill";
-import { frameAllows, isAutofillKind } from "./autofillFrames";
+import { FillGrants, frameAllows, isAutofillKind } from "./autofillFrames";
 import { definePageScript, profileOfContents } from "./guests";
 import { isPrivateProfile } from "./profiles";
 
@@ -248,6 +248,7 @@ function autofillPage(ipc: Electron.IpcRenderer) {
     popup.style.top = `${below ? rect.bottom + 4 : rect.top - 4 - height}px`;
     popup.addEventListener("mousedown", (event) => event.preventDefault());
     popup.addEventListener("click", (event) => {
+      if (!event.isTrusted) return;
       const target = (event.target as Element).closest<HTMLElement>("[data-index]");
       if (target) void choose(Number(target.dataset.index));
     });
@@ -288,6 +289,7 @@ function autofillPage(ipc: Electron.IpcRenderer) {
   document.addEventListener(
     "mousedown",
     (event) => {
+      if (!event.isTrusted) return;
       const el = event.target;
       if (el instanceof Element && host?.contains(el)) return;
       if (el instanceof HTMLInputElement && fillable(el)) setTimeout(() => void suggest(el, true), 0);
@@ -347,6 +349,7 @@ function autofillPage(ipc: Electron.IpcRenderer) {
   document.addEventListener(
     "keydown",
     (event) => {
+      if (!event.isTrusted) return;
       const el = event.target;
       if (open && el === open.field) {
         const count = open.list.length + 1;
@@ -465,6 +468,8 @@ function fillValues(profile: string, kind: string, id: string): Record<string, s
 const submissions = new Map<number, Submission>();
 const queues = new Map<number, Pending[]>();
 const watched = new WeakSet<WebContents>();
+const grants = new FillGrants();
+const grantsWatched = new WeakSet<WebContents>();
 let nextPromptId = 1;
 
 function cleanAddress(input: unknown): AddressFields | null {
@@ -625,6 +630,13 @@ function watch(contents: WebContents) {
   });
 }
 
+function watchGrants(contents: WebContents) {
+  if (grantsWatched.has(contents)) return;
+  grantsWatched.add(contents);
+  contents.on("did-frame-navigate", (_event, _url, _code, _status, _isMainFrame, processId, routingId) => grants.forgetFrame(contents.id, processId, routingId));
+  contents.once("destroyed", () => grants.forgetContents(contents.id));
+}
+
 export function resolveAutofillPrompt(webContentsId: number, id: number, answer: string): void {
   const queue = queues.get(webContentsId);
   const at = queue?.findIndex((pending) => pending.prompt.id === id) ?? -1;
@@ -645,7 +657,10 @@ ipcMain.handle(`${CHANNEL}:suggest`, (event, request: { kind?: unknown; type?: u
   const frame = event.senderFrame;
   if (profile === null || !isAutofillKind(kind) || !frame || !frameAllows(frame, kind)) return [];
   try {
-    return suggestions(profile, kind, text(request?.type), typeof request?.typed === "string" ? request.typed : "").slice(0, 8);
+    const list = suggestions(profile, kind, text(request?.type), typeof request?.typed === "string" ? request.typed : "").slice(0, 8);
+    watchGrants(event.sender);
+    grants.offer(event.sender.id, frame, kind, list.map((suggestion) => suggestion.id));
+    return list;
   } catch {
     return [];
   }
@@ -654,9 +669,10 @@ ipcMain.handle(`${CHANNEL}:suggest`, (event, request: { kind?: unknown; type?: u
 ipcMain.handle(`${CHANNEL}:fill`, (event, request: { kind?: unknown; id?: unknown }) => {
   const profile = profileOfContents(event.sender);
   const kind = request?.kind;
-  if (profile === null || !isAutofillKind(kind) || !frameAllows(event.senderFrame, kind)) return null;
+  const id = text(request?.id);
+  if (profile === null || !isAutofillKind(kind) || !grants.take(event.sender.id, event.senderFrame, kind, id)) return null;
   try {
-    return fillValues(profile, kind, text(request?.id));
+    return fillValues(profile, kind, id);
   } catch {
     return null;
   }

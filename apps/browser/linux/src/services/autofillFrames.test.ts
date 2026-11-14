@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { type AutofillFrame, frameAllows, isSecureOrigin } from "./autofillFrames.ts";
+import { type AutofillFrame, FillGrants, frameAllows, isSecureOrigin } from "./autofillFrames.ts";
 
 type Frame = AutofillFrame & { destroyed: boolean; origin: string };
 let nextToken = 1;
@@ -33,4 +33,47 @@ test("addresses fill in the top frame and same-origin frames, cards only on secu
   assert.equal(frameAllows(null, "address"), false);
   same.destroyed = true;
   assert.equal(frameAllows(same, "address"), false);
+});
+
+test("values are released only for a suggestion main showed to that frame, once", () => {
+  const grants = new FillGrants();
+  const top = frame("https://shop.example");
+  const other = frame("https://shop.example", top);
+  assert.equal(grants.take(1, top, "card", "c1"), false);
+  grants.offer(1, top, "card", ["c1", "c2"]);
+  assert.equal(grants.take(1, top, "card", "c3"), false);
+  grants.offer(1, top, "card", ["c1", "c2"]);
+  assert.equal(grants.take(1, other, "card", "c1"), false);
+  assert.equal(grants.take(2, top, "card", "c1"), false);
+  assert.equal(grants.take(1, top, "address", "c1"), false);
+  grants.offer(1, top, "card", ["c1", "c2"]);
+  assert.equal(grants.take(1, top, "card", "c2"), true);
+  assert.equal(grants.take(1, top, "card", "c2"), false);
+});
+
+test("a grant ends when its frame navigates, changes origin, goes away or waits too long", () => {
+  const grants = new FillGrants();
+  const top = frame("https://shop.example");
+  grants.offer(1, top, "address", ["a1"]);
+  grants.forgetFrame(1, top.processId, top.routingId);
+  assert.equal(grants.take(1, top, "address", "a1"), false);
+  grants.offer(1, top, "address", ["a1"]);
+  top.origin = "https://elsewhere.example";
+  assert.equal(grants.take(1, top, "address", "a1"), false);
+  top.origin = "https://shop.example";
+  grants.offer(1, top, "address", ["a1"]);
+  grants.forgetContents(1);
+  assert.equal(grants.take(1, top, "address", "a1"), false);
+  grants.offer(1, top, "address", ["a1"], 0);
+  assert.equal(grants.take(1, top, "address", "a1", 11 * 60_000), false);
+  grants.offer(1, top, "address", ["a1"]);
+  top.destroyed = true;
+  assert.equal(grants.take(1, top, "address", "a1"), false);
+});
+
+test("a card grant isn't honored once its frame can't take cards", () => {
+  const grants = new FillGrants();
+  const top = frame("http://shop.example");
+  grants.offer(1, top, "card", ["c1"]);
+  assert.equal(grants.take(1, top, "card", "c1"), false);
 });

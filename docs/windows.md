@@ -36,7 +36,7 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
 | First launch after the installer | Works: onboarding, no release notes | #1517 |
 | First launch with a link | Works: the link opens in a Little Ardia window in front, onboarding waits in the main window behind it | |
 | Onboarding (source, look, last choices) | Works: three steps, Edge found on this PC, Get Started and Take the Tour | |
-| Intro animation and music | Differs: the dawn poster stands in for the animated meadow, then hands over to step 1 after about 20 s; music not checked (the VM has no audio out) | #1547, #1546, #1249 |
+| Intro animation and music | Built, not yet walked on the VM: the Mac's meadow page runs as a hidden engine page in a private session of the original profile and draws the icon, wordmark, tagline, Skip and Mute itself from the app's values; the dawn poster stays as the fallback when the scene has no first frame within 2.5 s or the page fails. Before this, the poster stood in and handed over to step 1 after about 20 s; music not checked (the VM has no audio out) | #1547, #1546, #1249 |
 | Tour | Works (d83398e1f): Take the Tour shows five stops (search, tabs in the sidebar, room to focus, two pages side by side, all set) with Back, Next and Skip Tour; Done ends it | |
 | Import from Edge | Works (onboarding finds Edge; import itself checked in #1357) | #1516 |
 | Check for updates | Differs: Check Now says "No Windows update published yet" and names the build (0.2.47-nightly.1, Windows alpha 290) | #1517 |
@@ -874,7 +874,8 @@ App side, an agent can do these now:
 4. The app's own page, link and image menus instead of Chromium's (#1518). M.
 5. The app's own prompts for passwords, notifications and location, drawn like the Mac's (#1425 for the events the app
    needs). M each once the engine reports them.
-6. The intro: the animated meadow instead of the dawn poster (#1547). L (Direct3D).
+6. The intro: the animated meadow instead of the dawn poster (#1546): built as an engine page that draws its own text
+   and buttons; left is the VM walk (light, dark, the fallback, the launch log). S.
 7. Picture in picture: the Mac's stash, corners and mini player (#1425 for the window events). L.
 
 Engine work (#1425): the walk found nothing new missing beyond what is already listed there:

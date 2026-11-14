@@ -60,6 +60,8 @@ export {
   type DroppedItem,
   type DropUpdate,
   type MagnifyUpdate,
+  type MeadowIntro,
+  type MeadowIntroEvent,
   type MeadowTone,
   type SurfaceProps,
   type SwipeAreaHandle,

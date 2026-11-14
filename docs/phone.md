@@ -238,22 +238,92 @@ phone is listed as unverified, even where the code is in. Audited 2026-11-14 at 
 
 ### Needs only JavaScript
 
+- Search tray: search links (`ardia://search?q=`, web search, process text, shared text, Siri) open the tray with the words instead of searching at once as both apps do. `AppModel.kt` `handle()`, `AppModel+System.swift` `handle(_:)`. Small.
+- Search tray: a voice link shows the voice screen alone; both apps put the tray under it so Cancel lands on the tray. Same files. Small.
+- Search tray: the mic button leaves the field focused; both apps drop focus while voice is up and give it back. `SearchTray.kt`, `SearchTray.swift` (`mayFocus`). Small.
+- Search tray: the calculator row does nothing; both apps copy the value with a "Copied …" toast, offer Copy on long-press and title it "= value". `AppModel.kt`/`SearchTray.kt`, `AppModel+Search.swift`/`SearchTray.swift`. Small.
+- Search tray: bang queries lack their "Search <engine>" detail line. `SearchSuggestions.kt` `row()`, `SearchSuggestionsModel.swift` `row(for:)`. Small.
+- Search tray: 8 rows and no kept row for the exact typed query; both apps show 9 and keep it. Same files. Small.
+- Search tray: Mac-tab rows show the device name as text; both apps show a laptop icon and the host, and Switch to Tab uses `arrow.right.circle`. `SuggestionList.kt` `RowLabel`, `SuggestionRowView.swift`. Small.
+- Search tray: no scrubbing along the rows (highlight under the finger past 6 pt, a tick per row, open on release, press spring 0.2/0.7). `SuggestionList.kt`, `Scrub.kt`, `SearchTray.swift` `scrub`. A day.
+- Search tray: no drag down to close from the header, caption or empty area (the dim follows, traySettle 0.34/0.86 or dismiss past a threshold). `SearchTrayHost.kt`, `TrayDrag.kt`, `SearchTrayHost.swift`, `TrayDrag.swift`. A day.
+- Search tray: closing is not animated (trayDismiss 0.32/1, dim fades 300 ms, waits for the keyboard); the dim pops in. Same host files. A day.
+- Search tray: the rise does not follow the keyboard (IME insets on Android, the keyboard's own curve on iPhone, landing after 450 ms); Reanimated's `useAnimatedKeyboard` can drive it. `TrayPresentation.kt`, `TrayLift.kt`, `SearchTrayHost.swift`, `KeyboardTracker.swift`. A day.
+- Search tray: Reduce Motion ignored (both apps use a 200 ms fade or settle). `SearchTrayHost.kt`, `SearchTrayHost.swift`. Small.
+- Search tray: no 140 ms crossfade between caption, rows and empty (`resultsIn`). `SearchTray.kt` `TrayBody`, `SearchTray.swift`. Small.
+- Search tray: no fade mask at the bottom of overflowing rows (the list now ends at the last whole row). `SearchTray.kt` `FADE_MASK`, `SearchTray.swift` `fadeMask`. Small.
+- Search tray: the incognito toggle's label pops instead of fading and scaling from 0.9 (modeToggle 0.3 s, bounce 0.15). `IncognitoToggle.kt`, `IncognitoToggle.swift`. Small.
+- Search tray: field text is body, not title3 that scales with text size; the incognito caption is not centred semibold; past 1.5× text size rows don't wrap to 3–4 lines and scrubbing doesn't turn off. `SearchTray.kt`, `SearchTray.swift`, `SuggestionRowView.swift`. Small.
+- Search tray: rows expose one "More Actions" (menu at y 0); Compose exposes Refine and each menu item as accessibility actions. `SuggestionList.kt`. Small.
+- Start page: with no tabs and sync on, the leading button should be Synced Tabs (opens Spaces); the logo should fade and scale from 0.92 and the bar fade with searchRise instead of snapping. `SearchHomeView.kt`, `SearchHomeView.swift`. Small.
+- Voice screen: no 150 ms transcript crossfade, no logo shadow (12 dp, 15%), no 100 ms waveform ease (iPhone). `VoiceSearchView.kt`, `VoiceSearchView.swift`. Small.
+- System links: a tab link opens archived and private tabs as they are; both apps refuse private ones and restore archived ones, and Compose waits for the store before giving up on an unknown id. `AppModel.kt` `openTabFromSystem`, `AppModel+System.swift`. Small.
+- System links (iPhone): pages from the share sheet open with origin `link`, not `share`. `AppModel+System.swift` `drainSystemInbox`. Small.
+- Deck: no selection tick as the focused card changes, no light impact on a flick-close, no medium impact on confirming Close All or Close Incognito Tabs. `DeckState.kt`, `TabSwitcherView.kt`, `TabSwitcherView.swift`. Small.
+- Deck: Android haptics use expo-haptics' vibrator calls; Compose uses the view's system haptics (tick, key, long press, confirm, reject), which follow the touch-feedback setting. expo-haptics 15 has `performAndroidHapticsAsync`. `Haptics.kt`. Small.
+- Deck: no poof (9 puffs over 420 ms) where a card closes. `PoofBurst.kt`, `PoofBurst.swift`. A few hours.
+- Deck: opening without a page shows the cards at once; both apps fade them in over 200 ms, and crossfade a handoff cover when the page could not be animated. `DeckState.appear`, `TabSwitcherView.swift` `appear()`/`DeckCover`. Small.
+- Deck: the backdrop, bar and chip pop in and out around open and close; both apps fade the backdrop with position×1.4 and the chrome over the last 40%, and hide the chip while a card is lifted. `DeckPose.kt`, `TabSwitcherView.kt`, `TabSwitcherView.swift`. Small.
+- Deck: Reduce Motion ignored (both apps crossfade to open, close without the fly-away, and settle and close gaps with a 200 ms fade). `DeckState.kt`, `TabSwitcherView.swift` `crossfadeOpen`. Half a day.
+- Deck: the page mounts only when the open spring ends; both apps select the tab and make its view when the spring starts, so the page is ready under the card. `DeckState.open`, `AppModel+Tabs.swift` `prepareToOpen`/`beginOpening`. Half a day.
+- Deck: system Back leaves without the expand animation and ignores the focused card; Compose closes the card menu, then the archive card, then opens the selected or focused tab with the animation. `DeckState.back()`. Small.
+- Deck: the card menu lacks Send to <device> and Pin to Mac. `TabCard.kt` `CardMenu`, `TabSwitcherView.swift` `CardMenu`. Small.
+- Deck: no "From Your Mac" badge on received tabs not yet seen. `TabCard.kt` `ReceivedBadge`, `TabCardView.swift`. Small.
+- Deck: card headers lack the trailing fade, the icon reveal, the leading placement and the 1.35 text-size cap. `TabCard.kt` `DeckCardHeaderItem`, `DeckHeaderLayout.swift`. Half a day.
+- Deck: snapshots don't fade in over 200 ms; the placeholder colour hashes the whole URL, not the host; its title is body semibold, not headline. `TabCard.kt`, `TabCardView.swift`. Small.
+- Deck: card shadow is elevation 6; both apps use radius 18, offset (−2, 4) on iPhone and elevation 14 on Android. `TabDeckPlacement.swift`, `DeckModifiers.kt`. Small.
+- Deck: every card is mounted; both apps draw only the cards within 6 of the scroll position. `TabsDeckGeometry.swift`, `DeckState.renderedRange`. Small.
+- Deck: no page-left/page-right accessibility scroll actions, and the Close Tab action animates. `TabSwitcherView.kt`, `TabSwitcherView.swift`. Small.
+- Deck: a tap on a card that is lifted or flying away still opens it. `DeckState.open`. Small.
+- Archive card: enters with a fade only; both apps fade and scale from 0.96. `TabSwitcherView.kt`, `TabSwitcherView.swift`. Small.
+- Auto-archive: runs at launch, on becoming active and on an interval change; both apps also run it every 15 minutes while active and prune expired archive rows on becoming active, and the iPhone holds it while the deck is dragged. `TabStore.kt`, `TabStore.swift`. Small.
+- Archive: day titles always "weekday, month day"; both apps say Today, Yesterday, the weekday within six days, then the date (with the year if it differs). `ArchiveView.kt` `ArchiveDayLabel`, `ArchiveView.swift`. Small.
+- Archive: no tick on restoring a row, no warning haptic on Delete All, and Delete All is enabled when empty. `ArchiveView.kt`, `ArchiveView.swift`. Small.
+- Archive: empty and no-results states are text only; both apps show the 64 pt archive tile or a magnifier, and the empty state even while a query is typed. `ArchiveView.kt`, `ArchiveView.swift`. Small.
+- Archive: rows put a tile behind the favicon and day headers have no background (sticky only on iPhone, where text overlaps); both apps draw a plain favicon at 20× text size on sticky headers with a 0.92 surface tint. `ArchiveView.kt`. Small.
+- Archive: Back closes the sheet with a query typed (Compose clears the query first), and search runs on every keystroke (Compose waits 120 ms). `ArchiveView.kt`. Small.
+- Archive (iPhone): a full swipe deletes a row; SwiftUI only reveals Delete (`allowsFullSwipe: false`). `ArchiveView.swift`. Small.
 ### Needs native code on Android
 
+- Search field: no inline completion (the suggested address's rest highlighted after the caret, so Enter on "goo" opens google.com); React Native's field can't overlay a suffix or see the IME's composing text, so it needs a native field. `CompletingFieldState.kt`, `OmniboxTextField.kt`. More.
+- Search tray: no predictive back (the tray follows the back gesture down 72 dp); React Native's back handler gives no progress. `SearchTrayHost.kt` `PredictiveBackHandler`. A day.
+- Share sheet: no Send to Your Mac (Compose's ShareActivity offers Open, Search and Send). `share/ShareActivity.kt`, `ShareSheetModel.kt`, `ShareSheetView.kt`. A day.
+- Widgets: the Color setting doesn't tint them. `system/WidgetColors.kt`, `SystemSnapshotExport.kt`. Small.
 ### Needs native code on iPhone
 
+- Voice search: no speech module, so the mic is hidden and voice links, the intent and the control fall back to the tray. `VoiceDictation.swift`. A day.
+- Search field: no inline completion; needs a native field. `OmniboxTextField.swift` (`CompletingTextField`). More.
+- Spotlight: open and archived tabs aren't indexed. `SpotlightIndexer.swift`. A day.
+- Shortcuts and Siri: no Open Tab intent or tab entity in the app target (`apps/phone/ios/Ardia/Intents.swift`). `ArdiaIntents.swift` `OpenTabIntent`, `TabEntity.swift`. A day.
+- Handoff: the current page isn't offered to other devices (incoming works). `SystemIntegrations.swift`, `AppModel+System.swift`. Small.
+- Deck bar: SwiftUI's buttons are interactive Liquid Glass (`.glassEffect(.regular.interactive())`); the look module's Frost needs a glass variant that samples the deck. `TabDeckBar.swift`. A day.
+- Context menus: SwiftUI uses system context menus (lift preview and blur) on cards, the plus button and archive rows, with ShareLink; the app draws its own. Needs a native context-menu view. `TabSwitcherView.swift`, `TabDeckBar.swift`, `ArchiveView.swift`. A day.
 ### Unverified on a phone
 
+- iPhone look views: `packages/phone/ios/LookModule.swift` is in progress (uncommitted); until it lands the iPhone draws gradients and solid fills. Check: the deck's animated backdrop and frosted controls, and Reduce Motion and Reduce Transparency switching them.
+- Scroll position restore: scroll a long page, kill the app, relaunch; the same tab opens at the same offset, also after it was discarded in the background (both phones).
+- Card snapshot on deck entry: open the deck right after scrolling; the card shows the current view.
+- Deck gestures: a 400 ms hold opens the card menu without scrolling, a slow vertical drag lifts, a tap right after a settle opens the right card.
+- Incognito chip: compare its tap with Compose's `IncognitoChip` (SwiftUI shows a one-item menu, as the app does).
+- Voice from the tray: the keyboard goes down over the voice screen and comes back on the tray after Cancel.
+- Refine arrow with TalkBack and VoiceOver: reachable, read as "Refine <title>".
+- iPhone Lock Screen widgets and Control Center controls open the right link (the app target has its own intent copies).
+- iPhone search widget follows the profile colour and Match My Mac (`WidgetExporter.swift`).
+- Android Paste and Go: "Link You Copied" for a link, "Text You Copied" for text (c872c609f).
 ### Deliberately different
 
-- Voice screen status-bar icons: light over the voice screen's always-dark cover on both phones, the top layer's ink rule (`lib/statusInk.ts`), not each native app's own.
+- Voice screen status-bar icons: always light; Compose takes them from the light-mode tint although the screen is always dark (3a9ca2f10, `lib/statusInk.ts`).
 - Pin to Mac from the page menu: Android keeps Compose's toast, iPhone answers in the menu's title as SwiftUI does (5023ecabd).
 - Paste and Go: Android only; SwiftUI has no such row (`lib/platformCopy.ts` `offersPasteAndGo`).
 - Wording: each phone keeps its native app's words through one copy table per platform (`lib/platformCopy.ts`, 5db9a2263).
-- Settings, the Archive and Spaces share one sheet on both phones (3a9ca2f10); Compose opens Settings full screen.
+- Settings, the Archive and Spaces share one drawn sheet on both phones, as Compose's `SheetHost` (3a9ca2f10); SwiftUI uses the system sheet.
 - Menus are drawn by the app (`components/ui/Menu.tsx`) on both phones, not system menus, so they match across platforms.
 - Backdrops: native look views where the module has them, CSS gradients elsewhere; no Skia (the owner's decision).
 - The code scanner is the module's own view (`ScanView`); expo-camera and its ML Kit are gone (00b9064e9).
+- Tray rows end at the last whole row and scroll, so the iPhone's taller keyboard never cuts a row (992441306).
+- A suggestion whose text is an address opens that address, so a row tap does what Enter does (87bc6e89f).
+- A link that arrives during onboarding is held and only the last one runs afterwards (43753d1b5); both apps act at once.
+- The deck bar sits 6 points above a three-button navigation bar instead of on it (2db78f033); gesture navigation keeps Compose's numbers.
 
 ## Build and run
 

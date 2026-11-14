@@ -13,7 +13,7 @@ Walked by hand on 2026-11-14 on Ubuntu 24.04 (x86_64), in a test instance on a p
 data folder, as a user would: real X key presses, clicks and drags, a screenshot for every row. The walk started on
 commit d7a4bd789; the rows it found broken were fixed on the way and seen again after the fix (through cc0829af3),
 and those rows name the fix. Most rows were walked with no window manager; maximize, dragging, full screen, focus, menus and Peek were walked
-again under xfwm4 with its compositor. Of the 62 rows, 45 work, 6 work with a difference, 1 is broken, 1 is not
+again under xfwm4 with its compositor. Of the 63 rows, 46 work, 6 work with a difference, 1 is broken, 1 is not
 offered and 9 were not walked. Works with a difference says what differs; the Mac's list is
 `docs/dia-feature-parity.md`.
 
@@ -60,6 +60,7 @@ offered and 9 were not walked. Works with a difference says what differs; the Ma
 | Feature | State | Fixed in |
 | --- | --- | --- |
 | Command bar (history, open tabs, suggestions) | Works | |
+| First click into a page that never had focus | Works with real X input, with no window manager and under xfwm4: a page restored at launch, one in an inactive window, one reached by a tab click and a fresh tab all take the click and every key typed right after it, and an address field opens autofill's suggestions on that first click. Driving the app window with CDP clicks doesn't give the page focus, which is where this looked broken | |
 | Find in page | Works: the app's find bar with the match count | |
 | Zoom (Ctrl+=, Ctrl+0) | Works, with the zoom popover and the icon in the address bar | |
 | Print | Works: with a printer, the system print dialog; with none (CUPS has no destinations), Save as PDF into the downloads folder. Before, Ctrl+P froze the tab: Electron refuses to print without a printer and leaves the page waiting | 3b537855b |

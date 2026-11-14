@@ -1,7 +1,9 @@
+import type { ComponentProps } from "react";
 import { call } from "@ardia/ardiacore";
-import { nativeModule, type DragPreviewShape, type OpenWindowOptions, type Rect4, type WindowEvent } from "@ardia/shell";
+import { nativeModule, type DragPreviewShape, type OpenWindowOptions, type OutsidePressArea, type Rect4, type WindowEvent } from "@ardia/shell";
 
 export type { DragPreviewShape, WindowEvent, OpenWindowOptions };
+export type OutsidePressEvent = Parameters<NonNullable<ComponentProps<typeof OutsidePressArea>["onOutsidePress"]>>[0];
 
 const Windows = nativeModule("ArdiaAppWindows");
 let cachedWindowCornerRadius: number | undefined;

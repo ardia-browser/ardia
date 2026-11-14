@@ -1,3 +1,4 @@
+import type { OutsidePressEvent } from "../../platform/windows";
 import { storeAction, useBrowser } from "../browser/store";
 import { noteDownloadsPanel } from "../telemetry/downloadsPanelCounts";
 
@@ -13,7 +14,7 @@ export const clearDownloads = storeAction("clearDownloads");
 
 let downloadsPressedAway: { windowId: string; pressedAt: number } | null = null;
 
-export function dismissDownloadsByPress(windowId: string, press: { nativeEvent: { timestamp?: number } }) {
+export function dismissDownloadsByPress(windowId: string, press: OutsidePressEvent) {
   if (!useBrowser.getState().windowUi[windowId]?.downloadsOpen) return;
   const pressedAt = press.nativeEvent.timestamp;
   downloadsPressedAway = pressedAt === undefined ? null : { windowId, pressedAt };

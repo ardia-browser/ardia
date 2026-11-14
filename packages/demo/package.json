@@ -7,6 +7,7 @@
     "dev": "vite --host 127.0.0.1 --port 5191 --strictPort",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "node --test scripts/web-shims.test.mjs",
     "typecheck": "tsc -p . && node scripts/icons/check.mjs",
     "icons": "node scripts/icons/regenerate.mjs"
   },

@@ -75,6 +75,8 @@ jobs:
             apps/site/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm -C apps/site install --frozen-lockfile
+      - run: pnpm -C packages/demo exec playwright install --with-deps chromium
+      - run: pnpm -C packages/demo test
       - run: infra/site/deploy.sh build
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:

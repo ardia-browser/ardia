@@ -15,6 +15,7 @@ import { AutofillPrompt, BLOCKED_POPUPS_WIDTH, BlockedPopupsPrompt, EXTERNAL_APP
 import { SiteControls } from "../site/SiteControls";
 import { SITE_PANEL } from "../site/SiteControlsParts";
 import { ZOOM_POPOVER_WIDTH, ZoomPopover } from "../site/ZoomControls";
+import { HIDDEN_ELEMENTS_WIDTH, HiddenElementsPopover } from "../site/HiddenElements";
 import { SelectionPopover } from "../site/SelectionPopover";
 import { SharePicker } from "../media/SharePicker";
 import { CastPicker } from "../media/CastPicker";
@@ -72,6 +73,7 @@ export function PageOverlays({
       {popovers && <SiteControls tabId={tabId} open={popover === "siteControls"} {...at("siteButton", SITE_PANEL.width)} />}
       {popovers && popover === "popups" && <BlockedPopupsPrompt tabId={tabId} {...at("siteButton", BLOCKED_POPUPS_WIDTH)} />}
       {popovers && <ZoomPopover tabId={tabId} open={popover === "zoom"} {...at("siteButton", ZOOM_POPOVER_WIDTH)} />}
+      {popovers && <HiddenElementsPopover tabId={tabId} open={popover === "hiddenElements"} {...at("siteButton", HIDDEN_ELEMENTS_WIDTH)} />}
       <SharePicker tabId={tabId} paneWidth={width} />
       {!newTabShown && <DeviceChooser tabId={tabId} {...at("prompt", DEVICE_CHOOSER_WIDTH)} />}
       <CastPicker tabId={tabId} paneWidth={width} />
@@ -89,6 +91,7 @@ export function BesidePeekPopovers({ tabId, windowId, left, top, room }: { tabId
       <SiteControls tabId={tabId} open={popover === "siteControls"} {...fit(SITE_PANEL.width)} />
       {popover === "popups" && <BlockedPopupsPrompt tabId={tabId} {...fit(BLOCKED_POPUPS_WIDTH)} />}
       <ZoomPopover tabId={tabId} open={popover === "zoom"} {...fit(ZOOM_POPOVER_WIDTH)} />
+      <HiddenElementsPopover tabId={tabId} open={popover === "hiddenElements"} {...fit(HIDDEN_ELEMENTS_WIDTH)} />
       <HistoryPopover tabId={tabId} windowId={windowId} top={top} left={() => fitLeft(left, room, HISTORY_MENU_WIDTH)} />
     </>
   );

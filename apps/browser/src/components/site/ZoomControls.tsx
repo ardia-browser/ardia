@@ -30,14 +30,14 @@ export const ZoomIndicator = memo(function ZoomIndicator({ tabId, zoom, palette,
 
 export const ZOOM_POPOVER_WIDTH = 236;
 
-type ZoomPopoverPlace = { tabId: string; right?: number; left?: number; top: number };
+export type SitePanelPlace = { tabId: string; right?: number; left?: number; top: number };
 
-export function ZoomPopover({ open, ...place }: ZoomPopoverPlace & { open: boolean }) {
+export function ZoomPopover({ open, ...place }: SitePanelPlace & { open: boolean }) {
   const presence = usePopoverPresence(open);
   return presence.shown ? <ZoomPanel {...place} closing={presence.closing} onClosed={presence.onClosed} /> : null;
 }
 
-function ZoomPanel({ tabId, right, left, top, closing, onClosed }: ZoomPopoverPlace & { closing: boolean; onClosed: () => void }) {
+function ZoomPanel({ tabId, right, left, top, closing, onClosed }: SitePanelPlace & { closing: boolean; onClosed: () => void }) {
   const zoom = useTab(tabId)?.zoom ?? 1;
   const bubble = useIsZoomBubble(tabId);
   const [hoverProps] = useState(() => markHoverProps({ onMouseEnter: () => hoverZoomPopover(tabId, true), onMouseLeave: () => hoverZoomPopover(tabId, false) }));

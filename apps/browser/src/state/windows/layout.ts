@@ -21,11 +21,21 @@ export function useTabLayout(): "sidebar" | "top" {
   return useBrowser((s) => tabLayoutOf(s, windowId));
 }
 
+export const minimalismIn = (s: BrowserState, windowId: string): boolean => s.settings.minimalismMode && s.windows[windowId]?.kind !== "small";
+
+export const useMinimalism = (): boolean => {
+  const windowId = useWindowId();
+  return useBrowser((s) => minimalismIn(s, windowId));
+};
+
+export const sidebarAddressChosen = (settings: Pick<BrowserState["settings"], "addressBar" | "minimalismMode">): boolean =>
+  settings.addressBar === "sidebar" || settings.minimalismMode;
+
 export function addressBarInSidebar(s: BrowserState, windowId: string): boolean {
   const w = s.windows[windowId];
   return (
     !!w &&
-    s.settings.addressBar === "sidebar" &&
+    (s.settings.addressBar === "sidebar" || minimalismIn(s, windowId)) &&
     (tabsShownIn(s, windowId) || switchOn("sidebarSlide")) &&
     tabLayoutOf(s, w.id) === "sidebar"
   );
@@ -43,13 +53,13 @@ export function openingLightsCenter(s: BrowserState, windowId: string): LightsPl
   if (tabLayoutOf(s, w.id) === "top") return open ? [...TOP_STRIP_LIGHTS_CENTER] : lightsCenter(DEFAULT_SIDEBAR_WIDTH);
   const width = s.settings.sidebarWidth;
   const frame = pageFrameInsetOf(s.settings.pageFrame, {
-    borderlessMode: s.settings.borderlessMode,
+    borderlessMode: s.settings.borderlessMode || minimalismIn(s, windowId),
     zeroInFullScreen: s.settings.pageFrameZeroInFullScreen,
     fullScreen: !!w.fullScreen,
     zeroWhenTabsHidden: s.settings.pageFrameZeroWhenTabsHidden,
     tabsHidden: autoHidesTabsIn(s, windowId),
   });
-  const base = s.settings.addressBar === "sidebar" ? ARC_LIGHTS_CENTER : toolbarLightsCenter(s.settings.compactToolbar, frame);
+  const base = sidebarAddressChosen(s.settings) ? ARC_LIGHTS_CENTER : toolbarLightsCenter(s.settings.compactToolbar, frame);
   return sidebarLightsCenter(sidebarSideOf(s, w.id) === "right", width, open ? 0 : width, 0, base);
 }
 
@@ -57,7 +67,7 @@ export function usePageFrameInset(): number {
   const windowId = useWindowId();
   return useBrowser((s) =>
     pageFrameInsetOf(s.settings.pageFrame, {
-      borderlessMode: s.settings.borderlessMode,
+      borderlessMode: s.settings.borderlessMode || minimalismIn(s, windowId),
       zeroInFullScreen: s.settings.pageFrameZeroInFullScreen,
       fullScreen: !!s.windows[windowId]?.fullScreen,
       zeroWhenTabsHidden: s.settings.pageFrameZeroWhenTabsHidden,

@@ -23,6 +23,8 @@ import type { JsonSchema } from "../../lib/jsonSchema";
 import { PROVIDERS_SCHEMA } from "../omnibox/providerSchema";
 import { COMMAND_BAR_START_SCHEMA, isCommandBarStart, type CommandBarStart } from "../omnibox/commandBarStart";
 import { noteAutoHideTabsChosen } from "../telemetry/autoHideTabsChoices";
+import { READER_FONTS, READER_SIZE_NAMES } from "../reader/tokens";
+import { noteMinimalismToggled } from "../telemetry/minimalismCounts";
 
 export const DEFAULT_PROFILE_ID = "default";
 
@@ -140,6 +142,7 @@ export const SETTING_SPECS = {
   compactToolbar: flag(false, SYNCED),
   pageFrame: shaped<number>(PAGE_FRAME.default, validPageFrame, { type: "integer", minimum: PAGE_FRAME.min, maximum: PAGE_FRAME.max }, SYNCED),
   borderlessMode: flag(false, SYNCED),
+  minimalismMode: flag(false, SYNCED),
   pageFrameZeroInFullScreen: flag(false, SYNCED),
   pageFrameZeroWhenTabsHidden: flag(false, SYNCED),
   commandBarPlacement: oneOf(["field", "centred"], "field", SYNCED),
@@ -158,6 +161,8 @@ export const SETTING_SPECS = {
   protectedVideoInWebKit: flag(true),
   launchActions: shaped<string[]>([], (v) => isStringList(v) && v.length <= 20, { type: "array", items: { type: "string" }, maxItems: 20 }),
   omniboxProviders: shaped<ProviderEntry[]>([], isProviderEntryList, PROVIDERS_SCHEMA),
+  readerTextSize: oneOf(READER_SIZE_NAMES, "medium", SYNCED),
+  readerFont: oneOf(READER_FONTS, "serif", SYNCED),
 };
 
 type Specs = typeof SETTING_SPECS;
@@ -179,6 +184,8 @@ export function withLinkKeysApart(settings: Settings, patch: Partial<Settings>):
   if ((patch.peekModifier ?? settings.peekModifier) !== "alt" || (patch.splitLinkModifier ?? settings.splitLinkModifier) !== "alt") return patch;
   return "splitLinkModifier" in patch && !("peekModifier" in patch) ? { ...patch, peekModifier: "shift" } : { ...patch, splitLinkModifier: "altShift" };
 }
+
+export const newTabOpensOf = (settings: Pick<Settings, "newTabOpens" | "minimalismMode">): Settings["newTabOpens"] => (settings.minimalismMode ? "commandBar" : settings.newTabOpens);
 
 export const DEFAULT_SETTINGS = Object.fromEntries(SETTING_KEYS.map((key) => [key, SETTING_SPECS[key].default])) as Settings;
 
@@ -245,6 +252,7 @@ function withPageFrameDependencies(settings: Settings, patch: Partial<Settings>)
 export function choose(s: Pick<BrowserState, "settings" | "settingsMeta">, patch: Partial<Settings>): Pick<BrowserState, "settings" | "settingsMeta"> {
   const { chosen, inferred } = s.settingsMeta;
   if (patch.autoHideTabs !== undefined && patch.autoHideTabs !== s.settings.autoHideTabs) noteAutoHideTabsChosen();
+  if (patch.minimalismMode !== undefined && patch.minimalismMode !== s.settings.minimalismMode) noteMinimalismToggled(patch.minimalismMode);
   patch = withPageFrameDependencies(s.settings, patch);
   const next = { ...s.settings, ...patch };
   const added = Object.keys(patch).filter((k) => !chosen.includes(k));

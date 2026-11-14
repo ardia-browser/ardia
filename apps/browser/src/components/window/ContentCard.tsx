@@ -13,7 +13,7 @@ import { useFullscreenTab } from "../../state/tabs/pageState";
 import { DropTargets, SplitDividers, SplitFocusRing, SplitToast, type WindowShape } from "../split/SplitChrome";
 import { dockMoving, usePeekSpan, whenDockStill } from "../../state/windows/dockMotion";
 import { FrozenPage } from "./FrozenPage";
-import { setCardAnchor, setUrlAnchor, useAddressBarInSidebar, useTabLayout, watchToolbarExtensionsWidth, frameCornerRadius, onFullScreenLeft, windowFrame } from "../../state/windows/layout";
+import { setCardAnchor, setUrlAnchor, useAddressBarInSidebar, useMinimalism, useTabLayout, watchToolbarExtensionsWidth, frameCornerRadius, onFullScreenLeft, windowFrame } from "../../state/windows/layout";
 import { startSelectionTools } from "../../state/site/selection";
 import { startMedia } from "../../state/media/pip";
 import { urlFieldRight } from "../toolbar/Toolbar";
@@ -39,6 +39,7 @@ export function ContentCard() {
   const tabLayout = useTabLayout();
   const addressInSidebar = useAddressBarInSidebar();
   const small = useIsSmallWindow(windowId);
+  const minimal = useMinimalism();
   const hideWhileScrolling = useSettings((st) => st.hideToolbarWhileScrolling);
   const showSidebarButton = useSettings((st) => st.showSidebarButton !== false);
   const barMode = useBookmarksBarMode(windowId);
@@ -63,8 +64,8 @@ export function ContentCard() {
   const { mountedIds, panes, dividers, warmPanes, shown, lingerId, lingerRect } = usePaneLayout(windowId, activeId, split, fullscreenTab, size);
 
   const chrome = useMemo(
-    () => cardChrome({ addressInSidebar, small, split: !!split, fullscreen: !!fullscreenTab, hideWhileScrolling }),
-    [addressInSidebar, small, !!split, !!fullscreenTab, hideWhileScrolling],
+    () => cardChrome({ addressInSidebar, small, minimal, split: !!split, fullscreen: !!fullscreenTab, hideWhileScrolling }),
+    [addressInSidebar, small, minimal, !!split, !!fullscreenTab, hideWhileScrolling],
   );
   const geometryFor = (rect: Rect | undefined): ToolbarGeometry => {
     if (chrome.kind === "none") return NO_TOOLBAR;

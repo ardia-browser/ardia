@@ -1,6 +1,6 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 import { Animated, StyleSheet, View } from "react-native";
-import { DockSelection, radius, Surface } from "../ui";
+import { DockSelection, radius, Surface, Text, withAlpha } from "../ui";
 import { hex, layout, useTheme } from "../ui/theme";
 import { useTileTheme, type TileTheme } from "../../state/favicons/tileTheme";
 import { useTab } from "../../state/browser/hooks";
@@ -9,6 +9,9 @@ import { SLIDE } from "../tabstrip/tokens";
 import { TabBadges } from "../media/TabBadges";
 import { TabIcon } from "./TabIcon";
 import { sidebarTokens, TILE_GLOW, TILE_RIM, useSidebarTokens } from "./tokens";
+import { useQuietRows } from "./rowLook";
+import { useIsSleeping } from "../../state/tabs/sleepingTabs";
+import { tileLetterOf } from "../../lib/tileLetter";
 
 const SELECTION_STROKE = 3;
 const GLASS_RING = 2;
@@ -16,6 +19,46 @@ const GLASS_RING = 2;
 type FaceState = { width: number; active: boolean; selected: boolean; hovered: boolean; pressed: boolean };
 
 export const TileFace = memo(function TileFace({ tabId, badge, ...state }: FaceState & { tabId: string; badge?: ReactNode }) {
+  return useQuietRows() ? <LetterTile tabId={tabId} badge={badge} {...state} /> : <RichTileFace tabId={tabId} badge={badge} {...state} />;
+});
+
+const LETTER_SCALE = 12 / 34;
+const ASLEEP_LETTER = 0.45;
+
+function LetterTile({ tabId, badge, width, active, selected, hovered, pressed }: FaceState & { tabId: string; badge?: ReactNode }) {
+  const theme = useTheme();
+  const tokens = useSidebarTokens();
+  const url = useTab(tabId, (t) => t?.url ?? "");
+  const title = useTab(tabId, (t) => t?.customTitle ?? t?.title ?? "");
+  const asleep = useIsSleeping(tabId);
+  const height = layout.pinnedHeight;
+  const fill = active ? tokens.quietTileLive : pressed ? tokens.quietPressed : hovered || selected ? tokens.quietWash : tokens.quietTile;
+  return (
+    <View
+      accessibilityLabel={title}
+      style={{
+        width,
+        height,
+        borderRadius: radius.pinned,
+        backgroundColor: fill,
+        borderWidth: selected && !active ? 1 : 0,
+        borderColor: tokens.dragBorder,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <View>
+        <Text size="small" weight="medium" style={{ fontSize: Math.round(Math.min(width, height) * LETTER_SCALE * 2) / 2, opacity: asleep && !active ? ASLEEP_LETTER : 1 }} color={hex(withAlpha(theme.textTab, active ? tokens.quietActiveText : tokens.quietText))}>
+          {tileLetterOf(url, title)}
+        </Text>
+        <TabBadges tabId={tabId} />
+      </View>
+      {badge}
+    </View>
+  );
+}
+
+const RichTileFace = memo(function RichTileFace({ tabId, badge, ...state }: FaceState & { tabId: string; badge?: ReactNode }) {
   const theme = useTheme();
   const tab = useTab(tabId);
   const tileTheme = useTileTheme(tab?.url ?? "", tab?.favicon, tab?.customIcon, tab?.profileId ?? "");
@@ -97,7 +140,26 @@ export const TileFace = memo(function TileFace({ tabId, badge, ...state }: FaceS
 export function RestingTile({ width, selected, hovered, pressed, children }: Omit<FaceState, "active"> & { children: ReactNode }) {
   const theme = useTheme();
   const tokens = useSidebarTokens();
-  if (useGlass())
+  const quiet = useQuietRows();
+  const glass = useGlass();
+  if (quiet)
+    return (
+      <View
+        style={{
+          width,
+          height: layout.pinnedHeight,
+          borderRadius: radius.pinned,
+          borderWidth: selected ? 1 : 0,
+          borderColor: tokens.dragBorder,
+          backgroundColor: pressed ? tokens.quietPressed : hovered || selected ? tokens.quietWash : tokens.quietTile,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {children}
+      </View>
+    );
+  if (glass)
     return (
       <GlassTile width={width} active={false} selected={selected} hovered={hovered} pressed={pressed} tileTheme={null}>
         {children}

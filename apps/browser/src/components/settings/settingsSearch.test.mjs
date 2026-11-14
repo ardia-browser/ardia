@@ -92,6 +92,8 @@ const TOP = [
   ["auto hide", ["tabs.autoHideTabs"]],
   ["history", ["advanced.history"]],
   ["borderless mode", ["appearance.borderlessMode"]],
+  ["minimal", ["appearance.minimalismMode"]],
+  ["minimalism", ["appearance.minimalismMode"]],
   ["mouse wheel", ["privacy.commandScrollZoom"]],
   ["1password", ["passwords.managerApps"]],
   ["warn quitting", ["general.warnBeforeQuitting"]],
@@ -309,4 +311,8 @@ test("arrowing through results scrolls only as far as the selected row needs", a
   assert.equal(scrollToShow(100, 40, 200, 400, false), 100 - RESULTS_TOP);
   assert.equal(scrollToShow(260, 40, 200, 400, false), 200);
   assert.equal(scrollToShow(260, 40, 200, 400, true), 0);
+});
+
+test("Minimalism mode turns up for every word people use for it", () => {
+  for (const query of ["minimal", "minimalism", "clean", "compact", "zen", "distraction free", "no toolbar"]) assert.ok(ids(query).includes("appearance.minimalismMode"), query);
 });

@@ -28,6 +28,7 @@ import { paneBar, type CardChrome } from "./paneChrome";
 import { PageOverlays } from "./PageOverlays";
 import { useProfileTheme } from "./ThemeScope";
 import { useCardFrame } from "./cardFrame";
+import { newTabOpensOf } from "../../state/settings/settings";
 
 const LINGERING_PANE = "ardia.lingeringPane";
 
@@ -80,7 +81,7 @@ export const TabPane = memo(function TabPane({
   const theme = useProfileTheme(own.profileId);
   const toolbarHeight = useToolbarRow().height;
   const isNewTab = !own.url;
-  const emptyCard = useSettings((st) => isNewTab && st.newTabOpens === "commandBar");
+  const emptyCard = useSettings((st) => isNewTab && newTabOpensOf(st) === "commandBar");
   const newTabShown = useStoreWhile(usePages, live, (s) => !!s.pages[tabId]?.newTabShown);
   const inSomeSplit = useBrowserWhile(!!warm, (s) => !!warm && !!splitOf(s, tabId));
   const inSplit = visible ? inActiveSplit : inSomeSplit;

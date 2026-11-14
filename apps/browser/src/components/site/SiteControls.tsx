@@ -35,6 +35,7 @@ import { SectionLabel } from "../sidebar/SectionLabel";
 import { CertificateDetails, ConnectionChip, ConnectionRow } from "./SiteConnection";
 import { SiteExtensions } from "./SiteExtensions";
 import { TranslateRows } from "./TranslateControls";
+import { ReaderRow } from "./ReaderControls";
 import { ZoomStepper } from "./ZoomControls";
 import { blockerLabel, choiceTitle, featuredPermissions, permissionValue, readSiteSettings, setSitePermission, sitePermissionsFor, type SitePermission } from "../../state/site/siteControls";
 import { isWebPageUrl } from "../../lib/url";
@@ -276,6 +277,7 @@ function SiteControlsPanel({
             {origin ? (
               <>
                 <MenuSeparator />
+                <ReaderRow tabId={tabId} onClose={close} />
                 <TranslateRows tabId={tabId} onClose={close} />
                 {otherPermissions.map((p) => (
                   <MenuRow

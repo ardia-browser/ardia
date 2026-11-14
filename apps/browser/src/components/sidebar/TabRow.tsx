@@ -1,14 +1,14 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Animated, Pressable, TextInput, View, type GestureResponderEvent, type TextStyle } from "react-native";
 import { toggleMute } from "../../state/browser/actions";
-import { layout, useTheme } from "../ui/theme";
+import { hex, layout, useTheme } from "../ui/theme";
 import { useIsActiveTab, usePageProfileId, useTab, useWindow, useWindowId } from "../../state/browser/hooks";
 import { returnToPinnedUrl } from "../../state/pins/actions";
 import { useSplitRowPanes } from "../../state/sidebar/hooks";
 import { muteTitle } from "../../state/tabs/mute";
 import { usePictureInPicture } from "../../state/media/media";
 import { HoverSlot } from "../ui/HoverSlot";
-import { ActivitySpinner, Button, Divider, FadeLabel, font, ink, OutsidePressArea, radius, space, Symbol, lineHeight, typeFace, useHover } from "../ui";
+import { ActivitySpinner, Button, Divider, FadeLabel, font, ink, OutsidePressArea, radius, space, Symbol, lineHeight, typeFace, useHover, withAlpha } from "../ui";
 import { isPinnedRow, tabTitle } from "../../state/browser/model";
 import { awayFromPin, awayTitle } from "../../state/pins/organize";
 import { commitRename, endRename, startRename } from "../../state/sidebar/actions";
@@ -78,7 +78,7 @@ export const TabRow = memo(function TabRow({
   const [moved, movedRef] = useShift(shift, useCallback((v: View | null) => registerRow(windowId, tabId, v), [windowId, tabId]));
   const backToPin = useHover();
   const closeControl = useTabCloseControlWhile(tabId, hovered && !renaming);
-  const { backToPinHint } = useSidebarRowLook();
+  const { backToPinHint, quiet } = useSidebarRowLook();
   const unread = useTabUnread(tabId);
   const [unreadDrawn, setUnreadDrawn] = useState(false);
   const showsUnread = !!unread || unreadDrawn;
@@ -89,8 +89,12 @@ export const TabRow = memo(function TabRow({
   const resetting = resettable && backToPin.hovered && !renaming;
   const title = resetting ? "Back to Pinned URL" : tab.customTitle ? tabTitle(tab) : titleWithoutUnread(tabTitle(tab), unread);
   const away = resettable && !resetting ? awayTitle(tab) : null;
-  const fill = active ? theme.tabSelected : selected ? tokens.multiSelected : hovered ? theme.tabHover : ink.clear;
-  const border = active || selected ? 0.5 : 0;
+  const fill = quiet
+    ? active ? tokens.quietWash : selected ? tokens.multiSelected : hovered ? tokens.quietHover : ink.clear
+    : active ? theme.tabSelected : selected ? tokens.multiSelected : hovered ? theme.tabHover : ink.clear;
+  const border = (active && !quiet) || selected ? 0.5 : 0;
+  const titleColor = quiet ? hex(withAlpha(theme.textTab, active ? tokens.quietActiveText : tokens.quietText)) : active ? theme.rowSelectedText : theme.textTab;
+  const pressedFill = quiet ? tokens.quietPressed : theme.tabPressed;
 
   return (
     <View
@@ -103,8 +107,8 @@ export const TabRow = memo(function TabRow({
       <TabPressArea windowId={windowId} tab={tab}>
       {({ pressed }) => (
           <SidebarRowSurface
-            fill={onto || (!active && pressed) ? theme.tabPressed : fill}
-            selected={active}
+            fill={onto || (!active && pressed) ? pressedFill : fill}
+            selected={active && !quiet}
             border={border}
             stroke={selected && !active ? tokens.multiSelectedStroke : undefined}
             padLeft={TAB_ROW.contentLeft - border}
@@ -125,7 +129,7 @@ export const TabRow = memo(function TabRow({
                       </View>
                     ) : (
                       <View>
-                        <TabIcon tabId={tab.id} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} profileId={tab.profileId} marks={flags & ICON_MARKS} />
+                        <TabIcon tabId={tab.id} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} profileId={tab.profileId} marks={flags & ICON_MARKS} compact={quiet} />
                         <TabBadges tabId={tab.id} />
                       </View>
                     )}
@@ -133,7 +137,7 @@ export const TabRow = memo(function TabRow({
                 </Pressable>
               ) : (
                 <>
-                  <TabIcon tabId={tab.id} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} profileId={tab.profileId} marks={flags & ICON_MARKS} />
+                  <TabIcon tabId={tab.id} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} profileId={tab.profileId} marks={flags & ICON_MARKS} compact={quiet} />
                   <TabBadges tabId={tab.id} />
                 </>
               )}
@@ -152,9 +156,9 @@ export const TabRow = memo(function TabRow({
                 onDone={(text) => (text === null ? endRename({ kind: "tab", id: tabId }) : commitRename({ kind: "tab", id: tabId }, text))}
               />
             ) : away ? (
-              <AwayTitleLabel away={away} color={active ? theme.rowSelectedText : theme.textTab} fontSize={font.body.fontSize} height={TAB_ROW.titleHeight} style={AWAY_FRAME} />
+              <AwayTitleLabel away={away} color={titleColor} fontSize={quiet ? font.small.fontSize : font.body.fontSize} height={TAB_ROW.titleHeight} style={AWAY_FRAME} />
             ) : (
-              <SidebarRowLabel text={title} color={active ? theme.rowSelectedText : theme.textTab} />
+              <SidebarRowLabel text={title} color={titleColor} compact={quiet} />
             )}
             <HoverSlot
               hovered={hovered && !renaming}

@@ -61,7 +61,7 @@ const IDLE_PAGE: PageState = {
   newTabShown: null,
 };
 
-export type PagePopover = "siteControls" | "popups" | "zoom";
+export type PagePopover = "siteControls" | "popups" | "zoom" | "hiddenElements";
 
 type Store = {
   pages: Record<string, PageState>;

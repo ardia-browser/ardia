@@ -8,6 +8,9 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)setList:(NSString *)listId enabled:(BOOL)enabled completion:(void (^)(NSString *_Nullable error))completion NS_SWIFT_NAME(setList(_:enabled:completion:));
 + (void)isAllowedOnHost:(NSString *)host completion:(void (^)(BOOL allowed))completion NS_SWIFT_NAME(isAllowed(host:completion:));
 + (void)setAllowed:(BOOL)allowed onHost:(NSString *)host completion:(void (^)(NSString *_Nullable error))completion NS_SWIFT_NAME(setAllowed(_:host:completion:));
++ (void)hiddenElementsInProfile:(NSString *)profile completion:(void (^)(NSArray<NSString *> *_Nullable filters, NSString *_Nullable error))completion NS_SWIFT_NAME(hiddenElements(profile:completion:));
++ (void)hideElements:(NSArray<NSString *> *)filters inProfile:(NSString *)profile completion:(void (^)(NSString *_Nullable error))completion NS_SWIFT_NAME(hideElements(_:profile:completion:));
++ (void)restoreElements:(NSArray<NSString *> *)filters inProfile:(NSString *)profile completion:(void (^)(NSString *_Nullable error))completion NS_SWIFT_NAME(restoreElements(_:profile:completion:));
 + (void)devFailNextMessage;
 + (void)devDelayNextLoad:(double)ms;
 @end

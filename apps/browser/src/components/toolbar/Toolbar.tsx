@@ -28,6 +28,7 @@ import { showUrlBarMenu } from "../../state/omnibox/paste";
 import { ToolbarExtensions, useToolbarExtensionsWidth } from "../extensions/ToolbarExtensions";
 import { GlassFill, useGlass } from "../ui/Glass";
 import { TranslateButton } from "../site/TranslateControls";
+import { ReaderButton } from "../site/ReaderControls";
 import { ZoomIndicator } from "../site/ZoomControls";
 import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
 import { buttonMotion, curve, usePressScaleMotion } from "../ui/motion";
@@ -322,6 +323,7 @@ function FieldButtons({
     <View style={{ flexDirection: "row", alignItems: "center", paddingRight: space.xs }}>
       {children}
       {capture && <CaptureIndicator camera={capture.camera} microphone={capture.microphone} screen={capture.screen} onPress={toggleSiteControls} />}
+      <ReaderButton tabId={tab.id} palette={palette} onFocus={onFocus} />
       <TranslateButton tabId={tab.id} palette={palette} onFocus={onFocus} />
       <ZoomIndicator tabId={tab.id} zoom={tab.zoom} palette={palette} onFocus={onFocus} />
       {popups > 0 && (

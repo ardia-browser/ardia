@@ -11,6 +11,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(class, readonly) NSArray<NSDictionary<NSString *, id> *> *displayMediaSources;
 @property(class, readonly) BOOL screenRecordingAllowed;
 + (BOOL)requestScreenRecording;
++ (BOOL)mayCaptureDesktopSource:(NSString *)sourceId;
 + (void)resolveExternalApp:(NSString *)requestId open:(BOOL)open remember:(BOOL)remember NS_SWIFT_NAME(resolveExternalApp(_:open:remember:));
 + (void)deviceChooser:(int)chooserId select:(int)index NS_SWIFT_NAME(deviceChooser(_:select:));
 + (void)deviceChooser:(int)chooserId action:(NSString *)action NS_SWIFT_NAME(deviceChooser(_:action:));

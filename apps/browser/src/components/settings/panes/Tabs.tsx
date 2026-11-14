@@ -85,6 +85,7 @@ const DURATION_UNITS: Option<DurationUnit>[] = [
 
 export function TabsPane() {
   const newTabOpens = useSettings((s) => s.newTabOpens);
+  const minimal = useSettings((s) => s.minimalismMode);
   const newTabPosition = useSettings((s) => s.newTabPosition);
   const newTabButtonPosition = useSettings((s) => s.newTabButtonPosition);
   const cleanUpMinutes = useSettings((s) => s.cleanUpInactiveTabsAfterMinutes);
@@ -120,9 +121,10 @@ export function TabsPane() {
 
       <SectionHeader title="General" />
       <Group>
-        <Row anchor="tabs.newTabOpens">
+        <Row anchor="tabs.newTabOpens" description={minimal ? "Minimalism mode opens the command bar. Your choice here comes back when you turn it off." : undefined}>
           <PopUp
-            value={newTabOpens}
+            value={minimal ? "commandBar" : newTabOpens}
+            disabled={minimal}
             options={[
               { value: "page", title: "New Tab Page" },
               { value: "commandBar", title: "Command Bar" },

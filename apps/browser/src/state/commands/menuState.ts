@@ -3,7 +3,9 @@ import { engineBookmarkRoots, folderChildren, isBookmarked, isWithin, ROOT_TITLE
 import type { BrowserState } from "../browser/store";
 import { activeTab, bookmarkProfileId, engineProfile, IDLE_LIVE, isPinnedRow, tabLabel, togglePinTitle, windowTitle, tabLayoutOf, tabsShownIn } from "../browser/model";
 import { canSwitchEngine, tabEngine } from "../engines/engines";
+import { readerState as readerFor } from "../reader/reader";
 import { peekTabId } from "../peek/peek";
+import { canHideElements } from "../site/hiddenElements";
 import { splitOf } from "../splits/splits";
 import { canGoBack, canGoForward } from "../tabs/navigation";
 import type { Bookmarks, BookmarkNode } from "../browser/types";
@@ -68,6 +70,7 @@ export function menuState(s: BrowserState): MenuState {
   const disabled: string[] = [];
   if (!tab || !splitOf(s, tab.id)) disabled.push("focusNextPane", "focusPreviousPane");
   if (w && tabLayoutOf(s, w.id) === "top") disabled.push("toggleAddressBar", "toggleSidebarSide");
+  if (s.settings.minimalismMode) disabled.push("toggleAddressBar");
   if (!w) disabled.push(...WINDOW_COMMANDS);
   else {
     if (!page?.url) disabled.push(...PAGE_COMMANDS);
@@ -97,11 +100,15 @@ export function menuState(s: BrowserState): MenuState {
   if (page) titles.toggleMute = muteTitle(muteState(s, page));
   if (page && tabEngine(s, page.id) === "webkit") titles.togglePageEngine = "Open Page in Chromium";
   if (!canSwitchEngine(page?.url)) disabled.push("togglePageEngine");
+  const reader = page ? readerFor(page.id) : undefined;
+  if (reader?.active) titles.toggleReader = "Hide Reader";
+  if (!reader?.active && !reader?.available) disabled.push("toggleReader");
   if (page?.url && isBookmarked(s, bookmarkProfile, page.url)) {
     titles.bookmarkPage = "Edit Bookmark…";
   }
 
   if (!s.settings.openLinksInLittleArdia) titles.toggleOpenLinksInLittleArdia = "Open Links from Other Apps in Little Ardia";
+  if (!page || !canHideElements(s, page.id)) disabled.push("hideElement", "showHiddenElements");
 
   const sidebar = sidebarMenuState(s, windowId);
   disabled.push(...sidebar.disabled);

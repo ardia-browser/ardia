@@ -349,6 +349,56 @@ void LoadContentBlocker(NSString *profile) {
 
 }
 
+namespace {
+
+NSString *const kHidingRules =
+    @"const hidingRule = /^[a-z0-9.-]+##[^+^\\s][^\\n{}]*$/;"
+     "const userFilters = () => chrome.extension.getBackgroundPage().µBlock.loadUserFilters().then((d) => {"
+     "  if (!d || d.error || typeof d.content !== 'string') throw new Error(`user filters: ${d && d.error || 'unreadable'}`);"
+     "  return d.content;"
+     "});";
+
+NSString *const kReadHidden = @"userFilters().then((content) => content.split('\\n').map((l) => l.trim()).filter((l) => hidingRule.test(l)))";
+
+NSString *const kHide =
+    @"Promise.resolve(%@).then((want) => {"
+     "  for (const f of want) {"
+     "    if (typeof f !== 'string' || f.length > 1024 || !hidingRule.test(f)) throw new Error('not a hiding rule');"
+     "    document.createDocumentFragment().querySelector(f.slice(f.indexOf('##') + 2));"
+     "  }"
+     "  return userFilters().then((content) => {"
+     "    const have = new Set(content.split('\\n').map((l) => l.trim()));"
+     "    const fresh = [...new Set(want)].filter((f) => !have.has(f));"
+     "    const ublock = chrome.extension.getBackgroundPage().µBlock;"
+     "    if (!ublock.selectedFilterLists.includes(ublock.userFiltersPath))"
+     "      ublock.applyFilterListSelection({toSelect: [ublock.userFiltersPath], merge: true});"
+     "    return fresh.length ? ublock.appendUserFilters(fresh.join('\\n'), {}) : null;"
+     "  });"
+     "}).then(() => null)";
+
+NSString *const kRestore =
+    @"Promise.resolve(new Set(%@)).then((drop) => userFilters().then((content) => {"
+     "  const lines = content.split('\\n');"
+     "  const kept = lines.filter((l) => !drop.has(l.trim()));"
+     "  if (kept.length === lines.length) return null;"
+     "  const ublock = chrome.extension.getBackgroundPage().µBlock;"
+     "  return ublock.saveUserFilters(kept.join('\\n')).then(() => ublock.loadFilterLists());"
+     "})).then(() => null)";
+
+NSString *WithHidingRules(NSString *body) {
+  return [NSString stringWithFormat:@"(() => { %@ return %@; })()", kHidingRules, body];
+}
+
+NSArray<NSString *> *Strings(id value) {
+  NSMutableArray *out = [NSMutableArray array];
+  if ([value isKindOfClass:NSArray.class])
+    for (id item in value)
+      if ([item isKindOfClass:NSString.class]) [out addObject:item];
+  return out;
+}
+
+}
+
 @implementation ArdiaContentBlocker
 
 + (void)state:(void (^)(NSDictionary<NSString *, id> *))completion {
@@ -397,6 +447,23 @@ void LoadContentBlocker(NSString *profile) {
     if (!error) Publish(@{@"host" : host.lowercaseString, @"allowed" : @(allowed)});
     Changed(error, completion);
   });
+}
+
++ (void)hiddenElementsInProfile:(NSString *)profile completion:(void (^)(NSArray<NSString *> *, NSString *))completion {
+  Call(ardia_host::OriginalProfileName(profile), WithHidingRules(kReadHidden), ^(id filters, NSString *error) {
+    completion(error ? nil : Strings(filters), error);
+  });
+}
+
++ (void)hideElements:(NSArray<NSString *> *)filters inProfile:(NSString *)profile completion:(void (^)(NSString *))completion {
+  if (ardia_host::IsPrivateProfile(profile)) return completion(@"a private window keeps its hidden elements for the session");
+  if (!filters.count) return completion(nil);
+  Call(profile, WithHidingRules(ScriptWith(kHide, @[ filters ])), ^(id, NSString *error) { completion(error); });
+}
+
++ (void)restoreElements:(NSArray<NSString *> *)filters inProfile:(NSString *)profile completion:(void (^)(NSString *))completion {
+  if (!filters.count) return completion(nil);
+  Call(ardia_host::OriginalProfileName(profile), WithHidingRules(ScriptWith(kRestore, @[ filters ])), ^(id, NSString *error) { completion(error); });
 }
 
 + (void)devFailNextMessage {

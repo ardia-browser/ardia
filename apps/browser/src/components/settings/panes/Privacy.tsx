@@ -31,6 +31,7 @@ import { updateSettings } from "../../../state/settings/actions";
 import { blockerAvailable, categoryOn, setBlockingCategory, setFilterList } from "../../../state/site/contentBlocking";
 import { noteContentBlockerUnavailable, noteContentBlockerWriteFailure } from "../../../state/telemetry/usage";
 import { ShareDiagnosticsSection } from "./ShareDiagnostics";
+import { HiddenElementsSection } from "./HiddenElementsSection";
 import { UI_LOCALE } from "../../../lib/uiLocale";
 
 const CATEGORIES: { id: FilterListCategory; section: string; anchor?: SettingId }[] = [
@@ -133,6 +134,7 @@ export function PrivacyPane({ profileId, site }: { profileId: string | null; sit
         </>
       )}
 
+      <HiddenElementsSection />
       <SitePermissions shownProfileId={profileId} site={site} />
       <AppLinks />
       <SectionHeader anchor="privacy.commandScrollZoom" description={null} />

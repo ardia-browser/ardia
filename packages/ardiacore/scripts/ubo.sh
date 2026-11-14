@@ -6,7 +6,7 @@ vendor="$(cd "$(dirname "$0")/.." && pwd)/vendor"
 UBO_VERSION="1.76.0"
 UBO_SHA256="e76a1912426caa7b8679ad11dd140d1529c23db22ddbe892b6f901e9b7763456"
 UBO_KEY="MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv1MPdIgJjIsN4Y0N/20GDNPfN4J//aknk5dsH8Y1LBxSnz3Jp/BT187Gub5cv6lee5CUVDmVBa3Yiqow8GMna5KwX+ZP+yc1pt/ewzyNxm2BzoQPgWz+1DgZaahz56/szi1EEtWVYxd3wNxFN4wPDqwV6aqlnV4R3RnxlF1ocw1kDgJ+8BxR1EY+MB+H8bymdef+xB3TNifBZIVmZt81cC3UMOG6KWRTU1wtIXsW+ZqSv5zaeFHLkjG4MPB7EfcMGrvO80ElJBZZLdrTmYOL4uUPsz2Wy6GiPWzpDmzzI9RfsZm11sLiJo63blcPF0Cz3sM0wQfxJPPcQuqkZDReswIDAQAB"
-UBO_PATCH="22"
+UBO_PATCH="24"
 ubo="$vendor/ubo"
 stamp="$UBO_VERSION-$UBO_PATCH"
 installed() { [ -f "$ubo/.version" ] && [ "$(cat "$ubo/.version")" = "$stamp" ]; }
@@ -64,6 +64,36 @@ patch("js/background.js", "    autoUpdateDelayAfterLaunch: 37,", "    autoUpdate
 patch("js/background.js", "    showIconBadge: true,", "    showIconBadge: false,")
 patch("js/background.js", "    contextMenuEnabled: true,", "    contextMenuEnabled: false,")
 patch("js/contextmenu.js", "    newBits |= SUBSCRIBE_TO_LIST_BIT;\n", "")
+patch("js/contextmenu.js",
+      "const VIEW_SOURCE_BIT            = 0b10000;\n",
+      "const VIEW_SOURCE_BIT            = 0b10000;\n"
+      "const ARDIA_HIDE_ELEMENT_BIT     = 0b100000;\n")
+patch("js/contextmenu.js",
+      "const onEntryClicked = function(details, tab) {\n",
+      "const onEntryClicked = function(details, tab) {\n"
+      "    if ( details.menuItemId === 'ardia-hideElement' ) {\n"
+      "        if ( tab === undefined || /^https?:\\/\\//.test(tab.url) === false ) { return; }\n"
+      "        const ardiaEvent = details.frameId === 0 ? 'ardia-hide-element' : 'ardia-hide-element-in-frame';\n"
+      "        vAPI.tabs.executeScript(tab.id, { frameId: 0, code: \"document.dispatchEvent(new CustomEvent('\" + ardiaEvent + \"'))\" });\n"
+      "        return;\n"
+      "    }\n")
+patch("js/contextmenu.js",
+      "const menuEntries = {\n",
+      "const menuEntries = {\n"
+      "    ardiaHideElement: {\n"
+      "        id: 'ardia-hideElement',\n"
+      "        title: 'Hide Element\u2026',\n"
+      "        contexts: [ 'all' ],\n"
+      "        documentUrlPatterns: [ 'http://*/*', 'https://*/*' ],\n"
+      "    },\n")
+patch("js/contextmenu.js",
+      "    if ( newBits === currentBits ) { return; }\n"
+      "    currentBits = newBits;\n"
+      "    const usedEntries = [];\n",
+      "    newBits |= ARDIA_HIDE_ELEMENT_BIT;\n"
+      "    if ( newBits === currentBits ) { return; }\n"
+      "    currentBits = newBits;\n"
+      "    const usedEntries = [ menuEntries.ardiaHideElement ];\n")
 patch("js/vapi-background.js",
       "        let version = manifest.version_name || manifest.version;\n",
       "        let version = manifest.version;\n")

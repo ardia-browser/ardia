@@ -25,6 +25,14 @@ const DARK = {
   incognitoBadge: "rgba(255,255,255,0.08)",
   tileGlow: "#FFFFFF",
   fieldButtonPlate: "rgba(255,255,255,0.08)",
+  quietWash: "rgba(255,255,255,0.073)",
+  quietHover: "rgba(255,255,255,0.045)",
+  quietPressed: "rgba(255,255,255,0.1)",
+  quietTile: "rgba(255,255,255,0.04)",
+  quietTileLive: "rgba(255,255,255,0.112)",
+  quietActiveText: 0.92,
+  quietText: 0.53,
+  quietFaintText: 0.24,
 };
 
 const LIGHT: typeof DARK = {
@@ -48,6 +56,14 @@ const LIGHT: typeof DARK = {
   incognitoBadge: "rgba(0,0,0,0.06)",
   tileGlow: "#000000",
   fieldButtonPlate: "rgba(255,255,255,0.75)",
+  quietWash: "rgba(0,0,0,0.063)",
+  quietHover: "rgba(0,0,0,0.035)",
+  quietPressed: "rgba(0,0,0,0.09)",
+  quietTile: "rgba(0,0,0,0.035)",
+  quietTileLive: "rgba(0,0,0,0.1)",
+  quietActiveText: 0.9,
+  quietText: 0.45,
+  quietFaintText: 0.2,
 };
 
 type SidebarTokens = typeof DARK;

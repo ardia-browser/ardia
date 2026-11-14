@@ -6,6 +6,7 @@ import { beginExternalDrag, endExternalDrag, moveExternalDrag } from "../../stat
 import { lightsCenter, TOP_STRIP_LIGHTS_CENTER } from "../../state/windows/dockMotion";
 import { usePagerPages } from "../../state/windows/profilePager";
 import { DownloadsButton } from "../downloads/DownloadsButton";
+import { useMinimalism } from "../../state/windows/layout";
 import { ProfileIndicator, useProfileIndicatorWidth } from "../profiles/ProfileIndicator";
 import { ContextMenuArea, Panel, shadow, WindowDragRegion } from "../ui";
 import { layout, useTheme } from "../ui/theme";
@@ -47,7 +48,8 @@ export function TopTabStrip({ width, floating = false, hidden = false, swipe = t
   const current = useWindowProfileId();
   const { pages } = usePagerPages(windowId);
   const profileChip = useProfileIndicatorWidth(PROFILE_ROOM);
-  const controls = (profileChip ? profileChip + CONTROLS_GAP : 0) + DOWNLOADS_BOX;
+  const minimal = useMinimalism();
+  const controls = minimal ? 0 : (profileChip ? profileChip + CONTROLS_GAP : 0) + DOWNLOADS_BOX;
   const fullScreen = useWindowFullScreen(windowId);
   const left = floating || fullScreen ? 8 : layout.trafficLightsWidth + LIGHTS_GAP;
   const right = Math.max(84, controls + 8 + 6);
@@ -71,12 +73,14 @@ export function TopTabStrip({ width, floating = false, hidden = false, swipe = t
             ))}
           </View>
         </ContextMenuArea>
-        <View mouseDownCanMoveWindow={false} style={{ position: "absolute", right: 8, top: MID - 17, flexDirection: "row", alignItems: "center", gap: CONTROLS_GAP }}>
-          <TintInk>
-            <ProfileIndicator room={PROFILE_ROOM} />
-            <DownloadsButton windowId={windowId} />
-          </TintInk>
-        </View>
+        {minimal ? null : (
+          <View mouseDownCanMoveWindow={false} style={{ position: "absolute", right: 8, top: MID - 17, flexDirection: "row", alignItems: "center", gap: CONTROLS_GAP }}>
+            <TintInk>
+              <ProfileIndicator room={PROFILE_ROOM} />
+              <DownloadsButton windowId={windowId} />
+            </TintInk>
+          </View>
+        )}
         {swipe && <ProfileSwipeArea surface="strip" style={StyleSheet.absoluteFill} pageWidth={pageWidth + flare * 2} />}
         {!floating && <StripDropHighlight left={left} right={right} />}
       </StripDropArea>

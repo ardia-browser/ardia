@@ -11,7 +11,7 @@ type SidebarEntries = { tiles: string[]; cells: string[]; pinned: string[]; list
 const memo = new Map<string, { inputs: unknown[]; result: SidebarEntries }>();
 
 export function sidebarEntries(s: BrowserState, windowId: string, profileId?: string): SidebarEntries {
-  const inputs = [s.tabs, s.windows, s.groups, s.splits, s.settings.newTabOpens];
+  const inputs = [s.tabs, s.windows, s.groups, s.splits, s.settings.newTabOpens, s.settings.minimalismMode];
   const key = profileId ? `${windowId}|${profileId}` : windowId;
   const cached = memo.get(key);
   if (cached && cached.inputs.every((v, i) => v === inputs[i])) return cached.result;

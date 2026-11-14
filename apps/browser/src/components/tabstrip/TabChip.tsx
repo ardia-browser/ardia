@@ -109,7 +109,7 @@ export function DraggableChip({
 
 export function useWebsiteBand(tabId: string) {
   const theme = useTheme();
-  const extend = useSettings((s) => s.extendWebsiteColor);
+  const extend = useSettings((s) => s.extendWebsiteColor && !s.minimalismMode);
   const url = useTab(tabId)?.url;
   const themeColor = useTabLive(tabId, (l) => l.themeColor);
   const palette = toolbarPalette(theme, extend && url ? themeColor : null);

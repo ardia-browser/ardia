@@ -14,7 +14,9 @@ export type LinuxCount =
   | "location_unavailable"
   | "widevine_failures"
   | "popup_menus_without_focus"
-  | "popup_menus_unshown";
+  | "popup_menus_unshown"
+  | "task_manager_opens"
+  | "task_manager_processes_ended";
 
 const counts = new Map<LinuxCount, number>();
 

@@ -7,6 +7,7 @@ import { defineDomain } from "./domains";
 import { allGuests, guestOf } from "./guests";
 import { configurePageScripts, type PageScriptConfig } from "./pageScriptBridge";
 import { popupWindowCount } from "./popupWindows";
+import { openTaskManager } from "./taskManager";
 
 const PEEK_KEYS = ["alt", "shift", "off"];
 const SPLIT_KEYS = ["alt", "altShift"];
@@ -72,7 +73,7 @@ defineDomain("engine", {
   systemState: () => systemState(),
   batterySaver: () => ({ state: 0, active: false }),
   trimMemory: () => ({ ok: true }),
-  openTaskManager: () => ({ ok: false }),
+  openTaskManager: () => ({ ok: openTaskManager() }),
   cliControlStatus: () => ({ state: "off", connections: 0, generation: 0, file: "" }),
   setCliControl: () => ({ state: "off", connections: 0, generation: 0, file: "" }),
   setCliActiveTab: () => ({ state: "off", connections: 0, generation: 0, file: "" }),

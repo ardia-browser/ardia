@@ -6,7 +6,7 @@ import { definePageScript } from "./guests";
 
 function fileChooserPage(ipc: Electron.IpcRenderer) {
   const closed = (event: Event) => {
-    if (event.target instanceof HTMLInputElement && event.target.type === "file") ipc.send("ardia:file-chooser-closed");
+    if (event.isTrusted && event.target instanceof HTMLInputElement && event.target.type === "file") ipc.send("ardia:file-chooser-closed");
   };
   window.addEventListener("change", closed, true);
   window.addEventListener("cancel", closed, true);

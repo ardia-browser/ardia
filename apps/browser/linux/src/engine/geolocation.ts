@@ -1,4 +1,8 @@
 import type { WebContents } from "electron";
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { delimiter, join } from "node:path";
+import { defineModule } from "../bridge";
 import { note } from "../log";
 import { DBusConnection, variant, type Message } from "./dbus";
 
@@ -22,6 +26,8 @@ let connection: DBusConnection | null = null;
 let clientPath = "";
 let latest: Fix | null = null;
 let unavailableSince = 0;
+let unavailableReason = "";
+let locationRequests = 0;
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
 const waiting = new Set<(fix: Fix | null) => void>();
 const fed = new Set<WebContents>();
@@ -49,6 +55,7 @@ function giveUp(reason: string) {
   if (state !== "unavailable") note("geolocation", `GeoClue isn't available, so pages get "position unavailable": ${reason}`);
   state = "unavailable";
   unavailableSince = Date.now();
+  unavailableReason = reason;
   latest = null;
   connection?.close();
   connection = null;
@@ -146,6 +153,7 @@ function emulate(contents: WebContents, fix: Fix | null) {
 }
 
 export async function provideLocation(contents: WebContents): Promise<void> {
+  locationRequests++;
   const fix = await currentFix();
   if (contents.isDestroyed()) return;
   emulate(contents, fix);
@@ -155,3 +163,30 @@ export async function provideLocation(contents: WebContents): Promise<void> {
   }
   scheduleIdleStop();
 }
+
+type LocationPermission = "granted" | "denied" | "restricted" | "notDetermined" | "servicesOff";
+
+const deniedByDesktop = () => state === "unavailable" && /AccessDenied|not allowed|disabled/i.test(unavailableReason);
+
+const locationPermission = async (): Promise<LocationPermission> => (deniedByDesktop() ? "servicesOff" : "granted");
+
+const LOCATION_SETTINGS = [["gnome-control-center", "location"], ["systemsettings", "kcm_location"]] as const;
+
+const onPath = (command: string) => (process.env.PATH ?? "").split(delimiter).some((folder) => folder && existsSync(join(folder, command)));
+
+async function openLocationSettings(): Promise<void> {
+  const found = LOCATION_SETTINGS.find(([command]) => onPath(command));
+  if (!found) return note("geolocation", "no location settings app to open");
+  const child = spawn(found[0], [found[1]], { detached: true, stdio: "ignore" });
+  child.on("error", (error) => note("geolocation", `couldn't open the location settings: ${error.message}`));
+  child.unref();
+}
+
+defineModule("ArdiaLocation", {
+  async: {
+    locationPermission,
+    requestLocationPermission: locationPermission,
+    openLocationSettings,
+    devLocationRequests: async () => locationRequests,
+  },
+});

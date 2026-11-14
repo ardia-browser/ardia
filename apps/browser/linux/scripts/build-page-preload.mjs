@@ -13,7 +13,7 @@ const pageScriptAsFunction = {
 
 await build({
   absWorkingDir: root,
-  entryPoints: { "page-preload": "src/engine/pagePreload.ts" },
+  entryPoints: { "page-preload": "src/engine/pagePreload.ts", "window-preload": "src/engine/hostPreload.ts" },
   outdir: "out",
   bundle: true,
   platform: "node",

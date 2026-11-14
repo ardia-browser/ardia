@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { addReceiver } from "./bridge";
 
 export const preloadPath = () => join(__dirname, "preload.js");
+export const appWindowPreloadPath = () => join(__dirname, "window-preload.js");
 
 type CreatedListener = (id: string, window: BrowserWindow) => void;
 
@@ -63,7 +64,7 @@ export function createHost(load: (window: BrowserWindow) => Promise<void>): Brow
         transparent: true,
         resizable: true,
         ...shaped,
-        webPreferences: { ...sharedWebPreferences, ...shaped.webPreferences },
+        webPreferences: { ...sharedWebPreferences, preload: appWindowPreloadPath(), ...shaped.webPreferences },
       },
     };
   });

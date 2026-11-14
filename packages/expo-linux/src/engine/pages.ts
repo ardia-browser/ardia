@@ -47,9 +47,21 @@ function fallbackPartition(profile: string) {
 
 const partitionOf = (profile: string) => pagesCallSync<string>("partitionOf", profile) ?? fallbackPartition(profile);
 
+type Point = { x: number; y: number };
+
+const isPoint = (value: unknown): value is Point =>
+  typeof value === "object" && value !== null && Number.isFinite((value as Point).x) && Number.isFinite((value as Point).y);
+
+function placedInWindow(page: Page, name: string, data: unknown): unknown {
+  const point = name === "openWindow" ? (data as { point?: unknown } | null)?.point : undefined;
+  if (!isPoint(point)) return data;
+  const rect = page.element.getBoundingClientRect();
+  return { ...(data as object), point: { x: rect.left + point.x, y: rect.top + point.y } };
+}
+
 function deliver(page: Page, name: string, data: unknown) {
   if (page.closed) return;
-  const shaped = shapedPageEvent(page.opening, name, data);
+  const shaped = shapedPageEvent(page.opening, name, placedInWindow(page, name, data));
   page.sink?.(name, shaped);
 }
 
@@ -93,8 +105,8 @@ function restoreInto(page: Page, guestId: number, history: Promise<History | nul
   );
 }
 
-function makeElement(page: Page, src: string, history: Promise<History | null> | null): WebviewElement {
-  const element = document.createElement("webview") as WebviewElement;
+function makeElement(doc: Document, page: Page, src: string, history: Promise<History | null> | null): WebviewElement {
+  const element = doc.createElement("webview") as WebviewElement;
   element.setAttribute("partition", partitionOf(page.start.profile ?? ""));
   element.setAttribute("allowpopups", "");
   element.setAttribute("src", src || BLANK);
@@ -160,7 +172,7 @@ function createPage(key: string, start: PageStart, holder: HTMLElement): Page {
     started: { url: start.url ?? "", at: Date.now() },
   } as unknown as Page;
   page.attached = readyPromise(page);
-  page.element = makeElement(page, start.url ?? "", null);
+  page.element = makeElement(holder.ownerDocument, page, start.url ?? "", null);
   holder.appendChild(page.element);
   return page;
 }
@@ -176,7 +188,7 @@ function rebuildIn(page: Page, holder: HTMLElement, start: PageStart) {
   const settleWaiting = page.settle;
   page.attached = readyPromise(page);
   void page.attached.then(settleWaiting);
-  page.element = makeElement(page, RESTORES_HISTORY, history);
+  page.element = makeElement(holder.ownerDocument, page, RESTORES_HISTORY, history);
   holder.appendChild(page.element);
   applyVisibility(page);
   if (oldGuest) byGuest.delete(oldGuest);

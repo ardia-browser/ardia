@@ -13,21 +13,21 @@ Walked by hand on 2026-11-14 on Ubuntu 24.04 (x86_64), in a test instance on a p
 data folder, as a user would: real X key presses, clicks and drags, a screenshot for every row. The walk started on
 commit d7a4bd789; the rows it found broken were fixed on the way and seen again after the fix (through cc0829af3),
 and those rows name the fix. Most rows were walked with no window manager; maximize, dragging, full screen, focus, menus and Peek were walked
-again under xfwm4 with its compositor. Of the 63 rows, 48 work, 5 work with a difference, none is broken, 1 is not
-offered and 9 were not walked. Works with a difference says what differs; the Mac's list is
+again under xfwm4 with its compositor. Of the 63 rows, 57 work, 5 work with a difference, none is broken, 1 is not
+offered, and every row was walked. Works with a difference says what differs; the Mac's list is
 `docs/dia-feature-parity.md`.
 
 **Install, first launch, updates**
 
 | Feature | State | Fixed in |
 | --- | --- | --- |
-| AppImage and .deb | Not walked: the walk ran the checkout's build; CI's smoke runs the extracted AppImage | |
+| AppImage and .deb | Works: built with `pnpm -C apps/browser/linux package` and run from the extracted AppImage and the .deb's extracted `/opt/Ardia` (unsandboxed here: AppArmor blocks user namespaces and nothing was installed setuid): first launch (onboarding), a link from a second launch (opens in Little Ardia), Ctrl+Q, and a relaunch that restored the tabs (the .deb also resumed onboarding at the step it was left on) | |
 | First launch | Works: onboarding, no release notes | |
-| First launch with a link | Not walked | |
+| First launch with a link | Works: onboarding starts and the link opens in Little Ardia in front of it; closing Little Ardia leaves onboarding | |
 | Onboarding (source, look, last choices) | Works: six steps for Coming from Chrome (colour, frame, sharing, layout, default browser and login, welcome) | |
 | Intro animation and music | Differs: step 1 shows the app icon where the Mac plays the meadow; music not checked (no audio device) | |
 | Tour | Works: three stops for tabs across the top (search, two pages side by side, all set), Back, Next, Skip Tour, Done | |
-| Import from another browser | Not walked: no other browser's data on this machine | |
+| Import from another browser | Works with a Chromium profile made for the walk (this machine's browsers hold no data): Import from Another Browser finds Chromium, imports 2 bookmarks (into "Imported from Chromium") and 2 history items. Passwords from a keyring weren't tried | |
 | Check for updates | Works: "Ardia is up to date" with the version and the releases page, with the info icon | a03d8dd4a |
 | Default browser | Works: the pane then says Ardia is the default. A test instance (its own `ARDIA_DATA_DIR`) used to make the checkout's Electron the real desktop's default browser; it now writes `ardia.desktop`, `mimeapps.list` and icons under `<data>/Desktop` and runs no xdg tool | a3a39e114 |
 | Open at login | Works: the autostart entry is written (under `<data>/Desktop` in a test instance) | a3a39e114 |
@@ -51,9 +51,9 @@ offered and 9 were not walked. Works with a difference says what differs; the Ma
 | Main, Settings and Little Ardia window chrome | Works, app-drawn buttons, no system title bar | |
 | Maximize and restore | Works under xfwm4, square corners while maximized | |
 | Moving a window, edge snapping | Differs: dragging the tab strip moves the window (also with no window manager), but since Ardia moves it rather than the window manager, it doesn't snap to screen edges; a double click on the tab strip's empty space didn't maximize | |
-| Pop-up menus (the … menu, tab menus) | Works, also when no Ardia window has focus (no window manager, right after a dialog); before, the menu didn't open and its button stayed pressed. Shortcut labels read "Ctrl+Comma" | ab87cf84a |
-| Pin, Top Apps, groups | Not walked | |
-| Profiles: create, switch with Alt+1, Alt+2 | Not walked | |
+| Pop-up menus (the … menu, tab menus) | Works, also when no Ardia window has focus (no window manager, right after a dialog); before, the menu didn't open and its button stayed pressed; with no window manager they also open after another Ardia window or a file dialog closed, which used to leave every menu, the page's too, closing as it opened. Shortcut labels read "Ctrl+Comma" | ab87cf84a, becfcb2c6 |
+| Pin, Top Apps, groups | Works: the hover card's Pin makes a Top App tile; the tab menu's New Group with Tab makes a group and names it in place | |
+| Profiles: create, switch with Alt+1, Alt+2 | Works: Settings › Profiles › Create Profile, then Alt+2 and Alt+1 switch (the window takes the profile's colour). The sidebar header cuts "Work" to "W..." | |
 
 **Pages**
 
@@ -76,7 +76,7 @@ offered and 9 were not walked. Works with a difference says what differs; the Ma
 | DevTools (F12) | Works (a detached window) | |
 | Task Manager (Shift+Esc) | Works: every process with memory, CPU and process ID, and End Process for a page's, which then offers Reload. Before, it did nothing | eff01f92a |
 | Drop a link or file onto a page | Works: a link or file dropped on a page opens it in a new tab next to it; a page that takes drops gets them. Before, a link dropped on a page did nothing | e07e27d8a |
-| Drop a link onto the tab strip or sidebar | Not walked again after linux-crash's 4d95f7eff (before it, nothing happened) | |
+| Drop a link onto the tab strip or sidebar | Works: a link dragged from another app onto the sidebar opens as a new tab | |
 | Translate | Not offered | |
 
 **Passwords, permissions, extensions**
@@ -91,8 +91,8 @@ offered and 9 were not walked. Works with a difference says what differs; the Ma
 | Camera and microphone | Works with Chromium's fake camera: the app's prompt, then the stream | |
 | Chrome Web Store install | Works: Add to Chrome, the app's Add dialog listing the permissions, then the store says Remove from Chrome | |
 | Extensions pane | Works | |
-| Ad, tracker and cookie-banner blocking | Not walked | |
-| Bookmark and password export | Not walked | |
+| Ad, tracker and cookie-banner blocking | Works: an ad script and an analytics script are blocked while a CDN script loads; EasyList's `#carbonads` is hidden on a named host (the engine finds no domain for a bare IP or localhost, so cosmetic hiding skips those). Cookie-banner lists weren't turned on | |
+| Bookmark and password export | Works: Bookmarks › Export Bookmarks writes a Netscape bookmarks file; Settings › Passwords › Export CSV (an advanced row) writes the CSV with mode 0600. The Passwords pane's "Password manager apps" row talks about the macOS Applications folder | |
 
 **Settings**
 
@@ -102,7 +102,7 @@ offered and 9 were not walked. Works with a difference says what differs; the Ma
 | Appearance: light and dark | Works | |
 | Keyboard Shortcuts pane | Works, Ctrl keys | |
 | Live Folders pane | Works (renders; no service connected) | |
-| Sync | Not walked here (see Sync below) | |
+| Sync | Works: with a folder chosen (Settings › Sync › Sync folder, an advanced row), Turn On Sync writes the vault and shows Save Your Recovery Kit. Before a folder is chosen the pane says "cloud folder is off on this computer" and Turn On Sync is disabled | |
 | Report a Problem: screen recording | Works: the recording pill (Recording 0:05, Stop) floats over the window; Stop, Escape or the 60 s limit end it; with Include web pages off every page area is black, thumbnail included. Before, Record said Ardia couldn't record the window | cc0829af3 |
 
 ## Design

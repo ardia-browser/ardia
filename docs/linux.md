@@ -27,6 +27,11 @@ mounts a React root into the child's document, and every window shares the one z
 shapes those windows in `setWindowOpenHandler` (frameless, transparent, sizes from `ArdiaAppWindows.openWindow`).
 Closing a window unmounts its root. The host is never shown and lives until quit.
 
+`src/navigationGuards.ts` keeps them there: the host opens a window only for `about:blank` under a name shaped through
+`ArdiaAppWindows` just before (each shape used once), `will-navigate`, `will-frame-navigate` and `will-redirect` keep
+the host on the app document (its frames may hold `about:blank` or `about:srcdoc`) and every app window on
+`about:blank`, and an app window opens nothing. Refusals go to `launch.log` with the URL's scheme only.
+
 `ArdiaAppWindows.openWindow` (`packages/expo-linux/src/windows/appWindows.ts`) asks main to shape the window
 (`shapeWindow`, in `apps/browser/linux/src/modules/appWindows.ts`), opens it, mounts `AppRegistry.runApplication("main",
 { windowId })` into its `#root`, and asks main to show it after the first paint (fading in when `animated`). Closing
@@ -137,6 +142,14 @@ type LinuxBridge = {
 };
 ```
 
+Main answers `ardia:modules`, `ardia:callSync` and `ardia:call` only from the host's main frame while it shows the app
+document (`src/appDocument.ts`: the dev server's origin, or the `index.html` of `ARDIA_UI_DIR` or `ui/` beside the build,
+the same URL `main.ts` loads). Anything else gets `ERR_LINUX_BRIDGE_SENDER` (an empty module list) before dispatch,
+logged once per sender. A call from the host's new document that reaches main before main has seen that document
+commit (the commit and the IPC travel on different pipes) waits for `did-navigate`, 5 s at most, and is checked again.
+The page channels (`ardia:page-dialog`, `ardia:passwords:*`, `ardia:cosmetics`) accept only frames in a page
+session. Both checks are `src/ipcSenders.ts`.
+
 `contextBridge` copies an error thrown in the preload without its own properties, so a `code` set there never reaches
 the UI. `packages/expo-linux` therefore calls `callSyncRaw`/`callRaw`, which hand back the main process's reply as it
 is, and throws in the UI's world: a `NativeCallError` with the main error's message and `code` (`ERR_ENGINE`, …, or
@@ -159,21 +172,29 @@ the main method where one is needed (`aroundMain` in `tsModules.ts`), the main p
   only there do `ARDIA_TEST` and `ARDIA_TRACE` count. Linux adds the trace area `keys` (every key press, its
   webContents and window). The main process logs to stdout and `<data>/launch.log`.
 - **Documents.** `ArdiaDocuments` stages each write in memory (a read right after sees it) and lands it with an
-  atomic replace (temp file, fsync, rename), one at a time, retrying with backoff; quitting flushes synchronously.
+  atomic replace (temp file, fsync, rename), one at a time, retrying with backoff; quitting flushes synchronously. The
+  rename is synchronous and happens only if the write is still its document's newest, so a write in flight at quit
+  or removal can't land over what the flush saved.
 - **Quit.** `before-quit`, SIGTERM, SIGINT and SIGHUP emit `willQuit`; the UI saves and answers
   `ArdiaAppWindows.replyToTerminate`, and Ardia exits, or exits anyway after 3 s (`src/quit.ts`).
 - **Keyboard shortcuts.** The Windows command table, ported (`src/menus`), runs on `before-input-event` of every
   webContents, with Ctrl where the Mac has ⌘ and the user's remapped shortcuts. A `<webview>`'s keys arrive at the
   page's and the host's webContents, so they go to the page's window (`resolvePageWindowsWith`), else the focused app
   window. Context menus are native Electron menus; background instances log them to `activation.log` instead.
-- **Launch links.** URLs and files on the command line wait for the first window; a second launch with the same data
-  folder hands its links to the running app (`second-instance`), or opens a window (`--new-window`) or reopens one.
+- **Launch links.** URLs and files on the command line, and a second launch's (`second-instance`, same data folder),
+  wait in main until the UI listens: expo-linux calls `ArdiaLaunchLinks.listening` when the first
+  `ArdiaShell.onOpenURLs` listener subscribes, and they go out as one `onOpenURLs`. A second launch without links opens
+  a window (`--new-window`) or reopens one, also once the UI listens; a host that reloads holds them again.
 - **Default browser and login.** `xdg-settings set default-web-browser ardia.desktop` (an AppImage first writes
   `~/.local/share/applications/ardia.desktop` and its icons); open at login is `~/.config/autostart/ardia.desktop`.
 - **Updates** come from the GitHub releases of the repository the build was made from (`ARDIA_UPDATE_REPOSITORY` at
   build time): Ardia checks every 6 hours and offers the release page; it doesn't update itself yet.
-- **Secrets** (`ArdiaKeychain`) are sealed with `safeStorage` (the desktop keyring through libsecret or KWallet; with
-  no keyring Electron falls back to its `basic_text` key).
+- **Secrets** (`ArdiaKeychain`, passwords, card numbers) are sealed with `safeStorage`: the desktop keyring through
+  libsecret or KWallet, or, like Chrome with no keyring, the `basic_text` backend's fixed key (`v10` blobs;
+  `src/secretStorage.ts` turns it on). Nothing is stored as plain base64. Each keychain secret records its backend, and
+  password blobs carry Chrome's `v10`/`v11` prefix, so once a keyring appears, secrets sealed without one are sealed
+  again with it when read. `ArdiaKeychain.protection()` and the `passwords` domain's `protection` answer
+  `{ backend, keyring }` for the Passwords pane.
 
 ## Chrome services
 
@@ -210,6 +231,11 @@ the main method where one is needed (`aroundMain` in `tsModules.ts`), the main p
   content scripts per site, so `siteAccess` is null (the pane hides the row) and narrowing it is refused. They don't
   run in private windows either: Electron loads extensions only into sessions kept on disk, and private windows' are
   in memory, so "Allow in Incognito" is refused and hidden (`PLATFORM_FEATURES.extensionsInPrivate`).
+  Every CRX, from a file, the store's button, `installFromWebStore` or an update, is unpacked by `services/crx.ts`,
+  never the library: CRX3 only, every RSA and ECDSA proof verified over the signed header data and the archive, one
+  of them from the key whose hash is the id; Chrome's version format (the folder is `<id>/<version>_0`, checked to stay
+  inside the extensions folder). The store's button unpacks the verified CRX in `beforeInstall`, so the library's
+  install finds it on disk and only loads it.
   Web Store extensions update from Google's update service a minute after the profile starts and every 5 hours
   (`ArdiaLinuxExtensions.checkForUpdates(profile)` runs it now): a newer version is downloaded next to the old one,
   loaded in its place, recorded in the registry, and the old folder removed.
@@ -272,6 +298,9 @@ Data in `$XDG_DATA_HOME/ardia` (default `~/.local/share/ardia`) or `ARDIA_DATA_D
 - `scripts/linux/capture <port> <out-dir>` screenshots every app window and page over CDP.
 - `scripts/linux/launch-smoke <out-dir> [--app PATH]` is CI's check: a fresh instance with a fixture page as a launch
   link, the first window and the loaded page within 90 s, screenshots, a clean quit and a saved session.
-- CI (`.github/workflows/linux.yml`) runs on pushes and PRs to `linux`, on x64 and arm64: typecheck, build, package,
+- `pnpm -C apps/browser/linux test` runs the main process's tests (`src/**/*.test.ts`) with `node --test`;
+  `scripts/test-hooks.mjs` resolves extensionless imports and hands `electron` to `src/testing/electron.ts`, a fake
+  (ipcMain, app, safeStorage with Chrome's blob prefixes, inert stand-ins for the rest).
+- CI (`.github/workflows/linux.yml`) runs on pushes and PRs to `linux`, on x64 and arm64: typecheck, unit tests, build, package,
   the smoke on the checkout's build and on the extracted AppImage under `xvfb-run`, checks of the `.deb`, and uploads
   the screenshots, logs, AppImage and `.deb`.

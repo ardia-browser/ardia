@@ -1,5 +1,7 @@
 import { build } from "esbuild";
 import { copyFileSync, mkdirSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { appBuild, appVersion, nativeApiVersion } from "./version.mjs";
 
@@ -7,7 +9,7 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 
 await build({
   absWorkingDir: root,
-  entryPoints: { main: "src/main.ts", preload: "src/preload.ts" },
+  entryPoints: { main: "src/main.ts", preload: "src/preload.ts", translateWorker: "src/translate/worker.ts" },
   outdir: "out",
   bundle: true,
   platform: "node",
@@ -33,3 +35,7 @@ const iconSizes = { "16x16": "icon_16x16_1x", "32x32": "icon_32x32_1x", "64x64":
 mkdirSync(`${root}out/icons`, { recursive: true });
 for (const [size, source] of Object.entries(iconSizes)) copyFileSync(`${iconSet}${source}.png`, `${root}out/icons/${size}.png`);
 copyFileSync(`${root}../windows/Ardia/IntroMusic.wav`, `${root}out/IntroMusic.wav`);
+
+const bergamot = `${dirname(createRequire(import.meta.url).resolve("@browsermt/bergamot-translator/package.json"))}/worker/`;
+mkdirSync(`${root}out/bergamot`, { recursive: true });
+for (const name of ["bergamot-translator-worker.js", "bergamot-translator-worker.wasm"]) copyFileSync(`${bergamot}${name}`, `${root}out/bergamot/${name}`);

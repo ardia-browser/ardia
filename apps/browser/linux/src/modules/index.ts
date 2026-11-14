@@ -16,6 +16,7 @@ import "./shell";
 import "./system";
 import "./systemSignals";
 import "./telemetryLocal";
+import "./translate";
 import "./notOnLinux";
 import "./report";
 import "./updater";

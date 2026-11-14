@@ -1,5 +1,6 @@
 import { hostOf } from "@ardia/core";
 import { translation } from "../../platform/text";
+import { onTranslationDownload } from "../../platform/translationDownloads";
 import { create } from "zustand";
 import { webviews } from "../../platform/webviews";
 import { useBrowser } from "../browser/store";
@@ -195,6 +196,24 @@ function toast(tabId: string, title: string, message?: string, progress = false)
   else showToast(windowId, title, message, { icon: "translate" });
 }
 
+async function downloadLanguages(tabId: string, source: string, target: string) {
+  let shown = false;
+  const watching = onTranslationDownload((download) => {
+    if (download.source !== source || download.target !== target || download.total <= 0) return;
+    shown = true;
+    const percent = Math.min(99, Math.floor((download.received / download.total) * 100));
+    const names = download.languages.map(languageName).join(" and ");
+    toast(tabId, `Downloading ${names || languageName(source)}…`, `${percent}% of ${Math.max(1, Math.round(download.total / 1e6))} MB`, true);
+  });
+  try {
+    await translation!.prepare(source, target);
+  } finally {
+    watching.remove();
+    const windowId = useBrowser.getState().tabs[tabId]?.windowId;
+    if (shown && windowId) hideKeyedToast(windowId, PROGRESS_TOAST);
+  }
+}
+
 export async function translatePage(tabId: string, target = defaultTarget()) {
   const tab = useBrowser.getState().tabs[tabId];
   if (!translation || !tab || !webviews.get(tabId)) return;
@@ -209,7 +228,7 @@ export async function translatePage(tabId: string, target = defaultTarget()) {
   try {
     const status = await translation.status(source, target);
     if (status === "unsupported") return toast(tabId, `Translation error (${languageName(source)} to ${languageName(target)} isn't available)`);
-    if (status === "supported") await translation.prepare(source, target);
+    if (status === "supported") await downloadLanguages(tabId, source, target);
     const mine = (token = newToken());
     await translation.open(mine);
     set(tabId, { status: "translating", source, target, token: mine });

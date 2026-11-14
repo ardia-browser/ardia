@@ -51,6 +51,7 @@ const config = {
   directories: { app: stage, output: join(root, "dist"), buildResources: join(root, "packaging") },
   files: ["**/*"],
   asar: true,
+  asarUnpack: ["out/translateWorker.js", "out/bergamot/**"],
   npmRebuild: false,
   nodeGypRebuild: false,
   buildDependenciesFromSource: false,

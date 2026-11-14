@@ -36,7 +36,10 @@ export type LinuxCount =
   | "window_drag_area_menus"
   | "window_moves_by_app"
   | "meadow_scenes"
-  | "meadow_failures";
+  | "meadow_failures"
+  | "translate_model_downloads"
+  | "translate_model_download_failures"
+  | "translate_engine_failures";
 
 const counts = new Map<LinuxCount, number>();
 

@@ -2,6 +2,7 @@ import { BrowserWindow, Menu, screen, type BrowserWindowConstructorOptions, type
 import { defineModule, emit } from "../bridge";
 import { count } from "../counts";
 import { isBackground } from "../paths";
+import { popUpOver } from "../popupMenus";
 import { isQuitting, replyToTerminate, requestQuit } from "../quit";
 import { appWindow, appWindowIds, auxiliaryWindow, onAppWindowCreated, shapeNextAuxiliaryWindow, shapeNextWindow } from "../windows";
 
@@ -142,7 +143,7 @@ function offerEditMenu(window: BrowserWindow) {
       console.info(`[ardia linux] edit menu (not shown): ${menu.items.filter((item) => item.type !== "separator").map((item) => item.label).join(" | ")}`);
       return;
     }
-    menu.popup({ window });
+    popUpOver(menu, window);
   });
 }
 

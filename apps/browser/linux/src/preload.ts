@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 import "./engine/hostPreload";
 
 type Reply = { value?: unknown; error?: string; code?: string };
@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld("ardiaLinux", {
   call: async (module: string, method: string, args: unknown[]) => unwrap(module, method, await ipcRenderer.invoke("ardia:call", module, method, args)),
   callSyncRaw: (module: string, method: string, args: unknown[]): Reply => ipcRenderer.sendSync("ardia:callSync", module, method, args),
   callRaw: (module: string, method: string, args: unknown[]): Promise<Reply> => ipcRenderer.invoke("ardia:call", module, method, args),
+  pathForFile: (file: File): string => webUtils.getPathForFile(file),
   onEvent: (listener: EventListener) => {
     listeners.add(listener);
     return () => void listeners.delete(listener);

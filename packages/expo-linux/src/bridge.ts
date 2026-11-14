@@ -9,6 +9,7 @@ export type LinuxBridge = {
   callSyncRaw?(module: string, method: string, args: unknown[]): BridgeReply;
   callRaw?(module: string, method: string, args: unknown[]): Promise<BridgeReply>;
   onEvent(listener: (module: string, event: string, payload: unknown) => void): () => void;
+  pathForFile?(file: File): string;
 };
 
 export class NativeCallError extends Error {

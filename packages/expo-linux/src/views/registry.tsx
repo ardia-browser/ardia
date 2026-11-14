@@ -9,6 +9,7 @@ import { SwipeArea } from "../web/Pager";
 import { Symbol } from "../web/Symbol";
 import { WindowDragRegion } from "../windows/dragRegion";
 import { ContextMenuArea, MouseArea, PopoverBubble, Surface } from "./adapters";
+import { FileDrop } from "./fileDrop";
 import { PowerUp, WindowBackdrop } from "./shaders";
 
 type ViewByName = ComponentType<never> & { displayName?: string };
@@ -38,7 +39,7 @@ const drawnOnLinux: Record<string, ViewByName> = {
   ArdiaPowerUp: PowerUp as ViewByName,
   ArdiaClipView: PlainView as ViewByName,
   ArdiaWindowProfile: PlainView as ViewByName,
-  ArdiaFileDrop: PlainView as ViewByName,
+  ArdiaFileDrop: FileDrop as ViewByName,
   ArdiaMagnifyArea: PlainView as ViewByName,
 };
 

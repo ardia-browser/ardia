@@ -7,6 +7,7 @@ import { count } from "./counts";
 import { testValue } from "./launch";
 import { note } from "./log";
 import { windowPrompt } from "./ownerPrompt";
+import { whenScreenLocks } from "./system/screenLock";
 
 export type OwnerPrompt = {
   answer(): Promise<Uint8Array | null>;
@@ -95,7 +96,7 @@ async function answerUnlessAway(prompt: OwnerPrompt, away: Promise<null>): Promi
 function watchForAway() {
   if (watchingForAway) return;
   watchingForAway = true;
-  powerMonitor.on("lock-screen", ownerWentAway);
+  whenScreenLocks(ownerWentAway);
   powerMonitor.on("suspend", ownerWentAway);
 }
 

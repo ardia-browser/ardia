@@ -3,17 +3,29 @@ import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync, type Stat
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, afterEach, beforeEach, mock, test } from "node:test";
+import { dbusDaemonAvailable, fakeLogind, fakeScreenSaver, privateBus } from "./testing/dbus.ts";
 import { CORRECT_PASSWORD, heldAnswer, scriptedPrompt, stubPasswordHelper, untilHelperRuns } from "./testing/ownerCheck.ts";
 
 const dataDir = mkdtempSync(join(tmpdir(), "ardia-owner-"));
 const helper = stubPasswordHelper();
 process.env.ARDIA_DATA_DIR = dataDir;
 process.env.ARDIA_TEST = `passwordHelper=${helper.path}`;
+const SESSION_ID = "7";
+const buses = dbusDaemonAvailable() ? await Promise.all([privateBus(), privateBus()]) : null;
+process.env.DBUS_SYSTEM_BUS_ADDRESS = buses?.[0].address ?? `unix:path=${join(dataDir, "no-system-bus")}`;
+process.env.DBUS_SESSION_BUS_ADDRESS = buses?.[1].address ?? `unix:path=${join(dataDir, "no-session-bus")}`;
+process.env.XDG_SESSION_ID = SESSION_ID;
+const logind = buses ? await fakeLogind(buses[0].address, {}) : null;
+const screenSaver = buses ? await fakeScreenSaver(buses[1].address, "org.gnome.ScreenSaver", "/org/gnome/ScreenSaver") : null;
 after(() => {
+  logind?.connection.close();
+  screenSaver?.connection.close();
+  for (const bus of buses ?? []) bus.stop();
   rmSync(dataDir, { recursive: true, force: true });
   helper.remove();
 });
 
+const { sessionLockWatch, whenScreenLocks } = await import("./system/screenLock.ts");
 const { confirmDeviceOwner, ownerWentAway, presentOwnerPromptsWith, revokeOwnerGrant, runPasswordHelper, trustedPasswordHelper } = await import("./ownerCheck.ts");
 
 const bytesOf = (text: string) => new TextEncoder().encode(text);
@@ -218,4 +230,40 @@ test("a right password whose check finishes after the owner went away grants not
   prompt.answers.push(null);
   assert.equal(await confirmDeviceOwner("show your saved passwords"), false);
   assert.equal(prompt.asked.length, 2);
+});
+
+test("locking the session, as logind or a screen saver says on D-Bus, drops the grant and closes an open prompt", { skip: !buses }, async () => {
+  let locks = 0;
+  whenScreenLocks(() => locks++);
+  assert.deepEqual((await sessionLockWatch())?.sources, ["logind", "screenSaver"]);
+  const lockedBy = async (lock: () => void) => {
+    const before = locks;
+    lock();
+    const deadline = performance.now() + 5_000;
+    while (locks === before) {
+      if (performance.now() > deadline) throw new Error("the lock never arrived");
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  };
+
+  prompt.answers.push(CORRECT_PASSWORD);
+  assert.equal(await confirmDeviceOwner("show your saved passwords"), true);
+  await lockedBy(() => logind!.lock(SESSION_ID));
+  prompt.answers.push(null);
+  assert.equal(await confirmDeviceOwner("show your saved passwords"), false);
+  assert.equal(prompt.asked.length, 2);
+
+  prompt.answers.push(CORRECT_PASSWORD);
+  assert.equal(await confirmDeviceOwner("show your saved passwords"), true);
+  await lockedBy(() => logind!.lockedHint(SESSION_ID, true));
+  prompt.answers.push(null);
+  assert.equal(await confirmDeviceOwner("show your saved passwords"), false);
+  assert.equal(prompt.asked.length, 4);
+
+  const held = heldAnswer();
+  prompt.answers.push(held.answer);
+  const asking = confirmDeviceOwner("show your saved passwords");
+  await lockedBy(() => screenSaver!.active(true));
+  assert.equal(await asking, false);
+  held.give(null);
 });

@@ -1,6 +1,10 @@
 import { registerHooks } from "node:module";
 
 const fakeElectron = new URL("../src/testing/electron.ts", import.meta.url).href;
+const NO_BUS = "unix:path=/nonexistent/ardia-tests-use-private-buses";
+
+process.env.DBUS_SYSTEM_BUS_ADDRESS = NO_BUS;
+process.env.DBUS_SESSION_BUS_ADDRESS = NO_BUS;
 const SOURCE_EXTENSION = /\.(?:[cm]?[jt]s|json|node)$/;
 
 const asModule = (resolved) => (resolved.url.startsWith("file:") && /\.ts(?:\?.*)?$/.test(resolved.url) ? { ...resolved, format: "module-typescript" } : resolved);

@@ -2,6 +2,7 @@ import { BrowserWindow, app, clipboard, nativeTheme, net, powerMonitor } from "e
 import { defineModule, emit } from "../bridge";
 import { testValue } from "../launch";
 import { note } from "../log";
+import { whenScreenLocks } from "../system/screenLock";
 
 const BANG_LIST_URL = "https://services.helium.imput.net/bangs.json";
 
@@ -45,7 +46,7 @@ function watchActivation(): void {
     }, 50);
   });
   app.on("browser-window-focus", () => clearTimeout(resignTimer));
-  powerMonitor.on("lock-screen", () => {
+  whenScreenLocks(() => {
     emitAppEvent({ type: "lockedOrAsleep" });
     emitAppEvent({ type: "screenLocked" });
   });

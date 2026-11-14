@@ -21,6 +21,8 @@ export type LinuxCount =
   | "owner_check_unavailable"
   | "owner_check_helper_failures"
   | "owner_check_throttled"
+  | "screen_locks_seen"
+  | "screen_lock_watch_unavailable"
   | "memory_saver_discards_proactive"
   | "memory_saver_discards_urgent"
   | "location_unavailable"

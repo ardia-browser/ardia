@@ -15,6 +15,8 @@ export type Message = {
   body: unknown[];
 };
 export type Call = { destination: string; path: string; interface: string; member: string; signature?: string; body?: unknown[] };
+export type Signal = { path: string; interface: string; member: string; signature?: string; body?: unknown[] };
+export type Reply = { signature?: string; body?: unknown[] };
 
 const METHOD_CALL = 1;
 const METHOD_RETURN = 2;
@@ -324,23 +326,37 @@ export class DBusConnection {
   private readonly replies = new Map<number, { resolve: (message: Message) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   private readonly signalListeners = new Set<(message: Message) => void>();
   private readonly closeListeners = new Set<() => void>();
+  private methodHandler: ((message: Message) => Reply | Promise<Reply>) | null = null;
   uniqueName = "";
 
-  static async system(address = process.env.DBUS_SYSTEM_BUS_ADDRESS || SYSTEM_BUS): Promise<DBusConnection> {
+  static async system(address = process.env.DBUS_SYSTEM_BUS_ADDRESS || SYSTEM_BUS, deadlineMs = CALL_DEADLINE_MS): Promise<DBusConnection> {
+    return DBusConnection.connect(address, deadlineMs);
+  }
+
+  static async session(
+    address = process.env.DBUS_SESSION_BUS_ADDRESS || `unix:path=${process.env.XDG_RUNTIME_DIR || `/run/user/${userInfo().uid}`}/bus`,
+    deadlineMs = CALL_DEADLINE_MS,
+  ): Promise<DBusConnection> {
+    return DBusConnection.connect(address, deadlineMs);
+  }
+
+  static async connect(address: string, deadlineMs = CALL_DEADLINE_MS): Promise<DBusConnection> {
     const connection = new DBusConnection();
-    await connection.open(address);
+    await connection.open(address, deadlineMs);
     return connection;
   }
 
-  private open(address: string): Promise<void> {
+  private open(address: string, deadlineMs: number): Promise<void> {
     return new Promise((resolve, reject) => {
       const socket = createConnection(socketPath(address));
       let authenticated = false;
       let greeting = "";
       const fail = (error: Error) => {
+        clearTimeout(deadline);
         socket.destroy();
         reject(error);
       };
+      const deadline = setTimeout(() => fail(new Error(`the D-Bus bus at ${address} didn't answer`)), deadlineMs);
       socket.once("error", fail);
       socket.on("connect", () => {
         socket.write(Buffer.from([0]));
@@ -360,6 +376,7 @@ export class DBusConnection {
           void this.call({ destination: "org.freedesktop.DBus", path: "/org/freedesktop/DBus", interface: "org.freedesktop.DBus", member: "Hello" })
             .then((reply) => {
               this.uniqueName = String(reply[0] ?? "");
+              clearTimeout(deadline);
               resolve();
             })
             .catch(fail);
@@ -403,6 +420,8 @@ export class DBusConnection {
         else waiting.resolve(message);
       } else if (message.type === SIGNAL) {
         for (const listener of this.signalListeners) listener(message);
+      } else if (message.type === METHOD_CALL && this.methodHandler) {
+        void this.answer(message, this.methodHandler);
       }
     }
   }
@@ -426,6 +445,37 @@ export class DBusConnection {
     });
     socket.write(encode({ type: METHOD_CALL, serial, fields, signature: call.signature ?? "", body: call.body ?? [] }));
     return (await reply).body;
+  }
+
+  private async answer(call: Message, handler: (message: Message) => Reply | Promise<Reply>) {
+    const fields: [number, Variant][] = [[FIELD.replySerial, variant("u", call.serial)]];
+    if (call.sender) fields.push([FIELD.destination, variant("s", call.sender)]);
+    let reply: { type: number; signature: string; body: unknown[] };
+    try {
+      const answered = await handler(call);
+      reply = { type: METHOD_RETURN, signature: answered.signature ?? "", body: answered.body ?? [] };
+    } catch (error) {
+      fields.push([FIELD.errorName, variant("s", "org.freedesktop.DBus.Error.Failed")]);
+      reply = { type: ERROR, signature: "s", body: [error instanceof Error ? error.message : String(error)] };
+    }
+    this.socket?.write(encode({ ...reply, serial: ++this.serial, fields }));
+  }
+
+  serve(handler: (message: Message) => Reply | Promise<Reply>): void {
+    this.methodHandler = handler;
+  }
+
+  emit(signal: Signal): void {
+    const fields: [number, Variant][] = [
+      [FIELD.path, variant("o", signal.path)],
+      [FIELD.interface, variant("s", signal.interface)],
+      [FIELD.member, variant("s", signal.member)],
+    ];
+    this.socket?.write(encode({ type: SIGNAL, serial: ++this.serial, fields, signature: signal.signature ?? "", body: signal.body ?? [] }));
+  }
+
+  async requestName(name: string): Promise<void> {
+    await this.call({ destination: "org.freedesktop.DBus", path: "/org/freedesktop/DBus", interface: "org.freedesktop.DBus", member: "RequestName", signature: "su", body: [name, 4] });
   }
 
   onSignal(listener: (message: Message) => void): () => void {

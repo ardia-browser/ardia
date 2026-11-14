@@ -12,6 +12,7 @@ export {
   type MediaFault,
   type NowPlaying,
   type ControlPress,
+  type PictureInPictureDrag,
   type PictureInPictureState,
 } from "@ardia/ardiacore";
 

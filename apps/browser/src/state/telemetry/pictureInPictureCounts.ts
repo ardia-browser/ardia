@@ -1,5 +1,5 @@
-import type { PictureInPictureDrag } from "@ardia/ardiacore";
 import type { PageEngine } from "../engines/engines";
+import type { PictureInPictureDrag } from "../../platform/media";
 
 let nothingPlaying = 0;
 const backToTab: Record<PageEngine, number> = { chromium: 0, webkit: 0 };

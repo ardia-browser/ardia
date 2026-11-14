@@ -110,8 +110,9 @@ says what happened, and no tab or removed visit is lost or shows up twice.
    first foreground cycle, and the inbox holds any tabs the Mac sent.
 7. **Stalled age.** Turn on airplane mode and wait three minutes: the status reads `Last synced N minutes ago`
    and N moves each minute.
-- **Scanning the phrase.** The Compose app scans the Mac's QR code with CameraX and ZXing in Compose. The Expo
-  screens should scan in JavaScript (expo-camera reads QR codes) and pass the text to `sync.connect`.
+- **Scanning the phrase.** The module's own `ScanView` (`scanner`, `@ardia/phone-native`) scans the Mac's QR code
+  with the Compose app's CameraX and ZXing code and hands the text to `sync.connect`; expo-camera and its ML Kit are
+  gone (00b9064e9). It asks for the camera again once a one-time grant has expired (d8460729e).
 
 ## System entry points on Android
 
@@ -122,7 +123,8 @@ The Expo app has the Compose app's entry points (`docs/android.md`), from its ow
   `web`; `ardia://` from widgets and the tile is its kind, source `system`, and from launcher shortcuts, source
   `shortcut`; `WEB_SEARCH` and `PROCESS_TEXT` (Search in Ardia on selected text) search, or open a web
   address, source `intent`; `SEND` text opens its first link or searches the text, source `share`. A link is
-  delivered once, not again on recreate or from Recents. `system.setHidesFromRecents(hidden)` is the Compose
+  delivered once, not again on recreate or from Recents, and a new activity drops links an earlier one left
+  untaken (50824c133). `system.setHidesFromRecents(hidden)` is the Compose
   app's Recents screenshot and `FLAG_SECURE` handling, for the screens to call while a private tab shows.
 - **Default browser.** `defaultBrowser` uses the Compose app's `AndroidSystemActions` (`RoleManager.ROLE_BROWSER`).
 - **Tile, widgets and shortcuts.** The Compose app's `SearchTileService`, Glance widgets (Search, Your Mac's Tabs)

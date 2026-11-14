@@ -1,8 +1,9 @@
 import { confirm } from "../../platform/dialogs";
 import { onWindowEvent } from "../../platform/windows";
+import { mayCloseWindowPages } from "../../platform/windowPages";
 import { useBrowser } from "../browser/store";
 import { inPinnedContainer, plural, profileFor } from "../browser/model";
-import { tabsLostWithWindow } from "../tabs/sharedWindowClose";
+import { tabsHandedOver, tabsLostWithWindow } from "../tabs/sharedWindowClose";
 import { isLastRegularWindow, isOpenRegularWindow, isSmall } from "./small";
 import { closeLittleArdia } from "../littleArdia/actions";
 import { closeWindowAnimated } from "./closeAnimated";
@@ -43,7 +44,14 @@ async function requestClose(windowId: string) {
     if (!confirmed) return;
     for (const id of closing) asked.add(id);
   }
+  if (!(await mayCloseWindowPages(windowId, pagesClosedWithWindow(windowId)))) return;
   closeWindowAnimated(windowId, { keepsLastWindow: last });
+}
+
+function pagesClosedWithWindow(windowId: string) {
+  const s = useBrowser.getState();
+  const handed = new Set(tabsHandedOver(s, windowId, isOpenRegularWindow));
+  return (s.windows[windowId]?.tabIds ?? []).filter((id) => !handed.has(id));
 }
 
 export const unpinnedOpenTabIds = (windowId: string) => {

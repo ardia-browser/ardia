@@ -9,6 +9,8 @@ export type LinuxCount =
   | "leave_site_stayed"
   | "quit_unsaved_asked"
   | "quit_unsaved_stayed"
+  | "window_close_unsaved_asked"
+  | "window_close_unsaved_stayed"
   | "memory_saver_discards_proactive"
   | "memory_saver_discards_urgent"
   | "location_unavailable"

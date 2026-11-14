@@ -69,7 +69,7 @@ function defaultFolder(): { path: string; cloud: string | null } {
   const test = testFolder();
   if (test) return { path: test, cloud: test };
   const cloud = cloudFolder();
-  return { path: join(cloud ?? homedir(), FOLDER_NAME), cloud };
+  return { path: cloud ? join(cloud, FOLDER_NAME) : "", cloud };
 }
 
 function deviceName(): string {
@@ -124,8 +124,8 @@ defineModule("ArdiaSync", {
   async: {
     async folderInfo(path: string | null) {
       const fallback = defaultFolder();
-      const chosen = path ?? fallback.path;
-      const state = await folderState(chosen);
+      const chosen = path || fallback.path;
+      const state = chosen ? await folderState(chosen) : { exists: false, writable: false, hasSyncData: false };
       return {
         path: chosen,
         defaultPath: fallback.path,

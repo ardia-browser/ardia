@@ -112,7 +112,7 @@ function SyncOff({ info }: { info: FolderInfo | null }) {
             </>
           )}
         </Row>
-        <Row anchor="sync.folder" description={info ? folderLabel(info) : " "}>
+        <Row anchor="sync.folder" description={info ? (info.path ? folderLabel(info) : "No folder chosen") : " "}>
           <Button title="Choose…" onPress={() => void chooseSyncFolder()} />
         </Row>
         {noICloud ? (

@@ -190,7 +190,7 @@ async function pickFolder(current: string | null, promptText: string | null): Pr
   }
   return counted(async () => {
     const parent = owner();
-    const settings: Electron.OpenDialogOptions = { properties: ["openDirectory", "createDirectory"], defaultPath: current ?? undefined, buttonLabel: promptText ?? undefined };
+    const settings: Electron.OpenDialogOptions = { title: "Choose Folder", properties: ["openDirectory", "createDirectory"], defaultPath: current ?? undefined, buttonLabel: promptText ?? undefined };
     const reply = parent ? await dialog.showOpenDialog(parent, settings) : await dialog.showOpenDialog(settings);
     return reply.canceled ? null : (reply.filePaths[0] ?? null);
   });

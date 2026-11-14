@@ -15,6 +15,28 @@ BOOL (^gShouldClose)(NSWindow *);
 
 void (^gSwapped)(NSWindow *, NSWindow *);
 
+const void *const kFloatsForWindowManagersKey = &kFloatsForWindowManagersKey;
+
+NSMutableSet<NSString *> *AnsweredSubroleClasses() {
+  static NSMutableSet *classes = [NSMutableSet set];
+  return classes;
+}
+
+void AnswerFloatingSubrole(Class windowClass) {
+  NSString *name = NSStringFromClass(windowClass);
+  if (!name.length || [AnsweredSubroleClasses() containsObject:name]) return;
+  [AnsweredSubroleClasses() addObject:name];
+  SEL subrole = @selector(accessibilitySubrole);
+  Method method = class_getInstanceMethod(windowClass, subrole);
+  if (!method) return;
+  IMP original = method_getImplementation(method);
+  IMP floating = imp_implementationWithBlock(^NSAccessibilitySubrole(NSWindow *window) {
+    if (objc_getAssociatedObject(window, kFloatsForWindowManagersKey)) return NSAccessibilitySystemFloatingWindowSubrole;
+    return ((NSAccessibilitySubrole (*)(id, SEL))original)(window, subrole);
+  });
+  if (!class_addMethod(windowClass, subrole, floating, method_getTypeEncoding(method))) method_setImplementation(method, floating);
+}
+
 }
 
 NSView *ArdiaWindowRootView(NSWindow *window) {
@@ -142,6 +164,12 @@ NSView *ArdiaWindowRootView(NSWindow *window) {
 
 + (void (^)(NSWindow *, NSWindow *))swappedHandler {
   return gSwapped;
+}
+
++ (void)markFloatingForWindowManagers:(NSWindow *)window {
+  if (!window) return;
+  objc_setAssociatedObject(window, kFloatsForWindowManagersKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  AnswerFloatingSubrole(window.class);
 }
 
 + (void)closeWindow:(NSWindow *)window {

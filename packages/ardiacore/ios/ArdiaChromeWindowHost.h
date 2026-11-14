@@ -30,6 +30,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)moveTrafficLightsCenter:(nullable NSValue *)center trailing:(BOOL)trailing inWindow:(NSWindow *)window;
 
 + (void)closeWindow:(NSWindow *)window;
++ (void)markFloatingForWindowManagers:(NSWindow *)window;
 
 + (void)showProfile:(NSString *)profile inWindow:(NSWindow *)window;
 + (void)prepareProfiles:(NSArray<NSString *> *)profiles forWindow:(NSWindow *)window;

@@ -247,6 +247,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     var style: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
     if settings { style.insert(.resizable) }
     let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: style, backing: .buffered, defer: false)
+    window.setAccessibilitySubrole(.dialog)
     window.titlebarAppearsTransparent = true
     window.titleVisibility = .hidden
     window.title = title
@@ -289,6 +290,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
 
   private func configureSmall(_ window: NSWindow) {
     window.identifier = NSUserInterfaceItemIdentifier("ardia.window.small")
+    ArdiaChromeWindowHost.markFloating(forWindowManagers: window)
     window.minSize = NSSize(width: 420, height: 300)
     window.tabbingMode = .disallowed
     window.collectionBehavior.insert(.moveToActiveSpace)

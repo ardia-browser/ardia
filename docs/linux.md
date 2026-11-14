@@ -13,7 +13,7 @@ Walked by hand on 2026-11-14 on Ubuntu 24.04 (x86_64), in a test instance on a p
 data folder, as a user would: real X key presses, clicks and drags, a screenshot for every row. The walk started on
 commit d7a4bd789; the rows it found broken were fixed on the way and seen again after the fix (through cc0829af3),
 and those rows name the fix. Most rows were walked with no window manager; maximize, dragging, full screen, focus, menus and Peek were walked
-again under xfwm4 with its compositor. Of the 63 rows, 58 work, 4 work with a difference, none is broken, 1 is not
+again under xfwm4 with its compositor. Of the 63 rows, 59 work, 3 work with a difference, none is broken, 1 is not
 offered, and every row was walked. Works with a difference says what differs; the Mac's list is
 `docs/dia-feature-parity.md`.
 
@@ -85,7 +85,7 @@ offered, and every row was walked. Works with a difference says what differs; th
 | --- | --- | --- |
 | Offer to save a password | Works: the app's Save password prompt (Never on This Site, Not Now, Save) | |
 | Fill a saved password | Works: the form fills when the page loads | |
-| Passwords pane: Unlock | Differs: it unlocks without asking for anything, though the pane says it asks for your login password | |
+| Passwords pane: Unlock | Works: Unlock asks for the login password in a small window over Settings ("Ardia wants to show your saved passwords."), checked with PAM's `unix_chkpwd`; a wrong password says so and Cancel keeps the pane locked. The right password wasn't typed on this machine (it's the owner's), only the helper's answer to a wrong one. Showing or saving the sync recovery phrase asks the same way. Before, it unlocked without asking | 2d37b85cd |
 | Notification prompt and notifications | Works: the app's prompt; the notification shows | |
 | Location prompt | Works: the app's prompt; with no GeoClue the page gets "position unavailable". Before, allowing showed the Mac's "open System Settings" dialog | a413faa20 |
 | Camera and microphone | Works with Chromium's fake camera: the app's prompt, then the stream | |
@@ -337,6 +337,10 @@ the main method where one is needed (`aroundMain` in `tsModules.ts`), the main p
   `mimeapps.list` and the autostart entry go under `<data>/Desktop`, and no xdg tool runs.
 - **Updates** come from the GitHub releases of the repository the build was made from (`ARDIA_UPDATE_REPOSITORY` at
   build time): Ardia checks every 6 hours and offers the release page; it doesn't update itself yet.
+- **Device owner check.** Before showing saved passwords (the pane's Unlock) or the sync recovery phrase, `ownerCheck.ts`
+  asks for the login password in a small modal window and checks it with PAM's `unix_chkpwd` (setgid `shadow`; it only
+  checks the calling user's own password). One prompt at a time; a correct password counts for 60 s. Background
+  instances, `ARDIA_TEST=reauth` and systems without `unix_chkpwd` skip the prompt, logged.
 - **Secrets** (`ArdiaKeychain`, passwords, card numbers) are sealed with `safeStorage`: the desktop keyring through
   libsecret or KWallet, or, like Chrome with no keyring, the `basic_text` backend's fixed key (`v10` blobs;
   `src/secretStorage.ts` turns it on). Nothing is stored as plain base64. Each keychain secret records its backend, and
@@ -405,7 +409,7 @@ the main method where one is needed (`aroundMain` in `tsModules.ts`), the main p
   default folder is `Ardia Sync` in the first of `~/Dropbox`, `~/Nextcloud`, `~/OneDrive`, `~/Sync`, … that exists
   (the instance's `syncFolder` in a test instance). The Recovery Kit is the Windows TypeScript (PDF, text, QR code);
   its preview is the same layout as SVG; "Copy" puts the PDF on the clipboard as a file (`text/uri-list`). There's no
-  device owner check before showing the words yet (`ARDIA_TEST=reauth=denied` refuses, for tests).
+  login password check before showing the words (`ownerCheck.ts`, below; `ARDIA_TEST=reauth=denied` refuses, for tests).
   `node --test apps/browser/linux/src/services/sync/sync.test.ts` opens the Mac and Windows fixture vaults, matches
   their password seals byte for byte and checks what Linux writes with an independent WebCrypto implementation.
 - **Import.** `ArdiaImport` runs the Windows readers in main with a Node host: Chrome, Chromium, Brave, Edge, Vivaldi,

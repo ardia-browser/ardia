@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Usage: scripts/linux/xvfb <display-number> -- <command...>
-# Runs <command> with DISPLAY=:<display-number> on a private Xvfb (1600x1000x24), started if needed and stopped after.
-# Uses the system Xvfb, or the one unpacked in ~/.local/xvfb (apt-get download xvfb, dpkg-deb -x).
+# Runs <command> with DISPLAY=:<display-number> on a private Xvfb (1600x1000x24), started if needed and stopped after,
+# and on a private D-Bus session bus, so file pickers, notifications and the keyring never reach the user's desktop
+# (ARDIA_XVFB_USER_BUS=1 keeps the user's bus). Uses the system Xvfb, or the one unpacked in ~/.local/xvfb.
 set -euo pipefail
-[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { sed -n "2,4p" "$0" | cut -c3-; exit 0; }
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { sed -n "2,5p" "$0" | cut -c3-; exit 0; }
 display="${1:?display number}"; shift
 [[ "${1:-}" == "--" ]] && shift
 local_root="$HOME/.local/xvfb/root"
@@ -20,4 +21,6 @@ if [[ ! -S "/tmp/.X11-unix/X$display" ]]; then
 fi
 cleanup() { [[ -n "$started" ]] && kill "$started" 2>/dev/null || true; }
 trap cleanup EXIT
-DISPLAY=":$display" "$@"
+session_bus=()
+if [[ "${ARDIA_XVFB_USER_BUS:-}" != "1" ]] && command -v dbus-run-session >/dev/null; then session_bus=(dbus-run-session --); fi
+DISPLAY=":$display" "${session_bus[@]}" "$@"

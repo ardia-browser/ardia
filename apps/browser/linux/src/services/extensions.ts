@@ -13,6 +13,7 @@ import { database, pref, setPref } from "./database";
 import { onProfileSession } from "./guests";
 import { extensionsModulePath, webStoreModulePath } from "./vendorPreloads";
 import { engineError, isPrivateProfile, profileDirectory, sessionFor } from "./profiles";
+import { guardExtensionWorkers, withGuardedExtensionChannels } from "./extensionSenders";
 
 type Entry = { path: string; enabled: boolean; pinned: boolean; incognito: boolean; fileAccess: boolean; location: "webstore" | "unpacked" | "crx"; installed: number };
 type Manifest = Record<string, unknown> & {
@@ -269,7 +270,8 @@ const pendingAdopts = new Map<Session, ((tab: [WebContents, BrowserWindow]) => v
 
 function setUp(session: Session, profile: string) {
   if (isPrivateProfile(profile) || contexts.has(profile)) return;
-  const chrome = new ElectronChromeExtensions({
+  guardExtensionWorkers(session);
+  const chrome = withGuardedExtensionChannels(() => new ElectronChromeExtensions({
     license: "GPL-3.0",
     session,
     modulePath: extensionsModulePath(),
@@ -294,7 +296,7 @@ function setUp(session: Session, profile: string) {
     removeTab: (tab) => {
       if (!tab.isDestroyed()) tab.close();
     },
-  } as ConstructorParameters<typeof ElectronChromeExtensions>[0]);
+  } as ConstructorParameters<typeof ElectronChromeExtensions>[0]));
   contexts.set(profile, { session, chrome });
   const actions = browserActions(chrome);
   const update = actions.onUpdate.bind(actions);

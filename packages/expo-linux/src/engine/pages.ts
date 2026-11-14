@@ -23,6 +23,7 @@ type Page = {
   closed: boolean;
   history: Promise<History | null> | null;
   visible: boolean;
+  started: { url: string; at: number };
 };
 
 const BLANK = "about:blank";
@@ -30,6 +31,7 @@ const PASSWORDS_MODULE = "ArdiaLinuxPasswords";
 const RESTORES_HISTORY = "about:blank#ardia-restores-history";
 const PRIVATE_MARK = "@";
 const GUEST_ID_POLL_MS = 16;
+const SAME_LOAD_MS = 2000;
 const GUEST_ID_DEADLINE_MS = 5000;
 
 const pages = new Map<string, Page>();
@@ -155,6 +157,7 @@ function createPage(key: string, start: PageStart, holder: HTMLElement): Page {
     closed: false,
     history: null,
     visible: true,
+    started: { url: start.url ?? "", at: Date.now() },
   } as unknown as Page;
   page.attached = readyPromise(page);
   page.element = makeElement(page, start.url ?? "", null);
@@ -167,6 +170,7 @@ function rebuildIn(page: Page, holder: HTMLElement, start: PageStart) {
   const oldGuest = page.guestId;
   const history = page.history ?? (oldGuest ? pagesCall<{ entries: (HistoryEntry & { current: boolean })[] }>("page", oldGuest, "navigationEntries", { withState: true }).then(asHistory) : Promise.resolve(null));
   page.start = { ...page.start, ...start, url: page.start.url };
+  page.started = { url: start.url ?? "", at: Date.now() };
   page.history = null;
   page.guestId = 0;
   const settleWaiting = page.settle;
@@ -273,6 +277,7 @@ export async function focusPage(key: string) {
 export async function callPage<Result = unknown>(key: string, method: string, args: Record<string, unknown> = {}): Promise<Result | null> {
   const page = pages.get(key);
   if (!page || page.closed) return null;
+  if (method === "loadUrl" && args.url && args.url === page.started.url && Date.now() - page.started.at < SAME_LOAD_MS) return null;
   if (method === "loadUrl") noteLoadAsked(page.opening, args.url);
   const guestId = await page.attached;
   if (!guestId || page.closed) return null;

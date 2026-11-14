@@ -1,6 +1,6 @@
 import { app, BrowserWindow, type WebContents } from "electron";
 import { defineModule, emit } from "../bridge";
-import { appWindow } from "../windows";
+import { appWindow, host } from "../windows";
 import { emitPage } from "./pages";
 import { profileOfSession } from "./sessions";
 
@@ -28,6 +28,7 @@ export type Guest = {
   nextTransition: string;
   certificateError: string | null;
   blocked: number;
+  madeFullScreen: boolean;
 };
 
 const guests = new Map<number, Guest>();
@@ -48,6 +49,11 @@ export function tell(guest: Guest, name: string, data: unknown): void {
     return;
   }
   emit(PAGES_MODULE, "page", { guest: guest.contents.id, name, data });
+}
+
+function keepHostWindowed() {
+  const hidden = host();
+  if (hidden && !hidden.isDestroyed() && hidden.isFullScreen()) hidden.setFullScreen(false);
 }
 
 export function windowOf(guest: Guest): BrowserWindow | null {
@@ -175,6 +181,7 @@ function track(contents: WebContents) {
     nextTransition: "link",
     certificateError: null,
     blocked: 0,
+    madeFullScreen: false,
   };
   guests.set(contents.id, guest);
 
@@ -222,8 +229,22 @@ function track(contents: WebContents) {
   contents.on("found-in-page", (_event, result) => {
     tell(guest, "find", { count: result.matches, active: result.activeMatchOrdinal, final: result.finalUpdate });
   });
-  contents.on("enter-html-full-screen", () => tell(guest, "fullscreen", { fullscreen: true }));
-  contents.on("leave-html-full-screen", () => tell(guest, "fullscreen", { fullscreen: false }));
+  contents.on("enter-html-full-screen", () => {
+    keepHostWindowed();
+    const window = windowOf(guest);
+    if (window && !window.isFullScreen()) {
+      guest.madeFullScreen = true;
+      window.setFullScreen(true);
+    }
+    tell(guest, "fullscreen", { fullscreen: true });
+  });
+  contents.on("leave-html-full-screen", () => {
+    keepHostWindowed();
+    const window = windowOf(guest);
+    if (guest.madeFullScreen && window && !window.isDestroyed()) window.setFullScreen(false);
+    guest.madeFullScreen = false;
+    tell(guest, "fullscreen", { fullscreen: false });
+  });
   contents.on("audio-state-changed", (event) => tell(guest, "media", { playing: event.audible, muted: contents.isAudioMuted() }));
   contents.on("update-target-url", (_event, url) => tell(guest, "status", { text: url }));
   contents.on("render-process-gone", (_event, details) => {
@@ -241,6 +262,8 @@ function track(contents: WebContents) {
   });
   contents.once("destroyed", () => {
     guests.delete(contents.id);
+    const window = guest.madeFullScreen && guest.windowId ? appWindow(guest.windowId) : null;
+    if (window && !window.isDestroyed()) window.setFullScreen(false);
     if (guest.tabId) emitPage({ type: "closed", profile: guest.profile, tabId: guest.tabId });
   });
 }

@@ -4,10 +4,11 @@ import ExpoModulesCore
 
 public class MenusModule: Module {
   private let lifetime = ModuleLifetime()
+  private static weak var openMenu: NSMenu?
 
   public func definition() -> ModuleDefinition {
     Name("ArdiaMenus")
-    Events(ShellEvents.Channel.command.rawValue)
+    Events(ShellEvents.Channel.command.rawValue, ShellEvents.Channel.menuPick.rawValue)
 
     OnCreate {
       self.lifetime.begin(self) {
@@ -15,6 +16,7 @@ public class MenusModule: Module {
         ShellEvents.retire(self)
       }
       ShellEvents.attach(.command, to: self, while: self.lifetime)
+      ShellEvents.attach(.menuPick, to: self, while: self.lifetime)
       self.lifetime.onMain { NSApp.mainMenu = MainMenu.build() }
     }
 
@@ -38,8 +40,19 @@ public class MenusModule: Module {
       }
       let target = MenuChoice()
       let menu = MenusModule.contextMenu(items, target: target)
-      menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
-      DispatchQueue.main.async { promise.resolve(target.chosen) }
+      let location = NSEvent.mouseLocation
+      let popUp = {
+        MenusModule.openMenu = menu
+        menu.popUp(positioning: nil, at: location, in: nil)
+        if MenusModule.openMenu === menu { MenusModule.openMenu = nil }
+        DispatchQueue.main.async { promise.resolve(target.chosen) }
+      }
+      if MenuItem.anyKeepOpen(items) { RunLoop.main.perform(popUp) } else { popUp() }
+    }.runOnQueue(.main)
+
+    AsyncFunction("updateMenu") { (items: [MenuItem]) in
+      guard let menu = MenusModule.openMenu else { return }
+      MenusModule.update(menu, with: MenusModule.itemsById(items))
     }.runOnQueue(.main)
 
     AsyncFunction("menuShortcuts") { () -> [[String: Any]] in MainMenu.shortcutList() }.runOnQueue(.main)
@@ -51,9 +64,24 @@ public class MenusModule: Module {
     AsyncFunction("cancelRecording") { ShortcutRecorder.shared.finish(nil) }.runOnQueue(.main)
   }
 
+  private static func itemsById(_ items: [MenuItem]) -> [String: MenuItem] {
+    items.reduce(into: [:]) { byId, item in
+      if !item.separator { byId[item.id] = item }
+      byId.merge(itemsById(item.children ?? [])) { first, _ in first }
+    }
+  }
+
+  private static func update(_ menu: NSMenu, with items: [String: MenuItem]) {
+    for entry in menu.items {
+      if let row = entry.view as? KeepOpenMenuRow, let item = items[row.id] { row.update(item) }
+      if let submenu = entry.submenu { update(submenu, with: items) }
+    }
+  }
+
   static func contextMenu(_ items: [MenuItem], target: MenuChoice) -> NSMenu {
     let menu = NSMenu()
     menu.autoenablesItems = false
+    if items.contains(where: \.keepOpen) { menu.delegate = target }
     for item in items {
       if item.separator {
         menu.addItem(.separator())
@@ -74,6 +102,7 @@ public class MenusModule: Module {
         entry.action = #selector(MenuChoice.choose(_:))
         entry.target = target
         entry.representedObject = item.id
+        if item.keepOpen { entry.view = KeepOpenMenuRow(item) }
       }
       entry.isAlternate = item.alternate
       entry.isEnabled = item.enabled

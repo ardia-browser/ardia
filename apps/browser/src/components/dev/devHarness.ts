@@ -131,6 +131,7 @@ export function startDevHarness() {
       return require("../settings/panes/SyncSheets");
     },
     get menus(): typeof import("../../state/sidebar/menus") &
+      typeof import("../../state/sidebar/liveMenus") &
       typeof import("../../state/site/reloadMenu") &
       typeof import("../profiles/profileMenu") &
       typeof import("../../state/bookmarks/bookmarkMenus") &
@@ -141,6 +142,7 @@ export function startDevHarness() {
       return {
         useBookmarkDialog: require("../../state/bookmarks/actions").useBookmarkDialog,
         ...require("../../state/sidebar/menus"),
+        ...require("../../state/sidebar/liveMenus"),
         ...require("../../state/site/reloadMenu"),
         ...require("../profiles/profileMenu"),
         ...require("../../state/bookmarks/bookmarkMenus"),

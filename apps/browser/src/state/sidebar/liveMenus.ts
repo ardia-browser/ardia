@@ -7,8 +7,8 @@ import { calendarConnected, connectCalendar, setCalendarHidden, useCalendar } fr
 import { deleteLiveFolder, liveTabAway, manualRefresh, newLiveFolder, openLiveItem, refreshFolder, returnLiveTab, statusText } from "../live/engine";
 import { ALERT_LEADS, nowBadgeEvent } from "../live/meetings";
 import { SOURCES } from "../live/sources";
-import { repoKey } from "../live/rows";
 import { dismissNowBadge, live, markRead, markUnread, setRepoHidden, updateCalendarSettings, updateFolder } from "../live/store";
+import { folderRepos, setShowNewRepos, showAllRepos } from "../live/repoFilter";
 import type { LiveItem, LiveSourceId } from "../live/types";
 import { useBrowser } from "../browser/store";
 import { openSettings } from "../settings/settingsWindows";
@@ -58,8 +58,7 @@ export function liveFolderMenuItems(windowId: string, folderId: string): MenuIte
   const { canMoveUp, canMoveDown } = folderPlace(windowId, folderId);
   const pr = folder.kind === "pullRequests";
   const hiddenRepos = new Set(folder.hiddenRepos);
-  const listed = [...(s.items[folderId] ?? []), ...(s.hidden[folderId] ?? []), ...(s.repoHidden[folderId] ?? [])].flatMap((it) => repoKey(it) ?? []);
-  const repos = [...new Set([...listed, ...hiddenRepos])].map((key) => {
+  const repos = folderRepos(folderId).map((key) => {
     const [source, name] = key.split(/:(.*)/) as [LiveSourceId, string];
     return { key, source, name };
   });
@@ -80,8 +79,12 @@ export function liveFolderMenuItems(windowId: string, folderId: string): MenuIte
             title: "Repositories",
             enabled: repos.length > 0,
             children: sections(
-              [{ id: "repos:all", title: "Show All Repositories", enabled: hiddenRepos.size > 0 }],
-              repos.map((r) => ({ id: `repo:${r.key}`, title: oneSource ? r.name : `${r.name} (${SOURCES[r.source].name})`, checked: !hiddenRepos.has(r.key) })),
+              [
+                { id: "repos:all", title: "Show All Repositories", enabled: hiddenRepos.size > 0, keepOpen: true },
+                { id: "repos:none", title: "Hide All Repositories", enabled: repos.some((r) => !hiddenRepos.has(r.key)), keepOpen: true },
+              ],
+              repos.map((r) => ({ id: `repo:${r.key}`, title: oneSource ? r.name : `${r.name} (${SOURCES[r.source].name})`, checked: !hiddenRepos.has(r.key), keepOpen: true })),
+              [{ id: "repos:new", title: "Show New Repositories", checked: folder.showNewRepos, keepOpen: true }],
             ),
           },
         ]
@@ -117,23 +120,39 @@ export function liveFolderMenuItems(windowId: string, folderId: string): MenuIte
   );
 }
 
+function runRepoChoice(folderId: string, choice: string): boolean {
+  const folder = live().folders[folderId];
+  if (!folder) return false;
+  if (choice === "repos:all") {
+    showAllRepos(folderId);
+    return true;
+  }
+  if (choice === "repos:none") folderRepos(folderId).filter((repo) => !folder.hiddenRepos.includes(repo)).forEach((repo) => setRepoHidden(folderId, repo, true));
+  else if (choice === "repos:new") setShowNewRepos(folderId, !folder.showNewRepos);
+  else if (choice.startsWith("repo:")) {
+    const repo = choice.slice(5);
+    const show = folder.hiddenRepos.includes(repo);
+    setRepoHidden(folderId, repo, !show);
+    return show;
+  }
+  return false;
+}
+
 export async function openLiveFolderMenu(windowId: string, folderId: string) {
   const folder = live().folders[folderId];
   if (!folder) return;
-  const choice = await showMenu(liveFolderMenuItems(windowId, folderId));
+  let showedRepo = false;
+  const choice = await showMenu(liveFolderMenuItems(windowId, folderId), (picked) => {
+    showedRepo = runRepoChoice(folderId, picked) || showedRepo;
+    return liveFolderMenuItems(windowId, folderId);
+  });
+  if (choice?.startsWith("repo")) showedRepo = runRepoChoice(folderId, choice) || showedRepo;
+  if (showedRepo) void refreshFolder(folderId);
   if (!choice) return;
   const option = FOLDER_OPTIONS.find((key) => choice === `option:${key}`);
   if (choice === "refresh") void manualRefresh(folderId);
   else if (option) updateFolder(folderId, { [option]: !folder[option] });
-  else if (choice === "repos:all") {
-    updateFolder(folderId, { hiddenRepos: [] });
-    void refreshFolder(folderId);
-  } else if (choice.startsWith("repo:")) {
-    const repo = choice.slice(5);
-    const show = folder.hiddenRepos.includes(repo);
-    setRepoHidden(folderId, repo, !show);
-    if (show) void refreshFolder(folderId);
-  } else if (choice.startsWith("filter:")) {
+  else if (choice.startsWith("filter:")) {
     const key = choice.slice(7) as "authored" | "reviewRequests";
     updateFolder(folderId, { filters: { ...folder.filters, [key]: !folder.filters[key] } });
     void refreshFolder(folderId);

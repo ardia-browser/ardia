@@ -3,7 +3,7 @@ import { isBackground } from "../paths";
 import { guestOf, tell, windowOf, type Guest } from "./guests";
 import { definePageCall, savePage } from "./pageCalls";
 import { printPage } from "./printing";
-import { block, consumeActivation, forgetBlocked, mayOpen, takeBlocked } from "./popupBlocker";
+import { block, consumeActivation, forgetBlocked, mayOpen, takeBlocked, takeDrop } from "./popupBlocker";
 import { openPopupWindow, parseFeatures, popupWindowCreator } from "./popupWindows";
 
 type Disposition = "default" | "foreground-tab" | "background-tab" | "new-window" | "other";
@@ -51,11 +51,11 @@ function openBlocked(guest: Guest, id: string, always: boolean): boolean {
 }
 
 function handleOpen(contents: WebContents) {
-  contents.setWindowOpenHandler(({ url, features, disposition, postBody }) => {
+  contents.setWindowOpenHandler(({ url, features, disposition, postBody, referrer }) => {
     const guest = guestOf(contents);
     if (!guest) return { action: "deny" };
     const kind = disposition as Disposition;
-    if (!mayOpen(guest)) {
+    if (!takeDrop(contents, referrer.url) && !mayOpen(guest)) {
       block(guest, url, features, kind);
       return { action: "deny" };
     }

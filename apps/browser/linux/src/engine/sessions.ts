@@ -52,6 +52,7 @@ app.on("web-contents-created", (_event, contents) => {
     webPreferences.webSecurity = true;
     webPreferences.spellcheck = true;
     webPreferences.transparent = false;
+    webPreferences.navigateOnDragDrop = true;
   });
 });
 

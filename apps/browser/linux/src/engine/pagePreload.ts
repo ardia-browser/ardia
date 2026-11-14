@@ -86,6 +86,19 @@ try {
   ipcRenderer.send("ardia:page-script", "scriptFailed", JSON.stringify({ message: String((error as Error)?.message ?? error) }));
 }
 
+const DRAG_REPORT_MS = 250;
+let draggedReportedAt = 0;
+const reportDrag = (event: DragEvent) => {
+  const types = event.dataTransfer?.types ?? [];
+  if (!event.isTrusted || (!types.includes("text/uri-list") && !types.includes("Files"))) return;
+  const now = Date.now();
+  if (now - draggedReportedAt < DRAG_REPORT_MS) return;
+  draggedReportedAt = now;
+  ipcRenderer.send("ardia:page-drag");
+};
+addEventListener("dragenter", reportDrag, true);
+addEventListener("dragover", reportDrag, true);
+
 for (const [event, active] of [["enterpictureinpicture", true], ["leavepictureinpicture", false]] as const)
   document.addEventListener(event, () => ipcRenderer.send("ardia:page-picture-in-picture", active), true);
 

@@ -3,6 +3,9 @@ import { rememberSiteSetting, siteSetting } from "../services/sites";
 import { tell, type Guest } from "./guests";
 
 const ACTIVATION_LIFESPAN_MS = 5000;
+const DRAG_LIFESPAN_MS = 2000;
+const DROP_REFERRER = "about:client";
+export const PAGE_DRAG_CHANNEL = "ardia:page-drag";
 const KEPT_PER_PAGE = 50;
 const NOT_ACTIVATING_KEYS = new Set(["Escape", "Shift", "Control", "Alt", "Meta", "AltGraph", "CapsLock", "Fn", "OS", "Super", "Hyper"]);
 
@@ -16,6 +19,7 @@ export type BlockedOpen = {
 };
 
 const activatedAt = new Map<number, number>();
+const draggedOverAt = new Map<number, number>();
 const blocked = new Map<string, BlockedOpen>();
 let nextId = 0;
 
@@ -29,8 +33,12 @@ export function watchActivation(contents: WebContents): void {
   contents.on("input-event", (_event, input) => {
     if (activates(input)) activatedAt.set(contents.id, Date.now());
   });
+  contents.on("ipc-message", (_event, channel) => {
+    if (channel === PAGE_DRAG_CHANNEL) draggedOverAt.set(contents.id, Date.now());
+  });
   contents.once("destroyed", () => {
     activatedAt.delete(contents.id);
+    draggedOverAt.delete(contents.id);
     for (const [id, entry] of blocked) if (entry.guestId === contents.id) blocked.delete(id);
   });
 }
@@ -39,6 +47,13 @@ export function consumeActivation(contents: WebContents): boolean {
   const at = activatedAt.get(contents.id);
   if (at === undefined || Date.now() - at > ACTIVATION_LIFESPAN_MS) return false;
   activatedAt.delete(contents.id);
+  return true;
+}
+
+export function takeDrop(contents: WebContents, referrer: string): boolean {
+  const at = draggedOverAt.get(contents.id);
+  if (referrer !== DROP_REFERRER || at === undefined || Date.now() - at > DRAG_LIFESPAN_MS) return false;
+  draggedOverAt.delete(contents.id);
   return true;
 }
 

@@ -78,9 +78,17 @@ function suggest(profile: string, url: string, id: number): Promise<Reply> {
   });
 }
 
+const DEFAULT_ENGINE_NAME = "Google";
+let engineName = DEFAULT_ENGINE_NAME;
+
+export const searchEngineName = (): string => engineName;
+
 defineDomain("search", {
   engines: (_args, profile) => ({ list: { engines: extensionSearchEngines(profile) } }),
-  setEngineName: () => null,
+  setEngineName: (args) => {
+    engineName = typeof args.name === "string" && args.name.trim() ? args.name.trim() : DEFAULT_ENGINE_NAME;
+    return null;
+  },
   suggest: (args, profile) => suggest(profile, typeof args.url === "string" ? args.url : "", typeof args.id === "number" ? args.id : -1),
   stopSuggest: (args, profile) => {
     stop(profile, typeof args.id === "number" ? args.id : -1);

@@ -4,6 +4,7 @@ import "./guests";
 import "./pageScriptBridge";
 import "./pageCalls";
 import "./opening";
+import "./contextMenu";
 import "./downloads";
 import "./permissions";
 import "./hostDomains";

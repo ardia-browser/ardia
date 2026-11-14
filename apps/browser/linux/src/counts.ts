@@ -11,6 +11,7 @@ export type LinuxCount =
   | "quit_unsaved_stayed"
   | "window_close_unsaved_asked"
   | "window_close_unsaved_stayed"
+  | "page_context_menus"
   | "memory_saver_discards_proactive"
   | "memory_saver_discards_urgent"
   | "location_unavailable"

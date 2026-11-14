@@ -11,10 +11,10 @@ the Windows port (`docs/windows.md`): an app project under `apps/browser/linux`,
 
 Walked by hand on 2026-11-14 on Ubuntu 24.04 (x86_64), in a test instance on a private 1600 by 1000 Xvfb, from a fresh
 data folder, as a user would: real X key presses, clicks and drags, a screenshot for every row. The walk started on
-commit d7a4bd789; the rows it found broken were fixed on the way and seen again on eff01f92a, and those rows name the
-fix. Most rows were walked with no window manager; maximize, dragging, full screen, focus, menus and Peek were walked
-again under xfwm4 with its compositor. Of the 62 rows, 44 work, 6 work with a difference, 1 is broken, 1 does
-nothing, 1 is not offered and 9 were not walked. Works with a difference says what differs; the Mac's list is
+commit d7a4bd789; the rows it found broken were fixed on the way and seen again after the fix (through cc0829af3),
+and those rows name the fix. Most rows were walked with no window manager; maximize, dragging, full screen, focus, menus and Peek were walked
+again under xfwm4 with its compositor. Of the 62 rows, 45 work, 6 work with a difference, 1 is broken, 1 is not
+offered and 9 were not walked. Works with a difference says what differs; the Mac's list is
 `docs/dia-feature-parity.md`.
 
 **Install, first launch, updates**
@@ -102,7 +102,7 @@ nothing, 1 is not offered and 9 were not walked. Works with a difference says wh
 | Keyboard Shortcuts pane | Works, Ctrl keys | |
 | Live Folders pane | Works (renders; no service connected) | |
 | Sync | Not walked here (see Sync below) | |
-| Report a Problem: screen recording | Does nothing: Record answers false, so the form says Ardia couldn't record the window | |
+| Report a Problem: screen recording | Works: the recording pill (Recording 0:05, Stop) floats over the window; Stop, Escape or the 60 s limit end it; with Include web pages off every page area is black, thumbnail included. Before, Record said Ardia couldn't record the window | cc0829af3 |
 
 ## Design
 
@@ -213,6 +213,11 @@ its window's input router). The host's and every window's preload (`engine/hostP
   main-frame failure other than an abort counts as a commit of the failed URL, and when loading stops
   `errorPages.ts` writes a Chrome-style page (what happened, the error code, Reload) into the `chrome-error` document,
   never any other.
+- **Report recording.** `modules/reportRecording.ts` captures the app window with Chromium's desktop capture in a
+  hidden recorder window (a sandboxed `file:` page, since only secure contexts get media devices), draws each frame
+  to a canvas and records it with MediaRecorder as H.264 MP4. Unless pages are included, the page elements'
+  rectangles (`globalThis.ardiaLinuxPageRects` from the engine, polled every 200 ms, the first set before the first
+  frame) are filled black. `recordingPill.ts` is the Mac's pill with Stop; Escape also stops.
 - **Task Manager.** `taskManager.ts` answers `engine.openTaskManager` with one window listing `app.getAppMetrics()` by
   Chrome's names (Tab: <titles> for page processes), refreshed every second in a stable order, with End Process for a
   page's process. It is a sandboxed `data:` page; End Process reaches main as a token in its title.
@@ -365,6 +370,10 @@ the main method where one is needed (`aroundMain` in `tsModules.ts`), the main p
   content scripts per site, so `siteAccess` is null (the pane hides the row) and narrowing it is refused. They don't
   run in private windows either: Electron loads extensions only into sessions kept on disk, and private windows' are
   in memory, so "Allow in Incognito" is refused and hidden (`PLATFORM_FEATURES.extensionsInPrivate`).
+  `extensionSenders.ts` guards the library's IPC: `crx-msg` and its listener channels are answered only when the
+  extension id the renderer names is the sender's own (its `chrome-extension://` origin or worker scope), since the
+  library's preload lets an extension page pass any id; `crx-msg-remote` (across profiles) only for the app's own
+  document.
   Every CRX, from a file, the store's button, `installFromWebStore` or an update, is unpacked by `services/crx.ts`,
   never the library: CRX3 only, every RSA and ECDSA proof verified over the signed header data and the archive, one
   of them from the key whose hash is the id; Chrome's version format (the folder is `<id>/<version>_0`, checked to stay

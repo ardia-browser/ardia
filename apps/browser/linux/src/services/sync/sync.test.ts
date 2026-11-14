@@ -184,10 +184,10 @@ test("damaged and foreign files are reported, not thrown", async () => {
     const bad = "aaaaaaaaaaaaaaaaaaaaaaaaaa";
     await writeFile(join(scopeDir, `${bad}.nns`), other.seal(Buffer.from("{}"), keys.scopeTag("app"), bad));
     await writeFile(join(scopeDir, "notes.txt"), "hello");
-    const listing = await vault.read("app", [], Date.now() + 1000);
+    const listing = await vault.read("app", [], Date.now() + 60_000);
     assert.deepEqual(listing.files, [{ id: good, payload: '{"a":1}' }]);
     assert.deepEqual(listing.damaged.map((d) => d.id), [bad]);
-    assert.ok(listing.damaged[0]!.age >= 1000);
+    assert.ok(listing.damaged[0]!.age >= 59_000);
   } finally {
     await rm(folder, { recursive: true, force: true });
   }

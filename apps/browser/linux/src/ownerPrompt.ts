@@ -2,13 +2,13 @@ import { BrowserWindow, nativeTheme } from "electron";
 import type { OwnerPrompt, OwnerPromptUI } from "./ownerCheck";
 
 const WIDTH = 440;
-const HEIGHT = 196;
 
 const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
-type PageText = { heading: string; detail: string; form: string; script: string };
+type PageText = { height: number; heading: string; detail: string; form: string; script: string };
 
 const passwordPage = (reason: string): PageText => ({
+  height: 196,
   heading: `Ardia wants to ${escapeHtml(reason)}.`,
   detail: "Enter your login password to allow this.",
   form: `<form id="form"><input id="password" type="password" autocomplete="current-password" aria-label="Login password" autofocus>
@@ -27,6 +27,7 @@ window.refuse=(message,retryInMs)=>{field.value="";said=message;waitUntil=Date.n
 });
 
 const unavailablePage = (reason: string): PageText => ({
+  height: 150,
   heading: "Ardia can't check your login password on this system.",
   detail: `It needs your login password to ${escapeHtml(reason)}.`,
   form: `<form id="form"><div class="buttons"><button type="submit" class="primary" id="ok" autofocus>OK</button></div></form>`,
@@ -68,7 +69,7 @@ function openWindow(text: PageText): BrowserWindow {
   const parent = BrowserWindow.getFocusedWindow() ?? undefined;
   const window = new BrowserWindow({
     width: WIDTH,
-    height: HEIGHT,
+    height: text.height,
     useContentSize: true,
     parent,
     modal: !!parent,

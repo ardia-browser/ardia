@@ -3,6 +3,8 @@ import { LIGHTS_CENTER } from "../../state/windows/dockMotion";
 import { layout } from "../ui/theme";
 import { radius } from "../ui/tokens";
 import { profileSwitcher } from "../profiles/tokens";
+import type { ToolbarRow } from "../../lib/toolbarRow";
+import { SCROLL_EDGE } from "./ScrollEdge";
 
 export const LIVE_FOLDER_PAD = 2;
 export const GROUP_INDENT = SIDEBAR_GROUP.indent;
@@ -37,6 +39,12 @@ export function listTopGap(fieldOnTop: boolean): number {
 }
 
 export const sidebarHeaderWithField = () => SIDEBAR_FIELD.top + SIDEBAR_FIELD.height;
+
+export function toolbarEdgeLift(header: number, frame: number, row: ToolbarRow): number {
+  const sidebarLine = header + listTopGap(false) - SCROLL_EDGE.inset - SCROLL_EDGE.line;
+  const toolbarLine = frame + row.height - SCROLL_EDGE.line;
+  return Math.max(0, sidebarLine - toolbarLine);
+}
 
 export function sidebarHeaderOf(addressBar: boolean, lightsY: number, fieldOnTop = addressBar): number {
   if (fieldOnTop) return sidebarHeaderWithField();

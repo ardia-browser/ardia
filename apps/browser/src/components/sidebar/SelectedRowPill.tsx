@@ -71,7 +71,7 @@ export function useSelectedRowAway(windowId: string, geometry: RefObject<Sidebar
   return { away, judge: tracker.judge, relocate: tracker.relocate };
 }
 
-export function SelectedRowPill({ windowId, away }: { windowId: string; away: RowAway }) {
+export function SelectedRowPill({ windowId, away, bottomShift }: { windowId: string; away: RowAway; bottomShift?: Animated.AnimatedInterpolation<number> }) {
   const [shown, setShown] = useState<RowAway>(away);
   const [leaving, setLeaving] = useState(false);
   const progress = useRef(new Animated.Value(0)).current;
@@ -88,11 +88,14 @@ export function SelectedRowPill({ windowId, away }: { windowId: string; away: Ro
   if (!shown) return null;
   const outward = shown === "below" ? 1 : -1;
   return (
-    <View pointerEvents="box-none" style={[PLACE, shown === "below" ? AT_BOTTOM : AT_TOP]}>
+    <Animated.View
+      pointerEvents="box-none"
+      style={[PLACE, shown === "below" ? AT_BOTTOM : AT_TOP, shown === "below" && bottomShift ? { transform: [{ translateY: bottomShift }] } : null]}
+    >
       <Animated.View pointerEvents={away ? "auto" : "none"} style={leaving ? leaveStyle(progress, outward) : enterStyle(progress, outward)}>
         <PillFace windowId={windowId} direction={shown} />
       </Animated.View>
-    </View>
+    </Animated.View>
   );
 }
 

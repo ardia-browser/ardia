@@ -18,7 +18,9 @@ import { openSidebarMenu } from "../../state/sidebar/menus";
 import { PinnedGrid } from "./PinnedGrid";
 import { pinGridHeight } from "./pinZone";
 import { SCROLL_EDGE, ScrollEdgeLine, useScrollEdge, useScrollEdgeBelow } from "./ScrollEdge";
-import { listTopGap } from "./geometry";
+import { listTopGap, sidebarHeaderOf, toolbarEdgeLift } from "./geometry";
+import { useAddressBarInSidebar, usePageFrameInset, useToolbarLightsCenter } from "../../state/windows/layout";
+import { useToolbarRow } from "../toolbar/useToolbarRow";
 import { startsOffScreen } from "../../state/sidebar/geometry";
 import { toggleNewTabBar } from "../../state/omnibox/newTabBar";
 import { DOCK_SHARE, DOCKED_ROW_PAD, GLOW_ROOM, pageLayout, tilesFitDock, type SidebarGeometry } from "./pageLayout";
@@ -94,6 +96,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
     if (geometry) geometry.current.tilesFixed = dockFixed;
   }, [geometry, dockFixed]);
   const scrollEdge = useScrollEdge();
+  const edgeLift = useToolbarEdgeLift(fixedTiles.length === 0 && topGap === listTopGap(false));
   const scrollEdgeBelow = useScrollEdgeBelow();
   const scrollY = useRef(new Animated.Value(0)).current;
   const isCurrent = useRef(current);
@@ -165,7 +168,8 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
                         {dockFixed ? <PinnedGrid tabs={fixedTiles} innerWidth={innerWidth} /> : null}
                       </Animated.View>
                       <View style={{ height: fixedTiles.length ? SCROLL_EDGE.gap : topGap - SCROLL_EDGE.inset - SCROLL_EDGE.line }} />
-                      <ScrollEdgeLine opacity={scrollEdge.opacity} />
+                      <ScrollEdgeLine opacity={scrollEdge.opacity} style={edgeLift ? { marginTop: -edgeLift } : undefined} />
+                      {edgeLift ? <View style={{ height: edgeLift }} /> : null}
                     </View>
                     <Animated.View
                       onLayout={(e) => setListFrame({ top: e.nativeEvent.layout.y, height: e.nativeEvent.layout.height })}
@@ -218,12 +222,12 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
                         </Animated.View>
                       </Animated.View>
                     </Animated.View>
-                    <View pointerEvents="none" style={{ height: 0, zIndex: 1 }}>
+                    <Animated.View pointerEvents="none" style={{ height: 0, zIndex: 1, transform: [{ translateY: playerMotion.listClip }] }}>
                       <ScrollEdgeLine opacity={scrollEdgeBelow.opacity} style={{ position: "absolute", left: 0, right: 0, bottom: 0 }} />
-                    </View>
+                    </Animated.View>
                     {geometry && listFrame ? (
                       <View pointerEvents="box-none" style={{ position: "absolute", left: 0, right: 0, top: listFrame.top + GLOW_ROOM, height: Math.max(0, listFrame.height - GLOW_ROOM), zIndex: 2 }}>
-                        <SelectedRowPill windowId={windowId} away={selectedRow.away} />
+                        <SelectedRowPill windowId={windowId} away={selectedRow.away} bottomShift={playerMotion.listClip} />
                       </View>
                     ) : null}
                     {playerTab ? (
@@ -258,4 +262,12 @@ function PageContent({ tilesFixed, tilesRoom, children }: PageContentProps) {
     controller.tilesRoom = tilesRoom;
   }, [controller, tilesFixed, tilesRoom]);
   return <>{children(controller)}</>;
+}
+
+function useToolbarEdgeLift(besideToolbar: boolean): number {
+  const addressInSidebar = useAddressBarInSidebar();
+  const lightsY = useToolbarLightsCenter()[1];
+  const frame = usePageFrameInset();
+  const row = useToolbarRow();
+  return besideToolbar && !addressInSidebar ? toolbarEdgeLift(sidebarHeaderOf(false, lightsY), frame, row) : 0;
 }

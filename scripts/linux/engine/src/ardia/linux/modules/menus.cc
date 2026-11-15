@@ -344,7 +344,11 @@ void ShowMenu(base::ListValue args, ModuleReply reply) {
     return;
   }
   views::Widget* owner = OwnerWidget();
+  if (owner && !owner->IsActive()) {
+    CountLinux("popup_menus_without_focus");
+  }
   if (!owner) {
+    CountLinux("popup_menus_unshown");
     Note("menu", "pop-up menu not shown: no app window to show it over");
     std::move(reply).Run(base::Value());
     return;

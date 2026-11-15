@@ -194,3 +194,31 @@ export function installKeys() {
   addNativeListener("ArdiaMenus", "onCommand", (payload) => handleInternal(payload as CommandEvent));
   pushKeyMap();
 }
+
+type DevPress = { key: string; modifiers?: string[]; characters?: string; dry?: boolean };
+
+const DEV_CODES: Record<string, string> = {
+  "[": "BracketLeft", "]": "BracketRight", "{": "BracketLeft", "}": "BracketRight", "=": "Equal", "+": "Equal", "-": "Minus", ",": "Comma", ".": "Period",
+  "/": "Slash", ";": "Semicolon", "'": "Quote", "\\": "Backslash", "`": "Backquote", " ": "Space", "\t": "Tab", "\r": "Enter", "\u001b": "Escape", "\b": "Backspace",
+};
+
+function devInput(press: DevPress) {
+  const modifiers = press.modifiers ?? [];
+  const code = /^[a-z]$/i.test(press.key)
+    ? `Key${press.key.toUpperCase()}`
+    : /^\d$/.test(press.key)
+      ? `Digit${press.key}`
+      : (DEV_CODES[press.key] ?? (/^f\d{1,2}$/i.test(press.key) ? press.key.toUpperCase() : press.key));
+  return { type: "keyDown", key: press.characters ?? press.key, code, shift: modifiers.includes("shift"), control: modifiers.includes("control") || modifiers.includes("command"), alt: modifiers.includes("option"), meta: false };
+}
+
+export async function devKeyEquivalent(windowId: string, press: DevPress) {
+  const entry = menuStore.match(readKeyPress(devInput(press)));
+  const matched = entry ? [{ title: entry.title, action: entry.id, command: entry.command, arg: entry.arg ?? undefined, enabled: menuStore.entryEnabled(entry) }] : [];
+  if (press.dry || !entry || !menuStore.entryEnabled(entry)) return { handledBy: entry && !press.dry ? "none" : entry ? "menu" : "none", matched, fired: [] };
+  if (entry.id.startsWith("std:")) performNative(entry.id, windowId);
+  else emitNativeEvent("ArdiaMenus", "onCommand", { command: entry.command, arg: entry.arg, windowId, focusGeneration: null });
+  return { handledBy: "menu", matched, fired: [{ title: entry.title, action: entry.id, command: entry.command, arg: entry.arg ?? undefined }] };
+}
+
+export const devShortcutRecording = async () => modes.recording;

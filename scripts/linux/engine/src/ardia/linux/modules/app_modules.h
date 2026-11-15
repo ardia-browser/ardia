@@ -3,6 +3,8 @@
 #ifndef ARDIA_LINUX_MODULES_APP_MODULES_H_
 #define ARDIA_LINUX_MODULES_APP_MODULES_H_
 
+#include <string_view>
+
 #include "base/functional/callback.h"
 #include "base/values.h"
 
@@ -22,6 +24,10 @@ void RegisterSystemModule(ModuleRegistry& registry);
 void RegisterLaunchLinksModule(ModuleRegistry& registry);
 void RegisterKeychainModule(ModuleRegistry& registry);
 void RegisterNotificationsModule(ModuleRegistry& registry);
+void RegisterTelemetryLocalModule(ModuleRegistry& registry);
+void RegisterDevModule(ModuleRegistry& registry);
+
+void CountLinux(std::string_view name);
 
 void ConfirmWithUser(const base::DictValue& options,
                      base::OnceCallback<void(bool confirmed, bool suppressed)>

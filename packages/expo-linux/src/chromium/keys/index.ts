@@ -1,5 +1,5 @@
 import { menuStore } from "../../../../../apps/browser/linux/src/menus/store";
-import { addMenusListener, cancelRecording, installKeys, pushKeyMap, recentMenuLog, recordShortcut, setTextInputFocused, textInputFocused } from "./keyboard";
+import { addMenusListener, cancelRecording, devKeyEquivalent, devShortcutRecording, installKeys, pushKeyMap, recentMenuLog, recordShortcut, setTextInputFocused, textInputFocused } from "./keyboard";
 
 export { installKeys };
 
@@ -18,6 +18,7 @@ export const keysModules: Record<string, Record<string, unknown>> = {
     updateMenu: async () => {},
     addListener: addMenusListener,
   },
+  ArdiaDev: { devKeyEquivalent, devShortcutRecording },
   ArdiaFocus: {
     textInputFocused,
     setTextInputFocused: async (focused: boolean) => setTextInputFocused(!!focused),

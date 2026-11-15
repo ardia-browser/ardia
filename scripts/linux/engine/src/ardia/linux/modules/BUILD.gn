@@ -16,6 +16,8 @@ source_set("logic") {
     "launch_arguments.h",
     "launch_config.cc",
     "launch_config.h",
+    "telemetry_files.cc",
+    "telemetry_files.h",
   ]
 
   deps = [
@@ -35,6 +37,7 @@ source_set("modules") {
     "app_modules.h",
     "args.h",
     "config.cc",
+    "dev.cc",
     "dialogs.cc",
     "documents.cc",
     "focus.cc",
@@ -46,6 +49,7 @@ source_set("modules") {
     "owner_window.h",
     "shell.cc",
     "system.cc",
+    "telemetry_local.cc",
     "test_answers.cc",
     "test_answers.h",
   ]
@@ -72,6 +76,7 @@ source_set("modules") {
     "//services/network/public/cpp",
     "//skia",
     "//third_party/re2",
+    "//third_party/zlib/google:compression_utils",
     "//ui/base",
     "//ui/display",
     "//ui/events",
@@ -93,6 +98,7 @@ test("ardia_linux_modules_unittests") {
     "keychain_records_unittest.cc",
     "launch_arguments_unittest.cc",
     "launch_config_unittest.cc",
+    "telemetry_files_unittest.cc",
   ]
 
   deps = [

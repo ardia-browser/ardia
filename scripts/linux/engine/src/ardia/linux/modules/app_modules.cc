@@ -18,6 +18,8 @@ void RegisterAppModules(ModuleRegistry& registry) {
   RegisterLaunchLinksModule(registry);
   RegisterKeychainModule(registry);
   RegisterNotificationsModule(registry);
+  RegisterTelemetryLocalModule(registry);
+  RegisterDevModule(registry);
 }
 
 }

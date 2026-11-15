@@ -39,6 +39,7 @@ function withoutVisitsBetween(entry: HistoryEntry, since: number, until: number)
   const kept = times.filter((t) => t < since || t > until);
   if (kept.length === times.length) return entry;
   if (!kept.length) return null;
+  kept.sort((a, b) => a - b);
   return { ...entry, visits: entry.visits - (times.length - kept.length), lastVisit: kept[kept.length - 1]!, visitTimes: kept };
 }
 

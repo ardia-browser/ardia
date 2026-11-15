@@ -3,14 +3,13 @@
 #include <optional>
 #include <vector>
 
-#include "base/no_destructor.h"
 #include "chrome/browser/ardia/pip/ac_pip_mac.h"
 
 namespace {
 
 std::optional<gfx::Rect>& SavedBounds() {
-  static base::NoDestructor<std::optional<gfx::Rect>> bounds;
-  return *bounds;
+  static std::optional<gfx::Rect> bounds;
+  return bounds;
 }
 
 }  // namespace

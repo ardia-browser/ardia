@@ -116,7 +116,9 @@ after a window closes, the first click into a page and the drops ran again with 
 commit afc159fd7; the rows it found broken were fixed on the way and seen working again after the fix (through
 ccef10bdd), and those rows name the fix. The packaged build (`pnpm -C apps/browser/linux package:engine` over a fresh
 `06-package.sh` tarball) was walked from the extracted AppImage and the `.deb`'s extracted `/opt/Ardia`. Of the 64 rows,
-58 work, 5 work with a difference and 1 is broken; Electron's state is the table above.
+62 work, 2 work with a difference (Chrome's print preview and JavaScript dialogs) and none is broken; Electron's state is the table
+above. Pop-up windows, links no app handles, the page menus' Cast item and Report a Problem's recording were walked again
+after their fixes (through 7f747b65c).
 
 **Install, first launch, updates**
 
@@ -146,7 +148,7 @@ ccef10bdd), and those rows name the fix. The packaged build (`pnpm -C apps/brows
 | Tabs in the sidebar or across the top (Ctrl+Shift+S), hide the sidebar (Ctrl+S) | Works | |
 | Split View (Ctrl+\) | Works: the empty pane offers open tabs; both panes render and take typing | |
 | Peek | Works: the Dia preset's Shift-click and the Chrome preset's Alt-click open it with no window manager; Escape closes it and puts focus back on the link. Under xfwm4 Alt-click is the window manager's own move (its easy-click key), so the page never sees it | |
-| Pop-up windows from pages | Differs: `window.open` with a size opens as a foreground tab that keeps its opener (sign-in pop-ups still work), not Ardia's pop-up window with the origin strip and Open as Tab: the engine marks the tab `popup` but the UI has no pop-up window kind for it | |
+| Pop-up windows from pages | Works: `window.open` with a size opens Ardia's pop-up window (the system frame with the page's title, the origin strip with the connection glyph, the origin and Open as Tab), sized from the page's features and placed under the opener's window top. A sign-in pop-up keeps `window.opener`: Continue posted back to the opener and the pop-up closed itself. Ctrl+W closes only the pop-up; Open as Tab moves the same live page into the opener's window as a tab. Before, it opened as a tab | 15e8bfbd7 |
 | Pop-up blocking | Works: `window.open`, a `target=_blank` link and a form opened without a click are all blocked with the prompt (Always Deny, Only Once, Always Allow, the three addresses); with a click they open | |
 | Closing a window with unsaved work in a page | Works: its close button and Ctrl+Shift+W ask once for the window ("Leave 127.0.0.1:8737?", Close Window, Cancel); Cancel keeps it, Close Window closes it, and closing the last window quits. Before, it closed without asking | 32c92fb55 |
 | Main, Settings and Little Ardia window chrome | Works, app-drawn buttons, no system title bar | |
@@ -167,13 +169,13 @@ ccef10bdd), and those rows name the fix. The packaged build (`pnpm -C apps/brows
 | Zoom (Ctrl+=, Ctrl+0) | Works, with the zoom popover and the icon in the address bar | |
 | Print | Differs: Ctrl+P opens Chrome's print preview over the page (Save as PDF here, with no printers) instead of the system print dialog; Save asks where with the save dialog and writes the PDF | |
 | JavaScript alert, confirm and prompt | Differs: all three are Chrome's tab-modal dialogs over the page ("127.0.0.1:8737 says"), prompt included, not the app's prompt | |
-| Page, link and image menus | Differs: Chrome's menus in the Mac's order. Page: Back, Forward, Reload, Save As, Print, Cast, View Page Source, Inspect. Link: Open Link in New Tab, New Window, Split View, Incognito Window, Save Link As, Copy Link Address, Inspect (no Copy Link Text). Video: Loop, Show Controls, open, save, copy, Picture in Picture, Cast. Selection: Copy, Copy Link to Highlight, Search Google, Print. Cast is offered though Linux doesn't cast | |
+| Page, link and image menus | Works: Chrome's menus in the Mac's order. Page: Back, Forward, Reload, Save As, Print, View Page Source, Inspect. Link: Open Link in New Tab, New Window, Split View, Incognito Window, Save Link As, Copy Link Address, Inspect (no Copy Link Text, as on the Mac). Video: Loop, Show Controls, open, save, copy, Picture in Picture. Selection: Copy, Copy Link to Highlight, Search Google, Print. Before, page and video menus offered Cast, which Linux doesn't do | d8dc7070d |
 | Full screen (a page element) | Works; Escape leaves it | |
 | Picture in Picture | Works: the menu's Picture in Picture opens Dia's window (back to the tab, the origin, ±10 s, play, close); the page shows "Playing in picture-in-picture" | |
 | Downloads (download, panel, Ctrl+J) | Works: the panel opens for a new download and lists it. Before, a test instance saved into the real `~/Downloads`: its instance keys reached Chrome under the wrong switch names | 3e47809fc |
 | History (Ctrl+H), Clear Browsing Data (Ctrl+Shift+Del) | Works | |
 | Bookmarks (Ctrl+D, Ctrl+Shift+O) | Works | |
-| mailto and other app links | Differs: a `mailto:` link with no mail app opens the desktop portal's "Open With… No Apps available" window (Chrome launches `mailto` without its own prompt, through `xdg-open`); the Mac and Electron say nothing | |
+| mailto and other app links | Works: a `mailto:` link with no usable mail app, and a link to a scheme no app handles, open nothing, as on the Mac; a scheme with an installed handler still asks "Open <app>?". A handler whose desktop entry isn't for this desktop (here an XFCE-only mail helper) counts as none. Before, the desktop portal's "Open With… No Apps available" window appeared | 934577891 |
 | Network error page | Works: Chrome's "This site can't be reached" with the error code | |
 | DevTools (F12) | Works, docked inside the page's rect | |
 | Task Manager (Shift+Esc) | Works: Chrome's Task Manager with every tab's process, memory, CPU and End task | |
@@ -205,7 +207,7 @@ ccef10bdd), and those rows name the fix. The packaged build (`pnpm -C apps/brows
 | Keyboard Shortcuts pane | Works, Ctrl keys | |
 | Live Folders pane | Works (renders; no service connected) | |
 | Sync | Works: Sync folder › Choose…, then Turn On Sync writes the vault and shows Save Your Recovery Kit | |
-| Report a Problem: screen recording | Broken: Record the problem says "Ardia couldn't record this window": the engine build refuses recording for now (d3a39cdc5); reports with files and uploads work | |
+| Report a Problem: screen recording | Works: the recording pill (Recording 0:03, Stop) floats over the window and isn't recorded; Stop, Escape or the limit end it and the sheet comes back with the recording and its thumbnail; with Include web pages off every page area is black, with it on pages show (an H.264 MP4 at the window's size). Several recordings in a row start. Before, Record said Ardia couldn't record the window | 7f747b65c |
 
 ## Design
 

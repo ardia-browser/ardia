@@ -275,9 +275,10 @@ window argument is the UI's window id. It differs where Windows is about windows
   Electron's `navigationHistory.restore`.
 - Discarding is Chrome's (`tab.discard`, and Memory Saver's own timer: `chromium-memory-saver-pinned-tabs.patch`
   applies).
-- Pop-ups with features come from Chrome as a `Browser` of type popup; `Host` sends `tab.opened` with `popup: true`
-  and the features, and the UI opens its own pop-up window (the origin strip, "Open as Tab") and shows the tab there.
-  Windows shows a bare Chromium window today.
+- Pop-ups with features come from Chrome as a `Browser` of type popup; `Host` shows its tab in a `PopupWindow`
+  (`windows/popup_window.cc`), a Views window with the system frame and the Mac's origin strip (connection glyph,
+  origin, "Open as Tab"), as the Mac's native `ArdiaPopupWindow` does. Open as Tab sends `tab.opened` for the live tab
+  to the opener's window. Windows shows a bare Chromium window today.
 
 **Holes mean the reverse of Windows.** Windows cuts holes in a page window where a UI surface covers it, because the
 page is above the UI. On Linux the UI is above the page and draws there anyway; the same `holes` (from `usePageCover`,

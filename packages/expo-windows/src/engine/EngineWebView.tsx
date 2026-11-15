@@ -45,6 +45,7 @@ const ARGUMENTS: Record<string, string[]> = {
   resolvePasswordPrompt: ["answer", "edits"],
   resolveAutofillPrompt: ["id", "answer"],
   notificationAction: ["id", "action"],
+  executeExtensionAction: ["extensionId"],
 };
 const UNWRAPPED: Record<string, (reply: Record<string, unknown> | null) => unknown> = {
   evaluate: (reply) => reply?.result ?? null,
@@ -53,6 +54,10 @@ const UNWRAPPED: Record<string, (reply: Record<string, unknown> | null) => unkno
   discard: (reply) => reply?.outcome ?? "refused",
   getSecurityInfo: (reply) => (!reply || reply.info === null ? null : reply),
   clearSiteData: (reply) => reply ?? { cookies: false, storage: false },
+  executeExtensionAction: (reply) => reply?.result ?? null,
+};
+const UNANSWERED_FALLBACKS: Record<string, unknown> = {
+  executeExtensionAction: null,
 };
 const ANSWERS: Record<string, unknown> = {
   requestPictureInPicture: false,
@@ -183,7 +188,10 @@ export const EngineWebView = forwardRef<unknown, Props>(function EngineWebView(p
             if (names) {
               const unwrap = UNWRAPPED[method];
               return async (...values: unknown[]) => {
-                const reply = await callPage<Record<string, unknown>>(key, method, Object.fromEntries(names.map((name, index) => [name, values[index] ?? null])));
+                const asked = callPage<Record<string, unknown>>(key, method, Object.fromEntries(names.map((name, index) => [name, values[index] ?? null])));
+                if (!Object.hasOwn(UNANSWERED_FALLBACKS, method)) return (unwrap ?? (() => undefined))(await asked);
+                const reply = await asked.catch(() => undefined);
+                if (reply === undefined) return UNANSWERED_FALLBACKS[method];
                 return unwrap ? unwrap(reply) : undefined;
               };
             }

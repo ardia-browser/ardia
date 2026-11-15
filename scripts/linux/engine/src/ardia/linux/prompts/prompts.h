@@ -25,6 +25,12 @@ void AddPermissionVerbs(DomainVerbs& verbs);
 void InstallPasswordPrompts();
 void InstallExtensionPrompts();
 void AddExtensionInstallVerbs(DomainVerbs& verbs);
+void InstallExtensionActions();
+void AddExtensionActionVerbs(DomainVerbs& verbs);
+bool CallExtensionActionMethod(content::WebContents* contents,
+                               const std::string& method,
+                               const base::DictValue& args,
+                               ardia_win::Reply& reply);
 bool CallPasswordMethod(content::WebContents* contents,
                         const std::string& method,
                         const base::DictValue& args,

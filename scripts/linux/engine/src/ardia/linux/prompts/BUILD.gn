@@ -12,6 +12,7 @@ source_set("prompts") {
     "context_menu.cc",
     "domains.cc",
     "domains.h",
+    "extension_actions.cc",
     "extension_install.cc",
     "page_helpers.cc",
     "page_helpers.h",
@@ -37,6 +38,7 @@ source_set("prompts") {
     "//components/password_manager/core/browser",
     "//components/password_manager/core/common",
     "//components/permissions",
+    "//components/sessions",
     "//components/tabs:public",
     "//skia",
     "//content/public/browser",
@@ -49,6 +51,7 @@ source_set("prompts") {
     "//ui/base/clipboard",
     "//ui/events",
     "//ui/gfx",
+    "//ui/gfx/codec",
     "//ui/menus",
     "//url",
   ]

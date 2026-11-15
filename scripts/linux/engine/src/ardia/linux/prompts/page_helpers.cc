@@ -17,12 +17,14 @@ void RegisterPageModules(ModuleRegistry& registry) {
   InstallPermissionPrompts();
   InstallPasswordPrompts();
   InstallExtensionPrompts();
+  InstallExtensionActions();
   StartPageScript();
   DomainVerbs verbs;
   AddContentBlockerVerbs(verbs);
   AddPermissionVerbs(verbs);
   AddContextMenuVerbs(verbs);
   AddExtensionInstallVerbs(verbs);
+  AddExtensionActionVerbs(verbs);
   AddPageChannelVerbs(verbs);
   verbs.Register(registry);
 }
@@ -37,7 +39,8 @@ bool CallPromptMethod(content::WebContents* contents,
     std::move(reply).Run(std::move(done));
     return true;
   }
-  return CallPasswordMethod(contents, method, args, reply);
+  return CallExtensionActionMethod(contents, method, args, reply) ||
+         CallPasswordMethod(contents, method, args, reply);
 }
 
 }

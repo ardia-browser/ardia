@@ -11,6 +11,7 @@
 #include "ardia/linux/host/host.h"
 #include "ardia/linux/host/key_map.h"
 #include "ardia/linux/log.h"
+#include "ardia/linux/modules/app_modules.h"
 #include "ardia/linux/modules/focus_return.h"
 #include "base/base64.h"
 #include "base/functional/bind.h"
@@ -127,6 +128,7 @@ void AppWindowView::ShowContextMenuForViewImpl(
   payload.Set("id", window_->id());
   payload.Set("x", local.x());
   payload.Set("y", local.y());
+  CountLinux("windowMenusFromTopBar");
   AppWindows::Get().Emit("onSystemContextMenu", std::move(payload));
 }
 
@@ -349,6 +351,7 @@ void AppWindow::Show() {
     widget_->Show();
     widget_->Activate();
   }
+  CountLinux(behind ? "windowShowsBehindNewWindow" : "windowShows");
   if (!behind) {
     AppWindows::Get().NoteAppeared(this);
   }
@@ -416,6 +419,9 @@ void AppWindow::ToggleMaximize() {
 
 void AppWindow::SetPageFullscreen(bool on) {
   if (widget_ && !closing_ && widget_->IsFullscreen() != on) {
+    if (on) {
+      CountLinux("windowFullScreens");
+    }
     page_made_fullscreen_ = on;
     widget_->SetFullscreen(on);
   }
@@ -424,6 +430,7 @@ void AppWindow::SetPageFullscreen(bool on) {
 void AppWindow::LeavePageFullscreen() {
   if (widget_ && !closing_ && page_made_fullscreen_ &&
       widget_->IsFullscreen()) {
+    CountLinux("pageFullScreenExits");
     page_made_fullscreen_ = false;
     widget_->SetFullscreen(false);
   }

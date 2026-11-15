@@ -12,6 +12,7 @@
 #include "ardia/linux/app_lifetime.h"
 #include "ardia/linux/browser_window/browser_window.h"
 #include "ardia/linux/log.h"
+#include "ardia/linux/modules/app_modules.h"
 #include "ardia/linux/prompts/page_helpers.h"
 #include "ardia/linux/prompts/prompts.h"
 #include "ardia/linux/browser_window/web_contents_delegate.h"
@@ -421,6 +422,7 @@ base::DictValue Host::ShowTab(const base::DictValue& args,
   const std::string key = Text(args, "key");
   content::WebContents* contents = Find(key);
   if (!contents) {
+    CountLinux("pageShowsRefused");
     return Error("no such tab");
   }
   if (!args.FindBool("visible").value_or(true)) {
@@ -429,9 +431,11 @@ base::DictValue Host::ShowTab(const base::DictValue& args,
   }
   AppWindow* app = AppWindows::Get().Find(window);
   if (!app || !app->view()) {
+    CountLinux("pageShowsRefused");
     return Error("no window");
   }
   if (!PlaceTab(contents, window)) {
+    CountLinux("pageShowsRefused");
     return Error("the tab could not move to this window");
   }
   auto shown = shown_.find(key);
@@ -593,6 +597,7 @@ std::optional<base::DictValue> Host::CallTab(content::WebContents* contents,
     const GURL url(Text(args, "url"));
     if (!user_initiated && url == contents->GetLastCommittedURL() &&
         !contents->IsLoading()) {
+      CountLinux("pageReloadsSkipped");
       return Ok();
     }
     content::NavigationController::LoadURLParams params(url);
@@ -701,9 +706,11 @@ void Host::KeyboardToWindowIfUnfocused(const std::string& window) {
   }
   if (pages == 1 && only_page) {
     Note("windows", "keyboard to the shown page of " + window);
+    CountLinux("keyboardGivenToPageOnActivation");
     GiveKeyboard(only_page, window, true, false);
   } else if (app->ui_contents()) {
     Note("windows", "keyboard to the interface of " + window);
+    CountLinux("keyboardGivenToInterfaceOnActivation");
     app->ui_contents()->Focus();
   }
 }
@@ -1013,6 +1020,7 @@ bool Host::MoveTab(content::WebContents* contents,
   TabStripModel* model = target->GetTabStripModel();
   model->InsertDetachedTabAt(model->count(), std::move(moved),
                              AddTabTypes::ADD_NONE);
+  CountLinux("tabMovesBetweenWindows");
   return true;
 }
 

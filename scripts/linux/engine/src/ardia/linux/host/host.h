@@ -129,6 +129,7 @@ class Host : public TabStripModelObserver, public BrowserCollectionObserver {
                     bool follow,
                     bool background);
   void ApplyWantedKeyboard(const std::string& window);
+  void KeyboardToWindowIfUnfocused(const std::string& window);
   std::string KeyboardPage() const;
   void CloseSpareBrowsers();
   void EmitOpened(base::DictValue payload,

@@ -61,6 +61,7 @@
 #include "ui/gfx/geometry/point_f.h"
 #include "ui/gfx/geometry/rect_f.h"
 #include "ui/views/controls/webview/webview.h"
+#include "ui/views/focus/focus_manager.h"
 #include "ui/views/widget/widget.h"
 #include "url/gurl.h"
 
@@ -673,12 +674,38 @@ void Host::GiveKeyboard(content::WebContents* contents,
 }
 
 void Host::WindowActivated(const std::string& window) {
-  if (!keyboard_wanted_.contains(window)) {
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE,
+      base::BindOnce(keyboard_wanted_.contains(window)
+                         ? &Host::ApplyWantedKeyboard
+                         : &Host::KeyboardToWindowIfUnfocused,
+                     weak_factory_.GetWeakPtr(), window));
+}
+
+void Host::KeyboardToWindowIfUnfocused(const std::string& window) {
+  AppWindow* app = AppWindows::Get().Find(window);
+  if (!app || !app->KeyboardIsHere() || ardiacore::BackgroundInstance()) {
     return;
   }
-  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
-      FROM_HERE, base::BindOnce(&Host::ApplyWantedKeyboard,
-                                weak_factory_.GetWeakPtr(), window));
+  views::FocusManager* focus = app->widget()->GetFocusManager();
+  if (!focus || focus->GetFocusedView()) {
+    return;
+  }
+  content::WebContents* only_page = nullptr;
+  int pages = 0;
+  for (const auto& [key, shown] : shown_) {
+    if (shown.window == window) {
+      ++pages;
+      only_page = Find(key);
+    }
+  }
+  if (pages == 1 && only_page) {
+    Note("windows", "keyboard to the shown page of " + window);
+    GiveKeyboard(only_page, window, true, false);
+  } else if (app->ui_contents()) {
+    Note("windows", "keyboard to the interface of " + window);
+    app->ui_contents()->Focus();
+  }
 }
 
 void Host::ApplyWantedKeyboard(const std::string& window) {

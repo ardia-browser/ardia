@@ -12,8 +12,10 @@
 #include "ardia/linux/ui_host/modules.h"
 #include "base/no_destructor.h"
 #include "base/scoped_observation.h"
+#include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/timer/timer.h"
+#include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/themes/theme_service.h"
@@ -208,6 +210,68 @@ void FetchBangList(base::ListValue args, ModuleReply reply) {
       kMostBangListBytes);
 }
 
+
+constexpr char kKillSwitchesUrl[] = "https://ardia.dev/switches.json";
+constexpr size_t kMostKillSwitchesBytes = 4096;
+constexpr base::TimeDelta kKillSwitchesTimeout = base::Seconds(5);
+
+constexpr net::NetworkTrafficAnnotationTag kKillSwitchesAnnotation =
+    net::DefineNetworkTrafficAnnotation("ardia_kill_switches", R"(
+      semantics {
+        sender: "Ardia"
+        description: "Reads Ardia's kill switches, a small public JSON file."
+        trigger: "Once per launch, after the first window, when update checks are on."
+        data: "None."
+        destination: OTHER
+      }
+      policy {
+        cookies_allowed: NO
+        setting: "Turning automatic update checks off stops it."
+        policy_exception_justification: "Not implemented."
+      })");
+
+GURL KillSwitchesUrl() {
+  const std::string override_url =
+      CurrentLaunchConfig().TestValue("switchesUrl");
+  return GURL(override_url.empty() ? kKillSwitchesUrl : override_url);
+}
+
+void FetchKillSwitches(base::ListValue, ModuleReply reply) {
+  auto request = std::make_unique<network::ResourceRequest>();
+  request->url = KillSwitchesUrl();
+  request->credentials_mode = network::mojom::CredentialsMode::kOmit;
+  request->load_flags = net::LOAD_BYPASS_CACHE | net::LOAD_DISABLE_CACHE;
+  std::unique_ptr<network::SimpleURLLoader> loader =
+      network::SimpleURLLoader::Create(std::move(request),
+                                       kKillSwitchesAnnotation);
+  loader->SetAllowHttpErrorResults(true);
+  loader->SetTimeoutDuration(kKillSwitchesTimeout);
+  CountLinux("kill_switch_fetches");
+  network::SimpleURLLoader* raw = loader.get();
+  raw->DownloadToString(
+      g_browser_process->shared_url_loader_factory().get(),
+      base::BindOnce(
+          [](std::unique_ptr<network::SimpleURLLoader> loader,
+             ModuleReply reply, std::optional<std::string> body) {
+            const network::mojom::URLResponseHead* head =
+                loader->ResponseInfo();
+            base::DictValue result;
+            if (!head || !head->headers || !body) {
+              CountLinux("kill_switch_fetch_failures");
+              Note("shell",
+                   base::StrCat({"kill switches not fetched: ",
+                                 net::ErrorToString(loader->NetError())}));
+              result.Set("status", 0);
+              result.Set("body", "");
+            } else {
+              result.Set("status", head->headers->response_code());
+              result.Set("body", std::move(*body));
+            }
+            std::move(reply).Run(base::Value(std::move(result)));
+          },
+          std::move(loader), std::move(reply)),
+      kMostKillSwitchesBytes);
+}
 }
 
 void RegisterShellModule(ModuleRegistry& registry) {
@@ -239,7 +303,8 @@ void RegisterShellModule(ModuleRegistry& registry) {
                        },
                        std::move(reply)));
              }))
-      .Async("fetchBangList", base::BindRepeating(&FetchBangList));
+      .Async("fetchBangList", base::BindRepeating(&FetchBangList))
+      .Async("fetchKillSwitches", base::BindRepeating(&FetchKillSwitches));
 }
 
 }

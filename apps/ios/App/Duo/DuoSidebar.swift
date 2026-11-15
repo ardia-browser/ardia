@@ -144,7 +144,7 @@ struct DuoSpaceList: View {
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 0) {
-        if showsTiles, let tiles = space?.pinned.tiles, !tiles.isEmpty {
+        if showsTiles, let tiles = visibleTiles, !tiles.isEmpty {
           PinnedTiles(tiles: tiles, perRow: 2) { url, title in
             close()
             app.openPinned(url: url, title: title)
@@ -186,6 +186,11 @@ struct DuoSpaceList: View {
       .padding(.bottom, DuoLayout.sidebarPadding)
     }
     .scrollIndicators(.hidden)
+  }
+
+  private var visibleTiles: [PinnedTile]? {
+    let hidden = app.pinnedLinks.hidden
+    return space?.pinned.tiles.filter { !hidden.contains(PinnedTabLinks.scopedKey($0.key, space: space?.syncId)) }
   }
 
   private var tabs: [BrowserTab] {

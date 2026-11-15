@@ -217,6 +217,14 @@ sizes, copy), on Apple's controls, in the Mac's colours:
     site hides it, closing a tab keeps it open, and tapping the page hides it. The tab stack request (the deck) opens
     the sidebar instead, so the deck never shows here. Search becomes a command bar: the search panel centred over the
     dimmed page (`CommandBarPlacement` in `SearchTrayHost`), the same `SearchTray` and model.
+    In landscape the strip under the system's time and Wi-Fi holds the tab rail (`DuoTabRail`): the space's pinned
+    tiles, a divider, then the open tabs newest first, two to a row, bottom-aligned above a plus button. When the strip
+    runs short the bottom cells go first, and while the screen is recorded or mirrored the rail starts below the
+    indicator. Touch and slide to see a tab's title, icon and host in a bubble; let go to open it, or slide far away to
+    cancel. Holding a cell opens a menu beside it and lights the icon up instead of lifting it: Back to Pinned Page,
+    Copy Link, Unpin on This iPhone and Close All Tabs for a pinned tile, Copy Link, Close Tab and Close All Tabs for a
+    tab. A pinned tile switches to the tab it opened before (`PinnedTabLinks`) instead of loading again, and Unpin on
+    This iPhone hides it from the rail and the sidebar on this phone only.
   - **Half open (`split`).** The page card sits above the fold with the toolbar's buttons (no address); below the
     fold, the space switcher and `···`, the address and the tab list, with page dots.
 - **Blocking.** Ads, trackers and cookie banners: seed rules plus EasyList, EasyPrivacy and the EasyList Cookie List
@@ -240,7 +248,7 @@ starts in that space. Captures can be driven without touch:
 `-ArdiaColor <name>` (the colour picked in Settings), `-ArdiaInterfaceStyle glass|classic`,
 `-ArdiaColorScheme light|dark`, `-ArdiaSettingsPage <route>` (for example `appearance`, `siteSettings`, `searchEngine`,
 `about`), `-ArdiaOpenSheet history|bookmarks|downloads` and `-ArdiaNoSitePermissions` (demo mode otherwise seeds
-three allowed sites). `-ArdiaDeckQuery <text>` types into the closed Duo's deck search. `-ArdiaDuoCanvas open|half`
+three allowed sites). `-ArdiaDeckQuery <text>` types into the closed Duo's deck search. `-DuoRailHover <n>` (DEBUG) holds the open Duo's landscape tab rail hovered on its nth icon, its bubble shown. `-ArdiaDuoCanvas open|half`
 (DEBUG) draws the app at the open Duo's 669 by 951 pt inside a larger screen, open or half open, for an iPad
 simulator built with `TARGETED_DEVICE_FAMILY=1,2` on the `xcodebuild` command line (never in the project). The Duo
 simulator itself folds without a person: the `agent-device` `fold closed|half-open|open` command, then

@@ -8,14 +8,16 @@ import SwiftUI
     public var iconURL: String?
     public var pageURL: String?
     public var size: CGFloat
+    public var monogramTint: Color?
 
     @Environment(\.colorScheme) private var colorScheme
     @State private var loaded: FaviconCache.Entry?
 
-    public init(iconURL: String?, pageURL: String?, size: CGFloat = 16) {
+    public init(iconURL: String?, pageURL: String?, size: CGFloat = 16, monogramTint: Color? = nil) {
       self.iconURL = iconURL
       self.pageURL = pageURL
       self.size = size
+      self.monogramTint = monogramTint
     }
 
     public var body: some View {
@@ -30,7 +32,7 @@ import SwiftUI
             icon(loaded.image)
           }
         } else {
-          MonogramTile(pageURL: pageURL)
+          MonogramTile(pageURL: pageURL, tint: monogramTint)
         }
       }
       .frame(width: size, height: size)
@@ -122,19 +124,20 @@ import SwiftUI
 
   struct MonogramTile: View {
     var pageURL: String?
+    var tint: Color?
 
     var body: some View {
       GeometryReader { proxy in
         ZStack {
-          Rectangle().fill(tint.gradient)
+          Rectangle().fill(fill.gradient)
           if let letter {
             Text(letter)
               .font(.system(size: proxy.size.width * 0.56, weight: .semibold, design: .rounded))
-              .foregroundStyle(.white)
+              .foregroundStyle(ink)
           } else {
             Image(systemName: "globe")
               .font(.system(size: proxy.size.width * 0.6, weight: .medium))
-              .foregroundStyle(.white)
+              .foregroundStyle(ink)
           }
         }
       }
@@ -149,7 +152,18 @@ import SwiftUI
       return String(first).uppercased()
     }
 
-    private var tint: Color {
+    private var fill: Color { tint ?? hostTint }
+
+    private var ink: Color {
+      guard let tint else { return .white }
+      var red: CGFloat = 0
+      var green: CGFloat = 0
+      var blue: CGFloat = 0
+      guard UIColor(tint).getRed(&red, green: &green, blue: &blue, alpha: nil) else { return .white }
+      return 0.2126 * red + 0.7152 * green + 0.0722 * blue > 0.6 ? .black : .white
+    }
+
+    private var hostTint: Color {
       guard let host else { return Color(hex: 0x8E8E93) }
       let palette: [UInt32] = [0x5E6AD2, 0x2F9E8F, 0xD9663F, 0x8A5CC7, 0x3A8DDE, 0xC2477A, 0x5F9E3A, 0xB8862B]
       let hash = host.unicodeScalars.reduce(UInt32(5381)) { ($0 &* 33) &+ $1.value }

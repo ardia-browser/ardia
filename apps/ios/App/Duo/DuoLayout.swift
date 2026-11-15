@@ -50,5 +50,37 @@ nonisolated enum DuoLayout {
   static let columnButton: CGFloat = 48
   static let columnFieldSide: CGFloat = 12
 
+  static let railMinimumInset: CGFloat = 44
+  static let railTop: CGFloat = 112
+  static let railCaptureIndicator: CGFloat = 52
+  static let railColumns = 2
+  static let railMaxCell: CGFloat = 46
+  static let railSideMargin: CGFloat = 3
+  static let railPadding: CGFloat = 4
+  static let railRadius: CGFloat = 24
+  static let railIcon: CGFloat = 22
+  static let railDiscInset: CGFloat = 2
+  static let railDividerHeight: CGFloat = 13
+  static let railDividerInset: CGFloat = 12
+  static let railControlsGap: CGFloat = 14
+  static let railCancelDistance: CGFloat = 70
+  static let railHoldDuration = Duration.milliseconds(450)
+  static let railHoldSlop: CGFloat = 10
+  static let railMenuWidth: CGFloat = 270
+  static let railMenuRow: CGFloat = 44
+  static let railMenuSectionGap: CGFloat = 8
+  static let railMenuRadius: CGFloat = 22
+  static let railMenuFill: Double = 0.3
+  static let railMenuScale: CGFloat = 1.08
+  static let railSelectedFill: Double = 0.2
+  static let railHoverFill: Double = 0.12
+  static let railBubbleGap: CGFloat = 8
+  static let railBubbleHeight: CGFloat = 54
+  static let railBubbleIcon: CGFloat = 26
+  static let railBubbleLead: CGFloat = 14
+  static let railBubbleTrail: CGFloat = 20
+  static let railBubbleSpacing: CGFloat = 12
+  static let railBubbleMaxWidth: CGFloat = 320
+
   static let slide = Motion.smooth
 }

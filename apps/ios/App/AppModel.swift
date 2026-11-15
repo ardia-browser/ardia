@@ -40,6 +40,7 @@ final class AppModel {
   let settings = AppSettings.launch()
   let deck: TabDeckModel
   let defaultBrowser: DefaultBrowserStatus
+  let pinnedLinks: PinnedTabLinks
 
   var surface: Surface = .search
   var sheet: Sheet?
@@ -69,6 +70,7 @@ final class AppModel {
     web = WebEngine(tabs: tabs, blocker: blocker, preferences: preferences)
     deck = TabDeckModel(defaults: defaults)
     defaultBrowser = DefaultBrowserStatus(defaults: defaults, asksSystem: !isDemo)
+    pinnedLinks = PinnedTabLinks(defaults: defaults)
     sync = isDemo ? .demo : SyncService()
     omnibox = Omnibox()
     connectServices()

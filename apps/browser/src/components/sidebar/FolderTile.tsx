@@ -12,6 +12,7 @@ import { TabIcon } from "./TabIcon";
 import { FolderDropRing, RestingTile, TileFace, useSlotPosition } from "./TileFace";
 import { closedByPress, openTileFolderMenu, toggleFolderPanel, useFolderPanel } from "../../state/sidebar/tileFolderUi";
 import { entryKey } from "../../state/sidebar/entryKey";
+import { TILE_STATUS } from "./tokens";
 
 const MOSAICS = {
   tile: { cell: 9, gap: space.xxs, pad: space.xs },
@@ -33,7 +34,11 @@ export const FolderTile = memo(function FolderTile({ folderId, width, sliding, x
   const position = useSlotPosition(x, y, width, sliding, dragging);
   const pressedAt = useRef<number | undefined>(undefined);
   if (!members.length) return null;
-  const glyph = <Symbol name="folder.fill" size={7} color={theme.textSecondary} style={{ position: "absolute", bottom: 3, right: 4, width: 10, height: 9 }} />;
+  const glyph = (
+    <View pointerEvents="none" style={{ position: "absolute", bottom: TILE_STATUS.inset.y, right: TILE_STATUS.inset.x }}>
+      <Symbol name="folder" size={TILE_STATUS.speaker} color={theme.textSecondary} style={TILE_STATUS.box} />
+    </View>
+  );
 
   return (
     <Animated.View ref={wrapper.ref} style={[{ position: "absolute", ...position.getLayout() }, wrapper.style]} {...handle}>

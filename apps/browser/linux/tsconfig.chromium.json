@@ -2,7 +2,7 @@
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "types": ["vite/client"],
+    "types": ["vite/client", "node"],
     "moduleSuffixes": [".chromium", ""],
     "paths": {
       "react-native": ["../../../node_modules/react-native-macos"],

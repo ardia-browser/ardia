@@ -263,7 +263,10 @@ test("every settings row with a fixed title is searchable", () => {
 test("a row its pane doesn't draw is left out of search, by the same rule the pane hides it with", async () => {
   const { unshownSettings } = await import("./settingsIndex.ts");
   const { DEFAULT_SETTINGS } = await import("../../state/settings/settings.ts");
-  const unshown = (settings, env) => new Set(unshownSettings({ ...DEFAULT_SETTINGS, ...settings }, env).split("\n").filter(Boolean));
+  const ENGINE_BUILD_ONLY = ["advanced.playProtectedContent"];
+  const unshownBy = (settings, env) => unshownSettings({ ...DEFAULT_SETTINGS, ...settings }, env).split("\n").filter(Boolean);
+  for (const id of ENGINE_BUILD_ONLY) assert.ok(unshownBy({}, { top: false }).includes(id), `${id} is searchable only on the Linux engine build`);
+  const unshown = (settings, env) => new Set(unshownBy(settings, env).filter((id) => !ENGINE_BUILD_ONLY.includes(id)));
   const across = unshown({}, { top: true });
   assert.ok(!across.has("tabs.showSidebarButton"), "the Hide Tabs button shows in both layouts");
   for (const id of ["tabs.showClearButton", "tabs.balancedTopApps", "tabs.newTabButtonPosition"]) assert.ok(across.has(id), id);

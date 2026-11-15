@@ -11,6 +11,7 @@
 #include "ardia/core/ac_launch_switches.h"
 #include "ardia/linux/app_lifetime.h"
 #include "ardia/linux/browser_window/browser_window.h"
+#include "ardia/linux/log.h"
 #include "ardia/linux/browser_window/web_contents_delegate.h"
 #include "ardia/linux/host/input_region.h"
 #include "ardia/linux/windows/app_window.h"
@@ -117,6 +118,13 @@ void Host::Call(const std::string& verb,
                 base::DictValue args,
                 const std::string& window,
                 ardia_win::Reply reply) {
+  if (ardiacore::Traced("host") && verb != "tab.show") {
+    Note("host", verb + " key=" + Text(args, "key") + " window=" + window +
+                     (args.contains("url") ? " url" : "") +
+                     (args.contains("adopt") ? " adopt" : "") +
+                     (args.contains("method") ? " " + Text(args, "method")
+                                              : ""));
+  }
   if (verb == "tab.create") {
     CreateTab(std::move(args), window, std::move(reply));
     return;
@@ -575,8 +583,12 @@ std::optional<base::DictValue> Host::CallTab(content::WebContents* contents,
   if (method == "loadUrl") {
     const bool user_initiated =
         args.FindBool("userInitiated").value_or(false);
-    content::NavigationController::LoadURLParams params(
-        GURL(Text(args, "url")));
+    const GURL url(Text(args, "url"));
+    if (!user_initiated && url == contents->GetLastCommittedURL() &&
+        !contents->IsLoading()) {
+      return Ok();
+    }
+    content::NavigationController::LoadURLParams params(url);
     params.transition_type =
         user_initiated
             ? ui::PageTransitionFromInt(ui::PAGE_TRANSITION_TYPED |

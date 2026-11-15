@@ -1,0 +1,26 @@
+assert(is_linux)
+
+source_set("renderer") {
+  sources = [
+    "app_bridge_frame.cc",
+    "app_bridge_frame.h",
+    "content_renderer_client.cc",
+    "content_renderer_client.h",
+  ]
+
+  public_deps = [ "//ardia/core:renderer" ]
+
+  deps = [
+    "//ardia/linux/ui_host/mojom",
+    "//base",
+    "//chrome/renderer",
+    "//content/public/common",
+    "//content/public/renderer",
+    "//gin",
+    "//mojo/public/cpp/bindings",
+    "//third_party/blink/public:blink",
+    "//third_party/blink/public/common",
+    "//url",
+    "//v8",
+  ]
+}

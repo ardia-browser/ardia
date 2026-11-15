@@ -1,0 +1,17 @@
+module ardia_linux.mojom;
+
+interface AppBridgeClient {
+  Event(string module, string event, string json);
+};
+
+interface AppBridge {
+  [Sync]
+  Modules() => (string json);
+
+  [Sync]
+  CallSync(string module, string method, string args) => (string reply);
+
+  Call(string module, string method, string args) => (string reply);
+
+  SetClient(pending_associated_remote<AppBridgeClient> client);
+};

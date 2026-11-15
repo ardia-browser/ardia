@@ -11,7 +11,8 @@ import { TabBadges } from "../media/TabBadges";
 import { TabIcon } from "../sidebar/TabIcon";
 import { Button, FadeLabel, Symbol, useTooltip } from "../ui";
 import { HoverSlot } from "../ui/HoverSlot";
-import { surfaceTheme, ThemeContext, useTheme } from "../ui/theme";
+import { surfaceTheme, useTheme } from "../ui/theme";
+import { ThemeOverride } from "../ui/ThemeOverride";
 import { toolbarPalette, useEasedColor } from "../ui/toolbarColors";
 import { font, iconButton } from "../ui/tokens";
 import { DockContext, FloatingStrip } from "./context";
@@ -182,7 +183,7 @@ export const TabChip = memo(function TabChip({ tabId, width, drawn, tuck, dragge
   const onBand = active && !floating && !!palette.background;
   const ink = onBand ? palette.text : active ? theme.tabSelectedText : theme.textTab;
   return (
-    <ThemeContext.Provider value={theme}>
+    <ThemeOverride theme={theme}>
       <Animated.View {...chipHover.hoverProps} style={{ width: drawn ?? width, height: TOP_STRIP_HEIGHT }}>
         {active && <SelectedTab width={drawn ?? width} band={band} opaque={dragged} />}
         {dragged && !active && (
@@ -226,7 +227,7 @@ export const TabChip = memo(function TabChip({ tabId, width, drawn, tuck, dragge
           )}
         </TabPressArea>
       </Animated.View>
-    </ThemeContext.Provider>
+    </ThemeOverride>
   );
 });
 

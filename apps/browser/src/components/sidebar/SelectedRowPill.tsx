@@ -71,6 +71,7 @@ export function useSelectedRowAway(windowId: string, geometry: RefObject<Sidebar
       },
       stop: () => {
         cancelAnimationFrame(frame);
+        frame = 0;
         clearTimeout(quiet);
       },
     };

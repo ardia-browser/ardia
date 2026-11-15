@@ -268,8 +268,36 @@ The `chrome` binary, built with `symbol_level=1`, is 1.74 GB with its debug info
 file from a staged copy run through the tree's own `llvm-strip --strip-debug`: the symbol table stays, so a stack still
 names its functions, and the out dir keeps the full binary for debugging.
 
-`chrome_sandbox` (the setuid fallback sandbox) is in the archive config but isn't built with `chrome`; the app's own
-package (`.deb`, AppImage) is the next step and carries the sandbox story ([Running it](#running-it)).
+The engine tarball (2026-11-15, `chrome` with the layer): `ardia-chromium-linux-x64.tar.xz`, 140 MB, 480 files (641 MB
+unpacked; 1,338 MB of debug info left out), in 2.5 min. Beside the archive config's files it carries `ardia.build.json`
+and `libqt5_shim.so`/`libqt6_shim.so` (Chrome loads them to follow a Qt desktop's theme; Chrome's own `.deb` ships them).
+What `runtime_deps` lists and it leaves out is what Windows leaves out: DevTools' unbundled front end (8,475 files),
+`pyproto`, ANGLE's test data, the Vulkan mock driver and validation layer, `snapshot_blob.bin` (the context snapshot
+stands in) and the Isolated Web App key data. `05-build.sh` builds `chrome_sandbox` with `chrome`.
+
+**The app's package** is `scripts/linux/package-engine.mjs` (`pnpm -C apps/browser/linux package:engine`): `/opt/Ardia`
+from that tarball and the engine UI bundle (`build:ui:chromium`), with `chrome` as `ardia.bin`, `chrome_sandbox` as
+`chrome-sandbox`, `ui/` without source maps, `Extensions/` as the Mac bundles it, `ardia.build.json`, the AppArmor
+profile and the `ardia` launcher (`packaging/sandbox.sh`, `CHROME_DESKTOP=ardia.desktop`, `packaging/launcher.sh`). The
+`.deb` (`dpkg-deb --root-owner-group`) has `chrome-sandbox` setuid root and runs `packaging/after-install.sh` as its
+`postinst`; the AppImage is built as electron-builder builds one (its checksummed runtime and `mksquashfs`) and has no
+setuid helper. An engine carrying the test-build marker is refused. 2026-11-15: `.deb` 151 MB, AppImage 164 MB, 45 s.
+
+**uBlock Origin** goes in by default. `scripts/linux/ubo.sh` runs the Mac's `packages/ardiacore/scripts/ubo.sh` with its
+three macOS-only lines swapped (`lockf` for `flock`, `shasum` for `sha256sum`, its vendor path made absolute), so the
+pinned release (1.76.0), its SHA-256, the key (the extension id stays `fajbdaomknpkicfjcpipdmcpoamdmilh`) and Ardia's
+edits are the Mac's own, read at run time. `package-engine.mjs` lays it out as `embed.sh` does: `Extensions/ublock`,
+`Extensions/ublock.fingerprint` (the same SHA-256 over the sorted file hashes, `_metadata` left out) and
+`Extensions/ublock-lite-settings`.
+
+Proven on 2026-11-15 in the packaged engine (a test instance on Xvfb, the bundled `Extensions/ublock` given with
+`--load-extension`): `chrome://extensions-internals` lists uBlock Origin 1.76.0 under that id, and on a local test page
+uBO blocked `ad.doubleclick.net`'s image (`net::ERR_BLOCKED_BY_CLIENT`) and swapped `adsbygoogle.js` for its own
+stand-in (`web_accessible_resources/googlesyndication_adsbygoogle.js`; nothing reached Google), while the page's own
+script ran. One thing for the Linux content blocker: loaded from the command line (or any unpacked load), Chrome 157
+disables it (`DISABLE_UNSUPPORTED_DEVELOPER_EXTENSION`) unless developer mode is on; the proof turned developer mode on
+in its scratch profile. The Mac loads it as a component extension (`ComponentLoader`), which this doesn't apply to; the
+Linux loader should do the same.
 
 ## Running it
 

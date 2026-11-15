@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-const HELP = `Usage: node scripts/linux/package-engine.mjs [--engine <tar.xz>] [--ui <dir>] [--ublock <dir>] [--arch x64|arm64]
-         [--target deb|AppImage|dir|all] [--out <dir>]
+const HELP = `Usage: node scripts/linux/package-engine.mjs [--engine <tar.xz>] [--ui <dir>] [--ublock <dir> | --no-ublock]
+         [--arch x64|arm64] [--target deb|AppImage|dir|all] [--out <dir>]
 Packages Ardia on its own engine: the engine tarball scripts/linux/engine/06-package.sh makes (default
 ~/ardia-linux/out/ardia-chromium-linux-<arch>.tar.xz) and the engine UI bundle (default apps/browser/linux/ui-chromium,
 from pnpm -C apps/browser/linux build:ui:chromium) as /opt/Ardia: chrome as ardia.bin, chrome_sandbox as chrome-sandbox,
-ui/ without source maps, Extensions/ublock when --ublock names an unpacked uBlock Origin, ardia.build.json (version and
+ui/ without source maps, Extensions/ as the Mac bundles it (ublock: the pinned uBlock Origin scripts/linux/ubo.sh fetches,
+or --ublock's; ublock.fingerprint; ublock-lite-settings), ardia.build.json (version and
 build from apps/browser/linux/scripts/version.mjs), resources/apparmor-profile, and the ardia launcher (packaging/sandbox.sh,
 CHROME_DESKTOP=ardia.desktop, packaging/launcher.sh). Then a .deb (dpkg-deb, chrome-sandbox setuid root, the AppArmor
 profile installed by its postinst) and an AppImage (electron-builder's checksummed AppImage runtime and mksquashfs; no
@@ -12,6 +13,7 @@ setuid helper, so it is sandboxed where user namespaces work) in <out> (default 
 Refuses an engine that carries the test-build marker (ardia.test-build).`;
 
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync, writeSync, closeSync } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir, tmpdir } from "node:os";
@@ -36,11 +38,17 @@ const debArch = { x64: "amd64", arm64: "arm64" }[arch];
 if (!debArch) fail(`--arch must be x64 or arm64, not ${arch}`);
 const engine = option("--engine", join(homedir(), "ardia-linux/out", `ardia-chromium-linux-${arch}.tar.xz`));
 const ui = option("--ui", join(linuxApp, "ui-chromium"));
-const ublock = option("--ublock", "");
+const withUblock = !args.includes("--no-ublock");
+const ublock = withUblock ? option("--ublock", join(repo, "packages/ardiacore/vendor/ubo/ext")) : "";
 const out = option("--out", join(linuxApp, "dist/engine"));
 const targetOption = option("--target", "all");
 const targets = targetOption === "all" ? ["deb", "AppImage"] : [targetOption];
 for (const target of targets) if (!["deb", "AppImage", "dir"].includes(target)) fail(`unknown --target ${target}`);
+
+function ublockFingerprint(folder) {
+  const listing = execFileSync("bash", ["-c", "find . -type f ! -path './_metadata/*' -print0 | LC_ALL=C sort -z | xargs -0 sha256sum"], { cwd: folder });
+  return createHash("sha256").update(listing).digest("hex");
+}
 
 function fail(message) {
   console.error(`package-engine: ${message}`);
@@ -49,7 +57,8 @@ function fail(message) {
 
 if (!existsSync(engine)) fail(`no engine at ${engine}: run scripts/linux/engine/06-package.sh --apply (or pass --engine)`);
 if (!existsSync(join(ui, "index.html"))) fail(`no UI bundle at ${ui}: run pnpm -C apps/browser/linux build:ui:chromium (or pass --ui)`);
-if (ublock && !existsSync(join(ublock, "manifest.json"))) fail(`--ublock ${ublock} has no manifest.json`);
+if (withUblock && !args.includes("--ublock")) execFileSync(join(repo, "scripts/linux/ubo.sh"), { stdio: ["ignore", "ignore", "inherit"] });
+if (ublock && !existsSync(join(ublock, "manifest.json"))) fail(`${ublock} has no manifest.json`);
 
 const packaging = join(linuxApp, "packaging");
 const iconSet = join(repo, "apps/browser/macos/Ardia-macOS/Assets.xcassets/AppIcon.appiconset");
@@ -98,7 +107,12 @@ renameSync(join(app, "chrome"), join(app, "ardia.bin"));
 const hasSandbox = existsSync(join(app, "chrome_sandbox"));
 if (hasSandbox) renameSync(join(app, "chrome_sandbox"), join(app, "chrome-sandbox"));
 cpSync(ui, join(app, "ui"), { recursive: true, filter: (path) => !path.endsWith(".map") });
-if (ublock) cpSync(ublock, join(app, "Extensions/ublock"), { recursive: true });
+if (ublock) {
+  const extensions = join(app, "Extensions");
+  cpSync(ublock, join(extensions, "ublock"), { recursive: true });
+  writeFileSync(join(extensions, "ublock.fingerprint"), `${ublockFingerprint(join(extensions, "ublock"))}\n`);
+  cpSync(join(repo, "packages/ardiacore/extensions/ublock-lite-settings"), join(extensions, "ublock-lite-settings"), { recursive: true });
+}
 writeFileSync(join(app, "ardia.build.json"), `${JSON.stringify({ version: appVersion, build: String(appBuild) })}\n`);
 mkdirSync(join(app, "resources"), { recursive: true });
 copyFileSync(join(packaging, "apparmor-profile"), join(app, "resources/apparmor-profile"));
@@ -203,5 +217,5 @@ for (const file of built) {
   const size = statSync(file).isDirectory() ? "" : ` (${(statSync(file).size / 1e6).toFixed(0)} MB)`;
   console.log(`${file}${size}`);
 }
-if (!ublock) console.log("note: no --ublock: Extensions/ublock isn't in the package");
+if (!ublock) console.log("note: --no-ublock: Extensions/ublock isn't in the package");
 if (!hasSandbox) console.log("note: the engine has no chrome_sandbox: the .deb has no setuid helper (build chrome_sandbox, then 06-package.sh)");

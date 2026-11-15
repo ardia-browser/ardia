@@ -24,7 +24,7 @@ test("a new download opens the Downloads panel, and a click on the page still go
   const w = oneWindow();
   S().upsertDownload(download("one"));
   assert.equal(isOpen(w), true);
-  dismissDownloadsByPress(w);
+  dismissDownloadsByPress(w, { nativeEvent: { timestamp: 1000 } });
   assert.equal(isOpen(w), false, "the press on the next link closes the panel and reaches the page");
   S().upsertDownload(download("two"));
   assert.equal(isOpen(w), true, "the second download opens it again");

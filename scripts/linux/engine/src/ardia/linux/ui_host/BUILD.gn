@@ -34,6 +34,7 @@ source_set("ui_host") {
     "//base",
     "//chrome/browser",
     "//chrome/browser/profiles:profile",
+    "//chrome/common",
     "//components/component_updater",
     "//components/prefs",
     "//components/update_client",

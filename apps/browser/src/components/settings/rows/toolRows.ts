@@ -1,6 +1,7 @@
 import { type SettingSection } from "./types";
 import type { SettingsPane } from "../../../state/settings/settingsWindows";
 import { keyText } from "../../../state/commands/keyText";
+import { protectedContentToggleShown } from "../../../state/settings/protectedContent";
 
 export const toolRows = {
   shortcuts: [
@@ -214,7 +215,14 @@ export const toolRows = {
       section: "Web engine",
       rows: {
         chromium: { advanced: true, title: "Chromium", keywords: ["engine", "version", "ardiacore"] },
-        widevine: { advanced: true, title: "Widevine (protected video)", keywords: ["drm", "netflix", "disney"] },
+        playProtectedContent: {
+          advanced: true,
+          title: "Play DRM-protected content",
+          description: "Lets Netflix, Spotify and other sites play protected video and music. Ardia downloads Google's Widevine module when you turn this on; DRM plays after a restart.",
+          shown: () => protectedContentToggleShown,
+          keywords: ["drm", "widevine", "netflix", "spotify", "disney", "prime video", "protected", "streaming", "eme"],
+        },
+        widevine: { advanced: true, title: "Widevine (protected video)", shown: () => !protectedContentToggleShown, keywords: ["drm", "netflix", "disney"] },
       },
     },
     {

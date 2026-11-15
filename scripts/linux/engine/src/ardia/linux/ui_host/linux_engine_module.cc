@@ -7,11 +7,16 @@
 #include "ardia/linux/modules/app_modules.h"
 #include "ardia/linux/ui_host/modules.h"
 #include "ardia/linux/windows/app_window.h"
+#include "base/files/file_util.h"
 #include "base/functional/bind.h"
+#include "base/path_service.h"
+#include "base/task/thread_pool.h"
 #include "base/strings/strcat.h"
+#include "base/memory/weak_ptr.h"
 #include "base/version.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/component_updater/widevine_cdm_component_installer.h"
+#include "chrome/common/chrome_paths.h"
 #include "components/component_updater/component_updater_service.h"
 #include "components/prefs/pref_service.h"
 #include "components/update_client/crx_update_item.h"
@@ -52,17 +57,27 @@ base::Version InstalledWidevine() {
   return base::Version();
 }
 
+bool CdmHinted() {
+  base::FilePath hint;
+  return base::PathService::Get(chrome::FILE_COMPONENT_WIDEVINE_CDM_HINT,
+                                &hint) &&
+         base::PathExists(hint);
+}
+
 class ProtectedContent : public component_updater::ServiceObserver {
  public:
-  ProtectedContent()
-      : on_at_launch_(ProtectedContentOn()),
-        installed_at_launch_(InstalledWidevine().IsValid()) {
-    component_ = installed_at_launch_ ? ProtectedContentComponent::kInstalled
-                                      : ProtectedContentComponent::kAbsent;
+  ProtectedContent() : on_at_launch_(ProtectedContentOn()) {
     CountLinux(on_at_launch_ ? "linux_protected_content_on_at_launch"
                              : "linux_protected_content_off_at_launch");
     if (component_updater::ComponentUpdateService* components = Components()) {
       components->AddObserver(this);
+    }
+    if (on_at_launch_) {
+      base::ThreadPool::PostTaskAndReplyWithResult(
+          FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_VISIBLE},
+          base::BindOnce(&CdmHinted),
+          base::BindOnce(&ProtectedContent::NoteLoadedAtLaunch,
+                         weak_factory_.GetWeakPtr()));
     }
   }
 
@@ -75,15 +90,18 @@ class ProtectedContent : public component_updater::ServiceObserver {
   base::DictValue State() const {
     const bool on = ProtectedContentOn();
     const base::Version version = InstalledWidevine();
+    const ProtectedContentComponent component =
+        component_ == ProtectedContentComponent::kAbsent && version.IsValid()
+            ? ProtectedContentComponent::kInstalled
+            : component_;
     base::DictValue state;
     state.Set("enabled", on);
-    state.Set("component", ProtectedContentComponentName(component_));
+    state.Set("component", ProtectedContentComponentName(component));
     state.Set("version", version.IsValid() ? base::Value(version.GetString())
                                            : base::Value());
-    state.Set("playsNow", on && on_at_launch_ && installed_at_launch_);
+    state.Set("playsNow", on && loaded_at_launch_);
     state.Set("restartNeeded",
-              on ? !(on_at_launch_ && installed_at_launch_) && version.IsValid()
-                 : on_at_launch_ && installed_at_launch_);
+              on ? !loaded_at_launch_ && version.IsValid() : loaded_at_launch_);
     return state;
   }
 
@@ -150,6 +168,14 @@ class ProtectedContent : public component_updater::ServiceObserver {
   }
 
  private:
+  void NoteLoadedAtLaunch(bool hinted) {
+    loaded_at_launch_ = hinted;
+    if (hinted) {
+      CountLinux("linux_protected_content_loaded_at_launch");
+    }
+    Changed();
+  }
+
   void Changed() {
     if (ModuleRegistry::Exists()) {
       ModuleRegistry::Get().Emit(kLinuxEngineModule, kProtectedContentEvent,
@@ -158,8 +184,9 @@ class ProtectedContent : public component_updater::ServiceObserver {
   }
 
   const bool on_at_launch_;
-  const bool installed_at_launch_;
-  ProtectedContentComponent component_;
+  bool loaded_at_launch_ = false;
+  ProtectedContentComponent component_ = ProtectedContentComponent::kAbsent;
+  base::WeakPtrFactory<ProtectedContent> weak_factory_{this};
 };
 
 ProtectedContent*& Current() {

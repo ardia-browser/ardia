@@ -13,6 +13,7 @@ import { Button, DialogActions, DialogTitle, lineHeight, PopUp, Sheet, space, Te
 import { Favicon } from "../../favicon/Favicon";
 import { FormField, Group, Row, SectionHeader, SettingToggle } from "../Form";
 import { engineVersion, widevine as widevineComponent } from "../../../state/settings/paneData";
+import { describeProtectedContent, protectedContentToggleShown, setPlayProtectedContent, useProtectedContent } from "../../../state/settings/protectedContent";
 import { useResource } from "../../../state/settings/resources";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 import { AutomationRules } from "./AutomationRules";
@@ -104,6 +105,7 @@ export function AdvancedPane() {
             {info?.chromiumVersion ?? "…"}
           </Text>
         </Row>
+        {protectedContentToggleShown ? <PlayProtectedContentRow /> : null}
         <Row
           anchor="advanced.widevine"
           description={
@@ -126,6 +128,15 @@ export function AdvancedPane() {
         </Row>
       </Group>
     </View>
+  );
+}
+
+function PlayProtectedContentRow() {
+  const state = useProtectedContent();
+  return (
+    <Row anchor="advanced.playProtectedContent" description={describeProtectedContent(state)}>
+      <Toggle value={state?.enabled ?? false} onChange={(on) => void setPlayProtectedContent(on)} />
+    </Row>
   );
 }
 

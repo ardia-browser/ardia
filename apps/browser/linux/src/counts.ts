@@ -45,7 +45,9 @@ export type LinuxCount =
   | "translate_cancel_stops"
   | "translate_passages_refused"
   | "translate_requests_refused"
-  | "focus_returned";
+  | "focus_returned"
+  | "focus_return_skipped"
+  | "focus_return_unverified";
 
 const counts = new Map<LinuxCount, number>();
 

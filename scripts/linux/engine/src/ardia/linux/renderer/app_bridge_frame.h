@@ -9,7 +9,9 @@
 #include "content/public/renderer/render_frame_observer.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
-#include "v8/include/v8-forward.h"
+#include "v8/include/v8-context.h"
+#include "v8/include/v8-function.h"
+#include "v8/include/v8-promise.h"
 #include "v8/include/v8-persistent-handle.h"
 
 namespace gin {

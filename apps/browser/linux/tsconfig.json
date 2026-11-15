@@ -1,8 +1,19 @@
 {
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["node"],
-    "lib": ["ES2023", "DOM"]
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["vite/client", "node"],
+    "moduleSuffixes": [".chromium", ""],
+    "paths": {
+      "react-native": ["../../../node_modules/react-native-macos"],
+      "react-native-web": ["../../../packages/expo-linux/src/reactNative/react-native-web.d.ts"]
+    }
   },
-  "include": ["src", "scripts"]
+  "include": [
+    "renderer/src/host.tsx",
+    "../../../packages/expo-linux/src/chromium",
+    "../../../packages/expo-linux/src/**/*.chromium.ts",
+    "../../../packages/expo-linux/src/**/*.chromium.tsx",
+    "../src/react-native-macos.d.ts"
+  ]
 }

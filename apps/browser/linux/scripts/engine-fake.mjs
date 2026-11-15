@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 const HELP = `Usage: node scripts/engine-fake.mjs [--ui <dir>] [--out <dir>] [--onboarding] [--keep-open]
-Runs the engine UI bundle (ui-chromium) in a headless Chromium against the fake bridge
-(packages/expo-linux/src/chromium/fake), before the engine exists: the host page loads, opens its main window with
+Runs the UI bundle in a headless Chromium against the fake bridge
+(packages/expo-linux/src/chromium/fake), with no engine: the host page loads, opens its main window with
 window.open, the window mounts and shows, a launch link opens a page through tab.create and tab.show, and the
 command bar opened over it becomes a hole in the page. Builds the bundle first unless --ui is given. Writes the
 window's screenshots and a report.json to --out and exits 1 when a check fails. Pages are served with the engine's
@@ -31,7 +31,7 @@ mkdirSync(out, { recursive: true });
 let ui = option("--ui");
 if (!ui) {
   ui = join(out, "ui");
-  const built = spawnSync("npx", ["vite", "build", "--config", "renderer/vite.chromium.config.ts", "--logLevel", "warn"], { cwd: linux, env: { ...process.env, ARDIA_UI_OUT: ui }, stdio: "inherit" });
+  const built = spawnSync("npx", ["vite", "build", "--config", "renderer/vite.config.ts", "--logLevel", "warn"], { cwd: linux, env: { ...process.env, ARDIA_UI_OUT: ui }, stdio: "inherit" });
   if (built.status !== 0) process.exit(built.status ?? 1);
 }
 ui = resolve(ui);

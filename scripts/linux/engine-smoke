@@ -12,7 +12,7 @@ private Xvfb, from a fresh data folder (onboarding marked done), with real X inp
   8 Ctrl+Q writes the session and exits within 3 s
 It also logs the host's timer and frame rates over --rates seconds (default 60) and the sync calls' times.
 --engine is an out dir holding chrome or an unpacked engine package (default: the Linux tree's out/Release_GN_linux_x64);
---ui is the engine UI bundle (default: built into <out>/ui with vite.chromium.config.ts). Screenshots, the instance's log and
+--ui is the engine UI bundle (default: built into <out>/ui with renderer/vite.config.ts). Screenshots, the instance's log and
 report.json go to --out. Exits 1 when a check fails.`;
 
 import { spawn, spawnSync } from "node:child_process";
@@ -50,7 +50,7 @@ let ui = option("--ui");
 if (!ui) {
   ui = join(out, "ui");
   console.log("engine-smoke: building the engine UI bundle");
-  const built = spawnSync("npx", ["vite", "build", "--config", "renderer/vite.chromium.config.ts", "--logLevel", "warn"], { cwd: join(repo, "apps/browser/linux"), env: { ...process.env, ARDIA_UI_OUT: ui }, stdio: "inherit" });
+  const built = spawnSync("npx", ["vite", "build", "--config", "renderer/vite.config.ts", "--logLevel", "warn"], { cwd: join(repo, "apps/browser/linux"), env: { ...process.env, ARDIA_UI_OUT: ui }, stdio: "inherit" });
   if (built.status !== 0) process.exit(built.status ?? 1);
 }
 ui = resolve(ui);

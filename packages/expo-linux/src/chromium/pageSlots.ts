@@ -1,3 +1,4 @@
+import { appDark } from "../appearance";
 import { appWindowDocument } from "../windows/appWindows";
 
 export type ShownPage = { x: number; y: number; width: number; height: number; radius: number };
@@ -13,6 +14,7 @@ const SLOT_SELECTOR = "[data-ardia-page-slot]";
 const UNDERLAY = "ardiaUnderlay";
 const OVER_PAGE = "ardiaOverPage";
 const DENSEST_FROST = 0.94;
+const FROST_BASE = { light: [246, 246, 246], dark: [44, 44, 46] } as const;
 const STYLE_ID = "ardia-page-slots";
 const MEMBERS_REFRESH_MS = 120;
 const SETTLE_AFTER_CHANGES_MS = 60;
@@ -28,7 +30,7 @@ const STYLES = `
   background-size: var(--ardia-underlay-size); background-position: var(--ardia-underlay-position); background-repeat: var(--ardia-underlay-repeat);
   backdrop-filter: var(--ardia-underlay-backdrop); clip-path: var(--ardia-underlay-clip);
 }
-[data-ardia-over-page] { background-color: color(from var(--ardia-over-page-color) srgb r g b / max(alpha, ${DENSEST_FROST})) !important; }`;
+[data-ardia-over-page] { background-color: var(--ardia-over-page-color) !important; }`;
 
 const windows = new Map<string, WindowSlots>();
 const painted = new Set<string>();
@@ -79,6 +81,23 @@ function unfrost(element: HTMLElement) {
   element.style.removeProperty("--ardia-over-page-color");
 }
 
+function channels(color: string): [number, number, number, number] | null {
+  const rgba = /^rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)$/.exec(color);
+  if (rgba) return [Number(rgba[1]), Number(rgba[2]), Number(rgba[3]), rgba[4] === undefined ? 1 : Number(rgba[4])];
+  const srgb = /^color\(srgb ([\d.]+) ([\d.]+) ([\d.]+)(?: \/ ([\d.]+))?\)$/.exec(color);
+  if (srgb) return [Number(srgb[1]) * 255, Number(srgb[2]) * 255, Number(srgb[3]) * 255, srgb[4] === undefined ? 1 : Number(srgb[4])];
+  return null;
+}
+
+export function frostOverPage(color: string, dark: boolean): string {
+  const tint = channels(color);
+  if (!tint) return color;
+  const base = dark ? FROST_BASE.dark : FROST_BASE.light;
+  const [r, g, b, alpha] = tint;
+  const mixed = [r, g, b].map((channel, index) => Math.round(channel * alpha + (base[index] ?? 0) * (1 - alpha)));
+  return `rgba(${mixed.join(", ")}, ${Math.max(alpha, DENSEST_FROST)})`;
+}
+
 const frostedOverPages = (style: CSSStyleDeclaration) => style.backdropFilter !== "none" && style.backdropFilter !== "" && !TRANSPARENT.has(style.backgroundColor);
 
 function findMembers(doc: Document, pages: Map<string, ShownPage>, previous: Members): Members {
@@ -106,7 +125,7 @@ function findMembers(doc: Document, pages: Map<string, ShownPage>, previous: Mem
     if (!paints(style)) continue;
     const under = new Set(meeting.filter((slot) => precedes(element, slot.marker)).map((slot) => slot.key));
     if (under.size < meeting.length && frostedOverPages(style)) {
-      element.style.setProperty("--ardia-over-page-color", style.backgroundColor);
+      element.style.setProperty("--ardia-over-page-color", frostOverPage(style.backgroundColor, appDark()));
       found.frosted.push(element);
       continue;
     }

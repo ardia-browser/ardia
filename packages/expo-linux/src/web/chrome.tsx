@@ -91,7 +91,7 @@ const MATERIAL_FILL: Record<"light" | "dark", Record<string, string>> = {
   light: {
     popover: "rgba(246,246,246,0.94)",
     menu: "rgba(246,246,246,0.94)",
-    hudWindow: "rgba(30,30,30,0.82)",
+    hudWindow: "rgba(242,242,242,0.82)",
     fullScreenUI: "rgba(236,236,236,0.94)",
     sidebar: "rgba(232,232,234,0.97)",
     windowBackground: "rgb(246,246,246)",

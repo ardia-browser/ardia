@@ -5,7 +5,23 @@ import { isAsleep } from "../tabs/pageSession";
 const closedAway = (s: BrowserState, prev: BrowserState, tabId: string | undefined) =>
   !!tabId && (!s.tabs[tabId] || (isAsleep(s.tabs[tabId]) && !isAsleep(prev.tabs[tabId])));
 
-export const watchRevealTargets = (windowId: string, found: (switched: string | null, opened: string | null) => void) =>
+const asked = new Map<string, Set<(tabId: string) => void>>();
+
+export const revealTab = (windowId: string, tabId: string) => asked.get(windowId)?.forEach((reveal) => reveal(tabId));
+
+export function watchRevealTargets(windowId: string, found: (switched: string | null, opened: string | null) => void) {
+  const ask = (tabId: string) => found(tabId, null);
+  const askers = asked.get(windowId) ?? new Set();
+  asked.set(windowId, askers.add(ask));
+  const unsubscribe = watchStoreTargets(windowId, found);
+  return () => {
+    unsubscribe();
+    askers.delete(ask);
+    if (!askers.size) asked.delete(windowId);
+  };
+}
+
+const watchStoreTargets = (windowId: string, found: (switched: string | null, opened: string | null) => void) =>
   useBrowser.subscribe((s, prev) => {
     if (s.windows === prev.windows && s.tabs === prev.tabs) return;
     let switched: string | null = null;
@@ -20,4 +36,11 @@ export const watchRevealTargets = (windowId: string, found: (switched: string | 
       for (const id of w.tabIds) if (!had.has(id) && s.tabs[id]?.openerId && id !== active) opened = id;
     }
     found(switched, opened);
+  });
+
+export const selectedTabIn = (windowId: string) => activeTabId(useBrowser.getState(), windowId);
+
+export const watchRowsMoved = (moved: () => void) =>
+  useBrowser.subscribe((s, prev) => {
+    if (s.windows !== prev.windows || s.groups !== prev.groups) moved();
   });

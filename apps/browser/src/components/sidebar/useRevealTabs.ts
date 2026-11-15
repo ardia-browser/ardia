@@ -1,10 +1,9 @@
 import { useEffect, type RefObject } from "react";
-import type { ScrollView, View } from "react-native";
+import type { ScrollView } from "react-native";
 import { watchRevealTargets } from "../../state/sidebar/reveal";
-import { measureRow } from "../../state/sidebar/sidebarUi";
-import { revealSpot } from "../../state/sidebar/geometry";
 import { GLOW_ROOM, type SidebarGeometry } from "./pageLayout";
 import { SCROLL_EDGE } from "./ScrollEdge";
+import { locateTab } from "./selectedRow";
 
 export function useRevealTabs(windowId: string, scroll: RefObject<ScrollView | null>, scrollY: RefObject<number>, geometry: RefObject<SidebarGeometry>) {
   useEffect(() => {
@@ -25,16 +24,10 @@ export function useRevealTabs(windowId: string, scroll: RefObject<ScrollView | n
       const tabId = switched ?? opened;
       switched = opened = null;
       if (!tabId) return;
-      const spot = revealSpot(windowId, tabId, geometry.current.tilesFixed, geometry.current.newTabAtTop);
-      if (!spot) return;
-      if ("span" in spot) return show(GLOW_ROOM + SCROLL_EDGE.inset + geometry.current.regions[spot.span.section] + spot.span.top, spot.span.height);
-      const view = scroll.current as unknown as View;
-      const keys = spot.keys;
-      const firstShown = (i: number): Promise<Awaited<ReturnType<typeof measureRow>>> =>
-        i >= keys.length ? Promise.resolve(null) : measureRow(windowId, keys[i]!).then((row) => row ?? firstShown(i + 1));
-      void firstShown(0).then((row) =>
-        view.measureInWindow((_x, y) => row && mine === reveals && show(row.y - y + (scrollY.current ?? 0), row.height)),
-      );
+      const row = locateTab(windowId, tabId, geometry.current, scroll.current, () => scrollY.current ?? 0);
+      if (!row) return;
+      if ("then" in row) void row.then((found) => found && mine === reveals && show(found.y, found.height));
+      else show(row.y, row.height);
     };
     const schedule = () => {
       if ((switched || opened) && !frame) frame = requestAnimationFrame(reveal);

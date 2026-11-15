@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { Pressable, View, type ViewStyle } from "react-native";
 import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
 import { layout, useTheme } from "../ui/theme";
@@ -12,6 +12,7 @@ import { toolbarPalette, type ToolbarPalette } from "../ui/toolbarColors";
 import { Button, type ButtonHit, FadeLabel, radius, space, ToolbarRowContext, useHover } from "../ui";
 import { TOOLBAR_ROWS } from "../../lib/toolbarRow";
 import { setUrlAnchor } from "../../state/windows/layout";
+import { useWindowUiOf } from "../../state/windows/hooks";
 import { useSidebarPart } from "../../state/sidebar/chrome";
 import { SIDEBAR_FIELD } from "./geometry";
 import { SIDEBAR_TYPE, TAB_ROW } from "./tokens";
@@ -113,6 +114,13 @@ export function SidebarAddressRow({ width, top }: { width: number; top: number }
     field.current?.measureInWindow((x, y, width, height) => {
       if (width && isAddressBarInSidebar(windowId)) setUrlAnchor(windowId, { left: x, top: y, width, sidebar: { height } });
     });
+  const side = useSidebarSide(windowId);
+  const panelOpen = useWindowUiOf(windowId, (ui) => !!ui?.panel.open);
+  useLayoutEffect(anchor, [panelOpen]);
+  useEffect(() => {
+    const frame = requestAnimationFrame(anchor);
+    return () => cancelAnimationFrame(frame);
+  }, [side]);
 
   return (
     <View

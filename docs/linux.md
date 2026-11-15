@@ -52,7 +52,7 @@ and every row was walked. Works with a difference says what differs; the Mac's l
 | Maximize and restore | Works under xfwm4, square corners while maximized | |
 | Moving a window, edge snapping | Works under xfwm4: the window manager moves it from the tab strip, toolbar, sidebar header, frame margins and Settings' title bar, so it snaps to screen edges, a double click maximizes and restores, dragging a maximized window restores it, and Alt-drag works; right-clicking the empty tab strip or sidebar header still opens their menus. xfwm4 here doesn't tile on drag, a decorated window included. The empty sidebar below the tabs and Little Ardia's title still move the window themselves (they take double clicks and clicks). With no window manager, drag areas don't move the window | 72fcd4f2c |
 | Pop-up menus (the … menu, tab menus) | Works, also when no Ardia window has focus (no window manager, right after a dialog); before, the menu didn't open and its button stayed pressed; with no window manager they also open after another Ardia window or a file dialog closed, which used to leave every menu, the page's too, closing as it opened. Shortcut labels read "Ctrl+Comma" | ab87cf84a, becfcb2c6 |
-| Keyboard focus after a dialog or window closes | Works like the Mac: after a page's alert, an Ardia confirm, a save or open picker, a page's file input or a focused Ardia window (Settings) closes, the window behind takes the keyboard again and its text field keeps typing, with no window manager and under xfwm4, wherever the pointer is. Before, with no window manager, focus fell to the desktop and keys reached Ardia only while the pointer was over it | 016992209 |
+| Keyboard focus after a dialog or window closes | Works like the Mac: after a page's alert, an Ardia confirm, a save or open picker, a page's file input or a focused Ardia window (Settings) closes, the window behind takes the keyboard again and its text field keeps typing, with no window manager and under xfwm4, wherever the pointer is. Before, with no window manager, focus fell to the desktop and keys reached Ardia only while the pointer was over it. It never takes focus from another app: under xfwm4, an app switched to right as a dialog closed stays active; before, Ardia raised itself back over it | 016992209, 47a2c3291 |
 | Pin, Top Apps, groups | Works: the hover card's Pin makes a Top App tile; the tab menu's New Group with Tab makes a group and names it in place | |
 | Profiles: create, switch with Alt+1, Alt+2 | Works: Settings › Profiles › Create Profile, then Alt+2 and Alt+1 switch (the window takes the profile's colour). The sidebar header cuts "Work" to "W..." | |
 
@@ -78,7 +78,7 @@ and every row was walked. Works with a difference says what differs; the Mac's l
 | Task Manager (Shift+Esc) | Works: every process with memory, CPU and process ID, and End Process for a page's, which then offers Reload. Before, it did nothing | eff01f92a |
 | Drop a link or file onto a page | Works: a link or file dropped on a page opens it in a new tab next to it; a page that takes drops gets them. Before, a link dropped on a page did nothing | e07e27d8a |
 | Drop a link onto the tab strip or sidebar | Works: a link dragged from another app onto the sidebar opens as a new tab | |
-| Translate | Works on device, like the Mac: a French or German page shows the Translate button in the address bar; the first use downloads that language from Mozilla ("Downloading French… 45% of 26 MB"), then the page turns to English in place with links and bold kept, code and form fields left alone, and text further down translated as it scrolls in. Show Original restores it; the button's menu has Choose Another Language (German to French goes through English) and Never Translate This Site. The engine is Firefox's (Bergamot with Mozilla's released models), not Apple's, so wording differs from the Mac. Before, Translate wasn't offered | eab797e77 |
+| Translate | Works on device, like the Mac: a French or German page shows the Translate button in the address bar; the first use downloads that language from Mozilla ("Downloading French… 45% of 26 MB"), then the page turns to English in place with links and bold kept, code and form fields left alone, and text further down translated as it scrolls in. Show Original restores it; the button's menu has Choose Another Language (German to French goes through English) and Never Translate This Site. The engine is Firefox's (Bergamot with Mozilla's released models), not Apple's, so wording differs from the Mac. A page can't overload it: oversized or excess text is refused, a stuck engine is restarted, and leaving the page stops its work; a corrupt language download fails cleanly and is fetched again, and cached languages are checked against Mozilla's hashes. Before, Translate wasn't offered | eab797e77, 24e517463, 2499f3595, 3520e886d |
 
 **Passwords, permissions, extensions**
 
@@ -318,7 +318,11 @@ the main method where one is needed (`aroundMain` in `tsModules.ts`), the main p
 
 - **Focus after dialogs.** Every dialog main opens goes through `systemDialogs.ts`; when one closes, or a focused app
   window closes (`focusReturn.ts`), and no app window has focus 100 ms later, the parent or the most recently focused
-  window is focused again, which a window manager has already done. A page's file input reports its `change` and
+  window is focused again, which a window manager has already done. It does so only when nothing else has focus: on
+  X11 main asks the X server itself (`system/xFocus.ts`, a small X11 protocol client using the Xauthority cookie) for
+  `_NET_ACTIVE_WINDOW` under a window manager (None or an Ardia window) or the input focus without one (None,
+  PointerRoot, the root or an Ardia window), and leaves focus alone if it can't ask; on Wayland the compositor
+  already refuses focus stealing. Any Ardia window gaining focus cancels a pending return. A page's file input reports its `change` and
   `cancel` events from a page script (`services/fileChooserFocus.ts`) for the same.
 - **Launch config.** `src/launch.ts` and `src/paths.ts` are the only files that read the environment (`ARDIA_DATA_DIR`,
   `ARDIA_BACKGROUND`, `ARDIA_REMOTE_DEBUGGING_PORT`, `ARDIA_INSTANCE`, `ARDIA_SWITCHES`, `ARDIA_TRACE`, `ARDIA_TEST`,
@@ -412,10 +416,19 @@ the main method where one is needed (`aroundMain` in `tsModules.ts`), the main p
 - **Translate.** `ArdiaTranslate` (`modules/translate.ts`, `src/translate`) answers the Mac module the shared
   `state/site/translate.ts` drives. Bergamot, Firefox's engine (the browsermt WASM build), runs in a worker thread
   (`out/translateWorker.js` with `out/bergamot/`, unpacked from the asar), reads model files from disk and pivots through
-  English for pairs without a direct model; it exits after a minute idle. Models are Mozilla's released Firefox models
+  English for pairs without a direct model; it exits after a minute idle. Main holds the queue and sends the worker
+  one request at a time, with the models it needs (the worker keeps four loaded). Page text is untrusted, so main caps
+  it (`translationLimits` in `translate/engine.ts`): a passage over 64 KiB comes back untranslated, a request over 64
+  passages or 64 KiB is refused, a page (owner) can have 8 requests waiting, each request has a deadline of 20 s plus
+  1.5 s per KiB after which the worker is terminated and a fresh one takes the queue, and cancelling an owner drops its
+  queued requests and terminates the worker if its request is running. Direct `translate` calls share the caps;
+  detection reads the first 4096 characters. French Wikipedia's longest articles have passages of at most 4.1 KB. Models are Mozilla's released Firefox models
   from its public registry (`storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json`,
   cached for a week in `<data>/Translations/catalog.json`), downloaded gzipped per pair on first use into
-  `<data>/Translations/<from>-<to>`, the model checked against the registry's hash; until then the offered languages
+  `<data>/Translations/<from>-<to>`: each file is one stream pipeline (response, gunzip, size limit, staging file),
+  hashed as written and checked against the registry's hash before the rename; the files of a pair share an abort
+  signal, so the first failure stops the others and the pair's lock holds until all have settled. The manifest keeps
+  each file's hash, and cached files are checked against it once per launch; until then the offered languages
   come from a built-in list of released pairs and nothing is fetched. Firefox's Remote Settings CDN answers Chrome user
   agents with 406, so it isn't used. A passage of several text nodes goes out as HTML, one `<span data-p>` per node,
   and comes back mapped to the nodes in page order (`translate/pieces.ts`). CLD3 (`cld3-asm`) detects the language.

@@ -16,6 +16,12 @@ struct DuoTabRail: View {
 
   var body: some View {
     ZStack(alignment: .topLeading) {
+      VStack(spacing: DuoLayout.railControlsGap) {
+        DuoRailGrid(edge: edge, width: frame.width, maxHeight: gridRoom, menu: $menu, openPinned: openPinned, openTab: openTab)
+        BarPlusButton(action: newTab)
+      }
+      .frame(width: frame.width, height: frame.height, alignment: .bottom)
+      .offset(x: frame.minX, y: frame.minY)
       if menu != nil {
         Color.black.opacity(0.001)
           .frame(width: screen.width, height: screen.height)
@@ -23,12 +29,6 @@ struct DuoTabRail: View {
           .onTapGesture { menu = nil }
           .accessibilityHidden(true)
       }
-      VStack(spacing: DuoLayout.railControlsGap) {
-        DuoRailGrid(edge: edge, width: frame.width, maxHeight: gridRoom, menu: $menu, openPinned: openPinned, openTab: openTab)
-        BarPlusButton(action: newTab)
-      }
-      .frame(width: frame.width, height: frame.height, alignment: .bottom)
-      .offset(x: frame.minX, y: frame.minY)
       if let menu {
         DuoRailMenu(rows: menu.rows)
           .offset(menuOrigin(menu))
@@ -135,7 +135,6 @@ private struct DuoRailLayout {
 
   private static func newestFirst(_ tabs: [BrowserTab]) -> [BrowserTab] {
     tabs.sorted { lhs, rhs in
-      if lhs.isPrivate != rhs.isPrivate { return rhs.isPrivate }
       if lhs.created != rhs.created { return lhs.created > rhs.created }
       return lhs.position > rhs.position
     }
@@ -191,7 +190,7 @@ private struct DuoRailGrid: View {
 
   var body: some View {
     let pinned = app.visiblePinnedTiles
-    let linked = Set(pinned.compactMap { app.linkedPinnedTab(key: $0.key)?.id })
+    let linked = Set(pinned.flatMap(linkedTabIDs))
     let tabs = app.deckTabs.filter { !linked.contains($0.id) }
     let layout = DuoRailLayout(pinned: pinned, tabs: tabs, width: width, maxHeight: maxHeight)
     let selectedID = selectedID(in: layout)
@@ -277,10 +276,14 @@ private struct DuoRailGrid: View {
     return count == 1 ? String(localized: "Close 1 Tab?") : String(localized: "Close \(count) Tabs?")
   }
 
+  private func linkedTabIDs(of tile: PinnedTile) -> [UUID] {
+    ([tile.key] + (tile.folder ?? []).map(\.key)).compactMap { app.linkedPinnedTab(key: $0)?.id }
+  }
+
   private func selectedID(in layout: DuoRailLayout) -> String? {
     guard let selected = app.tabs.selectedTab else { return nil }
     for cell in layout.cells {
-      if case .pinned(let tile) = cell.item, app.linkedPinnedTab(key: tile.key)?.id == selected.id { return cell.id }
+      if case .pinned(let tile) = cell.item, linkedTabIDs(of: tile).contains(selected.id) { return cell.id }
     }
     let tabID = DuoRailItem.tab(selected).id
     if layout.cells.contains(where: { $0.id == tabID }) { return tabID }
@@ -332,7 +335,7 @@ private struct DuoRailGrid: View {
         app.unpinFromPhone(key: tile.key)
       })
     case .tab(let tab):
-      if !tab.isPrivate, URL(string: tab.url) != nil {
+      if URL(string: tab.url) != nil {
         rows.append(DuoRailMenuRow(title: String(localized: "Copy Link"), symbol: "doc.on.doc") { app.copyLink(of: tab) })
       }
       rows.append(DuoRailMenuRow(title: String(localized: "Close Tab"), symbol: "xmark", isDestructive: true) { app.closeTab(tab.id) })
@@ -456,7 +459,7 @@ private struct DuoRailMenu: View {
       list.glassEffect(.regular, in: shape)
     } else {
       list
-        .background(.regularMaterial, in: shape)
+        .chromeSurface(in: shape, interactive: false)
         .shadow(color: .black.opacity(0.18), radius: 14, y: 4)
     }
   }
@@ -611,7 +614,7 @@ private struct DuoRailBubble: View {
       content.glassEffect(.regular, in: .capsule)
     } else {
       content
-        .background(.regularMaterial, in: .capsule)
+        .chromeSurface(in: .capsule, interactive: false)
         .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
     }
   }

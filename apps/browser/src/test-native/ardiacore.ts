@@ -65,7 +65,7 @@ export const emitEvent = <E extends EventName>(name: E, data: EngineEvents[E]) =
 export const chromeWindowList: ChromeWindowState[] = [];
 export const engineCalls: { domain: string; verb: string; profile: string }[] = [];
 export const loadedEngineProfiles = new Set<string>([""]);
-export const idleProfileUnloads = new Map<string, CallResult<"profiles.unloadIdle">>();
+export const idleProfileUnloads = new Map<string, CallResult<"profiles.unloadIdle"> & { closing?: () => void }>();
 export const profilesLoadedCall = { known: true };
 
 function domain<D extends string, Sync extends object>(name: D, handlers: Handlers<D>, sync?: Sync): FakeDomain & Sync {
@@ -370,7 +370,8 @@ const fakeModules = {
     },
     release: () => null,
     unloadIdle: ({ profile }) => {
-      const unload = idleProfileUnloads.get(profile) ?? { status: "busy" as const, tabs: [] };
+      const { closing, ...unload } = idleProfileUnloads.get(profile) ?? { status: "busy" as const, tabs: [] };
+      closing?.();
       if (unload.status !== "busy") loadedEngineProfiles.delete(profile);
       return unload;
     },

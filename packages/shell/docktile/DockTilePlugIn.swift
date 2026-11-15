@@ -40,7 +40,8 @@ final class ArdiaDockTilePlugIn: NSObject, NSDockTilePlugIn {
 
   private func show() {
     guard let dockTile else { return }
-    let id = IconStyle.shown(saved: saved, theme: IconStyle.systemTheme)
+    let bundleIcon = app?.object(forInfoDictionaryKey: "CFBundleIconName") as? String
+    let id = IconStyle.shown(saved: saved, theme: IconStyle.systemTheme, bundleIcon: bundleIcon)
     if id == "default" || !AppIcons.variants.contains(where: { $0.id == id }) {
       dockTile.contentView = nil
     } else if let image = AppIcons.image(id, size: 512) {

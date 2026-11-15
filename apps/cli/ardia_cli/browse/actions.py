@@ -33,6 +33,7 @@ EMAIL = re.compile(r"[^\s@<>()\[\],;:\"']+@[^\s@<>()\[\],;:\"']+\.[A-Za-z]{2,}")
 ENABLE_WAIT = 1.5
 EDITOR_WAIT = 1.0
 COMMIT_WAIT = 0.5
+CLOSING_MODAL_WAIT = 0.5
 POLL = 0.05
 INSERTED_INPUT_TYPES = frozenset({"text", "search", "email", "url", "tel", "number"})
 DRAG_FAR_SHARE = 0.75
@@ -526,6 +527,22 @@ async def dom_click(page, element, error: BrowseError):
     from ardia_cli import command_metrics
 
     clicked = await page.call(DOM_CLICK, element, frame=element.frame)
+    if isinstance(clicked, dict):
+        async def unblocked():
+            nonlocal clicked
+            clicked = await page.call(DOM_CLICK, element, frame=element.frame)
+            return not isinstance(clicked, dict)
+
+        if await poll(unblocked, CLOSING_MODAL_WAIT) and clicked:
+            command_metrics.flag("dom_click_waited_for_modal", True)
+    if isinstance(clicked, dict):
+        command_metrics.flag("dom_click_behind_modal", True)
+        name = clicked.get("modal")
+        lock = f'the modal dialog "{name}" is open over it' if name else "a modal dialog is open over it"
+        raise BrowseError(
+            f"Element {element.label} is outside the visible page, and {lock}. Close that first (press Escape, or its close button), then retry",
+            data={**(error.data or {}), "scrollLock": lock}, code="outside_viewport",
+        )
     if not clicked:
         raise error
     command_metrics.flag("dom_click_fallback", True)
@@ -599,6 +616,58 @@ DOM_CLICK = """(el) => {
     if (/hidden|auto|scroll|clip/.test(overflow)) { clipped = true; break; }
   }
   if (!clipped) return false;
+  const within = (outer, node) => {
+    for (; node; node = node.parentNode || node.host) if (node === outer) return true;
+    return false;
+  };
+  const modals = el.checkVisibility && CSS.supports("selector(:modal)")
+    ? [...document.querySelectorAll("dialog:modal, [aria-modal=true]")].filter((modal) => !/opacity\\(0\\)/.test(getComputedStyle(modal).filter))
+    : [];
+  const owner = (node) => modals.filter((modal) => within(modal, node)).pop();
+  const ownerAt = (x, y) => {
+    let hit = document.elementFromPoint(x, y);
+    for (let inner = hit?.shadowRoot?.elementFromPoint(x, y); inner && inner !== hit; inner = hit.shadowRoot?.elementFromPoint(x, y)) hit = inner;
+    return hit?.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) ? owner(hit) : undefined;
+  };
+  function* tree(node) {
+    yield node;
+    if (node.shadowRoot) for (const child of node.shadowRoot.children) yield* tree(child);
+    for (const child of node.children) yield* tree(child);
+  }
+  const boxes = new Map(), hits = [];
+  for (const modal of modals) {
+    const sampled = [];
+    boxes.set(modal, sampled);
+    let seen = 0, tried = 0;
+    walk: for (const node of tree(modal)) {
+      if (++seen > 200 || tried >= 40) break;
+      const box = node.getBoundingClientRect();
+      const left = Math.max(box.left, 0), right = Math.min(box.right, innerWidth), top = Math.max(box.top, 0), bottom = Math.min(box.bottom, innerHeight);
+      if (right - left < 2 || bottom - top < 2 || getComputedStyle(node).pointerEvents === "none") continue;
+      sampled.push({ left, right, top, bottom });
+      for (const [fx, fy] of [[0.5, 0.5], [0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75]]) {
+        const x = left + (right - left) * fx, y = top + (bottom - top) * fy, over = ownerAt(x, y);
+        tried++;
+        if (over) hits.push({ over, x, y });
+        if (over === modal) break walk;
+      }
+    }
+  }
+  const open = modals.filter((modal) => hits.some((hit) => hit.over === modal));
+  if (open.length) {
+    const under = (modal, { over, x, y }) => over !== modal && boxes.get(modal).some((box) => x >= box.left && x <= box.right && y >= box.top && y <= box.bottom);
+    const top = open.filter((modal) => !hits.some((hit) => under(modal, hit)));
+    const ranked = top.length ? top : open.slice(-1);
+    const focused = owner(document.activeElement);
+    const holding = ranked.length > 1 && ranked.includes(focused) ? [focused] : ranked;
+    if (!holding.some((modal) => within(modal, el))) {
+      const blocking = holding[holding.length - 1];
+      const labelled = blocking.getAttribute("aria-labelledby");
+      const name = (blocking.getAttribute("aria-label") || (labelled && document.getElementById(labelled)?.innerText) || blocking.innerText || "")
+        .trim().split("\\n")[0].slice(0, 60);
+      return { modal: name };
+    }
+  }
   el.focus && el.focus({ preventScroll: true });
   el.click();
   return true;

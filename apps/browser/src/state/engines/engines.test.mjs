@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { chosenEngine, engineForUrl, engineMark, fairPlaySite, protectedVideoSite, recommendedEngineFor, ruleFor, siteOf, tabEngine, typedNavigationEngine, visitRecorder } from "./engines.ts";
+import { chosenEngine, engineForUrl, engineMark, fairPlaySite, offersEngineChoice, protectedVideoSite, recommendedEngineFor, ruleFor, siteOf, tabEngine, typedNavigationEngine, visitRecorder } from "./engines.ts";
 import { makeTab, snapshotTab } from "../browser/model.ts";
 import { carriableCookies, cookieAddresses } from "./signInCookies.ts";
 
@@ -269,4 +269,8 @@ test("partitioned, nameless and expired cookies stay behind; session cookies com
   const expired = cookie({ name: "e", expires: now - 1 });
   const nameless = cookie({ name: "" });
   assert.deepEqual(carriableCookies([kept, session, partitioned, opaque, expired, nameless], now), [kept, session]);
+});
+
+test("the Mac always offers a page engine choice, so Site Controls keeps Opens in for every page, local files included", () => {
+  assert.equal(offersEngineChoice(), true);
 });

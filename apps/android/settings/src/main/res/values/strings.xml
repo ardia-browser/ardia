@@ -22,6 +22,7 @@
     <string name="settings_show_onboarding">Show Onboarding</string>
     <string name="settings_about_ardia">About Ardia</string>
     <string name="settings_version_footer">Ardia %1$s (%2$s)</string>
+    <string name="settings_version_footer_dev">Ardia Dev</string>
     <string name="settings_selected">Selected</string>
 
     <string name="site_block_ads">Block Ads</string>

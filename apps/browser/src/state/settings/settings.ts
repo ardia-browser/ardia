@@ -121,6 +121,7 @@ export const SETTING_SPECS = {
   autoPictureInPicture: flag(true, SYNCED),
   blockAutoplayEverywhere: flag(false, SYNCED),
   commandScrollZoom: flag(true, SYNCED),
+  blockNotificationRequests: flag(false, SYNCED),
   videoUpscaling: flag(true, SYNCED),
   sidebarMediaControls: flag(true, SYNCED),
   sidebarWidth: width(DEFAULT_SIDEBAR_WIDTH),

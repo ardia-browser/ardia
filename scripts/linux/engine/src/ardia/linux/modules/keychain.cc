@@ -9,6 +9,8 @@
 #include "ardia/linux/log.h"
 #include "ardia/linux/modules/app_modules.h"
 #include "ardia/linux/modules/args.h"
+#include "ardia/linux/modules/electron_keyring.h"
+#include "ardia/linux/modules/electron_secrets.h"
 #include "ardia/linux/modules/keychain_records.h"
 #include "ardia/linux/ui_host/modules.h"
 #include "base/files/file_util.h"
@@ -17,6 +19,7 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/no_destructor.h"
 #include "base/strings/strcat.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/browser_process.h"
@@ -47,7 +50,7 @@ class Keychain {
   }
 
   void WhenReady(base::OnceClosure run) {
-    if (encryptor_) {
+    if (ready_) {
       std::move(run).Run();
       return;
     }
@@ -66,6 +69,11 @@ class Keychain {
   }
 
   void Remove(std::string account, ModuleReply reply) {
+    WhenReady(base::BindOnce(&Keychain::RemoveNow, base::Unretained(this),
+                             std::move(account), std::move(reply)));
+  }
+
+  void RemoveNow(std::string account, ModuleReply reply) {
     disk_->PostTaskAndReply(
         FROM_HERE,
         base::BindOnce(
@@ -113,6 +121,85 @@ class Keychain {
     }
     Note("keychain", base::StrCat({"secrets are sealed with ",
                                    SealKindName(available_)}));
+    disk_->PostTaskAndReplyWithResult(
+        FROM_HERE,
+        base::BindOnce(&Keychain::MigrateElectronSecrets, DataDirectory(),
+                       encryptor_),
+        base::BindOnce(&Keychain::Migrated, base::Unretained(this)));
+  }
+
+  struct Migration {
+    bool found = false;
+    int moved = 0;
+    int left = 0;
+  };
+
+  static Migration MigrateElectronSecrets(
+      base::FilePath data_dir,
+      scoped_refptr<os_crypt_async::Encryptor> encryptor) {
+    Migration migration;
+    const base::FilePath file = data_dir.Append(kElectronSecretsFile);
+    std::string json;
+    if (!base::ReadFileToString(file, &json)) {
+      return migration;
+    }
+    migration.found = true;
+    std::optional<std::string> keyring_password;
+    bool asked_keyring = false;
+    for (auto& [account, secret] : ParseElectronSecrets(json)) {
+      const base::FilePath record = PathOf(account);
+      if (base::PathExists(record)) {
+        ++migration.moved;
+        continue;
+      }
+      if (NeedsKeyringPassword(secret) && !asked_keyring) {
+        asked_keyring = true;
+        keyring_password = ElectronKeyringPassword({"Ardia", "ardia"});
+      }
+      std::optional<std::string> plain =
+          OpenElectronSecret(secret, keyring_password);
+      std::string sealed;
+      if (!plain || !encryptor->IsEncryptionAvailable() ||
+          !encryptor->EncryptString(*plain, &sealed)) {
+        ++migration.left;
+        continue;
+      }
+      std::fill(plain->begin(), plain->end(), '\0');
+      KeychainRecord moved;
+      moved.backend = SealKindName(SealKindOf(sealed));
+      moved.ciphertext = std::move(sealed);
+      if (base::CreateDirectory(record.DirName()) &&
+          base::ImportantFileWriter::WriteFileAtomically(record,
+                                                         RecordJson(moved))) {
+        ++migration.moved;
+      } else {
+        ++migration.left;
+      }
+    }
+    if (keyring_password) {
+      std::fill(keyring_password->begin(), keyring_password->end(), '\0');
+    }
+    if (migration.left == 0) {
+      base::Move(file, data_dir.Append(kElectronSecretsMigrated));
+    }
+    return migration;
+  }
+
+  void Migrated(Migration migration) {
+    if (migration.found) {
+      Note("keychain",
+           base::StrCat({"the Electron build's secrets: ",
+                         base::NumberToString(migration.moved), " moved, ",
+                         base::NumberToString(migration.left),
+                         " left for a later launch"}));
+      for (int i = 0; i < migration.moved; ++i) {
+        CountLinux("keychain_electron_secrets_moved");
+      }
+      for (int i = 0; i < migration.left; ++i) {
+        CountLinux("keychain_electron_secrets_left");
+      }
+    }
+    ready_ = true;
     for (base::OnceClosure& run : std::exchange(waiting_, {})) {
       std::move(run).Run();
     }
@@ -213,6 +300,7 @@ class Keychain {
   }
 
   bool started_ = false;
+  bool ready_ = false;
   scoped_refptr<base::SequencedTaskRunner> disk_;
   scoped_refptr<os_crypt_async::Encryptor> encryptor_;
   SealKind available_ = SealKind::kUnknown;

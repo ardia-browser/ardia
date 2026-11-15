@@ -469,6 +469,11 @@ async def run(ctx, source: str, seconds: float):
             stopped = await stop_worker(page, handle)
             kept = keep_state(ctx.state, stopped.get("state"))
             raise timed_out(seconds, current, source, list(stopped.get("logs") or []), kept, done) from None
+        except asyncio.CancelledError:
+            stopped = await stop_worker(page, handle)
+            if keep_state(ctx.state, stopped.get("state")):
+                command_metrics.flag("script_state_kept_on_interrupt", True)
+            raise
     finally:
         await temptabs.release(state, owned)
     keep_state(ctx.state, message.get("state"))

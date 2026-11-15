@@ -18,6 +18,7 @@ export {
   WindowDragRegion,
 } from "./web/chrome";
 export { FadeLabel } from "./web/FadeLabel";
+export { FolderIcon } from "./web/FolderIcon";
 export { MouseArea } from "./web/MouseArea";
 export { showMenu } from "./web/menus";
 

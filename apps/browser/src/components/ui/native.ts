@@ -3,6 +3,7 @@ export {
   ContextMenuArea,
   DockSelection,
   FileDropArea,
+  FolderIcon,
   MagnifyArea,
   MouseArea,
   OutsidePressArea,

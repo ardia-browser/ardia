@@ -135,6 +135,7 @@ export const LINUX_WORDING: readonly Wording[] = [
       ["how many tabs were closed from it with ⌃W", "how many tabs were closed from it with Ctrl+W"],
       ["because the Touch ID or password request before it was declined", "because the system password request before it was declined"],
       ["How many times ⌘W closed several", "How many times Ctrl+W closed several"],
+      ["closing the Top App in front (⌘W, or a middle click on it)", "closing the Top App in front (Ctrl+W, or a middle click on it)"],
       ["Bringing your last window back from the Dock or at launch", "Bringing your last window back from the taskbar or at launch"],
       ["How many times ⌘Y asked for the History", "How many times Ctrl+Y asked for the History"],
     ],

@@ -55,6 +55,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface ArdiaWebView (Tab)
 + (void)setLittleArdiaOpensNewTabLinks:(BOOL)enabled NS_SWIFT_NAME(setLittleArdiaOpensNewTabLinks(_:));
++ (void)setPopupsOpenAsTabs:(BOOL)enabled NS_SWIFT_NAME(setPopupsOpenAsTabs(_:));
 - (void)resolveUnresponsive:(BOOL)terminate NS_SWIFT_NAME(resolveUnresponsive(terminate:));
 - (NSString *)discard:(BOOL)unload NS_SWIFT_NAME(discard(unload:));
 - (NSArray<NSNumber *> *)sleepIfHiddenFor:(NSTimeInterval)seconds NS_SWIFT_NAME(sleepIfHidden(for:));
@@ -127,6 +128,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)setVideoUpscalingTestConditions:(NSDictionary<NSString *, NSNumber *> *)conditions
     NS_SWIFT_NAME(setVideoUpscalingTestConditions(_:));
 + (NSDictionary<NSString *, id> *)videoUpscalingState;
++ (NSDictionary<NSString *, NSNumber *> *)takeContentDrift;
 - (BOOL)takeControlPressAt:(double)clickMs control:(NSInteger)target NS_SWIFT_NAME(takeControlPress(clickAt:control:));
 - (void)requestPictureInPictureForClickAt:(double)clickMs
                                   control:(NSInteger)target

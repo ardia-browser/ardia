@@ -40,6 +40,7 @@ export {
   DockSelection,
   FadeLabel,
   FileDropArea,
+  FolderIcon,
   MagnifyArea,
   Meadow,
   meadowTextStyle,

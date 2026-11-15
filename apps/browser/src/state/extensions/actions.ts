@@ -30,7 +30,7 @@ import { closeSidePanelsOf, toggleSidePanel } from "./sidePanels";
 import { notePrivateWindowExtensionOpen, noteToolbarExtensionMove } from "../telemetry/usage";
 import { extensionPageUrl, extensionProfile, extensionsProfileId, isPrivate, pageProfile, shownIn, useExtensions, windowExtensions, readyTabOf, type Anchor } from "./store";
 import { errorText } from "../../lib/errors";
-import { movedToolbarOrder, toolbarOrder } from "./toolbarOrder";
+import { movedToolbarOrder, toolbarOrder, type ToolbarDrag } from "./toolbarOrder";
 
 export * from "./sidePanels";
 export * from "./store";
@@ -159,7 +159,13 @@ export async function setPinned(profile: string, id: string, pinned: boolean) {
   if (!done) await refreshExtensions(profile);
 }
 
-export async function moveToolbarExtension(windowId: string, id: string, to: number) {
+export const setToolbarDrag = (windowId: string, drag: ToolbarDrag | null) => useExtensions.setState({ toolbarDrag: drag && { ...drag, windowId } });
+
+export function endToolbarDrag(windowId: string) {
+  if (useExtensions.getState().toolbarDrag?.windowId === windowId) useExtensions.setState({ toolbarDrag: null });
+}
+
+export async function moveToolbarExtension(windowId: string, id: string, to: number, via: "drag" | "menu") {
   const s = useBrowser.getState();
   if (isPrivate(s, windowId)) return;
   const profile = extensionProfile(s, windowId);
@@ -170,7 +176,7 @@ export async function moveToolbarExtension(windowId: string, id: string, to: num
   useExtensions.setState((e) => ({
     lists: { ...e.lists, [profile]: (e.lists[profile] ?? EMPTY).map((x) => (slots.has(x.id) ? { ...x, pinnedIndex: slots.get(x.id) } : x)) },
   }));
-  noteToolbarExtensionMove();
+  noteToolbarExtensionMove(via);
   const done = await changed("move", () => configureExtension(id, profile, { pinnedIndex: moved.pinnedIndex }));
   if (!done) await refreshExtensions(profile);
 }
@@ -307,6 +313,17 @@ export const EXTENSION_LIST_ITEMS: ChoiceItem<never, ExtensionListChoice>[] = [
   { id: "manage", title: "Manage Extensions…", symbol: "puzzlepiece.extension" },
   { id: "pin", title: "Pin Extensions…", symbol: "pin" },
 ];
+
+export type ExtensionOverflowChoice = InstalledExtension | { front: InstalledExtension };
+
+export function extensionOverflowItems(enabled: InstalledExtension[], hidden: InstalledExtension[]): ChoiceItem<ExtensionOverflowChoice, ExtensionListChoice | "front">[] {
+  return [
+    ...enabled.map((x) => ({ value: x, title: x.name, symbol: x.pinned ? "pin.fill" : undefined })),
+    ...(enabled.length ? [{ separator: true as const }] : []),
+    ...(hidden.length ? [{ id: "front" as const, title: "Move to Front", symbol: "arrow.left.to.line", children: hidden.map((x) => ({ value: { front: x }, title: x.name })) }, { separator: true as const }] : []),
+    ...EXTENSION_LIST_ITEMS,
+  ];
+}
 
 export function runExtensionListChoice(choice: ExtensionListChoice | null, windowId: string) {
   if (choice === "add") openWebStore(windowId);

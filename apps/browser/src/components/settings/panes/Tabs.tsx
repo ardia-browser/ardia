@@ -52,6 +52,7 @@ function LinkKeys() {
       <Row anchor="tabs.newTabLinksOpenIn">
         <PopUp value={newTabLinks} options={NEW_TAB_LINKS} onChange={(newTabLinksOpenIn) => updateSettings({ newTabLinksOpenIn })} />
       </Row>
+      <SettingToggle anchor="tabs.popupsOpenAsTabs" />
       <Row anchor="tabs.peekButtons">
         <PopUp value={peekButtons} options={PEEK_BUTTONS} onChange={(peekButtons) => updateSettings({ peekButtons })} />
       </Row>
@@ -181,6 +182,7 @@ export function TabsPane() {
         <SettingToggle anchor="tabs.appLinksFirst" />
         <SettingToggle anchor="tabs.shareTabsAcrossWindows" />
         <SettingToggle anchor="tabs.warnBeforeClosingLastTab" />
+        <SettingToggle anchor="tabs.keepTopAppsRunning" />
         <SettingToggle anchor="tabs.tabReorderHaptics" />
         <SettingToggle anchor="tabs.extendWebsiteColor" />
         <SettingToggle anchor="tabs.sidebarMediaControls" />

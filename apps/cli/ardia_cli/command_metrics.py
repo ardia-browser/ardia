@@ -24,7 +24,7 @@ FLAGS = frozenset({"daemon_spawned", "reconnected_after_idle", "output_truncated
                    "followed_redrawn_ref", "script_eval_alias", "script_page_world_hint", "attach_refused", "viewport_set", "crashed_reloaded",
                    "network_disable_unconfirmed", "reattached_after_detach", "earlier_requests_ignored", "renderer_exit_kept_session",
                    "setup_restored", "setup_restore_failed",
-                   "selector_nth", "output_saved", "waited_for_element", "saved_to_file", "batch_line_saved", "script_state_kept", "saved_as_csv", "script_timeout_read_hint", "click_scroll_locked", "open_still_loading", "focused_inner_field", "stale_ref_after_navigation", "clicked_label_of_hidden_input", "waited_for_box_to_settle", "frame_cross_process_box", "screenshot_unchanged"})
+                   "selector_nth", "output_saved", "waited_for_element", "saved_to_file", "batch_line_saved", "script_state_kept", "saved_as_csv", "script_timeout_read_hint", "click_scroll_locked", "open_still_loading", "focused_inner_field", "stale_ref_after_navigation", "clicked_label_of_hidden_input", "waited_for_box_to_settle", "frame_cross_process_box", "screenshot_unchanged", "script_queued_behind_busy", "navigation_dropped_hint", "eval_timed_out", "read_queued_beside", "script_state_kept_on_interrupt", "find_closest_names", "batch_saved", "read_empty_page", "network_reloaded"})
 MAIN_PHASE = {"snapshot": "snapshot_build_ms", "eval": "eval_ms"}
 OUTPUT_MARKERS = ("\n[output capped at ", "\n[truncated ", "\n[pages cut to fit ", " not shown. Narrow it instead: ")
 

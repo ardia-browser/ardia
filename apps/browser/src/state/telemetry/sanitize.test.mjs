@@ -286,7 +286,7 @@ test("the snapshot says whether text adjusts to the colour, and how many profile
   assert.deepEqual(cleanProperties(counted), counted);
 });
 
-test("the snapshot counts browser windows narrower than the old 720 point minimum, never their size", () => {
+test("the snapshot counts browser windows narrower than the old 720 point minimum and those that narrow the sidebar, never their size", () => {
   const frame = (width) => [10, 20, width, 600];
   const counted = narrowWindows({
     a: { kind: "main", frame: frame(500) },
@@ -295,9 +295,11 @@ test("the snapshot counts browser windows narrower than the old 720 point minimu
     d: { kind: "small", frame: frame(400) },
     e: { kind: "main", frame: null },
     f: { kind: "main", frame: frame(600), fullScreen: 1700000000000 },
-  });
-  assert.deepEqual(counted, { narrow_windows: "2" });
+    g: { kind: "main", frame: frame(640) },
+  }, 400);
+  assert.deepEqual(counted, { narrow_windows: "3", sidebar_narrowed_windows: "2" });
   assert.deepEqual(cleanProperties(counted), counted);
+  assert.deepEqual(narrowWindows({ a: { kind: "main", frame: frame(500) } }, 190), { narrow_windows: "1", sidebar_narrowed_windows: "0" });
 });
 
 test("a value the spec doesn't allow is left out rather than sent", () => {

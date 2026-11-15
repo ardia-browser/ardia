@@ -1,6 +1,7 @@
+import { displayHost } from "@ardia/core";
 import { isFields } from "../../lib/decode";
 import { sourceMatches, type LinkSource } from "../../lib/linkSource";
-import { matchesUrl, parseMatchPattern, type MatchSpec } from "../../lib/matchPattern";
+import { globMatches, matchesUrl, parseMatchPattern, type MatchSpec } from "../../lib/matchPattern";
 import { parseSaved, unchanged, versionedJson, type Migrations } from "../../lib/savedDocument";
 import { urlParts } from "../../lib/urlParts";
 
@@ -35,9 +36,24 @@ export function siteHost(input: string): string | null {
   return "error" in spec || !spec.host ? null : spec.host;
 }
 
+export const isWildcardPattern = (pattern: string) => pattern !== "<all_urls>" && !pattern.includes("://");
+
 export function patternProblem(pattern: string): string | null {
-  const spec = parseMatchPattern(pattern.trim());
+  const text = pattern.trim();
+  if (!text) return "type one, like *github* or https://*.example.com/docs/*";
+  if (isWildcardPattern(text)) return /\s/.test(text) ? "a pattern can't have spaces" : null;
+  const spec = parseMatchPattern(text);
   return "error" in spec ? spec.error : null;
+}
+
+function wildcardMatches(pattern: string, url: string): boolean {
+  const parts = urlParts(url);
+  if (!parts?.host) return false;
+  const lower = pattern.toLowerCase();
+  const glob = lower.includes("*") ? lower : `*${lower}*`;
+  const hosts = new Set([parts.host, displayHost(parts.host)]);
+  const rest = glob.includes("/") ? `${parts.path}${parts.query}`.toLowerCase() : "";
+  return [...hosts].some((host) => globMatches(glob, `${host}${rest}`));
 }
 
 const compiled = new Map<string, MatchSpec | null>();
@@ -53,6 +69,7 @@ function specOf(pattern: string): MatchSpec | null {
 
 export function linkMatches(when: LinkCondition, url: string): boolean {
   if (when.kind === "any") return true;
+  if (when.kind === "pattern" && isWildcardPattern(when.pattern)) return wildcardMatches(when.pattern, url);
   const spec = specOf(when.kind === "site" ? `*://*.${when.host}/*` : when.pattern);
   return !!spec && matchesUrl(spec, url);
 }

@@ -3,6 +3,7 @@ import { duration } from "../ui/motion";
 import { font, ink, radius, shadow, sidebarFont, sidebarIconSize, sidebarPoints, space, withAlpha, type ShadowLevel } from "../ui/tokens";
 import type { GroupColor } from "../../state/browser/types";
 import { GROUP_COLORS } from "../../state/groups/tokens";
+import { mix } from "../../lib/color";
 
 const DARK = {
   groupFill: "rgba(255,255,255,0.1)",
@@ -17,7 +18,6 @@ const DARK = {
   badge: "rgba(255,255,255,0.9)",
   newTabLabel: "#FFFFFF8C",
   newTabIcon: "#FFFFFF40",
-  noGroupIcon: "#FFFFFF40",
   folderDropFill: "rgba(255,255,255,0.08)",
   folderMosaic: "rgba(255,255,255,0.1)",
   liveDotRing: "rgba(0,0,0,0.3)",
@@ -48,7 +48,6 @@ const LIGHT: typeof DARK = {
   badge: "rgba(0,0,0,0.75)",
   newTabLabel: "#00000080",
   newTabIcon: "#00000042",
-  noGroupIcon: "#00000040",
   folderDropFill: "rgba(0,0,0,0.05)",
   folderMosaic: "rgba(0,0,0,0.06)",
   liveDotRing: "rgba(0,0,0,0.1)",
@@ -68,8 +67,8 @@ const LIGHT: typeof DARK = {
 
 type SidebarTokens = typeof DARK;
 
-const HIGH_CONTRAST_DARK: SidebarTokens = { ...DARK, groupTitle: "#FFFFFF", newTabLabel: "#FFFFFFD1", newTabIcon: "#FFFFFFB3", noGroupIcon: "#FFFFFFB3", badge: "#FFFFFF" };
-const HIGH_CONTRAST_LIGHT: SidebarTokens = { ...LIGHT, groupTitle: "#000000", newTabLabel: "#000000D1", newTabIcon: "#000000B3", noGroupIcon: "#000000B3", badge: "#000000" };
+const HIGH_CONTRAST_DARK: SidebarTokens = { ...DARK, groupTitle: "#FFFFFF", newTabLabel: "#FFFFFFD1", newTabIcon: "#FFFFFFB3", badge: "#FFFFFF" };
+const HIGH_CONTRAST_LIGHT: SidebarTokens = { ...LIGHT, groupTitle: "#000000", newTabLabel: "#000000D1", newTabIcon: "#000000B3", badge: "#000000" };
 
 export function sidebarTokens(theme: { dark: boolean; highContrastText?: boolean }): SidebarTokens {
   if (theme.highContrastText) return theme.dark ? HIGH_CONTRAST_DARK : HIGH_CONTRAST_LIGHT;
@@ -185,12 +184,20 @@ export function groupTint(color: GroupColor | null | undefined): string | null {
 
 export const groupBoxAtRest = (color: GroupColor | null | undefined) => groupTint(color) !== null;
 
+const FOLDER_ACCENT = "#443AFF";
+
+export function folderPalette(color: GroupColor | null | undefined, dark: boolean) {
+  const tint = groupTint(color) ?? FOLDER_ACCENT;
+  return dark
+    ? { stroke: mix("#FFFFFF", tint, 0.64), face: mix("#211E29", tint, 0.12), insideTop: mix("#211E29", tint, 0.4), insideBottom: mix("#15121E", tint, 0.24) }
+    : { stroke: tint, face: mix("#FFFFFF", tint, 0.06), insideTop: mix("#FFFFFF", tint, 0.34), insideBottom: mix("#FFFFFF", tint, 0.64) };
+}
+
 export function groupSurface(color: GroupColor | null | undefined, tokens: SidebarTokens): { fill: string; stroke: string } {
   if (color === "none") return { fill: "transparent", stroke: "transparent" };
   const tint = groupTint(color);
   return tint ? { fill: withAlpha(tint, 0.16), stroke: withAlpha(tint, 0.3) } : { fill: tokens.groupFill, stroke: tokens.groupStroke };
 }
 
-export const SIDEBAR_MIN_WIDTH = 160;
-export const SIDEBAR_MAX_WIDTH = 400;
+export { SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH } from "../../lib/windowLayout";
 export const SIDEBAR_RESIZE_HANDLE = { top: 46, width: 8 } as const;

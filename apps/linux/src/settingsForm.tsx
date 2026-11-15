@@ -17,11 +17,23 @@ export function Anchor(props: ComponentProps<typeof shared.Anchor>) {
 }
 
 export const LINKS_FROM_OTHER_APPS_NOTE = " Links from other apps follow Settings › General › Open links from other apps in Little Ardia.";
+export const POPUPS_AS_TABS_SWITCH_NOTE = "pop-ups stay windows unless Open pop-up windows as tabs is on";
+export const POPUPS_OPEN_AS_TABS_NOTE = "pop-ups open as tabs";
+
+function linuxNewTabLinksDescription(description: string) {
+  let text = description;
+  if (settingUnavailable("general.openLinksInLittleArdia")) text = text.replace(LINKS_FROM_OTHER_APPS_NOTE, "");
+  if (settingUnavailable("tabs.popupsOpenAsTabs")) text = text.replace(POPUPS_AS_TABS_SWITCH_NOTE, POPUPS_OPEN_AS_TABS_NOTE);
+  return text;
+}
 
 export function Row(props: ComponentProps<typeof shared.Row>) {
   if (settingUnavailable(props.anchor)) return null;
-  if (props.anchor !== "tabs.newTabLinksOpenIn" || props.description !== undefined || !settingUnavailable("general.openLinksInLittleArdia")) return <shared.Row {...props} />;
-  return <shared.Row {...props} description={setting(props.anchor).description?.replace(LINKS_FROM_OTHER_APPS_NOTE, "")} />;
+  if (props.anchor !== "tabs.newTabLinksOpenIn" || props.description !== undefined) return <shared.Row {...props} />;
+  const description = setting(props.anchor).description;
+  if (!description) return <shared.Row {...props} />;
+  const linux = linuxNewTabLinksDescription(description);
+  return linux === description ? <shared.Row {...props} /> : <shared.Row {...props} description={linux} />;
 }
 
 export function SectionHeader(props: ComponentProps<typeof shared.SectionHeader>) {

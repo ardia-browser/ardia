@@ -33,12 +33,11 @@ test("a text-only row that is recording or has a Peek open shows its icon again,
 });
 
 test("the drag ghost of a text-only row draws no icon, and every other ghost keeps its icon", () => {
-  assert.equal(ghostIcon(null, row, true), null);
-  assert.deepEqual(ghostIcon(null, { ...row, customIcon: "🚀" }, true), { icon: "🚀" });
-  assert.deepEqual(ghostIcon(null, tile, false), { icon: NO_ROW_ICON });
-  assert.deepEqual(ghostIcon(null, row, false), { icon: NO_ROW_ICON }, "a group led by a text-only row keeps the group's icon, as its header does");
-  assert.deepEqual(ghostIcon("symbol:star", row, false), { icon: "symbol:star" });
-  assert.equal(ghostIcon(null, undefined, false), null);
+  assert.equal(ghostIcon(row, true), null);
+  assert.deepEqual(ghostIcon({ ...row, customIcon: "🚀" }, true), { icon: "🚀" });
+  assert.deepEqual(ghostIcon(tile, false), { icon: NO_ROW_ICON });
+  assert.deepEqual(ghostIcon(row, false), { icon: NO_ROW_ICON });
+  assert.equal(ghostIcon(undefined, false), null);
 });
 
 test("No Icon isn't a symbol anyone can pick, so the text format symbol stays a row icon", () => {

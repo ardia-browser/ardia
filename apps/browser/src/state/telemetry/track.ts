@@ -2,10 +2,11 @@ import { capture, isSharing } from "./client";
 import { appInfo } from "./transport";
 import { launchFirstWindow } from "./journeys";
 import type { PanelState } from "../browser/types";
+import type { AutofillToggle } from "../../platform/autofill";
 
 export type SuggestionType = "history" | "bookmark" | "tab" | "url" | "search" | "calc" | "action" | "create" | "extension" | "provider" | "typed";
 
-type SuggestionLike = { kind: string; tabId?: string; bookmarked?: boolean; visited?: boolean } | undefined;
+type SuggestionLike = { kind: string; id?: string; tabId?: string; bookmarked?: boolean; visited?: boolean } | undefined;
 
 function suggestionType(s: SuggestionLike): SuggestionType {
   if (!s) return "typed";
@@ -33,7 +34,8 @@ export function commandBarPlacementLabel(panel: Pick<PanelState, "newTab" | "pla
   return "field";
 }
 
-export const trackSuggestionChosen = (s: SuggestionLike) => capture("suggestion_chosen", { type: suggestionType(s) });
+export const trackSuggestionChosen = (s: SuggestionLike) =>
+  capture("suggestion_chosen", { type: suggestionType(s), ...(s?.kind === "action" && s.id ? { command: s.id.split(":")[0] } : {}) });
 
 export type CalendarConnectReport = { before: string; after: string; responsible: string; errored: boolean; settingsOpened: boolean; ms: number };
 
@@ -41,6 +43,7 @@ export const trackCalendarConnect = (r: CalendarConnectReport) =>
   capture("calendar_connect", { before: r.before, after: r.after, responsible: r.responsible, errored: r.errored, settings_opened: r.settingsOpened, ms: Math.min(Math.max(0, Math.round(r.ms)), 600_000) });
 
 export const trackSettingsSection = (section: string) => capture("settings_section_opened", { section });
+export const trackAutofillToggleKept = (toggle: AutofillToggle) => capture("autofill_toggle_kept", { toggle });
 
 const SAMPLE_EVERY = 5;
 const MAX_SAMPLES = 500;
@@ -73,6 +76,8 @@ export const takeExternalAppRequests = () => {
   externalAppRequests = { external_app_prompts: 0, external_app_requests_without_app: 0 };
   return taken;
 };
+
+export { takePopupTabCounts } from "./popupTabCounts";
 
 let firstWindowAt: number | null = null;
 

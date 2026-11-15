@@ -89,8 +89,8 @@ export const appearanceRows = {
         },
         addressBarButtons: {
           title: "Address bar buttons",
-          description: "Show on hover keeps Site Controls, Open Split View and Bookmark (or Copy URL) out of the address bar until the pointer is over it. Always show keeps them there.",
-          keywords: ["hover", "always show", "always visible", "site controls", "split view", "bookmark", "copy url", "buttons", "icons", "url bar", "location bar"],
+          description: "Show on hover keeps Site Controls, Open Split View and Bookmark (or Copy URL) out of the address bar until the pointer is over it; in the sidebar the pinned extensions wait for the pointer too, as in Arc, and the not-secure lock always shows. Always show keeps them there.",
+          keywords: ["hover", "always show", "always visible", "site controls", "split view", "bookmark", "copy url", "buttons", "icons", "extensions", "pinned extensions", "clean", "arc", "url bar", "location bar"],
         },
         showTranslateButton: {
           title: "Show Translate button",

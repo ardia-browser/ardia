@@ -679,6 +679,13 @@ class BrowseEndToEnd(unittest.TestCase):
         self.assertEqual(report["prompt"], "reject")
         self.assertIn("late-buy", report["clicked"])
 
+    def test_click_dismisses_a_consent_banner_that_appears_after_another_layer_moved_away(self):
+        session = "consent-late"
+        self.browse("open", self.url("consentlate.html"), "--show", session=session)
+        said = self.browse("click", "#search", session=session).stdout
+        self.assertIn('"Just Necessary" button was clicked (reject)', said)
+        self.assertEqual(self.report(session), {"clicked": ["search"], "choice": "necessary"})
+
     def test_press_on_a_wrapper_focuses_the_field_inside_and_a_hidden_one_is_explained(self):
         session = "focus"
         self.browse("open", self.url("focus.html"), "--show", session=session)
@@ -839,6 +846,59 @@ class BrowseEndToEnd(unittest.TestCase):
         missing = self.browse("is", "visible", "#never", session=session, check=False)
         self.assertNotIn("waited", missing.stdout + missing.stderr)
 
+    def test_eval_reads_its_code_from_stdin_when_none_is_given(self):
+        session = "eval-stdin"
+        self.browse("open", self.url("many.html"), session=session)
+        target = self.data / "out" / "eval-stdin.json"
+        said = self.browse("eval", "--out", str(target), session=session, stdin="JSON.stringify({ title: document.title })").stdout
+        self.assertIn(f"Saved to {target}", said)
+        self.assertEqual(json.loads(target.read_text())["title"], self.browse("get", "title", session=session).stdout.strip())
+
+    def test_eval_waits_for_slow_page_code_as_long_as_its_timeout_allows(self):
+        session = "slow-eval"
+        self.browse("open", self.url("many.html"), session=session)
+        slow = "new Promise((done) => setTimeout(() => done('settled'), 2500))"
+        cut = self.browse("eval", slow, "--timeout", "1s", session=session, check=False)
+        self.assertNotEqual(cut.returncode, 0)
+        self.assertIn("didn't finish within 1 s", cut.stderr)
+        self.assertIn("eval --timeout 5m", cut.stderr)
+        self.assertNotIn("Ardia didn't answer", cut.stderr)
+        self.assertIn("settled", self.browse("eval", slow, "--timeout", "10s", session=session).stdout)
+
+    def test_a_dropped_connection_says_to_try_another_way_in(self):
+        import threading
+
+        listener = socket.socket()
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(8)
+        stop = threading.Event()
+
+        def drop_every_connection():
+            listener.settimeout(0.2)
+            while not stop.is_set():
+                try:
+                    accepted, _ = listener.accept()
+                except OSError:
+                    continue
+                accepted.recv(4096)
+                accepted.close()
+
+        dropper = threading.Thread(target=drop_every_connection, daemon=True)
+        dropper.start()
+        try:
+            url = f"http://127.0.0.1:{listener.getsockname()[1]}/announcements"
+            first = self.browse("open", url, session="dropped", check=False)
+            second = self.browse("open", url, session="dropped", check=False)
+        finally:
+            stop.set()
+            dropper.join(2)
+            listener.close()
+        self.assertNotEqual(first.returncode, 0)
+        self.assertIn("ERR_EMPTY_RESPONSE", first.stderr)
+        self.assertIn("The site dropped the connection;", first.stderr)
+        self.assertIn("read --http <url>", first.stderr)
+        self.assertIn("(2 failures on 127.0.0.1 in this session)", second.stderr)
+
     def test_read_waits_for_a_page_that_hydrates_late(self):
         out = self.browse("read", self.url("late.html"), session="late-read").stdout
         self.assertIn("Result card 12", out)
@@ -860,6 +920,78 @@ class BrowseEndToEnd(unittest.TestCase):
         self.assertIn("slept", long.stdout.read())
         long.stdout.close()
         long.stderr.close()
+
+    def test_a_read_waits_its_turn_when_the_sibling_session_is_busy_too(self):
+        session = "busy-both"
+        self.browse("open", self.url("picker.html"), session=session)
+        self.browse("open", self.url("picker.html"), session=f"{session}-side")
+        env = dict(os.environ, PYTHONPATH=str(CLI))
+        base = [sys.executable, "-m", "ardia_cli", "browse", "--port", str(self.port), "--data-dir", str(self.data)]
+        sleepers = []
+        for name in (session, f"{session}-side"):
+            sleeper = subprocess.Popen(base + ["--session", name, "script", "--timeout", "2m"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE, text=True, env=env)
+            sleeper.stdin.write("await sleep(40000); return 'slept';")
+            sleeper.stdin.close()
+            sleepers.append(sleeper)
+        time.sleep(3)
+        read = subprocess.run(base + ["--session", session, "read", self.url("late.html")], capture_output=True, text=True, env=env, timeout=240)
+        for sleeper in sleepers:
+            self.assertEqual(sleeper.wait(120), 0)
+            sleeper.stdout.close()
+            sleeper.stderr.close()
+        self.assertEqual(read.returncode, 0, read.stderr)
+        self.assertIn("Result card 12", read.stdout)
+
+    def test_network_requests_reload_lists_what_the_page_loaded(self):
+        session = "network-reload"
+        self.browse("open", self.url("loadsdata.html"), session=session)
+        first = self.browse("network", "requests", "--type", "fetch", session=session).stdout
+        self.assertIn("network requests --reload", first)
+        listed = self.browse("network", "requests", "--reload", "--type", "fetch", session=session).stdout
+        self.assertIn("loadsdata.json", listed)
+
+    def test_batch_out_saves_everything_the_batch_printed(self):
+        session = "batch-out"
+        self.browse("open", self.url("many.html"), session=session)
+        target = self.data / "out" / "batch.txt"
+        said = self.browse("batch", "get title", "get url", "click #nothing-here", "--out", str(target), session=session, check=False).stdout
+        saved = target.read_text()
+        self.assertIn(self.browse("get", "title", session=session).stdout.strip(), saved)
+        self.assertIn("many.html", saved)
+        self.assertIn("✓ Saved the output of 2 of 3 lines to", said)
+        self.assertIn("✗ click #nothing-here:", said)
+
+    def test_unquoted_attribute_values_work_in_selectors_and_eval_says_how_to_quote(self):
+        session = "unquoted"
+        self.browse("open", self.url("many.html"), "--show", session=session)
+        self.browse("eval", "const b = document.createElement('button'); b.setAttribute('aria-label', 'Number of bedrooms'); "
+                    "b.dataset.path = '/en/plp/'; b.textContent = 'Beds'; b.onclick = () => { document.title = 'beds picked'; }; "
+                    "document.body.prepend(b); true", session=session)
+        self.browse("click", "[aria-label=Number of bedrooms]", session=session)
+        self.assertEqual(self.browse("get", "title", session=session).stdout.strip(), "beds picked")
+        self.assertIn("Beds", self.browse("get", "text", "button[data-path*=/en/plp/]", session=session).stdout)
+        bad = self.browse("eval", "document.querySelector('a[href*=/en/plp/]')", session=session, check=False)
+        self.assertNotEqual(bad.returncode, 0)
+        self.assertIn('needs quotes in CSS: a[href*="/path/"]', bad.stderr)
+
+    def test_an_interrupted_script_keeps_its_state(self):
+        import signal
+
+        session = "interrupted"
+        self.browse("open", self.url("picker.html"), session=session)
+        env = dict(os.environ, PYTHONPATH=str(CLI))
+        long = subprocess.Popen([sys.executable, "-m", "ardia_cli", "browse", "--port", str(self.port), "--data-dir", str(self.data), "--session", session,
+                                 "script", "--timeout", "2m"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+        long.stdin.write("state.rows = [1, 2, 3]; await sleep(60000); return 'slept';")
+        long.stdin.close()
+        time.sleep(4)
+        long.send_signal(signal.SIGINT)
+        _, err = long.communicate(timeout=30)
+        self.assertEqual(long.returncode, 130)
+        self.assertIn("ardia browse script 'return state'", err)
+        kept = self.browse("script", session=session, stdin="return state.rows;").stdout
+        self.assertIn("[1,2,3]", kept.replace(" ", "").replace("\n", ""))
 
     def test_out_saves_the_whole_result_and_prints_a_summary(self):
         session = "out"

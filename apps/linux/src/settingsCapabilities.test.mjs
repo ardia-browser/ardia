@@ -12,6 +12,7 @@ import * as engines from "./hostEngines.ts";
 const hidden = [
   "general.defaultBrowser", "general.openAtLogin", "appearance.pageScrollBars", "advanced.cliControl", "advanced.cliInstall", "tabs.videoUpscaling", "privacy.viewData",
   "privacy.commandScrollZoom", "general.littleArdiaOpensNewTabLinks", "general.openLinksInLittleArdia", "tabs.peekLinksToOtherSites", "tabs.tabReorderHaptics", "tabs.appLinksFirst",
+  "tabs.popupsOpenAsTabs",
 ];
 
 test("Settings navigation and search leave out the unavailable Engines pane and platform rows", () => {
@@ -57,7 +58,9 @@ test("Settings form primitives drop unavailable rows and keep available ones unc
   const newTabLinks = form.Row({ anchor: "tabs.newTabLinksOpenIn" });
   assert.ok(index.setting("tabs.newTabLinksOpenIn").description.endsWith(form.LINKS_FROM_OTHER_APPS_NOTE));
   assert.equal(newTabLinks.type, sharedForm.Row);
-  assert.ok(newTabLinks.props.description.endsWith("sign-in pop-ups stay windows."));
+  assert.ok(index.setting("tabs.newTabLinksOpenIn").description.includes(form.POPUPS_AS_TABS_SWITCH_NOTE));
+  assert.ok(newTabLinks.props.description.endsWith(`and ${form.POPUPS_OPEN_AS_TABS_NOTE}.`));
+  assert.equal(newTabLinks.props.description.includes("Open pop-up windows as tabs"), false);
 });
 
 test("every engine decision is Chromium on Linux even with stored WebKit settings, rules and streaming routes", () => {

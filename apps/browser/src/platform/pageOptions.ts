@@ -12,3 +12,4 @@ export type SearchEngineIdentity = Pick<SearchEngine, "name" | "keyword" | "url"
 export const setSearchEngineName = ({ name, keyword, url }: SearchEngineIdentity) =>
   call("search.setEngineName", { name, keyword, url });
 export const setLittleArdiaOpensNewTabLinks = (enabled: boolean) => call("webView.setLittleArdiaOpensNewTabLinks", { enabled });
+export const setPopupsOpenAsTabs = (enabled: boolean) => call("webView.setPopupsOpenAsTabs", { enabled });

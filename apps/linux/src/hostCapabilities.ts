@@ -15,6 +15,7 @@ export type LinuxCapabilities = {
   commandScrollZoom: boolean;
   littleArdiaNewTabLinks: boolean;
   peekOtherSites: boolean;
+  popupsOpenAsTabs: boolean;
   haptics: boolean;
   linksFromOtherApps: boolean;
   dictation: boolean;
@@ -65,6 +66,7 @@ export function linuxCapabilities(host: ArdiaHost | undefined = ardiaHost): Linu
     commandScrollZoom: has("webView.setCommandScrollZoom"),
     littleArdiaNewTabLinks: has("webView.setLittleArdiaOpensNewTabLinks"),
     peekOtherSites: has("webView.setPeekOtherSiteTabs"),
+    popupsOpenAsTabs: has("webView.setPopupsOpenAsTabs"),
     haptics: has("ArdiaSystem.hapticTick"),
     linksFromOtherApps: has(LINKS_FROM_OTHER_APPS),
     dictation: has(DICTATION_METHOD),
@@ -87,6 +89,7 @@ export function unavailableSettingIds(capabilities: LinuxCapabilities, settingId
   if (!capabilities.commandScrollZoom) ids.add("privacy.commandScrollZoom");
   if (!capabilities.littleArdiaNewTabLinks) ids.add("general.littleArdiaOpensNewTabLinks");
   if (!capabilities.peekOtherSites) ids.add("tabs.peekLinksToOtherSites");
+  if (!capabilities.popupsOpenAsTabs) ids.add("tabs.popupsOpenAsTabs");
   if (!capabilities.haptics) ids.add("tabs.tabReorderHaptics");
   if (!capabilities.unloadIdleProfiles) ids.add("advanced.unloadProfilesAfter");
   if (!capabilities.blockAutoplayEverywhere) ids.add("privacy.blockAutoplayEverywhere");

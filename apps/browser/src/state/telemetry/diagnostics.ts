@@ -1,6 +1,7 @@
 import { diagnosticsSample, hardwareInfo, type HardwareInfo } from "../../platform/app";
 import { onHoverLost, systemState, type HoverLostEpisode } from "../../platform/performance";
 import { cliControlStatus } from "../../platform/cli";
+import { call } from "../../platform/engine";
 import { withDeadline } from "../../lib/deadline";
 import { activeTab } from "../browser/model";
 import { useBrowser } from "../browser/store";
@@ -92,6 +93,12 @@ function keepRecent(list: SavedContext[], now: number): SavedContext[] {
 }
 
 export const takeMainProcessWork = async () => mainProcessWork(await diagnosticsSample().catch(() => ({})), Date.now());
+
+export async function takeContentDriftCounts(): Promise<Record<string, number>> {
+  const drift = await call("webView.takeContentDrift", {}).catch(() => null);
+  if (!drift) return {};
+  return { content_layer_layouts: drift.layouts, content_layer_refits: drift.fits, content_layer_drift_max_pt: drift.maxPoints };
+}
 
 export const contextSamples = () => samples;
 

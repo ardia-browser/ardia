@@ -32,6 +32,7 @@ export const PAGE_OPTION_CALLS = [
   "webView.setDisplayMediaPicker",
   "webView.setPeekOtherSiteTabs",
   "webView.setLittleArdiaOpensNewTabLinks",
+  "webView.setPopupsOpenAsTabs",
   "webView.setBlockAutoplayEverywhere",
   "webView.setFairPlayInChromium",
 ] as const;

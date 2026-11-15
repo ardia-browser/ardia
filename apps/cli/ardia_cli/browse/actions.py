@@ -374,7 +374,7 @@ async def target_point(page, element, humanize: bool, check_cover: bool = True):
     await laid_out(page)
     await scroll_into_view(page, element, humanize)
     tried = set()
-    for _ in range(3):
+    for _ in range(4):
         box = await settled_box(page, element)
         if box is None:
             raise BrowseError(f"Element {element.label} has no visible box (hidden or zero-size)", code="not_visible")
@@ -392,8 +392,8 @@ async def target_point(page, element, humanize: bool, check_cover: bool = True):
             cover = await page.call("(el, x, y) => ardiaBrowse.hitTest(el, x, y)", element, cx - ox, cy - oy, frame=element.frame)
         if not cover:
             break
-        if "consent" not in tried and not cover.startswith("nothing"):
-            tried.add("consent")
+        if f"consent {cover}" not in tried and not cover.startswith("nothing"):
+            tried.add(f"consent {cover}")
             if await dismissed_consent(page, element, cx - ox, cy - oy):
                 continue
         if "center" not in tried:

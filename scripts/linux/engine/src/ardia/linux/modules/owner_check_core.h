@@ -155,6 +155,9 @@ class OwnerCheck {
   const OwnerCheckThrottle& throttle() const { return throttle_; }
 
  private:
+  static void DeliverReusedGrant(base::WeakPtr<OwnerCheck> check,
+                                 int presence,
+                                 Done done);
   base::TimeTicks Now() const;
   void Finish(bool granted);
   void HelperLocated(std::string reason,

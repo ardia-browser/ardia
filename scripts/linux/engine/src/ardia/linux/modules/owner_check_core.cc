@@ -250,7 +250,10 @@ void OwnerCheck::Confirm(const std::string& reason, Done done) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (!granted_at_.is_null() && Now() - granted_at_ < kGrantReuse) {
     base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
-        FROM_HERE, base::BindOnce(std::move(done), true));
+        FROM_HERE,
+        base::BindOnce(&OwnerCheck::DeliverReusedGrant,
+                       weak_factory_.GetWeakPtr(), away_generation_,
+                       std::move(done)));
     return;
   }
   waiters_.push_back(std::move(done));
@@ -276,6 +279,13 @@ void OwnerCheck::Confirm(const std::string& reason, Done done) {
   }
   delegate_.find_helper.Run(base::BindOnce(
       &OwnerCheck::HelperLocated, weak_factory_.GetWeakPtr(), reason));
+}
+
+void OwnerCheck::DeliverReusedGrant(base::WeakPtr<OwnerCheck> check,
+                                    int presence,
+                                    Done done) {
+  std::move(done).Run(check && check->StillPresent(presence) &&
+                      !check->granted_at_.is_null());
 }
 
 void OwnerCheck::HelperLocated(std::string reason,

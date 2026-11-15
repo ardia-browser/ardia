@@ -318,6 +318,35 @@ TEST_F(OwnerCheckTest, ARightPasswordCheckedAfterGoingAwayGrantsNothing) {
   EXPECT_FALSE(next.Get());
 }
 
+TEST_F(OwnerCheckTest, AReusedGrantQueuedBeforeGoingAwayDenies) {
+  Make();
+  base::test::TestFuture<bool> granted;
+  check_->Confirm("x", granted.GetCallback());
+  Type("right");
+  ASSERT_TRUE(granted.Get());
+  base::test::TestFuture<bool> reused;
+  check_->Confirm("x", reused.GetCallback());
+  check_->OwnerWentAway();
+  task_environment_.RunUntilIdle();
+  ASSERT_TRUE(reused.IsReady());
+  EXPECT_FALSE(reused.Get());
+  EXPECT_EQ(log_.asked, 1);
+}
+
+TEST_F(OwnerCheckTest, AReusedGrantQueuedBeforeTheCheckEndsDenies) {
+  Make();
+  base::test::TestFuture<bool> granted;
+  check_->Confirm("x", granted.GetCallback());
+  Type("right");
+  ASSERT_TRUE(granted.Get());
+  base::test::TestFuture<bool> reused;
+  check_->Confirm("x", reused.GetCallback());
+  check_.reset();
+  task_environment_.RunUntilIdle();
+  ASSERT_TRUE(reused.IsReady());
+  EXPECT_FALSE(reused.Get());
+}
+
 TEST_F(OwnerCheckTest, GoingAwayDropsAGrant) {
   Make();
   base::test::TestFuture<bool> granted;

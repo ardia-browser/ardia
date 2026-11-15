@@ -1,0 +1,98 @@
+SPDX-License-Identifier: GPL-3.0-only
+
+A link to another app opens nothing when no app on this computer handles its scheme, as on the Mac (#1715) and Windows.
+On Linux GetApplicationNameForScheme named "xdg-open" whenever it found no usable handler, so a mailto: link (which
+Chrome launches without asking) went to the desktop portal, whose "Open With… No Apps available" window appeared, and an
+unknown scheme asked "Open xdg-open?". The name is now empty when xdg-settings names no handler, its desktop file isn't
+installed, or the entry isn't for this desktop (Hidden, or OnlyShowIn/NotShowIn against XDG_CURRENT_DESKTOP, as GIO and
+the portal judge it: an XFCE-only mail helper in another session). An empty name stops both the prompt (the Mac and
+Windows guard, now on Linux too) and the direct launch, with the same console message.
+
+--- a/chrome/browser/shell_integration_linux.cc
++++ b/chrome/browser/shell_integration_linux.cc
+@@ -11,6 +11,7 @@
+ #include <sys/types.h>
+ #include <unistd.h>
+ 
++#include <algorithm>
+ #include <memory>
+ #include <optional>
+ #include <sstream>
+@@ -32,6 +33,7 @@
+ #include "base/path_service.h"
+ #include "base/process/launch.h"
+ #include "base/strings/strcat.h"
++#include "base/strings/string_split.h"
+ #include "base/strings/string_util.h"
+ #include "base/strings/stringprintf.h"
+ #include "base/strings/utf_string_conversions.h"
+@@ -836,12 +838,37 @@
+   base::FilePath desktop_filepath =
+       shell_integration_linux::GetDesktopFileForDefaultSchemeHandler(env.get(),
+                                                                      url);
+-  if (shell_integration_linux::GetExistingShortcutContents(
++  if (desktop_filepath.empty() ||
++      !shell_integration_linux::GetExistingShortcutContents(
+           env.get(), desktop_filepath, &desktop_file_contents)) {
+-    application_name =
+-        shell_integration_linux::GetDesktopEntryStringValueFromFromDesktopFile(
+-            "Name", desktop_file_contents);
++    return std::u16string();
+   }
++  const auto entry = [&](const std::string& key) {
++    return shell_integration_linux::
++        GetDesktopEntryStringValueFromFromDesktopFile(key,
++                                                      desktop_file_contents);
++  };
++  const std::vector<std::string> current_desktops = base::SplitString(
++      env->GetVar("XDG_CURRENT_DESKTOP").value_or(std::string()), ":",
++      base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
++  const auto names_current_desktop = [&](const std::string& list) {
++    for (const std::string& desktop :
++         base::SplitString(list, ";", base::TRIM_WHITESPACE,
++                           base::SPLIT_WANT_NONEMPTY)) {
++      if (std::ranges::find(current_desktops, desktop) !=
++          current_desktops.end()) {
++        return true;
++      }
++    }
++    return false;
++  };
++  const std::string only_shown_in = entry("OnlyShowIn");
++  if (base::EqualsCaseInsensitiveASCII(entry("Hidden"), "true") ||
++      (!only_shown_in.empty() && !names_current_desktop(only_shown_in)) ||
++      names_current_desktop(entry("NotShowIn"))) {
++    return std::u16string();
++  }
++  application_name = entry("Name");
+ 
+   return application_name.empty() ? u"xdg-open"
+                                   : base::UTF8ToUTF16(application_name);
+--- a/chrome/browser/external_protocol/external_protocol_handler.cc
++++ b/chrome/browser/external_protocol/external_protocol_handler.cc
+@@ -165,7 +165,7 @@
+     return;
+   }
+ 
+-#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
++#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX)
+   // If the Shell does not have a registered name for the protocol,
+   // attempting to invoke the protocol will fail.
+   if (program_name.empty()) {
+@@ -305,6 +305,16 @@
+     return;
+   }
+ 
++#if BUILDFLAG(IS_LINUX)
++  if (program_name.empty()) {
++    AddMessageToConsole(
++        initiator_document, blink::mojom::ConsoleMessageLevel::kError,
++        "Failed to launch '" + escaped_url.possibly_invalid_spec() +
++            "' because the scheme does not have a registered handler.");
++    return;
++  }
++#endif
++
+   LaunchUrlWithoutSecurityCheckWithDelegate(
+       escaped_url, web_contents, std::move(initiator_document), delegate);
+ }

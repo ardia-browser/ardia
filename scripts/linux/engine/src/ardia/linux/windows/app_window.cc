@@ -158,7 +158,7 @@ views::WebView* AppWindowView::AddPage(const std::string& key,
 }
 
 bool AppWindowView::PagesUnderUi() {
-  return ardiacore::TestFlag("pagesUnderUi");
+  return !ardiacore::TestFlag("pagesAboveUi");
 }
 
 void AppWindowView::PlacePage(const std::string& key,

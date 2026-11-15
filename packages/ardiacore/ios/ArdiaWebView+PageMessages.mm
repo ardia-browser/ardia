@@ -17,14 +17,15 @@ using namespace ardia_runtime;
 
 namespace {
 
-NSDictionary *SelectionState(NSDictionary *d) {
+NSDictionary *SelectionState(NSDictionary *d, CGFloat rootPerPage) {
   NSString *text = Text(d, @"text", 4000);
   NSDictionary *rect = Field<NSDictionary>(d, @"rect");
   double x, y, width, height;
   if (!text || !Finite(rect, @"x", &x) || !Finite(rect, @"y", &y) || !Finite(rect, @"width", &width) ||
       !Finite(rect, @"height", &height))
     return nil;
-  return @{@"text" : text, @"rect" : @{@"x" : @(x), @"y" : @(y), @"width" : @(width), @"height" : @(height)}};
+  return @{@"text" : text, @"rect" : @{@"x" : @(x * rootPerPage), @"y" : @(y * rootPerPage), @"width" : @(width * rootPerPage),
+                                       @"height" : @(height * rootPerPage)}};
 }
 
 BOOL gDisplayMediaPicker = YES;
@@ -158,7 +159,7 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
   } else if ([kind isEqualToString:@"peekTrace"] && dict) {
     PeekTrace(@{@"event" : @"page", @"main" : @(main), @"page" : dict});
   } else if ([kind isEqualToString:@"selection"] && main) {
-    [self emit:@"selection" payload:@{@"selection" : SelectionState(dict) ?: NSNull.null}];
+    [self emit:@"selection" payload:@{@"selection" : SelectionState(dict, RootPointsPerLocalPoint(self)) ?: NSNull.null}];
   } else if ([kind isEqualToString:@"newTabLink"] && dict) {
     [self noteNewTabLink:Text(dict, @"url", 8192)];
   } else if ([kind isEqualToString:@"linkDrop"] && main) {

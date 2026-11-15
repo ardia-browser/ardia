@@ -55,6 +55,10 @@ export function startDevHarness() {
     get onboarding(): typeof import("../../state/onboarding/onboarding") {
       return require("../../state/onboarding/onboarding");
     },
+    get interfaceScale(): typeof import("../../state/settings/interfaceScale") & { pixelRatio: number; hairline: number } {
+      const rn: typeof import("react-native") = require("react-native");
+      return { ...require("../../state/settings/interfaceScale"), pixelRatio: rn.PixelRatio.get(), hairline: rn.StyleSheet.hairlineWidth };
+    },
     get media(): typeof import("../../state/media/media").useMedia {
       return require("../../state/media/media").useMedia;
     },

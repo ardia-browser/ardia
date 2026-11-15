@@ -8,6 +8,7 @@ import { groupEntries, holdsTab, keptEntries, sidebarEntries } from "./entries";
 import { shownPinnedEntries } from "./pinnedFold";
 import { entryId, entryKey } from "./entryKey";
 import { pinSection } from "../browser/model";
+import { windowRootSize } from "../windows/rootSize";
 
 const GROUP_BORDER = SIDEBAR_GROUP.border;
 
@@ -46,7 +47,7 @@ export const FIRST_PAINT_HEIGHT = 2400;
 
 export function firstPaintEntries(s: BrowserState, windowId: string, profileId: string, entries: string[], lazy: boolean): number {
   if (!lazy) return EAGER_FIRST_PAINT_ENTRIES;
-  return Math.max(1, entriesWithin(s, windowId, profileId, entries, s.windows[windowId]?.frame?.[3] ?? FIRST_PAINT_HEIGHT));
+  return Math.max(1, entriesWithin(s, windowId, profileId, entries, windowRootSize(s, windowId)?.height ?? FIRST_PAINT_HEIGHT));
 }
 
 export const startsOffScreen = (lazy: boolean, current: boolean) => lazy && !current;

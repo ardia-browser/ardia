@@ -13,6 +13,7 @@ import { BADGE_FALLBACK_FILL, TOOLBAR_DRAG_START } from "./tokens";
 import { SLIDE } from "../tabstrip/tokens";
 import { isLight } from "../../lib/color";
 import { dropToolbarAnchor, setToolbarAnchor } from "../../state/extensions/toolbarAnchors";
+import { onInterfaceScaleSettled } from "../../state/settings/interfaceScale";
 import {
   activateExtension,
   extensionOverflowItems,
@@ -153,6 +154,7 @@ function useAnchor(windowId: string, tabId: string, slot: string) {
         resolve(anchor);
       });
     });
+  useEffect(() => onInterfaceScaleSettled(() => void measure()), [owner]);
   return { ref, measure };
 }
 

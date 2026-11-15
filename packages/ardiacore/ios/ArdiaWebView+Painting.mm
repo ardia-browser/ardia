@@ -1,4 +1,5 @@
 #import "ArdiaWebViewInternal.h"
+#import "ArdiaInterfaceScale.h"
 #import "ArdiaEarlyWindow.h"
 #import "ArdiaRuntime.h"
 
@@ -152,8 +153,14 @@ BOOL Above(NSView *a, NSView *b) {
 
 - (void)setFrameSize:(NSSize)newSize {
   [super setFrameSize:newSize];
+  [ArdiaInterfaceScale fitPageHost:self];
   [self layoutPage];
   if (_visible) [ArdiaEarlyWindow noteLayoutChangeIn:self.window];
+}
+
+- (void)interfaceScaleChanged {
+  [ArdiaInterfaceScale fitPageHost:self];
+  [self layoutPage];
 }
 
 - (void)setFrameOrigin:(NSPoint)newOrigin {

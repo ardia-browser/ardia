@@ -21,6 +21,7 @@ import type { BrowserState } from "../browser/store";
 import { DEFAULT_SIDEBAR_WIDTH, PAGE_FRAME, validPageFrame } from "../../lib/windowLayout";
 import { SIDEBAR_TEXT_SIZES } from "../../lib/themeLook";
 import { TAB_CORNERS, validTabCorners } from "../../lib/tabCorners";
+import { INTERFACE_SCALE, INTERFACE_SCALE_STEPS, validInterfaceScale } from "../../lib/interfaceScale";
 import { isFields, isString, isStringList } from "../../lib/decode";
 import type { SavedObject } from "../../lib/savedDocument";
 import type { JsonSchema } from "../../lib/jsonSchema";
@@ -129,6 +130,7 @@ export const SETTING_SPECS = {
   balancedTopApps: flag(false, SYNCED),
   showAdvancedSettings: flag(false),
   selectedTabGlow: oneOf(["full", "soft", "off"], "full", SYNCED),
+  interfaceScale: shaped<number>(INTERFACE_SCALE.default, validInterfaceScale, { type: "number", enum: INTERFACE_SCALE_STEPS }),
   sidebarTextSize: oneOf(SIDEBAR_TEXT_SIZES, "default"),
   sidebarTextContrast: oneOf(["auto", "standard", "high"], "auto", SYNCED),
   selectedTopApp: oneOf(["ring", "fill", "outline"], "ring", SYNCED),

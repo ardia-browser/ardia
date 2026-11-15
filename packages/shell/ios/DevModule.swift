@@ -1,4 +1,5 @@
 import AppKit
+import ArdiaCore
 import ExpoModulesCore
 import ImageIO
 import UniformTypeIdentifiers
@@ -127,8 +128,9 @@ public class DevModule: Module {
         return true
       }
       guard let window = WindowManager.shared.window(windowId) else { return false }
-      ServerWindowDrag.pointerOverride = NSPoint(x: window.frame.minX + x, y: window.frame.maxY - top)
-      ServerWindowDrag.pointerMoved(in: window, at: NSPoint(x: x, y: window.frame.height - top))
+      let inWindow = SyntheticInput.windowPoint(x: x, top: top, in: window)
+      ServerWindowDrag.pointerOverride = window.convertPoint(toScreen: inWindow)
+      ServerWindowDrag.pointerMoved(in: window, at: inWindow)
       return true
     }.runOnQueue(.main)
 
@@ -209,9 +211,8 @@ public class DevModule: Module {
         _ = (view as AnyObject).perform(select, with: nil)
         return true
       }
-      guard let window = WindowManager.shared.window(windowId), let content = window.contentView else { return false }
-      let local = SyntheticInput.contentPoint(x: x, top: y, in: content)
-      let screen = window.convertPoint(toScreen: content.convert(local, to: nil))
+      guard let window = WindowManager.shared.window(windowId) else { return false }
+      let screen = SyntheticInput.screenPoint(x: x, top: y, in: window)
       _ = (view as AnyObject).perform(select, with: NSValue(point: screen))
       return true
     }.runOnQueue(.main)
@@ -223,7 +224,7 @@ public class DevModule: Module {
         return true
       }
       guard let window = WindowManager.shared.window(windowId) else { return false }
-      SidebarEdgeWatcher.shared.pointerOverride = NSPoint(x: window.frame.minX + x, y: window.frame.maxY - y)
+      SidebarEdgeWatcher.shared.pointerOverride = SyntheticInput.screenPoint(x: x, top: y, in: window)
       SidebarEdgeWatcher.shared.checkPointer()
       return true
     }.runOnQueue(.main)
@@ -327,11 +328,11 @@ public class DevModule: Module {
   private static let scriptQueue = DispatchQueue(label: "ardia.dev-applescript")
 
   private static func snapshot(windowId: String, path: String, transparent: Bool = false) -> Bool {
-    guard let view = WindowManager.shared.window(windowId)?.contentView, let layer = view.layer else { return false }
+    guard let view = WindowManager.shared.window(windowId)?.contentView, view.layer != nil else { return false }
     let scale = view.window?.backingScaleFactor ?? 2
-    let size = view.bounds.size
+    let area = view.convert(view.bounds, to: nil)
     guard let rep = NSBitmapImageRep(
-      bitmapDataPlanes: nil, pixelsWide: Int(size.width * scale), pixelsHigh: Int(size.height * scale), bitsPerSample: 8,
+      bitmapDataPlanes: nil, pixelsWide: Int(area.width * scale), pixelsHigh: Int(area.height * scale), bitsPerSample: 8,
       samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
       let context = NSGraphicsContext(bitmapImageRep: rep) else { return false }
     let cg = context.cgContext
@@ -339,15 +340,10 @@ public class DevModule: Module {
       NSGraphicsContext.saveGraphicsState()
       NSGraphicsContext.current = context
       (view.window?.backgroundColor ?? .windowBackgroundColor).setFill()
-      NSRect(origin: .zero, size: CGSize(width: size.width * scale, height: size.height * scale)).fill()
+      NSRect(origin: .zero, size: CGSize(width: area.width * scale, height: area.height * scale)).fill()
       NSGraphicsContext.restoreGraphicsState()
     }
-    cg.scaleBy(x: scale, y: scale)
-    if view.isFlipped || layer.isGeometryFlipped {
-      cg.translateBy(x: 0, y: size.height)
-      cg.scaleBy(x: 1, y: -1)
-    }
-    layer.render(in: cg)
+    DevSnapshotBurst.draw(view, windowArea: area, scale: scale, in: cg)
     guard let png = rep.representation(using: .png, properties: [:]) else { return false }
     return (try? png.write(to: URL(fileURLWithPath: path))) != nil
   }
@@ -403,9 +399,8 @@ final class DevSnapshotBurst: NSObject {
       promise.resolve(nil)
       return
     }
-    let burst = DevSnapshotBurst(
-      view: view, crop: CGRect(x: rect[0], y: rect[1], width: rect[2], height: rect[3]),
-      dir: URL(fileURLWithPath: dir), durationMs: durationMs, promise: promise)
+    let crop = InterfaceScale.windowRect(fromRoot: CGRect(x: rect[0], y: rect[1], width: rect[2], height: rect[3]), in: view.window)
+    let burst = DevSnapshotBurst(view: view, crop: crop, dir: URL(fileURLWithPath: dir), durationMs: durationMs, promise: promise)
     running = burst
     burst.link = view.displayLink(target: burst, selector: #selector(tick(_:)))
     burst.link?.add(to: .main, forMode: .common)
@@ -421,23 +416,28 @@ final class DevSnapshotBurst: NSObject {
   }
 
   private func render() -> CGImage? {
-    guard let layer = view.layer else { return nil }
+    guard view.layer != nil else { return nil }
     let scale = view.window?.backingScaleFactor ?? 2
     guard let cg = CGContext(
       data: nil, width: Int(crop.width * scale), height: Int(crop.height * scale), bitsPerComponent: 8, bytesPerRow: 0,
       space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
     cg.setFillColor((view.window?.backgroundColor ?? .windowBackgroundColor).cgColor)
     cg.fill(CGRect(x: 0, y: 0, width: crop.width * scale, height: crop.height * scale))
+    Self.draw(view, windowArea: crop, scale: scale, in: cg)
+    return cg.makeImage()
+  }
+
+  static func draw(_ view: NSView, windowArea: CGRect, scale: CGFloat, in cg: CGContext) {
+    guard let layer = view.layer, layer.bounds.width > 0, layer.bounds.height > 0 else { return }
+    let placed = view.convert(view.bounds, to: nil)
     cg.scaleBy(x: scale, y: scale)
+    cg.translateBy(x: placed.minX - windowArea.minX, y: placed.minY - windowArea.minY)
+    cg.scaleBy(x: placed.width / layer.bounds.width, y: placed.height / layer.bounds.height)
     if view.isFlipped || layer.isGeometryFlipped {
-      cg.translateBy(x: 0, y: crop.height)
+      cg.translateBy(x: 0, y: layer.bounds.height)
       cg.scaleBy(x: 1, y: -1)
-      cg.translateBy(x: -crop.minX, y: -crop.minY)
-    } else {
-      cg.translateBy(x: -crop.minX, y: -(view.bounds.height - crop.maxY))
     }
     layer.render(in: cg)
-    return cg.makeImage()
   }
 
   private func write() -> [[Any]] {

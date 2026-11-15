@@ -9,7 +9,7 @@ import type { Frame } from "../browser/types";
 import { tabTitle } from "../browser/model";
 import { splitOf, type SplitSide, splitTabIdsOf, splitViewAvailable } from "../splits/splits";
 import { dropTabIntoSplit } from "../splits/actions";
-import { dropTabsOutside, screenPoint, windowUnder } from "./windowDrop";
+import { dropTabsOutside, rootPointIn, screenPoint, windowUnder } from "./windowDrop";
 import { dropTabsOnBar, followTabDragOnBar } from "../bookmarks/barDrag";
 
 export type DropTarget = { tabId: string; side: SplitSide };
@@ -97,7 +97,7 @@ export function updateTabDrag(x: number, y: number, lifted: boolean | null = nul
   if (overWindow && overWindow !== drag.overWindow && s.settings.tabReorderHaptics) hapticTick();
   const screen = overWindow ? screenPoint(s, drag.windowId, x, y, session.liveFrame) : null;
   const over = overWindow ? s.windows[overWindow]?.frame : null;
-  const overPoint: [number, number] | null = screen && over ? [screen[0] - over[0], over[1] + over[3] - screen[1]] : null;
+  const overPoint: [number, number] | null = screen && over ? rootPointIn(over, screen) : null;
   const insert = drag.insert?.windowId === overWindow ? drag.insert : null;
   session.pointer = [x, y];
   if (lifted === false && drag.lifted === false && !outside && !drag.outside) return;

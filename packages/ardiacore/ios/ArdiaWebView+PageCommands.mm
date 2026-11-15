@@ -119,9 +119,8 @@ using namespace ardia_runtime;
 - (void)capturePicture:(double)scale completion:(void (^)(NSDictionary<NSString *, id> *))completion {
   NSWindow *window = self.window;
   if (!_tab || !window || self.hidden || self.awaitsFirstDocument) return completion(nil);
-  NSRect inWindow = [self convertRect:self.bounds toView:nil];
-  CGFloat top = NSHeight(window.contentView.frame);
-  NSArray *frame = @[ @(NSMinX(inWindow)), @(top - NSMaxY(inWindow)), @(NSWidth(inWindow)), @(NSHeight(inWindow)) ];
+  const NSRect inRoot = RootRectFromWindow(window, [self convertRect:self.bounds toView:nil]);
+  NSArray *frame = @[ @(NSMinX(inRoot)), @(NSMinY(inRoot)), @(NSWidth(inRoot)), @(NSHeight(inRoot)) ];
   __block BOOL answered = NO;
   void (^answer)(NSDictionary *) = ^(NSDictionary *result) {
     if (answered) return;

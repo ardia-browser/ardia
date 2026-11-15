@@ -84,7 +84,7 @@ final class ReportRecorder {
     self.path = path
     self.options = options
     pointSize = content.bounds.size
-    let scale = min(window.backingScaleFactor, max(1, options.maxPixelWidth / pointSize.width))
+    let scale = min(content.convertToBacking(NSSize(width: 1, height: 1)).width, max(1, options.maxPixelWidth / pointSize.width))
     pixelWidth = Int(pointSize.width * scale) & ~1
     pixelHeight = Int(pointSize.height * scale) & ~1
     try? FileManager.default.removeItem(atPath: path)
@@ -235,7 +235,7 @@ final class ReportRecorder {
       ctx.translateBy(x: 0, y: pointSize.height)
       ctx.scaleBy(x: 1, y: -1)
     }
-    stills.update(stillViews, scale: outputScale, now: began)
+    stills.update(stillViews, in: content, scale: outputScale, now: began)
     stills.render(layer, in: ctx)
     ctx.restoreGState()
     drawPages(pages, height: pointSize.height, in: ctx, now: began)
@@ -309,8 +309,11 @@ final class ReportRecorder {
     if content.isFlipped { frame.origin.y = size.height - frame.maxY }
     ctx.saveGState()
     ctx.translateBy(x: frame.minX, y: frame.minY)
+    if layer.bounds.width > 0, layer.bounds.height > 0 {
+      ctx.scaleBy(x: frame.width / layer.bounds.width, y: frame.height / layer.bounds.height)
+    }
     if view.isFlipped || layer.isGeometryFlipped {
-      ctx.translateBy(x: 0, y: frame.height)
+      ctx.translateBy(x: 0, y: layer.bounds.height)
       ctx.scaleBy(x: 1, y: -1)
     }
     layer.render(in: ctx)

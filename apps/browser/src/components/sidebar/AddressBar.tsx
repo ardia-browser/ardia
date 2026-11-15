@@ -13,6 +13,7 @@ import { Button, type ButtonHit, FadeLabel, radius, space, ToolbarRowContext, us
 import { TOOLBAR_ROWS } from "../../lib/toolbarRow";
 import { setUrlAnchor, useSidebarCaptionRoom, watchSidebarControlsRow } from "../../state/windows/layout";
 import { useWindowUiOf } from "../../state/windows/hooks";
+import { onInterfaceScaleSettled } from "../../state/settings/interfaceScale";
 import { useSidebarPart } from "../../state/sidebar/chrome";
 import { SIDEBAR_FIELD } from "./geometry";
 import { SIDEBAR_TYPE, TAB_ROW } from "./tokens";
@@ -126,6 +127,7 @@ export function SidebarAddressRow({ width, top }: { width: number; top: number }
     return () => cancelAnimationFrame(frame);
   }, [side]);
   useEffect(() => watchSidebarControlsRow(windowId, () => requestAnimationFrame(() => remeasure.current())), [windowId]);
+  useEffect(() => onInterfaceScaleSettled(() => remeasure.current()), [windowId]);
 
   return (
     <View

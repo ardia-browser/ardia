@@ -130,6 +130,15 @@ Launch with `scripts/agent/ac launch <app> --data <dir> [--instance K=V] [--test
   history, download and extension menus) are written to `<data dir>/menu.json` as the items JS built, and resolve with
   the id in `menu.json.pick` (read and deleted; an id that isn't an enabled item, or no file, resolves `null`, as a
   dismissed menu). Write the pick before the right-click (`windows.dev` `click:<x>,<y>,right`).
+- **Interface size.** `--arg=-interfaceScale --arg=1.25` starts an instance at that scale: native reads it before the
+  first window, and JS keeps it as long as the data dir never chose a size (once `interfaceScale` is chosen, the saved
+  value wins and is pushed to native at launch). Live: `ac.store.getState().updateSettings({ interfaceScale: 1.25 })` (the setting's own path: JS, native and
+  storage; calling `ArdiaApp.setInterfaceScale` directly changes native only and leaves JS at the old size), or
+  through the Settings row with `--test appMenu`: write the percent (`125`) to `menu.json.pick` and
+  `ac.shell.devClick("settings", { label: "Interface size" })`; `{ label: "Back to 100%" }` resets. `ac.interfaceScale`
+  in the dev harness has the current scale, `pixelRatio` and `hairline`. For a real 1× backing scale (pixel checks),
+  add `--arg=-AppleMagnifiedMode --arg=YES` (low resolution mode, `devicePixelRatio` 1). Dev clicks and `windows.dev`
+  points are root points.
 - **`appDialog`**: `confirm` and `prompt` write their options (and `kind`) to `<data dir>/dialog.json` and answer from
   `dialog.json.pick` (deleted): `confirm` (with `,suppress` to tick the suppression box) or anything else to cancel; a
   prompt's answer is the text, empty to cancel. With no pick file they run as usual (background mode cancels).

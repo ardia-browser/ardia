@@ -130,7 +130,7 @@ SOFTWARE.
 
 ==============================================================================
 Material Design Icons (Pictogrammers) (@mdi/svg 7.4.47, Apache-2.0) https://pictogrammers.com/library/mdi
-Icons used: account, account-multiple, account-multiple-outline, account-outline, alarm, arrow-collapse-vertical, bicycle, brain, briefcase, bug-outline, camera, cloud-off-outline, coffee-outline, cursor-default, folder, hammer, hand-back-right-outline, headphones, home, image-filter-hdr, image-outline, lightbulb, menu, music-note, pause, pause-circle, pencil-outline, piano, pin, play-box-outline, record-circle-outline, run, shield-check, shield-check-outline, shield-half-full, shield-lock-outline, silverware-fork-knife, skip-next, skip-previous, soccer, soccer-field, star, star-outline, stop-circle-outline, web, zip-box-outline
+Icons used: account, account-multiple, account-multiple-outline, account-outline, alarm, arrow-collapse-left, arrow-collapse-vertical, bicycle, brain, briefcase, bug-outline, camera, cloud-off-outline, coffee-outline, cursor-default, dock-left, folder, hammer, hand-back-right-outline, headphones, home, image-filter-hdr, image-outline, lightbulb, menu, music-note, pause, pause-circle, pencil-outline, piano, pin, play-box-outline, record-circle-outline, run, shield-check, shield-check-outline, shield-half-full, shield-lock-outline, silverware-fork-knife, skip-next, skip-previous, soccer, soccer-field, star, star-outline, stop-circle-outline, web, zip-box-outline
 ------------------------------------------------------------------------------
 Pictogrammers Free License
 --------------------------

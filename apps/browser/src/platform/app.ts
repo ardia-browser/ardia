@@ -44,6 +44,9 @@ export const appIcons = (size = 64) => App.appIcons(size);
 export const currentAppIcon = () => App.appIcon();
 export const setAppIcon = (id: string) => App.setAppIcon(id);
 export const isInDock = () => App.isInDock();
+export const nativeInterfaceScale = () => App.interfaceScale();
+export const nativeInterfaceScaleRange = () => App.interfaceScaleRange();
+export const setNativeInterfaceScale = (scale: number) => App.setInterfaceScale(scale);
 export const addToDock = () => App.addToDock();
 
 export const updaterState = () => Updater.updaterState();

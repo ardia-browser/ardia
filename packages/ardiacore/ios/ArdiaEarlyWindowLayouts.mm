@@ -2,6 +2,7 @@
 #import "ArdiaSavedDocument.h"
 #import "ArdiaChromeWindowHost.h"
 #import "ArdiaEngineBridge.h"
+#import "ArdiaInterfaceScale.h"
 #import "ArdiaTabParking.h"
 #import "ArdiaWebViewInternal.h"
 
@@ -19,7 +20,7 @@ using namespace ardia_early_window;
 
 namespace {
 
-constexpr int kLayoutVersion = 4;
+constexpr int kLayoutVersion = 5;
 
 constexpr CGFloat kMinPage = 100;
 
@@ -43,6 +44,7 @@ NSString *StateOf(ArdiaSavedSession *session, NSString *windowId) {
   NSNumber *autoHideTabs = [window[@"autoHideTabs"] isKindOfClass:NSNumber.class] ? window[@"autoHideTabs"]
                          : [settings[@"autoHideTabs"] isKindOfClass:NSNumber.class] ? settings[@"autoHideTabs"] : nil;
   if (id tabsShown = autoHideTabs ? (autoHideTabs.boolValue ? @NO : @YES) : window[@"sidebarOpen"]) state[@"w.sidebarOpen"] = tabsShown;
+  if (const CGFloat scale = ArdiaInterfaceScale.scale; scale != 1) state[@"i.interfaceScale"] = @(scale);
   NSData *data = [NSJSONSerialization dataWithJSONObject:state options:NSJSONWritingSortedKeys error:nil];
   return data ? [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] : nil;
 }
@@ -142,10 +144,11 @@ NSDictionary *WindowLayout(ArdiaWindowController *controller, ArdiaSavedSession 
       break;
     }
   NSView *card = clip ?: web;
+  const CGFloat clipToHost = clip ? fabs([clip convertSize:NSMakeSize(1, 0) toView:host].width) : 0;
   NSMutableDictionary *layout = [@{
     @"page" : Insets([web convertRect:web.bounds toView:host], host),
     @"card" : Insets([card convertRect:card.bounds toView:host], host),
-    @"radius" : @(clip ? clip.layer.cornerRadius : 0),
+    @"radius" : @(clip ? clip.layer.cornerRadius * clipToHost : 0),
     @"curve" : clip.layer.cornerCurve ?: kCACornerCurveCircular,
     @"size" : @[ @(NSWidth(window.frame)), @(NSHeight(window.frame)) ],
     @"state" : state,
@@ -215,7 +218,8 @@ void RecordLayouts(ArdiaSavedSession *session, BOOL wait) {
       NSString *active = ActiveTabOf(session, windowId);
       if (active && [layout[@"tab"] isEqual:active] && CapturePicture(controller, windowId, layout)) layout[@"pictureContent"] = layout[@"content"];
       else DropPictureFile(windowId);
-    } else if ([gLayouts[windowId][@"pictureContent"] isKindOfClass:NSString.class] && !gLayouts[windowId][@"glass"]) {
+    } else if ([gLayouts[windowId][@"pictureContent"] isKindOfClass:NSString.class] && !gLayouts[windowId][@"glass"] &&
+               [gLayouts[windowId][@"state"] isEqual:layout[@"state"]]) {
       layout[@"pictureContent"] = gLayouts[windowId][@"pictureContent"];
     }
     gLayouts[windowId] = layout;

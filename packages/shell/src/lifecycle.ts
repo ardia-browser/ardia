@@ -33,6 +33,7 @@ export type ShellNative = {
   setAppearance(mode: AppearanceMode): Promise<void>;
   isDarkAppearance(): Promise<boolean>;
   startDictation(): void;
+  dictationAvailable?(): boolean;
   fetchBangList(etag: string | null): Promise<BangListReply>;
   copyText(text: string): void;
   readText(): Promise<string>;

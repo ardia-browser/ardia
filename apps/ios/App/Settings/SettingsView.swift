@@ -292,9 +292,17 @@ extension AutoArchiveInterval {
 enum AppVersion {
   static var footer: String {
     let info = Bundle.main.infoDictionary
-    let version = info?["CFBundleShortVersionString"] as? String ?? "1.0"
-    let build = info?["CFBundleVersion"] as? String ?? "1"
-    return String(localized: "Ardia \(version) (\(build))")
+    #if DEBUG
+      let isDebug = true
+    #else
+      let isDebug = false
+    #endif
+    return AppVersionLabel.text(
+      releaseVersion: info?["ArdiaReleaseVersion"] as? String ?? "",
+      build: info?["CFBundleVersion"] as? String ?? "1",
+      isDebug: isDebug,
+      receiptName: Bundle.main.appStoreReceiptURL?.lastPathComponent
+    )
   }
 }
 

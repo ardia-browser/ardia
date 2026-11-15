@@ -335,6 +335,10 @@ mkdir -p dist/<version>-rc/export && ditto "$mnt/Ardia.app" dist/<version>-rc/ex
 
 The release itself is then a second run with `dry_run=false` on the same commit.
 
+**iPhone in the same release.** Add `-f iphone=true` to both runs when the owner asked for the iPhone build: the dry run
+builds and signs it, the real run sends it to TestFlight and its public testers after the Mac release publishes, at
+the same version (`docs/releasing.md` › Every platform). Never add it unasked: a TestFlight upload goes out to testers.
+
 The engine is never packed by a release: when engine/ changed since the last prebuilt engine, release.sh stops and
 asks for `scripts/publish-engine.sh` first, which publishes `engine-<tree:12>` (with the Helium source) and appends
 its line to `packages/ardiacore/prebuilt-engines.tsv`; commit that line before the release. Every release's notes end
@@ -388,6 +392,31 @@ does nothing when the cask is already there. `publish.sh` runs it for both chann
 `HOMEBREW_TAP_TOKEN` secret; otherwise run it yourself after the workflow). The casks have `auto_updates true`: Sparkle updates installed copies and `brew upgrade`
 skips them, so a late tap push only delays new installs. Lint after a cask edit by hand (never `brew install` it: that
 writes `/Applications/Ardia.app`): `brew audit --cask --online ardia-browser/tap/ardia` and `brew style ardia-browser/tap`.
+
+### 5d. Linux package
+
+The Release workflow builds it in its `linux` job (`scripts/linux/release.sh <version> --engine exact`, smoke gate
+included), and `publish.sh` attaches `Ardia-<version>-linux-x64.tar.xz`, `ardia-cli-<version>-linux-x64.tar.gz` and
+their `.sha256` files to the release, nightly or stable. That needs the Linux engine for the release commit's engine
+key (`engine/engine-key.sh`) published in ardia-browser/ardia. Without it the `linux` job fails, the Mac release
+still ships, and `publish` warns that Linux was skipped.
+
+Linux engines are built on a Boat VM (boat.dev, `boat new --type xlarge`), never in GitHub Actions. On the VM, at the
+commit whose engine key needs one:
+
+```bash
+scripts/linux/build.sh --apply
+source engine/patches/build/env.sh
+scripts/linux/publish-engine.sh --out "$CB/chromium_git/chromium/src/out/$GN_OUT_CONFIGS" --source <ardia checkout> --upload
+```
+
+`--upload` creates the `engine-<key12>` prerelease in ardia-browser/ardia and adds the row to
+`packages/ardiacore/prebuilt-engines-linux.tsv` without committing it. Commit that row on `main` (stage it, then a
+bare `git commit`) before dispatching the release; fetches also read the table on `main`, so older commits find it.
+
+To add Linux to a release that shipped without it: publish the engine, then on a Linux machine at the release commit
+run `scripts/linux/release.sh <version>` and the `gh release upload` line it prints. `--engine nearest` or
+`--allow-dirty` make test builds, never releases (`docs/linux-ci.md` › Linux releases).
 
 ## 6. Deploy the site
 

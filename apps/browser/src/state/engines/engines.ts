@@ -25,6 +25,7 @@ export function siteOf(url: string | undefined | null): string | null {
 }
 
 export const canSwitchEngine = (url: string | undefined | null) => !!url && isWebPageUrl(url);
+export const offersEngineChoice = () => true;
 export const chromiumOnly = (url: string | undefined | null) => !!url && /^(ardia|chrome|chrome-extension|chrome-untrusted|devtools|view-source):/i.test(url);
 
 export const defaultEngine = (s: Pick<BrowserState, "settings">): PageEngine => (s.settings.pageEngine === "webkit" ? "webkit" : "chromium");

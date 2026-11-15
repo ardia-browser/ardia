@@ -1,8 +1,9 @@
 # Config and themes
 
 When the user wants a setting changed for good, or set up from their dotfiles, edit `~/.config/ardia/config.json`
-with `ardia config` instead of clicking through Settings. Ardia reads the file at launch and whenever it changes,
-and never writes it; these commands don't need Ardia running.
+(on Linux `~/.config/ardia/config/config.json`; `ardia config path` prints the folder) with `ardia config` instead
+of clicking through Settings. Ardia reads the file at launch and whenever it changes, and never writes it; these
+commands don't need Ardia running.
 
 ```sh
 ardia config init
@@ -32,7 +33,7 @@ ardia theme get metrics.rowHeight
 ardia theme unset metrics.rowHeight
 ```
 
-Themes live in `~/.config/ardia/themes/NAME.json`: `dark` and `light` colour roles, plus `type` (font `family`,
+Themes live in `themes/NAME.json` in that folder: `dark` and `light` colour roles, plus `type` (font `family`,
 `mono`, `scale`, `sizes`, `weights`), `metrics` (`rowHeight`, `rowGap`, `pinnedHeight`, `sidebarWidth`, `radius`),
 `layout` (`hide` sidebar parts, `addressField` and `newTab` top or bottom) and `icons` (SF Symbol swaps). KEY is the
 dotted path (`type.sizes.body`, `metrics.radius.row`); under `icons` the rest is one symbol name

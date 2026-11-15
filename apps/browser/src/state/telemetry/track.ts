@@ -84,6 +84,10 @@ export function markFirstWindow() {
   if (firstWindowAt - start > 0 && firstWindowAt - start < 10 * 60_000) launchFirstWindow(firstWindowAt);
 }
 
+export { takeNotificationRequestCounts } from "./notificationRequestCounts";
+
+export { takeRecentlyClosedCounts } from "./recentlyClosedCounts";
+
 export { takeHistoryRemovalCounts } from "./historyRemovalCounts";
 
 export const devOmniboxSampler = () => ({ keystrokes, pending: latency.length });

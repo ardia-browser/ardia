@@ -57,7 +57,6 @@ constexpr base::TimeDelta kFrameSettle = base::Milliseconds(120);
 constexpr base::TimeDelta kFadeStep = base::Milliseconds(16);
 constexpr base::TimeDelta kBrowserFade = base::Milliseconds(250);
 constexpr base::TimeDelta kSmallFade = base::Milliseconds(200);
-constexpr int kMotionDelayMs = 0;
 
 gfx::RectF MotionRectAt(const PageMotion& motion, base::TimeDelta elapsed) {
   const double progress =
@@ -74,12 +73,17 @@ gfx::RectF MotionRectAt(const PageMotion& motion, base::TimeDelta elapsed) {
                     from.height() + (to.height() - from.height()) * fraction);
 }
 
-base::TimeDelta MotionDelay() {
-  int delay = kMotionDelayMs;
-  if (std::optional<std::string> value = ardiacore::TestValue("motionDelayMs")) {
-    base::StringToInt(*value, &delay);
+std::optional<base::TimeDelta> MotionDelayOverride() {
+  int delay = 0;
+  std::optional<std::string> value = ardiacore::TestValue("motionDelayMs");
+  if (!value || !base::StringToInt(*value, &delay)) {
+    return std::nullopt;
   }
   return base::Milliseconds(std::clamp(delay, -100, 100));
+}
+
+base::TimeDelta OneFrame(const ui::Compositor& compositor) {
+  return base::Seconds(1) / std::max(1.0f, compositor.refresh_rate());
 }
 
 std::unique_ptr<views::Widget::ShapeRects> RoundedShape(const gfx::Size& size,
@@ -144,7 +148,7 @@ PageMotion& PageMotion::operator=(const PageMotion&) = default;
 PageMotion::~PageMotion() = default;
 
 AppWindowView::AppWindowView(AppWindow* window)
-    : window_(window), motion_delay_(MotionDelay()) {
+    : window_(window), motion_delay_override_(MotionDelayOverride()) {
   ui_view_ = AddChildView(std::make_unique<views::WebView>(nullptr));
   SetEventTargeter(std::make_unique<views::ViewTargeter>(this));
 }
@@ -259,7 +263,20 @@ void AppWindowView::StartMotion(const std::string& key,
   }
   RunningMotion& running = motions_[key];
   running.motion = motion;
-  running.start = base::TimeTicks::Now() - motion.elapsed + motion_delay_;
+  const base::TimeDelta delay =
+      motion_delay_override_.value_or(OneFrame(*compositor));
+  running.start = base::TimeTicks::Now() - motion.elapsed + delay;
+  if (ardiacore::Traced("motion")) {
+    Note("motion", "start " + key + " delay " +
+                       base::NumberToString(delay.InMillisecondsF()) +
+                       " ms elapsed " +
+                       base::NumberToString(motion.elapsed.InMillisecondsF()) +
+                       " ms duration " +
+                       base::NumberToString(motion.duration.InMillisecondsF()) +
+                       " ms refresh " +
+                       base::NumberToString(compositor->refresh_rate()) +
+                       " Hz");
+  }
   if (views::Widget* widget = GetWidget()) {
     widget->LayoutRootViewIfNecessary();
   }

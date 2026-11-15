@@ -133,7 +133,7 @@ class AppWindowView : public views::View,
   std::set<std::string> above_ui_;
   std::map<std::string, RunningMotion> motions_;
   raw_ptr<ui::Compositor> stepping_ = nullptr;
-  const base::TimeDelta motion_delay_;
+  const std::optional<base::TimeDelta> motion_delay_override_;
   gfx::Size minimum_size_;
 };
 

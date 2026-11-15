@@ -169,8 +169,7 @@ bool KeyMap::Handle(const std::string& window_id,
     return false;
   }
   const Entry* entry = Match(event);
-  if (!entry || !entry->page_first || (page && entry->ui_only) ||
-      (!page && !entry->ui_only)) {
+  if (!entry || !entry->page_first || (page && entry->ui_only)) {
     return false;
   }
   Dispatch(*entry, window_id);

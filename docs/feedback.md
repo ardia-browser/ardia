@@ -34,7 +34,8 @@ contract the app, the CLI, the feedback service and the dashboard build against.
 - The CLI keeps its own copy in the same folder as `cli-<UTC day>.jsonl`, 7 days, 4 MB.
 - It leaves the Mac only when sharing is on (as the normal events) or when the user attaches it to a report.
 - It measures itself: an hourly `telemetry_local_store` event with bytes, lines, files, write time p95,
-  prune time, lines dropped for the cap, queue bytes, bytes posted, failed posts. A regression here is a bug.
+  prune time, lines dropped for the cap, queue bytes, bytes posted, failed posts, cancelled posts (an upload stopped
+  part-way because sharing was turned off or the anonymous ID was reset). A regression here is a bug.
 
 ## 14-day watch
 

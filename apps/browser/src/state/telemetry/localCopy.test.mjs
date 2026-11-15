@@ -142,7 +142,7 @@ test("the hourly measurement reports size, timings, drops and posts", async () =
   client.setSharing(true, "settings");
   client.capture("one_more");
   const props = await reportLocalStore();
-  for (const key of ["bytes", "lines", "files", "write_ms_p95", "prune_ms", "lines_dropped", "queue_bytes", "bytes_posted", "failed_posts"]) assert.ok(key in props, key);
+  for (const key of ["bytes", "lines", "files", "write_ms_p95", "prune_ms", "lines_dropped", "queue_bytes", "bytes_posted", "failed_posts", "cancelled_posts"]) assert.ok(key in props, key);
   local.flushLocal();
   assert.equal(stub.telemetryLocal.records().at(-1).event, LOCAL_STORE_EVENT);
 });

@@ -180,7 +180,7 @@ export const WHATS_SENT: { title: string; items: string[] }[] = [
     title: "The local copy",
     items: [
       "Leaves this Mac only as the events above while sharing is on, or when you attach it to a problem report. Settings › Privacy › View My Data saves it to your Downloads folder",
-      "Every hour, how big the local copy is and how long writing it took, so we notice if it ever slows Ardia down",
+      "Every hour, how big the local copy is and how long writing it took, so we notice if it ever slows Ardia down, and how many uploads of these events went through, failed, or were stopped part-way by turning sharing off or resetting your anonymous ID",
     ],
   },
   {

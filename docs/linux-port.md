@@ -1226,7 +1226,9 @@ It works as on the Mac ([cli.md](cli.md), [automation.md](automation.md)); what 
 - **Sending.** The shell can't fetch, so the shared client posts through `ArdiaTelemetry.post` (`ac_linux_telemetry.cc`):
   native sends the OTLP body to the fixed `https://ardia.dev/otel/v1/logs` with the app's ingest key, over the system
   network context with no cookies, and answers the HTTP status (0 for a network error). JS keeps its queue, batching and
-  backoff. Events carry `$os: Linux` and `os.type: linux`; the `ardia` command reports the same on Linux.
+  backoff. Each post carries a request id; when the client aborts it (sharing turned off, the anonymous ID reset),
+  `ArdiaTelemetry.cancelPost` destroys the native loader, which stops the upload, and the post answers 0 at once. An
+  engine without the cancel route gets the old two-argument post, and the abort only stops JS waiting for it. Events carry `$os: Linux` and `os.type: linux`; the `ardia` command reports the same on Linux.
 - **One owner.** Every window runs its own copy of the UI, so one browser window holds the `ardia.linux.telemetry` lock
   and runs the client (queue, flush, hourly usage, the daily ping) (`telemetryLeader.ts`). The others, utility windows
   included, forward `capture` and log calls to it over a `BroadcastChannel`. The owner acknowledges each one, and a

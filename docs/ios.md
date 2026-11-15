@@ -297,8 +297,15 @@ are `.widgets`, `.share` and `.open`, and they share the app group `group.com.ar
 - **On a Mac.** `scripts/release-ios.sh <build number>` does the same with the account Xcode is signed in to, or with
   `ASC_KEY`, `ASC_KEY_ID` and `ASC_ISSUER`. `node apps/ios/scripts/asc.mjs` is the App Store Connect client behind
   both (`--help` lists its commands).
-- **Version.** `MARKETING_VERSION` in `project.yml` (then `xcodegen generate`), 1.0 for the alpha; the build number is
-  never committed.
+- **Version.** The iPhone app ships the Mac's version: `scripts/release-ios.sh` takes the Mac app's committed
+  `MARKETING_VERSION`, or `--version <release version>`, and refuses anything that isn't a stable `0.2.47` or a
+  nightly `0.2.47-nightly.2`. Apple only takes `0.2.47`, so that is every target's `CFBundleShortVersionString`, and the
+  full release version goes in the app's `ArdiaReleaseVersion` Info.plist key (build setting `ARDIA_RELEASE_VERSION`,
+  empty in `project.yml`). The build number is never committed.
+- **Channel.** The same binary moves from TestFlight to the App Store, so the app works out its channel when it runs
+  (`AppVersionLabel` in ArdiaBrowser): installed from TestFlight (a `sandboxReceipt` receipt) it is Nightly and Settings
+  says "Ardia 0.2.47 Nightly 2 (build)", or "Ardia 0.2.47 Nightly (build)" for a stable release version; from the
+  App Store it says "Ardia 0.2.47 (build)". A Debug build, or one without a release version, says "Ardia Dev (build)".
 - **Default browser.** iOS lists an app under Settings, Apps, Default Apps, Browser App only when it is signed with
   `com.apple.developer.web-browser`, and Apple grants that per App ID on request: the account holder fills in
   https://developer.apple.com/contact/request/default-browser-entitlement/ for `com.ardia.browser.ios`. One build

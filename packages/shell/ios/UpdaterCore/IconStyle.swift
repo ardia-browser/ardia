@@ -8,9 +8,13 @@ enum IconStyle {
     return theme.hasPrefix("Tinted") || theme.hasPrefix("Clear")
   }
 
-  static func shown(saved: String, theme: String?) -> String {
-    restylesIcons(theme: theme) ? "default" : saved
+  static let devBundleIcon = "AppIcon-Dev"
+
+  static func shown(saved: String, theme: String?, bundleIcon: String? = nil) -> String {
+    bundleIcon == devBundleIcon || restylesIcons(theme: theme) ? "default" : saved
   }
+
+  static var bundleIcon: String? { Bundle.main.object(forInfoDictionaryKey: "CFBundleIconName") as? String }
 
   static var systemTheme: String? { UserDefaults.standard.string(forKey: defaultsKey) }
 }

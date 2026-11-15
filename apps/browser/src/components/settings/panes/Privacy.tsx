@@ -179,6 +179,7 @@ function SitePermissions({ shownProfileId, site }: { shownProfileId: string | nu
       <SectionHeader title="All sites" description="These apply in every profile." />
       <Group>
         <SettingToggle anchor="privacy.blockAutoplayEverywhere" />
+        <SettingToggle anchor="privacy.blockNotificationRequests" />
       </Group>
       <SectionHeader
         anchor="privacy.sitePermissions"

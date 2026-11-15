@@ -1,7 +1,7 @@
 import { loadedProfiles, onProfileLoaded, unloadIdleProfile } from "../../platform/profiles";
 import { everySlowly } from "../../platform/slowTimers";
 import { useBrowser } from "../browser/store";
-import { isIncognitoProfile } from "../browser/model";
+import { engineProfile, isIncognitoProfile } from "../browser/model";
 import { hasPage, IDLE, needsPage, wakeOf, withWake, wokenPage } from "../tabs/pageSession";
 import { noteProfileUnloaded, noteUnloadedProfileReloaded, noteUnloadedProfileReopened } from "../telemetry/tabSleepCounts";
 import { engineProfiles } from "./engineProfiles";
@@ -18,6 +18,8 @@ const store = () => useBrowser.getState();
 const readyToUnload = idleProfiles();
 const unloadedHere = new Set<string>();
 const reopenedAt = new Map<string, number>();
+const unloadingNow = new Set<string>();
+const sleptByUnload = new Set<string>();
 let checking = false;
 let clock = () => Date.now();
 
@@ -32,6 +34,14 @@ function wakeShown(ids: string[]) {
   }
 }
 
+export function closedByUnload(tabId: string): boolean {
+  const s = store();
+  const tab = s.tabs[tabId];
+  if (!tab) return false;
+  if (hasPage(tab)) sleptByUnload.delete(tabId);
+  return unloadingNow.has(engineProfile(s, tab.profileId)) || sleptByUnload.has(tabId);
+}
+
 const unloadable = (profile: string) => profile !== PERSONAL && !isIncognitoProfile(profile);
 
 export function applyUnload(profile: string, result: Unload) {
@@ -39,7 +49,9 @@ export function applyUnload(profile: string, result: Unload) {
   const shown = shownEngineProfiles(s).includes(profile);
   for (const id of result.tabs) {
     const tab = s.tabs[id];
-    if (tab && hasPage(tab)) s.updateTab(id, { page: withWake(IDLE, wakeOf(tab)) });
+    if (!tab || !hasPage(tab)) continue;
+    s.updateTab(id, { page: withWake(IDLE, wakeOf(tab)) });
+    sleptByUnload.add(id);
   }
   if (shown) setTimeout(() => wakeShown(result.tabs), REMOUNT_MS);
   if (result.status === "busy") return false;
@@ -59,12 +71,15 @@ const SETTLE_MS = 5_000;
 async function unload(profile: string, settled = false): Promise<boolean> {
   const s = store();
   if (!unloadable(profile) || profileUnloadDelay(s.settings) === null || shownEngineProfiles(s).includes(profile)) return false;
-  const result = await unloadIdleProfile(profile);
-  if (result.heldBy === "sleeping" && !settled) {
-    await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
-    return unload(profile, true);
+  unloadingNow.add(profile);
+  try {
+    const result = await unloadIdleProfile(profile);
+    if (result.heldBy !== "sleeping" || settled) return applyUnload(profile, result);
+  } finally {
+    unloadingNow.delete(profile);
   }
-  return applyUnload(profile, result);
+  await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
+  return unload(profile, true);
 }
 
 export async function checkIdleProfiles(now = clock()) {

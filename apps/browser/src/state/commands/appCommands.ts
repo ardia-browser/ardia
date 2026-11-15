@@ -18,6 +18,7 @@ export const APP_COMMAND_HANDLERS: Readonly<Record<AppCommand, (windowId: string
   videoTour: (windowId) => openVideoTour(windowId),
   releaseNotes: (windowId) => openReleaseNotesPage(windowId),
   taskManager: () => void openTaskManager().catch(() => {}),
+  clearRecentlyClosed: (windowId) => useBrowser.getState().clearRecentlyClosed(windowId),
 };
 
 export function reportProblem(windowId?: string | null, source: "menu" | "check_in" = "menu") {

@@ -118,6 +118,7 @@ function fakeGithub({
   repoLabels = vouch.LABEL_SPECS.map(({ name }) => ({ name })),
   runs = {},
   androidRuns = {},
+  linuxRuns = {},
   jobs = {},
   currentList = FILES.list,
   defaultBranch = "main",
@@ -166,7 +167,7 @@ function fakeGithub({
     },
     actions: {
       listWorkflowRuns: record("actions.listWorkflowRuns", ({ head_sha, workflow_id }) => {
-        const found = (workflow_id === "ios.yml" ? runs : androidRuns)[head_sha] || [];
+        const found = ({ "ios.yml": runs, "android.yml": androidRuns, "linux.yml": linuxRuns }[workflow_id] || {})[head_sha] || [];
         return { data: { workflow_runs: typeof found === "function" ? found() : found } };
       }),
       listJobsForWorkflowRun: record("actions.listJobsForWorkflowRun", ({ run_id }) => ({ data: jobs[run_id] || [] })),
@@ -560,14 +561,15 @@ test("the run-ci label re-runs the skipped build of every gated workflow", async
   const github = fakeGithub({
     runs: { s9: [runOf(9, 900)] },
     androidRuns: { s9: [runOf(9, 950)] },
-    jobs: { 900: GATE_SKIPPED, 950: GATE_SKIPPED },
+    linuxRuns: { s9: [runOf(9, 970)] },
+    jobs: { 900: GATE_SKIPPED, 950: GATE_SKIPPED, 970: GATE_SKIPPED },
   });
   await invoke("run", {
     github,
     eventName: "pull_request_target",
     payload: { action: "labeled", label: { name: "run-ci" }, pull_request: pr(9, "stranger", { sha: "s9" }) },
   });
-  assert.deepEqual(github.named("actions.reRunWorkflow").map((call) => call.params.run_id), [900, 950]);
+  assert.deepEqual(github.named("actions.reRunWorkflow").map((call) => call.params.run_id), [900, 950, 970]);
 });
 
 test("the run-ci label re-runs that pull request's skipped build; other labels do nothing", async () => {

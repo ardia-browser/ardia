@@ -158,12 +158,13 @@ export const checks: Check[] = [
   {
     name: "materials: a replaced Direct3D device keeps the grain tiles and redraws them",
     async run() {
+      const grainAtStart = materials().capabilities().grain;
       const probe = await materials().probeGrainRecovery(STAGED_GRAIN_TEXTURE);
-      if (!materials().capabilities().grain) {
+      if (!grainAtStart) {
         expectPath(probe, ["none"], "grain recovery without grain");
         return;
       }
-      expectPath(probe, ["redrawn"], "grain recovery");
+      expectPath(probe, ["redrawn"], `grain recovery (grain is ${materials().capabilities().grain ? "still" : "no longer"} available after it)`);
       expectTrue(probe.sameSurface, "the tile's surface was replaced instead of kept, so mounted views would keep a dead brush");
       expectEqual(probe.after, probe.before, `the ${STAGED_GRAIN_TEXTURE} tile read back after the new device`);
       expectEqual(probe.before, MAC_TILE_ALPHA_SUMS[STAGED_GRAIN_TEXTURE], `the ${STAGED_GRAIN_TEXTURE} tile against the Mac's`);

@@ -12,9 +12,9 @@ export type MaterialCapabilities = {
 
 export type MaterialPath = { path: string; reason: string; step?: string };
 
-export type GrainProbe = { path: string; reason: string; pixels: number; tileAlphaSum: number; drawnAlphaSum: number };
+export type GrainProbe = MaterialPath & { pixels: number; tileAlphaSum: number; drawnAlphaSum: number };
 
-export type GrainRecoveryProbe = { path: string; reason: string; sameSurface: boolean; before: number; after: number };
+export type GrainRecoveryProbe = MaterialPath & { sameSurface: boolean; before: number; after: number };
 
 export type MaterialsNative = {
   capabilities(): MaterialCapabilities;

@@ -9,6 +9,7 @@ import { focusHeroBar } from "./barState";
 import { isSmall } from "../windows/small";
 import type { NewTabTarget } from "../browser/types";
 import { notePageOverlay } from "../telemetry/usage";
+import { customNewTabUrl } from "../settings/settings";
 
 export { isEmptyCardTab };
 
@@ -34,7 +35,7 @@ export function showNewTabBar(windowId: string, target: NewTabTarget = IN_LIST):
 }
 
 function focusShownNewTabPage(s: BrowserState, windowId: string): boolean {
-  if (!s.settings.reuseEmptyNewTab) return false;
+  if (!s.settings.reuseEmptyNewTab || customNewTabUrl(s.settings)) return false;
   const active = activeTabId(s, windowId);
   if (!active || !isEmptyCardTab(s, s.tabs[active])) return false;
   if (s.windowUi[windowId]?.panel.open) s.closePanel(windowId);

@@ -21,6 +21,7 @@ export * from "./externalApps";
 export * from "./launchLinks";
 export * from "./motion";
 export * from "./scripting";
+export * from "./selfCheck";
 export * from "./system";
 export * from "./systemSignals";
 export * from "./translation";

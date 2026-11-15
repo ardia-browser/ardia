@@ -229,7 +229,12 @@ struct MenuKeyboard {
       PerformNative(entry->id, window);
       return true;
     }
-    if (!store.EntryEnabled(*entry)) return false;
+    if (entry->command == "closeTab" && WindowManager::Shared().IsPopupWindow(window.id)) {
+      PostMessageW(window.hwnd, WM_CLOSE, 0, 0);
+      LaunchLog::Write(L"keys", L"close tab closes the pop-up window");
+      return true;
+    }
+    if (!WindowManager::Shared().IsPopupWindow(window.id) && !store.EntryEnabled(*entry)) return false;
     Emit(entry->command, entry->arg, window.id);
     if (entry->command == "tabSwitcher") OpenedSwitcher(*entry, press);
     return true;

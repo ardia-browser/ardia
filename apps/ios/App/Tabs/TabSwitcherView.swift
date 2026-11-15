@@ -7,6 +7,7 @@ import SwiftUI
 struct TabSwitcherView: View {
   @Environment(AppModel.self) private var app
   @Environment(\.screenLayout) private var screenLayout
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
     GeometryReader { proxy in
@@ -21,12 +22,19 @@ struct TabSwitcherView: View {
         safeBottom: proxy.safeAreaInsets.bottom,
         safeSide: column == nil ? max(proxy.safeAreaInsets.leading, proxy.safeAreaInsets.trailing) : 0
       )
-      TabDeck(base: geometry, column: column, fullSize: full)
+      TabDeck(base: geometry, column: column, fullSize: full, initialOrder: app.deckOrder.map(\.id), opening: openingEntrance)
         .frame(width: geometry.container.width, height: full.height)
         .frame(width: full.width, height: full.height, alignment: column?.edge == .leading ? .trailing : .leading)
         .ignoresSafeArea()
     }
     .ignoresSafeArea(.keyboard)
+  }
+
+  private var openingEntrance: TabDeck.Opening? {
+    guard case .fromPage(let id) = app.deck.entrance, !reduceMotion, !app.deck.isGrid else { return nil }
+    let order = app.deckOrder.map(\.id)
+    guard order.contains(id) else { return nil }
+    return TabDeck.Opening(tabID: id, order: order)
   }
 }
 
@@ -42,9 +50,32 @@ private enum DragAxis {
 }
 
 struct TabDeck: View {
+  struct Opening {
+    let tabID: UUID
+    let order: [UUID]
+  }
+
   let base: TabsDeckGeometry
   var column: ScreenLayout.SideColumn?
   var fullSize: CGSize = .zero
+
+  init(base: TabsDeckGeometry, column: ScreenLayout.SideColumn? = nil, fullSize: CGSize = .zero, initialOrder: [UUID] = [], opening: Opening? = nil) {
+    self.base = base
+    self.column = column
+    self.fullSize = fullSize
+    _order = State(initialValue: initialOrder)
+    _scroll = State(initialValue: Double(max(0, initialOrder.count - 2)))
+    guard let opening, let index = opening.order.firstIndex(of: opening.tabID) else { return }
+    _order = State(initialValue: opening.order)
+    _scroll = State(initialValue: Double(TabDeck.openingFocus(index: index, count: opening.order.count)))
+    _phase = State(initialValue: .opening(opening.tabID))
+    _scaleProgress = State(initialValue: 0)
+    _positionProgress = State(initialValue: 0)
+  }
+
+  static func openingFocus(index: Int, count: Int) -> Int {
+    index < count - 1 ? index : max(0, min(index - 1, count - 1))
+  }
 
   @Environment(AppModel.self) private var app
   @Environment(\.profileLook) private var look
@@ -66,6 +97,7 @@ struct TabDeck: View {
   @State private var vanishing: Set<UUID> = []
   @State private var poofs: [PoofBurst.Spec] = []
   @State private var isShowingArchiveCard = false
+  @State private var archiveCardYields = false
   @State private var isConfirmingCloseAll = false
   @State private var isConfirmingCloseIncognito = false
   @State private var focusTicks = 0
@@ -128,12 +160,15 @@ struct TabDeck: View {
       if app.deck.isGrid {
         grid(byID, geometry: geometry)
           .opacity(chromeOpacity)
+          .transition(.opacity)
       } else if column != nil {
         ZStack { cards(byID) }
           .frame(width: geometry.container.width, height: geometry.container.height)
           .clipped()
+          .transition(.opacity)
       } else {
-        cards(byID)
+        ZStack { cards(byID) }
+          .transition(.opacity)
       }
       if order.isEmpty, phase == .settled {
         DeckEmptyState(geometry: geometry, isSearching: !trimmedQuery.isEmpty, showsArchive: app.hasArchivedTabs) { app.openArchive() }
@@ -151,7 +186,8 @@ struct TabDeck: View {
         .padding(.horizontal, geometry.safeSide + TabsLayout.headerSide)
         .frame(width: geometry.container.width)
         .position(x: geometry.container.width / 2, y: geometry.safeTop + TabsLayout.archiveCardCenter)
-        .opacity(lifts.isEmpty ? chromeOpacity : 0)
+        .opacity(archiveCardYields ? 0 : chromeOpacity)
+        .animation(Motion.fade, value: archiveCardYields)
         .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.96)))
         .zIndex(Self.overlayLayer + 1)
       }
@@ -177,7 +213,7 @@ struct TabDeck: View {
         )
         .frame(width: fullSize.width, height: fullSize.height)
         .position(x: fullSize.width / 2 + (column.edge == .leading ? geometry.container.width - fullSize.width : 0), y: fullSize.height / 2)
-        .opacity(chromeOpacity)
+        .opacity(barOpacity)
         .zIndex(Self.overlayLayer + 3)
       } else {
         DeckBottomBar(
@@ -190,7 +226,7 @@ struct TabDeck: View {
         )
         .frame(width: geometry.container.width)
         .position(x: geometry.container.width / 2, y: barCenterY(geometry))
-        .opacity(chromeOpacity)
+        .opacity(barOpacity)
         .zIndex(Self.overlayLayer + 3)
       }
     }
@@ -350,6 +386,11 @@ struct TabDeck: View {
     }
   }
 
+  private var barOpacity: Double {
+    if case .opening(nil) = phase { return chromeOpacity }
+    return 1
+  }
+
   private var closeAllTitle: String {
     order.count == 1 ? String(localized: "Close 1 Tab?") : String(localized: "Close \(order.count) Tabs?")
   }
@@ -386,26 +427,23 @@ struct TabDeck: View {
   private func appear() {
     guard !didAppear else { return }
     didAppear = true
-    order = sourceOrder
     shownSpace = app.currentSpace?.syncId
     isShowingArchiveCard = app.deck.shouldOfferArchiveCard(openTabs: app.deckTabs.count)
     let entrance = app.deck.entrance
     app.deck.entrance = .plain
-    if case .fromPage(let id) = entrance, let index = order.firstIndex(of: id), !reduceMotion, !app.deck.isGrid {
-      scroll = Double(max(0, min(index - 1, order.count - 1)))
-      if index < order.count - 1 { scroll = Double(index) }
-      phase = .opening(id)
-      scaleProgress = 0
-      positionProgress = 0
-      Task { @MainActor in
-        withAnimation(TabsMotion.openScale) { scaleProgress = 1 }
-        withAnimation(TabsMotion.openPosition, completionCriteria: .removed) {
-          positionProgress = 1
-        } completion: {
-          phase = .settled
-        }
+    if case .opening(let id?) = phase, case .fromPage(id) = entrance, order.contains(id) {
+      withAnimation(TabsMotion.open, completionCriteria: .removed) {
+        scaleProgress = 1
+        positionProgress = 1
+      } completion: {
+        phase = .settled
       }
+      if order != sourceOrder { reconcile(animated: false) }
     } else {
+      order = sourceOrder
+      phase = .settled
+      scaleProgress = 1
+      positionProgress = 1
       scroll = Double(max(0, order.count - 2))
       if case .fromPage = entrance, let handoff = app.deck.handoff {
         if let index = order.firstIndex(of: handoff.tabID) { scroll = Double(max(0, index - 1)) }
@@ -489,7 +527,7 @@ struct TabDeck: View {
       await app.primeCover(for: id)
       if case .closing(id) = phase { app.beginOpening(id) }
     }
-    withAnimation(TabsMotion.expand, completionCriteria: .removed) {
+    withAnimation(TabsMotion.expand, completionCriteria: .logicallyComplete) {
       scaleProgress = 0
       positionProgress = 0
     } completion: {
@@ -554,6 +592,8 @@ struct TabDeck: View {
     Task { @MainActor in
       try? await Task.sleep(for: .seconds(TabsMotion.flyAway * 0.6))
       remove()
+      try? await Task.sleep(for: .seconds(TabsMotion.flyAway * 0.4))
+      archiveCardYields = false
     }
     Task { @MainActor in
       try? await Task.sleep(for: .seconds(TabsMotion.poofDuration + 0.05))
@@ -617,6 +657,7 @@ struct TabDeck: View {
           let dy = value.translation.height
           if let id, abs(dy) > abs(dx), dy < 0 {
             axis = .vertical(id)
+            archiveCardYields = true
           } else {
             axis = .horizontal
             dragStart = currentScroll
@@ -659,6 +700,7 @@ struct TabDeck: View {
             close(card, animated: true)
           } else {
             withAnimation(TabsMotion.release) { lifts[card] = nil }
+            archiveCardYields = false
           }
         case nil:
           break

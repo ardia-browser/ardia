@@ -1,7 +1,7 @@
 import { tabTitle } from "../../state/browser/model";
 import { Image, View } from "react-native";
 import { knownFaviconTheme, resolveFavicon } from "../../state/favicons/favicons";
-import { Divider, FadeLabel, font, radius, space, Symbol, Text, withAlpha } from "../ui";
+import { Divider, FadeLabel, radius, space, Symbol, Text, withAlpha } from "../ui";
 import { layout, useTheme } from "../ui/theme";
 import type { BrowserState } from "../../state/browser/store";
 import type { GroupColor } from "../../state/browser/types";
@@ -15,11 +15,12 @@ import { pointerOnGroup, pointerOnRow } from "../../state/sidebar/hover";
 import { FaviconFallback, NewTabIcon } from "../favicon/Favicon";
 import { TabIcon } from "./TabIcon";
 import { iconSymbol } from "../../lib/customIcon";
-import { groupBoxAtRest, groupSurface, TAB_ROW, TABULAR_NUMS, useSidebarTokens } from "./tokens";
+import { drawnIcon, hidesRowIcon } from "../../state/pins/rowIcons";
+import { groupBoxAtRest, groupSurface, SIDEBAR_TYPE, TAB_ROW, TABULAR_NUMS, useSidebarTokens } from "./tokens";
 import { SidebarRowLabel } from "./SidebarRow";
 import { entryKey, parseEntry } from "../../state/sidebar/entryKey";
 
-type TabShot = { kind: "tab"; key: string; title: string; url: string; favicon?: string | null; icon?: string | null; profileId: string; uri: string | null; template: boolean; sound: "muted" | "playing" | null; hovered: boolean };
+type TabShot = { kind: "tab"; key: string; title: string; url: string; favicon?: string | null; icon?: string | null; textOnly: boolean; profileId: string; uri: string | null; template: boolean; sound: "muted" | "playing" | null; hovered: boolean };
 type SplitShot = { kind: "split"; key: string; panes: TabShot[] };
 type GroupShot = {
   kind: "group";
@@ -36,7 +37,7 @@ export type EntrySnapshot = TabShot | SplitShot | GroupShot;
 function tabShot(s: BrowserState, tabId: string, hovered: boolean): TabShot | null {
   const tab = s.tabs[tabId];
   if (!tab) return null;
-  const uri = tab.customIcon ? null : (resolveFavicon(tab.url, tab.favicon, tab.profileId)?.uri ?? null);
+  const uri = drawnIcon(tab.customIcon) ? null : (resolveFavicon(tab.url, tab.favicon, tab.profileId)?.uri ?? null);
   const shape = uri ? knownFaviconTheme(uri) : null;
   return {
     uri,
@@ -46,7 +47,8 @@ function tabShot(s: BrowserState, tabId: string, hovered: boolean): TabShot | nu
     title: tabTitle(tab),
     url: tab.url,
     favicon: tab.favicon,
-    icon: tab.customIcon,
+    icon: drawnIcon(tab.customIcon),
+    textOnly: hidesRowIcon(tab),
     profileId: tab.profileId,
     sound: isSilenced(s, tab) ? "muted" : s.live[tabId]?.playingAudio ? "playing" : null,
     hovered,
@@ -101,12 +103,12 @@ function tabGhost(shot: TabShot, theme: ReturnType<typeof useTheme>, top = 0) {
         borderRadius: radius.chrome,
         flexDirection: "row",
         alignItems: "center",
-        paddingLeft: TAB_ROW.contentLeft,
+        paddingLeft: shot.textOnly ? TAB_ROW.contentLeft - TAB_ROW.titleGap : TAB_ROW.contentLeft,
         paddingRight: shot.hovered ? TAB_ROW.trailing : TAB_ROW.trailing + TAB_ROW.closeSlot,
         backgroundColor: shot.hovered ? theme.tabHover : undefined,
       }}
     >
-      {ghostIcon(shot, theme)}
+      {shot.textOnly ? null : ghostIcon(shot, theme)}
       {shot.sound ? <Symbol name={shot.sound === "muted" ? "speaker.slash" : "speaker.wave.2"} size={12} color={theme.textTab} style={{ width: 18, height: 16, marginLeft: space.s }} /> : null}
       <SidebarRowLabel text={shot.title} color={theme.textTab} />
       {shot.hovered ? <Symbol name="xmark" size={10} weight="semibold" color={theme.icon} style={{ width: TAB_ROW.closeSlot, height: TAB_ROW.closeSlot }} /> : null}
@@ -123,7 +125,7 @@ function SplitGhost({ shot }: { shot: SplitShot }) {
           {i > 0 && <Divider vertical thick length={16} />}
           <View style={{ flex: 1, minWidth: 0, height: layout.rowHeight - 6, flexDirection: "row", alignItems: "center", paddingLeft: space.s }}>
             <TabIcon url={pane.url} favicon={pane.favicon} icon={pane.icon} profileId={pane.profileId} compact />
-            <FadeLabel text={pane.title} fontSize={font.small.fontSize} color={theme.textTab} style={{ flex: 1, height: 16, marginLeft: space.xs }} />
+            <FadeLabel text={pane.title} fontSize={SIDEBAR_TYPE.compact} color={theme.textTab} style={{ flex: 1, height: 16, marginLeft: space.xs }} />
           </View>
         </View>
       ))}
@@ -146,7 +148,7 @@ function GroupGhost({ shot }: { shot: GroupShot }) {
           <Text lines={1} weight="medium" style={MEASURE_LABEL}>
             {shot.label}
           </Text>
-          <FadeLabel text={shot.label} fontSize={font.body.fontSize} weight="medium" color={tokens.groupTitle} style={{ position: "absolute", left: 0, right: 0, top: 0, height: TAB_ROW.titleHeight }} />
+          <FadeLabel text={shot.label} fontSize={SIDEBAR_TYPE.title} weight="medium" color={tokens.groupTitle} style={{ position: "absolute", left: 0, right: 0, top: 0, height: TAB_ROW.titleHeight }} />
         </View>
         <View style={{ width: 10, height: 10, transform: [{ rotate: shot.collapsed ? "-90deg" : "0deg" }] }}>
           <Symbol name="chevron.down" size={9} weight="semibold" color={withAlpha(tokens.groupTitle, 0.5)} style={{ width: 10, height: 10 }} />

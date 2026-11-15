@@ -6,6 +6,7 @@
 #include <winrt/Microsoft.UI.Content.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdio>
 #include <map>
@@ -67,8 +68,8 @@ inline bool &BlurFailed() noexcept {
   return failed;
 }
 
-inline bool &GradientFailed() noexcept {
-  static bool failed = false;
+inline std::atomic<bool> &GradientFailed() noexcept {
+  static std::atomic<bool> failed{false};
   return failed;
 }
 

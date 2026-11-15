@@ -16,6 +16,7 @@
 #include <dwmapi.h>
 #include <shellscalingapi.h>
 #include <winrt/Microsoft.UI.Input.h>
+#include <winrt/Windows.Data.Json.h>
 #include <winrt/Windows.Graphics.h>
 #include <winrt/Windows.UI.h>
 
@@ -41,6 +42,8 @@ struct OpenWindowRequest {
   std::optional<std::array<double, 2>> size;
   bool focus{true};
   bool animated{false};
+  std::string focusWhenFront;
+  std::string focusWhenPage;
 };
 
 struct ManagedWindow {
@@ -66,6 +69,10 @@ struct ManagedWindow {
 
   bool IsBrowser() const noexcept {
     return kind == "browser" || kind == "small";
+  }
+
+  bool IsPopup() const noexcept {
+    return kind == "popup";
   }
 };
 
@@ -139,6 +146,40 @@ struct WindowManager {
     return background;
   }
 
+  static HWND FrontRoot() noexcept {
+    HWND front = GetForegroundWindow();
+    return front ? GetAncestor(front, GA_ROOTOWNER) : nullptr;
+  }
+
+  bool InFront(std::string_view id) const noexcept {
+    HWND hwnd = Hwnd(id);
+    return hwnd && FrontRoot() == hwnd;
+  }
+
+  static bool PageHoldsKeyboard(std::string const &key) noexcept {
+    const ArdiaEngineApi *engine = Host::Engine();
+    if (key.empty() || !engine || !engine->hostCall) return false;
+    std::string answer;
+    engine->hostCall("keyboard.page", "{}", 0, [](void *context, const char *json) noexcept { *static_cast<std::string *>(context) = json ? json : ""; }, &answer);
+    try {
+      winrt::Windows::Data::Json::JsonObject reply{nullptr};
+      if (answer.empty() || !winrt::Windows::Data::Json::JsonObject::TryParse(winrt::to_hstring(answer), reply)) return false;
+      return winrt::to_string(reply.GetNamedString(L"key", L"")) == key;
+    } catch (...) {
+      return false;
+    }
+  }
+
+  static void ShowAboveOpener(HWND hwnd, HWND opener) noexcept {
+    if (!opener || !IsWindow(opener)) return;
+    HWND top = opener;
+    for (HWND above = GetWindow(opener, GW_HWNDPREV); above && GetWindow(above, GW_OWNER) == opener; above = GetWindow(above, GW_HWNDPREV)) top = above;
+    HWND after = GetWindow(top, GW_HWNDPREV);
+    if (after == hwnd) return;
+    bool atTopOfBand = !after || (GetWindowLongPtrW(after, GWL_EXSTYLE) & WS_EX_TOPMOST);
+    SetWindowPos(hwnd, atTopOfBand ? HWND_TOP : after, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+  }
+
   void Open(OpenWindowRequest const &request) noexcept {
     if (ManagedWindow *existing = Find(request.id)) {
       bool wasClosing = !existing->exits.empty() || (existing->fade && (existing->fade->phase == WindowFade::Phase::Leaving || existing->fade->phase == WindowFade::Phase::Lingering));
@@ -175,7 +216,8 @@ struct WindowManager {
       ConnectNonClientInput(entry);
       ApplyInputRegions(entry);
 
-      bool activate = request.focus && !Background();
+      bool activate = request.focus && !Background() && (request.focusWhenFront.empty() || (InFront(request.focusWhenFront) && PageHoldsKeyboard(request.focusWhenPage)));
+      HWND openedFrom = request.focusWhenFront.empty() ? nullptr : Hwnd(request.focusWhenFront);
       bool entrance = request.animated || entry.kind != "browser";
       bool fades = entrance && WindowMotion::SystemAnimates();
       HWND hwnd = entry.hwnd;
@@ -183,8 +225,14 @@ struct WindowManager {
       m_order.push_back(entry.id);
       auto placed = m_windows.emplace(entry.id, std::move(entry)).first;
       if (fades) BeginEntrance(placed->second);
+      bool quietPopup = !activate && placed->second.kind == "popup";
+      if (quietPopup) ShowAboveOpener(hwnd, openedFrom);
       appWindow.Show(activate);
       if (activate) SetForegroundWindow(hwnd);
+      else if (quietPopup) {
+        ShowAboveOpener(hwnd, openedFrom);
+        LaunchLog::Write(L"window", L"a pop-up opened above its opener without taking focus: its opener's window is not in front or its page does not hold the keyboard");
+      }
       if (m_activeId.empty()) m_activeId = request.id;
       LaunchLog::Write(L"window", std::wstring(L"opened ").append(Paths::Wide(request.id)));
       if (entrance && !fades) LaunchLog::Write(L"window", std::wstring(L"window ").append(Paths::Wide(request.id)).append(L" shown at once: animations are off in Windows"));
@@ -202,6 +250,10 @@ struct WindowManager {
       entry->appWindow.Destroy();
     } catch (...) {
     }
+  }
+
+  void RequestClose(std::string_view id) noexcept {
+    if (HWND hwnd = Hwnd(id)) PostMessageW(hwnd, WM_CLOSE, 0, 0);
   }
 
   void AnimateClose(std::string const &id, std::optional<std::string> const &replacement, std::function<void()> done) noexcept {
@@ -411,6 +463,11 @@ struct WindowManager {
     return entry && entry->IsBrowser();
   }
 
+  bool IsPopupWindow(std::string_view id) const noexcept {
+    const ManagedWindow *entry = Find(id);
+    return entry && entry->IsPopup();
+  }
+
   void ReplyToTerminate(bool ok) noexcept {
     if (!m_quitting) return;
     if (ok) return Finish();
@@ -431,6 +488,11 @@ struct WindowManager {
 
  private:
   static constexpr UINT_PTR kSubclassId = 0xA2D1A;
+  static constexpr double kPopupMinWidth = 200;
+  static constexpr double kPopupMinPageHeight = 150;
+  static constexpr double kPopupChromeHeight = 60;
+  static constexpr double kPopupWidth = 500;
+  static constexpr double kPopupPageHeight = 600;
   static constexpr int kEdgePollMs = 40;
   static constexpr double kEdgeReach = 24.0;
 
@@ -505,6 +567,14 @@ struct WindowManager {
           presenter.PreferredMinimumWidth(pixels(entry.kind == "small" ? 420 : 480));
           presenter.PreferredMinimumHeight(pixels(entry.kind == "small" ? 300 : 360));
         }
+      } else if (entry.IsPopup()) {
+        if (presenter) {
+          presenter.IsMaximizable(true);
+          presenter.IsMinimizable(true);
+          presenter.IsResizable(true);
+          presenter.PreferredMinimumWidth(pixels(kPopupMinWidth));
+          presenter.PreferredMinimumHeight(pixels(kPopupMinPageHeight + kPopupChromeHeight));
+        }
       } else if (presenter) {
         bool settings = entry.kind == "settings";
         presenter.IsMaximizable(settings);
@@ -546,6 +616,9 @@ struct WindowManager {
       } else if (entry.kind == "small") {
         width = request.size ? (*request.size)[0] : 900;
         height = request.size ? (*request.size)[1] : 640;
+      } else if (entry.IsPopup()) {
+        width = (std::max)(request.size ? (*request.size)[0] : kPopupWidth, kPopupMinWidth);
+        height = (std::max)(request.size ? (*request.size)[1] : kPopupPageHeight + kPopupChromeHeight, kPopupMinPageHeight + kPopupChromeHeight);
       }
       auto area = winrt::Microsoft::UI::Windowing::DisplayArea::GetFromWindowId(
                       entry.appWindow.Id(), winrt::Microsoft::UI::Windowing::DisplayAreaFallback::Primary)
@@ -632,7 +705,7 @@ struct WindowManager {
     entry.closing = entry.appWindow.Closing(
         [this, id](winrt::Microsoft::UI::Windowing::AppWindow const &, winrt::Microsoft::UI::Windowing::AppWindowClosingEventArgs const &args) noexcept {
           ManagedWindow *found = Find(id);
-          if (!found || !found->IsBrowser() || !m_context || m_quitting) return;
+          if (!found || !(found->IsBrowser() || found->IsPopup()) || !m_context || m_quitting) return;
           try {
             args.Cancel(true);
           } catch (...) {

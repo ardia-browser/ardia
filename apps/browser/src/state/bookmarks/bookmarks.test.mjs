@@ -170,6 +170,84 @@ test("undo puts deleted rows back between the rows that stayed, in every folder 
   assert.deepEqual(S().bookmarks.nodes[roots.other].children, [x, y, z]);
 });
 
+test("a selection moves in one store update, in the order given, and lands between the rows that stay", () => {
+  S().hydrate({});
+  useBrowser.setState({ bookmarks: { nodes: {} } });
+  const source = S().addBookmarkFolder({ profileId: "default", title: "Source" });
+  const target = S().addBookmarkFolder({ profileId: "default", title: "Target" });
+  const [a, b, c, d, e] = ["A", "B", "C", "D", "E"].map((title) => S().addBookmark({ profileId: "default", title, url: `https://${title.toLowerCase()}.example/`, parentId: source }));
+  const children = (id) => S().bookmarks.nodes[id].children;
+  let changes = 0;
+  const unsubscribe = useBrowser.subscribe(() => changes++);
+  S().moveBookmarks([b, d], target);
+  assert.equal(changes, 1);
+  assert.deepEqual(children(source), [a, c, e]);
+  assert.deepEqual(children(target), [b, d]);
+  S().moveBookmarks([c, a], target, 1);
+  assert.equal(changes, 2);
+  assert.deepEqual(children(source), [e]);
+  assert.deepEqual(children(target), [b, c, a, d]);
+  assert.ok([a, b, c, d].every((id) => S().bookmarks.nodes[id].parentId === target));
+  S().moveBookmarks([d, b], target, 1);
+  assert.deepEqual(children(target), [c, d, b, a], "a reorder counts its index among the rows that stay");
+  S().moveBookmarks([a, e, a], target, 99);
+  assert.deepEqual(children(target), [c, d, b, a, e], "an id given twice moves once, and an index past the end appends");
+  unsubscribe();
+});
+
+test("a move leaves out what can't go: a root, a folder into itself or below itself, a missing id, a target that isn't a folder", () => {
+  S().hydrate({});
+  useBrowser.setState({ bookmarks: { nodes: {} } });
+  const outer = S().addBookmarkFolder({ profileId: "default", title: "Outer" });
+  const inner = S().addBookmarkFolder({ profileId: "default", title: "Inner", parentId: outer });
+  const leaf = S().addBookmark({ profileId: "default", title: "Leaf", url: "https://leaf.example/", parentId: inner });
+  const loose = S().addBookmark({ profileId: "default", title: "Loose", url: "https://loose.example/" });
+  const roots = bookmarkRoots(S(), "default");
+  const before = S().bookmarks;
+  S().moveBookmarks([outer], inner);
+  S().moveBookmarks([outer], outer);
+  S().moveBookmarks([roots.bar, "missing"], inner);
+  S().moveBookmarks([outer], loose);
+  S().moveBookmarks([], inner);
+  assert.equal(S().bookmarks, before, "none of them touches the store");
+  S().moveBookmarks([roots.bar, outer, loose, "missing"], inner);
+  assert.deepEqual(S().bookmarks.nodes[inner].children, [leaf, loose], "the rest of the selection still moves");
+  S().moveBookmarks([outer, inner, leaf], roots.other);
+  assert.deepEqual(S().bookmarks.nodes[roots.other].children, [outer], "a folder takes what's inside it along, in place");
+  assert.deepEqual(S().bookmarks.nodes[outer].children, [inner]);
+  assert.deepEqual(S().bookmarks.nodes[inner].children, [leaf, loose]);
+});
+
+test("a 20,000-bookmark selection moves to another folder in a bounded time, and Chrome ends up with the same tree", async () => {
+  S().hydrate({});
+  useBrowser.setState({ bookmarks: { nodes: {} } });
+  stub.docs.clear();
+  stub.bookmarkDbs.clear();
+  const stop = startBookmarks();
+  await settle();
+  await reloadBookmarks();
+  const roots = bookmarkRoots(S(), "default");
+  const [source, target] = S().addBookmarkTree("default", [{ title: "Source", children: Array.from({ length: 20000 }, (_, i) => ({ title: `Page ${i}`, url: `https://example.test/${i}` })) }, { title: "Target", children: [{ title: "First", url: "https://first.example/" }, { title: "Last", url: "https://last.example/" }] }], roots.other);
+  await settle();
+  assert.deepEqual(chromeTree(), storeTree());
+  const all = S().bookmarks.nodes[source].children;
+  const picked = all.filter((_, i) => i % 2 === 0);
+  const sent = stub.bookmarkOpsSent.length;
+  const started = process.cpuUsage();
+  S().moveBookmarks(picked, target, 1);
+  const moveMs = cpuMs(started);
+  const [first, last] = [S().bookmarks.nodes[target].children[0], S().bookmarks.nodes[target].children.at(-1)];
+  assert.deepEqual(S().bookmarks.nodes[target].children, [first, ...picked, last]);
+  assert.deepEqual(S().bookmarks.nodes[source].children, all.filter((_, i) => i % 2 === 1));
+  await settle();
+  assert.deepEqual(chromeTree(), storeTree());
+  const ops = stub.bookmarkOpsSent.slice(sent);
+  assert.equal(ops.length, 10000, "one move per bookmark and nothing for the rows that stayed");
+  assert.ok(ops.every((op) => op.op === "move"));
+  assert.ok(moveMs < 3000, `${moveMs.toFixed(0)} ms of CPU`);
+  stop();
+});
+
 test("an edit made at launch, before Chrome's tree is read, reaches Chrome and stays", async () => {
   useBrowser.setState({ bookmarks: { nodes: {} } });
   S().hydrate({});

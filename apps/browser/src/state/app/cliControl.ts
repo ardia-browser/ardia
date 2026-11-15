@@ -93,7 +93,7 @@ let hiddenStep = 0;
 
 function showIndicator(shown: boolean) {
   if (!shown) hiddenStep = ++indicatorStep;
-  else noteCliPillShown();
+  else noteCliPillShown(useBrowser.getState().settings.compactCliPill);
   const caller = shown && callerStep < hiddenStep ? null : useCliIndicator.getState().caller;
   useCliIndicator.setState({ shown, caller });
 }

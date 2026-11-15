@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { findNodeHandle, View, type TextInput } from "react-native";
+import { findNodeHandle, View, type TextInput, type ViewProps } from "react-native";
 import { useTab, useWindow } from "../../state/browser/hooks";
 import { useProfileHistory } from "../../state/history/hooks";
 import { removeHistory } from "../../state/history/actions";
@@ -10,7 +10,9 @@ import { claimFocusTag, historySearchFocus } from "../../state/focus/focusClaims
 import { Button, EmptyState, Text } from "../ui";
 import { ClearDataDialog } from "./ClearDataDialog";
 import { layoutHistory } from "./historyLayout";
-import { confirmRemoveSelected, shownSelection } from "../../state/history/historyMenus";
+import { confirmRemoveSelected } from "../../state/history/historyMenus";
+import { allRows, movedCursor, NO_ROWS_SELECTED, shownRows, toggledCursor, toggledRow, withoutRows, type RowSelection } from "../../state/history/historySelection";
+import { noteHistoryRowsRemoved } from "../../state/telemetry/historyRemovalCounts";
 import { HistoryList } from "./HistoryList";
 import { hostLabel, PageHeader } from "./PageLayout";
 
@@ -19,9 +21,10 @@ export function HistoryPage({ tabId, profileId, initialQuery }: { tabId: string;
   const windowId = useTab(tabId, (t) => t?.windowId ?? "");
   const history = useProfileHistory(profileId);
   const [query, setQuery] = useState(initialQuery);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selection, setSelection] = useState<RowSelection>(NO_ROWS_SELECTED);
+  const selected = selection.selected;
   const [clearOpen, setClearOpen] = useState(false);
-  const lastClicked = useRef<string | null>(null);
+  const list = useRef<View>(null);
 
   const clearRequest = useClearDataRequest((r) => r.windowId);
   const activeHere = useWindow(windowId, (w) => w?.activeTabIds[w!.profileId] === tabId);
@@ -45,51 +48,51 @@ export function HistoryPage({ tabId, profileId, initialQuery }: { tabId: string;
   useEffect(() => setQuery(initialQuery), [initialQuery]);
 
   const layout = useMemo(() => layoutHistory(history, query), [history, query]);
-  const latest = useRef({ layout, profileId });
-  latest.current = { layout, profileId };
-  useEffect(() => setSelected((prev) => shownSelection(prev, layout.rows)), [layout]);
+  const urls = useMemo(() => layout.rows.map((r) => r.entry.url), [layout]);
+  const latest = useRef({ layout, urls, profileId, selected });
+  latest.current = { layout, urls, profileId, selected };
+  useEffect(() => setSelection((prev) => shownRows(urls, prev)), [urls]);
 
-  const toggle = useCallback((url: string, shift: boolean) => {
-    const { rows } = latest.current.layout;
-    const from = shift && lastClicked.current ? rows.findIndex((r) => r.entry.url === lastClicked.current) : -1;
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (from >= 0) {
-        const to = rows.findIndex((r) => r.entry.url === url);
-        const [a, b] = [from, to].sort((x, y) => x - y);
-        for (let i = a!; i <= b!; i++) next.add(rows[i]!.entry.url);
-      } else if (next.has(url)) next.delete(url);
-      else next.add(url);
-      return next;
-    });
-    lastClicked.current = url;
-  }, []);
+  const toggle = useCallback((url: string, shift: boolean) => setSelection((prev) => toggledRow(latest.current.urls, prev, url, shift)), []);
   const moreFromSite = useCallback((url: string) => setQuery(hostLabel(url)), []);
-  const selection = useRef(selected);
-  selection.current = selected;
-  const remove = useCallback((urls: string[]) => {
-    removeHistory(latest.current.profileId, urls);
-    setSelected((prev) => (urls.some((u) => prev.has(u)) ? new Set([...prev].filter((u) => !urls.includes(u))) : prev));
+  const remove = useCallback((removed: string[]) => {
+    removeHistory(latest.current.profileId, removed);
+    noteHistoryRowsRemoved("menu", removed.length);
+    setSelection((prev) => withoutRows(prev, removed));
   }, []);
   const menuTargets = useCallback((entry: HistoryEntry) => {
-    const chosen = selection.current;
+    const chosen = latest.current.selected;
     if (chosen.size < 2 || !chosen.has(entry.url)) return [entry];
     return latest.current.layout.rows.map((r) => r.entry).filter((e) => chosen.has(e.url));
   }, []);
 
-  const deleteSelected = async () => {
+  const deleteSelected = async (via: "key" | "button") => {
+    if (!selected.size) return;
     const confirmed = await confirmRemoveSelected(windowId);
     if (!confirmed) return;
     removeHistory(profileId, [...selected]);
-    setSelected(new Set());
+    noteHistoryRowsRemoved(via, selected.size);
+    setSelection((prev) => ({ ...prev, selected: new Set() }));
+  };
+  const enterList = (step: 1 | -1) => {
+    if (step !== 1 || !urls.length) return;
+    list.current?.focus();
+    setSelection((prev) => movedCursor(urls, { ...prev, cursor: null }, 1, false));
+  };
+  const onListKey: ViewProps["onKeyDown"] = ({ nativeEvent: { key, metaKey, shiftKey } }) => {
+    if (key === "ArrowDown" || key === "ArrowUp") setSelection((prev) => movedCursor(urls, prev, key === "ArrowDown" ? 1 : -1, !!shiftKey));
+    else if (key === " ") setSelection((prev) => toggledCursor(urls, prev));
+    else if (key === "a" && metaKey) setSelection((prev) => allRows(urls, prev));
+    else if (key === "Backspace" || key === "Delete") void deleteSelected("key");
+    else if (key === "Escape") setSelection((prev) => ({ ...prev, selected: new Set() }));
   };
 
   const actions =
     selected.size > 0 ? (
       <>
         <Text size="small" tone="textSecondary">{`${selected.size} selected`}</Text>
-        <Button title="Cancel" onPress={() => setSelected(new Set())} />
-        <Button title="Delete" kind="primary" onPress={() => void deleteSelected()} />
+        <Button title="Cancel" onPress={() => setSelection((prev) => ({ ...prev, selected: new Set() }))} />
+        <Button title="Delete" kind="primary" onPress={() => void deleteSelected("button")} />
       </>
     ) : (
       <Button title="Clear Browsing Data…" onPress={() => setClearOpen(true)} />
@@ -97,25 +100,41 @@ export function HistoryPage({ tabId, profileId, initialQuery }: { tabId: string;
 
   return (
     <View style={{ flex: 1 }}>
-      <PageHeader title="History" query={query} onQuery={setQuery} actions={actions} searchRef={search} />
+      <PageHeader title="History" query={query} onQuery={setQuery} actions={actions} searchRef={search} onArrow={enterList} />
       {layout.rows.length === 0 ? (
         <EmptyState
           symbol="clock"
           title={query ? "No search results found" : "Your browsing history appears here"}
         />
       ) : (
-        <HistoryList
-          layout={layout}
-          profileId={profileId}
-          windowId={windowId}
-          selected={selected}
-          onToggle={toggle}
-          onMoreFromSite={moreFromSite}
-          onRemove={remove}
-          menuTargets={menuTargets}
-        />
+        <View ref={list} focusable enableFocusRing={false} keyDownEvents={selected.size ? LIST_KEYS_WITH_ESCAPE : LIST_KEYS} onKeyDown={onListKey} style={LIST_KEYS_VIEW}>
+          <HistoryList
+            layout={layout}
+            cursor={selection.cursor}
+            profileId={profileId}
+            windowId={windowId}
+            selected={selected}
+            onToggle={toggle}
+            onMoreFromSite={moreFromSite}
+            onRemove={remove}
+            menuTargets={menuTargets}
+          />
+        </View>
       )}
       {clearOpen && <ClearDataDialog profileId={profileId} onClose={() => setClearOpen(false)} />}
     </View>
   );
 }
+
+const LIST_KEYS = [
+  { key: "ArrowDown" },
+  { key: "ArrowUp" },
+  { key: "ArrowDown", shiftKey: true },
+  { key: "ArrowUp", shiftKey: true },
+  { key: " " },
+  { key: "a", metaKey: true },
+  { key: "Backspace" },
+  { key: "Delete" },
+];
+const LIST_KEYS_WITH_ESCAPE = [...LIST_KEYS, { key: "Escape" }];
+const LIST_KEYS_VIEW = { flex: 1 } as const;

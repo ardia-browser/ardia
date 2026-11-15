@@ -6,6 +6,9 @@ import { privateSessionOpened } from "./privateWindows";
 import type { ExternalAppRequest, NavigationState, OpenWindowRequest } from "@ardia/ardiacore";
 import type { CoverRect } from "./covers";
 import { notePageAsked, notePageSettled } from "./dialogPages";
+import { noteShowStep } from "./showTrace";
+import { popupFeatures } from "./popupPlacement";
+import { isPopupWindowId, onPopupWindowClosed, openPopupWindow, popupOpenerKey, type PopupWindowInfo } from "./popupWindows";
 
 export type PageListener = (name: string, data: unknown) => void;
 export type PageRect = Omit<CoverRect, "radius">;
@@ -33,7 +36,8 @@ type Page = {
   focusArgs: Record<string, unknown>;
 };
 
-type OpenedTab = { adopt?: unknown; url?: unknown; foreground?: unknown; window?: unknown; opener?: unknown; profile?: unknown; fromClick?: unknown; point?: unknown };
+type OpenedTab = { adopt?: unknown; url?: unknown; foreground?: unknown; window?: unknown; opener?: unknown; profile?: unknown; fromClick?: unknown; point?: unknown; popup?: unknown };
+type OpenedRequest = OpenWindowRequest & { adoptId: string };
 type Point = NonNullable<OpenWindowRequest["point"]>;
 type TabEvent = { key?: unknown; name?: unknown; data?: unknown };
 
@@ -68,6 +72,13 @@ export function externalAppStillAsked(key: string, id: string): Promise<boolean>
   return callPage<{ alive?: unknown }>(key, "externalAppAlive", { id }).then((answer) => answer?.alive === true);
 }
 
+function promptHostOf(page: Page): Page {
+  if (!isPopupWindowId(page.windowId)) return page;
+  const opener = pages.get(popupOpenerKey(page.windowId));
+  if (opener && opener.listeners.size && !opener.closed) return opener;
+  return takerOfOpenedTab(listeningTakers(), page.profile) ?? page;
+}
+
 function askExternalApp(page: Page, data: unknown) {
   const answers = externalAppAnswers;
   if (!answers) return;
@@ -75,11 +86,35 @@ function askExternalApp(page: Page, data: unknown) {
     answers.ask(page.profile, page.key, data).then((request) => {
       if (!request) return;
       if (page.closed) return answers.forget(request.id);
-      for (const listener of [...page.listeners]) listener("externalApp", request);
+      const host = promptHostOf(page);
+      for (const listener of [...host.listeners]) listener("externalApp", request);
     }),
   );
 }
 
+const listeningTakers = () => [...pages.values()].filter((page) => page.listeners.size && !page.closed && !isPopupWindowId(page.windowId));
+
+function handOpenedTab(opener: Page | undefined, request: OpenedRequest) {
+  const listening = listeningTakers();
+  const taker = opener?.listeners.size && !opener.closed ? opener : takerOfOpenedTab(listening, request.profile);
+  if (!taker) {
+    if (listening.length) console.warn("[ardia windows] a tab opened by a page was closed: no page of its profile is showing");
+    quietly(hostCall("tab.discard", { adopt: request.adoptId }));
+    return;
+  }
+  for (const listener of [...taker.listeners]) listener("openWindow", request);
+}
+
+function openFromPopup(page: Page, request: unknown) {
+  const moved = typeof request === "object" && request !== null ? { ...request, point: undefined } : request;
+  for (const listener of [...promptHostOf(page).listeners]) listener("openWindow", moved);
+}
+
+function popupWindowGone(popup: PopupWindowInfo) {
+  const page = pages.get(popup.pageKey);
+  if (page && !page.closed) return closePage(page);
+  if (!page) quietly(discardOffered(popup.adopt));
+}
 
 export function onPagePress(listener: (windowId: string) => void): () => void {
   pressListeners.add(listener);
@@ -118,30 +153,34 @@ function listen() {
     }
     if (event.name === "externalApp") return askExternalApp(page, event.data);
     if (event.name === "navigation" && (event.data as Partial<Pick<NavigationState, "isLoading">> | null)?.isLoading === false) notePageSettled(page.key);
+    if (event.name === "openWindow" && isPopupWindowId(page.windowId)) return openFromPopup(page, shapedPageEvent(page.opening, event.name, event.data));
     const data = placedPoint(page, event.name, shapedPageEvent(page.opening, event.name, event.data));
     for (const listener of [...page.listeners]) listener(event.name, data);
   });
+  onPopupWindowClosed(popupWindowGone);
   onEngineTopic("tab.opened", (opened: OpenedTab) => {
     if (typeof opened.adopt !== "string") return;
-    const opener = typeof opened.opener === "string" ? pages.get(opened.opener) : undefined;
+    const asking = typeof opened.opener === "string" ? pages.get(opened.opener) : undefined;
+    const opener = asking && isPopupWindowId(asking.windowId) ? pages.get(popupOpenerKey(asking.windowId)) : asking;
     const fromClick = opened.fromClick === true;
-    const request = {
+    const request: OpenedRequest = {
       url: typeof opened.url === "string" ? opened.url : "",
       disposition: opened.window === true ? "window" : opened.foreground === true ? "foreground" : "background",
       adoptId: opened.adopt,
       userGesture: true,
       profile: typeof opened.profile === "string" ? opened.profile : undefined,
       fromClick,
-      point: fromClick ? inWindow(opener, opened.point) : undefined,
+      point: fromClick && asking === opener ? inWindow(opener, opened.point) : undefined,
     };
-    const listening = [...pages.values()].filter((page) => page.listeners.size && !page.closed);
-    const taker = opener?.listeners.size ? opener : takerOfOpenedTab(listening, request.profile);
-    if (!taker) {
-      if (listening.length) console.warn("[ardia windows] a tab opened by a page was closed: no page of its profile is showing");
-      quietly(hostCall("tab.discard", { adopt: opened.adopt }));
-      return;
-    }
-    for (const listener of [...taker.listeners]) listener("openWindow", request);
+    const features = popupFeatures(opened.popup);
+    if (!features) return handOpenedTab(opener, request);
+    const openedFrom = opener && !opener.closed ? opener : undefined;
+    const ask = { adopt: request.adoptId, url: request.url, profile: request.profile ?? openedFrom?.profile ?? "", openerKey: openedFrom?.key ?? "", openedFromKey: (asking && !asking.closed ? asking : openedFrom)?.key ?? "", openedFromWindowId: (asking && !asking.closed ? asking : openedFrom)?.windowId ?? "", features };
+    quietly(
+      openPopupWindow(ask).then((outcome) => {
+        if (outcome === "failed") handOpenedTab(opener, { ...request, disposition: "foreground" });
+      }),
+    );
   });
 }
 
@@ -183,9 +222,12 @@ function tellReady(page: Page, listener: PageListener) {
 
 function sendShow(page: Page): Promise<unknown> | undefined {
   const args = page.show;
-  if (!args || args === page.showSent || page.closed) return undefined;
+  if (!args || args === page.showSent || page.closed) return void noteShowStep(page.key, `sendShow: ${!args ? "nothing" : page.closed ? "closed" : "already sent"}`);
   page.showSent = args;
-  return hostCall("tab.show", args, page.windowId);
+  noteShowStep(page.key, `sendShow: ${args.visible ? "shown" : "hidden"}`);
+  return hostCall("tab.show", args, page.windowId).catch((error: unknown) => {
+    throw (console.warn(`[ardia windows] the page ${page.key} could not show: ${String((error as Error)?.message ?? error)}`), error);
+  });
 }
 
 const focusWaits = (page: Page) => lastAskedToFocus === page && page.focusAsked > 0 && Date.now() - page.focusAsked < FOCUS_WAITS_FOR_SHOW_MS;
@@ -194,7 +236,7 @@ function askShow(page: Page, args: ShowArgs) {
   page.show = args;
   quietly(
     page.ready.then((opened) => {
-      if (!opened || page.show !== args) return;
+      if (!opened || page.show !== args) return noteShowStep(page.key, opened ? "askShow: superseded" : "askShow: not opened");
       const sent = sendShow(page);
       if (!args.visible || !focusWaits(page)) return sent;
       page.focusAsked = 0;
@@ -239,6 +281,7 @@ export function mountPage(key: string, from: PageStart, listener: PageListener):
       page.focusAsked = Date.now();
     }
   } else if (page.windowId !== from.windowId) {
+    noteShowStep(key, `mount: window ${page.windowId} to ${from.windowId}`);
     page.windowId = from.windowId;
     page.from = from;
     page.profile = from.profile ?? "";
@@ -284,10 +327,10 @@ function closePage(page: Page) {
   closings.set(page.key, closing);
 }
 
-export function showPage(key: string, visible: boolean, shape: PageShape | null) {
+export function showPage(key: string, visible: boolean, shape: PageShape | null): boolean {
   const page = pages.get(key);
-  if (!page || page.closed) return;
-  askShow(page, visible && shape ? { key, visible: true, ...shape } : { key, visible: false });
+  if (!page || page.closed) return (noteShowStep(key, page ? "showPage: closed" : "showPage: no page"), false);
+  return (askShow(page, visible && shape ? { key, visible: true, ...shape } : { key, visible: false }), true);
 }
 
 const REOPENING_METHODS = new Set(["loadUrl", "reload", "forceReload"]);
@@ -342,6 +385,11 @@ export function releasePage(key: string) {
   if (!page) return;
   page.parked = false;
   if (page.mounts <= 0) closePage(page);
+}
+
+export function pageOpened(key: string): Promise<boolean> {
+  const page = pages.get(key);
+  return page && !page.closed ? page.ready : Promise.resolve(false);
 }
 
 export function discardOffered(adopt: string): Promise<boolean> {

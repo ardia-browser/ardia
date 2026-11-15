@@ -354,7 +354,7 @@ def render(records: list[dict], options: dict, extra: str = "") -> str:
         return whole
     from ardia_cli.browse.daemon import spill
 
-    saved = spill(whole) or ""
+    saved = "" if options.get("json") else (spill(whole) or "")
     for shown in range(len(records), -1, -1):
         out = fit(heads[:shown], texts[:shown], len(records) - shown, limit, extra, len(whole) + 300, saved)
         if out is not None:
@@ -529,7 +529,12 @@ async def extract_filled(page, selector: str | None, timeout: float) -> dict:
     while thin(got, selector) and loop.time() + THIN_POLL < deadline:
         waited = True
         await asyncio.sleep(THIN_POLL)
-        got = await page.call(EXTRACT, selector, frame=page.main_frame, read=True)
+        try:
+            got = await page.call(EXTRACT, selector, frame=page.main_frame, read=True)
+        except BrowseError as error:
+            if error.code not in ("document_changed", "page_navigated", "frame_gone"):
+                raise
+            await settle(page, min(deadline, loop.time() + SETTLE_LIMIT))
     if waited:
         command_metrics.flag("read_waited_for_content", True)
     return got

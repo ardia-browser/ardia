@@ -70,6 +70,17 @@ export async function removeProfileFolder(folder: string): Promise<ProfileFolder
   return REMOVALS.find((known) => known === outcome) ?? "failed";
 }
 
+let unheardOpener: string | null = null;
+
+export function leaveOffersFromUnheard(openerKey: string | null) {
+  unheardOpener = openerKey;
+}
+
+function acknowledgeOffer(payload: Record<string, unknown>) {
+  if (typeof payload.adopt !== "string") return;
+  void hostCall("tab.offerHeard", { adopt: payload.adopt }).catch(() => {});
+}
+
 function deliver(event: EngineEvent) {
   if (typeof event?.topic !== "string" || typeof event.json !== "string") return;
   const wanted = listeners.get(event.topic);
@@ -81,7 +92,10 @@ function deliver(event: EngineEvent) {
     return;
   }
   if (!payload || typeof payload !== "object") return;
-  for (const listener of [...wanted]) listener(payload as Record<string, unknown>);
+  const fields = payload as Record<string, unknown>;
+  if (event.topic === "tab.opened" && unheardOpener !== null && fields.opener === unheardOpener) return;
+  for (const listener of [...wanted]) listener(fields);
+  if (event.topic === "tab.opened") acknowledgeOffer(fields);
 }
 
 export function onEngineTopic(topic: string, listener: TopicListener): { remove(): void } {

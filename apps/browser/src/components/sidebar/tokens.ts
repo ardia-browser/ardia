@@ -1,6 +1,6 @@
 import { useTheme } from "../ui/theme";
 import { duration } from "../ui/motion";
-import { font, ink, radius, shadow, space, withAlpha, type ShadowLevel } from "../ui/tokens";
+import { font, ink, radius, shadow, sidebarFont, sidebarIconSize, sidebarPoints, space, withAlpha, type ShadowLevel } from "../ui/tokens";
 import type { GroupColor } from "../../state/browser/types";
 import { GROUP_COLORS } from "../../state/groups/tokens";
 
@@ -25,6 +25,14 @@ const DARK = {
   incognitoBadge: "rgba(255,255,255,0.08)",
   tileGlow: "#FFFFFF",
   fieldButtonPlate: "rgba(255,255,255,0.08)",
+  quietWash: "rgba(255,255,255,0.073)",
+  quietHover: "rgba(255,255,255,0.045)",
+  quietPressed: "rgba(255,255,255,0.1)",
+  quietTile: "rgba(255,255,255,0.04)",
+  quietTileLive: "rgba(255,255,255,0.112)",
+  quietActiveText: 0.92,
+  quietText: 0.53,
+  quietFaintText: 0.24,
 };
 
 const LIGHT: typeof DARK = {
@@ -48,16 +56,28 @@ const LIGHT: typeof DARK = {
   incognitoBadge: "rgba(0,0,0,0.06)",
   tileGlow: "#000000",
   fieldButtonPlate: "rgba(255,255,255,0.75)",
+  quietWash: "rgba(0,0,0,0.063)",
+  quietHover: "rgba(0,0,0,0.035)",
+  quietPressed: "rgba(0,0,0,0.09)",
+  quietTile: "rgba(0,0,0,0.035)",
+  quietTileLive: "rgba(0,0,0,0.1)",
+  quietActiveText: 0.9,
+  quietText: 0.45,
+  quietFaintText: 0.2,
 };
 
 type SidebarTokens = typeof DARK;
 
-export function useSidebarTokens(): SidebarTokens {
-  return useTheme().dark ? DARK : LIGHT;
+const HIGH_CONTRAST_DARK: SidebarTokens = { ...DARK, groupTitle: "#FFFFFF", newTabLabel: "#FFFFFFD1", newTabIcon: "#FFFFFFB3", noGroupIcon: "#FFFFFFB3", badge: "#FFFFFF" };
+const HIGH_CONTRAST_LIGHT: SidebarTokens = { ...LIGHT, groupTitle: "#000000", newTabLabel: "#000000D1", newTabIcon: "#000000B3", noGroupIcon: "#000000B3", badge: "#000000" };
+
+export function sidebarTokens(theme: { dark: boolean; highContrastText?: boolean }): SidebarTokens {
+  if (theme.highContrastText) return theme.dark ? HIGH_CONTRAST_DARK : HIGH_CONTRAST_LIGHT;
+  return theme.dark ? DARK : LIGHT;
 }
 
-export function sidebarTokens(theme: { dark: boolean }): SidebarTokens {
-  return theme.dark ? DARK : LIGHT;
+export function useSidebarTokens(): SidebarTokens {
+  return sidebarTokens(useTheme());
 }
 
 
@@ -109,7 +129,39 @@ export const SIDEBAR_MOTION = { liveFold: duration.long, fold: duration.base, li
 export const HOVER_CARD_IN_SPRING = { response: 0.25, damping: 0.75 } as const;
 export const HOVER_CARD_OUT_SPRING = { response: 0.2, damping: 0.6 } as const;
 
-export const TAB_ROW = { contentLeft: 9, trailing: 6, titleGap: 5, titleHeight: 18, compactTitleHeight: 17, closeSlot: 22, renameTextOffset: 1 } as const;
+export const SLEEPING_TITLE_OPACITY = 0.6;
+
+export const TAB_ROW = {
+  contentLeft: 9,
+  trailing: 6,
+  titleGap: 5,
+  get titleHeight() {
+    return sidebarPoints(18);
+  },
+  get compactTitleHeight() {
+    return sidebarPoints(17);
+  },
+  closeSlot: 22,
+  renameTextOffset: 1,
+};
+
+export const ROW_GLYPH = {
+  get box() {
+    return sidebarIconSize(16);
+  },
+  get symbol() {
+    return sidebarPoints(12);
+  },
+  get small() {
+    return sidebarPoints(11);
+  },
+  get plus() {
+    return sidebarPoints(13);
+  },
+  get wide() {
+    return sidebarPoints(18);
+  },
+};
 
 export const TILE_RIM = 1;
 export const TILE_STATUS = { pip: 8, speaker: 9.5, box: { width: 14, height: 12 }, inset: { x: 5, y: 4 } } as const;
@@ -119,8 +171,11 @@ export const AWAY_TITLE = { slashAlpha: 0.45, slashGap: 4, pinnedMaxWidth: "45%"
 export const TABULAR_NUMS: ("tabular-nums")[] = ["tabular-nums"];
 
 export const SIDEBAR_TYPE = {
+  get title() {
+    return sidebarFont.body.fontSize;
+  },
   get compact() {
-    return font.small.fontSize;
+    return sidebarFont.small.fontSize;
   },
 };
 

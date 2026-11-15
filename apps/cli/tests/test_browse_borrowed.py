@@ -23,6 +23,7 @@ class FakePage:
         self.url = "https://user.example/draft"
         self.navigations = 0
         self.init_scripts = {}
+        self.overrides = {}
 
     async def refresh_frames(self):
         return self.frames

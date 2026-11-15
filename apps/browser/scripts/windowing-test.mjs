@@ -329,6 +329,27 @@ try {
     if (blank.length > 1) dump("dropped-page", pages.filter((c, i) => pages.slice(Math.max(0, i - 1), i + 2).some((n) => sd(n) < 3)), page);
     assert.ok(blank.length <= 1, `${blank.length} frames of w1's page blank`);
   });
+
+  await check("window managers float Settings and Little Ardia and keep tiling the main window", async () => {
+    const subroles = () => run(`return win("w1").then((n) => ac.engine.call("windows.dev", { window: n, action: "subroles" })).then((text) => JSON.parse(text));`);
+    const until = async (found) => {
+      for (let end = Date.now() + 10000; Date.now() < end; await sleep(250)) {
+        const list = await subroles();
+        if (found(list)) return list;
+      }
+      return subroles();
+    };
+    const main = await run(`return win("w1");`);
+    let list = await until(() => true);
+    assert.equal(list.find((w) => w.number === main)?.subrole, "AXStandardWindow", `main window before: ${JSON.stringify(list)}`);
+    await run(`ac.openSettings("general"); return true;`);
+    list = await until((l) => l.some((w) => w.title === "Settings"));
+    assert.equal(list.find((w) => w.title === "Settings")?.subrole, "AXDialog", `Settings: ${JSON.stringify(list)}`);
+    await run(`st().createWindow({ kind: "small", url: ${JSON.stringify(`${base}/blue?little`)} }); return true;`);
+    list = await until((l) => l.some((w) => w.identifier === "ardia.window.small"));
+    assert.equal(list.find((w) => w.identifier === "ardia.window.small")?.subrole, "AXSystemFloatingWindow", `Little Ardia: ${JSON.stringify(list)}`);
+    assert.equal(list.find((w) => w.number === main)?.subrole, "AXStandardWindow", `main window after Little Ardia: ${JSON.stringify(list)}`);
+  });
 } finally {
   await app?.quit();
   server.close();

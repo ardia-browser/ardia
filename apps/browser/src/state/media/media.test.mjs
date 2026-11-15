@@ -270,3 +270,20 @@ test("a session that ends while its tab is in the background stops being left pa
   media.setNowPlaying(b, null);
   assert.equal(M().leftPaused[b], undefined);
 });
+
+test("a looping clip's position wraps past its end instead of stopping there", () => {
+  const at = 1_000_000;
+  const looping = report({ position: 11, duration: 12, timestamp: at, loop: true });
+  assert.equal(media.positionOf(looping, at + 3000), 2);
+  assert.equal(media.positionOf({ ...looping, loop: false }, at + 3000), 12);
+  assert.equal(media.positionOf({ ...looping, playbackState: "paused" }, at + 3000), 11);
+});
+
+test("a looping clip's report from its start counts as a restart, a report moving on does not", () => {
+  const at = 1_000_000;
+  const before = report({ position: 0, duration: 12, timestamp: at, loop: true });
+  assert.equal(media.isLoopRestart(before, report({ position: 0.1, duration: 12, timestamp: at + 12_000, loop: true })), true);
+  assert.equal(media.isLoopRestart(before, report({ position: 5, duration: 12, timestamp: at + 5_000, loop: true })), false);
+  assert.equal(media.isLoopRestart(before, report({ position: 0.1, duration: 12, timestamp: at + 12_000 })), false);
+  assert.equal(media.isLoopRestart({ ...before, playbackState: "paused" }, report({ position: 0.1, duration: 12, timestamp: at + 12_000, loop: true })), false);
+});

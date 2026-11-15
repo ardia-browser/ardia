@@ -51,19 +51,17 @@ public enum TabsLayout {
 }
 
 public enum TabsMotion {
-  public static let openScale = Animation.spring(response: 0.19, dampingFraction: 1)
-  public static let openPosition = Animation.spring(response: 0.3, dampingFraction: 1)
-  public static let expand = Animation.spring(response: 0.3, dampingFraction: 1)
+  public static let open = Motion.arrive
+  public static let expand = Motion.expand
   public static let gapClose = Motion.tabStack
-  public static let release = Animation.spring(response: 0.3, dampingFraction: 0.9)
-  public static let fade = Animation.easeOut(duration: 0.2)
-  public static let poofDuration: Double = 0.42
-  public static let flyAway: Double = 0.2
+  public static let release = Motion.smooth
+  public static let fade = Motion.fade
+  public static let poofDuration: Double = 0.3
+  public static let flyAway: Double = 0.16
   public static let backdropSlowLoop: Double = 10
   public static let backdropFastLoop: Double = 7
 
   public static func settle(distance: Double, velocity: Double) -> Animation {
-    let initial = abs(distance) > 0.001 ? velocity / distance : 0
-    return .interpolatingSpring(duration: 0.4, bounce: 0, initialVelocity: max(min(initial, 30), -30))
+    Motion.settle(distance: distance, velocity: velocity, duration: 0.28)
   }
 }

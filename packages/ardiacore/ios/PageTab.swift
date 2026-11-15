@@ -62,4 +62,5 @@ protocol PageTab: NSView {
   func notificationAction(_ notificationId: String, action: String)
   func resolveUnresponsive(terminate: Bool)
   func discard(unload: Bool) -> String
+  func sleepIfHidden(for seconds: Double) -> [NSNumber]
 }

@@ -3,6 +3,7 @@ import { closesWindow, pinnedItemsRemain } from "../browser/model";
 import { splitOf } from "../splits/splits";
 import type { Tab } from "../browser/types";
 import { hasPage } from "../tabs/pageSession";
+import { newTabOpensOf } from "../settings/settings";
 
 export const NEW_TAB_BAR_POLICY = {
   closeTabKeyOnlyDismissesBar: true,
@@ -12,7 +13,7 @@ export const NEW_TAB_BAR_POLICY = {
   closingLastTabLeavesEmptyWindow: true,
 };
 
-export const newTabOpensBar = (s: Pick<BrowserState, "settings">) => s.settings.newTabOpens === "commandBar";
+export const newTabOpensBar = (s: Pick<BrowserState, "settings">) => newTabOpensOf(s.settings) === "commandBar";
 
 export function isEmptyCardTab(s: Pick<BrowserState, "splits">, tab: Tab | undefined): tab is Tab {
   return !!tab && !tab.pin && !tab.url && !hasPage(tab) && !splitOf(s as BrowserState, tab.id);

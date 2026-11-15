@@ -12,17 +12,17 @@ import { closeHistoryMenu, goBack, goForward, historyItems, toggleHistoryMenu } 
 import { openModeFor, openUrl } from "../../state/bookmarks/actions";
 import type { ToolbarPalette } from "../ui/toolbarColors";
 import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
-import { GLYPH, HISTORY_BUTTON_MOTION, RELOAD_BUTTON_MOTION } from "./tokens";
+import { GLYPH, HISTORY_GLYPH, HISTORY_BUTTON_MOTION, RELOAD_BUTTON_MOTION, SYMBOL_BOX } from "./tokens";
 import { showReloadMenu } from "../../state/site/reloadMenu";
 
 const ICON_CENTER = { width: GLYPH, height: GLYPH, alignItems: "center" as const, justifyContent: "center" as const };
 const ICON_LAYER = { ...ICON_CENTER, position: "absolute" as const };
-const RELOAD_SYMBOL_BOX = 16;
+const SYMBOL_FRAME = { width: SYMBOL_BOX, height: SYMBOL_BOX };
 
 const ReloadGlyphColor = createContext("");
 
 function ReloadSymbol({ name }: { name: "arrow.clockwise" | "xmark" }) {
-  return <Symbol name={name} size={GLYPH} weight="regular" color={useContext(ReloadGlyphColor)} style={{ width: RELOAD_SYMBOL_BOX, height: RELOAD_SYMBOL_BOX }} />;
+  return <Symbol name={name} size={GLYPH} weight="regular" color={useContext(ReloadGlyphColor)} style={SYMBOL_FRAME} />;
 }
 
 const ReloadGlyph = memo(function ReloadGlyph({ loading, color, press }: { loading: boolean; color: string; press: Animated.Value }) {
@@ -254,10 +254,10 @@ export const HistoryButton = memo(function HistoryButton({
       >
         <Animated.View style={[ICON_CENTER, { transform: [{ translateX: pressOffsetMotion }] }]}>
           <Animated.View pointerEvents="none" style={[ICON_LAYER, { opacity: handoffFadeOut, transform: [{ translateX: handoffOutX }] }]}>
-            <Symbol name={icon} size={GLYPH} weight="regular" color={iconColor} style={ICON_CENTER} />
+            <Symbol name={icon} size={HISTORY_GLYPH.size} weight={HISTORY_GLYPH.weight} color={iconColor} style={SYMBOL_FRAME} />
           </Animated.View>
           <Animated.View pointerEvents="none" style={[ICON_LAYER, { opacity: handoffFadeIn, transform: [{ translateX: handoffInX }] }]}>
-            <Symbol name={icon} size={GLYPH} weight="regular" color={iconColor} style={ICON_CENTER} />
+            <Symbol name={icon} size={HISTORY_GLYPH.size} weight={HISTORY_GLYPH.weight} color={iconColor} style={SYMBOL_FRAME} />
           </Animated.View>
         </Animated.View>
       </Button>

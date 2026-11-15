@@ -374,3 +374,16 @@ test("a page asked for the keyboard before it shows takes it once it shows, unle
   unmountLost();
   await settle();
 });
+
+test("a show asked before its view's page is mounted is not taken, so the view asks again after the mount and the page shows", async () => {
+  const shape = { x: 0, y: 32, width: 344, height: 272, radius: 0, holes: [] };
+  assert.equal(showPage("popup:early:page", true, shape), false, "a show for a key with no page yet is not taken");
+  await settle();
+  assert.equal(shows("popup:early:page").length, 0);
+  const unmount = mountPage("popup:early:page", { url: "", adopt: "ardiacore:7", windowId: "popup:early" }, () => {});
+  assert.equal(showPage("popup:early:page", true, shape), true, "the same show after the mount is taken");
+  await settle();
+  await settle();
+  assert.deepEqual(shows("popup:early:page"), [{ verb: "tab.show", args: { key: "popup:early:page", visible: true, ...shape }, windowId: "popup:early" }]);
+  unmount();
+});

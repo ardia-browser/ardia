@@ -1,3 +1,5 @@
+import type { GroupColor } from "../browser/types";
+
 export type LiveSourceId = "github" | "bitbucket" | "notion" | "confluence" | "gdrive";
 export type LiveFolderKind = "pullRequests" | "documents";
 
@@ -17,6 +19,7 @@ export type LiveFolder = {
   shownRepos: string[];
   createdAt: number;
   after?: string | null;
+  color?: GroupColor | null;
 };
 
 export type PullRequestSection = "authored" | "review" | "team";

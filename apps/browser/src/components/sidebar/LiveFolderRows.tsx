@@ -4,7 +4,7 @@ import type { FolderRow } from "../../state/live/rows";
 import { Badge, Button, space, Symbol, Text, useHover } from "../ui";
 import { HoverSlot } from "../ui/HoverSlot";
 import { layout, useTheme } from "../ui/theme";
-import { lineHeight } from "../ui/tokens";
+import { sidebarLineHeight } from "../ui/tokens";
 import { useLiveColors } from "../live/tokens";
 import { reduceMotion } from "../ui/reduceMotion";
 import { Fold, useFold } from "./Fold";
@@ -19,7 +19,7 @@ import { TAB_ROW } from "./tokens";
 const SECTION_HEIGHT = 22;
 
 export function SectionTitle({ title }: { title: string }) {
-  return <SectionLabel title={title} inset={TAB_ROW.contentLeft} top={SECTION_HEIGHT - space.xxs - lineHeight.caption} bottom={space.xxs} />;
+  return <SectionLabel title={title} inset={TAB_ROW.contentLeft} top={SECTION_HEIGHT - space.xxs - sidebarLineHeight.caption} bottom={space.xxs} />;
 }
 
 export function NoteRow({ text, icon, spinner, onPress }: { text: string; icon?: string; spinner?: boolean; onPress?: () => void }) {

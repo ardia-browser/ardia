@@ -1,5 +1,4 @@
 import asyncio
-import inspect
 import json
 import os
 import shlex
@@ -16,7 +15,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from ardia_cli.browse import actions, claims, client, inputs, media, paths, plugins, readurl, snapshot, vault
+from ardia_cli.browse import actions, claims, client, human, inputs, media, paths, plugins, readurl, snapshot, vault
 from ardia_cli.browse import cli as browse_cli
 from ardia_cli.browse import commands, daemon
 from ardia_cli.browse.errors import BrowseError, ConnectionLost, Gated, OutcomeUnknown, StaleRef, Usage
@@ -72,36 +71,41 @@ async def no_sleep(_seconds, *args, **kwargs):
 
 
 class SteadyKeyboardTest(unittest.TestCase):
-    def test_pydoll_still_routes_typos_through_should_make_typo(self):
-        from pydoll.interactions.keyboard import Keyboard
-
-        self.assertTrue(hasattr(Keyboard, "_should_make_typo"), "pydoll renamed Keyboard._should_make_typo")
-        source = inspect.getsource(Keyboard._process_char_with_typo)
-        self.assertIn("self._should_make_typo()", source, "pydoll no longer asks _should_make_typo before a typo")
-        humanized = inspect.getsource(Keyboard._type_text_humanized)
-        self.assertIn("_process_char_with_typo", humanized, "pydoll's humanized typing bypasses _process_char_with_typo")
-
-    def test_no_typos_even_when_pydoll_would_always_make_one(self):
-        text = "The quick brown fox, jumps over 13 lazy dogs!"
-        with mock.patch("pydoll.interactions.keyboard.DEFAULT_TYPO_PROBABILITY", 1.0), mock.patch("asyncio.sleep", no_sleep):
-            from pydoll.interactions.keyboard import Keyboard
-
-            plain = RecordingExecutor()
-            asyncio.run(Keyboard(plain)._type_text_humanized(text))
-            self.assertNotEqual(typed_text(plain.commands), text, "the control run should make typos at probability 1")
-            steady = RecordingExecutor()
-            asyncio.run(inputs.steady_keyboard_class()(steady).type_text(text, humanize=True))
+    def test_humanized_typing_never_makes_a_typo(self):
+        text = "The quick brown fox, jumps over 13 lazy dogs!\n"
+        steady = RecordingExecutor()
+        with mock.patch("asyncio.sleep", no_sleep):
+            asyncio.run(human.Keyboard(steady).type_text(text, humanize=True))
         self.assertEqual(typed_text(steady.commands), text)
         downs = [c for c in steady.commands if c["params"]["type"] == "keyDown"]
         ups = [c for c in steady.commands if c["params"]["type"] == "keyUp"]
         self.assertEqual(len(downs), len(text))
         self.assertEqual(len(ups), len(text))
+        self.assertNotIn("Backspace", {c["params"]["key"] for c in steady.commands})
 
-    def test_default_timing_is_pydolls(self):
-        from pydoll.interactions.keyboard import TimingConfig
+    def test_typing_events_carry_the_key_fields(self):
+        down, up = human.Keyboard.key_events("A")
+        self.assertEqual(down, {"method": "Input.dispatchKeyEvent", "params": {"type": "keyDown", "text": "A", "unmodifiedText": "A", "code": "KeyA",
+                                                                                "key": "A", "windowsVirtualKeyCode": 65, "nativeVirtualKeyCode": 65}})
+        self.assertEqual(up["params"], {"type": "keyUp", "code": "KeyA", "key": "A", "windowsVirtualKeyCode": 65, "nativeVirtualKeyCode": 65})
+        self.assertEqual(human.CHAR_TO_KEY_INFO["?"], ("?", "Slash", 191))
+        self.assertEqual(human.CHAR_TO_KEY_INFO["("], ("(", "Digit9", 57))
+        self.assertEqual(human.CHAR_TO_KEY_INFO["\n"], ("Enter", "Enter", 13))
+        self.assertEqual(len(human.CHAR_TO_KEY_INFO), 97)
 
-        keyboard = inputs.steady_keyboard_class()(RecordingExecutor())
-        self.assertEqual(keyboard._timing, TimingConfig())
+    def test_humanized_scroll_adds_up_to_the_distance(self):
+        deltas = []
+
+        async def wheel(dx, dy):
+            deltas.append((dx, dy))
+
+        async def run():
+            await human.scroll(wheel, 600, True, -1)
+
+        asyncio.run(run())
+        self.assertTrue(all(dx == 0 for dx, _ in deltas))
+        self.assertGreater(len(deltas), 10)
+        self.assertLess(abs(sum(dy for _, dy in deltas) + 600), 60)
 
 
 class KeysTest(unittest.TestCase):
@@ -205,7 +209,7 @@ class HeldInputTest(unittest.TestCase):
         self.assertEqual((page.sent[-1][1]["x"], page.sent[-1][1]["y"]), (10, 20))
 
     def test_human_mouse_marks_the_button_held_before_dispatch(self):
-        cls = inputs.human_mouse_class()
+        cls = human.Mouse
         seen = []
 
         class Handler:
@@ -214,15 +218,14 @@ class HeldInputTest(unittest.TestCase):
                 return {}
 
         mouse = cls(Handler())
-        from pydoll.protocol.input.types import MouseButton, MouseEventType
 
-        asyncio.run(mouse._dispatch_button(MouseEventType.MOUSE_PRESSED, MouseButton.LEFT))
-        self.assertEqual(seen, [MouseButton.LEFT])
-        asyncio.run(mouse._dispatch_button(MouseEventType.MOUSE_RELEASED, MouseButton.LEFT))
+        asyncio.run(mouse._dispatch_button("mousePressed", "left"))
+        self.assertEqual(seen, ["left"])
+        asyncio.run(mouse._dispatch_button("mouseReleased", "left"))
         self.assertIsNone(mouse.held)
 
     def test_humanized_click_moves_before_pressing_and_holds(self):
-        cls = inputs.human_mouse_class()
+        cls = human.Mouse
         events = []
 
         class Handler:

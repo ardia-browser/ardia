@@ -10,7 +10,8 @@ final class FadeLabel: ExpoView {
   var fontSize: Double = 13 { didSet { update() } }
   var weight = "regular" { didSet { update() } }
   var fontFamily = "" { didSet { update() } }
-  var color: NSColor = .labelColor { didSet { field.textColor = color } }
+  var color: NSColor = .labelColor { didSet { if strikethrough { update() } else { field.textColor = color } } }
+  var strikethrough = false { didSet { if strikethrough != oldValue { update() } } }
   var fadeWidth: Double = 24 { didSet { relayout() } }
 
   required init(appContext: AppContext? = nil) {
@@ -41,9 +42,17 @@ final class FadeLabel: ExpoView {
       "semibold": .semibold, "bold": .bold, "heavy": .heavy, "black": .black,
     ]
     let fontWeight = weights[weight] ?? .regular
-    field.font = familyFont(weight: fontWeight) ?? .monospacedDigitSystemFont(ofSize: fontSize, weight: fontWeight)
-    field.stringValue = text
+    let font = familyFont(weight: fontWeight) ?? .monospacedDigitSystemFont(ofSize: fontSize, weight: fontWeight)
+    field.font = font
     field.textColor = color
+    if strikethrough {
+      field.attributedStringValue = NSAttributedString(string: text, attributes: [
+        .font: font, .foregroundColor: color,
+        .strikethroughStyle: NSUnderlineStyle.single.rawValue, .strikethroughColor: color,
+      ])
+    } else {
+      field.stringValue = text
+    }
     relayout()
   }
 

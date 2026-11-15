@@ -26,11 +26,21 @@ export function useTabLayout(): "sidebar" | "top" {
   return useBrowser((s) => tabLayoutOf(s, windowId));
 }
 
+export const minimalismIn = (s: BrowserState, windowId: string): boolean => s.settings.minimalismMode && s.windows[windowId]?.kind !== "small";
+
+export const useMinimalism = (): boolean => {
+  const windowId = useWindowId();
+  return useBrowser((s) => minimalismIn(s, windowId));
+};
+
+export const sidebarAddressChosen = (settings: Pick<BrowserState["settings"], "addressBar" | "minimalismMode">): boolean =>
+  settings.addressBar === "sidebar" || settings.minimalismMode;
+
 export function addressBarInSidebar(s: BrowserState, windowId: string): boolean {
   const w = s.windows[windowId];
   return (
     !!w &&
-    s.settings.addressBar === "sidebar" &&
+    (s.settings.addressBar === "sidebar" || minimalismIn(s, windowId)) &&
     (tabsShownIn(s, windowId) || switchOn("sidebarSlide")) &&
     tabLayoutOf(s, w.id) === "sidebar"
   );
@@ -48,13 +58,13 @@ export function openingLightsCenter(s: BrowserState, windowId: string): LightsPl
   if (tabLayoutOf(s, w.id) === "top") return open ? [...TOP_STRIP_LIGHTS_CENTER] : lightsCenter(DEFAULT_SIDEBAR_WIDTH);
   const width = s.settings.sidebarWidth;
   const frame = pageFrameInsetOf(s.settings.pageFrame, {
-    borderlessMode: s.settings.borderlessMode,
+    borderlessMode: s.settings.borderlessMode || minimalismIn(s, windowId),
     zeroInFullScreen: s.settings.pageFrameZeroInFullScreen,
     fullScreen: !!w.fullScreen,
     zeroWhenTabsHidden: s.settings.pageFrameZeroWhenTabsHidden,
     tabsHidden: autoHidesTabsIn(s, windowId),
   });
-  const base = s.settings.addressBar === "sidebar" ? ARC_LIGHTS_CENTER : toolbarLightsCenter(s.settings.compactToolbar, frame);
+  const base = sidebarAddressChosen(s.settings) ? ARC_LIGHTS_CENTER : toolbarLightsCenter(s.settings.compactToolbar, frame);
   return sidebarLightsCenter(sidebarSideOf(s, w.id) === "right", width, open ? 0 : width, 0, base);
 }
 
@@ -62,7 +72,7 @@ export function usePageFrameInset(): number {
   const windowId = useWindowId();
   return useBrowser((s) =>
     pageFrameInsetOf(s.settings.pageFrame, {
-      borderlessMode: s.settings.borderlessMode,
+      borderlessMode: s.settings.borderlessMode || minimalismIn(s, windowId),
       zeroInFullScreen: s.settings.pageFrameZeroInFullScreen,
       fullScreen: !!s.windows[windowId]?.fullScreen,
       zeroWhenTabsHidden: s.settings.pageFrameZeroWhenTabsHidden,
@@ -70,6 +80,17 @@ export function usePageFrameInset(): number {
     }),
   );
 }
+
+export const pageFrameIn = (s: BrowserState, windowId: string): number =>
+  pageFrameInsetOf(s.settings.pageFrame, {
+    borderlessMode: s.settings.borderlessMode || minimalismIn(s, windowId),
+    zeroInFullScreen: s.settings.pageFrameZeroInFullScreen,
+    fullScreen: !!s.windows[windowId]?.fullScreen,
+    zeroWhenTabsHidden: s.settings.pageFrameZeroWhenTabsHidden,
+    tabsHidden: autoHidesTabsIn(s, windowId),
+  });
+
+const toolbarless = (s: BrowserState, windowId: string): boolean => addressBarInSidebar(s, windowId) || minimalismIn(s, windowId);
 
 function cardReachesCaption(s: BrowserState, windowId: string, chrome: WindowChrome): boolean {
   const w = s.windows[windowId];
@@ -84,8 +105,8 @@ export function cardCaptionRoom(s: BrowserState, windowId: string, frame: number
 }
 
 export function cardTopInset(s: BrowserState, windowId: string, frame: number, chrome: WindowChrome = WINDOW_CHROME): number {
-  if (!cardReachesCaption(s, windowId, chrome) || tabLayoutOf(s, windowId) === "top") return frame;
-  const toolbar = addressBarInSidebar(s, windowId) ? 0 : toolbarRowOf(s.settings.compactToolbar).height;
+  if (!cardReachesCaption(s, windowId, chrome) || (tabLayoutOf(s, windowId) === "top" && !minimalismIn(s, windowId))) return frame;
+  const toolbar = toolbarless(s, windowId) ? 0 : toolbarRowOf(s.settings.compactToolbar).height;
   return captionClearTop(frame, toolbar, frame, chrome);
 }
 
@@ -105,7 +126,7 @@ export function windowControlsPlace(s: BrowserState, windowId: string, frame: nu
   const top = tabLayoutOf(s, windowId) === "top";
   if (top && tabsShownIn(s, windowId)) return { centerY: TOP_STRIP_LIGHTS_CENTER[1], size: WINDOW_CONTROLS.regular, host: "strip" };
   const inSidebar = !top && sidebarSideOf(s, windowId) === "right" && tabsShownIn(s, windowId);
-  if (addressBarInSidebar(s, windowId)) {
+  if (toolbarless(s, windowId)) {
     if (inSidebar) return { centerY: ARC_LIGHTS_CENTER[1], size: WINDOW_CONTROLS.regular, host: "sidebar" };
     return { centerY: chrome.titleBarHeight / 2, size: WINDOW_CONTROLS.band, host: "band" };
   }
@@ -120,7 +141,7 @@ const CAPTION_GUTTER_MIN = 3;
 const SIDEBAR_TOOLS_TOP = 7;
 
 export function captionRegions(s: BrowserState, windowId: string, overlaid = false, chrome: WindowChrome = WINDOW_CHROME): CaptionRegion[] {
-  const frame = s.settings.pageFrame;
+  const frame = pageFrameIn(s, windowId);
   const place = windowControlsPlace(s, windowId, frame, chrome);
   if (!place || overlaid) return [];
   const ui = s.windowUi[windowId];
@@ -128,7 +149,7 @@ export function captionRegions(s: BrowserState, windowId: string, overlaid = fal
   const controls = windowControlsWidth(BROWSER_WINDOW_BUTTONS) + WINDOW_CONTROLS.edge;
   const regions: CaptionRegion[] = [[-(chrome.trailingWidth - 2), 0, controls + WINDOW_CONTROLS.gap, windowControlsBottom(place)]];
   if (place.host === "strip") return regions;
-  const gutter = Math.min(frame, place.centerY - place.size / 2 - 1, addressBarInSidebar(s, windowId) ? SIDEBAR_TOOLS_TOP : frame);
+  const gutter = Math.min(frame, place.centerY - place.size / 2 - 1, toolbarless(s, windowId) ? SIDEBAR_TOOLS_TOP : frame);
   if (gutter >= CAPTION_GUTTER_MIN) regions.push([0, 0, 0, gutter]);
   return regions;
 }
@@ -174,22 +195,22 @@ export function useDownloadsInSidebarFooter(): boolean {
 
 export function useWindowControlsCenterY(): number | null {
   const windowId = useWindowId();
-  return useBrowser((s) => windowControlsPlace(s, windowId, s.settings.pageFrame)?.centerY ?? null);
+  return useBrowser((s) => windowControlsPlace(s, windowId, pageFrameIn(s, windowId))?.centerY ?? null);
 }
 
 export function useWindowControlsSize(): number {
   const windowId = useWindowId();
-  return useBrowser((s) => windowControlsPlace(s, windowId, s.settings.pageFrame)?.size ?? 0);
+  return useBrowser((s) => windowControlsPlace(s, windowId, pageFrameIn(s, windowId))?.size ?? 0);
 }
 
 export function useWindowControlsBottom(): number {
   const windowId = useWindowId();
-  return useBrowser((s) => windowControlsBottom(windowControlsPlace(s, windowId, s.settings.pageFrame)));
+  return useBrowser((s) => windowControlsBottom(windowControlsPlace(s, windowId, pageFrameIn(s, windowId))));
 }
 
 export function useWindowControlsHost(): WindowControlsHost | null {
   const windowId = useWindowId();
-  return useBrowser((s) => windowControlsPlace(s, windowId, s.settings.pageFrame)?.host ?? null);
+  return useBrowser((s) => windowControlsPlace(s, windowId, pageFrameIn(s, windowId))?.host ?? null);
 }
 
 export const useToolbarLightsCenter = (): readonly [number, number] => toolbarLightsCenter(useBrowser((s) => s.settings.compactToolbar), usePageFrameInset());

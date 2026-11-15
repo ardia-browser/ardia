@@ -8,7 +8,7 @@ import { Button } from "../ui";
 import { perLook } from "../ui/tokens";
 import { anchorInside, type Rect } from "./downloadsPlacement";
 import { DOWNLOADS_BUTTON } from "./tokens";
-import { noteDownloadsPanelToggle } from "../../state/telemetry/downloadsPanelCounts";
+import { noteDownloadsPanelToggle } from "../../state/telemetry/downloadsPanelCauses";
 
 const downloadsButtons = new Map<string, Set<View>>();
 

@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from urllib.parse import parse_qsl, unquote, urlsplit
 
 from ardia_cli import command_metrics
-from ardia_cli.browse import snapshot
+from ardia_cli.browse import flowlog, snapshot
 from ardia_cli.redact import redact
 from ardia_cli.browse.errors import BrowseError, CdpError, ConnectionLost, Gated
 
@@ -589,12 +589,18 @@ class NetworkWatch:
         self.records: dict[str, dict] = {}
         self.order: list[str] = []
         self.last_event = 0.0
+        self.counting = False
+        self.earlier: set[str] = set()
 
     def listener(self, event_page, method, params):
         if event_page is not self.page or not method.startswith("Network."):
             return
         request_id = params.get("requestId")
         if not request_id:
+            return
+        if not self.counting or request_id in self.earlier:
+            self.earlier.add(request_id)
+            command_metrics.flag("earlier_requests_ignored", True)
             return
         loop = asyncio.get_running_loop()
         self.last_event = loop.time()
@@ -605,6 +611,8 @@ class NetworkWatch:
                 record = self.records[request_id] = {
                     "method": str(request.get("method") or "GET").upper(),
                     "url": clean_url(str(request.get("url") or "")),
+                    "raw": str(request.get("url") or ""),
+                    "headers": request.get("headers") or {},
                     "type": params.get("type") or "Other",
                     "statuses": [],
                     "done": False,
@@ -619,6 +627,7 @@ class NetworkWatch:
                 status = (params.get("response") or {}).get("status")
                 if status is not None:
                     record["statuses"].append(status)
+                record["mime"] = (params.get("response") or {}).get("mimeType") or ""
                 record["answered"] = True
             elif method == "Network.loadingFinished":
                 record["done"] = True
@@ -631,10 +640,12 @@ class NetworkWatch:
         self.watching = True
         self.last_event = asyncio.get_running_loop().time()
         if self.page.network_on:
+            self.counting = True
             return
         self.enabled_here = True
         try:
             await self.page.send("Network.enable", {"maxTotalBufferSize": WATCH_BUFFER, "maxResourceBufferSize": WATCH_BUFFER})
+            self.counting = True
         except BrowseError as error:
             if isinstance(error, (CdpError, Gated)):
                 self.enabled_here = False
@@ -673,7 +684,7 @@ class NetworkWatch:
         self.enabled_here = False
         if self.page.network_on or self.page.session_id is None:
             return
-        cleanup = asyncio.ensure_future(self.disable(self.page.session_id))
+        cleanup = asyncio.ensure_future(self.disable())
         cancelled = False
         while not cleanup.done():
             try:
@@ -683,19 +694,11 @@ class NetworkWatch:
         if cancelled:
             raise asyncio.CancelledError
 
-    async def disable(self, session: str):
+    async def disable(self):
         try:
             await asyncio.wait_for(self.page.send("Network.disable"), STOP_TIMEOUT)
-            return
         except Exception:
-            pass
-        if self.page.session_id != session:
-            return
-        self.page.detach()
-        try:
-            await asyncio.wait_for(self.page.browser.send("Target.detachFromTarget", {"sessionId": session}), STOP_TIMEOUT)
-        except Exception:
-            pass
+            command_metrics.flag("network_disable_unconfirmed", True)
 
     def writes(self) -> list[dict]:
         rows = []
@@ -811,9 +814,11 @@ async def observe(ctx, page, run, react=None):
         settling = command_metrics.clock()
         settled = await watch.settle(lambda: navigation_busy(page, navigations))
         command_metrics.spent("settle_ms", settling)
+        await flowlog.capture(page, watch)
     finally:
         await watch.stop()
     try:
+        await state.reattach(page)
         await page.refresh_frames()
         nodes = await snapshot.collect(state, page)
         state.set_refs(snapshot.refs_of(state, page, nodes), None, page)
@@ -845,6 +850,7 @@ async def settled(page, run):
         settling = command_metrics.clock()
         await watch.settle(lambda: navigation_busy(page, navigations))
         command_metrics.spent("settle_ms", settling)
+        await flowlog.capture(page, watch)
     finally:
         await watch.stop()
     return value
@@ -1009,11 +1015,13 @@ def arrival_notes(state, before: View | None, after: View) -> str | None:
     from pathlib import Path
 
     from ardia_cli import notes
+    from ardia_cli.browse import flows
 
     root = state.config.get("data_root") if isinstance(getattr(state, "config", None), dict) else None
     if not root or (before is not None and notes.page_site(before.url) == notes.page_site(after.url)):
         return None
-    return notes.header(Path(root), after.url)[1]
+    lines = [notes.header(Path(root), after.url)[1], flows.hint(state, after.url)]
+    return "\n".join(line for line in lines if line) or None
 
 
 def attach(result, report):

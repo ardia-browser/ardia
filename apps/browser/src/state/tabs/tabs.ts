@@ -32,6 +32,7 @@ export type NewTabOptions = {
   newTabCommand?: boolean;
   gated?: boolean;
   replaced?: boolean;
+  enginePage?: boolean;
 };
 
 

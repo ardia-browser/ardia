@@ -44,3 +44,19 @@ test("the page that is now current keeps the card it just started for its own ta
   assert.equal(useStripHover.getState().hover?.tabId, mine);
   stripChipLeft(w, mine);
 });
+
+test("with Show tab hover menu off, a top-strip chip raises no card, and turning it off takes a shown card down", async () => {
+  const { w, mine } = twoProfiles();
+  useStripHover.setState({ hover: null });
+  stripChipEntered(w, mine, measure);
+  await settle();
+  assert.equal(useStripHover.getState().hover?.tabId, mine);
+  S().updateSettings({ showTabHoverMenu: false });
+  assert.equal(useStripHover.getState().hover, null);
+  stripChipLeft(w, mine);
+  stripChipEntered(w, mine, measure);
+  await settle();
+  assert.equal(useStripHover.getState().hover, null);
+  stripChipLeft(w, mine);
+  S().updateSettings({ showTabHoverMenu: true });
+});

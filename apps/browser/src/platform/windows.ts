@@ -1,7 +1,8 @@
 import { call } from "@ardia/ardiacore";
-import { nativeModule, type DragPreviewShape, type OpenWindowOptions, type Rect4, type WindowEvent } from "@ardia/shell";
+import { isPopupWindowId, nativeModule, type DragPreviewShape, type OpenWindowOptions, type Rect4, type WindowEvent } from "@ardia/shell";
 
 export type { DragPreviewShape, WindowEvent, OpenWindowOptions };
+export { isPopupWindowId };
 
 const Windows = nativeModule("ArdiaAppWindows");
 let cachedWindowCornerRadius: number | undefined;

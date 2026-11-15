@@ -1,4 +1,17 @@
-export const View = () => null;
+import type { ComponentProps, PropsWithChildren } from "react";
+
+export const View = ({ children }: PropsWithChildren) => children ?? null;
+export const Text = () => null;
+export const Image = () => null;
+export const ScrollView = () => null;
+export const TextInput = () => null;
+export const StyleSheet = { create: <Styles,>(styles: Styles) => styles };
+
+export const pressables: ComponentProps<typeof import("react-native").Pressable>[] = [];
+export const Pressable = (props: (typeof pressables)[number]) => {
+  pressables.push(props);
+  return null;
+};
 
 export const turboModules: Record<string, unknown> = {};
 
@@ -155,6 +168,10 @@ function animate(value: AnimatedValue | AnimatedValueXY, toValue: number | { x: 
   return animateOne(value, toValue as number);
 }
 
+type Readable = number | { __getValue(): number };
+const read = (node: Readable) => (typeof node === "number" ? node : node.__getValue());
+const combined = (get: () => number) => ({ __getValue: get });
+
 export const Animated = {
   createAnimatedComponent: <Component>(component: Component) => component,
   Value: AnimatedValue,
@@ -162,6 +179,9 @@ export const Animated = {
   spring: (value: AnimatedValue | AnimatedValueXY, config: { toValue: number | { x: number; y: number } }) => animate(value, config.toValue),
   timing: (value: AnimatedValue | AnimatedValueXY, config: { toValue: number | { x: number; y: number } }) => animate(value, config.toValue),
   parallel: (list: Animation[]): Animation => ({ start: (done) => together(list, done), stop: () => list.forEach((a) => a.stop()) }),
+  add: (a: Readable, b: Readable) => combined(() => read(a) + read(b)),
+  subtract: (a: Readable, b: Readable) => combined(() => read(a) - read(b)),
+  multiply: (a: Readable, b: Readable) => combined(() => read(a) * read(b)),
 };
 
 export const findNodeHandle = () => null;
@@ -187,6 +207,7 @@ export const Easing = {
 export const AppState = { currentState: "active", addEventListener: () => ({ remove() {} }) };
 
 export const AccessibilityInfo = {
-  isReduceMotionEnabled: () => Promise.resolve(false),
+  isHighContrastEnabled: async () => false,
+  isReduceMotionEnabled: async () => false,
   addEventListener: () => ({ remove() {} }),
 };

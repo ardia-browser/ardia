@@ -1,4 +1,6 @@
-export type Check = { name: string; run(): Promise<void> | void };
+import type { SelfCheck } from "@ardia/shell";
+
+export type Check = SelfCheck;
 
 const distinct = (_key: string, value: unknown) => {
   if (value === undefined) return "<undefined>";

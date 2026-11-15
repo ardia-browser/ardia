@@ -140,7 +140,7 @@ def add_parsers(commands, formatter):
     rename.add_argument("name", nargs="?", metavar="NAME", help="the name")
     icon = common(verbs.add_parser("icon", help="set a tab's icon (no ICON resets it)", description="Set a tab's icon, as Change Icon… does; without ICON, the site's icon comes back."))
     icon.add_argument("id", metavar="ID", help="a tab id")
-    icon.add_argument("icon", nargs="?", metavar="ICON", help="an emoji from Ardia's icon picker or symbol:<SF Symbol name>")
+    icon.add_argument("icon", nargs="?", metavar="ICON", help="an emoji from Ardia's icon picker, symbol:<SF Symbol name>, or none (a pinned row: its title alone)")
 
     groups = common(commands.add_parser("groups", help="list and organize tab groups", description=GROUPS_DESCRIPTION, formatter_class=formatter), "print JSON")
     groups.add_argument("--window", metavar="ID", help="only this window")

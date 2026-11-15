@@ -12,6 +12,7 @@ import { leavesEmptyWindow } from "../omnibox/newTabBarPolicy";
 import { groupLabel } from "../pins/tabGrouping";
 import { sharingProfiles } from "../profiles/profiles";
 import { closeWindowAnimated } from "../windows/closeAnimated";
+import { askBeforeQuitting, quitWarningMayAsk } from "../windows/quitWarning";
 import { applyHeldReports } from "../../platform/nativeEvents";
 import { closeWindowDialog, unpinnedOpenTabIds } from "../windows/windowClose";
 import { menuCommandAlternate, menuShortcut } from "../commands/commandShortcuts";
@@ -48,12 +49,14 @@ export async function closeTab(tabId: string) {
   if (!tab || !w) return;
   const last = closesWindow(s, tabId) && !leavesEmptyWindow(s, tabId);
   const open = unpinnedOpenTabIds(w.id);
-  if (last && s.settings.warnBeforeClosingLastTab && w.kind !== "private" && open.length) {
+  const asksTabs = last && s.settings.warnBeforeClosingLastTab && w.kind !== "private" && open.length > 0;
+  if (asksTabs) {
     const { confirmed, suppressed } = await confirm({ ...closeWindowDialog(w.id, open), suppression: "Don’t ask me again", windowId: w.id });
     if (suppressed) store().updateSettings({ warnBeforeClosingLastTab: false });
     if (!confirmed) return;
     applyHeldReports();
   }
+  if (last && !asksTabs && quitWarningMayAsk() && (await askBeforeQuitting(w.id)) === "cancelled") return;
   const now = store();
   const closesItsWindow = now.tabs[tabId]?.windowId === w.id && now.peeks[w.id]?.tabId !== tabId && closesWindow(now, tabId) && !leavesEmptyWindow(now, tabId);
   if (last && closesItsWindow) return closeWindowAnimated(w.id);

@@ -1,4 +1,5 @@
 import { isFields, ok, originalProfile, passed, served, type Handlers } from "./calling";
+import { openPopupWindowCount } from "../popupWindows";
 
 const NO_ACTIVE_TAB = -1;
 
@@ -13,7 +14,7 @@ export const engineCalls: Handlers = {
       engine: "ardiacore",
       chromiumVersion: text(host.chromium),
       liveBrowsers: 0,
-      popupWindows: 0,
+      popupWindows: openPopupWindowCount(),
       chromeWindows: 0,
     });
   },

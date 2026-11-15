@@ -473,6 +473,15 @@ NSDictionary<NSString *, DevHandler> *DevHandlers() {
     @"keys" : ^NSString *(NSWindow *w, NSString *a) { return Keys(w, a); },
     @"ax" : ^NSString *(NSWindow *w, NSString *a) { return AccessibilityTree(w, a); },
     @"winfo" : ^NSString *(NSWindow *w, NSString *a) { return WindowInfo(w, a); },
+    @"subroles" : ^NSString *(NSWindow *, NSString *) {
+      NSMutableArray *windows = [NSMutableArray array];
+      for (NSWindow *w in NSApp.orderedWindows) {
+        if (!w.visible || w.parentWindow) continue;
+        [windows addObject:@{@"number" : @(w.windowNumber), @"title" : w.title ?: @"", @"identifier" : w.identifier ?: @"",
+                             @"subrole" : w.accessibilitySubrole ?: @""}];
+      }
+      return JSONText(windows, @"[]");
+    },
     @"ns" : ^NSString *(NSWindow *w, NSString *to) {
       if ([to isEqualToString:@"out"]) [w orderOut:nil];
       else [w orderFront:nil];

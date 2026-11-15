@@ -189,7 +189,7 @@ test("a drag turns hover cards and Escape capture off and gives both back, howev
   registerRow(m.w, "row", { measureInWindow: (done) => done(10, 10, 100, 30) });
   const cardShows = async () => {
     hover.rowShown(m.w, { kind: "tab", id: "row" });
-    t.mock.timers.tick(500);
+    t.mock.timers.tick(800);
     await D.settle();
     const shown = sidebarUi().hover?.id === "row";
     hover.dismissHover();

@@ -3,6 +3,8 @@ import { FadeLabel as NativeFadeLabel, type FadeLabelProps } from "@ardia/shell"
 import { activeLook } from "../../lib/activeLook";
 import type { FontWeight } from "../../lib/themeLook";
 import { ThemeContext } from "./theme";
+import { TextScopeContext } from "./Text";
+import { sidebarPoints } from "./look";
 
 type NativeWeight = NonNullable<FadeLabelProps["weight"]>;
 
@@ -20,10 +22,13 @@ const NAMED: Record<FontWeight, NativeWeight> = {
 
 const WEIGHT_NAMES: Partial<Record<NativeWeight, "regular" | "medium" | "semibold" | "bold">> = { regular: "regular", medium: "medium", semibold: "semibold", bold: "bold" };
 
-export function FadeLabel({ weight, ...props }: FadeLabelProps) {
+const FADE_WIDTH = 24;
+
+export function FadeLabel({ weight, fadeWidth = FADE_WIDTH, ...props }: FadeLabelProps) {
   useContext(ThemeContext);
+  const inSidebar = useContext(TextScopeContext) === "sidebar";
   const look = activeLook();
   const name = WEIGHT_NAMES[weight ?? "regular"];
   const drawn = name ? NAMED[look.weights[name]] : weight;
-  return <NativeFadeLabel {...props} weight={drawn ?? "regular"} fontFamily={look.family ?? ""} />;
+  return <NativeFadeLabel {...props} fadeWidth={inSidebar ? sidebarPoints(fadeWidth) : fadeWidth} weight={drawn ?? "regular"} fontFamily={look.family ?? ""} />;
 }

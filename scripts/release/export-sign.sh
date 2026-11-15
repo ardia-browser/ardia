@@ -58,7 +58,7 @@ sign_as "$identity" --options restrict,library,kill,runtime "$fwv/Helpers/app_mo
 sign_as "$identity" "$fw"
 fairplay="$app/Contents/Helpers/ArdiaFairPlay.app"
 [ -d "$fairplay" ] || die "no ArdiaFairPlay.app in the export"
-sign_as "$identity" --options restrict,library,kill,runtime "$fairplay"
+sign_as "$identity" --options restrict,library,kill,runtime --entitlements "$ardiacore/fairplay/ArdiaFairPlay.entitlements" "$fairplay"
 [ -d "$app/Contents/Frameworks/hermes.framework" ] \
   && sign_as "$identity" --preserve-metadata=identifier,entitlements,flags,runtime "$app/Contents/Frameworks/hermes.framework"
 sign_as "$identity" --preserve-metadata=entitlements,requirements,flags,runtime "$app"

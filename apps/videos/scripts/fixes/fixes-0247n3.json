@@ -1,0 +1,166 @@
+{
+  "id": "fixes-0247n3",
+  "segments": [
+    {
+      "scene": "u3downloads",
+      "title": "A new download leaves the page alone",
+      "body": "Three download links, one click each. nightly.2 popped the Downloads panel open on every new download, and the next click only closed it, so one file in three never started. Now every click downloads and the panel stays shut.",
+      "cam": [
+        40,
+        0,
+        650,
+        530
+      ],
+      "lead": 0.9,
+      "tail": 13.86,
+      "ripple": true
+    },
+    {
+      "scene": "u3floatdrag",
+      "title": "The floating sidebar holds while you drag it",
+      "body": "Tabs hidden: the sidebar peeks out, then gets dragged by its list and by its edge. nightly.2 dropped it once the pointer left it; now a press anywhere holds it until you let go, and the edge drag resizes it.",
+      "cam": [
+        0,
+        20,
+        620,
+        500
+      ],
+      "lead": 2.8,
+      "tail": 11.78,
+      "ripple": true
+    },
+    {
+      "scene": "u3edgezones",
+      "title": "The hidden sidebar is calmer at the edge",
+      "body": "Tabs hidden: the pointer creeps to the edge, drifts past the sidebar, then leaves. nightly.2 shut it the moment the pointer slipped off; now it opens in the last 3 pt, stays up to 40 pt past it, and closes 200 ms after you leave.",
+      "cam": [
+        0,
+        0,
+        460,
+        380
+      ],
+      "lead": 1.4,
+      "tail": 11.51
+    },
+    {
+      "scene": "u3edgeoff",
+      "title": "Hidden tabs can open from the shortcut only",
+      "body": "Tabs hidden: the pointer brushes the left edge, then ⌘S. With the new Reveal hidden tabs on hover setting off, only ⌘S brings the tabs back; nightly.2 opened them at every brush.",
+      "cam": [
+        0,
+        0,
+        460,
+        380
+      ],
+      "lead": 0.9,
+      "tail": 7.88,
+      "afterSettings": {
+        "revealTabsOnHover": false
+      }
+    },
+    {
+      "scene": "u3tabtext",
+      "title": "Larger, higher-contrast tab text",
+      "body": "The same sidebar with the new sidebar text size set to Larger and contrast to High. nightly.2 had one size, in light grey.",
+      "cam": [
+        0,
+        0,
+        640,
+        420
+      ],
+      "cursor": false,
+      "lead": 0.6,
+      "tail": 3.4,
+      "afterSettings": {
+        "sidebarTextSize": "larger",
+        "sidebarTextContrast": "high"
+      }
+    },
+    {
+      "scene": "u3cardhover",
+      "title": "The Playing now card opens at once",
+      "body": "The pointer onto the sidebar's media card, slowed down. nightly.2 waited about 250 ms, swapped the time for × in one frame, then jumped most of the way open with the controls cut in half. Now it grows smoothly the moment you arrive.",
+      "cam": [
+        0,
+        600,
+        280,
+        120
+      ],
+      "rate": 0.35,
+      "lead": 0.8,
+      "tail": 2.2
+    },
+    {
+      "scene": "u3loopcard",
+      "title": "A looping video keeps counting",
+      "body": "A six-second looping clip in another tab, sped up. nightly.2's card got stuck at -0:00 once the clip looped, until a stray update moved it; now the time counts down every loop.",
+      "cam": [
+        0,
+        600,
+        280,
+        120
+      ],
+      "cursor": false,
+      "rate": 2,
+      "lead": 0.6,
+      "tail": 12.0
+    },
+    {
+      "scene": "u3pipdrag",
+      "title": "Picture in Picture stays under the pointer",
+      "body": "The mini player dragged into the right edge of the screen and round a loop back to where it started. nightly.2 lost every step the edge held back and ended 163 pt from the pointer. Now the spot you grabbed comes back under it.",
+      "cam": [
+        0,
+        0,
+        1920,
+        1046
+      ],
+      "lead": 0.8,
+      "tail": 9.6
+    },
+    {
+      "scene": "u3slide",
+      "title": "⌘S stops at the page's final width",
+      "body": "⌘S twice on a page that prints its own width, slowed down. nightly.2's slide overshot, so the page was laid out 4 pt too wide and resized back. Now it stops at its width, settling in about 120 ms.",
+      "cam": [
+        0,
+        0,
+        1100,
+        720
+      ],
+      "cursor": false,
+      "rate": 0.4,
+      "lead": 0.3,
+      "tail": 3.3
+    },
+    {
+      "scene": "u3tabpopup",
+      "title": "The tab hover menu can be turned off",
+      "body": "The pointer runs down the tab list. nightly.2 opened an action card over the page for every tab it rested on; with the new Show tab hover menu setting off, it's just the tabs.",
+      "cam": [
+        0,
+        0,
+        1100,
+        720
+      ],
+      "lead": 0.4,
+      "tail": 7.0,
+      "afterSettings": {
+        "showTabHoverMenu": false
+      }
+    },
+    {
+      "scene": "u3resetmenu",
+      "title": "Reset Pinned Tab is in the right-click menu",
+      "body": "Right-click a pinned tab that has wandered from its page. nightly.2 had Reset on the hover card and, as Back to Pinned URL, two levels down; now Reset Pinned Tab sits right under Unpin.",
+      "cam": [
+        0,
+        0,
+        1100,
+        720
+      ],
+      "lead": 0.5,
+      "tail": 6.2
+    }
+  ]
+}

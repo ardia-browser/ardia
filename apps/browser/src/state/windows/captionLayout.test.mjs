@@ -211,3 +211,25 @@ test("the command panel keeps the Mac's 16 pt right margin and clears the window
   assert.equal(trailingClearance(60, 16, 45.2, windows), 16);
   assert.equal(trailingClearance(5, 16, 0, windows), 16);
 });
+
+test("Minimalism keeps the window buttons and a drag band on Windows in every layout, with the toolbar gone", () => {
+  const minimal = (settings = {}, window = {}) => state({ minimalismMode: true, ...settings }, window);
+  const host = (settings, window) => windowControlsPlace(minimal(settings, window), "w", 0, windows)?.host;
+  assert.equal(host({}), "band", "sidebar on the left");
+  assert.equal(host({ sidebarSide: "right" }), "sidebar", "sidebar on the right");
+  assert.equal(host({ autoHideTabs: true }), "band", "sidebar hidden");
+  assert.equal(host({ sidebarSide: "right", autoHideTabs: true }), "band", "sidebar hidden on the right");
+  assert.equal(host({ tabLayout: "top" }), "strip", "tabs on top");
+  assert.equal(host({ tabLayout: "top", autoHideTabs: true }), "band", "tabs on top, strip hidden");
+  for (const settings of [{}, { autoHideTabs: true }, { tabLayout: "top", autoHideTabs: true }]) {
+    const band = cardTopInset(minimal(settings), "w", 0, windows);
+    assert.ok(band >= windows.titleBarHeight, `the card starts below the band: ${JSON.stringify(settings)} gave ${band}`);
+  }
+  assert.equal(cardTopInset(state({ tabLayout: "top", autoHideTabs: true }), "w", 9, windows), 9, "without Minimalism the hidden strip leaves the toolbar on top");
+});
+
+test("Minimalism's frameless page leaves no full-width caption gutter over the card", () => {
+  const regions = captionRegions(state({ minimalismMode: true }), "w", false, windows);
+  assert.equal(regions.length, 1);
+  assert.ok(regions[0][0] < 0, "only the buttons' own region, counted from the trailing edge");
+});

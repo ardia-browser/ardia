@@ -131,6 +131,8 @@ def request(sock: socket.socket, payload: dict) -> dict:
         sock.settimeout(seconds)
         try:
             sock.sendall((json.dumps(payload, ensure_ascii=False) + "\n").encode())
+        except (BrokenPipeError, ConnectionResetError):
+            raise Unreachable("the ardia browse daemon closed the connection before taking the command (see the session log)") from None
         except TimeoutError:
             raise Unreachable(f"the ardia browse daemon didn't take the command in {seconds:g} s (see the session log)") from None
         chunks = []

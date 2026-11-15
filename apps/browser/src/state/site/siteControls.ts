@@ -34,14 +34,21 @@ export function featuredPermissions(tabId: string, settings: SiteSettings, list:
     camera: !!access?.camera,
     microphone: !!access?.microphone,
     sound: currentMuteState(tabId) !== null || !!currentLive(tabId)?.playingAudio,
+    autoplay: useBrowser.getState().settings.blockAutoplayEverywhere,
   };
   return new Set(list.filter((p) => !settings[p.type]?.isDefault || inUse[p.type]).map((p) => p.type));
 }
 
 export type SiteSound = { siteMuted: boolean; soundBlocked: boolean };
 
+const autoplayBlockedByDefault = (type: SiteSettingType, settings: SiteSettings | null) =>
+  type === "autoplay" && !!settings?.autoplay?.isDefault && useBrowser.getState().settings.blockAutoplayEverywhere;
+
+export const effectiveSettingValue = (type: SiteSettingType, settings: SiteSettings | null): SiteSettingValue | undefined =>
+  autoplayBlockedByDefault(type, settings) ? "block" : settings?.[type]?.value;
+
 export const permissionValue = (type: SiteSettingType, settings: SiteSettings | null, sound: SiteSound): SiteSettingValue | undefined =>
-  type === "sound" ? (sound.siteMuted || sound.soundBlocked ? "block" : "allow") : settings?.[type]?.value;
+  type === "sound" ? (sound.siteMuted || sound.soundBlocked ? "block" : "allow") : effectiveSettingValue(type, settings);
 
 export async function setSitePermission(
   page: { tabId: string; profile: string; origin: string; engine: PageEngine },

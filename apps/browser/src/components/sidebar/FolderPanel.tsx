@@ -5,6 +5,7 @@ import { useIsActiveTab, useTab } from "../../state/browser/hooks";
 import { plural, tabTitle } from "../../state/browser/model";
 import { useTileFolderLabel, useTileFolderMembers } from "../../state/pins/hooks";
 import { SLIDE } from "../tabstrip/tokens";
+import { useGated } from "../ui/motion";
 import { ContextMenuArea, HoverCard as HoverPanel, OutsidePressArea, space, useHover } from "../ui";
 import { SectionLabel } from "./SectionLabel";
 import { SidebarListRow, SidebarRowLabel } from "./SidebarRow";
@@ -15,6 +16,7 @@ import { openTabMenu } from "../../state/sidebar/menus";
 import { TabIcon } from "./TabIcon";
 import { closeFolderPanel, closeFolderPanelOnPress, closeFolderPanelWhenWindowMoves, openTileFolderMenu, useFolderPanel } from "../../state/sidebar/tileFolderUi";
 import { tailKey } from "./dragModel";
+import { useStruckTitle } from "../../state/sidebar/rowState";
 
 const PANEL_GAP = space.s;
 
@@ -33,6 +35,7 @@ function PanelBody({ windowId, folderId, anchor }: { windowId: string; folderId:
   const away = useFolderAway();
   const [root, setRoot] = useState<Frame | null>(null);
   const shown = useMemo(() => new Animated.Value(0), []);
+  const opacity = useGated(!away, shown, 0);
   const tail = useDragItem(tailKey("folder"), { kind: "tail", tabIds: [], section: "folder" });
 
   useEffect(() => {
@@ -67,7 +70,7 @@ function PanelBody({ windowId, folderId, anchor }: { windowId: string; folderId:
         left: layout.sidebarInset,
         width: root.w - layout.sidebarInset * 2,
         top: anchor.y + anchor.height + PANEL_GAP - root.y,
-        opacity: away ? 0 : shown,
+        opacity,
         transform: [{ scale: shown.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) }],
       }}
     >
@@ -92,6 +95,7 @@ function MemberRow({ tabId, windowId }: { tabId: string; windowId: string }) {
   const theme = useTheme();
   const tab = useTab(tabId);
   const active = useIsActiveTab(tabId);
+  const struck = useStruckTitle(tabId);
   const { hovered, hoverProps } = useHover();
   const { wrapper, handle } = useDragItem(`fm:${tabId}`, { kind: "row", tabIds: [tabId], section: "folder" });
   if (!tab) return null;
@@ -108,7 +112,7 @@ function MemberRow({ tabId, windowId }: { tabId: string; windowId: string }) {
             {({ pressed }) => (
               <SidebarListRow height={layout.rowHeight} padRight={TAB_ROW.contentLeft} fill={pressed ? theme.tabPressed : active ? theme.pinnedSelectedFill : hovered ? theme.tabHover : undefined}>
                 <TabIcon tabId={tabId} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} />
-                <SidebarRowLabel text={tabTitle(tab)} color={active ? theme.textPrimary : theme.textTab} />
+                <SidebarRowLabel text={tabTitle(tab)} color={active ? theme.textPrimary : theme.textTab} struck={struck} />
               </SidebarListRow>
             )}
           </Pressable>

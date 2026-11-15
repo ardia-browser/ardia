@@ -8,7 +8,7 @@ Usage: ardia browse <command> [args] [options]
 Same commands, flags and output (text and --json) as agent-browser, so an agent that
 knows `agent-browser <args>` can type `ardia browse <args>`. It drives the running Ardia
 over the ardia command's control connection (Settings > "Let the ardia command control
-Ardia"), through pydoll. Input is instant unless --humanize. Actions print what they changed
+Ardia"), with a small CDP client of its own. Input is instant unless --humanize. Actions print what they changed
 (nodes with refs, URL, title, the POSTs they caused), a session works in background tabs of its
 own (`tab active` picks the user's tab), and text output stops at about 12,000 characters (narrow it
 with snapshot -i or -s <css>).
@@ -77,6 +77,8 @@ Init:        addinitscript <js> | removeinitscript <id>   (page main world, by r
 Batch:       batch [--bail] ["cmd args" | '["cmd","arg"]' ...]  (or one command per stdin line; # comments)
 Script:      script [file.js] [--timeout 90s]   (JS on stdin: loops over pages with page.goto/click/text, read())
 Notes:       notes [get|set|append|list|rm] [site] [text|-]   (plain per-site notes, shown atop snapshot)
+Flows:       flow steps | save <name> [--param k=v] | run <name> [--param k=v] [--fields a,b] [--where f=v] [--limit n]
+             flow list [site] | show <name> | rm <name>   (do a task once, then rerun it as one request)
 Auth Vault:  auth save <name> --url <https url> --username <u> [--password-stdin]
              auth login <name> [--username-selector s] [--password-selector s] [--submit-selector s]
              auth login <name> --credential-provider <plugin> [--item ref] [--url url]
@@ -204,14 +206,16 @@ COMMANDS = {
     "scroll": "ardia browse scroll [up|down|left|right] [px] [-s <sel>] [--no-humanize]\n\nWheel scrolling with momentum, at the mouse position (moved into the page or the container first).",
     "wait": "ardia browse wait <sel|ms> [--state visible|hidden|attached|detached] | --text <t> | --url <glob> |\n"
             "  --load load|domcontentloaded|networkidle | --fn <js> [--timeout ms]\n\n--fn evaluates in the page's main world, like eval. Timeouts default to 25 s.",
-    "screenshot": "ardia browse screenshot [sel] [path] [--full] [--annotate] [--screenshot-format png|jpeg] [--screenshot-quality n]\n\n"
+    "screenshot": "ardia browse screenshot [sel] [path | --out path] [--full] [--annotate] [--screenshot-format png|jpeg] [--screenshot-quality n] [--if-changed [--threshold pct]]\n\n"
+                  "--if-changed saves nothing and says so when this view looks the same as at its last screenshot (under --threshold percent of pixels changed, 0.5 by default).\n"
                   "--annotate takes an interactive snapshot and draws the numbered labels onto the image (nothing is added\n"
                   "to the page). Without a path it saves under $TMPDIR/ardia-browse/screenshots.",
     "eval": "ardia browse eval <js> | -b <base64> | --stdin [--out <file>]\n\nRuns in the page's main world (the one place, with init scripts and the React hook, that does).\n"
             "--out <file> saves the whole value (JSON, or the text as is) and prints a short summary instead.",
     "get": "ardia browse get text|html|value|attr <name>|title|url|count|box|styles <sel>\n\ncdp-url works only with --port or --ws: the real URL carries Ardia's token.",
     "find": "ardia browse find <role|text|label|placeholder|alt|title|testid|first|last|nth> <value> [action] [text] [--name n] [--exact|--partial]\n\n"
-            "Actions: click (default), fill, type, check, uncheck, select, hover, focus, dblclick, text. The found element\n"
+            "Actions: click (default), fill, type, press [key] (Enter if none), check, uncheck, select, hover, focus, dblclick,\n"
+            "text. The found element\n"
             "gets the next ref, so later commands can use it.\n\n"
             "find role takes the role and accessible name the snapshot shows, in any order: `find role button\n"
             "click --name Save`, `find role button --name Save click` or `find role button Save click`. A name\n"
@@ -250,6 +254,20 @@ COMMANDS = {
              "Plain notes per site (host[:port]) for your own agent, in <data dir>/Notes/<site>.md (0600, 8 KB each).\n"
              "Without a site it's the session tab's (--tab <id> for another tab's). - reads stdin. snapshot prints a\n"
              "site's notes first, and so does an action that lands on another site.",
+    "flow": "ardia browse flow steps [--all]\n"
+            "ardia browse flow save <name> [--from n] [--to n] [--param k=v]... [--output s2r1] [--description text]\n"
+            "ardia browse flow run <name> [--param k=v]... [--fields a,b.c] [--where field=value]... [--limit n]\n"
+            "  [--site s] [--timeout 60s]\n"
+            "ardia browse flow list [site] | show <name> [--site s] | rm <name> [--site s]\n\n"
+            "The session keeps its last 200 actions with the first-party JSON each GET loaded (and JSON a page embeds:\n"
+            "__NEXT_DATA__, JSON-LD, window.x = {...}). save turns the steps since the last save (from the last open) into\n"
+            "a read-only flow for the site, in <data dir>/Flows/<site>/<name>.json (0600): GET requests only, no bodies,\n"
+            "typed text and query values become params, and a URL keeps only params, numbers and short words.\n"
+            "run opens the flow's start page like open (or uses a tab already there) and sends the GET from it, with your\n"
+            "logins; it never replays clicks or typing. It checks the answer still has the recorded shape and prints the\n"
+            "main list as items. --where keeps items whose field contains the value; unknown fields fail with the valid\n"
+            "ones. Codes: redirected, auth_expired, blocked, rate_limited, drifted, fetch_failed, flow_not_get; then drive\n"
+            "the page yourself. open and snapshot list a site's flows once.",
     "read": "ardia browse read [url...] [--links <pattern>] [-s <selector>] [--stdin] [--limit n] [--timeout ms] [--http] [--list] [--out <file>]\n"
             "ardia browse read [-s <list>] --scroll [--limit rows] [--match <text>] [--timeout ms]\n\n"
             "Reads each page in a background tab of this session's own (four at a time, through your logins, after its\n"

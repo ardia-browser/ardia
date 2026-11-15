@@ -22,7 +22,7 @@ import {
 } from "../browser/actions";
 import { bookmarkAllTabs, bookmarkTab } from "../bookmarks/actions";
 import { isBookmarklet, runBookmarklet } from "../bookmarks/bookmarklets";
-import { exportBookmarksFromWindow } from "../bookmarks/exportHtml";
+import { exportBookmarksFromWindow, toggleDownloadsPanel } from "./platformCommands";
 import { requestClearData } from "../profiles/clearDataRequest";
 import { showHistory } from "../history/showHistory";
 import { openInternalPage } from "../pages/urls";
@@ -37,10 +37,11 @@ import { addFolderToSidebar, restoreArcFolders } from "../bookmarks/bookmarkGrou
 import { withLivePage } from "../tabs/livePage";
 import { webviews } from "../../platform/webviews";
 import { togglePageEngine } from "../engines/actions";
+import { runReaderCommand } from "../reader/reader";
 import { goBack, goForward } from "../tabs/navigation";
 import { awaitsFirstPage } from "../tabs/pendingAddress";
 import { focusSplitPane, openSplitPane } from "../splits/actions";
-import { isAppCommand, LITTLE_ARDIA_PAGE_COMMANDS, settingChange, UNAVAILABLE_COMMANDS, variantArg } from "./commandCatalog";
+import { isAppCommand, LITTLE_ARDIA_PAGE_COMMANDS, settingChange, variantArg } from "./commandCatalog";
 import { APP_COMMAND_HANDLERS } from "./appCommands";
 import { runSidebarCommand } from "../sidebar/commands";
 import { numberedTabs } from "../sidebar/entries";
@@ -68,7 +69,7 @@ import { peekTabId } from "../peek/peek";
 import { expectFocus, findFocus } from "../focus/focusClaims";
 import { isWebPageUrl } from "../../lib/url";
 import { findStep, openFind } from "../find/actions";
-import { noteDownloadsPanelToggle } from "../telemetry/downloadsPanelCounts";
+import { runHidingCommand } from "../site/hiddenElements";
 
 const newOrId = (arg: string) => (arg === "new" ? null : arg);
 
@@ -152,6 +153,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
   const page = tab?.url ? tab : undefined;
   const web = tabId ? webviews.get(tabId) : undefined;
   const ui = s.windowUi[windowId];
+  if (page && (runHidingCommand(command, page.id) || runReaderCommand(command, page.id))) return;
   if (!targeted && runSidebarCommand(command, arg, windowId)) return;
 
   switch (command) {
@@ -305,8 +307,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
     case "toggleMute":
       return page ? (arg === "site" ? toggleSiteMute(page.id) : toggleMute(page.id)) : undefined;
     case "downloads":
-      noteDownloadsPanelToggle(!ui?.downloadsOpen, "command");
-      return s.setDownloadsOpen(windowId, !ui?.downloadsOpen);
+      return toggleDownloadsPanel(windowId, !ui?.downloadsOpen);
     case "cast":
       return void toggleCastPicker(windowId, tabId);
     case "showHistory":
@@ -317,7 +318,6 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
     case "manageBookmarks":
       return openInternalPage("bookmarks", windowId);
     case "exportBookmarks":
-      if (UNAVAILABLE_COMMANDS.has(command)) return;
       return void exportBookmarksFromWindow(windowId);
     case "bookmarkAllTabs":
       return bookmarkAllTabs(windowId);

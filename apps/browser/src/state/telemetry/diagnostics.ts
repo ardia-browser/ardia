@@ -7,6 +7,7 @@ import { useBrowser } from "../browser/store";
 import { capture, isSharing, saveContext, useTelemetry } from "./client";
 import type { SavedContext } from "./savedContext";
 import { noteDragsEnded } from "./stuckDrags";
+import { mainProcessWork } from "./mainProcessWork";
 import { appInfo } from "./transport";
 
 const CONTEXT_EVERY_MS = 10 * 60_000;
@@ -89,6 +90,8 @@ function keepRecent(list: SavedContext[], now: number): SavedContext[] {
   const recent = list.filter((c) => now - (c.at as number) < SAMPLE_KEEP_MS);
   return (recent.length >= MIN_SAMPLES ? recent : list.slice(-MIN_SAMPLES)).slice(-MAX_SAMPLES);
 }
+
+export const takeMainProcessWork = async () => mainProcessWork(await diagnosticsSample().catch(() => ({})), Date.now());
 
 export const contextSamples = () => samples;
 

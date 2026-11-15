@@ -2,6 +2,7 @@ import { cancelDownload, keepDownload, pauseDownload, resumeDownload, type Downl
 import {
   ContextMenuArea,
   MouseArea,
+  OutsidePressArea,
   PopoverBubble,
   Symbol,
   Button,
@@ -10,7 +11,6 @@ import {
   HoverSlot,
   layout,
   MenuSeparator,
-  OutsidePressArea,
   menuRowFill,
   PANEL,
   ProgressTrack,
@@ -30,9 +30,9 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Image, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useShallow } from "zustand/react/shallow";
 import { useDownloads, useSidebarOpen, useSidebarSide, useWindowId, useWindowUi } from "../../state/browser/hooks";
-import { clearDownloads, setDownloadsOpen } from "../../state/windows/actions";
+import { clearDownloads, dismissDownloadsByPress, setDownloadsOpen } from "../../state/windows/actions";
 import { watchNewDownloads } from "../../state/windows/downloadWatch";
-import { useDownload } from "../../state/windows/hooks";
+import { useDownload } from "../../state/downloads/hooks";
 import { useDownloadsInSidebarFooter, useTabLayout, useToolbarLightsCenter } from "../../state/windows/layout";
 import { SIDEBAR_FOOTER_DOWNLOADS } from "../sidebar/geometry";
 import { PROFILE_DOTS_HEIGHT } from "../profiles/ProfileDots";
@@ -48,7 +48,6 @@ import { useDownloadsPlacement } from "./useDownloadsPlacement";
 import { sameSize, useSettled, type Size } from "../ui/useSettled";
 import { DOWNLOADS_LIST as L, FILE_ICON_GLYPH_SHARE, MAGNET, useDownloadsColors } from "./tokens";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
-import { noteDownloadsPanelClose } from "../../state/telemetry/downloadsPanelCounts";
 
 const rowFill = (theme: Theme, hovered: boolean, pressed: boolean) => (hovered || pressed ? menuRowFill(theme, pressed) : undefined);
 
@@ -102,25 +101,19 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
   const arrowRoom = p && p.arrow !== "none" ? DOWNLOADS_PANEL.arrowHeight : 0;
   const listMax = p ? Math.max(L.row, Math.min(L.visibleRows * L.row, p.room - L.chrome)) : L.visibleRows * L.row;
 
-  const closeFromOutside = () => {
-    noteDownloadsPanelClose("outside");
-    setOpen(false);
-  };
-
   return (
-    <OutsidePressArea style={StyleSheet.absoluteFill} onOutsidePress={closing ? undefined : closeFromOutside}>
-      <View ref={root} collapsable={false} onLayout={onLayout} pointerEvents={closing ? "none" : "auto"} style={StyleSheet.absoluteFill}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={closeFromOutside} />
-        {p ? (
-          <Animated.View
-            style={{
-              position: "absolute",
-              left: p.left,
-              ...(upward ? { bottom: p.bottom } : { top: p.top }),
-              width: p.width,
-              ...motion,
-            }}
-          >
+    <View ref={root} collapsable={false} onLayout={onLayout} pointerEvents={closing ? "none" : "box-none"} style={StyleSheet.absoluteFill}>
+      {p ? (
+        <Animated.View
+          style={{
+            position: "absolute",
+            left: p.left,
+            ...(upward ? { bottom: p.bottom } : { top: p.top }),
+            width: p.width,
+            ...motion,
+          }}
+        >
+          <OutsidePressArea onOutsidePress={closing ? undefined : () => dismissDownloadsByPress(windowId)}>
             <PanelBackground placement={p} />
             <View style={{ marginTop: upward ? 0 : arrowRoom, marginBottom: upward ? arrowRoom : 0, paddingTop: L.padTop, paddingBottom: L.padBottom }}>
               <View style={{ flexDirection: "row", alignItems: "center", paddingLeft: PANEL.inset, paddingRight: PANEL.inset - L.textButtonPad, height: L.header }}>
@@ -159,10 +152,10 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
                 }}
               />
             </View>
-          </Animated.View>
-        ) : null}
-      </View>
-    </OutsidePressArea>
+          </OutsidePressArea>
+        </Animated.View>
+      ) : null}
+    </View>
   );
 }
 

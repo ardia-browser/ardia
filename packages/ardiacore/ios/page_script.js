@@ -189,7 +189,9 @@
     const size = (a) => Math.max(0, ...String(a.sizes || "0x0").split(/\s+/).map((s) => parseInt(s, 10) || 0));
     return absolute([...art].sort((a, b) => size(b) - size(a))[0].src);
   };
-  let lastNowPlaying = "";
+  const NOW_PLAYING_DRIFT_S = 1;
+  let lastNowPlaying = null;
+  const projectedPosition = (last, now) => last.position + (last.playing ? ((now - last.at) / 1000) * last.rate : 0);
   const reportNowPlaying = later(() => {
     const el = pickMedia();
     const md = session && session.metadata;
@@ -210,13 +212,16 @@
         hasVideo: !!el && el.tagName === "VIDEO" && el.videoWidth > 0,
         actions: [...actions.keys()],
         controllable: !!el && heard.has(el) && (sessionState !== "none" || !oneShot(el)),
+        loop: !positionState && !!el && el.loop,
       };
       if (!state.title && !el) state = null;
     }
-    const json = serialize(state && { ...state, position: Math.round(state.position) });
-    if (json === lastNowPlaying) return;
-    lastNowPlaying = json;
-    send("nowPlaying", state && { ...state, timestamp: Date.now() });
+    const now = Date.now();
+    const key = serialize(state && { ...state, position: 0 });
+    const last = lastNowPlaying;
+    if (last && key === last.key && (!state || Math.abs(state.position - projectedPosition(last, now)) < NOW_PLAYING_DRIFT_S)) return;
+    lastNowPlaying = { key, position: state ? state.position : 0, at: now, playing: !!state && state.playbackState === "playing", rate: (state && state.playbackRate) || 1 };
+    send("nowPlaying", state && { ...state, timestamp: now });
   }, 100);
   let blockAutoplay = false;
   let usedHere = false;
@@ -1704,6 +1709,24 @@
   send("hello", { top: isTop, url: location.href });
 
   if (!isTop) return receive;
+
+  let contextMenuAt = null;
+  addEventListener(
+    "contextmenu",
+    (e) => {
+      if (e.isTrusted) contextMenuAt = { x: e.clientX, y: e.clientY, at: performance.now() };
+    },
+    { capture: true, passive: true },
+  );
+  document.addEventListener("ardia-hide-element", () => {
+    const asked = contextMenuAt;
+    contextMenuAt = null;
+    if (asked && performance.now() - asked.at < 60000) send("hideElement", { x: asked.x, y: asked.y });
+  });
+  document.addEventListener("ardia-hide-element-in-frame", () => {
+    contextMenuAt = null;
+    send("hideElement", { x: -1, y: -1 });
+  });
 
   const parse = (css) => {
     if (!css) return null;

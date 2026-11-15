@@ -245,6 +245,18 @@ inline Rect DragStep(Rect frame, Point delta, const Screen *screens, int count, 
   return MoveWithin(frame, delta, screens, count, home);
 }
 
+inline Point GrabbedOrigin(Point pointer, Point grab) { return {std::round(pointer.x - grab.x), std::round(pointer.y - grab.y)}; }
+
+inline Rect DragTo(Rect frame, Point pointer, Point grab, const Screen *screens, int count, int home = -1) {
+  const Point origin = GrabbedOrigin(pointer, grab);
+  return MoveWithin(frame, {origin.x - frame.x, origin.y - frame.y}, screens, count, home);
+}
+
+inline bool HeldBack(Rect placed, Point pointer, Point grab) {
+  const Point origin = GrabbedOrigin(pointer, grab);
+  return std::fabs(placed.x - origin.x) > 1e-6 || std::fabs(placed.y - origin.y) > 1e-6;
+}
+
 struct SpringState {
   double offset, velocity;
 };

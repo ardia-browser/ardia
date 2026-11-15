@@ -1,5 +1,5 @@
 import { confirm } from "../../platform/dialogs";
-import { onWindowEvent } from "../../platform/windows";
+import { closeWindow, isPopupWindowId, onWindowEvent } from "../../platform/windows";
 import { useBrowser } from "../browser/store";
 import { inPinnedContainer, plural, profileFor } from "../browser/model";
 import { tabsLostWithWindow } from "../tabs/sharedWindowClose";
@@ -7,6 +7,7 @@ import { isLastRegularWindow, isOpenRegularWindow, isSmall } from "./small";
 import { closeLittleArdia } from "../littleArdia/actions";
 import { closeWindowAnimated } from "./closeAnimated";
 import { isEmptyCardTab } from "../omnibox/newTabBarPolicy";
+import { askBeforeQuitting } from "./quitWarning";
 
 const MIN_TABS = 2;
 
@@ -27,15 +28,18 @@ export function startWindowCloseGuard() {
 async function requestClose(windowId: string) {
   const s = useBrowser.getState();
   const w = s.windows[windowId];
+  if (!w && isPopupWindowId(windowId)) return closePopupAfterAsking(windowId);
   if (!w) return;
   if (isSmall(s, windowId)) return closeLittleArdia(windowId);
+  const quitWarning = await askBeforeQuitting(windowId);
+  if (quitWarning === "cancelled") return;
   const asked = new Set<string>();
   let last = false;
   for (;;) {
     const now = useBrowser.getState();
     if (!now.windows[windowId]) return;
     last = isLastRegularWindow(now, windowId);
-    if (last) break;
+    if (last || quitWarning === "confirmed") break;
     const closing = tabsLostWithWindow(now, windowId, isOpenRegularWindow).map((t) => t.id);
     if (!now.settings.warnBeforeClosingWindow || closing.length < MIN_TABS || closing.every((id) => asked.has(id))) break;
     const { confirmed, suppressed } = await confirm({ ...closeWindowDialog(windowId, closing), suppression: "Don’t ask me again", windowId });
@@ -44,6 +48,10 @@ async function requestClose(windowId: string) {
     for (const id of closing) asked.add(id);
   }
   closeWindowAnimated(windowId, { keepsLastWindow: last });
+}
+
+async function closePopupAfterAsking(windowId: string) {
+  if ((await askBeforeQuitting(windowId)) !== "cancelled") await closeWindow(windowId);
 }
 
 export const unpinnedOpenTabIds = (windowId: string) => {

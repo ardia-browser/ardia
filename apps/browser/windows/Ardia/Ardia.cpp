@@ -10,6 +10,7 @@
 #include "AppImage.h"
 #include "CrashLog.h"
 #include "EngineApi.h"
+#include "GradientFailures.h"
 #include "LaunchConfig.h"
 #include "Host.h"
 #include "LaunchLog.h"
@@ -147,6 +148,7 @@ static void ShutDown(Ardia::Host &host) {
   Ardia::TelemetryLocalStore::Drain();
   const bool documentsWritten = Ardia::DocumentStore::Flush(false);
   Ardia::LaunchLog::Write(L"launch", std::wstring(L"telemetry and documents written in ") + std::to_wstring(GetTickCount64() - flushing) + L" ms" + (documentsWritten ? L"" : L", some documents still staged"));
+  Ardia::Materials::ReportGradientFailuresTo(nullptr);
   host.engine = nullptr;
   SetFocus(nullptr);
   if (host.queue) host.queue.ShutdownQueue();

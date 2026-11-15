@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-const { keyBarPlacement, isCentred, commandKeyPlacement, addressFieldShown } = await import("./barPlacement.ts");
+const { keyBarPlacement, isCentred, commandKeyPlacement, addressFieldShown, clickBarPlacement, placementCard, placementFromCard } = await import("./barPlacement.ts");
+const { openBarFromAddress, openEmptySidebarField } = await import("./barState.ts");
 const { commandBarPlacementLabel } = await import("../telemetry/track.ts");
 const { useBrowser } = await import("../browser/store.ts");
 
@@ -29,11 +30,43 @@ const pageWindow = (settings) => {
   return S().createWindow({ url: "https://example.com/" });
 };
 
-test("a click opens at the field whatever the setting", () => {
+test("with In the centre, a click on the address still opens at the field", () => {
   const w = pageWindow({ commandBarPlacement: "centred" });
   S().openPanel(w, "https://example.com/");
   assert.equal(S().windowUi[w].panel.placement, "field");
   assert.equal(commandBarPlacementLabel(S().windowUi[w].panel), "field");
+});
+
+test("In the centre, also on click sends a click on the address to the centre, as ⌘L, except in Little Ardia", () => {
+  assert.equal(keyBarPlacement({ setting: "centredOnClick", small: false, fieldShown: true }), "centred");
+  assert.equal(keyBarPlacement({ setting: "centredOnClick", small: true, fieldShown: true }), "field");
+  let w = pageWindow({ commandBarPlacement: "centredOnClick" });
+  assert.equal(commandKeyPlacement(S(), w), "centred");
+  openBarFromAddress(w, "https://example.com/");
+  assert.equal(S().windowUi[w].panel.placement, "centred");
+  assert.equal(S().windowUi[w].panel.initialText, "https://example.com/");
+  w = pageWindow({ commandBarPlacement: "centredOnClick", addressBar: "sidebar", tabLayout: "sidebar", autoHideTabs: false });
+  openEmptySidebarField(w);
+  assert.equal(S().windowUi[w].panel.placement, "centred");
+  assert.equal(clickBarPlacement({ settings: { commandBarPlacement: "centredOnClick" }, windows: { little: { kind: "small" } } }, "little"), "field");
+});
+
+test("onboarding's two cards show In the centre for the click choice too, and picking it again keeps the click part", () => {
+  assert.equal(placementCard("field"), "field");
+  assert.equal(placementCard("centred"), "centred");
+  assert.equal(placementCard("centredOnClick"), "centred");
+  assert.equal(placementFromCard("centred", "centredOnClick"), "centredOnClick");
+  assert.equal(placementFromCard("field", "centredOnClick"), "field");
+  assert.equal(placementFromCard("centred", "field"), "centred");
+  assert.equal(placementFromCard("centred", "centred"), "centred");
+});
+
+test("with At the address or In the centre, a click on the address opens at the field", () => {
+  for (const commandBarPlacement of ["field", "centred"]) {
+    const w = pageWindow({ commandBarPlacement });
+    openBarFromAddress(w, "https://example.com/");
+    assert.equal(S().windowUi[w].panel.placement, "field", commandBarPlacement);
+  }
 });
 
 test("⌘L in each layout", () => {

@@ -5,6 +5,7 @@ import type { AppWindowsModule, EngineHostModule } from "../nativeModuleTypes";
 import { engineAvailable, engineCallJson, hostCall, onEngineTopic, removeProfileFolder } from "../engine/host";
 import { requireNativeModule } from "../modules";
 import { expectEqual, expectTrue, type Check } from "./check";
+import { popupChecks } from "./enginePopups";
 import { comparable } from "./engineCalls";
 import { fieldFocusedIn } from "../appKeyboard";
 import { textFocusForCheck } from "../textFocus";
@@ -342,6 +343,7 @@ const withEngine: Check[] = [
       expectEqual({ dropped: await alive(dropped), newest: await alive(newest), newestAgain: await alive(newest) }, { dropped: false, newest: true, newestAgain: false }, "an ask the app dropped, and the newest ask answered once");
     },
   },
+  ...popupChecks(PAGE_KEY, firstWindow),
   {
     name: "engine: a key closed while its page still runs its unload handlers can be used again at once",
     async run() {

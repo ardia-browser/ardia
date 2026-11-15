@@ -656,6 +656,20 @@ test("a modified, cancelled, untrusted or non-primary click isn't noted", () => 
   assert.deepEqual(newTabLinks(env), []);
 });
 
+test("a script's click on a new-tab link is noted while the user's gesture is active, as Google Drive opens a file", () => {
+  const env = environment();
+  const blank = (href) => env.link(href, { target: "_blank" });
+  env.fire("click", [blank("/no-gesture")], { trusted: false });
+  env.activation.active = true;
+  env.fire("click", [blank("/drive-file")], { trusted: false });
+  env.fire("click", [blank("/script-modified")], { trusted: false, meta: true });
+  env.fire("click", [blank("/script-middle")], { trusted: false, button: 1 });
+  env.fire("click", [env.link("/script-same-tab")], { trusted: false });
+  env.fire("click", [blank("/script-cancelled")], { trusted: false }, (e) => e.preventDefault());
+  env.flush();
+  assert.deepEqual(newTabLinks(env), ["https://page.example/drive-file"]);
+});
+
 test("downloads, non-http(s) links and links in editable content aren't noted", () => {
   const env = environment();
   env.gesture([env.link("/file.zip", { target: "_blank", download: "" })], {});

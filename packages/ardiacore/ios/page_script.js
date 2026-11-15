@@ -1601,6 +1601,13 @@
       const scale = ratio(window);
       send("peek", { url, key: "site", origin: pageOrigin, x: clientX(e) * scale, y: clientY(e) * scale, moved: 0 });
     };
+    const userActivationOf = window.Navigator && Object.getOwnPropertyDescriptor(Navigator.prototype, "userActivation");
+    const activeOf = window.UserActivation && Object.getOwnPropertyDescriptor(UserActivation.prototype, "isActive");
+    const activated = () => {
+      if (!userActivationOf || !activeOf) return false;
+      const activation = apply(userActivationOf.get, navigator, []);
+      return !!activation && !!apply(activeOf.get, activation, []);
+    };
     const noteNewTabLink = (e, link) => {
       if (defaultPrevented(e) || replacesPage(link)) return;
       const url = linkUrl(link);
@@ -1611,7 +1618,8 @@
       guard((e) => {
         const site = siteClick;
         siteClick = null;
-        if (!e.isTrusted || button(e) !== 0 || altKey(e) || shiftKey(e) || metaKey(e) || ctrlKey(e)) return;
+        if (!e.isTrusted && !activated()) return;
+        if (button(e) !== 0 || altKey(e) || shiftKey(e) || metaKey(e) || ctrlKey(e)) return;
         const hit = linkAt(e);
         if (!peekable(hit)) return;
         const path = apply(composedPath, e, []);
@@ -1638,14 +1646,8 @@
       }),
       true,
     );
-    const userActivationOf = window.Navigator && Object.getOwnPropertyDescriptor(Navigator.prototype, "userActivation");
-    const activeOf = window.UserActivation && Object.getOwnPropertyDescriptor(UserActivation.prototype, "isActive");
     const openDescriptor = Object.getOwnPropertyDescriptor(window, "open");
     if (userActivationOf && activeOf && openDescriptor && typeof openDescriptor.value === "function") {
-      const activated = () => {
-        const activation = apply(userActivationOf.get, navigator, []);
-        return !!activation && !!apply(activeOf.get, activation, []);
-      };
       const openedByUser = (args) => {
         if (!args.length || args[0] === undefined || args[0] === null || !activated()) return;
         const raw = `${args[0]}`;

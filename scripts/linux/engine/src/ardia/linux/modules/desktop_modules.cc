@@ -4,6 +4,7 @@
 #include "ardia/linux/modules/app_modules.h"
 #include "ardia/linux/modules/edge_pointer.h"
 #include "ardia/linux/modules/file_drop.h"
+#include "ardia/linux/modules/location.h"
 #include "ardia/linux/modules/owner_check.h"
 #include "ardia/linux/modules/screen_lock.h"
 #include "ardia/linux/sync/sync_module.h"
@@ -20,6 +21,7 @@ void RegisterDesktopModules(ModuleRegistry& registry) {
   RegisterSyncModule(registry);
   RegisterImportHostModule(registry);
   RegisterTranslateModule(registry);
+  RegisterLocationModule(registry);
 }
 
 }

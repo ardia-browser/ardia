@@ -38,6 +38,7 @@
 #include "ui/base/data_transfer_policy/data_transfer_endpoint.h"
 #include "ui/events/event_constants.h"
 #include "ui/menus/simple_menu_model.h"
+#include "ui/views/widget/widget.h"
 
 namespace ardia_linux {
 
@@ -149,9 +150,14 @@ class PageContextMenu : public RenderViewContextMenuViews {
 
   void Show() override {
     CountLinux("pageContextMenus");
-    if (!ShowThroughLog()) {
-      RenderViewContextMenuViews::Show();
+    if (ShowThroughLog()) {
+      return;
     }
+    if (views::Widget* window = views::Widget::GetTopLevelWidgetForNativeView(
+            source_web_contents_->GetNativeView())) {
+      window->Activate();
+    }
+    RenderViewContextMenuViews::Show();
   }
 
   void Arrange() {

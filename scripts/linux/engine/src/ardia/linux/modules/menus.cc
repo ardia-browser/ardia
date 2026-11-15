@@ -382,6 +382,7 @@ void ShowMenu(base::ListValue args, ModuleReply reply) {
     std::move(reply).Run(base::Value());
     return;
   }
+  owner->Activate();
   (new AppMenu(*items, std::move(reply)))->RunAt(owner);
 }
 

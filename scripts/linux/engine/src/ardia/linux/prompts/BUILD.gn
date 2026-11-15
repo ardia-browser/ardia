@@ -54,6 +54,7 @@ source_set("prompts") {
     "//ui/gfx",
     "//ui/gfx/codec",
     "//ui/menus",
+    "//ui/views",
     "//url",
   ]
 }

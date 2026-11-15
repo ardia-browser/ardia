@@ -1,8 +1,10 @@
 import { net } from "electron";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { open } from "node:fs/promises";
+import { createReadStream, createWriteStream, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { Readable, Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import type { ReadableStream as WebReadableStream } from "node:stream/web";
 import { createGunzip } from "node:zlib";
 import { dataDirectory } from "../paths";
 
@@ -172,65 +174,81 @@ export function filesOf(pair: string): LoadedFiles | null {
   return { model: at("model"), lex: at("lex"), vocabs };
 }
 
-type Transfer = { type: FileType; file: RemoteFile; response: Response; length: number };
+type Digest = { size: number; hash: string };
 
-async function startTransfer(type: FileType, file: RemoteFile): Promise<Transfer> {
-  const response = await net.fetch(`${STORE}${file.path}`, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
-  if (!response.ok || !response.body) throw new Error(`the download answered ${response.status}`);
-  return { type, file, response, length: Number(response.headers.get("content-length")) || 0 };
-}
-
-async function finishTransfer({ file, response }: Transfer, path: string, onBytes: (count: number) => void): Promise<number> {
-  const staging = `${path}.part`;
-  const handle = await open(staging, "w", 0o644);
+async function digestOf(path: string): Promise<Digest> {
   const hash = createHash("sha256");
   let size = 0;
+  for await (const chunk of createReadStream(path) as AsyncIterable<Buffer>) {
+    size += chunk.byteLength;
+    hash.update(chunk);
+  }
+  return { size, hash: hash.digest("hex") };
+}
+
+type Transfer = { type: FileType; file: RemoteFile; body: WebReadableStream<Uint8Array>; length: number };
+
+async function cancelBody(body: { cancel(reason?: unknown): Promise<void> } | null | undefined) {
   try {
-    const gunzip = createGunzip();
-    const written = (async () => {
-      for await (const chunk of gunzip as AsyncIterable<Buffer>) {
-        size += chunk.byteLength;
-        if (file.size !== undefined && size > file.size) throw new Error("the download was larger than expected");
-        hash.update(chunk);
-        await handle.write(chunk);
-      }
-    })();
-    const reader = response.body!.getReader();
-    try {
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        onBytes(value.byteLength);
-        if (!gunzip.write(value)) await new Promise((resolve) => gunzip.once("drain", resolve));
-      }
-      gunzip.end();
-      await written;
-    } catch (error) {
-      gunzip.destroy();
-      await written.catch(() => {});
-      throw error;
-    }
-    await handle.sync();
-  } finally {
-    await handle.close();
+    await body?.cancel();
+  } catch {}
+}
+
+async function startTransfer(type: FileType, file: RemoteFile, signal: AbortSignal): Promise<Transfer> {
+  const response = await net.fetch(`${STORE}${file.path}`, { signal: AbortSignal.any([signal, AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS)]) });
+  if (!response.ok || !response.body) {
+    await cancelBody(response.body);
+    throw new Error(`the download answered ${response.status}`);
   }
-  if ((file.size !== undefined && size !== file.size) || (file.hash !== undefined && hash.digest("hex") !== file.hash)) {
+  return { type, file, body: response.body as unknown as WebReadableStream<Uint8Array>, length: Number(response.headers.get("content-length")) || 0 };
+}
+
+function counter(onBytes: (count: number) => void): Transform {
+  return new Transform({
+    transform(chunk: Buffer, _encoding, done) {
+      onBytes(chunk.byteLength);
+      done(null, chunk);
+    },
+  });
+}
+
+function sizeLimit(limit: number | undefined): Transform {
+  let size = 0;
+  return new Transform({
+    transform(chunk: Buffer, _encoding, done) {
+      size += chunk.byteLength;
+      if (limit !== undefined && size > limit) done(new Error("the download was larger than expected"));
+      else done(null, chunk);
+    },
+  });
+}
+
+async function finishTransfer({ file, body }: Transfer, path: string, signal: AbortSignal, onBytes: (count: number) => void): Promise<Digest> {
+  const staging = `${path}.part`;
+  try {
+    await pipeline(Readable.fromWeb(body), counter(onBytes), createGunzip(), sizeLimit(file.size), createWriteStream(staging, { mode: 0o644, flush: true }), { signal });
+    const written = await digestOf(staging);
+    if ((file.size !== undefined && written.size !== file.size) || (file.hash !== undefined && written.hash !== file.hash)) throw new Error("the download didn't match Mozilla's checksum");
+    signal.throwIfAborted();
+    renameSync(staging, path);
+    return written;
+  } catch (error) {
+    await cancelBody(body);
     rmSync(staging, { force: true });
-    throw new Error("the download didn't match Mozilla's checksum");
+    throw error;
   }
-  renameSync(staging, path);
-  return size;
 }
 
 async function downloadPair(pair: string, entry: PairFiles, onLength: (length: number) => void, onBytes: (count: number) => void): Promise<void> {
   const target = pairFolder(pair);
   mkdirSync(target, { recursive: true });
   rmSync(manifestFile(pair), { force: true });
-  const transfers = await Promise.all(FILE_TYPES.filter((type) => entry.files[type]).map((type) => startTransfer(type, entry.files[type]!)));
+  const signal = AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS);
+  const transfers = await Promise.all(FILE_TYPES.filter((type) => entry.files[type]).map((type) => startTransfer(type, entry.files[type]!, signal)));
   for (const transfer of transfers) onLength(transfer.length);
-  const sizes = await Promise.all(transfers.map((transfer) => finishTransfer(transfer, join(target, transfer.type), onBytes)));
+  const digests = await Promise.all(transfers.map((transfer) => finishTransfer(transfer, join(target, transfer.type), signal, onBytes)));
   const manifest: Manifest = { version: entry.version, files: {} };
-  transfers.forEach((transfer, i) => (manifest.files[transfer.type] = { size: sizes[i]! }));
+  transfers.forEach((transfer, i) => (manifest.files[transfer.type] = { size: digests[i]!.size }));
   writeFileSync(`${manifestFile(pair)}.tmp`, JSON.stringify(manifest));
   renameSync(`${manifestFile(pair)}.tmp`, manifestFile(pair));
 }

@@ -85,7 +85,9 @@ const scriptable = <Methods extends object>(methods: Methods): Methods =>
 export const dialog = scriptable({
   showSaveDialog: async (..._args: unknown[]): Promise<{ canceled: boolean; filePath?: string }> => ({ canceled: true }),
 });
-export const net = inert();
+export const net = scriptable({
+  fetch: async (..._args: unknown[]): Promise<Response> => new Response(null, { status: 503 }),
+});
 export const Menu = inert();
 export const MenuItem = inert();
 export const nativeImage = inert();

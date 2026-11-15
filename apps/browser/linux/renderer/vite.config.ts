@@ -153,7 +153,7 @@ export default defineConfig({
   },
   resolve: {
     dedupe: ["react", "react-dom", "react-native-web", "zustand"],
-    extensions: [".chromium.tsx", ".chromium.ts", ".linux.tsx", ".linux.ts", ".web.tsx", ".web.ts", ".web.js", ".tsx", ".ts", ".mjs", ".js", ".jsx", ".json"],
+    extensions: [".linux.tsx", ".linux.ts", ".web.tsx", ".web.ts", ".web.js", ".tsx", ".ts", ".mjs", ".js", ".jsx", ".json"],
     alias: [
       { find: /^react-native\/Libraries\/Animated\/useAnimatedProps$/, replacement: `${reactNativeWeb}/dist/vendor/react-native/Animated/useAnimatedProps.js` },
       { find: /^react-native\/Libraries\/Core\/ExceptionsManager$/, replacement: `${expoLinux}reactNative/exceptionsManager.ts` },

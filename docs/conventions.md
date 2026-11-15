@@ -197,8 +197,7 @@ writeDocument(DOC, versionedJson(data, VERSION));
 
 - Components are `PascalCase.tsx`; every other module is `camelCase.ts`. Tests sit next to the code as
   `camelCase.test.mjs` (or `PascalCase.test.mjs` for a component). A platform's twin of a file adds its suffix:
-  `.macos`, `.ios`, `.windows`, `.linux`, `.web`, `.native`, and `.chromium` for the Linux build on Ardia's own engine,
-  which the engine bundle picks before `.linux`.
+  `.macos`, `.ios`, `.windows`, `.linux`, `.web`, `.native`.
 - At most 400 lines per TS/TSX file (`apps/browser/src`, `packages/*/src`), 600 per native file (`packages/*/ios`,
   `engine/ardiacore/src`, `engine/chromium/src`). Tests, fixtures and generated files (`packages/core/src/bangList.ts`,
   `packages/demo/src/shims/web/symbols/data.ts`, `apps/browser/src/lib/emojiData.ts` from `apps/browser/scripts/emoji-data.mjs`)

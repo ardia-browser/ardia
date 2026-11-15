@@ -3,7 +3,7 @@
   "compilerOptions": {
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "types": ["vite/client", "node"],
-    "moduleSuffixes": [".chromium", ""],
+    "moduleSuffixes": [".linux", ""],
     "paths": {
       "react-native": ["../../../node_modules/react-native-macos"],
       "react-native-web": ["../../../packages/expo-linux/src/reactNative/react-native-web.d.ts"]
@@ -11,9 +11,7 @@
   },
   "include": [
     "renderer/src/host.tsx",
-    "../../../packages/expo-linux/src/chromium",
-    "../../../packages/expo-linux/src/**/*.chromium.ts",
-    "../../../packages/expo-linux/src/**/*.chromium.tsx",
+    "../../../packages/expo-linux/src",
     "../src/react-native-macos.d.ts"
   ]
 }

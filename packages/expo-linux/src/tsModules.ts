@@ -1,3 +1,5 @@
+import { withLinuxShortcuts } from "./chromium/keys/menuShortcuts";
+import { cancelEngineRecording, isEngineRecording, startEngineRecording, stopEngineRecording } from "./chromium/recording";
 import { linuxFocus } from "./focus";
 import { linuxInlineCompletion } from "./inlineCompletion";
 import { devPagerState, pagerState, selectPager, stepPager, switchPager } from "./web/Pager";
@@ -31,5 +33,14 @@ export const aroundMain: Record<string, Record<string, (main: Call | null) => un
     saveKeyResponder: () => linuxFocus.saveKeyResponder,
     restoreKeyResponder: () => linuxFocus.restoreKeyResponder,
     discardKeyResponder: () => linuxFocus.discardKeyResponder,
+  },
+  ArdiaMenus: {
+    showMenu: (main) => (items: unknown) => (main ? main(withLinuxShortcuts(items)) : Promise.resolve(null)),
+  },
+  ArdiaReport: {
+    startRecording: () => startEngineRecording,
+    stopRecording: () => stopEngineRecording,
+    cancelRecording: () => cancelEngineRecording,
+    isRecording: () => isEngineRecording,
   },
 };

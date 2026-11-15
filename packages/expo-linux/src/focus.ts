@@ -1,4 +1,5 @@
 import type { FocusNative } from "@ardia/shell";
+import { setDragEscapeCapture, setSwitcherCapture } from "./chromium/keys/keyboard";
 import { appWindowDocument } from "./windows/appWindows";
 
 type Focusable = HTMLElement & { focus(options?: FocusOptions): void };
@@ -9,8 +10,8 @@ let nextToken = 0;
 const asElement = (tag: unknown): Focusable | null => (tag && typeof (tag as Focusable).focus === "function" ? (tag as Focusable) : null);
 
 export const linuxFocus: FocusNative = {
-  setSwitcherCapture: async () => {},
-  setDragEscapeCapture: async () => {},
+  setSwitcherCapture: async (active) => setSwitcherCapture(active),
+  setDragEscapeCapture: async (active) => setDragEscapeCapture(active),
   cancelFocusMove: async () => {},
   async claimFocus(_generation, tag) {
     asElement(tag)?.focus({ preventScroll: true });

@@ -1,20 +1,25 @@
-import { callMain } from "../bridge";
+import { importModules } from "../chromium/import";
+import { introMusicModules } from "../chromium/introMusic";
+import { keysModules } from "../chromium/keys";
+import { launchLinksModules } from "../chromium/launchLinks";
+import { syncModules } from "../chromium/sync";
+import { translateModules } from "../chromium/translate";
+import { updaterModules } from "../chromium/updater";
 
-const KIT_PDF_NAME = "Ardia Recovery Kit.pdf";
-const KIT_TEXT_NAME = "Ardia Recovery Kit.txt";
-
-const pickFolder = (current: string | null) => callMain<string | null>("ArdiaDialogs", "pickFolder", current, "Use Folder");
-
-async function saveRecoveryKit(format: "pdf" | "text"): Promise<string | null> {
-  const text = format === "text";
-  const path = await callMain<string | null>("ArdiaDialogs", "saveFile", text ? KIT_TEXT_NAME : KIT_PDF_NAME, text ? "txt" : "pdf", text ? "Text" : "PDF", "");
-  if (!path) return null;
-  return (await callMain<string | null>("ArdiaSync", "writeRecoveryKit", path, format)) ?? null;
-}
+const CLI_NOT_ON_LINUX = "The ardia command isn't on Linux yet";
 
 export const serviceModules: Record<string, Record<string, unknown>> = {
-  ArdiaSync: {
-    chooseFolder: async (current: string | null) => (await pickFolder(current)) ?? null,
-    saveRecoveryKit,
+  ...importModules,
+  ...introMusicModules,
+  ...keysModules,
+  ...launchLinksModules,
+  ...syncModules,
+  ...translateModules,
+  ...updaterModules,
+  ArdiaCli: {
+    installedVersion: () => null,
+    canInstallUnattended: () => false,
+    install: async () => ({ ok: false, appVersion: "", error: CLI_NOT_ON_LINUX, installedVersion: null, lines: [] }),
   },
+  ArdiaScripting: { setScriptState: () => {} },
 };

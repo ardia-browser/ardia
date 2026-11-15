@@ -151,6 +151,7 @@ export function TabsPane() {
         <SettingToggle anchor="tabs.showUnreadCounts" />
         <SettingToggle anchor="tabs.showTopAppBadges" />
         <SettingToggle anchor="tabs.showTabHoverMenu" />
+        <SettingToggle anchor="tabs.showFullUrlInTabHoverMenu" />
         <SettingToggle anchor="tabs.closedTopAppTiles" />
         <SettingToggle anchor="tabs.fadeUnloadedTabs" />
         <SettingToggle anchor="tabs.strikeSleepingTabs" />

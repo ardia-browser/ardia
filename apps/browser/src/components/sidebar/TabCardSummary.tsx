@@ -1,5 +1,6 @@
 import { View } from "react-native";
-import { displayUrl } from "@ardia/core";
+import { displayHost, displayUrl, hostOf } from "@ardia/core";
+import { useSettings } from "../../state/browser/hooks";
 import type { Tab } from "../../state/browser/types";
 import { tabTitle } from "../../state/browser/model";
 import { awayTitle } from "../../state/pins/organize";
@@ -16,6 +17,8 @@ export function TabCardSummary({ tab }: { tab: Tab }) {
   const theme = useTheme();
   const sleeping = useIsSleeping(tab.id);
   const away = awayTitle(tab);
+  const fullUrl = useSettings((s) => s.showFullUrlInTabHoverMenu);
+  const shownAddress = tab.url ? (fullUrl ? displayUrl(tab.url) : cardDomain(tab.url)) : "";
   return (
     <>
       <View style={{ flexDirection: "row", alignItems: "center", gap: TAB_ROW.titleGap, height: HOVER_CARD_HEADER }}>
@@ -26,9 +29,9 @@ export function TabCardSummary({ tab }: { tab: Tab }) {
           <FadeLabel text={tabTitle(tab)} fontSize={font.body.fontSize} weight="medium" color={theme.textPrimary} style={{ flex: 1, height: 18 }} />
         )}
       </View>
-      {tab.url ? (
-        <Text lines={2} size="caption" tone="textSecondary" style={urlLine()}>
-          {displayUrl(tab.url)}
+      {shownAddress ? (
+        <Text lines={fullUrl ? 2 : 1} size="caption" tone="textSecondary" style={urlLine()}>
+          {shownAddress}
         </Text>
       ) : null}
       {sleeping ? (
@@ -41,6 +44,11 @@ export function TabCardSummary({ tab }: { tab: Tab }) {
       ) : null}
     </>
   );
+}
+
+function cardDomain(url: string): string {
+  const host = hostOf(url);
+  return host ? displayHost(host) : displayUrl(url);
 }
 
 const urlLine = perLook(() => ({ marginTop: space.xs, lineHeight: lineHeight.caption }));

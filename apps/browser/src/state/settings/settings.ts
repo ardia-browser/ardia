@@ -111,6 +111,7 @@ export const SETTING_SPECS = {
   showUnreadCounts: flag(false, SYNCED),
   showTopAppBadges: flag(false, SYNCED),
   showTabHoverMenu: flag(true, SYNCED),
+  showFullUrlInTabHoverMenu: flag(false, SYNCED),
   closedTopAppTiles: flag(true, SYNCED),
   unreadHiddenSites: shaped<string[]>([], isStringList, STRING_LIST, SYNCED),
   neverTranslateSites: shaped<Record<string, string[]>>({}, (v) => isRecordOf(v, isStringList), recordOf(STRING_LIST)),

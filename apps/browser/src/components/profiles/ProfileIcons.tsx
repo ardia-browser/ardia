@@ -59,9 +59,11 @@ export const PROFILE_SYMBOLS: { name: string; title: string }[] = [
 
 export const switcherCellWidth = (icon: string | null) => (icon ? profileSwitcher.iconCell : profileSwitcher.dotCell);
 
-export function switcherIcons(icons: (string | null)[], room: number): (string | null)[] {
+export function switcherIcons(icons: (string | null)[], room: number, active = -1): (string | null)[] {
   const fits = icons.reduce((width, icon) => width + switcherCellWidth(icon), 0) <= room;
-  return fits ? icons : icons.map(() => null);
+  if (fits) return icons;
+  const compact = icons.map((icon, i) => (i === active ? icon : null));
+  return compact.reduce((width, icon) => width + switcherCellWidth(icon), 0) <= room ? compact : icons.map(() => null);
 }
 
 export function SwitcherMark({ icon, color, scale = 1 }: { icon: string | null; color: string; scale?: number }) {

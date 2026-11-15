@@ -4,7 +4,7 @@ import { useShallow } from "zustand/react/shallow";
 import { switchProfile } from "../../state/browser/actions";
 import { noteSwitcherPress } from "../../state/telemetry/switcherPresses";
 import { layout, useTheme } from "../ui/theme";
-import { useIsIncognito, useProfile, useSettings } from "../../state/browser/hooks";
+import { useIsIncognito, useProfile, useSettings, useWindow } from "../../state/browser/hooks";
 import { useProfileOrder, useProfileRecords } from "../../state/profiles/hooks";
 import { useNativePagerPosition, usePagerPages, type PagerPage } from "../../state/windows/profilePager";
 import { ContextMenuArea, useHover } from "../ui";
@@ -36,7 +36,9 @@ export function useProfileDotsShown() {
 export function ProfileDots({ windowId, width, besideDownloads }: { windowId: string; width: number; besideDownloads: boolean }) {
   const ids = useProfileOrder(useShallow((o) => o));
   const saved = useProfileRecords(useShallow((profiles) => ids.map((id) => switcherIconOf(profiles[id]))));
-  const icons = switcherIcons(saved, width - 2 * (besideDownloads ? SIDE_ROOM_BESIDE_DOWNLOADS : SIDE_ROOM));
+  const active = useWindow(windowId, (w) => w?.profileId);
+  const room = width - 2 * (besideDownloads ? SIDE_ROOM_BESIDE_DOWNLOADS : SIDE_ROOM);
+  const icons = switcherIcons(saved, room, ids.indexOf(active ?? ""));
   const { pages, pager } = usePagerPages(windowId);
   const cells = ids.map((_, i) => switcherCellWidth(icons[i] ?? null));
   const reorder = useDotReorder(ids, cells);

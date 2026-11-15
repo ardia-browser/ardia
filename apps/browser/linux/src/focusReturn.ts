@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from "electron";
 import { count } from "./counts";
+import { desktopSession } from "./paths";
 import { nothingElseFocused, queryXFocus } from "./system/xFocus";
 
 const RETURN_AFTER_MS = 100;
@@ -16,10 +17,11 @@ function forget(window: BrowserWindow) {
 }
 
 function onX11(): boolean {
-  const chosen = app.commandLine?.getSwitchValue("ozone-platform") || process.env.ELECTRON_OZONE_PLATFORM_HINT || "";
+  const session = desktopSession();
+  const chosen = app.commandLine?.getSwitchValue("ozone-platform") || session.ozonePlatformHint || "";
   if (chosen === "x11") return true;
   if (chosen === "wayland") return false;
-  return !process.env.WAYLAND_DISPLAY && process.env.XDG_SESSION_TYPE !== "wayland";
+  return !session.waylandDisplay && session.sessionType !== "wayland";
 }
 
 function ourXWindows(): Set<number> {

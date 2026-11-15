@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { createConnection, type Socket } from "node:net";
 import { homedir, hostname } from "node:os";
 import { join } from "node:path";
+import { desktopSession } from "../paths";
 
 export type XFocus = { root: number; focus: number; active: number | null };
 
@@ -37,7 +38,7 @@ const pad4 = (length: number) => (4 - (length % 4)) % 4;
 function readCookie(display: Display): Buffer | null {
   let file: Buffer;
   try {
-    file = readFileSync(process.env.XAUTHORITY || join(homedir(), ".Xauthority"));
+    file = readFileSync(desktopSession().xAuthority || join(homedir(), ".Xauthority"));
   } catch {
     return null;
   }
@@ -195,7 +196,7 @@ async function ask(socket: Socket, display: Display): Promise<XFocus> {
   return { root, focus, active };
 }
 
-export async function queryXFocus(displayName = process.env.DISPLAY): Promise<XFocus> {
+export async function queryXFocus(displayName = desktopSession().display ?? undefined): Promise<XFocus> {
   const display = parseDisplay(displayName);
   if (!display) throw new Error(`can't read DISPLAY ${JSON.stringify(displayName ?? "")}`);
   const socket = connect(display);

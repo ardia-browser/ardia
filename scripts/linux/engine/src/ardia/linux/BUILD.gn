@@ -19,6 +19,7 @@ source_set("linux") {
     "content_browser_client.h",
     "host/host.cc",
     "host/host.h",
+    "host/host_visibility.cc",
     "host/input_region.cc",
     "host/input_region.h",
     "host/key_map.cc",

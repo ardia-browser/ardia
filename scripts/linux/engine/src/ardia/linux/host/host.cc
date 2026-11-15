@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 
+#include "ardia/core/ac_host_visibility.h"
 #include "ardia/core/ac_launch_switches.h"
 #include "ardia/linux/app_lifetime.h"
 #include "ardia/linux/browser_window/browser_window.h"
@@ -455,6 +456,7 @@ base::DictValue Host::ShowTab(const base::DictValue& args,
   area.radius = static_cast<float>(radius);
   app->input_region().SetPage(key, area,
                               InputRegion::HolesFrom(args.FindList("holes")));
+  ardiacore::NoteTabShownByHost(contents, true);
   Shown& entry = shown_[key];
   entry.window = window;
   entry.place = place;
@@ -473,6 +475,7 @@ void Host::HideTab(const std::string& key) {
     keyboard_wanted_.erase(wanted);
   }
   content::WebContents* contents = Find(key);
+  ardiacore::NoteTabShownByHost(contents, false);
   Browser* browser = contents ? BrowserOf(contents) : nullptr;
   if (browser) {
     if (ExclusiveAccessManager* manager =

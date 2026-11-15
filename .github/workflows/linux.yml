@@ -2,7 +2,7 @@ name: Linux
 
 on:
   push:
-    branches: [linux]
+    branches: [linux, linux-dev]
   pull_request:
     branches: [linux]
   workflow_dispatch:
@@ -22,10 +22,8 @@ jobs:
         include:
           - runner: ubuntu-24.04
             arch: x64
-          - runner: ubuntu-24.04-arm
-            arch: arm64
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -38,71 +36,65 @@ jobs:
       - name: System packages
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq xvfb xauth libgtk-3-0t64 libnss3 libgbm1 libasound2t64 libnotify4 libxss1 libxtst6 libsecret-1-0 jq x11-utils
+          sudo apt-get install -y -qq xvfb xauth xfwm4 dbus-x11 libxtst6 libgtk-3-0t64 libnss3 libgbm1 libasound2t64 libcups2t64 libxkbcommon0 libsecret-1-0 jq x11-utils
       - run: pnpm install --frozen-lockfile
-      - name: Electron
-        run: |
-          node node_modules/electron/install.js
-          node -p "require('electron/package.json').version"
       - name: Typecheck
         run: |
           pnpm -C apps/browser/linux typecheck
-          if [ -f packages/expo-linux/tsconfig.json ]; then pnpm -C packages/expo-linux typecheck; fi
+          pnpm -C packages/expo-linux typecheck
       - name: Unit tests
         run: |
           pnpm -C apps/browser/linux test
           pnpm -C apps/browser test
-      - name: Build
+      - name: Prebuilt engine
+        id: prebuilt
+        run: |
+          jq -e --arg arch ${{ matrix.arch }} '.[$arch].asset' scripts/linux/engine/prebuilt.json > /dev/null
+          jq -r '"engine: \(.release), Chromium \(.chromium)"' scripts/linux/engine/prebuilt.json | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Fetch the engine
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/linux/fetch-engine.sh ${{ matrix.arch }} "$RUNNER_TEMP/engine/ardia-chromium-linux-${{ matrix.arch }}.tar.xz"
+      - name: Build the UI
         run: pnpm -C apps/browser/linux build
       - name: Package
-        run: pnpm -C apps/browser/linux package --arch ${{ matrix.arch }}
-      - name: Sandbox on this runner
         run: |
-          source apps/browser/linux/packaging/sandbox.sh
-          ardia_sandbox_decide node_modules/electron/dist/electron
-          echo "flags: ${ARDIA_SANDBOX_FLAGS[*]:-none} ($ARDIA_SANDBOX_REASON)" | tee -a "$GITHUB_STEP_SUMMARY"
-      - name: Launch the build
-        timeout-minutes: 5
-        run: xvfb-run -a -s "-screen 0 1600x1000x24" scripts/linux/launch-smoke "$RUNNER_TEMP/smoke-checkout" --port 9390
-      - name: Launch the AppImage
-        timeout-minutes: 5
-        run: |
-          mkdir -p "$RUNNER_TEMP/appimage"
-          cp apps/browser/linux/dist/*.AppImage "$RUNNER_TEMP/appimage/"
-          (cd "$RUNNER_TEMP/appimage" && ./*.AppImage --appimage-extract > /dev/null)
-          xvfb-run -a -s "-screen 0 1600x1000x24" scripts/linux/launch-smoke "$RUNNER_TEMP/smoke-appimage" --port 9391 --app "$RUNNER_TEMP/appimage/squashfs-root"
+          node scripts/linux/package-engine.mjs --arch ${{ matrix.arch }} --target all \
+            --engine "$RUNNER_TEMP/engine/ardia-chromium-linux-${{ matrix.arch }}.tar.xz" --ui apps/browser/linux/ui \
+            | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Check the .deb
         run: |
           deb=$(ls apps/browser/linux/dist/*.deb)
           dpkg-deb -I "$deb"
-          dpkg-deb -c "$deb" | grep -E 'opt/Ardia/(ardia|ardia.bin|chrome-sandbox)$'
+          dpkg-deb -c "$deb" | grep -E 'opt/Ardia/(ardia|ardia.bin|chrome-sandbox|ardia.build.json|ui/index.html)$'
+          dpkg-deb -c "$deb" | grep -E '^-rwsr-xr-x root/root .* \./opt/Ardia/chrome-sandbox$'
           dpkg-deb -e "$deb" "$RUNNER_TEMP/deb-control"
           grep -q 'chmod 4755' "$RUNNER_TEMP/deb-control/postinst"
           dpkg-deb -x "$deb" "$RUNNER_TEMP/deb-root"
           grep -q '^StartupWMClass=ardia$' "$RUNNER_TEMP"/deb-root/usr/share/applications/ardia.desktop
           grep -q 'x-scheme-handler/https' "$RUNNER_TEMP"/deb-root/usr/share/applications/ardia.desktop
-      - name: Install the .deb and launch it sandboxed
-        timeout-minutes: 6
+          ! find "$RUNNER_TEMP/deb-root/opt/Ardia/ui" -name '*.map' | grep -q .
+      - name: Smoke the AppImage
+        timeout-minutes: 10
         run: |
-          sudo apt-get install -y -qq "$PWD/$(ls apps/browser/linux/dist/*.deb)"
-          stat -c '%U %a %n' /opt/Ardia/chrome-sandbox | tee -a "$GITHUB_STEP_SUMMARY"
-          [ "$(stat -c '%U %a' /opt/Ardia/chrome-sandbox)" = "root 4755" ]
-          xvfb-run -a -s "-screen 0 1600x1000x24" scripts/linux/launch-smoke "$RUNNER_TEMP/smoke-deb" --port 9392 --app /opt/Ardia
-          head -1 "$RUNNER_TEMP/smoke-deb/data/launch.log" | tee -a "$GITHUB_STEP_SUMMARY"
-          grep -q "launch sandboxed with" "$RUNNER_TEMP/smoke-deb/data/launch.log"
-          sudo apt-get remove -y -qq ardia
-      - name: Screenshots in the summary
-        if: ${{ !cancelled() }}
+          mkdir -p "$RUNNER_TEMP/appimage"
+          cp apps/browser/linux/dist/*.AppImage "$RUNNER_TEMP/appimage/"
+          (cd "$RUNNER_TEMP/appimage" && ./*.AppImage --appimage-extract > /dev/null)
+          dir="$RUNNER_TEMP/appimage/squashfs-root"
+          touch "$dir/ardia.test-build"
+          scripts/linux/engine-smoke --engine "$dir" --ui "$dir/ui" --out "$RUNNER_TEMP/smoke-appimage" --rates 10 --display 132 --port 9390
+      - name: Smoke the .deb
+        timeout-minutes: 10
         run: |
-          for shot in "$RUNNER_TEMP"/smoke-*/screenshots/*.png; do [ -f "$shot" ] && echo "- $(basename "$(dirname "$(dirname "$shot")")")/$(basename "$shot")" >> "$GITHUB_STEP_SUMMARY"; done; true
+          dir="$RUNNER_TEMP/deb-root/opt/Ardia"
+          touch "$dir/ardia.test-build"
+          scripts/linux/engine-smoke --engine "$dir" --ui "$dir/ui" --out "$RUNNER_TEMP/smoke-deb" --rates 10 --display 133 --port 9391
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: launch-${{ matrix.arch }}
+          name: smoke-${{ matrix.arch }}
           path: |
-            ${{ runner.temp }}/smoke-*/screenshots
-            ${{ runner.temp }}/smoke-*/instance.log
-            ${{ runner.temp }}/smoke-*/data/launch.log
+            ${{ runner.temp }}/smoke-*
           if-no-files-found: ignore
           retention-days: 14
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9

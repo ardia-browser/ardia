@@ -5,7 +5,7 @@ import type { PanelState } from "../browser/types";
 
 export type SuggestionType = "history" | "bookmark" | "tab" | "url" | "search" | "calc" | "action" | "create" | "extension" | "provider" | "typed";
 
-type SuggestionLike = { kind: string; tabId?: string; bookmarked?: boolean; visited?: boolean } | undefined;
+type SuggestionLike = { kind: string; id?: string; tabId?: string; bookmarked?: boolean; visited?: boolean } | undefined;
 
 function suggestionType(s: SuggestionLike): SuggestionType {
   if (!s) return "typed";
@@ -33,7 +33,8 @@ export function commandBarPlacementLabel(panel: Pick<PanelState, "newTab" | "pla
   return "field";
 }
 
-export const trackSuggestionChosen = (s: SuggestionLike) => capture("suggestion_chosen", { type: suggestionType(s) });
+export const trackSuggestionChosen = (s: SuggestionLike) =>
+  capture("suggestion_chosen", { type: suggestionType(s), ...(s?.kind === "action" && s.id ? { command: s.id.split(":")[0] } : {}) });
 
 export type CalendarConnectReport = { before: string; after: string; responsible: string; errored: boolean; settingsOpened: boolean; ms: number };
 

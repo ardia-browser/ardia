@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Packs a Linux out dir into a tarball of the files Chromium's CI ships as its runnable Linux snapshot: the
-chrome-linux.zip archive of infra/archive_config/linux-archive-rel.json (its files and dirs), under one top folder.
+chrome-linux.zip archive of infra/archive_config/linux-archive-rel.json (its files and dirs), and ardia.build.json
+(the app's version and build, which 05-build.sh writes), under one top folder.
 Entries the build didn't make are listed, not fatal. The tarball's files are checked against gn's runtime deps of
 //chrome:chrome, and what differs goes to <work>/missing-runtime-deps.txt. RUN.txt goes in. Run by 06-package.sh.
 
@@ -69,7 +70,7 @@ def main():
     args = parser.parse_args()
     out_dir = os.path.join(args.src, args.out)
     files, dirs = archive_entries(args.config)
-    picked, not_built = collect(out_dir, files, dirs)
+    picked, not_built = collect(out_dir, files + ['ardia.build.json'], dirs)
     deps = [l.strip().removeprefix('./') for l in open(args.runtime_deps) if l.strip()]
     outside = [d for d in deps if d.startswith('../')]
     packed = set(picked)

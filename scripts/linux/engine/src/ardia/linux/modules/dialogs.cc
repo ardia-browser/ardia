@@ -452,6 +452,11 @@ void FromBackgroundPicks(std::string panel,
 }
 
 base::FilePath DownloadsFolder() {
+  const LaunchConfig& config = CurrentLaunchConfig();
+  if (auto instance = config.instance.find("downloadsDir");
+      instance != config.instance.end() && !instance->second.empty()) {
+    return base::FilePath(instance->second);
+  }
   base::FilePath downloads;
   base::PathService::Get(chrome::DIR_DEFAULT_DOWNLOADS, &downloads);
   return downloads;

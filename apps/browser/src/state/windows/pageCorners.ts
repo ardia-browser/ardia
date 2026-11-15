@@ -1,4 +1,4 @@
-import { windowControls } from "../../platform/windowControls";
+import { windowControls, type PageRounding } from "../../platform/windowControls";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { pageFrameInsetOf, pageFrameOf } from "../../lib/windowLayout";
 import { WINDOW_CHROME } from "../../lib/windowChrome";
@@ -8,7 +8,7 @@ import { splitOf } from "../splits/splits";
 import { isSmallWindow } from "./small";
 import { addressBarInSidebar, windowCornerRadius } from "./layout";
 
-const sent = new Map<string, number>();
+const sent = new Map<string, string>();
 
 function drawnPageFrame(s: BrowserState, windowId: string): number {
   return pageFrameInsetOf(s.settings.pageFrame, {
@@ -32,18 +32,19 @@ function pageReachesCardTop(s: BrowserState, windowId: string): boolean {
   return isSmallWindow(w) || addressBarInSidebar(s, windowId);
 }
 
-export function pageCornerRadiusIn(s: BrowserState, windowId: string, fixedRadius: number | null = WINDOW_CHROME.pageCornerRadius, windowRadius: () => number = windowCornerRadius): number {
-  if (!pageReachesCardTop(s, windowId)) return 0;
-  const inset = drawnPageFrame(s, windowId);
-  return pageFrameOf(inset, windowRadius(), 0, fixedRadius).radius;
+export function pageRoundingIn(s: BrowserState, windowId: string, fixedRadius: number | null = WINDOW_CHROME.pageCornerRadius, windowRadius: () => number = windowCornerRadius): PageRounding {
+  const card = pageFrameOf(drawnPageFrame(s, windowId), windowRadius(), 0, fixedRadius).radius;
+  const top = pageReachesCardTop(s, windowId) ? card : 0;
+  return { radius: top, corners: [top, top, card, card] };
 }
 
-export function syncPageCorners(s: BrowserState, send = windowControls.setPageCornerRadius, fixedRadius: number | null = WINDOW_CHROME.pageCornerRadius) {
+export function syncPageCorners(s: BrowserState, send = windowControls.setPageRounding, fixedRadius: number | null = WINDOW_CHROME.pageCornerRadius) {
   for (const id of Object.keys(s.windows)) {
-    const radius = pageCornerRadiusIn(s, id, fixedRadius);
-    if (sent.get(id) === radius) continue;
-    sent.set(id, radius);
-    send(id, radius);
+    const rounding = pageRoundingIn(s, id, fixedRadius);
+    const said = `${rounding.radius}:${rounding.corners.join(",")}`;
+    if (sent.get(id) === said) continue;
+    sent.set(id, said);
+    send(id, rounding);
   }
   for (const id of [...sent.keys()]) if (!s.windows[id]) sent.delete(id);
 }

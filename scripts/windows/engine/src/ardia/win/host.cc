@@ -3,6 +3,7 @@
 #include <commctrl.h>
 #include <dwmapi.h>
 
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <optional>
@@ -148,19 +149,73 @@ int Scaled(double value, double scale) {
   return static_cast<int>(std::lround(value * scale));
 }
 
+void CutCorner(HRGN region,
+               int square_left,
+               int square_top,
+               int ellipse_left,
+               int ellipse_top,
+               int radius) {
+  HRGN outside = ::CreateRectRgn(square_left, square_top,
+                                 square_left + radius, square_top + radius);
+  HRGN arc = ::CreateEllipticRgn(ellipse_left, ellipse_top,
+                                 ellipse_left + radius * 2 + 1,
+                                 ellipse_top + radius * 2 + 1);
+  ::CombineRgn(outside, outside, arc, RGN_DIFF);
+  ::CombineRgn(region, region, outside, RGN_DIFF);
+  ::DeleteObject(arc);
+  ::DeleteObject(outside);
+}
+
+HRGN CornersRegion(int width,
+                   int height,
+                   const base::ListValue& corners,
+                   double scale) {
+  HRGN region = ::CreateRectRgn(0, 0, width, height);
+  const int largest = std::max(0, std::min(width, height) / 2);
+  int radii[4];
+  for (size_t i = 0; i < 4; ++i) {
+    radii[i] = std::clamp(
+        Scaled(corners[i].GetIfDouble().value_or(0), scale), 0, largest);
+  }
+  const int top_left = radii[0];
+  const int top_right = radii[1];
+  const int bottom_right = radii[2];
+  const int bottom_left = radii[3];
+  if (top_left > 0) {
+    CutCorner(region, 0, 0, 0, 0, top_left);
+  }
+  if (top_right > 0) {
+    CutCorner(region, width - top_right, 0, width - top_right * 2, 0,
+              top_right);
+  }
+  if (bottom_right > 0) {
+    CutCorner(region, width - bottom_right, height - bottom_right,
+              width - bottom_right * 2, height - bottom_right * 2,
+              bottom_right);
+  }
+  if (bottom_left > 0) {
+    CutCorner(region, 0, height - bottom_left, 0, height - bottom_left * 2,
+              bottom_left);
+  }
+  return region;
+}
+
 void Shape(HWND window,
            int x,
            int y,
            int width,
            int height,
            int radius,
+           const base::ListValue* corners,
            const base::ListValue* holes,
            double scale) {
-  if (radius <= 0 && (!holes || holes->empty())) {
+  const bool per_corner = corners && corners->size() == 4;
+  if (!per_corner && radius <= 0 && (!holes || holes->empty())) {
     ::SetWindowRgn(window, nullptr, TRUE);
     return;
   }
-  HRGN region = radius > 0
+  HRGN region = per_corner ? CornersRegion(width, height, *corners, scale)
+                : radius > 0
                     ? ::CreateRoundRectRgn(0, 0, width + 1, height + 1,
                                            radius * 2, radius * 2)
                     : ::CreateRectRgn(0, 0, width, height);
@@ -577,7 +632,7 @@ base::DictValue Host::ShowTab(const base::DictValue& args, HWND parent) {
   Place(window, hosted);
   Shape(window, x, y, width, height,
         Scaled(args.FindDouble("radius").value_or(0), scale),
-        args.FindList("holes"), scale);
+        args.FindList("corners"), args.FindList("holes"), scale);
   if (!::IsWindowVisible(window)) {
     browser->GetWindow()->ShowInactive();
     Place(window, hosted);

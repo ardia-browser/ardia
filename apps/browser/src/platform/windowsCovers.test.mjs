@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { holesFor, pageRadiusOf, setPageRadius } from "../../../../packages/expo-windows/src/engine/covers.ts";
+import { holesFor, pageRoundingOf, setPageCorners, setPageRadius } from "../../../../packages/expo-windows/src/engine/covers.ts";
 
 const card = { x: 100, y: 50, width: 600, height: 400, radius: 12 };
 const popover = { x: 650, y: 60, width: 200, height: 100, radius: 8 };
@@ -81,11 +81,14 @@ test("a clip that grows or moves without its surfaces laying out has them measur
   assert.equal(measured.length, 1, "a surface that stopped watching is not measured");
 });
 
-test("only a tab's own page takes the window's page corner; a Peek's page and an extension's page stay square", () => {
+test("only a tab's own page takes the window's page rounding; a Peek's page and an extension's page stay square", () => {
+  const sentToEngine = (windowId, page) => JSON.parse(JSON.stringify(pageRoundingOf(windowId, page)));
   setPageRadius(8, "corners");
-  assert.equal(pageRadiusOf("corners", { tabId: "t" }), 8);
-  assert.equal(pageRadiusOf("corners", { tabId: "t", temporary: true }), 0, "a Peek's page sits under the Peek's bar");
-  assert.equal(pageRadiusOf("corners", {}), 0, "a side panel or action popup page has no tab");
-  assert.equal(pageRadiusOf("elsewhere", { tabId: "t" }), 0);
+  assert.deepEqual(sentToEngine("corners", { tabId: "t" }), { radius: 8 }, "before any corners are set, the page has only the radius every engine understands");
+  setPageCorners([0, 0, 8, 8], "corners");
   setPageRadius(0, "corners");
+  assert.deepEqual(sentToEngine("corners", { tabId: "t" }), { radius: 0, corners: [0, 0, 8, 8] }, "an engine without corners draws the radius: square below the toolbar");
+  assert.deepEqual(sentToEngine("corners", { tabId: "t", temporary: true }), { radius: 0 }, "a Peek's page sits under the Peek's bar");
+  assert.deepEqual(sentToEngine("corners", {}), { radius: 0 }, "a side panel or action popup page has no tab");
+  assert.deepEqual(sentToEngine("elsewhere", { tabId: "t" }), { radius: 0 });
 });

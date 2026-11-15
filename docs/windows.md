@@ -181,12 +181,14 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
   - The card's corners: where the Mac keeps the card concentric with its window (window radius minus the page frame),
     Windows rounds it to the window's own 8 px (`pageCornerRadius` in `lib/platformChrome.windows.ts`), and square with
     no page frame (borderless mode, a frame of 0, full screen when set). The page is a window of its own above the
-    card, and the engine host rounds all four of its corners or none (`ArdiaPageCovers.setRadius`), so
-    `state/windows/pageCorners.ts` sends the window's radius only while a tab's page reaches its card's top (address bar
-    in the sidebar, Little Ardia) and 0 below the toolbar or an always-shown bookmarks bar, where rounded top corners
-    would cut into the card. A Peek's page sits under the Peek's bar and an extension's page has no tab, so both stay
-    square (`pageRadiusOf` in `engine/covers.ts`). Rounding only the bottom corners below the toolbar needs per-corner
-    shapes in the engine host.
+    card, so `state/windows/pageCorners.ts` tells the engine host how to round it (`ArdiaPageCovers.setCorners` and
+    `setRadius`): all four corners while a tab's page reaches its card's top (address bar in the sidebar, Little
+    Ardia), and only the bottom two below the toolbar or an always-shown bookmarks bar, where rounded top corners would
+    cut into the card. `tab.show` carries both a per-corner `corners` list and a single `radius`: an engine that knows
+    `corners` draws each corner from it, and an older one draws `radius`, which is the card's radius only when all four
+    corners round, so below the toolbar it keeps the page square rather than cutting into the card. A Peek's page sits
+    under the Peek's bar and an extension's page has no tab, so both stay square (`pageRoundingOf` in
+    `engine/covers.ts`).
   - Moving the window: a drag region is a view that moves the window when the UI's own hit-testing gives it the press,
     so a control on top of it still clicks, and the app moves the window while the button is down (Escape puts it
     back, a maximized window restores under the pointer, a release at the top edge maximizes). The UI also marks
@@ -360,7 +362,8 @@ is plain Chromium.
   window, no mouse message for a child of it reaches the UI thread (`ARDIA_INPUT_TRACE=<file>` logs what does). A window
   Chromium opens by itself (a link opened in a new window) stays off screen until the app adopts its tabs.
 - The verbs: `tab.create` (a key, a profile, a URL or a tab to adopt; the same key again moves the tab to the window
-  that asks), `tab.show` (visible, and where in the window, in the UI's points; a corner radius and holes),
+  that asks), `tab.show` (visible, and where in the window, in the UI's points; a corner radius, optional
+  per-corner radii as `corners` [top left, top right, bottom right, bottom left] that take its place, and holes),
   `tab.close`, `tab.call` (load, back, forward, reload, stop, find, zoom, scripts, DevTools, print, site info and the
   rest of the Mac tab's methods, `tab_calls.cc`), `tab.discard`, `tabs.list`, `host.info`, `app.quit`. Events come as
   the topic `tab` with a key, a name and data (navigation, progress, favicon, find, zoom, security, media, pagePress,

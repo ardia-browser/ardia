@@ -10,7 +10,7 @@ import { notePageAsked, notePageSettled } from "./dialogPages";
 export type PageListener = (name: string, data: unknown) => void;
 export type PageRect = Omit<CoverRect, "radius">;
 export type PageShape = PageRect & { radius: number; holes: number[][] };
-export type PageStart = { url?: string; profile?: string; adopt?: string; windowId: string };
+export type PageStart = { url?: string; profile?: string; adopt?: string; windowId: string; kind?: "popup" | "sidePanel" };
 
 type ShowArgs = { key: string; visible: boolean } & Partial<PageShape>;
 
@@ -149,7 +149,7 @@ const offeredByEngine = (adopt: string | undefined) => (adopt?.startsWith("ardia
 
 function start(key: string, from: PageStart): Promise<boolean> {
   const url = from.url ?? "";
-  const create = (adopt: string) => hostCall("tab.create", { key, url, profile: from.profile ?? "", adopt }, from.windowId);
+  const create = (adopt: string) => hostCall("tab.create", { key, url, profile: from.profile ?? "", adopt, ...(from.kind ? { kind: from.kind } : {}) }, from.windowId);
   const offered = offeredByEngine(from.adopt);
   const closing = closings.get(key);
   return (closing ? closing.then(() => create(offered)) : create(offered))

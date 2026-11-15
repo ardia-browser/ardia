@@ -12,6 +12,7 @@
 #include "ardia/linux/app_lifetime.h"
 #include "ardia/linux/browser_window/browser_window.h"
 #include "ardia/linux/browser_window/autofill_prompts.h"
+#include "ardia/linux/host/extension_views.h"
 #include "ardia/linux/log.h"
 #include "ardia/linux/modules/app_modules.h"
 #include "chrome/browser/devtools/devtools_window.h"
@@ -348,7 +349,7 @@ void Host::CreateTab(base::DictValue args,
     AttachPageHelpers(existing);
   }
   if (existing) {
-    if (!PlaceTab(existing, window)) {
+    if (!IsExtensionView(existing) && !PlaceTab(existing, window)) {
       std::move(reply).Run(Error("the tab could not move to this window"));
       return;
     }
@@ -358,11 +359,48 @@ void Host::CreateTab(base::DictValue args,
     return;
   }
   std::string profile_name = Text(args, "profile");
+  if (std::string kind = Text(args, "kind"); ExtensionViewKindNamed(kind)) {
+    ardia_win::WithProfile(
+        profile_name,
+        base::BindOnce(&Host::CreateExtensionViewInProfile,
+                       weak_factory_.GetWeakPtr(), std::move(key),
+                       Text(args, "url"), std::move(kind), window,
+                       std::move(reply)));
+    return;
+  }
   ardia_win::WithProfile(
       profile_name,
       base::BindOnce(&Host::CreateTabInProfile, weak_factory_.GetWeakPtr(),
                      std::move(key), Text(args, "url"), profile_name, window,
                      std::move(reply)));
+}
+
+void Host::CreateExtensionViewInProfile(std::string key,
+                                        std::string url,
+                                        std::string kind,
+                                        std::string window,
+                                        ardia_win::Reply reply,
+                                        Profile* profile) {
+  if (!profile || !AppWindows::Get().Find(window)) {
+    std::move(reply).Run(Error("the profile did not load"));
+    return;
+  }
+  Browser* browser = BrowserFor(window, profile);
+  content::WebContents* contents =
+      browser ? OpenExtensionView(browser, GURL(url),
+                                  *ExtensionViewKindNamed(kind))
+              : nullptr;
+  if (!contents) {
+    std::move(reply).Run(Error("the extension view did not open"));
+    return;
+  }
+  tabs_[key] = contents;
+  TabState::Bind(contents, key)->NoteNavigation();
+  TabEvents::Attach(contents);
+  AttachPageHelpers(contents);
+  base::DictValue result;
+  result.Set("tab", TabState::IdOf(contents));
+  std::move(reply).Run(std::move(result));
 }
 
 void Host::CreateTabInProfile(std::string key,
@@ -436,7 +474,8 @@ base::DictValue Host::ShowTab(const base::DictValue& args,
     CountLinux("pageShowsRefused");
     return Error("no window");
   }
-  if (!PlaceTab(contents, window)) {
+  const bool extension_view = IsExtensionView(contents);
+  if (!extension_view && !PlaceTab(contents, window)) {
     CountLinux("pageShowsRefused");
     return Error("the tab could not move to this window");
   }
@@ -476,6 +515,16 @@ base::DictValue Host::ShowTab(const base::DictValue& args,
     for (RoundedArea& hole : holes) {
       hole.rect.InvScale(static_cast<float>(scale));
       hole.radius /= static_cast<float>(scale);
+    }
+  }
+  if (extension_view && first_show) {
+    const gfx::Size preferred = ExtensionPopupPreferredSize(contents);
+    TabState* state = TabState::FromWebContents(contents);
+    if (state && !preferred.IsEmpty()) {
+      base::DictValue size;
+      size.Set("width", preferred.width());
+      size.Set("height", preferred.height());
+      state->Send("preferredSize", std::move(size));
     }
   }
   app->view()->AddPage(key, contents);
@@ -543,6 +592,9 @@ base::DictValue Host::CloseTab(const base::DictValue& args) {
   tabs_.erase(key);
   if (state) {
     state->ReleaseKey();
+  }
+  if (CloseExtensionView(contents)) {
+    return Ok();
   }
   if (!browser) {
     return Ok();

@@ -12,7 +12,7 @@ import { WindowIdContext } from "./windowId";
 
 type PageEventsOnWindows = { onPageEvent?: (event: Pick<NativeSyntheticEvent<PageEvent>, "nativeEvent">) => void };
 
-type Props = Pick<NativeProps, "url" | "profile" | "adoptId" | "tabId" | "visible" | "style"> & Partial<Pick<NativeProps, "temporary">> & Partial<Pick<NativeProps, "pageEvents">> & PageEventsOnWindows;
+type Props = Pick<NativeProps, "url" | "profile" | "adoptId" | "tabId" | "visible" | "style" | "extensionHost"> & Partial<Pick<NativeProps, "temporary">> & Partial<Pick<NativeProps, "pageEvents">> & PageEventsOnWindows;
 
 
 const ARGUMENTS: Record<string, string[]> = {
@@ -133,7 +133,7 @@ export const EngineWebView = forwardRef<unknown, Props>(function EngineWebView(p
 
   useEffect(() => {
     const first = latest.current;
-    const unmount = mountPage(key, { url: first.url, profile: first.profile, adopt: first.adoptId, windowId }, (name, data) => {
+    const unmount = mountPage(key, { url: first.url, profile: first.profile, adopt: first.adoptId, windowId, kind: first.extensionHost }, (name, data) => {
       if (name === "ready") place();
       if (name === "fullscreen") {
         const on = !!(data as { fullscreen?: unknown } | null)?.fullscreen;

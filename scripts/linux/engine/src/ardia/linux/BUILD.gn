@@ -33,6 +33,8 @@ source_set("linux") {
     "browser_window/web_contents_delegate.h",
     "content_browser_client.cc",
     "content_browser_client.h",
+    "host/extension_views.cc",
+    "host/extension_views.h",
     "host/host.cc",
     "host/host.h",
     "host/host_visibility.cc",

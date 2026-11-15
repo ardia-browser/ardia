@@ -102,6 +102,12 @@ class Host : public TabStripModelObserver, public BrowserCollectionObserver {
   void CreateTab(base::DictValue args,
                  const std::string& window,
                  ardia_win::Reply reply);
+  void CreateExtensionViewInProfile(std::string key,
+                                    std::string url,
+                                    std::string kind,
+                                    std::string window,
+                                    ardia_win::Reply reply,
+                                    Profile* profile);
   void CreateTabInProfile(std::string key,
                           std::string url,
                           std::string profile_name,

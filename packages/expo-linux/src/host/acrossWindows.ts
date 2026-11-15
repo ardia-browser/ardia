@@ -12,6 +12,7 @@ const added: Record<Target, Added[]> = { window: [], document: [] };
 let focused: Realm | null = null;
 let lastFocused: Realm | null = null;
 let installed = false;
+const adoptionListeners = new Set<(realm: Realm) => void>();
 
 const captures = (options?: boolean | EventListenerOptions) => (typeof options === "boolean" ? options : !!options?.capture);
 const targetIn = (realm: Realm, target: Target): EventTarget => (target === "window" ? realm : realm.document);
@@ -151,8 +152,14 @@ export function installAcrossWindows() {
   patchObservers();
 }
 
+export function onAppWindowAdopted(listener: (realm: Realm) => void): void {
+  adoptionListeners.add(listener);
+  for (const realm of openWindows()) listener(realm);
+}
+
 export function adoptAppWindow(realm: Realm) {
   appWindows.add(realm);
+  for (const listener of adoptionListeners) listener(realm);
   for (const target of ["window", "document"] as const)
     for (const { type, listener, options } of added[target]) targetIn(realm, target).addEventListener(type, listener, options);
   realm.addEventListener("focus", () => {

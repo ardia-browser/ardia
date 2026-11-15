@@ -1,6 +1,7 @@
-import { noteFieldAsked, notePagePressed, readFocusedFieldWith } from "../../../expo-windows/src/appKeyboard";
+import { noteFieldAsked, notePagePressed, readFocusedFieldWith, takeKeyboardFor } from "../../../expo-windows/src/appKeyboard";
 import { onPagePress } from "../../../expo-windows/src/engine/pages";
-import { lastFocusedAppWindow } from "../host/acrossWindows";
+import { callMain, mainModules } from "../bridge";
+import { lastFocusedAppWindow, onAppWindowAdopted } from "../host/acrossWindows";
 import { engineAvailable, hostCall } from "./host";
 
 const TEXT_TYPES = new Set(["", "text", "search", "url", "email", "password", "tel", "number"]);
@@ -34,12 +35,32 @@ function focusedField() {
 }
 
 function fieldAskedForKeyboard(event: Event) {
-  const target = event.target as Element | null;
+  askForKeyboard(event.target as Element | null);
+}
+
+type FocusFollowing = HTMLElement["focus"] & { followsKeyboard?: true };
+
+function followProgrammaticFocus(realm: Window & typeof globalThis) {
+  const prototype = realm.HTMLElement.prototype;
+  const original = prototype.focus as FocusFollowing;
+  if (original.followsKeyboard) return;
+  const follows: FocusFollowing = function (this: HTMLElement, options?: FocusOptions) {
+    original.call(this, options);
+    askForKeyboard(this);
+  };
+  follows.followsKeyboard = true;
+  prototype.focus = follows;
+}
+
+function askForKeyboard(target: Element | null) {
   if (!isTextField(target)) return;
   const windowId = windowOf(target);
   noteFieldAsked(windowId);
   if (windowId && engineAvailable()) void hostCall("keyboard.forget", {}, windowId).catch(() => {});
+  if (windowId && mainModules().ArdiaFocus?.async.includes("takeKeyboardFromPage")) void takeKeyboardFor(engineFocus, windowId);
 }
+
+const engineFocus = { takeKeyboardFromPage: (windowId: string) => callMain<boolean>("ArdiaFocus", "takeKeyboardFromPage", windowId).then((moved) => moved === true) };
 
 let installed = false;
 
@@ -49,4 +70,5 @@ export function installKeyboardFollows() {
   readFocusedFieldWith(focusedField);
   onPagePress((windowId) => notePagePressed(windowId));
   document.addEventListener("focusin", fieldAskedForKeyboard, true);
+  onAppWindowAdopted(followProgrammaticFocus);
 }

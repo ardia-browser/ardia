@@ -8,6 +8,7 @@
 #include "ardia/linux/modules/file_drop.h"
 #include "ardia/linux/modules/location.h"
 #include "ardia/linux/ui_host/ui_host_parts.h"
+#include "ardia/linux/content_blocker.h"
 #include "ardia/linux/page_channel/page_channel.h"
 #include "ardia/linux/prompts/prompts.h"
 #include "chrome/browser/chrome_browser_main.h"
@@ -49,6 +50,7 @@ void ContentBrowserClient::CreateThrottlesForNavigation(
     content::NavigationThrottleRegistry& registry) {
   ChromeContentBrowserClient::CreateThrottlesForNavigation(registry);
   AddUiHostThrottles(registry);
+  AddContentBlockerThrottles(registry);
 }
 
 bool ContentBrowserClient::CanCreateWindow(

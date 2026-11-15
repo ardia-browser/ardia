@@ -8,6 +8,7 @@
 #include <vector>
 
 namespace content {
+class NavigationThrottleRegistry;
 class WebContents;
 }
 
@@ -21,6 +22,8 @@ inline constexpr char kContentBlockerExtensionId[] =
 void AddContentBlockerVerbs(DomainVerbs& verbs);
 
 void WatchBlockedRequests(content::WebContents* contents);
+
+void AddContentBlockerThrottles(content::NavigationThrottleRegistry& registry);
 
 std::string ContentBlockerScript(std::string_view format,
                                  const std::vector<std::string>& pieces);

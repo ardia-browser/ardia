@@ -54,6 +54,12 @@
 #include "content/public/browser/eye_dropper.h"
 #include "content/public/browser/keyboard_event_processing_result.h"
 #include "content/public/browser/navigation_handle.h"
+#include "content/public/browser/navigation_throttle.h"
+#include "content/public/browser/navigation_throttle_registry.h"
+#include "content/public/common/url_constants.h"
+#include "extensions/common/constants.h"
+#include "base/timer/timer.h"
+#include "url/url_constants.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
@@ -470,6 +476,145 @@ double Count(const base::Value* value) {
   return value ? value->GetIfDouble().value_or(0) : 0;
 }
 
+constexpr base::TimeDelta kHoldDeadline = base::Seconds(10);
+
+class HoldThrottle;
+
+class NavigationHold {
+ public:
+  NavigationHold() {
+    deadline_.Start(FROM_HERE, kHoldDeadline,
+                    base::BindOnce(&NavigationHold::Expired,
+                                   base::Unretained(this)));
+  }
+
+  void Defer(base::WeakPtr<HoldThrottle> throttle) {
+    throttles_.push_back(std::move(throttle));
+  }
+
+  size_t held() const { return throttles_.size(); }
+  base::TimeDelta age() const { return base::TimeTicks::Now() - since_; }
+
+  std::vector<base::WeakPtr<HoldThrottle>> TakeThrottles() {
+    return std::move(throttles_);
+  }
+
+  void set_expired(base::OnceClosure expired) { expired_ = std::move(expired); }
+
+ private:
+  void Expired() {
+    if (expired_) {
+      std::move(expired_).Run();
+    }
+  }
+
+  const base::TimeTicks since_ = base::TimeTicks::Now();
+  std::vector<base::WeakPtr<HoldThrottle>> throttles_;
+  base::OneShotTimer deadline_;
+  base::OnceClosure expired_;
+};
+
+std::map<Profile*, std::unique_ptr<NavigationHold>>& Holds() {
+  static base::NoDestructor<std::map<Profile*, std::unique_ptr<NavigationHold>>>
+      holds;
+  return *holds;
+}
+
+NavigationHold* HoldFor(content::BrowserContext* context) {
+  if (Holds().empty() || !context) {
+    return nullptr;
+  }
+  auto it =
+      Holds().find(Profile::FromBrowserContext(context)->GetOriginalProfile());
+  return it == Holds().end() ? nullptr : it->second.get();
+}
+
+bool IsHeldUrl(const GURL& url) {
+  return !url.SchemeIs(extensions::kExtensionScheme) &&
+         !url.SchemeIs(content::kChromeUIScheme) &&
+         !url.SchemeIs(content::kChromeUIUntrustedScheme) &&
+         !url.SchemeIs(content::kChromeDevToolsScheme) &&
+         !url.SchemeIs(url::kAboutScheme);
+}
+
+class HoldThrottle : public content::NavigationThrottle {
+ public:
+  explicit HoldThrottle(content::NavigationThrottleRegistry& registry)
+      : content::NavigationThrottle(registry) {}
+
+  ThrottleCheckResult WillStartRequest() override {
+    NavigationHold* hold = HoldFor(
+        navigation_handle()->GetWebContents()->GetBrowserContext());
+    if (!hold || !IsHeldUrl(navigation_handle()->GetURL())) {
+      return PROCEED;
+    }
+    hold->Defer(weak_factory_.GetWeakPtr());
+    return DEFER;
+  }
+
+  const char* GetNameForLogging() override {
+    return "ArdiaContentBlockerHoldThrottle";
+  }
+
+  void ResumeHeld() { Resume(); }
+
+ private:
+  base::WeakPtrFactory<HoldThrottle> weak_factory_{this};
+};
+
+void HoldNavigations(Profile* profile) {
+  Profile* original = profile->GetOriginalProfile();
+  if (Holds().contains(original)) {
+    return;
+  }
+  auto hold = std::make_unique<NavigationHold>();
+  hold->set_expired(base::BindOnce(
+      [](Profile* original) {
+        auto it = Holds().find(original);
+        if (it == Holds().end()) {
+          return;
+        }
+        std::unique_ptr<NavigationHold> gone = std::move(it->second);
+        Holds().erase(it);
+        Note("blocker", "the navigation hold timed out after " +
+                            base::NumberToString(gone->age().InMilliseconds()) +
+                            " ms; " + base::NumberToString(gone->held()) +
+                            " navigations go ahead unblocked");
+        CountLinux("contentBlockerHoldTimeouts");
+        for (base::WeakPtr<HoldThrottle>& throttle : gone->TakeThrottles()) {
+          base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+              FROM_HERE,
+              base::BindOnce(&HoldThrottle::ResumeHeld, std::move(throttle)));
+        }
+      },
+      original));
+  Holds()[original] = std::move(hold);
+}
+
+void ReleaseNavigations(Profile* profile, const std::string& why) {
+  if (!profile) {
+    return;
+  }
+  auto it = Holds().find(profile->GetOriginalProfile());
+  if (it == Holds().end()) {
+    return;
+  }
+  std::unique_ptr<NavigationHold> hold = std::move(it->second);
+  Holds().erase(it);
+  Note("blocker", "released " + base::NumberToString(hold->held()) +
+                      " held navigations after " +
+                      base::NumberToString(hold->age().InMilliseconds()) +
+                      " ms" + (why.empty() ? std::string() : " (" + why + ")"));
+  if (hold->held()) {
+    CountLinux("contentBlockerHeldNavigations");
+  }
+  for (base::WeakPtr<HoldThrottle>& throttle : hold->TakeThrottles()) {
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE,
+        base::BindOnce(&HoldThrottle::ResumeHeld, std::move(throttle)));
+  }
+}
+
 class Blocker : public ProfileManagerObserver, public ProfileObserver {
  public:
   static Blocker& Get() {
@@ -565,6 +710,7 @@ class Blocker : public ProfileManagerObserver, public ProfileObserver {
   }
 
   void OnProfileWillBeDestroyed(Profile* profile) override {
+    Holds().erase(profile);
     profile_observations_.RemoveObservation(profile);
     for (auto it = profiles_.begin(); it != profiles_.end();) {
       if (it->second != profile) {
@@ -657,6 +803,9 @@ class Blocker : public ProfileManagerObserver, public ProfileObserver {
       return;
     }
     profiles_[name] = profile;
+    if (!name.empty() && default_settled_) {
+      HoldNavigations(profile);
+    }
     if (!profile_observations_.IsObservingSource(profile)) {
       profile_observations_.AddObservation(profile);
     }
@@ -744,6 +893,7 @@ class Blocker : public ProfileManagerObserver, public ProfileObserver {
     if (!error.empty()) {
       Note("blocker",
            "the content blocker didn't load into a profile: " + error);
+      ReleaseNavigations(ProfileNamed(name), "the blocker didn't load");
       if (is_default) {
         DefaultSettled();
       }
@@ -794,6 +944,11 @@ class Blocker : public ProfileManagerObserver, public ProfileObserver {
                std::string error) {
               if (!blocker) {
                 return;
+              }
+              if (attempt == 0) {
+                ReleaseNavigations(blocker->ProfileNamed(name),
+                                   error.empty() ? std::string()
+                                                 : "settings: " + error);
               }
               const bool gone = !blocker->ProfileNamed(name) ||
                                 !blocker->loaded_.contains(name);
@@ -1400,6 +1555,14 @@ std::string ContentBlockerScript(std::string_view format,
 std::string ContentBlockerCategory(std::string_view list_id,
                                    std::string_view group) {
   return CategoryOf(list_id, group);
+}
+
+void AddContentBlockerThrottles(content::NavigationThrottleRegistry& registry) {
+  content::WebContents* contents =
+      registry.GetNavigationHandle().GetWebContents();
+  if (contents && HoldFor(contents->GetBrowserContext())) {
+    registry.AddThrottle(std::make_unique<HoldThrottle>(registry));
+  }
 }
 
 void WatchBlockedRequests(content::WebContents* contents) {

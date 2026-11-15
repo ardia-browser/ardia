@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Our series on a Linux tree: the `chromium` lines of engine/patches/series, minus the `skip <patch>` lines of
-scripts/linux/engine/series-linux, then that file's own lines: `chromium <patch>` is a Linux-only patch in
+scripts/linux/engine/series-linux (`except <patch> <path>…` applies one without those files, whose Linux
+version a later line carries), then that file's own lines: `chromium <patch>` is a Linux-only patch in
 scripts/linux/engine/patches, `win <patch>` is one of scripts/windows/engine/patches whose fix a Linux build needs
 as it is (it is not about Windows: the same Mac-only seam). Each is applied strictly (git apply), else with patch's
 fuzz; a patch that fails is recorded and the rest still run. Each patch that goes in is written to
@@ -18,6 +19,9 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
+
+sys.dont_write_bytecode = True
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..', '..', '..'))
@@ -40,9 +44,39 @@ def linux_lines():
             continue
         kind, _, name = line.partition(' ')
         name = name.strip()
-        if kind not in ('skip', *SOURCES) or not name:
-            sys.exit(f'series-linux:{n}: expected `skip|chromium|win <patch>`: {raw.rstrip()}')
-        out.append((kind, name))
+        if kind not in ('skip', 'except', *SOURCES) or not name:
+            sys.exit(f'series-linux:{n}: expected `skip|except|chromium|win <patch>`: {raw.rstrip()}')
+        if kind == 'except':
+            name, *paths = name.split()
+            if not paths:
+                sys.exit(f'series-linux:{n}: `except <patch>` needs the paths it leaves out')
+            out.append((kind, (name, tuple(paths))))
+        else:
+            out.append((kind, name))
+    return out
+
+
+def excepted():
+    return {name: paths for kind, (name, paths) in ((k, v) for k, v in linux_lines() if k == 'except')}
+
+
+def without_files(path, paths, scratch):
+    lines = open(path, encoding='utf-8', errors='surrogateescape').read().splitlines(True)
+    kept, keep, dropped = [], True, set()
+    for i, line in enumerate(lines):
+        if line.startswith('--- ') and i + 1 < len(lines) and lines[i + 1].startswith('+++ '):
+            target = lines[i + 1][4:].split('\t')[0].strip().removeprefix('b/')
+            keep = target not in paths
+            if not keep:
+                dropped.add(target)
+        if keep:
+            kept.append(line)
+    missing = sorted(set(paths) - dropped)
+    if missing:
+        sys.exit(f'series-linux: {os.path.basename(path)} doesn\'t touch {", ".join(missing)}')
+    out = os.path.join(scratch, os.path.basename(path))
+    with open(out, 'w', encoding='utf-8', errors='surrogateescape') as f:
+        f.write(''.join(kept))
     return out
 
 
@@ -56,9 +90,12 @@ def names():
     unknown = sorted(skips - set(mac))
     if unknown:
         sys.exit(f'series-linux skips patches engine/patches/series doesn\'t have: {", ".join(unknown)}')
+    unknown = sorted(set(excepted()) - set(mac))
+    if unknown:
+        sys.exit(f'series-linux excepts patches engine/patches/series doesn\'t have: {", ".join(unknown)}')
     out = [(n, os.path.join(PATCHES, n)) for n in mac if n not in skips]
     for kind, name in linux_lines():
-        if kind != 'skip':
+        if kind in SOURCES:
             path = os.path.join(SOURCES[kind], name)
             if not os.path.isfile(path):
                 sys.exit(f'series-linux: no {path}')
@@ -98,16 +135,23 @@ def cmd_apply(args):
     for name in sorted(skipped()):
         rows.append((name, 'skipped (series-linux)', win.classify(win.patch_files(os.path.join(PATCHES, name))), ''))
         print(f'{"skipped":16} {name}', flush=True)
+    excepts = excepted()
+    scratch = tempfile.mkdtemp(prefix='series-linux-')
     for name, path in names():
+        applied_path = without_files(path, excepts[name], scratch) if name in excepts else path
         if name in done:
             result, detail = 'already applied', 'recorded'
         else:
-            result, detail = win.apply_one(path, tree)
+            result, detail = win.apply_one(applied_path, tree)
             if result != 'FAILED':
                 record(tree, name)
+        if name in excepts:
+            detail = '; '.join(filter(None, [detail, 'without ' + ', '.join(excepts[name])]))
         failed += result == 'FAILED'
         rows.append((name, result, win.classify(win.patch_files(path)), detail))
-        print(f'{result:16} {name}', flush=True)
+        print(f'{result:16} {name}{" (without " + ", ".join(excepts[name]) + ")" if name in excepts else ""}',
+              flush=True)
+    shutil.rmtree(scratch, ignore_errors=True)
     layers(tree)
     os.makedirs(os.path.dirname(args.report), exist_ok=True)
     with open(args.report, 'w') as f:

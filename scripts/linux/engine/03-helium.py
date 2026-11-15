@@ -7,7 +7,9 @@ $CB/helium and $CB/helium-linux). The stages, the omitted downloads, the guard a
 helium-chromium patches are the same. The helium-macos skips are replaced by LINUX_SKIP, the guard also watches
 Linux's key storage, Helium's generated icons are made with Pillow instead of sips, and
 scripts/linux/engine/ardia_resources_linux.txt puts Ardia's logos over the Linux product logos after the Mac step's
-resources. --helium-macos takes the helium-linux checkout.
+resources. The scratch-tree check allows the hard links inside Chromium's Debian sysroot (build/linux/debian_*-sysroot,
+which nothing here writes) as long as every link of each file is inside it. --helium-macos takes the helium-linux
+checkout.
 
 Usage: scripts/linux/engine/03-helium.py --apply [--only STAGE,...] [--from STAGE] [--no-brand] (takes the Linux chromium lock itself)
 """
@@ -15,8 +17,11 @@ import configparser
 import importlib.util
 import os
 import pathlib
+import stat
 import subprocess
 import sys
+
+sys.dont_write_bytecode = True
 
 HERE = pathlib.Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[2]
@@ -38,6 +43,9 @@ LINUX_SKIP = {
         'helium.desktop; Ardia\'s Linux layer names its own',
     'helium/linux/rename-chrome-binary.patch':
         'renames the binary to helium and the crash handler to helium_crashpad_handler; the engine stays chrome',
+    'helium/linux/add-error-for-missing-desktop-file.patch':
+        'a "cannot be set as default" state whose Settings string names helium.desktop; Ardia\'s Linux layer owns '
+        'its .desktop file and its default-browser flow',
 }
 
 LINUX_GUARD_MARKERS = [('os_crypt', False), ('libsecret', True), ('kwallet', True), ('key_storage', False)]
@@ -145,8 +153,46 @@ def install():
     mac.pins = linux_pins
     mac.helium_patches = linux_helium_patches
     mac.generate_icons = generate_icons_with_pillow
+    mac.pathguard.aliases_under = linux_aliases_under
     mac.HANDLERS['pins'] = stage_pins_linux
     mac.HANDLERS['resources'] = stage_resources_linux
+
+
+mac_aliases_under = mac.pathguard.aliases_under
+SYSROOT_GLOB = 'build/linux/debian_*-sysroot'
+
+
+def linux_aliases_under(root, rels=None):
+    if rels is not None:
+        return mac_aliases_under(root, rels)
+    root_real = os.path.realpath(root)
+    problems, linked = [], {}
+    for top, dirs, files in os.walk(root_real):
+        rel_top = os.path.relpath(top, root_real)
+        parts = pathlib.PurePath(rel_top).parts[:3]
+        sysroot = pathlib.Path(root_real, *parts) if len(parts) == 3 and pathlib.PurePath(*parts).match(SYSROOT_GLOB) \
+            else None
+        for name in dirs + files:
+            path = os.path.join(top, name)
+            st = os.lstat(path)
+            if stat.S_ISLNK(st.st_mode):
+                target = os.path.realpath(path)
+                if not (target == root_real or target.startswith(root_real + os.sep)):
+                    problems.append(f'{path} is a symlink out of {root_real} (to {target})')
+                elif mac.pathguard.reaches(target):
+                    problems.append(f'{path} reaches the real ~/chromium-build')
+            elif stat.S_ISREG(st.st_mode) and st.st_nlink > 1:
+                if sysroot is None:
+                    problems.append(f'{path} is hard-linked ({st.st_nlink} links)')
+                else:
+                    key = (sysroot, st.st_dev, st.st_ino)
+                    found, _, first = linked.get(key, (0, st.st_nlink, path))
+                    linked[key] = (found + 1, st.st_nlink, first)
+        if len(problems) > 20:
+            break
+    problems += [f'{first} has {links - found} hard links outside {key[0]}'
+                 for key, (found, links, first) in linked.items() if found < links]
+    return problems
 
 
 def lock_held():

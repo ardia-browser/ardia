@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "ardia/linux/app_lifetime.h"
+#include "ardia/linux/modules/recording.h"
 #include "ardia/linux/ui_host/modules.h"
 #include "base/functional/bind.h"
 #include "base/no_destructor.h"
@@ -140,6 +141,9 @@ content::KeyboardEventProcessingResult KeyMap::PreHandle(
     const input::NativeWebKeyboardEvent& event) {
   if (!KeyDown(event)) {
     return content::KeyboardEventProcessingResult::NOT_HANDLED;
+  }
+  if (RecordingTakesKey(event)) {
+    return content::KeyboardEventProcessingResult::HANDLED;
   }
   const Entry* entry = Match(event);
   if (entry && page && entry->ui_only) {

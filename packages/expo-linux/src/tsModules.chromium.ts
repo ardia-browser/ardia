@@ -1,4 +1,5 @@
 import { withLinuxShortcuts } from "./chromium/keys/menuShortcuts";
+import { cancelEngineRecording, isEngineRecording, startEngineRecording, stopEngineRecording } from "./chromium/recording";
 import * as shared from "./tsModules.ts";
 
 type Call = (...values: unknown[]) => unknown;
@@ -13,5 +14,12 @@ export const aroundMain: Around = {
   ArdiaMenus: {
     ...sharedAround.ArdiaMenus,
     showMenu: (main) => (items: unknown) => (main ? main(withLinuxShortcuts(items)) : Promise.resolve(null)),
+  },
+  ArdiaReport: {
+    ...sharedAround.ArdiaReport,
+    startRecording: () => startEngineRecording,
+    stopRecording: () => stopEngineRecording,
+    cancelRecording: () => cancelEngineRecording,
+    isRecording: () => isEngineRecording,
   },
 };

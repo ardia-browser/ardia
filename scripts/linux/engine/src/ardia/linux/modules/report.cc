@@ -12,6 +12,7 @@
 #include "ardia/linux/modules/app_modules.h"
 #include "ardia/linux/modules/args.h"
 #include "ardia/linux/modules/launch_config.h"
+#include "ardia/linux/modules/recording.h"
 #include "ardia/linux/ui_host/modules.h"
 #include "base/files/file_util.h"
 #include "base/functional/bind.h"
@@ -57,22 +58,13 @@ constexpr net::NetworkTrafficAnnotationTag kReportAnnotation =
         policy_exception_justification: "Not implemented."
       })");
 
-base::FilePath ReportsFolder() {
-  return DataDirectory().Append("Reports");
-}
-
 base::FilePath DraftFolder() {
   return ReportsFolder().Append("draft");
 }
 
 std::optional<base::FilePath> Inside(const base::FilePath& root,
                                      const std::string& path) {
-  base::FilePath asked(path);
-  if (!asked.IsAbsolute() || asked.ReferencesParent() ||
-      !(root == asked || root.IsParent(asked))) {
-    return std::nullopt;
-  }
-  return asked;
+  return ReportPathInside(root, path);
 }
 
 class Reports {
@@ -291,19 +283,33 @@ void UploadFile(base::ListValue args, ModuleReply reply) {
       kLargestResponse);
 }
 
-ModuleResult RecordingRefused() {
-  CountLinux("report_recording_failures");
-  Note("report", "screen recording isn't on the engine build yet");
-  return ModuleResult(base::Value(false));
 }
 
+base::FilePath ReportsFolder() {
+  return DataDirectory().Append("Reports");
+}
+
+std::optional<base::FilePath> ReportPathInside(const base::FilePath& root,
+                                               const std::string& path) {
+  base::FilePath asked(path);
+  if (!asked.IsAbsolute() || asked.ReferencesParent() ||
+      !(root == asked || root.IsParent(asked))) {
+    return std::nullopt;
+  }
+  return asked;
+}
+
+void NoteReportFileSize(const std::string& path, int64_t size) {
+  Reports::Get().Known(path, size);
 }
 
 void RegisterReportModule(ModuleRegistry& registry) {
   base::ThreadPool::PostTask(
       FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
       base::BindOnce(base::IgnoreResult(&base::CreateDirectory), DraftFolder()));
-  registry.Define(kModule)
+  ModuleRegistry::Module module = registry.Define(kModule);
+  AddRecordingMethods(module);
+  module
       .Sync("draftDirectory", SyncOf([](const base::ListValue&) {
               return ModuleResult(base::Value(DraftFolder().value()));
             }))
@@ -324,28 +330,13 @@ void RegisterReportModule(ModuleRegistry& registry) {
               }
               return ModuleResult(base::Value());
             }))
-      .Sync("isRecording", SyncOf([](const base::ListValue&) {
-              return ModuleResult(base::Value(false));
-            }))
       .Sync("cancelUploads", SyncOf([](const base::ListValue&) {
               Reports::Get().CancelUploads();
               return ModuleResult(base::Value());
             }))
       .Async("gzipFile", base::BindRepeating(&GzipFile))
       .Async("gzipText", base::BindRepeating(&GzipText))
-      .Async("upload", base::BindRepeating(&UploadFile))
-      .Async("startRecording", AnswerOf([](const base::ListValue&) {
-               return RecordingRefused();
-             }))
-      .Async("stopRecording", AnswerOf([](const base::ListValue&) {
-               return ModuleResult(base::Value(false));
-             }))
-      .Async("cancelRecording", AnswerOf([](const base::ListValue&) {
-               return ModuleResult(base::Value());
-             }))
-      .Async("recordingThumbnail", AnswerOf([](const base::ListValue&) {
-               return ModuleResult(base::Value(false));
-             }));
+      .Async("upload", base::BindRepeating(&UploadFile));
 }
 
 }

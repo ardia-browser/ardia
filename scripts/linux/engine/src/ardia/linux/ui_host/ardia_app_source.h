@@ -15,6 +15,7 @@ inline constexpr char kArdiaAppHost[] = "ardia-app";
 inline constexpr char kArdiaAppUrl[] = "chrome://ardia-app/";
 inline constexpr char kArdiaAppDocumentUrl[] = "chrome://ardia-app/index.html";
 inline constexpr char kTranslationsPrefix[] = "translations/";
+inline constexpr char kReportsPrefix[] = "reports/";
 inline constexpr char kContentSecurityFile[] = "csp.json";
 
 std::optional<base::FilePath> ConfinedPath(const base::FilePath& root,
@@ -32,6 +33,7 @@ class ArdiaAppSource : public content::URLDataSource {
  public:
   ArdiaAppSource(base::FilePath ui_dir,
                  base::FilePath translations_dir,
+                 base::FilePath reports_dir,
                  std::vector<std::string> script_hashes);
   ArdiaAppSource(const ArdiaAppSource&) = delete;
   ArdiaAppSource& operator=(const ArdiaAppSource&) = delete;
@@ -50,6 +52,7 @@ class ArdiaAppSource : public content::URLDataSource {
  private:
   const base::FilePath ui_dir_;
   const base::FilePath translations_dir_;
+  const base::FilePath reports_dir_;
   const std::vector<std::string> script_hashes_;
 };
 

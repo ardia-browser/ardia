@@ -161,9 +161,11 @@ std::string MimeTypeForPath(std::string_view path) {
 
 ArdiaAppSource::ArdiaAppSource(base::FilePath ui_dir,
                                base::FilePath translations_dir,
+                               base::FilePath reports_dir,
                                std::vector<std::string> script_hashes)
     : ui_dir_(std::move(ui_dir)),
       translations_dir_(std::move(translations_dir)),
+      reports_dir_(std::move(reports_dir)),
       script_hashes_(std::move(script_hashes)) {}
 
 ArdiaAppSource::~ArdiaAppSource() = default;
@@ -184,6 +186,9 @@ void ArdiaAppSource::StartDataRequest(
   } else if (path.starts_with(kTranslationsPrefix)) {
     root = translations_dir_;
     path = path.substr(std::string_view(kTranslationsPrefix).size());
+  } else if (path.starts_with(kReportsPrefix)) {
+    root = reports_dir_;
+    path = path.substr(std::string_view(kReportsPrefix).size());
   }
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE,

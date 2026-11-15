@@ -7,6 +7,7 @@
 
 #include "ardia/linux/log.h"
 #include "ardia/linux/main.h"
+#include "ardia/linux/modules/recording.h"
 #include "ardia/linux/ui_host/app_bridge_host.h"
 #include "ardia/linux/ui_host/ardia_app_source.h"
 #include "ardia/linux/ui_host/ardia_app_ui.h"
@@ -176,6 +177,15 @@ class UiHost : public content::WebContentsDelegate,
     return nullptr;
   }
 
+  void RequestMediaAccessPermission(
+      content::WebContents* web_contents,
+      const content::MediaStreamRequest& request,
+      content::MediaResponseCallback callback) override {
+    AnswerRecordingMediaRequest(
+        web_contents == contents_.get() ? web_contents : nullptr, request,
+        callback);
+  }
+
   void CanDownload(const GURL& url,
                    const std::string& request_method,
                    base::OnceCallback<void(bool)> callback) override {
@@ -224,7 +234,7 @@ void LoadUiHost(base::FilePath ui_dir,
   content::WebUIConfigMap::GetInstance().AddWebUIConfig(
       std::make_unique<ArdiaAppUIConfig>(
           std::move(ui_dir), DataDirectory().Append("Translations"),
-          std::move(script_hashes)));
+          DataDirectory().Append("Reports"), std::move(script_hashes)));
   host->Load();
 }
 

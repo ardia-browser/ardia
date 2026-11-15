@@ -365,6 +365,16 @@ std::optional<gfx::Rect> Host::PlaceOf(content::WebContents* contents) const {
   return shown->second.place;
 }
 
+std::vector<gfx::Rect> Host::PagePlacesIn(const std::string& window) const {
+  std::vector<gfx::Rect> places;
+  for (const auto& [key, shown] : shown_) {
+    if (shown.window == window && !shown.place.IsEmpty()) {
+      places.push_back(shown.place);
+    }
+  }
+  return places;
+}
+
 void Host::CreateTab(base::DictValue args,
                      const std::string& window,
                      ardia_win::Reply reply) {

@@ -21,10 +21,12 @@ WEB_UI_CONTROLLER_TYPE_IMPL(ArdiaAppUI)
 
 ArdiaAppUIConfig::ArdiaAppUIConfig(base::FilePath ui_dir,
                                    base::FilePath translations_dir,
+                                   base::FilePath reports_dir,
                                    std::vector<std::string> script_hashes)
     : content::WebUIConfig(content::kChromeUIScheme, kArdiaAppHost),
       ui_dir_(std::move(ui_dir)),
       translations_dir_(std::move(translations_dir)),
+      reports_dir_(std::move(reports_dir)),
       script_hashes_(std::move(script_hashes)) {}
 
 ArdiaAppUIConfig::~ArdiaAppUIConfig() = default;
@@ -46,7 +48,7 @@ void ArdiaAppUIConfig::RegisterURLDataSource(
   content::URLDataSource::Add(
       browser_context,
       std::make_unique<ArdiaAppSource>(ui_dir_, translations_dir_,
-                                       script_hashes_));
+                                       reports_dir_, script_hashes_));
 }
 
 }

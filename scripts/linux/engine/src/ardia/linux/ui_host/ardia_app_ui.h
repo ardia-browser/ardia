@@ -26,6 +26,7 @@ class ArdiaAppUIConfig : public content::WebUIConfig {
  public:
   ArdiaAppUIConfig(base::FilePath ui_dir,
                    base::FilePath translations_dir,
+                   base::FilePath reports_dir,
                    std::vector<std::string> script_hashes);
   ~ArdiaAppUIConfig() override;
 
@@ -38,6 +39,7 @@ class ArdiaAppUIConfig : public content::WebUIConfig {
  private:
   const base::FilePath ui_dir_;
   const base::FilePath translations_dir_;
+  const base::FilePath reports_dir_;
   const std::vector<std::string> script_hashes_;
 };
 

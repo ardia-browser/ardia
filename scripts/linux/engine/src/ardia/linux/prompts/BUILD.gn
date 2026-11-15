@@ -10,6 +10,9 @@ source_set("prompts") {
     "domains.h",
     "page_helpers.cc",
     "page_helpers.h",
+    "passwords.cc",
+    "permissions.cc",
+    "prompts.h",
   ]
 
   public_deps = [ "//ardia/linux/ui_host:modules" ]
@@ -21,7 +24,11 @@ source_set("prompts") {
     "//chrome/browser",
     "//chrome/browser/extensions",
     "//chrome/browser/profiles:profile",
+    "//components/content_settings/core/common",
     "//components/input",
+    "//components/password_manager/core/browser",
+    "//components/password_manager/core/common",
+    "//components/permissions",
     "//content/public/browser",
     "//extensions/browser",
     "//extensions/common",

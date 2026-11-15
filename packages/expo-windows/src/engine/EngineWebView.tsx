@@ -42,6 +42,7 @@ const ARGUMENTS: Record<string, string[]> = {
   discard: ["unload"],
   setFrozen: ["frozen"],
   resolveUnresponsive: ["terminate"],
+  resolvePasswordPrompt: ["answer", "edits"],
 };
 const UNWRAPPED: Record<string, (reply: Record<string, unknown> | null) => unknown> = {
   evaluate: (reply) => reply?.result ?? null,

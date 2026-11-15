@@ -13,6 +13,7 @@
 #include "ardia/linux/browser_window/browser_window.h"
 #include "ardia/linux/log.h"
 #include "ardia/linux/prompts/page_helpers.h"
+#include "ardia/linux/prompts/prompts.h"
 #include "ardia/linux/browser_window/web_contents_delegate.h"
 #include "ardia/linux/host/input_region.h"
 #include "ardia/linux/windows/app_window.h"
@@ -141,7 +142,8 @@ void Host::Call(const std::string& verb,
       std::move(reply).Run(std::move(*done));
       return;
     }
-    if (!ardia_win::CallTabMethod(contents, Text(args, "method"), args,
+    if (!CallPromptMethod(contents, Text(args, "method"), args, reply) &&
+        !ardia_win::CallTabMethod(contents, Text(args, "method"), args,
                                   reply)) {
       std::move(reply).Run(Error("unknown method"));
     }

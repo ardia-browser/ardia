@@ -16,6 +16,8 @@ std::string TestGateRefusal(const base::FilePath& data_dir);
 
 std::string HoldScratchFolders(const base::FilePath& data_dir);
 
+std::string ScratchProfileRefusal(const base::FilePath& chromium_root);
+
 }
 
 #endif

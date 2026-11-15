@@ -1,6 +1,7 @@
 import { callMain, callMainSync, mainModules } from "../bridge";
 import { addNativeListener } from "../events";
-import { framePacing } from "./frames";
+import { framePacing, frameTrace } from "./frames";
+import { connectPageMotion, holdDuringMotion, pageMotionState } from "./pageMotion";
 import { noteShownPage, pageSlotsState } from "./pageSlots";
 
 type EngineEvent = { topic?: unknown; json?: unknown };
@@ -16,7 +17,7 @@ let hostCalls = 0;
 
 export const pagesUnderUi = (): boolean => mainModules()[LINUX_ENGINE]?.constants?.pagesUnderUi === true;
 
-Object.assign(globalThis, { ardiaEngineDebug: { shown: () => Object.fromEntries(shown), hostCalls: () => hostCalls, pagesUnderUi, pageSlots: pageSlotsState, framePacing } });
+Object.assign(globalThis, { ardiaEngineDebug: { shown: () => Object.fromEntries(shown), hostCalls: () => hostCalls, pagesUnderUi, pageSlots: pageSlotsState, framePacing, frameTrace, pageMotion: pageMotionState } });
 
 export const engineAvailable = (): boolean => !!mainModules()[ENGINE_HOST];
 
@@ -55,6 +56,7 @@ export async function hostCall<Result = unknown>(verb: string, args: Record<stri
   if (verb === "tab.show" && typeof args.key === "string") {
     shown.set(args.key, { ...args, windowId });
     if (pagesUnderUi()) noteShownPage(windowId, args.key, args.visible === true ? shownPage(args) : null);
+    if (holdDuringMotion({ ...args, key: args.key }, windowId)) return {} as Result;
   }
   if (verb === "tab.close" && typeof args.key === "string") {
     const last = shown.get(args.key);
@@ -113,3 +115,11 @@ export function onEngineTopic(topic: string, listener: TopicListener): { remove(
   wanted.add(listener);
   return { remove: () => void wanted.delete(listener) };
 }
+
+connectPageMotion(
+  (args, windowId) => void callMain(ENGINE_HOST, "hostCall", "tab.show", JSON.stringify(args), windowId).catch(() => {}),
+  (key) => {
+    const last = shown.get(key);
+    return last && typeof last.windowId === "string" ? { args: { ...last, key }, windowId: last.windowId } : null;
+  },
+);

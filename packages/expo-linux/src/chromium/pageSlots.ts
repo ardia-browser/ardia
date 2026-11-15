@@ -168,19 +168,82 @@ function outermost(holes: Hole[]): Hole[] {
   return holes.filter((hole, index) => !holes.some((other, at) => at !== index && contains(other, hole) && (!contains(hole, other) || at < index)));
 }
 
-function cut(underlays: Underlay[], holes: Map<string, Hole>) {
-  for (const { element, under } of underlays) {
-    const box = element.getBoundingClientRect();
-    const left = box.left + element.clientLeft;
-    const top = box.top + element.clientTop;
-    const outer = `M-1,-1 H${round(box.width + 2)} V${round(box.height + 2)} H-1 Z`;
-    const meeting = [...under].flatMap((key) => {
-      const hole = holes.get(key);
-      return hole && intersects(box, hole) ? [hole] : [];
-    });
-    const inside = outermost(meeting).map((hole) => holePath(hole, left, top));
-    element.style.setProperty("--ardia-underlay-clip", inside.length ? `path(evenodd, "${outer} ${inside.join(" ")}")` : "none");
+function clipFor(element: HTMLElement, under: Set<string>, holes: Map<string, Hole>): string {
+  const box = element.getBoundingClientRect();
+  const width = element.offsetWidth || box.width;
+  const height = element.offsetHeight || box.height;
+  const sx = width > 0 ? box.width / width : 1;
+  const sy = height > 0 ? box.height / height : 1;
+  const local = (hole: Hole): Hole => ({
+    x: (hole.x - box.x) / sx - element.clientLeft,
+    y: (hole.y - box.y) / sy - element.clientTop,
+    width: hole.width / sx,
+    height: hole.height / sy,
+    radius: hole.radius,
+    corners: hole.corners.map((corner) => corner / Math.min(sx, sy)) as Corners,
+  });
+  const outer = `M-1,-1 H${round(width + 2)} V${round(height + 2)} H-1 Z`;
+  const meeting = [...under].flatMap((key) => {
+    const hole = holes.get(key);
+    return hole && intersects(box, hole) ? [hole] : [];
+  });
+  const inside = outermost(meeting).map((hole) => holePath(local(hole), 0, 0));
+  return inside.length ? `path(evenodd, "${outer} ${inside.join(" ")}")` : "none";
+}
+
+type HoleMotion = { page: Element; moving: Element; clock: () => number; durationMs: number; rects: number[][]; endsAt: number };
+
+const FRAME_LEAD_MS = 1000 / 60;
+const holeMotions = new Map<string, HoleMotion>();
+let holeFrames = 0;
+let holeLoop = false;
+
+function rectAt(motion: HoleMotion, elapsed: number): number[] | undefined {
+  const steps = motion.rects.length - 1;
+  if (steps < 1) return motion.rects[0];
+  const position = Math.min(steps, Math.max(0, (elapsed / motion.durationMs) * steps));
+  const before = motion.rects[Math.floor(position)];
+  const after = motion.rects[Math.ceil(position)];
+  if (!before || !after) return motion.rects[steps];
+  const mix = position - Math.floor(position);
+  return before.map((value, index) => value + ((after[index] ?? value) - value) * mix);
+}
+
+function movingHoles(holes: Map<string, Hole>, element: Element): Map<string, Hole> {
+  if (!holeMotions.size) return holes;
+  const moved = new Map(holes);
+  for (const [key, motion] of holeMotions) {
+    const resting = holes.get(key);
+    if (!resting || !motion.page.isConnected) continue;
+    if (motion.moving.contains(element)) {
+      const box = motion.page.getBoundingClientRect();
+      moved.set(key, { ...resting, x: box.x, y: box.y, width: box.width, height: box.height });
+      continue;
+    }
+    const [x = 0, y = 0, width = 0, height = 0] = rectAt(motion, motion.clock() + FRAME_LEAD_MS) ?? [];
+    moved.set(key, { ...resting, x, y, width, height });
   }
+  return moved;
+}
+
+function followHoles() {
+  for (const [key, motion] of holeMotions) if (performance.now() >= motion.endsAt || !motion.page.isConnected) holeMotions.delete(key);
+  for (const [windowId, slots] of windows) if ([...holeMotions.keys()].some((key) => slots.pages.has(key))) update(windowId);
+  holeFrames += 1;
+  if (holeMotions.size) requestAnimationFrame(followHoles);
+  else holeLoop = false;
+}
+
+export function animatePageHoles(key: string, page: Element, moving: Element, clock: () => number, durationMs: number, rects: number[][]) {
+  holeMotions.set(key, { page, moving, clock, durationMs, rects, endsAt: performance.now() + durationMs + 50 });
+  if (holeLoop) return;
+  holeLoop = true;
+  requestAnimationFrame(followHoles);
+}
+
+export function stopPageHoles(key: string) {
+  if (!holeMotions.delete(key)) return;
+  for (const [windowId, slots] of windows) if (slots.pages.has(key)) update(windowId);
 }
 
 function watchMembers(doc: Document, slots: WindowSlots, windowId: string) {
@@ -222,7 +285,8 @@ function update(windowId: string) {
     slots.frosted = members.frosted;
     slots.membersAt = now;
   }
-  cut(slots.underlays, holesFor(pages, slots.underlays, view));
+  const holes = holesFor(pages, slots.underlays, view);
+  for (const underlay of slots.underlays) underlay.element.style.setProperty("--ardia-underlay-clip", clipFor(underlay.element, underlay.under, movingHoles(holes, underlay.element)));
 }
 
 export function noteShownPage(windowId: string, key: string, page: ShownPage | null) {
@@ -247,5 +311,6 @@ export function refreshPageSlots() {
 export const pageSlotsState = () => ({
   underlays: underlaysMarked,
   frosted: frostedMarked,
+  holeFrames,
   windows: Object.fromEntries([...windows].map(([id, slots]) => [id, { pages: slots.pages.size, underlays: slots.underlays.length, frosted: slots.frosted.length }])),
 });

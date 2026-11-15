@@ -23,6 +23,9 @@ let burst = { frames: 0, startedAt: 0, lastAt: 0, longest: 0, long: 0 };
 let timerFrames = 0;
 let realmFrames = 0;
 let missedRealmFrames = 0;
+const TRACE_FRAMES = 240;
+const traced: { at: number; work: number; follow: number; callbacks: number; missed: boolean }[] = [];
+let lastMissed = false;
 
 const report = (error: unknown) => console.error("[ardia linux] an animation frame failed", error);
 
@@ -86,7 +89,11 @@ function runFrame() {
       report(error);
     }
   }
+  const worked = now();
   each(followers, (follow) => follow());
+  traced.push({ at: Math.round(time * 10) / 10, work: Math.round((worked - time) * 10) / 10, follow: Math.round((now() - worked) * 10) / 10, callbacks: turn.size, missed: lastMissed });
+  lastMissed = false;
+  if (traced.length > TRACE_FRAMES) traced.shift();
   if (waiting.size) schedule();
   else endBurst(time);
 }
@@ -98,6 +105,7 @@ function schedule() {
     realmFrames += 1;
     const deadline = setTimeout(() => {
       missedRealmFrames += 1;
+      lastMissed = true;
       runFrame();
     }, REALM_FRAME_DEADLINE_MS);
     scheduled = { realm, handle: realm.requestAnimationFrame(runFrame), deadline };
@@ -131,6 +139,8 @@ export function onFrameBurst(listen: BurstListener): () => void {
 }
 
 export const framePacing = () => ({ realmFrames, timerFrames, missedRealmFrames });
+
+export const frameTrace = () => traced.splice(0);
 
 let installed = false;
 

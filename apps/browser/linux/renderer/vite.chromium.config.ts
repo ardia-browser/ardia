@@ -12,6 +12,7 @@ const repo = here("../../../../");
 const expoWindows = `${repo}packages/expo-windows/src/`;
 const chromium = `${repo}packages/expo-linux/src/chromium/`;
 const reactNativeOnLinux = `${repo}packages/expo-linux/src/reactNative/index.tsx`;
+const reactNativeOnEngine = `${chromium}reactNativeEngine.ts`;
 
 export const ENGINE_SWAPS: Record<string, string> = {
   [`${expoWindows}engine/host.ts`]: `${chromium}host.ts`,
@@ -31,7 +32,7 @@ function engineSwaps(): Plugin {
     async resolveId(source, importer, options) {
       if (!importer || REPLACEMENTS.has(importer)) return null;
       const fromWindows = importer.startsWith(expoWindows);
-      if (fromWindows && (source === "react-native" || source === reactNativeOnLinux)) return `${chromium}reactNative.ts`;
+      if (source === "react-native" || source === reactNativeOnLinux) return fromWindows ? `${chromium}reactNative.ts` : reactNativeOnEngine;
       if (!source.startsWith(".") && !source.startsWith("/")) return null;
       const resolved = await this.resolve(source, importer, { ...options, skipSelf: true });
       const swapped = resolved && ENGINE_SWAPS[resolved.id];

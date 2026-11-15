@@ -1,6 +1,6 @@
 import { requireOptionalNativeModule } from "../modules";
 
-export * from "../reactNative/index";
+export * from "./reactNativeEngine";
 
 export const TurboModuleRegistry = {
   get: <Module>(name: string): Module | null => requireOptionalNativeModule<Module>(name),

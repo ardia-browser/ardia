@@ -13,6 +13,9 @@ void RegisterAppModules(ModuleRegistry& registry) {
   RegisterMenusModule(registry);
   RegisterDialogsModule(registry);
   RegisterFocusModule(registry);
+  RegisterShellModule(registry);
+  RegisterSystemModule(registry);
+  RegisterLaunchLinksModule(registry);
 }
 
 }

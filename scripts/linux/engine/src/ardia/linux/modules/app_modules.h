@@ -17,6 +17,9 @@ void RegisterConfigModule(ModuleRegistry& registry);
 void RegisterDialogsModule(ModuleRegistry& registry);
 void RegisterFocusModule(ModuleRegistry& registry);
 void RegisterMenusModule(ModuleRegistry& registry);
+void RegisterShellModule(ModuleRegistry& registry);
+void RegisterSystemModule(ModuleRegistry& registry);
+void RegisterLaunchLinksModule(ModuleRegistry& registry);
 
 void ConfirmWithUser(const base::DictValue& options,
                      base::OnceCallback<void(bool confirmed, bool suppressed)>

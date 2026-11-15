@@ -6,8 +6,12 @@ assert(is_linux)
 
 source_set("logic") {
   sources = [
+    "desktop_entry.cc",
+    "desktop_entry.h",
     "document_store.cc",
     "document_store.h",
+    "launch_arguments.cc",
+    "launch_arguments.h",
     "launch_config.cc",
     "launch_config.h",
   ]
@@ -15,6 +19,9 @@ source_set("logic") {
   deps = [
     "//ardia/core:hooks",
     "//base",
+    "//net",
+    "//third_party/re2",
+    "//url",
   ]
 }
 
@@ -28,9 +35,12 @@ source_set("modules") {
     "dialogs.cc",
     "documents.cc",
     "focus.cc",
+    "launch_links.cc",
     "menus.cc",
     "owner_window.cc",
     "owner_window.h",
+    "shell.cc",
+    "system.cc",
     "test_answers.cc",
     "test_answers.h",
   ]
@@ -45,12 +55,14 @@ source_set("modules") {
     "//chrome/app/theme:chrome_unscaled_resources",
     "//chrome/browser",
     "//chrome/browser/profiles:profile",
+    "//chrome/browser/themes",
     "//chrome/common",
     "//components/constrained_window",
     "//components/version_info",
     "//content/public/browser",
     "//gpu/config",
     "//net",
+    "//services/network/public/cpp",
     "//skia",
     "//third_party/re2",
     "//ui/base",
@@ -59,6 +71,7 @@ source_set("modules") {
     "//ui/gfx",
     "//ui/gfx/x",
     "//ui/menus",
+    "//ui/native_theme",
     "//ui/shell_dialogs",
     "//ui/views",
     "//url",
@@ -67,7 +80,9 @@ source_set("modules") {
 
 test("ardia_linux_modules_unittests") {
   sources = [
+    "desktop_entry_unittest.cc",
     "document_store_unittest.cc",
+    "launch_arguments_unittest.cc",
     "launch_config_unittest.cc",
   ]
 

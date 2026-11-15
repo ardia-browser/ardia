@@ -274,7 +274,8 @@ Regular rows on the 37 pt pitch; the same for "+ New Tab" and ⌘T, and for the 
   or leaves it, folds open or shut on the slide's curve and time (`sidebar/Fold.tsx`), a closed one as its ghost, and the
   list plans its slides around such a group's old height. The header's 3 pt gap before a nested first row eases
   away with that row when a direct tab stays, including when the padding changes during a turn. Pins and moves
-  between windows don't animate.
+  between windows don't animate. A newly mounted row waits for a measured height before revealing; estimates
+  only size the overall fold, and an unmounted row's measurement is discarded before its next reveal.
 
 ### Hiding and showing the sidebar (Auto-Hide Tabs, ⌘S; owner recording 2026-10-06, 240 fps)
 

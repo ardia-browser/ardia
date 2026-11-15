@@ -20,12 +20,17 @@ try {
       tabs: ["a", "b", "below"].map((id) => ({ id, url: `about:blank#${id}`, title: id })),
     }),
   });
-  for (const kind of ["item", "stray", "stack"]) {
-    await rep.check(`a never-shown ${kind} folds into a folder mounted collapsed`, async () => {
+  for (const kind of ["item", "stray", "stack", "folder", "remount"]) {
+    const pinned = kind === "folder" || kind === "remount";
+    await rep.check(pinned ? `a ${kind === "folder" ? "new" : "remounted"} expanded live folder under collapsed pins eases to its full height` : `a never-shown ${kind} folds into a folder mounted collapsed`, async () => {
       const evidence = await app.eval(`
           const kind = ${JSON.stringify(kind)};
+          const pinned = ${pinned};
           const s = () => ac.store.getState();
           const live = ac.live.store;
+          s().updateProfile("default", { pinnedCollapsed: pinned });
+          ac.actions.switchToTab(pinned ? "below" : "a");
+          globalThis.sidebarMotionScale = pinned ? 3 : 1;
           const folder = live.createFolder("default", "pullRequests");
           const item = (id) => ({ id, source: "github", url: "about:blank#" + id, title: id, subtitle: "", icon: null, updatedAt: 1 });
           const items = [item("a")];
@@ -42,16 +47,20 @@ try {
           live.setStatus(folder, { state: "idle", lastFetch: Date.now(), error: null });
           s().updateTab("a", { liveItem: { folderId: folder, itemId: "a" } });
           s().updateTab("b", { liveItem: { folderId: folder, itemId: "b" } });
-          ac.actions.switchToTab("a");
-          live.updateFolder(folder, { collapsed: true });
+          live.updateFolder(folder, { collapsed: !pinned });
           const wait = (ms) => new Promise((r) => setTimeout(r, ms));
           const measure = () => ac.sidebarRows.measureRow("w1", "below");
-          return wait(600).then(measure).then((before) => {
+          if (kind === "remount") ac.actions.switchToTab("a");
+          return wait(600).then(() => {
+            if (kind !== "remount") return;
+            ac.actions.switchToTab("below");
+            return wait(600).then(() => live.applyFetch(folder, [...items, item("c"), item("d")], {}));
+          }).then(() => Promise.all([measure(), ac.sidebarRows.measureRow("w1", "livefolder|" + folder)])).then(([before, header]) => {
             if (!before) throw new Error("row below the folder is missing");
             const samples = [before.y];
             const started = performance.now();
             const frame = () => {
-              if (performance.now() - started >= 450) return Promise.resolve();
+              if (performance.now() - started >= (pinned ? 750 : 450)) return Promise.resolve();
               return new Promise((r) => requestAnimationFrame(r)).then(measure).then((row) => {
                 if (!row) throw new Error("row below the folder disappeared");
                 samples.push(row.y);
@@ -59,22 +68,28 @@ try {
               });
             };
             ac.actions.switchToTab("b");
-            return frame().then(() => {
+            return frame().then(() => ac.sidebarRows.measureRow("w1", "livefolder|" + folder)).then((afterHeader) => {
               const active = s().windows.w1.activeTabIds.default;
               live.removeFolder(folder);
-              return wait(200).then(() => ({ active, samples }));
+              return wait(200).then(() => ({ active, samples, initiallyMounted: !!header, finallyMounted: !!afterHeader }));
             });
           });
       `, { timeout: 15000 });
       rep.log(evidence);
       assert.equal(evidence.active, "b");
+      assert.equal(evidence.initiallyMounted, !pinned, "the fixture folder mounted in the wrong state");
+      assert.equal(evidence.finallyMounted, true, "the revealed folder header is missing");
       const ys = evidence.samples;
       assert.ok(ys.length >= 5, "not enough animation frames");
       const low = Math.min(ys[0], ys.at(-1));
       const high = Math.max(ys[0], ys.at(-1));
       const overshoot = Math.max(0, ...ys.map((y) => Math.max(low - y, y - high)));
       assert.ok(overshoot <= 1, `row below overshot by ${overshoot} pt`);
-      if (kind === "stack") {
+      if (pinned) {
+        assert.ok(high - low > 70, "the expanded folder did not reveal its contents");
+        const largestStep = Math.max(...ys.slice(1).map((y, i) => Math.abs(y - ys[i])));
+        assert.ok(largestStep < (high - low) * 0.3, `folder contents jumped ${largestStep} pt during the reveal`);
+      } else if (kind === "stack") {
         assert.ok(high - low > 10, "the expanded stack did not grow the folder");
         assert.ok(ys.filter((y) => y > low + 1 && y < high - 1).length >= 3, "the stack snapped to its full height");
       } else assert.ok(high - low <= 1, "replacing equally tall rows moved the row below");

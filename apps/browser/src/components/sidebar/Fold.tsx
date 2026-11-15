@@ -145,6 +145,7 @@ export function Fold({
   const { open, moving } = fold;
   const parentAway = useContext(FoldedAway);
   const measuring = rowHeight === undefined;
+  const mountAll = !collapsed || moving || mountClosed || (measuring && !estimate);
   const [measured, setMeasured] = useState<Record<string, number>>({});
   const styles = useRef(new Map<number, object>()).current;
   const turnStyles = useRef(new WeakMap<Turn, object>()).current;
@@ -152,8 +153,11 @@ export function Fold({
   const seen = useRef<ReadonlyMap<string, number>>(new Map());
   const laidOut = useRef(new Map<string, number>()).current;
   const kept = new Set([keep ?? []].flat().filter((key) => entries.some((e) => e.key === key)));
-  const knownHeight = (key: string) => (typeof rowHeight === "function" ? rowHeight(key) : (rowHeight ?? measured[key] ?? estimate?.(key)));
-  const heightOf = (key: string) => knownHeight(key) ?? 0;
+  if (!mountAll && Object.keys(measured).some((key) => !kept.has(key))) {
+    setMeasured(Object.fromEntries(Object.entries(measured).filter(([key]) => kept.has(key))));
+  }
+  const knownHeight = (key: string) => (typeof rowHeight === "function" ? rowHeight(key) : (rowHeight ?? measured[key]));
+  const heightOf = (key: string) => knownHeight(key) ?? estimate?.(key) ?? 0;
   const order = entries.flatMap((e) => (e.ghost ? [] : [e.key]));
   const keys = order.filter((key) => kept.has(key));
   const settledShut = collapsed && !moving;
@@ -234,7 +238,6 @@ export function Fold({
       : collapsed
         ? { height: 0, opacity: 0, overflow: "hidden" as const }
         : null;
-  const mountAll = !collapsed || moving || mountClosed || (measuring && !estimate);
 
   return (
     <Animated.View style={outer} pointerEvents={collapsed ? "box-none" : "auto"}>

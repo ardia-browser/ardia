@@ -113,6 +113,11 @@ export const generalRows = {
     {
       section: "Profile switcher",
       rows: {
+        showProfileDots: {
+          title: "Show profile dots",
+          description: "The dots at the bottom of the sidebar that switch profiles. Swiping and ⌃1–⌃9 still work.",
+          keywords: ["dots", "pager", "profile switcher", "page dots", "sidebar footer", "hide"],
+        },
         switcherIcons: {
           title: "Show profile icons instead of dots",
           description: "As in Arc: the switcher at the bottom of the sidebar shows each profile's symbol or emoji, and a profile without one keeps its dot. Right-click the switcher to pick an icon.",

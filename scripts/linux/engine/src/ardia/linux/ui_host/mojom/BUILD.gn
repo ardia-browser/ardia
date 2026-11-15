@@ -2,5 +2,4 @@ import("//mojo/public/tools/bindings/mojom.gni")
 
 mojom("mojom") {
   sources = [ "app_bridge.mojom" ]
-  disable_variants = true
 }

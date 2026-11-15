@@ -21,6 +21,7 @@ export const ENGINE_SWAPS: Record<string, string> = {
   [`${expoWindows}events.ts`]: `${chromium}events.ts`,
   [`${expoWindows}missing.ts`]: `${chromium}missing.ts`,
   [`${expoWindows}engine/windowId.ts`]: `${chromium}windowId.ts`,
+  [`${expoWindows}engine/domains/desktop.ts`]: `${chromium}desktop.ts`,
 };
 
 const REPLACEMENTS = new Set(Object.values(ENGINE_SWAPS));

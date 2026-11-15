@@ -161,7 +161,8 @@ views::WebView* AppWindowView::PageView(const std::string& key) const {
 }
 
 views::WebView* AppWindowView::AddPage(const std::string& key,
-                                       content::WebContents* contents) {
+                                       content::WebContents* contents,
+                                       bool above_ui) {
   if (views::WebView* existing = PageView(key)) {
     if (existing->web_contents() != contents) {
       existing->SetWebContents(contents);
@@ -170,13 +171,16 @@ views::WebView* AppWindowView::AddPage(const std::string& key,
   }
   const std::optional<size_t> ui_index = GetIndexOf(ui_view_);
   views::WebView* page =
-      PagesUnderUi()
+      PagesUnderUi() && !above_ui
           ? AddChildViewAt(std::make_unique<views::WebView>(nullptr),
                            ui_index.value_or(0))
           : AddChildView(std::make_unique<views::WebView>(nullptr));
   page->SetVisible(false);
   page->SetWebContents(contents);
   pages_[key] = page;
+  if (above_ui) {
+    above_ui_.insert(key);
+  }
   return page;
 }
 
@@ -316,6 +320,7 @@ void AppWindowView::RelayoutPage(const std::string& key) {
     return;
   }
   const Placement& placement = placed->second;
+  const bool clipped = !PagesUnderUi() || above_ui_.contains(key);
   gfx::Rect page_bounds = placement.bounds;
   views::WebView* devtools = DevToolsView(key);
   DevToolsContentsResizingStrategy strategy;
@@ -334,22 +339,23 @@ void AppWindowView::RelayoutPage(const std::string& key) {
     inspected_bounds.Offset(placement.bounds.OffsetFromOrigin());
     devtools->SetBoundsRect(devtools_bounds);
     devtools->SetVisible(true);
-    Shape(devtools, devtools_bounds, placement);
+    Shape(devtools, devtools_bounds, placement, clipped);
     page_bounds = inspected_bounds;
   } else if (devtools) {
     devtools->SetVisible(false);
   }
   page->SetBoundsRect(page_bounds);
   page->SetVisible(true);
-  Shape(page, page_bounds, placement);
+  Shape(page, page_bounds, placement, clipped);
 }
 
 void AppWindowView::Shape(views::WebView* view,
                           const gfx::Rect& view_bounds,
-                          const Placement& placement) {
+                          const Placement& placement,
+                          bool clipped) {
   const float corner = static_cast<float>(std::max(0, placement.radius));
   view->holder()->SetNativeViewCornerRadii(gfx::RoundedCornersF(corner));
-  if (PagesUnderUi()) {
+  if (!clipped) {
     return;
   }
   SkPath shape = SkPath::RRect(
@@ -404,6 +410,7 @@ void AppWindowView::RemovePage(const std::string& key) {
   EndMotion(key);
   SetDevTools(key, nullptr);
   placements_.erase(key);
+  above_ui_.erase(key);
   auto found = pages_.find(key);
   if (found == pages_.end()) {
     return;

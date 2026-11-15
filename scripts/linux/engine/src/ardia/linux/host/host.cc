@@ -527,7 +527,7 @@ base::DictValue Host::ShowTab(const base::DictValue& args,
       state->Send("preferredSize", std::move(size));
     }
   }
-  app->view()->AddPage(key, contents);
+  app->view()->AddPage(key, contents, extension_view);
   app->view()->SetDevTools(
       key, DevToolsWindow::GetInTabWebContents(contents, nullptr));
   std::optional<PageMotion> motion;

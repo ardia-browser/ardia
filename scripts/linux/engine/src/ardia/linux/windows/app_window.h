@@ -6,6 +6,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -70,7 +71,8 @@ class AppWindowView : public views::View,
   views::WebView* ui_view() const { return ui_view_; }
   views::WebView* PageView(const std::string& key) const;
   views::WebView* AddPage(const std::string& key,
-                          content::WebContents* contents);
+                          content::WebContents* contents,
+                          bool above_ui = false);
   void PlacePage(const std::string& key,
                  const gfx::Rect& bounds,
                  int radius,
@@ -105,7 +107,8 @@ class AppWindowView : public views::View,
 
   void Shape(views::WebView* view,
              const gfx::Rect& view_bounds,
-             const Placement& placement);
+             const Placement& placement,
+             bool clipped);
   views::WebView* DevToolsView(const std::string& key) const;
 
   struct RunningMotion {
@@ -126,6 +129,7 @@ class AppWindowView : public views::View,
   std::map<std::string, raw_ptr<views::WebView>> pages_;
   std::map<std::string, raw_ptr<views::WebView>> devtools_;
   std::map<std::string, Placement> placements_;
+  std::set<std::string> above_ui_;
   std::map<std::string, RunningMotion> motions_;
   raw_ptr<ui::Compositor> stepping_ = nullptr;
   const base::TimeDelta motion_delay_;

@@ -275,13 +275,15 @@ What `runtime_deps` lists and it leaves out is what Windows leaves out: DevTools
 `pyproto`, ANGLE's test data, the Vulkan mock driver and validation layer, `snapshot_blob.bin` (the context snapshot
 stands in) and the Isolated Web App key data. `05-build.sh` builds `chrome_sandbox` with `chrome`.
 
-**The app's package** is `scripts/linux/package-engine.mjs` (`pnpm -C apps/browser/linux package:engine`): `/opt/Ardia`
-from that tarball and the engine UI bundle (`build:ui:chromium`), with `chrome` as `ardia.bin`, `chrome_sandbox` as
+**The app's package** is `scripts/linux/package-engine.mjs` (`pnpm -C apps/browser/linux package`): `/opt/Ardia`
+from that tarball and the UI bundle (`pnpm -C apps/browser/linux build`), with `chrome` as `ardia.bin`, `chrome_sandbox` as
 `chrome-sandbox`, `ui/` without source maps, `Extensions/` as the Mac bundles it, `ardia.build.json`, the AppArmor
 profile and the `ardia` launcher (`packaging/sandbox.sh`, `CHROME_DESKTOP=ardia.desktop`, `packaging/launcher.sh`). The
 `.deb` (`dpkg-deb --root-owner-group`) has `chrome-sandbox` setuid root and runs `packaging/after-install.sh` as its
-`postinst`; the AppImage is built as electron-builder builds one (its checksummed runtime and `mksquashfs`) and has no
-setuid helper. An engine carrying the test-build marker is refused. 2026-11-15: `.deb` 151 MB, AppImage 164 MB, 45 s.
+`postinst`; the AppImage is AppImage's static type2 runtime (20251108) over a zstd squashfs made by `mksquashfs` 4.6.1,
+both from a toolset pinned by checksum and cached in `~/.cache/ardia`, so it needs no libfuse2, and it has no setuid
+helper. An engine carrying the test-build marker is refused. 2026-11-15: `.deb` 151 MB, AppImage 164 MB, 45 s (180 MB
+with zstd).
 
 **uBlock Origin** goes in by default. `scripts/linux/ubo.sh` runs the Mac's `packages/ardiacore/scripts/ubo.sh` with its
 three macOS-only lines swapped (`lockf` for `flock`, `shasum` for `sha256sum`, its vendor path made absolute), so the

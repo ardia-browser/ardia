@@ -1,12 +1,14 @@
 # Ardia on Linux, on the engine
 
-Today's Linux port (`docs/linux.md`) runs the shared UI in Electron. This is the design for running it on Ardia's own
-engine instead, the one the Mac and Windows builds use: Chromium 157.0.8103.50 with Helium 0.21.2 (helium-linux
+The first Linux port ran the shared UI in Electron. This is the design for running it on Ardia's own engine instead,
+the one the Mac and Windows builds use: Chromium 157.0.8103.50 with Helium 0.21.2 (helium-linux
 0.21.2.1) and our patch series, built by `scripts/linux/engine` into `~/chromium-build-linux`. It covers the process,
 the UI host and its bridge, windows, pages and input, focus and keys, menus and dialogs, the new home of every main
 process module, launching, the sandbox, packaging, test instances, the risks, and a work breakdown with a first
-milestone. Nothing here is built yet (2026-11-15). The Electron build keeps working until the engine build reaches its
-parity, and is then removed.
+milestone. It was written before any of it was built (2026-11-15); it is built now, the engine build is the Linux build
+and the Electron build is gone (below, "How the two builds coexisted"). `docs/linux.md` says what works and how to run
+it; this file stays the design reference. The "Electron today" column and the Electron module names below describe the
+removed port, which is in git history.
 
 The short version:
 
@@ -119,9 +121,9 @@ engine bundle reuses it as is (EngineWebView, `usePageCover`, covers and clips, 
 `privateWindows.ts`, and every domain table in `domains/`); a Vite resolver in the engine bundle's config swaps those
 four modules for Linux ones (`packages/expo-linux/src/chromium/`). Each replacement is type-checked against the module
 it stands in for (`satisfies typeof import(...)`), so a change on the Windows side that breaks Linux fails
-`pnpm -C apps/browser/linux typecheck:chromium`, not at run time. The import readers
-(`packages/expo-windows/src/import`), the sync TypeScript (`src/sync`: layout, listing, QR code, Recovery Kit) and the
-launch link filter (`src/launchLinks`) are reused the same way.
+`pnpm -C apps/browser/linux typecheck`, not at run time. The launch link
+filter (`src/launchLinks`) is reused the same way; the import readers and the Recovery Kit (PDF, PNG, QR code) are the
+Electron build's, moved into `packages/expo-linux/src/chromium/import` and `chromium/sync`.
 
 ## The UI host
 
@@ -166,7 +168,7 @@ commits only `chrome://ardia-app/` documents (its frames `about:blank` or `about
 `about:blank`, an app window opens nothing, and refusals go to `launch.log` with the scheme only. The host's delegate
 also refuses `OpenURLFromTab` and downloads.
 
-**Reloads.** `ArdiaDev.reloadUi` (test instances) and the engine bundle's watcher (`dev:engine`, below) close every app
+**Reloads.** `ArdiaDev.reloadUi` (test instances) and the bundle's watcher (`pnpm -C apps/browser/linux dev`, below) close every app
 window and reload the host; the UI restores the session as at launch, and launch links wait for it again, as on
 Electron.
 
@@ -335,8 +337,8 @@ the same `tab.show` data, and inherits Windows' known limits (a translucent surf
   never takes the keyboard because it shows; a tab switch or a Peek asks its page to follow unless an app text field
   has it) arrive as `tab.call` `focus` and `keyboard.forget`, and `Host` gives focus with `WebContents::Focus()`, only
   when the keyboard is already in that app window and Ardia is the active app, never in a background instance.
-- **Shortcuts, pages included.** The command table stays TypeScript (`apps/browser/linux/src/menus`'s
-  `commandTable.ts`, `keys.ts`, `keyboard.ts`, `store.ts` move into the engine bundle). The UI resolves it, with the
+- **Shortcuts, pages included.** The command table stays TypeScript (Electron's `menus/commandTable.ts`, `keys.ts` and
+  `store.ts` moved into the engine bundle as `packages/expo-linux/src/chromium/keys/`). The UI resolves it, with the
   user's remapped shortcuts, the window kind and whether an app text field has focus, into a flat key map and sends it
   to `ArdiaMenus.setKeyMap` whenever it changes. `ardia_linux::KeyMap` matches every key event in
   `WebContentsDelegate::PreHandleKeyboardEvent`, of the UI's `WebContents` and of every page (our delegate, from H2),
@@ -411,7 +413,7 @@ so a link never opens two Peeks.
 
 ## Every module's new home
 
-**Main process modules** (`apps/browser/linux/src/modules`, `src/*.ts`):
+**Main process modules** (the Electron build's `apps/browser/linux/src/modules` and `src/*.ts`, now removed):
 
 | Module | New home | Why |
 | --- | --- | --- |
@@ -436,8 +438,8 @@ so a link never opens two Peeks.
 | `ArdiaReport` (problem reports, recording) | C++ `modules/report.cc`, `recording.cc`; recorder in TypeScript | C++ gathers logs and uploads to `ARDIA_FEEDBACK_URL` with `network::SimpleURLLoader`; the recording registers the app window as a capture source (`DesktopMediaID::RegisterNativeWindow`), the UI renderer records it with `getUserMedia` and `MediaRecorder` (MP4, H.264) and blacks out page rects it knows, and C++ saves the bytes. The pill is an app window |
 | `ArdiaUpdater` | TypeScript in the UI renderer | A `fetch` of the GitHub releases feed and `ArdiaShell.openURL`; nothing native until the app updates itself |
 | `ArdiaTranslate` | TypeScript worker in the UI renderer; C++ `translate/models.cc` | Bergamot's WASM runs in a dedicated worker of the UI renderer with today's queue and caps (`translate/engine.ts`, `pieces.ts`); models are fetched, hashed while streaming (`crypto::SecureHash`), gunzipped and cached by C++ (the same registry, catalog and checks), and the worker loads them from `chrome://ardia-app/translations/<pair>/<file>`. Page language comes from Chrome's own CLD3 detection (`translate::LanguageDetectionObserver`, sent as a tab event), not `cld3-asm`. Page text goes in and out through the page channel |
-| `ArdiaSync` | C++ `sync/` (keys, crypto, files); TypeScript from `expo-windows/src/sync` | Windows' native half ported from BCrypt and DPAPI to BoringSSL (`crypto::HkdfSha256`, `crypto::hmac`, `crypto::Aead`) and `os_crypt_async`, so keys and passwords never reach JavaScript, as on the Mac and Windows; files confined to the sync folder |
-| `ArdiaImport` | C++ `import/` primitives; TypeScript readers from `expo-windows/src/import` | Listing and reading inside browser profile roots, a read-only SQLite snapshot (`//sql`), Chromium's v10 and v11 keys (libsecret through Chromium's wrapper, KWallet), NSS `key4.db` (Windows' `ImportNss.h` on BoringSSL), cookies and autofill decrypted straight into `ac_cookies_import`/`ac_autofill_import` JSON under one-time tokens, as Windows does |
+| `ArdiaSync` | C++ `sync/` (keys, crypto, files); TypeScript in `expo-linux/src/chromium/sync` (the Recovery Kit) | Windows' native half ported from BCrypt and DPAPI to BoringSSL (`crypto::HkdfSha256`, `crypto::hmac`, `crypto::Aead`) and `os_crypt_async`, so keys and passwords never reach JavaScript, as on the Mac and Windows; files confined to the sync folder |
+| `ArdiaImport` | C++ `import/` primitives and the browser icon lookup; TypeScript readers in `expo-linux/src/chromium/import` | Listing and reading inside browser profile roots, a read-only SQLite snapshot (`//sql`), Chromium's v10 and v11 keys (libsecret through Chromium's wrapper, KWallet), NSS `key4.db` (Windows' `ImportNss.h` on BoringSSL), cookies and autofill decrypted straight into `ac_cookies_import`/`ac_autofill_import` JSON under one-time tokens, as Windows does |
 | `ArdiaCli`, `ArdiaScripting` (not on Linux) | TypeScript stand-ins in the UI renderer | Nothing native |
 | `ArdiaDev` | C++ `modules/dev.cc`, test instances only | `snapshotWindow` (a `CopyOutputRequest` on the widget's root layer: UI and pages composited), pointer and key injection into the widget, `reloadUi` |
 | `quit.ts`, `launch.ts`, `paths.ts`, `log.ts`, `crashes.ts` | C++ `main.cc`, `app_lifetime.cc`, `log.cc` | Process |
@@ -523,31 +525,19 @@ instance unless the launcher decided it, which it says with `--ardia-sandbox-dec
   Electron), each app window's `about:blank` child and each page. `scripts/linux/capture` takes each app window's
   composited picture with `ArdiaDev.snapshotWindow` (UI and pages together; a CDP screenshot of an app window shows
   only the UI layer) and each page's with CDP. Real input is `xdotool` on the Xvfb, as the Electron walk used.
-- **`pnpm -C apps/browser/linux dev:engine`** builds the engine bundle with `vite build --watch` into a scratch
+- **`pnpm -C apps/browser/linux dev`** builds the bundle with `vite build --watch` into a scratch
   `ARDIA_UI_DIR` and runs a test instance on it; each rebuild reloads the host.
 
-## How the two builds coexist
+## How the two builds coexisted
 
-- `apps/browser/linux/src/**` is the Electron main process and stays as it is until removal.
-- `packages/expo-linux`: the backend-neutral files (`bridge.ts`, `modules.ts`, `events.ts`, `defaults.ts`, `host/`,
-  `windows/`, `views/` except the page view, `web/`, `reactNative/`) serve both. The Electron backend is `src/engine/**`
-  (`<webview>` pages) and `src/services/modules.ts`. The engine backend is `src/chromium/**` (the four modules swapped
-  into `expo-windows/src/engine`, the engine modules and domain tables, `followMotion` for the web, the key map pusher,
-  the requestAnimationFrame forwarding). Where a file differs by backend, its engine twin sits beside it as
-  `<name>.chromium.ts(x)` (`engine/modules.chromium.ts`, `services/modules.chromium.ts`, `views/registry.chromium.tsx`),
-  picked by the engine bundle's `resolve.extensions` and by `tsconfig.chromium.json`'s `moduleSuffixes`, the way
-  `*.linux.ts` platform files are picked today.
-- `apps/browser/linux/renderer/vite.config.ts` builds `ui/` (Electron); `vite.chromium.config.ts` builds `ui-chromium/`.
-  `package.json` gets `build:ui:chromium`, `typecheck:chromium`, `dev:engine`, `package:engine`.
-- `PLATFORM_FEATURES` rows that differ by backend (Translate, extensions in private windows, site access) read a
-  `linuxBackend` constant from `ArdiaApp`, so one `platformFeatures.linux.ts` serves both.
-- Telemetry's system profile gets `linux_backend` (`electron` or `chromium`) so the dashboard splits Linux by build.
-- CI: `.github/workflows/linux.yml` keeps its Electron jobs; a `linux-engine.yml` fetches a prebuilt engine (as
-  Windows' `prebuilt.json` does), builds the engine bundle, packages, and runs the engine smoke on Xvfb.
-- **Removal**, once the engine build walks the 64 rows of `docs/linux.md` at least as well: delete
-  `apps/browser/linux/src`, `packages/expo-linux/src/engine`, `src/services`, the Electron Vite config, the Electron and
-  Electron-library dependencies, the `.chromium` suffixes (each twin becomes the file) and the Electron CI jobs, and
-  rewrite `docs/linux.md` from this file.
+While the engine build was made, the two lived side by side: Electron's main process in `apps/browser/linux/src`, the
+engine backend in `packages/expo-linux/src/chromium` with `<name>.chromium.ts(x)` twins picked before `.linux`, a second
+Vite config and tsconfig, `*:chromium` and `*:engine` package scripts, and a `linux-engine.yml` workflow beside the
+Electron one. Once the engine build walked the 64 rows of `docs/linux.md` at least as well (62 work, 2 with a
+difference), the Electron build was removed (9a140faac and the commits around it): its tree, dependencies, packaging
+and CI went, the TypeScript the engine still used moved into `packages/expo-linux/src/chromium`, each `.chromium` twin
+became the `.linux` or plain file, and the engine commands became the plain ones (`build`, `dev`, `package`, `test`,
+`typecheck`).
 
 ## Risks, and how each is retired
 

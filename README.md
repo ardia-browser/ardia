@@ -104,12 +104,14 @@ reconstructed from Dia's own New Tab effects.
 ```
 apps/
   browser/            Expo + react-native-macos app (UI in src/, Xcode project in macos/)
+  browser/linux/      Linux: the same UI as a web bundle on our engine, and the AppImage and .deb packaging
 packages/
   ardiacore/             The engine: Chromium 157's framework with our layer (Chrome tabs hosted in our views), JS API in src/
   shell/              Native menu bar + shortcuts → JS, windows, SF Symbols, native primitives
   shaders/            Metal: New Tab effects + grained OKLab window backdrop
   import/             Import from other browsers (bookmarks, history, passwords, Arc spaces)
   core/               Pure TS: omnibox input → URL, suggestions, Dia-style breadcrumbs (tested)
+  expo-linux/         The Expo and React Native APIs on Linux, on react-native-web in the engine's UI renderer
 ```
 
 
@@ -133,6 +135,21 @@ Chromium tree in `~/chromium-build` (Chromium 157.0.8103.50 with the patch serie
 `docs/engine-build.md` › "Rebuilding", then `engine/chromium/apply.sh`,
 `engine/ardiacore/apply.sh` and `autoninja -C out/Release_GN_arm64 chrome_framework`; the first build takes about 2
 hours). The app's build stages it from there when it exists.
+
+### On Linux
+
+The Linux build runs the same UI on the same engine (Chromium with Helium's patches and ours, built for Linux, with
+`//ardia/linux` in it); there is no Electron. On x86_64 with Node 24 and pnpm 11:
+
+```bash
+pnpm install
+scripts/linux/fetch-engine.sh x64 ~/ardia-linux/out/ardia-chromium-linux-x64.tar.xz
+pnpm -C apps/browser/linux package
+```
+
+That downloads the published engine (checked against `scripts/linux/engine/prebuilt.json`), builds the UI and writes an
+AppImage and a `.deb` to `apps/browser/linux/dist`. `docs/linux.md` covers what works, test instances and the smoke;
+`docs/engine-build-linux.md` building the engine itself.
 
 ```bash
 pnpm pods

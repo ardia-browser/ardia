@@ -15,10 +15,12 @@ void AttachPageHelpers(content::WebContents* contents) {
 void RegisterPageModules(ModuleRegistry& registry) {
   InstallPermissionPrompts();
   InstallPasswordPrompts();
+  InstallExtensionPrompts();
   DomainVerbs verbs;
   AddContentBlockerVerbs(verbs);
   AddPermissionVerbs(verbs);
   AddContextMenuVerbs(verbs);
+  AddExtensionInstallVerbs(verbs);
   verbs.Register(registry);
 }
 

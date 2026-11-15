@@ -23,6 +23,8 @@ void InstallPermissionPrompts();
 void AddPermissionVerbs(DomainVerbs& verbs);
 
 void InstallPasswordPrompts();
+void InstallExtensionPrompts();
+void AddExtensionInstallVerbs(DomainVerbs& verbs);
 bool CallPasswordMethod(content::WebContents* contents,
                         const std::string& method,
                         const base::DictValue& args,

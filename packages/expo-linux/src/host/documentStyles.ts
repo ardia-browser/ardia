@@ -18,7 +18,6 @@ body { font-family: ${LINUX_UI_FONT_STACK}; -webkit-font-smoothing: antialiased;
 #root { display: flex; position: relative; }
 input:focus, textarea:focus, [tabindex]:focus { outline: none; }
 input, textarea { user-select: text; }
-webview { display: flex; }
 html[data-ardia-shape="round"] #root { border-radius: 12px; overflow: hidden; }
 html[data-ardia-shape="round"] #root::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 2147483647; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.14); }
 html[data-ardia-shape="round"][data-ardia-dark="true"] #root::after { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); }

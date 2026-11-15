@@ -22,7 +22,7 @@ function move(e: MouseEvent) {
 
 function out(e: MouseEvent) {
   const to = e.relatedTarget;
-  if (to && (to as Node).nodeName !== "IFRAME" && (to as Node).nodeName !== "WEBVIEW") return;
+  if (to && (to as Node).nodeName !== "IFRAME") return;
   last = null;
   publish();
 }

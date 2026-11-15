@@ -52,7 +52,7 @@ function holdPagePointer(id: string) {
   if (holding && !doc.getElementById(HOLDING_CLASS)) {
     const style = doc.createElement("style");
     style.id = HOLDING_CLASS;
-    style.textContent = `.${HOLDING_CLASS} webview, .${HOLDING_CLASS} iframe { pointer-events: none !important; }`;
+    style.textContent = `.${HOLDING_CLASS} iframe { pointer-events: none !important; }`;
     doc.head.append(style);
   }
   doc.documentElement.classList.toggle(HOLDING_CLASS, holding);

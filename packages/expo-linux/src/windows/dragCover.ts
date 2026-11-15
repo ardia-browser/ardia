@@ -3,7 +3,7 @@ const REGION_MARK = "ardiaDragRegion";
 const SYSTEM_REGION = "[data-ardia-drag-region='system']";
 const PASS_DELAY_MS = 120;
 const BAR_HEIGHT = 64;
-export const INTERACTIVE = "input, textarea, select, button, a[href], webview, iframe, video, audio, [contenteditable='true'], [role='button'], [role='link'], [tabindex], [data-ardia-stays-put]";
+export const INTERACTIVE = "input, textarea, select, button, a[href], iframe, video, audio, [contenteditable='true'], [role='button'], [role='link'], [tabindex], [data-ardia-stays-put]";
 const PLAIN_CURSORS = new Set(["auto", "default", ""]);
 const SCROLLING = new Set(["auto", "scroll"]);
 const WATCHED_ATTRIBUTES = ["class", "style", "tabindex", "role", "href", "contenteditable", "data-ardia-stays-put", "data-ardia-drag-region"];

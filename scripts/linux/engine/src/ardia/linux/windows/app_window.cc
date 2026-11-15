@@ -392,6 +392,24 @@ int AppWindow::FrameCornerRadius() const {
              : kFrameCornerRadius;
 }
 
+bool AppWindow::TakeKeyboardFromPage() {
+  if (!widget_ || closing_ || !ui_) {
+    return false;
+  }
+  AppWindow* active = nullptr;
+  for (const std::string& id : AppWindows::Get().Ids()) {
+    AppWindow* window = AppWindows::Get().Find(id);
+    if (window && window->KeyboardIsHere()) {
+      active = window;
+    }
+  }
+  if (active && active != this) {
+    return false;
+  }
+  ui_->Focus();
+  return true;
+}
+
 bool AppWindow::KeyboardIsHere() const {
   return widget_ && !closing_ && widget_->IsActive();
 }
@@ -525,6 +543,10 @@ void AppWindow::OnWidgetDestroying(views::Widget* widget) {
     native->RemovePreTargetHandler(this);
   }
   Host::Get()->WindowClosing(id_);
+  if (view_ && view_->ui_view()) {
+    view_->ui_view()->SetWebContents(nullptr);
+  }
+  view_ = nullptr;
   AppWindows::Get().WindowClosed(this);
 }
 

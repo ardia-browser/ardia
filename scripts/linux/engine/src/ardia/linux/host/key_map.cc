@@ -141,8 +141,10 @@ content::KeyboardEventProcessingResult KeyMap::PreHandle(
     return content::KeyboardEventProcessingResult::NOT_HANDLED;
   }
   if (const Entry* entry = Match(event)) {
-    if (page && entry->page_first) {
-      return content::KeyboardEventProcessingResult::NOT_HANDLED_IS_SHORTCUT;
+    if (entry->page_first) {
+      return page ? content::KeyboardEventProcessingResult::
+                        NOT_HANDLED_IS_SHORTCUT
+                  : content::KeyboardEventProcessingResult::NOT_HANDLED;
     }
     Dispatch(*entry, window_id);
     return content::KeyboardEventProcessingResult::HANDLED;

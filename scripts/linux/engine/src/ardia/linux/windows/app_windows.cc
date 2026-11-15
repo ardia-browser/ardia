@@ -469,6 +469,12 @@ void AppWindows::Register(ModuleRegistry& registry) {
                    args.size() > 0 && args[0].GetIfBool().value_or(false));
                return Nothing();
              }));
+  registry.Define("ArdiaFocus")
+      .Async("takeKeyboardFromPage", async([](const base::ListValue& args) {
+               AppWindow* window = WindowAt(args);
+               return ModuleResult(
+                   base::Value(window && window->TakeKeyboardFromPage()));
+             }));
 }
 
 }

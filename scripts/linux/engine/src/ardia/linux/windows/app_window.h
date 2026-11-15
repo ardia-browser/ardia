@@ -102,6 +102,7 @@ class AppWindow : public views::WidgetDelegate,
   base::DictValue DebugState() const;
   void Snapshot(base::OnceCallback<void(base::Value)> done);
   bool KeyboardIsHere() const;
+  bool TakeKeyboardFromPage();
 
   bool ShouldDescendIntoChildForEventHandling(
       gfx::NativeView child,

@@ -1,22 +1,18 @@
-import { FolderIcon } from "@ardia/shell";
-import { memo } from "react";
-import { mix, useTheme } from "../../lib/theme";
-import type { GroupColor } from "../../store/types";
-import { hasOwnGroupIcon, TabIcon } from "./TabIcon";
-import { GROUP_COLORS } from "./tokens";
+import { memo, useContext } from "react";
+import { FolderIcon, sidebarIconSize, TextScopeContext } from "../ui";
+import { useTheme } from "../ui/theme";
+import type { GroupColor } from "../../state/browser/types";
+import { hasOwnGroupIcon } from "../../state/groups/groupIcons";
+import { TabIcon } from "./TabIcon";
+import { folderPalette } from "./tokens";
 
-const FOLDER_ACCENT = "#443AFF";
+const FOLDER_SIDE = 16;
 
-function folderPalette(color: string, dark: boolean) {
-  return dark
-    ? { stroke: mix("#FFFFFF", color, 0.64), face: mix("#211E29", color, 0.12), insideTop: mix("#211E29", color, 0.4), insideBottom: mix("#15121E", color, 0.24) }
-    : { stroke: color, face: mix("#FFFFFF", color, 0.06), insideTop: mix("#FFFFFF", color, 0.34), insideBottom: mix("#FFFFFF", color, 0.64) };
-}
-
-export const AnimatedFolder = memo(function AnimatedFolder({ open, color, size = 16 }: { open: boolean; color?: GroupColor | null; size?: number }) {
+export const AnimatedFolder = memo(function AnimatedFolder({ open, color, size }: { open: boolean; color?: GroupColor | null; size?: number }) {
   const theme = useTheme();
-  const palette = folderPalette((color && GROUP_COLORS[color]?.hex) || FOLDER_ACCENT, theme.dark);
-  return <FolderIcon open={open} {...palette} style={{ width: size, height: size }} />;
+  const inSidebar = useContext(TextScopeContext) === "sidebar";
+  const side = size ?? (inSidebar ? sidebarIconSize(FOLDER_SIDE) : FOLDER_SIDE);
+  return <FolderIcon open={open} {...folderPalette(color, theme.dark)} style={{ width: side, height: side }} />;
 });
 
 export function FolderOrIcon({ icon, open, color }: { icon: string | null | undefined; open: boolean; color?: GroupColor | null }) {

@@ -1,75 +1,120 @@
-import { FadeLabel, Surface } from "@ardia/shell";
-import { useEffect } from "react";
-import { Pressable, Text, View } from "react-native";
-import { displayUrl } from "@ardia/core";
-import { hex, useTheme } from "../../lib/theme";
-import { useBrowser } from "../../store/browser";
-import { tabTitle } from "./actions";
-import { useSidebarUi } from "./state";
-import { commitSwitcher, hoverSwitcherRow, leaveSwitcherRow } from "./switcher";
+import { memo, useEffect, useSyncExternalStore } from "react";
+import { Image, Pressable, StyleSheet, View } from "react-native";
+import { tabTitle } from "../../state/browser/model";
+import { useTab } from "../../state/browser/hooks";
+import { useSidebarUi } from "../../state/sidebar/sidebarUi";
+import { lastPicture, onPicturesChanged } from "../../state/tabs/tabPictures";
+import { commitSwitcher, hoverSwitcherRow, leaveSwitcherRow, subscribeSwitcherTabChanges } from "../../state/sidebar/switcher";
+import { Symbol, Text, Panel } from "../ui";
+import { useTheme } from "../ui/theme";
 import { TabIcon } from "./TabIcon";
-import { useSidebarTokens } from "./tokens";
+import { SIDEBAR_SHADOW, TAB_SWITCHER as T } from "./tokens";
 
-const WIDTH = 400;
-const ROW = 40;
-const MAX_ROWS = 9;
+const SHOT = Math.round(T.card / T.shotAspect);
+const SHOT_WIDTH = T.card - 2 * T.cardInset;
 
 export function TabSwitcher({ windowId, windowWidth, windowHeight }: { windowId: string; windowWidth: number; windowHeight: number }) {
   const theme = useTheme();
-  const tokens = useSidebarTokens();
-  const switcher = useSidebarUi((u) => (u.switcher?.windowId === windowId && u.switcher.visible ? u.switcher : null));
+  const pendingSwitcher = useSidebarUi((u) => (u.switcher?.windowId === windowId ? u.switcher : null));
+  const switcher = pendingSwitcher?.visible ? pendingSwitcher : null;
+
+  useEffect(() => {
+    if (!pendingSwitcher) return;
+    return subscribeSwitcherTabChanges(windowId);
+  }, [pendingSwitcher?.windowId, windowId]);
+
   if (!switcher) return null;
-  const start = Math.max(0, Math.min(switcher.index - Math.floor(MAX_ROWS / 2), switcher.ids.length - MAX_ROWS));
-  const shown = switcher.ids.slice(start, start + MAX_ROWS);
-  const height = shown.length * ROW + 16 + 26;
+  const fits = Math.max(1, Math.floor((windowWidth - T.windowMargin - 2 * T.pad + T.gap) / (T.card + T.gap)));
+  const count = Math.min(fits, switcher.ids.length);
+  const start = Math.max(0, Math.min(switcher.index - Math.floor(count / 2), switcher.ids.length - count));
+  const ids = switcher.ids.slice(start, start + count);
+  const width = 2 * T.pad + count * T.card + (count - 1) * T.gap;
+  const height = 2 * T.pad + SHOT + T.label + 2 * T.cardInset;
+
   return (
-    <Surface
-      fill={hex(theme.panel)}
-      cornerRadius={16}
-      borderColor={hex(theme.panelBorder)}
-      borderWidth={0.5}
-      shadowColor="#000000"
-      shadowOpacity={theme.panelShadowOpacity}
-      shadowRadius={28}
-      shadowOffset={[0, 12]}
-      style={{ position: "absolute", left: (windowWidth - WIDTH) / 2, top: Math.max(40, (windowHeight - height) / 2 - 40), width: WIDTH, padding: 8 }}
+    <View
+      style={{
+        position: "absolute",
+        left: (windowWidth - width) / 2,
+        top: (windowHeight - height) / 2,
+        width,
+        height,
+      }}
     >
-      <Text style={{ fontSize: 11, fontWeight: "600", color: theme.textTertiary, paddingHorizontal: 8, paddingBottom: 6, paddingTop: 2 }}>Recent Tabs</Text>
-      {shown.map((id, i) => (
-        <SwitcherRow key={id} tabId={id} focused={start + i === switcher.index} index={start + i} focusFill={tokens.switcherFocus} outline={tokens.switcherOutline} />
-      ))}
-    </Surface>
+      <Panel
+        fill={theme.dark ? T.fill.dark : T.fill.light}
+        radius={T.panelRadius}
+        border={theme.panelBorder}
+        shadow={SIDEBAR_SHADOW.tabSwitcher}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={{ flexDirection: "row", gap: T.gap, padding: T.pad }}>
+        {ids.map((id, i) => (
+          <SwitcherCard key={id} tabId={id} index={start + i} focused={start + i === switcher.index} accent={theme.accent} />
+        ))}
+      </View>
+    </View>
   );
 }
 
-function SwitcherRow({ tabId, focused, index, focusFill, outline }: { tabId: string; focused: boolean; index: number; focusFill: string; outline: string }) {
-  const theme = useTheme();
-  const tab = useBrowser((s) => s.tabs[tabId]);
+const SwitcherCard = memo(function SwitcherCard({ tabId, index, focused, accent }: { tabId: string; index: number; focused: boolean; accent: string }) {
+  const tab = useTab(tabId);
+  const picture = useSyncExternalStore(onPicturesChanged, () => lastPicture(tabId));
   useEffect(() => () => leaveSwitcherRow(index), [index]);
   if (!tab) return null;
+  const url = tab.url || tab.pinnedUrl || "";
+
   return (
     <Pressable onPressIn={() => commitSwitcher(index)}>
       <View
         onMouseEnter={() => hoverSwitcherRow(index)}
         onMouseLeave={() => leaveSwitcherRow(index)}
-        style={{
-          height: ROW,
-          borderRadius: 10,
-          flexDirection: "row",
-          alignItems: "center",
-          paddingHorizontal: 10,
-          gap: 10,
-          backgroundColor: focused ? focusFill : undefined,
-          borderWidth: focused ? 0.5 : 0,
-          borderColor: outline,
-        }}
       >
-        <TabIcon url={tab.url} favicon={tab.favicon} icon={tab.customIcon} size={18} profileId={tab.profileId} />
-        <View style={{ flex: 1 }}>
-          <FadeLabel text={tabTitle(tab)} fontSize={13} weight={focused ? "medium" : "regular"} color={theme.textPrimary} style={{ height: 17 }} />
-          {tab.url ? <FadeLabel text={displayUrl(tab.url)} fontSize={11} color={theme.textSecondary} style={{ height: 14 }} /> : null}
+        <View style={{ width: T.card, padding: T.cardInset, borderRadius: T.cardRadius, backgroundColor: focused ? T.focusFill : undefined }}>
+          <View
+            style={{
+              width: SHOT_WIDTH,
+              height: SHOT,
+              borderRadius: T.previewRadius,
+              overflow: "hidden",
+              backgroundColor: url ? T.pageFill : T.blankFill,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {picture ? (
+              <Image
+                source={{ uri: `data:image/jpeg;base64,${picture.data}` }}
+                resizeMode="cover"
+                style={[StyleSheet.absoluteFill, { borderRadius: T.previewRadius }]}
+              />
+            ) : (
+              <TabIcon tabId={tab.id} url={url} favicon={tab.favicon} icon={tab.customIcon} profileId={tab.profileId} size={T.icon.preview} color={url ? T.onPage : T.onPanel} />
+            )}
+            <View
+              pointerEvents="none"
+              style={[
+                StyleSheet.absoluteFill,
+                {
+                  borderRadius: T.previewRadius,
+                  borderWidth: focused ? T.ring.focused : T.ring.rest,
+                  borderColor: focused ? accent : T.restRing,
+                },
+              ]}
+            />
+          </View>
+          <View style={{ height: T.label, flexDirection: "row", alignItems: "center", gap: T.labelGap, paddingHorizontal: T.labelInset }}>
+            {url || tab.customIcon ? (
+              <TabIcon tabId={tab.id} url={url} favicon={tab.favicon} icon={tab.customIcon} profileId={tab.profileId} size={T.icon.label} color={T.onPanel} />
+            ) : (
+              <Symbol name="globe" size={T.icon.globe} color={T.onPanel} style={{ width: T.icon.label, height: T.icon.label }} />
+            )}
+            <Text lines={1} weight="semibold" color={T.title} style={{ flex: 1, fontSize: T.titleSize }}>
+              {tabTitle(tab)}
+            </Text>
+          </View>
         </View>
       </View>
     </Pressable>
   );
-}
+});

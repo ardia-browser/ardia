@@ -16,7 +16,12 @@
 # current and the previous version and prunes the rest, except versions a running ardia uses (it leaves a lease in
 # <version>/.leases/<pid>, live while that pid runs and started before the lease was written). Two runs never overlap:
 # each holds a flock on $ARDIA_CLI_HOME/.lock (lockf), which the kernel drops when the run exits.
-# The installed version is `basename "$(readlink "$ARDIA_CLI_HOME/current")"`.
+# The installed version is `basename "$(readlink "$ARDIA_CLI_HOME/current")"`. After switching to a new version it runs
+# `ardia skills install --auto` (the skill for every coding agent found, never over a folder ardia didn't write or one
+# the user removed), then `ardia skills refresh`, which rewrites the agent skill copies `ardia skills install` wrote, and ignores its result,
+# then starts `ardia computer refresh` in the background, which updates /Applications/CuaDriver.app to the new pinned
+# cua-driver only when `ardia computer setup` put it there. --uninstall also removes $ARDIA_CLI_HOME/cua-driver and the
+# cua-driver link in the bin dir when it is ardia's, and leaves /Applications/CuaDriver.app.
 # Downloads are https only, and never trust a checksum from the same place as the tarball: without --sha256 it refuses
 # to download. ARDIA_CLI_URL overrides the tarball URL; a file:// one may go without --sha256, and its checksum is read
 # from $ARDIA_CLI_URL.sha256.
@@ -27,6 +32,7 @@ set -eu
 umask 022
 
 repo=mantrakp04/ardia
+asset_suffix=-macos-arm64.tar.gz
 version_pattern='^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}(-[a-z]{1,16}\.[0-9]{1,4})?$'
 cli_home=${ARDIA_CLI_HOME:-$HOME/Library/Application Support/Ardia/CLI}
 default_bin_dir=$HOME/.local/bin
@@ -88,13 +94,10 @@ else
 fi
 
 fetch() {
-  curl -fsSL --proto "$protocols" --proto-redir =https --retry 2 --connect-timeout 15 "$@"
+  curl -fsSL --proto "$protocols" --proto-redir =https --retry 2 --connect-timeout 15 --speed-limit 1024 --speed-time 60 --max-time 1800 "$@"
 }
 
 take_lock() {
-  if [ -d "$cli_home/.lock" ] && ! [ -L "$cli_home/.lock" ]; then
-    rm -rf "$cli_home/.lock" "$cli_home/.lock-takeover"
-  fi
   exec 9>>"$cli_home/.lock" || fail "couldn't open $cli_home/.lock"
   /usr/bin/lockf -s -t 120 9 || fail "another install is still running"
 }
@@ -194,12 +197,15 @@ if [ "$uninstall" -eq 1 ]; then
   if points_into_cli_home "$bin_dir/ardia"; then
     rm -f "$bin_dir/ardia" || fail "couldn't remove $bin_dir/ardia"
   fi
+  if points_into_cli_home "$bin_dir/cua-driver"; then
+    rm -f "$bin_dir/cua-driver" || fail "couldn't remove $bin_dir/cua-driver"
+  fi
   if [ -d "$cli_home" ]; then
     take_lock
     for entry in "$cli_home"/* "$cli_home"/.install.*; do
       [ -e "$entry" ] || [ -L "$entry" ] || continue
       case ${entry##*/} in
-        .install.*) ;;
+        .install.*|cua-driver) ;;
         *) is_cli_entry "$entry" || continue ;;
       esac
       rm -rf "$entry" || fail "couldn't remove $entry"
@@ -212,11 +218,7 @@ if [ "$uninstall" -eq 1 ]; then
 fi
 
 [ "$(uname -s)" = Darwin ] || fail "the ardia CLI runs on macOS only"
-machine=$(uname -m)
-case $machine in
-  arm64|x86_64) asset_suffix=-macos-$machine.tar.gz ;;
-  *) fail "the ardia CLI runs on Apple silicon and Intel Macs, not $machine" ;;
-esac
+[ "$(uname -m)" = arm64 ] || fail "the ardia CLI runs on Apple silicon only, not $(uname -m)"
 
 printf 'step resolve\n'
 if [ -n "${ARDIA_CLI_URL:-}" ]; then
@@ -229,7 +231,7 @@ if [ -n "${ARDIA_CLI_URL:-}" ]; then
 elif [ -n "$version" ]; then
   url=https://github.com/$repo/releases/download/v$version/ardia-cli-$version$asset_suffix
 else
-  pattern="https://github\.com/$repo/releases/download/v[0-9a-z.-]*/ardia-cli-[0-9a-z.-]*-macos-$machine\.tar\.gz"
+  pattern="https://github\.com/$repo/releases/download/v[0-9a-z.-]*/ardia-cli-[0-9a-z.-]*-macos-arm64\.tar\.gz"
   url=$(fetch https://api.github.com/repos/$repo/releases/latest 2>/dev/null | grep -o "$pattern" | head -n 1 || true)
   if [ -z "$url" ]; then
     url=$(fetch "https://api.github.com/repos/$repo/releases?per_page=30" 2>/dev/null | grep -o "$pattern" | head -n 1 || true)
@@ -307,6 +309,9 @@ for entry in "$cli_home"/*; do
 done
 
 link_bin
+ARDIA_CLI_HOME=$cli_home "$cli_home/current/bin/ardia" skills install --auto </dev/null >/dev/null 2>&1 9>&- || true
+ARDIA_CLI_HOME=$cli_home "$cli_home/current/bin/ardia" skills refresh </dev/null >/dev/null 2>&1 9>&- || true
+ARDIA_CLI_HOME=$cli_home nohup "$cli_home/current/bin/ardia" computer refresh </dev/null >/dev/null 2>&1 9>&- &
 
 if [ "$bin_dir" = "$default_bin_dir" ]; then
   login_shell=$(dscl . -read "/Users/$(id -un)" UserShell 2>/dev/null | awk '{ print $2 }')

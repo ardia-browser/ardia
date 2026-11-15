@@ -2,7 +2,7 @@
 """Check a built engine for what Ardia leaves out of Helium: its uBlock Origin, its onboarding page, the non-free
 search engine data, and Helium's own hosts.
 
-  helium-check-build.py [--out OUT_DIR] [--framework FRAMEWORK] [--pak PAK]… [--brotli BROTLI]
+  helium-check-build.py [--out OUT_DIR] [--framework FRAMEWORK] [--pak PAK]…
 
 Fails (exit 1) when:
   - OUT_DIR has build outputs for third_party/ublock, components/helium_onboarding or
@@ -13,8 +13,7 @@ Fails (exit 1) when:
 It also prints how many resources still say "Helium" or helium://, for the branding check.
 
 OUT_DIR defaults to ~/chromium-build/chromium_git/chromium/src/out/Release_GN_arm64 and FRAMEWORK to its
-"Chromium Framework.framework". BROTLI defaults to OUT_DIR/brotli, else brotli on PATH (pass it for a cross build,
-whose OUT_DIR/brotli may not run here). Reads only.
+"Chromium Framework.framework". Reads only.
 """
 import argparse
 import gzip
@@ -84,13 +83,9 @@ def main():
     parser.add_argument('--out', type=pathlib.Path, default=OUT)
     parser.add_argument('--framework', type=pathlib.Path)
     parser.add_argument('--pak', type=pathlib.Path, action='append', default=[])
-    parser.add_argument('--brotli', type=pathlib.Path)
     args = parser.parse_args()
     framework = args.framework or args.out / 'Chromium Framework.framework'
-    if args.brotli:
-        brotli = str(args.brotli)
-    else:
-        brotli = str(args.out / 'brotli') if (args.out / 'brotli').exists() else shutil.which('brotli')
+    brotli = str(args.out / 'brotli') if (args.out / 'brotli').exists() else shutil.which('brotli')
     problems = []
 
     for rel in OMITTED_GEN:

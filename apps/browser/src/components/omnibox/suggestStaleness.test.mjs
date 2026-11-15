@@ -3,9 +3,10 @@ import { test } from "node:test";
 import { mount } from "../../test-hooks.mjs";
 
 globalThis.__DEV__ = false;
-const { useBrowser } = await import("../../store/browser.ts");
-const { useSuggestions, scopeFor, keywordScope } = await import("./useSuggestions.ts");
-const { currentBarActions } = await import("./actions.ts");
+const { useBrowser } = await import("../../state/browser/store.ts");
+const { useSuggestions } = await import("./useSuggestions.ts");
+const { scopeFor, keywordScope } = await import("../../state/omnibox/scopes.ts");
+const { currentBarActions } = await import("../../state/omnibox/barActions.ts");
 
 const S = () => useBrowser.getState();
 const DAY = 86_400_000;
@@ -18,8 +19,8 @@ function setup() {
   useBrowser.setState((s) => ({
     history: {
       ...s.history,
-      default: [entry("https://zebra.example/one", "Zebra one"), entry("https://zebra.example/two", "Zebra two", 2 * DAY)],
-      [work]: [entry("https://zebra.work/", "Zebra at work")],
+      "": { list: [entry("https://zebra.example/one", "Zebra one"), entry("https://zebra.example/two", "Zebra two", 2 * DAY)], floor: -Infinity, ready: true },
+      [work]: { list: [entry("https://zebra.work/", "Zebra at work")], floor: -Infinity, ready: true },
     },
   }));
   return { w, work };
@@ -81,7 +82,9 @@ test("the bar's actions and known hosts follow the store: bookmark, mute, pin, p
   S().toggleBookmark("default", { url: "https://start.example/", title: "Start", favicon: null });
   assert.ok(titles().includes("Bookmark This Page"), "unbookmarked");
   S().updateTab(tab, { muted: true });
-  assert.ok(titles().includes("Unmute Site"), "muted");
+  assert.ok(titles().includes("Unmute Tab"), "muted");
+  S().setSiteMuted(tab, true);
+  assert.ok(titles().includes("Unmute Site"), "site muted");
   S().togglePin(tab);
   assert.ok(titles().includes("Unpin from Top Apps"), "pinned");
   S().updateProfile(work, { name: "Office" });

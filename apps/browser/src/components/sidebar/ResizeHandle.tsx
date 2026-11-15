@@ -1,26 +1,34 @@
 import { View } from "react-native";
-import { useBrowser } from "../../store/browser";
-import { useResizeDrag } from "../layout/useResizeDrag";
-import { setSidebarUi, sidebarUi } from "./state";
-import { SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH } from "./tokens";
+import { currentSettings } from "../../state/browser/current";
+import { useSidebarSide } from "../../state/browser/hooks";
+import { updateSettings } from "../../state/settings/actions";
+import { resetSidebarWidth } from "../../state/sidebar/actions";
+import { useResizeDrag } from "./useResizeDrag";
+import { setLiveSidebarWidth } from "../../state/sidebar/sidebarUi";
+import { noteSidebarResize } from "../../state/telemetry/sidebarResizeCounts";
+import { SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH, SIDEBAR_RESIZE_HANDLE } from "./tokens";
+
+const HALF = SIDEBAR_RESIZE_HANDLE.width / 2;
 
 export function ResizeHandle({ windowId }: { windowId: string }) {
+  const right = useSidebarSide(windowId) === "right";
   const handlers = useResizeDrag({
     min: SIDEBAR_MIN_WIDTH,
     max: SIDEBAR_MAX_WIDTH,
-    direction: 1,
-    saved: () => useBrowser.getState().settings.sidebarWidth ?? 190,
-    onLive: (w) => {
-      const { [windowId]: _, ...rest } = sidebarUi().dragWidth;
-      setSidebarUi({ dragWidth: w === null ? rest : { ...rest, [windowId]: Math.round(w * 2) / 2 } });
+    direction: right ? -1 : 1,
+    saved: () => currentSettings().sidebarWidth,
+    pointerFromEdge: (e) => e.nativeEvent.locationX - HALF,
+    onLive: (w) => setLiveSidebarWidth(windowId, w),
+    onCommit: (w, dragged) => {
+      if (dragged) noteSidebarResize();
+      updateSettings({ sidebarWidth: w });
     },
-    onCommit: (w) => useBrowser.getState().updateSettings({ sidebarWidth: w }),
   });
   return (
     <View
       {...handlers}
-      onDoubleClick={() => useBrowser.getState().updateSettings({ sidebarWidth: 190 })}
-      style={{ position: "absolute", top: 46, bottom: 0, right: 0, width: 4, cursor: "col-resize" }}
+      onDoubleClick={resetSidebarWidth}
+      style={{ position: "absolute", top: SIDEBAR_RESIZE_HANDLE.top, bottom: 0, [right ? "left" : "right"]: -HALF, width: SIDEBAR_RESIZE_HANDLE.width, cursor: "col-resize" }}
     />
   );
 }

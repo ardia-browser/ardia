@@ -1,51 +1,56 @@
-import { Symbol } from "@ardia/shell";
-import { memo } from "react";
-import { Text, View } from "react-native";
-import { useIsSleeping } from "../../lib/tabLifecycle";
-import { useTheme } from "../../lib/theme";
-import { useBrowser } from "../../store/browser";
-import { engineMark, ENGINE_NAMES, ENGINE_SYMBOLS } from "../../store/engines";
-import { isPageUnloaded } from "../../store/pinShare";
-import { Favicon } from "../primitives";
-
-export const SYMBOL_PREFIX = "symbol:";
-export const NO_GROUP_ICON = `${SYMBOL_PREFIX}square.stack.fill`;
-export const hasOwnGroupIcon = (icon: string | null | undefined): icon is string => !!icon && icon !== NO_GROUP_ICON;
+import { memo, useContext } from "react";
+import { View } from "react-native";
+import { useIsSleeping } from "../../state/tabs/tabLifecycle";
+import { sidebarIconSize, Symbol, Text, TextScopeContext } from "../ui";
+import { useTheme } from "../ui/theme";
+import { sidebarTokens } from "./tokens";
+import { useTab } from "../../state/browser/hooks";
+import { ENGINE_NAMES, ENGINE_SYMBOLS, type PageEngine } from "../../state/engines/engines";
+import { FADED, markedEngine, useIconMarks } from "../../state/sidebar/rowState";
+import { iconSymbol } from "../../lib/customIcon";
+import { drawnIcon } from "../../state/pins/rowIcons";
+import { Favicon } from "../favicon/Favicon";
 
 export const TabIcon = memo(function TabIcon({
   tabId,
   url,
   favicon,
   icon,
-  size = 16,
+  size: givenSize,
+  compact = false,
   color,
   profileId: profile,
   direct,
+  marks: givenMarks,
 }: {
   tabId?: string;
   url: string;
   favicon?: string | null;
   icon?: string | null;
   size?: number;
+  compact?: boolean;
   color?: string;
   profileId?: string;
   direct?: boolean;
+  marks?: number;
 }) {
+  useTheme();
+  const inSidebar = useContext(TextScopeContext) === "sidebar";
+  const size = compact ? (inSidebar ? sidebarIconSize(COMPACT_ICON) : COMPACT_ICON) : (givenSize ?? (inSidebar ? sidebarIconSize(ICON) : ICON));
   const sleeping = useIsSleeping(tabId ?? "");
-  const unloaded = useBrowser((s) => s.settings.fadeUnloadedTabs && !!tabId && isPageUnloaded(s, tabId));
+  const marks = useIconMarks(tabId, givenMarks);
+  const engine = tabId && size >= 14 ? markedEngine(marks) : null;
   const props = { url, favicon, icon, size, color, direct };
   return (
-    <View style={{ opacity: sleeping || unloaded ? SLEEPING_OPACITY : 1 }}>
+    <View style={{ opacity: sleeping || marks & FADED ? SLEEPING_OPACITY : 1 }}>
       {profile || !tabId ? <Icon {...props} profileId={profile} /> : <TabProfileIcon {...props} tabId={tabId} />}
-      {tabId && size >= 14 ? <EngineMark tabId={tabId} size={size} /> : null}
+      {engine ? <EngineMark mark={engine} size={size} /> : null}
     </View>
   );
 });
 
-function EngineMark({ tabId, size }: { tabId: string; size: number }) {
+function EngineMark({ mark, size }: { mark: PageEngine; size: number }) {
   const theme = useTheme();
-  const mark = useBrowser((s) => engineMark(s, tabId));
-  if (!mark) return null;
   const box = Math.round(size * 0.6);
   return (
     <View
@@ -60,7 +65,7 @@ function EngineMark({ tabId, size }: { tabId: string; size: number }) {
         borderRadius: box / 2,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: theme.dark ? "#2C2C2E" : "#FFFFFF",
+        backgroundColor: sidebarTokens(theme).engineMarkPlate,
       }}
     >
       <Symbol name={ENGINE_SYMBOLS[mark]} size={box - 3} weight="semibold" color={theme.icon} style={{ width: box, height: box }} />
@@ -69,11 +74,13 @@ function EngineMark({ tabId, size }: { tabId: string; size: number }) {
 }
 
 function TabProfileIcon({ tabId, ...props }: Omit<Parameters<typeof Icon>[0], "profileId"> & { tabId: string }) {
-  const profileId = useBrowser((s) => s.tabs[tabId]?.profileId);
+  const profileId = useTab(tabId, (t) => t?.profileId);
   return <Icon {...props} profileId={profileId} />;
 }
 
 const SLEEPING_OPACITY = 0.45;
+const ICON = 16;
+const COMPACT_ICON = 14;
 
 function Icon({
   url,
@@ -93,9 +100,9 @@ function Icon({
   direct?: boolean;
 }) {
   const theme = useTheme();
-  if (icon?.startsWith(SYMBOL_PREFIX)) {
-    return <Symbol name={icon.slice(SYMBOL_PREFIX.length)} size={size - 3} weight="medium" color={color ?? theme.icon} style={{ width: size, height: size }} />;
-  }
+  icon = drawnIcon(icon);
+  const symbol = iconSymbol(icon);
+  if (symbol) return <Symbol name={symbol} size={size - 3} weight="medium" color={color ?? theme.icon} style={{ width: size, height: size }} />;
   if (icon) {
     return (
       <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>

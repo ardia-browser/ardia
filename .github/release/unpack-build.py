@@ -5,18 +5,18 @@ import stat
 import sys
 import tarfile
 
-USAGE = "usage: python3 -I .github/release/unpack-build.py <build.tar> <new dir> <version> <arm64|x86_64>"
+USAGE = "usage: python3 -I .github/release/unpack-build.py <build.tar> <new dir> <version>"
 
-if len(sys.argv) != 5:
+if len(sys.argv) != 4:
     sys.exit(USAGE)
-tar_path, dest, version, arch = sys.argv[1:]
+tar_path, dest, version = sys.argv[1:]
 VERSION_PATTERN = r"[0-9]+\.[0-9]+\.[0-9]+(-nightly\.[0-9]+)?"
-if not re.fullmatch(VERSION_PATTERN, version) or arch not in ("arm64", "x86_64"):
+if not re.fullmatch(VERSION_PATTERN, version):
     sys.exit(USAGE)
 
 ARCHIVE = "Ardia.xcarchive"
 APP = f"{ARCHIVE}/Products/Applications/Ardia.app"
-CLI = f"ardia-cli-{version}-macos-{arch}.tar.gz"
+CLI = f"ardia-cli-{version}-macos-arm64.tar.gz"
 TOP_FILES = {"provenance.txt", CLI, f"{CLI}.sha256"}
 ARCHIVE_DIRS = {ARCHIVE, f"{ARCHIVE}/Products", f"{ARCHIVE}/Products/Applications", f"{ARCHIVE}/dSYMs"}
 

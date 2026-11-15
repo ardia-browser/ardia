@@ -4,7 +4,7 @@ export type ShownPage = { x: number; y: number; width: number; height: number; r
 
 type Corners = [number, number, number, number];
 type Hole = ShownPage & { corners: Corners };
-type Underlay = { element: HTMLElement; isolates: boolean };
+type Underlay = { element: HTMLElement; isolates: boolean; under: Set<string> };
 type Members = { underlays: Underlay[]; frosted: HTMLElement[] };
 type WindowSlots = { pages: Map<string, ShownPage>; underlays: Underlay[]; frosted: HTMLElement[]; membersAt: number; observer: MutationObserver | null; queued: boolean; settling: ReturnType<typeof setTimeout> | null };
 
@@ -54,11 +54,9 @@ function paints(style: CSSStyleDeclaration) {
 
 const intersects = (box: DOMRect, page: ShownPage) => box.left < page.x + page.width && box.right > page.x && box.top < page.y + page.height && box.bottom > page.y;
 
-function precedesSlot(element: Element, markers: Element[]) {
-  return markers.some((marker) => {
-    const position = element.compareDocumentPosition(marker);
-    return (position & Node.DOCUMENT_POSITION_FOLLOWING) !== 0 || (position & Node.DOCUMENT_POSITION_CONTAINED_BY) !== 0;
-  });
+function precedes(element: Element, marker: Element) {
+  const position = element.compareDocumentPosition(marker);
+  return (position & Node.DOCUMENT_POSITION_FOLLOWING) !== 0 || (position & Node.DOCUMENT_POSITION_CONTAINED_BY) !== 0;
 }
 
 function unmark(element: HTMLElement) {
@@ -82,29 +80,38 @@ function unfrost(element: HTMLElement) {
 
 const frostedOverPages = (style: CSSStyleDeclaration) => style.backdropFilter !== "none" && style.backdropFilter !== "" && !TRANSPARENT.has(style.backgroundColor);
 
-function findMembers(doc: Document, pages: ShownPage[], previous: Members): Members {
+function findMembers(doc: Document, pages: Map<string, ShownPage>, previous: Members): Members {
   for (const { element } of previous.underlays) delete element.dataset[UNDERLAY];
   for (const element of previous.frosted) delete element.dataset[OVER_PAGE];
-  const markers = [...doc.querySelectorAll(SLOT_SELECTOR)];
+  const markers = new Map<string, HTMLElement>();
+  for (const marker of doc.querySelectorAll<HTMLElement>(SLOT_SELECTOR)) markers.set(marker.dataset[SLOT_MARKER] ?? "", marker);
+  const slots = [...pages].flatMap(([key, page]) => {
+    const marker = markers.get(key);
+    return marker ? [{ key, page, marker }] : [];
+  });
   const view = doc.defaultView;
   const found: Members = { underlays: [], frosted: [] };
-  if (!markers.length || !view) {
+  if (!slots.length || !view) {
     for (const { element } of previous.underlays) unmark(element);
     for (const element of previous.frosted) unfrost(element);
     return found;
   }
   for (const element of doc.body.querySelectorAll<HTMLElement>("*")) {
-    if (element.matches(SLOT_SELECTOR) || !pages.some((page) => intersects(element.getBoundingClientRect(), page))) continue;
+    if (element.matches(SLOT_SELECTOR)) continue;
+    const box = element.getBoundingClientRect();
+    const meeting = slots.filter((slot) => intersects(box, slot.page));
+    if (!meeting.length) continue;
     const style = view.getComputedStyle(element);
     if (!paints(style)) continue;
-    if (!precedesSlot(element, markers)) {
-      if (!frostedOverPages(style)) continue;
+    const under = new Set(meeting.filter((slot) => precedes(element, slot.marker)).map((slot) => slot.key));
+    if (under.size < meeting.length && frostedOverPages(style)) {
       element.style.setProperty("--ardia-over-page-color", style.backgroundColor);
       found.frosted.push(element);
       continue;
     }
+    if (!under.size) continue;
     remember(element, style);
-    found.underlays.push({ element, isolates: style.zIndex === "auto" && element.childElementCount > 0 });
+    found.underlays.push({ element, isolates: style.zIndex === "auto" && element.childElementCount > 0, under });
   }
   const keptUnderlays = new Set(found.underlays.map((underlay) => underlay.element));
   for (const { element } of previous.underlays) if (!keptUnderlays.has(element)) unmark(element);
@@ -122,12 +129,14 @@ function cornerRadii(box: DOMRect, style: CSSStyleDeclaration): Corners {
   return [radius(style.borderTopLeftRadius), radius(style.borderTopRightRadius), radius(style.borderBottomRightRadius), radius(style.borderBottomLeftRadius)];
 }
 
-function holesFor(pages: ShownPage[], underlays: Underlay[], view: Window): Hole[] {
-  return pages.map((page) => {
+function holesFor(pages: Map<string, ShownPage>, underlays: Underlay[], view: Window): Map<string, Hole> {
+  const holes = new Map<string, Hole>();
+  for (const [key, page] of pages) {
     const corners: Corners = [page.radius, page.radius, page.radius, page.radius];
     const right = page.x + page.width;
     const bottom = page.y + page.height;
-    for (const { element } of underlays) {
+    for (const { element, under } of underlays) {
+      if (!under.has(key)) continue;
       const box = element.getBoundingClientRect();
       const radii = cornerRadii(box, view.getComputedStyle(element));
       const near = (a: number, b: number) => Math.abs(a - b) <= CORNER_SLOP;
@@ -136,8 +145,9 @@ function holesFor(pages: ShownPage[], underlays: Underlay[], view: Window): Hole
       if (near(box.right, right) && near(box.bottom, bottom)) corners[2] = Math.max(corners[2], radii[2]);
       if (near(box.left, page.x) && near(box.bottom, bottom)) corners[3] = Math.max(corners[3], radii[3]);
     }
-    return { ...page, corners };
-  });
+    holes.set(key, { ...page, corners });
+  }
+  return holes;
 }
 
 const round = (value: number) => Math.round(value * 100) / 100;
@@ -151,13 +161,24 @@ function holePath(hole: Hole, left: number, top: number): string {
   return `M${x + tl},${y} H${x + w - tr} A${tr},${tr} 0 0 1 ${x + w},${y + tr} V${y + h - br} A${br},${br} 0 0 1 ${x + w - br},${y + h} H${x + bl} A${bl},${bl} 0 0 1 ${x},${y + h - bl} V${y + tl} A${tl},${tl} 0 0 1 ${x + tl},${y} Z`;
 }
 
-function cut(underlays: Underlay[], holes: Hole[]) {
-  for (const { element } of underlays) {
+const contains = (outer: ShownPage, inner: ShownPage) =>
+  outer.x <= inner.x && outer.y <= inner.y && outer.x + outer.width >= inner.x + inner.width && outer.y + outer.height >= inner.y + inner.height;
+
+function outermost(holes: Hole[]): Hole[] {
+  return holes.filter((hole, index) => !holes.some((other, at) => at !== index && contains(other, hole) && (!contains(hole, other) || at < index)));
+}
+
+function cut(underlays: Underlay[], holes: Map<string, Hole>) {
+  for (const { element, under } of underlays) {
     const box = element.getBoundingClientRect();
     const left = box.left + element.clientLeft;
     const top = box.top + element.clientTop;
     const outer = `M-1,-1 H${round(box.width + 2)} V${round(box.height + 2)} H-1 Z`;
-    const inside = holes.filter((hole) => intersects(box, hole)).map((hole) => holePath(hole, left, top));
+    const meeting = [...under].flatMap((key) => {
+      const hole = holes.get(key);
+      return hole && intersects(box, hole) ? [hole] : [];
+    });
+    const inside = outermost(meeting).map((hole) => holePath(hole, left, top));
     element.style.setProperty("--ardia-underlay-clip", inside.length ? `path(evenodd, "${outer} ${inside.join(" ")}")` : "none");
   }
 }
@@ -184,8 +205,8 @@ function update(windowId: string) {
   const doc = appWindowDocument(windowId);
   const view = doc?.defaultView;
   if (!doc || !view) return;
-  const pages = [...slots.pages.values()];
-  if (!pages.length) {
+  const pages = slots.pages;
+  if (!pages.size) {
     for (const { element } of slots.underlays) unmark(element);
     for (const element of slots.frosted) unfrost(element);
     slots.underlays = [];

@@ -11,6 +11,7 @@
 #include "ardia/linux/host/host.h"
 #include "ardia/linux/host/key_map.h"
 #include "ardia/linux/log.h"
+#include "ardia/linux/modules/focus_return.h"
 #include "base/base64.h"
 #include "base/functional/bind.h"
 #include "base/memory/ref_counted_memory.h"
@@ -596,6 +597,7 @@ void AppWindow::OnWidgetDestroying(views::Widget* widget) {
   if (closing_) {
     return;
   }
+  const bool was_active = widget->IsActive();
   closing_ = true;
   fade_timer_.Stop();
   frame_timer_.Stop();
@@ -608,6 +610,9 @@ void AppWindow::OnWidgetDestroying(views::Widget* widget) {
   }
   view_ = nullptr;
   AppWindows::Get().WindowClosed(this);
+  if (was_active) {
+    ReturnFocusSoon();
+  }
 }
 
 void AppWindow::EmitFrameSoon() {

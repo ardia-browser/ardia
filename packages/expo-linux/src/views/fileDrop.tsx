@@ -68,7 +68,7 @@ function itemsOf(transfer: DataTransfer, accepts: Accepts): DroppedItem[] {
   const files = [...transfer.files];
   if (files.length) {
     const linux = bridge();
-    const paths = files.map((file) => linux?.pathForFile?.(file) ?? "").filter(Boolean);
+    const paths = files.map((file) => linux?.pathForFile?.(file) ?? file.name).filter(Boolean);
     return callMainSync<DroppedItem[]>("ArdiaLinuxFileDrop", "droppedFiles", paths, accepts) ?? [];
   }
   if (accepts === "extensionPackages") return [];

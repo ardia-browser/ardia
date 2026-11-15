@@ -37,6 +37,8 @@ class ContentBrowserClient : public ChromeContentBrowserClient {
                        bool user_gesture,
                        bool opener_suppressed,
                        bool* no_javascript_access) override;
+  std::unique_ptr<content::WebContentsViewDelegate> GetWebContentsViewDelegate(
+      content::WebContents* web_contents) override;
   void ConfigureNetworkContextParams(
       content::BrowserContext* context,
       bool in_memory,

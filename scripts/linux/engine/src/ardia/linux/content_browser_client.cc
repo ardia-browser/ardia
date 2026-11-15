@@ -5,10 +5,12 @@
 #include <utility>
 
 #include "ardia/linux/main_parts.h"
+#include "ardia/linux/modules/file_drop.h"
 #include "ardia/linux/ui_host/ui_host_parts.h"
 #include "chrome/browser/chrome_browser_main.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_main_parts.h"
+#include "content/public/browser/web_contents_view_delegate.h"
 #include "services/cert_verifier/public/mojom/cert_verifier_service_factory.mojom.h"
 #include "services/network/public/mojom/network_context.mojom.h"
 #include "third_party/blink/public/mojom/window_features/window_features.mojom.h"
@@ -66,6 +68,15 @@ bool ContentBrowserClient::CanCreateWindow(
       opener, opener_url, opener_top_level_frame_url, source_origin,
       container_type, target_url, referrer, frame_name, disposition, features,
       user_gesture, opener_suppressed, no_javascript_access);
+}
+
+std::unique_ptr<content::WebContentsViewDelegate>
+ContentBrowserClient::GetWebContentsViewDelegate(
+    content::WebContents* web_contents) {
+  if (IsAppUiContents(web_contents)) {
+    return CreateAppUiViewDelegate(web_contents);
+  }
+  return ChromeContentBrowserClient::GetWebContentsViewDelegate(web_contents);
 }
 
 void ContentBrowserClient::ConfigureNetworkContextParams(

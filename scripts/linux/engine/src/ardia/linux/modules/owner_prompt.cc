@@ -7,6 +7,7 @@
 #include <string>
 #include <utility>
 
+#include "ardia/linux/modules/focus_return.h"
 #include "ardia/linux/modules/launch_config.h"
 #include "ardia/linux/modules/owner_check_core.h"
 #include "ardia/linux/modules/owner_window.h"
@@ -30,6 +31,7 @@
 #include "ui/views/controls/textfield/textfield.h"
 #include "ui/views/layout/box_layout.h"
 #include "ui/views/layout/box_layout_view.h"
+#include "ui/views/layout/layout_provider.h"
 #include "ui/views/style/typography.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_observer.h"
@@ -59,6 +61,11 @@ views::Widget* ShowDialog(std::unique_ptr<views::DialogDelegate> dialog) {
   return widget;
 }
 
+gfx::Insets BodyMargins(views::DialogContentType trailing) {
+  return views::LayoutProvider::Get()->GetDialogInsetsForContentType(
+      views::DialogContentType::kText, trailing);
+}
+
 std::unique_ptr<views::Label> BodyLabel(const std::u16string& text,
                                         int style) {
   auto label = std::make_unique<views::Label>(
@@ -75,6 +82,7 @@ class WindowOwnerPrompt : public OwnerPrompt, public views::WidgetObserver {
     dialog->SetTitle(base::UTF8ToUTF16("Ardia wants to " + reason + "."));
     dialog->SetShowCloseButton(false);
     dialog->set_fixed_width(kPromptWidth);
+    dialog->set_margins(BodyMargins(views::DialogContentType::kText));
     dialog->SetButtonLabel(ui::mojom::DialogButton::kOk, u"OK");
     dialog->SetButtonLabel(ui::mojom::DialogButton::kCancel, u"Cancel");
     dialog->SetAcceptCallbackWithClose(base::BindRepeating(
@@ -121,6 +129,9 @@ class WindowOwnerPrompt : public OwnerPrompt, public views::WidgetObserver {
       dialog_ = nullptr;
       field_ = nullptr;
       error_ = nullptr;
+      if (widget->IsActive()) {
+        ReturnFocusSoon();
+      }
       widget->CloseWithReason(views::Widget::ClosedReason::kUnspecified);
     }
   }
@@ -159,6 +170,9 @@ class WindowOwnerPrompt : public OwnerPrompt, public views::WidgetObserver {
   }
 
   void OnWidgetDestroying(views::Widget* widget) override {
+    if (widget->IsActive()) {
+      ReturnFocusSoon();
+    }
     observation_.Reset();
     widget_ = nullptr;
     dialog_ = nullptr;
@@ -246,6 +260,7 @@ class WindowOwnerPromptUi : public OwnerPromptUi {
         u"Ardia can't check your login password on this system.");
     dialog->SetShowCloseButton(false);
     dialog->set_fixed_width(kPromptWidth);
+    dialog->set_margins(BodyMargins(views::DialogContentType::kText));
     dialog->SetButtons(static_cast<int>(ui::mojom::DialogButton::kOk));
     dialog->SetButtonLabel(ui::mojom::DialogButton::kOk, u"OK");
     dialog->SetContentsView(BodyLabel(

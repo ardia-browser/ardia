@@ -60,8 +60,15 @@ bool KeepsWindowWithoutTabs(const BrowserWindowInterface* browser) {
   return Host::Get()->Keeps(browser);
 }
 
+void DevToolsDockChanged(BrowserWindowInterface* browser,
+                         content::WebContents* inspected,
+                         content::WebContents* devtools) {
+  Host::Get()->DevToolsDockChanged(inspected, devtools);
+}
+
 void InstallChromeHooks() {
   g_ardia_viewless_browsers = true;
+  g_ardia_devtools_dock_changed = &DevToolsDockChanged;
   g_ardia_browser_window_factory = &WindowForChromeBrowser;
   g_ardia_create_web_contents_delegate = &CreateWebContentsDelegate;
   g_ardia_keeps_window_without_tabs = &KeepsWindowWithoutTabs;

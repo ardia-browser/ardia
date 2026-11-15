@@ -65,6 +65,8 @@ class Host : public TabStripModelObserver, public BrowserCollectionObserver {
   std::optional<gfx::Rect> PlaceOf(content::WebContents* contents) const;
   void WindowClosing(const std::string& window);
   void WindowActivated(const std::string& window);
+  void DevToolsDockChanged(content::WebContents* inspected,
+                           content::WebContents* devtools);
   void WindowMoved(const std::string& window);
   void WindowFullscreenChanged(const std::string& window);
   void PagePressed(const std::string& window, const std::string& key);

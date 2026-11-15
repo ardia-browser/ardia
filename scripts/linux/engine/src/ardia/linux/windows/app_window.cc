@@ -14,6 +14,8 @@
 #include "ardia/linux/modules/app_modules.h"
 #include "ardia/linux/modules/focus_return.h"
 #include "base/base64.h"
+#include "chrome/browser/devtools/devtools_contents_resizing_strategy.h"
+#include "chrome/browser/devtools/devtools_window.h"
 #include "base/functional/bind.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/strings/string_number_conversions.h"
@@ -163,25 +165,72 @@ bool AppWindowView::PagesUnderUi() {
   return !ardiacore::TestFlag("pagesAboveUi");
 }
 
+AppWindowView::Placement::Placement() = default;
+AppWindowView::Placement::Placement(const Placement&) = default;
+AppWindowView::Placement& AppWindowView::Placement::operator=(
+    const Placement&) = default;
+AppWindowView::Placement::~Placement() = default;
+
 void AppWindowView::PlacePage(const std::string& key,
                               const gfx::Rect& bounds,
                               int radius,
                               const std::vector<RoundedArea>& holes) {
+  Placement& placement = placements_[key];
+  placement.bounds = bounds;
+  placement.radius = radius;
+  placement.holes = holes;
+  RelayoutPage(key);
+}
+
+void AppWindowView::RelayoutPage(const std::string& key) {
   views::WebView* page = PageView(key);
-  if (!page) {
+  auto placed = placements_.find(key);
+  if (!page || placed == placements_.end()) {
     return;
   }
-  page->SetBoundsRect(bounds);
+  const Placement& placement = placed->second;
+  gfx::Rect page_bounds = placement.bounds;
+  views::WebView* devtools = DevToolsView(key);
+  DevToolsContentsResizingStrategy strategy;
+  content::WebContents* docked =
+      page->web_contents()
+          ? DevToolsWindow::GetInTabWebContents(page->web_contents(),
+                                                &strategy)
+          : nullptr;
+  if (devtools && docked && devtools->web_contents() == docked) {
+    gfx::Rect devtools_bounds;
+    gfx::Rect inspected_bounds;
+    ApplyDevToolsContentsResizingStrategy(
+        strategy, gfx::Rect(placement.bounds.size()), &devtools_bounds,
+        &inspected_bounds);
+    devtools_bounds.Offset(placement.bounds.OffsetFromOrigin());
+    inspected_bounds.Offset(placement.bounds.OffsetFromOrigin());
+    devtools->SetBoundsRect(devtools_bounds);
+    devtools->SetVisible(true);
+    Shape(devtools, devtools_bounds, placement);
+    page_bounds = inspected_bounds;
+  } else if (devtools) {
+    devtools->SetVisible(false);
+  }
+  page->SetBoundsRect(page_bounds);
   page->SetVisible(true);
-  const float corner = static_cast<float>(std::max(0, radius));
-  page->holder()->SetNativeViewCornerRadii(gfx::RoundedCornersF(corner));
+  Shape(page, page_bounds, placement);
+}
+
+void AppWindowView::Shape(views::WebView* view,
+                          const gfx::Rect& view_bounds,
+                          const Placement& placement) {
+  const float corner = static_cast<float>(std::max(0, placement.radius));
+  view->holder()->SetNativeViewCornerRadii(gfx::RoundedCornersF(corner));
   if (PagesUnderUi()) {
     return;
   }
   SkPath shape = SkPath::RRect(
-      SkRect::MakeWH(bounds.width(), bounds.height()), corner, corner);
-  for (const RoundedArea& hole : holes) {
-    const gfx::RectF cut = hole.rect - gfx::Vector2dF(bounds.x(), bounds.y());
+      SkRect::MakeWH(view_bounds.width(), view_bounds.height()), corner,
+      corner);
+  for (const RoundedArea& hole : placement.holes) {
+    const gfx::RectF cut =
+        hole.rect - gfx::Vector2dF(view_bounds.x(), view_bounds.y());
     const SkPath hole_path = SkPath::RRect(
         SkRect::MakeXYWH(cut.x(), cut.y(), cut.width(), cut.height()),
         hole.radius, hole.radius);
@@ -190,10 +239,43 @@ void AppWindowView::PlacePage(const std::string& key,
       shape = std::move(*cut_shape);
     }
   }
-  page->holder()->SetClipPath(shape);
+  view->holder()->SetClipPath(shape);
+}
+
+views::WebView* AppWindowView::DevToolsView(const std::string& key) const {
+  auto found = devtools_.find(key);
+  return found == devtools_.end() ? nullptr : found->second.get();
+}
+
+void AppWindowView::SetDevTools(const std::string& key,
+                                content::WebContents* devtools) {
+  views::WebView* page = PageView(key);
+  views::WebView* view = DevToolsView(key);
+  if (!page || !devtools) {
+    if (view) {
+      devtools_.erase(key);
+      view->SetWebContents(nullptr);
+      RemoveChildViewT(view);
+    }
+    RelayoutPage(key);
+    return;
+  }
+  if (!view) {
+    const std::optional<size_t> page_index = GetIndexOf(page);
+    view = AddChildViewAt(std::make_unique<views::WebView>(nullptr),
+                          page_index.value_or(0));
+    view->SetVisible(false);
+    devtools_[key] = view;
+  }
+  if (view->web_contents() != devtools) {
+    view->SetWebContents(devtools);
+  }
+  RelayoutPage(key);
 }
 
 void AppWindowView::RemovePage(const std::string& key) {
+  SetDevTools(key, nullptr);
+  placements_.erase(key);
   auto found = pages_.find(key);
   if (found == pages_.end()) {
     return;
@@ -225,6 +307,13 @@ views::View* AppWindowView::TargetForRect(views::View* root,
   const std::string key =
       window_->input_region().PageAt(rect.CenterPoint());
   views::WebView* page = key.empty() ? nullptr : PageView(key);
+  views::WebView* devtools = key.empty() ? nullptr : DevToolsView(key);
+  if (devtools && devtools->GetVisible() &&
+      devtools->bounds().Contains(rect.CenterPoint()) &&
+      !(page && page->GetVisible() &&
+        page->bounds().Contains(rect.CenterPoint()))) {
+    return devtools->holder();
+  }
   views::WebView* target = page && page->GetVisible() ? page : ui_view_.get();
   return target->holder();
 }

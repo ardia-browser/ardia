@@ -13,6 +13,7 @@
 #include "ardia/linux/browser_window/browser_window.h"
 #include "ardia/linux/log.h"
 #include "ardia/linux/modules/app_modules.h"
+#include "chrome/browser/devtools/devtools_window.h"
 #include "ardia/linux/prompts/page_helpers.h"
 #include "ardia/linux/prompts/prompts.h"
 #include "ardia/linux/browser_window/web_contents_delegate.h"
@@ -477,6 +478,8 @@ base::DictValue Host::ShowTab(const base::DictValue& args,
     }
   }
   app->view()->AddPage(key, contents);
+  app->view()->SetDevTools(
+      key, DevToolsWindow::GetInTabWebContents(contents, nullptr));
   app->view()->PlacePage(key, place, static_cast<int>(std::lround(radius)),
                          holes);
   RoundedArea area;
@@ -685,6 +688,23 @@ void Host::WindowActivated(const std::string& window) {
                          ? &Host::ApplyWantedKeyboard
                          : &Host::KeyboardToWindowIfUnfocused,
                      weak_factory_.GetWeakPtr(), window));
+}
+
+void Host::DevToolsDockChanged(content::WebContents* inspected,
+                               content::WebContents* devtools) {
+  TabState* state = inspected ? TabState::FromWebContents(inspected) : nullptr;
+  auto shown = state ? shown_.find(state->key()) : shown_.end();
+  if (shown == shown_.end()) {
+    return;
+  }
+  AppWindow* app = AppWindows::Get().Find(shown->second.window);
+  if (!app || !app->view()) {
+    return;
+  }
+  if (devtools) {
+    CountLinux("devToolsDocked");
+  }
+  app->view()->SetDevTools(state->key(), devtools);
 }
 
 void Host::KeyboardToWindowIfUnfocused(const std::string& window) {

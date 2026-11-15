@@ -53,6 +53,8 @@ class AppWindowView : public views::View,
                  const gfx::Rect& bounds,
                  int radius,
                  const std::vector<RoundedArea>& holes);
+  void SetDevTools(const std::string& key, content::WebContents* devtools);
+  void RelayoutPage(const std::string& key);
   static bool PagesUnderUi();
   void RemovePage(const std::string& key);
   std::vector<std::string> PageKeys() const;
@@ -67,9 +69,27 @@ class AppWindowView : public views::View,
       ui::mojom::MenuSourceType source_type) override;
 
  private:
+  struct Placement {
+    Placement();
+    Placement(const Placement&);
+    Placement& operator=(const Placement&);
+    ~Placement();
+
+    gfx::Rect bounds;
+    int radius = 0;
+    std::vector<RoundedArea> holes;
+  };
+
+  void Shape(views::WebView* view,
+             const gfx::Rect& view_bounds,
+             const Placement& placement);
+  views::WebView* DevToolsView(const std::string& key) const;
+
   raw_ptr<AppWindow> window_;
   raw_ptr<views::WebView> ui_view_ = nullptr;
   std::map<std::string, raw_ptr<views::WebView>> pages_;
+  std::map<std::string, raw_ptr<views::WebView>> devtools_;
+  std::map<std::string, Placement> placements_;
   gfx::Size minimum_size_;
 };
 

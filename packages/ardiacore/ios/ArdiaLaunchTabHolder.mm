@@ -1,11 +1,13 @@
 #import "ArdiaLaunchTabHolder.h"
 #import "ArdiaWebViewInternal.h"
+#import "ArdiaRuntime.h"
 #import "ArdiaEarlyWindow.h"
 #import "ArdiaNavigationDownloads.h"
 
 #import <objc/runtime.h>
 
 using namespace ardia_web_view;
+using namespace ardia_runtime;
 
 @implementation ArdiaLaunchTabHolder {
   NSMutableArray<NSInvocation *> *_calls;
@@ -28,7 +30,7 @@ static const NSUInteger kHeldPageStateTotalBytes = 256 * 1024;
 }
 
 - (void)holdPageMessage:(NSString *)kind json:(NSString *)json frame:(NSString *)frame main:(BOOL)main origin:(NSString *)origin {
-  if (![@[ @"hello", @"theme", @"media", @"nowPlaying" ] containsObject:kind ?: @""]) return;
+  if (![@[ @"hello", @"theme", @"media", @"nowPlaying", @"appBadge" ] containsObject:kind ?: @""]) return;
   if ([kind isEqualToString:@"hello"]) {
     NSString *from = frame ?: @"";
     [self forgetHeldPageStateWhere:^BOOL(NSDictionary *held) { return main || [held[@"frame"] isEqualToString:from]; }];
@@ -37,7 +39,7 @@ static const NSUInteger kHeldPageStateTotalBytes = 256 * 1024;
   if (bytes > kHeldPageStateBytes) return;
   NSString *key = [NSString stringWithFormat:@"%@|%@", frame ?: @"", kind];
   if ([kind isEqualToString:@"media"]) {
-    id value = JSONValue(json);
+    id value = JSONObject(json);
     NSString *mediaFrame = [value isKindOfClass:NSDictionary.class] ? Text(value, @"frame", 64) : nil;
     if (!mediaFrame) return;
     key = [key stringByAppendingFormat:@"|%@", mediaFrame];
@@ -93,10 +95,7 @@ static BOOL HeldSelector(SEL selector) {
     [invocation getArgument:&main atIndex:6];
     __unsafe_unretained NSString *origin = nil;
     [invocation getArgument:&origin atIndex:7];
-    if ([kind isEqualToString:@"hello"]) {
-      id hello = JSONValue(json);
-      AnswerHello(tab, _profile, [hello isKindOfClass:NSDictionary.class] ? hello : nil, frame ?: @"", main);
-    }
+    if ([kind isEqualToString:@"hello"]) AnswerHello(tab, _profile, frame ?: @"", main, origin);
     [self holdPageMessage:kind json:json frame:frame main:main origin:origin];
     return;
   }

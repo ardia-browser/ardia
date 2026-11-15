@@ -1,16 +1,15 @@
 import { Surface } from "@ardia/shell";
 import { useEffect, useRef, useState } from "react";
 import { Animated, Text } from "react-native";
-import { hex, useTheme } from "./theme";
-import { hairline, shadow } from "./tokens";
-import { curve } from "./motion";
+import { hex, surfaceTheme, useTheme } from "./theme";
+import { font, hairline, shadow, TOOLTIP, weight } from "./tokens";
+import { curve, duration } from "./motion";
 
 const SHOW_DELAY_MS = 500;
-const FADE_MS = 100;
+const FADE_MS = duration.fast;
 const FADE_EASING = curve.fade;
 const SPAN = 280;
 const RING = hairline.ring;
-const RADIUS = 4;
 
 function useShownAfterDelay(active: boolean) {
   const [shown, setShown] = useState(false);
@@ -26,7 +25,7 @@ function useShownAfterDelay(active: boolean) {
 }
 
 export function TooltipAbove({ text, active, centerX, bottom }: { text: string; active: boolean; centerX: number; bottom: number }) {
-  const theme = useTheme();
+  const theme = surfaceTheme(useTheme());
   const shown = useShownAfterDelay(active && text.length > 0);
   const opacity = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -42,7 +41,7 @@ export function TooltipAbove({ text, active, centerX, bottom }: { text: string; 
   return (
     <Animated.View pointerEvents="none" style={{ position: "absolute", left: centerX - SPAN / 2, width: SPAN, bottom: bottom - RING, alignItems: "center", opacity }}>
       <Surface
-        cornerRadius={RADIUS + RING}
+        cornerRadius={TOOLTIP.radius + RING}
         borderColor={hex(theme.tooltipRing)}
         borderWidth={RING}
         shadowColor={shadow.tooltip.color}
@@ -53,12 +52,12 @@ export function TooltipAbove({ text, active, centerX, bottom }: { text: string; 
       >
         <Surface
           fill={hex(theme.tooltipFill)}
-          cornerRadius={RADIUS}
+          cornerRadius={TOOLTIP.radius}
           borderColor={hex(theme.panelBorder)}
           borderWidth={1}
-          style={{ paddingHorizontal: 6.5, paddingVertical: 5 }}
+          style={{ paddingHorizontal: TOOLTIP.padX, paddingVertical: TOOLTIP.padY }}
         >
-          <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: "500", color: theme.tooltipText }}>
+          <Text numberOfLines={1} style={{ ...font.small, fontWeight: weight.medium, color: theme.tooltipText }}>
             {text}
           </Text>
         </Surface>

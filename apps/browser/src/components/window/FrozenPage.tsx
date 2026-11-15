@@ -9,7 +9,7 @@ import { notePainted, startPinHandoff, useFrozenPages } from "../../state/pins/p
 export function FrozenPage({ windowId, tabId, top }: { windowId: string; tabId: string | undefined; top: number }) {
   const theme = useTheme();
   useEffect(startPinHandoff, []);
-  const frozen = useTab(tabId, (t) => !!t?.pageIn);
+  const frozen = useTab(tabId, (t) => t?.page.kind === "frozen");
   const pass = useFrozenPages((f) => f.bridges[windowId]);
   const copyId = frozen ? tabId : pass?.copyId;
   const uri = useFrozenPages((f) => (copyId ? f.frames[copyId] : undefined)) ?? pass?.uri;
@@ -22,7 +22,7 @@ export function FrozenPage({ windowId, tabId, top }: { windowId: string; tabId: 
       }}
       style={[StyleSheet.absoluteFill, { top }]}
     >
-      {uri && <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" onLoad={() => notePainted(windowId)} />}
+      {uri && <Image testID="ardia.pagePicture" source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" onLoad={() => notePainted(windowId)} />}
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: windowColors(theme.dark).frozenWash }]} />
     </Pressable>
   );

@@ -1,18 +1,14 @@
 #import "ArdiaPictureInPicture.h"
 #import "ArdiaWebViewInternal.h"
+#import "ArdiaPiPThrowMath.h"
 
 #include <vector>
-
-namespace ardia_pip_throw {
-struct Point;
-struct Rect;
-struct Screen;
-}
 
 @interface NSWindow (ArdiaPreventsActivation)
 - (void)_setPreventsActivation:(BOOL)prevents;
 - (BOOL)_preventsActivation;
 - (NSInteger)_resizeDirectionForMouseLocation:(NSPoint)location;
+- (BOOL)_isNonactivatingPanel;
 @end
 
 namespace ardia_pip {
@@ -20,7 +16,7 @@ namespace ardia_pip {
 constexpr CGFloat kPeek = 28;
 constexpr CGFloat kReturnMargin = 16;
 constexpr CGFloat kButtonMargin = 12, kButtonSize = 28;
-constexpr CGFloat kCornerRadius = 6;
+constexpr CFTimeInterval kCornerBendDuration = 0.2;
 constexpr CGFloat kRimAlpha = 0.17;
 
 }
@@ -49,15 +45,14 @@ typedef NS_ENUM(NSInteger, ArdiaPiPEdge) { ArdiaPiPEdgeNone = 0, ArdiaPiPEdgeLef
 @property (nonatomic) BOOL keepOnTop;
 + (instancetype)forWindow:(NSWindow *)window;
 - (instancetype)initWithWindow:(NSWindow *)window;
-- (void)setVideoFrame:(NSString *)frameId;
 - (void)roundCorners;
+- (CGFloat)cornerRadius;
 - (void)backToTab;
 - (void)unstash;
 - (NSMenu *)menu;
 - (void)stopMotion;
 - (void)abandonSwipe;
 - (NSScreen *)gestureHome;
-- (void)dragReleasedAt:(NSPoint)pointer velocity:(NSPoint)velocity;
 - (NSDictionary *)throwInfo;
 @end
 
@@ -69,7 +64,6 @@ typedef NS_ENUM(NSInteger, ArdiaPiPEdge) { ArdiaPiPEdgeNone = 0, ArdiaPiPEdgeLef
   ArdiaPiPEdge _stashedEdge;
   BOOL _keepOnTop;
   NSMutableArray *_observers;
-  NSString *_frameId;
   NSTimer *_slide;
   BOOL _animating;
   BOOL _sawDrag;
@@ -80,9 +74,24 @@ typedef NS_ENUM(NSInteger, ArdiaPiPEdge) { ArdiaPiPEdgeNone = 0, ArdiaPiPEdgeLef
   CFTimeInterval _swipeBeganAt;
   NSTimeInterval _swipeLastAt;
   NSRect _swipeStart;
+  BOOL _dragging;
+  BOOL _dragMoving;
+  NSPoint _dragGrab;
+  NSPoint _dragFrom;
+  NSTimeInterval _dragBeganAt;
+  NSInteger _dragOffCursor;
+  double _dragMaxOff;
+  double _dragSlowestMove;
+  NSMutableArray *_dragTrace;
+  std::vector<ardia_pip_throw::Sample> _dragSamples;
+  __weak NSScreen *_dragHome;
+  NSDictionary *_lastDrag;
   NSDictionary *_lastRelease;
+  NSDictionary *_lastSkip;
+  NSInteger _skips;
   NSDictionary *_lastSwipe;
   NSMutableDictionary *_lastThrow;
+  NSDictionary *_lastScreenFit;
   __weak NSScreen *_lastScreen;
   __weak NSScreen *_swipeHome;
   __weak NSScreen *_stashScreen;
@@ -91,6 +100,9 @@ typedef NS_ENUM(NSInteger, ArdiaPiPEdge) { ArdiaPiPEdgeNone = 0, ArdiaPiPEdgeLef
 - (void)toggleKeepOnTop:(id)sender;
 - (void)backToTabFromMenu:(id)sender;
 - (void)windowMoved;
+- (void)fitCorners:(BOOL)animated;
+- (void)bendCornersTo:(CGFloat)radius animated:(BOOL)animated;
+- (void)screenChanged;
 - (NSScreen *)homeScreen;
 - (ArdiaPiPEdge)edgeBeyond;
 - (BOOL)throwFrom:(NSPoint)grab velocity:(NSPoint)velocity;
@@ -104,13 +116,29 @@ typedef NS_ENUM(NSInteger, ArdiaPiPEdge) { ArdiaPiPEdgeNone = 0, ArdiaPiPEdgeLef
 - (void)moveBy:(ardia_pip_throw::Point)delta;
 - (void)swipeMoved:(NSEvent *)event;
 - (void)swipeEnded:(NSEvent *)event cancelled:(BOOL)cancelled;
+- (void)dragReleasedAt:(NSPoint)pointer velocity:(NSPoint)velocity;
+@end
+
+@interface ArdiaPiPController (Workspaces)
+@end
+
+@interface ArdiaPiPController (Placement)
 @end
 
 @interface ArdiaPiPController (Swipe)
 + (BOOL)handleSwipe:(NSEvent *)event;
 + (void)abandonSwipeOn:(NSWindow *)window;
+- (void)dragBegan:(NSEvent *)event;
+- (void)followPointer:(NSEvent *)event;
+- (void)dragMoved:(NSEvent *)event;
+- (void)dragEnded:(NSEvent *)event;
 - (void)devSwipe:(NSArray<NSString *> *)args;
 - (void)devDrag:(NSArray<NSString *> *)args;
+@end
+
+@interface ArdiaPiPController (Skip)
+- (BOOL)skipBy:(double)seconds at:(NSPoint)point clickCount:(NSInteger)clickCount;
+- (NSDictionary *)skipInfo;
 @end
 
 @interface ArdiaPiPController (SelfTest)
@@ -118,6 +146,7 @@ typedef NS_ENUM(NSInteger, ArdiaPiPEdge) { ArdiaPiPEdgeNone = 0, ArdiaPiPEdgeLef
 - (void)runSelfTest;
 - (void)runButtonSelfTest:(NSString *)button;
 - (void)runHoverSelfTest;
+- (void)devMouse:(NSArray<NSString *> *)args;
 @end
 
 @interface ArdiaPiPZoom : NSObject
@@ -131,6 +160,8 @@ extern const void *const kZoomKey;
 BOOL IsChromeFloatingWindow(NSWindow *window);
 BOOL IsChromeVideoPictureInPicture(NSWindow *window);
 BOOL IsChromeDocumentPictureInPicture(NSWindow *window);
+BOOL JoinsFullScreenSpaces(NSWindow *window);
+void JoinFullScreenSpaces(NSWindow *window);
 NSScreen *ScreenFor(NSRect frame);
 void PreventActivation(NSWindow *window);
 BOOL PreventsActivation(NSWindow *window);

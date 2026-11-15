@@ -12,6 +12,8 @@ final class DockSelection: ExpoView {
   var dark = true { didSet { apply() } }
   var iconSize: Double = 16 { didSet { apply() } }
   var glass = false { didSet { if glass != oldValue { apply() } } }
+  var colorRing = false { didSet { if colorRing != oldValue { apply() } } }
+  var outline = false { didSet { if outline != oldValue { apply() } } }
 
   private let tile = CALayer()
   private let background = CALayer()
@@ -90,49 +92,74 @@ final class DockSelection: ExpoView {
       layer.insertSublayer(sheen, above: hue)
       layer.insertSublayer(rim, above: sheen)
     }
-    for dia in [tile, ring, icon] { dia.isHidden = glass }
-    for glassLayer in [lift, hue, sheen, rim] { glassLayer.isHidden = !glass }
+    for dia in [tile, icon] { dia.isHidden = glass || outline }
+    ring.isHidden = glass && !colorRing
+    for glassLayer in [hue, sheen] { glassLayer.isHidden = !glass || outline }
+    lift.isHidden = !glass || colorRing
+    rim.isHidden = !glass || colorRing
     let radius = min(cornerRadius, bounds.width / 2)
     let scale = window?.backingScaleFactor ?? 2
     let width = (strokeWidth * scale).rounded() / scale
     let big = bounds.insetBy(dx: -bounds.width * 0.75, dy: -bounds.height * 0.75)
-    if glass { return applyGlass(radius: radius, rimWidth: width, big: big) }
-    for shape in [tile, ring, ringMask] {
+    let blurred = kind == "blur" ? source.flatMap(BlurredIcon.of) : nil
+    if glass {
+      applyGlass(radius: radius, rimWidth: width, big: big)
+      if colorRing { applyRing(radius: radius, width: width, big: big, blurred: blurred) }
+      return
+    }
+    tile.frame = bounds
+    tile.cornerRadius = radius
+    tile.cornerCurve = .continuous
+    background.frame = bounds
+    tint.frame = big
+    icon.frame = CGRect(x: (bounds.width - iconSize) / 2, y: (bounds.height - iconSize) / 2, width: iconSize, height: iconSize)
+    icon.contents = kind == "template" ? source.flatMap(TemplateIcon.of) : nil
+    applyRing(radius: radius, width: width, big: big, blurred: blurred)
+
+    if let blurred {
+      background.backgroundColor = NSColor.white.withAlphaComponent(dark ? 0.2 : 1).cgColor
+      tint.contents = blurred.plain
+      tint.isHidden = false
+    } else {
+      background.backgroundColor = fill?.cgColor
+      tint.contents = nil
+      tint.isHidden = true
+    }
+  }
+
+  private func applyRing(radius: CGFloat, width: CGFloat, big: CGRect, blurred: BlurredIcon?) {
+    for shape in [ring, ringMask] {
       shape.frame = bounds
       shape.cornerRadius = radius
       shape.cornerCurve = .continuous
     }
-    background.frame = bounds
-    tint.frame = big
     ringImage.frame = big
     ringMask.borderWidth = width
-    icon.frame = CGRect(x: (bounds.width - iconSize) / 2, y: (bounds.height - iconSize) / 2, width: iconSize, height: iconSize)
-    icon.contents = kind == "template" ? source.flatMap(TemplateIcon.of) : nil
-
-    let blurred = kind == "blur" ? source.flatMap(BlurredIcon.of) : nil
     if let blurred {
-      background.backgroundColor = glass ? nil : NSColor.white.withAlphaComponent(dark ? 0.2 : 1).cgColor
-      tint.contents = blurred.plain
-      tint.isHidden = false
+      let bright = glass && colorRing
       ring.mask = ringMask
-      ring.backgroundColor = (dark ? NSColor.black : NSColor.white).cgColor
+      ring.backgroundColor = bright ? nil : (dark ? NSColor.black : NSColor.white).cgColor
       ring.borderWidth = 0
       ring.compositingFilter = nil
-      ringImage.contents = dark ? blurred.darkRing : blurred.plain
-      ringImage.opacity = dark ? 0.75 : 1
+      ringImage.contents = dark && !bright ? blurred.darkRing : blurred.plain
+      ringImage.opacity = dark && !bright ? 0.75 : 1
       ringImage.isHidden = false
     } else {
-      background.backgroundColor = glass ? nil : fill?.cgColor
-      tint.contents = nil
-      tint.isHidden = true
       ring.mask = nil
       ring.backgroundColor = nil
+      let opaque = ringStroke
       ring.borderWidth = width
-      ring.borderColor = (stroke ?? .white).cgColor
-      ring.compositingFilter = stroke == nil ? CIFilter(name: "CISoftLightBlendMode") : nil
+      ring.borderColor = opaque ?? NSColor.white.cgColor
+      ring.compositingFilter = opaque == nil ? CIFilter(name: "CISoftLightBlendMode") : nil
       ringImage.contents = nil
       ringImage.isHidden = true
     }
+  }
+
+  private var ringStroke: CGColor? {
+    if let stroke { return stroke.cgColor }
+    guard !glass, kind == "template", let fill, IconTheme.needsOpaqueRing(fill.cgColor) else { return nil }
+    return IconTheme.ringOnBlack
   }
 
   private func applyGlass(radius: CGFloat, rimWidth: CGFloat, big: CGRect) {
@@ -161,7 +188,7 @@ final class DockSelection: ExpoView {
     hueImage.frame = big.offsetBy(dx: -bounds.minX, dy: -bounds.minY)
     hueImage.contents = glow
     hue.backgroundColor = color
-    hue.isHidden = glow == nil && color == nil
+    hue.isHidden = outline || (glow == nil && color == nil)
     hue.opacity = dark ? 0.35 : 0.3
 
     sheen.colors = [NSColor.white.withAlphaComponent(dark ? 0.12 : 0.4).cgColor, NSColor.white.withAlphaComponent(0).cgColor]

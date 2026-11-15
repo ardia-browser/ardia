@@ -81,3 +81,209 @@ test("media that never played with sound gets no sidebar player until it does", 
   media.setNowPlaying(feed, report({ title: "Home / X", controllable: false }));
   assert.equal(pick(), undefined, "another muted video took over the page");
 });
+
+test("play on a sleeping tab reloads it and resumes where it paused", async () => {
+  const { useLifecycle } = await import("../tabs/sleepingTabs.ts");
+  S().hydrate({});
+  const w = S().createWindow({ url: "a.com" });
+  const b = S().newTab(w, { url: "b.com", background: true });
+  const sent = [];
+  let reloads = 0;
+  webviews.set(b, { reload: async () => void reloads++, mediaCommand: async (action, seconds) => void sent.push([action, seconds]) });
+  media.setNowPlaying(b, report());
+  media.setNowPlaying(b, report({ playbackState: "paused", position: 95 }));
+  useLifecycle.setState({ discarded: { [b]: true } });
+
+  media.mediaCommand(b, "toggle");
+  media.mediaCommand(b, "play");
+  media.mediaCommand(b, "next");
+  assert.equal(reloads, 1, "one reload however often it's pressed");
+  assert.deepEqual(sent, [], "nothing goes to a page that isn't there");
+
+  useLifecycle.setState({ discarded: {} });
+  media.setNowPlaying(b, null);
+  media.setNowPlaying(b, report({ playbackState: "paused", position: 0, controllable: false }));
+  assert.deepEqual(sent, [["seekTo", 95], ["play", undefined]]);
+  media.setNowPlaying(b, report({ playbackState: "paused", position: 95 }));
+  assert.equal(sent.length, 2, "it resumes once");
+  media.setNowPlaying(b, null);
+  webviews.delete(b);
+});
+
+test("a woken page that plays on its own, or plays something else, isn't sought", () => {
+  const before = { ...report({ playbackState: "paused", position: 95 }), playedAt: 1 };
+  assert.deepEqual(media.resumeCommands(before, report({ playbackState: "playing", position: 0 })), []);
+  assert.deepEqual(media.resumeCommands(before, report({ title: "Other", playbackState: "paused", position: 0 })), [["play"]]);
+  assert.deepEqual(media.resumeCommands(before, report({ playbackState: "paused", position: 93 })), [["play"]]);
+  assert.deepEqual(media.resumeCommands(undefined, report({ playbackState: "paused", position: 0 })), [["play"]]);
+});
+
+test("play on a sleeping tab whose page reports no media session still resumes once the page has loaded", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { useLifecycle } = await import("../tabs/sleepingTabs.ts");
+  S().hydrate({});
+  const w = S().createWindow({ url: "a.com" });
+  const b = S().newTab(w, { url: "b.com", background: true });
+  const sent = [];
+  webviews.set(b, { reload: async () => {}, mediaCommand: async (action, seconds) => void sent.push([action, seconds]) });
+  media.setNowPlaying(b, report());
+  media.setNowPlaying(b, report({ playbackState: "paused", position: 95 }));
+  useLifecycle.setState({ discarded: { [b]: true } });
+
+  media.mediaCommand(b, "toggle");
+  useLifecycle.setState({ discarded: {} });
+  media.setNowPlaying(b, null);
+  S().updateLive(b, { isLoading: true });
+  t.mock.timers.tick(5000);
+  assert.deepEqual(sent, [], "nothing while the page loads");
+  S().updateLive(b, { isLoading: false });
+  t.mock.timers.tick(5000);
+  assert.deepEqual(sent, [["seekTo", 95], ["play", undefined]], "a plain <video> with no MediaSession reports nothing until it plays");
+  webviews.delete(b);
+});
+
+async function playingIn(url) {
+  S().hydrate({});
+  const w = S().createWindow({ url: "a.com" });
+  const a = S().windows[w].tabIds[0];
+  const b = S().newTab(w, { url });
+  media.setNowPlaying(b, report());
+  return { w, a, b };
+}
+
+test("a tab paused before you leave it gets no sidebar player, one you leave playing keeps it after a pause", async () => {
+  const left = await playingIn("b.com");
+  media.setNowPlaying(left.b, report({ playbackState: "paused" }));
+  S().activate(left.a);
+  assert.equal(M().leftPaused[left.b], true, "paused, then left");
+
+  const kept = await playingIn("c.com");
+  S().activate(kept.a);
+  assert.equal(M().leftPaused[kept.b], undefined, "left playing");
+  media.setNowPlaying(kept.b, report({ playbackState: "paused" }));
+  assert.equal(M().leftPaused[kept.b], undefined, "paused after it was left: its player stays");
+});
+
+test("a left-paused tab gets its player back when it plays again or when you go back to it", async () => {
+  const { a, b } = await playingIn("b.com");
+  media.setNowPlaying(b, report({ playbackState: "paused" }));
+  S().activate(a);
+  assert.equal(M().leftPaused[b], true);
+  media.setNowPlaying(b, report());
+  assert.equal(M().leftPaused[b], undefined, "played in the background");
+
+  media.setNowPlaying(b, report({ playbackState: "paused" }));
+  S().activate(b);
+  media.setNowPlaying(b, report({ playbackState: "paused", position: 12 }));
+  S().activate(a);
+  assert.equal(M().leftPaused[b], true, "left paused again");
+  S().activate(b);
+  assert.equal(M().leftPaused[b], undefined, "shown again");
+});
+
+test("with sidebar media controls off nothing is left paused, and turning them on counts paused background players as left paused", async () => {
+  const { a, b } = await playingIn("b.com");
+  media.setNowPlaying(b, report({ playbackState: "paused" }));
+  S().activate(a);
+  assert.equal(M().leftPaused[b], true);
+  S().updateSettings({ sidebarMediaControls: false });
+  assert.equal(M().leftPaused[b], undefined);
+  S().updateSettings({ sidebarMediaControls: true });
+  assert.equal(M().leftPaused[b], true);
+});
+
+function sidebarPlayer(windowId) {
+  let shown;
+  return () => {
+    const hidden = media.hiddenPlayerTabs(S(), windowId, S().windows[windowId].profileId, Object.keys(M().sessions));
+    return (shown = media.playerTabFor(M(), media.sidebarPlayerCandidates(M(), hidden), shown));
+  };
+}
+
+async function pausedInTheBackground() {
+  const { w, a, b } = await playingIn("b.com");
+  S().activate(a);
+  const c = S().newTab(w, { url: "c.com", background: true });
+  const player = sidebarPlayer(w);
+  assert.equal(player(), b, "left playing");
+  media.setNowPlaying(b, report({ playbackState: "paused" }));
+  assert.equal(player(), b, "paused after it was left: its player stays so it can be resumed");
+  await tick();
+  return { w, a, b, c, player };
+}
+
+test("a tab paused in the background gives the sidebar player to a tab that starts playing in the background", async () => {
+  const { b, c, player } = await pausedInTheBackground();
+  media.setNowPlaying(c, report());
+  assert.equal(player(), c, "the newly playing tab");
+  media.setNowPlaying(c, report({ playbackState: "paused" }));
+  assert.equal(player(), c, "paused in turn: it keeps the player");
+  assert.equal(M().leftPaused[b], true);
+});
+
+test("a tab paused in the background loses the sidebar player to a tab that starts playing on screen, and doesn't get it back when that tab pauses", async () => {
+  const { a, b, c, player } = await pausedInTheBackground();
+  S().activate(c);
+  media.setNowPlaying(c, report());
+  assert.equal(player(), undefined, "the playing tab is on screen and the paused one is stale");
+  media.setNowPlaying(c, report({ playbackState: "paused" }));
+  assert.equal(player(), undefined, "nothing playing now: the stale card stays gone");
+  media.setNowPlaying(c, null);
+  assert.equal(player(), undefined, "its session ended");
+  media.setNowPlaying(b, report());
+  assert.equal(player(), b, "playing again in the background");
+  S().activate(a);
+  assert.equal(player(), b);
+});
+
+test("a play that started earlier doesn't take the sidebar player from a tab paused later", async () => {
+  const { b, c, player } = await pausedInTheBackground();
+  media.setNowPlaying(c, report());
+  assert.equal(player(), c);
+  media.setNowPlaying(b, report());
+  assert.equal(player(), c, "b plays again, but c started first");
+  media.setNowPlaying(c, report({ playbackState: "paused" }));
+  assert.equal(player(), c, "paused in the background while b plays: c keeps the player");
+  media.setNowPlaying(b, report({ playbackState: "paused" }));
+  assert.equal(player(), c);
+});
+
+test("a play in another window or profile doesn't take the sidebar player", async () => {
+  const { w, b, player } = await pausedInTheBackground();
+  const otherWindow = S().createWindow({ url: "z.com" });
+  const z = S().newTab(otherWindow, { url: "z2.com", background: true });
+  media.setNowPlaying(z, report());
+  assert.equal(M().leftPaused[b], undefined, "another window");
+  assert.equal(player(), b);
+
+  const work = S().createProfile({ name: "Work" });
+  S().switchProfile(w, work);
+  const y = S().newTab(w, { url: "y.com" });
+  media.setNowPlaying(y, report());
+  assert.equal(M().leftPaused[b], undefined, "another profile");
+});
+
+test("a session that ends while its tab is in the background stops being left paused", async () => {
+  const { a, b } = await playingIn("b.com");
+  media.setNowPlaying(b, report({ playbackState: "paused" }));
+  S().activate(a);
+  media.setNowPlaying(b, null);
+  assert.equal(M().leftPaused[b], undefined);
+});
+
+test("a looping clip's position wraps past its end instead of stopping there", () => {
+  const at = 1_000_000;
+  const looping = report({ position: 11, duration: 12, timestamp: at, loop: true });
+  assert.equal(media.positionOf(looping, at + 3000), 2);
+  assert.equal(media.positionOf({ ...looping, loop: false }, at + 3000), 12);
+  assert.equal(media.positionOf({ ...looping, playbackState: "paused" }, at + 3000), 11);
+});
+
+test("a looping clip's report from its start counts as a restart, a report moving on does not", () => {
+  const at = 1_000_000;
+  const before = report({ position: 0, duration: 12, timestamp: at, loop: true });
+  assert.equal(media.isLoopRestart(before, report({ position: 0.1, duration: 12, timestamp: at + 12_000, loop: true })), true);
+  assert.equal(media.isLoopRestart(before, report({ position: 5, duration: 12, timestamp: at + 5_000, loop: true })), false);
+  assert.equal(media.isLoopRestart(before, report({ position: 0.1, duration: 12, timestamp: at + 12_000 })), false);
+  assert.equal(media.isLoopRestart({ ...before, playbackState: "paused" }, report({ position: 0.1, duration: 12, timestamp: at + 12_000, loop: true })), false);
+});

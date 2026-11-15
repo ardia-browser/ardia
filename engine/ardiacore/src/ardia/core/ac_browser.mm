@@ -42,15 +42,47 @@ const char* DispositionName(WindowOpenDisposition disposition) {
   }
 }
 
+namespace {
+
 int g_tab_strip_notifying = 0;
 int g_navigation_notifying = 0;
+
+int& CounterOf(ScopedNotifying::Kind kind) {
+  return kind == ScopedNotifying::Kind::kTabStrip ? g_tab_strip_notifying
+                                                  : g_navigation_notifying;
+}
+
+bool Defer(bool notifying, dispatch_block_t retry) {
+  if (notifying) {
+    dispatch_async(dispatch_get_main_queue(), retry);
+  }
+  return notifying;
+}
+
+}
+
+ScopedNotifying::ScopedNotifying(Kind kind) : kind_(kind) {
+  ++CounterOf(kind_);
+}
+
+ScopedNotifying::~ScopedNotifying() {
+  --CounterOf(kind_);
+}
 
 bool IsNotifyingTabStrip() {
   return g_tab_strip_notifying > 0;
 }
 
-bool IsNotifyingNavigation() {
-  return g_navigation_notifying > 0;
+bool DeferWhileTabStripNotifies(dispatch_block_t retry) {
+  return Defer(IsNotifyingTabStrip(), retry);
+}
+
+bool IsNotifyingAny() {
+  return IsNotifyingTabStrip() || g_navigation_notifying > 0;
+}
+
+bool DeferWhileAnyNotifies(dispatch_block_t retry) {
+  return Defer(IsNotifyingAny(), retry);
 }
 
 void InitialMainDocumentAccessed(content::WebContents* contents) {
@@ -62,8 +94,7 @@ void InitialMainDocumentAccessed(content::WebContents* contents) {
     return;
   }
   ArdiaCoreTab* tab = bridge->tab();
-  base::AutoReset<int> notifying(&g_navigation_notifying,
-                                 g_navigation_notifying + 1);
+  ScopedNotifying notifying(ScopedNotifying::Kind::kNavigation);
   [tab notify:@selector(tabDidChangeURL:)];
   [tab notify:@selector(tabDidChangeNavigationState:)];
 }
@@ -91,7 +122,7 @@ void CloseBlankTabsBeforeWindowCloses(Browser* browser) {
   }
 }
 
-void DeleteTabClosedByHost(content::WebContents* contents) {
+void DeleteTabClosedByHost(content::WebContents* contents, ClosedTabRecord record) {
   BrowserWindowInterface* browser =
       GlobalBrowserCollection::GetInstance()->FindBrowserWithTab(contents);
   if (!browser) {
@@ -104,7 +135,8 @@ void DeleteTabClosedByHost(content::WebContents* contents) {
   }
   content::NavigationEntry* committed =
       contents->GetController().GetLastCommittedEntry();
-  if (!Profile::FromBrowserContext(contents->GetBrowserContext())
+  if (record == ClosedTabRecord::kRecentlyClosed &&
+      !Profile::FromBrowserContext(contents->GetBrowserContext())
            ->IsOffTheRecord() &&
       committed && !committed->IsInitialEntry() && !OnlyShowedBlank(contents)) {
     model->delegate()->CreateHistoricalTab(contents);

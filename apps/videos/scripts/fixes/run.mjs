@@ -4,16 +4,23 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const repo = process.env.ARDIA_REPO ?? join(process.env.HOME, "Documents/netnyahoo");
+const repo = process.env.ARDIA_REPO ?? join(here, "../../../..");
 const { appEnv, attach, binaryOf, binaryPids, launch, launchVariables, mergeLaunchEnv, processInfo, sleep } = await import(join(repo, "scripts/lib/instance.mjs"));
 
 const scratch = process.env.FIXES_SCRATCH ?? join(process.env.HOME, "ardia-scratch/video-fixes");
 const footage = join(scratch, "footage");
 const recorder = join(scratch, "demo-rec");
-const sitesPort = 47231;
+const sitesPort = Number(process.env.FIXES_SITES_PORT ?? 47231);
+const portBase = process.env.FIXES_PORT_BASE ? Number(process.env.FIXES_PORT_BASE) : null;
+const hoverLib = process.env.FIXES_HOVER ? join(scratch, "hover.dylib") : null;
+const inputLib = process.env.FIXES_INPUT ? join(scratch, "input.dylib") : null;
+const selfLib = process.env.FIXES_SELFREC ? join(scratch, "selfrec.dylib") : null;
+const pasteLib = process.env.FIXES_PASTEBOARD ? join(scratch, "pasteboard.dylib") : null;
+const injected = [hoverLib, inputLib, selfLib, pasteLib].filter(Boolean).join(":");
+const fps = process.env.FIXES_FPS ?? "60";
 const apps = {
   before: { app: process.env.BEFORE_APP ?? join(scratch, "before/Ardia.app"), js: "none", probe: true },
-  after: { app: process.env.AFTER_APP ?? join(repo, "apps/browser/build-tester/Build/Products/Debug/Ardia.app") },
+  after: { app: process.env.AFTER_APP ?? join(repo, "apps/browser/build-tester/Build/Products/Debug/Ardia.app"), ...(process.env.AFTER_JS === "none" ? { js: "none", probe: true } : {}) },
 };
 
 const args = process.argv.slice(2);
@@ -21,7 +28,35 @@ const sides = args.includes("--side") ? [args[args.indexOf("--side") + 1]] : ["b
 const names = args.filter((a, i) => !a.startsWith("--") && args[i - 1] !== "--side");
 const prelude = readFileSync(join(here, "prelude.js"), "utf8");
 
-if (!existsSync(recorder)) {
+if (hoverLib && !existsSync(hoverLib)) {
+  const built = spawnSync("clang", ["-dynamiclib", "-fobjc-arc", "-framework", "AppKit", "-o", hoverLib, join(here, "hover.m")], { stdio: "inherit" });
+  if (built.status !== 0) throw new Error("hover.dylib didn't build");
+}
+
+if (inputLib && !existsSync(inputLib)) {
+  const built = spawnSync("clang", ["-dynamiclib", "-fobjc-arc", "-framework", "AppKit", "-o", inputLib, join(here, "input.m")], { stdio: "inherit" });
+  if (built.status !== 0) throw new Error("input.dylib didn't build");
+}
+
+function sceneLib(name) {
+  const lib = join(scratch, `${name}.dylib`);
+  if (existsSync(lib)) return lib;
+  const built = spawnSync("clang", ["-dynamiclib", "-fobjc-arc", "-framework", "AppKit", "-o", lib, join(here, `${name}.m`)], { stdio: "inherit" });
+  if (built.status !== 0) throw new Error(`${name}.dylib didn't build`);
+  return lib;
+}
+
+if (selfLib && !existsSync(selfLib)) {
+  const built = spawnSync("clang", ["-dynamiclib", "-fobjc-arc", "-framework", "AppKit", "-framework", "AVFoundation", "-framework", "CoreMedia", "-framework", "CoreVideo", "-o", selfLib, join(here, "selfrec.m")], { stdio: "inherit" });
+  if (built.status !== 0) throw new Error("selfrec.dylib didn't build");
+}
+
+if (pasteLib && !existsSync(pasteLib)) {
+  const built = spawnSync("clang", ["-dynamiclib", "-fobjc-arc", "-framework", "AppKit", "-o", pasteLib, join(here, "pasteboard.m")], { stdio: "inherit" });
+  if (built.status !== 0) throw new Error("pasteboard.dylib didn't build");
+}
+
+if (!selfLib && !existsSync(recorder)) {
   const built = spawnSync("swiftc", ["-O", "-o", recorder, join(repo, "apps/browser/scripts/demo-rec.swift")], { stdio: "inherit" });
   if (built.status !== 0) throw new Error("demo-rec didn't build");
 }
@@ -49,39 +84,76 @@ async function launchWithoutDevTools(app, { data, js, probe, onboarded, files = 
   return instance;
 }
 
+function recordSelf(dir, out) {
+  const status = join(dir, "status");
+  rmSync(status, { force: true });
+  const id = `${Date.now()}`;
+  writeFileSync(join(dir, "cmd"), `start\t${id}\t${out}\t${fps}\t90`);
+  const read = () => (existsSync(status) ? readFileSync(status, "utf8") : "");
+  const started = (async () => {
+    for (const end = Date.now() + 15000; Date.now() < end; await sleep(50)) {
+      const text = read();
+      if (/^error/m.test(text)) throw new Error(`selfrec: ${text}`);
+      const m = /recording (\d+)/.exec(text);
+      const r = /rect (-?\d+),(-?\d+),(\d+),(\d+) scale ([\d.]+)/.exec(text);
+      if (m && r) return { t0: Number(m[1]), rect: r.slice(1, 5).map(Number), scale: Number(r[5]) };
+    }
+    throw new Error(`selfrec didn't start: ${read()}`);
+  })();
+  const stop = async () => {
+    writeFileSync(join(dir, "cmd"), `stop\t${id}`);
+    for (const end = Date.now() + 25000; Date.now() < end; await sleep(100)) if (/^(finished|error)/m.test(read())) return 0;
+    return 1;
+  };
+  return { started, stop };
+}
+
 function record(pid, out) {
-  const child = spawn(recorder, [String(pid), "90", out], { stdio: ["ignore", "pipe", "inherit"] });
+  const child = spawn(recorder, [String(pid), "90", out, "--fps", fps], { stdio: ["ignore", "pipe", "inherit"] });
   let text = "";
   const started = new Promise((resolve, reject) => {
     child.stdout.on("data", (d) => {
       text += d;
       const m = /recording (\d+)/.exec(text);
-      if (m && /rect /.test(text)) resolve(Number(m[1]));
+      const r = /rect (-?\d+),(-?\d+),(\d+),(\d+) scale ([\d.]+)/.exec(text);
+      if (m && r) resolve({ t0: Number(m[1]), rect: r.slice(1, 5).map(Number), scale: Number(r[5]) });
     });
     child.on("exit", (code) => reject(new Error(`demo-rec exited (${code}): ${text}`)));
     setTimeout(() => reject(new Error(`demo-rec didn't start: ${text}`)), 15000);
   });
   const finished = new Promise((resolve) => child.on("exit", resolve));
-  return { started, stop: () => (child.kill("SIGINT"), finished) };
+  const stop = () => {
+    child.kill("SIGINT");
+    const kill = setTimeout(() => child.kill("SIGKILL"), 10000);
+    return finished.then((code) => (clearTimeout(kill), code));
+  };
+  return { started, stop };
 }
 
 async function shoot(scene, name, side) {
   const data = join(scratch, "runs", `${name}-${side}`);
   rmSync(data, { recursive: true, force: true });
   const sessionFile = join(scratch, scene.session ?? "session.json");
+  const port = portBase === null ? undefined : portBase + (side === "before" ? 0 : 1);
   const downloads = join(scratch, "downloads", `${name}-${side}`);
   rmSync(downloads, { recursive: true, force: true });
   mkdirSync(downloads, { recursive: true });
   const { app, js, probe } = apps[side];
+  const libs = [injected, ...(scene.dylibs ?? []).map(sceneLib)].filter(Boolean).join(":");
   const empty = join(scratch, "import-empty");
   mkdirSync(empty, { recursive: true });
   const options = {
-    data, js, probe, onboarded: true, files: { "telemetry.json": { sharing: false, decidedAt: 1, askDoneAt: 1 } }, session: JSON.parse(readFileSync(sessionFile, "utf8")),
-    switches: [`--host-resolver-rules=MAP *.example 127.0.0.1:${sitesPort}`],
-    instance: { importSourceDir: empty, importSafariHome: empty, downloadsDir: downloads },
-    env: scene.env ?? {},
+    data, js, probe, port, onboarded: true, files: { "telemetry.json": { sharing: false, decidedAt: 1, askDoneAt: 1 }, ...(scene.files ?? {}) }, session: JSON.parse(readFileSync(sessionFile, "utf8")),
+    switches: [`--host-resolver-rules=MAP *.example 127.0.0.1:${sitesPort}`, ...(selfLib ? ["--disable-features=RemoteCoreAnimationAPI"] : []), ...(scene.switches ?? [])],
+    instance: { importSourceDir: empty, importSafariHome: empty, downloadsDir: downloads, ...(scene.instance ?? {}) },
+    env: { ...(libs ? { DYLD_INSERT_LIBRARIES: libs } : {}), ...(selfLib ? { FIXES_SELFREC_DIR: join(data, "selfrec") } : {}), ...(pasteLib ? { FIXES_PASTEBOARD_NAME: `com.ardia.film.${name}-${side}` } : {}), ...(scene.env ?? {}) },
+    ...(scene.test ? { test: scene.test } : {}),
   };
   const start = scene.withoutDevTools ? launchWithoutDevTools : launch;
+  if (scene.seed) {
+    mkdirSync(data, { recursive: true });
+    scene.seed(data, side);
+  }
   let instance = await start(app, options);
   try {
     await sleep(scene.boot ?? 6000);
@@ -98,8 +170,20 @@ async function shoot(scene, name, side) {
     const prepared = scene.prepare ? await scene.prepare(instance, side) : null;
     mkdirSync(join(footage, side), { recursive: true });
     const out = join(footage, side, `${name}.mov`);
-    const rec = record(instance.pid, out);
-    const t0 = await rec.started;
+    let rec = null;
+    let started = null;
+    for (let attempt = 0; attempt < 6 && !started; attempt++) {
+      rec = selfLib ? recordSelf(join(data, "selfrec"), out) : record(instance.pid, out);
+      const got = await rec.started;
+      if (got.rect[2] >= (scene.minWidth ?? 1000)) started = got;
+      else {
+        console.log(`${name} ${side}: the recorder picked ${got.rect}, retrying`);
+        await rec.stop();
+        await sleep(800);
+      }
+    }
+    if (!started) throw new Error(`${name} ${side}: the recorder never found the main window`);
+    const t0 = started.t0;
     await sleep(700);
     const external = scene.external ? scene.external(instance, side) : null;
     const result = JSON.parse(await instance.eval(`${prelude}\nconst P = ${JSON.stringify(prepared)};\nconst SIDE = ${JSON.stringify(side)};\n${scene.act}`, { timeout: 60000 }));
@@ -107,7 +191,7 @@ async function shoot(scene, name, side) {
     await sleep(scene.tail ?? 900);
     await rec.stop();
     const events = [...result.events, ...(Array.isArray(externalEvents) ? externalEvents : [])].sort((a, b) => a.t - b.t).map((e) => ({ ...e, t: Math.round(e.t - t0) / 1000 }));
-    writeFileSync(join(footage, side, `${name}.json`), JSON.stringify({ ...result, events, setup: JSON.parse(setup), prepared }, null, 1));
+    writeFileSync(join(footage, side, `${name}.json`), JSON.stringify({ ...result, events, setup: JSON.parse(setup), prepared, rect: started.rect, scale: started.scale }, null, 1));
     console.log(`${name} ${side}: ${out}, ${events.length} events, marks ${events.filter((e) => e.mark).map((e) => `${e.mark}@${e.t}`).join(" ")}`);
   } finally {
     await instance.quit();
@@ -116,7 +200,8 @@ async function shoot(scene, name, side) {
 
 for (const name of names) {
   const scene = (await import(join(here, "scenes", `${name}.mjs`))).default;
-  const results = await Promise.allSettled(sides.map((side) => shoot(scene, name, side)));
+  const results = process.env.FIXES_SERIAL ? [] : await Promise.allSettled(sides.map((side) => shoot(scene, name, side)));
+  if (process.env.FIXES_SERIAL) for (const side of sides) results.push(await shoot(scene, name, side).then((value) => ({ status: "fulfilled", value }), (reason) => ({ status: "rejected", reason })));
   for (const r of results) if (r.status === "rejected") console.error(`${name}: ${r.reason?.stack ?? r.reason}`);
 }
 process.exit(0);

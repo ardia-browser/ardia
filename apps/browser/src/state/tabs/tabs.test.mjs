@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const model = await import("../browser/model.ts");
-const organize = await import("../pins/organize.ts");
+const organize = await import("../pins/tabCleanup.ts");
 const { controllingSearchExtension, defaultSearchEngine, searchUrlPrefix } = await import("../settings/settings.ts");
 const media = await import("../media/media.ts");
+const { splitTabIdsOf } = await import("../splits/splits.ts");
 
+let clock = Date.now();
+Date.now = () => (clock += 1000);
 const S = () => useBrowser.getState();
 const view = (w) => model.viewTabIds(S(), w).map((id) => S().tabs[id].url);
 const short = (url) => url.replace(/^https:\/\/|\.com$/g, "");
@@ -34,36 +37,80 @@ test("links opened behind line up after their opener in order", () => {
   assert.equal(shown(w), "a", "opened behind: the opener stays in front");
 });
 
-test("closing a page opened in front returns to its opener unless you moved away", () => {
+test("closing the shown tab goes back to the tab used before it, not its neighbour", () => {
   reset();
-  const [w, a, b] = setup("a", "b");
-  const c = open(w, "c", a, false);
-  S().closeTab(c);
-  assert.equal(shown(w), "a");
-
-  const d = open(w, "d", a, false);
-  S().activate(b);
-  S().activate(d);
+  const [w, a, , c] = setup("a", "b", "c");
+  S().activate(c);
+  S().activate(a);
+  S().closeTab(a);
+  assert.equal(shown(w), "c", "not b, the tab after it");
+  const d = open(w, "d", c, false);
   S().closeTab(d);
-  assert.equal(shown(w), "b", "after moving away, the tab after it");
+  assert.equal(shown(w), "c", "a page opened in front goes back to its opener");
 });
 
-test("closing goes to the page's own tabs, then its siblings, then its opener", () => {
+test("tabs opened behind don't count as used until they're shown", () => {
   reset();
-  const [w, a] = setup("a", "b");
+  const [w, a, b] = setup("a", "b");
+  S().activate(b);
+  S().activate(a);
   const c1 = open(w, "c1", a);
-  const c2 = open(w, "c2", a);
+  open(w, "c2", a);
   S().activate(c1);
   const g = open(w, "g", c1);
   S().closeTab(c1);
-  assert.equal(shown(w), "g", "a tab it opened");
+  assert.equal(shown(w), "a", "not a tab it opened or a sibling");
   assert.equal(S().tabs[g].openerId, a, "a closed tab's tabs take its opener");
+  S().closeTab(a);
+  assert.equal(shown(w), "b", "not the tabs a opened behind");
+});
+
+test("closing a regular tab goes back to the pinned tab you came from", () => {
+  reset();
+  const [w, p, , b] = setup("p", "a", "b");
+  S().togglePin(p);
+  S().activate(p);
+  S().activate(b);
+  S().closeTab(b);
+  assert.equal(shown(w), "p");
+});
+
+test("closing goes to a tab opened behind before a closed pinned tab, so the pin doesn't load again", () => {
+  reset();
+  const [w, p, a] = setup("p", "a");
+  S().togglePin(p);
+  S().activate(p);
+  S().closeTab(p);
   S().activate(a);
-  S().activate(c2);
-  S().closeTab(c2);
-  assert.equal(shown(w), "g", "a sibling");
-  S().closeTab(g);
-  assert.equal(shown(w), "a", "no siblings left: the opener");
+  open(w, "b", a);
+  S().closeTab(a);
+  assert.equal(shown(w), "b");
+  assert.ok(!S().tabs[p].page.nav, "the pin stays closed");
+});
+
+test("the tab used before wins even in a collapsed group, over tabs opened behind", () => {
+  reset();
+  const [w, a, b] = setup("a", "b", "x");
+  const g = S().createGroup([a], { name: "G" });
+  S().activate(a);
+  S().activate(b);
+  S().updateGroup(g, { collapsed: true });
+  open(w, "c", b);
+  S().closeTab(b);
+  assert.equal(shown(w), "a");
+});
+
+test("the tab a close shows counts as used, so the next close comes back to it", () => {
+  reset();
+  const [w, a, b, c] = setup("a", "b", "c");
+  S().createSplit([a, c]);
+  S().activate(b);
+  S().activate(c);
+  S().closeTab(c);
+  assert.equal(shown(w), "a", "the split's other pane");
+  const d = open(w, "d", a, false);
+  S().closeTab(d);
+  assert.equal(shown(w), "a");
 });
 
 test("closing a group that holds the shown tab shows the tab just above the group", () => {
@@ -103,26 +150,16 @@ test("a pinned tab's links keep their group down to the last one; a loose tab's 
 
 test("closing a pinned tab selects the regular tab the window showed last, not the neighbour", () => {
   reset();
-  let clock = Date.now();
-  const select = (id) => {
-    const now = Date.now;
-    Date.now = () => (clock += 1000);
-    try {
-      S().activate(id);
-    } finally {
-      Date.now = now;
-    }
-  };
   const [w, p, q, , b] = setup("p", "q", "a", "b", "c");
   S().togglePin(p);
   S().togglePin(q);
-  select(b);
-  select(q);
-  select(p);
+  S().activate(b);
+  S().activate(q);
+  S().activate(p);
   S().closeTab(p);
   assert.equal(model.activeTabId(S(), w), b, "back to the regular tab used before the pinned ones");
-  assert.ok(S().tabs[b].navigation);
-  assert.notEqual(S().tabs[q].navigation, null, "the other pinned tab keeps its page");
+  assert.ok(S().tabs[b].page.nav);
+  assert.ok(S().tabs[q].page.nav, "the other pinned tab keeps its page");
 });
 
 test("groups stay contiguous; splits need two panes", () => {
@@ -145,6 +182,36 @@ test("groups stay contiguous; splits need two panes", () => {
   assert.equal(S().closedWindows.at(-1).groups.length, 1);
 });
 
+test("closing the focused pane of a split shows the pane left, not the next tab", () => {
+  reset();
+  const w = S().createWindow({ url: "https://a.com" });
+  const a = model.viewTabIds(S(), w)[0];
+  const b = S().newTab(w, { url: "https://b.com" });
+  S().newTab(w, { url: "https://c.com" });
+  const sp = S().createSplit([a, b]);
+  S().activate(b);
+  S().closeTab(b);
+  assert.equal(S().splits[sp], undefined, "the split dissolves");
+  assert.equal(shown(w), "a", "the other pane stays on screen as a tab");
+  assert.deepEqual(hosts(w), ["a", "c"]);
+});
+
+test("closing one pane of a three-pane split keeps the split and shows the pane used last", () => {
+  reset();
+  const w = S().createWindow({ url: "https://a.com" });
+  const a = model.viewTabIds(S(), w)[0];
+  const b = S().newTab(w, { url: "https://b.com" });
+  const c = S().newTab(w, { url: "https://c.com" });
+  S().newTab(w, { url: "https://d.com" });
+  const sp = S().createSplit([a, b, c]);
+  S().activate(b);
+  S().updateTab(a, { lastActiveAt: 1 });
+  S().updateTab(c, { lastActiveAt: 2 });
+  S().closeTab(b);
+  assert.deepEqual(splitTabIdsOf(S().splits[sp]), [a, c]);
+  assert.equal(shown(w), "c");
+});
+
 test("hydrate drops broken splits", () => {
   reset();
   const w = S().createWindow({ url: "a.com" });
@@ -155,8 +222,8 @@ test("hydrate drops broken splits", () => {
     windowOrder: S().windowOrder,
     tabs: S().tabs,
     splits: {
-      ok: { id: "ok", windowId: w, tabIds: [a, b], orientation: "horizontal", sizes: [0.5, 0.5] },
-      stale: { id: "stale", windowId: w, tabIds: [a, "gone"], orientation: "horizontal", sizes: [0.5, 0.5] },
+      ok: { id: "ok", windowId: w, orientation: "horizontal", slots: [{ size: 0.5, tabId: a }, { size: 0.5, tabId: b }] },
+      stale: { id: "stale", windowId: w, orientation: "horizontal", slots: [{ size: 0.5, tabId: a }, { size: 0.5, tabId: "gone" }] },
     },
   });
   assert.deepEqual(Object.keys(S().splits), ["ok"]);
@@ -181,13 +248,31 @@ test("clean up closes duplicates and stale tabs into Recently Cleaned, and resto
   assert.ok(S().tabs[e]);
 });
 
+test("one clean-up keeps every tab it closes in Recently Cleaned, past the cap, so Undo brings them all back", () => {
+  reset();
+  const many = organize.MAX_CLEANED + 20;
+  const [w] = setup("a", ...Array(many).fill("a"));
+  assert.equal(S().cleanUpTabs(w), many);
+  assert.equal(S().cleanedTabs.length, many);
+  S().restoreCleaned(S().cleanedTabs.map((c) => c.id), w);
+  assert.equal(view(w).length, many + 1);
+  open(w, "a");
+  assert.equal(S().cleanUpTabs(w), many + 1);
+  assert.equal(S().cleanedTabs.length, many + 1, "the newest batch is whole even when it alone is past the cap");
+  open(w, "b");
+  S().updateTab(model.viewTabIds(S(), w).find((id) => S().tabs[id].url === "https://b.com"), { lastActiveAt: Date.now() - 13 * 3600_000 });
+  S().activate(model.viewTabIds(S(), w)[0]);
+  assert.equal(S().cleanUpTabs(w), 1);
+  assert.equal(S().cleanedTabs.length, organize.MAX_CLEANED, "a later clean-up trims older entries back to the cap");
+});
+
 test("a reopened group's and cleaned tabs' tabs take their back/forward lists back", () => {
   reset();
   const [w, a, b, c, d] = setup("a", "b", "c", "d");
   const g = S().createGroup([b, c], { name: "G" });
   S().closeGroup(g);
   S().restoreClosed(S().closedGroups.at(-1).id);
-  const adopts = (id) => S().tabs[id].adoptId ?? S().tabs[id].wakeAdoptId;
+  const adopts = (id) => S().tabs[id].page.adopt ?? S().tabs[id].page.wake;
   const back = Object.values(S().groups).find((x) => x.name === "G");
   assert.deepEqual(back.tabIds.map(adopts), [`restore:${b}`, `restore:${c}`]);
   const g2 = S().createGroup([d], { name: "Old" });
@@ -212,15 +297,15 @@ test("a reopened tab not shown yet keeps its back/forward list's source through 
   S().closeGroup(g);
   S().restoreClosed(S().closedGroups.at(-1).id);
   const [, c2] = Object.values(S().groups).find((x) => x.name === "G").tabIds;
-  assert.equal(S().tabs[c2].wakeAdoptId, `restore:${c}`, "the second tab hasn't been shown");
+  assert.equal(S().tabs[c2].page.wake, `restore:${c}`, "the second tab hasn't been shown");
   S().closeGroup(Object.values(S().groups).find((x) => x.name === "G").id);
   S().restoreClosed(S().closedGroups.at(-1).id);
   const [, c3] = Object.values(S().groups).find((x) => x.name === "G").tabIds;
-  assert.equal(S().tabs[c3].wakeAdoptId, `restore:${c}`);
+  assert.equal(S().tabs[c3].page.wake, `restore:${c}`);
   S().closeTab(c3);
   S().reopenClosedTab();
   const c4 = S().windows[w].tabIds.find((id) => S().tabs[id].url.includes("c.com"));
-  assert.equal(S().tabs[c4].adoptId ?? S().tabs[c4].wakeAdoptId, `restore:${c}`);
+  assert.equal(S().tabs[c4].page.adopt ?? S().tabs[c4].page.wake, `restore:${c}`);
 });
 
 test("a pinned group's reopened tab, closed before it was shown, still wakes with its back/forward list", () => {
@@ -231,11 +316,11 @@ test("a pinned group's reopened tab, closed before it was shown, still wakes wit
   S().closeGroup(g);
   S().restoreClosed(S().closedGroups.at(-1).id);
   const [, c2] = Object.values(S().groups).find((x) => x.name === "P").tabIds;
-  assert.equal(S().tabs[c2].wakeAdoptId, `restore:${c}`);
+  assert.equal(S().tabs[c2].page.wake, `restore:${c}`);
   S().closeTab(c2);
-  assert.ok(S().tabs[c2]?.unloaded, "it keeps its row");
+  assert.equal(S().tabs[c2]?.page.kind, "asleep", "it keeps its row");
   S().activate(c2);
-  assert.equal(S().tabs[c2].adoptId, `restore:${c}`);
+  assert.equal(S().tabs[c2].page.adopt, `restore:${c}`);
 });
 
 test("a pinned group's reopened tab not shown yet keeps its back/forward list through parking in the last window's close", () => {
@@ -246,13 +331,13 @@ test("a pinned group's reopened tab not shown yet keeps its back/forward list th
   S().restoreClosed(S().closedGroups.at(-1).id);
   const [, c2] = Object.values(S().groups).find((x) => x.name === "P").tabIds;
   S().closeTab(c2);
-  assert.equal(S().tabs[c2].wakeAdoptId, `restore:${c}`);
+  assert.equal(S().tabs[c2].page.wake, `restore:${c}`);
   S().closeWindow(w);
   assert.ok(S().parkedPins.default, "the profile's pins are parked");
   const n = S().createWindow();
   const back = S().windows[n].tabIds.find((id) => S().tabs[id].url.includes("c.com"));
   S().activate(back);
-  assert.equal(S().tabs[back].adoptId, `restore:${c}`);
+  assert.equal(S().tabs[back].page.adopt, `restore:${c}`);
 });
 
 test("Settings shows the tab layout of the window in front, not a default it no longer follows", () => {
@@ -406,7 +491,7 @@ test("Clear keeps the selected tab's split and tabs playing media, and does noth
   assert.deepEqual(cleared.entries.map((x) => short(x.tab.url)), ["c", "e"]);
   assert.deepEqual(hosts(w), ["a", "b", "d"]);
   assert.equal(shown(w), "a");
-  assert.ok(Object.values(S().splits).some((v) => v.tabIds.includes(a) && v.tabIds.includes(b)), "the split stays whole");
+  assert.ok(Object.values(S().splits).some((v) => splitTabIdsOf(v).includes(a) && splitTabIdsOf(v).includes(b)), "the split stays whole");
   assert.equal(S().clearUnpinnedTabs(w), null, "nothing left to clear");
   S().undoClearTabs(cleared);
   assert.deepEqual(hosts(w), before);
@@ -506,4 +591,19 @@ test("Clear on a lone selected tab closes nothing and opens no New Tab page", ()
   const [w, a] = setup("a");
   assert.equal(S().clearUnpinnedTabs(w), null);
   assert.deepEqual(S().windows[w].tabIds, [a]);
+});
+
+test("a tab opened behind joins the ⌃Tab order only once it is shown, so ⌃Tab still returns to the tab before (#1190)", (t) => {
+  reset();
+  let now = Date.now();
+  t.mock.method(Date, "now", () => (now += 1000));
+  const [w, a, b] = setup("a", "b");
+  S().activate(b);
+  S().activate(a);
+  const link = open(w, "link", a);
+  const order = () => organize.recentTabIds(S(), w, now).map((id) => short(S().tabs[id].url));
+  assert.deepEqual(order(), ["a", "link", "b"]);
+  S().activate(link);
+  assert.deepEqual(order(), ["link", "a", "b"]);
+  assert.equal(S().tabs[link].unseen, undefined);
 });

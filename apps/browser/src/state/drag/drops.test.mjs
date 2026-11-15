@@ -26,13 +26,11 @@ function dockWith() {
 }
 
 const dockSlots = (w) =>
-  stripEntries(S(), w, S().windows[w].profileId)
-    .filter((key) => key.startsWith("pinned:"))
-    .map((key) => ({ tabIds: [key.slice("pinned:".length)] }));
+  stripEntries(S(), w, S().windows[w].profileId).flatMap((e) => (e.kind === "dock" ? e.ids.filter((cell) => !e.members.has(cell)).map((cell) => ({ tabIds: [cell] })) : []));
 
 const dock = (w) => {
-  const pinned = S().windows[w].tabIds.filter((id) => S().tabs[id].pinned);
-  return { tiles: pinned.filter((id) => !S().tabs[id].pinnedAsRow).map(host), rows: pinned.filter((id) => S().tabs[id].pinnedAsRow).map(host) };
+  const pinned = S().windows[w].tabIds.filter((id) => !!S().tabs[id].pin);
+  return { tiles: pinned.filter((id) => !(S().tabs[id].pin?.as === "row")).map(host), rows: pinned.filter((id) => (S().tabs[id].pin?.as === "row")).map(host) };
 };
 
 function dragInDock(w, id, to) {
@@ -62,7 +60,7 @@ test("top strip dock: a row dragged over the tiles stays a row, first among the 
   const { w, ids: [, , , , e] } = dockWith();
   dragInDock(w, e, 0);
   assert.deepEqual(dock(w), { tiles: ["t1", "t2"], rows: ["e", "c", "d"] });
-  assert.equal(S().tabs[e].pinnedAsRow, true);
+  assert.equal((S().tabs[e].pin?.as === "row"), true);
 });
 
 test("a drop on its own slot moves nothing", () => {
@@ -129,9 +127,47 @@ test("clicks: ⌘ adds to the selection from the shown tab, ⇧ selects the rang
   assert.deepEqual(S().selection[w], [], "⌘-clicking the shown tab alone selects nothing");
 });
 
+test("⇧-click ranges from the shown tab once it changed without a click: never from a tile clicked before (#1074)", () => {
+  const ways = {
+    "a keyboard switch": (w, u) => S().activate(u),
+    "⌘W on the tile": (w, u, t1) => S().closeTab(t1),
+    "⌘T": (w) => S().newTab(w, { url: "https://n.com/" }),
+  };
+  for (const [way, showAnother] of Object.entries(ways)) {
+    const { w, ids } = dockWith();
+    const [t1, , , , , u] = ids;
+    const v = S().newTab(w, { url: "https://v.com/", background: true });
+    const x = S().newTab(w, { url: "https://x.com/", background: true });
+    S().clickTab(w, t1);
+    showAnother(w, u, t1);
+    const shown = S().windows[w].activeTabIds[S().windows[w].profileId];
+    assert.ok(shown !== t1 && !S().tabs[shown].pin, `${way} shows a regular tab`);
+    const target = shown === x ? u : x;
+    S().clickTab(w, target, { shiftKey: true });
+    const view = S().windows[w].tabIds;
+    const [from, to] = [view.indexOf(shown), view.indexOf(target)].sort((a, b) => a - b);
+    assert.deepEqual(S().selection[w].map(host), view.slice(from, to + 1).map(host), `after ${way}`);
+    assert.ok(!S().selection[w].some((id) => S().tabs[id].pin), `no pinned tab after ${way}`);
+    S().clickTab(w, v, { shiftKey: true });
+    assert.ok(S().selection[w].includes(shown) && S().selection[w].includes(v), `the next ⇧-click keeps the same start after ${way}`);
+  }
+});
+
 const shape = (w) => S().windows[w].tabIds.map((id) => {
   const g = Object.values(S().groups).find((x) => x.tabIds.includes(id));
   return g ? `${host(id)}{${g.name}}` : host(id);
+});
+
+test("⇧-click after switching away and back by keyboard ranges from the shown tab, not from a ⌘-click made before", () => {
+  reset();
+  const { w, ids: [a, , c, d, e] } = windowWith("a", "b", "c", "d", "e");
+  S().clickTab(w, a);
+  S().clickTab(w, d, { metaKey: true });
+  S().setSelection(w, []);
+  S().activate(e);
+  S().activate(a);
+  S().clickTab(w, c, { shiftKey: true });
+  assert.deepEqual(S().selection[w].map(host), ["a", "b", "c"]);
 });
 
 test("⌃⇧⇞/⇟: a tab steps over a whole group, a member steps inside its group and leaves it at the edge, a split moves as one", () => {
@@ -193,4 +229,20 @@ test("⌃⇧⇞/⇟: a pinned row steps over a pinned group beside it, one block
   assert.deepEqual(pinnedArea(), ["g{G}", "r2", "r1"]);
   S().moveTabBy(r2, -1);
   assert.deepEqual(pinnedArea(), ["r2", "g{G}", "r1"]);
+});
+
+test("a ⇧-click that ranges from the shown tab because it changed since the last click counts as one (#1074 telemetry)", async () => {
+  const { clickTab } = await import("../sidebar/actions.ts");
+  const { devTabPresses } = await import("../telemetry/tabPresses.ts");
+  reset();
+  const { w, ids: [a, , c, , e] } = windowWith("a", "b", "c", "d", "e");
+  const before = devTabPresses();
+  clickTab(w, a);
+  S().activate(e);
+  clickTab(w, c, { shiftKey: true });
+  assert.deepEqual(S().selection[w].map(host), ["c", "d", "e"]);
+  clickTab(w, a, { shiftKey: true });
+  const after = devTabPresses();
+  assert.equal(after.range_selects - before.range_selects, 2);
+  assert.equal(after.range_from_shown - before.range_from_shown, 1, "only the first ⇧-click came after the shown tab changed");
 });

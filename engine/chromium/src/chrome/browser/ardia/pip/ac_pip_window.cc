@@ -18,6 +18,7 @@
 #include "chrome/browser/ui/views/overlay/overlay_window_live_caption_button.h"
 #include "chrome/browser/ui/views/overlay/simple_overlay_window_image_button.h"
 #include "chrome/browser/ui/views/overlay/toggle_mute_button.h"
+#include "ui/compositor/layer.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
 #include "ui/gfx/font_list.h"
@@ -32,6 +33,7 @@ namespace {
 
 constexpr base::TimeDelta kCloseFade = base::Milliseconds(100);
 constexpr base::TimeDelta kHideFade = base::Milliseconds(70);
+constexpr base::TimeDelta kSaveBoundsAfterMoves = base::Milliseconds(250);
 constexpr int kSeekButtonSize = 40;
 constexpr int kSeekButtonCenterOffset = 76;
 
@@ -62,7 +64,9 @@ ArdiaVideoOverlayWindow::ArdiaVideoOverlayWindow(
   hide_controls_timer_.Stop();
 }
 
-ArdiaVideoOverlayWindow::~ArdiaVideoOverlayWindow() = default;
+ArdiaVideoOverlayWindow::~ArdiaVideoOverlayWindow() {
+  SavePendingBounds();
+}
 
 void ArdiaVideoOverlayWindow::SetUpViews() {
   VideoOverlayWindowViews::SetUpViews();
@@ -96,6 +100,14 @@ void ArdiaVideoOverlayWindow::SetUpViews() {
   play_pause->SetSize({kCenterButtonSize, kCenterButtonSize});
   play_pause_controls_view_ =
       ReplaceView(play_pause_controls_view_, std::move(play_pause));
+  for (views::Button* button :
+       {static_cast<views::Button*>(back_to_tab_button_.get()),
+        static_cast<views::Button*>(close_controls_view_.get())}) {
+    ac_button_state_subscriptions_.push_back(
+        button->AddStateChangedCallback(base::BindRepeating(
+            &ArdiaVideoOverlayWindow::PresentNativeControls,
+            base::Unretained(this))));
+  }
   StyleSeekButton(replay_10_seconds_button_.get());
   StyleSeekButton(forward_10_seconds_button_.get());
 
@@ -126,6 +138,7 @@ void ArdiaVideoOverlayWindow::OnUpdateControlsBounds() {
   static_cast<ArdiaCloseButton*>(close_controls_view_.get())->Place(size);
 
   if (vc_controls_container_view_->GetVisible()) {
+    PresentNativeControls();
     return;
   }
 
@@ -149,6 +162,7 @@ void ArdiaVideoOverlayWindow::OnUpdateControlsBounds() {
   }
   previous_track_controls_view_->SetVisible(false);
   next_track_controls_view_->SetVisible(false);
+  PresentNativeControls();
 }
 
 void ArdiaVideoOverlayWindow::UpdateControlsVisibility(
@@ -169,7 +183,10 @@ void ArdiaVideoOverlayWindow::UpdateControlsVisibility(
         std::make_unique<ArdiaControlsFadeAnimation>(
             std::vector<raw_ptr<views::View>>{title_view_,
                                               controls_top_scrim_view_},
-            title_and_top_scrim_fade_animation_->type());
+            title_and_top_scrim_fade_animation_->type(),
+            base::BindRepeating(
+                &ArdiaVideoOverlayWindow::PresentNativeControls,
+                base::Unretained(this)));
     title_and_top_scrim_fade_animation_->Start();
   }
   if (fade_animation_ && fade_animation_.get() != controls_fade) {
@@ -177,9 +194,41 @@ void ArdiaVideoOverlayWindow::UpdateControlsVisibility(
         std::vector<raw_ptr<views::View>>{controls_container_view_,
                                           controls_scrim_view_,
                                           controls_bottom_scrim_view_},
-        fade_animation_->type());
+        fade_animation_->type(),
+        base::BindRepeating(&ArdiaVideoOverlayWindow::PresentNativeControls,
+                            base::Unretained(this)));
     fade_animation_->Start();
   }
+  PresentNativeControls();
+}
+
+void ArdiaVideoOverlayWindow::PresentNativeControls() {
+  if (!back_to_tab_button_ || !close_controls_view_) {
+    return;
+  }
+  auto present = [](const char* name, views::Button* button) {
+    float opacity = 1;
+    for (const views::View* view = button; view; view = view->parent()) {
+      if (!view->GetVisible()) {
+        opacity = 0;
+        break;
+      }
+      if (view->layer()) {
+        opacity *= view->layer()->opacity();
+      }
+    }
+    const views::Button::ButtonState state = button->GetState();
+    return ArdiaPipNativeControl{
+        name, button->ConvertRectToWidget(button->GetLocalBounds()),
+        state == views::Button::STATE_HOVERED,
+        state == views::Button::STATE_PRESSED, opacity};
+  };
+  views::Button* back = back_to_tab_button_;
+  views::Button* close = close_controls_view_;
+  const bool natively = PresentArdiaPictureInPictureControls(
+      GetNativeWindow(), {present("backToTab", back), present("close", close)});
+  SetArdiaPipButtonDrawnNatively(back, natively);
+  SetArdiaPipButtonDrawnNatively(close, natively);
 }
 
 gfx::Rect ArdiaVideoOverlayWindow::GetProgressViewBounds() {
@@ -195,12 +244,21 @@ void ArdiaVideoOverlayWindow::SetMediaPosition(
 
 gfx::Rect ArdiaVideoOverlayWindow::CalculateAndUpdateWindowBounds() {
   std::optional<gfx::Rect> saved;
-  if (!has_been_shown_) {
+  if (!has_been_shown_ || !views::Widget::IsVisible()) {
     saved = LoadArdiaPictureInPictureBounds();
+    if (!saved && has_been_shown_) {
+      saved = GetBounds();
+    }
   }
-  if (saved) {
+  if (saved && !saved->IsEmpty()) {
+    display::Screen* screen = display::Screen::Get();
+    const bool on_a_display = std::ranges::any_of(
+        screen->GetAllDisplays(), [&](const display::Display& display) {
+          return display.bounds().Intersects(*saved);
+        });
     const gfx::Rect work_area =
-        display::Screen::Get()->GetDisplayMatching(*saved).work_area();
+        on_a_display ? screen->GetDisplayMatching(*saved).work_area()
+                     : screen->GetPrimaryDisplay().work_area();
     UpdateMaxSize(work_area);
     gfx::Rect rect = *saved;
     gfx::Size size = rect.size();
@@ -222,6 +280,13 @@ gfx::Rect ArdiaVideoOverlayWindow::CalculateAndUpdateWindowBounds() {
           GetMinimumSize(), max_size_, &rect);
       UpdateLayerBoundsWithLetterboxing(rect.size());
     }
+    if (!on_a_display) {
+      const int margin = (work_area.width() - rect.width() +
+                          work_area.height() - rect.height()) /
+                         2 * 0.02;
+      rect.set_origin({work_area.right() - rect.width() - margin,
+                       work_area.bottom() - rect.height() - margin});
+    }
     rect.AdjustToFit(work_area);
     return rect;
   }
@@ -242,6 +307,7 @@ void ArdiaVideoOverlayWindow::ShowInactive() {
 }
 
 void ArdiaVideoOverlayWindow::Hide() {
+  SavePendingBounds();
   RemoveOverlayViewIfExists();
   if (fade_animator_) {
     fade_animator_->CancelAndReset();
@@ -291,6 +357,7 @@ void ArdiaVideoOverlayWindow::HideIdleControlsUnlessPointerOnControl() {
 }
 
 void ArdiaVideoOverlayWindow::OnNativeWidgetDestroyed() {
+  SavePendingBounds();
   views::Widget::OnNativeWidgetDestroyed();
   const bool should_pause_video = false;
   controller_->OnWindowDestroyed(should_pause_video);
@@ -310,7 +377,19 @@ void ArdiaVideoOverlayWindow::OnNativeWidgetSizeChanged(
 void ArdiaVideoOverlayWindow::MaybeSaveBounds() {
   if (has_been_shown_ && !is_tucking_forced_ && views::Widget::IsVisible() &&
       !ac_hide_timer_.IsRunning()) {
-    SaveArdiaPictureInPictureBounds(GetBounds());
+    ac_pending_bounds_ = GetBounds();
+    ac_save_bounds_timer_.Start(
+        FROM_HERE, kSaveBoundsAfterMoves,
+        base::BindOnce(&ArdiaVideoOverlayWindow::SavePendingBounds,
+                       base::Unretained(this)));
+  }
+}
+
+void ArdiaVideoOverlayWindow::SavePendingBounds() {
+  ac_save_bounds_timer_.Stop();
+  if (const std::optional<gfx::Rect> bounds =
+          std::exchange(ac_pending_bounds_, std::nullopt)) {
+    SaveArdiaPictureInPictureBounds(*bounds);
   }
 }
 

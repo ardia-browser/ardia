@@ -36,7 +36,10 @@ NS_ASSUME_NONNULL_BEGIN
 + (NSArray<NSDictionary<NSString *, id> *> *)devEventsForBrowser:(int)browserId NS_SWIFT_NAME(devEvents(browserId:));
 + (NSInteger)devWindowNumberForBrowser:(int)browserId NS_SWIFT_NAME(devWindowNumber(browserId:));
 + (BOOL)devFocusPageOfBrowser:(int)browserId NS_SWIFT_NAME(devFocusPage(browserId:));
++ (nullable NSString *)devPagePhaseOf:(NSString *)transferKey NS_SWIFT_NAME(devPagePhase(of:));
++ (BOOL)devClosePageOf:(NSString *)transferKey NS_SWIFT_NAME(devClosePage(of:));
 + (int)browserIdOfTab:(nullable NSString *)tabId NS_SWIFT_NAME(browserId(ofTab:));
+@property(class, nonatomic) BOOL reportsCommits;
 
 @end
 
@@ -51,31 +54,56 @@ NS_ASSUME_NONNULL_BEGIN
 @end
 
 @interface ArdiaWebView (Tab)
++ (void)setLittleArdiaOpensNewTabLinks:(BOOL)enabled NS_SWIFT_NAME(setLittleArdiaOpensNewTabLinks(_:));
 - (void)resolveUnresponsive:(BOOL)terminate NS_SWIFT_NAME(resolveUnresponsive(terminate:));
 - (NSString *)discard:(BOOL)unload NS_SWIFT_NAME(discard(unload:));
+- (NSArray<NSNumber *> *)sleepIfHiddenFor:(NSTimeInterval)seconds NS_SWIFT_NAME(sleepIfHidden(for:));
 @end
 
 @interface ArdiaWebView (Reveals)
 + (void)revealTab:(NSString *)transferKey;
 + (void)dropTabReveals:(NSString *)transferKey;
 + (void)revealOffered:(NSString *)adoptId over:(NSString *)transferKey;
++ (BOOL)discardOffered:(NSString *)adoptId;
 @end
 
 @interface ArdiaWebView (Focus)
-+ (void)installOutgoingFocusSnapshots;
++ (void)keepOutgoingFocusFrom:(NSResponder *)responder NS_SWIFT_NAME(keepOutgoingFocus(from:));
++ (void)endOutgoingFocusFrom:(NSResponder *)responder NS_SWIFT_NAME(endOutgoingFocus(from:));
 - (void)focusPage;
+@end
+
+@interface ArdiaWebView (NeighbourPages)
++ (void)wakeNeighbourPagesIn:(NSWindow *)window NS_SWIFT_NAME(wakeNeighbourPages(in:));
++ (void)wakeNeighbourPagesIn:(NSWindow *)window seconds:(CFTimeInterval)seconds committed:(BOOL)committed
+    NS_SWIFT_NAME(wakeNeighbourPages(in:seconds:committed:));
++ (void)releaseNeighbourPagesIn:(NSWindow *)window NS_SWIFT_NAME(releaseNeighbourPages(in:));
 @end
 
 @interface ArdiaWebView (InputMonitors)
 + (void)installScrollZoom;
 + (void)installSwitchPrewarm;
++ (void)setCommandScrollZoomEnabled:(BOOL)enabled NS_SWIFT_NAME(setCommandScrollZoomEnabled(_:));
 + (NSArray<NSNumber *> *)devScrollZoom:(NSArray<NSDictionary<NSString *, id> *> *)steps
                                browser:(int)browserId NS_SWIFT_NAME(devScrollZoom(_:browserId:));
+@end
+
+@interface ArdiaWebView (Recording)
+- (void)copyRecordingPicture:(void (^)(CGImageRef _Nullable picture))completion NS_SWIFT_NAME(copyRecordingPicture(_:));
+@property (nonatomic, readonly) BOOL recordingShowsPage;
++ (NSArray<NSWindow *> *)recordingPictureInPictureWindowsOfWindow:(NSWindow *)window NS_SWIFT_NAME(recordingPictureInPictureWindows(of:));
++ (BOOL)recordingWindowIsPrivate:(NSWindow *)window NS_SWIFT_NAME(recordingWindowIsPrivate(_:));
++ (CGFloat)recordingCornerRadiusOfWindow:(NSWindow *)window NS_SWIFT_NAME(recordingCornerRadius(of:));
++ (nullable NSView *)recordingControlsOfWindow:(NSWindow *)window NS_SWIFT_NAME(recordingControls(of:));
++ (void)copyRecordingPictureOfWindow:(NSWindow *)window
+                          completion:(void (^)(CGImageRef _Nullable picture))completion NS_SWIFT_NAME(copyRecordingPicture(of:_:));
 @end
 
 @interface ArdiaWebView (PageMessages)
 + (void)setDisplayMediaPicker:(BOOL)enabled;
 + (void)setSelectionPopoverEnabled:(BOOL)enabled NS_SWIFT_NAME(setSelectionPopoverEnabled(_:));
++ (void)setBlockAutoplayEverywhere:(BOOL)enabled NS_SWIFT_NAME(setBlockAutoplayEverywhere(_:));
++ (void)setFairPlayInChromium:(BOOL)enabled NS_SWIFT_NAME(setFairPlayInChromium(_:));
 - (void)resolveDisplayMedia:(NSString *)requestId sourceId:(nullable NSString *)sourceId audio:(BOOL)audio
     NS_SWIFT_NAME(resolveDisplayMedia(_:sourceId:audio:));
 @end
@@ -83,11 +111,14 @@ NS_ASSUME_NONNULL_BEGIN
 @interface ArdiaWebView (Peek)
 + (void)setPeekModifier:(NSString *)modifier;
 + (void)setSplitLinkModifier:(NSString *)modifier;
++ (void)setPeekOtherSiteTabs:(NSArray<NSString *> *)tabIds;
 + (BOOL)devPostPeekMouseUp:(NSString *)keys over:(NSString *)transferKey;
 @end
 
 @interface ArdiaWebView (ContextMenu)
 + (void)setSearchEngineName:(NSString *)name;
++ (void)removeSharedImage:(NSURL *)file NS_SWIFT_NAME(removeSharedImage(_:));
++ (void)removeSharedImages;
 @end
 
 @interface ArdiaWebView (PictureInPicture)
@@ -141,6 +172,7 @@ NS_ASSUME_NONNULL_BEGIN
            completion:(void (^)(NSDictionary<NSString *, id> *_Nullable result))completion
     NS_SWIFT_NAME(downloadImage(_:maxPixels:completion:));
 - (void)mediaCommand:(NSString *)action seconds:(double)seconds NS_SWIFT_NAME(mediaCommand(_:seconds:));
+- (void)seekPictureInPictureBy:(double)seconds;
 @end
 
 @interface ArdiaWebView (Site)

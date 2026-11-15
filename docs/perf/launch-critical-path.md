@@ -295,3 +295,102 @@ ms from `open`): window 269 vs 295, navigation start 270 vs 254, request 290 vs 
 341 vs 347, and the off arm's slow launches (386 to 390) are gone. Looked at and dropped: starting React Native 100 ms
 later (first paint unchanged) and the old navigation-first order with the engine fixes on (same first paint, later
 window).
+
+## First launch after an update (2026-10-27, #505)
+
+Field `perf_launch` (7 days to 2026-10-27): the first launch of a version reaches JS at a median of 2.2 s against 0.7 s
+for the launches after it, and all of the gap is before JS (JS to window is ~150 ms either way). Lab, macOS 27.2,
+0.2.41 → 0.2.42-nightly.1 release builds on one data dir with 5 tabs, hidden instances, interleaved, n=4 per row, load
+9 to 27, medians, ms from process start:
+
+| | before `ChromeMain` | `ChromeMain` → JS | window | its second launch's window |
+|---|---|---|---|---|
+| notarized update, Sparkle-style (`gktool scan`, then moved into place) | 2330 | 572 | 2995 | 680 |
+| the same, after a hidden run of the staged copy | 53 | 565 | 713 | 674 |
+| fresh copy of the notarized bundle, same path / new path | 3610 / 3125 | 781 / 588 | 4574 / 3812 | 886 / 760 |
+| same bundle, only the data from 0.2.41 | 84 | 822 | 1011 | 782 |
+
+- **The cost is Gatekeeper's evaluation of a bundle macOS hasn't run.** syspolicyd burns 1.6 to 3.4 s of CPU during
+  it (`GK evaluateScanResult: 3`, then ~1.7 s before the process goes on); Chrome's own version-change work and React
+  Native's add ~35 ms.
+- **`gktool scan` no longer pre-pays a notarized bundle.** On an Apple Development re-signed copy it does (97 to 130
+  ms before `ChromeMain` against 1566 to 1602 without it, n=2); on the notarized copy it doesn't (1766, 1790). So
+  Sparkle's own scan, which the lab runs with re-signed copies made look sufficient, does nothing for real updates.
+  A real Sparkle 2.9.6 install of the notarized nightly: 2059 ms before `ChromeMain` on its first launch.
+- **The hidden run does, through every Sparkle path.** Install on quit with the prewarm from
+  `willInstallUpdateOnQuit`: 52 ms. The resumed "Install and Relaunch" alert installs the same, prewarmed files (same
+  inode): 51 ms. A user-initiated check (Check for Updates…, Settings › Check Now) never calls `willInstallUpdateOnQuit`:
+  1465 ms (median, n=4; window 2019 ms); with a hidden run at `showReady(toInstallAndRelaunch:)`: 51 ms (window 552 ms),
+  interleaved.
+- **The hidden run's effect doesn't last.** On a quiet Mac a prewarmed copy was still warm 30 minutes later (63 ms), and
+  re-running an already-evaluated copy takes ~52 ms; on a busy one (an app build and dozens of other fresh copies in
+  between) two prewarmed copies were back to 2047 and 1775 ms after 40 minutes (untouched: 2549, 2406). The run from
+  `willInstallUpdateOnQuit` happens when Sparkle stages the update, often hours before the install, so it rarely
+  helps by itself.
+- **Shipped:** `UpdatePrewarm` also runs the staged copy when Sparkle shows a staged update (`showReady`, a resumed
+  alert) and holds the Install choice until that run ends (15 s at most), so every Install and Relaunch gets it, and
+  a resumed one re-runs it (an already-evaluated copy takes ~60 ms). The run is recorded and the next `perf_launch`
+  says `update_prewarm` (`done`, `failed`, `none`) and `update_prewarm_ago`, which tells field launches with and
+  without it apart.
+- **What stays the OS's:** a copy nothing ran before (a DMG install, a manual copy) pays the evaluation once, 2 to 5 s
+  here and more on a loaded Mac; a cold first launch adds the page cache. A run killed at quit (the user quits while it
+  runs) leaves the rest to the first launch.
+
+## Pre-JS time since 0.2.39 (2026-11-12)
+
+Field `perf_launch`, same installs on both versions, warm: `js_ms` +138 ms 0.2.39 → 0.2.40 and +176 ms 0.2.40 → 0.2.41,
+with `content_ms` (+128, +198) and `tab_paint_ms` (+145, +66) moving with it; `commit_ms - js_ms` flat at ~100 ms. Cold,
+0.2.44 → 0.2.45: `js_ms` +260 ms (46 installs).
+
+Lab, release builds ad-hoc signed, hidden, interleaved, medians, ms from process start. One-tab session (n=6, round-robin):
+
+| | 0.2.39 | 0.2.41 | 0.2.45 | HEAD |
+|---|---|---|---|---|
+| React Native starts executing the bundle | 252 | 279 | 271 | 263 |
+| its content on screen | 301 | 338 | 328 | 326 |
+| restored tab's first contentful paint (x.com) | 925 | 863 | 1190 | 901 |
+
+The owner's 89-tab profile on HEAD (n=8): `engineDidStart` 150, the early window built 160 → 220 (window creation in
+Chrome ~36 ms, layout ~15, ordering front ~20), its Core Animation commit until the run loop's first idle, React Native
+started at ~240 and executing at ~250. The ~90 ms between `engineDidStart` and React Native is the early window
+(shipped 0.2.40, picture and glass in 0.2.41): what moved `js_ms`. Nothing else before JS grew: dyld ~45 ms and
+`engineDidStart` ~150 ms in every version; the bundle grew 4.3 → 6.2 → 7.5 MB (0.2.39, 0.2.41, 0.2.45; mapped, its
+evaluation 22 to 30 ms in all three) and the app 304 → 390 MB with 357 more files, which only a cold or first launch
+reads.
+
+The early window is a net win on that profile (HEAD, `launchTab` off vs on, n=8): content 396 vs 396, the restored
+tab's first paint 540 vs 424, a window on screen at ~240 instead of ~400; `js_ms` 182 vs 248. Starting React Native
+earlier was tried three ways (before the early window; the early window built when JS starts; the same main-thread turn
+instead of the first idle): `js_ms` −23 to −82 ms and content −16 to −30 ms, but the restored tab's request and response
+need the main thread and waited behind React Native's first render, so its first paint was 32 to 100 ms later in every
+variant. Not shipped. `perf_launch` now sends `engine_ms`, `early_window_ms` and `rn_ms` so the field can split the
+pre-JS time the same way and tell whether the early window pays off on slower Macs.
+
+## Cold launches over 10 s (2026-11-13)
+
+Field `perf_launch`, cold, last 24 h: 65 of 381 launches had `content_ms` above 10 s (p50 3.0 s, p90 14.7 s on 0.2.45;
+0.2.44 14.8 s; nightlies 9.7 to 10.1 s). On those launches `js_ms` is ~14 s and `content_ms` only ~0.4 s later, so the
+time is spent before the app's JavaScript runs, not in tab restore. In the nightly rows that carry `engine_ms`, most of
+it is already spent at `engineDidStart` (6.4 s of 7.0 s in one row). Stable builds send no `engine_ms` yet, and the
+cause isn't known: it could be the OS (Gatekeeper, a cold page cache, a loaded Mac) or our code between process start and
+`engineDidStart`. Nothing here is fixed or confirmed; the next change waits for the data below.
+
+`perf_launch` now also sends the marks that split process start → `engineDidStart`, in ms from process start, each null
+when the app didn't reach it:
+
+| Field | Stamped | Reads as |
+|---|---|---|
+| `main_ms` | first statement of `main.swift`, before `LaunchConfig` and `LegacyMigration` | the OS's time before our code runs |
+| `startup_ms` | after `ardia_host::PrepareStartup` in `runWithArgc` | `startup_ms - main_ms`: migration, launch config, data directory |
+| `chromium_ms` | just before `ArdiaCoreEngine runWithArgc:` | `chromium_ms - startup_ms`: the rest of our setup |
+| `engine_ms` | `engineDidStart` | `engine_ms - chromium_ms`: Chromium's startup and its profile load |
+
+`load_1m` (the 1-minute load average from `getloadavg`) says whether the Mac was busy, and `launched_hidden` whether
+the launch was a hidden one (a login item) or the user opening the app. Together with `since_boot` and `since_quit`
+(`unclean`) they tell the first launch after a reboot or an unclean quit from the rest.
+
+How to read a slow launch once these ship (nightly first, since stable builds carry no `engine_ms` today): when
+`main_ms` is close to `engine_ms`, the time is before `main` and is the OS's (the next change would be a login-time
+prewarm); when `startup_ms - main_ms`, `chromium_ms - startup_ms` or `engine_ms - chromium_ms` holds the 5 to 10 s, that
+stretch is the one to optimise. A high `load_1m` with `launched_hidden` true points at a Mac still busy logging in. In a
+lab release build run hidden, `main_ms` should be a few tens of ms and `engine_ms` ~150 ms, as in the table above.

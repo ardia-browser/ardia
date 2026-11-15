@@ -1,8 +1,9 @@
-import { displayHost } from "@ardia/core";
+import { displayHost, hostOf } from "@ardia/core";
 import { memo, useState } from "react";
 import { Image, Text, View } from "react-native";
 import { faviconFailed, useAppearanceDark, useFavicon, useFaviconTheme } from "../../state/favicons/favicons";
 import { radius, Symbol, useTheme, weight } from "../ui";
+import { typeFace } from "../ui/tokens";
 import { bundledSiteIcon } from "./siteIcons";
 
 export const Favicon = memo(function Favicon({
@@ -35,15 +36,22 @@ export const Favicon = memo(function Favicon({
         setBroken(resolved.uri);
         if (resolved.profileId) faviconFailed(resolved.profileId, resolved.uri);
       }}
-      style={{ width: size, height: size, borderRadius: size > 18 ? radius.s : radius.xs, tintColor: white ? theme.textPrimary : undefined }}
+      style={{ width: size, height: size, borderRadius: size > 18 ? radius.control : radius.hair, tintColor: white ? theme.textPrimary : undefined }}
     />
   );
+});
+
+export const SiteFavicon = memo(function SiteFavicon({ host, profileId, size }: { host: string; profileId: string; size?: number }) {
+  const theme = useTheme();
+  const url = `https://${host}`;
+  if (bundledSiteIcon(url, theme.dark) !== undefined) return <Favicon url={url} size={size} />;
+  return <Favicon url={url} favicon={`${url}/favicon.ico`} profileId={profileId} size={size} />;
 });
 
 export const FaviconFallback = memo(function FaviconFallback({ url, size = 16 }: { url: string; size?: number }) {
   const theme = useTheme();
   const bundled = bundledSiteIcon(url, theme.dark);
-  if (bundled !== undefined) return <Image source={bundled} style={{ width: size, height: size, borderRadius: size > 18 ? radius.s : radius.xs }} />;
+  if (bundled !== undefined) return <Image source={bundled} style={{ width: size, height: size, borderRadius: size > 18 ? radius.control : radius.hair }} />;
   const initial = hostInitial(url);
   if (!initial) return <Symbol name="globe" size={size - 3} color={theme.textSecondary} style={{ width: size, height: size }} />;
   const tile = Math.round((size * 14) / 16);
@@ -60,17 +68,16 @@ export const FaviconFallback = memo(function FaviconFallback({ url, size = 16 }:
           justifyContent: "center",
         }}
       >
-        <Text style={{ fontSize: Math.round(tile * 0.64), lineHeight: tile, fontWeight: weight.semibold, color: theme.textSecondary }}>{initial}</Text>
+        <Text style={{ ...typeFace(), fontSize: Math.round(tile * 0.64), lineHeight: tile, fontWeight: weight.semibold, color: theme.textSecondary }}>{initial}</Text>
       </View>
     </View>
   );
 });
 
 function hostInitial(url: string): string {
-  const host = /^(?:https?|ftp):\/\/(?:[^@/?#]*@)?([^/?#:]+)/i.exec(url)?.[1];
+  const host = /^(?:https?|ftp):/i.test(url) ? hostOf(url) : "";
   if (!host || /^[\d.]+$|^\[/.test(host)) return "";
-  const shown = displayHost(host.toLowerCase()).replace(/^www\./, "");
-  return Array.from(shown)[0]?.toLocaleUpperCase() ?? "";
+  return Array.from(displayHost(host))[0]?.toLocaleUpperCase() ?? "";
 }
 
 const NEW_TAB_MARK = require("../../../assets/new-tab-mark.png");

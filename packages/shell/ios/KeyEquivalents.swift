@@ -5,14 +5,10 @@ import ExpoModulesCore
 
 #if DEBUG
 enum KeyEquivalents {
-  private static let modifierNames: [String: NSEvent.ModifierFlags] = [
-    "command": .command, "shift": .shift, "option": .option, "control": .control, "function": .function,
-  ]
   private static var fired: [[String: Any]] = []
   private static var matched: [[String: Any]] = []
   private static var watching = false
   private static var pressing = 0, dryPressing = 0
-  private static var handler: ((String, String?, String?) -> Void)?
   private static var menuKeyIMP: IMP?
   private(set) static var trace: [String] = []
 
@@ -22,11 +18,12 @@ enum KeyEquivalents {
   }
 
   static func press(windowId: String, _ press: [String: Any], _ done: @escaping ([String: Any]) -> Void) {
-    guard let window = WindowManager.shared.windows[windowId] else { return done(["error": "no window \(windowId)"]) }
+    guard let window = WindowManager.shared.window(windowId) else { return done(["error": "no window \(windowId)"]) }
     note("press \(press["key"] ?? "") \(press["modifiers"] ?? "") focus=\(press["focus"] ?? "-")")
     watch()
     let key = press["key"] as? String ?? ""
-    let mods = NSEvent.ModifierFlags((press["modifiers"] as? [String] ?? []).compactMap { modifierNames[$0] })
+    let mods = ModifierName.flags(named: press["modifiers"] as? [String] ?? [])
+    let characters = press["characters"] as? String ?? key, keyCode = press["keyCode"] as? Int ?? 0
     switch press["focus"] as? String {
     case "window": window.makeFirstResponder(nil)
     case "page": if let page = pageViews(in: window).first { window.makeFirstResponder(page) }
@@ -45,39 +42,79 @@ enum KeyEquivalents {
         Self.press(windowId: windowId, next, done)
       }
     }
-    guard let event = NSEvent.keyEvent(
-      with: .keyDown, location: .zero, modifierFlags: mods, timestamp: ProcessInfo.processInfo.systemUptime,
-      windowNumber: window.windowNumber, context: nil, characters: press["characters"] as? String ?? key,
-      charactersIgnoringModifiers: key, isARepeat: false, keyCode: UInt16(press["keyCode"] as? Int ?? 0))
-    else { return done(["error": "no event for \(key)"]) }
+    let viaAppKit = press["send"] as? Bool == true
+    let built = viaAppKit
+      ? SyntheticInput.hardwareKey(.keyDown, in: window, keyCode: keyCode, modifiers: mods)
+      : SyntheticInput.key(.keyDown, in: window, characters: characters, ignoringModifiers: key, modifiers: mods, keyCode: keyCode)
+    guard let event = built else { return done(["error": "no event for \(key)"]) }
+    if viaAppKit, event.window !== window {
+      return done(["error": "the key event for \(key) is aimed at window \(event.windowNumber), not the pressed window \(window.windowNumber)"])
+    }
+    if viaAppKit, let typed = event.charactersIgnoringModifiers, typed.lowercased() != key.lowercased() {
+      let codes = { (text: String) in text.unicodeScalars.map { String(format: "U+%04X", $0.value) }.joined(separator: " ") }
+      return done(["error": "keyCode \(keyCode) types \(codes(typed)) on this keyboard layout, not \(codes(key))"])
+    }
+    NSApp.postEvent(event, atStart: true)
+    guard let current = NSApp.nextEvent(matching: .keyDown, until: .distantPast, inMode: .default, dequeue: true) else {
+      return done(["error": "the key event never came back from the app's event queue"])
+    }
     let restoreKeyWindow = press["asKey"] as? Bool == true ? standInKeyWindow(window) : nil
     let dry = press["dry"] as? Bool == true
-    let throughAppKit = press["send"] as? Bool == true && !dry
+    let throughAppKit = viaAppKit && !dry
     if !throughAppKit { begin(dry: dry) }
     fired = []
     matched = []
-    NSApp.postEvent(event, atStart: true)
-    let current = NSApp.nextEvent(matching: .keyDown, until: .distantPast, inMode: .default, dequeue: true) ?? event
-    var result: [String: Any] = ["firstResponder": window.firstResponder.map { String(describing: type(of: $0)) } ?? "nil"]
-    if press["send"] as? Bool == true {
+    var result: [String: Any] = [
+      "firstResponder": window.firstResponder.map { String(describing: type(of: $0)) } ?? "nil", "keyWindow": NSApp.keyWindow === window,
+    ]
+    var lostEvents = 0, misaimedEvents = 0
+    var wait = press["wait"] as? Int ?? 250
+    if viaAppKit {
       NSApp.sendEvent(current)
       let keyEvent = { (type: NSEvent.EventType, repeated: Bool) in
-        NSEvent.keyEvent(
-          with: type, location: .zero, modifierFlags: mods, timestamp: ProcessInfo.processInfo.systemUptime,
-          windowNumber: window.windowNumber, context: nil, characters: press["characters"] as? String ?? key,
-          charactersIgnoringModifiers: key, isARepeat: repeated, keyCode: UInt16(press["keyCode"] as? Int ?? 0))
+        SyntheticInput.hardwareKey(type, in: window, keyCode: keyCode, modifiers: mods, isARepeat: repeated)
+      }
+      let dispatch = { (built: NSEvent?) in
+        guard let event = built, event.window === window else {
+          if built == nil { lostEvents += 1 } else { misaimedEvents += 1 }
+          return
+        }
+        NSApp.postEvent(event, atStart: true)
+        if let queued = NSApp.nextEvent(matching: NSEvent.EventTypeMask(type: event.type), until: .distantPast, inMode: .default, dequeue: true) {
+          NSApp.sendEvent(queued)
+        } else {
+          lostEvents += 1
+        }
+      }
+      let stillHeld: NSEvent.ModifierFlags? =
+        (press["release"] as? [String]).map { ModifierName.flags(named: $0) } ?? (press["release"] as? Bool == true ? [] : nil)
+      let releaseModifiers = {
+        guard let stillHeld else { return }
+        dispatch(SyntheticInput.hardwareKey(.flagsChanged, in: window, keyCode: 59, modifiers: stillHeld))
       }
       let repeats = press["repeats"] as? Int ?? 0
       let every = press["repeatEvery"] as? Int ?? 50
       if repeats > 0 {
+        wait = max(wait, repeats * every + 150)
         for index in 1...repeats {
           DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(index * every)) {
-            keyEvent(.keyDown, true).map { NSApp.sendEvent($0) }
-            if index == repeats { keyEvent(.keyUp, false).map { NSApp.sendEvent($0) } }
+            dispatch(keyEvent(.keyDown, true))
+            if index == repeats {
+              dispatch(keyEvent(.keyUp, false))
+              releaseModifiers()
+            }
           }
         }
       } else {
-        keyEvent(.keyUp, false).map { NSApp.sendEvent($0) }
+        dispatch(keyEvent(.keyUp, false))
+        releaseModifiers()
+      }
+      if let again = press["again"] as? Int, repeats == 0 {
+        wait = max(wait, again + 150)
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(again)) {
+          dispatch(keyEvent(.keyDown, false))
+          dispatch(keyEvent(.keyUp, false))
+        }
       }
       result["handledBy"] = "sent"
     } else if !window.isKeyWindow, let page = window.firstResponder, String(describing: type(of: page)) == "RenderWidgetHostViewCocoa" {
@@ -96,8 +133,10 @@ enum KeyEquivalents {
       result["handledBy"] = "none"
     }
     note("dispatched \(result["handledBy"] ?? "")")
-    DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(press["wait"] as? Int ?? 250)) {
+    DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(wait)) {
       result["firstResponderAfter"] = window.firstResponder.map { String(describing: type(of: $0)) } ?? "nil"
+      result["lostEvents"] = lostEvents
+      if misaimedEvents > 0 { result["error"] = "\(misaimedEvents) key events weren't aimed at the pressed window \(window.windowNumber), so they weren't sent" }
       restoreKeyWindow?()
       if !throughAppKit { end(dry: dry) }
       result["fired"] = fired
@@ -108,21 +147,21 @@ enum KeyEquivalents {
   }
 
   static func click(windowId: String, _ click: [String: Any], _ done: @escaping ([String: Any]) -> Void) {
-    guard let window = WindowManager.shared.windows[windowId], let content = window.contentView else {
+    guard let window = WindowManager.shared.window(windowId), let content = window.contentView else {
       return done(["error": "no window \(windowId)"])
     }
     var origin = NSPoint.zero
     if let label = click["label"] as? String {
       guard let target = labeledView(label, in: content) else { return done(["error": "no view labeled \(label)"]) }
       let frame = target.convert(target.bounds, to: content)
-      origin = NSPoint(x: frame.midX, y: content.isFlipped ? frame.midY : content.bounds.height - frame.midY)
+      origin = SyntheticInput.contentPoint(x: frame.midX, top: frame.midY, in: content)
     } else if click["in"] as? String == "page" {
       guard let page = pageViews(in: window).first else { return done(["error": "no page in \(windowId)"]) }
       let frame = page.convert(page.bounds, to: content)
       origin = NSPoint(x: frame.minX, y: content.isFlipped ? frame.minY : content.bounds.height - frame.maxY)
     }
     let x = origin.x + (click["x"] as? Double ?? 0), y = origin.y + (click["y"] as? Double ?? 0)
-    let point = content.convert(NSPoint(x: x, y: content.isFlipped ? y : content.bounds.height - y), to: nil)
+    let point = content.convert(SyntheticInput.contentPoint(x: x, top: y, in: content), to: nil)
     let responderName = { window.firstResponder.map { String(describing: type(of: $0)) } ?? "nil" }
     let hit = content.superview.flatMap { $0.hitTest(point) }
     var result: [String: Any] = ["firstResponder": responderName(), "hit": hit.map { String(describing: type(of: $0)) } ?? "nil"]
@@ -143,6 +182,25 @@ enum KeyEquivalents {
     }
   }
 
+  static func menuBar(_ menu: NSMenu? = NSApp.mainMenu) -> [[String: Any]] {
+    guard let menu else { return [] }
+    menu.update()
+    return menu.items.map { item in
+      if item.isSeparatorItem { return ["separator": true, "hidden": item.isHidden] }
+      var entry = describe(item)
+      entry["key"] = item.keyEquivalent
+      entry["modifiers"] = item.keyEquivalent.isEmpty ? [] : ModifierName.names(item.keyEquivalentModifierMask)
+      entry["hidden"] = item.isHidden
+      entry["alternate"] = item.isAlternate
+      entry["keyWhenHidden"] = item.allowsKeyEquivalentWhenHidden
+      entry["state"] = item.state.rawValue
+      entry["enabled"] = item.isEnabled
+      entry["identifier"] = item.identifier?.rawValue ?? ""
+      if let submenu = item.submenu, submenu !== NSApp.servicesMenu { entry["submenu"] = menuBar(submenu) }
+      return entry
+    }
+  }
+
   private static func begin(dry: Bool) {
     if pressing == 0, let method = class_getInstanceMethod(NSMenu.self, #selector(NSMenu.performKeyEquivalent(with:))) {
       let original = method_getImplementation(method)
@@ -155,7 +213,7 @@ enum KeyEquivalents {
         guard let (item, parent) = menuItem(for: event) else { return false }
         parent.update()
         matched.append(describe(item).merging(["enabled": item.isEnabled]) { a, _ in a })
-        guard item.isEnabled else { return false }
+        guard item.isEnabled else { return true }
         parent.performActionForItem(at: parent.index(of: item))
         return true
       }
@@ -163,16 +221,15 @@ enum KeyEquivalents {
     }
     pressing += 1
     if dry {
-      if dryPressing == 0 { handler = MenuTarget.shared.handler }
       dryPressing += 1
-      MenuTarget.shared.handler = { _, _, _ in }
+      MenuTarget.shared.swallowsCommands = true
     }
   }
 
   private static func end(dry: Bool) {
     if dry {
       dryPressing -= 1
-      if dryPressing == 0 { MenuTarget.shared.handler = handler }
+      if dryPressing == 0 { MenuTarget.shared.swallowsCommands = false }
     }
     pressing -= 1
     if pressing == 0, let imp = menuKeyIMP, let method = class_getInstanceMethod(NSMenu.self, #selector(NSMenu.performKeyEquivalent(with:))) {

@@ -1,18 +1,19 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, PanResponder, StyleSheet, View } from "react-native";
 import { useTheme } from "../ui/theme";
-import { withAlpha } from "../sidebar/tokens";
 import { updateSplit } from "../../state/splits/actions";
 import { useDragFallbackPane } from "../../state/splits/hooks";
 import type { SplitView } from "../../state/browser/types";
 import { resize, type Divider, type Rect } from "../window/geometry";
-import { font, Panel, radius, space, Symbol, useHover, VisualEffect, weight } from "../ui";
-import { hideToast, useToasts } from "../../state/splits/actions";
+import { capsule, space, Symbol, Text, Toast, withAlpha } from "../ui";
+import { hideToast, useToasts } from "../../state/app/toasts";
 import { useWindowId } from "../../state/browser/hooks";
+import { useCardFrame } from "../window/cardFrame";
+import type { Size } from "../ui/useSettled";
 import { overPeek } from "../../state/windows/dockMotion";
 import { zoneHit, zoneRect, type ZoneStage } from "./splitDrop";
 import { setDropTarget, setOnPage, setTargetResolver, useTabDrag } from "../../state/drag/tabDrag";
-import { SPLIT_MOTION, SPLIT_SHADOWS, splitColors, ZONE_ACCENT_ALPHA, ZONE_DASH_RADIUS, ZONE_RADIUS, ZONE_SLIDE_MS } from "./tokens";
+import { FOCUS_RING, SPLIT_MOTION, splitColors, TOAST_ACTION_MS, TOAST_MS, ZONE_ACCENT_ALPHA, ZONE_DASH_INSET, ZONE_SLIDE_MS, zoneDashRadius, zoneRadius } from "./tokens";
 
 export function SplitDividers({ split, dividers, width, height }: { split: SplitView; dividers: Divider[]; width: number; height: number }) {
   return (
@@ -24,11 +25,64 @@ export function SplitDividers({ split, dividers, width, height }: { split: Split
   );
 }
 
+export type WindowShape = Size & { radius: number };
+
+type Corners = { topLeft: number; topRight: number; bottomLeft: number; bottomRight: number };
+
+export const SplitFocusRing = memo(function SplitFocusRing({ rect, origin, windowShape }: { rect: Rect; origin: { x: number; y: number } | null; windowShape: WindowShape | null }) {
+  const theme = useTheme();
+  const { inset, radius, splitGap } = useCardFrame();
+  const framed = inset > 0;
+  const room = framed ? splitGap / 2 : 0;
+  const width = framed ? Math.min(FOCUS_RING.width, room) : FOCUS_RING.width;
+  const outset = Math.min(FOCUS_RING.width + FOCUS_RING.gap, room);
+  const corners = framed ? uniformCorners(radius > 0 ? radius + outset : 0) : windowCorners(rect, origin, windowShape);
+  const box = { x: rect.x - outset, y: rect.y - outset, width: rect.width + outset * 2, height: rect.height + outset * 2 };
+  const color = theme.powerUpColor ?? theme.accent;
+  const edge = (style: { left: number; top: number; width: number; height: number }) => <View style={{ position: "absolute", backgroundColor: color, ...style }} />;
+  const corner = (r: number, left: number, top: number, dx: number, dy: number) =>
+    r > 0 && (
+      <View style={{ position: "absolute", left, top, width: r, height: r, overflow: "hidden" }}>
+        <View style={{ position: "absolute", left: dx, top: dy, width: r * 2, height: r * 2, borderRadius: r, borderWidth: width, borderColor: color, overflow: "hidden" }} />
+      </View>
+    );
+  const { topLeft, topRight, bottomLeft, bottomRight } = corners;
+  const right = box.x + box.width;
+  const bottom = box.y + box.height;
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {edge({ left: box.x + topLeft, top: box.y, width: box.width - topLeft - topRight, height: width })}
+      {edge({ left: box.x + bottomLeft, top: bottom - width, width: box.width - bottomLeft - bottomRight, height: width })}
+      {edge({ left: box.x, top: box.y + topLeft, width, height: box.height - topLeft - bottomLeft })}
+      {edge({ left: right - width, top: box.y + topRight, width, height: box.height - topRight - bottomRight })}
+      {corner(topLeft, box.x, box.y, 0, 0)}
+      {corner(topRight, right - topRight, box.y, -topRight, 0)}
+      {corner(bottomLeft, box.x, bottom - bottomLeft, 0, -bottomLeft)}
+      {corner(bottomRight, right - bottomRight, bottom - bottomRight, -bottomRight, -bottomRight)}
+    </View>
+  );
+});
+
+const uniformCorners = (r: number): Corners => ({ topLeft: r, topRight: r, bottomLeft: r, bottomRight: r });
+
+function windowCorners(rect: Rect, origin: { x: number; y: number } | null, windowShape: WindowShape | null): Corners {
+  if (!origin || !windowShape || windowShape.radius <= 0) return uniformCorners(0);
+  const r = windowShape.radius;
+  const touches = (a: number, b: number) => Math.abs(a - b) < 0.5;
+  const left = touches(origin.x + rect.x, 0);
+  const top = touches(origin.y + rect.y, 0);
+  const right = touches(origin.x + rect.x + rect.width, windowShape.width);
+  const bottom = touches(origin.y + rect.y + rect.height, windowShape.height);
+  return { topLeft: left && top ? r : 0, topRight: right && top ? r : 0, bottomLeft: left && bottom ? r : 0, bottomRight: right && bottom ? r : 0 };
+}
+
+const sizesOf = (split: SplitView) => ({ sizes: split.slots.map((slot) => slot.size), stack: split.slots.find((slot) => "stack" in slot)?.stackSizes });
+
 function DividerHandle({ split, divider, width, height }: { split: SplitView; divider: Divider; width: number; height: number }) {
   const theme = useTheme();
   const [hovered, setHovered] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const start = useRef<{ sizes: number[]; stack?: [number, number] }>({ sizes: split.sizes });
+  const start = useRef<{ sizes: number[]; stack?: [number, number] }>(sizesOf(split));
   const latest = useRef({ split, divider, width, height });
   latest.current = { split, divider, width, height };
 
@@ -38,16 +92,17 @@ function DividerHandle({ split, divider, width, height }: { split: SplitView; di
         onStartShouldSetPanResponder: () => true,
         onPanResponderGrant: () => {
           const { split: v } = latest.current;
-          start.current = { sizes: v.sizes, stack: v.stack?.sizes };
+          start.current = sizesOf(v);
           setDragging(true);
         },
         onPanResponderMove: (_, g) => {
           const { split: v, divider: d, width: w, height: h } = latest.current;
           const delta = d.vertical ? g.dx : g.dy;
+          const gap = d.vertical ? d.rect.width : d.rect.height;
           if (d.kind === "root") {
-            updateSplit(v.id, { sizes: resize(start.current.sizes, d.index, delta, d.vertical ? w : h) });
+            updateSplit(v.id, { sizes: resize(start.current.sizes, d.index, delta, d.vertical ? w : h, gap) });
           } else if (start.current.stack) {
-            const next = resize(start.current.stack, 0, delta, d.vertical ? w : h) as [number, number];
+            const next = resize(start.current.stack, 0, delta, d.vertical ? w : h, gap) as [number, number];
             updateSplit(v.id, { stackSizes: next });
           }
         },
@@ -59,6 +114,7 @@ function DividerHandle({ split, divider, width, height }: { split: SplitView; di
 
   const { rect, vertical } = divider;
   const active = hovered || dragging;
+  const cursor = vertical ? "col-resize" : "row-resize";
   return (
     <View
       {...responder.panHandlers}
@@ -72,14 +128,16 @@ function DividerHandle({ split, divider, width, height }: { split: SplitView; di
         height: rect.height + (vertical ? 0 : 4),
         alignItems: "center",
         justifyContent: "center",
-        cursor: vertical ? "col-resize" : "row-resize",
+        cursor,
       }}
     >
       <View
+        pointerEvents="none"
         style={{
-          width: vertical ? 4 : 36,
-          height: vertical ? 36 : 4,
-          borderRadius: 2,
+          cursor,
+          width: vertical ? HANDLE_THICKNESS : HANDLE_LENGTH,
+          height: vertical ? HANDLE_LENGTH : HANDLE_THICKNESS,
+          borderRadius: capsule(HANDLE_THICKNESS),
           backgroundColor: theme.mark,
           opacity: dragging ? 0.55 : active ? 0.32 : 0,
         }}
@@ -88,14 +146,17 @@ function DividerHandle({ split, divider, width, height }: { split: SplitView; di
   );
 }
 
+const HANDLE_THICKNESS = 4;
+const HANDLE_LENGTH = 36;
+
 export function DropTargets({ panes, origin }: { panes: Record<string, Rect>; origin: { x: number; y: number } | null }) {
   const windowId = useWindowId();
-  const dragging = useTabDrag((s) => (s.windowId === windowId ? s.tabId : null));
-  const x = useTabDrag((s) => s.x);
-  const y = useTabDrag((s) => s.y);
-  const lifted = useTabDrag((s) => s.lifted);
-  const outside = useTabDrag((s) => s.outside);
-  const target = useTabDrag((s) => s.target);
+  const dragging = useTabDrag((s) => (s.phase === "tab" && s.windowId === windowId ? s.tabId : null));
+  const x = useTabDrag((s) => (s.phase === "tab" ? s.x : -1));
+  const y = useTabDrag((s) => (s.phase === "tab" ? s.y : -1));
+  const lifted = useTabDrag((s) => (s.phase === "tab" ? s.lifted : null));
+  const outside = useTabDrag((s) => s.phase === "tab" && s.outside);
+  const target = useTabDrag((s) => (s.phase === "tab" ? s.target : null));
   const full = Object.keys(panes).length >= 3;
   const fallback = useDragFallbackPane(dragging, panes, windowId);
   const candidates = useMemo((): [string, Rect][] => {
@@ -169,7 +230,7 @@ const ZONE_SPRING = { ...SPLIT_MOTION.zoneSpring, useNativeDriver: false } as co
 function DropZone({ pane, side, shown, stage, pointerX, onHidden }: { pane: Rect; side: "left" | "right"; shown: boolean; stage: ZoneStage; pointerX: number; onHidden(): void }) {
   const theme = useTheme();
   const rect = zoneRect(pane, side, stage, pointerX);
-  const anim = useRef({ x: new Animated.Value(rect.x), y: new Animated.Value(rect.y), w: new Animated.Value(rect.width), h: new Animated.Value(rect.height) }).current;
+  const [anim] = useState(() => ({ x: new Animated.Value(rect.x), y: new Animated.Value(rect.y), w: new Animated.Value(rect.width), h: new Animated.Value(rect.height) }));
   const glow = useRef(new Animated.Value(0)).current;
   const slide = useRef(new Animated.Value(0)).current;
   const active = stage === "active";
@@ -201,7 +262,7 @@ function DropZone({ pane, side, shown, stage, pointerX, onHidden }: { pane: Rect
         top: anim.y,
         width: anim.w,
         height: anim.h,
-        borderRadius: ZONE_RADIUS,
+        borderRadius: zoneRadius(),
         borderWidth: 0.5,
         borderColor: colors.zoneBorder,
         backgroundColor: glow.interpolate({ inputRange: [0, 1], outputRange: [colors.zoneFill, withAlpha(theme.accent, dark ? ZONE_ACCENT_ALPHA.dark : ZONE_ACCENT_ALPHA.light)] }),
@@ -213,93 +274,55 @@ function DropZone({ pane, side, shown, stage, pointerX, onHidden }: { pane: Rect
       <View
         style={{
           position: "absolute",
-          left: 9.5,
-          right: 9.5,
-          top: 9.5,
-          bottom: 9.5,
-          borderRadius: ZONE_DASH_RADIUS,
+          left: ZONE_DASH_INSET,
+          right: ZONE_DASH_INSET,
+          top: ZONE_DASH_INSET,
+          bottom: ZONE_DASH_INSET,
+          borderRadius: zoneDashRadius(),
           borderStyle: "dashed",
           borderWidth: active ? 2.33 : 2,
           borderColor: active ? theme.accent : colors.zoneDash,
         }}
       />
       <Symbol name={side === "left" ? "rectangle.lefthalf.filled" : "rectangle.righthalf.filled"} size={18} color={active ? theme.accent : rest} style={{ width: 24, height: 20 }} />
-      <Text style={{ marginTop: 11, ...font.body, fontWeight: weight.semibold, color: active ? theme.accent : rest }}>{side === "left" ? "Add left split" : "Add right split"}</Text>
+      <Text weight="semibold" color={active ? theme.accent : rest} style={{ marginTop: space.l }}>{side === "left" ? "Add left split" : "Add right split"}</Text>
     </Animated.View>
   );
 }
 
 export const SplitToast = memo(function SplitToast({ windowId }: { windowId: string }) {
-  const theme = useTheme();
   const toast = useToasts((s) => s.toasts[windowId] ?? null);
-  const appear = useRef(new Animated.Value(0)).current;
   const [shown, setShown] = useState(toast);
-  useEffect(() => {
-    if (toast) return setShown(toast);
-    if (!shown) return;
-    Animated.timing(appear, { toValue: 0, ...SPLIT_MOTION.toastOut, useNativeDriver: true }).start(({ finished }) => {
-      if (finished) setShown(null);
-    });
-  }, [toast]);
-  useEffect(() => {
-    if (!toast) return;
+  const [closing, setClosing] = useState(false);
+  if (toast && toast !== shown) {
     setShown(toast);
-    appear.setValue(0);
-    Animated.spring(appear, { toValue: 1, useNativeDriver: true, ...SPLIT_MOTION.toastIn }).start();
-    if (toast.sticky) return;
-    const timer = setTimeout(() => {
-      Animated.timing(appear, { toValue: 0, ...SPLIT_MOTION.toastOut, useNativeDriver: true }).start(({ finished }) => {
-        if (!finished) return;
-        setShown(null);
-        hideToast(windowId, toast.id);
-      });
-    }, toast.action ? 4000 : 2600);
+    setClosing(false);
+  } else if (!toast && shown && !closing) setClosing(true);
+  useEffect(() => {
+    if (!toast || toast.sticky) return;
+    const timer = setTimeout(() => setClosing(true), toast.action ? TOAST_ACTION_MS : TOAST_MS);
     return () => clearTimeout(timer);
   }, [toast?.id]);
   if (!shown) return null;
-  const toastColors = splitColors(theme.dark);
+  const action = shown.action;
   return (
-    <View pointerEvents={shown.action ? "box-none" : "none"} style={{ position: "absolute", left: 0, right: 0, bottom: 22, alignItems: "center" }}>
-      <Animated.View style={{ opacity: appear, transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }, { scale: appear.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] }}>
-        <Panel
-          fill={toastColors.toastFill}
-          radius={radius.sheet}
-          border={toastColors.toastBorder}
-          shadow={SPLIT_SHADOWS.toast}
-          style={{ paddingHorizontal: space.xl, paddingVertical: space.ml, flexDirection: "row", alignItems: "center", gap: space.ml, maxWidth: 420 }}
-        >
-          <VisualEffect material="hudWindow" cornerRadius={radius.sheet} style={StyleSheet.absoluteFill} />
-          <Symbol name={shown.icon ?? "rectangle.split.3x1"} size={15} color={theme.icon} style={{ width: 20, height: 20 }} />
-          <View style={{ flexShrink: 1 }}>
-            <Text style={{ ...font.body, fontWeight: weight.semibold, color: theme.textPrimary }}>{shown.title}</Text>
-            {shown.message ? <Text style={{ ...font.small, color: theme.textSecondary, marginTop: 1 }}>{shown.message}</Text> : null}
-          </View>
-          {shown.action ? (
-            <ToastAction
-              title={shown.action.title}
-              onPress={() => {
-                shown.action!.run();
-                setShown(null);
-                hideToast(windowId, shown.id);
-              }}
-            />
-          ) : null}
-        </Panel>
-      </Animated.View>
-    </View>
+    <Toast
+      key={shown.id}
+      title={shown.title}
+      message={shown.message ?? undefined}
+      icon={shown.icon ?? "rectangle.split.3x1"}
+      action={action?.title}
+      onAction={() => {
+        action?.run();
+        setShown(null);
+        hideToast(windowId, shown.id);
+      }}
+      closing={closing}
+      onClosed={() => {
+        setShown(null);
+        setClosing(false);
+        hideToast(windowId, shown.id);
+      }}
+    />
   );
 });
-
-function ToastAction({ title, onPress }: { title: string; onPress(): void }) {
-  const theme = useTheme();
-  const { hovered, hoverProps } = useHover();
-  return (
-    <Pressable {...hoverProps} onPress={onPress}>
-      {({ pressed }) => (
-        <View style={{ height: 24, paddingHorizontal: space.ml, borderRadius: radius.button, justifyContent: "center", backgroundColor: pressed ? theme.toolbarPressed : hovered ? theme.toolbarHover : theme.urlPill }}>
-          <Text style={{ ...font.small, fontWeight: weight.medium, color: theme.textPrimary }}>{title}</Text>
-        </View>
-      )}
-    </Pressable>
-  );
-}

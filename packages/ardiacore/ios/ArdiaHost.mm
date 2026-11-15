@@ -1,11 +1,11 @@
 #import "ArdiaHostInternal.h"
+#import "ArdiaLaunchConfig.h"
 #import "ArdiaEarlyWindow.h"
 #import "ArdiaServices.h"
 #import "ArdiaNavigationDownloads.h"
 #import "ArdiaStartup.h"
 #import "ArdiaTabParking.h"
 #import "ArdiaWebViewInternal.h"
-#import "ArdiaNotifications.h"
 
 #import <Security/Security.h>
 #import <objc/runtime.h>
@@ -24,7 +24,6 @@ id<NSApplicationDelegate> (^gMakeDelegate)(void);
 
 id<NSApplicationDelegate> gAppDelegate;
 
-BOOL gStarted;
 
 NSString *gDataDirectory;
 
@@ -35,7 +34,7 @@ namespace {
 BOOL gMenuShortcutsReady;
 
 void SendReservedShortcuts() {
-  if (!gStarted || !gMenuShortcutsReady) return;
+  if (!ArdiaLaunchSequence.shared.engineRunning || !gMenuShortcutsReady) return;
   [ArdiaCoreEngine reservedShortcutsChanged];
 }
 
@@ -46,12 +45,7 @@ namespace ardia_host {
 void WatchReservedShortcuts() {
   static dispatch_once_t once;
   dispatch_once(&once, ^{
-    NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
-    [center addObserverForName:ArdiaMenuShortcutsChangedNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *) {
-      gMenuShortcutsReady = YES;
-      SendReservedShortcuts();
-    }];
-    [center addObserverForName:NSTextInputContextKeyboardSelectionDidChangeNotification object:nil queue:NSOperationQueue.mainQueue
+    [NSNotificationCenter.defaultCenter addObserverForName:NSTextInputContextKeyboardSelectionDidChangeNotification object:nil queue:NSOperationQueue.mainQueue
                     usingBlock:^(NSNotification *) { SendReservedShortcuts(); }];
   });
   SendReservedShortcuts();
@@ -73,23 +67,32 @@ ArdiaBootstrapDelegate *gBootstrap;
 
 bool gScratchDataDir = false;
 
-bool gAppKitWillFinish = false;
 
-bool gAppKitDidFinish = false;
 
-NSArray<NSURL *> *gPendingLaunchURLs;
 
-NSArray<NSURL *> *gLaunchLinks;
 
-bool gLinksHandled = false;
 
-bool gJSStarted = false;
 
 NSMutableDictionary<NSString *, NSDictionary *> *gInstallPrompts = [NSMutableDictionary dictionary];
 
 }
 
 @implementation ArdiaHost
+
+static void (^gQuitCancelledHandler)(void);
+
++ (void (^)(void))quitCancelledHandler {
+  return gQuitCancelledHandler;
+}
+
++ (void)setQuitCancelledHandler:(void (^)(void))handler {
+  gQuitCancelledHandler = [handler copy];
+}
+
++ (void)menuShortcutsChanged {
+  gMenuShortcutsReady = YES;
+  SendReservedShortcuts();
+}
 
 + (void)replayInstallPrompts {
   for (NSDictionary *prompt in gInstallPrompts.allValues) [ArdiaEvents emit:@"extensions.installPrompt" data:prompt];
@@ -150,6 +153,40 @@ NSMutableDictionary<NSString *, NSDictionary *> *gInstallPrompts = [NSMutableDic
     if ([Profiles().allValues containsObject:p]) return;
   }
   if (p) [engine releaseProfile:p];
+}
+
++ (NSDictionary<NSString *, id> *)unloadIdleProfile:(NSString *)profile {
+  profile = profile ?: @"";
+  ArdiaCoreEngine *engine = ArdiaCoreEngine.sharedEngine;
+  ArdiaCoreProfile *p = ardia_host::LoadedProfile(profile);
+  NSDictionary * (^busy)(NSString *) = ^(NSString *heldBy) {
+    return @{@"status" : @"busy", @"tabs" : @[], @"heldBy" : heldBy};
+  };
+  if (!p) return ProfileWaiters()[profile] ? busy(@"profile") : @{@"status" : @"released", @"tabs" : @[]};
+  if (!engine || p.offTheRecord || ardia_host::IsPrivateSessionId(profile) || ardia_host::IsDeletedProfile(profile)) return busy(@"profile");
+  NSMutableArray<ArdiaWebView *> *views = [NSMutableArray array];
+  NSMutableArray<ArdiaCoreTab *> *hosted = [NSMutableArray array];
+  for (ArdiaWindowController *controller in ArdiaWindowController.all) {
+    for (ArdiaCoreTab *tab in [controller.coreWindow tabsForProfile:p]) {
+      ArdiaWebView *view = [ArdiaTabRegistry viewForTab:tab];
+      if (!view) return busy(@"tab");
+      if (NSString *heldBy = view.keptFromUnloadingBy) return busy(heldBy);
+      [views addObject:view];
+      [hosted addObject:tab];
+    }
+  }
+  if (NSString *heldBy = [engine sleepIdleProfile:p hostedTabs:hosted]) return busy(heldBy);
+  NSMutableArray<NSString *> *tabs = [NSMutableArray array];
+  for (ArdiaWebView *view in views) {
+    NSString *key = view.transferKey;
+    if (![view unloadKeepingHistory]) return @{@"status" : @"busy", @"tabs" : tabs, @"heldBy" : @"history"};
+    [tabs addObject:key];
+  }
+  return @{@"status" : [engine unloadIdleProfile:p], @"tabs" : tabs};
+}
+
++ (NSArray<NSString *> *)loadedProfiles {
+  return ardia_host::LoadedDataProfileNames();
 }
 
 + (BOOL)stopCapture:(NSString *)tabId {
@@ -248,6 +285,102 @@ NSMutableDictionary<NSString *, NSDictionary *> *gInstallPrompts = [NSMutableDic
   return tab ? tab.tabId : -1;
 }
 
+static NSMutableDictionary<NSString *, ArdiaCoreWindow *> *OffscreenWindows() {
+  static NSMutableDictionary<NSString *, ArdiaCoreWindow *> *windows = [NSMutableDictionary dictionary];
+  return windows;
+}
+
+static ArdiaCoreWindow *OffscreenWindowFor(ArdiaCoreProfile *profile) {
+  NSString *name = ardia_host::ProfileName(profile);
+  ArdiaCoreWindow *window = OffscreenWindows()[name];
+  if (window.window) return window;
+  window = [[ArdiaCoreWindow alloc] initWithContentRect:NSMakeRect(0, 0, 1280, 800)];
+  if (!window.window) return nil;
+  window.internal = YES;
+  window.automation = YES;
+  OffscreenWindows()[name] = window;
+  return window;
+}
+
+static NSDictionary<NSString *, id> *OffscreenRefusal(NSString *reason) {
+  return @{@"ok" : @NO, @"reason" : reason};
+}
+
++ (void)cliMoveOffscreen:(NSString *)tabId tries:(NSInteger)tries completion:(void (^)(NSDictionary<NSString *, id> *moved))completion {
+  ArdiaCoreTab *tab = ardia_host::TabWithAppTabId(tabId);
+  ArdiaWebView *view = tab ? [ArdiaTabRegistry viewForTab:tab] : nil;
+  if (!tab || tab.closed || tab.discarded || !view) return completion(OffscreenRefusal(@"That tab has no page loaded."));
+  ArdiaCoreWindow *window = OffscreenWindowFor(tab.profile);
+  const ArdiaCoreAdoption adoption = window ? [window canAdoptTab:tab] : ArdiaCoreAdoptionRefused;
+  if (adoption == ArdiaCoreAdoptionBusy && tries > 0) {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 20 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+      [self cliMoveOffscreen:tabId tries:tries - 1 completion:completion];
+    });
+    return;
+  }
+  if (adoption != ArdiaCoreAdoptionAdopted) return completion(OffscreenRefusal(@"Ardia couldn't take that tab off-screen."));
+  if (![view releasePageForOffscreen]) return completion(OffscreenRefusal(@"That tab is shown in a window, so it can't go off-screen."));
+  if ([window adoptTab:tab] != ArdiaCoreAdoptionAdopted) {
+    [tab close];
+    return completion(OffscreenRefusal(@"Ardia couldn't take that tab off-screen, and closed it."));
+  }
+  NSView *page = tab.view, *host = window.hostView;
+  [page removeFromSuperview];
+  page.frame = host.bounds;
+  page.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+  page.hidden = NO;
+  [host addSubview:page];
+  completion(@{@"ok" : @YES});
+}
+
++ (void)cliMoveOffscreen:(NSString *)tabId completion:(void (^)(NSDictionary<NSString *, id> *moved))completion {
+  [self cliMoveOffscreen:tabId tries:50 completion:completion];
+}
+
++ (void)cliCloseOffscreenTabs {
+  for (ArdiaCoreWindow *window in OffscreenWindows().allValues)
+    for (ArdiaCoreProfile *profile in ardia_host::LoadedProfiles())
+      for (ArdiaCoreTab *tab in [[window tabsForProfile:profile] copy]) [tab close];
+}
+
++ (void)cliTabTargets:(NSArray<NSString *> *)tabIds completion:(void (^)(NSDictionary<NSString *, id> *targets))completion {
+  static NSMutableDictionary<NSString *, NSString *> *lastTarget;
+  static NSMutableDictionary<NSString *, NSNumber *> *generations;
+  if (!lastTarget) {
+    lastTarget = [NSMutableDictionary dictionary];
+    generations = [NSMutableDictionary dictionary];
+  }
+  NSMutableDictionary<NSString *, id> *answer = [NSMutableDictionary dictionary];
+  void (^record)(NSString *, NSString *) = ^(NSString *tabId, NSString *targetId) {
+    if (targetId && ![lastTarget[tabId] isEqualToString:targetId]) {
+      lastTarget[tabId] = targetId;
+      generations[tabId] = @(generations[tabId].integerValue + 1);
+    }
+    answer[tabId] = @{@"targetId" : targetId ?: NSNull.null, @"pageGeneration" : generations[tabId] ?: @0};
+  };
+  dispatch_group_t pending = dispatch_group_create();
+  for (NSString *tabId in tabIds) {
+    ArdiaCoreTab *tab = ardia_host::TabWithAppTabId(tabId);
+    if (!tab || tab.closed || tab.discarded || [ArdiaTabRegistry viewForTab:tab].awaitsFirstDocument) {
+      record(tabId, nil);
+      continue;
+    }
+    dispatch_group_enter(pending);
+    [tab devToolsCall:@"Target.getTargetInfo"
+               params:@{}
+              timeout:1.0
+           completion:^(NSDictionary *result, NSString *error) {
+             id info = result[@"targetInfo"];
+             id targetId = [info isKindOfClass:NSDictionary.class] ? info[@"targetId"] : nil;
+             record(tabId, [targetId isKindOfClass:NSString.class] ? targetId : nil);
+             dispatch_group_leave(pending);
+           }];
+  }
+  dispatch_group_notify(pending, dispatch_get_main_queue(), ^{
+    completion(answer);
+  });
+}
+
 + (void)resolvePermission:(NSString *)requestId result:(NSString *)result remember:(BOOL)remember {
   [ArdiaCoreEngine resolvePermission:requestId result:result remember:remember];
 }
@@ -266,11 +399,11 @@ NSMutableDictionary<NSString *, NSDictionary *> *gInstallPrompts = [NSMutableDic
       @"height" : @(screen.frame.size.height),
     }];
   }
+  if (ArdiaLaunchConfig.shared.background) return sources;
   NSArray *windows = CFBridgingRelease(
       CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, kCGNullWindowID));
-  const pid_t me = getpid();
   for (NSDictionary *w in windows) {
-    if ([w[(id)kCGWindowLayer] intValue] != 0 || [w[(id)kCGWindowOwnerPID] intValue] == me) continue;
+    if ([w[(id)kCGWindowLayer] intValue] != 0) continue;
     NSDictionary *bounds = w[(id)kCGWindowBounds];
     const CGFloat width = [bounds[@"Width"] doubleValue], height = [bounds[@"Height"] doubleValue];
     if (width < 50 || height < 50) continue;
@@ -289,8 +422,34 @@ NSMutableDictionary<NSString *, NSDictionary *> *gInstallPrompts = [NSMutableDic
   return sources;
 }
 
++ (BOOL)screenRecordingAllowed {
+  NSString *answer = [ArdiaLaunchConfig.shared testValue:@"screenRecording"];
+  if (answer.length) return [answer isEqualToString:@"allowed"];
+  if (ArdiaLaunchConfig.shared.background) return NO;
+  return CGPreflightScreenCaptureAccess();
+}
+
++ (BOOL)mayCaptureDesktopSource:(NSString *)sourceId {
+  if (!ArdiaLaunchConfig.shared.background) return YES;
+  if (![sourceId hasPrefix:@"screen:"] && ![sourceId hasPrefix:@"window:"]) return YES;
+  NSLog(@"[ardia] background mode: %@ capture refused, it would ask macOS for Screen Recording", [sourceId componentsSeparatedByString:@":"].firstObject);
+  return NO;
+}
+
++ (BOOL)requestScreenRecording {
+  if (self.screenRecordingAllowed) return YES;
+  if (ArdiaLaunchConfig.shared.background) {
+    NSLog(@"[ardia] background mode: Screen Recording request not shown");
+    return NO;
+  }
+  if (CGRequestScreenCaptureAccess()) return YES;
+  [NSWorkspace.sharedWorkspace
+      openURL:[NSURL URLWithString:@"x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"]];
+  return NO;
+}
+
 + (BOOL)isStarted {
-  return gStarted;
+  return ArdiaLaunchSequence.shared.engineRunning;
 }
 
 + (NSString *)dataDirectory {
@@ -311,6 +470,7 @@ NSMutableDictionary<NSString *, NSDictionary *> *gInstallPrompts = [NSMutableDic
     @"chromeWindows" : @(chromeWindows),
     @"keepAlive" : engine.keepAliveState ?: @"",
     @"lastUsedProfile" : engine.defaultProfile.name ?: @"",
+    @"focus" : ardia_host::FocusState(),
   };
 }
 

@@ -11,7 +11,7 @@ export const WindowProfile = requireNativeViewManager<WindowProfileProps>("Ardia
 
 export const WindowDragRegion = requireNativeViewManager<
   ViewProps & { titleBarDoubleClick?: boolean; onRegionDoubleClick?: () => void; clickable?: boolean; onRegionClick?: () => void }
->("ArdiaShell");
+>("ArdiaAppWindows");
 
 export const OutsidePressArea = requireNativeViewManager<ViewProps & { onOutsidePress?: (event: { nativeEvent: { timestamp?: number } }) => void }>("ArdiaOutsidePressArea");
 
@@ -27,9 +27,11 @@ export const Symbol = requireNativeViewManager<SymbolProps>("ArdiaSymbol");
 export type FadeLabelProps = ViewProps & {
   text: string;
   fontSize?: number;
-  weight?: "light" | "regular" | "medium" | "semibold" | "bold";
+  weight?: "ultraLight" | "thin" | "light" | "regular" | "medium" | "semibold" | "bold" | "heavy" | "black";
+  fontFamily?: string;
   color?: string;
   fadeWidth?: number;
+  strikethrough?: boolean;
 };
 
 export const FadeLabel = requireNativeViewManager<FadeLabelProps>("ArdiaFadeLabel");
@@ -51,6 +53,10 @@ export function ContextMenuArea(props: ContextMenuAreaProps) {
 
 export type SurfaceProps = ViewProps & {
   fill?: string;
+  fillColors?: string[];
+  fillStops?: number[];
+  fade?: number[];
+  fadeStops?: number[];
   cornerRadius?: number;
   borderColor?: string;
   borderWidth?: number;
@@ -105,6 +111,8 @@ export const isLiquidGlass = (): boolean => GlassEffectModule.isLiquidGlass();
 
 export const GlassEffect = requireNativeViewManager<GlassEffectProps>("ArdiaGlassEffect");
 
+export const GlassGroup = requireNativeViewManager<ViewProps & { strength?: number }>("ArdiaGlassGroup");
+
 export type PopoverBubbleProps = ViewProps & {
   material?: "popover" | "menu" | "hudWindow" | "sheet" | "toolTip";
   dark?: boolean;
@@ -119,6 +127,7 @@ export type PopoverBubbleProps = ViewProps & {
   shadowOpacity?: number;
   shadowRadius?: number;
   shadowOffsetY?: number;
+  glass?: boolean;
 };
 
 type NativePopoverBubbleProps = Omit<PopoverBubbleProps, "shadowOpacity" | "shadowRadius" | "shadowOffsetY"> & {
@@ -137,12 +146,15 @@ export type IconTheme = { kind: "blur" } | { kind: "template"; fill: string; str
 
 export type DockSelectionNative = {
   iconTheme(uri: string | null, emoji: string | null): Promise<IconTheme | null>;
+  iconAccent(uri: string): Promise<string | null>;
 };
 
 const DockSelectionModule = nativeModule("ArdiaDockSelection");
 
 export const iconTheme = (source: { uri: string } | { emoji: string }): Promise<IconTheme | null> =>
   DockSelectionModule.iconTheme("uri" in source ? source.uri : null, "emoji" in source ? source.emoji : null);
+
+export const iconAccent = (uri: string): Promise<string | null> => DockSelectionModule.iconAccent(uri);
 
 export type DockSelectionProps = ViewProps & {
   image?: string;
@@ -155,6 +167,8 @@ export type DockSelectionProps = ViewProps & {
   iconSize?: number;
   dark: boolean;
   glass?: boolean;
+  colorRing?: boolean;
+  outline?: boolean;
 };
 
 export const DockSelection = requireNativeViewManager<DockSelectionProps>("ArdiaDockSelection");

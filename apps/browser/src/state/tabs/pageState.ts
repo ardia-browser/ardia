@@ -12,14 +12,16 @@ import type { ExternalAppRequest } from "../../platform/siteSettings";
 import type { PermissionRequest } from "../../platform/permissions";
 import { create } from "zustand";
 import { useBrowser } from "../browser/store";
+import { recordWatch, useKeyed } from "../browser/keyedWatch";
 import { activeTabId } from "../browser/model";
 import { peekTabId } from "../peek/peek";
-import { splitOf } from "../splits/splits";
+import { splitOf, splitTabIdsOf } from "../splits/splits";
 
 export type { AutofillPrompt, AutofillPromptAnswer, PasswordPrompt, PasswordPromptAnswer } from "../../platform/tabs";
 
 export type PageState = {
   status: string;
+  statusAtTop: boolean;
   crashed: CrashInfo | null;
   unresponsive: boolean;
   fullscreen: boolean;
@@ -36,11 +38,11 @@ export type PageState = {
   backToNewTab: boolean;
   engineBack: { engine: PageEngine; url: string } | null;
   newTabShown: { url: string; title: string; favicon: string | null } | null;
-  iconPage: string | null;
 };
 
 const IDLE_PAGE: PageState = {
   status: "",
+  statusAtTop: false,
   crashed: null,
   unresponsive: false,
   fullscreen: false,
@@ -57,13 +59,14 @@ const IDLE_PAGE: PageState = {
   backToNewTab: false,
   engineBack: null,
   newTabShown: null,
-  iconPage: null,
 };
+
+export type PagePopover = "siteControls" | "popups" | "zoom" | "hiddenElements";
 
 type Store = {
   pages: Record<string, PageState>;
   ready: Record<string, number>;
-  popover: Record<string, "siteControls" | "popups" | "zoom" | null>;
+  popover: Record<string, PagePopover | null>;
 };
 
 export const usePages = create<Store>()(() => ({ pages: {}, ready: {}, popover: {} }));
@@ -82,8 +85,16 @@ export function patchPage(tabId: string, patch: Partial<PageState>) {
 
 export const pageOf = (tabId: string | undefined): PageState => (tabId && usePages.getState().pages[tabId]) || IDLE_PAGE;
 
+const iconPages = new Map<string, string | null>();
+
+export const iconPageOf = (tabId: string): string | null => iconPages.get(tabId) ?? null;
+
+export const setIconPage = (tabId: string, page: string | null) => void iconPages.set(tabId, page);
+
+const watchPageRecord = recordWatch(() => usePages, (s) => s.pages);
+
 export function usePage<T>(tabId: string | undefined, select: (p: PageState) => T): T {
-  return usePages((s) => select((tabId && s.pages[tabId]) || IDLE_PAGE));
+  return useKeyed(watchPageRecord, tabId, () => select((tabId && usePages.getState().pages[tabId]) || IDLE_PAGE));
 }
 
 let readiness = 0;
@@ -110,13 +121,14 @@ export function useFullscreenTab(windowId: string): string | undefined {
     if (!fullscreen) return undefined;
     const active = activeTabId(s, windowId);
     const peek = peekTabId(s, windowId);
-    const shown = [...(peek ? [peek] : []), ...(active ? (splitOf(s, active)?.tabIds ?? [active]) : [])];
+    const shown = [...(peek ? [peek] : []), ...(active ? (splitTabIdsOf(splitOf(s, active)) ?? [active]) : [])];
     return shown.find((id) => fullscreen.split("\n").includes(id));
   });
 }
 
 useBrowser.subscribe((s, prev) => {
   if (s.tabs === prev.tabs) return;
+  for (const id of iconPages.keys()) if (!s.tabs[id]) iconPages.delete(id);
   const { pages, ready, popover } = usePages.getState();
   const stale = (ids: string[], tabOf: (id: string) => string) => {
     for (let i = 0; i < ids.length; i++) if (!s.tabs[tabOf(ids[i]!)]) return true;
@@ -124,16 +136,13 @@ useBrowser.subscribe((s, prev) => {
   };
   const pageIds = Object.keys(pages);
   const readyIds = Object.keys(ready);
-  if (!stale(pageIds, (id) => id) && !stale(readyIds, (id) => id)) return;
-  const gone = pageIds.filter((id) => !s.tabs[id]);
-  const goneReady = readyIds.filter((id) => !s.tabs[id]);
+  const popoverIds = Object.keys(popover);
+  if (!stale(pageIds, (id) => id) && !stale(readyIds, (id) => id) && !stale(popoverIds, (id) => id)) return;
   const nextPages = { ...pages };
+  for (const id of pageIds) if (!s.tabs[id]) delete nextPages[id];
   const nextPopover = { ...popover };
-  for (const id of gone) {
-    delete nextPages[id];
-    delete nextPopover[id];
-  }
+  for (const id of popoverIds) if (!s.tabs[id]) delete nextPopover[id];
   const nextReady = { ...ready };
-  for (const id of goneReady) delete nextReady[id];
+  for (const id of readyIds) if (!s.tabs[id]) delete nextReady[id];
   usePages.setState({ pages: nextPages, ready: nextReady, popover: nextPopover });
 });

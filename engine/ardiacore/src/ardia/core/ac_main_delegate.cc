@@ -25,7 +25,7 @@
 #include "chrome/browser/browser_process_impl.h"
 #include "chrome/browser/chrome_browser_main.h"
 #include "chrome/browser/chrome_browser_main_extra_parts.h"
-#include "chrome/browser/ardia/ac_scripts_policy.h"  // nogncheck
+#include "chrome/browser/ardia/ac_scripts_policy.h"
 #include "chrome/browser/chrome_content_browser_client.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/chrome_paths_internal.h"
@@ -50,7 +50,9 @@
 #include "ardia/core/ac_lifetime.h"
 #include "ardia/core/ac_context_menu.h"
 #include "ardia/core/ac_navigation_hold.h"
+#include "ardia/core/ac_app_urls.h"
 #include "ardia/core/ac_page_channel.h"
+#include "ardia/core/ac_page_script.h"
 #include "ardia/core/ac_safe_storage.h"
 #include "ardia/core/ac_seams.h"
 #include "ardia/core/ac_strings.h"
@@ -61,11 +63,6 @@
 namespace ardiacore {
 
 namespace {
-
-EngineCallbacks& Callbacks() {
-  static base::NoDestructor<EngineCallbacks> callbacks;
-  return *callbacks;
-}
 
 bool g_browser_started = false;
 
@@ -167,15 +164,11 @@ class ACBrowserMainExtraParts : public ChromeBrowserMainExtraParts {
   }
   void PostBrowserStart() override {
     g_browser_started = true;
-    if (Callbacks().started) {
-      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
-          FROM_HERE, std::move(Callbacks().started));
-    }
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(&OnEngineStarted));
   }
   void PostMainMessageLoopRun() override {
-    if (Callbacks().shutting_down) {
-      std::move(Callbacks().shutting_down).Run();
-    }
+    OnEngineShuttingDown();
   }
 };
 
@@ -248,12 +241,6 @@ class ACContentBrowserClient : public ChromeContentBrowserClient {
     MaybeAddNavigationHoldThrottle(registry);
     ardia::AddScriptsPagesThrottle(registry);
   }
-  void AppendExtraCommandLineSwitches(base::CommandLine* command_line,
-                                      int child_process_id) override {
-    ChromeContentBrowserClient::AppendExtraCommandLineSwitches(command_line,
-                                                               child_process_id);
-    PassSwitchesToGpuProcess(command_line);
-  }
   std::optional<base::TimeDelta> GetSpareRendererDelayForSiteURL(
       const GURL& site_url) override {
     std::optional<base::TimeDelta> delay =
@@ -290,10 +277,6 @@ class ACContentBrowserClient : public ChromeContentBrowserClient {
 
 }
 
-void SetEngineCallbacks(EngineCallbacks callbacks) {
-  Callbacks() = std::move(callbacks);
-}
-
 void ReleaseAppKeepAlive() {
   AppKeepAlive().reset();
 }
@@ -302,6 +285,7 @@ ACMainDelegate::ACMainDelegate(const StartupTimestamps& timestamps)
     : ChromeMainDelegate(timestamps) {
   g_ardia_embedder = true;
   g_ardia_restricted_component_extension = &IsBundledComponentExtension;
+  g_ardia_widevine_without_cdm = true;
   g_ardia_resource_bundle_delegate = ProductStrings();
 }
 
@@ -354,7 +338,9 @@ void QuietIdleTimers(base::CommandLine* command_line) {
 
 std::optional<int> ACMainDelegate::BasicStartupComplete() {
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
-  g_ardia_begin_frame_bridge = ExperimentOn("beginFrameBridge");
+  MergeFeatures(command_line, switches::kDisableFeatures,
+                "Glic,GlicActor,GlicActorUi,ApiGlicPrivate,ContextualCueing,"
+                "GlicZeroStateSuggestions");
   if (!command_line->HasSwitch(switches::kProcessType)) {
     g_ardia_background_instance = BackgroundInstance();
     DecideTestGateAtStartup();
@@ -364,6 +350,7 @@ std::optional<int> ACMainDelegate::BasicStartupComplete() {
     command_line->AppendSwitch(switches::kNoFirstRun);
     command_line->AppendSwitch(switches::kNoDefaultBrowserCheck);
     command_line->RemoveSwitch(switches::kMakeDefaultBrowser);
+    MergeFeatures(command_line, switches::kEnableFeatures, "WebContentsDiscard");
     QuietIdleTimers(command_line);
   }
   if (command_line->HasSwitch(extensions::switches::kExtensionProcess)) {

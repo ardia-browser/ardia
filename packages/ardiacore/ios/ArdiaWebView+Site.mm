@@ -1,7 +1,9 @@
 #import "ArdiaWebViewInternal.h"
+#import "ArdiaRuntime.h"
 #import "ArdiaServices.h"
 
 using namespace ardia_web_view;
+using namespace ardia_runtime;
 
 @implementation ArdiaWebView (Site)
 
@@ -18,7 +20,7 @@ using namespace ardia_web_view;
 }
 
 - (void)pageCookies:(NSArray<NSString *> *)urls completion:(void (^)(NSArray<NSDictionary<NSString *, id> *> *))completion {
-  if (!_tab || _tab.closed || !urls.count) return completion(nil);
+  if (!_tab || _tab.closed || !urls.count || self.awaitsFirstDocument) return completion(nil);
   __block BOOL answered = NO;
   void (^answer)(NSArray *) = ^(NSArray *cookies) {
     if (answered) return;
@@ -56,15 +58,16 @@ using namespace ardia_web_view;
 }
 
 - (void)notificationAction:(NSString *)notificationId action:(NSString *)action {
-  NSString *frame = notificationId ? _notificationFrames[notificationId] : nil;
+  NSString *frame = notificationId ? _reports.notificationFrames[notificationId] : nil;
   if (!frame) return;
-  if (![action isEqualToString:@"click"]) [_notificationFrames removeObjectForKey:notificationId];
-  [self callFrame:frame kind:@"notification" json:JSONString(@{@"id" : notificationId, @"action" : action ?: @""})];
+  if (![action isEqualToString:@"click"]) [_reports.notificationFrames removeObjectForKey:notificationId];
+  [self callFrame:frame kind:@"notification" json:JSONText(@{@"id" : notificationId, @"action" : action ?: @""})];
 }
 
 - (void)tab:(ArdiaCoreTab *)tab didChangeMediaAccess:(NSDictionary<NSString *, NSNumber *> *)access {
-  _capturing = [access[@"camera"] boolValue] || [access[@"microphone"] boolValue] || [access[@"screen"] boolValue];
+  _reports.capturing = [access[@"camera"] boolValue] || [access[@"microphone"] boolValue] || [access[@"screen"] boolValue];
   [self emit:@"mediaAccess" payload:access ?: @{}];
+  [self autoPictureInPictureInputsChanged];
 }
 
 - (void)tab:(ArdiaCoreTab *)tab externalAppRequest:(NSDictionary<NSString *, id> *)request {

@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const model = await import("../browser/model.ts");
-const organize = await import("../pins/organize.ts");
+const organize = await import("../pins/tabGrouping.ts");
 
+let clock = Date.now();
+Date.now = () => (clock += 1000);
 const S = () => useBrowser.getState();
 const short = (id) => (S().tabs[id].url ? S().tabs[id].url.replace(/^https:\/\/|\.com$/g, "") : `new:${id}`);
 const order = (w) => S().windows[w].tabIds.map(short);

@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Pressable, View } from "react-native";
+import { Animated, Pressable, View } from "react-native";
 import { bookmarkAncestors, folderChildren } from "../../state/bookmarks/bookmarks";
-import { useBookmarks } from "../../state/bookmarks/hooks";
-import { currentBookmarks } from "../../state/browser/current";
+import { useBookmarkRoots, useBookmarks } from "../../state/bookmarks/hooks";
+import { currentBookmarkRoots, currentBookmarks } from "../../state/browser/current";
 import { radius, space, Symbol, Text, useHover, useTheme } from "../ui";
 import { folderTree, folderTreeInk } from "./tokens";
+import { buttonMotion, usePressScaleMotion } from "../ui/motion";
 
 type FolderRow = { id: string; title: string; depth: number; hasChildren: boolean };
 
 function useFolderRows(profileId: string, expanded: Set<string>): FolderRow[] {
+  const roots = useBookmarkRoots(profileId);
   const key = useBookmarks((b) => {
-    const roots = b.roots[profileId];
     if (!roots) return "";
     const lines: string[] = [];
     const walk = (id: string, depth: number) => {
@@ -40,18 +41,18 @@ export function FolderTree({
   profileId,
   selectedId,
   onSelect,
-  rowHeight = folderTree.row,
+  rowHeight,
   wrapRow,
 }: {
   profileId: string;
   selectedId: string | null;
   onSelect: (id: string) => void;
-  rowHeight?: number;
+  rowHeight: number;
   wrapRow?: (id: string, row: ReactNode) => ReactNode;
 }) {
   const [expanded, setExpanded] = useState(() => {
     const b = currentBookmarks();
-    const roots = b.roots[profileId];
+    const roots = currentBookmarkRoots(profileId);
     const open = new Set<string>(roots ? [roots.bar, roots.other] : []);
     if (selectedId) for (const a of bookmarkAncestors(b, selectedId)) open.add(a.id);
     return open;
@@ -107,13 +108,15 @@ function FolderTreeRow({
 }) {
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
+  const pressMotion = usePressScaleMotion(row.hasChildren, buttonMotion.iconPressScale);
+  const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
   return (
     <View {...hoverProps}>
       <Pressable onPress={onSelect}>
         <View
           style={{
             height,
-            borderRadius: radius.m,
+            borderRadius: radius.control,
             flexDirection: "row",
             alignItems: "center",
             paddingLeft: folderTree.inset + row.depth * folderTree.indent,
@@ -121,15 +124,23 @@ function FolderTreeRow({
             backgroundColor: selected ? theme.formAccent : hovered ? theme.rowHover : undefined,
           }}
         >
-          <Pressable onPress={onToggle} disabled={!row.hasChildren} style={{ width: folderTree.chevronBox, height, alignItems: "center", justifyContent: "center" }}>
+          <Pressable
+            onPress={onToggle}
+            onPressIn={pressMotion.onPressIn}
+            onPressOut={pressMotion.onPressOut}
+            disabled={!row.hasChildren}
+            style={{ width: folderTree.chevronBox, height, alignItems: "center", justifyContent: "center" }}
+          >
             {row.hasChildren ? (
-              <Symbol
-                name={expanded ? "chevron.down" : "chevron.right"}
-                size={folderTree.chevron}
-                weight="semibold"
-                color={selected ? folderTreeInk.selectedChevron : theme.textSecondary}
-                style={CHEVRON}
-              />
+              <Animated.View style={[CHEVRON, scaleStyle]}>
+                <Symbol
+                  name={expanded ? "chevron.down" : "chevron.right"}
+                  size={folderTree.chevron}
+                  weight="semibold"
+                  color={selected ? folderTreeInk.selectedChevron : theme.textSecondary}
+                  style={CHEVRON}
+                />
+              </Animated.View>
             ) : null}
           </Pressable>
           <Symbol name="folder" size={folderTree.folderIcon} color={selected ? theme.onAccent : theme.icon} style={FOLDER_ICON} />

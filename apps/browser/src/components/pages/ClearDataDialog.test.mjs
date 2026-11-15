@@ -16,6 +16,7 @@ const { useBrowser } = await import("../../state/browser/store.ts");
 const { useFavicons, EMPTY_ICONS } = await import("../../state/favicons/favicons.ts");
 const { takeHistoryRemovalCounts } = await import("../../state/telemetry/historyRemovalCounts.ts");
 const { ClearDataDialog } = await import("./ClearDataDialog.tsx");
+const { Dialog } = await import("../ui/index.ts");
 const S = () => useBrowser.getState();
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 const nodes = (node) => !node || typeof node !== "object" ? [] : [node, ...[node.props?.children].flat(Infinity).flatMap(nodes)];
@@ -35,6 +36,33 @@ function dialog(profileId = "default", iconKey = "") {
   const h = mount(() => ClearDataDialog({ profileId, onClose: () => closes++ }));
   return { h, recent, old, icons, closes: () => closes };
 }
+
+test("the production dialog routes Escape while idle and during a pending clear", async () => {
+  for (const pending of [false, true]) {
+    const { h, closes } = dialog();
+    let surface;
+    let keys;
+    try {
+      if (pending) button(h, "Clear Data").props.onPress();
+      surface = mount(() => Dialog(h.value.props));
+      const content = surface.value.props.children[1].props.children;
+      assert.equal(typeof content.type, "function", "the dialog installs its keyboard handler");
+      keys = mount(() => content.type(content.props));
+      assert.ok(keys.value.props.keyDownEvents.some((event) => event.key === "Escape"));
+      keys.value.props.onKeyDown({ nativeEvent: { key: "Escape" } });
+      assert.equal(closes(), 1);
+      if (pending) {
+        requests[0].resolve("null");
+        await tick();
+        assert.equal(closes(), 1, "the pending completion does not close a second time");
+      }
+    } finally {
+      keys?.unmount();
+      surface?.unmount();
+      h.unmount();
+    }
+  }
+});
 
 test("clearing waits for native success, then removes the cleared range from History, and ignores a second press", async () => {
   const { h, recent, old, icons, closes } = dialog();

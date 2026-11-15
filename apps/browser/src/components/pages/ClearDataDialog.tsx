@@ -67,7 +67,7 @@ export function ClearDataDialog({ profileId, onClose }: { profileId: string; onC
   };
 
   return (
-    <Dialog width="m" onDismiss={leave}>
+    <Dialog width="m" onDismiss={leave} onSubmit={() => void clear()}>
       <DialogTitle subtitle={multipleProfiles ? `From your ${profileName} profile` : undefined}>Clear Browsing Data</DialogTitle>
       <Box row gap="ml" style={RANGE_ROW}>
         <Text>Time range</Text>

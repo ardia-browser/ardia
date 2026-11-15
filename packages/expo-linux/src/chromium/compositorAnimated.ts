@@ -184,7 +184,7 @@ function startMirror(value: ValueNode, curve: Curve): Mirror | null {
       const clock = () => (played.startTime === null ? null : timeline.now() - Number(played.startTime));
       if (!notePageMotion(key, motion, clock, played.ready)) continue;
       pages.push(key);
-      animatePageHoles(key, view, element, () => Number(played.currentTime ?? 0), motion.durationMs, motion.rects);
+      animatePageHoles(key, view, element, played, { durationMs: motion.durationMs, rects: motion.rects, offsets: times.map((ms) => (curve.durationMs > 0 ? ms / curve.durationMs : 1)) });
     }
   }
   if (!animations.length) return null;

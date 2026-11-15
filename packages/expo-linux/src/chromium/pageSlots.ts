@@ -1,11 +1,10 @@
 import { appDark } from "../appearance";
 import { appWindowDocument } from "../windows/appWindows";
+import { cutOutKeyframes, cutOutSpread, frostOverPage, holePath, holeRectAt, motionBounds, outermost, pagesToCut, round, type Corners, type Hole, type HoleSamples, type ShownPage } from "./pageSlotRules";
 
-export type ShownPage = { x: number; y: number; width: number; height: number; radius: number };
+export { frostOverPage, type ShownPage };
 
-type Corners = [number, number, number, number];
-type Hole = ShownPage & { corners: Corners };
-type Underlay = { element: HTMLElement; isolates: boolean; under: Set<string> };
+type Underlay = { element: HTMLElement; isolates: boolean; solid: boolean; under: Set<string> };
 type Members = { underlays: Underlay[]; frosted: HTMLElement[] };
 type WindowSlots = { pages: Map<string, ShownPage>; underlays: Underlay[]; frosted: HTMLElement[]; membersAt: number; observer: MutationObserver | null; queued: boolean; settling: ReturnType<typeof setTimeout> | null };
 
@@ -13,8 +12,7 @@ export const SLOT_MARKER = "ardiaPageSlot";
 const SLOT_SELECTOR = "[data-ardia-page-slot]";
 const UNDERLAY = "ardiaUnderlay";
 const OVER_PAGE = "ardiaOverPage";
-const DENSEST_FROST = 0.94;
-const FROST_BASE = { light: [246, 246, 246], dark: [44, 44, 46] } as const;
+const CUT_OUT = "ardiaCutOut";
 const STYLE_ID = "ardia-page-slots";
 const MEMBERS_REFRESH_MS = 120;
 const SETTLE_AFTER_CHANGES_MS = 60;
@@ -30,7 +28,9 @@ const STYLES = `
   background-size: var(--ardia-underlay-size); background-position: var(--ardia-underlay-position); background-repeat: var(--ardia-underlay-repeat);
   backdrop-filter: var(--ardia-underlay-backdrop); clip-path: var(--ardia-underlay-clip);
 }
-[data-ardia-over-page] { background-color: var(--ardia-over-page-color) !important; }`;
+[data-ardia-over-page] { background-color: var(--ardia-over-page-color) !important; }
+[data-ardia-cut-out] { isolation: isolate; }
+[data-ardia-underlay][data-ardia-cut-out]::before { display: none; }`;
 
 const windows = new Map<string, WindowSlots>();
 const painted = new Set<string>();
@@ -81,22 +81,7 @@ function unfrost(element: HTMLElement) {
   element.style.removeProperty("--ardia-over-page-color");
 }
 
-function channels(color: string): [number, number, number, number] | null {
-  const rgba = /^rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)$/.exec(color);
-  if (rgba) return [Number(rgba[1]), Number(rgba[2]), Number(rgba[3]), rgba[4] === undefined ? 1 : Number(rgba[4])];
-  const srgb = /^color\(srgb ([\d.]+) ([\d.]+) ([\d.]+)(?: \/ ([\d.]+))?\)$/.exec(color);
-  if (srgb) return [Number(srgb[1]) * 255, Number(srgb[2]) * 255, Number(srgb[3]) * 255, srgb[4] === undefined ? 1 : Number(srgb[4])];
-  return null;
-}
-
-export function frostOverPage(color: string, dark: boolean): string {
-  const tint = channels(color);
-  if (!tint) return color;
-  const base = dark ? FROST_BASE.dark : FROST_BASE.light;
-  const [r, g, b, alpha] = tint;
-  const mixed = [r, g, b].map((channel, index) => Math.round(channel * alpha + (base[index] ?? 0) * (1 - alpha)));
-  return `rgba(${mixed.join(", ")}, ${Math.max(alpha, DENSEST_FROST)})`;
-}
+const solidFill = (style: CSSStyleDeclaration) => style.backgroundImage === "none" && (style.backdropFilter === "none" || style.backdropFilter === "") && style.position !== "static";
 
 const frostedOverPages = (style: CSSStyleDeclaration) => style.backdropFilter !== "none" && style.backdropFilter !== "" && !TRANSPARENT.has(style.backgroundColor);
 
@@ -131,7 +116,7 @@ function findMembers(doc: Document, pages: Map<string, ShownPage>, previous: Mem
     }
     if (!under.size) continue;
     remember(element, style);
-    found.underlays.push({ element, isolates: style.zIndex === "auto" && element.childElementCount > 0, under });
+    found.underlays.push({ element, isolates: style.zIndex === "auto" && element.childElementCount > 0, solid: solidFill(style), under });
   }
   const keptUnderlays = new Set(found.underlays.map((underlay) => underlay.element));
   for (const { element } of previous.underlays) if (!keptUnderlays.has(element)) unmark(element);
@@ -170,24 +155,6 @@ function holesFor(pages: Map<string, ShownPage>, underlays: Underlay[], view: Wi
   return holes;
 }
 
-const round = (value: number) => Math.round(value * 100) / 100;
-
-function holePath(hole: Hole, left: number, top: number): string {
-  const x = round(hole.x - left);
-  const y = round(hole.y - top);
-  const w = round(hole.width);
-  const h = round(hole.height);
-  const [tl, tr, br, bl] = hole.corners.map((corner) => round(Math.min(corner, w / 2, h / 2))) as Corners;
-  return `M${x + tl},${y} H${x + w - tr} A${tr},${tr} 0 0 1 ${x + w},${y + tr} V${y + h - br} A${br},${br} 0 0 1 ${x + w - br},${y + h} H${x + bl} A${bl},${bl} 0 0 1 ${x},${y + h - bl} V${y + tl} A${tl},${tl} 0 0 1 ${x + tl},${y} Z`;
-}
-
-const contains = (outer: ShownPage, inner: ShownPage) =>
-  outer.x <= inner.x && outer.y <= inner.y && outer.x + outer.width >= inner.x + inner.width && outer.y + outer.height >= inner.y + inner.height;
-
-function outermost(holes: Hole[]): Hole[] {
-  return holes.filter((hole, index) => !holes.some((other, at) => at !== index && contains(other, hole) && (!contains(hole, other) || at < index)));
-}
-
 function clipFor(element: HTMLElement, under: Set<string>, holes: Map<string, Hole>): string {
   const box = element.getBoundingClientRect();
   const width = element.offsetWidth || box.width;
@@ -211,23 +178,15 @@ function clipFor(element: HTMLElement, under: Set<string>, holes: Map<string, Ho
   return inside.length ? `path(evenodd, "${outer} ${inside.join(" ")}")` : "none";
 }
 
-type HoleMotion = { page: Element; moving: Element; clock: () => number; durationMs: number; rects: number[][]; endsAt: number };
+type CutOut = { wrapper: HTMLElement; animation: Animation };
+type HoleMotion = HoleSamples & { page: Element; moving: Element; played: Animation; endsAt: number; cutOuts: Map<HTMLElement, CutOut> };
 
-const FRAME_LEAD_MS = 1000 / 60;
 const holeMotions = new Map<string, HoleMotion>();
 let holeFrames = 0;
 let holeLoop = false;
+let cutOutsMade = 0;
 
-function rectAt(motion: HoleMotion, elapsed: number): number[] | undefined {
-  const steps = motion.rects.length - 1;
-  if (steps < 1) return motion.rects[0];
-  const position = Math.min(steps, Math.max(0, (elapsed / motion.durationMs) * steps));
-  const before = motion.rects[Math.floor(position)];
-  const after = motion.rects[Math.ceil(position)];
-  if (!before || !after) return motion.rects[steps];
-  const mix = position - Math.floor(position);
-  return before.map((value, index) => value + ((after[index] ?? value) - value) * mix);
-}
+const elapsedOf = (motion: HoleMotion) => Number(motion.played.currentTime ?? 0);
 
 function movingHoles(holes: Map<string, Hole>, element: Element): Map<string, Hole> {
   if (!holeMotions.size) return holes;
@@ -240,29 +199,114 @@ function movingHoles(holes: Map<string, Hole>, element: Element): Map<string, Ho
       moved.set(key, { ...resting, x: box.x, y: box.y, width: box.width, height: box.height });
       continue;
     }
-    const [x = 0, y = 0, width = 0, height = 0] = rectAt(motion, motion.clock() + FRAME_LEAD_MS) ?? [];
+    const [x = 0, y = 0, width = 0, height = 0] = holeRectAt(motion, elapsedOf(motion)) ?? [];
     moved.set(key, { ...resting, x, y, width, height });
   }
   return moved;
 }
 
+function makeCutOut(element: HTMLElement, motion: HoleMotion, resting: Hole): CutOut | null {
+  const doc = element.ownerDocument;
+  const box = element.getBoundingClientRect();
+  const width = element.offsetWidth || box.width;
+  const height = element.offsetHeight || box.height;
+  if (!width || !height) return null;
+  const sx = box.width / width || 1;
+  const sy = box.height / height || 1;
+  const local = motion.rects.map(([x = 0, y = 0, w = 0, h = 0]) => ({ x: (x - box.x) / sx - element.clientLeft, y: (y - box.y) / sy - element.clientTop, width: w / sx, height: h / sy }));
+  const keyframes = cutOutKeyframes(local, motion.offsets);
+  const base = local[local.length - 1];
+  if (!keyframes.length || !base) return null;
+  const wrapper = doc.createElement("div");
+  wrapper.dataset.ardiaCutOutLayer = "";
+  Object.assign(wrapper.style, { position: "absolute", inset: "0", zIndex: "-1", overflow: "hidden", pointerEvents: "none", borderRadius: "inherit" });
+  const hole = doc.createElement("div");
+  const corners = resting.corners.map((corner) => `${round(corner / Math.min(sx, sy))}px`).join(" ");
+  Object.assign(hole.style, {
+    position: "absolute",
+    left: `${round(base.x)}px`,
+    top: `${round(base.y)}px`,
+    width: `${round(base.width)}px`,
+    height: `${round(base.height)}px`,
+    borderRadius: corners,
+    transformOrigin: "0 0",
+    boxShadow: `0 0 0 ${cutOutSpread(local, width, height)}px var(--ardia-underlay-color)`,
+  });
+  wrapper.appendChild(hole);
+  element.appendChild(wrapper);
+  const animation = hole.animate(keyframes, { duration: motion.durationMs, easing: "linear", fill: "forwards" });
+  const follow = () => {
+    if (motion.played.startTime !== null) animation.startTime = motion.played.startTime;
+  };
+  follow();
+  void motion.played.ready.then(follow, () => {});
+  element.dataset[CUT_OUT] = "";
+  cutOutsMade += 1;
+  return { wrapper, animation };
+}
+
+function dropCutOuts(motion: HoleMotion) {
+  for (const [element, cutOut] of motion.cutOuts) {
+    cutOut.animation.cancel();
+    cutOut.wrapper.remove();
+    delete element.dataset[CUT_OUT];
+  }
+  motion.cutOuts.clear();
+}
+
+function cutOutFor(underlay: Underlay, holes: Map<string, Hole>): boolean {
+  const { element, under, solid } = underlay;
+  const box = element.getBoundingClientRect();
+  const meeting = [...under].filter((key) => {
+    const hole = holes.get(key);
+    const moving = holeMotions.get(key);
+    return (hole && intersects(box, hole)) || (moving && intersects(box, motionBounds(moving)));
+  });
+  const [key] = meeting;
+  const motion = key === undefined ? undefined : holeMotions.get(key);
+  if (!motion || meeting.length !== 1 || motion.moving.contains(element)) return false;
+  if (motion.cutOuts.has(element)) return true;
+  const resting = key === undefined ? undefined : holes.get(key);
+  if (!solid || !resting) return false;
+  const made = makeCutOut(element, motion, resting);
+  if (!made) return false;
+  motion.cutOuts.set(element, made);
+  return true;
+}
+
+const heldClips = new WeakMap<HTMLElement, string>();
+
+const ridesMotion = (element: HTMLElement) => [...holeMotions.values()].some((motion) => motion.moving.contains(element));
+
 function followHoles() {
-  for (const [key, motion] of holeMotions) if (performance.now() >= motion.endsAt || !motion.page.isConnected) holeMotions.delete(key);
+  for (const [key, motion] of holeMotions) if (performance.now() >= motion.endsAt || !motion.page.isConnected) endHoleMotion(key);
   for (const [windowId, slots] of windows) if ([...holeMotions.keys()].some((key) => slots.pages.has(key))) update(windowId);
   holeFrames += 1;
   if (holeMotions.size) requestAnimationFrame(followHoles);
   else holeLoop = false;
 }
 
-export function animatePageHoles(key: string, page: Element, moving: Element, clock: () => number, durationMs: number, rects: number[][]) {
-  holeMotions.set(key, { page, moving, clock, durationMs, rects, endsAt: performance.now() + durationMs + 50 });
+function endHoleMotion(key: string): boolean {
+  const motion = holeMotions.get(key);
+  if (!motion) return false;
+  holeMotions.delete(key);
+  dropCutOuts(motion);
+  return true;
+}
+
+export type { HoleSamples };
+
+export function animatePageHoles(key: string, page: Element, moving: Element, played: Animation, samples: HoleSamples) {
+  endHoleMotion(key);
+  holeMotions.set(key, { ...samples, page, moving, played, endsAt: performance.now() + samples.durationMs + 50, cutOuts: new Map() });
+  for (const [windowId, slots] of windows) if (slots.pages.has(key)) update(windowId);
   if (holeLoop) return;
   holeLoop = true;
   requestAnimationFrame(followHoles);
 }
 
 export function stopPageHoles(key: string) {
-  if (!holeMotions.delete(key)) return;
+  if (!endHoleMotion(key)) return;
   for (const [windowId, slots] of windows) if (slots.pages.has(key)) update(windowId);
 }
 
@@ -288,7 +332,7 @@ function update(windowId: string) {
   const doc = appWindowDocument(windowId);
   const view = doc?.defaultView;
   if (!doc || !view) return;
-  const pages = new Map([...slots.pages].filter(([key]) => painted.has(key)));
+  const pages = pagesToCut(slots.pages, painted);
   if (!pages.size) {
     for (const { element } of slots.underlays) unmark(element);
     for (const element of slots.frosted) unfrost(element);
@@ -306,7 +350,15 @@ function update(windowId: string) {
     slots.membersAt = now;
   }
   const holes = holesFor(pages, slots.underlays, view);
-  for (const underlay of slots.underlays) underlay.element.style.setProperty("--ardia-underlay-clip", clipFor(underlay.element, underlay.under, movingHoles(holes, underlay.element)));
+  for (const underlay of slots.underlays) {
+    if (cutOutFor(underlay, holes)) continue;
+    const riding = ridesMotion(underlay.element);
+    const painted = [...underlay.under].filter((key) => pages.has(key)).join(" ");
+    if (riding && heldClips.get(underlay.element) === painted) continue;
+    underlay.element.style.setProperty("--ardia-underlay-clip", clipFor(underlay.element, underlay.under, movingHoles(holes, underlay.element)));
+    if (riding) heldClips.set(underlay.element, painted);
+    else heldClips.delete(underlay.element);
+  }
 }
 
 export function noteShownPage(windowId: string, key: string, page: ShownPage | null) {
@@ -332,6 +384,7 @@ export const pageSlotsState = () => ({
   underlays: underlaysMarked,
   frosted: frostedMarked,
   holeFrames,
+  cutOuts: cutOutsMade,
   windows: Object.fromEntries([...windows].map(([id, slots]) => [id, { pages: slots.pages.size, underlays: slots.underlays.length, frosted: slots.frosted.length }])),
 });
 

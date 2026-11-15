@@ -20,7 +20,9 @@ class TelemetryClient {
   TelemetryClient& operator=(const TelemetryClient&) = delete;
   ~TelemetryClient();
 
-  void Post(std::string body, const std::string& ingest_key, PostReply reply);
+  void Post(std::string body, const std::string& ingest_key,
+            std::string request_id, PostReply reply);
+  void Cancel(const std::string& request_id);
 
  private:
   friend class TelemetryPost;

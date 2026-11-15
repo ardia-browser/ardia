@@ -22,11 +22,11 @@ let host = PLATFORM_HOST;
 export const telemetryHost = (): Readonly<TelemetryHost> => host;
 export const setTelemetryHost = (next: TelemetryHost) => void (host = next);
 
-const posted = { bytes: 0, failed: 0, requests: 0 };
+const posted = { bytes: 0, cancelled: 0, failed: 0, requests: 0 };
 
 export function takePostStats() {
   const taken = { ...posted };
-  Object.assign(posted, { bytes: 0, failed: 0, requests: 0 });
+  Object.assign(posted, { bytes: 0, cancelled: 0, failed: 0, requests: 0 });
   return taken;
 }
 
@@ -44,7 +44,8 @@ export async function post(kind: RequestLogEntry["kind"], body: string, count: n
     entry.status = 0;
   }
   posted.requests++;
-  if (entry.status >= 200 && entry.status < 300) posted.bytes += body.length;
+  if (signal?.aborted) posted.cancelled++;
+  else if (entry.status >= 200 && entry.status < 300) posted.bytes += body.length;
   else posted.failed++;
   logRequest(entry, body);
   return entry.status;

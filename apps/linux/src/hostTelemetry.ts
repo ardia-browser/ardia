@@ -1,4 +1,3 @@
-import { APP_INGEST_KEY } from "@ardia/core";
 import { installErrorReporting, resetAnonymousId, startTelemetry } from "../../browser/src/state/telemetry/index.ts";
 import { captureException } from "../../browser/src/state/telemetry/errors";
 import { capture, devState, endSession, flush, loadChoice, queueLog, saveQueueNow, setSharing } from "../../browser/src/state/telemetry/client";
@@ -16,11 +15,11 @@ import { documentSaved } from "../../browser/src/platform/documents";
 import { withDeadline } from "../../browser/src/lib/deadline";
 import { refreshDocument } from "./shims/shellBase";
 import { hostSupports, invokeHost, type ArdiaHost } from "./host.ts";
+import { hostTelemetrySend, TELEMETRY_POST } from "./hostTelemetrySend.ts";
 import { startTelemetryLeadership, TELEMETRY_CHANNEL, type LeaderChannel, type LeaderLocks, type TelemetryLeadership, type TelemetryOp } from "./telemetryLeader.ts";
 import { createEndLedger, setTelemetrySettle } from "./telemetrySettle.ts";
 import { parseChoiceChange, shownAfter } from "./telemetryChoice.ts";
 
-export const TELEMETRY_POST = "ArdiaTelemetry.post";
 export const TELEMETRY_STEP = "telemetry";
 const STATE_DOC = "telemetry.json";
 const TELEMETRY_DOCUMENTS = [STATE_DOC, "telemetry-queue.json", DAILY_DOC];
@@ -29,14 +28,6 @@ const RESET_TIMEOUT_MS = 10_000;
 const WINDOW_USAGE_MS = 60 * 60 * 1000;
 
 const report = (error: unknown) => console.warn("[ardia linux] telemetry", error);
-
-export function hostTelemetrySend(host: ArdiaHost) {
-  return async (body: string) => {
-    const reply = await invokeHost<{ status?: unknown } | null>(TELEMETRY_POST, { args: [body, APP_INGEST_KEY] }, host);
-    const status = reply?.status;
-    return typeof status === "number" && Number.isSafeInteger(status) ? status : 0;
-  };
-}
 
 async function continuesSession(host: ArdiaHost): Promise<boolean> {
   if (!hostSupports("ArdiaShell.launchSteps", host) || !hostSupports("ArdiaShell.completeLaunchStep", host)) return false;

@@ -67,6 +67,15 @@ int main() {
   assert(ReportedStatus(true, 100) == 0);
   assert(ReportedStatus(true, 600) == 0);
   assert(kTimeoutSeconds == 30);
+  assert(RequestIdAcceptable("telemetry-1"));
+  assert(RequestIdAcceptable("a_B-9"));
+  assert(RequestIdAcceptable(std::string(kMaxRequestIdLength, 'x')));
+  assert(!RequestIdAcceptable(std::string(kMaxRequestIdLength + 1, 'x')));
+  assert(!RequestIdAcceptable(""));
+  assert(!RequestIdAcceptable("telemetry 1"));
+  assert(!RequestIdAcceptable("telemetry/1"));
+  assert(!RequestIdAcceptable("telemetry-1\n"));
+  assert(!RequestIdAcceptable(std::string("tele\0metry", 10)));
 }
 '''
         with tempfile.TemporaryDirectory(prefix='ardia-telemetry-policy-test-') as scratch:
@@ -88,6 +97,15 @@ int main() {
         self.assertNotIn('GetDefaultStoragePartition', fetcher)
         self.assertNotIn('Profile', fetcher)
 
+    def test_a_cancelled_post_destroys_its_loader_and_answers_once(self):
+        fetcher = (LINUX / 'ac_linux_telemetry.cc').read_text()
+        cancel = fetcher[fetcher.index('void TelemetryClient::Cancel('):fetcher.index('void TelemetryClient::Finish(')]
+        for needle in ['request_id.empty()', 'owned->request_id() == request_id', 'posts_.erase(found);', 'PostStatus(cancelled->TakeReply(), 0);']:
+            self.assertIn(needle, cancel)
+        post = fetcher[fetcher.index('void TelemetryClient::Post('):fetcher.index('void TelemetryClient::Cancel(')]
+        for needle in ['policy::RequestIdAcceptable(request_id)', 'duplicate', 'std::move(request_id)']:
+            self.assertIn(needle, post)
+
     def test_the_host_advertises_and_gates_the_route(self):
         host = (LINUX / 'ac_linux_host.cc').read_text()
         bootstrap = host[host.index('base::DictValue ShellHostView::Bootstrap() const {'):host.index('void ShellHostView::LayoutOverlay()')]
@@ -98,6 +116,12 @@ int main() {
         self.assertIn('ERR_TELEMETRY_REFUSED', route)
         self.assertIn('PostAcceptable(values[0].GetString(), values[1].GetString())', route)
         self.assertIn('values.size() != 2', route)
+        self.assertIn('RequestIdAcceptable(values[2].GetString())', route)
+        self.assertIn('.Append("ArdiaTelemetry.cancelPost")', bootstrap)
+        cancel = host[host.index('if (method == "ArdiaTelemetry.cancelPost") {'):]
+        cancel = cancel[:cancel.index('\n  if (method ==', 1)]
+        for needle in ['values.size() != 1', 'RequestIdAcceptable(values[0].GetString())', 'telemetry_->Cancel(values[0].GetString())', 'ERR_TELEMETRY_REFUSED']:
+            self.assertIn(needle, cancel)
         self.assertRegex(host, re.compile(r'bool IsolatedInstance\(\) \{\n.*switches::kUserDataDir.*\n.*"ARDIA_DATA_DIR"', re.M))
         build = (LINUX / 'BUILD.gn').read_text()
         for name in ['"ac_linux_telemetry.cc"', '"ac_linux_telemetry.h"', '"ac_linux_telemetry_policy.h"', '"//chrome/browser/net"']:

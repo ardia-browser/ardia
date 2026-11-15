@@ -81,8 +81,11 @@ scoped_refptr<network::SharedURLLoaderFactory> SystemLoaderFactory() {
 
 class TelemetryPost {
  public:
-  TelemetryPost(TelemetryClient* owner, PostReply reply)
-      : owner_(owner), reply_(std::move(reply)) {
+  TelemetryPost(TelemetryClient* owner, std::string request_id,
+                PostReply reply)
+      : owner_(owner),
+        request_id_(std::move(request_id)),
+        reply_(std::move(reply)) {
     ++InFlight();
   }
   TelemetryPost(const TelemetryPost&) = delete;
@@ -110,6 +113,7 @@ class TelemetryPost {
         base::BindOnce(&TelemetryPost::OnLoaded, base::Unretained(this)));
   }
 
+  const std::string& request_id() const { return request_id_; }
   PostReply TakeReply() { return std::move(reply_); }
 
  private:
@@ -120,6 +124,7 @@ class TelemetryPost {
   }
 
   raw_ptr<TelemetryClient> owner_;
+  std::string request_id_;
   PostReply reply_;
   std::unique_ptr<network::SimpleURLLoader> loader_;
 };
@@ -129,9 +134,16 @@ TelemetryClient::TelemetryClient() = default;
 TelemetryClient::~TelemetryClient() = default;
 
 void TelemetryClient::Post(std::string body, const std::string& ingest_key,
-                           PostReply reply) {
+                           std::string request_id, PostReply reply) {
+  const bool duplicate =
+      !request_id.empty() &&
+      std::any_of(posts_.begin(), posts_.end(),
+                  [&request_id](const std::unique_ptr<TelemetryPost>& owned) {
+                    return owned->request_id() == request_id;
+                  });
   if (!policy::PostAcceptable(body, ingest_key) ||
-      !policy::AdmitPost(InFlight())) {
+      (!request_id.empty() && !policy::RequestIdAcceptable(request_id)) ||
+      duplicate || !policy::AdmitPost(InFlight())) {
     return PostStatus(std::move(reply), 0);
   }
   scoped_refptr<network::SharedURLLoaderFactory> factory =
@@ -139,10 +151,28 @@ void TelemetryClient::Post(std::string body, const std::string& ingest_key,
   if (!factory) {
     return PostStatus(std::move(reply), 0);
   }
-  auto post = std::make_unique<TelemetryPost>(this, std::move(reply));
+  auto post = std::make_unique<TelemetryPost>(this, std::move(request_id),
+                                              std::move(reply));
   TelemetryPost* started = post.get();
   posts_.push_back(std::move(post));
   started->Load(factory.get(), std::move(body), ingest_key);
+}
+
+void TelemetryClient::Cancel(const std::string& request_id) {
+  if (request_id.empty()) {
+    return;
+  }
+  const auto found = std::find_if(
+      posts_.begin(), posts_.end(),
+      [&request_id](const std::unique_ptr<TelemetryPost>& owned) {
+        return owned->request_id() == request_id;
+      });
+  if (found == posts_.end()) {
+    return;
+  }
+  std::unique_ptr<TelemetryPost> cancelled = std::move(*found);
+  posts_.erase(found);
+  PostStatus(cancelled->TakeReply(), 0);
 }
 
 void TelemetryClient::Finish(TelemetryPost* post, int status) {

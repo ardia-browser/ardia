@@ -29,6 +29,7 @@ export function localStoreProperties(reading: LocalStoreReading, posts: ReturnTy
     bytes_posted: posts.bytes,
     posts: posts.requests,
     failed_posts: posts.failed,
+    cancelled_posts: posts.cancelled,
   };
 }
 

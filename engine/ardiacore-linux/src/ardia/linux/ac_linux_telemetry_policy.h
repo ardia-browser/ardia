@@ -44,6 +44,20 @@ inline bool PostAcceptable(std::string_view body, std::string_view key) {
   return BodyAcceptable(body) && IngestKeyAcceptable(key);
 }
 
+inline constexpr size_t kMaxRequestIdLength = 64;
+
+inline bool RequestIdAcceptable(std::string_view id) {
+  if (id.empty() || id.size() > kMaxRequestIdLength) {
+    return false;
+  }
+  for (const char c : id) {
+    if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_')) {
+      return false;
+    }
+  }
+  return true;
+}
+
 inline bool AdmitPost(int in_flight) {
   return in_flight >= 0 && in_flight < kMaxInFlight;
 }

@@ -295,10 +295,9 @@ bool AppWindowView::StartMotion(const std::string& key,
   const gfx::Rect& final_rect = placed->second.bounds;
   const gfx::Rect first =
       gfx::ToEnclosingRect(MotionRectAt(motion, motion.elapsed));
-  running.layout = gfx::Rect(
-      final_rect.origin(),
-      gfx::Size(std::max(first.width(), final_rect.width()),
-                std::max(first.height(), final_rect.height())));
+  running.layout = first.size().Area64() > final_rect.size().Area64()
+                       ? first
+                       : final_rect;
   if (ardiacore::Traced("motion")) {
     Note("motion", "start " + key + " delay " +
                        base::NumberToString(delay.InMillisecondsF()) +

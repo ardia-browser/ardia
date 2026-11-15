@@ -28,7 +28,7 @@ test("a press that drifts within the sidebar's click slop stays a click, one tha
   assert.equal(switcherDragStarts(-(TAB_CLICK_SLOP + 1), 2), true);
 });
 
-test("the dragged dot takes a neighbour's place once its centre passes the neighbour's centre", () => {
+test("the dragged dot takes a neighbour's place once its leading edge reaches the neighbour's centre", () => {
   const widths = [DOT, DOT, DOT];
   assert.equal(switcherDropSlot(widths, 0, 5), 0);
   assert.equal(switcherDropSlot(widths, 0, 13), 1);
@@ -38,11 +38,19 @@ test("the dragged dot takes a neighbour's place once its centre passes the neigh
   assert.equal(switcherDropSlot(widths, 2, -400), 0);
 });
 
-test("icons of different widths: the slot follows each cell's own centre", () => {
+test("icons of different widths: the slot follows each cell's own centre and the dragged cell's own width", () => {
   const widths = [ICON, DOT, ICON];
-  assert.equal(switcherDropSlot(widths, 1, 14), 1);
+  assert.equal(switcherDropSlot(widths, 1, 12), 1);
+  assert.equal(switcherDropSlot(widths, 1, -12), 1);
   assert.equal(switcherDropSlot(widths, 1, 20), 2);
   assert.equal(switcherDropSlot(widths, 1, -20), 0);
+});
+
+test("a wide icon reaches either end of the row past a narrow dot", () => {
+  assert.equal(switcherDropSlot([ICON, DOT], 0, 400), 1);
+  assert.equal(switcherDropSlot([DOT, ICON], 1, -400), 0);
+  assert.equal(switcherDropSlot([ICON, DOT, DOT], 0, 400), 2);
+  assert.equal(switcherDropSlot([DOT, DOT, ICON], 2, -400), 0);
 });
 
 test("the others make room by the dragged cell's width, and the lifted cell stays inside the row", () => {

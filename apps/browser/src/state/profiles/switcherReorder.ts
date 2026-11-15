@@ -15,10 +15,11 @@ export function switcherLift(widths: number[], from: number, dx: number): number
 }
 
 export function switcherDropSlot(widths: number[], from: number, dx: number): number {
-  const centre = centreOf(widths, from) + switcherLift(widths, from, dx);
+  const left = leftOf(widths, from) + switcherLift(widths, from, dx);
+  const right = left + widths[from]!;
   let to = from;
-  for (let j = from + 1; j < widths.length && centre >= centreOf(widths, j); j++) to = j;
-  for (let j = from - 1; j >= 0 && centre <= centreOf(widths, j); j--) to = j;
+  for (let j = from + 1; j < widths.length && right >= centreOf(widths, j); j++) to = j;
+  for (let j = from - 1; j >= 0 && left <= centreOf(widths, j); j--) to = j;
   return to;
 }
 

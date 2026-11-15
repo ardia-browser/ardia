@@ -1,0 +1,65 @@
+# Copyright 2026 Ardia. Apache-2.0.
+
+import("//testing/test.gni")
+
+assert(is_linux)
+
+source_set("logic") {
+  sources = [
+    "document_store.cc",
+    "document_store.h",
+    "launch_config.cc",
+    "launch_config.h",
+  ]
+
+  deps = [
+    "//ardia/core:hooks",
+    "//base",
+  ]
+}
+
+source_set("modules") {
+  sources = [
+    "app.cc",
+    "app_modules.cc",
+    "app_modules.h",
+    "args.h",
+    "config.cc",
+    "documents.cc",
+  ]
+
+  public_deps = [
+    ":logic",
+    "//ardia/linux/ui_host:modules",
+  ]
+
+  deps = [
+    "//base",
+    "//chrome/app/theme:chrome_unscaled_resources",
+    "//chrome/browser",
+    "//chrome/browser/profiles:profile",
+    "//chrome/common",
+    "//components/version_info",
+    "//content/public/browser",
+    "//gpu/config",
+    "//third_party/re2",
+    "//ui/base",
+    "//ui/display",
+    "//url",
+  ]
+}
+
+test("ardia_linux_modules_unittests") {
+  sources = [
+    "document_store_unittest.cc",
+    "launch_config_unittest.cc",
+  ]
+
+  deps = [
+    ":logic",
+    "//base",
+    "//base/test:run_all_unittests",
+    "//base/test:test_support",
+    "//testing/gtest",
+  ]
+}

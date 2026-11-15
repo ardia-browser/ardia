@@ -7,6 +7,7 @@
 
 #include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
 #include "base/sequence_checker.h"
@@ -94,6 +95,9 @@ class ModuleRegistry {
 
   SyncTimings TakeSyncTimings();
 
+  base::OnceClosure HoldUiLoad();
+  void WhenUiMayLoad(base::OnceClosure load);
+
  private:
   struct Entry {
     std::map<std::string, SyncMethod, std::less<>> sync;
@@ -102,11 +106,15 @@ class ModuleRegistry {
   };
 
   Entry& EntryFor(std::string_view module);
+  void ReleaseUiLoad();
 
   std::map<std::string, Entry, std::less<>> modules_;
   base::ObserverList<ModuleEventSink> sinks_;
   SyncTimings sync_timings_;
+  int ui_load_holds_ = 0;
+  base::OnceClosure ui_load_;
   SEQUENCE_CHECKER(sequence_checker_);
+  base::WeakPtrFactory<ModuleRegistry> weak_factory_{this};
 };
 
 void RegisterAppModules(ModuleRegistry& registry);

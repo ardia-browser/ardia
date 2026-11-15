@@ -10,6 +10,7 @@
 #include "ardia/linux/ui_host/app_bridge_host.h"
 #include "ardia/linux/ui_host/ardia_app_source.h"
 #include "ardia/linux/ui_host/ardia_app_ui.h"
+#include "ardia/linux/ui_host/modules.h"
 #include "ardia/linux/ui_host/ui_host_parts.h"
 #include "ardia/linux/ui_host/ui_navigation_throttle.h"
 #include "ardia/linux/windows/app_windows.h"
@@ -238,10 +239,14 @@ void StartUiHost() {
   Note("ui", ui_dir.value());
   UiHost* host = new UiHost(profile);
   UiHost::Current() = host;
-  base::ThreadPool::PostTaskAndReplyWithResult(
-      FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_BLOCKING},
-      base::BindOnce(&ReadScriptHashes, ui_dir),
-      base::BindOnce(&LoadUiHost, ui_dir));
+  ModuleRegistry::Get().WhenUiMayLoad(base::BindOnce(
+      [](base::FilePath folder) {
+        base::ThreadPool::PostTaskAndReplyWithResult(
+            FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_BLOCKING},
+            base::BindOnce(&ReadScriptHashes, folder),
+            base::BindOnce(&LoadUiHost, folder));
+      },
+      std::move(ui_dir)));
 }
 
 void StopUiHost() {

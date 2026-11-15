@@ -3,6 +3,7 @@
 #include <utility>
 
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/strings/strcat.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/time/time.h"
@@ -169,6 +170,29 @@ void ModuleRegistry::RemoveEventSink(ModuleEventSink* sink) {
 
 ModuleRegistry::SyncTimings ModuleRegistry::TakeSyncTimings() {
   return std::exchange(sync_timings_, SyncTimings());
+}
+
+base::OnceClosure ModuleRegistry::HoldUiLoad() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  ++ui_load_holds_;
+  return base::BindOnce(&ModuleRegistry::ReleaseUiLoad,
+                        weak_factory_.GetWeakPtr());
+}
+
+void ModuleRegistry::WhenUiMayLoad(base::OnceClosure load) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (ui_load_holds_ == 0) {
+    std::move(load).Run();
+    return;
+  }
+  ui_load_ = std::move(load);
+}
+
+void ModuleRegistry::ReleaseUiLoad() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (--ui_load_holds_ == 0 && ui_load_) {
+    std::move(ui_load_).Run();
+  }
 }
 
 }

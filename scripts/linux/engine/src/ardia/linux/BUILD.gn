@@ -49,6 +49,7 @@ source_set("linux") {
   ]
 
   deps = [
+    "//ardia/linux/modules",
     "//ardia/linux/renderer",
     "//base",
     "//chrome/app:command_ids",
@@ -87,6 +88,7 @@ source_set("linux") {
   ]
 
   allow_circular_includes_from = [
+    "//ardia/linux/modules",
     "//ardia/linux/ui_host",
     "//ardia/win:shared",
   ]

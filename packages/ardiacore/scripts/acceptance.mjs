@@ -4899,17 +4899,21 @@ try {
       await until("the window in full screen", async () => JSON.parse(await win("fullScreen")).fullScreen === true || null, 6000);
       await sleep(800);
       const from = await mark();
-      out.otherSpace = await win("fakeOtherSpace:1").catch((e) => `error: ${e.message}`);
       await win("fakeOcclusion:occluded");
       await win("fakeWindowServer:hides");
+      await sleep(1500);
+      out.onItsSpace = JSON.parse(await win("fullScreen")).pageFullScreen?.seen;
+      if (out.onItsSpace !== true) throw new Error(`the full-screen window on its own Space with Ardia active wasn't seen: ${await win("fullScreen")}`);
+      if ((await eventsOf(tab.id)).some((x) => x.name === "pictureInPicture" && x.t > from && x.payload.active)) throw new Error("popped out while the full-screen window was still on the active Space");
+      out.otherSpace = JSON.parse(await win("fakeOtherSpace:1"));
+      if (out.otherSpace.otherSpace !== true || out.otherSpace.seen !== false) throw new Error(`the Space change alone didn't make the window unseen at once: ${JSON.stringify(out.otherSpace)}`);
       const popped = await until("auto PiP once the full-screen window was left for another Space with Ardia still active", async () =>
         (await eventsOf(tab.id)).find((x) => x.name === "pictureInPicture" && x.t > from && x.payload.kind === "video" && x.payload.active && x.payload.fullScreenSpaces !== undefined) ?? null, 8000)
         .catch(async (e) => { throw new Error(`${e.message}; fakeOtherSpace answered ${JSON.stringify(out.otherSpace)}; window ${await win("fullScreen")}`); });
       out.popped = popped.payload;
       if (popped.payload.leftApp !== false || popped.payload.leftSpace !== true) throw new Error(`pip_shown left_app/left_space: ${JSON.stringify(popped.payload)}`);
-      await win("fakeOtherSpace:0");
-      await win("fakeOcclusion:visible");
-      await win("fakeWindowServer:shows");
+      out.backOnItsSpace = JSON.parse(await win("fakeOtherSpace:0"));
+      if (out.backOnItsSpace.otherSpace !== false || out.backOnItsSpace.seen !== true) throw new Error(`the Space change back alone didn't make the window seen at once: ${JSON.stringify(out.backOnItsSpace)}`);
       out.back = (await until("auto PiP ended on coming back to the window's Space", async () => {
         const e = await lastEvent(tab.id, "pictureInPicture");
         return e && e.t > popped.t && !e.payload.active ? e : null;

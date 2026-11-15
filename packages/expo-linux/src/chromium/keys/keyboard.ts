@@ -1,5 +1,5 @@
-import { MODIFIER_ORDER, Modifier, isFunctionKey, isModifierPress, modifierName, readKeyPress, recordedKey, ESCAPE } from "../../../../../apps/browser/linux/src/menus/keys";
-import { menuStore, type CommandEntry } from "../../../../../apps/browser/linux/src/menus/store";
+import { MODIFIER_ORDER, Modifier, isFunctionKey, isModifierPress, modifierName, readKeyPress, recordedKey, ESCAPE } from "./combos";
+import { menuStore, type CommandEntry } from "./store";
 import { callMain, callMainSync, mainModules } from "../../bridge";
 import { addNativeListener, emitNativeEvent, type EventSubscription } from "../../events";
 import { appWindowDocument } from "../../windows/appWindows";

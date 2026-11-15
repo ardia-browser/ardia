@@ -3,8 +3,8 @@ import { test } from "node:test";
 
 Object.assign(globalThis, { __ARDIA_VERSION__: "1.0.0", __ARDIA_BUILD__: "1", __ARDIA_NATIVE_API_VERSION__: 64, __ARDIA_DEBUG__: false, __ARDIA_UPDATE_REPOSITORY__: "x/y" });
 
-const { menuStore } = await import("../../../../../apps/browser/linux/src/menus/store");
-const { Modifier } = await import("../../../../../apps/browser/linux/src/menus/keys");
+const { menuStore } = await import("./store");
+const { Modifier } = await import("./combos");
 const { buildKeyMap, pressesFor, QUIT, SWITCHER_KEY, DRAG_ESCAPE } = await import("./keyMap");
 
 const idle = { recording: false, switcherHeld: 0, escapeCaptured: false, textInputFocused: false, undoReopensClosedTab: false, reopenClosedTabEnabled: true };

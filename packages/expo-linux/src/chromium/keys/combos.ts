@@ -110,7 +110,7 @@ export function storedForm(combo: Combo): string[] {
   return [combo.key, ...MODIFIER_ORDER.filter((modifier) => combo.modifiers & modifier).map(modifierName)];
 }
 
-export type ElectronInput = { type: string; key: string; code: string; shift: boolean; control: boolean; alt: boolean; meta: boolean; isAutoRepeat?: boolean; modifiers?: string[] };
+export type KeyInput = { type: string; key: string; code: string; shift: boolean; control: boolean; alt: boolean; meta: boolean; isAutoRepeat?: boolean; modifiers?: string[] };
 
 function fixedKeyOf(code: string): string {
   const letter = /^Key([A-Z])$/.exec(code);
@@ -122,7 +122,7 @@ function fixedKeyOf(code: string): string {
   return CODE_KEYS[code] ?? "";
 }
 
-export function readKeyPress(input: ElectronInput): KeyPress {
+export function readKeyPress(input: KeyInput): KeyPress {
   let modifiers = 0;
   if (input.control) modifiers |= Modifier.Control;
   if (input.alt) modifiers |= Modifier.Option;

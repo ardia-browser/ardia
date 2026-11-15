@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 Object.assign(globalThis, { __ARDIA_VERSION__: "1.0.0", __ARDIA_BUILD__: "1", __ARDIA_NATIVE_API_VERSION__: 64, __ARDIA_DEBUG__: false, __ARDIA_UPDATE_REPOSITORY__: "x/y" });
 
-const { menuStore } = await import("../../../../../apps/browser/linux/src/menus/store");
+const { menuStore } = await import("./store");
 const { linuxShortcutOf, withLinuxShortcuts } = await import("./menuShortcuts");
 
 test("a Mac combo from the UI becomes its row's Linux combo, else Cmd becomes Ctrl", () => {

@@ -1,7 +1,7 @@
 import glueUrl from "@browsermt/bergamot-translator/worker/bergamot-translator-worker.js?url";
 import wasmUrl from "@browsermt/bergamot-translator/worker/bergamot-translator-worker.wasm?url";
 import type { BrowserModelFiles, BrowserWorkerReply, BrowserWorkerRequest, BrowserWorkerText } from "./worker";
-import { alignedParts, piecesHtml } from "../../../../../apps/browser/linux/src/translate/pieces";
+import { alignedParts, piecesHtml } from "./pieces";
 
 export type TranslationHost = {
   modelFiles(source: string, target: string): Promise<{ key: string; files: BrowserModelFiles }[] | null>;

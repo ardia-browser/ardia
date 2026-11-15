@@ -1,5 +1,5 @@
-import { Modifier, linuxComboFromStored, storedCombo } from "../../../../../apps/browser/linux/src/menus/keys";
-import { menuStore } from "../../../../../apps/browser/linux/src/menus/store";
+import { Modifier, linuxComboFromStored, storedCombo } from "./combos";
+import { menuStore } from "./store";
 import { pressesFor } from "./keyMap";
 
 export type MenuShortcut = { code: string; ctrl: boolean; shift: boolean; alt: boolean };

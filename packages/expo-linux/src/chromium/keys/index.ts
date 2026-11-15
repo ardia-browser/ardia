@@ -1,4 +1,4 @@
-import { menuStore } from "../../../../../apps/browser/linux/src/menus/store";
+import { menuStore } from "./store";
 import { addMenusListener, cancelRecording, devKeyEquivalent, devShortcutRecording, installKeys, pushKeyMap, recentMenuLog, recordShortcut, setTextInputFocused, textInputFocused } from "./keyboard";
 
 export { installKeys };

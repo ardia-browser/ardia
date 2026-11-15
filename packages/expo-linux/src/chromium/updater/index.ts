@@ -1,4 +1,4 @@
-import { APP_VERSION, RELEASES_PAGE, UPDATE_REPOSITORY } from "../../../../../apps/browser/linux/src/build";
+import { APP_VERSION, RELEASES_PAGE, UPDATE_REPOSITORY } from "../build";
 import { callMain, callMainSync } from "../../bridge";
 import { compareVersions, newestOf, type Channel, type Release } from "./versions";
 

@@ -1,5 +1,5 @@
-import { KIT_PDF_NAME, KIT_TEXT_NAME, kitBytes, kitPreview, qrDataUrl } from "../../../../../apps/browser/linux/src/services/sync/kit";
-import { base64 } from "../../../../../apps/browser/linux/src/services/sync/png";
+import { KIT_PDF_NAME, KIT_TEXT_NAME, kitBytes, kitPreview, qrDataUrl } from "./kit";
+import { base64 } from "./png";
 import { callMain, callMainSync } from "../../bridge";
 
 type WordsPurpose = "show" | "save" | "copy";

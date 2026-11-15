@@ -1,6 +1,6 @@
 import { DEBUG_BUILD } from "../build";
 import { COMMAND_ROWS, Row, SYSTEM_ROWS, type CommandRow } from "./commandTable";
-import { MODIFIER_ORDER, Modifier, linuxComboFromStored, matches, modifierName, parseCombo, parseCombos, sameCombo, storedCombo, storedForm, type Combo, type KeyPress } from "./keys";
+import { MODIFIER_ORDER, Modifier, linuxComboFromStored, matches, modifierName, parseCombo, parseCombos, sameCombo, storedCombo, storedForm, type Combo, type KeyPress } from "./combos";
 
 type MenuEntryValue = { id: string; title: string; current?: boolean };
 

@@ -1,10 +1,10 @@
-import { BROWSERS, findBrowser, isChromiumBased } from "../../../../../apps/browser/linux/src/services/import/browsers";
-import { dataDirectory, listSources, profileDirectory } from "../../../../../apps/browser/linux/src/services/import/discovery";
-import { bookmarksFromHtml, passwordsFromCsv } from "../../../../../apps/browser/linux/src/services/import/fileFormats";
-import { join, pathFromFileUrl, type ImportHost } from "../../../../../apps/browser/linux/src/services/import/host";
-import { importProfile, Unlocks } from "../../../../../apps/browser/linux/src/services/import/importer";
-import { ImportFailure, type ImportKind, type Options, type Progress } from "../../../../../apps/browser/linux/src/services/import/model";
-import { knowExistingPaths } from "../../../../../apps/browser/linux/src/services/import/paths.chromium";
+import { BROWSERS, findBrowser, isChromiumBased } from "./browsers";
+import { dataDirectory, listSources, profileDirectory } from "./discovery";
+import { bookmarksFromHtml, passwordsFromCsv } from "./fileFormats";
+import { join, pathFromFileUrl, type ImportHost } from "./host";
+import { importProfile, Unlocks } from "./importer";
+import { ImportFailure, type ImportKind, type Options, type Progress } from "./model";
+import { knowExistingPaths } from "./paths";
 import { callMain, mainModules } from "../../bridge";
 import { emitNativeEvent } from "../events";
 

@@ -1,6 +1,6 @@
-import { Row } from "../../../../../apps/browser/linux/src/menus/commandTable";
-import { Modifier, matches, readKeyPress, type Combo, type ElectronInput } from "../../../../../apps/browser/linux/src/menus/keys";
-import type { CommandEntry } from "../../../../../apps/browser/linux/src/menus/store";
+import { Row } from "./commandTable";
+import { Modifier, matches, readKeyPress, type Combo, type KeyInput } from "./combos";
+import type { CommandEntry } from "./store";
 
 export type KeyMapEntry = { code: string; ctrl: boolean; shift: boolean; alt: boolean; meta: boolean; command: string; arg?: string; pageFirst?: boolean; uiOnly?: boolean };
 
@@ -51,7 +51,7 @@ function typedOn(code: string, shift: boolean): string {
   return code;
 }
 
-function inputOf(code: string, modifiers: number): ElectronInput {
+function inputOf(code: string, modifiers: number): KeyInput {
   const shift = (modifiers & Modifier.Shift) !== 0;
   return { type: "keyDown", code, key: typedOn(code, shift), shift, control: (modifiers & Modifier.Control) !== 0, alt: (modifiers & Modifier.Option) !== 0, meta: false };
 }

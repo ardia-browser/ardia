@@ -2,9 +2,10 @@ import { currentEngineProfile } from "../../state/browser/current";
 import { clearBrowsingData, type BrowsingDataType } from "../../state/profiles/profileData";
 import { useRef, useState } from "react";
 import { Pressable, View } from "react-native";
-import { pruneEngineFavicons } from "../../state/favicons/favicons";
+import { cacheKey, pruneEngineFavicons } from "../../state/favicons/favicons";
 import { isIncognitoProfile } from "../../state/browser/model";
 import { useProfileName, useProfileOrder } from "../../state/profiles/hooks";
+import { clearHistory } from "../../state/history/actions";
 import { noteBrowsingDataCleared } from "../../state/telemetry/historyRemovalCounts";
 import { Box, Button, Checkbox, Dialog, DialogActions, DialogTitle, Group, PopUp, Row, space, Text } from "../ui";
 import { clearDataDialog } from "./tokens";
@@ -27,8 +28,10 @@ export function ClearDataDialog({ profileId, onClose }: { profileId: string; onC
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
   const pending = useRef(false);
-  const dismiss = () => {
-    if (!pending.current) onClose();
+  const left = useRef(false);
+  const leave = () => {
+    left.current = true;
+    onClose();
   };
 
   const clear = async () => {
@@ -37,29 +40,34 @@ export function ClearDataDialog({ profileId, onClose }: { profileId: string; onC
     setBusy(true);
     setError(false);
     const ms = RANGES.find((r) => r.value === range)!.ms;
-    const since = ms === Infinity ? undefined : Date.now() - ms;
+    const startedAt = Date.now();
+    const since = ms === Infinity ? undefined : startedAt - ms;
     const profile = currentEngineProfile(profileId);
+    const icons = cacheKey(profileId);
     const types: BrowsingDataType[] = [...(history ? ["history" as const] : []), ...(siteData ? ["siteData" as const, "cache" as const] : [])];
     let cleared = false;
     try {
       if (!isIncognitoProfile(profileId)) {
         await clearBrowsingData(profile, types, since);
-        if (history) pruneEngineFavicons(profile);
         noteBrowsingDataCleared(true);
+      }
+      if (history) {
+        if (currentEngineProfile(profileId) === profile) clearHistory(profileId, since, startedAt);
+        pruneEngineFavicons(icons);
       }
       cleared = true;
     } catch {
       noteBrowsingDataCleared(false);
-      setError(true);
+      if (!left.current) setError(true);
     } finally {
       pending.current = false;
-      setBusy(false);
+      if (!left.current) setBusy(false);
     }
-    if (cleared) onClose();
+    if (cleared && !left.current) onClose();
   };
 
   return (
-    <Dialog width="m" onDismiss={busy ? undefined : dismiss}>
+    <Dialog width="m" onDismiss={leave}>
       <DialogTitle subtitle={multipleProfiles ? `From your ${profileName} profile` : undefined}>Clear Browsing Data</DialogTitle>
       <Box row gap="ml" style={RANGE_ROW}>
         <Text>Time range</Text>
@@ -71,9 +79,13 @@ export function ClearDataDialog({ profileId, onClose }: { profileId: string; onC
           <Option value={siteData} onChange={setSiteData} disabled={busy} title="Cookies, site data and cached files" subtitle="Signs you out of most sites." />
         </Group>
       </View>
-      {error && <Text tone="destructive">Some browsing data could not be cleared. Please try again.</Text>}
+      {error && (
+        <Text size="caption" tone="destructive" style={ERROR}>
+          Some browsing data could not be cleared. Please try again.
+        </Text>
+      )}
       <DialogActions>
-        <Button title="Cancel" disabled={busy} onPress={dismiss} />
+        <Button title="Cancel" onPress={leave} />
         <Button title={error ? "Retry" : "Clear Data"} kind="primary" disabled={busy || (!history && !siteData)} onPress={() => void clear()} />
       </DialogActions>
     </Dialog>
@@ -82,6 +94,7 @@ export function ClearDataDialog({ profileId, onClose }: { profileId: string; onC
 
 const RANGE_ROW = { alignItems: "center", marginTop: space.xl } as const;
 const OPTIONS = { marginTop: space.xl } as const;
+const ERROR = { marginTop: space.ml } as const;
 
 function Option({ value, onChange, disabled, title, subtitle }: { value: boolean; onChange: (v: boolean) => void; disabled: boolean; title: string; subtitle: string }) {
   return (

@@ -12,7 +12,7 @@ export type HistorySlice = {
   history: Record<string, HistoryView>;
 
   removeHistory(profileId: string, urls: string[]): void;
-  clearHistory(profileId: string, since?: number): void;
+  clearHistory(profileId: string, since?: number, until?: number): void;
   importHistory(profileId: string, entries: Omit<HistoryEntry, "favicon">[]): number;
 };
 
@@ -33,10 +33,11 @@ export function withHistoryList(s: HistoryState, engine: string, list: HistoryEn
   return { history: { ...s.history, [engine]: { list, floor: was?.floor ?? -Infinity, ready: was?.ready ?? false } } };
 }
 
-function withoutVisitsSince(entry: HistoryEntry, since: number): HistoryEntry | null {
+function withoutVisitsBetween(entry: HistoryEntry, since: number, until: number): HistoryEntry | null {
   if (entry.lastVisit < since) return entry;
   const times = entry.visitTimes?.length ? entry.visitTimes : [entry.lastVisit];
-  const kept = times.filter((t) => t < since);
+  const kept = times.filter((t) => t < since || t > until);
+  if (kept.length === times.length) return entry;
   if (!kept.length) return null;
   return { ...entry, visits: entry.visits - (times.length - kept.length), lastVisit: kept[kept.length - 1]!, visitTimes: kept };
 }
@@ -71,12 +72,12 @@ export const createHistorySlice: StateCreator<BrowserState, [], [], HistorySlice
     return added;
   },
 
-  clearHistory(profileId, since) {
+  clearHistory(profileId, since, until = Infinity) {
     if (isIncognitoProfile(profileId)) return;
     set((s) => {
       const engine = engineProfile(s, profileId);
-      if (since === undefined) return withHistoryList(s, engine, []);
-      const kept = historyOf(s, profileId).map((h) => withoutVisitsSince(h, since)).filter((h): h is HistoryEntry => !!h);
+      if (since === undefined && until === Infinity) return withHistoryList(s, engine, []);
+      const kept = historyOf(s, profileId).map((h) => withoutVisitsBetween(h, since ?? -Infinity, until)).filter((h): h is HistoryEntry => !!h);
       return withHistoryList(s, engine, kept.sort((a, b) => b.lastVisit - a.lastVisit));
     });
   },

@@ -22,7 +22,7 @@ const nodes = (node) => !node || typeof node !== "object" ? [] : [node, ...[node
 const button = (h, title) => nodes(h.value).find((node) => node.props?.title === title);
 const message = (h) => nodes(h.value).some((node) => node.props?.children === "Some browsing data could not be cleared. Please try again.");
 
-function dialog() {
+function dialog(profileId = "default", iconKey = "") {
   S().hydrate({});
   requests.length = 0;
   takeHistoryRemovalCounts();
@@ -30,22 +30,18 @@ function dialog() {
   const old = { url: "https://old.example/", title: "Old", lastVisit: Date.now() - 7_200_000, visits: 1, favicon: null };
   useBrowser.setState({ history: { "": { list: [recent, old], floor: -Infinity, ready: true } } });
   const icons = { pages: {}, srcs: {}, appearances: {} };
-  useFavicons.setState({ profiles: { "": icons } });
+  useFavicons.setState({ profiles: { [iconKey]: icons } });
   let closes = 0;
-  const h = mount(() => ClearDataDialog({ profileId: "default", onClose: () => closes++ }));
+  const h = mount(() => ClearDataDialog({ profileId, onClose: () => closes++ }));
   return { h, recent, old, icons, closes: () => closes };
 }
 
-test("clearing waits for native success, leaves history to engine reports and prevents duplicate requests or dismissal", async () => {
+test("clearing waits for native success, then removes the cleared range from History, and ignores a second press", async () => {
   const { h, recent, old, icons, closes } = dialog();
   try {
     const clear = button(h, "Clear Data").props.onPress;
-    const cancel = button(h, "Cancel").props.onPress;
-    const dismiss = h.value.props.onDismiss;
     clear();
     clear();
-    cancel();
-    dismiss();
     assert.equal(requests.length, 1);
     assert.equal(requests[0].profile, "");
     assert.deepEqual(requests[0].args.types, ["history", "siteData", "cache"]);
@@ -53,11 +49,9 @@ test("clearing waits for native success, leaves history to engine reports and pr
     assert.equal(useFavicons.getState().profiles[""], icons);
     assert.equal(closes(), 0);
     assert.equal(button(h, "Clear Data").props.disabled, true);
-    assert.equal(button(h, "Cancel").props.disabled, true);
-    assert.equal(h.value.props.onDismiss, undefined);
     assert.ok(nodes(h.value).filter((node) => node.props?.onChange).every((node) => node.props.disabled));
-    const arrival = { ...recent, url: "https://new-visit.example/", title: "New visit" };
-    useBrowser.setState({ history: { "": { ...S().history[""], list: [arrival, old] } } });
+    const arrival = { ...recent, url: "https://new-visit.example/", title: "New visit", lastVisit: Date.now() + 1 };
+    useBrowser.setState({ history: { "": { ...S().history[""], list: [arrival, recent, old] } } });
     requests[0].resolve("null");
     await tick();
     assert.deepEqual(S().history[""].list, [arrival, old]);
@@ -67,6 +61,52 @@ test("clearing waits for native success, leaves history to engine reports and pr
   } finally {
     requests[0]?.resolve("null");
     await tick();
+    h.unmount();
+  }
+});
+
+test("Cancel, Esc and the backdrop still leave while a clear is pending, without closing again when it finishes", async () => {
+  const { h, old, closes } = dialog();
+  try {
+    assert.equal(button(h, "Cancel").props.disabled, undefined);
+    button(h, "Clear Data").props.onPress();
+    assert.equal(typeof h.value.props.onDismiss, "function");
+    button(h, "Cancel").props.onPress();
+    assert.equal(closes(), 1);
+    requests[0].resolve("null");
+    await tick();
+    assert.equal(closes(), 1);
+    assert.deepEqual(S().history[""].list, [old]);
+    assert.equal(useFavicons.getState().profiles[""], EMPTY_ICONS);
+  } finally {
+    h.unmount();
+  }
+  const again = dialog();
+  try {
+    button(again.h, "Clear Data").props.onPress();
+    again.h.value.props.onDismiss();
+    assert.equal(again.closes(), 1);
+    requests[0].reject(Object.assign(new Error("failed"), { code: "ERR_ENGINE" }));
+    await tick();
+    assert.equal(again.closes(), 1);
+    assert.deepEqual(S().history[""].list, [again.recent, again.old]);
+    assert.equal(useFavicons.getState().profiles[""], again.icons);
+    assert.equal(takeHistoryRemovalCounts().browsing_data_clear_failures, 1);
+  } finally {
+    again.h.unmount();
+  }
+});
+
+test("an incognito window's clear asks nothing of the engine and still prunes its own favicons", async () => {
+  const { h, recent, old, closes } = dialog("incognito:w1", "incognito:w1");
+  try {
+    button(h, "Clear Data").props.onPress();
+    await tick();
+    assert.equal(requests.length, 0);
+    assert.equal(useFavicons.getState().profiles["incognito:w1"], EMPTY_ICONS);
+    assert.deepEqual(S().history[""].list, [recent, old]);
+    assert.equal(closes(), 1);
+  } finally {
     h.unmount();
   }
 });
@@ -82,8 +122,7 @@ test("a native failure keeps the dialog and caches, releases busy state, and all
     assert.deepEqual(S().history[""].list, [recent, old]);
     assert.equal(useFavicons.getState().profiles[""], icons);
     assert.equal(button(h, "Retry").props.disabled, false);
-    assert.equal(button(h, "Cancel").props.disabled, false);
-    assert.equal(typeof h.value.props.onDismiss, "function");
+    assert.ok(nodes(h.value).filter((node) => node.props?.onChange).every((node) => !node.props.disabled));
     assert.equal(takeHistoryRemovalCounts().browsing_data_clear_failures, 1);
     button(h, "Retry").props.onPress();
     assert.equal(message(h), false);
@@ -92,6 +131,7 @@ test("a native failure keeps the dialog and caches, releases busy state, and all
     requests[1].resolve("null");
     await tick();
     assert.equal(closes(), 1);
+    assert.deepEqual(S().history[""].list, [old]);
     assert.equal(useFavicons.getState().profiles[""], EMPTY_ICONS);
     assert.equal(takeHistoryRemovalCounts().browsing_data_clears, 1);
   } finally {

@@ -117,7 +117,7 @@ class SvgPage implements KitPage {
 export function kitPreview(width: number, created: Date, device: string): string {
   const page = new SvgPage();
   drawKit(page, HIDDEN_WORDS, created, device);
-  return `data:image/svg+xml;base64,${Buffer.from(page.document(width), "utf8").toString("base64")}`;
+  return `data:image/svg+xml;base64,${base64(new TextEncoder().encode(page.document(width)))}`;
 }
 
 export function qrDataUrl(words: readonly string[]): string {
@@ -132,4 +132,4 @@ export function qrDataUrl(words: readonly string[]): string {
 }
 
 export const kitBytes = (words: readonly string[], format: "pdf" | "text", device: string): Uint8Array =>
-  format === "text" ? Buffer.from(kitText(words, new Date(), device), "utf8") : kitPdf(words, new Date(), device);
+  format === "text" ? new TextEncoder().encode(kitText(words, new Date(), device)) : kitPdf(words, new Date(), device);

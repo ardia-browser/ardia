@@ -72,6 +72,8 @@ source_set("modules") {
     "shell.cc",
     "system.cc",
     "telemetry_local.cc",
+    "//ardia/linux/sync/sync_module.cc",
+    "//ardia/linux/sync/sync_module.h",
     "test_answers.cc",
     "test_answers.h",
   ]
@@ -83,6 +85,7 @@ source_set("modules") {
 
   deps = [
     "//ardia/linux/dbus",
+    "//ardia/linux/sync:core",
     "//base",
     "//chrome/app/theme:chrome_unscaled_resources",
     "//chrome/browser",

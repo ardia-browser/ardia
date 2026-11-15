@@ -1,0 +1,38 @@
+# Copyright 2026 Ardia. Apache-2.0.
+
+import("//testing/test.gni")
+
+assert(is_linux)
+
+source_set("core") {
+  sources = [
+    "sync_crypto.cc",
+    "sync_crypto.h",
+    "sync_logins.cc",
+    "sync_logins.h",
+    "sync_phrase.cc",
+    "sync_phrase.h",
+    "sync_vault.cc",
+    "sync_vault.h",
+    "sync_wordlist.cc",
+  ]
+
+  deps = [
+    "//base",
+    "//base:i18n",
+    "//third_party/boringssl",
+    "//third_party/icu",
+  ]
+}
+
+test("ardia_linux_sync_unittests") {
+  sources = [ "sync_unittest.cc" ]
+
+  deps = [
+    ":core",
+    "//base",
+    "//base/test:run_all_unittests",
+    "//base/test:test_support",
+    "//testing/gtest",
+  ]
+}

@@ -1,6 +1,7 @@
 import { introMusicModules } from "../chromium/introMusic";
 import { keysModules } from "../chromium/keys";
 import { launchLinksModules } from "../chromium/launchLinks";
+import { syncModules } from "../chromium/sync";
 import { updaterModules } from "../chromium/updater";
 import { serviceModules as sharedServiceModules } from "./modules.ts";
 
@@ -11,6 +12,7 @@ export const serviceModules: Record<string, Record<string, unknown>> = {
   ...introMusicModules,
   ...keysModules,
   ...launchLinksModules,
+  ...syncModules,
   ...updaterModules,
   ArdiaCli: {
     installedVersion: () => null,

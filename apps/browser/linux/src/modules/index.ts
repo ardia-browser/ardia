@@ -5,6 +5,7 @@ import "./config";
 import "./dev";
 import "./dialogs";
 import "./documents";
+import "./edgePointer";
 import "./fileDrop";
 import "./focus";
 import "./keychain";

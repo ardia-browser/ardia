@@ -6,6 +6,7 @@
 #include <string>
 #include <string_view>
 
+#include "ardia/core/ac_content_hooks.h"
 #include "ardia/core/ac_hooks.h"
 #include "ardia/linux/browser_window/web_contents_delegate.h"
 #include "ardia/linux/content_browser_client.h"
@@ -50,6 +51,11 @@ void InstallChromeHooks() {
   g_ardia_browser_window_factory = &WindowForChromeBrowser;
   g_ardia_create_web_contents_delegate = &CreateWebContentsDelegate;
   g_ardia_keeps_window_without_tabs = &KeepsWindowWithoutTabs;
+  g_ardia_script_loader_ready_at_once = true;
+  g_ardia_scripts_wait_at_response = true;
+  g_ardia_skip_cpu_health_sampling = true;
+  g_ardia_lazy_storage_usage = true;
+  g_ardia_hybrid_scan_on_demand = true;
 }
 
 }

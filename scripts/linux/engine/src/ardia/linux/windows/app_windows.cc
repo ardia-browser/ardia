@@ -24,6 +24,7 @@ constexpr char kModule[] = "ArdiaAppWindows";
 constexpr int kCornerRadius = 19;
 constexpr int kCascadeStep = 28;
 constexpr base::TimeDelta kLastWindowGrace = base::Milliseconds(400);
+constexpr base::TimeDelta kLaunchSettling = base::Seconds(1);
 
 struct Sizes {
   int width;
@@ -238,6 +239,17 @@ AppWindow* AppWindows::LastActive() const {
     }
   }
   return nullptr;
+}
+
+bool AppWindows::AnotherJustAppearedActive(const AppWindow* window) const {
+  AppWindow* other = Find(appeared_active_);
+  return other && other != window &&
+         base::TimeTicks::Now() - appeared_active_at_ < kLaunchSettling;
+}
+
+void AppWindows::NoteAppearedActive(const AppWindow* window) {
+  appeared_active_ = window->id();
+  appeared_active_at_ = base::TimeTicks::Now();
 }
 
 std::vector<std::string> AppWindows::Ids() const {

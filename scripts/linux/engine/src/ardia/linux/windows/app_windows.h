@@ -58,6 +58,8 @@ class AppWindows {
   AppWindow* Find(std::string_view id) const;
   AppWindow* ForUiContents(const content::WebContents* contents) const;
   AppWindow* LastActive() const;
+  bool AnotherJustAppearedActive(const AppWindow* window) const;
+  void NoteAppearedActive(const AppWindow* window);
   std::vector<std::string> Ids() const;
   void CloseAll();
 
@@ -85,6 +87,8 @@ class AppWindows {
   std::map<std::string, std::unique_ptr<AppWindow>, std::less<>> windows_;
   std::string last_browser_;
   std::string last_active_;
+  std::string appeared_active_;
+  base::TimeTicks appeared_active_at_;
   base::OneShotTimer last_window_timer_;
   base::WeakPtrFactory<AppWindows> weak_factory_{this};
 };

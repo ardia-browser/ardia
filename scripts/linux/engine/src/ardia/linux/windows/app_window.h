@@ -46,7 +46,11 @@ class AppWindowView : public views::View, public views::ViewTargeterDelegate {
   views::WebView* PageView(const std::string& key) const;
   views::WebView* AddPage(const std::string& key,
                           content::WebContents* contents);
-  void PlacePage(const std::string& key, const gfx::Rect& bounds, int radius);
+  void PlacePage(const std::string& key,
+                 const gfx::Rect& bounds,
+                 int radius,
+                 const std::vector<RoundedArea>& holes);
+  static bool PagesUnderUi();
   void RemovePage(const std::string& key);
   std::vector<std::string> PageKeys() const;
 

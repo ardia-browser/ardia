@@ -449,13 +449,21 @@ base::DictValue Host::ShowTab(const base::DictValue& args,
       model->ActivateTabAt(index);
     }
   }
+  std::vector<RoundedArea> holes =
+      InputRegion::HolesFrom(args.FindList("holes"));
+  if (scale != 1) {
+    for (RoundedArea& hole : holes) {
+      hole.rect.InvScale(static_cast<float>(scale));
+      hole.radius /= static_cast<float>(scale);
+    }
+  }
   app->view()->AddPage(key, contents);
-  app->view()->PlacePage(key, place, static_cast<int>(std::lround(radius)));
+  app->view()->PlacePage(key, place, static_cast<int>(std::lround(radius)),
+                         holes);
   RoundedArea area;
   area.rect = gfx::RectF(place);
   area.radius = static_cast<float>(radius);
-  app->input_region().SetPage(key, area,
-                              InputRegion::HolesFrom(args.FindList("holes")));
+  app->input_region().SetPage(key, area, std::move(holes));
   ardiacore::NoteTabShownByHost(contents, true);
   Shown& entry = shown_[key];
   entry.window = window;

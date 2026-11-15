@@ -10,9 +10,11 @@
 #include "ardia/linux/app_lifetime.h"
 #include "ardia/linux/host/host.h"
 #include "ardia/linux/host/key_map.h"
+#include "ardia/linux/log.h"
 #include "base/base64.h"
 #include "base/functional/bind.h"
 #include "base/memory/ref_counted_memory.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "components/input/native_web_keyboard_event.h"
@@ -34,6 +36,9 @@
 #include "ui/views/controls/webview/webview.h"
 #include "ui/views/view_targeter.h"
 #include "ui/views/window/frame_view.h"
+#include "third_party/skia/include/core/SkPath.h"
+#include "third_party/skia/include/core/SkRRect.h"
+#include "third_party/skia/include/pathops/SkPathOps.h"
 
 namespace ardia_linux {
 
@@ -124,25 +129,49 @@ views::WebView* AppWindowView::AddPage(const std::string& key,
     return existing;
   }
   const std::optional<size_t> ui_index = GetIndexOf(ui_view_);
-  views::WebView* page = AddChildViewAt(std::make_unique<views::WebView>(nullptr),
-                                        ui_index.value_or(0));
+  views::WebView* page =
+      PagesUnderUi()
+          ? AddChildViewAt(std::make_unique<views::WebView>(nullptr),
+                           ui_index.value_or(0))
+          : AddChildView(std::make_unique<views::WebView>(nullptr));
   page->SetVisible(false);
   page->SetWebContents(contents);
   pages_[key] = page;
   return page;
 }
 
+bool AppWindowView::PagesUnderUi() {
+  return ardiacore::TestFlag("pagesUnderUi");
+}
+
 void AppWindowView::PlacePage(const std::string& key,
                               const gfx::Rect& bounds,
-                              int radius) {
+                              int radius,
+                              const std::vector<RoundedArea>& holes) {
   views::WebView* page = PageView(key);
   if (!page) {
     return;
   }
   page->SetBoundsRect(bounds);
   page->SetVisible(true);
-  page->holder()->SetNativeViewCornerRadii(
-      gfx::RoundedCornersF(static_cast<float>(std::max(0, radius))));
+  const float corner = static_cast<float>(std::max(0, radius));
+  page->holder()->SetNativeViewCornerRadii(gfx::RoundedCornersF(corner));
+  if (PagesUnderUi()) {
+    return;
+  }
+  SkPath shape = SkPath::RRect(
+      SkRect::MakeWH(bounds.width(), bounds.height()), corner, corner);
+  for (const RoundedArea& hole : holes) {
+    const gfx::RectF cut = hole.rect - gfx::Vector2dF(bounds.x(), bounds.y());
+    const SkPath hole_path = SkPath::RRect(
+        SkRect::MakeXYWH(cut.x(), cut.y(), cut.width(), cut.height()),
+        hole.radius, hole.radius);
+    if (std::optional<SkPath> cut_shape =
+            Op(shape, hole_path, kDifference_SkPathOp)) {
+      shape = std::move(*cut_shape);
+    }
+  }
+  page->holder()->SetClipPath(shape);
 }
 
 void AppWindowView::RemovePage(const std::string& key) {
@@ -184,7 +213,9 @@ views::View* AppWindowView::TargetForRect(views::View* root,
 AppWindow::AppWindow(std::string id,
                      WindowShape shape,
                      std::unique_ptr<content::WebContents> ui)
-    : id_(std::move(id)), shape_(std::move(shape)), ui_(std::move(ui)) {
+    : id_(std::move(id)),
+      shape_(std::move(shape)),
+      ui_(std::move(ui)) {
   SetCanResize(shape_.resizable);
   SetCanMaximize(shape_.maximizable);
   SetCanMinimize(true);
@@ -282,11 +313,21 @@ void AppWindow::Show() {
     fade_started_ = base::TimeTicks::Now();
     widget_->SetOpacity(0);
   }
-  if (!shape_.focus || ardiacore::BackgroundInstance()) {
+  const bool behind = AppWindows::Get().AnotherJustAppearedActive(this);
+  const bool inactive =
+      !shape_.focus || ardiacore::BackgroundInstance() || behind;
+  Note("windows", "show " + id_ +
+                      (behind ? " behind the window that just appeared"
+                              : inactive ? " inactive" : " active"));
+  if (inactive) {
     widget_->ShowInactive();
+    if (!behind) {
+      widget_->StackAtTop();
+    }
   } else {
     widget_->Show();
     widget_->Activate();
+    AppWindows::Get().NoteAppearedActive(this);
   }
   if (fade) {
     fade_timer_.Start(FROM_HERE, kFadeStep,
@@ -321,6 +362,7 @@ void AppWindow::Focus() {
   if (!widget_ || closing_) {
     return;
   }
+  Note("windows", "focus " + id_);
   if (widget_->IsMinimized()) {
     widget_->Restore();
   }
@@ -502,6 +544,7 @@ bool AppWindow::OnCloseRequested(views::Widget::ClosedReason reason) {
 
 void AppWindow::OnWidgetActivationChanged(views::Widget* widget, bool active) {
   if (active) {
+    Note("windows", "activated " + id_);
     AppWindows::Get().WindowActivated(this);
     Host::Get()->WindowActivated(id_);
   }

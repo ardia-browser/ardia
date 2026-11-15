@@ -31,6 +31,8 @@ const void *kActedOcclusionKey = &kActedOcclusionKey;
 
 const void *kActedWindowServerKey = &kActedWindowServerKey;
 
+const void *kActedOtherSpaceKey = &kActedOtherSpaceKey;
+
 }
 
 namespace ardia_window {
@@ -52,6 +54,15 @@ void ActOcclusion(NSWindow *window, NSNumber *visible) {
 
 void ActWindowServer(NSWindow *window, BOOL shows) {
   objc_setAssociatedObject(window, kActedWindowServerKey, shows ? @YES : nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+void ActOtherSpace(NSWindow *window, BOOL elsewhere) {
+  objc_setAssociatedObject(window, kActedOtherSpaceKey, elsewhere ? @YES : nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  [NSWorkspace.sharedWorkspace.notificationCenter postNotificationName:NSWorkspaceActiveSpaceDidChangeNotification object:NSWorkspace.sharedWorkspace];
+}
+
+BOOL OnActiveSpace(NSWindow *window) {
+  return window && !objc_getAssociatedObject(window, kActedOtherSpaceKey) && (ardia_host::Background() || window.isOnActiveSpace);
 }
 
 NSTimeInterval gActedOcclusionGap = NAN;
@@ -186,6 +197,7 @@ NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges() {
   BOOL _seen;
   BOOL _closed;
   NSArray *_observers;
+  id _spaceObserver;
   __weak ArdiaCoreTab *_leftTab;
   NSInteger _waitingFor;
   NSUInteger _wait;
@@ -237,6 +249,10 @@ NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges() {
                  [weakSelf appActivated:YES];
                }]];
     _observers = observers;
+    NSNotificationCenter *spaces = NSWorkspace.sharedWorkspace.notificationCenter;
+    _spaceObserver = [spaces addObserverForName:NSWorkspaceActiveSpaceDidChangeNotification object:nil queue:nil usingBlock:^(NSNotification *) {
+      [weakSelf reconsiderSight];
+    }];
   }
   return self;
 }
@@ -250,6 +266,7 @@ NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges() {
 
 - (void)dealloc {
   for (id observer in _observers) [NSNotificationCenter.defaultCenter removeObserver:observer];
+  if (_spaceObserver) [NSWorkspace.sharedWorkspace.notificationCenter removeObserver:_spaceObserver];
 }
 
 - (BOOL)occlusionActed {
@@ -334,19 +351,24 @@ NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges() {
 - (void)updateSeen {
   if (![self occlusionActed] && [CFBridgingRelease(CGSessionCopyCurrentDictionary())[@"CGSSessionScreenIsLocked"] boolValue]) return;
   if (_settling && !_transitioning && [self windowVisible]) _settling = NO;
-  const BOOL seen = _settling || [self windowVisible] || (NSApp.isActive && IsWindowFullScreen(_coreWindow.window));
+  NSWindow *window = _coreWindow.window;
+  const BOOL seen = _settling || [self windowVisible] || (NSApp.isActive && IsWindowFullScreen(window) && OnActiveSpace(window));
   if ([ArdiaLaunchConfig.shared traced:@"visibility"])
-    NSLog(@"[ardiacore-vis] window %ld seen=%d (transitioning=%d settling=%d)", (long)_coreWindow.window.windowNumber, seen, _transitioning, _settling);
+    NSLog(@"[ardiacore-vis] window %ld seen=%d (transitioning=%d settling=%d activeSpace=%d)", (long)window.windowNumber, seen, _transitioning, _settling, OnActiveSpace(window));
   const BOOL overruleChanged = _overruleChanged;
   _overruleChanged = NO;
   if (seen == _seen && !overruleChanged && !_leftApp) return;
   _seen = seen;
-  if (NSWindow *window = _coreWindow.window)
+  if (window)
     [NSNotificationCenter.defaultCenter postNotificationName:ArdiaWindowSeenDidChange object:window userInfo:_leftApp ? @{ArdiaWindowSeenLeftAppKey : @YES} : nil];
 }
 
 - (BOOL)seen {
   return _seen;
+}
+
+- (BOOL)showsPageFullScreen:(ArdiaCoreTab *)tab {
+  return tab && _tab == tab;
 }
 
 - (void)settled:(BOOL)entered ours:(BOOL)ours {
@@ -363,12 +385,15 @@ NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges() {
   _waitingFor = 0;
   _coverTurn++;
   _picturing = NO;
+  ArdiaCoreTab *before = _tab;
   if (fullScreen) {
     _tab = _lastTab = tab;
   } else if (_tab == tab || !_tab) {
     if (_tab) _leftTab = _tab;
     _tab = nil;
   }
+  if (before != _tab) [[ArdiaTabRegistry viewForTab:tab] userSightChanged];
+  if (before && before != tab && before != _tab) [[ArdiaTabRegistry viewForTab:before] userSightChanged];
   _telling++;
   __weak ArdiaWindowFullScreen *weakSelf = self;
   __weak ArdiaCoreTab *weakTab = tab;

@@ -113,9 +113,9 @@ export type WebNotification = {
   isMainFrame: boolean;
 };
 
-export type PictureInPictureState = { kind: "video" | "document"; active: boolean; fullScreenSpaces?: boolean; leftApp?: boolean; leftTab?: boolean };
+export type PictureInPictureState = { kind: "video" | "document"; active: boolean; fullScreenSpaces?: boolean; leftApp?: boolean; leftSpace?: boolean; leftTab?: boolean };
 export type PictureInPictureDrag = { offCursor: boolean; slowMove: boolean };
-export type AutoPictureInPictureHold = "onScreen" | "appSwitch" | "nothingPlaying";
+export type AutoPictureInPictureHold = "onScreen" | "appSwitch" | "pageFullScreen" | "nothingPlaying";
 export type MediaFault = { reason: string; muted?: boolean; blockerActive?: boolean };
 export type ControlPress = { clickAt: number; control: number };
 export type ActivateRequest = { reason: "pictureInPicture" };

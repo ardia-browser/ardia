@@ -156,7 +156,7 @@ const unwrap: { [K in Handlers]: (e: NativeEvents[K]) => Parameters<NonNullable<
   onNotification: (e) => [e],
   onNotificationClose: (e) => [e.id],
   onPictureInPicture: (e) => [e],
-  onAutoPictureInPictureKept: (e) => [e.reason === "nothingPlaying" ? "nothingPlaying" : e.appSwitch ? "appSwitch" : "onScreen"],
+  onAutoPictureInPictureKept: (e) => [e.reason === "nothingPlaying" || e.reason === "pageFullScreen" ? e.reason : e.appSwitch ? "appSwitch" : "onScreen"],
   onPictureInPictureDragged: (e) => [{ offCursor: !!e.offCursor, slowMove: !!e.slowMove }],
   onPictureInPictureSkip: (e) => [e.seconds],
   onMediaFault: (e) => [e],

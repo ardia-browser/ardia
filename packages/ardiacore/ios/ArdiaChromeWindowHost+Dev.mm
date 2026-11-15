@@ -448,6 +448,10 @@ NSDictionary<NSString *, DevHandler> *DevHandlers() {
       ActWindowServer(w, [to isEqualToString:@"shows"]);
       return @"ok";
     },
+    @"fakeOtherSpace" : ^NSString *(NSWindow *w, NSString *on) {
+      ActOtherSpace(w, [on isEqualToString:@"1"]);
+      return @(!OnActiveSpace(w)).stringValue;
+    },
     @"fullScreen" : ^NSString *(NSWindow *w, NSString *) { return FullScreen(w, nil); },
     @"fakeFullScreen" : ^NSString *(NSWindow *w, NSString *a) { return FullScreen(w, a); },
     @"snapshotFrame" : ^NSString *(NSWindow *w, NSString *path) { return SnapshotFrameView(w, path); },

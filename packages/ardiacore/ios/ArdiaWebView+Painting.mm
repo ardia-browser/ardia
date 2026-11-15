@@ -260,7 +260,7 @@ BOOL Above(NSView *a, NSView *b) {
 }
 
 - (BOOL)seenByUser {
-  return _visible && [ArdiaWindowController userSees:self.window];
+  return _visible && ([ArdiaWindowController userSees:self.window] || [ArdiaWindowController showsPageFullScreen:_tab inWindow:self.window]);
 }
 
 - (void)userSightChanged {
@@ -273,6 +273,14 @@ BOOL Above(NSView *a, NSView *b) {
     _reports.keptByWindowServer = YES;
     [self traceAutoPictureInPicture:@"app: the window server still shows the tab, AppKit's occlusion overruled"];
     [self emit:@"autoPictureInPictureKept" payload:@{@"appSwitch" : @NO}];
+  }
+  const BOOL keptByPageFullScreen = seen && ![ArdiaWindowController userSees:self.window];
+  if (!keptByPageFullScreen) {
+    _reports.keptByPageFullScreen = NO;
+  } else if (!_reports.keptByPageFullScreen && self.playsForAutoPictureInPicture) {
+    _reports.keptByPageFullScreen = YES;
+    [self traceAutoPictureInPicture:@"app: the window left sight, the tab stays in its page full screen"];
+    [self emit:@"autoPictureInPictureKept" payload:@{@"reason" : @"pageFullScreen"}];
   }
   if (seen == _reports.seenByUser) return;
   _reports.seenByUser = seen;

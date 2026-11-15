@@ -17,7 +17,7 @@ import { DragScope, useDragController, useDragging, usePinnedCount } from "./Dra
 import { openSidebarMenu } from "../../state/sidebar/menus";
 import { PinnedGrid } from "./PinnedGrid";
 import { pinGridHeight } from "./pinZone";
-import { SCROLL_EDGE, ScrollEdgeLine, useScrollEdge } from "./ScrollEdge";
+import { SCROLL_EDGE, ScrollEdgeLine, useScrollEdge, useScrollEdgeBelow } from "./ScrollEdge";
 import { listTopGap } from "./geometry";
 import { startsOffScreen } from "../../state/sidebar/geometry";
 import { toggleNewTabBar } from "../../state/omnibox/newTabBar";
@@ -93,6 +93,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
     if (geometry) geometry.current.tilesFixed = dockFixed;
   }, [geometry, dockFixed]);
   const scrollEdge = useScrollEdge();
+  const scrollEdgeBelow = useScrollEdgeBelow();
   const scrollY = useRef(new Animated.Value(0)).current;
   const isCurrent = useRef(current);
   isCurrent.current = current;
@@ -109,6 +110,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
       listener: (e: NativeSyntheticEvent<NativeScrollEvent>) => {
         page.scrollY = e.nativeEvent.contentOffset.y;
         scrollEdge.follow(page.scrollY);
+        scrollEdgeBelow.measure({ offset: page.scrollY });
         if (isCurrent.current) onScrollY(page.scrollY);
       },
     }),
@@ -161,6 +163,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
                               ref={current ? onScrollView : undefined}
                               onLayout={(e) => {
                                 page.viewport = e.nativeEvent.layout.height;
+                                scrollEdgeBelow.measure({ viewport: page.viewport });
                                 if (!geometry) return;
                                 geometry.current.viewport = page.viewport;
                                 geometry.current.laidOut?.();
@@ -169,6 +172,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
                               showsVerticalScrollIndicator={false}
                               scrollEventThrottle={16}
                               onScroll={onScroll}
+                              onContentSizeChange={(_, content) => scrollEdgeBelow.measure({ content })}
                               contentContainerStyle={{ flexGrow: 1, width, paddingHorizontal: layout.sidebarInset, paddingTop: LIST_PAD, paddingBottom: docked ? GLOW_ROOM : 0 }}
                             >
                               <PageRows
@@ -195,6 +199,9 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
                         </Animated.View>
                       </Animated.View>
                     </Animated.View>
+                    <View pointerEvents="none" style={{ height: 0, zIndex: 1 }}>
+                      <ScrollEdgeLine opacity={scrollEdgeBelow.opacity} style={{ position: "absolute", left: 0, right: 0, bottom: 0 }} />
+                    </View>
                     {playerTab ? (
                       <View style={{ paddingHorizontal: layout.sidebarInset, paddingTop: docked ? space.m : 0, paddingBottom: docked ? 0 : space.m }}>
                         <SidebarPlayer tabId={playerTab} motion={playerMotion} docked={docked} />

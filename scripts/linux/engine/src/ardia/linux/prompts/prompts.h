@@ -23,6 +23,7 @@ void InstallPermissionPrompts();
 void AddPermissionVerbs(DomainVerbs& verbs);
 
 void InstallPasswordPrompts();
+void AddPasswordVerbs(DomainVerbs& verbs);
 void InstallExtensionPrompts();
 void AddExtensionInstallVerbs(DomainVerbs& verbs);
 void InstallExtensionActions();

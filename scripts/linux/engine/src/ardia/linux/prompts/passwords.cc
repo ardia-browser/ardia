@@ -5,14 +5,20 @@
 
 #include "ardia/core/ac_hooks.h"
 #include "ardia/linux/modules/app_modules.h"
+#include "ardia/linux/prompts/domains.h"
 #include "ardia/linux/prompts/prompts.h"
+#include "ardia/win/profiles.h"
 #include "ardia/win/tab_state.h"
 #include "base/memory/weak_ptr.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/passwords/passwords_model_delegate.h"
 #include "components/password_manager/core/browser/password_form.h"
 #include "components/password_manager/core/browser/password_string.h"
+#include "components/password_manager/core/common/password_manager_pref_names.h"
 #include "components/password_manager/core/common/password_manager_ui.h"
+#include "components/prefs/pref_service.h"
 #include "content/public/browser/web_contents.h"
 #include "url/origin.h"
 
@@ -141,6 +147,53 @@ std::string Field(const base::DictValue& args, const char* key) {
   return text ? *text : std::string();
 }
 
+void OfferingVerb(const std::string& profile,
+                  base::DictValue args,
+                  ModuleReply reply) {
+  ardia_win::WithProfile(
+      profile, base::BindOnce(
+                   [](ModuleReply reply, Profile* profile) {
+                     if (!profile) {
+                       ReplyError(std::move(reply), "no such profile");
+                       return;
+                     }
+                     ReplyJson(std::move(reply),
+                               base::Value(profile->GetPrefs()->GetBoolean(
+                                   password_manager::prefs::
+                                       kCredentialsEnableService)));
+                   },
+                   std::move(reply)));
+}
+
+void SetOfferingVerb(const std::string& profile,
+                     base::DictValue args,
+                     ModuleReply reply) {
+  const std::optional<bool> enabled = args.FindBool("enabled");
+  if (!enabled) {
+    ReplyError(std::move(reply), "enabled must be a boolean");
+    return;
+  }
+  ardia_win::WithProfile(
+      profile, base::BindOnce(
+                   [](bool enabled, ModuleReply reply, Profile* profile) {
+                     if (!profile) {
+                       ReplyError(std::move(reply), "no such profile");
+                       return;
+                     }
+                     profile->GetPrefs()->SetBoolean(
+                         password_manager::prefs::kCredentialsEnableService,
+                         enabled);
+                     ReplyNull(std::move(reply));
+                   },
+                   *enabled, std::move(reply)));
+}
+
+}
+
+void AddPasswordVerbs(DomainVerbs& verbs) {
+  verbs.Add("passwords", "autofillEnabled", base::BindRepeating(&OfferingVerb));
+  verbs.Add("passwords", "setAutofillEnabled",
+            base::BindRepeating(&SetOfferingVerb));
 }
 
 void InstallPasswordPrompts() {

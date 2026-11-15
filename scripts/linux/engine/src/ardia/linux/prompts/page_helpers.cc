@@ -22,6 +22,7 @@ void RegisterPageModules(ModuleRegistry& registry) {
   DomainVerbs verbs;
   AddContentBlockerVerbs(verbs);
   AddPermissionVerbs(verbs);
+  AddPasswordVerbs(verbs);
   AddContextMenuVerbs(verbs);
   AddExtensionInstallVerbs(verbs);
   AddExtensionActionVerbs(verbs);

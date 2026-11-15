@@ -23,6 +23,8 @@ source_set("linux") {
     "app_lifetime.cc",
     "app_lifetime.h",
     "browser_window/autofill_prompt_handler.cc",
+    "browser_window/autofill_prompts.cc",
+    "browser_window/autofill_prompts.h",
     "browser_window/browser_window.cc",
     "browser_window/browser_window.h",
     "browser_window/find_bar.cc",

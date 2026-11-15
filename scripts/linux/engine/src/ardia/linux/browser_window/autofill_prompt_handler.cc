@@ -2,6 +2,9 @@
 
 #include "ardia/linux/browser_window/browser_window.h"
 
+#include <utility>
+
+#include "ardia/linux/browser_window/autofill_prompts.h"
 #include "chrome/browser/ui/autofill/save_address_bubble_controller.h"
 #include "chrome/browser/ui/autofill/update_address_bubble_controller.h"
 #include "content/public/browser/web_contents.h"
@@ -16,23 +19,23 @@ AutofillPromptHandler::~AutofillPromptHandler() = default;
     return nullptr;       \
   }
 autofill::AutofillBubbleBase* AutofillPromptHandler::ShowSaveCreditCardBubble(
-    content::WebContents*,
-    autofill::SaveCardBubbleController*,
+    content::WebContents* web_contents,
+    autofill::SaveCardBubbleController* controller,
     bool) {
-  return nullptr;
+  return ShowSaveCardPrompt(web_contents, controller);
 }
 autofill::AutofillBubbleBase* AutofillPromptHandler::ShowIbanBubble(
-    content::WebContents*,
+    content::WebContents* web_contents,
     autofill::IbanBubbleController*,
     bool,
     autofill::IbanBubbleType) {
-  return nullptr;
+  return SkipIbanBubble(web_contents);
 }
 autofill::AutofillBubbleBase* AutofillPromptHandler::
-    ShowOfferNotificationBubble(content::WebContents*,
+    ShowOfferNotificationBubble(content::WebContents* web_contents,
                                 autofill::OfferNotificationBubbleController*,
                                 bool) {
-  return nullptr;
+  return SkipOfferNotification(web_contents);
 }
 autofill::AutofillBubbleBase* AutofillPromptHandler::
     ShowSaveAutofillAiDataBubble(content::WebContents*,
@@ -44,24 +47,24 @@ autofill::AutofillBubbleBase* AutofillPromptHandler::
         autofill::AutofillAiImportDataController*) AC_NO_BUBBLE()
 autofill::AutofillBubbleBase* AutofillPromptHandler::
     ShowSaveAddressProfileBubble(
-        content::WebContents*,
-        std::unique_ptr<autofill::SaveAddressBubbleController> ,
+        content::WebContents* web_contents,
+        std::unique_ptr<autofill::SaveAddressBubbleController> controller,
         bool) {
-  return nullptr;
+  return ShowSaveAddressPrompt(web_contents, std::move(controller));
 }
 #if BUILDFLAG(ENABLE_DICE_SUPPORT)
 autofill::AutofillBubbleBase* AutofillPromptHandler::ShowAddressSignInPromo(
-    content::WebContents*,
+    content::WebContents* web_contents,
     const autofill::AutofillProfile&) {
-  return nullptr;
+  return SkipAddressSignInPromo(web_contents);
 }
 #endif
 autofill::AutofillBubbleBase* AutofillPromptHandler::
     ShowUpdateAddressProfileBubble(
-        content::WebContents*,
-        std::unique_ptr<autofill::UpdateAddressBubbleController> ,
+        content::WebContents* web_contents,
+        std::unique_ptr<autofill::UpdateAddressBubbleController> controller,
         bool) {
-  return nullptr;
+  return ShowUpdateAddressPrompt(web_contents, std::move(controller));
 }
 autofill::AutofillBubbleBase* AutofillPromptHandler::
     ShowFilledCardInformationBubble(
@@ -84,9 +87,9 @@ autofill::AutofillBubbleBase* AutofillPromptHandler::
         AC_NO_BUBBLE()
 autofill::AutofillBubbleBase* AutofillPromptHandler::
     ShowSaveCardConfirmationBubble(
-        content::WebContents*,
-        autofill::SaveCardBubbleController*) {
-  return nullptr;
+        content::WebContents* web_contents,
+        autofill::SaveCardBubbleController* controller) {
+  return ShowSaveCardPrompt(web_contents, controller);
 }
 autofill::AutofillBubbleBase* AutofillPromptHandler::
     ShowSaveIbanConfirmationBubble(content::WebContents*,

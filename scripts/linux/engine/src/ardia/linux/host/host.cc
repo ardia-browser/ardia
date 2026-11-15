@@ -11,6 +11,7 @@
 #include "ardia/core/ac_launch_switches.h"
 #include "ardia/linux/app_lifetime.h"
 #include "ardia/linux/browser_window/browser_window.h"
+#include "ardia/linux/browser_window/autofill_prompts.h"
 #include "ardia/linux/log.h"
 #include "ardia/linux/modules/app_modules.h"
 #include "chrome/browser/devtools/devtools_window.h"
@@ -615,6 +616,19 @@ std::optional<base::DictValue> Host::CallTab(content::WebContents* contents,
       params.should_replace_current_entry = true;
     }
     controller.LoadURLWithParams(params);
+  } else if (method == "resolveAutofillPrompt") {
+    base::DictValue result = Ok();
+    result.Set("resolved",
+               ResolveAutofillPrompt(contents, Integer(args, "id"),
+                                     Text(args, "answer")));
+    return result;
+  } else if (method == "autofillPrompt") {
+    std::optional<base::DictValue> pending = PendingAutofillPrompt(contents);
+    base::DictValue result = Ok();
+    if (pending) {
+      result.Set("prompt", std::move(*pending));
+    }
+    return result;
   } else if (method == "goBack") {
     if (controller.CanGoBack()) {
       controller.GoBack();

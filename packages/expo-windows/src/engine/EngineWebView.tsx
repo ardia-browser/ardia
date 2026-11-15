@@ -43,6 +43,7 @@ const ARGUMENTS: Record<string, string[]> = {
   setFrozen: ["frozen"],
   resolveUnresponsive: ["terminate"],
   resolvePasswordPrompt: ["answer", "edits"],
+  resolveAutofillPrompt: ["id", "answer"],
   notificationAction: ["id", "action"],
 };
 const UNWRAPPED: Record<string, (reply: Record<string, unknown> | null) => unknown> = {

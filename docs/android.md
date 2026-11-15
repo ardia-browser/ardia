@@ -142,7 +142,14 @@ manner, in the Mac's colours. Where Android differs it says so on the line.
   is the system share sheet.
 - **Tabs.** A deck of snapshots; flick a card up to close it. Closing archives; tabs left alone archive after a chosen
   interval (24 hours by default). Private tabs live in memory in their own WebView profile (The page engine, above).
-  The Mac's Spaces (profiles), pinned tiles, rows and groups, and its open tabs sit behind the deck's leading button.
+  Previews use the page's aspect ratio below the status bar and expand back into those same bounds, so returning to
+  the live page preserves its size and position. The Mac's Spaces (profiles), pinned tiles, rows and groups, and its
+  open tabs sit behind the deck's leading button. Android has no consented usage telemetry pipeline yet; this geometry
+  fix is guarded by preview bounds regression tests rather than a new reporting path. The settled deck composes
+  visible cards plus a one-slot prefetch margin, keeping lifted and reordering cards mounted. Long flicks no longer
+  retain every card between their starting and current positions. Cached snapshots appear on the first composition,
+  avoiding repeated coloured placeholders and arrival fades while scrolling. These paths have geometry and snapshot-cache regression tests; device frame
+  timings and the reported green tint still need visual verification.
 - **Downloads.** In the app, into Downloads, announced with a toast (The page engine, above).
 - **Settings.** The iPhone's pages: the colour, sync and connecting a device, search engine, filter lists, My Filters,
   Trusted Sites, site settings, clearing data, the default browser, where app links open, Export Open Tabs, About and

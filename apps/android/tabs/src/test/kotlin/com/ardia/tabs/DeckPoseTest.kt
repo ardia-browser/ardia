@@ -39,6 +39,21 @@ class DeckPoseTest {
     }
 
     @Test
+    fun anExpandedPreviewMatchesTheLivePageBelowTheStatusBar() {
+        for ((width, height, top) in listOf(Triple(393.0, 852.0, 59.0), Triple(360.0, 800.0, 24.0), Triple(852.0, 393.0, 0.0))) {
+            val viewport = TabsDeckGeometry(DeckSize(width, height), safeTop = top, safeBottom = 34.0)
+            val expanded = DeckPose().resolve(viewport, DeckRole.Expanded, 0.0, 0.0, 0.0, 0.0, 0.0, true)
+            val previewWidth = viewport.cardSize.width * expanded.scale
+            val previewHeight = viewport.cardSize.height * expanded.scale
+            assertEquals(width, previewWidth, 1e-9)
+            assertEquals(height - top, previewHeight, 1e-9)
+            assertEquals(0.0, expanded.centerX - previewWidth / 2, 1e-9)
+            assertEquals(top, expanded.centerY - previewHeight / 2, 1e-9)
+            assertEquals(height, expanded.centerY + previewHeight / 2, 1e-9)
+        }
+    }
+
+    @Test
     fun aVanishingCardShrinksAndFadesAndLosesItsHeader() {
         val gone = pose(DeckRole.Stay, vanish = 1.0)
         assertEquals(0.0, gone.opacity, 1e-9)
@@ -92,6 +107,15 @@ class DeckPoseTest {
         assertEquals(1.0, DeckPose.chromeOpacity(DeckPhase.Settled, 0.0), 1e-9)
         assertEquals(1.0, DeckPose.chromeOpacity(DeckPhase.Opening(null), 0.0), 1e-9)
         assertEquals(0.7, DeckPose.backdropOpacity(closing, 0.5), 1e-9)
+    }
+
+    @Test
+    fun aMovingCardOutsideTheRestingRangeStillReceivesTouches() {
+        val viewport = TabsDeckGeometry(DeckSize(440.0, 956.0), safeTop = 62.0, safeBottom = 34.0)
+        val relative = { index: Int -> index + 1.0 - 97.0 }
+        val x = viewport.leading(relative(94)) + 0.5
+        assertEquals(94, DeckHit.cardAt(viewport, 99, listOf(94, 95, 96, 97, 98), x, viewport.cardCenterY, relative))
+        assertNull(DeckHit.cardAt(viewport, 99, listOf(95, 96, 97, 98), x, viewport.cardCenterY, relative))
     }
 
     @Test

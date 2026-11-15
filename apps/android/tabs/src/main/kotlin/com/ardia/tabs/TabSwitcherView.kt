@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -62,7 +63,7 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 @Composable
-fun TabSwitcherView(model: AppModel, modifier: Modifier = Modifier) {
+fun TabSwitcherView(model: AppModel, modifier: Modifier = Modifier, showsBar: Boolean = true) {
     val scope = rememberCoroutineScope()
     val haptics = rememberHaptics()
     val state = remember(model) { DeckState(model, scope, haptics) }
@@ -74,13 +75,15 @@ fun TabSwitcherView(model: AppModel, modifier: Modifier = Modifier) {
         val safeTop = insets.getTop(density) / density.density
         val safeBottom = insets.getBottom(density) / density.density
         val safeSide = max(insets.getLeft(density, direction), insets.getRight(density, direction)) / density.density
+        val navBottom = (WindowInsets.navigationBars.getBottom(density) / density.density).dp
+        val pageBottom = if (model.settings.collapsesBottomBar) 0.0 else BrowseLayout.barPageBottomInset(navBottom).value.toDouble()
         val width = maxWidth.value.toDouble()
         val height = maxHeight.value.toDouble()
-        val geometry = remember(width, height, safeTop, safeBottom, safeSide) {
-            TabsDeckGeometry(DeckSize(width, height), safeTop.toDouble(), safeBottom.toDouble(), safeSide.toDouble())
+        val geometry = remember(width, height, safeTop, safeBottom, safeSide, pageBottom) {
+            TabsDeckGeometry(DeckSize(width, height), safeTop.toDouble(), safeBottom.toDouble(), safeSide.toDouble(), pageBottom)
         }
         SideEffect { state.geometry = geometry }
-        TabDeck(model, state, haptics, geometry)
+        TabDeck(model, state, haptics, geometry, showsBar)
     }
     LaunchedEffect(state) { state.appear() }
     LaunchedEffect(state) {
@@ -96,12 +99,12 @@ fun TabSwitcherView(model: AppModel, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun TabDeck(model: AppModel, state: DeckState, haptics: Haptics, geometry: TabsDeckGeometry) {
+private fun TabDeck(model: AppModel, state: DeckState, haptics: Haptics, geometry: TabsDeckGeometry, showsBar: Boolean) {
     val look = LocalProfileLook.current
     val dark = LocalArdiaDarkTheme.current
     val backdrop = rememberFrostedBackdrop()
     val order = state.order
-    val range = state.renderedRange
+    val indices = state.renderedIndices
     val tabs = state.tabsById
     val privateCount = model.tabs.privateTabs.size
     Box(
@@ -126,7 +129,7 @@ private fun TabDeck(model: AppModel, state: DeckState, haptics: Haptics, geometr
                 .graphicsLayer { alpha = state.backdropOpacity },
             look = look,
         )
-        for (index in range) {
+        for (index in indices) {
             val id = order.getOrNull(index) ?: continue
             val tab = tabs[id] ?: continue
             val isLast = index == order.size - 1
@@ -181,31 +184,33 @@ private fun TabDeck(model: AppModel, state: DeckState, haptics: Haptics, geometr
                 dismiss = state::hideArchiveCard,
             )
         }
-        TabDeckBar(
-            backdrop = backdrop,
-            look = look,
-            isIncognito = model.isIncognito,
-            showsSyncedTabs = model.syncState.isEnabled,
-            canReopen = model.tabs.canReopenClosed,
-            hasTabs = order.isNotEmpty(),
-            actions = remember(model, state) {
-                DeckBarActions(
-                    newTab = model::newTab,
-                    newRegularTab = model::newRegularTab,
-                    newIncognitoTab = model::newIncognitoTab,
-                    reopen = model::reopenLastClosed,
-                    closeAll = { state.isConfirmingCloseAll = true },
-                    leading = { if (model.syncState.isEnabled) model.openSyncedSpaces() else model.openArchive() },
-                    settings = { model.sheet = AppModel.Sheet.Settings },
-                )
-            },
-            modifier = Modifier
-                .zIndex(OVERLAY_LAYER + 2)
-                .centeredAt(geometry.barCenterY)
-                .shieldsDeck()
-                .padding(horizontal = (geometry.safeSide + BAR_SIDE_PADDING).dp)
-                .graphicsLayer { alpha = state.chromeOpacity },
-        )
+        if (showsBar) {
+            TabDeckBar(
+                backdrop = backdrop,
+                look = look,
+                isIncognito = model.isIncognito,
+                showsSyncedTabs = model.syncState.isEnabled,
+                canReopen = model.tabs.canReopenClosed,
+                hasTabs = order.isNotEmpty(),
+                actions = remember(model, state) {
+                    DeckBarActions(
+                        newTab = model::newTab,
+                        newRegularTab = model::newRegularTab,
+                        newIncognitoTab = model::newIncognitoTab,
+                        reopen = model::reopenLastClosed,
+                        closeAll = { state.isConfirmingCloseAll = true },
+                        leading = { if (model.syncState.isEnabled) model.openSyncedSpaces() else model.openArchive() },
+                        settings = { model.sheet = AppModel.Sheet.Settings },
+                    )
+                },
+                modifier = Modifier
+                    .zIndex(OVERLAY_LAYER + 2)
+                    .centeredAt(geometry.barCenterY)
+                    .shieldsDeck()
+                    .padding(horizontal = (geometry.safeSide + BAR_SIDE_PADDING).dp)
+                    .graphicsLayer { alpha = state.chromeOpacity },
+            )
+        }
         val cover = state.cover
         if (cover != null) {
             Image(
@@ -217,34 +222,50 @@ private fun TabDeck(model: AppModel, state: DeckState, haptics: Haptics, geometr
                     .clearAndSetSemantics {}
                     .background(SystemPalette.background.resolve(dark))
                     .graphicsLayer { alpha = state.coverOpacity.value },
-                contentScale = ContentScale.FillWidth,
+                contentScale = ContentScale.Crop,
                 alignment = Alignment.TopCenter,
             )
         }
     }
-    DeckDialogs(model, state, haptics, order.size)
+    DeckDialogs(model, state, haptics, order.size, showsCloseAllDialog = showsBar)
 }
 
 @Composable
-private fun DeckDialogs(model: AppModel, state: DeckState, haptics: Haptics, count: Int) {
+fun CloseAllTabsDialog(
+    count: Int,
+    hasPrivate: Boolean,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     val dark = LocalArdiaDarkTheme.current
     val destructive = SystemPalette.red.resolve(dark)
-    if (state.isConfirmingCloseAll) {
-        val hasPrivate = model.tabs.privateTabs.isNotEmpty()
-        AlertDialog(
-            onDismissRequest = { state.isConfirmingCloseAll = false },
-            title = { Text(pluralStringResource(R.plurals.tabs_close_count_title, count, count), style = ArdiaType.headline) },
-            text = { Text(stringResource(if (hasPrivate) R.string.tabs_close_all_message_incognito else R.string.tabs_close_all_message)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    state.isConfirmingCloseAll = false
-                    haptics.mediumImpact()
-                    state.closeAll()
-                }) {
-                    Text(stringResource(if (count == 1) R.string.tabs_close_tab else R.string.tabs_close_all_tabs), color = destructive)
-                }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(pluralStringResource(R.plurals.tabs_close_count_title, count, count), style = ArdiaType.headline) },
+        text = { Text(stringResource(if (hasPrivate) R.string.tabs_close_all_message_incognito else R.string.tabs_close_all_message)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(stringResource(if (count == 1) R.string.tabs_close_tab else R.string.tabs_close_all_tabs), color = destructive)
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.tabs_cancel)) } },
+    )
+}
+
+@Composable
+private fun DeckDialogs(model: AppModel, state: DeckState, haptics: Haptics, count: Int, showsCloseAllDialog: Boolean) {
+    val dark = LocalArdiaDarkTheme.current
+    val destructive = SystemPalette.red.resolve(dark)
+    if (showsCloseAllDialog && state.isConfirmingCloseAll) {
+        CloseAllTabsDialog(
+            count = count,
+            hasPrivate = model.tabs.privateTabs.isNotEmpty(),
+            onConfirm = {
+                state.isConfirmingCloseAll = false
+                haptics.mediumImpact()
+                state.closeAll()
             },
-            dismissButton = { TextButton(onClick = { state.isConfirmingCloseAll = false }) { Text(stringResource(R.string.tabs_cancel)) } },
+            onDismiss = { state.isConfirmingCloseAll = false },
         )
     }
     if (state.isConfirmingCloseIncognito) {

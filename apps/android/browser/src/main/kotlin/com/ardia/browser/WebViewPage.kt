@@ -79,6 +79,12 @@ internal class WebViewPage(
     private var installedBundle: String? = null
     private val progressThrottle = ProgressThrottle()
     private val scrollTracker = ScrollDirectionTracker()
+    private var isNavigatingHistory = false
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val clearHistoryNavigationRunnable = Runnable {
+        isNavigatingHistory = false
+        webView?.let { scrollTracker.snapTo(it.scrollY.toDouble()) }
+    }
     private var pendingVisit: VisitKind? = null
     private var lastCommitAt = Long.MIN_VALUE / 2
     private var lastCommittedUrl: String? = null
@@ -173,6 +179,7 @@ internal class WebViewPage(
             mutableState.value.url?.let { navigate(web, it, VisitKind.Typed) }
             return
         }
+        clearHistoryNavigationGuard()
         pendingVisit = null
         prepareNavigation(web, current)
         web.reload()
@@ -190,7 +197,10 @@ internal class WebViewPage(
         val web = webView ?: return false
         if (!web.canGoBackOrForward(step)) return false
         failedUrl = null
-        update { it.copy(failure = null) }
+        isNavigatingHistory = true
+        scheduleClearHistoryNavigation(HISTORY_NAVIGATION_GUARD_MILLIS)
+        scrollTracker.snapTo(web.scrollY.toDouble())
+        update { it.copy(failure = null, scrollDirection = ScrollDirection.Up) }
         val list = web.copyBackForwardList()
         list.getItemAtIndex(list.currentIndex + step)?.url?.let { prepareNavigation(web, it) }
         pendingVisit = VisitKind.BackForward
@@ -403,6 +413,11 @@ internal class WebViewPage(
             if (event.actionMasked == MotionEvent.ACTION_DOWN) {
                 lastTouchX = event.x
                 lastTouchY = event.y
+                if (isNavigatingHistory) {
+                    isNavigatingHistory = false
+                    mainHandler.removeCallbacks(clearHistoryNavigationRunnable)
+                    scrollTracker.snapTo(web.scrollY.toDouble())
+                }
             }
             false
         }
@@ -441,6 +456,7 @@ internal class WebViewPage(
     }
 
     private fun navigate(web: WebView, url: String, kind: VisitKind) {
+        clearHistoryNavigationGuard()
         pendingVisit = kind
         prepareNavigation(web, url)
         web.loadUrl(url)
@@ -480,6 +496,8 @@ internal class WebViewPage(
         web.destroy()
         webView = null
         mutableView.value = null
+        mainHandler.removeCallbacks(clearHistoryNavigationRunnable)
+        isNavigatingHistory = false
         progressThrottle.reset()
         scrollTracker.reset()
         update { it.copy(isLive = false, isLoading = false, progress = 0f) }
@@ -521,7 +539,12 @@ internal class WebViewPage(
         }
         val host = BrowserUrl.host(url)
         if (!engine.supportsMessageListener) applyNightShade(web, engine.sitePreferences.nightShade(host, isPrivate))
-        scrollTracker.reset()
+        if (isNavigatingHistory) {
+            scheduleClearHistoryNavigation(HISTORY_LOADING_GUARD_MILLIS)
+            scrollTracker.snapTo(web.scrollY.toDouble())
+        } else {
+            scrollTracker.reset()
+        }
         val zoom = engine.sitePreferences.pageZoom(host, isPrivate) ?: 1.0
         web.settings.textZoom = (zoom * 100).roundToInt()
         val keepsFailure = failedUrl != null && BrowserUrl.withoutFragment(failedUrl!!) == BrowserUrl.withoutFragment(url)
@@ -551,6 +574,9 @@ internal class WebViewPage(
         crashReloads = 0
         progressThrottle.reset()
         answeredSignIns.clear()
+        if (isNavigatingHistory) {
+            scheduleClearHistoryNavigation(HISTORY_SETTLE_GUARD_MILLIS)
+        }
         update {
             it.copy(
                 url = web.url ?: url,
@@ -591,6 +617,7 @@ internal class WebViewPage(
     }
 
     internal fun startRendererNavigation(web: WebView, url: String, kind: VisitKind?) {
+        if (kind == VisitKind.Link) clearHistoryNavigationGuard()
         failedUrl = null
         if (mutableState.value.failure != null) update { it.copy(failure = null) }
         if (kind != null) pendingVisit = kind
@@ -790,15 +817,33 @@ internal class WebViewPage(
         web.requestFocusNodeHref(handler.obtainMessage())
     }
 
-    private fun scrolled(web: WebView, scrollY: Int) {
+    internal fun scrolled(web: WebView, scrollY: Int) {
         if (web !== webView) return
         val atTop = scrollY <= 1
         @Suppress("DEPRECATION")
         val contentHeight = web.contentHeight * web.scale.toDouble()
+        if (isNavigatingHistory) {
+            scrollTracker.snapTo(scrollY.toDouble())
+            val current = mutableState.value
+            if (atTop != current.isScrolledToTop || current.scrollDirection != ScrollDirection.Up) {
+                update { it.copy(isScrolledToTop = atTop, scrollDirection = ScrollDirection.Up) }
+            }
+            return
+        }
         val direction = scrollTracker.offer(scrollY.toDouble(), contentHeight, web.height.toDouble())
         val current = mutableState.value
         if (atTop == current.isScrolledToTop && (direction == null || direction == current.scrollDirection)) return
         update { it.copy(isScrolledToTop = atTop, scrollDirection = direction ?: it.scrollDirection) }
+    }
+
+    private fun scheduleClearHistoryNavigation(delayMillis: Long) {
+        mainHandler.removeCallbacks(clearHistoryNavigationRunnable)
+        mainHandler.postDelayed(clearHistoryNavigationRunnable, delayMillis)
+    }
+
+    private fun clearHistoryNavigationGuard() {
+        isNavigatingHistory = false
+        mainHandler.removeCallbacks(clearHistoryNavigationRunnable)
     }
 
     private fun readPageLook(web: WebView) {
@@ -838,6 +883,9 @@ internal class WebViewPage(
     companion object {
         private const val SAVED_STATE_LIMIT = 512 * 1024
         private const val CLIENT_REDIRECT_WINDOW_MILLIS = 1500L
+        private const val HISTORY_NAVIGATION_GUARD_MILLIS = 1000L
+        private const val HISTORY_LOADING_GUARD_MILLIS = 3000L
+        private const val HISTORY_SETTLE_GUARD_MILLIS = 500L
         private const val BLOCKED_FLUSH_MILLIS = 250L
         private const val DRAW_ATTEMPTS = 2
         private const val VISUAL_STATE_WAIT_MILLIS = 300L

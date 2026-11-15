@@ -65,7 +65,7 @@ import com.ardia.design.frostedBackdropSource
 import com.ardia.design.rememberFrostedBackdrop
 
 @Composable
-fun SearchHomeView(model: AppModel, modifier: Modifier = Modifier) {
+fun SearchHomeView(model: AppModel, modifier: Modifier = Modifier, showsBar: Boolean = true) {
     val isTrayUp = model.browse.search != null
     val isIncognito = model.isIncognito
     val reduceMotion = LocalReduceMotion.current
@@ -104,15 +104,17 @@ fun SearchHomeView(model: AppModel, modifier: Modifier = Modifier) {
                     }
                     .then(hidden),
             )
-            DeckBar(
-                model = model,
-                frost = frost,
-                enabled = !isTrayUp,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .graphicsLayer { alpha = shown.value }
-                    .then(hidden),
-            )
+            if (showsBar) {
+                DeckBar(
+                    model = model,
+                    frost = frost,
+                    enabled = !isTrayUp,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .graphicsLayer { alpha = shown.value }
+                        .then(hidden),
+                )
+            }
         }
     }
 }
@@ -125,7 +127,7 @@ private fun DeckBar(model: AppModel, frost: FrostedBackdrop, enabled: Boolean, m
     val navigationBottom = with(density) { WindowInsets.navigationBars.getBottom(this).toDp() }
     val safe = WindowInsets.safeDrawing
     val safeSide = with(density) { maxOf(safe.getLeft(this, direction), safe.getRight(this, direction)).toDp() }
-    val centerFromBottom = max(navigationBottom, 20.dp) + 6.dp
+    val centerFromBottom = max(navigationBottom, 20.dp) + BrowseLayout.hitTarget / 2 + 10.dp
     val side = safeSide + TabsLayout.barSideInset - (BrowseLayout.hitTarget - TabsLayout.barCircle) / 2
     val opensTabs = model.deckTabs.isNotEmpty()
     val syncs = model.syncState.isEnabled

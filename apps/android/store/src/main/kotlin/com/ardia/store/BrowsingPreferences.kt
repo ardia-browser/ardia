@@ -173,7 +173,7 @@ sealed interface LookSource {
 }
 
 data class AppSettings(
-    val collapsesBottomBar: Boolean = false,
+    val collapsesBottomBar: Boolean = true,
     val autoOpensKeyboard: Boolean = true,
     val hasFinishedOnboarding: Boolean = false,
     val archiveCardShown: Boolean = false,
@@ -192,7 +192,7 @@ class AppPreferences(private val store: KeyValueStore) {
     private val lock = Any()
     private val _settings = MutableStateFlow(
         AppSettings(
-            collapsesBottomBar = store.boolean(KEY_COLLAPSE_BOTTOM_BAR) ?: false,
+            collapsesBottomBar = store.boolean(KEY_COLLAPSE_BOTTOM_BAR) ?: true,
             autoOpensKeyboard = store.boolean(KEY_AUTO_OPEN_KEYBOARD) ?: true,
             hasFinishedOnboarding = store.boolean(KEY_FINISHED_ONBOARDING) ?: false,
             archiveCardShown = store.boolean(KEY_ARCHIVE_CARD_SHOWN) ?: false,

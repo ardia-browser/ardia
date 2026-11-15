@@ -216,10 +216,12 @@ private fun NavigationCapsule(model: AppModel, tab: BrowserTab, page: Page?, isW
     ) {
         Row(Modifier.fillMaxWidth().heightIn(min = MenuLayout.capsuleHeight), verticalAlignment = Alignment.CenterVertically) {
             CapsuleButton(ArdiaSymbols.chevronLeft, stringResource(R.string.browsing_back), MenuTags.BACK, canGoBack) {
+                model.browse.isBarHidden = false
                 page?.goBack()
                 onDismiss()
             }
             CapsuleButton(ArdiaSymbols.chevronRight, stringResource(R.string.browsing_forward), MenuTags.FORWARD, canGoForward) {
+                model.browse.isBarHidden = false
                 page?.goForward()
                 onDismiss()
             }

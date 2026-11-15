@@ -22,8 +22,9 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 
 class StillPage(override val id: String, setup: PageSetup) : Page {
+    val mutableState = MutableStateFlow(PageState(url = setup.url, title = setup.title))
     override val isPrivate: Boolean = setup.isPrivate
-    override val state: StateFlow<PageState> = MutableStateFlow(PageState(url = setup.url, title = setup.title))
+    override val state: StateFlow<PageState> = mutableState
     override val view: StateFlow<View?> = MutableStateFlow(null)
     override val request: StateFlow<PageRequest?> = MutableStateFlow(null)
     override val find: StateFlow<FindResult?> = MutableStateFlow(null)

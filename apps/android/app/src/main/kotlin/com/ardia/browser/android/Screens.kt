@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
 import com.ardia.appmodel.AppModel
+import com.ardia.browsing.BrowsingMenuHost
 import com.ardia.browsing.BrowsingView
 import com.ardia.search.SearchHomeView
 import com.ardia.search.SearchTrayHost
@@ -28,19 +29,21 @@ class RootScreens(
     val settings: @Composable (AppModel) -> Unit,
     val syncSetup: @Composable (AppModel) -> Unit,
     val onboarding: @Composable (AppModel) -> Unit,
+    val browsingMenu: @Composable (AppModel, Modifier) -> Unit = { _, _ -> },
 ) {
     companion object {
         val app = RootScreens(
-            searchStart = { model, modifier -> SearchHomeView(model, modifier) },
+            searchStart = { model, modifier -> SearchHomeView(model, modifier, showsBar = false) },
             searchTray = { model, modifier -> SearchTrayHost(model, modifier) },
             voiceSearch = { model -> VoiceSearchView(model, Modifier.fillMaxSize()) },
-            browsing = { model, isFront, modifier -> BrowsingView(model, isFront, modifier) },
-            tabDeck = { model, modifier -> TabSwitcherView(model, modifier) },
+            browsing = { model, isFront, modifier -> BrowsingView(model, isFront, modifier, showsBar = false) },
+            tabDeck = { model, modifier -> TabSwitcherView(model, modifier, showsBar = false) },
             archive = { model -> ArchiveView(model, Modifier.fillMaxSize()) },
             syncedSpaces = { model -> SyncedSpacesView(model, Modifier.fillMaxSize()) },
             settings = { model -> SettingsView(model, Modifier.fillMaxSize()) },
             syncSetup = { model -> SyncSetupView(model, Modifier.fillMaxSize()) },
             onboarding = { model -> OnboardingView(model, Modifier.fillMaxSize()) },
+            browsingMenu = { model, modifier -> BrowsingMenuHost(model, modifier) },
         )
     }
 }

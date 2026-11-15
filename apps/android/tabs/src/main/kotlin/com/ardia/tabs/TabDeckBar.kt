@@ -66,7 +66,7 @@ class DeckBarActions(
 )
 
 @Composable
-internal fun TabDeckBar(
+fun TabDeckBar(
     backdrop: FrostedBackdrop?,
     look: ProfileLook,
     isIncognito: Boolean,
@@ -75,12 +75,14 @@ internal fun TabDeckBar(
     hasTabs: Boolean,
     actions: DeckBarActions,
     modifier: Modifier = Modifier,
+    leadingSymbol: ImageVector? = null,
+    leadingLabel: String? = null,
 ) {
     val style = LookFrosting.bar(look)
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         DeckCircleButton(
-            symbol = if (showsSyncedTabs) ArdiaSymbols.laptopcomputer else ArdiaSymbols.archivebox,
-            label = stringResource(if (showsSyncedTabs) R.string.tabs_synced_tabs else R.string.tabs_archive),
+            symbol = leadingSymbol ?: if (showsSyncedTabs) ArdiaSymbols.laptopcomputer else ArdiaSymbols.archivebox,
+            label = leadingLabel ?: stringResource(if (showsSyncedTabs) R.string.tabs_synced_tabs else R.string.tabs_archive),
             backdrop = backdrop,
             style = style,
             action = actions.leading,

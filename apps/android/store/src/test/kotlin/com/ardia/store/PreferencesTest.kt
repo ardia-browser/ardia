@@ -16,7 +16,7 @@ class PreferencesTest {
         assertTrue(settings.searchSuggestions)
         assertEquals("google", settings.searchEngineId)
         val app = AppPreferences(MemoryKeyValueStore()).settings.value
-        assertEquals(AppSettings(collapsesBottomBar = false, autoOpensKeyboard = true, hasFinishedOnboarding = false, archiveCardShown = false), app)
+        assertEquals(AppSettings(collapsesBottomBar = true, autoOpensKeyboard = true, hasFinishedOnboarding = false, archiveCardShown = false), app)
     }
 
     @Test

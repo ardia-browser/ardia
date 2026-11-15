@@ -2,6 +2,7 @@ package com.ardia.browsing
 
 import android.graphics.Bitmap
 import android.os.Build
+import android.view.HapticFeedbackConstants
 import android.view.RoundedCorner
 import androidx.compose.animation.core.animate
 import androidx.compose.foundation.Image
@@ -17,10 +18,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import com.ardia.appmodel.AppModel
 import com.ardia.appmodel.PagerModel
 import com.ardia.browser.PageTone
+import com.ardia.design.LocalReduceMotion
 import com.ardia.design.Motion
 import com.ardia.design.PageLoadingPlaceholder
 import com.ardia.design.PagerPhysics
@@ -56,7 +60,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 @Stable
-internal class TabPager(
+class TabPager internal constructor(
     private val model: AppModel,
     val pager: PagerModel,
     private val scope: CoroutineScope,
@@ -136,6 +140,17 @@ internal class TabPager(
         presented = 0f
     }
 
+    fun switchTab(id: String) {
+        val order = model.swipeOrder
+        cancel()
+        model.browse.freezeOrder(order.map { it.id })
+        model.openTab(id)
+    }
+
+    fun stepTab(delta: Int) {
+        SwipeOrder.neighbor(model.swipeOrder, model.tabs.selectedTabId, delta)?.let { switchTab(it.id) }
+    }
+
     private fun catch() {
         settleJob?.cancel()
         settleJob = null
@@ -191,7 +206,23 @@ internal class TabPager(
     }
 }
 
-internal fun Modifier.tabPagerDrag(pager: TabPager, enabled: Boolean): Modifier {
+val LocalTabPager = compositionLocalOf<TabPager?> { null }
+
+@Composable
+fun rememberTabPager(model: AppModel): TabPager {
+    val scope = rememberCoroutineScope()
+    val view = LocalView.current
+    val reduceMotion = LocalReduceMotion.current
+    val pager = remember(model) {
+        TabPager(model, PagerModel(), scope) {
+            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+        }
+    }
+    pager.reduceMotion = reduceMotion
+    return pager
+}
+
+fun Modifier.tabPagerDrag(pager: TabPager, enabled: Boolean): Modifier {
     if (!enabled) return this
     return pointerInput(pager) {
         val minimum = TabPager.MINIMUM_DISTANCE_DP * density

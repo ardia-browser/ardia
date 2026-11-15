@@ -126,7 +126,7 @@ object DeckHit {
     fun cardAt(
         geometry: TabsDeckGeometry,
         count: Int,
-        range: IntRange,
+        range: Iterable<Int>,
         x: Double,
         y: Double,
         relativeOf: (Int) -> Double,
@@ -134,7 +134,7 @@ object DeckHit {
         if (count <= 0) return null
         val halfHeight = geometry.cardSize.height / 2
         if (y < geometry.cardCenterY - halfHeight || y > geometry.cardCenterY + halfHeight) return null
-        for (index in range.last downTo range.first) {
+        for (index in range.reversed()) {
             if (index !in 0 until count) continue
             val leading = geometry.leading(relativeOf(index))
             if (x >= leading && x <= leading + geometry.cardSize.width) return index

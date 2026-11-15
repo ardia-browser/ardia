@@ -16,6 +16,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
@@ -106,24 +107,42 @@ private fun Surfaces(model: AppModel, screens: RootScreens) {
     val homeSettled = home.isIdle && home.currentState
     val holdsKeyboard = model.browse.trayHoldsKeyboard
     val trayCovers = model.browse.search != null
-    Box(
-        Modifier
-            .fillMaxSize()
-            .then(if (holdsKeyboard) Modifier else Modifier.imePadding())
-            .coveredFromAccessibility(trayCovers)
-            .testTag(RootTags.SURFACES),
-    ) {
-        if (!homeSettled) {
-            screens.browsing(model, surface == AppModel.Surface.Browsing, Modifier.fillMaxSize().coveredFromAccessibility(surface != AppModel.Surface.Browsing))
-            if (covered == AppModel.Surface.TabSwitcher) screens.tabDeck(model, Modifier.fillMaxSize().zIndex(1f).coveredFromAccessibility(isHome))
-        }
-        AnimatedVisibility(
-            visibleState = home,
-            enter = fadeIn(motion.spec()),
-            exit = fadeOut(motion.spec()),
-            modifier = Modifier.fillMaxSize().zIndex(2f).coveredFromAccessibility(!isHome),
+    val pager = com.ardia.browsing.rememberTabPager(model)
+    androidx.compose.runtime.LaunchedEffect(surface) {
+        if (surface != AppModel.Surface.Browsing) pager.cancel()
+    }
+    androidx.compose.runtime.CompositionLocalProvider(com.ardia.browsing.LocalTabPager provides pager) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .then(if (holdsKeyboard) Modifier else Modifier.imePadding())
+                .coveredFromAccessibility(trayCovers)
+                .testTag(RootTags.SURFACES),
         ) {
-            screens.searchStart(model, Modifier.fillMaxSize())
+            if (!homeSettled) {
+                screens.browsing(model, surface == AppModel.Surface.Browsing, Modifier.fillMaxSize().coveredFromAccessibility(surface != AppModel.Surface.Browsing))
+                if (covered == AppModel.Surface.TabSwitcher) screens.tabDeck(model, Modifier.fillMaxSize().zIndex(1f).coveredFromAccessibility(isHome))
+            }
+            AnimatedVisibility(
+                visibleState = home,
+                enter = fadeIn(motion.spec()),
+                exit = fadeOut(motion.spec()),
+                modifier = Modifier.fillMaxSize().zIndex(2f).coveredFromAccessibility(!isHome),
+            ) {
+                screens.searchStart(model, Modifier.fillMaxSize())
+            }
+            if (screens === RootScreens.app) {
+                BrowserBottomBar(
+                    model = model,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .zIndex(5f),
+                )
+            }
+            screens.browsingMenu(
+                model,
+                Modifier.zIndex(10f),
+            )
         }
     }
 }

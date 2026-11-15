@@ -59,6 +59,20 @@ class TabSnapshotStoreTest {
     }
 
     @Test
+    fun cachedPreviewsAreAvailableBeforeLoadingAndDisappearWhenDeleted() = runTest {
+        val store = TabSnapshotStore(directory)
+        val id = BrowserTab.newId()
+        val name = store.save(solid(Color.BLUE), id)!!
+        assertNotNull(store.cachedImage(name))
+        val relaunched = TabSnapshotStore(directory)
+        assertNull(relaunched.cachedImage(name))
+        val loaded = relaunched.image(name)
+        assertTrue(loaded === relaunched.cachedImage(name))
+        relaunched.removeTabs(listOf(id))
+        assertNull(relaunched.cachedImage(name))
+    }
+
+    @Test
     fun wideImagesShrinkToSixHundredPixelsKeepingTheirShape() = runTest {
         val store = TabSnapshotStore(directory)
         val name = store.save(solid(Color.BLUE, 1200, 2400), BrowserTab.newId())!!

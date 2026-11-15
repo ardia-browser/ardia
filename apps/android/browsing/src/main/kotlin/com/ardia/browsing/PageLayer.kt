@@ -87,7 +87,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
 
 @Composable
-internal fun <T> Page.select(selector: (PageState) -> T): State<T> {
+fun <T> Page.select(selector: (PageState) -> T): State<T> {
     val flow = remember(this) { state.map(selector).distinctUntilChanged() }
     return flow.collectAsState(initial = selector(state.value))
 }

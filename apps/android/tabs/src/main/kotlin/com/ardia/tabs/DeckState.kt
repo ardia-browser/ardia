@@ -47,16 +47,19 @@ class DeckState internal constructor(
     var reduceMotion: Boolean = false
     var geometry: TabsDeckGeometry by mutableStateOf(TabsDeckGeometry(DeckSize(1.0, 1.0), 0.0, 0.0))
 
-    var order: List<String> by mutableStateOf(emptyList())
+    private val initialEntrance = model.deck.entrance as? TabDeckModel.Entrance.FromPage
+    private val initialOrder = model.deckOrder.map { it.id }
+    private val initialFromPage = initialEntrance?.let { initialOrder.indexOf(it.tabId) }?.takeIf { it >= 0 }
+
+    var order: List<String> by mutableStateOf(initialOrder)
         private set
-    var phase: DeckPhase by mutableStateOf(DeckPhase.Settled)
+    var phase: DeckPhase by mutableStateOf(if (initialFromPage != null) DeckPhase.Opening(initialEntrance!!.tabId) else DeckPhase.Settled)
         private set
 
-    val scroll = Animatable(0f)
+    val scroll = Animatable(if (initialFromPage != null) DeckOrder.openingScroll(initialFromPage, initialOrder.size).toFloat() else 0f)
     private var dragScroll by mutableFloatStateOf(Float.NaN)
-    private var settleOrigin by mutableFloatStateOf(Float.NaN)
-    val scaleProgress = Animatable(1f)
-    val positionProgress = Animatable(1f)
+    val scaleProgress = Animatable(if (initialFromPage != null) 0f else 1f)
+    val positionProgress = Animatable(if (initialFromPage != null) 0f else 1f)
     val cardsOpacity = Animatable(1f)
     var cover: ImageBitmap? by mutableStateOf(null)
         private set
@@ -71,7 +74,9 @@ class DeckState internal constructor(
 
     var showsArchiveCard: Boolean by mutableStateOf(false)
         private set
-    var isConfirmingCloseAll: Boolean by mutableStateOf(false)
+    var isConfirmingCloseAll: Boolean
+        get() = model.deck.isConfirmingCloseAll
+        set(value) { model.deck.isConfirmingCloseAll = value }
     var isConfirmingCloseIncognito: Boolean by mutableStateOf(false)
     var menuFor: String? by mutableStateOf(null)
 
@@ -87,13 +92,21 @@ class DeckState internal constructor(
 
     val tabsById: Map<String, BrowserTab> by derivedStateOf { model.deckTabs.associateBy { it.id } }
 
+    private val indicesById: Map<String, Int> by derivedStateOf { order.withIndex().associate { it.value to it.index } }
+
     val renderedRange: IntRange by derivedStateOf {
         val count = order.size
-        val current = TabsDeckGeometry.renderedRange(currentScroll.toDouble(), count)
-        val origin = settleOrigin
-        if (origin.isNaN()) return@derivedStateOf current
-        val previous = TabsDeckGeometry.renderedRange(origin.toDouble(), count)
-        if (previous.isEmpty() || current.isEmpty()) current else minOf(previous.first, current.first)..maxOf(previous.last, current.last)
+        if (phase == DeckPhase.Settled) geometry.visibleRange(currentScroll.toDouble(), count)
+        else TabsDeckGeometry.renderedRange(currentScroll.toDouble(), count)
+    }
+
+    val renderedIndices: List<Int> by derivedStateOf {
+        val moving = motions.filter { (id, motion) ->
+            val index = indicesById[id] ?: -1
+            index >= 0 && abs(motion.slot.value) > 0.001f &&
+                geometry.isCardVisible(relative(id, index), index == order.lastIndex)
+        }.keys
+        (renderedRange.toList() + (lifting + moving).mapNotNull { indicesById[it] }).distinct().sorted()
     }
 
     fun motion(id: String): CardMotion = motions.getOrPut(id) { CardMotion() }
@@ -134,7 +147,7 @@ class DeckState internal constructor(
 
     fun cardAt(x: Double, y: Double): String? {
         val current = order
-        val index = DeckHit.cardAt(geometry, current.size, renderedRange, x, y) { relative(current[it], it) } ?: return null
+        val index = DeckHit.cardAt(geometry, current.size, renderedIndices, x, y) { relative(current[it], it) } ?: return null
         return current[index]
     }
 
@@ -143,6 +156,7 @@ class DeckState internal constructor(
     suspend fun appear() {
         if (didAppear) return
         didAppear = true
+        model.deck.openingTabId = null
         order = model.deckOrder.map { it.id }
         val entrance = model.deck.entrance
         model.deck.entrance = TabDeckModel.Entrance.Plain
@@ -196,12 +210,17 @@ class DeckState internal constructor(
         motions.keys.retainAll { it in live || it in lifting }
         order = next
         dragScroll = Float.NaN
-        settleOrigin = Float.NaN
         scope.launch(start = CoroutineStart.UNDISPATCHED) { scroll.snapTo(nextScroll) }
         if (reduceMotion) return
         next.forEachIndexed { index, id ->
             val was = oldIndex[id] ?: return@forEachIndexed
             val motion = motions[id] ?: return@forEachIndexed
+            val wasVisible = geometry.isCardVisible(was + motion.slot.value.toDouble() - previousScroll, was == previous.lastIndex)
+            val willBeVisible = geometry.isCardVisible(index - nextScroll.toDouble(), index == next.lastIndex)
+            if (!wasVisible && !willBeVisible && id !in lifting) {
+                if (motion.slot.value != 0f) scope.launch(start = CoroutineStart.UNDISPATCHED) { motion.slot.snapTo(0f) }
+                return@forEachIndexed
+            }
             val shift = DeckOrder.slotShift(was, motion.slot.value.toDouble(), previousScroll.toDouble(), index, nextScroll.toDouble()).toFloat()
             if (abs(shift) < 0.001f) return@forEachIndexed
             scope.launch(start = CoroutineStart.UNDISPATCHED) {
@@ -233,35 +252,45 @@ class DeckState internal constructor(
             return
         }
         phase = DeckPhase.Closing(id)
+        model.deck.openingTabId = id
+        model.beginOpening(id)
         model.prepareToOpen(id)
         scope.launch {
             model.primeCover(id)
-            if (phase == DeckPhase.Closing(id)) model.beginOpening(id)
         }
         scope.launch {
-            coroutineScope {
-                launch { scaleProgress.animateTo(0f, TabsMotion.expand.spec()) }
-                positionProgress.animateTo(0f, TabsMotion.expand.spec())
+            try {
+                coroutineScope {
+                    launch { scaleProgress.animateTo(0f, TabsMotion.expand.spec()) }
+                    positionProgress.animateTo(0f, TabsMotion.expand.spec())
+                }
+                model.openTab(id)
+            } finally {
+                model.deck.openingTabId = null
             }
-            model.openTab(id)
         }
     }
 
     private fun crossfadeOpen(id: String) {
+        model.deck.openingTabId = id
+        model.beginOpening(id)
         model.prepareToOpen(id)
         phase = DeckPhase.Closing(id)
         scope.launch {
-            model.primeCover(id)
-            model.beginOpening(id)
-            val image = model.deck.memoryImage(id) ?: model.tab(id)?.let { model.snapshotImage(it) }
-            if (image == null) {
+            try {
+                model.primeCover(id)
+                val image = model.deck.memoryImage(id) ?: model.tab(id)?.let { model.snapshotImage(it) }
+                if (image == null) {
+                    model.openTab(id)
+                    return@launch
+                }
+                cover = image.asImageBitmap()
+                coverOpacity.snapTo(0f)
+                coverOpacity.animateTo(1f, TabsMotion.fade.spec())
                 model.openTab(id)
-                return@launch
+            } finally {
+                model.deck.openingTabId = null
             }
-            cover = image.asImageBitmap()
-            coverOpacity.snapTo(0f)
-            coverOpacity.animateTo(1f, TabsMotion.fade.spec())
-            model.openTab(id)
         }
     }
 
@@ -369,11 +398,9 @@ class DeckState internal constructor(
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
             scroll.snapTo(from)
             dragScroll = Float.NaN
-            settleOrigin = from
             val spec = if (reduceMotion) TabsMotion.fade.spec<Float>() else TabsMotion.settle.spec()
             val initial = if (reduceMotion) 0.0 else TabsMotion.settleVelocity(clamped - from.toDouble(), velocity)
             scroll.animateTo(clamped, spec, initialVelocity = initial.toFloat())
-            if (scroll.value == clamped) settleOrigin = Float.NaN
         }
     }
 

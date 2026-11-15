@@ -617,6 +617,9 @@ class AppModel(
         snapshotVersions[id] = snapshotVersion(id) + 1
     }
 
+    fun cachedSnapshotImage(tab: BrowserTab): Bitmap? = deck.memoryImage(tab.id)
+        ?: tab.snapshotFileName?.let { store?.snapshots?.cachedImage(it) }
+
     suspend fun snapshotImage(tab: BrowserTab): Bitmap? {
         deck.memoryImage(tab.id)?.let { return it }
         val name = tab.snapshotFileName ?: return null

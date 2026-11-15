@@ -35,6 +35,8 @@ class TabDeckModel(private val preferences: AppPreferences) {
     var handoff: Handoff? by mutableStateOf(null)
     var entrance: Entrance by mutableStateOf(Entrance.Plain)
     var command: Command? by mutableStateOf(null)
+    var openingTabId: String? by mutableStateOf(null)
+    var isConfirmingCloseAll: Boolean by mutableStateOf(false)
 
     var hasShownArchiveCard: Boolean
         get() = preferences.settings.value.archiveCardShown

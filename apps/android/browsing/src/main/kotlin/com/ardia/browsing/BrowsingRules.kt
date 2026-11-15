@@ -2,6 +2,7 @@ package com.ardia.browsing
 
 import android.Manifest
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.max
 import com.ardia.browser.SitePermission
 import com.ardia.design.BrowseLayout
@@ -15,13 +16,15 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 object BarGeometry {
-    fun centerFromBottom(navigationInset: Dp): Dp = max(BrowseLayout.barCenterFromBottom, navigationInset + BrowseLayout.hitTarget / 2)
+    val BAR_NAV_CLEARANCE: Dp get() = BrowseLayout.barNavClearance
 
-    fun height(navigationInset: Dp): Dp = BrowseLayout.barHeight + (centerFromBottom(navigationInset) - BrowseLayout.barCenterFromBottom)
+    fun centerFromBottom(navigationInset: Dp): Dp = BrowseLayout.barCenterFromBottom(navigationInset)
 
-    fun pageBottomInset(navigationInset: Dp): Dp = height(navigationInset) - PAGE_OVERLAP
+    fun height(navigationInset: Dp): Dp = BrowseLayout.barHeight(navigationInset)
 
-    val PAGE_OVERLAP: Dp = Dp(26f)
+    fun pageBottomInset(navigationInset: Dp): Dp = BrowseLayout.barPageBottomInset(navigationInset)
+
+    val PAGE_OVERLAP: Dp get() = BrowseLayout.barPageOverlap
 }
 
 object PagerPoses {

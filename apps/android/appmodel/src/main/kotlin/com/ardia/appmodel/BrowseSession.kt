@@ -27,6 +27,8 @@ class BrowseSession(private val scope: CoroutineScope) {
     var search: SearchRequest? by mutableStateOf(null)
     var trayHoldsKeyboard: Boolean by mutableStateOf(false)
     var isToolbarPresented: Boolean by mutableStateOf(false)
+    var showsSiteSettings: Boolean by mutableStateOf(false)
+    var isBarHidden: Boolean by mutableStateOf(false)
     var readerTabId: String? by mutableStateOf(null)
     var titleFeedback: String? by mutableStateOf(null)
         private set

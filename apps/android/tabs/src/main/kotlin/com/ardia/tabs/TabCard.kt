@@ -213,7 +213,7 @@ internal fun TabCardContent(tab: BrowserTab, image: ImageBitmap?, title: String,
                 image,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize().graphicsLayer { alpha = appear.value },
-                contentScale = ContentScale.FillWidth,
+                contentScale = ContentScale.Crop,
                 alignment = Alignment.TopCenter,
             )
         }
@@ -222,7 +222,7 @@ internal fun TabCardContent(tab: BrowserTab, image: ImageBitmap?, title: String,
 
 @Composable
 private fun rememberSnapshot(model: AppModel, tab: BrowserTab): ImageBitmap? {
-    val memory = model.deck.memoryImage(tab.id)
+    val memory = model.cachedSnapshotImage(tab)
     val version = model.snapshotVersion(tab.id)
     val current by rememberUpdatedState(tab)
     var image by remember(tab.id) { mutableStateOf(memory?.asImageBitmap()) }

@@ -60,6 +60,11 @@ class ScrollDirectionTracker(private val threshold: Double = 24.0) {
         anchor = 0.0
     }
 
+    fun snapTo(offset: Double) {
+        direction = ScrollDirection.Up
+        anchor = offset
+    }
+
     private fun update(next: ScrollDirection): ScrollDirection? {
         if (next == direction) return null
         direction = next

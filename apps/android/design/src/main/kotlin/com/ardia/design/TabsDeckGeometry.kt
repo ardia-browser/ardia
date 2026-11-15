@@ -10,12 +10,21 @@ data class DeckSize(val width: Double, val height: Double)
 
 data class DeckPoint(val x: Double, val y: Double)
 
-data class TabsDeckGeometry(val container: DeckSize, val safeTop: Double, val safeBottom: Double, val safeSide: Double = 0.0) {
+data class TabsDeckGeometry(
+    val container: DeckSize,
+    val safeTop: Double,
+    val safeBottom: Double,
+    val safeSide: Double = 0.0,
+    val pageBottom: Double = 0.0,
+) {
     val cardSize: DeckSize
     val focusLeading: Double
     val spacing: Double
     val leftReach: Double
     val cardCenterY: Double
+    private val pageTop = safeTop.coerceIn(0.0, max(container.height - 1.0, 0.0))
+    private val clampedBottom = pageBottom.coerceIn(0.0, max(container.height - pageTop - 1.0, 0.0))
+    private val pageHeight = max(container.height - pageTop - clampedBottom, 1.0)
 
     init {
         val width = max(container.width, 1.0)
@@ -23,7 +32,7 @@ data class TabsDeckGeometry(val container: DeckSize, val safeTop: Double, val sa
         val bandTop = safeTop + TOP_RESERVE + HEADER_HEIGHT
         val bandBottom = height - max(safeBottom, 20.0) - BAR_RESERVE + 24
         val band = max(bandBottom - bandTop, 120.0)
-        val aspect = height / width
+        val aspect = pageHeight / width
         val cardWidth = min(width * CARD_WIDTH_RATIO, band / aspect)
         cardSize = DeckSize(cardWidth, cardWidth * aspect)
         focusLeading = width * FOCUS_LEADING_RATIO
@@ -48,13 +57,24 @@ data class TabsDeckGeometry(val container: DeckSize, val safeTop: Double, val sa
 
     val expandedScale: Double get() = container.width / max(cardSize.width, 1.0)
 
-    val expandedCenter: DeckPoint get() = DeckPoint(container.width / 2, container.height / 2)
+    val expandedCenter: DeckPoint get() = DeckPoint(container.width / 2, pageTop + pageHeight / 2)
 
     val tabButtonCenter: DeckPoint get() = DeckPoint(safeSide + 16 + 17.5, barCenterY)
 
     val barCenterY: Double get() = container.height - max(safeBottom, 20.0) - 6
 
     fun scrollDelta(dragTranslation: Double): Double = -dragTranslation / spacing
+
+    fun isCardVisible(relative: Double, isLast: Boolean): Boolean =
+        visibleWidth(relative, isLast) >= 0.25 && leading(relative) < container.width + spacing &&
+            leading(relative) + cardSize.width > 0
+
+    fun visibleRange(scroll: Double, count: Int): IntRange {
+        val candidates = renderedRange(scroll, count)
+        val first = candidates.firstOrNull { visibleWidth(it - scroll, it == count - 1) >= 0.25 } ?: return IntRange.EMPTY
+        val last = candidates.lastOrNull { leading(it - scroll) < container.width + spacing } ?: return IntRange.EMPTY
+        return if (first <= last) first..last else IntRange.EMPTY
+    }
 
     fun settleTarget(scroll: Double, velocity: Double, count: Int): Int {
         if (count <= 0) return 0

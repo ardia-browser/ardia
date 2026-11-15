@@ -68,7 +68,7 @@ import com.ardia.design.parseHexColor
 import com.ardia.store.BrowserTab
 import com.ardia.store.BrowserUrl
 
-internal object BrowsingTags {
+object BrowsingTags {
     const val BAR = "browsing.bar"
     const val TABS = "browsing.bar.tabs"
     const val PLUS = "browsing.bar.plus"
@@ -87,7 +87,7 @@ internal object BrowsingTags {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun BottomBar(
+fun BottomBar(
     model: AppModel,
     isSearchPresented: Boolean,
     onTabs: () -> Unit,
@@ -296,18 +296,20 @@ private fun TabThumbnail(model: AppModel, tab: BrowserTab, modifier: Modifier = 
 }
 
 @Composable
-internal fun Modifier.barBacking(tone: Int?): Modifier {
+fun Modifier.barBacking(tone: Int?, alpha: Float = 1f): Modifier {
     val look = ArdiaThemeState.look
     val surface = look.surface.current
     val target = tone?.let { Color(it) } ?: surface
     val color by animateColorAsState(target, Motion.barTone.spec(), label = "barTone")
     val toneIsDark = tone?.let(PageColors::isDark)
     return drawBehind {
-        drawRect(color)
-        when (toneIsDark) {
-            true -> drawRect(Color.White.copy(alpha = 0.06f))
-            false -> drawRect(Color.Black.copy(alpha = 0.025f))
-            null -> Unit
+        if (alpha > 0f) {
+            drawRect(color, alpha = alpha)
+            when (toneIsDark) {
+                true -> drawRect(Color.White.copy(alpha = 0.06f * alpha))
+                false -> drawRect(Color.Black.copy(alpha = 0.025f * alpha))
+                null -> Unit
+            }
         }
     }
 }

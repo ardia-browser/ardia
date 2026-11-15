@@ -49,7 +49,18 @@ object BrowseLayout {
     val hitTarget = 44.dp
     val barHeight = 75.dp
     val barCollapseTravel = 30.dp
+    val barNavClearance = 10.dp
+    val barPageOverlap = 26.dp
     const val barControlScale = 0.93f
     val progressHeight = 2.5.dp
     val toolbarTile = 78.dp
+
+    fun barCenterFromBottom(navigationInset: androidx.compose.ui.unit.Dp): androidx.compose.ui.unit.Dp =
+        androidx.compose.ui.unit.max(barCenterFromBottom, navigationInset + hitTarget / 2 + barNavClearance)
+
+    fun barHeight(navigationInset: androidx.compose.ui.unit.Dp): androidx.compose.ui.unit.Dp =
+        barHeight + (barCenterFromBottom(navigationInset) - barCenterFromBottom)
+
+    fun barPageBottomInset(navigationInset: androidx.compose.ui.unit.Dp): androidx.compose.ui.unit.Dp =
+        barHeight(navigationInset) - barPageOverlap
 }

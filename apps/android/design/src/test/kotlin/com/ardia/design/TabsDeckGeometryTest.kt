@@ -12,9 +12,9 @@ class TabsDeckGeometryTest {
     private fun near(expected: Double, actual: Double, tolerance: Double = 1e-9) = assertEquals(expected, actual, tolerance)
 
     @Test
-    fun `an iPhone 16 Pro deck has the numbers the Swift geometry computes`() {
+    fun `the deck keeps its measured slots with previews sized to the Android page`() {
         near(273.31363636363636, geometry.cardSize.width)
-        near(592.5272727272727, geometry.cardSize.height)
+        near(551.4954545454545, geometry.cardSize.height)
         near(58.949999999999996, geometry.focusLeading)
         near(194.71363636363637, geometry.spacing)
         near(54.47741498649223, geometry.leftReach)
@@ -111,6 +111,35 @@ class TabsDeckGeometryTest {
     }
 
     @Test
+    fun `visible cards stay mounted without building the hidden stack`() {
+        for ((width, height) in listOf(360.0 to 800.0, 440.0 to 956.0, 852.0 to 393.0)) {
+            val viewport = TabsDeckGeometry(DeckSize(width, height), safeTop = 24.0, safeBottom = 20.0)
+            for (step in 0..396) {
+                val scroll = step / 4.0
+                val range = viewport.visibleRange(scroll, 100)
+                assertTrue(range.count() <= 6)
+                for (index in 0 until 100) {
+                    val relative = index - scroll
+                    val onScreen = viewport.leading(relative) < width &&
+                        viewport.leading(relative) + viewport.cardSize.width > 0 &&
+                        viewport.visibleWidth(relative, index == 99) >= 0.25
+                    if (onScreen) assertTrue("$width at $scroll lost $index", index in range)
+                }
+            }
+        }
+        assertTrue(geometry.visibleRange(0.0, 0).isEmpty())
+        assertEquals(0..0, geometry.visibleRange(0.0, 1))
+    }
+
+    @Test
+    fun `closing near the end does not animate the hidden visited stack`() {
+        val viewport = TabsDeckGeometry(DeckSize(440.0, 956.0), safeTop = 62.0, safeBottom = 34.0)
+        val visibleMoving = (0 until 97).filter { viewport.isCardVisible(it + 1.0 - 97.0, isLast = false) }
+        assertEquals(listOf(94, 95, 96), visibleMoving)
+        assertFalse(viewport.isCardVisible(-5.0, isLast = false))
+    }
+
+    @Test
     fun `scrolling past either end resists like Swift`() {
         near(-0.35, TabsDeckGeometry.rubberBand(-1.0, 5))
         near(4.664700568815827, TabsDeckGeometry.rubberBand(6.5, 5))
@@ -131,5 +160,14 @@ class TabsDeckGeometryTest {
         assertEquals(1, 0.5.swiftRounded())
         assertEquals(-1, (-0.5).swiftRounded())
         assertEquals(2, 2.4999.swiftRounded())
+    }
+
+    @Test
+    fun `non-collapsing bottom inset shrinks preview page aspect and expanded center`() {
+        val full = TabsDeckGeometry(DeckSize(393.0, 852.0), safeTop = 59.0, safeBottom = 34.0)
+        val inset = TabsDeckGeometry(DeckSize(393.0, 852.0), safeTop = 59.0, safeBottom = 34.0, pageBottom = 61.0)
+        assertEquals(full.cardSize.width, inset.cardSize.width, 1e-9)
+        assertTrue(inset.cardSize.height < full.cardSize.height)
+        assertTrue(inset.expandedCenter.y < full.expandedCenter.y)
     }
 }

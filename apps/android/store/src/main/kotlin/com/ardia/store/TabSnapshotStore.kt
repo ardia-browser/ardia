@@ -50,6 +50,8 @@ class TabSnapshotStore(
         return name
     }
 
+    fun cachedImage(name: String): Bitmap? = cache.get(name)
+
     suspend fun image(name: String): Bitmap? {
         cache.get(name)?.let { return it }
         if (name.startsWith(MEMORY_PREFIX)) return null

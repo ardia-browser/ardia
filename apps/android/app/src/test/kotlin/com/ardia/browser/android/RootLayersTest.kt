@@ -169,6 +169,7 @@ class RootLayersTest {
     }
 
     private fun frames(count: Int = 3) {
+        androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications()
         repeat(count) {
             shadowOf(Looper.getMainLooper()).idle()
             compose.mainClock.advanceTimeByFrame()

@@ -4,7 +4,6 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.graphics.Bitmap
-import android.view.HapticFeedbackConstants
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
@@ -36,7 +35,6 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -72,20 +70,15 @@ import kotlinx.coroutines.flow.map
 import kotlin.math.roundToInt
 
 @Composable
-fun BrowsingView(model: AppModel, isFront: Boolean, modifier: Modifier = Modifier) {
+fun BrowsingView(model: AppModel, isFront: Boolean, modifier: Modifier = Modifier, showsBar: Boolean = true) {
     val tab = model.tabs.selectedTab
     val page = tab?.let { model.page(it.id) }
-    val scope = rememberCoroutineScope()
-    val view = LocalView.current
     val density = LocalDensity.current
     val reduceMotion = LocalReduceMotion.current
     val dark = LocalArdiaDarkTheme.current
     val surface = ArdiaThemeState.look.surface.current
-    val pager = remember(model) { TabPager(model, PagerModel(), scope) { view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK) } }
-    pager.reduceMotion = reduceMotion
+    val pager = LocalTabPager.current ?: rememberTabPager(model)
     val corner = rememberDisplayCornerRadius()
-    var barHidden by remember { mutableStateOf(false) }
-    var showsSiteSettings by remember { mutableStateOf(false) }
     val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val navigationBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val barHeight = BarGeometry.height(navigationBottom)
@@ -106,26 +99,19 @@ fun BrowsingView(model: AppModel, isFront: Boolean, modifier: Modifier = Modifie
         model.showTabSwitcher()
     }
 
-    fun switchTab(id: String) {
-        val order = model.swipeOrder
-        pager.cancel()
-        model.browse.freezeOrder(order.map { it.id })
-        model.openTab(id)
-    }
+    fun switchTab(id: String) = pager.switchTab(id)
 
-    fun stepTab(delta: Int) {
-        SwipeOrder.neighbor(model.swipeOrder, model.tabs.selectedTabId, delta)?.let { switchTab(it.id) }
-    }
+    fun stepTab(delta: Int) = pager.stepTab(delta)
 
     LaunchedEffect(tab?.id) {
-        barHidden = false
+        model.browse.isBarHidden = false
         model.goBackToSearchIfEmpty()
         tab?.id?.let(model::prepareToOpen)
         pager.warmNeighbors()
         if (model.browse.isFindPresented) model.endFindOnPage()
     }
     LaunchedEffect(isFront) {
-        if (isFront) barHidden = false else if (model.browse.isFindPresented) model.endFindOnPage()
+        if (isFront) model.browse.isBarHidden = false else if (model.browse.isFindPresented) model.endFindOnPage()
     }
     LaunchedEffect(model.browse.deckRequested) {
         if (!model.browse.deckRequested) return@LaunchedEffect
@@ -141,7 +127,7 @@ fun BrowsingView(model: AppModel, isFront: Boolean, modifier: Modifier = Modifie
     LaunchedEffect(page, collapses) {
         page ?: return@LaunchedEffect
         page.state.map { it.scrollDirection }.distinctUntilChanged().collect { direction ->
-            barHidden = collapses && direction == ScrollDirection.Down
+            model.browse.isBarHidden = collapses && direction == ScrollDirection.Down
         }
     }
     val toneBottomInset = with(density) { (if (collapses) barHeight else BarGeometry.PAGE_OVERLAP).toPx().roundToInt() }
@@ -171,14 +157,14 @@ fun BrowsingView(model: AppModel, isFront: Boolean, modifier: Modifier = Modifie
             hasPressMenu = model.browse.press?.let { it.tabId == model.tabs.selectedTabId } == true,
             isFinding = model.browse.isFindPresented && livePage != null && isFront,
             isReading = model.browse.readerTabId != null,
-            isOnSubPage = liveMenu && showsSiteSettings,
+            isOnSubPage = liveMenu && model.browse.showsSiteSettings,
             isSheetOpen = liveMenu,
             canGoBack = livePage?.state?.value?.canGoBack == true,
             hasTab = model.tabs.selectedTab != null,
         )
     }
     val composedBackTarget = BackOrder.next(
-        BackState(fullscreen != null, press != null, isFinding, readerId != null, menuVisible && showsSiteSettings, menuVisible, canGoBack, tab != null),
+        BackState(fullscreen != null, press != null, isFinding, readerId != null, menuVisible && model.browse.showsSiteSettings, menuVisible, canGoBack, tab != null),
     )
     BackHandler(enabled = isFront && composedBackTarget != null && model.browse.search == null) {
         val livePage = model.currentPage
@@ -187,9 +173,12 @@ fun BrowsingView(model: AppModel, isFront: Boolean, modifier: Modifier = Modifie
             BrowsingLayer.PressMenu -> model.browse.press = null
             BrowsingLayer.FindBar -> model.endFindOnPage()
             BrowsingLayer.Reader -> model.browse.readerTabId = null
-            BrowsingLayer.SubPage -> showsSiteSettings = false
+            BrowsingLayer.SubPage -> model.browse.showsSiteSettings = false
             BrowsingLayer.Sheet -> model.browse.isToolbarPresented = false
-            BrowsingLayer.PageHistory -> livePage?.goBack()
+            BrowsingLayer.PageHistory -> {
+                model.browse.isBarHidden = false
+                livePage?.goBack()
+            }
             BrowsingLayer.TabSwitcher -> openDeck()
             null -> Unit
         }
@@ -230,36 +219,60 @@ fun BrowsingView(model: AppModel, isFront: Boolean, modifier: Modifier = Modifie
                 modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding(),
             )
         }
-        Bar(
-            model = model,
-            pager = pager,
-            tone = tone?.bottom,
-            hidden = barHidden || isFinding,
-            height = barHeight,
-            navigationBottom = navigationBottom,
-            reduceMotion = reduceMotion,
-            onTabs = ::openDeck,
-            onStep = ::stepTab,
-            onSelectTab = ::switchTab,
-            modifier = Modifier.align(Alignment.BottomCenter),
-        )
+        if (showsBar) {
+            Bar(
+                model = model,
+                pager = pager,
+                tone = tone?.bottom,
+                hidden = model.browse.isBarHidden || isFinding,
+                height = barHeight,
+                navigationBottom = navigationBottom,
+                reduceMotion = reduceMotion,
+                onTabs = ::openDeck,
+                onStep = ::stepTab,
+                onSelectTab = ::switchTab,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+        }
         page?.takeIf { isFinding }?.let { FindBar(it, onDone = model::endFindOnPage, modifier = Modifier.align(Alignment.BottomCenter)) }
         if (fullscreen != null) FullscreenVideoLayer(fullscreen)
-        if (tab != null) {
-            LaunchedEffect(menuVisible) { if (menuVisible) showsSiteSettings = false }
-            BrowsingSheet(visible = menuVisible, onDismiss = { model.browse.isToolbarPresented = false }, tag = BrowsingTags.MENU) {
-                PageMenu(
-                    model = model,
-                    tab = tab,
-                    page = page,
-                    showsSiteSettings = showsSiteSettings,
-                    onShowSiteSettings = { showsSiteSettings = it },
-                    onDismiss = { model.browse.isToolbarPresented = false },
-                )
-            }
+        if (showsBar) {
+            BrowsingMenuHost(model)
         }
         ReaderLayer(model, readerId, readerSettings)
         if (isFront) PageRequestHost(page)
+    }
+}
+
+@Composable
+fun BrowsingMenuHost(model: AppModel, modifier: Modifier = Modifier) {
+    val tab = model.tabs.selectedTab
+    val page = tab?.let { model.page(it.id) }
+    val isFront = model.surface == AppModel.Surface.Browsing
+    val menuVisible = model.browse.isToolbarPresented && tab != null && isFront
+    if (tab != null) {
+        LaunchedEffect(menuVisible) { if (menuVisible) model.browse.showsSiteSettings = false }
+        BrowsingSheet(
+            visible = menuVisible,
+            onDismiss = {
+                model.browse.showsSiteSettings = false
+                model.browse.isToolbarPresented = false
+            },
+            tag = BrowsingTags.MENU,
+            modifier = modifier,
+        ) {
+            PageMenu(
+                model = model,
+                tab = tab,
+                page = page,
+                showsSiteSettings = model.browse.showsSiteSettings,
+                onShowSiteSettings = { model.browse.showsSiteSettings = it },
+                onDismiss = {
+                    model.browse.showsSiteSettings = false
+                    model.browse.isToolbarPresented = false
+                },
+            )
+        }
     }
 }
 

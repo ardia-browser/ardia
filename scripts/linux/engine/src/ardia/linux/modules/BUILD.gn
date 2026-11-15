@@ -76,6 +76,8 @@ source_set("modules") {
     "//ardia/linux/import/import_module.h",
     "//ardia/linux/sync/sync_module.cc",
     "//ardia/linux/sync/sync_module.h",
+    "//ardia/linux/translate/translate_module.cc",
+    "//ardia/linux/translate/translate_module.h",
     "test_answers.cc",
     "test_answers.h",
   ]
@@ -89,6 +91,7 @@ source_set("modules") {
     "//ardia/linux/dbus",
     "//ardia/linux/import:core",
     "//ardia/linux/sync:core",
+    "//ardia/linux/translate:core",
     "//base",
     "//chrome/app/theme:chrome_unscaled_resources",
     "//chrome/browser",

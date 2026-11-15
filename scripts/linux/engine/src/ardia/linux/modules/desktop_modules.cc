@@ -7,6 +7,7 @@
 #include "ardia/linux/modules/owner_check.h"
 #include "ardia/linux/modules/screen_lock.h"
 #include "ardia/linux/sync/sync_module.h"
+#include "ardia/linux/translate/translate_module.h"
 #include "ardia/linux/ui_host/modules.h"
 
 namespace ardia_linux {
@@ -18,6 +19,7 @@ void RegisterDesktopModules(ModuleRegistry& registry) {
   RegisterFileDropModule(registry);
   RegisterSyncModule(registry);
   RegisterImportHostModule(registry);
+  RegisterTranslateModule(registry);
 }
 
 }

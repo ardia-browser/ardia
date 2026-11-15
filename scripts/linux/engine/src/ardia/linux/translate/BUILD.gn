@@ -1,0 +1,32 @@
+# Copyright 2026 Ardia. Apache-2.0.
+
+import("//testing/test.gni")
+
+assert(is_linux)
+
+source_set("core") {
+  sources = [
+    "translate_models.cc",
+    "translate_models.h",
+  ]
+
+  deps = [
+    "//base",
+    "//third_party/boringssl",
+    "//third_party/re2",
+    "//third_party/zlib",
+  ]
+}
+
+test("ardia_linux_translate_unittests") {
+  sources = [ "translate_models_unittest.cc" ]
+
+  deps = [
+    ":core",
+    "//base",
+    "//base/test:run_all_unittests",
+    "//base/test:test_support",
+    "//testing/gtest",
+    "//third_party/zlib/google:compression_utils",
+  ]
+}

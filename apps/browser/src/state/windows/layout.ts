@@ -5,6 +5,7 @@ import { ARC_LIGHTS_CENTER, lightsCenter, sidebarLightsCenter, toolbarLightsCent
 import { onWindowEvent, type LightsPlace } from "../../platform/windows";
 import { DEFAULT_SIDEBAR_WIDTH, pageFrameInsetOf } from "../../lib/windowLayout";
 import { useBrowser, type BrowserState } from "../browser/store";
+import { useExtensions } from "../extensions/store";
 import { useWindowId } from "../browser/hooks";
 import { useSettingValue } from "../tabs/tabWatch";
 import { BROWSER_WINDOW_BUTTONS, captionClearTop, captionRoom, WINDOW_CHROME, WINDOW_CONTROLS, windowControlsWidth, type WindowChrome } from "../../lib/windowChrome";
@@ -153,6 +154,13 @@ export function useSidebarCaptionRoom(): number {
 }
 
 export function useCardCaptionRoom(frame: number): number {
+  const windowId = useWindowId();
+  const room = useBrowser((s) => cardCaptionRoom(s, windowId, frame));
+  const sidePanelHoldsCaption = useExtensions((e) => !!e.sidePanels[windowId]);
+  return sidePanelHoldsCaption ? 0 : room;
+}
+
+export function useSidePanelCaptionRoom(frame: number): number {
   const windowId = useWindowId();
   return useBrowser((s) => cardCaptionRoom(s, windowId, frame));
 }

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Animated, Image, StyleSheet, View } from "react-native";
 import { useTheme } from "../ui/theme";
 import { useCardFrame } from "../window/cardFrame";
+import { usePageFrameInset, useSidePanelCaptionRoom } from "../../state/windows/layout";
 import { useSettings, useWindowId } from "../../state/browser/hooks";
 import { currentSettings } from "../../state/browser/current";
 import { updateSettings } from "../../state/settings/actions";
@@ -77,9 +78,10 @@ function PanelCard({ windowId, panel }: { windowId: string; panel: SidePanel }) 
   const ext = useExtensions((e) => e.lists[profile]?.find((x) => x.id === extensionId));
   const title = ext?.actionTitle || ext?.name || "Extension";
   const icon = ext?.actionIcon || ext?.icon;
+  const captionRoom = useSidePanelCaptionRoom(usePageFrameInset());
   return (
     <View style={{ flex: 1, borderRadius: cardRadius, overflow: "hidden", backgroundColor: theme.card }}>
-      <Box row gap="m" style={HEADER_ROW}>
+      <Box row gap="m" style={captionRoom ? [HEADER_ROW, { paddingRight: SIDE_PANEL_HEADER_PAD_RIGHT + captionRoom }] : HEADER_ROW}>
         {icon ? <Image source={{ uri: icon }} style={{ width: 16, height: 16 }} /> : null}
         <Text numberOfLines={1} weight="medium" style={FLEX}>
           {title}

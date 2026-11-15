@@ -28,6 +28,7 @@ test("ardia_linux_translate_unittests") {
     "//base/test:run_all_unittests",
     "//base/test:test_support",
     "//testing/gtest",
+    "//third_party/zlib",
     "//third_party/zlib/google:compression_utils",
   ]
 }

@@ -4,6 +4,7 @@
 #define ARDIA_LINUX_TRANSLATE_TRANSLATE_MODELS_H_
 
 #include <array>
+#include <cstdint>
 #include <map>
 #include <optional>
 #include <set>
@@ -25,6 +26,11 @@ inline constexpr char kRegistry[] =
 inline constexpr char kPivot[] = "en";
 inline constexpr std::array<const char*, 5> kFileTypes = {
     "model", "lex", "vocab", "srcvocab", "trgvocab"};
+
+inline constexpr int64_t kMaxExpandedFileBytes = int64_t{256} << 20;
+
+std::optional<int64_t> DeclaredFileSize(std::optional<double> size);
+int64_t ExpansionLimit(int64_t declared_size);
 
 struct RemoteFile {
   std::string path;

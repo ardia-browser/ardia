@@ -3,6 +3,7 @@
 #include "ardia/linux/translate/translate_models.h"
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 #include "base/files/file.h"
@@ -125,9 +126,12 @@ std::optional<PairFiles> FilesOf(const base::DictValue& entry) {
         hash && re2::RE2::FullMatch(*hash, *kHash)) {
       remote.hash = *hash;
     }
-    if (std::optional<double> size = file->FindDouble("uncompressedSize");
-        size && *size > 0) {
-      remote.size = static_cast<int64_t>(*size);
+    if (std::optional<double> declared = file->FindDouble("uncompressedSize")) {
+      std::optional<int64_t> size = DeclaredFileSize(declared);
+      if (!size) {
+        continue;
+      }
+      remote.size = *size;
     }
     pair.files[type] = std::move(remote);
   }
@@ -240,8 +244,13 @@ std::optional<Catalog> CatalogFromJson(std::string_view json) {
       if (const std::string* hash = fields->FindString("hash")) {
         remote.hash = *hash;
       }
-      remote.size =
-          static_cast<int64_t>(fields->FindDouble("size").value_or(0));
+      if (std::optional<double> declared = fields->FindDouble("size")) {
+        std::optional<int64_t> size = DeclaredFileSize(declared);
+        if (!size) {
+          continue;
+        }
+        remote.size = *size;
+      }
       pair.files[type] = std::move(remote);
     }
     if (CompleteFiles(TypesOf(pair.files))) {
@@ -465,9 +474,26 @@ std::optional<std::string> DetectedLanguage(std::string_view text) {
   return language;
 }
 
+std::optional<int64_t> DeclaredFileSize(std::optional<double> size) {
+  if (!size || !std::isfinite(*size) || *size < 1 ||
+      *size > static_cast<double>(kMaxExpandedFileBytes) ||
+      *size != std::floor(*size)) {
+    return std::nullopt;
+  }
+  return static_cast<int64_t>(*size);
+}
+
+int64_t ExpansionLimit(int64_t declared_size) {
+  if (declared_size <= 0) {
+    return kMaxExpandedFileBytes;
+  }
+  return std::min(declared_size, kMaxExpandedFileBytes);
+}
+
 std::optional<Digest> GunzipInto(const base::FilePath& gzipped,
                                  const base::FilePath& target,
                                  int64_t size_limit) {
+  const int64_t limit = ExpansionLimit(size_limit);
   base::File in(gzipped, base::File::FLAG_OPEN | base::File::FLAG_READ);
   base::File out(target,
                  base::File::FLAG_CREATE_ALWAYS | base::File::FLAG_WRITE);
@@ -503,7 +529,7 @@ std::optional<Digest> GunzipInto(const base::FilePath& gzipped,
       }
       const size_t produced = output.size() - stream.avail_out;
       digest.size += static_cast<int64_t>(produced);
-      if (size_limit > 0 && digest.size > size_limit) {
+      if (digest.size > limit) {
         ok = false;
         break;
       }

@@ -53,12 +53,16 @@ base::FilePath DesktopPlaces::IconsFolder() const {
 DesktopPlaces PlacesFor(const base::FilePath& data_dir,
                         bool isolated,
                         const base::FilePath& xdg_data_home,
-                        const base::FilePath& xdg_config_home) {
+                        const base::FilePath& xdg_config_home,
+                        bool tools_in_sandbox) {
   DesktopPlaces places;
   places.sandboxed = isolated;
   if (isolated) {
     places.data_home = data_dir.Append("Desktop").Append("share");
     places.config_home = data_dir.Append("Desktop").Append("config");
+    places.runs_tools = tools_in_sandbox;
+    places.tool_environment["XDG_DATA_HOME"] = places.data_home.value();
+    places.tool_environment["XDG_CONFIG_HOME"] = places.config_home.value();
   } else {
     places.data_home = xdg_data_home;
     places.config_home = xdg_config_home;
@@ -202,7 +206,8 @@ std::optional<std::string> DefaultApplicationIn(std::string_view mimeapps,
 }
 
 ToolRun RunTool(const std::vector<std::string>& argv,
-                base::TimeDelta deadline) {
+                base::TimeDelta deadline,
+                const base::EnvironmentMap& environment) {
   ToolRun run;
   int out_pipe[2];
   int err_pipe[2];
@@ -222,6 +227,7 @@ ToolRun RunTool(const std::vector<std::string>& argv,
   options.fds_to_remap.emplace_back(out_write.get(), STDOUT_FILENO);
   options.fds_to_remap.emplace_back(err_write.get(), STDERR_FILENO);
   options.new_process_group = true;
+  options.environment = environment;
   base::Process process = base::LaunchProcess(argv, options);
   out_write.reset();
   err_write.reset();

@@ -1,10 +1,11 @@
 // Copyright 2026 Ardia. Apache-2.0.
 
-#include <sys/stat.h>
 #include <unistd.h>
 
+#include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -59,7 +60,8 @@ const DesktopPlaces& Places() {
         base::nix::GetXDGDirectory(env.get(), "XDG_DATA_HOME",
                                    ".local/share"),
         base::nix::GetXDGDirectory(env.get(), base::nix::kXdgConfigHomeEnvVar,
-                                   base::nix::kDotConfigDir));
+                                   base::nix::kDotConfigDir),
+        CurrentLaunchConfig().TestFlag("desktopTools"));
   }());
   return *places;
 }
@@ -127,19 +129,20 @@ void EnsureUserDesktopEntry(const DesktopPlaces& places,
   base::ImportantFileWriter::WriteFileAtomically(file,
                                                  DesktopEntryText(launcher));
   InstallIcons(places);
-  if (!places.sandboxed) {
+  if (places.runs_tools) {
     RunTool({"update-desktop-database", file.DirName().value()},
-            kToolDeadline);
+            kToolDeadline, places.tool_environment);
   }
 }
 
 std::optional<std::string> Xdg(const DesktopPlaces& places,
                                std::vector<std::string> argv) {
-  if (places.sandboxed) {
+  if (!places.runs_tools) {
     return std::nullopt;
   }
   const bool slow = argv.size() > 1 && (argv[1] == "set" || argv[1] == "default");
-  ToolRun run = RunTool(argv, slow ? kToolDeadline : kQueryDeadline);
+  ToolRun run = RunTool(argv, slow ? kToolDeadline : kQueryDeadline,
+                        places.tool_environment);
   return run.ok ? std::optional<std::string>(run.out) : std::nullopt;
 }
 
@@ -179,10 +182,10 @@ base::DictValue DefaultBrowserState(DesktopPlaces places) {
 base::DictValue SetAsDefaultBrowser(DesktopPlaces places, std::string launcher) {
   EnsureUserDesktopEntry(places, launcher);
   bool set = false;
-  if (!places.sandboxed) {
+  if (places.runs_tools) {
     ToolRun run = RunTool(
         {"xdg-settings", "set", "default-web-browser", kDesktopFile},
-        kSetDeadline);
+        kSetDeadline, places.tool_environment);
     set = run.ok;
     if (!run.ok) {
       Note("system", base::StrCat({"xdg-settings ",
@@ -239,10 +242,74 @@ Profile* OriginalProfile() {
   return profile ? profile->GetOriginalProfile() : nullptr;
 }
 
-bool FileExistsNow(const std::string& text) {
+class FilePresence {
+ public:
+  static FilePresence& Get() {
+    static base::NoDestructor<FilePresence> presence;
+    return *presence;
+  }
+
+  bool Answer(const base::FilePath& path) {
+    if (path.empty()) {
+      return false;
+    }
+    auto known = known_.find(path);
+    const bool answer = known == known_.end() || known->second;
+    Probe(path);
+    return answer;
+  }
+
+  void Probe(const base::FilePath& path) {
+    if (!probing_.insert(path).second) {
+      return;
+    }
+    base::ThreadPool::PostTaskAndReplyWithResult(
+        FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_VISIBLE},
+        base::BindOnce(&base::PathExists, path),
+        base::BindOnce(&FilePresence::Learn, base::Unretained(this), path));
+  }
+
+  void Learn(const base::FilePath& path, bool exists) {
+    probing_.erase(path);
+    if (known_.size() >= kMostKnownPaths && !known_.contains(path)) {
+      known_.clear();
+    }
+    known_[path] = exists;
+  }
+
+ private:
+  friend class base::NoDestructor<FilePresence>;
+  static constexpr size_t kMostKnownPaths = 1024;
+
+  FilePresence() = default;
+
+  std::map<base::FilePath, bool> known_;
+  std::set<base::FilePath> probing_;
+};
+
+void WhenFileExists(const std::string& text,
+                    ModuleReply reply,
+                    base::OnceCallback<base::Value(base::FilePath)> act) {
   const base::FilePath path = NativePath(text);
-  struct stat info;
-  return !path.empty() && stat(path.value().c_str(), &info) == 0;
+  if (path.empty()) {
+    std::move(reply).Run(base::Value(false));
+    return;
+  }
+  base::ThreadPool::PostTaskAndReplyWithResult(
+      FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_VISIBLE},
+      base::BindOnce(&base::PathExists, path),
+      base::BindOnce(
+          [](base::FilePath path, ModuleReply reply,
+             base::OnceCallback<base::Value(base::FilePath)> act,
+             bool exists) {
+            FilePresence::Get().Learn(path, exists);
+            if (!exists) {
+              std::move(reply).Run(base::Value(false));
+              return;
+            }
+            std::move(reply).Run(std::move(act).Run(path));
+          },
+          path, std::move(reply), std::move(act)));
 }
 
 void FileIcon(base::ListValue args, ModuleReply reply) {
@@ -278,8 +345,8 @@ void RegisterSystemModule(ModuleRegistry& registry) {
   registry.Define(kModule)
       .Constant("backgroundInstance", base::Value(Background()))
       .Sync("fileExists", SyncOf([](const base::ListValue& args) {
-              return ModuleResult(
-                  base::Value(FileExistsNow(StringArg(args, 0))));
+              return ModuleResult(base::Value(
+                  FilePresence::Get().Answer(NativePath(StringArg(args, 0)))));
             }))
       .Sync("hapticTick", SyncOf([](const base::ListValue&) {
               return ModuleResult(base::Value());
@@ -382,34 +449,32 @@ void RegisterSystemModule(ModuleRegistry& registry) {
                    base::BindOnce(&ReplyWith, std::move(reply)));
              }))
       .Async("openFile", AsyncOf([](base::ListValue args, ModuleReply reply) {
-               const base::FilePath path = NativePath(StringArg(args, 0));
-               if (path.empty() || !FileExistsNow(path.value())) {
-                 std::move(reply).Run(base::Value(false));
-                 return;
-               }
-               if (!Background()) {
-                 platform_util::OpenItem(OriginalProfile(), path,
-                                         platform_util::OPEN_FILE,
-                                         platform_util::OpenOperationCallback());
-               }
-               std::move(reply).Run(base::Value(true));
+               WhenFileExists(
+                   StringArg(args, 0), std::move(reply),
+                   base::BindOnce([](base::FilePath path) {
+                     if (!Background()) {
+                       platform_util::OpenItem(
+                           OriginalProfile(), path, platform_util::OPEN_FILE,
+                           platform_util::OpenOperationCallback());
+                     }
+                     return base::Value(true);
+                   }));
              }))
       .Async("revealFile", AsyncOf([](base::ListValue args,
                                       ModuleReply reply) {
-               const base::FilePath path = NativePath(StringArg(args, 0));
-               if (path.empty() || !FileExistsNow(path.value())) {
-                 std::move(reply).Run(base::Value(false));
-                 return;
-               }
-               if (!Background()) {
-                 platform_util::ShowItemInFolder(OriginalProfile(), path);
-               }
-               std::move(reply).Run(base::Value(true));
+               WhenFileExists(
+                   StringArg(args, 0), std::move(reply),
+                   base::BindOnce([](base::FilePath path) {
+                     if (!Background()) {
+                       platform_util::ShowItemInFolder(OriginalProfile(), path);
+                     }
+                     return base::Value(true);
+                   }));
              }))
       .Async("moveToTrash", AsyncOf([](base::ListValue args,
                                        ModuleReply reply) {
                const base::FilePath path = NativePath(StringArg(args, 0));
-               if (path.empty() || !FileExistsNow(path.value())) {
+               if (path.empty()) {
                  std::move(reply).Run(base::Value(false));
                  return;
                }
@@ -417,12 +482,21 @@ void RegisterSystemModule(ModuleRegistry& registry) {
                    base::BindOnce(
                        [](base::FilePath path) {
                          return base::Value(
+                             base::PathExists(path) &&
                              RunTool({"gio", "trash", "--", path.value()},
                                      kToolDeadline)
                                  .ok);
                        },
                        path),
-                   base::BindOnce(&ReplyWith, std::move(reply)));
+                   base::BindOnce(
+                       [](base::FilePath path, ModuleReply reply,
+                          base::Value trashed) {
+                         if (trashed.GetBool()) {
+                           FilePresence::Get().Learn(path, false);
+                         }
+                         std::move(reply).Run(std::move(trashed));
+                       },
+                       path, std::move(reply)));
              }))
       .Async("fileIcon", base::BindRepeating(&FileIcon))
       .Async("runningAppIcon", AnswerOf([](const base::ListValue&) {

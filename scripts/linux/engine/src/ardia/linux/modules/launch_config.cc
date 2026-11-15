@@ -51,6 +51,7 @@ const std::set<std::string_view>& TestKeys() {
       "telemetry",         "liveMock",             "calendarFixture",
       "appMenu",           "appDialog",            "loginsTimeout",
       "externalAppLaunch", "nativeDragRefused",    "passwordHelper",
+      "desktopTools",
   });
   return *keys;
 }

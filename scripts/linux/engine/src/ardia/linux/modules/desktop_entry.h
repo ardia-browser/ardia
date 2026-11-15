@@ -9,6 +9,7 @@
 #include <string_view>
 #include <vector>
 
+#include "base/environment.h"
 #include "base/files/file_path.h"
 #include "base/time/time.h"
 
@@ -23,6 +24,8 @@ struct DesktopPlaces {
   base::FilePath data_home;
   base::FilePath config_home;
   bool sandboxed = false;
+  bool runs_tools = true;
+  base::EnvironmentMap tool_environment;
 
   base::FilePath UserDesktopFile() const;
   base::FilePath AutostartFile() const;
@@ -33,7 +36,8 @@ struct DesktopPlaces {
 DesktopPlaces PlacesFor(const base::FilePath& data_dir,
                         bool isolated,
                         const base::FilePath& xdg_data_home,
-                        const base::FilePath& xdg_config_home);
+                        const base::FilePath& xdg_config_home,
+                        bool tools_in_sandbox = false);
 
 std::string QuotedExec(std::string_view path);
 
@@ -57,7 +61,9 @@ struct ToolRun {
   std::string err;
 };
 
-ToolRun RunTool(const std::vector<std::string>& argv, base::TimeDelta deadline);
+ToolRun RunTool(const std::vector<std::string>& argv,
+                base::TimeDelta deadline,
+                const base::EnvironmentMap& environment = {});
 
 }
 

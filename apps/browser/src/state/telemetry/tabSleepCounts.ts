@@ -1,3 +1,5 @@
+import { takeCleanUpCounts } from "./cleanUpCounts";
+
 const none = () => ({ captureIndicatorsCleared: 0, pinnedTabsSleptByMemorySaver: 0, tabsSleptOverBudget: 0, tabsSleptOverBudgetReopened: 0 });
 
 let pending = none();
@@ -43,6 +45,7 @@ export function takeTabSleepCounts() {
     capture_indicators_cleared: taken.captureIndicatorsCleared,
     pinned_tabs_slept_by_memory_saver: taken.pinnedTabsSleptByMemorySaver,
     ...takeProfileUnloadCounts(),
+    ...takeCleanUpCounts(),
     tabs_slept_over_budget: taken.tabsSleptOverBudget,
     tabs_slept_over_budget_reopened: taken.tabsSleptOverBudgetReopened,
   };

@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Fixture Carousel Scrollbar</title>
+<style>
+  html::-webkit-scrollbar { width: 14px; }
+  html::-webkit-scrollbar-thumb { background: #888; }
+  body { margin: 0; }
+  .track { overflow: hidden; width: 600px; }
+  .slides { display: flex; transform: translateX(-2700px); }
+  .slides button { flex: 0 0 300px; height: 80px; }
+  #filler { height: 3000px; }
+  #drawer { position: fixed; top: 0; right: 0; width: 300px; height: 100%; background: #fff; transform: translateX(100%); }
+</style>
+</head>
+<body>
+<div class="track"><div class="slides">
+  <button id="s1">Slide one</button><button id="s2">Slide two</button><button id="s3">Slide three</button>
+</div></div>
+<div id="filler"></div>
+<div id="drawer" role="dialog" aria-modal="true" aria-label="Menu">Menu</div>
+<script>
+  const state = { clicked: [] };
+  for (const id of ["s1", "s2", "s3"]) document.getElementById(id).addEventListener("click", () => state.clicked.push(id));
+</script>
+</body>
+</html>

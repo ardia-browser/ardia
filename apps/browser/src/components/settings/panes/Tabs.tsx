@@ -202,7 +202,7 @@ export function TabsPane() {
 
       <SectionHeader
         title="Clean up"
-        description="Closes tabs you haven't used (and duplicates) automatically, like the tab menu's Clean Up Daily. Pinned, playing and selected tabs stay; cleaned tabs are listed under Recently Cleaned."
+        description="Closes tabs you haven't used (and duplicates) automatically, like the tab menu's Clean Up Daily. It also reaches profiles a window isn't showing. Pinned, playing and selected tabs stay; cleaned tabs are listed under Recently Cleaned."
       />
       <CleanUpRow minutes={cleanUpMinutes} />
     </View>

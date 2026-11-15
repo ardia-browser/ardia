@@ -2,6 +2,7 @@ import { WindowBackdrop } from "./components/ui";
 import { useMemo, useState } from "react";
 import { StyleSheet } from "react-native";
 import { CommandPanel } from "./components/omnibox/CommandPanel";
+import { WindowOverlays } from "./components/window/WindowOverlays";
 import { ContentCard } from "./components/window/ContentCard";
 import { BookmarkDialog } from "./components/bookmarks/BookmarkDialog";
 import { EditBookmarkDialog } from "./components/bookmarks/EditBookmarkDialog";
@@ -93,16 +94,20 @@ function BrowserWindow() {
         {card}
       </DockedLayout>
       <CommandPanel windowWidth={width} />
-      <FolderMenus />
-      <DownloadsPopover />
-      <ExtensionOverlays />
-      <DownloadMagnet />
-      <BookmarkDialog />
-      <EditBookmarkDialog />
-      <CreateProfileHost />
-      <SidebarOverlays windowWidth={width} />
+      <WindowOverlays>
+        <FolderMenus />
+        <DownloadsPopover />
+        <ExtensionOverlays />
+        <DownloadMagnet />
+        <BookmarkDialog />
+        <EditBookmarkDialog />
+        <CreateProfileHost />
+        <SidebarOverlays windowWidth={width} />
+      </WindowOverlays>
       <OnboardingOverlay />
-      <ReportSheetHost />
+      <WindowOverlays>
+        <ReportSheetHost />
+      </WindowOverlays>
     </CrxDropArea>
   );
 }

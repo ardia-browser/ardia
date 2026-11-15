@@ -12,7 +12,7 @@ import { canGoBack, canGoForward } from "../tabs/navigation";
 import type { Bookmarks, BookmarkNode, Tab } from "../browser/types";
 import { isInternalTab } from "../pages/urls";
 import { muteState, muteTitle } from "../tabs/mute";
-import { sidebarMenuState } from "../sidebar/commands";
+import { selectionToCopy, sidebarMenuState } from "../sidebar/commands";
 import { LITTLE_ARDIA_DISABLED_COMMANDS, PAGE_COMMANDS, PAGE_COMMANDS_OFF_INTERNAL_PAGES, settingChecks, WINDOW_COMMANDS } from "../commands/commandCatalog";
 import { extensionMenu } from "../extensions/actions";
 import { menuBarBindings } from "./commandShortcuts";
@@ -74,7 +74,8 @@ export function menuState(s: BrowserState): MenuState {
   if (s.settings.minimalismMode) disabled.push("toggleAddressBar");
   if (!w) disabled.push(...WINDOW_COMMANDS);
   else {
-    if (!page?.url) disabled.push(...PAGE_COMMANDS);
+    const copiesSelection = !peek && selectionToCopy(s, w.id).length > 0;
+    if (!page?.url) disabled.push(...PAGE_COMMANDS.filter((c) => !copiesSelection || (c !== "copyUrl" && c !== "copyUrlAsMarkdown")));
     else if (isInternalTab(page)) disabled.push(...PAGE_COMMANDS_OFF_INTERNAL_PAGES);
     if (!page || !canGoBack(page.id, live ?? IDLE_LIVE)) disabled.push("back");
     if (!page || !canGoForward(page.id, live ?? IDLE_LIVE)) disabled.push("forward");

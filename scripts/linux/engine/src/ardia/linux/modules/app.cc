@@ -519,6 +519,12 @@ void RegisterAppModule(ModuleRegistry& registry) {
             Facts() = std::move(facts);
             Note("app", base::StrCat({"version ", Facts().version, " (",
                                       Facts().build, ")"}));
+            if (ModuleRegistry::Exists()) {
+              ModuleRegistry::Get()
+                  .Define(kModule)
+                  .Constant("appVersion", base::Value(Facts().version))
+                  .Constant("appBuild", base::Value(Facts().build));
+            }
             std::move(release).Run();
           },
           registry.HoldUiLoad()));

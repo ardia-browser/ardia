@@ -15,6 +15,7 @@
     "package:engine": "node ../../../scripts/linux/package-engine.mjs",
     "start": "electron .",
     "test": "node --import ./scripts/test-hooks.mjs --test \"src/**/*.test.ts\"",
+    "test:engine": "node --import ./scripts/test-hooks.mjs --test \"../../../packages/expo-linux/src/chromium/**/*.test.ts\"",
     "test:engine-fake": "node scripts/engine-fake.mjs",
     "typecheck": "tsc -p .",
     "typecheck:chromium": "tsc -p tsconfig.chromium.json"

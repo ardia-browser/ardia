@@ -80,6 +80,8 @@ struct Digest {
 
 std::optional<Digest> DigestOf(const base::FilePath& path);
 
+std::optional<std::string> DetectedLanguage(std::string_view text);
+
 std::optional<Digest> GunzipInto(const base::FilePath& gzipped,
                                  const base::FilePath& target,
                                  int64_t size_limit);

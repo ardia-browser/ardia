@@ -744,6 +744,24 @@ void RegisterTranslateModule(ModuleRegistry& registry) {
              }))
       .Async("prepare", base::BindRepeating(&Prepare))
       .Async("modelFiles", base::BindRepeating(&ModelFiles))
+      .Async("detect", AsyncOf([](base::ListValue args, ModuleReply reply) {
+               const base::Value* text = ArgAt(args, 0);
+               if (!text || !text->is_string()) {
+                 std::move(reply).Run(base::Value());
+                 return;
+               }
+               base::ThreadPool::PostTaskAndReplyWithResult(
+                   FROM_HERE, {base::TaskPriority::USER_VISIBLE},
+                   base::BindOnce(&translate::DetectedLanguage,
+                                  text->GetString().substr(0, 64 * 1024)),
+                   base::BindOnce(
+                       [](ModuleReply reply,
+                          std::optional<std::string> language) {
+                         std::move(reply).Run(language ? base::Value(*language)
+                                                       : base::Value());
+                       },
+                       std::move(reply)));
+             }))
       .Async("count", AnswerOf([](const base::ListValue& args) {
                static constexpr std::string_view kEngineCounts[] = {
                    "translate_engine_failures", "translate_engine_timeouts",

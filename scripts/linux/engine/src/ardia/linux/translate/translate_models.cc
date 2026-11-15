@@ -12,7 +12,9 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
+#include "base/strings/utf_string_conversions.h"
 #include "third_party/boringssl/src/include/openssl/sha.h"
+#include "third_party/cld_3/src/src/nnet_language_identifier.h"
 #include "third_party/re2/src/re2/re2.h"
 #include "third_party/zlib/zlib.h"
 
@@ -413,6 +415,54 @@ std::optional<Digest> DigestOf(const base::FilePath& path) {
   SHA256_Final(hash, &context);
   digest.hash = base::ToLowerASCII(base::HexEncode(hash));
   return digest;
+}
+
+std::optional<std::string> DetectedLanguage(std::string_view text) {
+  constexpr size_t kSampleChars = 4096;
+  constexpr float kMinProbability = 0.5;
+  constexpr std::u16string_view kTraditional =
+      u"這個們說來時會對為國學與後開發經還現種點長車門問間東見話題實際關係電體歷無";
+  constexpr std::u16string_view kSimplified =
+      u"这个们说来时会对为国学与后开发经还现种点长车门问间东见话题实际关系电体历无";
+  std::u16string wide = base::UTF8ToUTF16(text);
+  if (wide.size() > kSampleChars) {
+    wide.resize(kSampleChars);
+  }
+  const std::string sample = base::UTF16ToUTF8(wide);
+  chrome_lang_id::NNetLanguageIdentifier identifier(0, 1000);
+  const chrome_lang_id::NNetLanguageIdentifier::Result found =
+      identifier.FindLanguage(sample);
+  const std::string& language = found.language;
+  if (found.probability < kMinProbability ||
+      language == chrome_lang_id::NNetLanguageIdentifier::kUnknown ||
+      language == "und" || language.ends_with("-Latn")) {
+    return std::nullopt;
+  }
+  if (language == "zh") {
+    int traditional = 0;
+    int simplified = 0;
+    for (char16_t c : wide) {
+      if (kTraditional.find(c) != std::u16string_view::npos) {
+        ++traditional;
+      } else if (kSimplified.find(c) != std::u16string_view::npos) {
+        ++simplified;
+      }
+    }
+    return traditional > simplified ? "zh-Hant" : "zh-Hans";
+  }
+  if (language == "iw") {
+    return "he";
+  }
+  if (language == "fil") {
+    return "tl";
+  }
+  if (language == "no") {
+    return "nb";
+  }
+  if (language == "jw") {
+    return "jv";
+  }
+  return language;
 }
 
 std::optional<Digest> GunzipInto(const base::FilePath& gzipped,

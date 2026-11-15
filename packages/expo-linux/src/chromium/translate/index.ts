@@ -1,6 +1,5 @@
 import { cancelOwner, openOwner, translatePassages, translateTexts, useTranslationHost } from "./engine";
 import type { BrowserModelFiles } from "./worker";
-import { detectLanguage } from "../../../../../apps/browser/linux/src/translate/detect";
 import { callMain } from "../../bridge";
 
 const TRANSLATE = "ArdiaTranslate";
@@ -24,7 +23,6 @@ useTranslationHost({
 export const translateModules: Record<string, Record<string, unknown>> = {
   ArdiaTranslate: {
     languageName,
-    detect: (text: string) => (typeof text === "string" ? detectLanguage(text).catch(() => null) : Promise.resolve(null)),
     translate: (source: string, target: string, texts: string[]) => translateTexts(source, target, texts),
     async translateBlocks(source: string, target: string, blocks: string[][], owner: string) {
       try {

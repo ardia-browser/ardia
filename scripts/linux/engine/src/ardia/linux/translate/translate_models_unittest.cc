@@ -91,6 +91,15 @@ TEST(TranslateModelsTest, GunzipChecksSizeAndHashesWhatItWrote) {
   EXPECT_FALSE(GunzipInto(gz, scratch.GetPath().Append("bad"), 0));
 }
 
+TEST(TranslateModelsTest, DetectsWithChromesLanguageIdentifier) {
+  EXPECT_EQ(DetectedLanguage("Ceci est une phrase en français pour la "
+                             "détection de la langue, avec plusieurs mots."),
+            "fr");
+  EXPECT_EQ(DetectedLanguage("Dies ist ein deutscher Satz, der lang genug "
+                             "ist, um erkannt zu werden."),
+            "de");
+}
+
 TEST(TranslateModelsTest, AManifestCountsOnlyWhenItsFilesAreThere) {
   base::ScopedTempDir scratch;
   ASSERT_TRUE(scratch.CreateUniqueTempDir());

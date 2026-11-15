@@ -13,6 +13,7 @@ source_set("core") {
   deps = [
     "//base",
     "//third_party/boringssl",
+    "//third_party/cld_3/src/src:cld_3",
     "//third_party/re2",
     "//third_party/zlib",
   ]

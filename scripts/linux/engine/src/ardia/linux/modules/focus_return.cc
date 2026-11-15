@@ -48,48 +48,6 @@ bool AnyOfOursActive() {
   return false;
 }
 
-bool OnX11() {
-  return ui::OzonePlatform::GetPlatformNameForTest() == "x11";
-}
-
-std::optional<XFocusState> QueryXFocus(std::set<uint32_t>* ours) {
-  x11::Connection* x = x11::Connection::Get();
-  if (!x || !x->Ready()) {
-    return std::nullopt;
-  }
-  XFocusState state;
-  state.root = static_cast<uint32_t>(x->default_root());
-  uint32_t active = 0;
-  if (x->GetPropertyAs(x->default_root(), x11::GetAtom("_NET_ACTIVE_WINDOW"),
-                       &active)) {
-    state.active = active;
-  } else {
-    auto reply = x->GetInputFocus({}).Sync();
-    if (!reply) {
-      return std::nullopt;
-    }
-    state.focus = static_cast<uint32_t>(reply->focus);
-  }
-  const uint32_t candidate = state.active.value_or(state.focus);
-  uint32_t pid = 0;
-  if (candidate > kPointerRoot && candidate != state.root &&
-      x->GetPropertyAs(static_cast<x11::Window>(candidate),
-                       x11::GetAtom("_NET_WM_PID"), &pid) &&
-      pid == static_cast<uint32_t>(getpid())) {
-    ours->insert(candidate);
-  }
-  for (const std::string& id : AppWindows::Get().Ids()) {
-    AppWindow* window = AppWindows::Get().Find(id);
-    views::Widget* widget = window ? window->widget() : nullptr;
-    if (widget && widget->GetNativeWindow() &&
-        widget->GetNativeWindow()->GetHost()) {
-      ours->insert(static_cast<uint32_t>(
-          widget->GetNativeWindow()->GetHost()->GetAcceleratedWidget()));
-    }
-  }
-  return state;
-}
-
 class FocusReturn {
  public:
   static FocusReturn& Get() {
@@ -151,6 +109,52 @@ bool NothingElseFocused(const XFocusState& state,
   }
   return state.focus == kNone || state.focus == kPointerRoot ||
          state.focus == state.root || ours.contains(state.focus);
+}
+
+bool OnX11() {
+  return ui::OzonePlatform::GetPlatformNameForTest() == "x11";
+}
+
+std::optional<XFocusState> QueryXFocus(std::set<uint32_t>* ours) {
+  x11::Connection* x = x11::Connection::Get();
+  if (!x || !x->Ready()) {
+    return std::nullopt;
+  }
+  XFocusState state;
+  state.root = static_cast<uint32_t>(x->default_root());
+  uint32_t active = 0;
+  if (x->GetPropertyAs(x->default_root(), x11::GetAtom("_NET_ACTIVE_WINDOW"),
+                       &active)) {
+    state.active = active;
+  } else {
+    auto reply = x->GetInputFocus({}).Sync();
+    if (!reply) {
+      return std::nullopt;
+    }
+    state.focus = static_cast<uint32_t>(reply->focus);
+  }
+  const uint32_t candidate = state.active.value_or(state.focus);
+  uint32_t pid = 0;
+  if (candidate > kPointerRoot && candidate != state.root &&
+      x->GetPropertyAs(static_cast<x11::Window>(candidate),
+                       x11::GetAtom("_NET_WM_PID"), &pid) &&
+      pid == static_cast<uint32_t>(getpid())) {
+    ours->insert(candidate);
+  }
+  for (const std::string& id : AppWindows::Get().Ids()) {
+    AppWindow* window = AppWindows::Get().Find(id);
+    views::Widget* widget = window ? window->widget() : nullptr;
+    if (widget && widget->GetNativeWindow() &&
+        widget->GetNativeWindow()->GetHost()) {
+      ours->insert(static_cast<uint32_t>(
+          widget->GetNativeWindow()->GetHost()->GetAcceleratedWidget()));
+    }
+  }
+  return state;
+}
+
+bool OursFocused(const XFocusState& state, const std::set<uint32_t>& ours) {
+  return ours.contains(state.active.value_or(state.focus));
 }
 
 void ReturnFocusSoon(std::string_view preferred_window_id) {

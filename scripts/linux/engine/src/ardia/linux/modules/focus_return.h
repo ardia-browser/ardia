@@ -21,6 +21,12 @@ struct XFocusState {
 bool NothingElseFocused(const XFocusState& state,
                         const std::set<uint32_t>& ours);
 
+bool OursFocused(const XFocusState& state, const std::set<uint32_t>& ours);
+
+bool OnX11();
+
+std::optional<XFocusState> QueryXFocus(std::set<uint32_t>* ours);
+
 }
 
 #endif

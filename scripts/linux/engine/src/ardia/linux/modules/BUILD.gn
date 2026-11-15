@@ -10,6 +10,8 @@ source_set("logic") {
     "desktop_entry.h",
     "document_store.cc",
     "document_store.h",
+    "edge_rules.cc",
+    "edge_rules.h",
     "electron_secrets.cc",
     "electron_secrets.h",
     "file_drop_rules.cc",
@@ -33,6 +35,7 @@ source_set("logic") {
     "//net",
     "//third_party/boringssl",
     "//third_party/re2",
+    "//ui/gfx/geometry",
     "//url",
   ]
 }
@@ -146,6 +149,7 @@ test("ardia_linux_modules_unittests") {
   sources = [
     "desktop_entry_unittest.cc",
     "document_store_unittest.cc",
+    "edge_rules_unittest.cc",
     "electron_secrets_unittest.cc",
     "file_drop_rules_unittest.cc",
     "keychain_records_unittest.cc",
@@ -161,5 +165,6 @@ test("ardia_linux_modules_unittests") {
     "//base/test:run_all_unittests",
     "//base/test:test_support",
     "//testing/gtest",
+    "//ui/gfx/geometry",
   ]
 }

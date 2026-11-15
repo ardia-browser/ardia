@@ -230,18 +230,18 @@ void DocumentStore::Landed(std::string key,
     SettleAll(std::move(waiters), std::nullopt);
     return;
   }
-  SettleAll(std::exchange(slot.waiters, {}), error);
+  std::vector<Settled> waiters = std::exchange(slot.waiters, {});
   const int units =
       std::min(kMostRetryUnits, 2 << std::min(slot.attempt, kLongestRetrySteps));
   ++slot.attempt;
-  if (closed_) {
-    return;
+  if (!closed_) {
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
+        FROM_HERE,
+        base::BindOnce(&DocumentStore::Retry, weak_factory_.GetWeakPtr(), key,
+                       generation),
+        retry_base_ * units);
   }
-  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
-      FROM_HERE,
-      base::BindOnce(&DocumentStore::Retry, weak_factory_.GetWeakPtr(), key,
-                     generation),
-      retry_base_ * units);
+  SettleAll(std::move(waiters), error);
 }
 
 void DocumentStore::Retry(std::string key, int64_t generation) {

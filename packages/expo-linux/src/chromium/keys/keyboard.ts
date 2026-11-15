@@ -2,6 +2,7 @@ import { MODIFIER_ORDER, Modifier, isFunctionKey, isModifierPress, modifierName,
 import { menuStore, type CommandEntry } from "../../../../../apps/browser/linux/src/menus/store";
 import { callMain, callMainSync, mainModules } from "../../bridge";
 import { addNativeListener, emitNativeEvent, type EventSubscription } from "../../events";
+import { appWindowDocument } from "../../windows/appWindows";
 import { DRAG_ESCAPE, INTERNAL_PREFIX, QUIT, SWITCHER_KEY, buildKeyMap, heldModifiersOf, type KeyMapEntry, type KeyModes } from "./keyMap";
 
 type Recorded = { key: string; modifiers: string[] } | null;
@@ -149,6 +150,14 @@ async function quitFromKeyboard() {
   void callMain("ArdiaApp", "quitApp");
 }
 
+const ASKS_BEFORE_CLOSING = new Set(["browser", "small"]);
+
+function closeFromKeyboard(windowId: string) {
+  const kind = appWindowDocument(windowId)?.documentElement.dataset.ardiaKind ?? "browser";
+  if (ASKS_BEFORE_CLOSING.has(kind)) emitNativeEvent("ArdiaAppWindows", "onWindowEvent", { type: "closeRequest", id: windowId });
+  else void callMain("ArdiaAppWindows", "closeWindow", windowId);
+}
+
 function performNative(id: string, windowId: string | null) {
   if (id === "std:miniaturizeAll:") {
     void callMain<string[]>("ArdiaAppWindows", "windowIds").then((ids) => {
@@ -157,7 +166,7 @@ function performNative(id: string, windowId: string | null) {
     return;
   }
   if (!windowId) return;
-  if (id === "std:closeWindow:") void callMain("ArdiaAppWindows", "closeWindow", windowId);
+  if (id === "std:closeWindow:") closeFromKeyboard(windowId);
   else if (id === "std:performMiniaturize:") void callMain("ArdiaAppWindows", "minimizeWindow", windowId);
   else if (id === "std:performZoom:") void callMain("ArdiaAppWindows", "toggleMaximizeWindow", windowId);
   else if (id === "std:toggleFullScreen:") {

@@ -30,6 +30,7 @@ class ExclusiveAccessBubbleViews;
 namespace ardia_linux {
 
 class AppWindow;
+class PopupWindow;
 
 class LocationBarStandIn : public LocationBar {
  public:
@@ -203,6 +204,7 @@ class HostedBrowserWindow : public BrowserWindow,
   void AttachBrowser(Browser* browser);
   Browser* browser() const { return browser_; }
   AppWindow* app_window() const;
+  PopupWindow* popup_window() const;
   std::string window_id() const;
 
   static HostedBrowserWindow* FromWindow(const BrowserWindow* window);

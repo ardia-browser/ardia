@@ -47,6 +47,7 @@ class KeyMap {
   bool Handle(const std::string& window_id,
               content::WebContents* page,
               const input::NativeWebKeyboardEvent& event);
+  bool BuiltIn(const input::NativeWebKeyboardEvent& event) const;
 
  private:
   friend class base::NoDestructor<KeyMap>;
@@ -56,7 +57,6 @@ class KeyMap {
 
   static std::string KeyOf(const std::string& code, int modifiers);
   const Entry* Match(const input::NativeWebKeyboardEvent& event) const;
-  bool BuiltIn(const input::NativeWebKeyboardEvent& event) const;
   void Dispatch(const Entry& entry, const std::string& window_id);
 
   std::map<std::string, Entry> entries_;

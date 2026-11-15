@@ -120,7 +120,7 @@ content::WebContents* PageContentsDelegate::AddNewContents(
     PopupFeatures::FromWebContents(new_contents.get())
         ->set_features(std::move(features));
   }
-  if (IsWindowDisposition(disposition)) {
+  if (disposition == WindowOpenDisposition::NEW_WINDOW) {
     disposition = WindowOpenDisposition::NEW_FOREGROUND_TAB;
   }
   return BrowserWebContentsDelegate::AddNewContents(

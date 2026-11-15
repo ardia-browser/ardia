@@ -22,6 +22,7 @@
 #include "ardia/linux/host/input_region.h"
 #include "ardia/linux/windows/app_window.h"
 #include "ardia/linux/windows/app_windows.h"
+#include "ardia/linux/windows/popup_window.h"
 #include "ardia/win/page_links.h"
 #include "ardia/win/private_sessions.h"
 #include "ardia/win/profiles.h"
@@ -591,11 +592,23 @@ base::DictValue Host::ShowTab(const base::DictValue& args,
         parsed.rects.emplace_back(side(0), side(1), side(2), side(3));
       }
     }
+    if (const base::ListValue* opacity = given->FindList("opacity")) {
+      if (opacity->size() == parsed.rects.size()) {
+        for (const base::Value& value : *opacity) {
+          parsed.opacity.push_back(
+              static_cast<float>(value.GetIfDouble().value_or(1)));
+        }
+      }
+    }
     CountLinux("pageMotions");
     motion = std::move(parsed);
   }
   app->view()->PlacePage(key, place, static_cast<int>(std::lround(radius)),
-                         holes, motion ? &*motion : nullptr);
+                         holes, motion ? &*motion : nullptr,
+                         args.FindDouble("opacity")
+                             ? std::optional<float>(static_cast<float>(
+                                   *args.FindDouble("opacity")))
+                             : std::nullopt);
   RoundedArea area;
   area.rect = gfx::RectF(place);
   area.radius = static_cast<float>(radius);
@@ -991,6 +1004,8 @@ base::DictValue Host::Info() {
   result.Set("privateSessions", PrivateSessions::Get()->LiveSessions());
   result.Set("pageWindows", static_cast<int>(hosted_.size()));
   result.Set("shownPages", static_cast<int>(shown_.size()));
+  result.Set("popupWindows", PopupWindow::Count());
+  result.Set("popupWindowStates", PopupWindow::DebugStates());
   result.Set("testInstance", ardiacore::TestInstance());
   result.Set("keyboardPage", KeyboardPage());
   AppWindow* active = AppWindows::Get().LastActive();
@@ -1194,13 +1209,7 @@ void Host::NoteOpened(Browser* browser,
     payload.Set("popup", true);
   }
   std::string opener_key;
-  content::WebContents* opener = nullptr;
-  if (tabs::TabInterface* opener_tab = model->GetOpenerOfTabAt(index)) {
-    opener = opener_tab->GetContents();
-  }
-  if (!opener) {
-    opener = contents->GetFirstWebContentsInLiveOriginalOpenerChain();
-  }
+  content::WebContents* opener = OpenerOf(model, contents, index);
   if (opener) {
     if (TabState* state = TabState::FromWebContents(opener)) {
       opener_key = state->key();
@@ -1216,6 +1225,58 @@ void Host::NoteOpened(Browser* browser,
     return;
   }
   EmitOpened(std::move(payload), contents->GetWeakPtr(), opener_key, 0);
+}
+
+content::WebContents* Host::OpenerOf(TabStripModel* model,
+                                    content::WebContents* contents,
+                                    int index) const {
+  if (tabs::TabInterface* opener_tab = model->GetOpenerOfTabAt(index)) {
+    return opener_tab->GetContents();
+  }
+  return contents->GetFirstWebContentsInLiveOriginalOpenerChain();
+}
+
+bool Host::OpenInPopupWindow(Browser* browser,
+                             TabStripModel* model,
+                             content::WebContents* contents,
+                             int index) {
+  if (!foreign_.contains(browser) ||
+      browser->GetType() != BrowserWindowInterface::TYPE_POPUP ||
+      PopupWindow::ForBrowser(browser)) {
+    return false;
+  }
+  content::WebContents* opener = OpenerOf(model, contents, index);
+  AppWindow* opener_window =
+      opener ? AppWindows::Get().Find(WindowOfContents(opener)) : nullptr;
+  if (!opener_window) {
+    opener_window = AppWindows::Get().LastActive();
+  }
+  AttachPageHelpers(contents);
+  PopupWindow::Open(browser, contents, PopupFeaturesOf(contents),
+                    opener_window ? opener_window->Bounds() : gfx::Rect());
+  return true;
+}
+
+void Host::OfferPopupAsTab(Browser* browser, content::WebContents* contents) {
+  TabStripModel* model = browser ? browser->GetTabStripModel() : nullptr;
+  const int index =
+      model ? model->GetIndexOfWebContents(contents) : TabStripModel::kNoTab;
+  if (index == TabStripModel::kNoTab) {
+    return;
+  }
+  content::WebContents* opener = OpenerOf(model, contents, index);
+  TabState* opener_state = opener ? TabState::FromWebContents(opener) : nullptr;
+  base::DictValue payload;
+  payload.Set("adopt", kOfferedPrefix +
+                           base::NumberToString(TabState::IdOf(contents)));
+  payload.Set("url", contents->GetVisibleURL().spec());
+  payload.Set("foreground", true);
+  payload.Set("window", false);
+  payload.Set("profile", NameOf(browser->GetProfile()));
+  payload.Set("opener", opener_state ? opener_state->key() : std::string());
+  payload.Set("parent", opener ? WindowOfContents(opener) : std::string());
+  payload.Set("fromClick", false);
+  ardia_win::Emit("tab.opened", std::move(payload));
 }
 
 void Host::EmitOpened(base::DictValue payload,
@@ -1277,6 +1338,10 @@ void Host::OnTabStripModelChanged(TabStripModel* tab_strip_model,
       content::WebContents* contents = inserted.contents;
       TabState* state = TabState::FromWebContents(contents);
       if (state && (!state->key().empty() || state->closed_by_host())) {
+        continue;
+      }
+      if (OpenInPopupWindow(browser, tab_strip_model, contents,
+                            inserted.index)) {
         continue;
       }
       NoteOpened(browser, tab_strip_model, contents, inserted.index,

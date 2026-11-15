@@ -7,6 +7,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <vector>
 
 #include "ardia/win/api.h"
 #include "base/memory/raw_ptr.h"
@@ -77,6 +78,7 @@ class Host : public TabStripModelObserver, public BrowserCollectionObserver {
                  const std::string& key,
                  const ui::MouseEvent& event);
   void BrowserWindowGone(Browser* browser);
+  void OfferPopupAsTab(Browser* browser, content::WebContents* contents);
 
   void OnTabStripModelChanged(
       TabStripModel* tab_strip_model,
@@ -132,6 +134,13 @@ class Host : public TabStripModelObserver, public BrowserCollectionObserver {
   Browser* NewBrowser(const std::string& window, Profile* profile);
   Browser* BrowserOf(content::WebContents* contents) const;
   Browser* OwnerOf(const TabStripModel* model) const;
+  content::WebContents* OpenerOf(TabStripModel* model,
+                                 content::WebContents* contents,
+                                 int index) const;
+  bool OpenInPopupWindow(Browser* browser,
+                         TabStripModel* model,
+                         content::WebContents* contents,
+                         int index);
   bool PlaceTab(content::WebContents* contents, const std::string& window);
   bool MoveTab(content::WebContents* contents, Browser* from, Browser* target);
   void HideTab(const std::string& key);

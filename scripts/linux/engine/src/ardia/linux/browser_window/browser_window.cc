@@ -7,10 +7,12 @@
 #include <utility>
 
 #include "ardia/core/ac_launch_switches.h"
+#include "ardia/linux/app_lifetime.h"
 #include "ardia/linux/host/host.h"
 #include "ardia/linux/host/key_map.h"
 #include "ardia/linux/windows/app_window.h"
 #include "ardia/linux/windows/app_windows.h"
+#include "ardia/linux/windows/popup_window.h"
 #include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/no_destructor.h"
@@ -45,6 +47,7 @@
 #include "ui/color/color_provider_manager.h"
 #include "ui/display/types/display_constants.h"
 #include "ui/events/event_constants.h"
+#include "third_party/blink/public/common/input/web_input_event.h"
 #include "ui/events/keycodes/keyboard_codes.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/native_theme/native_theme.h"
@@ -171,6 +174,36 @@ class BackgroundEyeDropper : public content::EyeDropper {
   base::WeakPtrFactory<BackgroundEyeDropper> weak_factory_{this};
 };
 
+bool IsPopupCloseKey(const input::NativeWebKeyboardEvent& event) {
+  const int modifiers = event.GetModifiers() &
+                        (blink::WebInputEvent::kShiftKey |
+                         blink::WebInputEvent::kControlKey |
+                         blink::WebInputEvent::kAltKey |
+                         blink::WebInputEvent::kMetaKey);
+  const bool control = modifiers == blink::WebInputEvent::kControlKey;
+  return (event.windows_key_code == ui::VKEY_W &&
+          (control || modifiers == (blink::WebInputEvent::kControlKey |
+                                    blink::WebInputEvent::kShiftKey))) ||
+         (event.windows_key_code == ui::VKEY_F4 && control);
+}
+
+content::KeyboardEventProcessingResult PopupKey(
+    PopupWindow* popup,
+    const input::NativeWebKeyboardEvent& event) {
+  if (event.GetType() != blink::WebInputEvent::Type::kRawKeyDown) {
+    return content::KeyboardEventProcessingResult::NOT_HANDLED;
+  }
+  if (IsPopupCloseKey(event)) {
+    popup->CloseFromUser();
+    return content::KeyboardEventProcessingResult::HANDLED;
+  }
+  if (KeyMap::Get().BuiltIn(event)) {
+    AppLifetime::Get().RequestQuit();
+    return content::KeyboardEventProcessingResult::HANDLED;
+  }
+  return content::KeyboardEventProcessingResult::NOT_HANDLED;
+}
+
 }
 
 web_modal::WebContentsModalDialogHost* TabDialogHostFor(
@@ -236,11 +269,18 @@ AppWindow* HostedBrowserWindow::app_window() const {
   return AppWindows::Get().Find(window_id());
 }
 
+PopupWindow* HostedBrowserWindow::popup_window() const {
+  return PopupWindow::ForBrowser(browser_);
+}
+
 void HostedBrowserWindow::DeleteBrowserWindow() {
   delete this;
 }
 
 bool HostedBrowserWindow::IsActive() const {
+  if (PopupWindow* popup = popup_window()) {
+    return popup->IsActive();
+  }
   AppWindow* window = app_window();
   return window && window->KeyboardIsHere();
 }
@@ -262,6 +302,10 @@ bool HostedBrowserWindow::IsFullscreen() const {
 }
 
 gfx::NativeWindow HostedBrowserWindow::GetNativeWindow() const {
+  if (PopupWindow* popup = popup_window()) {
+    return popup->widget() ? popup->widget()->GetNativeWindow()
+                           : gfx::NativeWindow();
+  }
   AppWindow* window = app_window();
   return window && window->widget() ? window->widget()->GetNativeWindow()
                                     : gfx::NativeWindow();
@@ -278,17 +322,28 @@ ui::mojom::WindowShowState HostedBrowserWindow::GetRestoredState() const {
 }
 
 gfx::Rect HostedBrowserWindow::GetBounds() const {
+  if (PopupWindow* popup = popup_window()) {
+    return popup->widget() ? popup->widget()->GetWindowBoundsInScreen()
+                           : gfx::Rect();
+  }
   AppWindow* window = app_window();
   return window ? window->Bounds() : gfx::Rect();
 }
 
 void HostedBrowserWindow::Show() {
+  if (PopupWindow* popup = popup_window()) {
+    popup->Activate();
+    return;
+  }
   if (AppWindow* window = app_window()) {
     window->Focus();
   }
 }
 
 bool HostedBrowserWindow::IsVisible() const {
+  if (PopupWindow* popup = popup_window()) {
+    return popup->widget() && popup->widget()->IsVisible();
+  }
   AppWindow* window = app_window();
   return window && window->widget() && window->widget()->IsVisible();
 }
@@ -306,6 +361,10 @@ void HostedBrowserWindow::Close() {
 }
 
 void HostedBrowserWindow::Activate() {
+  if (PopupWindow* popup = popup_window()) {
+    popup->Activate();
+    return;
+  }
   if (AppWindow* window = app_window()) {
     window->Focus();
   }
@@ -341,6 +400,9 @@ const ui::ThemeProvider* HostedBrowserWindow::GetThemeProvider() const {
 }
 
 const ui::ColorProvider* HostedBrowserWindow::GetColorProvider() const {
+  if (PopupWindow* popup = popup_window(); popup && popup->widget()) {
+    return popup->widget()->GetColorProvider();
+  }
   AppWindow* window = app_window();
   if (window && window->widget()) {
     return window->widget()->GetColorProvider();
@@ -363,6 +425,9 @@ void HostedBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
                                              int reason) {}
 
 gfx::Size HostedBrowserWindow::GetContentsSize() const {
+  if (PopupWindow* popup = popup_window()) {
+    return popup->PageBoundsInScreen().size();
+  }
   AppWindow* window = app_window();
   return window ? window->Bounds().size() : gfx::Size();
 }
@@ -422,6 +487,9 @@ void HostedBrowserWindow::ConfirmBrowserCloseWithPendingDownloads(
 content::KeyboardEventProcessingResult
 HostedBrowserWindow::PreHandleKeyboardEvent(
     const input::NativeWebKeyboardEvent& event) {
+  if (PopupWindow* popup = popup_window()) {
+    return PopupKey(popup, event);
+  }
   content::WebContents* contents =
       browser_ ? browser_->GetTabStripModel()->GetActiveWebContents()
                : nullptr;
@@ -430,6 +498,9 @@ HostedBrowserWindow::PreHandleKeyboardEvent(
 
 bool HostedBrowserWindow::HandleKeyboardEvent(
     const input::NativeWebKeyboardEvent& event) {
+  if (popup_window()) {
+    return false;
+  }
   content::WebContents* contents =
       browser_ ? browser_->GetTabStripModel()->GetActiveWebContents()
                : nullptr;
@@ -442,12 +513,18 @@ std::unique_ptr<FindBar> HostedBrowserWindow::CreateFindBar() {
 
 web_modal::WebContentsModalDialogHost*
 HostedBrowserWindow::GetWebContentsModalDialogHost() {
+  if (PopupWindow* popup = popup_window()) {
+    return popup;
+  }
   return this;
 }
 
 web_modal::WebContentsModalDialogHost*
 HostedBrowserWindow::GetWebContentsModalDialogHostFor(
     content::WebContents* web_contents) {
+  if (PopupWindow* popup = popup_window()) {
+    return popup;
+  }
   if (web_contents && tabs::TabInterface::MaybeGetFromContents(web_contents)) {
     return TabDialogHostFor(web_contents);
   }
@@ -659,12 +736,18 @@ bool HostedBrowserWindow::GetAcceleratorForCommandId(
 }
 
 gfx::NativeView HostedBrowserWindow::GetBubbleParentView() const {
+  if (PopupWindow* popup = popup_window()) {
+    return popup->GetHostView();
+  }
   AppWindow* window = app_window();
   return window && window->widget() ? window->widget()->GetNativeView()
                                     : gfx::NativeView();
 }
 
 gfx::Rect HostedBrowserWindow::GetClientAreaBoundsInScreen() const {
+  if (PopupWindow* popup = popup_window()) {
+    return popup->PageBoundsInScreen();
+  }
   AppWindow* window = app_window();
   return window && window->widget()
              ? window->widget()->GetClientAreaBoundsInScreen()

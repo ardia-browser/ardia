@@ -58,6 +58,8 @@ source_set("linux") {
     "windows/app_window.h",
     "windows/app_windows.cc",
     "windows/app_windows.h",
+    "windows/popup_window.cc",
+    "windows/popup_window.h",
   ]
 
   public_deps = [
@@ -83,8 +85,11 @@ source_set("linux") {
     "//chrome/common:buildflags",
     "//components/input",
     "//components/keep_alive_registry",
+    "//components/security_state/content",
+    "//components/security_state/core",
     "//components/tabs:public",
     "//components/version_info",
+    "//components/vector_icons",
     "//components/viz/common",
     "//components/web_modal",
     "//content/public/app",

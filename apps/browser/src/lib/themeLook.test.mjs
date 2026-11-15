@@ -1,121 +1,136 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+const { DEFAULT_LOOK, RADII, ROW_METRICS, TYPE_SIZES, WEIGHTS, lookDefaults, lookSchemas, lookUse, parseLookBlocks, resolveLook } = await import("./themeLook.ts");
 
-globalThis.__DEV__ = false;
-
-const P = await import("./profileTheme.ts");
-const { profileTheme, PROFILE_COLORS } = await import("./theme.ts");
-const { themeArea, themeBackdrop, sanitizeTheme, opaqueThemeTint, mixOklab, resolveTheme, readableDark, padColor, startingTheme } = P;
-
-const color = (r, g, b) => ({ r, g, b, a: 1 });
-const THEME = {
-  stops: [
-    { x: 0.2, y: 0.3, color: color(0.3, 0.75, 0.45) },
-    { x: 0.8, y: 0.7, color: color(0.85, 0.3, 0.65) },
-    { x: 0.5, y: 0.9, color: { r: 0.2, g: 0.4, b: 0.9, a: 0.8 } },
-  ],
-  intensity: 0.8,
-  mode: "auto",
-  grain: 0,
-  texture: "grain",
-  translucency: 1,
+const parse = (doc) => {
+  const problems = [];
+  return { blocks: parseLookBlocks("themes/t.json", doc, problems), problems };
 };
 
-function diagonalArea(theme, x, y, width, height) {
-  const [c0, c1 = c0, c2] = theme.stops.map((s) => s.color);
-  const short = Math.min(width, height), long = Math.max(width, height);
-  const start = short / 2 - (short * short) / (2 * long);
-  const end = long + short / 2 + (short * short) / (2 * long);
-  const t = Math.min(1, Math.max(0, (x + y - start) / (end - start) / 0.75));
-  const base = mixOklab(c0, c1, t);
-  if (!c2) return base;
-  const a = Math.min(1, Math.max(0, y / height)) * c2.a;
-  return base.map((v, i) => v + ([c2.r, c2.g, c2.b][i] - v) * a);
-}
-
-function near(actual, expected, label) {
-  actual.forEach((v, i) => assert.ok(Math.abs(v - expected[i]) < 1e-9, `${label}: ${actual} vs ${expected}`));
-}
-
-const points = (width, height) => [0, 0.2, 0.5, 0.8, 1].flatMap((u) => [0, 0.3, 0.6, 1].map((v) => [u * width, v * height]));
-
-test("a theme without an angle keeps the fixed top-left to bottom-right diagonal", () => {
-  for (const [width, height] of [[1200, 800], [800, 1200], [1, 1]]) {
-    for (const theme of [THEME, { ...THEME, stops: THEME.stops.slice(0, 2) }]) {
-      for (const [x, y] of points(width, height)) {
-        const old = diagonalArea(theme, x, y, width, height);
-        near(themeArea(theme, x, y, width, height), old, `${width}×${height} at ${x},${y}`);
-        near(themeArea({ ...theme, angle: 135 }, x, y, width, height), old, `135° at ${x},${y}`);
-      }
-    }
-  }
+test("no look blocks, or empty ones, resolve to Ardia's own look object", () => {
+  assert.equal(resolveLook(null), DEFAULT_LOOK);
+  assert.equal(resolveLook({}), DEFAULT_LOOK);
+  assert.equal(resolveLook(parse({ dark: {} }).blocks), DEFAULT_LOOK);
+  assert.deepEqual(DEFAULT_LOOK.sizes, TYPE_SIZES);
+  assert.deepEqual(DEFAULT_LOOK.weights, WEIGHTS);
+  assert.deepEqual(DEFAULT_LOOK.metrics, ROW_METRICS);
+  assert.deepEqual(DEFAULT_LOOK.radii, RADII);
+  assert.equal(DEFAULT_LOOK.family, null);
+  assert.equal(DEFAULT_LOOK.mono, "Menlo");
+  assert.equal(DEFAULT_LOOK.hidden.size, 0);
+  assert.equal(DEFAULT_LOOK.addressField, "top");
+  assert.equal(DEFAULT_LOOK.newTab, null);
+  assert.equal(DEFAULT_LOOK.icons.size, 0);
 });
 
-test("a theme without an angle keeps its old opaque tint corners", () => {
-  const over = (theme, x, y) => {
-    const a = P.themeLayerAlpha(theme);
-    const under = P.themeUnderColor(theme, false);
-    const grey = parseInt(under.slice(1, 3), 16) / 255;
-    return diagonalArea(theme, x, y, 1, 1).map((v) => a * Math.min(1, Math.max(0, v)) + (1 - a) * grey);
-  };
-  const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
-  const [top, bottom] = opaqueThemeTint(THEME, false);
-  hex(top).forEach((v, i) => assert.ok(Math.abs(v - over(THEME, 0, 0)[i]) < 1 / 255 + 1e-6, "top-left"));
-  hex(bottom).forEach((v, i) => assert.ok(Math.abs(v - over(THEME, 1, 1)[i]) < 1 / 255 + 1e-6, "bottom-right"));
+test("type: family, mono, per-size overrides, a scale over every size, and weights", () => {
+  const { blocks, problems } = parse({ type: { family: "Avenir Next", mono: "SF Mono", scale: 1.1, sizes: { body: 14 }, weights: { medium: "600", bold: 800 } } });
+  assert.deepEqual(problems, []);
+  const look = resolveLook(blocks);
+  assert.equal(look.family, "Avenir Next");
+  assert.equal(look.mono, "SF Mono");
+  assert.equal(look.sizes.body, 15.4);
+  assert.equal(look.sizes.small, 13.2);
+  assert.equal(look.sizes.large, 18.7);
+  assert.deepEqual(look.weights, { regular: "400", medium: "600", semibold: "600", bold: "800" });
 });
 
-test("an angle turns the whole gradient, the third colour with it", () => {
-  const turned = { ...THEME, angle: 315 };
-  for (const [x, y] of points(1200, 800)) near(themeArea(turned, x, y, 1200, 800), themeArea(THEME, 1200 - x, 800 - y, 1200, 800), `315° at ${x},${y}`);
-  const across = { ...THEME, stops: THEME.stops.slice(0, 2), angle: 90 };
-  near(themeArea(across, 0, 0, 1200, 800), themeArea(across, 0, 800, 1200, 800), "90° is the same down the left edge");
-  assert.deepEqual(opaqueThemeTint(turned, false), opaqueThemeTint(THEME, false).reverse(), "the tint's corners swap with the turned gradient");
+test("metrics and radii replace Ardia's, each one on its own", () => {
+  const look = resolveLook(parse({ metrics: { rowHeight: 40, rowGap: 6, pinnedHeight: 50, sidebarWidth: 260, radius: { row: 14, pinned: 18, panel: 20 } } }).blocks);
+  assert.deepEqual(look.metrics, { rowHeight: 40, rowGap: 6, pinnedHeight: 50 });
+  assert.equal(look.sidebarWidth, 260);
+  assert.equal(resolveLook(parse({ metrics: { rowHeight: 40 } }).blocks).sidebarWidth, null);
+  assert.equal(look.radii.chrome, 14);
+  assert.equal(look.radii.pinned, 18);
+  assert.equal(look.radii.panel, 20);
+  assert.equal(look.radii.tile, RADII.tile);
+  assert.equal(look.radii.hero, RADII.hero);
 });
 
-test("the angle survives sanitizing, in both looks, and reaches the backdrop", () => {
-  const t = sanitizeTheme({ ...THEME, angle: -45, dark: { ...THEME, angle: 405 } });
-  assert.equal(t.angle, 315);
-  assert.equal(t.dark.angle, 45);
-  assert.equal(themeBackdrop(t, false).themeAngle, 315);
-  const plain = sanitizeTheme({ ...THEME, angle: "east" });
-  assert.ok(!("angle" in plain), "no angle field when there was none to keep");
-  assert.equal(themeBackdrop(plain, false).themeAngle, 135);
-  assert.deepEqual(sanitizeTheme(THEME), THEME, "an old theme loads unchanged");
+test("layout hides named parts and moves the address field and the New Tab row", () => {
+  const look = resolveLook(parse({ layout: { hide: ["pinned", "newTab", "pinned"], addressField: "bottom", newTab: "top" } }).blocks);
+  assert.deepEqual([...look.hidden], ["pinned", "newTab"]);
+  assert.equal(look.addressField, "bottom");
+  assert.equal(look.newTab, "top");
 });
 
-test("a dark look without its own angle keeps the default diagonal, not the light look's angle", () => {
-  const { mode: _mode, ...look } = THEME;
-  const theme = { ...THEME, angle: 270, dark: look };
-  assert.equal(themeBackdrop(resolveTheme(theme, true), true).themeAngle, 135);
-  assert.equal(resolveTheme({ ...theme, dark: { ...look, angle: 0 } }, true).angle, 0);
-  assert.equal(resolveTheme(theme, false).angle, 270);
+test("icons map SF Symbol names to others", () => {
+  const look = resolveLook(parse({ icons: { plus: "plus.circle", "sidebar.left": "rectangle.lefthalf.inset.filled" } }).blocks);
+  assert.equal(look.icons.get("plus"), "plus.circle");
+  assert.equal(look.icons.get("sidebar.left"), "rectangle.lefthalf.inset.filled");
+  assert.equal(look.icons.get("constructor"), undefined);
 });
 
-const solid = (c, extra = {}) => ({ stops: [{ x: 0.5, y: 0.5, color: c }], intensity: 1, mode: "light", grain: 0, texture: "grain", translucency: 0, ...extra });
-
-test("a black theme gets light text even in light mode, and a white one dark text in dark mode", () => {
-  assert.equal(readableDark(solid(color(0, 0, 0)), false), true);
-  assert.equal(readableDark(solid(color(1, 1, 1)), true), false);
-  const black = profileTheme({ color: "plum", theme: solid(color(0, 0, 0)) }, false);
-  assert.equal(black.dark, true);
-  assert.equal(black.textPrimary, "#FFFFFF");
-  assert.equal(black.backdrop.themeAppearance, "dark", "the native backdrop goes dark with the text");
-  const white = profileTheme({ color: "plum", theme: solid(color(1, 1, 1), { mode: "dark" }) }, true);
-  assert.equal(white.dark, false);
-  assert.equal(white.backdrop.themeAppearance, "light");
+test("every bad key or value is reported in the app's words, and the good rest still applies", () => {
+  const { blocks, problems } = parse({
+    type: { family: "", mono: " Menlo", scale: 3, sizes: { body: 40, huge: 30, small: 12 }, weights: { medium: "550", bold: "700" }, color: 1 },
+    metrics: { rowHeight: 10, rowGap: "3", pinnedHeight: 60, radius: { row: 99, card: 4, tile: 6 } },
+    layout: { hide: ["pinned", "toolbar", 3], addressField: "left", newTab: "bottom" },
+    icons: { plus: "", "Bad Name": "x", minus: "minus.circle" },
+  });
+  assert.deepEqual(problems, [
+    "themes/t.json: type.family must be a font family name (1 to 64 characters, no space at either end)",
+    "themes/t.json: type.mono must be a font family name (1 to 64 characters, no space at either end)",
+    "themes/t.json: type.scale must be a number from 0.85 to 1.3",
+    "themes/t.json: type.sizes.body must be a number from 10 to 21",
+    "themes/t.json: type.sizes.huge isn't a text size key (badge, tiny, caption, small, body, title, large)",
+    'themes/t.json: type.weights.medium must be a weight from "100" to "900" in steps of 100',
+    "themes/t.json: type.color isn't a type key (family, mono, scale, sizes, weights)",
+    "themes/t.json: metrics.rowHeight must be a number from 24 to 56",
+    "themes/t.json: metrics.rowGap must be a number from 0 to 12",
+    "themes/t.json: metrics.radius.row must be a number from 0 to 24",
+    "themes/t.json: metrics.radius.card isn't a radius key (row, pinned, tile, control, toolbar, panel, sheet)",
+    'themes/t.json: layout.hide has "toolbar", which isn\'t a part (pinned, newTab, addressField, navButtons, sidebarButton, downloads, profile)',
+    "themes/t.json: layout.hide has 3, which isn't a part (pinned, newTab, addressField, navButtons, sidebarButton, downloads, profile)",
+    "themes/t.json: layout.addressField must be one of top, bottom",
+    "themes/t.json: icons.plus must be an SF Symbol name (lowercase letters, digits and dots)",
+    'themes/t.json: icons has "Bad Name", which isn\'t an SF Symbol name (lowercase letters, digits and dots)',
+  ]);
+  const look = resolveLook(blocks);
+  assert.equal(look.sizes.small, 12);
+  assert.equal(look.weights.bold, "700");
+  assert.equal(look.metrics.pinnedHeight, 60);
+  assert.equal(look.metrics.rowHeight, ROW_METRICS.rowHeight);
+  assert.equal(look.radii.tile, 6);
+  assert.deepEqual([...look.hidden], ["pinned"]);
+  assert.equal(look.newTab, "bottom");
+  assert.equal(look.addressField, "top");
+  assert.deepEqual([...look.icons], [["minus", "minus.circle"]]);
 });
 
-test("no theme the old colour pad could make changes appearance in light mode, nor at its defaults in dark", () => {
-  for (let h = 0; h < 1; h += 0.02) for (let r = 0; r <= 0.5; r += 0.05) {
-    const x = 0.5 + r * Math.cos(h * 2 * Math.PI), y = 0.5 + r * Math.sin(h * 2 * Math.PI);
-    for (const intensity of [0, 0.5, 1]) for (const translucency of [0, 0.5, 1]) {
-      assert.equal(readableDark(solid(padColor(x, y), { intensity, translucency }), false), false, `${x},${y}`);
-    }
-  }
-  for (const spec of Object.values(PROFILE_COLORS)) {
-    const theme = startingTheme(spec.swatch);
-    assert.equal(readableDark(theme, false), false, spec.name);
-    assert.equal(readableDark(theme, true), true, spec.name);
-    assert.equal(profileTheme({ color: "plum", theme }, true).backdrop.themeAppearance, "auto", spec.name);
-  }
+test("a block that isn't an object is reported and ignored", () => {
+  const { blocks, problems } = parse({ type: "Avenir", metrics: [], layout: { hide: "pinned" }, icons: 3 });
+  assert.deepEqual(problems, [
+    "themes/t.json: type must be an object",
+    "themes/t.json: metrics must be an object",
+    "themes/t.json: layout.hide must be a list of parts (pinned, newTab, addressField, navButtons, sidebarButton, downloads, profile)",
+    "themes/t.json: icons must be an object of SF Symbol names",
+  ]);
+  assert.equal(resolveLook(blocks), DEFAULT_LOOK);
+});
+
+test("the schema's defaults are Ardia's own look, and lookDefaults writes the same values", () => {
+  const schemas = lookSchemas();
+  assert.equal(schemas.type.properties.sizes.properties.body.default, TYPE_SIZES.body);
+  assert.equal(schemas.type.properties.mono.default, "Menlo");
+  assert.equal("default" in schemas.type.properties.family, false);
+  assert.equal(schemas.metrics.properties.rowHeight.default, ROW_METRICS.rowHeight);
+  assert.equal("default" in schemas.metrics.properties.sidebarWidth, false, "a new theme leaves the sidebar's width alone");
+  assert.equal(schemas.metrics.properties.radius.properties.row.default, RADII.chrome);
+  assert.equal(schemas.layout.properties.addressField.default, "top");
+  const defaults = lookDefaults();
+  assert.equal(resolveLook(defaults).sizes.body, TYPE_SIZES.body);
+  assert.deepEqual(resolveLook(defaults).metrics, ROW_METRICS);
+  assert.deepEqual(resolveLook(defaults).radii, RADII);
+  assert.equal(resolveLook(defaults).newTab, null);
+  assert.equal(resolveLook(defaults).sidebarWidth, null);
+  assert.equal(resolveLook(defaults).family, null);
+  const { problems } = parse(defaults);
+  assert.deepEqual(problems, []);
+});
+
+test("lookUse counts what a theme changes, as flags and counts only", () => {
+  assert.deepEqual(lookUse(null), { type: false, metrics: false, layout: false, icons: false, hidden: 0, moved: 0, iconOverrides: 0 });
+  const blocks = parse({ type: { family: "Avenir Next" }, layout: { hide: ["pinned", "profile"], addressField: "bottom" }, icons: { plus: "plus.circle" } }).blocks;
+  assert.deepEqual(lookUse(blocks), { type: true, metrics: false, layout: true, icons: true, hidden: 2, moved: 1, iconOverrides: 1 });
 });

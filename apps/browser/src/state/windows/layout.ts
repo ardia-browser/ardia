@@ -1,0 +1,113 @@
+import { create } from "zustand";
+import { autoHidesTabsIn, sidebarSideOf, tabLayoutOf, tabsShownIn } from "../browser/model";
+import { switchOn } from "../../platform/killSwitches";
+import { ARC_LIGHTS_CENTER, lightsCenter, sidebarLightsCenter, toolbarLightsCenter, TOP_STRIP_LIGHTS_CENTER } from "./dockMotion";
+import { onWindowEvent, type LightsPlace } from "../../platform/windows";
+import { DEFAULT_SIDEBAR_WIDTH, pageFrameInsetOf } from "../../lib/windowLayout";
+import { useBrowser, type BrowserState } from "../browser/store";
+import { useWindowId } from "../browser/hooks";
+
+export { frameCornerRadius, windowCornerRadius, windowFrame } from "../../platform/windows";
+
+export function onFullScreenLeft(windowId: string, run: () => void): () => void {
+  const subscription = onWindowEvent((e) => {
+    if (e.type === "fullScreen" && e.id === windowId && !e.on) run();
+  });
+  return () => subscription.remove();
+}
+
+export function useTabLayout(): "sidebar" | "top" {
+  const windowId = useWindowId();
+  return useBrowser((s) => tabLayoutOf(s, windowId));
+}
+
+export const minimalismIn = (s: BrowserState, windowId: string): boolean => s.settings.minimalismMode && s.windows[windowId]?.kind !== "small";
+
+export const useMinimalism = (): boolean => {
+  const windowId = useWindowId();
+  return useBrowser((s) => minimalismIn(s, windowId));
+};
+
+export const sidebarAddressChosen = (settings: Pick<BrowserState["settings"], "addressBar" | "minimalismMode">): boolean =>
+  settings.addressBar === "sidebar" || settings.minimalismMode;
+
+export function addressBarInSidebar(s: BrowserState, windowId: string): boolean {
+  const w = s.windows[windowId];
+  return (
+    !!w &&
+    (s.settings.addressBar === "sidebar" || minimalismIn(s, windowId)) &&
+    (tabsShownIn(s, windowId) || switchOn("sidebarSlide")) &&
+    tabLayoutOf(s, w.id) === "sidebar"
+  );
+}
+
+export function useAddressBarInSidebar(): boolean {
+  const windowId = useWindowId();
+  return useBrowser((s) => addressBarInSidebar(s, windowId));
+}
+
+export function openingLightsCenter(s: BrowserState, windowId: string): LightsPlace | null {
+  const w = s.windows[windowId];
+  if (!w) return null;
+  const open = tabsShownIn(s, windowId);
+  if (tabLayoutOf(s, w.id) === "top") return open ? [...TOP_STRIP_LIGHTS_CENTER] : lightsCenter(DEFAULT_SIDEBAR_WIDTH);
+  const width = s.settings.sidebarWidth;
+  const frame = pageFrameInsetOf(s.settings.pageFrame, {
+    borderlessMode: s.settings.borderlessMode || minimalismIn(s, windowId),
+    zeroInFullScreen: s.settings.pageFrameZeroInFullScreen,
+    fullScreen: !!w.fullScreen,
+    zeroWhenTabsHidden: s.settings.pageFrameZeroWhenTabsHidden,
+    tabsHidden: autoHidesTabsIn(s, windowId),
+  });
+  const base = sidebarAddressChosen(s.settings) ? ARC_LIGHTS_CENTER : toolbarLightsCenter(s.settings.compactToolbar, frame);
+  return sidebarLightsCenter(sidebarSideOf(s, w.id) === "right", width, open ? 0 : width, 0, base);
+}
+
+export function usePageFrameInset(): number {
+  const windowId = useWindowId();
+  return useBrowser((s) =>
+    pageFrameInsetOf(s.settings.pageFrame, {
+      borderlessMode: s.settings.borderlessMode || minimalismIn(s, windowId),
+      zeroInFullScreen: s.settings.pageFrameZeroInFullScreen,
+      fullScreen: !!s.windows[windowId]?.fullScreen,
+      zeroWhenTabsHidden: s.settings.pageFrameZeroWhenTabsHidden,
+      tabsHidden: autoHidesTabsIn(s, windowId),
+    }),
+  );
+}
+
+export const useToolbarLightsCenter = (): readonly [number, number] => toolbarLightsCenter(useBrowser((s) => s.settings.compactToolbar), usePageFrameInset());
+
+type UrlAnchor = { left: number; top: number; width: number; sidebar?: { height: number } };
+
+export const useUrlAnchors = create<Record<string, UrlAnchor>>()(() => ({}));
+
+export function setUrlAnchor(windowId: string, anchor: UrlAnchor) {
+  const current = useUrlAnchors.getState()[windowId];
+  if (current && current.left === anchor.left && current.top === anchor.top && current.width === anchor.width && current.sidebar?.height === anchor.sidebar?.height) return;
+  useUrlAnchors.setState({ [windowId]: anchor });
+}
+
+type CardAnchor = { left: number; top: number; width: number; height: number };
+
+export const useCardAnchors = create<Record<string, CardAnchor>>()(() => ({}));
+
+export function setCardAnchor(windowId: string, anchor: CardAnchor) {
+  const current = useCardAnchors.getState()[windowId];
+  if (current && current.left === anchor.left && current.top === anchor.top && current.width === anchor.width && current.height === anchor.height) return;
+  useCardAnchors.setState({ [windowId]: anchor });
+}
+
+export const useToolbarExtensionsWidths = create<Record<string, number>>()(() => ({}));
+
+export function watchToolbarExtensionsWidth(windowId: string, listener: (width: number | undefined) => void): () => void {
+  listener(useToolbarExtensionsWidths.getState()[windowId]);
+  return useToolbarExtensionsWidths.subscribe((w, prev) => {
+    if (w[windowId] !== prev[windowId]) listener(w[windowId]);
+  });
+}
+
+export function setToolbarExtensionsWidth(windowId: string, width: number) {
+  if (useToolbarExtensionsWidths.getState()[windowId] === width) return;
+  useToolbarExtensionsWidths.setState({ [windowId]: width });
+}

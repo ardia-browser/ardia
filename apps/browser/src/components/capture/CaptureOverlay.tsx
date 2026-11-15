@@ -1,42 +1,37 @@
 import { useEffect, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View, type GestureResponderEvent } from "react-native";
-import { useBrowser } from "../../store/browser";
-import { activeTabId } from "../../store/model";
-import { webviews } from "../../lib/webviews";
-import type { Rect } from "../layout/geometry";
-import { dragRect, paneUnder, type Point } from "./captureGeometry";
-import { endCapture, useCapture } from "./captureState";
+import { Pressable, StyleSheet, View, type GestureResponderEvent } from "react-native";
+import { Box, Text } from "../ui";
+import { useActiveTabId } from "../../state/browser/hooks";
+import { endCapture, finishCapture, useCapturing } from "../../state/capture/capture";
+import { dragRect, type Point, type Rect } from "../../state/capture/captureArea";
+import { CAPTURE_EDGE, CAPTURE_SHADE, CAPTURE_SIZE_GAP } from "./tokens";
 
-const SHADE = "rgba(0,0,0,0.3)";
+const ESCAPE = [{ key: "Escape" }];
 
 export function CaptureOverlay({ windowId, panes, origin, width, height }: {
   windowId: string;
-  panes: Record<string, Rect>;
-  origin: { x: number; y: number } | null;
+  panes: Readonly<Record<string, Rect>>;
+  origin: Point | null;
   width: number;
   height: number;
 }) {
-  const active = useCapture((c) => c.windowId === windowId);
-  const shownTab = useBrowser((s) => activeTabId(s, windowId));
+  const active = useCapturing(windowId);
+  const shownTab = useActiveTabId();
   const [drag, setDrag] = useState<{ from: Point; to: Point } | null>(null);
   const keys = useRef<View>(null);
   const latest = useRef({ panes, origin, width, height });
   latest.current = { panes, origin, width, height };
+  const gesture = useRef<{ from: Point; page: Point } | null>(null);
 
-  const wasActive = useRef(false);
   useEffect(() => {
     if (active) keys.current?.focus();
-    else {
-      setDrag(null);
-      const shown = wasActive.current && activeTabId(useBrowser.getState(), windowId);
-      if (shown) void webviews.get(shown)?.focus();
-    }
-    wasActive.current = active;
-  }, [active, windowId]);
-  useEffect(() => () => endCapture(windowId), [windowId]);
-  useEffect(() => endCapture(windowId), [shownTab, windowId]);
+    else setDrag(null);
+  }, [active]);
+  useEffect(() => () => endCapture(windowId, { refocus: false }), [windowId]);
+  useEffect(() => endCapture(windowId, { refocus: false }), [shownTab, windowId]);
 
-  const gesture = useRef<{ from: Point; page: Point } | null>(null);
+  if (!active || width <= 0) return null;
+
   const pointer = (e: GestureResponderEvent) => ({ x: e.nativeEvent.pageX, y: e.nativeEvent.pageY });
   const dragTo = (e: GestureResponderEvent): Point | null => {
     const g = gesture.current;
@@ -50,31 +45,27 @@ export function CaptureOverlay({ windowId, panes, origin, width, height }: {
     setDrag({ from, to: from });
   };
   const move = (e: GestureResponderEvent) => {
+    const from = gesture.current?.from;
     const to = dragTo(e);
-    if (to) setDrag({ from: gesture.current!.from, to });
+    if (from && to) setDrag({ from, to });
   };
   const finish = (e: GestureResponderEvent) => {
-    const start = gesture.current?.from;
+    const from = gesture.current?.from;
     const to = dragTo(e);
     gesture.current = null;
     setDrag(null);
-    endCapture(windowId);
-    const { panes, origin, width, height } = latest.current;
-    if (!start || !to || !origin) return;
-    const picked = paneUnder(dragRect(start, to, { width, height }), panes);
-    if (!picked) return;
-    const { x, y, width: w, height: h } = picked.rect;
-    void webviews.get(picked.tabId)?.copyRegionToPasteboard([origin.x + x, origin.y + y, w, h]);
+    const now = latest.current;
+    if (!from || !to || !now.origin) return endCapture(windowId);
+    void finishCapture(windowId, dragRect(from, to, now), now.panes, now.origin);
   };
 
-  if (!active || width <= 0) return null;
   const r = drag ? dragRect(drag.from, drag.to, { width, height }) : null;
   return (
     <Pressable
       ref={keys}
       focusable
       enableFocusRing={false}
-      keyDownEvents={[{ key: "Escape" }]}
+      keyDownEvents={ESCAPE}
       onKeyDown={(e) => {
         if (e.nativeEvent.key === "Escape") endCapture(windowId);
       }}
@@ -87,25 +78,26 @@ export function CaptureOverlay({ windowId, panes, origin, width, height }: {
     >
       {r ? (
         <>
-          <View pointerEvents="none" style={{ position: "absolute", left: 0, top: 0, width, height: r.y, backgroundColor: SHADE }} />
-          <View pointerEvents="none" style={{ position: "absolute", left: 0, top: r.y + r.height, width, bottom: 0, backgroundColor: SHADE }} />
-          <View pointerEvents="none" style={{ position: "absolute", left: 0, top: r.y, width: r.x, height: r.height, backgroundColor: SHADE }} />
-          <View pointerEvents="none" style={{ position: "absolute", left: r.x + r.width, top: r.y, right: 0, height: r.height, backgroundColor: SHADE }} />
-          <View pointerEvents="none" style={{ position: "absolute", left: r.x, top: r.y, width: r.width, height: r.height, borderWidth: 1, borderColor: "white" }} />
-          <Text pointerEvents="none" style={[styles.size, { left: r.x, top: r.y + r.height + 6 }]}>
-            {Math.round(r.width)} × {Math.round(r.height)}
-          </Text>
+          <View pointerEvents="none" style={{ position: "absolute", left: 0, top: 0, width, height: r.y, backgroundColor: CAPTURE_SHADE }} />
+          <View pointerEvents="none" style={{ position: "absolute", left: 0, top: r.y + r.height, width, bottom: 0, backgroundColor: CAPTURE_SHADE }} />
+          <View pointerEvents="none" style={{ position: "absolute", left: 0, top: r.y, width: r.x, height: r.height, backgroundColor: CAPTURE_SHADE }} />
+          <View pointerEvents="none" style={{ position: "absolute", left: r.x + r.width, top: r.y, right: 0, height: r.height, backgroundColor: CAPTURE_SHADE }} />
+          <View pointerEvents="none" style={{ position: "absolute", left: r.x, top: r.y, width: r.width, height: r.height, borderWidth: 1, borderColor: CAPTURE_EDGE }} />
+          <Box pointerEvents="none" fill="tooltipFill" radius="control" padX="s" padY="xxs" style={{ position: "absolute", left: r.x, top: r.y + r.height + CAPTURE_SIZE_GAP }}>
+            <Text size="caption" weight="semibold" tone="tooltipText">
+              {Math.round(r.width)} × {Math.round(r.height)}
+            </Text>
+          </Box>
         </>
       ) : (
-        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: SHADE, alignItems: "center", justifyContent: "center" }]}>
-          <Text style={styles.hint}>Drag to copy an area · Esc to cancel</Text>
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: CAPTURE_SHADE, alignItems: "center", justifyContent: "center" }]}>
+          <Box fill="tooltipFill" radius="control" padX="l" padY="s">
+            <Text size="body" weight="semibold" tone="tooltipText">
+              Drag to copy an area · Esc to cancel
+            </Text>
+          </Box>
         </View>
       )}
     </Pressable>
   );
 }
-
-const styles = StyleSheet.create({
-  hint: { fontSize: 13, fontWeight: "600", color: "white", backgroundColor: "rgba(0,0,0,0.55)", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, overflow: "hidden" },
-  size: { position: "absolute", fontSize: 11, fontWeight: "600", color: "white", backgroundColor: "rgba(0,0,0,0.6)", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5, overflow: "hidden" },
-});

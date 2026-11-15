@@ -5,6 +5,9 @@ import { createServer, request as httpRequest } from "node:http";
 import { createServer as createNetServer } from "node:net";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { forBuild, launchVariables, mergeLaunchEnv } from "./launchEnv.mjs";
+
+export { launchVariables, mergeLaunchEnv };
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const here = fileURLToPath(import.meta.url);
@@ -24,7 +27,11 @@ export function parsePort(value) {
 const pidList = (text) => [...new Set(text.split(/\s+/).filter(Boolean).map(Number))].filter((n) => Number.isInteger(n) && n > 0);
 export const commandIsBinary = (command, binary) => command === binary || command.startsWith(`${binary} `);
 export function listenerPids(port) {
-  const r = spawnSync("lsof", ["-nP", "-t", `-iTCP:${port}`, "-sTCP:LISTEN"], { encoding: "utf8", timeout: 5000 });
+  let r;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    r = spawnSync("lsof", ["-nP", "-t", `-iTCP:${port}`, "-sTCP:LISTEN"], { encoding: "utf8", timeout: 20000 });
+    if (!r.error && r.status <= 1) break;
+  }
   if (r.error || r.status > 1) throw new Error(`lsof failed for port ${port}: ${r.error ?? r.stderr}`);
   return pidList(r.stdout);
 }
@@ -36,9 +43,17 @@ export function processInfo(pid) {
   const r = spawnSync("ps", ["-ww", "-p", String(pid), "-o", "lstart=", "-o", "command="], { encoding: "utf8", timeout: 5000 });
   return r.status === 0 ? parseProcessLine(r.stdout) : null;
 }
+export function processTable(columns, tries = 3) {
+  let r;
+  for (let attempt = 0; attempt < tries; attempt++) {
+    r = spawnSync("ps", ["-ww", "-ax", ...columns.flatMap((column) => ["-o", `${column}=`])], { encoding: "utf8", timeout: 20000, maxBuffer: 64 << 20 });
+    if (r.status === 0) return r;
+  }
+  return r;
+}
 export function binaryPids(binary) {
-  const r = spawnSync("ps", ["-ww", "-ax", "-o", "pid=", "-o", "command="], { encoding: "utf8", timeout: 5000, maxBuffer: 64 << 20 });
-  if (r.status !== 0) throw new Error(`ps failed: ${r.stderr}`);
+  const r = processTable(["pid", "command"]);
+  if (r.status !== 0) throw new Error(`ps failed: ${r.error?.code ?? r.signal ?? r.stderr}`);
   return new Set(r.stdout.split("\n").map((l) => /^\s*(\d+)\s+(.*)$/.exec(l))
     .filter((m) => m && commandIsBinary(m[2], binary)).map((m) => Number(m[1])));
 }
@@ -53,7 +68,7 @@ export function ownedCandidate(listeners, before, commandOf, binary) {
 }
 export const realPath = (path) => { try { return realpathSync(path); } catch { return path; } };
 export function spawnedPids(binary, before, port, dataDirs) {
-  const r = spawnSync("ps", ["-ww", "-ax", "-o", "pid=", "-o", "ppid=", "-o", "command="], { encoding: "utf8", timeout: 5000, maxBuffer: 64 << 20 });
+  const r = processTable(["pid", "ppid", "command"]);
   if (r.status !== 0) return [];
   const rows = r.stdout.split("\n").map((l) => /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(l)).filter(Boolean)
     .map((m) => ({ pid: Number(m[1]), ppid: Number(m[2]), command: m[3] }));
@@ -72,9 +87,11 @@ export const isAlive = (pid) => { try { process.kill(pid, 0); return true; } cat
 export const binaryOf = (app) => join(app, "Contents/MacOS",
   execFileSync("plutil", ["-extract", "CFBundleExecutable", "raw", join(app, "Contents/Info.plist")]).toString().trim());
 export const appEnv = (app, env) => {
-  if (basename(binaryOf(app)) !== "Netnyahoo") return env;
-  const legacy = Object.fromEntries(Object.entries(env).filter(([k]) => k.startsWith("ARDIA_")).map(([k, v]) => [`NETNYAHOO_${k.slice("ARDIA_".length)}`, v]));
-  return { ...env, ...legacy };
+  const binary = binaryOf(app);
+  const forThisBuild = forBuild(binary, env);
+  if (basename(binary) !== "Netnyahoo") return forThisBuild;
+  const legacy = Object.fromEntries(Object.entries(forThisBuild).filter(([k]) => k.startsWith("ARDIA_")).map(([k, v]) => [`NETNYAHOO_${k.slice("ARDIA_".length)}`, v]));
+  return { ...forThisBuild, ...legacy };
 };
 export const onScreenWindows = (pid) => JSON.parse(execFileSync("osascript", ["-l", "JavaScript", "-e",
   `ObjC.import("CoreGraphics"); JSON.stringify(ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo($.kCGWindowListOptionOnScreenOnly, 0)))
@@ -295,6 +312,31 @@ class Instance {
   output() { return existsSync(this.log) ? readFileSync(this.log, "utf8") : ""; }
 }
 
+export const UBO_ID = "fajbdaomknpkicfjcpipdmcpoamdmilh";
+
+export async function uboReady(port, { seconds = 90, until = Date.now() + seconds * 1000 } = {}) {
+  const left = () => Math.max(1, until - Date.now());
+  while (Date.now() < until) {
+    const list = await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(Math.min(5000, left())) })
+      .then((r) => r.json(), () => []);
+    const background = list.find((t) => t.type === "background_page" && t.url.includes(UBO_ID));
+    if (background) {
+      const session = await Promise.race([devtools(background), sleep(left()).then(() => null)]).catch(() => null);
+      try {
+        const ready = session && (await session.eval(
+          `self.µBlock?.isReadyPromise ? µBlock.isReadyPromise.then(() => µBlock.supportStats.allReadyAfter ?? "ready") : null`,
+          { timeout: Math.min(10000, left()) },
+        ).catch(() => null));
+        if (ready) return ready;
+      } finally {
+        session?.close();
+      }
+    }
+    await sleep(Math.min(500, left()));
+  }
+  throw new Error(`uBlock Origin wasn't ready within ${seconds} s`);
+}
+
 export async function launch(app, opts = {}) {
   app = resolve(app);
   const installed = (path) => /^\/Applications\/[^/]+\.app(\/|$)/.test(path);
@@ -326,12 +368,13 @@ export async function launch(app, opts = {}) {
   }
   const location = jsMode === "pinned" ? `localhost:${js.port}` : jsMode === "live" ? `localhost:${metroPort}` : jsMode === "none" ? null : jsMode;
   const switches = [opts.switches].flat().filter(Boolean).join(" ");
-  const env = appEnv(app, {
+  const env = appEnv(app, mergeLaunchEnv({
     ARDIA_BACKGROUND: "1", ARDIA_DATA_DIR: data, ARDIA_REMOTE_DEBUGGING_PORT: String(port),
-    ...(location ? { ARDIA_JS_LOCATION: location } : {}),
-    ...(switches ? { ARDIA_CHROMIUM_SWITCHES: switches } : {}),
-    ...opts.env,
-  });
+    ...launchVariables({
+      instance: { ...(location ? { jsLocation: location } : {}), ...(switches ? { chromiumSwitches: switches } : {}), ...opts.instance },
+      test: opts.test, trace: opts.trace, switchOverrides: opts.switchOverrides,
+    }),
+  }, opts.env));
   const log = resolve(opts.log ?? join(data, "app.out.log"));
   const before = binaryPids(binary);
   const launchedAt = Date.now();

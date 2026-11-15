@@ -48,9 +48,8 @@ const white = ([r, g, b]) => r > 235 && g > 235 && b > 235;
 
 let app = null;
 const HELPERS = `
-const C = globalThis.expo.modules.ArdiaCEF;
 const settle = (ms) => new Promise((r) => setTimeout(r, ms));
-const act = (a) => C.chromeWindows().then((ws) => C.devWindow(ws.find((w) => w.hasRoot).window, a));
+const act = (a) => ac.engine.call("windows.list").then((ws) => ac.engine.call("windows.dev", { window: ws.find((w) => w.hasRoot).window, action: a }));
 const shownTab = () => { const s = ac.store.getState(), w = s.windows.w1; return w.activeTabIds[w.profileId]; };
 const covered = () => act("ax").then((ax) => ax.includes("Drag to copy an area"));
 const at = (kind, x, y) => ac.shell.devSetPointer("w1", { x, y }).then(() => act("mouse:" + kind + ":" + x + "," + y)).then(() => settle(40));
@@ -108,7 +107,7 @@ try {
     const before = pasteboard();
     await run(`return press("page").then(() => settle(500));`);
     assert.equal(await run(`return covered();`), true, "covered first");
-    await run(`return globalThis.expo.modules.ArdiaApp.devPostKey("w1", "\\u001b", 53, []).then(() => settle(500));`);
+    await run(`return globalThis.expo.modules.ArdiaDev.devPostKey("w1", "\\u001b", 53, []).then(() => settle(500));`);
     assert.equal(await run(`return covered();`), false, "Esc ends it");
     assert.equal(pasteboard().change, before.change, "the clipboard is untouched");
   });

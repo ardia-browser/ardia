@@ -1,0 +1,15 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Fixture Stalled</title>
+</head>
+<body>
+<h1>Listings</h1>
+<p id="ready">Three openings are listed.</p>
+<script>
+  const port = new URLSearchParams(location.search).get("hang");
+  if (port) document.write(`<img src="http://127.0.0.1:${port}/pixel.png" alt="">`);
+</script>
+</body>
+</html>

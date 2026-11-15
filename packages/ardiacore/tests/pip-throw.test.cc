@@ -1,10 +1,10 @@
-#include "../ios/ArdiaCorePiPThrow.h"
+#include "../ios/ArdiaPiPThrowMath.h"
 
 #include <cstdio>
 #include <cstdlib>
 #include <vector>
 
-using namespace ardiacore_pip_throw;
+using namespace ardia_pip_throw;
 
 static int failures = 0;
 #define CHECK(cond)                                                \
@@ -315,6 +315,35 @@ int main() {
     CHECK(r.x == 1512 + 1920 - 10 - 300 && r.y == -190);
   }
 
+  {
+    CHECK(kSnappedRadius == 9 && kFreeRadius == 6);
+    CHECK(Near(kCornerInset + kSnappedRadius, kBrowserCardInset + kBrowserCardRadius));
+    const Rect zoomed{0, 0, 1512, 949}, beside{1512, -200, 1920, 1055};
+    for (Rect visible : {zoomed, beside})
+      for (Corner corner : {kTopLeft, kTopRight, kBottomLeft, kBottomRight})
+        for (double w : {336.0, 300.4, 468.0}) {
+          const Rect at = CornerFrame(corner, w, 189, visible);
+          CHECK(SnappedCorner(at, visible) == corner);
+          CHECK(CornerRadius(at, visible) == kSnappedRadius);
+          CHECK(CornerRadius(Shifted(at, 1, 0), visible) == kFreeRadius);
+          CHECK(CornerRadius(Shifted(at, 0, -1), visible) == kFreeRadius);
+        }
+    CHECK(SnappedCorner({1157, 19, 336, 189}, zoomed) == kNoCorner);
+    CHECK(CornerRadius({1157, 19, 336, 189}, zoomed) == kFreeRadius);
+    CHECK(SnappedCorner({1166, 10, 336, 189}, zoomed) == kBottomRight);
+    CHECK(SnappedCorner({1166, 10, 336, 189}, beside) == kNoCorner);
+    CHECK(SnappedCorner({1166.4, 10, 335.6, 189}, zoomed) == kBottomRight);
+
+    const Rect docked{0, 70, 1512, 879}, dockHidden{0, 0, 1512, 949}, menuBarHidden{0, 70, 1512, 911};
+    const Rect thrownBottom = CornerFrame(kBottomRight, 336, 189, docked), thrownTop = CornerFrame(kTopLeft, 336, 189, docked);
+    CHECK(CornerRadius(thrownBottom, docked) == kSnappedRadius);
+    CHECK(CornerRadius(thrownBottom, dockHidden) == kFreeRadius);
+    CHECK(CornerRadius(thrownTop, dockHidden) == kSnappedRadius);
+    CHECK(CornerRadius(thrownTop, menuBarHidden) == kFreeRadius);
+    CHECK(CornerRadius(thrownBottom, menuBarHidden) == kSnappedRadius);
+    CHECK(CornerRadius(CornerFrame(kBottomRight, 336, 189, dockHidden), dockHidden) == kSnappedRadius);
+  }
+
   CHECK(FingerDelta(5, 3, true).x == 5 && FingerDelta(5, 3, true).y == -3);
   CHECK(FingerDelta(5, 3, false).x == -5 && FingerDelta(5, 3, false).y == 3);
   CHECK(!SwipeFlings({6, 0}) && SwipeFlings({5, 4}) && SwipeFlings({-7, 0}));
@@ -523,6 +552,61 @@ int main() {
   }
 
   {
+    const Screen primary{{0, 0, 1512, 982}, {0, 0, 1512, 945}};
+    const Screen beside[] = {primary, {{1512, 0, 1920, 1080}, {1512, 0, 1920, 1055}}};
+    const Screen above[] = {primary, {{0, 982, 1920, 1080}, {0, 982, 1920, 1055}}};
+    const Screen offset[] = {primary, {{1512, -200, 1920, 1080}, {1512, -200, 1920, 1055}}};
+    for (int drag = 0; drag < 2; drag++) {
+      Rect w{1000, 400, 468, 263};
+      for (int i = 0; i < 1200; i++) w = drag ? DragStep(w, {1, 0}, beside, 2) : SwipeStep(w, {1, 0}, beside, 2);
+      CHECK(w.x == 2200 && w.y == 400 && Inside(w, beside[1].visible));
+      for (int i = 0; i < 1200; i++) w = drag ? DragStep(w, {-1, 0}, beside, 2) : SwipeStep(w, {-1, 0}, beside, 2);
+      CHECK(w.x == 1000 && w.y == 400 && Inside(w, beside[0].visible));
+
+      Rect up{500, 600, 468, 263};
+      for (int i = 0; i < 700; i++) up = drag ? DragStep(up, {0, 1}, above, 2) : SwipeStep(up, {0, 1}, above, 2);
+      CHECK(up.x == 500 && up.y == 1300 && Inside(up, above[1].visible));
+      for (int i = 0; i < 700; i++) up = drag ? DragStep(up, {0, -1}, above, 2) : SwipeStep(up, {0, -1}, above, 2);
+      CHECK(up.x == 500 && up.y == 600 && Inside(up, above[0].visible));
+
+      Rect level{1000, 400, 468, 263};
+      for (int i = 0; i < 1200; i++) level = drag ? DragStep(level, {1, 0}, offset, 2) : SwipeStep(level, {1, 0}, offset, 2);
+      CHECK(level.x == 2200 && level.y == 400 && Inside(level, offset[1].visible));
+
+      Rect high{1000, 945 - 263, 468, 263};
+      for (int i = 0; i < 1200; i++) high = drag ? DragStep(high, {1, 0}, offset, 2) : SwipeStep(high, {1, 0}, offset, 2);
+      CHECK(high.x == 1511 && high.y == 945 - 263);
+      for (int i = 0; i < 100; i++) high = drag ? DragStep(high, {0, -1}, offset, 2) : SwipeStep(high, {0, -1}, offset, 2);
+      for (int i = 0; i < 700; i++) high = drag ? DragStep(high, {1, 0}, offset, 2) : SwipeStep(high, {1, 0}, offset, 2);
+      CHECK(high.x > 1512 + 468 && Inside(high, offset[1].visible));
+    }
+
+    const Screen only[] = {primary};
+    for (const Screen *layout : {beside, above, offset}) {
+      const Rect onSecond = layout == above ? Rect{500, 1300, 468, 263} : Rect{2200, 400, 468, 263};
+      CHECK(Reachable(onSecond, layout, 2) && !Reachable(onSecond, only, 1));
+      const Rect rescued = Rescue(onSecond, only, 1, 0);
+      CHECK(Reachable(rescued, only, 1) && Inside(rescued, primary.visible));
+    }
+    CHECK(Rescue({2200, 400, 468, 263}, only, 1, 0).x == 1512 - 468 && Rescue({2200, 400, 468, 263}, only, 1, 0).y == 400);
+    CHECK(Rescue({500, 1300, 468, 263}, only, 1, 0).x == 500 && Rescue({500, 1300, 468, 263}, only, 1, 0).y == 945 - 263);
+
+    const Screen docked[] = {primary, {{0, 982, 1512, 1080}, {0, 1052, 1512, 985}}};
+    for (int drag = 0; drag < 2; drag++) {
+      Rect w{500, 600, 468, 263};
+      int outside = 0;
+      for (int i = 0; i < 900; i++) {
+        w = drag ? DragStep(w, {0, 1}, docked, 2) : SwipeStep(w, {0, 1}, docked, 2);
+        if (Shortfall(w, docked, 2) > 1e-9) outside++;
+      }
+      CHECK(outside == 0 && w.y == 1500 && Inside(w, docked[1].visible));
+    }
+    CHECK(Shortfall({500, 840, 468, 263}, docked, 2) <= 1e-9 && !Reachable({500, 840, 468, 263}, docked, 2));
+    CHECK(Shortfall({500, 981, 468, 263}, only, 1) > 0 && Shortfall({500, 981, 468, 263}, above, 2) <= 1e-9);
+    CHECK(Shortfall({100, 774, 400, 225}, only, 1) > 0 && Shortfall({1512 - 28, 400, 468, 263}, only, 1) > 0);
+  }
+
+  {
     SpringState a = SpringAt(500, 0, 0);
     CHECK(Near(a.offset, 500) && Near(a.velocity, 0));
     a = SpringAt(0, 1000, 0);
@@ -545,6 +629,46 @@ int main() {
     double overshoot = 0;
     for (int frame = 0; frame < 600; frame++) overshoot = std::max(overshoot, SpringAt(-1000, 0, frame / 120.0).offset);
     CHECK(overshoot > 0 && overshoot < 2);
+  }
+
+  {
+    const Screen one[] = {{{0, 0, 1512, 982}, {0, 0, 1512, 949}}};
+    const Point grab{186.5, 63};
+    auto placed = [](Rect r) { return Rect{std::round(r.x), std::round(r.y), r.w, r.h}; };
+    Rect stepped{574, 386, 373, 210}, held = stepped;
+    Point pointer{stepped.x + grab.x, stepped.y + grab.y};
+    for (int i = 0; i < 600; i++) {
+      const Point next{pointer.x - 0.5005, pointer.y + 0.3337};
+      stepped = placed(DragStep(stepped, {next.x - pointer.x, next.y - pointer.y}, one, 1));
+      held = placed(DragTo(held, next, grab, one, 1));
+      pointer = next;
+    }
+    CHECK(std::fabs(stepped.x + grab.x - pointer.x) > 100 || std::fabs(stepped.y + grab.y - pointer.y) > 100);
+    CHECK(std::fabs(held.x + grab.x - pointer.x) <= 0.5 && std::fabs(held.y + grab.y - pointer.y) <= 0.5);
+    CHECK(!HeldBack(DragTo(held, pointer, grab, one, 1), pointer, grab));
+
+    Rect w{574, 386, 373, 210};
+    pointer = {w.x + grab.x, w.y + grab.y};
+    bool sawHeld = false;
+    for (int i = 0; i < 400; i++) {
+      pointer.x += 3.37;
+      const Rect next = DragTo(w, pointer, grab, one, 1);
+      sawHeld = sawHeld || HeldBack(next, pointer, grab);
+      w = placed(next);
+    }
+    CHECK(sawHeld && w.maxX() - 1512 > 0 && 1512 - w.x >= kMinVisibleWidth - 1e-9);
+    for (int i = 0; i < 400; i++) {
+      pointer.x -= 3.37;
+      w = placed(DragTo(w, pointer, grab, one, 1));
+    }
+    CHECK(std::fabs(w.x + grab.x - pointer.x) <= 0.5 && std::fabs(w.y + grab.y - pointer.y) <= 0.5);
+
+    Rect top{574, 700, 373, 210};
+    pointer = {top.x + grab.x, top.y + grab.y};
+    for (int i = 0; i < 200; i++) top = placed(DragTo(top, {pointer.x, pointer.y + 2.25 * (i + 1)}, grab, one, 1));
+    CHECK(top.maxY() <= 949 + 1e-9);
+    for (int i = 200; i >= 0; i--) top = placed(DragTo(top, {pointer.x, pointer.y + 2.25 * i}, grab, one, 1));
+    CHECK(Near(top.y, 700) && Near(top.x, 574));
   }
 
   failures += PropertyTest();

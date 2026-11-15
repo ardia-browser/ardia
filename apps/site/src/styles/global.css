@@ -71,6 +71,7 @@ html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   scroll-padding-top: 72px;
+  overscroll-behavior-y: none;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -236,7 +237,8 @@ h3 {
 
 :root:not([data-device="phone"]) .phone-only,
 :root:not([data-device="other"]) .other-only,
-:root[data-device="phone"] .not-phone {
+:root[data-device="phone"] .not-phone,
+:root:not([data-os="ios"]) .ios-only {
   display: none !important;
 }
 

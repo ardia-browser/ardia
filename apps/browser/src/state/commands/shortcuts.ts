@@ -78,7 +78,31 @@ export function parseShortcut(text: string): Shortcut {
   return { key, modifiers: ordered(modifiers) };
 }
 
-export function storedShortcut(stored: readonly string[]): Shortcut {
+const LAYOUT_CODES_OF_FUNCTION_KEYS: Record<string, string> = {
+  "\u001c": "\uf702",
+  "\u001d": "\uf703",
+  "\u001e": "\uf700",
+  "\u001f": "\uf701",
+  "\u0001": "\uf729",
+  "\u0004": "\uf72b",
+  "\u000b": "\uf72c",
+  "\u000c": "\uf72d",
+  "\u007f": "\uf728",
+};
+
+export const isNavigationOrFunctionKey = (key: string) => {
+  const code = key.charCodeAt(0);
+  return Array.from(key).length === 1 && code >= 0xf700 && code <= 0xf8ff;
+};
+
+function recordedAsLayoutCode(stored: readonly string[]): string[] {
+  const functionKey = LAYOUT_CODES_OF_FUNCTION_KEYS[stored[0] ?? ""];
+  if (!functionKey || !stored.includes("function")) return [...stored];
+  return [functionKey, ...stored.slice(1).filter((m) => m !== "function")];
+}
+
+export function storedShortcut(raw: readonly string[]): Shortcut {
+  const stored = recordedAsLayoutCode(raw);
   const key = stored[0] ?? "";
   const modifiers = stored.slice(1).filter(isModifier);
   const shifted = Array.from(key).length === 1 && key !== key.toLowerCase();

@@ -1,13 +1,16 @@
 import { useEffect, type ReactNode } from "react";
 import { View } from "react-native";
+import { space } from "../ui/tokens";
 import { durationTitle } from "../../lib/time";
 import { DEFAULT_SETTINGS, type PeekModifier, type Settings } from "../../state/settings/settings";
 import { ChoiceList, useMockFocus, type ChoiceOption } from "./ChoiceList";
 import { MockPanel, useScreen } from "./Screen";
 import { confirmAnswer, previewLive, PRESET_NAMES, PRESETS, setOnboardingDraft, skipStep, useOnboarding, type Preset, type QuestionId } from "../../state/onboarding/onboarding";
 import { keysOf, questionKeys, useQuestions } from "../../state/onboarding/questions";
+import { placementCard, placementFromCard } from "../../state/omnibox/barPlacement";
 import { StepActions, StepLayout } from "./StepLayout";
-import { CheckRow, OptionRow, Tag } from "./Parts";
+import { OptionCard } from "./OptionCard";
+import { OptionRow } from "./Parts";
 
 export function Page({
   id,
@@ -23,7 +26,7 @@ export function Page({
   id: QuestionId;
   title: string;
   subtitle: string;
-  tag?: ReactNode;
+  tag?: string;
   patch: Partial<Settings>;
   picked: string[];
   preview: ReactNode;
@@ -86,7 +89,7 @@ export function LayoutStep() {
   const preset = useOnboarding((s) => s.preset);
   useEffect(() => previewLive(values), []);
   const preview = <MockPanel settings={mock} focus={focus.focus} />;
-  const tag = <Tag title={styleOf(values, preset)} />;
+  const tag = styleOf(values, preset);
   const top = values.tabLayout === "top";
 
   if (id === "address")
@@ -111,13 +114,13 @@ export function LayoutStep() {
         subtitle="The command bar, for going anywhere."
         tag={tag}
         patch={{ commandBarPlacement: values.commandBarPlacement }}
-        picked={[values.commandBarPlacement === "centred" ? "⌘L opens in the centre" : "⌘L opens under the address"]}
+        picked={[values.commandBarPlacement !== "field" ? "⌘L opens in the centre" : "⌘L opens under the address"]}
         preview={preview}
       >
         <ChoiceList
           options={CMDL_CHOICES}
-          value={values.commandBarPlacement}
-          onChange={(commandBarPlacement) => change({ commandBarPlacement }, true)}
+          value={placementCard(values.commandBarPlacement)}
+          onChange={(card) => change({ commandBarPlacement: placementFromCard(card, values.commandBarPlacement) }, true)}
           mock={focus}
         />
       </Page>
@@ -261,15 +264,16 @@ export function TabsStep() {
         picked={[]}
         preview={preview}
       >
-        <View style={{ gap: 8 }}>
-          <CheckRow title="Top Apps grow with the sidebar" subtitle="Up to four across, as in Arc" value={values.balancedTopApps} onChange={(balancedTopApps) => change({ balancedTopApps })} />
+        <View style={{ gap: space.m }}>
+          <OptionCard control="check" title="Top Apps grow with the sidebar" subtitle="Up to four across, as in Arc" selected={values.balancedTopApps} onPress={() => change({ balancedTopApps: !values.balancedTopApps })} />
           <OptionRow title="Peek a link with" value={values.peekModifier} options={PEEK_WITH} onChange={(peekModifier) => change({ peekModifier })} />
-          <CheckRow title="⌘Z reopens closed tabs" subtitle="Outside text fields, as in Arc" value={values.undoReopensClosedTab} onChange={(undoReopensClosedTab) => change({ undoReopensClosedTab })} />
-          <CheckRow
+          <OptionCard control="check" title="⌘Z reopens closed tabs" subtitle="Outside text fields, as in Arc" selected={values.undoReopensClosedTab} onPress={() => change({ undoReopensClosedTab: !values.undoReopensClosedTab })} />
+          <OptionCard
+            control="check"
             title="⌘-click on a link makes a tab group"
             subtitle="Keeps related tabs together"
-            value={values.cmdClickCreatesTabGroup}
-            onChange={(cmdClickCreatesTabGroup) => change({ cmdClickCreatesTabGroup })}
+            selected={values.cmdClickCreatesTabGroup}
+            onPress={() => change({ cmdClickCreatesTabGroup: !values.cmdClickCreatesTabGroup })}
           />
         </View>
       </Page>

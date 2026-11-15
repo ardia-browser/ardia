@@ -44,6 +44,7 @@ final class QuitFlow {
     guard confirmActiveDownloads() else { return .terminateCancel }
     attempt += 1
     phase = .saving(wait: nil, lateAlert: nil)
+    WindowManager.shared.flushFrameReports()
     ShellEvents.send(.app, ["type": "willQuit"])
     waitForSave()
     return .terminateLater
@@ -94,7 +95,8 @@ final class QuitFlow {
   }
 
   func replyToTerminate(_ ok: Bool) {
-    if case .waitingForUpdater = phase { return }
+    if case .idle = phase { return }
+    if case .waitingForUpdater = phase, ok { return }
     if case .saving(let wait, let lateAlert) = phase {
       wait?.invalidate()
       phase = .saving(wait: nil, lateAlert: nil)

@@ -4,7 +4,7 @@ import { Surface } from "../ui";
 import { useTheme } from "../ui/theme";
 import type { useEasedColor } from "../ui/toolbarColors";
 import { FloatingStrip } from "./context";
-import { CHIP_HAIRLINE, FLARE, ITEM_HEIGHT, ITEM_TOP, RIM_HEIGHT, RIM_WIDTH, STRIP_COLORS, TAB_RADIUS, TAB_TOP, TOP_STRIP_HEIGHT } from "./tokens";
+import { CHIP_HAIRLINE, FLARE, ITEM_HEIGHT, ITEM_TOP, RIM_HEIGHT, RIM_WIDTH, STRIP_COLORS, tabRadius, TAB_TOP, TOP_STRIP_HEIGHT } from "./tokens";
 
 export type Fill = string | ReturnType<typeof useEasedColor>;
 
@@ -18,7 +18,7 @@ export function SelectedTab({ width, band, opaque = false }: { width: number; ba
       top: ITEM_TOP,
       width,
       height: ITEM_HEIGHT,
-      borderRadius: TAB_RADIUS,
+      borderRadius: tabRadius(),
     };
     return (
       <>
@@ -37,6 +37,7 @@ export function SelectedTab({ width, band, opaque = false }: { width: number; ba
   }
   const body = width - 1;
   const fills: Fill[] = [...(opaque ? [theme.windowTint[0]] : []), theme.card, ...(band ? [band] : [])];
+  const rim = STRIP_COLORS[theme.dark ? "dark" : "light"].selectedRim;
   return (
     <View pointerEvents="none" style={{ position: "absolute", left: 0, top: 0, width, height: TOP_STRIP_HEIGHT }}>
       {fills.map((fill, i) => (
@@ -48,8 +49,8 @@ export function SelectedTab({ width, band, opaque = false }: { width: number; ba
               top: TAB_TOP,
               width: body,
               height: TOP_STRIP_HEIGHT - TAB_TOP,
-              borderTopLeftRadius: TAB_RADIUS,
-              borderTopRightRadius: TAB_RADIUS,
+              borderTopLeftRadius: tabRadius(),
+              borderTopRightRadius: tabRadius(),
               backgroundColor: fill,
             }}
           />
@@ -58,10 +59,10 @@ export function SelectedTab({ width, band, opaque = false }: { width: number; ba
         </Fragment>
       ))}
       <Surface
-        cornerRadius={TAB_RADIUS + 0.5}
+        cornerRadius={tabRadius() + 0.5}
         borderWidth={RIM_WIDTH}
-        borderColors={STRIP_COLORS[theme.dark ? "dark" : "light"].selectedRim}
-        style={{ position: "absolute", left: 0, top: TAB_TOP - 0.5, width, height: RIM_HEIGHT }}
+        borderColors={[...rim, rim.at(-1)!]}
+        style={{ position: "absolute", left: 0, top: TAB_TOP - 0.5, width, height: RIM_HEIGHT * 2 }}
       />
     </View>
   );

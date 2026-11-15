@@ -1,5 +1,7 @@
 # ArdiaCore parity: the app's engine API on ArdiaCore
 
+History: the CEF → ArdiaCore cutover ledger (2026-10-01 to 0.2.31); how to run the acceptance checks today is in `docs/testing.md` › "ArdiaCore acceptance".
+
 **The owner chose a full cutover (2026-10-01):** the next release ships ArdiaCore only, and CEF's native side leaves
 the repo. The JS API (once `packages/cef/src`, now `packages/ardiacore/src`, imported as `@ardia/ardiacore`) doesn't
 change: `packages/ardiacore` registers the same Expo modules and view names (`ArdiaCEF`, `ArdiaExtensions`,
@@ -104,37 +106,7 @@ needs.
 
 ## How to build and check it
 
-```bash
-# Engine (once, and after engine/ changes): both apply.sh, then autoninja, under the chromium lock
-#   scripts/agent/engine-build --as <you>   (docs/engine-build.md)
-# App: apps/browser/macos (the only app project; pod install there after adding native files).
-scripts/agent/build-app --as <you>     # into apps/browser/build-<you>; --help
-# Acceptance, hidden (open -g -n, ARDIA_BACKGROUND=1, a scratch data dir); METRO_PORT is a Metro for this checkout.
-METRO_PORT=8081 node packages/ardiacore/scripts/acceptance.mjs apps/browser/build-<you>/Build/Products/Debug/Ardia.app <scratch dir> [check…]
-```
-
-The app (bundle id `com.ardia.browser`, Apple Development signing with the hardened runtime in
-Debug; `scripts/release.sh` signs releases with Developer ID). A Debug build refuses to start without
-`ARDIA_DATA_DIR` (it never falls back to a real profile). A test run hands it its Metro in `ARDIA_INSTANCE` `jsLocation`
-(that launch's argument domain, never written); never `defaults write com.ardia.browser`, the installed app's. Its build stages a copy of the engine framework
-(`packages/ardiacore/scripts/stage-framework.sh`, under the chromium lock, into `ARDIACORE_STAGE_DIR`), links that, and
-`embed.sh` signs the embedded copy with the build's identity.
-
-Test hygiene the run keeps (each was a real failure):
-- Metro is reached through a proxy that refuses its websockets (`/hot`, `/message`), so another session's edits
-  never reload the app mid-run.
-- Every file the app is asked to read lives in the scratch dir: the checkout is under `~/Documents`, and an ad hoc
-  build reading it raises macOS's folder-access prompt and blocks the main thread on it (the extension fixture is
-  copied).
-- Permissions use MIDI and notifications (no macOS prompt behind them), external apps a scheme no app handles;
-  never location or `mailto:`. Camera and microphone only on a copy of the app without the device entitlements
-  (ad hoc, hardened runtime: macOS refuses the devices without asking) and Chrome's fake devices: every hidden
-  instance gets `--use-fake-device-for-media-stream` (ArdiaHost), and with it the engine keeps the microphone on a
-  fake input (`ac_fake_media.mm`), since the fake list's "default" input is the Mac's real one to the audio service and
-  a stream on it raised macOS's microphone dialog on the owner's screen (2026-10-01).
-- A check that needs a page on screen (permission prompts, choosers, context menus) shows it first: Chrome holds
-  those for hidden tabs. Checks that need "no user activation" reload the page first (CDP's `userGesture` leaves
-  one behind).
+Moved to `docs/testing.md` › "ArdiaCore acceptance".
 
 ## Acceptance (hidden instance)
 
@@ -184,6 +156,7 @@ Test hygiene the run keeps (each was a real failure):
 | frozen | `setFrozen(true/false)` on a background page: the page sees freeze and resume |
 | discard | A background tab discarded in place → `onDiscarded` |
 | permission-prompt, popup-blocked | A permission request → the app's prompt → Chrome; a popup without a gesture → `onPopupBlocked` → `openBlockedPopup` |
+| popup-window-full-screen | A sized `window.open` popup and an extension's `chrome.windows.create` popup (a `TYPE_APP_POPUP` Chrome makes its own window for) opened from a full-screen window can join that window's Space (`NSWindowCollectionBehaviorFullScreenAuxiliary`), so macOS doesn't show them on another desktop; from a window that isn't full screen a popup keeps its own full screen |
 | camera-mic-allow | 0.2.21's crash case, on the media copy (above): a camera + microphone getUserMedia is one prompt; Allow starts the stream with both tracks live |
 | permission-answer-once | A double Allow and two more answers straight to the engine decide nothing twice; a late answer to that prompt doesn't answer the tab's next one |
 | permission-element-allow | The `<usermedia>` element (0.2.21's crash path): with macOS "not asked yet" (`--ardia-test-system-media-permission=ask`), one prompt, one Allow, Chrome's "ask macOS" step handled in the engine, no second prompt, the element's stream live |
@@ -290,7 +263,7 @@ over, `-[ArdiaCoreTab setTemporarySource:]`) is the tab a closed window's entry 
 | `onPermission`, `resolvePermission` | done | One answer per prompt (`ac_permissions.mm`): a page's permission element (Chrome's embedded flow) reaches the app only for its site question; the steps after Allow ("ask macOS", "open System Settings", policy) stay in the engine, as Chrome's own view does, and a later step is never a question even if the site's setting was reset meanwhile. 0.2.21 answered those steps with a second Accept and aborted (`camera-mic-allow`, `permission-answer-once`, `permission-element-allow`) |
 | `getExternalAppAllowances`, `removeExternalAppAllowance` | done | |
 | `clearBrowsingData`, `deleteProfileData` | done | A profile never loaded this session is its folder alone |
-| `getContentBlocker`, `setContentBlockerEnabled`, `setFilterListEnabled`, `isContentBlockerAllowed`, `setContentBlockerAllowed` | done | uBlock Origin Lite as a component extension (`loadComponentExtension:`), driven through its runtime messages |
+| `getContentBlocker`, `setContentBlockerEnabled`, `setFilterListEnabled`, `addFilterList`, `removeFilterList`, `isContentBlockerAllowed`, `setContentBlockerAllowed` | done | uBlock Origin as a component extension (`loadComponentExtension:`), driven through its runtime messages; `addFilterList`/`removeFilterList` import and drop custom lists by URL (`applyFilterListSelection` `toImport`/`toRemove`), and other profiles follow them |
 | `setSiteSetting`, `getSiteSettings`, `getSiteSettingsOrigins`, `resetSiteSettings`, `clearSiteData` | done | Chrome's content settings under CEF's type names; the page script's `blockAutoplay` comes from them as on CEF |
 | `setZoom`, `getZoomLevels` | done | |
 | `listPasswords`, `unlockPasswords`, `getPassword`, `savePassword`, `updatePassword`, `deletePassword`, `getNeverSavePasswordOrigins`, `allowSavingPasswords`, `exportPasswords`, `getPasswordAutofill`, `setPasswordAutofill` | done | |
@@ -387,7 +360,7 @@ Plain Chromium code over Chrome's services (`engine/chromium/src/chrome/browser/
 
 | Export | JS functions (`packages/ardiacore/src`) |
 |---|---|
-| `ac_engine_abi_version`, `ac_engine_set_event_sink` | `engineCall`, `onEngineEvent` |
+| `ac_engine_set_event_sink` | `onEngineEvent` |
 | `ac_passwords_*` (list, unlock, reveal, add, update, remove, exceptions, allow, export) | the password functions |
 | `ac_passwords_logins` | none: native only. `ArdiaSync.readPasswords` reads every saved login with its password (both stores, profile store first, blocklisted and empty ones left out; ArdiaSync keeps the first of any two with the same realm and username, compared as Swift strings, so canonically equivalent ones count as one) through `ArdiaEngineBridge.callForSecretReply`, which parses the reply from bytes it then wipes and settles once (the reply, or nil at its deadline); the engine builds the JSON in one reserved buffer and cleanses it after the reply. Any store error, Chrome skipping undecryptable passwords (`SkipUndecryptablePasswords`) or the process-bound backing answers an error, so sync never sees part of a list |
 | `ac_autofill_*` | the address and card functions |

@@ -5,7 +5,7 @@ import { orderChoiceKey } from "../pins/pinChoices";
 import { arrangeParked, arrangePinnedArea, parkedAnchors, parkedAreaKeys, pinnedAnchors, pinnedAreaKeys } from "../pins/pinnedArea";
 import { fromSync } from "../pins/pinOrderChoices";
 import { PIN_TAB, PIN_GROUP, anchorIn, PIN_ORDER, PIN_ROW, ROW, type PinOrderValue, type PinValue } from "./pinRecords";
-import { homeWindow, openWindows, settleChoices, store } from "./pinnedSyncState";
+import { choiceStillOut, homeWindow, openWindows, settleChoices, store } from "./pinnedSyncState";
 import { entryId } from "../sidebar/entryKey";
 
 export function pinnedOrderAdapter(profileId: string): Adapter {
@@ -38,7 +38,7 @@ export function pinnedOrderAdapter(profileId: string): Adapter {
       return {
         values,
         ignore,
-        republish: (k) => choiceOf(k) in chosen && !queued(k),
+        republish: (k) => choiceStillOut(chosen, choiceOf(k), stamp(k)) && !queued(k),
         published: (published) => settleChoices(profileId, Object.fromEntries([...published].map(choiceOf).filter((c) => c in chosen).map((c) => [c, chosen[c]!]))),
       } satisfies Extraction;
     },

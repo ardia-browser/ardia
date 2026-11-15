@@ -6,12 +6,13 @@ import { bookmarkRoots, bookmarkUuidFor, ensureRoots, isBookmarkUuid } from "../
 import { historyOf, historyViewOf, MAX_HISTORY, MAX_VISIT_TIMES, withHistoryList } from "../history/history";
 import { useBrowser } from "../browser/store";
 import { engineProfile } from "../browser/model";
+import { profileOpened } from "../profiles/profileLoading";
 import { isPeekTab } from "../peek/peek";
 import { fromSync } from "../pins/pinOrderChoices";
 import { fromLegacy } from "../../lib/legacy";
 import type { BookmarkNode, HistoryEntry } from "../browser/types";
 import { isWebPageUrl } from "../../lib/url";
-import { BOOKMARK, DEVICE, DEVICE_TABS, HISTORY, SHARE, bookmarkValue, historyValue, passwordValue, recordId, type BookmarkValue, type DeviceRecord, type DeviceTabs, type HistoryValue, type PasswordValue, type ShareRecord } from "./records";
+import { BOOKMARK, DEVICE, DEVICE_TABS, HISTORY, RECEIVES_TABS, SHARE, bookmarkValue, historyValue, passwordValue, recordId, type BookmarkValue, type DeviceRecord, type DeviceTabs, type HistoryValue, type PasswordValue, type ShareRecord } from "./records";
 import { isAsleep } from "../tabs/pageSession";
 
 const store = () => useBrowser.getState();
@@ -49,7 +50,7 @@ export function deviceAdapter(deviceId: string, name: () => string, retired = fa
   return {
     prefix: DEVICE,
     extract: () => ({
-      values: retired ? new Map() : new Map([[`${DEVICE}${deviceId}`, { n: name() } satisfies DeviceRecord]]),
+      values: retired ? new Map() : new Map([[`${DEVICE}${deviceId}`, { n: name(), k: "mac", f: [RECEIVES_TABS] } satisfies DeviceRecord]]),
       ignore: (key) => key !== `${DEVICE}${deviceId}`,
     }),
     apply: () => true,
@@ -297,6 +298,7 @@ export function passwordsAdapter(profileId: string, logins: SealedPasswords = na
   const profile = () => engineProfile(useBrowser.getState(), profileId);
   const keyOf = (origin: string, username: string) => `pws:${origin}\n${username}`;
   const read = async () => {
+    if (!profileOpened(profile())) return null;
     const list = await logins.read(profile());
     if (!list) return null;
     return new Map(list.map((l) => [keyOf(l.origin, l.username), { o: l.origin, u: l.username, s: l.sealed, c: l.created }] as const));
@@ -316,11 +318,12 @@ export function passwordsAdapter(profileId: string, logins: SealedPasswords = na
       const value = passwordValue(v);
       return (value && created.get(keyOf(value.o, value.u))) || undefined;
     },
-    apply: async (visible, changed, base) => {
+    apply: async (visible, changed, base, records) => {
       const local = await read();
       if (!local) return false;
       let ok = true;
       for (const key of changed) {
+        if (records.held()) return false;
         const v = passwordValue(visible.get(key));
         if (visible.has(key) && !v) return false;
         const have = local.get(key);
@@ -328,9 +331,13 @@ export function passwordsAdapter(profileId: string, logins: SealedPasswords = na
         if (have && known?.s !== have.s) continue;
         if (v) {
           if (have?.s === v.s) continue;
-          ok = (await logins.save(profile(), v.o, v.u, v.s, !!have).catch(orWarn(false))) && ok;
+          const saved = await logins.save(profile(), v.o, v.u, v.s, !!have).catch(orWarn(false));
+          if (saved) records.landed(key);
+          ok = saved && ok;
         } else if (have) {
-          ok = (await deletePassword(profile(), have.o, have.u).catch(orWarn(false))) && ok;
+          const deleted = await deletePassword(profile(), have.o, have.u).catch(orWarn(false, "sync delete"));
+          if (deleted) records.landed(key);
+          ok = deleted && ok;
         }
       }
       const landed = (now: Map<string, { s: string }>, key: string) => {
@@ -340,6 +347,7 @@ export function passwordsAdapter(profileId: string, logins: SealedPasswords = na
       };
       let settled = false;
       for (let i = 0; i < 20 && !settled; i++) {
+        if (records.held()) return false;
         const now = await read();
         settled = !!now && [...changed].every((k) => landed(now, k));
         if (!settled) await new Promise((r) => setTimeout(r, 250));

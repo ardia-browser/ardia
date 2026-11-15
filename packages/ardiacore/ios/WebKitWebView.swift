@@ -3,10 +3,14 @@ import WebKit
 
 final class WebKitWebView: WKWebView {
   var onFocus: (() -> Void)?
+  var onPressRefused: (() -> Void)?
+  private var presses = WebKitPagePresses()
   var mediaFrames: [String: WKFrameInfo] = [:]
   var playingFrames = Set<String>()
   let nowPlaying = ArdiaNowPlaying()
   var captureOrigins: [String: Set<String>] = [:]
+  var autoPictureInPictureRule = WebKitAutoPictureInPicture()
+  private var keyUpOfReservedKey: UInt16?
 
   override init(frame: CGRect, configuration: WKWebViewConfiguration) {
     super.init(frame: frame, configuration: configuration)
@@ -38,10 +42,55 @@ final class WebKitWebView: WKWebView {
     if kind == "microphone" { setMicrophoneCaptureState(.none, completionHandler: {}) }
   }
 
+  private func admits(_ event: NSEvent) -> Bool {
+    switch presses.verdict(for: event, on: self) {
+    case .pass: return true
+    case .drop: return false
+    case .refuse:
+      onPressRefused?()
+      return false
+    }
+  }
+
+  override func mouseDown(with event: NSEvent) { if admits(event) { super.mouseDown(with: event) } }
+  override func mouseDragged(with event: NSEvent) { if admits(event) { super.mouseDragged(with: event) } }
+  override func mouseUp(with event: NSEvent) { if admits(event) { super.mouseUp(with: event) } }
+  override func rightMouseDown(with event: NSEvent) { if admits(event) { super.rightMouseDown(with: event) } }
+  override func rightMouseDragged(with event: NSEvent) { if admits(event) { super.rightMouseDragged(with: event) } }
+  override func rightMouseUp(with event: NSEvent) { if admits(event) { super.rightMouseUp(with: event) } }
+  override func otherMouseDown(with event: NSEvent) { if admits(event) { super.otherMouseDown(with: event) } }
+  override func otherMouseDragged(with event: NSEvent) { if admits(event) { super.otherMouseDragged(with: event) } }
+  override func otherMouseUp(with event: NSEvent) { if admits(event) { super.otherMouseUp(with: event) } }
+
   override func becomeFirstResponder() -> Bool {
     let became = super.becomeFirstResponder()
     if became { onFocus?() }
     return became
+  }
+
+  override func performKeyEquivalent(with event: NSEvent) -> Bool {
+    guard (window?.firstResponder as? NSView)?.isDescendant(of: self) == true else { return super.performKeyEquivalent(with: event) }
+    let reserved = ArdiaPerformReservedKey(event)
+    keyUpOfReservedKey = reserved ? event.keyCode : nil
+    return reserved || super.performKeyEquivalent(with: event)
+  }
+
+  override func keyDown(with event: NSEvent) {
+    keyUpOfReservedKey = nil
+    super.keyDown(with: event)
+  }
+
+  override func keyUp(with event: NSEvent) {
+    if keyUpOfReservedKey == event.keyCode {
+      keyUpOfReservedKey = nil
+      return
+    }
+    super.keyUp(with: event)
+  }
+
+  override func resignFirstResponder() -> Bool {
+    keyUpOfReservedKey = nil
+    return super.resignFirstResponder()
   }
 
   override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {

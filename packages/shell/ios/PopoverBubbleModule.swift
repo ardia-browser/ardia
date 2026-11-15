@@ -21,6 +21,7 @@ public class PopoverBubbleModule: Module {
       Prop("bubbleShadowOpacity") { (view: PopoverBubble, v: Double) in view.bubbleShadowOpacity = v }
       Prop("bubbleShadowRadius") { (view: PopoverBubble, v: Double) in view.bubbleShadowRadius = v }
       Prop("bubbleShadowOffsetY") { (view: PopoverBubble, v: Double) in view.bubbleShadowOffsetY = v }
+      Prop("glass") { (view: PopoverBubble, glass: Bool?) in view.glass = glass ?? false }
     }
   }
 }

@@ -2,11 +2,13 @@
 
 #include "chrome/browser/ardia/ac_engine.h"
 
+#include <algorithm>
 #include <map>
 #include <set>
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "base/files/file_path.h"
 #include "base/functional/callback_helpers.h"
@@ -192,9 +194,16 @@ class ExtensionsState : public ProfileState {
               extensions::ExtensionInfoGenerator::ExtensionInfoList infos) {
     Drop(key);
     base::ListValue list;
+    const std::vector<ToolbarActionsModel::ActionId>& toolbar_order =
+        ToolbarActionsModel::Get(profile())->pinned_action_ids();
     for (const auto& info : infos) {
       if (info.type == developer::ExtensionType::kExtension) {
         base::DictValue entry = Entry(info);
+        auto on_toolbar = std::ranges::find(toolbar_order, info.id);
+        if (on_toolbar != toolbar_order.end()) {
+          entry.Set("pinnedIndex",
+                    static_cast<int>(on_toolbar - toolbar_order.begin()));
+        }
         const Extension* extension = Find(profile(), info.id);
         if (extension && !info.disable_reasons.blocked_by_policy &&
             info.state != developer::ExtensionState::kEnabled &&
@@ -486,6 +495,18 @@ AC_PROFILE_CALL(ac_extensions_configure) {
     if (model->IsActionPinned(id) != *pinned) {
       model->SetActionVisibility(id, *pinned);
     }
+  }
+  if (std::optional<int> index = call.args().FindInt("pinnedIndex")) {
+    ToolbarActionsModel* model = ToolbarActionsModel::Get(profile);
+    if (profile->IsOffTheRecord()) {
+      return call.TakeReply().Error(
+          "Toolbar order can't change in a private window");
+    }
+    if (!model->IsActionPinned(id)) {
+      return call.TakeReply().Error("The extension isn't pinned");
+    }
+    const int last = static_cast<int>(model->pinned_action_ids().size()) - 1;
+    model->MovePinnedAction(id, static_cast<size_t>(std::clamp(*index, 0, last)));
   }
   if (std::optional<bool> allow = call.args().FindBool("fileAccess")) {
     extensions::util::SetAllowFileAccess(id, profile, *allow);

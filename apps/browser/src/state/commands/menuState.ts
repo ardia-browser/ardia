@@ -1,12 +1,15 @@
 import type { MenuBookmark, MenuState } from "../../platform/commands";
 import { engineBookmarkRoots, folderChildren, isBookmarked, isWithin, ROOT_TITLES } from "../bookmarks/bookmarks";
 import type { BrowserState } from "../browser/store";
-import { activeTab, bookmarkProfileId, engineProfile, IDLE_LIVE, isPinnedRow, tabLabel, togglePinTitle, windowTitle, tabLayoutOf } from "../browser/model";
+import { changedIds } from "../browser/changes";
+import { activeTab, bookmarkProfileId, engineProfile, IDLE_LIVE, isPinnedRow, tabLabel, togglePinTitle, windowTitle, tabLayoutOf, tabsShownIn } from "../browser/model";
 import { canSwitchEngine, tabEngine } from "../engines/engines";
+import { readerState as readerFor } from "../reader/reader";
 import { peekTabId } from "../peek/peek";
+import { canHideElements } from "../site/hiddenElements";
 import { splitOf } from "../splits/splits";
 import { canGoBack, canGoForward } from "../tabs/navigation";
-import type { Bookmarks, BookmarkNode } from "../browser/types";
+import type { Bookmarks, BookmarkNode, Tab } from "../browser/types";
 import { isInternalTab } from "../pages/urls";
 import { muteState, muteTitle } from "../tabs/mute";
 import { sidebarMenuState } from "../sidebar/commands";
@@ -14,6 +17,7 @@ import { LITTLE_ARDIA_DISABLED_COMMANDS, PAGE_COMMANDS, PAGE_COMMANDS_OFF_INTERN
 import { extensionMenu } from "../extensions/actions";
 import { menuBarBindings } from "./commandShortcuts";
 import { focusedWindowOf } from "../windows/ui";
+import { BOOKMARK_COMMANDS, bookmarksShown } from "../bookmarks/visibility";
 
 function menuBookmarks(b: Bookmarks, folderId: string, depth = 0): MenuBookmark[] {
   return folderChildren(b, folderId).map((n: BookmarkNode) =>
@@ -66,7 +70,8 @@ export function menuState(s: BrowserState): MenuState {
 
   const disabled: string[] = [];
   if (!tab || !splitOf(s, tab.id)) disabled.push("focusNextPane", "focusPreviousPane");
-  if (w && tabLayoutOf(s, w.id) === "top") disabled.push("toggleAddressBar");
+  if (w && tabLayoutOf(s, w.id) === "top") disabled.push("toggleAddressBar", "toggleSidebarSide");
+  if (s.settings.minimalismMode) disabled.push("toggleAddressBar");
   if (!w) disabled.push(...WINDOW_COMMANDS);
   else {
     if (!page?.url) disabled.push(...PAGE_COMMANDS);
@@ -78,13 +83,16 @@ export function menuState(s: BrowserState): MenuState {
     else if (tab) disabled.push(`moveTabToProfile:${tab.profileId}`);
     if (regularWindows.length < 2) disabled.push("mergeAllWindows");
   }
+  const showBookmarks = bookmarksShown(s.settings);
+  if (!showBookmarks) disabled.push(...BOOKMARK_COMMANDS);
   if (!s.closedTabs.length && !s.closedWindows.length && !s.closedGroups.length) disabled.push("reopenClosedTab");
   if (!s.closedWindows.length) disabled.push("reopenClosedWindow");
 
   const checked = settingChecks(s.settings);
   if (s.settings.addressBar === "sidebar") checked.push("toggleAddressBar");
+  if (s.settings.sidebarSide === "right") checked.push("toggleSidebarSide");
   if (tabLayoutOf(s, windowId) === "sidebar") checked.push("toggleTabLayout");
-  if (w && !w.sidebarOpen) checked.push("toggleSidebar");
+  if (w && !tabsShownIn(s, w.id)) checked.push("toggleSidebar");
 
   const titles: Record<string, string> = {};
   if (tab?.pin) titles.togglePin = togglePinTitle(tab);
@@ -93,11 +101,15 @@ export function menuState(s: BrowserState): MenuState {
   if (page) titles.toggleMute = muteTitle(muteState(s, page));
   if (page && tabEngine(s, page.id) === "webkit") titles.togglePageEngine = "Open Page in Chromium";
   if (!canSwitchEngine(page?.url)) disabled.push("togglePageEngine");
+  const reader = page ? readerFor(page.id) : undefined;
+  if (reader?.active) titles.toggleReader = "Hide Reader";
+  if (!reader?.active && !reader?.available) disabled.push("toggleReader");
   if (page?.url && isBookmarked(s, bookmarkProfile, page.url)) {
     titles.bookmarkPage = "Edit Bookmark…";
   }
 
   if (!s.settings.openLinksInLittleArdia) titles.toggleOpenLinksInLittleArdia = "Open Links from Other Apps in Little Ardia";
+  if (!page || !canHideElements(s, page.id)) disabled.push("hideElement", "showHiddenElements");
 
   const sidebar = sidebarMenuState(s, windowId);
   disabled.push(...sidebar.disabled);
@@ -111,9 +123,12 @@ export function menuState(s: BrowserState): MenuState {
     titles.openFile = "Open in Ardia";
   }
 
+  const listed = (profileId: string | undefined) => !w || w.kind === "private" || (profileId && s.profiles[profileId] ? profileId : s.settings.defaultProfileId) === w.profileId;
   const closed = [
-    ...s.closedTabs.filter((c) => !c.tab.profileId.startsWith("incognito:")).map((c) => ({ id: c.id, title: c.tab.title || tabLabel(c.tab), at: c.closedAt })),
-    ...s.closedWindows.map((c) => ({ id: c.id, title: c.tabs.length === 1 ? "Window (1 Tab)" : `Window (${c.tabs.length} Tabs)`, at: c.closedAt })),
+    ...s.closedTabs
+      .filter((c) => !c.tab.profileId.startsWith("incognito:") && listed(c.tab.profileId))
+      .map((c) => ({ id: c.id, title: c.tab.title || tabLabel(c.tab), at: c.closedAt })),
+    ...s.closedWindows.filter((c) => listed(c.window.profileId)).map((c) => ({ id: c.id, title: c.tabs.length ? (c.tabs.length === 1 ? "Window (1 Tab)" : `Window (${c.tabs.length} Tabs)`) : "Window (Pinned Tabs)", at: c.closedAt })),
   ]
     .sort((a, b) => b.at - a.at)
     .slice(0, 10)
@@ -126,6 +141,7 @@ export function menuState(s: BrowserState): MenuState {
     profiles: s.profileOrder.map((id) => ({ id, title: s.profiles[id]!.name, current: w?.profileId === id })),
     windows: w?.kind === "private" ? [] : regularWindows.filter((id) => id !== windowId).map((id) => ({ id, title: windowTitle(s, id) })),
     ...bookmarkMenus(s.bookmarks, engineProfile(s, bookmarkProfile)),
+    bookmarksShown: showBookmarks,
     recentlyClosed: closed,
     recentlyClosedGroups: sidebar.recentlyClosedGroups,
     warnBeforeQuitting: s.settings.warnBeforeQuitting,
@@ -134,4 +150,52 @@ export function menuState(s: BrowserState): MenuState {
     downloadsInProgress: s.downloads.filter((d) => d.state === "downloading").length,
     shortcuts: menuBarBindings(s),
     extensions: extensionMenu(s, windowId) };
+}
+
+export type MenuReads = ReadonlySet<keyof BrowserState>;
+
+export function trackedMenuState(s: BrowserState): { state: MenuState; reads: MenuReads } {
+  const reads = new Set<keyof BrowserState>();
+  const tracked = new Proxy(s, {
+    get(target, key, receiver) {
+      if (typeof key === "string") reads.add(key as keyof BrowserState);
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  return { state: menuState(tracked), reads };
+}
+
+export const HIDDEN_TAB_FIELDS_IN_MENU = ["id", "windowId", "profileId", "pin"] as const satisfies readonly (keyof Tab)[];
+
+function shownOrSelected(s: BrowserState, tab: Tab): boolean {
+  const w = s.windows[tab.windowId];
+  if (!w) return true;
+  for (const profile in w.activeTabIds) if (w.activeTabIds[profile] === tab.id) return true;
+  return s.peeks[tab.windowId]?.tabId === tab.id || !!s.selection[tab.windowId]?.includes(tab.id);
+}
+
+function tabsChangedForMenu(s: BrowserState, prev: BrowserState): boolean {
+  for (const id of changedIds(s.tabs, prev.tabs)) {
+    const now = s.tabs[id];
+    const was = prev.tabs[id];
+    if (!now || !was || shownOrSelected(s, now)) return true;
+    for (const field of HIDDEN_TAB_FIELDS_IN_MENU) if (now[field] !== was[field]) return true;
+  }
+  return false;
+}
+
+function liveChangedForMenu(s: BrowserState, prev: BrowserState): boolean {
+  for (const id of changedIds(s.live, prev.live)) {
+    const tab = s.tabs[id];
+    if (tab && shownOrSelected(s, tab)) return true;
+  }
+  return false;
+}
+
+export function menuInputsChanged(reads: MenuReads, s: BrowserState, prev: BrowserState): boolean {
+  for (const key of reads) {
+    if (s[key] === prev[key]) continue;
+    if (key === "tabs" ? tabsChangedForMenu(s, prev) : key === "live" ? liveChangedForMenu(s, prev) : true) return true;
+  }
+  return false;
 }

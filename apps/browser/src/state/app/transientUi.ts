@@ -5,6 +5,7 @@ import { activeTabId } from "../browser/model";
 import { useExtensions } from "../extensions/store";
 import { pointerOnCard } from "../sidebar/hover";
 import { sidebarUi, useSidebarUi } from "../sidebar/sidebarUi";
+import { profileIconPickerIn, useProfileIconPicker } from "../profiles/iconPicker";
 import { useHistoryMenu } from "../tabs/navigation";
 import { usePages } from "../tabs/pageState";
 import { addressBarInSidebar } from "../windows/layout";
@@ -12,8 +13,8 @@ import { peekShown } from "../windows/dockMotion";
 import { useToolbarAutoHide } from "../windows/toolbarAutoHide";
 import { focusedWindowOf } from "../windows/ui";
 
-export type Surface = "menu" | "rename" | "iconPicker" | "hoverCard" | "downloads" | "popover" | "panel" | "find" | "historyMenu" | "extensionPopup";
-export type Held = "peek" | "toolbar" | "hover";
+export type Surface = "menu" | "rename" | "iconPicker" | "hoverCard" | "resize" | "downloads" | "popover" | "panel" | "find" | "historyMenu" | "extensionPopup";
+export type Held = "peek" | "topStrip" | "toolbar" | "hover";
 type Chrome = "sidebar" | "toolbar";
 type Where = { windowId: string; chrome: Chrome | null; tab: (tabId: string) => boolean };
 type Watch = (changed: () => void) => () => void;
@@ -21,6 +22,7 @@ type MenuOrigin = { windowId: string; sidebar: boolean; toolbarTabs: string[] };
 
 const onBrowser: Watch = (changed) => useBrowser.subscribe(changed);
 const onSidebarUi: Watch = (changed) => useSidebarUi.subscribe(changed);
+const onProfileIconPicker: Watch = (changed) => useProfileIconPicker.subscribe(changed);
 const onPages: Watch = (changed) => usePages.subscribe(changed);
 const onHistoryMenu: Watch = (changed) => useHistoryMenu.subscribe(changed);
 const onExtensions: Watch = (changed) => useExtensions.subscribe(changed);
@@ -50,8 +52,9 @@ function menuHolds(at: Where): boolean {
 const SURFACES: Record<Surface, { open: (at: Where) => boolean; watch: Watch[] }> = {
   menu: { open: menuHolds, watch: [watchMenus] },
   rename: { open: (at) => sidebarUi().renaming?.windowId === at.windowId, watch: [onSidebarUi] },
-  iconPicker: { open: (at) => sidebarUi().iconPicker?.windowId === at.windowId, watch: [onSidebarUi] },
+  iconPicker: { open: (at) => sidebarUi().iconPicker?.windowId === at.windowId || profileIconPickerIn(at.windowId), watch: [onSidebarUi, onProfileIconPicker, onBrowser] },
   hoverCard: { open: (at) => sidebarUi().hover?.windowId === at.windowId && pointerOnCard(), watch: [onSidebarUi] },
+  resize: { open: (at) => at.windowId in sidebarUi().dragWidth, watch: [onSidebarUi] },
   downloads: { open: (at) => !!browser().windowUi[at.windowId]?.downloadsOpen, watch: [onBrowser] },
   panel: { open: (at) => !!browser().windowUi[at.windowId]?.panel.open, watch: [onBrowser] },
   popover: { open: (at) => Object.entries(usePages.getState().popover).some(([id, open]) => !!open && at.tab(id)), watch: [onPages, onBrowser] },
@@ -61,7 +64,8 @@ const SURFACES: Record<Surface, { open: (at: Where) => boolean; watch: Watch[] }
 };
 
 export const HOLDS: Record<Held, { chrome: Chrome | null; surfaces: Surface[] }> = {
-  peek: { chrome: "sidebar", surfaces: ["menu", "rename", "iconPicker", "hoverCard", "downloads", "popover"] },
+  peek: { chrome: "sidebar", surfaces: ["menu", "rename", "iconPicker", "hoverCard", "resize", "downloads", "popover", "historyMenu"] },
+  topStrip: { chrome: null, surfaces: ["menu", "downloads"] },
   toolbar: { chrome: "toolbar", surfaces: ["menu", "panel", "find", "popover", "historyMenu", "extensionPopup"] },
   hover: { chrome: null, surfaces: ["menu", "rename", "iconPicker", "downloads", "popover", "panel", "find", "historyMenu", "extensionPopup"] },
 };
@@ -89,6 +93,8 @@ export const peekHeld = (windowId: string) => {
   const field = sidebarFieldTab(windowId);
   return holds("peek", windowId, field ? (id) => id === field : noTab);
 };
+
+export const topStripPeekHeld = (windowId: string) => holds("topStrip", windowId, noTab);
 
 export const hoverHeld = (windowId: string) => holds("hover", windowId, (id) => browser().tabs[id]?.windowId === windowId);
 

@@ -3,14 +3,14 @@ import { orderSections } from "../groups/groups";
 import { arrangeParked, arrangePinnedArea } from "../pins/pinnedArea";
 import type { Tab } from "../browser/types";
 import { PIN_TAB, anchorIn, PIN_ORDER, PIN_ROW, ROW, TILE, type PinValue } from "./pinRecords";
-import { commitPinnedEdit, homeWindow, openWindows, settleChoices, store, windowsHomeFirst } from "./pinnedSyncState";
+import { choiceStillOut, commitPinnedEdit, homeWindow, openWindows, settleChoices, store, windowsHomeFirst } from "./pinnedSyncState";
 import { isPinnedRow, pinKeyOf, ROW_PIN, TILE_PIN } from "../browser/model";
 
 export function pinnedRowsAdapter(profileId: string): Adapter {
   const keyOf = (k: string) => k.slice(PIN_ROW.length);
   return {
     prefix: PIN_ROW,
-    extract: (base, queued) => {
+    extract: (base, queued, _now, _known, _remote, stamp) => {
       const s = store();
       const values = new Map<string, unknown>();
       const known = new Set<string>();
@@ -37,7 +37,7 @@ export function pinnedRowsAdapter(profileId: string): Adapter {
       return {
         values,
         ignore: (k) => !known.has(keyOf(k)) && base(`${PIN_TAB}${keyOf(k)}`) === undefined,
-        republish: (k) => keyOf(k) in chosen && !queued(k),
+        republish: (k) => choiceStillOut(chosen, keyOf(k), stamp(k)) && !queued(k),
         published: (keys) => settleChoices(profileId, Object.fromEntries([...keys].map(keyOf).filter((k) => k in chosen).map((k) => [k, chosen[k]!]))),
       } satisfies Extraction;
     },

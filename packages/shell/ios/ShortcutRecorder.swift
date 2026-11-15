@@ -26,7 +26,9 @@ final class ShortcutRecorder {
         self.finish(nil)
         return nil
       }
-      let key = (event.characters(byApplyingModifiers: []) ?? event.charactersIgnoringModifiers ?? "").lowercased()
+      let unmodified = event.charactersIgnoringModifiers ?? ""
+      let navigationKey = unmodified.unicodeScalars.first.map { (0xF700...0xF8FF).contains($0.value) } ?? false
+      let key = navigationKey ? unmodified : (event.characters(byApplyingModifiers: []) ?? unmodified).lowercased()
       guard !key.isEmpty else { return nil }
       let functionKey = key.unicodeScalars.first.map { (0xF704...0xF726).contains($0.value) } ?? false
       guard flags.contains(.command) || flags.contains(.control) || functionKey else {

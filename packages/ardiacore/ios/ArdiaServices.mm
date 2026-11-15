@@ -342,6 +342,7 @@ NSString *StoreFolder(NSString *profile, NSString *extensionId, id version) {
   NSMutableDictionary *args = [NSMutableDictionary dictionaryWithObject:extensionId forKey:@"id"];
   for (NSString *key in @[ @"pinned", @"incognito", @"fileAccess", @"userScripts", @"siteAccess" ])
     if (options[key]) args[key] = options[key];
+  if ([options[@"pinnedIndex"] isKindOfClass:NSNumber.class]) args[@"pinnedIndex"] = @([options[@"pinnedIndex"] integerValue]);
   [self run:@"ac_extensions_configure" profile:profile args:args event:@"configured" reply:reply];
 }
 

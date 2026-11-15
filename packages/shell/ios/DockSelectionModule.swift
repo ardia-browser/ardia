@@ -14,6 +14,11 @@ public class DockSelectionModule: Module {
       return theme?.json
     }
 
+    AsyncFunction("iconAccent") { (uri: String) -> String? in
+      guard let image = IconSource(uri: uri, emoji: nil)?.load() else { return nil }
+      return IconAccent.dominant(image)
+    }
+
     View(DockSelection.self) {
       Prop("image") { (view: DockSelection, v: String?) in view.source = IconSource(uri: v, emoji: view.source?.emoji) }
       Prop("emoji") { (view: DockSelection, v: String?) in view.source = IconSource(uri: view.source?.uri, emoji: v) }
@@ -26,6 +31,7 @@ public class DockSelectionModule: Module {
       Prop("iconSize") { (view: DockSelection, v: Double) in view.iconSize = v }
       Prop("glass") { (view: DockSelection, v: Bool?) in view.glass = v ?? false }
       Prop("colorRing") { (view: DockSelection, v: Bool?) in view.colorRing = v ?? false }
+      Prop("outline") { (view: DockSelection, v: Bool?) in view.outline = v ?? false }
     }
   }
 }

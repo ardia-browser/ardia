@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { useBrowser, type BrowserState } from "../browser/store";
+import { usePageProfileId } from "../browser/hooks";
 import { activeTabId, tabLabel, viewTabIds } from "../browser/model";
 import { groupIndex, splitIndex, stableList } from "../browser/structure";
 import { movingTabIds, resolveDrop, slotDrop, type DragSource, type DropSpot, type Lane } from "../drag/drops";
@@ -7,7 +8,7 @@ import { hiddenEmptyCard } from "../omnibox/newTabBarPolicy";
 import { groupLabel } from "../pins/tabGrouping";
 import { folderCell, folderIn, folderLabel, folderMembers, tileFolderOf } from "../pins/tileFolders";
 import { clickTab } from "../sidebar/actions";
-import { groupEntries } from "../sidebar/entries";
+import { entriesInputs, groupEntries, sameEntriesInputs, type EntriesInputs } from "../sidebar/entries";
 import { renameFolder } from "../sidebar/tileFolderUi";
 import { chooseFromMenu, type ChoiceItem } from "../app/menuChoice";
 import { entryKey, parseEntry } from "../sidebar/entryKey";
@@ -30,7 +31,7 @@ export type StripGroupEntry = { kind: "group"; id: string; collapsed: boolean; m
 export type StripDock = { kind: "dock"; ids: string[]; members: Map<string, string[]> };
 export type StripEntry = StripDock | StripGroupEntry | StripMember;
 
-const stripMemo = new Map<string, { inputs: unknown[]; keys: string[]; entries: StripEntry[] }>();
+const stripMemo = new Map<string, { inputs: EntriesInputs; keys: string[]; entries: StripEntry[] }>();
 
 function parseStrip(keys: string[], previousDock: StripDock | undefined): StripEntry[] {
   const out: StripEntry[] = [];
@@ -78,9 +79,12 @@ function foldersUnderRoots(groups: BrowserState["groups"]): Map<string, string> 
 
 export function stripEntries(s: BrowserState, windowId: string, profileId: string): StripEntry[] {
   const key = `${windowId}|${profileId}`;
-  const inputs = [s.tabs, s.windows, s.groups, s.splits, s.settings.newTabOpens];
+  const inputs = entriesInputs(s);
   const cached = stripMemo.get(key);
-  if (cached && cached.inputs.every((v, i) => v === inputs[i])) return cached.entries;
+  if (cached && sameEntriesInputs(inputs, cached.inputs)) {
+    cached.inputs = inputs;
+    return cached.entries;
+  }
   const groups = groupIndex(s.groups);
   const folders = foldersUnderRoots(s.groups);
   const splits = splitIndex(s.splits);
@@ -94,7 +98,7 @@ export function stripEntries(s: BrowserState, windowId: string, profileId: strin
     const tileFolder = tileFolderOf(t);
     if (tileFolder) {
       const folderKey = entryKey("tileFolder", tileFolder.id);
-      if (!seen.has(folderKey)) dock.push(`tilefolder:${tileFolder.id}:${folderMembers(s, windowId, tileFolder.id).join(",")}`);
+      if (!seen.has(folderKey)) dock.push(`tilefolder:${tileFolder.id}:${folderMembers(s, windowId, tileFolder.id, profileId).join(",")}`);
       seen.add(folderKey);
       if (id === activeId) dock.push(`pinned:${id}`);
       continue;
@@ -158,7 +162,10 @@ export const useShownTabIdFor = (windowId: string, profileId: string) => useBrow
 export const useHasTuckTarget = (enabled: boolean, windowId: string, profileId: string, groupId: string) =>
   useBrowser((s) => enabled && !!tuckTarget(s, windowId, profileId, groupId));
 
-export const useTileFolderLabel = (windowId: string, folderId: string) => useBrowser((s) => folderLabel(folderIn(s, windowId, folderId)));
+export function useTileFolderLabel(windowId: string, folderId: string) {
+  const profileId = usePageProfileId();
+  return useBrowser((s) => folderLabel(folderIn(s, windowId, folderId, profileId)));
+}
 
 export function tuckGroup(windowId: string, profileId: string, groupId: string) {
   const s = useBrowser.getState();

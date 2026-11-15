@@ -7,7 +7,9 @@ const { sidebarEntries, numberedTabs } = await import("../sidebar/entries.ts");
 const { flushPersistence, loadSession, startPersistence } = await import("../session/persist.ts");
 const stub = await import("../../test-native/index.ts");
 
+const { Clock } = await import("@ardia/sync");
 const S = () => useBrowser.getState();
+const stamp = (wall) => new Clock("", null, () => wall).tick();
 const reset = () => S().hydrate({});
 const url = (id) => S().tabs[id].pinnedUrl || S().tabs[id].url;
 const urls = (ids) => ids.map(url);
@@ -283,8 +285,8 @@ test("choices go with unpinned pins and deleted profiles, also after a relaunch,
   S().pinTabs([x], true);
   S().deleteProfile(work);
   assert.equal(S().pinChoices[work], undefined, "a deleted profile's choices go");
-  S().hydrate({ ...S(), pinChoices: { default: { [a]: 5, ghost: 6 }, gone: { y: 7 } } });
-  assert.deepEqual(S().pinChoices, { default: { [a]: 5 } }, "stale choices from disk are dropped");
+  S().hydrate({ ...S(), pinChoices: { default: { [a]: stamp(5), ghost: stamp(6) }, gone: { y: stamp(7) } } });
+  assert.deepEqual(S().pinChoices, { default: { [a]: stamp(5) } }, "stale choices from disk are dropped");
   const first = (S().pinTabs([c], true), S().pinChoices.default?.[c]);
   assert.equal(first, undefined, "c closed with its window");
 });
@@ -303,7 +305,7 @@ test("a session's pending choices raise the generation counter, so a later choic
   reset();
   const { w, ids: [a] } = windowWith("a", "b");
   S().pinTabs([a], true);
-  const ahead = Date.now() + 1e9;
+  const ahead = stamp(Date.now() + 1e9);
   S().hydrate({ ...S(), pinChoices: { default: { [a]: ahead } } });
   assert.equal(S().pinChoices.default[a], ahead);
   S().pinTabs([a], false);

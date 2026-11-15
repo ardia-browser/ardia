@@ -1,0 +1,20 @@
+{
+  "id": "fixes-extension-order",
+  "segments": [
+    {
+      "scene": "extorder",
+      "title": "Drag pinned extensions to reorder them",
+      "body": "Press a pinned extension in the toolbar and drag it sideways: the others slide aside, and the order you drop it in sticks, after a relaunch too. Before, nothing moved. A plain click still opens the popup.",
+      "note": "four test extensions",
+      "layout": "side",
+      "cam": [
+        1072,
+        0,
+        440,
+        290
+      ],
+      "lead": 1.8,
+      "tail": 8.4
+    }
+  ]
+}

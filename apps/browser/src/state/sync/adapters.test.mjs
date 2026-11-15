@@ -6,6 +6,7 @@ const { historyOf } = await import("../history/history.ts");
 const model = await import("../browser/model.ts");
 const { Clock, emptyScope, syncScope } = await import("@ardia/sync");
 const adapters = await import("./adapters.ts");
+const { useEditClock } = await import("./editClock.ts");
 const { settingsAdapter, settingsToReapply } = await import("./settingsAdapter.ts");
 const pinnedArea = await import("./pinned.ts");
 const { pinnedOrderAdapter } = await import("./pinnedOrderAdapter.ts");
@@ -72,6 +73,7 @@ class Device {
     this.with(() => (this.scopes.app.unapplied = [...new Set([...this.scopes.app.unapplied, ...settingsToReapply(this.scopes.app.records)])]));
   }
   with(fn) {
+    useEditClock(this.clock);
     stub.current.device = this.id;
     useBrowser.setState(this.browser, true);
     try {
@@ -81,6 +83,7 @@ class Device {
     }
   }
   async sync(profileId = "default", options = {}) {
+    useEditClock(this.clock);
     stub.current.device = this.id;
     useBrowser.setState(this.browser, true);
     const run = (scope, list, options) =>
@@ -768,6 +771,61 @@ test("a tile choice whose batch never reached the disk survives a crash and stil
   assert.deepEqual(rowsOf(a), { tiles: ["https://docs.example/"], rows: [] });
 });
 
+test("a row choice that went out while quitting isn't sent again after the relaunch over a later tile choice elsewhere", async () => {
+  const folder = new Folder();
+  const a = new Device("devA", folder);
+  const b = new Device("devB", folder);
+  a.with(() => {
+    const w = S().createWindow({ url: "https://home.example/" });
+    S().pinTabs([S().newTab(w, { url: "https://docs.example/" })], true);
+  });
+  b.with(() => S().createWindow({ url: "https://b-home.example/" }));
+  await syncAll([a, b]);
+  await later();
+  a.with(() => S().placeTabs([tabAt("https://docs.example/")], { pinned: true, row: true }));
+  const frozenSession = a.browser;
+  await a.sync();
+  assert.deepEqual(a.with(() => S().pinChoices), {}, "the choice settles once it's out");
+  await later();
+  await b.sync();
+  assert.deepEqual(rowsOf(b), { tiles: [], rows: ["https://docs.example/"] });
+  b.with(() => S().placeTabs([tabAt("https://docs.example/")], { pinned: true, row: false }));
+  await b.sync();
+  await later();
+  a.browser = frozenSession;
+  await syncAll([a, b, a, b]);
+  assert.deepEqual(rowsOf(a), { tiles: ["https://docs.example/"], rows: [] }, "B's later tile stands");
+  assert.deepEqual(rowsOf(b), { tiles: ["https://docs.example/"], rows: [] });
+});
+
+test("a tile picked again after a cancelled quit goes out over a row from a Mac whose clock runs a minute ahead", async () => {
+  const folder = new Folder();
+  const a = new Device("devA", folder);
+  const b = new Device("devB", folder);
+  a.with(() => {
+    const w = S().createWindow({ url: "https://home.example/" });
+    const docs = S().newTab(w, { url: "https://docs.example/" });
+    S().pinTabs([docs], true, true);
+    S().placeTabs([docs], { pinned: true, row: false });
+  });
+  b.with(() => S().createWindow({ url: "https://b-home.example/" }));
+  await syncAll([a, b]);
+  b.clock = new Clock("devB", b.clock.last, () => Date.now() + 60_000);
+  b.with(() => S().placeTabs([tabAt("https://docs.example/")], { pinned: true, row: true }));
+  await b.sync();
+  await a.sync("default", { holdApply: () => true });
+  assert.deepEqual(rowsOf(a), { tiles: ["https://docs.example/"], rows: [] }, "the row waits, unapplied, while quitting");
+  await later();
+  a.with(() => {
+    S().placeTabs([tabAt("https://docs.example/")], { pinned: true, row: true });
+    S().placeTabs([tabAt("https://docs.example/")], { pinned: true, row: false });
+  });
+  assert.ok(Object.keys(a.with(() => S().pinChoices.default ?? {})).length > 0, "the tile is chosen again, as the base already says");
+  await syncAll([a, b, a, b]);
+  assert.deepEqual(rowsOf(a), { tiles: ["https://docs.example/"], rows: [] }, "the newer tile choice stands");
+  assert.deepEqual(rowsOf(b), { tiles: ["https://docs.example/"], rows: [] });
+});
+
 test("a tile choice whose journal write failed is sent once when the write is retried", async () => {
   const { folder, a, b } = await tileWithMarkOnBoth();
   await assert.rejects(b.sync("default", { persist: async () => { throw new Error("disk full"); } }));
@@ -1048,12 +1106,62 @@ test("passwords: saved on one Mac, changed or deleted on another; the newer edit
   await syncAll([a, b]);
   assert.deepEqual(list(a), list(b));
   assert.deepEqual(list(b), ["https://bank.example alice=hunter2", "https://mail.example alice=m41l", "https://shop.example bob=sh0p"]);
-  await save(b, "https://bank.example", "alice", "correct horse");
+  await b.with(() => passwords.updatePassword("", "https://bank.example", "alice", { password: "correct horse" }));
   await remove(b, "https://mail.example", "alice");
   await syncAll([b, a]);
   assert.deepEqual(list(a), ["https://bank.example alice=correct horse", "https://shop.example bob=sh0p"]);
   assert.equal((await a.sync()).published, 0);
   for (const d of [a, b]) assert.ok(!JSON.stringify(d.scopes.p).includes("correct horse"), "the sync state holds only sealed passwords");
+});
+
+test("passwords: a login whose read is still out when quitting begins isn't saved, and waits to be applied", async () => {
+  const folder = new Folder();
+  const a = new Device("devA", folder);
+  const b = new Device("devB", folder);
+  await a.with(() => passwords.savePassword("", "https://bank.example", "alice", "hunter2"));
+  await a.sync();
+  let quitting = false;
+  let armed = false;
+  const inner = adapters.passwordsAdapter(
+    "default",
+    sealedLogins(async () => {
+      if (armed) quitting = true;
+      return stub.readLogins();
+    }),
+  )(true);
+  b.passwords = { ...inner, apply: (...args) => ((armed = true), inner.apply(...args)) };
+  await b.sync("default", { holdApply: () => quitting });
+  assert.deepEqual([...stub.passwordStores.get("devB").values()], [], "nothing is saved once quitting has begun");
+  assert.ok(b.scopes.p.unapplied.some((k) => k.startsWith("pws:")), "and the login waits");
+  armed = false;
+  quitting = false;
+  await b.sync();
+  assert.equal(stub.passwordStores.get("devB").size, 1, "after a cancelled quit it's saved");
+});
+
+test("passwords: a remote change saved in Chrome as quitting begins isn't sent back as this Mac's edit after the relaunch", async () => {
+  const folder = new Folder();
+  const a = new Device("devA", folder);
+  const b = new Device("devB", folder);
+  const save = (d, password) => d.with(() => passwords.savePassword("", "https://bank.example", "alice", password));
+  const change = (d, password) => d.with(() => passwords.updatePassword("", "https://bank.example", "alice", { password }));
+  const list = (d) => [...stub.passwordStores.get(d.id).values()].map((l) => `${l.username}=${l.password}`);
+  await save(a, "one");
+  await syncAll([a, b]);
+  await change(a, "two");
+  await a.sync();
+  let quitting = false;
+  const logins = sealedLogins();
+  b.passwords = adapters.passwordsAdapter("default", { ...logins, save: async (...args) => ((quitting = true), logins.save(...args)) })(true);
+  await b.sync("default", { holdApply: () => quitting });
+  assert.deepEqual(list(b), ["alice=two"], "Chrome has the change");
+  await later();
+  await change(a, "three");
+  await a.sync();
+  b.passwords = adapters.passwordsAdapter("default", sealedLogins())(true);
+  await syncAll([b, a, b, a]);
+  assert.deepEqual(list(a), ["alice=three"], "the newer edit from A stands");
+  assert.deepEqual(list(b), ["alice=three"]);
 });
 
 test("history: two Macs settle on the union of their visits in Chrome, publish nothing more, and deletions reach Chrome", async () => {
@@ -1846,7 +1954,7 @@ test("only evidence that the anchor left the rows after the order record ends th
 
 const { compact } = await import("@ardia/sync");
 
-async function deletedWhileAway(OldMac, withGroup) {
+async function deletedWhileAway(OldMac) {
   const realNow = Date.now;
   let shift = 0;
   Date.now = () => realNow() + shift;
@@ -1857,9 +1965,8 @@ async function deletedWhileAway(OldMac, withGroup) {
     const w = a.with(() => {
       const w = S().createWindow({ url: "https://home.example/" });
       const open = (h) => S().newTab(w, { url: `https://${h}.example/`, background: true });
-      const [r, x, m] = ["r", "x", "member"].map(open);
+      const [r, x] = ["r", "x"].map(open);
       S().placeTabs([r, x], { pinned: true, row: true, beforeId: null });
-      if (withGroup) S().groupTabs([m], { pinned: true, name: "Group" });
       return w;
     });
     other.with(() => S().createWindow({ url: "https://other-home.example/" }));
@@ -1887,13 +1994,8 @@ async function deletedWhileAway(OldMac, withGroup) {
 }
 
 test("a pinned row deleted while a Mac was away past tombstone retention stays deleted when it comes back", async () => {
-  const { a, c, other } = await deletedWhileAway(Device, false);
+  const { a, c, other } = await deletedWhileAway(Device);
   for (const d of [a, c, other]) assert.deepEqual(pinnedAreaOf(d), ["row:r", "row:y"], d.id);
-});
-
-test.skip("known: a group anchored to a row whose tombstone was collected shows the same order on every Mac (a snapshot leaves no tombstone, so the order can't tell a deleted anchor from one still on its way; accepted)", async () => {
-  const { a, c } = await deletedWhileAway(PreInterleaveMac, true);
-  assert.deepEqual(pinnedAreaOf(a), pinnedAreaOf(c));
 });
 
 test("a bookmark made while another adapter is still reading survives that sync", async () => {

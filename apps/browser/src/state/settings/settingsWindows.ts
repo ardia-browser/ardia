@@ -11,6 +11,7 @@ export const isUtilityWindowId = (id: string | null | undefined) =>
 export const SETTINGS_PANES = [
   "general",
   "profiles",
+  "airTraffic",
   "sync",
   "tabs",
   "appearance",
@@ -63,6 +64,11 @@ export function settingsForward() {
 
 export function openSettings(pane?: SettingsPane, profileId?: string | null) {
   if (pane) goToSettingsPane(pane, profileId ?? null);
+  void openWindow(SETTINGS_WINDOW_ID, { kind: "settings", title: "Settings" });
+}
+
+export function openSiteSettings(origin: string, profileId: string) {
+  goToSettingsPane("privacy", profileId, origin);
   void openWindow(SETTINGS_WINDOW_ID, { kind: "settings", title: "Settings" });
 }
 

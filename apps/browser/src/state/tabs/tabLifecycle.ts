@@ -10,7 +10,9 @@ import { everySlowly } from "../../platform/slowTimers";
 import { webviews } from "../../platform/webviews";
 import { useLifecycle } from "./sleepingTabs";
 import { startMemorySaver } from "./memorySaver";
+import { noteTabGone, noteTabWoke, startLoadedTabBudget } from "./loadedTabBudget";
 import { focusedWindowOf } from "../windows/ui";
+import { noteTabSlept } from "../telemetry/tabSleepCounts";
 
 export { useIsSleeping, useLifecycle } from "./sleepingTabs";
 
@@ -27,14 +29,17 @@ const currentSystem = () => (system ? { ...system, ...systemOverride } : null);
 export function noteReady(tabId: string) {
   const tab = store().tabs[tabId];
   if (tab) loadedProfiles.add(engineProfile(useBrowser.getState(), tab.profileId));
+  noteTabWoke(tabId);
   forget(tabId);
 }
 
-export function noteDiscarded(tabId: string) {
+export function noteDiscarded(tabId: string, reason: string | null = null) {
+  noteTabSlept(!!store().tabs[tabId]?.pin, reason);
   useLifecycle.setState((l) => ({ discarded: { ...l.discarded, [tabId]: true } }));
 }
 
 export function noteGone(tabId: string) {
+  noteTabGone(tabId);
   forget(tabId);
 }
 
@@ -100,6 +105,7 @@ export function startTabLifecycle() {
   started = true;
 
   startMemorySaver();
+  startLoadedTabBudget(currentSystem);
   useBrowser.subscribe((s: BrowserState, prev: BrowserState) => {
     if (s.settings.batterySaverWhen !== prev.settings.batterySaverWhen) {
       lowBatteryHeld = false;

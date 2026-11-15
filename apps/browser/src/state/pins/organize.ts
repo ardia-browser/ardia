@@ -1,7 +1,7 @@
 import type { StateCreator } from "zustand";
 import type { BrowserState } from "../browser/store";
-import { activeTabId, inPinnedContainer, viewTabIds } from "../browser/model";
-import { clickedSelection, dropping, type ClickMods, type Drop } from "../drag/drops";
+import { activeTabId, inPinnedContainer, tabTitle, tabTooltip, viewTabIds } from "../browser/model";
+import { clickedSelection, dropping, type ClickMods, type Drop, type SelectionAnchor } from "../drag/drops";
 import type { Tab } from "../browser/types";
 import type { PinChoices, PinSync } from "./pinChoices";
 import { groupOf } from "./tabGrouping";
@@ -12,9 +12,10 @@ import { pinHome } from "./pinHomes";
 
 export type OrganizeSlice = {
   selection: Record<string, string[]>;
-  selectionAnchors: Record<string, string>;
+  selectionAnchors: Record<string, SelectionAnchor>;
   pinChoices: PinChoices;
   pinSync: PinSync;
+  topAppsMerged: string;
 
   setSelection(windowId: string, ids: string[]): void;
   clickTab(windowId: string, tabId: string, mods?: ClickMods): void;
@@ -35,8 +36,37 @@ export function selectedTabIds(s: BrowserState, windowId: string): string[] {
 
 export const awayFromPin = (t: Pick<Tab, "url" | "pinnedUrl">) => !!t.pinnedUrl && !!t.url && !samePage(t.url, t.pinnedUrl);
 
+export type AwayTitle = { pinned: string | null; page: string };
+
+type TitledTab = Pick<Tab, "url" | "pinnedUrl" | "customTitle" | "title">;
+
+export const awayTitle = (t: TitledTab): AwayTitle | null => (awayFromPin(t) ? { pinned: t.customTitle || null, page: tabTitle({ ...t, customTitle: null }) } : null);
+
+export const awayTitleText = (away: AwayTitle) => (away.pinned ? `${away.pinned} / ${away.page}` : `/ ${away.page}`);
+
+export function pinAwareTooltip(t: TitledTab): string {
+  const away = awayTitle(t);
+  return away ? `${awayTitleText(away)}\n${t.url}` : tabTooltip(t);
+}
+
 export function onUrlChange(s: BrowserState, tab: Tab, url: string): Partial<Tab> {
   return inPinnedContainer(s, tab.id) ? { pinnedUrl: pinHome({ ...tab, url }, true) } : {};
+}
+
+export function forgetMovedAnchors(s: BrowserState, prev: BrowserState): Pick<BrowserState, "selectionAnchors"> | null {
+  if (s.windows === prev.windows) return null;
+  const moved = Object.entries(s.selectionAnchors).filter(([windowId, anchor]) => {
+    const shown = activeTabId(s, windowId);
+    return shown !== activeTabId(prev, windowId) && shown !== anchor.shownTabId;
+  });
+  if (!moved.length) return null;
+  const kept = { ...s.selectionAnchors };
+  for (const [windowId] of moved) {
+    const shown = activeTabId(s, windowId);
+    if (shown) kept[windowId] = { tabId: shown, shownTabId: shown, reset: true };
+    else delete kept[windowId];
+  }
+  return { selectionAnchors: kept };
 }
 
 export function pruneSelection(selection: Record<string, string[]>, gone: Set<string>): Record<string, string[]> {
@@ -57,6 +87,7 @@ export const createOrganizeSlice: StateCreator<BrowserState, [], [], OrganizeSli
   selectionAnchors: {},
   pinChoices: {},
   pinSync: {},
+  topAppsMerged: "",
 
   setSelection(windowId, ids) {
     set((s) => {
@@ -73,10 +104,11 @@ export const createOrganizeSlice: StateCreator<BrowserState, [], [], OrganizeSli
     const intoGroup = !!mods.altKey && !!mods.shiftKey && !mods.metaKey && s.settings.optShiftClickOpensInGroup;
     const picked = intoGroup ? null : clickedSelection(s, windowId, tabId, mods);
     if (intoGroup) openInActiveGroup(s, windowId, tabId);
-    const anchor = picked ? picked.anchor : tabId;
-    if (anchor && anchor !== get().selectionAnchors[windowId]) set({ selectionAnchors: { ...get().selectionAnchors, [windowId]: anchor } });
     get().setSelection(windowId, picked?.selection ?? []);
     if (!picked) get().activate(tabId);
+    const anchor: SelectionAnchor = { tabId: picked?.anchor ?? tabId, shownTabId: activeTabId(get(), windowId) };
+    const kept = get().selectionAnchors[windowId];
+    if (kept?.tabId !== anchor.tabId || kept.shownTabId !== anchor.shownTabId || kept.reset) set({ selectionAnchors: { ...get().selectionAnchors, [windowId]: anchor } });
   },
 
   placeTabs(ids, placement) {

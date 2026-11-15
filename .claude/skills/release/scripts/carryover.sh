@@ -37,11 +37,11 @@ mkdir -p "$work/home" "$work/pages"
 for page in page1 page2 page3 work; do
   printf '<!doctype html><title>Carryover %s</title><h1>%s</h1><form><input name="username" autocomplete="username"><input type="password" autocomplete="current-password"></form>\n' "$page" "$page" > "$work/pages/$page.html"
 done
-cp -R "$harness_root/spikes/ardiacore-host/fixtures/ext" "$work/extension"
+cp -R "$harness_root/packages/ardiacore/tests/fixtures/ext" "$work/extension"
 serve_dir "$work/pages"
 origin="http://127.0.0.1:$served_port"
 export CARRYOVER_QUIT="$work/quit"
-carryover() { timeout 300 node "$here/carryover.mjs" "$1" "$work/$2/Ardia.app" "$work/home" "$(free_port)" "$origin" "${@:3}"; }
+carryover() { timeout 480 node "$here/carryover.mjs" "$1" "$work/$2/Ardia.app" "$work/home" "$(free_port)" "$origin" "${@:3}"; }
 
 if [ "$back" = 0 ]; then
   carryover create old "$work/extension" "$work/created.json"

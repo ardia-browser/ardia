@@ -18,6 +18,9 @@ enum Corner : int { kNoCorner = -1, kTopLeft = 0, kTopRight = 1, kBottomLeft = 2
 
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kCornerInset = 10;
+constexpr double kBrowserCardInset = 9, kBrowserCardRadius = 10;
+constexpr double kFreeRadius = 6;
+constexpr double kSnappedRadius = kBrowserCardRadius - (kCornerInset - kBrowserCardInset);
 constexpr double kCornerTolerance = kPi / 4;
 constexpr double kDragFlingSpeed = 350;
 constexpr double kSwipeFlingDelta = 6;
@@ -56,6 +59,16 @@ inline Rect CornerFrame(Corner corner, double w, double h, Rect visible) {
   const bool top = corner == kTopLeft || corner == kTopRight;
   return {std::round(left ? inner.x : inner.maxX() - w), std::round(top ? inner.maxY() - h : inner.y), w, h};
 }
+
+inline Corner SnappedCorner(Rect frame, Rect visible) {
+  for (Corner corner : {kTopLeft, kTopRight, kBottomLeft, kBottomRight}) {
+    const Rect at = CornerFrame(corner, frame.w, frame.h, visible);
+    if (std::fabs(at.x - frame.x) <= 0.5 && std::fabs(at.y - frame.y) <= 0.5) return corner;
+  }
+  return kNoCorner;
+}
+
+inline double CornerRadius(Rect frame, Rect visible) { return SnappedCorner(frame, visible) == kNoCorner ? kFreeRadius : kSnappedRadius; }
 
 inline Point FingerDelta(double scrollingDeltaX, double scrollingDeltaY, bool inverted) {
   return {inverted ? scrollingDeltaX : -scrollingDeltaX, inverted ? -scrollingDeltaY : scrollingDeltaY};
@@ -230,6 +243,18 @@ inline Rect SwipeStep(Rect frame, Point delta, const Screen *screens, int count,
 
 inline Rect DragStep(Rect frame, Point delta, const Screen *screens, int count, int home = -1) {
   return MoveWithin(frame, delta, screens, count, home);
+}
+
+inline Point GrabbedOrigin(Point pointer, Point grab) { return {std::round(pointer.x - grab.x), std::round(pointer.y - grab.y)}; }
+
+inline Rect DragTo(Rect frame, Point pointer, Point grab, const Screen *screens, int count, int home = -1) {
+  const Point origin = GrabbedOrigin(pointer, grab);
+  return MoveWithin(frame, {origin.x - frame.x, origin.y - frame.y}, screens, count, home);
+}
+
+inline bool HeldBack(Rect placed, Point pointer, Point grab) {
+  const Point origin = GrabbedOrigin(pointer, grab);
+  return std::fabs(placed.x - origin.x) > 1e-6 || std::fabs(placed.y - origin.y) > 1e-6;
 }
 
 struct SpringState {

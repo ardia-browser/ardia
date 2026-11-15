@@ -9,7 +9,9 @@ final class FadeLabel: ExpoView {
   var text = "" { didSet { update() } }
   var fontSize: Double = 13 { didSet { update() } }
   var weight = "regular" { didSet { update() } }
-  var color: NSColor = .labelColor { didSet { field.textColor = color } }
+  var fontFamily = "" { didSet { update() } }
+  var color: NSColor = .labelColor { didSet { if strikethrough { update() } else { field.textColor = color } } }
+  var strikethrough = false { didSet { if strikethrough != oldValue { update() } } }
   var fadeWidth: Double = 24 { didSet { relayout() } }
 
   required init(appContext: AppContext? = nil) {
@@ -36,16 +38,34 @@ final class FadeLabel: ExpoView {
 
   private func update() {
     let weights: [String: NSFont.Weight] = [
-      "light": .light, "regular": .regular, "medium": .medium, "semibold": .semibold, "bold": .bold,
+      "ultraLight": .ultraLight, "thin": .thin, "light": .light, "regular": .regular, "medium": .medium,
+      "semibold": .semibold, "bold": .bold, "heavy": .heavy, "black": .black,
     ]
-    field.font = .monospacedDigitSystemFont(ofSize: fontSize, weight: weights[weight] ?? .regular)
-    field.stringValue = text
+    let fontWeight = weights[weight] ?? .regular
+    let font = familyFont(weight: fontWeight) ?? .monospacedDigitSystemFont(ofSize: fontSize, weight: fontWeight)
+    field.font = font
     field.textColor = color
+    if strikethrough {
+      field.attributedStringValue = NSAttributedString(string: text, attributes: [
+        .font: font, .foregroundColor: color,
+        .strikethroughStyle: NSUnderlineStyle.single.rawValue, .strikethroughColor: color,
+      ])
+    } else {
+      field.stringValue = text
+    }
     relayout()
   }
 
+  private func familyFont(weight: NSFont.Weight) -> NSFont? {
+    guard !fontFamily.isEmpty else { return nil }
+    let descriptor = NSFontDescriptor(fontAttributes: [.family: fontFamily, .traits: [NSFontDescriptor.TraitKey.weight: weight]])
+    guard let font = NSFont(descriptor: descriptor, size: fontSize), font.familyName == fontFamily else { return nil }
+    return font
+  }
+
   private func relayout() {
-    let fitting = field.fittingSize
+    let natural = field.intrinsicContentSize
+    let fitting = field.frame(forAlignmentRect: NSRect(origin: .zero, size: natural)).size
     field.frame = NSRect(x: 0, y: (bounds.height - fitting.height) / 2, width: max(bounds.width, fitting.width), height: fitting.height)
     field.wantsLayer = true
     guard bounds.width > 0, fitting.width > bounds.width + 0.5 else {

@@ -4,6 +4,7 @@ import { useBrowser } from "../browser/store";
 import { activeTabId, resolveWindowId, viewTabIds } from "../browser/model";
 import type { Tab } from "../browser/types";
 import { navigationOf } from "../tabs/pageSession";
+import { noteChromeSettingsOpen } from "../telemetry/chromeSettingsOpens";
 
 export const INTERNAL_PAGES: Record<AppPageHost, { title: string }> = {
   history: { title: "History" },
@@ -46,4 +47,13 @@ export function openInternalPage(page: AppPageHost, windowId?: string | null, op
   const active = activeTabId(s, id);
   if (active && !s.tabs[active]!.url && !options.background) return s.navigate(active, url);
   s.newTab(id, { url, background: options.background });
+}
+
+export function openChromeSettings() {
+  const s = useBrowser.getState();
+  const id = resolveWindowId(s, null);
+  if (!id) return;
+  focus(id);
+  noteChromeSettingsOpen();
+  s.newTab(id, { url: "chrome://settings", enginePage: true });
 }

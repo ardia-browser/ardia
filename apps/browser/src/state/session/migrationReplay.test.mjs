@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 const { sessionWithTabPages, sessionWithTabPins } = await import("./savedShapes.ts");
 const { sessionWithSettingsMeta } = await import("../settings/settings.ts");
+const { sessionWithPinChoiceStamps } = await import("../pins/pinChoices.ts");
+const { Clock } = await import("@ardia/sync");
 
 const replays = (step, doc) => {
   const once = step(structuredClone(doc));
@@ -33,4 +35,11 @@ test("7 → 8 run twice keeps explicit choices chosen and inferred keys inferred
   assert.deepEqual(once.settingsMeta, { chosen: ["tabLayout"], inferred: ["appearance"] });
   const legacy = replays(sessionWithSettingsMeta, { settings: { batterySaver: false, newTabPosition: "top" } });
   assert.ok(legacy.settingsMeta.chosen.includes("batterySaverWhen") && legacy.settingsMeta.inferred.includes("batterySaverWhen"));
+});
+
+test("8 → 9 run twice turns each pending pin choice's time into an HLC that orders the same way", () => {
+  const once = replays(sessionWithPinChoiceStamps, { pinChoices: { default: { a: 1_000, b: 2_000, broken: { x: 1 } }, work: "nonsense" } });
+  assert.deepEqual(once.pinChoices, { default: { a: new Clock("", null, () => 1_000).tick(), b: new Clock("", null, () => 2_000).tick() }, work: {} });
+  assert.ok(once.pinChoices.default.a < once.pinChoices.default.b);
+  assert.deepEqual(replays(sessionWithPinChoiceStamps, { tabs: [] }), { tabs: [] }, "a session without choices is left as it is");
 });

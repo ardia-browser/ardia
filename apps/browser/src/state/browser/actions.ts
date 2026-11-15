@@ -13,12 +13,16 @@ import { groupLabel } from "../pins/tabGrouping";
 import { sharingProfiles } from "../profiles/profiles";
 import { closeWindowAnimated } from "../windows/closeAnimated";
 import { applyHeldReports } from "../../platform/nativeEvents";
-import { closeWindowDialog } from "../windows/windowClose";
+import { closeWindowDialog, unpinnedOpenTabIds } from "../windows/windowClose";
 import { menuCommandAlternate, menuShortcut } from "../commands/commandShortcuts";
 import { openSettings } from "../settings/settingsWindows";
 import { profileAccentOf } from "../profiles/looks";
 import { isSiteMuted } from "../tabs/mute";
+import { groupCloseAllowed } from "../groups/closeGuard";
 import { focusedWindowOf } from "../windows/ui";
+import { splitOf } from "../splits/splits";
+import { closeKind } from "../tabs/tabs";
+import { noteSplit } from "../telemetry/usage";
 
 const store = () => useBrowser.getState();
 
@@ -42,8 +46,9 @@ export async function closeTab(tabId: string) {
   const w = tab && s.windows[tab.windowId];
   if (!tab || !w) return;
   const last = closesWindow(s, tabId) && !leavesEmptyWindow(s, tabId);
-  if (last && s.settings.warnBeforeClosingLastTab && w.kind !== "private") {
-    const { confirmed, suppressed } = await confirm({ ...closeWindowDialog(w.id), suppression: "Don’t ask me again", windowId: w.id });
+  const open = unpinnedOpenTabIds(w.id);
+  if (last && s.settings.warnBeforeClosingLastTab && w.kind !== "private" && open.length) {
+    const { confirmed, suppressed } = await confirm({ ...closeWindowDialog(w.id, open), suppression: "Don’t ask me again", windowId: w.id });
     if (suppressed) store().updateSettings({ warnBeforeClosingLastTab: false });
     if (!confirmed) return;
     applyHeldReports();
@@ -51,6 +56,7 @@ export async function closeTab(tabId: string) {
   const now = store();
   const closesItsWindow = now.tabs[tabId]?.windowId === w.id && now.peeks[w.id]?.tabId !== tabId && closesWindow(now, tabId) && !leavesEmptyWindow(now, tabId);
   if (last && closesItsWindow) return closeWindowAnimated(w.id);
+  if (splitOf(now, tabId) && closeKind(now, tabId) === "close") noteSplit("splitPaneCloses");
   store().closeTab(tabId);
 }
 
@@ -59,6 +65,7 @@ export async function closeGroup(groupId: string) {
   const group = s.groups[groupId];
   const w = group && s.windows[group.windowId];
   if (!group || !w) return;
+  if (!(await groupCloseAllowed(w.id, groupId))) return;
   if (s.settings.warnBeforeClosingTabGroup && !rootOf(s.groups, groupId)?.pinned) {
     const tabs = plural(group.tabIds.length, "tab");
     const { confirmed, suppressed } = await confirm({

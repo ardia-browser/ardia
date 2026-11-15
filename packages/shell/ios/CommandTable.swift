@@ -19,10 +19,13 @@ enum CommandTable {
     case findInPage
     case findNext
     case findPrevious
+    case hideElement
+    case showHiddenElements
     case setAppearance
     case reload
     case forceReload
     case toggleTabLayout
+    case toggleSidebarSide
     case toggleSidebar
     case openSplitPane
     case useSelectionForFind
@@ -33,6 +36,7 @@ enum CommandTable {
     case toggleFullUrl
     case toggleJavaScriptFromAppleEvents
     case toggleAddressBar
+    case toggleMinimalism
     case cast
     case zoomReset
     case zoomIn
@@ -60,6 +64,7 @@ enum CommandTable {
     case restoreArcFolders
     case toggleMute
     case togglePageEngine
+    case toggleReader
     case downloads
     case mergeAllWindows
     case switchProfile
@@ -85,10 +90,9 @@ enum CommandTable {
     case returnToPinnedUrl
     case tabSwitcher
     case share
-    case sendFeedback
+    case reportProblem
     case keyboardShortcuts
     case copyDiagnostics
-    case recordPerformanceIssue
     case toolTour
     case videoTour
     case releaseNotes
@@ -128,12 +132,15 @@ enum CommandTable {
     "findInPage": "Find…",
     "findNext": "Find Next",
     "findPrevious": "Find Previous",
+    "hideElement": "Hide Element…",
+    "showHiddenElements": "Hidden Elements on This Site…",
     "setAppearance:auto": "Automatic",
     "setAppearance:light": "Light",
     "setAppearance:dark": "Dark",
     "reload": "Refresh",
     "forceReload": "Force Refresh the Page",
     "toggleTabLayout": "Show Tabs in Sidebar",
+    "toggleSidebarSide": "Sidebar on Right",
     "toggleSidebar": "Auto-Hide Tabs",
     "openSplitPane": "Open Split Pane",
     "useSelectionForFind": "Use Selection for Find",
@@ -144,6 +151,7 @@ enum CommandTable {
     "toggleFullUrl": "Show Full URL",
     "toggleJavaScriptFromAppleEvents": "Allow JavaScript from Apple Events",
     "toggleAddressBar": "Show Address Bar in Sidebar",
+    "toggleMinimalism": "Minimalism Mode",
     "cast": "Cast…",
     "zoomReset": "Zoom to Actual Size",
     "zoomIn": "Zoom In",
@@ -173,6 +181,7 @@ enum CommandTable {
     "bookmarkPage": "Add to Bookmarks…",
     "toggleMute": "Mute Tab",
     "togglePageEngine": "Open Page in WebKit",
+    "toggleReader": "Show Reader",
     "downloads": "Downloads",
     "mergeAllWindows": "Merge All Windows",
     "nextProfile": "Next Profile",
@@ -199,11 +208,10 @@ enum CommandTable {
     "returnToPinnedUrl": "Back to Pinned URL",
     "tabSwitcher:forward": "Tab Switcher (forward)",
     "tabSwitcher:backward": "Tab Switcher (backward)",
-    "share": "Share",
-    "sendFeedback": "Send Feedback…",
+    "share": "Share…",
+    "reportProblem": "Report a Problem…",
     "keyboardShortcuts": "Keyboard Shortcuts",
     "copyDiagnostics": "Copy Diagnostics",
-    "recordPerformanceIssue": "Record Performance Issue…",
     "toolTour": "Tool Tour",
     "videoTour": "Video Tour",
     "releaseNotes": "Release Notes",
@@ -242,6 +250,8 @@ enum CommandTable {
     "findInPage": [("f", [.command])],
     "findNext": [("g", [.command])],
     "findPrevious": [("g", [.shift, .command])],
+    "hideElement": [("h", [.shift, .command])],
+    "showHiddenElements": [("u", [.shift, .command])],
     "reload": [("r", [.command])],
     "forceReload": [("r", [.shift, .command])],
     "toggleTabLayout": [("s", [.shift, .command])],
@@ -252,6 +262,7 @@ enum CommandTable {
     "jumpToSelection": [("j", [.command])],
     "focusNextPane": [("]", [.control, .shift]), ("}", [.control])],
     "focusPreviousPane": [("[", [.control, .shift]), ("{", [.control])],
+    "toggleMinimalism": [("m", [.control, .command])],
     "zoomReset": [("0", [.command])],
     "zoomIn": [("+", [.command]), ("=", [.command])],
     "zoomOut": [("-", [.command])],
@@ -262,8 +273,8 @@ enum CommandTable {
     "viewSource": [("u", [.option, .command])],
     "back": [("[", [.command]), ("\u{F702}", [.command])],
     "forward": [("]", [.command]), ("\u{F703}", [.command])],
-    "nextTab": [("]", [.shift, .command]), ("}", [.command]), ("\u{F703}", [.option, .command]), ("\u{F72D}", [.control]), ("\u{F701}", [.option, .command])],
-    "previousTab": [("[", [.shift, .command]), ("{", [.command]), ("\u{F702}", [.option, .command]), ("\u{F72C}", [.control]), ("\u{F700}", [.option, .command])],
+    "nextTab": [("]", [.shift, .command]), ("}", [.command]), ("\u{F72D}", [.control]), ("\u{F701}", [.option, .command])],
+    "previousTab": [("[", [.shift, .command]), ("{", [.command]), ("\u{F72C}", [.control]), ("\u{F700}", [.option, .command])],
     "selectTab:1": [("1", [.command])],
     "selectTab:2": [("2", [.command])],
     "selectTab:3": [("3", [.command])],
@@ -275,7 +286,10 @@ enum CommandTable {
     "selectLastTab": [("9", [.command])],
     "togglePinnedRow": [("d", [.option, .shift, .command])],
     "bookmarkPage": [("d", [.command])],
+    "toggleReader": [("r", [.option, .command])],
     "downloads": [("j", [.shift, .command]), ("l", [.option, .command])],
+    "nextProfile": [("\u{F703}", [.option, .command])],
+    "previousProfile": [("\u{F702}", [.option, .command])],
     "openSettings": [(",", [.command])],
     "showHistory": [("y", [.command])],
     "clearBrowsingData": [("\u{8}", [.shift, .command])],
@@ -289,7 +303,8 @@ enum CommandTable {
     "returnToPinnedUrl": [("\u{D}", [.command])],
     "tabSwitcher:forward": [("\u{9}", [.control])],
     "tabSwitcher:backward": [("\u{9}", [.control, .shift])],
-    "sendFeedback": [("i", [.option, .shift, .command])],
+    "share": [("s", [.option, .command])],
+    "reportProblem": [("i", [.option, .shift, .command])],
     "openFile": [("o", [.command])],
     "emailPageLocation": [("i", [.shift, .command])],
     "printWithSystemDialog": [("p", [.option, .command])],

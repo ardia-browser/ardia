@@ -1,10 +1,24 @@
 (function (post) {
   "use strict";
-  if (!/^(https?|file):$/.test(location.protocol)) return () => {};
+  const web = /^(https?|file):$/.test(location.protocol);
+  const sameOriginChild = location.protocol === "about:" && window !== window.top && /^https?:\/\//.test(self.origin);
+  if (!web && !sameOriginChild) return () => {};
   const isTop = window === window.top;
   const handlers = Object.create(null);
   const { stringify: toJSON, parse: fromJSON } = JSON;
   const apply = Reflect.apply;
+  const asNative = (native, call) => {
+    const { getPrototypeOf: protoOf, setPrototypeOf: setProtoOf } = Reflect;
+    const disguised = new Proxy(native, {
+      apply: (target, self, args) => call(target, self, args),
+      setPrototypeOf(target, next) {
+        for (let link = next; link !== null; link = protoOf(link))
+          if (link === disguised || link === target) throw new TypeError("Cyclic __proto__ value");
+        return setProtoOf(target, next);
+      },
+    });
+    return disguised;
+  };
   const { keys, setPrototypeOf } = Object;
   const { isArray } = Array;
   const { isFinite } = Number;
@@ -42,14 +56,88 @@
     };
   };
 
+  const displayRequests = new Map();
+  let displaySeq = 0;
+  let displayMediaShim = null;
+  let nativeGetDisplayMedia = null;
+  const restoreDisplayMedia = () => {
+    const devices = navigator.mediaDevices;
+    const proto = devices && Object.getPrototypeOf(devices);
+    if (!proto || !displayMediaShim || proto.getDisplayMedia !== displayMediaShim) return;
+    proto.getDisplayMedia = nativeGetDisplayMedia;
+    displayMediaShim = null;
+  };
+  const installDisplayMedia = () => {
+    const devices = navigator.mediaDevices;
+    const proto = devices && Object.getPrototypeOf(devices);
+    if (!proto || !proto.getDisplayMedia || displayMediaShim) return;
+    nativeGetDisplayMedia = proto.getDisplayMedia;
+    const getUserMedia = proto.getUserMedia;
+    const activation = navigator.userActivation;
+    const activationProto = activation && Object.getPrototypeOf(activation);
+    const activationState = activationProto && Object.getOwnPropertyDescriptor(activationProto, "isActive");
+    const isActive = activationState && activationState.get;
+    const policy = document.featurePolicy;
+    const allowsFeature = policy && policy.allowsFeature;
+    const nativeRejects = (self, options) =>
+      self !== devices ||
+      (options !== undefined && options !== null && typeof options !== "object" && typeof options !== "function") ||
+      (policy && allowsFeature && !apply(allowsFeature, policy, ["display-capture"]));
+    displayMediaShim = asNative(nativeGetDisplayMedia, (target, self, args) => {
+      const constraints = args[0];
+      if (nativeRejects(self, constraints)) return apply(target, self, args);
+      if (activation && isActive && !apply(isActive, activation, []))
+        return Promise.reject(new DOMException("getDisplayMedia() requires transient activation (user gesture).", "InvalidStateError"));
+      return new Promise((resolve, reject) => {
+        const id = ++displaySeq;
+        const options = constraints || {};
+        displayRequests.set(id, { self, resolve, reject, constraints: options });
+        const windowAudio = options.windowAudio === "exclude" || options.windowAudio === "window" ? options.windowAudio : "system";
+        send("displayMedia", { id, audio: !!options.audio, systemAudio: options.systemAudio !== "exclude", windowAudio });
+      });
+    });
+    proto.getDisplayMedia = displayMediaShim;
+    handlers.displayMedia = ({ id, sourceId, audio }) => {
+      const request = displayRequests.get(id);
+      if (!request) return;
+      displayRequests.delete(id);
+      if (!sourceId) {
+        request.reject(new DOMException("Permission denied", "NotAllowedError"));
+        return;
+      }
+      const video = request.constraints.video;
+      const frameRate = (video && video.frameRate && (video.frameRate.max || video.frameRate.ideal || video.frameRate)) || 30;
+      apply(getUserMedia, request.self, [
+        {
+          audio: audio === true ? { mandatory: { chromeMediaSource: "desktop" } } : false,
+          video: { mandatory: { chromeMediaSource: "desktop", chromeMediaSourceId: sourceId, maxWidth: 3840, maxHeight: 2160, maxFrameRate: +frameRate || 30 } },
+        },
+      ]).then(request.resolve, request.reject);
+    };
+  };
+  installDisplayMedia();
+
+  const receive = (kind, json) => {
+    const handler = handlers[kind];
+    if (handler) guard(handler)(fromJSON(json));
+  };
+  if (!web) {
+    const configureDisplayMedia = (config) => (config.displayMediaPicker ? installDisplayMedia() : restoreDisplayMedia());
+    handlers.config = configureDisplayMedia;
+    send("displayMediaHello", {});
+    return receive;
+  }
+
   const frame = Math.random().toString(36).slice(2);
   const tracked = new WeakSet();
   let active = null;
+  let lastHeard = null;
   const heard = new WeakSet();
 
   const session = navigator.mediaSession;
   const actions = new Map();
   let positionState = null;
+  let timeline = null;
   const listening = new WeakSet();
   const LISTEN_TRIES = 20;
   const playingUnmuted = (m) => !m.paused && !m.ended && !m.muted && m.volume > 0;
@@ -61,6 +149,7 @@
     if (heard.has(m) || !playingUnmuted(m)) return listening.delete(m);
     if (decodedAudio(m)) {
       heard.add(m);
+      lastHeard = m;
       listening.delete(m);
       return reportNowPlaying();
     }
@@ -75,12 +164,14 @@
   const isPlaying = (m) => !m.paused && !m.ended;
   const pickMedia = () => {
     const all = [...document.querySelectorAll("video,audio")];
-    if (active && !all.includes(active) && tracked.has(active)) all.push(active);
+    for (const m of [active, lastHeard]) if (m && !all.includes(m) && tracked.has(m)) all.push(m);
     const current = all.includes(active) ? active : null;
+    const heardBefore = all.includes(lastHeard) ? lastHeard : null;
     return (
       all.find((m) => heard.has(m) && isPlaying(m)) ||
       (current && heard.has(current) ? current : null) ||
       all.find(isPlaying) ||
+      heardBefore ||
       current
     );
   };
@@ -98,7 +189,9 @@
     const size = (a) => Math.max(0, ...String(a.sizes || "0x0").split(/\s+/).map((s) => parseInt(s, 10) || 0));
     return absolute([...art].sort((a, b) => size(b) - size(a))[0].src);
   };
-  let lastNowPlaying = "";
+  const NOW_PLAYING_DRIFT_S = 1;
+  let lastNowPlaying = null;
+  const projectedPosition = (last, now) => last.position + (last.playing ? ((now - last.at) / 1000) * last.rate : 0);
   const reportNowPlaying = later(() => {
     const el = pickMedia();
     const md = session && session.metadata;
@@ -119,15 +212,24 @@
         hasVideo: !!el && el.tagName === "VIDEO" && el.videoWidth > 0,
         actions: [...actions.keys()],
         controllable: !!el && heard.has(el) && (sessionState !== "none" || !oneShot(el)),
+        loop: !positionState && !!el && el.loop,
       };
       if (!state.title && !el) state = null;
     }
-    const json = serialize(state && { ...state, position: Math.round(state.position) });
-    if (json === lastNowPlaying) return;
-    lastNowPlaying = json;
-    send("nowPlaying", state && { ...state, timestamp: Date.now() });
+    const now = Date.now();
+    const key = serialize(state && { ...state, position: 0 });
+    const last = lastNowPlaying;
+    if (last && key === last.key && (!state || Math.abs(state.position - projectedPosition(last, now)) < NOW_PLAYING_DRIFT_S)) return;
+    lastNowPlaying = { key, position: state ? state.position : 0, at: now, playing: !!state && state.playbackState === "playing", rate: (state && state.playbackRate) || 1 };
+    send("nowPlaying", state && { ...state, timestamp: now });
   }, 100);
   let blockAutoplay = false;
+  let usedHere = false;
+  const noteUse = (e) => {
+    if (e.isTrusted && !(e.type === "keydown" && (e.key === "Escape" || e.metaKey))) usedHere = true;
+  };
+  for (const type of ["pointerdown", "keydown"]) window.addEventListener(type, noteUse, true);
+  const askedToPlay = () => usedHere || (!isTop && !!(navigator.userActivation && navigator.userActivation.isActive));
   let pipTrace = false;
   let pipHandlerSet = null;
   const playingMedia = new Set();
@@ -136,7 +238,7 @@
     if (!(m instanceof HTMLMediaElement)) return;
     if (e.type === "play" || e.type === "playing") playingMedia.add(m);
     else if (e.type === "pause" || e.type === "ended" || e.type === "emptied") playingMedia.delete(m);
-    if (blockAutoplay && e.type === "play" && !(navigator.userActivation && navigator.userActivation.hasBeenActive)) {
+    if (blockAutoplay && e.type === "play" && !askedToPlay()) {
       m.pause();
       return;
     }
@@ -160,30 +262,43 @@
   for (const e of mediaEvents) document.addEventListener(e, onMediaEvent, true);
   const detachedMediaWatchers = [];
   const play = HTMLMediaElement.prototype.play;
-  HTMLMediaElement.prototype.play = function () {
-    if (!tracked.has(this) && !this.isConnected) {
-      tracked.add(this);
-      for (const e of mediaEvents) this.addEventListener(e, onMediaEvent);
-      for (const watch of detachedMediaWatchers) guard(watch)(this);
+  const pausedState = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "paused").get;
+  const connectedState = Object.getOwnPropertyDescriptor(Node.prototype, "isConnected").get;
+  const trackDetachedMedia = (self) => {
+    let media = false;
+    try {
+      apply(pausedState, self, []);
+      media = true;
+    } catch (e) {}
+    if (media && !tracked.has(self) && !apply(connectedState, self, [])) {
+      tracked.add(self);
+      for (const e of mediaEvents) self.addEventListener(e, onMediaEvent);
+      for (const watch of detachedMediaWatchers) guard(watch)(self);
     }
-    return play.apply(this, arguments);
+    return media;
   };
+  const autoplayRefusal = () => new DOMException("play() failed because the user didn't interact with the document first.", "NotAllowedError");
+  HTMLMediaElement.prototype.play = asNative(play, (target, self, args) => {
+    if (trackDetachedMedia(self) && blockAutoplay && !askedToPlay()) return Promise.reject(autoplayRefusal());
+    return apply(target, self, args);
+  });
 
   const proto = session && Object.getPrototypeOf(session);
   if (proto) {
-    const wrapSetter = (name) => {
+    const wrapSetter = (name, changed) => {
       const d = Object.getOwnPropertyDescriptor(proto, name);
       if (!d || !d.set) return;
       Object.defineProperty(proto, name, {
         ...d,
         set(value) {
           d.set.call(this, value);
+          changed?.();
           reportNowPlaying();
         },
       });
     };
     wrapSetter("metadata");
-    wrapSetter("playbackState");
+    wrapSetter("playbackState", () => timeline && restartTimelineClock(clockPosition(timeline.playbackRate, timeline.clock, performance.now())));
     const setActionHandler = proto.setActionHandler;
     proto.setActionHandler = function (action, handler) {
       if (action === "enterpictureinpicture") {
@@ -198,21 +313,63 @@
     };
     const setPositionState = proto.setPositionState;
     proto.setPositionState = function (state) {
+      const result = setPositionState.apply(this, arguments);
       positionState = state || null;
+      timeline = typeof state?.duration === "number" ? { position: state.position ?? 0, duration: state.duration, playbackRate: state.playbackRate ?? 1, mediaTimes: new WeakMap(reachableMedia().map((m) => [m, m.currentTime])) } : null;
+      if (timeline) restartTimelineClock(timeline.position);
       reportNowPlaying();
-      return setPositionState.apply(this, arguments);
+      return result;
     };
   }
   const playableMedia = (all) => all.find((m) => m.currentSrc || m.srcObject || m.src || m.querySelector("source[src]")) || null;
-  handlers.media = ({ action, seconds }) => {
-    const el = pickMedia() || playableMedia([...document.querySelectorAll("video,audio")]);
+  const pictureInPictureMedia = (root) => {
+    let el = root.pictureInPictureElement || null;
+    while (el?.shadowRoot?.pictureInPictureElement) el = el.shadowRoot.pictureInPictureElement;
+    return el;
+  };
+  const mediaCommandTarget = (action, inPictureInPicture, pick) => {
+    if (action !== "seekPictureInPictureBy") return { action, el: pick() };
+    if (!inPictureInPicture) return null;
+    return { action: "seekBy", el: typeof inPictureInPicture.currentTime === "number" ? inPictureInPicture : null };
+  };
+  const reachableMedia = () => [...new Set([...document.querySelectorAll("video,audio"), active, pictureInPictureMedia(document)])].filter((m) => typeof m?.currentTime === "number");
+  const clockPosition = (rate, clock, now) => {
+    return clock.position + (clock.advancing ? ((now - clock.at) / 1000) * rate : 0);
+  };
+  const timelineNow = (reported, mediaAdvance, now) => {
+    const position = mediaAdvance == null ? clockPosition(reported.playbackRate, reported.clock, now) : reported.position + mediaAdvance;
+    return { position: Math.max(0, Math.min(reported.duration, position)), duration: reported.duration };
+  };
+  const restartTimelineClock = (position) => {
+    timeline.clock = { position, at: performance.now(), advancing: session.playbackState !== "paused" };
+  };
+  const seekByCall = (seconds, el, registered, timeline) => {
+    if (registered(seconds >= 0 ? "seekforward" : "seekbackward")) return seconds >= 0 ? ["seekforward", { seekOffset: seconds }] : ["seekbackward", { seekOffset: -seconds }];
+    const within = (position, duration) => ({ seekTime: Math.max(0, Math.min(duration || Infinity, position + seconds)) });
+    if (registered("seekto")) {
+      const at = timeline || (el && { position: el.currentTime, duration: el.duration });
+      return at ? ["seekto", within(at.position, at.duration)] : null;
+    }
+    return el ? ["currentTime", within(el.currentTime, el.duration)] : null;
+  };
+  handlers.media = ({ action: asked, seconds }) => {
+    const target = mediaCommandTarget(asked, pictureInPictureMedia(document), () => pickMedia() || playableMedia([...document.querySelectorAll("video,audio")]));
+    if (!target) return;
+    const { action, el } = target;
     const call = (name, details) => {
       const h = actions.get(name);
       if (!h) return false;
       h({ action: name, ...details });
       return true;
     };
+    const askToSeek = (name, details, landsAt) => {
+      const reported = timeline;
+      if (!call(name, details)) return false;
+      if (timeline && timeline === reported) restartTimelineClock(landsAt(timeline));
+      return true;
+    };
     const playing = session?.playbackState === "playing" || (el && !el.paused);
+    if (action === "play" || action === "toggle") usedHere = true;
     switch (action) {
       case "play":
         call("play") || el?.play();
@@ -231,12 +388,15 @@
         call("previoustrack");
         break;
       case "seekBy": {
-        const handled = seconds >= 0 ? call("seekforward", { seekOffset: seconds }) : call("seekbackward", { seekOffset: -seconds });
-        if (!handled && el) el.currentTime = Math.max(0, Math.min(el.duration || Infinity, el.currentTime + seconds));
+        const mediaAdvance = el && timeline?.mediaTimes.has(el) ? el.currentTime - timeline.mediaTimes.get(el) : null;
+        const [how, details] = seekByCall(seconds, el, (name) => actions.has(name), timeline && timelineNow(timeline, mediaAdvance, performance.now())) || [];
+        if (how === "currentTime") el.currentTime = details.seekTime;
+        else if (how === "seekto") askToSeek(how, details, () => details.seekTime);
+        else if (how) askToSeek(how, details, (reported) => clockPosition(reported.playbackRate, reported.clock, performance.now()) + seconds);
         break;
       }
       case "seekTo":
-        if (!call("seekto", { seekTime: seconds }) && el) el.currentTime = seconds;
+        if (!askToSeek("seekto", { seekTime: seconds }, () => seconds) && el) el.currentTime = seconds;
         break;
       case "stop":
         call("stop") || el?.pause();
@@ -270,8 +430,10 @@
     const r = eyeField.getBoundingClientRect();
     const cs = getComputedStyle(eyeField);
     const size = Math.min(24, Math.max(18, r.height - 8));
-    const inset = Math.max(4, Math.min(10, parseFloat(cs.paddingRight) || 4));
-    eyeHost.style.left = r.right - (parseFloat(cs.borderRightWidth) || 0) - inset - size + "px";
+    const rtl = cs.direction === "rtl";
+    const inset = Math.max(4, Math.min(10, parseFloat(rtl ? cs.paddingLeft : cs.paddingRight) || 4));
+    const border = parseFloat(rtl ? cs.borderLeftWidth : cs.borderRightWidth) || 0;
+    eyeHost.style.left = (rtl ? r.left + border + inset : r.right - border - inset - size) + "px";
     eyeHost.style.top = r.top + (r.height - size) / 2 + "px";
     eyeButton.style.width = eyeButton.style.height = size + "px";
     eyeButton.style.color = cs.color;
@@ -367,9 +529,11 @@
   addEventListener("resize", () => eyeField && requestAnimationFrame(placeEye));
   addEventListener("pagehide", conceal);
 
+  let pageNotification = null;
   const installNotifications = () => {
     const NativeNotification = window.Notification;
-    if (!NativeNotification || NativeNotification.__ac) return !!NativeNotification;
+    if (!NativeNotification || NativeNotification === pageNotification) return !!NativeNotification;
+    const pageNotifications = new WeakSet();
     const live = new Map();
     let seq = 0;
     const show = (title, options, fire) => {
@@ -395,9 +559,9 @@
     };
     class PageNotification extends EventTarget {
       constructor(title, options) {
-        if (!new.target) throw new TypeError("Failed to construct 'Notification': Please use the 'new' operator.");
         if (arguments.length < 1) throw new TypeError("Failed to construct 'Notification': 1 argument required, but only 0 present.");
         super();
+        pageNotifications.add(this);
         options = options || {};
         const fields = { title: String(title), body: String(options.body ?? ""), tag: String(options.tag ?? ""),
           icon: String(options.icon ?? ""), data: options.data ?? null, silent: !!options.silent,
@@ -422,27 +586,46 @@
         Object.defineProperty(this, "_id", { value: id });
         setTimeout(() => this._fire("show"), 0);
       }
-      close() {
-        if (!this._id || !live.has(this._id)) return;
-        live.delete(this._id);
-        send("notificationClose", { id: this._id });
-        setTimeout(() => this._fire("close"), 0);
-      }
-      static get permission() { return NativeNotification.permission; }
-      static requestPermission(callback) { return NativeNotification.requestPermission(callback); }
-      static get maxActions() { return NativeNotification.maxActions || 0; }
+    }
+    const closeNotification = (n) => {
+      if (!n._id || !live.has(n._id)) return;
+      live.delete(n._id);
+      send("notificationClose", { id: n._id });
+      setTimeout(() => n._fire("close"), 0);
+    };
+    const nativeClose = NativeNotification.prototype.close;
+    Object.defineProperty(PageNotification.prototype, "close", {
+      value: asNative(nativeClose, (target, self, args) => (pageNotifications.has(self) ? closeNotification(self) : apply(target, self, args))),
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
+    for (const key of ["permission", "maxActions", "requestPermission"]) {
+      const native = Object.getOwnPropertyDescriptor(NativeNotification, key);
+      if (native) Object.defineProperty(PageNotification, key, native);
     }
     Object.defineProperty(PageNotification, "name", { value: "Notification" });
-    Object.defineProperty(PageNotification, "__ac", { value: true });
-    window.Notification = PageNotification;
+    Object.defineProperty(PageNotification, "length", { value: 1 });
+    pageNotification = asNative(PageNotification, () => {
+      throw new TypeError("Failed to construct 'Notification': Please use the 'new' operator, this DOM object constructor cannot be called as a function.");
+    });
+    Object.defineProperty(PageNotification.prototype, "constructor", { value: pageNotification, writable: true, configurable: true });
+    window.Notification = pageNotification;
     const Registration = window.ServiceWorkerRegistration;
-    if (Registration && Registration.prototype.showNotification) {
-      Registration.prototype.showNotification = function (title, options) {
-        if (NativeNotification.permission !== "granted")
-          return Promise.reject(new TypeError("No notification permission has been granted for this origin."));
-        show(title, options);
+    const nativeShow = Registration && Registration.prototype.showNotification;
+    const activeWorker = nativeShow && Object.getOwnPropertyDescriptor(Registration.prototype, "active");
+    if (nativeShow && activeWorker && activeWorker.get) {
+      Registration.prototype.showNotification = asNative(nativeShow, (target, self, args) => {
+        let worker = null;
+        try {
+          worker = apply(activeWorker.get, self, []);
+        } catch (e) {
+          return apply(target, self, args);
+        }
+        if (!worker || args.length < 1 || NativeNotification.permission !== "granted") return apply(target, self, args);
+        show(args[0], args[1]);
         return Promise.resolve();
-      };
+      });
     }
     handlers.notification = ({ id, action }) => {
       const n = live.get(id);
@@ -459,54 +642,74 @@
   };
   if (!installNotifications()) queueMicrotask(() => installNotifications() || setTimeout(installNotifications, 0));
 
-  const displayRequests = new Map();
-  let displaySeq = 0;
-  const installDisplayMedia = () => {
-    const devices = navigator.mediaDevices;
-    const proto = devices && Object.getPrototypeOf(devices);
-    if (!proto || !proto.getDisplayMedia || proto.getDisplayMedia.__ac) return;
-    const getUserMedia = proto.getUserMedia;
-    const activation = navigator.userActivation;
-    const activationProto = activation && Object.getPrototypeOf(activation);
-    const activationState = activationProto && Object.getOwnPropertyDescriptor(activationProto, "isActive");
-    const isActive = activationState && activationState.get;
-    const policy = document.featurePolicy;
-    const allowsFeature = policy && policy.allowsFeature;
-    const getDisplayMedia = function getDisplayMedia(constraints) {
-      if (policy && allowsFeature && !apply(allowsFeature, policy, ["display-capture"]))
-        return Promise.reject(new DOMException('Access to the feature "display-capture" is disallowed by permissions policy.', "NotAllowedError"));
-      if (activation && isActive && !apply(isActive, activation, []))
-        return Promise.reject(new DOMException("getDisplayMedia() requires transient activation (user gesture).", "InvalidStateError"));
-      const self = this;
-      return new Promise((resolve, reject) => {
-        const id = ++displaySeq;
-        const options = constraints || {};
-        displayRequests.set(id, { self, resolve, reject, constraints: options });
-        const windowAudio = options.windowAudio === "exclude" || options.windowAudio === "window" ? options.windowAudio : "system";
-        send("displayMedia", { id, audio: !!options.audio, systemAudio: options.systemAudio !== "exclude", windowAudio });
-      });
+  if (isTop && window.isSecureContext && window.Navigator) {
+    const navigatorProto = window.Navigator.prototype;
+    const PromiseType = Promise;
+    const { reject: promiseReject, resolve: promiseResolve } = Promise;
+    const promiseThen = Promise.prototype.then;
+    const { trunc } = Math;
+    const MAX_BADGE = 9007199254740991;
+    const badgeCount = (contents) => {
+      if (contents === undefined) return null;
+      const n = trunc(+contents);
+      if (!isFinite(n)) throw new TypeError("Failed to execute 'setAppBadge' on 'Navigator': Value is not of type 'unsigned long long'.");
+      if (n < 0 || n > MAX_BADGE) throw new TypeError("Failed to execute 'setAppBadge' on 'Navigator': Value is outside the 'unsigned long long' value range.");
+      return n === 0 ? 0 : n;
     };
-    Object.defineProperty(getDisplayMedia, "__ac", { value: true });
-    proto.getDisplayMedia = getDisplayMedia;
-    handlers.displayMedia = ({ id, sourceId, audio }) => {
-      const request = displayRequests.get(id);
-      if (!request) return;
-      displayRequests.delete(id);
-      if (!sourceId) {
-        request.reject(new DOMException("Permission denied", "NotAllowedError"));
-        return;
+    const ignore = () => {};
+    const BADGE_GAP_MS = 250;
+    const clock = Date.now;
+    let shownBadge;
+    let nextBadge;
+    let sentAt = -Infinity;
+    let queued = false;
+    const sendBadge = () => {
+      queued = false;
+      if (nextBadge === shownBadge) return;
+      shownBadge = nextBadge;
+      sentAt = clock();
+      send("appBadge", nextBadge === null ? { flag: true } : { count: nextBadge });
+    };
+    const noteBadge = (count) => {
+      nextBadge = count;
+      if (queued) return;
+      const wait = sentAt + BADGE_GAP_MS - clock();
+      if (wait <= 0) return sendBadge();
+      queued = true;
+      setTimeout(guard(sendBadge), wait);
+    };
+    const afterChrome = (result, count) => {
+      if (result && typeof result === "object") guard(() => apply(promiseThen, result, [() => noteBadge(count), ignore]))();
+      return result;
+    };
+    const install = (name, native, run) =>
+      typeof native === "function"
+        ? (navigatorProto[name] = asNative(native, (target, self, args) => (self === navigator ? run(target, self, args) : apply(target, self, args))))
+        : Object.defineProperty(navigatorProto, name, {
+            value: {
+              [name]() {
+                if (this !== navigator) return apply(promiseReject, PromiseType, [new TypeError("Illegal invocation")]);
+                return run(null, this, arguments);
+              },
+            }[name],
+            writable: true,
+            enumerable: true,
+            configurable: true,
+          });
+    install("setAppBadge", navigatorProto.setAppBadge, (target, self, args) => {
+      let count;
+      try {
+        count = badgeCount(args[0]);
+      } catch (e) {
+        return apply(promiseReject, PromiseType, [e]);
       }
-      const video = request.constraints.video;
-      const frameRate = (video && video.frameRate && (video.frameRate.max || video.frameRate.ideal || video.frameRate)) || 30;
-      apply(getUserMedia, request.self, [
-        {
-          audio: audio === true ? { mandatory: { chromeMediaSource: "desktop" } } : false,
-          video: { mandatory: { chromeMediaSource: "desktop", chromeMediaSourceId: sourceId, maxWidth: 3840, maxHeight: 2160, maxFrameRate: +frameRate || 30 } },
-        },
-      ]).then(request.resolve, request.reject);
-    };
-  };
-
+      if (!target) return afterChrome(apply(promiseResolve, PromiseType, []), count);
+      return afterChrome(apply(target, self, count === null ? [] : [count]), count);
+    });
+    install("clearAppBadge", navigatorProto.clearAppBadge, (target, self) =>
+      afterChrome(target ? apply(target, self, []) : apply(promiseResolve, PromiseType, []), 0),
+    );
+  }
   const PO = window.PerformanceObserver;
   const disconnect = PO && PO.prototype.disconnect;
   const { addEventListener: listen, removeEventListener: unlisten } = EventTarget.prototype;
@@ -689,6 +892,7 @@
     };
     let press = null;
     let peeked = null;
+    let siteClick = null;
     let sent = null;
     handlers.peekRefused = (refusal) => {
       const gesture = sent;
@@ -713,6 +917,7 @@
       guard((e) => {
         press = null;
         peeked = null;
+        siteClick = null;
         if (!e.isTrusted || button(e) !== 0) return;
         const hit = linkAt(e);
         if (!peekable(hit)) return;
@@ -734,10 +939,11 @@
         if (!hit || hit.link !== pressed.link) return trace("released off the link", { url: pressed.url, moved });
         if (!peekable(hit)) return trace("the link changed during the press", { url: hit.url, moved });
         if (moved > PRESS_SLOP) return trace("moved too far", { url: hit.url, moved });
-        if (key === "site" && hit.url.length > MAX_SITE_PEEK_URL) return trace("the link is too long to hand over", { length: hit.url.length });
-        if (key === "site" && !replacesPage(hit.link)) return trace("the link opens elsewhere", { url: hit.url });
-        if (key === "site" && !otherSite(hit.url)) return trace("the link stays on this site", { url: hit.url });
-        if (key === "site" && selecting()) return trace("the click belongs to a selection", { url: hit.url });
+        if (key === "site") {
+          if (selecting()) return trace("the click belongs to a selection", { url: hit.url });
+          siteClick = { link: hit.link, stamp: timeStamp(e) };
+          return;
+        }
         peeked = { link: hit.link, stamp: timeStamp(e) };
         sent = { url: hit.url, at: now(), link: hit.link };
         const scale = ratio(window);
@@ -756,10 +962,609 @@
       }),
       true,
     );
+    const defaultPrevented = getter(Event.prototype, "defaultPrevented");
+    const scheduleTimeout = window.setTimeout;
+    const carriesUrl = (url) => apply(test, /[?&][^=&#]*=(https?(:|%3A)(\/\/|%2F%2F))/i, [url]);
+    const peekSiteLink = (e, link) => {
+      if (defaultPrevented(e)) return trace("the page handled the click", {});
+      const url = linkUrl(link);
+      if (!peekable({ link, url, path: [] })) return trace("the link changed during the click", { url });
+      if (url.length > MAX_SITE_PEEK_URL) return trace("the link is too long to hand over", { length: url.length });
+      if (!otherSite(url) && !carriesUrl(url)) return trace("the link stays on this site", { url });
+      apply(preventDefault, e, []);
+      sent = { url, at: now(), link };
+      const scale = ratio(window);
+      send("peek", { url, key: "site", origin: pageOrigin, x: clientX(e) * scale, y: clientY(e) * scale, moved: 0 });
+    };
+    const noteNewTabLink = (e, link) => {
+      if (defaultPrevented(e) || replacesPage(link)) return;
+      const url = linkUrl(link);
+      if (url && apply(test, /^https?:/i, [url])) send("newTabLink", { url });
+    };
+    addEventListener(
+      "click",
+      guard((e) => {
+        const site = siteClick;
+        siteClick = null;
+        if (!e.isTrusted || button(e) !== 0 || altKey(e) || shiftKey(e) || metaKey(e) || ctrlKey(e)) return;
+        const hit = linkAt(e);
+        if (!peekable(hit)) return;
+        const path = apply(composedPath, e, []);
+        const forSite = !!site && timeStamp(e) === site.stamp && apply(includes, path, [site.link]);
+        const link = forSite ? site.link : hit.link;
+        let decided = false;
+        const decide = guard((ev) => {
+          if (ev !== e || decided) return;
+          decided = true;
+          if (forSite && replacesPage(link)) return peekSiteLink(e, link);
+          noteNewTabLink(e, link);
+        });
+        apply(listen, window, ["click", decide]);
+        apply(scheduleTimeout, window, [
+          guard(() => {
+            apply(unlisten, window, ["click", decide]);
+            if (decided) return;
+            decided = true;
+            if (forSite && replacesPage(link)) return trace("the click never reached the window", {});
+            noteNewTabLink(e, link);
+          }),
+          0,
+        ]);
+      }),
+      true,
+    );
+    const userActivationOf = window.Navigator && Object.getOwnPropertyDescriptor(Navigator.prototype, "userActivation");
+    const activeOf = window.UserActivation && Object.getOwnPropertyDescriptor(UserActivation.prototype, "isActive");
+    const openDescriptor = Object.getOwnPropertyDescriptor(window, "open");
+    if (userActivationOf && activeOf && openDescriptor && typeof openDescriptor.value === "function") {
+      const activated = () => {
+        const activation = apply(userActivationOf.get, navigator, []);
+        return !!activation && !!apply(activeOf.get, activation, []);
+      };
+      const openedByUser = (args) => {
+        if (!args.length || args[0] === undefined || args[0] === null || !activated()) return;
+        const raw = `${args[0]}`;
+        if (!raw) return;
+        const url = new URLCtor(raw, baseURI(document)).href;
+        if (apply(test, /^https?:/i, [url])) send("newTabLink", { url });
+      };
+      const open = asNative(openDescriptor.value, (target, self, args) => {
+        guard(openedByUser)(args);
+        return apply(target, self, args);
+      });
+      Object.defineProperty(window, "open", { ...openDescriptor, value: open });
+    }
     addEventListener("pageshow", guard((e) => e.isTrusted && persisted(e) && send("peekHello", {})));
     addEventListener("pagehide", guard((e) => e.isTrusted && send("peekGone", {})));
   } catch (e) {}
 
+  let bridgesProtectedPlayback = () => false;
+  let reportProtectedPlayback = null;
+  const FAIRPLAY_ORIGINS = ["https://open.spotify.com"];
+  try {
+    if (isTop && FAIRPLAY_ORIGINS.includes(location.origin) && typeof Navigator.prototype.requestMediaKeySystemAccess === "function") {
+      const KEY_SYSTEM = "com.apple.fps.1_0";
+      const PLAYLIST_PART = 30000;
+      const CONFIG_WAIT_MS = 3000;
+      const SEEK_GIVE_UP_MS = 2000;
+      const ENCRYPTED_DELAY_MS = 100;
+      const TICK_MS = 250;
+      const READY_GIVE_UP_MS = 45000;
+      const PLAYLIST_URL = /^data:application\/(?:vnd\.apple\.mpegurl|x-mpegurl)((?:;[^,]*)?),/i;
+      const Media = HTMLMediaElement.prototype;
+      const { defineProperty, getOwnPropertyDescriptor } = Object;
+      const { btoa, atob } = window;
+      const fromCharCode = String.fromCharCode;
+      const clock = performance;
+      const clockNow = clock.now;
+      const now = () => apply(clockNow, clock, []);
+      const encoder = new TextEncoder();
+      let enabled = null;
+      const awaitingConfig = [];
+      const configureFairPlay = (on) => {
+        enabled = on;
+        for (const resolve of awaitingConfig.splice(0)) resolve();
+      };
+      const whenConfigured = () =>
+        enabled !== null
+          ? Promise.resolve()
+          : new Promise((resolve) => {
+              awaitingConfig.push(resolve);
+              setTimeout(resolve, CONFIG_WAIT_MS);
+            });
+      const bytesOf = (b) =>
+        b instanceof ArrayBuffer ? new Uint8Array(b) : ArrayBuffer.isView(b) ? new Uint8Array(b.buffer, b.byteOffset, b.byteLength) : new Uint8Array(0);
+      const toBase64 = (bytes) => {
+        let text = "";
+        for (let i = 0; i < bytes.length; i += 0x8000) text += apply(fromCharCode, null, bytes.subarray(i, i + 0x8000));
+        return btoa(text);
+      };
+      const fromBase64 = (text) => {
+        const binary = atob(text);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return bytes;
+      };
+      const fire = (el, type) => el.dispatchEvent(new Event(type));
+
+      let certificate = "";
+      let generation = 0;
+      let media = null;
+      let pending = null;
+      let request = null;
+      let ticker = 0;
+      const tracks = new WeakMap();
+      const ownKeys = new WeakSet();
+      const keysOf = new WeakMap();
+      const everKeyed = new WeakSet();
+      let keyed = null;
+      const sessionGeneration = new WeakMap();
+      bridgesProtectedPlayback = () => {
+        const t = media && tracks.get(media);
+        return !!t && !t.failed;
+      };
+
+      const deliverRequest = () => {
+        if (!pending || !request || sessionGeneration.get(pending) !== request.gen) return;
+        const target = pending;
+        const { message } = request;
+        request = null;
+        let event;
+        try {
+          event = new MediaKeyMessageEvent("message", { messageType: "license-request", message });
+        } catch (e) {
+          event = new Event("message");
+          event.messageType = "license-request";
+          event.message = message;
+        }
+        target.dispatchEvent(event);
+      };
+      const createSession = () => {
+        const keySession = new EventTarget();
+        keySession.sessionId = "ardia-" + Math.random().toString(36).slice(2);
+        keySession.expiration = NaN;
+        keySession.keyStatuses = new Map();
+        let closeSession;
+        keySession.closed = new Promise((resolve) => (closeSession = resolve));
+        keySession.generateRequest = () => {
+          sessionGeneration.set(keySession, generation);
+          pending = keySession;
+          deliverRequest();
+          return Promise.resolve();
+        };
+        keySession.update = (response) => {
+          send("fairPlay", { op: "license", gen: sessionGeneration.get(keySession), ckc: toBase64(bytesOf(response)) });
+          keySession.keyStatuses = new Map([[new Uint8Array(16).buffer, "usable"]]);
+          keySession.dispatchEvent(new Event("keystatuseschange"));
+          return Promise.resolve();
+        };
+        keySession.load = () => Promise.resolve(false);
+        keySession.close = () => {
+          closeSession();
+          return Promise.resolve();
+        };
+        keySession.remove = () => Promise.resolve();
+        return keySession;
+      };
+      const createKeys = () => {
+        const keys = {
+          setServerCertificate(server) {
+            const bytes = bytesOf(server);
+            if (bytes.length) certificate = toBase64(bytes);
+            return Promise.resolve(true);
+          },
+          createSession,
+          getStatusForPolicy: () => Promise.resolve("usable"),
+        };
+        ownKeys.add(keys);
+        return keys;
+      };
+
+      const requestAccess = Navigator.prototype.requestMediaKeySystemAccess;
+      defineProperty(Navigator.prototype, "requestMediaKeySystemAccess", {
+        ...getOwnPropertyDescriptor(Navigator.prototype, "requestMediaKeySystemAccess"),
+        value: asNative(requestAccess, (target, self, args) => {
+          if (args[0] !== KEY_SYSTEM) {
+            if (!/^com\.(?:widevine|microsoft\.playready)(?:\.|$)/.test(String(args[0]))) return apply(target, self, args);
+            return whenConfigured().then(() =>
+              enabled === true
+                ? Promise.reject(new DOMException("Unsupported keySystem or supportedConfigurations.", "NotSupportedError"))
+                : apply(target, self, args)
+            );
+          }
+          const configurations = args[1];
+          return whenConfigured().then(() => {
+            if (enabled !== true) return apply(target, self, args);
+            const configuration = (configurations && configurations[0]) || {};
+            return { keySystem: KEY_SYSTEM, getConfiguration: () => configuration, createMediaKeys: () => Promise.resolve(createKeys()) };
+          });
+        }),
+      });
+      const mediaKeys = getOwnPropertyDescriptor(Media, "mediaKeys");
+      defineProperty(Media, "mediaKeys", {
+        ...mediaKeys,
+        get() {
+          return keysOf.has(this) ? keysOf.get(this) : apply(mediaKeys.get, this, []);
+        },
+      });
+      const setMediaKeys = Media.setMediaKeys;
+      Media.setMediaKeys = asNative(setMediaKeys, (target, self, args) => {
+        if (ownKeys.has(args[0])) {
+          keysOf.set(self, args[0]);
+          everKeyed.add(self);
+          keyed = self;
+          return Promise.resolve();
+        }
+        keysOf.delete(self);
+        return apply(target, self, args);
+      });
+
+      const positionOf = (t) =>
+        t.paused || !t.playing ? t.time : Math.min(Number.isNaN(t.duration) ? Infinity : t.duration, t.time + (now() - t.stamp) / 1000);
+      const rangesOf = (t) => ({ length: t.ready ? 1 : 0, start: () => 0, end: () => (Number.isNaN(t.duration) ? 0 : t.duration) });
+      const stopTicking = () => {
+        if (ticker) clearInterval(ticker);
+        ticker = 0;
+      };
+      const startTicking = () => {
+        if (ticker) return;
+        ticker = setInterval(
+          guard(() => {
+            const t = media && tracks.get(media);
+            if (t && !t.paused) fire(media, "timeupdate");
+            else stopTicking();
+          }),
+          TICK_MS
+        );
+      };
+      const finishSeek = (t, el) => {
+        t.seeking = 0;
+        fire(el, "seeked");
+        fire(el, "timeupdate");
+      };
+      const drives = (t) => !t.detached && !t.failed;
+      const seek = (t, el, value) => {
+        const time = +value;
+        if (!isFinite(time) || time < 0) return;
+        t.time = time;
+        t.stamp = now();
+        t.ended = false;
+        if (!drives(t)) {
+          fire(el, "seeking");
+          fire(el, "seeked");
+          fire(el, "timeupdate");
+          return;
+        }
+        const seq = ++t.seeks;
+        t.seeking = seq;
+        send("fairPlay", { op: "seek", time, seq });
+        fire(el, "seeking");
+        setTimeout(
+          guard(() => {
+            if (t.seeking === seq) finishSeek(t, el);
+          }),
+          SEEK_GIVE_UP_MS
+        );
+      };
+      const natives = {};
+      const override = (name, get, set) => {
+        const native = getOwnPropertyDescriptor(Media, name);
+        if (!native || !native.get) return;
+        natives[name] = native;
+        defineProperty(Media, name, {
+          ...native,
+          get() {
+            const t = tracks.get(this);
+            return t ? get(t) : apply(native.get, this, []);
+          },
+          set: native.set
+            ? function (value) {
+                const t = tracks.get(this);
+                if (t && set) set(t, this, value);
+                else apply(native.set, this, [value]);
+              }
+            : undefined,
+        });
+      };
+      override("readyState", (t) => t.ready);
+      override("networkState", (t) => (t.ready ? 1 : 2));
+      override("duration", (t) => t.duration);
+      override("paused", (t) => t.paused);
+      override("ended", (t) => t.ended);
+      override("error", (t) => t.error);
+      override("buffered", rangesOf);
+      override("seekable", rangesOf);
+      override("webkitAudioDecodedByteCount", (t) => (t.ready ? 1 : 0));
+      override("currentTime", positionOf, seek);
+      override("volume", (t) => t.volume, (t, el, value) => {
+        const volume = Math.min(Math.max(+value || 0, 0), 1);
+        t.volume = volume;
+        if (drives(t)) send("fairPlay", { op: "volume", volume });
+        fire(el, "volumechange");
+      });
+      override("muted", (t) => t.muted, (t, el, value) => {
+        t.muted = !!value;
+        if (drives(t)) send("fairPlay", { op: "muted", muted: t.muted });
+        fire(el, "volumechange");
+      });
+      const nativeValue = (el, name, fallback) => {
+        try {
+          return apply(natives[name].get, el, []);
+        } catch (e) {
+          return fallback;
+        }
+      };
+
+      const playMedia = Media.play;
+      Media.play = asNative(playMedia, (target, self, args) => {
+        const t = tracks.get(self);
+        if (!t) return apply(target, self, args);
+        trackDetachedMedia(self);
+        if (t.paused && blockAutoplay && !askedToPlay()) return Promise.reject(autoplayRefusal());
+        if (t.failed) return Promise.reject(new DOMException("The element has no supported sources.", "NotSupportedError"));
+        if (t.detached) {
+          attach(self, t);
+          if (t.time > 0 || t.seeks) send("fairPlay", { op: "seek", time: t.time, seq: ++t.seeks });
+        }
+        if (t.paused) {
+          if (t.ended) seek(t, self, 0);
+          t.paused = false;
+          t.ended = false;
+          t.stamp = now();
+          send("fairPlay", { op: "play" });
+          fire(self, "play");
+          startTicking();
+        }
+        return Promise.resolve();
+      });
+      const pauseMedia = Media.pause;
+      Media.pause = asNative(pauseMedia, (target, self, args) => {
+        const t = tracks.get(self);
+        if (!t) return apply(target, self, args);
+        if (t.paused) return;
+        t.time = positionOf(t);
+        t.paused = true;
+        t.playing = false;
+        send("fairPlay", { op: "pause" });
+        fire(self, "pause");
+      });
+      const loadMedia = Media.load;
+      Media.load = asNative(loadMedia, (target, self, args) => (tracks.has(self) ? undefined : apply(target, self, args)));
+
+      const sendMetadata = () => {
+        if (!media) return;
+        const md = session && session.metadata;
+        send("fairPlay", { op: "metadata", title: (md && md.title) || "", artist: (md && md.artist) || "", album: (md && md.album) || "", artwork: artworkOf(md) || "" });
+      };
+      const sessionProto = session && Object.getPrototypeOf(session);
+      const metadata = sessionProto && getOwnPropertyDescriptor(sessionProto, "metadata");
+      if (metadata && metadata.set)
+        defineProperty(sessionProto, "metadata", {
+          ...metadata,
+          set(value) {
+            apply(metadata.set, this, [value]);
+            guard(sendMetadata)();
+          },
+        });
+
+      const encryptedEvent = (skd) => {
+        const event = new Event("encrypted");
+        event.initDataType = "cbcs";
+        event.initData = encoder.encode(skd);
+        event.fromPolyfill = true;
+        return event;
+      };
+      const bridge = (el, value) => {
+        if (enabled !== true || !el || !everKeyed.has(el)) return false;
+        const url = String(value);
+        const head = url.match(PLAYLIST_URL);
+        if (!head) return false;
+        let playlist;
+        try {
+          playlist = /;base64/i.test(head[1]) ? atob(url.slice(head[0].length)) : decodeURIComponent(url.slice(head[0].length));
+        } catch (e) {
+          return false;
+        }
+        const skd = (playlist.match(/URI="(skd:\/\/[^"]+)"/) || [])[1];
+        if (!/^#EXTM3U/.test(playlist) || !skd || !certificate) return false;
+        const previous = tracks.get(el);
+        if (media && media !== el) release(media);
+        const t = {
+          gen: 0,
+          playlist,
+          cert: certificate,
+          loaded: false,
+          detached: false,
+          ready: 0,
+          time: 0,
+          stamp: now(),
+          duration: NaN,
+          paused: true,
+          playing: false,
+          ended: false,
+          error: null,
+          failed: false,
+          seeks: 0,
+          seeking: 0,
+          volume: previous ? previous.volume : nativeValue(el, "volume", 1),
+          muted: previous ? previous.muted : nativeValue(el, "muted", false),
+        };
+        tracks.set(el, t);
+        stopTicking();
+        attach(el, t);
+        setTimeout(
+          guard(() => {
+            if (tracks.get(el) === t) el.dispatchEvent(encryptedEvent(skd));
+          }),
+          ENCRYPTED_DELAY_MS
+        );
+        return true;
+      };
+      const parentMedia = (source) => (source.parentElement instanceof HTMLMediaElement ? source.parentElement : null);
+      const sourceSrc = getOwnPropertyDescriptor(HTMLSourceElement.prototype, "src");
+      defineProperty(HTMLSourceElement.prototype, "src", {
+        ...sourceSrc,
+        set(value) {
+          if (guard(bridge)(parentMedia(this) || keyed, value)) return;
+          guard(unbridge)(parentMedia(this));
+          apply(sourceSrc.set, this, [value]);
+        },
+      });
+      const mediaSrc = getOwnPropertyDescriptor(Media, "src");
+      defineProperty(Media, "src", {
+        ...mediaSrc,
+        set(value) {
+          if (guard(bridge)(this, value)) return;
+          guard(unbridge)(this);
+          apply(mediaSrc.set, this, [value]);
+        },
+      });
+      const srcObject = getOwnPropertyDescriptor(Media, "srcObject");
+      if (srcObject && srcObject.set)
+        defineProperty(Media, "srcObject", {
+          ...srcObject,
+          set(value) {
+            guard(unbridge)(this);
+            apply(srcObject.set, this, [value]);
+          },
+        });
+      const ElementProto = Element.prototype;
+      const isSrc = (name) => typeof name === "string" && name.toLowerCase() === "src";
+      defineProperty(Media, "setAttribute", {
+        ...getOwnPropertyDescriptor(ElementProto, "setAttribute"),
+        value: asNative(ElementProto.setAttribute, (target, self, args) => {
+          if (isSrc(args[0])) {
+            if (guard(bridge)(self, args[1])) return;
+            guard(unbridge)(self);
+          }
+          return apply(target, self, args);
+        }),
+      });
+      defineProperty(Media, "removeAttribute", {
+        ...getOwnPropertyDescriptor(ElementProto, "removeAttribute"),
+        value: asNative(ElementProto.removeAttribute, (target, self, args) => {
+          if (isSrc(args[0])) guard(unbridge)(self);
+          return apply(target, self, args);
+        }),
+      });
+
+      function attach(el, t) {
+        const previousGen = t.gen;
+        const gen = ++generation;
+        t.gen = gen;
+        t.detached = false;
+        t.loaded = false;
+        if (previousGen && pending && sessionGeneration.get(pending) === previousGen) sessionGeneration.set(pending, gen);
+        media = el;
+        request = null;
+        const { playlist } = t;
+        const parts = Math.max(1, Math.ceil(playlist.length / PLAYLIST_PART));
+        for (let part = 0; part < parts; part++) {
+          const chunk = playlist.slice(part * PLAYLIST_PART, (part + 1) * PLAYLIST_PART);
+          send("fairPlay", { op: "load", gen, part, parts, playlist: chunk, cert: part === 0 ? t.cert : null, volume: t.volume, muted: t.muted });
+        }
+        sendMetadata();
+        setTimeout(
+          guard(() => {
+            if (tracks.get(el) === t && t.gen === gen && !t.loaded && !t.detached) fail(el, t);
+          }),
+          READY_GIVE_UP_MS
+        );
+      }
+      function release(el) {
+        const t = tracks.get(el);
+        if (!t) return;
+        t.detached = true;
+        if (t.paused) return;
+        t.time = positionOf(t);
+        t.paused = true;
+        t.playing = false;
+        stopTicking();
+        fire(el, "pause");
+      }
+      function unbridge(el) {
+        if (!el || !tracks.has(el)) return;
+        tracks.delete(el);
+        if (media === el) {
+          media = null;
+          request = null;
+          stopTicking();
+          send("fairPlay", { op: "stop" });
+        }
+        fire(el, "emptied");
+      }
+      const fail = (el, t) => {
+        if (t.failed) return;
+        if (media === el && drives(t)) {
+          request = null;
+          send("fairPlay", { op: "stop" });
+        }
+        t.failed = true;
+        t.playing = false;
+        t.paused = true;
+        stopTicking();
+        t.error = { code: 3, message: "Protected playback failed", MEDIA_ERR_ABORTED: 1, MEDIA_ERR_NETWORK: 2, MEDIA_ERR_DECODE: 3, MEDIA_ERR_SRC_NOT_SUPPORTED: 4 };
+        fire(el, "error");
+        if (reportProtectedPlayback) reportProtectedPlayback(KEY_SYSTEM);
+      };
+      const remote = (command, time) => {
+        const t = media && tracks.get(media);
+        const action = command === "toggle" ? (t && !t.paused ? "pause" : "play") : command;
+        const handler = actions.get(action);
+        if (handler) return handler(action === "seekto" ? { action, seekTime: time } : { action });
+        if (!media) return;
+        if (action === "play") media.play();
+        else if (action === "pause") media.pause();
+        else if (action === "seekto" && isFinite(time)) media.currentTime = time;
+      };
+      handlers.fairPlay = (m) => {
+        if (m.event === "config") return configureFairPlay(m.on === true);
+        if (m.event === "remote") return remote(m.command, m.time);
+        const el = media;
+        const t = el && tracks.get(el);
+        if (!t || m.gen !== t.gen || t.failed) return;
+        if (m.event === "request") {
+          request = { gen: m.gen, message: fromBase64(m.spc).buffer };
+          deliverRequest();
+        } else if (m.event === "ready") {
+          t.loaded = true;
+          t.duration = m.duration;
+          t.ready = 4;
+          for (const type of ["loadedmetadata", "durationchange", "loadeddata", "canplay", "canplaythrough"]) fire(el, type);
+        } else if (m.event === "position") {
+          if (m.seq < t.seeks) return;
+          t.time = m.time;
+          t.stamp = now();
+          if (t.seeking) finishSeek(t, el);
+          const was = t.playing;
+          t.playing = !!m.playing && !t.paused;
+          if (t.playing && !was) fire(el, "playing");
+          else if (was && !t.playing && !t.paused) fire(el, "waiting");
+        } else if (m.event === "ended") {
+          if (!Number.isNaN(t.duration)) t.time = t.duration;
+          t.playing = false;
+          t.paused = true;
+          t.ended = true;
+          stopTicking();
+          fire(el, "timeupdate");
+          fire(el, "pause");
+          fire(el, "ended");
+        } else if (m.event === "failed") {
+          fail(el, t);
+        } else if (m.event === "stolen") {
+          release(el);
+        }
+      };
+      addEventListener(
+        "pagehide",
+        guard((e) => {
+          if (!e.isTrusted || !media) return;
+          send("fairPlay", { op: "stop" });
+          release(media);
+        })
+      );
+    }
+  } catch (e) {}
   try {
     const NavigatorType = window.Navigator;
     const requestAccess = NavigatorType && NavigatorType.prototype.requestMediaKeySystemAccess;
@@ -773,11 +1578,13 @@
       let drmSent = false;
       let refused = "";
       const attempted = new Set();
+      const grantedOnActivation = new WeakSet();
       const needsProtectedPlayback = (keySystem) => {
-        if (drmSent) return;
+        if (drmSent || bridgesProtectedPlayback()) return;
         drmSent = true;
         send("drm", { keySystem });
       };
+      reportProtectedPlayback = needsProtectedPlayback;
       const progressed = (m) => m.readyState >= 2 && m.currentTime > 0;
       const anyProgressed = () => [...attempted, ...document.querySelectorAll("video, audio")].some(progressed);
       const after = (ms, fn) => setTimeout(guard(fn), ms);
@@ -816,20 +1623,41 @@
             if (!anyProgressed()) needsProtectedPlayback(keySystem);
           });
       };
-      const wrapped = {
-        requestMediaKeySystemAccess(keySystem, configurations) {
-          const result = apply(requestAccess, this, arguments);
-          if (!drmSent && typeof keySystem === "string" && apply(test, protectedSystem, [keySystem])) {
-            const activated = !!(navigator.userActivation && navigator.userActivation.isActive);
-            apply(then, result, [null, () => onRefused(keySystem, activated)]);
-          }
-          return result;
-        },
-      }.requestMediaKeySystemAccess;
+      const wrapped = asNative(requestAccess, (target, self, args) => {
+        const result = apply(target, self, args);
+        const keySystem = args[0];
+        if (!drmSent && typeof keySystem === "string" && apply(test, protectedSystem, [keySystem])) {
+          const activated = !!(navigator.userActivation && navigator.userActivation.isActive);
+          const remember = guard((access) => activated && access && typeof access === "object" && grantedOnActivation.add(access));
+          apply(then, result, [remember, () => onRefused(keySystem, activated)]);
+        }
+        return result;
+      });
       Object.defineProperty(NavigatorType.prototype, "requestMediaKeySystemAccess", {
         ...Object.getOwnPropertyDescriptor(NavigatorType.prototype, "requestMediaKeySystemAccess"),
         value: wrapped,
       });
+      const AccessType = window.MediaKeySystemAccess;
+      const createKeys = AccessType && AccessType.prototype.createMediaKeys;
+      const keySystemOf = AccessType && Object.getOwnPropertyDescriptor(AccessType.prototype, "keySystem");
+      if (typeof createKeys === "function" && keySystemOf && typeof keySystemOf.get === "function") {
+        const keySystemFrom = guard((access) => apply(keySystemOf.get, access, []));
+        const wrappedCreate = asNative(createKeys, (target, self, args) => {
+          const result = apply(target, self, args);
+          if (!drmSent) {
+            const keySystem = keySystemFrom(self);
+            if (typeof keySystem === "string" && apply(test, protectedSystem, [keySystem])) {
+              const activated = !!(navigator.userActivation && navigator.userActivation.isActive) || grantedOnActivation.has(self);
+              apply(then, result, [null, () => onRefused(keySystem, activated)]);
+            }
+          }
+          return result;
+        });
+        Object.defineProperty(AccessType.prototype, "createMediaKeys", {
+          ...Object.getOwnPropertyDescriptor(AccessType.prototype, "createMediaKeys"),
+          value: wrappedCreate,
+        });
+      }
     }
   } catch (e) {}
 
@@ -873,23 +1701,109 @@
     if (pipTrace && pipHandlerSet !== null)
       send("pipTrace", { event: "setActionHandler", action: "enterpictureinpicture", set: pipHandlerSet });
     if (blockAutoplay)
-      pauseUnasked([...playingMedia, ...document.querySelectorAll("video, audio")], !!(navigator.userActivation && navigator.userActivation.hasBeenActive));
+      pauseUnasked([...playingMedia, ...document.querySelectorAll("video, audio")], askedToPlay());
     if (config.displayMediaPicker) installDisplayMedia();
+    else restoreDisplayMedia();
     if (config.fieldTiming) setFieldTiming(true);
     if (typeof config.selectionPopover === "boolean" && handlers.selectionPopover) handlers.selectionPopover(config.selectionPopover);
   };
   send("hello", { top: isTop, url: location.href });
 
-  const receive = (kind, json) => {
-    const handler = handlers[kind];
-    if (handler) guard(handler)(fromJSON(json));
-  };
   if (!isTop) return receive;
 
+  let contextMenuAt = null;
+  addEventListener(
+    "contextmenu",
+    (e) => {
+      if (e.isTrusted) contextMenuAt = { x: e.clientX, y: e.clientY, at: performance.now() };
+    },
+    { capture: true, passive: true },
+  );
+  document.addEventListener("ardia-hide-element", () => {
+    const asked = contextMenuAt;
+    contextMenuAt = null;
+    if (asked && performance.now() - asked.at < 60000) send("hideElement", { x: asked.x, y: asked.y });
+  });
+  document.addEventListener("ardia-hide-element-in-frame", () => {
+    contextMenuAt = null;
+    send("hideElement", { x: -1, y: -1 });
+  });
+
   const parse = (css) => {
-    const m = css && css.match(/[\d.]+/g);
-    if (!m || m.length < 3) return null;
-    return { r: +m[0], g: +m[1], b: +m[2], a: m[3] === undefined ? 1 : +m[3] };
+    if (!css) return null;
+    if (/^rgba?\(/.test(css)) {
+      const m = css.match(/[\d.]+/g);
+      if (!m || m.length < 3) return null;
+      return { r: +m[0], g: +m[1], b: +m[2], a: m[3] === undefined ? 1 : +m[3] };
+    }
+    const m = css.match(/^(?:color\(([\w-]+)|(lab|lch|oklab|oklch)\()\s*([^/)]*?)\s*(?:\/\s*([\d.]+%?)\s*)?\)$/);
+    const toLinearSrgb = m && LINEAR_SRGB_FROM[m[1] ?? m[2]];
+    if (!toLinearSrgb) return null;
+    const channels = m[3].split(/\s+/).map((token) => (token === "none" ? 0 : parseFloat(token)));
+    if (channels.length < 3 || channels.some((n) => !Number.isFinite(n))) return null;
+    const [r, g, b] = toLinearSrgb(channels).map((v) => Math.min(255, Math.max(0, srgbFromLinear(v) * 255)));
+    const alpha = m[4] === undefined ? 1 : parseFloat(m[4]) / (m[4].endsWith("%") ? 100 : 1);
+    return { r, g, b, a: Math.min(1, Math.max(0, alpha)) };
+  };
+  const srgbFromLinear = (v) => (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055);
+  const linearFromSrgb = (v) => {
+    const magnitude = Math.abs(v);
+    return Math.sign(v) * (magnitude <= 0.04045 ? magnitude / 12.92 : ((magnitude + 0.055) / 1.055) ** 2.4);
+  };
+  const multiply = (matrix, [x, y, z]) => matrix.map(([a, b, c]) => a * x + b * y + c * z);
+  const XYZ_D65_TO_LINEAR_SRGB = [
+    [3.2409699419045226, -1.537383177570094, -0.4986107602930034],
+    [-0.9692436362808796, 1.8759675015077202, 0.04155505740717559],
+    [0.05563007969699366, -0.20397695888897652, 1.0569715142428786],
+  ];
+  const XYZ_D50_TO_D65 = [
+    [0.955473421488075, -0.02309845494876471, 0.06325924320057072],
+    [-0.0283697093338637, 1.0099953980813041, 0.021041441191917323],
+    [0.012314014864481998, -0.020507649298898964, 1.330365926242124],
+  ];
+  const LINEAR_P3_TO_XYZ_D65 = [
+    [0.4865709486482162, 0.26566769316909306, 0.1982172852343625],
+    [0.2289745640697488, 0.6917385218365064, 0.079286914093745],
+    [0, 0.04511338185890264, 1.043944368900976],
+  ];
+  const D50_WHITE = [0.3457 / 0.3585, 1, (1 - 0.3457 - 0.3585) / 0.3585];
+  const LAB_EPSILON = 216 / 24389;
+  const LAB_KAPPA = 24389 / 27;
+  const labToLinearSrgb = ([l, a, b]) => {
+    const fy = (l + 16) / 116;
+    const fx = fy + a / 500;
+    const fz = fy - b / 200;
+    const xyzD50 = [
+      fx ** 3 > LAB_EPSILON ? fx ** 3 : (116 * fx - 16) / LAB_KAPPA,
+      l > LAB_KAPPA * LAB_EPSILON ? fy ** 3 : l / LAB_KAPPA,
+      fz ** 3 > LAB_EPSILON ? fz ** 3 : (116 * fz - 16) / LAB_KAPPA,
+    ].map((v, i) => v * D50_WHITE[i]);
+    return multiply(XYZ_D65_TO_LINEAR_SRGB, multiply(XYZ_D50_TO_D65, xyzD50));
+  };
+  const oklabToLinearSrgb = ([l, a, b]) => {
+    const lms = [
+      l + 0.3963377774 * a + 0.2158037573 * b,
+      l - 0.1055613458 * a - 0.0638541728 * b,
+      l - 0.0894841775 * a - 1.291485548 * b,
+    ].map((v) => v ** 3);
+    return multiply(
+      [
+        [4.0767416621, -3.3077115913, 0.2309699292],
+        [-1.2684380046, 2.6097574011, -0.3413193965],
+        [-0.0041960863, -0.7034186147, 1.707614701],
+      ],
+      lms,
+    );
+  };
+  const fromPolar = ([l, chroma, hue]) => [l, chroma * Math.cos((hue * Math.PI) / 180), chroma * Math.sin((hue * Math.PI) / 180)];
+  const LINEAR_SRGB_FROM = {
+    srgb: (channels) => channels.slice(0, 3).map(linearFromSrgb),
+    "srgb-linear": (channels) => channels.slice(0, 3),
+    "display-p3": (channels) => multiply(XYZ_D65_TO_LINEAR_SRGB, multiply(LINEAR_P3_TO_XYZ_D65, channels.slice(0, 3).map(linearFromSrgb))),
+    lab: labToLinearSrgb,
+    lch: (channels) => labToLinearSrgb(fromPolar(channels)),
+    oklab: oklabToLinearSrgb,
+    oklch: (channels) => oklabToLinearSrgb(fromPolar(channels)),
   };
   const hex = (c) => "#" + [c.r, c.g, c.b].map((n) => Math.round(n).toString(16).padStart(2, "0")).join("").toUpperCase();
   const normalize = (value) => {
@@ -1196,7 +2110,11 @@
 
   const scrollDirection = () => {
     const DOWN = 24, UP = 12, MIN_RANGE = 120, SETTLE = 300, GESTURE = 300;
-    let anchor = 0, last = 0, lastAt = -1e9, settleUntil = -1e9, budget = 0, height = 0, sent = null, gestureSent = false;
+    const paged = (snap, vertical) => {
+      const [axis, strictness] = snap.split(" ");
+      return strictness === "mandatory" && (axis === "y" || axis === "both" || axis === (vertical ? "inline" : "block"));
+    };
+    let anchor = 0, last = 0, lastAt = -1e9, settleUntil = -1e9, budget = 0, height = 0, sent = null, gestureSent = false, heading = 0;
     const resized = (viewport, now) => {
       if (now >= settleUntil) budget = 0;
       if (height && viewport !== height) {
@@ -1210,7 +2128,17 @@
       rebase(y) {
         anchor = last = y;
       },
-      scrolled(y, range, viewport, now, user) {
+      wheeled(deltaX, deltaY, pinch) {
+        if (pinch || !deltaY) {
+          if (pinch || deltaX) heading = 0;
+          return;
+        }
+        heading = deltaY > 0 ? 1 : -1;
+      },
+      undirected() {
+        heading = 0;
+      },
+      scrolled(y, range, viewport, now, user, snap = "", vertical = false) {
         resized(viewport, now);
         if (now - lastAt > GESTURE) {
           gestureSent = false;
@@ -1226,9 +2154,9 @@
         }
         let state = null;
         if (y <= 2) state = "top";
-        else if (!user) anchor = y;
+        else if (!user || moved * heading < 0) anchor = y;
         else if (y - anchor >= DOWN) {
-          if (range >= MIN_RANGE) state = "down";
+          if (range >= MIN_RANGE && !paged(snap, vertical)) state = "down";
           else anchor = y;
         } else if (anchor - y >= UP) state = "up";
         else if (sent === "down" ? gestureSent && y > anchor : y < anchor) anchor = y;
@@ -1248,8 +2176,20 @@
     inputAt = performance.now();
     if (!scroller && document.scrollingElement) direction.rebase((scroller = document.scrollingElement).scrollTop);
   };
-  for (const type of ["wheel", "keydown", "mousedown", "touchstart"]) addEventListener(type, noteInput, { passive: true, capture: true });
-  addEventListener("mousemove", (e) => e.buttons && noteInput(), { passive: true, capture: true });
+  const noteUndirectedInput = () => {
+    direction.undirected();
+    noteInput();
+  };
+  addEventListener(
+    "wheel",
+    (e) => {
+      direction.wheeled(e.deltaX, e.deltaY, e.ctrlKey);
+      noteInput();
+    },
+    { passive: true, capture: true },
+  );
+  for (const type of ["keydown", "mousedown", "touchstart"]) addEventListener(type, noteUndirectedInput, { passive: true, capture: true });
+  addEventListener("mousemove", (e) => e.buttons && noteUndirectedInput(), { passive: true, capture: true });
   const measureScroll = guard(() => {
     const target = scrollTarget;
     scrollTarget = null;
@@ -1258,7 +2198,8 @@
     if (!el || !doc || (el !== doc && (el.clientHeight < innerHeight * 0.5 || el.clientWidth < innerWidth * 0.5))) return;
     if (el !== scroller) direction.rebase((scroller = el).scrollTop);
     const now = performance.now();
-    const state = direction.scrolled(el.scrollTop, el.scrollHeight - el.clientHeight, innerHeight, now, now - inputAt < 1000);
+    const style = getComputedStyle(el === doc ? document.documentElement : el);
+    const state = direction.scrolled(el.scrollTop, el.scrollHeight - el.clientHeight, innerHeight, now, now - inputAt < 1000, style.scrollSnapType, /^(vertical|sideways)/.test(style.writingMode));
     if (state) send("scroll", { state });
   });
   addEventListener(

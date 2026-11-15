@@ -143,7 +143,8 @@ std::optional<std::string> Xdg(const DesktopPlaces& places,
   const bool slow = argv.size() > 1 && (argv[1] == "set" || argv[1] == "default");
   ToolRun run = RunTool(argv, slow ? kToolDeadline : kQueryDeadline,
                         places.tool_environment);
-  return run.ok ? std::optional<std::string>(run.out) : std::nullopt;
+  return run.ok && !run.out.empty() ? std::optional<std::string>(run.out)
+                                    : std::nullopt;
 }
 
 std::optional<std::string> MimeAppsDefault(const DesktopPlaces& places,

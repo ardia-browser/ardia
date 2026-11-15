@@ -127,7 +127,7 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
 | Calendar | Does nothing; hidden | #1521 |
 | Trackpad gestures, video upscaling, reorder haptics, thin scroll bars | Does nothing; hidden | #1522, #1520 |
 | Keep new-tab links inside a Little Ardia window, zoom with Ctrl and the mouse wheel, offer to save and fill passwords | Does nothing (the engine has no call for them yet); hidden | #1783, #1425 |
-| Warn before quitting | Works (#1796's build 1f4d97db1, run 43631924720): with it on, closing the last window (close button, Alt+F4, Ctrl+Shift+W, a lone Little Ardia's Ctrl+W; Ctrl+W on a window's last tab follows the same rule) asks first with the Mac's words; Cancel keeps the app running, Quit exits, Don't ask again turns it off; a hidden instance never asks | #1782, #1803 |
+| Warn before quitting | Works (#1796's build 1f4d97db1, run 43631924720): with it on, closing the last window (close button, Alt+F4, Ctrl+Shift+W, a lone Little Ardia's Ctrl+W; Ctrl+W on a window's last tab follows the same rule) asks first with the Mac's words; Cancel keeps the app running, Quit exits, Don't ask again turns it off; a hidden instance never asks. The last other window closing while a close-tabs confirm is open now makes that close ask the quit question too (#1889: unit-tested on Linux with Windows platform features, native check pending) | #1782, #1803, #1889 |
 | The ardia command, Widevine | Not offered (each says so) | |
 | Copy naming the Mac | Works: the walk found three more (a ⌘T, "History › Recently Closed", "File › Close All Tabs"), fixed in #1668's PR | #1522, #1668 |
 
@@ -243,9 +243,13 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
     close. It asks before the window closes, so a Cancel leaves the window and the app as they were and no quit
     starts; Quit closes the window and the quit above runs as before. A close that asked it never also shows the
     close-tabs confirm. The dialog is the shared confirm on the dialog thread (#1672). Closing Settings when it is
-    the only window left quits without asking: Settings closes without a close request. A window that closes
-    elsewhere while a close-tabs confirm is open isn't counted again, so that close can then quit without asking.
-    Both are #1803.
+    the only window left quits without asking: Settings closes without a close request (#1803). When the last other
+    window closes while a window's close-tabs confirm is open, agreeing to close the tabs then asks the quit question
+    too, since that close now quits: Cancel keeps the window, Quit closes it, and each question's Don't ask again
+    turns off only its own warning. A Settings or pop-up window, or a new browser window, still open by then
+    means no second question; a window that left the UI during its own confirm is cancelled without one (#1889,
+    `quitWarning.test.mjs`). `quit_warnings_after_close_tabs` and `quit_warnings_after_close_tabs_cancelled` in the
+    hourly `usage_counts` count it. Not yet checked on a Windows machine.
   - Windows fade as on the Mac (`WindowFade.h`), fade only with no grow. A window opened with `animated`, and every
     window that is not a browser window (Little Ardia, Settings, Import: the Mac's system animates those open),
     stays transparent until its React root has content or for 0.6 s, then fades in over 0.25 s (Little Ardia

@@ -9,6 +9,7 @@ import { closeWindowAnimated } from "./closeAnimated";
 import { isEmptyCardTab } from "../omnibox/newTabBarPolicy";
 import { askBeforeQuitting } from "./quitWarning";
 import { startClosingWindow, stopClosingWindow } from "./closingWindows";
+import { noteQuitWarningAfterCloseTabs } from "../telemetry/quitWarningCounts";
 
 const MIN_TABS = 2;
 
@@ -67,7 +68,7 @@ async function askToClose(windowId: string, ask: CloseAsk, closing?: string[]): 
 const cancel = (suppressWarning = false): WindowCloseDecision => ({ decision: "cancel", suppressWarning });
 
 export async function decideWindowClose(windowId: string, ask: CloseAsk = confirm): Promise<WindowCloseDecision> {
-  const quitWarning = await askBeforeQuitting(windowId, ask);
+  let quitWarning = await askBeforeQuitting(windowId, ask);
   if (quitWarning === "cancelled") return cancel();
   const asked = new Set<string>();
   let suppressWarning = false;
@@ -82,6 +83,12 @@ export async function decideWindowClose(windowId: string, ask: CloseAsk = confir
     const answer = await askToClose(windowId, ask, closing);
     suppressWarning ||= answer.suppressWarning;
     if (answer.decision === "cancel") return cancel(suppressWarning);
+    if (!useBrowser.getState().windows[windowId]) return cancel(suppressWarning);
+    if (quitWarning === "notAsked") {
+      quitWarning = await askBeforeQuitting(windowId, ask);
+      if (quitWarning !== "notAsked") noteQuitWarningAfterCloseTabs(quitWarning);
+      if (quitWarning === "cancelled") return cancel(suppressWarning);
+    }
     for (const id of closing) asked.add(id);
   }
 }

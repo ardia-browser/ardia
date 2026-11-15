@@ -252,3 +252,141 @@ test("on Windows, a browser window's close asks the quit question first: Cancel 
   assert.deepEqual(seen.lastTabQuitCancelled, { asked: [quit], open: true }, "with the last-tab confirm off, the quit question asks, and Cancel keeps the tab");
   assert.deepEqual(seen.lastTabQuit, { asked: [quit, quit], open: false }, "Quit closes it");
 });
+
+const CLOSE_TABS_CONFIRM_RACE = `
+const { useBrowser } = await import("./src/state/browser/store.ts");
+const { requestWindowClose } = await import("./src/state/windows/windowClose.ts");
+const { lastWindowToRestore } = await import("./src/state/windows/reopenClosed.ts");
+const { takeQuitWarningCounts } = await import("./src/state/telemetry/quitWarningCounts.ts");
+const { shellNativeModules, windows } = await import("./src/test-native/shell.ts");
+const S = () => useBrowser.getState();
+const yes = { confirmed: true, suppressed: false }, no = { confirmed: false, suppressed: false };
+const dialogs = [], animating = new Map();
+const originalConfirm = shellNativeModules.ArdiaDialogs.confirm;
+const originalAnimate = shellNativeModules.ArdiaAppWindows.animateWindowClose;
+const turn = () => new Promise((resolve) => setTimeout(resolve, 0));
+const until = async (done, what) => {
+  for (let n = 0; n < 200; n++) {
+    if (done()) return;
+    await turn();
+  }
+  throw new Error("never happened: " + what);
+};
+const settle = async () => { for (let n = 0; n < 20; n++) await turn(); };
+const isTabs = (d) => d.title.startsWith("Close");
+const reply = (which, answer) => {
+  const dialog = dialogs.find((d) => !d.answered && which(d));
+  dialog.answered = true;
+  dialog.resolve(answer);
+};
+const finishAnimation = async (id) => {
+  await until(() => animating.has(id), id + " starts its close animation");
+  animating.get(id)();
+  animating.delete(id);
+  await until(() => !S().windows[id], id + " leaves the UI's windows");
+};
+const scenario = async ({ during, tabs = yes, quit = no }) => {
+  S().hydrate({ profiles: { default: { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 } }, profileOrder: ["default"] });
+  S().updateSettings({ warnBeforeQuitting: true, warnBeforeClosingWindow: true });
+  windows.open.clear();
+  dialogs.length = 0;
+  takeQuitWarningCounts();
+  const other = S().createWindow({ url: "https://other.example/" });
+  const closing = S().createWindow({ url: "https://a.example/" });
+  S().newTab(closing, { url: "https://b.example/" });
+  windows.open.set(other, {});
+  windows.open.set(closing, {});
+  requestWindowClose(closing);
+  await until(() => dialogs.some(isTabs), "the close-tabs confirm opens");
+  await during?.({ other, closing });
+  reply(isTabs, tabs);
+  await settle();
+  if (dialogs.some((d) => !isTabs(d) && !d.answered)) reply((d) => !isTabs(d), quit);
+  await settle();
+  const animated = animating.has(closing);
+  if (animated) await finishAnimation(closing);
+  const { quit_warnings_after_close_tabs: asked, quit_warnings_after_close_tabs_cancelled: cancelled } = takeQuitWarningCounts();
+  return {
+    asked: dialogs.map((d) => (isTabs(d) ? "tabs" : "quit")),
+    closed: animated && !S().windows[closing],
+    otherOpen: !!S().windows[other],
+    keptForReopen: lastWindowToRestore(S())?.tabs.length ?? 0,
+    warnBeforeClosingWindow: S().settings.warnBeforeClosingWindow,
+    warnBeforeQuitting: S().settings.warnBeforeQuitting,
+    counts: [asked, cancelled],
+  };
+};
+const otherCloses = async ({ other }) => {
+  requestWindowClose(other);
+  await finishAnimation(other);
+};
+const otherClosesBeside = (id, kind) => async (ids) => {
+  windows.open.set(id, kind ? { kind } : {});
+  await otherCloses(ids);
+};
+try {
+  shellNativeModules.ArdiaDialogs.confirm = (options) => new Promise((resolve) => dialogs.push({ title: options.title, resolve }));
+  shellNativeModules.ArdiaAppWindows.animateWindowClose = (id) => new Promise((resolve) => animating.set(id, resolve));
+  const seen = {};
+  seen.raceCancelled = await scenario({ during: otherCloses, quit: no });
+  seen.raceQuit = await scenario({ during: otherCloses, quit: yes });
+  seen.raceTabsCancelled = await scenario({ during: otherCloses, tabs: no });
+  seen.otherStays = await scenario({});
+  seen.closingLeftUiToo = await scenario({ during: async (ids) => { await otherCloses(ids); S().closeWindow(ids.closing); }, quit: { confirmed: true, suppressed: true } });
+  seen.settingsStays = await scenario({ during: otherClosesBeside("settings", "settings") });
+  seen.popupStays = await scenario({ during: otherClosesBeside("popup:p1") });
+  seen.newWindowStays = await scenario({ during: async (ids) => { windows.open.set(S().createWindow({ url: "https://c.example/" }), {}); await otherCloses(ids); } });
+  seen.tabsSuppressed = await scenario({ during: otherCloses, tabs: { confirmed: true, suppressed: true }, quit: no });
+  seen.quitSuppressed = await scenario({ during: otherCloses, quit: { confirmed: false, suppressed: true } });
+  console.log(JSON.stringify(seen));
+} finally {
+  for (const release of animating.values()) release();
+  for (const d of dialogs) if (!d.answered) d.resolve(no);
+  shellNativeModules.ArdiaDialogs.confirm = originalConfirm;
+  shellNativeModules.ArdiaAppWindows.animateWindowClose = originalAnimate;
+}
+`;
+
+const runRace = (platformHook) => {
+  const imports = platformHook ? ["--import", `data:text/javascript,${encodeURIComponent(platformHook)}`] : [];
+  const run = spawnSync(process.execPath, ["--no-warnings", "--import", "./src/test-loader.mjs", ...imports, "--input-type=module", "-e", CLOSE_TABS_CONFIRM_RACE], { cwd: fileURLToPath(new URL("../../../", import.meta.url)), encoding: "utf8", timeout: 60_000 });
+  assert.equal(run.status, 0, run.stderr);
+  return JSON.parse(run.stdout.trim().split("\n").at(-1));
+};
+let raceOnWindows;
+const runRaceOnWindows = () => (raceOnWindows ??= runRace(ON_WINDOWS));
+
+test("on Windows, when the last other window closes while a close-tabs confirm is open, agreeing to close the tabs then asks the quit question once: Cancel keeps the window, Quit closes it", () => {
+  const seen = runRaceOnWindows();
+  const base = { otherOpen: false, warnBeforeClosingWindow: true, warnBeforeQuitting: true };
+  assert.deepEqual(seen.raceCancelled, { ...base, asked: ["tabs", "quit"], closed: false, keptForReopen: 0, counts: [1, 1] }, "Cancel on the quit question keeps the window and its tabs");
+  assert.deepEqual(seen.raceQuit, { ...base, asked: ["tabs", "quit"], closed: true, keptForReopen: 2, counts: [1, 0] }, "Quit closes it as the last window, kept for reopening");
+  assert.deepEqual(seen.raceTabsCancelled, { ...base, asked: ["tabs"], closed: false, keptForReopen: 0, counts: [0, 0] }, "Cancel on the close-tabs confirm asks nothing more");
+  assert.deepEqual(seen.otherStays, { ...base, asked: ["tabs"], closed: true, otherOpen: true, keptForReopen: 0, counts: [0, 0] }, "with the other window still open, the close asks only the close-tabs confirm");
+});
+
+test("on Windows, a close whose own window left the UI during its close-tabs confirm is cancelled without a quit question that could turn the warning off", () => {
+  const seen = runRaceOnWindows();
+  assert.deepEqual(seen.closingLeftUiToo, { asked: ["tabs"], closed: false, otherOpen: false, keptForReopen: 0, warnBeforeClosingWindow: true, warnBeforeQuitting: true, counts: [0, 0] });
+});
+
+test("on Windows, a Settings window, a pop-up or a new browser window still open after the other closes keeps the app running, so no quit question follows the close-tabs confirm", () => {
+  const seen = runRaceOnWindows();
+  const closesWithoutQuitQuestion = { asked: ["tabs"], closed: true, otherOpen: false, keptForReopen: 2, warnBeforeClosingWindow: true, warnBeforeQuitting: true, counts: [0, 0] };
+  assert.deepEqual(seen.settingsStays, closesWithoutQuitQuestion, "Settings: still the last browser window, so it is kept for reopening");
+  assert.deepEqual(seen.popupStays, closesWithoutQuitQuestion, "a pop-up: the same");
+  assert.deepEqual(seen.newWindowStays, { ...closesWithoutQuitQuestion, keptForReopen: 0 }, "a new browser window");
+});
+
+test("on Windows, each question's Don't ask again turns off only its own warning, even when the quit question is cancelled", () => {
+  const seen = runRaceOnWindows();
+  assert.deepEqual(seen.tabsSuppressed, { asked: ["tabs", "quit"], closed: false, otherOpen: false, keptForReopen: 0, warnBeforeClosingWindow: false, warnBeforeQuitting: true, counts: [1, 1] });
+  assert.deepEqual(seen.quitSuppressed, { asked: ["tabs", "quit"], closed: false, otherOpen: false, keptForReopen: 0, warnBeforeClosingWindow: true, warnBeforeQuitting: false, counts: [1, 1] });
+});
+
+test("on the Mac, the same race never asks a quit question: closing a window doesn't quit", () => {
+  const seen = runRace(null);
+  assert.deepEqual(seen.raceCancelled.asked, ["tabs"]);
+  assert.equal(seen.raceCancelled.closed, true);
+  assert.deepEqual(seen.raceCancelled.counts, [0, 0]);
+});

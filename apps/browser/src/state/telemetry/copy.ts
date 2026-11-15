@@ -243,6 +243,7 @@ const ADDED_ITEMS = {
     "How many deleted profiles had their browsing data removed from this Mac and how many removals had to wait or failed, summed up once an hour. Never which profile",
     "On Windows, how many sync files waited because they were online-only or still being written, and how many online-only sync files Ardia downloaded, summed up once an hour. Never which files or what's in them",
     "On Windows, how many times a tab you switched to had no page yet, so Ardia held on to giving that page the keyboard, and how many of those it then gave and how many it let go (you moved on, clicked another page or typed in a field), summed up once an hour. Never which tab or page",
+    "On Windows, how many times closing a window asked whether to quit Ardia after you had agreed to close its tabs, because the last other window closed while you were answering, and how many of those you cancelled, summed up once an hour. Never which window or tabs",
   ],
 };
 

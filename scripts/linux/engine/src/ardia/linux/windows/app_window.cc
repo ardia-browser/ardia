@@ -100,10 +100,6 @@ std::optional<base::TimeDelta> MotionDelayOverride() {
   return base::Milliseconds(std::clamp(delay, -100, 100));
 }
 
-base::TimeDelta OneFrame(const ui::Compositor& compositor) {
-  return base::Seconds(1) / std::max(1.0f, compositor.refresh_rate());
-}
-
 std::unique_ptr<views::Widget::ShapeRects> RoundedShape(const gfx::Size& size,
                                                         int radius) {
   auto rects = std::make_unique<views::Widget::ShapeRects>();
@@ -290,7 +286,7 @@ bool AppWindowView::StartMotion(const std::string& key,
   RunningMotion& running = motions_[key];
   running.motion = motion;
   const base::TimeDelta delay =
-      motion_delay_override_.value_or(OneFrame(*compositor));
+      motion_delay_override_.value_or(base::TimeDelta());
   running.start = base::TimeTicks::Now() - motion.elapsed + delay;
   const gfx::Rect& final_rect = placed->second.bounds;
   const gfx::Rect first =

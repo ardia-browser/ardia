@@ -69,6 +69,8 @@ source_set("modules") {
     "owner_prompt.h",
     "owner_window.cc",
     "owner_window.h",
+    "report.cc",
+    "report.h",
     "screen_lock.cc",
     "screen_lock.h",
     "shell.cc",

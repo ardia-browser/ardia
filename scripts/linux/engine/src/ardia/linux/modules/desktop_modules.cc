@@ -6,6 +6,7 @@
 #include "ardia/linux/modules/file_drop.h"
 #include "ardia/linux/modules/location.h"
 #include "ardia/linux/modules/owner_check.h"
+#include "ardia/linux/modules/report.h"
 #include "ardia/linux/modules/screen_lock.h"
 #include "ardia/linux/sync/sync_module.h"
 #include "ardia/linux/translate/translate_module.h"
@@ -22,6 +23,7 @@ void RegisterDesktopModules(ModuleRegistry& registry) {
   RegisterImportHostModule(registry);
   RegisterTranslateModule(registry);
   RegisterLocationModule(registry);
+  RegisterReportModule(registry);
 }
 
 }

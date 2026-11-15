@@ -4,9 +4,11 @@
 #include <cmath>
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <utility>
 
+#include "ardia/linux/host/host.h"
 #include "ardia/linux/modules/app_modules.h"
 #include "ardia/linux/page_channel/page_channel.h"
 #include "ardia/linux/prompts/domains.h"
@@ -14,6 +16,12 @@
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/no_destructor.h"
+#include "base/time/time.h"
+#include "chrome/browser/content_settings/host_content_settings_map_factory.h"
+#include "chrome/browser/profiles/profile.h"
+#include "components/content_settings/core/browser/host_content_settings_map.h"
+#include "components/content_settings/core/common/content_settings.h"
+#include "components/content_settings/core/common/content_settings_types.h"
 #include "base/strings/string_util.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
@@ -26,25 +34,8 @@ namespace {
 
 constexpr size_t kMostNotificationFrames = 500;
 
-struct PageReports {
-  std::string theme;
-  std::string theme_source;
-  std::map<std::string, std::string> notification_frames;
-};
-
-std::map<std::string, PageReports>& Reports() {
-  static base::NoDestructor<std::map<std::string, PageReports>> reports;
-  return *reports;
-}
-
-bool& SelectionPopover() {
-  static bool enabled = true;
-  return enabled;
-}
-
-std::string Json(const base::Value& value) {
-  return base::WriteJson(value).value_or("null");
-}
+constexpr size_t kMostMediaActions = 32;
+constexpr base::TimeDelta kLinkDropInterval = base::Seconds(1);
 
 std::optional<std::string> Text(const base::DictValue* dict,
                                 const char* key,
@@ -69,18 +60,159 @@ bool Flag(const base::DictValue* dict, const char* key) {
   return dict && dict->FindBool(key).value_or(false);
 }
 
+class NowPlaying {
+ public:
+  bool empty() const { return frames_.empty(); }
+
+  std::optional<base::DictValue> Note(const std::string& frame,
+                                      const base::DictValue* page,
+                                      bool main) {
+    if (page && !page->empty()) {
+      frames_[frame] = Sanitized(*page);
+      if (main) {
+        main_frames_.insert(frame);
+      } else {
+        main_frames_.erase(frame);
+      }
+    } else {
+      frames_.erase(frame);
+      main_frames_.erase(frame);
+    }
+    selected_ = page && !page->empty() ? frame
+                : frames_.empty()      ? std::string()
+                                       : frames_.begin()->first;
+    for (const auto& [other, state] : frames_) {
+      if (Rank(other) > Rank(selected_)) {
+        selected_ = other;
+      }
+    }
+    auto it = frames_.find(selected_);
+    if (it == frames_.end()) {
+      return std::nullopt;
+    }
+    return it->second.Clone();
+  }
+
+  bool Reset() {
+    const bool had = !frames_.empty();
+    frames_.clear();
+    main_frames_.clear();
+    selected_.clear();
+    return had;
+  }
+
+ private:
+  static base::DictValue Sanitized(const base::DictValue& page) {
+    const std::string* state = page.FindString("playbackState");
+    std::string playback = state && (*state == "none" || *state == "paused" ||
+                                     *state == "playing")
+                               ? *state
+                               : std::string("none");
+    base::ListValue actions;
+    if (const base::ListValue* asked = page.FindList("actions")) {
+      for (const base::Value& action : *asked) {
+        if (action.is_string() && action.GetString().size() <= 64 &&
+            actions.size() < kMostMediaActions) {
+          actions.Append(action.GetString());
+        }
+      }
+    }
+    double position = 0;
+    double duration = 0;
+    double rate = 1;
+    double timestamp = 0;
+    Finite(&page, "position", &position);
+    const bool has_duration =
+        Finite(&page, "duration", &duration) && duration >= 0;
+    Finite(&page, "playbackRate", &rate);
+    Finite(&page, "timestamp", &timestamp);
+    std::optional<std::string> artwork = Text(&page, "artwork", 1 << 20);
+    base::DictValue out;
+    out.Set("title", Text(&page, "title", 1024).value_or(std::string()));
+    out.Set("artist", Text(&page, "artist", 1024).value_or(std::string()));
+    out.Set("album", Text(&page, "album", 1024).value_or(std::string()));
+    out.Set("artwork", artwork ? base::Value(*artwork) : base::Value());
+    out.Set("playbackState", playback);
+    out.Set("position", std::max(position, 0.0));
+    out.Set("duration", has_duration ? base::Value(duration) : base::Value());
+    out.Set("playbackRate", rate);
+    out.Set("timestamp", timestamp);
+    out.Set("hasVideo", Flag(&page, "hasVideo"));
+    out.Set("actions", std::move(actions));
+    out.Set("controllable", Flag(&page, "controllable"));
+    return out;
+  }
+
+  int Rank(const std::string& frame) const {
+    auto it = frames_.find(frame);
+    if (it == frames_.end()) {
+      return -1;
+    }
+    const std::string* playback = it->second.FindString("playbackState");
+    return (it->second.FindBool("controllable").value_or(false) ? 4 : 0) +
+           (playback && *playback == "playing" ? 2 : 0) +
+           (main_frames_.contains(frame) ? 1 : 0);
+  }
+
+  std::map<std::string, base::DictValue> frames_;
+  std::set<std::string> main_frames_;
+  std::string selected_;
+};
+
+struct PageReports {
+  std::string theme;
+  std::string theme_source;
+  std::map<std::string, std::string> notification_frames;
+  NowPlaying now_playing;
+  base::TimeTicks link_drop_at;
+};
+
+std::map<std::string, PageReports>& Reports() {
+  static base::NoDestructor<std::map<std::string, PageReports>> reports;
+  return *reports;
+}
+
+bool& SelectionPopover() {
+  static bool enabled = true;
+  return enabled;
+}
+
+std::string Json(const base::Value& value) {
+  return base::WriteJson(value).value_or("null");
+}
+
 ardia_win::TabState* HostedState(content::WebContents* contents) {
   ardia_win::TabState* state =
       contents ? ardia_win::TabState::FromWebContents(contents) : nullptr;
   return state && !state->key().empty() ? state : nullptr;
 }
 
-void SendConfig(PageChannel* channel, const std::string& frame_id, bool main) {
+bool BlocksAutoplay(content::WebContents* contents) {
+  const GURL page = contents->GetLastCommittedURL();
+  if (!page.SchemeIsHTTPOrHTTPS()) {
+    return false;
+  }
+  HostContentSettingsMap* settings =
+      HostContentSettingsMapFactory::GetForProfile(
+          Profile::FromBrowserContext(contents->GetBrowserContext()));
+  return settings &&
+         settings->GetContentSetting(page, page,
+                                     ContentSettingsType::AUTOPLAY) ==
+             CONTENT_SETTING_BLOCK;
+}
+
+void SendConfig(PageChannel* channel,
+                const std::string& frame_id,
+                bool main,
+                bool block_autoplay) {
   base::DictValue peek;
   channel->CallFrame(frame_id, "peekConfig", Json(base::Value(std::move(peek))));
   base::DictValue config;
   if (main) {
     config.Set("selectionPopover", SelectionPopover());
+  }
+  if (block_autoplay) {
+    config.Set("blockAutoplay", true);
   }
   channel->CallFrame(frame_id, "config", Json(base::Value(std::move(config))));
 }
@@ -165,8 +297,14 @@ void HandlePageMessage(content::WebContents* contents,
   if (kind == "hello" || kind == "peekHello") {
     if (kind == "hello" && main) {
       CountLinux("pageScriptHellos");
+      if (reports.now_playing.Reset()) {
+        base::DictValue data;
+        data.Set("state", base::Value());
+        state->Send("nowPlaying", std::move(data));
+      }
     }
-    SendConfig(channel, frame_id, main && kind == "hello");
+    SendConfig(channel, frame_id, main && kind == "hello",
+               kind == "hello" && BlocksAutoplay(contents));
   } else if (kind == "displayMediaHello") {
     channel->CallFrame(frame_id, "config", "{}");
   } else if (kind == "theme") {
@@ -204,6 +342,27 @@ void HandlePageMessage(content::WebContents* contents,
                               : base::Value());
     data.Set("flag", !counted && Flag(dict, "flag"));
     state->Send("appBadge", std::move(data));
+  } else if (kind == "nowPlaying") {
+    std::optional<base::DictValue> playing =
+        reports.now_playing.Note(frame_id, dict, main);
+    base::DictValue data;
+    data.Set("state",
+             playing ? base::Value(std::move(*playing)) : base::Value());
+    state->Send("nowPlaying", std::move(data));
+  } else if (kind == "linkDrop" && main && dict) {
+    std::optional<std::string> url = Text(dict, "url", 8192);
+    const GURL link(url.value_or(std::string()));
+    const base::TimeTicks now = base::TimeTicks::Now();
+    if (link.SchemeIsHTTPOrHTTPS() && Host::Get()->Shows(state->key()) &&
+        now - reports.link_drop_at > kLinkDropInterval) {
+      reports.link_drop_at = now;
+      base::DictValue open;
+      open.Set("url", link.spec());
+      open.Set("disposition", "foreground");
+      open.Set("userGesture", true);
+      CountLinux("pageLinkDrops");
+      state->Send("openWindow", std::move(open));
+    }
   } else if (kind == "notification" && dict) {
     Notify(state, reports, dict, frame_id, sender, main);
   } else if (kind == "notificationClose" && dict) {

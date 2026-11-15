@@ -15,7 +15,8 @@ Mac sources with scripts/windows/engine/ardia-layer-win.patch (paths through Fro
 same on Linux), the files under scripts/linux/engine/src/chrome/browser/ardia over them, and a BUILD.gn made from the
 Mac one (no .mm, no external apps; pip/ with ac_pip_linux.cc for the Mac presenter; launch_switches from
 //ardia/win, as Windows builds it). Then the tree's ardia/ is made
-exactly: //ardia/core's portable files (the hook headers, ac_launch_switches with the Windows port's signature rule,
+exactly: //ardia/core's portable files (the hook headers, ac_host_visibility.h (//ardia/linux defines its functions),
+ac_launch_switches with the Windows port's signature rule,
 the page script and the renderer side of the page channel, the mojom), //ardia/win's platform-neutral files with
 ardia-win-on-linux.patch, its public/EngineApi.h and a generated table of the ac_* calls, then everything under
 scripts/linux/engine/src/ardia over them (//ardia/linux, the Linux //ardia/win overlays, //ardia/core's BUILD.gn).
@@ -55,9 +56,9 @@ WIN_SRC = os.path.join(WIN_DIR, 'src', 'ardia', 'win')
 LINUX_SRC = os.path.join(HERE, 'src', 'ardia')
 WIN_ON_LINUX_PATCH = os.path.join(HERE, 'ardia-win-on-linux.patch')
 ENGINE_API_H = os.path.join(REPO, 'apps', 'browser', 'windows', 'Ardia', 'EngineApi.h')
-CORE_FILES = ['ac_hooks.h', 'ac_content_hooks.h', 'ac_launch_switches.h', 'ac_page_limits.h', 'ac_page_script.cc',
-              'ac_page_script.h', 'renderer/ac_content_renderer_client.cc', 'renderer/ac_content_renderer_client.h',
-              'mojom/ardiacore.mojom', 'mojom/BUILD.gn']
+CORE_FILES = ['ac_hooks.h', 'ac_content_hooks.h', 'ac_host_visibility.h', 'ac_launch_switches.h', 'ac_page_limits.h',
+              'ac_page_script.cc', 'ac_page_script.h', 'renderer/ac_content_renderer_client.cc',
+              'renderer/ac_content_renderer_client.h', 'mojom/ardiacore.mojom', 'mojom/BUILD.gn']
 WIN_SHARED = ['ac_calls.h', 'api.h', 'external_apps.cc', 'external_apps.h', 'page_links.cc', 'page_links.h',
               'page_links_script.h', 'private_sessions.cc', 'private_sessions.h', 'profiles.cc', 'profiles.h',
               'tab_calls.cc', 'tab_calls.h', 'tab_events.cc', 'tab_events.h', 'tab_state.cc', 'tab_state.h']

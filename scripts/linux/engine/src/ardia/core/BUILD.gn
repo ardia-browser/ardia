@@ -9,6 +9,10 @@ source_set("hooks") {
   ]
 }
 
+source_set("host_visibility") {
+  sources = [ "ac_host_visibility.h" ]
+}
+
 source_set("page_script") {
   sources = [
     "ac_page_limits.h",

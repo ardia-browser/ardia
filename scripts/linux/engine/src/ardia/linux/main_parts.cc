@@ -11,6 +11,7 @@
 #include "ardia/linux/host/key_map.h"
 #include "ardia/linux/log.h"
 #include "ardia/linux/main.h"
+#include "ardia/linux/probe.h"
 #include "ardia/linux/ui_host/modules.h"
 #include "ardia/linux/ui_host/ui_host_parts.h"
 #include "ardia/linux/windows/app_windows.h"
@@ -65,6 +66,10 @@ void MainParts::PostBrowserStart() {
   Host::Get()->Start();
   ardia_win::WatchEngineEvents();
   AppLifetime::Get().WatchSignals();
+  if (WantsHostProbe()) {
+    StartHostProbe();
+    return;
+  }
   StartUiHost();
 }
 

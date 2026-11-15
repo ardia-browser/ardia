@@ -31,6 +31,8 @@ source_set("linux") {
     "main_delegate.h",
     "main_parts.cc",
     "main_parts.h",
+    "probe.cc",
+    "probe.h",
     "test_gate.cc",
     "test_gate.h",
     "windows/app_window.cc",

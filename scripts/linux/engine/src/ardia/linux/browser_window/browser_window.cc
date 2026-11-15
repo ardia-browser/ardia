@@ -257,13 +257,8 @@ bool HostedBrowserWindow::IsMinimized() const {
 
 bool HostedBrowserWindow::IsFullscreen() const {
   AppWindow* window = app_window();
-  if (tab_fullscreen_ ||
-      (window && window->widget() && window->widget()->IsFullscreen())) {
-    return true;
-  }
-  ExclusiveAccessManager* manager =
-      browser_ ? ExclusiveAccessManager::From(browser_) : nullptr;
-  return manager && manager->fullscreen_controller()->IsTabFullscreen();
+  return tab_fullscreen_ ||
+         (window && window->widget() && window->widget()->IsFullscreen());
 }
 
 gfx::NativeWindow HostedBrowserWindow::GetNativeWindow() const {
@@ -560,7 +555,17 @@ void HostedBrowserWindow::EnterFullscreen(
 
 void HostedBrowserWindow::ExitFullscreen() {
   tab_fullscreen_ = false;
+  base::WeakPtr<HostedBrowserWindow> self = weak_factory_.GetWeakPtr();
   ReportFullscreenTab();
+  if (!self) {
+    return;
+  }
+  AppWindow* window = app_window();
+  if (window && window->widget() && window->widget()->IsFullscreen()) {
+    window->LeavePageFullscreen();
+    return;
+  }
+  PostWindowFullscreenStateChanged();
 }
 
 void HostedBrowserWindow::PostWindowFullscreenStateChanged() {
@@ -570,7 +575,7 @@ void HostedBrowserWindow::PostWindowFullscreenStateChanged() {
                        ExclusiveAccessManager* manager =
                            window ? window->GetExclusiveAccessManager()
                                   : nullptr;
-                       if (manager && window->tab_fullscreen_) {
+                       if (manager) {
                          manager->fullscreen_controller()
                              ->WindowFullscreenStateChanged();
                        }

@@ -37,11 +37,6 @@ class PageContentsDelegate : public BrowserWebContentsDelegate {
       const blink::mojom::WindowFeatures& window_features,
       bool user_gesture,
       bool* was_blocked) override;
-  content::KeyboardEventProcessingResult PreHandleKeyboardEvent(
-      content::WebContents* source,
-      const input::NativeWebKeyboardEvent& event) override;
-  bool HandleKeyboardEvent(content::WebContents* source,
-                           const input::NativeWebKeyboardEvent& event) override;
   void UpdateTargetURL(content::WebContents* source, const GURL& url) override;
   void RendererUnresponsive(
       content::WebContents* source,

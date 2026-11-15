@@ -106,6 +106,7 @@ class AppWindow : public views::WidgetDelegate,
   void Minimize();
   void ToggleMaximize();
   void SetPageFullscreen(bool on);
+  void LeavePageFullscreen();
   void SetTitle(const std::string& title);
   void BeginDrag();
   gfx::Rect Bounds() const;
@@ -189,6 +190,7 @@ class AppWindow : public views::WidgetDelegate,
   bool closed_by_app_ = false;
   bool maximized_ = false;
   bool fullscreen_ = false;
+  bool page_made_fullscreen_ = false;
   base::TimeTicks fade_started_;
   base::TimeDelta fade_length_;
   base::RepeatingTimer fade_timer_;

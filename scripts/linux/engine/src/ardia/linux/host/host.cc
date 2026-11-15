@@ -37,6 +37,7 @@
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/browser_window/public/create_browser_window.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_manager.h"
+#include "chrome/browser/ui/exclusive_access/fullscreen_controller.h"
 #include "chrome/browser/ui/navigator/browser_navigator.h"
 #include "chrome/browser/ui/navigator/browser_navigator_params.h"
 #include "chrome/browser/ui/tabs/tab_enums.h"
@@ -696,6 +697,22 @@ void Host::ApplyWantedKeyboard(const std::string& window) {
 }
 
 void Host::WindowMoved(const std::string& window) {}
+
+void Host::WindowFullscreenChanged(const std::string& window) {
+  std::vector<base::WeakPtr<BrowserWindowInterface>> browsers;
+  for (const auto& [browser, hosted] : hosted_) {
+    if (hosted.window == window) {
+      browsers.push_back(browser->GetWeakPtr());
+    }
+  }
+  for (const base::WeakPtr<BrowserWindowInterface>& weak : browsers) {
+    ExclusiveAccessManager* manager =
+        weak ? ExclusiveAccessManager::From(weak.get()) : nullptr;
+    if (manager) {
+      manager->fullscreen_controller()->WindowFullscreenStateChanged();
+    }
+  }
+}
 
 std::string Host::KeyboardPage() const {
   for (const auto& [key, shown] : shown_) {

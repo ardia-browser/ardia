@@ -66,6 +66,7 @@ class Host : public TabStripModelObserver, public BrowserCollectionObserver {
   void WindowClosing(const std::string& window);
   void WindowActivated(const std::string& window);
   void WindowMoved(const std::string& window);
+  void WindowFullscreenChanged(const std::string& window);
   void PagePressed(const std::string& window, const std::string& key);
   void PageMouse(const std::string& window,
                  const std::string& key,

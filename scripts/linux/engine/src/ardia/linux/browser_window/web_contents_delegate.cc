@@ -6,14 +6,11 @@
 
 #include "ardia/linux/browser_window/browser_window.h"
 #include "ardia/linux/host/host.h"
-#include "ardia/linux/host/key_map.h"
 #include "ardia/win/tab_events.h"
 #include "ardia/win/tab_state.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/browser_window/public/global_browser_collection.h"
 #include "chrome/browser/ui/unload_controller.h"
-#include "components/input/native_web_keyboard_event.h"
-#include "content/public/browser/keyboard_event_processing_result.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_user_data.h"
 #include "third_party/blink/public/mojom/window_features/window_features.mojom.h"
@@ -129,21 +126,6 @@ content::WebContents* PageContentsDelegate::AddNewContents(
   return BrowserWebContentsDelegate::AddNewContents(
       source, std::move(new_contents), target_url, disposition,
       window_features, user_gesture, was_blocked);
-}
-
-content::KeyboardEventProcessingResult
-PageContentsDelegate::PreHandleKeyboardEvent(
-    content::WebContents* source,
-    const input::NativeWebKeyboardEvent& event) {
-  return KeyMap::Get().PreHandle(Host::Get()->WindowOfContents(source), source,
-                                 event);
-}
-
-bool PageContentsDelegate::HandleKeyboardEvent(
-    content::WebContents* source,
-    const input::NativeWebKeyboardEvent& event) {
-  return KeyMap::Get().Handle(Host::Get()->WindowOfContents(source), source,
-                              event);
 }
 
 void PageContentsDelegate::UpdateTargetURL(content::WebContents* source,

@@ -411,7 +411,16 @@ void AppWindow::ToggleMaximize() {
 
 void AppWindow::SetPageFullscreen(bool on) {
   if (widget_ && !closing_ && widget_->IsFullscreen() != on) {
+    page_made_fullscreen_ = on;
     widget_->SetFullscreen(on);
+  }
+}
+
+void AppWindow::LeavePageFullscreen() {
+  if (widget_ && !closing_ && page_made_fullscreen_ &&
+      widget_->IsFullscreen()) {
+    page_made_fullscreen_ = false;
+    widget_->SetFullscreen(false);
   }
 }
 
@@ -573,6 +582,7 @@ void AppWindow::OnWidgetBoundsChanged(views::Widget* widget,
   ApplyShape();
   EmitFrameSoon();
   Host::Get()->WindowMoved(id_);
+  OnWidgetShowStateChanged(widget);
 }
 
 void AppWindow::OnWidgetShowStateChanged(views::Widget* widget) {
@@ -587,6 +597,10 @@ void AppWindow::OnWidgetShowStateChanged(views::Widget* widget) {
   const bool fullscreen = widget->IsFullscreen();
   if (fullscreen != fullscreen_) {
     fullscreen_ = fullscreen;
+    if (!fullscreen) {
+      page_made_fullscreen_ = false;
+    }
+    Host::Get()->WindowFullscreenChanged(id_);
     base::DictValue extra;
     extra.Set("on", fullscreen);
     AppWindows::Get().WindowEvent("fullScreen", id_, std::move(extra));

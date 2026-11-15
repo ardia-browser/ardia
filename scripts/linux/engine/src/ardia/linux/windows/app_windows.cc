@@ -9,12 +9,18 @@
 #include "ardia/linux/log.h"
 #include "ardia/linux/ui_host/modules.h"
 #include "ardia/linux/windows/app_window.h"
+#include "base/base64.h"
 #include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "base/task/single_thread_task_runner.h"
+#include "components/viz/common/frame_sinks/copy_output_result.h"
+#include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/web_contents.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
+#include "ui/gfx/codec/jpeg_codec.h"
+#include "ui/gfx/geometry/rect_conversions.h"
+#include "ui/views/controls/webview/webview.h"
 
 namespace ardia_linux {
 
@@ -85,6 +91,45 @@ ModuleResult Nothing() {
 
 AppWindow* WindowAt(const base::ListValue& args) {
   return AppWindows::Get().Find(StringAt(args, 0));
+}
+
+constexpr int kPagePictureQuality = 70;
+constexpr base::TimeDelta kPagePictureTimeout = base::Seconds(1);
+constexpr double kLargestPictureScale = 1.0;
+
+double NumberAt(const base::ListValue& args, size_t index) {
+  if (index >= args.size()) {
+    return 0;
+  }
+  return args[index].GetIfDouble().value_or(
+      args[index].GetIfInt().value_or(0));
+}
+
+content::RenderWidgetHostView* PageAt(AppWindow* window,
+                                      const gfx::Rect& wanted) {
+  AppWindowView* view = window ? window->view() : nullptr;
+  if (!view || wanted.IsEmpty()) {
+    return nullptr;
+  }
+  content::RenderWidgetHostView* best = nullptr;
+  int best_area = 0;
+  for (const std::string& key : view->PageKeys()) {
+    views::WebView* page = view->PageView(key);
+    content::WebContents* contents = page ? page->web_contents() : nullptr;
+    if (!contents || !page->IsDrawn()) {
+      continue;
+    }
+    gfx::RectF placed(page->GetLocalBounds());
+    views::View::ConvertRectToTarget(page, view, &placed);
+    gfx::Rect overlap = gfx::ToEnclosingRect(placed);
+    overlap.Intersect(wanted);
+    const int area = overlap.width() * overlap.height();
+    if (area > best_area) {
+      best_area = area;
+      best = contents->GetRenderWidgetHostView();
+    }
+  }
+  return best;
 }
 
 }
@@ -438,6 +483,46 @@ void AppWindows::Register(ModuleRegistry& registry) {
                      std::move(reply).Run(std::move(picture));
                    },
                    std::move(reply)));
+             }))
+      .Async("capturePage",
+             base::BindRepeating([](base::ListValue args, ModuleReply reply) {
+               const gfx::Rect wanted(
+                   static_cast<int>(NumberAt(args, 1)),
+                   static_cast<int>(NumberAt(args, 2)),
+                   static_cast<int>(NumberAt(args, 3)),
+                   static_cast<int>(NumberAt(args, 4)));
+               const double scale = std::clamp(NumberAt(args, 5), 0.05,
+                                               kLargestPictureScale);
+               content::RenderWidgetHostView* page =
+                   PageAt(WindowAt(args), wanted);
+               if (!page) {
+                 std::move(reply).Run(Nothing());
+                 return;
+               }
+               const gfx::Size size(
+                   std::max(1, static_cast<int>(wanted.width() * scale)),
+                   std::max(1, static_cast<int>(wanted.height() * scale)));
+               page->CopyFromSurface(
+                   gfx::Rect(), size, kPagePictureTimeout,
+                   base::BindOnce(
+                       [](ModuleReply reply,
+                          const content::CopyFromSurfaceResult& result) {
+                         if (!result.has_value() ||
+                             result->bitmap.drawsNothing()) {
+                           std::move(reply).Run(Nothing());
+                           return;
+                         }
+                         std::optional<std::vector<uint8_t>> jpeg =
+                             gfx::JPEGCodec::Encode(result->bitmap,
+                                                    kPagePictureQuality);
+                         if (!jpeg) {
+                           std::move(reply).Run(Nothing());
+                           return;
+                         }
+                         std::move(reply).Run(
+                             base::Value(base::Base64Encode(*jpeg)));
+                       },
+                       std::move(reply)));
              }))
       .Async("setWindowTitle", async([](const base::ListValue& args) {
                if (AppWindow* window = WindowAt(args)) {

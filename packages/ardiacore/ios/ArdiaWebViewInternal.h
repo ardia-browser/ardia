@@ -83,6 +83,7 @@ struct ArdiaPageReports {
   BOOL inPictureInPicture{};
   BOOL autoPictureInPictureActive{};
   BOOL keptByWindowServer{};
+  BOOL keptByPageFullScreen{};
   BOOL playedForAutoPictureInPicture{};
 };
 
@@ -265,6 +266,7 @@ typedef NS_ENUM(NSInteger, ArdiaTransfer) {
 - (void)awaitPictureInPicture:(int)tries completion:(void (^)(BOOL))completion;
 - (void)updateAutoPictureInPicture;
 - (BOOL)leftAppInPictureInPicture;
+- (BOOL)leftSpaceInPictureInPicture;
 - (BOOL)playsForAutoPictureInPicture;
 - (void)autoPictureInPictureInputsChanged;
 - (void)noteStayedOnAppSwitch;

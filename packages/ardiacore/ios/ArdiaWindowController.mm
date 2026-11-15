@@ -71,6 +71,16 @@ void HandOffTab(ArdiaCoreTab *tab) {
   [[ArdiaWindowFullScreen ofWindow:controller.coreWindow create:YES] reconsiderSight];
 }
 
++ (BOOL)showsPageFullScreen:(ArdiaCoreTab *)tab inWindow:(NSWindow *)window {
+  ArdiaWindowController *controller = [self forNSWindow:window];
+  if (!controller || controller.stray || controller.standalone) return NO;
+  return [[ArdiaWindowFullScreen ofWindow:controller.coreWindow create:NO] showsPageFullScreen:tab];
+}
+
++ (BOOL)onActiveSpace:(NSWindow *)window {
+  return ardia_window::OnActiveSpace(window);
+}
+
 + (BOOL)userSeesOnlyThroughWindowServer:(NSWindow *)window {
   ArdiaWindowController *controller = [self forNSWindow:window];
   if (!controller || controller.stray || controller.standalone) return NO;

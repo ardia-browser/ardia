@@ -183,6 +183,10 @@ BOOL TracingPictureInPicture() {
   return !NSApp.isActive;
 }
 
+- (BOOL)leftSpaceInPictureInPicture {
+  return self.window && ![ArdiaWindowController onActiveSpace:self.window];
+}
+
 + (BOOL)playsForAutoPictureInPictureInWindow:(NSWindow *)window {
   for (ArdiaWebView *view in LiveViews().allObjects)
     if (view.window == window && view->_visible && view->_tab && view.playsForAutoPictureInPicture) return YES;
@@ -199,7 +203,7 @@ BOOL TracingPictureInPicture() {
 }
 
 - (void)noteStayedOnAppSwitch {
-  if (!_tab || !_visible || _reports.inPictureInPicture || !self.seenByUser || !self.playsForAutoPictureInPicture) return;
+  if (!_tab || !_visible || _reports.inPictureInPicture || ![ArdiaWindowController userSees:self.window] || !self.playsForAutoPictureInPicture) return;
   [self traceAutoPictureInPicture:@"app: the user left Ardia, the window server still shows the tab"];
   [self emit:@"autoPictureInPictureKept" payload:@{@"appSwitch" : @YES}];
 }

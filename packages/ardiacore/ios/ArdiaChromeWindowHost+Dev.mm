@@ -448,6 +448,12 @@ NSDictionary<NSString *, DevHandler> *DevHandlers() {
       ActWindowServer(w, [to isEqualToString:@"shows"]);
       return @"ok";
     },
+    @"fakeOtherSpace" : ^NSString *(NSWindow *w, NSString *on) {
+      ActOtherSpace(w, [on isEqualToString:@"1"]);
+      ArdiaCoreWindow *coreWindow = [ArdiaWindowController forNSWindow:w].coreWindow;
+      ArdiaWindowFullScreen *sight = coreWindow ? [ArdiaWindowFullScreen ofWindow:coreWindow create:NO] : nil;
+      return JSONText(@{@"otherSpace" : @(!OnActiveSpace(w)), @"seen" : sight ? @([sight seen]) : NSNull.null}, @"{}");
+    },
     @"fullScreen" : ^NSString *(NSWindow *w, NSString *) { return FullScreen(w, nil); },
     @"fakeFullScreen" : ^NSString *(NSWindow *w, NSString *a) { return FullScreen(w, a); },
     @"snapshotFrame" : ^NSString *(NSWindow *w, NSString *path) { return SnapshotFrameView(w, path); },

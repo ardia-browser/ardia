@@ -594,9 +594,14 @@ void HostedBrowserWindow::UpdateExclusiveAccessBubble(
   AppWindow* window = app_window();
   const bool can_show = window && window->widget() && browser_ &&
                         GetExclusiveAccessManager();
+  const bool window_full_screen_only =
+      params.type ==
+      EXCLUSIVE_ACCESS_BUBBLE_TYPE_BROWSER_FULLSCREEN_EXIT_INSTRUCTION;
   const bool should_close_bubble =
-      !can_show || (!params.has_download &&
-                    params.type == EXCLUSIVE_ACCESS_BUBBLE_TYPE_NONE);
+      !can_show ||
+      (!params.has_download &&
+       (params.type == EXCLUSIVE_ACCESS_BUBBLE_TYPE_NONE ||
+        window_full_screen_only));
   if (should_close_bubble) {
     if (first_hide_callback) {
       std::move(first_hide_callback)

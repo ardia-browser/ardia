@@ -48,7 +48,7 @@ defineModule("ArdiaTranslate", {
   constants: { available: true },
   sync: { userLanguages, languageName },
   async: {
-    detect: (text: string) => detectLanguage(String(text ?? "")).catch(() => null),
+    detect: (text: string) => (typeof text === "string" ? detectLanguage(text).catch(() => null) : Promise.resolve(null)),
     async status(source: string, target: string) {
       const pairs = route(source, target);
       if (!pairs) return "unsupported";

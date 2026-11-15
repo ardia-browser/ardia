@@ -4,31 +4,44 @@ import { count } from "../counts";
 import { note } from "../log";
 import { filesOf, pairKey, route } from "./models";
 import { alignedParts, piecesHtml } from "./pieces";
-import type { WorkerReply, WorkerRequest } from "./worker";
+import type { ModelFiles, WorkerReply, WorkerText } from "./worker";
+
+export const translationLimits = {
+  passageBytes: 64 * 1024,
+  requestBytes: 64 * 1024,
+  requestPassages: 64,
+  queuedPerOwner: 8,
+  openOwners: 256,
+  deadlineBaseMs: 20_000,
+  deadlinePerKiBMs: 1_500,
+  memoBytes: 8 * 1024 * 1024,
+};
 
 const IDLE_MS = 60_000;
-const LOADED_LIMIT = 4;
 const MEMO_LIMIT = 5000;
+const DIRECT = "\u0000direct";
 
-type Pending = { resolve: (value: unknown) => void; reject: (error: Error) => void };
-type Request = WorkerRequest extends infer R ? (R extends { id: number } ? Omit<R, "id"> : never) : never;
+class Cancelled extends Error {}
+
+type Job = {
+  owner: string;
+  models: { key: string; files: ModelFiles }[];
+  texts: WorkerText[];
+  bytes: number;
+  resolve: (translated: string[]) => void;
+  reject: (error: Error) => void;
+};
 
 let worker: Worker | null = null;
 let nextId = 0;
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
-const pending = new Map<number, Pending>();
-const loaded: string[] = [];
+let running: { job: Job; id: number; timer: ReturnType<typeof setTimeout> } | null = null;
+const queue: Job[] = [];
 const owners = new Set<string>();
 const memo = new Map<string, string[]>();
+let memoBytes = 0;
 
-function stopWorker(reason: string) {
-  const stopping = worker;
-  worker = null;
-  loaded.length = 0;
-  for (const waiter of pending.values()) waiter.reject(new Error(reason));
-  pending.clear();
-  void stopping?.terminate();
-}
+const utf8Bytes = (text: string) => Buffer.byteLength(text, "utf8");
 
 function startWorker(): Worker {
   const unpacked = __dirname.replace(/app\.asar(?=[\\/]|$)/, "app.asar.unpacked");
@@ -37,10 +50,9 @@ function startWorker(): Worker {
     workerData: { wasm: join(bergamot, "bergamot-translator-worker.wasm"), glue: join(bergamot, "bergamot-translator-worker.js") },
   });
   started.on("message", ({ id, result, error }: WorkerReply) => {
-    const waiter = pending.get(id);
-    pending.delete(id);
-    if (error !== undefined) waiter?.reject(new Error(error));
-    else waiter?.resolve(result);
+    if (worker !== started) return;
+    if (error !== undefined) finish(id, new Error(error));
+    else finish(id, null, result as string[]);
   });
   started.on("error", (error) => {
     count("translate_engine_failures");
@@ -54,63 +66,173 @@ function startWorker(): Worker {
   return started;
 }
 
+function stopWorker(reason: string) {
+  const stopping = worker;
+  worker = null;
+  void stopping?.terminate();
+  if (running) finish(running.id, new Error(reason));
+}
+
 function stopWhenIdle() {
   if (idleTimer) clearTimeout(idleTimer);
-  idleTimer = setTimeout(() => (pending.size ? stopWhenIdle() : stopWorker("idle")), IDLE_MS);
+  idleTimer = null;
+  if (running || queue.length || !worker) return;
+  idleTimer = setTimeout(() => {
+    idleTimer = null;
+    if (!running && !queue.length) stopWorker("idle");
+  }, IDLE_MS);
+  (idleTimer as { unref?: () => void }).unref?.();
 }
 
-function send<T>(request: Request): Promise<T> {
+const deadlineFor = (bytes: number) => translationLimits.deadlineBaseMs + Math.ceil(bytes / 1024) * translationLimits.deadlinePerKiBMs;
+
+function pump() {
+  if (running || !queue.length) return stopWhenIdle();
+  const job = queue.shift()!;
+  if (idleTimer) clearTimeout(idleTimer);
+  idleTimer = null;
   worker ??= startWorker();
-  stopWhenIdle();
   const id = ++nextId;
-  const sent = new Promise<T>((resolve, reject) => pending.set(id, { resolve: resolve as (value: unknown) => void, reject }));
-  worker.postMessage({ ...request, id });
-  return sent;
+  const timer = setTimeout(() => {
+    if (running?.id !== id) return;
+    count("translate_engine_timeouts");
+    note("translate", `the engine took longer than ${deadlineFor(job.bytes)} ms on ${job.bytes} bytes; starting a fresh one`);
+    stopWorker("the translation took too long");
+  }, deadlineFor(job.bytes));
+  running = { job, id, timer };
+  worker.postMessage({ op: "translate", id, models: job.models, texts: job.texts });
 }
 
-async function ensureLoaded(pair: string) {
-  const at = loaded.indexOf(pair);
-  if (at >= 0) {
-    loaded.splice(at, 1);
-    loaded.push(pair);
-    return;
+function finish(id: number, error: Error | null, result?: string[]) {
+  if (!running || running.id !== id) return;
+  const { job, timer } = running;
+  clearTimeout(timer);
+  running = null;
+  if (error) job.reject(error);
+  else if (!Array.isArray(result) || result.length !== job.texts.length) job.reject(new Error("the translation engine answered out of step"));
+  else job.resolve(result);
+  pump();
+}
+
+function enqueue(owner: string, models: Job["models"], texts: WorkerText[], bytes: number): Promise<string[]> {
+  const waiting = queue.filter((job) => job.owner === owner).length + (running?.job.owner === owner ? 1 : 0);
+  if (waiting >= translationLimits.queuedPerOwner) {
+    count("translate_requests_refused");
+    return Promise.reject(new Error("too many translations are already waiting for this page"));
   }
-  const files = filesOf(pair);
-  if (!files) throw new Error(`the ${pair.replace(">", " to ")} language files aren't downloaded`);
-  await send({ op: "load", key: pair, files });
-  loaded.push(pair);
-  while (loaded.length > LOADED_LIMIT) void send({ op: "free", key: loaded.shift()! });
+  return new Promise((resolve, reject) => {
+    queue.push({ owner, models, texts, bytes, resolve, reject });
+    pump();
+  });
 }
 
-async function modelsFor(source: string, target: string): Promise<string[]> {
+async function modelsFor(source: string, target: string): Promise<Job["models"]> {
   const pairs = route(source, target);
   if (!pairs) throw new Error(`${source} to ${target} isn't available`);
-  for (const pair of pairs) await ensureLoaded(pair);
-  return pairs;
+  return pairs.map((key) => {
+    const files = filesOf(key);
+    if (!files) throw new Error(`the ${key.replace(">", " to ")} language files aren't downloaded`);
+    return { key, files };
+  });
+}
+
+type Sized = { text: string; bytes: number };
+
+function sized(text: unknown): Sized | null {
+  if (typeof text !== "string" || text.length > translationLimits.passageBytes) return null;
+  const bytes = utf8Bytes(text);
+  return bytes <= translationLimits.passageBytes ? { text, bytes } : null;
+}
+
+function refuseRequest(reason: string): never {
+  count("translate_requests_refused");
+  throw new Error(reason);
+}
+
+function checkRequest(length: number, bytes: number) {
+  if (length > translationLimits.requestPassages) refuseRequest(`too many passages at once (${length})`);
+  if (bytes > translationLimits.requestBytes) refuseRequest(`too much text at once (${bytes} bytes)`);
 }
 
 export async function translateTexts(source: string, target: string, texts: string[]): Promise<(string | null)[]> {
+  if (!Array.isArray(texts)) refuseRequest("the texts weren't a list");
   if (!texts.length) return [];
+  checkRequest(texts.length, 0);
+  const accepted = texts.map(sized);
+  const refused = accepted.filter((entry) => !entry).length;
+  if (refused) count("translate_passages_refused");
+  const fresh = accepted.flatMap((entry, i) => (entry ? [{ ...entry, i }] : []));
+  const bytes = fresh.reduce((sum, entry) => sum + entry.bytes, 0);
+  checkRequest(texts.length, bytes);
+  const out: (string | null)[] = texts.map(() => null);
+  if (!fresh.length) return out;
   const models = await modelsFor(source, target);
-  return send<string[]>({ op: "translate", models, texts: texts.map((text) => ({ text, html: false })) });
+  const translated = await enqueue(
+    DIRECT,
+    models,
+    fresh.map(({ text }) => ({ text, html: false })),
+    bytes,
+  );
+  fresh.forEach(({ i }, k) => (out[i] = typeof translated[k] === "string" ? translated[k]! : null));
+  return out;
 }
 
 const memoKey = (source: string, target: string, pieces: string[]) => `${pairKey(source, target)}\u0000${pieces.join("\u0001")}`;
 
 function remember(key: string, parts: string[]) {
-  if (memo.size >= MEMO_LIMIT) memo.clear();
+  const bytes = key.length + parts.reduce((sum, part) => sum + part.length, 0);
+  if (memo.size >= MEMO_LIMIT || memoBytes + bytes > translationLimits.memoBytes) {
+    memo.clear();
+    memoBytes = 0;
+  }
   memo.set(key, parts);
+  memoBytes += bytes;
+}
+
+function passageOf(pieces: unknown): { pieces: string[]; bytes: number } | null {
+  if (!Array.isArray(pieces) || !pieces.length || pieces.length > translationLimits.requestPassages) return null;
+  let bytes = 0;
+  for (const piece of pieces) {
+    const entry = sized(piece);
+    if (!entry) return null;
+    bytes += entry.bytes;
+    if (bytes > translationLimits.passageBytes) return null;
+  }
+  return { pieces: pieces as string[], bytes };
 }
 
 export async function translatePassages(source: string, target: string, blocks: string[][], owner: string): Promise<(string[] | null)[]> {
-  if (!owners.has(owner)) return blocks.map(() => null);
-  const out: (string[] | null)[] = blocks.map((pieces) => memo.get(memoKey(source, target, pieces)) ?? null);
-  const fresh = blocks.map((pieces, i) => ({ pieces, i })).filter(({ pieces, i }) => !out[i] && pieces.length > 0);
+  if (!Array.isArray(blocks)) refuseRequest("the passages weren't a list");
+  checkRequest(blocks.length, 0);
+  const none = () => blocks.map(() => null);
+  if (!owners.has(owner)) return none();
+  const out: (string[] | null)[] = none();
+  const fresh: { pieces: string[]; bytes: number; i: number }[] = [];
+  let refused = 0;
+  blocks.forEach((block, i) => {
+    const passage = passageOf(block);
+    if (!passage) {
+      if (Array.isArray(block) && block.length) refused++;
+      return;
+    }
+    const known = memo.get(memoKey(source, target, passage.pieces));
+    if (known) out[i] = known;
+    else fresh.push({ ...passage, i });
+  });
+  if (refused) count("translate_passages_refused");
   if (!fresh.length) return out;
+  const bytes = fresh.reduce((sum, passage) => sum + passage.bytes, 0);
+  checkRequest(blocks.length, bytes);
   const models = await modelsFor(source, target);
-  if (!owners.has(owner)) return blocks.map(() => null);
+  if (!owners.has(owner)) return none();
   const texts = fresh.map(({ pieces }) => (pieces.length === 1 ? { text: pieces[0]!, html: false } : { text: piecesHtml(pieces), html: true }));
-  const translated = await send<string[]>({ op: "translate", models, texts });
+  let translated: string[];
+  try {
+    translated = await enqueue(owner, models, texts, bytes);
+  } catch (error) {
+    if (error instanceof Cancelled || !owners.has(owner)) return none();
+    throw error;
+  }
   fresh.forEach(({ pieces, i }, k) => {
     const text = translated[k];
     if (typeof text !== "string") return;
@@ -119,8 +241,29 @@ export async function translatePassages(source: string, target: string, blocks: 
     out[i] = parts;
     remember(memoKey(source, target, pieces), parts);
   });
-  return owners.has(owner) ? out : blocks.map(() => null);
+  return owners.has(owner) ? out : none();
 }
 
-export const openOwner = (owner: string) => void owners.add(owner);
-export const cancelOwner = (owner: string) => void owners.delete(owner);
+export function openOwner(owner: string): void {
+  if (typeof owner !== "string" || owner === DIRECT) return;
+  owners.delete(owner);
+  owners.add(owner);
+  for (const oldest of owners) {
+    if (owners.size <= translationLimits.openOwners) break;
+    cancelOwner(oldest);
+  }
+}
+
+export function cancelOwner(owner: string): void {
+  owners.delete(owner);
+  const dropped = queue.filter((job) => job.owner === owner);
+  if (dropped.length) {
+    queue.splice(0, queue.length, ...queue.filter((job) => job.owner !== owner));
+    for (const job of dropped) job.reject(new Cancelled("the translation was cancelled"));
+  }
+  if (running?.job.owner === owner) {
+    count("translate_cancel_stops");
+    stopWorker("the translation was cancelled");
+  }
+  stopWhenIdle();
+}

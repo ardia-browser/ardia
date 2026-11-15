@@ -22,10 +22,8 @@ type Runtime = {
 };
 
 export type ModelFiles = { model: string; lex: string; vocabs: string[] };
-export type WorkerRequest =
-  | { id: number; op: "load"; key: string; files: ModelFiles }
-  | { id: number; op: "free"; key: string }
-  | { id: number; op: "translate"; models: string[]; texts: { text: string; html: boolean }[] };
+export type WorkerText = { text: string; html: boolean };
+export type WorkerRequest = { id: number; op: "translate"; models: { key: string; files: ModelFiles }[]; texts: WorkerText[] };
 export type WorkerReply = { id: number; result?: unknown; error?: string };
 
 const GEMM_FALLBACKS: Record<string, string> = {
@@ -53,6 +51,8 @@ const MODEL_CONFIG = [
   "workspace: 128",
   "max-length-factor: 2.0",
 ].join("\n");
+
+const LOADED_LIMIT = 4;
 
 const { wasm, glue } = workerData as { wasm: string; glue: string };
 
@@ -84,26 +84,33 @@ function aligned(runtime: Runtime, path: string, alignment: number): AlignedMemo
   return memory;
 }
 
-async function load(key: string, files: ModelFiles) {
-  if (models.has(key)) return;
-  const { runtime } = await ready;
+function load(runtime: Runtime, key: string, files: ModelFiles): Native {
+  const known = models.get(key);
+  if (known) {
+    models.delete(key);
+    models.set(key, known);
+    return known;
+  }
   const vocabs = new runtime.AlignedMemoryList();
   for (const path of [...new Set(files.vocabs)]) vocabs.push_back(aligned(runtime, path, 64));
-  models.set(key, new runtime.TranslationModel(MODEL_CONFIG, aligned(runtime, files.model, 256), aligned(runtime, files.lex, 64), vocabs, null));
+  const model = new runtime.TranslationModel(MODEL_CONFIG, aligned(runtime, files.model, 256), aligned(runtime, files.lex, 64), vocabs, null);
+  models.set(key, model);
+  return model;
 }
 
-function free(key: string) {
-  models.get(key)?.delete();
-  models.delete(key);
+function freeBeyondLimit(keep: Set<string>) {
+  for (const [key, model] of models) {
+    if (models.size <= LOADED_LIMIT) return;
+    if (keep.has(key)) continue;
+    model.delete();
+    models.delete(key);
+  }
 }
 
-async function translate(keys: string[], texts: { text: string; html: boolean }[]): Promise<string[]> {
+async function translate(wanted: WorkerRequest["models"], texts: WorkerText[]): Promise<string[]> {
   const { runtime, service } = await ready;
-  const chosen = keys.map((key) => {
-    const model = models.get(key);
-    if (!model) throw new Error(`the ${key} model isn't loaded`);
-    return model;
-  });
+  const chosen = wanted.map(({ key, files }) => load(runtime, key, files));
+  freeBeyondLimit(new Set(wanted.map(({ key }) => key)));
   const input = new runtime.VectorString();
   const options = new runtime.VectorResponseOptions();
   for (const { text, html } of texts) {
@@ -124,14 +131,8 @@ async function translate(keys: string[], texts: { text: string; html: boolean }[
 }
 
 async function handle(request: WorkerRequest): Promise<unknown> {
-  switch (request.op) {
-    case "load":
-      return load(request.key, request.files);
-    case "free":
-      return free(request.key);
-    case "translate":
-      return translate(request.models, request.texts);
-  }
+  if (request.op !== "translate") throw new Error(`unknown request ${String(request.op)}`);
+  return translate(request.models, request.texts);
 }
 
 let chain: Promise<unknown> = ready;

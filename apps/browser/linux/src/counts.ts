@@ -40,6 +40,10 @@ export type LinuxCount =
   | "translate_model_downloads"
   | "translate_model_download_failures"
   | "translate_engine_failures"
+  | "translate_engine_timeouts"
+  | "translate_cancel_stops"
+  | "translate_passages_refused"
+  | "translate_requests_refused"
   | "focus_returned";
 
 const counts = new Map<LinuxCount, number>();

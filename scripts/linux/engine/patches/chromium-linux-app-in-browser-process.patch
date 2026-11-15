@@ -1,0 +1,50 @@
+SPDX-License-Identifier: GPL-3.0-only
+
+The app in the browser process on Linux, as chromium-win-app-in-browser-process.patch does on Windows: //chrome:chrome
+links //ardia/linux (scripts/linux/engine/src/ardia/linux), ChromeMain calls ardia_linux::BeforeChromeMain() right after
+CommandLine::Init in every process (it reads the launch variables and turns them into switches), and its delegate is
+ardia_linux::MainDelegate, a ChromeMainDelegate (the edit engine/ardiacore/apply.sh makes for the Mac's ACMainDelegate).
+
+--- a/chrome/BUILD.gn
++++ b/chrome/BUILD.gn
+@@ -402,6 +402,7 @@
+         "app/chrome_main_linux.h",
+       ]
+       deps += [ "//chrome/browser/ardia" ]  # Ardia: engine/chromium
++      deps += [ "//ardia/linux" ]  # Ardia: the app in the browser process (scripts/linux/engine/src)
+     }
+ 
+     if (is_chrome_for_testing) {
+--- a/chrome/app/chrome_main.cc
++++ b/chrome/app/chrome_main.cc
+@@ -42,6 +42,7 @@
+ 
+ #if BUILDFLAG(IS_LINUX)
+ #include "chrome/app/chrome_main_linux.h"
++#include "ardia/linux/main.h"  // nogncheck
+ #endif
+ 
+ #if BUILDFLAG(IS_WIN)
+@@ -130,6 +131,10 @@
+       base::TimeTicks::FromInternalValue(preread_begin_ticks),
+       base::TimeTicks::FromInternalValue(preread_end_ticks)};
+   ChromeMainDelegate chrome_main_delegate(timestamps);
++#elif BUILDFLAG(IS_LINUX)
++  // Ardia: the app's delegate (//ardia/linux), a ChromeMainDelegate.
++  ardia_linux::MainDelegate chrome_main_delegate(
++      {.exe_entry_point_ticks = base::TimeTicks::Now()});
+ #else  // BUILDFLAG(IS_WIN)
+   ChromeMainDelegate chrome_main_delegate(
+       {.exe_entry_point_ticks = base::TimeTicks::Now()});
+@@ -160,6 +165,11 @@
+   params.argc = argc;
+   params.argv = argv;
+   base::CommandLine::Init(params.argc, params.argv);
++#if BUILDFLAG(IS_LINUX)
++  // Ardia: the app (//ardia/linux) reads its launch variables, in every
++  // process, and turns them into switches.
++  ardia_linux::BeforeChromeMain();
++#endif
+ #endif  // BUILDFLAG(IS_WIN)
+ 
+   base::CommandLine* command_line(base::CommandLine::ForCurrentProcess());

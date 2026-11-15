@@ -1,0 +1,48 @@
+# Copyright 2026 Ardia. Apache-2.0.
+
+assert(is_linux)
+
+source_set("hooks") {
+  sources = [
+    "ac_content_hooks.h",
+    "ac_hooks.h",
+  ]
+}
+
+source_set("page_script") {
+  sources = [
+    "ac_page_limits.h",
+    "ac_page_script.cc",
+    "ac_page_script.h",
+  ]
+
+  deps = [
+    "//ardia/core/mojom",
+    "//base",
+    "//content/public/browser",
+    "//ipc",
+    "//mojo/public/cpp/bindings",
+  ]
+}
+
+source_set("renderer") {
+  sources = [
+    "ac_page_limits.h",
+    "renderer/ac_content_renderer_client.cc",
+    "renderer/ac_content_renderer_client.h",
+  ]
+
+  deps = [
+    "//ardia/core/mojom",
+    "//base",
+    "//chrome/common",
+    "//chrome/renderer",
+    "//content/public/common",
+    "//content/public/renderer",
+    "//gin",
+    "//mojo/public/cpp/bindings",
+    "//third_party/blink/public:blink",
+    "//url",
+    "//v8",
+  ]
+}

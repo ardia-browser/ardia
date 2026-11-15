@@ -6,10 +6,6 @@ context the Mac patch is made against, so series-linux applies the branding patc
 patch in their place. Same changes (descriptions say Ardia, Helium's flag ids are ardia-*, the updater channel and
 update server flags are gone), plus the Linux flag: helium-middle-click-paste-enabled is ardia-middle-click-paste-enabled.
 
-a
-b
-linux.patch
-mac-hunks.patch
 --- a/chrome/browser/helium_flag_choices.h
 +++ b/chrome/browser/helium_flag_choices.h
 @@ -32,23 +32,23 @@

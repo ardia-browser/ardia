@@ -1,0 +1,16 @@
+SPDX-License-Identifier: GPL-3.0-only
+
+The Linux counterpart of chromium-ardia-layer.patch: //chrome:chrome links chrome/browser/ardia (engine/chromium, the
+ac_* calls), which series_linux.py layer builds for Linux. The calls are reached through //ardia/linux's generated
+table of them; until something links that table, the linker drops them.
+
+--- a/chrome/BUILD.gn
++++ b/chrome/BUILD.gn
+@@ -401,6 +401,7 @@
+         "app/chrome_main_linux.cc",
+         "app/chrome_main_linux.h",
+       ]
++      deps += [ "//chrome/browser/ardia" ]  # Ardia: engine/chromium
+     }
+ 
+     if (is_chrome_for_testing) {

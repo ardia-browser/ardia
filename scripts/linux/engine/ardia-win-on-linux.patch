@@ -1,0 +1,36 @@
+//ardia/win's shared files on Linux (series_linux.py layer applies this to the tree's copies, never to the repo's): three
+lines turn a FilePath into UTF-8 and back with base::WideToUTF8/UTF8ToWide over FilePath::value(), which only compile
+where FilePath holds a wide string. AsUTF8Unsafe() and FromUTF8Unsafe() mean the same on Windows; once the Windows
+files use them, this patch goes.
+
+--- a/profiles.cc
++++ b/profiles.cc
+@@ -101,7 +101,7 @@
+     return manager->user_data_dir().Append(
+         ProfileManager::GetInitialProfileDir());
+   }
+-  return manager->user_data_dir().Append(base::UTF8ToWide(name.directory));
++  return manager->user_data_dir().Append(base::FilePath::FromUTF8Unsafe(name.directory));
+ }
+ 
+ void WithProfile(std::string_view name,
+@@ -121,7 +121,7 @@
+ }
+ 
+ std::string NameOfProfilePath(const base::FilePath& path) {
+-  std::string directory = base::WideToUTF8(path.BaseName().value());
++  std::string directory = path.BaseName().AsUTF8Unsafe();
+   std::string_view prefix = kDirectoryPrefix;
+   if (!directory.starts_with(prefix)) {
+     return std::string();
+--- a/tab_calls.cc
++++ b/tab_calls.cc
+@@ -632,7 +632,7 @@
+     call_args.Set("offTheRecord", true);
+   }
+   const std::string directory =
+-      base::WideToUTF8(profile->GetOriginalProfile()->GetPath().value());
++      profile->GetOriginalProfile()->GetPath().AsUTF8Unsafe();
+   const std::string json = base::WriteJson(call_args).value_or("{}");
+   call(directory.c_str(), json.c_str(), &SiteDataCleared,
+        new Reply(std::move(reply)));

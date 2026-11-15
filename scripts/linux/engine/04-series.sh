@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Step 4 (Linux): our series on the tree scripts/linux/engine/03-helium.py left: the series base (series.py
-# capture-base), then series_linux.py (every `chromium` line of engine/patches/series minus series-linux's skips, then
-# series-linux's own patches, the engine/chromium layer and ArdiaCore's hook headers), then the offline game. The
-# table of results goes to $CB/logs/series-linux.tsv. Fails when a patch does not apply, after trying every one.
+# capture-base), then series_linux.py apply: every `chromium` line of engine/patches/series minus series-linux's
+# skips, then series-linux's own patches; the layers (chrome/browser/ardia built for Linux, and the tree's ardia/:
+# //ardia/core's portable files, //ardia/win's shared ones, scripts/linux/engine/src/ardia); the hooks linux-hooks
+# names. Then the offline game. The table of results goes to $CB/logs/series-linux.tsv. Fails when a patch does not
+# apply, after trying every one.
 # Usage: scripts/linux/engine/04-series.sh --apply | --help (takes the Linux chromium lock itself)
 set -euo pipefail
 source "$(dirname "$0")/env.sh"

@@ -2,20 +2,20 @@
 const HELP = `Usage: node scripts/linux/package-engine.mjs [--engine <tar.xz>] [--ui <dir>] [--ublock <dir> | --no-ublock]
          [--arch x64|arm64] [--target deb|AppImage|dir|all] [--out <dir>]
 Packages Ardia on its own engine: the engine tarball scripts/linux/engine/06-package.sh makes (default
-~/ardia-linux/out/ardia-chromium-linux-<arch>.tar.xz) and the engine UI bundle (default apps/browser/linux/ui-chromium,
-from pnpm -C apps/browser/linux build:ui:chromium) as /opt/Ardia: chrome as ardia.bin, chrome_sandbox as chrome-sandbox,
+~/ardia-linux/out/ardia-chromium-linux-<arch>.tar.xz) and the UI bundle (default apps/browser/linux/ui, from
+pnpm -C apps/browser/linux build) as /opt/Ardia: chrome as ardia.bin, chrome_sandbox as chrome-sandbox,
 ui/ without source maps, Extensions/ as the Mac bundles it (ublock: the pinned uBlock Origin scripts/linux/ubo.sh fetches,
 or --ublock's; ublock.fingerprint; ublock-lite-settings), ardia.build.json (version and
 build from apps/browser/linux/scripts/version.mjs), resources/apparmor-profile, and the ardia launcher (packaging/sandbox.sh,
 CHROME_DESKTOP=ardia.desktop, packaging/launcher.sh). Then a .deb (dpkg-deb, chrome-sandbox setuid root, the AppArmor
-profile installed by its postinst) and an AppImage (electron-builder's checksummed AppImage runtime and mksquashfs; no
-setuid helper, so it is sandboxed where user namespaces work) in <out> (default apps/browser/linux/dist/engine).
+profile installed by its postinst) and an AppImage (AppImage's static type2 runtime 20251108 and mksquashfs 4.6.1, from a
+pinned, checksummed toolset cached in ~/.cache/ardia; zstd; no setuid helper, so it is sandboxed where user namespaces
+work) in <out> (default apps/browser/linux/dist).
 Refuses an engine that carries the test-build marker (ardia.test-build).`;
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync, writeSync, closeSync } from "node:fs";
-import { createRequire } from "node:module";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -37,10 +37,10 @@ const arch = option("--arch", "x64");
 const debArch = { x64: "amd64", arm64: "arm64" }[arch];
 if (!debArch) fail(`--arch must be x64 or arm64, not ${arch}`);
 const engine = option("--engine", join(homedir(), "ardia-linux/out", `ardia-chromium-linux-${arch}.tar.xz`));
-const ui = option("--ui", join(linuxApp, "ui-chromium"));
+const ui = option("--ui", join(linuxApp, "ui"));
 const withUblock = !args.includes("--no-ublock");
 const ublock = withUblock ? option("--ublock", join(repo, "packages/ardiacore/vendor/ubo/ext")) : "";
-const out = option("--out", join(linuxApp, "dist/engine"));
+const out = option("--out", join(linuxApp, "dist"));
 const targetOption = option("--target", "all");
 const targets = targetOption === "all" ? ["deb", "AppImage"] : [targetOption];
 for (const target of targets) if (!["deb", "AppImage", "dir"].includes(target)) fail(`unknown --target ${target}`);
@@ -50,13 +50,40 @@ function ublockFingerprint(folder) {
   return createHash("sha256").update(listing).digest("hex");
 }
 
+const APPIMAGE_TOOLS = {
+  url: "https://github.com/electron-userland/electron-builder-binaries/releases/download/appimage@1.0.3/appimage-tools-runtime-20251108.tar.gz",
+  sha256: "84021a78ee214ae6fd33a2d62a92ba25542dd10bc86bf117a9b2d0bba44e7665",
+  folder: "appimage-tools-runtime-20251108",
+};
+
+function appImageTools(targetArch) {
+  const cache = join(process.env.XDG_CACHE_HOME || join(homedir(), ".cache"), "ardia");
+  const folder = join(cache, APPIMAGE_TOOLS.folder);
+  const tools = { runtime: join(folder, "runtimes", `runtime-${targetArch}`), mksquashfs: join(folder, "mksquashfs") };
+  if (existsSync(tools.runtime) && existsSync(tools.mksquashfs)) return tools;
+  mkdirSync(cache, { recursive: true });
+  const download = mkdtempSync(join(cache, "appimage-tools-"));
+  const archive = join(download, "tools.tar.gz");
+  execFileSync("curl", ["-fsSL", "--retry", "3", "-o", archive, APPIMAGE_TOOLS.url], { stdio: ["ignore", "ignore", "inherit"] });
+  const sha256 = createHash("sha256").update(readFileSync(archive)).digest("hex");
+  if (sha256 !== APPIMAGE_TOOLS.sha256) fail(`the AppImage toolset's checksum is ${sha256}, not ${APPIMAGE_TOOLS.sha256}`);
+  const unpacked = join(download, "tools");
+  mkdirSync(unpacked);
+  execFileSync("tar", ["-xzf", archive, "-C", unpacked]);
+  rmSync(folder, { recursive: true, force: true });
+  renameSync(unpacked, folder);
+  rmSync(download, { recursive: true, force: true });
+  if (!existsSync(tools.runtime)) fail(`the AppImage toolset has no runtime for ${targetArch}`);
+  return tools;
+}
+
 function fail(message) {
   console.error(`package-engine: ${message}`);
   process.exit(1);
 }
 
 if (!existsSync(engine)) fail(`no engine at ${engine}: run scripts/linux/engine/06-package.sh --apply (or pass --engine)`);
-if (!existsSync(join(ui, "index.html"))) fail(`no UI bundle at ${ui}: run pnpm -C apps/browser/linux build:ui:chromium (or pass --ui)`);
+if (!existsSync(join(ui, "index.html"))) fail(`no UI bundle at ${ui}: run pnpm -C apps/browser/linux build (or pass --ui)`);
 if (withUblock && !args.includes("--ublock")) execFileSync(join(repo, "scripts/linux/ubo.sh"), { stdio: ["ignore", "ignore", "inherit"] });
 if (ublock && !existsSync(join(ublock, "manifest.json"))) fail(`${ublock} has no manifest.json`);
 
@@ -164,8 +191,7 @@ Homepage: https://ardia.dev
 Description: A web browser
  Ardia on its own engine: Chromium with Helium's patches and Ardia's.
 `);
-  const postinst = readFileSync(join(packaging, "after-install.sh"), "utf8").replaceAll("${sanitizedProductName}", "Ardia").replaceAll("${executable}", "ardia");
-  writeFileSync(join(deb, "DEBIAN/postinst"), postinst);
+  copyFileSync(join(packaging, "after-install.sh"), join(deb, "DEBIAN/postinst"));
   writeFileSync(join(deb, "DEBIAN/prerm"), `#!/bin/bash
 set -e
 if [ "$1" = remove ] || [ "$1" = deconfigure ]; then
@@ -188,11 +214,7 @@ exit 0
 }
 
 if (targets.includes("AppImage")) {
-  const require = createRequire(join(linuxApp, "package.json"));
-  const builderLib = join(require.resolve("app-builder-lib/package.json"), "..");
-  const { getAppImageTools } = require(join(builderLib, "out/toolsets/linux.js"));
-  const { Arch } = require(require.resolve("builder-util", { paths: [builderLib] }));
-  const { runtime, mksquashfs } = await getAppImageTools("0.0.0", arch === "arm64" ? Arch.arm64 : Arch.x64);
+  const { runtime, mksquashfs } = appImageTools(arch);
   const appDir = join(work, "AppDir");
   cpSync(app, appDir, { recursive: true, verbatimSymlinks: true });
   rmSync(join(appDir, "chrome-sandbox"), { force: true });
@@ -204,7 +226,7 @@ if (targets.includes("AppImage")) {
   const file = join(out, `${name}-${arch === "arm64" ? "arm64" : "x86_64"}.AppImage`);
   rmSync(file, { force: true });
   const runtimeData = readFileSync(runtime);
-  execFileSync(mksquashfs, [appDir, file, "-offset", String(runtimeData.length), "-all-root", "-noappend", "-no-progress", "-quiet", "-no-xattrs", "-no-fragments", "-comp", "xz", "-Xdict-size", "100%", "-b", "1048576"], { stdio: "inherit" });
+  execFileSync(mksquashfs, [appDir, file, "-offset", String(runtimeData.length), "-all-root", "-noappend", "-no-progress", "-quiet", "-no-xattrs", "-no-fragments", "-comp", "zstd", "-Xcompression-level", "19", "-b", "1048576"], { stdio: "inherit" });
   const fd = openSync(file, "r+");
   writeSync(fd, runtimeData, 0, runtimeData.length, 0);
   closeSync(fd);

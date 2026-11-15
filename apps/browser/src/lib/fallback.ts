@@ -1,3 +1,4 @@
+import { isUnknownCall } from "@ardia/core";
 import { errorText } from "./errors";
 
 export type PasswordAction = "browser import" | "csv import" | "settings edit" | "settings delete" | "sync delete";
@@ -8,6 +9,11 @@ export const orWarn =
     console.warn(`[engine] ${action ? `${action}: ` : ""}${errorText(error)}`);
     return fallback;
   };
+
+export const tolerateMissingCall = (error: unknown): void => {
+  if (!isUnknownCall(error)) throw error;
+  console.warn(`[engine] ${error.message}`);
+};
 
 export type PasswordFailure = "refused-or-already-saved" | "not-landed-in-time" | "other";
 

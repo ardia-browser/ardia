@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Packs a Linux out dir into a tarball of the files Chromium's CI ships as its runnable Linux snapshot: the
 chrome-linux.zip archive of infra/archive_config/linux-archive-rel.json (its files and dirs), and ardia.build.json
-(the app's version and build, which 05-build.sh writes), under one top folder.
+(the app's version and build, which 05-build.sh writes) and the Qt shims Chrome loads to follow a Qt desktop's theme
+(Chrome's own .deb ships them; the CI archive leaves them out), under one top folder. ELF files are packed without their debug
+info (llvm-strip --strip-debug on a staged copy; the symbol table stays, so stacks keep their names); the out dir keeps
+everything.
 Entries the build didn't make are listed, not fatal. The tarball's files are checked against gn's runtime deps of
 //chrome:chrome, and what differs goes to <work>/missing-runtime-deps.txt. RUN.txt goes in. Run by 06-package.sh.
 
@@ -14,8 +17,11 @@ import glob
 import io
 import json
 import os
+import shutil
+import subprocess
 import sys
 import tarfile
+import tempfile
 
 RUN_TXT = """Ardia's engine for Linux ({cpu})
 
@@ -34,6 +40,7 @@ only, add --no-sandbox. chrome_sandbox, the setuid fallback, isn't in this packa
 It installs nothing and registers nothing. The product name it shows is "Chromium"; Ardia's app is not in it.
 """
 
+EXTRA_FILES = ['ardia.build.json', 'libqt5_shim.so', 'libqt6_shim.so']
 SKIP_SUFFIXES = ('.runtime_deps', '.info', '.TOC')
 
 
@@ -43,6 +50,13 @@ def archive_entries(config):
         if str(archive.get('gcs_path', '')).endswith('/chrome-linux.zip'):
             return archive.get('files', []), archive.get('dirs', [])
     sys.exit(f'{config}: no chrome-linux.zip archive')
+
+
+def is_elf(path):
+    if os.path.islink(path) or not os.path.isfile(path):
+        return False
+    with open(path, 'rb') as f:
+        return f.read(4) == b'\x7fELF'
 
 
 def collect(out_dir, files, dirs):
@@ -65,12 +79,12 @@ def collect(out_dir, files, dirs):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     for flag in ('--src', '--out', '--config', '--runtime-deps', '--work', '--tarball', '--cpu', '--chromium',
-                 '--helium'):
+                 '--helium', '--strip'):
         parser.add_argument(flag, required=True)
     args = parser.parse_args()
     out_dir = os.path.join(args.src, args.out)
     files, dirs = archive_entries(args.config)
-    picked, not_built = collect(out_dir, files + ['ardia.build.json'], dirs)
+    picked, not_built = collect(out_dir, files + EXTRA_FILES, dirs)
     deps = [l.strip().removeprefix('./') for l in open(args.runtime_deps) if l.strip()]
     outside = [d for d in deps if d.startswith('../')]
     packed = set(picked)
@@ -100,16 +114,27 @@ def main():
     top = os.path.basename(args.tarball).removesuffix('.tar.xz')
     tmp = args.tarball + '.tmp'
     size = 0
+    stage = tempfile.mkdtemp(dir=args.work, prefix='stage-')
+    stripped = 0
     with tarfile.open(tmp, 'w:xz', preset=6) as tar:
         for name in picked:
-            tar.add(os.path.join(out_dir, name), arcname=f'{top}/{name}', recursive=False)
-            size += os.path.getsize(os.path.join(out_dir, name))
+            source = os.path.join(out_dir, name)
+            if is_elf(source):
+                staged = os.path.join(stage, 'elf')
+                shutil.copy2(source, staged)
+                subprocess.run([args.strip, '--strip-debug', staged], check=True)
+                stripped += os.path.getsize(source) - os.path.getsize(staged)
+                source = staged
+            tar.add(source, arcname=f'{top}/{name}', recursive=False)
+            size += os.path.getsize(source)
         text = RUN_TXT.format(cpu=args.cpu, chromium=args.chromium, helium=args.helium, top=top,
                               date=datetime.date.today().isoformat()).encode()
         info = tarfile.TarInfo(f'{top}/RUN.txt')
         info.size, info.mode, info.mtime = len(text), 0o644, int(datetime.datetime.now().timestamp())
         tar.addfile(info, io.BytesIO(text))
+    shutil.rmtree(stage, ignore_errors=True)
     os.replace(tmp, args.tarball)
+    print(f'debug info left out of ELF files: {stripped / 1e6:.0f} MB')
     print(f'{args.tarball}: {len(picked) + 1} files, {size / 1e6:.0f} MB unpacked, '
           f'{os.path.getsize(args.tarball) / 1e6:.0f} MB')
     print(f'runtime deps: {len(missing)} built but not packed, {len(absent)} not built, {len(outside)} source files; '

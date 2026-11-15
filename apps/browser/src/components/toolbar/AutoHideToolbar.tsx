@@ -12,7 +12,7 @@ import { Toolbar } from "./Toolbar";
 import { curve } from "../ui/motion";
 import { reduceMotion, space, Text } from "../ui";
 import { TOOLBAR_MOTION } from "./tokens";
-import { motionStep, tallPage, type MotionValue, type TallPage } from "./toolbarMotion";
+import { motionStep, pageCover, restStep, tallPage, type MotionValue, type TallPage } from "./toolbarMotion";
 import { useToolbarRow } from "./useToolbarRow";
 import { PAGE_IDENTITY_TAG } from "../../state/tabs/tabReveal";
 
@@ -38,7 +38,7 @@ type ToolbarMotion = {
   fade: Animated.Value;
   groupStyle: Animated.WithAnimatedValue<ViewStyle>;
   bottomStyle: Animated.WithAnimatedValue<ViewStyle>;
-  pageCover: number;
+  cover: { room: number; style: Animated.WithAnimatedValue<ViewStyle> };
 };
 
 export function useToolbarMotion({
@@ -53,7 +53,8 @@ export function useToolbarMotion({
   doc: string;
 }): ToolbarMotion {
   const collapsed = mode !== "shown";
-  const shownTop = useToolbarRow().height + extra;
+  const row = useToolbarRow().height;
+  const shownTop = row + extra;
   const room = shownTop - STRIP_HEIGHT;
   const [tallState, setTall] = useState<TallPage>({ on: collapsed, doc });
   const tall = tallPage(tallState, { enabled, collapsed, doc });
@@ -79,22 +80,28 @@ export function useToolbarMotion({
   const v = values.current;
   const translateY = useMemo(() => Animated.multiply(Animated.subtract(v.laid, v.page), room), [room]);
   const bottomShift = useMemo(() => (tall.on ? Animated.multiply(Animated.subtract(v.page, 1), room) : 0), [tall.on, room]);
+  const cover = useMemo(() => {
+    const line = pageCover({ row, extra, strip: STRIP_HEIGHT });
+    const height = Animated.add(Animated.multiply(v.page, line.perPage), Animated.multiply(v.bar, line.perBar));
+    const shift = height.interpolate({ inputRange: [0, line.room], outputRange: [-line.room, 0], extrapolate: "clamp" });
+    return { room: line.room, style: { transform: [{ translateY: shift }] } };
+  }, [row, extra]);
   useEffect(() => {
     const keep = (a: Animated.Value, value: number) => Animated.timing(a, { toValue: value, duration: TOOLBAR_MOTION.settle, useNativeDriver: true });
     Animated.parallel([keep(v.page, initial.page), keep(v.laid, initial.page), keep(v.bar, initial.bar), keep(v.fade, initial.bar)]).start();
   }, []);
-  const was = useRef(mode);
+  const was = useRef({ mode, enabled });
   useLayoutEffect(() => {
-    const step = motionStep(was.current, mode, reduceMotion() === true);
-    was.current = mode;
+    const step = was.current.enabled === enabled ? motionStep(was.current.mode, mode, reduceMotion() === true) : restStep(mode);
+    was.current = { mode, enabled };
     if (!step) return;
     for (const [name, value] of Object.entries(step.set)) v[name as MotionValue].setValue(value);
     const glides = Object.entries(step.glide).map(([name, value]) =>
       Animated.timing(v[name as MotionValue], { toValue: value, duration: step.show ? SHOW_MS : HIDE_MS, easing: step.show ? SHOW_EASING : HIDE_EASING, useNativeDriver: true }),
     );
-    if (glides.length) Animated.parallel(glides).start(({ finished }) => finished && step.fit === "afterGlide" && fitShownPage());
+    if (glides.length) Animated.parallel(glides, { stopTogether: false }).start(({ finished }) => finished && step.fit === "afterGlide" && fitShownPage());
     if (step.fit === "now") fitShownPage();
-  }, [mode]);
+  }, [mode, enabled]);
 
   return {
     bar: v.bar,
@@ -108,7 +115,7 @@ export function useToolbarMotion({
       transform: [{ translateY }],
     },
     bottomStyle: { transform: [{ translateY: bottomShift }] },
-    pageCover: mode === "peek" ? room : collapsed ? extra : 0,
+    cover,
   };
 }
 

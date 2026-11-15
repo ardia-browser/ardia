@@ -2,6 +2,7 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { isAsleep } from "../tabs/pageSession";
 import { useLive } from "../live/store";
+import { changedIds } from "../browser/changes";
 
 const closedAway = (s: BrowserState, prev: BrowserState, tabId: string | undefined) =>
   !!tabId && (!s.tabs[tabId] || (isAsleep(s.tabs[tabId]) && !isAsleep(prev.tabs[tabId])));
@@ -41,7 +42,7 @@ const watchStoreTargets = (windowId: string, found: (switched: string | null, op
 
 export const selectedTabIn = (windowId: string) => activeTabId(useBrowser.getState(), windowId);
 
-const pinsMoved = (s: BrowserState, prev: BrowserState) => s.tabs !== prev.tabs && Object.keys(s.tabs).some((id) => s.tabs[id]?.pin !== prev.tabs[id]?.pin);
+const pinsMoved = (s: BrowserState, prev: BrowserState) => changedIds(s.tabs, prev.tabs).some((id) => s.tabs[id]?.pin !== prev.tabs[id]?.pin);
 
 export function watchRowsMoved(moved: () => void) {
   const stopBrowser = useBrowser.subscribe((s, prev) => {

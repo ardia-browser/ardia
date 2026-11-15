@@ -77,6 +77,7 @@ export function useSelectedRowAway(windowId: string, geometry: RefObject<Sidebar
     };
   });
   useEffect(() => {
+    if (!geometry) return void tracker.judge();
     tracker.relocate();
     const unsubscribe = watchRowsMoved(tracker.relocate);
     return () => {

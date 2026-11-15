@@ -14,6 +14,7 @@
 #include "ardia/linux/windows/app_windows.h"
 #include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
@@ -36,8 +37,13 @@ namespace aura {
 class Window;
 }
 
+namespace cc {
+class Animation;
+}
+
 namespace ui {
 class Compositor;
+class Layer;
 }
 
 namespace views {
@@ -115,10 +121,20 @@ class AppWindowView : public views::View,
   views::WebView* DevToolsView(const std::string& key) const;
 
   struct RunningMotion {
+    RunningMotion();
+    RunningMotion(RunningMotion&&);
+    RunningMotion& operator=(RunningMotion&&);
+    ~RunningMotion();
+
     PageMotion motion;
     base::TimeTicks start;
     gfx::Rect layout;
+    scoped_refptr<cc::Animation> animation;
   };
+
+  void DropMotionAnimation(RunningMotion& running);
+  void AnimateOnCompositor(RunningMotion& running, ui::Layer* layer,
+                           ui::Compositor* compositor);
 
   void OnAnimationStep(base::TimeTicks timestamp) override;
   void OnCompositingShuttingDown(ui::Compositor* compositor) override;

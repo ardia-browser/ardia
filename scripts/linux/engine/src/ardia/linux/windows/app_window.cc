@@ -14,6 +14,12 @@
 #include "ardia/linux/modules/app_modules.h"
 #include "ardia/linux/modules/focus_return.h"
 #include "base/base64.h"
+#include "ui/gfx/geometry/transform_operations.h"
+#include "ui/gfx/animation/keyframe/keyframed_animation_curve.h"
+#include "cc/animation/keyframe_model.h"
+#include "cc/animation/animation_timeline.h"
+#include "cc/animation/animation_id_provider.h"
+#include "cc/animation/animation.h"
 #include "chrome/browser/devtools/devtools_contents_resizing_strategy.h"
 #include "chrome/browser/devtools/devtools_window.h"
 #include "base/functional/bind.h"
@@ -274,6 +280,71 @@ void AppWindowView::ShowMotionAt(const std::string& key,
   }
 }
 
+AppWindowView::RunningMotion::RunningMotion() = default;
+AppWindowView::RunningMotion::RunningMotion(RunningMotion&&) = default;
+AppWindowView::RunningMotion& AppWindowView::RunningMotion::operator=(
+    RunningMotion&&) = default;
+AppWindowView::RunningMotion::~RunningMotion() = default;
+
+void AppWindowView::DropMotionAnimation(RunningMotion& running) {
+  if (!running.animation) {
+    return;
+  }
+  running.animation->DetachElement();
+  if (cc::AnimationTimeline* timeline =
+          running.animation->animation_timeline()) {
+    timeline->DetachAnimation(running.animation);
+  }
+  running.animation.reset();
+}
+
+void AppWindowView::AnimateOnCompositor(RunningMotion& running,
+                                        ui::Layer* layer,
+                                        ui::Compositor* compositor) {
+  cc::AnimationTimeline* timeline = compositor->GetAnimationTimeline();
+  const PageMotion& motion = running.motion;
+  if (!timeline || !layer || motion.rects.size() < 2) {
+    return;
+  }
+  const gfx::Rect& layout = running.layout;
+  const base::TimeDelta step = motion.duration / (motion.rects.size() - 1);
+  auto transforms = gfx::KeyframedTransformAnimationCurve::Create();
+  for (size_t index = 0; index < motion.rects.size(); ++index) {
+    const gfx::RectF& rect = motion.rects[index];
+    gfx::TransformOperations operations;
+    operations.AppendTranslate(rect.x() - layout.x(), rect.y() - layout.y(), 0);
+    operations.AppendScale(rect.width() / layout.width(),
+                           rect.height() / layout.height(), 1);
+    transforms->AddKeyframe(
+        gfx::TransformKeyframe::Create(step * index, operations, nullptr));
+  }
+  scoped_refptr<cc::Animation> animation =
+      cc::Animation::Create(cc::AnimationIdProvider::NextAnimationId());
+  timeline->AttachAnimation(animation);
+  animation->AttachElement(layer->element_id());
+  const auto add = [&](std::unique_ptr<gfx::AnimationCurve> curve,
+                       cc::TargetProperty::Type property) {
+    std::unique_ptr<cc::KeyframeModel> model = cc::KeyframeModel::Create(
+        std::move(curve), cc::AnimationIdProvider::NextKeyframeModelId(),
+        cc::AnimationIdProvider::NextGroupId(),
+        cc::KeyframeModel::TargetPropertyId(property));
+    model->set_start_time(running.start);
+    model->set_fill_mode(gfx::KeyframeModel::FillMode::BOTH);
+    animation->AddKeyframeModel(std::move(model));
+  };
+  add(std::move(transforms), cc::TargetProperty::TRANSFORM);
+  if (motion.opacity.size() == motion.rects.size()) {
+    auto fades = gfx::KeyframedFloatAnimationCurve::Create();
+    for (size_t index = 0; index < motion.opacity.size(); ++index) {
+      fades->AddKeyframe(gfx::FloatKeyframe::Create(
+          step * index, std::clamp(motion.opacity[index], 0.0f, 1.0f),
+          nullptr));
+    }
+    add(std::move(fades), cc::TargetProperty::OPACITY);
+  }
+  running.animation = std::move(animation);
+}
+
 bool AppWindowView::StartMotion(const std::string& key,
                                 const PageMotion& motion) {
   ui::Compositor* compositor =
@@ -284,6 +355,7 @@ bool AppWindowView::StartMotion(const std::string& key,
     return false;
   }
   RunningMotion& running = motions_[key];
+  DropMotionAnimation(running);
   running.motion = motion;
   const base::TimeDelta delay =
       motion_delay_override_.value_or(base::TimeDelta());
@@ -311,6 +383,9 @@ bool AppWindowView::StartMotion(const std::string& key,
     widget->LayoutRootViewIfNecessary();
   }
   ShowMotionAt(key, motion.elapsed);
+  if (aura::Window* native = PageNativeView(key)) {
+    AnimateOnCompositor(running, native->layer(), compositor);
+  }
   if (!stepping_) {
     stepping_ = compositor;
     compositor->AddAnimationObserver(this);
@@ -320,7 +395,16 @@ bool AppWindowView::StartMotion(const std::string& key,
 
 void AppWindowView::FinishMotion(const std::string& key,
                                  std::optional<float> opacity) {
-  motions_.erase(key);
+  auto running = motions_.find(key);
+  if (running != motions_.end()) {
+    if (!opacity && running->second.motion.opacity.size() ==
+                        running->second.motion.rects.size() &&
+        !running->second.motion.opacity.empty()) {
+      opacity = std::clamp(running->second.motion.opacity.back(), 0.0f, 1.0f);
+    }
+    DropMotionAnimation(running->second);
+    motions_.erase(running);
+  }
   RelayoutPage(key);
   if (views::Widget* widget = GetWidget()) {
     widget->LayoutRootViewIfNecessary();
@@ -339,15 +423,12 @@ void AppWindowView::FinishMotion(const std::string& key,
 void AppWindowView::OnAnimationStep(base::TimeTicks timestamp) {
   std::vector<std::string> ended;
   for (auto& [key, running] : motions_) {
-    const PageMotion& motion = running.motion;
-    const base::TimeDelta elapsed =
-        std::max(timestamp - running.start, motion.elapsed);
-    if (elapsed >= motion.duration) {
-      ShowMotionAt(key, motion.duration);
+    if (timestamp - running.start >= running.motion.duration) {
       ended.push_back(key);
-      continue;
+    } else if (!running.animation) {
+      ShowMotionAt(key, std::max(timestamp - running.start,
+                                 running.motion.elapsed));
     }
-    ShowMotionAt(key, elapsed);
   }
   for (const std::string& key : ended) {
     FinishMotion(key, std::nullopt);
@@ -468,7 +549,10 @@ void AppWindowView::SetDevTools(const std::string& key,
 }
 
 void AppWindowView::RemovePage(const std::string& key) {
-  motions_.erase(key);
+  if (auto running = motions_.find(key); running != motions_.end()) {
+    DropMotionAnimation(running->second);
+    motions_.erase(running);
+  }
   if (motions_.empty()) {
     StopStepping();
   }

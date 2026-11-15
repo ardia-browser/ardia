@@ -91,3 +91,14 @@ source_set("linux") {
     "//ardia/win:shared",
   ]
 }
+
+source_set("unit_tests") {
+  testonly = true
+  sources = [ "host/input_region_unittest.cc" ]
+  deps = [
+    ":linux",
+    "//base",
+    "//testing/gtest",
+    "//ui/gfx/geometry",
+  ]
+}

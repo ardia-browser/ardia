@@ -44,6 +44,7 @@ source_set("linux") {
 
   public_deps = [
     "//ardia/core:hooks",
+    "//ardia/core:host_visibility",
     "//ardia/linux/ui_host",
     "//ardia/linux/ui_host:modules",
     "//ardia/win:shared",

@@ -44,6 +44,8 @@ KeyedEntries ParseKeyedEntries(std::string_view text,
                                const std::set<std::string_view>& holding_commas,
                                std::vector<std::string>* unknown);
 
+std::string InstanceSwitchName(std::string_view key);
+
 KeyedEntries ParseInstanceEntries(std::string_view text,
                                   std::vector<std::string>* unknown);
 

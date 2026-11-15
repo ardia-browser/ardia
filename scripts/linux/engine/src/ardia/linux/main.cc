@@ -116,25 +116,10 @@ void KeepRealProfileClosed(base::CommandLine* command_line) {
   unsetenv("SSLKEYLOGFILE");
 }
 
-std::string Kebab(std::string_view key) {
-  std::string kebab;
-  for (char c : key) {
-    if (base::IsAsciiUpper(c)) {
-      if (!kebab.empty()) {
-        kebab.push_back('-');
-      }
-      kebab.push_back(base::ToLowerASCII(c));
-    } else {
-      kebab.push_back(c);
-    }
-  }
-  return kebab;
-}
-
 void AddInstanceSwitches(base::CommandLine* command_line,
                          const std::string& instance) {
   for (const auto& [key, value] : ParseInstanceEntries(instance, nullptr)) {
-    command_line->AppendSwitchNative("ardia-" + Kebab(key), value);
+    command_line->AppendSwitchNative(InstanceSwitchName(key), value);
   }
 }
 

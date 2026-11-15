@@ -143,6 +143,18 @@ bool Truthy(std::string_view value) {
   return !value.empty() && value != "0" && value != "off" && value != "false";
 }
 
+std::string InstanceSwitchName(std::string_view key) {
+  std::string name = "ardia";
+  for (size_t i = 0; i < key.size(); ++i) {
+    const char c = key[i];
+    if (i == 0 || base::IsAsciiUpper(c)) {
+      name.push_back('-');
+    }
+    name.push_back(base::ToLowerASCII(c));
+  }
+  return name;
+}
+
 KeyedEntries ParseInstanceEntries(std::string_view text,
                                   std::vector<std::string>* unknown) {
   return ParseKeyedEntries(text, InstanceKeys(), KeysWhoseValuesHoldCommas(),
@@ -220,7 +232,7 @@ LaunchConfig ReadLaunchConfig(const base::CommandLine& command_line,
   config.background = command_line.HasSwitch(ardiacore::kBackgroundSwitch);
   config.test_instance = command_line.HasSwitch(kTestInstanceSwitch);
   for (std::string_view key : InstanceKeys()) {
-    const std::string name = "ardia-" + base::ToLowerASCII(key);
+    const std::string name = InstanceSwitchName(key);
     if (command_line.HasSwitch(name)) {
       config.instance[std::string(key)] =
           command_line.GetSwitchValueASCII(name);

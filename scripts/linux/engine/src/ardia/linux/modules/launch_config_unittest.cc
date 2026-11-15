@@ -37,12 +37,18 @@ TEST(LaunchConfigTest, SwitchEntriesReadOnAndOff) {
   EXPECT_TRUE(entries["e"]);
 }
 
+TEST(LaunchConfigTest, InstanceKeysBecomeKebabCaseSwitches) {
+  EXPECT_EQ(InstanceSwitchName("downloadsDir"), "ardia-downloads-dir");
+  EXPECT_EQ(InstanceSwitchName("importSourceDir"), "ardia-import-source-dir");
+  EXPECT_EQ(InstanceSwitchName("syncFolder"), "ardia-sync-folder");
+}
+
 TEST(LaunchConfigTest, ATestInstanceKeepsItsTestKeys) {
   const LaunchConfig config = ReadLaunchConfig(
       LaunchedWith({"--ardia-data-dir=/tmp/scratch", "--ardia-test-instance",
                     "--ardia-background", "--ardia-test=appMenu,keychain=x",
-                    "--ardia-trace=keys,bogus,keys", "--ardia-updatefeed=u",
-                    "--ardia-jslocation=/js", "--ardia-feedback-url=http://f"}),
+                    "--ardia-trace=keys,bogus,keys", "--ardia-update-feed=u",
+                    "--ardia-js-location=/js", "--ardia-feedback-url=http://f"}),
       base::FilePath("/home/me/.config"));
   EXPECT_EQ(config.config_directory.value(), "/tmp/scratch/config");
   EXPECT_TRUE(config.background);
@@ -61,7 +67,7 @@ TEST(LaunchConfigTest, ATestInstanceKeepsItsTestKeys) {
 TEST(LaunchConfigTest, OutsideATestInstanceTestKeysAndTestOnlyInstanceKeysGo) {
   const LaunchConfig config = ReadLaunchConfig(
       LaunchedWith({"--ardia-test=appMenu", "--ardia-trace=keys",
-                    "--ardia-updatefeed=u", "--ardia-releasenotes=1"}),
+                    "--ardia-update-feed=u", "--ardia-release-notes=1"}),
       base::FilePath("/home/me/.config"));
   EXPECT_EQ(config.config_directory.value(), "/home/me/.config/ardia");
   EXPECT_TRUE(config.test.empty());

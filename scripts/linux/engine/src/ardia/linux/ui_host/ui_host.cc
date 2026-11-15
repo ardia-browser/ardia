@@ -3,6 +3,7 @@
 #include <set>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "ardia/linux/log.h"
 #include "ardia/linux/main.h"
@@ -19,6 +20,8 @@
 #include "base/no_destructor.h"
 #include "base/path_service.h"
 #include "base/strings/strcat.h"
+#include "base/strings/string_number_conversions.h"
+#include "base/task/thread_pool.h"
 #include "base/time/time.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
@@ -206,6 +209,25 @@ class UiHost : public content::WebContentsDelegate,
 
 }
 
+namespace {
+
+void LoadUiHost(base::FilePath ui_dir,
+                std::vector<std::string> script_hashes) {
+  UiHost* host = UiHost::Current();
+  if (!host) {
+    return;
+  }
+  Note("ui", base::StrCat({"script hashes ",
+                           base::NumberToString(script_hashes.size())}));
+  content::WebUIConfigMap::GetInstance().AddWebUIConfig(
+      std::make_unique<ArdiaAppUIConfig>(
+          std::move(ui_dir), DataDirectory().Append("Translations"),
+          std::move(script_hashes)));
+  host->Load();
+}
+
+}
+
 void StartUiHost() {
   if (UiHost::Current()) {
     return;
@@ -213,13 +235,13 @@ void StartUiHost() {
   Profile* profile =
       ProfileManager::GetLastUsedProfile()->GetOriginalProfile();
   base::FilePath ui_dir = UiDirectory();
-  base::FilePath translations_dir = DataDirectory().Append("Translations");
-  content::WebUIConfigMap::GetInstance().AddWebUIConfig(
-      std::make_unique<ArdiaAppUIConfig>(ui_dir, translations_dir));
   Note("ui", ui_dir.value());
   UiHost* host = new UiHost(profile);
   UiHost::Current() = host;
-  host->Load();
+  base::ThreadPool::PostTaskAndReplyWithResult(
+      FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_BLOCKING},
+      base::BindOnce(&ReadScriptHashes, ui_dir),
+      base::BindOnce(&LoadUiHost, ui_dir));
 }
 
 void StopUiHost() {

@@ -1,10 +1,12 @@
 #!/usr/bin/env node
-const HELP = `Usage: node scripts/engine-fake.mjs [--ui <dir>] [--out <dir>] [--keep-open]
+const HELP = `Usage: node scripts/engine-fake.mjs [--ui <dir>] [--out <dir>] [--onboarding] [--keep-open]
 Runs the engine UI bundle (ui-chromium) in a headless Chromium against the fake bridge
 (packages/expo-linux/src/chromium/fake), before the engine exists: the host page loads, opens its main window with
 window.open, the window mounts and shows, a launch link opens a page through tab.create and tab.show, and the
 command bar opened over it becomes a hole in the page. Builds the bundle first unless --ui is given. Writes the
-window's screenshots and a report.json to --out and exits 1 when a check fails.`;
+window's screenshots and a report.json to --out and exits 1 when a check fails. Pages are served with the engine's
+Content Security Policy (with ui/csp.json's script hashes); --onboarding leaves onboarding showing (the meadow), where
+only the policy and page-error checks count.`;
 
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -36,10 +38,27 @@ ui = resolve(ui);
 
 const fake = await build({ entryPoints: [join(repo, "packages/expo-linux/src/chromium/fake/install.ts")], bundle: true, format: "iife", write: false, target: "chrome140" });
 const apiVersion = Number(/NATIVE_API_VERSION = (\d+)/.exec(readFileSync(join(repo, "apps/browser/src/platform/nativeApi.ts"), "utf8"))?.[1] ?? 0);
-const seeded = { "onboarding.json": JSON.stringify({ completedAt: 1, version: 1 }) };
+const onboarding = args.includes("--onboarding");
+const seeded = onboarding ? {} : { "onboarding.json": JSON.stringify({ completedAt: 1, version: 1 }) };
 const fakeScript = `globalThis.ardiaFakeApiVersion = ${apiVersion};\nglobalThis.ardiaFakeDocuments = ${JSON.stringify(seeded)};\n${fake.outputFiles[0].text}`;
 
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".wasm": "application/wasm", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".mp3": "audio/mpeg", ".woff2": "font/woff2" };
+const cspFile = join(ui, "csp.json");
+const scriptHashes = existsSync(cspFile) ? (JSON.parse(readFileSync(cspFile, "utf8")).scriptSrc ?? []) : [];
+const ENGINE_CSP = [
+  "child-src 'self' blob:",
+  "connect-src 'self' data: blob: https://api.github.com https://github.com https://objects.githubusercontent.com https://release-assets.githubusercontent.com https://storage.googleapis.com",
+  "default-src 'self'",
+  "font-src 'self' data:",
+  "frame-ancestors 'none'",
+  "frame-src 'self' about: data: blob:",
+  "img-src 'self' data: blob: https: http:",
+  "media-src 'self' data: blob:",
+  "object-src 'none'",
+  ["script-src 'self' 'wasm-unsafe-eval'", ...scriptHashes].join(" "),
+  "style-src 'self' 'unsafe-inline'",
+  "worker-src 'self' blob:",
+].join("; ");
 const server = createServer((request, response) => {
   const path = normalize(decodeURIComponent(new URL(request.url, "http://x").pathname)).replace(/^\/+/, "") || "index.html";
   const file = join(ui, path);
@@ -47,7 +66,7 @@ const server = createServer((request, response) => {
     response.writeHead(404).end();
     return;
   }
-  response.writeHead(200, { "content-type": TYPES[extname(file)] ?? "application/octet-stream" }).end(readFileSync(file));
+  response.writeHead(200, { "content-type": TYPES[extname(file)] ?? "application/octet-stream", "content-security-policy": ENGINE_CSP }).end(readFileSync(file));
 });
 await new Promise((done) => server.listen(0, "127.0.0.1", done));
 const origin = `http://127.0.0.1:${server.address().port}`;
@@ -61,7 +80,7 @@ const executable = () => {
   return undefined;
 };
 
-const report = { checks: {}, errors: [], console: [] };
+const report = { checks: {}, errors: [], console: [], csp: [] };
 const check = (name, ok, detail) => {
   report.checks[name] = { ok: !!ok, detail };
   console.log(`${ok ? "ok  " : "FAIL"} ${name}${detail === undefined ? "" : ` ${typeof detail === "string" ? detail : JSON.stringify(detail)}`}`);
@@ -84,6 +103,7 @@ try {
   const host = await context.newPage();
   host.on("console", (message) => report.console.push(`${message.type()}: ${message.text()}`));
   host.on("pageerror", (error) => report.errors.push(String(error?.stack ?? error)));
+  context.on("console", (message) => /Content Security Policy/.test(message.text()) && report.csp.push(message.text().slice(0, 300)));
   const popup = context.waitForEvent("page", { timeout: 20000 });
   await host.goto(`${origin}/index.html`);
   check("the host has the bridge", await host.evaluate(() => typeof window.ardiaLinux?.callSync === "function"));
@@ -100,6 +120,11 @@ try {
   await win.waitForTimeout(1500);
   await win.screenshot({ path: join(out, "1-window.png") });
 
+  if (onboarding) {
+    const meadow = await until("the meadow's scene", () => host.evaluate(() => window.ardiaFakeEngine.meadow), 15000).catch(() => null);
+    check("the onboarding meadow's scene runs under the policy", meadow === "ready", meadow);
+    await win.screenshot({ path: join(out, "2-onboarding.png") });
+  } else {
   const fixture = "data:text/html,<title>Fixture</title><p>fixture";
   await host.evaluate((url) => window.ardiaLinuxDebug.emit("ArdiaShell", "onOpenURLs", { urls: [url] }), fixture);
   const placed = await until("tab.create and tab.show for the launch link", async () => {
@@ -134,7 +159,9 @@ try {
   const final = await engine();
   report.engine = { ...final, holesBefore };
   check("sync calls answer under 2 ms", final.slowSync === 0, `${final.syncCalls} sync calls`);
+  }
   check("no page errors in the host", report.errors.length === 0, report.errors.slice(0, 3));
+  check("nothing breaks the engine's Content Security Policy", report.csp.length === 0, report.csp.slice(0, 3));
 } catch (error) {
   check("the run finished", false, String(error?.message ?? error));
 } finally {

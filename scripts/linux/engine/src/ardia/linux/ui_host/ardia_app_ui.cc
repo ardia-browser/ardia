@@ -4,6 +4,7 @@
 
 #include "ardia/linux/ui_host/ardia_app_source.h"
 #include "content/public/browser/browser_context.h"
+#include "content/public/browser/web_contents.h"
 #include "content/public/browser/url_data_source.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/common/url_constants.h"
@@ -19,10 +20,12 @@ ArdiaAppUI::~ArdiaAppUI() = default;
 WEB_UI_CONTROLLER_TYPE_IMPL(ArdiaAppUI)
 
 ArdiaAppUIConfig::ArdiaAppUIConfig(base::FilePath ui_dir,
-                                   base::FilePath translations_dir)
+                                   base::FilePath translations_dir,
+                                   std::vector<std::string> script_hashes)
     : content::WebUIConfig(content::kChromeUIScheme, kArdiaAppHost),
       ui_dir_(std::move(ui_dir)),
-      translations_dir_(std::move(translations_dir)) {}
+      translations_dir_(std::move(translations_dir)),
+      script_hashes_(std::move(script_hashes)) {}
 
 ArdiaAppUIConfig::~ArdiaAppUIConfig() = default;
 
@@ -42,7 +45,8 @@ void ArdiaAppUIConfig::RegisterURLDataSource(
     content::BrowserContext* browser_context) {
   content::URLDataSource::Add(
       browser_context,
-      std::make_unique<ArdiaAppSource>(ui_dir_, translations_dir_));
+      std::make_unique<ArdiaAppSource>(ui_dir_, translations_dir_,
+                                       script_hashes_));
 }
 
 }

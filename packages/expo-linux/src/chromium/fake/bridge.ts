@@ -13,6 +13,7 @@ export type FakeEngine = {
   shaped: string[];
   windowsShown: string[];
   syncCalls: { module: string; method: string; ms: number }[];
+  meadow: string | null;
   emit(module: string, event: string, payload: unknown): void;
   command(command: string, windowId?: string | null): void;
 };
@@ -25,6 +26,7 @@ const record: FakeEngine = {
   shaped: [],
   windowsShown: [],
   syncCalls: [],
+  meadow: null,
   emit: (module, event, payload) => {
     for (const listener of [...listeners]) listener(module, event, payload);
   },
@@ -86,6 +88,7 @@ const modules: Record<string, FakeModule> = {
       windowIds: async () => [...new Set(record.shaped)],
       quit: async () => {},
       replyToTerminate: async () => {},
+      noteMeadow: async (state: string) => void (record.meadow = state),
     },
   },
   ArdiaEngineHost: {

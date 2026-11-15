@@ -1,5 +1,9 @@
+import { createHash } from "node:crypto";
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin, type UserConfig } from "vite";
+import { inlineScripts, meadowDocument } from "../../../../packages/expo-linux/src/views/meadowDocument";
 import electronConfig from "./vite.config";
 
 const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
@@ -42,12 +46,29 @@ function engineEntry(): Plugin {
   };
 }
 
+const MEADOW_PAGE = `${repo}packages/shaders/ios/Meadow/index.html`;
+
+export function inlineScriptHashes(): string[] {
+  const scripts = inlineScripts(meadowDocument(readFileSync(MEADOW_PAGE, "utf8")));
+  return [...new Set(scripts.map((script) => `'sha256-${createHash("sha256").update(script, "utf8").digest("base64")}'`))];
+}
+
+function contentSecurityHashes(): Plugin {
+  let outDir = "";
+  return {
+    name: "ardia-linux:content-security-hashes",
+    apply: "build",
+    configResolved: (config) => void (outDir = config.build.outDir),
+    writeBundle: () => writeFileSync(join(outDir, "csp.json"), `${JSON.stringify({ scriptSrc: inlineScriptHashes() }, null, 2)}\n`),
+  };
+}
+
 const base = electronConfig as UserConfig;
 const extensions = base.resolve?.extensions ?? [];
 
 export default defineConfig({
   ...base,
-  plugins: [engineSwaps(), engineEntry(), ...(base.plugins ?? [])],
+  plugins: [engineSwaps(), engineEntry(), contentSecurityHashes(), ...(base.plugins ?? [])],
   resolve: { ...base.resolve, extensions: [".chromium.tsx", ".chromium.ts", ...extensions] },
   server: { ...base.server, port: Number(process.env.ARDIA_VITE_PORT ?? 5282) },
   build: { ...base.build, outDir: process.env.ARDIA_UI_OUT || here("../ui-chromium") },

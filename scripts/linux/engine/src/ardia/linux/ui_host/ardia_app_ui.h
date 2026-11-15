@@ -2,6 +2,8 @@
 #define ARDIA_LINUX_UI_HOST_ARDIA_APP_UI_H_
 
 #include <memory>
+#include <string>
+#include <vector>
 
 #include "base/files/file_path.h"
 #include "content/public/browser/web_ui_controller.h"
@@ -22,7 +24,9 @@ class ArdiaAppUI : public content::WebUIController {
 
 class ArdiaAppUIConfig : public content::WebUIConfig {
  public:
-  ArdiaAppUIConfig(base::FilePath ui_dir, base::FilePath translations_dir);
+  ArdiaAppUIConfig(base::FilePath ui_dir,
+                   base::FilePath translations_dir,
+                   std::vector<std::string> script_hashes);
   ~ArdiaAppUIConfig() override;
 
   bool IsWebUIEnabled(content::BrowserContext* browser_context) override;
@@ -34,6 +38,7 @@ class ArdiaAppUIConfig : public content::WebUIConfig {
  private:
   const base::FilePath ui_dir_;
   const base::FilePath translations_dir_;
+  const std::vector<std::string> script_hashes_;
 };
 
 }

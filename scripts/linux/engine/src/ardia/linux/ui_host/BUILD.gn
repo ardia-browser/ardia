@@ -38,6 +38,7 @@ source_set("ui_host") {
     "//mojo/public/cpp/bindings",
     "//services/network/public/mojom",
     "//third_party/blink/public/common",
+    "//third_party/re2",
     "//ui/base",
     "//url",
   ]

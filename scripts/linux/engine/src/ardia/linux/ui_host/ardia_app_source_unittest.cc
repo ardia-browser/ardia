@@ -42,6 +42,19 @@ TEST_F(ArdiaAppSourceTest, RefusesSymlinksThatLeave) {
   EXPECT_FALSE(ConfinedPath(root_, "link"));
 }
 
+TEST(ArdiaAppPolicyTest, TakesOnlyWellFormedScriptHashes) {
+  std::vector<std::string> hashes = ScriptHashesFromJson(
+      R"({"scriptSrc": ["'sha256-wyHw8EHIFZPNCzHjI2oBo3LWCdc6ZFJ1ROnvtK9YNak='",
+                        "'unsafe-inline'", "'sha256-x'; script-src *",
+                        "https://example.com", 7]})");
+  ASSERT_EQ(hashes.size(), 1u);
+  EXPECT_EQ(ScriptSrc(hashes),
+            "script-src 'self' 'wasm-unsafe-eval' "
+            "'sha256-wyHw8EHIFZPNCzHjI2oBo3LWCdc6ZFJ1ROnvtK9YNak=';");
+  EXPECT_TRUE(ScriptHashesFromJson("not json").empty());
+  EXPECT_EQ(ScriptSrc({}), "script-src 'self' 'wasm-unsafe-eval';");
+}
+
 TEST(ArdiaAppMimeTypeTest, KnowsTheBundlesTypes) {
   EXPECT_EQ(MimeTypeForPath(""), "text/html");
   EXPECT_EQ(MimeTypeForPath("index.html"), "text/html");

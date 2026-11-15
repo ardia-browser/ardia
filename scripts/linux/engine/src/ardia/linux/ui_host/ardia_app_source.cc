@@ -4,6 +4,8 @@
 
 #include "base/containers/fixed_flat_map.h"
 #include "base/files/file_util.h"
+#include "base/json/json_reader.h"
+#include "third_party/re2/src/re2/re2.h"
 #include "base/functional/bind.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/strings/string_util.h"
@@ -18,6 +20,9 @@ namespace {
 
 constexpr char kIndex[] = "index.html";
 constexpr int64_t kLargestFile = 256 * 1024 * 1024;
+constexpr int64_t kLargestPolicyFile = 64 * 1024;
+constexpr size_t kMostScriptHashes = 32;
+constexpr char kScriptHashPattern[] = "'sha256-[A-Za-z0-9+/]{43}='";
 
 constexpr auto kMimeTypes = base::MakeFixedFlatMap<std::string_view,
                                                    std::string_view>({
@@ -96,6 +101,47 @@ std::optional<base::FilePath> ConfinedPath(const base::FilePath& root,
   return real_path;
 }
 
+std::vector<std::string> ScriptHashesFromJson(std::string_view json) {
+  std::vector<std::string> hashes;
+  std::optional<base::Value> parsed =
+      base::JSONReader::Read(json, base::JSON_PARSE_RFC);
+  const base::ListValue* listed =
+      parsed && parsed->is_dict() ? parsed->GetDict().FindList("scriptSrc")
+                                  : nullptr;
+  if (!listed) {
+    return hashes;
+  }
+  for (const base::Value& hash : *listed) {
+    if (hashes.size() == kMostScriptHashes) {
+      break;
+    }
+    if (hash.is_string() &&
+        RE2::FullMatch(hash.GetString(), kScriptHashPattern)) {
+      hashes.push_back(hash.GetString());
+    }
+  }
+  return hashes;
+}
+
+std::vector<std::string> ReadScriptHashes(const base::FilePath& ui_dir) {
+  std::optional<base::FilePath> path =
+      ConfinedPath(ui_dir, kContentSecurityFile);
+  std::string json;
+  if (!path ||
+      !base::ReadFileToStringWithMaxSize(*path, &json, kLargestPolicyFile)) {
+    return {};
+  }
+  return ScriptHashesFromJson(json);
+}
+
+std::string ScriptSrc(const std::vector<std::string>& hashes) {
+  std::string policy = "script-src 'self' 'wasm-unsafe-eval'";
+  for (const std::string& hash : hashes) {
+    policy += " " + hash;
+  }
+  return policy + ";";
+}
+
 std::string MimeTypeForPath(std::string_view path) {
   std::string_view clean = PathWithoutQuery(path);
   size_t dot = clean.rfind('.');
@@ -114,9 +160,11 @@ std::string MimeTypeForPath(std::string_view path) {
 }
 
 ArdiaAppSource::ArdiaAppSource(base::FilePath ui_dir,
-                               base::FilePath translations_dir)
+                               base::FilePath translations_dir,
+                               std::vector<std::string> script_hashes)
     : ui_dir_(std::move(ui_dir)),
-      translations_dir_(std::move(translations_dir)) {}
+      translations_dir_(std::move(translations_dir)),
+      script_hashes_(std::move(script_hashes)) {}
 
 ArdiaAppSource::~ArdiaAppSource() = default;
 
@@ -164,7 +212,7 @@ std::string ArdiaAppSource::GetContentSecurityPolicy(
     case Directive::DefaultSrc:
       return "default-src 'self';";
     case Directive::ScriptSrc:
-      return "script-src 'self' 'wasm-unsafe-eval';";
+      return ScriptSrc(script_hashes_);
     case Directive::StyleSrc:
       return "style-src 'self' 'unsafe-inline';";
     case Directive::ImgSrc:

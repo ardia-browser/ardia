@@ -1,0 +1,31 @@
+# Copyright 2026 Ardia. Apache-2.0.
+
+import("//testing/test.gni")
+
+assert(is_linux)
+
+source_set("core") {
+  sources = [
+    "import_core.cc",
+    "import_core.h",
+  ]
+
+  deps = [
+    "//base",
+    "//third_party/boringssl",
+    "//third_party/sqlite",
+  ]
+}
+
+test("ardia_linux_import_unittests") {
+  sources = [ "import_unittest.cc" ]
+
+  deps = [
+    ":core",
+    "//base",
+    "//base/test:run_all_unittests",
+    "//base/test:test_support",
+    "//testing/gtest",
+    "//third_party/boringssl",
+  ]
+}

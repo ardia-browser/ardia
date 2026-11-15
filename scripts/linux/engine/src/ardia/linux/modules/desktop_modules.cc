@@ -1,5 +1,6 @@
 // Copyright 2026 Ardia. Apache-2.0.
 
+#include "ardia/linux/import/import_module.h"
 #include "ardia/linux/modules/app_modules.h"
 #include "ardia/linux/modules/edge_pointer.h"
 #include "ardia/linux/modules/file_drop.h"
@@ -16,6 +17,7 @@ void RegisterDesktopModules(ModuleRegistry& registry) {
   RegisterEdgePointerModule(registry);
   RegisterFileDropModule(registry);
   RegisterSyncModule(registry);
+  RegisterImportHostModule(registry);
 }
 
 }

@@ -106,7 +106,11 @@ function organiseItems(s: BrowserState, windowId: string, tab: Tab, f: Facts): T
   const groups = f.section === "tile" ? [] : groupItems(s, windowId, f.group?.id);
   const grouping: TabMenuItem[] =
     f.section === "tile"
-      ? [tileFolderOf(tab) ? { id: "leaveFolder", title: "Remove from Folder", symbol: "folder.badge.minus" } : { id: "newFolder", title: "New Folder…", symbol: "folder.badge.plus" }]
+      ? tileFolderOf(tab)
+        ? [{ id: "leaveFolder", title: "Remove from Folder", symbol: "folder.badge.minus" }]
+        : s.settings.topAppFolders
+          ? [{ id: "newFolder", title: "New Folder…", symbol: "folder.badge.plus" }]
+          : []
       : [
           ...(f.memberPin
             ? []

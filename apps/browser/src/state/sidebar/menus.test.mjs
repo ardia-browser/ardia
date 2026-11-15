@@ -7,6 +7,7 @@ const { multiTabMenuItems } = await import("./multiTabMenu.ts");
 const { groupMenuItems } = await import("./groupMenu.ts");
 const { sidebarMenuItems } = await import("./sidebarMenu.ts");
 const { tileFolderContextItems } = await import("./tileFolderUi.ts");
+const { addToTileFolder } = await import("../pins/tileFolders.ts");
 const { openTabMenu } = await import("./tabMenu.ts");
 const { openMultiMenu } = await import("./multiTabMenu.ts");
 const { openGroupMenu } = await import("./groupMenu.ts");
@@ -114,9 +115,19 @@ test("a tab in a group leaves it from the menu, and Move to Group lists pinned g
   assert.ok(S().groups[pinned].pinned);
 });
 
+test("a Top Apps tile with folders off has no New Folder…, and keeps Remove from Folder for one already in a folder", () => {
+  const { w, ids } = windowWith("a", "b");
+  S().pinTabs([ids[0], ids[1]], true);
+  S().updateSettings({ topAppFolders: false });
+  assert.equal(top(tabMenuItems(S(), w, S().tabs[ids[0]])).includes("New Folder… [folder.badge.plus]"), false);
+  useBrowser.setState(addToTileFolder(S(), [ids[1]], ids[0]), true);
+  assert.equal(top(tabMenuItems(S(), w, S().tabs[ids[0]])).includes("Remove from Folder [folder.badge.minus]"), true);
+});
+
 test("a Top Apps tile: unpin first, folders instead of groups, Open in New Window, no close section", () => {
   const { w, ids } = windowWith("a", "b");
   S().pinTabs([ids[0]], true);
+  S().updateSettings({ topAppFolders: true });
   assert.deepEqual(top(tabMenuItems(S(), w, S().tabs[ids[0]])), [
     "Unpin from Top Apps [pin.slash]",
     "Reset Pinned Tab [arrow.uturn.backward] (off)",

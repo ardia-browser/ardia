@@ -209,6 +209,11 @@ export const generalRows = {
           description: "As in Dia, every Top App sits on a tile. Off, a Top App whose page isn't open shows just its icon, faded, so you can tell at a glance which ones are open; it gets its tile back when you open it or point at it.",
           keywords: ["pinned tiles", "favorites", "top apps", "tile", "tiles", "background", "closed", "open", "unloaded", "faded", "contrast", "prominent", "quiet", "subtle", "dia"],
         },
+        topAppFolders: {
+          title: "Make folders in Top Apps",
+          description: "Hold a Top App over another for a moment, or pick New Folder… in its menu, to put several in one tile. Off, as in Dia, Top Apps don't make folders; folders you already have keep working.",
+          keywords: ["folder", "folders", "top apps", "pinned tiles", "favorites", "group", "tile folder", "stack"],
+        },
         fadeUnloadedTabs: {
           advanced: true,
           title: "Fade icons of unloaded tabs",

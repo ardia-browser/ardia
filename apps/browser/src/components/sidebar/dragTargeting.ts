@@ -29,6 +29,7 @@ export class DragTargeting extends DragGeometry {
     this.clearHold();
     hold.key = target.key;
     if (folderOf(target)) return void (hold.ready = target.key);
+    if (!currentSettings().topAppFolders) return;
     hold.timer = setTimeout(() => {
       if (this.session !== session || hold.key !== target.key || !session.sources.length) return;
       hold.ready = target.key;

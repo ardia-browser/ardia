@@ -18,6 +18,7 @@ function tilesScene({ tiles = 5, balanced = false, folder = 0, panel = false, em
   const W = world("a", "b", "c", ...names);
   const { id } = W;
   if (tiles) S().pinTabs(names.map((n) => id[n]), true);
+  S().updateSettings({ topAppFolders: true });
   if (balanced) S().updateSettings({ balancedTopApps: true });
   let folderId = null;
   const members = names.slice(0, folder).map((n) => id[n]);

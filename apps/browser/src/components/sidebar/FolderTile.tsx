@@ -75,6 +75,8 @@ export function FolderMosaic({ tabIds, scale = "tile" }: { tabIds: string[]; sca
         padding: pad,
         flexDirection: "row",
         flexWrap: "wrap",
+        alignContent: "center",
+        justifyContent: "center",
         gap,
         backgroundColor: sidebarTokens(theme).folderMosaic,
       }}

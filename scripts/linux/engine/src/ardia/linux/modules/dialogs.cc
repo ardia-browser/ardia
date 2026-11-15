@@ -27,6 +27,8 @@
 #include "ui/base/mojom/dialog_button.mojom.h"
 #include "ui/base/mojom/ui_base_types.mojom.h"
 #include "ui/shell_dialogs/select_file_dialog.h"
+#include "ui/shell_dialogs/select_file_dialog_factory.h"
+#include "ui/shell_dialogs/select_file_policy.h"
 #include "ui/shell_dialogs/selected_file_info.h"
 #include "ui/base/interaction/element_identifier.h"
 #include "ui/base/models/dialog_model.h"
@@ -337,6 +339,71 @@ class FilePicker : public ui::SelectFileDialog::Listener {
   scoped_refptr<ui::SelectFileDialog> dialog_;
 };
 
+class PickedFromFileDialog : public ui::SelectFileDialog {
+ public:
+  PickedFromFileDialog(Listener* listener,
+                       std::unique_ptr<ui::SelectFilePolicy> policy)
+      : ui::SelectFileDialog(listener, std::move(policy)) {}
+
+  bool IsRunning(gfx::NativeWindow) const override { return running_; }
+  void ListenerDestroyed() override { listener_ = nullptr; }
+
+ protected:
+  void SelectFileImpl(Type type,
+                      const std::u16string&,
+                      const base::FilePath&,
+                      const FileTypeInfo*,
+                      int,
+                      const base::FilePath::StringType&,
+                      gfx::NativeWindow,
+                      const GURL*) override {
+    running_ = true;
+    TakeFileChooserPicks(base::BindOnce(
+        &PickedFromFileDialog::Picked,
+        scoped_refptr<PickedFromFileDialog>(this), type));
+  }
+
+  bool HasMultipleFileTypeChoicesImpl() override { return false; }
+
+ private:
+  ~PickedFromFileDialog() override = default;
+
+  void Picked(Type type, std::vector<std::string> picks) {
+    running_ = false;
+    NoteActivation(base::StrCat(
+        {"file chooser (not shown): page | ",
+         picks.empty() ? "cancelled" : "chose a file"}));
+    if (!listener_) {
+      return;
+    }
+    if (picks.empty()) {
+      listener_->FileSelectionCanceled();
+      return;
+    }
+    if (type == SELECT_OPEN_MULTI_FILE) {
+      std::vector<ui::SelectedFileInfo> files;
+      for (const std::string& pick : picks) {
+        files.emplace_back(base::FilePath(pick));
+      }
+      listener_->MultiFilesSelected(files);
+      return;
+    }
+    listener_->FileSelected(ui::SelectedFileInfo(base::FilePath(picks.front())),
+                            0);
+  }
+
+  bool running_ = false;
+};
+
+class PickedFromFileDialogFactory : public ui::SelectFileDialogFactory {
+ public:
+  ui::SelectFileDialog* Create(
+      ui::SelectFileDialog::Listener* listener,
+      std::unique_ptr<ui::SelectFilePolicy> policy) override {
+    return new PickedFromFileDialog(listener, std::move(policy));
+  }
+};
+
 void ReplyPaths(ModuleReply reply,
                 bool as_urls,
                 bool first_only,
@@ -449,6 +516,10 @@ void ConfirmWithUser(const base::DictValue& options,
 }
 
 void RegisterDialogsModule(ModuleRegistry& registry) {
+  if (CurrentLaunchConfig().background) {
+    ui::SelectFileDialog::SetFactory(
+        std::make_unique<PickedFromFileDialogFactory>());
+  }
   registry.Define(kModule)
       .Sync("openCount", SyncOf([](const base::ListValue&) {
               return ModuleResult(base::Value(g_open_count));

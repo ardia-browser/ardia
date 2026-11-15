@@ -1,9 +1,7 @@
 import { closeWindow as closeNativeWindow } from "../../platform/windows";
-import { copyText } from "../../platform/clipboard";
 import { openExternalURL } from "../../platform/app";
 import { pickFiles, prompt } from "../../platform/dialogs";
 import type { CommandEvent } from "../../platform/commands";
-import { markdownLink } from "@ardia/core";
 import { useBrowser } from "../browser/store";
 import { requestCreateProfile } from "../profiles/createProfileRequest";
 import { activeTabId, bookmarkProfileId, isPinnedRow, resolveWindowId } from "../browser/model";
@@ -39,7 +37,6 @@ import { webviews } from "../../platform/webviews";
 import { togglePageEngine } from "../engines/actions";
 import { runReaderCommand } from "../reader/reader";
 import { goBack, goForward } from "../tabs/navigation";
-import { awaitsFirstPage } from "../tabs/pendingAddress";
 import { openSplitPane } from "../splits/actions";
 import { isAppCommand, LITTLE_ARDIA_PAGE_COMMANDS, settingChange, variantArg } from "./commandCatalog";
 import { APP_COMMAND_HANDLERS } from "./appCommands";
@@ -55,7 +52,6 @@ import { groupOf } from "../pins/tabGrouping";
 import { selectedTabIds } from "../pins/organize";
 import { copySelectedUrls } from "../sidebar/actions";
 import { noteSelectionClosedByKey } from "../telemetry/usage";
-import { noteUrlCopied } from "../telemetry/urlCopies";
 import { isSmall, mainWindowFor, newWindowProfile, originalProfile } from "../windows/small";
 import {
   closeLittleArdia,
@@ -210,11 +206,11 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
       return void shareTab(page, windowId, arg?.startsWith("via:") ? arg.slice(4) : null);
     case "copyUrl":
     case "copyUrlAsMarkdown": {
+      if (arg === "selectedTabs" && windowId !== invokedFrom) return;
       const markdown = command === "copyUrlAsMarkdown";
       if (!targeted && !peekTabId(s, windowId) && copySelectedUrls(windowId, markdown, arg === "selectedTabs")) return;
       if (arg === "selectedTabs" || !page) return;
-      if (markdown) noteUrlCopied(awaitsFirstPage(page.id));
-      return markdown ? copyText(markdownLink(page.customTitle || page.title, page.url)) : void copyPageUrl(page.id);
+      return void copyPageUrl(page.id, markdown);
     }
     case "findInPage":
       if (page) expectFocus(windowId, findFocus(page.id));

@@ -140,6 +140,27 @@ test("a stale native Copy event keeps the clipboard when the selection is cleare
   assert.deepEqual(clipboard.copied, []);
 });
 
+test("a stale native Copy event cannot copy another window's selection after its source closes", () => {
+  fresh();
+  const source = windowWith("a", "b");
+  S().setSelection(source.w, source.ids);
+  const published = menuState(S()).copiesSelectedTabsIn;
+  const other = windowWith("x", "y");
+  S().setSelection(other.w, other.ids);
+  S().closeWindow(source.w);
+  assert.equal(S().windows[source.w], undefined);
+  runCommand({ command: "copyUrl", arg: "selectedTabs", windowId: published });
+  assert.deepEqual(clipboard.copied, []);
+});
+
+test("a selection-only Copy without a source window cannot copy the focused selection", () => {
+  fresh();
+  const { w, ids } = windowWith("a", "b");
+  S().setSelection(w, ids);
+  runCommand({ command: "copyUrl", arg: "selectedTabs", windowId: null });
+  assert.deepEqual(clipboard.copied, []);
+});
+
 test("URL and Markdown copy follow flipped split panes in a group", () => {
   fresh();
   const { w, ids: [a, b, c] } = windowWith("a", "b", "c");

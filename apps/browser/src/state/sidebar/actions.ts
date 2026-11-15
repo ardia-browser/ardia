@@ -12,7 +12,7 @@ import { multiSelectedTabIds, selectedTabIds } from "../pins/organize";
 import { groupLabel, groupOf } from "../pins/tabGrouping";
 import type { Tab } from "../browser/types";
 import { awaitsFirstPage } from "../tabs/pendingAddress";
-import { noteUrlCopied } from "../telemetry/urlCopies";
+import { noteSelectionCopiedByKey, noteUrlCopied } from "../telemetry/urlCopies";
 import { noteRangeSelect } from "../telemetry/tabPresses";
 import { noteTextOnlyRow } from "../telemetry/tabStripCounts";
 import { NO_ROW_ICON } from "../pins/rowIcons";
@@ -21,7 +21,6 @@ import { DEFAULT_SIDEBAR_WIDTH } from "../../lib/windowLayout";
 import { activeLook } from "../../lib/activeLook";
 import { measureRow, setSidebarUi, sidebarUi, type Target } from "./sidebarUi";
 import { showToast } from "../app/toasts";
-import { noteSelectionCopiedByKey } from "../telemetry/usage";
 
 const store = () => useBrowser.getState();
 

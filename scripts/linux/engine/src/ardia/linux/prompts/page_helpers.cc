@@ -18,6 +18,7 @@ void RegisterPageModules(ModuleRegistry& registry) {
   DomainVerbs verbs;
   AddContentBlockerVerbs(verbs);
   AddPermissionVerbs(verbs);
+  AddContextMenuVerbs(verbs);
   verbs.Register(registry);
 }
 

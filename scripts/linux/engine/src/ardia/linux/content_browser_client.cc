@@ -7,6 +7,7 @@
 #include "ardia/linux/main_parts.h"
 #include "ardia/linux/modules/file_drop.h"
 #include "ardia/linux/ui_host/ui_host_parts.h"
+#include "ardia/linux/prompts/prompts.h"
 #include "chrome/browser/chrome_browser_main.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_main_parts.h"
@@ -76,7 +77,7 @@ ContentBrowserClient::GetWebContentsViewDelegate(
   if (IsAppUiContents(web_contents)) {
     return CreateAppUiViewDelegate(web_contents);
   }
-  return ChromeContentBrowserClient::GetWebContentsViewDelegate(web_contents);
+  return CreatePageViewDelegate(web_contents);
 }
 
 void ContentBrowserClient::ConfigureNetworkContextParams(

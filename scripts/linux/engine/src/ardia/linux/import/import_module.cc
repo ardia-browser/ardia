@@ -12,12 +12,14 @@
 #include <utility>
 #include <vector>
 
+#include "ardia/linux/import/browser_icons.h"
 #include "ardia/linux/import/import_core.h"
 #include "ardia/linux/log.h"
 #include "ardia/linux/modules/app_modules.h"
 #include "ardia/linux/modules/args.h"
 #include "ardia/linux/modules/launch_config.h"
 #include "ardia/linux/ui_host/modules.h"
+#include "ardia/linux/ui_host/served_files.h"
 #include "base/base64.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
@@ -48,6 +50,8 @@ constexpr int kCookieHashPrefixVersion = 24;
 constexpr size_t kCookieHashBytes = 32;
 constexpr size_t kBatch = 1000;
 constexpr size_t kBatchBytes = 3 * 1024 * 1024;
+constexpr size_t kMostBrowsers = 64;
+constexpr size_t kMostIconNames = 8;
 
 std::optional<double> FromWebKit(double micros) {
   if (!(micros > 0)) {
@@ -340,6 +344,48 @@ base::Value Existing(base::ListValue args) {
     }
   }
   return base::Value(std::move(found));
+}
+
+base::Value BrowserIcons(base::ListValue args) {
+  base::ListValue found;
+  const base::ListValue* browsers = ListArg(args, 0);
+  if (!browsers) {
+    return base::Value(std::move(found));
+  }
+  for (const base::Value& listed : *browsers) {
+    if (found.size() == kMostBrowsers) {
+      break;
+    }
+    std::vector<std::string> names;
+    if (listed.is_list()) {
+      for (const base::Value& name : listed.GetList()) {
+        if (name.is_string() && names.size() < kMostIconNames) {
+          names.push_back(name.GetString());
+        }
+      }
+    }
+    std::optional<base::FilePath> icon =
+        import::FindBrowserIcon(Host().home(), base::FilePath("/"), names);
+    if (!icon) {
+      found.Append(base::Value());
+      continue;
+    }
+    ServeImportImage(*icon, *icon);
+    found.Append(icon->value());
+  }
+  return base::Value(std::move(found));
+}
+
+base::Value ServeImage(base::ListValue args) {
+  const std::string asked = StringArg(args, 0);
+  std::optional<base::FilePath> path =
+      import::ConfinedPath(Host().home(), asked);
+  if (!path || !import::IsServableImage(base::FilePath(asked)) ||
+      !base::PathExists(*path) || base::DirectoryExists(*path)) {
+    return base::Value(false);
+  }
+  ServeImportImage(base::FilePath(asked), *path);
+  return base::Value(true);
 }
 
 std::unique_ptr<Snapshot> OpenConfined(const std::string& path,
@@ -1042,6 +1088,8 @@ void RegisterImportHostModule(ModuleRegistry& registry) {
                              NumberArg(args, 2, kLargestRead), true);
              }))
       .Async("existing", Pooled(&Existing))
+      .Async("browserIcons", Pooled(&BrowserIcons))
+      .Async("serveImage", Pooled(&ServeImage))
       .Async("query", Pooled(&Query))
       .Async("openSnapshot", Pooled(&OpenSnapshot))
       .Async("querySnapshot", Pooled(&QuerySnapshot))

@@ -97,6 +97,7 @@ source_set("modules") {
     "//ardia/linux/dbus",
     "//ardia/linux/import:core",
     "//ardia/linux/sync:core",
+    "//ardia/linux/ui_host:served_files",
     "//ardia/linux/translate:core",
     "//base",
     "//chrome/app/theme:chrome_unscaled_resources",

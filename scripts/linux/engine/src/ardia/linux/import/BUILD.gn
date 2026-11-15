@@ -6,6 +6,8 @@ assert(is_linux)
 
 source_set("core") {
   sources = [
+    "browser_icons.cc",
+    "browser_icons.h",
     "import_core.cc",
     "import_core.h",
   ]
@@ -18,7 +20,10 @@ source_set("core") {
 }
 
 test("ardia_linux_import_unittests") {
-  sources = [ "import_unittest.cc" ]
+  sources = [
+    "browser_icons_unittest.cc",
+    "import_unittest.cc",
+  ]
 
   deps = [
     ":core",

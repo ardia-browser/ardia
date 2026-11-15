@@ -9,6 +9,15 @@ source_set("modules") {
   deps = [ "//base" ]
 }
 
+source_set("served_files") {
+  sources = [
+    "served_files.cc",
+    "served_files.h",
+  ]
+
+  deps = [ "//base" ]
+}
+
 source_set("ui_host") {
   sources = [
     "app_bridge_host.cc",
@@ -27,6 +36,7 @@ source_set("ui_host") {
 
   public_deps = [
     ":modules",
+    ":served_files",
     "//ardia/linux/ui_host/mojom",
   ]
 

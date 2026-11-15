@@ -2,12 +2,15 @@
 
 #include <utility>
 
+#include "ardia/linux/ui_host/served_files.h"
+
 #include "base/containers/fixed_flat_map.h"
 #include "base/files/file_util.h"
 #include "base/json/json_reader.h"
 #include "third_party/re2/src/re2/re2.h"
 #include "base/functional/bind.h"
 #include "base/memory/ref_counted_memory.h"
+#include "base/strings/escape.h"
 #include "base/strings/string_util.h"
 #include "base/task/thread_pool.h"
 #include "content/public/browser/url_data_source.h"
@@ -21,6 +24,7 @@ namespace {
 constexpr char kIndex[] = "index.html";
 constexpr int64_t kLargestFile = 256 * 1024 * 1024;
 constexpr int64_t kLargestPolicyFile = 64 * 1024;
+constexpr int64_t kLargestImportImage = 8 * 1024 * 1024;
 constexpr size_t kMostScriptHashes = 32;
 constexpr char kScriptHashPattern[] = "'sha256-[A-Za-z0-9+/]{43}='";
 
@@ -65,6 +69,17 @@ scoped_refptr<base::RefCountedMemory> ReadConfined(base::FilePath root,
   }
   std::string contents;
   if (!base::ReadFileToString(*path, &contents)) {
+    return nullptr;
+  }
+  return base::MakeRefCounted<base::RefCountedString>(std::move(contents));
+}
+
+scoped_refptr<base::RefCountedMemory> ReadImportImage(std::string requested) {
+  std::optional<base::FilePath> file =
+      ServedImportImage(base::FilePath("/" + requested));
+  std::string contents;
+  if (!file ||
+      !base::ReadFileToStringWithMaxSize(*file, &contents, kLargestImportImage)) {
     return nullptr;
   }
   return base::MakeRefCounted<base::RefCountedString>(std::move(contents));
@@ -189,6 +204,16 @@ void ArdiaAppSource::StartDataRequest(
   } else if (path.starts_with(kReportsPrefix)) {
     root = reports_dir_;
     path = path.substr(std::string_view(kReportsPrefix).size());
+  } else if (path.starts_with(kImportImagesPrefix)) {
+    base::ThreadPool::PostTaskAndReplyWithResult(
+        FROM_HERE,
+        {base::MayBlock(), base::TaskPriority::USER_VISIBLE,
+         base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
+        base::BindOnce(&ReadImportImage,
+                       base::UnescapeBinaryURLComponent(path.substr(
+                           std::string_view(kImportImagesPrefix).size()))),
+        std::move(callback));
+    return;
   }
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE,

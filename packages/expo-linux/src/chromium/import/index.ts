@@ -4,9 +4,11 @@ import { bookmarksFromHtml, passwordsFromCsv } from "./fileFormats";
 import { join, pathFromFileUrl, type ImportHost } from "./host";
 import { importProfile, Unlocks } from "./importer";
 import { ImportFailure, type ImportKind, type Options, type Progress } from "./model";
+import { knowBrowserIcons } from "./icons";
 import { knowExistingPaths } from "./paths";
 import { callMain, mainModules } from "../../bridge";
 import { emitNativeEvent } from "../events";
+import { serveImportImages } from "../servedImages";
 
 const NATIVE = "ArdiaLinuxImport";
 const LARGEST_FILE_BYTES = 64 << 20;
@@ -57,7 +59,20 @@ function hostNow() {
 
 async function knowDataDirectories(current: ImportHost): Promise<void> {
   const candidates = BROWSERS.flatMap((browser) => browser.paths.map((path) => join(current.home, path)));
-  knowExistingPaths((await native<string[] | null>("existing", candidates).catch(() => null)) ?? []);
+  const iconNames = BROWSERS.map((browser) => browser.icons);
+  const [existing, icons] = await Promise.all([
+    native<string[] | null>("existing", candidates).catch(() => null),
+    native<(string | null)[] | null>("browserIcons", iconNames).catch(() => null),
+  ]);
+  knowExistingPaths(existing ?? []);
+  knowBrowserIcons(iconNames, icons ?? []);
+  serveImportImages((icons ?? []).filter((icon): icon is string => typeof icon === "string"));
+}
+
+async function serveProfilePictures(sources: Awaited<ReturnType<typeof listSources>>): Promise<void> {
+  const pictures = sources.flatMap((source) => source.profiles.flatMap((profile) => (profile.avatarPath ? [profile.avatarPath] : [])));
+  const served = await Promise.all(pictures.map((path) => native<boolean>("serveImage", path).catch(() => false)));
+  serveImportImages(pictures.filter((_, index) => served[index] === true));
 }
 
 const rethrown = (error: unknown): never => {
@@ -120,7 +135,9 @@ export const importModules: Record<string, Record<string, unknown>> = {
     listBrowsers: async () => {
       const current = hostNow();
       await knowDataDirectories(current);
-      return JSON.stringify(await listSources(current));
+      const sources = await listSources(current);
+      await serveProfilePictures(sources);
+      return JSON.stringify(sources);
     },
     importData: async (jobId: string, browserId: string, profileId: string, kinds: ImportKind[], options: Omit<Options, "historyPage"> | null) => {
       const current = hostNow();

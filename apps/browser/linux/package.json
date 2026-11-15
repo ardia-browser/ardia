@@ -7,12 +7,14 @@
   "scripts": {
     "build:main": "node scripts/build-main.mjs",
     "build:ui": "vite build --config renderer/vite.config.ts",
+    "build:ui:chromium": "vite build --config renderer/vite.chromium.config.ts",
     "build": "pnpm build:ui && pnpm build:main",
     "dev": "node scripts/dev.mjs",
     "package": "node scripts/package.mjs",
     "start": "electron .",
     "test": "node --import ./scripts/test-hooks.mjs --test \"src/**/*.test.ts\"",
-    "typecheck": "tsc -p ."
+    "typecheck": "tsc -p .",
+    "typecheck:chromium": "tsc -p tsconfig.chromium.json"
   },
   "dependencies": {
     "@ardia/ardiacore": "workspace:*",

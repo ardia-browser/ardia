@@ -1,0 +1,23 @@
+import type * as WindowsEvents from "../../../expo-windows/src/events";
+import type * as WindowsHost from "../../../expo-windows/src/engine/host";
+import type * as WindowsWindowId from "../../../expo-windows/src/engine/windowId";
+import type * as WindowsMissing from "../../../expo-windows/src/missing";
+import type * as WindowsModules from "../../../expo-windows/src/modules";
+import type * as WindowsMotion from "../../../expo-windows/src/animation/motion";
+import type * as ReactNative from "react-native";
+import * as events from "./events";
+import * as host from "./host";
+import * as missing from "./missing";
+import * as modules from "./modules";
+import * as motion from "./motion";
+import * as reactNative from "./reactNative";
+import * as windowId from "./windowId";
+
+host satisfies typeof WindowsHost;
+windowId satisfies typeof WindowsWindowId;
+events satisfies Pick<typeof WindowsEvents, "nativeEventName" | "emitNativeEvent" | "addNativeListener">;
+events.emitWhenListened satisfies (module: string, event: string, payload: unknown) => void;
+missing satisfies Pick<typeof WindowsMissing, "noteMissing" | "noteFirstWindow">;
+modules satisfies Pick<typeof WindowsModules, "requireNativeModule" | "requireOptionalNativeModule">;
+motion satisfies Pick<typeof WindowsMotion, "FRAME_MS" | "followMotion" | "noteAnimation" | "forgetAnimation" | "onMotionBurst">;
+reactNative satisfies Pick<typeof ReactNative, "TurboModuleRegistry">;

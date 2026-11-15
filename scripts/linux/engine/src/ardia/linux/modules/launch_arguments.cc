@@ -77,4 +77,20 @@ std::vector<std::string> LaunchArgumentTexts(
   return texts;
 }
 
+std::vector<std::string> LaunchAddresses(
+    const std::vector<std::string>& arguments,
+    const base::FilePath& cwd,
+    base::FunctionRef<bool(const base::FilePath&)> exists) {
+  std::vector<std::string> addresses;
+  for (const std::string& text : LaunchArgumentTexts(arguments, cwd, exists)) {
+    const GURL url(text);
+    if (url.is_valid() && (url.SchemeIsHTTPOrHTTPS() || url.SchemeIsFile())) {
+      addresses.push_back(url.spec());
+    } else if (!HasScheme(text) && LooksLikeBareHost(text)) {
+      addresses.push_back(GURL("http://" + text).spec());
+    }
+  }
+  return addresses;
+}
+
 }

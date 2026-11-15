@@ -21,6 +21,11 @@ std::vector<std::string> LaunchArgumentTexts(
     const base::FilePath& cwd,
     base::FunctionRef<bool(const base::FilePath&)> exists);
 
+std::vector<std::string> LaunchAddresses(
+    const std::vector<std::string>& arguments,
+    const base::FilePath& cwd,
+    base::FunctionRef<bool(const base::FilePath&)> exists);
+
 }
 
 #endif

@@ -33,6 +33,21 @@ TEST(LaunchArgumentsTest, ExistingPathsBecomeFileUrlsAndTheRestStaysText) {
   EXPECT_EQ(LaunchArgumentText("  ", cwd, exists), "");
 }
 
+TEST(LaunchArgumentsTest, ASecondLaunchKeepsWebAndFileAddressesOnly) {
+  auto exists = [](const base::FilePath& path) {
+    return path.value() == "/home/me/page.html";
+  };
+  const std::vector<std::string> addresses = LaunchAddresses(
+      {"page.html", "example.com/a", "https://ardia.dev", "javascript:alert(1)",
+       "mailto:x@y.z", "not a host", "localhost/x"},
+      base::FilePath("/home/me"), exists);
+  ASSERT_EQ(addresses.size(), 4u);
+  EXPECT_EQ(addresses[0], "file:///home/me/page.html");
+  EXPECT_EQ(addresses[1], "http://example.com/a");
+  EXPECT_EQ(addresses[2], "https://ardia.dev/");
+  EXPECT_EQ(addresses[3], "http://localhost/x");
+}
+
 }
 
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 const { layoutDock, layoutStrip, newTabPinned } = await import("./stripGroups.ts");
-const { GAP, ITEM_HEIGHT, MIN_CHIP, NEW_TAB_ROOM } = await import("./tokens.ts");
+const { COMPACT_CHIP, GAP, ITEM_HEIGHT, MAX_CHIP, NEW_TAB_ROOM, SELECTED_MIN_CHIP } = await import("./tokens.ts");
 
 const tab = (id, group = null) => ({ kind: "tab", id, group });
 const folder = (id, tabIds, group) => ({ kind: "folder", id, tabIds, group });
@@ -12,11 +12,36 @@ const dockOf = (entries) => layoutDock(entries.find((e) => e.kind === "dock"));
 const PAGE_LEAVING_TABS_1000_AFTER_PLUS = 1000 + NEW_TAB_ROOM - ITEM_HEIGHT;
 const layout = (entries, activeId, m = measured(), page = PAGE_LEAVING_TABS_1000_AFTER_PLUS) => layoutStrip(entries, activeId, page, m, dockOf(entries));
 
-test("tabs share the page after the new-tab button, rounded to half points and kept between the min and max chip", () => {
+test("tabs share the page after the new-tab button, rounded to half points and kept between the compact and max chip", () => {
   const six = ["a", "b", "c", "d", "e", "f"].map((id) => tab(id));
-  assert.equal(layout(six, "a").chip, 156.5);
+  assert.deepEqual([layout(six, "a").chip, layout(six, "a").selected], [156.5, 156.5]);
   assert.equal(layout(six.slice(0, 3), "a").chip, 173);
-  assert.equal(layout([...six, ...six.map((t) => tab(`${t.id}2`))], "a").chip, 96);
+  const twelve = layout([...six, ...six.map((t) => tab(`${t.id}2`))], "a");
+  assert.deepEqual([twelve.chip, twelve.selected], [71.5, SELECTED_MIN_CHIP]);
+});
+
+test("once an even share drops below the selected tab's minimum, the selected tab keeps it and the others shrink to the compact width", () => {
+  const tabs = (n) => Array.from({ length: n }, (_, i) => tab(`t${i}`));
+  const thirty = layout(tabs(30), "t15");
+  assert.equal(thirty.selected, SELECTED_MIN_CHIP);
+  assert.equal(thirty.chip, COMPACT_CHIP);
+  assert.deepEqual(thirty.spanOf("t15"), [15 * (COMPACT_CHIP + GAP), SELECTED_MIN_CHIP]);
+  assert.deepEqual(thirty.spanOf("t16"), [15 * (COMPACT_CHIP + GAP) + SELECTED_MIN_CHIP + GAP, COMPACT_CHIP]);
+  assert.equal(newTabPinned(thirty.chip, thirty.tabsEnd, PAGE_LEAVING_TABS_1000_AFTER_PLUS), true);
+  const noneShown = layout(tabs(30), "elsewhere");
+  assert.deepEqual([noneShown.chip, noneShown.selected], [COMPACT_CHIP, COMPACT_CHIP]);
+  const one = layoutStrip([tab("a")], "a", 120, measured(), null);
+  assert.deepEqual([one.chip, one.selected], [COMPACT_CHIP, SELECTED_MIN_CHIP]);
+  assert.equal(one.top.slots[0].width, SELECTED_MIN_CHIP);
+  assert.ok(layout(tabs(4), "t0").selected <= MAX_CHIP);
+});
+
+test("a split holding the selected tab is one compact pane plus the selected width; any other split is two compact panes", () => {
+  const split = (id, tabIds) => ({ kind: "split", id, tabIds, group: null });
+  const entries = [...Array.from({ length: 30 }, (_, i) => tab(`t${i}`)), split("s", ["x", "y"]), split("u", ["v", "w"])];
+  const strip = layout(entries, "y");
+  assert.equal(strip.top.slots[30].width, COMPACT_CHIP + SELECTED_MIN_CHIP);
+  assert.equal(strip.top.slots[31].width, COMPACT_CHIP * 2);
 });
 
 test("+ and the chevron take 58 pt: the 32 pt button, a 4 pt gap and the sidebar New Tab row's 22 pt chevron", () => {
@@ -28,20 +53,21 @@ test("+ and the chevron take 58 pt: the 32 pt button, a 4 pt gap and the sidebar
   assert.ok(strip.tabsEnd + GAP + NEW_TAB_ROOM <= 1000);
 });
 
-test("+ and the chevron stay inline after the tabs while they fit, and pin to the trailing end once the tabs overflow at the min chip", () => {
+test("+ and the chevron stay inline after the tabs while they fit, and pin to the trailing end once the tabs overflow at the compact chip", () => {
   const tabs = (n) => Array.from({ length: n }, (_, i) => tab(`t${i}`));
   const fits = layout(tabs(9), "t0", measured(), 1000);
-  assert.ok(fits.chip > MIN_CHIP);
+  assert.ok(fits.chip > COMPACT_CHIP);
   assert.equal(newTabPinned(fits.chip, fits.tabsEnd, 1000), false);
-  const full = layout(tabs(9), "t0", measured(), 9 * MIN_CHIP + 9 * GAP + GAP + NEW_TAB_ROOM);
-  assert.equal(full.chip, MIN_CHIP);
-  assert.equal(newTabPinned(full.chip, full.tabsEnd, 9 * MIN_CHIP + 9 * GAP + GAP + NEW_TAB_ROOM), false);
+  const exact = 8 * COMPACT_CHIP + SELECTED_MIN_CHIP + 9 * GAP + GAP + NEW_TAB_ROOM;
+  const full = layout(tabs(9), "t0", measured(), exact);
+  assert.deepEqual([full.chip, full.selected], [COMPACT_CHIP, SELECTED_MIN_CHIP]);
+  assert.equal(newTabPinned(full.chip, full.tabsEnd, exact), false);
   const over = layout(tabs(30), "t29", measured(), 1000);
-  assert.equal(over.chip, MIN_CHIP);
+  assert.equal(over.chip, COMPACT_CHIP);
   assert.ok(over.tabsEnd > 1000);
   assert.equal(newTabPinned(over.chip, over.tabsEnd, 1000), true);
   const closedWhileHeld = layout(tabs(9), "t0", measured(), 1000);
-  assert.equal(newTabPinned(MIN_CHIP, closedWhileHeld.tabsEnd + 400, 1000), true);
+  assert.equal(newTabPinned(COMPACT_CHIP, closedWhileHeld.tabsEnd + 400, 1000), true);
 });
 
 test("+ and the chevron pin once Top Apps, pinned tiles or collapsed groups alone overflow, with no tab left to shrink", () => {
@@ -50,7 +76,7 @@ test("+ and the chevron pin once Top Apps, pinned tiles or collapsed groups alon
   assert.equal(roomy.tabsShrink, false);
   assert.equal(newTabPinned(roomy.chip, roomy.tabsEnd, 2000, roomy.tabsShrink), false);
   const tight = layout([dock(cells)], "p0", measured(), 200);
-  assert.ok(tight.chip > MIN_CHIP);
+  assert.ok(tight.chip > COMPACT_CHIP);
   assert.ok(tight.tabsEnd + GAP + NEW_TAB_ROOM > 200);
   assert.equal(newTabPinned(tight.chip, tight.tabsEnd, 200, tight.tabsShrink), true);
   const withTabs = layout([dock(cells), tab("x")], "x", measured(), 2000);
@@ -90,12 +116,12 @@ test("an open group lays out its chip, its members and a nested folder holding t
   assert.deepEqual(strip.targets, [{ kind: "tab", id: "t1" }, { kind: "group", id: "G" }, { kind: "tab", id: "t2" }]);
 });
 
-test("a closed group shows only the member holding the selected tab, right after its chip", () => {
+test("a closed group shows only the member holding the selected tab, right after its chip, and reveals from its chip so the group stays readable", () => {
   const entries = [tab("t1"), group("G", [tab("a", "G"), folder("F", ["b", "c"], "G"), tab("d", "G")], true), tab("t2")];
   const strip = layout(entries, "c", measured({ G: 60 }, { F: 50 }));
   assert.equal(strip.chip, 173);
   assert.deepEqual(strip.top.slots.map((s) => s.width), [173, 300.5, 173]);
-  assert.deepEqual(strip.spanOf("c"), [247, 229.5]);
+  assert.deepEqual(strip.spanOf("c"), [173 + 4 + 3.5, 60 + 6.5 + 229.5]);
 });
 
 test("a folder without the selected tab is only its chip, and a split takes two chips", () => {
@@ -114,7 +140,7 @@ test("an unmeasured group or folder chip counts as zero wide until it is measure
 
 test("a held chip width keeps every tab where it was after a close, whatever room the close freed", () => {
   const six = ["a", "b", "c", "d", "e", "f"].map((id) => tab(id));
-  const held = layoutStrip(six.slice(1), "b", 1000, measured(), null, 156.5);
+  const held = layoutStrip(six.slice(1), "b", 1000, measured(), null, { chip: 156.5, selected: 156.5 });
   assert.equal(held.chip, 156.5);
   assert.deepEqual(held.spanOf("c"), [156.5 + 4, 156.5]);
   assert.equal(layoutStrip(six.slice(1), "b", 1000, measured(), null).chip, 173);

@@ -3,7 +3,7 @@ import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { closeSync, openSync } from "node:fs";
 import { createServer } from "node:http";
-import { copyFile, mkdir, mkdtemp, readdir, readFile, readlink, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, open, readdir, readFile, readlink, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { inflateSync } from "node:zlib";
 import { basename, join, resolve } from "node:path";
@@ -12,7 +12,7 @@ import { SHELL_PREFIX, closeAllApps, killAllAppsNow, launchArdia, launchArgument
 import { connectCdp, evaluate } from "../../apps/linux/scripts/acceptance/lib/cdp.mjs";
 import { errorText, js, nonce, until, withDeadline } from "../../apps/linux/scripts/acceptance/lib/util.mjs";
 
-export const USAGE = `Usage: node scripts/linux/smoke.mjs --package <Ardia-*linux-x64*.tar.xz> --results <dir> [--timeout-ms N] [--keep] [--allow-old-engine]
+export const USAGE = `Usage: node scripts/linux/smoke.mjs --package <Ardia-*linux-x64*.tar.xz|.deb|.AppImage> --results <dir> [--timeout-ms N] [--keep] [--allow-old-engine]
 
 Strict smoke gate for a packaged Ardia Linux build. It extracts the tarball into
 a temporary folder, launches ardia/bin/ardia headless (ozone headless, SwiftShader,
@@ -27,7 +27,9 @@ ARDIA_BACKGROUND=1, a throwaway profile and HOME, the sandbox on) without
   content-blocker   the packaged uBlock Origin and its Linux bridge are present and load, tuned to save its engine soon after launch
   restart-restore   after a clean quit and relaunch on the same profile the fixture tab is restored
   staged-install    install.sh --destdir stages the launcher, desktop entry, runtime and polkit policy,
-                    and lib/ardia/VERSION and lib/ardia/cli when the package has them
+                    and lib/ardia/VERSION and lib/ardia/cli when the package has them; for a .deb its
+                    control file, maintainer scripts, setuid chrome-sandbox, policy and AppArmor profile;
+                    for an AppImage its type 2 header, AppRun and no setuid helper
   app-version       systemInfo.appVersion is lib/ardia/VERSION (skip: a package without VERSION)
   cli-install       the bundled installer installs the bundled CLI into a scratch home, ardia --version
                     prints the package version, and a second install is a no-op (skip: no lib/ardia/cli)
@@ -92,6 +94,38 @@ export const cliTarball = (version) => `ardia-cli-${version}-linux-x64.tar.gz`;
 const BRIDGE_DIR = new URL("../../engine/ardiacore-linux/content-blocker/", import.meta.url);
 const DEFAULT_TIMEOUT_MS = 300000;
 
+export function packageFormat(path) {
+  if (/\.tar\.xz$/.test(path)) return "tar";
+  if (/\.deb$/.test(path)) return "deb";
+  if (/\.AppImage$/.test(path)) return "appimage";
+  return null;
+}
+
+export function debLayoutProblems(listing, fields) {
+  const problems = [];
+  const entries = new Map(listing.split("\n").filter(Boolean).map((line) => {
+    const parts = line.split(/\s+/);
+    const arrow = parts.indexOf("->");
+    return [arrow > 0 ? parts[arrow - 1] : parts.at(-1), { mode: parts[0], owner: parts[1], target: arrow > 0 ? parts[arrow + 1] : null }];
+  }));
+  const expect = (path, check, message) => {
+    const entry = entries.get(path);
+    if (!entry) problems.push(`${path} is missing`);
+    else if (!check(entry)) problems.push(`${path} ${message} (${entry.mode} ${entry.owner})`);
+  };
+  for (const [path, entry] of entries) if (entry.owner !== "root/root") problems.push(`${path} is owned by ${entry.owner}, not root`);
+  expect("./usr/lib/ardia/chrome", (e) => e.mode === "-rwxr-xr-x", "is not 0755");
+  expect("./usr/lib/ardia/ardia-launch", (e) => e.mode === "-rwxr-xr-x", "is not 0755");
+  expect("./usr/bin/ardia", (e) => e.target === "../lib/ardia/ardia-launch", "is not a link to ../lib/ardia/ardia-launch");
+  expect("./usr/share/polkit-1/actions/dev.ardia.linux.policy", (e) => e.mode === "-rw-r--r--", "is not 0644");
+  expect("./usr/share/ardia/apparmor/ardia", (e) => e.mode === "-rw-r--r--", "is not 0644");
+  expect("./usr/share/applications/ardia.desktop", (e) => e.mode === "-rw-r--r--", "is not 0644");
+  if (entries.has("./usr/lib/ardia/chrome-sandbox")) expect("./usr/lib/ardia/chrome-sandbox", (e) => e.mode === "-rwsr-xr-x", "is not setuid root 4755");
+  if (fields.Package !== "ardia") problems.push(`the package is called ${fields.Package}, not ardia`);
+  if (fields.Architecture !== "amd64") problems.push(`the architecture is ${fields.Architecture}, not amd64`);
+  return problems;
+}
+
 export function parseArgs(argv) {
   const options = { package: null, results: null, timeoutMs: DEFAULT_TIMEOUT_MS, keep: false, help: false };
   for (let index = 0; index < argv.length; index++) {
@@ -114,6 +148,8 @@ export function parseArgs(argv) {
     else throw new Error(`unknown argument ${arg}`);
   }
   if (!options.help && (!options.package || !options.results)) throw new Error("--package and --results are required");
+  const format = options.package ? packageFormat(options.package) : null;
+  if (format) options.format = format;
   return options;
 }
 
@@ -481,13 +517,20 @@ class Smoke {
     this.work = await mkdtemp(join(tmpdir(), "ardia-smoke-"));
     const into = join(this.work, "package");
     await mkdir(into);
-    const result = await run("tar", ["-xJf", this.packagePath, "-C", into], { timeout: 180000 });
-    if (result.code !== 0) throw new Error(`tar -xJf exited ${result.code}: ${result.stderr.slice(-400)}`);
-    this.root = join(into, "ardia");
-    this.launcher = join(this.root, "bin", "ardia");
+    this.format = this.options.format ?? packageFormat(this.packagePath);
+    if (!this.format) throw new Error(`${this.packagePath} is not a .tar.xz, .deb or .AppImage`);
+    const unpack = {
+      tar: () => run("tar", ["-xJf", this.packagePath, "-C", into], { timeout: 180000 }),
+      deb: () => run("dpkg-deb", ["-x", this.packagePath, into], { timeout: 180000 }),
+      appimage: () => run(this.packagePath, ["--appimage-extract"], { timeout: 180000, cwd: into }),
+    }[this.format];
+    const result = await unpack();
+    if (result.code !== 0) throw new Error(`unpacking the ${this.format} package exited ${result.code}: ${result.stderr.slice(-400)}`);
+    this.root = { tar: join(into, "ardia"), deb: join(into, "usr"), appimage: join(into, "squashfs-root") }[this.format];
+    this.launcher = { tar: join(this.root, "bin", "ardia"), deb: join(this.root, "bin", "ardia"), appimage: join(this.root, "AppRun") }[this.format];
     this.runtime = join(this.root, "lib", "ardia");
     this.chrome = join(this.runtime, "chrome");
-    for (const path of [this.launcher, this.chrome, join(this.runtime, "ardia-ui", "index.html"), join(this.root, "install.sh")]) {
+    for (const path of [this.launcher, this.chrome, join(this.runtime, "ardia-launch"), join(this.runtime, "ardia-ui", "index.html"), ...(this.format === "tar" ? [join(this.root, "install.sh")] : [])]) {
       if (!(await fileInfo(path))?.isFile) throw new Error(`the package has no ${path.slice(into.length + 1)}`);
     }
     this.profile = join(this.work, "profile");
@@ -652,6 +695,8 @@ class Smoke {
   }
 
   async stagedInstall() {
+    if (this.format === "deb") return this.debLayout();
+    if (this.format === "appimage") return this.appImageLayout();
     const stage = join(this.work, "stage");
     await mkdir(stage);
     const env = { PATH: process.env.PATH ?? "/usr/bin:/bin", LANG: "C", HOME: join(this.work, "install-home"), TMPDIR: this.work };
@@ -671,7 +716,7 @@ class Smoke {
       if (!staged || !packaged || !staged.equals(packaged)) problems.push(`the staged ${name} differs from the package's`);
     }
     const launcher = await readFile(join(stage, "usr/bin/ardia"), "utf8").catch(() => "");
-    if (!launcher.includes('exec "/usr/lib/ardia/chrome"')) problems.push(`the staged launcher does not exec /usr/lib/ardia/chrome: ${JSON.stringify(launcher)}`);
+    if (!launcher.includes('exec "/usr/lib/ardia/ardia-launch"')) problems.push(`the staged launcher does not exec /usr/lib/ardia/ardia-launch: ${JSON.stringify(launcher)}`);
     const desktop = await readFile(join(stage, "usr/share/applications/ardia.desktop"), "utf8").catch(() => "");
     if (!/^Exec=\/usr\/bin\/ardia /m.test(desktop)) problems.push("the staged desktop entry does not run /usr/bin/ardia");
     const policy = await readFile(join(stage, "usr/share/polkit-1/actions/dev.ardia.linux.policy")).catch(() => null);
@@ -684,6 +729,48 @@ class Smoke {
     if (stray.length) problems.push(`install.sh staged outside usr/: ${stray.join(", ")}`);
     if (problems.length) throw Object.assign(new Error(problems.join("; ")), { detail: entries });
     return { files: entries.map((e) => ({ path: e.path, mode: (e.actual.mode & 0o7777).toString(8) })) };
+  }
+
+  async debLayout() {
+    const listing = await run("dpkg-deb", ["-c", this.packagePath], { timeout: 60000 });
+    if (listing.code !== 0) throw new Error(`dpkg-deb -c exited ${listing.code}: ${listing.stderr.slice(-400)}`);
+    const control = await run("dpkg-deb", ["-f", this.packagePath], { timeout: 60000 });
+    const fields = Object.fromEntries(control.stdout.split("\n").map((line) => /^([A-Za-z-]+): (.*)$/.exec(line)).filter(Boolean).map((m) => [m[1], m[2]]));
+    const problems = debLayoutProblems(listing.stdout, fields);
+    if (this.version && fields.Version !== this.version.replace("-", "~")) problems.push(`the .deb version is ${fields.Version}, not ${this.version.replace("-", "~")}`);
+    const scripts = join(this.work, "deb-control");
+    const extracted = await run("dpkg-deb", ["-e", this.packagePath, scripts], { timeout: 60000 });
+    if (extracted.code !== 0) problems.push(`dpkg-deb -e exited ${extracted.code}`);
+    for (const script of ["postinst", "postrm"]) {
+      const info = await fileInfo(join(scripts, script));
+      if (!info?.isFile || (info.mode & 0o777) !== 0o755) problems.push(`the .deb has no executable ${script}`);
+    }
+    const policy = await readFile(join(this.root, "share/polkit-1/actions/dev.ardia.linux.policy")).catch(() => null);
+    const source = await readFile(new URL("./dev.ardia.linux.policy", import.meta.url)).catch(() => null);
+    if (!policy || !source || !policy.equals(source)) problems.push("the .deb's polkit policy differs from scripts/linux/dev.ardia.linux.policy");
+    const desktop = await readFile(join(this.root, "share/applications/ardia.desktop"), "utf8").catch(() => "");
+    if (!/^Exec=\/usr\/bin\/ardia /m.test(desktop)) problems.push("the .deb's desktop entry does not run /usr/bin/ardia");
+    if (problems.length) throw new Error(problems.join("; "));
+    return { format: "deb", version: fields.Version, setuidHelper: listing.stdout.includes("./usr/lib/ardia/chrome-sandbox") };
+  }
+
+  async appImageLayout() {
+    const problems = [];
+    const head = Buffer.alloc(16);
+    const handle = await open(this.packagePath, "r");
+    try {
+      await handle.read(head, 0, 16, 0);
+    } finally {
+      await handle.close();
+    }
+    if (!head.subarray(0, 4).equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46])) || !head.subarray(8, 11).equals(Buffer.from("AI\x02", "latin1"))) problems.push("the AppImage lacks the ELF and type 2 AppImage header");
+    if ((await readlink(this.launcher).catch(() => null)) !== "lib/ardia/ardia-launch") problems.push("AppRun is not a link to lib/ardia/ardia-launch");
+    if (await fileInfo(join(this.runtime, "chrome-sandbox"))) problems.push("the AppImage carries chrome-sandbox, which can't be setuid there");
+    const desktop = await readFile(join(this.root, "ardia.desktop"), "utf8").catch(() => "");
+    if (!/^Exec=AppRun /m.test(desktop)) problems.push("the AppImage's desktop entry does not run AppRun");
+    if (!(await fileInfo(join(this.root, "ardia.png")))?.isFile) problems.push("the AppImage has no ardia.png");
+    if (problems.length) throw new Error(problems.join("; "));
+    return { format: "appimage" };
   }
 
   async appVersion(shell) {

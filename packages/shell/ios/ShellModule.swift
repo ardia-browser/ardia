@@ -20,6 +20,7 @@ public class ShellModule: Module {
       _ = installSubmenuAction
       _ = installInputSourceKeys
       _ = installScrollViewInsetFix
+      _ = installStripWheel
       _ = installOutsidePressMonitor
       _ = installWindowMoveFallback
       _ = installCenteredResize

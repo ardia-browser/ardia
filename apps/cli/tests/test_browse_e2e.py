@@ -725,6 +725,15 @@ class BrowseEndToEnd(unittest.TestCase):
         time.sleep(0.5)
         self.assertEqual(json.loads(self.browse("get", "text", "#report", session=session).stdout), {"clicked": ["box"]})
 
+    def test_a_press_and_hold_inside_a_frame_in_a_closed_shadow_root_is_delivered(self):
+        session = "shadow-hold"
+        self.browse("open", self.url("shadowframe.html"), "--show", session=session)
+        time.sleep(0.5)
+        held = self.browse("batch", session=session, stdin="mouse move 190 100\nmouse down\nwait 600\nmouse up\n")
+        self.assertNotIn("received none of its", held.stdout + held.stderr)
+        time.sleep(0.3)
+        self.assertGreaterEqual(json.loads(self.browse("get", "text", "#report", session=session).stdout)["held"], 500)
+
     def test_screenshot_if_changed_skips_an_unchanged_view(self):
         session = "if-changed"
         self.browse("open", self.url("focus.html"), session=session)
@@ -845,6 +854,52 @@ class BrowseEndToEnd(unittest.TestCase):
         self.assertEqual(self.browse("get", "title", session=session).stdout, "late clicked\n")
         missing = self.browse("is", "visible", "#never", session=session, check=False)
         self.assertNotIn("waited", missing.stdout + missing.stderr)
+
+    def test_a_ref_follows_its_element_after_the_page_reloads_the_same_address(self):
+        session = "reloadme"
+        self.browse("open", self.url("reloadme.html"), "--show", session=session)
+        ref = re.search(r'button "Apply" \[ref=(e\d+)\]', self.browse("snapshot", "-i", session=session).stdout).group(1)
+        self.browse("eval", "setTimeout(() => location.reload(), 50); true", session=session)
+        time.sleep(1.5)
+        clicked = self.browse("click", "@" + ref, session=session)
+        self.assertIn("was from before the page reloaded the same address", clicked.stdout + clicked.stderr)
+        self.assertEqual(self.browse("get", "title", session=session).stdout.strip(), "applied")
+        again = re.search(r'button "Apply" \[ref=(e\d+)\]', self.browse("snapshot", "-i", session=session).stdout).group(1)
+        self.browse("open", self.url("qty.html"), session=session)
+        moved = self.browse("click", "@" + again, session=session, check=False)
+        self.assertNotEqual(moved.returncode, 0)
+        self.assertIn("Stale ref", moved.stderr)
+
+    def test_read_marks_blocks_that_are_not_the_main_content(self):
+        out = self.browse("read", self.url("product.html"), session="product").stdout
+        self.assertIn("[navigation: not the main content]", out)
+        self.assertIn("[Recently viewed: not the main content]", out)
+        self.assertIn("Glass kettle $25.00", out)
+        self.assertIn("[end of Recently viewed]", out)
+        self.assertIn("[related items: not the main content]", out)
+        self.assertIn("# Steel kettle", out)
+        self.assertIn("Capacity 1.7 L", out)
+        self.assertNotIn("[Specifications", out)
+        self.assertIn("[Customers also bought: not the main content]", out)
+        self.assertLess(out.index("$39.00"), out.index("[Recently viewed"))
+
+    def test_read_keeps_the_labels_of_icons_beside_values(self):
+        out = self.browse("read", self.url("iconlabels.html"), session="iconlabels").stdout
+        self.assertIn("[Customer care] 1-800-111-2222", out)
+        self.assertIn("[Sales] 1-800-333-4444", out)
+        self.assertIn("[Pro desk] 1-800-555-6666", out)
+        self.assertNotIn("Decoration", out)
+        self.assertIn("Plain text stays.", out)
+
+    def test_fill_says_when_the_page_has_not_reacted_yet(self):
+        session = "qty"
+        self.browse("open", self.url("qty.html"), "--show", session=session)
+        quiet = self.browse("fill", "#qty", "5", session=session).stdout
+        self.assertIn("Nothing else on the page changed yet", quiet)
+        self.browse("press", "Tab", session=session)
+        self.assertEqual(self.browse("get", "text", "#total", session=session).stdout.strip(), "$10.00")
+        live = self.browse("fill", "#live", "3", session=session).stdout
+        self.assertNotIn("Nothing else on the page changed yet", live)
 
     def test_eval_reads_its_code_from_stdin_when_none_is_given(self):
         session = "eval-stdin"
@@ -971,7 +1026,10 @@ class BrowseEndToEnd(unittest.TestCase):
         self.browse("click", "[aria-label=Number of bedrooms]", session=session)
         self.assertEqual(self.browse("get", "title", session=session).stdout.strip(), "beds picked")
         self.assertIn("Beds", self.browse("get", "text", "button[data-path*=/en/plp/]", session=session).stdout)
-        bad = self.browse("eval", "document.querySelector('a[href*=/en/plp/]')", session=session, check=False)
+        fixed = self.browse("eval", "document.querySelector('button[data-path*=/en/plp/]').textContent", session=session).stdout
+        self.assertIn("Beds", fixed)
+        self.assertIn('quoted the attribute values in button[data-path*="/en/plp/"]', fixed)
+        bad = self.browse("eval", "document.querySelector(['a[href*=/en/plp/]'].join(''))", session=session, check=False)
         self.assertNotEqual(bad.returncode, 0)
         self.assertIn('needs quotes in CSS: a[href*="/path/"]', bad.stderr)
 

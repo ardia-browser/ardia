@@ -3,10 +3,12 @@ param(
   [Parameter(Mandatory = $true)][string]$Engine,
   [Parameter(Mandatory = $true)][string]$Out,
   [string]$Version = "",
-  [int]$Build = 0
+  [int]$Build = 0,
+  [string]$VcRedist = ""
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "vc-runtime.ps1")
 
 $notShipped = @(".pdb", ".lib", ".exp", ".ilk", ".iobj", ".ipdb", ".winmd")
 $launcher = "Ardia.exe"
@@ -71,6 +73,10 @@ Move-Item -LiteralPath (Join-Path $outRoot $engineLauncher) -Destination (Join-P
 if ($LASTEXITCODE -ne 0) { throw "the launcher did not get the app's manifest entries" }
 & (Join-Path $PSScriptRoot "launcher-identity.ps1") -Icon $appIcon -To (Join-Path $outRoot $launcher)
 if ($LASTEXITCODE -ne 0) { throw "the launcher did not get Ardia's icon and name" }
+
+$launcherImage = Read-PeImage ([System.IO.File]::ReadAllBytes((Join-Path $outRoot $launcher)))
+if (-not $launcherImage -or @("x64", "arm64") -notcontains $launcherImage.Cpu) { throw "$launcher is not an x64 or ARM64 program" }
+Add-VcRuntime $outRoot $launcherImage.Cpu $VcRedist
 
 if ($Build -gt 0) {
   if (-not $Version) { $Version = & (Join-Path $PSScriptRoot "project-version.ps1") }

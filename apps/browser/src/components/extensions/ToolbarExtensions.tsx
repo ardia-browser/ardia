@@ -148,7 +148,7 @@ function useAnchor(windowId: string, tabId: string, slot: string) {
         const anchor = { x, y, width, height };
         if (ref.current) {
           mine.current = anchor;
-          setToolbarAnchor(owner.windowId, owner.tabId, owner.slot, anchor);
+          setToolbarAnchor(owner.windowId, owner.tabId, owner.slot, anchor, measure);
         }
         resolve(anchor);
       });

@@ -23,6 +23,7 @@ export type ArdiaHost = {
     adoptTabs?: UnclaimedTab[];
     chromeMade?: boolean;
     glassPanels?: boolean;
+    sandboxDecision?: string;
   };
   call(name: string, profile: string, args: string | null): Promise<string>;
   invoke(method: string, args: Record<string, unknown>): Promise<unknown>;

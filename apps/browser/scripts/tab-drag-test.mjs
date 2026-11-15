@@ -45,7 +45,7 @@ const win = (id) => ac.engine.call("windows.list").then((ws) => { const f = st()
 const act = (id, a) => win(id).then((n) => ac.engine.call("windows.dev", { window: n, action: a }));
 const items = (id) => win(id).then((n) => { const xs = []; for (let x = 70; x < st().windows[id].frame[2] - 100; x += 1) xs.push(x);
   return Promise.all(xs.map((x) => ac.engine.call("windows.dev", { window: n, action: "hit:" + x + ",21" }))).then((hits) => { const runs = []; let cur = null;
-    hits.forEach((h, i) => { const on = /ContextMenuArea|ImageView|Symbol|FadeLabel/.test(h); if (on && !cur) cur = [xs[i], xs[i]]; else if (on) cur[1] = xs[i]; else if (cur) { runs.push(cur); cur = null; } });
+    hits.forEach((h, i) => { const on = /ContextMenuArea|ImageView|Symbol|FadeLabel/.test(h) && !/^NSClipView|ContextMenuArea < RCTView < RCTView < RCTScrollContentView/.test(h); if (on && !cur) cur = [xs[i], xs[i]]; else if (on) cur[1] = xs[i]; else if (cur) { runs.push(cur); cur = null; } });
     if (cur) runs.push(cur); return runs; }); });
 const settle = (ms) => new Promise((r) => setTimeout(r, ms));
 const loose = (id) => st().windows[id].tabIds.filter((t) => !st().tabs[t].pin);

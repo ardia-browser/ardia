@@ -271,7 +271,7 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
             <Row
               key={d.id}
               icon={<Symbol name={deviceSymbol(d.kind, d.name)} size={15} color={theme.icon} style={{ width: 24, height: 20 }} />}
-              title={d.current ? `${d.name} (This ${PLATFORM_TERMS.computer})` : d.name}
+              title={d.current ? `${d.name} (This ${PLATFORM_TERMS.computerTitle})` : d.name}
               description={d.current ? statusLine(status, lastSyncedAt, 0) : d.lastSeen ? `last synced ${ago(d.lastSeen)}` : "hasn’t synced yet"}
             />
           ))

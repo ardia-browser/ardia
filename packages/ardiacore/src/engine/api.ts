@@ -237,3 +237,7 @@ export type EngineEvents = {
 export type WindowsHostEvents = {
   "tabs.windowRequest": WindowRequest;
 };
+
+export type LinuxHostEvents = {
+  "reauth.requested": { purpose: string; granted: boolean; result: string; method?: "polkit" | "loginPassword" };
+};

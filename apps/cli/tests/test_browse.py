@@ -777,6 +777,16 @@ class RefsTest(unittest.TestCase):
         with self.assertRaises(ConnectionLost):
             asyncio.run(state.connect())
 
+    def test_eval_quotes_unquoted_attribute_values_in_selector_strings(self):
+        from ardia_cli.browse.commands import quote_selector_literals
+
+        fixed, quoted = quote_selector_literals("document.querySelectorAll('a[href*=/jobs/view/]')")
+        self.assertEqual(fixed, "document.querySelectorAll('a[href*=\"/jobs/view/\"]')")
+        self.assertEqual(quoted, ['a[href*="/jobs/view/"]'])
+        self.assertEqual(quote_selector_literals('el.closest("[aria-label=Two words]")')[0], "el.closest(\"[aria-label='Two words']\")")
+        for untouched in ("document.querySelector('[data-x=plain]')", "document.querySelector('a[href*=\"/ok/\"]')", "find('a[href*=/x/]')"):
+            self.assertEqual(quote_selector_literals(untouched), (untouched, []))
+
     def test_an_empty_untitled_page_says_it_was_likely_turned_away(self):
         from ardia_cli.browse import readpages
 

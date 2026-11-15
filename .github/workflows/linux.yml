@@ -180,23 +180,34 @@ jobs:
           set -euo pipefail
           blocker=$(scripts/linux/fetch-ubo.sh)
           python3 scripts/linux/package.py --out "$ENGINE" --ui apps/linux/dist --content-blocker "$blocker" \
-            --version "$VERSION" --cli "$RUNNER_TEMP/dist/$CLI_NAME" --destination "$RUNNER_TEMP/dist/$PACKAGE_NAME.tar.xz"
-          (cd "$RUNNER_TEMP/dist" && sha256sum "$PACKAGE_NAME.tar.xz" > "$PACKAGE_NAME.tar.xz.sha256")
+            --version "$VERSION" --cli "$RUNNER_TEMP/dist/$CLI_NAME" --destination "$RUNNER_TEMP/dist/$PACKAGE_NAME.tar.xz" \
+            --deb "$RUNNER_TEMP/dist/$PACKAGE_NAME.deb" --appimage "$RUNNER_TEMP/dist/$PACKAGE_NAME.AppImage"
+          for built in tar.xz deb AppImage; do
+            (cd "$RUNNER_TEMP/dist" && sha256sum "$PACKAGE_NAME.$built" > "$PACKAGE_NAME.$built.sha256")
+          done
       - name: Smoke
         run: |
           set -euo pipefail
-          args=(--package "$RUNNER_TEMP/dist/$PACKAGE_NAME.tar.xz" --results "$RUNNER_TEMP/smoke" --timeout-ms 600000)
-          [ "${ENGINE_EXACT:-0}" = 1 ] || args+=(--allow-old-engine)
-          node scripts/linux/smoke.mjs "${args[@]}"
+          extra=()
+          [ "${ENGINE_EXACT:-0}" = 1 ] || extra+=(--allow-old-engine)
+          node scripts/linux/smoke.mjs --package "$RUNNER_TEMP/dist/$PACKAGE_NAME.tar.xz" --results "$RUNNER_TEMP/smoke" --timeout-ms 600000 "${extra[@]}"
+          node scripts/linux/smoke.mjs --package "$RUNNER_TEMP/dist/$PACKAGE_NAME.deb" --results "$RUNNER_TEMP/smoke/deb" --timeout-ms 600000 "${extra[@]}"
+          node scripts/linux/smoke.mjs --package "$RUNNER_TEMP/dist/$PACKAGE_NAME.AppImage" --results "$RUNNER_TEMP/smoke/appimage" --timeout-ms 600000 "${extra[@]}"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: ${{ env.PACKAGE_NAME }}
           path: |
             ${{ runner.temp }}/dist/${{ env.PACKAGE_NAME }}.tar.xz
             ${{ runner.temp }}/dist/${{ env.PACKAGE_NAME }}.tar.xz.sha256
+            ${{ runner.temp }}/dist/${{ env.PACKAGE_NAME }}.deb
+            ${{ runner.temp }}/dist/${{ env.PACKAGE_NAME }}.deb.sha256
+            ${{ runner.temp }}/dist/${{ env.PACKAGE_NAME }}.AppImage
+            ${{ runner.temp }}/dist/${{ env.PACKAGE_NAME }}.AppImage.sha256
             ${{ runner.temp }}/dist/${{ env.CLI_NAME }}
             ${{ runner.temp }}/dist/${{ env.CLI_NAME }}.sha256
             ${{ runner.temp }}/smoke/results.json
+            ${{ runner.temp }}/smoke/deb/results.json
+            ${{ runner.temp }}/smoke/appimage/results.json
           if-no-files-found: error
           compression-level: 0
           retention-days: 7

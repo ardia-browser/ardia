@@ -109,7 +109,7 @@ export async function syncNow() {
 type CycleOptions = { retiring?: boolean; forcePasswords?: boolean };
 
 async function runCycle({ retiring = false, forcePasswords = false }: CycleOptions = {}) {
-  if (!SyncNative || !doc.enabled || !doc.folder || !doc.deviceId) return;
+  if (!SyncNative || !doc.enabled || !doc.folder || !doc.deviceId || useSync.getState().status === "locked") return;
   if (cycle) {
     again = true;
     forcePasswordsNext ||= forcePasswords;
@@ -192,7 +192,7 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
   } catch (error) {
     if ((error as { code?: unknown } | null)?.code === "ERR_SYNC_FOLDER_UNREADABLE") {
       publishUi({ status: "offline", error: "The sync folder can’t be read. Check that it’s still there and that Ardia can open it." });
-    } else {
+    } else if (useSync.getState().status !== "locked") {
       console.warn("[sync] cycle failed", error);
       publishUi({ status: "stalled", error: errorText(error) });
     }

@@ -334,8 +334,9 @@ void AppWindows::Register(ModuleRegistry& registry) {
               const base::DictValue* options =
                   args.size() > 1 ? args[1].GetIfDict() : nullptr;
               AppWindows& windows = AppWindows::Get();
+              const base::DictValue none;
               windows.shaped_[id] =
-                  windows.ShapeFor(id, options ? *options : base::DictValue());
+                  windows.ShapeFor(id, options ? *options : none);
               windows.last_window_timer_.Stop();
               return Nothing();
             }))

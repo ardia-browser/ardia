@@ -19,6 +19,7 @@
 #include "base/strings/string_util.h"
 #include "chrome/common/chrome_switches.h"
 #include "content/public/common/content_switches.h"
+#include "media/base/media_switches.h"
 #include "sandbox/policy/switches.h"
 
 namespace ardia_linux {
@@ -35,7 +36,7 @@ Gate& TheGate() {
   return *gate;
 }
 
-std::string Variable(base::Environment& env, std::string_view name) {
+std::string Variable(base::Environment& env, const std::string& name) {
   return env.GetVar(name).value_or(std::string());
 }
 

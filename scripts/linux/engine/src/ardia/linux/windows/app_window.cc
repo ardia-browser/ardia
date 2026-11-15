@@ -189,7 +189,7 @@ AppWindow::AppWindow(std::string id,
   SetCanMaximize(shape_.maximizable);
   SetCanMinimize(true);
   SetCanFullscreen(shape_.fullscreenable);
-  SetTitle(base::UTF8ToUTF16(shape_.title));
+  views::WidgetDelegate::SetTitle(base::UTF8ToUTF16(shape_.title));
   view_ = SetContentsView(std::make_unique<AppWindowView>(this));
   view_->set_minimum_size(shape_.minimum_size);
 

@@ -63,7 +63,7 @@ void MainParts::PostBrowserStart() {
   AppWindows::Get().Register(*registry_);
   KeyMap::Get().Register(*registry_);
   Host::Get()->Start();
-  WatchEngineEvents();
+  ardia_win::WatchEngineEvents();
   AppLifetime::Get().WatchSignals();
   StartUiHost();
 }

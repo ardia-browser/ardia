@@ -6,6 +6,7 @@
 #include <memory>
 
 #include "base/memory/weak_ptr.h"
+#include "base/no_destructor.h"
 #include "base/timer/timer.h"
 
 class ScopedKeepAlive;
@@ -30,6 +31,8 @@ class AppLifetime {
   bool finished() const { return finished_; }
 
  private:
+  friend class base::NoDestructor<AppLifetime>;
+
   AppLifetime();
   ~AppLifetime();
 

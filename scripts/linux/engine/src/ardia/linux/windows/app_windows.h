@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "base/memory/weak_ptr.h"
+#include "base/no_destructor.h"
 #include "base/timer/timer.h"
 #include "base/values.h"
 #include "ui/gfx/geometry/rect.h"
@@ -69,6 +70,8 @@ class AppWindows {
   void WindowClosed(AppWindow* window);
 
  private:
+  friend class base::NoDestructor<AppWindows>;
+
   AppWindows();
   ~AppWindows();
 

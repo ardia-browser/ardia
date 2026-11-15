@@ -7,6 +7,7 @@
 #include <optional>
 #include <string>
 
+#include "base/no_destructor.h"
 #include "base/values.h"
 #include "content/public/browser/keyboard_event_processing_result.h"
 
@@ -47,6 +48,8 @@ class KeyMap {
               const input::NativeWebKeyboardEvent& event);
 
  private:
+  friend class base::NoDestructor<KeyMap>;
+
   KeyMap();
   ~KeyMap();
 

@@ -1,12 +1,14 @@
 #!/usr/bin/env node
-import { execFile } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { promisify } from "node:util";
+import { compareVersions } from "../apps/site/src/data/versions.ts";
+import { github, readCache } from "./stats/github.mjs";
+import { RELEASE_VERSION } from "./stats/queries.mjs";
+import { parseSince } from "./stats/since.mjs";
 import { clickhouse, hasTelemetryEnv } from "./telemetry-env.mjs";
 import {
-  APP_LIBS, APP_SOURCES, AUTO_EVENTS, DAILY_LIB, HISTORY_SOURCE, PRODUCTION_HOSTS, SITE_EVENTS, SITE_LIBS, SITE_SOURCES, classifyNoise,
+  APP_LIBS, APP_SOURCES, AUTO_EVENTS, DAILY_LIB, HISTORY_SOURCE, PRODUCTION_HOSTS, SITE_EVENTS, SITE_LIBS, SITE_SOURCES, classifyNoise, visitorOnSql,
 } from "../apps/site/src/data/telemetry.ts";
 
 const USAGE = `usage: node scripts/stats.mjs [--since <when>] [--json] [--no-save]
@@ -19,10 +21,7 @@ ending now, plus what changed since the last run. Writes the visual as an SVG an
   --json           print the data as JSON instead of the report
   --no-save        don't record this run as the last check`;
 
-const REPO = "mantrakp04/ardia";
 const STATE = join(homedir(), ".local/state/ardia/stats-last.json");
-const TRAFFIC_CACHE = join(homedir(), ".cache/ardia/github-traffic.json");
-const RELEASES_CACHE = join(homedir(), ".cache/ardia/github-older-releases.json");
 const SVG_DIR = "/tmp/ardia-stats";
 const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -35,35 +34,6 @@ const flag = (name) => {
   const i = args.indexOf(name);
   return i === -1 ? undefined : args[i + 1];
 };
-
-function parseSince(text, now) {
-  if (!text) return now - 24 * 3600e3;
-  const s = text.trim().toLowerCase();
-  let m = /^(\d+(?:\.\d+)?)\s*(m|min|mins|h|hr|hrs|d|day|days|w)$/.exec(s);
-  if (m) {
-    const unit = { m: 60e3, min: 60e3, mins: 60e3, h: 3600e3, hr: 3600e3, hrs: 3600e3, d: 864e5, day: 864e5, days: 864e5, w: 6048e5 }[m[2]];
-    return now - Number(m[1]) * unit;
-  }
-  const zoneOffset = (zone) => (zone === "ist" ? 330 : zone === "utc" || zone === "z" ? 0 : null);
-  m = /^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(ist|utc|z)?$/.exec(s);
-  if (m) {
-    let hour = Number(m[1]) % (m[3] ? 12 : 24);
-    if (m[3] === "pm") hour += 12;
-    const offset = zoneOffset(m[4]) ?? -new Date(now).getTimezoneOffset();
-    const shifted = new Date(now + offset * 60e3);
-    let at = Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate(), hour, Number(m[2] ?? 0)) - offset * 60e3;
-    if (at > now) at -= 864e5;
-    return at;
-  }
-  m = /^(\d{4})-(\d{2})-(\d{2})(?:[ t](\d{1,2}):(\d{2}))?\s*(ist|utc|z)?$/.exec(s);
-  if (m) {
-    const [, y, mo, d, h = "0", mi = "0", zone] = m;
-    const offset = zoneOffset(zone);
-    if (offset === null) return new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi)).getTime();
-    return Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi)) - offset * 60e3;
-  }
-  throw new Error(`can't read --since "${text}"`);
-}
 
 const now = Date.now();
 const since = parseSince(flag("--since"), now);
@@ -86,7 +56,7 @@ const REPORTED_EVENTS = [
 const unknownEvents = REPORTED_EVENTS.filter((e) => !SITE_EVENTS.includes(e) && !AUTO_EVENTS.includes(e));
 if (unknownEvents.length) throw new Error(`stats.mjs reports events the site no longer sends: ${unknownEvents.join(", ")}`);
 const WINDOW_EVENTS = sqlList(REPORTED_EVENTS);
-const MAC_DEVICE = "if({p}['ardia_device'] = '', {p}['$os'] = 'Mac OS X' AND {p}['$device_type'] = 'Desktop', {p}['ardia_device'] = 'mac')";
+const MAC_DEVICE = visitorOnSql("mac", (key) => `{p}['${key}']`);
 
 const OTEL = {
   table: "telemetry.otel_logs", final: " FINAL",
@@ -110,7 +80,6 @@ const both = (select, where, { final = false } = {}) =>
   [OTEL, HISTORY]
     .map((t) => `SELECT ${fill(select, t)} FROM ${t.table}${final ? t.final : ""} WHERE ${fill(where, t)} AND ${t.base}`)
     .join(" UNION ALL ");
-const VERSION = "'^[0-9]+\\\\.[0-9]+\\\\.[0-9]+(-nightly\\\\.[0-9]+)?$'";
 
 const problems = [];
 const attempt = async (name, fn) => {
@@ -142,7 +111,7 @@ const headline = () =>
               countIf(isFirst AND day = yesterday()) AS firstYesterday, countIf(isFirst AND day = today()) AS firstToday,
               countIf(isFirst) AS first
        FROM (${both("{p}['version'] AS v, toDate({t}) AS day, {p}['first'] = 'true' AS isFirst", "{e} = 'update_check'", { final: true })})
-       WHERE match(v, ${VERSION}) GROUP BY v)),
+       WHERE match(v, '${RELEASE_VERSION}') GROUP BY v)),
     (SELECT tuple(uniqExactIf(d, t >= toDateTime(${sinceSec}, 'UTC')), uniqExactIf(d, t >= today()), uniqExact(d))
      FROM (${both("{d} AS d, {t} AS t", `{ts} > now() - INTERVAL ${Math.max(7, Math.ceil(span / 864e5))} DAY AND {app}`)})),
     (SELECT tuple(countIf(day = today()), countIf(day = yesterday()), countIf(weekly AND day >= toMonday(today())),
@@ -152,84 +121,13 @@ const headline = () =>
                   LogAttributes['first'] = 'true' AS isFirst, LogAttributes['$app_version'] AS version
            FROM telemetry.otel_logs FINAL WHERE ${DAILY} AND Timestamp > now() - INTERVAL 40 DAY))`);
 
-const githubQuery = (releases, after) => `{ repository(owner: "mantrakp04", name: "ardia") { stargazerCount forkCount issues(states: OPEN) { totalCount }
-  stargazers(last: 100) { edges { starredAt } }
-  releases(first: ${releases}${after ? `, after: "${after}"` : ""}, orderBy: { field: CREATED_AT, direction: DESC }) { pageInfo { endCursor }
-    nodes { tagName isDraft isPrerelease publishedAt releaseAssets(first: 20) { nodes { name downloadCount } } } } } }`;
-const LIVE_RELEASES = 5;
-const github = async () => {
-  const token = process.env.GH_TOKEN ?? (await promisify(execFile)("gh", ["auth", "token"])).stdout.trim();
-  const headers = { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" };
-  const graphql = async (query) => {
-    const res = await fetch("https://api.github.com/graphql", { method: "POST", headers, body: JSON.stringify({ query }) });
-    const body = await res.json();
-    if (!res.ok || body.errors) throw new Error(`GitHub GraphQL: ${res.status} ${JSON.stringify(body.errors ?? body).slice(0, 160)}`);
-    return body.data.repository;
-  };
-  const rest = (path) => fetch(`https://api.github.com/repos/${REPO}/${path}`, { headers }).then((r) => (r.ok ? r.json() : null));
-  const cachedFor = async (file, maxAge, load) => {
-    const cached = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : null;
-    if (cached && now - cached.at < maxAge) return cached;
-    const fresh = load().then((value) => {
-      const entry = { ...value, at: Date.now() };
-      mkdirSync(dirname(file), { recursive: true });
-      writeFileSync(file, JSON.stringify(entry));
-      return entry;
-    });
-    if (!cached) return fresh;
-    return Promise.race([fresh.catch(() => cached), new Promise((resolve) => setTimeout(resolve, 800, cached))]);
-  };
-  const repoPromise = graphql(githubQuery(LIVE_RELEASES));
-  const [repo, older, { views, referrers }] = await Promise.all([
-    repoPromise,
-    repoPromise.then((r) =>
-      cachedFor(RELEASES_CACHE, 3600e3, async () => ({ after: r.releases.pageInfo.endCursor, nodes: (await graphql(githubQuery(100, r.releases.pageInfo.endCursor))).releases.nodes })),
-    ),
-    cachedFor(TRAFFIC_CACHE, 3600e3, async () => {
-      const [views, referrers] = await Promise.all([rest("traffic/views"), rest("traffic/popular/referrers")]);
-      return { views, referrers };
-    }),
-  ]);
-  const liveTags = new Set(repo.releases.nodes.map((r) => r.tagName));
-  const releases = { nodes: [...repo.releases.nodes, ...older.nodes.filter((r) => !liveTags.has(r.tagName))] };
-  const starTimes = repo.stargazers.edges.map((e) => Date.parse(e.starredAt));
-  const count = (release, ext) => release.releaseAssets.nodes.find((a) => a.name.endsWith(ext))?.downloadCount ?? 0;
-  const latest = releases.nodes.find((r) => !r.isDraft && !r.isPrerelease);
-  return {
-    stars: repo.stargazerCount,
-    starsInWindow: starTimes.filter((t) => t >= since).length,
-    stars24h: starTimes.filter((t) => t >= now - 864e5).length,
-    forks: repo.forkCount,
-    openIssues: repo.issues.totalCount,
-    dmg: releases.nodes.reduce((sum, r) => sum + count(r, ".dmg"), 0),
-    zips: releases.nodes.reduce((sum, r) => sum + count(r, ".zip"), 0),
-    latest: latest && { version: latest.tagName.replace(/^v/, ""), dmg: count(latest, ".dmg"), zip: count(latest, ".zip"), published: latest.publishedAt },
-    views: views && { count: views.count, uniques: views.uniques },
-    referrers: (referrers ?? []).slice(0, 3).map((r) => [r.referrer, r.uniques]),
-  };
-};
-
 const [rows, head, gitHub] = await Promise.all([
   hasTelemetryEnv() ? attempt("telemetry (window)", windowRows) : (problems.push("telemetry: ~/.config/ardia/telemetry.env is missing (docs/growth.md, Telemetry)"), null),
   hasTelemetryEnv() ? attempt("telemetry (headline)", headline) : null,
-  attempt("github", github),
+  attempt("github", () => github({ now, since })),
 ]);
 
 const uniq = (list) => new Set(list).size;
-const compareVersions = (a, b) => {
-  const parse = (v) => {
-    const [core = "", pre = ""] = v.split("-nightly.");
-    return [...core.split(".").map(Number), pre ? Number(pre) : Number.POSITIVE_INFINITY];
-  };
-  const pa = parse(a);
-  const pb = parse(b);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const x = pa[i] ?? 0;
-    const y = pb[i] ?? 0;
-    if (x !== y) return x < y ? -1 : 1;
-  }
-  return 0;
-};
 const tally = (pairs, top = 6) => {
   const sets = new Map();
   for (const [key, id] of pairs) {
@@ -340,7 +238,7 @@ if (head) {
   data.active = { dauToday, dauYesterday, wau, wauLastWeek, mau, newToday, newYesterday, pingSince, silentYesterday };
 }
 
-const previous = existsSync(STATE) ? JSON.parse(readFileSync(STATE, "utf8")) : null;
+const previous = readCache(STATE);
 const current = {
   at: now,
   visitors: data.headline?.allTime,

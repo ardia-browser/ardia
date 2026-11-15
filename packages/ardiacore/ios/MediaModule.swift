@@ -2,14 +2,11 @@ import ExpoModulesCore
 
 public class MediaModule: Module {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaMedia")
-    Events("media")
+    Name(Self.calls.moduleName)
+    Events(Self.calls.domain)
+    Self.calls.forwardEvents(to: self)
 
-    OnCreate { EngineCall.listen("media", self) }
-
-    AsyncFunction("call") { (name: String, profile: String, args: String, promise: Promise) in
-      MediaModule.calls.run(name, profile, args, promise)
-    }.runOnQueue(.main)
+    Self.calls.function
   }
 
   static func chooser(_ action: String) -> CallHandler {
@@ -21,6 +18,8 @@ public class MediaModule: Module {
 
   static let calls = CallTable(domain: "media", handlers: [
     "displayMediaSources": { _, reply in reply.ok(ArdiaHost.displayMediaSources) },
+    "screenRecordingAllowed": { _, reply in reply.ok(ArdiaHost.screenRecordingAllowed) },
+    "requestScreenRecording": { _, reply in reply.ok(ArdiaHost.requestScreenRecording()) },
     "selectDevice": { args, reply in
       ArdiaHost.deviceChooser(try args.int32("id"), select: try args.int32("index"))
       reply.ok()

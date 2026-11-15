@@ -1,11 +1,12 @@
 import { showMenu, type MenuItem } from "../../platform/menus";
 import { menuSections } from "../app/menuSections";
 import { addFolderToSidebar, makesGroup, restorableArcHolder, restoreArcFolders } from "./bookmarkGroups";
-import { folderChildren, folderLinks } from "./bookmarks";
+import { folderChildren, folderLinks, type BookmarkOwners } from "./bookmarks";
 import { editBookmark } from "./edit";
 import { copyLinkItems, openAllItems, openLinkItems, runLinkChoice, type Link } from "./linkMenus";
 import { FOLDER_MANY } from "./actions";
 import { currentBookmarks } from "../browser/current";
+import { useBrowser } from "../browser/store";
 import type { BookmarkNode, Bookmarks } from "../browser/types";
 import { openImport } from "../settings/settingsWindows";
 import { exportBookmarksFromWindow } from "./exportHtml";
@@ -60,13 +61,12 @@ function linksOf(b: Bookmarks, nodes: BookmarkNode[]): Link[] {
 const nounFor = (nodes: BookmarkNode[]) =>
   nodes.every((n) => n.kind === "url") ? "Bookmarks" : nodes.every((n) => n.kind === "folder") ? "Folders" : "Items";
 
-export function rowMenuTarget(b: Bookmarks, nodes: BookmarkNode[], showPath: boolean): RowMenuTarget | null {
+export function rowMenuTarget(s: BookmarkOwners, nodes: BookmarkNode[], showPath: boolean): RowMenuTarget | null {
   const [node] = nodes;
   if (!node) return null;
-  if (nodes.length > 1) return { kind: "several", links: linksOf(b, nodes).length, items: nodes.length, noun: nounFor(nodes) };
+  if (nodes.length > 1) return { kind: "several", links: linksOf(s.bookmarks, nodes).length, items: nodes.length, noun: nounFor(nodes) };
   if (node.kind === "url") return { kind: "url", showPath };
-  const s = { bookmarks: b };
-  return { kind: "folder", links: folderLinks(b, node.id).length, makesGroup: makesGroup(s, node.id), restoresArc: restorableArcHolder(s, node.id), showPath };
+  return { kind: "folder", links: folderLinks(s.bookmarks, node.id).length, makesGroup: makesGroup(s, node.id), restoresArc: restorableArcHolder(s, node.id), showPath };
 }
 
 export async function openBookmarkRowMenu(
@@ -80,9 +80,9 @@ export async function openBookmarkRowMenu(
     onDelete,
   }: { windowId: string; profileId: string; showPath: boolean; selection: string[]; onOpenFolder: (folder?: string) => void; onDelete: () => void },
 ) {
-  const b = currentBookmarks();
-  const nodes = selection.includes(node.id) && selection.length > 1 ? selection.map((id) => b.nodes[id]).filter((n): n is BookmarkNode => !!n) : [node];
-  const target = rowMenuTarget(b, nodes, showPath);
+  const s = useBrowser.getState();
+  const nodes = selection.includes(node.id) && selection.length > 1 ? selection.map((id) => s.bookmarks.nodes[id]).filter((n): n is BookmarkNode => !!n) : [node];
+  const target = rowMenuTarget(s, nodes, showPath);
   if (!target) return;
   const choice = await showMenu(bookmarkRowMenuItems(target));
   if (!choice) return;

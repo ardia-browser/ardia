@@ -12,7 +12,8 @@ export function parseColor(color: string): Rgba {
     const [r = 0, g = 0, b = 0, a = 1] = m[1]!.split(",").map((v) => Number(v.trim()));
     return [r, g, b, a];
   }
-  const h = color.trim().replace("#", "");
+  const short = color.trim().replace("#", "");
+  const h = short.length === 3 || short.length === 4 ? Array.from(short, (c) => c + c).join("") : short;
   const ch = (i: number) => parseInt(h.slice(2 * i, 2 * i + 2), 16);
   return [ch(0), ch(1), ch(2), h.length >= 8 ? ch(3) / 255 : 1];
 }
@@ -30,6 +31,14 @@ export function over(top: string, under: string): string {
   const [r, g, b, a] = parseColor(top);
   const base = parseColor(under);
   return toHex([r, g, b].map((v, i) => a * v + (1 - a) * base[i]!));
+}
+
+const FARTHEST_RGB = Math.hypot(255, 255, 255);
+
+export function colorDistance(a: string, b: string): number {
+  const from = parseColor(a);
+  const to = parseColor(b);
+  return Math.hypot(from[0] - to[0], from[1] - to[1], from[2] - to[2]) / FARTHEST_RGB;
 }
 
 export function luminance(color: string): number {

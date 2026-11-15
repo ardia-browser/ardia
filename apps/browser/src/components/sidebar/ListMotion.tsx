@@ -1,3 +1,4 @@
+import { devRegister } from "../dev/devRegister";
 import { createContext, memo, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Animated, View } from "react-native";
 import { layout, useTheme } from "../ui/theme";
@@ -10,12 +11,14 @@ import { entryHeight } from "../../state/sidebar/geometry";
 import { ghostEntry, snapshotEntry, type EntrySnapshot } from "./GhostEntry";
 import { curve } from "../ui/motion";
 import { SIDEBAR_MOTION } from "./tokens";
+import { entryId, entryKey, parseEntry } from "../../state/sidebar/entryKey";
+import { splitTabIdsOf } from "../../state/splits/splits";
+import { noteSidebarMotionMerge } from "../../state/telemetry/usage";
 
 export const SLIDE_MS = SIDEBAR_MOTION.listSlide;
 export const FADE_MS = SIDEBAR_MOTION.listFade;
 export const SLIDE_EASING = curve.cssEase;
 export const FADE_EASING = curve.cssEaseOut;
-const GAP = layout.rowGap;
 const TAIL = "~tail";
 const FRAME_SLACK_MS = 50;
 const devScale = () => (__DEV__ ? ((globalThis as { sidebarMotionScale?: number }).sidebarMotionScale ?? 1) : 1);
@@ -35,9 +38,9 @@ export const ListMotionContext = createContext<ListMotionScope>({ enabled: false
 let ghostIds = 0;
 
 const tabsOf = (s: BrowserState, entry: string): string[] => {
-  const id = entry.slice(2);
-  if (entry.startsWith("g:")) return s.groups[id]?.tabIds ?? [];
-  if (entry.startsWith("s:")) return s.splits[id]?.tabIds ?? [];
+  const { kind, id } = parseEntry(entry);
+  if (kind === "group") return s.groups[id]?.tabIds ?? [];
+  if (kind === "split") return splitTabIdsOf(s.splits[id]) ?? [];
   return [id];
 };
 
@@ -56,7 +59,7 @@ function offsets(s: BrowserState, entries: string[], height: Height, start = 0, 
   let y = base;
   for (let i = start; i < entries.length; i++) {
     at.set(entries[i]!, y);
-    y += height(s, entries[i]!) + GAP;
+    y += height(s, entries[i]!) + layout.rowGap;
   }
   return { at, end: y };
 }
@@ -69,7 +72,7 @@ function sharedPrefix(a: string[], b: string[]): number {
 
 function prefixHeight(s: BrowserState, entries: string[], count: number, height: Height): number {
   let y = 0;
-  for (let i = 0; i < count; i++) y += height(s, entries[i]!) + GAP;
+  for (let i = 0; i < count; i++) y += height(s, entries[i]!) + layout.rowGap;
   return y;
 }
 
@@ -125,6 +128,16 @@ function buildPlan({ before, after, old, next, removed, added, slides, ghosts, t
     return following === undefined ? (tail ? [TAIL] : []) : fresh.has(following) ? [] : [following];
   });
   return { moves, ghosts: born, clipped, below: 0 };
+}
+
+function mergePlans(first: Plan, then: Plan): Plan {
+  const later = new Set(then.moves.map((m) => m.key));
+  return {
+    moves: [...first.moves.filter((m) => !later.has(m.key)), ...then.moves],
+    ghosts: [...first.ghosts, ...then.ghosts],
+    clipped: [...new Set([...first.clipped, ...then.clipped])],
+    below: first.below + then.below,
+  };
 }
 
 type GroupChange = "same" | "grown" | "extended" | "other";
@@ -196,10 +209,7 @@ function useMotion({ devKey, entries, from, planner, height, enabled, nativeTail
   const queued = useRef<Plan | null>(null);
   const clipping = useRef<object | null>(null);
   const [, rerender] = useState(0);
-  if (__DEV__ && enabled) {
-    const dev = globalThis as { sidebarMotion?: Record<string, unknown> };
-    dev.sidebarMotion = { ...dev.sidebarMotion, [devKey]: { slides, ghosts, clipped } };
-  }
+  if (enabled) devRegister("sidebarMotion", devKey, { slides, ghosts, clipped });
 
   const now = Date.now();
   for (const slide of slides.values()) {
@@ -213,9 +223,12 @@ function useMotion({ devKey, entries, from, planner, height, enabled, nativeTail
   const prepare = (plan: Plan, at: number) => {
     for (const m of plan.moves) if (!slides.has(m.key)) slides.set(m.key, { value: new Animated.Value(m.from), from: m.from, at, until: 0, landed: false });
     ghosts.current = [...ghosts.current, ...plan.ghosts];
+    const pending = queued.current;
+    const next = pending ? mergePlans(pending, plan) : plan;
+    if (pending) noteSidebarMotionMerge();
     clipped.clear();
-    for (const key of plan.clipped) clipped.add(key);
-    queued.current = plan;
+    for (const key of next.clipped) clipped.add(key);
+    queued.current = next;
   };
 
   const before = from.pending;
@@ -307,7 +320,7 @@ function useMotion({ devKey, entries, from, planner, height, enabled, nativeTail
         shown++;
       }
       if (here) byAnchor.delete(entry);
-      y += height(entry) + GAP;
+      y += height(entry) + layout.rowGap;
     }
     for (const left of byAnchor.values()) for (const ghost of left) if (!ghost.anchor || !entries.includes(ghost.anchor)) out.push(place(ghost, ghost.y - y));
     return out;
@@ -323,8 +336,9 @@ export function useListMotion(windowId: string, profileId: string, entries: stri
     if (before.state.groups !== after.state.groups) {
       const had = new Set(before.list);
       for (const e of after.list) {
-        if (!had.has(e) || !e.startsWith("g:")) continue;
-        const change = groupChange(before.state, after.state, e.slice(2));
+        const groupId = entryId(e, "group");
+        if (!had.has(e) || groupId === null) continue;
+        const change = groupChange(before.state, after.state, groupId);
         if (change === "other" && height(before.state, e) !== height(after.state, e)) return null;
         if (change === "grown" || change === "extended") changes.set(e, change);
       }
@@ -368,7 +382,7 @@ export function useGroupMotion(windowId: string, profileId: string, groupId: str
     if (!atEnd) return plan;
     return { ...(plan ?? { moves: [], ghosts: [], clipped: [] }), below: old.end - next.end };
   };
-  const below = scope.slideBelow ? (delta: number) => scope.slideBelow?.(`g:${groupId}`, delta) : null;
+  const below = scope.slideBelow ? (delta: number) => scope.slideBelow?.(entryKey("group", groupId), delta) : null;
   return useMotion({ devKey: `${windowId}:${groupId}`, entries, from, planner, height: (e) => height(workspaceSnapshot(), e), enabled, nativeTail: false, below });
 }
 
@@ -377,7 +391,7 @@ export const GhostSlot = memo(function GhostSlot({ snapshot, top, opacity }: { s
   const [fade, ref] = useAnimatedStyle(style);
   const theme = useTheme();
   return (
-    <View pointerEvents="none" {...fade} ref={ref} style={[{ height: 0, marginBottom: -GAP }, fade.style as object]}>
+    <View pointerEvents="none" {...fade} ref={ref} style={[{ height: 0, marginBottom: -layout.rowGap }, fade.style as object]}>
       {ghostEntry(snapshot, theme, top)}
     </View>
   );

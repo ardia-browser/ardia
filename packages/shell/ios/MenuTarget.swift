@@ -12,7 +12,7 @@ final class MenuTarget: NSObject, NSMenuItemValidation {
     ])
   }
 
-  private static let focusMovingCommands: Set<String> = ["newTab", "focusCommandBar", "findInPage"]
+  private static let focusMovingCommands: Set<String> = ["newTab", "focusCommandBar", "findInPage", "showHistory"]
 
   @objc(commandDispatch:) func performCommand(_ sender: NSMenuItem) {
     guard let item = sender as? CommandItem else { return }
@@ -42,7 +42,7 @@ final class MenuTarget: NSObject, NSMenuItemValidation {
   private static var undoReopensClosedTab: Bool {
     let state = MenuState.current
     guard state.undoReopensClosedTab, !state.disabled.contains("reopenClosedTab"),
-      WindowManager.shared.keyWindowId != "settings", let window = WindowManager.shared.keyBrowserWindow
+      WindowManager.shared.keyWindowKind != .settings, let window = WindowManager.shared.keyBrowserWindow
     else { return false }
     return !MainMenu.editsText(window.firstResponder)
   }
@@ -90,13 +90,13 @@ final class MenuTarget: NSObject, NSMenuItemValidation {
     if item.title != title { item.title = title }
     if item.keyEquivalent == "\r", NSApp.keyWindow?.firstResponder is NSText { return false }
     if MainMenu.movesCaret(item), NSApp.currentEvent?.type == .keyDown, MainMenu.editsText(NSApp.keyWindow?.firstResponder) { return false }
-    if item.command == "findInPage", WindowManager.shared.keyWindowId == "settings" { return true }
+    if item.command == "findInPage", WindowManager.shared.keyWindowKind == .settings { return true }
     let enabled = !state.disabled.contains(item.stateKey) && !state.disabled.contains(item.command)
     if item.hidesWhenDisabled, item.isHidden == enabled { item.isHidden = !enabled }
     return enabled
   }
 
-  @objc func quit(_ sender: Any?) { WindowManager.shared.confirmQuit() }
+  @objc func quit(_ sender: Any?) { QuitFlow.shared.confirm() }
   @objc func arrangeWindowsInFront(_ sender: Any?) { NSApp.arrangeInFront(sender) }
   @objc func toggleKeepOnTop(_ sender: Any?) { WindowManager.shared.toggleKeepOnTop() }
   @objc func closeWindow(_ sender: Any?) { WindowManager.shared.closableWindow?.performClose(sender) }

@@ -1,13 +1,15 @@
 import { create } from "zustand";
 import { useBrowser } from "../browser/store";
 import { bookmarkProfileId } from "../browser/model";
-import { setBookmarksDrop, useTabDrag } from "../drag/tabDrag";
+import type { TabDrag } from "../drag/tabDrag";
 import { addBookmark, moveBookmark } from "./actions";
 import { addFolderToSidebar } from "./bookmarkGroups";
-import { insertTarget, isInside, linkTitle, moveTarget, sameSpot, type DropSpot } from "./barDrop";
+import { insertTarget, linkTitle, moveTarget, sameSpot, type DropSpot } from "./barDrop";
 import { closeFolderMenus, closeSprungMenus, holdMenuPanel, panelKey, useFolderMenus } from "./folderMenus";
-import { onAppEvent, setDragEscapeCapture } from "../drag/dragNative";
+import { captureEscape, onAppEvent } from "../drag/dragNative";
 import { isWebPageUrl } from "../../lib/url";
+import { isWithin } from "./bookmarks";
+import { NO_SIDEBAR_EDGE, overSidebar, type SidebarEdge } from "./sidebarEdge";
 
 export type BarDragSource = { kind: "bookmark"; id: string; panel: string | null } | { kind: "tabs"; tabIds: string[] } | { kind: "links" };
 
@@ -26,10 +28,10 @@ type BarDrag = {
   x: number;
   y: number;
   grab: { x: number; y: number; width: number; height: number };
-  sidebarEdge: number;
+  sidebarEdge: SidebarEdge;
 };
 
-const IDLE: BarDrag = { windowId: null, source: null, spot: null, x: 0, y: 0, grab: { x: 0, y: 0, width: 0, height: 0 }, sidebarEdge: 0 };
+const IDLE: BarDrag = { windowId: null, source: null, spot: null, x: 0, y: 0, grab: { x: 0, y: 0, width: 0, height: 0 }, sidebarEdge: NO_SIDEBAR_EDGE };
 
 export const useBarDrag = create<BarDrag>()(() => IDLE);
 
@@ -61,7 +63,7 @@ function hitAt(windowId: string, x: number, y: number, draggedId: string | null)
   if (!spot || !draggedId) return best.hit;
   const b = useBrowser.getState().bookmarks;
   const parentId = "into" in spot ? spot.into : spot.parentId;
-  return isInside(b, draggedId, parentId) ? { spot: null } : best.hit;
+  return isWithin(b, parentId, [draggedId]) ? { spot: null } : best.hit;
 }
 
 function armSpring(hit: ZoneHit | null) {
@@ -92,7 +94,7 @@ export function beginBookmarkDrag(options: {
   x: number;
   y: number;
   grab: BarDrag["grab"];
-  sidebarEdge: number;
+  sidebarEdge: SidebarEdge;
 }) {
   const { windowId, id, panel, x, y, grab, sidebarEdge } = options;
   useBarDrag.setState({ ...IDLE, windowId, source: { kind: "bookmark", id, panel }, x, y, grab, sidebarEdge });
@@ -114,7 +116,7 @@ export function endBookmarkDrag(commit: boolean) {
   const node = b.nodes[source.id];
   const target = spot ? moveTarget(b, source.id, spot) : null;
   if (target) moveBookmark(source.id, target.parentId, target.index);
-  const toSidebar = commit && !spot && node?.kind === "folder" && x < sidebarEdge;
+  const toSidebar = commit && !spot && node?.kind === "folder" && overSidebar(sidebarEdge, x);
   finish();
   holdMenuPanel(null);
   if (toSidebar) addFolderToSidebar(source.id, windowId);
@@ -157,7 +159,7 @@ export function dropLinksAt(windowId: string, x: number, y: number, links: { url
   return !!hit?.spot && bookmarkLinks(windowId, hit.spot, usable.map((l) => ({ url: l.url, title: linkTitle(l.url, l.text) })));
 }
 
-function dropTabs(tabIds: string[], windowId: string, x: number, y: number): boolean {
+export function dropTabsOnBar(tabIds: string[], windowId: string, x: number, y: number): boolean {
   const hit = hitAt(windowId, x, y, null);
   finish();
   if (!hit?.spot) return false;
@@ -171,12 +173,9 @@ function dropTabs(tabIds: string[], windowId: string, x: number, y: number): boo
   return done;
 }
 
-setBookmarksDrop(dropTabs);
-
-useTabDrag.subscribe((d) => {
+export function followTabDragOnBar(d: TabDrag) {
   const s = useBarDrag.getState();
-  const live = d.tabIds.length > 0 && !!d.windowId && d.windowId !== "external" && !d.outside && d.x >= 0;
-  if (!live) {
+  if (d.phase !== "tab" || d.outside || d.x < 0) {
     if (s.source?.kind === "tabs") {
       finish();
       closeSprungMenus();
@@ -185,8 +184,8 @@ useTabDrag.subscribe((d) => {
   }
   if (s.source && s.source.kind !== "tabs") return;
   if (!s.source || s.windowId !== d.windowId) useBarDrag.setState({ ...IDLE, windowId: d.windowId, source: { kind: "tabs", tabIds: d.tabIds } });
-  track(d.windowId!, d.x, d.y, null);
-});
+  track(d.windowId, d.x, d.y, null);
+}
 
 let escapeWatchers = 0;
 let stopEscape: (() => void) | null = null;
@@ -198,7 +197,7 @@ export function watchBookmarkEscape() {
       const want = useFolderMenus.getState().panels.length > 0 || useBarDrag.getState().source?.kind === "bookmark";
       if (want === capturing) return;
       capturing = want;
-      setDragEscapeCapture(want);
+      captureEscape("bookmarks", want);
     };
     const menus = useFolderMenus.subscribe(sync);
     const drags = useBarDrag.subscribe(sync);
@@ -211,7 +210,7 @@ export function watchBookmarkEscape() {
       menus();
       drags();
       keys.remove();
-      if (capturing) setDragEscapeCapture(false);
+      if (capturing) captureEscape("bookmarks", false);
     };
   }
   return () => {

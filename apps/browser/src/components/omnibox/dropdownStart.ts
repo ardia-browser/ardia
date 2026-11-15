@@ -2,21 +2,21 @@ import { tabTitle } from "../../state/browser/model";
 import { recentTabSuggestions, type Suggestion } from "@ardia/core";
 import { useMemo } from "react";
 import { useSettings, useTab, useWindow } from "../../state/browser/hooks";
-import { useHistory } from "../../state/history/hooks";
+import { useProfileHistory } from "../../state/history/hooks";
 import { usePeeks } from "../../state/peek/hooks";
 import { useTabs } from "../../state/tabs/hooks";
 import { openTabsByUse } from "../../state/tabs/tabShare";
-import type { HistoryEntry } from "../../state/browser/types";
 import { withoutFragment } from "../../lib/url";
+import { commandBarTabLimit, keepsOpenTab } from "../../state/omnibox/commandBarStart";
 
-const NO_HISTORY: HistoryEntry[] = [];
 const RECENT = 4;
 
 export function useDropdownStart(enabled: boolean, tabId: string, profileId: string): Suggestion[] {
   const url = useTab(tabId, (t) => (enabled ? (t?.url ?? "") : ""));
   const title = useTab(tabId, (t) => (enabled ? (t?.title ?? "") : ""));
   const favicon = useTab(tabId, (t) => (enabled ? (t?.favicon ?? null) : null));
-  const history = useHistory((h) => (enabled ? (h[profileId] ?? NO_HISTORY) : NO_HISTORY));
+  const historyOn = useSettings((st) => st.commandBarHistory);
+  const history = useProfileHistory(enabled && historyOn ? profileId : null);
   const recent = useMemo(() => {
     const seen = new Set(url ? [withoutFragment(url)] : []);
     const out: Suggestion[] = [];
@@ -38,10 +38,15 @@ export function useOpenTabsStart(enabled: boolean, windowId: string, profileId: 
   const tabs = useTabs((all) => (enabled ? all : null));
   const peeks = usePeeks((all) => (enabled ? all : null));
   const shared = useSettings((st) => !!st.shareTabsAcrossWindows);
+  const start = useSettings((st) => st.commandBarStart);
   const active = useWindow(windowId, (w) => (enabled ? w?.activeTabIds[profileId] : undefined));
   return useMemo(() => {
     if (!tabs || !peeks) return NO_TABS;
-    const rows = openTabsByUse(tabs, peeks, { profileId, windowId, shared }).map(({ tab: t, lastActiveAt }) => ({ id: t.id, url: t.url, title: tabTitle(t), favicon: t.favicon, lastActiveAt }));
-    return recentTabSuggestions(rows, { exclude: active });
-  }, [tabs, peeks, active, profileId, shared, windowId]);
+    const limit = commandBarTabLimit(start);
+    if (limit === 0) return NO_TABS;
+    const rows = openTabsByUse(tabs, peeks, { profileId, windowId, shared })
+      .filter(({ tab: t }) => keepsOpenTab(start, t.pin))
+      .map(({ tab: t, lastActiveAt }) => ({ id: t.id, url: t.url, title: tabTitle(t), favicon: t.favicon, lastActiveAt }));
+    return recentTabSuggestions(rows, { exclude: active, limit });
+  }, [tabs, peeks, active, profileId, shared, windowId, start]);
 }

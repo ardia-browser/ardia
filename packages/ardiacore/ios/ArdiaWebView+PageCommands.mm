@@ -1,11 +1,14 @@
 #import "ArdiaWebViewInternal.h"
+#import "ArdiaRuntime.h"
+#import "ArdiaFairPlay.h"
 
 using namespace ardia_web_view;
+using namespace ardia_runtime;
 
 @implementation ArdiaWebView (PageCommands)
 
 - (void)emitMedia {
-  const BOOL playing = _tab.audible;
+  const BOOL playing = _tab.audible || [ArdiaFairPlay playsInTab:_tab];
   const BOOL muted = _tab ? _tab.muted : _muted;
   [self emit:@"media" payload:@{@"playing" : @(playing), @"muted" : @(muted)}];
 }
@@ -21,7 +24,7 @@ using namespace ardia_web_view;
         @"zoom" : @(round(zoom * 100) / 100),
         @"host" : [NSURL URLWithString:_tab.url ?: @""].host.lowercaseString ?: @"",
         @"isDefault" : @(fabs(zoom - 1) < 0.001),
-        @"pinchScale" : @(_pinchScale ?: 1),
+        @"pinchScale" : @(_reports.pinchScale ?: 1),
         @"user" : @(user),
       }];
 }
@@ -32,6 +35,7 @@ using namespace ardia_web_view;
 
 - (void)tabDidChangeAudio:(ArdiaCoreTab *)tab {
   if (_muted && !tab.muted) tab.muted = YES;
+  [ArdiaFairPlay muteChangedInTab:tab];
   [self emitMedia];
 }
 
@@ -42,6 +46,7 @@ using namespace ardia_web_view;
 - (void)setMuted:(BOOL)muted {
   _muted = muted;
   _tab.muted = muted;
+  [ArdiaFairPlay muteChangedInTab:_tab];
 }
 
 - (void)setZoomFactor:(double)factor {
@@ -92,7 +97,12 @@ using namespace ardia_web_view;
   if (command) [self runChromeCommand:command];
 }
 
+- (BOOL)awaitsFirstDocument {
+  return _tab.loading && _tab.committedInitial && !_tab.initialDocumentAccessed;
+}
+
 - (void)executeJavaScript:(NSString *)code {
+  if (self.awaitsFirstDocument) return;
   [_tab executeJavaScript:code frame:nil];
 }
 
@@ -101,14 +111,14 @@ using namespace ardia_web_view;
 }
 
 - (void)evaluate:(NSString *)code completion:(void (^)(NSString *))completion {
-  if (!_tab) return completion(nil);
+  if (!_tab || self.awaitsFirstDocument) return completion(nil);
   [self thawHiddenPage];
   [_tab evaluate:code completion:completion];
 }
 
 - (void)capturePicture:(double)scale completion:(void (^)(NSDictionary<NSString *, id> *))completion {
   NSWindow *window = self.window;
-  if (!_tab || !window || self.hidden) return completion(nil);
+  if (!_tab || !window || self.hidden || self.awaitsFirstDocument) return completion(nil);
   NSRect inWindow = [self convertRect:self.bounds toView:nil];
   CGFloat top = NSHeight(window.contentView.frame);
   NSArray *frame = @[ @(NSMinX(inWindow)), @(top - NSMaxY(inWindow)), @(NSWidth(inWindow)), @(NSHeight(inWindow)) ];
@@ -141,8 +151,16 @@ using namespace ardia_web_view;
 
 - (void)mediaCommand:(NSString *)action seconds:(double)seconds {
   [self thawHiddenPage];
-  if ([action isEqualToString:@"play"] || [action isEqualToString:@"toggle"]) [_tab grantUserActivationToFrame:_nowPlayingFrame ?: @""];
-  [self callFrame:_nowPlayingFrame ?: @"" kind:@"media" json:JSONString(@{@"action" : action ?: @"", @"seconds" : @(seconds)})];
+  if ([action isEqualToString:@"play"] || [action isEqualToString:@"toggle"]) [_tab grantUserActivationToFrame:_reports.nowPlaying.frame ?: @""];
+  [self callFrame:_reports.nowPlaying.frame ?: @"" kind:@"media" json:JSONText(@{@"action" : action ?: @"", @"seconds" : @(seconds)})];
+}
+
+- (void)seekPictureInPictureBy:(double)seconds {
+  [self thawHiddenPage];
+  NSString *json = JSONText(@{@"action" : @"seekPictureInPictureBy", @"seconds" : @(seconds)});
+  NSArray<NSString *> *frames = ScriptFramesOf(_tab).array;
+  if (!frames.count) return [self callFrame:@"" kind:@"media" json:json];
+  for (NSString *frameId in frames) [self callFrame:frameId kind:@"media" json:json];
 }
 
 @end

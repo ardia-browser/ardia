@@ -19,8 +19,8 @@ function setup() {
   useBrowser.setState((s) => ({
     history: {
       ...s.history,
-      default: [entry("https://zebra.example/one", "Zebra one"), entry("https://zebra.example/two", "Zebra two", 2 * DAY)],
-      [work]: [entry("https://zebra.work/", "Zebra at work")],
+      "": { list: [entry("https://zebra.example/one", "Zebra one"), entry("https://zebra.example/two", "Zebra two", 2 * DAY)], floor: -Infinity, ready: true },
+      [work]: { list: [entry("https://zebra.work/", "Zebra at work")], floor: -Infinity, ready: true },
     },
   }));
   return { w, work };

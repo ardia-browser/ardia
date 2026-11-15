@@ -26,8 +26,8 @@ void AnnounceStrayTab(ArdiaCoreTab *tab, int tries) {
   if (![ArdiaEvents listens:@"extensions"]) return;
   [ArdiaEvents emit:@"extensions.tabs"
                data:@{
-                 @"action" : @"open", @"url" : url ?: @"", @"profile" : ardia_host::ProfileName(tab.profile), @"active" : @YES,
-                 @"window" : NSNull.null, @"extensionId" : @"", @"adoptId" : [ArdiaTabRegistry offerTab:tab prefix:@"tab"]
+                 @"action" : @"adopt", @"url" : url ?: @"", @"profile" : ardia_host::ProfileName(tab.profile),
+                 @"adoptId" : [ArdiaTabRegistry offerTab:tab prefix:@"tab"]
                }];
 }
 
@@ -36,8 +36,8 @@ void HandOffTab(ArdiaCoreTab *tab) {
   if (!profile) return (void)dispatch_async(dispatch_get_main_queue(), ^{ [tab closeNow]; });
   ArdiaWebView *view = [ArdiaWindowController hostingViewForProfile:profile];
   if (view || !profile.offTheRecord) {
-    if (view && ([view.profile isEqualToString:ardia_host::ProfileName(profile)] ||
-                 ardia_host::IsOffTheRecordOf(profile, view.profile)))
+    if (view && (view.visible || ![ArdiaEvents listens:@"extensions"]) &&
+        ([view.profile isEqualToString:ardia_host::ProfileName(profile)] || ardia_host::IsOffTheRecordOf(profile, view.profile)))
       [view openedTab:tab adoptId:[ArdiaTabRegistry offerTab:tab prefix:@"tab"] disposition:@"foreground"];
     else
       AnnounceStrayTab(tab, 0);
@@ -56,12 +56,25 @@ void HandOffTab(ArdiaCoreTab *tab) {
   BOOL _showInactive;
   BOOL _announced;
   __weak ArdiaCoreTab *_chromeActive;
+  id _willCloseObserver;
 }
 
 + (BOOL)userSees:(NSWindow *)window {
   ArdiaWindowController *controller = [self forNSWindow:window];
   if (!controller || controller.stray || controller.standalone) return YES;
   return [[ArdiaWindowFullScreen ofWindow:controller.coreWindow create:YES] seen];
+}
+
++ (void)reconsiderSightOf:(NSWindow *)window {
+  ArdiaWindowController *controller = [self forNSWindow:window];
+  if (!controller || controller.stray || controller.standalone) return;
+  [[ArdiaWindowFullScreen ofWindow:controller.coreWindow create:YES] reconsiderSight];
+}
+
++ (BOOL)userSeesOnlyThroughWindowServer:(NSWindow *)window {
+  ArdiaWindowController *controller = [self forNSWindow:window];
+  if (!controller || controller.stray || controller.standalone) return NO;
+  return [[ArdiaWindowFullScreen ofWindow:controller.coreWindow create:YES] seenOnlyByWindowServer];
 }
 
 + (instancetype)strayWindowForProfile:(ArdiaCoreProfile *)profile {
@@ -130,14 +143,18 @@ NSMutableDictionary<NSString *, ArdiaWindowController *> *ChromeMadeWindows() {
     return;
   }
   if (![ArdiaEvents listens:@"extensions"]) return;
-  NSMutableDictionary *request = [@{
-    @"action" : @"open", @"url" : url ?: @"", @"profile" : ardia_host::ProfileName(tab.profile),
-    @"active" : @(!_chromeActive || _chromeActive == tab), @"window" : NSNull.null, @"extensionId" : @"",
-    @"chromeWindow" : _chromeToken, @"focused" : @(!_showInactive)
-  } mutableCopy];
-  if (moving.length) request[@"tabId"] = moving;
-  else if ([ArdiaTabRegistry viewForTab:tab]) return;
-  else request[@"adoptId"] = [ArdiaTabRegistry offerTab:tab prefix:@"tab"];
+  NSDictionary *request;
+  if (moving.length) {
+    request = @{@"action" : @"moveInto", @"chromeWindow" : _chromeToken, @"tabId" : moving, @"focused" : @(!_showInactive)};
+  } else if ([ArdiaTabRegistry viewForTab:tab]) {
+    return;
+  } else {
+    request = @{
+      @"action" : @"adoptInto", @"chromeWindow" : _chromeToken, @"adoptId" : [ArdiaTabRegistry offerTab:tab prefix:@"tab"],
+      @"url" : url ?: @"", @"profile" : ardia_host::ProfileName(tab.profile), @"active" : @(!_chromeActive || _chromeActive == tab),
+      @"focused" : @(!_showInactive)
+    };
+  }
   _announced = YES;
   [ArdiaEvents emit:@"extensions.tabs" data:request];
 }
@@ -213,14 +230,18 @@ NSMapTable<ArdiaCoreProfile *, ArdiaWindowController *> *StandaloneWindows() {
     _coreWindow = coreWindow;
     coreWindow.delegate = self;
     __weak ArdiaWindowController *weakSelf = self;
-    [NSNotificationCenter.defaultCenter addObserverForName:NSWindowWillCloseNotification
-                                                    object:coreWindow.window
-                                                     queue:nil
-                                                usingBlock:^(NSNotification *) {
-                                                  if (ArdiaWindowController *c = weakSelf) [ArdiaTabStrip windowClosed:c];
-                                                }];
+    _willCloseObserver = [NSNotificationCenter.defaultCenter addObserverForName:NSWindowWillCloseNotification
+                                                                         object:coreWindow.window
+                                                                          queue:nil
+                                                                     usingBlock:^(NSNotification *) {
+                                                                       if (ArdiaWindowController *c = weakSelf) [ArdiaTabStrip windowClosed:c];
+                                                                     }];
   }
   return self;
+}
+
+- (void)dealloc {
+  if (_willCloseObserver) [NSNotificationCenter.defaultCenter removeObserver:_willCloseObserver];
 }
 
 - (ArdiaWebView *)viewFor:(ArdiaCoreTab *)tab {
@@ -257,7 +278,7 @@ NSMapTable<ArdiaCoreProfile *, ArdiaWindowController *> *StandaloneWindows() {
     return ardia_host::OpenPopupWindow(tab, openerView);
   }
   if (openerView) {
-    [openerView openedTab:tab adoptId:[ArdiaTabRegistry offerTab:tab] disposition:ardia_host::AppDisposition(disposition)];
+    [openerView openedLinkTab:tab adoptId:[ArdiaTabRegistry offerTab:tab] disposition:ardia_host::AppDisposition(disposition)];
   } else if (ArdiaWebView *view = [self anyShownViewForProfile:tab.profile]) {
     [view openedTab:tab adoptId:[ArdiaTabRegistry offerTab:tab prefix:@"tab"] disposition:@"foreground"];
   } else {
@@ -336,6 +357,11 @@ NSMapTable<ArdiaCoreProfile *, ArdiaWindowController *> *StandaloneWindows() {
 
 - (void)windowDidCancelClose:(ArdiaCoreWindow *)window {
   NSLog(@"[ardiacore] window close cancelled");
+  [ArdiaWebView retryPagesInWindow:self];
+}
+
+- (void)windowCanTakeTabs:(ArdiaCoreWindow *)window {
+  [ArdiaWebView retryPagesInWindow:self];
 }
 
 - (void)window:(ArdiaCoreWindow *)window confirmCloseWithDownloads:(int)count completion:(void (^)(BOOL))completion {
@@ -343,7 +369,7 @@ NSMapTable<ArdiaCoreProfile *, ArdiaWindowController *> *StandaloneWindows() {
 }
 
 - (BOOL)window:(ArdiaCoreWindow *)window preHandleKeyEvent:(NSEvent *)event {
-  return (IsReservedKey(event) || IsSecondSidebarKeyPress(event)) && [NSApp.mainMenu performKeyEquivalent:event];
+  return ArdiaPerformReservedKey(event);
 }
 
 - (BOOL)window:(ArdiaCoreWindow *)window handleKeyEvent:(NSEvent *)event {

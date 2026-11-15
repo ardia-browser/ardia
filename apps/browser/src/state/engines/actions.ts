@@ -11,6 +11,8 @@ import type { Tab } from "../browser/types";
 import { carrySignInToWebKit, signInCarryOn } from "./engineSignIn";
 import { wantsPage } from "../tabs/tabPages";
 import { webviews } from "../../platform/webviews";
+import { withDeadline } from "../../lib/deadline";
+import { loadedPage, navigationOf } from "../tabs/pageSession";
 
 export type EngineOffer = { site: string; host: string; keySystem: string; canRemember: boolean };
 
@@ -20,6 +22,7 @@ const store = () => useBrowser.getState();
 const declinedSites = new Set<string>();
 const movingTabs = new Set<string>();
 const siteMoves = new Map<string, number>();
+const siteWatches = new Map<string, () => void>();
 const SITE_MOVE_SPACING_MS = 10_000;
 const hostLabel = (site: string) => new URL(site).hostname.replace(/^www\./, "");
 
@@ -33,7 +36,7 @@ const UNSAVED_WORK = `(() => {
 async function hasUnsavedWork(tabId: string): Promise<boolean> {
   const web = webviews.get(tabId);
   if (!web) return false;
-  return (await Promise.race([web.evaluate<boolean>(UNSAVED_WORK), new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500))])) === true;
+  return (await withDeadline(web.evaluate<boolean>(UNSAVED_WORK), 1500, null)) === true;
 }
 
 export function setWebsiteEngine(url: string, engine: PageEngine | null) {
@@ -56,7 +59,7 @@ async function mayLeavePage(t: Tab, title: string, message: string, confirmTitle
   return confirmed;
 }
 
-const pageUrl = (t: Tab | undefined) => t?.url || t?.navigation?.url || "";
+const pageUrl = (t: Tab | undefined) => t?.url || navigationOf(t)?.url || "";
 
 export async function goBackAcrossEngines(tabId: string): Promise<boolean> {
   const back = pageOf(tabId).engineBack;
@@ -67,14 +70,14 @@ export async function goBackAcrossEngines(tabId: string): Promise<boolean> {
   const now = store().tabs[tabId];
   if (!leaving || !now || pageUrl(now) !== from || pageOf(tabId).engineBack !== back) return false;
   patchPage(tabId, { engineBack: null });
-  store().updateTab(tabId, { engine: back.engine, adoptId: undefined, navigation: navigationTo(back.url, true) });
+  store().updateTab(tabId, { engine: back.engine, page: loadedPage(navigationTo(back.url, true)) });
   return true;
 }
 
 export async function openPageIn(tabId: string, engine: PageEngine, options: { rule?: PageEngine | null; checkWork?: boolean } = {}): Promise<boolean> {
   const t = store().tabs[tabId];
   if (!t) return false;
-  const url = t.url || t.navigation?.url || "";
+  const url = t.url || navigationOf(t)?.url || "";
   if (!canSwitchEngine(url)) return false;
   const saveRule = () => options.rule !== undefined && !isIncognitoProfile(t.profileId) && setWebsiteEngine(url, options.rule);
   clearEngineOffer(tabId);
@@ -85,10 +88,10 @@ export async function openPageIn(tabId: string, engine: PageEngine, options: { r
   if (options.checkWork !== false && !(await mayLeavePage(t, `Open this page in ${ENGINE_NAMES[engine]}?`, `The page reloads in ${ENGINE_NAMES[engine]}, so changes you made on it may not be saved.`, `Open in ${ENGINE_NAMES[engine]}`))) return false;
   if (engine === "webkit" && signInCarryOn()) await carrySignInToWebKit(tabId, url);
   const now = store().tabs[tabId];
-  if (!now || (now.url || now.navigation?.url || "") !== url) return false;
+  if (!now || (now.url || navigationOf(now)?.url || "") !== url) return false;
   saveRule();
   if (tabEngine(store(), tabId) === engine) return true;
-  store().updateTab(tabId, wantsPage(now) ? { engine, adoptId: undefined, navigation: navigationTo(now.url || url, true) } : { engine });
+  store().updateTab(tabId, wantsPage(now) ? { engine, page: loadedPage(navigationTo(now.url || url, true)) } : { engine });
   return true;
 }
 
@@ -144,11 +147,17 @@ async function moveForProtectedVideo(tabId: string, site: string) {
     key,
     action: { title: "Move Back", run: () => void (stillThere() && openPageIn(tabId, "chromium", { rule: "chromium" })) },
   });
+  siteWatches.get(tabId)?.();
   const unwatchSite = useBrowser.subscribe((s, prev) => {
     if (s.tabs[tabId] === prev.tabs[tabId] || stillThere()) return;
-    unwatchSite();
+    stopWatch();
     hideKeyedToast(t.windowId, key);
   });
+  const stopWatch = () => {
+    unwatchSite();
+    if (siteWatches.get(tabId) === stopWatch) siteWatches.delete(tabId);
+  };
+  siteWatches.set(tabId, stopWatch);
 }
 
 export function followSiteChoice(tabId: string, engine: PageEngine, url: string, previousUrl: string) {
@@ -162,6 +171,7 @@ export function followSiteChoice(tabId: string, engine: PageEngine, url: string,
   const now = Date.now();
   if (now - (siteMoves.get(tabId) ?? 0) < SITE_MOVE_SPACING_MS) return;
   siteMoves.set(tabId, now);
+  watchClosedTabs();
   void openPageIn(tabId, chosen, { checkWork: false }).then((moved) => {
     if (moved && canSwitchEngine(previousUrl)) patchPage(tabId, { engineBack: { engine, url: previousUrl } });
   });
@@ -184,6 +194,7 @@ function watchClosedTabs() {
       visitedTabs.delete(id);
       visits.close(id);
     }
+    for (const id of siteMoves.keys()) if (!s.tabs[id]) siteMoves.delete(id);
   });
 }
 

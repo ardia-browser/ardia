@@ -1,5 +1,4 @@
 import {
-  Clock,
   emptyScope,
   EXTENSION_PREFIX,
   folderTransport,
@@ -15,15 +14,20 @@ import { engineProfile } from "../browser/model";
 import { historyExpired } from "./adapters";
 import { settingsToReapply } from "./settingsAdapter";
 import { watchExtensionIntents } from "./extensions";
-import { appAdapters, extensionsOf, extensionsSynced, forgetScopeAdapters, profileAdapters } from "./scopeAdapters";
-import { APP_SCOPE, defaultTypes, emptyDoc, type DataType, type SyncDoc, type SyncUi } from "./syncDoc";
+import { appAdapters, extensionsOf, forgetScopeAdapters, profileAdapters, typeSynced } from "./scopeAdapters";
+import { APP_SCOPE, defaultTypes, emptyDoc, type DataType, type SendTarget, type SyncDoc, type SyncUi } from "./syncDoc";
 import { syncFiles } from "./syncFiles";
-import { confirmThemes, settleAppliedThemes } from "./syncThemes";
+import { settleThemeAdoption, themeChosenHere } from "./syncThemes";
+import { editClock, startEditClock } from "./editClock";
 import { addLinkedProfile, appScopeOf, linkedProfileId, linkProfiles, readyToPair, remoteProfileRecord, sharedDataChain } from "./profileLinks";
 import { summarize } from "./syncSummary";
 import { profileScope } from "./records";
-import { onAppEvent } from "../../platform/app";
+import { queueSend, sendTargetsIn } from "./sentTabs";
 import { errorText } from "../../lib/errors";
+import { isQuitting, saveBeforeQuit } from "../app/quit";
+import { onProfilesOpened, profileOpened } from "../profiles/profileLoading";
+
+export { onTabsReceived } from "./sentTabs";
 
 const CYCLE_MS = 15_000;
 const AFTER_EDIT_MS = 3_000;
@@ -48,9 +52,22 @@ export const currentSyncFolder = () => useSync.getState().folder;
 let doc: SyncDoc = emptyDoc();
 let cycle: Promise<void> | null = null;
 let again = false;
+let forcePasswordsNext = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
-let forcePasswords = false;
-const { read, loadState, persistJournal, watchScope, clearJournal, save, checkpoint } = syncFiles(() => doc);
+let snapshotWrites = { count: 0, bytes: 0 };
+const { read, loadState, persistJournal, watchScope, save, startOver, checkpoint } = syncFiles(() => doc);
+
+function noteSnapshot({ snapshotBytes }: { snapshotBytes: number }) {
+  if (!snapshotBytes) return;
+  snapshotWrites.count++;
+  snapshotWrites.bytes += snapshotBytes;
+}
+
+export function takeSnapshotWrites() {
+  const taken = snapshotWrites;
+  snapshotWrites = { count: 0, bytes: 0 };
+  return taken;
+}
 
 function load() {
   const loaded = read();
@@ -71,9 +88,10 @@ function publishUi(patch: Partial<SyncUi> = {}) {
 }
 
 function watchExtensions() {
-  if (!doc.enabled || !doc.types.extensions) return;
+  if (!doc.enabled) return;
   const s = useBrowser.getState();
-  const profiles = [...new Set(Object.entries(doc.profiles).filter(([id, l]) => l.enabled && s.profiles[id] && !s.profiles[id]!.dataId).map(([id]) => engineProfile(s, id)))];
+  const watched = Object.entries(doc.profiles).filter(([id, l]) => l.enabled && s.profiles[id] && typeSynced(doc, "extensions", id));
+  const profiles = [...new Set(watched.map(([id]) => engineProfile(s, id)))].filter((engine) => profileOpened(engine));
   if (profiles.length) watchExtensionIntents(profiles);
 }
 
@@ -84,16 +102,20 @@ function scheduleSync(delay = AFTER_EDIT_MS) {
 }
 
 export async function syncNow() {
-  forcePasswords = true;
-  await runCycle();
+  await runCycle({ forcePasswords: true });
 }
 
-async function runCycle(options: { retiring?: boolean } = {}) {
+type CycleOptions = { retiring?: boolean; forcePasswords?: boolean };
+
+async function runCycle({ retiring = false, forcePasswords = false }: CycleOptions = {}) {
   if (!SyncNative || !doc.enabled || !doc.folder || !doc.deviceId) return;
   if (cycle) {
     again = true;
+    forcePasswordsNext ||= forcePasswords;
     return;
   }
+  const options = { retiring, forcePasswords: forcePasswords || forcePasswordsNext };
+  forcePasswordsNext = false;
   cycle = cycleOnce(SyncNative, doc.folder, doc.deviceId, options);
   try {
     await cycle;
@@ -102,7 +124,7 @@ async function runCycle(options: { retiring?: boolean } = {}) {
   }
 }
 
-async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string, device: string, { retiring = false }) {
+async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string, device: string, { retiring, forcePasswords }: Required<CycleOptions>) {
   clearTimeout(timer);
   const slow = setTimeout(() => useSync.getState().status === "updated" && publishUi({ status: "updating" }), 1000);
   try {
@@ -111,26 +133,25 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
     if (status === "unavailable") return publishUi({ status: "offline", error: null });
     if (status === "missing") return await resetFromElsewhere();
     const transport = folderTransport(native, folder);
-    const clock = new Clock(device, doc.clock);
+    if (editClock().device !== device) startEditClock(device, doc.clock);
+    const clock = editClock();
     const app = appScopeOf(doc);
     const appSettled = watchScope(APP_SCOPE, app, clock);
-    settleAppliedThemes(doc.profiles, app);
-    if (doc.types.settings && !retiring) app.unapplied = [...new Set([...app.unapplied, ...settingsToReapply(app.records)])];
     try {
-      await syncScope({
+      noteSnapshot(await syncScope({
         scope: APP_SCOPE,
         state: app,
         transport,
-        adapters: appAdapters(doc, retiring, themeAdopted),
+        adapters: appAdapters(doc, retiring),
         clock,
         device,
-        options: { persist: persistJournal(APP_SCOPE) },
-      });
+        options: { persist: persistJournal(APP_SCOPE), holdApply: isQuitting },
+      }));
     } finally {
       await appSettled();
     }
-    if (app.joined && readyToPair(doc, app)) linkProfiles(doc, app);
-    confirmThemes(doc.profiles, app);
+    if (app.joined && readyToPair(doc, app) && !isQuitting()) linkProfiles(doc, app);
+    settleThemeAdoption(doc.profiles, app, true);
     let pending = app.pending;
     const s = useBrowser.getState();
     for (const [profileId, link] of Object.entries(doc.profiles)) {
@@ -141,35 +162,35 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
       const state = (doc.scopes[scope] ??= emptyScope());
       const settled = watchScope(scope, state, clock);
       try {
-        await syncScope({
+        noteSnapshot(await syncScope({
           scope,
           state,
           transport,
-          adapters: profileAdapters(doc, profileId, retire, () => forcePasswords),
+          adapters: profileAdapters(doc, profileId, retire, forcePasswords),
           clock,
           device,
-          options: { expired: historyExpired, persist: persistJournal(scope) },
-        });
+          options: { expired: historyExpired, persist: persistJournal(scope), holdApply: isQuitting },
+        }));
       } finally {
         await settled();
       }
       pending += state.pending;
-      if (!retire && extensionsSynced(doc, profileId)) await extensionsOf(profileId).reconcile(visible(state, EXTENSION_PREFIX), Date.now());
+      if (!retire && !isQuitting() && typeSynced(doc, "extensions", profileId) && profileOpened(engineProfile(useBrowser.getState(), profileId))) await extensionsOf(profileId).reconcile(visible(state, EXTENSION_PREFIX), Date.now(), isQuitting);
       if (retire) {
         delete link.retire;
         if (!exists) {
           delete doc.scopes[scope];
+          delete doc.sends?.[scope];
           delete doc.profiles[profileId];
         }
       }
     }
     doc.clock = clock.last;
     doc.lastSyncedAt = Date.now();
-    forcePasswords = false;
     publishUi({ status: "updated", error: null, pending });
   } catch (error) {
     if ((error as { code?: unknown } | null)?.code === "ERR_SYNC_FOLDER_UNREADABLE") {
-      publishUi({ status: "offline", error: errorText(error) });
+      publishUi({ status: "offline", error: "The sync folder can’t be read. Check that it’s still there and that Ardia can open it." });
     } else {
       console.warn("[sync] cycle failed", error);
       publishUi({ status: "stalled", error: errorText(error) });
@@ -188,24 +209,24 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
   }
 }
 
-function themeAdopted(profileId: string) {
-  const link = doc.profiles[profileId];
-  if (link?.themeAdopting) delete link.themeAdopting;
-}
-
 export function adoptProfileTheme(profileId: string) {
-  const link = doc.profiles[profileId];
-  if (!link?.themeAdopting) return;
-  delete link.themeAdopting;
+  if (!themeChosenHere(doc.profiles[profileId])) return;
   save();
   if (doc.enabled) scheduleSync(AFTER_EDIT_MS);
+}
+
+async function loadSavedState() {
+  await loadState();
+  startEditClock(doc.deviceId ?? "", doc.clock);
+  const app = doc.scopes[APP_SCOPE];
+  if (app) app.unapplied = [...new Set([...app.unapplied, ...settingsToReapply(app.records)])];
+  settleThemeAdoption(doc.profiles, app, false);
 }
 
 async function resetFromElsewhere() {
   await SyncNative?.forget(doc.deviceId!);
   doc = { ...emptyDoc(), folder: doc.folder, types: doc.types };
-  clearJournal();
-  save({ stateNow: true });
+  startOver();
   publishUi({ status: "reset", error: "This device is out of sync. Sync may have been reset from another device." });
 }
 
@@ -228,8 +249,7 @@ export async function chooseSyncFolder(): Promise<string | null> {
 
 function begin(folder: string, deviceId: string, joining: boolean) {
   doc = { ...emptyDoc(), types: doc.types, enabled: true, folder, deviceId, setupAt: Date.now(), joining };
-  clearJournal();
-  save({ stateNow: true });
+  startOver();
   publishUi({ status: "starting", error: null });
   scheduleSync(0);
 }
@@ -255,7 +275,7 @@ export async function enterRecoveryPhrase(folder: string, text: string): Promise
   if (doc.enabled && doc.deviceId && useSync.getState().status === "locked") {
     const result = await native.enterPhrase(doc.deviceId, text, doc.folder ?? folder);
     if ("ok" in result) {
-      await loadState();
+      await loadSavedState();
       publishUi({ status: "starting", error: null });
       scheduleSync(0);
     }
@@ -271,8 +291,9 @@ export async function stopSync({ deleteData = false } = {}) {
   const native = SyncNative;
   if (!native || !doc.enabled) return;
   clearTimeout(timer);
-  while (cycle) await cycle;
-  if (useSync.getState().status !== "locked") await runCycle({ retiring: true });
+  const reportFailure = (error: unknown) => console.warn("[sync] the last cycle before stopping failed", error);
+  while (cycle) await cycle.catch(reportFailure);
+  if (useSync.getState().status !== "locked") await runCycle({ retiring: true }).catch(reportFailure);
   clearTimeout(timer);
   const folder = doc.folder;
   if (deleteData && folder) {
@@ -285,8 +306,7 @@ export async function stopSync({ deleteData = false } = {}) {
   if (doc.deviceId) await native.forget(doc.deviceId);
   doc = { ...emptyDoc(), folder, types: doc.types };
   forgetScopeAdapters();
-  clearJournal();
-  save({ stateNow: true });
+  startOver();
   publishUi({ status: "off", error: null });
 }
 
@@ -300,12 +320,22 @@ export function setTypeSynced(type: DataType, enabled: boolean) {
 export function setProfileSynced(profileId: string, enabled: boolean) {
   const link = doc.profiles[profileId];
   if (!link) return;
-  doc.profiles[profileId] = enabled
-    ? { syncId: link.syncId, enabled, ...(link.themeAdopting ? { themeAdopting: true as const } : {}) }
-    : { ...link, enabled, retire: true };
+  const { retire: _retire, ...kept } = link;
+  doc.profiles[profileId] = enabled ? { ...kept, enabled } : { ...link, enabled, retire: true };
   save();
   publishUi();
   scheduleSync(0);
+}
+
+export function sendTargets(profileId: string): SendTarget[] {
+  return useSync.getState().status === "locked" ? [] : sendTargetsIn(doc, profileId);
+}
+
+export function sendTab(tabId: string, deviceId: string): boolean {
+  if (useSync.getState().status === "locked" || !queueSend(doc, tabId, deviceId)) return false;
+  save();
+  scheduleSync(0);
+  return true;
 }
 
 export const appScopeRecords = () => doc.scopes[APP_SCOPE]?.records ?? {};
@@ -328,15 +358,24 @@ export function startSync() {
   publishUi({ status: doc.enabled ? "starting" : "off" });
   watchExtensions();
   if (doc.enabled && doc.deviceId) {
-    void SyncNative.unlock(doc.deviceId).then(async (ok) => {
-      if (!ok) return publishUi({ status: "locked", error: "Enter your recovery phrase to keep syncing on this Mac." });
-      await loadState();
-      settleAppliedThemes(doc.profiles, doc.scopes[APP_SCOPE]);
-      publishUi();
-      scheduleSync(500);
-    });
+    void SyncNative.unlock(doc.deviceId)
+      .then(async (ok) => {
+        if (!ok) return publishUi({ status: "locked", error: "Enter your recovery phrase to keep syncing on this Mac." });
+        await loadSavedState();
+        publishUi();
+        scheduleSync(500);
+      })
+      .catch((error: unknown) => {
+        console.warn("[sync] unlocking at launch failed", error);
+        publishUi({ status: "stalled", error: errorText(error) });
+      });
   }
-  onAppEvent((e) => e.type === "willQuit" && checkpoint());
+  saveBeforeQuit(checkpoint);
+  onProfilesOpened(() => {
+    if (!doc.enabled || !doc.deviceId) return;
+    watchExtensions();
+    scheduleSync();
+  });
   useBrowser.subscribe((s, prev) => {
     if (!doc.enabled || cycle) return;
     if (s.bookmarks !== prev.bookmarks || s.settings !== prev.settings || s.profiles !== prev.profiles || s.groups !== prev.groups) scheduleSync();

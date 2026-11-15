@@ -13,6 +13,7 @@ final class DockSelection: ExpoView {
   var iconSize: Double = 16 { didSet { apply() } }
   var glass = false { didSet { if glass != oldValue { apply() } } }
   var colorRing = false { didSet { if colorRing != oldValue { apply() } } }
+  var outline = false { didSet { if outline != oldValue { apply() } } }
 
   private let tile = CALayer()
   private let background = CALayer()
@@ -91,9 +92,9 @@ final class DockSelection: ExpoView {
       layer.insertSublayer(sheen, above: hue)
       layer.insertSublayer(rim, above: sheen)
     }
-    for dia in [tile, icon] { dia.isHidden = glass }
+    for dia in [tile, icon] { dia.isHidden = glass || outline }
     ring.isHidden = glass && !colorRing
-    for glassLayer in [hue, sheen] { glassLayer.isHidden = !glass }
+    for glassLayer in [hue, sheen] { glassLayer.isHidden = !glass || outline }
     lift.isHidden = !glass || colorRing
     rim.isHidden = !glass || colorRing
     let radius = min(cornerRadius, bounds.width / 2)
@@ -146,12 +147,19 @@ final class DockSelection: ExpoView {
     } else {
       ring.mask = nil
       ring.backgroundColor = nil
+      let opaque = ringStroke
       ring.borderWidth = width
-      ring.borderColor = (stroke ?? .white).cgColor
-      ring.compositingFilter = stroke == nil ? CIFilter(name: "CISoftLightBlendMode") : nil
+      ring.borderColor = opaque ?? NSColor.white.cgColor
+      ring.compositingFilter = opaque == nil ? CIFilter(name: "CISoftLightBlendMode") : nil
       ringImage.contents = nil
       ringImage.isHidden = true
     }
+  }
+
+  private var ringStroke: CGColor? {
+    if let stroke { return stroke.cgColor }
+    guard !glass, kind == "template", let fill, IconTheme.needsOpaqueRing(fill.cgColor) else { return nil }
+    return IconTheme.ringOnBlack
   }
 
   private func applyGlass(radius: CGFloat, rimWidth: CGFloat, big: CGRect) {
@@ -180,7 +188,7 @@ final class DockSelection: ExpoView {
     hueImage.frame = big.offsetBy(dx: -bounds.minX, dy: -bounds.minY)
     hueImage.contents = glow
     hue.backgroundColor = color
-    hue.isHidden = glow == nil && color == nil
+    hue.isHidden = outline || (glow == nil && color == nil)
     hue.opacity = dark ? 0.35 : 0.3
 
     sheen.colors = [NSColor.white.withAlphaComponent(dark ? 0.12 : 0.4).cgColor, NSColor.white.withAlphaComponent(0).cgColor]

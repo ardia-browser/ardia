@@ -6,6 +6,7 @@ import { isPeekTab } from "../peek/peek";
 import type { Tab } from "../browser/types";
 import { withoutFragment } from "../../lib/url";
 import { launchFavicons, seedFavicons, type LaunchFavicons } from "../favicons/launchFavicons";
+import { isRegularWindow } from "./small";
 
 const DOCUMENT = "launch-look.json";
 const VERSION = 2;
@@ -25,7 +26,7 @@ function savedTabs(s: BrowserState): Tab[] {
   const windowIds = [...new Set([...s.ui.focusOrder, ...s.windowOrder])];
   return windowIds.flatMap((id) => {
     const w = s.windows[id];
-    if (!w || w.incognito || w.kind === "small") return [];
+    if (!isRegularWindow(w)) return [];
     return w.tabIds.map((tabId) => s.tabs[tabId]).filter((t): t is Tab => !!t && !!t.url && !isIncognitoProfile(t.profileId) && !isPeekTab(s, t.id));
   });
 }

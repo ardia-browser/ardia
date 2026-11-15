@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const { viewTabIds } = await import("../browser/model.ts");
+const { splitTabIdsOf } = await import("../splits/splits.ts");
 
 const S = () => useBrowser.getState();
 const host = (id) => new URL(S().tabs[id].url).hostname.replace(".com", "");
@@ -63,10 +64,10 @@ for (const shared of [false, true]) {
     const { w, ids } = windowWith("a", "b", "c");
     if (shared) S().createWindow({ url: "https://x.com/" }), S().updateSettings({ shareTabsAcrossWindows: true });
     const work = S().createProfile({ name: "Work" });
-    S().navigated(ids[1], { url: "https://b.com/home", title: "B" }, {});
+    S().updateTab(ids[1], { url: "https://b.com/home", title: "B" }, {});
     const g = S().groupTabs([ids[1], ids[2]], { name: "Docs" });
     assert.equal(S().tabs[ids[1]].pinnedUrl, "https://b.com/home");
-    S().navigated(ids[1], { url: "https://b.com/away", title: "B" }, {});
+    S().updateTab(ids[1], { url: "https://b.com/away", title: "B" }, {});
     S().moveGroupToProfile(g, work);
     const moved = Object.values(S().groups).find((x) => x.windowId === w && x.profileId === work && x.name === "Docs");
     assert.ok(moved, "the group is in the profile");
@@ -101,21 +102,21 @@ for (const nested of [false, true]) {
 const splitIn = (win) =>
   Object.values(S().splits)
     .filter((v) => v.windowId === win)
-    .map((v) => ({ tabs: v.tabIds.map(host), orientation: v.orientation, sizes: v.sizes, stack: v.stack ?? null }));
+    .map((v) => ({ tabs: splitTabIdsOf(v).map(host), orientation: v.orientation, slots: v.slots.map((x) => [x.size, x.stackSizes ?? null]) }));
 
 for (const to of ["window", "profile"]) {
   test(`Move to ${to === "window" ? "Window" : "Profile"} keeps a split inside the group, panes, orientation, sizes and stack`, () => {
     const { w, ids } = windowWith("a", "b", "c", "d", "e");
     const g = S().groupTabs([ids[1], ids[2], ids[3], ids[4]], { name: "Trip", pinned: false });
     const sp = S().createSplit([ids[2], ids[1], ids[3]], "vertical");
-    useBrowser.setState((s) => ({ splits: { ...s.splits, [sp]: { ...s.splits[sp], sizes: [0.6, 0.4], stack: { index: 1, sizes: [0.3, 0.7] } } } }));
+    useBrowser.setState((s) => ({ splits: { ...s.splits, [sp]: { ...s.splits[sp], slots: [{ size: 0.6, tabId: ids[2] }, { size: 0.4, stack: [ids[1], ids[3]], stackSizes: [0.3, 0.7] }] } } }));
     const before = splitIn(w);
     let dest = w;
     if (to === "window") dest = S().createWindow({ url: "https://x.com/" }), S().moveGroupToWindow(g, dest);
     else S().moveGroupToProfile(g, S().createProfile({ name: "Work" }));
     const kept = before.find((v) => v.tabs.join() === "c,b,d");
     assert.deepEqual(splitIn(dest).filter((v) => v.tabs.join() === "c,b,d"), [kept]);
-    assert.ok(Object.values(S().splits).every((v) => v.tabIds.every((id) => S().tabs[id].windowId === v.windowId)));
+    assert.ok(Object.values(S().splits).every((v) => splitTabIdsOf(v).every((id) => S().tabs[id].windowId === v.windowId)));
   });
 }
 

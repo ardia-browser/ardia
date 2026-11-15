@@ -1,5 +1,6 @@
 import { capture } from "./telemetry";
 import { sentLink } from "../data/release";
+import { pagePath } from "../data/site";
 
 const LINK = sentLink("share");
 const DATA: ShareData = { url: LINK, title: "Ardia", text: "Ardia: real Chromium for the Mac. Open this on your Mac." };
@@ -76,7 +77,7 @@ if (root.dataset.device === "phone") {
       e.preventDefault();
       report(link.dataset.trackLocation ?? null, "panel");
       if (!main) {
-        location.href = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/#send`;
+        location.href = `${pagePath("home")}#send`;
         return;
       }
       main.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });

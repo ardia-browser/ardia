@@ -1,4 +1,4 @@
-import type { MenuItem } from "../../platform/menus";
+import type { ChoiceItem } from "../app/menuChoice";
 import { menuSections } from "../app/menuSections";
 
 export type TranslateMenuState = {
@@ -8,17 +8,19 @@ export type TranslateMenuState = {
   neverTranslate: boolean | null;
 };
 
-export function translateMenuItems({ translated, target, languages, neverTranslate }: TranslateMenuState): MenuItem[] {
-  return menuSections(
+export type TranslateMenuItem = ChoiceItem<{ language: string }, "original" | "translate" | "choose" | "never">;
+
+export function translateMenuItems({ translated, target, languages, neverTranslate }: TranslateMenuState): TranslateMenuItem[] {
+  return menuSections<TranslateMenuItem>(
     [
-      translated ? { id: "original", title: "Show Original", symbol: "arrow.uturn.backward" } : { id: "translate", title: `Translate to ${target}`, symbol: "translate" },
+      translated ? { id: "original" as const, title: "Show Original", symbol: "arrow.uturn.backward" } : { id: "translate" as const, title: `Translate to ${target}`, symbol: "translate" },
       languages.length > 0 && {
-        id: "choose",
+        id: "choose" as const,
         title: "Choose Another Language",
         symbol: "globe",
-        children: languages.map((l) => ({ id: `language:${l.id}`, title: l.name, checked: l.current })),
+        children: languages.map((l) => ({ value: { language: l.id }, title: l.name, checked: l.current })),
       },
     ],
-    [neverTranslate !== null && { id: "never", title: "Never Translate This Site", checked: neverTranslate }],
+    [neverTranslate !== null && { id: "never" as const, title: "Never Translate This Site", checked: neverTranslate }],
   );
 }

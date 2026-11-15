@@ -4,15 +4,20 @@ import { prompt } from "../../platform/dialogs";
 import { showMenu, type MenuItem } from "../../platform/menus";
 import { closeTab } from "../browser/actions";
 import { calendarConnected, connectCalendar, setCalendarHidden, useCalendar } from "../live/calendar";
-import { deleteLiveFolder, manualRefresh, newLiveFolder, openLiveItem, refreshFolder, statusText } from "../live/engine";
+import { deleteLiveFolder, liveTabAway, manualRefresh, newLiveFolder, openLiveItem, refreshFolder, returnLiveTab, statusText } from "../live/engine";
 import { ALERT_LEADS, nowBadgeEvent } from "../live/meetings";
 import { SOURCES } from "../live/sources";
-import { dismissNowBadge, hideItems, live, markRead, markUnread, updateCalendarSettings, updateFolder } from "../live/store";
+import { dismissNowBadge, live, markRead, markUnread, setRepoHidden, updateCalendarSettings, updateFolder } from "../live/store";
+import { folderRepos, setShowNewRepos, showAllRepos } from "../live/repoFilter";
+import { noteLiveFolderColorPick, noteLiveRepoMenuPick } from "../telemetry/liveHides";
 import type { LiveItem, LiveSourceId } from "../live/types";
+import type { GroupColor } from "../browser/types";
+import { groupColorItems } from "./groupMenu";
 import { useBrowser } from "../browser/store";
 import { openSettings } from "../settings/settingsWindows";
-import { openIconPicker } from "../sidebar/actions";
-import { LIVE, moveLiveFolder, pinnedSequence } from "./pinnedOrder";
+import { openIconPicker } from "./actions";
+import { moveLiveFolder, pinnedSequence } from "./pinnedOrder";
+import { entryKey } from "./entryKey";
 import { activeTabId } from "../browser/model";
 import { hintWhen, sections, sep, withAlternate } from "./menuParts";
 
@@ -45,8 +50,25 @@ function folderPlace(windowId: string, folderId: string) {
   const s = live();
   const folder = s.folders[folderId]!;
   const sequence = pinnedSequence(useBrowser.getState(), s.folders, s.folderOrder, windowId, folder.profileId);
-  const index = sequence.indexOf(`${LIVE}${folderId}`);
+  const index = sequence.indexOf(entryKey("live", folderId));
   return { canMoveUp: index > 0, canMoveDown: index >= 0 && index < sequence.length - 1 };
+}
+
+const COLOR_CHOICE = "color:";
+const NEUTRAL_CHOICE = "neutral";
+
+function folderColorItems(current: GroupColor | null): MenuItem[] {
+  return groupColorItems(current, null, false).flatMap((item): MenuItem[] => {
+    if ("separator" in item) return [item];
+    if (!("value" in item)) return [];
+    const { value, ...look } = item;
+    return [{ ...look, id: `${COLOR_CHOICE}${(value.kind === "color" && value.color) || NEUTRAL_CHOICE}` }];
+  });
+}
+
+function chosenColor(choice: string): GroupColor | null {
+  const color = choice.slice(COLOR_CHOICE.length);
+  return color === NEUTRAL_CHOICE ? null : (color as GroupColor);
 }
 
 export function liveFolderMenuItems(windowId: string, folderId: string): MenuItem[] {
@@ -55,6 +77,13 @@ export function liveFolderMenuItems(windowId: string, folderId: string): MenuIte
   if (!folder) return [];
   const { canMoveUp, canMoveDown } = folderPlace(windowId, folderId);
   const pr = folder.kind === "pullRequests";
+  const hiddenRepos = new Set(folder.hiddenRepos);
+  const repos = folderRepos(folderId).map((key) => {
+    const [source, name] = key.split(/:(.*)/) as [LiveSourceId, string];
+    return { key, source, name };
+  });
+  const oneSource = new Set(repos.map((r) => r.source)).size <= 1;
+  repos.sort((a, b) => a.name.localeCompare(b.name) || a.source.localeCompare(b.source));
   return sections(
     [
       { id: "status", title: statusText(folderId), enabled: false },
@@ -65,6 +94,19 @@ export function liveFolderMenuItems(windowId: string, folderId: string): MenuIte
       ? [
           { id: "filter:authored", title: "Created by Me", checked: folder.filters.authored },
           { id: "filter:reviewRequests", title: "Awaiting My Review", checked: folder.filters.reviewRequests },
+          {
+            id: "repos",
+            title: "Repositories",
+            enabled: repos.length > 0,
+            children: sections(
+              [
+                { id: "repos:all", title: "Show All Repositories", enabled: hiddenRepos.size > 0, keepOpen: true },
+                { id: "repos:none", title: "Hide All Repositories", enabled: repos.some((r) => !hiddenRepos.has(r.key)), keepOpen: true },
+              ],
+              repos.map((r) => ({ id: `repo:${r.key}`, title: oneSource ? r.name : `${r.name} (${SOURCES[r.source].name})`, checked: !hiddenRepos.has(r.key), keepOpen: true })),
+              [{ id: "repos:new", title: "Show New Repositories", checked: folder.showNewRepos, keepOpen: true }],
+            ),
+          },
         ]
       : [],
     pr
@@ -93,15 +135,41 @@ export function liveFolderMenuItems(windowId: string, folderId: string): MenuIte
     [
       { id: "rename", title: "Rename…", symbol: "pencil" },
       { id: "icon", title: folder.icon ? "Change Icon…" : "Add Icon…", symbol: "photo" },
+      { id: "color", title: "Color", symbol: "paintpalette", children: folderColorItems(folder.color ?? null) },
     ],
     [{ id: "delete", title: "Delete Live Folder", symbol: "trash" }],
   );
 }
 
+function runRepoChoice(folderId: string, choice: string): boolean {
+  const folder = live().folders[folderId];
+  if (!folder) return false;
+  if (choice === "repos:all") {
+    showAllRepos(folderId);
+    return true;
+  }
+  if (choice === "repos:none") folderRepos(folderId).filter((repo) => !folder.hiddenRepos.includes(repo)).forEach((repo) => setRepoHidden(folderId, repo, true));
+  else if (choice === "repos:new") setShowNewRepos(folderId, !folder.showNewRepos);
+  else if (choice.startsWith("repo:")) {
+    const repo = choice.slice(5);
+    const show = folder.hiddenRepos.includes(repo);
+    setRepoHidden(folderId, repo, !show);
+    return show;
+  }
+  return false;
+}
+
 export async function openLiveFolderMenu(windowId: string, folderId: string) {
   const folder = live().folders[folderId];
   if (!folder) return;
-  const choice = await showMenu(liveFolderMenuItems(windowId, folderId));
+  let showedRepo = false;
+  const choice = await showMenu(liveFolderMenuItems(windowId, folderId), (picked) => {
+    showedRepo = runRepoChoice(folderId, picked) || showedRepo;
+    noteLiveRepoMenuPick(picked, !!live().folders[folderId]?.showNewRepos);
+    return liveFolderMenuItems(windowId, folderId);
+  });
+  if (choice?.startsWith("repo")) showedRepo = runRepoChoice(folderId, choice) || showedRepo;
+  if (showedRepo) queueMicrotask(() => void refreshFolder(folderId));
   if (!choice) return;
   const option = FOLDER_OPTIONS.find((key) => choice === `option:${key}`);
   if (choice === "refresh") void manualRefresh(folderId);
@@ -120,6 +188,11 @@ export async function openLiveFolderMenu(windowId: string, folderId: string) {
     const name = await prompt({ title: "Rename Live Folder", value: folder.name, placeholder: "Live folder name", confirmTitle: "Rename", windowId });
     if (name?.trim()) updateFolder(folderId, { name: name.trim() });
   } else if (choice === "icon") void openIconPicker(windowId, { kind: "live", id: `livefolder|${folderId}` });
+  else if (choice.startsWith(COLOR_CHOICE)) {
+    const color = chosenColor(choice);
+    noteLiveFolderColorPick();
+    updateFolder(folderId, { color });
+  }
   else if (choice === "read") markRead(folderId);
   else if (choice === "up") moveLiveFolder(windowId, folderId, -1);
   else if (choice === "down") moveLiveFolder(windowId, folderId, 1);
@@ -134,12 +207,10 @@ export function liveItemMenuItems(windowId: string, folderId: string, item: Live
     [
       { id: "open", title: tabId ? "Show Tab" : "Open", symbol: "arrow.up.forward.square" },
       { id: "background", title: "Open in Background", enabled: !tabId },
+      ...(tabId ? [{ id: "backToPin", title: "Back to Pinned URL", symbol: "arrow.uturn.backward", enabled: liveTabAway(tabId), ...hintWhen(shown, "returnToPinnedUrl") }] : []),
     ],
     withAlternate({ id: "copy", title: "Copy Link", symbol: "link" }, { id: "copyMd", title: "Copy Link as Markdown", symbol: "link" }, null),
-    [
-      { id: "unread", title: unread ? "Mark as Read" : "Mark as Unread", symbol: unread ? "circle" : "circle.fill" },
-      ...(item.pr ? [{ id: "hide", title: "Hide Until Refresh", symbol: "eye.slash" }] : []),
-    ],
+    [{ id: "unread", title: unread ? "Mark as Read" : "Mark as Unread", symbol: unread ? "circle" : "circle.fill" }],
     tabId ? [{ id: "close", title: "Close", symbol: "xmark", ...hintWhen(shown, "closeTab") }] : [],
   );
 }
@@ -148,19 +219,14 @@ export async function openLiveItemMenu(windowId: string, folderId: string, item:
   const unread = !!live().unread[folderId]?.includes(item.id);
   const choice = await showMenu(liveItemMenuItems(windowId, folderId, item, tabId));
   if (choice === "open") openLiveItem(windowId, folderId, item);
+  else if (choice === "backToPin" && tabId) returnLiveTab(tabId);
   else if (choice === "background") openLiveItem(windowId, folderId, item, { background: true });
   else if (choice === "copy") copyText(cleanUrl(item.url));
   else if (choice === "copyMd") copyText(markdownLink(item.title, item.url));
   else if (choice === "unread") {
     if (unread) markRead(folderId, [item.id]);
     else markUnread(folderId, item.id);
-  } else if (choice === "hide") hideItems(folderId, [item]);
-  else if (choice === "close" && tabId) void closeTab(tabId);
-}
-
-export async function openLiveStackMenu(folderId: string, stackId: string) {
-  const choice = await showMenu([{ id: "hide", title: "Hide Stack Until Refresh", symbol: "eye.slash" }]);
-  if (choice === "hide") hideItems(folderId, (live().items[folderId] ?? []).filter((it) => it.pr?.stack?.id === stackId));
+  } else if (choice === "close" && tabId) void closeTab(tabId);
 }
 
 const DISMISS_NOW = "cal:dismissNow:";

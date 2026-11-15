@@ -1,5 +1,7 @@
 import { setContentBlockerEnabled, setFilterListEnabled, type ContentBlockerState, type FilterListCategory } from "../../platform/contentBlocker";
 
+export const blockerAvailable = (s: ContentBlockerState | null): s is ContentBlockerState => !!s && s.stats.ready !== false && s.lists.length > 0;
+
 export const categoryOn = (s: ContentBlockerState, category: FilterListCategory) => s.enabled && s.lists.some((l) => l.category === category && l.enabled);
 
 async function setLists(s: ContentBlockerState, ids: string[], on: boolean) {
@@ -17,3 +19,29 @@ export function setBlockingCategory(s: ContentBlockerState, category: FilterList
 }
 
 export const setFilterList = (s: ContentBlockerState, id: string, on: boolean) => setLists(s, [id], on);
+
+const LIST_ADDRESS_LIMIT = 2048;
+
+export function filterListAddress(typed: string): string | null {
+  const text = typed.trim();
+  if (!text || text.length > LIST_ADDRESS_LIMIT || /\s/.test(text)) return null;
+  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(text) ? text : `https://${text}`;
+  try {
+    const url = new URL(withScheme);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    if (!url.hostname.includes(".") && url.hostname !== "localhost") return null;
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
+export function filterListLabel(id: string, title: string): string {
+  if (title && title !== id) return title;
+  try {
+    const url = new URL(id);
+    return `${url.hostname}${url.pathname === "/" ? "" : url.pathname}`;
+  } catch {
+    return id;
+  }
+}

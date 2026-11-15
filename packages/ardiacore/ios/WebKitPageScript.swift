@@ -84,6 +84,7 @@ enum WebKitPageScript {
       hasVideo: m.tagName === "VIDEO" && m.videoWidth > 0,
       actions: pageActions,
       controllable: fromSession !== "none" || !(m.duration > 0 && m.duration <= 5),
+      loop: !pagePosition && m.loop,
     });
   };
   const schedule = () => {
@@ -132,6 +133,18 @@ enum WebKitPageScript {
     },
     true,
   );
+  const mediaFaultSites = \#(WebKitMediaFaults.sitesJSON);
+  if (location.protocol === "https:" && mediaFaultSites.some((site) => location.hostname === site || location.hostname.endsWith("." + site))) {
+    let faultsRelayed = 0;
+    document.addEventListener(
+      "ardia:media-fault",
+      (e) => {
+        if (typeof e.detail !== "string" || e.detail.length > 64 || ++faultsRelayed > 200) return;
+        post("mediaFault", { reason: e.detail });
+      },
+      true,
+    );
+  }
   const knownActions = ["play", "pause", "stop", "seekbackward", "seekforward", "seekto", "previoustrack", "nexttrack", "skipad", "enterpictureinpicture"];
   document.addEventListener(
     "ardia:media-session",
@@ -196,27 +209,111 @@ enum WebKitPageScript {
   addEventListener("load", sendIcons, { once: true });
 
   if (isTop) {
-    let anchor = 0;
-    let sent = null;
+    const scrollDirection = () => {
+      const DOWN = 24, UP = 12, MIN_RANGE = 120, SETTLE = 300, GESTURE = 300;
+      const paged = (snap, vertical) => {
+        const [axis, strictness] = snap.split(" ");
+        return strictness === "mandatory" && (axis === "y" || axis === "both" || axis === (vertical ? "inline" : "block"));
+      };
+      let anchor = 0, last = 0, lastAt = -1e9, settleUntil = -1e9, budget = 0, height = 0, sent = null, gestureSent = false, heading = 0;
+      const resized = (viewport, now) => {
+        if (now >= settleUntil) budget = 0;
+        if (height && viewport !== height) {
+          settleUntil = now + SETTLE;
+          budget += Math.abs(viewport - height) + 2;
+        }
+        height = viewport;
+      };
+      return {
+        resized,
+        rebase(y) {
+          anchor = last = y;
+        },
+        wheeled(deltaX, deltaY, pinch) {
+          if (pinch || !deltaY) {
+            if (pinch || deltaX) heading = 0;
+            return;
+          }
+          heading = deltaY > 0 ? 1 : -1;
+        },
+        undirected() {
+          heading = 0;
+        },
+        scrolled(y, range, viewport, now, user, snap = "", vertical = false) {
+          resized(viewport, now);
+          if (now - lastAt > GESTURE) {
+            gestureSent = false;
+            anchor = last;
+          }
+          lastAt = now;
+          const moved = y - last;
+          last = y;
+          if (budget > 0 && moved) {
+            const absorbed = Math.min(budget, Math.abs(moved));
+            budget -= absorbed;
+            anchor += moved > 0 ? absorbed : -absorbed;
+          }
+          let state = null;
+          if (y <= 2) state = "top";
+          else if (!user || moved * heading < 0) anchor = y;
+          else if (y - anchor >= DOWN) {
+            if (range >= MIN_RANGE && !paged(snap, vertical)) state = "down";
+            else anchor = y;
+          } else if (anchor - y >= UP) state = "up";
+          else if (sent === "down" ? gestureSent && y > anchor : y < anchor) anchor = y;
+          if (state) anchor = y;
+          if (!state || (state === sent && (state !== "down" || gestureSent))) return null;
+          sent = state;
+          if (state === "down") gestureSent = true;
+          return state;
+        },
+      };
+    };
+    const direction = scrollDirection();
+    let scroller = null;
+    let scrollTarget = null;
     let inputAt = -1e9;
-    const noteInput = () => (inputAt = performance.now());
-    for (const type of ["wheel", "keydown", "mousedown"]) addEventListener(type, noteInput, { passive: true, capture: true });
+    const noteInput = () => {
+      inputAt = performance.now();
+      if (!scroller && document.scrollingElement) direction.rebase((scroller = document.scrollingElement).scrollTop);
+    };
+    const noteUndirectedInput = () => {
+      direction.undirected();
+      noteInput();
+    };
+    addEventListener(
+      "wheel",
+      (e) => {
+        direction.wheeled(e.deltaX, e.deltaY, e.ctrlKey);
+        noteInput();
+      },
+      { passive: true, capture: true },
+    );
+    for (const type of ["keydown", "mousedown", "touchstart"]) addEventListener(type, noteUndirectedInput, { passive: true, capture: true });
+    addEventListener("mousemove", (e) => e.buttons && noteUndirectedInput(), { passive: true, capture: true });
+    const measureScroll = () => {
+      try {
+        const target = scrollTarget;
+        scrollTarget = null;
+        const doc = document.scrollingElement || document.documentElement;
+        const el = target === document || target === doc ? doc : target;
+        if (!el || !doc || (el !== doc && (el.clientHeight < innerHeight * 0.5 || el.clientWidth < innerWidth * 0.5))) return;
+        if (el !== scroller) direction.rebase((scroller = el).scrollTop);
+        const now = performance.now();
+        const style = getComputedStyle(el === doc ? document.documentElement : el);
+        const state = direction.scrolled(el.scrollTop, el.scrollHeight - el.clientHeight, innerHeight, now, now - inputAt < 1000, style.scrollSnapType, /^(vertical|sideways)/.test(style.writingMode));
+        if (state) post("scroll", { state });
+      } catch (e) {}
+    };
     addEventListener(
       "scroll",
-      () => {
-        const y = window.scrollY;
-        let state = null;
-        if (y <= 2) state = "top";
-        else if (performance.now() - inputAt > 1000) anchor = y;
-        else if (y - anchor >= 24 && document.documentElement.scrollHeight - innerHeight >= 120) state = "down";
-        else if (anchor - y >= 12) state = "up";
-        if (state) anchor = y;
-        if (!state || state === sent) return;
-        sent = state;
-        post("scroll", { state });
+      (e) => {
+        if (!scrollTarget) requestAnimationFrame(measureScroll);
+        scrollTarget = e.target;
       },
-      { passive: true },
+      { passive: true, capture: true },
     );
+    addEventListener("resize", () => direction.resized(innerHeight, performance.now()));
   }
 
   window.__ardia = {
@@ -258,15 +355,16 @@ enum WebKitPageScript {
       schedule();
       return !!m || pageActions.length > 0;
     },
-    pictureInPicture(on) {
+    pictureInPicture(on, automatic) {
       if (!on) {
         if (document.pictureInPictureElement) document.exitPictureInPicture();
         for (const v of document.querySelectorAll("video")) if (v.webkitPresentationMode === "picture-in-picture") v.webkitSetPresentationMode("inline");
         return true;
       }
       const videos = Array.from(document.querySelectorAll("video"));
-      const v = videos.find((x) => !x.paused) || videos.sort((a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight)[0];
-      if (!v) return false;
+      const largest = () => videos.sort((a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight)[0];
+      const v = videos.find(playing) || (automatic ? null : largest());
+      if (!v) return automatic ? "nothingPlaying" : false;
       if (v.webkitSupportsPresentationMode && v.webkitSupportsPresentationMode("picture-in-picture")) v.webkitSetPresentationMode("picture-in-picture");
       else if (v.requestPictureInPicture) v.requestPictureInPicture();
       else return false;
@@ -297,7 +395,35 @@ enum WebKitPageScript {
   const Mouse = MouseEvent;
   const now = Date.now;
   const doc = document;
+  const NativePromise = Promise;
+  const then = Promise.prototype.then;
+  const sites = \#(WebKitMediaFaults.sitesJSON);
+  const watched = location.protocol === "https:" && sites.some((site) => location.hostname === site || location.hostname.endsWith("." + site));
+  const noop = () => {};
+  const reported = Object.create(null);
+  const fault = (reason) => {
+    reported[reason] = (reported[reason] || 0) + 1;
+    if (reported[reason] > 20) return;
+    apply(dispatch, doc, [new Custom("ardia:media-fault", { detail: reason })]);
+  };
+  const observe = (promise, onValue, onError) =>
+    apply(then, promise, [
+      (value) => {
+        try {
+          onValue(value);
+        } catch (e) {}
+        return value;
+      },
+      (error) => {
+        try {
+          onError(error);
+        } catch (e) {}
+        throw error;
+      },
+    ]);
   const handedOver = new WeakSet();
+  const errorsHeard = new WeakSet();
+  const errorEventsCounted = new WeakSet();
   const mediaProto = HTMLMediaElement.prototype;
   const play = mediaProto.play;
   mediaProto.play = function () {
@@ -307,8 +433,15 @@ enum WebKitPageScript {
         apply(dispatch, doc, [new Mouse("ardia:media-element", { relatedTarget: this })]);
       } catch (e) {}
     }
-    return apply(play, this, arguments);
+    if (watched && !errorsHeard.has(this) && !apply(connected, this, [])) {
+      errorsHeard.add(this);
+      apply(listen, this, ["error", reportMediaError]);
+    }
+    const result = apply(play, this, arguments);
+    return watched && result instanceof NativePromise ? observe(result, noop, (error) => fault("play_rejected_" + playRejection(error))) : result;
   };
+
+\#(WebKitMediaFaults.pageScript)
 
   const session = navigator.mediaSession;
   const proto = session && Object.getPrototypeOf(session);

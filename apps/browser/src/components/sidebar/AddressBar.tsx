@@ -2,45 +2,52 @@ import { useRef } from "react";
 import { Pressable, View, type ViewStyle } from "react-native";
 import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
 import { layout, useTheme } from "../ui/theme";
-import { useActiveTabId, useSettings, useTabLive, useWindowId } from "../../state/browser/hooks";
-import { openPanel, toggleSidebar } from "../../state/windows/actions";
+import { useActiveTabId, useSettings, useSidebarSide, useTabLive, useWindowFullScreen, useWindowId } from "../../state/browser/hooks";
+import { toggleSidebar } from "../../state/windows/actions";
+import { openEmptySidebarField } from "../../state/omnibox/barState";
 import { isAddressBarInSidebar } from "../../state/sidebar/current";
-import { useIsInSplit } from "../../state/sidebar/hooks";
-import { usePageProgress } from "../../state/tabs/pageProgress";
 import { extensionsFitting, ToolbarExtensions, useToolbarExtensionsWidth } from "../extensions/ToolbarExtensions";
 import { useHistoryAvailability } from "../../state/tabs/navigation";
 import { toolbarPalette, type ToolbarPalette } from "../ui/toolbarColors";
-import { Button, type ButtonHit, FadeLabel, font, useHover } from "../ui";
+import { Button, type ButtonHit, FadeLabel, radius, space, ToolbarRowContext, useHover } from "../ui";
+import { TOOLBAR_ROWS } from "../../lib/toolbarRow";
 import { setUrlAnchor } from "../../state/windows/layout";
+import { useSidebarPart } from "../../state/sidebar/chrome";
 import { SIDEBAR_FIELD } from "./geometry";
+import { SIDEBAR_TYPE, TAB_ROW } from "./tokens";
+import { SidebarTextScope } from "./SidebarTextScope";
+import { noteEmptyTabSidebarExtensionPress } from "../../state/telemetry/usage";
 import { SidebarFieldFill } from "./SidebarField";
-import { UrlField, useToolbarTab } from "../toolbar/Toolbar";
+import { SidebarUrlField, useToolbarTab } from "../toolbar/Toolbar";
 import { HistoryButton, ReloadButton } from "../toolbar/NavButtons";
 import { GLYPH } from "../toolbar/tokens";
-import { HEADER_TOOLS, navButtonsFitting, type HeaderButton } from "../window/dockMotion";
+import { HEADER_TOOLS, headerToggleX, navButtonsFitting, type HeaderButton } from "../window/dockMotion";
 import { ARC_LIGHTS_CENTER } from "../../state/windows/dockMotion";
 
 const BUTTON = layout.toolbarButton;
-const { toggleX: TOGGLE_X, edge: EDGE } = HEADER_TOOLS;
+const { edge: EDGE } = HEADER_TOOLS;
 const LIGHTS_Y = ARC_LIGHTS_CENTER[1];
 const PLATE = 32;
-const PLATE_RADIUS = 6;
 
 export function SidebarHeaderTools({ width }: { width: number }) {
   const windowId = useWindowId();
   const tab = useToolbarTab(useActiveTabId());
   const palette = toolbarPalette(useTheme(), null);
-  const toggle = useSettings((st) => st.showSidebarButton !== false);
+  const toggleWanted = useSettings((st) => st.showSidebarButton !== false);
+  const toggle = useSidebarPart("sidebarButton") && toggleWanted;
+  const navShown = useSidebarPart("navButtons");
+  const right = useSidebarSide(windowId) === "right";
   const sidebarHint = useShortcutHint("toggleSidebar");
-  const { buttons, step } = navButtonsFitting(width, BUTTON, toggle);
-  const shown = tab ? buttons : [];
+  const toggleX = headerToggleX(useWindowFullScreen(windowId));
+  const { buttons, step } = navButtonsFitting(width, BUTTON, toggle, toggleX);
+  const shown = tab && navShown ? buttons : [];
   const last = width - EDGE - BUTTON / 2;
   const centres = shown.map((_, i) => last - (shown.length - 1 - i) * step);
-  const at = toggle ? [TOGGLE_X, ...centres] : centres;
+  const at = toggle ? [toggleX, ...centres] : centres;
   const plate = Math.min(PLATE, step);
   const place = (center: number) => ({
     style: { position: "absolute" as const, top: LIGHTS_Y - plate / 2, left: center - plate / 2 },
-    hit: { width: plate, height: plate, plateX: 0, plateY: 0, box: plate, radius: PLATE_RADIUS },
+    hit: { width: plate, height: plate, plateX: 0, plateY: 0, box: plate, radius: radius.toolbar },
   });
   return (
     <>
@@ -48,10 +55,10 @@ export function SidebarHeaderTools({ width }: { width: number }) {
         <Button variant="icon" toolbar
           {...place(at[0]!)}
           palette={palette}
-          icon="sidebar.left"
-          size={GLYPH}
+          icon={right ? "sidebar.right" : "sidebar.left"}
+          glyph={GLYPH}
           onPress={() => toggleSidebar(windowId)}
-          tooltip={withShortcut("Auto-Hide Tabs", sidebarHint)}
+          tooltip={withShortcut("Hide Tabs", sidebarHint)}
         />
       )}
       {tab ? <NavigationButtons tab={tab} palette={palette} buttons={shown} slots={at.slice(toggle ? 1 : 0).map(place)} /> : null}
@@ -78,11 +85,11 @@ function NavigationButtons({
     <>
       {buttons.map((b, i) =>
         b === "reload" ? (
-          <ReloadButton key={b} {...slots[i]!} tab={tab} loading={loading} palette={palette} onFocus={alreadyFocused} />
+          <ReloadButton key={b} place={slots[i]} tab={tab} loading={loading} palette={palette} onFocus={alreadyFocused} />
         ) : (
           <HistoryButton
             key={b}
-            {...slots[i]!}
+            place={slots[i]}
             tabId={tab.id}
             windowId={tab.windowId}
             direction={b === "back" ? -1 : 1}
@@ -96,7 +103,7 @@ function NavigationButtons({
   );
 }
 
-export function SidebarAddressRow({ width }: { width: number }) {
+export function SidebarAddressRow({ width, top }: { width: number; top: number }) {
   const windowId = useWindowId();
   const tab = useToolbarTab(useActiveTabId());
   const field = useRef<View>(null);
@@ -109,9 +116,17 @@ export function SidebarAddressRow({ width }: { width: number }) {
     <View
       ref={field}
       onLayout={anchor}
-      style={{ position: "absolute", left: layout.sidebarInset, right: layout.sidebarInset, top: SIDEBAR_FIELD.top, height: SIDEBAR_FIELD.height }}
+      style={{ position: "absolute", left: layout.sidebarInset, right: layout.sidebarInset, top, height: SIDEBAR_FIELD.height }}
     >
-      {tab?.url ? <PageField tab={tab} windowId={windowId} width={width - 2 * layout.sidebarInset} /> : <EmptyField windowId={windowId} />}
+      <SidebarTextScope>
+        <ToolbarRowContext.Provider value={TOOLBAR_ROWS.regular}>
+          {tab?.url ? (
+            <PageField tab={tab} windowId={windowId} width={width - 2 * layout.sidebarInset} />
+          ) : (
+            <EmptyField windowId={windowId} tabId={tab?.id} width={width - 2 * layout.sidebarInset} />
+          )}
+        </ToolbarRowContext.Provider>
+      </SidebarTextScope>
     </View>
   );
 }
@@ -120,44 +135,45 @@ const HOST_ROOM = 84;
 
 function PageField({ tab, windowId, width }: { tab: NonNullable<ReturnType<typeof useToolbarTab>>; windowId: string; width: number }) {
   const palette = toolbarPalette(useTheme(), null);
-  const loading = useTabLive(tab.id, (l) => l.isLoading);
-  const loaded = usePageProgress(tab.id);
-  const progress = loading ? loaded : null;
-  const inSplit = useIsInSplit(tab.id);
-  const limit = extensionsFitting(width - 10 - 3 - HOST_ROOM);
-  const extensionsWidth = useToolbarExtensionsWidth(windowId, limit);
   return (
-    <UrlField
+    <SidebarUrlField
       tab={tab}
       palette={palette}
       windowId={windowId}
-      inSplit={inSplit}
       onFocus={alreadyFocused}
-      sidebar={{
-        height: SIDEBAR_FIELD.height,
-        progress,
-        accessory: extensionsWidth ? (
-          <View style={{ width: extensionsWidth - 6, height: 28 }}>
-            <ToolbarExtensions tabId={tab.id} windowId={windowId} palette={palette} top={0} right={0} limit={limit} />
-          </View>
-        ) : null,
-      }}
+      height={SIDEBAR_FIELD.height}
+      accessory={<FieldExtensions tabId={tab.id} windowId={windowId} width={width} palette={palette} />}
     />
   );
 }
 
-function EmptyField({ windowId }: { windowId: string }) {
-  const theme = useTheme();
-  const { hovered, hoverProps } = useHover();
-  const open = () => openPanel(windowId, "");
+function FieldExtensions({ tabId, windowId, width, palette, onActivate }: { tabId: string; windowId: string; width: number; palette: ToolbarPalette; onActivate?: () => void }) {
+  const limit = extensionsFitting(width - 10 - 3 - HOST_ROOM);
+  const extensionsWidth = useToolbarExtensionsWidth(windowId, limit);
+  if (!extensionsWidth) return null;
   return (
-    <View {...hoverProps}>
-      <Pressable onPress={open}>
-        <View style={{ height: SIDEBAR_FIELD.height, justifyContent: "center", paddingLeft: 11 }}>
-          <SidebarFieldFill hovered={hovered} />
-          <FadeLabel text="Search or enter address" fontSize={font.body.fontSize} color={theme.placeholder} fadeWidth={14} style={{ height: 18, marginLeft: -2 }} />
-        </View>
+    <View style={{ width: extensionsWidth - 6, height: 28 }}>
+      <ToolbarExtensions tabId={tabId} windowId={windowId} palette={palette} top={0} right={0} limit={limit} onActivate={onActivate} />
+    </View>
+  );
+}
+
+function EmptyField({ windowId, tabId, width }: { windowId: string; tabId: string | undefined; width: number }) {
+  const theme = useTheme();
+  const palette = toolbarPalette(theme, null);
+  const { hovered, hoverProps } = useHover();
+  const open = () => openEmptySidebarField(windowId);
+  return (
+    <View {...hoverProps} style={{ flexDirection: "row", alignItems: "center", height: SIDEBAR_FIELD.height }}>
+      <SidebarFieldFill hovered={hovered} />
+      <Pressable onPress={open} style={{ flex: 1, height: SIDEBAR_FIELD.height, justifyContent: "center", paddingLeft: space.l }}>
+        <FadeLabel text="Search or enter address" fontSize={SIDEBAR_TYPE.title} color={theme.placeholder} fadeWidth={14} style={{ height: TAB_ROW.titleHeight, marginLeft: -space.xxs }} />
       </Pressable>
+      {tabId ? (
+        <View style={{ paddingRight: space.xs }}>
+          <FieldExtensions tabId={tabId} windowId={windowId} width={width} palette={palette} onActivate={noteEmptyTabSidebarExtensionPress} />
+        </View>
+      ) : null}
     </View>
   );
 }

@@ -1,9 +1,18 @@
 import type {
   ActionState,
   BookmarkOp,
+  CallArgs,
+  CallName,
+  CallResult,
+  ChromeWindowState,
   CliControlStatus,
+  CliTabTarget,
   EngineBookmark,
+  EngineEvents,
+  EngineTask,
+  EventName,
   HistoryChange,
+  HistoryChangedBatch,
   InstalledExtension,
   LinkRoute,
   TabStripCommand,
@@ -24,18 +33,23 @@ type ExtensionEngine = {
   reload(id: string, profile: string): Promise<void>;
   uninstall(id: string, profile: string): Promise<void>;
 };
-type EngineArgs = Record<string, unknown> | undefined;
-
 const testGlobals = globalThis as {
-  acTestEngineCall?: (name: string, profile: string, args: EngineArgs) => unknown;
   acTestTabStrip?: TabStripHost;
   acTestCliControl?: (on: boolean | null) => Promise<CliControlStatus> | undefined;
   acTestCliActive?: (tabId: string | null) => Promise<CliControlStatus> | undefined;
+  acTestCliTargets?: (tabId: string) => CliTabTarget | undefined;
+  acTestCliOwns?: (tabId: string) => { owned: boolean; shown: boolean };
+  acTestCliMoveOffscreen?: (tabId: string) => { ok: boolean; reason?: string };
+  acTestTasks?: () => EngineTask[];
   acTestUserScripts?: { engine: ExtensionEngine };
+  acTestSuggest?: (args: { url: string; id: number; profile: string }) => CallResult<"search.suggest"> | undefined;
 };
 
-type Args = Record<string, unknown> & { profile: string };
-type Handler = (args: Args) => unknown;
+type VerbOf<D extends string, N extends string = CallName> = N extends `${D}.${infer V}` ? V : never;
+type Call<D extends string, V extends string> = `${D}.${V}` & CallName;
+type Handlers<D extends string> = {
+  [V in VerbOf<D>]?: (args: CallArgs<Call<D, V>> & { profile: string }) => CallResult<Call<D, V>> | Promise<CallResult<Call<D, V>>>;
+};
 type FakeDomain = { call(name: string, profile: string, json: string): Promise<string>; addListener: ReturnType<typeof nativeEvents>["addListener"] };
 
 const domainEvents = new Map<string, ReturnType<typeof nativeEvents>>();
@@ -43,15 +57,22 @@ const eventsOf = (domain: string) => {
   if (!domainEvents.has(domain)) domainEvents.set(domain, nativeEvents());
   return domainEvents.get(domain)!;
 };
-export const emitEvent = (name: string, data: unknown) => {
+export const emitEvent = <E extends EventName>(name: E, data: EngineEvents[E]) => {
   const domain = name.slice(0, name.indexOf("."));
   eventsOf(domain).emit(domain, { name, data });
 };
 
-function domain<Sync extends object>(name: string, handlers: Record<string, Handler>, sync?: Sync): FakeDomain & Sync {
+export const chromeWindowList: ChromeWindowState[] = [];
+export const engineCalls: { domain: string; verb: string; profile: string }[] = [];
+export const loadedEngineProfiles = new Set<string>([""]);
+export const idleProfileUnloads = new Map<string, CallResult<"profiles.unloadIdle">>();
+export const profilesLoadedCall = { known: true };
+
+function domain<D extends string, Sync extends object>(name: D, handlers: Handlers<D>, sync?: Sync): FakeDomain & Sync {
   const fake: FakeDomain = {
     call: (verb, profile, json) => {
-      const handler = handlers[verb];
+      engineCalls.push({ domain: name, verb, profile });
+      const handler = (handlers as Record<string, ((args: object) => unknown) | undefined>)[verb];
       if (!handler) return Promise.reject(Object.assign(new Error(`${name}.${verb} has no test fake yet`), { code: "ERR_UNKNOWN_CALL" }));
       const args = { ...(JSON.parse(json) as Record<string, unknown>), profile };
       try {
@@ -65,11 +86,9 @@ function domain<Sync extends object>(name: string, handlers: Record<string, Hand
   return Object.assign(fake, sync);
 }
 
-const APP_EVENT_OF_TOPIC: Record<string, string> = { cliControl: "engine.cliControl" };
-export const engineEvent = (topic: string, payload: object) => emitEvent(APP_EVENT_OF_TOPIC[topic] ?? topic, payload);
-const laterEngineEvent = (topic: string, payload: object) => queueMicrotask(() => engineEvent(topic, payload));
-export const emitDownload = (download: object) => emitEvent("downloads.changed", download);
-export const emitPermission = (request: object) => emitEvent("permissions.requested", request);
+const laterEvent = <E extends EventName>(name: E, data: EngineEvents[E]) => queueMicrotask(() => emitEvent(name, data));
+export const emitDownload = (download: EngineEvents["downloads.changed"]) => emitEvent("downloads.changed", download);
+export const emitPermission = (request: EngineEvents["permissions.requested"]) => emitEvent("permissions.requested", request);
 
 export const current = { device: null as string | null };
 
@@ -89,13 +108,13 @@ export const chromeHistory = (profile = "", device = current.device) => {
 export const historyWatches: string[] = [];
 
 export function chromeHistoryEvent(change: HistoryChange) {
-  const wire =
+  const wire: HistoryChangedBatch["changes"][number] =
     change.kind === "visit"
       ? { kind: "visit", u: change.url, t: change.title, n: change.visits, at: change.at }
       : change.kind === "modified"
         ? { kind: "modified", rows: change.rows.map((r) => ({ u: r.url, t: r.title, n: r.visits })) }
         : { kind: "deleted", all: change.all, urls: change.urls };
-  laterEngineEvent("history.changed", { profile: change.profile, kind: "batch", changes: [wire] });
+  laterEvent("history.changed", { profile: change.profile, kind: "batch", changes: [wire] });
 }
 
 function addVisit(profile: string, url: string, title: string, at: number) {
@@ -247,15 +266,12 @@ function applyBookmarkOps(profile: string, { ops }: { ops: BookmarkOp[] }) {
 export function chromeBookmarkEdit(profile: string, ops: BookmarkOp[]) {
   const db = chromeBookmarks(profile);
   for (const op of ops) applyOp(db, op);
-  laterEngineEvent("bookmarks.changed", { profile });
+  laterEvent("bookmarks.changed", { profile });
 }
 
-const cliControl = (on: boolean | null) => testGlobals.acTestCliControl?.(on) ?? { state: on ? "on" : "off" };
-
-const passing = (name: string): Handler => (args) => {
-  const { profile, ...rest } = args;
-  return testGlobals.acTestEngineCall?.(name, profile, Object.keys(rest).length ? rest : undefined) ?? {};
-};
+const cliStatus = (on: boolean | null): CliControlStatus =>
+  on ? { state: "on", port: 0, connections: 0, generation: 0, file: "" } : { state: "off", connections: 0, generation: 0, file: "" };
+const cliControl = (on: boolean | null) => testGlobals.acTestCliControl?.(on) ?? cliStatus(on);
 
 export const cancelledDownloads: string[] = [];
 export const endedWebKitSessions: string[] = [];
@@ -264,11 +280,15 @@ export const stagingRemovals = { ok: true };
 export const deletedProfileData: string[] = [];
 export const profileDataLeft = new Map<string, string[]>();
 export const revealedTabs: string[] = [];
+export const discardedOffers: string[] = [];
 export const installedCrx: { path: string; profile: string }[] = [];
+export const crxInstallFailure: { next: string | null } = { next: null };
 export const linkRoute: { next: LinkRoute } = { next: {} };
+export const resolvedPermissions: { id: string; result: string; remember: boolean }[] = [];
 export const extensionAnswers = {
   actionStates: async (_tabId: string, _ids: string[]): Promise<Record<string, ActionState>> => ({}),
   sidePanelUrl: async (_tabId: string, _extensionId: string): Promise<string | null> => null,
+  change: async (_verb: string, _id: string): Promise<void> => {},
 };
 
 const tabStripHost = () => testGlobals.acTestTabStrip!;
@@ -285,24 +305,28 @@ function withStrips<Fake extends FakeDomain>(fake: Fake): Fake {
   return fake;
 }
 
-const loginKey = (args: Args) => `${args.origin}\n${args.username}`;
+const loginKey = (args: { origin: string; username: string }) => `${args.origin}\n${args.username}`;
 
 const fakeModules = {
   ArdiaEngine: domain(
     "engine",
     {
       components: () => [],
-      tasks: () => [],
+      tasks: () => testGlobals.acTestTasks?.() ?? [],
       beginTracing: () => false,
       endTracing: () => null,
       isTracing: () => false,
       systemState: () => ({ onBattery: false, batteryLevel: null, lowPowerMode: false, memoryPressure: "normal", physicalMemory: 16 * 2 ** 30 }),
-      batterySaver: () => null,
-      trimMemory: passing("ac_memory_trim"),
-      openTaskManager: passing("ac_task_manager_open"),
+      batterySaver: ({ mode }) => ({ state: 0, active: mode === "on" }),
+      trimMemory: () => ({ ok: true }),
+      openTaskManager: () => ({ ok: true }),
       cliControlStatus: () => cliControl(null),
-      setCliControl: ({ on }) => cliControl(on as boolean),
-      setCliActiveTab: ({ tabId }) => testGlobals.acTestCliActive?.(tabId as string | null) ?? {},
+      setCliControl: ({ on }) => cliControl(on),
+      setCliActiveTab: ({ tabId }) => testGlobals.acTestCliActive?.(tabId) ?? cliStatus(null),
+      cliOwnsTab: ({ tabId }) => testGlobals.acTestCliOwns?.(tabId) ?? { owned: false, shown: false },
+      cliMoveOffscreen: ({ tabId }) => testGlobals.acTestCliMoveOffscreen?.(tabId) ?? { ok: false },
+      cliCloseOffscreenTabs: () => null,
+      cliTabTargets: ({ tabIds }) => Object.fromEntries(tabIds.map((id) => [id, testGlobals.acTestCliTargets?.(id) ?? { targetId: null, pageGeneration: 0 }])),
     },
     { inputIdleSeconds: () => 3600 },
   ),
@@ -310,9 +334,9 @@ const fakeModules = {
     "tabs",
     {
       routeLinkTabs: () => linkRoute.next,
-      stripCommand: ({ id, command }) => (tabStripHost().command(command as TabStripCommand, id as number), null),
+      stripCommand: ({ id, command }) => (tabStripHost().command(command, id), null),
       strips: () => tabStripHost().snapshot(),
-      lastTabPolicy: passing("ac_tabs_last_tab_policy"),
+      lastTabPolicy: () => ({ closesWindow: true }),
     },
     {
       prepareTransfer: () => {},
@@ -321,25 +345,35 @@ const fakeModules = {
       revealTab: (key: string) => void revealedTabs.push(key),
       dropTabReveals: (key: string) => void revealedTabs.push(`drop over ${key}`),
       revealOffered: (adoptId: string, key: string) => void revealedTabs.push(`${adoptId} over ${key}`),
+      discardOffered: async (adoptId: string) => (discardedOffers.push(adoptId), true),
     },
   )),
-  ArdiaWindows: domain("windows", { list: () => [], dev: () => "" }),
+  ArdiaWindows: domain("windows", { list: () => chromeWindowList, dev: () => "" }),
   ArdiaDownloads: domain("downloads", {
-    cancel: ({ id }) => (cancelledDownloads.push(id as string), null),
+    cancel: ({ id }) => (cancelledDownloads.push(id), null),
     pause: () => null,
     resume: () => null,
     keep: () => null,
-    settings: passing("ac_downloads_settings"),
-    setSettings: passing("ac_downloads_set_settings"),
+    settings: () => ({ folder: "", askWhereToSave: false, managed: false }),
+    setSettings: () => ({ folder: "", askWhereToSave: false, managed: false }),
   }),
   ArdiaPermissions: domain("permissions", {
-    resolve: () => null,
+    resolve: ({ id, result, remember }) => (resolvedPermissions.push({ id, result, remember }), null),
     resolveExternalApp: () => null,
     externalAppAllowances: () => [],
     removeExternalAppAllowance: () => null,
   }),
   ArdiaProfiles: domain("profiles", {
+    loaded: () => {
+      if (!profilesLoadedCall.known) throw Object.assign(new Error("profiles.loaded isn't a call"), { code: "ERR_UNKNOWN_CALL" });
+      return { profiles: [...loadedEngineProfiles] };
+    },
     release: () => null,
+    unloadIdle: ({ profile }) => {
+      const unload = idleProfileUnloads.get(profile) ?? { status: "busy" as const, tabs: [] };
+      if (unload.status !== "busy") loadedEngineProfiles.delete(profile);
+      return unload;
+    },
     deleteData: ({ profile }) => (deletedProfileData.push(profile), { remaining: profileDataLeft.get(profile) ?? [] }),
     clearBrowsingData: () => null,
   }),
@@ -355,7 +389,7 @@ const fakeModules = {
     "passwords",
     {
       list: () => ({
-        passwords: [...(passwordStores.get(current.device)?.values() ?? [])].map((l) => ({ origin: l.origin, username: l.username, created: l.created, modified: l.created })),
+        passwords: [...(passwordStores.get(current.device)?.values() ?? [])].map((l) => ({ origin: l.url, username: l.username, created: l.created, modified: l.created })),
       }),
       unlock: () => ({ unlocked: true }),
       reveal: (args) => ({ password: passwordStores.get(current.device)?.get(loginKey(args))?.password ?? null }),
@@ -368,10 +402,23 @@ const fakeModules = {
     },
     {
       save: async (_profile: string, origin: string, username: string, password: string) => {
-        logins().set(`${origin}\n${username}`, { origin: `${origin}/`, url: origin, username, password, created: Date.now() });
+        const refused = new Error("Could not save the password (invalid, or already saved)");
+        if (!/^https?:\/\/[^/?#]+$/i.test(origin)) throw refused;
+        const stored = new URL(origin).origin;
+        const key = `${stored}\n${username}`;
+        const existing = logins().get(key);
+        if (existing && existing.password !== password) throw refused;
+        if (!existing) logins().set(key, { origin: `${stored}/`, url: stored, username, password, created: Date.now() });
         return JSON.stringify({ ok: true });
       },
-      update: () => unfaked("ArdiaPasswords", "update"),
+      update: async (_profile: string, origin: string, username: string, newUsername: string | null, newPassword: string | null) => {
+        const entry = logins().get(`${origin}\n${username}`);
+        if (!entry) throw new Error("No such password");
+        const renamed = newUsername ?? username;
+        logins().delete(`${origin}\n${username}`);
+        logins().set(`${origin}\n${renamed}`, { ...entry, username: renamed, password: newPassword ?? entry.password });
+        return JSON.stringify({ ok: true });
+      },
     },
   ),
   ArdiaAutofill: domain(
@@ -393,22 +440,33 @@ const fakeModules = {
     install: async ({ profile, path }) => {
       const engine = extensionEngine();
       if (!engine) throw Object.assign(new Error("no extension engine in this test"), { code: "ERR_ENGINE" });
-      return { id: await engine.install(path as string, profile) };
+      return { id: await engine.install(path, profile) };
     },
-    setEnabled: () => ({ ok: true }),
-    uninstall: async ({ profile, id }) => (await extensionEngine()?.uninstall(id as string, profile), { ok: true }),
-    reload: async ({ profile, id }) => (await extensionEngine()?.reload(id as string, profile), { ok: true }),
-    configure: () => ({ ok: true }),
+    setEnabled: async ({ id }) => (await extensionAnswers.change("setEnabled", id), { ok: true }),
+    uninstall: async ({ profile, id }) => (await extensionAnswers.change("uninstall", id), await extensionEngine()?.uninstall(id, profile), { ok: true }),
+    reload: async ({ profile, id }) => (await extensionAnswers.change("reload", id), await extensionEngine()?.reload(id, profile), { ok: true }),
+    configure: async ({ id }) => (await extensionAnswers.change("configure", id), { ok: true }),
     chooseFolder: () => null,
-    installCrx: ({ profile, path }) => (installedCrx.push({ path: path as string, profile }), { id: "crx" }),
+    installCrx: ({ profile, path }) => {
+      const failure = crxInstallFailure.next;
+      crxInstallFailure.next = null;
+      if (failure) throw new Error(failure);
+      installedCrx.push({ path: path, profile });
+      return { id: "crx" };
+    },
     resolveInstallPrompt: () => null,
-    actionStates: ({ tabId, ids }) => extensionAnswers.actionStates(tabId as string, ids as string[]),
-    sidePanelUrl: ({ tabId, extensionId }) => extensionAnswers.sidePanelUrl(tabId as string, extensionId as string),
-    watchActions: passing("ac_extensions_watch_actions"),
-    syncState: passing("ac_extensions_sync_state"),
-    syncApply: passing("ac_extensions_sync_apply"),
+    actionStates: ({ tabId, ids }) => extensionAnswers.actionStates(tabId, ids),
+    sidePanelUrl: ({ tabId, extensionId }) => extensionAnswers.sidePanelUrl(tabId, extensionId),
+    watchActions: () => null,
+    syncState: () => ({ ready: false, extensions: [], pending: [], settling: [], queued: [], intents: [] }),
+    syncApply: () => ({ state: "pending" }),
   }),
-  ArdiaSearch: domain("search", { engines: () => ({ list: { engines: [] } }), setEngineName: () => null }),
+  ArdiaSearch: domain("search", {
+    engines: () => ({ list: { engines: [] } }),
+    setEngineName: () => null,
+    suggest: (args) => testGlobals.acTestSuggest?.(args) ?? { status: 200, body: JSON.stringify([args.url, []]) },
+    stopSuggest: () => null,
+  }),
   ArdiaMedia: domain("media", {
     displayMediaSources: () => [],
     selectDevice: () => null,
@@ -427,24 +485,26 @@ const fakeModules = {
   ArdiaContentBlocker: domain("contentBlocker", {
     setEnabled: () => null,
     setListEnabled: () => null,
+    addList: ({ url }) => ({ id: url, custom: true, existed: false, filters: 1, failed: false }),
+    removeList: () => null,
     isAllowed: () => false,
     setAllowed: () => null,
   }),
   ArdiaHistory: domain("history", {
     query: ({ profile, ...args }) => queryHistory(profile, args),
-    add: ({ profile, ...args }) => addHistoryVisits(profile, args as never),
-    import: ({ profile, ...args }) => importHistoryRows(profile, args as never),
-    deleteUrls: ({ profile, ...args }) => deleteHistoryUrls(profile, args as never),
-    watch: ({ profile }) => (historyWatches.push(profile), { ok: true }),
+    add: ({ profile, ...args }) => addHistoryVisits(profile, args),
+    import: ({ profile, ...args }) => importHistoryRows(profile, args),
+    deleteUrls: ({ profile, ...args }) => deleteHistoryUrls(profile, args),
+    watch: ({ profile }) => (historyWatches.push(profile), null),
   }),
   ArdiaBookmarks: domain("bookmarks", {
     tree: ({ profile }) => ({ bar: treeOf(chromeBookmarks(profile), "bar"), other: treeOf(chromeBookmarks(profile), "other") }),
-    apply: ({ profile, ...args }) => applyBookmarkOps(profile, args as never),
-    watch: () => ({ ok: true }),
+    apply: ({ profile, ...args }) => applyBookmarkOps(profile, args),
+    watch: () => null,
   }),
   ArdiaFavicons: domain("favicons", {
-    get: ({ profile, ...args }) => faviconsFor(profile, args as never),
-    set: passing("ac_favicons_set"),
+    get: ({ profile, ...args }) => faviconsFor(profile, args),
+    set: () => ({ stored: true }),
     fetch: () => null,
   }),
   ArdiaWebView: domain("webView", {
@@ -453,18 +513,20 @@ const fakeModules = {
     setSplitLinkModifier: () => null,
     setPeekOtherSiteTabs: () => null,
     setSelectionPopover: () => null,
+    setBlockAutoplayEverywhere: () => null,
+    setFairPlayInChromium: () => null,
     setCommandScrollZoom: () => null,
+    setLittleArdiaOpensNewTabLinks: () => null,
     setAutoPictureInPicture: () => null,
     setVideoUpscaling: () => null,
     setVideoUpscalingTestConditions: () => null,
     videoUpscalingState: () => null,
   }),
   ArdiaWebKit: domain("webKit", {
-    endPrivateSession: ({ session }) => (endedWebKitSessions.push(session as string), null),
-    removeDownloadStaging: ({ path }) => (removedStagings.push(path as string), stagingRemovals.ok),
+    endPrivateSession: ({ session }) => (endedWebKitSessions.push(session), null),
+    removeDownloadStaging: ({ path }) => (removedStagings.push(path), stagingRemovals.ok),
     cookieStoreKey: ({ profile }) => profile,
-    importCookies: ({ cookies }) => (cookies as unknown[]).length,
-    clearSiteData: () => ({ cookies: 0, storage: true }),
+    importCookies: ({ cookies }) => cookies.length,
     passkeyAccess: () => ({ entitled: false, status: "entitlementRequired" }),
     requestPasskeyAccess: () => ({ entitled: false, status: "entitlementRequired" }),
   }),

@@ -1,5 +1,5 @@
 import { classifyPaste, markdownLink, sanitizePaste, searchUrl, type PasteAction } from "@ardia/core";
-import { copyText, readClipboard } from "../../platform/clipboard";
+import { copyText, readText } from "../../platform/clipboard";
 import { showMenu, type MenuItem } from "../../platform/menus";
 import { menuSections, withOptionAlternate, type MenuKey } from "../app/menuSections";
 import { currentSettings } from "../browser/current";
@@ -11,7 +11,7 @@ import { copyPageUrl } from "../site/selection";
 import type { Tab } from "../browser/types";
 
 export async function clipboardPasteAction(): Promise<PasteAction | null> {
-  return classifyPaste(await readClipboard());
+  return classifyPaste(await readText());
 }
 
 export function pasteMenuItem(action: PasteAction | null): MenuItem[] {
@@ -68,7 +68,7 @@ export async function showFieldMenu(value: string, selection: { current: { start
   if (choice === "pasteAndGo" && paste) return { kind: "go", url: pasteTarget(paste) };
   if (choice === "copy" || choice === "cut") copyText(value.slice(start, end));
   if (choice === "cut" || choice === "paste") {
-    const insert = choice === "paste" ? sanitizePaste(await readClipboard()) : "";
+    const insert = choice === "paste" ? sanitizePaste(await readText()) : "";
     return { kind: "edit", text: value.slice(0, start) + insert + value.slice(end), caret: start + insert.length };
   }
   if (choice === "selectAll") return { kind: "selectAll" };

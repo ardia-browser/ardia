@@ -1,10 +1,11 @@
 import type { MenuItem } from "../../platform/menus";
 import { useBrowser, type BrowserState } from "../browser/store";
-import { activeTabId } from "../browser/model";
+import { activeTabId, isPinnedRow, tabLayoutOf } from "../browser/model";
 import { live } from "../live/store";
 import { updateProfile } from "../profiles/actions";
 import { keptEntry } from "./entries";
-import { LIVE, pinnedSequence } from "./pinnedOrder";
+import { pinnedSequence } from "./pinnedOrder";
+import { entryKey } from "./entryKey";
 
 export const PINNED_FOLD_TITLES = { collapse: "Collapse Pinned Tabs", expand: "Expand Pinned Tabs" } as const;
 
@@ -22,7 +23,8 @@ export function pinnedKept(s: BrowserState, windowId: string, profileId: string,
   const kept = keptEntry(s, windowId, profileId, entries);
   if (kept) return kept;
   const folderId = s.tabs[activeTabId(s, windowId, profileId) ?? ""]?.liveItem?.folderId;
-  return folderId && entries.includes(`${LIVE}${folderId}`) ? `${LIVE}${folderId}` : null;
+  const entry = folderId && entryKey("live", folderId);
+  return entry && entries.includes(entry) ? entry : null;
 }
 
 export const shownPinnedEntries = (s: BrowserState, windowId: string, profileId: string, pinned: string[]): string[] =>
@@ -31,7 +33,7 @@ export const shownPinnedEntries = (s: BrowserState, windowId: string, profileId:
 function pinnedSectionTabs(s: Pick<BrowserState, "tabs" | "groups">, profileId: string): Set<string> {
   const ids = new Set<string>();
   for (const g of Object.values(s.groups)) if (g.pinned && g.profileId === profileId) for (const id of g.tabIds) ids.add(id);
-  for (const t of Object.values(s.tabs)) if (t.profileId === profileId && t.pinned && t.pinnedAsRow) ids.add(t.id);
+  for (const t of Object.values(s.tabs)) if (t.profileId === profileId && isPinnedRow(t)) ids.add(t.id);
   return ids;
 }
 
@@ -50,7 +52,7 @@ useBrowser.subscribe(expandOnPin);
 
 export function pinnedFoldMenuItem(s: BrowserState, windowId: string): MenuItem[] {
   const w = s.windows[windowId];
-  if (!w || !s.profiles[w.profileId] || (w.tabLayout ?? s.settings.tabLayout) !== "sidebar") return [];
+  if (!w || !s.profiles[w.profileId] || tabLayoutOf(s, w.id) !== "sidebar") return [];
   const collapsed = pinnedCollapsed(s, w.profileId);
   const hasPinned = pinnedSequence(s, live().folders, live().folderOrder, windowId, w.profileId).length > 0;
   return [

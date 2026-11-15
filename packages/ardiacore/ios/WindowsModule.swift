@@ -3,11 +3,9 @@ import ExpoModulesCore
 
 public class WindowsModule: Module {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaWindows")
+    Name(Self.calls.moduleName)
 
-    AsyncFunction("call") { (name: String, profile: String, args: String, promise: Promise) in
-      WindowsModule.calls.run(name, profile, args, promise)
-    }.runOnQueue(.main)
+    Self.calls.function
   }
 
   static let calls = CallTable(domain: "windows", handlers: [

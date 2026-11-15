@@ -33,7 +33,8 @@ test("every event in api.ts is emitted natively under that name, and nothing els
     for (const [, swift, objc] of native(file).matchAll(/ArdiaEvents\.emit\("([^"]+)"|ArdiaEvents emit:@"([^"]+)"/g)) emitted.add(swift ?? objc);
   }
   const bridge = native("ArdiaEngineBridge.mm");
-  const topics = bridge.slice(bridge.indexOf("AppEventOfTopic()"), bridge.indexOf("};", bridge.indexOf("AppEventOfTopic()")));
-  for (const [, name] of topics.matchAll(/: @"([^"]+)"/g)) emitted.add(name);
+  const between = (from, to) => bridge.slice(bridge.indexOf(from), bridge.indexOf(to, bridge.indexOf(from)));
+  const renamed = new Map([...between("NSString *AppEventOfTopic(", "\n}").matchAll(/isEqualToString:@"([^"]+)"\] \? @"([^"]+)"/g)].map((m) => [m[1], m[2]]));
+  for (const [, topic] of between("ForwardedTopics()", "];").matchAll(/@"([^"]+)"/g)) emitted.add(renamed.get(topic) ?? topic);
   assert.deepEqual(sorted(emitted), sorted(keysOf(typeBody("EngineEvents"))));
 });

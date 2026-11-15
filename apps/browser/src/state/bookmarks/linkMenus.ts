@@ -35,6 +35,8 @@ export function copyLinkItems(count = 1): MenuEntry[] {
 }
 
 const OPEN_ALL_MODES: Record<string, OpenAllMode> = { openAll: "tabs", openAllWindow: "window", openAllIncognito: "incognito" };
+
+export const openAllModeOf = (id: string): OpenAllMode | undefined => OPEN_ALL_MODES[id];
 const OPEN_ONE_MODES = { tab: "foreground", window: "window", incognito: "incognito", split: "split" } as const;
 
 export function runLinkChoice(choice: string | null, links: Link[], windowId: string, manyMessage?: string): boolean {

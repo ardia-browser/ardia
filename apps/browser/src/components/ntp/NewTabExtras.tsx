@@ -11,7 +11,7 @@ export type Frame = { x: number; y: number; width: number; height: number };
 
 export function NewTabExtras({ size, bar }: { size: { width: number; height: number }; bar: Frame }) {
   const windowId = useWindowId();
-  const incognito = useWindow(windowId, (w) => !!w?.incognito);
+  const incognito = useWindow(windowId, (w) => w?.kind === "private");
   const pending = usePendingReleaseNotes();
   const page = useReleaseNotesPage(windowId);
 
@@ -20,7 +20,7 @@ export function NewTabExtras({ size, bar }: { size: { width: number; height: num
       <View ref={tourAnchorRef(windowId, "page")} style={StyleSheet.absoluteFill} pointerEvents="none" />
       <View ref={tourAnchorRef(windowId, "commandBar")} style={{ position: "absolute", left: bar.x, top: bar.y, width: bar.width, height: bar.height }} pointerEvents="none" />
       <CheckInBanner windowId={windowId} />
-      <TelemetryAsk windowId={windowId} />
+      <TelemetryAsk windowId={windowId} size={size} bar={bar} />
       {incognito ? null : <PersonalizeButton windowId={windowId} />}
       {pending && !incognito && !page ? (
         <ReleaseNotesPostcard notes={pending} size={size} onOpen={() => openReleaseNotes(windowId)} onDismiss={retireReleaseNotes} />

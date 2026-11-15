@@ -178,8 +178,8 @@ try {
   await sleep(1000);
 
   const mouseButton = async (window, button, x = 120, y = 400, upX = x, upY = y) => ({
-    down: await action(window, `mouse:otherdown:${x},${y},1,0,${button}`),
-    up: await action(window, `mouse:otherup:${upX},${upY},1,0,${button}`),
+    down: await action(window, `mouse:otherdown:${x},${y},1,0,0,${button}`),
+    up: await action(window, `mouse:otherup:${upX},${upY},1,0,0,${button}`),
   });
   await test("mouse button forward and back switch the docked sidebar profile", async () => {
     await reset();
@@ -216,20 +216,20 @@ try {
   await test("mouse button forward switches the auto-hidden sidebar peek", async () => {
     await reset();
     const window = (await nativeWindow()).window;
-    await ac('ac.store.getState().toggleSidebar("w1"); return true;');
+    await ac('if (!ac.store.getState().settings.autoHideTabs) ac.store.getState().toggleSidebar("w1"); return true;');
     try {
       await sleep(350);
-      await ac('return ac.shell.devLeftEdgePointer("w1", {x:-4,y:300});');
+      await ac('return ac.shell.devSidebarEdgePointer("w1", {x:-4,y:300});');
       await sleep(500);
-      await ac('return ac.shell.devLeftEdgePointer("w1", {x:120,y:300});');
+      await ac('return ac.shell.devSidebarEdgePointer("w1", {x:120,y:300});');
       await sleep(500);
       assert.equal(await ac('return !!globalThis.acLayout.peek.w1?.live;'), true, "the sidebar peeks before the mouse button press");
       const events = await mouseButton(window, 4);
       await waitProfile("work");
       return events;
     } finally {
-      await ac('return ac.shell.devLeftEdgePointer("w1", null);');
-      await ac('globalThis.acLayout.peek.w1.hide(); if (!ac.store.getState().windows.w1.sidebarOpen) ac.store.getState().toggleSidebar("w1"); return true;');
+      await ac('return ac.shell.devSidebarEdgePointer("w1", null);');
+      await ac('globalThis.acLayout.peek.w1?.hide(); if (ac.store.getState().settings.autoHideTabs) ac.store.getState().toggleSidebar("w1"); return true;');
       await sleep(350);
     }
   });
@@ -287,7 +287,7 @@ try {
       assert.ok((await page.eval("window.__ups", { timeout: 3000 })).length > 0, "the page listener must see an ordinary page release");
       await page.eval("window.__ups.length=0; true", { timeout: 3000 });
     } finally { page.close(); }
-    const missed = await action(window, "mouse:otherdown:120,400,1,0,4");
+    const missed = await action(window, "mouse:otherdown:120,400,1,0,0,4");
     await waitProfile("work");
     await sleep(350);
     await reset();
@@ -302,7 +302,7 @@ try {
   await test("mouse button presses leave a private sidebar unchanged with no pager target", async () => {
     await reset();
     const before = new Set((await windows()).map((w) => w.window));
-    const id = await ac('return ac.store.getState().createWindow({incognito:true,profileId:"default",frame:[80,80,1280,800]});');
+    const id = await ac('return ac.store.getState().createWindow({kind:"private",profileId:"default",frame:[80,80,1280,800]});');
     try {
       let window;
       for (let start = Date.now(); Date.now() - start < 5000 && !window;) {
@@ -528,9 +528,8 @@ try {
       }
     });
   }
-  await test("web page horizontal and vertical scrolling retain renderer ownership", async () => {
-    await reset();
-    const url = `http://127.0.0.1:${server.address().port}/scroll-fixture`;
+  async function openScrollFixture(host = "127.0.0.1") {
+    const url = `http://${host}:${server.address().port}/scroll-fixture`;
     const fixtureState = await ac(`
       ac.store.getState().activate("t1");
       ac.store.getState().navigate("t1", ${JSON.stringify(url)});
@@ -543,10 +542,17 @@ try {
     } catch (error) { error.evidence = { fixtureState }; throw error; }
     let loaded = false;
     for (let i = 0; i < 30 && !loaded; i++) {
-      try { loaded = await pageEval('document.readyState === "complete"'); } catch { assertOwnedAlive(); }
+      try { loaded = await pageEval(`document.readyState === "complete" && location.hostname === ${JSON.stringify(host)}`); } catch { assertOwnedAlive(); }
       if (!loaded) await sleep(100);
     }
     assert.ok(loaded, "local scroll fixture must load");
+    return fixtureState;
+  }
+  const paneSimulate = (steps) => ac(`return globalThis.acSwipe.pane("t1").devSimulate(${JSON.stringify(steps)}, {ignorePreference:true});`);
+  const rejected = (result) => result.acks.find((a) => a.diag === "reject")?.reason;
+  await test("web page horizontal and vertical scrolling retain renderer ownership", async () => {
+    await reset();
+    const fixtureState = await openScrollFixture();
     await pageEval("window.scrollTo(400,400); true");
     await sleep(100);
     const before = await pageEval("({x:scrollX,y:scrollY,url:location.href})");
@@ -601,6 +607,64 @@ try {
     assert.equal(routing(result)?.fallback, false, "a hit inside the renderer must not fall back");
     assert.equal(await profile(), "default", "a web-page swipe must not switch profiles");
     return result;
+  });
+  await test("a page that scrolls sideways itself keeps the gesture: its renderer consumed the first update", async () => {
+    await reset();
+    await openScrollFixture();
+    await pageEval("window.scrollTo(400,400); true");
+    await sleep(100);
+    const result = await paneSimulate(gesture(-1));
+    await sleep(250);
+    const acks = result.acks.filter((a) => a.ack);
+    assert.ok(acks.some((a) => a.ack === "gesture" && a.kind === "begin"), "the renderer must ack the scroll's begin");
+    assert.ok(acks.some((a) => a.ack === "gesture" && a.kind === "update" && a.consumed === true), "the renderer must ack the first update as consumed");
+    assert.equal(rejected(result), "rendererConsumed");
+    assert.equal(result.responder.takesSwipes, true, "a page view the app tracked is the app's to swipe");
+    return { acks, reason: rejected(result) };
+  });
+  await test("overscroll-behavior-x: contain at the page's edge keeps the gesture, auto lets it overscroll", async () => {
+    await reset();
+    await openScrollFixture();
+    const at = async (behavior) => {
+      await pageEval(`for (const e of [document.documentElement, document.body]) e.style.overscrollBehaviorX = ${JSON.stringify(behavior)}; window.scrollTo(0,400); true`);
+      await sleep(150);
+      const result = await paneSimulate(gesture(1));
+      await sleep(400);
+      return { overscroll: result.acks.find((a) => a.ack === "overscroll") ?? null, reason: rejected(result) ?? null };
+    };
+    const contained = await at("contain");
+    assert.equal(contained.overscroll?.allowsX, false, "contain must reach the app as an overscroll that doesn't allow a swipe");
+    assert.equal(contained.reason, "overscrollBehavior");
+    await openScrollFixture();
+    const auto = await at("auto");
+    assert.equal(auto.overscroll?.allowsX, true, "auto must reach the app as an overscroll that allows a swipe");
+    assert.notEqual(auto.reason, "overscrollBehavior");
+    await openScrollFixture();
+    return { contained, auto };
+  });
+  await test("only a page view the app tracked stops feeding Chrome's history swiper", async () => {
+    await reset();
+    await openScrollFixture("localhost");
+    const source = (await nativeWindow()).window;
+    const at = (steps, ignorePreference) =>
+      ac(`return globalThis.expo.modules.ArdiaSwipe.devSimulate(700, 400, ${source}, ${JSON.stringify(steps)}, ${ignorePreference});`);
+    const untouched = await at([], true);
+    assert.equal(untouched.where.hit, "RenderWidgetHostViewCocoa", "the point must hit the new page view");
+    assert.equal(untouched.responder.takesSwipes, false, "a page view no gesture has reached keeps Chrome's swiper");
+    const system = untouched.where.systemSwipeEnabled;
+    let declined = null;
+    if (!system) {
+      declined = await at(gesture(-1), false);
+      await sleep(250);
+      assert.equal(rejected(declined), "systemPreferenceOff");
+      assert.equal(declined.responder.takesSwipes, false, "a gesture the app declined must leave the view to Chrome");
+    }
+    const tracked = await at(gesture(-1), true);
+    await sleep(250);
+    assert.equal(tracked.responder.takesSwipes, true, "a gesture the app tracks takes the view's swipes");
+    assert.equal(await profile(), "default");
+    await openScrollFixture();
+    return { system, untouched: untouched.responder, declined: declined && { reason: rejected(declined), responder: declined.responder }, tracked: tracked.responder };
   });
   await test("a native sidebar hit does not use the renderer fallback", async () => {
     await reset();

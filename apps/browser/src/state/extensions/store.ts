@@ -1,4 +1,5 @@
 import type { ActionState, ExtensionInstallPrompt, ExtensionPackage, InstalledExtension } from "../../platform/extensions";
+import type { SettingsPane, SettingsPlace } from "../settings/settingsWindows";
 import { useMemo } from "react";
 import { create } from "zustand";
 import { useBrowser, type BrowserState } from "../browser/store";
@@ -10,15 +11,13 @@ export type { ActionState, InstalledExtension } from "../../platform/extensions"
 
 export type Anchor = { x: number; y: number; width: number; height: number };
 
-export type InstallRequest = {
-  windowId: string;
-  profile: string;
-  source: "webStore" | "unpacked";
-  status: "ready" | "installing" | "error";
-  pkg?: ExtensionPackage;
-  error?: string;
-  prompt?: ExtensionInstallPrompt;
-};
+export const extensionPageUrl = (extensionId: string, path: string) => `chrome-extension://${extensionId}/${path.replace(/^\//, "")}`;
+
+export type InstallRequest = { windowId: string; profile: string; source: "webStore" | "unpacked" } & (
+  | { status: "error"; error: string }
+  | { status: "ready" | "installing"; pkg: ExtensionPackage }
+  | { status: "prompt"; prompt: ExtensionInstallPrompt }
+);
 
 type ExtensionsStore = {
   lists: Record<string, InstalledExtension[]>;
@@ -27,6 +26,7 @@ type ExtensionsStore = {
   install: InstallRequest | null;
   pinDialog: { windowId: string } | null;
   sidePanels: Record<string, SidePanel>;
+  sidePanelLookups: Record<string, number>;
 };
 
 export type SidePanel = {
@@ -34,9 +34,10 @@ export type SidePanel = {
   profile: string;
   pageProfile: string;
   url: string;
+  opened: number;
 };
 
-export const useExtensions = create<ExtensionsStore>()(() => ({ lists: {}, actions: {}, popup: null, install: null, pinDialog: null, sidePanels: {} }));
+export const useExtensions = create<ExtensionsStore>()(() => ({ lists: {}, actions: {}, popup: null, install: null, pinDialog: null, sidePanels: {}, sidePanelLookups: {} }));
 
 const EMPTY: InstalledExtension[] = [];
 
@@ -59,15 +60,15 @@ export function extensionsProfileId(profileId?: string | null, windowId?: string
   return settingsProfileOf(s, windowId) ?? settingsProfileOf(s, focused) ?? s.settings.defaultProfileId;
 }
 
-export const settingsProfileFor = (pane: string, current: { pane: string; profileId: string | null }): string | null =>
+export const settingsProfileFor = (pane: SettingsPane, current: SettingsPlace): string | null =>
   pane === "extensions" ? extensionsProfileId(current.pane === "extensions" ? current.profileId : null) : null;
 
-export const isPrivate = (s: BrowserState, windowId: string) => !!s.windows[windowId]?.incognito;
+export const isPrivate = (s: BrowserState, windowId: string) => s.windows[windowId]?.kind === "private";
 
 export const pageProfile = (s: BrowserState, windowId: string) =>
   isPrivate(s, windowId) ? engineProfile(s, s.windows[windowId]!.profileId) : extensionProfile(s, windowId);
 
-const showsExtension = (priv: boolean, ext: InstalledExtension) => ext.enabled && (!priv || (ext.incognito && !!ext.incognitoSplit));
+const showsExtension = (priv: boolean, ext: InstalledExtension) => ext.enabled && (!priv || ext.incognito);
 
 export function useWindowExtensions(windowId: string): InstalledExtension[] {
   const profile = useBrowser((s) => extensionProfile(s, windowId));
@@ -75,6 +76,8 @@ export function useWindowExtensions(windowId: string): InstalledExtension[] {
   const list = useExtensionList(profile);
   return useMemo(() => list.filter((x) => showsExtension(priv, x)), [list, priv]);
 }
+
+export const useToolbarReorderable = (windowId: string) => !useBrowser((s) => isPrivate(s, windowId));
 
 export function windowExtensions(s: BrowserState, windowId: string | undefined): InstalledExtension[] {
   if (!windowId) return EMPTY;

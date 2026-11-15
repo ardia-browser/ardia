@@ -2,11 +2,9 @@ import ExpoModulesCore
 
 public class SitesModule: Module {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaSites")
+    Name(Self.calls.moduleName)
 
-    AsyncFunction("call") { (name: String, profile: String, args: String, promise: Promise) in
-      SitesModule.calls.run(name, profile, args, promise)
-    }.runOnQueue(.main)
+    Self.calls.function
   }
 
   enum EngineName: String {
@@ -33,7 +31,9 @@ public class SitesModule: Module {
       ArdiaServices.resetSiteSettings(profile: args.profile, origin: try args.text("origin"))
       reply.ok()
     },
-    "clearData": { args, reply in ArdiaServices.clearSiteData(profile: args.profile, origin: try args.text("origin")) { reply.service($0, $1) } },
+    "clearData": { args, reply in
+      try engine(args).clearSiteData(profile: args.profile, origin: try args.text("origin")) { reply.service($0, $1) }
+    },
     "zoomLevels": { args, reply in ArdiaServices.zoomLevels(profile: args.profile) { reply.service($0, $1) } },
     "setZoom": { args, reply in
       ArdiaServices.setZoom(try args.double("zoom"), profile: args.profile, host: try args.text("host"))

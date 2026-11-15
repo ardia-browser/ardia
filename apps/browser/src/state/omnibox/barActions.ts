@@ -1,9 +1,10 @@
 import type { CommandAction } from "@ardia/core";
 import type { BrowserCommand } from "../../platform/commands";
 import { isBookmarked } from "../bookmarks/bookmarks";
+import { hidesBookmarkCommand } from "../bookmarks/visibility";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTab, bookmarkProfileId, isPinnedRow, pinnedSectionTitle } from "../browser/model";
-import { canTidyPins } from "../pins/tidyPins";
+import { canTidy } from "../pins/tidy";
 import { commandBarTitle, commandSymbol } from "../commands/commandCatalog";
 import { menuBarRevision, shortcutHint } from "../commands/commandShortcuts";
 import type { Tab } from "../browser/types";
@@ -32,7 +33,7 @@ const DEFS: ActionDef[] = [
   { command: "reopenClosedTab", keywords: ["undo close", "restore tab"] },
   {
     command: "togglePin",
-    title: ({ tab }) => (isPinnedRow(tab) ? "Unpin Tab" : tab?.pinned ? "Unpin from Top Apps" : "Move to Top Apps"),
+    title: ({ tab }) => (isPinnedRow(tab) ? "Unpin Tab" : tab?.pin ? "Unpin from Top Apps" : "Move to Top Apps"),
     keywords: ["pin", "unpin", "pin tab", "unpin tab", "remove from top apps", "favorites"],
     needs: "tab",
   },
@@ -67,7 +68,7 @@ const DEFS: ActionDef[] = [
   {
     command: "bookmarkPage",
     title: ({ s, windowId, tab }) =>
-      tab?.url && isBookmarked(s.bookmarks, bookmarkProfileId(s, s.windows[windowId]), tab.url) ? "Remove Bookmark" : "Bookmark This Page",
+      tab?.url && isBookmarked(s, bookmarkProfileId(s, s.windows[windowId]), tab.url) ? "Remove Bookmark" : "Bookmark This Page",
     keywords: ["add bookmark", "bookmark"],
     needs: page,
   },
@@ -105,8 +106,9 @@ export function barActions(s: BrowserState, windowId: string): CommandAction[] {
   for (const d of DEFS) {
     if (d.needs === "page" && !tab?.url) continue;
     if (d.needs === "tab" && !tab) continue;
-    if (d.needs === "profiles" && w?.incognito) continue;
-    if (d.needs === "pins" && !canTidyPins(s, windowId)) continue;
+    if (d.needs === "profiles" && w?.kind === "private") continue;
+    if (d.needs === "pins" && !canTidy(s, windowId)) continue;
+    if (hidesBookmarkCommand(s.settings, d.command)) continue;
     const id = actionId(d);
     const hint = shortcutHint(id, s);
     out.push({
@@ -117,7 +119,7 @@ export function barActions(s: BrowserState, windowId: string): CommandAction[] {
       ...(d.keywords ? { keywords: d.keywords } : {}),
     });
   }
-  if (w && !w.incognito) {
+  if (w && w.kind !== "private") {
     s.profileOrder.forEach((id) => {
       if (id === w.profileId) return;
       const name = s.profiles[id]?.name ?? "";

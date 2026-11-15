@@ -1,10 +1,10 @@
 import type { MenuItem } from "../../platform/menus";
 import type { ChoiceItem } from "../app/menuChoice";
 import { menuShortcut } from "../commands/commandShortcuts";
-import { folderChildren } from "../bookmarks/bookmarks";
+import { bookmarkRoots, folderChildren, ROOT_TITLES } from "../bookmarks/bookmarks";
 import type { BrowserState } from "../browser/store";
 import { bookmarkProfileId, windowTitle } from "../browser/model";
-import { groupLabel } from "../pins/organize";
+import { groupLabel } from "../pins/tabGrouping";
 import { groupPath } from "../groups/groups";
 
 export { menuSections as sections } from "../app/menuSections";
@@ -49,7 +49,7 @@ export function profileItems(s: BrowserState, isCurrent: (profileId: string) => 
 }
 
 export function windowItems(s: BrowserState, windowId: string): DestinationItem[] {
-  const others = s.windowOrder.filter((id) => id !== windowId && !s.windows[id]!.incognito && s.windows[id]!.kind !== "small");
+  const others = s.windowOrder.filter((id) => id !== windowId && s.windows[id]!.kind !== "private" && s.windows[id]!.kind !== "small");
   return [
     ...others.map((id) => ({ value: { kind: "window" as const, windowId: id }, title: windowTitle(s, id) })),
     ...(others.length ? [sep] : []),
@@ -73,12 +73,12 @@ export function groupItems(s: BrowserState, windowId: string, exclude: string | 
 }
 
 export function bookmarkFolderItems(s: BrowserState, windowId: string): DestinationItem[] {
-  const roots = s.bookmarks.roots[bookmarkProfileId(s, s.windows[windowId])];
+  const roots = bookmarkRoots(s, bookmarkProfileId(s, s.windows[windowId]));
   const folders = roots ? [...folderChildren(s.bookmarks, roots.bar), ...folderChildren(s.bookmarks, roots.other)].filter((n) => n.kind === "folder") : [];
   const folder = (parentId: string | undefined, title: string): DestinationItem => ({ value: { kind: "folder", parentId }, title });
   return [
-    folder(undefined, "Bookmarks Bar"),
-    ...(roots ? [folder(roots.other, "Other Bookmarks")] : []),
+    folder(undefined, ROOT_TITLES.bar),
+    ...(roots ? [folder(roots.other, ROOT_TITLES.other)] : []),
     ...folders.map((f) => folder(f.id, f.title)),
     sep,
     { value: { kind: "newFolder" }, title: "New Folder…" },

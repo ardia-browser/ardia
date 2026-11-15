@@ -30,9 +30,9 @@ test("muting a tab leaves another tab on the same site playing", () => {
 test("a tab's mute stays with it across navigation, to another site and back", () => {
   const { a } = setup();
   toggleMute(a);
-  S().navigated(a, { url: "https://other.example/", title: "" }, {});
+  S().updateTab(a, { url: "https://other.example/", title: "" }, {});
   assert.equal(state(a), "tab");
-  S().navigated(a, { url: "https://video.example/c", title: "" }, {});
+  S().updateTab(a, { url: "https://video.example/c", title: "" }, {});
   assert.equal(state(a), "tab");
 });
 
@@ -44,7 +44,7 @@ test("Mute Site silences every tab on the site, new ones included, and only ther
   assert.equal(S().tabs[b].muted, false, "the site's mute isn't copied into the tab");
   const c = S().newTab(w, { url: "https://video.example/c", background: true });
   assert.equal(state(c), "site");
-  S().navigated(c, { url: "https://other.example/", title: "" }, {});
+  S().updateTab(c, { url: "https://other.example/", title: "" }, {});
   assert.equal(state(c), null, "leaving the site leaves its mute behind");
   toggleSiteMute(a);
   assert.ok(!silent(a) && !silent(b));
@@ -75,7 +75,7 @@ test("the tab menu: Mute Tab with Mute Site under ⌥, and one Unmute Site while
 
 test("a private window's site mutes stay in that window", () => {
   S().hydrate({});
-  const w = S().createWindow({ incognito: true, url: "https://video.example/a" });
+  const w = S().createWindow({ kind: "private", url: "https://video.example/a" });
   const a = S().windows[w].tabIds[0];
   toggleSiteMute(a);
   assert.equal(state(a), "site");

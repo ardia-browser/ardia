@@ -1,7 +1,7 @@
 import { prompt } from "../../platform/dialogs";
 import { showMenu, type MenuItem } from "../../platform/menus";
 import { addFolderToSidebar, makesGroup, restorableArcHolder, restoreArcFolders } from "./bookmarkGroups";
-import { folderChildren, folderLinks } from "./bookmarks";
+import { bookmarkRoots, folderChildren, folderLinks } from "./bookmarks";
 import { addBookmarkFolder, FOLDER_MANY, removeBookmark } from "./actions";
 import { copyLinkItems, openAllItems, openLinkItems, runLinkChoice } from "./linkMenus";
 import { menuSections, type MenuKey } from "../app/menuSections";
@@ -70,7 +70,7 @@ function barShownIn(windowId: string) {
 }
 
 export async function openBarMenu(windowId: string, profileId: string, node: BookmarkNode | null) {
-  const s = { bookmarks: currentBookmarks() };
+  const s = useBrowser.getState();
   const barShown = barShownIn(windowId);
   const target: BarMenuTarget =
     node?.kind === "url"
@@ -80,7 +80,7 @@ export async function openBarMenu(windowId: string, profileId: string, node: Boo
         : null;
   const choice = await showMenu(barMenuItems(target, { barShown, size: useBrowser.getState().settings.bookmarksBarSize }));
   if (!choice) return;
-  const bar = s.bookmarks.roots[profileId]?.bar;
+  const bar = bookmarkRoots(s, profileId)?.bar;
   if (node?.kind === "url") {
     if (runLinkChoice(choice, [node], windowId)) return;
     if (choice === "edit") void editBookmark(node.id, windowId);

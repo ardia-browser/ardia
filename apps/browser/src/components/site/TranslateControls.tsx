@@ -1,4 +1,5 @@
 import { showMenu } from "../../state/app/system";
+import { chooseFromMenu } from "../../state/app/menuChoice";
 import {
   translation,
   defaultTarget,
@@ -9,7 +10,8 @@ import {
   setNeverTranslate,
   toggleTranslation,
   translatePage,
-  translateStateOf,
+  isTranslated,
+  translationTarget,
   useTranslateState,
 } from "../../state/site/translate";
 import { translateMenuItems } from "../../state/site/translateMenu";
@@ -21,18 +23,17 @@ import { isIncognitoProfile } from "../../state/browser/model";
 import { Button, MenuRow, MenuSeparator, Toggle } from "../ui";
 import type { ToolbarPalette } from "../ui/toolbarColors";
 
-export const TranslateButton = memo(function TranslateButton({ tabId, palette, box, radius, onFocus }: { tabId: string; palette: ToolbarPalette; box: number; radius: number; onFocus: () => void }) {
+export const TranslateButton = memo(function TranslateButton({ tabId, palette, onFocus }: { tabId: string; palette: ToolbarPalette; onFocus: () => void }) {
   const theme = useTheme();
   const state = useTranslateState(tabId);
-  if (!translation || (!state.source && state.status === "idle")) return null;
+  const shown = useSettings((s) => s.showTranslateButton);
+  if (!shown || !translation || (!state.source && state.status === "idle")) return null;
   const translated = state.status !== "idle";
   return (
     <Button variant="icon" toolbar
       palette={palette}
+      look="field"
       icon="translate"
-      size={13}
-      box={box}
-      radius={radius}
       color={translated ? theme.accent : undefined}
       onPress={() => {
         onFocus();
@@ -46,7 +47,7 @@ export const TranslateButton = memo(function TranslateButton({ tabId, palette, b
 
 async function chooseLanguage(tabId: string) {
   const languages = await otherLanguages();
-  const current = translateStateOf(tabId).target;
+  const current = translationTarget(tabId);
   const choice = await showMenu(languages.map((l) => ({ id: l.id, title: l.name, checked: l.id === current })));
   if (choice) void translatePage(tabId, choice);
 }
@@ -54,19 +55,19 @@ async function chooseLanguage(tabId: string) {
 async function showTranslateMenu(tabId: string) {
   const tab = currentTab(tabId);
   if (!tab) return;
-  const state = translateStateOf(tabId);
+  const target = translationTarget(tabId);
   const languages = await otherLanguages();
-  const choice = await showMenu(
+  const choice = await chooseFromMenu(
     translateMenuItems({
-      translated: state.status !== "idle",
+      translated: isTranslated(tabId),
       target: languageName(defaultTarget()),
-      languages: languages.map((l) => ({ id: l.id, name: l.name, current: l.id === state.target })),
+      languages: languages.map((l) => ({ id: l.id, name: l.name, current: l.id === target })),
       neverTranslate: isIncognitoProfile(tab.profileId) ? null : isNeverTranslated(tab.profileId, tab.url),
     }),
   );
   if (choice === "original") void revertPage(tabId);
   else if (choice === "translate") void translatePage(tabId);
-  else if (choice?.startsWith("language:")) void translatePage(tabId, choice.slice("language:".length));
+  else if (choice && typeof choice === "object") void translatePage(tabId, choice.language);
   else if (choice === "never") setNeverTranslate(tabId, !isNeverTranslated(tab.profileId, tab.url));
 }
 

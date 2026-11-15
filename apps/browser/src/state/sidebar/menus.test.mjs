@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+globalThis.acTestNativeModules = { ArdiaSharedFolders: { location: () => ({ path: "/scratch", iCloudAvailable: true, iCloudPath: "/scratch" }) } };
 const { useBrowser } = await import("../browser/store.ts");
 const { tabMenuItems } = await import("./tabMenu.ts");
 const { multiTabMenuItems } = await import("./multiTabMenu.ts");
@@ -10,6 +11,8 @@ const { openTabMenu } = await import("./tabMenu.ts");
 const { openMultiMenu } = await import("./multiTabMenu.ts");
 const { openGroupMenu } = await import("./groupMenu.ts");
 const { shellNativeModules } = await import("../../test-native/shell.ts");
+const { splitTabIdsOf } = await import("../splits/splits.ts");
+const { useMedia } = await import("../media/media.ts");
 
 const S = () => useBrowser.getState();
 const MODS = [
@@ -116,6 +119,7 @@ test("a Top Apps tile: unpin first, folders instead of groups, Open in New Windo
   S().pinTabs([ids[0]], true);
   assert.deepEqual(top(tabMenuItems(S(), w, S().tabs[ids[0]])), [
     "Unpin from Top Apps [pin.slash]",
+    "Reset Pinned Tab [arrow.uturn.backward] (off)",
     "Move to Pinned in Personal",
     "Edit Pinned Page ›",
     "---",
@@ -139,7 +143,6 @@ test("a Top Apps tile: unpin first, folders instead of groups, Open in New Windo
     "Mute Site [speaker.slash] ⌥ (alt)",
   ]);
   assert.deepEqual(sub(tabMenuItems(S(), w, S().tabs[ids[0]]), "pinnedPage"), [
-    "Back to Pinned URL [arrow.uturn.backward] (off)",
     "Replace Pinned URL with Current (off)",
     "---",
     "Edit Pinned URL…",
@@ -150,11 +153,30 @@ test("a pinned row offers Top Apps as its other place, and a pinned group's tab 
   const { w, ids } = windowWith("a", "b", "c");
   S().pinTabs([ids[0]], true, true);
   const row = top(tabMenuItems(S(), w, S().tabs[ids[0]]));
-  assert.deepEqual(row.slice(0, 3), ["Unpin [pin.slash]", "Move to Top Apps", "Edit Pinned Page ›"]);
+  assert.deepEqual(row.slice(0, 4), ["Unpin [pin.slash]", "Reset Pinned Tab [arrow.uturn.backward] (off)", "Move to Top Apps", "Edit Pinned Page ›"]);
   S().groupTabs([ids[1]], { name: "P" });
   const member = top(tabMenuItems(S(), w, S().tabs[ids[1]]));
-  assert.deepEqual(member.slice(0, 2), ["Unpin [pin.slash]", "Edit Pinned Page ›"]);
+  assert.deepEqual(member.slice(0, 3), ["Unpin [pin.slash]", "Reset Pinned Tab [arrow.uturn.backward] (off)", "Edit Pinned Page ›"]);
   assert.ok(!member.some((l) => l.startsWith("Remove from Group") || l.startsWith("New Group with Tab") || l.startsWith("Close")));
+});
+
+test("every hover card action is in the menu: Reset Pinned Tab once a pinned tab is away, Remove Bookmark on a saved page, Exit Picture in Picture", () => {
+  const { w, ids } = windowWith("a", "b");
+  S().pinTabs([ids[0]], true);
+  S().updateTab(ids[0], { url: "https://a.com/elsewhere" });
+  const tile = top(tabMenuItems(S(), w, S().tabs[ids[0]]));
+  assert.equal(tile[1], "Reset Pinned Tab [arrow.uturn.backward]");
+  assert.ok(!sub(tabMenuItems(S(), w, S().tabs[ids[0]]), "pinnedPage").some((l) => l.startsWith("Back to Pinned URL") || l.startsWith("Reset")), "not twice");
+  S().toggleBookmark(S().windows[w].profileId, { url: S().tabs[ids[1]].url, title: "b", favicon: null });
+  const saved = top(tabMenuItems(S(), w, S().tabs[ids[1]]));
+  const edit = saved.findIndex((l) => l.startsWith("Edit Bookmark… [bookmark.fill]"));
+  assert.ok(edit > 0);
+  assert.equal(saved[edit + 1], "Remove Bookmark");
+  assert.ok(!saved.some((l) => l.startsWith("Add to Bookmarks")));
+  assert.ok(!saved.some((l) => l.startsWith("Exit Picture in Picture")));
+  useMedia.setState((m) => ({ pipOpen: { ...m.pipOpen, [ids[1]]: "video" } }));
+  assert.ok(top(tabMenuItems(S(), w, S().tabs[ids[1]])).includes("Exit Picture in Picture [pip.exit]"));
+  useMedia.setState((m) => ({ pipOpen: {} }));
 });
 
 test("a split pane offers Remove from Split View in place of Open as Split", () => {
@@ -229,7 +251,7 @@ test("a group's colour menu: None, Neutral, the site's colour, then the palette;
   const g = S().groupTabs([ids[1]], { name: "G", pinned: false });
   const items = groupMenuItems(S(), w, g);
   assert.deepEqual(sub(items, "color").slice(0, 4), ["None", "Neutral ✓", "Match Site Color (off)", "---"]);
-  const shell = shellNativeModules.ArdiaShell;
+  const shell = shellNativeModules.ArdiaMenus;
   const real = shell.showMenu;
   shell.showMenu = (shown) => Promise.resolve(shown.find((it) => it.id === "color").children.find((it) => it.title === "Blue").id);
   try {
@@ -242,7 +264,7 @@ test("a group's colour menu: None, Neutral, the site's colour, then the palette;
 
 test("Move to Window › New Window moves the tab to a new window", async () => {
   const { w, ids } = windowWith("a", "b");
-  const shell = shellNativeModules.ArdiaShell;
+  const shell = shellNativeModules.ArdiaMenus;
   const real = shell.showMenu;
   shell.showMenu = (shown) => Promise.resolve(shown.find((it) => it.id === "moveToWindow").children.at(-1).id);
   try {
@@ -262,6 +284,7 @@ test("the sidebar background menu: new things, then the sidebar toggles, Close A
     "---",
     "New Group [folder.badge.plus]",
     "New Live Folder ›",
+    "Add Shared Folder… [person.2]",
     "---",
     "New Profile… [plus]",
     "---",
@@ -269,10 +292,14 @@ test("the sidebar background menu: new things, then the sidebar toggles, Close A
     "---",
     "Collapse Pinned Tabs [rectangle.compress.vertical] (off)",
     "Show Tabs in Sidebar [sidebar.left] ⇧⌘S ✓",
+    "Sidebar on Right [sidebar.right]",
     "Auto-Hide Tabs ⌘S",
     "---",
     "Close All Tabs [xmark] ⇧⌘K",
   ]);
+  S().updateSettings({ sidebarSide: "right" });
+  assert.ok(top(sidebarMenuItems(S(), w)).includes("Sidebar on Right [sidebar.right] ✓"));
+  S().updateSettings({ sidebarSide: "left" });
   S().closeTabs([ids[1]]);
   assert.ok(top(sidebarMenuItems(S(), w)).includes("Reopen Closed Tab ⇧⌘T"));
 });
@@ -291,7 +318,7 @@ test("a rebound key moves the hint with it, and an alternate keeps its pair only
 });
 
 async function whileMenuIsUp(open, meanwhile, choice) {
-  const shell = shellNativeModules.ArdiaShell;
+  const shell = shellNativeModules.ArdiaMenus;
   const real = shell.showMenu;
   let pick;
   shell.showMenu = () => new Promise((resolve) => (pick = resolve));
@@ -309,8 +336,8 @@ test("Open as Split splits the tab the menu was opened on, even if another tab c
   const { w, ids } = windowWith("a", "b", "c");
   await whileMenuIsUp(() => openTabMenu(w, S().tabs[ids[2]]), () => S().activate(ids[0]), "split");
   const split = Object.values(S().splits)[0];
-  assert.ok(split?.tabIds.includes(ids[2]), "c is a pane");
-  assert.equal(split.tabIds.includes(ids[0]), false, "a, now in front, is left alone");
+  assert.ok(splitTabIdsOf(split).includes(ids[2]), "c is a pane");
+  assert.equal(splitTabIdsOf(split).includes(ids[0]), false, "a, now in front, is left alone");
 });
 
 test("a tab menu whose tab left the window meanwhile does nothing, and Close Other Tabs spares tabs that left", async () => {
@@ -359,14 +386,14 @@ test("Open as Split on a tab that came to the front while its menu was up opens 
   S().activate(ids[0]);
   await whileMenuIsUp(() => openTabMenu(w, S().tabs[ids[2]]), () => S().activate(ids[2]), "split");
   const split = Object.values(S().splits)[0];
-  assert.ok(split?.tabIds.includes(ids[2]), "c is a pane");
-  assert.equal(split.tabIds.length, 2);
-  assert.equal(split.tabIds.includes(ids[0]), false, "a isn't");
+  assert.ok(splitTabIdsOf(split).includes(ids[2]), "c is a pane");
+  assert.equal(splitTabIdsOf(split).length, 2);
+  assert.equal(splitTabIdsOf(split).includes(ids[0]), false, "a isn't");
 });
 
 test("Open as Split on a background tab pairs it with the tab in front when the choice lands", async () => {
   const { w, ids } = windowWith("a", "b", "c");
   S().activate(ids[0]);
   await whileMenuIsUp(() => openTabMenu(w, S().tabs[ids[2]]), () => S().activate(ids[1]), "split");
-  assert.deepEqual(Object.values(S().splits).map((v) => [...v.tabIds].sort()), [[ids[1], ids[2]].sort()]);
+  assert.deepEqual(Object.values(S().splits).map((v) => [...splitTabIdsOf(v)].sort()), [[ids[1], ids[2]].sort()]);
 });

@@ -14,6 +14,7 @@ NSSet<NSString *> *ReservedIdentifiers() {
   static NSSet<NSString *> *reserved = [NSSet setWithArray:@[
     @"ardia.command.closeTab", @"ardia.shortcut.std:closeWindow:", @"ardia.command.newIncognitoWindow", @"ardia.command.newTab",
     @"ardia.command.newWindow", @"ardia.command.reopenClosedTab", @"ardia.command.nextTab", @"ardia.command.previousTab",
+    @"ardia.command.nextProfile", @"ardia.command.previousProfile",
     @"ardia.command.tabSwitcher", kQuitIdentifier, @"ardia.command.copyUrl", @"ardia.command.devTools", @"ardia.command.toggleDevTools",
     @"ardia.command.searchTabs"
   ]];
@@ -115,6 +116,7 @@ bool IsReservedKey(NSEvent *event) {
 bool IsSecondSidebarKeyPress(NSEvent *event) {
   if (!IsSidebarKey(event) || event.isARepeat) return false;
   const SidebarKeyPress first = gSidebarKeyPressForPage;
+  if (first.at == event.timestamp && first.window == event.windowNumber) return false;
   const bool second = first.at > 0 && first.window == event.windowNumber && event.timestamp - first.at <= NSEvent.doubleClickInterval;
   gSidebarKeyPressForPage = second ? SidebarKeyPress{} : SidebarKeyPress{event.timestamp, event.windowNumber};
   return second;
@@ -123,13 +125,16 @@ bool IsSecondSidebarKeyPress(NSEvent *event) {
 bool KeepsUnhandledSidebarKeyInPage(NSWindow *window, NSEvent *event) {
   if (!IsSidebarKey(event)) return false;
   NSResponder *focused = window.firstResponder;
-  const SEL textInputType = NSSelectorFromString(@"textInputType");
-  const bool typing = [NSStringFromClass(focused.class) isEqualToString:@"RenderWidgetHostViewCocoa"] && [focused respondsToSelector:textInputType] &&
-                      ((int (*)(id, SEL))objc_msgSend)(focused, textInputType) != 0;
+  const bool typing = [focused isKindOfClass:NSView.class] && [ArdiaCorePageView isEditingText:(NSView *)focused];
   if (!typing) gSidebarKeyPressForPage = SidebarKeyPress{};
   return typing;
 }
 
+}
+
+BOOL ArdiaPerformReservedKey(NSEvent *event) {
+  return event.type == NSEventTypeKeyDown && (IsReservedKey(event) || IsSecondSidebarKeyPress(event)) &&
+         [NSApp.mainMenu performKeyEquivalent:event];
 }
 
 namespace ardia_host {

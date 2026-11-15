@@ -13,8 +13,14 @@ export const privacyRows = {
           advanced: true,
           title: "Advanced Settings",
           description: "Block common components found across the web by using additional rules and filters.",
-          keywords: ["filter lists", "annoyances", "malware", "regional", "ad block settings"],
+          keywords: ["filter lists", "annoyances", "malware", "regional", "ad block settings", "custom filter list", "add filter list", "import list", "subscribe"],
         },
+      },
+    },
+    {
+      section: "All sites",
+      rows: {
+        blockAutoplayEverywhere: { title: "Block autoplay on every site", description: "Sites you set to Allow in Site Controls still autoplay. A click on a player always plays. Applies to pages you open or reload. Covers Chromium tabs only: WebKit tabs still autoplay for now.", keywords: ["autoplay", "auto play", "videos playing", "stop videos", "media autoplay", "muted autoplay"] },
       },
     },
     {
@@ -22,8 +28,8 @@ export const privacyRows = {
       rows: {
         sitePermissions: {
           title: "Site permissions",
-          description: "Pop-ups, camera, location and other permissions you've set for sites.",
-          keywords: ["camera", "microphone", "location", "notifications", "popups", "cookies", "javascript", "clear site data", "website settings"],
+          description: "Pop-ups, camera, location, notifications and other permissions you've set for sites.",
+          keywords: ["camera", "microphone", "location", "popups", "cookies", "javascript", "clear site data", "website settings"],
         },
       },
     },
@@ -34,7 +40,7 @@ export const privacyRows = {
         commandScrollZoom: {
           title: "Zoom with ⌘ and the mouse wheel",
           description: "Sites that use ⌘-scroll themselves, like maps, still get it. ⌘+, ⌘− and ⌘0 zoom either way.",
-          keywords: ["scroll wheel", "command scroll", "cmd scroll", "mouse zoom", "accidental zoom", "page zoom"],
+          keywords: ["scroll wheel", "command scroll", "cmd scroll", "mouse zoom", "accidental zoom", "page zoom", "font size", "text size", "bigger text"],
         },
       },
     },
@@ -42,7 +48,22 @@ export const privacyRows = {
       section: "Crash reports and usage",
       rows: {
         shareDiagnostics: { title: "Share anonymous crash reports and usage stats", keywords: ["telemetry", "analytics", "diagnostics", "crash"] },
-        whatsSent: { title: "What's Sent", description: "Every field, and what never leaves this Mac.", keywords: ["telemetry", "data collection"] },
+        whatsSent: { title: "What's Sent", description: "Every field, and what never leaves this Mac.", keywords: ["telemetry", "data collection", "analytics", "usage data"] },
+        anonymousId: {
+          title: "Your anonymous ID",
+          description: "The name and colours you appear to us as, and resetting the ID.",
+          keywords: ["install id", "identity", "reset id", "avatar", "anonymous name"],
+        },
+      },
+    },
+    {
+      section: "Kept on this Mac",
+      rows: {
+        viewData: {
+          title: "The last 7 days",
+          description: "Saves the last 7 days Ardia recorded to your Downloads folder.",
+          keywords: ["view my data", "local copy", "export", "download my data", "telemetry log", "diagnostics", "events"],
+        },
       },
     },
   ],
@@ -89,7 +110,17 @@ export const privacyRows = {
       section: "Other search engines",
       rows: { otherEngines: { advanced: true, title: "Other search engines", description: "Type a shortcut and press Tab in the command bar to search a site directly.", keywords: ["custom search", "site search", "keyword"] } },
     },
-    { section: "Suggestions", rows: { suggestions: { title: "Show search suggestions", description: "Sends what you type to your search engine to suggest searches.", keywords: ["autocomplete"] } } },
+    {
+      section: "Suggestions",
+      rows: {
+        suggestions: { title: "Show search suggestions", description: "Sends what you type to your search engine to suggest searches.", keywords: ["autocomplete"] },
+        commandBarHistory: {
+          title: "Suggest pages from history",
+          description: "Pages you visited show in the command bar as you type and complete the address for you. Off, it suggests open tabs, bookmarks, searches and actions only; your history stays in History, ⌘Y.",
+          keywords: ["history", "visited pages", "browsing history", "hide history", "autocomplete", "autofill", "inline completion", "recent pages", "command bar", "omnibox"],
+        },
+      },
+    },
     {
       section: "Text selection",
       rows: {

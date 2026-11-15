@@ -43,7 +43,7 @@ final class CallArgs {
 
   func choice<Choice: RawRepresentable>(_ key: String, _: Choice.Type = Choice.self) throws -> Choice where Choice.RawValue == String {
     let raw = try text(key)
-    guard let value = Choice(rawValue: raw) else { throw BadCallArgs(message: "\(key) can't be \(raw)") }
+    guard let value = Choice(rawValue: raw) else { throw BadCallArgs(message: "\(key) isn't one of the values it takes") }
     return value
   }
 }
@@ -94,6 +94,20 @@ struct CallTable {
   let domain: String
   let handlers: [String: CallHandler]
 
+  var moduleName: String { "Ardia\(domain.prefix(1).uppercased())\(domain.dropFirst())" }
+
+  var function: AnyDefinition {
+    AsyncFunction("call") { (name: String, profile: String, args: String, promise: Promise) in
+      run(name, profile, args, promise)
+    }.runOnQueue(.main)
+  }
+
+  func forwardEvents(to module: Module) -> AnyDefinition {
+    OnCreate { [domain, weak module] in
+      ArdiaEvents.setSender({ [weak module] name, data in module?.sendEvent(domain, ["name": name, "data": data]) }, forDomain: domain)
+    }
+  }
+
   func run(_ name: String, _ profile: String, _ args: String, _ promise: Promise) {
     guard let handler = handlers[name] else { return promise.reject("ERR_UNKNOWN_CALL", "\(domain).\(name) isn't a call") }
     do {
@@ -120,7 +134,4 @@ enum EngineCall {
     ArdiaEngineBridge.call(name, profile: profile, args: json) { reply.engine($0) }
   }
 
-  static func listen(_ domain: String, _ module: Module) {
-    ArdiaEvents.setSender({ [weak module] name, data in module?.sendEvent(domain, ["name": name, "data": data]) }, forDomain: domain)
-  }
 }

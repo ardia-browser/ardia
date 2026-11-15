@@ -7,10 +7,14 @@ final class ShortcutRecorder {
   static let shared = ShortcutRecorder()
   private var monitor: Any?
   private var promise: Promise?
+  private var owner: ObjectIdentifier?
 
-  func record(_ promise: Promise) {
+  var isRecording: Bool { monitor != nil }
+
+  func record(_ promise: Promise, for module: AnyObject) {
     finish(nil)
     self.promise = promise
+    owner = ObjectIdentifier(module)
     monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .rightMouseDown]) { [weak self] event in
       guard let self else { return event }
       guard event.type == .keyDown else {
@@ -22,7 +26,9 @@ final class ShortcutRecorder {
         self.finish(nil)
         return nil
       }
-      let key = (event.characters(byApplyingModifiers: []) ?? event.charactersIgnoringModifiers ?? "").lowercased()
+      let unmodified = event.charactersIgnoringModifiers ?? ""
+      let navigationKey = unmodified.unicodeScalars.first.map { (0xF700...0xF8FF).contains($0.value) } ?? false
+      let key = navigationKey ? unmodified : (event.characters(byApplyingModifiers: []) ?? unmodified).lowercased()
       guard !key.isEmpty else { return nil }
       let functionKey = key.unicodeScalars.first.map { (0xF704...0xF726).contains($0.value) } ?? false
       guard flags.contains(.command) || flags.contains(.control) || functionKey else {
@@ -41,10 +47,21 @@ final class ShortcutRecorder {
   }
 
   func finish(_ result: [String: Any]?) {
+    let pending = stop()
+    pending?.resolve(result)
+  }
+
+  func abandon(by module: AnyObject) {
+    guard owner == ObjectIdentifier(module) else { return }
+    _ = stop()
+  }
+
+  private func stop() -> Promise? {
     if let monitor { NSEvent.removeMonitor(monitor) }
     monitor = nil
+    owner = nil
     let pending = promise
     promise = nil
-    pending?.resolve(result)
+    return pending
   }
 }

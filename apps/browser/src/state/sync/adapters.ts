@@ -2,16 +2,18 @@ import { addHistoryVisits, deleteHistoryUrls } from "../../platform/history";
 import { deletePassword } from "../../platform/passwords";
 import { orWarn } from "../../lib/fallback";
 import { assignPositions, SyncNative, type Adapter, type SealedLogin } from "../../platform/sync";
-import { bookmarkUuidFor, ensureRoots, isBookmarkUuid } from "../bookmarks/bookmarks";
-import { MAX_HISTORY, MAX_VISIT_TIMES } from "../history/history";
+import { bookmarkRoots, bookmarkUuidFor, ensureRoots, isBookmarkUuid } from "../bookmarks/bookmarks";
+import { historyOf, historyViewOf, MAX_HISTORY, MAX_VISIT_TIMES, withHistoryList } from "../history/history";
 import { useBrowser } from "../browser/store";
 import { engineProfile } from "../browser/model";
+import { profileOpened } from "../profiles/profileLoading";
 import { isPeekTab } from "../peek/peek";
 import { fromSync } from "../pins/pinOrderChoices";
 import { fromLegacy } from "../../lib/legacy";
 import type { BookmarkNode, HistoryEntry } from "../browser/types";
 import { isWebPageUrl } from "../../lib/url";
-import { BOOKMARK, DEVICE, DEVICE_TABS, HISTORY, SHARE, bookmarkValue, historyValue, passwordValue, recordId, type BookmarkValue, type DeviceRecord, type DeviceTabs, type HistoryValue, type PasswordValue, type ShareRecord } from "./records";
+import { BOOKMARK, DEVICE, DEVICE_TABS, HISTORY, RECEIVES_TABS, SHARE, bookmarkValue, historyValue, passwordValue, recordId, type BookmarkValue, type DeviceRecord, type DeviceTabs, type HistoryValue, type PasswordValue, type ShareRecord } from "./records";
+import { isAsleep } from "../tabs/pageSession";
 
 const store = () => useBrowser.getState();
 
@@ -48,7 +50,7 @@ export function deviceAdapter(deviceId: string, name: () => string, retired = fa
   return {
     prefix: DEVICE,
     extract: () => ({
-      values: retired ? new Map() : new Map([[`${DEVICE}${deviceId}`, { n: name() } satisfies DeviceRecord]]),
+      values: retired ? new Map() : new Map([[`${DEVICE}${deviceId}`, { n: name(), k: "mac", f: [RECEIVES_TABS] } satisfies DeviceRecord]]),
       ignore: (key) => key !== `${DEVICE}${deviceId}`,
     }),
     apply: () => true,
@@ -56,13 +58,13 @@ export function deviceAdapter(deviceId: string, name: () => string, retired = fa
 }
 
 export function bookmarksAdapter(profileId: string): Adapter {
-  const ready = () => !!store().bookmarksReady[profileId];
+  const ready = () => !!store().bookmarksReady[engineProfile(store(), profileId)];
   return {
     prefix: BOOKMARK,
     extract: (base) => {
       if (!ready()) return null;
       const b = store().bookmarks;
-      const roots = b.roots[profileId];
+      const roots = bookmarkRoots(store(), profileId);
       const values = new Map<string, unknown>();
       if (!roots) return { values };
       const keyOf = (id: string) => {
@@ -104,7 +106,7 @@ export function bookmarksAdapter(profileId: string): Adapter {
     apply: (visible) => {
       if (!ready()) return false;
       const s = store();
-      const [b, roots] = ensureRoots(s, profileId);
+      const [b, roots] = ensureRoots(s.bookmarks, engineProfile(s, profileId));
       const decoded = [...visible].map(([k, v]) => [k, bookmarkValue(v)] as const);
       if (decoded.some(([, v]) => !v)) return false;
       const values = new Map(decoded.map(([k, v]) => [bookmarkUuidFor(recordId(BOOKMARK, k)), v!]));
@@ -172,7 +174,7 @@ export function historyExpired(key: string, value: unknown, now: number) {
 }
 
 export function historyAdapter(profileId: string): Adapter {
-  const ready = () => !!store().historyReady[profileId];
+  const ready = () => !!historyViewOf(store(), profileId)?.ready;
   return {
     prefix: HISTORY,
     extract: (base) => {
@@ -180,8 +182,7 @@ export function historyAdapter(profileId: string): Adapter {
       const since = Date.now() - HISTORY_WINDOW_MS;
       const values = new Map<string, unknown>();
       const older = new Set<string>();
-      const view = store().history[profileId] ?? [];
-      const floor = store().historyFloor[profileId] ?? -Infinity;
+      const { list: view, floor } = historyViewOf(store(), profileId)!;
       for (const e of view) {
         if (!isWebPageUrl(e.url)) continue;
         const key = `${HISTORY}${e.url}`;
@@ -208,7 +209,7 @@ export function historyAdapter(profileId: string): Adapter {
     apply: async (visible, changed) => {
       if (!ready()) return false;
       const since = Date.now() - HISTORY_WINDOW_MS;
-      const byUrl = new Map((store().history[profileId] ?? []).map((e) => [e.url, e]));
+      const byUrl = new Map(historyOf(store(), profileId).map((e) => [e.url, e]));
       const add: { url: string; title: string; visitTimes: number[] }[] = [];
       const remove: string[] = [];
       const updates = new Map<string, HistoryEntry | null>();
@@ -216,7 +217,7 @@ export function historyAdapter(profileId: string): Adapter {
         const url = recordId(HISTORY, key);
         if (!isWebPageUrl(url)) continue;
         const v = historyValue(visible.get(key));
-        if (visible.has(key) && !v) continue;
+        if (visible.has(key) && !v) return false;
         const old = byUrl.get(url);
         if (v) {
           const have = old?.visitTimes ?? [];
@@ -241,7 +242,7 @@ export function historyAdapter(profileId: string): Adapter {
       const engine = engineProfile(useBrowser.getState(), profileId);
       await Promise.all([addHistoryVisits(engine, add, SAME_VISIT_MS), deleteHistoryUrls(engine, remove)]);
       useBrowser.setState((s) => {
-        const current = new Map((s.history[profileId] ?? []).map((e) => [e.url, e]));
+        const current = new Map(historyOf(s, profileId).map((e) => [e.url, e]));
         for (const [url, update] of updates) {
           const now = current.get(url);
           if (!update) current.delete(url);
@@ -252,7 +253,7 @@ export function historyAdapter(profileId: string): Adapter {
           }
         }
         const list = [...current.values()].sort((a, z) => z.lastVisit - a.lastVisit).slice(0, MAX_HISTORY);
-        return { history: { ...s.history, [profileId]: list } };
+        return withHistoryList(s, engine, list);
       });
     },
   };
@@ -268,7 +269,7 @@ export function deviceTabsAdapter(profileId: string, deviceId: string, name: () 
       if (retired) return { values: new Map(), ignore: (k) => k !== key };
       const s = store();
       const open = Object.values(s.tabs)
-        .filter((t) => t.profileId === profileId && !t.pinned && !t.unloaded && isWebPageUrl(t.url) && !s.windows[t.windowId]?.incognito && !isPeekTab(s, t.id))
+        .filter((t) => t.profileId === profileId && !t.pin && !isAsleep(t) && isWebPageUrl(t.url) && s.windows[t.windowId]?.kind !== "private" && !isPeekTab(s, t.id))
         .sort((a, z) => z.lastActiveAt - a.lastActiveAt)
         .slice(0, MAX_DEVICE_TABS)
         .map((t) => ({ u: t.url, t: t.customTitle || t.title }));
@@ -290,22 +291,23 @@ const nativePasswords: SealedPasswords = {
   save: async (p, origin, username, sealed, replacing) => !!(await SyncNative?.savePassword(p, origin, username, sealed, replacing)),
 };
 
-export function passwordsAdapter(profileId: string, forced: () => boolean, logins: SealedPasswords = nativePasswords): Adapter {
+export function passwordsAdapter(profileId: string, logins: SealedPasswords = nativePasswords): (forced: boolean) => Adapter {
   let lastRead = 0;
   let quietUntil = 0;
   let created = new Map<string, number>();
   const profile = () => engineProfile(useBrowser.getState(), profileId);
   const keyOf = (origin: string, username: string) => `pws:${origin}\n${username}`;
   const read = async () => {
+    if (!profileOpened(profile())) return null;
     const list = await logins.read(profile());
     if (!list) return null;
     return new Map(list.map((l) => [keyOf(l.origin, l.username), { o: l.origin, u: l.username, s: l.sealed, c: l.created }] as const));
   };
-  return {
+  return (forced) => ({
     prefix: "pws:",
     extract: async () => {
       const now = Date.now();
-      if (now < quietUntil || (now - lastRead < PASSWORD_READ_INTERVAL && !forced())) return null;
+      if (now < quietUntil || (now - lastRead < PASSWORD_READ_INTERVAL && !forced)) return null;
       const local = await read();
       if (!local) return null;
       lastRead = now;
@@ -316,21 +318,26 @@ export function passwordsAdapter(profileId: string, forced: () => boolean, login
       const value = passwordValue(v);
       return (value && created.get(keyOf(value.o, value.u))) || undefined;
     },
-    apply: async (visible, changed, base) => {
+    apply: async (visible, changed, base, records) => {
       const local = await read();
       if (!local) return false;
       let ok = true;
       for (const key of changed) {
+        if (records.held()) return false;
         const v = passwordValue(visible.get(key));
-        if (visible.has(key) && !v) continue;
+        if (visible.has(key) && !v) return false;
         const have = local.get(key);
         const known = passwordValue(base(key));
         if (have && known?.s !== have.s) continue;
         if (v) {
           if (have?.s === v.s) continue;
-          ok = (await logins.save(profile(), v.o, v.u, v.s, !!have).catch(orWarn(false))) && ok;
+          const saved = await logins.save(profile(), v.o, v.u, v.s, !!have).catch(orWarn(false));
+          if (saved) records.landed(key);
+          ok = saved && ok;
         } else if (have) {
-          ok = (await deletePassword(profile(), have.o, have.u).catch(orWarn(false))) && ok;
+          const deleted = await deletePassword(profile(), have.o, have.u).catch(orWarn(false, "sync delete"));
+          if (deleted) records.landed(key);
+          ok = deleted && ok;
         }
       }
       const landed = (now: Map<string, { s: string }>, key: string) => {
@@ -340,6 +347,7 @@ export function passwordsAdapter(profileId: string, forced: () => boolean, login
       };
       let settled = false;
       for (let i = 0; i < 20 && !settled; i++) {
+        if (records.held()) return false;
         const now = await read();
         settled = !!now && [...changed].every((k) => landed(now, k));
         if (!settled) await new Promise((r) => setTimeout(r, 250));
@@ -347,5 +355,5 @@ export function passwordsAdapter(profileId: string, forced: () => boolean, login
       if (!settled) quietUntil = Date.now() + 30_000;
       return ok;
     },
-  };
+  });
 }

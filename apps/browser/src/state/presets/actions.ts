@@ -2,9 +2,11 @@ import { copyText } from "../../platform/clipboard";
 import { useBrowser } from "../browser/store";
 import { resolveWindowId, tabLayoutOf } from "../browser/model";
 import { useOnboarding } from "../onboarding/onboarding";
+import { adoptSetupChoices } from "../onboarding/setupCodeChoices";
 import { PINNABLE_SITES, pinSites } from "../onboarding/sites";
 import { choosePresetColor } from "../profiles/themeActions";
 import type { Settings } from "../settings/settings";
+import { chooseTabLayout } from "../settings/actions";
 import { decodeSetupCode, describeSetupChoices, encodeSetupCode, SETUP_SETTING_KEYS, type SetupChoices } from "./setupCode";
 
 export type SetupCodeApplied = { ok: true; lines: string[] } | { ok: false; error: string };
@@ -27,17 +29,9 @@ export function onboardingSetupCode(): { code: string; lines: string[] } {
 
 export const copySetupCode = (code: string) => copyText(code);
 
-function applyTabLayout(tabLayout: Settings["tabLayout"]) {
-  for (const w of Object.values(useBrowser.getState().windows)) {
-    const s = useBrowser.getState();
-    if ((w.tabLayout ?? s.settings.tabLayout) !== tabLayout) s.toggleTabLayout(w.id);
-  }
-  useBrowser.getState().updateSettings({ tabLayout });
-}
-
 function applyChoices(choices: SetupChoices, windowId: string | null) {
   const { tabLayout, ...rest } = choices.settings;
-  if (tabLayout) applyTabLayout(tabLayout);
+  if (tabLayout) chooseTabLayout(tabLayout);
   if (Object.keys(rest).length) useBrowser.getState().updateSettings(rest);
   const s = useBrowser.getState();
   const id = resolveWindowId(s, windowId);
@@ -60,21 +54,6 @@ export function applySetupCodeInOnboarding(code: string): SetupCodeApplied {
   const { choices } = decoded;
   applyChoices(choices, useOnboarding.getState().windowId);
   const lines = describeSetupChoices(choices);
-  useOnboarding.setState((o) => {
-    const draft = { ...o.draft };
-    const baseline = { ...o.baseline };
-    for (const key of Object.keys(choices.settings)) {
-      delete draft[key as keyof Settings];
-      delete baseline[key as keyof Settings];
-    }
-    if (choices.color) delete baseline.color;
-    return {
-      preset: choices.preset ?? o.preset,
-      draft,
-      baseline,
-      extras: choices.pins ? { ...o.extras, pins: choices.pins } : o.extras,
-      picked: { ...o.picked, source: lines },
-    };
-  });
+  adoptSetupChoices(choices, lines);
   return { ok: true, lines };
 }

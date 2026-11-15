@@ -1,4 +1,5 @@
 ---
+import { base } from "../../data/site";
 import type { ImageMetadata } from "astro";
 import { Image, Picture } from "astro:assets";
 import Base from "../../layouts/Base.astro";
@@ -13,22 +14,20 @@ import {
   FONTS,
   LOGOS,
   LONG,
-  MARK_SVGS,
   SHORT,
   SHOTS,
   ZIP_NAME,
   logoFile,
   megabytes,
-  oklch,
-  pressZip,
   shotFile,
 } from "../../data/press";
+import { MARK_SVGS, pressZip } from "../../lib/pressAssets";
+import { oklch } from "../../lib/oklch";
 
-const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 const press = `${base}/press`;
 const zipSize = megabytes((await pressZip()).length);
-const shotImages = import.meta.glob<{ default: ImageMetadata }>("../../assets/shots/*.webp", { eager: true });
-const shots = SHOTS.map((s) => ({ ...s, image: shotImages[`../../assets/shots/${s.id}.webp`]!.default }));
+const shotImages = import.meta.glob<{ default: ImageMetadata }>("../../assets/shots/*.webp");
+const shots = await Promise.all(SHOTS.map(async (s) => ({ ...s, image: (await shotImages[`../../assets/shots/${s.id}.webp`]!()).default })));
 const previews: Record<string, ImageMetadata> = { "app-icon": appIcon, "mark-painted": paintedMark };
 const sections = [
   ["logo", "Logo"],

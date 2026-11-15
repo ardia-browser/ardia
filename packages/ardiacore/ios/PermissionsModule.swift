@@ -2,14 +2,11 @@ import ExpoModulesCore
 
 public class PermissionsModule: Module {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaPermissions")
-    Events("permissions")
+    Name(Self.calls.moduleName)
+    Events(Self.calls.domain)
+    Self.calls.forwardEvents(to: self)
 
-    OnCreate { EngineCall.listen("permissions", self) }
-
-    AsyncFunction("call") { (name: String, profile: String, args: String, promise: Promise) in
-      PermissionsModule.calls.run(name, profile, args, promise)
-    }.runOnQueue(.main)
+    Self.calls.function
   }
 
   enum PermissionResult: String {

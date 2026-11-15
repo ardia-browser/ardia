@@ -73,7 +73,6 @@ test("a Bookmarks page row matches the bar, adds Show in Folder for a search res
 
 test("a selection's target counts the links inside folders and names what it deletes", () => {
   const b = {
-    roots: {},
     nodes: {
       f: { kind: "folder", id: "f", parentId: "bar", title: "F", children: ["x", "y"] },
       x: { kind: "url", id: "x", parentId: "f", title: "X", url: "https://x.com/" },
@@ -81,9 +80,10 @@ test("a selection's target counts the links inside folders and names what it del
       z: { kind: "url", id: "z", parentId: "bar", title: "Z", url: "https://z.com/" },
     },
   };
-  assert.deepEqual(rowMenuTarget(b, [b.nodes.f, b.nodes.z], false), { kind: "several", links: 3, items: 2, noun: "Items" });
-  assert.deepEqual(rowMenuTarget(b, [b.nodes.x, b.nodes.z], false), { kind: "several", links: 2, items: 2, noun: "Bookmarks" });
-  assert.deepEqual(rowMenuTarget(b, [b.nodes.z], true), { kind: "url", showPath: true });
+  const s = { bookmarks: b, profiles: {}, profileOrder: [] };
+  assert.deepEqual(rowMenuTarget(s, [b.nodes.f, b.nodes.z], false), { kind: "several", links: 3, items: 2, noun: "Items" });
+  assert.deepEqual(rowMenuTarget(s, [b.nodes.x, b.nodes.z], false), { kind: "several", links: 2, items: 2, noun: "Bookmarks" });
+  assert.deepEqual(rowMenuTarget(s, [b.nodes.z], true), { kind: "url", showPath: true });
 });
 
 test("a History row gets the same verbs plus Open in Split View; several selected rows act together and confirm the removal", () => {

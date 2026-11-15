@@ -1,10 +1,8 @@
 import type { Adapter, Extraction } from "../../platform/sync";
-import { useBrowser } from "../browser/store";
-import { fromSync } from "../pins/pinOrderChoices";
-import { pinKeyOf } from "../pins/pinMirror";
 import type { TabGroup } from "../browser/types";
 import { PIN_GROUP, GROUP_LOOK, legacyColor, lookedColor, NO_BOX, PIN_NEST } from "./pinRecords";
-import { store } from "./pinnedSyncState";
+import { commitPinnedEdit, store } from "./pinnedSyncState";
+import { pinKeyOf } from "../browser/model";
 
 export function groupLooksAdapter(profileId: string): Adapter {
   const keyOf = (k: string) => k.slice(GROUP_LOOK.length);
@@ -47,12 +45,7 @@ export function groupLooksAdapter(profileId: string): Adapter {
       });
       const parkEdited = !!park && parkedGroups!.some((g, i) => g !== park.groups[i]);
       if (!groups && !parkEdited) return true;
-      fromSync(() =>
-        useBrowser.setState({
-          ...(groups ? { groups } : {}),
-          ...(parkEdited ? { parkedPins: { ...s.parkedPins, [profileId]: { ...park!, groups: parkedGroups! } } } : {}),
-        }),
-      );
+      commitPinnedEdit(s, profileId, groups ? { groups } : {}, parkEdited ? { groups: parkedGroups! } : null);
       return true;
     },
   };

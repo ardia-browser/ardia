@@ -3,19 +3,17 @@ import ExpoModulesCore
 
 public class EngineModule: Module {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaEngine")
-    Events("engine")
+    Name(Self.calls.moduleName)
+    Events(Self.calls.domain)
+    Self.calls.forwardEvents(to: self)
 
     OnCreate {
-      EngineCall.listen("engine", self)
       ArdiaEngineBridge.forwardEngineEvents()
       SystemState.shared.onChange = { state in ArdiaEvents.emit("engine.systemState", data: state) }
       SystemState.shared.start()
     }
 
-    AsyncFunction("call") { (name: String, profile: String, args: String, promise: Promise) in
-      EngineModule.calls.run(name, profile, args, promise)
-    }.runOnQueue(.main)
+    Self.calls.function
 
     Function("inputIdleSeconds") { () -> Double in
       guard NSRunningApplication.current.isActive else { return 3600 }
@@ -41,6 +39,20 @@ public class EngineModule: Module {
     "cliControlStatus": EngineCall.passing("ac_cli_control"),
     "setCliControl": { args, reply in
       EngineCall.passing("ac_cli_control", profile: args.profile, args: ["on": try args.bool("on")], reply: reply)
+    },
+    "cliTabTargets": { args, reply in
+      ArdiaHost.cliTabTargets(try args.strings("tabIds")) { reply.ok($0) }
+    },
+    "cliOwnsTab": { args, reply in
+      let tab = ArdiaHost.chromeTabId(ofTab: try args.text("tabId"))
+      EngineCall.passing("ac_cli_owns_tab", profile: args.profile, args: ["tab": tab], reply: reply)
+    },
+    "cliMoveOffscreen": { args, reply in
+      ArdiaHost.cliMoveOffscreen(try args.text("tabId")) { reply.ok($0) }
+    },
+    "cliCloseOffscreenTabs": { _, reply in
+      ArdiaHost.cliCloseOffscreenTabs()
+      reply.ok()
     },
     "setCliActiveTab": { args, reply in
       let active = try args.optionalText("tabId").map { ArdiaHost.chromeTabId(ofTab: $0) } ?? -1

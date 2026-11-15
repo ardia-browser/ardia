@@ -1,4 +1,5 @@
 import type { Bookmarks } from "../browser/types";
+import { isWithin } from "./bookmarks";
 
 export type DropSpot = { parentId: string; slot: number; zone?: string } | { into: string };
 
@@ -32,21 +33,13 @@ export function roomOffsets(ids: string[], draggedId: string | null, slot: numbe
   });
 }
 
-export function isInside(b: Bookmarks, id: string, folderId: string): boolean {
-  let node = b.nodes[folderId];
-  for (let i = 0; node && i < 64; i++) {
-    if (node.id === id) return true;
-    node = node.parentId ? b.nodes[node.parentId] : undefined;
-  }
-  return false;
-}
 
 export function moveTarget(b: Bookmarks, id: string, spot: DropSpot): { parentId: string; index: number } | null {
   const node = b.nodes[id];
   if (!node?.parentId) return null;
   const parentId = "into" in spot ? spot.into : spot.parentId;
   const parent = b.nodes[parentId];
-  if (parent?.kind !== "folder" || isInside(b, id, parentId)) return null;
+  if (parent?.kind !== "folder" || isWithin(b, parentId, [id])) return null;
   if ("into" in spot) return parentId === node.parentId ? null : { parentId, index: parent.children.length };
   const from = node.parentId === parentId ? parent.children.indexOf(id) : -1;
   const slot = Math.max(0, Math.min(spot.slot, parent.children.length));

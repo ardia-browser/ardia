@@ -1,11 +1,12 @@
 import { confirm } from "../../platform/dialogs";
 import { create } from "zustand";
 import { focus, openWindow } from "../browser/actions";
-import { folderLinks } from "./bookmarks";
+import { bookmarkRoots, folderLinks, isWithin, ownerOfBookmark } from "./bookmarks";
 import { storeAction, useBrowser } from "../browser/store";
 import { activeTabId, bookmarkProfileId, resolveWindowId, tabTitle, viewTabIds } from "../browser/model";
 import { originalProfile } from "../windows/small";
 import { isWebPageUrl } from "../../lib/url";
+import { isBookmarklet, runBookmarklet } from "./bookmarklets";
 
 type OpenMode = "current" | "background" | "foreground" | "window" | "incognito" | "split";
 
@@ -17,12 +18,13 @@ export function openModeFor(e: { metaKey?: boolean; shiftKey?: boolean; altKey?:
 }
 
 export function openUrl(url: string, windowId: string | null | undefined, mode: OpenMode) {
+  if (isBookmarklet(url)) return void runBookmarklet(url, windowId);
   const s = useBrowser.getState();
   const id = resolveWindowId(s, windowId);
   const w = id ? s.windows[id] : undefined;
-  if (mode === "incognito") return void openWindow({ incognito: true, url, profileId: originalProfile(s, w) });
+  if (mode === "incognito") return void openWindow({ kind: "private", url, profileId: originalProfile(s, w) });
   if (!id || mode === "window") {
-    const created = openWindow(w?.incognito ? { incognito: true, url, profileId: originalProfile(s, w) } : { url, profileId: w?.profileId });
+    const created = openWindow(w?.kind === "private" ? { kind: "private", url, profileId: originalProfile(s, w) } : { url, profileId: w?.profileId });
     return focus(created);
   }
   const tabId = activeTabId(s, id);
@@ -43,8 +45,9 @@ export function openFolder(folderId: string, windowId: string | null | undefined
   return openLinks(folderLinks(useBrowser.getState().bookmarks, folderId), windowId, mode, FOLDER_MANY);
 }
 
-export async function openLinks(links: { url: string }[], windowId: string | null | undefined, mode: OpenAllMode = "tabs", manyMessage = "That's a lot of pages.") {
+export async function openLinks(given: { url: string }[], windowId: string | null | undefined, mode: OpenAllMode = "tabs", manyMessage = "That's a lot of pages.") {
   const s = useBrowser.getState();
+  const links = given.filter((link) => !isBookmarklet(link.url));
   if (!links.length) return;
   if (links.length > 15) {
     const { confirmed } = await confirm({
@@ -58,8 +61,8 @@ export async function openLinks(links: { url: string }[], windowId: string | nul
   const id = resolveWindowId(s, windowId);
   const source = id ? s.windows[id] : undefined;
   if (mode !== "tabs" || !id) {
-    const incognito = mode === "incognito" || !!source?.incognito;
-    const created = openWindow({ url: links[0]!.url, incognito, profileId: incognito ? undefined : source?.profileId });
+    const incognito = mode === "incognito" || source?.kind === "private";
+    const created = openWindow({ url: links[0]!.url, kind: incognito ? "private" : "main", profileId: incognito ? undefined : source?.profileId });
     openInOrder(created, links.slice(1), activeTabId(useBrowser.getState(), created));
     return focus(created);
   }
@@ -83,13 +86,7 @@ export const useBookmarkDialog = create<{ open: BookmarkDialogState | null }>()(
 
 export const closeBookmarkDialog = () => useBookmarkDialog.setState({ open: null });
 
-export function profileOfBookmark(id: string): string | null {
-  const b = useBrowser.getState().bookmarks;
-  let node = b.nodes[id];
-  for (let i = 0; node?.parentId && i < 64; i++) node = b.nodes[node.parentId];
-  if (!node) return null;
-  return Object.entries(b.roots).find(([, r]) => r.bar === node!.id || r.other === node!.id)?.[0] ?? null;
-}
+export const profileOfBookmark = (id: string) => ownerOfBookmark(useBrowser.getState(), id);
 
 export function bookmarkTab(windowId: string, tabId: string) {
   const s = useBrowser.getState();
@@ -97,9 +94,9 @@ export function bookmarkTab(windowId: string, tabId: string) {
   const tab = s.tabs[tabId];
   if (!s.windows[id] || !tab?.url) return;
   const profileId = bookmarkProfileId(s, s.windows[id]);
-  const roots = s.bookmarks.roots[profileId];
+  const roots = bookmarkRoots(s, profileId);
   const existing = Object.values(s.bookmarks.nodes).find(
-    (n) => n.kind === "url" && n.url === tab.url && roots && isUnder(n.id, [roots.bar, roots.other]),
+    (n) => n.kind === "url" && n.url === tab.url && roots && isWithin(useBrowser.getState().bookmarks, n.id, [roots.bar, roots.other]),
   );
   const bookmarkId =
     existing?.id ?? s.addBookmark({ profileId, url: tab.url, title: tabTitle(tab), favicon: tab.favicon });
@@ -118,20 +115,12 @@ export function bookmarkAllTabs(windowId: string | null | undefined) {
   useBookmarkDialog.setState({ open: { kind: "allTabs", windowId: id, profileId: bookmarkProfileId(s, s.windows[id]), tabs } });
 }
 
-function isUnder(id: string, roots: string[]): boolean {
-  const { nodes } = useBrowser.getState().bookmarks;
-  let node = nodes[id];
-  for (let i = 0; node && i < 64; i++) {
-    if (roots.includes(node.id)) return true;
-    node = node.parentId ? nodes[node.parentId] : undefined;
-  }
-  return false;
-}
 
 export const addBookmark = storeAction("addBookmark");
 export const addBookmarkFolder = storeAction("addBookmarkFolder");
 export const updateBookmark = storeAction("updateBookmark");
 export const moveBookmark = storeAction("moveBookmark");
+export const moveBookmarks = storeAction("moveBookmarks");
 export const removeBookmark = storeAction("removeBookmark");
 export const toggleBookmark = storeAction("toggleBookmark");
 export const addBookmarkTree = storeAction("addBookmarkTree");

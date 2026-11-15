@@ -1,12 +1,14 @@
 // Copyright 2026 Ardia. Apache-2.0.
 
-#include "chrome/browser/ardia/ac_extensions.h"
+#include "chrome/browser/ardia/ac_engine.h"
 
+#include <algorithm>
 #include <map>
 #include <set>
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "base/files/file_path.h"
 #include "base/functional/callback_helpers.h"
@@ -192,9 +194,16 @@ class ExtensionsState : public ProfileState {
               extensions::ExtensionInfoGenerator::ExtensionInfoList infos) {
     Drop(key);
     base::ListValue list;
+    const std::vector<ToolbarActionsModel::ActionId>& toolbar_order =
+        ToolbarActionsModel::Get(profile())->pinned_action_ids();
     for (const auto& info : infos) {
       if (info.type == developer::ExtensionType::kExtension) {
         base::DictValue entry = Entry(info);
+        auto on_toolbar = std::ranges::find(toolbar_order, info.id);
+        if (on_toolbar != toolbar_order.end()) {
+          entry.Set("pinnedIndex",
+                    static_cast<int>(on_toolbar - toolbar_order.begin()));
+        }
         const Extension* extension = Find(profile(), info.id);
         if (extension && !info.disable_reasons.blocked_by_policy &&
             info.state != developer::ExtensionState::kEnabled &&
@@ -309,20 +318,12 @@ void LiftPolicyBlockIfAllowed(Profile* profile, const std::string& id) {
 using ardia::Call;
 using ardia::Reply;
 
-#define AC_EXTENSIONS_CALL()                         \
-  Call call(profile_dir, args_json, reply, context); \
-  if (!call) {                                       \
-    return;                                          \
-  }
-
-AC_ENGINE_CALL(ac_extensions_list) {
-  AC_EXTENSIONS_CALL();
+AC_PROFILE_CALL(ac_extensions_list) {
   ardia::StateFor<ardia::ExtensionsState>(call.profile())
       .List(call.TakeReply());
 }
 
-AC_ENGINE_CALL(ac_extensions_install) {
-  AC_EXTENSIONS_CALL();
+AC_PROFILE_CALL(ac_extensions_install) {
   const std::string path = call.String("path");
   if (path.empty() || path[0] != '/') {
     return call.TakeReply().Error("an absolute path required");
@@ -381,8 +382,7 @@ AC_ENGINE_CALL(ac_extensions_install) {
   installer->Load(load_path);
 }
 
-AC_ENGINE_CALL(ac_extensions_install_crx) {
-  AC_EXTENSIONS_CALL();
+AC_PROFILE_CALL(ac_extensions_install_crx) {
   const std::string path = call.String("path");
   if (path.empty() || path[0] != '/') {
     return call.TakeReply().Error("an absolute path required");
@@ -415,8 +415,7 @@ AC_ENGINE_CALL(ac_extensions_install_crx) {
   installer->InstallCrx(base::FilePath(path));
 }
 
-AC_ENGINE_CALL(ac_extensions_set_enabled) {
-  AC_EXTENSIONS_CALL();
+AC_PROFILE_CALL(ac_extensions_set_enabled) {
   Profile* profile = call.profile();
   const std::string id = call.String("id");
   const bool enable = call.Bool("enabled");
@@ -449,8 +448,7 @@ AC_ENGINE_CALL(ac_extensions_set_enabled) {
       extension, call.TakeReply());
 }
 
-AC_ENGINE_CALL(ac_extensions_uninstall) {
-  AC_EXTENSIONS_CALL();
+AC_PROFILE_CALL(ac_extensions_uninstall) {
   Profile* profile = call.profile();
   const std::string id = call.String("id");
   const extensions::Extension* extension = ardia::Find(profile, id);
@@ -472,8 +470,7 @@ AC_ENGINE_CALL(ac_extensions_uninstall) {
   call.TakeReply().Ok();
 }
 
-AC_ENGINE_CALL(ac_extensions_reload) {
-  AC_EXTENSIONS_CALL();
+AC_PROFILE_CALL(ac_extensions_reload) {
   const std::string id = call.String("id");
   if (!ardia::Find(call.profile(), id)) {
     return call.TakeReply().Error("No such extension");
@@ -483,8 +480,7 @@ AC_ENGINE_CALL(ac_extensions_reload) {
   call.TakeReply().Ok();
 }
 
-AC_ENGINE_CALL(ac_extensions_configure) {
-  AC_EXTENSIONS_CALL();
+AC_PROFILE_CALL(ac_extensions_configure) {
   Profile* profile = call.profile();
   const std::string id = call.String("id");
   if (!ardia::Find(profile, id)) {
@@ -499,6 +495,18 @@ AC_ENGINE_CALL(ac_extensions_configure) {
     if (model->IsActionPinned(id) != *pinned) {
       model->SetActionVisibility(id, *pinned);
     }
+  }
+  if (std::optional<int> index = call.args().FindInt("pinnedIndex")) {
+    ToolbarActionsModel* model = ToolbarActionsModel::Get(profile);
+    if (profile->IsOffTheRecord()) {
+      return call.TakeReply().Error(
+          "Toolbar order can't change in a private window");
+    }
+    if (!model->IsActionPinned(id)) {
+      return call.TakeReply().Error("The extension isn't pinned");
+    }
+    const int last = static_cast<int>(model->pinned_action_ids().size()) - 1;
+    model->MovePinnedAction(id, static_cast<size_t>(std::clamp(*index, 0, last)));
   }
   if (std::optional<bool> allow = call.args().FindBool("fileAccess")) {
     extensions::util::SetAllowFileAccess(id, profile, *allow);

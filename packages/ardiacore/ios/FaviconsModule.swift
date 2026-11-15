@@ -2,11 +2,9 @@ import ExpoModulesCore
 
 public class FaviconsModule: Module {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaFavicons")
+    Name(Self.calls.moduleName)
 
-    AsyncFunction("call") { (name: String, profile: String, args: String, promise: Promise) in
-      FaviconsModule.calls.run(name, profile, args, promise)
-    }.runOnQueue(.main)
+    Self.calls.function
   }
 
   static let calls = CallTable(domain: "favicons", handlers: [

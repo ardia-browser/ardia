@@ -6,6 +6,7 @@ import { engineProfile } from "../browser/model";
 import { carriableCookies, cookieAddresses } from "./signInCookies";
 import { webviews } from "../../platform/webviews";
 import { experimentOn } from "../../platform/killSwitches";
+import { withDeadline } from "../../lib/deadline";
 
 const CARRY_DEADLINE_MS = 1500;
 
@@ -35,8 +36,5 @@ async function copyCookies(tabId: string, url: string): Promise<number> {
 
 export function carrySignInToWebKit(tabId: string, url: string): Promise<number> {
   if (!signInCarryOn()) return Promise.resolve(0);
-  return Promise.race([
-    copyCookies(tabId, url).catch(() => 0),
-    new Promise<number>((resolve) => setTimeout(() => resolve(0), CARRY_DEADLINE_MS)),
-  ]);
+  return withDeadline(copyCookies(tabId, url).catch(() => 0), CARRY_DEADLINE_MS, 0);
 }

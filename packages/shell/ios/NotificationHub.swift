@@ -45,25 +45,24 @@ final class NotificationHub: NSObject, UNUserNotificationCenterDelegate {
     }
   }
 
-  func post(_ options: [String: Any], completion: @escaping (String?) -> Void) {
-    let id = options["id"] as? String ?? UUID().uuidString
+  func post(_ options: NotificationOptions, completion: @escaping (String?) -> Void) {
+    let id = options.id ?? UUID().uuidString
     let content = UNMutableNotificationContent()
-    content.title = options["title"] as? String ?? ""
-    content.body = options["body"] as? String ?? ""
-    if let subtitle = options["subtitle"] as? String { content.subtitle = subtitle }
-    if options["silent"] as? Bool != true { content.sound = .default }
-    if let origin = options["origin"] as? String { content.threadIdentifier = origin }
-    if options["dismissible"] as? Bool == true { content.categoryIdentifier = Self.dismissibleCategory }
-    var info: [String: Any] = [:]
-    for key in ["tabId", "windowId", "origin", "data"] { if let v = options[key] { info[key] = v } }
-    content.userInfo = info
+    content.title = options.title
+    content.body = options.body
+    if let subtitle = options.subtitle { content.subtitle = subtitle }
+    if !options.silent { content.sound = .default }
+    if let origin = options.origin { content.threadIdentifier = origin }
+    if options.dismissible { content.categoryIdentifier = Self.dismissibleCategory }
+    let info: [String: Any?] = ["tabId": options.tabId, "windowId": options.windowId, "origin": options.origin, "data": options.data]
+    content.userInfo = info.compactMapValues { $0 }
 
     let deliver = { [center] in
       center.add(UNNotificationRequest(identifier: id, content: content, trigger: nil)) { error in
         DispatchQueue.main.async { completion(error == nil ? id : nil) }
       }
     }
-    guard let icon = (options["icon"] as? String).flatMap(URL.init(string:)) else { return deliver() }
+    guard let icon = options.icon.flatMap(URL.init(string:)) else { return deliver() }
     attachment(from: icon, id: id) { attachment in
       if let attachment { content.attachments = [attachment] }
       deliver()

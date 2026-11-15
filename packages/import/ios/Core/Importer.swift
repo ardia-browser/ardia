@@ -118,6 +118,7 @@ public final class Importer: @unchecked Sendable {
       }
     }
 
+    let snapshots = SQLiteSnapshots()
     let ordered = ImportKind.allCases.filter(kinds.contains)
     for kind in ordered {
       try cancellation.check()
@@ -130,13 +131,13 @@ public final class Importer: @unchecked Sendable {
           result.bookmarks = try ChromiumBookmarks.load(profile: dir)
           count = result.bookmarks?.linkCount ?? 0
         case (.bookmarks, .firefox):
-          result.bookmarks = try Firefox.bookmarks(places: dir.appendingPathComponent("places.sqlite"), cancellation: cancellation)
+          result.bookmarks = try Firefox.bookmarks(places: dir.appendingPathComponent("places.sqlite"), cancellation: cancellation, snapshots: snapshots)
           count = result.bookmarks?.linkCount ?? 0
 
         case (.history, .chromium), (.history, .arc), (.history, .firefox):
           let flavor: HistoryReader.Flavor = def.family == .firefox ? .firefox : .chromium
           let file = dir.appendingPathComponent(def.family == .firefox ? "places.sqlite" : "History")
-          let (entries, total) = try HistoryReader.read(file, flavor: flavor, options: options, observer: observer, cancellation: cancellation)
+          let (entries, total) = try HistoryReader.read(file, flavor: flavor, options: options, observer: observer, cancellation: cancellation, snapshots: snapshots)
           result.history = entries
           result.historyCount = total
           count = total
@@ -174,7 +175,7 @@ public final class Importer: @unchecked Sendable {
           result.credentials = outcome.items
           count = outcome.items.count
           if outcome.undecryptable > 0 {
-            result.warnings.append(ImportWarning(kind, "undecryptable", "\(Self.count(outcome.undecryptable, "password")) couldn't be decrypted"))
+            result.warnings.append(ImportWarning(kind, .undecryptable, "\(Self.count(outcome.undecryptable, "password")) couldn't be decrypted"))
             if outcome.items.isEmpty { throw ImportError.locked("The \(def.name) key didn't decrypt any passwords") }
           }
         case (.passwords, .firefox):
@@ -188,7 +189,7 @@ public final class Importer: @unchecked Sendable {
           result.cookies = outcome.items
           count = outcome.items.count
           if outcome.undecryptable > 0 {
-            result.warnings.append(ImportWarning(kind, "undecryptable", "\(Self.count(outcome.undecryptable, "cookie")) couldn't be decrypted"))
+            result.warnings.append(ImportWarning(kind, .undecryptable, "\(Self.count(outcome.undecryptable, "cookie")) couldn't be decrypted"))
             if outcome.items.isEmpty { throw ImportError.locked("The \(def.name) key didn't decrypt any cookies") }
           }
         case (.cookies, .firefox):
@@ -196,7 +197,7 @@ public final class Importer: @unchecked Sendable {
           result.cookies = outcome.items
           count = outcome.items.count
           if outcome.skipped > 0 {
-            result.warnings.append(ImportWarning(kind, "skipped",
+            result.warnings.append(ImportWarning(kind, .skipped,
               "\(Self.count(outcome.skipped, "cookie")) from containers or private windows weren't imported"))
           }
 
@@ -207,10 +208,10 @@ public final class Importer: @unchecked Sendable {
           result.cards = outcome.cards
           count = outcome.addresses.count + outcome.cards.count
           if outcome.lockedCards > 0 {
-            result.warnings.append(ImportWarning(kind, "locked", "Unlock \(def.name) to import \(Self.count(outcome.lockedCards, "saved card"))"))
+            result.warnings.append(ImportWarning(kind, .locked, "Unlock \(def.name) to import \(Self.count(outcome.lockedCards, "saved card"))"))
           }
           if outcome.undecryptable > 0 {
-            result.warnings.append(ImportWarning(kind, "undecryptable", "\(Self.count(outcome.undecryptable, "card")) couldn't be decrypted"))
+            result.warnings.append(ImportWarning(kind, .undecryptable, "\(Self.count(outcome.undecryptable, "card")) couldn't be decrypted"))
           }
 
         default:
@@ -220,13 +221,13 @@ public final class Importer: @unchecked Sendable {
       } catch ImportError.cancelled {
         throw ImportError.cancelled
       } catch ImportError.notFound(let message) {
-        result.warnings.append(ImportWarning(kind, "empty", message))
+        result.warnings.append(ImportWarning(kind, .empty, message))
       } catch let error as ImportError {
         result.failed.append(kind)
-        result.warnings.append(ImportWarning(kind, error.code, error.description))
+        result.warnings.append(ImportWarning(kind, error.warningCode, error.description))
       } catch {
         result.failed.append(kind)
-        result.warnings.append(ImportWarning(kind, "unreadable", error.localizedDescription))
+        result.warnings.append(ImportWarning(kind, .unreadable, error.localizedDescription))
       }
       if kind != .history || !succeeded { observer.progress(ImportProgress(kind: kind, phase: .end, processed: count, total: count)) }
     }
@@ -236,6 +237,7 @@ public final class Importer: @unchecked Sendable {
     }
     if let zen {
       result.favicons = zen.favicons(for: ChromiumFavicons.pages(of: result))
+      result.separateEssentials = zen.separateEssentials
     }
     return result
   }

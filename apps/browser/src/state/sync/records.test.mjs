@@ -19,10 +19,11 @@ test("a malformed history record from another Mac neither expires nor stalls com
 
 test("a malformed history record leaves the local entry alone instead of deleting it", async () => {
   const entry = { url: "https://kept.example/", title: "Kept", favicon: null, visits: 1, lastVisit: now, visitTimes: [now] };
-  useBrowser.setState({ history: { default: [entry] }, historyReady: { default: true } });
+  useBrowser.setState({ history: { "": { list: [entry], floor: -Infinity, ready: true } } });
   const view = new Map([["h:https://kept.example/", { t: "Kept", n: "many" }]]);
-  await adapters.historyAdapter("default").apply(view, new Set(view.keys()), () => undefined, { known: () => true, now, horizon: 0, joined: true });
-  assert.deepEqual(useBrowser.getState().history.default.map((e) => e.url), ["https://kept.example/"]);
+  const applied = await adapters.historyAdapter("default").apply(view, new Set(view.keys()), () => undefined, { known: () => true, now, horizon: 0, joined: true });
+  assert.deepEqual(useBrowser.getState().history[""].list.map((e) => e.url), ["https://kept.example/"]);
+  assert.equal(applied, false, "not applied, so the scope keeps its base and never reads the gap as a deletion to publish");
 });
 
 test("devices, their tabs and other Macs' profiles with malformed records drop out of the summary", () => {

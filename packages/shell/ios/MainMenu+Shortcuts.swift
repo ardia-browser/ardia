@@ -66,12 +66,6 @@ extension MainMenu {
     return unsafeBitCast(page.method(for: textInputType), to: Getter.self)(page, textInputType) != 0
   }
 
-  static func comboKey(_ key: String, _ mods: NSEvent.ModifierFlags) -> String {
-    let relevant = mods.intersection([.control, .option, .shift, .command, .function])
-    let shift: NSEvent.ModifierFlags = key != key.lowercased() ? .shift : []
-    return "\(key.lowercased())|\(relevant.union(shift).rawValue)"
-  }
-
   private struct ShortcutGroup {
     var primary: Rebindable
     var path: [String]
@@ -96,10 +90,20 @@ extension MainMenu {
     return order.map { ($0, groups[$0]!) }
   }
 
-  private static func setShortcut(_ item: NSMenuItem, _ key: String, _ mods: NSEvent.ModifierFlags) {
+  static func setShortcut(_ item: NSMenuItem, _ key: String, _ mods: NSEvent.ModifierFlags) {
     let shortcut = keyEquivalent(key, key.isEmpty ? [] : mods)
     if item.keyEquivalent != shortcut.key { item.keyEquivalent = shortcut.key }
     if item.keyEquivalentModifierMask != shortcut.mods { item.keyEquivalentModifierMask = shortcut.mods }
+  }
+
+  static func setShortcut(_ item: NSMenuItem, _ stored: [String]?) {
+    setShortcut(item, stored?.first ?? "", ModifierName.flags(named: stored?.dropFirst() ?? []))
+  }
+
+  private static func isDefault(_ stored: [String], of item: Rebindable) -> Bool {
+    let bound = keyEquivalent(stored.first ?? "", ModifierName.flags(named: stored.dropFirst()))
+    let fallback = keyEquivalent(item.defaultKey, item.defaultModifiers)
+    return !item.defaultKey.isEmpty && bound.key == fallback.key && bound.mods == fallback.mods
   }
 
   private static var announcedShortcuts: [String]?
@@ -112,36 +116,28 @@ extension MainMenu {
     }
     if bound != announcedShortcuts {
       announcedShortcuts = bound
-      NotificationCenter.default.post(name: .ardiaMenuShortcutsChanged, object: nil)
+      ArdiaHost.menuShortcutsChanged()
     }
   }
 
-  static func applyShortcuts(_ overrides: [String: [String]]) {
+  static func applyShortcuts(_ bindings: [String: [[String]]]) {
     defer { announceShortcuts() }
-    let groups = shortcutGroups()
-    let liveIds = Set(groups.map(\.id))
-    let taken = Set(overrides.compactMap { id, o -> String? in
-      guard liveIds.contains(id), let key = o.first, !key.isEmpty else { return nil }
-      return comboKey(key, ModifierName.flags(named: o.dropFirst()))
-    })
-    for (id, group) in groups {
-      let carriesOverride: (Rebindable) -> Bool = { $0 === group.primary || !$0.isHidden }
+    for (id, group) in shortcutGroups() {
+      guard let bound = bindings[id] else {
+        group.items.forEach { setShortcut($0, $0.defaultKey, $0.defaultModifiers) }
+        continue
+      }
       for item in group.items {
-        if let o = overrides[id] {
-          if carriesOverride(item) { setShortcut(item, o.first ?? "", ModifierName.flags(named: o.dropFirst())) } else { setShortcut(item, "", []) }
-        } else if !item.defaultKey.isEmpty, taken.contains(comboKey(item.defaultKey, item.defaultModifiers)) {
-          setShortcut(item, "", [])
+        if item === group.primary || !item.isHidden {
+          setShortcut(item, bound.first)
         } else {
-          setShortcut(item, item.defaultKey, item.defaultModifiers)
+          setShortcut(item, bound.dropFirst().first { isDefault($0, of: item) })
         }
       }
     }
-    var bound = Set<String>()
-    walk(NSApp.mainMenu) { item, _ in
-      guard !item.keyEquivalent.isEmpty, (item as? CommandItem)?.commandAlternateOf == nil else { return }
-      bound.insert(comboKey(item.keyEquivalent, item.keyEquivalentModifierMask))
+    for case let item as CommandItem in profiles.items where item.commandAlternateOf != nil {
+      item.applyAlternate(bindings[item.shortcutId] ?? [])
     }
-    for case let item as CommandItem in profiles.items { item.followPrimaryShortcut(bound: bound) }
   }
 
   static func shortcutList() -> [[String: Any]] {
@@ -150,21 +146,7 @@ extension MainMenu {
       let item = group.primary
       if let command = item as? CommandItem, dynamicCommands.contains(command.command) { continue }
       guard !item.defaultTitle.isEmpty else { continue }
-      let current = shortcut(of: item)
-      let defaultCombo = comboKey(item.defaultKey, item.defaultModifiers)
-      var aliases: [[String]] = []
-      var seen: Set<String> = [defaultCombo]
-      for other in group.items where other !== item && !other.defaultKey.isEmpty {
-        if seen.insert(comboKey(other.defaultKey, other.defaultModifiers)).inserted {
-          aliases.append([other.defaultKey] + ModifierName.names(other.defaultModifiers))
-        }
-      }
-      list.append([
-        "id": id, "title": item.defaultTitle, "path": group.path, "key": current.key,
-        "modifiers": current.key.isEmpty ? [] : ModifierName.names(current.mods), "defaultKey": item.defaultKey,
-        "defaultModifiers": item.defaultKey.isEmpty ? [] : ModifierName.names(item.defaultModifiers), "remappable": true,
-        "aliases": aliases,
-      ])
+      list.append(["id": id, "title": item.defaultTitle, "path": group.path, "remappable": true])
     }
     var seen = Set<String>()
     walk(NSApp.mainMenu) { item, path in
@@ -172,10 +154,9 @@ extension MainMenu {
       let id = "system:" + (path + [item.title]).joined(separator: " > ")
       guard seen.insert(id).inserted else { return }
       let current = shortcut(of: item)
-      let mods = ModifierName.names(current.mods)
       list.append([
-        "id": id, "title": item.title, "path": path, "key": current.key, "modifiers": mods,
-        "defaultKey": current.key, "defaultModifiers": mods, "remappable": false, "aliases": [[String]](),
+        "id": id, "title": item.title, "path": path, "remappable": false, "key": current.key,
+        "modifiers": ModifierName.names(current.mods),
       ])
     }
     return list

@@ -2,12 +2,16 @@ import { setPeekModifier, setPeekOtherSiteTabs, setSplitLinkModifier } from "../
 import { hapticTick } from "../../platform/haptics";
 import { webviews } from "../../platform/webviews";
 import { useBrowser, type BrowserState } from "../browser/store";
-import { activeTabId } from "../browser/model";
-import type { PeekModifier, SplitLinkModifier } from "../settings/settings";
-import { MAX_SPLIT_PANES, splitOf } from "../splits/splits";
+import { activeTabId, IDLE_LIVE } from "../browser/model";
+import { splitLinkModifierOf, type PeekModifier, type SplitLinkModifier } from "../settings/settings";
+import { MAX_SPLIT_PANES, splitOf, splitTabIdsOf } from "../splits/splits";
 import { openSplitPane } from "../splits/actions";
 import { showToast } from "../app/toasts";
 import { isPeekTab, otherSitePeekTabIds, shownPageId } from "./peek";
+import { closeFind } from "../find/actions";
+import { hostOf } from "@ardia/core";
+import { linkDestination } from "../../lib/linkWrappers";
+import { navigationOf } from "../tabs/pageSession";
 
 const store = () => useBrowser.getState();
 const closers = new Map<string, () => void>();
@@ -56,7 +60,7 @@ export function openPeekInSplit(windowId: string) {
   const s = store();
   const peek = s.peeks[windowId];
   if (!peek) return;
-  if ((splitOf(s, peek.sourceId)?.tabIds.length ?? 0) >= MAX_SPLIT_PANES) {
+  if ((splitTabIdsOf(splitOf(s, peek.sourceId))?.length ?? 0) >= MAX_SPLIT_PANES) {
     return showToast(windowId, "Cannot Add New Pane", `Split View can show up to ${MAX_SPLIT_PANES} tabs at once.`);
   }
   const id = s.peekToTab(windowId, { activate: false });
@@ -83,11 +87,8 @@ export function runPeekCommand(command: string, windowId: string): boolean {
     return true;
   }
   if (command !== "closeTab" || s.windowUi[windowId]?.panel.open) return false;
-  if (s.find[peek.tabId]?.open) {
-    s.setFind(peek.tabId, { open: false, count: null, active: 0 });
-    void webviews.get(peek.tabId)?.stopFinding(false);
-    void webviews.get(peek.tabId)?.focus();
-  } else dismissPeek(windowId);
+  if (s.find[peek.tabId]?.open) closeFind(peek.tabId);
+  else dismissPeek(windowId);
   return true;
 }
 
@@ -104,7 +105,7 @@ export function startPeeks() {
     const s = store();
     const modifier = s.settings.peekModifier;
     if (modifier !== sent) void setPeekModifier((sent = modifier));
-    const split = s.settings.splitLinkModifier;
+    const split = splitLinkModifierOf(s.settings);
     if (split !== sentSplit) void setSplitLinkModifier((sentSplit = split));
     const on = s.settings.peekLinksToOtherSites;
     if (read && read.tabs === s.tabs && read.groups === s.groups && read.on === on) return;
@@ -119,6 +120,41 @@ export function startPeeks() {
   useBrowser.subscribe(sync);
   useBrowser.subscribe(bumpOnFirstLoad);
   useBrowser.subscribe(refocusAfterClose);
+  useBrowser.subscribe(landBackOnSite);
+}
+
+type LandingWatch = { nav: number | null; judged: boolean };
+const landings = new Map<string, LandingWatch>();
+const isLinkWrapper = (url: string) => linkDestination(url) !== url;
+
+function landBackOnSite(s: BrowserState, prev: BrowserState) {
+  if (s.tabs === prev.tabs && s.peeks === prev.peeks && s.live === prev.live) return;
+  const shown = new Set(Object.values(s.peeks).map((p) => p.tabId));
+  for (const id of landings.keys()) if (!shown.has(id)) landings.delete(id);
+  for (const [windowId, peek] of Object.entries(s.peeks)) {
+    const landing = peek.landing;
+    const tab = s.tabs[peek.tabId];
+    if (!landing || !tab) continue;
+    const nav = navigationOf(tab)?.seq ?? null;
+    let watch = landings.get(peek.tabId);
+    if (!watch) landings.set(peek.tabId, (watch = { nav, judged: false }));
+    if (watch.judged) continue;
+    if (Date.now() > landing.until || nav !== watch.nav) {
+      watch.judged = true;
+      continue;
+    }
+    const live = s.live[peek.tabId];
+    if (!live || live === IDLE_LIVE || live.isLoading || !/^https?:/i.test(tab.url) || isLinkWrapper(tab.url)) continue;
+    watch.judged = true;
+    if (hostOf(tab.url) !== landing.host) continue;
+    const url = tab.url;
+    queueMicrotask(() => {
+      if (store().peeks[windowId]?.tabId !== peek.tabId) return;
+      if (landing.then === "tab") return openPeekAsTab(windowId);
+      store().closePeek(windowId);
+      store().navigate(peek.sourceId, url, { userInitiated: false });
+    });
+  }
 }
 
 function refocusAfterClose(s: BrowserState, prev: BrowserState) {

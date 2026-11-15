@@ -1,20 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
-import { Animated, Pressable, Text, View } from "react-native";
+import { Animated, Pressable, View } from "react-native";
 import { layout, useTheme } from "../ui/theme";
 import { useIsActiveTab, useTab } from "../../state/browser/hooks";
 import { plural, tabTitle } from "../../state/browser/model";
 import { useTileFolderLabel, useTileFolderMembers } from "../../state/pins/hooks";
-import { SLIDE } from "../tabstrip/stripReorder";
-import { ContextMenuArea, FadeLabel, font, OutsidePressArea, Panel, radius, useHover, weight } from "../ui";
-import { SIDEBAR_SHADOW } from "./tokens";
+import { SLIDE } from "../tabstrip/tokens";
+import { ContextMenuArea, HoverCard as HoverPanel, OutsidePressArea, space, useHover } from "../ui";
+import { SectionLabel } from "./SectionLabel";
+import { SidebarListRow, SidebarRowLabel } from "./SidebarRow";
+import { TAB_ROW } from "./tokens";
 import { clickTab } from "../../state/sidebar/actions";
 import { useDragController, useDragItem, useFolderAway } from "./DragProvider";
 import { openTabMenu } from "../../state/sidebar/menus";
 import { TabIcon } from "./TabIcon";
 import { closeFolderPanel, closeFolderPanelOnPress, closeFolderPanelWhenWindowMoves, openTileFolderMenu, useFolderPanel } from "../../state/sidebar/tileFolderUi";
+import { tailKey } from "./dragModel";
+import { useStruckTitle } from "../../state/sidebar/rowState";
 
-const PANEL_GAP = 6;
-const PANEL_PAD = 6;
+const PANEL_GAP = space.s;
 
 type Frame = { x: number; y: number; w: number; h: number };
 
@@ -25,14 +28,13 @@ export function FolderPanel({ windowId }: { windowId: string }) {
 }
 
 function PanelBody({ windowId, folderId, anchor }: { windowId: string; folderId: string; anchor: { x: number; y: number; width: number; height: number } }) {
-  const theme = useTheme();
   const controller = useDragController();
   const members = useTileFolderMembers(windowId, folderId);
   const label = useTileFolderLabel(windowId, folderId);
   const away = useFolderAway();
   const [root, setRoot] = useState<Frame | null>(null);
   const shown = useMemo(() => new Animated.Value(0), []);
-  const tail = useDragItem("tail:folder", { kind: "tail", tabIds: [], section: "folder" });
+  const tail = useDragItem(tailKey("folder"), { kind: "tail", tabIds: [], section: "folder" });
 
   useEffect(() => {
     controller?.root?.measureInWindow((x, y, w, h) => setRoot({ x, y, w, h }));
@@ -71,12 +73,9 @@ function PanelBody({ windowId, folderId, anchor }: { windowId: string; folderId:
       }}
     >
       <OutsidePressArea onOutsidePress={closeFolderPanelOnPress}>
-        <Panel fill={theme.panel} radius={radius.panel} border={theme.panelBorder} shadow={SIDEBAR_SHADOW.card} style={{ padding: PANEL_PAD }}
-        >
+        <HoverPanel width={root.w - layout.sidebarInset * 2} pad="s">
           <ContextMenuArea onContextMenu={() => void openTileFolderMenu(windowId, folderId)}>
-            <Text numberOfLines={1} style={{ ...font.small, fontWeight: weight.semibold, color: theme.textSecondary, marginTop: 2, marginBottom: 6, marginHorizontal: 6 }}>
-              {label} · {plural(members.length, "tab")}
-            </Text>
+            <SectionLabel title={`${label} · ${plural(members.length, "tab")}`} inset={space.s} top={space.xxs} bottom={space.s} />
           </ContextMenuArea>
           <View style={{ gap: layout.rowGap }}>
             {members.map((id) => (
@@ -84,7 +83,7 @@ function PanelBody({ windowId, folderId, anchor }: { windowId: string; folderId:
             ))}
             <Animated.View ref={tail.wrapper.ref} style={tail.wrapper.style} />
           </View>
-        </Panel>
+        </HoverPanel>
       </OutsidePressArea>
     </Animated.View>
   );
@@ -94,6 +93,7 @@ function MemberRow({ tabId, windowId }: { tabId: string; windowId: string }) {
   const theme = useTheme();
   const tab = useTab(tabId);
   const active = useIsActiveTab(tabId);
+  const struck = useStruckTitle(tabId);
   const { hovered, hoverProps } = useHover();
   const { wrapper, handle } = useDragItem(`fm:${tabId}`, { kind: "row", tabIds: [tabId], section: "folder" });
   if (!tab) return null;
@@ -108,19 +108,10 @@ function MemberRow({ tabId, windowId }: { tabId: string; windowId: string }) {
             }}
           >
             {({ pressed }) => (
-              <View
-                style={{
-                  height: layout.rowHeight,
-                  borderRadius: radius.l,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  paddingHorizontal: 9,
-                  backgroundColor: pressed ? theme.tabPressed : active ? theme.pinnedSelectedFill : hovered ? theme.tabHover : undefined,
-                }}
-              >
+              <SidebarListRow height={layout.rowHeight} padRight={TAB_ROW.contentLeft} fill={pressed ? theme.tabPressed : active ? theme.pinnedSelectedFill : hovered ? theme.tabHover : undefined}>
                 <TabIcon tabId={tabId} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} />
-                <FadeLabel text={tabTitle(tab)} fontSize={font.body.fontSize} color={active ? theme.textPrimary : theme.textTab} style={{ flex: 1, height: 18, marginLeft: 8 }} />
-              </View>
+                <SidebarRowLabel text={tabTitle(tab)} color={active ? theme.textPrimary : theme.textTab} struck={struck} />
+              </SidebarListRow>
             )}
           </Pressable>
         </ContextMenuArea>

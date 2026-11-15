@@ -1,5 +1,5 @@
 import type { APIRoute, GetStaticPaths } from "astro";
-import { PRESS_FILES, pressFile } from "../../data/press";
+import { PRESS_FILES, pressFile } from "../../lib/pressAssets";
 
 export const getStaticPaths: GetStaticPaths = () => PRESS_FILES.map((file) => ({ params: { file } }));
 

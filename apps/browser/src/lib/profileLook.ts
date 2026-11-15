@@ -1,14 +1,12 @@
+import { THEME_TEXTURES, type ThemeBackdropProps, type ThemeMode, type ThemeTexture } from "@ardia/core";
 import { hslToRgb, parseColor, rgbToHsl, toHex } from "./color";
+import { numberOr } from "./decode";
 
 export type ProfileColor = "plum" | "blue" | "purple" | "pink" | "red" | "orange" | "yellow" | "green" | "neutral";
 
 export type ThemeColor = { r: number; g: number; b: number; a: number };
 
 export type ThemeStop = { color: ThemeColor; x: number; y: number };
-
-export type ThemeMode = "auto" | "light" | "dark";
-
-export type ThemeTexture = "grain" | "sand" | "denim" | "tweed";
 
 export type ThemeLook = {
   stops: ThemeStop[];
@@ -28,21 +26,10 @@ export type ProfileLookFields = { color: ProfileColor; theme?: ProfileTheme | nu
 
 export const MAX_THEME_STOPS = 3;
 export const PAD_LIGHTNESS = 0.6;
-export const THEME_TEXTURES: ThemeTexture[] = ["grain", "sand", "denim", "tweed"];
 
 const TEXTURE_STRENGTH: Record<ThemeTexture, number> = { grain: 0.8, sand: 0.15, denim: 0.6, tweed: 0.4 };
 const BASE_REACH = 0.75;
 export const DEFAULT_THEME_ANGLE = 135;
-
-export type ThemeBackdropProps = {
-  themeColors: number[];
-  themeOpacity: number;
-  themeBaseAlpha: number;
-  themeGrain: number;
-  themeTexture: ThemeTexture;
-  themeAppearance: ThemeMode;
-  themeAngle: number;
-};
 
 export const PRESET_BACKDROP: ThemeBackdropProps = {
   themeColors: [],
@@ -309,14 +296,12 @@ export function startingTheme(swatch: string): ProfileTheme {
   return { stops: [stop(-0.45), stop(0.45)], intensity: 0.6, mode: "auto", grain: 0, texture: "grain", translucency: 1 };
 }
 
-const num = (v: unknown, fallback: number) => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
-
 function sanitizeColor(v: unknown): ThemeColor | null {
   if (!v || typeof v !== "object") return null;
   const c = v as Record<string, unknown>;
   const parts = [c.r, c.g, c.b];
   if (!parts.every((n) => typeof n === "number" && Number.isFinite(n) && Math.abs(n) < 4)) return null;
-  return { r: c.r as number, g: c.g as number, b: c.b as number, a: clamp01(num(c.a, 1)) };
+  return { r: c.r as number, g: c.g as number, b: c.b as number, a: clamp01(numberOr(c.a, 1)) };
 }
 
 const MAX_SANITIZED_STOPS = 16;
@@ -330,15 +315,15 @@ function sanitizeLook(v: unknown): ThemeLook | null {
     if (stops.length >= MAX_THEME_STOPS) break;
     const s = raw as Record<string, unknown> | null;
     const color = sanitizeColor(s?.color);
-    if (color) stops.push({ color, x: clamp01(num(s!.x, 0.5)), y: clamp01(num(s!.y, 0.5)) });
+    if (color) stops.push({ color, x: clamp01(numberOr(s!.x, 0.5)), y: clamp01(numberOr(s!.y, 0.5)) });
   }
   if (!stops.length) return null;
   return {
     stops,
-    intensity: clamp01(num(t.intensity, 0.6)),
-    grain: clamp01(num(t.grain, 0)),
+    intensity: clamp01(numberOr(t.intensity, 0.6)),
+    grain: clamp01(numberOr(t.grain, 0)),
     texture: THEME_TEXTURES.includes(t.texture as ThemeTexture) ? (t.texture as ThemeTexture) : "grain",
-    translucency: clamp01(num(t.translucency, 1)),
+    translucency: clamp01(numberOr(t.translucency, 1)),
     ...(typeof t.angle === "number" && Number.isFinite(t.angle) ? { angle: ((t.angle % 360) + 360) % 360 } : {}),
   };
 }

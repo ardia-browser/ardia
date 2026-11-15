@@ -2,6 +2,7 @@ import { installExtensionCrx, onExtensionInstallFailed } from "../../platform/ex
 import { useBrowser } from "../browser/store";
 import { extensionProfile } from "./store";
 import { showToast } from "../app/toasts";
+import { focusedWindowOf } from "../windows/ui";
 
 export function crxPath(url: string): string | null {
   const encoded = /^file:\/\/(\/[^/?#][^?#]*)$/i.exec(url)?.[1];
@@ -17,12 +18,15 @@ export function crxPath(url: string): string | null {
 const toast = (windowId: string, message: string) =>
   showToast(windowId, "Couldn't add the extension", message, { icon: "puzzlepiece.extension" });
 
+export function takesCrxDrops(windowId: string): boolean {
+  const w = useBrowser.getState().windows[windowId];
+  return !!w && w.kind !== "private";
+}
+
 export function installDroppedCrx(windowId: string, urls: string[]): string[] {
   const paths = urls.map(crxPath);
-  if (!paths.some(Boolean)) return urls;
+  if (!paths.some(Boolean) || !takesCrxDrops(windowId)) return urls;
   const s = useBrowser.getState();
-  const w = s.windows[windowId];
-  if (!w || w.incognito) return urls;
   const profile = extensionProfile(s, windowId);
   for (const path of paths) if (path) void installExtensionCrx(path, profile).catch((error: Error) => toast(windowId, error.message));
   return urls.filter((_, i) => !paths[i]);
@@ -31,7 +35,7 @@ export function installDroppedCrx(windowId: string, urls: string[]): string[] {
 export function watchExtensionInstallFailures() {
   onExtensionInstallFailed(({ message, tabId }) => {
     const s = useBrowser.getState();
-    const windowId = (tabId && s.tabs[tabId]?.windowId) || s.ui.focusedWindowId || s.windowOrder[0];
+    const windowId = (tabId && s.tabs[tabId]?.windowId) || focusedWindowOf(s) || s.windowOrder[0];
     if (windowId) toast(windowId, message);
   });
 }

@@ -23,6 +23,8 @@ export type SpaceSummary = {
   pinnedCount: number;
   tabCount: number;
   theme?: string;
+  container?: number;
+  containerName?: string;
 };
 
 export type BrowserProfile = {
@@ -53,7 +55,7 @@ export type BrowserSource = {
   asksAppForTabs?: boolean;
 };
 
-export type BookmarkRole = "toolbar" | "other" | "mobile" | "menu" | "readingList" | "liveGitHubPullRequests" | "liveBitbucketPullRequests";
+export type BookmarkRole = "toolbar" | "other" | "mobile" | "menu" | "readingList" | "liveGitHubPullRequests" | "liveBitbucketPullRequests" | "split";
 
 export type BookmarkNode = {
   type: "folder" | "url";
@@ -73,9 +75,11 @@ export type ImportedTab = {
   pinned: boolean;
   customTitle?: string;
   groupId?: string;
+  splitId?: string;
   windowIndex: number;
   active: boolean;
   lastActive?: number;
+  container?: number;
 };
 
 export type ImportedTabGroup = { id: string; title: string; color: TabGroupColor | (string & {}); collapsed: boolean };
@@ -104,15 +108,14 @@ export type SpaceSuggestion = {
   pinned: BookmarkNode[];
   tabs: ImportedTab[];
   theme?: string;
+  container?: number;
 };
 
 export type ProfileSuggestion = { name: string; color?: string; avatarPath?: string };
 
-export type ImportWarning = {
-  kind?: ImportKind;
-  code: string;
-  message: string;
-};
+export type ImportWarning =
+  | { kind: ImportKind; code: "empty" | "undecryptable" | "skipped" | "locked" | "unreadable" | "unsupported" | "notRunning"; message: string }
+  | { kind?: undefined; code: "unreadableBookmarks" | "unreadableHistory" | "unreadableTabs" | "unreadableCookies" | "unreadableFile"; message: string };
 
 export type ImportedFavicon = { page: string; icon: string; png: string };
 
@@ -133,6 +136,7 @@ export type ImportResult = {
   spaces: SpaceSuggestion[];
   favorites: ImportedTab[];
   favicons: ImportedFavicon[];
+  separateEssentials?: boolean;
   failed: ImportKind[];
   warnings: ImportWarning[];
 };
@@ -168,6 +172,8 @@ export type ImportProgress = {
   total?: number;
 };
 
+type NativeImportOptions = { historyLimit?: number; historySince?: number; spaceIds?: string[]; chunkSize?: number; streamHistory: boolean };
+
 export type ImportOptions = {
   historyLimit?: number;
   historySince?: number;
@@ -201,12 +207,12 @@ type ImportEvent =
 const Native = requireNativeModule<{
   addListener(name: "onImportEvent", listener: (e: ImportEvent) => void): EventSubscription;
   listBrowsers(): Promise<string>;
-  importData(jobId: string, browserId: string, profileId: string, kinds: ImportKind[], options: object): Promise<string>;
+  importData(jobId: string, browserId: string, profileId: string, kinds: ImportKind[], options: NativeImportOptions): Promise<string>;
   cancelImport(jobId: string): void;
   unlockBrowser(browserId: string, primaryPassword: string | null): Promise<null>;
   isBrowserUnlocked(browserId: string): boolean;
   forgetUnlockedKeys(): void;
-  writeImported(token: string, profile: string, kinds: string[]): Promise<string>;
+  writeImported(token: string, profile: string, kinds: ("cookies" | "autofill")[]): Promise<string>;
   discardImported(token: string): void;
   listExtensions(browserId: string, profileId: string): Promise<string>;
   importSafariExport(jobId: string, path: string): Promise<string>;
@@ -251,7 +257,7 @@ async function job<T>(options: ImportOptions, start: (jobId: string) => Promise<
 export const listBrowsers = () => call<BrowserSource[]>(Native.listBrowsers());
 
 export function importData(browserId: string, profileId: string, kinds: ImportKind[], options: ImportOptions = {}) {
-  const native = {
+  const native: NativeImportOptions = {
     historyLimit: options.historyLimit,
     historySince: options.historySince,
     spaceIds: options.spaceIds,

@@ -1,5 +1,7 @@
 #import "ArdiaWebViewInternal.h"
+#import "ArdiaRuntime.h"
 #import "ArdiaEarlyWindow.h"
+#import "ArdiaFairPlay.h"
 #import "ArdiaFieldTiming.h"
 #import "ArdiaHost.h"
 #import "ArdiaPictureInPicture.h"
@@ -11,37 +13,9 @@
 #include <cmath>
 
 using namespace ardia_web_view;
+using namespace ardia_runtime;
 
 namespace {
-
-NSDictionary *NowPlayingState(NSDictionary *d, BOOL main) {
-  NSString *state = Field<NSString>(d, @"playbackState");
-  if (![@[ @"none", @"paused", @"playing" ] containsObject:state]) state = @"none";
-  NSMutableArray *actions = [NSMutableArray array];
-  for (id action in Field<NSArray>(d, @"actions"))
-    if ([action isKindOfClass:NSString.class] && [action length] <= 64 && actions.count < 32) [actions addObject:action];
-  double position = 0, duration = 0, rate = 1, timestamp = 0;
-  Finite(d, @"position", &position);
-  const bool hasDuration = Finite(d, @"duration", &duration) && duration >= 0;
-  Finite(d, @"playbackRate", &rate);
-  Finite(d, @"timestamp", &timestamp);
-  return @{
-    @"frame" : Text(d, @"frame", 64) ?: @"",
-    @"title" : Text(d, @"title", 1024) ?: @"",
-    @"artist" : Text(d, @"artist", 1024) ?: @"",
-    @"album" : Text(d, @"album", 1024) ?: @"",
-    @"artwork" : Text(d, @"artwork", 1 << 20) ?: NSNull.null,
-    @"playbackState" : state,
-    @"position" : @(MAX(position, 0)),
-    @"duration" : hasDuration ? @(duration) : NSNull.null,
-    @"playbackRate" : @(rate),
-    @"timestamp" : @(timestamp),
-    @"hasVideo" : @(Flag(d, @"hasVideo")),
-    @"actions" : actions,
-    @"controllable" : @(Flag(d, @"controllable")),
-    @"main" : @(main),
-  };
-}
 
 NSDictionary *SelectionState(NSDictionary *d) {
   NSString *text = Text(d, @"text", 4000);
@@ -53,10 +27,11 @@ NSDictionary *SelectionState(NSDictionary *d) {
   return @{@"text" : text, @"rect" : @{@"x" : @(x), @"y" : @(y), @"width" : @(width), @"height" : @(height)}};
 }
 
-BOOL gDisplayMediaPicker = NO;
+BOOL gDisplayMediaPicker = YES;
 }
 
 static BOOL gSelectionPopover = YES;
+static BOOL gBlockAutoplayEverywhere = NO;
 static char kScriptFramesKey;
 
 static NSDictionary *DisplayMediaAudioOffer(NSDictionary *message) {
@@ -81,6 +56,10 @@ static NSString *DisplayMediaAudioFor(NSDictionary *offer, NSString *sourceId) {
 
 namespace ardia_web_view {
 
+static NSString *FairPlayConfig() {
+  return JSONText(@{@"event" : @"config", @"on" : @(ArdiaFairPlay.enabled && ArdiaFairPlay.available)});
+}
+
 void AnswerHello(ArdiaCoreTab *tab, NSString *profile, NSString *frameId, BOOL main, NSString *verifiedOrigin) {
   NSString *origin = (main ? VerifiedOrigin(verifiedOrigin) : nil) ?: OriginOf(tab.url);
   __weak ArdiaCoreTab *weakTab = tab;
@@ -97,12 +76,14 @@ void AnswerHello(ArdiaCoreTab *tab, NSString *profile, NSString *frameId, BOOL m
     config[@"peekOtherSites"] = @([ArdiaTabRegistry viewForTab:to].peeksLinksToOtherSites);
     if (PeekTracing()) config[@"peekTrace"] = @YES;
     if (TracingPictureInPicture()) config[@"pipTrace"] = @YES;
-    [to callFrame:frameId kind:@"config" json:JSONString(config)];
+    [to callFrame:frameId kind:@"config" json:JSONText(config)];
   };
+  if (main && frameId.length && [ArdiaFairPlay servesOrigin:VerifiedOrigin(verifiedOrigin)])
+    [tab callFrame:frameId kind:@"fairPlay" json:FairPlayConfig()];
   if (origin && [origin hasPrefix:@"http"])
     [ArdiaServices siteSettings:profile ?: @"" origin:origin reply:^(NSDictionary *settings, NSString *) {
       NSDictionary *autoplay = [settings[@"autoplay"] isKindOfClass:NSDictionary.class] ? settings[@"autoplay"] : nil;
-      answer([autoplay[@"value"] isEqual:@"block"]);
+      answer([autoplay[@"value"] isEqual:@"block"] || (gBlockAutoplayEverywhere && (!autoplay || [autoplay[@"isDefault"] boolValue])));
     }];
   else
     answer(NO);
@@ -123,6 +104,17 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
 
 + (void)setDisplayMediaPicker:(BOOL)enabled {
   gDisplayMediaPicker = enabled;
+  ArdiaCoreEngine.pagesPickDisplayMedia = enabled;
+}
+
++ (void)setBlockAutoplayEverywhere:(BOOL)enabled {
+  gBlockAutoplayEverywhere = enabled;
+}
+
++ (void)setFairPlayInChromium:(BOOL)enabled {
+  if (enabled == ArdiaFairPlay.enabled) return;
+  ArdiaFairPlay.enabled = enabled;
+  for (ArdiaWebView *view in LiveViews().allObjects) [view pushFairPlay];
 }
 
 + (void)setSelectionPopoverEnabled:(BOOL)enabled {
@@ -138,17 +130,19 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
                      main:(BOOL)main
                    origin:(NSString *)verifiedOrigin {
   NSString *sender = VerifiedOrigin(verifiedOrigin) ?: (main ? OriginOf(tab.url) : nil);
-  id data = JSONValue(json);
+  id data = JSONObject(json);
   NSDictionary *dict = [data isKindOfClass:NSDictionary.class] ? data : nil;
   frameId = frameId ?: @"";
   if ([kind isEqualToString:@"hello"]) {
     PeekTrace(@{@"event" : @"hello", @"main" : @(main), @"frame" : frameId ?: @"", @"url" : Text(dict, @"url", 8192) ?: @""});
     if (main && !tab.discarded) [self resetPageMedia];
-    if (main && ![(Text(dict, @"url", 8192) ?: @"about:") hasPrefix:@"about:"]) _requestedURL = nil;
+    if (main && ![(Text(dict, @"url", 8192) ?: @"about:") hasPrefix:@"about:"]) _requests.requestedURL = nil;
     [self noteScriptFrame:frameId main:main];
     [self callFrame:frameId kind:@"peekConfig" json:PeekConfigJSON(self)];
     AnswerHello(tab, _profile, frameId, main, verifiedOrigin);
-    if (main && _littlePageHeld) [self callFrame:frameId kind:@"firstPaint" json:@"{}"];
+    if (main && _littlePage.held) [self callFrame:frameId kind:@"firstPaint" json:@"{}"];
+  } else if ([kind isEqualToString:@"displayMediaHello"]) {
+    [self callFrame:frameId kind:@"config" json:gDisplayMediaPicker ? @"{\"displayMediaPicker\":true}" : @"{}"];
   } else if ([kind isEqualToString:@"firstPaint"] && main) {
     NSString *url = Text(dict, @"url", 8192);
     if (url.length && ![url hasPrefix:@"about:"] && SamePage(url, tab.url)) [self revealLittlePage:YES];
@@ -165,6 +159,8 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
     PeekTrace(@{@"event" : @"page", @"main" : @(main), @"page" : dict});
   } else if ([kind isEqualToString:@"selection"] && main) {
     [self emit:@"selection" payload:@{@"selection" : SelectionState(dict) ?: NSNull.null}];
+  } else if ([kind isEqualToString:@"newTabLink"] && dict) {
+    [self noteNewTabLink:Text(dict, @"url", 8192)];
   } else if ([kind isEqualToString:@"linkDrop"] && main) {
     NSString *url = Text(dict, @"url", 8192);
     NSString *scheme = (url.length ? [NSURL URLWithString:url].scheme.lowercaseString : nil) ?: @"";
@@ -186,50 +182,55 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
       NSNumber *at = [dict[what] isKindOfClass:NSNumber.class] ? dict[what] : nil;
       if (at && fabs(at.doubleValue - ArdiaFieldNow()) < 600000) ArdiaFieldMark(_transferKey, what, at.doubleValue);
     }
+  } else if ([kind isEqualToString:@"hideElement"] && main && dict) {
+    double x, y;
+    if (Finite(dict, @"x", &x) && Finite(dict, @"y", &y))
+      [self emit:@"command" payload:@{@"command" : @"hideElement", @"text" : @"", @"point" : @[ @(x), @(y) ]}];
   } else if ([kind isEqualToString:@"scroll"] && main) {
     NSString *state = Text(dict, @"state", 8);
     if ([@[ @"down", @"up", @"top" ] containsObject:state ?: @""])
       [self emit:@"scroll" payload:@{@"state" : state}];
   } else if ([kind isEqualToString:@"drm"] && dict) {
     [self emit:@"protectedMedia" payload:@{@"keySystem" : Text(dict, @"keySystem", 64) ?: @"", @"main" : @(main)}];
+  } else if ([kind isEqualToString:@"fairPlay"] && main && dict && [ArdiaFairPlay servesOrigin:VerifiedOrigin(verifiedOrigin)]) {
+    [ArdiaFairPlay tab:tab frame:frameId message:dict];
   } else if ([kind isEqualToString:@"nowPlaying"]) {
-    if (!_nowPlaying) _nowPlaying = [NSMutableDictionary dictionary];
-    if (dict) _nowPlaying[frameId] = NowPlayingState(dict, main);
-    else [_nowPlaying removeObjectForKey:frameId];
-    _nowPlayingFrame = dict ? frameId : _nowPlaying.allKeys.firstObject;
-    NSDictionary<NSString *, NSDictionary *> *frames = _nowPlaying;
-    NSInteger (^rank)(NSString *) = ^NSInteger(NSString *f) {
-      NSDictionary *np = f ? frames[f] : nil;
-      return ([np[@"controllable"] boolValue] ? 4 : 0) + ([np[@"playbackState"] isEqual:@"playing"] ? 2 : 0) + ([np[@"main"] boolValue] ? 1 : 0);
-    };
-    for (NSString *f in _nowPlaying)
-      if (rank(f) > rank(_nowPlayingFrame)) _nowPlayingFrame = f;
-    NSMutableDictionary *state = [_nowPlaying[_nowPlayingFrame ?: @""] mutableCopy];
-    [state removeObjectsForKeys:@[ @"frame", @"main" ]];
+    if (!_reports.nowPlaying) _reports.nowPlaying = [ArdiaNowPlaying new];
+    NSDictionary *state = [_reports.nowPlaying noteFrame:frameId page:dict main:main];
     [self emit:@"nowPlaying" payload:@{@"state" : state ?: NSNull.null}];
+    [self autoPictureInPictureInputsChanged];
   } else if ([kind isEqualToString:@"theme"]) {
     if (!main || !dict) return;
     NSString *color = [dict[@"color"] isKindOfClass:NSString.class] ? Text(dict, @"color", 64) : nil;
     NSString *source = [dict[@"source"] isKindOfClass:NSString.class] ? Text(dict, @"source", 32) : nil;
-    _pageTheme = color;
-    _pageThemeSource = source;
+    _reports.theme = color;
+    _reports.themeSource = source;
     [self queueNavigation];
+  } else if ([kind isEqualToString:@"appBadge"] && main && dict && VerifiedOrigin(verifiedOrigin)) {
+    double count;
+    const BOOL counted = Finite(dict, @"count", &count) && count >= 1;
+    [self emit:@"appBadge"
+        payload:@{
+          @"origin" : VerifiedOrigin(verifiedOrigin),
+          @"count" : counted ? @(floor(MIN(count, 1e9))) : NSNull.null,
+          @"flag" : @(!counted && Flag(dict, @"flag"))
+        }];
   } else if ([kind isEqualToString:@"pinch"] && main && dict) {
     double scale;
     if (!Finite(dict, @"scale", &scale) || scale <= 0) return;
-    _pinchScale = MIN(scale, 100);
+    _reports.pinchScale = MIN(scale, 100);
     [self emitZoom];
   } else if ([kind isEqualToString:@"pipTrace"]) {
     if (TracingPictureInPicture())
-      [_tab tracePictureInPicture:[NSString stringWithFormat:@"page (%@): %@", main ? @"main frame" : @"subframe", JSONString(dict ?: @{})]
+      [_tab tracePictureInPicture:[NSString stringWithFormat:@"page (%@): %@", main ? @"main frame" : @"subframe", JSONText(dict ?: @{})]
                        withInputs:NO];
   } else if ([kind isEqualToString:@"notification"] && dict) {
     PeekTrace(@{@"event" : @"notification", @"bytes" : @(json.length), @"origin" : sender ?: @""});
     NSString *nid = Text(dict, @"id", 128);
     NSString *origin = sender;
     if (!nid.length || !Text(dict, @"title", 1024) || !origin) return;
-    if (!_notificationFrames || _notificationFrames.count > 500) _notificationFrames = [NSMutableDictionary dictionary];
-    _notificationFrames[nid] = frameId;
+    if (!_reports.notificationFrames || _reports.notificationFrames.count > 500) _reports.notificationFrames = [NSMutableDictionary dictionary];
+    _reports.notificationFrames[nid] = frameId;
     NSDictionary *notification = @{
       @"id" : nid,
       @"title" : Text(dict, @"title", 1024),
@@ -245,7 +246,7 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
     __weak ArdiaWebView *weakSelf = self;
     [ArdiaServices siteSettings:_profile ?: @"" origin:origin reply:^(NSDictionary *settings, NSString *) {
       ArdiaWebView *view = weakSelf;
-      if (!view || ![view->_notificationFrames[nid] isEqualToString:frameId]) return;
+      if (!view || ![view->_reports.notificationFrames[nid] isEqualToString:frameId]) return;
       NSDictionary *permission = [settings[@"notifications"] isKindOfClass:NSDictionary.class] ? settings[@"notifications"] : nil;
       if ([permission[@"value"] isEqual:@"allow"]) [view emit:@"notification" payload:notification];
       else [view notificationAction:nid action:@"close"];
@@ -253,16 +254,16 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
   } else if ([kind isEqualToString:@"notificationClose"] && dict) {
     NSString *nid = Text(dict, @"id", 128);
     if (!nid.length) return;
-    [_notificationFrames removeObjectForKey:nid];
+    [_reports.notificationFrames removeObjectForKey:nid];
     [self emit:@"notificationClose" payload:@{@"id" : nid}];
   } else if ([kind isEqualToString:@"displayMedia"] && dict) {
     double pageId;
     if (!Finite(dict, @"id", &pageId) || pageId < 1 || pageId > INT_MAX || pageId != floor(pageId) || !sender) return;
-    if (!_displayRequests) _displayRequests = [NSMutableDictionary dictionary];
-    if (_displayRequests.count >= 16) return;
+    if (!_reports.displayRequests) _reports.displayRequests = [NSMutableDictionary dictionary];
+    if (_reports.displayRequests.count >= 16) return;
     NSString *requestId = NSUUID.UUID.UUIDString;
     NSDictionary *audio = DisplayMediaAudioOffer(dict);
-    _displayRequests[requestId] = @{@"frame" : frameId, @"id" : @((int)pageId), @"audio" : audio ?: NSNull.null, @"origin" : sender};
+    _reports.displayRequests[requestId] = @{@"frame" : frameId, @"id" : @((int)pageId), @"audio" : audio ?: NSNull.null, @"origin" : sender};
     [self emit:@"displayMediaRequest"
         payload:@{
           @"id" : requestId,
@@ -287,6 +288,10 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
   if (frameId.length) [ScriptFramesOf(_tab) removeObject:frameId];
 }
 
+- (void)pushFairPlay {
+  if (_tab && [ArdiaFairPlay servesOrigin:OriginOf(_tab.url)]) [_tab callPage:@"fairPlay" json:FairPlayConfig()];
+}
+
 - (void)pushSelectionPopover {
   if (_tab) [self callFrame:@"" kind:@"selectionPopover" json:gSelectionPopover ? @"true" : @"false"];
 }
@@ -297,16 +302,16 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
 }
 
 - (void)resetPageMedia {
-  const BOOL hadNowPlaying = _nowPlaying.count > 0;
-  [_nowPlaying removeAllObjects];
-  _nowPlayingFrame = nil;
-  if (hadNowPlaying) [self emit:@"nowPlaying" payload:@{@"state" : NSNull.null}];
+  [ArdiaFairPlay pageGoneFromTab:_tab];
+  if ([_reports.nowPlaying reset]) [self emit:@"nowPlaying" payload:@{@"state" : NSNull.null}];
+  [self autoPictureInPictureInputsChanged];
 }
 
 - (void)resolveDisplayMedia:(NSString *)requestId sourceId:(NSString *)sourceId audio:(BOOL)shareAudio {
-  NSDictionary *request = requestId ? _displayRequests[requestId] : nil;
+  NSDictionary *request = requestId ? _reports.displayRequests[requestId] : nil;
   if (!request) return;
-  [_displayRequests removeObjectForKey:requestId];
+  [_reports.displayRequests removeObjectForKey:requestId];
+  if (sourceId.length && ![ArdiaHost mayCaptureDesktopSource:sourceId]) sourceId = nil;
   NSString *audio = shareAudio && sourceId.length ? DisplayMediaAudioFor(Field<NSDictionary>(request, @"audio"), sourceId) : nil;
   if (sourceId.length && _tab)
     [ArdiaCoreEngine allowDesktopCapture:sourceId
@@ -315,7 +320,7 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
                                origin:request[@"origin"]
                                 audio:audio];
   [self callFrame:request[@"frame"] kind:@"displayMedia"
-             json:JSONString(@{@"id" : request[@"id"], @"sourceId" : sourceId.length ? sourceId : NSNull.null, @"audio" : @(audio != nil)})];
+             json:JSONText(@{@"id" : request[@"id"], @"sourceId" : sourceId.length ? sourceId : NSNull.null, @"audio" : @(audio != nil)})];
 }
 
 @end

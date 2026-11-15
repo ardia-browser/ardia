@@ -20,6 +20,8 @@ void RegisterMenusModule(ModuleRegistry& registry);
 void RegisterShellModule(ModuleRegistry& registry);
 void RegisterSystemModule(ModuleRegistry& registry);
 void RegisterLaunchLinksModule(ModuleRegistry& registry);
+void RegisterKeychainModule(ModuleRegistry& registry);
+void RegisterNotificationsModule(ModuleRegistry& registry);
 
 void ConfirmWithUser(const base::DictValue& options,
                      base::OnceCallback<void(bool confirmed, bool suppressed)>

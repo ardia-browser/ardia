@@ -16,6 +16,8 @@ void RegisterAppModules(ModuleRegistry& registry) {
   RegisterShellModule(registry);
   RegisterSystemModule(registry);
   RegisterLaunchLinksModule(registry);
+  RegisterKeychainModule(registry);
+  RegisterNotificationsModule(registry);
 }
 
 }

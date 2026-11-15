@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { View } from "react-native";
+import { View, type GestureResponderEvent } from "react-native";
 import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
 import { toggleDownloadsOpen } from "../../state/windows/actions";
 import { useWindowUiOf } from "../../state/windows/hooks";
@@ -43,15 +43,21 @@ export function DownloadsButton({ windowId }: { windowId: string }) {
     };
   }, [windowId]);
   return (
-    <View ref={view} collapsable={false}>
+    <View ref={view} collapsable={false} onStartShouldSetResponderCapture={(press) => {
+      pressedAt.current = press.nativeEvent.timestamp;
+      return false;
+    }}>
       <Button variant="icon"
         icon="arrow.down.circle"
         glyph={DOWNLOADS_BUTTON.icon}
         hit={DOWNLOADS_HIT()}
         active={open}
         tooltip={open ? undefined : withShortcut("Downloads", hint)}
-        onPressIn={(press) => void (pressedAt.current = press.nativeEvent.timestamp)}
-        onPress={() => toggleDownloadsOpen(windowId, pressedAt.current)}
+        onPress={(press: GestureResponderEvent) => {
+          const startedAt = pressedAt.current;
+          pressedAt.current = undefined;
+          toggleDownloadsOpen(windowId, "key" in press.nativeEvent ? undefined : startedAt);
+        }}
       />
     </View>
   );

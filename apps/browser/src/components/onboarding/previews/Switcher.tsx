@@ -1,5 +1,6 @@
 import { Animated, View, type ViewStyle } from "react-native";
-import { switcherCellWidth, SwitcherMark } from "../../profiles/ProfileIcons";
+import { SwitcherMark } from "../../profiles/ProfileIcons";
+import { switcherCellWidth } from "../../profiles/switcherLayout";
 import { profileSwitcher } from "../../profiles/tokens";
 import { at, SIDEBAR_W, type Geo } from "./geometry";
 import type { Styles } from "./Kit";

@@ -1078,7 +1078,7 @@ index b85ee3dd203f88bf2daaa47e912031ea200ff910..fdd49042170be0c7850fea3ea8550c32
  }
    
 diff --git a/React/Base/macOS/RCTUIKit.m b/React/Base/macOS/RCTUIKit.m
-index a37a1c106a04752c1baeb6dd2170402ce5f34f71..4b0fa1207d50724979fdb0122a4a88eed20374cd 100644
+index a37a1c106a04752c1baeb6dd2170402ce5f34f71..830c8c246a756860c2bf41a0eaf9ee2cd9cda53f 100644
 --- a/React/Base/macOS/RCTUIKit.m
 +++ b/React/Base/macOS/RCTUIKit.m
 @@ -15,6 +15,7 @@
@@ -1134,7 +1134,7 @@ index a37a1c106a04752c1baeb6dd2170402ce5f34f71..4b0fa1207d50724979fdb0122a4a88ee
  - (BOOL)acceptsFirstMouse:(NSEvent *)event
  {
    if (self.acceptsFirstMouse || [super acceptsFirstMouse:event]) {
-@@ -284,20 +323,53 @@ - (CATransform3D)transform3D
+@@ -284,21 +323,54 @@ - (CATransform3D)transform3D
    return _transform3D;
  }
  
@@ -1175,8 +1175,8 @@ index a37a1c106a04752c1baeb6dd2170402ce5f34f71..4b0fa1207d50724979fdb0122a4a88ee
    _hasCustomTransform3D = !CATransform3DEqualToTransform(transform3D, CATransform3DIdentity);
 -  self.layer.transform = transform3D;
 +  self.layer.transform = RCTUIViewLayerTransform(self);
-+}
-+
+ }
+ 
 +- (void)setFrameOrigin:(NSPoint)newOrigin
 +{
 +  [super setFrameOrigin:newOrigin];
@@ -1191,11 +1191,12 @@ index a37a1c106a04752c1baeb6dd2170402ce5f34f71..4b0fa1207d50724979fdb0122a4a88ee
 +  if (_hasCustomTransform3D) {
 +    RCTUIViewApplyTransform3D(self);
 +  }
- }
++}
 +// Ardia]
- 
++
  - (NSView *)hitTest:(NSPoint)point
  {
+   // NSView's hitTest: receives a point in superview coordinates. Convert to local
 @@ -308,7 +380,11 @@ - (NSView *)hitTest:(NSPoint)point
    if (self.layer.superlayer) {
      localPoint = [self.layer convertPoint:point fromLayer:self.layer.superlayer];
@@ -1220,7 +1221,35 @@ index a37a1c106a04752c1baeb6dd2170402ce5f34f71..4b0fa1207d50724979fdb0122a4a88ee
    }
  
    if (_respondsToDisplayLayer) {
-@@ -822,6 +898,13 @@ - (instancetype)initWithFrame:(CGRect)frame
+@@ -504,14 +580,19 @@ - (void)setContentOffset:(CGPoint)contentOffset
+ 
+ - (void)setContentOffset:(CGPoint)contentOffset animated:(BOOL)animated
+ {
+-    if (animated) {
+-        [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
+-            context.duration = 0.3; // Set the duration of the animation
+-            [self.documentView.animator scrollPoint:contentOffset];
+-        } completionHandler:nil];
+-    } else {
+-        [self.documentView scrollPoint:contentOffset];
+-    }
++  if (!animated) { // [Ardia]
++    [self.documentView scrollPoint:contentOffset]; // [Ardia]
++    return; // [Ardia]
++  } // [Ardia]
++  NSClipView *clipView = self.contentView; // [Ardia]
++  NSRect target = [clipView constrainBoundsRect:NSMakeRect(contentOffset.x, contentOffset.y, NSWidth(clipView.bounds), NSHeight(clipView.bounds))]; // [Ardia]
++  [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) { // [Ardia]
++    context.duration = 0.3; // [Ardia]
++    context.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut]; // [Ardia]
++    [clipView.animator setBoundsOrigin:target.origin]; // [Ardia]
++  } completionHandler:^{ // [Ardia]
++    [self reflectScrolledClipView:clipView]; // [Ardia]
++  }]; // [Ardia]
+ }
+ 
+ - (UIEdgeInsets)contentInset
+@@ -822,6 +903,13 @@ - (instancetype)initWithFrame:(CGRect)frame
    return self;
  }
  
@@ -1538,7 +1567,7 @@ index 7f1aeff436b8a51514254b72d1fb1fd1ee3b1553..dd2851fec59498902a78204041d994ed
  
  - (void)setNeedsLayout
 diff --git a/React/Views/RCTView.m b/React/Views/RCTView.m
-index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..8554a54819424c7b724d8400125721ab3c4f78a0 100644
+index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..225a981dab7644929da4dc82a732d39d98695d27 100644
 --- a/React/Views/RCTView.m
 +++ b/React/Views/RCTView.m
 @@ -136,6 +136,24 @@ - (RCTPlatformView *)react_findClipView // [macOS]
@@ -1945,7 +1974,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..8554a54819424c7b724d8400125721ab
  - (void)mouseEntered:(NSEvent *)event
  {
    _hasMouseOver = YES;
-@@ -1768,7 +1978,7 @@ - (BOOL)handleKeyboardEvent:(NSEvent *)event {
+@@ -1768,7 +1981,7 @@ - (BOOL)handleKeyboardEvent:(NSEvent *)event {
    static const char kRCTViewKeyboardEventEmittedKey = 0;
    NSNumber *emitted = objc_getAssociatedObject(event, &kRCTViewKeyboardEventEmittedKey);
    BOOL alreadyEmitted = [emitted boolValue];

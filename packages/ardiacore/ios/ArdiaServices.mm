@@ -451,11 +451,14 @@ NSMutableDictionary<NSString *, NSString *> *DownloadProfiles() {
   })];
 }
 
-+ (void)clearBrowsingData:(NSString *)profile types:(NSArray<NSString *> *)types since:(double)sinceMs completion:(void (^)(void))completion {
++ (void)clearBrowsingData:(NSString *)profile types:(NSArray<NSString *> *)types since:(double)sinceMs completion:(void (^)(NSString * _Nullable))completion {
   if ([types containsObject:@"history"]) [ArdiaEarlyWindow forgetPictures];
-  ArdiaCoreProfile *p = ardia_host::LoadedProfile(profile);
-  if (!p) return completion();
-  [p clearBrowsingData:types since:[NSDate dateWithTimeIntervalSince1970:sinceMs / 1000] completion:completion];
+  [self call:@"ac_browsing_data_clear" profile:profile args:@{@"types" : types, @"since" : @(sinceMs)} completion:^(NSDictionary *result) {
+    if (id error = result[@"error"]) return completion([error description]);
+    id ok = result[@"ok"];
+    const BOOL cleared = [ok isKindOfClass:NSNumber.class] && CFGetTypeID((__bridge CFTypeRef)ok) == CFBooleanGetTypeID() && [ok boolValue];
+    completion(cleared ? nil : @"Some browsing data could not be cleared.");
+  }];
 }
 
 @end

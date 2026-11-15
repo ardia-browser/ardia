@@ -89,7 +89,7 @@ typedef NS_ENUM(NSInteger, ArdiaProfileToggle) {
 + (void)tasks:(ArdiaServiceReply)reply NS_SWIFT_NAME(tasks(_:));
 + (void)components:(ArdiaServiceReply)reply NS_SWIFT_NAME(components(_:));
 
-+ (void)clearBrowsingData:(NSString *)profile types:(NSArray<NSString *> *)types since:(double)sinceMs completion:(void (^)(void))completion
++ (void)clearBrowsingData:(NSString *)profile types:(NSArray<NSString *> *)types since:(double)sinceMs completion:(void (^)(NSString * _Nullable))completion
     NS_SWIFT_NAME(clearBrowsingData(profile:types:since:completion:));
 
 @end

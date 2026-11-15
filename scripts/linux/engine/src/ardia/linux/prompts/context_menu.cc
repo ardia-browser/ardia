@@ -212,7 +212,7 @@ class PageContextMenu : public RenderViewContextMenuViews {
           IDC_CONTENT_CONTEXT_GENERATE_QR_CODE, IDC_SEND_TAB_TO_SELF,
           IDC_CONTENT_CONTEXT_SEARCHLENSFORIMAGE,
           IDC_CONTENT_CONTEXT_SEARCHLENSFORVIDEOFRAME,
-          IDC_CONTENT_CONTEXT_LENS_REGION_SEARCH}) {
+          IDC_CONTENT_CONTEXT_LENS_REGION_SEARCH, IDC_ROUTE_MEDIA}) {
       while (std::optional<size_t> index =
                  menu_model_.GetIndexOfCommandId(command)) {
         menu_model_.RemoveItemAt(*index);

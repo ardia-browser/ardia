@@ -14,13 +14,13 @@ export const LINUX_WORDING: readonly Wording[] = [
   },
   {
     file: "components/onboarding/SourceStep.tsx",
-    replacements: [[`<SectionLabel title="Found on this Mac" />`, `<SectionLabel title="Found on this computer" />`]],
+    replacements: [["<SectionLabel title={`Found on this ${PLATFORM_TERMS.computer}`} />", `<SectionLabel title="Found on this computer" />`]],
   },
   {
     file: "components/onboarding/LookStep.tsx",
     replacements: [
       [`subtitle: "Buttons and panels catch the light, as in Tahoe"`, `subtitle: "Buttons and panels catch the light"`],
-      [`subtitle: "Light by day, dark by night, like your Mac"`, `subtitle: "Light by day, dark by night, like your desktop"`],
+      ["subtitle: `Light by day, dark by night, like your ${PLATFORM_TERMS.computer}`", `subtitle: "Light by day, dark by night, like your desktop"`],
     ],
   },
   {
@@ -33,26 +33,26 @@ export const LINUX_WORDING: readonly Wording[] = [
 `,
         "",
       ],
-      [`        {chip(dock, "dock.rectangle", "In your Dock")}\n`, ""],
+      ["        {PLATFORM_FEATURES.dock ? chip(dock, \"dock.rectangle\", \"In your Dock\") : null}\n", ""],
     ],
   },
   {
     file: "components/onboarding/previews/MockWindow.tsx",
-    replacements: [["{`Auto · ${look.dark ? \"Dark\" : \"Light\"} like your Mac`}", "{`Auto · ${look.dark ? \"Dark\" : \"Light\"} like your desktop`}"]],
+    replacements: [["{`Auto · ${look.dark ? \"Dark\" : \"Light\"} like your ${PLATFORM_TERMS.computer}`}", "{`Auto · ${look.dark ? \"Dark\" : \"Light\"} like your desktop`}"]],
   },
   {
     file: "components/onboarding/previews/scenes/LookScenes.tsx",
-    replacements: [["`Auto · ${toDark ? \"Dark\" : \"Light\"} like your Mac`", "`Auto · ${toDark ? \"Dark\" : \"Light\"} like your desktop`"]],
+    replacements: [["`Auto · ${toDark ? \"Dark\" : \"Light\"} like your ${PLATFORM_TERMS.computer}`", "`Auto · ${toDark ? \"Dark\" : \"Light\"} like your desktop`"]],
   },
   {
     file: "components/settings/panes/Appearance.tsx",
-    replacements: [[`{ value: "system", title: "Follow macOS" }`, `{ value: "system", title: "Follow system" }`]],
+    replacements: [["{ value: \"system\", title: `Follow ${PLATFORM_TERMS.os}` }", `{ value: "system", title: "Follow system" }`]],
   },
   {
     file: "components/settings/rows/generalRows.ts",
     replacements: [
-      ["description: `Asks before ${APP} quits with ⌘Q.`", "description: `Asks before ${APP} quits with Ctrl+Shift+Q.`"],
-      [`description: "Asks before ⇧⌘W or the close button closes its tabs."`, `description: "Asks before the close button or File › Close Window closes its tabs."`],
+      ["description: PLATFORM_FEATURES.quitsWithLastWindow ? `Asks before ${APP} quits when you close its last window.` : `Asks before ${APP} quits with ${keyText(\"⌘Q\")}.`", "description: `Asks before ${APP} quits with Ctrl+Shift+Q.`"],
+      ["description: `Asks before ${keyText(\"⇧⌘W\")} or the close button closes its tabs.`", `description: "Asks before the close button or File › Close Window closes its tabs."`],
       ["The window buttons stay at the top left.", "The window buttons move with the sidebar."],
     ],
   },
@@ -63,8 +63,8 @@ export const LINUX_WORDING: readonly Wording[] = [
         `"Follow macOS uses System Settings › Appearance › Show scroll bars. Thin shows slim scroll bars over the page only while you scroll, even with a mouse."`,
         `"Follow system keeps the scroll bars your desktop shows. Thin shows slim scroll bars over the page only while you scroll, even with a mouse."`,
       ],
-      ["In macOS full screen the page goes edge to edge", "In full screen the page goes edge to edge"],
-      ["In macOS full screen with Auto-Hide Tabs,", "In full screen with Auto-Hide Tabs,"],
+      ["In ${PLATFORM_TERMS.fullScreen} the page goes edge to edge", "In full screen the page goes edge to edge"],
+      ["In ${PLATFORM_TERMS.fullScreen} with Auto-Hide Tabs,", "In full screen with Auto-Hide Tabs,"],
     ],
   },
   {
@@ -74,9 +74,9 @@ export const LINUX_WORDING: readonly Wording[] = [
   {
     file: "components/settings/rows/privacyRows.ts",
     replacements: [
-      [`description: "Every field, and what never leaves this Mac."`, `description: "Every field, and what never leaves this computer."`],
-      [`section: "Kept on this Mac"`, `section: "Kept on this computer"`],
-      [`title: "Zoom with ⌘ and the mouse wheel"`, `title: "Zoom with Ctrl and the mouse wheel"`],
+      ["description: `Every field, and what never leaves this ${PLATFORM_TERMS.computer}.`", `description: "Every field, and what never leaves this computer."`],
+      ["section: `Kept on this ${PLATFORM_TERMS.computer}`", `section: "Kept on this computer"`],
+      ["title: `Zoom with ${keyText(\"⌘\")} and the mouse wheel`", `title: "Zoom with Ctrl and the mouse wheel"`],
     ],
   },
   {
@@ -84,6 +84,7 @@ export const LINUX_WORDING: readonly Wording[] = [
     replacements: [
       ["Sent to ardia.dev with a random ID made on this Mac, and kept", "Sent to ardia.dev with a random ID made on this computer, and kept"],
       [`keptOnThisMac: "Kept on this Mac"`, `keptOnThisMac: "Kept on this computer"`],
+      ["browsing data removed from this Mac and", "browsing data removed from this computer and"],
       ["switched Auto-hide tabs on or off on this Mac,", "switched Auto-hide tabs on or off on this computer,"],
       ["more were loaded than your Mac's memory allows for", "more were loaded than your computer's memory allows for"],
       ["turned Minimalism mode on and off on this Mac, from Settings, the View menu or ⌃⌘M,", "turned Minimalism mode on and off on this computer, from Settings, the View menu or Ctrl+Super+M,"],
@@ -141,20 +142,16 @@ export const LINUX_WORDING: readonly Wording[] = [
     ],
   },
   {
-    file: "components/settings/panes/ShareDiagnostics.tsx",
-    replacements: [["and “Kept on this Mac”.`}", "and “Kept on this computer”.`}"]],
-  },
-  {
     file: "state/commands/appCommands.ts",
-    replacements: [["`macOS ${app.osVersion} (${app.osBuild}), ${app.arch}", "`${app.osVersion} (${app.osBuild}), ${app.arch}"]],
+    replacements: [["`${PLATFORM_TERMS.os} ${app.osVersion} (${app.osBuild}), ${app.arch}", "`${app.osVersion} (${app.osBuild}), ${app.arch}"]],
   },
   {
     file: "state/report/details.ts",
-    replacements: [["`macOS ${app.osVersion}`, app.model", "`Linux ${app.osVersion}`, app.model"]],
+    replacements: [["`${PLATFORM_TERMS.os} ${app.osVersion}`, app.model", "`Linux ${app.osVersion}`, app.model"]],
   },
   {
     file: "components/report/ReportPreview.tsx",
-    replacements: [["Exactly what leaves your Mac when you press Send.", "Exactly what leaves this computer when you press Send."]],
+    replacements: [["Exactly what leaves your ${PLATFORM_TERMS.computer} when you press Send.", "Exactly what leaves this computer when you press Send."]],
   },
   {
     file: "components/report/ReportSheet.tsx",
@@ -169,7 +166,7 @@ export const LINUX_WORDING: readonly Wording[] = [
   },
   {
     file: "components/import/steps/ChooseStep.tsx",
-    replacements: [["No other browsers with data to import were found on this Mac.", "No other browsers with data to import were found on this computer."]],
+    replacements: [["No other browsers with data to import were found on this ${PLATFORM_TERMS.computer}.", "No other browsers with data to import were found on this computer."]],
   },
   {
     file: "components/import/steps/SafariStep.tsx",
@@ -190,60 +187,61 @@ export const LINUX_WORDING: readonly Wording[] = [
   },
   {
     file: "state/extensions/actions.ts",
-    replacements: [[`"The extension's folder stays on your Mac."`, `"The extension's folder stays on this computer."`]],
+    replacements: [["`The extension's folder stays on your ${PLATFORM_TERMS.computer}.`", `"The extension's folder stays on this computer."`]],
   },
   {
     file: "components/settings/panes/Advanced.tsx",
     replacements: [
-      ["At 20% battery or less, or in Low Power Mode,", "At 20% battery or less, or in power saver mode,"],
-      ["On battery or in Low Power Mode,", "On battery or in power saver mode,"],
+      ["At 20% battery or less, or in ${PLATFORM_TERMS.lowPowerMode},", "At 20% battery or less, or in power saver mode,"],
+      ["On battery or in ${PLATFORM_TERMS.lowPowerMode},", "On battery or in power saver mode,"],
     ],
   },
   {
     file: "components/downloads/Downloads.tsx",
     replacements: [
-      ["tooltip=\"Show in Finder\"", "tooltip=\"Show in Folder\""],
+      ["tooltip={`Show in ${PLATFORM_TERMS.fileManager}`}", "tooltip=\"Show in Folder\""],
     ],
   },
   {
     file: "components/pages/DownloadsPage.tsx",
     replacements: [
-      ["<Button title=\"Show in Finder\"", "<Button title=\"Show in Folder\""],
+      ["<Button title={`Show in ${PLATFORM_TERMS.fileManager}`}", "<Button title=\"Show in Folder\""],
     ],
   },
   {
     file: "state/downloads/downloadMenu.ts",
     replacements: [
-      ["{ id: \"reveal\", title: \"Show in Finder\"", "{ id: \"reveal\", title: \"Show in Folder\""],
+      ["{ id: \"reveal\", title: `Show in ${PLATFORM_TERMS.fileManager}`", "{ id: \"reveal\", title: \"Show in Folder\""],
     ],
   },
   {
     file: "state/bookmarks/exportHtml.ts",
     replacements: [
-      ["action: { title: \"Show in Finder\"", "action: { title: \"Show in Folder\""],
+      ["action: { title: `Show in ${PLATFORM_TERMS.fileManager}`", "action: { title: \"Show in Folder\""],
     ],
   },
   {
     file: "state/browser/actions.ts",
     replacements: [
-      ["stay installed on this Mac, turned off.` :", "stay installed on this computer, turned off.` :"],
-      ["\" Its extensions stay installed on this Mac, turned off.\"", "\" Its extensions stay installed on this computer, turned off.\""],
+      ["stay installed on this ${PLATFORM_TERMS.computer}, turned off.` :", "stay installed on this computer, turned off.` :"],
+      ["` Its extensions stay installed on this ${PLATFORM_TERMS.computer}, turned off.`", "\" Its extensions stay installed on this computer, turned off.\""],
     ],
   },
   {
     file: "state/onboarding/tour.ts",
     replacements: [
-      ["⌘L brings the command bar up from any page, and ⌘T opens a new tab.", "Ctrl+L brings the command bar up from any page, and Ctrl+T opens a new tab."],
-      ["⌘S hides the sidebar.", "Ctrl+S hides the sidebar."],
-      ["or press ⌃⇧=. ⌃⇧] and ⌃⇧[ move between the panes.", "or press Super+Shift+=. Super+Shift+] and Super+Shift+[ move between the panes."],
+      ["${keyText(\"⌘L\")} brings the command bar up from any page, and ${keyText(\"⌘T\")} opens a new tab.", "Ctrl+L brings the command bar up from any page, and Ctrl+T opens a new tab."],
+      ["${keyText(\"⌘S\")} hides the sidebar.", "Ctrl+S hides the sidebar."],
+      ["or press ${keyText(\"⌃⇧=\")}. ${keyText(\"⌃⇧]\")} and ${keyText(\"⌃⇧[\")} move between the panes.", "or press Super+Shift+=. Super+Shift+] and Super+Shift+[ move between the panes."],
       ["Everything else is in the menu bar and in Settings (⌘,).", "Everything else is in the menu button's menus and in Settings (Ctrl+,)."],
+      ["`Everything else is in Settings (${keyText(\"⌘,\")}).`", "\"Everything else is in Settings (Ctrl+,).\""],
     ],
   },
   {
     file: "state/presets/setupCode.ts",
     replacements: [
-      ["auto: \"Appearance follows your Mac\"", "auto: \"Appearance follows your desktop\""],
-      ["\"⌘T opens the command bar\" : \"⌘T opens the New Tab page\"", "\"Ctrl+T opens the command bar\" : \"Ctrl+T opens the New Tab page\""],
+      ["auto: `Appearance follows your ${PLATFORM_TERMS.computer}`", "auto: \"Appearance follows your desktop\""],
+      ["`${keyText(\"⌘T\")} opens the command bar` : `${keyText(\"⌘T\")} opens the New Tab page`", "\"Ctrl+T opens the command bar\" : \"Ctrl+T opens the New Tab page\""],
     ],
   },
   {
@@ -255,7 +253,7 @@ export const LINUX_WORDING: readonly Wording[] = [
   {
     file: "state/sync/scopeAdapters.ts",
     replacements: [
-      ["\"This Mac\"", "\"This computer\""],
+      ["`This ${PLATFORM_TERMS.computer}`", "\"This computer\""],
     ],
   },
 ];

@@ -6,7 +6,7 @@ import { closeSuccessor, forgetOpeners, insertionIndex } from "./openers";
 import { onUrlChange, pruneSelection } from "../pins/organize";
 import { isClosedPin } from "../pins/tabCleanup";
 import { adoptedPage, ASLEEP, frozenOn, hasOwnOrSharedPage, hasPage, isAsleep, isLazy, loadedPage, needsPage, withWake, wokenPage } from "./pageSession";
-import { isPeekTab, withoutPeek } from "../peek/peek";
+import { isPeekTab, peekSourceOf, withoutPeek } from "../peek/peek";
 import { resolveTyped } from "../settings/settings";
 import { leavesEmptyWindow } from "../omnibox/newTabBarPolicy";
 import { holderOf, withSharedFamily } from "../pins/pinShare";
@@ -72,7 +72,10 @@ function withoutTopApps(s: BrowserState, ids: string[]): string[] {
 
 export function closingTabs(s: BrowserState, ids: string[], { lastClosesWindow = false, keepTopApps = s.settings.keepTopAppsRunning }: CloseOptions = {}): [BrowserState, string[]] {
   let next = s;
-  for (const id of ids) if (isPeekTab(next, id)) next = withoutPeek(next, next.tabs[id]!.windowId);
+  for (const id of ids) {
+    const source = peekSourceOf(next, id);
+    if (source) next = withoutPeek(next, source);
+  }
   const asked = ids.filter((id) => next.tabs[id]);
   next = unloadPinnedTabs(next, asked, keepTopApps);
   const gone = asked.filter((id) => !inPinnedContainer(next, id));
@@ -100,7 +103,7 @@ function pinnedInsertionIndex(s: BrowserState, w: BrowserWindow): number {
 export function activated(s: BrowserState, id: string, shareLivePins = true): Partial<BrowserState> {
   const tab = s.tabs[id];
   const w = tab && s.windows[tab.windowId];
-  if (!tab || !w || s.peeks[w.id]?.tabId === id) return {};
+  if (!tab || !w || isPeekTab(s, id)) return {};
   const lazy = isLazy(tab);
   const holder = lazy && shareLivePins ? holderOf(s, id) : undefined;
   const frozen = lazy && (!!holder || tab.page.kind === "frozen");

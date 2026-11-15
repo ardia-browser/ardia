@@ -11,7 +11,7 @@ import { groupTint, useSidebarTokens } from "../sidebar/tokens";
 import type { GroupColor } from "../../state/browser/types";
 import { AnimatedFolder } from "../sidebar/AnimatedFolder";
 import { ContextMenuArea, Offstage, Symbol, useOffstage, useTooltip } from "../ui";
-import { curve } from "../ui/motion";
+import { curve, useGated } from "../ui/motion";
 import { useTheme } from "../ui/theme";
 import { font, ink, space, weight, withAlpha } from "../ui/tokens";
 import { useChipHover, useChipHovered } from "./reachableHover";
@@ -67,7 +67,8 @@ export function GroupMember({
     () => (clip ? Animated.subtract(clip, start + offset).interpolate({ inputRange: [0, width], outputRange: [0, width], extrapolate: "clamp" }) : width),
     [clip, start, offset, width],
   );
-  const left = useMemo(() => (shown ? open.interpolate({ inputRange: [0, 1], outputRange: [start, start + offset] }) : start + offset), [start, offset, shown]);
+  const sliding = useMemo(() => open.interpolate({ inputRange: [0, 1], outputRange: [start, start + offset] }), [open, start, offset]);
+  const left = useGated(shown, sliding, start + offset);
   const opacity = useMemo(
     () =>
       Animated.add(shownValue, open.interpolate({ inputRange: [0, 0.5], outputRange: [0, 1], extrapolate: "clamp" })).interpolate({

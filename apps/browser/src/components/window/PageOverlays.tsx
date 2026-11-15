@@ -97,11 +97,11 @@ export function BesidePeekPopovers({ tabId, windowId, left, top, room }: { tabId
   );
 }
 
-export function PeekPage({ tabId, sourceId, windowId, width, fullscreen }: { tabId: string; sourceId: string; windowId: string; width: number; fullscreen: boolean }) {
+export function PeekPage({ tabId, sourceId, windowId, width, shown, fullscreen }: { tabId: string; sourceId: string; windowId: string; width: number; shown: boolean; fullscreen: boolean }) {
   return (
     <>
-      <TabWebView tabId={tabId} visible warm={false} peekOf={sourceId} />
-      <PageOverlays tabId={tabId} windowId={windowId} width={width} geometry={NO_TOOLBAR} toolbar={false} newTabShown={false} cliPill loadingPill={fullscreen} />
+      <TabWebView tabId={tabId} visible={shown} warm={false} peekOf={sourceId} />
+      {shown && <PageOverlays tabId={tabId} windowId={windowId} width={width} geometry={NO_TOOLBAR} toolbar={false} newTabShown={false} cliPill loadingPill={fullscreen} />}
     </>
   );
 }

@@ -12,6 +12,7 @@ import { settleSharedPins } from "../pins/pinShare";
 import { settleTileFolders } from "../pins/tileFolders";
 import { mirrorTopApps } from "../pins/topApps";
 import { mirrorTabs, pagesIntoSplits, unshareTabs } from "../tabs/tabShare";
+import { splitsWhereUnavailable } from "../splits/splits";
 
 export type SettleStep = (s: BrowserState, prev: BrowserState) => BrowserState | null;
 
@@ -23,6 +24,7 @@ const patched =
   };
 
 export const SETTLE_STEPS: readonly (readonly [string, SettleStep])[] = [
+  ["splitsWhereUnavailable", patched((s) => splitsWhereUnavailable(s))],
   ["forgetClosedWindowMutes", patched(forgetClosedWindowMutes)],
   ["forgetClosedWindowCleanUps", patched(forgetClosedWindowCleanUps)],
   ["forgetMovedAnchors", patched(forgetMovedAnchors)],

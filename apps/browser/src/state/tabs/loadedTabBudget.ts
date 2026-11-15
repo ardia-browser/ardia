@@ -2,6 +2,7 @@ import type { SystemState } from "../../platform/performance";
 import { everySlowly } from "../../platform/slowTimers";
 import { webviews } from "../../platform/webviews";
 import { withDeadline } from "../../lib/deadline";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { tabEngine } from "../engines/engines";
 import { isPlaying, useMedia } from "../media/media";
@@ -32,7 +33,7 @@ const REOPENED_SOON_MS = 30 * MINUTE;
 const RECENTLY_VISIBLE = 7;
 
 export function loadedTabBudget(settings: Pick<Settings, "memorySaver" | "memorySaverMode">, sys: SystemState | null): LoadedTabBudget | null {
-  if (settings.memorySaver === false || !sys) return null;
+  if (!PLATFORM_FEATURES.sleepsTabsOverBudget || settings.memorySaver === false || !sys) return null;
   const mode = MODES[settings.memorySaverMode] ?? MODES.balanced;
   if (sys.memoryPressure !== "normal") return { tabs: mode.floor, hiddenMs: Math.min(mode.hiddenMs, HIDDEN_UNDER_PRESSURE_MS) };
   return { tabs: Math.max(mode.floor, Math.round((sys.physicalMemory / GIB) * mode.perGib)), hiddenMs: mode.hiddenMs };

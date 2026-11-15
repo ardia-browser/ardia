@@ -42,7 +42,7 @@ test("a pop-up from a Peek keeps the Peek's page as a tab, opens in front of it,
   const popup = popupTabOf("https://signin.example/popup");
   assert.ok(popup);
   assert.ok(S().tabs[peek], "the page that opened the pop-up is still open");
-  assert.equal(S().peeks[w], undefined);
+  assert.equal(S().peeks[page], undefined);
   assert.deepEqual(S().windows[w].tabIds.slice(0, 3), [page, peek, popup]);
   assert.equal(S().tabs[popup].openerId, peek);
   assert.equal(S().windows[w].activeTabIds.default, popup);
@@ -70,7 +70,7 @@ test("a pop-up from a Peek that an opening rule cancels leaves the Peek a Peek",
   const tabs = [...S().windows[w].tabIds];
   await openThroughGate(w, peek, ref, { cancel: true });
   assert.equal(popupTabOf("https://signin.example/popup"), undefined);
-  assert.equal(S().peeks[w]?.tabId, peek);
+  assert.equal(S().peeks[page]?.tabId, peek);
   assert.deepEqual(S().windows[w].tabIds, tabs);
 });
 
@@ -78,9 +78,27 @@ test("a pop-up whose Peek you close while the opening rule decides still opens i
   const { w, page, ref } = windowWithTab();
   const other = S().newTab(w, { url: "https://b.example/", background: true });
   const peek = S().openPeek(page, "https://signin.example/start");
-  await openThroughGate(w, peek, ref, null, () => S().activate(other));
+  await openThroughGate(w, peek, ref, null, () => {
+    S().activate(other);
+    S().closePeek(page);
+  });
   const popup = popupTabOf("https://signin.example/popup");
   assert.ok(popup);
   assert.equal(S().tabs[peek], undefined);
   assert.equal(S().windows[w].activeTabIds.default, popup);
+});
+
+test("a pop-up from a Peek hidden behind another tab keeps that Peek's page as a tab, not another tab's Peek", () => {
+  const { w, page, ref } = windowWithTab();
+  const other = S().newTab(w, { url: "https://b.example/", background: true });
+  const peek = S().openPeek(page, "https://signin.example/start");
+  S().activate(other);
+  const otherPeek = S().openPeek(other, "https://c.example/");
+  openFromPage({ url: "https://signin.example/popup", disposition: "foreground", popup: true }, ref(peek));
+  const popup = popupTabOf("https://signin.example/popup");
+  assert.ok(popup);
+  assert.equal(S().peeks[page], undefined);
+  assert.ok(S().windows[w].tabIds.includes(peek), "the hidden Peek's page became a tab");
+  assert.equal(S().peeks[other]?.tabId, otherPeek, "the shown Peek stays a Peek");
+  assert.equal(S().tabs[popup].openerId, peek);
 });

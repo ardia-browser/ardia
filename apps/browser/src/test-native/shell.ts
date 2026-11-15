@@ -53,6 +53,7 @@ export const launch: LaunchConfig = {
 export type FakeWindow = OpenWindowOptions & { title?: string; trafficLightsCenter?: [number, number] | null; trafficLightsTrailing?: boolean };
 const shellEvents = nativeEvents();
 export const windows = {
+  closeRequests: [] as string[],
   open: new Map<string, FakeWindow>(),
   closed: [] as string[],
   focused: null as string | null,
@@ -73,12 +74,16 @@ const shell: Modules["ArdiaShell"] = {
   isDarkAppearance: () => Promise.resolve(false),
 };
 
-const windowsModule: Modules["ArdiaAppWindows"] = {
+const windowsModule: Modules["ArdiaAppWindows"] & { requestClose(id: string): Promise<void> } = {
   windowCornerRadius: () => 19,
   addListener: shellEvents.addListener,
   openWindow: (id, options) => {
     windows.open.set(id, { ...options });
     if (options.focus !== false) windows.focused = id;
+    return Promise.resolve();
+  },
+  requestClose: (id) => {
+    windows.closeRequests.push(id);
     return Promise.resolve();
   },
   closeWindow: (id) => {

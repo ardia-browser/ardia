@@ -1,4 +1,5 @@
 import type { TabGroupColor } from "@ardia/core";
+import type { OpenWindowRequest } from "./pageTypes";
 import { call } from "./engine/call";
 
 export type StripTab = {
@@ -57,3 +58,5 @@ export function sendTabStripCommand(command: TabStripCommand): number {
 }
 
 export type LinkRoute = { profile?: string; adoptIds?: (string | null)[]; dismissed?: number[] };
+
+export type WindowRequest = { request: OpenWindowRequest; profile: string; fromWindow?: string };

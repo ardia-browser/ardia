@@ -1,4 +1,3 @@
-import { closeWindow as closeNativeWindow } from "../../platform/windows";
 import { copyText } from "../../platform/clipboard";
 import { openExternalURL } from "../../platform/app";
 import { pickFiles, prompt } from "../../platform/dialogs";
@@ -22,7 +21,7 @@ import {
 } from "../browser/actions";
 import { bookmarkAllTabs, bookmarkTab } from "../bookmarks/actions";
 import { isBookmarklet, runBookmarklet } from "../bookmarks/bookmarklets";
-import { exportBookmarksFromWindow } from "../bookmarks/exportHtml";
+import { exportBookmarksFromWindow, toggleDownloadsPanel } from "./platformCommands";
 import { requestClearData } from "../profiles/clearDataRequest";
 import { showHistory } from "../history/showHistory";
 import { openInternalPage } from "../pages/urls";
@@ -40,7 +39,7 @@ import { togglePageEngine } from "../engines/actions";
 import { runReaderCommand } from "../reader/reader";
 import { goBack, goForward } from "../tabs/navigation";
 import { awaitsFirstPage } from "../tabs/pendingAddress";
-import { openSplitPane } from "../splits/actions";
+import { focusSplitPane, openSplitPane } from "../splits/actions";
 import { isAppCommand, LITTLE_ARDIA_PAGE_COMMANDS, settingChange, variantArg } from "./commandCatalog";
 import { APP_COMMAND_HANDLERS } from "./appCommands";
 import { runSidebarCommand } from "../sidebar/commands";
@@ -70,6 +69,7 @@ import { expectFocus, findFocus } from "../focus/focusClaims";
 import { isWebPageUrl } from "../../lib/url";
 import { findStep, openFind } from "../find/actions";
 import { runHidingCommand } from "../site/hiddenElements";
+import { requestWindowClose } from "../windows/windowClose";
 
 const newOrId = (arg: string) => (arg === "new" ? null : arg);
 
@@ -80,7 +80,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
   const s = useBrowser.getState();
 
   if (isUtilityWindowId(requested)) {
-    if (command === "closeTab") return void closeNativeWindow(requested!);
+    if (command === "closeTab") return requestWindowClose(requested!);
     if (command === "findInPage" && requested === SETTINGS_WINDOW_ID) return focusSettingsSearch();
     requested = null;
   }
@@ -237,9 +237,8 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
     case "openSplitPane":
       return void openSplitPane(windowId);
     case "focusNextPane":
-      return s.focusPane(windowId, 1);
     case "focusPreviousPane":
-      return s.focusPane(windowId, -1);
+      return focusSplitPane(windowId, command === "focusNextPane" ? 1 : -1);
     case "toggleSidebar":
       return s.toggleSidebar(windowId);
     case "zoomIn":
@@ -308,7 +307,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
     case "toggleMute":
       return page ? (arg === "site" ? toggleSiteMute(page.id) : toggleMute(page.id)) : undefined;
     case "downloads":
-      return s.setDownloadsOpen(windowId, !ui?.downloadsOpen);
+      return toggleDownloadsPanel(windowId, !ui?.downloadsOpen);
     case "cast":
       return void toggleCastPicker(windowId, tabId);
     case "showHistory":

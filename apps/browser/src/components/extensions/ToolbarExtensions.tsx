@@ -209,6 +209,7 @@ function ExtensionButton({ ext, index, pitch, reorder, windowId, tabId, ready, p
   const title = state?.title || ext.actionTitle || ext.name;
   const icon = state?.icon || ext.actionIcon || ext.icon;
   const fill = state?.badgeColor && state.badgeColor !== ink.black ? state.badgeColor : BADGE_FALLBACK_FILL;
+  const badgeRoom = useToolbarRowContext().extensionButton - BADGE_PLACE.right;
   const pressMotion = usePressScaleMotion(true, buttonMotion.iconPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
   const responder = useReorderResponder(ext.id, index, reorder);
@@ -238,7 +239,7 @@ function ExtensionButton({ ext, index, pitch, reorder, windowId, tabId, ready, p
             onActivate?.();
             return activateExtension(windowId, ext, await measure(), fetched?.[ext.id], tabId);
           }}
-          badge={badge ? <Badge text={badge.slice(0, 4)} size="s" fill={fill} color={state?.badgeTextColor ?? contrastText(fill)} style={BADGE_PLACE} /> : null}
+          badge={badge ? <Badge text={badge.slice(0, 4)} size="s" fit={badgeRoom} fill={fill} color={state?.badgeTextColor ?? contrastText(fill)} style={BADGE_PLACE} /> : null}
         >
           <Animated.View pointerEvents="none" style={[{ width: GLYPH_BOX, height: GLYPH_BOX, alignItems: "center", justifyContent: "center" }, scaleStyle]}>
             {icon ? (

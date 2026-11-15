@@ -10,6 +10,7 @@ import type {
   EngineBookmark,
   EngineEvents,
   EngineTask,
+  EventData,
   EventName,
   HistoryChange,
   HistoryChangedBatch,
@@ -58,7 +59,7 @@ const eventsOf = (domain: string) => {
   if (!domainEvents.has(domain)) domainEvents.set(domain, nativeEvents());
   return domainEvents.get(domain)!;
 };
-export const emitEvent = <E extends EventName>(name: E, data: EngineEvents[E]) => {
+export const emitEvent = <E extends EventName>(name: E, data: EventData<E>) => {
   const domain = name.slice(0, name.indexOf("."));
   eventsOf(domain).emit(domain, { name, data });
 };
@@ -87,7 +88,7 @@ function domain<D extends string, Sync extends object>(name: D, handlers: Handle
   return Object.assign(fake, sync);
 }
 
-const laterEvent = <E extends EventName>(name: E, data: EngineEvents[E]) => queueMicrotask(() => emitEvent(name, data));
+const laterEvent = <E extends EventName>(name: E, data: EventData<E>) => queueMicrotask(() => emitEvent(name, data));
 export const emitDownload = (download: EngineEvents["downloads.changed"]) => emitEvent("downloads.changed", download);
 export const emitPermission = (request: EngineEvents["permissions.requested"]) => emitEvent("permissions.requested", request);
 

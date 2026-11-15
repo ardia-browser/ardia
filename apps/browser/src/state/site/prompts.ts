@@ -1,8 +1,9 @@
 import type { BlockedPopup } from "../../platform/tabs";
-import type { ExternalAppRequest } from "../../platform/siteSettings";
 import { getSiteSettings, resolveExternalApp } from "./siteSettings";
 import { patchPage, pageOf, setPopover, type AutofillPrompt, type PasswordPrompt } from "../tabs/pageState";
+import type { ExternalAppRequest } from "../../platform/siteSettings";
 import { currentEngineProfile, currentTab } from "../browser/current";
+import { noteExternalApp } from "../telemetry/externalAppCounts";
 import { noteExternalAppRequest } from "../telemetry/track";
 
 async function shouldPromptForPopups(profile: string, origin: string): Promise<boolean> {
@@ -40,5 +41,6 @@ export function answerExternalApp(tabId: string, open: boolean, remember = false
   const request = pageOf(tabId).externalApp;
   if (!request) return;
   patchPage(tabId, { externalApp: null });
+  if (request.app) noteExternalApp(!open ? "declined" : remember ? "allowedAlways" : "allowed");
   void resolveExternalApp(request.id, open, remember);
 }

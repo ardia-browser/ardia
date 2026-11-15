@@ -5,6 +5,7 @@ import { PostageStamp, PostcardPaper } from "../ntp/PostageStamp";
 import { finishOnboarding, QUESTION_ORDER, useOnboarding } from "../../state/onboarding/onboarding";
 import { SecondaryButton } from "./Buttons";
 import { useOnboardingColors } from "./Parts";
+import { keyText } from "../../state/commands/keyText";
 import { StepActions, StepLayout } from "./StepLayout";
 import { onboardingType } from "./tokens";
 
@@ -35,7 +36,7 @@ export function OutroStep() {
       <View style={{ gap: space.ml }}>
         {SHORTCUTS.map(([keys, label]) => (
           <View key={keys} style={{ flexDirection: "row", alignItems: "center", gap: space.l }}>
-            <KeyCap keys={[keys]} />
+            <KeyCap keys={[keyText(keys)]} />
             <Text color={colors.subtitle}>{label}</Text>
           </View>
         ))}

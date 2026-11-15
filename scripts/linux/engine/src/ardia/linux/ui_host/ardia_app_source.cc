@@ -222,7 +222,8 @@ std::string ArdiaAppSource::GetContentSecurityPolicy(
     case Directive::FontSrc:
       return "font-src 'self' data:;";
     case Directive::ConnectSrc:
-      return "connect-src 'self' data: blob: https://api.github.com "
+      return "connect-src 'self' data: blob: https://ardia.dev "
+             "https://api.github.com "
              "https://github.com https://objects.githubusercontent.com "
              "https://release-assets.githubusercontent.com "
              "https://storage.googleapis.com;";

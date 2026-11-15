@@ -12,6 +12,7 @@ class ContentRendererClient : public ardiacore::ACContentRendererClient {
   ContentRendererClient& operator=(const ContentRendererClient&) = delete;
   ~ContentRendererClient() override;
 
+  void RenderThreadStarted() override;
   void RenderFrameCreated(content::RenderFrame* render_frame) override;
 };
 

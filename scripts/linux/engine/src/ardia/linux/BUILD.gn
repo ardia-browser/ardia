@@ -1,0 +1,90 @@
+# Copyright 2026 Ardia. Apache-2.0.
+
+assert(is_linux)
+
+source_set("linux") {
+  sources = [
+    "api.cc",
+    "api.h",
+    "app_lifetime.cc",
+    "app_lifetime.h",
+    "browser_window/autofill_prompt_handler.cc",
+    "browser_window/browser_window.cc",
+    "browser_window/browser_window.h",
+    "browser_window/find_bar.cc",
+    "browser_window/location_bar.cc",
+    "browser_window/web_contents_delegate.cc",
+    "browser_window/web_contents_delegate.h",
+    "content_browser_client.cc",
+    "content_browser_client.h",
+    "host/host.cc",
+    "host/host.h",
+    "host/input_region.cc",
+    "host/input_region.h",
+    "host/key_map.cc",
+    "host/key_map.h",
+    "log.cc",
+    "log.h",
+    "main.cc",
+    "main.h",
+    "main_delegate.cc",
+    "main_delegate.h",
+    "main_parts.cc",
+    "main_parts.h",
+    "test_gate.cc",
+    "test_gate.h",
+    "windows/app_window.cc",
+    "windows/app_window.h",
+    "windows/app_windows.cc",
+    "windows/app_windows.h",
+  ]
+
+  public_deps = [
+    "//ardia/core:hooks",
+    "//ardia/linux/ui_host",
+    "//ardia/linux/ui_host:modules",
+    "//ardia/win:shared",
+  ]
+
+  deps = [
+    "//ardia/linux/renderer",
+    "//base",
+    "//chrome/app:command_ids",
+    "//chrome/browser",
+    "//chrome/browser/ardia",
+    "//chrome/browser/devtools",
+    "//chrome/browser/profiles:profile",
+    "//chrome/common",
+    "//chrome/common:buildflags",
+    "//components/input",
+    "//components/keep_alive_registry",
+    "//components/tabs:public",
+    "//components/version_info",
+    "//components/web_modal",
+    "//content/public/app",
+    "//content/public/browser",
+    "//content/public/common",
+    "//sandbox/policy",
+    "//services/cert_verifier/public/mojom",
+    "//services/network/public/mojom",
+    "//skia",
+    "//third_party/blink/public/common",
+    "//ui/aura",
+    "//ui/base",
+    "//ui/color",
+    "//ui/compositor",
+    "//ui/display",
+    "//ui/events",
+    "//ui/gfx",
+    "//ui/native_theme",
+    "//ui/snapshot",
+    "//ui/views",
+    "//ui/views/controls/webview",
+    "//url",
+  ]
+
+  allow_circular_includes_from = [
+    "//ardia/linux/ui_host",
+    "//ardia/win:shared",
+  ]
+}

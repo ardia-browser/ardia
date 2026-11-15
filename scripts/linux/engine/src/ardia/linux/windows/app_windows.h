@@ -45,6 +45,8 @@ class AppWindows {
   AppWindows& operator=(const AppWindows&) = delete;
 
   static AppWindows& Get();
+  static base::ListValue FrameOf(const gfx::Rect& bounds);
+  static std::optional<gfx::Rect> BoundsOf(const base::ListValue* frame);
 
   void Register(ModuleRegistry& registry);
 

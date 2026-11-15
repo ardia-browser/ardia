@@ -14,7 +14,11 @@
 #include "ardia/linux/renderer/content_renderer_client.h"
 #include "base/base_switches.h"
 #include "base/command_line.h"
+#include "base/files/file_path.h"
 #include "base/no_destructor.h"
+#include "base/path_service.h"
+#include "chrome/common/chrome_paths.h"
+#include "chrome/common/chrome_switches.h"
 #include "chrome/common/profiler/main_thread_stack_sampling_profiler.h"
 #include "content/public/common/content_switches.h"
 
@@ -40,6 +44,16 @@ bool BrowserProcess() {
 
 BrowserWindow* WindowForChromeBrowser(Browser* browser) {
   return Host::Get()->HostChromeBrowser(browser);
+}
+
+void KeepCrashDumpsInDataFolder() {
+  const base::FilePath user_data =
+      base::CommandLine::ForCurrentProcess()->GetSwitchValuePath(
+          switches::kUserDataDir);
+  if (!user_data.empty() && user_data.IsAbsolute()) {
+    base::PathService::Override(chrome::DIR_CRASH_DUMPS,
+                                user_data.Append("Crash Reports"));
+  }
 }
 
 bool KeepsWindowWithoutTabs(const BrowserWindowInterface* browser) {
@@ -80,6 +94,7 @@ std::optional<int> MainDelegate::BasicStartupComplete() {
 void MainDelegate::PreSandboxStartup() {
   if (BrowserProcess()) {
     InstallChromeHooks();
+    KeepCrashDumpsInDataFolder();
   }
   ChromeMainDelegate::PreSandboxStartup();
 }

@@ -179,6 +179,7 @@ export const TabPane = memo(function TabPane({
             )}
           </View>
         </View>
+        {hideBar && motion.pageCover > 0 && <View pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, top: 0, height: motion.pageCover, backgroundColor: theme.card }} />}
       </Animated.View>
       {hideBar && <AutoHideBackdrop tabId={tabId} mode={mode} motion={motion} />}
       {autoLayout && bar.bar === "pane" && <AutoHideToolbar tabId={tabId} geometry={geometry} windowId={windowId} inSplit={inSplit} focused={focused || !inSplit} mode={mode} motion={motion} />}

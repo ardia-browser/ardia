@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Animated, Pressable, StyleSheet, View, type ViewStyle } from "react-native";
-import { useTheme } from "../ui/theme";
 import { pageHostLabel } from "../../lib/url";
 import { useTab } from "../../state/browser/hooks";
 import { useBrowserWhile, useStoreWhile } from "../../state/tabs/tabWatch";
@@ -39,6 +38,7 @@ type ToolbarMotion = {
   fade: Animated.Value;
   groupStyle: Animated.WithAnimatedValue<ViewStyle>;
   bottomStyle: Animated.WithAnimatedValue<ViewStyle>;
+  pageCover: number;
 };
 
 export function useToolbarMotion({
@@ -108,6 +108,7 @@ export function useToolbarMotion({
       transform: [{ translateY }],
     },
     bottomStyle: { transform: [{ translateY: bottomShift }] },
+    pageCover: mode === "peek" ? room : collapsed ? extra : 0,
   };
 }
 
@@ -118,7 +119,6 @@ function useMovedOnce(mode: ToolbarMode) {
 }
 
 export function AutoHideBackdrop({ tabId, mode, motion }: { tabId: string; mode: ToolbarMode; motion: Pick<ToolbarMotion, "bar"> }) {
-  const theme = useTheme();
   const url = useTab(tabId, (t) => t?.url ?? "");
   const palette = useSitePalette(tabId);
   const band = useEasedColor(palette.background);
@@ -137,7 +137,7 @@ export function AutoHideBackdrop({ tabId, mode, motion }: { tabId: string; mode:
   return (
     <View pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, top: 0, height: H }}>
       <Animated.View
-        style={{ position: "absolute", left: 0, right: 0, top: 0, height: H, backgroundColor: theme.card, transform: anim ? [{ translateY: anim.bandLift }, { scaleY: anim.bandScale }] : undefined }}
+        style={{ position: "absolute", left: 0, right: 0, top: 0, height: H, transform: anim ? [{ translateY: anim.bandLift }, { scaleY: anim.bandScale }] : undefined }}
       >
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: band }]} />
       </Animated.View>

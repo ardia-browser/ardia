@@ -21,6 +21,7 @@
 #include "third_party/skia/include/core/SkRegion.h"
 #include "ui/events/event_handler.h"
 #include "ui/gfx/geometry/rect.h"
+#include "ui/views/context_menu_controller.h"
 #include "ui/views/view.h"
 #include "ui/views/view_targeter_delegate.h"
 #include "ui/views/widget/widget.h"
@@ -35,7 +36,9 @@ namespace ardia_linux {
 
 class AppWindow;
 
-class AppWindowView : public views::View, public views::ViewTargeterDelegate {
+class AppWindowView : public views::View,
+                      public views::ViewTargeterDelegate,
+                      public views::ContextMenuController {
  public:
   explicit AppWindowView(AppWindow* window);
   AppWindowView(const AppWindowView&) = delete;
@@ -58,6 +61,10 @@ class AppWindowView : public views::View, public views::ViewTargeterDelegate {
   gfx::Size GetMinimumSize() const override;
   void OnBoundsChanged(const gfx::Rect& previous_bounds) override;
   View* TargetForRect(View* root, const gfx::Rect& rect) override;
+  void ShowContextMenuForViewImpl(
+      View* source,
+      const gfx::Point& point,
+      ui::mojom::MenuSourceType source_type) override;
 
  private:
   raw_ptr<AppWindow> window_;

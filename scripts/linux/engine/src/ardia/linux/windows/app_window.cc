@@ -113,6 +113,22 @@ AppWindowView::AppWindowView(AppWindow* window) : window_(window) {
   SetEventTargeter(std::make_unique<views::ViewTargeter>(this));
 }
 
+void AppWindowView::ShowContextMenuForViewImpl(
+    views::View* source,
+    const gfx::Point& point,
+    ui::mojom::MenuSourceType source_type) {
+  gfx::Point local = point;
+  views::View::ConvertPointFromScreen(this, &local);
+  if (!window_->draggable_region().contains(local.x(), local.y())) {
+    return;
+  }
+  base::DictValue payload;
+  payload.Set("id", window_->id());
+  payload.Set("x", local.x());
+  payload.Set("y", local.y());
+  AppWindows::Get().Emit("onSystemContextMenu", std::move(payload));
+}
+
 AppWindowView::~AppWindowView() = default;
 
 views::WebView* AppWindowView::PageView(const std::string& key) const {
@@ -244,6 +260,7 @@ AppWindow::AppWindow(std::string id,
   widget_->Init(std::move(params));
   widget_observation_.Observe(widget_.get());
   widget_->GetNativeWindow()->AddPreTargetHandler(this);
+  widget_->GetContentsView()->set_context_menu_controller(view_);
   view_->ui_view()->SetWebContents(ui_.get());
   MakeTransparent();
   ApplyShape();
@@ -688,16 +705,6 @@ void AppWindow::OnMouseEvent(ui::MouseEvent* event) {
                            *event);
   }
   if (event->type() != ui::EventType::kMousePressed) {
-    return;
-  }
-  if (event->IsRightMouseButton() && (event->flags() & ui::EF_IS_NON_CLIENT) &&
-      draggable_region_.contains(event->x(), event->y())) {
-    base::DictValue point;
-    point.Set("id", id_);
-    point.Set("x", event->root_location().x());
-    point.Set("y", event->root_location().y());
-    AppWindows::Get().Emit("onSystemContextMenu", std::move(point));
-    event->StopPropagation();
     return;
   }
   NotePress(*event);

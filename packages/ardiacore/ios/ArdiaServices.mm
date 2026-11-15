@@ -203,23 +203,16 @@ NSString *StoreFolder(NSString *profile, NSString *extensionId, id version) {
   [panel beginWithCompletionHandler:^(NSModalResponse response) { run(response == NSModalResponseOK ? panel.URL.path : nil); }];
 }
 
-+ (BOOL)profileToggle:(ArdiaProfileToggle)toggle profile:(NSString *)profile {
-  ArdiaCoreProfile *p = ardia_host::LoadedProfile(ardia_host::OriginalProfileName(profile));
-  if (!p) return YES;
-  switch (toggle) {
-    case ArdiaProfileTogglePasswordsOffered: return p.passwordsOffered;
-    case ArdiaProfileToggleAddressesAutofilled: return p.addressesAutofilled;
-    case ArdiaProfileToggleCardsAutofilled: return p.cardsAutofilled;
-  }
-}
-
-+ (void)setProfileToggle:(ArdiaProfileToggle)toggle value:(BOOL)value profile:(NSString *)profile {
-  ArdiaCoreProfile *p = ardia_host::LoadedProfile(ardia_host::OriginalProfileName(profile));
-  switch (toggle) {
-    case ArdiaProfileTogglePasswordsOffered: p.passwordsOffered = value; break;
-    case ArdiaProfileToggleAddressesAutofilled: p.addressesAutofilled = value; break;
-    case ArdiaProfileToggleCardsAutofilled: p.cardsAutofilled = value; break;
-  }
++ (void)profileToggles:(NSString *)profile set:(NSDictionary<NSString *, NSNumber *> *)values reply:(ArdiaServiceReply)reply {
+  NSDictionary<NSString *, NSNumber *> *wanted = [values copy];
+  ArdiaServiceReply done = [reply copy];
+  ardia_host::WithProfile(ardia_host::OriginalProfileName(profile), ^(ArdiaCoreProfile *p) {
+    if (!p || p.destroyed) return done(nil, @"profile not loaded");
+    if (NSNumber *on = wanted[@"passwords"]) p.passwordsOffered = on.boolValue;
+    if (NSNumber *on = wanted[@"addresses"]) p.addressesAutofilled = on.boolValue;
+    if (NSNumber *on = wanted[@"cards"]) p.cardsAutofilled = on.boolValue;
+    done(@{@"passwords" : @(p.passwordsOffered), @"addresses" : @(p.addressesAutofilled), @"cards" : @(p.cardsAutofilled)}, nil);
+  });
 }
 
 + (void)addresses:(NSString *)profile reply:(ArdiaServiceReply)reply {

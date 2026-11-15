@@ -7,7 +7,6 @@ import { sidebarTokens } from "./tokens";
 import { useTab } from "../../state/browser/hooks";
 import { ENGINE_NAMES, ENGINE_SYMBOLS, type PageEngine } from "../../state/engines/engines";
 import { FADED, markedEngine, useIconMarks } from "../../state/sidebar/rowState";
-import { NO_GROUP_ICON } from "../../state/groups/groupIcons";
 import { iconSymbol } from "../../lib/customIcon";
 import { drawnIcon } from "../../state/pins/rowIcons";
 import { Favicon } from "../favicon/Favicon";
@@ -103,10 +102,7 @@ function Icon({
   const theme = useTheme();
   icon = drawnIcon(icon);
   const symbol = iconSymbol(icon);
-  if (symbol) {
-    const ink = icon === NO_GROUP_ICON ? sidebarTokens(theme).noGroupIcon : theme.icon;
-    return <Symbol name={symbol} size={size - 3} weight="medium" color={color ?? ink} style={{ width: size, height: size }} />;
-  }
+  if (symbol) return <Symbol name={symbol} size={size - 3} weight="medium" color={color ?? theme.icon} style={{ width: size, height: size }} />;
   if (icon) {
     return (
       <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>

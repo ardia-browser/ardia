@@ -1,12 +1,12 @@
 import { Animated } from "react-native";
 import { Badge, FadeLabel, Panel, radius, space } from "../ui";
 import { layout, useTheme } from "../ui/theme";
-import { liveFolderIcon } from "../../state/live/sources";
 import { useLive } from "../../state/live/store";
 import { useGroup, useTab } from "../../state/browser/hooks";
 import { useDragGhostLabel } from "../../state/sidebar/hooks";
 import { useTabDrag } from "../../state/drag/tabDrag";
 import type { Ghost } from "./dragModel";
+import { FolderOrIcon } from "./AnimatedFolder";
 import { FolderMosaic } from "./FolderTile";
 import { TabIcon } from "./TabIcon";
 import { SIDEBAR_SHADOW, SIDEBAR_TYPE, TAB_ROW, useSidebarTokens } from "./tokens";
@@ -21,12 +21,12 @@ export function DragGhost({ ghost }: { ghost: Ghost }) {
   const liveFolderId = item.kind === "live" ? item.liveFolderId : undefined;
   const groupId = item.kind === "group" ? item.groupId : undefined;
   const folder = useLive((s) => (liveFolderId ? s.folders[liveFolderId] : undefined));
-  const liveIcon = folder ? liveFolderIcon(folder) : null;
   const groupIcon = useGroup(groupId ?? null, (g) => g?.icon ?? null);
+  const groupColor = useGroup(groupId ?? null, (g) => g?.color ?? null);
   const label = useDragGhostLabel(folder?.name, groupId, tab);
   const tile = item.kind === "tile";
   const folderTile = !!folderOf(item);
-  const drawn = folderTile ? null : ghostIcon(groupIcon, tab, item.kind === "row");
+  const drawn = folderTile || groupId ? null : ghostIcon(tab, item.kind === "row");
   const textOnly = item.kind === "row" && !drawn;
   const onPage = useTabDrag((d) => d.phase === "tab" && d.onPage);
   return (
@@ -47,7 +47,8 @@ export function DragGhost({ ghost }: { ghost: Ghost }) {
           opacity: 0.96,
         }}
       >
-        {liveIcon ? <TabIcon url={liveIcon.site} icon={liveIcon.icon} /> : null}
+        {folder ? <FolderOrIcon icon={folder.icon} open={false} color={folder.color} /> : null}
+        {groupId ? <FolderOrIcon icon={groupIcon} open={false} color={groupColor} /> : null}
         {folderTile ? <FolderMosaic tabIds={item.tabIds} /> : null}
         {drawn ? <TabIcon url={tab?.url ?? ""} favicon={tab?.favicon} icon={drawn.icon} profileId={tab?.profileId} /> : null}
         {!tile ? <FadeLabel text={label} fontSize={SIDEBAR_TYPE.title} weight={item.kind === "group" || item.kind === "live" ? "medium" : "regular"} color={theme.textPrimary} style={{ flex: 1, height: TAB_ROW.titleHeight, marginLeft: textOnly ? TAB_ROW.titleGap : space.m }} /> : null}

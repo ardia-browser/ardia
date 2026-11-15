@@ -99,9 +99,15 @@ export const toolRows = {
         protectedVideo: {
           advanced: true,
           title: "Open streaming sites in WebKit",
-          description: "Netflix, Disney+, Max, Prime Video, Hulu, Apple TV+, Apple Music and other sites whose video is protected open in WebKit, which plays it. A website rule wins.",
+          description: "Netflix, Disney+, Max, Prime Video, Hulu, Apple TV+, Apple Music, Spotify and other sites whose video is protected open in WebKit, which plays it. A website rule wins.",
           shown: (s) => s.pageEngine !== "webkit",
-          keywords: ["drm", "netflix", "disney", "hbo", "max", "prime video", "hulu", "apple tv", "apple music", "fairplay", "widevine", "streaming", "tencent video", "v.qq.com"],
+          keywords: ["drm", "netflix", "disney", "hbo", "max", "prime video", "hulu", "spotify", "apple tv", "apple music", "fairplay", "widevine", "streaming", "tencent video", "v.qq.com"],
+        },
+        fairPlayInChromium: {
+          advanced: true,
+          title: "Play protected media in Chromium with FairPlay",
+          description: "Sites Ardia's FairPlay player supports, like Spotify, stay in Chromium, and a small Ardia helper plays their protected media with Apple's FairPlay. Off, they open in WebKit like the other streaming sites.",
+          keywords: ["fairplay", "spotify", "drm", "chromium", "helper", "protected", "music", "video", "streaming"],
         },
       },
     },

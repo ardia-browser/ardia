@@ -166,9 +166,11 @@ def labels_for_repeats(nodes: list[Node], rows: list[tuple[int, Node]]) -> dict[
     seen: dict[tuple, int] = {}
     for _, node in rows:
         seen[(node.role, node.name.strip())] = seen.get((node.role, node.name.strip()), 0) + 1
-    wanted = {id(node) for _, node in rows if not node.name.strip() or seen[(node.role, node.name.strip())] > 1}
+    wanted = {id(node) for _, node in rows
+              if node.role not in UNLABELED_ROLES and (not node.name.strip() or seen[(node.role, node.name.strip())] > 1)}
     if not wanted:
         return {}
+    repeated = {" ".join(name.split()) for (_, name), count in seen.items() if count > 1 and name}
     parents: dict[int, Node] = {}
 
     def link(node: Node):
@@ -179,18 +181,25 @@ def labels_for_repeats(nodes: list[Node], rows: list[tuple[int, Node]]) -> dict[
     for node in nodes:
         link(node)
     labels: dict[int, str] = {}
+    groups: dict[tuple, list[int]] = {}
     for _, node in rows:
         if id(node) not in wanted:
             continue
-        found = nearby_label(node, parents)
+        found = nearby_label(node, parents, repeated)
         if found:
             labels[id(node)] = found
+            groups.setdefault((node.role, node.name.strip()), []).append(id(node))
+    for members in groups.values():
+        shared = Counter(labels[member] for member in members)
+        for member in members:
+            if shared[labels[member]] > 1:
+                del labels[member]
     if labels:
         command_metrics.flag("snapshot_repeat_labels", True)
     return labels
 
 
-def nearby_label(node: Node, parents: dict[int, Node]) -> str | None:
+def nearby_label(node: Node, parents: dict[int, Node], repeated: set[str] = frozenset()) -> str | None:
     own = node.name.strip()
     current = node
     for _ in range(NEAR_LEVELS):
@@ -201,7 +210,7 @@ def nearby_label(node: Node, parents: dict[int, Node]) -> str | None:
         budget = [NEAR_SCAN]
         for candidate in near_candidates(parent, node, budget):
             text = " ".join(candidate.name.split())
-            if not text or text == own or len(text) < 2:
+            if not text or text == own or len(text) < 2 or text in repeated:
                 continue
             rank = NEAR_ROLES.get(candidate.role, len(NEAR_ROLES))
             if best is None or rank < best[0]:
@@ -455,6 +464,7 @@ async def collect(state, page, selector=None, cursor=True) -> list[Node]:
 UNNAMED_CONTEXTS = frozenset({"RootWebArea", "WebArea"})
 NEAR_ROLES = {"heading": 0, "link": 1, "cell": 2, "gridcell": 2, "rowheader": 2, "StaticText": 3, "img": 4}
 NEAR_LEVELS = 4
+UNLABELED_ROLES = {"heading"}
 NEAR_SCAN = 120
 NEAR_CHARS = 60
 

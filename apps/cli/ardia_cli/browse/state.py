@@ -623,6 +623,8 @@ def parse_ref(selector: str) -> str | None:
         return selector[1:]
     if selector.startswith("ref=") and selector[4:5] == "e" and selector[5:].isdigit():
         return selector[4:]
+    if selector.startswith("[ref=") and selector.endswith("]") and selector[5:6] == "e" and selector[6:-1].isdigit():
+        return selector[5:-1]
     return None
 
 

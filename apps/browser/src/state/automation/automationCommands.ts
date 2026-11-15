@@ -13,6 +13,7 @@ export const AUTOMATION: Readonly<Record<BrowserCommand, AutomationDecision>> = 
   reopenClosedTab: "run",
   reopenClosedWindow: "run",
   restoreClosed: "needsArgument",
+  clearRecentlyClosed: "run",
   focusCommandBar: "run",
   closeTab: "run",
   closeAllTabs: "run",

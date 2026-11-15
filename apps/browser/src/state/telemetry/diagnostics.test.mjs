@@ -301,6 +301,7 @@ test("tab presses count clicks, drags turned into clicks, drags and presses that
   stub.pressRepeated.earlier = null;
   presses.noteRangeSelect(true);
   presses.noteRangeSelect(false);
+  presses.notePagePressRefused();
   presses.emitTabPresses();
   await client.saveQueueNow();
   const props = events("tab_presses").at(-1).properties;
@@ -315,6 +316,7 @@ test("tab presses count clicks, drags turned into clicks, drags and presses that
   assert.equal(props.down_switches, 3);
   assert.equal(props.held_n, 2);
   assert.ok(props.held_ms_p50 >= 0 && props.held_ms_p50 < 1000);
+  assert.equal(props.page_refused, 1);
   assert.equal(props.page_click_n, 1);
   assert.ok(props.page_click_ms_p50 >= 0 && props.page_click_ms_p50 < 1000);
   presses.emitTabPresses();
@@ -332,12 +334,31 @@ test("tab presses count clicks, drags turned into clicks, drags and presses that
   assert.deepEqual([events("tab_presses").at(-1).properties.range_selects, events("tab_presses").at(-1).properties.presses], [1, 0]);
 });
 
+test("an hour with only refused page presses still sends them", async () => {
+  presses.notePagePressRefused();
+  presses.notePagePressRefused();
+  presses.emitTabPresses();
+  await client.saveQueueNow();
+  assert.equal(events("tab_presses").length, 4);
+  const props = events("tab_presses").at(-1).properties;
+  assert.equal(props.presses, 0);
+  assert.equal(props.down_switches, 0);
+  assert.equal(props.page_refused, 2);
+  assert.deepEqual([props.lost_releases, props.repeat_presses, props.repeat_gap_ms_p50, props.repeat_landed_on], [0, 0, null, null]);
+  assert.equal(props.page_click_n, 0);
+  assert.equal(props.page_click_ms_p50, null);
+  assert.equal(props.held_n, 0);
+  assert.equal(props.held_ms_p50, null);
+  assert.ok(Object.values(props).every((v) => v !== undefined && !Number.isNaN(v)), JSON.stringify(props));
+});
+
 test("turning sharing off forgets pending presses and samples, so they never go out under the next install id", async () => {
   await diagnostics.recordContext();
   assert.ok(diagnostics.contextSamples().length > 0);
   presses.notePressStarted();
   presses.notePressEnded("click", "t9");
   presses.notePressStarted();
+  presses.notePagePressRefused();
   client.setSharing(false, "settings");
   client.setSharing(true, "settings");
   assert.equal(diagnostics.contextSamples().length, 0);
@@ -346,7 +367,7 @@ test("turning sharing off forgets pending presses and samples, so they never go 
   presses.emitTabPresses();
   await client.saveQueueNow();
   assert.equal(events("tab_presses").length, 0);
-  assert.deepEqual(presses.devTabPresses(), { presses: 0, down_switches: 0, clicks: 0, drag_clicks: 0, drags: 0, unanswered: 0, range_selects: 0, range_from_shown: 0, pending: false, toPageClick: 0, held: 0 });
+  assert.deepEqual(presses.devTabPresses(), { presses: 0, down_switches: 0, clicks: 0, drag_clicks: 0, drags: 0, unanswered: 0, range_selects: 0, range_from_shown: 0, page_refused: 0, pending: false, toPageClick: 0, held: 0 });
 });
 
 test("with sharing off no context is saved, and tab presses stay in the local copy, never queued", async () => {

@@ -25,6 +25,7 @@ export function siteOf(url: string | undefined | null): string | null {
 }
 
 export const canSwitchEngine = (url: string | undefined | null) => !!url && isWebPageUrl(url);
+export const offersEngineChoice = () => true;
 export const chromiumOnly = (url: string | undefined | null) => !!url && /^(ardia|chrome|chrome-extension|chrome-untrusted|devtools|view-source):/i.test(url);
 
 export const defaultEngine = (s: Pick<BrowserState, "settings">): PageEngine => (s.settings.pageEngine === "webkit" ? "webkit" : "chromium");
@@ -51,6 +52,8 @@ export const PROTECTED_VIDEO_SITES: readonly string[] = [
   "v.qq.com",
 ];
 
+export const FAIRPLAY_IN_CHROMIUM_ORIGINS: readonly string[] = ["https://open.spotify.com"];
+
 export function protectedVideoSite(url: string | undefined | null): boolean {
   const site = siteOf(url);
   if (!site?.startsWith("https://")) return false;
@@ -58,8 +61,13 @@ export function protectedVideoSite(url: string | undefined | null): boolean {
   return PROTECTED_VIDEO_SITES.some((domain) => host === domain || host.endsWith(`.${domain}`));
 }
 
+export const fairPlaySite = (url: string | undefined | null) => FAIRPLAY_IN_CHROMIUM_ORIGINS.includes(siteOf(url) ?? "");
+
+const fairPlayGoesToWebKit = (s: Pick<BrowserState, "settings">, url: string | undefined | null) =>
+  s.settings.fairPlayInChromium !== true && fairPlaySite(url);
+
 export const builtInEngine = (s: Pick<BrowserState, "settings">, url: string | undefined | null): PageEngine | undefined =>
-  s.settings.protectedVideoInWebKit === true && protectedVideoSite(url) ? "webkit" : undefined;
+  s.settings.protectedVideoInWebKit === true && (protectedVideoSite(url) || fairPlayGoesToWebKit(s, url)) ? "webkit" : undefined;
 
 export const chosenEngine = (s: Pick<BrowserState, "settings">, url: string | undefined | null): PageEngine | undefined => ruleFor(s, url) ?? builtInEngine(s, url);
 

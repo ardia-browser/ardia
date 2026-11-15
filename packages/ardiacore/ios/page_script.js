@@ -1040,8 +1040,9 @@
 
   let bridgesProtectedPlayback = () => false;
   let reportProtectedPlayback = null;
+  const FAIRPLAY_ORIGINS = ["https://open.spotify.com"];
   try {
-    if (isTop && location.origin === "https://open.spotify.com" && typeof Navigator.prototype.requestMediaKeySystemAccess === "function") {
+    if (isTop && FAIRPLAY_ORIGINS.includes(location.origin) && typeof Navigator.prototype.requestMediaKeySystemAccess === "function") {
       const KEY_SYSTEM = "com.apple.fps.1_0";
       const PLAYLIST_PART = 30000;
       const CONFIG_WAIT_MS = 3000;

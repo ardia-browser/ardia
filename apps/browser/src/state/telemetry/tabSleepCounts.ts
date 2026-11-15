@@ -1,4 +1,6 @@
-const none = () => ({ captureIndicatorsCleared: 0, pinnedTabsSleptByMemorySaver: 0, tabsSleptOverBudget: 0, tabsSleptOverBudgetReopened: 0 });
+import { takeCleanUpCounts } from "./cleanUpCounts";
+
+const none = () => ({ captureIndicatorsCleared: 0, pinnedTabsSleptByMemorySaver: 0, tabsSleptOverBudget: 0, tabsSleptOverBudgetReopened: 0, topAppsKeptRunning: 0, topAppsUnloadedFromMenu: 0 });
 
 let pending = none();
 
@@ -36,13 +38,24 @@ function takeProfileUnloadCounts() {
   return taken;
 }
 
+export function noteTopAppsKeptRunning(count: number) {
+  pending.topAppsKeptRunning += count;
+}
+
+export function noteTopAppUnloadedFromMenu() {
+  pending.topAppsUnloadedFromMenu++;
+}
+
 export function takeTabSleepCounts() {
   const taken = pending;
   pending = none();
   return {
     capture_indicators_cleared: taken.captureIndicatorsCleared,
     pinned_tabs_slept_by_memory_saver: taken.pinnedTabsSleptByMemorySaver,
+    top_app_closes_kept_running: taken.topAppsKeptRunning,
+    top_apps_unloaded_from_menu: taken.topAppsUnloadedFromMenu,
     ...takeProfileUnloadCounts(),
+    ...takeCleanUpCounts(),
     tabs_slept_over_budget: taken.tabsSleptOverBudget,
     tabs_slept_over_budget_reopened: taken.tabsSleptOverBudgetReopened,
   };

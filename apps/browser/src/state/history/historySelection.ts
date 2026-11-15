@@ -47,5 +47,8 @@ export function shownRows(urls: readonly string[], s: RowSelection): RowSelectio
   return { selected: kept.length === s.selected.size ? s.selected : new Set(kept), anchor, cursor };
 }
 
-export const withoutRows = (s: RowSelection, urls: readonly string[]): RowSelection =>
-  urls.some((url) => s.selected.has(url)) ? { ...s, selected: new Set([...s.selected].filter((url) => !urls.includes(url))) } : s;
+export function withoutRows(s: RowSelection, urls: readonly string[]): RowSelection {
+  if (!urls.some((url) => s.selected.has(url))) return s;
+  const gone = new Set(urls);
+  return { ...s, selected: new Set([...s.selected].filter((url) => !gone.has(url))) };
+}

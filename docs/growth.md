@@ -213,7 +213,8 @@ owner's Mac ──▶ ardia.dev/_ch/ (read-only ClickHouse user)   ardia.dev/_re
     switch on release would have added), `page_click_ms_p50`/`_p75`/`page_click_n` (from opening a tab with a press
     to the first press in its page, within 60 s), `range_selects` (⇧-clicks that selected a range of tabs) and
     `range_from_shown` (those whose last clicked tab was no longer the shown one, so the range started at the shown tab:
-    #1074, where it started at a Top Apps tile and took every pinned tab).
+    #1074, where it started at a Top Apps tile and took every pinned tab), `page_refused` (presses on the sidebar or anything else drawn over a
+    WebKit page that the page turned away, `WebKitPagePresses.swift`).
   - `settings_snapshot` adds `setting_app_icon` / `default_app_icon`.
   - The context is saved in `telemetry.json` (`context`) every 10 minutes and 3 s after launch while sharing is on
     (the last 12 samples also stay in memory), and cleared when sharing is turned off or a profile is deleted. It's

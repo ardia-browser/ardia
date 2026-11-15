@@ -14,7 +14,7 @@ import { updateSettings } from "../../../state/settings/actions";
 import { useProfile, useProfiles, useSettings } from "../../../state/browser/hooks";
 import { sharingProfiles } from "../../../state/profiles/profiles";
 import { ClearDataDialog } from "../../pages/ClearDataDialog";
-import { Group, PaneIntro, Row, SectionHeader } from "../Form";
+import { Group, PaneIntro, Row, SectionHeader, SettingToggle } from "../Form";
 import { ColorStack } from "../../profiles/CreateProfile";
 import { PROFILE_SYMBOLS, ProfileBadge } from "../../profiles/ProfileIcons";
 import { iconSymbol } from "../../../lib/customIcon";
@@ -71,6 +71,7 @@ export function ProfilesPane() {
 
       <SectionHeader title="Profile switcher" />
       <Group>
+        <SettingToggle anchor="profiles.showProfileDots" />
         <Row anchor="profiles.switcherIcons">
           <Toggle value={switcherIcons} onChange={(profileSwitcherIcons) => updateSettings({ profileSwitcherIcons })} />
         </Row>

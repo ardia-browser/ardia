@@ -12,7 +12,7 @@ export type AppEvent =
   | { type: "screenLocked" }
   | { type: "lockedOrAsleep" }
   | { type: "switcherReleased" }
-  | { type: "switcherKey"; key: "escape" | "next" | "previous" }
+  | { type: "switcherKey"; key: "escape" | "next" | "previous" | "close" }
   | { type: "switcherMouseUp" }
   | { type: "dragEscape" }
   | { type: "unclaimedEscape"; windowId: string }
@@ -34,6 +34,7 @@ export type ShellNative = {
   setAppearance(mode: AppearanceMode): Promise<void>;
   isDarkAppearance(): Promise<boolean>;
   startDictation(): void;
+  dictationAvailable?(): boolean;
   fetchBangList(etag: string | null): Promise<BangListReply>;
   copyText(text: string): void;
   readText(): Promise<string>;

@@ -42,10 +42,14 @@ it never changes what a connection may do, and both ends strip control and invis
 characters (the app keeps `app` only when it's an absolute, outermost `.app` path). When several run at once the pill
 names the most recent one; a pill that hid and shows again without a new name says "The ardia command".
 
-Code: `apps/cli` (`ardia_cli`, `install.sh`, `scripts/build.sh`). Dependencies are pinned with hashes in
-`apps/cli/requirements.lock` (regenerate with `uv pip compile requirements.in --python-version 3.13
---python-platform aarch64-apple-darwin --generate-hashes --no-annotate --no-header -o requirements.lock`, then copy
-the pins into `pyproject.toml`).
+Code: `apps/cli` (`ardia_cli`, `install.sh`, `scripts/build.sh`). It runs on macOS (Apple silicon) and Linux
+(x86_64). Dependencies are pinned with hashes in `apps/cli/requirements.lock` (regenerate with `uv pip compile
+requirements.in --python-version 3.13 --python-platform aarch64-apple-darwin --generate-hashes --no-annotate
+--no-header -o requirements.lock`, then copy the pins into `pyproject.toml`). uv writes the hash of every file a
+pinned version publishes, so the one lock covers both platforms: compiled with `--python-platform
+x86_64-manylinux_2_28` it comes out byte for byte the same, and it carries the cp313 manylinux x86_64 wheels of the
+native packages (aiohttp, pydantic-core, multidict, yarl, frozenlist, propcache, websockets). Check that again when
+you bump a pin.
 
 ## Commands
 
@@ -121,8 +125,8 @@ the pins into `pyproject.toml`).
 - `ardia on EVENT[,EVENT…] -- PROGRAM` runs a program for each event (see `docs/automation.md`). PROGRAM's output goes
   to the terminal untouched; event data such as `ARDIA_TITLE` and `ARDIA_URL` comes from pages, so a program that
   prints it should escape control characters, as the CLI's own output does.
-- `ardia hooks run|install|uninstall|list` runs the hooks in `hooks.json`, at login through a LaunchAgent (see
-  `docs/automation.md`).
+- `ardia hooks run|install|uninstall|list` runs the hooks in `hooks.json`, at login through a LaunchAgent on macOS
+  or a systemd user service on Linux (see Linux below and `docs/automation.md`).
 - `ardia feedback --title TITLE [--kind bug|slow|idea|other] [--attach FILE]… [--command CMD] [--data-dir DIR] TEXT|-`
   reports a problem or an idea to the developer (see Feedback and the star nudge). Exit 0 sent (or the same report
   already went out today), 1 not sent and kept on the Mac (the line says why), 2 a missing or bad title, description
@@ -354,8 +358,21 @@ close, never a bare "Continue" or "Decline" on some other dialog, says so in the
 the element to the middle of the viewport (a sticky header over it) and retries. A left click on an element that still sits outside the page after that
 (a carousel slide translated to x = -2700) gets a DOM `click()` instead, and the output says so, but only when it is
 visible to CSS, at least 4×4, not clipped (sr-only), and inside a container that clips overflow; a honeypot at
-left:-9999px still fails
-(`dom_click_fallback`): one BU Bench agent hit `outside_viewport` 20 times on carousel cards. If it's still covered it fails with
+left:-9999px still fails (`dom_click_fallback`): one BU Bench agent hit `outside_viewport` 20 times on carousel cards.
+While a modal dialog is open, that DOM click only goes to an element inside the open dialog on top; anything else
+fails with `outside_viewport`, naming the dialog and saying to close it first (`dom_click_behind_modal`). A dialog
+still fading out is given up to 0.5 s to go, so `click <close>` or `press Escape` straight before the click works
+(`dom_click_waited_for_modal` when that wait ends in the click). A dialog counts as open when a click at it would
+land in it: the page is hit-tested at points on the dialog and on up to 200 of its elements (40 hit tests at most),
+so one closed by clipping, collapsing, sliding off screen, `inert` or `pointer-events: none` doesn't count, nor does
+one faded to `opacity: 0` or `filter: opacity(0)`, and one whose only visible part comes after its first 200
+elements isn't seen. An open dialog hit at a point inside
+another one's box is above it. Of open dialogs that don't overlap, the one holding focus takes the click, or any of
+them when none does, and the error names the focused one or the last in the document. Only a
+`<dialog>` opened with `showModal()` and an element marked `aria-modal="true"` are recognised. These aren't, so the
+click goes through them as before: `role="dialog"` or `role="alertdialog"` without `aria-modal` (Radix, MUI 5, React
+Aria Components), a modal in a parent frame, a modal in a child iframe over a target in the parent, and a modal
+element inside a shadow root (a shadow host can itself be the modal). A menu portaled out of the dialog counts as outside it. If the element is still covered it fails with
 `covered by <tag#id.class>`, and one outside the laid-out viewport with `outside_viewport` (the point and the viewport
 size). A tab with no size yet (0×0, seen on a loaded hidden test instance) is waited for up to 2 s, then given a
 1280×800 device metrics override for that command, cleared afterwards and never over the session's own `set viewport`;
@@ -1080,12 +1097,18 @@ checks as the token path first (regular file, owned, 0600, live pid), so they wo
 on (exit 2 otherwise). Neither reads cookies, passwords, Login Data or Web Data. Text output is one line per row;
 `--json` prints the rows.
 
-- `ardia pinned` reads `<data dir>/session.json` (the app's persisted state, `apps/browser/src/state/session/persist.ts`) and lists
-  one row per pin: `title` (custom title first), `url` (else the pinned URL), `pinned_url`, `kind` (`favorite` for a
-  tile, `pinned` for a tab in a pinned folder), `folder`, `profile` (its name) and `parked` (pins of a profile no
-  window shows, from `parkedPins`). Pins mirrored across windows count once. Incognito profiles are skipped.
+- `ardia pinned` reads `<data dir>/session.json` (the app's persisted state, `apps/browser/src/state/session/persist.ts`;
+  version 2 or later) and, on Linux, `<data dir>/<app profile>/Ardia/linux-session.json` (see Linux) and lists one
+  row per pin: `title` (custom title first), `url` (else the pinned URL), `pinned_url`, `kind` (`favorite` for a
+  Top Apps tile, `pinned` for a pinned row or a tab in a pinned folder), `folder` (the pinned folder, the innermost
+  one when they nest, or the tile's folder), `profile` (its name) and `parked` (pins of a profile no window shows,
+  from `parkedPins`). It takes each tab's `pin` (`{"as": "tile" | "row", "folder"?}`), or the older `pinned`,
+  `pinnedAsRow` and `tileFolder` fields when a tab still has them. Rows follow `profileOrder`, then `windowOrder`,
+  then each window's tab order. Pins mirrored across windows (one `pinKey`) count once. Incognito profiles, private
+  and small windows are skipped. A missing file gives no rows; a symlink, a file that isn't regular, one past the
+  size cap (256 MB for `session.json`, the host's 8 MB for `linux-session.json`) or invalid JSON is an error.
 - `ardia history [--days N] [--limit N] [--profile P] [--domains]` (default 1 day, 200 rows, `--limit 0` for all) reads Chromium's `History` for each `Default` and
-  `Profile <id>` folder under `<data dir>/Chromium/` (never incognito, guest or system profiles; `--profile` must be a
+  `Profile <id>` folder under `<data dir>/Chromium/` (on Linux, the data dir itself) (never incognito, guest or system profiles; `--profile` must be a
   profile name or one of those folder names, never a path). Rows per URL, newest first: `url`, `title`, `visits` in
   the window, `total_visits`, `last_visit` (ISO 8601, local time), `profile`. Only http(s) pages; subframe
   navigations and hidden URLs are left out. `--domains` rolls rows up per domain (`domain`, `visits`, `pages`,
@@ -1122,7 +1145,8 @@ resolving symlinks), not by path spelling, since APFS is case-insensitive. A scr
 before anything is injected or published, so a script can't bundle `ArdiaControl.json` or other files and send
 them to a page. `data:` imports are allowed. The tarball ships esbuild in `ardia_cli/bin/esbuild` and an installed
 CLI uses only that one; from the repo (`python -m ardia_cli`) it falls back to
-`node_modules/@esbuild/darwin-arm64/bin/esbuild` in a parent folder of the package, then `esbuild` on PATH. It never
+`node_modules/@esbuild/darwin-arm64/bin/esbuild` (`@esbuild/linux-x64` on Linux) in a parent folder of the package,
+then `esbuild` on PATH. It never
 looks in the cwd.
 
 - `ardia scripts new NAME [--match PATTERN]…` writes `NAME.user.ts` in the cwd (default match
@@ -1160,12 +1184,15 @@ looks in the cwd.
 
 ### Install contract with the app
 
-The data dir is `--data-dir`, else `$ARDIA_DATA_DIR`, else `~/Library/Application Support/com.ardia.browser`.
+The data dir is `--data-dir`, else `$ARDIA_DATA_DIR`, else the installed app's (`~/Library/Application
+Support/com.ardia.browser`; on Linux `${ARDIA_CONFIG_HOME:-${XDG_CONFIG_HOME:-~/.config}}/ardia`, see How it finds
+Ardia).
 
 1. The CLI takes an exclusive `flock` on `<data dir>/Scripts/.lock` (polled, 30 s deadline). The app takes a shared
    one while it reads and validates. `Scripts/`, `Scripts/scripts/`, record folders and `extension/` must be real
    folders the user owns: each is opened with `O_NOFOLLOW`, and everything below works relative to those folder
-   descriptors (`renameatx_np`, `openat`, `rmtree(dir_fd=)`), so a planted symlink is refused, not followed.
+   descriptors (`renameatx_np` on macOS, `renameat2` on Linux, `openat`, `rmtree(dir_fd=)`), so a planted symlink is
+   refused, not followed.
 2. It keeps its record in `Scripts/scripts/<id>/`: `meta.json` (the parsed metadata, `id`, `world`, `source_file`,
    `installed_at`, `updated_at`), `script.js` (the build) and `source.<ext>` (a copy of the entry file). A new record
    is staged in a temp sibling and only swapped in after the extension built from it validated and was published; if
@@ -1178,7 +1205,8 @@ The data dir is `--data-dir`, else `$ARDIA_DATA_DIR`, else `~/Library/Applicatio
    one bad script can't make the shared extension unloadable, along with the engine's limits: at most 256 content
    script entries, 256 files per entry, 512 distinct files, and a 256 KB manifest. A script with `@match` gets one entry; one with `@include` gets an entry with `matches` `*://*/*` and
    the globs, excluding its `@match` patterns so no page runs it twice. Entries follow install order. When
-   `extension/` exists the new folder replaces it with `renamex_np(RENAME_SWAP)` and the old one is deleted, so the
+   `extension/` exists the new folder replaces it with `renameatx_np(RENAME_SWAP)` (`renameat2(RENAME_EXCHANGE)` on
+   Linux) and the old one is deleted, so the
    path never goes missing; a plain rename only when there's none. With no scripts left, `extension/` is removed.
 4. It writes `Scripts/generation` (temp file and rename): one more than the largest of `Scripts/generation`,
    `extension/generation` and the last reported one. A crashed run is repaired by the next install or
@@ -1206,6 +1234,10 @@ The data dir is `--data-dir`, else `$ARDIA_DATA_DIR`, else `~/Library/Applicatio
 4. `$ARDIA_CDP_URL`, like `--ws`.
 5. `<data dir>/Chromium/ArdiaControl.json`, with `--data-dir` or `$ARDIA_DATA_DIR`, else the installed app's
    `~/Library/Application Support/com.ardia.browser/Chromium/ArdiaControl.json`.
+   On Linux the browser is Chromium itself and its user data dir is the data dir, so it's `<data dir>/ArdiaControl.json`
+   and the installed app's is `${XDG_CONFIG_HOME:-~/.config}/ardia/ArdiaControl.json` (`$ARDIA_CONFIG_HOME/ardia` when
+   that's set, as the engine does). The control socket is `<data dir>/ArdiaControl.sock` on both, checked with
+   `LOCAL_PEERCRED` on macOS and `SO_PEERCRED` on Linux; its path may be 103 bytes on macOS and 107 on Linux.
 
 The active-page route is `GET http://127.0.0.1:P/ardia/active?token=<token>`: `{"targetId": "<id>"}`, or `null` when
 New Tab or an Ardia view is showing; anything else is a 404. The CLI calls it directly (no proxy, no Origin header)
@@ -1255,7 +1287,7 @@ from a checkout), `$geoip_disable`, `$process_person_profile: false` and `$sessi
   `snapshot`, `eval_ms` for `eval` or `action_ms` for the rest (the daemon's time less connect, attach and settle),
   `settle_ms` (the wait for the change report's network to settle, `changes.observe`), `snapshot_nodes` and
   `snapshot_chars`, `network_writes_count` and `unsettled` from the change report,
-  `output_chars` and `output_truncated`, `humanize`, `followed_redrawn_ref` (a stale ref followed its redrawn node), `stale_ref_after_navigation` (a ref from before the page navigated was used; the error says the page navigated, where it used to say only that the ref came from an earlier snapshot, and names the same role and name on the new page when there is one; watch `error_code` `stale_ref`), `attach_refused` (the policy refused the attach to a tab; watch it with `error_code` `policy_refused` on `read` and `open`, where it should stay at zero), `network_disable_unconfirmed` (a command's change report turned network capture off and the page didn't confirm within 2 s, usually because it was mid-navigation or its main thread was busy; the tab is kept, where it used to be detached and the command failed with `error_code` `tab_detached`), `reattached_after_detach` (`open`, or an action's change report, found its tab detached from the command while the tab was still open, attached to it again and finished; watch `error_code` `tab_detached` on `open` and `script`, which should stay near zero), `setup_restored` and `setup_restore_failed` (after attaching again, the session's init scripts, `set` overrides and interception were put back, or something couldn't be and the command failed with `error_code` `setup_lost`, which should stay near zero), `renderer_exit_kept_session` (Chromium said a tab's renderer exited and the session was kept), `earlier_requests_ignored` (a change report left out requests that began before its capture was on), `cell_edits` (grid cells `fill` edited through their editor; watch `error_code` `rejected` and `not_editable` on `fill`), `fill_picked_option` (`fill` picked a `<select>` option), `fill_inserted_text` (`fill` put the text in with one `Input.insertText`), `waited_for_enabled` (a `click`, `fill`, `select` or `check` target was disabled and was waited for; `error_code` `disabled` when it stayed so), `drag_side_given` (`drag --before`/`--after`) and `drag_list_position` (the drag answer named the new place in a list), `select_opened_list` (`select` picked from the one list that opened when it opened a field with no linked list; watch `error_code` `no_fresh_suggestions` on `select`, which it should lower), `press_targeted` (`press <sel> <key>` focused the element first), `focused_inner_field` (an element that couldn't take focus itself, like a combobox wrapper, had the field inside it focused instead; a hidden or inert one now fails with `error_code` `not_focusable` and says to click it open, where it used to print the raw `DOM.focus: Element is not focusable`), `waited_for_reaction` (after typing into a search or filter field, the next command that targets something else waited, best effort, at least 0.6 s from the last keystroke for the page to redraw and go quiet, longer while anything is `aria-busy`, counting only the results the field `aria-controls` when it names them, up to 1.5 s; key presses without a target, `tab`, `notes`, `frame` and `get url`/`title` don't wait, and `--no-changes` keeps the wait; watch `error_code` `target_replaced` and `input_not_delivered` on `fill`, which it should keep low), `selector_nth` (a selector ended in `>> nth=N`), `saved_as_csv` (`--out` wrote a CSV or TSV table), `script_state_kept` (a script ended or timed out with something in `state`), `script_timeout_read_hint` (a timed-out script had opened three or more pages one after another and was pointed at `read <url> <url> …`; watch `error_code` `timeout` on `script`, which it should lower), `saved_to_file` (`script`, `eval` or `read` ran with `--out`; watch `output_truncated` on `script`, which it should lower), `batch_line_saved` (a `batch` line carried `--out` and saved its file, where it used to fail with Unknown flag), `waited_for_element` (a selector matched only after polling; watch `error_code` `not_found`, which it should lower), `output_saved` (a capped output was saved whole to a file; watch `output_truncated` on `script`, which it should lower), `consent_dismissed` (a click dismissed the consent banner covering it; watch `error_code` `covered` on `click`, which it should lower), `popup_dismissed` (a click closed an email-signup popup covering it, through its close, No thanks or × button, never its signup button; watch `error_code` `covered` on `click`), `dom_click_fallback` (a click target outside the page got a DOM click), `screenshot_unchanged` (`screenshot --if-changed` found the view unchanged since its last screenshot and saved nothing), `flow_saved` with `flow_requests_kept` and `flow_params` (a `flow save` and what it kept), `flow_run_page` (a `flow run` got its answer), `flow_drifted` (an answer's shape changed; watch it with `error_code` `drifted`, `redirected`, `auth_expired`, `blocked`, `rate_limited`, `fetch_failed` and `flow_not_get` on `flow`), `flow_shaped` with `flow_items` (`--fields`, `--where` or `--limit` were given, and the items returned), `flow_hint_shown` (`open` or `snapshot` listed a site's saved flows), `frame_cross_process_box` (`frame` on a cross-process iframe, which ardia browse can't enter, answered with `error_code` `cross_process_frame`, the iframe's viewport box and the `mouse move`/`down`/`up` recipe for clicking inside it), `click_scroll_locked` (a click target the page couldn't scroll to was held back by an open dialog or a scroll lock, and the error named it and said to close it; watch `error_code` `outside_viewport` on `click`), `click_recentered` (a covered or off-screen click target was scrolled to the middle and retried; watch `error_code` `outside_viewport`), `clicked_label_of_hidden_input` (a click on a checkbox or radio drawn by its label, with the input itself hidden, went to the label; watch `error_code` `not_visible` on `click`), `waited_for_box_to_settle` (a click target was still moving, from a scroll or a layout change, and the click waited up to 1 s for it to stop before aiming), `read_scope_shown` (a read printed the page's own total or pagination), `read_data` with `read_data_blocks` and `read_data_shaped` (`read --data` listed the JSON blocks the page embeds, how many, and whether `--fields`/`--where`/`--limit` shaped one; watch `error_code` `no_data` on `read`), `read_bot_check` (a page read like a bot check or block and got the retry note), `read_scroll_guessed` (`read --scroll` without `-s` picked the page's main repeated list; watch `error_code` `no_list`), `read_beside_busy` (a `read` of named URLs ran in the sibling session because its own was busy; watch `error_code` `session_busy` on `read`, which it should lower), `read_waited_for_content` (a page read thin after settling and was read again until it filled in or 5 s passed; watch `read_pages` against it), `read_pdf` (`read` extracted a PDF's text; watch `error_code` `pdf_unreadable`), `script_eval_alias` (a script called `page.eval`), `script_page_world_hint` (a script's error got the page-world hint), `read_scrolled` with `read_rows` (a `read --scroll` and the rows it read) and `read_matched` (it had `--match`), `read_pages` (the pages a multi-page `read` read; watch `output_truncated` on those), `read_tabs_reopened` (reading tabs Ardia detached mid-read that were opened again; watch it with `error_code` `tab_detached`, which should stay near zero), `read_virtualized_grid` (a read printed the virtualized-grid note), `change_text` with `change_text_chars` (a change report carried `text:` lines, and their length), `change_run_choices` (a mixed run listed its enabled members), `open_report` (`open` printed a change report), `open_moved_tab` (`open` moved the session off the user's tab to its own and named the way back), `open_still_loading` (`open` hit its time limit waiting for the load event on a page that already showed content, and returned it with a note instead of failing; watch `error_code` `timeout` on `open`, which it should lower), `snapshot_disabled_folded` (`snapshot -i` folded disabled members into a count), `snapshot_repeat_labels` (`snapshot -i` labeled controls that share a name, or have none, with the nearest heading, link, cell or text around them, as `(near "…")`), `names_clipped` (a name was cut at 100 characters), `daemon_answer_timed_out` (the client gave up waiting for the
+  `output_chars` and `output_truncated`, `humanize`, `followed_redrawn_ref` (a stale ref followed its redrawn node), `stale_ref_after_navigation` (a ref from before the page navigated was used; the error says the page navigated, where it used to say only that the ref came from an earlier snapshot, and names the same role and name on the new page when there is one; watch `error_code` `stale_ref`), `attach_refused` (the policy refused the attach to a tab; watch it with `error_code` `policy_refused` on `read` and `open`, where it should stay at zero), `network_disable_unconfirmed` (a command's change report turned network capture off and the page didn't confirm within 2 s, usually because it was mid-navigation or its main thread was busy; the tab is kept, where it used to be detached and the command failed with `error_code` `tab_detached`), `reattached_after_detach` (`open`, or an action's change report, found its tab detached from the command while the tab was still open, attached to it again and finished; watch `error_code` `tab_detached` on `open` and `script`, which should stay near zero), `setup_restored` and `setup_restore_failed` (after attaching again, the session's init scripts, `set` overrides and interception were put back, or something couldn't be and the command failed with `error_code` `setup_lost`, which should stay near zero), `renderer_exit_kept_session` (Chromium said a tab's renderer exited and the session was kept), `earlier_requests_ignored` (a change report left out requests that began before its capture was on), `cell_edits` (grid cells `fill` edited through their editor; watch `error_code` `rejected` and `not_editable` on `fill`), `fill_picked_option` (`fill` picked a `<select>` option), `fill_inserted_text` (`fill` put the text in with one `Input.insertText`), `waited_for_enabled` (a `click`, `fill`, `select` or `check` target was disabled and was waited for; `error_code` `disabled` when it stayed so), `drag_side_given` (`drag --before`/`--after`) and `drag_list_position` (the drag answer named the new place in a list), `select_opened_list` (`select` picked from the one list that opened when it opened a field with no linked list; watch `error_code` `no_fresh_suggestions` on `select`, which it should lower), `press_targeted` (`press <sel> <key>` focused the element first), `find_closest_names` (`find role … --name` matched nothing and the error listed the names closest to the one asked for first, where it used to list the first eight on the page, usually navigation links; watch `error_code` `not_found` on `find`), `focused_inner_field` (an element that couldn't take focus itself, like a combobox wrapper, had the field inside it focused instead; a hidden or inert one now fails with `error_code` `not_focusable` and says to click it open, where it used to print the raw `DOM.focus: Element is not focusable`), `waited_for_reaction` (after typing into a search or filter field, the next command that targets something else waited, best effort, at least 0.6 s from the last keystroke for the page to redraw and go quiet, longer while anything is `aria-busy`, counting only the results the field `aria-controls` when it names them, up to 1.5 s; key presses without a target, `tab`, `notes`, `frame` and `get url`/`title` don't wait, and `--no-changes` keeps the wait; watch `error_code` `target_replaced` and `input_not_delivered` on `fill`, which it should keep low), `selector_nth` (a selector ended in `>> nth=N`; a CSS selector with an unquoted attribute value that has spaces or punctuation, like `[aria-label=Two words]`, is quoted for you, and an `eval` that fails on one says how to quote it; nothing extra is sent for this, watch `error_code` `page_script_error` on `click` and `eval`), `saved_as_csv` (`--out` wrote a CSV or TSV table), `script_state_kept` (a script ended or timed out with something in `state`), `script_state_kept_on_interrupt` (a script was interrupted, its caller's Ctrl-C or a closed connection, and what it had put in `state` was kept for the next script, where it used to be thrown away; the interrupt message says to read it with `script 'return state'`), `eval_timed_out` (an `eval`'s page code, usually an awaited promise, ran past its limit, 60 s or `--timeout` up to 10m, and the error said so and pointed at `--timeout`, where it used to say Ardia didn't answer `Runtime.evaluate`; it stays an unknown outcome, so a `batch` stops after it; watch `error_code` `outcome_unknown` on `eval`), `navigation_dropped_hint` (a navigation failed because the site dropped or refused the connection, and the error said a retry of the same URL rarely loads and listed other ways in, counting the failures on that host; watch `error_code` `navigation_failed` on `open`), `script_queued_behind_busy` (a `script` arrived while its session was busy and waited its turn, up to its own `--timeout` or 90 s, where every command used to give up after 30 s; watch `error_code` `session_busy` on `script`, which it should lower), `script_timeout_read_hint` (a timed-out script had opened three or more pages one after another and was pointed at `read <url> <url> …`; watch `error_code` `timeout` on `script`, which it should lower), `saved_to_file` (`script`, `eval` or `read` ran with `--out`; watch `output_truncated` on `script`, which it should lower), `batch_line_saved` (a `batch` line carried `--out` and saved its file, where it used to fail with Unknown flag), `batch_saved` (`batch … --out <file>` saved everything the batch printed and listed the lines that failed, where it used to fail with Unknown flag), `waited_for_element` (a selector matched only after polling; watch `error_code` `not_found`, which it should lower), `output_saved` (a capped output was saved whole to a file; watch `output_truncated` on `script`, which it should lower), `consent_dismissed` (a click dismissed the consent banner covering it; watch `error_code` `covered` on `click`, which it should lower), `popup_dismissed` (a click closed an email-signup popup covering it, through its close, No thanks or × button, never its signup button; watch `error_code` `covered` on `click`), `dom_click_fallback` (a click target outside the page got a DOM click), `dom_click_behind_modal` (a click target outside the page sat outside the modal dialog showing over it, so it got no DOM click and the error named that dialog; watch `error_code` `outside_viewport` on `click` and `dom_click_fallback` against it), `dom_click_waited_for_modal` (that dialog was still closing and went within 0.5 s, so the click went through after the wait; watch it against `dom_click_behind_modal`), `screenshot_unchanged` (`screenshot --if-changed` found the view unchanged since its last screenshot and saved nothing), `flow_saved` with `flow_requests_kept` and `flow_params` (a `flow save` and what it kept), `flow_run_page` (a `flow run` got its answer), `flow_drifted` (an answer's shape changed; watch it with `error_code` `drifted`, `redirected`, `auth_expired`, `blocked`, `rate_limited`, `fetch_failed` and `flow_not_get` on `flow`), `flow_shaped` with `flow_items` (`--fields`, `--where` or `--limit` were given, and the items returned), `flow_hint_shown` (`open` or `snapshot` listed a site's saved flows), `frame_cross_process_box` (`frame` on a cross-process iframe, which ardia browse can't enter, answered with `error_code` `cross_process_frame`, the iframe's viewport box and the `mouse move`/`down`/`up` recipe for clicking inside it), `click_scroll_locked` (a click target the page couldn't scroll to was held back by an open dialog or a scroll lock, and the error named it and said to close it; watch `error_code` `outside_viewport` on `click`), `click_recentered` (a covered or off-screen click target was scrolled to the middle and retried; watch `error_code` `outside_viewport`), `clicked_label_of_hidden_input` (a click on a checkbox or radio drawn by its label, with the input itself hidden, went to the label; watch `error_code` `not_visible` on `click`), `waited_for_box_to_settle` (a click target was still moving, from a scroll or a layout change, and the click waited up to 1 s for it to stop before aiming), `read_scope_shown` (a read printed the page's own total or pagination), `read_data` with `read_data_blocks` and `read_data_shaped` (`read --data` listed the JSON blocks the page embeds, how many, and whether `--fields`/`--where`/`--limit` shaped one; watch `error_code` `no_data` on `read`), `read_bot_check` (a page read like a bot check or block and got the retry note), `network_reloaded` (`network requests --reload` started recording and reloaded the page so its own loads were listed; plain `network requests` that starts recording now points at it), `read_empty_page` (a page came back with no title and no text and was marked as a likely block, with a pointer to another source; watch `read_pages` against it), `read_scroll_guessed` (`read --scroll` without `-s` picked the page's main repeated list; watch `error_code` `no_list`), `read_beside_busy` (a `read` of named URLs ran in the sibling session because its own was busy; watch `error_code` `session_busy` on `read`, which it should lower), `read_queued_beside` (that sibling session was itself busy, so the read waited its turn there, up to its own time limit, where it used to give up after 30 s), `read_waited_for_content` (a page read thin after settling and was read again until it filled in or 5 s passed; watch `read_pages` against it), `read_pdf` (`read` extracted a PDF's text; watch `error_code` `pdf_unreadable`), `script_eval_alias` (a script called `page.eval`), `script_page_world_hint` (a script's error got the page-world hint), `read_scrolled` with `read_rows` (a `read --scroll` and the rows it read) and `read_matched` (it had `--match`), `read_pages` (the pages a multi-page `read` read; watch `output_truncated` on those), `read_tabs_reopened` (reading tabs Ardia detached mid-read that were opened again; watch it with `error_code` `tab_detached`, which should stay near zero), `read_virtualized_grid` (a read printed the virtualized-grid note), `change_text` with `change_text_chars` (a change report carried `text:` lines, and their length), `change_run_choices` (a mixed run listed its enabled members), `open_report` (`open` printed a change report), `open_moved_tab` (`open` moved the session off the user's tab to its own and named the way back), `open_still_loading` (`open` hit its time limit waiting for the load event on a page that already showed content, and returned it with a note instead of failing; watch `error_code` `timeout` on `open`, which it should lower), `snapshot_disabled_folded` (`snapshot -i` folded disabled members into a count), `snapshot_repeat_labels` (`snapshot -i` labeled controls that share a name, or have none, with the nearest heading, link, cell or text around them, as `(near "…")`; headings get none, a text that is itself a repeated name is never used, and a label two of the same controls would share is left out), `names_clipped` (a name was cut at 100 characters), `daemon_answer_timed_out` (the client gave up waiting for the
   daemon's answer: the queue wait plus the command's own limit plus 30 s, `browse/limits.py`), `batch_steps` (also the operations an `ardia apply`, `tabs …`
   or `groups …` call sent), and `cdp_calls` with `cdp_ms_total` (the
   command's own DevTools calls, counted in `connection.py`). The daemon returns its share as `metrics` in its answer
@@ -1488,8 +1520,9 @@ The app runs `install.sh` with its own environment minus every `ARDIA_*` variabl
 
 `install.sh [--version V] [--sha256 DIGEST] [--uninstall]` (run with `/bin/sh`; `--help`):
 
-- Downloads `https://github.com/mantrakp04/ardia/releases/download/v<V>/ardia-cli-<V>-macos-arm64.tar.gz` (https only)
-  into a private temp dir; it runs on Apple silicon only and stops with an error anywhere else. Without `--version` it
+- Downloads `https://github.com/mantrakp04/ardia/releases/download/v<V>/ardia-cli-<V>-macos-arm64.tar.gz` on macOS
+  and `…/ardia-cli-<V>-linux-x64.tar.gz` on Linux (https only) into a private temp dir; it runs on Apple silicon and
+  x86_64 Linux and stops with an error anywhere else. Without `--version` it
   takes the latest release that has the asset. `--sha256` is the only
   digest it trusts (the app passes `Ardia.app/Contents/Resources/ardia-cli.sha256`, which the signed bundle pins), and
   a download needs it: a `.sha256` from the same release would only prove the tarball came from wherever the tarball
@@ -1504,15 +1537,22 @@ The app runs `install.sh` with its own environment minus every `ARDIA_*` variabl
   against the lease's mtime), so a reused pid doesn't pin a version.
 - Links `$ARDIA_CLI_BIN_DIR/ardia` (default `~/.local/bin`) to `current/bin/ardia`. It replaces only a link that
   already points into `$ARDIA_CLI_HOME` and refuses anything else. With the default bin dir off the login shell's
-  PATH, it adds `export PATH="$HOME/.local/bin:$PATH"` to `~/.zprofile` once.
+  PATH, it adds `export PATH="$HOME/.local/bin:$PATH"` to the shell's login file once: on macOS `~/.zprofile`
+  (`~/.bash_profile` for bash); on Linux `~/.zprofile` for zsh, `~/.bash_profile` for bash when it exists, else
+  `~/.profile`, and `~/.profile` for any other shell. Fish reads none of those, so for fish (on both) it writes
+  `contains -- $HOME/.local/bin $PATH; or set -gx PATH $HOME/.local/bin $PATH` to
+  `${XDG_CONFIG_HOME:-~/.config}/fish/conf.d/ardia.fish` instead. The login shell comes from `dscl` on macOS and
+  `getent passwd` on Linux, else `$SHELL`.
 - A version that is already current is a no-op. Two runs never overlap: each takes a flock on
-  `$ARDIA_CLI_HOME/.lock` through fd 9 (`/usr/bin/lockf -s -t 120 9`). The kernel drops it when the run exits, even on
+  `$ARDIA_CLI_HOME/.lock` through fd 9 (`/usr/bin/lockf -s -t 120 9`; `flock -w 120 9` on Linux). The kernel drops it
+  when the run exits, even on
   SIGKILL; a run that waits 120 s prints `error another install is still running`. Uninstall leaves the empty `.lock`
   file, since deleting a lock file other runs may have open would split the lock.
 - Output for the app, one line each: `step resolve|download|verify|install|link`, `version <v>`, `path <rc file>`,
   then `installed <bin path>` or `uninstalled`, or `error <message>` with exit 1.
 
-`$ARDIA_CLI_HOME` defaults to `~/Library/Application Support/Ardia/CLI`. The installed version is
+`$ARDIA_CLI_HOME` defaults to `~/Library/Application Support/Ardia/CLI` (on Linux
+`${XDG_DATA_HOME:-~/.local/share}/ardia/cli`). The installed version is
 `basename "$(readlink "$ARDIA_CLI_HOME/current")"`; the app reads that link to decide whether to upgrade, and after an
 app update it runs `install.sh --version <app version> --sha256 <pinned digest>` in the background. The CLI never
 updates itself. After switching `current` to a new version, `install.sh` runs `current/bin/ardia skills refresh`
@@ -1520,12 +1560,18 @@ updates itself. After switching `current` to a new version, `install.sh` runs `c
 
 ## Build and release
 
-`apps/cli/scripts/build.sh <version> <out dir>` writes `ardia-cli-<version>-macos-arm64.tar.gz` and its `.sha256`:
-python-build-standalone CPython 3.13 (release and sha256 pinned in the script), the locked dependencies and
-`ardia_cli` in its site-packages, pruned of tests, idlelib, Tk, ensurepip, the unused libpython dylib and
-`__pycache__`, plus `bin/ardia`, an sh launcher that resolves its links and runs `python3 -I -m ardia_cli`, and
-esbuild (the npm `@esbuild/darwin-arm64` tarball, version, sha256 and sha512 pinned in the script) in
-`ardia_cli/bin/esbuild`. About 18 MB; 52 MB installed. `ardia --version` takes about 10 ms; the first command about 1 s while Python writes its
+`apps/cli/scripts/build.sh <version> <out dir> [--platform macos-arm64|linux-x64]` writes
+`ardia-cli-<version>-<platform>.tar.gz` and its `.sha256` (`sha256sum` format). The platform defaults to the host's
+and must be the host's, since the bundled Python installs the wheels and runs the checks; the Linux tarball builds on
+any x86_64 Linux with uv. Both hold python-build-standalone CPython 3.13 (release and sha256 pinned in the script per
+platform: `aarch64-apple-darwin` and `x86_64-unknown-linux-gnu` `install_only_stripped`), the locked dependencies and
+`ardia_cli` in its site-packages, pruned of tests, idlelib, Tk, ensurepip, the unused libpython (a dylib on macOS; on
+Linux `python3.13` links it statically, so the `.so` goes too) and `__pycache__`, plus `bin/ardia`, an sh launcher
+that resolves its links and runs `python3 -I -m ardia_cli`, and esbuild (the npm `@esbuild/darwin-arm64` or
+`@esbuild/linux-x64` tarball, the same version, its sha256 and npm's sha512 pinned in the script) in
+`ardia_cli/bin/esbuild`. Downloads are cached in `~/Library/Caches/ardia-cli-build` on macOS and
+`${XDG_CACHE_HOME:-~/.cache}/ardia-cli-build` on Linux. The macOS tarball is about 18 MB, 52 MB installed; the Linux
+one about 26 MB, 76 MB installed. `ardia --version` takes about 10 ms; the first command about 1 s while Python writes its
 bytecode cache, later ones about 0.15 s.
 
 `scripts/release.sh` builds it into the release's dist dir after the export and writes its digest to
@@ -1559,5 +1605,69 @@ control server when the port switch is set) and with control on, for example a s
 `"settings": {"cliControl": true}`, opened with `open -g -n --env ARDIA_BACKGROUND=1 --env ARDIA_DATA_DIR=<dir>`.
 Unit tests (matching parity with node, import confinement, store rollback and recovery, symlink refusal; config
 and theme commands against the schemas in `tests/fixtures`: a hand-written `config.schema.json` that uses every keyword
-of the subset, and `theme.schema.json` as the app's `themeSchema` writes it):
-`python -m unittest discover -s apps/cli/tests` with the locked dependencies installed.
+of the subset, and `theme.schema.json` as the app's `themeSchema` writes it; the Linux paths, the systemd unit
+against a fake `systemctl`, and `install.sh` run end to end from `file://` tarballs in a scratch home in `tests/test_linux.py`): `python -m unittest discover -s apps/cli/tests` with the locked dependencies
+installed. On Linux, the installer:
+
+```sh
+apps/cli/scripts/build.sh 0.0.1 /tmp/ardia-cli-out --platform linux-x64
+HOME=/tmp/ardia-cli-home ARDIA_CLI_URL=file:///tmp/ardia-cli-out/ardia-cli-0.0.1-linux-x64.tar.gz \
+  /bin/sh apps/cli/install.sh
+/tmp/ardia-cli-home/.local/bin/ardia browse --port <port> open https://example.com
+/tmp/ardia-cli-home/.local/bin/ardia browse --port <port> get title
+```
+
+Any Chromium works for `--port`: `chromium --headless=new --remote-debugging-port=<port> --user-data-dir=<scratch>`.
+
+## Linux
+
+The same CLI, with these differences:
+
+- Paths: data dir `${ARDIA_CONFIG_HOME:-${XDG_CONFIG_HOME:-~/.config}}/ardia` (the engine's Chromium user data dir,
+  holding `ArdiaControl.json`, `ArdiaControl.sock` and the `Default`/`Profile N` folders), config folder
+  `<data dir>/config` (`${ARDIA_CONFIG_HOME:-${XDG_CONFIG_HOME:-~/.config}}/ardia/config` by default, which the app
+  reads too; on macOS the default is `~/.config/ardia`), so `hooks.json` lives there as well, CLI home
+  `${XDG_DATA_HOME:-~/.local/share}/ardia/cli`, bin dir `~/.local/bin`, hooks log
+  `${XDG_STATE_HOME:-~/.local/state}/ardia/hooks.log` (rotated at 5 MB as on macOS). An `XDG_*_HOME` that isn't an
+  absolute path is ignored, as the XDG spec, systemd and the engine's CLI installer do, except `XDG_CONFIG_HOME` (and
+  `ARDIA_CONFIG_HOME`) for the data dir and config folder, where Chromium takes any non-empty value.
+- `ardia hooks install` writes `${XDG_CONFIG_HOME:-~/.config}/systemd/user/dev.ardia.hooks.service` (`Type=exec`,
+  `ExecStart` the installed `current/bin/ardia hooks run --log <log>`, `WorkingDirectory` the home folder, `PATH`
+  from the installing shell, an empty `ARDIA_DATA_DIR` and `ARDIA_CONFIG_HOME` set to the folder the installing
+  shell resolved (`$ARDIA_CONFIG_HOME`, else `${XDG_CONFIG_HOME:-~/.config}`), so the service reads the same
+  `hooks.json` and reaches the same Ardia as `ardia hooks list` even when the systemd user manager's environment
+  differs, `Restart=on-failure` with `RestartSec=10` and
+  `StartLimitIntervalSec=0` so it never gives up, output to null, `WantedBy=default.target`), then runs `systemctl
+  --user daemon-reload`, `enable` and `restart` (so a reinstall picks up a new unit). `hooks run` exits 0 only on
+  SIGTERM or SIGHUP, so `systemctl --user stop` sticks and every crash restarts it. `uninstall` runs `disable --now`,
+  removes the unit and reloads; `list` reads `systemctl --user show` and prints whether it's active. Paths in the unit
+  escape `%`, `$`, `"` and `\`; control characters are refused.
+- `ardia config edit` uses `$VISUAL`, then `$EDITOR`; with neither, in a desktop session (`$DISPLAY` or
+  `$WAYLAND_DISPLAY` set) it opens the file with `xdg-open`, which returns at once, so it prints a reminder to run
+  `ardia config check` instead of checking. Without a display (an SSH session) or without `xdg-open` it uses `vi`.
+- `ardia scripts install|uninstall|list` use `<data dir>/Scripts`, which is where the engine's scripts policy looks on
+  Linux (the Mac's `Chromium/..` parent would be `~/.config` here). The Linux host reads, watches and reports the
+  folder with the same contract as the Mac (`ac_linux_user_scripts*.cc`, see [linux-port.md](linux-port.md) › "The
+  `ardia` command"); one regular window applies the scripts, and another takes over when it closes.
+- `ardia browse` runs on Linux for opening, reading, snapshots and screenshots, with two gaps. `open --show` and
+  `tab <id> --show` switch Ardia to the tab, but a tab it opened in the background stays hidden to the page, so `click`
+  and typing refuse it with the hidden-tab error. `auth` stores passwords through `/usr/bin/security`, the macOS
+  Keychain tool, which Linux doesn't have.
+- `ardia computer` is macOS only (cua-driver drives macOS apps): `setup` and every passthrough print `ardia computer:
+  computer use through cua-driver needs macOS here` and exit 1, and `computer refresh`, which `install.sh` starts after
+  an upgrade, does nothing. `skills refresh` works as on macOS.
+- The caller name (`ardia_cli/caller.py`) walks the parent processes through `/proc/<pid>/stat`, `exe` and `cmdline`
+  instead of libproc and `sysctl`; app bundles don't exist here, so a process with no known agent above it is
+  `ardia`. Telemetry's `startup_ms` reads the process start from `/proc/self/stat` against `CLOCK_BOOTTIME`.
+- `ardia pinned` reads the host's session, `<data dir>/<app profile>/Ardia/linux-session.json`
+  (`engine/ardiacore-linux/src/ardia/linux/ac_linux_host.cc`, `MergeAndWriteSession`; the shape is
+  `snapshotHostSession` in `apps/linux/src/hostSession.ts`), never `session.json`. The app profile is the folder
+  `profile.last_used` names in `<data dir>/Local State`, which the host pins to its app profile, when it's `Default`
+  or a regular `Profile …` folder; else `Default`. The shape differs from macOS's only in packaging: `windows`,
+  `tabs`, `groups` and `splits` are objects keyed by id rather than lists, there's no `version`, and windows carry
+  `kind` instead of `incognito`. Nothing macOS's pins need is missing: profile names, `profileOrder`,
+  `windowOrder`, tab order, pin keys, folders and `parkedPins` are all there, so the rows match macOS's. The host
+  writes it with `ImportantFileWriter::WriteFileAtomically` (a temp file in `Ardia/`, then a rename), so the CLI
+  opens the profile folder, `Ardia` and the file each with `O_NOFOLLOW` (relative to the folder above) and reads
+  the one file it opened, which is always a whole version; it never writes there. `ardia history` takes its profile
+  labels from the same file (`Profile <dataId>` is that profile's folder).

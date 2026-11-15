@@ -16,8 +16,9 @@ export type HistorySlice = {
   importHistory(profileId: string, entries: Omit<HistoryEntry, "favicon">[]): number;
 };
 
-export const MAX_HISTORY = 5000;
+export const MAX_HISTORY = 100_000;
 export const MAX_VISIT_TIMES = 50;
+export const SUGGESTION_HISTORY = 5000;
 
 export const NO_HISTORY: HistoryEntry[] = [];
 
@@ -26,6 +27,17 @@ type HistoryState = Pick<BrowserState, "profiles" | "history">;
 export const historyViewOf = (s: HistoryState, profileId: string): HistoryView | undefined => s.history[engineProfile(s, profileId)];
 
 export const historyOf = (s: HistoryState, profileId: string): HistoryEntry[] => historyViewOf(s, profileId)?.list ?? NO_HISTORY;
+
+const newestPages = new WeakMap<HistoryEntry[], HistoryEntry[]>();
+
+export function suggestionHistory(list: HistoryEntry[]): HistoryEntry[] {
+  if (list.length <= SUGGESTION_HISTORY) return list;
+  let newest = newestPages.get(list);
+  if (!newest) newestPages.set(list, (newest = list.slice(0, SUGGESTION_HISTORY)));
+  return newest;
+}
+
+export const suggestionHistoryOf = (s: HistoryState, profileId: string): HistoryEntry[] => suggestionHistory(historyOf(s, profileId));
 
 export function withHistoryList(s: HistoryState, engine: string, list: HistoryEntry[]): Partial<Pick<BrowserState, "history">> {
   if (!engineProfiles(s).includes(engine)) return {};
@@ -48,7 +60,8 @@ export const createHistorySlice: StateCreator<BrowserState, [], [], HistorySlice
 
   removeHistory(profileId, urls) {
     if (!urls.length || isIncognitoProfile(profileId)) return;
-    set((s) => withHistoryList(s, engineProfile(s, profileId), historyOf(s, profileId).filter((h) => !urls.includes(h.url))));
+    const gone = new Set(urls);
+    set((s) => withHistoryList(s, engineProfile(s, profileId), historyOf(s, profileId).filter((h) => !gone.has(h.url))));
     void deleteHistoryUrls(engineProfile(get(), profileId), urls).catch(failed("delete"));
   },
 

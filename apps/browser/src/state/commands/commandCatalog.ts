@@ -33,6 +33,7 @@ export const COMMANDS = {
   reopenClosedTab: { title: "Reopen Closed Tab", symbol: "arrow.uturn.backward", keys: ["⇧⌘T"], littleArdia: "page" },
   reopenClosedWindow: { title: "Reopen Closed Window" },
   restoreClosed: { littleArdia: "page" },
+  clearRecentlyClosed: { title: "Clear Recently Closed", symbol: "trash", ...appWide },
   focusCommandBar: { title: "Open Command Bar", keys: ["⌘L", "⌃F5"], ...inWindow },
   closeTab: { title: "Close Tab", symbol: "xmark", keys: ["⌘W"], ...inWindow },
   closeAllTabs: { title: "Close All Tabs", symbol: "xmark.square", keys: ["⇧⌘K"], ...windowOffInLittleArdia },

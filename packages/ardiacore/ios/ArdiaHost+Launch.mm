@@ -279,8 +279,7 @@ static NSArray<NSNumber *> *LittleArdiaFrame(id size) {
   }
   width = MIN(MAX(width, 420), NSWidth(visible));
   height = MIN(MAX(height, 300), NSHeight(visible));
-  const double lift = MIN(NSHeight(visible) * 0.05, (NSHeight(visible) - height) / 2);
-  return @[ @(round(NSMidX(visible) - width / 2)), @(round(NSMidY(visible) - height / 2 + lift)), @(round(width)), @(round(height)) ];
+  return @[ @(round(NSMidX(visible) - width / 2)), @(round(NSMidY(visible) - height / 2)), @(round(width)), @(round(height)) ];
 }
 
 static bool gEarlyLittleTried;

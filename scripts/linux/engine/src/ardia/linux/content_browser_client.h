@@ -37,6 +37,7 @@ class ContentBrowserClient : public ChromeContentBrowserClient {
                        bool user_gesture,
                        bool opener_suppressed,
                        bool* no_javascript_access) override;
+  bool IsWebUIAllowedToMakeNetworkRequests(const url::Origin& origin) override;
   std::unique_ptr<device::LocationProvider> OverrideSystemLocationProvider()
       override;
   std::unique_ptr<content::WebContentsViewDelegate> GetWebContentsViewDelegate(

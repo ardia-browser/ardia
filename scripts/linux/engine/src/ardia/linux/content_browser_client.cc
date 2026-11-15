@@ -7,6 +7,7 @@
 #include "ardia/linux/main_parts.h"
 #include "ardia/linux/modules/file_drop.h"
 #include "ardia/linux/modules/location.h"
+#include "ardia/linux/ui_host/ardia_app_source.h"
 #include "ardia/linux/ui_host/ui_host_parts.h"
 #include "ardia/linux/content_blocker.h"
 #include "ardia/linux/page_channel/page_channel.h"
@@ -15,11 +16,13 @@
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_main_parts.h"
 #include "content/public/browser/web_contents_view_delegate.h"
+#include "content/public/common/url_constants.h"
 #include "services/device/public/cpp/geolocation/location_provider.h"
 #include "services/cert_verifier/public/mojom/cert_verifier_service_factory.mojom.h"
 #include "services/network/public/mojom/network_context.mojom.h"
 #include "third_party/blink/public/mojom/window_features/window_features.mojom.h"
 #include "url/gurl.h"
+#include "url/origin.h"
 
 namespace ardia_linux {
 
@@ -75,6 +78,16 @@ bool ContentBrowserClient::CanCreateWindow(
       opener, opener_url, opener_top_level_frame_url, source_origin,
       container_type, target_url, referrer, frame_name, disposition, features,
       user_gesture, opener_suppressed, no_javascript_access);
+}
+
+bool ContentBrowserClient::IsWebUIAllowedToMakeNetworkRequests(
+    const url::Origin& origin) {
+  if (origin.scheme() == content::kChromeUIScheme &&
+      origin.host() == kArdiaAppHost) {
+    return true;
+  }
+  return ChromeContentBrowserClient::IsWebUIAllowedToMakeNetworkRequests(
+      origin);
 }
 
 std::unique_ptr<device::LocationProvider>

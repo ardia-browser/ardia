@@ -1,7 +1,7 @@
 import { callMain, callMainSync, mainModules } from "../bridge";
 import { addNativeListener } from "../events";
 import { framePacing, frameTrace } from "./frames";
-import { connectPageMotion, holdDuringMotion, pageMotionState } from "./pageMotion";
+import { connectPageMotion, holdDuringMotion, pageMotionState, settledPageOpacity } from "./pageMotion";
 import { notePagePainted, noteShownPage, pageSlotsState } from "./pageSlots";
 
 type EngineEvent = { topic?: unknown; json?: unknown };
@@ -54,9 +54,12 @@ export async function hostCall<Result = unknown>(verb: string, args: Record<stri
   present();
   hostCalls += 1;
   if (verb === "tab.show" && typeof args.key === "string") {
-    shown.set(args.key, { ...args, windowId });
-    if (pagesUnderUi()) noteShownPage(windowId, args.key, args.visible === true ? shownPage(args) : null);
-    if (holdDuringMotion({ ...args, key: args.key }, windowId)) return {} as Result;
+    const key = args.key;
+    const settled = args.visible === true && !args.motion ? settledPageOpacity(key) : undefined;
+    if (settled !== undefined) args = { ...args, opacity: settled };
+    shown.set(key, { ...args, windowId });
+    if (pagesUnderUi()) noteShownPage(windowId, key, args.visible === true ? shownPage(args) : null);
+    if (holdDuringMotion({ ...args, key }, windowId)) return {} as Result;
   }
   if (verb === "tab.close" && typeof args.key === "string") {
     const last = shown.get(args.key);

@@ -1,4 +1,4 @@
-export type PageMotion = { durationMs: number; rects: number[][]; elapsedMs?: number };
+export type PageMotion = { durationMs: number; rects: number[][]; opacity?: number[]; elapsedMs?: number };
 
 type ShowArgs = Record<string, unknown> & { key: string };
 type Sender = (args: ShowArgs, windowId: string) => void;
@@ -16,6 +16,7 @@ const SETTLE_AFTER_MS = 34;
 const LONGEST_WAIT_TO_START_MS = 500;
 
 const moving = new Map<string, Moving>();
+const settledOpacity = new Map<string, number>();
 let send: Sender | null = null;
 let lastShown: (key: string) => Shown | null = () => null;
 let motionsSent = 0;
@@ -28,13 +29,21 @@ export function connectPageMotion(sender: Sender, shownNow: typeof lastShown) {
   lastShown = shownNow;
 }
 
-function finish(key: string) {
+type Ending = "ended" | "hidden" | "replaced";
+
+function finish(key: string, ending: Ending) {
   const entry = moving.get(key);
   if (!entry) return;
   clearTimeout(entry.timer);
   moving.delete(key);
-  if (entry.held && send) send(entry.held.args, entry.held.windowId);
+  const last = entry.sent && ending !== "replaced" ? entry.motion.opacity?.at(-1) : undefined;
+  if (ending === "ended" && last !== undefined && last < 1) settledOpacity.set(key, last);
+  if (!entry.held || !send) return;
+  const held = last !== undefined && last < 1 ? { ...entry.held.args, opacity: last } : entry.held.args;
+  send(held, entry.held.windowId);
 }
+
+export const settledPageOpacity = (key: string): number | undefined => settledOpacity.get(key);
 
 function remaining(entry: Moving): PageMotion | null {
   const { motion } = entry;
@@ -45,7 +54,8 @@ function remaining(entry: Moving): PageMotion | null {
   const from = Math.min(steps, Math.max(0, Math.floor(elapsed / step)));
   const rects = motion.rects.slice(from);
   if (rects.length < 2) return null;
-  return { durationMs: Math.round(motion.durationMs - from * step), rects, elapsedMs: Math.round((elapsed - from * step) * 10) / 10 };
+  const opacity = motion.opacity?.slice(from);
+  return { durationMs: Math.round(motion.durationMs - from * step), rects, ...(opacity && { opacity }), elapsedMs: Math.round((elapsed - from * step) * 10) / 10 };
 }
 
 function sendMotion(entry: Moving, base: Shown): boolean {
@@ -55,6 +65,7 @@ function sendMotion(entry: Moving, base: Shown): boolean {
   const [x, y, width, height] = final;
   const args: ShowArgs = { ...base.args, x, y, width, height, motion };
   delete args.windowId;
+  delete args.opacity;
   send(args, base.windowId);
   entry.sent = true;
   entry.held = null;
@@ -70,7 +81,8 @@ function begin(key: string, entry: Moving) {
 }
 
 export function notePageMotion(key: string, motion: PageMotion | null, clock: () => number | null = () => 0, started: Promise<unknown> = Promise.resolve()): boolean {
-  finish(key);
+  finish(key, "replaced");
+  settledOpacity.delete(key);
   if (!motion || motion.rects.length < 2) return false;
   const entry: Moving = {
     motion,
@@ -78,21 +90,22 @@ export function notePageMotion(key: string, motion: PageMotion | null, clock: ()
     started: false,
     sent: false,
     held: null,
-    timer: setTimeout(() => finish(key), motion.durationMs + LONGEST_WAIT_TO_START_MS + SETTLE_AFTER_MS),
+    timer: setTimeout(() => finish(key, "ended"), motion.durationMs + LONGEST_WAIT_TO_START_MS + SETTLE_AFTER_MS),
   };
   moving.set(key, entry);
   void started.then(
     () => begin(key, entry),
-    () => finish(key),
+    () => finish(key, "replaced"),
   );
   return true;
 }
 
 export function holdDuringMotion(args: ShowArgs, windowId: string): boolean {
+  if (args.visible !== true) settledOpacity.delete(args.key);
   const entry = moving.get(args.key);
   if (!entry || args.motion) return false;
   if (args.visible !== true) {
-    finish(args.key);
+    finish(args.key, "hidden");
     return false;
   }
   if (entry.started && !entry.sent) {

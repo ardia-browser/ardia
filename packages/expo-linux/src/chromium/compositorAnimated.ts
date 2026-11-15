@@ -173,18 +173,18 @@ function startMirror(value: ValueNode, curve: Curve): Mirror | null {
     });
     const played = element.animate(keyframes, { duration: curve.durationMs, easing: "linear", fill: "forwards" });
     animations.push(played);
-    if (!moves) continue;
     const start = affine(frames[0]?.transform ?? null);
     const center = untransformedCenter(element, start);
     for (const { key, box, view } of pageBoxesUnder(element)) {
-      const rects = frames.map((frame) => movedBox(box, center, start, affine(frame.transform)));
-      lastMirror = { key, box, center, start: [start.a, start.d, start.e, start.f], origin: getComputedStyle(element).transformOrigin, transforms: [frames[0]?.transform, frames[Math.floor(frames.length / 2)]?.transform, frames[frames.length - 1]?.transform], rects: [rects[0], rects[Math.floor(rects.length / 2)], rects[rects.length - 1]], element: [element.offsetWidth, element.offsetHeight] };
-      const motion: PageMotion = { durationMs: Math.round(curve.durationMs), rects: rects.map((rect) => [rect.x, rect.y, rect.width, rect.height]) };
+      const rects = frames.map((frame) => (moves ? movedBox(box, center, start, affine(frame.transform)) : box));
+      const opacity = fades ? frames.map((frame) => Math.round(Math.min(1, Math.max(0, frame.opacity ?? 1)) * 100) / 100) : undefined;
+      lastMirror = { key, box, center, start: [start.a, start.d, start.e, start.f], origin: getComputedStyle(element).transformOrigin, transforms: [frames[0]?.transform, frames[Math.floor(frames.length / 2)]?.transform, frames[frames.length - 1]?.transform], rects: [rects[0], rects[Math.floor(rects.length / 2)], rects[rects.length - 1]], opacity: opacity && [opacity[0], opacity[Math.floor(opacity.length / 2)], opacity[opacity.length - 1]], element: [element.offsetWidth, element.offsetHeight] };
+      const motion: PageMotion = { durationMs: Math.round(curve.durationMs), rects: rects.map((rect) => [rect.x, rect.y, rect.width, rect.height]), ...(opacity && { opacity }) };
       const timeline = element.ownerDocument.defaultView?.performance ?? performance;
       const clock = () => (played.startTime === null ? null : timeline.now() - Number(played.startTime));
       if (!notePageMotion(key, motion, clock, played.ready)) continue;
       pages.push(key);
-      animatePageHoles(key, view, element, played, { durationMs: motion.durationMs, rects: motion.rects, offsets: times.map((ms) => (curve.durationMs > 0 ? ms / curve.durationMs : 1)) });
+      if (moves) animatePageHoles(key, view, element, played, { durationMs: motion.durationMs, rects: motion.rects, offsets: times.map((ms) => (curve.durationMs > 0 ? ms / curve.durationMs : 1)) });
     }
   }
   if (!animations.length) return null;

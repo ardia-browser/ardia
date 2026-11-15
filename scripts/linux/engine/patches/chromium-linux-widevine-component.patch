@@ -1,0 +1,245 @@
+SPDX-License-Identifier: GPL-3.0-only
+
+"Play DRM-protected content" on Linux, the owner's decision: an opt-in setting, off by default, as Firefox does it.
+chromium-component-updater-security-only.patch keeps every component off the network but the security ones; with this
+patch Widevine's component (oimompecagnajdejgnnjijobebaeigek) joins them only while the local-state pref
+component_updater::kArdiaPlayProtectedContentPref ("ardia.play_protected_content", registered with the component
+updater's prefs, default false) is on. The app's settings set it; the engine reads it before the installed component is
+read and follows its changes.
+- Off: nothing is fetched (the update client never sees the component), an installed CDM's ComponentReady doesn't
+  write the Linux hint file, and the hint file is deleted, so no Widevine CDM loads at the next start.
+- Turned on: an update check for the component (MaybeThrottle, the public on-demand call, with its cooldown) fetches it
+  from Google, and an installed one is hinted again. On Linux the CDM loads at startup, before the zygote is locked
+  down, so it plays from the next start.
+
+--- a/chrome/browser/component_updater/component_updater_prefs.cc
++++ b/chrome/browser/component_updater/component_updater_prefs.cc
+@@ -10,6 +10,10 @@
+ #include "chrome/browser/component_updater/wasm_tts_engine_component_installer.h"
+ #include "chrome/common/buildflags.h"
+ #include "components/component_updater/component_updater_service.h"
++#include "third_party/widevine/cdm/buildflags.h"
++#if BUILDFLAG(IS_LINUX) && BUILDFLAG(ENABLE_WIDEVINE_CDM_COMPONENT)
++#include "chrome/browser/component_updater/widevine_cdm_component_installer.h"
++#endif
+ #if !BUILDFLAG(IS_ANDROID)
+ #include "chrome/browser/component_updater/soda_component_installer.h"
+ #endif
+@@ -20,6 +24,9 @@
+   RegisterComponentUpdateServicePrefs(registry);
+   PlatformRuntimeComponentInstallerPolicy::RegisterPrefs(registry);
+   WasmTtsEngineComponentInstallerPolicy::RegisterPrefs(registry);
++#if BUILDFLAG(IS_LINUX) && BUILDFLAG(ENABLE_WIDEVINE_CDM_COMPONENT)
++  RegisterWidevineCdmPrefs(registry);
++#endif
+ }
+ 
+ }  // namespace component_updater
+--- a/chrome/browser/component_updater/widevine_cdm_component_installer.cc
++++ b/chrome/browser/component_updater/widevine_cdm_component_installer.cc
+@@ -46,6 +46,16 @@
+ #include "chrome/common/media/component_widevine_cdm_hint_file_linux.h"
+ #endif
+ 
++#if BUILDFLAG(IS_LINUX)
++#include "base/functional/callback_helpers.h"
++#include "base/no_destructor.h"
++#include "base/task/sequenced_task_runner.h"
++#include "chrome/browser/browser_process.h"
++#include "components/prefs/pref_change_registrar.h"
++#include "components/prefs/pref_registry_simple.h"
++#include "components/prefs/pref_service.h"
++#endif
++
+ #if BUILDFLAG(IS_CHROMEOS)
+ #include "chromeos/ash/components/dbus/image_loader/image_loader_client.h"
+ #endif
+@@ -54,6 +64,10 @@
+ #error This file should only be compiled when Widevine CDM component is enabled
+ #endif
+ 
++#if BUILDFLAG(IS_LINUX)
++extern bool g_ardia_widevine_component_updates;
++#endif
++
+ namespace component_updater {
+ 
+ namespace {
+@@ -318,6 +332,13 @@
+     const base::FilePath& path,
+     base::DictValue manifest) {
+   DVLOG(1) << __func__ << ": version=" << version << ", path=" << path;
++#if BUILDFLAG(IS_LINUX)
++  // Ardia: an installed CDM loads at the next start only while "Play
++  // DRM-protected content" is on.
++  if (!g_ardia_widevine_component_updates) {
++    return;
++  }
++#endif
+   if (!IsCdmManifestCompatibleWithChrome(manifest)) {
+     VLOG(1) << "Widevine CDM component " << version << " is incompatible.";
+     return;
+@@ -435,10 +456,95 @@
+ #endif
+ }
+ 
++#if BUILDFLAG(IS_LINUX)
++namespace {
++
++constexpr char kWidevineCdmComponentId[] = "oimompecagnajdejgnnjijobebaeigek";
++
++bool PlayProtectedContent() {
++  PrefService* local_state = g_browser_process->local_state();
++  return local_state &&
++         local_state->GetBoolean(kArdiaPlayProtectedContentPref);
++}
++
++scoped_refptr<base::SequencedTaskRunner> HintFileRunner() {
++  static base::NoDestructor<scoped_refptr<base::SequencedTaskRunner>> runner(
++      base::ThreadPool::CreateSequencedTaskRunner(
++          {base::MayBlock(), base::TaskPriority::USER_VISIBLE}));
++  return *runner;
++}
++
++void ForgetHintedCdm() {
++  base::FilePath hint_file;
++  if (base::PathService::Get(chrome::FILE_COMPONENT_WIDEVINE_CDM_HINT,
++                             &hint_file)) {
++    base::DeleteFile(hint_file);
++  }
++}
++
++void HintInstalledCdm(const base::Version& version) {
++  base::FilePath base_dir;
++  if (!base::PathService::Get(chrome::DIR_COMPONENT_UPDATED_WIDEVINE_CDM,
++                              &base_dir)) {
++    return;
++  }
++  const base::FilePath install_dir =
++      base::MakeAbsoluteFilePath(base_dir.AppendASCII(version.GetString()));
++  if (install_dir.empty() ||
++      !base::PathExists(GetCdmPathFromInstallDir(install_dir))) {
++    return;
++  }
++  if (!UpdateHintFile(install_dir)) {
++    PLOG(WARNING) << "Failed to update Widevine CDM hint path.";
++  }
++}
++
++void ApplyPlayProtectedContent(ComponentUpdateService* cus, bool changed) {
++  g_ardia_widevine_component_updates = PlayProtectedContent();
++  if (!g_ardia_widevine_component_updates) {
++    HintFileRunner()->PostTask(FROM_HERE, base::BindOnce(&ForgetHintedCdm));
++    return;
++  }
++  if (!changed) {
++    return;
++  }
++  for (const ComponentInfo& info : cus->GetComponents()) {
++    if (info.id == kWidevineCdmComponentId && info.version.IsValid() &&
++        info.version.CompareTo(base::Version("0.0.0.0")) > 0) {
++      HintFileRunner()->PostTask(
++          FROM_HERE, base::BindOnce(&HintInstalledCdm, info.version));
++    }
++  }
++  cus->MaybeThrottle(kWidevineCdmComponentId, base::DoNothing());
++}
++
++}  // namespace
++
++void RegisterWidevineCdmPrefs(PrefRegistrySimple* registry) {
++  registry->RegisterBooleanPref(kArdiaPlayProtectedContentPref, false);
++}
++#endif
++
+ void RegisterWidevineCdmComponent(ComponentUpdateService* cus) {
++#if BUILDFLAG(IS_LINUX)
++  // Ardia: the "Play DRM-protected content" setting decides, before the
++  // installed component is read, whether Widevine is fetched and loaded.
++  g_ardia_widevine_component_updates = PlayProtectedContent();
++#endif
+   auto installer = base::MakeRefCounted<ComponentInstaller>(
+       std::make_unique<WidevineCdmComponentInstallerPolicy>());
++#if BUILDFLAG(IS_LINUX)
++  installer->Register(
++      cus, base::BindOnce(&ApplyPlayProtectedContent, cus, false));
++  if (PrefService* local_state = g_browser_process->local_state()) {
++    static base::NoDestructor<PrefChangeRegistrar> registrar;
++    registrar->Init(local_state);
++    registrar->Add(kArdiaPlayProtectedContentPref,
++                   base::BindRepeating(&ApplyPlayProtectedContent, cus, true));
++  }
++#else
+   installer->Register(cus, base::OnceClosure());
++#endif
+ }
+ 
+ }  // namespace component_updater
+--- a/chrome/browser/component_updater/widevine_cdm_component_installer.h
++++ b/chrome/browser/component_updater/widevine_cdm_component_installer.h
+@@ -5,8 +5,23 @@
+ #ifndef CHROME_BROWSER_COMPONENT_UPDATER_WIDEVINE_CDM_COMPONENT_INSTALLER_H_
+ #define CHROME_BROWSER_COMPONENT_UPDATER_WIDEVINE_CDM_COMPONENT_INSTALLER_H_
+ 
++#include "build/build_config.h"
++
++class PrefRegistrySimple;
++
+ namespace component_updater {
+ 
++#if BUILDFLAG(IS_LINUX)
++// Ardia: the "Play DRM-protected content" setting (local state, off by
++// default). While it is off, Widevine's component is never fetched and no
++// Widevine CDM loads; turning it on fetches the component, and the CDM loads
++// at the next start.
++inline constexpr char kArdiaPlayProtectedContentPref[] =
++    "ardia.play_protected_content";
++
++void RegisterWidevineCdmPrefs(PrefRegistrySimple* registry);
++#endif
++
+ class ComponentUpdateService;
+ 
+ // Our job is to:
+--- a/components/component_updater/component_updater_service.cc
++++ b/components/component_updater/component_updater_service.cc
+@@ -37,6 +37,7 @@
+ #include "components/component_updater/required_components_controller.h"
+ #include "components/prefs/pref_registry_simple.h"
+ #include "components/prefs/pref_service.h"
++#include "build/build_config.h"
+ #include "components/update_client/configurator.h"
+ #include "components/update_client/crx_cache.h"
+ #include "components/update_client/crx_update_item.h"
+@@ -45,6 +46,12 @@
+ #include "components/update_client/utils.h"
+ #include "url/gurl.h"
+ 
++#if BUILDFLAG(IS_LINUX)
++// Ardia: true while the "Play DRM-protected content" setting is on; set by
++// chrome/browser/component_updater/widevine_cdm_component_installer.cc.
++bool g_ardia_widevine_component_updates = false;
++#endif
++
+ namespace {
+ 
+ using CrxInstaller = ::update_client::CrxInstaller;
+@@ -525,7 +532,17 @@
+   std::vector<std::optional<CrxComponent>> crxs;
+   for (std::optional<ComponentRegistration> item :
+        component_updater::GetCrxComponents(components_, ids)) {
+-    crxs.push_back(item && kNetworkUpdatableComponents.contains(item->app_id)
++    bool network_updatable =
++        item && kNetworkUpdatableComponents.contains(item->app_id);
++#if BUILDFLAG(IS_LINUX)
++    // Ardia: Widevine's component only while the user has turned on "Play
++    // DRM-protected content".
++    network_updatable =
++        network_updatable ||
++        (item && g_ardia_widevine_component_updates &&
++         item->app_id == "oimompecagnajdejgnnjijobebaeigek");
++#endif
++    crxs.push_back(network_updatable
+                        ? std::optional<CrxComponent>{ToCrxComponent(*item)}
+                        : std::nullopt);
+   }

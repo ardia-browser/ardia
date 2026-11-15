@@ -123,6 +123,7 @@ lines, each strictly with `git apply` and else with `patch`'s fuzz. Line kinds:
 | `chromium chromium-linux-app-in-browser-process.patch` | `//chrome:chrome` links `//ardia/linux`; `ChromeMain` calls `ardia_linux::BeforeChromeMain()` right after `CommandLine::Init`, in every process, and its delegate is `ardia_linux::MainDelegate` (a `ChromeMainDelegate`) |
 | `win-widened chromium-win-external-protocol-dialog.patch` | the external app prompt goes to the app (the shared `//ardia/win/external_apps.cc` sets `g_ardia_win_external_protocol_dialog`) |
 | `win-widened chromium-win-relaunch-to-app.patch` | a second launch's command line goes to the app instead of Chrome's startup |
+| `chromium chromium-linux-widevine-component.patch` | "Play DRM-protected content", off by default ([GN args](#gn-args), Widevine) |
 
 Retired: `chromium-win-load-local-state-delegate.patch` (the `chrome_main_delegate.cc` hook below passes ArdiaCore's
 ResourceBundle delegate instead, as on the Mac) and `chromium-win-ardia-layer-calls-mac-only.patch` (the layer builds on
@@ -237,14 +238,23 @@ Kept: proprietary codecs (`ffmpeg_branding="Chrome"`), Widevine's build flag, no
 no reporting, no field-trial config, no updater, no background mode, not a component build, `exclude_unwind_tables`,
 and `branding_file_path` (`//chrome/app/theme/ardia/BRANDING`).
 
-**Widevine** is built (`enable_widevine=true`) but nothing fetches its CDM: the component updater is security-only
-(`chromium-component-updater-security-only.patch`), as on the Mac. The owner's decision for Linux is an opt-in setting,
-off by default ("Play DRM-protected content", as Firefox does). Planned, after the first milestone:
-`chromium-linux-widevine-component.patch` (Linux only, `series-linux`) adds Widevine's component
-(`oimompecagnajdejgnnjijobebaeigek`) to the updater's network allowlist and registers its installer only while a
-local-state pref the UI sets is on (read when the updater starts and when the pref changes); with it off, nothing is
-fetched and the key system isn't offered. The UI owns the setting and its copy; telemetry counts the setting's state
-and the component's install result (enums only).
+**Widevine** is an opt-in setting on Linux, off by default ("Play DRM-protected content", as Firefox does it; the
+owner's decision). The component updater is security-only (`chromium-component-updater-security-only.patch`), as on
+the Mac; `chromium-linux-widevine-component.patch` lets Widevine's component (`oimompecagnajdejgnnjijobebaeigek`) through
+only while the local-state pref `component_updater::kArdiaPlayProtectedContentPref` (`ardia.play_protected_content`,
+declared in `widevine_cdm_component_installer.h` and registered with the component updater's prefs) is on. The app's
+settings set it (`g_browser_process->local_state()->SetBoolean(...)`); the engine reads it before the installed
+component is read and follows its changes:
+
+- **Off** (the default): the update client never sees the component, so nothing is fetched; an installed CDM's
+  `ComponentReady` doesn't write the Linux hint file, and the hint file is deleted, so no Widevine CDM loads at the next
+  start.
+- **Turned on**: `MaybeThrottle` (the component updater's public on-demand call, with its cooldown) fetches the
+  component from Google, and an installed one is hinted again. Linux loads the CDM at startup, before the zygote is
+  locked down, so DRM plays from the next start: the setting's copy should say so.
+
+The pref is local state, so it holds for every profile. Compiled (`chrome/browser/component_updater:impl`,
+`components/component_updater`); not exercised yet: the UI has no setting for it, and fetching it reaches Google.
 
 ## Packaging
 

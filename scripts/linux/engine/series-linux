@@ -6,3 +6,4 @@ chromium chromium-linux-ardia-layer.patch
 chromium chromium-linux-app-in-browser-process.patch
 win-widened chromium-win-external-protocol-dialog.patch
 win-widened chromium-win-relaunch-to-app.patch
+chromium chromium-linux-widevine-component.patch

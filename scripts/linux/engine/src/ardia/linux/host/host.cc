@@ -58,6 +58,8 @@
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/browser/web_contents_observer.h"
+#include "content/public/browser/web_contents_user_data.h"
 #include "ui/base/page_transition_types.h"
 #include "ui/base/window_open_disposition.h"
 #include "ui/compositor/compositor.h"
@@ -72,6 +74,41 @@
 namespace ardia_linux {
 
 namespace {
+
+class FirstPaintWatch
+    : public content::WebContentsObserver,
+      public content::WebContentsUserData<FirstPaintWatch> {
+ public:
+  ~FirstPaintWatch() override = default;
+
+  static void Attach(content::WebContents* contents) {
+    CreateForWebContents(contents);
+    if (contents->CompletedFirstVisuallyNonEmptyPaint()) {
+      Tell(contents);
+    }
+  }
+
+  void DidFirstVisuallyNonEmptyPaint() override { Tell(web_contents()); }
+
+ private:
+  friend WebContentsUserData;
+
+  explicit FirstPaintWatch(content::WebContents* contents)
+      : content::WebContentsObserver(contents),
+        content::WebContentsUserData<FirstPaintWatch>(*contents) {}
+
+  static void Tell(content::WebContents* contents) {
+    if (ardia_win::TabState* state =
+            ardia_win::TabState::FromWebContents(contents)) {
+      state->Send("firstPaint", base::DictValue());
+    }
+  }
+
+  WEB_CONTENTS_USER_DATA_KEY_DECL();
+};
+
+WEB_CONTENTS_USER_DATA_KEY_IMPL(FirstPaintWatch);
+
 
 using ardia_win::Error;
 using ardia_win::PageLinks;
@@ -349,6 +386,7 @@ void Host::CreateTab(base::DictValue args,
     AttachPageHelpers(existing);
   }
   if (existing) {
+    FirstPaintWatch::Attach(existing);
     if (!IsExtensionView(existing) && !PlaceTab(existing, window)) {
       std::move(reply).Run(Error("the tab could not move to this window"));
       return;
@@ -398,6 +436,7 @@ void Host::CreateExtensionViewInProfile(std::string key,
   TabState::Bind(contents, key)->NoteNavigation();
   TabEvents::Attach(contents);
   AttachPageHelpers(contents);
+  FirstPaintWatch::Attach(contents);
   base::DictValue result;
   result.Set("tab", TabState::IdOf(contents));
   std::move(reply).Run(std::move(result));
@@ -452,6 +491,7 @@ void Host::CreateTabInProfile(std::string key,
   state->NoteNavigation();
   TabEvents::Attach(contents);
   AttachPageHelpers(contents);
+  FirstPaintWatch::Attach(contents);
   base::DictValue result;
   result.Set("tab", TabState::IdOf(contents));
   std::move(reply).Run(std::move(result));
@@ -535,6 +575,9 @@ base::DictValue Host::ShowTab(const base::DictValue& args,
     PageMotion parsed;
     parsed.duration =
         base::Milliseconds(given->FindDouble("durationMs").value_or(0));
+    parsed.elapsed = std::clamp(
+        base::Milliseconds(given->FindDouble("elapsedMs").value_or(0)),
+        base::TimeDelta(), parsed.duration);
     if (const base::ListValue* rects = given->FindList("rects")) {
       for (const base::Value& rect : *rects) {
         const base::ListValue* sides = rect.GetIfList();

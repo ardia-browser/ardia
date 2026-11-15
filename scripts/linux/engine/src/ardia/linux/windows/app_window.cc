@@ -59,6 +59,21 @@ constexpr base::TimeDelta kBrowserFade = base::Milliseconds(250);
 constexpr base::TimeDelta kSmallFade = base::Milliseconds(200);
 constexpr int kMotionDelayMs = 0;
 
+gfx::RectF MotionRectAt(const PageMotion& motion, base::TimeDelta elapsed) {
+  const double progress =
+      std::clamp(elapsed / motion.duration, 0.0, 1.0) *
+      (motion.rects.size() - 1);
+  const size_t index =
+      std::min(static_cast<size_t>(progress), motion.rects.size() - 2);
+  const float fraction = static_cast<float>(progress - index);
+  const gfx::RectF& from = motion.rects[index];
+  const gfx::RectF& to = motion.rects[index + 1];
+  return gfx::RectF(from.x() + (to.x() - from.x()) * fraction,
+                    from.y() + (to.y() - from.y()) * fraction,
+                    from.width() + (to.width() - from.width()) * fraction,
+                    from.height() + (to.height() - from.height()) * fraction);
+}
+
 base::TimeDelta MotionDelay() {
   int delay = kMotionDelayMs;
   if (std::optional<std::string> value = ardiacore::TestValue("motionDelayMs")) {
@@ -244,8 +259,11 @@ void AppWindowView::StartMotion(const std::string& key,
   }
   RunningMotion& running = motions_[key];
   running.motion = motion;
-  running.start.reset();
-  ShowMotionAt(key, motion.rects.front());
+  running.start = base::TimeTicks::Now() - motion.elapsed + motion_delay_;
+  if (views::Widget* widget = GetWidget()) {
+    widget->LayoutRootViewIfNecessary();
+  }
+  ShowMotionAt(key, MotionRectAt(motion, motion.elapsed));
   if (!stepping_) {
     stepping_ = compositor;
     compositor->AddAnimationObserver(this);
@@ -267,28 +285,14 @@ void AppWindowView::EndMotion(const std::string& key) {
 void AppWindowView::OnAnimationStep(base::TimeTicks timestamp) {
   std::vector<std::string> ended;
   for (auto& [key, running] : motions_) {
-    if (!running.start) {
-      running.start = timestamp + motion_delay_;
-    }
-    const base::TimeDelta elapsed = timestamp - *running.start;
     const PageMotion& motion = running.motion;
+    const base::TimeDelta elapsed =
+        std::max(timestamp - running.start, motion.elapsed);
     if (elapsed >= motion.duration) {
       ended.push_back(key);
       continue;
     }
-    const double progress =
-        std::max(0.0, elapsed / motion.duration) * (motion.rects.size() - 1);
-    const size_t index = std::min(static_cast<size_t>(progress),
-                                  motion.rects.size() - 2);
-    const float fraction = static_cast<float>(progress - index);
-    const gfx::RectF& from = motion.rects[index];
-    const gfx::RectF& to = motion.rects[index + 1];
-    ShowMotionAt(key, gfx::RectF(from.x() + (to.x() - from.x()) * fraction,
-                                 from.y() + (to.y() - from.y()) * fraction,
-                                 from.width() +
-                                     (to.width() - from.width()) * fraction,
-                                 from.height() +
-                                     (to.height() - from.height()) * fraction));
+    ShowMotionAt(key, MotionRectAt(motion, elapsed));
   }
   for (const std::string& key : ended) {
     EndMotion(key);

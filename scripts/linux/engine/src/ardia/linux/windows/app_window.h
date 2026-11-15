@@ -55,6 +55,7 @@ struct PageMotion {
   ~PageMotion();
 
   base::TimeDelta duration;
+  base::TimeDelta elapsed;
   std::vector<gfx::RectF> rects;
 };
 
@@ -113,7 +114,7 @@ class AppWindowView : public views::View,
 
   struct RunningMotion {
     PageMotion motion;
-    std::optional<base::TimeTicks> start;
+    base::TimeTicks start;
   };
 
   void OnAnimationStep(base::TimeTicks timestamp) override;

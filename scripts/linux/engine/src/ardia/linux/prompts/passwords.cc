@@ -20,6 +20,7 @@
 #include "components/password_manager/core/common/password_manager_ui.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/browser/web_contents_user_data.h"
 #include "url/origin.h"
 
 namespace ardia_linux {
@@ -27,6 +28,65 @@ namespace ardia_linux {
 namespace {
 
 using password_manager::ui::State;
+
+constexpr int kMostOpenerHops = 8;
+
+class PasswordPromptRoute
+    : public content::WebContentsUserData<PasswordPromptRoute> {
+ public:
+  ~PasswordPromptRoute() override = default;
+
+  static void Note(content::WebContents* shown_in,
+                   content::WebContents* source) {
+    if (!source) {
+      shown_in->RemoveUserData(UserDataKey());
+      return;
+    }
+    CreateForWebContents(shown_in);
+    FromWebContents(shown_in)->source_ = source->GetWeakPtr();
+  }
+
+  static content::WebContents* Take(content::WebContents* shown_in,
+                                    bool* routed) {
+    PasswordPromptRoute* route = FromWebContents(shown_in);
+    *routed = route != nullptr;
+    if (!route) {
+      return shown_in;
+    }
+    base::WeakPtr<content::WebContents> source = route->source_;
+    shown_in->RemoveUserData(UserDataKey());
+    return source.get();
+  }
+
+ private:
+  explicit PasswordPromptRoute(content::WebContents* contents)
+      : content::WebContentsUserData<PasswordPromptRoute>(*contents) {}
+  friend WebContentsUserData;
+  WEB_CONTENTS_USER_DATA_KEY_DECL();
+
+  base::WeakPtr<content::WebContents> source_;
+};
+
+WEB_CONTENTS_USER_DATA_KEY_IMPL(PasswordPromptRoute);
+
+ardia_win::TabState* KeyedTab(content::WebContents* contents) {
+  ardia_win::TabState* tab =
+      contents ? ardia_win::TabState::FromWebContents(contents) : nullptr;
+  return tab && !tab->key().empty() ? tab : nullptr;
+}
+
+content::WebContents* TabShowingPromptOf(content::WebContents* contents) {
+  content::WebContents* candidate = contents;
+  for (int hop = 0; candidate && hop <= kMostOpenerHops; ++hop) {
+    if (KeyedTab(candidate)) {
+      return candidate;
+    }
+    content::WebContents* opener =
+        candidate->GetFirstWebContentsInLiveOriginalOpenerChain();
+    candidate = opener == candidate ? nullptr : opener;
+  }
+  return nullptr;
+}
 
 base::WeakPtr<PasswordsModelDelegate> ModelFor(content::WebContents* contents) {
   return contents ? PasswordsModelDelegateFromWebContents(contents) : nullptr;
@@ -81,9 +141,9 @@ std::optional<base::DictValue> PasswordPrompt(content::WebContents* contents) {
 }
 
 bool OfferPasswordSave(content::WebContents* contents) {
-  ardia_win::TabState* tab =
-      contents ? ardia_win::TabState::FromWebContents(contents) : nullptr;
-  if (!tab || tab->key().empty()) {
+  content::WebContents* shown_in = TabShowingPromptOf(contents);
+  ardia_win::TabState* tab = KeyedTab(shown_in);
+  if (!tab) {
     return false;
   }
   std::optional<base::DictValue> prompt = PasswordPrompt(contents);
@@ -93,9 +153,14 @@ bool OfferPasswordSave(content::WebContents* contents) {
   if (base::WeakPtr<PasswordsModelDelegate> model = ModelFor(contents)) {
     model->OnBubbleShown();
   }
+  const bool from_popup = shown_in != contents;
   const std::string* state = prompt->FindString("state");
-  CountLinux(state && *state == "saved" ? "passwordSavedNotices"
-                                        : "passwordPrompts");
+  const bool saved = state && *state == "saved";
+  CountLinux(saved ? "passwordSavedNotices" : "passwordPrompts");
+  if (from_popup && !saved) {
+    CountLinux("passwordPromptsFromPopups");
+  }
+  PasswordPromptRoute::Note(shown_in, from_popup ? contents : nullptr);
   tab->Send("passwordPrompt", std::move(*prompt));
   base::WeakPtr<PasswordsModelDelegate> model = ModelFor(contents);
   if (model && (model->GetState() == State::SAVE_CONFIRMATION_STATE ||
@@ -208,7 +273,12 @@ bool CallPasswordMethod(content::WebContents* contents,
     return false;
   }
   const base::DictValue* edits = args.FindDict("edits");
-  ResolvePasswordPrompt(contents, Field(args, "answer"),
+  bool routed = false;
+  content::WebContents* source = PasswordPromptRoute::Take(contents, &routed);
+  if (routed && !source) {
+    CountLinux("passwordPromptsPopupGone");
+  }
+  ResolvePasswordPrompt(source, Field(args, "answer"),
                         edits ? Field(*edits, "username") : std::string(),
                         edits ? Field(*edits, "password") : std::string());
   base::DictValue done;

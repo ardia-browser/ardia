@@ -43,7 +43,10 @@ function engineSwaps(): Plugin {
 function engineEntry(): Plugin {
   return {
     name: "ardia-linux:engine-entry",
-    transformIndexHtml: (html) => html.replace('src="./src/host.tsx"', 'src="./src/host.chromium.tsx"'),
+    transformIndexHtml: {
+      order: "pre",
+      handler: (html) => html.replace('src="./src/host.tsx"', 'src="./src/host.chromium.tsx"'),
+    },
   };
 }
 

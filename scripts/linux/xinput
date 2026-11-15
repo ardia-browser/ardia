@@ -4,7 +4,7 @@ Real X input and pictures on an X display (an Xvfb), through XTest and XGetImage
   click X Y [button] [mods]   press and release a button at X,Y (button 1 left, 3 right; mods like ctrl,shift)
   wheel X Y STEPS             scroll at X,Y (STEPS > 0 down, < 0 up)
   keys CHORD [CHORD...]       press key chords like ctrl+l, ctrl+q, Escape, Return
-  type TEXT                   type plain ASCII text
+  type TEXT                   type ASCII text, shifting the characters that need it
   shot PATH [X Y W H]         save the root window (or a rectangle of it) as a PNG
   pixel X Y                   print the root window's pixel at X,Y as rrggbb"""
 import ctypes
@@ -25,6 +25,8 @@ x11.XStringToKeysym.restype = ctypes.c_ulong
 x11.XStringToKeysym.argtypes = [ctypes.c_char_p]
 x11.XGetGeometry.argtypes = [ctypes.c_void_p, ctypes.c_ulong] + [ctypes.c_void_p] * 7
 x11.XFlush.argtypes = [ctypes.c_void_p]
+x11.XkbKeycodeToKeysym.restype = ctypes.c_ulong
+x11.XkbKeycodeToKeysym.argtypes = [ctypes.c_void_p, ctypes.c_ubyte, ctypes.c_int, ctypes.c_int]
 xtst.XTestFakeMotionEvent.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_ulong]
 xtst.XTestFakeButtonEvent.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_int, ctypes.c_ulong]
 xtst.XTestFakeKeyEvent.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_int, ctypes.c_ulong]
@@ -70,6 +72,23 @@ def chord(display, text):
         flush(display, 0.02)
     for code in reversed(codes):
         xtst.XTestFakeKeyEvent(display, code, False, 0)
+        flush(display, 0.02)
+
+
+def type_text(display, text):
+    shift = keycode(display, "Shift_L")
+    for character in text:
+        symbol = 0x20 if character == " " else ord(character)
+        code = x11.XKeysymToKeycode(display, symbol)
+        if not code:
+            sys.exit(f"xinput: no key types {character!r}")
+        shifted = x11.XkbKeycodeToKeysym(display, code, 0, 0) != symbol
+        if shifted:
+            xtst.XTestFakeKeyEvent(display, shift, True, 0)
+        xtst.XTestFakeKeyEvent(display, code, True, 0)
+        xtst.XTestFakeKeyEvent(display, code, False, 0)
+        if shifted:
+            xtst.XTestFakeKeyEvent(display, shift, False, 0)
         flush(display, 0.02)
 
 
@@ -146,8 +165,7 @@ def main():
         for text in args:
             chord(display, text)
     elif command == "type":
-        for character in args[0]:
-            chord(display, "space" if character == " " else ("shift+" + character.lower() if character.isupper() else character))
+        type_text(display, args[0])
     elif command == "shot":
         rect = [int(float(value)) for value in args[1:5]] if len(args) >= 5 else [0, 0, 0, 0]
         width, height, rows = grab(display, *rect)

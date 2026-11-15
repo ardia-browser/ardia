@@ -1,17 +1,22 @@
 import { callMain, callMainSync, mainModules } from "../bridge";
 import { addNativeListener } from "../events";
+import { framePacing } from "./frames";
+import { noteShownPage, pageSlotsState } from "./pageSlots";
 
 type EngineEvent = { topic?: unknown; json?: unknown };
 type TopicListener = (payload: Record<string, unknown>) => void;
 
 export const ENGINE_HOST = "ArdiaEngineHost";
+export const LINUX_ENGINE = "ArdiaLinuxEngine";
 
 const listeners = new Map<string, Set<TopicListener>>();
 const shown = new Map<string, Record<string, unknown>>();
 let subscribed = false;
 let hostCalls = 0;
 
-Object.assign(globalThis, { ardiaEngineDebug: { shown: () => Object.fromEntries(shown), hostCalls: () => hostCalls } });
+export const pagesUnderUi = (): boolean => mainModules()[LINUX_ENGINE]?.constants?.pagesUnderUi === true;
+
+Object.assign(globalThis, { ardiaEngineDebug: { shown: () => Object.fromEntries(shown), hostCalls: () => hostCalls, pagesUnderUi, pageSlots: pageSlotsState, framePacing } });
 
 export const engineAvailable = (): boolean => !!mainModules()[ENGINE_HOST];
 
@@ -32,6 +37,14 @@ function decode<Result>(json: unknown): Result {
   return parsed as Result;
 }
 
+const shownPage = (args: Record<string, unknown>) => ({
+  x: Number(args.x) || 0,
+  y: Number(args.y) || 0,
+  width: Number(args.width) || 0,
+  height: Number(args.height) || 0,
+  radius: Number(args.radius) || 0,
+});
+
 function present() {
   if (!engineAvailable()) throw new EngineError("no engine");
 }
@@ -39,8 +52,15 @@ function present() {
 export async function hostCall<Result = unknown>(verb: string, args: Record<string, unknown> = {}, windowId = ""): Promise<Result> {
   present();
   hostCalls += 1;
-  if (verb === "tab.show" && typeof args.key === "string") shown.set(args.key, { ...args, windowId });
-  if (verb === "tab.close" && typeof args.key === "string") shown.delete(args.key);
+  if (verb === "tab.show" && typeof args.key === "string") {
+    shown.set(args.key, { ...args, windowId });
+    if (pagesUnderUi()) noteShownPage(windowId, args.key, args.visible === true ? shownPage(args) : null);
+  }
+  if (verb === "tab.close" && typeof args.key === "string") {
+    const last = shown.get(args.key);
+    shown.delete(args.key);
+    if (pagesUnderUi() && typeof last?.windowId === "string") noteShownPage(last.windowId, args.key, null);
+  }
   return decode<Result>(await callMain<string>(ENGINE_HOST, "hostCall", verb, JSON.stringify(args), windowId));
 }
 

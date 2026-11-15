@@ -10,6 +10,7 @@
 #include "ardia/linux/ui_host/app_bridge_host.h"
 #include "ardia/linux/ui_host/ardia_app_source.h"
 #include "ardia/linux/ui_host/ardia_app_ui.h"
+#include "ardia/linux/ui_host/linux_engine_module.h"
 #include "ardia/linux/ui_host/modules.h"
 #include "ardia/linux/ui_host/ui_host_parts.h"
 #include "ardia/linux/ui_host/ui_navigation_throttle.h"
@@ -233,6 +234,7 @@ void StartUiHost() {
   if (UiHost::Current()) {
     return;
   }
+  RegisterLinuxEngineModule(ModuleRegistry::Get());
   Profile* profile =
       ProfileManager::GetLastUsedProfile()->GetOriginalProfile();
   base::FilePath ui_dir = UiDirectory();
@@ -251,6 +253,7 @@ void StartUiHost() {
 
 void StopUiHost() {
   delete std::exchange(UiHost::Current(), nullptr);
+  StopLinuxEngineModule();
 }
 
 void ReloadUiHost() {

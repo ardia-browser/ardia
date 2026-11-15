@@ -8,6 +8,7 @@ type BurstListener = (burst: MotionBurst) => void;
 
 export const FRAME_MS = 1000 / 60;
 const LONG_FRAME_MS = FRAME_MS * 2.5;
+const REALM_FRAME_DEADLINE_MS = FRAME_MS * 4;
 const REPORT_AFTER_FRAMES = 3;
 
 const host = globalThis as unknown as Window;
@@ -15,12 +16,13 @@ const now = () => performance.now();
 
 let waiting = new Map<number, Frame>();
 let lastId = 0;
-let scheduled: { realm: Realm | null; handle: number } | null = null;
+let scheduled: { realm: Realm | null; handle: number; deadline: ReturnType<typeof setTimeout> | null } | null = null;
 const followers = new Set<Follower>();
 const burstListeners = new Set<BurstListener>();
 let burst = { frames: 0, startedAt: 0, lastAt: 0, longest: 0, long: 0 };
 let timerFrames = 0;
 let realmFrames = 0;
+let missedRealmFrames = 0;
 
 const report = (error: unknown) => console.error("[ardia linux] an animation frame failed", error);
 
@@ -61,8 +63,18 @@ function noteFrame(time: number) {
   burst.lastAt = time;
 }
 
-function runFrame() {
+function clearScheduled() {
+  if (!scheduled) return;
+  if (scheduled.realm) {
+    if (!scheduled.realm.closed) scheduled.realm.cancelAnimationFrame(scheduled.handle);
+  }
+  else clearTimeout(scheduled.handle);
+  if (scheduled.deadline !== null) clearTimeout(scheduled.deadline);
   scheduled = null;
+}
+
+function runFrame() {
+  clearScheduled();
   const time = now();
   const turn = waiting;
   waiting = new Map();
@@ -84,11 +96,15 @@ function schedule() {
   const realm = pacingRealm();
   if (realm) {
     realmFrames += 1;
-    scheduled = { realm, handle: realm.requestAnimationFrame(runFrame) };
+    const deadline = setTimeout(() => {
+      missedRealmFrames += 1;
+      runFrame();
+    }, REALM_FRAME_DEADLINE_MS);
+    scheduled = { realm, handle: realm.requestAnimationFrame(runFrame), deadline };
     return;
   }
   timerFrames += 1;
-  scheduled = { realm: null, handle: setTimeout(runFrame, FRAME_MS) as unknown as number };
+  scheduled = { realm: null, handle: setTimeout(runFrame, FRAME_MS) as unknown as number, deadline: null };
 }
 
 export function requestFrame(frame: Frame): number {
@@ -100,10 +116,8 @@ export function requestFrame(frame: Frame): number {
 
 export function cancelFrame(id: number) {
   waiting.delete(id);
-  if (waiting.size || !scheduled) return;
-  if (scheduled.realm) scheduled.realm.cancelAnimationFrame(scheduled.handle);
-  else clearTimeout(scheduled.handle);
-  scheduled = null;
+  if (waiting.size) return;
+  clearScheduled();
 }
 
 export function followFrames(follow: Follower): () => void {
@@ -116,7 +130,7 @@ export function onFrameBurst(listen: BurstListener): () => void {
   return () => void burstListeners.delete(listen);
 }
 
-export const framePacing = () => ({ realmFrames, timerFrames });
+export const framePacing = () => ({ realmFrames, timerFrames, missedRealmFrames });
 
 let installed = false;
 

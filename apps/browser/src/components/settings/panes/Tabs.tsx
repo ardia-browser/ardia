@@ -1,12 +1,18 @@
-import { Symbol } from "@ardia/shell";
-import { Pressable, Text, View } from "react-native";
-import { useTheme } from "../../../lib/theme";
-import { useBrowser } from "../../../store/browser";
-import { tabLayoutOf } from "../../../store/model";
-import { peekModifierOf, splitLinkModifierOf, type PeekModifier, type Settings, type SplitLinkModifier } from "../../../store/settings";
-import { liquidGlass } from "../../glass";
-import { Checkbox, Group, PopUp, Row, SectionHeader, Toggle, useFormColors } from "../controls";
-import { setting } from "../settingsIndex";
+import { useState } from "react";
+import { View } from "react-native";
+import { useTheme } from "../../ui/theme";
+import { useSettings, useTabLayout } from "../../../state/browser/hooks";
+import { chooseSidebarSide, chooseTabLayout, updateSettings } from "../../../state/settings/actions";
+import { customNewTabUrl, splitLinkModifierOf, type PeekButtons, type PeekModifier, type Settings, type SplitLinkModifier } from "../../../state/settings/settings";
+import { Box, Button, Checkbox, DialogActions, DialogTitle, PopUp, Segmented, Sheet, space, Text, TextField, Toggle, type Option, type SegmentOption } from "../../ui";
+import { durationMinutes, durationParts, type DurationUnit } from "../../../lib/time";
+import { cleanUpChoices, CUSTOM_CLEAN_UP, DAILY_CLEAN_UP_MINUTES } from "../../../state/settings/cleanUpAfter";
+import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
+import { Group, Row, SectionHeader, SettingToggle } from "../Form";
+import { MiniWindow } from "../MiniWindow";
+import { PictureChoice } from "../PictureChoice";
+import { setting, type SettingId } from "../settingsIndex";
+import { useSettingsColors } from "../useSettingsColors";
 
 const PEEK_WITH: { value: PeekModifier; title: string }[] = [
   { value: "shift", title: "⇧-click" },
@@ -14,25 +20,46 @@ const PEEK_WITH: { value: PeekModifier; title: string }[] = [
   { value: "off", title: "Off" },
 ];
 
+const PEEK_BUTTONS: { value: PeekButtons; title: string }[] = [
+  { value: "top", title: "In the title bar" },
+  { value: "left", title: "On the left" },
+  { value: "right", title: "On the right" },
+];
+
 const SPLIT_WITH: { value: SplitLinkModifier; title: string }[] = [
   { value: "altShift", title: "⌥⇧-click" },
   { value: "alt", title: "⌥-click" },
 ];
 
-const withNote = (anchor: string, note: string | null) => (note ? `${setting(anchor)?.description ?? ""} ${note}`.trim() : undefined);
+const NEW_TAB_LINKS: { value: Settings["newTabLinksOpenIn"]; title: string }[] = [
+  { value: "tab", title: "A new tab" },
+  { value: "peek", title: "A Peek" },
+  { value: "littleArdia", title: "Little Ardia" },
+];
 
-function LinkKeys({ settings, update }: { settings: Settings; update: (patch: Partial<Settings>) => void }) {
-  const peekWith = peekModifierOf(settings);
-  const splitWith = splitLinkModifierOf(settings);
+const withNote = (anchor: SettingId, note: string | null) => (note ? `${setting(anchor).description ?? ""} ${note}`.trim() : undefined);
+
+function LinkKeys() {
+  const peekWith = useSettings((s) => s.peekModifier);
+  const splitWith = useSettings(splitLinkModifierOf);
+  const newTabLinks = useSettings((s) => s.newTabLinksOpenIn);
+  const peekButtons = useSettings((s) => s.peekButtons);
   const peekOptions = PEEK_WITH.map((o) => (o.value === "alt" && splitWith === "alt" ? { ...o, title: "⌥-click (split view moves to ⌥⇧-click)" } : o));
   const splitOptions = SPLIT_WITH.map((o) => (o.value === "alt" && peekWith === "alt" ? { ...o, title: "⌥-click (Peek moves to ⇧-click)" } : o));
   return (
     <Group>
+      <SettingToggle anchor="tabs.peekLinksToOtherSites" />
+      <Row anchor="tabs.newTabLinksOpenIn">
+        <PopUp value={newTabLinks} options={NEW_TAB_LINKS} onChange={(newTabLinksOpenIn) => updateSettings({ newTabLinksOpenIn })} />
+      </Row>
+      <Row anchor="tabs.peekButtons">
+        <PopUp value={peekButtons} options={PEEK_BUTTONS} onChange={(peekButtons) => updateSettings({ peekButtons })} />
+      </Row>
       <Row anchor="tabs.peekModifier" description={withNote("tabs.peekModifier", splitWith === "alt" ? "⌥-click opens a split now: choosing it here moves split view back to ⌥⇧-click." : null)}>
-        <PopUp value={peekWith} options={peekOptions} onChange={(peekModifier) => update({ peekModifier })} />
+        <PopUp value={peekWith} options={peekOptions} onChange={(peekModifier) => updateSettings({ peekModifier })} />
       </Row>
       <Row anchor="tabs.splitLinkModifier" description={withNote("tabs.splitLinkModifier", peekWith === "alt" ? "⌥-click peeks now: choosing it here moves Peek back to ⇧-click." : null)}>
-        <PopUp value={splitWith} options={splitOptions} onChange={(splitLinkModifier) => update({ splitLinkModifier })} />
+        <PopUp value={splitWith} options={splitOptions} onChange={(splitLinkModifier) => updateSettings({ splitLinkModifier })} />
       </Row>
     </Group>
   );
@@ -50,140 +77,202 @@ const NEW_TABS_ACROSS: { value: Settings["newTabPosition"]; title: string }[] = 
   { value: "nextToCurrent", title: "Next to the current tab" },
 ];
 
-const CLEAN_UP = [
-  { value: "12", title: "12 hours" },
-  { value: "24", title: "24 hours" },
-  { value: "168", title: "7 days" },
-  { value: "720", title: "30 days" },
+const NEW_TAB_BUTTON: { value: Settings["newTabButtonPosition"]; title: string }[] = [
+  { value: "bottom", title: "At the bottom" },
+  { value: "top", title: "At the top" },
 ];
 
-export function TabsPane() {
-  const settings = useBrowser((s) => s.settings);
-  const update = useBrowser((s) => s.updateSettings);
-  const toggle = (key: keyof Settings, anchor: string) => (
-    <Row key={key} anchor={anchor}>
-      <Toggle value={!!settings[key]} onChange={(v) => update({ [key]: v })} />
+const SIDEBAR_SIDES: SegmentOption<Settings["sidebarSide"]>[] = [
+  { value: "left", title: "Left" },
+  { value: "right", title: "Right" },
+];
+
+const DURATION_UNITS: Option<DurationUnit>[] = [
+  { value: "minutes", title: "Minutes" },
+  { value: "hours", title: "Hours" },
+  { value: "days", title: "Days" },
+];
+
+function NewTabUrlRow() {
+  const saved = useSettings((s) => s.newTabUrl);
+  const [draft, setDraft] = useState(saved);
+  const [editedFrom, setEditedFrom] = useState(saved);
+  if (editedFrom !== saved) {
+    setEditedFrom(saved);
+    setDraft(saved);
+  }
+  const invalid = !!draft.trim() && !customNewTabUrl({ newTabOpens: "page", minimalismMode: false, newTabUrl: draft });
+  const save = () => {
+    const value = draft.trim();
+    if (value !== saved) updateSettings({ newTabUrl: value });
+  };
+  return (
+    <Row anchor="tabs.newTabUrl">
+      <TextField value={draft} onChangeText={setDraft} placeholder="New Tab page" onSubmit={save} onBlur={save} invalid={invalid} width={220} />
     </Row>
   );
-  const top = useBrowser((s) => tabLayoutOf(s) === "top");
+}
+
+export function TabsPane() {
+  const newTabOpens = useSettings((s) => s.newTabOpens);
+  const minimal = useSettings((s) => s.minimalismMode);
+  const newTabPosition = useSettings((s) => s.newTabPosition);
+  const newTabButtonPosition = useSettings((s) => s.newTabButtonPosition);
+  const cleanUpMinutes = useSettings((s) => s.cleanUpInactiveTabsAfterMinutes);
+  const top = useTabLayout() === "top";
+  const sidebarSide = useSettings((s) => s.sidebarSide);
 
   return (
     <View>
-      <SectionHeader anchor="tabs.layout" />
-      <View style={{ flexDirection: "row", gap: 14 }}>
-        <LayoutChoice layout="sidebar" title="Tab layout in the sidebar" selected={!top} />
-        <LayoutChoice layout="top" title="Tab layout across the top of the window" selected={top} />
-      </View>
-      <Group style={{ marginTop: 14 }}>
-        {toggle("hideToolbarWhileScrolling", "tabs.hideToolbarWhileScrolling")}
-        {!top && toggle("showSidebarButton", "tabs.showSidebarButton")}
-        {!top && toggle("showClearButton", "tabs.showClearButton")}
-        {!top && toggle("balancedTopApps", "tabs.balancedTopApps")}
-        {!top && liquidGlass && toggle("pinnedTabIconRing", "tabs.pinnedTabIconRing")}
-        {toggle("fadeUnloadedTabs", "tabs.fadeUnloadedTabs")}
-      </Group>
+      <SectionHeader anchor="tabs.layout" description={null} />
+      <Box gap="xl">
+        <Box row gap="xl">
+          <LayoutChoice layout="sidebar" title="Tab layout in the sidebar" selected={!top} side={sidebarSide} />
+          <LayoutChoice layout="top" title="Tab layout across the top of the window" selected={top} />
+        </Box>
+        <Group>
+          <SettingToggle
+            anchor="tabs.autoHideTabs"
+            description={`In every window, the tabs slide out of view and come back when you move the pointer to the window's ${top ? "top edge" : "edge"}. Changing it here resets every window; ⌘S and View › Auto-Hide Tabs hide or show the tabs in one window only.`}
+          />
+          <SettingToggle
+            anchor="tabs.revealTabsOnHover"
+            description={`With Auto-hide tabs on, the tabs slide back over the page while the pointer is at the window's ${top ? "top edge" : "edge"}. Off, they come back only with ⌘S or View › Auto-Hide Tabs.`}
+          />
+        <Row anchor="tabs.sidebarSide">
+          <Segmented options={SIDEBAR_SIDES} value={sidebarSide} onChange={chooseSidebarSide} />
+        </Row>
+        <SettingToggle anchor="tabs.hideToolbarWhileScrolling" />
+        <SettingToggle anchor="tabs.showSidebarButton" />
+        <SettingToggle anchor="tabs.showClearButton" />
+        <SettingToggle anchor="tabs.tidyTabs" />
+        <SettingToggle anchor="tabs.balancedTopApps" />
+        <SettingToggle anchor="tabs.showUnreadCounts" />
+        <SettingToggle anchor="tabs.showTopAppBadges" />
+        <SettingToggle anchor="tabs.showTabHoverMenu" />
+        <SettingToggle anchor="tabs.closedTopAppTiles" />
+        <SettingToggle anchor="tabs.fadeUnloadedTabs" />
+        <SettingToggle anchor="tabs.strikeSleepingTabs" />
+        </Group>
+      </Box>
 
       <SectionHeader title="General" />
       <Group>
-        <Row anchor="tabs.newTabOpens">
+        <Row anchor="tabs.newTabOpens" description={minimal ? "Minimalism mode opens the command bar. Your choice here comes back when you turn it off." : undefined}>
           <PopUp
-            value={settings.newTabOpens}
+            value={minimal ? "commandBar" : newTabOpens}
+            disabled={minimal}
             options={[
               { value: "page", title: "New Tab Page" },
               { value: "commandBar", title: "Command Bar" },
             ]}
-            onChange={(v) => update({ newTabOpens: v })}
+            onChange={(v) => updateSettings({ newTabOpens: v })}
             minWidth={160}
           />
         </Row>
+        <SettingToggle anchor="tabs.reuseEmptyNewTab" />
+        <NewTabUrlRow />
         <Row anchor="tabs.newTabPosition">
-          <PopUp value={settings.newTabPosition} options={top ? NEW_TABS_ACROSS : NEW_TABS_DOWN} onChange={(newTabPosition) => update({ newTabPosition })} minWidth={190} />
+          <PopUp value={newTabPosition} options={top ? NEW_TABS_ACROSS : NEW_TABS_DOWN} onChange={(v) => updateSettings({ newTabPosition: v })} minWidth={190} />
         </Row>
-        {toggle("shareTabsAcrossWindows", "tabs.shareTabsAcrossWindows")}
-        {toggle("warnBeforeClosingLastTab", "tabs.warnBeforeClosingLastTab")}
-        {toggle("tabReorderHaptics", "tabs.tabReorderHaptics")}
-        {toggle("extendWebsiteColor", "tabs.extendWebsiteColor")}
-        {toggle("sidebarMediaControls", "tabs.sidebarMediaControls")}
-        {toggle("autoPictureInPicture", "tabs.autoPictureInPicture")}
-        {toggle("videoUpscaling", "tabs.videoUpscaling")}
+        <Row anchor="tabs.newTabButtonPosition">
+          <PopUp value={newTabButtonPosition} options={NEW_TAB_BUTTON} onChange={(v) => updateSettings({ newTabButtonPosition: v })} minWidth={190} />
+        </Row>
+        <SettingToggle anchor="tabs.appLinksFirst" />
+        <SettingToggle anchor="tabs.shareTabsAcrossWindows" />
+        <SettingToggle anchor="tabs.warnBeforeClosingLastTab" />
+        <SettingToggle anchor="tabs.tabReorderHaptics" />
+        <SettingToggle anchor="tabs.extendWebsiteColor" />
+        <SettingToggle anchor="tabs.sidebarMediaControls" />
+        <SettingToggle anchor="tabs.autoPictureInPicture" />
+        <SettingToggle anchor="tabs.videoUpscaling" />
       </Group>
 
       <SectionHeader title="Links" />
-      <LinkKeys settings={settings} update={update} />
+      <LinkKeys />
 
       <SectionHeader title="Tab groups" />
       <Group>
-        {toggle("warnBeforeClosingTabGroup", "tabs.warnBeforeClosingTabGroup")}
-        {toggle("cmdClickCreatesTabGroup", "tabs.cmdClickCreatesTabGroup")}
-        {toggle("optShiftClickOpensInGroup", "tabs.optShiftClickOpensInGroup")}
-        {toggle("autoGroupMeetingTabs", "tabs.autoGroupMeetingTabs")}
+        <SettingToggle anchor="tabs.warnBeforeClosingTabGroup" />
+        <SettingToggle anchor="tabs.cmdClickCreatesTabGroup" />
+        <SettingToggle anchor="tabs.optShiftClickOpensInGroup" />
+        <SettingToggle anchor="tabs.dragToGroupInTopStrip" />
+        <SettingToggle anchor="tabs.autoGroupMeetingTabs" />
       </Group>
 
       <SectionHeader
         title="Clean up"
         description="Closes tabs you haven't used (and duplicates) automatically, like the tab menu's Clean Up Daily. Pinned, playing and selected tabs stay; cleaned tabs are listed under Recently Cleaned."
       />
-      <Group>
-        <Row anchor="tabs.cleanUp" description={null} title={<Checkbox value={settings.cleanUpInactiveTabsAfterHours !== null} onChange={(v) => update({ cleanUpInactiveTabsAfterHours: v ? 24 : null })} label="Clean up tabs I haven't used in:" />}>
-          <PopUp
-            value={String(settings.cleanUpInactiveTabsAfterHours ?? 24)}
-            options={CLEAN_UP}
-            disabled={settings.cleanUpInactiveTabsAfterHours === null}
-            onChange={(v) => update({ cleanUpInactiveTabsAfterHours: Number(v) })}
-          />
-        </Row>
-      </Group>
+      <CleanUpRow minutes={cleanUpMinutes} />
     </View>
   );
 }
 
-function LayoutChoice({ layout, title, selected }: { layout: "sidebar" | "top"; title: string; selected: boolean }) {
-  const theme = useTheme();
-  const colors = useFormColors();
-  const choose = () => {
-    const s = useBrowser.getState();
-    s.updateSettings({ tabLayout: layout });
-    for (const w of Object.values(s.windows)) {
-      if ((w.tabLayout ?? s.settings.tabLayout) !== layout) useBrowser.getState().toggleTabLayout(w.id);
-    }
-    useBrowser.getState().updateSettings({ tabLayout: layout });
-  };
-  const bar = theme.dark ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.16)";
-  const page = theme.dark ? "rgba(255,255,255,0.08)" : "#FFFFFF";
+function CleanUpRow({ minutes }: { minutes: number | null }) {
+  const shown = minutes ?? DAILY_CLEAN_UP_MINUTES;
   return (
-    <Pressable onPress={choose} style={{ flex: 1, alignItems: "center", gap: 8 }}>
-      <View
-        style={{
-          width: "100%",
-          height: 104,
-          borderRadius: 10,
-          padding: 8,
-          borderWidth: selected ? 2.5 : 1,
-          borderColor: selected ? colors.accent : colors.groupBorder,
-          backgroundColor: theme.dark ? "#2A2A2C" : "#E9E9EB",
-          flexDirection: layout === "sidebar" ? "row" : "column",
-          gap: 5,
-        }}
-      >
-        {layout === "sidebar" ? (
-          <View style={{ width: "26%", gap: 4, paddingTop: 10 }}>
-            {[0, 1, 2, 3].map((i) => (
-              <View key={i} style={{ height: 7, borderRadius: 3, backgroundColor: i === 1 ? colors.accent : bar }} />
-            ))}
-          </View>
-        ) : (
-          <View style={{ height: 10, flexDirection: "row", gap: 4, paddingLeft: 26 }}>
-            {[0, 1, 2].map((i) => (
-              <View key={i} style={{ flex: 1, borderRadius: 3, backgroundColor: i === 1 ? colors.accent : bar }} />
-            ))}
-          </View>
-        )}
-        <View style={{ flex: 1, borderRadius: 5, backgroundColor: page }} />
-      </View>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-        {selected && <Symbol name="checkmark.circle.fill" size={12} color={colors.accent} style={{ width: 14, height: 14 }} />}
-        <Text style={{ fontSize: 12, color: selected ? theme.textPrimary : theme.textSecondary }}>{title}</Text>
-      </View>
-    </Pressable>
+    <Group>
+      <Row anchor="tabs.cleanUp" description={null} title={<Checkbox value={minutes !== null} onChange={(v) => updateSettings({ cleanUpInactiveTabsAfterMinutes: v ? DAILY_CLEAN_UP_MINUTES : null })} label="Clean up tabs I haven't used in:" />}>
+        <PopUp
+          value={String(shown)}
+          options={cleanUpChoices(shown)}
+          disabled={minutes === null}
+          onChange={(v) => (v === CUSTOM_CLEAN_UP ? showSettingsSheet(<CustomCleanUpSheet minutes={shown} />) : updateSettings({ cleanUpInactiveTabsAfterMinutes: Number(v) }))}
+        />
+      </Row>
+      <SettingToggle anchor="tabs.suggestCleanUp" />
+    </Group>
+  );
+}
+
+function CustomCleanUpSheet({ minutes }: { minutes: number }) {
+  const start = durationParts(minutes);
+  const [amount, setAmount] = useState(String(start.amount));
+  const [unit, setUnit] = useState<DurationUnit>(start.unit);
+  const [invalid, setInvalid] = useState(false);
+  const save = () => {
+    const chosen = durationMinutes(amount, unit);
+    if (chosen === null) return setInvalid(true);
+    updateSettings({ cleanUpInactiveTabsAfterMinutes: chosen });
+    closeSettingsSheet();
+  };
+  return (
+    <Sheet size="s" onClose={closeSettingsSheet}>
+      <DialogTitle subtitle="Clean up tabs I haven't used in:">Custom Clean Up Time</DialogTitle>
+      <Box row gap="m" style={FIELDS}>
+        <TextField value={amount} onChangeText={(text) => { setAmount(text); setInvalid(false); }} onSubmit={save} onEscape={closeSettingsSheet} autoFocus selectOnFocus width={80} />
+        <PopUp value={unit} options={DURATION_UNITS} onChange={(next) => { setUnit(next); setInvalid(false); }} minWidth={110} />
+      </Box>
+      {invalid && (
+        <Text size="caption" tone="destructive" style={ERROR}>
+          Enter a number above zero, up to 365 days.
+        </Text>
+      )}
+      <DialogActions>
+        <Button title="Cancel" onPress={closeSettingsSheet} />
+        <Button title="Save" kind="primary" onPress={save} />
+      </DialogActions>
+    </Sheet>
+  );
+}
+
+const FIELDS = { marginTop: space.l, alignItems: "center" } as const;
+const ERROR = { marginTop: space.ml } as const;
+
+function LayoutChoice({ layout, title, selected, side }: { layout: "sidebar" | "top"; title: string; selected: boolean; side?: Settings["sidebarSide"] }) {
+  const theme = useTheme();
+  const look = useSettingsColors();
+  return (
+    <PictureChoice title={title} selected={selected} onPress={() => chooseTabLayout(layout)} size="l">
+      <MiniWindow
+        size="l"
+        layout={layout === "sidebar" ? "side" : "top"}
+        side={side}
+        bars={layout === "sidebar" ? 4 : 3}
+        accentBar={1}
+        look={{ window: look.miniWindow, bar: look.miniBar, page: look.miniPage, accent: theme.formAccent }}
+      />
+    </PictureChoice>
   );
 }

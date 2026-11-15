@@ -87,11 +87,6 @@ source_set("linux") {
     "//url",
   ]
 
-  allow_circular_includes_from = [
-    "//ardia/linux/modules",
-    "//ardia/linux/ui_host",
-    "//ardia/win:shared",
-  ]
 }
 
 source_set("unit_tests") {

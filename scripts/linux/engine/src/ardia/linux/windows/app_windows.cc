@@ -241,15 +241,17 @@ AppWindow* AppWindows::LastActive() const {
   return nullptr;
 }
 
-bool AppWindows::AnotherJustAppearedActive(const AppWindow* window) const {
-  AppWindow* other = Find(appeared_active_);
+AppWindow* AppWindows::AnotherJustAppeared(const AppWindow* window) const {
+  AppWindow* other = Find(appeared_);
   return other && other != window &&
-         base::TimeTicks::Now() - appeared_active_at_ < kLaunchSettling;
+                 base::TimeTicks::Now() - appeared_at_ < kLaunchSettling
+             ? other
+             : nullptr;
 }
 
-void AppWindows::NoteAppearedActive(const AppWindow* window) {
-  appeared_active_ = window->id();
-  appeared_active_at_ = base::TimeTicks::Now();
+void AppWindows::NoteAppeared(const AppWindow* window) {
+  appeared_ = window->id();
+  appeared_at_ = base::TimeTicks::Now();
 }
 
 std::vector<std::string> AppWindows::Ids() const {

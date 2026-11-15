@@ -331,7 +331,8 @@ void AppWindow::Show() {
     fade_started_ = base::TimeTicks::Now();
     widget_->SetOpacity(0);
   }
-  const bool behind = AppWindows::Get().AnotherJustAppearedActive(this);
+  AppWindow* newer = AppWindows::Get().AnotherJustAppeared(this);
+  const bool behind = newer != nullptr;
   const bool inactive =
       !shape_.focus || ardiacore::BackgroundInstance() || behind;
   Note("windows", "show " + id_ +
@@ -339,13 +340,17 @@ void AppWindow::Show() {
                               : inactive ? " inactive" : " active"));
   if (inactive) {
     widget_->ShowInactive();
-    if (!behind) {
+    if (behind && newer->widget()) {
+      newer->widget()->StackAtTop();
+    } else {
       widget_->StackAtTop();
     }
   } else {
     widget_->Show();
     widget_->Activate();
-    AppWindows::Get().NoteAppearedActive(this);
+  }
+  if (!behind) {
+    AppWindows::Get().NoteAppeared(this);
   }
   if (fade) {
     fade_timer_.Start(FROM_HERE, kFadeStep,

@@ -5,13 +5,14 @@
 # waits until the debugging port answers, prints the instance's pid and exits. --stop quits it cleanly (willQuit, saves) and stops its Xvfb.
 # --app runs a packaged build (an extracted AppImage folder, the .deb's /opt/Ardia, or a launcher script) instead of the checkout's Electron.
 # --engine runs the engine build instead of Electron: an unpacked engine package (its ardia launcher) or an out dir holding chrome,
-# with ARDIA_UI_DIR set to --ui (default: <DIR>/ui) and the out dir's ardia.test-build marker written; an out dir's chrome
+# with ARDIA_UI_DIR set to --ui (default: <DIR>/ui), the out dir's ardia.test-build marker written and Extensions/ublock linked to
+# the checkout's uBlock Origin (scripts/linux/ubo.sh) when it has none; an out dir's chrome
 # keeps secrets with --password-store=basic (the private D-Bus bus stalls libsecret ~25 s; ARDIA_KEYRING=1 keeps the keyring).
 # --wm runs xfwm4 with its compositor on the display first.
 # --visible leaves ARDIA_BACKGROUND unset, so menus and dialogs are shown on the virtual display instead of logged.
 # State lives in ${ARDIA_INSTANCES:-${TMPDIR:-/tmp}/ardia-instances}/<name>: pid, port, display, data/ and instance.log.
 set -euo pipefail
-[[ "${1:-}" == "-h" || "${1:-}" == "--help" || $# -eq 0 ]] && { sed -n "2,11p" "$0" | cut -c3-; exit 0; }
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" || $# -eq 0 ]] && { sed -n "2,12p" "$0" | cut -c3-; exit 0; }
 repo="$(cd "$(dirname "$0")/../.." && pwd)"
 name="$1"; shift
 [[ "$name" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo "test-instance: the name may use letters, digits, . _ -" >&2; exit 2; }
@@ -68,6 +69,9 @@ if [[ -n "$engine" ]]; then
     command=("$engine/ardia")
   elif [[ -x "$engine/chrome" ]]; then
     [[ -f "$engine/ardia.test-build" ]] || : > "$engine/ardia.test-build"
+    if [[ ! -e "$engine/Extensions/ublock" && -f "$repo/packages/ardiacore/vendor/ubo/ext/manifest.json" ]]; then
+      mkdir -p "$engine/Extensions" && ln -sfn "$repo/packages/ardiacore/vendor/ubo/ext" "$engine/Extensions/ublock"
+    fi
     ardia_sandbox_decide "$engine/chrome"
     command=("$engine/chrome" --ozone-platform=x11 "${ARDIA_SANDBOX_FLAGS[@]}")
     [[ "${ARDIA_KEYRING:-}" == "1" ]] || command+=(--password-store=basic)

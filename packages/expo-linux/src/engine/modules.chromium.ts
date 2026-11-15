@@ -5,6 +5,7 @@ import { engineModules as windowsEngineModules } from "../../../expo-windows/src
 import { ClipView } from "../../../expo-windows/src/views/ClipView";
 import { coveringPages } from "../chromium/covered";
 import { engineAvailable, pagesUnderUi } from "../chromium/host";
+import { withLinuxDomains } from "../chromium/linuxDomains";
 import { linuxMotion } from "../chromium/motion";
 import { PopoverBubble, Surface } from "../views/adapters";
 
@@ -21,7 +22,7 @@ const PageSlot = forwardRef<unknown, SlotProps>(function PageSlot(props, ref) {
 });
 
 export const engineModules: Record<string, Record<string, unknown>> = {
-  ...(live ? windowsEngineModules : {}),
+  ...(live ? withLinuxDomains(windowsEngineModules) : {}),
   ArdiaMotion: linuxMotion,
 };
 

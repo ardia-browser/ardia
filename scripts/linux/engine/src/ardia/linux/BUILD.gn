@@ -65,6 +65,7 @@ source_set("linux") {
 
   deps = [
     "//ardia/linux/modules",
+    "//ardia/linux/prompts",
     "//ardia/linux/renderer",
     "//base",
     "//chrome/app:command_ids",

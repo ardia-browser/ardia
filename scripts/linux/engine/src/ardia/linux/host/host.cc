@@ -12,6 +12,7 @@
 #include "ardia/linux/app_lifetime.h"
 #include "ardia/linux/browser_window/browser_window.h"
 #include "ardia/linux/log.h"
+#include "ardia/linux/prompts/page_helpers.h"
 #include "ardia/linux/browser_window/web_contents_delegate.h"
 #include "ardia/linux/host/input_region.h"
 #include "ardia/linux/windows/app_window.h"
@@ -337,6 +338,7 @@ void Host::CreateTab(base::DictValue args,
     tabs_[key] = existing;
     TabState::Bind(existing, key)->NoteNavigation();
     TabEvents::Attach(existing);
+    AttachPageHelpers(existing);
   }
   if (existing) {
     if (!PlaceTab(existing, window)) {
@@ -404,6 +406,7 @@ void Host::CreateTabInProfile(std::string key,
   }
   state->NoteNavigation();
   TabEvents::Attach(contents);
+  AttachPageHelpers(contents);
   base::DictValue result;
   result.Set("tab", TabState::IdOf(contents));
   std::move(reply).Run(std::move(result));

@@ -12,6 +12,7 @@
 #include "ardia/linux/log.h"
 #include "ardia/linux/main.h"
 #include "ardia/linux/probe.h"
+#include "ardia/linux/prompts/page_helpers.h"
 #include "ardia/linux/ui_host/modules.h"
 #include "ardia/linux/ui_host/ui_host_parts.h"
 #include "ardia/linux/windows/app_windows.h"
@@ -60,6 +61,7 @@ void MainParts::PostBrowserStart() {
   NoteTestGate();
   registry_ = std::make_unique<ModuleRegistry>();
   RegisterAppModules(*registry_);
+  RegisterPageModules(*registry_);
   RegisterEngineHostModule(*registry_);
   AppWindows::Get().Register(*registry_);
   KeyMap::Get().Register(*registry_);

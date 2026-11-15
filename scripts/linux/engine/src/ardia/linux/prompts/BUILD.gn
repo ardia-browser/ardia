@@ -1,0 +1,34 @@
+# Copyright 2026 Ardia. Apache-2.0.
+
+assert(is_linux)
+
+source_set("prompts") {
+  sources = [
+    "../content_blocker.cc",
+    "../content_blocker.h",
+    "domains.cc",
+    "domains.h",
+    "page_helpers.cc",
+    "page_helpers.h",
+  ]
+
+  public_deps = [ "//ardia/linux/ui_host:modules" ]
+
+  deps = [
+    "//ardia/core/mojom",
+    "//ardia/win:shared",
+    "//base",
+    "//chrome/browser",
+    "//chrome/browser/extensions",
+    "//chrome/browser/profiles:profile",
+    "//components/input",
+    "//content/public/browser",
+    "//extensions/browser",
+    "//extensions/common",
+    "//mojo/public/cpp/bindings",
+    "//net",
+    "//third_party/blink/public/common",
+    "//ui/gfx",
+    "//url",
+  ]
+}

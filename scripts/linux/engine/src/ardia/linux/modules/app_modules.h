@@ -26,6 +26,7 @@ void RegisterKeychainModule(ModuleRegistry& registry);
 void RegisterNotificationsModule(ModuleRegistry& registry);
 void RegisterTelemetryLocalModule(ModuleRegistry& registry);
 void RegisterDevModule(ModuleRegistry& registry);
+void RegisterDesktopModules(ModuleRegistry& registry);
 
 void CountLinux(std::string_view name);
 

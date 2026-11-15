@@ -1,0 +1,14 @@
+# Copyright 2026 Ardia. Apache-2.0.
+
+assert(is_linux)
+
+source_set("dbus") {
+  sources = [
+    "signal_watch.cc",
+    "signal_watch.h",
+  ]
+
+  public_deps = [ "//dbus" ]
+
+  deps = [ "//base" ]
+}

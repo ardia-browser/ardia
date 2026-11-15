@@ -20,6 +20,7 @@ void RegisterAppModules(ModuleRegistry& registry) {
   RegisterNotificationsModule(registry);
   RegisterTelemetryLocalModule(registry);
   RegisterDevModule(registry);
+  RegisterDesktopModules(registry);
 }
 
 }

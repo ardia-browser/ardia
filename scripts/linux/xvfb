@@ -10,8 +10,8 @@ display="${1:?display number}"; shift
 local_root="$HOME/.local/xvfb/root"
 if command -v Xvfb >/dev/null; then xvfb=(Xvfb); xkb=()
 else
-  export LD_LIBRARY_PATH="$local_root/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-  xvfb=("$local_root/usr/bin/Xvfb"); xkb=(-xkbdir "$local_root/usr/share/X11/xkb")
+  xvfb=(env "LD_LIBRARY_PATH=$local_root/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$local_root/usr/bin/Xvfb")
+  xkb=(-xkbdir "$local_root/usr/share/X11/xkb")
 fi
 started=""
 if [[ ! -S "/tmp/.X11-unix/X$display" ]]; then

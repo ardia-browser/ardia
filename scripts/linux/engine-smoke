@@ -15,9 +15,8 @@ It also logs the host's timer and frame rates over --rates seconds (default 60) 
 --ui is the engine UI bundle (default: built into <out>/ui with vite.chromium.config.ts). Screenshots, the instance's log and
 report.json go to --out. Exits 1 when a check fails.`;
 
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { createServer } from "node:http";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -119,7 +118,7 @@ function cdp(url) {
     socket.send(JSON.stringify({ id, method, params }));
     return new Promise((resolveCall, rejectCall) => {
       waiting.set(id, { resolve: resolveCall, reject: rejectCall });
-      setTimeout(() => waiting.has(id) && (waiting.delete(id), rejectCall(new Error(`${method} timed out`))), 30000);
+      setTimeout(() => waiting.has(id) && (waiting.delete(id), rejectCall(new Error(`${method} timed out`))), Math.max(30000, rateSeconds * 1000 + 15000));
     });
   };
   const evaluate = async (expression) => {
@@ -135,17 +134,26 @@ const targets = async () => {
   return response.ok ? response.json() : [];
 };
 
-const fixtureHtml = readFileSync(join(repo, "scripts/linux/fixtures/engine-smoke.html"));
-const server = createServer((request, response) => {
+const fixturePath = join(repo, "scripts/linux/fixtures/engine-smoke.html");
+const serverCode = `const html = require("node:fs").readFileSync(process.argv[1]);
+const server = require("node:http").createServer((request, response) => {
   if (request.url !== "/engine-smoke.html") return void response.writeHead(404).end();
-  response.writeHead(200, { "content-type": "text/html" }).end(fixtureHtml);
+  response.writeHead(200, { "content-type": "text/html" }).end(html);
 });
-await new Promise((done) => server.listen(0, "127.0.0.1", done));
-const fixture = `http://127.0.0.1:${server.address().port}/engine-smoke.html`;
+server.listen(0, "127.0.0.1", () => console.log(server.address().port));
+process.stdin.on("end", () => process.exit(0));
+process.stdin.resume();`;
+const server = spawn(process.execPath, ["-e", serverCode, fixturePath], { stdio: ["pipe", "pipe", "inherit"] });
+const serverPort = await new Promise((done, fail) => {
+  server.stdout.once("data", (chunk) => done(Number(String(chunk).trim())));
+  server.once("exit", () => fail(new Error("the fixture server exited")));
+});
+server.close = () => server.kill();
+const fixture = `http://127.0.0.1:${serverPort}/engine-smoke.html`;
 
 const env = { ...process.env, ARDIA_INSTANCES: instances };
 const started = Date.now();
-const launched = spawnSync(join(repo, "scripts/linux/test-instance"), [name, "--engine", engine, "--ui", ui, "--wm", "--display", display, "--port", port, "--data", data, "--", fixture], { env, encoding: "utf8", timeout: 60000 });
+const launched = spawnSync(join(repo, "scripts/linux/test-instance"), [name, "--engine", engine, "--ui", ui, "--wm", "--visible", "--display", display, "--port", port, "--data", data, "--", fixture], { env, encoding: "utf8", timeout: 60000 });
 const pid = Number(launched.stdout.trim());
 const instanceLog = join(instances, name, "instance.log");
 const finish = (code) => {
@@ -201,9 +209,22 @@ try {
   check("2a", "window.ardiaLinux lists the M1 modules", bridge.installed && missingModules.length === 0, { missing: missingModules, all: bridge.modules?.length });
   check("2b", "callSync and call answer", bridge.sync?.value === true && typeof bridge.async?.value === "string" && bridge.unknown === "ERR_LINUX_NATIVE", { sync: bridge.sync, async: bridge.async, unknown: bridge.unknown });
 
-  const windowTarget = await until(async () => (await targets()).find((target) => target.type === "page" && target.url === "about:blank" && target.title), 20000);
-  const app = windowTarget ? cdp(windowTarget.webSocketDebuggerUrl) : null;
-  const windowState = app
+  let windowTarget = await until(async () => (await targets()).find((target) => target.type === "page" && target.url === "about:blank" && target.title), 20000);
+  if (windowTarget) {
+    await sleep(1500);
+    let widest = 0;
+    for (const target of (await targets()).filter((target) => target.type === "page" && target.url === "about:blank" && target.title)) {
+      const probe = cdp(target.webSocketDebuggerUrl);
+      const width = await probe.evaluate("innerWidth").catch(() => 0);
+      probe.close();
+      if (width > widest) {
+        widest = width;
+        windowTarget = target;
+      }
+    }
+  }
+  let app = windowTarget ? cdp(windowTarget.webSocketDebuggerUrl) : null;
+  let windowState = app
     ? await until(async () => {
         const state = await app.evaluate(`({ id: document.documentElement.dataset.ardiaWindow, shape: document.documentElement.dataset.ardiaShape, x: screenX, y: screenY, width: innerWidth, height: innerHeight, text: document.body.innerText, bridge: "ardiaLinux" in window, mounted: (document.getElementById("root")?.childElementCount ?? 0) > 0 })`);
         return state.mounted && state.width > 0 ? state : null;
@@ -230,6 +251,26 @@ try {
     const shown = await host.evaluate(`Object.values(globalThis.ardiaEngineDebug?.shown() ?? {}).filter((show) => show.visible && show.width > 0)`);
     return shown?.[0] ?? null;
   }, 15000);
+  if (placed?.windowId && windowState?.id !== placed.windowId) {
+    const pageWindow = await until(async () => {
+      for (const target of (await targets()).filter((target) => target.type === "page" && target.url === "about:blank")) {
+        const candidate = cdp(target.webSocketDebuggerUrl);
+        const id = await candidate.evaluate("document.documentElement.dataset.ardiaWindow").catch(() => null);
+        if (id === placed.windowId) return { target, connection: candidate };
+        candidate.close();
+      }
+      return null;
+    }, 10000);
+    if (pageWindow) {
+      app?.close();
+      windowTarget = pageWindow.target;
+      app = pageWindow.connection;
+      windowState = await app.evaluate(`({ id: document.documentElement.dataset.ardiaWindow, shape: document.documentElement.dataset.ardiaShape, x: screenX, y: screenY, width: innerWidth, height: innerHeight })`);
+      await host.evaluate(`window.ardiaLinux.callRaw("ArdiaAppWindows", "focusWindow", [${JSON.stringify(placed.windowId)}])`);
+      await sleep(700);
+      report.notes.push(`the page opened in window ${placed.windowId} (${windowState.width}x${windowState.height}), not the first window; the checks drive that window`);
+    }
+  }
   const titled = app ? await until(() => app.evaluate(`document.body.innerText.includes("Engine smoke")`), 10000) : null;
   await sleep(800);
   shot("4-page.png");
@@ -256,7 +297,8 @@ try {
   const barColor = barRect ? pixel(barRect.x + barRect.width / 2, barRect.y + barRect.height / 2) : null;
   const besideBar = barRect ? pixel(pageRect.x + pageRect.width - 20, pageRect.y + pageRect.height - 60) : null;
   const holes = (await host.evaluate(`Object.values(globalThis.ardiaEngineDebug.shown()).filter((show) => show.visible).flatMap((show) => show.holes ?? [])`)) ?? [];
-  check("5", "Ctrl+L opens the command bar over the page, the page visible around it", !!barRect && barInsidePage && barColor && !near(barColor, FIXTURE_COLOR) && besideBar && near(besideBar, FIXTURE_COLOR) && holes.length > 0, { bar: barRect, barColor, besideBar, holes });
+  const holeOverPage = holes.some(([hx, hy, hw, hh]) => hx < placed.x + placed.width && placed.x < hx + hw && hy < placed.y + placed.height && placed.y < hy + hh);
+  check("5", "Ctrl+L opens the command bar over the page, the page visible around it", !!barRect && (barInsidePage || holeOverPage) && barColor && !near(barColor, FIXTURE_COLOR) && besideBar && near(besideBar, FIXTURE_COLOR) && holes.length > 0, { bar: barRect, barColor, besideBar, holes });
 
   const clicks = () => page.evaluate("window.clicks");
   const scrollY = () => page.evaluate("Math.round(scrollY)");

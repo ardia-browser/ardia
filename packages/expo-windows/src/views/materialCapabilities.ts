@@ -14,14 +14,17 @@ export type MaterialPath = { path: string; reason: string; step?: string };
 
 export type GrainProbe = { path: string; reason: string; pixels: number; tileAlphaSum: number; drawnAlphaSum: number };
 
+export type GrainRecoveryProbe = { path: string; reason: string; sameSurface: boolean; before: number; after: number };
+
 export type MaterialsNative = {
   capabilities(): MaterialCapabilities;
   applyWindowMaterial(windowId: string, material: string): Promise<MaterialPath>;
   clearWindowMaterial(windowId: string): Promise<boolean>;
   probeBlur(): Promise<MaterialPath>;
   probeGradient(): Promise<MaterialPath>;
-  grainPath(): MaterialPath;
+  grainPath(request: string): MaterialPath;
   probeGrain(texture: string): Promise<GrainProbe>;
+  probeGrainRecovery(texture: string): Promise<GrainRecoveryProbe>;
 };
 
 let capabilities: MaterialCapabilities | null | undefined;

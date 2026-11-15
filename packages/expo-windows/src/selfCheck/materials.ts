@@ -17,6 +17,7 @@ const WINDOW_MATERIALS = ["micaAlt", "mica", "acrylic"];
 const MAC_TILE_ALPHA_SUMS: Record<string, number> = { grain: 287662, sand: 1429150, denim: 653735, tweed: 1227414 };
 const GRAIN_PATH_DEADLINE_MS = 3000;
 const STAGED_GRAIN_TEXTURE = "denim";
+let stagedGrainViews = 0;
 const VIEWS_WITH_MATERIALS = ["ArdiaVisualEffect", "ArdiaGlassEffect", "ArdiaPopoverBubble", "ArdiaWindowBackdrop", "ArdiaThemeSwatch"];
 const MATERIAL_PROPS: Record<string, Record<string, unknown>> = {
   ArdiaVisualEffect: { material: "popover", cornerRadius: 12 },
@@ -136,23 +137,37 @@ export const checks: Check[] = [
     },
   },
   {
-    name: "materials: the grain view mounts and reports its path",
+    name: "materials: the grain view mounts and reports its own path",
     async run() {
+      const requestId = `self-check-grain-${Date.now()}-${++stagedGrainViews}`;
       const release = await holdOnStage(
-        createElement(NativeMaterialGrain, { pointerEvents: "none", texture: STAGED_GRAIN_TEXTURE, amount: 0.5, style: { width: 200, height: 40 } }),
+        createElement(NativeMaterialGrain, { pointerEvents: "none", texture: STAGED_GRAIN_TEXTURE, amount: 0.5, requestId, style: { width: 200, height: 40 } }),
         "ArdiaMaterialGrain",
       );
       try {
-        const reported = await until(() => {
-          const last = materials().grainPath();
-          return last.step === STAGED_GRAIN_TEXTURE && last.path !== "";
-        }, GRAIN_PATH_DEADLINE_MS);
-        const last = materials().grainPath();
-        expectTrue(reported, `the grain view reported nothing within ${GRAIN_PATH_DEADLINE_MS} ms: ${JSON.stringify(last)}`);
+        const reported = await until(() => materials().grainPath(requestId).path !== "", GRAIN_PATH_DEADLINE_MS);
+        const last = materials().grainPath(requestId);
+        expectTrue(reported, `the grain view ${requestId} reported nothing within ${GRAIN_PATH_DEADLINE_MS} ms: ${JSON.stringify(last)}`);
+        expectEqual(last.step, STAGED_GRAIN_TEXTURE, "the staged grain view's texture");
         expectPath(last, materials().capabilities().grain ? ["tiled"] : ["none"], "mounted grain view");
       } finally {
         release();
       }
+    },
+  },
+  {
+    name: "materials: a replaced Direct3D device keeps the grain tiles and redraws them",
+    async run() {
+      const probe = await materials().probeGrainRecovery(STAGED_GRAIN_TEXTURE);
+      if (!materials().capabilities().grain) {
+        expectPath(probe, ["none"], "grain recovery without grain");
+        return;
+      }
+      expectPath(probe, ["redrawn"], "grain recovery");
+      expectTrue(probe.sameSurface, "the tile's surface was replaced instead of kept, so mounted views would keep a dead brush");
+      expectEqual(probe.after, probe.before, `the ${STAGED_GRAIN_TEXTURE} tile read back after the new device`);
+      expectEqual(probe.before, MAC_TILE_ALPHA_SUMS[STAGED_GRAIN_TEXTURE], `the ${STAGED_GRAIN_TEXTURE} tile against the Mac's`);
+      console.info(`[ardia windows] materials: grain recovery kept the surface and read back ${probe.after} after a new device`);
     },
   },
   {

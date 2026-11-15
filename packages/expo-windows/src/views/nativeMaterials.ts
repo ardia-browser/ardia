@@ -1,7 +1,8 @@
+import type { WindowBackdropProps } from "@ardia/shaders";
 import { processColor, type ViewProps } from "react-native";
 import * as NativeComponentRegistry from "react-native/Libraries/NativeComponent/NativeComponentRegistry";
 
-export { gradientDrawsNow, materialCapabilities, nativeBlur, nativeGradient, nativeGrain, nativeWindowMaterial, type GrainProbe, type MaterialCapabilities, type MaterialPath, type MaterialsNative } from "./materialCapabilities";
+export { gradientDrawsNow, materialCapabilities, nativeBlur, nativeGradient, nativeGrain, nativeWindowMaterial, type GrainProbe, type GrainRecoveryProbe, type MaterialCapabilities, type MaterialPath, type MaterialsNative } from "./materialCapabilities";
 
 export type WindowMaterialKind = "micaAlt" | "mica" | "acrylic";
 
@@ -29,9 +30,9 @@ export type NativeMaterialGradientProps = ViewProps & {
   fadeAngle?: number;
 };
 
-export type GrainTexture = "grain" | "sand" | "denim" | "tweed" | "hash";
+export type GrainTexture = NonNullable<WindowBackdropProps["themeTexture"]> | "hash";
 
-export type NativeMaterialGrainProps = ViewProps & { texture: GrainTexture; amount: number; cellSize?: number };
+export type NativeMaterialGrainProps = ViewProps & { texture: GrainTexture; amount: number; cellSize?: number; requestId?: string };
 
 const colorAttribute = { process: processColor as (value: never) => unknown };
 
@@ -52,7 +53,7 @@ export const NativeMaterialGradient = NativeComponentRegistry.get<NativeMaterial
 
 export const NativeMaterialGrain = NativeComponentRegistry.get<NativeMaterialGrainProps>("ArdiaMaterialGrain", () => ({
   uiViewClassName: "ArdiaMaterialGrain",
-  validAttributes: { texture: true, amount: true, cellSize: true },
+  validAttributes: { texture: true, amount: true, cellSize: true, requestId: true },
 }));
 
 type Point = [number, number];

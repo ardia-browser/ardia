@@ -57,6 +57,20 @@ struct GrainProbe {
   double drawnAlphaSum{0};
 };
 
+REACT_STRUCT(GrainRecoveryProbe)
+struct GrainRecoveryProbe {
+  REACT_FIELD(path)
+  std::string path;
+  REACT_FIELD(reason)
+  std::string reason;
+  REACT_FIELD(sameSurface)
+  bool sameSurface{false};
+  REACT_FIELD(before)
+  double before{0};
+  REACT_FIELD(after)
+  double after{0};
+};
+
 REACT_MODULE(MaterialsModule, L"ArdiaMaterials")
 struct MaterialsModule {
   REACT_INIT(Initialize)
@@ -161,9 +175,9 @@ struct MaterialsModule {
   }
 
   REACT_SYNC_METHOD(grainPath)
-  MaterialPath grainPath() noexcept {
+  MaterialPath grainPath(std::string request) noexcept {
     MaterialPath answer;
-    const Grain::LastPath last = Grain::Last();
+    const Grain::LastPath last = Grain::Last(request);
     answer.path = last.path;
     answer.reason = last.reason;
     answer.step = last.texture;
@@ -187,6 +201,30 @@ struct MaterialsModule {
           answer.drawnAlphaSum = static_cast<double>(drawn.alphaSum);
           answer.reason = Paths::Utf8(drawn.outcome.reason);
           if (drawn.outcome.drawn) answer.path = "tiled";
+        }
+      } catch (...) {
+        answer.reason = "error";
+      }
+      promise.Resolve(answer);
+    });
+  }
+
+  REACT_METHOD(probeGrainRecovery)
+  void probeGrainRecovery(std::string texture, winrt::Microsoft::ReactNative::ReactPromise<GrainRecoveryProbe> promise) noexcept {
+    RunOnUI(m_context, [texture = Grain::Known(texture), promise]() noexcept {
+      GrainRecoveryProbe answer;
+      answer.path = "none";
+      try {
+        auto *host = Host::Current();
+        if (!host || !host->compositor) {
+          answer.reason = "no compositor";
+        } else {
+          const Grain::Redrawn redrawn = Grain::RedrawnOnReplacedDevice(host->compositor, texture, Grain::TileFor(texture).side);
+          answer.sameSurface = redrawn.sameSurface;
+          answer.before = static_cast<double>(redrawn.before);
+          answer.after = static_cast<double>(redrawn.after);
+          answer.reason = Paths::Utf8(redrawn.outcome.reason);
+          if (redrawn.outcome.drawn) answer.path = "redrawn";
         }
       } catch (...) {
         answer.reason = "error";

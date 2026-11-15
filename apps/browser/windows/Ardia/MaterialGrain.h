@@ -2,10 +2,12 @@
 
 #include <d2d1_1.h>
 #include <d3d11.h>
+#include <d3d11_4.h>
 #include <d3d10.h>
 #include <winrt/Microsoft.Graphics.DirectX.h>
 #include <winrt/Microsoft.UI.Composition.h>
 #include <winrt/Microsoft.UI.Composition.Interop.h>
+#include <winrt/Microsoft.UI.Dispatching.h>
 #include <winrt/Windows.Graphics.h>
 
 #include <algorithm>
@@ -199,16 +201,35 @@ struct Outcome {
   std::wstring reason;
 };
 
+struct TileSurface {
+  winrt::Microsoft::UI::Composition::CompositionDrawingSurface surface{nullptr};
+  std::string texture;
+  int pixels{0};
+};
+
 struct Device {
   winrt::Microsoft::UI::Composition::Compositor compositor{nullptr};
   winrt::Microsoft::UI::Composition::CompositionGraphicsDevice graphics{nullptr};
   winrt::Microsoft::UI::Composition::CompositionEffectFactory wrap{nullptr};
   winrt::com_ptr<ID3D11Device> d3d;
   winrt::com_ptr<ID2D1Device> d2d;
-  std::map<std::string, winrt::Microsoft::UI::Composition::CompositionDrawingSurface> surfaces;
+  std::map<std::string, TileSurface> surfaces;
   const wchar_t *adapter{L"none"};
   std::wstring failure;
+  DWORD removalCookie{0};
 };
+
+struct RemovalWatch {
+  std::mutex mutex;
+  winrt::Microsoft::UI::Dispatching::DispatcherQueue queue{nullptr};
+  HANDLE signal{nullptr};
+  PTP_WAIT wait{nullptr};
+};
+
+inline RemovalWatch &Removals() noexcept {
+  static RemovalWatch watch;
+  return watch;
+}
 
 inline Device &Shared() noexcept {
   static Device device;
@@ -224,7 +245,17 @@ inline bool Available() noexcept {
   return !Failed();
 }
 
+inline void StopWatching(Device &device) noexcept {
+  RemovalWatch &watch = Removals();
+  if (watch.wait) ::SetThreadpoolWait(watch.wait, nullptr, nullptr);
+  if (device.removalCookie) {
+    if (auto latest = device.d3d.try_as<ID3D11Device4>()) latest->UnregisterDeviceRemoved(device.removalCookie);
+    device.removalCookie = 0;
+  }
+}
+
 inline void Forget(Device &device) noexcept {
+  StopWatching(device);
   device.surfaces.clear();
   device.wrap = nullptr;
   device.graphics = nullptr;
@@ -246,24 +277,35 @@ inline HRESULT MakeD3D(winrt::com_ptr<ID3D11Device> &made, const wchar_t *&adapt
   return result;
 }
 
+inline void MakeRenderingDevice(winrt::com_ptr<ID3D11Device> &d3d, winrt::com_ptr<ID2D1Device> &d2d, const wchar_t *&adapter, std::wstring &stage) {
+  stage = L"creating the Direct3D device";
+  HRESULT result = MakeD3D(d3d, adapter);
+  if (FAILED(result)) throw winrt::hresult_error(result);
+  if (auto protect = d3d.try_as<ID3D10Multithread>()) protect->SetMultithreadProtected(TRUE);
+  stage = L"creating the Direct2D device";
+  auto dxgi = d3d.as<IDXGIDevice>();
+  winrt::com_ptr<ID2D1Factory1> factory;
+  D2D1_FACTORY_OPTIONS options{};
+  winrt::check_hresult(D2D1CreateFactory(D2D1_FACTORY_TYPE_MULTI_THREADED, __uuidof(ID2D1Factory1), &options, factory.put_void()));
+  d2d = nullptr;
+  winrt::check_hresult(factory->CreateDevice(dxgi.get(), d2d.put()));
+}
+
+inline bool Replace(Device &device, std::wstring &reason, std::wstring const &why) noexcept;
+
+inline void WatchForRemoval(Device &device) noexcept;
+
 inline bool Ready(Device &device, winrt::Microsoft::UI::Composition::Compositor const &compositor, std::wstring &reason) noexcept {
-  if (device.graphics && device.compositor == compositor && device.d3d && device.d3d->GetDeviceRemovedReason() == S_OK) return true;
-  if (device.d3d && device.d3d->GetDeviceRemovedReason() != S_OK) {
-    Materials::NoteOnce(L"grain-device-lost", std::wstring{L"grain: the Direct3D device was lost ("}.append(Materials::HexOf(device.d3d->GetDeviceRemovedReason())).append(L"), making a new one"));
+  if (device.graphics && device.compositor == compositor && device.d3d) {
+    const HRESULT removed = device.d3d->GetDeviceRemovedReason();
+    if (removed == S_OK) return true;
+    return Replace(device, reason, std::wstring{L"the Direct3D device was lost ("}.append(Materials::HexOf(removed)).append(L")"));
   }
   Forget(device);
   device.compositor = compositor;
-  std::wstring stage{L"creating the Direct3D device"};
+  std::wstring stage;
   try {
-    HRESULT result = MakeD3D(device.d3d, device.adapter);
-    if (FAILED(result)) throw winrt::hresult_error(result);
-    if (auto protect = device.d3d.try_as<ID3D10Multithread>()) protect->SetMultithreadProtected(TRUE);
-    stage = L"creating the Direct2D device";
-    auto dxgi = device.d3d.as<IDXGIDevice>();
-    winrt::com_ptr<ID2D1Factory1> factory;
-    D2D1_FACTORY_OPTIONS options{};
-    winrt::check_hresult(D2D1CreateFactory(D2D1_FACTORY_TYPE_MULTI_THREADED, __uuidof(ID2D1Factory1), &options, factory.put_void()));
-    winrt::check_hresult(factory->CreateDevice(dxgi.get(), device.d2d.put()));
+    MakeRenderingDevice(device.d3d, device.d2d, device.adapter, stage);
     stage = L"creating the composition graphics device";
     auto interop = compositor.as<winrt::Microsoft::UI::Composition::ICompositorInterop>();
     winrt::check_hresult(interop->CreateGraphicsDevice(device.d2d.get(), &device.graphics));
@@ -273,6 +315,7 @@ inline bool Ready(Device &device, winrt::Microsoft::UI::Composition::Compositor 
     border->m_sources.push_back(winrt::Microsoft::UI::Composition::CompositionEffectSourceParameter(TileSource));
     device.wrap = compositor.CreateEffectFactory(border.as<winrt::Windows::Graphics::Effects::IGraphicsEffect>());
     device.failure.clear();
+    WatchForRemoval(device);
     Materials::NoteOnce(L"grain-device", std::wstring{L"grain: Direct2D tiles on the "}.append(device.adapter).append(L" Direct3D device, wrapped by a Composition border effect"));
     return true;
   } catch (winrt::hresult_error const &error) {
@@ -329,14 +372,90 @@ inline std::string SurfaceKey(std::string const &texture, int pixels) {
 inline winrt::Microsoft::UI::Composition::CompositionDrawingSurface SurfaceFor(Device &device, std::string const &texture, int pixels) {
   const std::string key = SurfaceKey(texture, pixels);
   auto found = device.surfaces.find(key);
-  if (found != device.surfaces.end()) return found->second;
+  if (found != device.surfaces.end()) return found->second.surface;
   auto surface = device.graphics.CreateDrawingSurface2(
       winrt::Windows::Graphics::SizeInt32{pixels, pixels},
       winrt::Microsoft::Graphics::DirectX::DirectXPixelFormat::B8G8R8A8UIntNormalized,
       winrt::Microsoft::Graphics::DirectX::DirectXAlphaMode::Premultiplied);
   DrawTile(surface, TileFor(texture), pixels);
-  device.surfaces.emplace(key, surface);
+  device.surfaces.emplace(key, TileSurface{surface, texture, pixels});
   return surface;
+}
+
+inline bool Replace(Device &device, std::wstring &reason, std::wstring const &why) noexcept {
+  StopWatching(device);
+  std::wstring stage;
+  try {
+    winrt::com_ptr<ID3D11Device> d3d;
+    winrt::com_ptr<ID2D1Device> d2d;
+    MakeRenderingDevice(d3d, d2d, device.adapter, stage);
+    stage = L"giving the composition graphics device the new device";
+    winrt::check_hresult(device.graphics.as<winrt::Microsoft::UI::Composition::ICompositionGraphicsDeviceInterop>()->SetRenderingDevice(d2d.get()));
+    device.d3d = d3d;
+    device.d2d = d2d;
+    stage = L"redrawing the tiles";
+    for (auto const &[key, tile] : device.surfaces) DrawTile(tile.surface, TileFor(tile.texture), tile.pixels);
+    WatchForRemoval(device);
+    Materials::NoteOnce(
+        std::wstring{L"grain-device-replaced-"}.append(why),
+        std::wstring{L"grain: "}.append(why).append(L"; redrew ").append(std::to_wstring(device.surfaces.size())).append(L" tiles on a new ").append(device.adapter).append(L" Direct3D device"));
+    return true;
+  } catch (winrt::hresult_error const &error) {
+    reason = std::wstring{L"failed while "}.append(stage).append(L": ").append(Materials::Described(error));
+  } catch (...) {
+    reason = std::wstring{L"failed while "}.append(stage).append(L": unknown error");
+  }
+  Forget(device);
+  device.failure = reason;
+  Failed() = true;
+  Materials::NoteOnce(L"grain-none", std::wstring{L"grain: none drawn after "}.append(why).append(L" (").append(reason).append(L")"));
+  return false;
+}
+
+inline void RecoverIfLost(winrt::Microsoft::UI::Composition::Compositor const &compositor) noexcept {
+  Device &device = Shared();
+  if (!compositor || !device.graphics || device.compositor != compositor || !device.d3d) return;
+  if (device.d3d->GetDeviceRemovedReason() == S_OK) return;
+  std::wstring reason;
+  Ready(device, compositor, reason);
+}
+
+inline void CALLBACK DeviceRemoved(PTP_CALLBACK_INSTANCE, PVOID, PTP_WAIT, TP_WAIT_RESULT) {
+  winrt::Microsoft::UI::Dispatching::DispatcherQueue queue{nullptr};
+  {
+    RemovalWatch &watch = Removals();
+    std::scoped_lock lock{watch.mutex};
+    queue = watch.queue;
+  }
+  if (!queue) return;
+  try {
+    queue.TryEnqueue([]() noexcept {
+      const auto compositor = Shared().compositor;
+      RecoverIfLost(compositor);
+    });
+  } catch (...) {
+  }
+}
+
+inline void WatchForRemoval(Device &device) noexcept {
+  auto latest = device.d3d.try_as<ID3D11Device4>();
+  if (!latest || !device.compositor) return;
+  RemovalWatch &watch = Removals();
+  try {
+    {
+      std::scoped_lock lock{watch.mutex};
+      watch.queue = device.compositor.DispatcherQueue();
+    }
+    if (!watch.signal) watch.signal = ::CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    if (!watch.wait) watch.wait = ::CreateThreadpoolWait(DeviceRemoved, nullptr, nullptr);
+    if (!watch.signal || !watch.wait) return;
+    if (FAILED(latest->RegisterDeviceRemovedEvent(watch.signal, &device.removalCookie))) {
+      device.removalCookie = 0;
+      return;
+    }
+    ::SetThreadpoolWait(watch.wait, watch.signal, nullptr);
+  } catch (...) {
+  }
 }
 
 struct Painted {
@@ -426,6 +545,38 @@ inline ReadBack DrawnAlphaSum(winrt::Microsoft::UI::Composition::Compositor cons
   return answer;
 }
 
+struct Redrawn {
+  Outcome outcome;
+  bool sameSurface{false};
+  uint64_t before{0};
+  uint64_t after{0};
+};
+
+inline Redrawn RedrawnOnReplacedDevice(winrt::Microsoft::UI::Composition::Compositor const &compositor, std::string const &texture, int pixels) noexcept {
+  Redrawn answer;
+  const ReadBack before = DrawnAlphaSum(compositor, texture, pixels);
+  answer.before = before.alphaSum;
+  if (!before.outcome.drawn) {
+    answer.outcome = before.outcome;
+    return answer;
+  }
+  Device &device = Shared();
+  const std::string key = SurfaceKey(texture, pixels);
+  auto kept = device.surfaces.find(key);
+  if (kept == device.surfaces.end()) {
+    answer.outcome.reason = L"the tile was not kept";
+    return answer;
+  }
+  const auto surface = kept->second.surface;
+  if (!Replace(device, answer.outcome.reason, L"the self-check replaced the Direct3D device")) return answer;
+  const ReadBack after = DrawnAlphaSum(compositor, texture, pixels);
+  answer.after = after.alphaSum;
+  auto again = device.surfaces.find(key);
+  answer.sameSurface = again != device.surfaces.end() && again->second.surface == surface;
+  answer.outcome = after.outcome;
+  return answer;
+}
+
 struct LastPath {
   std::string path;
   std::string reason;
@@ -435,6 +586,7 @@ struct LastPath {
 struct LastPathStore {
   std::mutex mutex;
   LastPath path;
+  std::map<std::string, LastPath> requests;
 };
 
 inline LastPathStore &LastStore() noexcept {
@@ -442,16 +594,19 @@ inline LastPathStore &LastStore() noexcept {
   return store;
 }
 
-inline void Remember(LastPath path) noexcept {
+inline void Remember(LastPath path, std::string const &request) noexcept {
   LastPathStore &store = LastStore();
   std::scoped_lock lock{store.mutex};
+  if (!request.empty()) store.requests[request] = path;
   store.path = std::move(path);
 }
 
-inline LastPath Last() noexcept {
+inline LastPath Last(std::string const &request) noexcept {
   LastPathStore &store = LastStore();
   std::scoped_lock lock{store.mutex};
-  return store.path;
+  if (request.empty()) return store.path;
+  auto found = store.requests.find(request);
+  return found == store.requests.end() ? LastPath{} : found->second;
 }
 
 }

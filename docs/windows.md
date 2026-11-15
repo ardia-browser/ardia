@@ -344,7 +344,10 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
   takes the Mac shader's hash grain, `grainOpacity` darkening per `grainScale` pixel cell, as a 256-cell tile. The Mac
   dims the window grain to a quarter in an inactive window; Windows keeps it full. Windows 10, a background
   instance and any failure keep the flat colours, and a grain that fails to draw is left out; the launch log says once
-  which path each one took.
+  which path each one took. The tiles live on one Direct3D device shared by every grain view. When that device is lost
+  (a driver update, a GPU reset), its removal event, or the next paint that finds it gone, hands the same Composition
+  graphics device a new one (`SetRenderingDevice`) and redraws every tile, so the surfaces and the brushes mounted
+  views hold stay valid and refill without a repaint (`Replace` in `MaterialGrain.h`).
 - Switching profiles slides the sidebar's pages and crossfades the tint as on the Mac. The Mac's native pager
   (`Pager.swift`) has a TypeScript version in `packages/expo-windows/src/pager`: the `ArdiaSwipe` view and module with
   the same events (`onPagerPosition` every frame, `onPagerState` on select and settle), sequence numbers and spring

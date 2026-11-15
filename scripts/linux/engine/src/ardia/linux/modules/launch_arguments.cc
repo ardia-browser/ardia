@@ -24,6 +24,23 @@ bool HasScheme(std::string_view text) {
   return re2::RE2::FullMatch(text, *scheme);
 }
 
+bool NamesADocument(std::string_view text) {
+  static const base::NoDestructor<re2::RE2> document(
+      R"((?i).*\.(?:html?|xhtml|mhtml|pdf|svg|txt|md|json|xml|png|jpe?g|gif|webp|avif))");
+  return re2::RE2::FullMatch(text, *document);
+}
+
+base::FilePath WithoutDotComponents(const base::FilePath& path) {
+  base::FilePath clean(path.IsAbsolute() ? "/" : "");
+  for (const std::string& part : path.GetComponents()) {
+    if (part == "." || part == "/") {
+      continue;
+    }
+    clean = clean.empty() ? base::FilePath(part) : clean.Append(part);
+  }
+  return clean;
+}
+
 }
 
 std::string LaunchArgumentText(
@@ -35,10 +52,12 @@ std::string LaunchArgumentText(
     return text;
   }
   const base::FilePath given(text);
-  const base::FilePath path = given.IsAbsolute() ? given : cwd.Append(given);
+  const base::FilePath path =
+      WithoutDotComponents(given.IsAbsolute() ? given : cwd.Append(given));
   const bool pathlike = given.IsAbsolute() || text.starts_with(".") ||
                         text.find('/') != std::string::npos;
-  if ((pathlike || !LooksLikeBareHost(text)) && exists(path)) {
+  if ((pathlike || !LooksLikeBareHost(text) || NamesADocument(text)) &&
+      exists(path)) {
     return net::FilePathToFileURL(path.NormalizePathSeparators()).spec();
   }
   return text;

@@ -10,6 +10,9 @@ void RegisterAppModules(ModuleRegistry& registry) {
   RegisterDocumentsModule(registry);
   RegisterConfigModule(registry);
   RegisterAppModule(registry);
+  RegisterMenusModule(registry);
+  RegisterDialogsModule(registry);
+  RegisterFocusModule(registry);
 }
 
 }

@@ -25,7 +25,14 @@ source_set("modules") {
     "app_modules.h",
     "args.h",
     "config.cc",
+    "dialogs.cc",
     "documents.cc",
+    "focus.cc",
+    "menus.cc",
+    "owner_window.cc",
+    "owner_window.h",
+    "test_answers.cc",
+    "test_answers.h",
   ]
 
   public_deps = [
@@ -39,12 +46,21 @@ source_set("modules") {
     "//chrome/browser",
     "//chrome/browser/profiles:profile",
     "//chrome/common",
+    "//components/constrained_window",
     "//components/version_info",
     "//content/public/browser",
     "//gpu/config",
+    "//net",
+    "//skia",
     "//third_party/re2",
     "//ui/base",
     "//ui/display",
+    "//ui/events",
+    "//ui/gfx",
+    "//ui/gfx/x",
+    "//ui/menus",
+    "//ui/shell_dialogs",
+    "//ui/views",
     "//url",
   ]
 }

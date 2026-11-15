@@ -565,6 +565,12 @@ void RegisterAppModule(ModuleRegistry& registry) {
                                         ModuleReply reply) {
                base::FilePath crash_dir;
                base::PathService::Get(chrome::DIR_CRASH_DUMPS, &crash_dir);
+               if (!DataDirectory().IsParent(crash_dir)) {
+                 Note("app", "crash dumps are outside the data folder; not "
+                             "reading them");
+                 std::move(reply).Run(base::Value(base::ListValue()));
+                 return;
+               }
                base::ThreadPool::PostTaskAndReplyWithResult(
                    FROM_HERE,
                    {base::MayBlock(), base::TaskPriority::BEST_EFFORT},

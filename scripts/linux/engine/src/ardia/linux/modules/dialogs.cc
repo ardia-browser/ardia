@@ -9,6 +9,7 @@
 #include "ardia/linux/log.h"
 #include "ardia/linux/modules/app_modules.h"
 #include "ardia/linux/modules/args.h"
+#include "ardia/linux/modules/focus_return.h"
 #include "ardia/linux/modules/launch_config.h"
 #include "ardia/linux/modules/owner_window.h"
 #include "ardia/linux/modules/test_answers.h"
@@ -156,11 +157,12 @@ class PendingAnswer : public base::RefCounted<PendingAnswer> {
 void ShowAppDialog(const DialogText& text, Answered answered) {
   ++g_open_count;
   auto pending = base::MakeRefCounted<PendingAnswer>(base::BindOnce(
-      [](Answered answered, DialogAnswer answer) {
+      [](std::string window_id, Answered answered, DialogAnswer answer) {
         --g_open_count;
+        ReturnFocusSoon(window_id);
         std::move(answered).Run(std::move(answer));
       },
-      std::move(answered)));
+      text.window_id, std::move(answered)));
   const bool cancellable = text.prompt || !text.cancel_title.empty();
   ui::DialogModel::Builder builder;
   builder.SetTitle(base::UTF8ToUTF16(text.title));
@@ -330,6 +332,7 @@ class FilePicker : public ui::SelectFileDialog::Listener {
 
   void Finish(std::vector<base::FilePath> paths) {
     --g_open_count;
+    ReturnFocusSoon();
     dialog_->ListenerDestroyed();
     std::move(picked_).Run(std::move(paths));
     delete this;

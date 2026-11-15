@@ -1,9 +1,11 @@
 import { watchRelaunches } from "../../../expo-windows/src/engine/relaunch";
-import { pushDefaultKeyMap } from "./defaultKeyMap";
 import { installFrameForwarding } from "./frames";
 import { installKeyboardFollows } from "./keyboard";
+import { installKeys } from "./keys";
+import { startUpdater } from "./updater";
 
 installFrameForwarding();
 installKeyboardFollows();
 watchRelaunches();
-pushDefaultKeyMap();
+installKeys();
+startUpdater();

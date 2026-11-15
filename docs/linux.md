@@ -106,6 +106,107 @@ and every row was walked. Works with a difference says what differs; the Mac's l
 | Sync | Works: with a folder chosen (Settings › Sync › Sync folder, in plain view since Linux has no default cloud folder), Turn On Sync writes the vault and shows Save Your Recovery Kit. Before a folder is chosen the folder row says "No folder chosen", the pane says "No synced folder found on this computer" and to choose one a sync app keeps the same across computers, and Turn On Sync is disabled, as on the Mac with iCloud Drive off; any folder chosen, `~/Ardia Sync` included, enables it. Before, the picker was an advanced row, the pane said "cloud folder is off", and it showed `~/Ardia Sync` as the folder while Turn On Sync stayed disabled, even after choosing that folder | babe9426d, 9859cf55e |
 | Report a Problem: screen recording | Works: the recording pill (Recording 0:05, Stop) floats over the window; Stop, Escape or the 60 s limit end it; with Include web pages off every page area is black, thumbnail included. Before, Record said Ardia couldn't record the window | cc0829af3 |
 
+## What works on the engine build
+
+The same 64 rows, walked on the engine build (`docs/linux-engine.md`: Chromium 157.0.8103.50 + Helium 0.21.2 + our
+series, `//ardia/linux`, the engine UI bundle) on 2026-11-15, as the Electron walk was: Ubuntu 24.04 (x86_64), a private
+1600 by 1000 Xvfb, a fresh data folder, real X key presses, clicks and drags (`scripts/linux/xinput`), a screenshot looked
+at for every row. Most rows ran under xfwm4 with its compositor; first launch with a link, Peek, pop-up menus, focus
+after a window closes, the first click into a page and the drops ran again with no window manager. The walk started on
+commit afc159fd7; the rows it found broken were fixed on the way and seen working again after the fix (through
+ccef10bdd), and those rows name the fix. The packaged build (`pnpm -C apps/browser/linux package:engine` over a fresh
+`06-package.sh` tarball) was walked from the extracted AppImage and the `.deb`'s extracted `/opt/Ardia`. Of the 64 rows,
+58 work, 5 work with a difference and 1 is broken; Electron's state is the table above.
+
+**Install, first launch, updates**
+
+| Feature | State | Fixed in |
+| --- | --- | --- |
+| AppImage and .deb | Works: both packages, run from the extracted AppImage and the `.deb`'s `/opt/Ardia` (unsandboxed here: AppArmor blocks user namespaces and nothing was installed setuid), start at onboarding; a second launch with a link reaches the running instance ("Opening in existing browser session") and opens it in Little Ardia; Ctrl+Q exits in about 200 ms and a relaunch restores the tabs. On the test's private D-Bus, which has no secret service, the packaged launcher (no `--password-store=basic`) waits about 25 s for the keyring before the restored pages finish loading | |
+| First launch | Works: onboarding, no release notes | |
+| First launch with a link | Works: the meadow plays and the link opens in Little Ardia in front of it; closing Little Ardia leaves onboarding | |
+| Onboarding (source, look, last choices) | Works: six steps for Coming from Chrome (colour, frame, sharing, layout, default browser and login, welcome), eight from Starting fresh | |
+| Intro animation and music | Works: the meadow scene plays behind the first window (WebGL2 is blocklisted on Xvfb; the scene drew). The music wasn't checked (no audio device) | |
+| Tour | Works: three stops for tabs across the top, Back, Next, Done | |
+| Import from another browser | Works with a Chromium profile made for the walk (`ARDIA_INSTANCE importSourceDir`): Chromium found, 2 bookmarks and 2 history items imported. Before, the test's import folder never arrived, so the dialog searched the real home | 7db906421 |
+| Check for updates | Works: "Ardia is up to date" with the version and the releases page. Before, "Failed to fetch": Chrome gives a WebUI with bindings no network unless the embedder allows its origin | df5e05602 |
+| Default browser | Works: the pane then says Ardia is the default; a test instance writes `ardia.desktop` and `mimeapps.list` under `<data>/Desktop` | |
+| Open at login | Works: the autostart entry is written (under `<data>/Desktop` in a test instance) | |
+
+**Windows and tabs**
+
+| Feature | State | Fixed in |
+| --- | --- | --- |
+| New tab, close, reopen closed tab (Ctrl+Shift+T) | Works | |
+| New window | Works | |
+| Private window | Works; closing one with two tabs asks (Close 2 tabs?, Don't ask me again) from its close button and from Ctrl+Shift+W. Before, Ctrl+Shift+W closed it without asking | 8a4ba355b |
+| Quit and relaunch with the session restored | Works: Ctrl+Q exits in 200 to 300 ms; the window, its place, the split, the group, the Top App and every tab came back. Before, a restored or switched-to tab could show a blank white page: a hidden tab's page slot painted its unpainted fill over the shown one | 6faa98da7 |
+| Little Ardia (Ctrl+Alt+N) | Works: recent pages, a page loads in it, Ctrl+W closes it; with no compositor its corners are cut, not black | |
+| Search Tabs (Ctrl+Shift+A), Ctrl+Tab | Works: the switcher shows page pictures. Before, every card showed a globe: the engine had no `capturePage` | 5aa48a602 |
+| Tabs in the sidebar or across the top (Ctrl+Shift+S), hide the sidebar (Ctrl+S) | Works | |
+| Split View (Ctrl+\) | Works: the empty pane offers open tabs; both panes render and take typing | |
+| Peek | Works: the Dia preset's Shift-click and the Chrome preset's Alt-click open it with no window manager; Escape closes it and puts focus back on the link. Under xfwm4 Alt-click is the window manager's own move (its easy-click key), so the page never sees it | |
+| Pop-up windows from pages | Differs: `window.open` with a size opens as a foreground tab that keeps its opener (sign-in pop-ups still work), not Ardia's pop-up window with the origin strip and Open as Tab: the engine marks the tab `popup` but the UI has no pop-up window kind for it | |
+| Pop-up blocking | Works: `window.open`, a `target=_blank` link and a form opened without a click are all blocked with the prompt (Always Deny, Only Once, Always Allow, the three addresses); with a click they open | |
+| Closing a window with unsaved work in a page | Works: its close button and Ctrl+Shift+W ask once for the window ("Leave 127.0.0.1:8737?", Close Window, Cancel); Cancel keeps it, Close Window closes it, and closing the last window quits. Before, it closed without asking | 32c92fb55 |
+| Main, Settings and Little Ardia window chrome | Works, app-drawn buttons, no system title bar | |
+| Maximize and restore | Works under xfwm4, square corners while maximized | |
+| Moving a window, edge snapping | Works under xfwm4: the sidebar header moves the window, a double click maximizes, and dragging a maximized window restores and moves it; the top edge resizes | |
+| Pop-up menus (the … menu, tab menus) | Works under xfwm4 and with no window manager. Before, with no window manager, after a window closed every menu (the … menu, tab menus, the page's) never showed: X focus was on the root while Chrome still counted the window active | 1dbffa721 |
+| Keyboard focus after a dialog or window closes | Works with no window manager: after Settings closes, the page's field keeps typing | |
+| Pin, Top Apps, groups | Works: the tab menu's Move to Top Apps makes a tile; New Group with Tab makes a group and names it in place | |
+| Profiles: create, switch with Alt+1, Alt+2 | Works: Create Profile, then Alt+2 and Alt+1 switch; "Work" shows in full. Before, with two profiles, clicks in a 172 by 34 area at the page's top left went to the UI: the other profile's sidebar page reported its selected row as a cover the sidebar's clip never cut | 0f9c79d82 |
+
+**Pages**
+
+| Feature | State | Fixed in |
+| --- | --- | --- |
+| Command bar (history, open tabs, suggestions) | Works: addresses, Google suggestions | |
+| First click into a page that never had focus | Works with no window manager: a restored page, a fresh tab and one reached by a tab click take the click and the keys typed right after it | |
+| Find in page | Works: the app's find bar with the match count | |
+| Zoom (Ctrl+=, Ctrl+0) | Works, with the zoom popover and the icon in the address bar | |
+| Print | Differs: Ctrl+P opens Chrome's print preview over the page (Save as PDF here, with no printers) instead of the system print dialog; Save asks where with the save dialog and writes the PDF | |
+| JavaScript alert, confirm and prompt | Differs: all three are Chrome's tab-modal dialogs over the page ("127.0.0.1:8737 says"), prompt included, not the app's prompt | |
+| Page, link and image menus | Differs: Chrome's menus in the Mac's order. Page: Back, Forward, Reload, Save As, Print, Cast, View Page Source, Inspect. Link: Open Link in New Tab, New Window, Split View, Incognito Window, Save Link As, Copy Link Address, Inspect (no Copy Link Text). Video: Loop, Show Controls, open, save, copy, Picture in Picture, Cast. Selection: Copy, Copy Link to Highlight, Search Google, Print. Cast is offered though Linux doesn't cast | |
+| Full screen (a page element) | Works; Escape leaves it | |
+| Picture in Picture | Works: the menu's Picture in Picture opens Dia's window (back to the tab, the origin, ±10 s, play, close); the page shows "Playing in picture-in-picture" | |
+| Downloads (download, panel, Ctrl+J) | Works: the panel opens for a new download and lists it. Before, a test instance saved into the real `~/Downloads`: its instance keys reached Chrome under the wrong switch names | 3e47809fc |
+| History (Ctrl+H), Clear Browsing Data (Ctrl+Shift+Del) | Works | |
+| Bookmarks (Ctrl+D, Ctrl+Shift+O) | Works | |
+| mailto and other app links | Differs: a `mailto:` link with no mail app opens the desktop portal's "Open With… No Apps available" window (Chrome launches `mailto` without its own prompt, through `xdg-open`); the Mac and Electron say nothing | |
+| Network error page | Works: Chrome's "This site can't be reached" with the error code | |
+| DevTools (F12) | Works, docked inside the page's rect | |
+| Task Manager (Shift+Esc) | Works: Chrome's Task Manager with every tab's process, memory, CPU and End task | |
+| Drop a link or file onto a page | Works: a file dropped on a page that takes drops reaches it; a link dropped elsewhere on a page opens in a new tab next to it | |
+| Drop a link onto the tab strip or sidebar | Works: a link dragged from another app onto the sidebar opens as a new tab | |
+| Translate | Works: a French page shows the Translate button; the first use downloads the French model, then the page turns to English in place | |
+
+**Passwords, permissions, extensions**
+
+| Feature | State | Fixed in |
+| --- | --- | --- |
+| Offer to save a password | Works: the app's Save password prompt (Never on This Site, Not Now, Save). Before, the Passwords pane showed Offer to save off on every profile: the engine had no `passwords.autofillEnabled` | aaf7afa62 |
+| Fill a saved password | Works: the form fills when the page loads and the field's dropdown offers the login | |
+| Passwords pane: Unlock | Works: Unlock asks for the login password in the app's window; a wrong one says "Wrong password. Try again." (the system's `unix_chkpwd`), the right one unlocks (a stub helper, `ARDIA_TEST passwordHelper`). Before, every check said "Ardia couldn't check the password": Chrome launches children with `no_new_privs`, so the setgid helper couldn't read the shadow file | bce08ce3e |
+| Notification prompt and notifications | Works: the app's prompt; the notification shows on the desktop's notification server | |
+| Location prompt | Works: the app's prompt; with no GeoClue the page gets "The system location service isn't available" | |
+| Camera and microphone | Works with Chromium's fake camera: the app's prompt, then the stream | |
+| Chrome Web Store install | Works: Add to Chrome, the app's Add dialog listing the permissions, the extension's toolbar button and its welcome page | |
+| Extensions pane | Works: lists the installed extension with its toggle | |
+| Ad, tracker and cookie-banner blocking | Works: uBlock Origin blocks the ad and analytics scripts (it hands them its stand-ins, so they report loaded) and counts them; generic hiding stays off on 127.0.0.1, as EasyList says | |
+| Bookmark and password export | Works: Export Bookmarks writes a Netscape bookmarks file (mode 0600); Export CSV asks for the login password after the save dialog (Chrome's own export reauth), then writes the CSV with mode 0600. Before, both said "Couldn't export bookmarks: This build has no Windows dialogs" | d4f1bbb20 |
+
+**Settings**
+
+| Feature | State | Fixed in |
+| --- | --- | --- |
+| Settings window, panes | Works: all panes open; a test instance's save dialogs start in its own downloads folder | ccef10bdd |
+| Appearance: light and dark | Works | |
+| Keyboard Shortcuts pane | Works, Ctrl keys | |
+| Live Folders pane | Works (renders; no service connected) | |
+| Sync | Works: Sync folder › Choose…, then Turn On Sync writes the vault and shows Save Your Recovery Kit | |
+| Report a Problem: screen recording | Broken: Record the problem says "Ardia couldn't record this window": the engine build refuses recording for now (d3a39cdc5); reports with files and uploads work | |
+
 ## Design
 
 | Layer | Linux |

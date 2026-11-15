@@ -36,6 +36,7 @@
 #include "ui/display/screen.h"
 #include "ui/events/event.h"
 #include "ui/gfx/geometry/insets.h"
+#include "ui/gfx/geometry/rect_conversions.h"
 #include "ui/gfx/geometry/rounded_corners_f.h"
 #include "ui/snapshot/snapshot.h"
 #include "ui/views/controls/native/native_view_host.h"
@@ -57,6 +58,23 @@ constexpr base::TimeDelta kFrameSettle = base::Milliseconds(120);
 constexpr base::TimeDelta kFadeStep = base::Milliseconds(16);
 constexpr base::TimeDelta kBrowserFade = base::Milliseconds(250);
 constexpr base::TimeDelta kSmallFade = base::Milliseconds(200);
+
+std::optional<float> MotionOpacityAt(const PageMotion& motion,
+                                     base::TimeDelta elapsed) {
+  if (motion.opacity.size() != motion.rects.size() ||
+      motion.opacity.size() < 2) {
+    return std::nullopt;
+  }
+  const double progress = std::clamp(elapsed / motion.duration, 0.0, 1.0) *
+                          (motion.opacity.size() - 1);
+  const size_t index =
+      std::min(static_cast<size_t>(progress), motion.opacity.size() - 2);
+  const float fraction = static_cast<float>(progress - index);
+  return std::clamp(motion.opacity[index] +
+                        (motion.opacity[index + 1] - motion.opacity[index]) *
+                            fraction,
+                    0.0f, 1.0f);
+}
 
 gfx::RectF MotionRectAt(const PageMotion& motion, base::TimeDelta elapsed) {
   const double progress =
@@ -217,18 +235,21 @@ void AppWindowView::PlacePage(const std::string& key,
                               const gfx::Rect& bounds,
                               int radius,
                               const std::vector<RoundedArea>& holes,
-                              const PageMotion* motion) {
+                              const PageMotion* motion,
+                              std::optional<float> opacity) {
   Placement& placement = placements_[key];
   placement.bounds = bounds;
   placement.radius = radius;
   placement.holes = holes;
-  RelayoutPage(key);
   if (motion && motion->rects.size() >= 2 && motion->duration.is_positive() &&
-      !DevToolsView(key)) {
-    StartMotion(key, *motion);
-  } else {
-    EndMotion(key);
+      !DevToolsView(key) && StartMotion(key, *motion)) {
+    aura::Window* native = PageNativeView(key);
+    if (native && motion->opacity.empty()) {
+      native->layer()->SetOpacity(std::clamp(opacity.value_or(1.0f), 0.0f, 1.0f));
+    }
+    return;
   }
+  FinishMotion(key, std::clamp(opacity.value_or(1.0f), 0.0f, 1.0f));
 }
 
 aura::Window* AppWindowView::PageNativeView(const std::string& key) const {
@@ -237,35 +258,47 @@ aura::Window* AppWindowView::PageNativeView(const std::string& key) const {
 }
 
 void AppWindowView::ShowMotionAt(const std::string& key,
-                                 const gfx::RectF& rect) {
+                                 base::TimeDelta elapsed) {
   aura::Window* native = PageNativeView(key);
-  auto placed = placements_.find(key);
-  if (!native || placed == placements_.end() ||
-      placed->second.bounds.IsEmpty()) {
+  auto running = motions_.find(key);
+  if (!native || running == motions_.end() ||
+      running->second.layout.IsEmpty()) {
     return;
   }
-  const gfx::Rect& final_rect = placed->second.bounds;
+  const PageMotion& motion = running->second.motion;
+  const gfx::Rect& layout = running->second.layout;
+  const gfx::RectF rect = MotionRectAt(motion, elapsed);
   gfx::Transform transform;
-  transform.Translate(rect.x() - final_rect.x(), rect.y() - final_rect.y());
-  transform.Scale(rect.width() / final_rect.width(),
-                  rect.height() / final_rect.height());
+  transform.Translate(rect.x() - layout.x(), rect.y() - layout.y());
+  transform.Scale(rect.width() / layout.width(),
+                  rect.height() / layout.height());
   native->SetTransform(transform);
+  if (std::optional<float> opacity = MotionOpacityAt(motion, elapsed)) {
+    native->layer()->SetOpacity(*opacity);
+  }
 }
 
-void AppWindowView::StartMotion(const std::string& key,
+bool AppWindowView::StartMotion(const std::string& key,
                                 const PageMotion& motion) {
   ui::Compositor* compositor =
       GetWidget() && GetWidget()->IsVisible() ? GetWidget()->GetCompositor()
                                               : nullptr;
-  if (!compositor) {
-    EndMotion(key);
-    return;
+  auto placed = placements_.find(key);
+  if (!compositor || placed == placements_.end() || !PageView(key)) {
+    return false;
   }
   RunningMotion& running = motions_[key];
   running.motion = motion;
   const base::TimeDelta delay =
       motion_delay_override_.value_or(OneFrame(*compositor));
   running.start = base::TimeTicks::Now() - motion.elapsed + delay;
+  const gfx::Rect& final_rect = placed->second.bounds;
+  const gfx::Rect first =
+      gfx::ToEnclosingRect(MotionRectAt(motion, motion.elapsed));
+  running.layout = gfx::Rect(
+      final_rect.origin(),
+      gfx::Size(std::max(first.width(), final_rect.width()),
+                std::max(first.height(), final_rect.height())));
   if (ardiacore::Traced("motion")) {
     Note("motion", "start " + key + " delay " +
                        base::NumberToString(delay.InMillisecondsF()) +
@@ -273,26 +306,35 @@ void AppWindowView::StartMotion(const std::string& key,
                        base::NumberToString(motion.elapsed.InMillisecondsF()) +
                        " ms duration " +
                        base::NumberToString(motion.duration.InMillisecondsF()) +
-                       " ms refresh " +
+                       " ms layout " + running.layout.ToString() + " final " +
+                       final_rect.ToString() + " refresh " +
                        base::NumberToString(compositor->refresh_rate()) +
                        " Hz");
   }
+  RelayoutPage(key);
   if (views::Widget* widget = GetWidget()) {
     widget->LayoutRootViewIfNecessary();
   }
-  ShowMotionAt(key, MotionRectAt(motion, motion.elapsed));
+  ShowMotionAt(key, motion.elapsed);
   if (!stepping_) {
     stepping_ = compositor;
     compositor->AddAnimationObserver(this);
   }
+  return true;
 }
 
-void AppWindowView::EndMotion(const std::string& key) {
-  if (motions_.erase(key) == 0) {
-    return;
+void AppWindowView::FinishMotion(const std::string& key,
+                                 std::optional<float> opacity) {
+  motions_.erase(key);
+  RelayoutPage(key);
+  if (views::Widget* widget = GetWidget()) {
+    widget->LayoutRootViewIfNecessary();
   }
   if (aura::Window* native = PageNativeView(key)) {
     native->SetTransform(gfx::Transform());
+    if (opacity) {
+      native->layer()->SetOpacity(*opacity);
+    }
   }
   if (motions_.empty()) {
     StopStepping();
@@ -306,13 +348,14 @@ void AppWindowView::OnAnimationStep(base::TimeTicks timestamp) {
     const base::TimeDelta elapsed =
         std::max(timestamp - running.start, motion.elapsed);
     if (elapsed >= motion.duration) {
+      ShowMotionAt(key, motion.duration);
       ended.push_back(key);
       continue;
     }
-    ShowMotionAt(key, MotionRectAt(motion, elapsed));
+    ShowMotionAt(key, elapsed);
   }
   for (const std::string& key : ended) {
-    EndMotion(key);
+    FinishMotion(key, std::nullopt);
   }
 }
 
@@ -323,7 +366,7 @@ void AppWindowView::OnCompositingShuttingDown(ui::Compositor* compositor) {
     keys.push_back(key);
   }
   for (const std::string& key : keys) {
-    EndMotion(key);
+    FinishMotion(key, 1.0f);
   }
 }
 
@@ -342,7 +385,9 @@ void AppWindowView::RelayoutPage(const std::string& key) {
   }
   const Placement& placement = placed->second;
   const bool clipped = !PagesUnderUi() || above_ui_.contains(key);
-  gfx::Rect page_bounds = placement.bounds;
+  auto moving = motions_.find(key);
+  gfx::Rect page_bounds = moving != motions_.end() ? moving->second.layout
+                                                   : placement.bounds;
   views::WebView* devtools = DevToolsView(key);
   DevToolsContentsResizingStrategy strategy;
   content::WebContents* docked =
@@ -428,7 +473,14 @@ void AppWindowView::SetDevTools(const std::string& key,
 }
 
 void AppWindowView::RemovePage(const std::string& key) {
-  EndMotion(key);
+  motions_.erase(key);
+  if (motions_.empty()) {
+    StopStepping();
+  }
+  if (aura::Window* native = PageNativeView(key)) {
+    native->SetTransform(gfx::Transform());
+    native->layer()->SetOpacity(1.0f);
+  }
   SetDevTools(key, nullptr);
   placements_.erase(key);
   above_ui_.erase(key);

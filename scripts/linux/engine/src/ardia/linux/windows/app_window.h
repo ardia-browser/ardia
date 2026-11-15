@@ -57,6 +57,7 @@ struct PageMotion {
   base::TimeDelta duration;
   base::TimeDelta elapsed;
   std::vector<gfx::RectF> rects;
+  std::vector<float> opacity;
 };
 
 class AppWindowView : public views::View,
@@ -78,7 +79,8 @@ class AppWindowView : public views::View,
                  const gfx::Rect& bounds,
                  int radius,
                  const std::vector<RoundedArea>& holes,
-                 const PageMotion* motion = nullptr);
+                 const PageMotion* motion = nullptr,
+                 std::optional<float> opacity = std::nullopt);
   void SetDevTools(const std::string& key, content::WebContents* devtools);
   void RelayoutPage(const std::string& key);
   static bool PagesUnderUi();
@@ -115,13 +117,14 @@ class AppWindowView : public views::View,
   struct RunningMotion {
     PageMotion motion;
     base::TimeTicks start;
+    gfx::Rect layout;
   };
 
   void OnAnimationStep(base::TimeTicks timestamp) override;
   void OnCompositingShuttingDown(ui::Compositor* compositor) override;
-  void StartMotion(const std::string& key, const PageMotion& motion);
-  void EndMotion(const std::string& key);
-  void ShowMotionAt(const std::string& key, const gfx::RectF& rect);
+  bool StartMotion(const std::string& key, const PageMotion& motion);
+  void FinishMotion(const std::string& key, std::optional<float> opacity);
+  void ShowMotionAt(const std::string& key, base::TimeDelta elapsed);
   aura::Window* PageNativeView(const std::string& key) const;
   void StopStepping();
 

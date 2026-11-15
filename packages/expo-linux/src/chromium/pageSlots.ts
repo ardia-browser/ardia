@@ -31,6 +31,7 @@ const STYLES = `
 [data-ardia-over-page] { background-color: color(from var(--ardia-over-page-color) srgb r g b / max(alpha, ${DENSEST_FROST})) !important; }`;
 
 const windows = new Map<string, WindowSlots>();
+const painted = new Set<string>();
 let underlaysMarked = 0;
 let frostedMarked = 0;
 
@@ -268,7 +269,7 @@ function update(windowId: string) {
   const doc = appWindowDocument(windowId);
   const view = doc?.defaultView;
   if (!doc || !view) return;
-  const pages = slots.pages;
+  const pages = new Map([...slots.pages].filter(([key]) => painted.has(key)));
   if (!pages.size) {
     for (const { element } of slots.underlays) unmark(element);
     for (const element of slots.frosted) unfrost(element);
@@ -314,3 +315,13 @@ export const pageSlotsState = () => ({
   holeFrames,
   windows: Object.fromEntries([...windows].map(([id, slots]) => [id, { pages: slots.pages.size, underlays: slots.underlays.length, frosted: slots.frosted.length }])),
 });
+
+export function notePagePainted(key: string) {
+  if (painted.has(key)) return;
+  painted.add(key);
+  for (const [windowId, slots] of windows) {
+    if (!slots.pages.has(key)) continue;
+    slots.membersAt = 0;
+    update(windowId);
+  }
+}

@@ -7,18 +7,23 @@ import { coveringPages } from "../chromium/covered";
 import { engineAvailable, pagesUnderUi } from "../chromium/host";
 import { withLinuxDomains } from "../chromium/linuxDomains";
 import { linuxMotion } from "../chromium/motion";
+import { useAppDark } from "../appearance";
 import { PopoverBubble, Surface } from "../views/adapters";
 
 const live = engineAvailable();
 
 const SLOT_MARKER_STYLE = { position: "absolute", width: 0, height: 0 } as const;
 
-type SlotProps = { tabId?: string };
+const UNPAINTED_SLOT = { light: "#ffffff", dark: "#1c1c1e" } as const;
+
+type SlotProps = { tabId?: string; style?: unknown };
 
 const PageSlot = forwardRef<unknown, SlotProps>(function PageSlot(props, ref) {
+  const dark = useAppDark();
+  const fill = { backgroundColor: dark ? UNPAINTED_SLOT.dark : UNPAINTED_SLOT.light };
+  const page = createElement(EngineWebView as unknown as ComponentType<SlotProps & { ref: unknown }>, { ...props, style: [props.style, fill], key: "page", ref });
   const marker = createElement(View, { key: "slot", pointerEvents: "none", style: SLOT_MARKER_STYLE, dataSet: { ardiaPageSlot: props.tabId ?? "" } } as never);
-  const page = createElement(EngineWebView as unknown as ComponentType<SlotProps & { ref: unknown }>, { ...props, key: "page", ref });
-  return createElement(Fragment, null, marker, page);
+  return createElement(Fragment, null, page, marker);
 });
 
 export const engineModules: Record<string, Record<string, unknown>> = {

@@ -126,7 +126,7 @@ const affine = (transform: string | null) => new DOMMatrix(transform && transfor
 
 function pageBoxesUnder(element: Element): { key: string; box: Box; view: Element }[] {
   return [...element.querySelectorAll<HTMLElement>("[data-ardia-page-slot]")].flatMap((marker) => {
-    const page = marker.nextElementSibling;
+    const page = marker.previousElementSibling;
     const key = marker.dataset.ardiaPageSlot;
     if (!key || !page) return [];
     const rect = page.getBoundingClientRect();
@@ -180,7 +180,9 @@ function startMirror(value: ValueNode, curve: Curve): Mirror | null {
       const rects = frames.map((frame) => movedBox(box, center, start, affine(frame.transform)));
       lastMirror = { key, box, center, start: [start.a, start.d, start.e, start.f], origin: getComputedStyle(element).transformOrigin, transforms: [frames[0]?.transform, frames[Math.floor(frames.length / 2)]?.transform, frames[frames.length - 1]?.transform], rects: [rects[0], rects[Math.floor(rects.length / 2)], rects[rects.length - 1]], element: [element.offsetWidth, element.offsetHeight] };
       const motion: PageMotion = { durationMs: Math.round(curve.durationMs), rects: rects.map((rect) => [rect.x, rect.y, rect.width, rect.height]) };
-      if (!notePageMotion(key, motion)) continue;
+      const timeline = element.ownerDocument.defaultView?.performance ?? performance;
+      const clock = () => (played.startTime === null ? null : timeline.now() - Number(played.startTime));
+      if (!notePageMotion(key, motion, clock, played.ready)) continue;
       pages.push(key);
       animatePageHoles(key, view, element, () => Number(played.currentTime ?? 0), motion.durationMs, motion.rects);
     }

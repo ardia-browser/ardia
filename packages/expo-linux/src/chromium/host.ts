@@ -2,7 +2,7 @@ import { callMain, callMainSync, mainModules } from "../bridge";
 import { addNativeListener } from "../events";
 import { framePacing, frameTrace } from "./frames";
 import { connectPageMotion, holdDuringMotion, pageMotionState } from "./pageMotion";
-import { noteShownPage, pageSlotsState } from "./pageSlots";
+import { notePagePainted, noteShownPage, pageSlotsState } from "./pageSlots";
 
 type EngineEvent = { topic?: unknown; json?: unknown };
 type TopicListener = (payload: Record<string, unknown>) => void;
@@ -123,3 +123,7 @@ connectPageMotion(
     return last && typeof last.windowId === "string" ? { args: { ...last, key }, windowId: last.windowId } : null;
   },
 );
+
+onEngineTopic("tab", (event) => {
+  if (typeof event.key === "string" && (event.name === "firstPaint" || event.name === "loadError")) notePagePainted(event.key);
+});

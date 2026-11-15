@@ -118,7 +118,11 @@ class PendingAnswer : public base::RefCounted<PendingAnswer> {
  public:
   explicit PendingAnswer(Answered answered) : answered_(std::move(answered)) {}
 
-  void set_model(ui::DialogModel* model) { model_ = model; }
+  void set_model(ui::DialogModel* model, bool has_checkbox, bool has_field) {
+    model_ = model;
+    has_checkbox_ = has_checkbox;
+    has_field_ = has_field;
+  }
 
   void Accept() {
     if (!answered_ || !model_) {
@@ -126,13 +130,13 @@ class PendingAnswer : public base::RefCounted<PendingAnswer> {
     }
     DialogAnswer answer;
     answer.confirmed = true;
-    if (ui::DialogModelCheckbox* box =
-            model_->GetCheckboxByUniqueId(kSuppressCheckbox)) {
-      answer.suppressed = box->is_checked();
+    if (has_checkbox_) {
+      answer.suppressed =
+          model_->GetCheckboxByUniqueId(kSuppressCheckbox)->is_checked();
     }
-    if (ui::DialogModelTextfield* field =
-            model_->GetTextfieldByUniqueId(kPromptField)) {
-      answer.text = base::UTF16ToUTF8(field->text());
+    if (has_field_) {
+      answer.text = base::UTF16ToUTF8(
+          model_->GetTextfieldByUniqueId(kPromptField)->text());
     }
     Answer(std::move(answer));
   }
@@ -152,6 +156,8 @@ class PendingAnswer : public base::RefCounted<PendingAnswer> {
 
   Answered answered_;
   raw_ptr<ui::DialogModel> model_ = nullptr;
+  bool has_checkbox_ = false;
+  bool has_field_ = false;
 };
 
 void ShowAppDialog(const DialogText& text, Answered answered) {
@@ -198,7 +204,7 @@ void ShowAppDialog(const DialogText& text, Answered answered) {
   builder.SetDialogDestroyingCallback(
       base::BindOnce(&PendingAnswer::Decline, pending));
   std::unique_ptr<ui::DialogModel> model = builder.Build();
-  pending->set_model(model.get());
+  pending->set_model(model.get(), !text.suppression.empty(), text.prompt);
   views::Widget* owner = OwnerWidget(text.window_id);
   auto host = views::BubbleDialogModelHost::CreateModal(
       std::move(model), owner ? ui::mojom::ModalType::kWindow

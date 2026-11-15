@@ -2,8 +2,9 @@ import { windowControls } from "../../platform/windowControls";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { pageFrameInsetOf, pageFrameOf } from "../../lib/windowLayout";
 import { WINDOW_CHROME } from "../../lib/windowChrome";
-import { autoHidesTabsIn } from "../browser/model";
+import { activeTabId, autoHidesTabsIn } from "../browser/model";
 import { bookmarksShown } from "../bookmarks/visibility";
+import { splitOf } from "../splits/splits";
 import { isSmallWindow } from "./small";
 import { addressBarInSidebar, windowCornerRadius } from "./layout";
 
@@ -21,7 +22,8 @@ function drawnPageFrame(s: BrowserState, windowId: string): number {
 
 function bookmarksBarAbovePages(s: BrowserState, windowId: string): boolean {
   const w = s.windows[windowId];
-  return !!w && !isSmallWindow(w) && w.kind !== "private" && bookmarksShown(s.settings) && s.settings.bookmarksBar === "always";
+  if (!w || isSmallWindow(w) || w.kind === "private" || splitOf(s, activeTabId(s, windowId))) return false;
+  return bookmarksShown(s.settings) && s.settings.bookmarksBar === "always";
 }
 
 function pageReachesCardTop(s: BrowserState, windowId: string): boolean {
@@ -36,7 +38,7 @@ export function pageCornerRadiusIn(s: BrowserState, windowId: string, fixedRadiu
   return pageFrameOf(inset, windowRadius(), 0, fixedRadius).radius;
 }
 
-export function syncPageCorners(s: BrowserState, send: (windowId: string, radius: number) => void = windowControls.setPageCornerRadius, fixedRadius: number | null = WINDOW_CHROME.pageCornerRadius) {
+export function syncPageCorners(s: BrowserState, send = windowControls.setPageCornerRadius, fixedRadius: number | null = WINDOW_CHROME.pageCornerRadius) {
   for (const id of Object.keys(s.windows)) {
     const radius = pageCornerRadiusIn(s, id, fixedRadius);
     if (sent.get(id) === radius) continue;

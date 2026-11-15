@@ -3,9 +3,11 @@ import { test } from "node:test";
 const { pageCornerRadiusIn, syncPageCorners } = await import("./pageCorners.ts");
 
 const SETTINGS = { tabLayout: "sidebar", sidebarSide: "left", addressBar: "sidebar", compactToolbar: false, autoHideTabs: false, pageFrame: 9 };
-function state(settings = {}, window = {}) {
+function state(settings = {}, window = {}, splits = {}) {
   return {
-    windows: { w: { id: "w", kind: "main", profileId: "p", fullScreen: false, ...window } },
+    windows: { w: { id: "w", kind: "main", profileId: "p", fullScreen: false, activeTabIds: { p: "a" }, ...window } },
+    tabs: { a: { id: "a", windowId: "w", url: "https://a.test" }, b: { id: "b", windowId: "w", url: "https://b.test" }, c: { id: "c", windowId: "w", url: "https://c.test" } },
+    splits,
     windowOrder: ["w"],
     ui: { focusOrder: ["w"] },
     profiles: { p: { id: "p", name: "Personal" } },
@@ -15,7 +17,9 @@ function state(settings = {}, window = {}) {
   };
 }
 
-const windowsRadius = (settings, window) => pageCornerRadiusIn(state(settings, window), "w", 8, () => 8);
+const windowsRadius = (settings, window, splits) => pageCornerRadiusIn(state(settings, window, splits), "w", 8, () => 8);
+const ACTIVE_SPLIT = { s: { id: "s", slots: [{ size: 0.5, tabId: "a" }, { size: 0.5, tabId: "b" }] } };
+const OTHER_SPLIT = { s: { id: "s", slots: [{ size: 0.5, tabId: "b" }, { size: 0.5, tabId: "c" }] } };
 
 test("on Windows a page that reaches its card's top matches the window's 8 px corners, and goes square with no page frame", () => {
   assert.equal(windowsRadius({}), 8);
@@ -35,6 +39,13 @@ test("on Windows a page below the toolbar or the bookmarks bar stays square, so 
   assert.equal(windowsRadius({ showBookmarks: true, bookmarksBar: "newTab" }), 8);
   assert.equal(windowsRadius({ showBookmarks: false, bookmarksBar: "always" }), 8);
   assert.equal(windowsRadius({ showBookmarks: true, bookmarksBar: "always" }, { kind: "private" }), 8);
+});
+
+test("on Windows Split View hides the bookmarks bar, so a split's panes round their corners again", () => {
+  const bar = { showBookmarks: true, bookmarksBar: "always" };
+  assert.equal(windowsRadius(bar, {}, ACTIVE_SPLIT), 8);
+  assert.equal(windowsRadius(bar, {}, OTHER_SPLIT), 0);
+  assert.equal(windowsRadius({ ...bar, addressBar: "toolbar" }, {}, ACTIVE_SPLIT), 0);
 });
 
 test("on the Mac the page corner stays concentric with the window", () => {

@@ -21,7 +21,7 @@ import { SCROLL_EDGE, ScrollEdgeLine, useScrollEdge, useScrollEdgeBelow } from "
 import { listTopGap } from "./geometry";
 import { startsOffScreen } from "../../state/sidebar/geometry";
 import { toggleNewTabBar } from "../../state/omnibox/newTabBar";
-import { DOCK_SHARE, DOCKED_BOTTOM, GLOW_ROOM, pageLayout, tilesFitDock, type SidebarGeometry } from "./pageLayout";
+import { DOCK_SHARE, DOCKED_ROW_PAD, GLOW_ROOM, pageLayout, tilesFitDock, type SidebarGeometry } from "./pageLayout";
 import { PageRows } from "./PageRows";
 import { NewTabRow } from "./NewTabRow";
 import { SelectedRowPill, useSelectedRowAway } from "./SelectedRowPill";
@@ -232,7 +232,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
                       </View>
                     ) : null}
                     {docked && newTabShown ? (
-                      <View style={{ paddingHorizontal: layout.sidebarInset, paddingTop: layout.rowGap, paddingBottom: DOCKED_BOTTOM }}>
+                      <View style={{ paddingHorizontal: layout.sidebarInset, paddingVertical: DOCKED_ROW_PAD }}>
                         <NewTabRow windowId={windowId} />
                       </View>
                     ) : null}

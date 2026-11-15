@@ -1,25 +1,31 @@
 #!/usr/bin/env bash
-# Usage: scripts/linux/test-instance <name> [--port N] [--display N] [--data DIR] [--app PATH] [--visible] [-- <app args>]
+# Usage: scripts/linux/test-instance <name> [--port N] [--display N] [--data DIR] [--app PATH | --engine DIR [--ui DIR]] [--wm] [--visible] [-- <app args>]
 #        scripts/linux/test-instance <name> --stop
 # Starts a hidden Ardia test instance on a private Xvfb display with its own ARDIA_DATA_DIR and remote debugging port, builds nothing,
 # waits until the debugging port answers, prints the instance's pid and exits. --stop quits it cleanly (willQuit, saves) and stops its Xvfb.
 # --app runs a packaged build (an extracted AppImage folder, the .deb's /opt/Ardia, or a launcher script) instead of the checkout's Electron.
+# --engine runs the engine build instead of Electron: an unpacked engine package (its ardia launcher) or an out dir holding chrome,
+# with ARDIA_UI_DIR set to --ui (default: <DIR>/ui) and the out dir's ardia.test-build marker written. --wm runs xfwm4 with its
+# compositor on the display first.
 # --visible leaves ARDIA_BACKGROUND unset, so menus and dialogs are shown on the virtual display instead of logged.
 # State lives in ${ARDIA_INSTANCES:-${TMPDIR:-/tmp}/ardia-instances}/<name>: pid, port, display, data/ and instance.log.
 set -euo pipefail
-[[ "${1:-}" == "-h" || "${1:-}" == "--help" || $# -eq 0 ]] && { sed -n "2,8p" "$0" | cut -c3-; exit 0; }
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" || $# -eq 0 ]] && { sed -n "2,11p" "$0" | cut -c3-; exit 0; }
 repo="$(cd "$(dirname "$0")/../.." && pwd)"
 name="$1"; shift
 [[ "$name" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo "test-instance: the name may use letters, digits, . _ -" >&2; exit 2; }
 base="${ARDIA_INSTANCES:-${TMPDIR:-/tmp}/ardia-instances}/$name"
 hash=$(( $(printf '%s' "$name" | cksum | cut -d' ' -f1) % 400 ))
-port=$((9400 + hash)); display=$((200 + hash)); data=""; app=""; visible=""; stop=""; extra=()
+port=$((9400 + hash)); display=$((200 + hash)); data=""; app=""; engine=""; ui=""; wm=""; visible=""; stop=""; extra=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --port) port="$2"; shift 2 ;;
     --display) display="$2"; shift 2 ;;
     --data) data="$2"; shift 2 ;;
     --app) app="$2"; shift 2 ;;
+    --engine) engine="$2"; shift 2 ;;
+    --ui) ui="$2"; shift 2 ;;
+    --wm) wm=1; shift ;;
     --visible) visible=1; shift ;;
     --stop) stop=1; shift ;;
     --) shift; extra=("$@"); break ;;
@@ -51,7 +57,23 @@ mkdir -p "$base"
 data="${data:-$base/data}"; mkdir -p "$data"
 source "$repo/apps/browser/linux/packaging/sandbox.sh"
 
-if [[ -z "$app" ]]; then
+engine_env=()
+if [[ -n "$engine" ]]; then
+  engine="$(cd "$engine" && pwd)"
+  ui="${ui:-$engine/ui}"
+  [[ -f "$ui/index.html" ]] || { echo "test-instance: no engine UI bundle at $ui; build it: pnpm -C apps/browser/linux build:ui:chromium" >&2; exit 1; }
+  engine_env=(ARDIA_UI_DIR="$(cd "$ui" && pwd)")
+  if [[ -x "$engine/ardia" ]]; then
+    command=("$engine/ardia")
+  elif [[ -x "$engine/chrome" ]]; then
+    [[ -f "$engine/ardia.test-build" ]] || : > "$engine/ardia.test-build"
+    ardia_sandbox_decide "$engine/chrome"
+    command=("$engine/chrome" --ozone-platform=x11 "${ARDIA_SANDBOX_FLAGS[@]}")
+    [[ ${#ARDIA_SANDBOX_FLAGS[@]} -gt 0 ]] && command+=("--ardia-sandbox-decision=$ARDIA_SANDBOX_REASON")
+  else
+    echo "test-instance: $engine has neither an ardia launcher nor chrome" >&2; exit 1
+  fi
+elif [[ -z "$app" ]]; then
   binary="$repo/node_modules/electron/dist/electron"
   [[ -x "$binary" ]] || { echo "test-instance: Electron isn't installed; run node node_modules/electron/install.js" >&2; exit 1; }
   [[ -f "$repo/apps/browser/linux/out/main.js" ]] || { echo "test-instance: build first: pnpm -C apps/browser/linux build" >&2; exit 1; }
@@ -64,9 +86,11 @@ else
 fi
 
 : > "$base/instance.log"
-env_vars=(ARDIA_DATA_DIR="$data" ARDIA_REMOTE_DEBUGGING_PORT="$port" ARDIA_INSTANCE_NAME="$name")
+env_vars=(ARDIA_DATA_DIR="$data" ARDIA_REMOTE_DEBUGGING_PORT="$port" ARDIA_INSTANCE_NAME="$name" "${engine_env[@]}")
 [[ -z "$visible" ]] && env_vars+=(ARDIA_BACKGROUND=1)
-setsid env "${env_vars[@]}" "$repo/scripts/linux/xvfb" "$display" -- "${command[@]}" --enable-logging=stderr "${extra[@]}" >>"$base/instance.log" 2>&1 < /dev/null &
+launch=("${command[@]}" --enable-logging=stderr "${extra[@]}")
+[[ -n "$wm" ]] && launch=(bash -c 'xfwm4 --sm-client-disable --compositor=on >/dev/null 2>&1 & sleep 1; exec "$@"' with-wm "${launch[@]}")
+setsid env "${env_vars[@]}" "$repo/scripts/linux/xvfb" "$display" -- "${launch[@]}" >>"$base/instance.log" 2>&1 < /dev/null &
 wrapper=$!
 echo "$wrapper" > "$base/wrapper"; echo "$port" > "$base/port"; echo "$display" > "$base/display"; echo "$data" > "$base/data-dir"
 

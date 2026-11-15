@@ -1,0 +1,335 @@
+#!/usr/bin/env node
+const HELP = `Usage: scripts/linux/engine-smoke [--engine DIR] [--ui DIR] [--out DIR] [--display N] [--port N] [--rates SECONDS] [--keep]
+The engine milestone's checks (docs/linux-engine.md, "The first milestone"), on a hidden test instance under xfwm4 on a
+private Xvfb, from a fresh data folder (onboarding marked done), with real X input (scripts/linux/xinput):
+  1 the engine starts with no window of its own and the host loads chrome://ardia-app/index.html from ARDIA_UI_DIR
+  2 window.ardiaLinux lists the M1 modules, callSync and call answer, an engine event reaches onEvent
+  3 the UI shows in an app window of ours (window.open child, shown after first paint, rounded, sidebar and toolbar)
+  4 a fixture page given as the launch link loads under the UI, its title in the sidebar
+  5 Ctrl+L opens the command bar over the page, its pixels inside the page's rect, the page around it
+  6 a click on the page counts there, a click on the bar doesn't; the wheel scrolls the page only over the page
+  7 typing goes to the page's field after clicking it, to the command bar after Ctrl+L
+  8 Ctrl+Q writes the session and exits within 3 s
+It also logs the host's timer and frame rates over --rates seconds (default 60) and the sync calls' times.
+--engine is an out dir holding chrome or an unpacked engine package (default: the Linux tree's out/Release_GN_linux_x64);
+--ui is the engine UI bundle (default: built into <out>/ui with vite.chromium.config.ts). Screenshots, the instance's log and
+report.json go to --out. Exits 1 when a check fails.`;
+
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
+import { homedir, tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const args = process.argv.slice(2);
+if (args.includes("-h") || args.includes("--help")) {
+  console.log(HELP);
+  process.exit(0);
+}
+const option = (name, fallback) => (args.includes(name) ? args[args.indexOf(name) + 1] : fallback);
+const repo = resolve(fileURLToPath(new URL("../..", import.meta.url)));
+const engine = resolve(option("--engine", join(homedir(), "chromium-build-linux/chromium_git/chromium/src/out/Release_GN_linux_x64")));
+const out = resolve(option("--out", join(tmpdir(), "ardia-engine-smoke")));
+const display = option("--display", "132");
+const port = option("--port", "9332");
+const rateSeconds = Number(option("--rates", "60"));
+const name = `engine-smoke-${display}`;
+const data = join(out, "data");
+const instances = join(out, "instances");
+const xinput = join(repo, "scripts/linux/xinput");
+const FIXTURE_COLOR = [0x18, 0xa0, 0xe0];
+const M1_MODULES = ["ArdiaDocuments", "ArdiaApp", "ArdiaAppWindows", "ArdiaEngineHost", "ArdiaMenus"];
+
+rmSync(data, { recursive: true, force: true });
+rmSync(instances, { recursive: true, force: true });
+mkdirSync(join(out, "screenshots"), { recursive: true });
+mkdirSync(data, { recursive: true });
+writeFileSync(join(data, "onboarding.json"), JSON.stringify({ completedAt: 1, version: 1 }));
+
+let ui = option("--ui");
+if (!ui) {
+  ui = join(out, "ui");
+  console.log("engine-smoke: building the engine UI bundle");
+  const built = spawnSync("npx", ["vite", "build", "--config", "renderer/vite.chromium.config.ts", "--logLevel", "warn"], { cwd: join(repo, "apps/browser/linux"), env: { ...process.env, ARDIA_UI_OUT: ui }, stdio: "inherit" });
+  if (built.status !== 0) process.exit(built.status ?? 1);
+}
+ui = resolve(ui);
+
+const report = { checks: {}, measures: {}, notes: [] };
+let failures = 0;
+const check = (id, label, ok, detail) => {
+  report.checks[id] = { label, ok: !!ok, detail };
+  if (!ok) failures += 1;
+  console.log(`${ok ? "ok  " : "FAIL"} ${id} ${label}${detail === undefined ? "" : ` ${typeof detail === "string" ? detail : JSON.stringify(detail)}`}`);
+};
+const measure = (key, value) => {
+  report.measures[key] = value;
+  console.log(`     ${key} ${typeof value === "string" ? value : JSON.stringify(value)}`);
+};
+const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+const until = async (test, ms, step = 150) => {
+  const deadline = Date.now() + ms;
+  for (;;) {
+    const value = await test().catch(() => null);
+    if (value) return value;
+    if (Date.now() > deadline) return null;
+    await sleep(step);
+  }
+};
+
+const x = (...command) => {
+  const result = spawnSync("python3", [xinput, `:${display}`, ...command.map(String)], { encoding: "utf8", timeout: 20000 });
+  if (result.status !== 0) throw new Error(`xinput ${command.join(" ")}: ${result.stderr.trim()}`);
+  return result.stdout.trim();
+};
+const pixel = (px, py) => {
+  const hex = x("pixel", Math.round(px), Math.round(py));
+  return [0, 2, 4].map((at) => parseInt(hex.slice(at, at + 2), 16));
+};
+const near = (a, b, tolerance = 24) => a.every((value, index) => Math.abs(value - b[index]) <= tolerance);
+const shot = (file) => {
+  try {
+    x("shot", join(out, "screenshots", file));
+  } catch (error) {
+    report.notes.push(String(error.message));
+  }
+};
+
+function cdp(url) {
+  const socket = new WebSocket(url);
+  let next = 0;
+  const waiting = new Map();
+  const listeners = new Set();
+  socket.addEventListener("message", (event) => {
+    const message = JSON.parse(String(event.data));
+    if (message.method) for (const listener of listeners) listener(message);
+    const settle = waiting.get(message.id);
+    if (!settle) return;
+    waiting.delete(message.id);
+    message.error ? settle.reject(new Error(message.error.message)) : settle.resolve(message.result);
+  });
+  const opened = new Promise((done, fail) => {
+    socket.addEventListener("open", done, { once: true });
+    socket.addEventListener("error", () => fail(new Error(`couldn't connect to ${url}`)), { once: true });
+  });
+  const send = async (method, params = {}) => {
+    await opened;
+    const id = ++next;
+    socket.send(JSON.stringify({ id, method, params }));
+    return new Promise((resolveCall, rejectCall) => {
+      waiting.set(id, { resolve: resolveCall, reject: rejectCall });
+      setTimeout(() => waiting.has(id) && (waiting.delete(id), rejectCall(new Error(`${method} timed out`))), 30000);
+    });
+  };
+  const evaluate = async (expression) => {
+    const result = await send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true });
+    if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description ?? result.exceptionDetails.text);
+    return result.result.value;
+  };
+  return { send, evaluate, close: () => socket.close() };
+}
+
+const targets = async () => {
+  const response = await fetch(`http://127.0.0.1:${port}/json/list`);
+  return response.ok ? response.json() : [];
+};
+
+const fixtureHtml = readFileSync(join(repo, "scripts/linux/fixtures/engine-smoke.html"));
+const server = createServer((request, response) => {
+  if (request.url !== "/engine-smoke.html") return void response.writeHead(404).end();
+  response.writeHead(200, { "content-type": "text/html" }).end(fixtureHtml);
+});
+await new Promise((done) => server.listen(0, "127.0.0.1", done));
+const fixture = `http://127.0.0.1:${server.address().port}/engine-smoke.html`;
+
+const env = { ...process.env, ARDIA_INSTANCES: instances };
+const started = Date.now();
+const launched = spawnSync(join(repo, "scripts/linux/test-instance"), [name, "--engine", engine, "--ui", ui, "--wm", "--display", display, "--port", port, "--data", data, "--", fixture], { env, encoding: "utf8", timeout: 60000 });
+const pid = Number(launched.stdout.trim());
+const instanceLog = join(instances, name, "instance.log");
+const finish = (code) => {
+  server.close();
+  if (existsSync(instanceLog)) writeFileSync(join(out, "instance.log"), readFileSync(instanceLog));
+  if (existsSync(join(data, "launch.log"))) writeFileSync(join(out, "launch.log"), readFileSync(join(data, "launch.log")));
+  writeFileSync(join(out, "report.json"), JSON.stringify(report, null, 2));
+  console.log(`engine-smoke: ${failures ? `${failures} failed` : "all passed"}; report, logs and screenshots in ${out}`);
+  process.exit(code);
+};
+const stopInstance = () => spawnSync(join(repo, "scripts/linux/test-instance"), [name, "--stop"], { env, timeout: 20000 });
+if (launched.status !== 0 || !pid) {
+  check("1", "the engine starts", false, launched.stderr.trim().split("\n").slice(-5).join(" | "));
+  finish(1);
+}
+const alive = () => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+try {
+  const hostTarget = await until(async () => (await targets()).find((target) => target.url.startsWith("chrome://ardia-app/")), 20000);
+  const launchLog = () => (existsSync(join(data, "launch.log")) ? readFileSync(join(data, "launch.log"), "utf8") : "");
+  const namesUi = await until(async () => launchLog().includes(` ui ${ui}`), 5000);
+  const early = await targets();
+  const strayWindows = early.filter((target) => target.type === "page" && /^chrome:\/\/(newtab|new-tab-page|welcome)/.test(target.url));
+  check("1", "no window of its own; the host loads chrome://ardia-app/index.html from ARDIA_UI_DIR", hostTarget?.url === "chrome://ardia-app/index.html" && namesUi && strayWindows.length === 0, {
+    host: hostTarget?.url ?? null,
+    uiInLaunchLog: !!namesUi,
+    gate: launchLog().split("\n").find((line) => / gate /.test(line)) ?? null,
+    stray: strayWindows.map((target) => target.url),
+  });
+  if (!hostTarget) throw new Error("no host");
+  const host = cdp(hostTarget.webSocketDebuggerUrl);
+
+  const bridge = await host.evaluate(`(async () => {
+    const linux = window.ardiaLinux;
+    if (!linux) return { installed: false };
+    globalThis.__smokeEvents = 0;
+    linux.onEvent(() => (globalThis.__smokeEvents += 1));
+    const modules = linux.modules();
+    const sync = linux.callSyncRaw("ArdiaEngineHost", "available", []);
+    const async = await linux.callRaw("ArdiaEngineHost", "hostCall", ["host.info", "{}", ""]);
+    let unknown = null;
+    try { linux.callSync("ArdiaNothing", "nothing", []); } catch (error) { unknown = error.code; }
+    return { installed: true, frozen: Object.isFrozen(linux), modules: Object.keys(modules), sync, async, unknown };
+  })()`);
+  const missingModules = M1_MODULES.filter((module) => !bridge.modules?.includes(module));
+  check("2a", "window.ardiaLinux lists the M1 modules", bridge.installed && missingModules.length === 0, { missing: missingModules, all: bridge.modules?.length });
+  check("2b", "callSync and call answer", bridge.sync?.value === true && typeof bridge.async?.value === "string" && bridge.unknown === "ERR_LINUX_NATIVE", { sync: bridge.sync, async: bridge.async, unknown: bridge.unknown });
+
+  const windowTarget = await until(async () => (await targets()).find((target) => target.type === "page" && target.url === "about:blank" && target.title), 20000);
+  const app = windowTarget ? cdp(windowTarget.webSocketDebuggerUrl) : null;
+  const windowState = app
+    ? await until(async () => {
+        const state = await app.evaluate(`({ id: document.documentElement.dataset.ardiaWindow, shape: document.documentElement.dataset.ardiaShape, x: screenX, y: screenY, width: innerWidth, height: innerHeight, text: document.body.innerText, bridge: "ardiaLinux" in window, mounted: (document.getElementById("root")?.childElementCount ?? 0) > 0 })`);
+        return state.mounted && state.width > 0 ? state : null;
+      }, 20000)
+    : null;
+  await sleep(1500);
+  shot("3-window.png");
+  let corner = null;
+  let inside = null;
+  if (windowState) {
+    corner = pixel(windowState.x + 1, windowState.y + 1);
+    inside = pixel(windowState.x + 30, windowState.y + 30);
+  }
+  check("3", "the UI shows in an app window of ours, rounded, with the sidebar and toolbar", !!windowState && !windowState.bridge && windowState.shape === "round" && corner && !near(corner, inside, 8), {
+    window: windowState && { id: windowState.id, x: windowState.x, y: windowState.y, width: windowState.width, height: windowState.height },
+    shape: windowState?.shape,
+    corner,
+    inside,
+  });
+
+  const pageTarget = await until(async () => (await targets()).find((target) => target.url === fixture), 20000);
+  const page = pageTarget ? cdp(pageTarget.webSocketDebuggerUrl) : null;
+  const placed = await until(async () => {
+    const shown = await host.evaluate(`Object.values(globalThis.ardiaEngineDebug?.shown() ?? {}).filter((show) => show.visible && show.width > 0)`);
+    return shown?.[0] ?? null;
+  }, 15000);
+  const titled = app ? await until(() => app.evaluate(`document.body.innerText.includes("Engine smoke")`), 10000) : null;
+  await sleep(800);
+  shot("4-page.png");
+  const pageCenter = placed && windowState ? [windowState.x + placed.x + placed.width * 0.75, windowState.y + placed.y + placed.height * 0.5] : null;
+  const pageColor = pageCenter ? pixel(...pageCenter) : null;
+  const events = await host.evaluate("globalThis.__smokeEvents");
+  check("2c", "an engine event reaches onEvent", events > 0, `${events} events`);
+  check("4", "the launch link loads under the UI in the same window, its title in the sidebar", !!pageTarget && !!placed && !!titled && pageColor && near(pageColor, FIXTURE_COLOR), { placed: placed && { x: placed.x, y: placed.y, width: placed.width, height: placed.height, radius: placed.radius }, pageColor, titled: !!titled });
+  if (!placed || !windowState || !page || !app) throw new Error("no page to drive");
+
+  const toScreen = (rect) => ({ x: windowState.x + rect.x, y: windowState.y + rect.y, width: rect.width, height: rect.height });
+  const pageRect = toScreen(placed);
+  x("click", pageRect.x + pageRect.width * 0.8, pageRect.y + pageRect.height * 0.3);
+  await sleep(300);
+  x("keys", "ctrl+l");
+  const bar = await until(async () => {
+    const rect = await app.evaluate(`(() => { const field = document.activeElement; if (!field || field.tagName !== "INPUT" && field.tagName !== "TEXTAREA") return null; const box = field.getBoundingClientRect(); return { x: box.x, y: box.y, width: box.width, height: box.height }; })()`);
+    return rect && rect.width > 0 ? rect : null;
+  }, 5000);
+  await sleep(500);
+  shot("5-command-bar.png");
+  const barRect = bar ? toScreen(bar) : null;
+  const barInsidePage = barRect && barRect.y + barRect.height / 2 > pageRect.y && barRect.x > pageRect.x;
+  const barColor = barRect ? pixel(barRect.x + barRect.width / 2, barRect.y + barRect.height / 2) : null;
+  const besideBar = barRect ? pixel(pageRect.x + pageRect.width - 20, pageRect.y + pageRect.height - 60) : null;
+  const holes = (await host.evaluate(`Object.values(globalThis.ardiaEngineDebug.shown()).filter((show) => show.visible).flatMap((show) => show.holes ?? [])`)) ?? [];
+  check("5", "Ctrl+L opens the command bar over the page, the page visible around it", !!barRect && barInsidePage && barColor && !near(barColor, FIXTURE_COLOR) && besideBar && near(besideBar, FIXTURE_COLOR) && holes.length > 0, { bar: barRect, barColor, besideBar, holes });
+
+  const clicks = () => page.evaluate("window.clicks");
+  const scrollY = () => page.evaluate("Math.round(scrollY)");
+  let barClick = null;
+  let wheelOverBar = null;
+  if (barRect) {
+    const before = await clicks();
+    x("click", barRect.x + barRect.width / 2, barRect.y + barRect.height / 2);
+    await sleep(300);
+    barClick = (await clicks()) - before;
+    const scrollBefore = await scrollY();
+    x("wheel", barRect.x + barRect.width / 2, barRect.y + barRect.height / 2, 3);
+    await sleep(400);
+    wheelOverBar = (await scrollY()) - scrollBefore;
+  }
+  const clicksBefore = await clicks();
+  x("click", pageRect.x + pageRect.width * 0.8, pageRect.y + pageRect.height * 0.6);
+  await sleep(400);
+  const pageClick = (await clicks()) - clicksBefore;
+  const scrollBefore = await scrollY();
+  x("wheel", pageRect.x + pageRect.width * 0.8, pageRect.y + pageRect.height * 0.6, 3);
+  const wheelOverPage = (await until(async () => ((await scrollY()) - scrollBefore > 0 ? (await scrollY()) - scrollBefore : null), 2000)) ?? 0;
+  check("6", "a click and the wheel reach the page outside the bar, not through it", barClick === 0 && wheelOverBar === 0 && pageClick === 1 && wheelOverPage > 0, { barClick, wheelOverBar, pageClick, wheelOverPage });
+
+  await page.evaluate("scrollTo(0, 0)");
+  await sleep(300);
+  const field = await page.evaluate(`(() => { const box = document.getElementById("field").getBoundingClientRect(); return { x: box.x + box.width / 2, y: box.y + box.height / 2 }; })()`);
+  x("click", pageRect.x + field.x, pageRect.y + field.y);
+  await sleep(300);
+  x("type", "page");
+  await sleep(300);
+  const pageTyped = await page.evaluate(`document.getElementById("field").value`);
+  x("keys", "ctrl+l");
+  await sleep(500);
+  x("type", "bar");
+  await sleep(400);
+  const barTyped = await app.evaluate(`document.activeElement?.value ?? null`);
+  const pageAfter = await page.evaluate(`document.getElementById("field").value`);
+  shot("7-typed.png");
+  check("7", "typing goes to the page's field after clicking it, to the command bar after Ctrl+L", pageTyped === "page" && typeof barTyped === "string" && barTyped.endsWith("bar") && pageAfter === "page", { pageTyped, barTyped, pageAfter });
+  x("keys", "Escape");
+
+  const rates = await host.evaluate(`new Promise((done) => {
+    let ticks = 0, frames = 0;
+    const started = performance.now();
+    const timer = setInterval(() => (ticks += 1), 16);
+    const frame = () => { frames += 1; if (performance.now() - started < ${rateSeconds * 1000}) requestAnimationFrame(frame); };
+    requestAnimationFrame(frame);
+    setTimeout(() => { clearInterval(timer); const seconds = (performance.now() - started) / 1000; done({ seconds: Math.round(seconds), timersPerSecond: Math.round(ticks / seconds), framesPerSecond: Math.round(frames / seconds) }); }, ${rateSeconds * 1000});
+  })`);
+  measure("host rates", rates);
+  const syncTimes = await host.evaluate(`(() => {
+    const times = [];
+    for (let i = 0; i < 200; i++) { const started = performance.now(); window.ardiaLinux.callSyncRaw("ArdiaEngineHost", "available", []); times.push(performance.now() - started); }
+    times.sort((a, b) => a - b);
+    return { calls: times.length, medianMs: +times[100].toFixed(3), p99Ms: +times[197].toFixed(3), maxMs: +times[199].toFixed(3) };
+  })()`);
+  measure("sync calls", syncTimes);
+  report.notes.push("the page's lag behind the UI during the sidebar's slide isn't measured yet (needs a 60 fps capture)");
+
+  host.close();
+  app.close();
+  page.close();
+  const quitAt = Date.now();
+  x("keys", "ctrl+q");
+  const gone = await until(async () => !alive(), 6000, 50);
+  const quitMs = Date.now() - quitAt;
+  const saved = readdirSync(data).filter((file) => /^session.*\.json$/.test(file));
+  check("8", "Ctrl+Q writes the session and exits within 3 s", !!gone && quitMs <= 3000 && saved.length > 0, { quitMs, saved });
+  measure("whole run", `${Math.round((Date.now() - started) / 1000)} s`);
+} catch (error) {
+  check("run", "the smoke ran to the end", false, String(error?.message ?? error));
+} finally {
+  if (alive() && !args.includes("--keep")) stopInstance();
+}
+finish(failures ? 1 : 0);

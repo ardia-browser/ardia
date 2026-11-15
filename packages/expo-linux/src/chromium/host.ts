@@ -7,7 +7,11 @@ type TopicListener = (payload: Record<string, unknown>) => void;
 export const ENGINE_HOST = "ArdiaEngineHost";
 
 const listeners = new Map<string, Set<TopicListener>>();
+const shown = new Map<string, Record<string, unknown>>();
 let subscribed = false;
+let hostCalls = 0;
+
+Object.assign(globalThis, { ardiaEngineDebug: { shown: () => Object.fromEntries(shown), hostCalls: () => hostCalls } });
 
 export const engineAvailable = (): boolean => !!mainModules()[ENGINE_HOST];
 
@@ -34,6 +38,9 @@ function present() {
 
 export async function hostCall<Result = unknown>(verb: string, args: Record<string, unknown> = {}, windowId = ""): Promise<Result> {
   present();
+  hostCalls += 1;
+  if (verb === "tab.show" && typeof args.key === "string") shown.set(args.key, { ...args, windowId });
+  if (verb === "tab.close" && typeof args.key === "string") shown.delete(args.key);
   return decode<Result>(await callMain<string>(ENGINE_HOST, "hostCall", verb, JSON.stringify(args), windowId));
 }
 

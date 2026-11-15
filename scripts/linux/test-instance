@@ -7,12 +7,13 @@
 # --engine runs the engine build instead of Electron: an unpacked engine package (its ardia launcher) or an out dir holding chrome,
 # with ARDIA_UI_DIR set to --ui (default: <DIR>/ui), the out dir's ardia.test-build marker written and Extensions/ublock linked to
 # the checkout's uBlock Origin (scripts/linux/ubo.sh) when it has none; an out dir's chrome
-# keeps secrets with --password-store=basic (the private D-Bus bus stalls libsecret ~25 s; ARDIA_KEYRING=1 keeps the keyring).
+# keeps secrets with --password-store=basic (the private D-Bus bus stalls libsecret ~25 s; ARDIA_KEYRING=1 keeps the keyring); an engine
+# instance downloads into <data>/Downloads (ARDIA_INSTANCE downloadsDir) unless ARDIA_INSTANCE names another folder.
 # --wm runs xfwm4 with its compositor on the display first.
 # --visible leaves ARDIA_BACKGROUND unset, so menus and dialogs are shown on the virtual display instead of logged.
 # State lives in ${ARDIA_INSTANCES:-${TMPDIR:-/tmp}/ardia-instances}/<name>: pid, port, display, data/ and instance.log.
 set -euo pipefail
-[[ "${1:-}" == "-h" || "${1:-}" == "--help" || $# -eq 0 ]] && { sed -n "2,12p" "$0" | cut -c3-; exit 0; }
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" || $# -eq 0 ]] && { sed -n "2,13p" "$0" | cut -c3-; exit 0; }
 repo="$(cd "$(dirname "$0")/../.." && pwd)"
 name="$1"; shift
 [[ "$name" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo "test-instance: the name may use letters, digits, . _ -" >&2; exit 2; }
@@ -65,6 +66,9 @@ if [[ -n "$engine" ]]; then
   ui="${ui:-$engine/ui}"
   [[ -f "$ui/index.html" ]] || { echo "test-instance: no engine UI bundle at $ui; build it: pnpm -C apps/browser/linux build:ui:chromium" >&2; exit 1; }
   engine_env=(ARDIA_UI_DIR="$(cd "$ui" && pwd)")
+  instance="${ARDIA_INSTANCE:-}"
+  [[ "$instance" == *downloadsDir=* ]] || instance="${instance:+$instance,}downloadsDir=$data/Downloads"
+  engine_env+=(ARDIA_INSTANCE="$instance")
   if [[ -x "$engine/ardia" ]]; then
     command=("$engine/ardia")
   elif [[ -x "$engine/chrome" ]]; then

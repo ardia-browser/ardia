@@ -9,6 +9,7 @@
 #include "ardia/linux/host/host.h"
 #include "ardia/linux/main.h"
 #include "ardia/linux/ui_host/modules.h"
+#include "ardia/linux/page_channel/page_channel.h"
 #include "ardia/win/ac_calls.h"
 #include "ardia/win/profiles.h"
 #include "base/files/file_path.h"
@@ -117,6 +118,9 @@ void WatchEngineEvents() {
 void Emit(std::string_view topic, base::DictValue payload) {
   if (!ardia_linux::ModuleRegistry::Exists()) {
     return;
+  }
+  if (topic == "tab") {
+    ardia_linux::AmendTabEvent(payload);
   }
   base::DictValue event;
   event.Set("topic", topic);

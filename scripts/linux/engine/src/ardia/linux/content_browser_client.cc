@@ -7,6 +7,7 @@
 #include "ardia/linux/main_parts.h"
 #include "ardia/linux/modules/file_drop.h"
 #include "ardia/linux/ui_host/ui_host_parts.h"
+#include "ardia/linux/page_channel/page_channel.h"
 #include "ardia/linux/prompts/prompts.h"
 #include "chrome/browser/chrome_browser_main.h"
 #include "content/public/browser/browser_context.h"
@@ -39,6 +40,7 @@ void ContentBrowserClient::RegisterAssociatedInterfaceBindersForRenderFrameHost(
       RegisterAssociatedInterfaceBindersForRenderFrameHost(
           render_frame_host, associated_registry);
   RegisterUiHostBinders(render_frame_host, associated_registry);
+  RegisterPageChannelBinders(render_frame_host, associated_registry);
 }
 
 void ContentBrowserClient::CreateThrottlesForNavigation(

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin, type UserConfig } from "vite";
@@ -51,6 +51,7 @@ function engineEntry(): Plugin {
 }
 
 const MEADOW_PAGE = `${repo}packages/shaders/ios/Meadow/index.html`;
+const PAGE_SCRIPT = `${repo}packages/ardiacore/ios/page_script.js`;
 
 export function inlineScriptHashes(): string[] {
   const scripts = inlineScripts(meadowDocument(readFileSync(MEADOW_PAGE, "utf8")));
@@ -63,7 +64,10 @@ function contentSecurityHashes(): Plugin {
     name: "ardia-linux:content-security-hashes",
     apply: "build",
     configResolved: (config) => void (outDir = config.build.outDir),
-    writeBundle: () => writeFileSync(join(outDir, "csp.json"), `${JSON.stringify({ scriptSrc: inlineScriptHashes() }, null, 2)}\n`),
+    writeBundle: () => {
+      writeFileSync(join(outDir, "csp.json"), `${JSON.stringify({ scriptSrc: inlineScriptHashes() }, null, 2)}\n`);
+      copyFileSync(PAGE_SCRIPT, join(outDir, "page_script.js"));
+    },
   };
 }
 

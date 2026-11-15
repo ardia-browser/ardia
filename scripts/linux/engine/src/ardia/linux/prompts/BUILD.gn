@@ -6,6 +6,9 @@ source_set("prompts") {
   sources = [
     "../content_blocker.cc",
     "../content_blocker.h",
+    "../page_channel/page_channel.cc",
+    "../page_channel/page_channel.h",
+    "../page_channel/page_messages.cc",
     "context_menu.cc",
     "domains.cc",
     "domains.h",
@@ -20,6 +23,7 @@ source_set("prompts") {
   public_deps = [ "//ardia/linux/ui_host:modules" ]
 
   deps = [
+    "//ardia/core:page_script",
     "//ardia/core/mojom",
     "//ardia/win:shared",
     "//base",

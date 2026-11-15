@@ -3,6 +3,7 @@
 #include "ardia/linux/prompts/page_helpers.h"
 
 #include "ardia/linux/content_blocker.h"
+#include "ardia/linux/page_channel/page_channel.h"
 #include "ardia/linux/prompts/domains.h"
 #include "ardia/linux/prompts/prompts.h"
 
@@ -16,11 +17,13 @@ void RegisterPageModules(ModuleRegistry& registry) {
   InstallPermissionPrompts();
   InstallPasswordPrompts();
   InstallExtensionPrompts();
+  StartPageScript();
   DomainVerbs verbs;
   AddContentBlockerVerbs(verbs);
   AddPermissionVerbs(verbs);
   AddContextMenuVerbs(verbs);
   AddExtensionInstallVerbs(verbs);
+  AddPageChannelVerbs(verbs);
   verbs.Register(registry);
 }
 
@@ -28,6 +31,12 @@ bool CallPromptMethod(content::WebContents* contents,
                       const std::string& method,
                       const base::DictValue& args,
                       ardia_win::Reply& reply) {
+  if (CallPageChannelMethod(contents, method, args)) {
+    base::DictValue done;
+    done.Set("ok", true);
+    std::move(reply).Run(std::move(done));
+    return true;
+  }
   return CallPasswordMethod(contents, method, args, reply);
 }
 

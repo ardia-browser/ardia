@@ -9,7 +9,7 @@ import { SHADOWS } from "../window/tokens";
 import type { SidebarGeometry } from "./pageLayout";
 import { locateTab, rowAway, type RowAway, type RowSpot } from "./selectedRow";
 import { TabIcon } from "./TabIcon";
-import { SELECTED_ROW_PILL, SELECTED_ROW_PILL_MOTION, useSidebarTokens } from "./tokens";
+import { SELECTED_ROW_PILL, SELECTED_ROW_PILL_MOTION, SELECTED_ROW_REVEAL_SETTLE_MS, useSidebarTokens } from "./tokens";
 
 function settle(progress: Animated.Value, phase: keyof typeof SELECTED_ROW_PILL_MOTION, done?: () => void) {
   const toValue = phase === "enter" ? 1 : 0;
@@ -31,15 +31,27 @@ export function useSelectedRowAway(windowId: string, geometry: RefObject<Sidebar
     let row: RowSpot | null = null;
     let ticket = 0;
     let frame = 0;
+    let selected: string | null | undefined;
+    let quietUntil = 0;
+    let quiet: ReturnType<typeof setTimeout> | undefined;
     const judge = () => {
       const page = live.current.geometry?.current;
-      setAway(page ? rowAway(row, live.current.scrollY(), page.viewport) : null);
+      setAway(page && Date.now() >= quietUntil ? rowAway(row, live.current.scrollY(), page.viewport) : null);
+    };
+    const settleAfterSwitch = (tabId: string | null) => {
+      if (selected !== undefined && tabId !== selected) {
+        quietUntil = Date.now() + SELECTED_ROW_REVEAL_SETTLE_MS;
+        clearTimeout(quiet);
+        quiet = setTimeout(judge, SELECTED_ROW_REVEAL_SETTLE_MS);
+      }
+      selected = tabId;
     };
     const locate = () => {
       frame = 0;
       const mine = ++ticket;
       const page = live.current.geometry?.current;
       const tabId = selectedTabIn(windowId);
+      settleAfterSwitch(tabId ?? null);
       const found = page && tabId ? locateTab(windowId, tabId, page, scroll.current, () => live.current.scrollY()) : null;
       if (found && "then" in found) {
         void found.then((spot) => {
@@ -57,7 +69,10 @@ export function useSelectedRowAway(windowId: string, geometry: RefObject<Sidebar
       relocate: () => {
         if (!frame) frame = requestAnimationFrame(locate);
       },
-      stop: () => cancelAnimationFrame(frame),
+      stop: () => {
+        cancelAnimationFrame(frame);
+        clearTimeout(quiet);
+      },
     };
   });
   useEffect(() => {

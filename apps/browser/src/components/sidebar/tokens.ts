@@ -221,3 +221,4 @@ export const SELECTED_ROW_PILL_MOTION = {
   enter: { duration: 140, easing: Easing.out(Easing.quad) },
   exit: { duration: 60, easing: Easing.linear },
 } as const;
+export const SELECTED_ROW_REVEAL_SETTLE_MS = 400;

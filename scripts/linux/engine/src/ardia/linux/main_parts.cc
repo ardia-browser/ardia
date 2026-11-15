@@ -9,6 +9,7 @@
 #include "ardia/linux/app_lifetime.h"
 #include "ardia/linux/host/host.h"
 #include "ardia/linux/host/key_map.h"
+#include "ardia/linux/host/leaving_pages.h"
 #include "ardia/linux/log.h"
 #include "ardia/linux/main.h"
 #include "ardia/linux/probe.h"
@@ -64,6 +65,7 @@ void MainParts::PostBrowserStart() {
   RegisterPageModules(*registry_);
   RegisterEngineHostModule(*registry_);
   AppWindows::Get().Register(*registry_);
+  RegisterLeavingPagesModule(*registry_);
   KeyMap::Get().Register(*registry_);
   Host::Get()->Start();
   ardia_win::WatchEngineEvents();

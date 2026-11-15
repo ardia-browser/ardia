@@ -57,6 +57,9 @@ class Host : public TabStripModelObserver, public BrowserCollectionObserver {
   int CloseBrowsersOf(Profile* profile);
   void ForgetProfile(Profile* profile);
   bool Shows(const std::string& key) const;
+  content::WebContents* FindTab(const std::string& key) const {
+    return Find(key);
+  }
   void TabDestroyed(ardia_win::TabState* state);
   void DeleteClosedTab(content::WebContents* contents);
 

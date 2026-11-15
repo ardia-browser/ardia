@@ -2,18 +2,31 @@
 
 #include "ardia/linux/main.h"
 
+#include <fcntl.h>
+#include <poll.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 
 #include "ardia/core/ac_launch_switches.h"
+#include "ardia/linux/modules/launch_config.h"
 #include "ardia/linux/test_gate.h"
 #include "base/base_switches.h"
 #include "base/command_line.h"
 #include "base/environment.h"
 #include "base/files/file_path.h"
+#include "base/files/file_util.h"
+#include "base/files/scoped_file.h"
+#include "base/json/json_reader.h"
+#include "base/posix/eintr_wrapper.h"
+#include "base/process/launch.h"
+#include "base/process/process.h"
+#include "base/time/time.h"
+#include "base/values.h"
 #include "base/no_destructor.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
@@ -105,19 +118,80 @@ void KeepRealProfileClosed(base::CommandLine* command_line) {
 
 void AddInstanceSwitches(base::CommandLine* command_line,
                          const std::string& instance) {
-  for (const std::string& entry : base::SplitString(
-           instance, ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY)) {
-    const size_t equals = entry.find('=');
-    const std::string key = base::ToLowerASCII(
-        equals == std::string::npos ? entry : entry.substr(0, equals));
-    if (key.empty() || !base::ContainsOnlyChars(
-                           key, "abcdefghijklmnopqrstuvwxyz0123456789-")) {
-      continue;
-    }
-    command_line->AppendSwitchASCII(
-        "ardia-" + key,
-        equals == std::string::npos ? "1" : entry.substr(equals + 1));
+  for (const auto& [key, value] : ParseInstanceEntries(instance, nullptr)) {
+    command_line->AppendSwitchNative("ardia-" + base::ToLowerASCII(key), value);
   }
+}
+
+bool ChoseThinScrollBars(const base::FilePath& data_dir) {
+  std::string text;
+  if (!base::ReadFileToStringWithMaxSize(data_dir.Append("scroll-bars.json"),
+                                         &text, 4096)) {
+    return false;
+  }
+  std::optional<base::DictValue> saved = base::JSONReader::ReadDict(text, base::JSON_PARSE_RFC);
+  const std::string* choice = saved ? saved->FindString("pageScrollBars") : nullptr;
+  return choice && *choice == "thin";
+}
+
+std::optional<std::string> GnomeOverlayScrolling() {
+  int fds[2];
+  if (pipe2(fds, O_CLOEXEC) != 0) {
+    return std::nullopt;
+  }
+  base::ScopedFD read_end(fds[0]);
+  base::ScopedFD write_end(fds[1]);
+  base::LaunchOptions options;
+  options.fds_to_remap.emplace_back(write_end.get(), STDOUT_FILENO);
+  base::Process process = base::LaunchProcess(
+      {"gsettings", "get", "org.gnome.desktop.interface", "overlay-scrolling"},
+      options);
+  write_end.reset();
+  if (!process.IsValid()) {
+    return std::nullopt;
+  }
+  std::string output;
+  const base::TimeTicks deadline =
+      base::TimeTicks::Now() + base::Milliseconds(300);
+  while (true) {
+    const int left = static_cast<int>(
+        (deadline - base::TimeTicks::Now()).InMilliseconds());
+    struct pollfd watched = {read_end.get(), POLLIN, 0};
+    if (left <= 0 || HANDLE_EINTR(poll(&watched, 1, left)) <= 0) {
+      process.Terminate(0, false);
+      break;
+    }
+    char buffer[64];
+    const ssize_t got = HANDLE_EINTR(read(read_end.get(), buffer, sizeof(buffer)));
+    if (got <= 0) {
+      break;
+    }
+    output.append(buffer, static_cast<size_t>(got));
+  }
+  int exit_code = 0;
+  process.WaitForExitWithTimeout(base::Milliseconds(50), &exit_code);
+  return std::string(base::TrimWhitespaceASCII(output, base::TRIM_ALL));
+}
+
+bool DesktopPrefersOverlay(base::Environment& env) {
+  if (Variable(env, "GTK_OVERLAY_SCROLLING") == "0") {
+    return false;
+  }
+  return GnomeOverlayScrolling().value_or(std::string()) != "false";
+}
+
+void AddScrollBars(base::CommandLine* command_line,
+                   base::Environment& env,
+                   const base::FilePath& data_dir) {
+  const bool overlay = ChoseThinScrollBars(data_dir) || DesktopPrefersOverlay(env);
+  std::string features =
+      command_line->GetSwitchValueASCII(switches::kEnableFeatures);
+  if (!features.empty()) {
+    features.push_back(',');
+  }
+  features.append(overlay ? "OverlayScrollbar:mode/overlay"
+                          : "OverlayScrollbar:mode/classic");
+  command_line->AppendSwitchASCII(switches::kEnableFeatures, features);
 }
 
 void DecideTestGate(base::CommandLine* command_line, base::Environment& env) {
@@ -170,6 +244,7 @@ void AddLaunchSwitches(base::CommandLine* command_line,
     command_line->AppendSwitchASCII("class", "ardia");
   }
   const base::FilePath data_dir = ChosenDataDir(env);
+  base::FilePath data_folder = data_dir;
   if (!data_dir.empty()) {
     command_line->AppendSwitchPath(ardiacore::kDataDirSwitch, data_dir);
     command_line->AppendSwitchPath(switches::kUserDataDir,
@@ -180,9 +255,11 @@ void AddLaunchSwitches(base::CommandLine* command_line,
                                   ? base::FilePath(Variable(env, "HOME"))
                                         .Append(".local/share")
                                   : base::FilePath(data_home);
+    data_folder = base_dir.Append("ardia");
     command_line->AppendSwitchPath(switches::kUserDataDir,
-                                   base_dir.Append("ardia").Append("Chromium"));
+                                   data_folder.Append("Chromium"));
   }
+  AddScrollBars(command_line, env, data_folder);
   if (Set(Variable(env, "ARDIA_BACKGROUND"))) {
     command_line->AppendSwitch(ardiacore::kBackgroundSwitch);
     command_line->AppendSwitch(switches::kMuteAudio);

@@ -142,6 +142,12 @@ bool Truthy(std::string_view value) {
   return !value.empty() && value != "0" && value != "off" && value != "false";
 }
 
+KeyedEntries ParseInstanceEntries(std::string_view text,
+                                  std::vector<std::string>* unknown) {
+  return ParseKeyedEntries(text, InstanceKeys(), KeysWhoseValuesHoldCommas(),
+                           unknown);
+}
+
 KeyedEntries ParseKeyedEntries(std::string_view text,
                                const std::set<std::string_view>& known,
                                const std::set<std::string_view>& holding_commas,

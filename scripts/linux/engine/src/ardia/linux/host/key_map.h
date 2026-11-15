@@ -29,6 +29,7 @@ class KeyMap {
     std::string command;
     std::optional<std::string> arg;
     bool page_first = false;
+    bool ui_only = false;
   };
 
   KeyMap(const KeyMap&) = delete;

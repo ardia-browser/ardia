@@ -96,6 +96,7 @@ int KeyMap::Set(const base::ListValue& entries) {
       made.arg = *arg;
     }
     made.page_first = entry->FindBool("pageFirst").value_or(false);
+    made.ui_only = entry->FindBool("uiOnly").value_or(false);
     next.insert_or_assign(KeyOf(*code, ModifiersOf(*entry)), std::move(made));
   }
   entries_ = std::move(next);
@@ -140,11 +141,16 @@ content::KeyboardEventProcessingResult KeyMap::PreHandle(
   if (!KeyDown(event)) {
     return content::KeyboardEventProcessingResult::NOT_HANDLED;
   }
-  if (const Entry* entry = Match(event)) {
+  const Entry* entry = Match(event);
+  if (entry && page && entry->ui_only) {
+    entry = nullptr;
+  }
+  if (entry) {
     if (entry->page_first) {
-      return page ? content::KeyboardEventProcessingResult::
-                        NOT_HANDLED_IS_SHORTCUT
-                  : content::KeyboardEventProcessingResult::NOT_HANDLED;
+      return page || entry->ui_only
+                 ? content::KeyboardEventProcessingResult::
+                       NOT_HANDLED_IS_SHORTCUT
+                 : content::KeyboardEventProcessingResult::NOT_HANDLED;
     }
     Dispatch(*entry, window_id);
     return content::KeyboardEventProcessingResult::HANDLED;
@@ -159,11 +165,12 @@ content::KeyboardEventProcessingResult KeyMap::PreHandle(
 bool KeyMap::Handle(const std::string& window_id,
                     content::WebContents* page,
                     const input::NativeWebKeyboardEvent& event) {
-  if (!page || !KeyDown(event) || event.skip_if_unhandled) {
+  if (!KeyDown(event) || event.skip_if_unhandled) {
     return false;
   }
   const Entry* entry = Match(event);
-  if (!entry || !entry->page_first) {
+  if (!entry || !entry->page_first || (page && entry->ui_only) ||
+      (!page && !entry->ui_only)) {
     return false;
   }
   Dispatch(*entry, window_id);

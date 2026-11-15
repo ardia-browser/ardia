@@ -141,7 +141,7 @@ export function copyUrls(ids: string[], markdown: boolean) {
 export function copySelectedUrls(windowId: string, markdown: boolean, plainCopy: boolean): boolean {
   const ids = multiSelectedTabIds(store(), windowId);
   const copied = ids.length ? copyUrls(ids, markdown) : 0;
-  if (!copied) return false;
+  if (!copied) return ids.length > 0;
   showToast(windowId, `Copied ${copied} ${copied === 1 ? "URL" : "URLs"}${markdown ? " as Markdown" : ""}`, undefined, { icon: "link" });
   noteSelectionCopiedByKey(copied, plainCopy);
   return true;

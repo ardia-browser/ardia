@@ -118,6 +118,18 @@ test("a blank tab doesn't count as a URL in the copy menu", () => {
   assert.equal(copied(), "https://a.com/");
 });
 
+test("selecting only blank tabs never copies an unselected active page", () => {
+  fresh();
+  const { w, ids: [active] } = windowWith("a");
+  const blanks = [S().newTab(w, {}), S().newTab(w, {})];
+  S().activate(active);
+  S().setSelection(w, blanks);
+  for (const command of ["copyUrl", "copyUrlAsMarkdown"]) {
+    runCommand({ command, arg: null, windowId: w });
+    assert.deepEqual(clipboard.copied, []);
+  }
+});
+
 test("an open peek copies its page instead of the sidebar selection", () => {
   fresh();
   const { w, ids: [a, b] } = windowWith("a", "b");

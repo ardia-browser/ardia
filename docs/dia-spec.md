@@ -272,7 +272,9 @@ Regular rows on the 37 pt pitch; the same for "+ New Tab" and ⌘T, and for the 
   translucent selected fill. Hover is checked again after every layout (react-native-macos patch, `RCTView.m`), so it
   follows the final layout during the slide. A row that comes up under a collapsed group, pinned section or live folder,
   or leaves it, folds open or shut on the slide's curve and time (`sidebar/Fold.tsx`), a closed one as its ghost, and the
-  list plans its slides around such a group's old height. Pins and moves between windows don't animate.
+  list plans its slides around such a group's old height. The header's 3 pt gap before a nested first row eases
+  away with that row when a direct tab stays, including when the padding changes during a turn. Pins and moves
+  between windows don't animate.
 
 ### Hiding and showing the sidebar (Auto-Hide Tabs, ⌘S; owner recording 2026-10-06, 240 fps)
 

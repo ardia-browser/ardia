@@ -41,7 +41,9 @@ export type FoldEntry = { key: string; node: ReactNode; ghost?: boolean };
 
 type Leaving = { node: ReactNode; before: string | null };
 type Turn = { value: Animated.Value; to: 0 | 1; done: boolean; at: number; from: number; height: number; waiting: boolean; leaving?: Leaving };
-type Shown = { settled: boolean; keys: string[]; order: string[]; turns: ReadonlyMap<string, Turn>; pad: Turn | null };
+type Padding = { top: number; bottom: number };
+type PadTurn = Turn & { before: Padding; after: Padding };
+type Shown = { settled: boolean; keys: string[]; order: string[]; turns: ReadonlyMap<string, Turn>; padding: Padding; pad: PadTurn | null };
 
 const NO_TURNS: ReadonlyMap<string, Turn> = new Map();
 
@@ -67,10 +69,21 @@ const foldStyle = (value: Animated.Value, height: number) => ({
   overflow: "hidden" as const,
 });
 
+const samePadding = (a: Padding, b: Padding) => a.top === b.top && a.bottom === b.bottom;
+
+function paddingTurn(was: Shown, padding: Padding): PadTurn | null {
+  if (samePadding(was.padding, padding)) return was.pad;
+  const progress = was.pad ? currentValue(was.pad.value) : 1;
+  const before = was.pad
+    ? { top: was.pad.before.top + (was.pad.after.top - was.pad.before.top) * progress, bottom: was.pad.before.bottom + (was.pad.after.bottom - was.pad.before.bottom) * progress }
+    : was.padding;
+  return { ...turnTo(null, 1, 1), before, after: padding };
+}
+
 type Farewell = (key: string) => { node: ReactNode; height: number } | null;
 
-function nextShown(was: Shown, settled: boolean, keys: string[], order: string[], farewell: Farewell | undefined, heightOf: (key: string) => number | undefined, lastHeight: (key: string) => number | undefined): Shown {
-  if (!settled || !was.settled) return { settled, keys, order, turns: NO_TURNS, pad: null };
+function nextShown(was: Shown, settled: boolean, keys: string[], order: string[], farewell: Farewell | undefined, heightOf: (key: string) => number | undefined, lastHeight: (key: string) => number | undefined, padding: Padding): Shown {
+  if (!settled || !was.settled) return { settled, keys, order, turns: NO_TURNS, padding, pad: null };
   const had = new Set(was.keys);
   const has = new Set(keys);
   const live = new Set(order);
@@ -91,9 +104,7 @@ function nextShown(was: Shown, settled: boolean, keys: string[], order: string[]
     turns.set(key, { ...turnTo(turns.get(key), 0, gone.height), leaving: { node: gone.node, before } });
   }
   for (const [key, turn] of turns) if ((!turn.waiting && turn.height <= 0 && turn.from <= 0) || turn.at === turn.to) turns.delete(key);
-  const showing = keys.length > 0;
-  const wasShowing = was.pad ? was.pad.to === 1 : was.keys.length > 0;
-  return { settled, keys, order, turns, pad: showing === wasShowing ? was.pad : turnTo(was.pad, showing ? 1 : 0, 1) };
+  return { settled, keys, order, turns, padding, pad: paddingTurn(was, padding) };
 }
 
 function swept(shown: Shown): Shown {
@@ -146,11 +157,13 @@ export function Fold({
   const order = entries.flatMap((e) => (e.ghost ? [] : [e.key]));
   const keys = order.filter((key) => kept.has(key));
   const settledShut = collapsed && !moving;
-  const [tracked, setTracked] = useState<Shown>(() => ({ settled: settledShut, keys, order, turns: NO_TURNS, pad: null }));
+  const top = typeof padTop === "function" ? padTop(collapsed && keys.length ? keys[0] : order[0]) : padTop;
+  const padding = settledShut && !keys.length ? { top: 0, bottom: 0 } : { top, bottom: padBottom };
+  const [tracked, setTracked] = useState<Shown>(() => ({ settled: settledShut, keys, order, turns: NO_TURNS, padding, pad: null }));
   const sized = [...tracked.turns].some(([key, turn]) => turn.waiting && knownHeight(key) !== undefined);
   let shown = tracked;
-  if (tracked.settled !== settledShut || (settledShut && (!sameKeys(tracked.keys, keys) || !sameKeys(tracked.order, order) || sized))) {
-    shown = nextShown(tracked, settledShut, keys, order, farewell, knownHeight, (key) => laidOut.get(key) ?? seen.current.get(key));
+  if (tracked.settled !== settledShut || (settledShut && (!sameKeys(tracked.keys, keys) || !sameKeys(tracked.order, order) || !samePadding(tracked.padding, padding) || sized))) {
+    shown = nextShown(tracked, settledShut, keys, order, farewell, knownHeight, (key) => laidOut.get(key) ?? seen.current.get(key), padding);
     setTracked(shown);
   }
   seen.current = new Map(keys.map((key) => [key, heightOf(key)]));
@@ -191,8 +204,6 @@ export function Fold({
     rows.push(entry);
   }
   for (const gone of leaving) if (gone.before === null || !live.has(gone.before)) rows.push(gone);
-  const firstShown = rows.find((e) => !e.ghost && (kept.has(e.key) || shown.turns.has(e.key)))?.key;
-  const top = typeof padTop === "function" ? padTop(collapsed && firstShown ? firstShown : order[0]) : padTop;
   const listed = entries.filter((e) => !e.ghost);
   const total = listed.reduce((sum, e) => sum + heightOf(e.key), 0) + GAP * Math.max(0, listed.length - 1) + top + padBottom;
   const foldingStyle = (height: number) => {
@@ -213,8 +224,8 @@ export function Fold({
     return style;
   };
   const pads = shown.pad
-    ? { paddingTop: shown.pad.value.interpolate({ inputRange: [0, 1], outputRange: [0, top] }), paddingBottom: shown.pad.value.interpolate({ inputRange: [0, 1], outputRange: [0, padBottom] }) }
-    : { paddingTop: top, paddingBottom: padBottom };
+    ? { paddingTop: shown.pad.value.interpolate({ inputRange: [0, 1], outputRange: [shown.pad.before.top, shown.pad.after.top] }), paddingBottom: shown.pad.value.interpolate({ inputRange: [0, 1], outputRange: [shown.pad.before.bottom, shown.pad.after.bottom] }) }
+    : { paddingTop: padding.top, paddingBottom: padding.bottom };
   const closed = { height: 0, marginBottom: -GAP, opacity: 0, overflow: "hidden" as const };
   const outer = folding
     ? null

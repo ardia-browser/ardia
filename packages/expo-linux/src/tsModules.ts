@@ -13,7 +13,7 @@ export const writtenInTs: Record<string, Record<string, unknown>> = {
   ArdiaAppWindows: {
     openWindow,
     animateWindowClose,
-    watchSidebarEdge: async (id: string, on: boolean, hold: number, right: boolean) => watchSidebarEdge(id, on, hold, right),
+    watchSidebarEdge: async (id: string, on: boolean, hold: number, right: boolean, whilePressed: boolean) => watchSidebarEdge(id, on, hold, right, whilePressed),
     ...dragPreviewModule,
     raiseView: async () => {},
   },

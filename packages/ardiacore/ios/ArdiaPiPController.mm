@@ -109,17 +109,6 @@ BOOL PreventsActivation(NSWindow *window) {
 }
 
 NSInteger gActivations = 0;
-static NSTimeInterval gBackToTabActivationUntil = 0;
-
-void MarkBackToTabActivation() {
-  if (!ardia_host::Background() && !NSApp.isActive) gBackToTabActivationUntil = NSProcessInfo.processInfo.systemUptime + 2;
-}
-
-BOOL ConsumeBackToTabActivation() {
-  const BOOL pending = NSProcessInfo.processInfo.systemUptime <= gBackToTabActivationUntil;
-  gBackToTabActivationUntil = 0;
-  return pending;
-}
 
 void ActivateApp(NSString *why) {
   gActivations++;

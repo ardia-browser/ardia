@@ -1,3 +1,4 @@
+import { introMusicModules } from "../chromium/introMusic";
 import { keysModules } from "../chromium/keys";
 import { launchLinksModules } from "../chromium/launchLinks";
 import { updaterModules } from "../chromium/updater";
@@ -7,6 +8,7 @@ const CLI_NOT_ON_LINUX = "The ardia command isn't on Linux yet";
 
 export const serviceModules: Record<string, Record<string, unknown>> = {
   ...sharedServiceModules,
+  ...introMusicModules,
   ...keysModules,
   ...launchLinksModules,
   ...updaterModules,

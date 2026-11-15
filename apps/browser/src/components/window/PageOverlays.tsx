@@ -23,7 +23,9 @@ import { DEVICE_CHOOSER_WIDTH, DeviceChooser } from "../site/DeviceChooser";
 import { NavigationOverlays } from "./SwipeOverlay";
 import { HISTORY_MENU_WIDTH, HistoryPopover } from "./HistoryPopover";
 import { TabWebView } from "./TabWebView";
-import { fitLeft, pageSurfaceLeft, type PageAnchor, type PageSurface } from "./pageAnchors";
+import { fitLeft, pageSurfaceLeft, type HistoryButtons, type PageAnchor, type PageSurface } from "./pageAnchors";
+import { useCardFrame } from "./cardFrame";
+import { PEEK_HISTORY_CENTERS } from "../peek/tokens";
 import { useSidebarSide } from "../../state/browser/hooks";
 
 export function PageOverlays({
@@ -37,6 +39,7 @@ export function PageOverlays({
   popovers = true,
   cliPill = false,
   loadingPill = true,
+  historyButtons,
 }: {
   tabId: string;
   windowId: string;
@@ -48,11 +51,12 @@ export function PageOverlays({
   popovers?: boolean;
   cliPill?: boolean;
   loadingPill?: boolean;
+  historyButtons?: HistoryButtons;
 }) {
   const popover = usePages((s) => s.popover[tabId] ?? null);
   const zoom = useTabValue(tabId, (t) => t?.zoom ?? 1);
   const sidebarRight = useSidebarSide(windowId) === "right";
-  const anchor: PageAnchor = { toolbar: toolbar ? geometry : null, sidebarRight };
+  const anchor: PageAnchor = { toolbar: toolbar ? geometry : null, sidebarRight, historyButtons };
   const at = (surface: PageSurface, surfaceWidth: number) => ({ left: pageSurfaceLeft(anchor, surface, width, surfaceWidth), top: POPOVER_MARGIN });
   useEffect(startPopoverEscape, []);
   return (
@@ -98,10 +102,12 @@ export function BesidePeekPopovers({ tabId, windowId, left, top, room }: { tabId
 }
 
 export function PeekPage({ tabId, sourceId, windowId, width, shown, fullscreen }: { tabId: string; sourceId: string; windowId: string; width: number; shown: boolean; fullscreen: boolean }) {
+  const inset = useCardFrame().inset;
+  const historyButtons = fullscreen ? undefined : { back: PEEK_HISTORY_CENTERS.back - inset, forward: PEEK_HISTORY_CENTERS.forward - inset };
   return (
     <>
       <TabWebView tabId={tabId} visible={shown} warm={false} peekOf={sourceId} />
-      {shown && <PageOverlays tabId={tabId} windowId={windowId} width={width} geometry={NO_TOOLBAR} toolbar={false} newTabShown={false} cliPill loadingPill={fullscreen} />}
+      {shown && <PageOverlays tabId={tabId} windowId={windowId} width={width} geometry={NO_TOOLBAR} toolbar={false} newTabShown={false} cliPill loadingPill={fullscreen} historyButtons={historyButtons} />}
     </>
   );
 }

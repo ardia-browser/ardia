@@ -3,7 +3,9 @@ import type { Rect, ToolbarGeometry } from "./geometry";
 
 const MARGIN = space.m;
 
-export type PageAnchor = { toolbar: ToolbarGeometry | null; sidebarRight: boolean };
+export type HistoryButtons = { back: number; forward: number };
+
+export type PageAnchor = { toolbar: ToolbarGeometry | null; sidebarRight: boolean; historyButtons?: HistoryButtons };
 
 export type PageSurface = "prompt" | "siteButton";
 
@@ -17,7 +19,7 @@ export function pageSurfaceLeft(anchor: PageAnchor, surface: PageSurface, paneWi
 }
 
 export function historyMenuLeft(anchor: PageAnchor, underButton: number, paneWidth: number, width: number): number {
-  return fitLeft(anchor.toolbar ? underButton : sidebarEdgeWant(anchor.sidebarRight), paneWidth, width);
+  return fitLeft(anchor.toolbar || anchor.historyButtons ? underButton : sidebarEdgeWant(anchor.sidebarRight), paneWidth, width);
 }
 
 export type PeekSpanLike = readonly [from: number, to: number];

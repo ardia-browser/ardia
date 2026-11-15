@@ -41,6 +41,14 @@ test("history menu: under its button with a toolbar, at the sidebar's edge witho
   assert.equal(historyMenuLeft(sidebarRight, 30, PANE, 260), PANE - 260 - M);
 });
 
+test("history menu in a Peek: under the Peek's own button, whichever side the sidebar is on", () => {
+  for (const right of [false, true]) {
+    const peek = { toolbar: null, sidebarRight: right, historyButtons: { back: 14, forward: 44 } };
+    assert.equal(historyMenuLeft(peek, 30, PANE, 260), 30);
+    assert.equal(pageSurfaceLeft(peek, "prompt", PANE, W), right ? PANE - W - M : M);
+  }
+});
+
 test("sidebar peeking from the left: popovers start past the peek, inside the focused pane", () => {
   const pane = { x: 600, y: 0, width: 600, height: 800 };
   assert.deepEqual(besidePeekSpan([-Infinity, 300], 10, PANE, pane), { left: 600 + M, room: PANE });

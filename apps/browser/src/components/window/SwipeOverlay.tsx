@@ -39,7 +39,8 @@ const rowsAboveSelected = (count: number, selected: number) => count - 1 - selec
 const listTop = (height: number, count: number, selected: number) => height / 2 - ROW / 2 - LIST_PAD - rowsAboveSelected(count, selected) * ROW;
 
 export function NavigationOverlays({ tabId, windowId, anchor, paneWidth, historyMenu }: { tabId: string; windowId: string; anchor: PageAnchor; paneWidth: number; historyMenu: boolean }) {
-  const historyLeft = (direction: -1 | 1) => historyMenuLeft(anchor, underButton(direction < 0 ? anchor.toolbar?.back ?? 0 : anchor.toolbar?.forward ?? 0), paneWidth, HISTORY_MENU_WIDTH);
+  const buttons = anchor.toolbar ?? anchor.historyButtons;
+  const historyLeft = (direction: -1 | 1) => historyMenuLeft(anchor, underButton(direction < 0 ? buttons?.back ?? 0 : buttons?.forward ?? 0), paneWidth, HISTORY_MENU_WIDTH);
   return (
     <>
       <SwipeOverlay tabId={tabId} />

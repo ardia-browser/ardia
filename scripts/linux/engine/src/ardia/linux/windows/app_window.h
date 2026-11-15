@@ -5,6 +5,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -19,14 +20,24 @@
 #include "content/public/browser/web_contents_delegate.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "third_party/skia/include/core/SkRegion.h"
+#include "ui/compositor/compositor_animation_observer.h"
 #include "ui/events/event_handler.h"
 #include "ui/gfx/geometry/rect.h"
+#include "ui/gfx/geometry/rect_f.h"
 #include "ui/views/context_menu_controller.h"
 #include "ui/views/view.h"
 #include "ui/views/view_targeter_delegate.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_delegate.h"
 #include "ui/views/widget/widget_observer.h"
+
+namespace aura {
+class Window;
+}
+
+namespace ui {
+class Compositor;
+}
 
 namespace views {
 class WebView;
@@ -36,9 +47,20 @@ namespace ardia_linux {
 
 class AppWindow;
 
+struct PageMotion {
+  PageMotion();
+  PageMotion(const PageMotion&);
+  PageMotion& operator=(const PageMotion&);
+  ~PageMotion();
+
+  base::TimeDelta duration;
+  std::vector<gfx::RectF> rects;
+};
+
 class AppWindowView : public views::View,
                       public views::ViewTargeterDelegate,
-                      public views::ContextMenuController {
+                      public views::ContextMenuController,
+                      public ui::CompositorAnimationObserver {
  public:
   explicit AppWindowView(AppWindow* window);
   AppWindowView(const AppWindowView&) = delete;
@@ -52,7 +74,8 @@ class AppWindowView : public views::View,
   void PlacePage(const std::string& key,
                  const gfx::Rect& bounds,
                  int radius,
-                 const std::vector<RoundedArea>& holes);
+                 const std::vector<RoundedArea>& holes,
+                 const PageMotion* motion = nullptr);
   void SetDevTools(const std::string& key, content::WebContents* devtools);
   void RelayoutPage(const std::string& key);
   static bool PagesUnderUi();
@@ -85,11 +108,27 @@ class AppWindowView : public views::View,
              const Placement& placement);
   views::WebView* DevToolsView(const std::string& key) const;
 
+  struct RunningMotion {
+    PageMotion motion;
+    std::optional<base::TimeTicks> start;
+  };
+
+  void OnAnimationStep(base::TimeTicks timestamp) override;
+  void OnCompositingShuttingDown(ui::Compositor* compositor) override;
+  void StartMotion(const std::string& key, const PageMotion& motion);
+  void EndMotion(const std::string& key);
+  void ShowMotionAt(const std::string& key, const gfx::RectF& rect);
+  aura::Window* PageNativeView(const std::string& key) const;
+  void StopStepping();
+
   raw_ptr<AppWindow> window_;
   raw_ptr<views::WebView> ui_view_ = nullptr;
   std::map<std::string, raw_ptr<views::WebView>> pages_;
   std::map<std::string, raw_ptr<views::WebView>> devtools_;
   std::map<std::string, Placement> placements_;
+  std::map<std::string, RunningMotion> motions_;
+  raw_ptr<ui::Compositor> stepping_ = nullptr;
+  const base::TimeDelta motion_delay_;
   gfx::Size minimum_size_;
 };
 

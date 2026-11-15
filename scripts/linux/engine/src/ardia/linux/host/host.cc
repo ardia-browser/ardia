@@ -530,8 +530,29 @@ base::DictValue Host::ShowTab(const base::DictValue& args,
   app->view()->AddPage(key, contents);
   app->view()->SetDevTools(
       key, DevToolsWindow::GetInTabWebContents(contents, nullptr));
+  std::optional<PageMotion> motion;
+  if (const base::DictValue* given = args.FindDict("motion")) {
+    PageMotion parsed;
+    parsed.duration =
+        base::Milliseconds(given->FindDouble("durationMs").value_or(0));
+    if (const base::ListValue* rects = given->FindList("rects")) {
+      for (const base::Value& rect : *rects) {
+        const base::ListValue* sides = rect.GetIfList();
+        if (!sides || sides->size() != 4) {
+          continue;
+        }
+        const auto side = [&](size_t index) {
+          return static_cast<float>((*sides)[index].GetIfDouble().value_or(0) /
+                                    scale);
+        };
+        parsed.rects.emplace_back(side(0), side(1), side(2), side(3));
+      }
+    }
+    CountLinux("pageMotions");
+    motion = std::move(parsed);
+  }
   app->view()->PlacePage(key, place, static_cast<int>(std::lround(radius)),
-                         holes);
+                         holes, motion ? &*motion : nullptr);
   RoundedArea area;
   area.rect = gfx::RectF(place);
   area.radius = static_cast<float>(radius);

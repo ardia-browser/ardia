@@ -120,3 +120,33 @@ test("a corrupt gzip body fails the download cleanly: one rejection, nothing unh
   assert.equal(cancelled, true);
   assert.equal(await installed("fr>en"), false);
 });
+
+test("when one part fails the others are stopped before the pair is released, and nothing writes after", async () => {
+  let lexCancelled = false;
+  serve = (type, signal) => {
+    if (type === "model") return new Response(Buffer.from("not gzip at all"));
+    if (type === "lex") return trickle(split(gzipSync(contents.lex), 20), 40, () => (lexCancelled = true), signal);
+    return plain(type);
+  };
+  const failure = await within(5_000, models.ensurePairs(["fr>en"], () => {})).then(
+    () => null,
+    (error: Error) => error,
+  );
+  assert.ok(failure);
+  assert.notEqual(failure.name, "AbortError");
+  assert.equal(lexCancelled, true);
+  assert.deepEqual(leftovers(), []);
+  await pause(900);
+  assert.deepEqual(leftovers(), []);
+  assert.equal(existsSync(join(pairFolder, "lex")), false);
+  assert.deepEqual(unhandled, []);
+});
+
+test("a cached file of the right size but the wrong contents isn't trusted at launch, and is fetched again", async () => {
+  assert.equal(await installed("en>fr"), false);
+  assert.equal(await filesOf("en>fr"), null);
+  assert.equal(await within(5_000, models.ensurePairs(["en>fr"], () => {})), 1);
+  assert.ok(fetched.includes("model"));
+  assert.equal(await installed("en>fr"), true);
+  assert.deepEqual(readFileSync(join(corruptFolder, "model")), contents.model);
+});

@@ -39,6 +39,7 @@ export type LinuxCount =
   | "meadow_failures"
   | "translate_model_downloads"
   | "translate_model_download_failures"
+  | "translate_model_corrupt"
   | "translate_engine_failures"
   | "translate_engine_timeouts"
   | "translate_cancel_stops"

@@ -6,6 +6,8 @@ import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as WebReadableStream } from "node:stream/web";
 import { createGunzip } from "node:zlib";
+import { count } from "../counts";
+import { note } from "../log";
 import { dataDirectory } from "../paths";
 
 const STORE = "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/";
@@ -32,7 +34,7 @@ type FileType = (typeof FILE_TYPES)[number];
 type RemoteFile = { path: string; hash?: string; size?: number };
 type PairFiles = { version: string; files: Partial<Record<FileType, RemoteFile>> };
 type Catalog = { source: string; fetchedAt: number; pairs: Record<string, PairFiles> };
-type Manifest = { version: string; files: Partial<Record<FileType, { size: number }>> };
+type Manifest = { version: string; files: Partial<Record<FileType, { size: number; hash?: string }>> };
 
 export type Progress = { received: number; total: number };
 export type LoadedFiles = { model: string; lex: string; vocabs: string[] };
@@ -46,6 +48,7 @@ export const pairKey = (from: string, to: string) => `${from}>${to}`;
 let catalog: Catalog | null = readCatalog();
 let refreshing: Promise<Catalog> | null = null;
 const downloading = new Map<string, Promise<void>>();
+const verified = new Map<string, Promise<boolean>>();
 
 function readCatalog(): Catalog | null {
   try {
@@ -155,23 +158,14 @@ export function languages(): string[] {
 function readManifest(pair: string): Manifest | null {
   try {
     const manifest = JSON.parse(readFileSync(manifestFile(pair), "utf8")) as Manifest;
+    if (typeof manifest.version !== "string" || !manifest.files || typeof manifest.files !== "object") return null;
     for (const [type, file] of Object.entries(manifest.files)) {
-      if (!file || statSync(join(pairFolder(pair), type)).size !== file.size) return null;
+      if (!FILE_TYPES.includes(type as FileType) || !file || statSync(join(pairFolder(pair), type)).size !== file.size) return null;
     }
     return complete(manifest.files) ? manifest : null;
   } catch {
     return null;
   }
-}
-
-export const installed = (pair: string) => readManifest(pair) !== null;
-
-export function filesOf(pair: string): LoadedFiles | null {
-  const manifest = readManifest(pair);
-  if (!manifest) return null;
-  const at = (type: FileType) => join(pairFolder(pair), type);
-  const vocabs = manifest.files.vocab ? [at("vocab")] : [at("srcvocab"), at("trgvocab")];
-  return { model: at("model"), lex: at("lex"), vocabs };
 }
 
 type Digest = { size: number; hash: string };
@@ -184,6 +178,53 @@ async function digestOf(path: string): Promise<Digest> {
     hash.update(chunk);
   }
   return { size, hash: hash.digest("hex") };
+}
+
+const verificationKey = (pair: string, manifest: Manifest) => `${pair}\u0000${JSON.stringify(manifest)}`;
+
+function expectedHash(pair: string, manifest: Manifest, type: FileType): string | undefined {
+  const listed = manifest.files[type]?.hash;
+  if (listed) return listed;
+  const entry = catalog?.pairs[pair];
+  return entry?.version === manifest.version ? entry.files[type]?.hash : undefined;
+}
+
+async function filesMatch(pair: string, manifest: Manifest): Promise<boolean> {
+  try {
+    for (const type of FILE_TYPES) {
+      const hash = manifest.files[type] && expectedHash(pair, manifest, type);
+      if (!hash) continue;
+      if ((await digestOf(join(pairFolder(pair), type))).hash === hash) continue;
+      count("translate_model_corrupt");
+      note("translate", `the cached ${pair} ${type} file doesn't match its checksum; it will be downloaded again`);
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function trustedManifest(pair: string): Promise<Manifest | null> {
+  const manifest = readManifest(pair);
+  if (!manifest) return null;
+  const key = verificationKey(pair, manifest);
+  let check = verified.get(key);
+  if (!check) {
+    check = filesMatch(pair, manifest);
+    verified.set(key, check);
+  }
+  return (await check) ? manifest : null;
+}
+
+export const installed = async (pair: string): Promise<boolean> => (await trustedManifest(pair)) !== null;
+
+export async function filesOf(pair: string): Promise<LoadedFiles | null> {
+  const manifest = await trustedManifest(pair);
+  if (!manifest) return null;
+  const at = (type: FileType) => join(pairFolder(pair), type);
+  const vocabs = manifest.files.vocab ? [at("vocab")] : [at("srcvocab"), at("trgvocab")];
+  return { model: at("model"), lex: at("lex"), vocabs };
 }
 
 type Transfer = { type: FileType; file: RemoteFile; body: WebReadableStream<Uint8Array>; length: number };
@@ -239,22 +280,52 @@ async function finishTransfer({ file, body }: Transfer, path: string, signal: Ab
   }
 }
 
+async function allOrNothing<T>(tasks: ((signal: AbortSignal) => Promise<T>)[], controller: AbortController, undo: (value: T) => Promise<void>): Promise<T[]> {
+  let first: { error: unknown } | null = null;
+  const settled = await Promise.allSettled(
+    tasks.map((task) =>
+      task(controller.signal).catch((error: unknown) => {
+        if (!first) {
+          first = { error };
+          controller.abort(error);
+        }
+        throw error;
+      }),
+    ),
+  );
+  const values = settled.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
+  if (!first) return values;
+  await Promise.all(values.map(undo));
+  throw (first as { error: unknown }).error;
+}
+
 async function downloadPair(pair: string, entry: PairFiles, onLength: (length: number) => void, onBytes: (count: number) => void): Promise<void> {
   const target = pairFolder(pair);
   mkdirSync(target, { recursive: true });
   rmSync(manifestFile(pair), { force: true });
-  const signal = AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS);
-  const transfers = await Promise.all(FILE_TYPES.filter((type) => entry.files[type]).map((type) => startTransfer(type, entry.files[type]!, signal)));
+  const controller = new AbortController();
+  const types = FILE_TYPES.filter((type) => entry.files[type]);
+  const transfers = await allOrNothing(
+    types.map((type) => (signal) => startTransfer(type, entry.files[type]!, signal)),
+    controller,
+    (transfer) => cancelBody(transfer.body),
+  );
   for (const transfer of transfers) onLength(transfer.length);
-  const digests = await Promise.all(transfers.map((transfer) => finishTransfer(transfer, join(target, transfer.type), signal, onBytes)));
+  const digests = await allOrNothing(
+    transfers.map((transfer) => (signal) => finishTransfer(transfer, join(target, transfer.type), signal, onBytes)),
+    controller,
+    async () => {},
+  );
   const manifest: Manifest = { version: entry.version, files: {} };
-  transfers.forEach((transfer, i) => (manifest.files[transfer.type] = { size: digests[i]!.size }));
+  transfers.forEach((transfer, i) => (manifest.files[transfer.type] = { size: digests[i]!.size, hash: digests[i]!.hash }));
   writeFileSync(`${manifestFile(pair)}.tmp`, JSON.stringify(manifest));
   renameSync(`${manifestFile(pair)}.tmp`, manifestFile(pair));
+  verified.set(verificationKey(pair, manifest), Promise.resolve(true));
 }
 
 export async function ensurePairs(pairs: string[], onProgress: (progress: Progress) => void): Promise<number> {
-  const missing = pairs.filter((pair) => !installed(pair));
+  const present = await Promise.all(pairs.map(installed));
+  const missing = pairs.filter((_, i) => !present[i]);
   if (!missing.length) return 0;
   const fresh = await currentCatalog();
   const entries = missing.map((pair) => {

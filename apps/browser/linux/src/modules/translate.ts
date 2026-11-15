@@ -26,7 +26,8 @@ function userLanguages(): string[] {
 async function prepare(source: string, target: string) {
   const pairs = route(source, target);
   if (!pairs) throw new Error(`${languageName(source)} to ${languageName(target)} isn't available`);
-  const fetched = [...new Set(pairs.filter((pair) => !installed(pair)).flatMap((pair) => pair.split(">")).filter((language) => language !== PIVOT))];
+  const present = await Promise.all(pairs.map(installed));
+  const fetched = [...new Set(pairs.filter((_, i) => !present[i]).flatMap((pair) => pair.split(">")).filter((language) => language !== PIVOT))];
   let shownAt = 0;
   try {
     const downloaded = await ensurePairs(pairs, ({ received, total }) => {
@@ -52,7 +53,7 @@ defineModule("ArdiaTranslate", {
     async status(source: string, target: string) {
       const pairs = route(source, target);
       if (!pairs) return "unsupported";
-      return pairs.every(installed) ? "installed" : "supported";
+      return (await Promise.all(pairs.map(installed))).every(Boolean) ? "installed" : "supported";
     },
     supportedLanguages: async () => languages(),
     prepare,

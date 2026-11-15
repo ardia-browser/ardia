@@ -129,11 +129,13 @@ function enqueue(owner: string, models: Job["models"], texts: WorkerText[], byte
 async function modelsFor(source: string, target: string): Promise<Job["models"]> {
   const pairs = route(source, target);
   if (!pairs) throw new Error(`${source} to ${target} isn't available`);
-  return pairs.map((key) => {
-    const files = filesOf(key);
-    if (!files) throw new Error(`the ${key.replace(">", " to ")} language files aren't downloaded`);
-    return { key, files };
-  });
+  return Promise.all(
+    pairs.map(async (key) => {
+      const files = await filesOf(key);
+      if (!files) throw new Error(`the ${key.replace(">", " to ")} language files aren't downloaded`);
+      return { key, files };
+    }),
+  );
 }
 
 type Sized = { text: string; bytes: number };

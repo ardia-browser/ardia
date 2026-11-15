@@ -157,6 +157,36 @@ describe("Ardia launch plumbing and shell driver against a mock host", () => {
     assert.equal(seen[1][0], "/opt/ardia/bin/ardia");
   });
 
+  it("retries the first DevTools connection while the browser is too busy to accept it", async () => {
+    mock.stalledUpgrades = 2;
+    const app = await launchArdia({ executable: "/bin/true", scratch, spawnImpl: fakeSpawn(), startTimeout: 5000, connectTimeout: 300 });
+    try {
+      assert.equal(mock.stalledUpgrades, 0);
+      assert.deepEqual(await app.browser.send("Browser.getVersion"), {});
+    } finally {
+      assert.equal(await app.close(), true);
+    }
+  });
+
+  it("stops retrying the first DevTools connection when the browser exits", async () => {
+    mock.stalledUpgrades = 1000;
+    const started = Date.now();
+    try {
+      await assert.rejects(launchArdia({ executable: "/bin/true", scratch, spawnImpl: (...args) => {
+        const child = fakeSpawn()(...args);
+        setTimeout(() => child.kill("SIGTERM"), 500);
+        return child;
+      }, startTimeout: 20000, connectTimeout: 200, keepLogsIn: join(scratch, "failed-logs") }), (error) => {
+        assert.match(error.message, /first DevTools connection aborted: the browser exited/);
+        assert.match(error.message, new RegExp(`log: ${join(scratch, "failed-logs")}/ardia-\\d+\\.log$`));
+        return true;
+      });
+      assert.ok(Date.now() - started < 5000);
+    } finally {
+      mock.stalledUpgrades = 0;
+    }
+  });
+
   it("fails fast when the browser exits before DevTools starts", async () => {
     await assert.rejects(launchArdia({ executable: "/bin/true", scratch, spawnImpl: fakeSpawn(false), startTimeout: 10000 }), /exited/);
   });

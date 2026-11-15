@@ -43,9 +43,14 @@ export async function startMockCdp({ targets = [], handlers = {} } = {}) {
     response.end();
   });
   server.on("upgrade", (request, socket) => {
+    sockets.add(socket);
+    if (mock.stalledUpgrades > 0) {
+      mock.stalledUpgrades--;
+      socket.on("error", () => {});
+      return;
+    }
     const accept = createHash("sha1").update(`${request.headers["sec-websocket-key"]}${GUID}`).digest("base64");
     socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
-    sockets.add(socket);
     const targetId = request.url.split("/").pop();
     const peer = {
       targetId,
@@ -84,6 +89,7 @@ export async function startMockCdp({ targets = [], handlers = {} } = {}) {
     targets,
     peers: [],
     received: [],
+    stalledUpgrades: 0,
     NO_REPLY: Symbol("no reply"),
     url: (path = "/devtools/browser/mock") => `ws://127.0.0.1:${server.address().port}${path}`,
     async close() {

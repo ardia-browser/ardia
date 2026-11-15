@@ -43,7 +43,10 @@ drops, kiosk print to PDF, process-group cleanup and the content blocker's bridg
 - **Profile.** A fresh `--user-data-dir`. `HOME` and the XDG directories point inside it.
 - **Display.** `--ozone-platform=headless` with SwiftShader, and `DISPLAY`/`WAYLAND_DISPLAY` cleared.
 - **Isolation.** The browser can't reach the session bus or a CUPS server, so no portal dialog appears on the desktop.
-- **Debugging port.** `--remote-debugging-port=0`, read back from `DevToolsActivePort`.
+- **Debugging port.** `--remote-debugging-port=0`, read back from `DevToolsActivePort`. Chromium writes that file as
+  soon as its DevTools server listens, before the browser's UI thread, which accepts the WebSocket, has finished
+  starting, so the first connection retries (5 s per attempt) until the launch's start deadline or the browser exits.
+  With `ARDIA_ACCEPTANCE_FAILED_LOGS` set (CI sets it), a launch that fails copies the browser log there.
 - **Background.** Launches use `ARDIA_BACKGROUND=1`, except where a scenario needs print, DevTools or real activation.
 - **Process groups.** Each browser runs in its own process group. Cleanup closes it through CDP `Browser.close`, then
   sends `SIGTERM` and `SIGKILL` to that group only. Ctrl+C stops every scenario's browsers; a second Ctrl+C kills

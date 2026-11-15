@@ -14,6 +14,7 @@ import { createLinuxWindowIds } from "../windowSweep";
 import { useBrowser } from "../../../browser/src/state/browser/store";
 
 export { Symbol } from "./web/Symbol";
+export { FolderIcon } from "./web/FolderIcon";
 export { ActivitySpinner } from "./web/motion/ActivitySpinner";
 export {
   ContextMenuArea,

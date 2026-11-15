@@ -83,7 +83,8 @@ TEST(ModuleRegistryTest, EventsReachSinks) {
   RecordingSink sink;
   registry.AddEventSink(&sink);
   registry.Emit("ArdiaEngineHost", "event", base::Value(1));
-  EXPECT_EQ(sink.seen, "ArdiaEngineHost.event=1\n");
+  EXPECT_EQ(sink.seen, "ArdiaEngineHost.event");
+  EXPECT_EQ(sink.value.GetInt(), 1);
   registry.RemoveEventSink(&sink);
 }
 

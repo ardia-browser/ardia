@@ -13,6 +13,7 @@
     "package": "node scripts/package.mjs",
     "start": "electron .",
     "test": "node --import ./scripts/test-hooks.mjs --test \"src/**/*.test.ts\"",
+    "test:engine-fake": "node scripts/engine-fake.mjs",
     "typecheck": "tsc -p .",
     "typecheck:chromium": "tsc -p tsconfig.chromium.json"
   },

@@ -33,8 +33,10 @@ export async function askBeforeQuitting(windowId: string, ask: typeof confirm = 
   if (asking.has(windowId)) return "cancelled";
   asking.add(windowId);
   try {
+    const browserWindow = !!useBrowser.getState().windows[windowId];
     const openWindowIds = await windowIds().catch(() => [] as string[]);
     const s = useBrowser.getState();
+    if (browserWindow && !s.windows[windowId]) return "notAsked";
     const staysOpen = windowsStayingOpen(openWindowIds, windowId, new Set(Object.keys(s.windows)), isWindowClosing);
     if (!asksBeforeQuit({ quitsWithLastWindow: true, background: false, warns: s.settings.warnBeforeQuitting, staysOpen })) return "notAsked";
     const { confirmed, suppressed } = await ask({ ...QUIT_WARNING, windowId });

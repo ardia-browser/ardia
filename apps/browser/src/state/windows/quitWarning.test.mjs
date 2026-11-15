@@ -254,6 +254,7 @@ test("on Windows, a browser window's close asks the quit question first: Cancel 
 });
 
 const CLOSE_TABS_CONFIRM_RACE = `
+const { PLATFORM_FEATURES } = await import("./src/lib/platformFeatures.ts");
 const { useBrowser } = await import("./src/state/browser/store.ts");
 const { requestWindowClose } = await import("./src/state/windows/windowClose.ts");
 const { lastWindowToRestore } = await import("./src/state/windows/reopenClosed.ts");
@@ -264,6 +265,8 @@ const yes = { confirmed: true, suppressed: false }, no = { confirmed: false, sup
 const dialogs = [], animating = new Map();
 const originalConfirm = shellNativeModules.ArdiaDialogs.confirm;
 const originalAnimate = shellNativeModules.ArdiaAppWindows.animateWindowClose;
+const originalWindowIds = shellNativeModules.ArdiaAppWindows.windowIds;
+const lookupReleases = new Set();
 const turn = () => new Promise((resolve) => setTimeout(resolve, 0));
 const until = async (done, what) => {
   for (let n = 0; n < 200; n++) {
@@ -285,7 +288,8 @@ const finishAnimation = async (id) => {
   animating.delete(id);
   await until(() => !S().windows[id], id + " leaves the UI's windows");
 };
-const scenario = async ({ during, tabs = yes, quit = no }) => {
+const scenario = async ({ during, duringLookup = false, tabs = yes, quit = no }) => {
+  duringLookup &&= PLATFORM_FEATURES.quitsWithLastWindow;
   S().hydrate({ profiles: { default: { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 } }, profileOrder: ["default"] });
   S().updateSettings({ warnBeforeQuitting: true, warnBeforeClosingWindow: true });
   windows.open.clear();
@@ -299,7 +303,25 @@ const scenario = async ({ during, tabs = yes, quit = no }) => {
   requestWindowClose(closing);
   await until(() => dialogs.some(isTabs), "the close-tabs confirm opens");
   await during?.({ other, closing });
+  let lookupStarted, releaseLookup;
+  const lookupEntered = new Promise((resolve) => { lookupStarted = resolve; });
+  const lookupReleased = new Promise((resolve) => { releaseLookup = resolve; });
+  if (duringLookup) {
+    lookupReleases.add(releaseLookup);
+    shellNativeModules.ArdiaAppWindows.windowIds = async () => {
+      shellNativeModules.ArdiaAppWindows.windowIds = originalWindowIds;
+      lookupStarted();
+      await lookupReleased;
+      return originalWindowIds();
+    };
+  }
   reply(isTabs, tabs);
+  if (duringLookup) {
+    await lookupEntered;
+    S().closeWindow(closing);
+    releaseLookup();
+    lookupReleases.delete(releaseLookup);
+  }
   await settle();
   if (dialogs.some((d) => !isTabs(d) && !d.answered)) reply((d) => !isTabs(d), quit);
   await settle();
@@ -333,6 +355,7 @@ try {
   seen.raceTabsCancelled = await scenario({ during: otherCloses, tabs: no });
   seen.otherStays = await scenario({});
   seen.closingLeftUiToo = await scenario({ during: async (ids) => { await otherCloses(ids); S().closeWindow(ids.closing); }, quit: { confirmed: true, suppressed: true } });
+  seen.closingLeftDuringLookup = await scenario({ during: otherCloses, duringLookup: true, quit: { confirmed: true, suppressed: true } });
   seen.settingsStays = await scenario({ during: otherClosesBeside("settings", "settings") });
   seen.popupStays = await scenario({ during: otherClosesBeside("popup:p1") });
   seen.newWindowStays = await scenario({ during: async (ids) => { windows.open.set(S().createWindow({ url: "https://c.example/" }), {}); await otherCloses(ids); } });
@@ -340,10 +363,12 @@ try {
   seen.quitSuppressed = await scenario({ during: otherCloses, quit: { confirmed: false, suppressed: true } });
   console.log(JSON.stringify(seen));
 } finally {
+  for (const release of lookupReleases) release();
   for (const release of animating.values()) release();
   for (const d of dialogs) if (!d.answered) d.resolve(no);
   shellNativeModules.ArdiaDialogs.confirm = originalConfirm;
   shellNativeModules.ArdiaAppWindows.animateWindowClose = originalAnimate;
+  shellNativeModules.ArdiaAppWindows.windowIds = originalWindowIds;
 }
 `;
 
@@ -368,6 +393,11 @@ test("on Windows, when the last other window closes while a close-tabs confirm i
 test("on Windows, a close whose own window left the UI during its close-tabs confirm is cancelled without a quit question that could turn the warning off", () => {
   const seen = runRaceOnWindows();
   assert.deepEqual(seen.closingLeftUiToo, { asked: ["tabs"], closed: false, otherOpen: false, keptForReopen: 0, warnBeforeClosingWindow: true, warnBeforeQuitting: true, counts: [0, 0] });
+});
+
+test("on Windows, a browser target removed during the native window lookup is not asked an orphan quit question", () => {
+  const seen = runRaceOnWindows();
+  assert.deepEqual(seen.closingLeftDuringLookup, { asked: ["tabs"], closed: false, otherOpen: false, keptForReopen: 0, warnBeforeClosingWindow: true, warnBeforeQuitting: true, counts: [0, 0] });
 });
 
 test("on Windows, a Settings window, a pop-up or a new browser window still open after the other closes keeps the app running, so no quit question follows the close-tabs confirm", () => {

@@ -30,6 +30,8 @@
 #include "ui/menus/simple_menu_model.h"
 #include "ui/display/screen.h"
 #include "ui/events/event_constants.h"
+#include "ui/events/keycodes/dom/keycode_converter.h"
+#include "ui/events/keycodes/keyboard_code_conversion.h"
 #include "ui/events/keycodes/keyboard_codes.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/views/controls/menu/menu_runner.h"
@@ -123,7 +125,34 @@ ui::ImageModel SwatchImage(SkColor color) {
       gfx::ImageSkia::CreateFrom1xBitmap(bitmap));
 }
 
+std::optional<ui::Accelerator> LinuxAcceleratorOf(
+    const base::DictValue& shortcut) {
+  const std::string* code = shortcut.FindString("code");
+  if (!code) {
+    return std::nullopt;
+  }
+  const ui::KeyboardCode key = ui::DomCodeToUsLayoutKeyboardCode(
+      ui::KeycodeConverter::CodeStringToDomCode(*code));
+  if (key == ui::VKEY_UNKNOWN) {
+    return std::nullopt;
+  }
+  int flags = 0;
+  if (shortcut.FindBool("ctrl").value_or(false)) {
+    flags |= ui::EF_CONTROL_DOWN;
+  }
+  if (shortcut.FindBool("shift").value_or(false)) {
+    flags |= ui::EF_SHIFT_DOWN;
+  }
+  if (shortcut.FindBool("alt").value_or(false)) {
+    flags |= ui::EF_ALT_DOWN;
+  }
+  return ui::Accelerator(key, flags);
+}
+
 std::optional<ui::Accelerator> AcceleratorOf(const base::DictValue& item) {
+  if (const base::DictValue* shortcut = item.FindDict("shortcut")) {
+    return LinuxAcceleratorOf(*shortcut);
+  }
   const std::string* key = item.FindString("key");
   if (!key || key->empty()) {
     return std::nullopt;

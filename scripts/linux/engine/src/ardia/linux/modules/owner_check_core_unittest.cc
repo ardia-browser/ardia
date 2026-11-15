@@ -436,6 +436,14 @@ TEST_F(PasswordHelperTest, ExitSevenIsAWrongPasswordAndAnythingElseAFailure) {
             HelperVerdict::kFailed);
 }
 
+TEST_F(PasswordHelperTest, TheHelperMayGainItsSetgidGroup) {
+  Script(
+      "cat > /dev/null; "
+      "grep -q '^NoNewPrivs:[[:space:]]*0$' /proc/self/status");
+  EXPECT_EQ(RunPasswordHelper(helper_, "owner", Secret("x")),
+            HelperVerdict::kMatch);
+}
+
 TEST_F(PasswordHelperTest, AHelperThatHangsPastItsDeadlineFails) {
   Script("exec sleep 30");
   base::TimeTicks start = base::TimeTicks::Now();

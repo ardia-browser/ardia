@@ -179,6 +179,7 @@ HelperVerdict RunPasswordHelper(const base::FilePath& helper,
   base::ScopedFD nowhere(HANDLE_EINTR(open("/dev/null", O_RDWR | O_CLOEXEC)));
   base::LaunchOptions options;
   options.clear_environment = true;
+  options.allow_new_privs = true;
   options.fds_to_remap.emplace_back(read_end.get(), STDIN_FILENO);
   if (nowhere.is_valid()) {
     options.fds_to_remap.emplace_back(nowhere.get(), STDOUT_FILENO);

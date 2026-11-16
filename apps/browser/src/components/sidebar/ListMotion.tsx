@@ -13,7 +13,8 @@ import { curve } from "../ui/motion";
 import { SIDEBAR_MOTION } from "./tokens";
 import { entryId, entryKey, parseEntry } from "../../state/sidebar/entryKey";
 import { splitTabIdsOf } from "../../state/splits/splits";
-import { noteSidebarMotionMerge } from "../../state/telemetry/usage";
+import { noteSidebarMotion } from "../../state/telemetry/usage";
+import { settleSlides, type Slide } from "./slideSettle";
 
 export const SLIDE_MS = SIDEBAR_MOTION.listSlide;
 export const FADE_MS = SIDEBAR_MOTION.listFade;
@@ -23,7 +24,6 @@ const TAIL = "~tail";
 const FRAME_SLACK_MS = 50;
 const devScale = () => (__DEV__ ? ((globalThis as { sidebarMotionScale?: number }).sidebarMotionScale ?? 1) : 1);
 
-type Slide = { value: Animated.Value; from: number; at: number; until: number; landed: boolean };
 type Ghost = { key: string; anchor: string | null; y: number; snapshot: EntrySnapshot; opacity: Animated.Value; until: number };
 type Snapshot = ListSnapshot;
 type Move = { key: string; from: number };
@@ -212,20 +212,15 @@ function useMotion({ devKey, entries, from, planner, height, enabled, nativeTail
   if (enabled) devRegister("sidebarMotion", devKey, { slides, ghosts, clipped });
 
   const now = Date.now();
-  for (const slide of slides.values()) {
-    if (slide.until && now >= slide.until) {
-      slide.until = 0;
-      if (!slide.landed) slide.value.setValue(0);
-    }
-  }
+  if (settleSlides(slides.values(), now)) noteSidebarMotion("overrun");
   if (ghosts.current.some((g) => g.until && now >= g.until)) ghosts.current = ghosts.current.filter((g) => !g.until || now < g.until);
 
   const prepare = (plan: Plan, at: number) => {
-    for (const m of plan.moves) if (!slides.has(m.key)) slides.set(m.key, { value: new Animated.Value(m.from), from: m.from, at, until: 0, landed: false });
+    for (const m of plan.moves) if (!slides.has(m.key)) slides.set(m.key, { value: new Animated.Value(m.from), from: m.from, at, until: 0, run: null, landed: false });
     ghosts.current = [...ghosts.current, ...plan.ghosts];
     const pending = queued.current;
     const next = pending ? mergePlans(pending, plan) : plan;
-    if (pending) noteSidebarMotionMerge();
+    if (pending) noteSidebarMotion("merge");
     clipped.clear();
     for (const key of next.clipped) clipped.add(key);
     queued.current = next;
@@ -271,9 +266,11 @@ function useMotion({ devKey, entries, from, planner, height, enabled, nativeTail
       slide.at = at;
       slide.until = at + slideMs + FRAME_SLACK_MS;
       slide.landed = false;
-      const timing = Animated.timing(slide.value, { toValue: 0, duration: slideMs, easing: SLIDE_EASING, useNativeDriver: nativeTail || m.key !== TAIL });
+      const run = Animated.timing(slide.value, { toValue: 0, duration: slideMs, easing: SLIDE_EASING, useNativeDriver: nativeTail || m.key !== TAIL });
+      slide.run = run;
       const clips = i === 0 && token;
-      timing.start(({ finished }) => {
+      run.start(({ finished }) => {
+        if (slide.run === run) slide.run = null;
         if (!finished) return;
         slide.landed = true;
         if (!clips) return;

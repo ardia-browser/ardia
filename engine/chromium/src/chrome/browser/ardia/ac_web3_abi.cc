@@ -482,10 +482,21 @@ AbiValue AbiList(std::vector<AbiValue> items) {
   return AbiValue{AbiValue::Kind::kList, {}, std::move(items)};
 }
 
+int ContainerDepth(const AbiType& type) {
+  int depth = 0;
+  for (const AbiType& item : type.items) depth = std::max(depth, ContainerDepth(item));
+  return type.kind == AbiType::Kind::kArray || type.kind == AbiType::Kind::kTuple
+             ? depth + 1
+             : depth;
+}
+
 std::optional<AbiType> ParseAbiType(std::string_view text) {
   TypeParser parser{text};
   std::optional<AbiType> type = parser.Tuple(0);
-  if (!type || parser.at != text.size()) return std::nullopt;
+  if (!type || parser.at != text.size() ||
+      ContainerDepth(*type) > kMaxTypeDepth + 1) {
+    return std::nullopt;
+  }
   return type;
 }
 

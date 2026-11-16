@@ -166,6 +166,9 @@ void AutoCalls() {
   std::string deep = "returns=(uint256";
   for (int i = 0; i < 100000; ++i) deep += "[1]";
   Expect(std::holds_alternative<std::string>(ParseAutoCall("/x", deep + ")")), "array nesting counts toward the depth limit");
+  Expect(!ParseAbiType("((uint256[1][1][1][1][1][1])[1][1][1][1][1][1][])"), "tuple and array nesting add up to one depth limit");
+  Expect(ParseAbiType("((uint256[1][1][1])[1][1][1][1])").has_value(), "eight containers under the root tuple are allowed");
+  Expect(!ParseAbiType("((uint256[1][1][1])[1][1][1][1][1])"), "a ninth is not");
   Expect(std::holds_alternative<AutoCall>(ParseAutoCall("/x", "returns=(uint256[2][][3])")), "a few array dimensions are fine");
 }
 
@@ -216,6 +219,10 @@ void ValueCapFitsNestedAnswers() {
   Bytes answer = Word(32) + Word(65536);
   for (int i = 0; i < 65536; ++i) answer += Word(i);
   Expect(AutoCallBody(nested, answer).has_value(), "65,536 words in three single-element arrays decode, a valid 2 MB answer");
+  const AutoCall deepest = Auto("/x", "returns=((uint256[1][1][1])[1][1][1][])");
+  Bytes full = Word(32) + Word(78000);
+  for (int i = 0; i < 78000; ++i) full += Word(i);
+  Expect(AutoCallBody(deepest, full).has_value(), "a full RPC reply of the deepest allowed type fits the value cap");
 
   std::string tuple = "(uint256";
   for (int i = 1; i < 20000; ++i) tuple += ",uint256";

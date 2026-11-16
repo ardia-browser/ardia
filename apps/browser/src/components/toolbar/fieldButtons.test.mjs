@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fieldButtonsShown, sidebarFieldButtons } from "./fieldButtons.ts";
+import { fieldButtonsShown, readerButtonShown, sidebarFieldButtons } from "./fieldButtons.ts";
 import { DEFAULT_SETTINGS, parseSettings, SETTING_SPECS } from "../../state/settings/settings.ts";
 import { isConfigSettingKey } from "../../state/settings/configAllowlist.ts";
 import { settingsSnapshot } from "../../state/telemetry/settingsSnapshot.ts";
@@ -29,6 +29,16 @@ test("the sidebar field always shows the not-secure lock on the left, and an ope
 test("with buttons always shown, the sidebar field keeps Site Controls on the left and its extensions, as before", () => {
   assert.deepEqual(sidebar({ mode: "always" }), { leading: true, siteControls: false, page: true, extensions: true });
   assert.deepEqual(sidebar({ mode: "always", hovered: true }), { leading: true, siteControls: false, page: true, extensions: true });
+});
+
+test("Reader waits for hover like the other field buttons while a page only offers it, and stays shown while Reading mode is on", () => {
+  const offered = { available: true, active: false };
+  assert.equal(readerButtonShown(offered, fieldButtonsShown("hover", false)), false);
+  assert.equal(readerButtonShown(offered, fieldButtonsShown("hover", true)), true);
+  assert.equal(readerButtonShown(offered, fieldButtonsShown("always", false)), true);
+  assert.equal(readerButtonShown({ available: true, active: true }, fieldButtonsShown("hover", false)), true);
+  assert.equal(readerButtonShown({ available: false, active: true }, fieldButtonsShown("hover", false)), true);
+  assert.equal(readerButtonShown({ available: false, active: false }, fieldButtonsShown("hover", true)), false);
 });
 
 test("the address bar buttons setting syncs, sits in config files and in the daily settings snapshot, and a value it doesn't know falls back to hover", () => {

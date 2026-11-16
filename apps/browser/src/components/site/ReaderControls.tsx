@@ -4,12 +4,13 @@ import { useShortcutHint, withShortcut } from "../../state/commands/commandShort
 import { Button, MenuRow } from "../ui";
 import { useTheme } from "../ui/theme";
 import type { ToolbarPalette } from "../ui/toolbarColors";
+import { readerButtonShown } from "../toolbar/fieldButtons";
 
-export const ReaderButton = memo(function ReaderButton({ tabId, palette, onFocus }: { tabId: string; palette: ToolbarPalette; onFocus: () => void }) {
+export const ReaderButton = memo(function ReaderButton({ tabId, palette, onFocus, buttonsShown }: { tabId: string; palette: ToolbarPalette; onFocus: () => void; buttonsShown: boolean }) {
   const theme = useTheme();
   const state = useReaderState(tabId);
   const hint = useShortcutHint("toggleReader");
-  if (!state.available && !state.active) return null;
+  if (!readerButtonShown(state, buttonsShown)) return null;
   return (
     <Button variant="icon" toolbar
       palette={palette}

@@ -228,7 +228,7 @@ export const ToolbarUrlField = memo(function ToolbarUrlField({ tab, palette, win
           </View>
         </Pressable>
       </ContextMenuArea>
-      <FieldButtons tab={tab} palette={palette} onFocus={onFocus} popover={popover} toggleSiteControls={toggleSiteControls}>
+      <FieldButtons tab={tab} palette={palette} onFocus={onFocus} popover={popover} toggleSiteControls={toggleSiteControls} buttonsShown={buttonsShown}>
         {buttonsShown && (
           <>
             <PageButton tab={tab} palette={palette} windowId={windowId} />
@@ -285,7 +285,7 @@ export const SidebarUrlField = memo(function SidebarUrlField({ tab, palette, win
         </Pressable>
       </ContextMenuArea>
       <ToolbarRowContext.Provider value={TOOLBAR_ROWS.regular}>
-        <FieldButtons tab={tab} palette={palette} onFocus={onFocus} popover={popover} toggleSiteControls={openSiteControls} accessory={shown.extensions ? accessory : null}>
+        <FieldButtons tab={tab} palette={palette} onFocus={onFocus} popover={popover} toggleSiteControls={openSiteControls} buttonsShown={shown.page} accessory={shown.extensions ? accessory : null}>
           {shown.page && <PageButton tab={tab} palette={palette} windowId={windowId} />}
           {shown.siteControls && <Button variant="icon" toolbar palette={palette} icon="slider.horizontal.3" look="field" onPress={openSiteControls} active={popover === "siteControls"} tooltip="Site Controls" />}
         </FieldButtons>
@@ -322,6 +322,7 @@ function FieldButtons({
   onFocus,
   popover,
   toggleSiteControls,
+  buttonsShown,
   accessory,
   children,
 }: {
@@ -330,6 +331,7 @@ function FieldButtons({
   onFocus: () => void;
   popover: string | null;
   toggleSiteControls: () => void;
+  buttonsShown: boolean;
   accessory?: ReactNode;
   children: ReactNode;
 }) {
@@ -339,7 +341,7 @@ function FieldButtons({
     <View style={{ flexDirection: "row", alignItems: "center", paddingRight: space.xs }}>
       {children}
       {capture && <CaptureIndicator camera={capture.camera} microphone={capture.microphone} screen={capture.screen} onPress={toggleSiteControls} />}
-      <ReaderButton tabId={tab.id} palette={palette} onFocus={onFocus} />
+      <ReaderButton tabId={tab.id} palette={palette} onFocus={onFocus} buttonsShown={buttonsShown} />
       <TranslateButton tabId={tab.id} palette={palette} onFocus={onFocus} />
       <ZoomIndicator tabId={tab.id} zoom={tab.zoom} palette={palette} onFocus={onFocus} />
       {popups > 0 && (

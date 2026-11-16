@@ -13,6 +13,8 @@ struct SyncStoreListing {
   var present: [String] = []
 }
 
+struct SyncSignInNeeded: Error {}
+
 protocol SyncStore: AnyObject, Sendable {
   func rootNames() throws -> [String]
   func read(scope: String, skipping known: Set<String>) throws -> SyncStoreListing
@@ -79,10 +81,12 @@ extension SyncStoreListing {
 
 public enum SyncLocation: Sendable {
   case folder(SyncFolderGrant)
+  case nextcloud(NextcloudConnection)
 
   func makeStore(keys: SyncKeys, coordination: SyncCoordination) -> any SyncStore {
     switch self {
     case .folder(let grant): FolderStore(grant: grant, keys: keys, coordination: coordination)
+    case .nextcloud(let connection): NextcloudStore(connection: connection, keys: keys)
     }
   }
 }

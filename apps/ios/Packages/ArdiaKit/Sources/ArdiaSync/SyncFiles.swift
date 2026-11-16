@@ -5,6 +5,7 @@ struct SyncMeta: Codable, Equatable, Sendable {
   var deviceId: String?
   var deviceName: String = SyncMeta.defaultDeviceName
   var folder: SyncFolderLocation?
+  var nextcloud: NextcloudLocation?
   var enabled = false
   var setupAt: Date?
   var lastSyncedAt: Date?

@@ -1,8 +1,9 @@
 # Sync
 
-End-to-end-encrypted sync with no server, no account and no Apple entitlement. Every Mac reads
+End-to-end-encrypted sync with no server of ours, no account and no Apple entitlement. Every Mac reads
 and writes sealed files in a folder the user picks; any service that syncs a folder carries them
-between Macs. The default is `iCloud Drive › Ardia Sync`
+between Macs. The iPhone can also reach that folder on the user's own Nextcloud server over WebDAV
+(`docs/ios.md` › Sync on iPhone), since Nextcloud's iOS app can't hand other apps a folder. The default is `iCloud Drive › Ardia Sync`
 (`~/Library/Mobile Documents/com~apple~CloudDocs/Ardia Sync`: iCloud Drive syncs any folder
 under it, with no CloudKit container and no entitlement). Dropbox, a NAS or a USB drive work
 the same way. A Mac that turned sync on before the rename keeps `Netnyahoo Sync`, and one setting up after it is

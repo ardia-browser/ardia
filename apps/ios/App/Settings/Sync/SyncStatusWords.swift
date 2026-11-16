@@ -13,17 +13,20 @@ struct SyncStatusWords {
   let phase: SyncPhase
   let statusText: String
   let isEnabled: Bool
+  let usesNextcloud: Bool
 
   init(sync: SyncService) {
     phase = sync.phase
     statusText = sync.statusText
     isEnabled = sync.isEnabled
+    usesNextcloud = sync.usesNextcloud
   }
 
-  init(phase: SyncPhase, statusText: String, isEnabled: Bool) {
+  init(phase: SyncPhase, statusText: String, isEnabled: Bool, usesNextcloud: Bool = false) {
     self.phase = phase
     self.statusText = statusText
     self.isEnabled = isEnabled
+    self.usesNextcloud = usesNextcloud
   }
 
   var isOff: Bool {
@@ -46,7 +49,7 @@ struct SyncStatusWords {
 
   var rowSubtitle: Text {
     switch attention {
-    case .folder: Text("Choose Your Sync Folder Again").foregroundStyle(.ink(.orange))
+    case .folder: (usesNextcloud ? Text("Sign In to Nextcloud Again") : Text("Choose Your Sync Folder Again")).foregroundStyle(.ink(.orange))
     case .phrase: Text("Enter Your Recovery Phrase").foregroundStyle(.ink(.orange))
     case .reset: Text("Out of Sync").foregroundStyle(.ink(.orange))
     case .stalled: Text(verbatim: statusText).foregroundStyle(.ink(.orange))

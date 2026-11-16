@@ -52,6 +52,36 @@ the folder or the Mac's format changes, and a Mac that has never heard of the iP
   system folder picker and keeps a security-scoped bookmark. Picking iCloud Drive itself works too: the app looks
   for Ardia Sync (or Netnyahoo Sync) inside it. Reads and writes go through `NSFileCoordinator`, which makes iCloud
   bring files down; dataless files are reported as pending, as on the Mac.
+- **Nextcloud sign-in.** Nextcloud's iOS app is a legacy File Provider: the picker returns a folder URL that doesn't
+  exist on disk (every read fails with ENOENT, nextcloud/ios#943), so the iPhone talks to the server directly. The Mac
+  keeps using the folder the Nextcloud desktop client syncs. Connect › Use Nextcloud signs in with Login Flow v2 in an
+  ephemeral `ASWebAuthenticationSession`, which gives Ardia an app password of its own, kept in the Keychain
+  (`Ardia Nextcloud`, a random account per sign-in) and never in `sync.json`. With no window to show the sign-in on,
+  it fails instead of opening. With the phrase entered, a WebDAV `SEARCH` for the chain's folder name finds where the
+  Mac syncs, falling back to Ardia Sync or a typed path. At connect, a typed folder that won't list says so, and a
+  folder the search found that won't list is "can't reach the server"; neither reads as "no sync data".
+- **Nextcloud store and faults.** `NextcloudStore` (`ArdiaSync`) is the cycle's store: PROPFIND, GET, PUT and DELETE
+  under `remote.php/dav/files/<user id>/<path>/<chain>/<scope>/<id>.nns`, MKCOL only for a missing scope folder, never
+  the chain. https only, an ephemeral session with no cache, 20 s per request, no redirect to another host, and the
+  rest of a cycle fails fast after the first failure. Only a parsed 207 Multi-Status is a listing, and only when it
+  holds the exact folder asked for (same path after decoding, same scheme, host and port for an absolute href) as a
+  collection with a 2xx propstat. A child entry that failed voids the listing only when sync could use its name: a
+  chain-shaped name (26 base32 characters) in the sync folder, or `<26 base32 characters>.nns` in a scope folder.
+  Other failed children (a shared mount Ardia can't open, the desktop client's `.~lock` or `.part` files) are left
+  out. A timeout, a refused connection, 403, 404 on the folder, 423, 5xx, a captive portal's HTML, broken XML, a failed
+  or property-less root, or another collection standing in for it is Offline, never "missing", so a server problem
+  can't reset sync. A 401 stops syncing and asks to sign in again, unless it comes from an account the phone has since
+  switched away from: each cycle's outcome carries the location generation it ran on, outcomes from a replaced location
+  are dropped, and a sign-in or reset that settles after the location changed leaves the new one alone.
+- **Nextcloud credentials.** Each saved location points at its own Keychain entry, but a credential is the server,
+  login and app password: moving to another folder with the same sign-in drops only the old Keychain entry, never
+  revokes the password still in use. Changing accounts revokes the old app password only after the engine has
+  switched. A fresh app password belongs to the page that got it until sync adopts it: a failed join that's abandoned,
+  replaced by a folder or another sign-in, or a failed change in Settings revokes it (`SyncService.release`, deferred
+  while a join is in flight). Stopping sync deletes the app password and revokes it on the server once the stop has
+  landed. Revoking is one best-effort request with no retry: offline, the "Ardia" app password stays on the server,
+  and Nextcloud › Settings › Security › Devices & sessions removes it.
+  `FolderStore` is the same seam over the vault.
 - **Joining.** The Mac's Settings › Sync › Connect Another Device shows a QR code of the phrase. The iPhone scans it
   (or takes the 24 words typed or pasted), checks the checksum, and checks that the folder holds that phrase's
   chain before saving anything. Its errors are the Mac's. A different phrase entered after a failure clears the old
@@ -259,6 +289,11 @@ previous tab), `-BrowsePagerScript` plays a scripted swipe (cancel, edge, commit
   and with "name 2" conflict copies and stray files. Its soak runs hours of random edits, sends and compactions on a
   test clock and checks both sides converge, nothing the Mac still has disappears from the phone, every sent tab
   arrives once and no seq is reused. iCloud's own delivery between devices is the one thing left for a real phone.
+- `NextcloudSyncTests` and `NextcloudStoreTests` run the same fake Mac against `FakeNextcloud`, a URLProtocol stub
+  serving WebDAV, Login Flow v2 and OCS over a temp folder: round trips both ways, every server fault across cycles
+  more than a minute apart (Offline, never a reset), recovery after an outage, a truly missing chain still resetting,
+  401 asking to sign in again, a 401 from a just-replaced account (held mid-request) never discarding the new one,
+  unadopted app passwords revoked, and the app password never reaching `sync.json` or a message.
 - `pnpm --filter @ardia/sync test` includes the companion's tests and checks the bundles are current.
 - The app's own states are checked in the simulator (see the agent notes below).
 - CI (`.github/workflows/ios.yml`, on GitHub's `xcode-27` runner with Xcode 27.1) builds the `Ardia` scheme for the
@@ -269,7 +304,8 @@ previous tab), `-BrowsePagerScript` plays a scripted swipe (cancel, edge, commit
 
 A real iPhone and a real Mac on the same iCloud account: scan the code, pick the folder, and watch tabs, history,
 bookmarks and sent tabs go both ways; a relaunch and a reboot keep the folder bookmark; background refresh runs.
-The simulator can't sign in to iCloud Drive.
+The simulator can't sign in to iCloud Drive. For Nextcloud: sign in on a real server, let it find the folder, and
+watch the same round trips; turn the server off for a while and back on.
 
 Export compliance: the app's only encryption is Apple's own (CryptoKit's AES-GCM, HKDF and HMAC for sync, and
 HTTPS), with no cryptography of its own and none from a third party, which Apple counts as exempt. So

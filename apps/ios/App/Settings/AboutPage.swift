@@ -27,7 +27,7 @@ struct AboutPage: View {
         AboutLink("Release Notes", url: "https://ardia.dev/release-notes")
         AboutLink("Source Code", url: "https://github.com/mantrakp04/ardia")
       } footer: {
-        Text("No accounts. Your data stays on your devices and in your iCloud Drive.")
+        Text("No accounts. Your data stays on your devices and in the sync folder you choose.")
       }
 
       Section {

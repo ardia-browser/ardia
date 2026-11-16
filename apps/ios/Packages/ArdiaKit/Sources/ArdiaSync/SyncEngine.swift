@@ -39,6 +39,8 @@ public struct CycleOutcome: Sendable {
   public var published: Int
   public var changed: Int
   public var chainSeen = false
+  public var signInNeeded = false
+  public var locationGeneration = 0
 
   static let offline = CycleOutcome(status: .unavailable, snapshot: nil, received: [], historyRemoved: [], pending: 0, published: 0, changed: 0)
 }
@@ -62,6 +64,7 @@ public actor SyncEngine {
   private let coordination: SyncCoordination
   private let keys: SyncKeys
   private let current: Mutex<any SyncStore>
+  private var locationGeneration: Int
   private var loaded = false
   private var retired = false
 
@@ -84,6 +87,7 @@ public actor SyncEngine {
     deviceId: String,
     entropy: Data,
     location: SyncLocation,
+    locationGeneration: Int = 0,
     chainSeen: Bool = false,
     coordinationTimeout: TimeInterval = SyncFolderAccess.defaultTimeout,
     now: @escaping @Sendable () -> Date = Date.init
@@ -114,6 +118,7 @@ public actor SyncEngine {
     self.deviceId = deviceId
     self.token = token
     self.now = now
+    self.locationGeneration = locationGeneration
   }
 
   public static func prepareFresh(directory: URL, deviceId: String, ghosts: [String]) throws {
@@ -144,15 +149,12 @@ public actor SyncEngine {
     current.withLock { $0 }.cancel()
   }
 
-  public func changeFolder(_ grant: SyncFolderGrant) throws {
-    try changeLocation(.folder(grant))
-  }
-
-  public func changeLocation(_ location: SyncLocation) throws {
+  public func changeLocation(_ location: SyncLocation, generation: Int) throws {
     try checkLive()
     let store = location.makeStore(keys: keys, coordination: coordination)
     current.withLock { $0 = store }
     host.use(store)
+    locationGeneration = generation
   }
 
   public func cachedSnapshot() -> SyncSnapshot? {
@@ -165,6 +167,7 @@ public actor SyncEngine {
     try Task.checkCancellation()
     host.store.resume()
     host.timedOut = false
+    host.signInNeeded = false
     try load()
     let input = CycleInput(
       name: local.deviceName,
@@ -178,7 +181,12 @@ public actor SyncEngine {
     do {
       json = try script.callAsync(.sync, "runCompanionCycle", json: [String(decoding: Self.encoder.encode(input), as: UTF8.self)])
     } catch {
-      if host.timedOut { return .offline }
+      if host.timedOut {
+        var offline = CycleOutcome.offline
+        offline.signInNeeded = host.signInNeeded
+        offline.locationGeneration = locationGeneration
+        return offline
+      }
       throw error
     }
     let output = try Self.decoder.decode(CycleOutput.self, from: Data(json.utf8))
@@ -201,7 +209,9 @@ public actor SyncEngine {
       pending: output.pending,
       published: output.published,
       changed: output.changed,
-      chainSeen: host.chainSeen
+      chainSeen: host.chainSeen,
+      signInNeeded: host.signInNeeded,
+      locationGeneration: locationGeneration
     )
   }
 

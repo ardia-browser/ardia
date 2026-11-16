@@ -8,42 +8,6 @@ import UIKit
 import BackgroundTasks
 #endif
 
-public struct PhraseCheck: Equatable, Sendable {
-  public var wordCount: Int
-  public var counterText: String
-  public var isTooLong: Bool
-  public var problem: String?
-  public var isValid: Bool
-}
-
-public enum PinOutcome: Equatable, Sendable {
-  case pinned
-  case alreadyPinned
-  case failed
-}
-
-public enum ConnectResult: Equatable, Sendable {
-  case connected
-  case invalidPhrase(String)
-  case mismatch
-  case noSyncData
-  case folderUnavailable
-  case keychainFailed
-  case busy
-
-  public var message: String? {
-    switch self {
-    case .connected: nil
-    case .invalidPhrase(let message): message
-    case .mismatch: "This recovery phrase doesn’t match the synced data in this folder. Check the phrase, or choose the folder your other devices sync to."
-    case .noSyncData: "There’s no synced data in this folder yet. Choose the folder your other devices sync to, or wait for it to finish downloading."
-    case .folderUnavailable: "Ardia can’t open this folder. Choose the Ardia Sync folder in iCloud Drive."
-    case .keychainFailed: "Couldn’t save the sync key in your Keychain."
-    case .busy: "Ardia is still turning off sync. Try again in a moment."
-    }
-  }
-}
-
 @MainActor
 @Observable
 public final class SyncService {
@@ -60,7 +24,10 @@ public final class SyncService {
   public private(set) var isEnabled = false
   public var isCycleRunning: Bool { running }
   public private(set) var folderName: String?
+  public private(set) var nextcloudHost: String?
   public let isDemo: Bool
+
+  public var usesNextcloud: Bool { nextcloudHost != nil }
 
   public var deviceName: String {
     didSet {
@@ -114,7 +81,7 @@ public final class SyncService {
       guard let lastSynced else { return "Not syncing" }
       return "Not syncing · Last synced \(Self.relative.localizedString(for: lastSynced, relativeTo: now()))"
     case .offline: return "Offline"
-    case .needsFolderAccess: return "Choose your sync folder again to keep syncing."
+    case .needsFolderAccess: return usesNextcloud ? "Sign in to Nextcloud again to keep syncing." : "Choose your sync folder again to keep syncing."
     case .locked: return "Enter your recovery phrase to keep syncing on this iPhone."
     case .reset: return Self.resetMessage
     }
@@ -123,8 +90,13 @@ public final class SyncService {
   @ObservationIgnored public weak var source: (any LocalBrowsingSource)?
   @ObservationIgnored private let files: SyncFiles
   @ObservationIgnored private let keyStore: any SyncKeyStore
+  @ObservationIgnored private let resolver: SyncStoreResolver
+  @ObservationIgnored var revocations: [Task<Void, Never>] = []
   @ObservationIgnored private var meta: SyncMeta
   @ObservationIgnored private var engine: SyncEngine?
+  @ObservationIgnored private var locationGeneration = 0
+  @ObservationIgnored private var joining = 0
+  @ObservationIgnored private var releaseAfterJoining: [NextcloudAccount] = []
   @ObservationIgnored private var running = false
   @ObservationIgnored private var again = false
   @ObservationIgnored private var idle: [CheckedContinuation<Void, Never>] = []
@@ -147,7 +119,6 @@ public final class SyncService {
   static let historyWindow: TimeInterval = 90 * 86_400
   static let resetConfirmation: TimeInterval = 60
   static let visitOverlap: TimeInterval = 300
-  static let resetMessage = "This device is out of sync. Sync may have been reset from another device."
 
   private static weak var active: SyncService?
 
@@ -155,23 +126,28 @@ public final class SyncService {
     directory: URL = SyncService.defaultDirectory,
     keyStore: any SyncKeyStore = KeychainKeyStore(service: "Ardia Sync Key"),
     coordinationTimeout: TimeInterval = SyncFolderAccess.defaultTimeout,
+    nextcloudPasswords: any SyncKeyStore = KeychainKeyStore(service: "Ardia Nextcloud"),
+    nextcloudTransport: NextcloudTransport = .live,
     now: @escaping @Sendable () -> Date = Date.init
   ) {
     files = SyncFiles(directory: directory)
     self.keyStore = keyStore
+    resolver = SyncStoreResolver(passwords: nextcloudPasswords, transport: nextcloudTransport)
     self.now = now
     self.coordinationTimeout = coordinationTimeout
     meta = files.loadMeta()
     deviceName = meta.deviceName
     selectedProfileId = meta.selectedProfileId
     lastSynced = meta.lastSyncedAt
-    folderName = meta.folder?.name
+    folderName = meta.nextcloud?.path ?? meta.folder?.name
+    nextcloudHost = meta.nextcloud?.host
     isDemo = false
   }
 
   private init(demo snapshot: SyncSnapshot) {
     files = SyncFiles(directory: URL(filePath: "/dev/null"))
     keyStore = DemoKeyStore()
+    resolver = SyncStoreResolver(passwords: DemoKeyStore(), transport: .live)
     now = Date.init
     coordinationTimeout = SyncFolderAccess.defaultTimeout
     meta = SyncMeta(deviceName: "iPhone", enabled: true)
@@ -190,7 +166,7 @@ public final class SyncService {
     guard !isDemo, engine == nil else { return }
     Self.active = self
     meta = files.loadMeta()
-    folderName = meta.folder?.name
+    refreshLocationName()
     if meta.retiringDeviceId != nil, retiring == nil {
       retiring = Task { await retirePending() }
     }
@@ -199,7 +175,7 @@ public final class SyncService {
       set(\.phase, .reset)
       return
     }
-    guard meta.enabled, let deviceId = meta.deviceId, let location = meta.folder else {
+    guard meta.enabled, let deviceId = meta.deviceId, meta.folder != nil || meta.nextcloud != nil else {
       set(\.isEnabled, false)
       set(\.phase, .off)
       return
@@ -209,7 +185,7 @@ public final class SyncService {
       set(\.phase, .locked)
       return
     }
-    guard case .resolved(let grant, let refreshed) = SyncFolderAccess.resolve(location) else {
+    guard case .ready(let location, let refreshed) = resolver.resolve(meta) else {
       set(\.phase, .needsFolderAccess)
       return
     }
@@ -217,7 +193,7 @@ public final class SyncService {
       meta.folder = refreshed
       saveMeta()
     }
-    guard let engine = makeEngine(deviceId: deviceId, entropy: entropy, grant: grant) else { return }
+    guard let engine = makeEngine(deviceId: deviceId, entropy: entropy, location: location) else { return }
     set(\.phase, .starting)
     Task {
       if let cached = await engine.cachedSnapshot(), snapshot == .empty { snapshot = cached }
@@ -244,6 +220,10 @@ public final class SyncService {
   }
 
   public func connect(phrase: String, folder: URL) async -> ConnectResult {
+    await connect(phrase: phrase, to: .folder(folder))
+  }
+
+  public func connect(phrase: String, to destination: SyncDestination) async -> ConnectResult {
     guard !isDemo else { return .connected }
     guard !stopping else { return .busy }
     foreground = true
@@ -255,12 +235,12 @@ public final class SyncService {
     } catch {
       return .invalidPhrase(Self.message(for: .checksum))
     }
-    guard let prepared = await Self.prepare(folder: folder, entropy: entropy) else { return .folderUnavailable }
-    switch prepared.check {
-    case .matches: break
-    case .mismatch: return .mismatch
-    case .noSyncData: return .noSyncData
-    case .unavailable: return .folderUnavailable
+    joining += 1
+    defer { finishJoining() }
+    let prepared: Prepared
+    switch await prepare(destination, entropy: entropy) {
+    case .success(let ready): prepared = ready
+    case .failure(let failure): return failure
     }
     guard !stopping else { return .busy }
     if let retiring { await retiring.value }
@@ -271,13 +251,18 @@ public final class SyncService {
     }
     let reuse = phase == .locked ? meta.deviceId.flatMap { id in Self.opensState(files, entropy: entropy) ? id : nil } : nil
     let deviceId = reuse ?? SyncKeys.newFileId()
-    guard keyStore.save(entropy, account: deviceId) else { return .keychainFailed }
+    guard let saved = commit(prepared.draft) else { return .keychainFailed }
+    guard keyStore.save(entropy, account: deviceId) else {
+      resolver.discard(saved)
+      return .keychainFailed
+    }
     if reuse == nil {
       let previous = meta.deviceId
       do {
         try SyncEngine.prepareFresh(directory: files.directory, deviceId: deviceId, ghosts: [abandoned, previous].compactMap(\.self))
       } catch {
         keyStore.delete(account: deviceId)
+        resolver.discard(saved)
         return .keychainFailed
       }
       if let previous { keyStore.delete(account: previous) }
@@ -289,14 +274,13 @@ public final class SyncService {
       snapshot = .empty
     }
     meta.deviceId = deviceId
-    meta.folder = prepared.location
+    if let replaced = adopt(saved) { forget(replaced, keeping: meta.nextcloud) }
     meta.enabled = true
     meta.outOfSync = false
     saveMeta()
     Self.active = self
-    folderName = prepared.location.name
     missingSince = nil
-    guard makeEngine(deviceId: deviceId, entropy: entropy, grant: prepared.grant) != nil else { return .connected }
+    guard makeEngine(deviceId: deviceId, entropy: entropy, location: prepared.location) != nil else { return .connected }
     set(\.isEnabled, true)
     set(\.phase, .starting)
     visitsDue = true
@@ -307,30 +291,40 @@ public final class SyncService {
 
   @discardableResult
   public func changeFolder(_ folder: URL) async -> ConnectResult {
+    await changeLocation(.folder(folder))
+  }
+
+  @discardableResult
+  public func changeLocation(_ destination: SyncDestination) async -> ConnectResult {
     guard !isDemo else { return .connected }
     guard meta.enabled, let deviceId = meta.deviceId, let entropy = keyStore.load(account: deviceId) else { return .keychainFailed }
-    guard let prepared = await Self.prepare(folder: folder, entropy: entropy) else { return .folderUnavailable }
-    switch prepared.check {
-    case .matches: break
-    case .mismatch: return .mismatch
-    case .noSyncData: return .noSyncData
-    case .unavailable: return .folderUnavailable
+    joining += 1
+    defer { finishJoining() }
+    let prepared: Prepared
+    switch await prepare(destination, entropy: entropy) {
+    case .success(let ready): prepared = ready
+    case .failure(let failure): return failure
     }
-    meta.folder = prepared.location
+    guard meta.enabled, meta.deviceId == deviceId, let saved = commit(prepared.draft) else { return .keychainFailed }
+    let replaced = adopt(saved)
+    locationGeneration += 1
     meta.chainSeen = false
     saveMeta()
-    folderName = prepared.location.name
     missingSince = nil
+    var unfinished: ConnectResult?
     if let engine {
       do {
-        try await engine.changeFolder(prepared.grant)
+        try await engine.changeLocation(prepared.location, generation: locationGeneration)
       } catch {
-        return .folderUnavailable
+        unfinished = if case .nextcloud = destination { .serverUnavailable } else { .folderUnavailable }
       }
-    } else if makeEngine(deviceId: deviceId, entropy: entropy, grant: prepared.grant) == nil {
-      return .connected
+    } else if makeEngine(deviceId: deviceId, entropy: entropy, location: prepared.location) == nil {
+      unfinished = .connected
     }
+    if let replaced, replaced != meta.nextcloud { forget(replaced, keeping: meta.nextcloud) }
+    if let unfinished { return unfinished }
     set(\.phase, .starting)
+    if foreground { startForegroundLoop() }
     Task { await runCycle() }
     return .connected
   }
@@ -338,6 +332,7 @@ public final class SyncService {
   public func acknowledgeReset() {
     guard !isDemo, phase == .reset else { return }
     if let deviceId = meta.deviceId { keyStore.delete(account: deviceId) }
+    forgetNextcloud()
     meta.deviceId = nil
     meta.enabled = false
     meta.outOfSync = false
@@ -459,6 +454,7 @@ public final class SyncService {
     guard meta.deviceId == deviceId else { return }
     if landed {
       if let deviceId { keyStore.delete(account: deviceId) }
+      forgetNextcloud()
     } else {
       meta.retiringDeviceId = deviceId
     }
@@ -558,9 +554,9 @@ public final class SyncService {
     return phase == .updated
   }
 
-  private func makeEngine(deviceId: String, entropy: Data, grant: SyncFolderGrant) -> SyncEngine? {
+  private func makeEngine(deviceId: String, entropy: Data, location: SyncLocation) -> SyncEngine? {
     do {
-      let engine = try SyncEngine(directory: files.directory, deviceId: deviceId, entropy: entropy, folder: grant, chainSeen: meta.chainSeen, coordinationTimeout: coordinationTimeout, now: now)
+      let engine = try SyncEngine(directory: files.directory, deviceId: deviceId, entropy: entropy, location: location, locationGeneration: locationGeneration, chainSeen: meta.chainSeen, coordinationTimeout: coordinationTimeout, now: now)
       self.engine = engine
       return engine
     } catch {
@@ -641,7 +637,11 @@ public final class SyncService {
   }
 
   private func apply(_ outcome: CycleOutcome, engine: SyncEngine) async {
-    guard self.engine === engine else { return }
+    guard self.engine === engine, outcome.locationGeneration == locationGeneration else { return }
+    if outcome.signInNeeded {
+      await needSignIn(engine)
+      return
+    }
     if outcome.chainSeen, !meta.chainSeen {
       meta.chainSeen = true
       saveMeta()
@@ -686,7 +686,7 @@ public final class SyncService {
 
   private func startOver(_ broken: SyncEngine) async {
     guard self.engine === broken, let oldId = meta.deviceId, let entropy = keyStore.load(account: oldId),
-          let location = meta.folder, case .resolved(let grant, _) = SyncFolderAccess.resolve(location)
+          case .ready(let location, _) = resolver.resolve(meta)
     else {
       set(\.phase, .stalled(Self.stalledMessage))
       return
@@ -711,7 +711,7 @@ public final class SyncService {
     engine = nil
     keyStore.delete(account: oldId)
     visitsDue = true
-    guard makeEngine(deviceId: deviceId, entropy: entropy, grant: grant) != nil else { return }
+    guard makeEngine(deviceId: deviceId, entropy: entropy, location: location) != nil else { return }
     again = true
   }
 
@@ -719,6 +719,7 @@ public final class SyncService {
     meta.outOfSync = true
     saveMeta()
     await engine.setAside("reset")
+    guard self.engine === engine else { return }
     self.engine = nil
     foregroundLoop?.cancel()
     foregroundLoop = nil
@@ -734,12 +735,10 @@ public final class SyncService {
   }
 
   private func retireAsGhost(_ oldId: String) async {
-    guard let entropy = keyStore.load(account: oldId), let location = meta.folder,
-          case .resolved(let grant, _) = SyncFolderAccess.resolve(location)
-    else { return }
+    guard let entropy = keyStore.load(account: oldId), case .ready(let location, _) = resolver.resolve(meta) else { return }
     let temporary = SyncKeys.newFileId()
     guard (try? SyncEngine.prepareFresh(directory: files.directory, deviceId: temporary, ghosts: [oldId])) != nil,
-          let engine = try? SyncEngine(directory: files.directory, deviceId: temporary, entropy: entropy, folder: grant, coordinationTimeout: coordinationTimeout, now: now)
+          let engine = try? SyncEngine(directory: files.directory, deviceId: temporary, entropy: entropy, location: location, coordinationTimeout: coordinationTimeout, now: now)
     else { return }
     let local = LocalBrowsing(deviceName: meta.deviceName, tabs: nil, visits: nil)
     for _ in 0..<2 {
@@ -752,9 +751,8 @@ public final class SyncService {
   private func finishPendingRetire(giveUp: Bool) async -> String? {
     guard let deviceId = meta.retiringDeviceId else { return nil }
     var landed = false
-    if let entropy = keyStore.load(account: deviceId), let location = meta.folder,
-       case .resolved(let grant, _) = SyncFolderAccess.resolve(location) {
-      if let engine = try? SyncEngine(directory: files.directory, deviceId: deviceId, entropy: entropy, folder: grant, coordinationTimeout: coordinationTimeout, now: now) {
+    if let entropy = keyStore.load(account: deviceId), case .ready(let location, _) = resolver.resolve(meta) {
+      if let engine = try? SyncEngine(directory: files.directory, deviceId: deviceId, entropy: entropy, location: location, coordinationTimeout: coordinationTimeout, now: now) {
         do {
           landed = try await engine.stop(LocalBrowsing(deviceName: meta.deviceName, tabs: nil, visits: nil))
         } catch SyncError.stateUnreadable {
@@ -772,6 +770,7 @@ public final class SyncService {
     keyStore.delete(account: deviceId)
     files.removeSyncData()
     meta.retiringDeviceId = nil
+    if !meta.enabled { forgetNextcloud() }
     saveMeta()
     return landed ? nil : deviceId
   }
@@ -803,26 +802,11 @@ public final class SyncService {
     return " · " + Self.waitingForDownloads(pendingDownloads)
   }
 
-  static func waitingForDownloads(_ count: Int) -> String {
-    String(AttributedString(localized: "Waiting for ^[\(count) file](inflect: true) to download").characters)
-  }
-
   static func same(_ a: SyncSnapshot, _ b: SyncSnapshot) -> Bool {
     var a = a
     a.syncedAt = b.syncedAt
     return a == b
   }
-
-  static func message(for problem: RecoveryPhrase.Problem) -> String {
-    switch problem {
-    case .wordCount: "Recovery phrase must be exactly 24 words."
-    case .unknownWord(let word): "“\(word)” is not a valid recovery phrase word."
-    case .checksum: "This recovery phrase is not valid. Please check for typos."
-    }
-  }
-
-  static let stalledMessage = "Ardia couldn’t read or write the sync folder. It will try again."
-  static let unavailableMessage = "Ardia can’t read its sync data right now. It will try again."
 
   private static let relative: RelativeDateTimeFormatter = {
     let formatter = RelativeDateTimeFormatter()
@@ -830,16 +814,128 @@ public final class SyncService {
     return formatter
   }()
 
+  private enum Draft: Sendable {
+    case folder(SyncFolderLocation)
+    case nextcloud(NextcloudAccount, path: String)
+  }
+
+  private enum Preparation {
+    case success(Prepared)
+    case failure(ConnectResult)
+  }
+
   private struct Prepared: Sendable {
-    var grant: SyncFolderGrant
-    var location: SyncFolderLocation
+    var location: SyncLocation
+    var draft: Draft
     var check: FolderCheck
+  }
+
+  private func prepare(_ destination: SyncDestination, entropy: Data) async -> Preparation {
+    let prepared: Prepared
+    switch destination {
+    case .folder(let folder):
+      guard let ready = await Self.prepare(folder: folder, entropy: entropy) else { return .failure(.folderUnavailable) }
+      prepared = ready
+    case .nextcloud(let account, let path):
+      let transport = resolver.transport
+      do {
+        let found = try await NextcloudLogin(transport: transport).locate(account, entropy: entropy, typedPath: path)
+        prepared = Prepared(location: .nextcloud(NextcloudConnection(account: account, path: found.path, transport: transport)), draft: .nextcloud(account, path: found.path), check: found.check)
+      } catch let problem as NextcloudProblem {
+        return .failure(ConnectResult(problem))
+      } catch {
+        return .failure(.serverUnavailable)
+      }
+    }
+    let remote = if case .nextcloud = destination { true } else { false }
+    switch prepared.check {
+    case .matches: return .success(prepared)
+    case .mismatch: return .failure(.mismatch)
+    case .noSyncData: return .failure(remote ? .noSyncDataInNextcloud : .noSyncData)
+    case .unavailable: return .failure(remote ? .serverUnavailable : .folderUnavailable)
+    }
   }
 
   @concurrent
   private static func prepare(folder: URL, entropy: Data) async -> Prepared? {
     guard let (grant, location) = try? SyncFolderAccess.grant(picked: folder) else { return nil }
-    return Prepared(grant: grant, location: location, check: SyncEngine.check(entropy: entropy, folder: grant.folder))
+    return Prepared(location: .folder(grant), draft: .folder(location), check: SyncEngine.check(entropy: entropy, folder: grant.folder))
+  }
+
+  private func commit(_ draft: Draft) -> SavedLocation? {
+    switch draft {
+    case .folder(let location): .folder(location)
+    case .nextcloud(let account, let path): resolver.save(account, path: path).map { .nextcloud($0) }
+    }
+  }
+
+  private func adopt(_ saved: SavedLocation) -> NextcloudLocation? {
+    let previous = meta.nextcloud
+    switch saved {
+    case .folder(let location):
+      meta.folder = location
+      meta.nextcloud = nil
+    case .nextcloud(let location):
+      meta.nextcloud = location
+      meta.folder = nil
+    }
+    refreshLocationName()
+    guard let previous, previous != meta.nextcloud else { return nil }
+    return previous
+  }
+
+  private func forget(_ location: NextcloudLocation, keeping live: NextcloudLocation? = nil) {
+    if let revoking = resolver.forget(location, keeping: live) { revocations.append(revoking) }
+  }
+
+  private func forgetNextcloud() {
+    guard let location = meta.nextcloud else { return }
+    forget(location)
+    meta.nextcloud = nil
+    refreshLocationName()
+  }
+
+  public func release(_ account: NextcloudAccount) {
+    guard !isDemo else { return }
+    guard joining == 0 else {
+      releaseAfterJoining.append(account)
+      return
+    }
+    if let live = meta.nextcloud.flatMap(resolver.account), live.sharesCredential(with: account) { return }
+    let login = NextcloudLogin(transport: resolver.transport)
+    revocations.append(Task.detached { await login.revoke(account) })
+  }
+
+  private func finishJoining() {
+    joining -= 1
+    guard joining == 0, !releaseAfterJoining.isEmpty else { return }
+    let waiting = releaseAfterJoining
+    releaseAfterJoining = []
+    for account in waiting { release(account) }
+  }
+
+  private func refreshLocationName() {
+    folderName = meta.nextcloud?.path ?? meta.folder?.name
+    nextcloudHost = meta.nextcloud?.host
+  }
+
+  private func needSignIn(_ engine: SyncEngine) async {
+    let rejected = meta.nextcloud
+    let generation = locationGeneration
+    foregroundLoop?.cancel()
+    foregroundLoop = nil
+    debounce?.cancel()
+    debounce = nil
+    missingSince = nil
+    if self.engine === engine { self.engine = nil }
+    await engine.retire()
+    guard locationGeneration == generation, meta.nextcloud == rejected else {
+      if self.engine == nil, meta.enabled, !stopping { start() }
+      if self.engine != nil, foreground { startForegroundLoop() }
+      return
+    }
+    if let rejected { resolver.discard(.nextcloud(rejected)) }
+    set(\.phase, .needsFolderAccess)
   }
 
   private static func opensState(_ files: SyncFiles, entropy: Data) -> Bool {

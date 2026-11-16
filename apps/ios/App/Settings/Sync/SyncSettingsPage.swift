@@ -9,6 +9,7 @@ struct SyncSettingsPage: View {
   @State private var syncFailures = 0
   @State private var stops = 0
   @State private var isChoosingFolder = false
+  @State private var isUsingNextcloud = false
   @State private var isConfirmingStop = false
   @State private var isStopping = false
   @State private var folderError: String?
@@ -50,6 +51,15 @@ struct SyncSettingsPage: View {
         folderError = result.message
       }
     }
+    .navigationDestination(isPresented: $isUsingNextcloud) {
+      NextcloudConnectPage { account, path in
+        Task {
+          let result = await sync.changeLocation(.nextcloud(account, path: path))
+          folderError = result.message
+          if result != .connected { sync.release(account) }
+        }
+      }
+    }
     .confirmationDialog("Stop Syncing This Device?", isPresented: $isConfirmingStop, titleVisibility: .visible) {
       Button("Stop Syncing", role: .destructive) {
         stops += 1
@@ -77,7 +87,7 @@ struct SyncSettingsPage: View {
     } header: {
       Text("What You Get")
     } footer: {
-      Text("End-to-end encrypted, in your own iCloud Drive.")
+      Text("End-to-end encrypted, in your own iCloud Drive or Nextcloud.")
     }
   }
 
@@ -85,10 +95,18 @@ struct SyncSettingsPage: View {
   private func attentionSection(_ attention: SyncStatusWords.Attention) -> some View {
     switch attention {
     case .folder:
-      Section {
-        Button("Choose Folder…") { isChoosingFolder = true }
-      } footer: {
-        Text("Choose the Ardia Sync folder again.")
+      if app.sync.usesNextcloud {
+        Section {
+          Button("Sign In to Nextcloud…") { isUsingNextcloud = true }
+        } footer: {
+          Text("Nextcloud stopped accepting Ardia’s app password. Sign in again to keep syncing.")
+        }
+      } else {
+        Section {
+          Button("Choose Folder…") { isChoosingFolder = true }
+        } footer: {
+          Text("Choose the Ardia Sync folder again.")
+        }
       }
     case .phrase, .reset:
       Section {
@@ -159,10 +177,17 @@ struct SyncSettingsPage: View {
     }
 
     Section {
-      LabeledContent("Folder", value: sync.folderName ?? String(localized: "Ardia Sync"))
+      if sync.usesNextcloud {
+        LabeledContent("Location") {
+          Text(verbatim: Self.nextcloudLocation(sync.folderName))
+        }
+      } else {
+        LabeledContent("Folder", value: sync.folderName ?? String(localized: "Ardia Sync"))
+      }
       Button("Change Folder…") { isChoosingFolder = true }
+      Button(sync.usesNextcloud ? "Change Nextcloud Account…" : "Use Nextcloud…") { isUsingNextcloud = true }
     } header: {
-      Text("Sync Folder")
+      Text("Sync Location")
     } footer: {
       if let folderError {
         Text(folderError).foregroundStyle(.ink(.red))
@@ -185,6 +210,13 @@ struct SyncSettingsPage: View {
     } footer: {
       Text("Your Mac stops seeing this iPhone’s tabs.")
     }
+  }
+}
+
+extension SyncSettingsPage {
+  static func nextcloudLocation(_ path: String?) -> String {
+    guard let path, !path.isEmpty else { return "Nextcloud" }
+    return "Nextcloud · \(path)"
   }
 }
 

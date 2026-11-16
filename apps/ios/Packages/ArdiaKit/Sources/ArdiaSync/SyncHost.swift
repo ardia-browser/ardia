@@ -8,6 +8,7 @@ final class SyncHost {
   private(set) var store: any SyncStore
   var journal = SyncJournal()
   var timedOut = false
+  var signInNeeded = false
   var chainSeen = false
   let device: String
 
@@ -82,6 +83,10 @@ final class SyncHost {
       return try body()
     } catch let error as SyncCoordination.TimedOut {
       timedOut = true
+      throw error
+    } catch let error as SyncSignInNeeded {
+      timedOut = true
+      signInNeeded = true
       throw error
     }
   }

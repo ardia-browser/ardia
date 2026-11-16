@@ -11,6 +11,7 @@ struct SyncConnectPage: View {
   @State private var isScanning = false
   @State private var isEnteringWords = false
   @State private var isChoosingFolder = false
+  @State private var isUsingNextcloud = false
   @State private var scans = 0
   @State private var connections = 0
   @State private var connectFailures = 0
@@ -18,6 +19,7 @@ struct SyncConnectPage: View {
   private var isConnecting: Bool { flow.isConnecting }
   private var failure: String? { flow.failure }
   private var pickedFolder: URL? { flow.folder }
+  private var pickedNextcloud: NextcloudAccount? { flow.nextcloud }
 
   private var phrase: Binding<String> {
     Binding(get: { flow.phrase }, set: { start(flow.enterPhrase($0)) })
@@ -54,8 +56,8 @@ struct SyncConnectPage: View {
 
         SetupStepRow(
           2,
-          title: Text("Choose the Ardia Sync folder"),
-          detail: Text("Choose the Ardia Sync folder in iCloud Drive."),
+          title: Text("Choose where your Mac syncs"),
+          detail: Text("The Ardia Sync folder in iCloud Drive, or your Nextcloud."),
           progress: .step(done: false, after: hasPhrase)
         ) {
           VStack(alignment: .leading, spacing: Spacing.tight) {
@@ -68,6 +70,15 @@ struct SyncConnectPage: View {
               .font(.subheadline.weight(.medium))
               .foregroundStyle(.secondary)
             }
+            if let pickedNextcloud, !isConnecting {
+              Label {
+                Text("Nextcloud · \(pickedNextcloud.host)")
+              } icon: {
+                Image(systemName: "cloud.fill")
+              }
+              .font(.subheadline.weight(.medium))
+              .foregroundStyle(.secondary)
+            }
             if isConnecting {
               HStack(spacing: Spacing.tight) {
                 ProgressView()
@@ -75,11 +86,10 @@ struct SyncConnectPage: View {
               }
               .font(.subheadline)
             } else {
-              Button(pickedFolder == nil ? "Choose Folder…" : "Choose Another Folder…") { isChoosingFolder = true }
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.capsule)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
+              ViewThatFits(in: .horizontal) {
+                HStack(spacing: Spacing.tight) { locationButtons }
+                VStack(alignment: .leading, spacing: Spacing.tight) { locationButtons }
+              }
             }
             if let failure {
               Text(failure)
@@ -115,6 +125,17 @@ struct SyncConnectPage: View {
     }
     .folderPicker(isPresented: $isChoosingFolder) { folder in
       start(flow.chooseFolder(folder))
+      releaseReplacedAccounts()
+    }
+    .navigationDestination(isPresented: $isUsingNextcloud) {
+      NextcloudConnectPage { account, path in
+        start(flow.choose(.nextcloud(account, path: path)))
+        releaseReplacedAccounts()
+      }
+    }
+    .onDisappear {
+      guard !isUsingNextcloud, !isEnteringWords, !isScanning, !isChoosingFolder else { return }
+      for account in flow.abandon() { app.sync.release(account) }
     }
     .sensoryFeedback(.success, trigger: scans)
     .sensoryFeedback(.success, trigger: connections)
@@ -137,10 +158,26 @@ struct SyncConnectPage: View {
     .fixedSize(horizontal: true, vertical: false)
   }
 
+  private var locationButtons: some View {
+    Group {
+      Button(pickedFolder == nil ? "Choose Folder…" : "Choose Another Folder…") { isChoosingFolder = true }
+      Button(pickedNextcloud == nil ? "Use Nextcloud…" : "Change Nextcloud…", systemImage: "cloud") { isUsingNextcloud = true }
+        .labelStyle(.titleOnly)
+    }
+    .buttonStyle(.bordered)
+    .buttonBorderShape(.capsule)
+    .lineLimit(1)
+    .fixedSize(horizontal: true, vertical: false)
+  }
+
+  private func releaseReplacedAccounts() {
+    for account in flow.takeReleased() { app.sync.release(account) }
+  }
+
   private func start(_ attempt: SyncConnectFlow.Attempt?) {
     guard let attempt else { return }
     Task {
-      let result = await app.sync.connect(phrase: attempt.phrase, folder: attempt.folder)
+      let result = await app.sync.connect(phrase: attempt.phrase, to: attempt.destination)
       let retry = flow.finish(result)
       if let retry {
         start(retry)

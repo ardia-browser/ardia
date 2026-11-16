@@ -242,7 +242,7 @@ async function status() {
   });
 
   await section("Tester groups", async () => {
-    const { rows } = await get(`/v1/apps/${app.id}/betaGroups`, { "fields[betaGroups]": "name,isInternalGroup,hasAccessToAllBuilds,publicLinkEnabled,publicLink" });
+    const { rows } = await get(`/v1/apps/${app.id}/betaGroups`, { "fields[betaGroups]": "name,isInternalGroup,hasAccessToAllBuilds,publicLinkEnabled,publicLink,iosBuildsAvailableForAppleSiliconMac" });
     if (rows.length === 0) console.log("none");
     for (const row of rows) {
       const group = row.attributes;
@@ -252,7 +252,7 @@ async function status() {
       const summary = Object.entries(states).map(([state, count]) => `${count} ${state}`).join(", ") || "none";
       console.log(
         `${group.name} ${group.isInternalGroup ? "internal" : "external"} allBuilds=${group.hasAccessToAllBuilds} ` +
-          `publicLink=${group.publicLinkEnabled ? group.publicLink : group.publicLinkEnabled} testers: ${summary}`,
+          `publicLink=${group.publicLinkEnabled ? group.publicLink : group.publicLinkEnabled} mac=${group.iosBuildsAvailableForAppleSiliconMac} testers: ${summary}`,
       );
     }
   });
@@ -456,7 +456,7 @@ async function publicLink(args) {
     console.log("What to Test set");
   }
 
-  const fields = { "fields[betaGroups]": "name,isInternalGroup,publicLinkEnabled,publicLink" };
+  const fields = { "fields[betaGroups]": "name,isInternalGroup,publicLinkEnabled,publicLink,iosBuildsAvailableForAppleSiliconMac" };
   const { rows: groups } = await get(`/v1/apps/${app.id}/betaGroups`, fields);
   let group = groups.find((row) => !row.attributes.isInternalGroup && row.attributes.name === PUBLIC_GROUP);
   if (!group) {
@@ -468,6 +468,10 @@ async function publicLink(args) {
       },
     });
     console.log(`created the ${PUBLIC_GROUP} group`);
+  }
+  if (group.attributes.iosBuildsAvailableForAppleSiliconMac !== false) {
+    await patch(`/v1/betaGroups/${group.id}`, { data: { type: "betaGroups", id: group.id, attributes: { iosBuildsAvailableForAppleSiliconMac: false } } });
+    console.log(`${PUBLIC_GROUP} builds are no longer offered on Apple silicon Macs`);
   }
 
   await unlessAlready(

@@ -52,7 +52,7 @@ export function openEmptySidebarField(windowId: string) {
   openBarFromAddress(windowId, "");
 }
 
-export type BarDismissal = "escape" | "closeKey";
+export type BarDismissal = "escape" | "closeKey" | "commandKey";
 
 export function cancelPanel(windowId: string) {
   useBrowser.getState().closePanel(windowId);

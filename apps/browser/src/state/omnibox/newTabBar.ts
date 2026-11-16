@@ -5,7 +5,7 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { isEmptyCardTab, NEW_TAB_BAR_POLICY, newTabOpensBar } from "./newTabBarPolicy";
 import { hasPage } from "../tabs/pageSession";
-import { focusHeroBar } from "./barState";
+import { closePanelToHeroBar, focusHeroBar } from "./barState";
 import { isSmall } from "../windows/small";
 import type { NewTabTarget } from "../browser/types";
 import { notePageOverlay } from "../telemetry/usage";
@@ -61,6 +61,19 @@ export function closeNewTabBar(windowId: string) {
   s.closePanel(windowId);
   const active = activeTabId(store(), windowId);
   if (active && store().tabs[active]?.url) void webviews.get(active)?.focus();
+}
+
+export function closeBarOnCommandKey(windowId: string, tabId: string | undefined): boolean {
+  const s = store();
+  const panel = s.windowUi[windowId]?.panel;
+  if (!panel?.open) return false;
+  if (panel.newTab) {
+    if (!isEmptyCardTab(s, tabId ? s.tabs[tabId] : undefined)) return false;
+    closeNewTabBar(windowId);
+  } else if (tabId) closePanelToHeroBar(windowId, tabId, "commandKey");
+  else s.closePanel(windowId);
+  notePageOverlay("commandBarKeyClosed");
+  return true;
 }
 
 export function openFromNewTabBar(windowId: string, target: NewTabTarget, url: string) {

@@ -25,6 +25,7 @@ import { openProfileItemMenu } from "../../profiles/profileMenu";
 import { curve } from "../../ui/motion";
 import { settingsMotion } from "../tokens";
 import { setOpenTabsSynced, useSync } from "../../../state/sync/engine";
+import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 
 const listOf = (names: string[], joiner = "and") => (names.length <= 2 ? names.join(` ${joiner} `) : `${names.slice(0, -1).join(", ")}, ${joiner} ${names.at(-1)}`);
 
@@ -356,7 +357,7 @@ export function ProfileDetailsPane({ profileId }: { profileId: string }) {
           </Row>
         ) : null}
         {synced ? (
-          <Row title="Sync All Open Tabs" description="Every open tab in this profile, not just pinned ones, is the same on all your Macs.">
+          <Row title="Sync All Open Tabs" description={`Every open tab in this profile, not just pinned ones, is the same on all your ${PLATFORM_TERMS.syncedComputer}s.`}>
             <Toggle value={!!profile.syncTabs} disabled={!syncsTabs} accessibilityLabel="Sync All Open Tabs" onChange={(on) => setOpenTabsSynced(profileId, on)} />
           </Row>
         ) : null}

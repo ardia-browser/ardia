@@ -11,7 +11,8 @@ import { TabBadges } from "../media/TabBadges";
 import { TabIcon } from "../sidebar/TabIcon";
 import { Button, FadeLabel, Symbol, useTooltip } from "../ui";
 import { HoverSlot } from "../ui/HoverSlot";
-import { surfaceTheme, ThemeContext, useTheme } from "../ui/theme";
+import { surfaceTheme, useTheme } from "../ui/theme";
+import { ThemeOverride } from "../ui/ThemeOverride";
 import { toolbarPalette, useEasedColor } from "../ui/toolbarColors";
 import { font, iconButton } from "../ui/tokens";
 import { DockContext, FloatingStrip } from "./context";
@@ -23,7 +24,6 @@ import { SelectedTab } from "./SelectedTab";
 import { CELL_STEP, dragRange, leaveIndex, type DragGeometry } from "./stripGroups";
 import { AUDIO_BADGE, CHIP_LABEL_GAP, CHIP_PAD, CLOSE_MIN_CHIP, DROP_RING_WIDTH, FAVICON, GAP, ITEM_HEIGHT, ITEM_TOP, PINNED_CELL, tabRadius, TITLE_FADE_MAX, TITLE_FADE_MIN, TITLE_MIN_CHIP, TOP_STRIP_HEIGHT, WIDTH_SPRING } from "./tokens";
 import { useStripDrag } from "./useStripDrag";
-import { useEdgeOpacity } from "./edgeFade";
 import { StripScrollContext } from "./stripScroll";
 import { useStripCardHover } from "./StripHoverCard";
 import { useChipHover, useChipHovered, useOwnChipHover, type ChipHover } from "./reachableHover";
@@ -106,18 +106,11 @@ export const DraggableChip = memo(function DraggableChip({
   });
   const hover = useChipHover();
   const card = useStripCardHover(windowId, tabId, drag.ref, hover);
-  const edge = useEdgeOpacity(tabId, () => {
-    if (member) return [member.left, width];
-    if (!topLevel) return null;
-    const from = fromOf();
-    const geometry = geometryOf();
-    return from < 0 ? null : [geometry.lefts[from]!, geometry.slots[from]!.width];
-  });
   const dock = drag.crossed ? dockOf() : null;
   const drawn = useChipWidth(width, () => topLevel && !!strip?.current.animateWidths);
   return (
     <Animated.View ref={drag.ref} {...drag.panHandlers} {...card} mouseDownCanMoveWindow={false} style={{ ...drag.style, zIndex: drag.dragging ? 10 : active ? 1 : 0 }}>
-      <Animated.View style={{ opacity: drag.crossed ? 0 : drag.dragging ? 1 : edge }}>
+      <Animated.View style={{ opacity: drag.crossed ? 0 : 1 }}>
         <TabChip tabId={tabId} width={width} drawn={drawn} tuck={tuck} dragged={drag.dragging} hover={hover} />
       </Animated.View>
       {dock && (
@@ -182,7 +175,7 @@ export const TabChip = memo(function TabChip({ tabId, width, drawn, tuck, dragge
   const onBand = active && !floating && !!palette.background;
   const ink = onBand ? palette.text : active ? theme.tabSelectedText : theme.textTab;
   return (
-    <ThemeContext.Provider value={theme}>
+    <ThemeOverride theme={theme}>
       <Animated.View {...chipHover.hoverProps} style={{ width: drawn ?? width, height: TOP_STRIP_HEIGHT }}>
         {active && <SelectedTab width={drawn ?? width} band={band} opaque={dragged} />}
         {dragged && !active && (
@@ -226,7 +219,7 @@ export const TabChip = memo(function TabChip({ tabId, width, drawn, tuck, dragge
           )}
         </TabPressArea>
       </Animated.View>
-    </ThemeContext.Provider>
+    </ThemeOverride>
   );
 });
 

@@ -86,7 +86,7 @@ export function GroupMember({
         {member.kind === "folder" ? (
           <FolderMember groupId={member.id} chip={chip} shownTab={member.tabIds.includes(activeId) ? activeId : null} tuck={tuck} />
         ) : member.kind === "split" ? (
-          <SplitChip tabIds={member.tabIds} width={width} paneWidths={member.tabIds.map(tabWidth)} geometry={geometry} from={from} group={member.group} out={out} />
+          <SplitChip tabIds={member.tabIds} width={width} paneWidths={member.tabIds.map(tabWidth)} geometry={geometry} from={from} group={member.group} />
         ) : (
           <DraggableChip tabId={member.id} width={width} geometry={geometry} from={from} group={member.group} tuck={tuck} out={out} />
         )}

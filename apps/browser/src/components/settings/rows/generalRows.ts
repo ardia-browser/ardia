@@ -152,8 +152,8 @@ export const generalRows = {
       rows: {
         allOpenTabs: {
           title: "Sync all open tabs",
-          description: "Pick profiles whose open tabs are the same on all your Macs, not just their pinned tabs. Closing a tab closes it on your other Macs too.",
-          keywords: ["unpinned tabs", "regular tabs", "today tabs", "arc", "spaces", "tabs on every mac", "same tabs", "continue on another mac"],
+          description: `Pick profiles whose open tabs are the same on all your ${PLATFORM_TERMS.syncedComputer}s, not just their pinned tabs. Closing a tab closes it on your other ${PLATFORM_TERMS.syncedComputer}s too.`,
+          keywords: ["unpinned tabs", "regular tabs", "today tabs", "arc", "spaces", `tabs on every ${PLATFORM_TERMS.syncedComputer.toLowerCase()}`, "same tabs", `continue on another ${PLATFORM_TERMS.syncedComputer.toLowerCase()}`],
         },
       },
     },

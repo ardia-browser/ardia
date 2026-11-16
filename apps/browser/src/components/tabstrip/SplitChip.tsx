@@ -4,17 +4,16 @@ import { useIsActiveTab, usePageProfileId, useTab, useWindowId } from "../../sta
 import { useShownTabIdFor } from "../../state/tabs/topStrip";
 import { TabIcon } from "../sidebar/TabIcon";
 import { Divider, FadeLabel, Symbol } from "../ui";
-import { surfaceTheme, ThemeContext, useTheme } from "../ui/theme";
+import { surfaceTheme, useTheme } from "../ui/theme";
+import { ThemeOverride } from "../ui/ThemeOverride";
 import type { ToolbarPalette } from "../ui/toolbarColors";
 import { font, space } from "../ui/tokens";
 import { DockContext, FloatingStrip } from "./context";
 import { SelectedTab } from "./SelectedTab";
 import { dragGeometry, type DragGeometry } from "./stripGroups";
-import type { GroupOut } from "./model";
 import { ItemRow, useWebsiteBand } from "./TabChip";
 import { CHIP_LABEL_GAP, CHIP_PAD, GAP, TOP_STRIP_HEIGHT } from "./tokens";
 import { useStripDrag } from "./useStripDrag";
-import { useEdgeOpacity } from "./edgeFade";
 import { StripScrollContext } from "./stripScroll";
 import { useStripCardHover } from "./StripHoverCard";
 import { useChipHover, useChipHovered } from "./reachableHover";
@@ -23,10 +22,9 @@ import { tabTitle } from "../../state/browser/model";
 import { useStruckTitle } from "../../state/sidebar/rowState";
 import { SLEEPING_TITLE_OPACITY } from "../sidebar/tokens";
 
-export function SplitChip({ tabIds, width, paneWidths, geometry: givenGeometry, from: givenFrom, group, out }: { tabIds: string[]; width: number; paneWidths?: number[]; geometry?: DragGeometry; from?: number; group: string | null; out?: GroupOut }) {
+export function SplitChip({ tabIds, width, paneWidths, geometry: givenGeometry, from: givenFrom, group }: { tabIds: string[]; width: number; paneWidths?: number[]; geometry?: DragGeometry; from?: number; group: string | null }) {
   const strip = useContext(DockContext);
   const scroll = useContext(StripScrollContext);
-  const topLevel = !givenGeometry && !group;
   const geometryOf = () => givenGeometry ?? strip!.current.top;
   const fromOf = () => givenFrom ?? strip?.current.slotOf(tabIds[0]!) ?? -1;
   const onTint = useTheme();
@@ -59,15 +57,10 @@ export function SplitChip({ tabIds, width, paneWidths, geometry: givenGeometry, 
     scroll,
     axis: "x",
   });
-  const edge = useEdgeOpacity(tabIds.join(","), () => {
-    if (out) return out.slot >= 0 ? [out.left, width] : null;
-    const from = fromOf();
-    return topLevel && from >= 0 ? [geometryOf().lefts[from]!, geometryOf().slots[from]!.width] : null;
-  });
   return (
-    <ThemeContext.Provider value={theme}>
+    <ThemeOverride theme={theme}>
       <Animated.View ref={drag.ref} {...drag.panHandlers} mouseDownCanMoveWindow={false} style={{ ...drag.style, zIndex: drag.dragging ? 10 : active ? 1 : 0 }}>
-        <Animated.View {...hover.hoverProps} style={{ width, height: TOP_STRIP_HEIGHT, opacity: drag.dragging ? 1 : edge }}>
+        <Animated.View {...hover.hoverProps} style={{ width, height: TOP_STRIP_HEIGHT }}>
           {active && <SelectedTab width={width} band={band} opaque={drag.dragging} />}
           <ItemRow hovered={hovered && !active} pressed={false} padded={false}>
             {tabIds.map((id, i) => (
@@ -76,7 +69,7 @@ export function SplitChip({ tabIds, width, paneWidths, geometry: givenGeometry, 
           </ItemRow>
         </Animated.View>
       </Animated.View>
-    </ThemeContext.Provider>
+    </ThemeOverride>
   );
 }
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, type Ref } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, type Ref } from "react";
 import type { Animated, View } from "react-native";
 
 export type ClipSource = { clipped: () => boolean; subscribe: (changed: () => void) => () => void };
@@ -27,7 +27,14 @@ export function useAnimatedStyle(style: object | null, own?: (view: View | null)
   return [animated, ref];
 }
 
-export function useShift(shift: Animated.Value | null, own?: (view: View | null) => void) {
+const sliding = new WeakSet<Animated.Value>();
+
+export const setSliding = (shift: Animated.Value, on: boolean) => void (on ? sliding.add(shift) : sliding.delete(shift));
+
+export function useShift(shift: Animated.Value | null, own?: (view: View | null) => void): [Record<string, unknown>, Ref<View>] {
   const style = useMemo(() => (shift ? { transform: [{ translateY: shift }] } : null), [shift]);
-  return useAnimatedStyle(style, own);
+  const [moved, ref] = useAnimatedStyle(style, own);
+  const drawn = useRef(moved);
+  if (!shift || !sliding.has(shift)) drawn.current = moved;
+  return [drawn.current, ref];
 }

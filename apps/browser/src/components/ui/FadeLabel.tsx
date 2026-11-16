@@ -2,7 +2,7 @@ import { useContext } from "react";
 import { FadeLabel as NativeFadeLabel, type FadeLabelProps } from "@ardia/shell";
 import { activeLook } from "../../lib/activeLook";
 import type { FontWeight } from "../../lib/themeLook";
-import { ThemeContext } from "./theme";
+import { useScopedTheme } from "./theme";
 import { TextScopeContext } from "./Text";
 import { sidebarPoints } from "./look";
 import { singleLine } from "../../lib/singleLine";
@@ -26,7 +26,7 @@ const WEIGHT_NAMES: Partial<Record<NativeWeight, "regular" | "medium" | "semibol
 const FADE_WIDTH = 24;
 
 export function FadeLabel({ text, weight, fadeWidth = FADE_WIDTH, ...props }: FadeLabelProps) {
-  useContext(ThemeContext);
+  useScopedTheme();
   const inSidebar = useContext(TextScopeContext) === "sidebar";
   const look = activeLook();
   const name = WEIGHT_NAMES[weight ?? "regular"];

@@ -1,7 +1,7 @@
 import { useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { View, type ViewProps, type ViewStyle } from "react-native";
 import { useBrowser } from "../../../../browser/src/state/browser/store";
-import { ThemeContext } from "../../../../browser/src/components/ui/theme";
+import { useScopedTheme } from "../../../../browser/src/components/ui/theme";
 import { ardiaHost, hostModuleMethod, hostSupports, reportHostError } from "../../host";
 import { shellOverPages, useInputRegion } from "../../shellAbove";
 import { GlassInside, GlassOptIn, useGlassSurface, useVisualEffectMark } from "../../shellGlass";
@@ -116,7 +116,7 @@ const PLAIN_MATERIAL: MaterialFill = { light: "rgba(246,246,246,0.6)", dark: "rg
 
 export function useSurfaceDark(): boolean {
   const appDark = useBrowser((s) => s.ui.appDark);
-  return useContext(ThemeContext)?.dark ?? appDark;
+  return useScopedTheme()?.dark ?? appDark;
 }
 
 export type VisualEffectProps = ViewProps & { material?: string; blendingMode?: "withinWindow" | "behindWindow"; cornerRadius?: number };

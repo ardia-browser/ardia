@@ -17,7 +17,7 @@ export type WindowControlsNative = {
 export type WindowEvent =
   | { type: "focus"; id: string; fromPage?: boolean }
   | { type: "close"; id: string }
-  | { type: "frame"; id: string; frame: [number, number, number, number] }
+  | { type: "frame"; id: string; frame: [number, number, number, number]; restored?: [number, number, number, number] }
   | { type: "fullScreen"; id: string; on: boolean }
   | { type: "maximized"; id: string; on: boolean }
   | { type: "sidebarEdge"; id: string; over: boolean; point: [number, number]; screenEdge?: "stopped" | "passed" }
@@ -37,6 +37,7 @@ export type OpenWindowOptions = {
   pointer?: [number, number];
   returnTo?: string;
   animated?: boolean;
+  maximized?: boolean;
 };
 
 export type DragPreviewShape = "hidden" | "pill" | "card";

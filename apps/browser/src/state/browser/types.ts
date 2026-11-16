@@ -29,6 +29,8 @@ type WindowBase = {
   tabLayout?: "sidebar" | "top";
   autoHideTabs?: boolean;
   frame: Frame | null;
+  restoredFrame?: Frame;
+  maximized?: boolean;
   fullScreen?: number;
   createdAt: number;
 };
@@ -164,7 +166,7 @@ export type ClosedTab = {
 export type ClosedWindow = {
   kind: "window";
   id: string;
-  window: Pick<BrowserWindow, "profileId" | "frame" | "tabLayout" | "autoHideTabs">;
+  window: Pick<BrowserWindow, "profileId" | "frame" | "restoredFrame" | "maximized" | "tabLayout" | "autoHideTabs">;
   tabs: (TabSnapshot & { active: boolean; tabId?: string })[];
   groups: (Omit<TabGroup, "tabIds" | "windowId" | "shownTabIds"> & { tabIndexes: number[] })[];
   splits?: Pick<SplitView, "orientation" | "slots">[];

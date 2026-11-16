@@ -79,6 +79,9 @@ class RegistryTests(unittest.TestCase):
         self.assertFalse((ROOT / "ac_cli_control_linux.cc").exists())
         provided = linux_core_headers()
         self.assertIn("ardia/core/ac_launch_switches.h", provided)
+        self.assertIn("ardia/core/ac_windowless_page.h", provided)
+        self.assertIn(ROOT / "ac_windowless_page_linux.cc", linux)
+        self.assertNotIn(ROOT / "ac_windowless_page_linux.cc", sources("mac"))
         for path in service_sources("linux"):
             text = path.read_text()
             self.assertNotRegex(text, r'#(?:include|import) [<"](?:AppKit|Cocoa|Security|QuartzCore|base/apple)/')

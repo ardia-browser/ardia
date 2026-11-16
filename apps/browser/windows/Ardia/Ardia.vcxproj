@@ -176,6 +176,7 @@
     <ClInclude Include="Paths.h" />
     <ClInclude Include="PointerLatch.h" />
     <ClInclude Include="WindowFade.h" />
+    <ClInclude Include="WindowPlacement.h" />
     <ClInclude Include="WindowManager.h" />
     <ClInclude Include="WindowsModule.h" />
     <ClInclude Include="AutolinkedNativeModules.g.h" />

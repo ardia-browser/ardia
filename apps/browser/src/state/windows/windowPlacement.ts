@@ -1,0 +1,23 @@
+import type { BrowserState } from "../browser/store";
+import type { Frame } from "../browser/types";
+import { isSmallWindow } from "./small";
+
+const sameFrame = (a: Frame | null | undefined, b: Frame | null | undefined) => a === b || (!!a && !!b && a.every((v, i) => v === b[i]));
+
+export function withWindowFrame(s: BrowserState, id: string, frame: Frame, restored?: Frame): Partial<BrowserState> {
+  const w = s.windows[id];
+  if (!w || (sameFrame(w.frame, frame) && sameFrame(w.restoredFrame, restored))) return {};
+  const { restoredFrame: _, ...rest } = w;
+  const windows = { ...s.windows, [id]: { ...rest, frame, ...(restored ? { restoredFrame: restored } : {}) } };
+  if (!isSmallWindow(w)) return { windows };
+  const size: [number, number] = [Math.round(frame[2]), Math.round(frame[3])];
+  const [width, height] = s.settings.littleArdiaSize;
+  return size[0] === width && size[1] === height ? { windows } : { windows, settings: { ...s.settings, littleArdiaSize: size } };
+}
+
+export function withWindowMaximized(s: BrowserState, id: string, on: boolean): Partial<BrowserState> {
+  const w = s.windows[id];
+  if (!w || isSmallWindow(w) || !!w.maximized === on) return {};
+  const { maximized: _, ...rest } = w;
+  return { windows: { ...s.windows, [id]: on ? { ...rest, maximized: true } : rest } };
+}

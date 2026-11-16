@@ -7,6 +7,8 @@ import {
   noteTabStripOverflow,
   noteTabStripHeldClose,
   noteTabStripRevealAfterPress,
+  noteTabStripRevealHeldForScroll,
+  noteTabStripScrolled,
   noteTabStripTitledTabs,
   noteTextOnlyRow,
   takeTabStripCounts,
@@ -21,6 +23,9 @@ const ZERO = {
   tab_strip_most_tabs: 0,
   tab_strip_held_closes: 0,
   tab_strip_most_titled_tabs: 0,
+  tab_strip_scrolls: 0,
+  tab_strip_scroll_stalls: 0,
+  tab_strip_reveals_held_for_scroll: 0,
 };
 
 test("group collapses and expands from the strip are counted, and taking them starts over", () => {
@@ -50,5 +55,12 @@ test("closes that land in a held strip are counted, and the most tabs given titl
   noteTabStripTitledTabs(9);
   noteTabStripTitledTabs(2);
   assert.deepEqual(takeTabStripCounts(), { ...ZERO, tab_strip_held_closes: 2, tab_strip_most_titled_tabs: 9 });
+  assert.deepEqual(takeTabStripCounts(), ZERO);
+});
+
+test("a scroll starts after a quarter second without one, and an update more than two frames after the last is a stall", () => {
+  for (const at of [1000, 1016, 1033, 1100, 1116, 2000, 2008]) noteTabStripScrolled(at);
+  noteTabStripRevealHeldForScroll();
+  assert.deepEqual(takeTabStripCounts(), { ...ZERO, tab_strip_scrolls: 2, tab_strip_scroll_stalls: 1, tab_strip_reveals_held_for_scroll: 1 });
   assert.deepEqual(takeTabStripCounts(), ZERO);
 });

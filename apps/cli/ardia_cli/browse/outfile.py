@@ -5,6 +5,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 
 from ardia_cli.browse.errors import Usage
+from ardia_cli.printable import well_formed
 
 TAKES_OUT = ("script", "eval", "read", "snapshot", "get")
 AS_TEXT = ("snapshot", "get")
@@ -96,7 +97,7 @@ def save(path: str, text: str) -> Path:
     handle, temporary = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".part", dir=target.parent)
     try:
         with os.fdopen(handle, "w", encoding="utf-8") as out:
-            out.write(redact(text))
+            out.write(well_formed(redact(text)))
         if target.exists():
             os.chmod(temporary, target.stat().st_mode & 0o777)
         else:

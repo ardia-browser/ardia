@@ -1,0 +1,729 @@
+{
+ "kind": "trackpad",
+ "before": {
+  "label": "Nov 15 build",
+  "scenes": {
+   "scrollperf-strip": {
+    "file": "footage/scroll-perf/before/scrollperf-strip.mp4",
+    "take": "scrollperf-strip-trackpad-t2",
+    "w": 1280,
+    "h": 800,
+    "scale": 1,
+    "inS": 1.63,
+    "outS": 10.449,
+    "gestures": [
+     {
+      "from": 2.13,
+      "to": 3.661,
+      "name": "trackpad-x"
+     },
+     {
+      "from": 4.188,
+      "to": 5.724,
+      "name": "trackpad-x reverse"
+     },
+     {
+      "from": 6.253,
+      "to": 7.788,
+      "name": "trackpad-x"
+     },
+     {
+      "from": 8.315,
+      "to": 9.849,
+      "name": "trackpad-x reverse"
+     }
+    ],
+    "flags": "00000000000000000000000000000000000011111111111111111111110111111111111111111111111111001001000000000000000000000000000000000000000000000000000000000000000000110111111111111110111111111111111111111111111101111111001000000000000000000000000000000000000000000000000000000000000000000111111111111101111111111111111111111111111011111111111010010000000000000000000000000000000000000000000000000000000000000000011011111011111111111111111111111111110111011111111111101010000000000000000000000000000000000000000000000000000000000000000000",
+    "numbers": {
+     "takes": 3,
+     "uniqueFps": 55,
+     "longestMs": 50,
+     "hitches": 0,
+     "firstMs": 60.3,
+     "captureFps": 60.4,
+     "range": {
+      "uniqueFps": [
+       51.7,
+       55.3
+      ],
+      "longestMs": [
+       50,
+       283.3
+      ]
+     },
+     "medianTake": "scrollperf-strip-trackpad-t2"
+    },
+    "takes": [
+     {
+      "name": "scrollperf-strip-trackpad-t1",
+      "uniqueFps": 51.7,
+      "longestMs": 283.3,
+      "hitches": 1
+     },
+     {
+      "name": "scrollperf-strip-trackpad-t2",
+      "uniqueFps": 55,
+      "longestMs": 50,
+      "hitches": 0
+     },
+     {
+      "name": "scrollperf-strip-trackpad-t3",
+      "uniqueFps": 55.3,
+      "longestMs": 50,
+      "hitches": 0
+     }
+    ],
+    "perGesture": [
+     {
+      "gesture": "trackpad-x",
+      "at": 2.13,
+      "moved": 51,
+      "span": 913,
+      "uniqueFps": 54.7,
+      "captureFps": 60.2,
+      "repeatedFrames": 5,
+      "longestMs": 50,
+      "hitches": 0,
+      "firstMs": 90
+     },
+     {
+      "gesture": "trackpad-x reverse",
+      "at": 4.188,
+      "moved": 53,
+      "span": 935,
+      "uniqueFps": 55.6,
+      "captureFps": 61,
+      "repeatedFrames": 5,
+      "longestMs": 50,
+      "hitches": 0,
+      "firstMs": 60.3
+     },
+     {
+      "gesture": "trackpad-x",
+      "at": 6.253,
+      "moved": 54,
+      "span": 953,
+      "uniqueFps": 55.6,
+      "captureFps": 60.8,
+      "repeatedFrames": 5,
+      "longestMs": 50,
+      "hitches": 0,
+      "firstMs": 60.3
+     },
+     {
+      "gesture": "trackpad-x reverse",
+      "at": 8.315,
+      "moved": 52,
+      "span": 945,
+      "uniqueFps": 54,
+      "captureFps": 60.3,
+      "repeatedFrames": 6,
+      "longestMs": 33.3,
+      "hitches": 0,
+      "firstMs": 56.7
+     }
+    ],
+    "kind": "trackpad"
+   },
+   "scrollperf-swipe": {
+    "file": "footage/scroll-perf/before/scrollperf-swipe.mp4",
+    "take": "scrollperf-swipe-trackpad-t1",
+    "w": 1280,
+    "h": 800,
+    "scale": 1,
+    "inS": 1.615,
+    "outS": 10.331,
+    "gestures": [
+     {
+      "from": 2.115,
+      "to": 3.644,
+      "name": "trackpad-x"
+     },
+     {
+      "from": 4.148,
+      "to": 5.678,
+      "name": "trackpad-x reverse"
+     },
+     {
+      "from": 6.174,
+      "to": 7.703,
+      "name": "trackpad-x"
+     },
+     {
+      "from": 8.201,
+      "to": 9.731,
+      "name": "trackpad-x reverse"
+     }
+    ],
+    "flags": "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "numbers": {
+     "takes": 3,
+     "uniqueFps": null,
+     "longestMs": null,
+     "hitches": 0,
+     "firstMs": null,
+     "captureFps": null,
+     "range": {
+      "uniqueFps": [
+       null,
+       null
+      ],
+      "longestMs": [
+       null,
+       null
+      ]
+     },
+     "medianTake": "scrollperf-swipe-trackpad-t1"
+    },
+    "takes": [
+     {
+      "name": "scrollperf-swipe-trackpad-t1",
+      "uniqueFps": null,
+      "longestMs": null,
+      "hitches": 0
+     },
+     {
+      "name": "scrollperf-swipe-trackpad-t2",
+      "uniqueFps": null,
+      "longestMs": null,
+      "hitches": 0
+     },
+     {
+      "name": "scrollperf-swipe-trackpad-t3",
+      "uniqueFps": null,
+      "longestMs": null,
+      "hitches": 0
+     }
+    ],
+    "perGesture": [
+     {
+      "gesture": "trackpad-x",
+      "at": 2.115,
+      "moved": 0,
+      "uniqueFps": null,
+      "captureFps": null,
+      "longestMs": null,
+      "hitches": 0,
+      "firstMs": null
+     },
+     {
+      "gesture": "trackpad-x reverse",
+      "at": 4.148,
+      "moved": 0,
+      "uniqueFps": null,
+      "captureFps": null,
+      "longestMs": null,
+      "hitches": 0,
+      "firstMs": null
+     },
+     {
+      "gesture": "trackpad-x",
+      "at": 6.174,
+      "moved": 0,
+      "uniqueFps": null,
+      "captureFps": null,
+      "longestMs": null,
+      "hitches": 0,
+      "firstMs": null
+     },
+     {
+      "gesture": "trackpad-x reverse",
+      "at": 8.201,
+      "moved": 0,
+      "uniqueFps": null,
+      "captureFps": null,
+      "longestMs": null,
+      "hitches": 0,
+      "firstMs": null
+     }
+    ],
+    "kind": "trackpad"
+   },
+   "scrollperf-sidebar": {
+    "file": "footage/scroll-perf/before/scrollperf-sidebar.mp4",
+    "take": "scrollperf-sidebar-trackpad-t2",
+    "w": 1280,
+    "h": 800,
+    "scale": 1,
+    "inS": 1.603,
+    "outS": 10.318,
+    "gestures": [
+     {
+      "from": 2.103,
+      "to": 3.632,
+      "name": "trackpad"
+     },
+     {
+      "from": 4.13,
+      "to": 5.66,
+      "name": "trackpad reverse"
+     },
+     {
+      "from": 6.162,
+      "to": 7.692,
+      "name": "trackpad"
+     },
+     {
+      "from": 8.189,
+      "to": 9.718,
+      "name": "trackpad reverse"
+     }
+    ],
+    "flags": "0000000000000000000000000000000000011011111111111110111111111111111111111111111101111110100100000000000000000000000000000000000000000000000000000000000000011111111111110111111111111111111111111111101111111111100100000000000000000000000000000000000000000000000000000000000000000011111110111111111111111111111111111101111111111111110110010000000000000000000000000000000000000000000000000000000000000001110111111111111111111111111111101111111111111111111011001000000000000000000000000000000000000000000000000000000000000000000",
+    "numbers": {
+     "takes": 3,
+     "uniqueFps": 54.8,
+     "longestMs": 50,
+     "hitches": 0,
+     "firstMs": 74.3,
+     "captureFps": 60.4,
+     "range": {
+      "uniqueFps": [
+       50.5,
+       55.4
+      ],
+      "longestMs": [
+       50,
+       116.7
+      ]
+     },
+     "medianTake": "scrollperf-sidebar-trackpad-t2"
+    },
+    "takes": [
+     {
+      "name": "scrollperf-sidebar-trackpad-t1",
+      "uniqueFps": 50.5,
+      "longestMs": 116.7,
+      "hitches": 3
+     },
+     {
+      "name": "scrollperf-sidebar-trackpad-t2",
+      "uniqueFps": 54.8,
+      "longestMs": 50,
+      "hitches": 0
+     },
+     {
+      "name": "scrollperf-sidebar-trackpad-t3",
+      "uniqueFps": 55.4,
+      "longestMs": 50,
+      "hitches": 0
+     }
+    ],
+    "perGesture": [
+     {
+      "gesture": "trackpad",
+      "at": 2.103,
+      "moved": 52,
+      "span": 942,
+      "uniqueFps": 54.2,
+      "captureFps": 60.5,
+      "repeatedFrames": 6,
+      "longestMs": 50,
+      "hitches": 0,
+      "firstMs": 72
+     },
+     {
+      "gesture": "trackpad reverse",
+      "at": 4.13,
+      "moved": 53,
+      "span": 933,
+      "uniqueFps": 55.7,
+      "captureFps": 60,
+      "repeatedFrames": 4,
+      "longestMs": 50,
+      "hitches": 0,
+      "firstMs": 53.3
+     },
+     {
+      "gesture": "trackpad",
+      "at": 6.162,
+      "moved": 54,
+      "span": 962,
+      "uniqueFps": 55.1,
+      "captureFps": 60.3,
+      "repeatedFrames": 5,
+      "longestMs": 50,
+      "hitches": 0,
+      "firstMs": 59.7
+     },
+     {
+      "gesture": "trackpad reverse",
+      "at": 8.189,
+      "moved": 53,
+      "span": 957,
+      "uniqueFps": 54.4,
+      "captureFps": 60.6,
+      "repeatedFrames": 6,
+      "longestMs": 50,
+      "hitches": 0,
+      "firstMs": 54.3
+     }
+    ],
+    "kind": "trackpad"
+   }
+  }
+ },
+ "after": {
+  "label": "with the fixes",
+  "scenes": {
+   "scrollperf-strip": {
+    "file": "footage/scroll-perf/after/scrollperf-strip.mp4",
+    "take": "scrollperf-strip-trackpad-t3",
+    "w": 1280,
+    "h": 800,
+    "scale": 1,
+    "inS": 1.658,
+    "outS": 10.414,
+    "gestures": [
+     {
+      "from": 2.158,
+      "to": 3.69,
+      "name": "trackpad-x"
+     },
+     {
+      "from": 4.194,
+      "to": 5.726,
+      "name": "trackpad-x reverse"
+     },
+     {
+      "from": 6.238,
+      "to": 7.771,
+      "name": "trackpad-x"
+     },
+     {
+      "from": 8.28,
+      "to": 9.814,
+      "name": "trackpad-x reverse"
+     }
+    ],
+    "flags": "0000000000000000000000000000000000111111111111111111111111101111111111111111111111111011001000000000000000000000000000000000000000000000000000000000000000001111111111111111111110111111111111111111101111111101110100100000000000000000000000000000000000000000000000000000000000000001111111111111111111110111111111111111111111111111101101001000000000000000000000000000000000000000000000000000000000000000001111111111111111011111111111111111111111111110111111010010000000000000000000000000000000000000000000000000000000000000000000",
+    "numbers": {
+     "takes": 3,
+     "uniqueFps": 54.9,
+     "longestMs": 50,
+     "hitches": 0,
+     "firstMs": 60,
+     "captureFps": 60.2,
+     "range": {
+      "uniqueFps": [
+       51.4,
+       55.7
+      ],
+      "longestMs": [
+       50,
+       340
+      ]
+     },
+     "medianTake": "scrollperf-strip-trackpad-t3"
+    },
+    "takes": [
+     {
+      "name": "scrollperf-strip-trackpad-t1",
+      "uniqueFps": 51.4,
+      "longestMs": 340,
+      "hitches": 1
+     },
+     {
+      "name": "scrollperf-strip-trackpad-t2",
+      "uniqueFps": 55.7,
+      "longestMs": 50,
+      "hitches": 0
+     },
+     {
+      "name": "scrollperf-strip-trackpad-t3",
+      "uniqueFps": 54.9,
+      "longestMs": 50,
+      "hitches": 0
+     }
+    ],
+    "perGesture": [
+     {
+      "gesture": "trackpad-x",
+      "at": 2.158,
+      "moved": 53,
+      "span": 932,
+      "uniqueFps": 55.8,
+      "captureFps": 60.1,
+      "repeatedFrames": 4,
+      "longestMs": 50,
+      "hitches": 0,
+      "firstMs": 60.3
+     },
+     {
+      "gesture": "trackpad-x reverse",
+      "at": 4.194,
+      "moved": 54,
+      "span": 975,
+      "uniqueFps": 54.4,
+      "captureFps": 60.5,
+      "repeatedFrames": 6,
+      "longestMs": 50,
+      "hitches": 0,
+      "firstMs": 47.7
+     },
+     {
+      "gesture": "trackpad-x",
+      "at": 6.238,
+      "moved": 53,
+      "span": 948,
+      "uniqueFps": 54.8,
+      "captureFps": 60.1,
+      "repeatedFrames": 5,
+      "longestMs": 50,
+      "hitches": 0,
+      "firstMs": 63.7
+     },
+     {
+      "gesture": "trackpad-x reverse",
+      "at": 8.28,
+      "moved": 52,
+      "span": 933,
+      "uniqueFps": 54.6,
+      "captureFps": 60,
+      "repeatedFrames": 5,
+      "longestMs": 50,
+      "hitches": 0,
+      "firstMs": 70
+     }
+    ],
+    "kind": "trackpad"
+   },
+   "scrollperf-swipe": {
+    "file": "footage/scroll-perf/after/scrollperf-swipe.mp4",
+    "take": "scrollperf-swipe-trackpad-t1",
+    "w": 1280,
+    "h": 800,
+    "scale": 1,
+    "inS": 1.609,
+    "outS": 10.382,
+    "gestures": [
+     {
+      "from": 2.109,
+      "to": 3.64,
+      "name": "trackpad-x"
+     },
+     {
+      "from": 4.154,
+      "to": 5.695,
+      "name": "trackpad-x reverse"
+     },
+     {
+      "from": 6.2,
+      "to": 7.732,
+      "name": "trackpad-x"
+     },
+     {
+      "from": 8.248,
+      "to": 9.782,
+      "name": "trackpad-x reverse"
+     }
+    ],
+    "flags": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "numbers": {
+     "takes": 3,
+     "uniqueFps": null,
+     "longestMs": null,
+     "hitches": 0,
+     "firstMs": null,
+     "captureFps": null,
+     "range": {
+      "uniqueFps": [
+       null,
+       null
+      ],
+      "longestMs": [
+       null,
+       null
+      ]
+     },
+     "medianTake": "scrollperf-swipe-trackpad-t1"
+    },
+    "takes": [
+     {
+      "name": "scrollperf-swipe-trackpad-t1",
+      "uniqueFps": null,
+      "longestMs": null,
+      "hitches": 0
+     },
+     {
+      "name": "scrollperf-swipe-trackpad-t2",
+      "uniqueFps": null,
+      "longestMs": null,
+      "hitches": 0
+     },
+     {
+      "name": "scrollperf-swipe-trackpad-t3",
+      "uniqueFps": null,
+      "longestMs": null,
+      "hitches": 0
+     }
+    ],
+    "perGesture": [
+     {
+      "gesture": "trackpad-x",
+      "at": 2.109,
+      "moved": 0,
+      "uniqueFps": null,
+      "captureFps": null,
+      "longestMs": null,
+      "hitches": 0,
+      "firstMs": null
+     },
+     {
+      "gesture": "trackpad-x reverse",
+      "at": 4.154,
+      "moved": 0,
+      "uniqueFps": null,
+      "captureFps": null,
+      "longestMs": null,
+      "hitches": 0,
+      "firstMs": null
+     },
+     {
+      "gesture": "trackpad-x",
+      "at": 6.2,
+      "moved": 0,
+      "uniqueFps": null,
+      "captureFps": null,
+      "longestMs": null,
+      "hitches": 0,
+      "firstMs": null
+     },
+     {
+      "gesture": "trackpad-x reverse",
+      "at": 8.248,
+      "moved": 0,
+      "uniqueFps": null,
+      "captureFps": null,
+      "longestMs": null,
+      "hitches": 0,
+      "firstMs": null
+     }
+    ],
+    "kind": "trackpad"
+   },
+   "scrollperf-sidebar": {
+    "file": "footage/scroll-perf/after/scrollperf-sidebar.mp4",
+    "take": "scrollperf-sidebar-trackpad-t3",
+    "w": 1280,
+    "h": 800,
+    "scale": 1,
+    "inS": 1.645,
+    "outS": 10.467,
+    "gestures": [
+     {
+      "from": 2.145,
+      "to": 3.676,
+      "name": "trackpad"
+     },
+     {
+      "from": 4.208,
+      "to": 5.741,
+      "name": "trackpad reverse"
+     },
+     {
+      "from": 6.269,
+      "to": 7.801,
+      "name": "trackpad"
+     },
+     {
+      "from": 8.334,
+      "to": 9.867,
+      "name": "trackpad reverse"
+     }
+    ],
+    "flags": "00000000000000000000000000000000000111111011111111110111111111111111111111111111101111110100100000000000000000000000000000000000000000000000000000000000000000101111111111101111111111111111111111111111011111111110101000000000000000000000000000000000000000000000000000000000000000000001101011110111111111111111111111111111101111111111111101001000000000000000000000000000000000000000000000000000000000000000001111101011111111111111111111111111110111110111111111110100100000000000000000000000000000000000000000000000000000000000000000",
+    "numbers": {
+     "takes": 3,
+     "uniqueFps": 53.8,
+     "longestMs": 50,
+     "hitches": 0,
+     "firstMs": 71.7,
+     "captureFps": 60.3,
+     "range": {
+      "uniqueFps": [
+       52.6,
+       55.1
+      ],
+      "longestMs": [
+       50,
+       116.7
+      ]
+     },
+     "medianTake": "scrollperf-sidebar-trackpad-t3"
+    },
+    "takes": [
+     {
+      "name": "scrollperf-sidebar-trackpad-t1",
+      "uniqueFps": 55.1,
+      "longestMs": 50,
+      "hitches": 0
+     },
+     {
+      "name": "scrollperf-sidebar-trackpad-t2",
+      "uniqueFps": 52.6,
+      "longestMs": 116.7,
+      "hitches": 2
+     },
+     {
+      "name": "scrollperf-sidebar-trackpad-t3",
+      "uniqueFps": 53.8,
+      "longestMs": 50,
+      "hitches": 0
+     }
+    ],
+    "perGesture": [
+     {
+      "gesture": "trackpad",
+      "at": 2.145,
+      "moved": 52,
+      "span": 938,
+      "uniqueFps": 54.4,
+      "captureFps": 60.7,
+      "repeatedFrames": 6,
+      "longestMs": 50,
+      "hitches": 0,
+      "firstMs": 83.3
+     },
+     {
+      "gesture": "trackpad reverse",
+      "at": 4.208,
+      "moved": 52,
+      "span": 925,
+      "uniqueFps": 55.1,
+      "captureFps": 60.5,
+      "repeatedFrames": 5,
+      "longestMs": 33.3,
+      "hitches": 0,
+      "firstMs": 67
+     },
+     {
+      "gesture": "trackpad",
+      "at": 6.269,
+      "moved": 51,
+      "span": 950,
+      "uniqueFps": 52.6,
+      "captureFps": 60,
+      "repeatedFrames": 7,
+      "longestMs": 50,
+      "hitches": 0,
+      "firstMs": 81
+     },
+     {
+      "gesture": "trackpad reverse",
+      "at": 8.334,
+      "moved": 52,
+      "span": 960,
+      "uniqueFps": 53.1,
+      "captureFps": 60.4,
+      "repeatedFrames": 7,
+      "longestMs": 50,
+      "hitches": 0,
+      "firstMs": 72.7
+     }
+    ],
+    "kind": "trackpad"
+   }
+  }
+ }
+}

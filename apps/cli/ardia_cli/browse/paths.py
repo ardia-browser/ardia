@@ -10,6 +10,8 @@ import stat
 import struct
 from pathlib import Path
 
+from ardia_cli.printable import well_formed
+
 DIR_NAME = "Browse"
 SESSION_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 SOL_LOCAL = 0
@@ -188,7 +190,7 @@ def write_private_json(name: str, dir_fd: int, value) -> None:
     temp = f".{name}.{os.getpid()}.tmp"
     fd = open_private_file(temp, dir_fd, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)
     try:
-        os.write(fd, json.dumps(value, ensure_ascii=False).encode())
+        os.write(fd, well_formed(json.dumps(value, ensure_ascii=False)).encode())
     finally:
         os.close(fd)
     os.rename(temp, name, src_dir_fd=dir_fd, dst_dir_fd=dir_fd)

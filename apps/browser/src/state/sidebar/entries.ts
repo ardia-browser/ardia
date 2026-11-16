@@ -94,6 +94,7 @@ export function numberedTabs(s: BrowserState, windowId: string): string[] {
     const last = panes.reduce<string | undefined>((a, b) => (!a || s.tabs[b]!.lastActiveAt > s.tabs[a]!.lastActiveAt ? b : a), undefined);
     return last ? [last] : [];
   };
+  if (s.settings.numberedTabsSkipPinned) return list.flatMap(rowTab);
   return [...tiles, ...pinned.flatMap(rowTab), ...list.flatMap(rowTab)];
 }
 

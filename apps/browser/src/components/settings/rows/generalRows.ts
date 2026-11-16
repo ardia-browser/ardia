@@ -287,6 +287,11 @@ export const generalRows = {
           description: `${keyText("⌘W")} on a Top App switches away from it and leaves its page loaded, so a site like Slack keeps its notifications. A Top App split with another pinned tab stays together and loaded. Choose Unload from its right-click menu to put it to sleep. Off, as in Dia, ${keyText("⌘W")} unloads it. Memory Saver can still put a page to sleep unless the site is in its Always keep these sites active list.`,
           keywords: ["top apps", "pinned tiles", "favorites", "essentials", "cmd w", "close", "unload", "keep loaded", "keep running", "background", "arc"],
         },
+        numberedTabsSkipPinned: {
+          title: `${keyText("⌘1")}–${keyText("⌘8")} select only unpinned tabs`,
+          description: `${keyText("⌘1")} selects the first tab below your Top Apps, pinned tabs and pinned groups, and ${keyText("⌘2")} to ${keyText("⌘8")} count on from there. ${keyText("⌘9")} still selects the last tab. With no tabs below the pinned ones, they do nothing. Off, Top Apps and pinned tabs count first.`,
+          keywords: ["cmd 1", "cmd 9", "command 1", "number keys", "numbered tabs", "select tab", "switch tab", "first tab", "skip", "unpinned", "keyboard shortcut"],
+        },
         tabReorderHaptics: { advanced: true, title: "Haptic feedback when reordering tabs", keywords: ["trackpad", "vibration", "drag"], shown: () => PLATFORM_FEATURES.haptics },
         extendWebsiteColor: { title: "Extend website color into tab bar", keywords: ["theme color", "tint", "colour"] },
         sidebarMediaControls: {

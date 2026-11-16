@@ -36,6 +36,7 @@ const TOP = [
   ["vertical tabs", ["tabs.layout"]],
   ["pinned", ["profiles.shareTopApps", "tabs.balancedTopApps", "tabs.fadeUnloadedTabs"]],
   ["strikethrough", ["tabs.strikeSleepingTabs"]],
+  ["cmd 1", ["tabs.numberedTabsSkipPinned"]],
   ["sleeping tabs", ["tabs.strikeSleepingTabs"]],
   ["split", ["tabs.splitLinkModifier"]],
   ["split view", ["tabs.splitLinkModifier"]],

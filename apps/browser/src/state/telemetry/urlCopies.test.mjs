@@ -25,6 +25,17 @@ test("address copies are counted, those taken before the first page apart, and t
   assert.deepEqual(takeUrlCopyCounts(), empty);
 });
 
+test("taken copy counts stay isolated from later copies and caller changes", () => {
+  noteUrlCopied(true);
+  noteSelectionCopiedByKey(2, true);
+  const taken = takeUrlCopyCounts();
+  noteUrlCopied(false);
+  noteSelectionCopiedByKey(3, false);
+  assert.deepEqual(taken, { ...empty, url_copies: 1, url_copies_while_pending: 1, selection_copy_keys: 1, selection_copy_key_tabs: 2, selection_plain_copy_keys: 1 });
+  taken.url_copies = 99;
+  assert.deepEqual(takeUrlCopyCounts(), { ...empty, url_copies: 1, selection_copy_keys: 1, selection_copy_key_tabs: 3 });
+});
+
 test("selection copies respect sharing and send their counts once even without other usage", async () => {
   client.loadChoice();
   noteSelectionCopiedByKey(3, true);

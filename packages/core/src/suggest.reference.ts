@@ -23,6 +23,7 @@ export type Suggestion =
       tabId?: string;
       bookmarked?: boolean;
       visited?: boolean;
+      byBookmarkTitle?: true;
     }
   | { kind: "search"; query: string; url: string; engine: string; suggested?: boolean; bang?: true }
   | { kind: "calc"; expression: string; value: string; url: string }
@@ -81,6 +82,10 @@ function pageText(row: { url: string; title: string }): PageText {
   return text;
 }
 
+function withTitles(text: PageText, titlesLower: readonly string[]): PageText {
+  return { ...text, titleLower: titlesLower.join("\n") };
+}
+
 const hostOfPage = (t: PageText) => (t.host ??= hostOf(t.url));
 const originOfPage = (t: PageText) => (t.origin === undefined ? (t.origin = /^https?:\/\/[^/?#]+/i.exec(t.url)?.[0] ?? null) : t.origin);
 
@@ -93,12 +98,14 @@ type Candidate = {
   bookmarked: boolean;
   tabId?: string;
   text: PageText;
+  ownText?: PageText;
+  bookmarkTitles?: { title: string; text: PageText }[];
 };
 
 type Lookup = { get(key: string): Candidate | undefined; has(key: string): boolean };
 type Pool = { list: Candidate[]; byKey: Lookup };
 
-type BookmarkBase = { list: Candidate[]; byKey: Map<string, Candidate>; keys: Set<string>; cursor: number; done: boolean };
+type BookmarkBase = { list: Candidate[]; byKey: Map<string, Candidate>; titles: Map<string, string[]>; cursor: number; done: boolean };
 type Builder = {
   base: BookmarkBase;
   history: readonly HistoryRow[];
@@ -117,7 +124,7 @@ const SLICE_CHECK = 64;
 
 function baseFor(bookmarks: readonly BookmarkRow[]): BookmarkBase {
   let base = bases.get(bookmarks);
-  if (!base) bases.set(bookmarks, (base = { list: [], byKey: new Map(), keys: new Set(), cursor: 0, done: false }));
+  if (!base) bases.set(bookmarks, (base = { list: [], byKey: new Map(), titles: new Map(), cursor: 0, done: false }));
   return base;
 }
 
@@ -129,7 +136,9 @@ function advance(b: Builder, bookmarks: readonly BookmarkRow[], deadline: number
   while (!base.done && base.cursor < bookmarks.length) {
     const row = bookmarks[base.cursor++]!;
     const text = pageText(row);
-    base.keys.add(text.key);
+    const titles = base.titles.get(text.key) ?? [];
+    base.titles.set(text.key, titles);
+    if (text.titleLower && !titles.some((t) => t.toLowerCase() === text.titleLower)) titles.push(row.title);
     if (!base.byKey.has(text.key)) {
       const c: Candidate = { url: row.url, title: row.title, favicon: row.favicon, visits: 0, lastVisit: 0, bookmarked: true, text };
       base.list.push(c);
@@ -142,10 +151,16 @@ function advance(b: Builder, bookmarks: readonly BookmarkRow[], deadline: number
     const h = b.history[b.historyCursor++]!;
     const text = pageText(h);
     if (!b.byKey.has(text.key)) {
-      const bookmarked = base.keys.has(text.key);
+      const titles = base.titles.get(text.key);
+      const bookmarked = titles !== undefined;
+      const others = (titles ?? []).filter((t) => t.toLowerCase() !== text.titleLower);
       let c = historyCandidates.get(h);
-      if (!c || c.bookmarked !== bookmarked) {
+      if (!c || c.bookmarked !== bookmarked || (c.bookmarkTitles ?? []).map((b) => b.title).join("\n") !== others.join("\n")) {
         c = { url: h.url, title: h.title, favicon: h.favicon, visits: h.visits, lastVisit: h.lastVisit, bookmarked, text };
+        if (others.length) {
+          const bookmarkTitles = others.map((title) => ({ title, text: withTitles(text, [title.toLowerCase()]) }));
+          c = { ...c, text: withTitles(text, [text.titleLower, ...others.map((t) => t.toLowerCase())]), ownText: text, bookmarkTitles };
+        }
         historyCandidates.set(h, c);
       }
       b.list.push(c);
@@ -291,7 +306,7 @@ class TopList {
   }
 }
 
-const pageSuggestion = (c: Candidate, tabId: string | null | undefined = c.tabId): Suggestion => ({
+const pageSuggestion = (c: Candidate, tabId: string | null | undefined = c.tabId, byBookmarkTitle = false): Suggestion => ({
   kind: "page",
   url: c.url,
   title: c.title,
@@ -299,6 +314,7 @@ const pageSuggestion = (c: Candidate, tabId: string | null | undefined = c.tabId
   ...(tabId ? { tabId } : {}),
   ...(c.bookmarked ? { bookmarked: true } : {}),
   ...(c.visits > 0 ? { visited: true } : {}),
+  ...(byBookmarkTitle ? { byBookmarkTitle: true as const } : {}),
 });
 
 export function suggestionKey(s: Suggestion): string {
@@ -373,6 +389,12 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
   }
   lastMatches = q.length >= 2 ? { pool, q, tokens, pages: matched } : null;
   const ranked = top.items;
+  const rowOf = (x: Ranked): Suggestion => {
+    const named = x.c.bookmarkTitles;
+    if (!named || matchScore(x.c.ownText!, parsed) > 0) return pageSuggestion(x.c, x.tabId);
+    const title = (named.find((n) => matchScore(n.text, parsed) > 0) ?? named[0]!).title;
+    return pageSuggestion({ ...x.c, title }, x.tabId, true);
+  };
 
   const out = new Output(limit);
   const remoteRows = (url: (text: string) => string, name: string) =>
@@ -384,7 +406,7 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
     const scopedUrl = (text: string) => scopedSearchUrl(scope, text, engine);
     out.push({ kind: "search", query, url: scopedUrl(query), engine: scope.name });
     out.push(...remoteRows(scopedUrl, scope.name));
-    out.push(...onSite!.items.map((x) => pageSuggestion(x.c, x.tabId)));
+    out.push(...onSite!.items.map(rowOf));
     return { items: out.items, completion: "" };
   }
 
@@ -404,7 +426,7 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
   else if (actionMatches[0]?.exact) first = actionRow(actionMatches[0].action);
   else if (target && completion) first = known(target.url) ?? { kind: "page", url: target.url, title: "", favicon: target.favicon };
   else if (typedUrl) first = known(typedUrl) ?? { kind: "page", url: typedUrl, title: "", favicon: null };
-  else if (websiteFirst && best && best.m >= 40 && (!noInline || q === best.c.text.shownLower || q === hostPart(best.c.text.shownLower))) first = pageSuggestion(best.c, best.tabId);
+  else if (websiteFirst && best && best.m >= 40 && (!noInline || q === best.c.text.shownLower || q === hostPart(best.c.text.shownLower))) first = rowOf(best);
   else first = search;
 
   out.push(first);
@@ -412,7 +434,7 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
   if (calc) out.push({ kind: "calc", expression: calc.expression, value: calc.display, url: searchUrl(engine, calc.expression) });
   out.push(...actionMatches.map((m) => actionRow(m.action)));
   out.push(...creates.map(createRow));
-  const pageRows = ranked.map((x) => pageSuggestion(x.c, x.tabId));
+  const pageRows = ranked.map(rowOf);
   out.push(...pageRows.slice(0, 3));
   out.push(...remoteRows((text) => searchUrl(engine, text), engine.name));
   out.push(...pageRows.slice(3));

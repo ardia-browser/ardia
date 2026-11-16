@@ -2323,6 +2323,7 @@ __define("packages/core/src/pageText.ts", function (exports, __require) {
   __export(exports, "logVisits", () => logVisits);
   __export(exports, "shownWordsOf", () => shownWordsOf);
   __export(exports, "pageText", () => pageText);
+  __export(exports, "withTitles", () => withTitles);
   __export(exports, "hostOfPage", () => hostOfPage);
   __export(exports, "hostPart", () => hostPart);
   __export(exports, "hostLowerOfPage", () => hostLowerOfPage);
@@ -2369,6 +2370,11 @@ function pageText(row                                )           {
     pageTexts.set(row, text);
   }
   return text;
+}
+
+function withTitles(text          , titlesLower                   )           {
+  const titleLower = titlesLower.join("\n");
+  return { ...text, titleLower, titleWords: wordsOf(titleLower) };
 }
 
 const hostOfPage = (t          ) => (t.host ??= hostOf(t.url));
@@ -2793,6 +2799,12 @@ function buildSuggestions(raw        , source                  , options        
   }
   remember(pool, q, tokens, matched, scores);
   const ranked = top.items;
+  const rowOf = (x        )             => {
+    const named = x.c.bookmarkTitles;
+    if (!named || score(x.c.ownText , parsed) > 0) return pageSuggestion(x.c, x.tabId);
+    const title = (named.find((n) => score(n.text, parsed) > 0) ?? named[0] ).title;
+    return pageSuggestion({ ...x.c, title }, x.tabId, true);
+  };
 
   const out = new Output(limit);
   const remoteRows = (url                          , name        ) =>
@@ -2804,7 +2816,7 @@ function buildSuggestions(raw        , source                  , options        
     const scopedUrl = (text        ) => scopedSearchUrl(scope, text, engine);
     out.push({ kind: "search", query, url: scopedUrl(query), engine: scope.name });
     out.push(...remoteRows(scopedUrl, scope.name));
-    out.push(...onSite .items.map((x) => pageSuggestion(x.c, x.tabId)));
+    out.push(...onSite .items.map(rowOf));
     return { items: out.items, completion: "" };
   }
 
@@ -2826,7 +2838,7 @@ function buildSuggestions(raw        , source                  , options        
   else if (target && completion) first = known(target.url) ?? { kind: "page", url: target.url, title: "", favicon: target.favicon };
   else if (typedUrl) first = known(typedUrl) ?? { kind: "page", url: typedUrl, title: "", favicon: null };
   else if (extensionMatches.exact) first = extensionMatches.rows[0] ;
-  else if (websiteFirst && best && best.m >= 40 && (!noInline || typedIsPage(best.c.text, q))) first = pageSuggestion(best.c, best.tabId);
+  else if (websiteFirst && best && best.m >= 40 && (!noInline || typedIsPage(best.c.text, q))) first = rowOf(best);
   else first = search;
 
   out.push(first);
@@ -2835,7 +2847,7 @@ function buildSuggestions(raw        , source                  , options        
   out.push(...actionMatches.map((m) => actionRow(m.action)));
   out.push(...extensionMatches.rows);
   out.push(...creates.map(createRow));
-  const pageRows = ranked.map((x) => pageSuggestion(x.c, x.tabId));
+  const pageRows = ranked.map(rowOf);
   out.push(...pageRows.slice(0, 3));
   const providerAt = out.items.length;
   out.push(...remoteRows((text) => searchUrl(engine, text), engine.name));
@@ -2891,7 +2903,7 @@ __define("packages/core/src/candidatePool.ts", function (exports, __require) {
   __export(exports, "poolFor", () => poolFor);
   __export(exports, "prepareSuggestions", () => prepareSuggestions);
   __export(exports, "tabsOver", () => tabsOver);
-const { logVisits, pageText, pageTexts } = __require("packages/core/src/pageText.ts");
+const { logVisits, pageText, pageTexts, withTitles } = __require("packages/core/src/pageText.ts");
                                                         
 
                                                       
@@ -2909,12 +2921,16 @@ const { logVisits, pageText, pageTexts } = __require("packages/core/src/pageText
                  
                   
                  
+                     
+                                   
   
+
+                                                              
 
                                                                                      
                                                         
 
-                                                                                                                           
+                                                                                                                                       
                 
                      
                                  
@@ -2933,7 +2949,7 @@ const SLICE_CHECK = 64;
 
 function baseFor(bookmarks                        )               {
   let base = bases.get(bookmarks);
-  if (!base) bases.set(bookmarks, (base = { list: [], byKey: new Map(), keys: new Set(), cursor: 0, done: false }));
+  if (!base) bases.set(bookmarks, (base = { list: [], byKey: new Map(), titles: new Map(), cursor: 0, done: false }));
   return base;
 }
 
@@ -2945,7 +2961,9 @@ function advance(b         , bookmarks                        , deadline        
   while (!base.done && base.cursor < bookmarks.length) {
     const row = bookmarks[base.cursor++] ;
     const text = pageText(row);
-    base.keys.add(text.key);
+    const titles = base.titles.get(text.key);
+    if (!titles) base.titles.set(text.key, text.titleLower ? [row.title] : []);
+    else if (text.titleLower && !titles.some((t) => t.toLowerCase() === text.titleLower)) titles.push(row.title);
     if (!base.byKey.has(text.key)) {
       const c            = { url: row.url, title: row.title, favicon: row.favicon, visits: 0, lastVisit: 0, logVisits: 0, bookmarked: true, text };
       base.list.push(c);
@@ -2958,10 +2976,16 @@ function advance(b         , bookmarks                        , deadline        
     const h = b.history[b.historyCursor++] ;
     const text = pageText(h);
     if (!b.byKey.has(text.key)) {
-      const bookmarked = base.keys.has(text.key);
+      const titles = base.titles.get(text.key);
+      const bookmarked = titles !== undefined;
+      const others = titles?.filter((t) => t.toLowerCase() !== text.titleLower);
       let c = historyCandidates.get(h);
-      if (!c || c.bookmarked !== bookmarked) {
+      if (!c || c.bookmarked !== bookmarked || !sameTitles(c.bookmarkTitles, others)) {
         c = { url: h.url, title: h.title, favicon: h.favicon, visits: h.visits, lastVisit: h.lastVisit, logVisits: logVisits(h.visits), bookmarked, text };
+        if (others?.length) {
+          const bookmarkTitles = others.map((title) => ({ title, text: withTitles(text, [title.toLowerCase()]) }));
+          c = { ...c, text: withTitles(text, [text.titleLower, ...bookmarkTitles.map((b) => b.text.titleLower)]), ownText: text, bookmarkTitles };
+        }
         historyCandidates.set(h, c);
       }
       b.list.push(c);
@@ -2979,6 +3003,13 @@ function advance(b         , bookmarks                        , deadline        
     list: b.list,
     byKey: { get: (key) => history.get(key) ?? base.byKey.get(key), has: (key) => history.has(key) || base.byKey.has(key) },
   };
+  return true;
+}
+
+function sameTitles(kept                                      , titles                               )          {
+  const n = titles?.length ?? 0;
+  if ((kept?.length ?? 0) !== n) return false;
+  for (let i = 0; i < n; i++) if (kept [i] .title !== titles [i]) return false;
   return true;
 }
 
@@ -3047,7 +3078,7 @@ __define("packages/core/src/suggestionRows.ts", function (exports, __require) {
 const { pageKey } = __require("packages/core/src/pageText.ts");
                                                                  
 
-const pageSuggestion = (c           , tabId                            = c.tabId)             => ({
+const pageSuggestion = (c           , tabId                            = c.tabId, byBookmarkTitle = false)             => ({
   kind: "page",
   url: c.url,
   title: c.title,
@@ -3055,6 +3086,7 @@ const pageSuggestion = (c           , tabId                            = c.tabId
   ...(tabId ? { tabId } : {}),
   ...(c.bookmarked ? { bookmarked: true } : {}),
   ...(c.visits > 0 ? { visited: true } : {}),
+  ...(byBookmarkTitle ? { byBookmarkTitle: true          } : {}),
 });
 
 function suggestionKey(s            )         {

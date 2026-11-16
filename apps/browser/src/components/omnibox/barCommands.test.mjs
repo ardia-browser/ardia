@@ -159,3 +159,22 @@ test("picking a command bar action counts which command it ran, never its profil
     ["search", undefined],
   ]);
 });
+
+test("picking a page found only by its bookmark's name flags it, never the name or the page", async () => {
+  client.setSharing(true, "onboarding");
+  trackSuggestionChosen({ kind: "page", url: "https://bank.example/", title: "My Bank", bookmarked: true, visited: true, byBookmarkTitle: true });
+  trackSuggestionChosen({ kind: "page", url: "https://bank.example/", title: "Login", bookmarked: true, visited: true });
+  await client.saveQueueNow();
+  const sent = JSON.parse(stub.docs.get("telemetry-queue.json"))
+    .events.filter((x) => x.event === "suggestion_chosen")
+    .slice(-2)
+    .map((x) => x.properties);
+  assert.deepEqual(
+    sent.map((p) => [p.type, p.by_bookmark_title]),
+    [
+      ["bookmark", true],
+      ["bookmark", undefined],
+    ],
+  );
+  assert.ok(!JSON.stringify(sent).includes("bank"), "no url or title");
+});

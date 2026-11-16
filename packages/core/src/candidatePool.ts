@@ -1,4 +1,4 @@
-import { logVisits, pageText, pageTexts, type PageText } from "./pageText.ts";
+import { logVisits, pageText, pageTexts, withTitles, type PageText } from "./pageText.ts";
 import type { SuggestionSource } from "./suggestion.ts";
 
 type HistoryRow = SuggestionSource["history"][number];
@@ -16,12 +16,16 @@ export type Candidate = {
   tabId?: string;
   fresh?: boolean;
   text: PageText;
+  ownText?: PageText;
+  bookmarkTitles?: BookmarkTitle[];
 };
+
+export type BookmarkTitle = { title: string; text: PageText };
 
 type Lookup = { get(key: string): Candidate | undefined; has(key: string): boolean };
 export type Pool = { list: Candidate[]; byKey: Lookup };
 
-type BookmarkBase = { list: Candidate[]; byKey: Map<string, Candidate>; keys: Set<string>; cursor: number; done: boolean };
+type BookmarkBase = { list: Candidate[]; byKey: Map<string, Candidate>; titles: Map<string, string[]>; cursor: number; done: boolean };
 type Builder = {
   base: BookmarkBase;
   history: readonly HistoryRow[];
@@ -40,7 +44,7 @@ const SLICE_CHECK = 64;
 
 function baseFor(bookmarks: readonly BookmarkRow[]): BookmarkBase {
   let base = bases.get(bookmarks);
-  if (!base) bases.set(bookmarks, (base = { list: [], byKey: new Map(), keys: new Set(), cursor: 0, done: false }));
+  if (!base) bases.set(bookmarks, (base = { list: [], byKey: new Map(), titles: new Map(), cursor: 0, done: false }));
   return base;
 }
 
@@ -52,7 +56,9 @@ function advance(b: Builder, bookmarks: readonly BookmarkRow[], deadline: number
   while (!base.done && base.cursor < bookmarks.length) {
     const row = bookmarks[base.cursor++]!;
     const text = pageText(row);
-    base.keys.add(text.key);
+    const titles = base.titles.get(text.key);
+    if (!titles) base.titles.set(text.key, text.titleLower ? [row.title] : []);
+    else if (text.titleLower && !titles.some((t) => t.toLowerCase() === text.titleLower)) titles.push(row.title);
     if (!base.byKey.has(text.key)) {
       const c: Candidate = { url: row.url, title: row.title, favicon: row.favicon, visits: 0, lastVisit: 0, logVisits: 0, bookmarked: true, text };
       base.list.push(c);
@@ -65,10 +71,16 @@ function advance(b: Builder, bookmarks: readonly BookmarkRow[], deadline: number
     const h = b.history[b.historyCursor++]!;
     const text = pageText(h);
     if (!b.byKey.has(text.key)) {
-      const bookmarked = base.keys.has(text.key);
+      const titles = base.titles.get(text.key);
+      const bookmarked = titles !== undefined;
+      const others = titles?.filter((t) => t.toLowerCase() !== text.titleLower);
       let c = historyCandidates.get(h);
-      if (!c || c.bookmarked !== bookmarked) {
+      if (!c || c.bookmarked !== bookmarked || !sameTitles(c.bookmarkTitles, others)) {
         c = { url: h.url, title: h.title, favicon: h.favicon, visits: h.visits, lastVisit: h.lastVisit, logVisits: logVisits(h.visits), bookmarked, text };
+        if (others?.length) {
+          const bookmarkTitles = others.map((title) => ({ title, text: withTitles(text, [title.toLowerCase()]) }));
+          c = { ...c, text: withTitles(text, [text.titleLower, ...bookmarkTitles.map((b) => b.text.titleLower)]), ownText: text, bookmarkTitles };
+        }
         historyCandidates.set(h, c);
       }
       b.list.push(c);
@@ -86,6 +98,13 @@ function advance(b: Builder, bookmarks: readonly BookmarkRow[], deadline: number
     list: b.list,
     byKey: { get: (key) => history.get(key) ?? base.byKey.get(key), has: (key) => history.has(key) || base.byKey.has(key) },
   };
+  return true;
+}
+
+function sameTitles(kept: readonly BookmarkTitle[] | undefined, titles: readonly string[] | undefined): boolean {
+  const n = titles?.length ?? 0;
+  if ((kept?.length ?? 0) !== n) return false;
+  for (let i = 0; i < n; i++) if (kept![i]!.title !== titles![i]) return false;
   return true;
 }
 

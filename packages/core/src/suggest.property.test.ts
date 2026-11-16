@@ -91,7 +91,7 @@ function sequence(r: Rng, p: ReturnType<typeof makeProfile>): string[] {
 
 const BANGS = bangTable("gh git\tGitHub\tgithub.com/search?q={s}\nw wiki\tWikipedia\twikipedia.org/w/index.php?search={s}\nyt\tYouTube\twww.youtube.com/results?search_query={s}");
 
-const stats = { steps: 0, completions: 0, pages: 0, bangs: 0 };
+const stats = { steps: 0, completions: 0, pages: 0, bangs: 0, bookmarkTitles: 0 };
 
 function compareRun(seed: number, size: number) {
   const r = rng(seed);
@@ -140,6 +140,7 @@ function compareRun(seed: number, size: number) {
     if (want.completion) stats.completions++;
     if (want.items.some((x) => x.kind === "search" && x.bang)) stats.bangs++;
     stats.pages += want.items.filter((x) => x.kind === "page").length;
+    stats.bookmarkTitles += want.items.filter((x) => x.kind === "page" && x.byBookmarkTitle).length;
     assert.deepStrictEqual(got, want, `seed ${seed} size ${size} step ${i} query ${JSON.stringify(q)}`);
   }
 }
@@ -153,7 +154,7 @@ test("big profiles too, and a stale narrowing never leaks across profiles", () =
 });
 
 test("the sequences exercise inline completion and page rows", () => {
-  assert.ok(stats.steps > 5000 && stats.completions > 300 && stats.pages > 10000 && stats.bangs > 40, JSON.stringify(stats));
+  assert.ok(stats.steps > 5000 && stats.completions > 300 && stats.pages > 10000 && stats.bangs > 40 && stats.bookmarkTitles > 20, JSON.stringify(stats));
 });
 
 test("an empty profile and a one-row profile", () => {

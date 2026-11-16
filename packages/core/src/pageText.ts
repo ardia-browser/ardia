@@ -42,6 +42,11 @@ export function pageText(row: { url: string; title: string }): PageText {
   return text;
 }
 
+export function withTitles(text: PageText, titlesLower: readonly string[]): PageText {
+  const titleLower = titlesLower.join("\n");
+  return { ...text, titleLower, titleWords: wordsOf(titleLower) };
+}
+
 export const hostOfPage = (t: PageText) => (t.host ??= hostOf(t.url));
 export const hostPart = (shown: string) => /^[^/?#]*/.exec(shown)![0];
 export const hostLowerOfPage = (t: PageText) => (t.hostLower ??= hostPart(t.shownLower));

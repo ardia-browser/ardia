@@ -22,6 +22,7 @@ export type Suggestion =
       tabId?: string;
       bookmarked?: boolean;
       visited?: boolean;
+      byBookmarkTitle?: true;
     }
   | { kind: "search"; query: string; url: string; engine: string; suggested?: boolean; bang?: true }
   | { kind: "calc"; expression: string; value: string; url: string }

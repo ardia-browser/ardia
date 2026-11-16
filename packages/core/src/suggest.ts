@@ -106,6 +106,12 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
   }
   remember(pool, q, tokens, matched, scores);
   const ranked = top.items;
+  const rowOf = (x: Ranked): Suggestion => {
+    const named = x.c.bookmarkTitles;
+    if (!named || score(x.c.ownText!, parsed) > 0) return pageSuggestion(x.c, x.tabId);
+    const title = (named.find((n) => score(n.text, parsed) > 0) ?? named[0]!).title;
+    return pageSuggestion({ ...x.c, title }, x.tabId, true);
+  };
 
   const out = new Output(limit);
   const remoteRows = (url: (text: string) => string, name: string) =>
@@ -117,7 +123,7 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
     const scopedUrl = (text: string) => scopedSearchUrl(scope, text, engine);
     out.push({ kind: "search", query, url: scopedUrl(query), engine: scope.name });
     out.push(...remoteRows(scopedUrl, scope.name));
-    out.push(...onSite!.items.map((x) => pageSuggestion(x.c, x.tabId)));
+    out.push(...onSite!.items.map(rowOf));
     return { items: out.items, completion: "" };
   }
 
@@ -139,7 +145,7 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
   else if (target && completion) first = known(target.url) ?? { kind: "page", url: target.url, title: "", favicon: target.favicon };
   else if (typedUrl) first = known(typedUrl) ?? { kind: "page", url: typedUrl, title: "", favicon: null };
   else if (extensionMatches.exact) first = extensionMatches.rows[0]!;
-  else if (websiteFirst && best && best.m >= 40 && (!noInline || typedIsPage(best.c.text, q))) first = pageSuggestion(best.c, best.tabId);
+  else if (websiteFirst && best && best.m >= 40 && (!noInline || typedIsPage(best.c.text, q))) first = rowOf(best);
   else first = search;
 
   out.push(first);
@@ -148,7 +154,7 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
   out.push(...actionMatches.map((m) => actionRow(m.action)));
   out.push(...extensionMatches.rows);
   out.push(...creates.map(createRow));
-  const pageRows = ranked.map((x) => pageSuggestion(x.c, x.tabId));
+  const pageRows = ranked.map(rowOf);
   out.push(...pageRows.slice(0, 3));
   const providerAt = out.items.length;
   out.push(...remoteRows((text) => searchUrl(engine, text), engine.name));

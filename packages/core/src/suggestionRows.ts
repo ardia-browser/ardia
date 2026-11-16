@@ -2,7 +2,7 @@ import type { Candidate } from "./candidatePool.ts";
 import { pageKey } from "./pageText.ts";
 import type { CommandAction, Suggestion } from "./suggestion.ts";
 
-export const pageSuggestion = (c: Candidate, tabId: string | null | undefined = c.tabId): Suggestion => ({
+export const pageSuggestion = (c: Candidate, tabId: string | null | undefined = c.tabId, byBookmarkTitle = false): Suggestion => ({
   kind: "page",
   url: c.url,
   title: c.title,
@@ -10,6 +10,7 @@ export const pageSuggestion = (c: Candidate, tabId: string | null | undefined = 
   ...(tabId ? { tabId } : {}),
   ...(c.bookmarked ? { bookmarked: true } : {}),
   ...(c.visits > 0 ? { visited: true } : {}),
+  ...(byBookmarkTitle ? { byBookmarkTitle: true as const } : {}),
 });
 
 export function suggestionKey(s: Suggestion): string {

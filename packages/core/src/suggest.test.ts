@@ -132,6 +132,35 @@ test("only a visited page completes: a bookmark or an open tab with no history r
   assert.equal(buildSuggestions("bookm", { tabs: [], history: host, bookmarks: deep }, { now }).completion, "arked.example.org");
 });
 
+test("a bookmark is found by its own title when history knows its page under another title", () => {
+  const url = "https://login.examplebank.com/";
+  const visited = [...history, { url, title: "Login – Example Bank", favicon: null, visits: 3, lastVisit: now - 1000 }];
+  const bookmarks = [{ url, title: "My Bank", favicon: null }];
+  const source = { tabs: [], history: visited, bookmarks };
+  const page = (q: string) => buildSuggestions(q, source, { now }).items.find((i) => i.kind === "page" && i.url === url);
+  const named = { kind: "page", url, title: "My Bank", favicon: null, bookmarked: true, visited: true, byBookmarkTitle: true };
+  assert.deepEqual(page("my bank"), named);
+  assert.deepEqual(page("My"), named);
+  assert.deepEqual(page("bank my"), named);
+  const own = { kind: "page", url, title: "Login – Example Bank", favicon: null, bookmarked: true, visited: true };
+  assert.deepEqual(page("login"), own);
+  assert.deepEqual(page("example bank"), own);
+  assert.deepEqual(page("examplebank.com"), own);
+  assert.deepEqual(page("my bank login"), named);
+  assert.equal(page("my bank zebra"), undefined);
+  const tabs = [{ id: "t4", url, title: "Login – Example Bank", favicon: null }];
+  assert.deepEqual(
+    buildSuggestions("my bank", { tabs, history: visited, bookmarks }, { now }).items.find((i) => i.kind === "page"),
+    { ...named, tabId: "t4" },
+  );
+  const twice = [...bookmarks, { url: `${url}#top`, title: "Savings", favicon: null }];
+  assert.deepEqual(buildSuggestions("savings", { tabs: [], history: visited, bookmarks: twice }, { now }).items.find((i) => i.kind === "page"), { ...named, title: "Savings" });
+  assert.deepEqual(buildSuggestions("my bank", { tabs: [], history: visited, bookmarks: twice }, { now }).items.find((i) => i.kind === "page"), named);
+  const same = [{ url, title: "login – example BANK", favicon: null }];
+  assert.deepEqual(buildSuggestions("login", { tabs: [], history: visited, bookmarks: same }, { now }).items.find((i) => i.kind === "page"), own);
+  assert.equal(buildSuggestions("my bank", { tabs: [], history: visited }, { now }).items.find((i) => i.kind === "page"), undefined);
+});
+
 test("open tabs are marked so the bar can switch to them, except the bar's own tab", () => {
   const tabs = [{ id: "t1", url: "https://github.com/pulls", title: "Pull requests", favicon: null }];
   const { items } = buildSuggestions("pull", { tabs, history }, { now });

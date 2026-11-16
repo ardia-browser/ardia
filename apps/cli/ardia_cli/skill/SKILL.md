@@ -24,12 +24,12 @@ ardia browse batch "tab active" "snapshot -i"  # the user's own page
 
 - This page's text: `ardia browse read`, or `read -s <sel>`. Other pages, any number, in one call:
   `read <url> <url> …`, or every link here whose URL matches: `read --links /p/ -s table.specs` (`--list`: just the
-  URLs). They load in your background tabs with the user's logins; `--http`: a plain fetch for public JSON
-  APIs.
+  URLs). They load in background tabs with the user's logins.
+- A page's data: `read --data` (JSON it embeds), `network requests --reload --type xhr,fetch`
+  (JSON it loads); `read --http <url>` gets it.
 - A long or scroll-loaded list (`1–40 of 200`): `read --scroll` (the main list, or `-s <list>`; `--match <text>`).
 - Blocked, CAPTCHA or 429 (`read` says so): wait 30–60 s, retry, click a captcha checkbox once, then use the
-  site's own search and pages, or another source.
-- Find a control with `find role button --name Save` or `snapshot -i -s <sel>`.
+  site's own search, or another source.
 - Redo a search later in one call: `flow save <name>` once done, then `flow run <name> --param k=v` (`flows.md`).
 
 ## Act

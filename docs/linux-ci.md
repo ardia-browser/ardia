@@ -105,7 +105,8 @@ The Ubuntu compatibility risk is small. The engine builds against Chromium's own
 
 ## Smoke gate
 
-`node scripts/linux/smoke.mjs --package <tar.xz> --results <dir>` extracts the tarball and launches `bin/ardia`:
+`node scripts/linux/smoke.mjs --package <tar.xz|.deb|.AppImage> --results <dir>` unpacks the package (`tar`,
+`dpkg-deb -x` or `--appimage-extract`) and launches its launcher:
 
 - with headless Ozone and SwiftShader;
 - with `ARDIA_BACKGROUND=1`;
@@ -122,7 +123,9 @@ It refuses any sandbox-disabling switch. Every check must run and pass:
 6. The shipped uBlock Origin and its Linux bridge are present and the content blocker reports ready.
 7. A clean quit and relaunch restores the tab.
 8. `install.sh --destdir` stages the launcher, desktop entry, chrome, UI and polkit policy with the right modes, plus
-   `lib/ardia/VERSION` and `lib/ardia/cli/` when the package has them.
+   `lib/ardia/VERSION` and `lib/ardia/cli/` when the package has them. For a `.deb` it checks the control file, the
+   maintainer scripts, root ownership, the setuid `chrome-sandbox`, the policy and the AppArmor profile; for an
+   AppImage the type 2 header, `AppRun` and that no setuid helper is inside.
 9. `app-version`: `systemInfo.appVersion` is `lib/ardia/VERSION`.
 10. `cli-install`: the bundled installer installs the bundled CLI the way the browser does
     (`--version <VERSION> --sha256 <digest>`, `ARDIA_CLI_URL=file://…`). `HOME`, `XDG_DATA_HOME`, `ARDIA_CLI_HOME` and
@@ -179,13 +182,15 @@ with `release.sh` and uploads them by hand.
 ## Sandbox on Ubuntu
 
 - **The restriction.** Ubuntu 24.04 limits unprivileged user namespaces through AppArmor
-  (`kernel.apparmor_restrict_unprivileged_userns=1`). The package ships no SUID `chrome_sandbox`, so Chromium refuses
-  to start rather than run unsandboxed.
+  (`kernel.apparmor_restrict_unprivileged_userns=1`). The engine builds `chrome_sandbox` and packages ship it as
+  `chrome-sandbox`; `install.sh` (as root) and the `.deb` make it setuid root. The launcher decides before Chromium
+  does ([linux-port.md](linux-port.md) › Packaging and installing).
 - **In CI.** The workflow lifts the restriction on its throwaway runner before the smoke step and never passes
   `--no-sandbox`.
 - **For users.** Users on Ubuntu 24.04 hit the same restriction. `sudo ./ardia/install.sh` installs and loads an
   AppArmor profile for the installed `chrome`, as Chrome's `.deb` does ([linux-port.md](linux-port.md) › Packaging
-  and installing). An extracted package run in place has no profile and doesn't start there.
+  and installing). An extracted tarball run in place says how to fix it and exits; an AppImage runs without the
+  sandbox there and says so.
 
 ## Triggers and gating
 

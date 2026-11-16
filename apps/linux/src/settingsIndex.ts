@@ -10,6 +10,7 @@ const hiddenPanes = unavailablePanes(capabilities);
 const hiddenSettings = unavailableSettingIds(capabilities, shared.SETTINGS.map((entry) => entry.id));
 if (!hostSupports("ArdiaTelemetryLocal.exportToDownloads") && !telemetryLocalAvailable()) hiddenSettings.add("privacy.viewData");
 if (!hostSupports("ArdiaApp.postNotification")) hiddenSettings.add("calendar.alertCondition");
+if (!hostSupports("ArdiaApp.setInterfaceScale")) hiddenSettings.add("appearance.interfaceScale");
 
 export const settingUnavailable = (id: string | undefined) => !!id && hiddenSettings.has(id);
 export const sectionUnavailable = (pane: string | null | undefined, section: string | undefined) => {

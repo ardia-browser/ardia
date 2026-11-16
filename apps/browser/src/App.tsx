@@ -4,6 +4,7 @@ import { StyleSheet } from "react-native";
 import { CommandPanel } from "./components/omnibox/CommandPanel";
 import { WindowOverlays } from "./components/window/WindowOverlays";
 import { ContentCard } from "./components/window/ContentCard";
+import { BrowserWindowControls } from "./components/window/BrowserWindowControls";
 import { BookmarkDialog } from "./components/bookmarks/BookmarkDialog";
 import { EditBookmarkDialog } from "./components/bookmarks/EditBookmarkDialog";
 import { FolderMenus } from "./components/bookmarks/FolderMenus";
@@ -18,7 +19,7 @@ import { CreateProfileHost } from "./components/profiles/CreateProfile";
 import { useFullscreenTab } from "./state/tabs/pageState";
 import { ProfileTint } from "./components/window/ProfileSwipe";
 import { TOP_STRIP_HEIGHT, TopStripPeek, TopTabStrip } from "./components/tabstrip/TopTabStrip";
-import { usePageFrameInset, useTabLayout } from "./state/windows/layout";
+import { useCardTopInset, usePageFrameInset, useTabLayout } from "./state/windows/layout";
 import { WindowProfile } from "./components/window/WindowProfile";
 import { DockedLayout } from "./components/window/SidebarDock";
 import { LittleArdiaWindow } from "./components/littleArdia/LittleArdiaWindow";
@@ -32,7 +33,7 @@ import { provideProfileLooks } from "./state/profiles/looks";
 import { currentBasePalette } from "./state/config/basePalette";
 import { focusedWindowOf } from "./state/windows/ui";
 import { SETTLE_MS, useSettled } from "./components/ui/useSettled";
-import { forgetWindowLayoutWidth, setWindowLayoutWidth } from "./state/sidebar/shownWidth";
+import { forgetWindowRootSize, setWindowRootSize } from "./state/windows/rootSize";
 
 provideProfileLooks({ accent: profileAccent, theme: (profile, appDark, source) => profileTheme(profile, appDark, source, currentBasePalette()) });
 
@@ -64,9 +65,10 @@ function BrowserWindow() {
   const topTabs = useTabLayout() === "top";
   const fullscreen = !!useFullscreenTab(windowId);
   const frame = usePageFrameInset();
+  const cardTop = useCardTopInset(frame);
   const [width, setWidth] = useState(0);
   const settleWidth = useSettled(setWidth, topTabs ? 0 : SETTLE_MS);
-  useEffect(() => () => forgetWindowLayoutWidth(windowId), [windowId]);
+  useEffect(() => () => forgetWindowRootSize(windowId), [windowId]);
   const card = useMemo(
     () => (
       <>
@@ -78,14 +80,14 @@ function BrowserWindow() {
   );
 
   return (
-    <CrxDropArea style={{ flex: 1, flexDirection: "row" }} onLayout={(e) => (setWindowLayoutWidth(windowId, e.nativeEvent.layout.width), settleWidth(e.nativeEvent.layout.width))}>
+    <CrxDropArea style={{ flex: 1, flexDirection: "row" }} onLayout={(e) => (setWindowRootSize(windowId, e.nativeEvent.layout.width, e.nativeEvent.layout.height), settleWidth(e.nativeEvent.layout.width))}>
       <WindowBackdrop vibrancy {...theme.backdrop} colors={theme.windowTint} grainOpacity={theme.grain} style={StyleSheet.absoluteFill} />
       <WindowProfile />
       <ProfileTint />
       <DockedLayout
         fullscreen={fullscreen}
         topTabs={topTabs}
-        inset={{ top: topTabs ? TOP_STRIP_HEIGHT : frame, right: frame, bottom: frame, left: frame }}
+        inset={{ top: topTabs ? TOP_STRIP_HEIGHT : cardTop, right: frame, bottom: frame, left: frame }}
         windowWidth={width}
         topStrip={
           topTabs
@@ -110,6 +112,7 @@ function BrowserWindow() {
       <WindowOverlays>
         <ReportSheetHost />
       </WindowOverlays>
+      <BrowserWindowControls />
     </CrxDropArea>
   );
 }

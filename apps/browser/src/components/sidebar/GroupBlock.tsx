@@ -19,7 +19,7 @@ import { GROUP_BORDER, GROUP_INNER_RADIUS, GROUP_INDENT, GROUP_INSET, GROUP_RADI
 import { entryHeightNow, foldedGroupHeight, headGap } from "../../state/sidebar/geometry";
 import { dismissHover } from "../../state/sidebar/hover";
 import { useGroupHover, useRowHover } from "./hoverController";
-import { HOVER_CARD_FADE_MS } from "./hoverMotion";
+import { useHoverFade } from "./hoverMotion";
 import { GhostSlot, ListMotionContext, useGroupMotion } from "./ListMotion";
 import { pressGroupClose, useGroupCloseControlWhile } from "../../state/sidebar/closeControl";
 import { openGroupMenu } from "../../state/sidebar/menus";
@@ -28,13 +28,11 @@ import { FolderOrIcon } from "./AnimatedFolder";
 import { RenameField, SplitRowItem, TabRowItem } from "./TabRow";
 import { groupBoxAtRest, groupSurface, SIDEBAR_TYPE, TAB_ROW, TABULAR_NUMS, useSidebarTokens } from "./tokens";
 import { SidebarRowSurface } from "./SidebarRow";
-import { curve } from "../ui/motion";
 import { entryKey, parseEntry } from "../../state/sidebar/entryKey";
 import { LiveFolderBlock } from "./LiveFolderBlock";
 import { tailKey, type RowSection } from "./dragModel";
 import { SharedFolderMark } from "./SharedFolderMark";
 
-const BOX_FADE = curve.fade;
 const NO_GROUPS: ReadonlySet<string> = new Set();
 
 type ReportInnerHover = (groupId: string, hovered: boolean) => void;
@@ -58,16 +56,6 @@ function useInnermostHover(groupId: string, hovered: boolean) {
     return () => reportToParent(groupId, false);
   }, [reportToParent, hovered, groupId]);
   return { innermost: hovered && hoveredInside.size === 0, reportInside };
-}
-
-function useBoxOpacity(shown: boolean) {
-  const [opacity] = useState(() => new Animated.Value(shown ? 1 : 0));
-  useEffect(() => {
-    const fade = Animated.timing(opacity, { toValue: shown ? 1 : 0, duration: HOVER_CARD_FADE_MS, easing: BOX_FADE, useNativeDriver: true });
-    fade.start();
-    return () => fade.stop();
-  }, [shown]);
-  return opacity;
 }
 
 export const GroupBlock = memo(function GroupBlock({
@@ -103,7 +91,7 @@ export const GroupBlock = memo(function GroupBlock({
   const box = useGroupHover(windowId, groupId);
   const dropInto = useDropInto() === groupId;
   const nested = useInnermostHover(groupId, box.hovered);
-  const boxOpacity = useBoxOpacity(nested.innermost || dropInto || groupBoxAtRest(color));
+  const boxOpacity = useHoverFade(nested.innermost || dropInto || groupBoxAtRest(color));
 
   const { fill, stroke } = groupSurface(color, tokens);
 

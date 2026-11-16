@@ -5,11 +5,22 @@
 
 #include <string>
 
-#include "base/functional/callback_forward.h"
+#include "base/functional/callback.h"
+
+class Profile;
 
 namespace ardia {
 
 void ProbeReauth(base::OnceCallback<void(bool available, std::string reason)> done);
+
+struct ReauthFallback {
+  base::RepeatingCallback<bool()> available;
+  base::RepeatingCallback<void(Profile*, const std::u16string& purpose,
+                               base::OnceCallback<void(bool granted, bool cancelled)>)>
+      confirm;
+};
+
+void SetReauthFallback(ReauthFallback fallback);
 
 }
 

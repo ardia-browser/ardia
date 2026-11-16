@@ -25,4 +25,4 @@ if ! lsof -nP -iTCP:"$FIXES_SITES_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
 fi
 export BEFORE_APP=$S/before/Ardia.app AFTER_APP=$S/after/Ardia.app
 export FIXES_HOVER=1 FIXES_INPUT=1 FIXES_SERIAL=1 FIXES_PORT_BASE=${FIXES_PORT_BASE:-9871}
-node "$REPO/apps/videos/scripts/fixes/run.mjs" extorder "$@"
+node "$REPO/apps/videos/scripts/fixes/run.mjs" ${FIXES_SCENES:-extorder extsidebar extfront} "$@"

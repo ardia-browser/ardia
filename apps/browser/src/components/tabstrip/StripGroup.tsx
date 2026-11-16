@@ -25,6 +25,7 @@ export function StripGroup({
   geometry,
   from,
   chip,
+  tabWidth,
   activeId,
   chipWidth,
   onChipWidth,
@@ -35,6 +36,7 @@ export function StripGroup({
   geometry: DragGeometry;
   from: number;
   chip: number;
+  tabWidth: (tabId: string) => number;
   activeId: string;
   chipWidth: number | undefined;
   onChipWidth: (width: number) => void;
@@ -131,6 +133,7 @@ export function StripGroup({
           geometry={members}
           from={expanded ? i : -1}
           chip={chip}
+          tabWidth={tabWidth}
           activeId={activeId}
           measured={m.kind !== "folder" || folderMeasured(m.id)}
           tuck={tuckable && i === shown ? tuck : undefined}

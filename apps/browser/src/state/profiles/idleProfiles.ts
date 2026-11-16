@@ -1,4 +1,5 @@
 import type { Settings } from "../settings/settings";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 
 const MINUTE_MS = 60_000;
 
@@ -11,7 +12,7 @@ const DELAYS: Record<Settings["unloadProfilesAfter"], number | null> = {
 };
 
 export const profileUnloadDelay = (settings: Pick<Settings, "memorySaver" | "unloadProfilesAfter">): number | null =>
-  settings.memorySaver ? (DELAYS[settings.unloadProfilesAfter] ?? null) : null;
+  PLATFORM_FEATURES.unloadsIdleProfiles && settings.memorySaver ? (DELAYS[settings.unloadProfilesAfter] ?? null) : null;
 
 export function idleProfiles() {
   const idleSince = new Map<string, number>();

@@ -178,3 +178,18 @@ test("History › Recently Closed lists only what the window's shown profile clo
   S().deleteProfile(work);
   assert.equal(titles().filter((t) => t.startsWith("Window")).length, before + 1, "a closed window whose profile was deleted reopens in the default profile, so it lists there");
 });
+
+test("the shown Peek's page rebuilds the menu like a shown tab; a Peek hidden behind another tab doesn't", () => {
+  S().hydrate({});
+  const w = S().createWindow({ url: "https://a.example/" });
+  const source = model.activeTabId(S(), w);
+  const other = S().newTab(w, { url: "https://b.example/", background: true });
+  const shownPeek = S().openPeek(other, "https://peek.example/");
+  S().activate(other);
+  const hiddenPeek = S().openPeek(source, "https://hidden.example/");
+  S().activate(other);
+  S().setFocusedWindow(w);
+  assert.equal(menuChanges(() => S().updateLive(shownPeek, { canGoForward: true })), true, "Forward turns on in the Peek");
+  assert.equal(menuChanges(() => S().updateTab(shownPeek, { muted: true })), true, "Mute Tab becomes Unmute Tab");
+  assert.equal(menuChanges(() => S().updateTab(hiddenPeek, { muted: true })), false);
+});

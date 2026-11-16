@@ -809,6 +809,21 @@ theme, a group "X" of five tabs after the pinned dock. Positions in points from 
   tab 6.5 after the chip, container 4.5 after it, the next tab 8 after the container; spring sampled in the app: response
   0.31 s / damping 0.81 expanding, 0.30 s / 0.82 collapsing, 1.1 % overshoot.
 
+#### Many tabs (1.57.1 binary, 2026-11-15)
+
+Not measured in pixels: Dia is read-only here and its strip with dozens of tabs was never captured. Its binary names
+the layout's inputs, which say what it does: `TabStrip.TabStripLayout` takes a `TabStripLayoutConfiguration`
+(`maximumTabWidth`, `lockedMaximumTabWidth`, `standardTabWidth`, `dockWidth`, `itemSpacing`, `trailingReservedWidth`,
+`contentInsets`, `bottomDragBufferRegionHeight`) and gives each item `TabStripItemLayoutAttributes` with its own
+`naturalWidth`, `minWidth` and `hasCloseButton`, plus a `primarySelectedTabID`, `tabsWithExpandedPreviewWidth` and a
+`hoverExitLayoutUnlockTask` (widths held until the pointer leaves after a close, Chrome's rule). A
+`TabStripClippingView` and a `fadeWidth` sit next to it. So: the selected tab has its own minimum, narrow tabs drop ×,
+the strip scrolls inside a clipped, faded view. Ardia (2026-11-15, `tabstrip/tokens.ts`): an even share of the room
+down to each tab's own minimum, then scrolling: 32 pt for a tab with its own favicon (favicon only below 52 pt), 64 pt
+for a tab whose favicon is shared or missing, 128 pt for the selected tab, 173 pt at most; × on hover only, and not
+below 84 pt; an 88 pt fade (to 0.25 opacity) at an edge that hides tabs; widths spring on a selection change at Dia's
+group spring (0.30 s, 0.82); drag auto-scroll within 48 pt of an edge, up to 14 pt a frame; a mouse wheel 40 pt a line.
+
 #### Dragging tabs and split targets (1.50.1, owner's 2× recordings, 2026-10-01)
 
 Two recordings, dark, tabs on top (3024 × 1964, variable frame rate, every frame's own timestamp): one with three

@@ -6,6 +6,7 @@ import { pageOf } from "../tabs/pageState";
 import { useBrowser } from "../browser/store";
 import { ensureLocationPermission } from "./locationAccess";
 import { noteSiteControls } from "../telemetry/usage";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 
 export type SitePermission = { type: SiteSettingType; title: string; icon: string; badge: string; choices: SiteSettingValue[] };
 
@@ -19,8 +20,10 @@ const SITE_PERMISSIONS: SitePermission[] = [
   { type: "autoplay", title: "Autoplay", icon: "play.rectangle", badge: "play.rectangle.fill", choices: ["allow", "block"] },
 ];
 
+export const offersSiteSetting = (type: SiteSettingType) => type !== "autoplay" || PLATFORM_FEATURES.blocksAutoplay;
+
 export const sitePermissionsFor = (engine: PageEngine) =>
-  engine === "webkit" ? SITE_PERMISSIONS.filter((p) => p.type === "sound" || WEBKIT_SITE_SETTINGS.includes(p.type)) : SITE_PERMISSIONS;
+  SITE_PERMISSIONS.filter((p) => offersSiteSetting(p.type) && (engine !== "webkit" || p.type === "sound" || WEBKIT_SITE_SETTINGS.includes(p.type)));
 
 export const choiceTitle = (type: SiteSettingType, value: SiteSettingValue) =>
   type === "sound" ? (value === "block" ? "Muted" : "Allowed") : value === "allow" ? "Allowed" : value === "block" ? "Blocked" : "Ask";

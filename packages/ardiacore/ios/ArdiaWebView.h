@@ -128,6 +128,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)setVideoUpscalingTestConditions:(NSDictionary<NSString *, NSNumber *> *)conditions
     NS_SWIFT_NAME(setVideoUpscalingTestConditions(_:));
 + (NSDictionary<NSString *, id> *)videoUpscalingState;
++ (NSDictionary<NSString *, NSNumber *> *)takeContentDrift;
 - (BOOL)takeControlPressAt:(double)clickMs control:(NSInteger)target NS_SWIFT_NAME(takeControlPress(clickAt:control:));
 - (void)requestPictureInPictureForClickAt:(double)clickMs
                                   control:(NSInteger)target

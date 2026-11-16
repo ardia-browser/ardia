@@ -33,6 +33,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (void)closeWindow:(NSWindow *)window;
 
++ (NSSize)windowSizeFromInterfaceSize:(NSSize)size forWindow:(nullable NSWindow *)window NS_SWIFT_NAME(windowSize(fromInterface:for:));
++ (void)setInterfaceMinSize:(NSSize)size ofWindow:(NSWindow *)window NS_SWIFT_NAME(setInterfaceMinSize(_:of:));
++ (void)keepInterfaceContentSizeOfWindow:(NSWindow *)window NS_SWIFT_NAME(keepInterfaceContentSize(of:));
+
 + (void)showProfile:(NSString *)profile inWindow:(NSWindow *)window;
 + (void)prepareProfiles:(NSArray<NSString *> *)profiles forWindow:(NSWindow *)window;
 @property(class, nonatomic, copy, nullable) void (^swappedHandler)(NSWindow *from, NSWindow *to);

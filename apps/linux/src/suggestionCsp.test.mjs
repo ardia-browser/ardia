@@ -14,6 +14,7 @@ test("the rest of the shell policy keeps its privileged restrictions", () => {
   assert.equal(directives.get("ObjectSrc"), "object-src 'none';");
   assert.equal(directives.get("FormAction"), "form-action 'none';");
   assert.equal(directives.get("TrustedTypes"), "trusted-types ardia-symbols;");
+  assert.equal(directives.get("MediaSrc"), "media-src 'self';", "the intro music plays from the shell's own assets and nowhere else");
   assert.match(shellContentSecurityPolicy(), /require-trusted-types-for 'script';/);
 });
 

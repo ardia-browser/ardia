@@ -777,11 +777,41 @@ class RefsTest(unittest.TestCase):
         with self.assertRaises(ConnectionLost):
             asyncio.run(state.connect())
 
+    def test_eval_quotes_unquoted_attribute_values_in_selector_strings(self):
+        from ardia_cli.browse.commands import quote_selector_literals
+
+        fixed, quoted = quote_selector_literals("document.querySelectorAll('a[href*=/jobs/view/]')")
+        self.assertEqual(fixed, "document.querySelectorAll('a[href*=\"/jobs/view/\"]')")
+        self.assertEqual(quoted, ['a[href*="/jobs/view/"]'])
+        self.assertEqual(quote_selector_literals('el.closest("[aria-label=Two words]")')[0], "el.closest(\"[aria-label='Two words']\")")
+        for untouched in ("document.querySelector('[data-x=plain]')", "document.querySelector('a[href*=\"/ok/\"]')", "find('a[href*=/x/]')",
+                          "document.querySelector('input[value=\\\"Save/Load\\\"]')"):
+            self.assertEqual(quote_selector_literals(untouched), (untouched, []))
+
+    def test_an_empty_untitled_page_says_it_was_likely_turned_away(self):
+        from ardia_cli.browse import readpages
+
+        empty = readpages.render([{"url": "https://example.test/a", "status": 200, "title": "", "text": ""}], {})
+        self.assertIn("the site sent an empty page", empty)
+        titled = readpages.render([{"url": "https://example.test/b", "status": 200, "title": "Blank", "text": ""}], {})
+        self.assertIn("(no text)", titled)
+        self.assertNotIn("empty page", titled)
+
+    def test_a_missing_name_lists_the_closest_names_first(self):
+        from ardia_cli.browse.commands import closest_names
+
+        links = ["Skip to Main Content", "Homepage", "Deals", "Pharmacy", "Gifts", "Registry", "Help", "Account", "Page 1", "Page 2", "Next Page"]
+        self.assertEqual(closest_names("Go to Page 2", links)[:2], ["Page 2", "Next Page"])
+        self.assertEqual(closest_names("Zebra", links), links[:8])
+
     def test_ref_parsing(self):
         from ardia_cli.browse.state import parse_ref
 
         self.assertEqual(parse_ref("@e12"), "e12")
         self.assertEqual(parse_ref("ref=e3"), "e3")
+        self.assertEqual(parse_ref("[ref=e80]"), "e80")
+        self.assertIsNone(parse_ref("[ref=e80"))
+        self.assertIsNone(parse_ref("[data-ref=e80]"))
         self.assertIsNone(parse_ref("#e3"))
         self.assertIsNone(parse_ref("@ex"))
 

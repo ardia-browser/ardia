@@ -20,6 +20,8 @@ WORLD_NAME = "ardia-browse"
 CONSOLE_LIMIT = 1000
 ERROR_LIMIT = 500
 REQUEST_LIMIT = 1000
+FETCHES_TRACKED = 256
+FETCH_FRESH = 1.5
 RECORD_TEXT_LIMIT = 64 * 1024
 HEADER_VALUE_LIMIT = 8 * 1024
 HEADERS_LIMIT = 64 * 1024
@@ -40,6 +42,7 @@ SETUP_NAMES = {
     "Network.setExtraHTTPHeaders": "the extra headers",
 }
 ROUTE_PATTERNS = [{"urlPattern": "*", "requestStage": "Request"}]
+OTHER_WORLD = "same JavaScript world"
 STALE_CONTEXT = ("Cannot find context", "Execution context was destroyed", "Cannot find default execution context", "Inspected target navigated")
 
 
@@ -140,6 +143,9 @@ class Page:
         self.requests: collections.OrderedDict = collections.OrderedDict()
         self.request_sizes: dict = {}
         self.requests_dropped = 0
+        self.fetches_started: dict = {}
+        self.fetch_loaders: dict = {}
+        self.fetches_busy_until = 0.0
         self.runtime_on = False
         self.network_on = False
         self.input = Input(self)
@@ -157,6 +163,7 @@ class Page:
         self.dropped: set = set()
         self.crashed = False
         self.needs_enable = False
+        self.awake = False
 
     async def attach(self, browser):
         self.browser = browser
@@ -197,6 +204,8 @@ class Page:
             await self.enable_network()
         if self.needs_restore:
             await self.restore_setup()
+        if self.awake or self.target_id in self.state.opened:
+            await self.keep_awake()
         viewport = None
         try:
             metrics = await self.send("Page.getLayoutMetrics")
@@ -206,6 +215,19 @@ class Page:
             pass
         self.input.bind(viewport)
         self.needs_enable = False
+
+    async def keep_awake(self):
+        from ardia_cli import command_metrics
+
+        endpoint = self.state.endpoint
+        if endpoint is None or not endpoint.explicit:
+            return
+        try:
+            await self.send("Emulation.setFocusEmulationEnabled", {"enabled": True})
+        except BrowseError:
+            return
+        self.awake = True
+        command_metrics.flag("tab_kept_awake", True)
 
     async def restore_setup(self):
         from ardia_cli import command_metrics
@@ -390,7 +412,9 @@ class Page:
             try:
                 result = await self.send("Runtime.callFunctionOn", params, timeout=timeout, mutation=not read)
             except CdpError as error:
-                if not any(marker in error.cdp_message for marker in STALE_CONTEXT):
+                if OTHER_WORLD in error.cdp_message and attempt == 0 and await self.rehome(args, context):
+                    continue
+                if OTHER_WORLD not in error.cdp_message and not any(marker in error.cdp_message for marker in STALE_CONTEXT):
                     raise
                 self.worlds.pop(frame or self.main_frame, None)
                 if read and attempt == 0 and not any(isinstance(a, Element) for a in args):
@@ -406,6 +430,24 @@ class Page:
             remote = result.get("result") or {}
             return remote.get("value") if by_value else remote
         raise BrowseError("the page navigated while reading it; try again", code="page_navigated")
+
+    async def rehome(self, args, context) -> bool:
+        from ardia_cli import command_metrics
+
+        elements = [arg for arg in args if isinstance(arg, Element)]
+        if not elements:
+            return False
+        for element in elements:
+            try:
+                result = await self.send("DOM.resolveNode", {"backendNodeId": element.backend_id, "executionContextId": context})
+            except CdpError:
+                return False
+            remote = result.get("object") or {}
+            if "objectId" not in remote:
+                return False
+            element.object_id = remote["objectId"]
+        command_metrics.flag("element_rehomed", True)
+        return True
 
     async def element_from(self, remote: dict, frame: str, label: str) -> Element | None:
         if not remote or remote.get("subtype") == "null" or remote.get("type") == "undefined" or "objectId" not in remote:
@@ -574,6 +616,7 @@ class Page:
         request_id = params.get("requestId")
         if not request_id:
             return
+        self.track_fetch(method, request_id, params)
         if method == "Network.requestWillBeSent":
             request = params.get("request") or {}
             record = self.requests.get(request_id)
@@ -616,6 +659,25 @@ class Page:
                 record["failed"] = clip(params.get("errorText") or "failed", 1024)
                 record["finished"] = params.get("timestamp")
         self.account_request(request_id)
+
+    def track_fetch(self, method: str, request_id: str, params: dict):
+        if method == "Network.requestWillBeSent":
+            if params.get("type") in ("XHR", "Fetch") and request_id not in self.fetches_started:
+                now = time.monotonic()
+                if len(self.fetches_started) >= FETCHES_TRACKED:
+                    self.fetches_started = {key: started for key, started in self.fetches_started.items() if now - started < FETCH_FRESH}
+                    self.fetch_loaders = {key: self.fetch_loaders[key] for key in self.fetches_started if key in self.fetch_loaders}
+                if len(self.fetches_started) >= FETCHES_TRACKED:
+                    oldest_id = next(iter(self.fetches_started))
+                    oldest = self.fetches_started.pop(oldest_id)
+                    self.fetch_loaders.pop(oldest_id, None)
+                    self.fetches_busy_until = max(self.fetches_busy_until, oldest + FETCH_FRESH)
+                self.fetches_started[request_id] = now
+                if params.get("loaderId"):
+                    self.fetch_loaders[request_id] = params["loaderId"]
+        elif method in ("Network.loadingFinished", "Network.loadingFailed"):
+            self.fetches_started.pop(request_id, None)
+            self.fetch_loaders.pop(request_id, None)
 
     def account_request(self, request_id):
         record = self.requests.get(request_id)

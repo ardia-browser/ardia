@@ -1,22 +1,23 @@
+import { displayHost } from "@ardia/core";
 import { isFields } from "../../lib/decode";
 import { sourceMatches, type LinkSource } from "../../lib/linkSource";
-import { matchesUrl, parseMatchPattern, type MatchSpec } from "../../lib/matchPattern";
+import { globMatches, matchesUrl, parseMatchPattern, type MatchSpec } from "../../lib/matchPattern";
 import { parseSaved, unchanged, versionedJson, type Migrations } from "../../lib/savedDocument";
 import { urlParts } from "../../lib/urlParts";
 
 export const AIR_TRAFFIC_DOC = "air-traffic.json";
-export const AIR_TRAFFIC_VERSION = 1;
+export const AIR_TRAFFIC_VERSION = 2;
 export const MAX_AIR_TRAFFIC_RULES = 100;
-const MIGRATIONS: Migrations = { 0: unchanged };
+const MIGRATIONS: Migrations = { 0: unchanged, 1: unchanged };
 
 export const OPEN_AS = ["tab", "window", "littleArdia"] as const;
 export type OpenAs = (typeof OPEN_AS)[number];
 export type SourceApp = { bundleId: string | null; name: string };
 export type LinkCondition = { kind: "any" } | { kind: "site"; host: string } | { kind: "pattern"; pattern: string };
-export type AirTrafficTarget = { profileId: string | null; open: OpenAs };
+export type AirTrafficTarget = { profileId: string | null; open: OpenAs; groupKey?: string };
 export type AirTrafficRule = AirTrafficTarget & { id: string; enabled: boolean; from: SourceApp | null; when: LinkCondition };
 export type AirTrafficConfig = { rules: AirTrafficRule[]; fallback: AirTrafficTarget | null };
-export type ProfileUsable = (profileId: string) => boolean;
+export type TargetUsable = (profileId: string, groupKey: string | null) => boolean;
 export type AirTrafficMatch = { by: "rule"; rule: AirTrafficRule; index: number; target: AirTrafficTarget } | { by: "fallback"; target: AirTrafficTarget };
 
 export const NO_AIR_TRAFFIC: AirTrafficConfig = { rules: [], fallback: null };
@@ -35,9 +36,24 @@ export function siteHost(input: string): string | null {
   return "error" in spec || !spec.host ? null : spec.host;
 }
 
+export const isWildcardPattern = (pattern: string) => pattern !== "<all_urls>" && !pattern.includes("://");
+
 export function patternProblem(pattern: string): string | null {
-  const spec = parseMatchPattern(pattern.trim());
+  const text = pattern.trim();
+  if (!text) return "type one, like *github* or https://*.example.com/docs/*";
+  if (isWildcardPattern(text)) return /\s/.test(text) ? "a pattern can't have spaces" : null;
+  const spec = parseMatchPattern(text);
   return "error" in spec ? spec.error : null;
+}
+
+function wildcardMatches(pattern: string, url: string): boolean {
+  const parts = urlParts(url);
+  if (!parts?.host) return false;
+  const lower = pattern.toLowerCase();
+  const glob = lower.includes("*") ? lower : `*${lower}*`;
+  const hosts = new Set([parts.host, displayHost(parts.host)]);
+  const rest = glob.includes("/") ? `${parts.path}${parts.query}`.toLowerCase() : "";
+  return [...hosts].some((host) => globMatches(glob, `${host}${rest}`));
 }
 
 const compiled = new Map<string, MatchSpec | null>();
@@ -53,25 +69,43 @@ function specOf(pattern: string): MatchSpec | null {
 
 export function linkMatches(when: LinkCondition, url: string): boolean {
   if (when.kind === "any") return true;
+  if (when.kind === "pattern" && isWildcardPattern(when.pattern)) return wildcardMatches(when.pattern, url);
   const spec = specOf(when.kind === "site" ? `*://*.${when.host}/*` : when.pattern);
   return !!spec && matchesUrl(spec, url);
 }
 
 export const appMatches = (from: SourceApp | null, source: LinkSource) => !from || sourceMatches([from.bundleId ?? from.name], source);
 
-const targetUsable = (target: AirTrafficTarget, usable: ProfileUsable) => target.profileId === null || usable(target.profileId);
+const targetUsable = (target: AirTrafficTarget, usable: TargetUsable) => target.profileId === null || usable(target.profileId, null);
 
-const targetOf = (target: AirTrafficTarget): AirTrafficTarget => ({ profileId: target.profileId, open: target.open });
+const targetOf = (target: AirTrafficTarget, usable: TargetUsable): AirTrafficTarget => ({
+  profileId: target.profileId,
+  open: target.open,
+  ...(target.groupKey && target.profileId !== null && usable(target.profileId, target.groupKey) ? { groupKey: target.groupKey } : {}),
+});
 
-export function airTrafficRule(config: AirTrafficConfig, url: string, source: LinkSource, usable: ProfileUsable): AirTrafficMatch | null {
+export function cleanTarget(target: AirTrafficTarget): AirTrafficTarget {
+  const { profileId, open, groupKey } = target;
+  return groupKey && profileId !== null && open === "tab" ? { profileId, open, groupKey } : { profileId, open };
+}
+
+export const cleanRule = ({ groupKey, ...rule }: AirTrafficRule): AirTrafficRule => ({
+  ...rule,
+  ...cleanTarget({ profileId: rule.profileId, open: rule.open, groupKey }),
+});
+
+export const sameTarget = (a: AirTrafficTarget | null, b: AirTrafficTarget | null) =>
+  a === b || (!!a && !!b && a.profileId === b.profileId && a.open === b.open && (a.groupKey ?? null) === (b.groupKey ?? null));
+
+export function airTrafficRule(config: AirTrafficConfig, url: string, source: LinkSource, usable: TargetUsable): AirTrafficMatch | null {
   const index = config.rules.findIndex((r) => r.enabled && appMatches(r.from, source) && linkMatches(r.when, url) && targetUsable(r, usable));
   if (index < 0) return null;
   const rule = config.rules[index]!;
-  return { by: "rule", rule, index, target: targetOf(rule) };
+  return { by: "rule", rule, index, target: targetOf(rule, usable) };
 }
 
-export function airTrafficFallback(config: AirTrafficConfig, usable: ProfileUsable): AirTrafficMatch | null {
-  return config.fallback && targetUsable(config.fallback, usable) ? { by: "fallback", target: targetOf(config.fallback) } : null;
+export function airTrafficFallback(config: AirTrafficConfig, usable: TargetUsable): AirTrafficMatch | null {
+  return config.fallback && targetUsable(config.fallback, usable) ? { by: "fallback", target: targetOf(config.fallback, usable) } : null;
 }
 
 export const airTrafficHolds = (config: AirTrafficConfig) => !!config.fallback || config.rules.some((r) => r.enabled);
@@ -94,7 +128,9 @@ function conditionOf(v: unknown): LinkCondition | null {
 }
 
 function targetFrom(v: unknown): AirTrafficTarget | null {
-  return isFields(v) && isProfileRef(v.profileId) && isOpenAs(v.open) ? { profileId: v.profileId, open: v.open } : null;
+  if (!isFields(v) || !isProfileRef(v.profileId) || !isOpenAs(v.open)) return null;
+  const groupKey = typeof v.groupKey === "string" ? v.groupKey : undefined;
+  return cleanTarget({ profileId: v.profileId, open: v.open, groupKey });
 }
 
 function ruleOf(v: unknown): AirTrafficRule | null {

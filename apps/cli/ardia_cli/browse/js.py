@@ -72,6 +72,18 @@ LIBRARY = r"""
       const found = api.queryAll(selector, root);
       return found.find((el) => api.visible(el)) || found[0] || null;
     },
+    validCss(css) {
+      try {
+        document.createDocumentFragment().querySelector(css);
+        return true;
+      } catch (error) {
+        return false;
+      }
+    },
+    quoteAttributeValues(css) {
+      return css.replace(/\[\s*([^\s~|^$*!=\]"']+)\s*([~|^$*]?=)\s*([^"'\]\s][^\]]*?)(\s+[iIsS])?\s*\]/g,
+        (whole, name, op, value, flag) => `[${name}${op}"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"${flag || ""}]`);
+    },
     queryAll(selector, root) {
       root = root || document;
       const chain = api.chainParts(selector);
@@ -111,6 +123,7 @@ LIBRARY = r"""
       let css = selector.replace(/^css=/, "").replace(/\[role=(["']?)([A-Za-z]+)\1\]/g, (whole, q, name) => api.roleCss(name.toLowerCase()) === `[role="${name.toLowerCase()}"]` ? whole : `:is(${api.roleCss(name.toLowerCase())})`);
       css = api.outsideStrings(css, (piece) => piece.replace(/:text\(/g, ":has-text("));
       if (/^[a-z]+$/.test(css) && ROLE_WORDS.has(css) && !root.querySelector(css)) css = api.roleCss(css);
+      if (!api.validCss(css)) css = api.quoteAttributeValues(css);
       const parts = api.textPseudos(css);
       if (parts.length === 1) return Array.from(root.querySelectorAll(css));
       let found = null;
@@ -230,11 +243,11 @@ LIBRARY = r"""
     scope() {
       const text = ((document.body && document.body.innerText) || "").slice(0, 200000);
       const counts = [];
-      const range = text.match(/\b\d[\d,.]*\s*[-–—]\s*\d[\d,.]*\s+of\s+(about\s+|over\s+)?\d[\d,.]*\+?(\s+[A-Za-z]+)?/);
+      const range = text.match(/\b\d[\d,.]*[ \u00a0]*[-–—][ \u00a0]*\d[\d,.]*[ \u00a0]+of[ \u00a0]+(about[ \u00a0]+|over[ \u00a0]+)?\d[\d,.]*\+?([ \u00a0]+[A-Za-z]+)?/);
       if (range) counts.push(range[0]);
-      const total = text.match(/\b\d[\d,.]*\+?\s+(results|items|products|listings|jobs|homes|properties|matches|reviews|rentals|vehicles|cars|hotels|apartments|roles|positions|articles|stores|locations|courses|events|deals)\b/i);
+      const total = text.match(/\b\d[\d,.]*\+?[ \u00a0]+(results|items|products|listings|jobs|homes|properties|matches|reviews|rentals|vehicles|cars|hotels|apartments|roles|positions|articles|stores|locations|courses|events|deals)\b/i);
       if (total && !(range && range[0].includes(total[0]))) counts.push(total[0]);
-      const paged = text.match(/\bpage\s+\d+\s+of\s+\d+\b/i);
+      const paged = text.match(/\bpage[ \u00a0]+\d+[ \u00a0]+of[ \u00a0]+\d+\b/i);
       if (paged) counts.push(paged[0]);
       const controls = [];
       const named = (pattern) => {
@@ -259,7 +272,7 @@ LIBRARY = r"""
     dismissConsent(x, y) {
       const about = /\b(cookies?|consent|gdpr|ccpa)\b/i;
       const vendor = "[id*=cookie i],[class*=cookie i],[id*=consent i],[class*=consent i],[id*=onetrust i],[class*=onetrust i],[id*=osano i],[class*=osano i],[id*=didomi i],[id*=usercentrics i],[id*=truste i],[class*=truste i],[class*=qc-cmp i],[id*=sp_message i],[class*=cmp-],[id*=cmpbox i],[class*=cmpbox i],[id*=cookiebot i],[class*=cookiebot i],[id*=iubenda i],[class*=iubenda i],[id*=termly i],[class*=termly i],[id*=klaro i],[class*=klaro i],[id*=cmplz i],[class*=cmplz i],[class*=cky-consent i]";
-      const reject = /^(reject|decline|refuse)( all| optional| non-essential)?( cookies)?$|^(only|strictly) (essential|necessary)( cookies)?$|^(necessary|essential) (cookies )?only$|^use (only )?necessary cookies$|^continue without accepting$/i;
+      const reject = /^(reject|decline|refuse)( all| optional| non-essential)?( cookies)?$|^(only|strictly) (essential|necessary)( cookies)?$|^(necessary|essential) (cookies )?only$|^use (only )?necessary cookies$|^just (necessary|essential)( cookies)?$|^(use|allow|accept) (only )?(necessary|essential)( cookies)?( only)?$|^deny( all)?$|^continue without accepting$/i;
       const accept = /^(accept|allow)( all)?( cookies)?$|^(i agree|agree|got it|ok|okay)$/i;
       const close = /^(close|dismiss)$|^(×|✕)$/i;
       const layerOf = (node) => {
@@ -348,7 +361,35 @@ LIBRARY = r"""
     readable(root) {
       root = root || document.body || document.documentElement;
       const lines = [];
-      const SKIP = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "SVG", "HEAD", "IFRAME"]);
+      const SKIP = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "SVG", "HEAD"]);
+      const ASIDE_TITLE = /^(related|recently viewed|you (may|might) also like|similar (items|products)|sponsored|recommended|customers (also|who)|more (from|like this)|frequently bought|people also)/i;
+      const ASIDE_NAME = /(^|[-_\s])(related|recently-?viewed|recommend\w*|sponsored|similar-?(items|products)|also-?(bought|viewed))([-_\s]|$)/i;
+      const asideLabel = (el) => {
+        const tag = el.tagName, role = roleOf(el);
+        if (tag === "NAV" || role === "navigation") return "navigation";
+        const label = norm(el.getAttribute("aria-label") || "");
+        if (label && ASIDE_TITLE.test(label)) return label;
+        const first = el.firstElementChild;
+        const isHeading = (node) => !!node && /^H[2-4]$/.test(node.tagName);
+        const heading = isHeading(first) ? first : first && isHeading(first.firstElementChild) ? first.firstElementChild : null;
+        const title = heading ? norm(heading.innerText || "") : "";
+        if (title && ASIDE_TITLE.test(title) && title.length <= 60) return title;
+        const names = (el.id || "") + " " + (typeof el.className === "string" ? el.className : "");
+        if (ASIDE_NAME.test(names) && /^(SECTION|DIV|ASIDE|UL)$/.test(tag)) return title || "related items";
+        if (tag === "ASIDE" || role === "complementary") return title || label || "aside";
+        return "";
+      };
+      let insideAside = false;
+      const iconLabel = (el) => {
+        if (el.getAttribute("aria-hidden") === "true") return "";
+        const own = norm(el.getAttribute("aria-label") || "");
+        if (own) return own;
+        if (el.tagName === "SVG" || el.tagName === "svg") {
+          const title = el.querySelector("title");
+          return title ? norm(title.textContent || "") : "";
+        }
+        return "";
+      };
       const BLOCK = /^(P|DIV|SECTION|ARTICLE|MAIN|HEADER|FOOTER|NAV|ASIDE|FORM|FIELDSET|UL|OL|TABLE|TR|BLOCKQUOTE|PRE|FIGURE|DETAILS|DL|DT|DD|ADDRESS|HR|BR|LABEL|SELECT|TEXTAREA|BUTTON)$/;
       const CELL_ROLES = new Set(["gridcell", "cell", "columnheader", "rowheader"]);
       const GRID_ROLES = new Set(["grid", "treegrid", "table"]);
@@ -365,14 +406,50 @@ LIBRARY = r"""
       };
       let buffer = "";
       let row = null;
+      let frameDepth = 0;
       const flush = () => { const t = norm(buffer); if (t) lines.push(t); buffer = ""; };
+      const frameText = (el) => {
+        const box = el.getBoundingClientRect();
+        if (box.width < 120 || box.height < 80) return;
+        const title = norm(el.getAttribute("title") || el.getAttribute("name") || "") || "frame";
+        let doc = null;
+        try { doc = el.contentDocument; } catch (error) { doc = null; }
+        const body = doc && (doc.body || doc.documentElement);
+        if (body && frameDepth < 3) {
+          flush();
+          lines.push("");
+          lines.push(`[frame "${title}"]`);
+          frameDepth++;
+          try { walk(body); } finally { frameDepth--; }
+          flush();
+          lines.push(`[end of frame "${title}"]`);
+          lines.push("");
+          return;
+        }
+        const src = el.src || "";
+        if (!doc && /^https?:/.test(src) && box.width >= 400 && box.height >= 300) {
+          flush();
+          lines.push(`[frame "${title}" from another site, not read here: read ${src}]`);
+        }
+      };
       const walk = (node) => {
         if (node.nodeType === 3) { buffer += node.nodeValue; return; }
         if (node.nodeType !== 1) return;
+        if (node.tagName === "SVG" || node.tagName === "svg") {
+          const label = iconLabel(node);
+          if (label) buffer += " [" + label + "] ";
+          return;
+        }
         if (SKIP.has(node.tagName)) return;
         const style = getComputedStyle(node);
         if (style.display === "none" || style.visibility === "hidden") return;
         const tag = node.tagName;
+        if (tag === "IFRAME" || tag === "FRAME") { frameText(node); return; }
+        if (!/^(INPUT|SELECT|TEXTAREA|IMG|A|BUTTON)$/.test(tag) && node.hasAttribute("aria-label") && !norm(node.textContent || "")) {
+          const label = iconLabel(node);
+          if (label) buffer += " [" + label + "] ";
+          return;
+        }
         if (row) {
           if (isCell(node)) {
             if (row.cells++) buffer += " | ";
@@ -395,6 +472,25 @@ LIBRARY = r"""
           }
           flush();
           return;
+        }
+        if (!insideAside && node !== root && /^(NAV|ASIDE|SECTION|DIV|UL)$/.test(tag)) {
+          const label = asideLabel(node);
+          if (label) {
+            flush();
+            lines.push("");
+            lines.push(`[${label}: not the main content]`);
+            insideAside = true;
+            try {
+              for (const child of node.childNodes) walk(child);
+              if (node.shadowRoot) for (const child of node.shadowRoot.childNodes) walk(child);
+            } finally {
+              insideAside = false;
+            }
+            flush();
+            lines.push(`[end of ${label}]`);
+            lines.push("");
+            return;
+          }
         }
         const h = /^H([1-6])$/.exec(tag);
         if (h) { flush(); const t = norm(node.innerText); if (t) { lines.push(""); lines.push("#".repeat(Number(h[1])) + " " + t); lines.push(""); } return; }
@@ -754,16 +850,22 @@ LIBRARY = r"""
       const drags = globalThis.ardiaBrowseDragStarts;
       drags.accepted += drags.dispatched.filter((event) => !event.defaultPrevented).length;
       drags.dispatched.length = 0;
-      const active = document.activeElement;
-      return Object.assign({ activeFrame: !!active && (active.tagName === "IFRAME" || active.tagName === "FRAME") }, globalThis.ardiaBrowseInput, {
+      let active = document.activeElement;
+      while (active && active.shadowRoot && active.shadowRoot.activeElement) active = active.shadowRoot.activeElement;
+      return Object.assign({ activeFrame: !!active && ["IFRAME", "FRAME", "EMBED", "OBJECT"].includes(active.tagName) }, globalThis.ardiaBrowseInput, {
         dragstart: drags.accepted,
         dragend: drags.dragend,
         drop: drags.drop,
       });
     },
     overFrame(x, y) {
-      const hit = document.elementFromPoint(x, y);
-      return !!hit && (hit.tagName === "IFRAME" || hit.tagName === "FRAME");
+      let hit = document.elementFromPoint(x, y);
+      while (hit && hit.shadowRoot) {
+        const inner = hit.shadowRoot.elementFromPoint(x, y);
+        if (!inner || inner === hit) break;
+        hit = inner;
+      }
+      return !!hit && ["IFRAME", "FRAME", "EMBED", "OBJECT"].includes(hit.tagName);
     },
     pushState(url) {
       history.pushState({}, "", url);

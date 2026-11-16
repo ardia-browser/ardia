@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const nativeSource = (path) => readFileSync(new URL(`../../../engine/ardiacore-linux/src/ardia/linux/${path}`, import.meta.url), "utf8");
@@ -162,4 +162,19 @@ test("the two event-only capabilities need no gate: the engine's events reach th
   deliverPageEvent({ onCommand: (event) => commands.push(event) }, { name: "command", data: { command: "escape", text: "" } });
   assert.equal(commands.length, 1);
   assert.equal(commands[0].command, "escape");
+});
+
+test("an event only the Linux engine sends is declared apart from the Mac's, and the Linux engine does send it", () => {
+  const api = readFileSync(new URL("../../../packages/ardiacore/src/engine/api.ts", import.meta.url), "utf8");
+  const bodyOf = (name) => api.slice(api.indexOf(`export type ${name} = {`), api.indexOf("\n};", api.indexOf(`export type ${name} = {`)));
+  const keysOf = (body) => [...body.matchAll(/^ {2}"([a-zA-Z]+\.[a-zA-Z]+)":/gm)].map((match) => match[1]);
+  const linuxOnly = keysOf(bodyOf("LinuxHostEvents"));
+  assert.ok(linuxOnly.length > 0);
+  const mac = new Set(keysOf(bodyOf("EngineEvents")));
+  const engine = new URL("../../../engine/chromium/src/chrome/browser/ardia/", import.meta.url);
+  const sent = readdirSync(engine).filter((file) => /_linux\.cc$/.test(file)).map((file) => readFileSync(new URL(file, engine), "utf8")).join("\n");
+  for (const name of linuxOnly) {
+    assert.equal(mac.has(name), false, `${name} is also in the Mac's events`);
+    assert.ok(sent.includes(`Emit("${name}"`), `the Linux engine never sends ${name}`);
+  }
 });

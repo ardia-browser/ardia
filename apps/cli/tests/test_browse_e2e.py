@@ -1,4 +1,5 @@
 from datetime import datetime
+import http.server
 import json
 import re
 import os
@@ -7,8 +8,10 @@ import socket
 import statistics
 import subprocess
 import sys
+import threading
 import time
 import unittest
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -192,7 +195,7 @@ class BrowseEndToEnd(unittest.TestCase):
     def test_no_humanize_is_instant(self):
         session = "instant"
         self.browse("open", self.url("probe.html"), "--show", session=session)
-        self.browse("fill", "#field", "abc", session=session)
+        self.browse("type", "#field", "abc", "--no-humanize", session=session)
         self.browse("click", "#target", "--no-humanize", session=session)
         events = self.report(session)["events"]
         down = next(index for index, event in enumerate(events) if event["type"] == "mousedown")
@@ -400,6 +403,22 @@ class BrowseEndToEnd(unittest.TestCase):
         moved = json.loads(self.browse("open", self.url("form.html"), "--json", session="attach").stdout)["data"]
         self.assertTrue(moved["background"])
         self.assertEqual(self.browse("get", "url", session="attach-src").stdout, self.url("login.html#attach") + "\n")
+
+    def test_a_background_tab_tells_its_first_script_the_window_it_belongs_to(self):
+        self.browse("open", self.url("geometry.html"), "--show", session="geometry-shown")
+        shown = json.loads(json.loads(self.browse("eval", "JSON.stringify([outerWidth, outerHeight, screenX, screenY])", session="geometry-shown").stdout))
+        for attempt in range(3):
+            session = f"geometry-{attempt}"
+            self.browse("open", self.url("geometry.html"), session=session)
+            seen = json.loads(self.browse("eval", "JSON.stringify(window.geometryAtHead)", session=session).stdout)
+            outer_width, outer_height, inner_width, inner_height, left, top, screen_width, screen_height = json.loads(seen)
+            self.assertGreater(inner_width, 0, seen)
+            self.assertGreater(inner_height, 0, seen)
+            self.assertGreaterEqual(outer_width, inner_width, seen)
+            self.assertGreater(outer_height, inner_height, seen)
+            self.assertEqual([outer_width, outer_height, left, top], shown, seen)
+            self.browse("close", session=session)
+        self.browse("close", session="geometry-shown")
 
     def test_site_notes_show_in_snapshots(self):
         session = "notes"
@@ -679,6 +698,13 @@ class BrowseEndToEnd(unittest.TestCase):
         self.assertEqual(report["prompt"], "reject")
         self.assertIn("late-buy", report["clicked"])
 
+    def test_click_dismisses_a_consent_banner_that_appears_after_another_layer_moved_away(self):
+        session = "consent-late"
+        self.browse("open", self.url("consentlate.html"), "--show", session=session)
+        said = self.browse("click", "#search", session=session).stdout
+        self.assertIn('"Just Necessary" button was clicked (reject)', said)
+        self.assertEqual(self.report(session), {"clicked": ["search"], "choice": "necessary"})
+
     def test_press_on_a_wrapper_focuses_the_field_inside_and_a_hidden_one_is_explained(self):
         session = "focus"
         self.browse("open", self.url("focus.html"), "--show", session=session)
@@ -717,6 +743,15 @@ class BrowseEndToEnd(unittest.TestCase):
         self.browse("batch", session=session, stdin="mouse move 190 100\nmouse down\nmouse up\n")
         time.sleep(0.5)
         self.assertEqual(json.loads(self.browse("get", "text", "#report", session=session).stdout), {"clicked": ["box"]})
+
+    def test_a_press_and_hold_inside_a_frame_in_a_closed_shadow_root_is_delivered(self):
+        session = "shadow-hold"
+        self.browse("open", self.url("shadowframe.html"), "--show", session=session)
+        time.sleep(0.5)
+        held = self.browse("batch", session=session, stdin="mouse move 190 100\nmouse down\nwait 600\nmouse up\n")
+        self.assertNotIn("received none of its", held.stdout + held.stderr)
+        time.sleep(0.3)
+        self.assertGreaterEqual(json.loads(self.browse("get", "text", "#report", session=session).stdout)["held"], 500)
 
     def test_screenshot_if_changed_skips_an_unchanged_view(self):
         session = "if-changed"
@@ -839,9 +874,223 @@ class BrowseEndToEnd(unittest.TestCase):
         missing = self.browse("is", "visible", "#never", session=session, check=False)
         self.assertNotIn("waited", missing.stdout + missing.stderr)
 
+    def test_a_ref_follows_its_element_after_the_page_reloads_the_same_address(self):
+        session = "reloadme"
+        self.browse("open", self.url("reloadme.html"), "--show", session=session)
+        ref = re.search(r'button "Apply" \[ref=(e\d+)\]', self.browse("snapshot", "-i", session=session).stdout).group(1)
+        self.browse("eval", "setTimeout(() => location.reload(), 50); true", session=session)
+        time.sleep(1.5)
+        clicked = self.browse("click", "@" + ref, session=session)
+        self.assertIn("was from before the page reloaded the same address", clicked.stdout + clicked.stderr)
+        self.assertEqual(self.browse("get", "title", session=session).stdout.strip(), "applied")
+        again = re.search(r'button "Apply" \[ref=(e\d+)\]', self.browse("snapshot", "-i", session=session).stdout).group(1)
+        self.browse("open", self.url("qty.html"), session=session)
+        moved = self.browse("click", "@" + again, session=session, check=False)
+        self.assertNotEqual(moved.returncode, 0)
+        self.assertIn("Stale ref", moved.stderr)
+
+    def test_a_scroll_that_lands_in_a_frame_counts_as_delivered(self):
+        session = "scrollframe"
+        self.browse("open", self.url("scrollframe.html"), "--show", session=session)
+        done = self.browse("scroll", "down", "600", session=session, check=False)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertNotIn("received none of its wheel events", done.stderr)
+
+    def test_click_goes_to_the_visible_content_of_a_target_with_no_box(self):
+        session = "contents"
+        self.browse("open", self.url("contents.html"), "--show", session=session)
+        self.browse("click", "#wrap", session=session)
+        self.assertEqual(self.browse("get", "title", session=session).stdout.strip(), "closed")
+        said = self.browse("click", "#zero", session=session)
+        self.assertIn("has no box of its own", said.stdout + said.stderr)
+        self.assertEqual(self.browse("get", "title", session=session).stdout.strip(), "page 2")
+        gone = self.browse("click", "#gone", session=session, check=False)
+        self.assertNotEqual(gone.returncode, 0)
+        self.assertIn("no visible box", gone.stderr)
+
+    def test_read_marks_blocks_that_are_not_the_main_content(self):
+        out = self.browse("read", self.url("product.html"), session="product").stdout
+        self.assertIn("[navigation: not the main content]", out)
+        self.assertIn("[Recently viewed: not the main content]", out)
+        self.assertIn("Glass kettle $25.00", out)
+        self.assertIn("[end of Recently viewed]", out)
+        self.assertIn("[related items: not the main content]", out)
+        self.assertIn("# Steel kettle", out)
+        self.assertIn("Capacity 1.7 L", out)
+        self.assertNotIn("[Specifications", out)
+        self.assertIn("[Customers also bought: not the main content]", out)
+        self.assertLess(out.index("$39.00"), out.index("[Recently viewed"))
+
+    def test_read_keeps_the_labels_of_icons_beside_values(self):
+        out = self.browse("read", self.url("iconlabels.html"), session="iconlabels").stdout
+        self.assertIn("[Customer care] 1-800-111-2222", out)
+        self.assertIn("[Sales] 1-800-333-4444", out)
+        self.assertIn("[Pro desk] 1-800-555-6666", out)
+        self.assertNotIn("Decoration", out)
+        self.assertIn("Plain text stays.", out)
+
+    def test_fill_says_when_the_page_has_not_reacted_yet(self):
+        session = "qty"
+        self.browse("open", self.url("qty.html"), "--show", session=session)
+        quiet = self.browse("fill", "#qty", "5", session=session).stdout
+        self.assertIn("Nothing else on the page changed yet", quiet)
+        self.browse("press", "Tab", session=session)
+        self.assertEqual(self.browse("get", "text", "#total", session=session).stdout.strip(), "$10.00")
+        live = self.browse("fill", "#live", "3", session=session).stdout
+        self.assertNotIn("Nothing else on the page changed yet", live)
+
+    def test_eval_reads_its_code_from_stdin_when_none_is_given(self):
+        session = "eval-stdin"
+        self.browse("open", self.url("many.html"), session=session)
+        target = self.data / "out" / "eval-stdin.json"
+        said = self.browse("eval", "--out", str(target), session=session, stdin="JSON.stringify({ title: document.title })").stdout
+        self.assertIn(f"Saved to {target}", said)
+        self.assertEqual(json.loads(target.read_text())["title"], self.browse("get", "title", session=session).stdout.strip())
+
+    def test_eval_waits_for_slow_page_code_as_long_as_its_timeout_allows(self):
+        session = "slow-eval"
+        self.browse("open", self.url("many.html"), session=session)
+        slow = "new Promise((done) => setTimeout(() => done('settled'), 2500))"
+        cut = self.browse("eval", slow, "--timeout", "1s", session=session, check=False)
+        self.assertNotEqual(cut.returncode, 0)
+        self.assertIn("didn't finish within 1 s", cut.stderr)
+        self.assertIn("eval --timeout 5m", cut.stderr)
+        self.assertNotIn("Ardia didn't answer", cut.stderr)
+        self.assertIn("settled", self.browse("eval", slow, "--timeout", "10s", session=session).stdout)
+
+    def test_a_dropped_connection_says_to_try_another_way_in(self):
+        import threading
+
+        listener = socket.socket()
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(8)
+        stop = threading.Event()
+
+        def drop_every_connection():
+            listener.settimeout(0.2)
+            while not stop.is_set():
+                try:
+                    accepted, _ = listener.accept()
+                except OSError:
+                    continue
+                accepted.recv(4096)
+                accepted.close()
+
+        dropper = threading.Thread(target=drop_every_connection, daemon=True)
+        dropper.start()
+        try:
+            url = f"http://127.0.0.1:{listener.getsockname()[1]}/announcements"
+            first = self.browse("open", url, session="dropped", check=False)
+            second = self.browse("open", url, session="dropped", check=False)
+        finally:
+            stop.set()
+            dropper.join(2)
+            listener.close()
+        self.assertNotEqual(first.returncode, 0)
+        self.assertIn("ERR_EMPTY_RESPONSE", first.stderr)
+        self.assertIn("The site dropped the connection;", first.stderr)
+        self.assertIn("read --http <url>", first.stderr)
+        self.assertIn("(2 failures on 127.0.0.1 in this session)", second.stderr)
+
     def test_read_waits_for_a_page_that_hydrates_late(self):
         out = self.browse("read", self.url("late.html"), session="late-read").stdout
         self.assertIn("Result card 12", out)
+
+    def test_read_scope_waits_for_late_content_and_says_when_it_stays_empty(self):
+        session = "late-scope"
+        self.browse("open", self.url("latescope.html"), "--show", session=session)
+        self.assertIn("Claims trainee, remote", self.browse("read", "-s", "main", session=session).stdout)
+        blank = self.browse("read", "-s", "#blank", session=session)
+        self.assertEqual(blank.returncode, 0)
+        self.assertIn("#blank matched 1 element with no text", blank.stdout)
+        missing = self.browse("read", "-s", "#nowhere", session=session, check=False)
+        self.assertNotEqual(missing.returncode, 0)
+        self.assertIn("Nothing on the page matches #nowhere", missing.stderr)
+
+    def test_read_waits_for_results_a_page_is_still_fetching(self):
+        class SlowJobs(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                time.sleep(1.2)
+                body = json.dumps(["Claims trainee, remote", "Sales associate, on site"]).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), SlowJobs)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            api = f"http://127.0.0.1:{server.server_address[1]}/jobs"
+            out = self.browse("read", self.url("searchfetch.html") + "?api=" + urllib.parse.quote(api, safe=""), session="fetch-read").stdout
+        finally:
+            server.shutdown()
+            server.server_close()
+        self.assertIn("Claims trainee, remote", out)
+
+    def test_read_keeps_what_a_stalled_page_sent(self):
+        class Stalls(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(b"<!doctype html><html><head><title>Slow listing</title></head><body><h1>Openings</h1>"
+                                 b"<p>Claims trainee, remote</p><p>Sales associate, on site</p>" + b" " * 4096)
+                self.wfile.flush()
+                time.sleep(8)
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Stalls)
+        server.daemon_threads = True
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            done = self.browse("read", f"http://127.0.0.1:{server.server_address[1]}/slow", "--timeout", "2500", session="stalled-read")
+        finally:
+            server.shutdown()
+            server.server_close()
+        self.assertIn("Claims trainee, remote", done.stdout)
+        self.assertIn("the page was still loading after 2.5 s; this is the part that had arrived", done.stdout)
+
+    def test_settling_sees_results_drawn_inside_shadow_roots(self):
+        from ardia_cli.browse.readpages import SETTLE_PROBE
+
+        session = "shadow-settle"
+        self.browse("open", self.url("shadowresults.html"), "--show", session=session)
+        probe = f"({SETTLE_PROBE})()"
+        before = json.loads(self.browse("eval", probe, session=session).stdout)[1]
+        self.browse("eval", "document.querySelector('search-app').shadowRoot.append(Object.assign(document.createElement('result-tile'), "
+                    "{textContent: 'Sales associate guide, 2004'}))", session=session)
+        after = json.loads(self.browse("eval", probe, session=session).stdout)[1]
+        self.assertNotEqual(before, after)
+
+    def test_read_scope_ignores_a_number_and_a_word_on_separate_lines(self):
+        out = self.browse("read", self.url("scopebadge.html"), session="scope-badge").stdout
+        self.assertIn("Kombucha starter kit", out)
+        self.assertNotIn("page says", out)
+
+    def test_read_takes_in_the_text_of_a_same_origin_frame(self):
+        session = "frame-jobs"
+        page = self.url("framejobs.html")
+        for out in (self.browse("read", page, session=session).stdout,
+                    self.browse("open", page, session=session).stdout and self.browse("read", session=session).stdout,
+                    self.browse("read", "-s", "#board", session=session).stdout):
+            self.assertIn('[frame "Job board"]', out)
+            self.assertIn("Field Service Technician | Oklahoma City", out)
+            self.assertNotIn("Tiny tracker", out)
+        self.assertIn('[frame "Partner board" from another site, not read here: read http://localhost:', self.browse("read", session=session).stdout)
+
+    def test_text_with_half_an_emoji_still_reads(self):
+        session = "surrogate"
+        out = self.browse("read", self.url("surrogate.html"), session=session).stdout
+        self.assertIn("Handshake \ufffd then Tue Botanicals \U0001f91d", out)
+        self.browse("open", self.url("surrogate.html"), session=session)
+        self.assertIn("\ufffd", self.browse("get", "text", "#team", session=session).stdout)
 
     def test_read_runs_beside_a_session_busy_with_a_script(self):
         session = "busy"
@@ -860,6 +1109,81 @@ class BrowseEndToEnd(unittest.TestCase):
         self.assertIn("slept", long.stdout.read())
         long.stdout.close()
         long.stderr.close()
+
+    def test_a_read_waits_its_turn_when_the_sibling_session_is_busy_too(self):
+        session = "busy-both"
+        self.browse("open", self.url("picker.html"), session=session)
+        self.browse("open", self.url("picker.html"), session=f"{session}-side")
+        env = dict(os.environ, PYTHONPATH=str(CLI))
+        base = [sys.executable, "-m", "ardia_cli", "browse", "--port", str(self.port), "--data-dir", str(self.data)]
+        sleepers = []
+        for name in (session, f"{session}-side"):
+            sleeper = subprocess.Popen(base + ["--session", name, "script", "--timeout", "2m"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE, text=True, env=env)
+            sleeper.stdin.write("await sleep(40000); return 'slept';")
+            sleeper.stdin.close()
+            sleepers.append(sleeper)
+        time.sleep(3)
+        read = subprocess.run(base + ["--session", session, "read", self.url("late.html")], capture_output=True, text=True, env=env, timeout=240)
+        for sleeper in sleepers:
+            self.assertEqual(sleeper.wait(120), 0)
+            sleeper.stdout.close()
+            sleeper.stderr.close()
+        self.assertEqual(read.returncode, 0, read.stderr)
+        self.assertIn("Result card 12", read.stdout)
+
+    def test_network_requests_reload_lists_what_the_page_loaded(self):
+        session = "network-reload"
+        self.browse("open", self.url("loadsdata.html"), session=session)
+        first = self.browse("network", "requests", "--type", "fetch", session=session).stdout
+        self.assertIn("network requests --reload", first)
+        listed = self.browse("network", "requests", "--reload", "--type", "fetch", session=session).stdout
+        self.assertIn("loadsdata.json", listed)
+
+    def test_batch_out_saves_everything_the_batch_printed(self):
+        session = "batch-out"
+        self.browse("open", self.url("many.html"), session=session)
+        target = self.data / "out" / "batch.txt"
+        said = self.browse("batch", "get title", "get url", "click #nothing-here", "--out", str(target), session=session, check=False).stdout
+        saved = target.read_text()
+        self.assertIn(self.browse("get", "title", session=session).stdout.strip(), saved)
+        self.assertIn("many.html", saved)
+        self.assertIn("✓ Saved the output of 2 of 3 lines to", said)
+        self.assertIn("✗ click #nothing-here:", said)
+
+    def test_unquoted_attribute_values_work_in_selectors_and_eval_says_how_to_quote(self):
+        session = "unquoted"
+        self.browse("open", self.url("many.html"), "--show", session=session)
+        self.browse("eval", "const b = document.createElement('button'); b.setAttribute('aria-label', 'Number of bedrooms'); "
+                    "b.dataset.path = '/en/plp/'; b.textContent = 'Beds'; b.onclick = () => { document.title = 'beds picked'; }; "
+                    "document.body.prepend(b); true", session=session)
+        self.browse("click", "[aria-label=Number of bedrooms]", session=session)
+        self.assertEqual(self.browse("get", "title", session=session).stdout.strip(), "beds picked")
+        self.assertIn("Beds", self.browse("get", "text", "button[data-path*=/en/plp/]", session=session).stdout)
+        fixed = self.browse("eval", "document.querySelector('button[data-path*=/en/plp/]').textContent", session=session).stdout
+        self.assertIn("Beds", fixed)
+        self.assertIn('quoted the attribute values in button[data-path*="/en/plp/"]', fixed)
+        bad = self.browse("eval", "document.querySelector(['a[href*=/en/plp/]'].join(''))", session=session, check=False)
+        self.assertNotEqual(bad.returncode, 0)
+        self.assertIn('needs quotes in CSS: a[href*="/path/"]', bad.stderr)
+
+    def test_an_interrupted_script_keeps_its_state(self):
+        import signal
+
+        session = "interrupted"
+        self.browse("open", self.url("picker.html"), session=session)
+        env = dict(os.environ, PYTHONPATH=str(CLI))
+        long = subprocess.Popen([sys.executable, "-m", "ardia_cli", "browse", "--port", str(self.port), "--data-dir", str(self.data), "--session", session,
+                                 "script", "--timeout", "2m"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+        long.stdin.write("state.rows = [1, 2, 3]; await sleep(60000); return 'slept';")
+        long.stdin.close()
+        time.sleep(4)
+        long.send_signal(signal.SIGINT)
+        _, err = long.communicate(timeout=30)
+        self.assertEqual(long.returncode, 130)
+        self.assertIn("ardia browse script 'return state'", err)
+        kept = self.browse("script", session=session, stdin="return state.rows;").stdout
+        self.assertIn("[1,2,3]", kept.replace(" ", "").replace("\n", ""))
 
     def test_out_saves_the_whole_result_and_prints_a_summary(self):
         session = "out"

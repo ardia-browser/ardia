@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Fixture Late Consent</title>
+<style>
+  body { margin: 0; font: 16px system-ui; }
+  #top { height: calc(100vh - 60px); }
+  #bottom { height: 150vh; }
+  #suggestions { position: fixed; left: 0; right: 0; bottom: 0; height: 120px; background: #eef; z-index: 10; }
+  #explicit_consent { position: fixed; left: 0; right: 0; top: 25vh; height: 50vh; background: #ddd; z-index: 20; display: none; }
+</style>
+</head>
+<body>
+<div id="top"><pre id="report">{}</pre></div>
+<button id="search">Search</button>
+<div id="bottom"></div>
+<ul id="suggestions"><li>blue lamp</li><li>blue lamp shade</li></ul>
+<section id="explicit_consent" class="prompt-container">
+  <h1>We use cookies</h1>
+  <button id="necessary">Just Necessary</button>
+  <button id="accept">Accept All</button>
+  <button id="settings">Cookie Settings</button>
+</section>
+<script>
+  const state = { clicked: [] };
+  const show = () => { document.getElementById("report").textContent = JSON.stringify(state); };
+  const consent = document.getElementById("explicit_consent");
+  addEventListener("scroll", () => {
+    document.getElementById("suggestions").style.display = "none";
+    if (!state.choice) consent.style.display = "block";
+  });
+  document.getElementById("necessary").addEventListener("click", () => { state.choice = "necessary"; consent.remove(); show(); });
+  document.getElementById("accept").addEventListener("click", () => { state.choice = "accept"; consent.remove(); show(); });
+  document.getElementById("search").addEventListener("click", () => { state.clicked.push("search"); show(); });
+  show();
+</script>
+</body>
+</html>

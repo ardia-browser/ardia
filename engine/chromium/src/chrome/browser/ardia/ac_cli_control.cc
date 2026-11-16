@@ -38,6 +38,7 @@
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "ardia/core/ac_host_visibility.h"
+#include "ardia/core/ac_windowless_page.h"
 #include "chrome/browser/ardia/ac_cli_owned_tabs.h"
 #include "chrome/browser/ardia/ac_cli_token_policy.h"
 #include "chrome/browser/ardia/ac_engine.h"
@@ -250,6 +251,11 @@ class ControlServer {
                         g_ardia_drags_ended[kArdiaDragEndNativeRefused])
                    .Set("sourceGone",
                         g_ardia_drags_ended[kArdiaDragEndSourceGone]));
+    const ardiacore::WindowlessPageTotals windowless =
+        ardiacore::WindowlessPagesSoFar();
+    status.Set("windowlessPages", base::DictValue()
+                                      .Set("given", windowless.given)
+                                      .Set("missed", windowless.missed));
     if (ardiacore::TestFlag("nativeDragRefused")) {
       status.Set("nativeDragsRefused", true);
     }

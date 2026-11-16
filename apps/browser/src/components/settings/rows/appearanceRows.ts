@@ -1,12 +1,16 @@
 import { type SettingSection } from "./types";
+import { keyText } from "../../../state/commands/keyText";
+import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
+import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 import type { SettingsPane } from "../../../state/settings/settingsWindows";
+import { interfaceScaleAdjustable } from "../../../state/settings/interfaceScale";
 
 export const appearanceRows = {
   appearance: [
     {
       section: "Appearance Theme",
       rows: {
-        theme: { title: "Appearance Theme", description: "Also in View › Appearance. Incognito windows are always dark.", keywords: ["dark mode", "light mode", "automatic", "night", "system"] },
+        theme: { title: "Appearance Theme", description: `${PLATFORM_FEATURES.menuBar ? "Also in View › Appearance. " : ""}Incognito windows are always dark.`, keywords: ["dark mode", "light mode", "automatic", "night", "system"] },
         spacesFollowAppearance: {
           advanced: true,
           title: "Profile themes follow this appearance",
@@ -21,16 +25,27 @@ export const appearanceRows = {
       },
     },
     {
+      section: "Interface Size",
+      rows: {
+        interfaceScale: {
+          shown: () => PLATFORM_FEATURES.interfaceSize && interfaceScaleAdjustable(),
+          title: "Interface size",
+          description: "Resizes Ardia's sidebar, toolbar, tabs and panels. Web pages keep their size: page zoom (⌘+ and ⌘−) is separate.",
+          keywords: ["scale", "scaling", "ui scale", "ui size", "interface scale", "zoom", "zoom interface", "fractional scaling", "1440p", "4k", "high resolution", "retina", "bigger", "smaller", "larger", "display", "monitor", "density", "accessibility", "low vision"],
+        },
+      },
+    },
+    {
       section: "Sidebar Text",
       rows: {
         sidebarTextSize: {
           title: "Text size",
           description: "Tab, folder and group titles in the sidebar, with their rows, icons and pinned tiles. Default is Dia's size.",
-          keywords: ["bigger text", "larger text", "large text", "text size", "small text", "readability", "readable", "low vision", "accessibility", "a11y", "interface size", "tab titles", "arc"],
+          keywords: ["bigger text", "larger text", "large text", "text size", "small text", "readability", "readable", "low vision", "accessibility", "a11y", "tab titles", "arc"],
         },
         sidebarTextContrast: {
           title: "Higher contrast text",
-          description: "Full-strength tab titles, and darker or brighter labels, icons and New Tab in the sidebar. On by default when macOS Increase Contrast is on.",
+          description: `Full-strength tab titles, and darker or brighter labels, icons and New Tab in the sidebar. On by default when ${PLATFORM_TERMS.systemContrast} is on.`,
           keywords: ["contrast", "high contrast", "increase contrast", "grey text", "gray text", "light text", "faint", "readability", "readable", "low vision", "accessibility", "a11y", "wcag", "bold"],
         },
       },
@@ -68,7 +83,7 @@ export const appearanceRows = {
       rows: {
         minimalismMode: {
           title: "Minimalism mode",
-          description: "Just a column of tabs and the page, as in the Search browser: no toolbar, the page flat against the sidebar, quiet grey tabs and letter tiles, and ⌘T opens the command bar. ⌘L opens the command bar for the address; back, reload, downloads and extensions stay in the menus and their shortcuts. Turn it off and everything comes back as it was. Also in View › Minimalism Mode, ⌃⌘M.",
+          description: `Just a column of tabs and the page, as in the Search browser: no toolbar, the page flat against the sidebar, quiet grey tabs and letter tiles, and ${keyText("⌘T")} opens the command bar. ${keyText("⌘L")} opens the command bar for the address; ${PLATFORM_FEATURES.menuBar ? "back, reload, downloads and extensions stay in the menus and their shortcuts" : `back and reload keep ${keyText("⌘[")} and ${keyText("⌘R")}, downloads stays in the … menu, and extension buttons go away with the toolbar`}. Turn it off and everything comes back as it was. Also ${PLATFORM_FEATURES.menuBar ? "in View › Minimalism Mode, " : ""}${keyText("⌃⌘M")}.`,
           keywords: ["minimal", "minimalism", "minimalist", "clean", "compact", "zen", "simple", "distraction free", "no toolbar", "hide toolbar", "search browser", "quiet", "focus"],
         },
       },
@@ -78,8 +93,8 @@ export const appearanceRows = {
       rows: {
         addressBar: { title: "Address Bar", description: "In the toolbar or in the sidebar.", keywords: ["url bar", "location bar", "toolbar"] },
         commandBarPlacement: {
-          title: "⌘L opens the command bar",
-          description: "In the centre, ⌘L shows it over the middle of the page, as in Arc, and a click on the address still edits it where it is. In the centre, also on click opens a click on the address there too. ⌘L opens in the centre whenever the address is out of sight.",
+          title: `${keyText("⌘L")} opens the command bar`,
+          description: `In the centre, ${keyText("⌘L")} shows it over the middle of the page, as in Arc, and a click on the address still edits it where it is. In the centre, also on click opens a click on the address there too. ${keyText("⌘L")} opens in the centre whenever the address is out of sight.`,
           keywords: ["cmd l", "command bar", "centred", "centered", "arc", "url bar", "location bar", "click", "click address", "click url"],
         },
         compactToolbar: {
@@ -89,8 +104,8 @@ export const appearanceRows = {
         },
         addressBarButtons: {
           title: "Address bar buttons",
-          description: "Show on hover keeps Site Controls, Open Split View and Bookmark (or Copy URL) out of the address bar until the pointer is over it. Always show keeps them there.",
-          keywords: ["hover", "always show", "always visible", "site controls", "split view", "bookmark", "copy url", "buttons", "icons", "url bar", "location bar"],
+          description: "Show on hover keeps Site Controls, Open Split View and Bookmark (or Copy URL) out of the address bar until the pointer is over it; in the sidebar the pinned extensions wait for the pointer too, as in Arc, and the not-secure lock always shows. Always show keeps them there.",
+          keywords: ["hover", "always show", "always visible", "site controls", "split view", "bookmark", "copy url", "buttons", "icons", "extensions", "pinned extensions", "clean", "arc", "url bar", "location bar"],
         },
         showTranslateButton: {
           title: "Show Translate button",
@@ -109,7 +124,7 @@ export const appearanceRows = {
         },
         bookmarksBar: {
           title: "Show bookmarks bar",
-          description: "Below the toolbar. Also in View › Show Bookmarks Bar, ⇧⌘B.",
+          description: `Below the toolbar. Also ${PLATFORM_FEATURES.menuBar ? "in View › Show Bookmarks Bar, " : ""}${keyText("⇧⌘B")}.`,
           keywords: ["bookmarks bar", "favorites bar", "favourites bar", "toolbar", "hide bookmarks", "show bookmarks"],
           shown: (s) => s.showBookmarks,
         },
@@ -142,12 +157,12 @@ export const appearanceRows = {
         },
         pageFrameZeroInFullScreen: {
           title: "Zero in full screen",
-          description: "In macOS full screen the page goes edge to edge with square corners, whatever the frame above is set to.",
+          description: `In ${PLATFORM_TERMS.fullScreen} the page goes edge to edge with square corners, whatever the frame above is set to.`,
           keywords: ["fullscreen", "full screen", "borderless", "edge to edge", "zero", "none", "frame", "inset", "margin"],
         },
         pageFrameZeroWhenTabsHidden: {
           title: "Zero in full screen when tabs are hidden",
-          description: "In macOS full screen with Auto-Hide Tabs, the page goes edge to edge with square corners. Show the sidebar or top strip, or leave full screen, and the frame comes back.",
+          description: `In ${PLATFORM_TERMS.fullScreen} with Auto-Hide Tabs, the page goes edge to edge with square corners. Show the sidebar or top strip, or leave full screen, and the frame comes back.`,
           keywords: ["auto hide", "autohide", "sidebar", "tabs hidden", "fullscreen", "full screen", "borderless", "edge to edge", "zero", "none", "frame", "inset", "margin"],
         },
       },
@@ -177,9 +192,10 @@ export const appearanceRows = {
           title: "Scroll bars",
           description: "Follow macOS uses System Settings › Appearance › Show scroll bars. Thin shows slim scroll bars over the page only while you scroll, even with a mouse.",
           keywords: ["scrollbar", "scroll bar", "overlay", "thin", "mouse", "trackpad"],
+          shown: () => PLATFORM_FEATURES.thinScrollBars,
         },
       },
     },
-    { section: "App Icon", rows: { appIcon: { title: "App Icon", description: "Shown in the Dock and the app switcher. The Dock keeps it after you quit.", keywords: ["dock icon", "logo"] } } },
+    { section: "App Icon", rows: { appIcon: { title: "App Icon", description: "Shown in the Dock and the app switcher. The Dock keeps it after you quit.", shown: () => PLATFORM_FEATURES.appIcon, keywords: ["dock icon", "logo"] } } },
   ],
 } satisfies Pick<Record<SettingsPane, SettingSection[]>, "appearance">;

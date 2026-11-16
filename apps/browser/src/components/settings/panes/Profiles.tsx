@@ -24,6 +24,8 @@ import { goToSettingsPane, SETTINGS_WINDOW_ID } from "../../../state/settings/se
 import { openProfileItemMenu } from "../../profiles/profileMenu";
 import { curve } from "../../ui/motion";
 import { settingsMotion } from "../tokens";
+import { setOpenTabsSynced, useSync } from "../../../state/sync/engine";
+import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 
 const listOf = (names: string[], joiner = "and") => (names.length <= 2 ? names.join(` ${joiner} `) : `${names.slice(0, -1).join(", ")}, ${joiner} ${names.at(-1)}`);
 
@@ -280,6 +282,8 @@ export function ProfileDetailsPane({ profileId }: { profileId: string }) {
   const sharedColors = useProfileRecords(useShallow((profiles) => shared.map((id) => profileAccent(profiles[id]))));
   const stats = useProfileDataStats(profileId);
   const topAppsDescription = useTopAppsDescription(profileId);
+  const synced = useSync((s) => s.enabled && !!s.profiles[profileId]?.enabled);
+  const syncsTabs = useSync((s) => s.types.tabs);
   const savedName = profile?.name ?? "";
   const [name, setName] = useState(savedName);
   const typed = useRef(name);
@@ -350,6 +354,11 @@ export function ProfileDetailsPane({ profileId }: { profileId: string }) {
             description={topAppsDescription}
           >
             <Toggle value={!!profile.shareTopApps} accessibilityLabel="Share Top Apps" onChange={(share) => setShareTopApps(profileId, share)} />
+          </Row>
+        ) : null}
+        {synced ? (
+          <Row title="Sync All Open Tabs" description={`Every open tab in this profile, not just pinned ones, is the same on all your ${PLATFORM_TERMS.syncedComputer}s.`}>
+            <Toggle value={!!profile.syncTabs} disabled={!syncsTabs} accessibilityLabel="Sync All Open Tabs" onChange={(on) => setOpenTabsSynced(profileId, on)} />
           </Row>
         ) : null}
         <Row title="Make Default Profile" description={isDefault ? "New windows already open with this profile." : "Open new windows with this profile."}>

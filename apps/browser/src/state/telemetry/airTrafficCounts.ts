@@ -1,21 +1,27 @@
 import { currentAirTraffic } from "../airTraffic/store";
-import type { AirTrafficConfig } from "../airTraffic/rules";
+import { isWildcardPattern, type AirTrafficConfig } from "../airTraffic/rules";
 
-let byRule = 0;
-let byFallback = 0;
+export type AirTrafficRouted = "rule" | "fallback" | "group";
 
-export const noteAirTrafficLink = (by: "rule" | "fallback") => void (by === "rule" ? byRule++ : byFallback++);
+const counts: Record<AirTrafficRouted, number> = { rule: 0, fallback: 0, group: 0 };
+const ROUTED: readonly AirTrafficRouted[] = ["rule", "fallback", "group"];
+
+export const noteAirTrafficLink = (by: AirTrafficRouted) => void counts[by]++;
 
 export function takeAirTrafficCounts() {
-  const taken = { air_traffic_rule_links: byRule, air_traffic_fallback_links: byFallback };
-  byRule = 0;
-  byFallback = 0;
+  const taken = Object.fromEntries(ROUTED.map((by) => [`air_traffic_${by}_links`, counts[by]]));
+  for (const by of ROUTED) counts[by] = 0;
   return taken;
 }
 
-export const airTrafficSetting = (config: AirTrafficConfig): Record<string, string> => ({
-  air_traffic_rules: String(config.rules.filter((r) => r.enabled).length),
-  air_traffic_fallback: config.fallback ? "true" : "false",
-});
+export const airTrafficSetting = (config: AirTrafficConfig): Record<string, string> => {
+  const enabled = config.rules.filter((r) => r.enabled);
+  return {
+    air_traffic_rules: String(enabled.length),
+    air_traffic_wildcard_rules: String(enabled.filter((r) => r.when.kind === "pattern" && isWildcardPattern(r.when.pattern)).length),
+    air_traffic_fallback: config.fallback ? "true" : "false",
+    air_traffic_group_rules: String(enabled.filter((r) => r.groupKey).length),
+  };
+};
 
 export const airTrafficSnapshot = () => airTrafficSetting(currentAirTraffic());

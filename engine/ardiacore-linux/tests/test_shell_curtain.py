@@ -28,11 +28,15 @@ class ShellCurtainTests(unittest.TestCase):
                         restack.index('if (curtain_) ReorderChildView(curtain_, children().size());'))
         self.assertIn('if (curtain_) curtain_->SetBoundsRect(GetLocalBounds());', self.body('void ShellHostView::LayoutOverlay()'))
 
-    def test_curtain_lifts_after_the_first_paint_or_a_deadline(self):
+    def test_curtain_lifts_when_the_shell_says_it_painted_or_at_a_deadline(self):
         initialize = self.body('void ShellHostView::Initialize()')
-        self.assertIn('shell_first_paint_ = std::make_unique<ShellFirstPaint>(', initialize)
         self.assertIn('curtain_timer_.Start(FROM_HERE, kShellCurtainLimit,', initialize)
-        self.assertIn('void DidFirstVisuallyNonEmptyPaint() override', self.host)
+        self.assertNotIn('DidFirstVisuallyNonEmptyPaint', self.host)
+        self.assertIn('method == "ArdiaShell.shellPainted" || method == "ArdiaShell.setWindowTitle"', self.host)
+        painted_verb = self.host.index('if (method == "ArdiaShell.shellPainted") {')
+        verb = self.host[painted_verb:self.host.index('\n    }\n', painted_verb)]
+        self.assertIn('if (target != this)', verb)
+        self.assertIn('ShellPainted();', verb)
         painted = self.body('void ShellHostView::ShellPainted()')
         self.assertIn('kShellCurtainSettle', painted)
         lift = self.body('void ShellHostView::LiftCurtain()')

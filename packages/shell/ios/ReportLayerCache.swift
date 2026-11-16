@@ -9,6 +9,7 @@ final class ReportLayerCache {
     weak var layer: CALayer?
     let image: CGImage
     let size: CGSize
+    let scale: CGFloat
     let madeAt: CFTimeInterval
   }
 
@@ -19,15 +20,17 @@ final class ReportLayerCache {
     stillViewClasses.contains(String(NSStringFromClass(type(of: view)).split(separator: ".").last ?? ""))
   }
 
-  func update(_ views: [NSView], scale: CGFloat, now: CFTimeInterval) {
+  func update(_ views: [NSView], in content: NSView, scale: CGFloat, now: CFTimeInterval) {
     var kept: [ObjectIdentifier: Still] = [:]
     for view in views {
       guard let layer = view.layer, !layer.bounds.isEmpty else { continue }
       let key = ObjectIdentifier(layer)
-      if let still = stills[key], still.size == layer.bounds.size, now - still.madeAt < Self.refreshInterval {
+      let placed = view.convert(view.bounds, to: content)
+      let local = scale * placed.width / layer.bounds.width
+      if let still = stills[key], still.size == layer.bounds.size, still.scale == local, now - still.madeAt < Self.refreshInterval {
         kept[key] = still
-      } else if let image = Self.picture(of: layer, scale: scale) {
-        kept[key] = Still(layer: layer, image: image, size: layer.bounds.size, madeAt: now)
+      } else if let image = Self.picture(of: layer, scale: local) {
+        kept[key] = Still(layer: layer, image: image, size: layer.bounds.size, scale: local, madeAt: now)
         refreshes += 1
       }
     }

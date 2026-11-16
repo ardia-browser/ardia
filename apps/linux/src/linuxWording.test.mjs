@@ -8,6 +8,8 @@ import { CALENDAR_WORDING, calendarWording, rewordCalendar } from "../calendarWo
 import { SYNC_WORDING, rewordSync, syncWording } from "../syncWording.ts";
 import { unavailablePanes } from "./hostCapabilities.ts";
 import { linuxShortcutText } from "../shortcutText.ts";
+import { PLATFORM_FEATURES as LINUX_FEATURES } from "../../browser/src/lib/platformFeatures.linux.ts";
+import { PLATFORM_TERMS as LINUX_TERMS } from "../../browser/src/lib/platformTerms.linux.ts";
 
 const shared = (path) => fileURLToPath(new URL(`../../browser/src/${path}`, import.meta.url));
 const read = (path) => readFileSync(shared(path), "utf8");
@@ -17,16 +19,20 @@ const PIPELINE = [rewordCredentials, rewordForLinux, rewordCalendar, rewordSync]
 const linuxCopy = (path) => {
   const source = read(path);
   const start = path.startsWith("components/") && !path.endsWith("/settings/searchMatch.ts") ? linuxShortcutText(source) : source;
-  return PIPELINE.reduce((code, reword) => reword(shared(path), code) ?? code, start);
+  return withLinuxTerms(PIPELINE.reduce((code, reword) => reword(shared(path), code) ?? code, start));
 };
+const withLinuxTerms = (code) => code.replace(/\$?\{PLATFORM_TERMS\.(\w+)\}/g, (_match, key) => {
+  assert.equal(typeof LINUX_TERMS[key], "string", `platformTerms.linux.ts has no ${key}`);
+  return LINUX_TERMS[key];
+});
 
 const MODULES = [
   { name: "calendar", list: CALENDAR_WORDING, reword: rewordCalendar, plugin: calendarWording, pick: whole, macos: /System Settings|Privacy & Security|x-apple|Calendar app/, surfaces: CALENDAR_WORDING.map((entry) => entry.file), probe: "components/settings/panes/Calendar.tsx" },
-  { name: "credential", list: CREDENTIAL_WORDING, reword: rewordCredentials, plugin: credentialWording, pick: whole, macos: /\bMac\b|macOS|Keychain|Touch ID|Applications folder/, surfaces: ["components/settings/panes/Passwords.tsx", "components/settings/panes/Autofill.tsx"], probe: "components/settings/panes/Passwords.tsx" },
-  { name: "sync", list: SYNC_WORDING, reword: rewordSync, plugin: syncWording, pick: whole, macos: /\bMacs?\b|iCloud Drive|iCloud Settings|in Finder|iPhone|Universal Clipboard|Keychain|x-apple\.|\bUsers\b/, surfaces: ["components/settings/panes/Sync.tsx", "components/settings/panes/SyncSheets.tsx"], probe: "components/settings/panes/Sync.tsx" },
+  { name: "credential", list: CREDENTIAL_WORDING, reword: rewordCredentials, plugin: credentialWording, pick: whole, macos: /\bMac\b|macOS|Keychain|Touch ID|Applications folder|\{PLATFORM_TERMS\.\w+\}/, surfaces: ["components/settings/panes/Passwords.tsx", "components/settings/panes/Autofill.tsx"], probe: "components/settings/panes/Passwords.tsx" },
+  { name: "sync", list: SYNC_WORDING, reword: rewordSync, plugin: syncWording, pick: whole, macos: /\bMacs?\b|iCloud Drive|iCloud Settings|in Finder|iPhone|Universal Clipboard|Keychain|x-apple\.|\bUsers\b|\{PLATFORM_TERMS\.\w+\}/, surfaces: ["components/settings/panes/Sync.tsx", "components/settings/panes/SyncSheets.tsx"], probe: "components/settings/panes/Sync.tsx" },
   {
-    name: "linux", list: LINUX_WORDING, reword: rewordForLinux, plugin: linuxWording, pick: strings, macos: /\bMacs?\b|macOS|iCloud|Keychain|keychain|Tahoe/, probe: "components/onboarding/SourceStep.tsx",
-    surfaces: ["state/extensions/actions.ts", "components/onboarding/SourceStep.tsx", "components/onboarding/LookStep.tsx", "components/settings/panes/Appearance.tsx", "components/settings/panes/Privacy.tsx", "state/telemetry/copy.ts", "components/import/steps/ChooseStep.tsx", "components/import/steps/SafariStep.tsx", "state/import/runImport.ts", "components/onboarding/previews/MockWindow.tsx", "components/onboarding/previews/scenes/LookScenes.tsx", "components/settings/panes/ShareDiagnostics.tsx", "state/commands/appCommands.ts", "state/report/details.ts", "components/report/ReportPreview.tsx"],
+    name: "linux", list: LINUX_WORDING, reword: rewordForLinux, plugin: linuxWording, pick: strings, macos: /\bMacs?\b|macOS|iCloud|Keychain|keychain|Tahoe|\{PLATFORM_TERMS\.\w+\}/, probe: "components/onboarding/LookStep.tsx",
+    surfaces: ["state/extensions/actions.ts", "components/onboarding/SourceStep.tsx", "components/onboarding/LookStep.tsx", "components/settings/panes/Appearance.tsx", "components/settings/panes/Privacy.tsx", "state/telemetry/copy.ts", "components/import/steps/ChooseStep.tsx", "components/import/steps/SafariStep.tsx", "state/import/runImport.ts", "components/onboarding/previews/MockWindow.tsx", "components/onboarding/previews/scenes/LookScenes.tsx", "state/commands/appCommands.ts", "state/report/details.ts", "components/report/ReportPreview.tsx"],
   },
 ];
 
@@ -35,37 +41,41 @@ const EXPECTED = [
   ["components/settings/panes/Calendar.tsx", ["<Button title=\"Try Again\" onPress={() => void connectCalendar()} />", "Ardia reads your calendars through Evolution Data Server, which isn't running", "Evolution Data Server refused to share your calendars"], []],
   ["components/settings/panes/Passwords.tsx", ["system password"], []],
   ["components/settings/panes/Sync.tsx", ["across your computers", "Syncthing, Nextcloud or Dropbox", "title: \"Open Sync Folder\""], ["Linking.openURL"]],
-  ["components/settings/panes/SyncSheets.tsx", ["title=\"Add to This Computer\"", "system keyring", "return folder.path.replace(/^\\/home\\/[^/]+(?=\\/|$)/, \"~\");", "<Button title=\"Save as Text…\" kind=\"primary\" onPress={() => void save(\"text\")} />", "<Button title=\"Copy Words\" onPress={() => void copyRecoveryPhrase()} />"], ["recoveryKitPreview(", "copyRecoveryKit()", "shareRecoveryKit()", "save(\"pdf\")", "title=\"Other Options\""]],
+  ["components/settings/panes/SyncSheets.tsx", ["title={`Add to This Computer`}", "system keyring", "return folder.path.replace(/^\\/home\\/[^/]+(?=\\/|$)/, \"~\");", "<Button title=\"Save as Text…\" kind=\"primary\" onPress={() => void save(\"text\")} />", "<Button title=\"Copy Words\" onPress={() => void copyRecoveryPhrase()} />"], ["recoveryKitPreview(", "copyRecoveryKit()", "shareRecoveryKit()", "save(\"pdf\")", "title=\"Other Options\""]],
   ["lib/themeLook.ts", ["export const MONO_FAMILY = \"monospace\";"], ["export const MONO_FAMILY = \"Menlo\";"]],
   ["state/sync/syncDoc.ts", ["never removes them from this computer"], []],
-  ["state/sync/engine.ts", ["keep syncing on this device", "Couldn’t save the sync key in your Keychain."], []],
+  ["components/settings/panes/Sync.tsx", ["(This Computer)", "Just this computer so far", "Choose which profiles sync on this computer."], []],
+  ["components/settings/panes/SyncSheets.tsx", ["This Computer Is Syncing", "Add them to this computer to sync", "Everything on this computer stays as it is."], []],
+  ["state/sync/engine.ts", ["keep syncing on this device", "Couldn’t save the sync key in your keyring."], []],
   ["components/onboarding/SourceStep.tsx", ["Found on this computer"], []],
   ["components/settings/panes/Appearance.tsx", ["title: \"Follow system\""], []],
   ["state/import/runImport.ts", ["system keyring"], []],
-  ["state/extensions/actions.ts", ["\"The extension's folder stays on this computer.\""], ["stays on your Mac"]],
+  ["state/extensions/actions.ts", ["`The extension's folder stays on your computer.`"], ["stays on your ${PLATFORM_TERMS.computer}"]],
   ["state/live/engine.ts", ["case \"keyringLocked\":\n      return `Unlock your keyring to refresh ${name}`;", "case \"keyringUnavailable\":\n      return `Start your keyring to refresh ${name}`;", "case \"signedOut\":\n      return `Sign back in to ${name}`;"], []],
-  ["components/settings/rows/generalRows.ts", ["quits with Ctrl+Shift+Q.", "Ctrl+Alt-click splits too, and so does Alt+Shift-click when Alt-click is chosen", "title: \"Ctrl-clicking links creates tab groups\""], []],
+  ["components/settings/rows/generalRows.ts", ["quits with Ctrl+Shift+Q.", "Ctrl+Alt-click splits too, and so does Alt+Shift-click when Alt-click is chosen", "title: `Ctrl-clicking links creates tab groups`"], []],
   ["components/settings/rows/privacyRows.ts", ["system password", "title: \"Zoom with Ctrl and the mouse wheel\""], []],
-  ["components/settings/panes/Tabs.tsx", ["title: \"Shift-click\"", "title: \"Alt-click\"", "title: \"Alt+Shift-click\"", "\"Alt-click (Peek moves to Shift-click)\"", "\"Alt-click (split view moves to Alt+Shift-click)\"", "\"Alt-click opens a split now: choosing it here moves split view back to Alt+Shift-click.\""], []],
-  ["components/onboarding/LayoutSteps.tsx", ["title: \"Shift-click\""], []],
+  ["components/settings/panes/Tabs.tsx", ["title: `Shift-click`", "title: `Alt-click`", "title: `Alt+Shift-click`", "`Alt-click (Peek moves to Shift-click)`", "`Alt-click (split view moves to Alt+Shift-click)`", "`Alt-click opens a split now: choosing it here moves split view back to Alt+Shift-click.`"], []],
+  ["components/onboarding/LayoutSteps.tsx", ["title: `Shift-click`"], []],
   ["components/settings/rows/generalRows.ts", ["Asks before the close button or File › Close Window closes its tabs.", "The window buttons move with the sidebar."], ["The window buttons stay at the top left."]],
-  ["components/settings/rows/appearanceRows.ts", ["In full screen the page goes edge to edge", "Also in View › Show Bookmarks Bar, Ctrl+Shift+B."], ["In macOS full screen"]],
-  ["components/settings/panes/Advanced.tsx", ["or in power saver mode"], ["Low Power Mode"]],
-  ["components/downloads/Downloads.tsx", ["tooltip=\"Show in Folder\""], ["Show in Finder"]],
-  ["components/pages/DownloadsPage.tsx", ["title=\"Show in Folder\""], ["Show in Finder"]],
-  ["state/downloads/downloadMenu.ts", ["title: \"Show in Folder\""], ["Show in Finder"]],
-  ["state/bookmarks/exportHtml.ts", ["title: \"Show in Folder\""], ["Show in Finder"]],
-  ["state/browser/actions.ts", ["stay installed on this computer, turned off."], ["on this Mac"]],
+  ["components/settings/rows/appearanceRows.ts", ["In full screen the page goes edge to edge", "Also ${PLATFORM_FEATURES.menuBar ? \"in View › Show Bookmarks Bar, \" : \"\"}Ctrl+Shift+B."], ["In ${PLATFORM_TERMS.fullScreen}"]],
+  ["components/settings/panes/Advanced.tsx", ["or in power saver mode"], ["${PLATFORM_TERMS.lowPowerMode}"]],
+  ["components/downloads/Downloads.tsx", ["tooltip=\"Show in Folder\""], ["Show in ${PLATFORM_TERMS.fileManager}"]],
+  ["components/pages/DownloadsPage.tsx", ["title=\"Show in Folder\""], ["Show in ${PLATFORM_TERMS.fileManager}"]],
+  ["state/downloads/downloadMenu.ts", ["title: \"Show in Folder\""], ["Show in ${PLATFORM_TERMS.fileManager}"]],
+  ["state/bookmarks/exportHtml.ts", ["title: \"Show in Folder\""], ["Show in ${PLATFORM_TERMS.fileManager}"]],
+  ["state/browser/actions.ts", ["stay installed on this computer, turned off."], ["on this ${PLATFORM_TERMS.computer}"]],
   ["state/onboarding/tour.ts", ["Ctrl+S hides the sidebar.", "press Super+Shift+=.", "Settings (Ctrl+,)."], ["menu bar", "⌘"]],
-  ["state/presets/setupCode.ts", ["Appearance follows your desktop", "Ctrl+T opens the command bar"], ["your Mac", "⌘T"]],
+  ["state/presets/setupCode.ts", ["Appearance follows your desktop", "Ctrl+T opens the command bar"], ["your ${PLATFORM_TERMS.computer}", "⌘T"]],
   ["state/releaseNotes/releaseNotes.ts", ["from any page with Ctrl+L."], ["⌘L"]],
-  ["state/sync/scopeAdapters.ts", ["\"This computer\""], ["This Mac"]],
+  ["state/sync/scopeAdapters.ts", ["`This Computer`"], ["This ${PLATFORM_TERMS.computerTitle}"]],
+  ["components/import/steps/ChooseStep.tsx", ["were found on this computer."], []],
+  ["components/settings/rows/privacyRows.ts", ["never leaves this computer.", "Kept on this computer"], []],
   ["state/telemetry/copy.ts", ["Ctrl+Tab switcher", "Alt+Enter in the command bar", "from the taskbar or at launch"], ["Dock", "Touch ID", "⌘", "⌥", "⌃"]],
-  ["state/report/details.ts", ["`Linux ${app.osVersion}`, app.model"], ["`macOS ${app.osVersion}`"]],
-  ["components/report/ReportPreview.tsx", ["Exactly what leaves this computer when you press Send."], ["leaves your Mac"]],
+  ["state/report/details.ts", ["`Linux ${app.osVersion}`, app.model"], ["`${PLATFORM_TERMS.os} ${app.osVersion}`"]],
+  ["components/report/ReportPreview.tsx", ["Exactly what leaves your computer when you press Send."], ["leaves your ${PLATFORM_TERMS.computer}"]],
   ["components/report/ReportSheet.tsx", ["Contact and details stay private.", "share errors and usage for 14 days"], ["Recordings, contact and details stay private.", "share crash reports and usage"]],
   ["components/report/AttachedRow.tsx", ["title: \"Usage and errors, last 7 days\""], ["Usage, errors and crashes, last 7 days"]],
-  ["components/tabstrip/NewTabButton.tsx", ["Alt-click to open in Split View"], ["⌥-click"]],
+  ["components/tabstrip/NewTabButton.tsx", ["Alt-click to open in Split View"], ["${keyText(\"⌥\")}-click"]],
 ];
 
 test("every listed replacement matches its shared source exactly once", () => {
@@ -106,6 +116,12 @@ test("search rows describing reworded panes read as Linux too", () => {
   assert.match(section(privacy, "passwords: [", "extensions: ["), /Touch ID|keychain/);
   assert.doesNotMatch(section(linuxCopy("components/settings/rows/privacyRows.ts"), "passwords: [", "extensions: ["), /Touch ID|keychain|Keychain|\bMac\b/);
   assert.doesNotMatch(section(linuxCopy("components/settings/rows/privacyRows.ts"), "whatsSent: {", "keywords"), /\bMacs?\b|macOS|iCloud|Keychain|keychain/);
+});
+
+test("open-tab sync telemetry describes this computer on Linux", () => {
+  const copy = linuxCopy("state/telemetry/copy.ts");
+  assert.match(copy, /how many tab changes this computer sent,/);
+  assert.doesNotMatch(copy, /\bMacs?\b/);
 });
 
 test("a shared copy change fails with 'no longer contains', and unlisted files pass through", () => {
@@ -150,4 +166,16 @@ test("onboarding names no Mac, macOS or Dock on Linux, and the Engines pane is n
     .flatMap((path) => strings(linuxCopy(path)).filter((text) => words.test(text)).map((text) => `${path}: ${text}`));
   assert.deepEqual(leftover, []);
   assert.ok(unavailablePanes({ webkit: false }).has("engines"));
+});
+
+test("the Linux platform layer finds browsers through the import list and says computer, not Mac", async () => {
+  const { sourceTiles } = await import("../../browser/src/components/onboarding/sourceTiles.ts");
+  const listed = new Set(["chrome", "firefox"]);
+  const tiles = sourceTiles((candidate) => listed.has(candidate.importId ?? candidate.id), LINUX_FEATURES);
+  assert.deepEqual(tiles.filter((tile) => tile.found).map((tile) => tile.id), ["chrome", "firefox"]);
+  assert.ok(tiles.every((tile) => tile.app === null && tile.id !== "safari" && tile.id !== "dia"));
+  assert.equal(LINUX_FEATURES.calendar && LINUX_FEATURES.sync && !LINUX_FEATURES.webKit && !LINUX_FEATURES.dock, true);
+  assert.deepEqual(Object.values(LINUX_TERMS).filter((value) => typeof value === "string" && /\bMacs?\b|macOS|iCloud|Keychain|Finder/.test(value)), []);
+  const vite = readFileSync(new URL("../vite.shared.ts", import.meta.url), "utf8");
+  assert.match(vite, /extensions: \["\.linux\.tsx", "\.linux\.ts", "\.web\.tsx"/);
 });

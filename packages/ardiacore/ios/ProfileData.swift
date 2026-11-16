@@ -7,7 +7,7 @@ enum ProfileData {
   static func deleteDefault(_ done: @escaping Done) {
     let steps: [Step] = [
       ("history, cookies and cache", { ok in
-        ArdiaServices.clearBrowsingData(profile: "", types: ["history", "siteData", "cache", "downloads"], since: 0) { ok(true) }
+        ArdiaServices.clearBrowsingData(profile: "", types: ["history", "siteData", "cache", "downloads"], since: 0) { ok($0 == nil) }
       }),
       ("autocomplete entries", { ok in
         ArdiaServices.call("ac_browsing_data_clear", profile: "", args: ["types": ["formData", "siteSettings"]]) { ok($0["ok"] as? Bool == true) }

@@ -101,6 +101,10 @@
 #include "ardia/linux/ac_linux_system.h"
 #include "ardia/linux/ac_linux_telemetry.h"
 #include "ardia/linux/ac_linux_telemetry_policy.h"
+#include "ardia/linux/ac_linux_updates.h"
+#include "ardia/linux/ac_linux_password_prompt.h"
+#include "ardia/linux/ac_linux_system_signals.h"
+#include "ardia/linux/ac_linux_geoclue.h"
 #include "ardia/linux/ac_linux_typeahead_input.h"
 #include "ardia/linux/host_bootstrap.h"
 #include "base/auto_reset.h"
@@ -215,6 +219,7 @@
 #include "mojo/public/cpp/bindings/callback_helpers.h"
 #include "net/base/net_errors.h"
 #include "net/http/http_response_headers.h"
+#include "sandbox/policy/switches.h"
 #include "services/network/public/mojom/content_security_policy.mojom.h"
 #include "third_party/blink/public/common/page/page_zoom.h"
 #include "third_party/skia/include/core/SkBitmap.h"
@@ -378,19 +383,6 @@ class ShellTransparency : public content::WebContentsObserver {
     web_contents()->SetPageBaseBackgroundColor(SK_ColorTRANSPARENT);
     if (auto* view = web_contents()->GetRenderWidgetHostView()) view->SetBackgroundColor(SK_ColorTRANSPARENT);
   }
-};
-
-class ShellFirstPaint : public content::WebContentsObserver {
- public:
-  ShellFirstPaint(content::WebContents* shell, base::OnceClosure painted)
-      : content::WebContentsObserver(shell), painted_(std::move(painted)) {}
-
-  void DidFirstVisuallyNonEmptyPaint() override {
-    if (painted_) std::move(painted_).Run();
-  }
-
- private:
-  base::OnceClosure painted_;
 };
 
 constexpr base::TimeDelta kShellCurtainSettle = base::Milliseconds(100);
@@ -906,6 +898,7 @@ std::string MimeType(std::string_view path) {
   if (ext == ".woff") return "font/woff";
   if (ext == ".woff2") return "font/woff2";
   if (ext == ".ttf") return "font/ttf";
+  if (ext == ".wav") return "audio/wav";
   return {};
 }
 
@@ -1310,6 +1303,7 @@ class ShellHostView : public views::View,
     return base::NumberToString(id_) + "#" + base::NumberToString(renderer_generation_);
   }
   void RetireRenderer() {
+    ardia::LinuxSystemSignals::Get().WatchIdle(id_, {});
     LinuxLiveCallerGone(LiveCaller());
     ardiacore::LinuxAutomationCallerGone(LiveCaller());
     ardiacore::LinuxConfigCallerGone(LiveCaller());
@@ -1377,6 +1371,7 @@ class ShellHostView : public views::View,
     LinuxExtensionsWindowClosing(id_);
   }
   void WatchSystemState();
+  void WatchSystemSignals();
   void WatchCalendar();
   void NoteInputActivity();
   void OfferTab(content::WebContents* contents) {
@@ -1694,7 +1689,6 @@ class ShellHostView : public views::View,
   std::vector<gfx::Rect> shell_pass_;
   std::unique_ptr<ShellTransparency> shell_transparency_;
   raw_ptr<views::View> curtain_ = nullptr;
-  std::unique_ptr<ShellFirstPaint> shell_first_paint_;
   base::OneShotTimer curtain_timer_;
   raw_ptr<HostMessageHandler> handler_ = nullptr;
   uint64_t renderer_generation_ = 0;
@@ -1789,6 +1783,7 @@ class ShellHostView : public views::View,
   base::ScopedObservation<views::FocusManager, views::FocusChangeListener> pane_focus_observation_{this};
   std::map<int, bool> devtools_had_focus_;
   base::CallbackListSubscription system_state_subscription_;
+  base::CallbackListSubscription system_signals_subscription_;
   base::CallbackListSubscription calendar_subscription_;
   base::WeakPtrFactory<ShellHostView> weak_factory_{this};
 };
@@ -2339,6 +2334,7 @@ class HostMessageHandler : public content::WebUIMessageHandler,
       }
       if (name == "engine.systemState") {
         host_->WatchSystemState();
+        host_->WatchSystemSignals();
         return ardiacore::LinuxPowerMonitor::Get().Current(base::BindOnce(
             [](base::WeakPtr<HostMessageHandler> handler, std::string id, base::DictValue state) {
               if (handler) handler->Resolve(id, base::Value(std::move(state)));
@@ -2466,6 +2462,7 @@ class ShellDataSource : public content::URLDataSource {
       case Directive::StyleSrc: return "style-src 'self' 'unsafe-inline';";
       case Directive::ImgSrc: return "img-src 'self' data: blob:;";
       case Directive::FontSrc: return "font-src 'self' data:;";
+      case Directive::MediaSrc: return "media-src 'self';";
       case Directive::ConnectSrc: return "connect-src 'none';";
       case Directive::FrameSrc: return "frame-src 'none';";
       case Directive::ChildSrc: return "child-src 'none';";
@@ -2569,6 +2566,7 @@ void CloseUtilitiesWithoutBrowserWindows() {
 }
 
 ShellHostView::~ShellHostView() {
+  ardia::LinuxSystemSignals::Get().WatchIdle(id_, {});
   ReleaseDragEscape();
   ForgetOpenerHost(id_);
   LinuxImportWindowClosed(window_id_);
@@ -2653,8 +2651,6 @@ void ShellHostView::Initialize() {
   }
   shell_->LoadInitialURL(GURL("chrome://ardia/"));
   shell_transparency_ = std::make_unique<ShellTransparency>(shell());
-  shell_first_paint_ = std::make_unique<ShellFirstPaint>(
-      shell(), base::BindOnce(&ShellHostView::ShellPainted, base::Unretained(this)));
   curtain_timer_.Start(FROM_HERE, kShellCurtainLimit,
                        base::BindOnce(&ShellHostView::LiftCurtain, base::Unretained(this)));
   ApplyShellInput();
@@ -3140,6 +3136,12 @@ base::DictValue ShellHostView::Bootstrap() const {
       .Append("ArdiaShell.cancelDialog").Append("ArdiaShell.beginWindowCloseDrain")
       .Append("ArdiaSearch.suggest").Append("ArdiaSearch.cancelSuggest")
       .Append("ArdiaTelemetry.post")
+      .Append("ArdiaShell.fetchKillSwitches")
+      .Append("ArdiaLocation.locationPermission")
+      .Append("ArdiaLocation.requestLocationPermission")
+      .Append("ArdiaSystemSignals.watchIdle")
+      .Append("ArdiaSystemSignals.devPost")
+      .Append("ArdiaUpdates.releases")
       .Append("ArdiaShell.launchSteps")
       .Append("ArdiaShell.completeLaunchStep")
       .Append("ArdiaShell.typeaheadReady")
@@ -3223,6 +3225,11 @@ base::DictValue ShellHostView::Bootstrap() const {
   bootstrap.Set("pageProfile", page_profile_);
   if (!private_window_.empty()) bootstrap.Set("privateWindow", private_window_.Clone());
   bootstrap.Set("windowKind", WindowKind());
+  if (const base::CommandLine* command = base::CommandLine::ForCurrentProcess();
+      command->HasSwitch(sandbox::policy::switches::kNoSandbox)) {
+    const std::string decision = command->GetSwitchValueASCII("ardia-sandbox-decision");
+    bootstrap.Set("sandboxDecision", decision.empty() ? "--no-sandbox was passed to chrome directly" : decision.substr(0, 400));
+  }
   if (small_ && !small_window_.empty()) bootstrap.Set("smallWindow", small_window_.Clone());
   if (ChromeMade()) bootstrap.Set("chromeMade", true);
   if (base::ListValue adopt = UnclaimedTabsForShell(); !adopt.empty()) bootstrap.Set("adoptTabs", std::move(adopt));
@@ -3253,7 +3260,6 @@ void ShellHostView::ShellPainted() {
 
 void ShellHostView::LiftCurtain() {
   curtain_timer_.Stop();
-  shell_first_paint_.reset();
   if (!curtain_) return;
   views::View* curtain = curtain_;
   curtain_ = nullptr;
@@ -4684,6 +4690,14 @@ void ShellHostView::NoteInputActivity() {
   if (is_utility() || !handler_) return;
   Event("ArdiaEngine", "engine", base::Value(base::DictValue()
       .Set("name", "engine.inputActivity").Set("data", base::DictValue())));
+}
+
+void ShellHostView::WatchSystemSignals() {
+  if (system_signals_subscription_) return;
+  system_signals_subscription_ = ardia::LinuxSystemSignals::Get().Subscribe(base::BindRepeating(
+      [](base::WeakPtr<ShellHostView> host, const base::DictValue& signal) {
+        if (host) host->Event("ArdiaSystemSignals", "onSystemSignal", base::Value(signal.Clone()));
+      }, GetWeakPtr()));
 }
 
 void ShellHostView::WatchSystemState() {
@@ -6541,6 +6555,34 @@ void ShellHostView::Invoke(
         },
         std::move(done)));
   }
+  if (const auto source = ardia::linux_updates_policy::SourceForMethod(method)) {
+    if (!values.empty())
+      return std::move(done).Run(false, base::Value("This call takes no arguments"));
+    return ardia::linux_updates::Fetch(*source, base::BindOnce(
+        [](base::OnceCallback<void(bool, base::Value)> done, int status, std::string body) {
+          std::move(done).Run(true, base::Value(base::DictValue().Set("status", status).Set("body", std::move(body))));
+        },
+        std::move(done)));
+  }
+  if (method == "ArdiaLocation.locationPermission" || method == "ArdiaLocation.requestLocationPermission") {
+    return std::move(done).Run(true, base::Value(ardia::LinuxLocationPermission()));
+  }
+  if (method == "ArdiaSystemSignals.watchIdle") {
+    if (values.size() != 1 || !values[0].is_list())
+      return std::move(done).Run(false, base::Value("watchIdle takes a list of seconds"));
+    std::vector<double> thresholds;
+    for (const base::Value& threshold : values[0].GetList())
+      if (threshold.is_int() || threshold.is_double()) thresholds.push_back(threshold.GetDouble());
+    WatchSystemSignals();
+    ardia::LinuxSystemSignals::Get().WatchIdle(id_, thresholds);
+    return std::move(done).Run(true, base::Value());
+  }
+  if (method == "ArdiaSystemSignals.devPost") {
+    if (values.size() != 1 || !values[0].is_string())
+      return std::move(done).Run(false, base::Value("devPost takes willSleep or didWake"));
+    WatchSystemSignals();
+    return std::move(done).Run(true, base::Value(ardia::LinuxSystemSignals::Get().Post(values[0].GetString())));
+  }
   if (method == "ArdiaTelemetry.post") {
     if (values.size() != 2 || !values[0].is_string() || !values[1].is_string() ||
         !ardia::linux_telemetry_policy::PostAcceptable(values[0].GetString(), values[1].GetString()))
@@ -7084,7 +7126,7 @@ void ShellHostView::Invoke(
       method == "ArdiaShell.toggleMaximizeWindow" ||
       method == ardia::linux_commands::kToggleFullScreenCall ||
       method == "ArdiaShell.focusWindow" || method == "ArdiaShell.utilityReady" ||
-      method == "ArdiaShell.setWindowTitle") {
+      method == "ArdiaShell.shellPainted" || method == "ArdiaShell.setWindowTitle") {
     ShellHostView* target = nullptr;
     for (const auto& [id, host] : Hosts()) {
       if (host->window_id() == ArgumentString(values, 0) &&
@@ -7102,6 +7144,11 @@ void ShellHostView::Invoke(
             FROM_HERE, base::BindOnce(&ShellHostView::RequestUtilityClose, GetWeakPtr()));
       }
       return std::move(done).Run(true, base::Value(utility_.Clone()));
+    }
+    if (method == "ArdiaShell.shellPainted") {
+      if (target != this) return std::move(done).Run(false, base::Value("Only a window's own shell lifts its curtain"));
+      ShellPainted();
+      return std::move(done).Run(true, base::Value());
     }
     if (method == "ArdiaShell.windowFrame") {
       return std::move(done).Run(true, base::Value(SharedFrameValue(target->browser()->GetWindow()->GetBounds())));
@@ -7949,6 +7996,8 @@ void StartLinuxHost() {
   ardiacore::InstallLinuxBackgroundFileDialogs();
   g_ardia_auto_picture_in_picture_off = true;
   ardia::InstallCliVisibleTabs();
+  ardia::linux_password::InstallReauthFallback();
+  ardia::InstallLinuxLocationProvider();
   g_ardia_linux_tab_shown = [](content::WebContents* contents) {
     for (const auto& [id, host] : Hosts()) {
       const int shown = host->TabShown(contents);

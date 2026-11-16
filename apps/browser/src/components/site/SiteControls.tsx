@@ -39,6 +39,7 @@ import { ReaderRow } from "./ReaderControls";
 import { ZoomStepper } from "./ZoomControls";
 import { blockerLabel, choiceTitle, featuredPermissions, permissionValue, readSiteSettings, setSitePermission, sitePermissionsFor, type SitePermission } from "../../state/site/siteControls";
 import { isWebPageUrl } from "../../lib/url";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { ALL_UNREAD_TITLE, canChooseSiteUnread, isUnreadSiteHidden, setSiteUnreadShown, showUnreadCounts } from "../../state/tabs/unreadSites";
 
 type Expanded = "connection" | "more" | null;
@@ -217,22 +218,24 @@ function SiteControlsPanel({
         {origin ? (
           <>
             <SectionLabel title="Settings" inset={PANEL.inset} top={SITE_PANEL.sectionTop} bottom={SITE_PANEL.sectionGap - (SITE_PANEL.settingHeight - SITE_PANEL.settingBadge) / 2} />
-            <SettingRow
-              icon="shield.lefthalf.filled"
-              title="Block Ads & Trackers"
-              value={blockerValue}
-              on={!!blocker?.enabled && !blocker.allowed}
-              onPress={
-                !blocker
-                  ? undefined
-                  : blocker.enabled
-                    ? () => void toggleBlocker(blocker.allowed)
-                    : () => {
-                        close();
-                        openSettings("privacy");
-                      }
-              }
-            />
+            {PLATFORM_FEATURES.contentBlocker && (
+              <SettingRow
+                icon="shield.lefthalf.filled"
+                title="Block Ads & Trackers"
+                value={blockerValue}
+                on={!!blocker?.enabled && !blocker.allowed}
+                onPress={
+                  !blocker
+                    ? undefined
+                    : blocker.enabled
+                      ? () => void toggleBlocker(blocker.allowed)
+                      : () => {
+                          close();
+                          openSettings("privacy");
+                        }
+                }
+              />
+            )}
             {engineChoice ? <SettingRow icon={ENGINE_SYMBOLS[pageEngine]} title="Opens in" value={opensIn} on={!!engineRule} onPress={() => void pickEngine()} /> : null}
             {shownPermissions.map((p) => (
               <SettingRow

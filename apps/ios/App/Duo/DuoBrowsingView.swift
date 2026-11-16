@@ -161,7 +161,7 @@ struct DuoBrowsingView: View {
   private func setSidebar(_ shown: Bool) {
     if !shown, app.surface == .tabSwitcher, app.tabs.selectedTab == nil { app.surface = .search }
     guard shown != isSidebarShown else { return }
-    withAnimation(reduceMotion ? .easeOut(duration: 0.2) : DuoLayout.slide) { isSidebarShown = shown }
+    withAnimation(reduceMotion ? Motion.reducedMotion : DuoLayout.slide) { isSidebarShown = shown }
   }
 }
 

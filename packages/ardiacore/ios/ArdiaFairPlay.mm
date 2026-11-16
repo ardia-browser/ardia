@@ -22,7 +22,7 @@ constexpr NSUInteger kMaxLine = 4 * 1024 * 1024;
 BOOL gEnabled = NO;
 
 NSSet<NSString *> *FairPlayOrigins() {
-  static NSSet<NSString *> *origins = [NSSet setWithArray:@[ @"https://open.spotify.com" ]];
+  static NSSet<NSString *> *origins = [NSSet setWithArray:@[ @"https://open.spotify.com", @"https://www.netflix.com", @"https://www.disneyplus.com" ]];
   return origins;
 }
 

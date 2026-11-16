@@ -27,6 +27,7 @@ target = module('target', BUILD / 'target_config.py')
 series = module('series', BUILD.parent / 'series.py')
 helium = module('helium', BUILD / '03-helium.py')
 packaging = module('packaging', REPO / 'scripts/linux/package.py')
+formats = packaging.linux_formats
 
 
 
@@ -94,7 +95,7 @@ class TargetTests(unittest.TestCase):
         for cpu in ('x64', 'arm64'):
             config = target.configuration('linux', cpu, {})
             self.assertEqual(config['GN_OUT_CONFIGS'], f'Release_GN_linux_{cpu}')
-            self.assertEqual(config['AC_CHROMIUM_TARGET'], 'chrome')
+            self.assertEqual(config['AC_CHROMIUM_TARGET'], 'chrome chrome_sandbox')
         for value in ('../Release', 'a/b', '..', '/tmp/out', 'out;touch'):
             with self.assertRaises(ValueError):
                 target.configuration('linux', 'x64', {'GN_OUT_CONFIGS': value})
@@ -347,10 +348,13 @@ class PackagingTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'keyed uBlock Origin'):
                 packaging.package(output, ui, root / 'unkeyed.tar.xz', ubo)
 
-    def fake_package(self, root):
+    def fake_package(self, root, sandbox=False, **formats):
         output, ui = root / 'out', root / 'ui'
         output.mkdir()
         ui.mkdir()
+        if sandbox:
+            (output / 'chrome_sandbox').write_bytes(b'helper')
+            (output / 'chrome_sandbox').chmod(0o755)
         for name in packaging.REQUIRED:
             if name == 'locales':
                 (output / name).mkdir()
@@ -359,7 +363,7 @@ class PackagingTests(unittest.TestCase):
                 (output / name).write_bytes(b'runtime')
         (output / 'chrome').chmod(0o755)
         (ui / 'index.html').write_text('<html></html>')
-        archive = packaging.package(output, ui, root / 'ardia.tar.xz')
+        archive = packaging.package(output, ui, root / 'ardia.tar.xz', version=formats.get('version'), deb=formats.get('deb'), appimage=formats.get('appimage'))
         extracted = root / 'extracted'
         with tarfile.open(archive) as packed:
             self.assertIn('ardia/install.sh', packed.getnames())
@@ -388,7 +392,8 @@ class PackagingTests(unittest.TestCase):
                 self.assertTrue(os.access(installed / 'lib/ardia/chrome', os.X_OK))
                 self.assertTrue((installed / 'lib/ardia/ardia-ui/index.html').is_file())
                 launcher = (installed / 'bin/ardia').read_text()
-                self.assertIn(f'exec "{prefix}/lib/ardia/chrome" "$@"', launcher)
+                self.assertIn(f'exec "{prefix}/lib/ardia/ardia-launch" "$@"', launcher)
+                self.assertTrue(os.access(installed / 'lib/ardia/ardia-launch', os.X_OK))
                 self.assertNotIn(str(destdir), launcher)
                 self.assertTrue(os.access(installed / 'bin/ardia', os.X_OK))
                 desktop = (installed / 'share/applications/ardia.desktop').read_text()
@@ -463,6 +468,118 @@ class PackagingTests(unittest.TestCase):
             self.assertNotEqual(refused.returncode, 0)
             self.assertIn('root', refused.stderr)
             self.assertFalse(target.exists())
+
+    def test_the_package_ships_the_sandbox_helper_as_chrome_sandbox_and_starts_through_the_launcher(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            archive, package_root = self.fake_package(pathlib.Path(scratch), sandbox=True)
+            self.assertTrue((package_root / 'lib/ardia/chrome-sandbox').is_file())
+            self.assertFalse((package_root / 'lib/ardia/chrome_sandbox').exists())
+            self.assertEqual((package_root / 'lib/ardia/ardia-launch').read_bytes(), (REPO / 'scripts/linux/ardia-launch').read_bytes())
+            self.assertIn('exec "$ardia_bin_dir/../lib/ardia/ardia-launch" "$@"', (package_root / 'bin/ardia').read_text())
+            with tarfile.open(archive) as packed:
+                self.assertEqual(packed.getmember('ardia/lib/ardia/chrome-sandbox').mode & 0o7777, 0o755)
+
+    def launcher_run(self, root, env, extra=()):
+        runtime = root / 'lib/ardia'
+        runtime.mkdir(parents=True)
+        shutil.copyfile(REPO / 'scripts/linux/ardia-launch', runtime / 'ardia-launch')
+        (runtime / 'ardia-launch').chmod(0o755)
+        (runtime / 'chrome').write_text('#!/usr/bin/env bash\nprintf "%s\\n" "$@"\n')
+        (runtime / 'chrome').chmod(0o755)
+        proc = root / 'proc'
+        for name, value in env.get('proc', {}).items():
+            (proc / name).parent.mkdir(parents=True, exist_ok=True)
+            (proc / name).write_text(value)
+        script = (runtime / 'ardia-launch').read_text().replace('/proc/sys/', f'{proc}/sys/').replace('/etc/apparmor.d/', f'{root}/apparmor.d/')
+        (runtime / 'ardia-launch').write_text(script)
+        if env.get('profile'):
+            (root / 'apparmor.d').mkdir()
+            (root / 'apparmor.d/ardia').write_text(env['profile'].replace('CHROME', str((runtime / 'chrome').resolve())))
+        variables = {'PATH': os.environ['PATH'], **env.get('vars', {})}
+        return subprocess.run([str(runtime / 'ardia-launch'), '--marker', *extra], capture_output=True, text=True, timeout=30, env=variables)
+
+    def test_the_launcher_keeps_the_sandbox_and_runs_without_it_only_when_asked(self):
+        restricted = {'sys/kernel/apparmor_restrict_unprivileged_userns': '1'}
+        cases = [
+            ('user namespaces', {}, (), 0, ['--marker']),
+            ('a profile grants userns', {'proc': restricted, 'profile': 'profile ardia CHROME flags=(unconfined) {\n  userns,\n}\n'}, (), 0, ['--marker']),
+            ('AppImage, restricted', {'proc': restricted, 'vars': {'APPIMAGE': '/tmp/Ardia.AppImage'}}, (), 1, None),
+            ('AppImage, clone off', {'proc': {'sys/kernel/unprivileged_userns_clone': '0'}, 'vars': {'APPIMAGE': '/tmp/Ardia.AppImage'}}, (), 1, None),
+            ('extracted, restricted', {'proc': restricted}, (), 1, None),
+            ('namespaces off', {'proc': {'sys/user/max_user_namespaces': '0'}}, (), 1, None),
+            ('asked', {'proc': restricted}, ('--no-sandbox',), 0, None),
+            ('AppImage, asked', {'proc': restricted, 'vars': {'APPIMAGE': '/tmp/Ardia.AppImage'}}, ('--no-sandbox',), 0, None),
+        ]
+        for label, env, extra, code, expected in cases:
+            with self.subTest(label), tempfile.TemporaryDirectory() as scratch:
+                result = self.launcher_run(pathlib.Path(scratch), env, extra)
+                self.assertEqual(result.returncode, code, result.stdout + result.stderr)
+                lines = result.stdout.splitlines()
+                if expected is not None:
+                    self.assertEqual(lines, expected)
+                if code == 1:
+                    self.assertEqual(lines, [])
+                    self.assertIn("can't start Chromium's sandbox", result.stderr)
+                if label.startswith('AppImage') and code == 1:
+                    self.assertIn("Ardia won't run without the sandbox", result.stderr)
+                    self.assertIn("Install Ardia's .deb, which sets up the sandbox helper and its AppArmor profile", result.stderr)
+                if label == 'AppImage, restricted':
+                    self.assertIn('allow user namespaces with sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0.', result.stderr)
+                if label == 'AppImage, clone off':
+                    self.assertIn('allow user namespaces with sudo sysctl -w kernel.unprivileged_userns_clone=1.', result.stderr)
+                if label in ('asked', 'AppImage, asked'):
+                    self.assertEqual(lines, ['--ardia-sandbox-decision=Ardia was started with --no-sandbox', '--marker', '--no-sandbox'])
+
+    @unittest.skipUnless(shutil.which('dpkg-deb'), 'dpkg-deb is required')
+    def test_the_deb_installs_under_usr_with_a_setuid_helper_the_policy_and_the_apparmor_profile(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            root = pathlib.Path(scratch)
+            deb = root / 'ardia.deb'
+            self.fake_package(root, sandbox=True, version='0.2.47-nightly.3', deb=deb)
+            control = subprocess.run(['dpkg-deb', '-f', str(deb), 'Package', 'Version', 'Architecture'], capture_output=True, text=True, check=True).stdout
+            self.assertEqual(control.split(), ['Package:', 'ardia', 'Version:', '0.2.47~nightly.3', 'Architecture:', 'amd64'])
+            listing = subprocess.run(['dpkg-deb', '-c', str(deb)], capture_output=True, text=True, check=True).stdout
+            entries = {line.split()[-1] if '->' not in line else line.split()[-3]: line.split()[:2] for line in listing.splitlines()}
+            self.assertEqual(entries['./usr/lib/ardia/chrome-sandbox'], ['-rwsr-xr-x', 'root/root'])
+            self.assertEqual(entries['./usr/lib/ardia/chrome'], ['-rwxr-xr-x', 'root/root'])
+            self.assertIn('./usr/share/polkit-1/actions/dev.ardia.linux.policy', entries)
+            self.assertIn('./usr/share/ardia/apparmor/ardia', entries)
+            self.assertIn('./usr/bin/ardia -> ../lib/ardia/ardia-launch', listing)
+            unpacked = root / 'deb'
+            subprocess.run(['dpkg-deb', '-x', str(deb), str(unpacked)], check=True)
+            self.assertIn('Exec=/usr/bin/ardia %U', (unpacked / 'usr/share/applications/ardia.desktop').read_text())
+            self.assertFalse((unpacked / 'usr/share/apparmor.d').exists())
+            scripts = root / 'control'
+            subprocess.run(['dpkg-deb', '-e', str(deb), str(scripts)], check=True)
+            postinst = (scripts / 'postinst').read_text()
+            self.assertIn('chmod 4755 "$helper"', postinst)
+            self.assertIn('apparmor_parser -r /etc/apparmor.d/ardia', postinst)
+            self.assertIn('rm -f /etc/apparmor.d/ardia', (scripts / 'postrm').read_text())
+
+    def test_the_appimage_carries_no_setuid_helper_runs_the_launcher_and_has_the_type_2_header(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            root = pathlib.Path(scratch)
+            runtime = root / 'runtime'
+            runtime.write_bytes(b'\x7fELF\x02\x01\x01\x00AI\x02' + bytes(500))
+            built = {}
+            def fake_mksquashfs(command, check, stdout):
+                built['app'] = pathlib.Path(command[1])
+                built['names'] = sorted(str(path.relative_to(built['app'])) for path in built['app'].rglob('*'))
+                built['apprun'] = os.readlink(built['app'] / 'AppRun')
+                built['desktop'] = (built['app'] / 'ardia.desktop').read_text()
+                pathlib.Path(command[2]).write_bytes(bytes(int(command[4])) + b'squashfs')
+            with mock.patch.object(formats.subprocess, 'run', fake_mksquashfs):
+                _, package_root = self.fake_package(root, sandbox=True)
+                formats.build_appimage(package_root, root / 'Ardia.AppImage', {'runtime': runtime, 'mksquashfs': root / 'mksquashfs'})
+            self.assertEqual(built['apprun'], 'lib/ardia/ardia-launch')
+            self.assertIn('Exec=AppRun %U', built['desktop'])
+            self.assertNotIn('lib/ardia/chrome-sandbox', built['names'])
+            self.assertNotIn('install.sh', built['names'])
+            self.assertIn('lib/ardia/chrome', built['names'])
+            image = (root / 'Ardia.AppImage').read_bytes()
+            self.assertEqual(image[8:11], b'AI\x02')
+            self.assertTrue(image.endswith(b'squashfs'))
+            self.assertTrue(os.access(root / 'Ardia.AppImage', os.X_OK))
 
     def test_arch_package_installs_the_policy_through_the_installer(self):
         pkgbuild = (REPO / 'scripts/linux/arch/PKGBUILD').read_text()

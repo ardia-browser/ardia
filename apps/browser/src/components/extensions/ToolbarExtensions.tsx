@@ -13,16 +13,19 @@ import { BADGE_FALLBACK_FILL, TOOLBAR_DRAG_START } from "./tokens";
 import { SLIDE } from "../tabstrip/tokens";
 import { isLight } from "../../lib/color";
 import { dropToolbarAnchor, setToolbarAnchor } from "../../state/extensions/toolbarAnchors";
+import { onInterfaceScaleSettled } from "../../state/settings/interfaceScale";
 import {
   activateExtension,
-  EXTENSION_LIST_ITEMS,
-  type ExtensionListChoice,
+  extensionOverflowItems,
   runExtensionListChoice,
   showExtensionMenu,
   useExtensions,
   useWindowExtensions,
   currentWindowExtensions,
   moveToolbarExtension,
+  setToolbarDrag,
+  endToolbarDrag,
+  useToolbarDrag,
   useToolbarReorderable,
   type Anchor,
 } from "../../state/extensions/actions";
@@ -43,7 +46,8 @@ function useToolbarExtensions(windowId: string, limit: number) {
     const all = toolbarOrder(shown);
     const room = Math.max(0, limit - (casting ? 1 : 0));
     const overflow = all.length > room;
-    return { pinned: overflow ? all.slice(0, Math.max(0, room - 1)) : all, overflow, casting, routes };
+    const pinned = overflow ? all.slice(0, Math.max(0, room - 1)) : all;
+    return { pinned, hidden: pinned.length ? all.slice(pinned.length) : [], overflow, casting, routes };
   }, [shown, routes, casting, limit]);
 }
 
@@ -79,24 +83,26 @@ function TabToolbarExtensions({
   limit = Infinity,
   onActivate,
 }: ToolbarExtensionsProps) {
-  const { pinned, overflow, routes } = useToolbarExtensions(windowId, limit);
+  const { pinned, hidden, overflow, routes } = useToolbarExtensions(windowId, limit);
   const ready = usePages((p) => !!p.ready[tabId]);
   const pitch = useToolbarRowContext().extensionButton + GAP;
-  const movable = useToolbarReorderable(windowId) && pinned.length > 1;
-  const [drag, setDrag] = useState<ToolbarDrag | null>(null);
+  const reorderable = useToolbarReorderable(windowId);
+  const movable = reorderable && pinned.length > 1;
+  const drag = useToolbarDrag(windowId);
+  useEffect(() => () => endToolbarDrag(windowId), [windowId]);
   if (!pinned.length && !overflow && !routes.length) return <EmptyAnchor windowId={windowId} tabId={tabId} top={top} right={right} />;
   const reorder: Reorder | undefined = movable
     ? {
         count: pinned.length,
         pitch,
         drag,
-        move: (id, from, dx) => setDrag({ id, from, dx }),
+        move: (id, from, dx) => setToolbarDrag(windowId, { id, from, dx }),
         drop: (id, from, dx) => {
           const to = dropIndex(from, dx, pitch, pinned.length);
-          if (to !== from) void moveToolbarExtension(windowId, id, to);
-          setDrag(null);
+          if (to !== from) void moveToolbarExtension(windowId, id, to, "drag");
+          endToolbarDrag(windowId);
         },
-        cancel: () => setDrag(null),
+        cancel: () => endToolbarDrag(windowId),
       }
     : undefined;
   return (
@@ -109,7 +115,7 @@ function TabToolbarExtensions({
           ))}
         </View>
       ) : null}
-      {overflow && <OverflowButton windowId={windowId} tabId={tabId} palette={palette} onActivate={onActivate} />}
+      {overflow && <OverflowButton windowId={windowId} tabId={tabId} hidden={reorderable ? hidden : []} palette={palette} onActivate={onActivate} />}
     </View>
   );
 }
@@ -143,11 +149,12 @@ function useAnchor(windowId: string, tabId: string, slot: string) {
         const anchor = { x, y, width, height };
         if (ref.current) {
           mine.current = anchor;
-          setToolbarAnchor(owner.windowId, owner.tabId, owner.slot, anchor);
+          setToolbarAnchor(owner.windowId, owner.tabId, owner.slot, anchor, measure);
         }
         resolve(anchor);
       });
     });
+  useEffect(() => onInterfaceScaleSettled(() => void measure()), [owner]);
   return { ref, measure };
 }
 
@@ -204,6 +211,7 @@ function ExtensionButton({ ext, index, pitch, reorder, windowId, tabId, ready, p
   const title = state?.title || ext.actionTitle || ext.name;
   const icon = state?.icon || ext.actionIcon || ext.icon;
   const fill = state?.badgeColor && state.badgeColor !== ink.black ? state.badgeColor : BADGE_FALLBACK_FILL;
+  const badgeRoom = useToolbarRowContext().extensionButton - BADGE_PLACE.right;
   const pressMotion = usePressScaleMotion(true, buttonMotion.iconPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
   const responder = useReorderResponder(ext.id, index, reorder);
@@ -233,7 +241,7 @@ function ExtensionButton({ ext, index, pitch, reorder, windowId, tabId, ready, p
             onActivate?.();
             return activateExtension(windowId, ext, await measure(), fetched?.[ext.id], tabId);
           }}
-          badge={badge ? <Badge text={badge.slice(0, 4)} size="s" fill={fill} color={state?.badgeTextColor ?? contrastText(fill)} style={BADGE_PLACE} /> : null}
+          badge={badge ? <Badge text={badge.slice(0, 4)} size="s" fit={badgeRoom} fill={fill} color={state?.badgeTextColor ?? contrastText(fill)} style={BADGE_PLACE} /> : null}
         >
           <Animated.View pointerEvents="none" style={[{ width: GLYPH_BOX, height: GLYPH_BOX, alignItems: "center", justifyContent: "center" }, scaleStyle]}>
             {icon ? (
@@ -271,21 +279,18 @@ function CastButton({ windowId, tabId, routes, palette }: { windowId: string; ta
   );
 }
 
-function OverflowButton({ windowId, tabId, palette, onActivate }: { windowId: string; tabId: string; palette: ToolbarPalette; onActivate?: () => void }) {
+function OverflowButton({ windowId, tabId, hidden, palette, onActivate }: { windowId: string; tabId: string; hidden: InstalledExtension[]; palette: ToolbarPalette; onActivate?: () => void }) {
   const { ref, measure } = useAnchor(windowId, tabId, "*");
   const onPress = async () => {
     const anchor = await measure();
     const enabled = currentWindowExtensions(windowId);
-    const choice = await chooseFromMenu<InstalledExtension, ExtensionListChoice>([
-      ...enabled.map((x) => ({ value: x, title: x.name, symbol: x.pinned ? "pin.fill" : undefined })),
-      ...(enabled.length ? [{ separator: true as const }] : []),
-      ...EXTENSION_LIST_ITEMS,
-    ]);
-    if (choice && typeof choice === "object") {
+    const choice = await chooseFromMenu(extensionOverflowItems(enabled, hidden));
+    if (choice && typeof choice === "object" && "front" in choice) void moveToolbarExtension(windowId, choice.front.id, 0, "menu");
+    else if (choice && typeof choice === "object") {
       onActivate?.();
       void activateExtension(windowId, choice, anchor, undefined, tabId);
     }
-    else runExtensionListChoice(choice, windowId);
+    else if (choice !== "front") runExtensionListChoice(choice, windowId);
   };
   return (
     <View ref={ref} onLayout={() => void measure()}>

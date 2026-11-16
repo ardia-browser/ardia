@@ -95,7 +95,11 @@ The acceptance suite is in [linux-acceptance.md](linux-acceptance.md) and CI in 
   the text tone and halo the same way. The scene draws at the display's rate, drops to 30 fps when idle, stops when
   the page is hidden or off screen, and the intro's unmount disposes it and loses its WebGL context. A software
   renderer (SwiftShader, llvmpipe) keeps the poster instead. Unlike the Mac's WebKit view, the scene gets the
-  pointer, so the grass brushes and the sun can be dragged. The intro music stays silent on Linux.
+  pointer, so the grass brushes and the sun can be dragged.
+- **Intro music.** The shell plays the Windows app's `IntroMusic.wav` (rendered from the Mac's synthesis) with an
+  audio element from its own assets (`introMusic.ts`; the shell CSP has `media-src 'self'`), starts it muted when the
+  intro is, fades it on mute and stop, and keeps quiet in a hidden instance unless `allowAudio` is set. An engine
+  without `media-src` refuses it, and `intros_music_failed` counts that.
 
 ### Tabs and viewports
 
@@ -500,6 +504,23 @@ python3 scripts/linux/package.py \
   --destination "$CB/artifacts/ardia-linux-$AC_TARGET_CPU.tar.xz"
 ```
 
+- **Formats.** `--deb <path>` and `--appimage <path>` build a `.deb` and an AppImage from the same tree. `release.sh`
+  builds all three and smoke-tests each.
+- **Launcher.** Every format starts through `lib/ardia/ardia-launch`, which decides the sandbox before it runs
+  `chrome`: user namespaces when the kernel allows them and AppArmor doesn't restrict them (or a profile grants
+  `userns` to this `chrome`), else the setuid-root `chrome-sandbox` beside it on a mount without `nosuid`. Otherwise it
+  says why on stderr and exits 1, whatever the format: Ardia never runs without the sandbox on its own. A tarball run
+  in place points at `sudo install.sh` or the `.deb`; an AppImage points at the `.deb` (the sandbox helper and the
+  AppArmor profile) or at the `sysctl` that allows user namespaces for the reason it found. Only a user who passes
+  `--no-sandbox` runs without it: the launcher adds `--ardia-sandbox-decision=Ardia was started with --no-sandbox`, and
+  the shell says so once per launch and counts `launches_without_sandbox`.
+- **`.deb`.** Installs under `/usr` (`/usr/bin/ardia` links the launcher), with `chrome-sandbox` setuid root, the
+  polkit policy and the AppArmor profile, which its `postinst` installs and loads on AppArmor 4 and its `postrm`
+  removes. Version `0.2.47-nightly.2` becomes `0.2.47~nightly.2` so a nightly sorts before its release.
+- **AppImage.** AppImage's static type 2 runtime and `mksquashfs` (zstd) from a toolset pinned by SHA-256, cached in
+  `~/.cache/ardia-appimage`. It carries no setuid helper and no polkit policy, so reauth falls back to the login
+  password, and it needs user namespaces: where they're restricted (Ubuntu 24.04 and later) it refuses to start.
+
 That makes a dev package. A release adds `--version <version>` and `--cli <dist>/ardia-cli-<version>-linux-x64.tar.gz`.
 `scripts/linux/release.sh <version>` runs the whole release build, the smoke gate included, and prints the upload
 command ([linux-ci.md](linux-ci.md) › Linux releases).
@@ -596,6 +617,31 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
   userscript installed with `ardia scripts install` running on the fixture page ([linux-ci.md](linux-ci.md) › Smoke gate).
 - **Acceptance suite.** Nine headless scenarios for core features; see [linux-acceptance.md](linux-acceptance.md).
 - **Shared changes.** A change to shared code also needs the Mac checks.
+
+### Updates and kill switches
+
+- **Check.** With an engine that serves `ArdiaUpdates.releases`, Settings › General shows Updates. The host reads
+  GitHub's release list for ardia-browser/ardia (`ac_linux_updates.cc`: a cookieless GET of a fixed URL, at most
+  4 MiB, no redirects, 20 s), and the shell (`hostUpdates.ts`, `updateReleases.ts`) keeps published releases that
+  carry a Linux package and a github.com release page, newest per channel (a nightly build follows nightly).
+- **What it does.** Check Now and the app menu ask before opening the release page; an automatic check (30 s after
+  launch, then every 6 h, in one window, never in a hidden instance or a build without `lib/ardia/VERSION`) offers a
+  newer release once as a toast. Ardia doesn't install updates on Linux, so "Automatically update Ardia" is hidden.
+- **Kill switches.** `ArdiaShell.fetchKillSwitches` fetches `ardia.dev/switches.json` (at most 16 KiB) once per
+  browser process for every window, and the shared refresh runs under the Mac's rule (automatic checks on).
+- **Telemetry.** `update_checks_asked`, `update_checks_automatic`, `update_check_failures`, `update_checks_found`,
+  `update_release_page_opens`, `kill_switch_refreshes`, `kill_switch_refresh_failures`.
+
+### System signals and location
+
+- **Idle, sleep and wake.** `ArdiaSystemSignals.watchIdle` and `onSystemSignal` are served
+  (`ac_linux_system_signals.cc`): sleep and wake from logind's `PrepareForSleep`, idle from Chromium's own idle time
+  (`ui::CalculateIdleTime`), polled only while a window watches a threshold. Automation's `user.idle`, `user.active`,
+  sleep and wake hooks fire.
+- **Location.** Sites get positions from GeoClue 2 (`ac_linux_geoclue.cc`, hooked into
+  `OverrideSystemLocationProvider` by `chromium-linux-geolocation.patch`): desktop id `ardia`, exact accuracy for
+  high-accuracy requests and city level otherwise. Without GeoClue or a fix within 10 s a page gets "position
+  unavailable". `ArdiaLocation.locationPermission` answers `servicesOff` when the desktop refuses Ardia.
 
 ## Platform notes
 
@@ -1074,6 +1120,16 @@ Linux reads calendars from Evolution Data Server, which GNOME Online Accounts, G
   - A newer request cancels the older one.
   - `ProbeReauth()` reports why authentication is unavailable without prompting: `notPermitted`, `policyMissing`,
     `noPolkit` or `background`.
+- **Login password when polkit can't ask.** Where `dev.ardia.linux.reauthenticate` isn't installed (an AppImage, an
+  extracted tarball) or polkit isn't running, reauth asks for the login password instead (from #1998): a native
+  window-modal dialog over the profile's last active window (`ac_linux_password_prompt.cc`) whose password goes to
+  the system's `unix_chkpwd` on stdin, never on a command line and never through a renderer
+  (`ac_linux_password_check.cc`).
+  - The helper must be a root-owned executable no one else can write, in root-owned folders no one else can write,
+    at `/usr/sbin`, `/sbin`, `/usr/bin` or NixOS's `/run/wrappers/bin`; without one, reauth stays unavailable.
+  - The helper runs with an empty environment and is killed after 15 s; the typed password is wiped once checked.
+  - Wrong passwords back off 2 s, 5 s, 30 s, then 60 s. The grant window and supersession are polkit's.
+  - `ProbeReauth` reports such a system as available (`loginPassword`), and `reauth.requested` says which method ran.
 - **Secret routes.**
   - Secrets travel only on typed calls (`ArdiaPasswords.reveal|save|update|export|unlock`,
     `ArdiaAutofill.cardNumber|saveCard`), as hex buffers sized exactly and wiped after use.
@@ -1728,9 +1784,9 @@ These were open at the time of the PR.
   - A played video removed from the DOM keeps its media entry until the element is collected.
 - **Not available on Linux:**
   - casting (Cast shows a toast);
-  - translation;
+  - translation (Bergamot isn't ported yet);
   - video upscaling;
-  - the updater;
+  - installing updates: Ardia checks for them and opens the release page (Updates and kill switches);
   - crash reports;
   - sending problem reports from the sheet with an engine older than `report.files` and `report.send` (see Problem
     reports), where `ArdiaTelemetryLocal.exportForReport` answers null;
@@ -1739,14 +1795,14 @@ These were open at the time of the PR.
   - Handoff;
   - AppleScript;
   - alternate app icons;
-  - automation's native signals (`ArdiaSystemSignals`): `user.idle`/`user.active`, sleep and wake never fire, incoming
-    links aren't held at launch for a link rule, and a `download.deciding` folder outside the default doesn't move the
-    file, which stays where it landed (`appModuleFallbacks.ts`).
+  - holding incoming links at launch for a link rule, and moving a finished download out of the default folder
+    (`ArdiaSystemSignals.holdsIncomingLinks`, `moveCompletedDownload`), which still answer from
+    `appModuleFallbacks.ts`.
 - **Packaging.**
-  - There is no published Linux release or AUR package yet; the `PKGBUILD` builds from a local tarball.
-  - The package ships no SUID sandbox helper. On Ubuntu 24.04, which restricts unprivileged user namespaces, only an
-    installed Ardia starts: the AppArmor profile names the installed `chrome`, so `bin/ardia` run from an extracted
-    package and the smoke gate still need the restriction lifted.
+  - There is no AUR package yet; the `PKGBUILD` builds from a local tarball.
+  - An AppImage can't carry a setuid helper, so where user namespaces are restricted (Ubuntu 24.04 and later
+    without Ardia's AppArmor profile) it refuses to start, like the tarball, and says to install the `.deb` or allow
+    user namespaces. The `.deb` and `install.sh` set the sandbox up.
 - **Sync.** One read has no total size cap (each file is capped at 64 MiB). Linux and macOS sharing a real folder has
   not been run end to end with a Mac.
 - **Shared, not Linux-specific.** The Google Drive OAuth flow uses `Math.random` state, plain PKCE and a loopback

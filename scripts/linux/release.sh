@@ -69,7 +69,7 @@ if ! command -v pnpm >/dev/null; then
   [ -x "$fallback/pnpm" ] || die "pnpm is neither on PATH nor in $fallback"
   PATH="$fallback:$PATH"
 fi
-for tool in node python3 sha256sum tar xz git; do
+for tool in node python3 sha256sum tar xz git dpkg-deb; do
   command -v "$tool" >/dev/null || die "$tool is required"
 done
 node scripts/lib/release-note.mjs "docs/release-notes/$version.md" headline >/dev/null \
@@ -77,8 +77,9 @@ node scripts/lib/release-note.mjs "docs/release-notes/$version.md" headline >/de
 
 release_output_entry() {
   case $1 in
-    provenance.txt|ui-build.log|cli-build.log|ubo.log|smoke) return 0 ;;
+    provenance.txt|ui-build.log|cli-build.log|ubo.log|smoke|smoke-deb|smoke-appimage) return 0 ;;
     Ardia-*-linux-x64.tar.xz|Ardia-*-linux-x64.tar.xz.sha256) return 0 ;;
+    Ardia-*-linux-x64.deb|Ardia-*-linux-x64.deb.sha256|Ardia-*-linux-x64.AppImage|Ardia-*-linux-x64.AppImage.sha256) return 0 ;;
     ardia-cli-*-linux-x64.tar.gz|ardia-cli-*-linux-x64.tar.gz.sha256|ardia-cli-*-linux-x64.tar.gz.part) return 0 ;;
   esac
   return 1
@@ -98,6 +99,8 @@ fi
 mkdir -p "$out"
 out=$(cd "$out" && pwd -P)
 package_name="Ardia-$version-linux-x64.tar.xz"
+deb_name="Ardia-$version-linux-x64.deb"
+appimage_name="Ardia-$version-linux-x64.AppImage"
 cli_name="ardia-cli-$version-linux-x64.tar.gz"
 
 echo "==> Engine ($engine_mode)"
@@ -147,8 +150,11 @@ blocker=$(scripts/linux/fetch-ubo.sh 2>"$out/ubo.log") \
 
 echo "==> Package"
 python3 scripts/linux/package.py --out "$engine" --ui apps/linux/dist --content-blocker "$blocker" \
-  --version "$version" --cli "$out/$cli_name" --destination "$out/$package_name" >/dev/null
-(cd "$out" && sha256sum "$package_name" > "$package_name.sha256")
+  --version "$version" --cli "$out/$cli_name" --destination "$out/$package_name" \
+  --deb "$out/$deb_name" --appimage "$out/$appimage_name" >/dev/null
+for built in "$package_name" "$deb_name" "$appimage_name"; do
+  (cd "$out" && sha256sum "$built" > "$built.sha256")
+done
 
 {
   echo "version $version, $channel, linux-x64"
@@ -157,19 +163,27 @@ python3 scripts/linux/package.py --out "$engine" --ui apps/linux/dist --content-
   echo "engine source commit ${engine_commit:-unknown}"
   echo "chromium ${chromium_version:-unknown}"
   echo "package $(cut -d' ' -f1 "$out/$package_name.sha256")  $package_name"
+  echo "deb $(cut -d' ' -f1 "$out/$deb_name.sha256")  $deb_name"
+  echo "appimage $(cut -d' ' -f1 "$out/$appimage_name.sha256")  $appimage_name"
   echo "cli $(cut -d' ' -f1 "$out/$cli_name.sha256")  $cli_name"
 } > "$out/provenance.txt"
 
 echo "==> Smoke"
-smoke_args=(--package "$out/$package_name" --results "$out/smoke" --timeout-ms 600000)
-[ "$exact" = 1 ] || smoke_args+=(--allow-old-engine)
-node scripts/linux/smoke.mjs "${smoke_args[@]}" || die "the smoke gate failed ($out/smoke/results.json)"
+smoke_extra=()
+[ "$exact" = 1 ] || smoke_extra+=(--allow-old-engine)
+node scripts/linux/smoke.mjs --package "$out/$package_name" --results "$out/smoke" --timeout-ms 600000 "${smoke_extra[@]}" \
+  || die "the smoke gate failed ($out/smoke/results.json)"
+node scripts/linux/smoke.mjs --package "$out/$deb_name" --results "$out/smoke-deb" --timeout-ms 600000 "${smoke_extra[@]}" \
+  || die "the smoke gate failed for the .deb ($out/smoke-deb/results.json)"
+node scripts/linux/smoke.mjs --package "$out/$appimage_name" --results "$out/smoke-appimage" --timeout-ms 600000 "${smoke_extra[@]}" \
+  || die "the smoke gate failed for the AppImage ($out/smoke-appimage/results.json)"
 
 echo
 [ "$exact" = 1 ] || echo "NOT a release: built against engine $engine_label, not this commit's ${head_key:0:12}."
 [ -z "$dirty" ] || echo "NOT a release: built with uncommitted changes."
-du -sh "$out/$package_name" "$out/$cli_name"
+du -sh "$out/$package_name" "$out/$deb_name" "$out/$appimage_name" "$out/$cli_name"
 echo
 echo "Publish it on the v$version release (made by the macOS release) with:"
-printf '  gh release upload v%s -R %s %q %q %q %q\n' "$version" "$REPO" \
-  "$out/$package_name" "$out/$package_name.sha256" "$out/$cli_name" "$out/$cli_name.sha256"
+printf '  gh release upload v%s -R %s %q %q %q %q %q %q %q %q\n' "$version" "$REPO" \
+  "$out/$package_name" "$out/$package_name.sha256" "$out/$deb_name" "$out/$deb_name.sha256" \
+  "$out/$appimage_name" "$out/$appimage_name.sha256" "$out/$cli_name" "$out/$cli_name.sha256"

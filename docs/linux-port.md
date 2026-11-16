@@ -1755,7 +1755,8 @@ A background instance rejects without fetching.
   - Escape still closes it.
   - Acceptance F08 presses the header, a finished row (open file), Show in Folder, View all downloads, Pause, Resume,
     Cancel, Keep, Discard, Clear and a spot outside, with real CDP input in the packaged UI. A stand-in `xdg-open`
-    records what Open and Show in Folder ask for.
+    records what Open and Show in Folder ask for. Progress and paused-byte samples come from the engine's
+    `downloads.list`; live progress is stored separately from `s.downloads`.
   - Clear removes the rows, but the panel opens again, empty. The engine posts `downloads.changed` for each removed
     item before `downloads.removed`, and `upsertDownload` takes it for a new download.
   - No telemetry. No existing count tells whether a press inside reached its control.

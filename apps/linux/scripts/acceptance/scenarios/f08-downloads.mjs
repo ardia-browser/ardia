@@ -81,9 +81,9 @@ async function control(shell, verb, id) {
 
 async function receivedStalls(shell, id) {
   await pause(700);
-  const first = downloadById(await downloadsOf(shell), id)?.received;
+  const first = (await waitEngineDownload(shell, (d) => d.id === id, "paused download in the engine")).received;
   await pause(1500);
-  const second = downloadById(await downloadsOf(shell), id)?.received;
+  const second = (await waitEngineDownload(shell, (d) => d.id === id, "paused download in the engine")).received;
   return { first, second, stalled: first === second };
 }
 
@@ -228,7 +228,7 @@ export default {
     let slowDownload;
     await t.check("a slow download reports progress", async () => {
       await startDownload(state.shell, tabId, t.fixtures.url.slow(slow, 6 << 20), slow);
-      slowDownload = await waitDownload(state.shell, (d) => d.filename?.endsWith(slow) && d.state === "downloading" && d.received > 0, "slow download progress");
+      slowDownload = await waitEngineDownload(state.shell, (d) => d.filename?.endsWith(slow) && d.state === "downloading" && d.received > 0, "slow download progress");
       return { received: slowDownload.received, total: slowDownload.total };
     }, { critical: true });
     await t.check("pause stops progress", async () => {
@@ -253,7 +253,7 @@ export default {
     let cancelledDownload;
     await t.check("cancel stops a download and removes its partial file", async () => {
       const d = await startDownload(state.shell, tabId, t.fixtures.url.slow(cancelled, 6 << 20), cancelled);
-      await waitDownload(state.shell, (x) => x.id === d.id && x.received > 0, "cancel candidate progress");
+      await waitEngineDownload(state.shell, (x) => x.id === d.id && x.received > 0, "cancel candidate progress");
       await control(state.shell, "cancel", d.id);
       cancelledDownload = await waitDownload(state.shell, (x) => x.id === d.id && x.state === "cancelled", "cancelled state");
       const leftovers = () => readdir(folder).then((names) => names.filter((name) => name.includes(cancelled)));

@@ -31,7 +31,7 @@ struct NextcloudConnectPage: View {
 
   var body: some View {
     Form {
-      SettingsHero("Use Nextcloud", subtitle: Text("Sync with your Mac through your own Nextcloud server."), systemImage: "cloud", tint: SettingsTint.sync)
+      SettingsHero("Use Nextcloud", subtitle: Text("Sync with your Mac through your own Nextcloud server."), icon: OtherSyncServiceTile(service: .nextcloud, baseSide: 64))
 
       Section {
         TextField("cloud.example.com", text: $address)

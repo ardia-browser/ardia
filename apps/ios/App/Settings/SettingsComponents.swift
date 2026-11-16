@@ -24,22 +24,24 @@ struct SettingsRowLabel: View {
 struct SettingsHero<Accessory: View>: View {
   var title: LocalizedStringKey
   var subtitle: Text
-  var systemImage: String
-  var tint: Color
+  var icon: AnyView
   var accessory: Accessory
 
   init(_ title: LocalizedStringKey, subtitle: Text, systemImage: String, tint: Color, @ViewBuilder accessory: () -> Accessory) {
+    self.init(title, subtitle: subtitle, icon: SettingsIconTile(systemImage: systemImage, color: tint, baseSide: 64), accessory: accessory)
+  }
+
+  init(_ title: LocalizedStringKey, subtitle: Text, icon: some View, @ViewBuilder accessory: () -> Accessory) {
     self.title = title
     self.subtitle = subtitle
-    self.systemImage = systemImage
-    self.tint = tint
+    self.icon = AnyView(icon)
     self.accessory = accessory()
   }
 
   var body: some View {
     Section {
       VStack(spacing: Spacing.small) {
-        SettingsIconTile(systemImage: systemImage, color: tint, baseSide: 64)
+        icon
         VStack(spacing: Spacing.hairline) {
           Text(title)
             .font(.title2.bold())
@@ -64,6 +66,10 @@ struct SettingsHero<Accessory: View>: View {
 extension SettingsHero where Accessory == EmptyView {
   init(_ title: LocalizedStringKey, subtitle: Text, systemImage: String, tint: Color) {
     self.init(title, subtitle: subtitle, systemImage: systemImage, tint: tint) { EmptyView() }
+  }
+
+  init(_ title: LocalizedStringKey, subtitle: Text, icon: some View) {
+    self.init(title, subtitle: subtitle, icon: icon) { EmptyView() }
   }
 }
 

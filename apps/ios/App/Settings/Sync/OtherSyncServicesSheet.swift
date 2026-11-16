@@ -90,12 +90,13 @@ struct OtherSyncServicesSheet: View {
   }
 }
 
-private struct OtherSyncServiceTile: View {
+struct OtherSyncServiceTile: View {
   var service: OtherSyncService
+  var baseSide: CGFloat = SettingsTile.side
 
   @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 1
 
-  private var side: CGFloat { SettingsTile.side * min(scale, 1.6) }
+  private var side: CGFloat { baseSide * min(scale, 1.6) }
 
   var body: some View {
     Image(service.logo)

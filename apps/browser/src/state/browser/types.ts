@@ -18,6 +18,7 @@ export type Profile = {
   theme?: ProfileTheme | null;
   pinnedCollapsed?: boolean;
   shareTopApps?: true;
+  syncTabs?: true;
 };
 
 type WindowBase = {

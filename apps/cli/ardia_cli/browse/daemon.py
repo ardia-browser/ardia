@@ -12,7 +12,7 @@ from ardia_cli import command_metrics
 from ardia_cli.browse import paths
 from ardia_cli.caller import parse as parse_caller
 from ardia_cli.browse.errors import BrowseError, ConnectionLost, Unreachable, Usage
-from ardia_cli.browse.limits import QUEUE_WAIT, command_limit, queue_wait
+from ardia_cli.browse.limits import BEHIND_SCRIPT_WAIT, QUEUE_WAIT, command_limit, queue_wait
 
 CONNECTED_IDLE = 30.0
 DEFAULT_DAEMON_IDLE = 3600.0
@@ -432,7 +432,10 @@ class Daemon:
             request["busy_elsewhere"] = True
             return render(options, error=self.busy_error(waited=False), name=name)
         patience = queue_wait(name, [str(arg) for arg in argv[1:]], QUEUE_WAIT, name == "read" and bool(request.get("patient_queue")))
-        if patience > QUEUE_WAIT and self.lock.locked():
+        if self.lock.locked() and (self.state.extras.get("running") or {}).get("name") == "script" and patience < BEHIND_SCRIPT_WAIT:
+            patience = BEHIND_SCRIPT_WAIT
+            command_metrics.flag("queued_behind_script", True)
+        elif patience > QUEUE_WAIT and self.lock.locked():
             command_metrics.flag("read_queued_beside" if request.get("patient_queue") else "script_queued_behind_busy", True)
         try:
             await asyncio.wait_for(self.lock.acquire(), patience)

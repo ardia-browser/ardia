@@ -1,6 +1,6 @@
 import { takeCleanUpCounts } from "./cleanUpCounts";
 
-const none = () => ({ captureIndicatorsCleared: 0, pinnedTabsSleptByMemorySaver: 0, tabsSleptOverBudget: 0, tabsSleptOverBudgetReopened: 0, topAppsKeptRunning: 0, topAppsUnloadedFromMenu: 0 });
+const none = () => ({ captureIndicatorsCleared: 0, pinnedTabsSleptByMemorySaver: 0, tabsSleptOverBudget: 0, tabsSleptOverBudgetReopened: 0, tabsOverBudgetSkippedLoading: 0, tabsOverBudgetAsksPassedOn: 0, topAppsKeptRunning: 0, topAppsUnloadedFromMenu: 0 });
 
 let pending = none();
 
@@ -18,6 +18,11 @@ export function noteTabSleptOverBudget() {
 
 export function noteTabSleptOverBudgetReopened() {
   pending.tabsSleptOverBudgetReopened++;
+}
+
+export function noteBudgetSweep(skippedLoading: number, asksPassedOn: number) {
+  pending.tabsOverBudgetSkippedLoading += skippedLoading;
+  pending.tabsOverBudgetAsksPassedOn += asksPassedOn;
 }
 
 let profilesUnloaded = 0;
@@ -58,5 +63,7 @@ export function takeTabSleepCounts() {
     ...takeCleanUpCounts(),
     tabs_slept_over_budget: taken.tabsSleptOverBudget,
     tabs_slept_over_budget_reopened: taken.tabsSleptOverBudgetReopened,
+    tabs_over_budget_skipped_loading: taken.tabsOverBudgetSkippedLoading,
+    tabs_over_budget_asks_passed_on: taken.tabsOverBudgetAsksPassedOn,
   };
 }

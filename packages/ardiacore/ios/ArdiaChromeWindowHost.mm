@@ -1,5 +1,6 @@
 #import "ArdiaChromeWindowInternal.h"
 #import "ArdiaEarlyWindow.h"
+#import "ArdiaInterfaceScale.h"
 #import "ArdiaRuntime.h"
 #import "ArdiaWebViewInternal.h"
 
@@ -27,6 +28,87 @@ void AnswerFloatingSubrole(Class windowClass) {
       if (objc_getAssociatedObject(window, kFloatsForWindowManagersKey)) return NSAccessibilitySystemFloatingWindowSubrole;
       return ((NSAccessibilitySubrole (*)(id, SEL))original)(window, @selector(accessibilitySubrole));
     };
+  });
+}
+
+const void *const kInterfaceMinSizeKey = &kInterfaceMinSizeKey;
+
+const void *const kInterfaceContentScaleKey = &kInterfaceContentScaleKey;
+
+NSRect VisibleFrameOf(NSWindow *window) {
+  NSScreen *screen = window.screen ?: NSScreen.mainScreen;
+  return screen ? screen.visibleFrame : NSMakeRect(0, 0, CGFLOAT_MAX, CGFLOAT_MAX);
+}
+
+NSSize WithinVisibleFrame(NSSize size, NSWindow *window) {
+  const NSRect visible = VisibleFrameOf(window);
+  return NSMakeSize(MIN(size.width, floor(NSWidth(visible))), MIN(size.height, floor(NSHeight(visible))));
+}
+
+NSRect OnScreen(NSRect frame, NSWindow *window) {
+  const NSRect visible = VisibleFrameOf(window);
+  if (NSMaxX(frame) > NSMaxX(visible)) frame.origin.x = NSMaxX(visible) - NSWidth(frame);
+  if (NSMinX(frame) < NSMinX(visible)) frame.origin.x = NSMinX(visible);
+  if (NSMinY(frame) < NSMinY(visible)) frame.origin.y = NSMinY(visible);
+  if (NSMaxY(frame) > NSMaxY(visible)) frame.origin.y = NSMaxY(visible) - NSHeight(frame);
+  return frame;
+}
+
+NSSize InterfaceSize(NSSize size, NSWindow *window) {
+  const NSSize scaled = [ArdiaInterfaceScale windowSizeFromRoot:size];
+  return WithinVisibleFrame(NSMakeSize(round(scaled.width), round(scaled.height)), window);
+}
+
+void SetFrameKeepingTop(NSWindow *window, NSSize size) {
+  const NSRect was = window.frame;
+  const NSRect frame = OnScreen(NSMakeRect(NSMinX(was), NSMaxY(was) - size.height, size.width, size.height), window);
+  if (!NSEqualRects(frame, was)) [window setFrame:frame display:window.visible];
+}
+
+void ApplyInterfaceMinSize(NSWindow *window, BOOL grow) {
+  NSValue *design = objc_getAssociatedObject(window, kInterfaceMinSizeKey);
+  if (!design) return;
+  const NSSize minimum = InterfaceSize(design.sizeValue, window);
+  window.minSize = minimum;
+  if (!grow || (window.styleMask & NSWindowStyleMaskFullScreen)) return;
+  const NSSize size = window.frame.size;
+  if (size.width >= minimum.width && size.height >= minimum.height) return;
+  SetFrameKeepingTop(window, NSMakeSize(MAX(size.width, minimum.width), MAX(size.height, minimum.height)));
+}
+
+void RescaleInterfaceContent(NSWindow *window) {
+  NSNumber *was = objc_getAssociatedObject(window, kInterfaceContentScaleKey);
+  if (!was) return;
+  const CGFloat scale = ArdiaInterfaceScale.scale;
+  objc_setAssociatedObject(window, kInterfaceContentScaleKey, @(scale), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  if (was.doubleValue == scale || !(was.doubleValue > 0) || (window.styleMask & NSWindowStyleMaskFullScreen)) return;
+  const NSSize content = [window contentRectForFrameRect:window.frame].size;
+  const CGFloat ratio = scale / was.doubleValue;
+  const NSSize scaled = NSMakeSize(round(content.width * ratio), round(content.height * ratio));
+  const NSSize frame = [window frameRectForContentRect:NSMakeRect(0, 0, scaled.width, scaled.height)].size;
+  SetFrameKeepingTop(window, WithinVisibleFrame(frame, window));
+}
+
+void FollowInterfaceScale() {
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    [NSNotificationCenter.defaultCenter addObserverForName:ArdiaInterfaceScaleDidChange
+                                                    object:nil
+                                                     queue:nil
+                                                usingBlock:^(NSNotification *) {
+                                                  for (NSWindow *window in NSApp.windows) {
+                                                    ApplyInterfaceMinSize(window, NO);
+                                                    RescaleInterfaceContent(window);
+                                                    ApplyInterfaceMinSize(window, YES);
+                                                  }
+                                                }];
+    [NSNotificationCenter.defaultCenter addObserverForName:NSWindowDidChangeScreenNotification
+                                                    object:nil
+                                                     queue:nil
+                                                usingBlock:^(NSNotification *note) {
+                                                  if (NSWindow *window = note.object; [window isKindOfClass:NSWindow.class])
+                                                    ApplyInterfaceMinSize(window, NO);
+                                                }];
   });
 }
 
@@ -157,6 +239,23 @@ NSView *ArdiaWindowRootView(NSWindow *window) {
   if (!MoveTrafficLights(window, center)) [self setTrafficLightsCenter:center trailing:trailing inWindow:window];
 }
 
++ (NSSize)windowSizeFromInterfaceSize:(NSSize)size forWindow:(NSWindow *)window {
+  return InterfaceSize(size, window);
+}
+
++ (void)setInterfaceMinSize:(NSSize)size ofWindow:(NSWindow *)window {
+  if (!window) return;
+  FollowInterfaceScale();
+  objc_setAssociatedObject(window, kInterfaceMinSizeKey, [NSValue valueWithSize:size], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  ApplyInterfaceMinSize(window, YES);
+}
+
++ (void)keepInterfaceContentSizeOfWindow:(NSWindow *)window {
+  if (!window) return;
+  FollowInterfaceScale();
+  objc_setAssociatedObject(window, kInterfaceContentScaleKey, @(ArdiaInterfaceScale.scale), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
 + (void)setSwappedHandler:(void (^)(NSWindow *, NSWindow *))handler {
   gSwapped = [handler copy];
 }
@@ -215,6 +314,7 @@ NSView *ArdiaWindowRootView(NSWindow *window) {
   if (cover.superview == host) [host addSubview:root positioned:NSWindowBelow relativeTo:cover];
   else [host addSubview:root];
   controller.root = root;
+  [ArdiaInterfaceScale rootAttached:root];
   [ArdiaEarlyWindow rootEmbedded:root inWindow:window];
 }
 

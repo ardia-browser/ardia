@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Ardia is a macOS browser: Dia's polish and Arc's sidebar, built on Chrome's own framework (Chromium 157 on Helium) through ArdiaCore, our thin layer,
+Ardia is a browser for macOS, Linux and Windows: Dia's polish and Arc's sidebar, built on Chrome's own framework (Chromium 157 on Helium) through ArdiaCore, our thin layer,
 with no account. This file is how the owner works; follow it.
 You are the owner and long-term maintainer of this codebase, and its design is up to you.
 For the architecture and the test tooling, read `docs/agent-brief.md`.
@@ -79,6 +79,32 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
 - **No AI features.** This is the owner's decision. Dia's AI rows in `docs/dia-feature-parity.md`
   stay ⏸.
 
+## Platforms
+One browser UI (`apps/browser/src` and `packages/*/src`) runs on three platforms, each with its own native layer and
+engine. A change to the shared UI reaches all three, so check the other two before calling it done: Linux's
+`pnpm -C apps/linux typecheck`, `test:graph` and `test:host`, and the Windows workflow, which runs on any pull
+request touching shared code. Copy that names Mac things (⌘, "macOS", the menu bar) needs its Linux and Windows
+wording. When the machine you're on isn't the platform you're changing, use a Boat VM (`boat` CLI, signed in):
+`boat new --type xlarge --no-auto-stop`, an idle-stop watchdog that stops it after 20 idle minutes, `boat desktop`
+or an X11 display for real input and screen recordings. A Boat VM's desktop is yours: the hidden-instance and focus
+rules are for the owner's Mac.
+- **macOS** is the main app: `apps/browser` (React Native macOS) on `engine/ardiacore` and the Mac engine. The rest
+  of this file is written for it.
+- **Linux** (`docs/linux-port.md`): Chromium's own `chrome` is the app and serves the UI from `chrome://ardia/`;
+  `apps/linux` builds the shared components with Linux adapters (Vite aliases, checked by `test:graph`), and
+  `engine/ardiacore-linux` plus `engine/patches/chromium-linux-*.patch` are its native layer. The engine is built from
+  source on a Boat builder VM (`scripts/linux/build.sh --apply`, incremental like the Mac's), published with
+  `scripts/linux/publish-engine.sh --upload`, and pinned by a row in `packages/ardiacore/prebuilt-engines-linux.tsv`.
+  The engine key (`engine/engine-key.sh`) covers all of `engine/`, so any change there needs a new Mac engine and a
+  new Linux engine. CI: `.github/workflows/linux.yml` (`docs/linux-ci.md`); acceptance: `docs/linux-acceptance.md`.
+- **Windows** (`docs/windows.md`): `apps/browser/windows` (React Native Windows) and `packages/expo-windows` host
+  Chromium's `chrome.dll`, renamed Ardia, with each tab's page in its own window under the app's. The engine is
+  cross-built on a Mac in `~/chromium-build-win` (`docs/engine-build-windows.md`; never `~/chromium-build`), its
+  sources and patches live in `scripts/windows/engine/` (never under `engine/`, which would move the Mac's engine
+  key), and `scripts/windows/engine/prebuilt.json` pins the release CI fetches. CI: `.github/workflows/windows.yml`
+  builds x64 and ARM64 on Windows runners, launches the app, tours pages with real input and installs the
+  installer. To use it yourself, run Windows 11 in QEMU on a Boat VM (nested KVM, `dockurr/windows`).
+
 ## Building features
 - **Conventions.** Folders, import direction, tokens, state, names, the translation layer and environment
   variables follow `docs/conventions.md`; its check runs in `pnpm -C apps/browser test`.
@@ -147,6 +173,10 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
     prerelease and never reaches stable users.
   - **Stable** gets the full run (about 1.5 h): smoke, update test, perf ratchet and perf gate. Its perf is
     compared against the previous stable release, never against a nightly.
+- **Every release covers all three platforms.** The Release workflow's `linux` job builds and smoke-tests the Linux
+  tarball against the exact engine for the release's key; Windows ships as the `windows-alpha` prerelease the app
+  updates from (`scripts/windows/publish-alpha.sh`, `docs/windows.md`). A missing Linux or Windows build never holds
+  back the Mac release; say which one was skipped and why.
 - **Use the `release` skill** (`.claude/skills/release/SKILL.md`). The stable flow is:
   - write the notes in `docs/release-notes/<version>.md` (style guide in that folder);
   - bump the version, commit and push;
@@ -179,7 +209,10 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
 - Write simple, concise English. Pinned attention items are goals: show progress and the next step, not the original issue again.
 
 ## Repo map
-`apps/browser` is the React Native macOS app; `apps/browser/windows` and `packages/expo-windows` are the start of the Windows app (`docs/windows.md`). The native Expo modules are in `packages/{ardiacore,shell,shaders,import,sync}`; `engine/chromium` is our Chrome-services code (the `ac_*` C calls) and `engine/ardiacore` ArdiaCore's window and tab layer,
+`apps/browser` is the React Native macOS app; `apps/browser/windows` and `packages/expo-windows` are the Windows
+app (`docs/windows.md`), and `apps/linux` the Linux UI with `scripts/linux` for its build, packaging and engine. `scripts/windows` holds
+the Windows packaging, checks and engine build. The native Expo modules are in `packages/{ardiacore,shell,shaders,import,sync}`; `engine/chromium` is our Chrome-services code (the `ac_*` C calls) and `engine/ardiacore` ArdiaCore's window and tab layer
+(`engine/ardiacore-linux` on Linux),
 and `packages/core` holds the omnibox logic and its tests. `packages/demo` is the app on the web (the site's demo).
 `apps/cli` is the `ardia` command, `apps/ios` the iPhone app and `apps/dashboard` the telemetry and triage dashboard.
 `apps/site` is ardia.dev and `apps/videos` holds the Remotion videos. `infra/` holds each service's deploy setup and

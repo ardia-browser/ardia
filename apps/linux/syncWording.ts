@@ -19,13 +19,6 @@ export const SYNC_WORDING: readonly Wording[] = [
       ],
       ["No server and no account: your {PLATFORM_TERMS.syncedComputer}s meet in the sync folder.", "No server and no account: your devices meet in the sync folder."],
       ["title: `Show Sync Folder in ${PLATFORM_TERMS.fileManager}`", `title: "Open Sync Folder"`],
-      [
-        "`Choose which profiles sync on this ${PLATFORM_TERMS.computer}. Each syncs on its own. Profiles on your other devices can be added to this ${PLATFORM_TERMS.computer}.`",
-        `"Choose which profiles sync on this computer. Each syncs on its own. Profiles on your other devices can be added to this computer."`,
-      ],
-      [": `Choose which profiles sync on this ${PLATFORM_TERMS.computer}. Each syncs on its own.`", `: "Choose which profiles sync on this computer. Each syncs on its own."`],
-      ["`${d.name} (This ${PLATFORM_TERMS.computer})`", "`${d.name} (This Computer)`"],
-      ["title={`Just this ${PLATFORM_TERMS.computer} so far`}", `title="Just this computer so far"`],
     ],
   },
   {
@@ -65,14 +58,6 @@ export const SYNC_WORDING: readonly Wording[] = [
         "Click Show Code. On your iPhone, open Ardia, tap Sync With Mac, and scan the code. For another Mac, you can also scan it with your iPhone’s camera and paste the words there with Universal Clipboard.",
         "Click Show Code, then scan the code with your phone’s camera to copy the words, and type or paste them on your other device.",
       ],
-      ["<Button title={`Add to This ${PLATFORM_TERMS.computer}`}", `<Button title="Add to This Computer"`],
-      [
-        "`These profiles are on your other devices. Add them to this ${PLATFORM_TERMS.computer} to sync their pinned tabs, bookmarks, history${PLATFORM_FEATURES.syncsPasswords ? \" and passwords\" : \"\"} here too.`",
-        `"These profiles are on your other devices. Add them to this computer to sync their pinned tabs, bookmarks, history and passwords here too."`,
-      ],
-      ["`Every profile on your other devices is on this ${PLATFORM_TERMS.computer} too.`", `"Every profile on your other devices is on this computer too."`],
-      [">{`This ${PLATFORM_TERMS.computer} Is Syncing`}</DialogTitle>", `>This Computer Is Syncing</DialogTitle>`],
-      ["Recovery Kit. Everything on this ${PLATFORM_TERMS.computer} stays as it is.", "Recovery Kit. Everything on this computer stays as it is."],
       ["Your data on each ${PLATFORM_TERMS.syncedComputer} stays.", "Your data on each device stays."],
       [
         `  if (folder.inICloud) {
@@ -97,10 +82,6 @@ export const SYNC_WORDING: readonly Wording[] = [
   {
     file: "lib/themeLook.ts",
     replacements: [[`export const MONO_FAMILY = "Menlo";`, `export const MONO_FAMILY = "monospace";`]],
-  },
-  {
-    file: "state/sync/syncDoc.ts",
-    replacements: [["Turning sync off never removes them from this ${PLATFORM_TERMS.computer}.", "Turning sync off never removes them from this computer."]],
   },
   {
     file: "state/sync/engine.ts",

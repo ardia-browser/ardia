@@ -1,21 +1,17 @@
 --- a/ac_autofill.cc
 +++ b/ac_autofill.cc
-@@ -230,8 +230,12 @@
-             }
-             ardia::Reauth(
-                 profile, device_reauth::DeviceAuthSource::kAutofill,
-+#if BUILDFLAG(IS_MAC)
-                 l10n_util::GetStringUTF16(
-                     IDS_PAYMENTS_AUTOFILL_EDIT_CARD_MANDATORY_REAUTH_PROMPT),
-+#else
-+                std::u16string(),
-+#endif
-                 base::TimeDelta(),
-                 base::BindOnce(
-                     [](std::string id, base::WeakPtr<PersonalDataManager> pdm,
+@@ -86,6 +86,8 @@ using Ready = base::OnceCallback<void(PersonalDataManager*)>;
+ std::u16string CardNumberPrompt() {
+ #if BUILDFLAG(IS_LINUX)
+   return u"Show a saved card number";
++#elif BUILDFLAG(IS_WIN)
++  return std::u16string();
+ #else
+   return l10n_util::GetStringUTF16(
+       IDS_PAYMENTS_AUTOFILL_EDIT_CARD_MANDATORY_REAUTH_PROMPT);
 --- a/ac_bookmarks.cc
 +++ b/ac_bookmarks.cc
-@@ -476,7 +476,7 @@
+@@ -476,7 +476,7 @@ AC_PROFILE_CALL(ac_bookmarks_export_html) {
      return call.TakeReply().Error("no bookmarks");
    }
    const std::string path = call.String("path");
@@ -24,7 +20,7 @@
      return call.TakeReply().Error("an absolute path required");
    }
    ardia::WhenLoaded::Run(
-@@ -497,6 +497,6 @@
+@@ -497,6 +497,6 @@ AC_PROFILE_CALL(ac_bookmarks_export_html) {
                      },
                      std::move(reply)));
            },
@@ -34,7 +30,7 @@
  }
 --- a/ac_downloads.cc
 +++ b/ac_downloads.cc
-@@ -82,7 +82,7 @@
+@@ -93,7 +93,7 @@ void UseTestDownloadsDir(Profile* profile) {
    }
    profile->GetPrefs()->SetDefaultPrefValue(
        prefs::kDownloadDefaultDirectory,
@@ -43,7 +39,7 @@
  }
  
  base::DictValue Describe(DownloadItem* item) {
-@@ -98,8 +98,8 @@
+@@ -109,8 +109,8 @@ base::DictValue Describe(DownloadItem* item) {
    return base::DictValue()
        .Set("id", item->GetGuid())
        .Set("url", item->GetOriginalUrl().spec())
@@ -54,7 +50,7 @@
        .Set("state", StateName(*item))
        .Set("paused", item->IsPaused())
        .Set("received", static_cast<double>(item->GetReceivedBytes()))
-@@ -369,7 +369,7 @@
+@@ -380,7 +380,7 @@ constexpr CommandEntry kCommands[] = {
  base::DictValue DownloadSettings(Profile* profile) {
    DownloadPrefs* prefs = DownloadPrefs::FromBrowserContext(profile);
    return base::DictValue()
@@ -63,7 +59,7 @@
        .Set("askWhereToSave", prefs->PromptForDownload())
        .Set("managed", prefs->IsDownloadPathManaged());
  }
-@@ -388,7 +388,7 @@
+@@ -399,7 +399,7 @@ AC_PROFILE_CALL(ac_downloads_set_settings) {
      return call.TakeReply().Error("downloads are set by policy");
    }
    if (const std::string* folder = call.args().FindString("folder")) {
@@ -74,7 +70,7 @@
      }
 --- a/ac_engine.cc
 +++ b/ac_engine.cc
-@@ -233,7 +233,7 @@
+@@ -252,7 +252,7 @@ Profile* ProfileAt(std::string_view dir) {
    if (!manager || dir.empty()) {
      return nullptr;
    }
@@ -83,7 +79,7 @@
  }
  
  content::WebContents* TabWithId(int id) {
-@@ -259,7 +259,8 @@
+@@ -278,7 +278,8 @@ void Emit(std::string_view topic, Profile* profile, base::DictValue payload) {
      return;
    }
    if (profile) {
@@ -95,7 +91,7 @@
      }
 --- a/ac_extensions.cc
 +++ b/ac_extensions.cc
-@@ -316,7 +316,7 @@
+@@ -325,7 +325,7 @@ AC_PROFILE_CALL(ac_extensions_list) {
  
  AC_PROFILE_CALL(ac_extensions_install) {
    const std::string path = call.String("path");
@@ -104,7 +100,7 @@
      return call.TakeReply().Error("an absolute path required");
    }
    Profile* profile = call.profile();
-@@ -325,7 +325,7 @@
+@@ -334,7 +334,7 @@ AC_PROFILE_CALL(ac_extensions_install) {
      return call.TakeReply().Error(
          "Extension installation is blocked by policy.");
    }
@@ -113,7 +109,7 @@
    const bool scripts = ardia::NamesScriptsFolder(load_path);
    base::ScopedClosureRunner scripts_install;
    if (scripts) {
-@@ -375,7 +375,7 @@
+@@ -384,7 +384,7 @@ AC_PROFILE_CALL(ac_extensions_install) {
  
  AC_PROFILE_CALL(ac_extensions_install_crx) {
    const std::string path = call.String("path");
@@ -122,7 +118,7 @@
      return call.TakeReply().Error("an absolute path required");
    }
    Profile* profile = call.profile();
-@@ -403,7 +403,7 @@
+@@ -412,7 +412,7 @@ AC_PROFILE_CALL(ac_extensions_install_crx) {
                                           : installer->expected_id()));
        },
        call.TakeReply(), installer));
@@ -133,7 +129,7 @@
  AC_PROFILE_CALL(ac_extensions_set_enabled) {
 --- a/ac_passwords.cc
 +++ b/ac_passwords.cc
-@@ -571,7 +571,7 @@
+@@ -541,7 +541,7 @@ AC_PROFILE_CALL(ac_passwords_export) {
      return;
    }
    const std::string path = call.String("path");
@@ -142,7 +138,7 @@
      return call.TakeReply().Error("an absolute path required");
    }
    ardia::WithList(
-@@ -590,7 +590,7 @@
+@@ -560,7 +560,7 @@ AC_PROFILE_CALL(ac_passwords_export) {
                              base::DictValue().Set("status", "reauthFailed"));
                        }
                        session.state->Export(session.delegate.get(),
@@ -153,7 +149,7 @@
                      },
 --- a/ac_passwords_logins.cc
 +++ b/ac_passwords_logins.cc
-@@ -67,7 +67,9 @@
+@@ -67,7 +67,9 @@ bool TestReleaseAfter(Store store) {
  }
  
  bool Synced(const StoredCredential& credential) {
@@ -164,7 +160,7 @@
  }
  
  size_t JSONBound(const Credentials& profile, const Credentials& account) {
-@@ -91,10 +93,14 @@
+@@ -91,10 +93,14 @@ bool AppendLogin(const StoredCredential& credential, bool first, std::string& js
    bool valid = base::EscapeJSONString(credential.signon_realm, true, &json);
    json += ",\"username\":";
    valid &= base::EscapeJSONString(credential.username_value, true, &json);
@@ -183,7 +179,7 @@
    json += ",\"created\":";
    json += base::NumberToString(credential.date_created.is_null()
                                     ? 0.0
-@@ -201,7 +207,10 @@
+@@ -201,7 +207,10 @@ void LoginsRead::Take(Store store, CredentialsOrError result) {
      return;
    }
    if (!result.has_value()) {
@@ -195,14 +191,14 @@
    }
    (store == Store::kProfile ? profile_ : account_) = std::move(*result);
    if (!profile_ || !account_) {
-@@ -253,10 +262,6 @@
+@@ -252,10 +261,6 @@ void LoginsRead::Send() {
+ }
  
  AC_PROFILE_CALL(ac_passwords_logins) {
-   if (base::FeatureList::IsEnabled(
+-  if (base::FeatureList::IsEnabled(
 -          password_manager::features::kSkipUndecryptablePasswords)) {
 -    return call.TakeReply().Error("partial password reads");
 -  }
--  if (base::FeatureList::IsEnabled(
+   if (base::FeatureList::IsEnabled(
            password_manager::features::kUseProcessBoundPasswordString)) {
      return call.TakeReply().Error("process-bound password strings");
-   }

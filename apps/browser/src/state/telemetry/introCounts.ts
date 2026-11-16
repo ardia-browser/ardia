@@ -8,6 +8,7 @@ let skipped = 0;
 let finished = 0;
 let scenes: Record<IntroScene, number> = { animated: 0, poster: 0, fallback: 0 };
 let firstFrameMs = 0;
+let musicFailed = 0;
 
 export function noteIntroShown(musicMuted: boolean) {
   shown += 1;
@@ -15,6 +16,7 @@ export function noteIntroShown(musicMuted: boolean) {
 }
 
 export const noteIntroSkipped = () => void (skipped += 1);
+export const noteIntroMusicFailed = () => void (musicFailed += 1);
 
 export function noteIntroEnded(ended: { skipped: boolean; shown: IntroScene | null; firstFrameMs: number | null }) {
   if (!ended.skipped) finished += 1;
@@ -32,6 +34,7 @@ export function takeIntroCounts() {
     intros_scene_poster: scenes.poster,
     intros_scene_fell_back: scenes.fallback,
     intros_first_frame_ms: firstFrameMs,
+    intros_music_failed: musicFailed,
   };
   shown = 0;
   mutedAtStart = 0;
@@ -39,5 +42,6 @@ export function takeIntroCounts() {
   finished = 0;
   scenes = { animated: 0, poster: 0, fallback: 0 };
   firstFrameMs = 0;
+  musicFailed = 0;
   return taken;
 }

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { CARD_INSET } from "../../lib/windowLayout";
 import { compactLift, toolbarRowOf } from "../../lib/toolbarRow";
 import type { LightsPlace } from "../../platform/windows";
+import { snappedToDevicePixels } from "../settings/interfaceScale";
 
 const LIGHTS_X = 25;
 const LIGHTS_BELOW_CARD_TOP = 21;
@@ -17,7 +18,7 @@ export const ARC_LIGHTS_CENTER: readonly [number, number] = [25, 24];
 export const TOP_STRIP_LIGHTS_CENTER: readonly [number, number] = [20.75, 20.75];
 
 export function lightsCenter(offset: number, down = 0, base: readonly [number, number] = LIGHTS_CENTER): [number, number] {
-  const dx = Math.round(offset * 2) / 2;
+  const dx = snappedToDevicePixels(offset);
   return [base[0] - dx, base[1] + down];
 }
 

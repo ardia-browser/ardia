@@ -51,6 +51,8 @@ Ardia never creates the folder. `ardia config init` does, or the user does.
   `extensionSearchEngines`, `defaultProfileId`, `customSearchUrl`, `newTabUrl`, `customSearchEngines`, `pageEngine`,
   `websiteEngines`, `protectedVideoInWebKit`, `fairPlayInChromium`. `searchEngine` must name an engine that already exists (built in, or
   one the user added in Settings).
+- `interfaceScale` (0.8 to 1.5 in steps of 0.05, default 1; this Mac only, not synced) is Settings › Appearance ›
+  Interface size: it scales the whole app's UI, not web pages, and applies live.
 - `sidebarTextSize` (`default`, `large`, `larger`; this Mac only, not synced) and `sidebarTextContrast` (`auto`
   follows macOS Increase Contrast, `standard`, `high`) are Settings › Appearance › Sidebar Text. Large and Larger
   scale the sidebar's text (13 pt titles to 15 and 17), favicons and row metrics, a theme's `metrics` included; the

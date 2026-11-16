@@ -7,6 +7,7 @@
 
 #include "ardia/win/host.h"
 #include "ardia/win/page_links_script.h"
+#include "ardia/win/tab_calls.h"
 #include "ardia/win/tab_state.h"
 #include "base/containers/span.h"
 #include "base/functional/bind.h"
@@ -270,6 +271,7 @@ bool PageLinks::Attach() {
     host_ = nullptr;
     return false;
   }
+  UnmarkEngineDevTools(&GetWebContents());
   return true;
 }
 

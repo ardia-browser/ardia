@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { launchArguments, launchEnvironment } from "../../apps/linux/scripts/acceptance/lib/ardia.mjs";
-import { ASSERTIONS, SCRIPT_NAME, SCRIPT_TITLE_PREFIX, USAGE, USER_SCRIPTS_CAPABILITIES, VERSION_PATTERN, appVersionVerdict, cliControlSupport, cliTarball, formatTable, installerRanAgain, launchRefusal, packageStagedFiles, parseArgs, pipeLaunchArguments, splitPipeMessages, summarize, uboTuningProblems, userScriptSource } from "./smoke.mjs";
+import { ASSERTIONS, SCRIPT_NAME, SCRIPT_TITLE_PREFIX, USAGE, USER_SCRIPTS_CAPABILITIES, VERSION_PATTERN, appVersionVerdict, cliControlSupport, cliTarball, debLayoutProblems, packageFormat, formatTable, installerRanAgain, launchRefusal, packageStagedFiles, parseArgs, pipeLaunchArguments, splitPipeMessages, summarize, uboTuningProblems, userScriptSource } from "./smoke.mjs";
 
 test("the package checks are named in the usage and keep the original eight first", () => {
   assert.deepEqual(ASSERTIONS.slice(0, 8), ["ldd", "shell-ui", "bootstrap", "native-tab", "sandbox", "content-blocker", "restart-restore", "staged-install"]);
@@ -23,8 +23,8 @@ test("the smoke userscript retitles only the fixture pages and is a userscript t
 });
 
 test("--allow-old-engine is opt-in and leaves the default options as they were", () => {
-  assert.deepEqual(parseArgs(["--package", "a", "--results", "b"]), { package: "a", results: "b", timeoutMs: 300000, keep: false, help: false });
-  assert.equal(parseArgs(["--package", "a", "--results", "b", "--allow-old-engine"]).allowOldEngine, true);
+  assert.deepEqual(parseArgs(["--package", "a.tar.xz", "--results", "b"]), { package: "a.tar.xz", results: "b", timeoutMs: 300000, keep: false, help: false, format: "tar" });
+  assert.equal(parseArgs(["--package", "a.tar.xz", "--results", "b", "--allow-old-engine"]).allowOldEngine, true);
 });
 
 test("the version pattern is the package contract's", () => {
@@ -94,4 +94,35 @@ test("the packaged uBlock Origin saves its engine soon after a launch and waits 
   assert.deepEqual(uboTuningProblems(tuned.replace("selfieDelayInSeconds: 3,", "selfieDelayInSeconds: 53,")), ["selfieDelayInSeconds is 53, not 3"]);
   assert.deepEqual(uboTuningProblems(tuned.replace("autoUpdateDelayAfterLaunch: 600,", "autoUpdateDelayAfterLaunch: 37,")), ["autoUpdateDelayAfterLaunch is 37, not 600"]);
   assert.deepEqual(uboTuningProblems(""), ["selfieDelayInSeconds is missing", "autoUpdateDelayAfterLaunch is missing"]);
+});
+
+test("the gate takes a tarball, a .deb or an AppImage and refuses anything else", () => {
+  assert.equal(packageFormat("/x/Ardia-0.2.47-linux-x64.tar.xz"), "tar");
+  assert.equal(packageFormat("/x/Ardia-0.2.47-linux-x64.deb"), "deb");
+  assert.equal(packageFormat("/x/Ardia-0.2.47-linux-x64.AppImage"), "appimage");
+  assert.equal(packageFormat("/x/Ardia.zip"), null);
+  assert.equal(parseArgs(["--package", "a", "--results", "b"]).format, undefined);
+  assert.equal(parseArgs(["--package", "a.deb", "--results", "b"]).format, "deb");
+});
+
+test("a .deb is root-owned with a setuid root helper, the launcher link, the policy and the AppArmor profile", () => {
+  const line = (mode, path, extra = "") => `${mode} root/root 10 2026-11-15 10:00 ${path}${extra}`;
+  const good = [
+    line("drwxr-xr-x", "./usr/lib/ardia/"),
+    line("-rwxr-xr-x", "./usr/lib/ardia/chrome"),
+    line("-rwxr-xr-x", "./usr/lib/ardia/ardia-launch"),
+    line("-rwsr-xr-x", "./usr/lib/ardia/chrome-sandbox"),
+    line("lrwxrwxrwx", "./usr/bin/ardia", " -> ../lib/ardia/ardia-launch"),
+    line("-rw-r--r--", "./usr/share/polkit-1/actions/dev.ardia.linux.policy"),
+    line("-rw-r--r--", "./usr/share/ardia/apparmor/ardia"),
+    line("-rw-r--r--", "./usr/share/applications/ardia.desktop"),
+  ];
+  const fields = { Package: "ardia", Architecture: "amd64" };
+  assert.deepEqual(debLayoutProblems(good.join("\n"), fields), []);
+  const broken = good.map((entry) => entry.replace("-rwsr-xr-x root/root", "-rwxr-xr-x root/root").replace("./usr/share/ardia/apparmor/ardia", "./usr/share/ardia/other"));
+  const problems = debLayoutProblems(`${broken.join("\n")}\n${line("-rw-r--r--", "./usr/x").replace("root/root", "user/user")}`, { ...fields, Architecture: "arm64" });
+  assert.equal(problems.length, 4, problems.join("\n"));
+  assert.ok(problems.some((p) => p.includes("chrome-sandbox is not setuid root")));
+  assert.ok(problems.some((p) => p.includes("apparmor/ardia is missing")));
+  assert.ok(problems.some((p) => p.includes("owned by user/user")));
 });

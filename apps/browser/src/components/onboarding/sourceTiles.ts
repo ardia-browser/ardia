@@ -1,7 +1,7 @@
 import type { BrowserSourceId } from "../../state/onboarding/onboarding";
 import type { PlatformFeatures } from "../../lib/platformFeatures";
 
-export type SourceCandidate = { id: Exclude<BrowserSourceId, "fresh">; name: string; app: string; importId?: string; onlyWhenFound?: boolean };
+export type SourceCandidate = { id: Exclude<BrowserSourceId, "fresh">; name: string; app: string; importId?: string; onlyWhenFound?: boolean; listedOnly?: boolean };
 
 export const SOURCE_CANDIDATES: SourceCandidate[][] = [
   [{ id: "arc", name: "Arc", app: "/Applications/Arc.app" }],
@@ -25,6 +25,9 @@ export const SOURCE_CANDIDATES: SourceCandidate[][] = [
     { id: "edge", name: "Edge Beta", app: "/Applications/Microsoft Edge Beta.app", importId: "edgeBeta" },
   ],
   [{ id: "helium", name: "Helium", app: "/Applications/Helium.app", onlyWhenFound: true }],
+  [{ id: "chromium", name: "Chromium", app: "", onlyWhenFound: true, listedOnly: true }],
+  [{ id: "vivaldi", name: "Vivaldi", app: "", onlyWhenFound: true, listedOnly: true }],
+  [{ id: "opera", name: "Opera", app: "", onlyWhenFound: true, listedOnly: true }],
 ];
 
 export type SourceTile = { id: BrowserSourceId; name: string; found: boolean; app: string | null; icon: string | null; importId?: string };
@@ -33,7 +36,8 @@ type Finding = Pick<PlatformFeatures, "findsBrowsersBy" | "hiddenBrowserSources"
 
 export function sourceTiles(isFound: (c: SourceCandidate) => boolean, platform: Finding): SourceTile[] {
   const keepsAppPaths = platform.findsBrowsersBy === "appBundle";
-  return SOURCE_CANDIDATES.filter((group) => !platform.hiddenBrowserSources.includes(group[0]!.id)).flatMap((group): SourceTile[] => {
+  const offered = SOURCE_CANDIDATES.filter((group) => !platform.hiddenBrowserSources.includes(group[0]!.id) && !(keepsAppPaths && group[0]!.listedOnly));
+  return offered.flatMap((group): SourceTile[] => {
     const found = group.find(isFound);
     if (found) return [{ id: found.id, name: found.name, found: true, app: keepsAppPaths ? found.app : null, icon: null, importId: found.importId }];
     if (group.every((c) => c.onlyWhenFound)) return [];

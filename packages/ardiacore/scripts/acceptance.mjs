@@ -4355,7 +4355,8 @@ try {
       if (!spot) throw new Error("no window point over the page");
       await press(spot);
       const down = await until("the calibration press", async () => (await events()).find((e) => e[0] === "mousedown"), 4000);
-      const at = (x, y) => [Math.round(x + spot[0] - down[2]), Math.round(y + spot[1] - down[3])];
+      const rootPointsPerPagePoint = 1 / (await evalApp("return globalThis.expo.modules.ArdiaApp.interfaceScale()"));
+      const at = (x, y) => [Math.round(spot[0] + (x - down[2]) * rootPointsPerPagePoint), Math.round(spot[1] + (y - down[3]) * rootPointsPerPagePoint)];
       const [x, y] = at(130, 70);
       await act(`mouse:down:${x},${y}`);
       for (let i = 1; i <= 12; i++) {
@@ -6171,7 +6172,7 @@ try {
     await pressQuit(windowId);
     await until("the quit", async () => exited, 30000);
     const layout = JSON.parse(readFileSync(join(data, "launch-layout.json"), "utf8"));
-    if (layout.version !== 4 || !layout.windows?.[windowId]) throw new Error(`no launch layout for the window: ${JSON.stringify(Object.keys(layout.windows ?? {}))}`);
+    if (layout.version !== 5 || !layout.windows?.[windowId]) throw new Error(`no launch layout for the window: ${JSON.stringify(Object.keys(layout.windows ?? {}))}`);
     const before = served.get(path) ?? 0;
     await appUp("app-launch-tab-2.out.log");
     const tab = await until("the launch tab restored", async () => (await state()).tabs.find((t) => t.id === id && t.title === "Fresh" && !t.loading), 20000);

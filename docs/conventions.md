@@ -115,6 +115,31 @@ lib/                    pure helpers: url, color, time, keys
 | a radio dot | `<Radio on look="form" \| "compact" \| "ring">` |
 | a colour swatch with a selection ring | `<Swatch selected ring fill>` (children instead of `fill` for a gradient) |
 
+## Coordinates: root points
+
+Settings › Appearance › Interface size (`interfaceScale`, 0.8 to 1.5) scales every window's React root: the root
+keeps its frame and takes bounds of frame / scale, so React lays out in **root points** and AppKit scales drawing,
+hit-testing and conversions. JS speaks root points everywhere: styles, `onLayout`, `measure`, `measureInWindow`
+(from the root's top left), touch `pageX`/`pageY`, and every rect or point it sends to native or gets from native for
+layout. Native converts at the boundary with `ArdiaInterfaceScale` (Swift `InterfaceScale`).
+
+- **Physical, never scaled:** NSWindow frames and screen coordinates (`window.frame`, saved and closed window frames,
+  `littleArdiaSize`, `openWindow` frame and pointer, `windowFrame()`), PiP geometry, image pixel sizes, CSS
+  coordinates that go back into a page, and diagnostics that say they are physical. A frame's size used for layout is
+  divided by the scale: `windowRootSize` / `useWindowRootWidth` (`state/windows/rootSize.ts`) prefer the root's own
+  `onLayout` size and fall back to `rootSizeOfFrame`. A point crossing between windows goes through the screen:
+  `screenPoint` and `rootPointIn` (`state/drag/windowDrop.ts`).
+- **Page points** (CSS pixels at zoom 1) are window points: a page's own size divides by the scale on its way into
+  React (the extension popup's DOM size).
+- The current scale lives in `state/settings/interfaceScale.ts` (`useCurrentInterfaceScale`, `currentInterfaceScale`,
+  `onInterfaceScaleChange`, `onInterfaceScaleSettled` for re-measuring once the relayout is done). A cached measurement
+  re-measures there; anchored popovers and menus close on a change (`state/app/interfaceScaleRefresh.ts`).
+- One device pixel is `1 / (PixelRatio.get() × scale)` root points (`PixelRatio` stays the backing scale). Snap with
+  `snappedToDevicePixels`, never `Math.round(x * 2) / 2`. `StyleSheet.hairlineWidth` stays half a root point at 2×: a
+  hairline scales with the interface like every other length.
+- Persisted UI lengths (`sidebarWidth`, `extensionSidePanelWidth`, theme metrics) are root points, so they mean the
+  same at every scale.
+
 ## State
 
 - Hover, pressed and open state of one component stays in that component's `useState`.
@@ -182,7 +207,7 @@ writeDocument(DOC, versionedJson(data, VERSION));
   `default-browser-offer.json`, `sync.json`, `sync-extensions.json`, `live.json`, `shared-folders.json`, `ardia-cli.json`,
   `bangs-state.json`, `Scripts/status.json`, `air-traffic.json` and `link-sources.json` (all 1).
 - Native code reads through `ArdiaSavedDocument` (packages/ardiacore/ios), with the same rules: `session.json` and
-  `onboarding.json` (any version up to the one JS writes; a test pins each) and `launch-layout.json` (4, written and
+  `onboarding.json` (any version up to the one JS writes; a test pins each) and `launch-layout.json` (5, written and
   read by native code only, so any other version reads as nothing).
 - The sealed sync files carry their own `version` inside the sealed JSON, because they're written apart from
   `sync.json` and its `v` doesn't cover them: the `sync-state.nns` checkpoint (`{ covers, clock, scopes }`, 1; version 0
@@ -196,7 +221,8 @@ writeDocument(DOC, versionedJson(data, VERSION));
 ## Files
 
 - Components are `PascalCase.tsx`; every other module is `camelCase.ts`. Tests sit next to the code as
-  `camelCase.test.mjs` (or `PascalCase.test.mjs` for a component).
+  `camelCase.test.mjs` (or `PascalCase.test.mjs` for a component). A platform's twin of a file adds its suffix:
+  `.macos`, `.ios`, `.windows`, `.linux`, `.web`, `.native`. `apps/linux` resolves `.linux.*` ahead of `.web.*`.
 - At most 400 lines per TS/TSX file (`apps/browser/src`, `packages/*/src`), 600 per native file (`packages/*/ios`,
   `engine/ardiacore/src`, `engine/chromium/src`). Tests, fixtures and generated files (`packages/core/src/bangList.ts`,
   `packages/demo/src/shims/web/symbols/data.ts`, `apps/browser/src/lib/emojiData.ts` from `apps/browser/scripts/emoji-data.mjs`)

@@ -25,7 +25,7 @@ a fresh data folder, as a user would: 41 driven runs, every row below seen on th
 changed by #1658, #1686 and #1691 were seen again, and Tour and Open at login walked, on run 43565273476 (commit
 d83398e1f, engine `windows-engine-20261113-16`), and the intro, onboarding and tab strip that evening on #1737's
 build 72901e27a (run 43624897005, engine `windows-engine-20261113-21`); those rows say so, and rows others saw say
-who and on which build. Of the 76 rows, 55 work, 8 work with a difference, 4 do nothing, 8 are not offered
+who and on which build. Of the 76 rows, 56 work, 8 work with a difference, 4 do nothing, 7 are not offered
 and 1 was not walked. Works with a difference says
 what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidden" are off on Windows behind
 `PLATFORM_FEATURES` until what they need exists. The walk before this one (2026-11-13, bfd586fe) is in git history.
@@ -56,7 +56,7 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
 | Close-tabs confirm while other windows load | Works: the confirm (like the prompt and the file pickers) runs on its own thread, so other windows keep loading and taking input while it is open; it stays in front of its own window and comes forward with it (#1688's self-check holds a confirm while a page loads, on CI; not walked here) | #1672, #1688 |
 | Quit and relaunch with the session restored | Works (tabs, the split and the open windows came back) | |
 | Engine memory trimmed after tabs close, once input is idle | Works (logged after closes) | #1544 |
-| Memory Saver's loaded-tab budget (the tabs hidden longest sleep past it) | Not offered; hidden: the page view has no `sleepIfHidden` on Windows | #1425 |
+| Memory Saver's loaded-tab budget (the tabs hidden longest sleep past it) | Works (engine `windows-engine-20261116-4`, which also has #2052's page-place guard; seen by the `engine sleep:` self-checks in CI, not walked in the VM): the Mac's budget and sweep, sized from this PC's memory and Windows' memory load (85 % a warning, 95 % critical); the page view's `sleepIfHidden` asks Chromium's discard policy with the proactive reason, so a shown page or split pane, a page hidden within the mode's wait, typed form input, audio, capture and the other protections keep a tab awake. A page the app hid is no longer its page window's active tab, which Chromium would otherwise keep from every discard, and Chromium's DevTools-open state means a DevTools window inspects the page, not the engine's own always-attached page client (before -10 no Windows page could be discarded at all, by this budget, Chrome's Memory Saver timer or memory pressure). A discard is in place (`WebContentsDiscard`, as on the Mac), so the tab keeps its page and back/forward list. A slept tab wakes on show at its address and scroll. A pop-up window's page is not a tab, so the budget never asks it. The engine keeps a page for its own reasons too, in every discard but one the user or one of their extensions asks for (Chrome's Memory Saver timer, its memory-pressure and frozen-with-growing-memory discards as well as the budget, `kept_pages.cc` through `chromium-win-discard-asks-the-host.patch`; a kept page is never taken by an urgent discard either, since Windows' urgent discards skip protected pages; a discard the user or one of their extensions asks for, such as `chrome.tabs.discard()` from a tab-suspender extension, does not ask the host): the opener of a live pop-up or of a pending offer (100), so the pop-up's `window.opener` keeps working; a `beforeunload` handler (content's own handler state; the page graph's flag is never set in Chromium 157) on a page the user has used (101); a held Web Lock (102) or blocking IndexedDB lock (103); a WebSocket, WebTransport, WebRTC or direct-socket connection (104: the same signals that keep a page from freezing; in Chromium 157 an open WebSocket registers only the sticky feature, so a page that has used one stays kept until it navigates or reloads); a DevTools window, or a DevTools client other than the engine's own on the page or tab target: an extension's `chrome.debugger` or a remote CDP tool (105). Chromium's own protections hold as on the Mac (audible, capture, form input, notifications). Not seen yet, so such a page can still sleep (#2050): a Web Lock held by a dedicated worker, a WebSocket held by a SharedWorker, a blocking IndexedDB lock in a shared or service worker, an EventSource or long fetch stream, an upload. A hidden Peek card that stays mounted is not a shown page: after the mode's wait it can sleep, and it reloads at its address and scroll when it shows again. A tab that slept once still opens a new tab its link script saw clicked (the script Peek runs in) and an app-link ask. Pinned tabs sleep like any tab, as on the Mac (#1069). A page window keeps #2052's guard through a sleep and holds its place again once it wakes. Self-checks: `engine sleep:` in `selfCheck/engineSleep.ts`, `engineSleepKept.ts` and `engineSleepPlace.ts` | #1969 |
 | Unload inactive profiles (Settings › Advanced, with Memory Saver) | Not offered; hidden: the engine has no `profiles.unloadIdle` | #1425 |
 | Little Ardia (Ctrl+Alt+N) | Works, app-drawn chrome; its command bar lists recent pages | |
 | Search Tabs (Ctrl+Shift+A), Ctrl+Tab | Works (d83398e1f): the new page has the keyboard after Ctrl+Tab and after Next Tab into a tab a restore left unloaded (#1658, #1691). Gap: a new tab opened with an address (Ctrl+T, the address, Enter) doesn't get the keyboard, tracked in #1689 (still so on 72901e27a) | #1658, #1689 |
@@ -89,7 +89,7 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
 | Full-screen (a page element) | Works; Escape leaves it | |
 | Picture in picture | Differs: Chromium's window, no stash, corners or mini player | #1425 |
 | Downloads (download, panel, Ctrl+J) | Works: the panel opens for a new download and lists it, including one held for Keep; Ctrl+J opens it and Escape closes it (53d5a2bee, walked 2026-11-14) | #1519, #1610 |
-| History (Ctrl+H), Clear Browsing Data (Ctrl+Shift+Del) | Works | |
+| History (Ctrl+H), Clear Browsing Data (Ctrl+Shift+Del) | Works; history is kept past 90 days and an import keeps its older pages, as on the Mac (engine `windows-engine-20261115-17` passes `keep-old-history`; seen by the `engine history:` self-check in CI) | #2009 |
 | Bookmarks (Ctrl+D, Ctrl+Shift+O) | Works | |
 | mailto and other app links | Works: the app's prompt, then the handler (`mailto` opens the mail app without a prompt, as Chromium and the Mac allow it by default). The engine thread saw the prompt and the handler in the VM on build 347 of #1701; not walked here. The first click on the prompt works after using the page since #1749, and a data: page's prompt stops counting once its document is gone since #1750 (engine `-22`); the engine thread saw the first in the VM and the self-check proves the second on both CPUs. | #1590, #1701, #1749, #1750 |
 | Translate | Not offered | #1520 |
@@ -389,6 +389,16 @@ is one folder: Chromium's launcher as `Ardia.exe`, `chrome.dll`, and the app's l
 manifest entries). With `ArdiaApp.dll` beside the launcher the browser process runs the app; without it the same build
 is plain Chromium.
 
+- The Visual C++ runtime ships inside the folder. React Native's DLLs import the app-container CRT (`vcruntime140_app.dll`,
+  `msvcp140_app.dll` and the other `*_app.dll`), whose exports forward to the desktop `VCRUNTIME140.dll`, `MSVCP140.dll`
+  and friends. A clean Windows 11 has none of those, and the per-user installer can't run `vc_redist`, so
+  `assemble.ps1` (`vc-runtime.ps1`) reads every PE file's imports, delay-loads and forwarded exports and copies each
+  redist DLL they reach from the build machine's Visual Studio (`VC\Redist\MSVC\<version>\<cpu>`, the version from
+  `Microsoft.VCRedistVersion.default.txt`, found with vswhere; `-VcRedist <folder>` overrides it), for the launcher's
+  CPU (all nine on x64, eight on ARM64, which has no `vcruntime140_1`). A forwarder whose target the redist lacks is left
+  out when nothing loads it, and fails the assembly when something does. Without this the app fails with "Class not registered" on a machine without the VC++ redist, and GitHub's
+  runners have it, so only `dependency-check.ps1` below catches it in CI (#2036).
+
 - `//ardia/win` (`scripts/windows/engine/src/ardia/win`, copied into the tree by `series_win.py`) is the engine's side.
   It starts Chromium with no window of its own, turns the launch variables into switches as the Mac's launcher does
   (`ARDIA_DATA_DIR` keeps Chromium's data in `<dir>\Chromium`; `ARDIA_REMOTE_DEBUGGING_PORT`, `ARDIA_TEST` and
@@ -400,7 +410,12 @@ is plain Chromium.
   or shortcuts of its own (the `chromium-win-hosted-*` patches), and each shows one page: its active tab. Each is
   a borderless top-level window owned by the app's window, placed over the page's view: it stays above its owner, hides
   and minimizes with it, and follows it when it moves. It cannot be a child window: with the Windows App SDK in a
-  window, no mouse message for a child of it reaches the UI thread (`ARDIA_INPUT_TRACE=<file>` logs what does). A window
+  window, no mouse message for a child of it reaches the UI thread (`ARDIA_INPUT_TRACE=<file>` logs what does). Being
+  top-level, it is what a window tool finds under the pointer (AltSnap's Alt+drag, a script posting SC_MOVE), so while a page
+  is shown and not fullscreen its window holds its place: the host's own placement is the only move or resize it takes,
+  a change that skipped WM_WINDOWPOSCHANGING (SWP_NOSENDCHANGING) is put back, and a system move or size started on it
+  goes to the app window (#2051, `Test-PageHoldsPlace` in `launch-smoke.ps1`). The guard stays on the window through Memory
+  Saver: a hidden page that sleeps keeps it, and the page holds its place again once it wakes (`engineSleepPlace.ts`). A window
   Chromium opens by itself (a link opened in a new window) stays off screen until the app adopts its tabs.
 - The verbs: `tab.create` (a key, a profile, a URL or a tab to adopt; the same key again moves the tab to the window
   that asks), `tab.show` (visible, and where in the window, in the UI's points; a corner radius and holes),
@@ -812,7 +827,9 @@ Answered on Windows since the engine took Windows paths (`windows-engine-2026111
 
 Deleting a profile's data: native (`ArdiaEngineHost.removeProfileFolder`) works out Chromium's data folder itself, as
 the engine does (`<ARDIA_DATA_DIR>\Chromium` in an instance with its own data folder, `%LOCALAPPDATA%\Ardia\User Data`
-otherwise), and acts only where that folder holds `Local State` and agrees with `host.info`'s `userDataDir`. A profile
+otherwise), and acts only where that folder holds the `Default` profile folder or `Local State` and agrees with `host.info`'s
+`userDataDir`. The folder counts first: Chromium saves `Local State` with `ReplaceFile`, and while it does a reader can
+find the file missing, which made a removal answer "refused" and leave a deleted profile's data on disk (#2120). A profile
 is deleted by its folder only when its id is one Ardia makes: lowercase `a-z`, `0-9` and `-`, at most 238 characters,
 so that `Ardia <id> (removing)` fits one 255-character NTFS name. Its folder is then exactly `Ardia <id>`. Any other id
 (hand-edited state, a sync from something else, a bug) could share its folder with another profile, so on purpose
@@ -951,13 +968,18 @@ Swift core wrote (`fixtures/windows-interop/mac`), and the self-check opens that
 
 ## Updates
 
-- The Windows alpha is the GitHub prerelease `windows-alpha`: `Ardia-Setup-x64.exe`, `Ardia-Setup-arm64.exe`, the
+- The updates live on the GitHub prerelease `windows-alpha`: `Ardia-Setup-x64.exe`, `Ardia-Setup-arm64.exe`, the
   feed `windows-update.json` (version, build, and per CPU the installer's address, SHA-256 and size) and the
-  engine's source. `scripts/windows/publish-alpha.sh <run id>` publishes one green Windows workflow run there; the
-  feed goes up last. It keeps the installers of the build before, so an update the app already offered still downloads,
-  and removes older ones.
-- A build knows what it is from `Ardia.build.json` beside `Ardia.exe` (`assemble.ps1 -Build`, the workflow's run
-  number). `ArdiaApp.systemInfo` takes its version and build from that file, since the library has no version
+  engine's source. `scripts/windows/publish-alpha.sh` puts one build there, the feed last. It keeps the installers of
+  the build before, so an update the app already offered still downloads, and removes older ones. It refuses a build
+  at or below the live feed's, since no installed app would take it.
+- Every release refreshes it (Releases, below), so installed Windows apps update to each nightly and stable.
+  `publish-alpha.sh <run id>` still publishes one green Windows workflow run there as an alpha between releases.
+- A build knows what it is from `Ardia.build.json` beside `Ardia.exe` (`assemble.ps1 -Version -Build`). The build
+  number is the number of commits in the built commit's history (`git rev-list --count`, the workflow's `identity`
+  job), so it grows with `main` and a release outranks every build before it, CI's included; builds before this rule
+  were numbered by the run (up to about 670). The Windows workflow puts the same file beside the installer in its
+  `Ardia-Setup-<cpu>` artifact, which is where `publish-alpha.sh` reads a build's version and number. `ArdiaApp.systemInfo` takes its version and build from that file, since the library has no version
   resource, so telemetry, About and problem reports name the build; a folder build without it says 0.0.0, build 0. Only an installed build with that file updates: Settings › General › Updates shows "not set up" for a
   folder build.
 - `packages/expo-windows/src/updater` is the app's `ArdiaUpdater` on Windows. It reads the feed, offers a higher
@@ -970,6 +992,45 @@ Swift core wrote (`fixtures/windows-interop/mac`), and the self-check opens that
   after hashing it again while holding it open. The installer runs silently, closes what is left of the app and
   opens it again (`/relaunch=1`). Nothing is signed yet, so what stands behind an update is GitHub's HTTPS and the
   release's write access.
+
+## Releases
+
+The Release workflow (`.github/workflows/release.yml`, dispatched by the `release` skill) builds Windows next to the
+Mac, for every nightly and stable:
+
+1. Its `windows` job calls `windows.yml` with the release's version, at the release's commit: the same build, pinned
+   engine (`scripts/windows/engine/prebuilt.json`), launch, tour and installer checks as CI, for x64 and arm64.
+   `release-files.ps1` names each tested installer `Ardia-<version>-windows-<cpu>-setup.exe` with its `.sha256`, and
+   the job leaves them with `Ardia.build.json` in the artifacts `windows-release-x64` and `windows-release-arm64`. Its
+   `source` job packs the engine's source, `Ardia-<version>-windows-source.tar.xz` with a `.sha256`, in
+   `windows-release-source`: `scripts/windows/engine-source.sh`, from the Helium tags `helium-pins.ini` pins at that
+   commit, with a README naming Chromium's source and this repository's tree.
+2. `publish` attaches both installers, the engine's source and their `.sha256` files to `v<version>` (`publish.sh`
+   checks the hashes and that the build is this version, and refuses installers without their source), so every
+   release keeps the source beside its Windows binaries for as long as it stays up. A dry run checks the same and
+   attaches nothing.
+3. `windows-update`, after `publish`, runs `publish-alpha.sh --installers` on those files: a real run puts them on
+   `windows-alpha`, with the same source archive as `ardia-windows-source-<build>.tar.xz`, and points the feed at them,
+   so installed Windows apps offer the release; a dry run packs the feed and prints what it would upload.
+   `publish-alpha.sh <run id>` packs the source with the same `engine-source.sh`.
+
+A Windows failure never holds back the Mac release: `publish` warns that Windows was skipped, and the release ships
+without the installers and without refreshing the feed. Don't re-run the Release run's failed jobs for it: that runs
+`publish` again, which can't create a release that exists. When the cause is outside the code (a runner, a flaky
+check, an engine release the token can't read), build the release's commit on its own and add the result:
+
+```bash
+gh workflow run windows.yml -R ardia-browser/ardia --ref v<version> -f version=<version>
+gh run download <run id> -R ardia-browser/ardia -p 'windows-release-*' -D dist/<version>/artifacts
+mkdir -p dist/<version>/windows && cp -n dist/<version>/artifacts/windows-release-*/* dist/<version>/windows/
+gh release upload v<version> -R ardia-browser/ardia dist/<version>/windows/Ardia-<version>-windows-*
+scripts/windows/publish-alpha.sh --installers dist/<version>/windows --commit v<version>
+```
+
+When the cause is in the code (a stale engine pin needs a new engine release and `prebuilt.json`), fix it on `main`;
+Windows skips this version and ships with the next release. When only `windows-update` failed, the installers are on
+the release already: re-run that job alone (its re-run touches nothing else), or run the last line above on its
+`windows-release-*` artifacts, flattened into one folder as above.
 
 ## Test instances
 
@@ -1092,6 +1153,13 @@ does run in a test instance. A scratch folder with the marker must get both powe
   button does not do so; a drag of the toolbar's empty middle is not the app's own move; Ctrl+T matches no command; the sidebar button does not take its click; or the pointer just outside the
   window's left edge does not bring the hidden sidebar's edge over and away. The ARM runner's desktop is covered by
   Windows' own first-run screen, so its screenshots show that screen and it skips the input.
+- After assembling, `scripts/windows/dependency-check.ps1` (x64 and ARM64) reads the import table, delay-load table and
+  forwarded exports of every PE file in the folder (`pe-imports.ps1`) and fails when a DLL they name is neither in
+  the folder, an API set (`api-ms-win-*`, `ext-ms-*`), nor on its explicit list of DLLs a clean Windows 11 ships in
+  System32 (checked against a clean 25H2 install). The Visual C++ runtime (`vcruntime*`, `msvcp*`, `concrt*`,
+  `vccorlib*`, `vcomp*`, `vcamp*`, `ucrtbased`) can never be on that list. `pe-imports.test.ps1` checks the reader and
+  the runtime deployment against PE images it builds in memory. A new system DLL an engine or app update imports goes
+  on the list once it is confirmed in a clean Windows 11's System32.
 - Both runs then write the library's WinRT list into a copy of `Ardia.exe` with `scripts/windows/host-manifest.ps1`
   and read it back, so the script the engine's launcher depends on is exercised on every build.
 - `scripts/windows/tour.ps1` drives a full screenshot tour and writes `tour.md`, one line per stop with the facts it
@@ -1164,7 +1232,6 @@ Engine work (#1425): the walk found nothing new missing beyond what is already l
 Decisions for Shivam:
 - the calendar source on Windows (#1521);
 - Translate (#1520);
-- publishing a `windows-alpha` release, so Check for Updates has something to find (#1517);
 - signing, or a per-machine install (#1659).
 
 With the engine and owner items set aside, the app side has not reached parity yet: items 1 to 4, 9 and 10 are bugs a
@@ -1184,5 +1251,5 @@ only where the engine, Windows itself or a decision stands in the way.
    gestures. Import from another browser is done for bookmarks, history, open tabs, favicons, Chromium passwords and
    cookies, and HTML and CSV files; what is left is listed under Import from another browser.
 6. An installer exists (`scripts/windows/make-installer.ps1`, Inno Setup, per user, no admin prompt; CI builds
-   `Ardia-Setup-<cpu>.exe` and installs and uninstalls it), and the app updates itself from the Windows alpha
-   (Updates, below). Left: signing both.
+   `Ardia-Setup-<cpu>.exe` and installs and uninstalls it), every release ships them and refreshes the feed, and the
+   app updates itself from it (Updates, below). Left: signing both.

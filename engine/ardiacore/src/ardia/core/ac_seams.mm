@@ -29,6 +29,7 @@
 #include "ardia/core/ac_host_visibility.h"
 #include "ardia/core/ac_installed_bubble.h"
 #include "ardia/core/ac_launch_switches.h"
+#include "ardia/core/ac_windowless_page.h"
 #include "ui/base/cocoa/drag_permission.h"
 #import "ardia/core/ardiacore_api_internal.h"
 #import "ardia/core/ardiacore_internal.h"
@@ -180,6 +181,7 @@ void InstallChromeHooks() {
   g_ardia_live_tab_skips_restore = &LiveTabSkipsRestore;
   g_ardia_omits_from_session_service = &OmitsFromSessionService;
   g_ardia_viewless_browsers = true;
+  InstallWindowlessPageGeometry();
   ardia::InstallCliVisibleTabs();
   if (TestFlag("nativeDragRefused")) {
     ui::ArdiaRefuseDragSessionInitiation();

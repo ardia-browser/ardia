@@ -22,6 +22,7 @@ test("the intro counts say which scene ran, how soon the meadow drew, and whethe
     intros_scene_poster: 1,
     intros_scene_fell_back: 1,
     intros_first_frame_ms: 600,
+    intros_music_failed: 0,
   });
-  assert.deepEqual(Object.values(takeIntroCounts()), [0, 0, 0, 0, 0, 0, 0, 0]);
+  assert.deepEqual(Object.values(takeIntroCounts()), [0, 0, 0, 0, 0, 0, 0, 0, 0]);
 });

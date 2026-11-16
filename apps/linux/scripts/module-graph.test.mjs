@@ -103,6 +103,10 @@ test("production graph uses current Linux adapters and one canonical shared stat
   assert.ok(!app.importedIds.includes(`${browser}components/tabstrip/TopTabStrip.tsx`));
   assert.ok(graph.get(`${linux}TopStripPeekRegion.tsx`).importedIds.includes(`${browser}components/tabstrip/TopTabStrip.tsx`));
 
+  for (const twin of ["lib/platformFeatures", "lib/platformTerms"]) {
+    assert.ok(graph.has(`${browser}${twin}.linux.ts`), `${twin} resolves to its .linux twin`);
+    assert.ok(!graph.has(`${browser}${twin}.ts`), `the macOS ${twin} stays out of the Linux bundle`);
+  }
   assert.ok(!graph.has(`${browser}platform/fieldTiming.ts`), "the macOS-only field timing module stays out of the Linux bundle");
   assert.ok(graph.get(`${browser}state/telemetry/journeys.ts`).importedIds.includes(`${linux}fieldTiming.ts`), "journeys reads the Linux field timing stub");
   for (const shared of ["state/live/sources.ts", "state/live/net.ts"]) assert.ok(!graph.has(`${browser}${shared}`), `${shared} and its renderer fetch stay out of the Linux bundle`);

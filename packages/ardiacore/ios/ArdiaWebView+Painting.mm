@@ -1,4 +1,5 @@
 #import "ArdiaWebViewInternal.h"
+#import "ArdiaInterfaceScale.h"
 #import "ArdiaEarlyWindow.h"
 #import "ArdiaRuntime.h"
 
@@ -152,8 +153,14 @@ BOOL Above(NSView *a, NSView *b) {
 
 - (void)setFrameSize:(NSSize)newSize {
   [super setFrameSize:newSize];
+  [ArdiaInterfaceScale fitPageHost:self];
   [self layoutPage];
   if (_visible) [ArdiaEarlyWindow noteLayoutChangeIn:self.window];
+}
+
+- (void)interfaceScaleChanged {
+  [ArdiaInterfaceScale fitPageHost:self];
+  [self layoutPage];
 }
 
 - (void)setFrameOrigin:(NSPoint)newOrigin {
@@ -166,6 +173,7 @@ BOOL Above(NSView *a, NSView *b) {
   if (NSView *standIn = _standIn.page; standIn.superview == self) standIn.frame = self.bounds;
   NSView *page = _tab.view;
   if (!page || page.superview != self) return;
+  if (NSIsEmptyRect(self.bounds) && !NSIsEmptyRect(page.frame) && !self.paints) return;
   if (_devtoolsView) {
     NSRect devtools = NSZeroRect, pageFrame = self.bounds;
     [_tab devToolsLayoutForSize:self.bounds.size devTools:&devtools page:&pageFrame];
@@ -289,6 +297,7 @@ BOOL Above(NSView *a, NSView *b) {
   [CATransaction setDisableActions:YES];
   self.alphaValue = _frameHold.awaiting && (_standIn.page.superview != self || _standIn.leaving) ? 0 : _visible || _reveal.active || _frameHold.holding || !(_warm || _leave.active) ? 1 : 0;
   const BOOL shown = self.paints;
+  if (shown && NSIsEmptyRect(self.bounds)) [self layoutPage];
   for (NSView *sub in self.subviews) {
     sub.hidden = !shown;
     AcceptDrops(sub, _visible);

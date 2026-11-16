@@ -9,9 +9,10 @@ final class SidebarEdgeWatcher {
   var pointerOverride: NSPoint?
   private var backgroundPoint: NSPoint?
   private struct Watch {
-    let hold: CGFloat
+    let rootHold: CGFloat
     let right: Bool
     let whilePressed: Bool
+    var hold: CGFloat { InterfaceScale.windowLength(fromRoot: rootHold) }
   }
 
   private var watched: [String: Watch] = [:]
@@ -41,7 +42,7 @@ final class SidebarEdgeWatcher {
   private static let localEvents: NSEvent.EventTypeMask = pointerEvents.union([.leftMouseDown, .rightMouseDown, .otherMouseDown])
 
   func watch(id: String, on: Bool, hold: CGFloat, right: Bool, whilePressed: Bool) {
-    watched[id] = on ? Watch(hold: max(0, hold), right: right, whilePressed: whilePressed) : nil
+    watched[id] = on ? Watch(rootHold: max(0, hold), right: right, whilePressed: whilePressed) : nil
     if on { unreported.insert(id) } else { over.remove(id) }
     if !on { overSince[id] = nil }
     if watched.isEmpty { return stop() }
@@ -99,8 +100,8 @@ final class SidebarEdgeWatcher {
       guard fresh || now != over.contains(id) || edgeNote != nil else { continue }
       if now, !over.contains(id) { overSince[id] = ProcessInfo.processInfo.systemUptime }
       if now { over.insert(id) } else { over.remove(id) }
-      let frame = window.frame
-      var event: [String: Any] = ["type": "sidebarEdge", "id": id, "over": now, "point": [point.x - frame.minX, frame.maxY - point.y]]
+      let inRoot = InterfaceScale.rootPoint(fromScreen: point, in: window)
+      var event: [String: Any] = ["type": "sidebarEdge", "id": id, "over": now, "point": [inRoot.x, inRoot.y]]
       if let edgeNote { event["screenEdge"] = edgeNote }
       ShellEvents.send(.window, event)
     }
@@ -269,7 +270,7 @@ final class SidebarEdgeWatcher {
     if NSApp.isActive || !over.isEmpty { return true }
     return watched.contains { id, watch in
       guard let window = WindowManager.shared.window(id) else { return false }
-      if watch.hold > 0 { return true }
+      if watch.rootHold > 0 { return true }
       guard let screen = window.screen else { return false }
       return Self.besideScreenEdge(window, screen, right: watch.right)
     }
@@ -316,6 +317,9 @@ final class SidebarEdgeWatcher {
       }
       observers.append(center.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
         self?.updateGlobalMonitor()
+      })
+      observers.append(center.addObserver(forName: .ArdiaInterfaceScaleDidChange, object: nil, queue: .main) { [weak self] _ in
+        self?.checkPointer()
       })
       for name in [NSWindow.didMoveNotification, NSWindow.didResizeNotification, NSWindow.didChangeScreenNotification] {
         observers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in

@@ -12,6 +12,7 @@ import { toolbarPalette, type ToolbarPalette } from "../ui/toolbarColors";
 import { Button, type ButtonHit, FadeLabel, radius, space, ToolbarRowContext, useHover } from "../ui";
 import { TOOLBAR_ROWS } from "../../lib/toolbarRow";
 import { setUrlAnchor, useSidebarCaptionRoom, watchSidebarControlsRow } from "../../state/windows/layout";
+import { onInterfaceScaleSettled } from "../../state/settings/interfaceScale";
 import { useSidebarPart } from "../../state/sidebar/chrome";
 import { SIDEBAR_FIELD } from "./geometry";
 import { SIDEBAR_TYPE, TAB_ROW } from "./tokens";
@@ -118,6 +119,7 @@ export function SidebarAddressRow({ width, top }: { width: number; top: number }
   const remeasure = useRef(anchor);
   remeasure.current = anchor;
   useEffect(() => watchSidebarControlsRow(windowId, () => requestAnimationFrame(() => remeasure.current())), [windowId]);
+  useEffect(() => onInterfaceScaleSettled(() => remeasure.current()), [windowId]);
 
   return (
     <View

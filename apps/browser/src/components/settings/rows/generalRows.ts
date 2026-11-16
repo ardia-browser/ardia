@@ -144,7 +144,17 @@ export const generalRows = {
       section: "Sync",
       rows: {
         sync: { title: "Sync", description: `Sync your profiles, bookmarks, history, tabs, ${PLATFORM_FEATURES.syncsPasswords ? "passwords, " : ""}extensions and settings across your ${PLATFORM_TERMS.syncedComputer}s.`, keywords: [PLATFORM_TERMS.cloudDrive.toLowerCase(), "recovery phrase", "devices", "turn on sync", "end to end", "encrypted"] },
-        folder: { advanced: true, title: "Sync folder", keywords: ["icloud drive", "dropbox", "folder"] },
+        folder: { ...(PLATFORM_FEATURES.defaultCloudDrive ? { advanced: true as const } : {}), title: "Sync folder", keywords: ["icloud drive", "dropbox", "folder"] },
+      },
+    },
+    {
+      section: "All Open Tabs",
+      rows: {
+        allOpenTabs: {
+          title: "Sync all open tabs",
+          description: "Pick profiles whose open tabs are the same on all your Macs, not just their pinned tabs. Closing a tab closes it on your other Macs too.",
+          keywords: ["unpinned tabs", "regular tabs", "today tabs", "arc", "spaces", "tabs on every mac", "same tabs", "continue on another mac"],
+        },
       },
     },
   ],

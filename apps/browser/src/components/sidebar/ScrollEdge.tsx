@@ -7,8 +7,10 @@ import { curve, duration } from "../ui/motion";
 export const SCROLL_EDGE = { gap: space.xs, line: 1, inset: 1 } as const;
 const FADE = { duration: duration.fast, easing: curve.fade };
 
+const SCROLLED_PAST = 0.5;
+
 export function scrolledPastTop(offset: number): boolean {
-  return offset > 0;
+  return offset >= SCROLLED_PAST;
 }
 
 export function useScrollEdge() {

@@ -1,11 +1,11 @@
 import { ArdiaError, ardiaError } from "@ardia/core";
 import { requireNativeModule, type EventSubscription } from "expo-modules-core";
-import type { EngineCalls, EngineEvents, WindowsHostEvents } from "./api";
+import type { EngineCalls, EngineEvents, LinuxHostEvents, WindowsHostEvents } from "./api";
 
 export type CallName = keyof EngineCalls;
 export type CallArgs<N extends CallName> = EngineCalls[N][0];
 export type CallResult<N extends CallName> = EngineCalls[N][1];
-type Events = EngineEvents & WindowsHostEvents;
+type Events = EngineEvents & WindowsHostEvents & LinuxHostEvents;
 export type EventName = keyof Events;
 export type EventData<E extends EventName> = Events[E];
 

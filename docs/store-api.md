@@ -31,6 +31,11 @@ store but through `storeAction` wrappers in each domain's `actions.ts` (`newTab`
   regular window closed with the close button is marked `lastWindow`, with `activePin` when a pinned tab was showing, and
   `openLastWindowOrNew` (state/windows/lastWindow.ts) brings it back on a Dock click or at launch);
   `downloads`; `settings` (typed, state/settings/settings.ts).
+- Interface size: `settings.interfaceScale` is the chosen size (this Mac only); `useInterfaceScale`
+  (state/settings/interfaceScale.ts) holds the applied one, which every root-point conversion reads
+  (`currentInterfaceScale`, `onInterfaceScaleChange`). `chooseInterfaceScale` (state/settings/actions.ts) snaps to a 5 %
+  step; `startInterfaceScale` (interfaceScaleSync.ts) pushes it to native. Window frames stay physical: lay out with
+  `windowRootSize` (state/windows/rootSize.ts).
 - `parkedPins[profileId]` (state/pins/parkedPins.ts): pinned tabs belong to the profile's sidebar, as in Dia. Closing a
   window (⌘W on its last tab, the close button, ⇧⌘W, "Start fresh" on launch) parks its pinned tiles (at their pinned
   URL) and pinned groups, with their order and tab/group ids; the next window that shows the profile takes them back,

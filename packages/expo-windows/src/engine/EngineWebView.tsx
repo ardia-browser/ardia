@@ -42,6 +42,7 @@ const ARGUMENTS: Record<string, string[]> = {
   pageCookies: ["urls"],
   openBlockedPopup: ["id", "always"],
   discard: ["unload"],
+  sleepIfHidden: ["seconds"],
   setFrozen: ["frozen"],
   resolveUnresponsive: ["terminate"],
 };
@@ -50,6 +51,7 @@ const UNWRAPPED: Record<string, (reply: Record<string, unknown> | null) => unkno
   navigationEntries: (reply) => reply?.entries ?? [],
   pageCookies: (reply) => reply?.cookies ?? [],
   discard: (reply) => reply?.outcome ?? "refused",
+  sleepIfHidden: (reply) => (Array.isArray(reply?.keptBy) ? reply.keptBy : [-1]),
   getSecurityInfo: (reply) => (!reply || reply.info === null ? null : reply),
   clearSiteData: (reply) => reply ?? { cookies: false, storage: false },
 };

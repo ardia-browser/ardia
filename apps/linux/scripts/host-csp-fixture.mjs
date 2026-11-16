@@ -56,6 +56,7 @@ window.__ardiaHost = {
     if(method==='ArdiaExtensions.list')return {extensions:[]};
     if(method==='ArdiaExtensions.searchEngineList')return {list:null};
     if(method==='ArdiaShell.windowIds')return ['w_csp'];
+    if(method==='ArdiaShell.windowFrame')return [0,0,1280,800];
     if(method==='ArdiaCEF.tabStrips')return {rev:0,cmd:null,strips:[]};
     if(noops.has(method))return;
     throw new Error('Unexpected fixture host call '+method);
@@ -67,7 +68,7 @@ window.addEventListener('pagehide', () => { for(const listener of closing)listen
 `;
 const styles = (await readdir(join(output, "assets"))).filter((name) => name.endsWith(".css"));
 const html = `<!doctype html><html><head><meta charset="utf-8"><title>Ardia Trusted Types fixture</title>${styles.map((name) => `<link rel="stylesheet" href="/assets/${name}">`).join("")}</head><body><div id="root"></div><div id="symbol-fixture" style="position:absolute;left:-2000px;top:0;width:1000px"></div><script src="/fixture-host.js"></script><script type="module" src="/assets/host-csp-entry.js"></script></body></html>`;
-const mime = { ".js": "application/javascript", ".css": "text/css", ".png": "image/png", ".svg": "image/svg+xml" };
+const mime = { ".js": "application/javascript", ".css": "text/css", ".png": "image/png", ".svg": "image/svg+xml", ".wav": "audio/wav" };
 const server = http.createServer(async (request, response) => {
   response.setHeader("Content-Security-Policy", policy);
   const pathname = new URL(request.url, "http://127.0.0.1").pathname;

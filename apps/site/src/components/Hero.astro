@@ -1,6 +1,7 @@
 ---
 import DownloadButton from "./DownloadButton.astro";
 import MacOnlyNote from "./MacOnlyNote.astro";
+import PcNote from "./PcNote.astro";
 import SendToMac from "./SendToMac.astro";
 import { REPO } from "../data/release";
 import { STARS } from "../data/github";
@@ -56,8 +57,11 @@ const posterTones = HERO_POSTERS.map(({ media, tones, sky, headerHalo }) => ({ m
         <SendToMac location="hero" main />
       </div>
       <div class="cta-row" data-reveal data-meadow-keep-out="row" style="--i: 3">
-        <DownloadButton location="hero" class="not-phone" />
-        <DownloadButton location="hero" class="not-phone" nightly label="Nightly" meta="Wet paint" />
+        <DownloadButton location="hero" class="not-phone not-pc" />
+        <DownloadButton location="hero" class="not-phone not-pc" nightly label="Nightly" meta="Wet paint" />
+        <DownloadButton location="hero" platform="windows-x64" />
+        <DownloadButton location="hero" platform="windows-arm64" />
+        <DownloadButton location="hero" platform="linux" />
         <a
           class="link source"
           href={REPO}
@@ -69,6 +73,7 @@ const posterTones = HERO_POSTERS.map(({ media, tones, sky, headerHalo }) => ({ m
         >
       </div>
       <MacOnlyNote location="hero" />
+      <PcNote location="hero" />
     </div>
   </div>
 </section>
@@ -320,6 +325,16 @@ const posterTones = HERO_POSTERS.map(({ media, tones, sky, headerHalo }) => ({ m
   .hero :global([data-tone="dark"] .nightly-btn) {
     --btn-bg: color-mix(in srgb, var(--ink) 55%, transparent);
   }
+  .hero :global(.pc-note) {
+    width: fit-content;
+    margin-top: 16px;
+    padding: 10px 14px 8px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--paper) 82%, transparent);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    color: var(--ink-2);
+  }
   .source {
     font-size: var(--t-small);
     min-height: 44px;
@@ -398,7 +413,7 @@ const posterTones = HERO_POSTERS.map(({ media, tones, sky, headerHalo }) => ({ m
       lede: [hero.querySelector(".lede"), hero.querySelector(".welcome")],
       cta: [hero.querySelector(".cta-row")],
       send: [hero.querySelector("[data-send-panel]")?.parentElement],
-      note: [hero.querySelector(".note")],
+      note: [...hero.querySelectorAll(".note")],
     };
     for (const [group, [tone, halo]] of Object.entries(preset.tones)) {
       for (const element of groups[group] ?? []) {

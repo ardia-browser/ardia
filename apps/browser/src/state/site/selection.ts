@@ -1,5 +1,5 @@
 import { setSearchEngineName, setSelectionPopover, type SearchEngineIdentity } from "../../platform/pageOptions";
-import { chooseTextFragment, cleanUrl, searchUrl, withTextFragment, type SelectionContext } from "@ardia/core";
+import { chooseTextFragment, cleanUrl, markdownLink, searchUrl, withTextFragment, type SelectionContext } from "@ardia/core";
 import { copyText } from "../../platform/clipboard";
 import { create } from "zustand";
 import { webviews } from "../../platform/webviews";
@@ -97,12 +97,13 @@ export async function copyLinkToSelection(tabId: string) {
 
 const HAS_SELECTION = `post("result", JSON.stringify(!!String(getSelection() || "").trim()))`;
 
-export async function copyPageUrl(tabId: string) {
+export async function copyPageUrl(tabId: string, markdown = false) {
   const tab = store().tabs[tabId];
   if (!tab?.url) return;
   const clean = cleanUrl(tab.url);
-  copyText(clean);
+  copyText(markdown ? markdownLink(tab.customTitle || tab.title, tab.url) : clean);
   noteUrlCopied(awaitsFirstPage(tabId));
+  if (markdown) return;
   const title = clean !== tab.url ? "Copied a clean link without trackers" : "Copied Current URL";
   const web = webviews.get(tabId);
   const selected = /^https?:/.test(tab.url) && web ? await web.evaluate<boolean>(HAS_SELECTION) : false;

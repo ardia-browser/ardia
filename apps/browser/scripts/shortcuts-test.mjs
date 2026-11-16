@@ -271,6 +271,7 @@ function recordFocus(focusName) {
 const results = new Map(shortcuts.map(([name]) => [name, {}]));
 let failures = 0;
 await showPage("t3");
+if (!(await menuLive())) throw new Error("the window's menu isn't ready for shortcut checks");
 const onlyFocuses = process.env.SHORTCUTS_FOCUSES?.split(",").filter(Boolean);
 for (const [focusName, focus] of Object.entries(focuses)) {
   if (onlyFocuses && !onlyFocuses.includes(focusName)) continue;
@@ -309,7 +310,7 @@ const real = async (label, key, focus, expectUrl) => {
 };
 const sidebar = { focus: "window" };
 const page = { focus: "page", asKey: true, wait: 800, settle: 500 };
-const menuLive = async () => {
+async function menuLive() {
   await ac(`ac.store.getState().setFocusedWindow("w1"); return 1;`);
   const deadline = Date.now() + 5000;
   while (Date.now() < deadline) {
@@ -318,7 +319,7 @@ const menuLive = async () => {
     await sleep(100);
   }
   return false;
-};
+}
 check("the window's menu is live before the real presses", await menuLive(), "Select Tab 1 stayed disabled: the menu state has no focused window");
 await real("⌘1 in the sidebar", cmd("1", 18), sidebar, "pin1");
 await real("⌘2 in the sidebar", cmd("2", 19), sidebar, "pin2");
@@ -416,6 +417,20 @@ const resetToPageField = async (value, selection) => {
   await pageField(`(f.value = ${JSON.stringify(value)}, f.focus(), f.setSelectionRange(${selection[0]}, ${selection[1]}), true)`);
   await sleep(100);
 };
+await resetToPageField("", [0, 0]);
+await ac(`ac.store.getState().setSelection("w1", ["t1", "t2", "t3"]); return 1;`);
+await cdp("?t3", `document.activeElement.blur(); const r = document.createRange(); r.selectNodeContents(document.querySelector("h1"));
+  getSelection().removeAllRanges(); getSelection().addRange(r); true;`);
+await clipboard.set("selected-tabs-sentinel");
+await press(cmd("c", 8), { ...page, send: true });
+check("⌘C copies selected page text with several tabs selected", (await clipboard.get()) === "t3", "page Copy was intercepted");
+const selectedUrls = ["t1", "t2", "t3"].map((id) => `${pages}/?${id}`).join("\n");
+for (const [label, key] of [["⌘C", cmd("c", 8)], ["⇧⌘C", cmd("C", 8, "shift")]]) {
+  await clipboard.set("selected-tabs-sentinel");
+  await press(key, { ...sidebar, asKey: true, send: true, wait: 400 });
+  check(`${label} copies every selected sidebar URL`, (await clipboard.get()) === selectedUrls, "selected URLs were not copied");
+}
+await ac(`ac.store.getState().setSelection("w1", []); return 1;`);
 const sidebarOpen = () => ac(`return !ac.store.getState().settings.autoHideTabs;`);
 for (const [label, presses, toggles] of [
   ["one ⌘S in a page's text field stays with the page", [keyPress("s", 1)], 0],

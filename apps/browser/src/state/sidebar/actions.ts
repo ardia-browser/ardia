@@ -8,11 +8,11 @@ import { focusHeroBar } from "../omnibox/barState";
 import { ancestorIds } from "../groups/groups";
 import { activeTabId, bookmarkProfileId, inPinnedContainer, pinSection, tabLayoutOf, tabsShownIn, tabTitle, viewTabIds } from "../browser/model";
 import { anchorOutdated, type ClickMods } from "../drag/drops";
-import { selectedTabIds } from "../pins/organize";
+import { multiSelectedTabIds, selectedTabIds } from "../pins/organize";
 import { groupLabel, groupOf } from "../pins/tabGrouping";
 import type { Tab } from "../browser/types";
 import { awaitsFirstPage } from "../tabs/pendingAddress";
-import { noteUrlCopied } from "../telemetry/urlCopies";
+import { noteSelectionCopiedByKey, noteUrlCopied } from "../telemetry/urlCopies";
 import { noteRangeSelect } from "../telemetry/tabPresses";
 import { noteTextOnlyRow } from "../telemetry/tabStripCounts";
 import { NO_ROW_ICON } from "../pins/rowIcons";
@@ -20,6 +20,7 @@ import type { BookmarkFolderChoice } from "./menuParts";
 import { DEFAULT_SIDEBAR_WIDTH } from "../../lib/windowLayout";
 import { activeLook } from "../../lib/activeLook";
 import { measureRow, setSidebarUi, sidebarUi, type Target } from "./sidebarUi";
+import { showToast } from "../app/toasts";
 
 const store = () => useBrowser.getState();
 
@@ -130,10 +131,20 @@ export function newGroupWithSelection(windowId: string, ids = selectedTabIds(sto
 
 export function copyUrls(ids: string[], markdown: boolean) {
   const tabs = ids.map((id) => store().tabs[id]).filter((t): t is Tab => !!t?.url);
-  if (!tabs.length) return;
+  if (!tabs.length) return 0;
   const lines = tabs.map((t) => (markdown ? markdownLink(tabTitle(t), t.url) : cleanUrl(t.url)));
   copyText(markdown && lines.length > 1 ? lines.map((l) => `- ${l}`).join("\n") : lines.join("\n"));
   for (const t of tabs) noteUrlCopied(awaitsFirstPage(t.id));
+  return tabs.length;
+}
+
+export function copySelectedUrls(windowId: string, markdown: boolean, plainCopy: boolean): boolean {
+  const ids = multiSelectedTabIds(store(), windowId);
+  const copied = ids.length ? copyUrls(ids, markdown) : 0;
+  if (!copied) return ids.length > 0;
+  showToast(windowId, `Copied ${copied} ${copied === 1 ? "URL" : "URLs"}${markdown ? " as Markdown" : ""}`, undefined, { icon: "link" });
+  noteSelectionCopiedByKey(copied, plainCopy);
+  return true;
 }
 
 export async function bookmarkTabs(windowId: string, ids: string[], folder: BookmarkFolderChoice) {

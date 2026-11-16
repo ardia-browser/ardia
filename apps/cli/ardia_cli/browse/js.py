@@ -243,11 +243,11 @@ LIBRARY = r"""
     scope() {
       const text = ((document.body && document.body.innerText) || "").slice(0, 200000);
       const counts = [];
-      const range = text.match(/\b\d[\d,.]*\s*[-–—]\s*\d[\d,.]*\s+of\s+(about\s+|over\s+)?\d[\d,.]*\+?(\s+[A-Za-z]+)?/);
+      const range = text.match(/\b\d[\d,.]*[ \u00a0]*[-–—][ \u00a0]*\d[\d,.]*[ \u00a0]+of[ \u00a0]+(about[ \u00a0]+|over[ \u00a0]+)?\d[\d,.]*\+?([ \u00a0]+[A-Za-z]+)?/);
       if (range) counts.push(range[0]);
-      const total = text.match(/\b\d[\d,.]*\+?\s+(results|items|products|listings|jobs|homes|properties|matches|reviews|rentals|vehicles|cars|hotels|apartments|roles|positions|articles|stores|locations|courses|events|deals)\b/i);
+      const total = text.match(/\b\d[\d,.]*\+?[ \u00a0]+(results|items|products|listings|jobs|homes|properties|matches|reviews|rentals|vehicles|cars|hotels|apartments|roles|positions|articles|stores|locations|courses|events|deals)\b/i);
       if (total && !(range && range[0].includes(total[0]))) counts.push(total[0]);
-      const paged = text.match(/\bpage\s+\d+\s+of\s+\d+\b/i);
+      const paged = text.match(/\bpage[ \u00a0]+\d+[ \u00a0]+of[ \u00a0]+\d+\b/i);
       if (paged) counts.push(paged[0]);
       const controls = [];
       const named = (pattern) => {

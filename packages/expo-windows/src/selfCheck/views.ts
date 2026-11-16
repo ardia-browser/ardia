@@ -8,6 +8,7 @@ import { expectEqual, expectTrue, type Check } from "./check";
 const EXPECTED = [
   "ArdiaSurface",
   "ArdiaFadeLabel",
+  "ArdiaEdgeFadeMask",
   "ArdiaActivitySpinner",
   "ArdiaVisualEffect",
   "ArdiaGlassEffect",
@@ -28,6 +29,7 @@ const EXPECTED = [
 
 const MINIMAL_PROPS: Record<string, Record<string, unknown>> = {
   ArdiaFadeLabel: { text: "" },
+  ArdiaEdgeFadeMask: { fadeWidth: 88, floor: 0.25, onset: 24 },
   ArdiaWindowBackdrop: { colors: ["#000000", "#FFFFFF"] },
   ArdiaThemeSwatch: { colors: [] },
   ArdiaDockSelection: { dark: true },

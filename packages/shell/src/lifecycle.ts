@@ -11,11 +11,13 @@ export type AppEvent =
   | { type: "screenLocked" }
   | { type: "lockedOrAsleep" }
   | { type: "switcherReleased" }
-  | { type: "switcherKey"; key: "escape" | "next" | "previous" }
+  | { type: "switcherKey"; key: "escape" | "next" | "previous" | "close" }
   | { type: "switcherMouseUp" }
   | { type: "dragEscape" }
   | { type: "unclaimedEscape"; windowId: string }
-  | { type: "centeredResize" };
+  | { type: "centeredResize" }
+  | { type: "appLinkOpened"; windowId: string | null }
+  | { type: "littleArdiaReturnedToApp" };
 
 export type AppearanceMode = "auto" | "light" | "dark";
 
@@ -23,7 +25,7 @@ export type OpenURLSource = { bundleId: string | null; appName: string | null };
 
 type ShellEvents = {
   onAppEvent: (e: AppEvent) => void;
-  onOpenURLs: (e: { urls: string[]; pointer?: [number, number]; source?: OpenURLSource }) => void;
+  onOpenURLs: (e: { urls: string[]; pointer?: [number, number]; source?: OpenURLSource; returnTo?: string }) => void;
 };
 
 export type ShellNative = {
@@ -31,6 +33,7 @@ export type ShellNative = {
   setAppearance(mode: AppearanceMode): Promise<void>;
   isDarkAppearance(): Promise<boolean>;
   startDictation(): void;
+  dictationAvailable?(): boolean;
   fetchBangList(etag: string | null): Promise<BangListReply>;
   copyText(text: string): void;
   readText(): Promise<string>;

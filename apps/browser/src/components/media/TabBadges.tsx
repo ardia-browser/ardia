@@ -6,6 +6,7 @@ import { ink } from "../ui/tokens";
 import { usePage } from "../../state/tabs/pageState";
 import { CAPTURE_DOT_RIM } from "./tokens";
 import { PeekMark } from "../peek/PeekMark";
+import { useTabShared } from "../../state/media/screenShare";
 
 export const TabBadges = memo(function TabBadges({ tabId, size = 16 }: { tabId: string; size?: number }) {
   return (
@@ -19,8 +20,9 @@ export const TabBadges = memo(function TabBadges({ tabId, size = 16 }: { tabId: 
 function CaptureBadge({ tabId, size }: { tabId: string; size: number }) {
   const theme = useTheme();
   const capture = usePage(tabId, (p) => p.mediaAccess);
-  if (!capture) return null;
-  if (capture.screen) {
+  const shared = useTabShared(tabId);
+  if (!capture && !shared) return null;
+  if (shared || capture?.screen) {
     const d = Math.round(size * 0.72);
     return (
       <View pointerEvents="none" style={{ position: "absolute", right: -d / 3, bottom: -d / 3 }}>

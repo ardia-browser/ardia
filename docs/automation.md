@@ -126,8 +126,8 @@ drag or a menu pick. Code: `state/automation/workspace*.ts`.
 `"shown": true`: `{"profile", "profileName", "shown", "activeTab", "topApps", "pinned", "tabs"}`, each list in sidebar
 order. `topApps` holds tiles and tile folders (`{"type": "folder", "id", "name", "items"}`); `pinned` the pinned rows
 and pinned groups, interleaved as shown; `tabs` the rest. A group is `{"type": "group", "id", "name", "label" (the
-shown name, made from its tabs when `name` is empty), "icon" (an emoji, `symbol:<SF Symbol>`, `"none"` for No Icon,
-or null for the default), "color" (`neutral`, `none` or one of Chrome's nine), "collapsed", "pinned", "parent",
+shown name, made from its tabs when `name` is empty), "icon" (an emoji, `symbol:<SF Symbol>`, `"none"`, which draws
+the default folder like null, or null for the default), "color" (`neutral`, `none` or one of Chrome's nine), "collapsed", "pinned", "parent",
 "items"}`, its items its own tabs and child groups in order. A tab is `{"type": "tab", "id", "url", "title",
 "customTitle", "icon", "pin" (`tile`, `row` or null), "pinned" (also true in a pinned group), "folder", "group" (the
 innermost), "split", "active", "muted", "asleep", "index"}`; URLs and titles as in `windows` (internal pages
@@ -215,7 +215,7 @@ profile goes where the store puts moved tabs.
   `bookmarks`, `downloads` or `newtab`. Never `javascript:`, `data:`, `blob:`, `view-source:`, `chrome:`, other
   `ardia://` pages (settings, flags, extensions…) or schemes that open other apps.
 - **Icons** are what the icon picker offers: an emoji from its list (`lib/emojiData.ts`), `symbol:<name>` (an SF
-  Symbol name, lowercase with dots), `"none"` (groups: No Icon) or null. Names are trimmed text of at most 200
+  Symbol name, lowercase with dots), `"none"` (No Icon: pinned rows, which then show their title alone; a group draws its folder) or null. Names are trimmed text of at most 200
   characters without control characters.
 - **Telemetry:** `usage_counts` carries `cli_tab_edits`, `cli_group_edits` (operations applied),
   `cli_edit_failures` (batches refused or stopped) and `cli_pill_shows` (times the control pill appeared: `run` and
@@ -405,10 +405,14 @@ the data dir (`air-traffic.json`, version 1: an ordered `rules` list and a `fall
   choice when nothing answered (no hook fit, a route hook's profile is gone, or a program hook gave no answer in
   time). With no Everything Else choice the link takes Ardia's usual routing.
 - **A rule** is `from` (an app by bundle id, or by name when it has none; `null` is any app), a link condition (`any`,
-  a `site` host that also takes its subdomains, matched as `*://*.<host>/*`, or a userscript match `pattern`), a profile
+  a `site` host that also takes its subdomains, matched as `*://*.<host>/*`, or a `pattern`), a profile
   id (`null` is the profile used last) and `open` (`tab`, `window`, `littleArdia`). Profiles are stored by id, so a
   rename keeps the rule; a rule or fallback whose profile was deleted, or is private, doesn't apply and the link
   goes on down the list.
+- **Patterns.** A pattern with `://` (or `<all_urls>`) is a userscript match pattern. One without is a wildcard, case
+  blind, where `*` is any run of characters: with no `/` it matches the link's host (`*git*`, `*.github.com`), with one
+  it matches host, path and query (`github.com/ardia/*`), and one with no `*` matches anywhere in that text (`github`
+  is `*github*`). Spaces are refused.
 - **No approval.** The user makes these rules in Settings, so they count as approved. hooks.json route hooks still need
   approval in Advanced › Automation; the pane lists them read-only with their state.
 - **The hold.** An enabled rule or an Everything Else choice turns the incoming-link hold on, reported again on every
@@ -424,7 +428,8 @@ the data dir (`air-traffic.json`, version 1: an ordered `rules` list and a `fall
 - Code: `state/airTraffic/rules.ts` (the pure matching and the saved document), `store.ts`, `sourceApps.ts`,
   `preview.ts`; the pane is `components/settings/panes/AirTraffic.tsx`.
 - Telemetry: `usage_counts.air_traffic_rule_links` and `air_traffic_fallback_links`, and `settings_snapshot`'s
-  `air_traffic_rules` (enabled rules) and `air_traffic_fallback` (true or false).
+  `air_traffic_rules` (enabled rules), `air_traffic_wildcard_rules` (enabled rules with a wildcard pattern) and
+  `air_traffic_fallback` (true or false).
 
 ## Approvals
 
@@ -592,6 +597,11 @@ The runner fires them and passes a `schedule.fired` event (it never comes from A
   `hooks.log.1`; stdout and stderr are drained as they come and a single line longer than 64 KB is cut. `hooks run`
   writes the log itself (`--log PATH`, `-` for the terminal), so the plist's `StandardOutPath` and
   `StandardErrorPath` are `/dev/null`: launchd would hold its own descriptor to the file and defeat the rotation.
+- On Linux, `hooks install` writes the systemd user service `dev.ardia.hooks.service` in
+  `${XDG_CONFIG_HOME:-~/.config}/systemd/user` instead (the same command line and environment, `Restart=on-failure`,
+  `RestartSec=10`, `StartLimitIntervalSec=0`, output to `/dev/null` for the same reason), then runs
+  `systemctl --user daemon-reload`, `enable` and `restart`. `uninstall` disables and stops it and removes the unit,
+  and `hooks list` reads `systemctl --user show`. The log is `${XDG_STATE_HOME:-~/.local/state}/ardia/hooks.log`.
 
 ## Tests
 

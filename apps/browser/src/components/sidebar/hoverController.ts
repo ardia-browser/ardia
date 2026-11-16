@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useReducer, useRef, useState } fr
 import type { LayoutChangeEvent } from "react-native";
 import { markHoverProps } from "../../lib/hoverMarks";
 import { currentWindow } from "../../state/browser/current";
-import { PageProfileContext, useWindow } from "../../state/browser/hooks";
+import { PageProfileContext, useSettings, useWindow } from "../../state/browser/hooks";
 import {
   cardEntered,
   cardLaidOut,
@@ -17,6 +17,7 @@ import {
   type HoverPointerEvent,
 } from "../../state/sidebar/hover";
 import type { Target } from "../../state/sidebar/sidebarUi";
+import { useMedia, usePinnedWithMediaControls } from "../../state/media/media";
 
 export const FoldedAway = createContext(false);
 
@@ -26,7 +27,21 @@ export const cardHoverProps = {
   onLayout: (e: LayoutChangeEvent) => cardLaidOut(e.nativeEvent.layout),
 };
 
-export function useRowHover(windowId: string, target: Target | null) {
+export function useCardTarget<T extends Target>(target: T | null): T | null {
+  const cards = useSettings((s) => s.showTabHoverMenu);
+  const playerTab = !cards && target?.kind === "tab" ? target.id : undefined;
+  const pinned = usePinnedWithMediaControls(playerTab);
+  const playing = useMedia((m) => {
+    const session = playerTab ? m.sessions[playerTab] : undefined;
+    return !!session && session.controllable && session.playbackState !== "none" && !!(session.title || session.artwork);
+  });
+  const player = pinned && playing;
+  if (cards || !target || player) return target;
+  return target.kind === "tab" || target.kind === "folder" ? null : target;
+}
+
+export function useRowHover(windowId: string, rowTarget: Target | null) {
+  const target = useCardTarget(rowTarget);
   const [hovered, setHovered] = useState(false);
   const [, refresh] = useReducer((n: number) => n + 1, 0);
   const page = useContext(PageProfileContext);

@@ -84,6 +84,7 @@ enum WebKitPageScript {
       hasVideo: m.tagName === "VIDEO" && m.videoWidth > 0,
       actions: pageActions,
       controllable: fromSession !== "none" || !(m.duration > 0 && m.duration <= 5),
+      loop: !pagePosition && m.loop,
     });
   };
   const schedule = () => {

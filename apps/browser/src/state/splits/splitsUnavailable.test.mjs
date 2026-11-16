@@ -15,7 +15,7 @@ registerHooks({ resolve(specifier, context, next) {
 } });`;
 
 const WITHOUT_SPLIT_VIEW = `import { registerHooks } from "node:module";
-const features = "export const PLATFORM_FEATURES = { dock: false, appIcon: false, menuBar: false, memoryPressure: false, escapeClosesDownloads: true, dictation: false, findsBrowsersBy: 'importList', hiddenBrowserSources: [], splitView: false, setsDefaultBrowser: false, exportsBookmarksAndPasswords: false };";
+const features = "export const PLATFORM_FEATURES = { dock: false, appIcon: false, menuBar: false, memoryPressure: false, escapeClosesDownloads: true, findsBrowsersBy: 'importList', hiddenBrowserSources: [], splitView: false, setsDefaultBrowser: false, exportsBookmarksAndPasswords: false };";
 registerHooks({ resolve(specifier, context, next) {
   const resolved = next(specifier, context);
   return resolved.url.endsWith("/lib/platformFeatures.ts") ? { ...resolved, url: "data:text/javascript," + encodeURIComponent(features) } : resolved;

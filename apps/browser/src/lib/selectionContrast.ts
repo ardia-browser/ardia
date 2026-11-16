@@ -5,6 +5,7 @@ export const MIN_SELECTION_LIGHTNESS = 0.06;
 
 const ALPHA_STEP = 0.01;
 const MAX_FALLBACK_ALPHA = 0.5;
+const MAX_LINE_ALPHA = 0.3;
 
 function lightness(color: string): number {
   const [r, g, b] = parseColor(color);
@@ -20,12 +21,16 @@ const overlayAt = (color: string, alpha: number) => {
   return toHex([r, g, b, Math.round(alpha * 100) * 2.55]);
 };
 
-export function visibleSelection(fill: string, fallback: string, backdrops: readonly string[]): string {
+function lifted(fill: string, fallback: string, backdrops: readonly string[], cap: number): string {
   const passes = (color: string) => selectionLightnessDelta(color, backdrops) >= MIN_SELECTION_LIGHTNESS;
   if (!backdrops.length || passes(fill)) return fill;
-  for (let alpha = ALPHA_STEP; alpha <= MAX_FALLBACK_ALPHA + 1e-9; alpha += ALPHA_STEP) {
+  for (let alpha = ALPHA_STEP; alpha <= cap + 1e-9; alpha += ALPHA_STEP) {
     const shown = overlayAt(fallback, alpha);
     if (passes(shown)) return shown;
   }
-  return overlayAt(fallback, MAX_FALLBACK_ALPHA);
+  return overlayAt(fallback, cap);
 }
+
+export const visibleSelection = (fill: string, fallback: string, backdrops: readonly string[]): string => lifted(fill, fallback, backdrops, MAX_FALLBACK_ALPHA);
+
+export const visibleLine = (line: string, ink: string, backdrops: readonly string[]): string => lifted(line, ink, backdrops, MAX_LINE_ALPHA);

@@ -1,11 +1,13 @@
 import { ArdiaError, ardiaError } from "@ardia/core";
 import { requireNativeModule, type EventSubscription } from "expo-modules-core";
-import type { EngineCalls, EngineEvents } from "./api";
+import type { EngineCalls, EngineEvents, WindowsHostEvents } from "./api";
 
 export type CallName = keyof EngineCalls;
 export type CallArgs<N extends CallName> = EngineCalls[N][0];
 export type CallResult<N extends CallName> = EngineCalls[N][1];
-export type EventName = keyof EngineEvents;
+type Events = EngineEvents & WindowsHostEvents;
+export type EventName = keyof Events;
+export type EventData<E extends EventName> = Events[E];
 
 export type DomainModule = {
   call(name: string, profile: string, args: string): Promise<string>;
@@ -52,7 +54,7 @@ function deliver({ name, data }: { name: string; data: unknown }) {
   for (const listener of [...(listeners.get(name) ?? [])]) listener(data);
 }
 
-export function on<E extends EventName>(name: E, listener: (data: EngineEvents[E]) => void): EventSubscription {
+export function on<E extends EventName>(name: E, listener: (data: EventData<E>) => void): EventSubscription {
   const domain = domainOf(name);
   let named = listeners.get(name);
   if (!named) listeners.set(name, (named = new Set()));

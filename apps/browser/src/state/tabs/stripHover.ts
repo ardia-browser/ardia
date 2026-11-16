@@ -13,6 +13,8 @@ export const useStripHover = create<{ hover: StripHover | null }>()(() => ({ hov
 
 type Pointed = { windowId: string; tabId: string; measure: () => Promise<Anchor | null> };
 
+const tabCardsOn = () => useBrowser.getState().settings.showTabHoverMenu;
+
 let pointed: Pointed | null = null;
 let pressedTab: string | null = null;
 let ticket = 0;
@@ -29,7 +31,7 @@ const hide = () => {
 
 async function show(target: Pointed, mine: number) {
   const anchor = await target.measure();
-  if (mine !== ticket || pointed !== target || !anchor || tabDragging() || hoverHeld(target.windowId)) return;
+  if (mine !== ticket || pointed !== target || !anchor || !tabCardsOn() || tabDragging() || hoverHeld(target.windowId)) return;
   useStripHover.setState({ hover: { windowId: target.windowId, tabId: target.tabId, anchor } });
   const s = useBrowser.getState();
   noteStripHoverCard(s.tabs[target.tabId]?.profileId !== s.windows[target.windowId]?.profileId);
@@ -41,6 +43,7 @@ export function stripChipEntered(windowId: string, tabId: string, measure: () =>
   pointed = target;
   if (pressedTab === tabId) return;
   pressedTab = null;
+  if (!tabCardsOn()) return hide();
   const mine = ++ticket;
   const current = useStripHover.getState().hover;
   if (current?.windowId === windowId) void show(target, mine);
@@ -66,6 +69,10 @@ export function dismissStripHover() {
   stop();
   hide();
 }
+
+useBrowser.subscribe((s, prev) => {
+  if (!s.settings.showTabHoverMenu && prev.settings.showTabHoverMenu) dismissStripHover();
+});
 
 export function dismissStripHoverIn(windowId: string) {
   if (pointed?.windowId === windowId || useStripHover.getState().hover?.windowId === windowId) dismissStripHover();

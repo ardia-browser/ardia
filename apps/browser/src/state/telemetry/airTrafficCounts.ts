@@ -1,5 +1,5 @@
 import { currentAirTraffic } from "../airTraffic/store";
-import type { AirTrafficConfig } from "../airTraffic/rules";
+import { isWildcardPattern, type AirTrafficConfig } from "../airTraffic/rules";
 
 let byRule = 0;
 let byFallback = 0;
@@ -15,6 +15,7 @@ export function takeAirTrafficCounts() {
 
 export const airTrafficSetting = (config: AirTrafficConfig): Record<string, string> => ({
   air_traffic_rules: String(config.rules.filter((r) => r.enabled).length),
+  air_traffic_wildcard_rules: String(config.rules.filter((r) => r.enabled && r.when.kind === "pattern" && isWildcardPattern(r.when.pattern)).length),
   air_traffic_fallback: config.fallback ? "true" : "false",
 });
 

@@ -31,10 +31,15 @@ public class PasswordsModule: Module {
     "neverSaveOrigins": { args, reply in ArdiaServices.neverSaveOrigins(profile: args.profile) { reply.service($0, $1) } },
     "allowSaving": { args, reply in ArdiaServices.allowSaving(profile: args.profile, origin: try args.text("origin")) { reply.service($0, $1) } },
     "export": { args, reply in ArdiaServices.exportPasswords(profile: args.profile, path: nil) { reply.service($0, $1) } },
-    "autofillEnabled": { args, reply in reply.ok(ArdiaServices.profileToggle(.passwordsOffered, profile: args.profile)) },
+    "autofillEnabled": { args, reply in
+      ArdiaServices.profileToggles(profile: args.profile, set: nil) { toggles, error in
+        guard let toggles = toggles as? [String: Bool], let enabled = toggles["passwords"] else { return reply.service(nil, error ?? "no password setting") }
+        reply.ok(enabled)
+      }
+    },
     "setAutofillEnabled": { args, reply in
-      ArdiaServices.setProfileToggle(.passwordsOffered, value: try args.bool("enabled"), profile: args.profile)
-      reply.ok()
+      let enabled = try args.bool("enabled")
+      ArdiaServices.profileToggles(profile: args.profile, set: ["passwords": NSNumber(value: enabled)]) { _, error in reply.service(nil, error) }
     },
   ])
 }

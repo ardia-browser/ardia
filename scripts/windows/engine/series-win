@@ -13,3 +13,6 @@ chromium chromium-win-hosted-no-browser-shortcuts.patch
 chromium chromium-win-relaunch-to-app.patch
 chromium chromium-win-reauth-app-window.patch
 chromium chromium-win-external-protocol-dialog.patch
+chromium chromium-win-hosted-popups-and-menus.patch
+chromium chromium-win-strict-login-list.patch
+chromium chromium-win-keep-every-login.patch

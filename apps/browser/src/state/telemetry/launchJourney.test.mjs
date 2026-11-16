@@ -29,6 +29,10 @@ globalThis.fetch = async () => ({ status: 200 });
 const client = await import("./client.ts");
 const journeys = await import("./journeys.ts");
 const track = await import("./track.ts");
+const { useBrowser } = await import("../browser/store.ts");
+const DAY = 86_400_000;
+const page = (url, daysAgo) => ({ url, title: url, favicon: null, visits: 1, lastVisit: Date.now() - daysAgo * DAY });
+useBrowser.setState({ history: { "": { list: [page("https://a.com/", 1), page("https://b.com/", 200), page("https://arc-import.com/", 2 * 365)], floor: -Infinity, ready: true } } });
 after(() => client.setSharing(false, "settings"));
 
 test("a launch with sharing on at start sends one perf_launch with launch_ms, however many windows open", async () => {
@@ -63,4 +67,11 @@ test("perf_launch carries the early launch marks in order from process start, th
   assert.deepEqual([main_ms, startup_ms, chromium_ms, engine_ms, early_window_ms, rn_ms], [40, 700, 720, 6400, 6600, 6900]);
   assert.equal(load_1m, 7.13);
   assert.equal(launched_hidden, true);
+});
+
+test("perf_launch says in ranges how much history there is and how old its oldest page is, so imported history past 90 days shows", () => {
+  const saved = JSON.parse(stub.docs.get("telemetry-queue.json"));
+  const { history, history_oldest } = saved.events.find((e) => e.event === "perf_launch").properties;
+  assert.equal(history, "<100");
+  assert.equal(history_oldest, "<3y");
 });

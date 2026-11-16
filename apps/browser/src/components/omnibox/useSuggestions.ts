@@ -13,7 +13,7 @@ import { bookmarksByUrl } from "../../state/bookmarks/bookmarks";
 import { useMenuBarRevision } from "../../state/commands/commandShortcuts";
 import { useSettings } from "../../state/browser/hooks";
 import { useBookmarkEngine, useBookmarks, useBookmarksShown } from "../../state/bookmarks/hooks";
-import { useProfileHistory } from "../../state/history/hooks";
+import { useSuggestionHistory } from "../../state/history/hooks";
 import { useTabs } from "../../state/tabs/hooks";
 import { defaultSearchEngine, searchEngines } from "../../state/settings/settings";
 import type { Bookmarks } from "../../state/browser/types";
@@ -71,7 +71,8 @@ export function useSuggestions({
   preventInline?: boolean;
 }): SuggestionResult {
   const allTabs = useTabs((tabs) => tabs);
-  const history = useProfileHistory(profileId);
+  const historyOn = useSettings((st) => st.commandBarHistory);
+  const history = useSuggestionHistory(historyOn ? profileId : null);
   const bookmarks = useBookmarks((b) => b);
   const bookmarkEngine = useBookmarkEngine(windowId);
   const engines = useSettings((st) => searchEngines(st));

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 await import("../../test-native/index.ts");
 const { useBrowser } = await import("../browser/store.ts");
-const { closeBlankLittleArdiaOnEscape } = await import("./actions.ts");
+const { closeBlankLittleArdiaOnEscape, closeLittleArdiaForAppLink } = await import("./actions.ts");
 const { escapePressed } = await import("../windows/unclaimedEscape.ts");
 const { isWindowClosing } = await import("../windows/closeAnimated.ts");
 
@@ -48,4 +48,15 @@ test("Escape in a blank Little Ardia's address bar closes the window, and never 
   assert.equal(gone(main), false);
   assert.equal(closeBlankLittleArdiaOnEscape(small), true);
   assert.equal(gone(small), true);
+});
+
+test("a page opening another app closes the Little Ardia window it was in, and never a main window", () => {
+  const { main, small } = windows("https://zoom.example/j/1");
+  closeLittleArdiaForAppLink(main);
+  closeLittleArdiaForAppLink(null);
+  assert.equal(gone(main), false);
+  assert.equal(gone(small), false);
+  closeLittleArdiaForAppLink(small);
+  assert.equal(gone(small), true);
+  assert.equal(gone(main), false);
 });

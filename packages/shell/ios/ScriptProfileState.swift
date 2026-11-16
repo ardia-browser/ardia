@@ -1,6 +1,9 @@
-import ExpoModulesCore
+struct ScriptProfileState {
+  let id: String
+  let name: String
 
-struct ScriptProfileState: Record {
-  @Field var id: String = ""
-  @Field var name: String = ""
+  init(_ raw: [String: Any]) {
+    id = raw["id"] as? String ?? ""
+    name = raw["name"] as? String ?? ""
+  }
 }

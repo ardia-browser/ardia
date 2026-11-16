@@ -11,6 +11,7 @@ import { peekTabId } from "../peek/peek";
 import { splitOf, splitTabIdsOf } from "../splits/splits";
 import { hostOf } from "@ardia/core";
 import { capture } from "../telemetry/client";
+import { noteMediaPositionReport, noteNowPlayingLoopRestart } from "../telemetry/mediaCardCounts";
 import { isSleeping } from "../tabs/sleepingTabs";
 
 export type Session = NowPlaying & {
@@ -52,6 +53,16 @@ export function setPictureInPictureState(tabId: string, { kind, active, fullScre
 }
 
 export function setNowPlaying(tabId: string, state: NowPlaying | null) {
+  if (state) notePositionReport(useMedia.getState().sessions[tabId], state);
+  applyNowPlaying(tabId, state);
+}
+
+function notePositionReport(before: Session | undefined, report: NowPlaying) {
+  if (isLoopRestart(before, report)) noteNowPlayingLoopRestart();
+  else noteMediaPositionReport(before, report);
+}
+
+function applyNowPlaying(tabId: string, state: NowPlaying | null) {
   useMedia.setState((s) => {
     const sessions = { ...s.sessions };
     if (!state) {
@@ -84,11 +95,17 @@ export const useSession = (tabId: string | undefined): Session | undefined => us
 
 export const isPlaying = (session: Session | undefined) => session?.playbackState === "playing";
 
-export function positionOf(session: Session, now = Date.now()): number {
-  const elapsed = isPlaying(session) ? ((now - session.timestamp) / 1000) * (session.playbackRate || 1) : 0;
-  const position = session.position + elapsed;
-  return session.duration ? Math.min(Math.max(0, position), session.duration) : Math.max(0, position);
+export function positionOf(session: Pick<Session, "playbackState" | "position" | "timestamp" | "playbackRate" | "duration" | "loop">, now = Date.now()): number {
+  const elapsed = session.playbackState === "playing" ? ((now - session.timestamp) / 1000) * (session.playbackRate || 1) : 0;
+  const position = Math.max(0, session.position + elapsed);
+  if (!session.duration) return position;
+  return session.loop && position >= session.duration ? position % session.duration : Math.min(position, session.duration);
 }
+
+const LOOP_RESTART_MIN_SECONDS = 1;
+
+export const isLoopRestart = (before: NowPlaying | undefined, after: NowPlaying) =>
+  !!before && !!after.loop && before.playbackState === "playing" && after.position + LOOP_RESTART_MIN_SECONDS < before.position + ((after.timestamp - before.timestamp) / 1000) * (before.playbackRate || 1);
 
 export function useTicker(active: boolean, ms = 500) {
   const [, setTick] = useState(0);
@@ -165,12 +182,12 @@ export const SKIP_SECONDS = 15;
 export function skipBy(tabId: string, session: Session, seconds: number) {
   const now = Date.now();
   const position = Math.max(0, Math.min(session.duration ?? Infinity, positionOf(session, now) + seconds));
-  setNowPlaying(tabId, { ...session, position, timestamp: now });
+  applyNowPlaying(tabId, { ...session, position, timestamp: now });
   mediaCommand(tabId, "seekBy", seconds);
 }
 
 export function seekTo(tabId: string, session: Session, seconds: number) {
-  setNowPlaying(tabId, { ...session, position: seconds, timestamp: Date.now() });
+  applyNowPlaying(tabId, { ...session, position: seconds, timestamp: Date.now() });
   mediaCommand(tabId, "seekTo", seconds);
 }
 

@@ -21,8 +21,9 @@ import { importPasswordsCsv, revealPassword, unlockPasswordsFor, usePasswordsUnl
 import { hostLabel, matchesQuery } from "../../pages/PageLayout";
 import { Favicon } from "../../favicon/Favicon";
 import { Group, ProfilePicker, Row, SectionHeader, useSettingsProfile } from "../Form";
+import { keptByExtensionNote } from "../keptByExtension";
 import { settingsLayout } from "../tokens";
-import { passwordAutofill, setPasswordAutofillFor } from "../../../state/settings/paneData";
+import { autofillToggleAsked, passwordAutofill, setPasswordAutofillFor } from "../../../state/settings/paneData";
 import { useResource } from "../../../state/settings/resources";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
@@ -45,6 +46,7 @@ export function PasswordsPane({ profileId: initial }: { profileId?: string | nul
   const profile = currentEngineProfile(profileId);
   const unlocked = usePasswordsUnlocked(profile);
   const [autofill = true] = useResource(passwordAutofill, profile);
+  const [asked] = useResource(autofillToggleAsked, profile, "passwords");
 
   const load = () => {
     void listPasswords(profile).catch(orWarn<SavedPassword[]>([])).then(setList);
@@ -85,8 +87,8 @@ export function PasswordsPane({ profileId: initial }: { profileId?: string | nul
         action={<ProfilePicker value={profileId} onChange={setProfileId} />}
       />
       <Group>
-        <Row anchor="passwords.offerToSave">
-          <Toggle value={autofill} onChange={(v) => void setPasswordAutofillFor(profile, v)} />
+        <Row anchor="passwords.offerToSave" description={keptByExtensionNote(autofill, asked)}>
+          <Toggle value={autofill} onChange={(v) => setPasswordAutofillFor(profile, v)} />
         </Row>
         <Row anchor="passwords.importPasswords" description={importStatus || undefined}>
           <Button title="Import CSV…" onPress={() => void importCsv()} />

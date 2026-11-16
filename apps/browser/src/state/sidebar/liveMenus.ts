@@ -9,8 +9,10 @@ import { ALERT_LEADS, nowBadgeEvent } from "../live/meetings";
 import { SOURCES } from "../live/sources";
 import { dismissNowBadge, live, markRead, markUnread, setRepoHidden, updateCalendarSettings, updateFolder } from "../live/store";
 import { folderRepos, setShowNewRepos, showAllRepos } from "../live/repoFilter";
-import { noteLiveRepoMenuPick } from "../telemetry/liveHides";
+import { noteLiveFolderColorPick, noteLiveRepoMenuPick } from "../telemetry/liveHides";
 import type { LiveItem, LiveSourceId } from "../live/types";
+import type { GroupColor } from "../browser/types";
+import { groupColorItems } from "./groupMenu";
 import { useBrowser } from "../browser/store";
 import { openSettings } from "../settings/settingsWindows";
 import { openIconPicker } from "./actions";
@@ -50,6 +52,23 @@ function folderPlace(windowId: string, folderId: string) {
   const sequence = pinnedSequence(useBrowser.getState(), s.folders, s.folderOrder, windowId, folder.profileId);
   const index = sequence.indexOf(entryKey("live", folderId));
   return { canMoveUp: index > 0, canMoveDown: index >= 0 && index < sequence.length - 1 };
+}
+
+const COLOR_CHOICE = "color:";
+const NEUTRAL_CHOICE = "neutral";
+
+function folderColorItems(current: GroupColor | null): MenuItem[] {
+  return groupColorItems(current, null, false).flatMap((item): MenuItem[] => {
+    if ("separator" in item) return [item];
+    if (!("value" in item)) return [];
+    const { value, ...look } = item;
+    return [{ ...look, id: `${COLOR_CHOICE}${(value.kind === "color" && value.color) || NEUTRAL_CHOICE}` }];
+  });
+}
+
+function chosenColor(choice: string): GroupColor | null {
+  const color = choice.slice(COLOR_CHOICE.length);
+  return color === NEUTRAL_CHOICE ? null : (color as GroupColor);
 }
 
 export function liveFolderMenuItems(windowId: string, folderId: string): MenuItem[] {
@@ -116,6 +135,7 @@ export function liveFolderMenuItems(windowId: string, folderId: string): MenuIte
     [
       { id: "rename", title: "Rename…", symbol: "pencil" },
       { id: "icon", title: folder.icon ? "Change Icon…" : "Add Icon…", symbol: "photo" },
+      { id: "color", title: "Color", symbol: "paintpalette", children: folderColorItems(folder.color ?? null) },
     ],
     [{ id: "delete", title: "Delete Live Folder", symbol: "trash" }],
   );
@@ -168,6 +188,11 @@ export async function openLiveFolderMenu(windowId: string, folderId: string) {
     const name = await prompt({ title: "Rename Live Folder", value: folder.name, placeholder: "Live folder name", confirmTitle: "Rename", windowId });
     if (name?.trim()) updateFolder(folderId, { name: name.trim() });
   } else if (choice === "icon") void openIconPicker(windowId, { kind: "live", id: `livefolder|${folderId}` });
+  else if (choice.startsWith(COLOR_CHOICE)) {
+    const color = chosenColor(choice);
+    noteLiveFolderColorPick();
+    updateFolder(folderId, { color });
+  }
   else if (choice === "read") markRead(folderId);
   else if (choice === "up") moveLiveFolder(windowId, folderId, -1);
   else if (choice === "down") moveLiveFolder(windowId, folderId, 1);

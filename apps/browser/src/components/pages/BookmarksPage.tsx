@@ -1,20 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent, ScrollView, View } from "react-native";
-import { folderChildren, type RemovedBookmarks } from "../../state/bookmarks/bookmarks";
+import type { RemovedBookmarks } from "../../state/bookmarks/bookmarks";
 import { useTab } from "../../state/browser/hooks";
 import { currentBookmarks } from "../../state/browser/current";
 import { useBookmarkRoots, useBookmarks } from "../../state/bookmarks/hooks";
 import { plural } from "../../state/browser/model";
-import type { BookmarkNode, Bookmarks } from "../../state/browser/types";
-import { moveBookmark, openFolder, removeBookmarks, restoreBookmarks } from "../../state/bookmarks/actions";
+import { moveBookmarks, openFolder, removeBookmarks, restoreBookmarks } from "../../state/bookmarks/actions";
 import { clickSelection, NO_SELECTION, rowWindow, selectAll, selectedInOrder, type ListSelection } from "../../state/bookmarks/bookmarkList";
 import { FolderTree } from "../bookmarks/FolderTree";
 import { Box, Button, Divider, EmptyState, radius, space, Text, Toast, useTheme } from "../ui";
 import { openOrganizeMenu } from "../../state/bookmarks/bookmarkMenus";
 import { BookmarkRow } from "./BookmarkRow";
+import { listedBookmarks } from "./bookmarkResults";
 import { DropTargets } from "./dropTargets";
-import { matchesQuery, PageHeader } from "./PageLayout";
+import { PageHeader } from "./PageLayout";
 import { bookmarkList, pagesColors, undoToast } from "./tokens";
+import { COMMAND_KEY, commandHeld } from "../../state/commands/keyNotation";
 
 
 type Target = { kind: "folder"; id: string } | { kind: "row"; id: string; index: number; folder: boolean };
@@ -40,24 +41,13 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
   useEffect(() => setSelection(NO_SELECTION), [folderId, query]);
 
   const folderTitle = useBookmarks((b) => (folderId ? (b.nodes[folderId]?.title ?? "") : ""));
-  const listKey = useBookmarks((b) => {
-    if (query.trim() && roots) {
-      const all = [...folderLinksAndFolders(b, roots.bar), ...folderLinksAndFolders(b, roots.other)];
-      return all
-        .filter((n) => matchesQuery(query, n.title, n.kind === "url" ? n.url : ""))
-        .map((n) => n.id)
-        .join(",");
-    }
-    const folder = folderId ? b.nodes[folderId] : undefined;
-    return folder?.kind === "folder" ? folder.children.join(",") : "";
-  });
-  const ids = useMemo(() => (listKey ? listKey.split(",") : []), [listKey]);
+  const ids = useBookmarks(useMemo(() => listedBookmarks(roots, folderId, query), [roots, folderId, query]));
   const searching = !!query.trim();
   const selected = useMemo(() => selectedInOrder(ids, selection), [ids, selection]);
 
   const list = useRef<View>(null);
-  const select = (id: string, e: { metaKey?: boolean; shiftKey?: boolean }) => {
-    setSelection((current) => clickSelection(ids, current, id, e));
+  const select = (id: string, e: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean }) => {
+    setSelection((current) => clickSelection(ids, current, id, { shiftKey: e.shiftKey, metaKey: commandHeld(e) }));
     list.current?.focus();
   };
 
@@ -108,13 +98,11 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
     setDrop(null);
     if (!target) return;
     const moving = dragging.current;
-    if ("into" in target) return moving.forEach((id) => moveBookmark(id, target.into));
+    if ("into" in target) return moveBookmarks(moving, target.into);
+    const picked = new Set(moving);
     let index = target.index;
-    for (const id of moving) {
-      const from = ids.indexOf(id);
-      if (from >= 0 && from < target.index) index--;
-    }
-    moving.forEach((id, i) => moveBookmark(id, target.parentId, index + i));
+    for (let at = 0; at < target.index && at < ids.length; at++) if (picked.has(ids[at]!)) index--;
+    moveBookmarks(moving, target.parentId, index);
   };
 
   const actions =
@@ -174,9 +162,9 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
               enableFocusRing={false}
               keyDownEvents={LIST_KEYS}
               onKeyDown={(e) => {
-                const { key, metaKey } = e.nativeEvent;
+                const { key } = e.nativeEvent;
                 if (key === "Backspace" || key === "Delete") remove(selected);
-                else if (key === "a" && metaKey) setSelection(selectAll(ids));
+                else if (key === "a" && commandHeld(e.nativeEvent)) setSelection(selectAll(ids));
               }}
               style={LIST_KEYS_VIEW}
             >
@@ -228,15 +216,11 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
   );
 }
 
-function folderLinksAndFolders(b: Bookmarks, folderId: string): BookmarkNode[] {
-  return folderChildren(b, folderId).flatMap((n) => (n.kind === "folder" ? [n, ...folderLinksAndFolders(b, n.id)] : [n]));
-}
-
 function DropLine({ top, color }: { top: number; color: string }) {
   return <View style={[DROP_LINE, { top: top - bookmarkList.dropLine / 2, backgroundColor: color }]} />;
 }
 
-const LIST_KEYS = [{ key: "Backspace" }, { key: "Delete" }, { key: "a", metaKey: true }];
+const LIST_KEYS = [{ key: "Backspace" }, { key: "Delete" }, { key: "a", [COMMAND_KEY]: true }];
 
 const BODY = { flex: 1, flexDirection: "row", paddingHorizontal: space.xl, paddingBottom: space.xl, gap: space.xl } as const;
 const TREE = { width: bookmarkList.treeWidth, flexGrow: 0 } as const;

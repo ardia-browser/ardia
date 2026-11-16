@@ -1,14 +1,12 @@
 import { TurboModuleRegistry, type TurboModule } from "react-native";
-import type { FolderInfo, SealedLogin, SyncNative } from "@ardia/sync";
+import type { FolderInfo, SealedLogin } from "@ardia/sync";
 import { originalProfile } from "../engine/domains/calling";
 import type { DialogsModule, SystemModule, WindowsHostModule, WindowsSyncModule } from "../nativeModuleTypes";
 import { base32 } from "./base32";
 import { HIDDEN_WORDS, KIT_PDF_NAME, KIT_TEXT_NAME, kitPdf, kitText } from "./kit";
 import { base64, grayscalePng } from "./png";
 import { qrCode, utf8 } from "./qr";
-import { syncVault, type FileCounts } from "./vault";
-
-type SyncContract = NonNullable<typeof SyncNative>;
+import { syncVault, type FileCounts, type SyncContract } from "./vault";
 
 export const NATIVE_SYNC = "ArdiaWindowsSync";
 

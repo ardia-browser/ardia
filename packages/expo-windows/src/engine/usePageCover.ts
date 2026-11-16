@@ -1,7 +1,7 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useRef, type ReactNode, type Ref } from "react";
 import type { LayoutChangeEvent, ViewProps } from "react-native";
 import { followMotion } from "../animation/motion";
-import { assignRef, CoverClips, coverMeasurer, watchClips, type Measurable } from "./coverClip";
+import { assignRef, CoverClips, coverMeasurer, PageCovering, watchClips, type Measurable } from "./coverClip";
 import { setCover } from "./covers";
 import { engineAvailable } from "./host";
 import { WindowIdContext } from "./windowId";
@@ -15,11 +15,12 @@ export function usePageCover<Node extends Measurable>(forwarded: Ref<Node> | und
   const windowId = useContext(WindowIdContext);
   const above = useContext(CoverAncestry);
   const clips = useContext(CoverClips);
+  const covering = useContext(PageCovering);
   const id = useRef(`cover-${++covers}`).current;
   const node = useRef<Node | null>(null);
   const live = engineAvailable();
   const ancestry = useMemo(() => [...above, id], [above, id]);
-  const measurer = useMemo(() => coverMeasurer(windowId, id, radius, () => node.current, clips), [windowId, id, radius, clips]);
+  const measurer = useMemo(() => coverMeasurer(windowId, id, radius, () => node.current, clips, covering), [windowId, id, radius, clips, covering]);
 
   const measure = useCallback(() => {
     if (live) void measurer.measure();

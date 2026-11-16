@@ -36,6 +36,7 @@ export const COMMANDS = {
   reopenClosedTab: { title: "Reopen Closed Tab", symbol: "arrow.uturn.backward", keys: ["⇧⌘T"], littleArdia: "page" },
   reopenClosedWindow: { title: "Reopen Closed Window" },
   restoreClosed: { littleArdia: "page" },
+  clearRecentlyClosed: { title: "Clear Recently Closed", symbol: "trash", ...appWide },
   focusCommandBar: { title: "Open Command Bar", keys: ["⌘L", "⌃F5"], ...inWindow },
   closeTab: { title: "Close Tab", symbol: "xmark", keys: ["⌘W"], ...inWindow },
   closeAllTabs: { title: "Close All Tabs", symbol: "xmark.square", keys: ["⇧⌘K"], ...windowOffInLittleArdia },
@@ -45,6 +46,8 @@ export const COMMANDS = {
   findInPage: { title: "Find…", barTitle: "Find in Page", symbol: "text.magnifyingglass", keys: ["⌘F"], ...pageInLittleArdia },
   findNext: { title: "Find Next", keys: ["⌘G"], ...pageInLittleArdia },
   findPrevious: { title: "Find Previous", keys: ["⇧⌘G"], ...pageInLittleArdia },
+  hideElement: { title: "Hide Element…", barTitle: "Hide an Element on This Page", symbol: "eye.slash", keys: ["⇧⌘H"], ...pageInLittleArdia },
+  showHiddenElements: { title: "Hidden Elements on This Site…", barTitle: "Show Hidden Elements on This Site", symbol: "eye", keys: ["⇧⌘U"], ...pageInLittleArdia },
   setAppearance: {
     chooses: "appearance",
     variants: {
@@ -67,6 +70,7 @@ export const COMMANDS = {
   toggleFullUrl: { title: "Show Full URL", symbol: "text.alignleft", toggles: "showFullUrl" },
   toggleJavaScriptFromAppleEvents: { title: "Allow JavaScript from Apple Events", toggles: "allowJavaScriptFromAppleEvents" },
   toggleAddressBar: { title: "Show Address Bar in Sidebar", ...offInLittleArdia },
+  toggleMinimalism: { title: "Minimalism Mode", barTitle: "Toggle Minimalism Mode", symbol: "rectangle.leftthird.inset.filled", keys: ["⌃⌘M"], toggles: "minimalismMode", ...offInLittleArdia },
   cast: { title: "Cast…", littleArdia: "page" },
   zoomReset: { title: "Zoom to Actual Size", barTitle: "Actual Size", symbol: "1.magnifyingglass", keys: ["⌘0"], ...pageInLittleArdia },
   zoomIn: { title: "Zoom In", symbol: "plus.magnifyingglass", keys: ["⌘+", "⌘="], ...pageInLittleArdia },
@@ -102,6 +106,7 @@ export const COMMANDS = {
   restoreArcFolders: {},
   toggleMute: { title: "Mute Tab", symbol: "speaker.slash", ...pageInLittleArdia },
   togglePageEngine: { title: "Open Page in WebKit" },
+  toggleReader: { title: "Show Reader", barTitle: "Toggle Reading Mode", symbol: "doc.plaintext", keys: ["⌥⌘R"], ...pageInLittleArdia },
   downloads: { title: "Downloads", symbol: "arrow.down.circle", keys: ["⇧⌘J", "⌥⌘L"], scope: "window", littleArdia: "page" },
   mergeAllWindows: { title: "Merge All Windows", symbol: "rectangle.stack", ...windowOffInLittleArdia },
   switchProfile: inWindow,
@@ -216,10 +221,12 @@ export const LITTLE_ARDIA_DISABLED_COMMANDS = commandsWhere((c) => c.littleArdia
 export const SPLIT_VIEW_COMMANDS: readonly BrowserCommand[] = ["openSplitPane", "focusNextPane", "focusPreviousPane"];
 export const EXPORT_COMMANDS: readonly BrowserCommand[] = ["exportBookmarks"];
 export const WEBKIT_COMMANDS: readonly BrowserCommand[] = ["togglePageEngine"];
+export const HIDING_COMMANDS: readonly BrowserCommand[] = ["hideElement", "showHiddenElements"];
 export const UNAVAILABLE_COMMANDS: ReadonlySet<string> = new Set([
   ...(splitViewAvailable ? [] : SPLIT_VIEW_COMMANDS),
   ...(PLATFORM_FEATURES.exportsBookmarksAndPasswords ? [] : EXPORT_COMMANDS),
   ...(PLATFORM_FEATURES.webKit ? [] : WEBKIT_COMMANDS),
+  ...(PLATFORM_FEATURES.contentBlocker ? [] : HIDING_COMMANDS),
 ]);
 export const LITTLE_ARDIA_PAGE_COMMANDS: ReadonlySet<string> = new Set(commandsWhere((c) => c.littleArdia === "page"));
 

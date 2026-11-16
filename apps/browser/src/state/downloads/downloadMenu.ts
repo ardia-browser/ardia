@@ -7,8 +7,7 @@ import { removeDownload } from "../windows/actions";
 import { opensWhenDone, toggleOpenWhenDone } from "../windows/downloadWatch";
 import { cancelDownload, keepDownload, pauseDownload, resumeDownload, type Download } from "./actions";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
-
-export const awaitsKeep = (d: Pick<Download, "state" | "dangerous">) => d.state === "downloading" && d.dangerous === true;
+import { awaitsKeep } from "./status";
 
 export type DownloadMenuState = { held: boolean; downloading: boolean; paused: boolean; opensWhenDone: boolean; fileExists: boolean };
 

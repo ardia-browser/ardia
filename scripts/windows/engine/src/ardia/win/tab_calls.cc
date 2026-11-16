@@ -9,6 +9,7 @@
 #include <string_view>
 #include <utility>
 
+#include "ardia/core/ac_launch_switches.h"
 #include "ardia/win/ac_calls.h"
 #include "ardia/win/external_apps.h"
 #include "ardia/win/tab_events.h"
@@ -517,6 +518,10 @@ void Evaluate(content::WebContents* contents,
              kEvaluationStart + Text(args, "code") + kEvaluationEnd);
   params.Set("awaitPromise", true);
   params.Set("returnByValue", true);
+  if (args.FindBool("userGesture").value_or(false) &&
+      ardiacore::TestInstance()) {
+    params.Set("userGesture", true);
+  }
   CallDevTools(contents, "Runtime.evaluate", std::move(params), std::nullopt,
                base::BindOnce(&Evaluated, std::move(reply)));
 }

@@ -155,7 +155,7 @@ def flags() -> dict:
     from ardia_cli.browse import readurl
 
     return {**readurl.FLAGS, "--http": "bool", "--stdin": "bool", "--links": "value", "--limit": "value", "--selector": "value", "--list": "bool",
-            "--scroll": "bool", "--match": "value"}
+            "--scroll": "bool", "--match": "value", "--data": "bool", "--fields": "value", "--where": "multi", "--block": "value"}
 
 
 ALIASES = {"-s": "--selector"}
@@ -329,6 +329,9 @@ def footer(limit: int, cut_any: bool, hidden: int, wanted: int, saved: str = "")
 VIRTUALIZED_MARK = "rows rendered; the grid is virtualized"
 
 
+EMPTY_PAGE = ("(no text: the site sent an empty page with no title, which usually means it turns away automated or foreign "
+              "traffic; reading it again rarely helps, so get the data from another source and say which)")
+
 def note_virtualized(*texts: str) -> None:
     from ardia_cli import command_metrics
 
@@ -342,11 +345,20 @@ def pages_cap(pages: int) -> int:
     return min(max(PAGE_SHARE * pages, OUTPUT_CAP), PAGES_CAP_CEILING)
 
 
+def empty_note(record: dict) -> str:
+    from ardia_cli import command_metrics
+
+    if record.get("title") or (record.get("status") or 200) >= 300:
+        return "(no text)"
+    command_metrics.flag("read_empty_page", True)
+    return EMPTY_PAGE
+
+
 def render(records: list[dict], options: dict, extra: str = "") -> str:
     from ardia_cli.redact import redact
 
     heads = [redact(header(record, index + 1, len(records))) for index, record in enumerate(records)]
-    texts = [redact(record.get("text") or ("" if record.get("error") else "(no text)")) for record in records]
+    texts = [redact(record.get("text") or ("" if record.get("error") else empty_note(record))) for record in records]
     extra = redact(extra)
     limit = None if options.get("full") else (pages_cap(len(records)) if options.get("max_output") is None else int(options["max_output"]))
     whole = join(heads, texts, [extra])
@@ -354,7 +366,7 @@ def render(records: list[dict], options: dict, extra: str = "") -> str:
         return whole
     from ardia_cli.browse.daemon import spill
 
-    saved = spill(whole) or ""
+    saved = "" if options.get("json") else (spill(whole) or "")
     for shown in range(len(records), -1, -1):
         out = fit(heads[:shown], texts[:shown], len(records) - shown, limit, extra, len(whole) + 300, saved)
         if out is not None:
@@ -529,7 +541,12 @@ async def extract_filled(page, selector: str | None, timeout: float) -> dict:
     while thin(got, selector) and loop.time() + THIN_POLL < deadline:
         waited = True
         await asyncio.sleep(THIN_POLL)
-        got = await page.call(EXTRACT, selector, frame=page.main_frame, read=True)
+        try:
+            got = await page.call(EXTRACT, selector, frame=page.main_frame, read=True)
+        except BrowseError as error:
+            if error.code not in ("document_changed", "page_navigated", "frame_gone"):
+                raise
+            await settle(page, min(deadline, loop.time() + SETTLE_LIMIT))
     if waited:
         command_metrics.flag("read_waited_for_content", True)
     return got

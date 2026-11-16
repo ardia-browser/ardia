@@ -25,7 +25,7 @@ a fresh data folder, as a user would: 41 driven runs, every row below seen on th
 changed by #1658, #1686 and #1691 were seen again, and Tour and Open at login walked, on run 43565273476 (commit
 d83398e1f, engine `windows-engine-20261113-16`), and the intro, onboarding and tab strip that evening on #1737's
 build 72901e27a (run 43624897005, engine `windows-engine-20261113-21`); those rows say so, and rows others saw say
-who and on which build. Of the 66 rows, 49 work, 8 work with a difference, 1 is broken, 4 do nothing, 3 are not offered
+who and on which build. Of the 76 rows, 55 work, 8 work with a difference, 4 do nothing, 8 are not offered
 and 1 was not walked. Works with a difference says
 what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidden" are off on Windows behind
 `PLATFORM_FEATURES` until what they need exists. The walk before this one (2026-11-13, bfd586fe) is in git history.
@@ -38,7 +38,7 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
 | First launch after the installer | Works: onboarding, no release notes | #1517 |
 | First launch with a link | Works: the link opens in a Little Ardia window in front, onboarding waits in the main window behind it | |
 | Onboarding (main's walk-through, #1762) | Works (72901e27a): eight steps (source, layout, tabs, look, search and privacy, pins, default browser, outro), Edge found on this PC, Windows wording, Ctrl+T, Ctrl+L and Ctrl+S key caps, no Dock card or trial, no app icon row; Skip on every step; Get Started and Take the Tour. Gaps: Tab leaves the intro for the page behind it, and the links step names the Mac's Notes (#1812); the default-browser hand-off to Windows Settings wasn't seen (the VM's default is already Ardia) | #1812 |
-| Intro animation and music | Differs: the dawn poster stands in for the animated meadow, then hands over to onboarding; at night it is the plain dark background. Seen on #1737's build 72901e27a, where the meadow page is built but WebGL is unavailable in the VM (`ardia://gpu`: software compositing only, and the engine has no SwiftShader), so all 14 launches fell back to the poster within about 0.4 s; the animated scene hasn't drawn on any Windows machine yet. Music not checked (the VM has no audio out) | #1547, #1546, #1737, #1249 |
+| Intro animation and music | Differs: no Windows machine with a real GPU has run the animated meadow yet. Where Chromium gives no WebGL2 (the VM and the CI runners: no GPU, and the engine has no SwiftShader) the dawn poster stands in, or the plain dark background at night, within about 0.4 s (14 of 14 launches on 72901e27a). On software rendering (WARP, turned on with test switches) the scene draws: in the VM on 65dd9760b, in light with the page's own icon and wordmark and at night with the moon and fireflies; Tab, Space and Enter work Mute and Skip, and a click on Skip ends it. The WARP self-check runs it on every PR on x64 and ARM64. Music not checked (the VM has no audio out) | #1547, #1546, #1737, #1249 |
 | Tour | Works (d83398e1f): Take the Tour shows five stops (search, tabs in the sidebar, room to focus, two pages side by side, all set) with Back, Next and Skip Tour; Done ends it | |
 | Import from Edge | Works (onboarding finds Edge; import itself checked in #1357) | #1516 |
 | Check for updates | Differs: Check Now says "No Windows update published yet" and names the build (0.2.47-nightly.1, Windows alpha 290) | #1517 |
@@ -56,17 +56,21 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
 | Close-tabs confirm while other windows load | Works: the confirm (like the prompt and the file pickers) runs on its own thread, so other windows keep loading and taking input while it is open; it stays in front of its own window and comes forward with it (#1688's self-check holds a confirm while a page loads, on CI; not walked here) | #1672, #1688 |
 | Quit and relaunch with the session restored | Works (tabs, the split and the open windows came back) | |
 | Engine memory trimmed after tabs close, once input is idle | Works (logged after closes) | #1544 |
+| Memory Saver's loaded-tab budget (the tabs hidden longest sleep past it) | Not offered; hidden: the page view has no `sleepIfHidden` on Windows | #1425 |
+| Unload inactive profiles (Settings › Advanced, with Memory Saver) | Not offered; hidden: the engine has no `profiles.unloadIdle` | #1425 |
 | Little Ardia (Ctrl+Alt+N) | Works, app-drawn chrome; its command bar lists recent pages | |
 | Search Tabs (Ctrl+Shift+A), Ctrl+Tab | Works (d83398e1f): the new page has the keyboard after Ctrl+Tab and after Next Tab into a tab a restore left unloaded (#1658, #1691). Gap: a new tab opened with an address (Ctrl+T, the address, Enter) doesn't get the keyboard, tracked in #1689 (still so on 72901e27a) | #1658, #1689 |
 | Pin, Top Apps, New Group with Tab, tab menus | Works (the tab menu offers Move to Top Apps, Remove from Split View, Close Split View) | |
 | Page picture (a pinned page in another window) | Works: the other window shows the page picture | #1540 |
 | Tabs in the sidebar or across the top (Ctrl+Shift+S), hide the sidebar (Ctrl+S) | Works. The pale box once left over the page's top-left came from visiting a second profile, not from Ctrl+S: the next profile's sidebar page, parked beside the sidebar, cut a hole in the page. Gone on d83398e1f, on a full-width tab and a split pane. With tabs across the top (72901e27a), the open and recently closed tabs button and New Tab stay clear of the caption buttons down to the narrowest window (600 px), where tabs scroll instead, and a right-click on the empty strip opens the tab menu | #1673, #1583 |
+| Minimalism mode (Ctrl+Alt+M) | Works, except one edge (53d5a2bee, walked 2026-11-14): in all five layouts (sidebar left, right, hidden; tabs on top with the strip shown and hidden) the window buttons sit in the band, the sidebar header or the strip with only app UI under them; minimize, maximize, restore and close work, the band, strip or header drags and double-click maximizes; Split View, full screen, a second window and turning it off behave, at 100% and 125%. Left, right and bottom resize work; where the page reaches the top edge (sidebar right), the band resizes the window (#1888; a real drag in CI, the cursor and double click untried in the VM) | #1831, #1888 |
 | Profiles: switch with Alt+1, Alt+2 | Works (Work opened in its own colour) | |
 | Open in WebKit, Engines pane, Opens in | Does nothing (no WebKit on Windows); hidden | #1522 |
 | Split View (Ctrl+\, two pages, Next Pane) | Works: the empty pane takes the next address, Alt+Shift+] moves focus to the other pane's page. Seen on #1686's build: Focus Next Split Pane into an empty pane puts the typing in its search field, and a page left full screen by a tab switch comes back in a window and gets Escape | #1490, #1658 |
-| Peek | Works: Shift-click opens it over a split pane and in a private window; Escape closes it. Keys reach the Peek's page without a click, and after Escape they reach the source page with the link still focused, as on the Mac (the engine thread saw both in the VM on build 339 of #1708; not re-walked here) | #1531, #1708 |
+| Peek | Works: Shift-click opens it over a split pane and in a private window; Escape closes it. Keys reach the Peek's page without a click, and after Escape they reach the source page with the link still focused, as on the Mac (the engine thread saw both in the VM on build 339 of #1708; not re-walked here). Its buttons at the top, left and right (53d5a2bee, walked 2026-11-14) are app UI over the page with a clean cut, answer clicks, include Split View's, and the tooltip reads "Open as Tab (Ctrl+O)" | #1531, #1576, #1708 |
 | A download while split | Differs: an insecure (http) download is blocked by Chromium's own download bubble; a download from localhost reaches Ardia's panel | #1519 |
-| Pop-up windows from pages | Broken: a bare Chromium window with the Windows title bar | #1518 |
+| Pop-up windows from pages | Works: the pop-up stays a tab of its opener's window, so `window.opener` and `postMessage` keep working, and shows in a pop-up window the app draws, sized and placed as the page asked | #1518 |
+| Open pop-up windows as tabs (Settings › Tabs › Links) | Works, not seen on Windows yet: with it on, a page's pop-up opens as a foreground tab beside the page instead of a pop-up window, as on the Mac (`engine/popupsAsTabs.ts`); a pop-up from Little Ardia, one with no page to open beside, an extension's, and a pop-up window already open stay windows | #1986 |
 | Main, Settings and Little Ardia window chrome | Works, no system title bar | |
 
 **Pages**
@@ -76,13 +80,15 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
 | Command bar (history, open tabs, suggestions) | Works | |
 | Inline completion in the command bar | Works (top match completes inline) | #1520 |
 | Find in page | Works: the app's find bar, from a page or the app's UI (Ctrl+F); count, Enter, Shift+Enter, F3 and Shift+F3 step; Escape gives the page the keyboard back; private windows too | #1758 |
+| Page loading in the address field | Works (#1865's build 0bcabc63e, run 43642845254, 125%): while a slow page loads the glow fills the toolbar field, a Split View pane's field, a Peek's bar and Little Ardia's field, sweeps across when the load ends and fades; a load under 150 ms shows nothing; the tab's spinner and the stop button as before | #1820 |
+| Reading mode (Ctrl+Alt+R, F9) | Works (53d5a2bee, walked 2026-11-14): it draws on a local article and on Wikipedia; Larger Text and the font switch work, Escape leaves it, F9 and Ctrl+Alt+R toggle it and it stays across a tab switch. A reload leaves it, as on the Mac. Find in page finds nothing inside it, as the shared reader keeps the article in a closed shadow root | #1831, #1883 |
 | Zoom (Ctrl+=, Ctrl+0) | Works, with the zoom icon in the address bar | |
 | Print | Works (Chromium's print preview, Microsoft Print to PDF) | |
 | JavaScript alert, confirm and prompt | Works (Chromium's dialogs over the page) | |
-| Page, link and image menus | Differs: Chromium's (Reload, Save as, Print, Cast, View page source, Inspect) | #1518 |
+| Page, link and image menus | Differs: Chromium's menu, trimmed as on the Mac (no Open link in split view, Cast, reading mode, QR code, send to your devices, Lens or other-profile items; Save as shows no Ctrl+S), but without the Mac's own items for a selection (search with Ardia's engine, Share) | #1811 |
 | Full-screen (a page element) | Works; Escape leaves it | |
 | Picture in picture | Differs: Chromium's window, no stash, corners or mini player | #1425 |
-| Downloads (download, panel, Ctrl+J) | Works: the panel opens for a new download and lists it; Ctrl+J opens it | #1519 |
+| Downloads (download, panel, Ctrl+J) | Works: the panel opens for a new download and lists it, including one held for Keep; Ctrl+J opens it and Escape closes it (53d5a2bee, walked 2026-11-14) | #1519, #1610 |
 | History (Ctrl+H), Clear Browsing Data (Ctrl+Shift+Del) | Works | |
 | Bookmarks (Ctrl+D, Ctrl+Shift+O) | Works | |
 | mailto and other app links | Works: the app's prompt, then the handler (`mailto` opens the mail app without a prompt, as Chromium and the Mac allow it by default). The engine thread saw the prompt and the handler in the VM on build 347 of #1701; not walked here. The first click on the prompt works after using the page since #1749, and a data: page's prompt stops counting once its document is gone since #1750 (engine `-22`); the engine thread saw the first in the VM and the self-check proves the second on both CPUs. | #1590, #1701, #1749, #1750 |
@@ -101,6 +107,9 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
 | Chrome Web Store install | Differs: the store says Add to Ardia, Chromium's Add extension dialog, then the icon in the toolbar and the extension's own page | stand-ins `extensions.resolveInstallPrompt` |
 | ardia://extensions | Works | |
 | Ad, tracker and cookie-banner blocking | Not offered; hidden | #1425 |
+| Hide anything (Hide Element) | Not offered; hidden: its rules are kept by the content blocker, which Windows lacks | #1425 |
+| Block autoplay on every site, and Autoplay per site in Site Controls | Not offered; hidden: on the Mac the page script blocks media nobody asked to play, from the global switch and the site's Autoplay choice, and the Windows page script has no such blocking, so the switch (`webView.setBlockAutoplayEverywhere` is missing) and the per-site choice (stored, never read) are hidden behind `blocksAutoplay` | #1425, #1774 |
+| Block requests to send notifications (Settings › Privacy & Security) | Not offered; hidden: it turns a notification request down when the app hears one, and on Windows the app hears none and can't answer one (`permissions.resolve`), so Chromium's own prompt still asks | #1425 |
 | Bookmark export | Works: Windows' Save As, then the HTML file is written | #1551 |
 | Password export | Works up to Windows' own sign-in prompt over the app window; the walk cancelled it there (the VM account's password is not typed in a test), so the file was not written | #1551 |
 
@@ -111,6 +120,7 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
 | Settings window, panes, search | Works (all twelve panes; search finds rows and opens their pane) | |
 | Profiles: create, switcher | Works | |
 | Appearance: light and dark | Works | |
+| Higher contrast text | Works (403b48b2c, walked 2026-11-14): Automatic follows a Windows contrast theme turned on while the app runs and one already on at launch, through the shell's `isHighContrast` and its `highContrast` event (react-native-windows' `AppTheme` is UWP-only and always read off). Changing the theme while Settings is open can crash the window layer, on older builds too | #1831, #1882, #1900 |
 | Keyboard Shortcuts pane | Works, Windows keys | |
 | "…" menu | Works, except Check for Updates | #1517 |
 | Sync | Works: Turn On Sync at the default folder shows the Recovery Kit, the pane says updated just now, every What Syncs row but Passwords; a Mac and a PC exchanged pinned tabs and bookmarks both ways (#1594) | #1575, #1425 |
@@ -170,10 +180,14 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
   as the Mac's lights live inside the UI there. So no band is kept free at the top: the page card starts at the page
   frame, and Settings and Import have no title bar above them.
   - Where the buttons sit comes from `windowControlsPlace` in `state/windows/layout.ts`: in the card's toolbar row, in
-    a right sidebar's header, at the end of the top tab strip, in Little Ardia's bar. Only a card with no toolbar under
-    the corner (address bar in the sidebar, sidebar on the left) keeps a 32 point band for them. They take the site's
-    toolbar colours in the toolbar, and when the toolbar hides while scrolling a smaller set fades in on the 20 point
-    strip. The room every row keeps for them (138 points: 12 to the edge, 96 of buttons, 30 to drag by) is in
+    a right sidebar's header, at the end of the top tab strip, in Little Ardia's bar. With the address bar in a left
+    sidebar they sit at the sidebar's leading end, in their own row above the header (one button and a 3 point gap
+    tall, `sidebarControlsRow`), in the same order as everywhere else (menu, minimize, maximize, close), and the card
+    reaches the page frame (#1973); the row beside them is a caption region, counted from the left (a negative third
+    value in a caption region is a width). Only a card with no toolbar and no sidebar showing (address bar in the
+    sidebar, tabs hidden) and Minimalism's band layouts keep a 32 point band for them. They take the site's toolbar
+    colours in the toolbar, and when the toolbar hides while scrolling a smaller set fades in on the 20 point strip.
+    The room every row keeps for them (171 points: 12 to the edge, 129 of buttons, 30 to drag by) is in
     `lib/platformChrome.windows.ts` and `WINDOW_CONTROLS` in `lib/windowChrome.ts`.
   - With no lights on the left, a sidebar header with nothing in it collapses to the page frame on Windows
     (`sidebarHeaderCollapsed`), so the tabs start at the top; the downloads button then sits in the sidebar's footer.
@@ -187,6 +201,22 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
     would cut into the card. A Peek's page sits under the Peek's bar and an extension's page has no tab, so both stay
     square (`pageRadiusOf` in `engine/covers.ts`). Rounding only the bottom corners below the toolbar needs per-corner
     shapes in the engine host.
+  - Resizing from the top edge over a page: Windows keeps the top resize band inside the client area, and the page is
+    its own window above it. The page window's hit test (`HostedFrameView::NonClientHitTest` in `ardia/win/frame_view.cc`)
+    answers what the app window answers at that point when that is its top edge or a top corner (so the band's size,
+    and no band while maximized or full screen, are the app window's own), and the page's content everywhere else.
+    Chromium would take the press that follows as a page press, so the engine's message hook (`PreTranslate` in
+    `ardia/win/main.cc`, called before Chromium's pump dispatches) takes a hosted page's non-client press and double
+    click with those codes: the press becomes the app window's own size command, the double click the app window's.
+    A move in the band sets the resize cursor (Chromium's page child window answers WM_SETCURSOR with nothing) and still
+    reaches Chromium. Chromium arms its non-client leave tracking on the page's top-level window, which never sees the
+    pointer leave from over its child, so the hook arms it on the child itself and, when the child reports the pointer
+    left the page, sends the page window WM_MOUSELEAVE: a page's hover ends when the pointer leaves through the band. Touch and pen can't resize from the top edge over a page: their contact arrives as WM_NCPOINTERDOWN,
+    which Chromium handles (untried without a touch device). `HTTOP` alone (Chromium handles the press) and
+    `HTTRANSPARENT` (a child window's transparency doesn't reach another top-level window) both left the window
+    unresized in a real drag. `launch-smoke.ps1` drags the band over a page in Minimalism with the sidebar on the
+    right and expects the window to resize from the top; the `tab.hitTest` host verb answers the page's and the app
+    window's hit for the self-check.
   - Moving the window: a drag region is a view that moves the window when the UI's own hit-testing gives it the press,
     so a control on top of it still clicks, and the app moves the window while the button is down (Escape puts it
     back, a maximized window restores under the pointer, a release at the top edge maximizes). The UI also marks
@@ -200,11 +230,23 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
     which path each drag took, and `maximized|restored <id>`.
   - A hidden sidebar slides back in when the pointer reaches the window's edge, as on the Mac: `watchSidebarEdge`
     polls the pointer every 40 ms while a window is watched and logs `sidebar edge over|away <id>`.
+  - React Native for Windows hit-tests by layout and ignores `transform`, and the app runs every animation that
+    doesn't repeat from JS on Windows, so a running animation keeps writing its values to a view until it ends. So a
+    style never swaps an Animated value for a constant while an animation may still write to it: the view keeps the
+    same node, and `useGated` (`components/ui/motion.ts`) pins that node to its resting value while its state is off.
+    A sidebar docked while its peek was closing drew its rows off where they click before this (#1852); the self-check
+    `sidebar peek layer rests at identity after docking mid-close` docks the first window six times as its peek
+    closes and logs `self-check note: sidebar peek, <n> cycles, <m> docked mid-close, ...`. And no view that takes
+    clicks rests under a non-zero transform (#1868).
   - The app quits when its last window closes: it sends `willQuit`, then quits on the UI's yes or after 3 seconds
     without a reply; a no cancels the quit.
   - Warn before quitting asks when closing a browser window would quit the app: the setting is on, the instance
     isn't hidden, and no other window stays open: `windowIds()` less the browser windows the UI has closed or is
-    closing (Settings and Import count while listed). Little Ardia's own closes (Ctrl+W, Escape) and Ctrl+W on a
+    closing (Settings, Import and pop-up windows count while listed). A pop-up keeps Ardia running like any window:
+    closing the last browser window with a pop-up open neither asks nor quits, and the user closing that pop-up (its
+    button, Alt+F4, Ctrl+W, the system menu) is the close that quits and asks. A page that closes itself
+    (`window.close()`) closes its pop-up window at once, so in the last window it quits without asking: the question
+    protects what is still open, and nothing is. Little Ardia's own closes (Ctrl+W, Escape) and Ctrl+W on a
     window's last tab ask the same way; when the last-tab confirm asks, it stands in for the quit question.
     Windows has no Quit command, so these are the only places it asks; the Mac asks on ⌘Q and never on a window's
     close. It asks before the window closes, so a Cancel leaves the window and the app as they were and no quit
@@ -260,8 +302,9 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
   while the UI holds Escape (`captureEscape` in `platform/focus.ts`, for a page popover, a sidebar or bookmarks bar
   drag, and on Windows the Downloads popover too), `ArdiaFocus.setDragEscapeCapture` (`FocusModule.h`) has the
   keyboard hook in `MenuKeyboard.h` take a bare Escape in an Ardia window and send `dragEscape`. While the tab
-  switcher is open the hook takes every key, as on the Mac: Escape and the left and right arrows go to the switcher
-  and its own shortcut still runs. The launch log says `keys escape capture on|off` and
+  switcher is open the hook takes every key, as on the Mac: Escape and the left and right arrows go to the switcher,
+  W with Ctrl held (with or without Shift, never with Alt or as a key repeat) closes its highlighted row, and its own
+  shortcut still runs. The launch log says `keys escape capture on|off` and
   `keys escape sent to the open popover or drag`. The Mac's Downloads popover does not close on Escape yet
   (`PLATFORM_FEATURES.escapeClosesDownloads` is off there).
 - "Ctrl+Z reopens closed tabs" works as the Mac's retargeted Undo: with the setting on, the keyboard hook in
@@ -385,6 +428,11 @@ is plain Chromium.
   a hole there, with the surface's corners. A surface inside a `ClipView` (the sidebar's and the tab strip's profile
   pages, which sit side by side and clip to one) reports only the part its clips show, so the next profile's rows,
   parked beside the sidebar, cut nothing in the page (#1673). A translucent surface shows the card behind it in the hole, not the page.
+  A `Surface` that only draws a gradient (`GradientFill`, the address field's load glow) reports no rectangle: it always
+  sits inside a toolbar, sidebar or Little Ardia plate that does, and `windowsGradientFill.test.mjs` pins its callers.
+  Gradients draw through `ArdiaMaterialGradient` (`GradientView.h`): `fillColors` at `fillStops` top to bottom, masked
+  left to right by `fade` at `fadeStops` through a `CompositionMaskBrush`, as `Surface.swift` masks its plate. When
+  composition gradients fail, `Surface` draws rows at the stops inside columns that carry the fade.
   The page window has no system backdrop: Chromium asks for Mica on its top-level windows, and Windows paints that
   into the holes. While a modal the app shows is open (a confirm, a prompt, a file or folder picker), the page windows its
   window owns are disabled and enabled again when it closes, so a click on the page cannot raise it over the dialog. A press in the page counts
@@ -461,7 +509,18 @@ is plain Chromium.
   is in decide, and a field the user left by pressing a page of its window no longer counts. A field in the content
   area of another tab (its New Tab page, an empty split pane, an internal page: the views `TabPane` wraps in
   `TabContentArea`, whose `contentAreaOf` prop the field walk reads) doesn't count either, since the new page replaces
-  it; the sidebar, the command bar, the find bar and the toolbar keep the keyboard. The engine host carries
+  it; the sidebar, the command bar, the find bar and the toolbar keep the keyboard. Only a page already showing
+  in that window gets the ask at once. For any other page (none yet, sleeping, hidden, prewarmed, still opening, or
+  still showing in the window a tab moved from) the ask is kept until that page shows in that window, however long it
+  takes to open, and no show timer is involved (`engine/keptFollow.ts`, #1689, not seen on Windows yet). A shown tab
+  that gets its first address (Enter in its New Tab page's search box, or in the command bar over it) asks again.
+  Escape in the command bar over a page gives that page the keyboard back, as on the Mac (#1894): the page's
+  `focusIfUnfocused` asks the same way, and only when no field of the window holds the keyboard (not seen on Windows
+  yet; `page_focus_returns_after_bar` counts it).
+  The ask is used once. It is dropped when another tab is followed or focused, a page is pressed, or a field takes the
+  keyboard or holds it when the page shows: the rule above for fields of the page's window, so another tab's content
+  area doesn't count, and any field at all in another window, such as Settings. `keyboard_follows_kept`,
+  `keyboard_follows_used` and `keyboard_follows_dropped` in the hourly `usage_counts` count them. The engine host carries
   it out only if the keyboard is already in that app window (its own UI or its pages), only while one of the app's
   windows is the foreground window, and never in a background instance. A focus it can't carry out because Ardia
   isn't in front is kept for that window and given when the window is activated again; it is dropped when the window
@@ -487,7 +546,10 @@ is plain Chromium.
   (ArdiaCore's page script also counts a `window.open()` during an activation; Windows doesn't).
   Cross-site iframes run in their own process and their own DevTools target, so links in them don't peek yet.
   The Peek card's background is a surface painted beneath the Peek's page, so a Peek's page (`temporary`) keeps a
-  cover that encloses it whole; anything over part of it still cuts it. Escape closes a Peek from either page, as on
+  cover that encloses it whole; anything over part of it still cuts it. A Peek belongs to its tab (#1361): while
+  another tab shows, its card stays mounted and unseen, its page is hidden, and `PageCoverGate` (a plain pass-through
+  on the Mac) keeps the card's surfaces from cutting holes in the page that shows; back on its tab the Peek's page is
+  asked to follow again (not seen on Windows yet). Escape closes a Peek from either page, as on
   the Mac: the host reports an Escape keydown the page didn't use as the `command` event `escape`, from any frame
   of the page (it watches every frame widget, so a cross-site iframe counts).
 - A tab restored from the last session, or duplicated, loads its address: the Windows engine keeps no saved page
@@ -509,7 +571,54 @@ is plain Chromium.
   events do. The panel closes on a click in the page through `OutsidePressArea`, which page presses reach
   (`pagePress`); the full-window backdrop it also has only sees presses in the app's own surface.
 - Chromium's own UI still shows where the app has none on Windows yet: the page's right-click menu, JavaScript
-  dialogs, the status bubble for a hovered link, and popup windows a page opens.
+  dialogs and the status bubble for a hovered link. The right-click menu is Chromium's, as on the Mac, but the engine
+  (`ardia/win/context_menu.cc`) leaves out what Windows can't do: Open link in split view, Cast, reading mode, listen
+  to this page, the QR code, send to your devices, Lens, and opening a link as another Chromium profile; Save as
+  shows no Ctrl+S, which is Ardia's Hide Tabs on Windows. Its search item still names Chromium's default engine.
+- A tab or pop-up a page opens (`target=_blank`, `window.open`, with a size or not) never becomes a Chromium pop-up
+  window and never shows in its opener's place: `Navigate()` (`chromium-win-hosted-popups-and-menus.patch`) asks the
+  host, which inserts it as a background tab of the opener's hosted window (the opener stays the active, visible tab)
+  and offers it to the app with `tab.opened` (`foreground` as the page asked, and for a pop-up `window: true` and
+  `popup: {x, y, width, height}`, only what the page asked for). A blocked pop-up the user lets through opens as a tab,
+  as before. The host tracks every offer until the app adopts or discards it; offers whose app window closes are
+  closed with it. The app acknowledges each `tab.opened` it handled (`tab.offerHeard`, in `engine/host.ts`) and then
+  owns the decision, so a background tab it keeps for later stays; an offer nobody acknowledged within 30 s (4 s in a
+  test instance) is closed, whatever lost it.
+- What a pop-up's page asks for goes to one place, `requestHost` (`engine/requestHosts.ts`): its opener's page while
+  that page is listening and in the request's profile, else a browser page of that profile, else nobody. The profile
+  test is `takerOfOpenedTab`'s: the same name, or for a private request a private page of the same original profile.
+  An opener whose tab moved to another profile keys a new page in that profile while its pop-up stays in the old
+  one, so the opener's page is passed over and the pop-up's tabs, links and app-link asks never cross profiles. A
+  page's own offered tab takes the same test, for a tab that changed profile while the engine was opening one from
+  it. With nobody, a tab or link the pop-up opens
+  reaches the app whole, as the `tabs.windowRequest` engine event (the request with its offered tab, disposition and
+  engine profile; the Mac never sends it). The app (`state/tabs/openFromWindowlessPage.ts`) gives it to the most
+  recently focused browser window of that profile, with or without a page, through the same `openFromPage` a page's
+  own request takes, or opens a window of that profile holding the tab when none is open. For a background tab that
+  window opens without focus, behind the pop-up that asked (`opensBehind`, the native open's `behind`), so the pop-up
+  keeps the keyboard. A background tab's offered page mounts its page view at once, hidden, which adopts it. It is never treated as a
+  link from another app, so no external-link rule applies and it keeps its profile and live tab. A tab the app hasn't
+  adopted within 10 s is closed in the engine, never left hidden and running; a profile the app doesn't know closes
+  it at once. Known gap: a private pop-up's tab is closed and forgotten at once. The app makes a new private session
+  for each private window and can't open one on an existing session, and a regular window would leak it. An app-link
+  ask with nobody to show it is refused and forgotten (`externalAppForget`), where the Mac drops it unanswered: the
+  prompt is drawn on the asking page's tab, so a window with no page has nowhere to show it.
+- A pop-up window takes focus only if, when it opens, its opener's app window is the foreground window and the
+  opener's page holds the keyboard (`keyboard.page`, asked by `WindowManager.h` at that moment, the same rule as page
+  focus in #1658); a pop-up from a pop-up is placed and focused by that pop-up, while its tabs and prompts go to the
+  main page. Otherwise it shows just above its opener's window and that window's pages, without activating, and never
+  above another application's window. The Mac shows such a pop-up in front of its Ardia windows and makes it key
+  within Ardia; Windows shows it in the same place but leaves the keyboard where it was.
+  `host.info` counts Chromium pop-up windows in `popupBrowsers`, which the self-check expects to stay 0.
+- Open pop-up windows as tabs (`webView.setPopupsOpenAsTabs`) is kept in the app, in `engine/popupsAsTabs.ts`: the Mac's
+  native layer does it there, while on Windows the app makes the pop-up window itself. With it on, a `tab.opened`
+  with `popup` goes to `requestHost` as the Mac's request (`foreground`, `popup: true`, the offered tab, the engine
+  profile), so `openFromPage` puts it beside its page, keeps a Peek's page as a tab and counts it. The opener is the
+  one the pop-up window would have used: for a pop-up from a pop-up, the first page. It stays a pop-up window when
+  that opener is gone, when the opener or the page that would take it is in Little Ardia (the `small` window kind,
+  noted as the app opens its windows in `modules.ts`, like the Mac's `ardia.window.small`), and when no page of its
+  profile is listening. An extension's pop-up never comes this way: Chromium makes it as its own pop-up browser. The
+  setting only decides for new pop-ups, so a pop-up window already open stays one.
 - CI takes its engine from a GitHub release: `scripts/windows/engine/prebuilt.json` names the release and each
   CPU's zip with its SHA-256, `fetch-engine.ps1` downloads and checks it, and the Windows workflow assembles the app
   with it, launches it with the self-check (which then loads a page through the engine) and runs the tour's pages
@@ -626,13 +735,15 @@ Answered on Windows since the engine took Windows paths (`windows-engine-2026111
   denied schemes, with the request's user gesture). For a tab the host keeps, `ardia/win/external_apps.cc` sends the
   `externalApp` tab event (`id`, `url`, `origin` or null, `userGesture`, `offTheRecord`) to `domains/externalApps.ts`
   and keeps the asking document. The `externalAppAlive` page call answers `{ alive: true }` once per request while
-  that document lives, as the Mac's `ResolveExternalApp` checks. Every request with an initiating origin that isn't an
+  that document is the one showing: still there, active (not kept in the back/forward cache, not pending deletion
+  after a navigation) and in the tab's primary page. The Mac's `ResolveExternalApp` checks only that the document
+  still exists. Every request with an initiating origin that isn't an
   extension's counts as a page's, opaque origins included: a `data:` page or a sandboxed frame needs its document
   alive too. Only a request with no initiating origin (the browser) or an extension's needs just its tab. The prompt
   shows an origin only when it isn't opaque; otherwise it says "This page wants to open this application." and never
   borrows another page's name. A cross-site navigation drops the page's prompt (`state/tabs/pageEvents.ts`
   `leftPage`, as on the Mac); after a same-site navigation or a reload the prompt can stay, and Open then launches
-  nothing because the asking document is gone. The engine keeps a page's 8 newest asks at most, and the app tells it
+  nothing because the asking document is no longer the one showing, even while the back/forward cache keeps it. The engine keeps a page's 8 newest asks at most, and the app tells it
   (`externalAppForget`) whenever it drops one without launching: a no, no handler, a closed page or a forgotten
   profile. `mailto` never asks: Chromium allows it by default and opens the mail app itself,
   as on the Mac.
@@ -651,8 +762,9 @@ Answered on Windows since the engine took Windows paths (`windows-engine-2026111
     site, outside private windows, and kept per profile in `external-app-allowances.json`; deleting a profile
     forgets them. A remembered site opens the app without asking only when the request had a user gesture.
   - **Lifetime:** an ask belongs to its page and is dropped when the page closes. Before any launch the engine must
-    answer `true` to the `externalAppAlive` page call, as the Mac checks that the asking document is still alive, so
-    a prompt survives a single-page site's route change but opens nothing once its document is gone.
+    answer `true` to the `externalAppAlive` page call, which needs the asking document to be the active one in the
+    tab's primary page, so a prompt survives a single-page site's route change but opens nothing once its document
+    is no longer shown, cached or not.
     The prompt carries an id the app makes, so two pages whose engine ids collide never answer each other's
     prompt. The engine's origin must be a serialized origin (no user info, path or spaces), and a profile deleted
     while a yes waits for the engine keeps no allowance and opens nothing.
@@ -800,9 +912,23 @@ sealed exactly as `packages/sync/ios/Core/SyncCrypto.swift` seals it. The engine
   an owner check that began before it is dropped.
 - Passwords are off on Windows (`PLATFORM_FEATURES.syncsPasswords`: no What Syncs row, the type never syncs, and
   the Mac's synced passwords stay in the vault untouched). Chromium turns `kSkipUndecryptablePasswords` on by default
-  on Windows only, and with it `ac_passwords_logins` answers "partial password reads": a login list that may silently
-  leave out undecryptable passwords would look like deletions to sync. The engine needs to list every login on
-  Windows (#1425); the native side below is ready for it.
+  on Windows only, and Ardia keeps it on: Settings, export and autofill read through the affiliation path, which still
+  leaves out a login it can't decrypt. The plain login read is strict on Windows (`chromium-win-strict-login-list.patch`):
+  it fails when any login can't be decrypted, for every caller of that read, so no caller has to remember a flag.
+  Chromium never deletes a login it can't decrypt on Windows (`chromium-win-keep-every-login.patch`):
+  `LoginDatabase::DeleteUndecryptableLogins`, the only code that does, deletes nothing, so neither
+  `kClearUndecryptablePasswords` nor `kClearUndecryptablePasswordsOnSync` can turn it on. That rule is proven from the
+  source, not exercised: a test instance's `--user-data-dir` already skips Chromium's cleanup.
+  `ac_passwords_logins` answers the full list (empty means no passwords), "undecryptable" or "unreadable"; "closed"
+  and "no password store" mean the profile isn't ready. Sites never to save and federated sign-ins have no password
+  and are left out. An ordinary login whose stored password is empty is listed with `"passwordless": true` and no
+  password: Chromium stores such logins (an imported one with an empty password, a username-only one), and on disk
+  they look the same as a damaged blob, so the engine lists them and Sync decides. The native side passes it on
+  unsealed (`SyncLogins::SealedLogins`), and Sync's password adapter neither uploads it nor reads it as a deletion
+  (`ignore`), and never writes a synced password over it: such a login stays as it is on this machine and nothing about
+  it is uploaded, and a damaged row is the user's to fix by saving the password again. Before passwords sync on
+  Windows (#1425), Sync must treat every error as "skip this cycle, delete nothing". The Mac drops such a login
+  silently (#1933).
 - Passwords, once the engine lists them: `ac_passwords_logins` is called and its reply sealed in C++ (`SyncSystem.h`),
   and a synced password is opened only to hand it to `ac_passwords_add`. The Mac's vault files carry plaintext `p` in `pw:` records, as the Mac
   writes them; `SyncLogins.h` swaps them for sealed `s` before JS sees a document (escaped keys included; a login it
@@ -940,6 +1066,25 @@ does run in a test instance. A scratch folder with the marker must get both powe
   which launches it three times and uploads each launch's log: a first launch (onboarding) and a launch with
   onboarding done (the browser window), each with a screenshot when the runner allows a capture, then a hidden
   self-check launch.
+- A pull request gets the fast run. The `gate` job waits for a vouch, like the iPhone build. Then three things start
+  together. A Linux job (`javascript`) bundles the app's JavaScript with Metro, once for both CPUs. Each CPU's build
+  job (`app`, `arm64-app`, both on x64 runners) looks in the Actions cache for an app built from the same native code
+  (`windows-app-<cpu>-<hash>`; the hash covers `apps/browser/windows`, each package's `package.json` and `windows`
+  folder, the lockfile, the patches and the workflow) and compiles only when none is there, then saves it.
+- Each CPU then has two jobs side by side on its own kind of runner: `x64` and `arm64` run the launch check's
+  launches, input and self-check (`launch-smoke.ps1 -Part launch`), `x64-gate` and `arm64-gate` its test-gate checks
+  (`-Part gate`). Each takes the built app, from the cache or from the build job, and when the app was reused
+  `scripts/windows/rebundle.ps1` compiles the Linux bundle with the Hermes compiler saved beside that app and
+  replaces the app's `Bundle` folder; a reused app carries no source maps. When the app was compiled in this run,
+  the same script checks instead that the Linux bundle, compiled here, matches the build's own `Bundle` file for
+  file, so the reuse path is known to test the bundle a build would make. A run that compiled launches the app as
+  built too, with its own launcher; a run that reused launches only the assembled app with the engine inside.
+- A push to `main` or to the Windows branch gets the full run, and so does a pull request with the `full-ci` label
+  (add the label, then push or re-run the run). A pull request can read its base branch's caches and no other pull
+  request's, which is why the Windows branch builds on every push: without that, each pull request into it would
+  compile once for itself. A full run always compiles, saves that app for pull requests to reuse, and adds the tours, the
+  installers and the install check. Only a full run has the `Ardia-Setup-<cpu>` artifacts that
+  `scripts/windows/publish-alpha.sh` publishes.
 - With the browser window open, the x64 run also drives the app with real input and fails when the default layout
   marks no caption region; a drag by the gap beside the window buttons is not Windows' own move or does not move the
   window by the dragged distance; dragging it to the top edge does not maximize the window or dragging back down does
@@ -987,21 +1132,29 @@ Ranked by how much a user notices. Sizes are rough: S is under a day, M is one t
 App side, an agent can do these now:
 1. A new tab opened with an address (Ctrl+T, the address, Enter) gets no keyboard (#1689). S, with the engine
    thread.
-2. Onboarding: Tab leaves the intro for the page behind it, and the links step names the Mac's Notes (#1812). S.
-3. The address field shows no load: the glow that replaced the progress line is a gradient the Windows `Surface`
-   doesn't draw (#1820). S.
-4. Pop-up windows in the app's own frame instead of Chromium's (#1518). M.
-5. The app's own page, link and image menus instead of Chromium's (#1518). M.
-6. The app's own prompts for passwords, notifications and location, drawn like the Mac's (#1425 for the events the app
-   needs). M each once the engine reports them.
-7. The intro's animated meadow (#1737) hasn't drawn on any Windows machine: the VM has no GPU and the engine no
-   SwiftShader, so it falls back to the poster. S once a software or real GPU path is proven.
-8. Quitting with a file picker open waits 2 s and leaves the dialog's thread running (#1747). S.
-9. Picture in picture: the Mac's stash, corners and mini player (#1425 for the window events). L.
+2. Changing a Windows contrast theme while Settings is open crashes Ardia, inside the Windows App SDK (#1900). S once
+   the cause is seen on Windows.
+3. A private pop-up left as the only window closes the tabs it opens at once, where a regular one gets a browser window
+   back (#1910): the app can't open a window on the pop-up's private session yet. S.
+4. The top edge over a page that reaches it (#1888): a real drag in CI resizes the window from the top; the cursor, a
+   double click and a maximized window are untried in the VM. S.
+5. The theme's grain draws nothing, and the sidebar and toolbar don't blur what is behind them (#1921). M.
+6. The Mac's own items in the page menu: search a selection with Ardia's engine and Share (Chromium's menu is otherwise
+   trimmed as on the Mac since #1811). S.
+7. The app's own prompts for passwords, notifications and location, drawn like the Mac's (#1425 for the events the app
+   needs). M each once the engine reports them. A pop-up's prompts go to its opener's window, as on the Mac's
+   `ArdiaPopupWindow` (else any window of its profile). Today Chromium's own prompt shows, most likely in the
+   pop-up's window (not yet seen in the VM).
+8. Picture in picture: the Mac's stash, corners and mini player (#1425 for the window events). L.
+9. A pop-up whose opener wrote its document shows about:blank in its origin strip (#1863). S.
+10. Dragging a pinned extension to reorder the toolbar (main's #1935): the engine takes `pinnedIndex` since
+    `windows-engine-20261115-3`; that the new order sticks, and the drag itself, are untried on Windows. S.
+11. A group's and a live folder's icon is the plain folder symbol, filled while open, not the Mac's animated folder
+    (main's #376; `views/FolderIcon.tsx`). S.
 
 Engine work (#1425): the walk found nothing new missing beyond what is already listed there:
-- `ac_passwords_logins` answering on Windows, where Chromium's `kSkipUndecryptablePasswords` is on by default (password
-  sync);
+- password sync on Windows: the engine's login read is ready (#1918); Sync still has to handle its errors before
+  `syncsPasswords` turns on;
 - the password, permission and picture-in-picture events the app needs to draw its own prompts and windows;
 - the 67 calls `packages/expo-windows/src/engine/domains/forwarded.json` lists under `missing`;
 - nothing else open from the 2026-11-14 walk: a tab the app closes no longer prompts and is gone within its deadlines
@@ -1014,9 +1167,9 @@ Decisions for Shivam:
 - publishing a `windows-alpha` release, so Check for Updates has something to find (#1517);
 - signing, or a per-machine install (#1659).
 
-With the engine and owner items set aside, the app side has not reached parity yet: items 1 to 3 and 8 are bugs a user
-hits, and 4 to 6 are visible differences with Chromium's own UI. Everything else in the table works or differs only
-where the engine, Windows itself or a decision stands in the way.
+With the engine and owner items set aside, the app side has not reached parity yet: items 1 to 4, 9 and 10 are bugs a
+user hits, and 5 to 8 and 11 are visible differences from the Mac. Everything else in the table works or differs
+only where the engine, Windows itself or a decision stands in the way.
 
 ## Order of work
 

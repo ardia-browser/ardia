@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
 import { startChromeTabs } from "../../state/tabs/chromeTabs";
 import { useIsSmallWindow, useSplitOf } from "../../state/windows/card";
-import { usePeeks } from "../../state/peek/hooks";
+import { usePeekOpenedFrom } from "../../state/peek/hooks";
 import { useActiveTabId, useSettings, useWindowFullScreen, useWindowId } from "../../state/browser/hooks";
 import { useBookmarksBarHeight } from "../bookmarks/barSize";
 import { useBookmarksBarMode } from "../../state/bookmarks/hooks";
@@ -13,7 +13,7 @@ import { useFullscreenTab } from "../../state/tabs/pageState";
 import { DropTargets, SplitDividers, SplitFocusRing, SplitToast, type WindowShape } from "../split/SplitChrome";
 import { dockMoving, usePeekSpan, whenDockStill } from "../../state/windows/dockMotion";
 import { FrozenPage } from "./FrozenPage";
-import { setCardAnchor, setUrlAnchor, useAddressBarInSidebar, useCardCaptionRoom, usePageFrameInset, useTabLayout, watchToolbarExtensionsWidth, frameCornerRadius, onFullScreenLeft, windowFrame } from "../../state/windows/layout";
+import { setCardAnchor, setUrlAnchor, useAddressBarInSidebar, useCardCaptionRoom, useMinimalism, usePageFrameInset, useTabLayout, watchToolbarExtensionsWidth, frameCornerRadius, onFullScreenLeft, windowFrame } from "../../state/windows/layout";
 import { startSelectionTools } from "../../state/site/selection";
 import { startMedia } from "../../state/media/pip";
 import { urlFieldRight } from "../toolbar/Toolbar";
@@ -39,6 +39,7 @@ export function ContentCard() {
   const tabLayout = useTabLayout();
   const addressInSidebar = useAddressBarInSidebar();
   const small = useIsSmallWindow(windowId);
+  const minimal = useMinimalism();
   const hideWhileScrolling = useSettings((st) => st.hideToolbarWhileScrolling);
   const showSidebarButton = useSettings((st) => st.showSidebarButton !== false);
   const barMode = useBookmarksBarMode(windowId);
@@ -55,7 +56,7 @@ export function ContentCard() {
   useEffect(startMedia, []);
   useEffect(startSelectionTools, []);
   useEffect(startPeeks, []);
-  const peekId = usePeeks((p) => p[windowId]?.tabId);
+  const peekId = usePeekOpenedFrom(activeId ?? "");
   const peekFullscreen = !!peekId && fullscreenTab === peekId;
   useEffect(() => {
     if (fullscreenTab && peekId && !peekFullscreen) dismissPeek(windowId);
@@ -64,8 +65,8 @@ export function ContentCard() {
   const { mountedIds, panes, dividers, warmPanes, shown, lingerId, lingerRect } = usePaneLayout(windowId, activeId, split, fullscreenTab, size);
 
   const chrome = useMemo(
-    () => cardChrome({ addressInSidebar, small, split: !!split, fullscreen: !!fullscreenTab, hideWhileScrolling }),
-    [addressInSidebar, small, !!split, !!fullscreenTab, hideWhileScrolling],
+    () => cardChrome({ addressInSidebar, small, minimal, split: !!split, fullscreen: !!fullscreenTab, hideWhileScrolling }),
+    [addressInSidebar, small, minimal, !!split, !!fullscreenTab, hideWhileScrolling],
   );
   const geometryFor = (rect: Rect | undefined): ToolbarGeometry => {
     if (chrome.kind === "none") return NO_TOOLBAR;
@@ -186,14 +187,13 @@ export function ContentCard() {
         />
       )}
       {!fullscreenTab && <DropTargets panes={panes} origin={origin} />}
-      {(!fullscreenTab || peekFullscreen) && !small && (
+      {!small && (
         <PeekOverlay
           windowId={windowId}
           width={size.width}
           height={size.height}
           origin={origin}
-          fullscreen={peekFullscreen}
-          page={(tabId, sourceId, width) => <PeekPage tabId={tabId} sourceId={sourceId} windowId={windowId} width={width} fullscreen={peekFullscreen} />}
+          page={(tabId, sourceId, width, shown, fullscreen) => <PeekPage tabId={tabId} sourceId={sourceId} windowId={windowId} width={width} shown={shown} fullscreen={fullscreen} />}
         />
       )}
       <SplitToast windowId={windowId} />

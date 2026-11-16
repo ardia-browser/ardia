@@ -410,3 +410,40 @@ test("a hidden repo's pull requests come back read when it's shown, even after t
   assert.deepEqual(live().items[id].map((it) => it.id).sort(), ["c", "x"]);
   assert.deepEqual(live().unread[id], [], "c was in the folder before its repo was hidden, so it isn't new");
 });
+
+test("a live folder's menu has a group's Color submenu, without Match Site Color, checked at the folder's colour", () => {
+  const id = createFolder("p", "pullRequests", []);
+  const colors = () => liveFolderMenuItems("w", id).find((item) => item.id === "color")?.children ?? [];
+  const ids = colors().filter((item) => item.id).map((item) => item.id);
+  assert.deepEqual(ids.slice(0, 2), ["color:none", "color:neutral"]);
+  assert.equal(ids.length, 11, "None, Neutral and the nine colours");
+  assert.ok(!colors().some((item) => item.title === "Match Site Color"));
+  assert.equal(colors().find((item) => item.checked)?.id, "color:neutral", "a folder with no colour reads as Neutral");
+  updateFolder(id, { color: "purple" });
+  assert.equal(colors().find((item) => item.checked)?.id, "color:purple");
+  removeFolder(id);
+});
+
+test("picking a colour from a live folder's menu saves it, Neutral clears it, None saves none, and each pick is counted", async () => {
+  const { shellNativeModules } = await import("../../test-native/shell.ts");
+  const { openLiveFolderMenu } = await import("../sidebar/liveMenus.ts");
+  const { takeLiveHideCounts } = await import("../telemetry/liveHides.ts");
+  const id = createFolder("p", "pullRequests", []);
+  const shell = shellNativeModules.ArdiaMenus;
+  const real = shell.showMenu;
+  takeLiveHideCounts();
+  const pick = async (title) => {
+    shell.showMenu = (shown) => Promise.resolve(shown.find((it) => it.id === "color").children.find((it) => it.title === title).id);
+    try {
+      await openLiveFolderMenu("w", id);
+    } finally {
+      shell.showMenu = real;
+    }
+    return live().folders[id].color;
+  };
+  assert.equal(await pick("Green"), "green");
+  assert.equal(await pick("Neutral"), null);
+  assert.equal(await pick("None"), "none");
+  assert.equal(takeLiveHideCounts().live_folder_color_picks, 3);
+  removeFolder(id);
+});

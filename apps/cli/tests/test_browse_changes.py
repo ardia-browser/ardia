@@ -430,7 +430,7 @@ class NetworkWatchTest(unittest.TestCase):
 
         self.assertTrue(run(go()).enabled)
 
-    def test_an_unconfirmed_disable_drops_the_cdp_session(self):
+    def test_an_unconfirmed_disable_keeps_the_cdp_session_for_the_rest_of_the_command(self):
         detached = []
 
         class Failing(WatchPage):
@@ -459,8 +459,31 @@ class NetworkWatchTest(unittest.TestCase):
             return page
 
         page = run(go())
-        self.assertIsNone(page.session_id)
-        self.assertEqual(detached, [("Target.detachFromTarget", {"sessionId": "S"})])
+        self.assertEqual(page.session_id, "S")
+        self.assertEqual(page.sent, ["Network.enable", "Network.disable"])
+        self.assertEqual(detached, [])
+
+    def test_a_request_from_before_the_watch_enabled_capture_is_not_its_own(self):
+        class LateRenderer(WatchPage):
+            async def send(self, method, params=None, **kwargs):
+                self.sent.append(method)
+                if method == "Network.enable":
+                    old = {"requestId": "old", "type": "XHR", "request": {"method": "POST", "url": "http://x/earlier"}}
+                    for listener in list(self.state.listeners):
+                        listener(self, "Network.requestWillBeSent", old)
+                return {}
+
+        async def go():
+            page = LateRenderer()
+            watch = changes.NetworkWatch(page)
+            await watch.start()
+            watch.listener(page, "Network.responseReceived", {"requestId": "old", "response": {"status": 200}})
+            watch.listener(page, "Network.requestWillBeSent", {"requestId": "new", "type": "Fetch", "request": {"method": "PUT", "url": "http://x/mine"}})
+            await watch.stop()
+            return watch
+
+        watch = run(go())
+        self.assertEqual([(write["method"], write["url"]) for write in watch.writes()], [("PUT", "http://x/mine")])
 
     def test_capture_already_on_is_left_on(self):
         async def go():

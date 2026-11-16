@@ -3,7 +3,7 @@ import type { ProfileColor } from "../../lib/profileLook";
 import { parseColor } from "../../lib/color";
 import { font, radius, weight, withFace, withMono } from "./look";
 
-export { font, lineHeight, monoFace, perLook, proseLineHeight, radius, typeFace, weight, withFace, withMono } from "./look";
+export { font, lineHeight, monoFace, perLook, proseLineHeight, radius, sidebarFont, sidebarIconSize, sidebarLineHeight, sidebarPoints, typeFace, weight, withFace, withMono } from "./look";
 
 export function withAlpha(color: string, alpha: number): string {
   const [r, g, b] = parseColor(color);
@@ -11,6 +11,8 @@ export function withAlpha(color: string, alpha: number): string {
 }
 
 export const ink = { white: "#FFFFFF", black: "#000000", clear: "#00000000", neutralGrey: "#808080A6" } as const;
+
+export const HIGH_CONTRAST_INK = { tab: 1, icon: 1, placeholder: 0.82, secondary: 0.82, tertiary: 0.7 } as const;
 
 const darkRoles = {
   dark: true,

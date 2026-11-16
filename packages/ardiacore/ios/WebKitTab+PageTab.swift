@@ -57,4 +57,6 @@ extension WebKitTab: PageTab {
   func resolveUnresponsive(terminate: Bool) {}
 
   func discard(unload: Bool) -> String { Self.unsupported }
+
+  func sleepIfHidden(for seconds: Double) -> [NSNumber] { [-1] }
 }

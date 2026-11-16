@@ -1,18 +1,17 @@
 import { forwardRef, memo, useCallback, useState } from "react";
 import type { FadeLabelProps } from "@ardia/shell";
-import { Text, View, type LayoutChangeEvent, type TextStyle, type ViewStyle } from "react-native";
-import { colorOrUndefined, finite, useDark, useFirstWindow } from "./shared";
+import { Text, View, type LayoutChangeEvent, type TextProps, type TextStyle, type ViewStyle } from "react-native";
+import { labelTextStyle } from "./labelStyle";
+import { finite, useDark, useFirstWindow } from "./shared";
 
-const FONT_WEIGHT: Record<string, TextStyle["fontWeight"]> = { ultraLight: "100", thin: "200", light: "300", regular: "400", medium: "500", semibold: "600", bold: "700", heavy: "800", black: "900" };
 const CELL_PADDING = 2;
 const FADE_SLICES = 6;
 const RUN_WIDTH = 100000;
-const LABEL_COLOR = { light: "rgba(0,0,0,0.85)", dark: "rgba(255,255,255,0.85)" };
 
 const frame: ViewStyle = { justifyContent: "center", overflow: "hidden" };
 const runRow: ViewStyle = { position: "absolute", top: 0, bottom: 0, width: RUN_WIDTH, flexDirection: "row", alignItems: "center", paddingLeft: CELL_PADDING };
 
-type RunProps = { text: string; textStyle: TextStyle; left: number; width?: number; opacity?: number; onTextLayout?: (event: LayoutChangeEvent) => void };
+type RunProps = { text: string; textStyle: TextStyle; left: number; width?: number; opacity?: number; onTextLayout?: TextProps["onLayout"] };
 
 const Run = memo(function Run({ text, textStyle, left, width, opacity, onTextLayout }: RunProps) {
   const line = (
@@ -26,19 +25,13 @@ const Run = memo(function Run({ text, textStyle, left, width, opacity, onTextLay
   return <View style={{ position: "absolute", top: 0, bottom: 0, left, width, opacity, overflow: "hidden" }}>{line}</View>;
 });
 
-export const FadeLabel = forwardRef<View, FadeLabelProps>(function FadeLabel({ text, fontSize, weight, fontFamily, color, fadeWidth, style, onLayout, ...rest }, ref) {
+export const FadeLabel = forwardRef<View, FadeLabelProps>(function FadeLabel({ text, fontSize, weight, fontFamily, color, fadeWidth, strikethrough, style, onLayout, ...rest }, ref) {
   useFirstWindow();
   const dark = useDark(undefined);
   const [boxWidth, setBoxWidth] = useState(0);
   const [textWidth, setTextWidth] = useState(0);
   const label = typeof text === "string" ? text : text == null ? "" : String(text);
-  const textStyle: TextStyle = {
-    fontSize: Math.max(1, finite(fontSize, 13)),
-    fontWeight: FONT_WEIGHT[typeof weight === "string" ? weight : "regular"] ?? "400",
-    fontVariant: ["tabular-nums"],
-    ...(fontFamily ? { fontFamily } : null),
-    color: colorOrUndefined(color) ?? LABEL_COLOR[dark ? "dark" : "light"],
-  };
+  const textStyle: TextStyle = labelTextStyle({ fontSize, weight, fontFamily, color, strikethrough }, dark);
   const measureBox = useCallback(
     (event: LayoutChangeEvent) => {
       setBoxWidth(event.nativeEvent.layout.width);

@@ -14,6 +14,8 @@ NS_ASSUME_NONNULL_BEGIN
                                chromeWindow:(nullable NSString *)chromeWindow
                                   appWindow:(nullable NSString *)appWindow;
 
++ (void)floatForWindowManagers:(NSWindow *)window;
+
 + (void)recordLaunchLayout;
 + (void)forgetLaunchPictures;
 + (BOOL)takeDismissedAppWindow:(NSString *)appWindow;

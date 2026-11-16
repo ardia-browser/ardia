@@ -17,4 +17,6 @@ export type ChromeWindowState = {
   group: string;
   hasRoot: boolean;
   translucent: boolean;
+  occlusionVisible: boolean;
+  chromeOccluded: boolean | null;
 };

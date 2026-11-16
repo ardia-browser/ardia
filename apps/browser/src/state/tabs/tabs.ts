@@ -6,7 +6,7 @@ import { closeSuccessor, forgetOpeners, insertionIndex } from "./openers";
 import { onUrlChange, pruneSelection } from "../pins/organize";
 import { isClosedPin } from "../pins/tabCleanup";
 import { adoptedPage, ASLEEP, frozenOn, hasOwnOrSharedPage, hasPage, isAsleep, isLazy, loadedPage, needsPage, withWake, wokenPage } from "./pageSession";
-import { isPeekTab, withoutPeek } from "../peek/peek";
+import { isPeekTab, peekSourceOf, withoutPeek } from "../peek/peek";
 import { resolveTyped } from "../settings/settings";
 import { leavesEmptyWindow } from "../omnibox/newTabBarPolicy";
 import { holderOf, withSharedFamily } from "../pins/pinShare";
@@ -18,6 +18,7 @@ import { orderSections } from "../groups/groups";
 import { samePage } from "../../lib/url";
 import { historyOf } from "../history/history";
 import { pinHome } from "../pins/pinHomes";
+import { noteTopAppsKeptRunning } from "../telemetry/tabSleepCounts";
 
 export type NewTabOptions = {
   url?: string;
@@ -32,10 +33,11 @@ export type NewTabOptions = {
   newTabCommand?: boolean;
   gated?: boolean;
   replaced?: boolean;
+  enginePage?: boolean;
 };
 
 
-export type CloseOptions = { lastClosesWindow?: boolean };
+export type CloseOptions = { lastClosesWindow?: boolean; keepTopApps?: boolean };
 export type CloseKind = "close" | "unload" | "removePin";
 export type CloseIntent = { kind: CloseKind; ids: string[] };
 
@@ -58,19 +60,33 @@ export function closeIntent(s: BrowserState, tabId: string): CloseIntent {
   return { kind, ids: pages.length ? pages : [tabId] };
 }
 
-export function closingTabs(s: BrowserState, ids: string[], { lastClosesWindow = false }: CloseOptions = {}): [BrowserState, string[]] {
+const isTopApp = (t: Tab | undefined) => t?.pin?.as === "tile";
+const keptWithTopApp = (s: BrowserState, id: string) => inPinnedContainer(s, id) && withPinnedPanes(s, [id]).some((pane) => isTopApp(s.tabs[pane]));
+const runningKept = (s: BrowserState, id: string) => keptWithTopApp(s, id) && hasOwnOrSharedPage(s.tabs[id]!);
+
+function withoutTopApps(s: BrowserState, ids: string[]): string[] {
+  if (!s.settings.keepTopAppsRunning) return ids;
+  const others = ids.filter((id) => !keptWithTopApp(s, id));
+  return others.length ? others : ids;
+}
+
+export function closingTabs(s: BrowserState, ids: string[], { lastClosesWindow = false, keepTopApps = s.settings.keepTopAppsRunning }: CloseOptions = {}): [BrowserState, string[]] {
   let next = s;
-  for (const id of ids) if (isPeekTab(next, id)) next = withoutPeek(next, next.tabs[id]!.windowId);
+  for (const id of ids) {
+    const source = peekSourceOf(next, id);
+    if (source) next = withoutPeek(next, source);
+  }
   const asked = ids.filter((id) => next.tabs[id]);
-  next = unloadPinnedTabs(next, asked);
+  next = unloadPinnedTabs(next, asked, keepTopApps);
   const gone = asked.filter((id) => !inPinnedContainer(next, id));
   const goneIds = new Set(gone);
   const closedWindows = new Set<string>();
   for (const w of Object.values(next.windows)) {
     const view = viewTabIds(next, w.id);
     const shown = view.filter((id) => goneIds.has(id));
-    if (!shown.length || !view.every((id) => goneIds.has(id) || isAsleep(next.tabs[id]))) continue;
-    const keepsWindow = !lastClosesWindow || leavesEmptyWindow(shown.length > 1 ? removeTabs(next, shown.slice(1), false) : next, shown[0]!);
+    const keptRunning = keepTopApps && view.some((id) => !goneIds.has(id) && runningKept(next, id));
+    if (!shown.length || !view.every((id) => goneIds.has(id) || isAsleep(next.tabs[id]) || (keptRunning && keptWithTopApp(next, id)))) continue;
+    const keepsWindow = keptRunning || !lastClosesWindow || leavesEmptyWindow(shown.length > 1 ? removeTabs(next, shown.slice(1), false) : next, shown[0]!);
     if (keepsWindow) next = withNewTab(next, w.id)[0];
     else closedWindows.add(w.id);
   }
@@ -87,7 +103,7 @@ function pinnedInsertionIndex(s: BrowserState, w: BrowserWindow): number {
 export function activated(s: BrowserState, id: string, shareLivePins = true): Partial<BrowserState> {
   const tab = s.tabs[id];
   const w = tab && s.windows[tab.windowId];
-  if (!tab || !w || s.peeks[w.id]?.tabId === id) return {};
+  if (!tab || !w || isPeekTab(s, id)) return {};
   const lazy = isLazy(tab);
   const holder = lazy && shareLivePins ? holderOf(s, id) : undefined;
   const frozen = lazy && (!!holder || tab.page.kind === "frozen");
@@ -139,7 +155,7 @@ export function removeTabs(s: BrowserState, ids: string[], record: boolean): Bro
     for (const [profileId, activeId] of Object.entries(w.activeTabIds)) {
       if (!gone.has(activeId)) continue;
       const before = w.tabIds.filter((id) => s.tabs[id]?.profileId === profileId);
-      const left = before.filter((id) => !gone.has(id));
+      const left = withoutTopApps(s, before.filter((id) => !gone.has(id)));
       const next = otherPane(s, activeId, gone) ?? closeSuccessor(s, activeId, before, left);
       if (next) activeTabIds[profileId] = next;
       else delete activeTabIds[profileId];
@@ -186,17 +202,23 @@ function adoptOrphans(tabs: Record<string, Tab>, before: Record<string, Tab>, go
   return next;
 }
 
-export function unloadPinnedTabs(s: BrowserState, requested: string[]): BrowserState {
-  const ids = withSharedFamily(s, withPinnedPanes(s, requested.filter((id) => inPinnedContainer(s, id))));
-  const closing = new Set([...requested, ...ids]);
-  const pinned = ids.filter((id) => inPinnedContainer(s, id));
-  if (!pinned.length) return s;
-  const gone = new Set(pinned);
+export function unloadPinnedTabs(s: BrowserState, requested: string[], keepTopApps = false): BrowserState {
+  const asked = requested.filter((id) => inPinnedContainer(s, id));
+  const withTopApp = (id: string) => withPinnedPanes(s, [id]).some((pane) => isTopApp(s.tabs[pane]));
+  const switchedAway = keepTopApps ? withPinnedPanes(s, asked.filter(withTopApp)) : [];
+  const leaving = new Set(switchedAway);
+  const ids = withSharedFamily(s, withPinnedPanes(s, asked.filter((id) => !leaving.has(id))));
+  const closing = new Set([...requested, ...ids, ...switchedAway]);
+  const unloading = ids.filter((id) => inPinnedContainer(s, id) && !leaving.has(id) && !(keepTopApps && isTopApp(s.tabs[id])));
+  if (!unloading.length && !switchedAway.length) return s;
+  const unloaded = new Set(unloading);
+  const gone = new Set([...unloading, ...switchedAway]);
+  const runningInFront = (id: string) => withPinnedPanes(s, [id]).some((pane) => isTopApp(s.tabs[pane]) && hasPage(s.tabs[pane]!));
   const now = Date.now();
   const tabs = { ...s.tabs };
   const live = { ...s.live };
   const closed: ClosedTab[] = [];
-  for (const id of pinned) {
+  for (const id of unloading) {
     const t = s.tabs[id]!;
     const w = s.windows[t.windowId];
     const loaded = hasPage(t);
@@ -212,8 +234,8 @@ export function unloadPinnedTabs(s: BrowserState, requested: string[]): BrowserS
     ...s,
     tabs,
     live,
-    find: without(s.find, gone),
-    splits: removeFromSplits(s.splits, new Set(pinned.filter((id) => !splitTabIdsOf(splitOf(s, id))?.every((pane) => gone.has(pane))))),
+    find: without(s.find, unloaded),
+    splits: removeFromSplits(s.splits, new Set([...gone].filter((id) => !splitTabIdsOf(splitOf(s, id))?.every((pane) => gone.has(pane))))),
     selection: pruneSelection(s.selection, gone),
     closedTabs: closed.length ? [...s.closedTabs, ...closed].slice(-MAX_CLOSED_TABS) : s.closedTabs,
   };
@@ -221,7 +243,8 @@ export function unloadPinnedTabs(s: BrowserState, requested: string[]): BrowserS
     for (const [profileId, activeId] of Object.entries(w.activeTabIds)) {
       if (!gone.has(activeId)) continue;
       const shown = profileId === w.profileId;
-      let replacement = lastRegularTab(s, w, activeId, closing) ?? lastLivePinnedTab(s, w, activeId, closing);
+      if (shown && leaving.has(activeId) && runningInFront(activeId)) noteTopAppsKeptRunning(1);
+      let replacement = lastRegularTab(s, w, activeId, closing) ?? lastLivePinnedTab(s, w, activeId, closing, keepTopApps);
       if (!replacement) [next, replacement] = withNewTab(next, w.id, { profileId, background: !shown });
       if (shown) next = apply(next, activated(next, replacement));
       else {
@@ -248,11 +271,11 @@ function lastRegularTab(s: BrowserState, w: BrowserWindow, id: string, closing: 
   return pool.reduce<string | undefined>((best, t) => (!best || byRecentUse(s.tabs[t]!, s.tabs[best]!) < 0 ? t : best), undefined);
 }
 
-function lastLivePinnedTab(s: BrowserState, w: BrowserWindow, id: string, closing: Set<string>): string | undefined {
+function lastLivePinnedTab(s: BrowserState, w: BrowserWindow, id: string, closing: Set<string>, skipTopApps: boolean): string | undefined {
   const profileId = s.tabs[id]!.profileId;
   const live = w.tabIds.filter((t) => {
     const tab = s.tabs[t];
-    return !closing.has(t) && tab?.profileId === profileId && inPinnedContainer(s, t) && hasPage(tab);
+    return !closing.has(t) && tab?.profileId === profileId && inPinnedContainer(s, t) && hasPage(tab) && !(skipTopApps && keptWithTopApp(s, t));
   });
   return live.reduce<string | undefined>((best, t) => (!best || byRecentUse(s.tabs[t]!, s.tabs[best]!) < 0 ? t : best), undefined);
 }

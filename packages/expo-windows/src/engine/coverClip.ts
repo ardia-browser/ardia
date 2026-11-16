@@ -8,6 +8,8 @@ export type CoverClip = { node: () => Measurable | null; watch(listener: () => v
 
 export const CoverClips = createContext<readonly CoverClip[]>([]);
 
+export const PageCovering = createContext(true);
+
 export function assignRef<Node>(target: Ref<Node> | undefined, node: Node | null) {
   if (typeof target === "function") target(node);
   else if (target) target.current = node;
@@ -48,13 +50,14 @@ export function clipBox(box: Box, clips: readonly Box[]): Box | null {
 
 const boxOf = (node: Measurable) => new Promise<Box>((resolve) => node.measureInWindow((x, y, width, height) => resolve({ x, y, width, height })));
 
-export function coverMeasurer(windowId: string, id: string, radius: number, node: () => Measurable | null, clips: readonly CoverClip[]) {
+export function coverMeasurer(windowId: string, id: string, radius: number, node: () => Measurable | null, clips: readonly CoverClip[], covering = true) {
   let latest = 0;
   let stopped = false;
   return {
     async measure() {
       const own = node();
       if (!own || stopped) return;
+      if (!covering) return setCover(windowId, id, null);
       const asked = ++latest;
       const clipNodes = clips.map((clip) => clip.node()).filter((clip): clip is Measurable => !!clip);
       const [box, ...clipBoxes] = await Promise.all([own, ...clipNodes].map(boxOf));

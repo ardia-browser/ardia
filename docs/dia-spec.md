@@ -243,8 +243,11 @@ corner**, the corner nearest the row.
 - Show delay: the controller sleeps **0.5 s** or **0.1 s** before presenting (a flag in the hover source picks which;
   not identified) and **0** when another card is already up. A click or key down dismisses it (local event monitor).
   The leave delay comes from the hover source's dismissal behaviour; no value in the binary. Both need a recording.
-- Ours (`components/sidebar/hoverMotion.ts`): the same curve, spring and scale, anchored at the card's top-left, row to
-  row without animation, 0.5 s show delay, 160 ms leave delay. Measured on the native driver's own per-frame values
+- Ours (`components/sidebar/hoverMotion.ts`): the same curve, spring and scale, anchored at the card's top-left. Unlike Dia,
+  since 2026-11-14 (#1584, #1365) it opens only after the pointer rests 0.8 s on one row (Dia: 0.5 s, then 0 for every
+  next row), never moves from row to row with the pointer, leaves at once when the pointer leaves away from it (up, out
+  of the far edge, or onto another row) and 160 ms after a leave toward it, and never opens for rows a peeking sidebar
+  brings under the pointer during its first 0.4 s; Settings › Tabs › Show tab hover menu turns it off. Measured on the native driver's own per-frame values
   (120 Hz, a hidden instance): opacity within 0.007 of Dia's curve over its 12 frames, scale within 0.001 of the spring
   (peak 1.0022 at 180 ms, settled by 340 ms); the fade out takes 12 frames.
 

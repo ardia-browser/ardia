@@ -21,6 +21,7 @@ const EXPECTED = [
   "ArdiaFileDrop",
   "ArdiaThemeSwatch",
   "ArdiaDockSelection",
+  "ArdiaFolderIcon",
   "ArdiaWindowProfile",
   "ArdiaSwipe",
 ];
@@ -30,6 +31,7 @@ const MINIMAL_PROPS: Record<string, Record<string, unknown>> = {
   ArdiaWindowBackdrop: { colors: ["#000000", "#FFFFFF"] },
   ArdiaThemeSwatch: { colors: [] },
   ArdiaDockSelection: { dark: true },
+  ArdiaFolderIcon: { open: false },
   ArdiaWindowProfile: { profile: "", neighbours: [] },
 };
 

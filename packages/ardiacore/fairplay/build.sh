@@ -60,4 +60,4 @@ case "${EXPANDED_CODE_SIGN_IDENTITY_NAME:-}" in
   "Developer ID"*) timestamp=--timestamp ;;
   *) timestamp=--timestamp=none ;;
 esac
-codesign --force --sign "$identity" "$timestamp" --options runtime "$helper"
+codesign --force --sign "$identity" "$timestamp" --options runtime --entitlements "$here/$name.entitlements" "$helper"

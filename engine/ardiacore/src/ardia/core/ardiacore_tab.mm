@@ -2,9 +2,14 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "base/strings/sys_string_conversions.h"
+#include "chrome/browser/ardia/ac_tab_restore.h"
 #include "chrome/browser/lifetime/browser_shutdown.h"
+#include "chrome/browser/performance_manager/policies/cannot_discard_reason.h"
+#include "chrome/browser/performance_manager/policies/discard_eligibility_policy.h"
+#include "chrome/browser/performance_manager/policies/page_discarding_helper.h"
 #include "chrome/browser/performance_manager/public/user_tuning/user_performance_tuning_manager.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/resource_coordinator/lifecycle_unit_state.mojom.h"
@@ -18,6 +23,9 @@
 #include "components/favicon/content/content_favicon_driver.h"
 #include "components/find_in_page/find_tab_helper.h"
 #include "components/find_in_page/find_types.h"
+#include "components/performance_manager/public/graph/graph.h"
+#include "components/performance_manager/public/graph/page_node.h"
+#include "components/performance_manager/public/performance_manager.h"
 #include "components/sessions/content/session_tab_helper.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
@@ -170,8 +178,67 @@ using ardiacore::NS;
                      ::mojom::LifecycleUnitDiscardReason::EXTERNAL);
 }
 
+- (NSArray<NSNumber*>*)sleepIfHiddenFor:(NSTimeInterval)seconds {
+  namespace policies = performance_manager::policies;
+  using performance_manager::PerformanceManager;
+  NSArray<NSNumber*>* unavailable = @[ @-1 ];
+  if (!_contents || !PerformanceManager::IsAvailable()) {
+    return unavailable;
+  }
+  base::WeakPtr<performance_manager::PageNode> page =
+      PerformanceManager::GetPrimaryPageNodeForWebContents(_contents);
+  if (!page) {
+    return unavailable;
+  }
+  performance_manager::Graph* graph = page->GetGraph();
+  auto* eligibility = policies::DiscardEligibilityPolicy::GetFromGraph(graph);
+  auto* discarding = policies::PageDiscardingHelper::GetFromGraph(graph);
+  if (!eligibility || !discarding) {
+    return unavailable;
+  }
+  const auto reason =
+      policies::DiscardEligibilityPolicy::DiscardReason::PROACTIVE;
+  std::vector<policies::CannotDiscardReason> kept_by;
+  if (eligibility->CanDiscardWithCustomRecentVisibilityWindow(
+          page.get(), reason, base::Seconds(seconds), &kept_by) !=
+      policies::CanDiscardResult::kEligible) {
+    NSMutableArray<NSNumber*>* codes = [NSMutableArray array];
+    for (policies::CannotDiscardReason kept : kept_by) {
+      [codes addObject:@(static_cast<int>(kept))];
+    }
+    return codes.count ? codes : unavailable;
+  }
+  if (!discarding->ImmediatelyDiscardMultiplePages({page.get()}, reason)) {
+    return unavailable;
+  }
+  return @[];
+}
+
 - (BOOL)discarded {
   return _contents && _contents->WasDiscarded();
+}
+
+- (BOOL)unloadKeepingHistory {
+  if (!_contents || !_contents->WasDiscarded() || ardiacore::IsNotifyingAny() ||
+      browser_shutdown::IsTryingToQuit()) {
+    return NO;
+  }
+  BrowserWindowInterface* browser =
+      GlobalBrowserCollection::GetInstance()->FindBrowserWithTab(_contents);
+  ardiacore::TabBridge* bridge = ardiacore::TabBridge::GetOrCreate(_contents);
+  if (!browser || !ardiacore::WindowHost::ForBrowser(browser) ||
+      bridge->closing_after_unload() ||
+      UnloadController::From(browser)->is_attempting_to_close_browser() ||
+      browser->GetTabStripModel()->GetIndexOfWebContents(_contents) ==
+          TabStripModel::kNoTab) {
+    return NO;
+  }
+  if (!ardia::KeepTabHistoryWhenClosed(_contents)) {
+    return NO;
+  }
+  bridge->set_closed_by_host();
+  ardiacore::DeleteTabClosedByHost(_contents, ardiacore::ClosedTabRecord::kNone);
+  return !_contents;
 }
 
 - (NSString*)discardReason {

@@ -6,6 +6,7 @@ import { openSplitPane } from "../splits/actions";
 import { splitViewAvailable } from "../splits/splits";
 import { gateOpening, settleOpening } from "../tabs/openingGate";
 import { noteSplit } from "../telemetry/usage";
+import { noteBarLoad } from "../telemetry/barLoadFocus";
 import { originalProfile } from "../windows/small";
 
 export type Disposition = "current" | "newTab" | "newWindow" | "split";
@@ -22,7 +23,10 @@ export function openFromBar(url: string, tabId: string, disposition: Disposition
   const tab = s.tabs[tabId];
   if (!url || !tab) return;
   const w = s.windows[tab.windowId];
-  if (disposition === "current") return s.navigate(tabId, url);
+  if (disposition === "current") {
+    s.navigate(tabId, url);
+    return noteBarLoad(tabId);
+  }
   if (disposition === "split") {
     s.closePanel(tab.windowId);
     const gated = gateOpening(url, { tabId: null, windowId: tab.windowId, profileId: tab.profileId, via: "newTab" }, null);

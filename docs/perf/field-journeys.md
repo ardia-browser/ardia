@@ -70,7 +70,8 @@ window, or at quit), not at the first window as before.
 
 `perf_launch` context: `tabs` (the restored tabs, an exact count since 0.2.42; before, ranges 0, 1, 2-5, 6-20, 21-50,
 51-100, 101-200, 200+, which a numeric query reads as 0), `windows`
-(1…10), `history` (0, <100, <1k, <5k, <20k, 20k+ entries), `cold` (the first launch since the Mac started, by
+(1…10), `history` (0, <100, <1k, <5k, <20k, 20k+ entries; from the fix for #766: <20k, <100k, 100k+), `history_oldest` (from
+the fix for #766: the oldest listed page's last visit, <30d, <91d, <1y, <3y, 3y+, null with no history), `cold` (the first launch since the Mac started, by
 `kern.boottime` against this copy's last launch; null until a second launch with sharing on), `first_of_version` (the
 first launch after the app's version or build changed, or the first this copy recorded: macOS's Gatekeeper scans the new
 bundle before `main`, so these launches are slower; a copy from before this field compares versions only),

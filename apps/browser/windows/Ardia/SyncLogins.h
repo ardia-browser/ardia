@@ -1,7 +1,7 @@
 #pragma once
 
+#include <map>
 #include <optional>
-#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -406,37 +406,66 @@ inline std::optional<std::string> LoginOrigin(std::string_view realm) {
   return std::string{realm};
 }
 
+struct ListedLogin {
+  WipedString realm;
+  WipedString username;
+  std::optional<WipedString> password;
+  Node const *created;
+};
+
+inline std::optional<ListedLogin> ReadListedLogin(std::string_view reply, Node const &login) {
+  if (login.kind != Node::Kind::Object) return std::nullopt;
+  Node const *realmNode = Member(login, "realm");
+  Node const *userNode = Member(login, "username");
+  Node const *passwordNode = Member(login, "password");
+  Node const *passwordlessNode = Member(login, "passwordless");
+  Node const *created = Member(login, "created");
+  bool const passwordless = !passwordNode && passwordlessNode && passwordlessNode->kind == Node::Kind::Literal &&
+                            reply.substr(passwordlessNode->begin, passwordlessNode->end - passwordlessNode->begin) == "true";
+  std::optional<WipedString> realm = realmNode ? Reader::Decoded(reply, *realmNode) : std::nullopt;
+  std::optional<WipedString> username = userNode ? Reader::Decoded(reply, *userNode) : std::nullopt;
+  std::optional<WipedString> password = passwordNode ? Reader::Decoded(reply, *passwordNode) : std::nullopt;
+  if (!realm || !username || (!password && !passwordless) || !created || created->kind != Node::Kind::Number) return std::nullopt;
+  return ListedLogin{std::move(*realm), std::move(*username), std::move(password), created};
+}
+
+inline std::string LoginKey(ListedLogin const &login) { return login.realm.text() + std::string(1, '\0') + login.username.text(); }
+
 inline std::optional<std::string> SealedLogins(std::string_view reply, SyncCrypto::Keys const &keys) {
   std::optional<Node> root = Reader(reply).Document();
   if (!root || root->kind != Node::Kind::Object) return std::nullopt;
   Node const *logins = Member(*root, "logins");
   if (!logins || logins->kind != Node::Kind::Array) return std::nullopt;
+  std::map<std::string, size_t> kept;
+  std::vector<bool> withPassword;
+  for (size_t i = 0; i < logins->items.size(); i++) {
+    std::optional<ListedLogin> login = ReadListedLogin(reply, logins->items[i]);
+    if (!login) return std::nullopt;
+    withPassword.push_back(login->password.has_value());
+    auto [at, added] = kept.emplace(LoginKey(*login), i);
+    if (!added && login->password && !withPassword[at->second]) at->second = i;
+  }
   std::string out = "[";
-  std::set<std::string> seen;
-  for (Node const &login : logins->items) {
-    if (login.kind != Node::Kind::Object) return std::nullopt;
-    Node const *realmNode = Member(login, "realm");
-    Node const *userNode = Member(login, "username");
-    Node const *passwordNode = Member(login, "password");
-    Node const *created = Member(login, "created");
-    std::optional<WipedString> realm = realmNode ? Reader::Decoded(reply, *realmNode) : std::nullopt;
-    std::optional<WipedString> username = userNode ? Reader::Decoded(reply, *userNode) : std::nullopt;
-    std::optional<WipedString> password = passwordNode ? Reader::Decoded(reply, *passwordNode) : std::nullopt;
-    if (!realm || !username || !password || !created || created->kind != Node::Kind::Number) return std::nullopt;
-    if (!seen.insert(realm->text() + std::string(1, '\0') + username->text()).second) continue;
-    std::optional<std::string> origin = LoginOrigin(realm->text());
+  for (size_t i = 0; i < logins->items.size(); i++) {
+    std::optional<ListedLogin> login = ReadListedLogin(reply, logins->items[i]);
+    if (!login || kept[LoginKey(*login)] != i) continue;
+    std::optional<std::string> origin = LoginOrigin(login->realm.text());
     if (!origin) continue;
-    std::optional<std::string> sealed = keys.SealPassword(password->text(), *origin, username->text());
-    if (!sealed) return std::nullopt;
+    std::optional<std::string> sealed = login->password ? keys.SealPassword(login->password->text(), *origin, login->username.text()) : std::nullopt;
+    if (login->password && !sealed) return std::nullopt;
     if (out.size() > 1) out.push_back(',');
     out.append("{\"origin\":");
     Quote(out, *origin);
     out.append(",\"username\":");
-    Quote(out, username->text());
-    out.append(",\"sealed\":");
-    Quote(out, *sealed);
+    Quote(out, login->username.text());
+    if (sealed) {
+      out.append(",\"sealed\":");
+      Quote(out, *sealed);
+    } else {
+      out.append(",\"passwordless\":true");
+    }
     out.append(",\"created\":");
-    out.append(reply.substr(created->begin, created->end - created->begin));
+    out.append(reply.substr(login->created->begin, login->created->end - login->created->begin));
     out.push_back('}');
   }
   out.push_back(']');

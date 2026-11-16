@@ -17,6 +17,8 @@ const OFFERS = `
 const { useBrowser } = await import("./src/state/browser/store.ts");
 const { PANES, SETTINGS, unshownSettings } = await import("./src/components/settings/settingsIndex.ts");
 const { UNAVAILABLE_COMMANDS } = await import("./src/state/commands/commandCatalog.ts");
+const { profileUnloadDelay } = await import("./src/state/profiles/idleProfiles.ts");
+const { loadedTabBudget } = await import("./src/state/tabs/loadedTabBudget.ts");
 const { canSwitchEngine, engineForUrl, tabEngine, typedNavigationEngine } = await import("./src/state/engines/engines.ts");
 const { goToSettingsPane, useSettingsNav } = await import("./src/state/settings/settingsWindows.ts");
 const { DATA_TYPES, SYNCED_KINDS, typeSyncedFor, defaultTypes } = await import("./src/state/sync/syncDoc.ts");
@@ -42,6 +44,9 @@ console.log(JSON.stringify({
   panes: PANES.map((p) => p.id).filter((id) => ["sync", "calendar", "engines"].includes(id)),
   hidden: watched.filter((id) => unshown.has(id)),
   engineCommand: UNAVAILABLE_COMMANDS.has("togglePageEngine"),
+  hidingCommands: ["hideElement", "showHiddenElements"].map((id) => UNAVAILABLE_COMMANDS.has(id)),
+  unloadsProfiles: profileUnloadDelay({ memorySaver: true, unloadProfilesAfter: "15m" }) !== null,
+  sleepsTabsOverBudget: loadedTabBudget({ memorySaver: true, memorySaverMode: "balanced" }, { memoryPressure: "normal", physicalMemory: 16 * 2 ** 30, lowPowerMode: false, thermalState: "nominal" }) !== null,
   switchesEngine: canSwitchEngine("https://example.com/"),
   pageEngines: pageEngines(),
   calendarLink,
@@ -64,6 +69,9 @@ test("Windows offers Sync without passwords but no Calendar or WebKit pane, no b
     panes: ["sync"],
     hidden: ["calendar.access", "engines.defaultEngine", "privacy.blockAds", "privacy.filterLists", "general.littleWindowGestures", "tabs.videoUpscaling", "tabs.tabReorderHaptics", "appearance.pageScrollBars"],
     engineCommand: true,
+    hidingCommands: [true, true],
+    unloadsProfiles: false,
+    sleepsTabsOverBudget: false,
     switchesEngine: false,
     pageEngines: ["chromium", "chromium", "chromium", "chromium", "chromium"],
     calendarLink: "general",
@@ -79,6 +87,9 @@ test("the Mac keeps every pane, row and the engine switch", () => {
   assert.deepEqual(mac.panes, ["sync", "engines", "calendar"]);
   assert.deepEqual(mac.hidden, []);
   assert.equal(mac.engineCommand, false);
+  assert.deepEqual(mac.hidingCommands, [false, false]);
+  assert.equal(mac.unloadsProfiles, true);
+  assert.equal(mac.sleepsTabsOverBudget, true);
   assert.equal(mac.switchesEngine, true);
   assert.deepEqual(mac.pageEngines, ["webkit", "webkit", "webkit", "webkit", "webkit"]);
   assert.equal(mac.calendarLink, "calendar");
@@ -88,8 +99,8 @@ test("the Mac keeps every pane, row and the engine switch", () => {
 });
 
 const PANES_DIR = new URL("./panes/", import.meta.url);
-const HIDDEN_ON_WINDOWS = new Set(["Calendar.tsx", "Engines.tsx"]);
-const MAC_ONLY_STATES = [["General.tsx", "requiresApproval"]];
+const HIDDEN_ON_WINDOWS = new Set(["Calendar.tsx", "Engines.tsx", "HiddenElementsSection.tsx"]);
+const MAC_ONLY_STATES = [["General.tsx", "requiresApproval"], ["Privacy.tsx", 'title="Content blocking"']];
 const MAC_WORDS = /macOS|Touch ID|Keychain|this Mac|their Mac|View ›|Apple silicon|System Settings/;
 
 test("the Settings panes Windows shows write no Mac word outside PLATFORM_TERMS or a Mac-only state", () => {
@@ -106,4 +117,10 @@ test("the Settings panes Windows shows write no Mac word outside PLATFORM_TERMS 
       });
   }
   assert.deepEqual(found, []);
+});
+
+test("Hide anything's Settings section is mounted only where the content blocker keeps its rules", () => {
+  const privacy = readFileSync(new URL("Privacy.tsx", PANES_DIR), "utf8");
+  const mounts = privacy.split("\n").filter((line) => line.includes("<HiddenElementsSection"));
+  assert.deepEqual(mounts.map((line) => line.trim()), ["{PLATFORM_FEATURES.contentBlocker && <HiddenElementsSection />}"]);
 });

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { startedThisLaunch, watchDownloads } from "../../../../packages/expo-windows/src/engine/domains/downloads.ts";
 import { withoutRepeats } from "../state/downloads/downloadsSlice.ts";
-import { noteDownloadsPanelClose, noteDownloadsPanelOpen, noteDownloadsPanelToggle, takeDownloadsPanelCounts } from "../state/telemetry/downloadsPanelCounts.ts";
+import { noteDownloadsPanelClose, noteDownloadsPanelOpen, noteDownloadsPanelToggle, takeDownloadsPanelCauses } from "../state/telemetry/downloadsPanelCauses.ts";
 
 const LAUNCH = 1_800_000_000_000;
 
@@ -32,22 +32,19 @@ test("the launch replay announces only this launch's downloads, with their profi
 });
 
 test("downloads panel opens and closes are counted by cause and reset once taken", () => {
-  takeDownloadsPanelCounts();
-  noteDownloadsPanelOpen("download");
+  takeDownloadsPanelCauses();
+  noteDownloadsPanelOpen("command");
   noteDownloadsPanelToggle(true, "button");
   noteDownloadsPanelToggle(false, "command");
-  noteDownloadsPanelClose("outside");
   noteDownloadsPanelClose("escape");
-  assert.deepEqual(takeDownloadsPanelCounts(), {
-    downloads_panel_opens_download: 1,
+  assert.deepEqual(takeDownloadsPanelCauses(), {
     downloads_panel_opens_button: 1,
-    downloads_panel_opens_command: 0,
+    downloads_panel_opens_command: 1,
     downloads_panel_closes_escape: 1,
-    downloads_panel_closes_outside: 1,
     downloads_panel_closes_button: 0,
     downloads_panel_closes_command: 1,
   });
-  assert.equal(Object.values(takeDownloadsPanelCounts()).reduce((a, b) => a + b, 0), 0);
+  assert.equal(Object.values(takeDownloadsPanelCauses()).reduce((a, b) => a + b, 0), 0);
 });
 
 test("a download saved twice by the old launch replay is restored once; other profiles, other start times and rows without a file stay", () => {

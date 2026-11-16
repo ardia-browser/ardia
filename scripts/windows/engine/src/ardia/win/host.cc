@@ -9,7 +9,10 @@
 #include <utility>
 #include <vector>
 
+#include "ardia/core/ac_host_visibility.h"
 #include "ardia/core/ac_launch_switches.h"
+#include "ardia/win/context_menu.h"
+#include "ardia/win/frame_view.h"
 #include "ardia/win/hooks.h"
 #include "ardia/win/main.h"
 #include "ardia/win/page_links.h"
@@ -58,6 +61,7 @@
 #include "ui/events/types/event_type.h"
 #include "ui/gfx/geometry/point_f.h"
 #include "ui/gfx/geometry/rect.h"
+#include "third_party/blink/public/mojom/window_features/window_features.mojom.h"
 #include "url/gurl.h"
 
 namespace ardia_win {
@@ -68,6 +72,8 @@ constexpr int kParkedAt = -32000;
 constexpr char kOfferedPrefix[] = "ardiacore:";
 constexpr int kOpenRequestTries = 20;
 constexpr base::TimeDelta kOpenRequestWait = base::Milliseconds(25);
+constexpr base::TimeDelta kOfferDeadline = base::Seconds(30);
+constexpr base::TimeDelta kTestOfferDeadline = base::Seconds(4);
 constexpr UINT_PTR kParentSubclass = 0xA2D1A;
 
 base::DictValue Ok() {
@@ -138,6 +144,23 @@ LRESULT CALLBACK ParentProcedure(HWND window,
     ::RemoveWindowSubclass(window, &ParentProcedure, id);
   }
   return ::DefSubclassProc(window, message, w_param, l_param);
+}
+
+std::string_view HitName(LRESULT hit) {
+  switch (hit) {
+    case HTCLIENT:
+      return "client";
+    case HTTRANSPARENT:
+      return "transparent";
+    case HTTOP:
+      return "top";
+    case HTTOPLEFT:
+      return "topLeft";
+    case HTTOPRIGHT:
+      return "topRight";
+    default:
+      return "other";
+  }
 }
 
 int Integer(const base::DictValue& args, std::string_view key) {
@@ -248,6 +271,16 @@ HWND PromptWindow() {
   return Host::Get()->VisibleParent();
 }
 
+bool HostOpensAsOffer(BrowserWindowInterface* browser,
+                      WindowOpenDisposition disposition,
+                      const blink::mojom::WindowFeatures& features) {
+  return Host::Get()->OpenAsOffer(browser, disposition, features);
+}
+
+void HostNotesOfferInserted() {
+  Host::Get()->OfferInserted();
+}
+
 }
 
 void Host::Start() {
@@ -256,6 +289,9 @@ void Host::Start() {
   }
   started_ = true;
   g_ardia_win_prompt_window = &PromptWindow;
+  g_ardia_win_open_as_offer = &HostOpensAsOffer;
+  g_ardia_win_offer_inserted = &HostNotesOfferInserted;
+  InstallHostedPageMenus();
   browsers_observation_.Observe(GlobalBrowserCollection::GetInstance());
 }
 
@@ -289,6 +325,19 @@ void Host::Call(const std::string& verb,
     result = CloseTab(args);
   } else if (verb == "tab.discard") {
     result = DiscardOffered(args);
+  } else if (verb == "tab.offerHeard") {
+    if (content::WebContents* offered = FindOffered(Text(args, "adopt"))) {
+      auto found = offers_.find(TabState::IdOf(offered));
+      if (found != offers_.end()) {
+        found->second.heard = true;
+      }
+    }
+    result = Ok();
+  } else if (verb == "tab.hitTest") {
+    result = HitTest(args);
+  } else if (verb == "keyboard.page") {
+    result = Ok();
+    result.Set("key", KeyboardPage());
   } else if (verb == "tabs.list") {
     result = ListTabs();
   } else if (verb == "host.info") {
@@ -401,6 +450,17 @@ void Host::ParentDestroying(HWND parent) {
     hosted.parent = nullptr;
   }
   keyboard_wanted_.erase(parent);
+  std::vector<base::WeakPtr<content::WebContents>> orphaned;
+  for (const auto& [id, offer] : offers_) {
+    if (offer.parent == parent) {
+      orphaned.push_back(offer.contents);
+    }
+  }
+  for (const base::WeakPtr<content::WebContents>& contents : orphaned) {
+    if (contents) {
+      CloseOffered(contents.get());
+    }
+  }
   base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&Host::CloseSparePages, weak_factory_.GetWeakPtr()));
@@ -440,6 +500,7 @@ void Host::CreateTab(base::DictValue args, HWND parent, Reply reply) {
       return;
     }
     tabs_[key] = existing;
+    offers_.erase(TabState::IdOf(existing));
     TabState::Bind(existing, key)->NoteNavigation();
     TabEvents::Attach(existing);
   }
@@ -583,6 +644,8 @@ base::DictValue Host::ShowTab(const base::DictValue& args, HWND parent) {
     Place(window, hosted);
   }
   hosted.shown = key;
+  ardiacore::NoteTabInShownSlot(contents);
+  ardiacore::NoteTabShownByHost(contents, true);
   return Ok();
 }
 
@@ -652,6 +715,27 @@ void Host::DeleteClosedTab(content::WebContents* contents) {
   model->DetachAndDeleteWebContentsAt(index);
 }
 
+base::DictValue Host::HitTest(const base::DictValue& args) {
+  content::WebContents* contents = Find(Text(args, "key"));
+  Browser* browser = contents ? BrowserOf(contents) : nullptr;
+  HWND window = browser ? WindowOf(browser) : nullptr;
+  RECT bounds;
+  if (!window || !::GetWindowRect(window, &bounds)) {
+    return Error("the tab has no page window");
+  }
+  const LRESULT hit = ::SendMessageW(
+      window, WM_NCHITTEST, 0,
+      MAKELPARAM(bounds.left + Integer(args, "x"),
+                 bounds.top + Integer(args, "y")));
+  base::DictValue result = Ok();
+  result.Set("hit", HitName(hit));
+  result.Set("appHit",
+             HitName(AppWindowHitAt(
+                 window, {bounds.left + Integer(args, "x"),
+                          bounds.top + Integer(args, "y")})));
+  return result;
+}
+
 base::DictValue Host::DiscardOffered(const base::DictValue& args) {
   content::WebContents* contents = FindOffered(Text(args, "adopt"));
   if (!contents) {
@@ -661,15 +745,7 @@ base::DictValue Host::DiscardOffered(const base::DictValue& args) {
   if (state && !state->key().empty()) {
     return Error("the tab is in use");
   }
-  Browser* browser = BrowserOf(contents);
-  if (!browser) {
-    return Ok();
-  }
-  TabStripModel* model = browser->GetTabStripModel();
-  int index = model->GetIndexOfWebContents(contents);
-  if (index != TabStripModel::kNoTab) {
-    model->CloseWebContentsAt(index, TabCloseTypes::CLOSE_NONE);
-  }
+  CloseOffered(contents);
   return Ok();
 }
 
@@ -735,6 +811,8 @@ base::DictValue Host::Info() {
                                   .value()));
   result.Set("privateSessions", PrivateSessions::Get()->LiveSessions());
   result.Set("pageWindows", static_cast<int>(hosted_.size()));
+  result.Set("popupBrowsers", static_cast<int>(popup_browsers_.size()));
+  result.Set("offers", static_cast<int>(offers_.size()));
   result.Set("testInstance", ardiacore::TestInstance());
   result.Set("keyboardPage", KeyboardPage());
   result.Set("keyboardMayMove", KeyboardMayMove());
@@ -970,6 +1048,7 @@ void Host::Hide(Browser* browser, Hosted& hosted) {
     }
   }
   if (content::WebContents* shown = Find(hosted.shown)) {
+    ardiacore::NoteTabShownByHost(shown, false);
     if (ExclusiveAccessManager* manager =
             ExclusiveAccessManager::From(browser)) {
       manager->OnTabDeactivated(shown);
@@ -1135,6 +1214,74 @@ void Host::FocusFor(ui::Event* event) {
   }
 }
 
+bool Host::OpenAsOffer(BrowserWindowInterface* browser,
+                       WindowOpenDisposition disposition,
+                       const blink::mojom::WindowFeatures& features) {
+  Browser* opener = static_cast<Browser*>(browser);
+  if (creating_tab_ || moving_tab_ || !opener ||
+      (!hosted_.contains(opener) && !foreign_.contains(opener))) {
+    return false;
+  }
+  opening_ = Opening();
+  opening_.browser = opener;
+  opening_.popup = disposition == WindowOpenDisposition::NEW_POPUP;
+  if (opening_.popup && features.has_x) {
+    opening_.bounds.Set("x", features.bounds.x());
+  }
+  if (opening_.popup && features.has_y) {
+    opening_.bounds.Set("y", features.bounds.y());
+  }
+  if (opening_.popup && features.has_width) {
+    opening_.bounds.Set("width", features.bounds.width());
+  }
+  if (opening_.popup && features.has_height) {
+    opening_.bounds.Set("height", features.bounds.height());
+  }
+  return true;
+}
+
+void Host::OfferInserted() {
+  opening_ = Opening();
+}
+
+void Host::NoteOffer(content::WebContents* contents, HWND parent) {
+  const int id = TabState::IdOf(contents);
+  offers_[id] = {contents->GetWeakPtr(), parent};
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE,
+      base::BindOnce(&Host::ExpireOffer, weak_factory_.GetWeakPtr(), id),
+      ardiacore::TestInstance() ? kTestOfferDeadline : kOfferDeadline);
+}
+
+void Host::ExpireOffer(int id) {
+  auto found = offers_.find(id);
+  if (found == offers_.end() || found->second.heard) {
+    return;
+  }
+  base::WeakPtr<content::WebContents> contents = found->second.contents;
+  offers_.erase(found);
+  if (contents) {
+    CloseOffered(contents.get());
+  }
+}
+
+void Host::CloseOffered(content::WebContents* contents) {
+  offers_.erase(TabState::IdOf(contents));
+  TabState* state = TabState::FromWebContents(contents);
+  if (state && !state->key().empty()) {
+    return;
+  }
+  Browser* browser = BrowserOf(contents);
+  if (!browser) {
+    return;
+  }
+  TabStripModel* model = browser->GetTabStripModel();
+  int index = model->GetIndexOfWebContents(contents);
+  if (index != TabStripModel::kNoTab) {
+    model->CloseWebContentsAt(index, TabCloseTypes::CLOSE_NONE);
+  }
+}
+
 void Host::NoteOpened(Browser* browser,
                       TabStripModel* model,
                       content::WebContents* contents,
@@ -1145,7 +1292,17 @@ void Host::NoteOpened(Browser* browser,
   payload.Set("url", contents->GetVisibleURL().spec());
   payload.Set("foreground", foreground);
   bool foreign = foreign_.contains(browser);
-  payload.Set("window", foreign);
+  const bool offered = opening_.browser == browser;
+  const bool popup = offered && opening_.popup;
+  if (popup) {
+    payload.Set("popup", opening_.bounds.Clone());
+  }
+  if (offered) {
+    foreground = true;
+    payload.Set("foreground", true);
+    opening_ = Opening();
+  }
+  payload.Set("window", foreign || popup);
   payload.Set("profile", NameOf(browser->GetProfile()));
   std::string opener_key;
   content::WebContents* opener = nullptr;
@@ -1167,8 +1324,9 @@ void Host::NoteOpened(Browser* browser,
     parent = found->second.parent;
   }
   payload.Set("parent", base::NumberToString(reinterpret_cast<uintptr_t>(parent)));
+  NoteOffer(contents, parent);
   payload.Set("fromClick", false);
-  if (!foreground || foreign || opener_key.empty() ||
+  if (popup || !foreground || foreign || opener_key.empty() ||
       !OpenRequest::FromWebContents(contents)) {
     Emit("tab.opened", std::move(payload));
     return;
@@ -1254,6 +1412,7 @@ void Host::OnTabStripModelChanged(TabStripModel* tab_strip_model,
       if (removed.remove_reason != TabRemovedReason::kDeleted) {
         continue;
       }
+      offers_.erase(TabState::IdOf(removed.contents));
       TabState* state = TabState::FromWebContents(removed.contents);
       if (!state || state->key().empty()) {
         continue;
@@ -1271,6 +1430,9 @@ void Host::OnTabStripModelChanged(TabStripModel* tab_strip_model,
 }
 
 void Host::OnBrowserCreated(BrowserWindowInterface* browser) {
+  if (browser->GetType() == BrowserWindowInterface::TYPE_POPUP) {
+    popup_browsers_.insert(static_cast<Browser*>(browser));
+  }
   if (creating_browser_ ||
       browser->GetType() != BrowserWindowInterface::TYPE_NORMAL) {
     return;
@@ -1291,6 +1453,7 @@ void Host::OnBrowserClosed(BrowserWindowInterface* browser) {
   Browser* closed = static_cast<Browser*>(browser);
   hosted_.erase(closed);
   foreign_.erase(closed);
+  popup_browsers_.erase(closed);
 }
 
 void Host::OnMouseEvent(ui::MouseEvent* event) {

@@ -73,19 +73,31 @@ test("a test instance seals its sync key under its own DPAPI purpose, so it can'
 });
 
 test("an app folder the Windows workflow uploads has lost its test-build marker, with no harness run after that", () => {
-  const workflow = readFileSync(new URL("../../../../.github/workflows/windows.yml", import.meta.url), "utf8");
-  const jobs = workflow.split(/\r?\n  (?=[a-z0-9-]+:\r?\n    runs-on:)/).slice(1);
-  assert.equal(jobs.length, 2);
-  for (const job of jobs) {
-    const strip = job.indexOf('-Filter "Ardia.test-build"');
-    assert.ok(strip > 0, "the job removes the marker");
-    const uploads = [...job.matchAll(/path: (\$\{\{ runner\.temp \}\}\/Ardia|apps\/browser\/windows\/\w+\/Release)\r?\n/g)];
-    assert.equal(uploads.length, 2);
-    const removal = job.slice(job.lastIndexOf("\n", strip), job.indexOf("\n", strip));
-    for (const upload of uploads) {
-      assert.ok(upload.index > strip, `${upload[1]} is uploaded after the marker is removed`);
-      assert.ok(removal.includes(upload[1]), `${upload[1]} is one of the folders the marker is removed from`);
-    }
-    assert.doesNotMatch(job.slice(strip), /launch-smoke\.ps1|tour\.ps1/);
+  const workflow = readFileSync(new URL("../../../../.github/workflows/windows.yml", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+  const harness = /launch-smoke\.ps1|tour\.ps1/;
+  const appFolder = /^\s+(?:path: )?(\$\{\{ runner\.temp \}\}\/Ardia|\$\{\{ env\.APP \}\}|apps\/browser\/windows\/\w+\/Release)$/gm;
+  const stepLists = workflow.split(/\n  (?=[a-z0-9-]+:\n)/).slice(1).flatMap((job) => {
+    const at = job.search(/\n    steps:(?: &\w+)?\n/);
+    return at < 0 ? [] : [job.slice(at).split("\n      - ").slice(1)];
+  });
+  assert.equal(workflow.split("\n    steps:").length - 1, stepLists.length + workflow.split("\n    steps: *").length - 1, "every job's steps are written out or shared");
+  const uploaded = { beforeAnyHarness: 0, afterRemoval: 0 };
+  for (const steps of stepLists) {
+    const firstHarness = steps.findIndex((step) => harness.test(step));
+    const strip = steps.findIndex((step) => step.includes('-Filter "Ardia.test-build"'));
+    steps.forEach((step, at) => {
+      if (!/actions\/(upload-artifact|cache\/save)@/.test(step)) return;
+      for (const [, folder] of step.matchAll(appFolder)) {
+        if (firstHarness < 0 || at < firstHarness) {
+          uploaded.beforeAnyHarness++;
+          continue;
+        }
+        assert.ok(strip >= 0 && at > strip, `${folder} is uploaded after the marker is removed`);
+        assert.ok(steps[strip].includes(folder), `${folder} is one of the folders the marker is removed from`);
+        uploaded.afterRemoval++;
+      }
+    });
+    if (strip >= 0) assert.ok(!steps.slice(strip + 1).some((step) => harness.test(step)), "no harness runs after the marker is removed");
   }
+  assert.ok(uploaded.beforeAnyHarness > 0 && uploaded.afterRemoval > 0, `the workflow uploads app folders: ${JSON.stringify(uploaded)}`);
 });

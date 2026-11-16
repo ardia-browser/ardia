@@ -14,6 +14,7 @@ import { capsule, space } from "../ui/tokens";
 import { ChoiceCard } from "./ChoiceCard";
 import { OptionCard } from "./OptionCard";
 import { confirmAnswer, confirmDefaultBrowserAnswer, recordDefaultBrowserTrial, setOnboardingDraft, setOnboardingExtras, skipStep, useOnboarding } from "../../state/onboarding/onboarding";
+import { probeOnboardingSystem, type OnboardingSystem } from "../../state/onboarding/systemProbe";
 import { ChoiceList, useMockFocus, type ChoiceOption } from "./ChoiceList";
 import { useOnboardingColors } from "./Parts";
 import { MockPanel, useScreen } from "./Screen";
@@ -23,7 +24,6 @@ import { PLATFORM_TERMS } from "../../lib/platformTerms";
 
 const ICON = require("../../../assets/app-icon.png");
 
-type SystemState = { isDefault: boolean; inDock: boolean; loginEnabled: boolean };
 
 const LINK_CHOICES: ChoiceOption<boolean>[] = [
   { value: true, preview: "links-little", title: "Little Ardia", subtitle: "A small window that's gone when you're done" },
@@ -38,18 +38,16 @@ export function HomeStep() {
 function DefaultBrowserQuestion() {
   const extras = useOnboarding((s) => s.extras);
   const redo = useOnboarding((s) => s.redo);
-  const [system, setSystem] = useState<SystemState | null>(null);
+  const [system, setSystem] = useState<OnboardingSystem | null>(null);
   const [busy, setBusy] = useState(false);
   const setDefault = extras.setDefault ?? !backgroundInstance;
   const trial = !redo && PLATFORM_FEATURES.setsDefaultBrowser && (extras.trial ?? false);
-  const dock = PLATFORM_FEATURES.dock && (extras.dock ?? true);
+  const dock = extras.dock ?? true;
   const login = extras.login ?? system?.loginEnabled ?? false;
   const setExtras = setOnboardingExtras;
 
   useEffect(() => {
-    void Promise.all([isDefaultBrowser(), isInDock(), launchAtLoginStatus()]).then(([isDefault, inDock, login]) =>
-      setSystem({ isDefault, inDock, loginEnabled: login === "enabled" }),
-    );
+    void probeOnboardingSystem({ isDefaultBrowser, isInDock, launchAtLoginStatus }).then(setSystem);
   }, []);
 
   const apply = async () => {
@@ -62,7 +60,7 @@ function DefaultBrowserQuestion() {
         picked.push(setDefault ? "Ardia is your default browser" : "A week as your default browser");
       }
       if (login !== system.loginEnabled) await setLaunchAtLogin(login).catch(() => {});
-      if (dock && !system.inDock) await addToDock();
+      if (dock && system.dockAvailable && !system.inDock) await addToDock();
     } finally {
       setBusy(false);
       confirmDefaultBrowserAnswer(picked);
@@ -84,7 +82,7 @@ function DefaultBrowserQuestion() {
           onSkip={() => skipStep()}
         />
       }
-      preview={<SystemPreview isDefault={!!(defaultOn || trying)} dock={!!(system?.inDock || dock)} login={login} />}
+      preview={<SystemPreview isDefault={!!(defaultOn || trying)} dock={!!(system?.inDock || (dock && system?.dockAvailable !== false))} login={login} />}
     >
       <View style={{ gap: space.m }}>
         <OptionCard
@@ -99,7 +97,7 @@ function DefaultBrowserQuestion() {
         {system && !defaultOn && !redo && PLATFORM_FEATURES.setsDefaultBrowser ? (
           <OptionCard control="check" icon="calendar" title="Try it for seven days" subtitle="We'll check in to make sure you love it." selected={trial} onPress={() => setExtras({ trial: !trial })} />
         ) : null}
-        {PLATFORM_FEATURES.dock && system && !system.inDock ? (
+        {system && system.dockAvailable && !system.inDock ? (
           <OptionCard control="check" icon="dock.rectangle" title="Add Ardia to Dock" subtitle="Quick access whenever you need it" selected={dock} onPress={() => setExtras({ dock: !dock })} />
         ) : null}
         <OptionCard control="check" icon="power" title="Open Ardia at login" subtitle="Ready when you sign in" selected={login} onPress={() => setExtras({ login: !login })} />
@@ -116,7 +114,7 @@ function LinksQuestion() {
     <StepLayout
       pageKey="links"
       title="Where do links from other apps open?"
-      subtitle="From Mail, Slack, Notes and the rest."
+      subtitle={`From ${PLATFORM_TERMS.linkSourceApps} and the rest.`}
       actions={
         <StepActions
           onContinue={() =>

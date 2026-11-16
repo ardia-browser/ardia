@@ -80,6 +80,8 @@ command: it gives the reason (`data.reason`) and, for a tab, what Ardia has ther
   prints.
 - `tab_detached`: Ardia took the tab away mid-command (it closed, crashed or went to sleep). Run the command again;
   a multi-page `read` already retries that page in a new tab.
+- `setup_lost`: the tab was attached again after Ardia detached it, but the init scripts, `set` overrides or routes the
+  error names couldn't be put back, so they are off. Set them again, then rerun the command.
 - `--session name` (or `AGENT_BROWSER_SESSION`) gives its own tabs, refs and captures; cookies and logins are the
   user's in every session. Use one session per task.
 
@@ -102,7 +104,7 @@ ardia browse auth save github --url https://github.com/login --username me --pas
 ardia browse auth login github
 ```
 
-Passwords go to the macOS login Keychain; `--password` is refused. `login` types only on the saved https origins and
+Passwords go to the macOS login Keychain (so `auth` doesn't work on Linux); `--password` is refused. `login` types only on the saved https origins and
 stops if the page navigates, the frame changes or focus leaves the field. Never echo secrets yourself.
 
 ## Exit status

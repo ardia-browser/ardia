@@ -41,7 +41,8 @@ const overlaps = (a: Box, b: Box) => a.x < b.x + b.width && b.x < a.x + a.width 
 const encloses = (outer: Box, inner: Box) =>
   outer.x <= inner.x && outer.y <= inner.y && outer.x + outer.width >= inner.x + inner.width && outer.y + outer.height >= inner.y + inner.height;
 
-export function holesFor(page: Box, covers: readonly CoverRect[], temporary: boolean): number[][] {
+export function holesFor(page: Box, covers: readonly CoverRect[], temporary: boolean, onTop = false): number[][] {
+  if (onTop) return [];
   return covers
     .filter((cover) => overlaps(cover, page) && !(temporary && encloses(cover, page)))
     .map((hole) => [hole.x, hole.y, hole.width, hole.height, hole.radius]);

@@ -36,6 +36,7 @@ NSString *StateOf(ArdiaSavedSession *session, NSString *windowId) {
     if (settings[key]) state[[@"s." stringByAppendingString:key]] = settings[key];
   if ([settings[@"compactToolbar"] isEqual:@YES]) state[@"s.compactToolbar"] = @YES;
   if ([settings[@"borderlessMode"] isEqual:@YES]) state[@"s.borderlessMode"] = @YES;
+  if ([settings[@"minimalismMode"] isEqual:@YES]) state[@"s.minimalismMode"] = @YES;
   if ([settings[@"pageFrame"] isKindOfClass:NSNumber.class] && ![settings[@"pageFrame"] isEqual:@9]) state[@"s.pageFrame"] = settings[@"pageFrame"];
   for (NSString *key in @[ @"tabLayout", @"profileId", @"incognito" ])
     if (window[key]) state[[@"w." stringByAppendingString:key]] = window[key];

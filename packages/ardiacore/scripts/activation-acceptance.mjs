@@ -819,6 +819,50 @@ try {
     }
   });
 
+  await check("keys-after-command-bar", async () => {
+    const urlA = `${origin()}/keys?a`, urlB = `${origin()}/keys?b`;
+    const a = await openTab(urlA, "Keys");
+    const b = await openTab(urlB, "Keys");
+    const n = await engine("tabs.devWindowNumber", { tabId: a });
+    const win = JSON.stringify(mainWindow);
+    const press = (k, keyCode, modifiers = []) =>
+      evalApp(`return ac.shell.devKeyEquivalent(${win}, ${JSON.stringify({ key: k, keyCode, modifiers, send: true, asKey: true, release: true, wait: 400 })})`);
+    const typedInA = async () => {
+      const t = await pageTarget(urlA);
+      await js(t, `__keys = ""; true`);
+      const r = await press("x", 7);
+      return { responder: r.firstResponder, keys: await js(t, "__keys") };
+    };
+    const steps = [];
+    try {
+      await show(a);
+      await evalApp(`ac.actions.focus(${win}); return true`);
+      await engine("tabs.devFocusPage", { tabId: a });
+      steps.push({ step: "before", ...(await typedInA()) });
+      await press("l", 37, ["command"]);
+      await until("the command bar open", () => evalApp(`return ac.store.getState().windowUi[${win}]?.panel.open || null`), 5000);
+      await show(b);
+      await sleep(400);
+      await show(a);
+      await sleep(900);
+      steps.push({ step: "switched with the bar open", ...(await typedInA()) });
+      await press("l", 37, ["command"]);
+      await until("the command bar open", () => evalApp(`return ac.store.getState().windowUi[${win}]?.panel.open || null`), 5000);
+      const [x, y] = await evalApp(`return ac.sidebarRows.measureRow(${win}, ${JSON.stringify(a)}).then((r) => [Math.round(r.x + r.width / 2), Math.round(r.y + r.height / 2)])`);
+      await engine("windows.dev", { window: n, action: `mouse:down:${x},${y}` });
+      await sleep(80);
+      await engine("windows.dev", { window: n, action: `mouse:up:${x},${y}` });
+      await sleep(900);
+      steps.push({ step: "bar closed by a click", ...(await typedInA()) });
+      const lost = steps.filter((s) => s.keys !== "x");
+      if (lost.length) throw new Error(`a key missed the page: ${JSON.stringify(steps)}`);
+      return steps;
+    } finally {
+      await closeTab(b);
+      await closeTab(a);
+    }
+  });
+
   await check("chrome-tab-to-front-window", async () => {
     const home = await openTab(`${origin()}/front-a?t=FrontA`, "FrontA");
     await show(home);

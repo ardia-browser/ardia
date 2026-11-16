@@ -33,7 +33,7 @@ extension AppModel {
     case .query:
       if let url { openPage(url, origin: .search) } else { openSearch(suggestion.query) }
     case .openTab(let id):
-      browse.dismissSearch()
+      browse.dismissSearch(submitted: true)
       openTab(id)
     case .remoteTab:
       if let url { openPage(url, origin: .sync) }
@@ -71,7 +71,7 @@ extension AppModel {
 
   private func finishOpening(_ id: UUID) {
     _ = web.webTab(for: id)
-    browse.dismissSearch()
+    browse.dismissSearch(submitted: true)
     surface = .browsing
   }
 

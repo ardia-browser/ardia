@@ -35,7 +35,6 @@ final class SymbolView: ExpoView {
   override func layout() {
     super.layout()
     imageView.frame = bounds
-    render()
   }
 
   override func setFrameSize(_ newSize: NSSize) {

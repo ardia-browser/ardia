@@ -231,20 +231,23 @@ test("with Top Apps kept running, ⌘W on either pane of a tile split with a pin
   }
 });
 
-test("with Top Apps kept running, ⌘W on two Top Apps split together keeps both loaded in their split and brings a New Tab, not the other tile", () => {
-  const { w, ids: [a, b] } = windowWith("a", "b");
-  S().pinTabs([a, b], true);
-  S().updateSettings({ keepTopAppsRunning: true });
-  S().createSplit([a, b]);
-  S().activate(a);
-  S().closeTabs([a]);
-  assert.equal(S().tabs[a].page.kind, "loaded");
-  assert.equal(S().tabs[b].page.kind, "loaded");
-  assert.deepEqual(Object.values(S().splits).map((split) => [...splitTabIdsOf(split)].sort()), [[a, b].sort()], "the split stays whole");
-  assert.equal(shownTab(w).pin, null, "no tile is brought forward");
-  assert.equal(shownTab(w).url, "", "a New Tab is in front");
-  S().updateSettings({ keepTopAppsRunning: false });
-});
+for (const keep of [false, true]) {
+  test(`⌘W on one of two Top Apps split together closes only that pane and leaves the other in front (Keep Top Apps running ${keep ? "on" : "off"})`, async () => {
+    const { w, ids: [reading, notes, video] } = windowWith("reading", "notes", "video");
+    S().pinTabs([notes, video], true);
+    S().updateSettings({ keepTopAppsRunning: keep });
+    S().activate(notes);
+    S().replaceSplitPane(S().openSplitPane(w).tabId, video);
+    assert.equal(activeTabId(S(), w), video);
+    await closeTab(video);
+    assert.equal(activeTabId(S(), w), notes, "the other Top App stays in front");
+    assert.notEqual(activeTabId(S(), w), reading);
+    assert.equal(S().tabs[notes].page.kind, "loaded");
+    assert.equal(S().tabs[video].page.kind, keep ? "loaded" : "asleep");
+    assert.deepEqual(Object.keys(S().splits), [], "the split ends, so opening either Top App shows it alone");
+    S().updateSettings({ keepTopAppsRunning: false });
+  });
+}
 
 test("off, ⌘W on a tile split with a pinned row still unloads the whole split", () => {
   const { w, ids: [app, row, other] } = windowWith("app", "row", "other");

@@ -6,32 +6,19 @@ export const SYNC_WORDING: readonly Wording[] = [
     file: "components/settings/panes/Sync.tsx",
     replacements: [
       [
-        `extensions and settings across your Macs. It all goes through a folder
-        you choose, like one in iCloud Drive, and it’s end-to-end encrypted: only your devices can read it.`,
-        `extensions and settings across your computers. It all goes through a folder
-        you choose, like one that Syncthing, Nextcloud or Dropbox keeps in sync, and it’s end-to-end encrypted: only your devices can read it.`,
+        "{SYNCED_KINDS} across your {PLATFORM_TERMS.syncedComputer}s. It all goes through a folder you choose, like one in {PLATFORM_TERMS.cloudDrive}, and it’s end-to-end encrypted: only your devices can read it.",
+        "{SYNCED_KINDS} across your computers. It all goes through a folder you choose, like one that Syncthing, Nextcloud or Dropbox keeps in sync, and it’s end-to-end encrypted: only your devices can read it.",
       ],
       [
-        `            icon={<Symbol name="exclamationmark.icloud" size={14} color={theme.warning} style={{ width: 28, height: 20 }} />}
-            title="iCloud Drive is off on this Mac"
-            description="Turn on iCloud Drive in System Settings, or choose another folder that syncs between your Macs, like one in Dropbox, on a NAS or on a USB drive."
-          >
-            <Button title="Open iCloud Settings" onPress={() => void Linking.openURL("x-apple.systempreferences:com.apple.preferences.AppleIDPrefPane")} />`,
+        "            icon={<Symbol name=\"exclamationmark.icloud\" size={14} color={theme.warning} style={{ width: 28, height: 20 }} />}\n            title={`${PLATFORM_TERMS.cloudDrive} is off on this ${PLATFORM_TERMS.computer}`}\n            description={`${PLATFORM_TERMS.turnOnCloudDrive}, or choose another folder that syncs between your ${PLATFORM_TERMS.syncedComputer}s, like one in Dropbox, on a NAS or on a USB drive.`}\n          >\n            {PLATFORM_TERMS.cloudDriveSettingsUrl ? <Button title=\"Open iCloud Settings\" onPress={() => void Linking.openURL(PLATFORM_TERMS.cloudDriveSettingsUrl)} /> : null}",
         `            icon={<Symbol name="exclamationmark.triangle.fill" size={13} color={theme.warning} style={{ width: 28, height: 20 }} />}
             title="The default sync folder’s location is missing"
             description="Choose a folder that syncs between your computers, like one that Syncthing, Nextcloud or Dropbox keeps in sync, or one on a NAS or a USB drive."
           >
             <Button title="Choose…" onPress={() => void chooseSyncFolder()} />`,
       ],
-      ["No server and no account: your Macs meet in the sync folder.", "No server and no account: your devices meet in the sync folder."],
-      [`title: "Show Sync Folder in Finder"`, `title: "Open Sync Folder"`],
-      [
-        `"Choose which profiles sync on this Mac. Each syncs on its own. Profiles on your other devices can be added to this Mac."`,
-        `"Choose which profiles sync on this computer. Each syncs on its own. Profiles on your other devices can be added to this computer."`,
-      ],
-      [`: "Choose which profiles sync on this Mac. Each syncs on its own."`, `: "Choose which profiles sync on this computer. Each syncs on its own."`],
-      ["`${d.name} (This Mac)`", "`${d.name} (This Computer)`"],
-      [`title="Just this Mac so far"`, `title="Just this computer so far"`],
+      ["No server and no account: your {PLATFORM_TERMS.syncedComputer}s meet in the sync folder.", "No server and no account: your devices meet in the sync folder."],
+      ["title: `Show Sync Folder in ${PLATFORM_TERMS.fileManager}`", `title: "Open Sync Folder"`],
     ],
   },
   {
@@ -39,18 +26,7 @@ export const SYNC_WORDING: readonly Wording[] = [
     replacements: [
       ["  useEffect(() => void recoveryKitPreview(168)?.then(setPreview), []);\n", ""],
       [
-        `  const more = async () => {
-    const choice = await showMenu([
-      { id: "copy", title: "Copy", symbol: "doc.on.doc" },
-      { id: "share", title: "Share…", symbol: "square.and.arrow.up" },
-      { separator: true },
-      { id: "text", title: "Save as Text…", symbol: "doc.plaintext" },
-    ]);
-    if (choice === "copy") await copyRecoveryKit();
-    else if (choice === "share") await shareRecoveryKit();
-    else if (choice === "text") await save("text");
-  };
-`,
+        "  const more = async () => {\n    const choice = await showMenu([\n      { id: \"copy\", title: \"Copy\", symbol: \"doc.on.doc\" },\n      ...(PLATFORM_FEATURES.sharesFiles ? [{ id: \"share\", title: \"Share…\", symbol: \"square.and.arrow.up\" }] : []),\n      { separator: true },\n      { id: \"text\", title: \"Save as Text…\", symbol: \"doc.plaintext\" },\n    ]);\n    if (choice === \"copy\") await copyRecoveryKit();\n    else if (choice === \"share\") await shareRecoveryKit();\n    else if (choice === \"text\") await save(\"text\");\n  };\n",
         "",
       ],
       [
@@ -73,24 +49,16 @@ export const SYNC_WORDING: readonly Wording[] = [
         <Button title="Close" onPress={closeSettingsSheet} />
         <Button title="Save as Text…" kind="primary" onPress={() => void save("text")} />`,
       ],
-      [`return "Couldn’t save the sync key in your Keychain.";`, `return "Couldn’t save the sync key in your system keyring.";`],
+      ["return `Couldn’t save the sync key in ${PLATFORM_TERMS.secretStore}.`;", `return "Couldn’t save the sync key in your system keyring.";`],
       [
-        `On your other Mac, open Ardia › Settings › Sync and choose the same sync folder.`,
+        "On your other ${PLATFORM_TERMS.syncedComputer}, open Ardia › Settings › Sync and choose the same sync folder.",
         `On your other device, open Ardia › Settings › Sync and choose the same sync folder.`,
       ],
       [
         "Click Show Code. On your iPhone, open Ardia, tap Sync With Mac, and scan the code. For another Mac, you can also scan it with your iPhone’s camera and paste the words there with Universal Clipboard.",
         "Click Show Code, then scan the code with your phone’s camera to copy the words, and type or paste them on your other device.",
       ],
-      [`<Button title="Add to This Mac"`, `<Button title="Add to This Computer"`],
-      [
-        `"These profiles are on your other devices. Add them to this Mac to sync their pinned tabs, bookmarks, history and passwords here too."`,
-        `"These profiles are on your other devices. Add them to this computer to sync their pinned tabs, bookmarks, history and passwords here too."`,
-      ],
-      [`"Every profile on your other devices is on this Mac too."`, `"Every profile on your other devices is on this computer too."`],
-      [`>This Mac Is Syncing</DialogTitle>`, `>This Computer Is Syncing</DialogTitle>`],
-      ["Recovery Kit. Everything on this Mac stays as it is.", "Recovery Kit. Everything on this computer stays as it is."],
-      ["Your data on each Mac stays.", "Your data on each device stays."],
+      ["Your data on each ${PLATFORM_TERMS.syncedComputer} stays.", "Your data on each device stays."],
       [
         `  if (folder.inICloud) {
     const rest = folder.path.split("com~apple~CloudDocs")[1]?.split("/").filter(Boolean) ?? [];
@@ -105,7 +73,7 @@ export const SYNC_WORDING: readonly Wording[] = [
     file: "components/settings/rows/generalRows.ts",
     replacements: [
       [
-        `description: "Sync your profiles, bookmarks, history, tabs, passwords, extensions and settings across your Macs.", keywords: ["icloud", "recovery phrase",`,
+        "description: `Sync your profiles, bookmarks, history, tabs, ${PLATFORM_FEATURES.syncsPasswords ? \"passwords, \" : \"\"}extensions and settings across your ${PLATFORM_TERMS.syncedComputer}s.`, keywords: [PLATFORM_TERMS.cloudDrive.toLowerCase(), \"recovery phrase\",",
         `description: "Sync your profiles, bookmarks, history, tabs, passwords, extensions and settings across your computers.", keywords: ["syncthing", "recovery phrase",`,
       ],
       [`keywords: ["icloud drive", "dropbox", "folder"]`, `keywords: ["syncthing", "nextcloud", "dropbox", "folder"]`],
@@ -116,12 +84,8 @@ export const SYNC_WORDING: readonly Wording[] = [
     replacements: [[`export const MONO_FAMILY = "Menlo";`, `export const MONO_FAMILY = "monospace";`]],
   },
   {
-    file: "state/sync/syncDoc.ts",
-    replacements: [["Turning sync off never removes them from this Mac.", "Turning sync off never removes them from this computer."]],
-  },
-  {
     file: "state/sync/engine.ts",
-    replacements: [["Enter your recovery phrase to keep syncing on this Mac.", "Enter your recovery phrase to keep syncing on this device."]],
+    replacements: [["Enter your recovery phrase to keep syncing on this ${PLATFORM_TERMS.computer}.", "Enter your recovery phrase to keep syncing on this device."]],
   },
 ];
 

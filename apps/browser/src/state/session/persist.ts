@@ -10,7 +10,7 @@ import { parkWindowPins } from "../pins/parkedPins";
 import { closedWindowEntry, MAX_CLOSED_WINDOWS } from "../pins/closedTabs";
 import { isPeekTab } from "../peek/peek";
 import type { BrowserWindow, ClosedWindow, ParkedPins, SplitView, Tab } from "../browser/types";
-import { downloadSession } from "../downloads/downloadsSlice";
+import { downloadSession, withoutRepeats } from "../downloads/downloadsSlice";
 import { anyDownloadProgress, withLiveProgress } from "../downloads/progress";
 import { noteDownloadHistoryWrite } from "../telemetry/downloadWork";
 import { parseSaved, versionedJson, unchanged, type Migrations, type SavedObject } from "../../lib/savedDocument";
@@ -221,7 +221,7 @@ function savedDownloads(saved: Pick<BrowserState, "profiles">): Download[] {
   const raw = parseSaved(read(DOWNLOADS_DOCUMENT), DOWNLOADS_VERSION, DOWNLOADS_MIGRATIONS);
   const downloads = rows<Download>(raw?.downloads, (d) => isString(d.id) && isString(d.state));
   droppedPrivateDownloads = downloads.some((d) => downloadSession(saved, d) !== null);
-  return downloads.filter((d) => downloadSession(saved, d) === null).map((d, i) => {
+  return withoutRepeats(downloads.filter((d) => downloadSession(saved, d) === null)).map((d, i) => {
     const id = `saved-${i}`;
     const { staging, ...kept } = d;
     if (!staging || d.state === "downloading") return { ...kept, id };

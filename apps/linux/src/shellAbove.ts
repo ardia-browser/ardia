@@ -86,11 +86,11 @@ export function startShellAbove(host: ArdiaHost, root: HTMLElement = document.bo
   };
 }
 
-export function useInputRegion(ref: RefObject<Element | null>, shape: RegionShape = "box", gated = true) {
+export function useInputRegion(ref: RefObject<Element | null>, shape: RegionShape = "box", gated = true, capturing = true) {
   useLayoutEffect(() => {
     const element = ref.current;
-    return element && regions ? regions.addOverlay(element, shape, gated) : undefined;
-  }, [shape, gated]);
+    return capturing && element && regions ? regions.addOverlay(element, shape, gated) : undefined;
+  }, [shape, gated, capturing]);
 }
 
 export const AbovePages = createContext(false);

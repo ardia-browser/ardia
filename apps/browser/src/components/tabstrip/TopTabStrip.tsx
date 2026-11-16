@@ -8,7 +8,7 @@ import { usePagerPages } from "../../state/windows/profilePager";
 import { DownloadsButton } from "../downloads/DownloadsButton";
 import { useMinimalism } from "../../state/windows/layout";
 import { ProfileIndicator, useProfileIndicatorWidth } from "../profiles/ProfileIndicator";
-import { ContextMenuArea, Panel, shadow, WindowDragRegion } from "../ui";
+import { ClipView, ContextMenuArea, Panel, shadow, WindowDragRegion } from "../ui";
 import { layout, useTheme } from "../ui/theme";
 import { TintInk } from "../ui/TintInk";
 import { radius } from "../ui/tokens";
@@ -40,6 +40,8 @@ import {
   TOP_STRIP_HEIGHT,
 } from "./tokens";
 import { WindowDropGlow } from "./WindowDropGlow";
+import { captionRoom } from "../../lib/windowChrome";
+import { stripCaptionRoom } from "./stripGroups";
 
 export { TOP_STRIP_HEIGHT } from "./tokens";
 
@@ -52,7 +54,8 @@ export function TopTabStrip({ width, floating = false, hidden = false, swipe = t
   const controls = minimal ? 0 : (profileChip ? profileChip + CONTROLS_GAP : 0) + DOWNLOADS_BOX;
   const fullScreen = useWindowFullScreen(windowId);
   const left = floating || fullScreen ? 8 : layout.trafficLightsWidth + LIGHTS_GAP;
-  const right = Math.max(84, controls + 8 + 6);
+  const room = stripCaptionRoom(floating, fullScreen);
+  const right = Math.max(84, controls + 8 + 6) + room;
   const pageWidth = Math.max(0, width - left - right);
   const flare = floating ? 0 : FLARE;
 
@@ -67,14 +70,14 @@ export function TopTabStrip({ width, floating = false, hidden = false, swipe = t
       <StripDropArea style={{ height: TOP_STRIP_HEIGHT }}>
         <ContextMenuArea style={StyleSheet.absoluteFill} onContextMenu={() => openTabStripMenu(windowId)}>
           <WindowDragRegion style={StyleSheet.absoluteFill} />
-          <View style={{ position: "absolute", left: left - flare, right: Math.max(right - flare, controls + 8), maxWidth: pageWidth + flare * 2, top: 0, bottom: 0, overflow: "hidden" }}>
+          <ClipView pointerEvents="box-none" style={{ position: "absolute", left: left - flare, right: Math.max(right - flare, controls + 8 + room), maxWidth: pageWidth + flare * 2, top: 0, bottom: 0, overflow: "hidden" }}>
             {pages.map((page) => (
               <StripPage key={page.id} profileId={page.id} slot={page.slot} pageWidth={pageWidth} current={page.id === current} resting={!!page.resting} />
             ))}
-          </View>
+          </ClipView>
         </ContextMenuArea>
         {minimal ? null : (
-          <View mouseDownCanMoveWindow={false} style={{ position: "absolute", right: 8, top: MID - 17, flexDirection: "row", alignItems: "center", gap: CONTROLS_GAP }}>
+          <View mouseDownCanMoveWindow={false} style={{ position: "absolute", right: 8 + room, top: MID - 17, flexDirection: "row", alignItems: "center", gap: CONTROLS_GAP }}>
             <TintInk>
               <ProfileIndicator room={PROFILE_ROOM} />
               <DownloadsButton windowId={windowId} />
@@ -132,6 +135,7 @@ export function TopStripPeek({ windowWidth, enabled: hidden }: { windowWidth: nu
     if (live && e.nativeEvent.clientY < PEEK_HOVER_HEIGHT) hide();
     else cancelPending();
   };
+  const hoverRight = PEEK_LEFT + captionRoom(0);
   const leavePanel = (e: { nativeEvent: { clientX: number; clientY: number } }) => {
     const x = e.nativeEvent.clientX + PEEK_LEFT;
     const y = e.nativeEvent.clientY + PEEK_TOP;
@@ -143,7 +147,7 @@ export function TopStripPeek({ windowWidth, enabled: hidden }: { windowWidth: nu
         <View
           onMouseEnter={show}
           onMouseLeave={leaveStrip}
-          style={{ position: "absolute", left: layout.trafficLightsWidth, right: PEEK_LEFT, top: 0, height: PEEK_HOVER_HEIGHT }}
+          style={{ position: "absolute", left: layout.trafficLightsWidth, right: hoverRight, top: 0, height: PEEK_HOVER_HEIGHT }}
         />
       ) : null}
       <Animated.View

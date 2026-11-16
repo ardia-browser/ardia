@@ -1,6 +1,7 @@
 import re
 
 QUEUE_WAIT = 30.0
+BEHIND_SCRIPT_WAIT = 300.0
 COMMAND_LIMIT = 120.0
 LIMIT_MARGIN = 30.0
 SCRIPT_DEFAULT = 90.0
@@ -53,4 +54,5 @@ def answer_deadline(payload: dict) -> float:
     options = payload.get("options") or {}
     timeout = float(options.get("timeout_ms") or DEFAULT_TIMEOUT_MS) / 1000
     name, rest = str(argv[0]), [str(arg) for arg in argv[1:]]
-    return queue_wait(name, rest, patient=bool(payload.get("patient_queue"))) + command_limit(name, rest, timeout) + LIMIT_MARGIN
+    waits = max(queue_wait(name, rest, patient=bool(payload.get("patient_queue"))), BEHIND_SCRIPT_WAIT)
+    return waits + command_limit(name, rest, timeout) + LIMIT_MARGIN

@@ -25,8 +25,7 @@ public enum TabsLayout {
   public static let headerSpacing: CGFloat = 6
   public static let headerGap: CGFloat = 8
   public static let barCircle: CGFloat = 48
-  public static let barPlus = CGSize(width: 77, height: 48)
-  public static let barSideInset: CGFloat = 12
+  public static let barPlusWidth: CGFloat = 77
   public static let barGap: CGFloat = 8
   public static let headerCircle: CGFloat = 44
   public static let headerCenter: CGFloat = 26

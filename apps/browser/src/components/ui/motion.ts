@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Animated, Easing, type EasingFunction } from "react-native";
 import { reduceMotion } from "./reduceMotion";
 
@@ -15,6 +15,18 @@ export const curve = {
 } as const;
 
 export const currentValue = (value: Animated.Value): number => (value as unknown as { __getValue(): number }).__getValue();
+
+export const animating = (value: Animated.Value): boolean => (value as unknown as { _animation?: unknown })._animation != null;
+
+export const gateLevel = (on: boolean) => (on ? 1 : 0);
+
+export const gatedNode = (gate: Animated.Value, value: Animated.Value | Animated.AnimatedInterpolation<number>, rest: number) => Animated.add(rest, Animated.multiply(gate, Animated.subtract(value, rest)));
+
+export function useGated(on: boolean, value: Animated.Value | Animated.AnimatedInterpolation<number>, rest: number) {
+  const gate = useRef(new Animated.Value(gateLevel(on))).current;
+  useLayoutEffect(() => gate.setValue(gateLevel(on)), [gate, on]);
+  return useMemo(() => gatedNode(gate, value, rest), [gate, value, rest]);
+}
 
 export const duration = {
   fast: 100,

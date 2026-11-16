@@ -21,7 +21,7 @@ def configuration(target_os=None, target_cpu=None, env=None):
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]*', output):
         raise ValueError('GN_OUT_CONFIGS must be one directory name')
     return {'AC_TARGET_OS': target_os, 'AC_TARGET_CPU': target_cpu, 'GN_OUT_CONFIGS': output,
-            'AC_CHROMIUM_TARGET': 'chrome_framework' if target_os == 'mac' else 'chrome',
+            'AC_CHROMIUM_TARGET': 'chrome_framework' if target_os == 'mac' else 'chrome chrome_sandbox',
             'AC_CHROMIUM_BINARY': 'Chromium Framework.framework' if target_os == 'mac' else 'chrome'}
 
 

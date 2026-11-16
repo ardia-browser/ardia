@@ -29,6 +29,20 @@ namespace {
 
 using reauth_linux::Outcome;
 
+ReauthFallback& Fallback() {
+  static ReauthFallback* fallback = new ReauthFallback();
+  return *fallback;
+}
+
+bool FallbackAvailable() {
+  return Fallback().available && Fallback().confirm && Fallback().available.Run();
+}
+
+bool PolkitUnusable(reauth_linux::Availability availability) {
+  return availability == reauth_linux::Availability::kNoPolkit ||
+         availability == reauth_linux::Availability::kPolicyMissing;
+}
+
 std::string NextCancellation() {
   static uint64_t next = 0;
   return "ardia-reauth-" + base::NumberToString(++next);
@@ -114,6 +128,9 @@ void WriteCheck(dbus::MethodCall* call,
 using Probed = base::OnceCallback<void(bool, std::string)>;
 
 void FinishProbe(Probed done, reauth_linux::Availability availability) {
+  if (PolkitUnusable(availability) && FallbackAvailable()) {
+    return std::move(done).Run(true, "loginPassword");
+  }
   std::move(done).Run(availability == reauth_linux::Availability::kAvailable,
                       reauth_linux::AvailabilityName(availability));
 }
@@ -162,12 +179,13 @@ class ReauthState : public ProfileState {
     }
     const uint64_t generation = ++generation_;
     done_ = std::move(done);
+    using_fallback_ = false;
     purpose_ = purpose;
     validity_ = validity;
     cancellation_ = NextCancellation();
     bus_ = dbus_thread_linux::GetSharedSystemBus();
     if (!bus_) {
-      return Finish(generation, Outcome::kUnavailable);
+      return PolkitUnavailable(generation);
     }
     bus_->GetDBusTaskRunner()->PostTaskAndReplyWithResult(
         FROM_HERE, base::BindOnce(&UniqueName, bus_),
@@ -190,6 +208,7 @@ class ReauthState : public ProfileState {
     ++generation_;
     base::OnceCallback<void(bool)> older = std::move(done_);
     Report(purpose_, Outcome::kCancelled, false);
+    using_fallback_ = false;
     std::move(older).Run(false);
   }
 
@@ -212,7 +231,7 @@ class ReauthState : public ProfileState {
       return;
     }
     if (unique_name.empty()) {
-      return Finish(generation, Outcome::kUnavailable);
+      return PolkitUnavailable(generation);
     }
     dbus::ObjectProxy* authority = bus_->GetObjectProxy(
         reauth_linux::kPolkitService,
@@ -234,12 +253,37 @@ class ReauthState : public ProfileState {
     if (generation != generation_ || !done_) {
       return;
     }
-    const Outcome outcome =
-        reauth_linux::Classify(ReadReply(response, error));
+    const reauth_linux::PolkitReply reply = ReadReply(response, error);
+    if (!reply.error_name.empty() &&
+        PolkitUnusable(reauth_linux::ClassifyProbe(reply))) {
+      prompting_ = false;
+      return PolkitUnavailable(generation);
+    }
+    const Outcome outcome = reauth_linux::Classify(reply);
     if (outcome == Outcome::kExpired) {
       CancelPending();
     }
     Finish(generation, outcome);
+  }
+
+  void PolkitUnavailable(uint64_t generation) {
+    if (generation != generation_ || !done_) {
+      return;
+    }
+    if (!FallbackAvailable()) {
+      return Finish(generation, Outcome::kUnavailable);
+    }
+    using_fallback_ = true;
+    Fallback().confirm.Run(
+        profile(), purpose_,
+        base::BindOnce(&ReauthState::FallbackAnswered,
+                       weak_factory_.GetWeakPtr(), generation));
+  }
+
+  void FallbackAnswered(uint64_t generation, bool granted, bool cancelled) {
+    Finish(generation, granted     ? Outcome::kGranted
+                       : cancelled ? Outcome::kCancelled
+                                   : Outcome::kDenied);
   }
 
   void Finish(uint64_t generation, Outcome outcome) {
@@ -254,6 +298,7 @@ class ReauthState : public ProfileState {
     prompting_ = false;
     cancellation_.clear();
     Report(purpose_, outcome, granted);
+    using_fallback_ = false;
     std::move(done).Run(granted);
   }
 
@@ -262,7 +307,8 @@ class ReauthState : public ProfileState {
          base::DictValue()
              .Set("purpose", purpose)
              .Set("granted", granted)
-             .Set("result", reauth_linux::OutcomeName(outcome)));
+             .Set("result", reauth_linux::OutcomeName(outcome))
+             .Set("method", using_fallback_ ? "loginPassword" : "polkit"));
   }
 
   scoped_refptr<dbus::Bus> bus_;
@@ -271,11 +317,17 @@ class ReauthState : public ProfileState {
   base::TimeDelta validity_;
   std::string cancellation_;
   bool prompting_ = false;
+  bool using_fallback_ = false;
   uint64_t generation_ = 0;
   reauth_linux::GrantWindow grants_;
   base::WeakPtrFactory<ReauthState> weak_factory_{this};
 };
 
+}
+
+void SetReauthFallback(ReauthFallback fallback) {
+  CHECK(content::BrowserThread::CurrentlyOn(content::BrowserThread::UI));
+  Fallback() = std::move(fallback);
 }
 
 void ProbeReauth(base::OnceCallback<void(bool, std::string)> done) {

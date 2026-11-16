@@ -102,6 +102,9 @@ export type IntroMusicCues = {
 };
 
 export type AppNative = {
+  interfaceScale(): number;
+  interfaceScaleRange(): [min: number, max: number];
+  setInterfaceScale(scale: number): Promise<number>;
   setWindowActivity(windowId: string, url: string | null, title: string | null): Promise<void>;
   share(url: string, title: string | null, windowId: string | null, anchor: ShareAnchor | null): Promise<void>;
   shareVia(service: string, url: string, title: string | null, windowId: string | null): Promise<void>;

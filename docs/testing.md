@@ -54,7 +54,7 @@ holds the rest.
 | Import window | `node apps/browser/scripts/import-flow-test.mjs <Debug app> <scratch dir> [flow…] [--record <file>] [--compare <file>] [--keep]` | Every flow of the import window (Chrome with unlock, skip and back, Arc, Firefox, Dia, Safari direct, export and a bad file) against `packages/import/fixtures`, with a background-only stand-in for Dia, never a real profile |
 | Sync | `node packages/sync/scripts/e2e.mjs <Debug app>` | Two and three hidden instances through one folder (`docs/sync.md`) |
 | Import | `node packages/import/scripts/e2e.mjs <Debug app> <scratch dir>` | Cookies, addresses and cards from a fake Chrome home (`packages/import/README.md`) |
-| Video upscaling | `node apps/browser/scripts/video-upscaling-test.mjs <Debug app> [--keep] [check…]` (`--list`) | What the GPU process upscales in every state the gate decides (playing, paused, native size, background tab, app inactive, occluded, Low Power, thermal, PiP, HDR, full screen, Little Ardia, setting off), from its `ArdiaVSR.*` trace events and `videoUpscalingState()` |
+| Video upscaling | `node apps/browser/scripts/video-upscaling-test.mjs <Debug app> [--keep] [check…]` (`--list`) | What the GPU process upscales in every state the gate decides (playing, paused, native size, background tab, app inactive, occluded, Low Power, thermal, screen sharing (acted, and a real tab share through the picker), PiP, HDR, full screen, Little Ardia, setting off), from its `ArdiaVSR.*` trace events and `videoUpscalingState()` |
 | PiP click to skip | `node apps/browser/scripts/pip-click-seek-test.mjs <Debug app> [--keep] [--expect-no-seek]` | A click on the left or right of the video Picture in Picture window skips 10 s back or ahead, and each click of a quick double or triple click skips again; the centre column, a drag (also one that only passes 3 pt at the release), a dead-band double-click and a stashed window never seek; the video in the window is the one that moves, even paused while another plays; a page with only a `seekto` handler is asked on the timeline it reported, kept current through repeated clicks and a pause though it reports once, also for a video in a closed shadow root; Chrome's close button still closes (#1735). `--expect-no-seek` runs it against a build from before, where no click moves the video |
 | Engine patches | `python3 engine/patches/series.py check` | The patch series reproduces the Chromium tree (`docs/engine-build.md`) |
 | Engine (ArdiaCore) | `node packages/ardiacore/scripts/acceptance.mjs <Debug app> <scratch dir> [--keep] [check…]` | The app on ArdiaCore, hidden (`docs/ardiacore-parity.md`). `--keep` leaves the instance up and `--attach <scratch dir> [check…]` re-runs checks on it in seconds; `--list` gives each check's section and what it needs (brought along automatically) |
@@ -130,6 +130,15 @@ Launch with `scripts/agent/ac launch <app> --data <dir> [--instance K=V] [--test
   history, download and extension menus) are written to `<data dir>/menu.json` as the items JS built, and resolve with
   the id in `menu.json.pick` (read and deleted; an id that isn't an enabled item, or no file, resolves `null`, as a
   dismissed menu). Write the pick before the right-click (`windows.dev` `click:<x>,<y>,right`).
+- **Interface size.** `--arg=-interfaceScale --arg=1.25` starts an instance at that scale: native reads it before the
+  first window, and JS keeps it as long as the data dir never chose a size (once `interfaceScale` is chosen, the saved
+  value wins and is pushed to native at launch). Live: `ac.store.getState().updateSettings({ interfaceScale: 1.25 })` (the setting's own path: JS, native and
+  storage; calling `ArdiaApp.setInterfaceScale` directly changes native only and leaves JS at the old size), or
+  through the Settings row with `--test appMenu`: write the percent (`125`) to `menu.json.pick` and
+  `ac.shell.devClick("settings", { label: "Interface size" })`; `{ label: "Back to 100%" }` resets. `ac.interfaceScale`
+  in the dev harness has the current scale, `pixelRatio` and `hairline`. For a real 1× backing scale (pixel checks),
+  add `--arg=-AppleMagnifiedMode --arg=YES` (low resolution mode, `devicePixelRatio` 1). Dev clicks and `windows.dev`
+  points are root points.
 - **`appDialog`**: `confirm` and `prompt` write their options (and `kind`) to `<data dir>/dialog.json` and answer from
   `dialog.json.pick` (deleted): `confirm` (with `,suppress` to tick the suppression box) or anything else to cancel; a
   prompt's answer is the text, empty to cancel. With no pick file they run as usual (background mode cancels).

@@ -330,7 +330,7 @@ VIRTUALIZED_MARK = "rows rendered; the grid is virtualized"
 
 
 EMPTY_PAGE = ("(no text: the site sent an empty page with no title, which usually means it turns away automated or foreign "
-              "traffic; reading it again rarely helps, so get the data from another source and say which)")
+              "traffic; reading it again rarely helps)")
 
 def note_virtualized(*texts: str) -> None:
     from ardia_cli import command_metrics

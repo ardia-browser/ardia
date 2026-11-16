@@ -9,6 +9,7 @@ import { focusHeroBar } from "./barState";
 import { isSmall } from "../windows/small";
 import type { NewTabTarget } from "../browser/types";
 import { notePageOverlay } from "../telemetry/usage";
+import { noteBarLoad } from "../telemetry/barLoadFocus";
 import { customNewTabUrl } from "../settings/settings";
 
 export { isEmptyCardTab };
@@ -67,15 +68,19 @@ export function openFromNewTabBar(windowId: string, target: NewTabTarget, url: s
   if (!url || !s.windows[windowId] || !s.windowUi[windowId]?.panel.newTab) return;
   s.closePanel(windowId);
   const into = target.kind === "into" ? s.tabs[target.tabId] : undefined;
-  if (into && into.windowId === windowId && isEmptyCardTab(s, into)) return store().navigate(into.id, url);
+  if (into && into.windowId === windowId && isEmptyCardTab(s, into)) {
+    store().navigate(into.id, url);
+    return noteBarLoad(into.id);
+  }
   const group = target.kind === "group" ? s.groups[target.groupId] : undefined;
   if (group && group.windowId === windowId && group.profileId === s.windows[windowId]!.profileId) {
     const id = store().newTabInGroup(group.id);
     if (!id) return;
     store().navigate(id, url);
-    return store().activate(id);
+    store().activate(id);
+    return noteBarLoad(id);
   }
-  store().newTab(windowId, { url, newTabCommand: true });
+  noteBarLoad(store().newTab(windowId, { url, newTabCommand: true }));
 }
 
 const launchTabs = new Set<string>();

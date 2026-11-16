@@ -13,7 +13,7 @@ const table = pageEvents.slice(pageEvents.indexOf("const PAGE_EVENTS = {"), page
 const PAGE_EVENTS = collect([table], /^ {2}on[A-Za-z]+: "([A-Za-z]+)",$/gm);
 
 const chromiumView = files(/^ArdiaWebView.*\.mm$/).map(native);
-const frameCallers = [...chromiumView, native("ArdiaFairPlay.mm")];
+const frameCallers = [...chromiumView, native("ArdiaFairPlay.mm"), native("ArdiaVideoMirror.mm"), ...files(/^ArdiaHLSVideo.*\.mm$/).map(native), ...files(/^ArdiaPVSession.*\.mm$/).map(native)];
 const chromiumEmitters = files(/\.mm$/).map(native);
 const webKitTab = files(/^WebKitTab.*\.swift$/).map(native);
 const pageScript = native("page_script.js");

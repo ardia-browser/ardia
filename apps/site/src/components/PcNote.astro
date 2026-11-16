@@ -1,0 +1,63 @@
+---
+import { DMG, LINUX_NIGHTLY, LINUX_VERSION, VERSION, WINDOWS_SETUP } from "../data/release";
+
+interface Props {
+  location: "hero" | "closing";
+}
+const { location } = Astro.props;
+const track = { "data-track": "download_clicked", "data-track-location": location };
+const windowsLink = (arch: "x64" | "arm64") => ({
+  ...track,
+  href: WINDOWS_SETUP[arch],
+  "data-track-version": "nightly",
+  "data-track-channel": "nightly",
+  "data-track-platform": "windows",
+  "data-track-arch": arch,
+  "data-track-pick": "other_arch",
+});
+---
+
+<div class="pc-note pc-only" data-meadow-keep-out="copy">
+  <p class="windows-only">
+    A nightly, and not signed yet, so Windows asks first: <span class="path">More info › Run anyway</span>.
+  </p>
+  <p class="linux-only">
+    {LINUX_NIGHTLY ? "A nightly" : `Ardia ${LINUX_VERSION}`} for x86-64, Wayland or X11. Unpack it, then{" "}
+    <code>sudo ardia/install.sh</code>.
+  </p>
+  <p class="how label">
+    <span class="windows-only">Updates itself · </span>
+    <span class="linux-only">{LINUX_VERSION} · </span>
+    <a class="link windows-only x64-only" {...windowsLink("arm64")}>On an Arm PC?</a>
+    <a class="link windows-only arm-only" {...windowsLink("x64")}>On an x64 PC?</a>
+    <span class="windows-only"> · </span>
+    <a class="link" {...track} href={DMG} data-track-version={VERSION} data-track-pick="mac">Got a Mac?</a>
+  </p>
+</div>
+
+<style>
+  .pc-note {
+    margin-top: 12px;
+    font-size: var(--t-small);
+    color: var(--ink-2);
+    max-width: 34em;
+  }
+  .path {
+    white-space: nowrap;
+    color: var(--ink);
+  }
+  code {
+    font-family: var(--mono);
+    font-size: 0.92em;
+    white-space: nowrap;
+    user-select: all;
+    color: var(--ink);
+  }
+  .how {
+    margin-top: 4px;
+    color: var(--ink-3);
+  }
+  .how .link {
+    color: inherit;
+  }
+</style>

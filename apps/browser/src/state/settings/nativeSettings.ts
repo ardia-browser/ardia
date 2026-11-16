@@ -5,6 +5,7 @@ import { setPopupsOpenAsTabs } from "../../platform/pageOptions";
 import { setBlockAutoplayEverywhere, setFairPlayInChromium } from "../../platform/pageOptions";
 import { useBrowser } from "../browser/store";
 import type { Settings } from "./settings";
+import { startInterfaceScale } from "./interfaceScaleSync";
 
 type Mirror = { key: keyof Settings; send: (settings: Settings) => unknown };
 
@@ -22,6 +23,7 @@ const NATIVE_SETTINGS: Mirror[] = [
 ];
 
 export function startNativeSettings() {
+  startInterfaceScale();
   const sent = new Map<keyof Settings, unknown>();
   const sync = (settings: Settings) => {
     for (const { key, send } of NATIVE_SETTINGS) {

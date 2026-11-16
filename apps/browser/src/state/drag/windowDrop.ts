@@ -6,11 +6,18 @@ import { isRegularWindow } from "../windows/small";
 import { installDroppedCrx } from "../extensions/crxDrop";
 import { activeTabId } from "../browser/model";
 import { splitOf, splitTabIdsOf } from "../splits/splits";
+import { currentInterfaceScale } from "../settings/interfaceScale";
 
-export function screenPoint(s: BrowserState, windowId: string, x: number, y: number, live?: Frame | null): [number, number] | null {
+const NEW_WINDOW_GRAB = { x: 90, y: 70 };
+
+export function screenPoint(s: BrowserState, windowId: string, x: number, y: number, live?: Frame | null, scale = currentInterfaceScale()): [number, number] | null {
   const frame = live ?? s.windows[windowId]?.frame;
   if (!frame) return null;
-  return [frame[0] + x, frame[1] + frame[3] - y];
+  return [frame[0] + x * scale, frame[1] + frame[3] - y * scale];
+}
+
+export function rootPointIn(frame: Frame, [screenX, screenY]: [number, number], scale = currentInterfaceScale()): [number, number] {
+  return [(screenX - frame[0]) / scale, (frame[1] + frame[3] - screenY) / scale];
 }
 
 const contains = (frame: Frame, [px, py]: [number, number]) => px >= frame[0] && px <= frame[0] + frame[2] && py >= frame[1] && py <= frame[1] + frame[3];
@@ -18,7 +25,8 @@ const contains = (frame: Frame, [px, py]: [number, number]) => px >= frame[0] &&
 export function windowUnder(s: BrowserState, source: string, x: number, y: number, live?: Frame | null): { outside: boolean; overWindow: string | null } {
   const from = s.windows[source];
   const frame = live ?? from?.frame;
-  const outside = !!frame && (x < 0 || y < 0 || x > frame[2] || y > frame[3]);
+  const scale = currentInterfaceScale();
+  const outside = !!frame && (x < 0 || y < 0 || x * scale > frame[2] || y * scale > frame[3]);
   const point = outside ? screenPoint(s, source, x, y, live) : null;
   if (!point || !from || from.kind === "private") return { outside, overWindow: null };
   const overWindow = s.ui.focusOrder.find((id) => {
@@ -47,7 +55,8 @@ export function dropTabsOutside(
   const point = screenPoint(s, source, x, y, live);
   if (!point || from.tabIds.every((id) => tabIds.includes(id))) return null;
   const [, , width, height] = from.frame ?? [0, 0, 1200, 800];
-  const frame: Frame = [Math.round(point[0] - 90), Math.round(point[1] - height + 70), width, height];
+  const scale = currentInterfaceScale();
+  const frame: Frame = [Math.round(point[0] - NEW_WINDOW_GRAB.x * scale), Math.round(point[1] - height + NEW_WINDOW_GRAB.y * scale), width, height];
   onNewWindow?.(frame);
   return s.createWindow({ profileId: s.tabs[tabIds[0]!]?.profileId, tabIds, frame });
 }

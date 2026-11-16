@@ -1,0 +1,37 @@
+export type PlatformFeatures = {
+  sharesFiles: boolean;
+  syncsWithPhone: boolean;
+  syncsPasswords: boolean;
+  unloadsIdleProfiles: boolean;
+  sleepsTabsOverBudget: boolean;
+  dock: boolean;
+  appIcon: boolean;
+  menuBar: boolean;
+  memoryPressure: boolean;
+  escapeClosesDownloads: boolean;
+  findsBrowsersBy: "appBundle" | "importList";
+  hiddenBrowserSources: readonly string[];
+  splitView: boolean;
+  setsDefaultBrowser: boolean;
+  exportsBookmarksAndPasswords: boolean;
+  sync: boolean;
+  calendar: boolean;
+  webKit: boolean;
+  contentBlocker: boolean;
+  trackpadGestures: boolean;
+  videoUpscaling: boolean;
+  thinScrollBars: boolean;
+  haptics: boolean;
+  launchLoad: boolean;
+  quitsWithLastWindow: boolean;
+  keepsNewTabLinksInLittleArdia: boolean;
+  commandScrollZoom: boolean;
+  passwordAutofillSwitch: boolean;
+  blocksAutoplay: boolean;
+  answersPermissionRequests: boolean;
+  tabReachesUnderOverlays: boolean;
+  defaultCloudDrive: boolean;
+  interfaceSize: boolean;
+};
+
+export const PLATFORM_FEATURES: PlatformFeatures = { dock: true, appIcon: true, menuBar: true, memoryPressure: true, escapeClosesDownloads: false, findsBrowsersBy: "appBundle", hiddenBrowserSources: [], splitView: true, setsDefaultBrowser: true, exportsBookmarksAndPasswords: true, sync: true, calendar: true, webKit: true, contentBlocker: true, trackpadGestures: true, videoUpscaling: true, thinScrollBars: true, haptics: true, launchLoad: true, sharesFiles: true, syncsWithPhone: true, syncsPasswords: true, unloadsIdleProfiles: true, sleepsTabsOverBudget: true, quitsWithLastWindow: false, keepsNewTabLinksInLittleArdia: true, commandScrollZoom: true, passwordAutofillSwitch: true, blocksAutoplay: true, answersPermissionRequests: true, tabReachesUnderOverlays: false, defaultCloudDrive: true, interfaceSize: true };

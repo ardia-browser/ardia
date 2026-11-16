@@ -91,7 +91,8 @@ function openNow(request: OpenWindowRequest, page: PageRef, gated: boolean) {
 
 function keepPopupOpener(page: PageRef) {
   const s = useBrowser.getState();
-  if (peekSourceOf(s, page.tabId)) s.peekToTab(page.windowId, { activate: false });
+  const sourceId = peekSourceOf(s, page.tabId);
+  if (sourceId) s.peekToTab(page.windowId, { activate: false, sourceId });
 }
 
 export function pageProfileId(windowId: string, pageProfile: string): string {

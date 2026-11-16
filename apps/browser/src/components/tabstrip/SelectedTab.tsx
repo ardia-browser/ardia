@@ -8,7 +8,10 @@ import { CHIP_HAIRLINE, FLARE, ITEM_HEIGHT, ITEM_TOP, RIM_HEIGHT, RIM_WIDTH, STR
 
 export type Fill = string | ReturnType<typeof useEasedColor>;
 
-export function SelectedTab({ width, band, opaque = false }: { width: number; band: Fill | null; opaque?: boolean }) {
+type Size = number | Animated.Value | Animated.AnimatedAddition<number>;
+const plus = (size: Size, k: number): Size => (typeof size === "number" ? size + k : Animated.add<number>(size, k));
+
+export function SelectedTab({ width, band, opaque = false }: { width: Size; band: Fill | null; opaque?: boolean }) {
   const theme = useTheme();
   const floating = useContext(FloatingStrip);
   if (floating) {
@@ -22,8 +25,8 @@ export function SelectedTab({ width, band, opaque = false }: { width: number; ba
     };
     return (
       <>
-        {opaque && <View pointerEvents="none" style={{ ...card, backgroundColor: theme.windowTint[0] }} />}
-        <View
+        {opaque && <Animated.View pointerEvents="none" style={{ ...card, backgroundColor: theme.windowTint[0] }} />}
+        <Animated.View
           pointerEvents="none"
           style={{
             ...card,
@@ -35,11 +38,11 @@ export function SelectedTab({ width, band, opaque = false }: { width: number; ba
       </>
     );
   }
-  const body = width - 1;
+  const body = plus(width, -1);
   const fills: Fill[] = [...(opaque ? [theme.windowTint[0]] : []), theme.card, ...(band ? [band] : [])];
   const rim = STRIP_COLORS[theme.dark ? "dark" : "light"].selectedRim;
   return (
-    <View pointerEvents="none" style={{ position: "absolute", left: 0, top: 0, width, height: TOP_STRIP_HEIGHT }}>
+    <Animated.View pointerEvents="none" style={{ position: "absolute", left: 0, top: 0, width, height: TOP_STRIP_HEIGHT }}>
       {fills.map((fill, i) => (
         <Fragment key={i}>
           <Animated.View
@@ -55,23 +58,20 @@ export function SelectedTab({ width, band, opaque = false }: { width: number; ba
             }}
           />
           <Flare x={0.5 - FLARE} side="left" color={fill} />
-          <Flare x={0.5 + body} side="right" color={fill} />
+          <Flare x={plus(body, 0.5)} side="right" color={fill} />
         </Fragment>
       ))}
-      <Surface
-        cornerRadius={tabRadius() + 0.5}
-        borderWidth={RIM_WIDTH}
-        borderColors={[...rim, rim.at(-1)!]}
-        style={{ position: "absolute", left: 0, top: TAB_TOP - 0.5, width, height: RIM_HEIGHT * 2 }}
-      />
-    </View>
+      <Animated.View style={{ position: "absolute", left: 0, top: TAB_TOP - 0.5, width, height: RIM_HEIGHT * 2 }}>
+        <Surface cornerRadius={tabRadius() + 0.5} borderWidth={RIM_WIDTH} borderColors={[...rim, rim.at(-1)!]} style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0 }} />
+      </Animated.View>
+    </Animated.View>
   );
 }
 
-function Flare({ x, side, color }: { x: number; side: "left" | "right"; color: Fill }) {
+function Flare({ x, side, color }: { x: Size; side: "left" | "right"; color: Fill }) {
   const outer = FLARE * 2;
   return (
-    <View style={{ position: "absolute", left: x, top: TOP_STRIP_HEIGHT - FLARE, width: FLARE, height: FLARE, overflow: "hidden" }}>
+    <Animated.View style={{ position: "absolute", left: x, top: TOP_STRIP_HEIGHT - FLARE, width: FLARE, height: FLARE, overflow: "hidden" }}>
       <Animated.View
         style={{
           position: "absolute",
@@ -84,6 +84,6 @@ function Flare({ x, side, color }: { x: number; side: "left" | "right"; color: F
           borderColor: color,
         }}
       />
-    </View>
+    </Animated.View>
   );
 }

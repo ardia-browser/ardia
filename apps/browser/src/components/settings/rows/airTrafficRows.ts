@@ -11,7 +11,7 @@ export const airTrafficRows = {
         rules: {
           title: "Link rules",
           description: "Checked from the top. The first rule that fits a link decides where it opens.",
-          keywords: [...LINK_WORDS, "work profile", "rule", "add rule"],
+          keywords: [...LINK_WORDS, "work profile", "rule", "add rule", "tab group", "group"],
         },
       },
     },
@@ -22,6 +22,11 @@ export const airTrafficRows = {
           title: "Links no rule catches",
           description: "Where links open when no rule or hook decides.",
           keywords: ["everything else", "fallback", "otherwise", "air traffic control", "links from other apps"],
+        },
+        fallbackGroup: {
+          title: "Tab group",
+          description: "The tab group links no rule catches join, when they open as a new tab in a profile.",
+          keywords: ["everything else", "fallback", "tab group", "group"],
         },
       },
     },

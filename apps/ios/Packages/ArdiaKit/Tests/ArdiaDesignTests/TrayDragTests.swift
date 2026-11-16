@@ -20,9 +20,9 @@ struct TrayDragTests {
     #expect(!TrayDrag.shouldDismiss(translation: 40, velocity: 60, trayHeight: 274))
   }
 
-  @Test func `a slow drag past the distance dismisses`() {
-    let distance = TrayDrag.dismissDistance(trayHeight: 274)
-    #expect(TrayDrag.shouldDismiss(translation: distance + 1, velocity: 0, trayHeight: 274))
+  @Test func `a slow drag past about a third of the tray dismisses`() {
+    #expect(!TrayDrag.shouldDismiss(translation: 90, velocity: 0, trayHeight: 274))
+    #expect(TrayDrag.shouldDismiss(translation: 100, velocity: 0, trayHeight: 274))
   }
 
   @Test func `a flick down dismisses from a short distance`() {
@@ -38,14 +38,36 @@ struct TrayDragTests {
   }
 
   @Test func `a compact tray needs a proportionally shorter drag`() {
-    #expect(TrayDrag.dismissDistance(trayHeight: 78) < TrayDrag.dismissDistance(trayHeight: 274))
-    #expect(TrayDrag.dismissDistance(trayHeight: 2000) == TrayDrag.distanceCap)
+    #expect(TrayDrag.shouldDismiss(translation: 40, velocity: 0, trayHeight: 78))
+    #expect(!TrayDrag.shouldDismiss(translation: 40, velocity: 0, trayHeight: 274))
+  }
+
+  @Test func `a very tall tray still dismisses from a capped distance`() {
+    #expect(!TrayDrag.shouldDismiss(translation: 110, velocity: 0, trayHeight: 2000))
+    #expect(TrayDrag.shouldDismiss(translation: 125, velocity: 0, trayHeight: 2000))
   }
 
   @Test func `the keyboard waits for a deliberate pull`() {
     #expect(!TrayDrag.releasesKeyboard(translation: 3))
     #expect(!TrayDrag.releasesKeyboard(translation: -30))
     #expect(TrayDrag.releasesKeyboard(translation: 20))
+  }
+
+  @Test func `a grabbed offset maps back to the drag that made it`() {
+    for translation: CGFloat in [-120, -40, -5, 0, 30, 200] {
+      #expect(abs(TrayDrag.translation(for: TrayDrag.offset(for: translation)) - translation) < 0.001)
+    }
+  }
+
+  @Test func `a downward release hands the tray the finger's speed`() {
+    #expect(TrayDrag.trayVelocity(translation: 80, fingerVelocity: 900) == 900)
+  }
+
+  @Test func `an upward release hands over the damped speed the tray actually had`() {
+    let step: CGFloat = 0.01
+    let translation: CGFloat = -50
+    let measured = (TrayDrag.offset(for: translation + step) - TrayDrag.offset(for: translation)) / step
+    #expect(abs(TrayDrag.trayVelocity(translation: translation, fingerVelocity: 1) - measured) < 0.001)
   }
 
   @Test func `progress is clamped to the travel`() {

@@ -197,7 +197,7 @@ async function send(kind: RequestLogEntry["kind"], body: string, count: number) 
   }
 }
 
-function resource(): Record<string, unknown> {
+export function resource(): Record<string, unknown> {
   const info = appInfo();
   return {
     "service.name": "ardia-app",

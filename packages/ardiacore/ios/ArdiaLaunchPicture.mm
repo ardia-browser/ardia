@@ -177,9 +177,10 @@ BOOL CapturePicture(ArdiaWindowController *controller, NSString *windowId, NSMut
   NSArray<NSNumber *> *page = layout[@"page"];
   if (!gLayoutPath || !layer || !window.visible || window.miniaturized || ![page isKindOfClass:NSArray.class] || page.count != 4) return NO;
   const NSSize size = root.bounds.size;
-  const CGFloat scale = window.backingScaleFactor ?: 2;
-  const size_t w = (size_t)ceil(size.width * scale), h = (size_t)ceil(size.height * scale);
-  if (w < 64 || h < 64) return NO;
+  const CGFloat backing = window.backingScaleFactor ?: 2;
+  const size_t w = (size_t)ceil(NSWidth(root.frame) * backing), h = (size_t)ceil(NSHeight(root.frame) * backing);
+  if (w < 64 || h < 64 || size.width <= 0 || size.height <= 0) return NO;
+  const CGFloat scale = backing * (NSWidth(root.frame) / size.width);
   CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
   CGContextRef context = CGBitmapContextCreate(nullptr, w, h, 8, 0, space, (CGBitmapInfo)kCGImageAlphaPremultipliedLast);
   CGColorSpaceRelease(space);
@@ -257,8 +258,8 @@ BOOL CapturePicture(ArdiaWindowController *controller, NSString *windowId, NSMut
   for (NSUInteger i = 0; i < fills.count; i++) fills[i].backgroundColor = (__bridge CGColorRef)fillColors[i];
   [CATransaction commit];
   CGContextRestoreGState(context);
-  const CGRect hole = CGRectMake(page[0].doubleValue * scale, page[3].doubleValue * scale,
-                                 w - (page[0].doubleValue + page[2].doubleValue) * scale, h - (page[1].doubleValue + page[3].doubleValue) * scale);
+  const CGRect hole = CGRectMake(page[0].doubleValue * backing, page[3].doubleValue * backing,
+                                 w - (page[0].doubleValue + page[2].doubleValue) * backing, h - (page[1].doubleValue + page[3].doubleValue) * backing);
   if (hole.size.width > 0 && hole.size.height > 0) CGContextClearRect(context, hole);
   CGImageRef image = CGBitmapContextCreateImage(context);
   CGContextRelease(context);

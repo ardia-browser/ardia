@@ -17,13 +17,13 @@ import type { BrowsingDataType } from "../profiles";
 import type { ChromeWindowState } from "../windows";
 import type { PasswordExportStatus, SavedPassword } from "../passwords";
 import type { ClearSiteDataResult, SiteSettings, SiteSettingType, SiteSettingValue } from "../siteSettings";
-import type { LinkRoute, TabStripCommand, TabStripTransaction } from "../tabs";
+import type { LinkRoute, TabStripCommand, TabStripTransaction, WindowRequest } from "../tabs";
 import type { PageCookie, PageEngine, PasskeyAccess } from "../webkit";
 import type { DisplayMediaSource } from "../pageTypes";
 
 type Profile = { profile: string };
 type Done = Record<string, never> | null;
-type VideoUpscalingState = { enabled: boolean; lowPower: boolean; thermalPressure: boolean; appActive: boolean; tabs: { tabId: number; allowed: boolean }[] };
+type VideoUpscalingState = { enabled: boolean; lowPower: boolean; thermalPressure: boolean; appActive: boolean; tabs: { tabId: number; allowed: boolean; capturing: boolean }[] };
 
 export type EngineCalls = {
   "engine.info": [{}, EngineInfo];
@@ -191,7 +191,7 @@ export type EngineCalls = {
   "webView.setPopupsOpenAsTabs": [{ enabled: boolean }, null];
   "webView.setAutoPictureInPicture": [{ enabled: boolean }, null];
   "webView.setVideoUpscaling": [{ enabled: boolean }, null];
-  "webView.setVideoUpscalingTestConditions": [{ lowPower?: boolean; thermalPressure?: boolean }, null];
+  "webView.setVideoUpscalingTestConditions": [{ lowPower?: boolean; thermalPressure?: boolean; capturing?: boolean }, null];
   "webView.videoUpscalingState": [{}, VideoUpscalingState | null];
   "webView.takeContentDrift": [{}, { layouts: number; fits: number; maxPoints: number }];
 
@@ -232,4 +232,12 @@ export type EngineEvents = {
   "media.deviceChooser": DeviceChooser;
   "media.castDialog": CastDialog;
   "media.castRoutes": { profile: string; routes: CastRoute[] };
+};
+
+export type WindowsHostEvents = {
+  "tabs.windowRequest": WindowRequest;
+};
+
+export type LinuxHostEvents = {
+  "reauth.requested": { purpose: string; granted: boolean; result: string; method?: "polkit" | "loginPassword" };
 };

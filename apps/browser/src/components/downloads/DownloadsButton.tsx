@@ -8,6 +8,7 @@ import { Button } from "../ui";
 import { perLook } from "../ui/tokens";
 import { anchorInside, type Rect } from "./downloadsPlacement";
 import { DOWNLOADS_BUTTON } from "./tokens";
+import { noteDownloadsPanelToggle } from "../../state/telemetry/downloadsPanelCauses";
 
 const downloadsButtons = new Map<string, Set<View>>();
 
@@ -56,6 +57,7 @@ export function DownloadsButton({ windowId }: { windowId: string }) {
         onPress={(press: GestureResponderEvent) => {
           const startedAt = pressedAt.current;
           pressedAt.current = undefined;
+          noteDownloadsPanelToggle(!open, "button");
           toggleDownloadsOpen(windowId, "key" in press.nativeEvent ? undefined : startedAt);
         }}
       />

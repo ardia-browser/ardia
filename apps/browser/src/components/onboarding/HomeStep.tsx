@@ -19,6 +19,8 @@ import { ChoiceList, useMockFocus, type ChoiceOption } from "./ChoiceList";
 import { useOnboardingColors } from "./Parts";
 import { MockPanel, useScreen } from "./Screen";
 import { StepActions, StepLayout } from "./StepLayout";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { PLATFORM_TERMS } from "../../lib/platformTerms";
 
 const ICON = require("../../../assets/app-icon.png");
 
@@ -39,7 +41,7 @@ function DefaultBrowserQuestion() {
   const [system, setSystem] = useState<OnboardingSystem | null>(null);
   const [busy, setBusy] = useState(false);
   const setDefault = extras.setDefault ?? !backgroundInstance;
-  const trial = !redo && (extras.trial ?? false);
+  const trial = !redo && PLATFORM_FEATURES.setsDefaultBrowser && (extras.trial ?? false);
   const dock = extras.dock ?? true;
   const login = extras.login ?? system?.loginEnabled ?? false;
   const setExtras = setOnboardingExtras;
@@ -87,12 +89,12 @@ function DefaultBrowserQuestion() {
           control="check"
           icon="globe"
           title="Set Ardia as default browser"
-          subtitle={system?.isDefault ? "Ardia is already your default browser" : "Open links and web pages in Ardia"}
+          subtitle={system?.isDefault ? "Ardia is already your default browser" : PLATFORM_FEATURES.setsDefaultBrowser ? "Open links and web pages in Ardia" : `Continue opens ${PLATFORM_TERMS.os} Settings, where you choose Ardia`}
           selected={!!defaultOn}
           disabled={!system || system.isDefault}
           onPress={() => setExtras(defaultOn ? { setDefault: false, trial: !redo } : { setDefault: true })}
         />
-        {system && !defaultOn && !redo ? (
+        {system && !defaultOn && !redo && PLATFORM_FEATURES.setsDefaultBrowser ? (
           <OptionCard control="check" icon="calendar" title="Try it for seven days" subtitle="We'll check in to make sure you love it." selected={trial} onPress={() => setExtras({ trial: !trial })} />
         ) : null}
         {system && system.dockAvailable && !system.inDock ? (
@@ -112,7 +114,7 @@ function LinksQuestion() {
     <StepLayout
       pageKey="links"
       title="Where do links from other apps open?"
-      subtitle="From Mail, Slack, Notes and the rest."
+      subtitle={`From ${PLATFORM_TERMS.linkSourceApps} and the rest.`}
       actions={
         <StepActions
           onContinue={() =>
@@ -150,7 +152,7 @@ function SystemPreview({ isDefault, dock, login }: { isDefault: boolean; dock: b
       <Image source={ICON} style={{ width: 132, height: 132 }} />
       <View style={{ gap: space.m, alignItems: "center" }}>
         {chip(isDefault, "globe", "Default browser")}
-        {chip(dock, "dock.rectangle", "In your Dock")}
+        {PLATFORM_FEATURES.dock ? chip(dock, "dock.rectangle", "In your Dock") : null}
         {chip(login, "power", "Opens at login")}
       </View>
     </View>

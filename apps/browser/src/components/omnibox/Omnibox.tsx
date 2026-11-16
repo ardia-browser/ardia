@@ -75,9 +75,9 @@ export function Omnibox({
   useEffect(() => () => bangEnter.cancel(), [bangEnter]);
   useEffect(() => bangEnter.cancel(), [bangEnter, typed, selected, scope]);
   const root = useRef<View>(null);
-
   const { items, completion, inline, shownCompletion, value, selectedIndex, current, tabScope, previewing } = useBarItems({
     input,
+    caret: () => selection.current,
     typed,
     edited,
     scope,

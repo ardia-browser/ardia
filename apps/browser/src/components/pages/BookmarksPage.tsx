@@ -15,6 +15,7 @@ import { listedBookmarks } from "./bookmarkResults";
 import { DropTargets } from "./dropTargets";
 import { PageHeader } from "./PageLayout";
 import { bookmarkList, pagesColors, undoToast } from "./tokens";
+import { COMMAND_KEY, commandHeld } from "../../state/commands/keyNotation";
 
 
 type Target = { kind: "folder"; id: string } | { kind: "row"; id: string; index: number; folder: boolean };
@@ -45,8 +46,8 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
   const selected = useMemo(() => selectedInOrder(ids, selection), [ids, selection]);
 
   const list = useRef<View>(null);
-  const select = (id: string, e: { metaKey?: boolean; shiftKey?: boolean }) => {
-    setSelection((current) => clickSelection(ids, current, id, e));
+  const select = (id: string, e: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean }) => {
+    setSelection((current) => clickSelection(ids, current, id, { shiftKey: e.shiftKey, metaKey: commandHeld(e) }));
     list.current?.focus();
   };
 
@@ -161,9 +162,9 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
               enableFocusRing={false}
               keyDownEvents={LIST_KEYS}
               onKeyDown={(e) => {
-                const { key, metaKey } = e.nativeEvent;
+                const { key } = e.nativeEvent;
                 if (key === "Backspace" || key === "Delete") remove(selected);
-                else if (key === "a" && metaKey) setSelection(selectAll(ids));
+                else if (key === "a" && commandHeld(e.nativeEvent)) setSelection(selectAll(ids));
               }}
               style={LIST_KEYS_VIEW}
             >
@@ -219,7 +220,7 @@ function DropLine({ top, color }: { top: number; color: string }) {
   return <View style={[DROP_LINE, { top: top - bookmarkList.dropLine / 2, backgroundColor: color }]} />;
 }
 
-const LIST_KEYS = [{ key: "Backspace" }, { key: "Delete" }, { key: "a", metaKey: true }];
+const LIST_KEYS = [{ key: "Backspace" }, { key: "Delete" }, { key: "a", [COMMAND_KEY]: true }];
 
 const BODY = { flex: 1, flexDirection: "row", paddingHorizontal: space.xl, paddingBottom: space.xl, gap: space.xl } as const;
 const TREE = { width: bookmarkList.treeWidth, flexGrow: 0 } as const;

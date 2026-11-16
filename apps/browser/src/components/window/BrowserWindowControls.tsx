@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { useActiveTabId, useWindowId } from "../../state/browser/hooks";
-import { usePageFrameInset, useWindowControlsCenterY, useWindowControlsHost, useWindowControlsSize } from "../../state/windows/layout";
+import { usePageFrameInset, useWindowControlsCenterY, useWindowControlsHost, useWindowControlsLeading, useWindowControlsSize } from "../../state/windows/layout";
 import { STRIP_HEIGHT } from "../../state/windows/toolbarAutoHide";
 import { showAppMenu } from "../../state/app/appMenu";
 import { WINDOW_CONTROLS } from "../../lib/windowChrome";
@@ -18,12 +18,13 @@ function PlacedControls() {
   const centerY = useWindowControlsCenterY();
   const size = useWindowControlsSize();
   const host = useWindowControlsHost();
+  const leading = useWindowControlsLeading();
   const onMenu = useCallback(() => void showAppMenu(windowId), [windowId]);
   if (centerY === null || !host) return null;
   if (host === "toolbar") return <ToolbarControls windowId={windowId} centerY={centerY} size={size} onMenu={onMenu} />;
   return (
     <TintInk>
-      <WindowControls windowId={windowId} onMenu={onMenu} centerY={centerY} size={size} />
+      <WindowControls windowId={windowId} onMenu={onMenu} centerY={centerY} size={size} leading={leading} />
     </TintInk>
   );
 }

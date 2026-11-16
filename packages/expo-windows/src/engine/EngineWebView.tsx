@@ -3,6 +3,7 @@ import { View, type LayoutChangeEvent, type NativeMethods, type NativeSyntheticE
 import type { NativeProps, PageEvent, WebViewHandle } from "@ardia/ardiacore";
 import type { AppWindowsModule } from "../nativeModuleTypes";
 import { followMotion } from "../animation/motion";
+import { fieldFocusedIn } from "../appKeyboard";
 import { noteMissing } from "../missing";
 import { requireNativeModule } from "../modules";
 import { coversIn, hiddenByFullScreen, holesFor, onCoversChange, pageRadiusIn, setFullScreenPage } from "./covers";
@@ -11,7 +12,7 @@ import { noteShowStep } from "./showTrace";
 import { CoverAncestry } from "./usePageCover";
 import { WindowIdContext } from "./windowId";
 
-type PageEventsOnWindows = { onPageEvent?: (event: Pick<NativeSyntheticEvent<PageEvent>, "nativeEvent">) => void };
+type PageEventsOnWindows = { onPageEvent?: (event: Pick<NativeSyntheticEvent<PageEvent>, "nativeEvent">) => void; onTop?: boolean };
 
 type Props = Pick<NativeProps, "url" | "profile" | "adoptId" | "tabId" | "visible" | "style"> & Partial<Pick<NativeProps, "temporary">> & Partial<Pick<NativeProps, "pageEvents">> & PageEventsOnWindows;
 
@@ -105,12 +106,13 @@ export const EngineWebView = forwardRef<unknown, Props>(function EngineWebView(p
       noteShowStep(key, latest.current.visible === false ? "place: not visible" : "place: hidden by full screen");
       if (shown.current.visible) {
         shown.current = { visible: false, placed: "", shows: shown.current.shows + 1 };
-        showPage(key, false, null);
+        showPage(key, false, null, windowId);
       }
       return;
     }
     if (!view.current) noteShowStep(key, "place: no view");
     view.current?.measureInWindow((x, y, width, height) => {
+      if (!view.current) return noteShowStep(key, "place: measured after the view was gone");
       if (latest.current.visible === false || hiddenByFullScreen(windowId, key) || !(width > 0) || !(height > 0)) return noteShowStep(key, `place: measured ${width}x${height}, visible ${latest.current.visible !== false}`);
       const page = { x, y, width, height };
       const shape: PageShape = fullScreen.current
@@ -118,11 +120,11 @@ export const EngineWebView = forwardRef<unknown, Props>(function EngineWebView(p
         : {
             ...page,
             radius: pageRadiusIn(windowId),
-            holes: holesFor(page, coversIn(windowId, above.current), latest.current.temporary === true),
+            holes: holesFor(page, coversIn(windowId, above.current), latest.current.temporary === true, latest.current.onTop === true),
           };
       const placed = JSON.stringify(shape);
       if (shown.current.visible && shown.current.placed === placed) return noteShowStep(key, "place: deduped");
-      if (!showPage(key, true, shape)) return noteShowStep(key, `place: not taken ${width}x${height}`);
+      if (!showPage(key, true, shape, windowId)) return noteShowStep(key, `place: not taken ${width}x${height}`);
       noteShowStep(key, `place: show ${width}x${height}`);
       shown.current = { visible: true, placed, shows: shown.current.shows + 1 };
     });
@@ -184,6 +186,7 @@ export const EngineWebView = forwardRef<unknown, Props>(function EngineWebView(p
           get(_target, method) {
             if (typeof method !== "string" || method === "then" || method === "$$typeof") return undefined;
             if (method === "capturePicture") return (scale: number) => capturePicture(windowId, shown, scale);
+            if (method === "focusIfUnfocused") return async () => !fieldFocusedIn(windowId) && (await callPage(key, "focus", { follow: true })) !== null;
             const names = ARGUMENTS[method];
             if (names) {
               const unwrap = UNWRAPPED[method];

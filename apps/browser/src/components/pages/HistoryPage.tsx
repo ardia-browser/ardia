@@ -15,6 +15,7 @@ import { allRows, movedCursor, NO_ROWS_SELECTED, shownRows, toggledCursor, toggl
 import { noteHistoryRowsRemoved } from "../../state/telemetry/historyRemovalCounts";
 import { HistoryList } from "./HistoryList";
 import { hostLabel, PageHeader } from "./PageLayout";
+import { COMMAND_KEY, commandHeld } from "../../state/commands/keyNotation";
 
 
 export function HistoryPage({ tabId, profileId, initialQuery }: { tabId: string; profileId: string; initialQuery: string }) {
@@ -79,10 +80,11 @@ export function HistoryPage({ tabId, profileId, initialQuery }: { tabId: string;
     list.current?.focus();
     setSelection((prev) => movedCursor(urls, { ...prev, cursor: null }, 1, false));
   };
-  const onListKey: ViewProps["onKeyDown"] = ({ nativeEvent: { key, metaKey, shiftKey } }) => {
+  const onListKey: ViewProps["onKeyDown"] = ({ nativeEvent }) => {
+    const { key, shiftKey } = nativeEvent;
     if (key === "ArrowDown" || key === "ArrowUp") setSelection((prev) => movedCursor(urls, prev, key === "ArrowDown" ? 1 : -1, !!shiftKey));
     else if (key === " ") setSelection((prev) => toggledCursor(urls, prev));
-    else if (key === "a" && metaKey) setSelection((prev) => allRows(urls, prev));
+    else if (key === "a" && commandHeld(nativeEvent)) setSelection((prev) => allRows(urls, prev));
     else if (key === "Backspace" || key === "Delete") void deleteSelected("key");
     else if (key === "Escape") setSelection((prev) => ({ ...prev, selected: new Set() }));
   };
@@ -132,7 +134,7 @@ const LIST_KEYS = [
   { key: "ArrowDown", shiftKey: true },
   { key: "ArrowUp", shiftKey: true },
   { key: " " },
-  { key: "a", metaKey: true },
+  { key: "a", [COMMAND_KEY]: true },
   { key: "Backspace" },
   { key: "Delete" },
 ];

@@ -185,6 +185,10 @@ def list_digest(items: list) -> str:
 
 
 def content(command: str, data: dict, path: Path) -> tuple[str, str]:
+    if command == "read" and ("blocks" in data or "block" in data):
+        value = data.get("data") if "block" in data else data.get("blocks")
+        text = json.dumps(value, ensure_ascii=False, indent=2) + "\n"
+        return text, (list_digest(value) + shown_rows(value)) if isinstance(value, list) else f"embedded data, {len(text):,} characters of JSON"
     if command == "read" and "rows" in data:
         rows = data.get("rows") or []
         text = json.dumps(rows, ensure_ascii=False, indent=2) if path.suffix.lower() == ".json" else "\n".join(map(str, rows)) + "\n"

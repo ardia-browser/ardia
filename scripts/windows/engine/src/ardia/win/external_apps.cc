@@ -15,6 +15,7 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/values.h"
 #include "content/public/browser/browser_context.h"
+#include "content/public/browser/page.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/weak_document_ptr.h"
 #include "content/public/browser/web_contents.h"
@@ -103,6 +104,11 @@ bool AskApp(const GURL& url,
   return true;
 }
 
+bool AskingDocumentShown(const content::WeakDocumentPtr& initiator) {
+  content::RenderFrameHost* document = initiator.AsRenderFrameHostIfValid();
+  return document && document->IsActive() && document->GetPage().IsPrimary();
+}
+
 }
 
 void InstallExternalAppAsks() {
@@ -117,7 +123,7 @@ bool ExternalAppAlive(content::WebContents* contents, const std::string& id) {
   const Pending& pending = found->second;
   const bool alive =
       pending.contents && pending.contents.get() == contents &&
-      (!pending.asked_by_page || pending.initiator.AsRenderFrameHostIfValid());
+      (!pending.asked_by_page || AskingDocumentShown(pending.initiator));
   if (alive || !pending.contents) {
     PendingAsks().erase(found);
   }

@@ -74,7 +74,7 @@ const shell: Modules["ArdiaShell"] = {
   isDarkAppearance: () => Promise.resolve(false),
 };
 
-const windowsModule: Modules["ArdiaAppWindows"] = {
+const windowsModule: Modules["ArdiaAppWindows"] & { requestClose(id: string): Promise<void> } = {
   windowCornerRadius: () => 19,
   addListener: shellEvents.addListener,
   openWindow: (id, options) => {

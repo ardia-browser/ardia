@@ -70,8 +70,8 @@ export const createDownloadsSlice: StateCreator<BrowserState, [], [], DownloadsS
       const downloads = listed ? s.downloads.map((x) => (x.id === d.id ? record : x)) : [record, ...s.downloads].slice(0, MAX_DOWNLOADS);
       const focused = focusedWindowOf(s);
       const newlyHeld = awaitsKeep(d) && !s.downloads.some((x) => x.id === d.id && awaitsKeep(x));
-      const open = newlyHeld && focused && downloadVisibleIn(s, d, s.windows[focused]) && !s.windowUi[focused]?.downloadsOpen;
-      if (open) noteDownloadsPanel("heldOpen");
+      const open = (!listed || newlyHeld) && focused && downloadVisibleIn(s, d, s.windows[focused]) && !s.windowUi[focused]?.downloadsOpen;
+      if (open && newlyHeld) noteDownloadsPanel("heldOpen");
       return { downloads, ...(open ? patchWindowUi(s, focused, { downloadsOpen: true }) : {}) };
     });
     if (d.state === "downloading" && get().downloads.some((x) => x.id === d.id && x.state === "downloading")) showDownloadProgress(d);

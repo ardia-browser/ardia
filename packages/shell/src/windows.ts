@@ -6,7 +6,7 @@ export const POPUP_WINDOW_PREFIX = "popup:";
 
 export const isPopupWindowId = (windowId: string | null | undefined) => typeof windowId === "string" && windowId.startsWith(POPUP_WINDOW_PREFIX);
 
-export type CaptionRegion = readonly [left: number, top: number, rightInset: number, height: number];
+export type CaptionRegion = readonly [left: number, top: number, rightInsetOrNegativeWidth: number, height: number];
 
 export type WindowControlsNative = {
   minimizeWindow(windowId: string): Promise<void>;
@@ -35,6 +35,7 @@ export type OpenWindowOptions = {
   chromeWindow?: string;
   claim?: string;
   pointer?: [number, number];
+  returnTo?: string;
   animated?: boolean;
 };
 
@@ -45,7 +46,6 @@ export type WindowsNative = {
   addListener(name: "onWindowEvent", listener: (e: WindowEvent) => void): EventSubscription;
   openWindow(id: string, options: OpenWindowOptions): Promise<void>;
   closeWindow(id: string): Promise<void>;
-  requestClose(id: string): Promise<void>;
   animateWindowClose(id: string, after: string | null): Promise<void>;
   focusWindow(id: string): Promise<void>;
   restoreFullScreen(ids: string[], focus: string | null): Promise<void>;

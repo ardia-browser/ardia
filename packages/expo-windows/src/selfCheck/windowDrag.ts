@@ -11,6 +11,7 @@ const HOST = 5;
 const FUNCTION_COMPONENT = 0;
 const GUTTER: CaptionRegion = [0, 0, 0, 9];
 const SPACER: CaptionRegion = [-136, 0, 111, 45];
+const LEADING: CaptionRegion = [144, 0, -46, 39];
 
 const host = (props: Record<string, unknown>, parent: HostFiber | null): HostFiber => ({ tag: HOST, type: "RCTView", return: parent, memoizedProps: props, stateNode: null });
 const component = (parent: HostFiber | null): HostFiber => ({ tag: FUNCTION_COMPONENT, type: () => null, return: parent, memoizedProps: {}, stateNode: null });
@@ -31,11 +32,11 @@ async function browserWindow() {
 
 export const checks: Check[] = [
   {
-    name: "window drag: the caption regions the UI marks become caption rects, with no pass-through over them, and clearing them leaves none",
+    name: "window drag: the caption regions the UI marks become caption rects, a negative third value a width from the left, with no pass-through over them, and clearing them leaves none",
     async run() {
       const { id, scale } = await browserWindow();
       try {
-        await windows().setCaptionRegions(id, [GUTTER, SPACER]);
+        await windows().setCaptionRegions(id, [GUTTER, SPACER, LEADING]);
         const marked = await windows().debugDragRegions(id);
         expectEqual(marked?.titleBand, "caption", "the title band with caption regions");
         const caption = marked?.caption ?? [];
@@ -44,6 +45,8 @@ export const checks: Check[] = [
         const spacer = caption.find((rect) => rect[1] === 0 && near(rect[2], 25 * scale) && near(rect[3], 45 * scale));
         expectTrue(spacer, `no caption rect is the spacer beside the window buttons: ${JSON.stringify(caption)}`);
         expectTrue(near(gutter[0]! + gutter[2]! - (spacer[0]! + spacer[2]!), 111 * scale), `the spacer does not end 111 points from the right edge: ${JSON.stringify(caption)}`);
+        const leading = caption.find((rect) => rect[1] === 0 && near(rect[0], 144 * scale) && near(rect[2], 46 * scale) && near(rect[3], 39 * scale));
+        expectTrue(leading, `no caption rect is the room beside window buttons at the leading end, 144 points in and 46 wide: ${JSON.stringify(caption)}`);
         const covered = (marked?.passthrough ?? []).filter((rect) => caption.some((region) => overlaps(rect, region)));
         expectEqual(covered, [], "pass-through rects that cover a caption region");
         await windows().setCaptionRegions(id, []);

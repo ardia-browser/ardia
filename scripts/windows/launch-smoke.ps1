@@ -3,7 +3,8 @@ param(
   [Parameter(Mandatory = $true)][string]$Out,
   [int]$Seconds = 25,
   [int]$SelfCheckSeconds = 120,
-  [switch]$NoInput
+  [switch]$NoInput,
+  [ValidateSet("all", "launch", "gate")][string]$Part = "all"
 )
 
 $ErrorActionPreference = "Stop"
@@ -52,6 +53,8 @@ public static class ArdiaInput {
   [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr window, out Rect rect);
   [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr window, ref Point point);
   [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr window);
+  [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(Point point);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassName(IntPtr window, System.Text.StringBuilder name, int size);
   [DllImport("user32.dll", EntryPoint = "SendMessageTimeoutW")] public static extern IntPtr SendMessageTimeout(IntPtr window, uint message, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
   [DllImport("user32.dll", EntryPoint = "SystemParametersInfoW")] public static extern bool GetSystemFlag(uint action, uint unused, ref int value, uint flags);
   [DllImport("user32.dll", EntryPoint = "SystemParametersInfoW")] public static extern bool SetSystemFlag(uint action, uint value, IntPtr pointerValue, uint flags);
@@ -409,6 +412,7 @@ function New-DataDirectory([string]$Name) {
   return $directory
 }
 
+if ($Part -ne "gate") {
 $env:ARDIA_DATA_DIR = New-DataDirectory "launch-data"
 $env:ARDIA_BACKGROUND = ""
 $process = Start-Process -FilePath $App -ArgumentList "--log-file=`"$log`"" -PassThru
@@ -432,6 +436,46 @@ else {
   $first = (Select-String -Path $log -Pattern "^\w+ (\d+) .*\[ardia windows\] first window" | Select-Object -First 1)
   if ($first) { Write-Host "First window rendered $($first.Matches[0].Groups[1].Value) ms after the process started." }
 }
+
+$httpPagesPort = 9353
+$httpPagesFolder = New-DataDirectory "http-pages"
+$httpPagesScript = Join-Path $httpPagesFolder "serve.ps1"
+$httpPagesLog = Join-Path $httpPagesFolder "requests.log"
+Set-Content -LiteralPath $httpPagesScript -Encoding utf8NoBOM -Value @'
+param([int]$Port, [string]$Log)
+$listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $Port)
+$listener.Start()
+while ($true) {
+  $client = $listener.AcceptTcpClient()
+  try {
+    $client.ReceiveTimeout = 2000
+    $stream = $client.GetStream()
+    $reader = [System.IO.StreamReader]::new($stream, [System.Text.Encoding]::ASCII, $false, 1024, $true)
+    $request = $reader.ReadLine()
+    while ($reader.ReadLine()) { }
+    $path = if ($request) { $request.Split(" ")[1] } else { "" }
+    if ($Log -and $path) { Add-Content -LiteralPath $Log -Value $path }
+    $name = @{ "/a" = "a"; "/b" = "b"; "/hover" = "hover"; "/event/hovered" = "event"; "/event/left" = "event" }[$path]
+    $status = if ($name -eq "event") { "204 No Content" } elseif ($name) { "200 OK" } else { "404 Not Found" }
+    $text = if ($name -eq "event") { "" } elseif ($name -eq "hover") { "<!doctype html><meta charset=utf-8><title>ready</title><style>body{margin:0}#strip{height:160px;background:#ddd}</style><div id=strip>hover strip</div><script>const strip = document.getElementById('strip'); strip.addEventListener('mouseenter', () => { document.title = 'hovered'; fetch('/event/hovered'); }); strip.addEventListener('mouseleave', () => { document.title = 'left'; fetch('/event/left'); });</script>" } elseif ($name) { "<!doctype html><meta charset=utf-8><p>cached page $name</p><script>addEventListener('pageshow', (event) => { document.title = (event.persisted ? 'restored ' : 'loaded ') + '$name'; });</script>" } else { "" }
+    $body = [System.Text.Encoding]::UTF8.GetBytes($text)
+    $head = [System.Text.Encoding]::ASCII.GetBytes("HTTP/1.1 $status`r`nContent-Type: text/html; charset=utf-8`r`nContent-Length: $($body.Length)`r`nConnection: close`r`n`r`n")
+    $stream.Write($head, 0, $head.Length)
+    $stream.Write($body, 0, $body.Length)
+    $stream.Flush()
+  } catch { } finally { $client.Close() }
+}
+'@
+$httpPages = Start-Process -FilePath (Get-Process -Id $PID).Path -ArgumentList "-NoProfile", "-NonInteractive", "-File", "`"$httpPagesScript`"", "-Port", $httpPagesPort, "-Log", "`"$httpPagesLog`"" -WindowStyle Hidden -PassThru
+$httpPagesBy = (Get-Date).AddSeconds(15)
+$httpPagesUp = $false
+while (-not $httpPagesUp -and (Get-Date) -lt $httpPagesBy -and -not $httpPages.HasExited) {
+  $probe = New-Object System.Net.Sockets.TcpClient
+  try { $httpPagesUp = $probe.ConnectAsync("127.0.0.1", $httpPagesPort).Wait(1000) -and $probe.Connected } catch { } finally { $probe.Dispose() }
+  if (-not $httpPagesUp) { Start-Sleep -Milliseconds 300 }
+}
+if (-not $httpPagesUp) { $failures += "the loopback page server never listened on port $httpPagesPort" }
+$withEngineForEdge = Test-Path -LiteralPath (Join-Path (Split-Path -Parent (Resolve-Path -LiteralPath $App).Path) "chrome.dll")
 
 $browserLog = Join-Path $Out "browser.log"
 Remove-Item -Force -ErrorAction SilentlyContinue $browserLog
@@ -466,6 +510,109 @@ elseif (Select-String -Path $browserLog -Pattern "^(js-error|fatal|error) " -Qui
 }
 elseif (-not (Select-String -Path $browserLog -Pattern "\[ardia windows\] first window" -Quiet)) { $failures += "the browser window never rendered with onboarding done" }
 
+function Get-PageEvents {
+  if (-not (Test-Path -LiteralPath $httpPagesLog)) { return @() }
+  return @(Get-Content -LiteralPath $httpPagesLog | Where-Object { $_ -like "/event/*" })
+}
+
+function Send-Move([int]$FromX, [int]$FromY, [int]$ToX, [int]$ToY) {
+  $screen = [System.Windows.Forms.SystemInformation]::PrimaryMonitorSize
+  foreach ($step in 1..12) {
+    $x = $FromX + [int](($ToX - $FromX) * $step / 12)
+    $y = $FromY + [int](($ToY - $FromY) * $step / 12)
+    [ArdiaInput]::mouse_event(0x8001, [uint32]($x * 65535 / ($screen.Width - 1)), [uint32]($y * 65535 / ($screen.Height - 1)), 0, [UIntPtr]::Zero)
+    Start-Sleep -Milliseconds 40
+  }
+}
+
+function Wait-PageEvent([string]$Name, [int]$After, [int]$Milliseconds) {
+  $deadline = (Get-Date).AddMilliseconds($Milliseconds)
+  do {
+    $events = Get-PageEvents
+    if (@($events | Select-Object -Skip $After) -contains "/event/$Name") { return $true }
+    Start-Sleep -Milliseconds 100
+  } while ((Get-Date) -lt $deadline)
+  return $false
+}
+
+function Test-PageHoverEnds([System.Diagnostics.Process]$Process) {
+  $handle = $Process.MainWindowHandle
+  if ($handle -eq [IntPtr]::Zero) { return @("hover: the window never showed") }
+  [ArdiaInput]::SetForegroundWindow($handle) | Out-Null
+  Start-Sleep -Milliseconds 400
+  $window = Get-WindowRect $Process
+  $client = Get-ClientArea $Process
+  if (-not $window -or -not $client) { return @("hover: the window could not be measured") }
+  $x = $client.X + [int]($client.Width * 0.3)
+  $inside = $client.Y + [int](60 * $client.Scale)
+  $band = $client.Y + 2
+  $before = @(Get-PageEvents).Count
+  [ArdiaInput]::SetCursorPos($x, $inside + 20) | Out-Null
+  Start-Sleep -Milliseconds 300
+  Send-Move $x ($inside + 20) $x $inside
+  if (-not (Wait-PageEvent "hovered" $before 3000)) { return @("hover: the page never reported the pointer over its strip (events: $((Get-PageEvents) -join ', '))") }
+  Write-Host "Hover: the page reports the pointer over its strip."
+  $entered = @(Get-PageEvents).Count
+  Send-Move $x $inside $x $band
+  Start-Sleep -Milliseconds 200
+  if ($window.Top -ge 40) { $outX = $x; $outY = $window.Top - 30 } else { $outX = $window.Right + 30; $outY = $band }
+  Send-Move $x $band $outX $outY
+  if (Wait-PageEvent "left" $entered 3000) { Write-Host "Hover: leaving the window through the top band ended the page's hover."; return @() }
+  return @("hover: after the pointer left the window through the top band over the page, the page never reported the hover ended (events: $((Get-PageEvents) -join ', '))")
+}
+
+function Test-TopEdgeResize([System.Diagnostics.Process]$Process) {
+  $handle = $Process.MainWindowHandle
+  if ($handle -eq [IntPtr]::Zero) { return @("top edge: the window never showed") }
+  [ArdiaInput]::SetForegroundWindow($handle) | Out-Null
+  Start-Sleep -Milliseconds 400
+  $before = Get-WindowRect $Process
+  $client = Get-ClientArea $Process
+  if (-not $before -or -not $client) { return @("top edge: the window could not be measured") }
+  $press = New-Object ArdiaInput+Point
+  $press.X = $client.X + [int]($client.Width * 0.3)
+  $press.Y = $client.Y + 2
+  $class = New-Object System.Text.StringBuilder 256
+  [ArdiaInput]::GetClassName([ArdiaInput]::WindowFromPoint($press), $class, 256) | Out-Null
+  $under = $class.ToString()
+  Write-Host "Top edge: the window under ($($press.X), $($press.Y)) is $under."
+  Save-Screenshot (Join-Path $Out "top-edge-before.png")
+  if (-not $under.StartsWith("Chrome_")) { return @("top edge: the press point is over $under, not a page window, so the drag would prove nothing") }
+  Send-Drag $press.X $press.Y 0 40 300
+  Start-Sleep -Milliseconds 700
+  Save-Screenshot (Join-Path $Out "top-edge-after.png")
+  $after = Get-WindowRect $Process
+  if (-not $after) { return @("top edge: the window was gone after the drag") }
+  $topMoved = $after.Top - $before.Top
+  $bottomMoved = $after.Bottom - $before.Bottom
+  if ([Math]::Abs($topMoved - 40) -le 8 -and [Math]::Abs($bottomMoved) -le 2) { Write-Host "Top edge: dragging the top band over the page down by 40 px resized the window from the top (top moved $topMoved px, bottom stayed)."; return @() }
+  return @("top edge: dragging the top band over the page down by 40 px moved the window's top by $topMoved px and its bottom by $bottomMoved px; it should resize from the top")
+}
+
+$edgeLog = Join-Path $Out "top-edge.log"
+$env:ARDIA_DATA_DIR = New-DataDirectory "top-edge-data"
+$env:ARDIA_CONFIG_DIR = $env:ARDIA_DATA_DIR
+Set-Content -Path (Join-Path $env:ARDIA_DATA_DIR "onboarding.json") -Value '{"completedAt":1700000000000,"version":1}' -Encoding utf8NoBOM
+Set-Content -Path (Join-Path $env:ARDIA_DATA_DIR "config.json") -Value '{"settings":{"minimalismMode":true,"sidebarSide":"right","openLinksInLittleArdia":false}}' -Encoding utf8NoBOM
+if ($withEngineForEdge -and -not $NoInput -and $httpPagesUp) {
+  $edge = Start-Process -FilePath $App -ArgumentList "--log-file=`"$edgeLog`"", "http://127.0.0.1:$httpPagesPort/hover" -PassThru
+  $env:ARDIA_CONFIG_DIR = ""
+  try {
+    Start-Sleep -Seconds 12
+    if ($edge.HasExited) { $failures += "top edge: the app exited on its own (exit code $($edge.ExitCode))" }
+    else {
+      Test-PageHoverEnds $edge | ForEach-Object { $failures += $_ }
+      Test-TopEdgeResize $edge | ForEach-Object { $failures += $_ }
+    }
+  } finally {
+    if (-not $edge.HasExited) {
+      Stop-Process -Id $edge.Id -Force
+      $edge.WaitForExit(10000) | Out-Null
+    }
+  }
+}
+$env:ARDIA_CONFIG_DIR = ""
+
 $env:ARDIA_DATA_DIR = New-DataDirectory "self-check-data"
 $importFixtures = Join-Path $env:ARDIA_DATA_DIR "import-fixtures"
 $fixtureProfiles = Join-Path $PSScriptRoot "..\..\packages\import\fixtures\home\Library\Application Support"
@@ -479,7 +626,7 @@ foreach ($fixture in @(@("firefox", "Firefox\Profiles\abcd1234.default-release")
 }
 $env:ARDIA_CONFIG_DIR = $env:ARDIA_DATA_DIR
 $env:ARDIA_BACKGROUND = "1"
-$env:ARDIA_TEST = "pipHover=first,pipHover=last"
+$env:ARDIA_TEST = "pipHover=first,pipHover=last,httpPages=$httpPagesPort"
 $leftover = Join-Path $env:ARDIA_DATA_DIR "Chromium\Ardia self-check-stuck (removing)"
 $held = $null
 $check = $null
@@ -509,11 +656,12 @@ try {
   } finally {
     if ($held) { $held.Dispose() }
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $leftover
+    if (-not $httpPages.HasExited) { Stop-Process -Id $httpPages.Id -Force -ErrorAction SilentlyContinue }
   }
 }
 
 if (Test-Path $checkLog) {
-  Select-String -Path $checkLog -Pattern "self-check|^(js-error|fatal|error) " | ForEach-Object { Write-Host $_.Line }
+  Select-String -Path $checkLog -Pattern "self-check|webgl2 probe|^dialog |^(js-error|fatal|error) " | ForEach-Object { Write-Host $_.Line }
   $done = Select-String -Path $checkLog -Pattern "self-check done: (\d+) passed, (\d+) failed" | Select-Object -First 1
   if (-not $done) { $failures += "the self-check never reported its result" }
   elseif ([int]$done.Matches[0].Groups[2].Value -gt 0) { $failures += "$($done.Matches[0].Groups[2].Value) self-checks failed" }
@@ -521,6 +669,82 @@ if (Test-Path $checkLog) {
   if (Select-String -Path $checkLog -Pattern "^(js-error|fatal|error) " -Quiet) { $failures += "the self-check log has errors" }
 } else {
   $failures += "the self-check wrote no log"
+}
+}
+
+function Invoke-LoginData([string]$Sql) {
+  $database = Join-Path $env:ARDIA_DATA_DIR "Chromium\Default\Login Data"
+  if (-not (Test-Path -LiteralPath $database)) { return "no Login Data at $database" }
+  if (-not ("Ardia.Sqlite" -as [type])) {
+    Add-Type -Namespace Ardia -Name Sqlite -MemberDefinition @'
+[DllImport("winsqlite3.dll", CallingConvention = CallingConvention.StdCall, CharSet = CharSet.Ansi)] public static extern int sqlite3_open(string filename, out IntPtr db);
+[DllImport("winsqlite3.dll", CallingConvention = CallingConvention.StdCall, CharSet = CharSet.Ansi)] public static extern int sqlite3_exec(IntPtr db, string sql, IntPtr callback, IntPtr argument, IntPtr error);
+[DllImport("winsqlite3.dll", CallingConvention = CallingConvention.StdCall)] public static extern int sqlite3_changes(IntPtr db);
+[DllImport("winsqlite3.dll", CallingConvention = CallingConvention.StdCall)] public static extern int sqlite3_close(IntPtr db);
+'@
+  }
+  $handle = [IntPtr]::Zero
+  if ([Ardia.Sqlite]::sqlite3_open($database, [ref]$handle) -ne 0) { return "Login Data did not open" }
+  try {
+    if ([Ardia.Sqlite]::sqlite3_exec($handle, $Sql, [IntPtr]::Zero, [IntPtr]::Zero, [IntPtr]::Zero) -ne 0) { return "the statement failed: $Sql" }
+    $changed = [Ardia.Sqlite]::sqlite3_changes($handle)
+    if ($changed -ne 1) { return "the statement changed $changed rows, not 1: $Sql" }
+    return ""
+  } finally { [Ardia.Sqlite]::sqlite3_close($handle) | Out-Null }
+}
+
+function Invoke-SelfCheckStage([string]$Stage) {
+  $stageLog = Join-Path $Out "self-check-$Stage.log"
+  $env:ARDIA_TEST = "selfCheckStage=$Stage"
+  $stageRun = Start-Process -FilePath $App -ArgumentList "--self-check", "--log-file=`"$stageLog`"" -PassThru
+  $env:ARDIA_TEST = ""
+  if (-not $stageRun.WaitForExit(120000)) {
+    Stop-Process -Id $stageRun.Id -Force -ErrorAction SilentlyContinue
+    return "the $Stage self-check did not finish within 120 s"
+  }
+  if (-not (Test-Path $stageLog)) { return "the $Stage self-check wrote no log" }
+  Select-String -Path $stageLog -Pattern "self-check" | ForEach-Object { Write-Host $_.Line }
+  $stageDone = Select-String -Path $stageLog -Pattern "self-check done: (\d+) passed, (\d+) failed" | Select-Object -First 1
+  if (-not $stageDone) { return "the $Stage self-check never reported its result" }
+  if ([int]$stageDone.Matches[0].Groups[2].Value -gt 0 -or [int]$stageDone.Matches[0].Groups[1].Value -eq 0) { return "the $Stage self-check: $($stageDone.Line)" }
+  return ""
+}
+
+if ($Part -ne "gate" -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent (Resolve-Path -LiteralPath $App).Path) "chrome.dll"))) {
+  $secondLogin = "https://ardia-self-check-two.example%"
+  $otherKinds = "CREATE TEMP TABLE ardia_kinds AS SELECT * FROM logins WHERE signon_realm LIKE 'https://ardia-self-check-one.example%';" +
+    " UPDATE ardia_kinds SET id = NULL, signon_realm = 'https://ardia-self-check-never.example/', origin_url = 'https://ardia-self-check-never.example/', username_value = '', password_value = X'', blacklisted_by_user = 1;" +
+    " INSERT INTO logins SELECT * FROM ardia_kinds;" +
+    " UPDATE ardia_kinds SET signon_realm = 'https://ardia-self-check-federated.example/', origin_url = 'https://ardia-self-check-federated.example/', username_value = 'federated', blacklisted_by_user = 0, federation_url = 'https://ardia-self-check-idp.example';" +
+    " INSERT INTO logins SELECT * FROM ardia_kinds;" +
+    " DROP TABLE ardia_kinds;"
+  foreach ($step in @(
+      @{ Sql = $otherKinds; Stage = "blocklistedAndFederated" },
+      @{ Sql = "UPDATE logins SET password_value = X'763130' || randomblob(40) WHERE signon_realm LIKE '$secondLogin'"; Stage = "undecryptableLogin" },
+      @{ Sql = "UPDATE logins SET password_value = X'' WHERE signon_realm LIKE '$secondLogin'"; Stage = "emptyPasswordLogin" },
+      @{ Sql = "DELETE FROM logins WHERE signon_realm LIKE '$secondLogin'"; Stage = "undecryptableRemoved" })) {
+    $problem = Invoke-LoginData $step.Sql
+    if (-not $problem) { $problem = Invoke-SelfCheckStage $step.Stage }
+    if ($problem) {
+      $failures += "passwords, $($step.Stage): $problem"
+      break
+    }
+  }
+}
+
+if ($Part -ne "gate" -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent (Resolve-Path -LiteralPath $App).Path) "chrome.dll"))) {
+  $warpLog = Join-Path $Out "self-check-warp.log"
+  $env:ARDIA_TEST = "selfCheckOnly=meadow:,meadowWebGL=required"
+  $warp = Start-Process -FilePath $App -ArgumentList "--self-check", "--ignore-gpu-blocklist", "--use-angle=d3d11-warp", "--log-file=`"$warpLog`"" -PassThru
+  $env:ARDIA_TEST = ""
+  if (-not $warp.WaitForExit(120000)) { $failures += "the meadow self-check on WARP did not finish within 120 s"; Stop-Process -Id $warp.Id -Force -ErrorAction SilentlyContinue }
+  if (Test-Path $warpLog) {
+    Select-String -Path $warpLog -Pattern "webgl2 probe|meadow|self-check (pass|FAIL|done)" | ForEach-Object { Write-Host "warp: $($_.Line)" }
+    $warpDone = Select-String -Path $warpLog -Pattern "self-check done: (\d+) passed, (\d+) failed" | Select-Object -First 1
+    if (-not $warpDone) { $failures += "the meadow self-check on WARP never reported its result" }
+    elseif ([int]$warpDone.Matches[0].Groups[2].Value -gt 0) { $failures += "$($warpDone.Matches[0].Groups[2].Value) meadow self-checks on WARP failed" }
+    elseif ([int]$warpDone.Matches[0].Groups[1].Value -lt 2) { $failures += "the meadow self-check on WARP ran $($warpDone.Matches[0].Groups[1].Value) checks, not 2" }
+  } else { $failures += "the meadow self-check on WARP wrote no log" }
 }
 
 $gateApp = (Resolve-Path -LiteralPath $App).Path
@@ -652,6 +876,7 @@ function Test-ATestInstance([string]$DataDirectory, [string]$Case) {
   } finally { Stop-GateLaunch $run }
 }
 
+if ($Part -ne "launch") {
 $gateData = New-DataDirectory "gate-scratch"
 $marker = Join-Path (Split-Path -Parent $gateApp) "Ardia.test-build"
 Remove-Item -Force -LiteralPath $marker
@@ -679,6 +904,7 @@ if ($withEngine -and $env:GITHUB_ACTIONS -eq "true") {
   Test-ExtensionRunsInATestInstance $extension 9341
 }
 if ($withEngine) { Test-ATestInstance (New-DataDirectory "gate-test-instance") "a scratch folder with the marker" }
+}
 $env:ARDIA_DATA_DIR = ""
 $env:ARDIA_BACKGROUND = ""
 
@@ -686,4 +912,5 @@ if ($failures.Count) {
   $failures | ForEach-Object { Write-Host "::error::$_" }
   exit 1
 }
-Write-Host "The app launched, rendered its first window, stayed up for $Seconds s, and passed its self-check."
+if ($Part -ne "gate") { Write-Host "The app launched, rendered its first window, stayed up for $Seconds s, and passed its self-check." }
+if ($Part -ne "launch") { Write-Host "The test gate refused what it must and let a test instance through." }

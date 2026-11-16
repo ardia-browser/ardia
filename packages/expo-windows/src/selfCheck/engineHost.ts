@@ -11,7 +11,7 @@ import { fieldFocusedIn } from "../appKeyboard";
 import { textFocusForCheck } from "../textFocus";
 
 export type TabEvent = { key?: unknown; name?: unknown; data?: { title?: unknown; isLoading?: unknown } };
-type ListedTab = { key: string; tab?: number; title: string; shown: boolean; windowVisible: boolean; width: number; height: number; session?: number };
+export type ListedTab = { key: string; tab?: number; title: string; shown: boolean; windowVisible: boolean; width: number; height: number; session?: number };
 
 const PAGE_KEY = "self-check-page";
 const OTHER_WINDOW = "self-check-other-window";

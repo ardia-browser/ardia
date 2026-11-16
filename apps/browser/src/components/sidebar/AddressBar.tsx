@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { Pressable, View, type ViewStyle } from "react-native";
 import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
 import { layout, useTheme } from "../ui/theme";
@@ -11,7 +11,7 @@ import { useHistoryAvailability } from "../../state/tabs/navigation";
 import { toolbarPalette, type ToolbarPalette } from "../ui/toolbarColors";
 import { Button, type ButtonHit, FadeLabel, radius, space, ToolbarRowContext, useHover } from "../ui";
 import { TOOLBAR_ROWS } from "../../lib/toolbarRow";
-import { setUrlAnchor, useSidebarCaptionRoom } from "../../state/windows/layout";
+import { setUrlAnchor, useSidebarCaptionRoom, watchSidebarControlsRow } from "../../state/windows/layout";
 import { useSidebarPart } from "../../state/sidebar/chrome";
 import { SIDEBAR_FIELD } from "./geometry";
 import { SIDEBAR_TYPE, TAB_ROW } from "./tokens";
@@ -19,6 +19,8 @@ import { SidebarTextScope } from "./SidebarTextScope";
 import { noteEmptyTabSidebarExtensionPress } from "../../state/telemetry/usage";
 import { SidebarFieldFill } from "./SidebarField";
 import { SidebarUrlField, useToolbarTab } from "../toolbar/Toolbar";
+import { sidebarFieldButtons } from "../toolbar/fieldButtons";
+import { useFieldExtensionsHeld } from "../../state/extensions/store";
 import { HistoryButton, ReloadButton } from "../toolbar/NavButtons";
 import { GLYPH } from "../toolbar/tokens";
 import { HEADER_TOOLS, headerToggleX, navButtonsFitting, type HeaderButton } from "../window/dockMotion";
@@ -113,6 +115,9 @@ export function SidebarAddressRow({ width, top }: { width: number; top: number }
     field.current?.measureInWindow((x, y, width, height) => {
       if (width && isAddressBarInSidebar(windowId)) setUrlAnchor(windowId, { left: x, top: y, width, sidebar: { height } });
     });
+  const remeasure = useRef(anchor);
+  remeasure.current = anchor;
+  useEffect(() => watchSidebarControlsRow(windowId, () => requestAnimationFrame(() => remeasure.current())), [windowId]);
 
   return (
     <View
@@ -164,6 +169,8 @@ function EmptyField({ windowId, tabId, width }: { windowId: string; tabId: strin
   const theme = useTheme();
   const palette = toolbarPalette(theme, null);
   const { hovered, hoverProps } = useHover();
+  const extensionsHeld = useFieldExtensionsHeld(windowId);
+  const shown = sidebarFieldButtons({ mode: useSettings((s) => s.addressBarButtons), hovered, insecure: false, extensionsHeld });
   const open = () => openEmptySidebarField(windowId);
   return (
     <View {...hoverProps} style={{ flexDirection: "row", alignItems: "center", height: SIDEBAR_FIELD.height }}>
@@ -171,7 +178,7 @@ function EmptyField({ windowId, tabId, width }: { windowId: string; tabId: strin
       <Pressable onPress={open} style={{ flex: 1, height: SIDEBAR_FIELD.height, justifyContent: "center", paddingLeft: space.l }}>
         <FadeLabel text="Search or enter address" fontSize={SIDEBAR_TYPE.title} color={theme.placeholder} fadeWidth={14} style={{ height: TAB_ROW.titleHeight, marginLeft: -space.xxs }} />
       </Pressable>
-      {tabId ? (
+      {tabId && shown.extensions ? (
         <View style={{ paddingRight: space.xs }}>
           <FieldExtensions tabId={tabId} windowId={windowId} width={width} palette={palette} onActivate={noteEmptyTabSidebarExtensionPress} />
         </View>

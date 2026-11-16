@@ -102,7 +102,7 @@ export const checks: Check[] = [
       const icons = await app().appIcons(32);
       expectTrue(Array.isArray(icons), `appIcons is ${JSON.stringify(icons)}`);
       expectTrue((await app().appIcon()) === "", "appIcon is not empty");
-      expectTrue((await app().isInDock()) === false, "isInDock is not false");
+      expectTrue(await app().isInDock().then(() => false, () => true), "isInDock answered instead of refusing");
       expectTrue((await app().openExternalURL("file:///C:/Windows")) === false, "openExternalURL accepted a file URL");
     },
   },

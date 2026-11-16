@@ -55,6 +55,7 @@ function LinkKeys() {
       <Row anchor="tabs.newTabLinksOpenIn">
         <PopUp value={newTabLinks} options={NEW_TAB_LINKS} onChange={(newTabLinksOpenIn) => updateSettings({ newTabLinksOpenIn })} />
       </Row>
+      <SettingToggle anchor="tabs.popupsOpenAsTabs" />
       <Row anchor="tabs.peekButtons">
         <PopUp value={peekButtons} options={PEEK_BUTTONS} onChange={(peekButtons) => updateSettings({ peekButtons })} />
       </Row>
@@ -186,6 +187,7 @@ export function TabsPane() {
         <SettingToggle anchor="tabs.appLinksFirst" />
         <SettingToggle anchor="tabs.shareTabsAcrossWindows" />
         <SettingToggle anchor="tabs.warnBeforeClosingLastTab" />
+        <SettingToggle anchor="tabs.keepTopAppsRunning" />
         <SettingToggle anchor="tabs.tabReorderHaptics" />
         <SettingToggle anchor="tabs.extendWebsiteColor" />
         <SettingToggle anchor="tabs.sidebarMediaControls" />
@@ -207,7 +209,7 @@ export function TabsPane() {
 
       <SectionHeader
         title="Clean up"
-        description="Closes tabs you haven't used (and duplicates) automatically, like the tab menu's Clean Up Daily. Pinned, playing and selected tabs stay; cleaned tabs are listed under Recently Cleaned."
+        description="Closes tabs you haven't used (and duplicates) automatically, like the tab menu's Clean Up Daily. It also reaches profiles a window isn't showing. Pinned, playing and selected tabs stay; cleaned tabs are listed under Recently Cleaned."
       />
       <CleanUpRow minutes={cleanUpMinutes} />
     </View>

@@ -2,6 +2,8 @@ import { customNewTabUrl, SETTING_SPECS, type Settings, type SettingSpec } from 
 import { commandBarStartFlags } from "../omnibox/commandBarStart";
 import { lookUse, type LookBlocks } from "../../lib/themeLook";
 import { currentThemeLook } from "../config/basePalette";
+import type { BrowserWindow } from "../browser/types";
+import { shownSidebarWidth } from "../../lib/windowLayout";
 import { systemIncreaseContrast } from "../app/systemContrast";
 import { isNavigationOrFunctionKey, storedShortcut } from "../commands/shortcuts";
 
@@ -53,6 +55,16 @@ export const appIconSetting = (icon: string | null): Record<string, string> =>
 export const customColorProfiles = (profiles: Record<string, { theme?: unknown }>): Record<string, string> => ({
   custom_color_profiles: String(Object.values(profiles).filter((profile) => !!profile.theme).length),
 });
+
+const FORMER_MIN_WINDOW_WIDTH = 720;
+
+export function narrowWindows(windows: Record<string, Pick<BrowserWindow, "kind" | "frame" | "fullScreen">>, sidebarWidth: number): Record<string, string> {
+  const widths = Object.values(windows).flatMap((w) => (w.kind !== "small" && !w.fullScreen && w.frame ? [w.frame[2]] : []));
+  return {
+    narrow_windows: String(widths.filter((width) => width < FORMER_MIN_WINDOW_WIDTH).length),
+    sidebar_narrowed_windows: String(widths.filter((width) => shownSidebarWidth(sidebarWidth, width) < sidebarWidth).length),
+  };
+}
 
 export function themeFileSnapshot(theme: string | null, blocks: LookBlocks | null): Record<string, string> {
   const use = lookUse(blocks);

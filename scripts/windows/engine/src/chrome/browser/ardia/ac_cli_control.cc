@@ -3,3 +3,7 @@
 AC_ARGS_CALL(ac_cli_control) {
   call.TakeReply().Error("the ardia command is not on Windows yet");
 }
+
+AC_ARGS_CALL(ac_cli_owns_tab) {
+  call.TakeReply().Error("the ardia command is not on Windows yet");
+}

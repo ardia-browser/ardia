@@ -77,7 +77,7 @@ test("back on a Peek with no history of its own ends the Peek and shows the tab 
   assert.equal(canGoBack(peek, live(peek)), true, "back is offered even though the Peek's page cannot go back");
   const closed = S().closedTabs.length;
   goBack(peek);
-  assert.equal(S().peeks[w], undefined, "the Peek ended");
+  assert.equal(S().peeks[a], undefined, "the Peek ended");
   assert.equal(S().tabs[peek], undefined, "its page is thrown away");
   assert.equal(shown(w), a, "the tab it was opened from is shown");
   assert.equal(S().closedTabs.length, closed, "a Peek leaves no closed-tab record");
@@ -89,7 +89,7 @@ test("back on a Peek whose page has history goes back in the page, and the Peek 
   S().updateTab(peek, {}, { canGoBack: true });
   assert.equal(live(peek).canGoBack, true);
   goBack(peek);
-  assert.ok(S().peeks[w], "the Peek stays: its page went back instead");
+  assert.ok(S().peeks[a], "the Peek stays: its page went back instead");
   assert.ok(S().tabs[peek]);
 });
 
@@ -99,7 +99,7 @@ test("back on a Peek opened from a pinned tab ends the Peek and leaves the pin a
   const peek = S().openPeek(a, "https://peek.example/");
   assert.ok(peek);
   goBack(peek);
-  assert.equal(S().peeks[w], undefined);
+  assert.equal(S().peeks[a], undefined);
   assert.ok(S().tabs[a], "the pinned tab stays");
 });
 

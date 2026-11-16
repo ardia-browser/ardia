@@ -2,7 +2,7 @@ import { AppState } from "react-native";
 import { create } from "zustand";
 import { orWarn } from "../../lib/fallback";
 import { IMPORT_WINDOW_ID, takePreferredImportSource } from "../settings/settingsWindows";
-import { closeWindow } from "../windows/nativeWindow";
+import { requestWindowClose } from "../windows/windowClose";
 import { defaultTarget, openInWebStore, type BrowserSource, type ImportCounts, type ImportedExtension, type ImportKind } from "./apply";
 import { importModule } from "./importApi";
 
@@ -127,11 +127,8 @@ export const toggleImportSpace = (id: string, on: boolean) => patchImport({ spac
 export const setImportTarget = (target: string) => patchImport({ target });
 export const setSafariCookies = (safariCookies: boolean) => patchImport({ safariCookies });
 export const backTo = (name: "choose" | "profiles") => patchImport({ step: name === "choose" ? { name, error: null } : { name } });
-export const closeImport = () => void closeWindow(IMPORT_WINDOW_ID);
-export function cancelImport() {
-  session.abort();
-  closeImport();
-}
+export const closeImport = () => requestWindowClose(IMPORT_WINDOW_ID);
+export const cancelImport = () => requestWindowClose(IMPORT_WINDOW_ID, () => session.abort());
 
 export async function recheckAccess() {
   const api = importModule();

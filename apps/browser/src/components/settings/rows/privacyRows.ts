@@ -27,8 +27,12 @@ export const privacyRows = {
       section: "All sites",
       rows: {
         blockAutoplayEverywhere: {
-          shown: () => PLATFORM_FEATURES.blocksAutoplayEverywhere,
+          shown: () => PLATFORM_FEATURES.blocksAutoplay,
           title: "Block autoplay on every site", description: "Sites you set to Allow in Site Controls still autoplay. A click on a player always plays. Applies to pages you open or reload. Covers Chromium tabs only: WebKit tabs still autoplay for now.", keywords: ["autoplay", "auto play", "videos playing", "stop videos", "media autoplay", "muted autoplay"],
+        },
+        blockNotificationRequests: {
+          shown: () => PLATFORM_FEATURES.answersPermissionRequests,
+          title: "Block requests to send notifications", description: "A site that asks is set to Block, so it stops asking. Sites that asked while this was on stay blocked after you turn it off, until you allow each one in its Site Controls. Sites you already allowed keep sending them.", keywords: ["push notifications", "notification prompts", "notification requests", "stop asking", "notification spam"],
         },
       },
     },

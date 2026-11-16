@@ -1,7 +1,6 @@
 import type { SearchScope } from "@ardia/core";
 import { memo, type ReactNode, type RefObject } from "react";
 import { View } from "react-native";
-import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { Button, capsule, ContextMenuArea, ink, useHover, useTheme } from "../ui";
 import { GlassFill, useGlass } from "../ui/Glass";
 import { GoButton } from "./GoButton";
@@ -74,7 +73,7 @@ export function PanelFrame({ rootRef, onContextMenu, leadingIcon, scope, field, 
   );
 }
 
-export function BottomRow({ hero, addChip, onDictate, label, enabled, onGo }: { hero: boolean; addChip: ReactNode; onDictate(): void; label: string; enabled: boolean; onGo(): void }) {
+export function BottomRow({ hero, addChip, onDictate, label, enabled, onGo }: { hero: boolean; addChip: ReactNode; onDictate?: () => void; label: string; enabled: boolean; onGo(): void }) {
   return (
     <View
       style={{
@@ -88,7 +87,7 @@ export function BottomRow({ hero, addChip, onDictate, label, enabled, onGo }: { 
     >
       {addChip}
       <View style={{ flex: 1 }} />
-      {PLATFORM_FEATURES.dictation ? <DictateButton onPress={onDictate} /> : null}
+      {onDictate && <DictateButton onPress={onDictate} />}
       <GoButton label={label} enabled={enabled} onPress={onGo} />
     </View>
   );

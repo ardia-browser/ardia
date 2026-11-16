@@ -15,6 +15,7 @@ source_set("win") {
     "hooks.h",
     "host.cc",
     "host.h",
+    "host_visibility.cc",
     "main.cc",
     "main.h",
     "page_links.cc",

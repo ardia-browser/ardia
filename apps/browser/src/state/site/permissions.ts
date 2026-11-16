@@ -13,6 +13,7 @@ import { patchPage, pageOf, usePages } from "../tabs/pageState";
 import { startDeviceChoosers } from "./deviceChoosers";
 import { originForSecurityDisplay } from "../../lib/url";
 import { permissionGate } from "./permissionGate";
+import { noteNotificationRequestAutoDenied } from "../telemetry/notificationRequestCounts";
 
 const queues = new Map<string, PermissionRequest[]>();
 let started = false;
@@ -33,7 +34,14 @@ export function startPermissionPrompts() {
 
 const deciding = new Map<string, { controller: AbortController; tabId: string }>();
 
+const turnedDownUnasked = (request: PermissionRequest) =>
+  useBrowser.getState().settings.blockNotificationRequests && request.permissions.length > 0 && request.permissions.every((kind) => kind === "notifications");
+
 function gated(tabId: string, request: PermissionRequest) {
+  if (turnedDownUnasked(request)) {
+    noteNotificationRequestAutoDenied();
+    return void resolvePermission(request.id, "deny", true);
+  }
   const gate = permissionGate();
   if (!gate) return enqueue(tabId, request);
   const controller = new AbortController();
@@ -55,6 +63,7 @@ function gated(tabId: string, request: PermissionRequest) {
 }
 
 function enqueue(tabId: string, request: PermissionRequest) {
+  if (pageOf(tabId).permission?.id === request.id || queues.get(tabId)?.some((r) => r.id === request.id)) return;
   if (!pageOf(tabId).permission) patchPage(tabId, { permission: request });
   else queues.set(tabId, [...(queues.get(tabId) ?? []), request]);
 }

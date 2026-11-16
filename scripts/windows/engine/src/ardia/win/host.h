@@ -104,6 +104,7 @@ class Host : public TabStripModelObserver,
   std::optional<base::DictValue> CallTab(content::WebContents* contents,
                                          const base::DictValue& args);
   base::DictValue DiscardOffered(const base::DictValue& args);
+  base::DictValue HitTest(const base::DictValue& args);
   base::DictValue Info();
   base::DictValue ListTabs();
 

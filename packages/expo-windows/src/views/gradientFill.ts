@@ -1,6 +1,7 @@
+import type { SurfaceProps } from "@ardia/shell";
 import { mixOklab, parseColor, type Rgba } from "./color";
 
-export type GradientFillSource = { fill?: unknown; fillColors?: unknown; fillStops?: unknown; fade?: unknown; fadeStops?: unknown };
+export type GradientFillSource = Pick<SurfaceProps, "fill" | "fillColors" | "fillStops" | "fade" | "fadeStops">;
 
 export type GradientFill = { stops: Rgba[]; places?: number[]; fade?: number[]; fadePlaces?: number[] };
 

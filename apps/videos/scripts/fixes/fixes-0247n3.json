@@ -3,8 +3,8 @@
   "segments": [
     {
       "scene": "u3downloads",
-      "title": "A new download leaves the page alone",
-      "body": "Three download links, one click each. nightly.2 popped the Downloads panel open on every new download, and the next click only closed it, so one file in three never started. Now every click downloads and the panel stays shut.",
+      "title": "Every click starts its download",
+      "body": "Three download links, one click each. nightly.2 popped the Downloads panel open on every new download, and the next click only closed it, so one file in three never started. The panel still opens, but now a click on the next link goes through: three clicks, three files.",
       "cam": [
         40,
         0,

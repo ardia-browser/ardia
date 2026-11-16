@@ -2,7 +2,7 @@ import { useLive } from "../../state/live/store";
 import { setIcon } from "../../state/sidebar/actions";
 import { setSidebarUi, useSidebarUi } from "../../state/sidebar/sidebarUi";
 import { useIconPickerCurrent, useIsPinnedRow } from "../../state/sidebar/hooks";
-import { NO_GROUP_ICON } from "../../state/groups/groupIcons";
+import { hasOwnGroupIcon } from "../../state/groups/groupIcons";
 import { NO_ROW_ICON } from "../../state/pins/rowIcons";
 import { clampLeft, clampTop, IconPickerLayer, type PickerAction, type PickerSymbol } from "../iconPicker/IconPickerPanel";
 import { ICON_PICKER, ICON_PICKER_WIDTH } from "../iconPicker/tokens";
@@ -38,7 +38,8 @@ function besideSidebar(anchor: Picker["anchor"], sidebarWidth: number, side: Sid
 
 function PickerPanel({ picker, sidebarWidth, side }: { picker: Picker; sidebarWidth: number; side: SidebarSide }) {
   const liveIcon = useLive((s) => (picker.kind === "live" ? s.folders[picker.id.split("|")[1] ?? ""]?.icon : null));
-  const current = useIconPickerCurrent(picker.kind, picker.id, liveIcon);
+  const stored = useIconPickerCurrent(picker.kind, picker.id, liveIcon);
+  const current = picker.kind === "group" && !hasOwnGroupIcon(stored) ? null : stored;
   const row = useIsPinnedRow(picker.kind, picker.id);
   const close = () => setSidebarUi({ iconPicker: null });
   const choose = (icon: string | null) => {
@@ -48,7 +49,6 @@ function PickerPanel({ picker, sidebarWidth, side }: { picker: Picker; sidebarWi
   const { anchor } = picker;
   const { windowMargin } = ICON_PICKER;
   const actions: PickerAction[] = [
-    ...(picker.kind === "group" ? [{ title: "No Icon", icon: "square.stack.fill", primary: current === NO_GROUP_ICON, onPress: () => choose(NO_GROUP_ICON) }] : []),
     ...(row ? [{ title: "No Icon", icon: "textformat", primary: current === NO_ROW_ICON, onPress: () => choose(NO_ROW_ICON) }] : []),
     ...(current ? [{ title: "Reset Icon", onPress: () => choose(null) }] : []),
   ];

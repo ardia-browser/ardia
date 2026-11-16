@@ -47,7 +47,7 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
   `/recheck` on a PR runs it again. Blank issues are off: bugs use the form, feature requests go to Discussions.
 - **Vouch gates outside PRs.** Every PR carries `vouch:trusted`, `vouch:unvouched` or `vouch:denounced`; a denounced
   author's PRs and issues are closed, and denouncing is by hand, for spam and abuse only. An unvouched PR stays
-  open, but its iOS build and CodeRabbit's automatic review wait until a maintainer comments `vouch` (also
+  open, but its iOS, Android and Windows builds and CodeRabbit's automatic review wait until a maintainer comments `vouch` (also
   `vouch @user`, `denounce @user <reason>`, `unvouch @user`) or adds the `run-ci` label; re-running all jobs of the
   skipped run starts the build alone. Vouching lets that person send features, so start one outsider's build with
   `run-ci`. Agents manage the list and `run-ci` only when the owner asks. A new heavy PR workflow needs the `gate`

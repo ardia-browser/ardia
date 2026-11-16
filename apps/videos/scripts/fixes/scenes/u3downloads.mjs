@@ -14,8 +14,7 @@ const get = (i) => {
     const started = now > before;
     results.push({ started, open, wasOpen });
     if (!started) say(wasOpen ? "Click swallowed: it only closed the panel" : "Click missed", "bad", at + 250);
-    else if (open) say("File " + now + " started · panel popped open", "bad", at + 250);
-    else say("File " + now + " started", "good", at + 250);
+    else say("File " + now + " started" + (open && !wasOpen ? " · panel opens" : ""), "good", at + 250);
   }); });
 };
 return at(560, 440).then(() => sleep(600))

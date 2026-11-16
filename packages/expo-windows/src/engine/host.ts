@@ -46,6 +46,13 @@ export async function hostCall<Result = unknown>(verb: string, args: Record<stri
   return decode<Result>(await engine.hostCall(verb, JSON.stringify(args), windowId));
 }
 
+export function discardOffered(adopt: string): Promise<boolean> {
+  return hostCall("tab.discard", { adopt }).then(
+    () => true,
+    () => false,
+  );
+}
+
 export async function engineCallJson(name: string, profile: string, argsJson: string): Promise<string> {
   const engine = host();
   if (!engine) throw new EngineError("no engine");

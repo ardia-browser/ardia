@@ -18,7 +18,7 @@ import { noteWebKitPage, offerWebKit, persistEngine } from "../../state/engines/
 import { webviewRef, webviews } from "../../state/tabs/webviewHandles";
 import { noteIssued, takeStartedNavigation } from "../../state/tabs/earlyNavigate";
 import { currentEngineProfile, currentTab, isTabSilenced } from "../../state/browser/current";
-import { closeTabNow, updateLive, updateTab } from "../../state/tabs/actions";
+import { updateLive, updateTab } from "../../state/tabs/actions";
 import { returnRefusedMove, setFind } from "../../state/windows/actions";
 import { activateFocusedPane, currentTabEngine, downloadNavigated, useTabEngine } from "../../state/windows/card";
 import { setPageProgress } from "../../state/tabs/pageProgress";
@@ -28,7 +28,7 @@ import type { Tab } from "../../state/browser/types";
 import { zoomChangedByUser } from "../../state/site/zoomBubble";
 import { markTabReady, patchPage, pageOf } from "../../state/tabs/pageState";
 import { popupBlocked, showAutofillPrompt, showExternalApp, showPasswordPrompt } from "../../state/site/prompts";
-import { leftPage, pageEnded } from "../../state/tabs/pageEvents";
+import { leftPage, pageAskedToClose, pageEnded } from "../../state/tabs/pageEvents";
 import { copyLinkToSelection, searchSelection, setPageSelection } from "../../state/site/selection";
 import { shareFromPage } from "../../state/site/share";
 import { useAutoPictureInPicture } from "../../state/media/pip";
@@ -43,7 +43,7 @@ import { noteCommit } from "../../state/automation/automationEvents";
 import { forgetUnreadIfGone, noteAppBadge, noteUnreadFavicon, noteUnreadLoading, noteUnreadPageEnded } from "../../state/tabs/unread";
 import { trackPageProcessGone } from "../../state/telemetry/diagnostics";
 import { releaseTranslation, translateCrashContext } from "../../state/site/translate";
-import { notePagePress } from "../../state/telemetry/tabPresses";
+import { notePagePress, notePagePressRefused } from "../../state/telemetry/tabPresses";
 import { noteAutoPictureInPictureKept, notePageOverlay, noteReopenedPage, noteWebKitPageKeptHidden } from "../../state/telemetry/usage";
 import { noteWebKitMediaFault } from "../../state/telemetry/webkitMediaFaults";
 import { noteFairPlay } from "../../state/telemetry/fairPlayCounts";
@@ -262,11 +262,12 @@ function EngineWebView({ tabId, visible, warm, peekOf, engine }: TabWebViewProps
       onAutofillPrompt={(prompt, id) => showAutofillPrompt(tabId, prompt, id)}
       onExternalApp={(externalApp) => showExternalApp(tabId, externalApp)}
       onPageFocus={() => activateFocusedPane(tabId)}
-      onPagePress={() => {
+      onPagePress={(refused) => {
+        if (refused) return notePagePressRefused();
         notePagePress(tabId);
         activateFocusedPane(tabId);
       }}
-      onWindowClose={() => !isQuitting() && closeTabNow(tabId)}
+      onWindowClose={() => pageAskedToClose(tabId)}
       onTransferRefused={(from) => returnRefusedMove(tabId, from)}
       onNotification={(notification) => showWebNotification(tabId, notification)}
       onCommand={({ command, text, modifiers, share, anchor, point }) => {

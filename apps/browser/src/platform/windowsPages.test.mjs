@@ -387,3 +387,27 @@ test("a show asked before its view's page is mounted is not taken, so the view a
   assert.deepEqual(shows("popup:early:page"), [{ verb: "tab.show", args: { key: "popup:early:page", visible: true, ...shape }, windowId: "popup:early" }]);
   unmount();
 });
+
+test("a tab moved to another window: a show its old window's view asks for late is not taken, so the page keeps the place its new window gave it", async () => {
+  const shape = { x: 0, y: 40, width: 800, height: 600, radius: 10, holes: [] };
+  const unmountOld = mountPage("moved-late", { url: "https://moved.example/", windowId: "w1" }, () => {});
+  await settle();
+  assert.equal(showPage("moved-late", true, shape, "w1"), true);
+  await settle();
+  const unmountNew = mountPage("moved-late", { url: "https://moved.example/", windowId: "w2" }, () => {});
+  unmountOld();
+  await settle();
+  const placedInNew = { ...shape, x: 240, width: 560 };
+  assert.equal(showPage("moved-late", true, placedInNew, "w2"), true);
+  await settle();
+  await settle();
+  const sentBefore = shows("moved-late").length;
+  assert.equal(showPage("moved-late", true, shape, "w1"), false, "the old window's measurement is refused");
+  assert.equal(showPage("moved-late", false, null, "w1"), false, "and so is the old window's hide");
+  await settle();
+  await settle();
+  assert.equal(shows("moved-late").length, sentBefore, "nothing more is sent to the page");
+  assert.deepEqual(shows("moved-late").at(-1), { verb: "tab.show", args: { key: "moved-late", visible: true, ...placedInNew }, windowId: "w2" });
+  unmountNew();
+  await settle();
+});

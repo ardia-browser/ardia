@@ -9,7 +9,9 @@ using namespace ardia_web_view;
 namespace {
 
 const char kPageReportsKey = 0;
+const char kPopupTabKey = 0;
 BOOL gLittleArdiaOpensNewTabLinks = NO;
+BOOL gPopupsOpenAsTabs = NO;
 const CFTimeInterval kNewTabLinkSeconds = 2;
 const NSUInteger kNewTabLinksKept = 4;
 const int kNewTabLinkTries = 8;
@@ -187,6 +189,19 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
   gLittleArdiaOpensNewTabLinks = enabled;
 }
 
++ (void)setPopupsOpenAsTabs:(BOOL)enabled {
+  gPopupsOpenAsTabs = enabled;
+}
+
+- (BOOL)opensPopupsAsTabs {
+  return gPopupsOpenAsTabs && ![self.window.identifier isEqualToString:@"ardia.window.small"];
+}
+
+- (void)openedPopupTab:(ArdiaCoreTab *)tab {
+  objc_setAssociatedObject(tab, &kPopupTabKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  [self announceOpenedTab:tab adoptId:[ArdiaTabRegistry offerTab:tab] disposition:@"foreground" link:NO tries:0];
+}
+
 - (void)openedTab:(ArdiaCoreTab *)tab adoptId:(NSString *)adoptId disposition:(NSString *)disposition {
   [self announceOpenedTab:tab adoptId:adoptId disposition:disposition link:NO tries:0];
 }
@@ -305,6 +320,10 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
   if (tab.profile.offTheRecord) payload[@"profile"] = ardia_host::OriginalProfileNameOf(tab.profile);
   if (clicked) payload[@"point"] = RecentClickPoint(self);
   if (linkWait) payload[@"linkWait"] = linkWait;
+  if (objc_getAssociatedObject(tab, &kPopupTabKey)) {
+    objc_setAssociatedObject(tab, &kPopupTabKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    payload[@"popup"] = @YES;
+  }
   [self emit:@"openWindow" payload:payload];
 }
 

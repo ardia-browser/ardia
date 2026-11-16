@@ -14,6 +14,7 @@ const ENGINE_ANSWERS: Record<string, Record<string, unknown>> = {
   ArdiaTabs: { strips: { rev: 0, cmd: null, strips: [] }, routeLinkTabs: {} },
   ArdiaExtensions: { list: { extensions: [] } },
   ArdiaSearch: { engines: { list: { engines: [] } } },
+  ArdiaWindows: { list: [] },
 };
 
 const engineDomains = Object.fromEntries(

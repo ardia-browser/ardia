@@ -47,6 +47,16 @@ export type ActivitySpinnerProps = ViewProps;
 
 export const ActivitySpinner = requireNativeViewManager<ActivitySpinnerProps>("ArdiaActivitySpinner");
 
+export type FolderIconProps = ViewProps & {
+  open: boolean;
+  stroke?: string;
+  face?: string;
+  insideTop?: string;
+  insideBottom?: string;
+};
+
+export const FolderIcon = requireNativeViewManager<FolderIconProps>("ArdiaFolderIcon");
+
 export type ContextMenuAreaProps = ViewProps & {
   onContextMenu?: () => void;
   captureDescendants?: boolean;

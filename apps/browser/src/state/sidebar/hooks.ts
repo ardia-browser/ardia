@@ -12,6 +12,7 @@ import { folderIn } from "../pins/tileFolders";
 import { ownIcon } from "../pins/rowIcons";
 import { usePage } from "../tabs/pageState";
 import { usePeekOpenedFrom } from "../peek/hooks";
+import { useTabShared } from "../media/screenShare";
 import { useStoreWhile } from "../tabs/tabWatch";
 import { splitRowPanes } from "../splits/splits";
 import { downloadsIn } from "../downloads/downloadsSlice";
@@ -20,11 +21,12 @@ import { groupTabIds } from "./groupPanelRows";
 import { capture, type Capture } from "./listCapture";
 import { pinnedCollapsed, pinnedKept } from "./pinnedFold";
 import { useSidebarUi, type Hover } from "./sidebarUi";
+import { useShownSidebarWidth } from "./shownWidth";
 
 export function useSidebarWidth(windowId: string): number {
-  const saved = useBrowser((s) => s.settings.sidebarWidth);
+  const shown = useShownSidebarWidth(windowId);
   const dragging = useSidebarUi((u) => u.dragWidth[windowId]);
-  return dragging ?? saved;
+  return dragging ?? shown;
 }
 
 export const useDragGhostLabel = (folderName: string | undefined, groupId: string | undefined, tab: Tab | undefined) =>
@@ -41,8 +43,9 @@ export const useIconPickerCurrent = (kind: "tab" | "group" | "live" | "folder", 
 
 export function useTabBadged(tabId: string): boolean {
   const capturing = usePage(tabId, (p) => !!p.mediaAccess);
+  const shared = useTabShared(tabId);
   const peeked = !!usePeekOpenedFrom(tabId);
-  return capturing || peeked;
+  return capturing || shared || peeked;
 }
 
 export const useIsPinnedRow = (kind: "tab" | "group" | "live" | "folder", id: string) => useBrowser((s) => kind === "tab" && isPinnedRow(s.tabs[id]));
@@ -68,14 +71,6 @@ export const useShowsExtraTabs = (windowId: string, profileId: string, groupId: 
 export const usePinnedCollapsed = (profileId: string) => useBrowser((s) => pinnedCollapsed(s, profileId));
 
 export const usePinnedKept = (windowId: string, profileId: string, entries: string[]) => useBrowser((s) => pinnedKept(s, windowId, profileId, entries));
-
-export const useGroupFirstTabIcon = (groupId: string) =>
-  useBrowser(
-    useShallow((s) => {
-      const t = s.tabs[s.groups[groupId]?.tabIds[0] ?? ""];
-      return t && { url: t.url, favicon: t.favicon, customIcon: t.customIcon, profileId: t.profileId };
-    }),
-  );
 
 export const useHasDownloads = (windowId: string) => useBrowser((s) => downloadsIn(s, windowId).length > 0);
 

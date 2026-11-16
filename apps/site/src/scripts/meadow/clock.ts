@@ -9,6 +9,10 @@ export function startSunrise(hero: HTMLElement) {
   hero.dataset.sunrise = "run";
 }
 
+export function resetSunrise() {
+  startedAt = null;
+}
+
 export function sunriseElapsed(now = performance.now()) {
   return startedAt === null ? 0 : now - startedAt;
 }

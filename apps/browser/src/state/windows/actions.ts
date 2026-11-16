@@ -1,3 +1,4 @@
+import type { OutsidePressEvent } from "../../platform/windows";
 import { storeAction, useBrowser } from "../browser/store";
 import { noteDownloadsPanel } from "../telemetry/downloadsPanelCounts";
 
@@ -11,23 +12,23 @@ export const returnRefusedMove = storeAction("returnRefusedMove");
 export const removeDownload = storeAction("removeDownload");
 export const clearDownloads = storeAction("clearDownloads");
 
-const SAME_PRESS_MS = 600;
-let downloadsPressedAway: { windowId: string; at: number } | null = null;
+let downloadsPressedAway: { windowId: string; pressedAt: number } | null = null;
 
-export function dismissDownloadsByPress(windowId: string) {
+export function dismissDownloadsByPress(windowId: string, press: OutsidePressEvent) {
   if (!useBrowser.getState().windowUi[windowId]?.downloadsOpen) return;
-  downloadsPressedAway = { windowId, at: Date.now() };
+  const pressedAt = press.nativeEvent.timestamp;
+  downloadsPressedAway = pressedAt === undefined ? null : { windowId, pressedAt };
   setDownloadsOpen(windowId, false);
   noteDownloadsPanel("pressClose");
 }
 
-function downloadsClosedByThisPress(windowId: string, now = Date.now()) {
+function downloadsClosedByThisPress(windowId: string, pressedAt: number | undefined) {
   const away = downloadsPressedAway;
   downloadsPressedAway = null;
-  return !!away && away.windowId === windowId && now - away.at < SAME_PRESS_MS;
+  return pressedAt !== undefined && away?.windowId === windowId && away.pressedAt === pressedAt;
 }
 
-export function toggleDownloadsOpen(windowId: string) {
-  if (downloadsClosedByThisPress(windowId)) return;
+export function toggleDownloadsOpen(windowId: string, pressedAt?: number) {
+  if (downloadsClosedByThisPress(windowId, pressedAt)) return;
   setDownloadsOpen(windowId, !useBrowser.getState().windowUi[windowId]?.downloadsOpen);
 }

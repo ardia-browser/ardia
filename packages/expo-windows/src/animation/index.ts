@@ -5,7 +5,7 @@ type Config = { useNativeDriver?: boolean; iterations?: number };
 type Helper = { default: { shouldUseNativeDriver(config: Config): boolean } };
 type AnimatedValue = { __makeNative(platformConfig?: unknown): void };
 type NodeClass = { default: { prototype: AnimatedValue } };
-type Running = {
+export type Running = {
   __active: boolean;
   __isLooping?: boolean | null;
   start(...args: unknown[]): void;

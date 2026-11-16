@@ -45,7 +45,7 @@ enum AppIcons {
     }
   }
 
-  static var shown: String { IconStyle.shown(saved: current, theme: IconStyle.systemTheme) }
+  static var shown: String { IconStyle.shown(saved: current, theme: IconStyle.systemTheme, bundleIcon: IconStyle.bundleIcon) }
 
   private static func apply() {
     let id = shown

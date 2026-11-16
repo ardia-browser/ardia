@@ -191,14 +191,17 @@
   };
   const NOW_PLAYING_DRIFT_S = 1;
   let lastNowPlaying = null;
+  let reportedMedia = null;
   const projectedPosition = (last, now) => last.position + (last.playing ? ((now - last.at) / 1000) * last.rate : 0);
   const reportNowPlaying = later(() => {
     const el = pickMedia();
+    reportedMedia = el;
     const md = session && session.metadata;
     let state = null;
     if (el || md) {
       const duration = positionState?.duration ?? el?.duration;
       const sessionState = session ? session.playbackState : "none";
+      const onTimeline = timeline && timelineReport(timeline, el, performance.now());
       state = {
         frame,
         title: md?.title || document.title || "",
@@ -206,9 +209,9 @@
         album: md?.album || "",
         artwork: artworkOf(md),
         playbackState: sessionState !== "none" ? sessionState : el ? (el.paused || el.ended ? "paused" : "playing") : "none",
-        position: positionState?.position ?? el?.currentTime ?? 0,
+        position: onTimeline ? onTimeline.position : (el?.currentTime ?? 0),
         duration: Number.isFinite(duration) ? duration : null,
-        playbackRate: positionState?.playbackRate ?? el?.playbackRate ?? 1,
+        playbackRate: onTimeline ? onTimeline.playbackRate : (el?.playbackRate ?? 1),
         hasVideo: !!el && el.tagName === "VIDEO" && el.videoWidth > 0,
         actions: [...actions.keys()],
         controllable: !!el && heard.has(el) && (sessionState !== "none" || !oneShot(el)),
@@ -242,9 +245,12 @@
       m.pause();
       return;
     }
+    if (e.type === "emptied") timeline?.mediaTimes.delete(m);
     if (e.type === "play" || e.type === "playing") {
       active = m;
       watchRemoval(m);
+      const joinedAt = timeline && anchorStartedMedia(timeline, m, reportedMedia, performance.now());
+      if (joinedAt != null) restartTimelineClock(joinedAt);
     }
     noteHeard(m);
     if (e.type !== "volumechange") reportNowPlaying();
@@ -314,9 +320,14 @@
     const setPositionState = proto.setPositionState;
     proto.setPositionState = function (state) {
       const result = setPositionState.apply(this, arguments);
-      positionState = state || null;
-      timeline = typeof state?.duration === "number" ? { position: state.position ?? 0, duration: state.duration, playbackRate: state.playbackRate ?? 1, mediaTimes: new WeakMap(reachableMedia().map((m) => [m, m.currentTime])) } : null;
-      if (timeline) restartTimelineClock(timeline.position);
+      const media = reachableMedia();
+      timeline = typeof state?.duration === "number" ? { position: state.position ?? 0, duration: state.duration, playbackRate: state.playbackRate ?? 1, mediaTimes: mediaTimesOf(media), started: [...media, ...playingMedia].some(isPlaying) } : null;
+      positionState = timeline ? state : null;
+      if (timeline) {
+        restartTimelineClock(timeline.position);
+        const reported = timeline;
+        queueMicrotask(guard(() => timeline === reported && (reported.mediaTimes = mediaTimesOf(reachableMedia()))));
+      }
       reportNowPlaying();
       return result;
     };
@@ -339,6 +350,23 @@
   const timelineNow = (reported, mediaAdvance, now) => {
     const position = mediaAdvance == null ? clockPosition(reported.playbackRate, reported.clock, now) : reported.position + mediaAdvance;
     return { position: Math.max(0, Math.min(reported.duration, position)), duration: reported.duration };
+  };
+  const mediaTimesOf = (media) => new WeakMap(media.map((m) => [m, m.currentTime]));
+  const incidentalSound = (m, timeline) => oneShot(m) && m.duration * 2 < timeline.duration;
+  const anchorStartedMedia = (timeline, m, followed, now) => {
+    if (incidentalSound(m, timeline)) return null;
+    const started = timeline.started;
+    timeline.started = true;
+    const followedAdvance = followed === m ? null : mediaAdvanceOf(followed, timeline);
+    if (timeline.mediaTimes.has(m) && followedAdvance == null) return null;
+    const position = started ? timelineNow(timeline, followedAdvance, now).position : timeline.position;
+    timeline.mediaTimes.set(m, m.currentTime - (position - timeline.position));
+    return position;
+  };
+  const mediaAdvanceOf = (el, timeline) => (el && !incidentalSound(el, timeline) && timeline.mediaTimes.has(el) ? el.currentTime - timeline.mediaTimes.get(el) : null);
+  const timelineReport = (timeline, el, now) => {
+    const mediaAdvance = mediaAdvanceOf(el, timeline);
+    return { position: timelineNow(timeline, mediaAdvance, now).position, playbackRate: mediaAdvance == null ? timeline.playbackRate : el.playbackRate };
   };
   const restartTimelineClock = (position) => {
     timeline.clock = { position, at: performance.now(), advancing: session.playbackState !== "paused" };
@@ -388,7 +416,7 @@
         call("previoustrack");
         break;
       case "seekBy": {
-        const mediaAdvance = el && timeline?.mediaTimes.has(el) ? el.currentTime - timeline.mediaTimes.get(el) : null;
+        const mediaAdvance = timeline && mediaAdvanceOf(el, timeline);
         const [how, details] = seekByCall(seconds, el, (name) => actions.has(name), timeline && timelineNow(timeline, mediaAdvance, performance.now())) || [];
         if (how === "currentTime") el.currentTime = details.seekTime;
         else if (how === "seekto") askToSeek(how, details, () => details.seekTime);
@@ -405,6 +433,7 @@
         call("enterpictureinpicture");
         break;
     }
+    lastNowPlaying = null;
     reportNowPlaying();
   };
 
@@ -1040,8 +1069,9 @@
 
   let bridgesProtectedPlayback = () => false;
   let reportProtectedPlayback = null;
+  const FAIRPLAY_ORIGINS = ["https://open.spotify.com"];
   try {
-    if (isTop && location.origin === "https://open.spotify.com" && typeof Navigator.prototype.requestMediaKeySystemAccess === "function") {
+    if (isTop && FAIRPLAY_ORIGINS.includes(location.origin) && typeof Navigator.prototype.requestMediaKeySystemAccess === "function") {
       const KEY_SYSTEM = "com.apple.fps.1_0";
       const PLAYLIST_PART = 30000;
       const CONFIG_WAIT_MS = 3000;

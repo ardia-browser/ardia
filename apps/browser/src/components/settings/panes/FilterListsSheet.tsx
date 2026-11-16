@@ -121,6 +121,7 @@ function CustomLists({ blocker, refresh }: { blocker: ContentBlockerState | null
   const [typed, setTyped] = useState("");
   const [note, setNote] = useState<{ text: string; error: boolean } | null>(null);
   const [adding, setAdding] = useState(false);
+  const [tried, setTried] = useState(false);
   const lists = blocker?.lists.filter((l) => l.category === "custom") ?? [];
   const downloading = lists.some((l) => !l.failed && !l.filters);
   useEffect(() => {
@@ -130,7 +131,12 @@ function CustomLists({ blocker, refresh }: { blocker: ContentBlockerState | null
   }, [downloading, blocker]);
   const address = filterListAddress(typed);
   const add = async () => {
-    if (!blocker || !address || adding) return;
+    if (!blocker || adding) return;
+    if (!address) {
+      setTried(true);
+      setNote({ text: "That doesn't look like a web address.", error: true });
+      return;
+    }
     setAdding(true);
     setNote(null);
     try {
@@ -181,15 +187,16 @@ function CustomLists({ blocker, refresh }: { blocker: ContentBlockerState | null
               value={typed}
               onChangeText={(t) => {
                 setTyped(t);
+                setTried(false);
                 setNote(null);
               }}
               placeholder="https://example.com/filters.txt"
-              invalid={!!typed.trim() && !address}
+              invalid={tried && !address}
               onSubmit={() => void add()}
             />
           }
         >
-          <Button title={adding ? "Adding…" : "Add"} disabled={!blocker || !address || adding} onPress={() => void add()} />
+          <Button title={adding ? "Adding…" : "Add"} disabled={!blocker || !typed.trim() || adding} onPress={() => void add()} />
         </Row>
       </Group>
       {note && (

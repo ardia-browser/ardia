@@ -17,6 +17,7 @@ import { LITTLE_ARDIA_DISABLED_COMMANDS, PAGE_COMMANDS, PAGE_COMMANDS_OFF_INTERN
 import { extensionMenu } from "../extensions/actions";
 import { menuBarBindings } from "./commandShortcuts";
 import { focusedWindowOf } from "../windows/ui";
+import { clearableRecentlyClosed, closedWindowTitle, newestClosed, recentlyClosedIn } from "../windows/recentlyClosedList";
 import { BOOKMARK_COMMANDS, bookmarksShown } from "../bookmarks/visibility";
 
 function menuBookmarks(b: Bookmarks, folderId: string, depth = 0): MenuBookmark[] {
@@ -123,17 +124,9 @@ export function menuState(s: BrowserState): MenuState {
     titles.openFile = "Open in Ardia";
   }
 
-  const listed = (profileId: string | undefined) => !w || w.kind === "private" || (profileId && s.profiles[profileId] ? profileId : s.settings.defaultProfileId) === w.profileId;
-  const closed = [
-    ...s.closedTabs
-      .filter((c) => !c.tab.profileId.startsWith("incognito:") && listed(c.tab.profileId))
-      .map((c) => ({ id: c.id, title: c.tab.title || tabLabel(c.tab), at: c.closedAt })),
-    ...s.closedWindows.filter((c) => listed(c.window.profileId)).map((c) => ({ id: c.id, title: c.tabs.length ? (c.tabs.length === 1 ? "Window (1 Tab)" : `Window (${c.tabs.length} Tabs)`) : "Window (Pinned Tabs)", at: c.closedAt })),
-  ]
-    .sort((a, b) => b.at - a.at)
-    .slice(0, 10)
-    .map(({ id, title }) => ({ id, title }));
+  const closed = newestClosed(recentlyClosedIn(s, w)).map((c) => ({ id: c.id, title: c.kind === "tab" ? c.tab.title || tabLabel(c.tab) : closedWindowTitle(c) }));
 
+  if (!clearableRecentlyClosed(s, windowId)) disabled.push("clearRecentlyClosed");
   return {
     checked,
     disabled,
@@ -171,7 +164,7 @@ function shownOrSelected(s: BrowserState, tab: Tab): boolean {
   const w = s.windows[tab.windowId];
   if (!w) return true;
   for (const profile in w.activeTabIds) if (w.activeTabIds[profile] === tab.id) return true;
-  return s.peeks[tab.windowId]?.tabId === tab.id || !!s.selection[tab.windowId]?.includes(tab.id);
+  return peekTabId(s, tab.windowId) === tab.id || !!s.selection[tab.windowId]?.includes(tab.id);
 }
 
 function tabsChangedForMenu(s: BrowserState, prev: BrowserState): boolean {

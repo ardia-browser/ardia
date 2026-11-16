@@ -6,7 +6,7 @@ vendor="$(cd "$(dirname "$0")/.." && pwd)/vendor"
 UBO_VERSION="1.76.0"
 UBO_SHA256="e76a1912426caa7b8679ad11dd140d1529c23db22ddbe892b6f901e9b7763456"
 UBO_KEY="MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv1MPdIgJjIsN4Y0N/20GDNPfN4J//aknk5dsH8Y1LBxSnz3Jp/BT187Gub5cv6lee5CUVDmVBa3Yiqow8GMna5KwX+ZP+yc1pt/ewzyNxm2BzoQPgWz+1DgZaahz56/szi1EEtWVYxd3wNxFN4wPDqwV6aqlnV4R3RnxlF1ocw1kDgJ+8BxR1EY+MB+H8bymdef+xB3TNifBZIVmZt81cC3UMOG6KWRTU1wtIXsW+ZqSv5zaeFHLkjG4MPB7EfcMGrvO80ElJBZZLdrTmYOL4uUPsz2Wy6GiPWzpDmzzI9RfsZm11sLiJo63blcPF0Cz3sM0wQfxJPPcQuqkZDReswIDAQAB"
-UBO_PATCH="24"
+UBO_PATCH="25"
 ubo="$vendor/ubo"
 stamp="$UBO_VERSION-$UBO_PATCH"
 installed() { [ -f "$ubo/.version" ] && [ "$(cat "$ubo/.version")" = "$stamp" ]; }
@@ -61,6 +61,7 @@ def patch(rel, old, new):
 patch("js/background.js", "prefetchingDisabled: true,", "prefetchingDisabled: false,")
 patch("js/background.js", "    noDashboard: false,", "    noDashboard: true,")
 patch("js/background.js", "    autoUpdateDelayAfterLaunch: 37,", "    autoUpdateDelayAfterLaunch: 600,")
+patch("js/background.js", "    selfieDelayInSeconds: 53,", "    selfieDelayInSeconds: 3,")
 patch("js/background.js", "    showIconBadge: true,", "    showIconBadge: false,")
 patch("js/background.js", "    contextMenuEnabled: true,", "    contextMenuEnabled: false,")
 patch("js/contextmenu.js", "    newBits |= SUBSCRIBE_TO_LIST_BIT;\n", "")

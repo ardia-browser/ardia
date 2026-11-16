@@ -3,10 +3,13 @@
 #include <commctrl.h>
 #include <shobjidl.h>
 
+#include <cstdio>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
+#include "LaunchLog.h"
 #include "ModalThread.h"
 
 namespace Ardia {
@@ -25,6 +28,110 @@ inline TaskDialogIndirectFunction ResolveTaskDialog() noexcept {
 
 constexpr int ConfirmButtonId = 1001;
 
+inline void NoteCancel(std::string_view kind, std::wstring const &what) noexcept {
+  LaunchLog::Write(L"dialog", std::wstring(kind.begin(), kind.end()) + L" " + what);
+}
+
+inline std::wstring HexResult(HRESULT result) noexcept {
+  wchar_t text[16]{};
+  swprintf_s(text, L"0x%08X", static_cast<unsigned int>(result));
+  return text;
+}
+
+struct CancelTiming {
+  explicit CancelTiming(std::string_view kind) noexcept : kind(kind) {}
+  ~CancelTiming() noexcept {
+    if (cancelledAt) NoteCancel(kind, L"closed " + std::to_wstring(GetTickCount64() - cancelledAt) + L" ms after its cancel" + (byWindow ? L", by its window's Cancel" : L""));
+  }
+  CancelTiming(CancelTiming const &) = delete;
+  CancelTiming &operator=(CancelTiming const &) = delete;
+
+  std::string_view kind;
+  ULONGLONG cancelledAt = 0;
+  bool byWindow = false;
+};
+
+inline HWND FileDialogWindow(IFileDialog *dialog) noexcept {
+  winrt::com_ptr<IOleWindow> window;
+  HWND found = nullptr;
+  if (SUCCEEDED(dialog->QueryInterface(__uuidof(IOleWindow), window.put_void())) && window) window->GetWindow(&found);
+  return found;
+}
+
+struct FirstFolderEvents : winrt::implements<FirstFolderEvents, ::IFileDialogEvents> {
+  HRESULT __stdcall OnFileOk(IFileDialog *) noexcept override { return S_OK; }
+  HRESULT __stdcall OnFolderChanging(IFileDialog *, IShellItem *) noexcept override { return S_OK; }
+  HRESULT __stdcall OnFolderChange(IFileDialog *) noexcept override {
+    ModalWatch::NoteFirstFolder();
+    return S_OK;
+  }
+  HRESULT __stdcall OnSelectionChange(IFileDialog *) noexcept override { return S_OK; }
+  HRESULT __stdcall OnShareViolation(IFileDialog *, IShellItem *, FDE_SHAREVIOLATION_RESPONSE *response) noexcept override {
+    if (response) *response = FDESVR_DEFAULT;
+    return S_OK;
+  }
+  HRESULT __stdcall OnTypeChange(IFileDialog *) noexcept override { return S_OK; }
+  HRESULT __stdcall OnOverwrite(IFileDialog *, IShellItem *, FDE_OVERWRITE_RESPONSE *response) noexcept override {
+    if (response) *response = FDEOR_DEFAULT;
+    return S_OK;
+  }
+};
+
+struct FileDialogWatch {
+  FileDialogWatch(IFileDialog *dialog, std::string_view kind) noexcept : timing(kind), m_dialog(dialog) {
+    ModalWatch::OpensFolders();
+    try {
+      winrt::com_ptr<::IFileDialogEvents> events = winrt::make_self<FirstFolderEvents>().as<::IFileDialogEvents>();
+      if (FAILED(dialog->Advise(events.get(), &m_events))) m_events = 0;
+    } catch (...) {
+      m_events = 0;
+    }
+    ModalWatch::OnAbandon([this, dialog] {
+      timing.cancelledAt = GetTickCount64();
+      NoteCancel(timing.kind, L"cancelled (Close: " + HexResult(dialog->Close(HRESULT_FROM_WIN32(ERROR_CANCELLED))) + L")");
+      CancelThroughWindow(dialog);
+      ModalWatch::OnStubborn([this, dialog] { CancelThroughWindow(dialog); });
+    });
+  }
+
+  void CancelThroughWindow(IFileDialog *dialog) noexcept {
+    ULONGLONG now = GetTickCount64();
+    std::wstring since = std::to_wstring(now - timing.cancelledAt) + L" ms after Close";
+    HWND window = FileDialogWindow(dialog);
+    if (!window) {
+      if (!m_saidNoWindow) NoteCancel(timing.kind, L"has no window yet " + since + L": its Cancel waits for one");
+      m_saidNoWindow = true;
+      return;
+    }
+    bool visible = IsWindowVisible(window) != FALSE;
+    if (!PostMessageW(window, WM_COMMAND, IDCANCEL, 0)) return;
+    if (!timing.byWindow) {
+      timing.byWindow = true;
+      m_saidAt = now;
+      NoteCancel(timing.kind, L"sent Cancel to its window " + since + (visible ? L"" : L", not shown yet"));
+    } else if (now - m_saidAt >= StillOpenNoteMs) {
+      m_saidAt = now;
+      NoteCancel(timing.kind, L"still open " + since + L", its thread running: sent Cancel to its window again");
+    }
+  }
+  ~FileDialogWatch() noexcept {
+    ModalWatch::Disarm();
+    if (m_events) m_dialog->Unadvise(m_events);
+  }
+  FileDialogWatch(FileDialogWatch const &) = delete;
+  FileDialogWatch &operator=(FileDialogWatch const &) = delete;
+
+  CancelTiming timing;
+
+ private:
+  static constexpr ULONGLONG StillOpenNoteMs = 500;
+
+  IFileDialog *m_dialog;
+  DWORD m_events = 0;
+  bool m_saidNoWindow = false;
+  ULONGLONG m_saidAt = 0;
+};
+
 inline HRESULT CALLBACK ConfirmEvents(HWND dialog, UINT notification, WPARAM, LPARAM, LONG_PTR data) noexcept {
   auto *shown = reinterpret_cast<HWND *>(data);
   if (notification == TDN_CREATED) *shown = dialog;
@@ -36,7 +143,10 @@ inline DialogConfirmReply ShowConfirm(HWND owner, std::wstring const &title, std
   DialogConfirmReply reply;
   ModalOverWindow modal(owner, "confirm");
   HWND shown = nullptr;
-  ModalWatch::OnAbandon([&shown, &modal] {
+  CancelTiming timing("confirm");
+  ModalWatch::OnAbandon([&shown, &modal, &timing] {
+    timing.cancelledAt = GetTickCount64();
+    NoteCancel(timing.kind, shown ? L"cancelled (Cancel button)" : L"cancelled (its window's Cancel)");
     if (shown) SendMessageW(shown, TDM_CLICK_BUTTON, IDCANCEL, 0);
     else if (HWND fallback = modal.parent.Dialog()) PostMessageW(fallback, WM_COMMAND, IDCANCEL, 0);
   });
@@ -213,7 +323,7 @@ inline std::vector<std::wstring> ShowOpenFiles(HWND owner) noexcept {
   FILEOPENDIALOGOPTIONS options = 0;
   dialog->GetOptions(&options);
   dialog->SetOptions(options | FOS_ALLOWMULTISELECT | FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST | FOS_PATHMUSTEXIST);
-  ModalWatch::OnAbandon([shown = dialog.get()] { shown->Close(HRESULT_FROM_WIN32(ERROR_CANCELLED)); });
+  FileDialogWatch watch(dialog.get(), "file picker");
   if (FAILED(dialog->Show(modal.Parent()))) return picked;
   winrt::com_ptr<IShellItemArray> results;
   if (FAILED(dialog->GetResults(results.put())) || !results) return picked;
@@ -241,7 +351,7 @@ inline std::optional<std::wstring> ShowOpenFolder(HWND owner, std::optional<std:
     winrt::com_ptr<IShellItem> folder;
     if (SUCCEEDED(SHCreateItemFromParsingName(current->c_str(), nullptr, __uuidof(IShellItem), folder.put_void())) && folder) dialog->SetFolder(folder.get());
   }
-  ModalWatch::OnAbandon([shown = dialog.get()] { shown->Close(HRESULT_FROM_WIN32(ERROR_CANCELLED)); });
+  FileDialogWatch watch(dialog.get(), "folder picker");
   if (FAILED(dialog->Show(modal.Parent()))) return std::nullopt;
   winrt::com_ptr<IShellItem> result;
   if (FAILED(dialog->GetResult(result.put())) || !result) return std::nullopt;

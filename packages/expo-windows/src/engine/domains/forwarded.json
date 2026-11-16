@@ -92,8 +92,10 @@
       "setLittleArdiaOpensNewTabLinks",
       "setAutoPictureInPicture",
       "setBlockAutoplayEverywhere",
+      "setFairPlayInChromium",
       "setVideoUpscaling",
       "setVideoUpscalingTestConditions",
+      "takeContentDrift",
       "videoUpscalingState"
     ],
     "windows": ["list", "dev"]

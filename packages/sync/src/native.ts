@@ -20,7 +20,7 @@ export type PhraseResult =
   | { error: "mismatch" }
   | { error: "keychain" };
 
-export type SealedLogin = { origin: string; username: string; sealed: string; created: number };
+export type SealedLogin = { origin: string; username: string; created: number } & ({ sealed: string; passwordless?: undefined } | { passwordless: true; sealed?: undefined });
 
 type SyncNative = {
   folderInfo(path: string | null): Promise<FolderInfo>;

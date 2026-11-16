@@ -10,6 +10,7 @@ import { useClosedGroups, useClosedTabs } from "../../state/sidebar/hooks";
 import { searchCandidates, type Row } from "../../state/sidebar/searchTabs";
 import { setSidebarUi, useSidebarUi } from "../../state/sidebar/sidebarUi";
 import { TabIcon } from "./TabIcon";
+import { FolderOrIcon } from "./AnimatedFolder";
 import { SIDEBAR_SHADOW } from "./tokens";
 import { SectionLabel } from "./SectionLabel";
 
@@ -125,7 +126,7 @@ function ResultRow({ row, selected, onHover, onPress }: { row: Row; selected: bo
   const detail = row.kind === "tab" ? (row.current && !row.where ? "Current Tab" : row.where) : row.detail;
   return (
     <ListRow height={ROW} selected={selected} onPress={onPress} onHover={(hovered) => hovered && onHover()}>
-        <TabIcon url={row.url} favicon={row.favicon} icon={row.icon} />
+        {row.kind === "closed" && row.group ? <FolderOrIcon icon={row.icon} open={false} color={row.group.color} /> : <TabIcon url={row.url} favicon={row.favicon} icon={row.icon} />}
         <View style={{ flex: 1, flexDirection: "row", alignItems: "center", minWidth: 0 }}>
           <FadeLabel text={row.title} fontSize={font.title.fontSize} color={theme.textPrimary} style={{ flex: 3, height: 19 }} />
           {row.url ? <FadeLabel text={`— ${displayUrl(row.url)}`} fontSize={font.title.fontSize} color={theme.textSecondary} style={{ flex: 2, height: 19, marginLeft: URL_LABEL_GAP }} /> : null}

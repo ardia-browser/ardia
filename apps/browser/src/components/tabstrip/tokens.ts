@@ -63,16 +63,7 @@ const REORDER_OMEGA = 90;
 
 export const SLIDE = { ...spring({ response: (2 * Math.PI) / REORDER_OMEGA, damping: 1 }), restDisplacementThreshold: 0.25, restSpeedThreshold: 2, useNativeDriver: false } as const;
 
-export const GROUP_GLYPH = {
-  width: 13,
-  height: 11,
-  sliver: 1.25,
-  backHeight: 7,
-  midHeight: 9,
-  midGap: 0.6,
-  faceGap: 0.5,
-  face: { width: 9.4, height: 10.6 },
-} as const;
+export const STRIP_FOLDER_SIDE = 13;
 
 export const STRIP_COLORS = {
   dark: {

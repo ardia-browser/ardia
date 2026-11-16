@@ -1,6 +1,21 @@
 import { hostCall, leaveOffersFromUnheard, onEngineTopic } from "../engine/host";
 import { showStepsOf, traceShowsOf } from "../engine/showTrace";
-import { expectEqual, type Check } from "./check";
+import type { WindowsNative } from "@ardia/shell";
+import { isPopupWindowId } from "@ardia/shell/src/windows.ts";
+import { requireNativeModule } from "../modules";
+import { expectEqual, expectTrue, type Check } from "./check";
+
+const POPUP_WINDOW_GONE_MS = 3000;
+const popupWindows = async () => (await requireNativeModule<Pick<WindowsNative, "windowIds">>("ArdiaAppWindows").windowIds()).filter((id) => isPopupWindowId(id));
+
+async function popupWindowsGone(before: readonly string[], withinMs: number) {
+  const began = Date.now();
+  while (Date.now() - began < withinMs) {
+    if ((await popupWindows()).every((id) => before.includes(id))) return true;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return false;
+}
 
 export const pagePopupCheck = (pageKey: string, firstWindow: () => Promise<string>): Check => ({
   name: "engine: a pop-up a page opens with a click waits in the background of its window, sent to the app as a pop-up with the size it asked for and its opener, the opener stays the shown tab, and no Chromium pop-up window opens",
@@ -24,6 +39,7 @@ export const pagePopupCheck = (pageKey: string, firstWindow: () => Promise<strin
       const reply = await hostCall<{ result?: unknown }>("tab.call", { key: pageKey, method: "evaluate", userGesture, code });
       return typeof reply.result === "string" ? (JSON.parse(reply.result) as unknown) : null;
     };
+    const popupsBefore = await popupWindows();
     try {
       const before = await evaluate(`window.ardiaHiddenSeen = false; document.addEventListener("visibilitychange", () => { if (document.visibilityState !== "visible") window.ardiaHiddenSeen = true; }); post("result", JSON.stringify(document.visibilityState));`);
       expectEqual(before, "visible", "the opener page before its pop-up opens");
@@ -55,6 +71,7 @@ export const pagePopupCheck = (pageKey: string, firstWindow: () => Promise<strin
         "the opener page stays the visible tab of its window while its pop-up waits for the app and after",
       );
       expectEqual(linked, { linked: true, closed: true }, "the pop-up's opener, and window.close() from its opener");
+      expectTrue(await popupWindowsGone(popupsBefore, POPUP_WINDOW_GONE_MS), `the app's pop-up window was still open ${POPUP_WINDOW_GONE_MS} ms after its page was closed by window.close(): ${JSON.stringify(await popupWindows())}`);
     } finally {
       await evaluate(`const w = window.open("", "${popupName}"); if (w) w.close(); post("result", "null");`).catch(() => null);
       await hostCall("tab.show", { key: pageKey, visible: false }, windowId).catch(() => null);

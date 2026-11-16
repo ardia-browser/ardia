@@ -9,8 +9,10 @@
 #include <utility>
 #include <vector>
 
+#include "ardia/core/ac_host_visibility.h"
 #include "ardia/core/ac_launch_switches.h"
 #include "ardia/win/context_menu.h"
+#include "ardia/win/frame_view.h"
 #include "ardia/win/hooks.h"
 #include "ardia/win/main.h"
 #include "ardia/win/page_links.h"
@@ -142,6 +144,23 @@ LRESULT CALLBACK ParentProcedure(HWND window,
     ::RemoveWindowSubclass(window, &ParentProcedure, id);
   }
   return ::DefSubclassProc(window, message, w_param, l_param);
+}
+
+std::string_view HitName(LRESULT hit) {
+  switch (hit) {
+    case HTCLIENT:
+      return "client";
+    case HTTRANSPARENT:
+      return "transparent";
+    case HTTOP:
+      return "top";
+    case HTTOPLEFT:
+      return "topLeft";
+    case HTTOPRIGHT:
+      return "topRight";
+    default:
+      return "other";
+  }
 }
 
 int Integer(const base::DictValue& args, std::string_view key) {
@@ -314,6 +333,8 @@ void Host::Call(const std::string& verb,
       }
     }
     result = Ok();
+  } else if (verb == "tab.hitTest") {
+    result = HitTest(args);
   } else if (verb == "keyboard.page") {
     result = Ok();
     result.Set("key", KeyboardPage());
@@ -623,6 +644,8 @@ base::DictValue Host::ShowTab(const base::DictValue& args, HWND parent) {
     Place(window, hosted);
   }
   hosted.shown = key;
+  ardiacore::NoteTabInShownSlot(contents);
+  ardiacore::NoteTabShownByHost(contents, true);
   return Ok();
 }
 
@@ -690,6 +713,27 @@ void Host::DeleteClosedTab(content::WebContents* contents) {
     model->delegate()->CreateHistoricalTab(contents);
   }
   model->DetachAndDeleteWebContentsAt(index);
+}
+
+base::DictValue Host::HitTest(const base::DictValue& args) {
+  content::WebContents* contents = Find(Text(args, "key"));
+  Browser* browser = contents ? BrowserOf(contents) : nullptr;
+  HWND window = browser ? WindowOf(browser) : nullptr;
+  RECT bounds;
+  if (!window || !::GetWindowRect(window, &bounds)) {
+    return Error("the tab has no page window");
+  }
+  const LRESULT hit = ::SendMessageW(
+      window, WM_NCHITTEST, 0,
+      MAKELPARAM(bounds.left + Integer(args, "x"),
+                 bounds.top + Integer(args, "y")));
+  base::DictValue result = Ok();
+  result.Set("hit", HitName(hit));
+  result.Set("appHit",
+             HitName(AppWindowHitAt(
+                 window, {bounds.left + Integer(args, "x"),
+                          bounds.top + Integer(args, "y")})));
+  return result;
 }
 
 base::DictValue Host::DiscardOffered(const base::DictValue& args) {
@@ -1004,6 +1048,7 @@ void Host::Hide(Browser* browser, Hosted& hosted) {
     }
   }
   if (content::WebContents* shown = Find(hosted.shown)) {
+    ardiacore::NoteTabShownByHost(shown, false);
     if (ExclusiveAccessManager* manager =
             ExclusiveAccessManager::From(browser)) {
       manager->OnTabDeactivated(shown);

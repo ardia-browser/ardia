@@ -11,7 +11,7 @@ export const isTextOnlyRow = (t: Pick<Tab, "pin" | "customIcon"> | undefined): b
 
 export const hidesRowIcon = (t: Pick<Tab, "pin" | "customIcon" | "url" | "pinnedUrl"> | undefined, badged = false): boolean => !!t && !badged && isTextOnlyRow(t) && !awayFromPin(t);
 
-export const ghostIcon = (groupIcon: string | null, tab: Pick<Tab, "pin" | "customIcon" | "url" | "pinnedUrl"> | undefined, draggingRow: boolean): { icon: string | null } | null =>
-  groupIcon ? { icon: groupIcon } : tab && !(draggingRow && hidesRowIcon(tab)) ? { icon: tab.customIcon } : null;
+export const ghostIcon = (tab: Pick<Tab, "pin" | "customIcon" | "url" | "pinnedUrl"> | undefined, draggingRow: boolean): { icon: string | null } | null =>
+  tab && !(draggingRow && hidesRowIcon(tab)) ? { icon: tab.customIcon } : null;
 
 export const ownIcon = (t: Pick<Tab, "pin" | "customIcon"> | undefined): string | null => (t && (isPinnedRow(t) ? t.customIcon : drawnIcon(t.customIcon))) ?? null;

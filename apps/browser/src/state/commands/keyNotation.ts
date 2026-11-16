@@ -8,4 +8,8 @@ export const defaultKeys = (_id: string, keys: readonly string[] | undefined): r
 
 export const profileSwitchKey = (n: number): string => `⌃${n}`;
 
+export const COMMAND_KEY: "metaKey" | "ctrlKey" = "metaKey";
+
+export const commandHeld = (e: { metaKey?: boolean; ctrlKey?: boolean }): boolean => !!e.metaKey;
+
 export const storedModifiers = (modifiers: readonly ShortcutModifier[]): ShortcutModifier[] => [...modifiers];

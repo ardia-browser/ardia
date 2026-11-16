@@ -1,5 +1,6 @@
 import type { DomainModule } from "@ardia/ardiacore";
 import type { ImportHost } from "../../import/host";
+import type { profileDataFolder, removeProfileFolder } from "../host";
 import type { ExternalApps } from "./externalApps";
 
 export type Fields = Record<string, unknown>;
@@ -7,8 +8,8 @@ export type Fields = Record<string, unknown>;
 export type Engine = {
   call: DomainModule["call"];
   host(verb: string, args?: Fields): Promise<Fields>;
-  profileDataFolder(): string | null;
-  removeProfileFolder(folder: string): Promise<string>;
+  profileDataFolder: typeof profileDataFolder;
+  removeProfileFolder: typeof removeProfileFolder;
   emit(name: string, data: unknown): void;
   missing(domain: string, verb: string, profile: string, argsJson: string): Promise<string>;
   desktop?: Desktop;

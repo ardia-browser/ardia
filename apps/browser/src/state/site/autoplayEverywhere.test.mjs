@@ -40,3 +40,18 @@ test("Site Controls features Autoplay while Block autoplay on every site is on, 
   assert.equal(featuredPermissions("no-such-tab", settings, list).has("camera"), false);
   useBrowser.getState().updateSettings({ blockAutoplayEverywhere: false });
 });
+
+test("a platform that cannot block autoplay offers no Autoplay choice in Site Controls or a site's settings", async () => {
+  const { PLATFORM_FEATURES } = await import("../../lib/platformFeatures.ts");
+  const { offersSiteSetting, sitePermissionsFor } = await import("./siteControls.ts");
+  const types = (engine) => sitePermissionsFor(engine).map((p) => p.type);
+  assert.ok(types("chromium").includes("autoplay") && offersSiteSetting("autoplay"));
+  PLATFORM_FEATURES.blocksAutoplay = false;
+  try {
+    assert.equal(types("chromium").includes("autoplay"), false);
+    assert.equal(offersSiteSetting("autoplay"), false);
+    assert.ok(offersSiteSetting("sound") && types("chromium").includes("sound") && types("webkit").includes("sound"));
+  } finally {
+    PLATFORM_FEATURES.blocksAutoplay = true;
+  }
+});

@@ -17,6 +17,7 @@ const { startBookmarks, reloadBookmarks } = await import("../bookmarks/engineSyn
 const { startCast } = await import("../media/cast.ts");
 const { startHistory } = await import("../history/engineSync.ts");
 const { takeTabSleepCounts } = await import("../telemetry/tabSleepCounts.ts");
+const { pageAskedToClose } = await import("../tabs/pageEvents.ts");
 
 const S = () => useBrowser.getState();
 const MINUTE = 60_000;
@@ -95,6 +96,28 @@ test("a profile no window shows is unloaded after the delay: its tabs wait to lo
   await until(() => callsFor("play", since).includes("history.query") && callsFor("play", since).includes("bookmarks.tree"), "its history and bookmarks read again");
   assert.equal(takeTabSleepCounts().unloaded_profiles_reopened, 1);
   for (const s of stops) s();
+  stop();
+});
+
+test("tabs the engine closes while it unloads their profile stay in the sidebar, waiting to load again", async () => {
+  const stop = launch();
+  await until(() => loading.profileOpened("play"), "the engine's loaded profiles");
+  const closedBefore = S().closedTabs.length;
+  stub.idleProfileUnloads.set("play", {
+    status: "pending", tabs: ["t-play", "t-play-2"],
+    closing: () => { pageAskedToClose("t-play"); pageAskedToClose("t-play-2"); },
+  });
+  await checkIdleProfiles(clock);
+  await checkIdleProfiles(clock + 5 * MINUTE);
+  assert.equal(loading.profileOpened("play"), false);
+  assert.deepEqual([S().tabs["t-play"]?.page.kind, S().tabs["t-play-2"]?.page.kind], ["idle", "idle"]);
+  assert.equal(S().closedTabs.length, closedBefore, "an unload is not a close");
+  pageAskedToClose("t-play");
+  assert.equal(S().tabs["t-play"]?.page.kind, "idle", "a late close from the unloaded page keeps the tab");
+  S().switchProfile("w1", "play");
+  await until(() => S().tabs["t-play"]?.page.kind === "loaded", "the shown tab to load again");
+  pageAskedToClose("t-play");
+  assert.equal(S().tabs["t-play"], undefined, "a page that asks to close once loaded again still closes its tab");
   stop();
 });
 

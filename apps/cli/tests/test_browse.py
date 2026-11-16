@@ -777,11 +777,30 @@ class RefsTest(unittest.TestCase):
         with self.assertRaises(ConnectionLost):
             asyncio.run(state.connect())
 
+    def test_an_empty_untitled_page_says_it_was_likely_turned_away(self):
+        from ardia_cli.browse import readpages
+
+        empty = readpages.render([{"url": "https://example.test/a", "status": 200, "title": "", "text": ""}], {})
+        self.assertIn("the site sent an empty page", empty)
+        titled = readpages.render([{"url": "https://example.test/b", "status": 200, "title": "Blank", "text": ""}], {})
+        self.assertIn("(no text)", titled)
+        self.assertNotIn("empty page", titled)
+
+    def test_a_missing_name_lists_the_closest_names_first(self):
+        from ardia_cli.browse.commands import closest_names
+
+        links = ["Skip to Main Content", "Homepage", "Deals", "Pharmacy", "Gifts", "Registry", "Help", "Account", "Page 1", "Page 2", "Next Page"]
+        self.assertEqual(closest_names("Go to Page 2", links)[:2], ["Page 2", "Next Page"])
+        self.assertEqual(closest_names("Zebra", links), links[:8])
+
     def test_ref_parsing(self):
         from ardia_cli.browse.state import parse_ref
 
         self.assertEqual(parse_ref("@e12"), "e12")
         self.assertEqual(parse_ref("ref=e3"), "e3")
+        self.assertEqual(parse_ref("[ref=e80]"), "e80")
+        self.assertIsNone(parse_ref("[ref=e80"))
+        self.assertIsNone(parse_ref("[data-ref=e80]"))
         self.assertIsNone(parse_ref("#e3"))
         self.assertIsNone(parse_ref("@ex"))
 

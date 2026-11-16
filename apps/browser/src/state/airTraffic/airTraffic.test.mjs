@@ -69,6 +69,25 @@ test("a pattern rule matches as a userscript match pattern", () => {
   assert.equal(rules.patternProblem("https://*.example.com/*"), null);
 });
 
+test("a pattern without a scheme is a wildcard over the link", () => {
+  for (const [pattern, hits, misses] of [
+    ["*git*", ["https://github.com/ardia", "https://gitlab.com/", "https://digit.example/"], ["https://example.com/", "https://example.com/git"]],
+    ["github", ["https://GitHub.com/x", "https://gist.github.com/"], ["https://example.com/"]],
+    ["github.com/ardia/*", ["https://github.com/ardia/x", "http://github.com/ardia/"], ["https://github.com/other/x", "https://evil.example/github.com/ardia/x"]],
+    ["*.github.com", ["https://gist.github.com/x"], ["https://github.com/x", "https://example.com/?q=a.github.com"]],
+    ["*.bücher.de", ["https://shop.bücher.de/", "https://shop.xn--bcher-kva.de/x"], ["https://shop.bucher.de/"]],
+    ["bücher.de/*", ["https://bücher.de/a"], ["https://example.com/bücher.de/a"]],
+  ]) {
+    assert.equal(rules.patternProblem(pattern), null, pattern);
+    fresh({ rules: [rule({ when: { kind: "pattern", pattern }, open: "window" })] });
+    for (const url of hits) assert.equal(verdictOf(decideLink(url, null)), "last:window", `${pattern} ${url}`);
+    for (const url of misses) assert.equal(decideLink(url, null), null, `${pattern} ${url}`);
+  }
+  assert.ok(rules.patternProblem(""));
+  assert.ok(rules.patternProblem("git hub"));
+  assert.equal(rules.parseAirTraffic(rules.airTrafficJson({ rules: [rule({ id: "w", when: { kind: "pattern", pattern: "*git*" } })], fallback: null })).rules.length, 1);
+});
+
 test("a rule whose profile was deleted or is private falls through to the next one", () => {
   const work = fresh({ rules: [(w) => rule({ profileId: w, open: "window" }), rule({ profileId: "incognito:1@default" }), rule({ open: "littleArdia" })] });
   S().deleteProfile(work);
@@ -240,9 +259,9 @@ test("incoming links remember the last 20 distinct apps that sent them, and noth
 
 test("telemetry sends only how many rules are on and whether a fallback is set", () => {
   const snap = airTrafficSetting({ rules: [rule({ from: slackApp }), rule({ enabled: false }), rule()], fallback: { profileId: "p", open: "tab" } });
-  assert.deepEqual(snap, { air_traffic_rules: "2", air_traffic_fallback: "true" });
+  assert.deepEqual(snap, { air_traffic_rules: "2", air_traffic_wildcard_rules: "0", air_traffic_fallback: "true" });
   assert.deepEqual(cleanProperties(snap), snap);
-  assert.deepEqual(airTrafficSetting(rules.NO_AIR_TRAFFIC), { air_traffic_rules: "0", air_traffic_fallback: "false" });
+  assert.deepEqual(airTrafficSetting(rules.NO_AIR_TRAFFIC), { air_traffic_rules: "0", air_traffic_wildcard_rules: "0", air_traffic_fallback: "false" });
 });
 
 test("a link from another app lands where its rule says, before any tab exists", async () => {

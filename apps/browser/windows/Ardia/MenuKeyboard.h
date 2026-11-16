@@ -48,6 +48,7 @@ struct MenuKeyboard {
   bool consumedWithAlt = false;
   bool escapeCaptured = false;
   bool switcherCaptured = false;
+  bool capturedWHeld = false;
   std::atomic<bool> textInputFocused{false};
   std::set<UINT> swallowedKeyUps;
   std::optional<winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue>> recording;
@@ -105,13 +106,19 @@ struct MenuKeyboard {
     return true;
   }
 
-  bool CaptureSwitcherKey(KeyPress const &press) noexcept {
+  static bool ClosesSwitcherRow(KeyPress const &press, bool repeat) noexcept {
+    return press.virtualKey == 'W' && !repeat && (press.modifiers & (ModifierControl | ModifierCommand)) != 0 && (press.modifiers & ModifierOption) == 0;
+  }
+
+  bool CaptureSwitcherKey(KeyPress const &press, bool repeat) noexcept {
     CommandEntry const *entry = MenuStore::Shared().Match(press);
     if (entry && entry->command == "tabSwitcher") return Dispatch(press);
+    if (press.virtualKey == 'W') capturedWHeld = true;
     const char *key = nullptr;
     if (press.virtualKey == VK_ESCAPE) key = "escape";
     else if (press.virtualKey == VK_RIGHT) key = "next";
     else if (press.virtualKey == VK_LEFT) key = "previous";
+    else if (ClosesSwitcherRow(press, repeat)) key = "close";
     if (key) EmitEvent(context, L"ArdiaShell", L"onAppEvent", winrt::Microsoft::ReactNative::JSValueObject{{"type", "switcherKey"}, {"key", key}});
     return true;
   }
@@ -283,6 +290,7 @@ struct MenuKeyboard {
   bool HandleKey(UINT virtualKey, LPARAM flags) noexcept {
     bool keyUp = (flags & (1u << 31)) != 0;
     if (keyUp) {
+      if (virtualKey == 'W') capturedWHeld = false;
       if (unsigned released = ModifierOfKey(virtualKey)) ModifiersChanged(static_cast<unsigned>(HeldModifiers() & ~released));
       if (swallowedKeyUps.erase(virtualKey)) return true;
       if ((virtualKey == VK_MENU || virtualKey == VK_LMENU || virtualKey == VK_RMENU) && consumedWithAlt) {
@@ -292,6 +300,10 @@ struct MenuKeyboard {
       return false;
     }
     if (IsModifierKey(virtualKey)) return false;
+    if (capturedWHeld && virtualKey == 'W') {
+      if (flags & (1u << 30)) return true;
+      capturedWHeld = false;
+    }
     if (trackingMenu) return false;
     KeyPress press = ReadKeyPress(virtualKey, flags);
     if (press.windowsKey || press.altGraph) return false;
@@ -301,7 +313,7 @@ struct MenuKeyboard {
     } else {
       ActiveWindow window = ActiveArdiaWindow();
       if (!window.hwnd) return false;
-      if (switcherCaptured) handled = CaptureSwitcherKey(press);
+      if (switcherCaptured) handled = CaptureSwitcherKey(press, (flags & (1u << 30)) != 0);
       else if (escapeCaptured && BareEscape(press)) handled = CaptureEscape();
       else if (UndoReopensClosedTab(press, window)) handled = ReopenClosedTab(window);
       else handled = Dispatch(press);

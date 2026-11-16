@@ -7,6 +7,7 @@ import { takeFindCounts } from "./findCounts";
 import { takeFirstRunCounts } from "./firstRunCounts";
 import { takeImportRuns } from "./importRuns";
 import { takeInlineCompletionCounts } from "./inlineCompletionCounts";
+import { takeKeyboardFollowCounts } from "./keyboardFollowCounts";
 import { takeMemoryTrimCounts } from "./memoryTrimCounts";
 import { takePlatformCounts, watchPlatformCounts } from "./platformCounts";
 import { takeProfileDataCounts } from "./profileDataCounts";
@@ -16,7 +17,7 @@ export { watchPlatformCounts };
 
 export const USAGE_COUNTS_EVENT = "usage_counts";
 
-export const takeHourlyExtras = () => ({ ...takePlatformCounts(), ...takeImportRuns(), ...takeProfileDataCounts(), ...takeExportCounts(), ...takeInlineCompletionCounts(), ...takeFirstRunCounts(), ...takeMemoryTrimCounts(), ...takeDownloadsPanelCauses(), ...takeExternalAppCounts(), ...takeDialogPageCounts(), ...takeFindCounts(), ...takeSyncFileCounts() });
+export const takeHourlyExtras = () => ({ ...takePlatformCounts(), ...takeImportRuns(), ...takeProfileDataCounts(), ...takeExportCounts(), ...takeInlineCompletionCounts(), ...takeFirstRunCounts(), ...takeMemoryTrimCounts(), ...takeDownloadsPanelCauses(), ...takeExternalAppCounts(), ...takeDialogPageCounts(), ...takeFindCounts(), ...takeSyncFileCounts(), ...takeKeyboardFollowCounts() });
 
 type Send = typeof send;
 

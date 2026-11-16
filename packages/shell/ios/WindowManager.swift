@@ -114,6 +114,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
       ChromeWindows.onSwap { [weak self] from, to in self?.adopt(from: from, to: to) }
       observeDelegateNotifications(chromeWindow)
       if small { configureSmall(chromeWindow) }
+      if small { LittleArdiaHandoff.shared.opened(id, linkFrom: options.returnTo) }
       return show(entry, frame: frame, title: title, focus: focus, small: small, smallSize: options.size, smallPointer: options.pointer, behind: behind)
     }
     let window = makeWindow()
@@ -123,7 +124,10 @@ final class WindowManager: NSObject, NSWindowDelegate {
     window.contentViewController = controller
     window.delegate = self
     if options.incognito { window.appearance = NSAppearance(named: .darkAqua) }
-    if small { configureSmall(window) }
+    if small {
+      configureSmall(window)
+      LittleArdiaHandoff.shared.opened(id, linkFrom: options.returnTo)
+    }
     show(ManagedWindow(id: id, kind: kind, window: window), frame: frame, title: title, focus: focus, small: small, smallSize: options.size, smallPointer: options.pointer)
   }
 
@@ -308,8 +312,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     guard let visible = screen?.visibleFrame else { return window.center() }
     let width = min(max(size?.width ?? 900, window.minSize.width), visible.width)
     let height = min(max(size?.height ?? 640, window.minSize.height), visible.height)
-    let lift = min(visible.height * 0.05, (visible.height - height) / 2)
-    let origin = NSPoint(x: (visible.midX - width / 2).rounded(), y: (visible.midY - height / 2 + lift).rounded())
+    let origin = NSPoint(x: (visible.midX - width / 2).rounded(), y: (visible.midY - height / 2).rounded())
     window.setFrame(NSRect(origin: origin, size: NSSize(width: width.rounded(), height: height.rounded())), display: false)
   }
 
@@ -336,6 +339,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     flushFrameReport(entry.window)
     if entry.exit != nil { return entry.exit!.append(done) }
     let window = entry.window
+    LittleArdiaHandoff.shared.closing(id, replacedBy: replacement, keyWindow: window.isKeyWindow)
     guard entry.kind.isBrowser, window.isVisible, !window.isMiniaturized, !window.styleMask.contains(.fullScreen), !entry.isWaitingToReveal
     else { return done() }
     entry.exit = [done]
@@ -385,6 +389,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
   }
 
   private func forget(_ entry: ManagedWindow) {
+    LittleArdiaHandoff.shared.forget(entry.id)
     entry.stopWatchingContent()
     lightsCenters[entry.id] = nil
     entry.takeReveal()?.then.forEach { $0() }

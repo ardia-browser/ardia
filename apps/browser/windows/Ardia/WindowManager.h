@@ -44,6 +44,7 @@ struct OpenWindowRequest {
   bool animated{false};
   std::string focusWhenFront;
   std::string focusWhenPage;
+  std::string behind;
 };
 
 struct ManagedWindow {
@@ -170,6 +171,13 @@ struct WindowManager {
     }
   }
 
+  void PlaceBehind(HWND hwnd, std::string_view id) const noexcept {
+    HWND under = Hwnd(id);
+    if (!under || !IsWindow(under) || under == hwnd) return;
+    SetWindowPos(hwnd, under, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    LaunchLog::Write(L"window", std::wstring(L"opened behind ").append(Paths::Wide(id)).append(L" without taking focus"));
+  }
+
   static void ShowAboveOpener(HWND hwnd, HWND opener) noexcept {
     if (!opener || !IsWindow(opener)) return;
     HWND top = opener;
@@ -228,6 +236,7 @@ struct WindowManager {
       bool quietPopup = !activate && placed->second.kind == "popup";
       if (quietPopup) ShowAboveOpener(hwnd, openedFrom);
       appWindow.Show(activate);
+      if (!activate && !request.behind.empty()) PlaceBehind(hwnd, request.behind);
       if (activate) SetForegroundWindow(hwnd);
       else if (quietPopup) {
         ShowAboveOpener(hwnd, openedFrom);
@@ -705,7 +714,7 @@ struct WindowManager {
     entry.closing = entry.appWindow.Closing(
         [this, id](winrt::Microsoft::UI::Windowing::AppWindow const &, winrt::Microsoft::UI::Windowing::AppWindowClosingEventArgs const &args) noexcept {
           ManagedWindow *found = Find(id);
-          if (!found || !(found->IsBrowser() || found->IsPopup()) || !m_context || m_quitting) return;
+          if (!found || !m_context || m_quitting) return;
           try {
             args.Cancel(true);
           } catch (...) {
@@ -910,7 +919,7 @@ struct WindowManager {
       bool finite = std::isfinite(region[0]) && std::isfinite(region[1]) && std::isfinite(region[2]) && std::isfinite(region[3]);
       if (!finite) continue;
       int32_t left = across(region[0] >= 0 ? region[0] * scale : client.Width + region[0] * scale);
-      int32_t right = across(client.Width - region[2] * scale);
+      int32_t right = across(region[2] >= 0 ? client.Width - region[2] * scale : left - region[2] * scale);
       int32_t top = down(region[1] * scale);
       int32_t bottom = down((region[1] + region[3]) * scale);
       if (right > left && bottom > top) rects.push_back({left, top, right - left, bottom - top});

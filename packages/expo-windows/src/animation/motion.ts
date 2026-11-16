@@ -1,6 +1,7 @@
 import type { MotionBurst, MotionNative } from "@ardia/shell";
+import type { Running as Animation } from "./index";
 
-type Running = { __active: boolean };
+type Running = Pick<Animation, "__active">;
 type Frame = (time: number) => void;
 type Follower = () => void;
 type Timers = { requestAnimationFrame(frame: Frame): number; cancelAnimationFrame(id: number): void };

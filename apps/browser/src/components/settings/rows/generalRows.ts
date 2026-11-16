@@ -125,6 +125,11 @@ export const generalRows = {
     {
       section: "Profile switcher",
       rows: {
+        showProfileDots: {
+          title: "Show profile dots",
+          description: `The dots at the bottom of the sidebar that switch profiles. Swiping and ${keyText("⌃1")}–${keyText("⌃9")} still work.`,
+          keywords: ["dots", "pager", "profile switcher", "page dots", "sidebar footer", "hide"],
+        },
         switcherIcons: {
           title: "Show profile icons instead of dots",
           description: "As in Arc: the switcher at the bottom of the sidebar shows each profile's symbol or emoji, and a profile without one keeps its dot. Right-click the switcher to pick an icon.",
@@ -267,6 +272,11 @@ export const generalRows = {
           keywords: ["arc", "multiple windows", "same tabs", "sync windows", "shared sidebar", "unpinned"],
         },
         warnBeforeClosingLastTab: { advanced: true, title: "Warn before closing last tab in a Profile", keywords: ["confirm", "close tab"] },
+        keepTopAppsRunning: {
+          title: "Keep Top Apps running when closed",
+          description: `${keyText("⌘W")} on a Top App switches away from it and leaves its page loaded, so a site like Slack keeps its notifications. A Top App split with another pinned tab stays together and loaded. Choose Unload from its right-click menu to put it to sleep. Off, as in Dia, ${keyText("⌘W")} unloads it. Memory Saver can still put a page to sleep unless the site is in its Always keep these sites active list.`,
+          keywords: ["top apps", "pinned tiles", "favorites", "essentials", "cmd w", "close", "unload", "keep loaded", "keep running", "background", "arc"],
+        },
         tabReorderHaptics: { advanced: true, title: "Haptic feedback when reordering tabs", keywords: ["trackpad", "vibration", "drag"], shown: () => PLATFORM_FEATURES.haptics },
         extendWebsiteColor: { title: "Extend website color into tab bar", keywords: ["theme color", "tint", "colour"] },
         sidebarMediaControls: {
@@ -300,8 +310,13 @@ export const generalRows = {
         },
         newTabLinksOpenIn: {
           title: "Open new-tab links in",
-          description: `Where a link that would open a new tab goes when you click it in a tab. ${keyText("⌘")}-click still opens a tab behind, and sign-in pop-ups stay windows. Links from other apps follow Settings › General › Open links from other apps in Little Ardia.`,
+          description: `Where a link that would open a new tab goes when you click it in a tab. ${keyText("⌘")}-click still opens a tab behind, and pop-ups stay windows unless Open pop-up windows as tabs is on. Links from other apps follow Settings › General › Open links from other apps in Little Ardia.`,
           keywords: ["peek", "new tab", "target blank", "links", "preview", "open links"],
+        },
+        popupsOpenAsTabs: {
+          title: "Open pop-up windows as tabs",
+          description: "A page that opens a pop-up window, like Outlook's Open in New Window or a sign-in pop-up, opens it as a tab next to the page instead. The page can still talk to it, and closing it brings you back. Extension pop-ups stay windows.",
+          keywords: ["popup", "pop-up", "pop up", "window.open", "new window", "outlook", "sign in", "oauth", "as tab", "links"],
         },
         peekButtons: {
           title: "Show Peek buttons",

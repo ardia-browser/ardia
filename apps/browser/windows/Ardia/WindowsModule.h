@@ -31,6 +31,7 @@ struct WindowsModule {
     if (auto animated = options["animated"].TryGetBoolean()) request.animated = *animated;
     if (auto front = options["focusWhenFront"].TryGetString()) request.focusWhenFront = *front;
     if (auto page = options["focusWhenPage"].TryGetString()) request.focusWhenPage = *page;
+    if (auto behind = options["behind"].TryGetString()) request.behind = *behind;
     request.frame = Numbers<4>(options["frame"]);
     request.size = Numbers<2>(options["size"]);
     OnUI(promise, [request]() noexcept { WindowManager::Shared().Open(request); });

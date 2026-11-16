@@ -32,8 +32,8 @@ const Updater = nativeModule("ArdiaUpdater");
 export const setAppearance = (mode: AppearanceMode) => Shell.setAppearance(mode);
 export const isDarkAppearance = () => Shell.isDarkAppearance();
 export const onAppEvent = (listener: (e: AppEvent) => void) => Shell.addListener("onAppEvent", listener);
-export const onOpenURLs = (listener: (urls: string[], pointer?: [number, number], source?: OpenURLSource) => void) =>
-  Shell.addListener("onOpenURLs", ({ urls, pointer, source }) => listener(urls, pointer, source));
+export const onOpenURLs = (listener: (urls: string[], pointer?: [number, number], source?: OpenURLSource, returnTo?: string) => void) =>
+  Shell.addListener("onOpenURLs", ({ urls, pointer, source, returnTo }) => listener(urls, pointer, source, returnTo));
 
 export const systemInfo = () => App.systemInfo();
 export const crashReports = (since: number) => App.crashReports(since);

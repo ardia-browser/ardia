@@ -72,6 +72,18 @@ LIBRARY = r"""
       const found = api.queryAll(selector, root);
       return found.find((el) => api.visible(el)) || found[0] || null;
     },
+    validCss(css) {
+      try {
+        document.createDocumentFragment().querySelector(css);
+        return true;
+      } catch (error) {
+        return false;
+      }
+    },
+    quoteAttributeValues(css) {
+      return css.replace(/\[\s*([^\s~|^$*!=\]"']+)\s*([~|^$*]?=)\s*([^"'\]\s][^\]]*?)(\s+[iIsS])?\s*\]/g,
+        (whole, name, op, value, flag) => `[${name}${op}"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"${flag || ""}]`);
+    },
     queryAll(selector, root) {
       root = root || document;
       const chain = api.chainParts(selector);
@@ -111,6 +123,7 @@ LIBRARY = r"""
       let css = selector.replace(/^css=/, "").replace(/\[role=(["']?)([A-Za-z]+)\1\]/g, (whole, q, name) => api.roleCss(name.toLowerCase()) === `[role="${name.toLowerCase()}"]` ? whole : `:is(${api.roleCss(name.toLowerCase())})`);
       css = api.outsideStrings(css, (piece) => piece.replace(/:text\(/g, ":has-text("));
       if (/^[a-z]+$/.test(css) && ROLE_WORDS.has(css) && !root.querySelector(css)) css = api.roleCss(css);
+      if (!api.validCss(css)) css = api.quoteAttributeValues(css);
       const parts = api.textPseudos(css);
       if (parts.length === 1) return Array.from(root.querySelectorAll(css));
       let found = null;
@@ -259,7 +272,7 @@ LIBRARY = r"""
     dismissConsent(x, y) {
       const about = /\b(cookies?|consent|gdpr|ccpa)\b/i;
       const vendor = "[id*=cookie i],[class*=cookie i],[id*=consent i],[class*=consent i],[id*=onetrust i],[class*=onetrust i],[id*=osano i],[class*=osano i],[id*=didomi i],[id*=usercentrics i],[id*=truste i],[class*=truste i],[class*=qc-cmp i],[id*=sp_message i],[class*=cmp-],[id*=cmpbox i],[class*=cmpbox i],[id*=cookiebot i],[class*=cookiebot i],[id*=iubenda i],[class*=iubenda i],[id*=termly i],[class*=termly i],[id*=klaro i],[class*=klaro i],[id*=cmplz i],[class*=cmplz i],[class*=cky-consent i]";
-      const reject = /^(reject|decline|refuse)( all| optional| non-essential)?( cookies)?$|^(only|strictly) (essential|necessary)( cookies)?$|^(necessary|essential) (cookies )?only$|^use (only )?necessary cookies$|^continue without accepting$/i;
+      const reject = /^(reject|decline|refuse)( all| optional| non-essential)?( cookies)?$|^(only|strictly) (essential|necessary)( cookies)?$|^(necessary|essential) (cookies )?only$|^use (only )?necessary cookies$|^just (necessary|essential)( cookies)?$|^(use|allow|accept) (only )?(necessary|essential)( cookies)?( only)?$|^deny( all)?$|^continue without accepting$/i;
       const accept = /^(accept|allow)( all)?( cookies)?$|^(i agree|agree|got it|ok|okay)$/i;
       const close = /^(close|dismiss)$|^(×|✕)$/i;
       const layerOf = (node) => {

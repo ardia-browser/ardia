@@ -1,0 +1,20 @@
+{
+  "id": "fixes-atc-pattern",
+  "segments": [
+    {
+      "scene": "atcpattern",
+      "title": "Air Traffic Control takes simple wildcard patterns",
+      "body": "Add Rule › Links matching a pattern now takes *git*, github or github.com/ardia/*: a pattern without a scheme matches the link's site, or its address when it has a slash. 0.2.47-nightly.2 rejected anything that wasn't a full scheme://host/path match pattern.",
+      "note": "a report from Discord",
+      "layout": "side",
+      "cam": [
+        180,
+        110,
+        640,
+        420
+      ],
+      "lead": 1.7,
+      "tail": 12.2
+    }
+  ]
+}

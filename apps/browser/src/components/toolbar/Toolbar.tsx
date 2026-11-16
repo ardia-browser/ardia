@@ -35,7 +35,9 @@ import { ZoomIndicator } from "../site/ZoomControls";
 import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
 import { buttonMotion, curve, usePressScaleMotion } from "../ui/motion";
 import { FieldLoadFill } from "./FieldLoadFill";
-import { fieldButtonsShown } from "./fieldButtons";
+import { fieldButtonsShown, sidebarFieldButtons } from "./fieldButtons";
+import { useFieldExtensionsHeld } from "../../state/extensions/store";
+import { noteSiteControls } from "../../state/telemetry/usage";
 import { HistoryButton, ReloadButton } from "./NavButtons";
 import { FIELD_LOAD, TOOLBAR_MOTION } from "./tokens";
 import { useToolbarRow } from "./useToolbarRow";
@@ -49,6 +51,7 @@ export const useToolbarTab = (tabId: string | undefined) => useTab(tabId, useSha
 export const urlFieldRight = (inSplit: boolean, extensionsWidth: number, row: ToolbarRow) => (inSplit ? 12 + 2 * (row.button - 2) : 12) + extensionsWidth;
 const LOCK = { left: 7, width: 18, gap: space.xs } as const;
 const SIDEBAR_TEXT_GAP = 6;
+const SIDEBAR_TEXT_ALONE = space.ml;
 export const urlTextLeft = (insecure: boolean) => (insecure ? LOCK.left + LOCK.width + LOCK.gap : 8);
 export const insecureLevel = (p: PageState) =>
   p.security && (p.security.level === "insecure" || p.security.level === "certificateError") ? p.security.level : null;
@@ -250,21 +253,29 @@ export const SidebarUrlField = memo(function SidebarUrlField({ tab, palette, win
   const theme = useTheme();
   const field = useUrlField(tab, windowId, onFocus);
   const { insecure, hovered, popover, toggleSiteControls } = field;
+  const extensionsHeld = useFieldExtensionsHeld(windowId);
+  const shown = sidebarFieldButtons({ mode: useSettings((s) => s.addressBarButtons), hovered, insecure: !!insecure, extensionsHeld });
+  const openSiteControls = () => {
+    if (popover !== "siteControls") noteSiteControls("sidebarField");
+    toggleSiteControls();
+  };
 
   return (
     <View {...field.hoverProps} style={{ flexDirection: "row", alignItems: "center", height, borderRadius: SIDEBAR_FIELD.radius }}>
       <SidebarFieldFill hovered={hovered} />
       <FieldLoadFill key={tab.id} tabId={tab.id} color={loadFillColor(palette, theme.accent)} height={height} radius={SIDEBAR_FIELD.radius} />
-      <FieldSiteButton
-        icon={insecure ? "lock.open.trianglebadge.exclamationmark.fill" : "slider.horizontal.3"}
-        color={insecure === "certificateError" ? theme.destructive : undefined}
-        tooltip={insecure ? "Connection is not secure" : "Site Controls"}
-        active={popover === "siteControls"}
-        palette={palette}
-        onPress={toggleSiteControls}
-      />
+      {shown.leading && (
+        <FieldSiteButton
+          icon={insecure ? "lock.open.trianglebadge.exclamationmark.fill" : "slider.horizontal.3"}
+          color={insecure === "certificateError" ? theme.destructive : undefined}
+          tooltip={insecure ? "Connection is not secure" : "Site Controls"}
+          active={popover === "siteControls"}
+          palette={palette}
+          onPress={openSiteControls}
+        />
+      )}
       <ContextMenuArea style={{ flex: 1 }} onContextMenu={() => void showUrlBarMenu(tab)}>
-        <Pressable onPress={field.openPanel} style={{ flex: 1, height, justifyContent: "center", paddingLeft: SIDEBAR_TEXT_GAP }}>
+        <Pressable onPress={field.openPanel} style={{ flex: 1, height, justifyContent: "center", paddingLeft: shown.leading ? SIDEBAR_TEXT_GAP : SIDEBAR_TEXT_ALONE }}>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <Text numberOfLines={1} ellipsizeMode="head" weight="medium" color={palette.text} style={SHRINK}>
               {field.host}
@@ -274,8 +285,9 @@ export const SidebarUrlField = memo(function SidebarUrlField({ tab, palette, win
         </Pressable>
       </ContextMenuArea>
       <ToolbarRowContext.Provider value={TOOLBAR_ROWS.regular}>
-        <FieldButtons tab={tab} palette={palette} onFocus={onFocus} popover={popover} toggleSiteControls={toggleSiteControls} accessory={accessory}>
-          {field.buttonsShown && <PageButton tab={tab} palette={palette} windowId={windowId} />}
+        <FieldButtons tab={tab} palette={palette} onFocus={onFocus} popover={popover} toggleSiteControls={openSiteControls} accessory={shown.extensions ? accessory : null}>
+          {shown.page && <PageButton tab={tab} palette={palette} windowId={windowId} />}
+          {shown.siteControls && <Button variant="icon" toolbar palette={palette} icon="slider.horizontal.3" look="field" onPress={openSiteControls} active={popover === "siteControls"} tooltip="Site Controls" />}
         </FieldButtons>
       </ToolbarRowContext.Provider>
     </View>

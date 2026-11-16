@@ -60,6 +60,12 @@ inline bool SystemUsesDarkApps() noexcept {
   return status == ERROR_SUCCESS && value == 0;
 }
 
+inline bool HighContrastOn() noexcept {
+  HIGHCONTRASTW contrast{};
+  contrast.cbSize = sizeof(contrast);
+  return SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof(contrast), &contrast, 0) && (contrast.dwFlags & HCF_HIGHCONTRASTON) != 0;
+}
+
 inline bool EffectiveDark() noexcept {
   switch (static_cast<AppearanceMode>(AppearanceSetting().load())) {
     case AppearanceMode::Light: return false;
@@ -73,6 +79,7 @@ struct ShellState {
   std::atomic<bool> alive{true};
   std::mutex appearanceLock;
   bool lastDark = false;
+  bool lastHighContrast = false;
   HWND watcher = nullptr;
   bool sessionRegistered = false;
 
@@ -94,6 +101,16 @@ struct ShellState {
     }
     if (context) RunOnUI(context, [dark]() noexcept { WindowManager::Shared().SetDark(dark); });
     EmitAppEvent(winrt::Microsoft::ReactNative::JSValueObject{{"type", "appearance"}, {"dark", dark}});
+  }
+
+  void NoteHighContrast() noexcept {
+    bool on = HighContrastOn();
+    {
+      std::scoped_lock lock{appearanceLock};
+      if (on == lastHighContrast) return;
+      lastHighContrast = on;
+    }
+    EmitAppEvent(winrt::Microsoft::ReactNative::JSValueObject{{"type", "highContrast"}, {"on", on}});
   }
 
   void NoteLocked() noexcept {
@@ -121,6 +138,7 @@ inline LRESULT CALLBACK WatcherProcedure(HWND hwnd, UINT message, WPARAM wParam,
   switch (message) {
     case WM_SETTINGCHANGE:
       if (lParam && wcscmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0) state.NoteAppearance();
+      state.NoteHighContrast();
       break;
     case WM_WTSSESSION_CHANGE:
       if (wParam == WTS_SESSION_LOCK) state.NoteLocked();
@@ -370,6 +388,7 @@ struct ShellModule {
   void Initialize(winrt::Microsoft::ReactNative::ReactContext const &context) noexcept {
     m_state->context = context;
     m_state->lastDark = ShellParts::EffectiveDark();
+    m_state->lastHighContrast = ShellParts::HighContrastOn();
     std::shared_ptr<ShellParts::ShellState> state = m_state;
     RunOnUI(context, [state]() noexcept {
       WindowManager::Shared().SetDark(ShellParts::EffectiveDark());
@@ -413,8 +432,16 @@ struct ShellModule {
     promise.Resolve(ShellParts::EffectiveDark());
   }
 
+  REACT_METHOD(isHighContrast)
+  void isHighContrast(winrt::Microsoft::ReactNative::ReactPromise<bool> promise) noexcept {
+    promise.Resolve(ShellParts::HighContrastOn());
+  }
+
   REACT_METHOD(startDictation)
   void startDictation() noexcept {}
+
+  REACT_SYNC_METHOD(dictationAvailable)
+  bool dictationAvailable() noexcept { return false; }
 
   REACT_METHOD(fetchBangList)
   void fetchBangList(std::optional<std::string> etag, winrt::Microsoft::ReactNative::ReactPromise<ShellBangListReply> promise) noexcept {

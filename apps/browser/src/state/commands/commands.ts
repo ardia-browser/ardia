@@ -1,4 +1,3 @@
-import { closeWindow as closeNativeWindow } from "../../platform/windows";
 import { copyText } from "../../platform/clipboard";
 import { openExternalURL } from "../../platform/app";
 import { pickFiles, prompt } from "../../platform/dialogs";
@@ -70,6 +69,7 @@ import { expectFocus, findFocus } from "../focus/focusClaims";
 import { isWebPageUrl } from "../../lib/url";
 import { findStep, openFind } from "../find/actions";
 import { runHidingCommand } from "../site/hiddenElements";
+import { requestWindowClose } from "../windows/windowClose";
 
 const newOrId = (arg: string) => (arg === "new" ? null : arg);
 
@@ -80,7 +80,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
   const s = useBrowser.getState();
 
   if (isUtilityWindowId(requested)) {
-    if (command === "closeTab") return void closeNativeWindow(requested!);
+    if (command === "closeTab") return requestWindowClose(requested!);
     if (command === "findInPage" && requested === SETTINGS_WINDOW_ID) return focusSettingsSearch();
     requested = null;
   }

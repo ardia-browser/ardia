@@ -1,5 +1,5 @@
 import { stopIntroMusic } from "../../platform/introMusic";
-import { devTestValue } from "../../platform/launchConfig";
+import { devTestValue, introStartDelayMs } from "../../platform/launchConfig";
 import { create } from "zustand";
 import { useBrowser } from "../browser/store";
 import { resolveWindowId, tabLayoutOf } from "../browser/model";
@@ -29,6 +29,7 @@ export {
   saveIntroMusicMuted,
 } from "./onboardingDocument";
 export { playIntroMusic, setIntroMusicMuted, stopIntroMusic, type IntroMusicCues } from "../../platform/introMusic";
+export { introStartDelayMs };
 export { PRESET_NAMES, PRESETS, presetFor, setsUpLikeBrowser, type BrowserSourceId, type Preset } from "./presets";
 
 export const STEPS: OnboardingStep[] = stepsForThisSurface(["intro", "source", "layout", "tabs", "look", "searchPrivacy", "pins", "home", "outro"]);

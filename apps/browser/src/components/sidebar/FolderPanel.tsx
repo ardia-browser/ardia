@@ -17,6 +17,7 @@ import { TabIcon } from "./TabIcon";
 import { closeFolderPanel, closeFolderPanelOnPress, closeFolderPanelWhenWindowMoves, openTileFolderMenu, useFolderPanel } from "../../state/sidebar/tileFolderUi";
 import { tailKey } from "./dragModel";
 import { useStruckTitle } from "../../state/sidebar/rowState";
+import { watchSidebarControlsRow } from "../../state/windows/layout";
 
 const PANEL_GAP = space.s;
 
@@ -39,8 +40,10 @@ function PanelBody({ windowId, folderId, anchor }: { windowId: string; folderId:
   const tail = useDragItem(tailKey("folder"), { kind: "tail", tabIds: [], section: "folder" });
 
   useEffect(() => {
-    controller?.root?.measureInWindow((x, y, w, h) => setRoot({ x, y, w, h }));
-  }, [controller]);
+    const measureRoot = () => controller?.root?.measureInWindow((x, y, w, h) => setRoot({ x, y, w, h }));
+    measureRoot();
+    return watchSidebarControlsRow(windowId, () => requestAnimationFrame(measureRoot));
+  }, [controller, windowId]);
   useEffect(() => {
     if (!root) return;
     const spring = Animated.spring(shown, { toValue: 1, ...SLIDE });

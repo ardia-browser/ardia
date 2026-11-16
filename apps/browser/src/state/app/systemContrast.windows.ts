@@ -1,12 +1,5 @@
-import * as ReactNative from "react-native";
 import { create } from "zustand";
-
-type ContrastTheme = {
-  isHighContrast: boolean;
-  addListener(eventName: "highContrastChanged", listener: (event: { isHighContrast: boolean }) => void): unknown;
-};
-
-const contrastTheme = (ReactNative as unknown as { AppTheme?: ContrastTheme }).AppTheme;
+import { highContrastOn, onHighContrast } from "../../platform/highContrast";
 
 export const useSystemIncreaseContrast = create<{ on: boolean }>()(() => ({ on: false }));
 
@@ -17,10 +10,10 @@ const setIncreaseContrast = (on: boolean) => {
 let watching = false;
 
 export function watchSystemContrast() {
-  if (watching || !contrastTheme) return;
+  if (watching) return;
   watching = true;
-  setIncreaseContrast(!!contrastTheme.isHighContrast);
-  contrastTheme.addListener("highContrastChanged", (event) => setIncreaseContrast(!!event.isHighContrast));
+  onHighContrast(setIncreaseContrast);
+  void highContrastOn().then(setIncreaseContrast);
 }
 
 export const systemIncreaseContrast = () => useSystemIncreaseContrast.getState().on;

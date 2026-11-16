@@ -8,11 +8,12 @@ import { openGroupMenu } from "../../state/sidebar/menus";
 import { openFolderMenu } from "../../state/tabs/topStrip";
 import { setMeasuredWidth, useMeasuredWidth } from "../../state/windows/measuredWidths";
 import { groupTint, useSidebarTokens } from "../sidebar/tokens";
-import { NEUTRAL_GROUP_SWATCH } from "../../state/groups/tokens";
+import type { GroupColor } from "../../state/browser/types";
+import { AnimatedFolder } from "../sidebar/AnimatedFolder";
 import { ContextMenuArea, Offstage, Symbol, useOffstage, useTooltip } from "../ui";
 import { curve, useGated } from "../ui/motion";
 import { useTheme } from "../ui/theme";
-import { capsule, font, ink, radius, space, weight, withAlpha } from "../ui/tokens";
+import { font, ink, space, weight, withAlpha } from "../ui/tokens";
 import { useChipHover, useChipHovered } from "./reachableHover";
 import { folderKey, type GroupOut } from "./model";
 import type { StripMember } from "../../state/tabs/topStrip";
@@ -20,7 +21,7 @@ import { TabIcon } from "../sidebar/TabIcon";
 import { SplitChip } from "./SplitChip";
 import { MEMBERS_INSET, type DragGeometry } from "./stripGroups";
 import { DraggableChip, TabChip } from "./TabChip";
-import { CHIP_HAIRLINE, FOLDER_HEIGHT, FOLDER_PAD, folderRadius, FOLDER_TITLE_GAP, FOLDER_TITLE_MAX, GROUP_GLYPH, MID, TOP_STRIP_HEIGHT, TUCK_FADE_MS } from "./tokens";
+import { CHIP_HAIRLINE, FOLDER_HEIGHT, FOLDER_PAD, folderRadius, FOLDER_TITLE_GAP, FOLDER_TITLE_MAX, MID, STRIP_FOLDER_SIDE, TOP_STRIP_HEIGHT, TUCK_FADE_MS } from "./tokens";
 
 export function GroupMember({
   member,
@@ -144,7 +145,7 @@ function FolderChip({ groupId, holding }: { groupId: string; holding: boolean })
                 backgroundColor: pressed ? theme.tabPressed : tint ? withAlpha(tint, hovered ? 0.3 : 0.22) : hovered ? tokens.groupHeaderHover : bare ? ink.clear : tokens.groupFill,
               }}
             >
-              <StripGroupIcon icon={group.icon} tint={tint} />
+              <StripGroupIcon icon={group.icon} color={group.color} open={false} />
               <Text numberOfLines={1} style={{ marginLeft: FOLDER_TITLE_GAP, maxWidth: FOLDER_TITLE_MAX, ...font.small, fontWeight: weight.semibold, color: titleInk }}>
                 {label}
               </Text>
@@ -157,20 +158,10 @@ function FolderChip({ groupId, holding }: { groupId: string; holding: boolean })
   );
 }
 
-export function StripGroupIcon({ icon, tint }: { icon: string | null; tint: string | null | undefined }) {
+export function StripGroupIcon({ icon, color, open }: { icon: string | null; color: GroupColor | null | undefined; open: boolean }) {
   const theme = useTheme();
-  if (!hasOwnGroupIcon(icon)) return <GroupGlyph color={tint ?? (theme.dark ? NEUTRAL_GROUP_SWATCH.dark : NEUTRAL_GROUP_SWATCH.light)} />;
+  if (!hasOwnGroupIcon(icon)) return <AnimatedFolder open={open} color={color} size={STRIP_FOLDER_SIDE} />;
   const symbol = iconSymbol(icon);
-  if (symbol) return <Symbol name={symbol} size={11} weight="medium" color={tint ?? theme.icon} style={{ width: 13, height: 13 }} />;
+  if (symbol) return <Symbol name={symbol} size={11} weight="medium" color={groupTint(color) ?? theme.icon} style={{ width: 13, height: 13 }} />;
   return <TabIcon url="" icon={icon} />;
-}
-
-function GroupGlyph({ color }: { color: string }) {
-  return (
-    <View style={{ width: GROUP_GLYPH.width, height: GROUP_GLYPH.height, flexDirection: "row", alignItems: "center" }}>
-      <View style={{ width: GROUP_GLYPH.sliver, height: GROUP_GLYPH.backHeight, borderRadius: capsule(GROUP_GLYPH.sliver), backgroundColor: color, opacity: 0.5 }} />
-      <View style={{ width: GROUP_GLYPH.sliver, height: GROUP_GLYPH.midHeight, borderRadius: capsule(GROUP_GLYPH.sliver), marginLeft: GROUP_GLYPH.midGap, backgroundColor: color, opacity: 0.75 }} />
-      <View style={{ width: GROUP_GLYPH.face.width, height: GROUP_GLYPH.face.height, borderRadius: radius.hair, marginLeft: GROUP_GLYPH.faceGap, backgroundColor: color }} />
-    </View>
-  );
 }

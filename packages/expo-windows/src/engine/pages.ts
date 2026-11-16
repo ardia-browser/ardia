@@ -1,14 +1,17 @@
 import { fieldFocusedIn } from "../appKeyboard";
-import { hostCall, onEngineTopic } from "./host";
-import { takerOfOpenedTab } from "./openedTabs";
+import { discardOffered, hostCall, onEngineTopic } from "./host";
+import { asOpenWindowRequest, listeningBrowserPages, offeredTabAdopting, openInBrowserWindow, requestHost, type RequestPage } from "./requestHosts";
 import { noteLoadAsked, openingPage, shapedPageEvent, type OpeningPage } from "./pageEvents";
 import { privateSessionOpened } from "./privateWindows";
 import type { ExternalAppRequest, NavigationState, OpenWindowRequest } from "@ardia/ardiacore";
 import type { CoverRect } from "./covers";
+import type { ExternalApps } from "./domains/externalApps";
 import { notePageAsked, notePageSettled } from "./dialogPages";
 import { noteShowStep } from "./showTrace";
 import { popupFeatures } from "./popupPlacement";
 import { isPopupWindowId, onPopupWindowClosed, openPopupWindow, popupOpenerKey, type PopupWindowInfo } from "./popupWindows";
+import { dropKeptFollow, keepFollow, spendKeptFollow } from "./keptFollow";
+import { handPopupAsTab } from "./popupsAsTabs";
 
 export type PageListener = (name: string, data: unknown) => void;
 export type PageRect = Omit<CoverRect, "radius">;
@@ -17,7 +20,7 @@ export type PageStart = { url?: string; profile?: string; adopt?: string; window
 
 type ShowArgs = { key: string; visible: boolean } & Partial<PageShape>;
 
-type Page = {
+export type Page = {
   key: string;
   windowId: string;
   from: PageStart;
@@ -49,12 +52,7 @@ const closings = new Map<string, Promise<void>>();
 const pressListeners = new Set<(windowId: string) => void>();
 let listening = false;
 let lastAskedToFocus: Page | null = null;
-let followBeforeMount = "";
-type ExternalAppAnswers = {
-  ask: (profile: string, page: string, data: unknown) => Promise<ExternalAppRequest | null>;
-  forget: (id: string) => void;
-  forgetPage: (page: string) => void;
-};
+type ExternalAppAnswers = Pick<ExternalApps, "forget" | "forgetPage"> & { ask: (profile: string, page: string, data: unknown) => Promise<ExternalAppRequest | null> };
 
 let externalAppAnswers: ExternalAppAnswers | null = null;
 
@@ -72,13 +70,6 @@ export function externalAppStillAsked(key: string, id: string): Promise<boolean>
   return callPage<{ alive?: unknown }>(key, "externalAppAlive", { id }).then((answer) => answer?.alive === true);
 }
 
-function promptHostOf(page: Page): Page {
-  if (!isPopupWindowId(page.windowId)) return page;
-  const opener = pages.get(popupOpenerKey(page.windowId));
-  if (opener && opener.listeners.size && !opener.closed) return opener;
-  return takerOfOpenedTab(listeningTakers(), page.profile) ?? page;
-}
-
 function askExternalApp(page: Page, data: unknown) {
   const answers = externalAppAnswers;
   if (!answers) return;
@@ -86,28 +77,31 @@ function askExternalApp(page: Page, data: unknown) {
     answers.ask(page.profile, page.key, data).then((request) => {
       if (!request) return;
       if (page.closed) return answers.forget(request.id);
-      const host = promptHostOf(page);
+      const host = isPopupWindowId(page.windowId) ? requestHost(pages.get(popupOpenerKey(page.windowId)), page.profile, pages.values()) : page;
+      if (!host) return answers.forget(request.id);
       for (const listener of [...host.listeners]) listener("externalApp", request);
     }),
   );
 }
 
-const listeningTakers = () => [...pages.values()].filter((page) => page.listeners.size && !page.closed && !isPopupWindowId(page.windowId));
+const sendTo = (name: string, data: unknown) => (host: RequestPage) => [...host.listeners].forEach((listener) => listener(name, data));
 
-function handOpenedTab(opener: Page | undefined, request: OpenedRequest) {
-  const listening = listeningTakers();
-  const taker = opener?.listeners.size && !opener.closed ? opener : takerOfOpenedTab(listening, request.profile);
-  if (!taker) {
-    if (listening.length) console.warn("[ardia windows] a tab opened by a page was closed: no page of its profile is showing");
-    quietly(hostCall("tab.discard", { adopt: request.adoptId }));
-    return;
-  }
-  for (const listener of [...taker.listeners]) listener("openWindow", request);
+function handOpenedTab(asking: Page | undefined, opener: Page | undefined, request: OpenedRequest) {
+  const host = requestHost(opener, request.profile ?? asking?.profile, pages.values());
+  if (host) return sendTo("openWindow", request)(host);
+  const discard = () => quietly(hostCall("tab.discard", { adopt: request.adoptId }));
+  if (asking && isPopupWindowId(asking.windowId)) return openInBrowserWindow(request, request.profile ?? asking.profile, asking.windowId, discard);
+  if (listeningBrowserPages(pages.values()).length) console.warn("[ardia windows] a tab opened by a page was closed: no page of its profile is showing");
+  discard();
 }
 
 function openFromPopup(page: Page, request: unknown) {
-  const moved = typeof request === "object" && request !== null ? { ...request, point: undefined } : request;
-  for (const listener of [...promptHostOf(page).listeners]) listener("openWindow", moved);
+  const asked = asOpenWindowRequest(request);
+  if (!asked) return;
+  const moved = { ...asked, point: undefined };
+  const host = requestHost(pages.get(popupOpenerKey(page.windowId)), page.profile, pages.values());
+  if (host) return sendTo("openWindow", moved)(host);
+  openInBrowserWindow(moved, page.profile, page.windowId, () => console.warn("[ardia windows] a link from a private pop-up was dropped: no window of its private session can take it"));
 }
 
 function popupWindowGone(popup: PopupWindowInfo) {
@@ -146,7 +140,7 @@ function listen() {
     const page = pages.get(event.key);
     if (!page) return;
     if (event.name === "pagePress") {
-      followBeforeMount = "";
+      dropKeptFollow();
       lastAskedToFocus = page;
       page.focusAsked = 0;
       for (const pressed of [...pressListeners]) pressed(page.windowId);
@@ -173,12 +167,13 @@ function listen() {
       point: fromClick && asking === opener ? inWindow(opener, opened.point) : undefined,
     };
     const features = popupFeatures(opened.popup);
-    if (!features) return handOpenedTab(opener, request);
+    if (!features) return handOpenedTab(asking, opener, request);
     const openedFrom = opener && !opener.closed ? opener : undefined;
+    if (handPopupAsTab(openedFrom, request, pages.values())) return;
     const ask = { adopt: request.adoptId, url: request.url, profile: request.profile ?? openedFrom?.profile ?? "", openerKey: openedFrom?.key ?? "", openedFromKey: (asking && !asking.closed ? asking : openedFrom)?.key ?? "", openedFromWindowId: (asking && !asking.closed ? asking : openedFrom)?.windowId ?? "", features };
     quietly(
       openPopupWindow(ask).then((outcome) => {
-        if (outcome === "failed") handOpenedTab(opener, { ...request, disposition: "foreground" });
+        if (outcome === "failed") handOpenedTab(asking, opener, { ...request, disposition: "foreground" });
       }),
     );
   });
@@ -230,6 +225,11 @@ function sendShow(page: Page): Promise<unknown> | undefined {
   });
 }
 
+function followNow(page: Page) {
+  lastAskedToFocus = page;
+  page.focusArgs = { follow: true };
+}
+
 const focusWaits = (page: Page) => lastAskedToFocus === page && page.focusAsked > 0 && Date.now() - page.focusAsked < FOCUS_WAITS_FOR_SHOW_MS;
 
 function askShow(page: Page, args: ShowArgs) {
@@ -238,7 +238,9 @@ function askShow(page: Page, args: ShowArgs) {
     page.ready.then((opened) => {
       if (!opened || page.show !== args) return noteShowStep(page.key, opened ? "askShow: superseded" : "askShow: not opened");
       const sent = sendShow(page);
-      if (!args.visible || !focusWaits(page)) return sent;
+      const kept = args.visible && spendKeptFollow(page.key, page.windowId);
+      if (kept) followNow(page);
+      if (!args.visible || !(kept || focusWaits(page))) return sent;
       page.focusAsked = 0;
       const focusArgs = page.focusArgs;
       if (fieldFocusedIn(page.windowId, page.key)) return sent;
@@ -274,12 +276,6 @@ export function mountPage(key: string, from: PageStart, listener: PageListener):
     notePageAsked(key);
     page.ready = begin(page, from);
     pages.set(key, page);
-    if (followBeforeMount === key) {
-      followBeforeMount = "";
-      lastAskedToFocus = page;
-      page.focusArgs = { follow: true };
-      page.focusAsked = Date.now();
-    }
   } else if (page.windowId !== from.windowId) {
     noteShowStep(key, `mount: window ${page.windowId} to ${from.windowId}`);
     page.windowId = from.windowId;
@@ -293,7 +289,9 @@ export function mountPage(key: string, from: PageStart, listener: PageListener):
   mounted.parked = false;
   mounted.mounts += 1;
   mounted.listeners.add(listener);
+  const adopting = offeredTabAdopting(from.adopt);
   void mounted.ready.then((opened) => {
+    adopting(opened);
     if (opened) tellReady(mounted, listener);
   });
   return () => {
@@ -327,9 +325,10 @@ function closePage(page: Page) {
   closings.set(page.key, closing);
 }
 
-export function showPage(key: string, visible: boolean, shape: PageShape | null): boolean {
+export function showPage(key: string, visible: boolean, shape: PageShape | null, askedIn?: string): boolean {
   const page = pages.get(key);
   if (!page || page.closed) return (noteShowStep(key, page ? "showPage: closed" : "showPage: no page"), false);
+  if (askedIn !== undefined && askedIn !== page.windowId) return (noteShowStep(key, `showPage: asked in ${askedIn}, the page is in ${page.windowId}`), false);
   return (askShow(page, visible && shape ? { key, visible: true, ...shape } : { key, visible: false }), true);
 }
 
@@ -357,7 +356,7 @@ export function callPage<Result = unknown>(key: string, method: string, args: Re
   if (method === "loadUrl" && args.url === page.started.url && Date.now() - page.started.at < SAME_LOAD_MS) return Promise.resolve(null);
   if (method === "loadUrl") noteLoadAsked(page.opening, args.url);
   if (method === "focus") {
-    followBeforeMount = "";
+    dropKeptFollow();
     lastAskedToFocus = page;
     page.focusArgs = args;
     page.focusAsked = page.show?.visible ? 0 : Date.now();
@@ -368,10 +367,10 @@ export function callPage<Result = unknown>(key: string, method: string, args: Re
   return ready.then((opened) => (opened && !page.closed ? hostCall<Result>("tab.call", { key, method, ...args }) : null));
 }
 
-export function followPage(key: string) {
+export function followPage(key: string, windowId = "") {
   const page = pages.get(key);
-  if (page && !page.closed) return void callPage(key, "focus", { follow: true });
-  followBeforeMount = key;
+  if (page && !page.closed && page.show?.visible && page.show === page.showSent && (!windowId || page.windowId === windowId)) return void callPage(key, "focus", { follow: true });
+  keepFollow(key);
   lastAskedToFocus = null;
 }
 
@@ -387,14 +386,12 @@ export function releasePage(key: string) {
   if (page.mounts <= 0) closePage(page);
 }
 
+export async function pageGone(key: string, waits = 25): Promise<void> {
+  for (let left = waits; left > 0 && pages.has(key); left--) await new Promise((done) => setTimeout(done, 16));
+  await closings.get(key);
+}
+
 export function pageOpened(key: string): Promise<boolean> {
   const page = pages.get(key);
   return page && !page.closed ? page.ready : Promise.resolve(false);
-}
-
-export function discardOffered(adopt: string): Promise<boolean> {
-  return hostCall("tab.discard", { adopt }).then(
-    () => true,
-    () => false,
-  );
 }

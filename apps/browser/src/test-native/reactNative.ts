@@ -168,7 +168,7 @@ function animate(value: AnimatedValue | AnimatedValueXY, toValue: number | { x: 
   return animateOne(value, toValue as number);
 }
 
-type Readable = number | { __getValue(): number };
+type Readable = number | Pick<AnimatedValue, "__getValue">;
 const read = (node: Readable) => (typeof node === "number" ? node : node.__getValue());
 const combined = (get: () => number) => ({ __getValue: get });
 

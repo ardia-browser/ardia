@@ -1,6 +1,8 @@
 #ifndef ARDIA_WIN_FRAME_VIEW_H_
 #define ARDIA_WIN_FRAME_VIEW_H_
 
+#include <windows.h>
+
 #include <memory>
 
 #include "chrome/browser/ui/views/frame/browser_frame_view.h"
@@ -24,6 +26,9 @@ class HostedFrameView : public BrowserFrameView {
       const gfx::Rect& client_bounds) const override;
   int NonClientHitTest(const gfx::Point& point) override;
 };
+
+LRESULT AppWindowHitAt(HWND page, POINT screen);
+bool TakeTopEdgePress(const MSG& msg);
 
 std::unique_ptr<BrowserFrameView> CreateHostedFrameView(
     BrowserWidget* widget,

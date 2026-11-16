@@ -151,3 +151,58 @@
                                              std::move(session.busy),
                                              std::move(reply));
                      },
+--- a/ac_passwords_logins.cc
++++ b/ac_passwords_logins.cc
+@@ -67,7 +67,9 @@
+ }
+ 
+ bool Synced(const StoredCredential& credential) {
+-  return !credential.blocked_by_user && !credential.password_value.empty();
++  return !credential.blocked_by_user &&
++         (!credential.password_value.empty() ||
++          !credential.federation_origin.IsValid());
+ }
+ 
+ size_t JSONBound(const Credentials& profile, const Credentials& account) {
+@@ -91,10 +93,14 @@
+   bool valid = base::EscapeJSONString(credential.signon_realm, true, &json);
+   json += ",\"username\":";
+   valid &= base::EscapeJSONString(credential.username_value, true, &json);
+-  json += ",\"password\":";
+-  std::u16string password = credential.password_value.value();
+-  valid &= base::EscapeJSONString(password, true, &json);
+-  Cleanse(password);
++  if (credential.password_value.empty()) {
++    json += ",\"passwordless\":true";
++  } else {
++    json += ",\"password\":";
++    std::u16string password = credential.password_value.value();
++    valid &= base::EscapeJSONString(password, true, &json);
++    Cleanse(password);
++  }
+   json += ",\"created\":";
+   json += base::NumberToString(credential.date_created.is_null()
+                                    ? 0.0
+@@ -201,7 +207,10 @@
+     return;
+   }
+   if (!result.has_value()) {
+-    return Fail("unreadable");
++    const bool undecryptable =
++        result.error().type ==
++        password_manager::PasswordStoreBackendErrorType::kKeychainError;
++    return Fail(undecryptable ? "undecryptable" : "unreadable");
+   }
+   (store == Store::kProfile ? profile_ : account_) = std::move(*result);
+   if (!profile_ || !account_) {
+@@ -253,10 +262,6 @@
+ 
+ AC_PROFILE_CALL(ac_passwords_logins) {
+   if (base::FeatureList::IsEnabled(
+-          password_manager::features::kSkipUndecryptablePasswords)) {
+-    return call.TakeReply().Error("partial password reads");
+-  }
+-  if (base::FeatureList::IsEnabled(
+           password_manager::features::kUseProcessBoundPasswordString)) {
+     return call.TakeReply().Error("process-bound password strings");
+   }

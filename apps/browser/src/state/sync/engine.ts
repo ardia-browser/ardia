@@ -354,9 +354,7 @@ export function addRemoteProfile(syncId: string): string | null {
   return shareWith;
 }
 
-export function removeRemoteProfile(syncId: string): boolean {
-  return markRemoved(doc, syncId) && (docChanged(), true);
-}
+export const removeRemoteProfile = (syncId: string): boolean => markRemoved(doc, syncId) && (docChanged(), true);
 
 export function startSync() {
   if (!SyncNative) return;

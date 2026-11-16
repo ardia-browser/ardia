@@ -118,7 +118,7 @@ test("a profile deleted on the only Mac can be removed from sync: its records go
     assert.equal(engineA.removeRemoteProfile(offered.syncId), false, "nothing left to remove");
     return offered.syncId;
   });
-  for (const prefix of ["prof:", "share:", "pth:", "pta:"]) assert.equal(live(prefix, syncId), false, `${prefix} has no live record left`);
+  for (const prefix of ["prof:", "share:", "pth:", "pta:", "ptab:"]) assert.equal(live(prefix, syncId), false, `${prefix} has no live record left`);
   await join(c, engineC);
   await c.with(() => assert.equal(engineC.useSync.getState().remoteProfiles.find((p) => p.name === "Work"), undefined, "a Mac that joins later isn't offered it"));
 });

@@ -26,7 +26,7 @@ import { groupCloseAllowed } from "../groups/closeGuard";
 import { focusedWindowOf } from "../windows/ui";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import { splitOf } from "../splits/splits";
-import { closeKind } from "../tabs/tabs";
+import { closeKind, pinnedPanesAreTopApps } from "../tabs/tabs";
 import { isSleeping } from "../tabs/sleepingTabs";
 import { noteSplit } from "../telemetry/usage";
 import { consentToken, stillValid } from "../telemetry/client";
@@ -81,7 +81,7 @@ export async function closeTab(tabId: string, { mayWrite, user }: CloseRequest =
     noteTabClosedByUser(tabId);
     return closeWindowAnimated(w.id);
   }
-  if (splitOf(now, tabId) && closeKind(now, tabId) === "close") noteSplit("splitPaneCloses", consent);
+  if (splitOf(now, tabId) && (closeKind(now, tabId) === "close" || pinnedPanesAreTopApps(now, tabId))) noteSplit("splitPaneCloses", consent);
   const front = activeTabId(now, w.id);
   commit(() => store().closeTab(tabId, close));
   const next = activeTabId(store(), w.id);

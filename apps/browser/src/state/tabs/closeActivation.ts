@@ -14,7 +14,7 @@ import type { ConsentToken } from "../telemetry/consentPeriod";
 import { hasPage } from "./pageSession";
 import { stripEntries, type StripMember } from "./stripEntries";
 import { withSharedFamily } from "../pins/pinShare";
-import { keptWithTopApp, successorKey, type CloseOptions, type Successor } from "./tabs";
+import { keptWithTopApp, successorKey, withPinnedSplits, type CloseOptions, type Successor } from "./tabs";
 
 type VisibleSection = "topApps" | "pinned" | "regular";
 type VisibleRow = { ids: string[]; section: VisibleSection };
@@ -117,8 +117,8 @@ function pickSuccessors(s: BrowserState, ids: string[], keepTopApps = s.settings
   if (!side) return out;
   const requested = ids.filter((id) => s.tabs[id]);
   const pinned = requested.filter((id) => inPinnedContainer(s, id));
-  const leaving = keepTopApps ? withPinnedPanes(s, pinned.filter((id) => withPinnedPanes(s, [id]).some((pane) => s.tabs[pane]?.pin?.as === "tile"))) : [];
-  const closing = new Set([...requested, ...leaving, ...withSharedFamily(s, withPinnedPanes(s, pinned.filter((id) => !leaving.includes(id))))]);
+  const leaving = keepTopApps ? withPinnedSplits(s, pinned.filter((id) => withPinnedPanes(s, [id]).some((pane) => s.tabs[pane]?.pin?.as === "tile"))) : [];
+  const closing = new Set([...requested, ...leaving, ...withSharedFamily(s, withPinnedSplits(s, pinned.filter((id) => !leaving.includes(id))))]);
   for (const w of Object.values(s.windows)) {
     for (const [profileId, activeId] of Object.entries(w.activeTabIds)) {
       if (!closing.has(activeId)) continue;

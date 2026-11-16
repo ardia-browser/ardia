@@ -100,6 +100,7 @@ export function unavailableSettingIds(capabilities: LinuxCapabilities, settingId
 
 export const unavailableCommands = (capabilities: LinuxCapabilities): Set<string> =>
   new Set([
+    "capture",
     ...(capabilities.externalLinks ? [] : ["emailPageLocation"]),
     ...(capabilities.linksFromOtherApps ? [] : ["toggleOpenLinksInLittleArdia"]),
     ...(capabilities.webkit ? [] : ["togglePageEngine", "toggleJavaScriptFromAppleEvents"]),

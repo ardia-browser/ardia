@@ -26,7 +26,10 @@ export function CaptureOverlay({ windowId, panes, origin, width, height }: {
 
   useEffect(() => {
     if (active) keys.current?.focus();
-    else setDrag(null);
+    else {
+      setDrag(null);
+      gesture.current = null;
+    }
   }, [active]);
   useEffect(() => () => endCapture(windowId, { refocus: false }), [windowId]);
   useEffect(() => endCapture(windowId, { refocus: false }), [shownTab, windowId]);

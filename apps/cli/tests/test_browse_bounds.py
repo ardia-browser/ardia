@@ -30,13 +30,13 @@ class CommandsAreBounded(unittest.TestCase):
 
     def test_the_client_waits_past_the_daemons_own_limits(self):
         self.assertEqual(limits.answer_deadline({"argv": ["click", "@e1"], "options": {}}),
-                         limits.QUEUE_WAIT + limits.COMMAND_LIMIT + limits.LIMIT_MARGIN)
+                         limits.BEHIND_SCRIPT_WAIT + limits.COMMAND_LIMIT + limits.LIMIT_MARGIN)
         self.assertEqual(limits.answer_deadline({"argv": ["wait", "400000"], "options": {}}),
-                         limits.QUEUE_WAIT + 400 + 2 * limits.LIMIT_MARGIN)
+                         limits.BEHIND_SCRIPT_WAIT + 400 + 2 * limits.LIMIT_MARGIN)
         self.assertEqual(limits.answer_deadline({"argv": ["wait", "--text", "x"], "options": {"timeout_ms": 200000}}),
-                         limits.QUEUE_WAIT + 200 + 2 * limits.LIMIT_MARGIN)
+                         limits.BEHIND_SCRIPT_WAIT + 200 + 2 * limits.LIMIT_MARGIN)
         self.assertEqual(limits.answer_deadline({"argv": [], "options": {}}),
-                         limits.QUEUE_WAIT + limits.COMMAND_LIMIT + limits.LIMIT_MARGIN)
+                         limits.BEHIND_SCRIPT_WAIT + limits.COMMAND_LIMIT + limits.LIMIT_MARGIN)
 
     def test_a_queued_script_waits_its_turn_for_as_long_as_it_may_run(self):
         self.assertEqual(limits.queue_wait("click", ["@e1"]), limits.QUEUE_WAIT)
@@ -155,6 +155,27 @@ class CommandsAreBounded(unittest.TestCase):
         self.assertEqual(ran, ["script"])
         self.assertEqual(code, 1)
         self.assertIn("is closing", err)
+
+    def test_any_command_waits_its_turn_behind_a_running_script(self):
+        instance = make_daemon(self)
+        started = asyncio.Event()
+
+        async def slow(ctx, name, argv):
+            if not started.is_set():
+                started.set()
+                await asyncio.sleep(0.6)
+            return commands.Result()
+
+        async def scenario():
+            with mock.patch.object(daemon, "dispatch", slow), mock.patch.object(daemon, "QUEUE_WAIT", 0.2):
+                running = asyncio.ensure_future(instance.execute({"argv": ["script", "--timeout", "5s"], "options": {}}))
+                await started.wait()
+                waited = await instance.execute({"argv": ["tab", "list"], "options": {}})
+                await running
+                return waited
+
+        code, _, err = run(scenario())
+        self.assertEqual(code, 0, err)
 
     def test_patient_queue_only_lets_a_read_wait_longer(self):
         instance = make_daemon(self)

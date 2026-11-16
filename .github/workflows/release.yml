@@ -354,6 +354,10 @@ jobs:
           path: |
             ${{ runner.temp }}/linux/Ardia-${{ inputs.version }}-linux-x64.tar.xz
             ${{ runner.temp }}/linux/Ardia-${{ inputs.version }}-linux-x64.tar.xz.sha256
+            ${{ runner.temp }}/linux/Ardia-${{ inputs.version }}-linux-x64.deb
+            ${{ runner.temp }}/linux/Ardia-${{ inputs.version }}-linux-x64.deb.sha256
+            ${{ runner.temp }}/linux/Ardia-${{ inputs.version }}-linux-x64.AppImage
+            ${{ runner.temp }}/linux/Ardia-${{ inputs.version }}-linux-x64.AppImage.sha256
             ${{ runner.temp }}/linux/ardia-cli-${{ inputs.version }}-linux-x64.tar.gz
             ${{ runner.temp }}/linux/ardia-cli-${{ inputs.version }}-linux-x64.tar.gz.sha256
             ${{ runner.temp }}/linux/provenance.txt
@@ -367,11 +371,22 @@ jobs:
           path: |
             ${{ runner.temp }}/linux/*.log
             ${{ runner.temp }}/linux/smoke
+            ${{ runner.temp }}/linux/smoke-deb
+            ${{ runner.temp }}/linux/smoke-appimage
           if-no-files-found: ignore
           retention-days: 14
 
+  windows:
+    needs: preflight
+    permissions:
+      contents: write
+      pull-requests: read
+    uses: ./.github/workflows/windows.yml
+    with:
+      version: ${{ inputs.version }}
+
   publish:
-    needs: [preflight, checks, sign, linux]
+    needs: [preflight, checks, sign, linux, windows]
     if: ${{ !cancelled() && needs.checks.result == 'success' && needs.sign.result == 'success' }}
     runs-on: macos-15
     timeout-minutes: 30
@@ -397,6 +412,19 @@ jobs:
         run: |
           echo "::warning::the Linux job ended $LINUX_RESULT, so v$VERSION ships without the Linux tarball: build it with scripts/linux/release.sh and upload it by hand once the engine is published"
           echo "- Linux: skipped (the linux job ended $LINUX_RESULT)" >> "$GITHUB_STEP_SUMMARY"
+      - if: needs.windows.result == 'success'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          pattern: windows-release-*
+          merge-multiple: true
+          path: dist/${{ inputs.version }}/windows
+      - name: Windows assets
+        if: needs.windows.result != 'success'
+        env:
+          WINDOWS_RESULT: ${{ needs.windows.result }}
+        run: |
+          echo "::warning::the Windows job ended $WINDOWS_RESULT, so v$VERSION ships without the Windows installers and installed Windows apps aren't offered it: see docs/windows.md › Releases to add them"
+          echo "- Windows: skipped (the windows job ended $WINDOWS_RESULT)" >> "$GITHUB_STEP_SUMMARY"
       - name: Tag
         if: ${{ !inputs.dry_run }}
         run: |
@@ -418,6 +446,37 @@ jobs:
             .claude/skills/release/scripts/publish.sh "$VERSION" --dry-run
           else
             .claude/skills/release/scripts/publish.sh "$VERSION"
+          fi
+
+  windows-update:
+    needs: [publish, windows]
+    if: ${{ !cancelled() && needs.publish.result == 'success' && needs.windows.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          pattern: windows-release-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/windows
+      - name: Offer it to installed Windows apps
+        env:
+          BUILD: ${{ needs.windows.outputs.build }}
+        run: |
+          args=(--installers "$RUNNER_TEMP/windows" --commit "$GITHUB_SHA" --out "$RUNNER_TEMP/windows-alpha")
+          if [ "$DRY_RUN" = true ]; then args+=(--dry-run); fi
+          scripts/windows/publish-alpha.sh "${args[@]}"
+          if [ "$DRY_RUN" = true ]; then
+            echo "- Windows: build $BUILD, packed for windows-alpha, not published" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- Windows: build $BUILD is the update on windows-alpha" >> "$GITHUB_STEP_SUMMARY"
           fi
 
   iphone:

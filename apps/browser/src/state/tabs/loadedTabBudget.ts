@@ -9,7 +9,7 @@ import { isPlaying, useMedia } from "../media/media";
 import { withSharedFamily } from "../pins/pinShare";
 import type { Settings } from "../settings/settings";
 import { withPinnedPanes } from "../splits/splits";
-import { noteTabSleptOverBudget, noteTabSleptOverBudgetReopened } from "../telemetry/tabSleepCounts";
+import { noteBudgetSweep, noteTabSleptOverBudget, noteTabSleptOverBudgetReopened } from "../telemetry/tabSleepCounts";
 import { hasPage } from "./pageSession";
 import { usePages } from "./pageState";
 import { shownTabIds } from "./shownTabs";
@@ -29,6 +29,7 @@ const HIDDEN_UNDER_PRESSURE_MS = 10 * MINUTE;
 const SLEEPS_PER_SWEEP = 4;
 const ANSWER_WITHIN_MS = 1500;
 const ASK_AGAIN_MS = 10 * MINUTE;
+const KEPT_RECENTLY_MS = 60 * MINUTE;
 const REOPENED_SOON_MS = 30 * MINUTE;
 const RECENTLY_VISIBLE = 7;
 
@@ -61,6 +62,7 @@ export function tabsOverBudget(
   now: number,
   seenAt: ReadonlyMap<string, number> = new Map(),
   askAgainAt: ReadonlyMap<string, number> = new Map(),
+  skippedLoading: string[] = [],
 ): string[] {
   const awake = awakeOf(s, loaded);
   if (awake.length <= budget.tabs) return [];
@@ -76,7 +78,8 @@ export function tabsOverBudget(
         (askAgainAt.get(id) ?? 0) <= now &&
         tabEngine(s, id) === "chromium" &&
         /^https?:\/\//i.test(s.tabs[id]!.url) &&
-        !inUse(s, id),
+        !inUse(s, id) &&
+        !(s.live[id]?.isLoading && skippedLoading.push(id)),
     )
     .reverse();
 }
@@ -84,6 +87,7 @@ export function tabsOverBudget(
 const seenAt = new Map<string, number>();
 const askAgainAt = new Map<string, number>();
 const sleptAt = new Map<string, number>();
+const keptAt = new Map<string, number>();
 let sweeping = false;
 
 export async function sleepTabsOverBudget(budget: LoadedTabBudget | null, now = Date.now()): Promise<string[]> {
@@ -92,18 +96,27 @@ export async function sleepTabsOverBudget(budget: LoadedTabBudget | null, now = 
   for (const id of shownTabIds(s)) seenAt.set(id, now);
   for (const id of seenAt.keys()) if (!s.tabs[id]) seenAt.delete(id);
   for (const [id, at] of askAgainAt) if (!s.tabs[id] || at <= now) askAgainAt.delete(id);
+  for (const [id, at] of keptAt) if (!s.tabs[id] || now - at >= KEPT_RECENTLY_MS) keptAt.delete(id);
+  const skippedLoading: string[] = [];
+  const candidates = tabsOverBudget(s, webviews.keys(), budget, now, seenAt, askAgainAt, skippedLoading);
+  const asking = [...candidates.filter((id) => !keptAt.has(id)), ...candidates.filter((id) => keptAt.has(id))].slice(0, SLEEPS_PER_SWEEP);
+  noteBudgetSweep(skippedLoading.length, candidates.slice(0, SLEEPS_PER_SWEEP).filter((id) => !asking.includes(id)).length);
   const slept: string[] = [];
   sweeping = true;
   try {
-    for (const id of tabsOverBudget(s, webviews.keys(), budget, now, seenAt, askAgainAt).slice(0, SLEEPS_PER_SWEEP)) {
+    for (const id of asking) {
       const asked = Promise.resolve(webviews.get(id)?.sleepIfHidden(budget.hiddenMs / 1000)).catch(() => undefined);
       const keptBy = await withDeadline(asked, ANSWER_WITHIN_MS, undefined);
       if (keptBy?.length === 0) {
         slept.push(id);
         sleptAt.set(id, now);
+        keptAt.delete(id);
         noteTabSleptOverBudget();
       } else if (keptBy?.includes(RECENTLY_VISIBLE)) seenAt.set(id, now);
-      else askAgainAt.set(id, now + ASK_AGAIN_MS);
+      else {
+        askAgainAt.set(id, now + ASK_AGAIN_MS);
+        keptAt.set(id, now);
+      }
     }
   } finally {
     sweeping = false;

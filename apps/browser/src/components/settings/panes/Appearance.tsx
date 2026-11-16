@@ -12,6 +12,7 @@ import { AmountSlider } from "../ThemeControls";
 import { PAGE_FRAME } from "../../../lib/windowLayout";
 import { FrameSlider, TabCornersSlider } from "./FrameSlider";
 import { BookmarksBarSection } from "./BookmarksBarSection";
+import { InterfaceSizePicker } from "./InterfaceSize";
 import { modePreview, stylePreview } from "../tokens";
 import { useSettingsColors } from "../useSettingsColors";
 import { APP_ICON_SIZE, appIconChoices, chooseAppIcon } from "../../../state/settings/paneData";
@@ -52,6 +53,7 @@ export function AppearancePane() {
           </Row>
         </Group>
       </Box>
+      <InterfaceSizePicker />
       <SidebarTextPicker />
       <InterfaceStylePicker />
       <SectionHeader title="Minimalism" description={null} />

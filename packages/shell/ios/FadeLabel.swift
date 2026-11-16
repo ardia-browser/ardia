@@ -45,15 +45,24 @@ final class FadeLabel: ExpoView {
     let font = familyFont(weight: fontWeight) ?? .monospacedDigitSystemFont(ofSize: fontSize, weight: fontWeight)
     field.font = font
     field.textColor = color
+    let line = Self.singleLine(text)
     if strikethrough {
-      field.attributedStringValue = NSAttributedString(string: text, attributes: [
+      field.attributedStringValue = NSAttributedString(string: line, attributes: [
         .font: font, .foregroundColor: color,
         .strikethroughStyle: NSUnderlineStyle.single.rawValue, .strikethroughColor: color,
       ])
     } else {
-      field.stringValue = text
+      field.stringValue = line
     }
     relayout()
+  }
+
+  static func singleLine(_ text: String) -> String {
+    guard text.contains(where: \.isNewline) else { return text }
+    return text.split(whereSeparator: \.isNewline)
+      .map { $0.trimmingCharacters(in: .whitespaces) }
+      .filter { !$0.isEmpty }
+      .joined(separator: " ")
   }
 
   private func familyFont(weight: NSFont.Weight) -> NSFont? {

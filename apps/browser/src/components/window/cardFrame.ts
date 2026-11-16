@@ -4,16 +4,21 @@ import { usePageFrameInset, windowCornerRadius } from "../../state/windows/layou
 import { perLook } from "../ui/tokens";
 import { peekRadius } from "./tokens";
 import { sidebarCardGap } from "./dockMotion";
+import { currentInterfaceScale, useCurrentInterfaceScale } from "../../state/settings/interfaceScale";
 
 export type CardFrame = PageFrame & { dockGap: number };
 
-const framesOfLook = perLook(() => new Map<number, CardFrame>());
+const framesOfLook = perLook(() => new Map<string, CardFrame>());
 
-export function cardFrameOf(inset: number): CardFrame {
+export function cardFrameOf(inset: number, scale = currentInterfaceScale()): CardFrame {
   const frames = framesOfLook();
-  let frame = frames.get(inset);
-  if (!frame) frames.set(inset, (frame = { ...pageFrameOf(inset, windowCornerRadius(), peekRadius(), WINDOW_CHROME.pageCornerRadius), dockGap: sidebarCardGap(inset) }));
+  const key = `${inset}@${scale}`;
+  let frame = frames.get(key);
+  if (!frame) frames.set(key, (frame = { ...pageFrameOf(inset, windowCornerRadius(), peekRadius(), WINDOW_CHROME.pageCornerRadius), dockGap: sidebarCardGap(inset) }));
   return frame;
 }
 
-export const useCardFrame = (): CardFrame => cardFrameOf(usePageFrameInset());
+export function useCardFrame(): CardFrame {
+  const scale = useCurrentInterfaceScale();
+  return cardFrameOf(usePageFrameInset(), scale);
+}

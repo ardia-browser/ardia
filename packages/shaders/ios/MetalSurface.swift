@@ -36,8 +36,8 @@ class MetalSurface: ExpoView, MTKViewDelegate {
 
   func writeSnapshot(to path: String) -> Bool {
     guard let pipeline, bounds.width > 0, bounds.height > 0 else { return false }
-    let scale = window?.backingScaleFactor ?? 2
-    let width = Int(bounds.width * scale), height = Int(bounds.height * scale)
+    let pixels = window == nil ? CGSize(width: bounds.width * 2, height: bounds.height * 2) : convertToBacking(bounds).size
+    let width = Int(pixels.width), height = Int(pixels.height)
     let desc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: width, height: height, mipmapped: false)
     desc.usage = [.renderTarget]
     desc.storageMode = .shared

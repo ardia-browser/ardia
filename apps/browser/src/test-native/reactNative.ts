@@ -6,6 +6,7 @@ export const Image = () => null;
 export const ScrollView = () => null;
 export const TextInput = () => null;
 export const StyleSheet = { create: <Styles,>(styles: Styles) => styles };
+export const PixelRatio = { get: () => 2, roundToNearestPixel: (size: number) => Math.round(size * 2) / 2 };
 
 export const pressables: ComponentProps<typeof import("react-native").Pressable>[] = [];
 export const Pressable = (props: (typeof pressables)[number]) => {

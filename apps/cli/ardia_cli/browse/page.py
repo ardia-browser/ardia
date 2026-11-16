@@ -40,6 +40,7 @@ SETUP_NAMES = {
     "Network.setExtraHTTPHeaders": "the extra headers",
 }
 ROUTE_PATTERNS = [{"urlPattern": "*", "requestStage": "Request"}]
+OTHER_WORLD = "same JavaScript world"
 STALE_CONTEXT = ("Cannot find context", "Execution context was destroyed", "Cannot find default execution context", "Inspected target navigated")
 
 
@@ -390,7 +391,9 @@ class Page:
             try:
                 result = await self.send("Runtime.callFunctionOn", params, timeout=timeout, mutation=not read)
             except CdpError as error:
-                if not any(marker in error.cdp_message for marker in STALE_CONTEXT):
+                if OTHER_WORLD in error.cdp_message and attempt == 0 and await self.rehome(args, context):
+                    continue
+                if OTHER_WORLD not in error.cdp_message and not any(marker in error.cdp_message for marker in STALE_CONTEXT):
                     raise
                 self.worlds.pop(frame or self.main_frame, None)
                 if read and attempt == 0 and not any(isinstance(a, Element) for a in args):
@@ -406,6 +409,24 @@ class Page:
             remote = result.get("result") or {}
             return remote.get("value") if by_value else remote
         raise BrowseError("the page navigated while reading it; try again", code="page_navigated")
+
+    async def rehome(self, args, context) -> bool:
+        from ardia_cli import command_metrics
+
+        elements = [arg for arg in args if isinstance(arg, Element)]
+        if not elements:
+            return False
+        for element in elements:
+            try:
+                result = await self.send("DOM.resolveNode", {"backendNodeId": element.backend_id, "executionContextId": context})
+            except CdpError:
+                return False
+            remote = result.get("object") or {}
+            if "objectId" not in remote:
+                return False
+            element.object_id = remote["objectId"]
+        command_metrics.flag("element_rehomed", True)
+        return True
 
     async def element_from(self, remote: dict, frame: str, label: str) -> Element | None:
         if not remote or remote.get("subtype") == "null" or remote.get("type") == "undefined" or "objectId" not in remote:

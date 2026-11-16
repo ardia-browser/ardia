@@ -34,6 +34,8 @@ const initials = (name: string) =>
     .map((part) => part[0])
     .join("")
     .toUpperCase();
+
+const restCount = VOICES.filter((v) => !v.featured).length;
 ---
 
 <section class="voices paint edge" id="voices" aria-labelledby="voices-title" data-shot="voices">
@@ -43,7 +45,7 @@ const initials = (name: string) =>
       <h2 class="poster" id="voices-title" data-reveal>They switched.</h2>
     </header>
 
-    <ul class="quotes" role="list" aria-label="Testimonials">
+    <ul class="quotes" role="list" aria-label="Testimonials" data-rest={restCount % 3}>
       {
         VOICES.map((v, i) => {
           const avatar = avatars[v.avatar];
@@ -106,7 +108,8 @@ const initials = (name: string) =>
 
   .quotes {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    /* 6-col base: featured cards span 3 (two-up), the rest span 2 (three-up). */
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 14px;
     margin: clamp(36px, 4.4vw, 64px) 0 0;
     padding: 0;
@@ -114,7 +117,16 @@ const initials = (name: string) =>
   }
 
   .quote.featured {
-    grid-column: 1 / -1;
+    grid-column: span 3;
+  }
+
+  .quote:not(.featured) {
+    grid-column: span 2;
+  }
+
+  /* 8 regular cards leave two in the last row; let them fill the width. */
+  .quotes[data-rest="2"] .quote:not(.featured):nth-last-child(-n + 2) {
+    grid-column: span 3;
   }
 
   .card {
@@ -145,11 +157,11 @@ const initials = (name: string) =>
   }
 
   .quote.featured .card {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: end;
-    gap: 32px 48px;
-    padding: clamp(22px, 2.2vw, 36px);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 28px;
+    padding: clamp(22px, 2.2vw, 32px);
   }
 
   blockquote {
@@ -164,11 +176,10 @@ const initials = (name: string) =>
   }
 
   .quote.featured blockquote p {
-    font-size: clamp(1.28rem, 1rem + 1.1vw, 1.85rem);
+    font-size: clamp(1.22rem, 0.95rem + 0.9vw, 1.6rem);
     font-weight: 480;
     line-height: 1.28;
     letter-spacing: -0.015em;
-    max-width: 22ch;
   }
 
   footer {
@@ -285,7 +296,6 @@ const initials = (name: string) =>
       padding: 16px;
     }
     .quote.featured .card {
-      grid-template-columns: 1fr;
       gap: 20px;
       padding: 16px;
     }

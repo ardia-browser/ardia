@@ -13,10 +13,6 @@ export const LINUX_WORDING: readonly Wording[] = [
     ],
   },
   {
-    file: "components/onboarding/SourceStep.tsx",
-    replacements: [["<SectionLabel title={`Found on this ${PLATFORM_TERMS.computer}`} />", `<SectionLabel title="Found on this computer" />`]],
-  },
-  {
     file: "components/onboarding/LookStep.tsx",
     replacements: [
       [`subtitle: "Buttons and panels catch the light, as in Tahoe"`, `subtitle: "Buttons and panels catch the light"`],
@@ -63,8 +59,6 @@ export const LINUX_WORDING: readonly Wording[] = [
         `"Follow macOS uses System Settings › Appearance › Show scroll bars. Thin shows slim scroll bars over the page only while you scroll, even with a mouse."`,
         `"Follow system keeps the scroll bars your desktop shows. Thin shows slim scroll bars over the page only while you scroll, even with a mouse."`,
       ],
-      ["In ${PLATFORM_TERMS.fullScreen} the page goes edge to edge", "In full screen the page goes edge to edge"],
-      ["In ${PLATFORM_TERMS.fullScreen} with Auto-Hide Tabs,", "In full screen with Auto-Hide Tabs,"],
     ],
   },
   {
@@ -74,8 +68,6 @@ export const LINUX_WORDING: readonly Wording[] = [
   {
     file: "components/settings/rows/privacyRows.ts",
     replacements: [
-      ["description: `Every field, and what never leaves this ${PLATFORM_TERMS.computer}.`", `description: "Every field, and what never leaves this computer."`],
-      ["section: `Kept on this ${PLATFORM_TERMS.computer}`", `section: "Kept on this computer"`],
       ["title: `Zoom with ${keyText(\"⌘\")} and the mouse wheel`", `title: "Zoom with Ctrl and the mouse wheel"`],
     ],
   },
@@ -122,7 +114,7 @@ export const LINUX_WORDING: readonly Wording[] = [
       ["one the ardia command or a debugger started and left behind, or one macOS refused to start.", "one the ardia command or a debugger started and left behind, or one the system refused to start."],
       [
         "whether macOS gave Ardia location access, you said no in macOS's prompt, it was already off in System Settings, or the check failed, one event each time.",
-        "whether Ardia had location access (always, on Linux: the system has no app-wide location switch to ask) or the check failed, one event each time.",
+        "whether the desktop's location service (GeoClue) let Ardia ask for the location, refused it, or the check failed, one event each time.",
       ],
       ["and the copy kept on this Mac is deleted.", "and the copy kept on this computer is deleted."],
       [`title: "Kept on this Mac"`, `title: "Kept on this computer"`],
@@ -150,10 +142,6 @@ export const LINUX_WORDING: readonly Wording[] = [
     replacements: [["`${PLATFORM_TERMS.os} ${app.osVersion}`, app.model", "`Linux ${app.osVersion}`, app.model"]],
   },
   {
-    file: "components/report/ReportPreview.tsx",
-    replacements: [["Exactly what leaves your ${PLATFORM_TERMS.computer} when you press Send.", "Exactly what leaves this computer when you press Send."]],
-  },
-  {
     file: "components/report/ReportSheet.tsx",
     replacements: [
       ["Recordings, contact and details stay private.", "Contact and details stay private."],
@@ -163,10 +151,6 @@ export const LINUX_WORDING: readonly Wording[] = [
   {
     file: "components/report/AttachedRow.tsx",
     replacements: [[`title: "Usage, errors and crashes, last 7 days"`, `title: "Usage and errors, last 7 days"`]],
-  },
-  {
-    file: "components/import/steps/ChooseStep.tsx",
-    replacements: [["No other browsers with data to import were found on this ${PLATFORM_TERMS.computer}.", "No other browsers with data to import were found on this computer."]],
   },
   {
     file: "components/import/steps/SafariStep.tsx",
@@ -183,17 +167,6 @@ export const LINUX_WORDING: readonly Wording[] = [
         "`${NOT_BROUGHT} macOS didn't allow Ardia to ask Dia for them. Allow it in System Settings › Privacy & Security › Automation, then import again.`",
         "`${NOT_BROUGHT} Ardia wasn't allowed to ask Dia for them.`",
       ],
-    ],
-  },
-  {
-    file: "state/extensions/actions.ts",
-    replacements: [["`The extension's folder stays on your ${PLATFORM_TERMS.computer}.`", `"The extension's folder stays on this computer."`]],
-  },
-  {
-    file: "components/settings/panes/Advanced.tsx",
-    replacements: [
-      ["At 20% battery or less, or in ${PLATFORM_TERMS.lowPowerMode},", "At 20% battery or less, or in power saver mode,"],
-      ["On battery or in ${PLATFORM_TERMS.lowPowerMode},", "On battery or in power saver mode,"],
     ],
   },
   {
@@ -221,13 +194,6 @@ export const LINUX_WORDING: readonly Wording[] = [
     ],
   },
   {
-    file: "state/browser/actions.ts",
-    replacements: [
-      ["stay installed on this ${PLATFORM_TERMS.computer}, turned off.` :", "stay installed on this computer, turned off.` :"],
-      ["` Its extensions stay installed on this ${PLATFORM_TERMS.computer}, turned off.`", "\" Its extensions stay installed on this computer, turned off.\""],
-    ],
-  },
-  {
     file: "state/onboarding/tour.ts",
     replacements: [
       ["${keyText(\"⌘L\")} brings the command bar up from any page, and ${keyText(\"⌘T\")} opens a new tab.", "Ctrl+L brings the command bar up from any page, and Ctrl+T opens a new tab."],
@@ -248,12 +214,6 @@ export const LINUX_WORDING: readonly Wording[] = [
     file: "state/releaseNotes/releaseNotes.ts",
     replacements: [
       ["or from any page with ⌘L.", "or from any page with Ctrl+L."],
-    ],
-  },
-  {
-    file: "state/sync/scopeAdapters.ts",
-    replacements: [
-      ["`This ${PLATFORM_TERMS.computer}`", "\"This computer\""],
     ],
   },
 ];

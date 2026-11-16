@@ -128,8 +128,8 @@ class RendererContractTests(unittest.TestCase):
             native = native.replace(name + '(', 'HostMessageHandler::' + name + '(', 1)
             handlers.append(native)
         code = (ROOT / 'tests/fixtures/renderer.h').read_text()
-        methods = '  std::string LiveCaller() const { return "live"; }\n  void DropPlayer() {}\n' + methods
-        code = code.replace('struct ShellHostView {', 'inline void LinuxLiveCallerGone(const std::string&) {}\nnamespace ardiacore { inline void LinuxAutomationCallerGone(const std::string&) {}\ninline void LinuxConfigCallerGone(const std::string&) {}\ninline void LinuxUserScriptsCallerGone(const std::string&) {} }\nstruct ShellHostView {', 1)
+        methods = '  int id_ = 0;\n  std::string LiveCaller() const { return "live"; }\n  void DropPlayer() {}\n' + methods
+        code = code.replace('struct ShellHostView {', 'namespace ardia { struct LinuxSystemSignals { static LinuxSystemSignals& Get() { static LinuxSystemSignals signals; return signals; }\nvoid WatchIdle(int, const std::vector<double>&) {} }; }\ninline void LinuxLiveCallerGone(const std::string&) {}\nnamespace ardiacore { inline void LinuxAutomationCallerGone(const std::string&) {}\ninline void LinuxConfigCallerGone(const std::string&) {}\ninline void LinuxUserScriptsCallerGone(const std::string&) {} }\nstruct ShellHostView {', 1)
         code = code.replace('ARDIA_METHODS', methods).replace('ARDIA_GUARD', guard).replace('ARDIA_TRUSTED', trusted).replace('ARDIA_HANDLER_METHODS', '\n'.join(handlers))
         return code + r'''
 int main(int argc, char** argv) {

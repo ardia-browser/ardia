@@ -184,12 +184,14 @@ export function PopUp<T extends string>({
   onChange,
   minWidth = 120,
   disabled,
+  accessibilityLabel,
 }: {
   value: T;
   options: Option<T>[];
   onChange: (value: T) => void;
   minWidth?: number;
   disabled?: boolean;
+  accessibilityLabel?: string;
 }) {
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
@@ -206,7 +208,7 @@ export function PopUp<T extends string>({
   };
   return (
     <View {...hoverProps} style={{ opacity: disabled ? opacity.disabled : 1 }}>
-      <Pressable disabled={disabled} onPress={open} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut}>
+      <Pressable disabled={disabled} onPress={open} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} accessibilityRole="button" accessibilityLabel={accessibilityLabel}>
         {({ pressed }) => (
           <Animated.View
             style={[

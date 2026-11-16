@@ -19,6 +19,6 @@ export * from "./swipe";
 export * from "./tabs";
 export * from "./webkit";
 export { call, on, type CallArgs, type CallName, type CallResult, type EventData, type EventName } from "./engine/call";
-export type { EngineCalls, EngineEvents, WindowsHostEvents } from "./engine/api";
+export type { EngineCalls, EngineEvents, LinuxHostEvents, WindowsHostEvents } from "./engine/api";
 export { nativeModule, type ArdiaCoreNativeModules } from "./nativeModules";
 export type { DomainModule } from "./engine/call";

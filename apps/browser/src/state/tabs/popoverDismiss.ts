@@ -38,6 +38,11 @@ export function togglePopover(tabId: string, popover: PagePopover) {
   setPopover(tabId, popoverOf(tabId) === popover ? null : popover);
 }
 
+export function closeEveryPopover() {
+  const open = usePages.getState().popover;
+  for (const id of Object.keys(open)) if (open[id]) closePopover(id);
+}
+
 function popoverTabsIn(windowId: string | null): string[] {
   if (!windowId) return [];
   const tabs = useBrowser.getState().tabs;

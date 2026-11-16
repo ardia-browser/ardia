@@ -6,12 +6,14 @@ import os
 import pathlib
 import re
 import shutil
+import subprocess
 import sys
 import tarfile
 import tempfile
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import linux_formats
 import runtime_files
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
@@ -101,7 +103,7 @@ def normalize_modes(root):
         path.chmod(0o755 if path.is_dir() or path.stat().st_mode & 0o111 else 0o644)
 
 
-def package(output, ui, destination, content_blocker=None, version=None, cli=None):
+def package(output, ui, destination, content_blocker=None, version=None, cli=None, deb=None, appimage=None):
     if version is not None:
         check_version(version)
     cli_digest = None
@@ -116,14 +118,19 @@ def package(output, ui, destination, content_blocker=None, version=None, cli=Non
         raise ValueError(f'no UI bundle at {ui}/index.html')
     if not os.access(output / 'chrome', os.X_OK):
         raise ValueError('chrome is not executable')
-    if destination.exists():
-        raise ValueError(f'refusing to overwrite {destination}')
+    for path in (destination, deb, appimage):
+        if path is not None and path.exists():
+            raise ValueError(f'refusing to overwrite {path}')
     destination.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='ardia-package-') as scratch:
         root = pathlib.Path(scratch) / 'ardia'
         runtime = root / 'lib/ardia'
         runtime.mkdir(parents=True)
         runtime_files.copy(output, runtime)
+        if (runtime / 'chrome_sandbox').is_file():
+            (runtime / 'chrome_sandbox').rename(runtime / 'chrome-sandbox')
+        shutil.copyfile(pathlib.Path(__file__).resolve().parent / 'ardia-launch', runtime / 'ardia-launch')
+        (runtime / 'ardia-launch').chmod(0o755)
         shutil.copytree(ui, runtime / 'ardia-ui')
         if version is not None:
             (runtime / 'VERSION').write_text(version + '\n')
@@ -138,7 +145,7 @@ def package(output, ui, destination, content_blocker=None, version=None, cli=Non
                 shutil.copy2(path, blocker / path.name)
         launcher = root / 'bin/ardia'
         launcher.parent.mkdir()
-        launcher.write_text('#!/usr/bin/env sh\nardia_bin_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nexec "$ardia_bin_dir/../lib/ardia/chrome" "$@"\n')
+        launcher.write_text('#!/usr/bin/env sh\nardia_bin_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nexec "$ardia_bin_dir/../lib/ardia/ardia-launch" "$@"\n')
         launcher.chmod(0o755)
         desktop = root / 'share/applications/ardia.desktop'
         desktop.parent.mkdir(parents=True)
@@ -160,6 +167,10 @@ def package(output, ui, destination, content_blocker=None, version=None, cli=Non
         normalize_modes(root)
         with tarfile.open(destination, 'x:xz') as archive:
             archive.add(root, arcname='ardia')
+        if deb is not None:
+            linux_formats.build_deb(root, deb, version)
+        if appimage is not None:
+            linux_formats.build_appimage(root, appimage)
     return destination
 
 
@@ -171,14 +182,18 @@ def main():
     parser.add_argument('--content-blocker', type=pathlib.Path)
     parser.add_argument('--version', help='the Ardia version, written to lib/ardia/VERSION')
     parser.add_argument('--cli', type=pathlib.Path, help=f'the ardia-cli-<version>-{CLI_PLATFORM}.tar.gz to bundle in lib/ardia/cli (needs --version)')
+    parser.add_argument('--deb', type=pathlib.Path, help='also build a .deb at this path (dpkg-deb)')
+    parser.add_argument('--appimage', type=pathlib.Path, help='also build an AppImage at this path (a pinned type 2 runtime and mksquashfs)')
     args = parser.parse_args()
     if args.cli is not None and args.version is None:
         parser.error('--cli needs --version')
     try:
         blocker = args.content_blocker.resolve() if args.content_blocker else None
         cli = args.cli.resolve() if args.cli else None
-        print(package(args.out.resolve(), args.ui.resolve(), args.destination.resolve(), blocker, args.version, cli))
-    except (ValueError, OSError, json.JSONDecodeError) as error:
+        deb = args.deb.resolve() if args.deb else None
+        appimage = args.appimage.resolve() if args.appimage else None
+        print(package(args.out.resolve(), args.ui.resolve(), args.destination.resolve(), blocker, args.version, cli, deb, appimage))
+    except (ValueError, OSError, json.JSONDecodeError, subprocess.CalledProcessError) as error:
         parser.error(str(error))
 
 

@@ -267,12 +267,78 @@ test("Chrome decides each sleep: a tab it keeps, or whose answer doesn't come in
   lifecycle.noteDiscarded(ids[0]);
   asked.length = 0;
   assert.deepEqual(await sweep(now + 12 * minute), []);
-  assert.deepEqual(asked.map(([id]) => id), [ids[5], ids[4], ids[1], ids[3]], "ten minutes later Chrome is asked again, the tab it had seen on screen as the most recent");
+  assert.deepEqual(asked.map(([id]) => id), [ids[3], ids[5], ids[4], ids[1]], "ten minutes later Chrome is asked again: first the tab it had only seen on screen, then the tabs it kept");
   assert.equal(takeTabSleepCounts().tabs_slept_over_budget, 2);
   lifecycle.noteReady(ids[2]);
   assert.equal(takeTabSleepCounts().tabs_slept_over_budget_reopened, 1, "a slept tab opened again within half an hour is counted: the sign the budget is too tight");
   lifecycle.noteReady(ids[2]);
   lifecycle.noteGone(ids[0]);
   assert.equal(takeTabSleepCounts().tabs_slept_over_budget_reopened, 0);
+  webviews.clear();
+});
+
+test("a page the budget sees that isn't a tab, such as a pop-up window's page on Windows, is never asked to sleep", async () => {
+  const { tabsOverBudget } = await import("./loadedTabBudget.ts");
+  const now = Date.now() + 72 * 60 * minute;
+  const { ids, active } = windowOfHiddenTabs(3, now);
+  const popupPage = "popup:w-1:page";
+  const over = tabsOverBudget(S(), [popupPage, active, ...ids], { tabs: 1, hiddenMs: 0 }, now);
+  assert.ok(!over.includes(popupPage), "the pop-up's page is never a candidate");
+  assert.deepEqual(over, [ids[2], ids[1], ids[0]], "the hidden tabs still are");
+});
+
+test("Memory Saver keeps a Peek shown over its tab awake, and treats a Peek hidden with its tab like a hidden tab", async () => {
+  const { tabsOverBudget } = await import("./loadedTabBudget.ts");
+  const now = Date.now() + 96 * 60 * minute;
+  const { ids, active } = windowOfHiddenTabs(2, now);
+  const peek = S().openPeek(active, "https://peeked.example/");
+  assert.ok(peek, "the Peek opens over the shown tab");
+  const over = () => tabsOverBudget(S(), [active, peek, ...ids], { tabs: 1, hiddenMs: 0 }, now);
+  assert.ok(!over().includes(peek), "the Peek over the shown tab is never a candidate");
+  S().activate(ids[0]);
+  assert.ok(over().includes(peek), "hidden with its tab, the Peek's page can sleep like a hidden tab");
+});
+
+test("a hidden tab that is still loading is never asked to sleep, so a navigation in flight isn't lost", async () => {
+  const { tabsOverBudget } = await import("./loadedTabBudget.ts");
+  const now = Date.now() + 120 * 60 * minute;
+  const { ids, active } = windowOfHiddenTabs(3, now);
+  S().updateLive(ids[2], { isLoading: true });
+  const skipped = [];
+  const over = tabsOverBudget(S(), [active, ...ids], { tabs: 1, hiddenMs: 0 }, now, new Map(), new Map(), skipped);
+  assert.deepEqual(over, [ids[1], ids[0]], "the loading tab is left out; the others are still asked, oldest first");
+  assert.deepEqual(skipped, [ids[2]], "and it is counted as skipped while loading");
+  S().updateLive(ids[2], { isLoading: false });
+  assert.deepEqual(tabsOverBudget(S(), [active, ...ids], { tabs: 1, hiddenMs: 0 }, now), [ids[2], ids[1], ids[0]], "once its load ends it is a candidate again");
+});
+
+test("tabs the engine kept give their asks to tabs not kept yet, so a sweep where old kept tabs come due still sleeps a younger idle tab", async (t) => {
+  const { sleepTabsOverBudget } = await import("./loadedTabBudget.ts");
+  const { webviews } = await import("../../platform/webviews.ts");
+  const { takeTabSleepCounts } = await import("../telemetry/tabSleepCounts.ts");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const now = Date.now() + 240 * 60 * minute;
+  const { ids, active } = windowOfHiddenTabs(8, now);
+  const alwaysKept = new Set(ids.slice(4));
+  const asked = [];
+  webviews.clear();
+  for (const id of [active, ...ids]) webviews.set(id, { sleepIfHidden: () => (asked.push(id), Promise.resolve(alwaysKept.has(id) ? [104] : [])) });
+  takeTabSleepCounts();
+  const budget = { tabs: 1, hiddenMs: 45 * minute };
+  const sweep = async (at) => {
+    const done = sleepTabsOverBudget(budget, at);
+    for (let i = 0; i < 8; i++) {
+      await new Promise((resolve) => setImmediate(resolve));
+      t.mock.timers.tick(1500);
+    }
+    return done;
+  };
+  assert.deepEqual(await sweep(now), [], "the four oldest tabs are the only ones hidden long enough, and the engine keeps all four");
+  assert.deepEqual(asked, [ids[7], ids[6], ids[5], ids[4]]);
+  asked.length = 0;
+  const later = now + 10 * minute;
+  assert.deepEqual(await sweep(later), [ids[3]], "ten minutes later the kept tabs are due again, and the younger tab now past the wait is asked first and sleeps");
+  assert.deepEqual(asked, [ids[3], ids[7], ids[6], ids[5]], "the kept tabs fill the asks that are left");
+  assert.equal(takeTabSleepCounts().tabs_over_budget_asks_passed_on, 1, "one ask went from a kept tab to a tab not kept yet");
   webviews.clear();
 });

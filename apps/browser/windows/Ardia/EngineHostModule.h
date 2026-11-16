@@ -119,7 +119,8 @@ inline bool IsProfileFolderName(std::string_view folder) noexcept {
 
 inline bool IsChromiumDataFolder(std::filesystem::path const &folder) noexcept {
   std::error_code error;
-  return folder.is_absolute() && std::filesystem::is_directory(folder, error) && std::filesystem::is_regular_file(folder / L"Local State", error);
+  if (!folder.is_absolute() || !std::filesystem::is_directory(folder, error)) return false;
+  return std::filesystem::is_directory(folder / L"Default", error) || std::filesystem::is_regular_file(folder / L"Local State", error);
 }
 
 inline bool Gone(std::filesystem::path const &path) noexcept {

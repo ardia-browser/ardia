@@ -351,6 +351,124 @@ void ProbeNeverPromptsAndExplainsUnavailability() {
   }
 }
 
+struct FallbackSpy {
+  bool available = true;
+  int asked = 0;
+  std::u16string purpose;
+  base::OnceCallback<void(bool, bool)> answer;
+};
+
+void InstallFallback(FallbackSpy& spy) {
+  ardia::SetReauthFallback({
+      base::RepeatingCallback<bool()>([&spy] { return spy.available; }),
+      base::RepeatingCallback<void(Profile*, const std::u16string&, base::OnceCallback<void(bool, bool)>)>(
+          [&spy](Profile*, const std::u16string& purpose, base::OnceCallback<void(bool, bool)> answer) {
+            ++spy.asked;
+            spy.purpose = purpose;
+            spy.answer = std::move(answer);
+          }),
+  });
+}
+
+void LoginPasswordStandsInOnlyWhenPolkitCantAsk() {
+  FallbackSpy spy;
+  InstallFallback(spy);
+
+  Reset();
+  Profile missing_policy;
+  Result granted;
+  Request(missing_policy, granted);
+  Pump();
+  dbus::SentCall check = Take(0);
+  Fail(check, "org.freedesktop.PolicyKit1.Error.Failed", "Action dev.ardia.linux.reauthenticate is not registered");
+  assert(spy.asked == 1 && spy.purpose == u"see passwords" && !granted.granted);
+  std::move(spy.answer).Run(true, false);
+  assert(granted.granted == true && granted.runs == 1);
+  assert(LastResult() == "granted" && ardia::emitted.back().values.at("method") == "loginPassword");
+  Result remembered;
+  Request(missing_policy, remembered);
+  assert(remembered.granted == true && spy.asked == 1);
+
+  Reset();
+  Profile no_polkit;
+  Result cancelled;
+  Request(no_polkit, cancelled);
+  Pump();
+  dbus::SentCall unknown = Take(0);
+  Fail(unknown, "org.freedesktop.DBus.Error.ServiceUnknown");
+  assert(spy.asked == 2);
+  std::move(spy.answer).Run(false, true);
+  assert(cancelled.granted == false && LastResult() == "cancelled");
+
+  Reset();
+  dbus_thread_linux::system_bus->connects = false;
+  Profile no_bus;
+  Result denied;
+  Request(no_bus, denied);
+  Pump();
+  assert(spy.asked == 3 && dbus::sent_calls.empty());
+  std::move(spy.answer).Run(false, false);
+  assert(denied.granted == false && LastResult() == "denied");
+
+  Reset();
+  Profile polkit_denies;
+  Result refused;
+  Request(polkit_denies, refused);
+  Pump();
+  dbus::SentCall answered = Take(0);
+  Reply(answered, false, false);
+  assert(spy.asked == 3 && refused.granted == false && LastResult() == "denied" &&
+         ardia::emitted.back().values.at("method") == "polkit");
+
+  Reset();
+  Profile superseded;
+  Result older;
+  Result newer;
+  Request(superseded, older);
+  Pump();
+  dbus::SentCall first = Take(0);
+  Fail(first, "org.freedesktop.DBus.Error.NameHasNoOwner");
+  assert(spy.asked == 4);
+  auto stale = std::move(spy.answer);
+  Request(superseded, newer);
+  assert(older.granted == false && older.runs == 1);
+  std::move(stale).Run(true, false);
+  assert(!newer.granted.has_value());
+  Pump();
+  dbus::SentCall second = Take(1);
+  Fail(second, "org.freedesktop.DBus.Error.NameHasNoOwner");
+  assert(spy.asked == 5);
+  std::move(spy.answer).Run(true, false);
+  assert(newer.granted == true && newer.runs == 1);
+
+  Reset();
+  spy.available = false;
+  Profile helperless;
+  Result unavailable;
+  Request(helperless, unavailable);
+  Pump();
+  dbus::SentCall last = Take(0);
+  Fail(last, "org.freedesktop.DBus.Error.ServiceUnknown");
+  assert(unavailable.granted == false && LastResult() == "unavailable" && spy.asked == 5);
+
+  Reset();
+  spy.available = true;
+  Probed probed;
+  Probe(probed);
+  Pump();
+  dbus::SentCall probe = Take(0);
+  Fail(probe, "org.freedesktop.PolicyKit1.Error.Failed", "Action dev.ardia.linux.reauthenticate is not registered");
+  assert(probed.available == true && probed.reason == "loginPassword");
+  Reset();
+  Probed denied_probe;
+  Probe(denied_probe);
+  Pump();
+  dbus::SentCall not_permitted = Take(0);
+  Reply(not_permitted, false, false);
+  assert(denied_probe.available == false && denied_probe.reason == "notPermitted");
+  ardia::SetReauthFallback({});
+}
+
 }
 
 int main(int argc, char**) {
@@ -368,5 +486,6 @@ int main(int argc, char**) {
   NewerRequestSupersedesAndStaleRepliesAreIgnored();
   UnconnectedBusIsUnavailable();
   ProbeNeverPromptsAndExplainsUnavailability();
+  LoginPasswordStandsInOnlyWhenPolkitCantAsk();
   std::puts("reauth scenarios passed");
 }

@@ -1,4 +1,5 @@
 import AppKit
+import ArdiaCore
 import ExpoModulesCore
 
 final class FolderIconView: ExpoView {
@@ -20,6 +21,11 @@ final class FolderIconView: ExpoView {
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     wantsLayer = true
+    NotificationCenter.default.addObserver(self, selector: #selector(interfaceScaleDidChange), name: .ArdiaInterfaceScaleDidChange, object: nil)
+  }
+
+  @objc private func interfaceScaleDidChange() {
+    redraw()
   }
 
   override func hitTest(_ point: NSPoint) -> NSView? { nil }
@@ -73,7 +79,7 @@ final class FolderIconView: ExpoView {
     let frame = backingAlignedRect(bounds.insetBy(dx: -side * FolderArt.bleed, dy: -side * FolderArt.bleed), options: .alignAllEdgesNearest)
     art.frame = frame
     let center = CGPoint(x: bounds.midX - frame.minX, y: isFlipped ? bounds.midY - frame.minY : frame.maxY - bounds.midY)
-    let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
+    let scale = backingDensity
     let palette = self.palette
     let image = { (progress: Double) in
       FolderArt.image(progress, size: frame.size, center: center, side: side, scale: scale, palette: palette)
@@ -97,5 +103,12 @@ final class FolderIconView: ExpoView {
     animation.duration = motion.duration
     animation.beginTime = art.convertTime(CACurrentMediaTime(), from: nil) - elapsed
     art.add(animation, forKey: "folder")
+  }
+}
+
+extension NSView {
+  var backingDensity: CGFloat {
+    guard window != nil else { return NSScreen.main?.backingScaleFactor ?? 2 }
+    return convertToBacking(NSSize(width: 1, height: 1)).width
   }
 }

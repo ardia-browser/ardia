@@ -54,6 +54,9 @@ provideNativeModule("ArdiaApp", {
   launchConfig: () => LAUNCH_CONFIG,
   appIcons: async () => [],
   appIcon: async () => null,
+  interfaceScale: () => 1,
+  interfaceScaleRange: () => [1, 1],
+  setInterfaceScale: async () => 1,
 });
 provideNativeModule("ArdiaCalendar", { authorizationStatus: () => "notDetermined" });
 provideNativeModule("ArdiaCli", { installedVersion: () => null });

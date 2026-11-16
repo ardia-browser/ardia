@@ -2,7 +2,8 @@ import { create } from "zustand";
 import { autoHidesTabsIn, sidebarSideOf, tabLayoutOf, tabsShownIn } from "../browser/model";
 import { switchOn } from "../../platform/killSwitches";
 import { ARC_LIGHTS_CENTER, lightsCenter, sidebarLightsCenter, toolbarLightsCenter, TOP_STRIP_LIGHTS_CENTER } from "./dockMotion";
-import { onWindowEvent, type LightsPlace } from "../../platform/windows";
+import { frameCornerRadius, onWindowEvent, windowFrame, type LightsPlace } from "../../platform/windows";
+import { rootSizeOfFrame } from "../settings/interfaceScale";
 import { DEFAULT_SIDEBAR_WIDTH, pageFrameInsetOf } from "../../lib/windowLayout";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { useWindowId } from "../browser/hooks";
@@ -14,6 +15,10 @@ import type { CaptionRegion } from "../../platform/windowControls";
 import { sidebarWidthIn } from "../sidebar/shownWidth";
 
 export { frameCornerRadius, windowCornerRadius, windowFrame } from "../../platform/windows";
+export { onInterfaceScaleChange } from "../settings/interfaceScale";
+
+export const windowRootShape = (windowId: string): Promise<{ width: number; height: number; radius: number } | null> =>
+  Promise.all([windowFrame(windowId), frameCornerRadius(windowId)]).then(([frame, radius]) => (frame ? { ...rootSizeOfFrame(frame), radius } : null));
 
 export function onFullScreenLeft(windowId: string, run: () => void): () => void {
   const subscription = onWindowEvent((e) => {

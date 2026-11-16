@@ -71,7 +71,7 @@ test("Windows offers Sync without passwords but no Calendar or WebKit pane, no b
     engineCommand: true,
     hidingCommands: [true, true],
     unloadsProfiles: false,
-    sleepsTabsOverBudget: false,
+    sleepsTabsOverBudget: true,
     switchesEngine: false,
     pageEngines: ["chromium", "chromium", "chromium", "chromium", "chromium"],
     calendarLink: "general",

@@ -135,15 +135,25 @@ On the Windows tree (2026-11-10): `pins` and `guard` pass, 356 patches applied w
 `scripts/windows/engine/series-win`, then that file's own `chromium` lines (patches in `scripts/windows/engine/patches/`),
 strictly with `git apply` and else with `patch`'s fuzz. It records a failure and goes on, and writes
 `~/chromium-build-win/logs/series-win.tsv`. `series-win` today: one skip and twelve Windows-only patches (the table).
+A shared `chromium` line may end in a platform tag since the Linux port: untagged lines are for every platform, and
+Windows takes those and the `mac` ones (the set it started from), never `linux`.
 The layers:
 
 - `engine/chromium/apply.sh` runs as is. Its `chrome/browser/ardia` (the `ac_*` C API) then builds on Windows from a
   copy `series_win.py layer` makes: the Mac sources with `ardia-layer-win.patch` (UTF-8 paths, and Windows absolute
   paths accepted where the Mac checks for a leading `/`), Windows stand-ins for the two
-  POSIX-only files, and a build file generated from the Mac one. The Ardia logos it replaces are OS-neutral and give
-  the Windows build its branding.
+  POSIX-only files, and a build file generated from the shared one: its shared sources less `.mm` and `pip/`, and from
+  its Mac block the portable files in `WINDOWS_FROM_MAC_BLOCK` (`ac_reauth.cc`). The Ardia logos it replaces are
+  OS-neutral and give the Windows build its branding.
 - `series_win.py layer` also copies `//ardia/win` into the tree, with `EngineApi.h` from the app and a generated table
-  of the `ac_*` exports. `chrome.dll` depends on it; `//ardia/win:probe` builds `ArdiaProbe.dll`, a stand-in for the app.
+  of the `ac_*` exports, made only from the sources Windows compiles.
+- `check_inputs.py` runs those same steps without a Chromium tree, on every pull request (the "Windows engine inputs"
+  workflow), and fails, naming the file and line, when the shared inputs change in a way the Windows build can't take:
+  a series line it can't read or a patch that isn't there, a `series-win` skip that names nothing, `ardia-layer-win.patch`
+  not applying without fuzz, a BUILD.gn it can't turn into the Windows one, a source or engine call Windows would build
+  that isn't there. The patches Windows applies and the layer sources it compiles are recorded in
+  `accepted-patches.txt` and `accepted-layer-sources.txt`; a change to either is taken on purpose with
+  `check_inputs.py --accept`. `chrome.dll` depends on it; `//ardia/win:probe` builds `ArdiaProbe.dll`, a stand-in for the app.
 - `engine/ardiacore/apply.sh` doesn't run: it is Mac code. Only `ardia/core/ac_hooks.h` and `ac_content_hooks.h` are
   copied, because the hook patches include them (`// nogncheck`) and they are OS-neutral. With nothing setting the
   hooks, Chrome behaves as stock.
@@ -238,6 +248,8 @@ a Windows build needs.
 | `chromium-win-hosted-page-fills-window.patch` | applies (Windows only, `series-win`) | Windows only | A hosted window has no rounded page frame or insets: the page fills it |
 | `chromium-win-hosted-no-browser-shortcuts.patch` | applies (Windows only, `series-win`) | Windows only | Chrome's own accelerators are off in hosted windows, so Ctrl+L and the rest reach the app |
 | `chromium-win-relaunch-to-app.patch` | applies (Windows only, `series-win`) | Windows only | A second launch's command line goes to `//ardia/win` instead of Chrome's startup, which would open nothing under `--no-startup-window` |
+| `chromium-win-discard-asks-the-host.patch` | applies (Windows only, `series-win`) | OS-neutral | Every discard but one the user or one of their extensions asks for (`EXTERNAL`: Chrome's Memory Saver timer, its urgent and frozen-with-growing-memory discards and the app's `sleepIfHidden` all do) asks `//ardia/win`'s `g_ardia_keeps_page` before Chromium's own early answers; a page the app keeps is protected (`kExtensionProtected`), which Windows' urgent discards skip |
+| `chromium-win-devtools-other-clients.patch` | applies (Windows only, `series-win`) | OS-neutral | `content::ArdiaHasOtherDevToolsClient`: whether a DevTools client other than the engine's own is attached to a page, so the engine's always-attached Peek client doesn't count as DevTools open |
 
 Every patch that applies does so strictly (`git apply`, no fuzz). 72 of the Mac series' 73 apply; the one left out is a
 Mac-only keychain patch. Four Windows-only patches follow them (`series-win`). The file classes above come from paths, so a

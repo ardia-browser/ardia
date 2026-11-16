@@ -234,3 +234,30 @@ test("a Keychain unlock that fails outright reads as stalled with its error inst
     native.unlock = unlock;
   }
 });
+
+test("a missing sync key reads as locked and asks for the phrase, and a cycle while locked doesn't turn that into stalled", async () => {
+  reset();
+  shell.docs.clear();
+  const first = await import("./engine.ts?locked-setup");
+  first.startSync();
+  assert.ok("ok" in (await first.turnOnSync("/sync")));
+  await first.syncNow();
+  const native = globalThis.acTestNativeModules.ArdiaSync;
+  const { unlock, chainStatus } = native;
+  native.unlock = async () => false;
+  native.chainStatus = async () => {
+    throw Object.assign(new Error("Sync isn't set up on this computer."), { code: "locked" });
+  };
+  try {
+    const relaunched = await import("./engine.ts?locked-relaunch");
+    relaunched.startSync();
+    for (let i = 0; i < 5; i++) await new Promise((resolve) => setImmediate(resolve));
+    await relaunched.syncNow();
+    const { status, error } = relaunched.useSync.getState();
+    assert.equal(status, "locked");
+    assert.match(error ?? "", /Enter your recovery phrase/);
+  } finally {
+    native.unlock = unlock;
+    native.chainStatus = chainStatus;
+  }
+});

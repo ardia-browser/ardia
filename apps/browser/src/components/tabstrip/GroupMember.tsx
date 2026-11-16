@@ -36,6 +36,7 @@ export function GroupMember({
   geometry,
   from,
   chip,
+  tabWidth,
   activeId,
   measured,
   tuck,
@@ -53,6 +54,7 @@ export function GroupMember({
   geometry: DragGeometry;
   from: number;
   chip: number;
+  tabWidth: (tabId: string) => number;
   activeId: string;
   measured: boolean;
   tuck?: () => void;
@@ -84,7 +86,7 @@ export function GroupMember({
         {member.kind === "folder" ? (
           <FolderMember groupId={member.id} chip={chip} shownTab={member.tabIds.includes(activeId) ? activeId : null} tuck={tuck} />
         ) : member.kind === "split" ? (
-          <SplitChip tabIds={member.tabIds} width={width} geometry={geometry} from={from} group={member.group} />
+          <SplitChip tabIds={member.tabIds} width={width} paneWidths={member.tabIds.map(tabWidth)} geometry={geometry} from={from} group={member.group} out={out} />
         ) : (
           <DraggableChip tabId={member.id} width={width} geometry={geometry} from={from} group={member.group} tuck={tuck} out={out} />
         )}

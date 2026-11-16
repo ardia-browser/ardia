@@ -37,6 +37,9 @@ const APP_FALLBACKS: Record<string, Fallback> = {
   crashReports: answer([]),
   hardwareInfo: refuse("Hardware details"),
   diagnosticsSample: answer({}),
+  interfaceScale: now(1),
+  interfaceScaleRange: now([1, 1]),
+  setInterfaceScale: answer(1),
 };
 
 const REPORT_FALLBACKS: Record<string, Fallback> = {

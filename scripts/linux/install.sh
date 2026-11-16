@@ -11,7 +11,8 @@ Installs an extracted Ardia Linux package.
   --destdir DIR  staging root for distribution packages (default none)
 
 Ardia goes under PREFIX/lib/ardia with PREFIX/bin/ardia, its desktop entry
-and icon. The polkit policy always goes to DESTDIR/usr/share/polkit-1/actions,
+and icon. Run as root without --destdir, it makes lib/ardia/chrome-sandbox
+setuid root, Chromium's sandbox where user namespaces are unavailable. The polkit policy always goes to DESTDIR/usr/share/polkit-1/actions,
 the only directory polkit reads actions from, whatever the prefix.
 Without --destdir it must run as root, and installed files are owned by root.
 On a host whose AppArmor reads the 4.0 ABI (Ubuntu 24.04 and later), an install
@@ -61,11 +62,14 @@ rm -rf "$target/lib/ardia"
 cp -R --preserve=mode,timestamps,links "$source_root/lib/ardia" "$target/lib/ardia"
 if [[ "$(id -u)" == 0 ]]; then
   chown -R 0:0 "$target/lib/ardia"
+  if [[ -z "$destdir" && -f "$target/lib/ardia/chrome-sandbox" ]]; then
+    chmod 4755 "$target/lib/ardia/chrome-sandbox"
+  fi
 fi
 
 launcher=$(mktemp)
 trap 'rm -f "$launcher"' EXIT
-printf '#!/usr/bin/env sh\nexec "%s/lib/ardia/chrome" "$@"\n' "$prefix" > "$launcher"
+printf '#!/usr/bin/env sh\nexec "%s/lib/ardia/ardia-launch" "$@"\n' "$prefix" > "$launcher"
 install -m 0755 "$launcher" "$target/bin/ardia"
 
 sed "s|^Exec=ardia |Exec=$prefix/bin/ardia |" "$source_root/share/applications/ardia.desktop" > "$launcher"

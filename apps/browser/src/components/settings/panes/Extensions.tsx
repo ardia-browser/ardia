@@ -4,6 +4,8 @@ import {
   extensionsProfileId,
   loadUnpacked,
   openExtensionDetails,
+  openInExtensionProfile,
+  openWebStoreFor,
   reload,
   removeExtension,
   setEnabled,
@@ -14,8 +16,7 @@ import {
 import type { InstalledExtension } from "../../../state/extensions/store";
 import { useEffect, useState } from "react";
 import { Image, View } from "react-native";
-import { currentEngineProfile, resolvedWindowId } from "../../../state/browser/current";
-import { newTab } from "../../../state/tabs/actions";
+import { currentEngineProfile } from "../../../state/browser/current";
 import { InstallDialogHost } from "../../extensions/ExtensionOverlays";
 import { Box, Button, PopUp, proseLineHeight, space, Text, TextField, Toggle } from "../../ui";
 import { Group, ProfilePicker, Row, SectionHeader } from "../Form";
@@ -93,10 +94,7 @@ export function ExtensionsPane({ profileId: chosen, detail }: { profileId: strin
         <Row anchor="extensions.webStore">
           <Button
             title="Open Web Store"
-            onPress={() => {
-              const windowId = resolvedWindowId();
-              if (windowId) newTab(windowId, { url: "https://chromewebstore.google.com/category/extensions" });
-            }}
+            onPress={() => openWebStoreFor(profile, profileId)}
           />
         </Row>
         <Row anchor="extensions.addLink">
@@ -117,10 +115,7 @@ export function ExtensionsPane({ profileId: chosen, detail }: { profileId: strin
 }
 
 function ExtensionDetails({ ext, profile, onBack }: { ext: InstalledExtension; profile: string; onBack: () => void }) {
-  const openTab = (url: string) => {
-    const windowId = resolvedWindowId();
-    if (windowId) newTab(windowId, { url });
-  };
+  const openTab = (url: string) => openInExtensionProfile(url, profile);
   return (
     <View>
       <Box gap="xl" style={DETAILS_TOP}>

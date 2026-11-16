@@ -290,7 +290,7 @@ NSString *CornerName(int corner) {
 - (void)backToTab {
   ArdiaWebView *view = self.view;
   if (!view) return;
-  ActivateApp(@"Back to Tab (menu)");
+  ActivateApp(@"Back to Tab");
   [view emit:@"activateRequest" payload:@{@"reason" : @"pictureInPicture"}];
   [view exitPictureInPicture];
 }

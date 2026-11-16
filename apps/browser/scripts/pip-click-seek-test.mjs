@@ -5,7 +5,8 @@ moves the window without seeking (also one that only passes 3 pt at the release)
 the skip moves the video in the window even while it is paused and another one plays, a page's Media Session seek
 handlers get the skip as they get Chrome's own button (seekto on the timeline the page reports, kept current through
 repeated clicks and a pause though the page reports it once, also for a video in a closed shadow root), a stashed
-window never seeks, and Chrome's close button still closes.
+window never seeks, a double-click in the centre column goes back to the video's tab from another one, and Chrome's
+close button still closes.
 
   node apps/browser/scripts/pip-click-seek-test.mjs <Debug app> [--out DIR] [--keep] [--expect-no-seek]
   node apps/browser/scripts/pip-click-seek-test.mjs --attach [--out DIR] [--expect-no-seek]
@@ -232,10 +233,6 @@ if (ok) {
   await seekCheck("Chrome's own −10 s button: Chrome seeks, we don't", [...controlsUp, ...click(centre - 76, midY)], -10, null, { byChrome: true });
   await seekCheck("double-click in the right zone", click(right, midY, 2), 20);
   await seekCheck("triple-click in the left zone", click(left, midY, 3), -30);
-  await seekCheck("double-click in the dead band", click(centre, midY, 2), 0, async (m) => {
-    r.say(`  dead-band double-click went to Chrome: frame ${m.frameBefore} → ${m.frameAfter}`);
-    return null;
-  });
   await r.check("right-zone click with the PiP video paused and another video playing", async () => {
     if ((await page.eval("window.playOther(true)")) !== "ok") throw new Error("the other video didn't play");
     await sleep(500);
@@ -322,6 +319,27 @@ if (ok) {
   await seekCheck("click on a stashed window", click(left, midY), 0, async () => (await shown())?.stashed ? null : "the window wasn't stashed");
   await pip("unstash");
   await sleep(900);
+
+  if (!before) await r.check("double-click in the dead band goes back to the video's tab", async () => {
+    const activeTab = (windowId) => evalApp(`const s = ac.store.getState(), w = s.windows[${JSON.stringify(windowId)}]; return w.activeTabIds[w.profileId] ?? null`);
+    const windowId = await evalApp(`return ac.store.getState().tabs[${JSON.stringify(tabId)}].windowId`);
+    const otherTab = await evalApp(`return ac.store.getState().newTab(${JSON.stringify(windowId)}, { url: "about:blank" })`);
+    await evalApp(`ac.actions.switchToTab(${JSON.stringify(otherTab)}); return true`);
+    await until("the other tab", async () => (await activeTab(windowId)) === otherTab, 5000);
+    await sleep(600);
+    if (!(await shown())) throw new Error("Picture in Picture closed when its tab was left");
+    await mouse(click(centre, midY, 2));
+    await until("Picture in Picture to close", async () => !(await shown()), 5000);
+    await until("the video's tab", async () => (await activeTab(windowId)) === tabId, 5000);
+    await sleep(500);
+    const s = await sample();
+    if (s.pip || s.paused) throw new Error(`the page after Back to Tab: ${JSON.stringify(s)}`);
+    const entered = await page.eval("window.hideInShadowRoot()", { userGesture: true });
+    if (entered !== "ok") throw new Error(`no PiP again: ${entered}`);
+    await until("the styled PiP window", shown, 8000);
+    await sleep(800);
+    return "PiP closed, the video's tab is active and the video plays in the page";
+  });
 
   const button = join(data, "pip-button-selftest.json");
   rmSync(button, { force: true });

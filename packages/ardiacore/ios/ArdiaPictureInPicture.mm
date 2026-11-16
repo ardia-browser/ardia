@@ -31,9 +31,15 @@ double ClickSkipSeconds(NSWindow *window, NSPoint local) {
   return ardia_pip_seek::SkipSecondsAt(local.x, NSWidth(window.frame));
 }
 
+BOOL DoubleClickReturnsToTab(NSWindow *window, NSEvent *event) {
+  ArdiaPiPController *controller = [ArdiaPiPController forWindow:window];
+  return event.clickCount == 2 && controller.view && controller.stashedEdge == ArdiaPiPEdgeNone &&
+         !ClickSkipSeconds(window, event.locationInWindow);
+}
+
 BOOL GrabsWindowBackground(NSWindow *window, NSEvent *event) {
   if (!window || ![ArdiaPiPController forWindow:window] || (event.modifierFlags & NSEventModifierFlagControl)) return NO;
-  if (event.clickCount > 1 && !ClickSkipSeconds(window, event.locationInWindow)) return NO;
+  if (event.clickCount > 1 && !ClickSkipSeconds(window, event.locationInWindow) && !DoubleClickReturnsToTab(window, event)) return NO;
   if ([window respondsToSelector:@selector(_resizeDirectionForMouseLocation:)] &&
       [window _resizeDirectionForMouseLocation:event.locationInWindow] != -1)
     return NO;
@@ -52,6 +58,8 @@ double gGrabTravel;
 double gGrabSkip;
 
 NSInteger gGrabClicks;
+
+BOOL gGrabBackToTab;
 
 void NoteGrabTravel(NSEvent *event) {
   const NSPoint mouse = PointerOf(event);
@@ -75,6 +83,7 @@ void InstallDragMonitor() {
                                                       gGrabTravel = 0;
                                                       gGrabSkip = ClickSkipSeconds(window, event.locationInWindow);
                                                       gGrabClicks = event.clickCount;
+                                                      gGrabBackToTab = DoubleClickReturnsToTab(window, event);
                                                       return nil;
                                                     }
                                                     ArdiaPiPController *dragged = gDragged;
@@ -85,6 +94,8 @@ void InstallDragMonitor() {
                                                       [dragged dragEnded:event];
                                                       if (gGrabSkip && ardia_pip_seek::IsClick(gGrabTravel))
                                                         [dragged skipBy:gGrabSkip at:gGrabLocal clickCount:gGrabClicks];
+                                                      else if (gGrabBackToTab && ardia_pip_seek::IsClick(gGrabTravel))
+                                                        [dragged backToTab];
                                                     } else {
                                                       [dragged dragMoved:event];
                                                     }

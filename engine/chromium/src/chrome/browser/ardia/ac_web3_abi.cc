@@ -11,7 +11,7 @@ namespace {
 constexpr size_t kWord = 32;
 constexpr int kMaxTypeDepth = 8;
 constexpr size_t kMaxDecoded = 64u << 20;
-constexpr size_t kMaxValues = 1u << 18;
+constexpr size_t kMaxValues = 1u << 20;
 constexpr size_t kMaxJson = 16u << 20;
 
 int HexDigit(char c) {
@@ -202,6 +202,7 @@ struct Decoder {
           if (!size) return std::nullopt;
           count = *size;
         }
+        if (count == 0) return AbiList({});
         const size_t element = std::max(HeadSize(type.items[0]), kWord);
         if (start > data.size() || count > (data.size() - start) / element ||
             !Spend(count * kWord)) {

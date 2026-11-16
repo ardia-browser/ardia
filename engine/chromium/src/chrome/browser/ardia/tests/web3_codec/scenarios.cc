@@ -208,7 +208,25 @@ void AliasedDynamicElementsFailFast() {
   answer += Word(0);
   const auto start = std::chrono::steady_clock::now();
   Expect(!AutoCallBody(call, answer), "9999 aliased copies of a 2000-string tuple exceed the value cap");
-  Expect(std::chrono::steady_clock::now() - start < std::chrono::seconds(3), "they fail before 20 million types and values are made");
+  Expect(std::chrono::steady_clock::now() - start < std::chrono::seconds(10), "they fail before 20 million types and values are made");
+}
+
+void ValueCapFitsNestedAnswers() {
+  const AutoCall nested = Auto("/x", "returns=(uint256[1][1][1][])");
+  Bytes answer = Word(32) + Word(65536);
+  for (int i = 0; i < 65536; ++i) answer += Word(i);
+  Expect(AutoCallBody(nested, answer).has_value(), "65,536 words in three single-element arrays decode, a valid 2 MB answer");
+
+  std::string tuple = "(uint256";
+  for (int i = 1; i < 20000; ++i) tuple += ",uint256";
+  tuple += ")";
+  const AutoCall empties = Auto("/x", "returns=(" + tuple + "[][])");
+  Bytes aliased = Word(32) + Word(9999);
+  for (int i = 0; i < 9999; ++i) aliased += Word(9999 * 32);
+  aliased += Word(0);
+  const auto start = std::chrono::steady_clock::now();
+  Expect(AutoCallBody(empties, aliased).has_value(), "9999 aliased empty arrays of a wide tuple decode");
+  Expect(std::chrono::steady_clock::now() - start < std::chrono::seconds(3), "an empty array doesn't measure its element type");
 }
 
 int main() {
@@ -222,6 +240,7 @@ int main() {
   ContractPoliciesLoseReporting();
   HugeStaticTypesFailFast();
   AliasedDynamicElementsFailFast();
+  ValueCapFitsNestedAnswers();
   if (g_failures) {
     std::printf("%d web3 codec scenarios failed\n", g_failures);
     return 1;

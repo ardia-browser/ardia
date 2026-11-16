@@ -246,6 +246,7 @@ class ACContentBrowserClient : public ChromeContentBrowserClient {
       content::NavigationThrottleRegistry& registry) override {
     ChromeContentBrowserClient::CreateThrottlesForNavigation(registry);
     AddAppSchemeThrottle(registry);
+    ardia::AddWeb3EmbedThrottle(registry);
     MaybeAddNavigationHoldThrottle(registry);
     ardia::AddScriptsPagesThrottle(registry);
   }

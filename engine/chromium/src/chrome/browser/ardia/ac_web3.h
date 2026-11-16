@@ -10,6 +10,7 @@ class GURL;
 
 namespace content {
 class BrowserContext;
+class NavigationThrottleRegistry;
 }
 
 namespace ardia {
@@ -23,6 +24,8 @@ mojo::PendingRemote<network::mojom::URLLoaderFactory> CreateWeb3URLLoaderFactory
     Web3Loads loads);
 
 bool IsWeb3SettingsURL(const GURL& url);
+
+void AddWeb3EmbedThrottle(content::NavigationThrottleRegistry& registry);
 
 }
 

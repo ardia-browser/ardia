@@ -16,6 +16,10 @@
 #include "chrome/browser/ardia/ac_web3_internal.h"
 #include "chrome/browser/profiles/profile.h"
 #include "content/public/browser/browser_context.h"
+#include "content/public/browser/navigation_handle.h"
+#include "content/public/browser/navigation_throttle.h"
+#include "content/public/browser/navigation_throttle_registry.h"
+#include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/storage_partition.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -181,6 +185,36 @@ class Web3URLLoaderFactory : public network::SelfDeletingURLLoaderFactory {
   Web3Loads loads_;
 };
 
+class Web3EmbedThrottle : public content::NavigationThrottle {
+ public:
+  explicit Web3EmbedThrottle(content::NavigationThrottleRegistry& registry)
+      : content::NavigationThrottle(registry) {}
+
+  ThrottleCheckResult WillStartRequest() override { return Check(); }
+  ThrottleCheckResult WillRedirectRequest() override { return Check(); }
+  const char* GetNameForLogging() override { return "ArdiaWeb3EmbedThrottle"; }
+
+ private:
+  ThrottleCheckResult Check() {
+    content::NavigationHandle* navigation = navigation_handle();
+    if (!navigation->GetURL().SchemeIs(kWeb3Scheme) ||
+        navigation->IsInOutermostMainFrame()) {
+      return PROCEED;
+    }
+    content::RenderFrameHost* parent = navigation->GetParentFrameOrOuterDocument();
+    if (parent && parent->GetLastCommittedOrigin()
+                          .GetTupleOrPrecursorTupleIfOpaque()
+                          .scheme() == kWeb3Scheme) {
+      return PROCEED;
+    }
+    return BLOCK_REQUEST;
+  }
+};
+
+}
+
+void AddWeb3EmbedThrottle(content::NavigationThrottleRegistry& registry) {
+  registry.AddThrottle(std::make_unique<Web3EmbedThrottle>(registry));
 }
 
 mojo::PendingRemote<network::mojom::URLLoaderFactory> CreateWeb3URLLoaderFactory(

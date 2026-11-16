@@ -35,7 +35,7 @@ public enum ConnectResult: Equatable, Sendable {
     case .invalidPhrase(let message): message
     case .mismatch: "This recovery phrase doesn’t match the synced data in this folder. Check the phrase, or choose the folder your other devices sync to."
     case .noSyncData: "There’s no synced data in this folder yet. Choose the folder your other devices sync to, or wait for it to finish downloading."
-    case .folderUnavailable: "Ardia can’t open this folder. Choose the Ardia Sync folder in iCloud Drive, or tap Use Nextcloud if your Mac syncs through Nextcloud."
+    case .folderUnavailable: "Ardia can’t open this folder. Choose the Ardia Sync folder in iCloud Drive, or tap Other… if your Mac syncs through Nextcloud."
     case .keychainFailed: "Couldn’t save the sync key in your Keychain."
     case .busy: "Ardia is still turning off sync. Try again in a moment."
     case .serverUnavailable: "Ardia can’t reach your Nextcloud server. Check your connection and try again."

@@ -54,7 +54,7 @@ the folder or the Mac's format changes, and a Mac that has never heard of the iP
   bring files down; dataless files are reported as pending, as on the Mac.
 - **Nextcloud sign-in.** Nextcloud's iOS app is a legacy File Provider: the picker returns a folder URL that doesn't
   exist on disk (every read fails with ENOENT, nextcloud/ios#943), so the iPhone talks to the server directly. The Mac
-  keeps using the folder the Nextcloud desktop client syncs. Connect › Use Nextcloud signs in with Login Flow v2 in an
+  keeps using the folder the Nextcloud desktop client syncs. Connect › Other… › Nextcloud (the Other Sync Services sheet, also in Settings › Sync, one row per service) signs in with Login Flow v2 in an
   ephemeral `ASWebAuthenticationSession`, which gives Ardia an app password of its own, kept in the Keychain
   (`Ardia Nextcloud`, a random account per sign-in) and never in `sync.json`. With no window to show the sign-in on,
   it fails instead of opening. With the phrase entered, a WebDAV `SEARCH` for the chain's folder name finds where the

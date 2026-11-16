@@ -9,6 +9,7 @@ struct SyncSettingsPage: View {
   @State private var syncFailures = 0
   @State private var stops = 0
   @State private var isChoosingFolder = false
+  @State private var isChoosingService = false
   @State private var isUsingNextcloud = false
   @State private var isConfirmingStop = false
   @State private var isStopping = false
@@ -51,6 +52,11 @@ struct SyncSettingsPage: View {
         folderError = result.message
       }
     }
+    .otherSyncServices(isPresented: $isChoosingService) { service in
+      switch service {
+      case .nextcloud: isUsingNextcloud = true
+      }
+    }
     .navigationDestination(isPresented: $isUsingNextcloud) {
       NextcloudConnectPage { account, path in
         Task {
@@ -87,7 +93,7 @@ struct SyncSettingsPage: View {
     } header: {
       Text("What You Get")
     } footer: {
-      Text("End-to-end encrypted, in your own iCloud Drive or Nextcloud.")
+      Text("End-to-end encrypted, in your own iCloud Drive or sync service.")
     }
   }
 
@@ -185,7 +191,7 @@ struct SyncSettingsPage: View {
         LabeledContent("Folder", value: sync.folderName ?? String(localized: "Ardia Sync"))
       }
       Button("Change Folder…") { isChoosingFolder = true }
-      Button(sync.usesNextcloud ? "Change Nextcloud Account…" : "Use Nextcloud…") { isUsingNextcloud = true }
+      Button("Other…") { isChoosingService = true }
     } header: {
       Text("Sync Location")
     } footer: {

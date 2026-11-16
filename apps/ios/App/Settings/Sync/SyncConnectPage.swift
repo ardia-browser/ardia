@@ -11,6 +11,7 @@ struct SyncConnectPage: View {
   @State private var isScanning = false
   @State private var isEnteringWords = false
   @State private var isChoosingFolder = false
+  @State private var isChoosingService = false
   @State private var isUsingNextcloud = false
   @State private var scans = 0
   @State private var connections = 0
@@ -57,7 +58,7 @@ struct SyncConnectPage: View {
         SetupStepRow(
           2,
           title: Text("Choose where your Mac syncs"),
-          detail: Text("The Ardia Sync folder in iCloud Drive, or your Nextcloud."),
+          detail: Text("The Ardia Sync folder in iCloud Drive, or another sync service."),
           progress: .step(done: false, after: hasPhrase)
         ) {
           VStack(alignment: .leading, spacing: Spacing.tight) {
@@ -127,6 +128,11 @@ struct SyncConnectPage: View {
       start(flow.chooseFolder(folder))
       releaseReplacedAccounts()
     }
+    .otherSyncServices(isPresented: $isChoosingService) { service in
+      switch service {
+      case .nextcloud: isUsingNextcloud = true
+      }
+    }
     .navigationDestination(isPresented: $isUsingNextcloud) {
       NextcloudConnectPage { account, path in
         start(flow.choose(.nextcloud(account, path: path)))
@@ -134,7 +140,7 @@ struct SyncConnectPage: View {
       }
     }
     .onDisappear {
-      guard !isUsingNextcloud, !isEnteringWords, !isScanning, !isChoosingFolder else { return }
+      guard !isChoosingService, !isUsingNextcloud, !isEnteringWords, !isScanning, !isChoosingFolder else { return }
       for account in flow.abandon() { app.sync.release(account) }
     }
     .sensoryFeedback(.success, trigger: scans)
@@ -161,8 +167,7 @@ struct SyncConnectPage: View {
   private var locationButtons: some View {
     Group {
       Button(pickedFolder == nil ? "Choose Folder…" : "Choose Another Folder…") { isChoosingFolder = true }
-      Button(pickedNextcloud == nil ? "Use Nextcloud…" : "Change Nextcloud…", systemImage: "cloud") { isUsingNextcloud = true }
-        .labelStyle(.titleOnly)
+      Button("Other…") { isChoosingService = true }
     }
     .buttonStyle(.bordered)
     .buttonBorderShape(.capsule)

@@ -64,6 +64,7 @@ final class SymbolView: ExpoView {
     let config = NSImage.SymbolConfiguration(pointSize: pointSize, weight: weights[weight] ?? .regular)
     image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(config)
     imageView.image = image
+    imageView.frame = bounds
     render()
   }
 

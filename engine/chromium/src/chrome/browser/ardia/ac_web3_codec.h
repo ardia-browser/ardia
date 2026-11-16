@@ -65,7 +65,7 @@ struct ContentContract {
 };
 std::optional<ContentContract> ParseContentContract(std::string_view record);
 
-Bytes ResourceRequestCall(std::string_view path, std::string_view query);
+std::optional<Bytes> ResourceRequestCall(std::string_view path, std::string_view query);
 
 struct Resource {
   int status = 0;

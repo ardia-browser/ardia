@@ -15,6 +15,7 @@
 #include "base/time/time.h"
 #include "chrome/browser/ardia/ac_engine.h"
 #include "chrome/browser/ardia/ac_web3_internal.h"
+#include "net/base/ip_address.h"
 #include "net/base/load_flags.h"
 #include "net/base/url_util.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
@@ -56,6 +57,13 @@ bool UsableRpcUrl(const GURL& url) {
   if (!url.is_valid() || url.has_ref()) return false;
   if (url.SchemeIs("https")) return true;
   return url.SchemeIs("http") && net::IsLocalhost(url);
+}
+
+bool IsPrivateTarget(const GURL& url) {
+  if (net::IsLocalhost(url)) return true;
+  net::IPAddress address;
+  return address.AssignFromIPLiteral(url.HostNoBracketsPiece()) &&
+         !address.IsPubliclyRoutable();
 }
 
 bool IsRevert(const base::DictValue& error) {
@@ -114,6 +122,7 @@ void Rpc::Send(const GURL& endpoint, std::string body, Done done) {
   request->credentials_mode = network::mojom::CredentialsMode::kOmit;
   request->load_flags = net::LOAD_DISABLE_CACHE;
   done_ = std::move(done);
+  endpoint_ = endpoint;
   loader_ = network::SimpleURLLoader::Create(std::move(request), kRpcAnnotation);
   loader_->SetOnRedirectCallback(
       base::BindRepeating(&Rpc::Redirected, base::Unretained(this)));
@@ -129,7 +138,10 @@ void Rpc::Redirected(const GURL& from,
                      const net::RedirectInfo& redirect,
                      const network::mojom::URLResponseHead& head,
                      std::vector<std::string>* removed_headers) {
-  if (UsableRpcUrl(redirect.new_url)) return;
+  if (UsableRpcUrl(redirect.new_url) &&
+      (!IsPrivateTarget(redirect.new_url) || IsPrivateTarget(endpoint_))) {
+    return;
+  }
   loader_.reset();
   std::move(done_).Run(Answer());
 }

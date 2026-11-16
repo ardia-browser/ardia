@@ -2,6 +2,7 @@
 
 #include "chrome/browser/ardia/ac_web3_codec.h"
 
+#include <algorithm>
 #include <array>
 #include <utility>
 
@@ -9,6 +10,7 @@ namespace ardia::web3 {
 namespace {
 
 constexpr size_t kWord = 32;
+constexpr size_t kMaxRequestParts = 256;
 
 std::vector<std::string_view> Split(std::string_view text, char separator) {
   std::vector<std::string_view> parts;
@@ -307,7 +309,13 @@ std::optional<ContentContract> ParseContentContract(std::string_view record) {
   return contract;
 }
 
-Bytes ResourceRequestCall(std::string_view path, std::string_view query) {
+bool FewRequestParts(std::string_view path, std::string_view query) {
+  return static_cast<size_t>(std::count(path.begin(), path.end(), '/')) <= kMaxRequestParts &&
+         static_cast<size_t>(std::count(query.begin(), query.end(), '&')) < kMaxRequestParts;
+}
+
+std::optional<Bytes> ResourceRequestCall(std::string_view path, std::string_view query) {
+  if (!FewRequestParts(path, query)) return std::nullopt;
   std::vector<AbiValue> resource;
   for (std::string_view segment : PathSegments(path)) {
     resource.push_back(AbiBytes(PercentDecode(segment, false)));
@@ -348,6 +356,7 @@ std::optional<Resource> DecodeResource(std::string_view returned) {
 std::variant<AutoCall, std::string> ParseAutoCall(std::string_view path,
                                                   std::string_view query) {
   AutoCall call;
+  if (!FewRequestParts(path, query)) return std::string("Too many path segments or query parameters");
   if (!query.empty()) {
     for (std::string_view pair : Split(query, '&')) {
       const size_t equals = pair.find('=');

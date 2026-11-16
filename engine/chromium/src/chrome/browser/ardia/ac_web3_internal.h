@@ -86,6 +86,7 @@ class Rpc {
 
   scoped_refptr<network::SharedURLLoaderFactory> factory_;
   std::unique_ptr<network::SimpleURLLoader> loader_;
+  GURL endpoint_;
   Done done_;
 };
 

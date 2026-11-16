@@ -342,10 +342,16 @@ void Resolver::GotCode(Rpc::Answer answer) {
 
 void Resolver::Request() {
   switch (mode_) {
-    case web3::Mode::kResource:
-      return rpc_.Call(endpoint_, address_,
-                       web3::ResourceRequestCall(url_.path(), url_.query()),
+    case web3::Mode::kResource: {
+      std::optional<web3::Bytes> call =
+          web3::ResourceRequestCall(url_.path(), url_.query());
+      if (!call) {
+        return Fail(Outcome::kBadUrl, 400, "Not a web3:// call",
+                    "The address has too many path segments or query parameters.");
+      }
+      return rpc_.Call(endpoint_, address_, *call,
                        base::BindOnce(&Resolver::GotResource, base::Unretained(this)));
+    }
     case web3::Mode::kAuto: {
       std::variant<web3::AutoCall, std::string> call =
           web3::ParseAutoCall(url_.path(), url_.query());

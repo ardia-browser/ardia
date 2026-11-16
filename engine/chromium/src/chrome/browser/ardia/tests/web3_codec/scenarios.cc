@@ -103,8 +103,8 @@ void ResolveModes() {
 }
 
 void ResourceRequests() {
-  Expect(Hex(ResourceRequestCall("/", "")) == "0x1374c460" + Words({"40", "60", "0", "0"}).substr(2), "the root asks for no segments and no params");
-  const Bytes call = ResourceRequestCall("/a%20b/c+d/", "x=1&y=a+b%26&flag");
+  Expect(Hex(*ResourceRequestCall("/", "")) == "0x1374c460" + Words({"40", "60", "0", "0"}).substr(2), "the root asks for no segments and no params");
+  const Bytes call = *ResourceRequestCall("/a%20b/c+d/", "x=1&y=a+b%26&flag");
   static const AbiType type = *ParseAbiType("(string[],(string,string)[])");
   std::optional<std::vector<AbiValue>> decoded = AbiDecode(type, std::string_view(call).substr(4));
   Expect(decoded.has_value(), "a resource request decodes");
@@ -114,6 +114,13 @@ void ResourceRequests() {
   const auto& params = (*decoded)[1].items;
   Expect(params.size() == 3 && params[1].items[0].data == "y" && params[1].items[1].data == "a b&" && params[2].items[0].data == "flag" && params[2].items[1].data.empty(),
          "query pairs decode like a form");
+  std::string pairs = "a";
+  for (int i = 1; i < 256; ++i) pairs += "&a";
+  std::string segments_path;
+  for (int i = 0; i < 256; ++i) segments_path += "/s";
+  Expect(ResourceRequestCall(segments_path, pairs).has_value(), "256 path segments and 256 query pairs are encoded");
+  Expect(!ResourceRequestCall(segments_path + "/s", "") && !ResourceRequestCall("/", pairs + "&a"), "a 257th segment or pair is refused before anything is built");
+  Expect(std::holds_alternative<std::string>(ParseAutoCall(segments_path + "/s", "")), "auto mode refuses as many segments");
 }
 
 void ResourceResponses() {

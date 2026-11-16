@@ -373,7 +373,7 @@ struct SystemInfo {
 REACT_MODULE(AppModule, L"ArdiaApp")
 struct AppModule {
   REACT_CONSTANT(windowsApiVersion)
-  const int windowsApiVersion = 23;
+  const int windowsApiVersion = 24;
 
   REACT_SYNC_METHOD(systemInfo)
   SystemInfo systemInfo() noexcept {

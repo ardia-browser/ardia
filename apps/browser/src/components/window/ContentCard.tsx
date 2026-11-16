@@ -21,6 +21,7 @@ import { WindowToolbar } from "../toolbar/WindowToolbar";
 import { useToolbarRow } from "../toolbar/useToolbarRow";
 import "../dev/devExpose";
 import { PeekOverlay } from "../peek/PeekOverlay";
+import { CaptureOverlay } from "../capture/CaptureOverlay";
 import { dismissPeek, startPeeks } from "../../state/peek/actions";
 import { usePaneLayout } from "./usePaneLayout";
 import { cardChrome } from "./paneChrome";
@@ -195,6 +196,15 @@ export function ContentCard() {
           height={size.height}
           origin={origin}
           page={(tabId, sourceId, width, shown, fullscreen) => <PeekPage tabId={tabId} sourceId={sourceId} windowId={windowId} width={width} shown={shown} fullscreen={fullscreen} />}
+        />
+      )}
+      {!peekId && (
+        <CaptureOverlay
+          windowId={windowId}
+          panes={fullscreenTab && panes[fullscreenTab] ? { [fullscreenTab]: panes[fullscreenTab] } : panes}
+          origin={origin}
+          width={size.width}
+          height={size.height}
         />
       )}
       <SplitToast windowId={windowId} />

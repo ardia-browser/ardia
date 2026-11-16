@@ -17,6 +17,7 @@ enum CommandTable {
     case print
     case copyUrl
     case copyUrlAsMarkdown
+    case capture
     case findInPage
     case findNext
     case findPrevious
@@ -131,6 +132,7 @@ enum CommandTable {
     "print": "Print…",
     "copyUrl": "Copy URL",
     "copyUrlAsMarkdown": "Copy URL as Markdown",
+    "capture": "Capture…",
     "findInPage": "Find…",
     "findNext": "Find Next",
     "findPrevious": "Find Previous",
@@ -249,6 +251,7 @@ enum CommandTable {
     "print": [("p", [.command])],
     "copyUrl": [("c", [.shift, .command])],
     "copyUrlAsMarkdown": [("c", [.option, .shift, .command])],
+    "capture": [("2", [.shift, .command]), ("@", [.command])],
     "findInPage": [("f", [.command])],
     "findNext": [("g", [.command])],
     "findPrevious": [("g", [.shift, .command])],

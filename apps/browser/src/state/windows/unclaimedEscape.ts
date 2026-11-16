@@ -3,13 +3,14 @@ import { activeTabId } from "../browser/model";
 import { useBrowser } from "../browser/store";
 import { closeLittleArdiaOnEscape } from "../littleArdia/actions";
 import { closePeekOnEscape } from "../peek/actions";
+import { closeCaptureOnEscape } from "../capture/capture";
 import { closeFolderPanelIn } from "../sidebar/tileFolderUi";
 import { popoverOf, setPopover } from "../tabs/pageState";
 import type { EscapePressedIn } from "../telemetry/littleArdiaEscapes";
 
 export function escapePressed(tabId: string, pressedIn: EscapePressedIn) {
   if (popoverOf(tabId)) return setPopover(tabId, null);
-  if (closeFolderPanelIn(useBrowser.getState().tabs[tabId]?.windowId) || closePeekOnEscape(tabId)) return;
+  if (closeCaptureOnEscape(tabId) || closeFolderPanelIn(useBrowser.getState().tabs[tabId]?.windowId) || closePeekOnEscape(tabId)) return;
   closeLittleArdiaOnEscape(tabId, pressedIn);
 }
 

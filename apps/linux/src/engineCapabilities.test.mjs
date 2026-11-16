@@ -110,7 +110,8 @@ test("with every new capability on, each command, menu entry and shortcut row ap
   const capabilities = linuxCapabilities(host);
   const hidden = unavailableCommands(capabilities);
   for (const command of ["emailPageLocation", "toggleOpenLinksInLittleArdia", FULL_SCREEN_ITEM]) assert.equal(hidden.has(command), false, command);
-  assert.deepEqual([...hidden].sort(), ["toggleJavaScriptFromAppleEvents", "togglePageEngine"]);
+  assert.deepEqual([...hidden].sort(), ["capture", "toggleJavaScriptFromAppleEvents", "togglePageEngine"]);
+  assert.equal(linuxMenuShortcuts().some((row) => row.id === "capture"), false);
   for (const command of ["emailPageLocation", "toggleOpenLinksInLittleArdia", FULL_SCREEN_ITEM, "hideElement", "showHiddenElements"]) assert.equal(unavailableCommands(linuxCapabilities(bare)).has(command), true, `${command} is hidden without the engine`);
   const items = appMenuItems(menuState, new Map(), hidden);
   for (const id of ["emailPageLocation", "toggleOpenLinksInLittleArdia", FULL_SCREEN_ITEM, "reportProblem"]) assert.ok(find(items, id), `${id} is in the menu`);

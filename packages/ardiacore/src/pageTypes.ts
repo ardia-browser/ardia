@@ -259,6 +259,7 @@ export type WebViewHandle = {
   evaluate<T = unknown>(code: string): Promise<T | null>;
   navigationEntries(): Promise<NavigationEntry[]>;
   capturePicture(scale: number): Promise<{ data: string; frame: [number, number, number, number] } | null>;
+  copyRegionToPasteboard(rect: [number, number, number, number]): Promise<{ width: number; height: number } | null>;
   downloadFavicon(url: string): Promise<FaviconImage | null>;
   downloadImage(url: string, maxPixels: number): Promise<FaviconImage | null>;
 

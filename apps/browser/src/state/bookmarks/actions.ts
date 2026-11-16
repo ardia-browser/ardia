@@ -1,4 +1,4 @@
-import { confirm } from "../../platform/dialogs";
+import { confirm, prompt } from "../../platform/dialogs";
 import { create } from "zustand";
 import { focus, openWindow } from "../browser/actions";
 import { bookmarkRoots, folderLinks, isWithin, ownerOfBookmark } from "./bookmarks";
@@ -113,6 +113,20 @@ export function bookmarkAllTabs(windowId: string | null | undefined) {
     .map((t) => ({ url: t.url, title: tabTitle(t) }));
   if (!tabs.length) return;
   useBookmarkDialog.setState({ open: { kind: "allTabs", windowId: id, profileId: bookmarkProfileId(s, s.windows[id]), tabs } });
+}
+
+export async function addBookmarkToFolder(windowId: string, tabId: string, folder: string) {
+  const s = useBrowser.getState();
+  const tab = s.tabs[tabId];
+  if (!tab?.url) return;
+  const profileId = bookmarkProfileId(s, s.windows[windowId]);
+  let parentId = folder;
+  if (folder === "new") {
+    const title = await prompt({ title: "New Folder", placeholder: "Folder name", confirmTitle: "Create", windowId });
+    if (!title) return;
+    parentId = useBrowser.getState().addBookmarkFolder({ profileId, title });
+  }
+  useBrowser.getState().addBookmark({ profileId, url: tab.url, title: tab.title, favicon: tab.favicon, parentId });
 }
 
 

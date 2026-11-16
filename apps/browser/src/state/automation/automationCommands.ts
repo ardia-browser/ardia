@@ -20,6 +20,7 @@ export const AUTOMATION: Readonly<Record<BrowserCommand, AutomationDecision>> = 
   print: "run",
   copyUrl: "run",
   copyUrlAsMarkdown: "run",
+  capture: "run",
   findInPage: "run",
   findNext: "run",
   findPrevious: "run",

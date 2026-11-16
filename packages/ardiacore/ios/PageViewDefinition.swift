@@ -59,6 +59,12 @@ enum PageViewDefinition {
       AsyncFunction("capturePicture") { (view: V, scale: Double, promise: Promise) in
         view.page.capturePicture(scale) { promise.resolve($0) }
       }.runOnQueue(.main)
+      AsyncFunction("copyRegionToPasteboard") { (view: V, rect: [Double], promise: Promise) in
+        guard rect.count == 4 else { return promise.reject("ERR_BAD_ARGS", "copyRegionToPasteboard takes [x, y, width, height]") }
+        let area = NSRect(x: rect[0], y: rect[1], width: rect[2], height: rect[3])
+        let density = view.window?.backingScaleFactor ?? 1
+        view.page.copyPicture(ofRootArea: area) { promise.resolve(PicturePasteboard.write($0, pixelsPerPoint: density)) }
+      }.runOnQueue(.main)
       AsyncFunction("downloadFavicon") { (view: V, url: String, promise: Promise) in
         view.page.downloadFavicon(url) { promise.resolve($0) }
       }.runOnQueue(.main)

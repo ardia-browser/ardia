@@ -1,11 +1,11 @@
 import { copyText } from "../../platform/clipboard";
 import { openExternalURL } from "../../platform/app";
-import { pickFiles, prompt } from "../../platform/dialogs";
+import { pickFiles } from "../../platform/dialogs";
 import type { CommandEvent } from "../../platform/commands";
 import { markdownLink } from "@ardia/core";
 import { useBrowser } from "../browser/store";
 import { requestCreateProfile } from "../profiles/createProfileRequest";
-import { activeTabId, bookmarkProfileId, isPinnedRow, resolveWindowId } from "../browser/model";
+import { activeTabId, isPinnedRow, resolveWindowId } from "../browser/model";
 import {
   closeGroup,
   closeTab,
@@ -19,7 +19,7 @@ import {
   toggleMute,
   toggleSiteMute,
 } from "../browser/actions";
-import { bookmarkAllTabs, bookmarkTab } from "../bookmarks/actions";
+import { addBookmarkToFolder, bookmarkAllTabs, bookmarkTab } from "../bookmarks/actions";
 import { isBookmarklet, runBookmarklet } from "../bookmarks/bookmarklets";
 import { exportBookmarksFromWindow, toggleDownloadsPanel } from "./platformCommands";
 import { requestClearData } from "../profiles/clearDataRequest";
@@ -69,6 +69,7 @@ import { expectFocus, findFocus } from "../focus/focusClaims";
 import { isWebPageUrl } from "../../lib/url";
 import { findStep, openFind } from "../find/actions";
 import { runHidingCommand } from "../site/hiddenElements";
+import { runCaptureCommand } from "../capture/capture";
 import { requestWindowClose } from "../windows/windowClose";
 
 const newOrId = (arg: string) => (arg === "new" ? null : arg);
@@ -153,7 +154,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
   const page = tab?.url ? tab : undefined;
   const web = tabId ? webviews.get(tabId) : undefined;
   const ui = s.windowUi[windowId];
-  if (page && (runHidingCommand(command, page.id) || runReaderCommand(command, page.id))) return;
+  if (page && (runHidingCommand(command, page.id) || runReaderCommand(command, page.id) || runCaptureCommand(command, windowId))) return;
   if (!targeted && runSidebarCommand(command, arg, windowId)) return;
 
   switch (command) {
@@ -371,20 +372,6 @@ function runLittleArdiaCommand(command: string, arg: string | null | undefined, 
       return true;
   }
   return false;
-}
-
-async function addBookmarkToFolder(windowId: string, tabId: string, folder: string) {
-  const s = useBrowser.getState();
-  const tab = s.tabs[tabId];
-  if (!tab?.url) return;
-  const profileId = bookmarkProfileId(s, s.windows[windowId]);
-  let parentId = folder;
-  if (folder === "new") {
-    const title = await prompt({ title: "New Folder", placeholder: "Folder name", confirmTitle: "Create", windowId });
-    if (!title) return;
-    parentId = useBrowser.getState().addBookmarkFolder({ profileId, title });
-  }
-  useBrowser.getState().addBookmark({ profileId, url: tab.url, title: tab.title, favicon: tab.favicon, parentId });
 }
 
 async function openFiles(windowId: string | null) {

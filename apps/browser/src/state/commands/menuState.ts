@@ -116,6 +116,7 @@ export function menuState(s: BrowserState): MenuState {
   disabled.push(...sidebar.disabled, ...UNAVAILABLE_COMMANDS);
   Object.assign(titles, sidebar.titles);
   if (peek) {
+    disabled.push("capture");
     titles.openFile = "Open Peek as Tab";
     titles.closeTab = "Close Peek";
   }

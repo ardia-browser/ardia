@@ -551,7 +551,7 @@ test("the window list answers an empty list where the engine has none, so a call
 test("an event only the Windows host sends is declared apart from the Mac's, and Windows does send it", () => {
   const api = read("packages/ardiacore/src/engine/api.ts");
   const bodyOf = (name) => api.slice(api.indexOf(`export type ${name} = {`), api.indexOf("\n};", api.indexOf(`export type ${name} = {`)));
-  const keysOf = (body) => [...body.matchAll(/^ {2}"([a-zA-Z]+\.[a-zA-Z]+)":/gm)].map((m) => m[1]);
+  const keysOf = (body) => [...body.matchAll(/^ {2}"([a-zA-Z][a-zA-Z0-9]*\.[a-zA-Z][a-zA-Z0-9]*)":/gm)].map((m) => m[1]);
   const windowsOnly = keysOf(bodyOf("WindowsHostEvents"));
   assert.ok(windowsOnly.length > 0);
   const mac = new Set(keysOf(bodyOf("EngineEvents")));

@@ -13,7 +13,7 @@ const typeBody = (name) => {
   assert.ok(start >= 0, `${name} is in api.ts`);
   return api.slice(start, api.indexOf("\n};", start));
 };
-const keysOf = (body) => new Set([...body.matchAll(/^ {2}"([a-zA-Z]+\.[a-zA-Z]+)":/gm)].map((m) => m[1]));
+const keysOf = (body) => new Set([...body.matchAll(/^ {2}"([a-zA-Z][a-zA-Z0-9]*\.[a-zA-Z][a-zA-Z0-9]*)":/gm)].map((m) => m[1]));
 const sorted = (set) => [...set].sort();
 
 test("every call in api.ts has a handler in its domain's Swift call table, and nothing else does", () => {
@@ -22,7 +22,7 @@ test("every call in api.ts has a handler in its domain's Swift call table, and n
     const text = native(file);
     const domain = text.match(/CallTable\(domain: "([a-zA-Z]+)"/)?.[1];
     if (!domain) continue;
-    for (const [, verb] of text.matchAll(/^ {4}"([a-zA-Z]+)": /gm)) swift.add(`${domain}.${verb}`);
+    for (const [, verb] of text.matchAll(/^ {4}"([a-zA-Z][a-zA-Z0-9]*)": /gm)) swift.add(`${domain}.${verb}`);
   }
   assert.deepEqual(sorted(swift), sorted(keysOf(typeBody("EngineCalls"))));
 });

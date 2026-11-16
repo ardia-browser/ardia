@@ -321,7 +321,8 @@ are `.widgets`, `.share` and `.open`, and they share the app group `group.com.ar
   arrives from another app also proves it. The simulator ignores the Settings deep link and opens Settings where it
   was left, so where the button lands is a real-phone check.
 - **Testers.** A processed build reaches the Internal group at once. An upload also sends it to everyone else: it
-  puts the build in the Public Testers group (made with a public link the first time), sets its What to Test text from
+  puts the build in the Public Testers group (made with a public link the first time, and kept off Apple silicon
+  Macs, where the iPhone-only build crashes on open), sets its What to Test text from
   `Config/TestFlight-WhatToTest.txt`, submits it for Beta App Review and prints the link. The link stays the same for
   every build and works once Apple approves one; later builds of the same version usually pass without a full review.
   Apple has no setting that gives an external group every build, so each one is submitted. `-f public_testers=false`

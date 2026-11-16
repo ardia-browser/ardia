@@ -177,3 +177,54 @@ test("with several profiles, a private window lists and opens only its own profi
   assert.deepEqual(urls(work).slice(1), [shared.optionsUrl], "Work's regular window, though Personal's was used last");
   assert.ok(!urls(personal).includes(shared.optionsUrl) && !urls(privWork).includes(shared.optionsUrl));
 });
+
+const { addFromWebStore, openInExtensionProfile, openWebStore, openWebStoreFor } = await import("./actions.ts");
+const { SETTINGS_WINDOW_ID } = await import("../settings/settingsWindows.ts");
+
+test("Settings › Extensions opens the store and an extension's pages in the profile it shows, whichever window is in front (FB-M5K5)", () => {
+  S().hydrate({});
+  const personal = S().createWindow({ url: "a.com" });
+  const aurumId = S().createProfile({ name: "Aurum" });
+  const aurum = S().createWindow({ profileId: aurumId, url: "b.com" });
+  const urls = (w) => S().windows[w].tabIds.map((id) => S().tabs[id].url);
+  const store = "https://chromewebstore.google.com/category/extensions";
+  S().setFocusedWindow(aurum);
+  S().setFocusedWindow(personal);
+
+  openWebStoreFor(aurumId, aurumId);
+  assert.deepEqual(urls(aurum).slice(1), [store], "Aurum's window, though Personal's was used last");
+  assert.ok(!urls(personal).includes(store));
+  assert.equal(S().ui.focusOrder[0], aurum, "and it comes to the front");
+
+  openInExtensionProfile("chrome-extension://ext/options.html", aurumId);
+  assert.deepEqual(urls(aurum).slice(2), ["chrome-extension://ext/options.html"]);
+
+  addFromWebStore(SETTINGS_WINDOW_ID, "aeblfdkhhhdcdjpifhhbdiojplfjncoa", aurumId);
+  assert.deepEqual(urls(aurum).slice(3), ["https://chromewebstore.google.com/detail/aeblfdkhhhdcdjpifhhbdiojplfjncoa"]);
+  assert.equal(urls(personal).length, 1, "nothing opened in Personal");
+
+  openWebStore(personal);
+  assert.deepEqual(urls(personal).slice(1), [store], "the Extensions menu still opens the store in its own window");
+});
+
+test("with no window showing the profile, the store opens in a new window of that profile, not the one in front", () => {
+  S().hydrate({});
+  const personal = S().createWindow({ url: "a.com" });
+  const aurumId = S().createProfile({ name: "Aurum" });
+  S().setFocusedWindow(personal);
+  const before = new Set(S().windowOrder);
+  openWebStoreFor(aurumId, aurumId);
+  const made = S().windowOrder.filter((id) => !before.has(id));
+  assert.equal(made.length, 1);
+  assert.equal(S().windows[made[0]].profileId, aurumId);
+  assert.deepEqual(S().windows[made[0]].tabIds.map((id) => S().tabs[id].url), ["https://chromewebstore.google.com/category/extensions"]);
+  assert.equal(S().windows[personal].tabIds.length, 1);
+});
+
+test("a private window's Extensions menu opens the store in that private window, as before", () => {
+  S().hydrate({});
+  S().createWindow({ url: "a.com" });
+  const priv = S().createWindow({ kind: "private", profileId: "default", url: "c.com" });
+  openWebStore(priv);
+  assert.deepEqual(S().windows[priv].tabIds.map((id) => S().tabs[id].url).slice(1), ["https://chromewebstore.google.com/category/extensions"]);
+});

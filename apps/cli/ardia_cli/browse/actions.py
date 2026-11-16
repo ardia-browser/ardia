@@ -376,7 +376,12 @@ async def restore_metrics(page):
 
 async def scroll_into_view(page, element, humanize: bool):
     if not humanize or element.frame != page.main_frame:
-        await page.send("DOM.scrollIntoViewIfNeeded", {"backendNodeId": element.backend_id})
+        try:
+            await page.send("DOM.scrollIntoViewIfNeeded", {"backendNodeId": element.backend_id})
+        except CdpError as error:
+            if "layout object" not in error.cdp_message:
+                raise
+            raise BrowseError(f"Element {element.label} has no visible box (hidden or zero-size)", code="not_visible") from None
         return
     for _ in range(5):
         r = await rect(page, element)
@@ -532,11 +537,17 @@ async def click(page, element, humanize: bool, count: int = 1, button: str = "le
     except BrowseError as error:
         if error.code == "not_visible":
             stand_in = await visible_label(page, element)
+            if stand_in is not None:
+                command_metrics.flag("clicked_label_of_hidden_input", True)
+                await click(page, stand_in, humanize, count, button)
+                page.state.click_note = f"{element.label} is hidden and drawn by its label, so the click went to the label"
+                return
+            stand_in = await visible_content(page, element)
             if stand_in is None:
                 raise
-            command_metrics.flag("clicked_label_of_hidden_input", True)
+            command_metrics.flag("clicked_visible_content", True)
             await click(page, stand_in, humanize, count, button)
-            page.state.click_note = f"{element.label} is hidden and drawn by its label, so the click went to the label"
+            page.state.click_note = f"{element.label} has no box of its own, so the click went to its visible content"
             return
         if error.code != "outside_viewport" or count != 1 or button != "left":
             raise
@@ -556,6 +567,11 @@ async def click(page, element, humanize: bool, count: int = 1, button: str = "le
 async def visible_label(page, element):
     remote = await page.call(VISIBLE_LABEL, element, frame=element.frame, by_value=False)
     return await page.element_from(remote, element.frame, f"the label of {element.label}")
+
+
+async def visible_content(page, element):
+    remote = await page.call(VISIBLE_CONTENT, element, frame=element.frame, by_value=False)
+    return await page.element_from(remote, element.frame, f"the visible content of {element.label}")
 
 
 async def scroll_lock(page, element) -> str | None:
@@ -627,6 +643,19 @@ VISIBLE_LABEL = """(el) => {
   const wrapping = el.closest("label");
   if (wrapping && !labels.includes(wrapping)) labels.push(wrapping);
   return labels.find(shown) || null;
+}"""
+VISIBLE_CONTENT = """(el) => {
+  const box = el.getBoundingClientRect();
+  if (box.width >= 2 && box.height >= 2) return null;
+  const shown = (node) => {
+    const rect = node.getBoundingClientRect();
+    return rect.width >= 2 && rect.height >= 2 && (!node.checkVisibility || node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }));
+  };
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_ELEMENT);
+  for (let node = walker.nextNode(), seen = 0; node && seen < 400; node = walker.nextNode(), seen++) {
+    if (shown(node)) return node;
+  }
+  return null;
 }"""
 SCROLL_LOCK = """(el) => {
   const shown = (node) => node.checkVisibility ? node.checkVisibility({ checkVisibilityCSS: true }) : !!node.offsetParent;
@@ -1398,6 +1427,13 @@ async def scroll(page, direction: str, amount: float, humanize: bool, selector_e
         ox, oy = await frame_offset(page, selector_element.frame)
         point = (ox + r["x"] + r["width"] * random.uniform(0.35, 0.65), oy + r["y"] + r["height"] * random.uniform(0.35, 0.65))
         frame = selector_element.frame
-    needs = {} if distance == 0 or not await page.takes_input() else {"wheel": 1}
+    else:
+        vp = await viewport(page)
+        x, y = page.input.mouse._position
+        if not (8 <= x <= vp["width"] - 8 and 8 <= y <= vp["height"] - 8):
+            x, y = vp["width"] * random.uniform(0.35, 0.65), vp["height"] * random.uniform(0.35, 0.65)
+        point = (x, y)
+    landed_inside = frame is None and distance != 0 and await over_frame(page, *point)
+    needs = {} if distance == 0 or landed_inside or not await page.takes_input() else {"wheel": 1}
     await expect_input(page, frame, lambda: page.input.gesture("scroll", lambda: scroll_wheel(page, distance, vertical, humanize, point, frame, selector_element), allow_hidden=True),
                        needs, "The scroll")

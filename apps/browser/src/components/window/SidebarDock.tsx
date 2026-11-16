@@ -5,7 +5,7 @@ import { switchOn } from "../../state/app/switches";
 import { useTheme } from "../ui/theme";
 import { curve, useGated } from "../ui/motion";
 import { Panel, reduceMotion, WindowBackdrop, WindowDragRegion } from "../ui";
-import { useSettings, useSidebarSide, useWindowId } from "../../state/browser/hooks";
+import { useSettings, useSidebarSide, useWindowFullScreen, useWindowId } from "../../state/browser/hooks";
 import { useSidebarDockState } from "../../state/windows/hooks";
 import { useSidebarWidth } from "../../state/sidebar/hooks";
 import { useCardTopInset, useSidebarControlsRowIn, useToolbarLightsCenter } from "../../state/windows/layout";
@@ -15,7 +15,15 @@ import { dismissHoverIn } from "../../state/sidebar/hover";
 import { sidebarUi, useSidebarUi } from "../../state/sidebar/sidebarUi";
 import { peekHeld, watchHolds } from "../../state/app/transientUi";
 import { noteSidebarPeek } from "../../state/telemetry/usage";
-import { noteSidebarPeekClosedWhileResizing, noteSidebarPeekResize, noteSidebarPeekRevealHeldBack, noteSidebarScreenEdge, noteSidebarSlide } from "../../state/telemetry/dockCounts";
+import {
+  noteFullScreenPeek,
+  noteFullScreenPeekClosed,
+  noteSidebarPeekClosedWhileResizing,
+  noteSidebarPeekResize,
+  noteSidebarPeekRevealHeldBack,
+  noteSidebarScreenEdge,
+  noteSidebarSlide,
+} from "../../state/telemetry/dockCounts";
 import { ProfileSwipe } from "./ProfileSwipe";
 import { ARC_HIDE_MS, DOCK_SLIDE, SHADOWS } from "./tokens";
 import {
@@ -206,12 +214,22 @@ function SidebarDock({
   const edgeOn = revealOnHover || draggingTab;
   const edgeOver = useRef(false);
   const arm = useRef(EDGE_ARMED);
+  const windowFullScreen = useRef(false);
+  windowFullScreen.current = useWindowFullScreen(windowId);
+  const fullScreenPeekAt = useRef<number | null>(null);
+  const opened = (bounce: boolean) => {
+    noteSidebarPeek(bounce);
+    if (windowFullScreen.current) noteFullScreenPeek();
+    fullScreenPeekAt.current = windowFullScreen.current ? Date.now() : null;
+  };
   const closed = () => {
     arm.current = edgeClosed(arm.current);
     if (windowId in sidebarUi().dragWidth) noteSidebarPeekClosedWhileResizing();
+    if (fullScreenPeekAt.current !== null) noteFullScreenPeekClosed(Date.now() - fullScreenPeekAt.current);
+    fullScreenPeekAt.current = null;
     dismissHoverIn(windowId);
   };
-  const peek = usePeek(!open && !moving && !fullscreen && edgeOn, arc, () => edgeOver.current || peekHeld(windowId), closed, noteSidebarPeek);
+  const peek = usePeek(!open && !moving && !fullscreen && edgeOn, arc, () => edgeOver.current || peekHeld(windowId), closed, opened);
   const reveal = () => {
     if (arm.current.armed) latestPeek.current.show();
     else noteSidebarPeekRevealHeldBack();

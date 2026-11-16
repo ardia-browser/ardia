@@ -54,6 +54,8 @@ public static class ArdiaInput {
   [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr window, ref Point point);
   [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr window);
   [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(Point point);
+  [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr window, uint flags);
+  [DllImport("user32.dll", EntryPoint = "PostMessageW")] public static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassName(IntPtr window, System.Text.StringBuilder name, int size);
   [DllImport("user32.dll", EntryPoint = "SendMessageTimeoutW")] public static extern IntPtr SendMessageTimeout(IntPtr window, uint message, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
   [DllImport("user32.dll", EntryPoint = "SystemParametersInfoW")] public static extern bool GetSystemFlag(uint action, uint unused, ref int value, uint flags);
@@ -445,25 +447,50 @@ Set-Content -LiteralPath $httpPagesScript -Encoding utf8NoBOM -Value @'
 param([int]$Port, [string]$Log)
 $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $Port)
 $listener.Start()
+$held = [System.Collections.Generic.List[object]]::new()
 while ($true) {
   $client = $listener.AcceptTcpClient()
+  $keep = $false
   try {
     $client.ReceiveTimeout = 2000
     $stream = $client.GetStream()
     $reader = [System.IO.StreamReader]::new($stream, [System.Text.Encoding]::ASCII, $false, 1024, $true)
     $request = $reader.ReadLine()
-    while ($reader.ReadLine()) { }
+    $socketKey = $null
+    while ($line = $reader.ReadLine()) { if ($line -match '^Sec-WebSocket-Key:\s*(\S+)') { $socketKey = $Matches[1] } }
     $path = if ($request) { $request.Split(" ")[1] } else { "" }
     if ($Log -and $path) { Add-Content -LiteralPath $Log -Value $path }
-    $name = @{ "/a" = "a"; "/b" = "b"; "/hover" = "hover"; "/event/hovered" = "event"; "/event/left" = "event" }[$path]
+    if (($path -replace '\?.*$', '') -eq "/hold") {
+      $held.Add($client)
+      $keep = $true
+      continue
+    }
+    if (($path -replace '\?.*$', '') -eq "/ws" -and $socketKey) {
+      $accept = [Convert]::ToBase64String([System.Security.Cryptography.SHA1]::HashData([System.Text.Encoding]::ASCII.GetBytes($socketKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")))
+      $upgrade = [System.Text.Encoding]::ASCII.GetBytes("HTTP/1.1 101 Switching Protocols`r`nUpgrade: websocket`r`nConnection: Upgrade`r`nSec-WebSocket-Accept: $accept`r`n`r`n")
+      $stream.Write($upgrade, 0, $upgrade.Length)
+      $stream.Flush()
+      $held.Add($client)
+      $keep = $true
+      continue
+    }
+    if (($path -replace '\?.*$', '') -eq "/download.bin") {
+      $file = [System.Text.Encoding]::ASCII.GetBytes("ardia blank check")
+      $head = [System.Text.Encoding]::ASCII.GetBytes("HTTP/1.1 200 OK`r`nContent-Type: application/octet-stream`r`nContent-Disposition: attachment; filename=ardia-blank-check.bin`r`nContent-Length: $($file.Length)`r`nConnection: close`r`n`r`n")
+      $stream.Write($head, 0, $head.Length)
+      $stream.Write($file, 0, $file.Length)
+      $stream.Flush()
+      continue
+    }
+    $name = @{ "/a" = "a"; "/b" = "b"; "/hover" = "hover"; "/sleep" = "sleep"; "/links" = "links"; "/drag" = "drag"; "/event/hovered" = "event"; "/event/left" = "event"; "/event/pressed" = "event"; "/event/selected" = "event"; "/event/released" = "event"; "/event/dragstart" = "event"; "/event/fullscreen" = "event"; "/event/windowed" = "event"; "/event/local-state-start" = "event"; "/event/local-state-stop" = "event" }[$($path -replace '\?.*$', '')]
     $status = if ($name -eq "event") { "204 No Content" } elseif ($name) { "200 OK" } else { "404 Not Found" }
-    $text = if ($name -eq "event") { "" } elseif ($name -eq "hover") { "<!doctype html><meta charset=utf-8><title>ready</title><style>body{margin:0}#strip{height:160px;background:#ddd}</style><div id=strip>hover strip</div><script>const strip = document.getElementById('strip'); strip.addEventListener('mouseenter', () => { document.title = 'hovered'; fetch('/event/hovered'); }); strip.addEventListener('mouseleave', () => { document.title = 'left'; fetch('/event/left'); });</script>" } elseif ($name) { "<!doctype html><meta charset=utf-8><p>cached page $name</p><script>addEventListener('pageshow', (event) => { document.title = (event.persisted ? 'restored ' : 'loaded ') + '$name'; });</script>" } else { "" }
+    $text = if ($name -eq "event") { "" } elseif ($name -eq "links") { "<!doctype html><meta charset=utf-8><title>links page</title><style>body{margin:0}a{position:absolute;left:10px;width:200px;height:40px;display:block;background:#ddd}</style><a id=peek style='top:10px' href='/a'>peek</a><a id=blank style='top:70px' target=_blank href='/b'>blank</a><a id=app style='top:130px' href='ardia-sleep-check-link:woke'>app</a>" } elseif ($name -eq "sleep") { "<!doctype html><meta charset=utf-8><title>sleep page</title><body style='margin:0;height:6000px'><input id=field></body>" } elseif ($name -eq "drag") { "<!doctype html><meta charset=utf-8><title>drag page</title><style>body{margin:0;font:18px sans-serif}#words{position:absolute;left:40px;top:120px;width:560px;margin:0}#link{position:absolute;left:40px;top:240px}#full{position:absolute;left:40px;top:320px;width:160px;height:40px}</style><p id=words>Plain words to select by dragging across them, plain words to select by dragging across them.</p><a id=link href='/a'>a link to drag</a><button id=full>full screen</button><script>const report = (name) => fetch('/event/' + name); addEventListener('mousedown', () => report('pressed')); addEventListener('mouseup', () => report(getSelection().toString().length > 0 ? 'selected' : 'released')); addEventListener('dragstart', () => report('dragstart')); document.getElementById('full').addEventListener('click', (event) => { event.stopPropagation(); document.documentElement.requestFullscreen(); }); addEventListener('fullscreenchange', () => report(document.fullscreenElement ? 'fullscreen' : 'windowed'));</script>" } elseif ($name -eq "hover") { "<!doctype html><meta charset=utf-8><title>ready</title><style>body{margin:0}#strip{height:160px;background:#ddd}</style><div id=strip>hover strip</div><script>const strip = document.getElementById('strip'); strip.addEventListener('mouseenter', () => { document.title = 'hovered'; fetch('/event/hovered'); }); strip.addEventListener('mouseleave', () => { document.title = 'left'; fetch('/event/left'); });</script>" } elseif ($name) { "<!doctype html><meta charset=utf-8><p>cached page $name</p><script>addEventListener('pageshow', (event) => { document.title = (event.persisted ? 'restored ' : 'loaded ') + '$name'; });</script>" } else { "" }
     $body = [System.Text.Encoding]::UTF8.GetBytes($text)
     $head = [System.Text.Encoding]::ASCII.GetBytes("HTTP/1.1 $status`r`nContent-Type: text/html; charset=utf-8`r`nContent-Length: $($body.Length)`r`nConnection: close`r`n`r`n")
     $stream.Write($head, 0, $head.Length)
     $stream.Write($body, 0, $body.Length)
     $stream.Flush()
-  } catch { } finally { $client.Close() }
+  } catch { } finally { if (-not $keep) { $client.Close() } }
 }
 '@
 $httpPages = Start-Process -FilePath (Get-Process -Id $PID).Path -ArgumentList "-NoProfile", "-NonInteractive", "-File", "`"$httpPagesScript`"", "-Port", $httpPagesPort, "-Log", "`"$httpPagesLog`"" -WindowStyle Hidden -PassThru
@@ -509,6 +536,95 @@ elseif (Select-String -Path $browserLog -Pattern "^(js-error|fatal|error) " -Qui
   $failures += "the launch with onboarding done has errors"
 }
 elseif (-not (Select-String -Path $browserLog -Pattern "\[ardia windows\] first window" -Quiet)) { $failures += "the browser window never rendered with onboarding done" }
+
+function Start-PlacementRun([string]$Name) {
+  $runLog = Join-Path $Out "placement-$Name.log"
+  Remove-Item -Force -ErrorAction SilentlyContinue $runLog
+  $run = Start-Process -FilePath $App -ArgumentList "--log-file=`"$runLog`"" -PassThru
+  $by = (Get-Date).AddSeconds(40)
+  while ((Get-Date) -lt $by -and -not $run.HasExited) {
+    $run.Refresh()
+    if ($run.MainWindowHandle -ne [IntPtr]::Zero -and (Test-Path $runLog) -and (Select-String -Path $runLog -Pattern "\[ardia windows\] first window" -Quiet)) { break }
+    Start-Sleep -Milliseconds 300
+  }
+  Start-Sleep -Seconds 3
+  $run.Refresh()
+  return [pscustomobject]@{ Process = $run; Log = $runLog; Handle = $run.MainWindowHandle }
+}
+
+function Stop-PlacementRun($Run, [string]$What) {
+  if ($Run.Process.HasExited) { return @("placement: the app had exited before $What") }
+  [ArdiaInput]::PostMessage($Run.Handle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
+  if ($Run.Process.WaitForExit(20000)) { return @() }
+  Stop-Process -Id $Run.Process.Id -Force -ErrorAction SilentlyContinue
+  $Run.Process.WaitForExit(10000) | Out-Null
+  return @("placement: closing the last window did not quit the app within 20 s ($What)")
+}
+
+function Test-RectNear($Rect, $Expected, [string]$What) {
+  if (-not $Rect) { return @("placement: no window to measure $What") }
+  $got = "$($Rect.Left),$($Rect.Top) $($Rect.Right - $Rect.Left)x$($Rect.Bottom - $Rect.Top)"
+  $want = "$($Expected.Left),$($Expected.Top) $($Expected.Right - $Expected.Left)x$($Expected.Bottom - $Expected.Top)"
+  $near = [Math]::Abs($Rect.Left - $Expected.Left) -le 4 -and [Math]::Abs($Rect.Top - $Expected.Top) -le 4 -and [Math]::Abs($Rect.Right - $Expected.Right) -le 4 -and [Math]::Abs($Rect.Bottom - $Expected.Bottom) -le 4
+  if ($near) { Write-Host "Placement: $What came back at $got."; return @() }
+  return @("placement: $What came back at $got, not $want")
+}
+
+function Test-WindowPlacementKept {
+  $env:ARDIA_DATA_DIR = New-DataDirectory "placement-data"
+  Set-Content -Path (Join-Path $env:ARDIA_DATA_DIR "onboarding.json") -Value '{"completedAt":1700000000000,"version":1}' -Encoding utf8NoBOM
+  $notes = @()
+  $first = Start-PlacementRun "first"
+  if ($first.Handle -eq [IntPtr]::Zero) { Stop-Process -Id $first.Process.Id -Force -ErrorAction SilentlyContinue; return @("placement: the first run showed no window") }
+  $work = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+  $placeWidth = [int]($work.Width * 0.7)
+  $placeHeight = [int]($work.Height * 0.7)
+  $placeX = $work.X + [int](($work.Width - $placeWidth) / 3)
+  $placeY = $work.Y + [int](($work.Height - $placeHeight) / 3)
+  Write-Host "Placement: the work area is $($work.Width)x$($work.Height); the window goes to $placeX,$placeY ${placeWidth}x$placeHeight."
+  [ArdiaInput]::SetWindowPos($first.Handle, [IntPtr]::Zero, $placeX, $placeY, $placeWidth, $placeHeight, 0x0014) | Out-Null
+  Start-Sleep -Milliseconds 800
+  $placed = Get-WindowRect $first.Process
+  [ArdiaInput]::ShowWindow($first.Handle, 3) | Out-Null
+  Start-Sleep -Milliseconds 1200
+  if (-not [ArdiaInput]::IsZoomed($first.Handle)) { $notes += "placement: the window did not maximize before the app quit" }
+  Save-Screenshot (Join-Path $Out "placement-before-quit.png")
+  $notes += @(Stop-PlacementRun $first "the maximized run")
+  $saved = Join-Path $env:ARDIA_DATA_DIR "window-placement.txt"
+  if (Test-Path $saved) { Write-Host "Placement: the app saved '$((Get-Content -Raw $saved).Trim())' as the last window placement." }
+  else { $notes += "placement: the app saved no window-placement.txt when it quit" }
+
+  $second = Start-PlacementRun "maximized"
+  Save-Screenshot (Join-Path $Out "placement-relaunched-maximized.png")
+  $how = Get-LastLogLine $second.Log "^window \d+ (placed |opened \S+ maximized)"
+  Write-Host "Placement: the relaunch logged '$how'."
+  if ($second.Handle -eq [IntPtr]::Zero) { $notes += "placement: the relaunch showed no window" }
+  elseif (-not [ArdiaInput]::IsZoomed($second.Handle)) { $notes += "placement: a window maximized when the app quit came back not maximized ($(Get-WindowRect $second.Process | ForEach-Object { "$($_.Left),$($_.Top) $($_.Right - $_.Left)x$($_.Bottom - $_.Top)" }))" }
+  else {
+    Write-Host "Placement: a window maximized when the app quit came back maximized."
+    [ArdiaInput]::ShowWindow($second.Handle, 9) | Out-Null
+    Start-Sleep -Milliseconds 1200
+    $notes += @(Test-RectNear (Get-WindowRect $second.Process) $placed "the maximized window, restored,")
+  }
+  $notes += @(Stop-PlacementRun $second "the restored run")
+
+  $third = Start-PlacementRun "restored"
+  Save-Screenshot (Join-Path $Out "placement-relaunched-restored.png")
+  if ($third.Handle -eq [IntPtr]::Zero) { $notes += "placement: the third run showed no window" }
+  elseif ([ArdiaInput]::IsZoomed($third.Handle)) { $notes += "placement: a window restored before the app quit came back maximized" }
+  else { $notes += @(Test-RectNear (Get-WindowRect $third.Process) $placed "a window left restored") }
+  $notes += @(Stop-PlacementRun $third "the last run")
+  foreach ($name in "first", "maximized", "restored") {
+    $runLog = Join-Path $Out "placement-$name.log"
+    if ((Test-Path $runLog) -and (Select-String -Path $runLog -Pattern "^(js-error|fatal|error) " -Quiet)) {
+      Select-String -Path $runLog -Pattern "^(js-error|fatal|error) " | ForEach-Object { Write-Host $_.Line }
+      $notes += "placement: the $name run logged errors"
+    }
+  }
+  return $notes
+}
+
+if (-not $NoInput) { Test-WindowPlacementKept | ForEach-Object { $failures += $_ } }
 
 function Get-PageEvents {
   if (-not (Test-Path -LiteralPath $httpPagesLog)) { return @() }
@@ -559,6 +675,171 @@ function Test-PageHoverEnds([System.Diagnostics.Process]$Process) {
   Send-Move $x $band $outX $outY
   if (Wait-PageEvent "left" $entered 3000) { Write-Host "Hover: leaving the window through the top band ended the page's hover."; return @() }
   return @("hover: after the pointer left the window through the top band over the page, the page never reported the hover ended (events: $((Get-PageEvents) -join ', '))")
+}
+
+function Get-HandleRect([IntPtr]$Handle) {
+  $rect = New-Object ArdiaInput+Rect
+  if (-not [ArdiaInput]::GetWindowRect($Handle, [ref]$rect)) { return $null }
+  return $rect
+}
+
+function Test-PageDragStays([System.Diagnostics.Process]$Process, [string]$Layout) {
+  $handle = $Process.MainWindowHandle
+  if ($handle -eq [IntPtr]::Zero) { return @("page drag ($Layout): the window never showed") }
+  [ArdiaInput]::SetForegroundWindow($handle) | Out-Null
+  Start-Sleep -Milliseconds 400
+  $client = Get-ClientArea $Process
+  if (-not $client) { return @("page drag ($Layout): the window could not be measured") }
+  $probe = New-Object ArdiaInput+Point
+  $probe.X = $client.X + [int]($client.Width * 0.75)
+  $probe.Y = $client.Y + [int]($client.Height * 0.6)
+  $page = [ArdiaInput]::GetAncestor([ArdiaInput]::WindowFromPoint($probe), 2)
+  if ($page -eq $handle -or $page -eq [IntPtr]::Zero) { return @("page drag ($Layout): no page window under ($($probe.X), $($probe.Y))") }
+  $failures = @()
+  $pageRect = Get-HandleRect $page
+  $scale = $client.Scale
+  $targets = @(
+    @{ Name = "text"; X = $pageRect.Left + [int](60 * $scale); Y = $pageRect.Top + [int](132 * $scale); ByX = [int](240 * $scale); ByY = [int](20 * $scale); Event = "selected" },
+    @{ Name = "empty area"; X = $pageRect.Left + [int](300 * $scale); Y = $pageRect.Top + [int](380 * $scale); ByX = [int](220 * $scale); ByY = [int](90 * $scale); Event = "released" },
+    @{ Name = "text after a long press"; X = $pageRect.Left + [int](60 * $scale); Y = $pageRect.Top + [int](132 * $scale); ByX = [int](240 * $scale); ByY = [int](20 * $scale); Event = "selected"; Hold = 1200 },
+    @{ Name = "link"; X = $pageRect.Left + [int](70 * $scale); Y = $pageRect.Top + [int](250 * $scale); ByX = [int](200 * $scale); ByY = [int](80 * $scale); Event = "dragstart" }
+  )
+  foreach ($target in $targets) {
+    Send-Click ($pageRect.Left + [int](300 * $scale)) ($pageRect.Top + [int](380 * $scale))
+    Start-Sleep -Milliseconds 300
+    $appBefore = Get-WindowRect $Process
+    $pageBefore = Get-HandleRect $page
+    $events = @(Get-PageEvents).Count
+    Send-Drag $target.X $target.Y $target.ByX $target.ByY $(if ($target.Hold) { $target.Hold } else { 200 })
+    Start-Sleep -Milliseconds 700
+    [ArdiaInput]::keybd_event(0x1B, 0, 0, [UIntPtr]::Zero)
+    [ArdiaInput]::keybd_event(0x1B, 0, 2, [UIntPtr]::Zero)
+    Start-Sleep -Milliseconds 300
+    Save-Screenshot (Join-Path $Out "page-drag-$Layout-$($target.Name -replace ' ', '-').png")
+    $appAfter = Get-WindowRect $Process
+    $pageAfter = Get-HandleRect $page
+    if (-not $appAfter -or -not $pageAfter) { $failures += "page drag ($Layout, $($target.Name)): a window was gone after the drag"; continue }
+    $appMoved = "$($appAfter.Left - $appBefore.Left),$($appAfter.Top - $appBefore.Top)"
+    $pageMoved = "$(($pageAfter.Left - $appAfter.Left) - ($pageBefore.Left - $appBefore.Left)),$(($pageAfter.Top - $appAfter.Top) - ($pageBefore.Top - $appBefore.Top))"
+    $got = @(Get-PageEvents | Select-Object -Skip $events)
+    Write-Host "Page drag ($Layout, $($target.Name)): the app window moved by $appMoved, the page window moved by $pageMoved against it, the page reported $($got -join ', ')."
+    if ($appMoved -ne "0,0") { $failures += "page drag ($Layout, $($target.Name)): a drag inside the page moved the app window by $appMoved" }
+    if ($pageMoved -ne "0,0") { $failures += "page drag ($Layout, $($target.Name)): a drag inside the page moved the page's own window by $pageMoved against the app window (#2051)" }
+    if (-not (@($got) -contains "/event/$($target.Event)")) { $failures += "page drag ($Layout, $($target.Name)): the page never reported $($target.Event) for the drag (got: $($got -join ', '))" }
+  }
+  return $failures
+}
+
+function Get-PageInsets([System.Diagnostics.Process]$Process, [IntPtr]$Page) {
+  $appRect = Get-WindowRect $Process
+  $pageRect = Get-HandleRect $Page
+  if (-not $appRect -or -not $pageRect) { return $null }
+  return [pscustomobject]@{ App = $appRect; Text = "$($pageRect.Left - $appRect.Left),$($pageRect.Top - $appRect.Top),$($appRect.Right - $pageRect.Right),$($appRect.Bottom - $pageRect.Bottom)" }
+}
+
+function Test-PageHoldsPlace([System.Diagnostics.Process]$Process, [string]$Layout) {
+  $handle = $Process.MainWindowHandle
+  if ($handle -eq [IntPtr]::Zero) { return @("page place ($Layout): the window never showed") }
+  [ArdiaInput]::SetForegroundWindow($handle) | Out-Null
+  Start-Sleep -Milliseconds 400
+  $client = Get-ClientArea $Process
+  if (-not $client) { return @("page place ($Layout): the window could not be measured") }
+  $probe = New-Object ArdiaInput+Point
+  $probe.X = $client.X + [int]($client.Width * 0.75)
+  $probe.Y = $client.Y + [int]($client.Height * 0.6)
+  $page = [ArdiaInput]::GetAncestor([ArdiaInput]::WindowFromPoint($probe), 2)
+  if ($page -eq $handle -or $page -eq [IntPtr]::Zero) { return @("page place ($Layout): no page window under ($($probe.X), $($probe.Y))") }
+  $maximized = [ArdiaInput]::IsZoomed($handle)
+  $scale = $client.Scale
+  $byX = [int](180 * $scale)
+  $byY = [int](90 * $scale)
+  $failures = @()
+  $appHome = Get-WindowRect $Process
+  $steps = @("move", "async move", "move without notice", "resize")
+  if (-not $maximized) { $steps += "move command" }
+  foreach ($step in $steps) {
+    $before = Get-PageInsets $Process $page
+    $pageRect = Get-HandleRect $page
+    if (-not $before -or -not $pageRect) { $failures += "page place ($Layout, $step): a window was gone before the step"; break }
+    $called = $true
+    switch ($step) {
+      "move" { $called = [ArdiaInput]::SetWindowPos($page, [IntPtr]::Zero, $pageRect.Left + $byX, $pageRect.Top + $byY, 0, 0, 0x0215) }
+      "async move" { $called = [ArdiaInput]::SetWindowPos($page, [IntPtr]::Zero, $pageRect.Left + $byX, $pageRect.Top + $byY, 0, 0, 0x4215) }
+      "move without notice" { $called = [ArdiaInput]::SetWindowPos($page, [IntPtr]::Zero, $pageRect.Left + $byX, $pageRect.Top + $byY, 0, 0, 0x0615) }
+      "resize" { $called = [ArdiaInput]::SetWindowPos($page, [IntPtr]::Zero, 0, 0, ($pageRect.Right - $pageRect.Left) - $byX, ($pageRect.Bottom - $pageRect.Top) - $byY, 0x0216) }
+      "move command" {
+        $pressX = $pageRect.Left + [int](300 * $scale)
+        $pressY = $pageRect.Top + [int](380 * $scale)
+        [ArdiaInput]::SetCursorPos($pressX, $pressY) | Out-Null
+        Start-Sleep -Milliseconds 250
+        [ArdiaInput]::mouse_event(2, 0, 0, 0, [UIntPtr]::Zero)
+        Start-Sleep -Milliseconds 150
+        $called = [ArdiaInput]::PostMessage($page, 0x0112, [IntPtr]0xF012, [IntPtr](($pressY -shl 16) -bor ($pressX -band 0xFFFF)))
+        Start-Sleep -Milliseconds 300
+        $screen = [System.Windows.Forms.SystemInformation]::PrimaryMonitorSize
+        foreach ($i in 1..12) {
+          $toX = $pressX + [int]($byX * $i / 12)
+          $toY = $pressY + [int]($byY * $i / 12)
+          [ArdiaInput]::mouse_event(0x8001, [uint32]($toX * 65535 / ($screen.Width - 1)), [uint32]($toY * 65535 / ($screen.Height - 1)), 0, [UIntPtr]::Zero)
+          Start-Sleep -Milliseconds 40
+        }
+        Start-Sleep -Milliseconds 200
+        [ArdiaInput]::mouse_event(4, 0, 0, 0, [UIntPtr]::Zero)
+        Start-Sleep -Milliseconds 200
+        [ArdiaInput]::keybd_event(0x1B, 0, 0, [UIntPtr]::Zero)
+        [ArdiaInput]::keybd_event(0x1B, 0, 2, [UIntPtr]::Zero)
+      }
+    }
+    if (-not $called) { $failures += "page place ($Layout, $step): the call to the page window failed, so the step proves nothing"; continue }
+    if ($step -in @("move", "resize")) {
+      $atReturn = Get-PageInsets $Process $page
+      if ($atReturn -and $atReturn.Text -ne $before.Text) { $failures += "page place ($Layout, $step): when the call returned the page window had already left its place, insets $($atReturn.Text) instead of $($before.Text), so the change was let through instead of refused (#2051)" }
+    }
+    $samples = @()
+    foreach ($i in 1..30) {
+      Start-Sleep -Milliseconds 100
+      $sample = Get-PageInsets $Process $page
+      if ($sample) { $samples += $sample.Text }
+    }
+    $after = Get-PageInsets $Process $page
+    if (-not $after) { $failures += "page place ($Layout, $step): a window was gone after the step"; break }
+    Save-Screenshot (Join-Path $Out "page-place-$Layout-$($step -replace ' ', '-').png")
+    $away = @($samples | Where-Object { $_ -ne $before.Text } | Select-Object -Unique)
+    $appMoved = "$($after.App.Left - $before.App.Left),$($after.App.Top - $before.App.Top),$($after.App.Right - $before.App.Right),$($after.App.Bottom - $before.App.Bottom)"
+    Write-Host "Page place ($Layout, $step): the page's insets in the app window were $($before.Text), then $($after.Text) after 3 s, away from their place in $($away.Count) distinct samples ($($away -join ' ')); the app window's edges moved by $appMoved."
+    if ($after.Text -ne $before.Text) { $failures += "page place ($Layout, $step): the page window left its place in the app window, insets $($before.Text) became $($after.Text) (#2051)" }
+    if ($step -in @("move", "async move", "resize") -and $away.Count -gt 0) { $failures += "page place ($Layout, $step): the page window left its place for a while, insets $($away -join ' ') instead of $($before.Text) (#2051)" }
+    $wanted = if ($step -eq "move command") { "$byX,$byY,$byX,$byY" } else { "0,0,0,0" }
+    $parts = $appMoved -split ","
+    $wantedParts = $wanted -split ","
+    $close = $true
+    foreach ($i in 0..3) { if ([Math]::Abs([int]$parts[$i] - [int]$wantedParts[$i]) -gt 3) { $close = $false } }
+    if (-not $close) { $failures += "page place ($Layout, $step): the app window's edges moved by $appMoved, not $wanted" }
+    if (-not $maximized -and $appMoved -ne "0,0,0,0") {
+      [ArdiaInput]::SetWindowPos($handle, [IntPtr]::Zero, $appHome.Left, $appHome.Top, $appHome.Right - $appHome.Left, $appHome.Bottom - $appHome.Top, 0x0214) | Out-Null
+      Start-Sleep -Milliseconds 1200
+    }
+  }
+  if ($maximized) { return $failures }
+  $before = Get-PageInsets $Process $page
+  $pageRect = Get-HandleRect $page
+  $events = @(Get-PageEvents).Count
+  Send-Click ($pageRect.Left + [int](120 * $scale)) ($pageRect.Top + [int](340 * $scale))
+  if (-not (Wait-PageEvent "fullscreen" $events 5000)) { return $failures + "page place ($Layout, full screen): the page never went full screen from its button (events: $(@(Get-PageEvents | Select-Object -Skip $events) -join ', '))" }
+  Start-Sleep -Milliseconds 1500
+  $whileFull = Get-HandleRect $page
+  Save-Screenshot (Join-Path $Out "page-place-$Layout-full-screen.png")
+  [ArdiaInput]::keybd_event(0x1B, 0, 0, [UIntPtr]::Zero)
+  [ArdiaInput]::keybd_event(0x1B, 0, 2, [UIntPtr]::Zero)
+  if (-not (Wait-PageEvent "windowed" $events 5000)) { return $failures + "page place ($Layout, full screen): Escape never took the page out of full screen" }
+  Start-Sleep -Milliseconds 2500
+  $after = Get-PageInsets $Process $page
+  Save-Screenshot (Join-Path $Out "page-place-$Layout-after-full-screen.png")
+  $fullText = if ($whileFull) { "$($whileFull.Left),$($whileFull.Top),$($whileFull.Right),$($whileFull.Bottom)" } else { "unknown" }
+  Write-Host "Page place ($Layout, full screen): the page window was at $fullText while full screen; its insets in the app window were $($before.Text) before and $($after.Text) after leaving it; the app window's edges moved by $($after.App.Left - $before.App.Left),$($after.App.Top - $before.App.Top),$($after.App.Right - $before.App.Right),$($after.App.Bottom - $before.App.Bottom)."
+  if (-not $after -or $after.Text -ne $before.Text) { $failures += "page place ($Layout, full screen): after leaving full screen the page's insets were $($after.Text), not $($before.Text)" }
+  if ($after -and ($after.App.Left -ne $before.App.Left -or $after.App.Top -ne $before.App.Top -or $after.App.Right -ne $before.App.Right -or $after.App.Bottom -ne $before.App.Bottom)) { $failures += "page place ($Layout, full screen): the app window did not come back to its place after full screen" }
+  return $failures
 }
 
 function Test-TopEdgeResize([System.Diagnostics.Process]$Process) {
@@ -613,6 +894,37 @@ if ($withEngineForEdge -and -not $NoInput -and $httpPagesUp) {
 }
 $env:ARDIA_CONFIG_DIR = ""
 
+if ($Part -ne "gate" -and $withEngineForEdge -and -not $NoInput -and $httpPagesUp) {
+  foreach ($layout in @(@{ Name = "sidebar-left"; Settings = '{"settings":{"openLinksInLittleArdia":false}}' }, @{ Name = "minimal-right"; Settings = '{"settings":{"minimalismMode":true,"sidebarSide":"right","openLinksInLittleArdia":false}}' })) {
+    $dragLog = Join-Path $Out "page-drag-$($layout.Name).log"
+    $env:ARDIA_DATA_DIR = New-DataDirectory "page-drag-$($layout.Name)-data"
+    $env:ARDIA_CONFIG_DIR = $env:ARDIA_DATA_DIR
+    Set-Content -Path (Join-Path $env:ARDIA_DATA_DIR "onboarding.json") -Value '{"completedAt":1700000000000,"version":1}' -Encoding utf8NoBOM
+    Set-Content -Path (Join-Path $env:ARDIA_DATA_DIR "config.json") -Value $layout.Settings -Encoding utf8NoBOM
+    $dragApp = Start-Process -FilePath $App -ArgumentList "--log-file=`"$dragLog`"", "http://127.0.0.1:$httpPagesPort/drag" -PassThru
+    $env:ARDIA_CONFIG_DIR = ""
+    try {
+      Start-Sleep -Seconds 12
+      if ($dragApp.HasExited) { $failures += "page drag ($($layout.Name)): the app exited on its own (exit code $($dragApp.ExitCode))" }
+      else {
+        Test-PageDragStays $dragApp $layout.Name | ForEach-Object { $failures += $_ }
+        Test-PageHoldsPlace $dragApp $layout.Name | ForEach-Object { $failures += $_ }
+        $dragApp.Refresh()
+        [ArdiaInput]::ShowWindow($dragApp.MainWindowHandle, 3) | Out-Null
+        Start-Sleep -Seconds 2
+        Test-PageDragStays $dragApp "$($layout.Name)-maximized" | ForEach-Object { $failures += $_ }
+        Test-PageHoldsPlace $dragApp "$($layout.Name)-maximized" | ForEach-Object { $failures += $_ }
+      }
+    } finally {
+      if (-not $dragApp.HasExited) {
+        Stop-Process -Id $dragApp.Id -Force
+        $dragApp.WaitForExit(10000) | Out-Null
+      }
+    }
+  }
+}
+$env:ARDIA_CONFIG_DIR = ""
+
 $env:ARDIA_DATA_DIR = New-DataDirectory "self-check-data"
 $importFixtures = Join-Path $env:ARDIA_DATA_DIR "import-fixtures"
 $fixtureProfiles = Join-Path $PSScriptRoot "..\..\packages\import\fixtures\home\Library\Application Support"
@@ -630,9 +942,68 @@ $env:ARDIA_TEST = "pipHover=first,pipHover=last,httpPages=$httpPagesPort"
 $leftover = Join-Path $env:ARDIA_DATA_DIR "Chromium\Ardia self-check-stuck (removing)"
 $held = $null
 $check = $null
+Add-Type @"
+using System;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Threading;
+public static class LocalStateRace {
+  [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool ReplaceFileW(string replaced, string replacement, string backup, uint flags, IntPtr exclude, IntPtr reserved);
+  static Thread runner;
+  static volatile bool done;
+  public static int Replaces;
+  static bool Logged(string path, string text) {
+    try {
+      using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+      using (var reader = new StreamReader(stream)) return reader.ReadToEnd().Contains(text);
+    } catch { return false; }
+  }
+  static byte[] ReadShared(string path) {
+    try {
+      using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete)) {
+        var bytes = new byte[stream.Length];
+        int read = 0;
+        while (read < bytes.Length) { int got = stream.Read(bytes, read, bytes.Length - read); if (got <= 0) break; read += got; }
+        return read == bytes.Length ? bytes : null;
+      }
+    } catch { return null; }
+  }
+  public static void Start(string localState, string requests) {
+    done = false;
+    Replaces = 0;
+    runner = new Thread(() => {
+      DateTime giveUp = DateTime.UtcNow.AddMinutes(10);
+      while (!done && DateTime.UtcNow < giveUp && !Logged(requests, "/event/local-state-start")) Thread.Sleep(25);
+      DateTime stopAt = DateTime.UtcNow.AddSeconds(60);
+      DateTime nextLook = DateTime.UtcNow;
+      string temp = localState + "~race.TMP";
+      while (!done && DateTime.UtcNow < stopAt) {
+        if (DateTime.UtcNow >= nextLook) {
+          if (Logged(requests, "/event/local-state-stop")) break;
+          nextLook = DateTime.UtcNow.AddMilliseconds(100);
+        }
+        byte[] bytes = ReadShared(localState);
+        if (bytes == null) continue;
+        try {
+          File.WriteAllBytes(temp, bytes);
+          if (ReplaceFileW(localState, temp, null, 2, IntPtr.Zero, IntPtr.Zero)) Replaces++;
+        } catch { }
+      }
+    });
+    runner.IsBackground = true;
+    runner.Start();
+  }
+  public static int Stop() {
+    done = true;
+    if (runner != null) runner.Join(5000);
+    return Replaces;
+  }
+}
+"@
 try {
   New-Item -ItemType Directory -Force -Path $leftover | Out-Null
   $held = [System.IO.File]::Open((Join-Path $leftover "held.txt"), [System.IO.FileMode]::Create, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+  [LocalStateRace]::Start((Join-Path $env:ARDIA_DATA_DIR "Chromium\Local State"), $httpPagesLog)
   $check = Start-Process -FilePath $App -ArgumentList "--self-check", "--log-file=`"$checkLog`"" -PassThru
   $env:ARDIA_TEST = ""
   if (-not $check.WaitForExit($SelfCheckSeconds * 1000)) { $failures += "the self-check did not finish within $SelfCheckSeconds s" }
@@ -647,6 +1018,7 @@ try {
     }
   }
 } finally {
+  Write-Host "Local State was saved $([LocalStateRace]::Stop()) times the way Chromium saves it while the self-check removed a profile whose earlier removal is held"
   try {
     if ($check -and -not $check.HasExited) {
       Save-Screenshot (Join-Path $Out "self-check-stuck.png")

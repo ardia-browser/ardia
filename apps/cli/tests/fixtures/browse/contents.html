@@ -1,0 +1,16 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Fixture Contents</title>
+<style>
+  #wrap { display: contents; }
+  #zero { display: block; height: 0; width: 0; overflow: visible; position: relative; }
+  #zero span { position: absolute; top: 40px; left: 0; display: inline-block; padding: 6px; background: #ddd; white-space: nowrap; }
+  #gone { display: none; }
+</style></head>
+<body>
+<div style="height:120px"><button id="wrap"><span style="display:inline-block;padding:6px;background:#ccd">Close dialogue</span></button></div>
+<a id="zero" href="#" onclick="document.title = 'page 2'; return false"><span>2</span></a>
+<button id="gone">Hidden</button>
+<script>document.getElementById("wrap").addEventListener("click", () => { document.title = "closed"; });</script>
+</body>
+</html>

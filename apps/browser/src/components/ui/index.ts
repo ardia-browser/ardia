@@ -46,6 +46,7 @@ export {
   Meadow,
   meadowTextStyle,
   MouseArea,
+  PageCoverGate,
   OutsidePressArea,
   PopoverBubble,
   PowerUp,

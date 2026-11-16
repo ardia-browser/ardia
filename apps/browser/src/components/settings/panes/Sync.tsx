@@ -11,6 +11,7 @@ import { useProfiles } from "../../../state/browser/hooks";
 import {
   chooseSyncFolder,
   folderInfo,
+  setOpenTabsSynced,
   setProfileSynced,
   setTypeSynced,
   syncNow,
@@ -253,6 +254,21 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
         {remoteProfiles.map((p) => (
           <RemoteProfileRow key={p.syncId} profile={p} />
         ))}
+      </Group>
+
+      <SectionHeader
+        anchor="sync.allOpenTabs"
+        title="All Open Tabs"
+        description="Every open tab syncs, not just pinned ones. Closing a tab closes it on your other Macs too."
+      />
+      <Group>
+        {profiles
+          .filter((p) => links[p.id]?.enabled)
+          .map((p) => (
+            <Row key={p.id} icon={<ProfileBadge profile={p} size={24} />} title={p.name} description={types.tabs ? undefined : "Needs Open Tabs, under What Syncs."}>
+              <Toggle value={!!p.syncTabs} disabled={!types.tabs} accessibilityLabel={`Sync All Open Tabs in ${p.name}`} onChange={(on) => setOpenTabsSynced(p.id, on)} />
+            </Row>
+          ))}
       </Group>
 
       <SectionHeader title="What Syncs" />

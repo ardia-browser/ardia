@@ -147,6 +147,16 @@ export const generalRows = {
         folder: { ...(PLATFORM_FEATURES.defaultCloudDrive ? { advanced: true as const } : {}), title: "Sync folder", keywords: ["icloud drive", "dropbox", "folder"] },
       },
     },
+    {
+      section: "All Open Tabs",
+      rows: {
+        allOpenTabs: {
+          title: "Sync all open tabs",
+          description: "Pick profiles whose open tabs are the same on all your Macs, not just their pinned tabs. Closing a tab closes it on your other Macs too.",
+          keywords: ["unpinned tabs", "regular tabs", "today tabs", "arc", "spaces", "tabs on every mac", "same tabs", "continue on another mac"],
+        },
+      },
+    },
   ],
   tabs: [
     { section: "Tab layout", rows: { layout: { title: "Tab layout", description: "In the sidebar or across the top of the window.", keywords: ["vertical tabs", "horizontal tabs", "top tabs", "sidebar"] } } },

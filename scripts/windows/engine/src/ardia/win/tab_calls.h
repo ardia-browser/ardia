@@ -7,10 +7,16 @@
 #include "base/values.h"
 
 namespace content {
+class DevToolsAgentHostClient;
 class WebContents;
 }
 
 namespace ardia_win {
+
+void UnmarkEngineDevTools(content::WebContents* contents);
+
+const content::DevToolsAgentHostClient* EngineDevToolsClient(
+    content::WebContents* contents);
 
 bool CallTabMethod(content::WebContents* contents,
                    const std::string& method,

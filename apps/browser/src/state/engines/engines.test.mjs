@@ -80,7 +80,9 @@ test("streaming sites open in WebKit when the setting is on, over https, subdoma
 test("a FairPlay site is its exact https origin", () => {
   assert.equal(fairPlaySite("https://open.spotify.com/track/1"), true);
   assert.equal(fairPlaySite("https://OPEN.spotify.com/"), true);
-  for (const url of ["http://open.spotify.com/", "https://www.spotify.com/", "https://x.open.spotify.com/", "https://open.spotify.com.example.com/", "https://open.spotify.com:8443/", "https://www.netflix.com/", "", null]) {
+  assert.equal(fairPlaySite("https://www.netflix.com/watch/1"), true);
+  assert.equal(fairPlaySite("https://www.disneyplus.com/play/1"), true);
+  for (const url of ["http://open.spotify.com/", "https://www.spotify.com/", "https://x.open.spotify.com/", "https://open.spotify.com.example.com/", "https://open.spotify.com:8443/", "https://netflix.com/", "https://help.netflix.com/", "https://disneyplus.com/", "https://www.max.com/", "", null]) {
     assert.equal(fairPlaySite(url), false, String(url));
   }
 });
@@ -94,7 +96,13 @@ test("a FairPlay site opens in WebKit unless FairPlay in Chromium is on, and a r
   assert.equal(chosenEngine(bridged, spotify), undefined);
   assert.equal(engineForUrl(bridged, spotify), "chromium");
   assert.equal(recommendedEngineFor(bridged, spotify), "chromium");
-  assert.equal(engineForUrl(bridged, "https://www.netflix.com/"), "webkit");
+  assert.equal(engineForUrl(bridged, "https://www.netflix.com/watch/1"), "chromium");
+  assert.equal(engineForUrl(bridged, "https://www.disneyplus.com/play/1"), "chromium");
+  assert.equal(engineForUrl(bridged, "https://netflix.com/"), "webkit");
+  assert.equal(engineForUrl(bridged, "https://www.max.com/"), "webkit");
+  assert.equal(engineForUrl(state([], { protectedVideoInWebKit: true }), "https://www.netflix.com/watch/1"), "webkit");
+  assert.equal(engineForUrl(state([], { protectedVideoInWebKit: true, fairPlayInChromium: false }), "https://www.disneyplus.com/"), "webkit");
+  assert.equal(engineForUrl(state([], { protectedVideoInWebKit: true, fairPlayInChromium: true, websiteEngines: { "https://www.netflix.com": "webkit" } }), "https://www.netflix.com/"), "webkit");
   assert.equal(engineForUrl(state([], { protectedVideoInWebKit: true }), "http://open.spotify.com/"), "chromium");
   assert.equal(engineForUrl(state([], { protectedVideoInWebKit: true }), "https://www.spotify.com/"), "chromium");
   assert.equal(engineForUrl(state([], { protectedVideoInWebKit: true, fairPlayInChromium: true, websiteEngines: { "https://open.spotify.com": "webkit" } }), spotify), "webkit");

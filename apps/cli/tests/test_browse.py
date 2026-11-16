@@ -784,7 +784,8 @@ class RefsTest(unittest.TestCase):
         self.assertEqual(fixed, "document.querySelectorAll('a[href*=\"/jobs/view/\"]')")
         self.assertEqual(quoted, ['a[href*="/jobs/view/"]'])
         self.assertEqual(quote_selector_literals('el.closest("[aria-label=Two words]")')[0], "el.closest(\"[aria-label='Two words']\")")
-        for untouched in ("document.querySelector('[data-x=plain]')", "document.querySelector('a[href*=\"/ok/\"]')", "find('a[href*=/x/]')"):
+        for untouched in ("document.querySelector('[data-x=plain]')", "document.querySelector('a[href*=\"/ok/\"]')", "find('a[href*=/x/]')",
+                          "document.querySelector('input[value=\\\"Save/Load\\\"]')"):
             self.assertEqual(quote_selector_literals(untouched), (untouched, []))
 
     def test_an_empty_untitled_page_says_it_was_likely_turned_away(self):

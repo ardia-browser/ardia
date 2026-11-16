@@ -262,7 +262,7 @@ test("Split View: focusing a pane whose page is already showing in that window g
 
 test("Peek: opening one asks its page, kept until the Peek's page shows", async () => {
   const { store, stop } = ctrlT();
-  store.set({ peeks: { w: { tabId: "kf-peek", sourceId: "kf-before" } } });
+  store.set({ peeks: { "kf-before": { tabId: "kf-peek", sourceId: "kf-before" } }, tabs: { ...store.getState().tabs, "kf-peek": { url: "https://peeked.example/", windowId: "w" } } });
   mount("kf-peek");
   later += 5000;
   showPage("kf-peek", true, shape);

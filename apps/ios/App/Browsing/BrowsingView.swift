@@ -233,10 +233,10 @@ struct BrowsingView: View {
   private func columnBar(_ column: ScreenLayout.SideColumn) -> some View {
     GeometryReader { proxy in
       let insets = proxy.safeAreaInsets
-      BottomBar(
+      BarColumn(
         address: BarAddress(tab: app.tabs.selectedTab, page: currentWebPage),
-        isCollapsed: false,
-        arrangement: .column(column, CGSize(width: proxy.size.width + insets.leading + insets.trailing, height: proxy.size.height + insets.top + insets.bottom)),
+        column: column,
+        size: CGSize(width: proxy.size.width + insets.leading + insets.trailing, height: proxy.size.height + insets.top + insets.bottom),
         actions: barActions
       )
       .ignoresSafeArea()
@@ -250,33 +250,30 @@ struct BrowsingView: View {
   private var bar: some View {
     BottomBar(
       address: BarAddress(tab: app.tabs.selectedTab, page: currentWebPage),
-      isCollapsed: barPresentation == .collapsed,
+      isCollapsed: barVisibility.presentation == .collapsed,
       sideInset: pageSpan.safeSide,
+      sidesShown: barVisibility.isShown && app.browse.barSidesShown,
+      centreShown: barVisibility.isShown && app.browse.barCentreShown,
       actions: barActions
     )
     .padding(.bottom, BrowseLayout.barBottomGap)
     .environment(\.colorScheme, barScheme)
     .highPriorityGesture(pagerGesture)
-    .offset(y: isBarShown ? 0 : BrowseLayout.barCollapseTravel)
-    .opacity(isBarShown ? 1 : 0)
     .allowsHitTesting(isBarShown)
-    .animation(barMotion, value: isBarShown)
-    .animation(barMotion, value: barPresentation)
+    .animation(barMotion, value: barVisibility.presentation)
     .frame(maxHeight: .infinity, alignment: .bottom)
     .ignoresSafeArea(.container, edges: [.bottom, .horizontal])
     .ignoresSafeArea(.keyboard)
   }
 
   private var barMotion: Animation {
-    reduceMotion ? .easeOut(duration: 0.2) : Motion.barCollapse
-  }
-
-  private var barPresentation: BottomBarVisibility.Presentation {
-    barVisibility.presentation(searchTrayPresented: app.browse.isSearchTrayOnScreen)
+    reduceMotion ? Motion.reducedMotion : Motion.barCollapse
   }
 
   private var isBarShown: Bool {
-    barPresentation != .hidden
+    let visibility = barVisibility
+    let isSearchTrayOnScreen = app.browse.isSearchTrayOnScreen
+    return visibility.isShown && !isSearchTrayOnScreen
   }
 
   private func editAddress() {

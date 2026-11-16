@@ -8,6 +8,7 @@ export {
   MagnifyArea,
   MouseArea,
   OutsidePressArea,
+  PageCoverGate,
   PopoverBubble,
   ReportVideo,
   Surface,

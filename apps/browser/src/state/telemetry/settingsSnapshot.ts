@@ -60,6 +60,10 @@ export const customColorProfiles = (profiles: Record<string, { theme?: unknown }
   custom_color_profiles: String(Object.values(profiles).filter((profile) => !!profile.theme).length),
 });
 
+export const openTabSyncProfiles = (profiles: Record<string, { syncTabs?: true }>): Record<string, string> => ({
+  sync_open_tabs_profiles: String(Object.values(profiles).filter((profile) => !!profile.syncTabs).length),
+});
+
 const FORMER_MIN_WINDOW_WIDTH = 720;
 
 export function narrowWindows(windows: Record<string, Pick<BrowserWindow, "kind" | "frame" | "fullScreen">>, sidebarWidth: number, scale = currentInterfaceScale()): Record<string, string> {

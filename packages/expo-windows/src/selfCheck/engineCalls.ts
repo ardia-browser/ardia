@@ -5,6 +5,7 @@ import { pngImage } from "../engine/domains/favicons";
 import { profileFolder } from "../engine/domains/profiles";
 import { requireNativeModule } from "../modules";
 import { expectEqual, expectTrue, type Check } from "./check";
+import { httpPagesPort } from "./engineBackForward";
 
 const system = () => requireNativeModule<Pick<SystemNative, "fileExists">>("ArdiaSystem");
 const domain = (name: string) => requireNativeModule<Pick<DomainModule, "call">>(name);
@@ -12,6 +13,10 @@ const domain = (name: string) => requireNativeModule<Pick<DomainModule, "call">>
 const NEVER_LOADED = "self-check-never-loaded";
 const LOADED = "self-check-loaded";
 const STUCK = "self-check-stuck";
+const REMOVALS_DURING_SAVES = 300;
+const RACE_SETTLE_MS = 300;
+
+const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 const SEEDED_ZOOM_HOST = "selfcheck.example";
 const ONE_PIXEL_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
@@ -94,11 +99,24 @@ const withEngine: Check[] = [
     },
   },
   {
-    name: "engine: an earlier removal that is still left is reported, not taken as done",
+    name: "engine: an earlier removal that is still left is reported, not taken as done, even while Chromium saves Local State",
     async run() {
       const leftover = `${await userDataDir()}\\${folderOf(STUCK)} (removing)`;
       expectTrue(system().fileExists(leftover), `the launch left no held ${leftover}`);
-      expectEqual(await removeProfileFolder(folderOf(STUCK)), "partial", "removing a profile whose earlier removal is held open");
+      const port = httpPagesPort();
+      const tell = (what: string) => (port ? fetch(`http://127.0.0.1:${port}/event/local-state-${what}`).catch(() => null) : Promise.resolve(null));
+      const answers: Record<string, number> = {};
+      await tell("start");
+      try {
+        await pause(RACE_SETTLE_MS);
+        for (let i = 0; i < REMOVALS_DURING_SAVES; i++) {
+          const outcome = await removeProfileFolder(folderOf(STUCK));
+          answers[outcome] = (answers[outcome] ?? 0) + 1;
+        }
+      } finally {
+        await tell("stop");
+      }
+      expectEqual(answers, { partial: REMOVALS_DURING_SAVES }, "removing a profile whose earlier removal is held open, again and again while Local State is saved");
       expectEqual((await deleteData(STUCK)).remaining, ["files (partial)"], "what deleteData reports");
     },
   },

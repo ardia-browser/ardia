@@ -1,5 +1,5 @@
 import { breadcrumb } from "@ardia/core";
-import { Button, WindowBackdrop, ink, Panel, PinchArea, pinchFollow, pinchSettle, reduceMotion, reduceMotionKnown, type PinchMotion } from "../ui";
+import { Button, WindowBackdrop, ink, PageCoverGate, Panel, PinchArea, pinchFollow, pinchSettle, reduceMotion, reduceMotionKnown, type PinchMotion } from "../ui";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Animated, Pressable, StyleSheet, View } from "react-native";
 import { useTheme } from "../ui/theme";
@@ -202,7 +202,7 @@ function PeekCard({
   const cardOpacity = fade ? progress : progress.interpolate({ inputRange: [0, 0.35, 1], outputRange: [0, 1, 1] });
   const dim = Animated.multiply(progress, expand.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }));
 
-  return (
+  const overlay = (
     <View style={[StyleSheet.absoluteFill, !shown && { opacity: 0 }]} pointerEvents={motion && shown ? "box-none" : "none"}>
       <Animated.View pointerEvents={fullscreen ? "none" : "auto"} style={[StyleSheet.absoluteFill, { opacity: fullscreen ? 0 : dim }]}>
         <Pressable
@@ -273,6 +273,7 @@ function PeekCard({
       )}
     </View>
   );
+  return <PageCoverGate covering={shown}>{overlay}</PageCoverGate>;
 }
 
 function PeekSideButtons({ windowId }: { windowId: string }) {

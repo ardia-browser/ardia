@@ -11,7 +11,7 @@ const ASK_ATTEMPTS = 4;
 
 type ListedTab = Pick<HostListedTab, "key" | "title">;
 
-const httpPagesPort = () => {
+export const httpPagesPort = () => {
   const port = requireNativeModule<Pick<AppNative, "launchConfig">>("ArdiaApp").launchConfig().test?.httpPages;
   return typeof port === "string" && /^\d+$/.test(port) ? port : null;
 };

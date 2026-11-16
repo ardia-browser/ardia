@@ -16,6 +16,8 @@ source_set("win") {
     "host.cc",
     "host.h",
     "host_visibility.cc",
+    "kept_pages.cc",
+    "kept_pages.h",
     "main.cc",
     "main.h",
     "page_links.cc",

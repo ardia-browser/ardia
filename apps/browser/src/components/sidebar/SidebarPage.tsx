@@ -15,6 +15,7 @@ import { usePageStyle } from "../../state/windows/profilePager";
 import { useSharedTilesStyle } from "../../state/sidebar/sharedTiles";
 import { DragScope, useDragController, useDragging, usePinnedCount } from "./DragProvider";
 import { openSidebarMenu } from "../../state/sidebar/menus";
+import { noteRowsScrolled } from "../../state/sidebar/hover";
 import { PinnedGrid } from "./PinnedGrid";
 import { pinGridHeight } from "./pinZone";
 import { SCROLL_EDGE, ScrollEdgeLine, useScrollEdge, useScrollEdgeBelow } from "./ScrollEdge";
@@ -101,6 +102,8 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
   const scrollY = useRef(new Animated.Value(0)).current;
   const isCurrent = useRef(current);
   isCurrent.current = current;
+  const windowRef = useRef(windowId);
+  windowRef.current = windowId;
   const page = useRef<PageGeometry>({ scrollY: 0, viewport: 0, regions: { pinnedGroups: 0, list: 0 } }).current;
   const scrollView = useRef<ScrollView | null>(null);
   const setScrollView = useCallback(
@@ -126,7 +129,9 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
         scrollEdge.follow(page.scrollY);
         scrollEdgeBelow.measure({ offset: page.scrollY });
         selectedRow.judge();
-        if (isCurrent.current) onScrollY(page.scrollY);
+        if (!isCurrent.current) return;
+        noteRowsScrolled(windowRef.current);
+        onScrollY(page.scrollY);
       },
     }),
   );

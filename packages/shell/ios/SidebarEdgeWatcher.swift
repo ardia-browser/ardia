@@ -191,7 +191,7 @@ final class SidebarEdgeWatcher {
   }
 
   private func isOver(_ point: NSPoint, of window: NSWindow, _ watch: Watch, live: Bool, holding: Bool = false) -> Bool {
-    guard window.isVisible, !window.isMiniaturized, !window.styleMask.contains(.fullScreen), let screen = window.screen else { return false }
+    guard window.isVisible, !window.isMiniaturized, let screen = window.screen else { return false }
     let frame = window.frame
     let slack = holding ? Self.reach : 0
     guard point.y >= frame.minY - slack, point.y < frame.maxY + slack else { return false }

@@ -23,6 +23,10 @@ struct BarAddress: Equatable {
   }
 }
 
+extension BarAddress {
+  var showsFavicon: Bool { pageURL != nil && !isPrivate && !isInsecure }
+}
+
 struct BarActions {
   var onTabs: () -> Void
   var onAddress: () -> Void
@@ -93,10 +97,7 @@ struct BarMenuButton: View {
 
   var body: some View {
     Button(action: action) {
-      Image(systemName: "ellipsis")
-        .font(.system(size: BrowseLayout.barMenuGlyph, weight: .semibold))
-        .foregroundStyle(BrowsePalette.foregroundPrimary)
-        .frame(width: BrowseLayout.barControl, height: BrowseLayout.barControl)
+      BarMenuGlyph()
         .contentShape(.rect)
     }
     .buttonStyle(BarButtonStyle())
@@ -104,9 +105,19 @@ struct BarMenuButton: View {
   }
 }
 
+struct BarMenuGlyph: View {
+  var body: some View {
+    Image(systemName: "ellipsis")
+      .font(.system(size: BrowseLayout.barMenuGlyph, weight: .semibold))
+      .foregroundStyle(BrowsePalette.foregroundPrimary)
+      .frame(width: BrowseLayout.barControl, height: BrowseLayout.barControl)
+  }
+}
+
 struct BarAddressLabel: View {
   let address: BarAddress
   var compact = false
+  var favicon: FaviconImage.Prepared?
 
   @ScaledMetric(relativeTo: .subheadline) private var iconSize: CGFloat = 16
   @ScaledMetric(relativeTo: .subheadline) private var compactIconSize: CGFloat = 13
@@ -142,8 +153,8 @@ struct BarAddressLabel: View {
         .font(.system(size: size * 0.92, weight: .regular))
         .foregroundStyle(BrowsePalette.foregroundSecondary)
         .accessibilityHidden(true)
-    } else if address.pageURL != nil {
-      FaviconImage(iconURL: address.iconURL, pageURL: address.pageURL, size: size)
+    } else if address.showsFavicon {
+      FaviconImage(iconURL: address.iconURL, pageURL: address.pageURL, size: size, prepared: favicon)
         .accessibilityHidden(true)
     }
   }
@@ -151,7 +162,6 @@ struct BarAddressLabel: View {
 
 struct BarAddressField: View {
   let address: BarAddress
-  var showsMenu = true
   let onAddress: () -> Void
   let onMore: () -> Void
 
@@ -167,10 +177,8 @@ struct BarAddressField: View {
       .accessibilityLabel(address.isInsecure ? Text("Address, Not Secure") : Text("Address"))
       .accessibilityValue(Text(address.host))
       .accessibilityHint("Opens search with this page’s address.")
-      if showsMenu {
-        BarMenuButton(action: onMore)
-          .padding(.trailing, BrowseLayout.barMenuTrail)
-      }
+      BarMenuButton(action: onMore)
+        .padding(.trailing, BrowseLayout.barMenuTrail)
     }
     .frame(height: BrowseLayout.barControl)
     .frame(maxWidth: .infinity)

@@ -88,3 +88,21 @@ test("a clip that grows or moves without its surfaces laying out has them measur
   clip.moved();
   assert.equal(measured.length, 1, "a surface that stopped watching is not measured");
 });
+
+test("a surface told not to cover (a Peek hidden with its tab) cuts no hole, and cuts it again once it covers", async () => {
+  const windowId = "gated-window";
+  const page = { x: 256, y: 8, width: 900, height: 640 };
+  const card = node(400, 80, 500, 400);
+  const shown = coverMeasurer(windowId, "peek-card", 12, () => card, [], true);
+  await shown.measure();
+  assert.deepEqual(holesFor(page, coversIn(windowId), false), [[400, 80, 500, 400, 12]]);
+  shown.stop();
+  const hidden = coverMeasurer(windowId, "peek-card", 12, () => card, [], false);
+  await hidden.measure();
+  assert.deepEqual(coversIn(windowId), [], "hidden with its tab, its cover goes though it is still laid out");
+  hidden.stop();
+  const back = coverMeasurer(windowId, "peek-card", 12, () => card, []);
+  await back.measure();
+  assert.deepEqual(holesFor(page, coversIn(windowId), false), [[400, 80, 500, 400, 12]], "shown again, the hole is back");
+  back.stop();
+});

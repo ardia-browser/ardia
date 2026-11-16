@@ -10,6 +10,12 @@ const shownTabOf = (s: Followed, windowId: string) => {
   return w ? w.activeTabIds[w.profileId] : undefined;
 };
 
+const peekShownIn = (s: Followed, windowId: string) => {
+  const source = shownTabOf(s, windowId);
+  const peek = source ? s.peeks[source]?.tabId : undefined;
+  return peek && s.tabs[peek]?.windowId === windowId ? peek : undefined;
+};
+
 const gotItsFirstPage = (s: Followed, prev: Followed, tabId: string) => !!s.tabs[tabId]?.url && !prev.tabs[tabId]?.url;
 
 export function startKeyboardFollows(follow: FollowKeyboard | null = followKeyboard, store: Store = useBrowser): () => void {
@@ -19,8 +25,8 @@ export function startKeyboardFollows(follow: FollowKeyboard | null = followKeybo
     for (const windowId of Object.keys(s.windows)) {
       const shown = shownTabOf(s, windowId);
       if (shown && (shown !== shownTabOf(prev, windowId) || gotItsFirstPage(s, prev, shown))) follow(shown, windowId);
-      const peek = s.peeks[windowId]?.tabId;
-      if (peek && peek !== prev.peeks[windowId]?.tabId) follow(peek, windowId);
+      const peek = peekShownIn(s, windowId);
+      if (peek && peek !== peekShownIn(prev, windowId)) follow(peek, windowId);
     }
   });
 }

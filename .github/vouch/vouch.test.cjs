@@ -17,6 +17,10 @@ const FILES = {
   unvouchedNote: "Hi @{author}, see {owner}/{repo} on {default_branch}.",
   denouncedNote: "Closed for @{author}.",
   overLimitNote: "@{author}, more than {limit} open, see {owner}/{repo} on {default_branch}.",
+  takenNote: "@{holder} is already working on this.",
+  takenPullNote: "@{holder} is already working on this in #{pull}.",
+  takeNotABugNote: "@{author}, bug fixes only, see {owner}/{repo} on {default_branch}.",
+  takeOverLimitNote: "@{author}, you hold {limit} issues already.",
 };
 
 const WRITE_METHODS = new Set([
@@ -25,17 +29,26 @@ const WRITE_METHODS = new Set([
   "issues.createLabel",
   "issues.createComment",
   "issues.update",
+  "issues.addAssignees",
+  "issues.removeAssignees",
+  "reactions.createForIssueComment",
+  "graphql.VouchMinimize",
   "pulls.update",
   "actions.reRunWorkflow",
   "repos.createCommitStatus",
 ]);
 
-function pr(number, login, { labels = [], state = "open", sha = `sha${number}`, association, ...rules } = {}) {
+function restUser(login) {
+  return { login, type: login.endsWith("[bot]") ? "Bot" : "User" };
+}
+
+function pr(number, login, { labels = [], state = "open", sha = `sha${number}`, association, assignees = [], ...rules } = {}) {
   return {
     number,
     state,
     author_association: association,
     user: login === null ? null : { login },
+    assignees: assignees.map(restUser),
     labels: labels.map((name) => ({ name })),
     head: { sha, ref: `branch${number}`, repo: { full_name: `fork${number}/ardia` } },
     created_at: rules.created_at,
@@ -44,6 +57,8 @@ function pr(number, login, { labels = [], state = "open", sha = `sha${number}`, 
 }
 
 const NEW = "2026-11-15T09:00:00Z";
+const CLAIMED = "2026-11-17T09:00:00Z";
+const NOW = "2026-11-18T09:00:00Z";
 const OLD = "2026-11-01T09:00:00Z";
 const SHOT = "![shot](https://github.com/user-attachments/assets/0f3a)";
 
@@ -63,7 +78,48 @@ function graphAuthor(login) {
   return login.endsWith("[bot]") ? { __typename: "Bot", login: login.slice(0, -5) } : { __typename: "User", login };
 }
 
-function graphNode(item, issues, mergeableOf) {
+function closersOf(pulls, number) {
+  return pulls
+    .filter((item) => (item.rules.linked || []).includes(number))
+    .map((item) => ({
+      number: item.number,
+      state: item.state.toUpperCase(),
+      createdAt: item.rules.created_at || null,
+      closedAt: item.rules.closed_at || null,
+      author: graphAuthor(item.user && item.user.login),
+    }));
+}
+
+function graphComment(item) {
+  return {
+    id: item.node_id,
+    databaseId: item.id,
+    isMinimized: Boolean(item.minimized),
+    createdAt: item.created_at || null,
+    authorAssociation: item.author_association || "NONE",
+    author: graphAuthor(item.user && item.user.login),
+    body: item.body || "",
+  };
+}
+
+function issueNode(number, issues, pulls, comments = {}) {
+  const issue = issues.find((candidate) => candidate.number === number);
+  if (issue && issue.pull_request) return { __typename: "PullRequest" };
+  const found = issue || { state: "open", labels: [], assignees: [], rules: {} };
+  return {
+    __typename: "Issue",
+    number,
+    state: found.state.toUpperCase(),
+    labels: { nodes: found.labels },
+    assignees: { nodes: found.assignees.map((assignee) => graphAuthor(assignee.login)) },
+    closedByPullRequestsReferences: { nodes: closersOf(pulls, number) },
+    timelineItems: { nodes: ((found.rules || {}).assigned || []).map((event) => ({ createdAt: event.at, assignee: graphAuthor(event.login) })) },
+    comments: { nodes: (comments[number] || []).map(graphComment) },
+    everyPull: { nodes: closersOf(pulls, number) },
+  };
+}
+
+function graphNode(item, issues, mergeableOf, pulls = []) {
   const rules = item.rules || {};
   return {
     number: item.number,
@@ -77,12 +133,7 @@ function graphNode(item, issues, mergeableOf) {
     authorAssociation: item.author_association || "NONE",
     author: graphAuthor(item.user && item.user.login),
     labels: { nodes: item.labels },
-    closingIssuesReferences: {
-      nodes: (rules.linked || []).map((number) => {
-        const issue = issues.find((candidate) => candidate.number === number);
-        return { number, labels: { nodes: issue ? issue.labels : [] } };
-      }),
-    },
+    closingIssuesReferences: { nodes: (rules.linked || []).map((number) => issueNode(number, issues, pulls)) },
     reviewThreads: {
       nodes: (rules.threads || []).map((thread) => ({
         isResolved: Boolean(thread.resolved),
@@ -123,8 +174,12 @@ function fakeGithub({
   jobs = {},
   currentList = FILES.list,
   defaultBranch = "main",
+  unassignable = [],
 } = {}) {
   const calls = [];
+  let commentSeq = 9000;
+  const issueByNumber = (number) => issues.find((issue) => issue.number === number);
+  const assignedTo = (issue, login) => issue.assignees.some((assignee) => assignee.login.toLowerCase() === login.toLowerCase());
   const record = (name, handler) => async (params) => {
     calls.push({ name, params });
     return handler(params || {});
@@ -155,16 +210,39 @@ function fakeGithub({
       addLabels: record("issues.addLabels", () => ({ data: [] })),
       removeLabel: record("issues.removeLabel", () => ({ data: [] })),
       listComments: record("issues.listComments", ({ issue_number }) => ({ data: comments[issue_number] || [] })),
-      createComment: record("issues.createComment", () => ({ data: {} })),
+      createComment: record("issues.createComment", ({ issue_number, body }) => {
+        commentSeq += 1;
+        const created = { id: commentSeq, node_id: `IC_${commentSeq}`, user: { login: "github-actions[bot]" }, body, created_at: "2026-11-18T00:00:00Z" };
+        comments[issue_number] = [...(comments[issue_number] || []), created];
+        return { data: created };
+      }),
       update: record("issues.update", () => ({ data: {} })),
       get: record("issues.get", ({ issue_number }) => {
         const found = issues.find((issue) => issue.number === issue_number);
         if (!found) throw notFound();
         return { data: found };
       }),
-      listForRepo: record("issues.listForRepo", ({ creator }) => ({
-        data: issues.filter((issue) => issue.user && issue.user.login === creator && issue.state === "open"),
-      })),
+      listForRepo: record("issues.listForRepo", ({ creator, assignee }) => {
+        const open = issues.filter((issue) => issue.state === "open");
+        if (assignee === "*") return { data: open.filter((issue) => issue.assignees.length) };
+        if (assignee) return { data: open.filter((issue) => assignedTo(issue, assignee)) };
+        return { data: open.filter((issue) => issue.user && issue.user.login === creator) };
+      }),
+      addAssignees: record("issues.addAssignees", ({ issue_number, assignees }) => {
+        const issue = issueByNumber(issue_number);
+        for (const login of assignees) {
+          if (!unassignable.includes(login) && !assignedTo(issue, login)) issue.assignees.push(restUser(login));
+        }
+        return { data: { ...issue, assignees: [...issue.assignees] } };
+      }),
+      removeAssignees: record("issues.removeAssignees", ({ issue_number, assignees }) => {
+        const issue = issueByNumber(issue_number);
+        issue.assignees = issue.assignees.filter((assignee) => !assignees.some((login) => login.toLowerCase() === assignee.login.toLowerCase()));
+        return { data: { ...issue, assignees: [...issue.assignees] } };
+      }),
+    },
+    reactions: {
+      createForIssueComment: record("reactions.createForIssueComment", () => ({ data: {} })),
     },
     actions: {
       listWorkflowRuns: record("actions.listWorkflowRuns", ({ head_sha, workflow_id }) => {
@@ -184,12 +262,29 @@ function fakeGithub({
   };
   const pullByNumber = (number) => pulls.find((item) => item.number === number);
   const graphql = async (query, variables) => {
-    const operation = /query (\w+)/.exec(query)[1];
+    const operation = /(?:query|mutation) (\w+)/.exec(query)[1];
     calls.push({ name: `graphql.${operation}`, params: variables });
     const defaultBranchRef = { name: defaultBranch };
+    if (operation === "VouchMinimize") {
+      const found = Object.values(comments).flat().find((item) => item.node_id === variables.id);
+      found.minimized = variables.classifier;
+      return { minimizeComment: { minimizedComment: { isMinimized: true } } };
+    }
+    if (["VouchIssueClaim", "VouchIssueThread", "VouchIssuePulls"].includes(operation)) {
+      return { repository: { issueOrPullRequest: issueNode(variables.number, issues, pulls, comments) } };
+    }
+    if (operation === "VouchPullIssues") {
+      const item = pullByNumber(variables.number);
+      const pullRequest = item && {
+        body: item.rules.body || "",
+        baseRefName: item.rules.base || "main",
+        closingIssuesReferences: { nodes: (item.rules.linked || []).map((number) => ({ number })) },
+      };
+      return { repository: { defaultBranchRef, pullRequest } };
+    }
     if (operation === "VouchRulePull") {
       const item = pullByNumber(variables.number);
-      return { repository: { defaultBranchRef, pullRequest: item ? graphNode(item, issues, mergeableOf) : null } };
+      return { repository: { defaultBranchRef, pullRequest: item ? graphNode(item, issues, mergeableOf, pulls) : null } };
     }
     if (operation === "VouchMergeable") {
       const item = pullByNumber(variables.number);
@@ -207,16 +302,10 @@ function fakeGithub({
           defaultBranchRef,
           pullRequests: {
             pageInfo: { hasNextPage: end < open.length, endCursor: String(end) },
-            nodes: page.map((item) => graphNode(item, issues, mergeableOf)),
+            nodes: page.map((item) => graphNode(item, issues, mergeableOf, pulls)),
           },
         },
       };
-    }
-    if (operation === "VouchIssuePulls") {
-      const nodes = pulls
-        .filter((item) => (item.rules.linked || []).includes(variables.number))
-        .map((item) => ({ number: item.number, state: item.state.toUpperCase(), createdAt: item.rules.created_at || null }));
-      return { repository: { issue: { closedByPullRequestsReferences: { nodes } } } };
     }
     throw new Error(`Unexpected query ${operation}`);
   };
@@ -241,7 +330,8 @@ function fakeCore() {
       return this;
     },
   };
-  return { outputs, summaries, summary, info() {}, warning() {}, setOutput: (key, value) => (outputs[key] = value) };
+  const warnings = [];
+  return { outputs, summaries, summary, warnings, info() {}, warning: (message) => warnings.push(message), setOutput: (key, value) => (outputs[key] = value) };
 }
 
 function context(eventName, payload = {}) {
@@ -252,9 +342,9 @@ function context(eventName, payload = {}) {
   };
 }
 
-async function invoke(entry, { github, eventName, payload, env = {} }) {
+async function invoke(entry, { github, eventName, payload, env = {}, now = () => Date.parse(NOW) }) {
   const core = fakeCore();
-  const result = await vouch[entry]({ github, context: context(eventName, payload), core, files: FILES, env, pace: async () => {}, settle: async () => {} });
+  const result = await vouch[entry]({ github, context: context(eventName, payload), core, files: FILES, env, now, pace: async () => {}, settle: async () => {} });
   return { core, result };
 }
 
@@ -1219,4 +1309,466 @@ test("the sweep reads a pull request again before it writes, so a change made me
   await invoke("run", { github, eventName: "schedule" });
   assert.equal(github.named("graphql.VouchRulePull").length, 1);
   assert.deepEqual(ruleWrites(github), [["add", 98, READY], ["status", "sha98", "success"]]);
+});
+
+const { ALREADY_CLAIMED } = vouch;
+const DAY = 24 * 60 * 60 * 1000;
+const CLAIM_CALLS = ["issues.addAssignees", "issues.removeAssignees", "reactions.createForIssueComment", "graphql.VouchMinimize", "issues.createComment"];
+
+function claimIssue(number, { labels = ["bug"], ...options } = {}) {
+  return pr(number, "reporter", { labels, ...options });
+}
+
+function comment(id, login, body, createdAt = CLAIMED, extra = {}) {
+  return { id, node_id: `IC_${id}`, user: { login }, body, created_at: createdAt, ...extra };
+}
+
+function claimWrites(github) {
+  return github.calls
+    .filter((call) => CLAIM_CALLS.includes(call.name))
+    .map(({ name, params }) => {
+      if (name === "issues.addAssignees") return ["assign", params.issue_number, ...params.assignees];
+      if (name === "issues.removeAssignees") return ["unassign", params.issue_number, ...params.assignees];
+      if (name === "reactions.createForIssueComment") return ["react", params.comment_id, params.content];
+      if (name === "graphql.VouchMinimize") return ["minimize", params.id, params.classifier];
+      return ["reply", params.issue_number, params.body];
+    });
+}
+
+async function command(github, issue, body = "/take") {
+  return invoke("run", { github, eventName: "issue_comment", payload: { action: "created", comment: { body }, issue } });
+}
+
+function heldIssue(overrides = {}) {
+  return { number: 120, state: "open", labels: ["bug"], assignees: [], pulls: [], ...overrides };
+}
+
+test("who holds an issue: its assignees first, else the earliest open pull request's author, never a bot", () => {
+  const pulls = [
+    { number: 131, createdAt: "2026-11-17T10:00:00Z", login: "bob" },
+    { number: 130, createdAt: "2026-11-17T09:00:00Z", login: "carol" },
+  ];
+  assert.deepEqual(vouch.issueHolder(heldIssue({ pulls })), { logins: ["carol"], pull: 130 });
+  assert.deepEqual(vouch.issueHolder(heldIssue({ pulls, assignees: ["alice"] })), { logins: ["alice"], pull: null });
+  assert.deepEqual(vouch.issueHolder(heldIssue({ pulls: [{ number: 132, createdAt: CLAIMED, login: null }, ...pulls] })).logins, ["carol"]);
+  assert.equal(vouch.issueHolder(heldIssue()), null);
+  assert.equal(vouch.issueHolder(heldIssue({ state: "closed", assignees: ["alice"], pulls })), null);
+  const twice = [{ number: 141, createdAt: "2026-11-17T11:00:00Z", login: "Carol" }, ...pulls.slice(1)];
+  assert.deepEqual(vouch.issueHolder(heldIssue({ pulls: twice })), { logins: ["carol"], pull: 130 });
+  assert.equal(vouch.takeDecision({ login: "CAROL", tier: "outsider", issue: heldIssue({ pulls: twice }) }).outcome, "assign");
+});
+
+test("a command is exactly /take or /drop, trimmed and in any case", () => {
+  assert.equal(vouch.claimCommand(" /TAKE \n"), "/take");
+  assert.equal(vouch.claimCommand("/drop"), "/drop");
+  for (const body of ["/take please", "/takes", "take", "", null, "> /take"]) assert.equal(vouch.claimCommand(body), null, String(body));
+});
+
+test("take decision: someone else's hold first, then the outsider's bug rule and cap; trusted and team have neither", () => {
+  const free = heldIssue({ labels: [] });
+  assert.equal(vouch.takeDecision({ login: "x", tier: "outsider", issue: heldIssue({ assignees: ["alice"] }) }).outcome, "taken");
+  assert.equal(vouch.takeDecision({ login: "alice", tier: "outsider", issue: heldIssue({ assignees: ["Alice"], labels: [] }) }).outcome, "kept");
+  assert.equal(vouch.takeDecision({ login: "x", tier: "outsider", issue: free }).outcome, "not-a-bug");
+  assert.equal(vouch.takeDecision({ login: "x", tier: "outsider", issue: heldIssue(), held: 2 }).outcome, "assign");
+  assert.equal(vouch.takeDecision({ login: "x", tier: "outsider", issue: heldIssue(), held: 3 }).outcome, "at-limit");
+  for (const tier of ["trusted", "team"]) assert.equal(vouch.takeDecision({ login: "x", tier, issue: free, held: 9 }).outcome, "assign", tier);
+  assert.equal(vouch.dropDecision({ login: "ALICE", issue: heldIssue({ assignees: ["alice"] }) }).outcome, "release");
+  assert.equal(vouch.dropDecision({ login: "bob", issue: heldIssue({ assignees: ["alice"], pulls: [{ number: 1, createdAt: CLAIMED, login: "bob" }] }) }).outcome, "refuse");
+});
+
+test("stale decision: more than five quiet days with no open pull request, counted from the newest sign of life", () => {
+  assert.equal(vouch.CLAIM_QUIET_DAYS, 5);
+  const at = Date.parse("2026-11-20T00:00:00Z");
+  const thread = { assignedEvents: [{ login: "a", createdAt: "2026-11-20T00:00:00Z" }], comments: [], everyPull: [] };
+  assert.equal(vouch.claimIsStale(thread, "a", at + 5 * DAY - 1), false);
+  assert.equal(vouch.claimIsStale(thread, "a", at + 5 * DAY), false);
+  assert.equal(vouch.claimIsStale(thread, "A", at + 5 * DAY + 1), true);
+  const commented = { ...thread, comments: [{ login: "a", createdAt: "2026-11-23T00:00:00Z" }, { login: "b", createdAt: "2026-11-24T00:00:00Z" }] };
+  assert.equal(vouch.claimLastActive(commented, "a"), Date.parse("2026-11-23T00:00:00Z"));
+  assert.equal(vouch.claimIsStale(commented, "a", at + 7 * DAY), false);
+  assert.equal(vouch.claimIsStale(commented, "a", at + 8 * DAY + 1), true);
+  const pulling = { ...thread, everyPull: [{ login: "a", state: "open", createdAt: "2026-11-20T01:00:00Z" }] };
+  assert.equal(vouch.claimIsStale(pulling, "a", at + 60 * DAY), false);
+  const closedPull = { ...thread, everyPull: [{ login: "a", state: "closed", closedAt: "2026-11-24T00:00:00Z" }, { login: "b", state: "open" }] };
+  assert.equal(vouch.claimIsStale(closedPull, "a", at + 8 * DAY), false);
+  assert.equal(vouch.claimIsStale(closedPull, "a", at + 9 * DAY + 1), true);
+  const beyondThePage = { ...thread, pulls: [{ number: 150, login: "a", createdAt: "2026-11-20T01:00:00Z" }], everyPull: [{ login: "b", state: "closed", closedAt: "2026-11-19T00:00:00Z" }] };
+  assert.equal(vouch.claimIsStale(beyondThePage, "a", at + 60 * DAY), false);
+  const start = Date.parse(vouch.CLAIMS_START);
+  const preRule = { assignedEvents: [{ login: "a", createdAt: "2026-11-01T00:00:00Z" }], comments: [], everyPull: [] };
+  assert.equal(vouch.claimIsStale(preRule, "a", start + 5 * DAY - 1), false);
+  assert.equal(vouch.claimIsStale(preRule, "a", start + 5 * DAY + 1), true);
+});
+
+test("/take on a free bug assigns the commenter, thumbs up, minimizes and re-checks the issue's pull requests", async () => {
+  const issue = claimIssue(120);
+  const github = fakeGithub({ issues: [issue], comments: { 120: [comment(1, "stranger", "/take")] } });
+  await command(github, issue);
+  assert.deepEqual(claimWrites(github), [["assign", 120, "stranger"], ["react", 1, "+1"], ["minimize", "IC_1", "RESOLVED"]]);
+  assert.equal(github.named("graphql.VouchIssuePulls").length, 1);
+});
+
+test("/take on an issue someone is assigned to is refused with one reply naming them", async () => {
+  const issue = claimIssue(120, { assignees: ["alice"] });
+  const github = fakeGithub({ issues: [issue], comments: { 120: [comment(1, "stranger", "/take")] } });
+  await command(github, issue);
+  assert.deepEqual(claimWrites(github), [
+    ["react", 1, "-1"],
+    ["reply", 120, "@alice is already working on this."],
+    ["minimize", "IC_1", "RESOLVED"],
+  ]);
+});
+
+test("/take on an issue held by an earlier pull request names that pull request; the commenter's own pull request lets them take it", async () => {
+  const issue = claimIssue(120);
+  const pulls = [fresh(131, "bob", { created_at: "2026-11-17T10:00:00Z", linked: [120] }), fresh(130, "alice", { created_at: CLAIMED, linked: [120] })];
+  const github = fakeGithub({ issues: [issue], pulls, comments: { 120: [comment(1, "stranger", "/take")] } });
+  await command(github, issue);
+  assert.deepEqual(claimWrites(github)[1], ["reply", 120, "@alice is already working on this in #130."]);
+  const own = claimIssue(120);
+  const mine = fakeGithub({ issues: [own], pulls: [fresh(130, "stranger", { created_at: CLAIMED, linked: [120] })], comments: { 120: [comment(1, "stranger", "/take")] } });
+  await command(mine, own);
+  assert.deepEqual(claimWrites(mine).slice(0, 2), [["assign", 120, "stranger"], ["react", 1, "+1"]]);
+});
+
+test("an outsider's /take needs a bug and stays under the cap; a trusted contributor or the team needs neither", async () => {
+  const feature = claimIssue(120, { labels: [] });
+  const notABug = fakeGithub({ issues: [feature], comments: { 120: [comment(1, "stranger", "/take")] } });
+  await command(notABug, feature);
+  assert.deepEqual(claimWrites(notABug), [
+    ["react", 1, "-1"],
+    ["reply", 120, "@stranger, bug fixes only, see acme/ardia on main."],
+    ["minimize", "IC_1", "RESOLVED"],
+  ]);
+  const others = (login) => [121, 122, 123].map((number) => claimIssue(number, { assignees: [login] }));
+  const bug = claimIssue(120);
+  const capped = fakeGithub({ issues: [bug, ...others("stranger")], comments: { 120: [comment(1, "stranger", "/take")] } });
+  await command(capped, bug);
+  assert.deepEqual(claimWrites(capped), [["react", 1, "-1"], ["reply", 120, "@stranger, you hold 3 issues already."], ["minimize", "IC_1", "RESOLVED"]]);
+  const underCap = fakeGithub({ issues: [claimIssue(120), ...others("stranger").slice(1)], comments: { 120: [comment(1, "stranger", "/take")] } });
+  await command(underCap, claimIssue(120));
+  assert.deepEqual(claimWrites(underCap)[0], ["assign", 120, "stranger"]);
+  for (const login of ["alice", "shivamhwp"]) {
+    const trustedIssue = claimIssue(120, { labels: [] });
+    const github = fakeGithub({ issues: [trustedIssue, ...others(login)], comments: { 120: [comment(1, login, "/take")] } });
+    await command(github, trustedIssue);
+    assert.deepEqual(claimWrites(github), [["assign", 120, login], ["react", 1, "+1"], ["minimize", "IC_1", "RESOLVED"]], login);
+  }
+});
+
+test("/drop by the assignee releases the issue and retires the reply that named them; anyone else's /drop gets a thumbs down", async () => {
+  const issue = claimIssue(120, { assignees: ["stranger"] });
+  const github = fakeGithub({
+    issues: [issue],
+    comments: { 120: [comment(5, "github-actions[bot]", "@stranger is already working on this.", "2026-11-17T08:00:00Z"), comment(6, "stranger", "/drop")] },
+  });
+  await command(github, issue, "/drop");
+  assert.deepEqual(claimWrites(github), [
+    ["unassign", 120, "stranger"],
+    ["react", 6, "+1"],
+    ["minimize", "IC_6", "RESOLVED"],
+    ["minimize", "IC_5", "OUTDATED"],
+  ]);
+  const held = claimIssue(120, { assignees: ["alice"] });
+  const stranger = fakeGithub({ issues: [held], comments: { 120: [comment(7, "bob", "/drop")] } });
+  await command(stranger, held, "/drop");
+  assert.deepEqual(claimWrites(stranger), [["react", 7, "-1"], ["minimize", "IC_7", "RESOLVED"]]);
+  assert.deepEqual(held.assignees.map((assignee) => assignee.login), ["alice"]);
+});
+
+test("a minimized command was handled already and is not handled again; denounced authors and bots are left alone", async () => {
+  const issue = claimIssue(120);
+  const github = fakeGithub({
+    permissions: { mallory: "read" },
+    issues: [issue],
+    comments: { 120: [comment(1, "stranger", "/take", CLAIMED, { minimized: "RESOLVED" }), comment(2, "mallory", "/take"), comment(3, "renovate[bot]", "/take")] },
+  });
+  await command(github, issue);
+  assert.deepEqual(github.writes(), []);
+});
+
+test("two unhandled /take in one run: the earlier one gets the issue, the later one the reply, which then stays", async () => {
+  const issue = claimIssue(120);
+  const github = fakeGithub({
+    issues: [issue],
+    comments: { 120: [comment(2, "alice", "/take", "2026-11-17T10:00:00Z"), comment(1, "stranger", "/take", "2026-11-17T09:00:00Z")] },
+  });
+  await command(github, issue);
+  assert.deepEqual(claimWrites(github), [
+    ["assign", 120, "stranger"],
+    ["react", 1, "+1"],
+    ["minimize", "IC_1", "RESOLVED"],
+    ["react", 2, "-1"],
+    ["reply", 120, "@stranger is already working on this."],
+    ["minimize", "IC_2", "RESOLVED"],
+  ]);
+});
+
+test("the already-working reply is never posted twice", async () => {
+  const issue = claimIssue(120, { assignees: ["alice"] });
+  const github = fakeGithub({
+    issues: [issue],
+    comments: { 120: [comment(5, "github-actions[bot]", "@alice is already working on this.", "2026-11-17T08:00:00Z"), comment(1, "stranger", "/take")] },
+  });
+  await command(github, issue);
+  assert.deepEqual(claimWrites(github), [["react", 1, "-1"], ["minimize", "IC_1", "RESOLVED"]]);
+  const twice = claimIssue(120, { assignees: ["alice"] });
+  const both = fakeGithub({
+    issues: [twice],
+    comments: { 120: [comment(1, "stranger", "/take", "2026-11-17T09:00:00Z"), comment(2, "bob", "/take", "2026-11-17T10:00:00Z")] },
+  });
+  await command(both, twice);
+  assert.deepEqual(claimWrites(both).filter((write) => write[0] === "reply"), [["reply", 120, "@alice is already working on this."]]);
+});
+
+test("a reply retired when its holder left is posted afresh when they hold the issue again", async () => {
+  const issue = claimIssue(120, { assignees: ["alice"] });
+  const retired = comment(5, "github-actions[bot]", "@alice is already working on this.", "2026-11-17T08:00:00Z", { minimized: "OUTDATED" });
+  const github = fakeGithub({ issues: [issue], comments: { 120: [retired, comment(1, "stranger", "/take")] } });
+  await command(github, issue);
+  assert.deepEqual(claimWrites(github), [
+    ["react", 1, "-1"],
+    ["reply", 120, "@alice is already working on this."],
+    ["minimize", "IC_1", "RESOLVED"],
+  ]);
+});
+
+test("an outsider whose other /take landed meanwhile is unassigned again and told about the cap, whichever issue number is lower", async () => {
+  for (const other of [119, 131]) {
+    const held = [121, 122].map((number) => claimIssue(number, { assignees: ["stranger"] }));
+    const elsewhere = claimIssue(other);
+    const issue = claimIssue(120);
+    const github = fakeGithub({ issues: [issue, elsewhere, ...held], comments: { 120: [comment(1, "stranger", "/take")] } });
+    const assign = github.rest.issues.addAssignees;
+    github.rest.issues.addAssignees = async (params) => {
+      elsewhere.assignees.push({ login: "stranger", type: "User" });
+      return assign(params);
+    };
+    await command(github, issue);
+    assert.deepEqual(claimWrites(github), [
+      ["assign", 120, "stranger"],
+      ["unassign", 120, "stranger"],
+      ["react", 1, "-1"],
+      ["reply", 120, "@stranger, you hold 3 issues already."],
+      ["minimize", "IC_1", "RESOLVED"],
+    ], String(other));
+    assert.deepEqual(issue.assignees, [], String(other));
+  }
+});
+
+test("the cap counts what the outsider holds after the take, so an assignment a maintainer moved meanwhile costs nothing", async () => {
+  const held = [121, 122].map((number) => claimIssue(number, { assignees: ["stranger"] }));
+  const moved = claimIssue(119);
+  const issue = claimIssue(120);
+  const github = fakeGithub({ issues: [issue, moved, ...held], comments: { 120: [comment(1, "stranger", "/take")] } });
+  const assign = github.rest.issues.addAssignees;
+  github.rest.issues.addAssignees = async (params) => {
+    held[0].assignees = [];
+    moved.assignees.push({ login: "stranger", type: "User" });
+    return assign(params);
+  };
+  await command(github, issue);
+  assert.deepEqual(claimWrites(github), [["assign", 120, "stranger"], ["react", 1, "+1"], ["minimize", "IC_1", "RESOLVED"]]);
+});
+
+test("any admitted event on the issue handles a command whose own run was dropped", async () => {
+  const waiting = () => ({ 120: [comment(1, "stranger", "/take")] });
+  const taken = [["assign", 120, "stranger"], ["react", 1, "+1"], ["minimize", "IC_1", "RESOLVED"]];
+  const chatted = claimIssue(120);
+  const chat = fakeGithub({ issues: [chatted], comments: waiting() });
+  await command(chat, chatted, "/take please");
+  assert.deepEqual(claimWrites(chat), taken);
+  const labelled = claimIssue(120);
+  const label = fakeGithub({ issues: [labelled], comments: waiting() });
+  await invoke("run", { github: label, eventName: "issues", payload: { action: "labeled", label: { name: "bug" }, issue: labelled } });
+  assert.deepEqual(claimWrites(label), taken);
+  const freed = claimIssue(120);
+  const unassigned = fakeGithub({ issues: [freed], comments: waiting() });
+  await invoke("run", { github: unassigned, eventName: "issues", payload: { action: "unassigned", issue: freed } });
+  assert.deepEqual(claimWrites(unassigned), taken);
+  const back = claimIssue(120);
+  const reopened = fakeGithub({ issues: [back], comments: waiting() });
+  await invoke("run", { github: reopened, eventName: "issues", payload: { action: "reopened", issue: back } });
+  assert.deepEqual(claimWrites(reopened), taken);
+});
+
+test("a command handled by a run that died before tidying up is tidied by the next event", async () => {
+  const issue = claimIssue(120);
+  const waiting = fresh(142, "bob", { created_at: CLAIMED, linked: [120], labels: [ALREADY_CLAIMED, INCOMPLETE] });
+  const github = fakeGithub({
+    issues: [issue],
+    pulls: [waiting],
+    comments: {
+      120: [
+        comment(5, "github-actions[bot]", "@stranger is already working on this.", "2026-11-17T08:00:00Z"),
+        comment(6, "stranger", "/drop", CLAIMED, { minimized: "RESOLVED" }),
+      ],
+    },
+  });
+  await command(github, issue, "/drop");
+  assert.deepEqual(claimWrites(github), [["minimize", "IC_5", "OUTDATED"]]);
+  assert.deepEqual(ruleWrites(github), [["add", 142, READY], ["remove", 142, ALREADY_CLAIMED], ["remove", 142, INCOMPLETE]]);
+});
+
+test("the reply naming a pull request's author is retired when that pull request closes", async () => {
+  const closed = fresh(130, "alice", { created_at: CLAIMED, linked: [120], state: "closed" });
+  const github = fakeGithub({
+    issues: [claimIssue(120)],
+    pulls: [closed],
+    comments: { 120: [comment(5, "github-actions[bot]", "@alice is already working on this in #130.", "2026-11-17T10:00:00Z")] },
+  });
+  await event(github, "closed", closed);
+  assert.deepEqual(claimWrites(github), [["minimize", "IC_5", "OUTDATED"]]);
+  const open = fresh(130, "alice", { created_at: CLAIMED, linked: [120] });
+  const another = fresh(131, "bob", { created_at: "2026-11-17T10:00:00Z", linked: [120], state: "closed" });
+  const still = fakeGithub({
+    issues: [claimIssue(120)],
+    pulls: [open, another],
+    comments: { 120: [comment(5, "github-actions[bot]", "@alice is already working on this in #130.", "2026-11-17T10:00:00Z")] },
+  });
+  await event(still, "closed", another);
+  assert.deepEqual(claimWrites(still), []);
+  const first = fresh(130, "alice", { created_at: CLAIMED, linked: [120], state: "closed" });
+  const second = fresh(133, "alice", { created_at: "2026-11-17T11:00:00Z", linked: [120] });
+  const moved = fakeGithub({
+    issues: [claimIssue(120)],
+    pulls: [first, second],
+    comments: { 120: [comment(5, "github-actions[bot]", "@alice is already working on this in #130.", "2026-11-17T10:00:00Z")] },
+  });
+  await event(moved, "closed", first);
+  assert.deepEqual(claimWrites(moved), [["minimize", "IC_5", "OUTDATED"]]);
+});
+
+test("a /take GitHub will not assign gets a confused reaction and a warning, and nothing else", async () => {
+  const issue = claimIssue(120);
+  const github = fakeGithub({ issues: [issue], unassignable: ["stranger"], comments: { 120: [comment(1, "stranger", "/take")] } });
+  const { core } = await command(github, issue);
+  assert.deepEqual(claimWrites(github), [["assign", 120, "stranger"], ["react", 1, "confused"], ["minimize", "IC_1", "RESOLVED"]]);
+  assert.equal(core.warnings.length, 1);
+});
+
+test("rule decision: already-claimed blocks ready for a ruled pull request created since the claims rule", () => {
+  const taken = [{ number: 120, state: "open", labels: ["bug"], assignees: ["alice"], pulls: [] }];
+  for (const tier of ["outsider", "trusted"]) {
+    assert.deepEqual(vouch.ruleLabels(facts({ tier, login: "stranger", createdAt: CLAIMED, linkedIssues: taken })), [ALREADY_CLAIMED, INCOMPLETE], tier);
+  }
+  assert.deepEqual(vouch.ruleLabels(facts({ login: "Alice", createdAt: CLAIMED, linkedIssues: taken })), [READY]);
+  assert.deepEqual(vouch.ruleLabels(facts({ login: "stranger", createdAt: "2026-11-16T11:59:59Z", linkedIssues: taken })), [READY]);
+  assert.deepEqual(vouch.ruleLabels(facts({ login: "stranger", createdAt: vouch.CLAIMS_START, linkedIssues: taken })), [ALREADY_CLAIMED, INCOMPLETE]);
+  assert.deepEqual(vouch.ruleLabels(facts({ login: "stranger", createdAt: CLAIMED, linkedIssues: [{ ...taken[0], state: "closed" }] })), [READY]);
+});
+
+test("a pull request for an issue someone else holds gets already-claimed, by assignee or by an earlier pull request", async () => {
+  const assigned = claimIssue(120, { assignees: ["alice"] });
+  const pull = fresh(140, "stranger", { created_at: CLAIMED, linked: [120] });
+  const github = fakeGithub({ pulls: [pull], issues: [assigned] });
+  await event(github, "opened", pull);
+  assert.deepEqual(ruleWrites(github), [["add", 140, ALREADY_CLAIMED, INCOMPLETE], ["status", "sha140", "success"]]);
+  const earlier = fresh(139, "alice", { created_at: "2026-11-17T08:00:00Z", linked: [120], labels: [READY] });
+  const byPull = fakeGithub({ pulls: [earlier, pull], issues: [claimIssue(120)] });
+  await event(byPull, "opened", pull);
+  assert.deepEqual(ruleWrites(byPull), [["add", 140, ALREADY_CLAIMED, INCOMPLETE], ["status", "sha140", "success"]]);
+});
+
+test("already-claimed comes off when the holder's pull request closes, and goes on when it reopens", async () => {
+  const holder = fresh(141, "alice", { created_at: CLAIMED, linked: [120], state: "closed" });
+  const waiting = fresh(142, "stranger", { created_at: "2026-11-17T10:00:00Z", linked: [120], labels: [ALREADY_CLAIMED, INCOMPLETE] });
+  const github = fakeGithub({ pulls: [holder, waiting], issues: [claimIssue(120)] });
+  await event(github, "closed", holder);
+  assert.deepEqual(ruleWrites(github), [["add", 142, READY], ["remove", 142, ALREADY_CLAIMED], ["remove", 142, INCOMPLETE], ["status", "sha142", "success"]]);
+  const reopened = fresh(141, "alice", { created_at: CLAIMED, linked: [120] });
+  const ready = fresh(142, "stranger", { created_at: "2026-11-17T10:00:00Z", linked: [120], labels: [READY] });
+  const again = fakeGithub({ pulls: [reopened, ready], issues: [claimIssue(120)] });
+  await event(again, "reopened", reopened);
+  assert.deepEqual(ruleWrites(again), [["add", 141, READY], ["add", 142, ALREADY_CLAIMED, INCOMPLETE], ["remove", 142, READY], ["status", "sha142", "success"]]);
+});
+
+test("a maintainer picks the winner by assigning the issue: the assignee beats the earliest pull request", async () => {
+  const issue = claimIssue(120, { assignees: ["bob"] });
+  const earliest = fresh(142, "stranger", { created_at: CLAIMED, linked: [120], labels: [READY] });
+  const chosen = fresh(143, "bob", { created_at: "2026-11-17T10:00:00Z", linked: [120], labels: [ALREADY_CLAIMED, INCOMPLETE] });
+  const github = fakeGithub({ pulls: [earliest, chosen], issues: [issue] });
+  await invoke("run", { github, eventName: "issues", payload: { action: "assigned", issue } });
+  assert.deepEqual(ruleWrites(github), [
+    ["add", 142, ALREADY_CLAIMED, INCOMPLETE],
+    ["remove", 142, READY],
+    ["status", "sha142", "success"],
+    ["add", 143, READY],
+    ["remove", 143, ALREADY_CLAIMED],
+    ["remove", 143, INCOMPLETE],
+  ]);
+  const onPull = fakeGithub({ pulls: [earliest] });
+  await invoke("run", { github: onPull, eventName: "issues", payload: { action: "assigned", issue: { ...issue, pull_request: {} } } });
+  assert.deepEqual(onPull.calls, []);
+});
+
+test("already-claimed is never given to a pull request from before the claims rule, nor to the team", async () => {
+  const assigned = claimIssue(120, { assignees: ["alice"] });
+  for (const created of [NEW, "2026-11-16T11:59:59Z"]) {
+    const pull = fresh(144, "stranger", { created_at: created, linked: [120] });
+    const github = fakeGithub({ pulls: [pull], issues: [assigned] });
+    await event(github, "edited", pull);
+    assert.deepEqual(ruleWrites(github), [["add", 144, READY], ["status", "sha144", "success"]], created);
+  }
+  const team = fresh(145, "shivamhwp", { created_at: CLAIMED, linked: [120] });
+  const github = fakeGithub({ pulls: [team], issues: [assigned] });
+  await event(github, "opened", team);
+  assert.deepEqual(ruleWrites(github), []);
+});
+
+test("a stacked pull request reads the claim from the issue its description closes; a missing number is skipped", async () => {
+  const assigned = claimIssue(120, { assignees: ["alice"] });
+  for (const login of ["stranger", "bob"]) {
+    const pull = fresh(146, login, { created_at: CLAIMED, base: "release", linked: [], body: `Fixes #120\n${SHOT}` });
+    const github = fakeGithub({ pulls: [pull], issues: [assigned] });
+    await event(github, "edited", pull);
+    assert.deepEqual(ruleWrites(github)[0], ["add", 146, ALREADY_CLAIMED, INCOMPLETE], login);
+  }
+  const missing = fresh(147, "bob", { created_at: CLAIMED, base: "release", linked: [], body: `Fixes #999\n${SHOT}` });
+  const github = fakeGithub({ pulls: [missing] });
+  const graphql = github.graphql;
+  github.graphql = async (query, variables) => {
+    if (/query VouchIssueClaim/.test(query) && variables.number === 999) {
+      throw Object.assign(new Error("Could not resolve"), { errors: [{ type: "NOT_FOUND" }] });
+    }
+    return graphql(query, variables);
+  };
+  await event(github, "edited", missing);
+  assert.deepEqual(ruleWrites(github), [["add", 147, READY]]);
+});
+
+function claimSweepFixture() {
+  const assignedOn = (login) => [{ login, at: "2026-11-17T00:00:00Z" }];
+  return fakeGithub({
+    issues: [
+      claimIssue(150, { assignees: ["quiet"], assigned: assignedOn("quiet") }),
+      claimIssue(151, { assignees: ["busy"], assigned: assignedOn("busy") }),
+      claimIssue(152, { assignees: ["coder"], assigned: assignedOn("coder") }),
+      claimIssue(153, { assignees: ["renovate[bot]"] }),
+    ],
+    pulls: [pr(160, "coder", { created_at: OLD, linked: [152] })],
+    comments: {
+      150: [comment(7, "github-actions[bot]", "@quiet is already working on this.", "2026-11-17T02:00:00Z")],
+      151: [comment(8, "busy", "still on it", "2026-11-22T00:00:00Z")],
+    },
+  });
+}
+
+const SWEEP_NOW = () => Date.parse("2026-11-25T00:00:00Z");
+
+test("the sweep releases a claim quiet for five days, keeps a fresh one and one with an open pull request", async () => {
+  const github = claimSweepFixture();
+  const { result, core } = await invoke("run", { github, eventName: "schedule", now: SWEEP_NOW });
+  assert.deepEqual(claimWrites(github), [["unassign", 150, "quiet"], ["minimize", "IC_7", "OUTDATED"]]);
+  assert.deepEqual(result.claims, { held: 3, released: [{ number: 150, logins: ["quiet"] }] });
+  assert.match(core.summaries[0], /3 open issues are held by an assignee\./);
+  assert.match(core.summaries[0], /Released after 5 quiet days \(1\)\n- issue #150 from @quiet/);
+});
+
+test("a dry-run sweep releases nothing but reports the claims it would release", async () => {
+  const github = claimSweepFixture();
+  const { result, core } = await invoke("run", { github, eventName: "workflow_dispatch", payload: { inputs: { dry_run: "true" } }, now: SWEEP_NOW });
+  assert.deepEqual(github.writes(), []);
+  assert.deepEqual(result.claims.released, [{ number: 150, logins: ["quiet"] }]);
+  assert.match(core.summaries[0], /Would release after 5 quiet days \(1\)/);
 });

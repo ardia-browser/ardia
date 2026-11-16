@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ardia_cli import control, endpoint, urlmatch
+from ardia_cli.printable import well_formed
 
 HOOKS_FILE = "hooks.json"
 LABEL = "dev.ardia.hooks"
@@ -582,7 +583,7 @@ class HookRunner:
             return None
         self.process = process
         pumps = [asyncio.ensure_future(self._pump(stream)) for stream in (process.stdout, process.stderr) if stream is not None]
-        payload = json.dumps(event, ensure_ascii=False, separators=(",", ":")).encode("utf-8") + b"\n"
+        payload = well_formed(json.dumps(event, ensure_ascii=False, separators=(",", ":"))).encode("utf-8") + b"\n"
         loop = asyncio.get_running_loop()
         deadline = loop.time() + self.hook.timeout
         timed_out = False

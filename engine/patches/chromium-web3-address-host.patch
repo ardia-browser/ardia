@@ -77,3 +77,36 @@
  
      // Host must not be empty for standard URLs.
      if (parsed.host.is_empty())
+--- a/third_party/blink/renderer/core/url_pattern/url_pattern_dummy_url_canon.cc
++++ b/third_party/blink/renderer/core/url_pattern/url_pattern_dummy_url_canon.cc
+@@ -70,6 +70,19 @@
+       input_utf8.AsStringView(), allow_ipv6_delimiters);
+ }
+ 
++bool IsEthereumAddressHostname(const String& hostname) {
++  if (hostname.length() != 42 || hostname[0] != '0' ||
++      (hostname[1] != 'x' && hostname[1] != 'X')) {
++    return false;
++  }
++  for (wtf_size_t i = 2; i < hostname.length(); ++i) {
++    if (!IsAsciiHexDigit(hostname[i])) {
++      return false;
++    }
++  }
++  return true;
++}
++
+ String StringFromCanonOutput(const url::CanonOutput& output,
+                              const url::Component& component) {
+   return String::FromUtf8(output.view().substr(component.begin, component.len));
+@@ -205,6 +218,10 @@
+ 
+   if (stripped.empty()) {
+     return base::ok(stripped);
++  }
++
++  if (IsEthereumAddressHostname(stripped)) {
++    return base::ok(stripped.ToAsciiLower());
+   }
+ 
+   dummy_url.SetHost(stripped);

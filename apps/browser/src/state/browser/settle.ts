@@ -8,7 +8,7 @@ import { livePinTables } from "../pins/pinChoices";
 import { settlePeeks } from "../peek/peek";
 import { pinnedTabsLeaveLive, settlePinHomes } from "../pins/pinHomes";
 import { mirrorPins } from "../pins/pinMirror";
-import { settleSharedPins } from "../pins/pinShare";
+import { returnPagesLeftBehind, settleSharedPins } from "../pins/pinShare";
 import { settleTileFolders } from "../pins/tileFolders";
 import { mirrorTopApps } from "../pins/topApps";
 import { mirrorTabs, pagesIntoSplits, unshareTabs } from "../tabs/tabShare";
@@ -36,6 +36,7 @@ export const SETTLE_STEPS: readonly (readonly [string, SettleStep])[] = [
   ["unshareTabs", unshareTabs],
   ["pagesIntoSplits", pagesIntoSplits],
   ["settleSharedPins", settleSharedPins],
+  ["returnPagesLeftBehind", returnPagesLeftBehind],
   ["settleTileFolders", settleTileFolders],
   ["mirrorPins", mirrorPins],
   ["mirrorTopApps", mirrorTopApps],

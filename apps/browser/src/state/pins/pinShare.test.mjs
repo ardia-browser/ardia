@@ -56,15 +56,65 @@ test("clicking the frozen copy in A pulls the page back; B keeps it frozen", () 
   assert.equal(pages("https://mail.com").length, 1);
 });
 
-test("B switching to another tab leaves the page in B until another window asks", () => {
+test("B switching to another tab gives the page back to A, which was showing it frozen (Arc)", () => {
+  reset();
+  const { a, b, mail } = twoWindows();
+  const copy = tileOf(b, "https://mail.com");
+  S().activate(copy);
+  const other = model.viewTabIds(S(), b).find((id) => !S().tabs[id].pin);
+  S().activate(other);
+  assert.equal(S().tabs[mail].windowId, a, "the same page is back in A, no reload");
+  assert.equal(shown(a), mail, "A shows it live");
+  assert.equal(loaded(mail), true);
+  assert.equal(shown(b), other);
+  assert.equal(tileOf(b, "https://mail.com"), copy, "B's tile slot keeps a copy");
+  assert.equal(S().tabs[copy].page.holderId, mail, "frozen on A's page, unshown");
+  assert.equal(pages("https://mail.com").length, 1);
+  S().activate(copy);
+  assert.equal(S().tabs[mail].windowId, b, "selecting it in B again takes it back");
+  assert.equal(S().tabs[shown(a)].page.holderId, mail, "and A shows it frozen again");
+});
+
+test("B switching away keeps the page in B when no window shows it frozen", () => {
   reset();
   const { a, b, mail } = twoWindows();
   S().activate(tileOf(b, "https://mail.com"));
-  const other = model.viewTabIds(S(), b).find((id) => !S().tabs[id].pin);
-  S().activate(other);
-  assert.equal(S().tabs[mail].windowId, b, "it stays");
+  S().activate(model.viewTabIds(S(), a).find((id) => !S().tabs[id].pin));
+  S().activate(model.viewTabIds(S(), b).find((id) => !S().tabs[id].pin));
+  assert.equal(S().tabs[mail].windowId, b, "nobody is looking at it, so it stays put");
   assert.equal(loaded(mail), true);
-  assert.equal(S().tabs[shown(a)].page.holderId, mail, "A still shows it frozen");
+});
+
+test("B switching from one shared page to another that A holds swaps both back the right way", () => {
+  reset();
+  const { a, b, mail, docs } = twoWindows();
+  S().activate(tileOf(b, "https://mail.com"));
+  assert.equal(S().tabs[mail].windowId, b);
+  S().activate(tileOf(b, "https://docs.com"));
+  assert.equal(S().tabs[docs].windowId, b, "docs moved to B");
+  assert.equal(shown(b), docs);
+  assert.equal(S().tabs[mail].windowId, a, "mail went back to A, which still showed it frozen");
+  assert.equal(shown(a), mail);
+  assert.equal(pages("https://mail.com").length, 1);
+  assert.equal(pages("https://docs.com").length, 1);
+});
+
+test("with three windows showing it frozen, the page goes to the one focused last", () => {
+  for (const pick of ["a", "c"]) {
+    reset();
+    const { a, b, mail } = twoWindows();
+    const c = S().createWindow({ url: "https://c.com" });
+    S().activate(tileOf(c, "https://mail.com"));
+    S().activate(tileOf(b, "https://mail.com"));
+    assert.equal(S().tabs[mail].windowId, b);
+    const target = pick === "a" ? a : c;
+    S().setFocusedWindow(target);
+    S().setFocusedWindow(b);
+    S().activate(model.viewTabIds(S(), b).find((id) => !S().tabs[id].pin));
+    assert.equal(S().tabs[mail].windowId, target, `window ${pick} was focused after the other`);
+    assert.equal(shown(target), mail);
+    assert.equal(pages("https://mail.com").length, 1);
+  }
 });
 
 test("closing B while it holds the page returns the page to A in place, no reload", () => {
@@ -134,10 +184,11 @@ test("a window that gets the pin selected implicitly shows it frozen instead of 
   const other = shown(b);
   S().activate(copy);
   S().activate(other);
+  assert.equal(S().tabs[mail].windowId, a, "B switched away, so A has the page again");
   S().closeTab(other);
-  assert.equal(S().tabs[mail].windowId, b);
-  const frozen = shown(a);
-  assert.equal(S().tabs[frozen].page.holderId, mail);
+  assert.equal(S().tabs[mail].windowId, a, "B selecting the pin by closing its tab doesn't take the page");
+  assert.equal(shown(b), copy);
+  assert.equal(S().tabs[copy].page.holderId, mail, "B shows it frozen");
   assert.equal(pages("https://mail.com").length, 1);
 });
 

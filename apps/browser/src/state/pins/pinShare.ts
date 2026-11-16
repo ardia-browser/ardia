@@ -7,6 +7,7 @@ import { sharedListTab } from "../tabs/tabShare";
 import type { BrowserWindow, Tab, TabGroup, TabLive } from "../browser/types";
 import { isRegularWindow } from "../windows/small";
 import { isTopApp, sameTopApp, sharingChanged } from "./topApps";
+import { noteSharedPageReturned } from "../telemetry/tabSleepCounts";
 
 
 export function shares(s: BrowserState, t: Tab | undefined): t is Tab {
@@ -267,6 +268,14 @@ export function handPagesOutOfProfile(s: BrowserState, profileId: string): Brows
   return next;
 }
 
+function focusedLast(s: BrowserState, copies: Tab[]): Tab {
+  const rank = (c: Tab) => {
+    const at = s.ui.focusOrder.indexOf(c.windowId);
+    return at < 0 ? Number.MAX_SAFE_INTEGER : at;
+  };
+  return copies.reduce((x, y) => (rank(y) < rank(x) ? y : x));
+}
+
 export function returnSharedPages(s: BrowserState, windowId: string): BrowserState {
   const w = s.windows[windowId];
   if (!isRegularWindow(w) || !frozenIds(s).length) return s;
@@ -274,16 +283,28 @@ export function returnSharedPages(s: BrowserState, windowId: string): BrowserSta
   for (const id of w.tabIds) {
     const t = next.tabs[id];
     if (!t || !hasPage(t)) continue;
-    const order = next.ui.focusOrder;
     const copies = frozenCopiesOf(next, id).filter((c) => c.windowId !== windowId && next.windows[c.windowId]);
     if (!copies.length) continue;
-    const rank = (c: Tab) => {
-      const at = order.indexOf(c.windowId);
-      return at < 0 ? Number.MAX_SAFE_INTEGER : at;
-    };
-    const target = copies.reduce((x, y) => (rank(y) < rank(x) ? y : x));
-    const swapped = swapPinPage(next, target.id);
+    const swapped = swapPinPage(next, focusedLast(next, copies).id);
     if (swapped) next = swapped.state;
   }
   return next;
+}
+
+export function returnPagesLeftBehind(s: BrowserState, prev: BrowserState): BrowserState | null {
+  if (s.windows === prev.windows || !frozenIds(s).length) return null;
+  let next = s;
+  for (const was of Object.values(prev.windows)) {
+    const w = s.windows[was.id];
+    if (!w || (w.activeTabIds === was.activeTabIds && w.profileId === was.profileId)) continue;
+    const left = next.tabs[was.activeTabIds[was.profileId] ?? ""];
+    if (!left || left.windowId !== w.id || !hasPage(left) || shownIn(next, left)) continue;
+    const waiting = frozenCopiesOf(next, left.id).filter((c) => shownIn(next, c) && holderOf(next, c.id)?.id === left.id);
+    if (!waiting.length) continue;
+    const swapped = swapPinPage(next, focusedLast(next, waiting).id);
+    if (!swapped) continue;
+    next = swapped.state;
+    noteSharedPageReturned();
+  }
+  return next === s ? null : next;
 }

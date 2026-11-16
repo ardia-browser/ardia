@@ -1,6 +1,6 @@
 import { takeCleanUpCounts } from "./cleanUpCounts";
 
-const none = () => ({ captureIndicatorsCleared: 0, pinnedTabsSleptByMemorySaver: 0, tabsSleptOverBudget: 0, tabsSleptOverBudgetReopened: 0, tabsOverBudgetSkippedLoading: 0, tabsOverBudgetAsksPassedOn: 0, topAppsKeptRunning: 0, topAppsUnloadedFromMenu: 0 });
+const none = () => ({ captureIndicatorsCleared: 0, pinnedTabsSleptByMemorySaver: 0, tabsSleptOverBudget: 0, tabsSleptOverBudgetReopened: 0, tabsOverBudgetSkippedLoading: 0, tabsOverBudgetAsksPassedOn: 0, topAppsKeptRunning: 0, topAppsUnloadedFromMenu: 0, sharedPagesReturned: 0 });
 
 let pending = none();
 
@@ -51,6 +51,10 @@ export function noteTopAppUnloadedFromMenu() {
   pending.topAppsUnloadedFromMenu++;
 }
 
+export function noteSharedPageReturned() {
+  pending.sharedPagesReturned++;
+}
+
 export function takeTabSleepCounts() {
   const taken = pending;
   pending = none();
@@ -59,6 +63,7 @@ export function takeTabSleepCounts() {
     pinned_tabs_slept_by_memory_saver: taken.pinnedTabsSleptByMemorySaver,
     top_app_closes_kept_running: taken.topAppsKeptRunning,
     top_apps_unloaded_from_menu: taken.topAppsUnloadedFromMenu,
+    shared_pages_returned: taken.sharedPagesReturned,
     ...takeProfileUnloadCounts(),
     ...takeCleanUpCounts(),
     tabs_slept_over_budget: taken.tabsSleptOverBudget,

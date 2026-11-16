@@ -1,27 +1,29 @@
 import { View } from "react-native";
-import { currentSettings } from "../../state/browser/current";
 import { useSidebarSide } from "../../state/browser/hooks";
 import { updateSettings } from "../../state/settings/actions";
 import { resetSidebarWidth } from "../../state/sidebar/actions";
 import { useResizeDrag } from "./useResizeDrag";
 import { setLiveSidebarWidth } from "../../state/sidebar/sidebarUi";
 import { noteSidebarResize } from "../../state/telemetry/sidebarResizeCounts";
-import { SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH, SIDEBAR_RESIZE_HANDLE } from "./tokens";
+import { SIDEBAR_MIN_WIDTH, SIDEBAR_RESIZE_HANDLE } from "./tokens";
+import { keptSidebarWidth, useShownSidebarWidth, useSidebarWidthLimit } from "../../state/sidebar/shownWidth";
 
 const HALF = SIDEBAR_RESIZE_HANDLE.width / 2;
 
 export function ResizeHandle({ windowId }: { windowId: string }) {
   const right = useSidebarSide(windowId) === "right";
+  const shown = useShownSidebarWidth(windowId);
+  const limit = useSidebarWidthLimit(windowId);
   const handlers = useResizeDrag({
     min: SIDEBAR_MIN_WIDTH,
-    max: SIDEBAR_MAX_WIDTH,
+    max: limit,
     direction: right ? -1 : 1,
-    saved: () => currentSettings().sidebarWidth,
+    saved: () => shown,
     pointerFromEdge: (e) => e.nativeEvent.locationX - HALF,
     onLive: (w) => setLiveSidebarWidth(windowId, w),
     onCommit: (w, dragged) => {
       if (dragged) noteSidebarResize();
-      updateSettings({ sidebarWidth: w });
+      updateSettings({ sidebarWidth: keptSidebarWidth(w, limit) });
     },
   });
   return (

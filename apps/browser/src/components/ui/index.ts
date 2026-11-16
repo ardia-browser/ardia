@@ -35,15 +35,18 @@ export { TooltipAbove } from "./TooltipAbove";
 export { Offstage, useHover, useOffstage, useTooltip } from "./useHover";
 export {
   ActivitySpinner,
+  ClipView,
   ContextMenuArea,
   DIA_SPECTRUM,
   DockSelection,
   FadeLabel,
   FileDropArea,
+  FolderIcon,
   MagnifyArea,
   Meadow,
   meadowTextStyle,
   MouseArea,
+  PageCoverGate,
   OutsidePressArea,
   PopoverBubble,
   PowerUp,
@@ -60,6 +63,8 @@ export {
   type DroppedItem,
   type DropUpdate,
   type MagnifyUpdate,
+  type MeadowIntro,
+  type MeadowIntroEvent,
   type MeadowTone,
   type SurfaceProps,
   type SwipeAreaHandle,
@@ -67,3 +72,4 @@ export {
   type SymbolProps,
   type WebViewHandle,
 } from "./native";
+export { OverPage } from "./OverPage";

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { cleanProperties, errorCode, errorMessage, errorType, nativeCrashExceptions, nativeFrames, parseStack, scrubText } from "./sanitize.ts";
-import { customColorProfiles, settingsSnapshot, themeFileSnapshot } from "./settingsSnapshot.ts";
+import { customColorProfiles, narrowWindows, settingsSnapshot, themeFileSnapshot } from "./settingsSnapshot.ts";
 const { DEFAULT_SETTINGS, SETTING_SPECS } = await import("../settings/settings.ts");
 
 const leaks = (text, ...secrets) => secrets.filter((s) => text.includes(s));
@@ -286,6 +286,22 @@ test("the snapshot says whether text adjusts to the colour, and how many profile
   assert.deepEqual(cleanProperties(counted), counted);
 });
 
+test("the snapshot counts browser windows narrower than the old 720 point minimum and those that narrow the sidebar, never their size", () => {
+  const frame = (width) => [10, 20, width, 600];
+  const counted = narrowWindows({
+    a: { kind: "main", frame: frame(500) },
+    b: { kind: "private", frame: frame(719) },
+    c: { kind: "main", frame: frame(720) },
+    d: { kind: "small", frame: frame(400) },
+    e: { kind: "main", frame: null },
+    f: { kind: "main", frame: frame(600), fullScreen: 1700000000000 },
+    g: { kind: "main", frame: frame(640) },
+  }, 400);
+  assert.deepEqual(counted, { narrow_windows: "3", sidebar_narrowed_windows: "2" });
+  assert.deepEqual(cleanProperties(counted), counted);
+  assert.deepEqual(narrowWindows({ a: { kind: "main", frame: frame(500) } }, 190), { narrow_windows: "1", sidebar_narrowed_windows: "0" });
+});
+
 test("a value the spec doesn't allow is left out rather than sent", () => {
   const snap = settingsSnapshot({ ...DEFAULT_SETTINGS, interfaceStyle: "https://not-an-option.example" });
   assert.equal(snap.setting_interfaceStyle, undefined);
@@ -316,4 +332,21 @@ test("the theme file snapshot is flags and counts only, and survives sanitizing"
   });
   assert.equal(JSON.stringify(snap).includes("nord") || JSON.stringify(snap).includes("Avenir"), false);
   assert.deepEqual(cleanProperties(snap), snap);
+});
+
+test("the snapshot reports the interface size in whole percent with its default, and counts narrow windows in root points", async () => {
+  const { useInterfaceScale } = await import("../settings/interfaceScale.ts");
+  useInterfaceScale.setState({ scale: 1.25 });
+  try {
+    const snap = settingsSnapshot(DEFAULT_SETTINGS);
+    assert.equal(snap.setting_interfaceScale, "125");
+    assert.equal(snap.default_interfaceScale, "100");
+    assert.deepEqual(cleanProperties(snap), snap);
+    const wide = { kind: "main", frame: [0, 0, 800, 700] };
+    assert.deepEqual(narrowWindows({ a: wide }, 190), { narrow_windows: "1", sidebar_narrowed_windows: "0" }, "800 window points are 640 root points at 125%");
+    assert.deepEqual(narrowWindows({ a: wide }, 400), { narrow_windows: "1", sidebar_narrowed_windows: "1" });
+  } finally {
+    useInterfaceScale.setState({ scale: 1 });
+  }
+  assert.equal(settingsSnapshot(DEFAULT_SETTINGS).setting_interfaceScale, "100");
 });

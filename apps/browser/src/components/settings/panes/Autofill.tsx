@@ -9,6 +9,7 @@ import {
   type SavedCard,
 } from "../../../state/site/autofill";
 import { orWarn } from "../../../lib/fallback";
+import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 import { confirm, copyText } from "../../../state/app/system";
 import { Box, Button, DialogActions, DialogTitle, type Option, PopUp, Sheet, space, Symbol, Text, TextField, Toggle } from "../../ui";
 import { useState } from "react";
@@ -16,8 +17,9 @@ import { View } from "react-native";
 import { useTheme } from "../../ui/theme";
 import { currentEngineProfile } from "../../../state/browser/current";
 import { Group, ProfilePicker, Row, SectionHeader, useSettingsProfile } from "../Form";
+import { keptByExtensionNote } from "../keptByExtension";
 import { NetworkBadge } from "../../site/Autofill";
-import { addresses as addressList, autofillEnabled, cards as cardList, setAutofillFor } from "../../../state/settings/paneData";
+import { addresses as addressList, autofillEnabled, autofillToggleAsked, cards as cardList, setAutofillFor } from "../../../state/settings/paneData";
 import { useResource } from "../../../state/settings/resources";
 import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
 
@@ -28,25 +30,27 @@ export function AutofillPane({ profileId: initial }: { profileId?: string | null
   const [addresses, reloadAddresses] = useResource(addressList, profile);
   const [cards, reloadCards] = useResource(cardList, profile);
   const [enabled] = useResource(autofillEnabled, profile);
+  const [addressesAsked] = useResource(autofillToggleAsked, profile, "addresses");
+  const [cardsAsked] = useResource(autofillToggleAsked, profile, "cards");
 
   const load = () => {
     void reloadAddresses();
     void reloadCards();
   };
-  const toggle = (kind: "addresses" | "cards", on: boolean) => void setAutofillFor(profile, kind, on);
+  const toggle = (kind: Parameters<typeof setAutofillFor>[1], on: boolean) => setAutofillFor(profile, kind, on);
 
   return (
     <View>
       <SectionHeader
         title="Autofill"
-        description="Addresses and cards you save are offered when you fill in a form, separately for each profile. Card numbers are kept in your macOS Keychain."
+        description={`Addresses and cards you save are offered when you fill in a form, separately for each profile. Card numbers are kept in ${PLATFORM_TERMS.secretStore}.`}
         action={<ProfilePicker value={profileId} onChange={setProfileId} />}
       />
       <Group>
-        <Row anchor="autofill.addresses">
+        <Row anchor="autofill.addresses" description={keptByExtensionNote(enabled?.addresses, addressesAsked)}>
           <Toggle value={enabled?.addresses ?? true} disabled={!enabled} onChange={(v) => toggle("addresses", v)} />
         </Row>
-        <Row anchor="autofill.cards">
+        <Row anchor="autofill.cards" description={keptByExtensionNote(enabled?.cards, cardsAsked)}>
           <Toggle value={enabled?.cards ?? true} disabled={!enabled} onChange={(v) => toggle("cards", v)} />
         </Row>
       </Group>
@@ -239,7 +243,7 @@ function CardSheet({ profile, saved, onChanged }: { profile: string; saved?: Sav
     closeSettingsSheet();
   };
   const remove = async () => {
-    if (!saved || !(await confirmDelete("Delete this card?", "Its number is removed from your Keychain too."))) return;
+    if (!saved || !(await confirmDelete("Delete this card?", `Its number is removed from ${PLATFORM_TERMS.secretStore} too.`))) return;
     await deleteCard(profile, saved.id).catch(orWarn(undefined));
     onChanged();
     closeSettingsSheet();

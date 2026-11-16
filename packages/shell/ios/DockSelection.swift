@@ -1,4 +1,5 @@
 import AppKit
+import ArdiaCore
 import CoreImage
 import ExpoModulesCore
 
@@ -33,6 +34,7 @@ final class DockSelection: ExpoView {
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     wantsLayer = true
+    NotificationCenter.default.addObserver(self, selector: #selector(interfaceScaleDidChange), name: .ArdiaInterfaceScaleDidChange, object: nil)
     layerUsesCoreImageFilters = true
     tile.masksToBounds = true
     tile.addSublayer(background)
@@ -78,6 +80,10 @@ final class DockSelection: ExpoView {
     apply()
   }
 
+  @objc private func interfaceScaleDidChange() {
+    apply()
+  }
+
   private func apply() {
     guard let layer else { return }
     CATransaction.begin()
@@ -98,7 +104,7 @@ final class DockSelection: ExpoView {
     lift.isHidden = !glass || colorRing
     rim.isHidden = !glass || colorRing
     let radius = min(cornerRadius, bounds.width / 2)
-    let scale = window?.backingScaleFactor ?? 2
+    let scale = window == nil ? 2 : backingDensity
     let width = (strokeWidth * scale).rounded() / scale
     let big = bounds.insetBy(dx: -bounds.width * 0.75, dy: -bounds.height * 0.75)
     let blurred = kind == "blur" ? source.flatMap(BlurredIcon.of) : nil

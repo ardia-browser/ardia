@@ -57,7 +57,7 @@ export function parseMatchPattern(pattern: string): MatchSpec | { error: string 
   return { all: false, schemes, host: host.toLowerCase(), sub, port, file: false, path: rest.slice(end) };
 }
 
-function globMatches(glob: string, text: string): boolean {
+export function globMatches(glob: string, text: string): boolean {
   let g = 0;
   let t = 0;
   let star = -1;

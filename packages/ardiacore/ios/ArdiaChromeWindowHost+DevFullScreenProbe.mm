@@ -38,7 +38,8 @@ NSDictionary *ProbeFrame(NSWindow *window, ArdiaWindowFullScreen *state, CFTimeI
   if (!NSEqualSizes(before, NSZeroSize) && !NSEqualSizes(before, size)) {
     NSMutableArray<NSView *> *views = [NSMutableArray arrayWithArray:content.subviews];
     for (NSUInteger i = 0; i < views.count && i < 64; i++) {
-      if (NSEqualSizes(views[i].frame.size, before)) {
+      const NSSize seen = [views[i] convertRect:views[i].bounds toView:content].size;
+      if (fabs(seen.width - before.width) < 0.5 && fabs(seen.height - before.height) < 0.5) {
         frame[@"relayout"] = @YES;
         break;
       }

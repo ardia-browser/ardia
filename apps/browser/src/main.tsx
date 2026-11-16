@@ -1,4 +1,5 @@
 import "./platform/nativeEvents";
+import "./state/tabs/profileMoveCheck";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { AppRegistry, unstable_batchedUpdates } from "react-native";
 import { WindowRoot } from "./App";

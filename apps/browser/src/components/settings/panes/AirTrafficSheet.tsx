@@ -100,7 +100,7 @@ export function RuleSheet({ rule }: { rule?: AirTrafficRule }) {
       </Line>
       {kind !== "any" ? (
         <View style={FIELD_BELOW}>
-          <TextField value={text} onChangeText={setText} placeholder={kind === "site" ? "github.com" : "https://*.example.com/docs/*"} mono={kind === "pattern"} onSubmit={save} onEscape={closeSettingsSheet} />
+          <TextField value={text} onChangeText={setText} placeholder={kind === "site" ? "github.com" : "*github* or https://*.example.com/docs/*"} mono={kind === "pattern"} onSubmit={save} onEscape={closeSettingsSheet} />
         </View>
       ) : null}
       <Line label="Open in">

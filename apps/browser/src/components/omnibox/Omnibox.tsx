@@ -2,7 +2,7 @@ import { displayUrl, asksForBackspace, keywordBySpace, resolveInput, searchUrl, 
 import { Symbol, useTheme } from "../ui";
 import { copyText, pickFiles } from "../../state/app/system";
 import { chooseFromMenu } from "../../state/app/menuChoice";
-import { startDictation } from "../../state/omnibox/textInput";
+import { dictationAvailable, startDictation } from "../../state/omnibox/textInput";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { findNodeHandle, type TextInput, type View } from "react-native";
 import { journeyBarCommitted, journeyBarFocused, journeyKeystroke, journeyNavigate, journeySuggestions } from "../../state/telemetry/journeys";
@@ -75,9 +75,9 @@ export function Omnibox({
   useEffect(() => () => bangEnter.cancel(), [bangEnter]);
   useEffect(() => bangEnter.cancel(), [bangEnter, typed, selected, scope]);
   const root = useRef<View>(null);
-
   const { items, completion, inline, shownCompletion, value, selectedIndex, current, tabScope, previewing } = useBarItems({
     input,
+    caret: () => selection.current,
     typed,
     edited,
     scope,
@@ -375,7 +375,7 @@ export function Omnibox({
         <BottomRow
           hero={hero}
           addChip={<AddChip onPress={barActions.openTabOrFile} />}
-          onDictate={barActions.dictate}
+          onDictate={dictationAvailable() ? barActions.dictate : undefined}
           label={destinationLabel(current)}
           enabled={!hero || !!typed.trim() || previewing}
           onGo={barActions.choose}

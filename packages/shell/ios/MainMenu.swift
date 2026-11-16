@@ -550,5 +550,7 @@ enum MainMenu {
       history.addItem(groupsHeader)
       for entry in state.recentlyClosedGroups { history.addItem(CommandItem(entry.title, "restoreClosed", arg: entry.id)) }
     }
+    history.addItem(.separator())
+    history.addItem(CommandItem(.clearRecentlyClosed))
   }
 }

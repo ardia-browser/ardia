@@ -25,6 +25,7 @@ export function StripGroup({
   geometry,
   from,
   chip,
+  tabWidth,
   activeId,
   chipWidth,
   onChipWidth,
@@ -35,6 +36,7 @@ export function StripGroup({
   geometry: DragGeometry;
   from: number;
   chip: number;
+  tabWidth: (tabId: string) => number;
   activeId: string;
   chipWidth: number | undefined;
   onChipWidth: (width: number) => void;
@@ -131,6 +133,7 @@ export function StripGroup({
           geometry={members}
           from={expanded ? i : -1}
           chip={chip}
+          tabWidth={tabWidth}
           activeId={activeId}
           measured={m.kind !== "folder" || folderMeasured(m.id)}
           tuck={tuckable && i === shown ? tuck : undefined}
@@ -157,7 +160,7 @@ export function StripGroup({
             }}
             style={{ height: ITEM_HEIGHT, flexDirection: "row", alignItems: "center", paddingLeft: GROUP_CHIP_PAD.left, paddingRight: GROUP_CHIP_PAD.right }}
           >
-            <StripGroupIcon icon={group.icon} tint={tint} />
+            <StripGroupIcon icon={group.icon} color={group.color} open={expanded || onto} />
             <Text numberOfLines={1} style={{ marginLeft: GROUP_TITLE_GAP, maxWidth: GROUP_TITLE_MAX, ...font.small, fontWeight: weight.semibold, color: tint ?? (shown >= 0 ? theme.textPrimary : theme.textTab) }}>
               {group.name || `${group.tabIds.length} ${group.tabIds.length === 1 ? "Tab" : "Tabs"}`}
             </Text>

@@ -6,7 +6,7 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId, bookmarkProfileId, inPinnedContainer, isIncognitoProfile, pinnedSectionTitle, pinSection, tabTitle, togglePinTitle, viewTabIds, tabLayoutOf } from "../browser/model";
 import { awayFromPin, selectedTabIds } from "../pins/organize";
 import { groupOf } from "../pins/tabGrouping";
-import { splitOf, splitRowPanes } from "../splits/splits";
+import { splitOf, splitRowPanes, splitViewAvailable } from "../splits/splits";
 import { closeSplitView, openSplitPane } from "../splits/actions";
 import type { Tab } from "../browser/types";
 import { bookmarkTabs, copyUrls, editPinnedPage, newGroupWithSelection, openIconPicker, startRename, toggleBookmarkInWindow } from "./actions";
@@ -25,6 +25,8 @@ import { openMultiMenu } from "./multiTabMenu";
 import { tileFolderOf } from "../pins/tileFolders";
 import { sendTabFromMenu, sendTabMenuItem } from "../sync/menu";
 import { pageUnread } from "../tabs/unread";
+import { closeIntent, openPages } from "../tabs/tabs";
+import { noteTopAppUnloadedFromMenu } from "../telemetry/tabSleepCounts";
 import { ALL_UNREAD_TITLE, canChooseSiteUnread, isUnreadSiteHidden, showUnreadCounts, toggleSiteUnread, unreadSiteTitle } from "../tabs/unreadSites";
 
 const store = () => useBrowser.getState();
@@ -84,7 +86,7 @@ function openItems(s: BrowserState, tab: Tab, f: Facts): MenuItem[] {
   return [
     ...(f.split
       ? [{ id: "unsplit", title: "Remove from Split View", symbol: "rectangle.split.2x1.slash" }]
-      : f.section === "tile"
+      : f.section === "tile" || !splitViewAvailable
         ? []
         : [{ id: "split", title: "Open as Split", symbol: "rectangle.split.2x1", ...hintWhen(f.active, "openSplitPane", s) }]),
     { id: "duplicate", title: "Duplicate", symbol: "plus.square.on.square" },
@@ -150,8 +152,14 @@ function unreadItems(s: BrowserState, tab: Tab): MenuItem[] {
   return [{ id: "siteUnread", title: unreadSiteTitle(hidden), symbol: "app.badge" }];
 }
 
-function closeItems(f: Facts): MenuItem[] {
-  if (f.housed) return [];
+function unloadTopApp(tabId: string) {
+  const s = store();
+  noteTopAppUnloadedFromMenu();
+  s.closeTabs(closeIntent(s, tabId).ids, { keepTopApps: false });
+}
+
+function closeItems(s: BrowserState, tab: Tab, f: Facts): MenuItem[] {
+  if (f.housed) return f.section === "tile" && s.settings.keepTopAppsRunning && openPages(s, tab.id).length > 0 ? [{ id: "unloadTopApp", title: "Unload", symbol: "moon.zzz" }] : [];
   return [
     { id: "close", title: "Close", symbol: "xmark", ...hintWhen(f.active, "closeTab") },
     ...(f.split ? [{ id: "closeSplit", title: "Close Split View" }] : []),
@@ -194,7 +202,7 @@ export function tabMenuItems(s: BrowserState, windowId: string, tab: Tab, f: Fac
       ...pictureInPictureItems(tab),
       ...unreadItems(s, tab),
     ],
-    closeItems(f),
+    closeItems(s, tab, f),
   );
 }
 
@@ -261,6 +269,7 @@ function runTabChoice(windowId: string, tab: Tab, f: Facts, choice: string | Des
   else if (choice === "copyMd") copyUrls([tab.id], true);
   else if (choice === "bookmark") bookmarkTab(windowId, tab.id);
   else if (choice === "close") void closeTab(tab.id);
+  else if (choice === "unloadTopApp") unloadTopApp(tab.id);
   else if (choice === "closeSplit" && f.split) closeSplitView(f.split.id);
   else if (choice === "closeOthers") s.closeTabs(f.others);
   else if (choice === "closeAbove") s.closeTabs(f.above);

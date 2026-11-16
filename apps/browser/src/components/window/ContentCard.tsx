@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
 import { startChromeTabs } from "../../state/tabs/chromeTabs";
 import { useIsSmallWindow, useSplitOf } from "../../state/windows/card";
-import { usePeeks } from "../../state/peek/hooks";
+import { usePeekOpenedFrom } from "../../state/peek/hooks";
 import { useActiveTabId, useSettings, useWindowFullScreen, useWindowId } from "../../state/browser/hooks";
 import { useBookmarksBarHeight } from "../bookmarks/barSize";
 import { useBookmarksBarMode } from "../../state/bookmarks/hooks";
@@ -13,7 +13,7 @@ import { useFullscreenTab } from "../../state/tabs/pageState";
 import { DropTargets, SplitDividers, SplitFocusRing, SplitToast, type WindowShape } from "../split/SplitChrome";
 import { dockMoving, usePeekSpan, whenDockStill } from "../../state/windows/dockMotion";
 import { FrozenPage } from "./FrozenPage";
-import { setCardAnchor, setUrlAnchor, useAddressBarInSidebar, useMinimalism, useTabLayout, watchToolbarExtensionsWidth, frameCornerRadius, onFullScreenLeft, windowFrame } from "../../state/windows/layout";
+import { setCardAnchor, setUrlAnchor, useAddressBarInSidebar, useCardCaptionRoom, useMinimalism, usePageFrameInset, useTabLayout, watchToolbarExtensionsWidth, onFullScreenLeft, onInterfaceScaleChange, windowRootShape } from "../../state/windows/layout";
 import { startSelectionTools } from "../../state/site/selection";
 import { startMedia } from "../../state/media/pip";
 import { urlFieldRight } from "../toolbar/Toolbar";
@@ -46,6 +46,7 @@ export function ContentCard() {
   const barMode = useBookmarksBarMode(windowId);
   const toolbarRow = useToolbarRow();
   const barHeight = useBookmarksBarHeight();
+  const captionRoom = useCardCaptionRoom(usePageFrameInset());
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [origin, setOrigin] = useState<{ x: number; y: number } | null>(null);
   const [windowShape, setWindowShape] = useState<WindowShape | null>(null);
@@ -56,7 +57,7 @@ export function ContentCard() {
   useEffect(startMedia, []);
   useEffect(startSelectionTools, []);
   useEffect(startPeeks, []);
-  const peekId = usePeeks((p) => p[windowId]?.tabId);
+  const peekId = usePeekOpenedFrom(activeId ?? "");
   const peekFullscreen = !!peekId && fullscreenTab === peekId;
   useEffect(() => {
     if (fullscreenTab && peekId && !peekFullscreen) dismissPeek(windowId);
@@ -71,7 +72,8 @@ export function ContentCard() {
   const geometryFor = (rect: Rect | undefined): ToolbarGeometry => {
     if (chrome.kind === "none") return NO_TOOLBAR;
     const leading = !!rect && rect.x === 0 && rect.y === 0;
-    return toolbarGeometry({ sidebarButton: leading && showSidebarButton });
+    const trailing = !!rect && rect.y === 0 && rect.x + rect.width === size.width ? captionRoom : 0;
+    return toolbarGeometry({ sidebarButton: leading && showSidebarButton, trailing });
   };
 
   const focusedRect = activeId ? panes[activeId] : undefined;
@@ -82,10 +84,10 @@ export function ContentCard() {
       setUrlAnchor(windowId, {
         left: origin.x + focusedRect.x + g.urlLeft,
         top: origin.y + focusedRect.y,
-        width: focusedRect.width - g.urlLeft - urlFieldRight(!!split, extensionsWidth, toolbarRow),
+        width: focusedRect.width - g.urlLeft - urlFieldRight(!!split, extensionsWidth, toolbarRow) - g.trailing,
       });
     return watchToolbarExtensionsWidth(windowId, place);
-  }, [origin, focusedRect?.x, focusedRect?.y, focusedRect?.width, tabLayout, chrome.kind, !!split, showSidebarButton, toolbarRow]);
+  }, [origin, focusedRect?.x, focusedRect?.y, focusedRect?.width, tabLayout, chrome.kind, !!split, showSidebarButton, toolbarRow, captionRoom]);
 
   useEffect(() => {
     if (origin && size.width > 0) setCardAnchor(windowId, { left: origin.x, top: origin.y, width: size.width, height: size.height });
@@ -93,10 +95,11 @@ export function ContentCard() {
 
   const settled = useRef<{ width: number; height: number } | null>(null);
   const measureWindowShape = () =>
-    void Promise.all([windowFrame(windowId), frameCornerRadius(windowId)]).then(([f, radius]) => {
-      if (f) setWindowShape((prev) => (prev && prev.radius === radius && sameSize(prev, { width: f[2], height: f[3] }) ? prev : { width: f[2], height: f[3], radius }));
+    void windowRootShape(windowId).then((shape) => {
+      if (shape) setWindowShape((prev) => (prev && prev.radius === shape.radius && sameSize(prev, shape) ? prev : shape));
     });
   useEffect(() => onFullScreenLeft(windowId, measureWindowShape), [windowId]);
+  useEffect(() => onInterfaceScaleChange(measureWindowShape), [windowId]);
   const measure = (width: number, height: number) => {
     setSize((prev) => (sameSize(prev, { width, height }) ? prev : { width, height }));
     container.current?.measureInWindow((x, y) => setOrigin((prev) => (prev && prev.x === x && prev.y === y ? prev : { x, y })));
@@ -186,14 +189,13 @@ export function ContentCard() {
         />
       )}
       {!fullscreenTab && <DropTargets panes={panes} origin={origin} />}
-      {(!fullscreenTab || peekFullscreen) && !small && (
+      {!small && (
         <PeekOverlay
           windowId={windowId}
           width={size.width}
           height={size.height}
           origin={origin}
-          fullscreen={peekFullscreen}
-          page={(tabId, sourceId, width) => <PeekPage tabId={tabId} sourceId={sourceId} windowId={windowId} width={width} fullscreen={peekFullscreen} />}
+          page={(tabId, sourceId, width, shown, fullscreen) => <PeekPage tabId={tabId} sourceId={sourceId} windowId={windowId} width={width} shown={shown} fullscreen={fullscreen} />}
         />
       )}
       {!peekId && (

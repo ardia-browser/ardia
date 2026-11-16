@@ -34,6 +34,51 @@ for file in "$dmg" "$zip" "$feed" "$cli" "$cli.sha256"; do
   [ -f "$file" ] || die "no $file (scripts/release.sh $version first)"
   assets+=("$file")
 done
+linux="$dist/linux"
+if [ -d "$linux" ]; then
+  linux_package="$linux/Ardia-$version-linux-x64.tar.xz"
+  linux_cli="$linux/ardia-cli-$version-linux-x64.tar.gz"
+  linux_deb="$linux/Ardia-$version-linux-x64.deb"
+  linux_appimage="$linux/Ardia-$version-linux-x64.AppImage"
+  for file in "$linux_package" "$linux_package.sha256" "$linux_deb" "$linux_deb.sha256" "$linux_appimage" "$linux_appimage.sha256" "$linux_cli" "$linux_cli.sha256"; do
+    [ -f "$file" ] || die "$linux has no $(basename "$file") (scripts/linux/release.sh $version first, or remove $linux to publish without Linux)"
+    assets+=("$file")
+  done
+  provenance="$linux/provenance.txt"
+  [ -f "$provenance" ] || die "$linux has no provenance.txt"
+  grep -q '^engine key [0-9a-f]\{40\} (exact)' "$provenance" && ! grep -q 'uncommitted changes' "$provenance" \
+    || die "$linux is a Linux test build (an inexact engine or uncommitted changes, $provenance), not a release"
+  (cd "$linux" && shasum -a 256 -c --quiet "${linux_package##*/}.sha256" "${linux_deb##*/}.sha256" "${linux_appimage##*/}.sha256" "${linux_cli##*/}.sha256") \
+    || die "the Linux assets in $linux don't match their .sha256 files"
+  echo "PASS  the Linux tarball, .deb, AppImage and CLI join the release"
+else
+  echo "note: no $linux: the release ships without the Linux tarball"
+fi
+windows="$dist/windows"
+if [ -d "$windows" ]; then
+  windows_assets=()
+  for cpu in x64 arm64; do
+    windows_setup="Ardia-$version-windows-$cpu-setup.exe"
+    for file in "$windows/$windows_setup" "$windows/$windows_setup.sha256"; do
+      [ -f "$file" ] || die "$windows has no $(basename "$file") (the Release workflow's windows job makes them, or remove $windows to publish without Windows)"
+    done
+    windows_assets+=("$windows_setup")
+  done
+  windows_source="Ardia-$version-windows-source.tar.xz"
+  for file in "$windows/$windows_source" "$windows/$windows_source.sha256"; do
+    [ -f "$file" ] || die "$windows has no $(basename "$file"): the installers ship only beside their engine's source"
+  done
+  windows_assets+=("$windows_source")
+  stamped_version="$(python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1]))["version"])' "$windows/Ardia.build.json" 2>/dev/null)" \
+    || die "$windows has no readable Ardia.build.json"
+  [ "$stamped_version" = "$version" ] || die "the Windows installers in $windows are Ardia $stamped_version, not $version"
+  (cd "$windows" && for file in "${windows_assets[@]}"; do shasum -a 256 -c --quiet "$file.sha256" || exit 1; done) \
+    || die "the Windows files in $windows don't match their .sha256 files"
+  for file in "${windows_assets[@]}"; do assets+=("$windows/$file" "$windows/$file.sha256"); done
+  echo "PASS  the Windows installers and their engine's source join the release"
+else
+  echo "note: no $windows: the release ships without the Windows installers"
+fi
 item_channel="$(appcast channel "$feed" "$version")"
 [ "$item_channel" = "$channel" ] || die "$version's item in $feed is on the $item_channel channel, not $channel"
 [ -f "$dist/release-notes.md" ] || die "no $dist/release-notes.md"

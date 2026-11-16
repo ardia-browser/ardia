@@ -5,6 +5,7 @@ import type { FontWeight } from "../../lib/themeLook";
 import { ThemeContext } from "./theme";
 import { TextScopeContext } from "./Text";
 import { sidebarPoints } from "./look";
+import { singleLine } from "../../lib/singleLine";
 
 type NativeWeight = NonNullable<FadeLabelProps["weight"]>;
 
@@ -24,11 +25,11 @@ const WEIGHT_NAMES: Partial<Record<NativeWeight, "regular" | "medium" | "semibol
 
 const FADE_WIDTH = 24;
 
-export function FadeLabel({ weight, fadeWidth = FADE_WIDTH, ...props }: FadeLabelProps) {
+export function FadeLabel({ text, weight, fadeWidth = FADE_WIDTH, ...props }: FadeLabelProps) {
   useContext(ThemeContext);
   const inSidebar = useContext(TextScopeContext) === "sidebar";
   const look = activeLook();
   const name = WEIGHT_NAMES[weight ?? "regular"];
   const drawn = name ? NAMED[look.weights[name]] : weight;
-  return <NativeFadeLabel {...props} fadeWidth={inSidebar ? sidebarPoints(fadeWidth) : fadeWidth} weight={drawn ?? "regular"} fontFamily={look.family ?? ""} />;
+  return <NativeFadeLabel {...props} text={singleLine(text)} fadeWidth={inSidebar ? sidebarPoints(fadeWidth) : fadeWidth} weight={drawn ?? "regular"} fontFamily={look.family ?? ""} />;
 }

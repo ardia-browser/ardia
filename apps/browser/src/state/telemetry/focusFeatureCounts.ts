@@ -2,16 +2,11 @@ import { takeCaptureCounts } from "./captureCounts";
 import { takeChromeSettingsOpens } from "./chromeSettingsOpens";
 import { takeHiddenElementCounts } from "./hiddenElementCounts";
 import { takeMinimalismCounts } from "./minimalismCounts";
+import { takePageFocusReturns } from "./pageFocusReturns";
 import { takeReaderCounts } from "./readerCounts";
 import { takeWindowOcclusionCounts } from "./windowOcclusionCounts";
+import { takeBarLoadFocusCounts } from "./barLoadFocus";
 
 export function takeFocusFeatureCounts() {
-  return {
-    ...takeMinimalismCounts(),
-    ...takeReaderCounts(),
-    ...takeHiddenElementCounts(),
-    ...takeCaptureCounts(),
-    ...takeChromeSettingsOpens(),
-    ...takeWindowOcclusionCounts(),
-  };
+  return { ...takeMinimalismCounts(), ...takeReaderCounts(), ...takeHiddenElementCounts(), ...takeCaptureCounts(), ...takeChromeSettingsOpens(), ...takeWindowOcclusionCounts(), ...takePageFocusReturns(), ...takeBarLoadFocusCounts() };
 }

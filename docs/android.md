@@ -219,6 +219,14 @@ scripts/gradle-locked :<module>:assembleDebugAndroidTest   one module's device t
 scripts/gradle-locked connectedDebugAndroidTest --continue  every module's device tests on the one emulator
 ```
 
+A build is a Dev build unless it's given a release version: `-PardiaVersion=0.2.47-nightly.2` (or a stable `0.2.47`)
+makes that the app's versionName, the same version the Mac release carries (`docs/releasing.md` › Every platform). Its
+versionCode is `major × 100,000,000 + minor × 1,000,000 + patch × 1,000`, plus the nightly number or 999 for a
+stable, so every nightly of a version sorts below that stable and below the next version's nightlies
+(0.2.47-nightly.2 is 2047002, 0.2.47 is 2047999). The build stops on any other version string, or on a major over 20,
+a minor over 99 or a patch over 999, the most Google Play's limit of 2,100,000,000 leaves room for. Settings' footer
+reads the versionName: "Ardia 0.2.47 Nightly 2 (2047002)", "Ardia 0.2.47 (2047999)", or "Ardia Dev".
+
 Needs JDK 17 or later, the Android SDK (`ANDROID_HOME` or `local.properties`), NDK 27.1.12297006 and CMake 3.22.1. The
 first build downloads Gradle, Hermes, `react-android` (for `libjsi.so`) and `hermes-compiler`.
 
@@ -244,9 +252,11 @@ first build downloads Gradle, Hermes, `react-android` (for `libjsi.so`) and `her
   `ARDIA_CROSSCHECK_DIR` to keep the files. It runs on a Mac, not in CI.
 - `node apps/ios/scripts/bundle-shared.mjs --check` guards the bundles both phones run.
 - **CI** (`.github/workflows/android.yml`, on pull requests and pushes to `main` that touch `apps/android`, the
-  bundles, `packages/sync`, `packages/core` or the workflow, behind the vouch gate) builds the app and every test and
-  runs the unit tests in one job, and runs every module's instrumented tests on an API 35 emulator in another. It keeps
-  the test reports and the screen tour as artifacts.
+  bundles, `packages/sync`, `packages/core` or the workflow, behind the vouch gate) runs four things side by side:
+  the debug build with the unit tests, the release build, and every module's instrumented tests on API 35
+  emulators, split over three jobs (the app's tests in two halves, the other modules in the third). The build and
+  unit tests answer first; the emulator jobs are the last to finish. It keeps the test reports and the screen tour
+  as artifacts.
 
 ## Left for a person
 

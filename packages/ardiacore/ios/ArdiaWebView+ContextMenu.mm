@@ -249,9 +249,10 @@ NSDictionary *FindMenuItem(NSArray *items, NSString *label) {
     item[@"fileUrl"] = file.absoluteString;
   NSMutableDictionary *payload = [@{@"command" : @"share", @"text" : item[@"text"] ?: @"", @"share" : item} mutableCopy];
   NSArray<NSNumber *> *point = Field<NSArray>(share, @"point");
-  NSView *content = self.window.contentView;
-  if (point.count == 2 && content)
-    payload[@"anchor"] = @[ @(point[0].doubleValue - 1), @(NSHeight(content.frame) - point[1].doubleValue - 1), @2, @2 ];
+  if (point.count == 2 && self.window) {
+    const NSPoint inRoot = RootPointFromWindow(self.window, NSMakePoint(point[0].doubleValue, point[1].doubleValue));
+    payload[@"anchor"] = @[ @(inRoot.x - 1), @(inRoot.y - 1), @2, @2 ];
+  }
   [self emit:@"command" payload:payload];
 }
 

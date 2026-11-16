@@ -17,7 +17,7 @@ import { updateSettings } from "../../state/settings/actions";
 import { useEngineRule, usePageEngine, useRecommendedEngine, useStreamingSite } from "../../state/engines/hooks";
 import { useSettings, useTab } from "../../state/browser/hooks";
 import { isIncognitoProfile, tabLabel } from "../../state/browser/model";
-import { ENGINE_NAMES, ENGINE_SYMBOLS, otherEngine } from "../../state/engines/engines";
+import { ENGINE_NAMES, ENGINE_SYMBOLS, offersEngineChoice, otherEngine } from "../../state/engines/engines";
 import { openPageIn, togglePageEngine } from "../../state/engines/actions";
 import { Box, Divider, MenuRow, MenuSeparator, PANEL, PanelHeader, Popover, PopoverValue, space, Toggle, usePopoverPresence } from "../ui";
 import { Favicon } from "../favicon/Favicon";
@@ -39,6 +39,7 @@ import { ReaderRow } from "./ReaderControls";
 import { ZoomStepper } from "./ZoomControls";
 import { blockerLabel, choiceTitle, featuredPermissions, permissionValue, readSiteSettings, setSitePermission, sitePermissionsFor, type SitePermission } from "../../state/site/siteControls";
 import { isWebPageUrl } from "../../lib/url";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { ALL_UNREAD_TITLE, canChooseSiteUnread, isUnreadSiteHidden, setSiteUnreadShown, showUnreadCounts } from "../../state/tabs/unreadSites";
 
 type Expanded = "connection" | "more" | null;
@@ -162,6 +163,7 @@ function SiteControlsPanel({
   const toggle = (section: Exclude<Expanded, null>) => setExpanded((e) => (e === section ? null : section));
 
   const findable = isWebPageUrl(url);
+  const engineChoice = offersEngineChoice();
   const castTile = !video && !!origin;
   const tiles = [
     canShare(tab) ? <ActionTile key="share" ref={shareTile} icon="square.and.arrow.up" label="Share…" onPress={share} /> : null,
@@ -216,23 +218,25 @@ function SiteControlsPanel({
         {origin ? (
           <>
             <SectionLabel title="Settings" inset={PANEL.inset} top={SITE_PANEL.sectionTop} bottom={SITE_PANEL.sectionGap - (SITE_PANEL.settingHeight - SITE_PANEL.settingBadge) / 2} />
-            <SettingRow
-              icon="shield.lefthalf.filled"
-              title="Block Ads & Trackers"
-              value={blockerValue}
-              on={!!blocker?.enabled && !blocker.allowed}
-              onPress={
-                !blocker
-                  ? undefined
-                  : blocker.enabled
-                    ? () => void toggleBlocker(blocker.allowed)
-                    : () => {
-                        close();
-                        openSettings("privacy");
-                      }
-              }
-            />
-            <SettingRow icon={ENGINE_SYMBOLS[pageEngine]} title="Opens in" value={opensIn} on={!!engineRule} onPress={() => void pickEngine()} />
+            {PLATFORM_FEATURES.contentBlocker && (
+              <SettingRow
+                icon="shield.lefthalf.filled"
+                title="Block Ads & Trackers"
+                value={blockerValue}
+                on={!!blocker?.enabled && !blocker.allowed}
+                onPress={
+                  !blocker
+                    ? undefined
+                    : blocker.enabled
+                      ? () => void toggleBlocker(blocker.allowed)
+                      : () => {
+                          close();
+                          openSettings("privacy");
+                        }
+                }
+              />
+            )}
+            {engineChoice ? <SettingRow icon={ENGINE_SYMBOLS[pageEngine]} title="Opens in" value={opensIn} on={!!engineRule} onPress={() => void pickEngine()} /> : null}
             {shownPermissions.map((p) => (
               <SettingRow
                 key={p.type}
@@ -264,7 +268,7 @@ function SiteControlsPanel({
             <MenuSeparator />
             <MenuRow icon="plus.magnifyingglass" title="Zoom" accessory={<ZoomStepper tabId={tabId} zoom={tab.zoom} />} />
             {origin && !castTile ? <MenuRow icon="tv.and.mediabox" title="Cast…" onPress={cast} /> : null}
-            {origin ? (
+            {engineChoice && origin ? (
               <MenuRow
                 icon={ENGINE_SYMBOLS[otherEngine(pageEngine)]}
                 title={`Open Page in ${ENGINE_NAMES[otherEngine(pageEngine)]}`}

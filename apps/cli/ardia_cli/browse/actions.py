@@ -10,8 +10,9 @@ from ardia_cli.browse.errors import BrowseError, CdpError, Gated, OutcomeUnknown
 SCROLL_DEFAULT = 300
 DELIVERY_TIMEOUT = 1.5
 NOT_DELIVERED = (
-    "{action} was sent, but the page received none of its {missing} events. The tab may not be on screen in Ardia "
-    "(just switched, or covered by another tab); check it's shown (`ardia browse tab <id> --show`) before trying again"
+    "{action} was sent, but the page received none of its {missing} events. Something may have caught them first (an overlay, "
+    "or a frame this check can't see into), or the tab may have just been switched away from; take a screenshot to see what's "
+    "at that point, or show the tab (`ardia browse tab <id> --show`), before trying again"
 )
 TARGET_REPLACED = (
     "{action} didn't land: {target} was removed from the page before it arrived (the page redrew it, as a list does after "
@@ -33,6 +34,7 @@ EMAIL = re.compile(r"[^\s@<>()\[\],;:\"']+@[^\s@<>()\[\],;:\"']+\.[A-Za-z]{2,}")
 ENABLE_WAIT = 1.5
 EDITOR_WAIT = 1.0
 COMMIT_WAIT = 0.5
+CLOSING_MODAL_WAIT = 0.5
 POLL = 0.05
 INSERTED_INPUT_TYPES = frozenset({"text", "search", "email", "url", "tel", "number"})
 DRAG_FAR_SHARE = 0.75
@@ -157,6 +159,45 @@ LIST_AFTER = """() => {
 }"""
 
 
+FRAME_OWNERS = frozenset({"IFRAME", "FRAME", "EMBED", "OBJECT"})
+MAX_FOCUS_PROBES = 24
+
+
+async def over_frame(page, x: float, y: float) -> bool:
+    try:
+        hit = await page.send("DOM.getNodeForLocation", {"x": round(x), "y": round(y), "includeUserAgentShadowDOM": False})
+        if hit.get("frameId") and hit["frameId"] != page.main_frame:
+            command_metrics.flag("input_in_inner_frame", True)
+            return True
+        node = (await page.send("DOM.describeNode", {"backendNodeId": hit["backendNodeId"]}))["node"]
+    except (CdpError, KeyError):
+        return bool(await page.call("(x, y) => ardiaBrowse.overFrame(x, y)", x, y, frame=page.main_frame, read=True))
+    if node.get("nodeName") in FRAME_OWNERS:
+        command_metrics.flag("input_in_inner_frame", True)
+        return True
+    return False
+
+
+FOCUSED_HERE = "() => document.hasFocus() && !['IFRAME', 'FRAME', 'EMBED', 'OBJECT'].includes((document.activeElement || {}).tagName)"
+KEY_EVENTS = ("keydown", "keyup", "input")
+
+
+async def focus_in_other_frame(page, frame) -> bool:
+    focused = set()
+    for other in list(page.frames)[:MAX_FOCUS_PROBES]:
+        try:
+            if await page.call(FOCUSED_HERE, frame=other, read=True, timeout=2):
+                focused.add(other)
+        except BrowseError:
+            continue
+    parents = {page.frames[other].get("parent") for other in focused if other in page.frames}
+    leaves = focused - parents
+    if leaves and frame not in leaves:
+        command_metrics.flag("input_in_inner_frame", True)
+        return True
+    return False
+
+
 async def input_counts(page, frame):
     return await page.call("() => ardiaBrowse.inputWatch()", frame=frame)
 
@@ -199,6 +240,8 @@ async def expect_input(page, frame, run, needs: dict, action: str, element=None)
         if loop.time() >= deadline:
             names = " or ".join(part for name in missing for part in name.split("|"))
             if all(delivered(now, before, name) == 0 for name in needs):
+                if any(key in name for name in needs for key in KEY_EVENTS) and await focus_in_other_frame(page, frame):
+                    return result
                 if element is not None and not await still_attached(page, element):
                     raise BrowseError(TARGET_REPLACED.format(action=action, target=element.label), code="target_replaced")
                 raise BrowseError(NOT_DELIVERED.format(action=action, missing="/".join(needs).replace("|", "/")), data={"missing": missing}, code="input_not_delivered")
@@ -333,7 +376,12 @@ async def restore_metrics(page):
 
 async def scroll_into_view(page, element, humanize: bool):
     if not humanize or element.frame != page.main_frame:
-        await page.send("DOM.scrollIntoViewIfNeeded", {"backendNodeId": element.backend_id})
+        try:
+            await page.send("DOM.scrollIntoViewIfNeeded", {"backendNodeId": element.backend_id})
+        except CdpError as error:
+            if "layout object" not in error.cdp_message:
+                raise
+            raise BrowseError(f"Element {element.label} has no visible box (hidden or zero-size)", code="not_visible") from None
         return
     for _ in range(5):
         r = await rect(page, element)
@@ -373,7 +421,7 @@ async def target_point(page, element, humanize: bool, check_cover: bool = True):
     await laid_out(page)
     await scroll_into_view(page, element, humanize)
     tried = set()
-    for _ in range(3):
+    for _ in range(4):
         box = await settled_box(page, element)
         if box is None:
             raise BrowseError(f"Element {element.label} has no visible box (hidden or zero-size)", code="not_visible")
@@ -391,8 +439,8 @@ async def target_point(page, element, humanize: bool, check_cover: bool = True):
             cover = await page.call("(el, x, y) => ardiaBrowse.hitTest(el, x, y)", element, cx - ox, cy - oy, frame=element.frame)
         if not cover:
             break
-        if "consent" not in tried and not cover.startswith("nothing"):
-            tried.add("consent")
+        if f"consent {cover}" not in tried and not cover.startswith("nothing"):
+            tried.add(f"consent {cover}")
             if await dismissed_consent(page, element, cx - ox, cy - oy):
                 continue
         if "center" not in tried:
@@ -489,11 +537,17 @@ async def click(page, element, humanize: bool, count: int = 1, button: str = "le
     except BrowseError as error:
         if error.code == "not_visible":
             stand_in = await visible_label(page, element)
+            if stand_in is not None:
+                command_metrics.flag("clicked_label_of_hidden_input", True)
+                await click(page, stand_in, humanize, count, button)
+                page.state.click_note = f"{element.label} is hidden and drawn by its label, so the click went to the label"
+                return
+            stand_in = await visible_content(page, element)
             if stand_in is None:
                 raise
-            command_metrics.flag("clicked_label_of_hidden_input", True)
+            command_metrics.flag("clicked_visible_content", True)
             await click(page, stand_in, humanize, count, button)
-            page.state.click_note = f"{element.label} is hidden and drawn by its label, so the click went to the label"
+            page.state.click_note = f"{element.label} has no box of its own, so the click went to its visible content"
             return
         if error.code != "outside_viewport" or count != 1 or button != "left":
             raise
@@ -515,6 +569,11 @@ async def visible_label(page, element):
     return await page.element_from(remote, element.frame, f"the label of {element.label}")
 
 
+async def visible_content(page, element):
+    remote = await page.call(VISIBLE_CONTENT, element, frame=element.frame, by_value=False)
+    return await page.element_from(remote, element.frame, f"the visible content of {element.label}")
+
+
 async def scroll_lock(page, element) -> str | None:
     try:
         return await page.call(SCROLL_LOCK, element, frame=element.frame)
@@ -526,6 +585,22 @@ async def dom_click(page, element, error: BrowseError):
     from ardia_cli import command_metrics
 
     clicked = await page.call(DOM_CLICK, element, frame=element.frame)
+    if isinstance(clicked, dict):
+        async def unblocked():
+            nonlocal clicked
+            clicked = await page.call(DOM_CLICK, element, frame=element.frame)
+            return not isinstance(clicked, dict)
+
+        if await poll(unblocked, CLOSING_MODAL_WAIT) and clicked:
+            command_metrics.flag("dom_click_waited_for_modal", True)
+    if isinstance(clicked, dict):
+        command_metrics.flag("dom_click_behind_modal", True)
+        name = clicked.get("modal")
+        lock = f'the modal dialog "{name}" is open over it' if name else "a modal dialog is open over it"
+        raise BrowseError(
+            f"Element {element.label} is outside the visible page, and {lock}. Close that first (press Escape, or its close button), then retry",
+            data={**(error.data or {}), "scrollLock": lock}, code="outside_viewport",
+        )
     if not clicked:
         raise error
     command_metrics.flag("dom_click_fallback", True)
@@ -569,6 +644,19 @@ VISIBLE_LABEL = """(el) => {
   if (wrapping && !labels.includes(wrapping)) labels.push(wrapping);
   return labels.find(shown) || null;
 }"""
+VISIBLE_CONTENT = """(el) => {
+  const box = el.getBoundingClientRect();
+  if (box.width >= 2 && box.height >= 2) return null;
+  const shown = (node) => {
+    const rect = node.getBoundingClientRect();
+    return rect.width >= 2 && rect.height >= 2 && (!node.checkVisibility || node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }));
+  };
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_ELEMENT);
+  for (let node = walker.nextNode(), seen = 0; node && seen < 400; node = walker.nextNode(), seen++) {
+    if (shown(node)) return node;
+  }
+  return null;
+}"""
 SCROLL_LOCK = """(el) => {
   const shown = (node) => node.checkVisibility ? node.checkVisibility({ checkVisibilityCSS: true }) : !!node.offsetParent;
   const dialogs = [...document.querySelectorAll("dialog[open], [role=dialog], [role=alertdialog], [aria-modal=true]")]
@@ -599,6 +687,58 @@ DOM_CLICK = """(el) => {
     if (/hidden|auto|scroll|clip/.test(overflow)) { clipped = true; break; }
   }
   if (!clipped) return false;
+  const within = (outer, node) => {
+    for (; node; node = node.parentNode || node.host) if (node === outer) return true;
+    return false;
+  };
+  const modals = el.checkVisibility && CSS.supports("selector(:modal)")
+    ? [...document.querySelectorAll("dialog:modal, [aria-modal=true]")].filter((modal) => !/opacity\\(0\\)/.test(getComputedStyle(modal).filter))
+    : [];
+  const owner = (node) => modals.filter((modal) => within(modal, node)).pop();
+  const ownerAt = (x, y) => {
+    let hit = document.elementFromPoint(x, y);
+    for (let inner = hit?.shadowRoot?.elementFromPoint(x, y); inner && inner !== hit; inner = hit.shadowRoot?.elementFromPoint(x, y)) hit = inner;
+    return hit?.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) ? owner(hit) : undefined;
+  };
+  function* tree(node) {
+    yield node;
+    if (node.shadowRoot) for (const child of node.shadowRoot.children) yield* tree(child);
+    for (const child of node.children) yield* tree(child);
+  }
+  const boxes = new Map(), hits = [];
+  for (const modal of modals) {
+    const sampled = [];
+    boxes.set(modal, sampled);
+    let seen = 0, tried = 0;
+    walk: for (const node of tree(modal)) {
+      if (++seen > 200 || tried >= 40) break;
+      const box = node.getBoundingClientRect();
+      const left = Math.max(box.left, 0), right = Math.min(box.right, innerWidth), top = Math.max(box.top, 0), bottom = Math.min(box.bottom, innerHeight);
+      if (right - left < 2 || bottom - top < 2 || getComputedStyle(node).pointerEvents === "none") continue;
+      sampled.push({ left, right, top, bottom });
+      for (const [fx, fy] of [[0.5, 0.5], [0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75]]) {
+        const x = left + (right - left) * fx, y = top + (bottom - top) * fy, over = ownerAt(x, y);
+        tried++;
+        if (over) hits.push({ over, x, y });
+        if (over === modal) break walk;
+      }
+    }
+  }
+  const open = modals.filter((modal) => hits.some((hit) => hit.over === modal));
+  if (open.length) {
+    const under = (modal, { over, x, y }) => over !== modal && boxes.get(modal).some((box) => x >= box.left && x <= box.right && y >= box.top && y <= box.bottom);
+    const top = open.filter((modal) => !hits.some((hit) => under(modal, hit)));
+    const ranked = top.length ? top : open.slice(-1);
+    const focused = owner(document.activeElement);
+    const holding = ranked.length > 1 && ranked.includes(focused) ? [focused] : ranked;
+    if (!holding.some((modal) => within(modal, el))) {
+      const blocking = holding[holding.length - 1];
+      const labelled = blocking.getAttribute("aria-labelledby");
+      const name = (blocking.getAttribute("aria-label") || (labelled && document.getElementById(labelled)?.innerText) || blocking.innerText || "")
+        .trim().split("\\n")[0].slice(0, 60);
+      return { modal: name };
+    }
+  }
   el.focus && el.focus({ preventScroll: true });
   el.click();
   return true;
@@ -1287,6 +1427,13 @@ async def scroll(page, direction: str, amount: float, humanize: bool, selector_e
         ox, oy = await frame_offset(page, selector_element.frame)
         point = (ox + r["x"] + r["width"] * random.uniform(0.35, 0.65), oy + r["y"] + r["height"] * random.uniform(0.35, 0.65))
         frame = selector_element.frame
-    needs = {} if distance == 0 or not await page.takes_input() else {"wheel": 1}
+    else:
+        vp = await viewport(page)
+        x, y = page.input.mouse._position
+        if not (8 <= x <= vp["width"] - 8 and 8 <= y <= vp["height"] - 8):
+            x, y = vp["width"] * random.uniform(0.35, 0.65), vp["height"] * random.uniform(0.35, 0.65)
+        point = (x, y)
+    landed_inside = frame is None and distance != 0 and await over_frame(page, *point)
+    needs = {} if distance == 0 or landed_inside or not await page.takes_input() else {"wheel": 1}
     await expect_input(page, frame, lambda: page.input.gesture("scroll", lambda: scroll_wheel(page, distance, vertical, humanize, point, frame, selector_element), allow_hidden=True),
                        needs, "The scroll")

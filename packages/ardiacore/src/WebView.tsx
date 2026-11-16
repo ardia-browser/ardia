@@ -59,6 +59,7 @@ export const WebView = forwardRef<WebViewHandle, WebViewProps>(function WebView(
       forceReload: () => call(undefined, (n) => n.forceReload()),
       stopLoading: () => call(undefined, (n) => n.stopLoading()),
       focus: () => call(undefined, (n) => n.focus()),
+      focusIfUnfocused: () => call(false, (n) => n.focusIfUnfocused()),
       setMuted: (muted) => call(undefined, (n) => n.setMuted(muted)),
       zoomStep: (direction) => call(undefined, (n) => n.zoomStep(direction)),
       find: (text, forward, findNext) => call(undefined, (n) => n.find(text, forward, findNext)),

@@ -11,7 +11,7 @@ const watch = await import("./watch.ts");
 const local = await import("./localStore.ts");
 
 const DAY = 86_400_000;
-const T = Date.parse("2026-11-01T10:00:00Z");
+const T = Math.floor(Date.now() / DAY) * DAY;
 const state = () => JSON.parse(stub.docs.get("telemetry.json"));
 const lastLocal = (event) => (local.flushLocal(), stub.telemetryLocal.records().filter((r) => r.event === event).at(-1));
 

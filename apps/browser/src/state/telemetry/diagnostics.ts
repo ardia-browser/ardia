@@ -1,12 +1,14 @@
 import { diagnosticsSample, hardwareInfo, type HardwareInfo } from "../../platform/app";
 import { onHoverLost, systemState, type HoverLostEpisode } from "../../platform/performance";
 import { cliControlStatus } from "../../platform/cli";
+import { call } from "../../platform/engine";
 import { withDeadline } from "../../lib/deadline";
 import { activeTab } from "../browser/model";
 import { useBrowser } from "../browser/store";
 import { capture, isSharing, saveContext, useTelemetry } from "./client";
 import type { SavedContext } from "./savedContext";
 import { noteDragsEnded } from "./stuckDrags";
+import { noteWindowlessPages } from "./cliCounts";
 import { mainProcessWork } from "./mainProcessWork";
 import { appInfo } from "./transport";
 
@@ -66,7 +68,10 @@ export const noteAppMemory = (totalMb: number) => (appMemoryMb = totalMb);
 
 export async function recordContext(): Promise<SavedContext | null> {
   if (!isSharing()) return null;
-  void cliControlStatus().then((status) => noteDragsEnded(status.dragsEnded), () => {});
+  void cliControlStatus().then((status) => {
+    noteDragsEnded(status.dragsEnded);
+    noteWindowlessPages(status.windowlessPages);
+  }, () => {});
   const [sample, pressure] = await Promise.all([diagnosticsSample().catch(() => ({ footprintMB: undefined, freeDiskGB: undefined })), memoryPressure()]);
   const now = Date.now();
   const context: SavedContext = {
@@ -92,6 +97,12 @@ function keepRecent(list: SavedContext[], now: number): SavedContext[] {
 }
 
 export const takeMainProcessWork = async () => mainProcessWork(await diagnosticsSample().catch(() => ({})), Date.now());
+
+export async function takeContentDriftCounts(): Promise<Record<string, number>> {
+  const drift = await call("webView.takeContentDrift", {}).catch(() => null);
+  if (!drift) return {};
+  return { content_layer_layouts: drift.layouts, content_layer_refits: drift.fits, content_layer_drift_max_pt: drift.maxPoints };
+}
 
 export const contextSamples = () => samples;
 

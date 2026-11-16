@@ -7,6 +7,7 @@ import { captureException, installErrorReporting, reportNativeCrashes } from "./
 import { devJourneys, emitJourneys } from "./journeys";
 import { devOmniboxSampler } from "./track";
 import { hardwareProperties, recordContext } from "./diagnostics";
+import { watchPlatformCounts } from "./hourlyExtras";
 import { devTabPresses } from "./tabPresses";
 import { devHourly, sessionEnding, startUsage } from "./usage";
 import { devLocalStore, exportLocalCopy, flushLocal, localEventsSince, pruneLocalStore } from "./localStore";
@@ -22,8 +23,9 @@ export { startWatch, stopWatch, watchStatus, WATCH_DAYS, type WatchStatus } from
 export { localEventsSince, exportLocalCopy } from "./localStore";
 export { diagnosticsSnapshot, type DiagnosticsSnapshot } from "./diagnosticsSnapshot";
 
-export function startTelemetry() {
-  startUsage();
+export function startTelemetry({ continuing = false }: { continuing?: boolean } = {}) {
+  startUsage(continuing);
+  watchPlatformCounts();
   startWatchNotice();
   startDaily(onboardingCompletedAt() !== null);
   if (__DEV__) {

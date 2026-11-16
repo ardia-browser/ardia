@@ -1,6 +1,7 @@
 import type { Shortcut } from "../commands/shortcuts";
 import { storeAction, useBrowser } from "../browser/store";
 import { tabLayoutOf } from "../browser/model";
+import { steppedInterfaceScale } from "../../lib/interfaceScale";
 
 export const updateSettings = storeAction("updateSettings");
 export const setSearchEngine = storeAction("setSearchEngine");
@@ -28,4 +29,8 @@ export function chooseSidebarSide(side: "left" | "right") {
 
 export function toggleSidebarSide() {
   chooseSidebarSide(useBrowser.getState().settings.sidebarSide === "right" ? "left" : "right");
+}
+
+export function chooseInterfaceScale(scale: number) {
+  useBrowser.getState().updateSettings({ interfaceScale: steppedInterfaceScale(scale) });
 }

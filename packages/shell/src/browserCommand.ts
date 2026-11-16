@@ -7,6 +7,7 @@ export type BrowserCommand =
   | "reopenClosedTab"
   | "reopenClosedWindow"
   | "restoreClosed"
+  | "clearRecentlyClosed"
   | "focusCommandBar"
   | "closeTab"
   | "closeAllTabs"

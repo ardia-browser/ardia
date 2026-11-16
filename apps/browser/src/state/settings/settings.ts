@@ -21,6 +21,7 @@ import type { BrowserState } from "../browser/store";
 import { DEFAULT_SIDEBAR_WIDTH, PAGE_FRAME, validPageFrame } from "../../lib/windowLayout";
 import { SIDEBAR_TEXT_SIZES } from "../../lib/themeLook";
 import { TAB_CORNERS, validTabCorners } from "../../lib/tabCorners";
+import { INTERFACE_SCALE, INTERFACE_SCALE_STEPS, validInterfaceScale } from "../../lib/interfaceScale";
 import { isFields, isString, isStringList } from "../../lib/decode";
 import type { SavedObject } from "../../lib/savedDocument";
 import type { JsonSchema } from "../../lib/jsonSchema";
@@ -51,12 +52,7 @@ const recordOf = (item: JsonSchema): JsonSchema => ({ type: "object", additional
 const flag = (d: boolean, synced = false): SettingSpec<boolean> => ({ default: d, valid: (v) => typeof v === "boolean", synced, schema: { type: "boolean" } });
 const text = (d: string, synced = false): SettingSpec<string> => ({ default: d, valid: isString, synced, schema: { type: "string" } });
 const width = (d: number): SettingSpec<number> => ({ default: d, valid: isWidth, synced: false, schema: WIDTH });
-const fraction = (d: number, synced = false): SettingSpec<number> => ({
-  default: d,
-  valid: (v) => typeof v === "number" && v >= 0 && v <= 1,
-  synced,
-  schema: { type: "number", minimum: 0, maximum: 1 },
-});
+const fraction = (d: number, synced = false): SettingSpec<number> => ({ default: d, valid: (v) => typeof v === "number" && v >= 0 && v <= 1, synced, schema: { type: "number", minimum: 0, maximum: 1 } });
 const oneOf = <const V extends readonly string[]>(values: V, d: V[number], synced = false): SettingSpec<V[number]> & { values: V } => ({
   default: d,
   values,
@@ -94,6 +90,7 @@ export const SETTING_SPECS = {
   reuseEmptyNewTab: flag(false, SYNCED),
   newTabUrl: text("", SYNCED),
   warnBeforeClosingLastTab: flag(true, SYNCED),
+  keepTopAppsRunning: flag(false, SYNCED),
   undoReopensClosedTab: flag(false, SYNCED),
   warnBeforeMovingTabsToProfile: flag(true, SYNCED),
   shareTabsAcrossWindows: flag(false),
@@ -105,6 +102,7 @@ export const SETTING_SPECS = {
   peekModifier: oneOf(["alt", "shift", "off"], "shift", SYNCED),
   peekLinksToOtherSites: flag(true, SYNCED),
   newTabLinksOpenIn: oneOf(["tab", "peek", "littleArdia"], "peek", SYNCED),
+  popupsOpenAsTabs: flag(false, SYNCED),
   peekButtons: oneOf(["top", "left", "right"], "top", SYNCED),
   splitLinkModifier: oneOf(["altShift", "alt"], "altShift", SYNCED),
   autoGroupMeetingTabs: flag(true, SYNCED),
@@ -121,6 +119,7 @@ export const SETTING_SPECS = {
   autoPictureInPicture: flag(true, SYNCED),
   blockAutoplayEverywhere: flag(false, SYNCED),
   commandScrollZoom: flag(true, SYNCED),
+  blockNotificationRequests: flag(false, SYNCED),
   videoUpscaling: flag(true, SYNCED),
   sidebarMediaControls: flag(true, SYNCED),
   sidebarWidth: width(DEFAULT_SIDEBAR_WIDTH),
@@ -130,6 +129,7 @@ export const SETTING_SPECS = {
   balancedTopApps: flag(false, SYNCED),
   showAdvancedSettings: flag(false),
   selectedTabGlow: oneOf(["full", "soft", "off"], "full", SYNCED),
+  interfaceScale: shaped<number>(INTERFACE_SCALE.default, validInterfaceScale, { type: "number", enum: INTERFACE_SCALE_STEPS }),
   sidebarTextSize: oneOf(SIDEBAR_TEXT_SIZES, "default"),
   sidebarTextContrast: oneOf(["auto", "standard", "high"], "auto", SYNCED),
   selectedTopApp: oneOf(["ring", "fill", "outline"], "ring", SYNCED),
@@ -171,6 +171,7 @@ export const SETTING_SPECS = {
   spacesFollowAppearance: flag(true),
   adaptTextToColor: flag(true, SYNCED),
   defaultProfileId: text(DEFAULT_PROFILE_ID),
+  showProfileDots: flag(true, SYNCED),
   profileSwitcherIcons: flag(false, SYNCED),
   shortcuts: shaped<Record<string, string[]>>({}, (v) => isRecordOf(v, isStringList), recordOf(STRING_LIST), SYNCED),
   openLinksInLittleArdia: flag(true),

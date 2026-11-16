@@ -25,7 +25,6 @@ export const useSidebarDockState = (windowId: string) =>
       (s) =>
         [
           tabsShownIn(s, windowId),
-          s.settings.sidebarWidth,
           sidebarAddressChosen(s.settings),
         ] as const,
     ),

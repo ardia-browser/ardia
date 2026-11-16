@@ -397,3 +397,22 @@ test("Open as Split on a background tab pairs it with the tab in front when the 
   await whileMenuIsUp(() => openTabMenu(w, S().tabs[ids[2]]), () => S().activate(ids[1]), "split");
   assert.deepEqual(Object.values(S().splits).map((v) => [...splitTabIdsOf(v)].sort()), [[ids[1], ids[2]].sort()]);
 });
+
+test("a Top App whose page runs in another window offers Unload here too while Keep Top Apps running is on, and Unload puts that page to sleep", async () => {
+  S().hydrate({});
+  const a = S().createWindow({ url: "https://app.com/" });
+  const [app] = S().windows[a].tabIds;
+  S().newTab(a, { url: "https://x.com/" });
+  S().pinTabs([app], true);
+  const b = S().createWindow({ url: "https://y.com/" });
+  const copy = Object.values(S().tabs).find((t) => t.windowId === b && t.pin?.as === "tile");
+  assert.notEqual(copy.page.kind, "loaded");
+  const ids = () => tabMenuItems(S(), b, S().tabs[copy.id]).map((i) => i.id);
+  assert.ok(!ids().includes("unloadTopApp"), "off: no Unload");
+  S().updateSettings({ keepTopAppsRunning: true });
+  assert.ok(ids().includes("unloadTopApp"));
+  await whileMenuIsUp(() => openTabMenu(b, S().tabs[copy.id]), () => {}, "unloadTopApp");
+  assert.equal(S().tabs[app].page.kind, "asleep");
+  assert.ok(!ids().includes("unloadTopApp"), "nothing left to unload");
+  S().updateSettings({ keepTopAppsRunning: false });
+});

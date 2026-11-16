@@ -16,6 +16,8 @@ const longDate = (ms: number) => new Date(ms).toLocaleDateString(UI_LOCALE, { mo
 
 export function ShareDiagnosticsSection() {
   const sharing = useTelemetry((s) => s.sharing);
+  const report = useWatchReport();
+  const until = useWatchUntil();
   return (
     <>
       <SectionHeader title="Crash reports and usage" description={SHARING_COPY.dailyCountShort} />
@@ -23,7 +25,7 @@ export function ShareDiagnosticsSection() {
         <Row anchor="privacy.shareDiagnostics" title={SHARING_COPY.toggle} description={SHARING_COPY.summary}>
           <Toggle value={sharing} onChange={(on) => setSharing(on, "settings")} />
         </Row>
-        <WatchRow />
+        {report && until !== null ? <WatchRow report={report} until={until} /> : null}
         <IdentityRow />
         <Row anchor="privacy.whatsSent" title={SHARING_COPY.whatsSent} onPress={() => showSettingsSheet(<WhatsSentSheet />)} />
       </Group>
@@ -32,11 +34,8 @@ export function ShareDiagnosticsSection() {
   );
 }
 
-function WatchRow() {
-  const report = useWatchReport();
-  const until = useWatchUntil();
+function WatchRow({ report, until }: { report: string; until: number }) {
   const turnedSharingOn = useWatchTurnedSharingOn();
-  if (!report || until === null) return null;
   const detail = turnedSharingOn ? WATCH_COPY.rowDetail(report, longDate(until)) : WATCH_COPY.rowDetailAlreadySharing(report, longDate(until));
   return (
     <Row title={WATCH_COPY.rowTitle} description={detail}>
@@ -109,7 +108,7 @@ export function WhatsSentSheet() {
   const groups = [...WHATS_SENT.slice(0, -1), { title: SHARING_COPY.keptOnThisMac, items: [...LOCAL_COPY.items] }, WHATS_SENT.at(-1)!];
   return (
     <Sheet size="l" onClose={closeSettingsSheet}>
-      <DialogTitle subtitle={`Only while “${SHARING_COPY.toggle}” is on, except what’s under “Even with sharing off” and “Kept on this Mac”.`}>{SHARING_COPY.whatsSent}</DialogTitle>
+      <DialogTitle subtitle={`Only while “${SHARING_COPY.toggle}” is on, except what’s under “Even with sharing off” and “${SHARING_COPY.keptOnThisMac}”.`}>{SHARING_COPY.whatsSent}</DialogTitle>
       <ScrollView style={LIST}>
         {groups.map((group) => (
           <View key={group.title}>

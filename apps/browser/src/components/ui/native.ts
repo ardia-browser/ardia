@@ -1,11 +1,14 @@
 export {
   ActivitySpinner,
+  ClipView,
   ContextMenuArea,
   DockSelection,
   FileDropArea,
+  FolderIcon,
   MagnifyArea,
   MouseArea,
   OutsidePressArea,
+  PageCoverGate,
   PopoverBubble,
   ReportVideo,
   Surface,
@@ -23,4 +26,4 @@ export { Symbol, type SymbolProps } from "./Symbol";
 
 export { SwipeArea, WebView, type SwipeAreaHandle, type SwipeEvent, type WebViewHandle } from "@ardia/ardiacore";
 
-export { DIA_SPECTRUM, Meadow, meadowTextStyle, PowerUp, ThemeSwatch, WindowBackdrop, type MeadowTone } from "@ardia/shaders";
+export { DIA_SPECTRUM, Meadow, meadowTextStyle, PowerUp, ThemeSwatch, WindowBackdrop, type MeadowIntro, type MeadowIntroEvent, type MeadowTone } from "@ardia/shaders";

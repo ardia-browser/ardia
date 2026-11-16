@@ -338,6 +338,8 @@ const BODIES: readonly string[] = [
   "<path d=\"M165.66,101.66,139.31,128l26.35,26.34a8,8,0,0,1-11.32,11.32L128,139.31l-26.34,26.35a8,8,0,0,1-11.32-11.32L116.69,128,90.34,101.66a8,8,0,0,1,11.32-11.32L128,116.69l26.34-26.35a8,8,0,0,1,11.32,11.32ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z\"/>",
   "<path d=\"M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm37.66,130.34a8,8,0,0,1-11.32,11.32L128,139.31l-26.34,26.35a8,8,0,0,1-11.32-11.32L116.69,128,90.34,101.66a8,8,0,0,1,11.32-11.32L128,116.69l26.34-26.35a8,8,0,0,1,11.32,11.32L139.31,128Z\"/>",
   "<path d=\"M208,32H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32Zm0,176H48V48H208V208ZM165.66,101.66,139.31,128l26.35,26.34a8,8,0,0,1-11.32,11.32L128,139.31l-26.34,26.35a8,8,0,0,1-11.32-11.32L116.69,128,90.34,101.66a8,8,0,0,1,11.32-11.32L128,116.69l26.34-26.35a8,8,0,0,1,11.32,11.32Z\"/>",
+  "<path d=\"M11.92,19.92L4,12L11.92,4.08L13.33,5.5L7.83,11H22V13H7.83L13.34,18.5L11.92,19.92M4,12V2H2V22H4V12Z\" />",
+  "<path d=\"M20 4H4A2 2 0 0 0 2 6V18A2 2 0 0 0 4 20H20A2 2 0 0 0 22 18V6A2 2 0 0 0 20 4M20 18H9V6H20Z\" />",
 ];
 
 const ENCODED: Record<string, readonly EncodedLayer[]> = {
@@ -354,6 +356,7 @@ const ENCODED: Record<string, readonly EncodedLayer[]> = {
   "arrow.down.circle": [[13,256,1,1,0,[[1.2182,1.0025,-0.0075,0.015,0.0008,0,1],[1.2201,1,-0.0019,0.0028,0.0083,0,1],[1.2126,1,0.0056,-0.0028,0.0233,0,1],[1.207,1.0025,0.0094,-0.0066,0.0383,0,1],[1.2051,1,0.015,-0.0141,0.054,0,1]]]],
   "arrow.down.doc": [[14,256,1,1,0,[[1.2162,0.9625,0.0138,0.0321,0,0,1],[1.2162,0.965,-0.0162,0.0284,0.0075,0,1],[1.2162,0.965,-0.0162,0.0274,0.0195,0,1],[1.2125,0.97,-0.0012,0.0181,0.0368,0,1],[1.2013,0.975,0.0063,0.0209,0.0473,0,1]]]],
   "arrow.left.arrow.right": [[15,24,0,1,0,[[1.2987,0.9625,0.0024,0.015,0.0747,0,1],[1.3025,0.95,0.0155,0,0.0995,0,1],[1.3044,0.955,-0.0183,-0.0075,0.1108,0,1],[1.2969,0.955,-0.0126,-0.015,0.1235,0,1],[1.2894,0.945,-0.0042,0.015,0.1408,0,1]]]],
+  "arrow.left.to.line": [[334,24,1,1,0,[[1.042,0.9675,-0.0963,0.0007,0,0,1],[1.0082,1.0375,-0.0663,-0.004,0.0023,0,1],[1.0157,1.0025,-0.0626,-0.0115,0.0263,0,1],[1.0739,1.025,-0.0663,-0.0171,0.03,0,1],[1.117,1.0425,-0.0344,0.0119,0.0405,0,1]]]],
   "arrow.right": [[16,256,1,1,0,[[1.1871,1.0075,0.0044,-0.0176,0.0098,0,1],[1.2003,1.01,-0.0096,0.0106,0.0075,0,1],[1.1778,1.0025,0.0063,0.0106,0.036,0,1],[1.2003,1.0025,0.0054,0.0002,0.0353,0,1],[1.1815,1.0025,0.0176,-0.0044,0.057,0,1]]]],
   "arrow.right.circle": [[17,256,1,1,0,[[1.222,1.0025,-0.0066,0.0075,0.0007,0,1],[1.2201,1.005,-0.0009,0.0019,0.009,0,1],[1.2126,1,0.0056,-0.0047,0.0225,0,1],[1.207,1,0.0084,-0.0084,0.0383,0,1],[1.2051,1,0.0159,-0.0131,0.0517,0,1]]]],
   "arrow.triangle.2.circlepath": [[18,32,0,1,0,[[1.4515,0.995,-0.0169,0.0094,0.0665,0,1],[1.4458,0.995,-0.0112,0.0019,0.0823,0,1],[1.4365,0.9925,-0.0075,-0.0047,0.0965,0,1],[1.4346,0.995,-0.0047,-0.0094,0.1085,0,1],[1.4252,0.995,0,-0.0159,0.125,0,1]]]],
@@ -581,6 +584,7 @@ const ENCODED: Record<string, readonly EncodedLayer[]> = {
   "rectangle.inset.filled.on.rectangle": [[257,32,0,1,0,[[1.125,1.0325,-0.1237,-0.09,0.0718,0,1],[1.14,1.005,-0.12,-0.1013,0.083,0,1],[1.1437,0.9975,-0.1172,-0.1059,0.0943,0,1],[1.14,0.99,-0.1134,-0.1162,0.1175,0,1],[1.1287,1.0075,-0.105,-0.1013,0.1295,0,1]]],[258,32,0,1,0.07,[[1.155,1,0.0891,0.12,0.0642,0,1],[1.14,1,0.1116,0.1172,0.0823,0,1],[1.1325,0.99,0.1266,0.1116,0.0943,0,1],[1.1175,0.98,0.1341,0.1022,0.1108,0,1],[1.1269,0.99,0.1481,0.1322,0.122,0,1]]]],
   "rectangle.lefthalf.filled": [[259,32,0,1,0,[[1.3315,1,-0.0037,-0.0187,0.0665,0,1],[1.3315,1,-0.0037,0.0141,0.0785,0,1],[1.3315,1.0025,-0.0056,0.0084,0.083,0,1],[1.3277,0.985,-0.0037,0.0009,0.0905,0,1],[1.309,0.99,-0.0037,-0.0047,0.1093,0,1]]]],
   "rectangle.lefthalf.inset.filled.arrow.left": [[260,32,0,1,0,[[1.339,1.0025,-0.0047,-0.0188,0.0635,0,-1],[1.3333,0.9975,0,0.0141,0.08,0,-1],[1.324,0.9975,0.0038,0.0122,0.0868,0,-1],[1.3071,0.995,0.0019,0.0009,0.1108,0,-1],[1.3033,0.9875,0.0075,-0.0047,0.1213,0,-1]]]],
+  "rectangle.leftthird.inset.filled": [[335,24,1,1,0,[[1.3674,1.0125,0.0019,-0.0077,0,0,1],[1.3674,1.0125,0.0019,-0.0077,0,0,1],[1.3824,1.0075,0.0028,-0.0134,0,0,1],[1.3862,1,0.0019,-0.0209,0,0,1],[1.3824,1.0025,0.0019,0.0148,0.0098,0,1]]]],
   "rectangle.on.rectangle": [[237,32,0,1,0,[[1.1438,1.0225,-0.1331,-0.0872,0.0695,0,1],[1.1438,1.015,-0.1294,-0.1097,0.086,0,1],[1.155,1.005,-0.1228,-0.1125,0.0943,0,1],[1.1512,1.005,-0.1153,-0.1266,0.1153,0,1],[1.1175,1.0325,-0.1125,-0.1191,0.1258,0,1]]],[238,32,0,1,0.07,[[1.1437,0.9875,0.0975,0.1228,0.0718,0,1],[1.14,1,0.1125,0.1191,0.0815,0,1],[1.1437,0.99,0.1238,0.1116,0.0965,0,1],[1.1269,0.9875,0.1284,0.1031,0.1123,0,1],[1.1363,0.99,0.1453,0.1322,0.1273,0,1]]]],
   "rectangle.portrait.and.arrow.right": [[261,24,0,1,0,[[1.4557,0.995,0.0391,0.019,0.0702,0,1],[1.4651,1.015,0.0223,0.0143,0.083,0,1],[1.4651,1.015,0.0363,0.0143,0.101,0,1],[1.4632,1.02,0.0466,0.0059,0.113,0,1],[1.4764,1.0275,0.0241,0.0002,0.1333,0,1]]]],
   "rectangle.righthalf.filled": [[262,32,0,1,0,[[1.3371,1.005,0.0009,-0.0197,0.0627,0,-1],[1.3333,1.0025,0.0028,0.0122,0.077,0,-1],[1.3296,1,0.0028,0.0103,0.0868,0,-1],[1.324,0.985,0.0103,0.0009,0.0935,0,-1],[1.3258,0.9775,0.0131,-0.0028,0.1003,0,-1]]]],
@@ -691,6 +695,7 @@ const NUDGES: Record<string, string> = {
   "arrow.down.circle": "ccg8cceag8ccg8ccg8ccg8cccccccccccccccc8gccea8gcc8gcc8gcc8gcccccccccccccccc8gccea8gcc8gcc8gcc8gcccccccccccccccc8gccea8gcc8gcc8gcc8gcccccccccccccc",
   "arrow.down.doc": "f9ade9f7adc8gcb7eba7dbg6f6edddbchbhag8bde9feadd7hbc7fab6ea9dgdfcfbcbcaa9f9acd8ff9cc88bb7ebaeda8efdecccbbaa9af8bce77d9bd78abeeaaed98d7c6bdab8a897",
   "arrow.left.arrow.right": "9fdb9ebcc98dc88cbf7abd696gdfcdccbbaacfgbceebg9cdggcbgfcagechcgcfcdcccbkicfgbcdebgacdggccgfcagechcgcfcdcccjcicdg8cbe9gec9gcc7gacdg9cbcac8c6cccac9",
+  "arrow.left.to.line": "f9b9gfedgcd9heebfci9fekbgdhclemcjekgghc9hffdhcehiefbgckhhelbhdjcoeocmengigfajfidkcghmeibjcohkeobmdobmemcoeogieffjciak8hdlai7j8fcl9gen7odl6mck6m7",
   "arrow.right": "acd89eaccbh8ccf9beeba8edd7d9cbcdb799abd89dbbca8fccf9adeba7dcdec8c9bbada79bd89dacca8fcc89befbageddfc8caacae9g9bdg9dacca8ebc79ad6a9f6c5ecgb9bbbdaf",
   "arrow.right.circle": "ccg8cceag8ccg8ccg8ccg8cccccccccccccccc8gccea8gcc8gcc8gcc8gcccccccccccccccc8gccea8gcc8gcc8gcc8gcccccccccccccccc8gccea8gcc8gcc8gcc8gcccccccccbcbcb",
   "arrow.triangle.2.circlepath": "bcg8ecgaa8gcc8hce8bcg8dcecgcacccecgcbcggdcgaagfccg9cegbcggdcechcacccecgcbc8gdcgaagfccg9cegbcggdcfchcacccecgcbc8gdcfaagfccg9cegbcggccec8cacccecgc",
@@ -918,6 +923,7 @@ const NUDGES: Record<string, string> = {
   "rectangle.inset.filled.on.rectangle": "bcg8ecgab8fcc8hde8bcg8dcfdgcacccdcfcbc7fdcf9affbcf9bdfabffcbdb7b9aaadaeacc9gec8aaffbcg9befbc7fcceb8babcbdb8bb98dd87eac68bb87daa669b55c7c8baa4969",
   "rectangle.lefthalf.filled": "9eeba7ccfbb8gcd89ce8adf9999abbbcdce5aefacfedhcd8acf8cch8ddh9badbebgbicidbefbcfedhbegacf8cdh8ediabadaecgcickdbffacffdhcdgacfgbch9ddiabadbebfcicjd",
   "rectangle.lefthalf.inset.filled.arrow.left": "8edba8cceba8fcc88dd99de9798a9abbccd59edabfcdeac78bd79ce8bcf9999abacbecfc9fdbbecdfbbg9cd89de8bdg98aaabbccddfd9febafddfccg8cdhace9bdga9aabccdcecge",
+  "rectangle.leftthird.inset.filled": "9cdca98fbdface8aabdfacfgc9deafcc9eaebcgcbgbfddh9eebacbhfecigghheffhdedgdccfcdhbfeejigecbdbjgfclhihkejgkcidjec9h9eecbf9kehaeefekah6mbkbm7k8mckdmc",
   "rectangle.on.rectangle": "ddg8ecgab9fce9hde8bdf9eefdgdbedcgdhdcc8fdbf99ffbcf8bdeabggdbeb9bbbcaeagacc9hec8baggcdgadfhcc9hecgdaccdedgcabb99de98fac78cc96eab78ad66d8daccb5b7a",
   "rectangle.portrait.and.arrow.right": "g9dda9d77db9gcd88ce7abe776gd9cbcccfbh9cd98ce5ca87bb78bc78a5d6d7c8c9babba89cd99bf5d286ca87b4g8b4e5e6d8c8c1babaaedb9ef8d589cfgbc7fcb8fbecded7c8c9b",
   "rectangle.righthalf.filled": "9edaa7bdecb8gcb89cd8adf98a9bbbcccdf58ecb9fbceca87cb88cd8ace9798a9aabcbdc8ecb9fbddbag6cb87dc98dda6a7a8c9c9cbd8ebb8faddb9g5cag6ca88db94a5a6b7c8c9c",

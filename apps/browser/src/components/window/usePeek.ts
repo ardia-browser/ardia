@@ -70,6 +70,16 @@ export function usePeek(
     heldBack.current = false;
     hide();
   };
+  const reset = () => {
+    clearTimeout(hideTimer.current);
+    slide.stopAnimation();
+    slide.setValue(0);
+    out.current = false;
+    heldBack.current = false;
+    waitingForFocus.current = false;
+    setLive(false);
+    setLeaving(false);
+  };
   const latestShow = useRef(show);
   latestShow.current = show;
   useEffect(() => {
@@ -83,5 +93,5 @@ export function usePeek(
     if (live) slideOut();
   }, [enabled]);
   useEffect(() => () => clearTimeout(hideTimer.current), []);
-  return { slide, live, leaving, show, hide, recheck, cancelPending };
+  return { slide, live, leaving, show, hide, recheck, cancelPending, reset };
 }

@@ -245,11 +245,21 @@ private fun ShortcutButton(title: String, icon: ImageVector, onClick: () -> Unit
 const val ACCESSIBILITY_FONT_SCALE = 1.5f
 
 object AppVersion {
+    private val stable = Regex("""^[0-9]+\.[0-9]+\.[0-9]+$""")
+    private val nightly = Regex("""^([0-9]+\.[0-9]+\.[0-9]+)-nightly\.([0-9]+)$""")
+
+    fun releaseText(versionName: String?): String? {
+        if (versionName == null) return null
+        if (stable.matches(versionName)) return versionName
+        val match = nightly.matchEntire(versionName) ?: return null
+        return "${match.groupValues[1]} Nightly ${match.groupValues[2]}"
+    }
+
     fun footer(context: Context): String {
         val info = runCatching { packageInfo(context) }.getOrNull()
-        val version = info?.versionName ?: "1.0"
+        val release = releaseText(info?.versionName) ?: return context.getString(R.string.settings_version_footer_dev)
         val build = info?.longVersionCode ?: 1L
-        return context.getString(R.string.settings_version_footer, version, build.toString())
+        return context.getString(R.string.settings_version_footer, release, build.toString())
     }
 
     @Suppress("DEPRECATION")

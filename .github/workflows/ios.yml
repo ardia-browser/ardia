@@ -61,11 +61,36 @@ jobs:
         run: |
           xcodebuild -version
           xcrun --sdk iphonesimulator --show-sdk-version
+      - id: cas-key
+        run: echo "prefix=xcode-cas-ios-$(xcodebuild -version | awk '/Build version/ { print $3 }')-" >> "$GITHUB_OUTPUT"
+      - id: cas
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: .ci/cas
+          key: ${{ steps.cas-key.outputs.prefix }}${{ github.sha }}
+          restore-keys: ${{ steps.cas-key.outputs.prefix }}
       - name: Build the app for the simulator
-        run: >-
-          xcodebuild -project apps/ios/Ardia.xcodeproj -scheme Ardia -configuration Debug
-          -destination 'generic/platform=iOS Simulator' -derivedDataPath "$SCRATCH/dd"
-          CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO -quiet build
+        env:
+          RESTORED: ${{ steps.cas.outputs.cache-matched-key }}
+        run: |
+          build() {
+            xcodebuild -project apps/ios/Ardia.xcodeproj -scheme Ardia -configuration Debug \
+              -destination 'generic/platform=iOS Simulator' -derivedDataPath "$SCRATCH/dd" \
+              CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO \
+              COMPILATION_CACHE_ENABLE_CACHING=YES COMPILATION_CACHE_CAS_PATH="$SCRATCH/cas" -quiet build
+          }
+          if build; then exit 0; fi
+          [ -n "$RESTORED" ] || exit 1
+          echo "::warning::The build failed with the compile cache restored from $RESTORED. Building once more from nothing, in case the cache is the cause."
+          rm -rf "$SCRATCH/cas" "$SCRATCH/dd"
+          build
+      - name: Size of the compile cache
+        run: du -sh "$SCRATCH/cas"
+      - if: github.event_name == 'push' && steps.cas.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: .ci/cas
+          key: ${{ steps.cas-key.outputs.prefix }}${{ github.sha }}
 
   packages:
     needs: gate

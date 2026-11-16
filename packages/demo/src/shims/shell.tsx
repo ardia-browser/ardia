@@ -18,6 +18,7 @@ export {
   WindowDragRegion,
 } from "./web/chrome";
 export { FadeLabel } from "./web/FadeLabel";
+export { FolderIcon } from "./web/FolderIcon";
 export { MouseArea } from "./web/MouseArea";
 export { showMenu } from "./web/menus";
 
@@ -53,6 +54,9 @@ provideNativeModule("ArdiaApp", {
   launchConfig: () => LAUNCH_CONFIG,
   appIcons: async () => [],
   appIcon: async () => null,
+  interfaceScale: () => 1,
+  interfaceScaleRange: () => [1, 1],
+  setInterfaceScale: async () => 1,
 });
 provideNativeModule("ArdiaCalendar", { authorizationStatus: () => "notDetermined" });
 provideNativeModule("ArdiaCli", { installedVersion: () => null });

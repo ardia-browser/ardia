@@ -1,6 +1,8 @@
 #import "ArdiaWebViewInternal.h"
 #import "ArdiaRuntime.h"
 #import "ArdiaFairPlay.h"
+#import "ArdiaProtectedVideo.h"
+#import "ArdiaHLSVideo.h"
 
 using namespace ardia_web_view;
 using namespace ardia_runtime;
@@ -10,9 +12,10 @@ static const NSTimeInterval kAreaPictureTimeout = 1.0;
 @implementation ArdiaWebView (PageCommands)
 
 - (void)emitMedia {
-  const BOOL playing = _tab.audible || [ArdiaFairPlay playsInTab:_tab];
+  const BOOL playing = _tab.audible || [ArdiaFairPlay playsInTab:_tab] || [ArdiaProtectedVideo playsInTab:_tab] || [ArdiaHLSVideo playsInTab:_tab];
   const BOOL muted = _tab ? _tab.muted : _muted;
   [self emit:@"media" payload:@{@"playing" : @(playing), @"muted" : @(muted)}];
+  [self systemNowPlayingChanged];
 }
 
 - (void)emitZoom {
@@ -38,6 +41,8 @@ static const NSTimeInterval kAreaPictureTimeout = 1.0;
 - (void)tabDidChangeAudio:(ArdiaCoreTab *)tab {
   if (_muted && !tab.muted) tab.muted = YES;
   [ArdiaFairPlay muteChangedInTab:tab];
+  [ArdiaProtectedVideo muteChangedInTab:tab];
+  [ArdiaHLSVideo muteChangedInTab:tab];
   [self emitMedia];
 }
 
@@ -49,6 +54,8 @@ static const NSTimeInterval kAreaPictureTimeout = 1.0;
   _muted = muted;
   _tab.muted = muted;
   [ArdiaFairPlay muteChangedInTab:_tab];
+  [ArdiaProtectedVideo muteChangedInTab:_tab];
+  [ArdiaHLSVideo muteChangedInTab:_tab];
 }
 
 - (void)setZoomFactor:(double)factor {
@@ -121,9 +128,8 @@ static const NSTimeInterval kAreaPictureTimeout = 1.0;
 - (void)capturePicture:(double)scale completion:(void (^)(NSDictionary<NSString *, id> *))completion {
   NSWindow *window = self.window;
   if (!_tab || !window || self.hidden || self.awaitsFirstDocument) return completion(nil);
-  NSRect inWindow = [self convertRect:self.bounds toView:nil];
-  CGFloat top = NSHeight(window.contentView.frame);
-  NSArray *frame = @[ @(NSMinX(inWindow)), @(top - NSMaxY(inWindow)), @(NSWidth(inWindow)), @(NSHeight(inWindow)) ];
+  const NSRect inRoot = RootRectFromWindow(window, [self convertRect:self.bounds toView:nil]);
+  NSArray *frame = @[ @(NSMinX(inRoot)), @(NSMinY(inRoot)), @(NSWidth(inRoot)), @(NSHeight(inRoot)) ];
   __block BOOL answered = NO;
   void (^answer)(NSDictionary *) = ^(NSDictionary *result) {
     if (answered) return;

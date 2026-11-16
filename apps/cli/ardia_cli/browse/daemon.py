@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -11,7 +12,7 @@ from ardia_cli import command_metrics
 from ardia_cli.browse import paths
 from ardia_cli.caller import parse as parse_caller
 from ardia_cli.browse.errors import BrowseError, ConnectionLost, Unreachable, Usage
-from ardia_cli.browse.limits import QUEUE_WAIT, command_limit
+from ardia_cli.browse.limits import BEHIND_SCRIPT_WAIT, QUEUE_WAIT, command_limit, queue_wait
 
 CONNECTED_IDLE = 30.0
 DEFAULT_DAEMON_IDLE = 3600.0
@@ -230,6 +231,7 @@ class Daemon:
         self.last = time.monotonic()
         self.stop = asyncio.Event()
         self.stopping = False
+        self.closing = 0
         self.active: set = set()
         self.sock_id = None
         self.idle_limit = float(config.get("idle_timeout_ms") or DEFAULT_DAEMON_IDLE * 1000) / 1000
@@ -429,12 +431,18 @@ class Daemon:
         if request.get("beside_if_busy") and self.lock.locked():
             request["busy_elsewhere"] = True
             return render(options, error=self.busy_error(waited=False), name=name)
+        patience = queue_wait(name, [str(arg) for arg in argv[1:]], QUEUE_WAIT, name == "read" and bool(request.get("patient_queue")))
+        if self.lock.locked() and (self.state.extras.get("running") or {}).get("name") == "script" and patience < BEHIND_SCRIPT_WAIT:
+            patience = BEHIND_SCRIPT_WAIT
+            command_metrics.flag("queued_behind_script", True)
+        elif patience > QUEUE_WAIT and self.lock.locked():
+            command_metrics.flag("read_queued_beside" if request.get("patient_queue") else "script_queued_behind_busy", True)
         try:
-            await asyncio.wait_for(self.lock.acquire(), QUEUE_WAIT)
+            await asyncio.wait_for(self.lock.acquire(), patience)
         except asyncio.TimeoutError:
-            return render(options, error=self.busy_error(), name=name)
+            return render(options, error=self.busy_error(waited=patience), name=name)
         try:
-            if self.stopping:
+            if self.stopping or self.closing:
                 return self.refuse_closing(options, name)
             if self.state.lost:
                 return render(options, error=ConnectionLost(), name=name)
@@ -468,11 +476,12 @@ class Daemon:
             if getattr(page, "temporary_metrics", False) and page.session_id and self.state.connected:
                 await restore_metrics(page)
 
-    def busy_error(self, waited: bool = True) -> BrowseError:
+    def busy_error(self, waited: float | bool = True) -> BrowseError:
         running = self.state.extras.get("running") or {}
         age = f" for {time.monotonic() - running['since']:.0f} s" if running.get("since") else ""
         what = f"`{running['name']}`" if running.get("name") else "another command"
-        waiting = f"this command waited {QUEUE_WAIT:g} s for it and gave up without running" if waited else "this command didn't run"
+        seconds = QUEUE_WAIT if waited is True else waited
+        waiting = f"this command waited {seconds:g} s for it and gave up without running" if waited else "this command didn't run"
         return BrowseError(f"This session is still running {what}{age}; {waiting}. A session runs one command at a time: wait for it "
                            "(a long `script` returns when done), or run independent work with `--session <name>`, which gets its own tab",
                            code="session_busy")
@@ -497,12 +506,24 @@ class Daemon:
             return render(options, error=BrowseError(f"{name} failed: {type(error).__name__}: {error}"), name=name)
         return render(options, result=result, name=name)
 
+    @contextlib.asynccontextmanager
+    async def lock_for_close(self):
+        self.closing += 1
+        try:
+            await self.lock.acquire()
+        finally:
+            self.closing -= 1
+        try:
+            yield
+        finally:
+            self.lock.release()
+
     async def close(self, ctx):
         from ardia_cli.browse.commands import Result
 
         closed = 0
         kept = []
-        async with self.lock:
+        async with self.lock_for_close():
             if self.stopping:
                 return self.refuse_closing(ctx.options, "close")
             self.stopping = True

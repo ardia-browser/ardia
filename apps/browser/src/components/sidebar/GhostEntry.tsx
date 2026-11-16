@@ -14,6 +14,7 @@ import { headGap } from "../../state/sidebar/geometry";
 import { pointerOnGroup, pointerOnRow } from "../../state/sidebar/hover";
 import { FaviconFallback, NewTabIcon } from "../favicon/Favicon";
 import { TabIcon } from "./TabIcon";
+import { FolderOrIcon } from "./AnimatedFolder";
 import { iconSymbol } from "../../lib/customIcon";
 import { drawnIcon, hidesRowIcon } from "../../state/pins/rowIcons";
 import { groupBoxAtRest, groupSurface, SIDEBAR_TYPE, TAB_ROW, TABULAR_NUMS, useSidebarTokens } from "./tokens";
@@ -27,7 +28,7 @@ type GroupShot = {
   key: string;
   label: string;
   color: GroupColor | null;
-  icon: { url: string; favicon?: string | null; icon?: string | null; profileId?: string } | null;
+  icon: string | null;
   collapsed: boolean;
   hovered: boolean;
   members: (TabShot | SplitShot | GroupShot)[];
@@ -67,13 +68,12 @@ export function snapshotEntry(s: BrowserState, windowId: string, profileId: stri
   const group = s.groups[id];
   if (!group) return null;
   const members = group.collapsed ? keptEntries(s, windowId, profileId, id) : groupEntries(s, id);
-  const first = s.tabs[group.tabIds[0] ?? ""];
   return {
     kind: "group",
     key: entry,
     label: groupLabel(s, group),
     color: group.color ?? null,
-    icon: group.icon || first ? { url: first?.url ?? "", favicon: first?.favicon, icon: group.icon ?? first?.customIcon, profileId: first?.profileId } : null,
+    icon: group.icon ?? null,
     collapsed: !!group.collapsed,
     hovered: pointerOnGroup(id),
     members: members.flatMap((e) => (parseEntry(e).kind === "tab" ? tabShot(s, parseEntry(e).id, false) : snapshotEntry(s, windowId, profileId, e)) ?? []),
@@ -143,7 +143,7 @@ function GroupGhost({ shot }: { shot: GroupShot }) {
     <View style={{ paddingVertical: GROUP_BORDER }}>
       {shot.hovered || groupBoxAtRest(shot.color) ? <View style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, borderRadius: GROUP_RADIUS, backgroundColor: fill, borderWidth: GROUP_BORDER, borderColor: stroke }} /> : null}
       <View style={{ height: layout.rowHeight, flexDirection: "row", alignItems: "center", paddingLeft: TAB_ROW.contentLeft, paddingRight: TAB_ROW.trailing }}>
-        {shot.icon ? <TabIcon url={shot.icon.url} favicon={shot.icon.favicon} icon={shot.icon.icon} profileId={shot.icon.profileId} /> : <View style={{ width: 16 }} />}
+        <FolderOrIcon icon={shot.icon} open={!shot.collapsed} color={shot.color} />
         <View style={{ flexShrink: 1, height: TAB_ROW.titleHeight, marginLeft: TAB_ROW.titleGap, paddingRight: space.m, justifyContent: "center" }}>
           <Text lines={1} weight="medium" style={MEASURE_LABEL}>
             {shot.label}

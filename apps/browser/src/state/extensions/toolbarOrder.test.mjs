@@ -3,7 +3,7 @@ import { test } from "node:test";
 const native = await import("../../test-native/index.ts");
 const { useBrowser } = await import("../browser/store.ts");
 const { useExtensions } = await import("./store.ts");
-const { moveToolbarExtension } = await import("./actions.ts");
+const { extensionOverflowItems, moveToolbarExtension } = await import("./actions.ts");
 const { dropIndex, makeRoomShift, movedToolbarOrder, toolbarOrder } = await import("./toolbarOrder.ts");
 
 const ext = (id, pinnedIndex, more = {}) => ({ id, name: id, enabled: true, pinned: pinnedIndex !== undefined, pinnedIndex, hasAction: true, incognito: false, ...more });
@@ -46,7 +46,18 @@ test("dropping reorders the toolbar at once and tells Chrome which extension mov
   useExtensions.setState({ lists: { "": [ext("a", 0), ext("b", 1), ext("c", 2)] } });
   const asked = [];
   native.extensionAnswers.change = async (what, id) => void asked.push([what, id]);
-  await moveToolbarExtension(w, "a", 2);
+  await moveToolbarExtension(w, "a", 2, "drag");
   assert.deepEqual(toolbarOrder(useExtensions.getState().lists[""]).map((x) => x.id), ["b", "c", "a"]);
-  assert.deepEqual(asked, [["configure", "a"]]);
+  await moveToolbarExtension(w, "a", 0, "menu");
+  assert.deepEqual(toolbarOrder(useExtensions.getState().lists[""]).map((x) => x.id), ["a", "b", "c"]);
+  assert.deepEqual(asked, [["configure", "a"], ["configure", "a"]]);
+});
+
+test("the extensions menu offers Move to Front for pinned extensions that didn't fit, and only when some didn't", () => {
+  const a = ext("a", 0), b = ext("b", 1), c = ext("c", 2);
+  const menu = extensionOverflowItems([a, b, c], [b, c]);
+  const front = menu.find((x) => x.id === "front");
+  assert.equal(front.title, "Move to Front");
+  assert.deepEqual(front.children.map((x) => [x.title, x.value.front.id]), [["b", "b"], ["c", "c"]]);
+  assert.equal(extensionOverflowItems([a, b, c], []).some((x) => x.id === "front"), false);
 });

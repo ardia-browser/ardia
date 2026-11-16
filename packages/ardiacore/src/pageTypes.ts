@@ -53,6 +53,7 @@ export type OpenWindowRequest = {
   site?: boolean;
   fromClick?: boolean;
   linkWait?: "matched" | "skipped" | "timedOut";
+  popup?: boolean;
 };
 
 export type BlockedPopup = { id: string; url: string; origin: string };
@@ -141,6 +142,7 @@ export type PasswordPrompt = {
   passwordLength: number;
   federation: string;
   usernames: string[];
+  offer?: string;
 };
 export type PasswordPromptAnswer = "save" | "update" | "never" | "nope" | "dismiss";
 export type AutofillPrompt = {
@@ -163,7 +165,13 @@ export type ExtensionActionResult = "none" | "popup" | "sidePanel";
 export type PageSelection = { text: string; rect: { x: number; y: number; width: number; height: number } };
 export type ScrollState = "down" | "up" | "top";
 export type ProtectedMediaRequest = { keySystem: string; main: boolean };
-export type FairPlayReport = { event: "played" | "failed"; step?: "license" | "playback" | "player" };
+export type FairPlayReport = {
+  event: "played" | "failed" | "mirrored" | "mirrorResync" | "pip" | "pipReopen" | "choppy" | "nowPlayingCommand";
+  step?: "license" | "playback" | "player";
+  video?: boolean;
+  site?: "youtube";
+  fitted?: boolean;
+};
 
 export type WebViewProps = ViewProps & {
   engine?: PageEngine;
@@ -239,6 +247,7 @@ export type WebViewHandle = {
   forceReload(): Promise<void>;
   stopLoading(): Promise<void>;
   focus(): Promise<void>;
+  focusIfUnfocused(): Promise<boolean>;
   setMuted(muted: boolean): Promise<void>;
   zoomStep(direction: 1 | -1 | 0): Promise<void>;
   find(text: string, forward: boolean, findNext: boolean): Promise<void>;
@@ -264,7 +273,7 @@ export type WebViewHandle = {
   openBlockedPopup(id: string, always?: boolean): Promise<void>;
   clearSiteData(): Promise<{ cookies: number | false; storage: boolean }>;
 
-  resolvePasswordPrompt(answer: PasswordPromptAnswer, edits?: { username?: string; password?: string }): Promise<void>;
+  resolvePasswordPrompt(answer: PasswordPromptAnswer, edits?: { username?: string; password?: string; offer?: string }): Promise<void>;
   resolveAutofillPrompt(id: number, answer: AutofillPromptAnswer): Promise<void>;
   executeExtensionAction(extensionId: string): Promise<ExtensionActionResult | null>;
 

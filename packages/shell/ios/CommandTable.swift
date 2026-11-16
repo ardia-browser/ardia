@@ -10,6 +10,7 @@ enum CommandTable {
     case reopenClosedTab
     case reopenClosedWindow
     case restoreClosed
+    case clearRecentlyClosed
     case focusCommandBar
     case closeTab
     case closeAllTabs
@@ -124,6 +125,7 @@ enum CommandTable {
     "toggleOpenLinksInLittleArdia": "Open Links from Other Apps in Main Window",
     "reopenClosedTab": "Reopen Closed Tab",
     "reopenClosedWindow": "Reopen Closed Window",
+    "clearRecentlyClosed": "Clear Recently Closed",
     "focusCommandBar": "Open Command Bar",
     "closeTab": "Close Tab",
     "closeAllTabs": "Close All Tabs",

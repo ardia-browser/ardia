@@ -24,6 +24,22 @@ class RepeatLabels(unittest.TestCase):
         tree = [Node("RootWebArea", "Mail", children=[Node("generic", children=[Node("StaticText", "Weekly report"), Node("button", "", ref="e9")])])]
         self.assertIn('[ref=e9] (near "Weekly report")', render(tree, interactive=True))
 
+    def test_labels_that_dont_tell_repeats_apart_are_left_out(self):
+        def tile(title: str, price: str, refs: tuple[str, str, str]) -> Node:
+            return Node("generic", children=[Node("button", "Save to favourites", ref=refs[0]),
+                                             Node("link", title, ref=refs[1], children=[Node("heading", title, ref=refs[2])]),
+                                             Node("StaticText", price)])
+
+        tree = [Node("RootWebArea", "Shop", children=[tile("Cotton tee", "$15", ("e1", "e2", "e3")),
+                                                      tile("Cotton tee", "$15", ("e4", "e5", "e6")),
+                                                      tile("Linen shirt", "$30", ("e7", "e8", "e9"))])]
+        shown = render(tree, interactive=True)
+        self.assertNotIn('heading "Cotton tee" [ref=e3] (near', shown)
+        self.assertNotIn('link "Cotton tee" [ref=e2] (near', shown)
+        self.assertNotIn('(near "Save to favourites")', shown)
+        self.assertIn('- button "Save to favourites" [ref=e7] (near "Linen shirt")', shown)
+        self.assertNotIn('- button "Save to favourites" [ref=e1] (near', shown)
+
 
 if __name__ == "__main__":
     unittest.main()

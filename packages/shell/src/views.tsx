@@ -9,11 +9,18 @@ export type WindowProfileProps = ViewProps & {
 };
 export const WindowProfile = requireNativeViewManager<WindowProfileProps>("ArdiaWindowProfile");
 
-export const WindowDragRegion = requireNativeViewManager<
-  ViewProps & { titleBarDoubleClick?: boolean; onRegionDoubleClick?: () => void; clickable?: boolean; onRegionClick?: () => void }
->("ArdiaAppWindows");
+export type WindowDragRegionProps = ViewProps & {
+  titleBarDoubleClick?: boolean;
+  onRegionDoubleClick?: () => void;
+  clickable?: boolean;
+  onRegionClick?: () => void;
+};
 
-export const OutsidePressArea = requireNativeViewManager<ViewProps & { onOutsidePress?: (event: { nativeEvent: { timestamp?: number } }) => void }>("ArdiaOutsidePressArea");
+export const WindowDragRegion = requireNativeViewManager<WindowDragRegionProps>("ArdiaAppWindows");
+
+export type OutsidePressAreaProps = ViewProps & { onOutsidePress?: (event: { nativeEvent: { timestamp?: number } }) => void };
+
+export const OutsidePressArea = requireNativeViewManager<OutsidePressAreaProps>("ArdiaOutsidePressArea");
 
 export type SymbolProps = ViewProps & {
   name: string;
@@ -36,16 +43,30 @@ export type FadeLabelProps = ViewProps & {
 
 export const FadeLabel = requireNativeViewManager<FadeLabelProps>("ArdiaFadeLabel");
 
-export const ActivitySpinner = requireNativeViewManager<ViewProps>("ArdiaActivitySpinner");
+export type ActivitySpinnerProps = ViewProps;
+
+export const ActivitySpinner = requireNativeViewManager<ActivitySpinnerProps>("ArdiaActivitySpinner");
+
+export type FolderIconProps = ViewProps & {
+  open: boolean;
+  stroke?: string;
+  face?: string;
+  insideTop?: string;
+  insideBottom?: string;
+};
+
+export const FolderIcon = requireNativeViewManager<FolderIconProps>("ArdiaFolderIcon");
 
 export type ContextMenuAreaProps = ViewProps & {
   onContextMenu?: () => void;
   captureDescendants?: boolean;
 };
 
-const NativeContextMenuArea = requireNativeViewManager<Omit<ContextMenuAreaProps, "onContextMenu"> & { onContextMenu?: () => void }>(
-  "ArdiaContextMenuArea",
-);
+export type NativeContextMenuAreaProps = Omit<ContextMenuAreaProps, "onContextMenu"> & {
+  onContextMenu?: (event: { nativeEvent: Record<string, never> }) => void;
+};
+
+const NativeContextMenuArea = requireNativeViewManager<NativeContextMenuAreaProps>("ArdiaContextMenuArea");
 
 export function ContextMenuArea(props: ContextMenuAreaProps) {
   return <NativeContextMenuArea {...props} />;
@@ -67,7 +88,7 @@ export type SurfaceProps = ViewProps & {
   shadowOffset?: [number, number];
 };
 
-type NativeSurfaceProps = Omit<SurfaceProps, "shadowColor" | "shadowOpacity" | "shadowRadius" | "shadowOffset"> & {
+export type NativeSurfaceProps = Omit<SurfaceProps, "shadowColor" | "shadowOpacity" | "shadowRadius" | "shadowOffset"> & {
   surfaceShadowColor?: string;
   surfaceShadowOpacity?: number;
   surfaceShadowRadius?: number;
@@ -111,7 +132,9 @@ export const isLiquidGlass = (): boolean => GlassEffectModule.isLiquidGlass();
 
 export const GlassEffect = requireNativeViewManager<GlassEffectProps>("ArdiaGlassEffect");
 
-export const GlassGroup = requireNativeViewManager<ViewProps & { strength?: number }>("ArdiaGlassGroup");
+export type GlassGroupProps = ViewProps & { strength?: number };
+
+export const GlassGroup = requireNativeViewManager<GlassGroupProps>("ArdiaGlassGroup");
 
 export type PopoverBubbleProps = ViewProps & {
   material?: "popover" | "menu" | "hudWindow" | "sheet" | "toolTip";
@@ -130,7 +153,7 @@ export type PopoverBubbleProps = ViewProps & {
   glass?: boolean;
 };
 
-type NativePopoverBubbleProps = Omit<PopoverBubbleProps, "shadowOpacity" | "shadowRadius" | "shadowOffsetY"> & {
+export type NativePopoverBubbleProps = Omit<PopoverBubbleProps, "shadowOpacity" | "shadowRadius" | "shadowOffsetY"> & {
   bubbleShadowOpacity?: number;
   bubbleShadowRadius?: number;
   bubbleShadowOffsetY?: number;

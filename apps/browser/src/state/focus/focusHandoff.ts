@@ -33,6 +33,7 @@ export function settlingCommandFocus(e: CommandEvent, run: (e: CommandEvent) => 
     });
   } finally {
     if (!expects) cancelFocusMove(generation, activeTab(windowId) === before);
+    cancelAbandonedFocus((id, destination) => id !== windowId || stillPossible(id, destination), activeTab);
   }
 }
 

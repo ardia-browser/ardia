@@ -371,6 +371,7 @@ Plain Chromium code over Chrome's services (`engine/chromium/src/chrome/browser/
 | `ac_site_settings_*`, `ac_site_data_clear` | the site-settings functions, both `clearSiteData`s |
 | `ac_external_apps_allowances`, `_remove` | `getExternalAppAllowances`, `removeExternalAppAllowance` |
 | `ac_tasks_list`, `ac_components_list` | `listTasks` (memory telemetry, the dev harness), `components` |
+| `ac_web3_set_rpcs` | `setWeb3Rpcs` (the chain ID → RPC URL map web3:// pages are read through, `nativeSettings.ts`; replies with the chains it refused: https, or http on localhost only) |
 | `ac_task_manager_open`, `ac_battery_saver`, `ac_memory_saver` | `openTaskManager` (Chrome's Views Task Manager), `setBatterySaver` (Chrome's battery saver mode pref), `setMemorySaver` (Chrome's Memory Saver state and aggressiveness in local state, and the "Always keep these sites active" list, `performance_tuning.tab_discarding.exceptions_with_time`, written to every regular profile loaded now or later; `{ validate }` checks a site as Chrome's settings page does, `url_matcher::util::FilterToComponents`) |
 | `ac_history_*`, `ac_favicons_*`, `ac_bookmarks_*` | `history.ts`, `favicons.ts`, `bookmarks.ts` (through `engineCall`) |
 | `ac_tab_restore_tag`, `_take`, `_load` | native: the WebView's attach (and close) and `restore:` |

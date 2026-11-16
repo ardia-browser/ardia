@@ -26,6 +26,7 @@
 #include "mojo/public/cpp/bindings/associated_receiver_set.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "ardia/core/ac_page_limits.h"
+#include "chrome/browser/ardia/ac_web3.h"
 #include "ardia/core/mojom/ardiacore.mojom.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_registry.h"
@@ -39,6 +40,7 @@
 #include "third_party/blink/public/mojom/script/script_evaluation_params.mojom.h"
 #include "third_party/blink/public/web/web_script_execution_callback.h"
 #include "third_party/blink/public/web/web_script_source.h"
+#include "third_party/blink/public/web/web_security_policy.h"
 #include "url/gurl.h"
 #include "v8/include/v8-context.h"
 #include "v8/include/v8-function.h"
@@ -455,6 +457,8 @@ ACContentRendererClient::~ACContentRendererClient() = default;
 
 void ACContentRendererClient::RenderThreadStarted() {
   ChromeContentRendererClient::RenderThreadStarted();
+  blink::WebSecurityPolicy::RegisterURLSchemeAsSupportingFetchAPI(
+      blink::WebString::FromAscii(ardia::kWeb3Scheme));
   observer_ = std::make_unique<ACRenderThreadObserver>();
   content::RenderThread::Get()->AddObserver(observer_.get());
 }

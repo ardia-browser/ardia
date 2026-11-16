@@ -57,6 +57,12 @@ export type MemorySaverState = { state: "on" | "off"; aggressiveness: MemorySave
 
 export const inputIdleSeconds = () => nativeModule("ArdiaEngine").inputIdleSeconds();
 
+export type Web3Load = {
+  profile: string;
+  mode: "5219" | "auto";
+  outcome: "ok" | "noRpc" | "rpcFailed" | "reverted" | "notContract" | "notFound" | "badUrl" | "unsupportedMode" | "badResponse";
+};
+
 type CliServer = { connections: number; generation: number; file: string; reason?: string };
 
 export type HoverLostEpisode = {

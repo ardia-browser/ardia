@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 const { comboKey, formatShortcut, parseShortcut, resolveShortcuts } = await import("./shortcuts.ts");
 const { settingsSnapshot } = await import("../telemetry/settingsSnapshot.ts");
+const { DEFAULT_SETTINGS } = await import("../settings/settings.ts");
 
 const source = (id, ...keys) => ({ id, keys: keys.map(parseShortcut) });
 const menu = [
@@ -104,7 +105,7 @@ test("an arrow shortcut saved as the layout's code with fn binds the arrow itsel
 
 test("telemetry counts custom shortcuts and those on arrow, page and F keys, never which", () => {
   const shortcuts = { nextTab: ["\uf703", "shift", "command"], previousTab: ["\u001c", "shift", "command", "function"], newTab: ["n", "command"], closeTab: [""] };
-  const snapshot = settingsSnapshot({ shortcuts });
+  const snapshot = settingsSnapshot({ ...DEFAULT_SETTINGS, shortcuts });
   assert.equal(snapshot.custom_shortcuts, "3");
   assert.equal(snapshot.custom_shortcuts_navigation_keys, "2");
   assert.ok(!JSON.stringify(snapshot).includes("nextTab"));

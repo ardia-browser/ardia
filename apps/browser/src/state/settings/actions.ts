@@ -16,6 +16,16 @@ export function setShortcutOverride(id: string, combo: Shortcut | null) {
   useBrowser.getState().updateSettings({ shortcuts: next });
 }
 
+export function setWeb3Rpc(chain: string, url: string) {
+  useBrowser.getState().updateSettings({ web3Rpcs: { ...useBrowser.getState().settings.web3Rpcs, [chain]: url } });
+}
+
+export function removeWeb3Rpc(chain: string) {
+  const next = { ...useBrowser.getState().settings.web3Rpcs };
+  delete next[chain];
+  useBrowser.getState().updateSettings({ web3Rpcs: next });
+}
+
 export function chooseTabLayout(layout: "sidebar" | "top") {
   useBrowser.getState().updateSettings({ tabLayout: layout });
   for (const id of Object.keys(useBrowser.getState().windows)) {

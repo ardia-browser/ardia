@@ -13,6 +13,7 @@
       "batterySaver": "ac_battery_saver",
       "memorySaver": "ac_memory_saver",
       "trimMemory": "ac_memory_trim",
+      "setWeb3Rpcs": "ac_web3_set_rpcs",
       "openTaskManager": "ac_task_manager_open",
       "cliControlStatus": "ac_cli_control"
     },
@@ -105,6 +106,7 @@
     "bookmarks.changed": "bookmarks.changed",
     "extensions.action": "extensions.action",
     "extensions.sync": "extensions.sync",
-    "cliControl": "engine.cliControl"
+    "cliControl": "engine.cliControl",
+    "engine.web3Load": "engine.web3Load"
   }
 }

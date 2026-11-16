@@ -147,6 +147,7 @@ export const SETTING_SPECS = {
   memorySaverMode: oneOf(["moderate", "balanced", "maximum"], "balanced"),
   loadProfilesWhenOpened: flag(true),
   keepActiveSites: shaped<string[]>([], isStringList, STRING_LIST, SYNCED),
+  web3Rpcs: shaped<Record<string, string>>({}, (v) => isRecordOf(v, isString), recordOf({ type: "string" })),
   extensionSidePanelWidth: width(360),
   showFullUrl: flag(false, SYNCED),
   allowJavaScriptFromAppleEvents: flag(false),

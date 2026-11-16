@@ -8,6 +8,7 @@ const PANE_ALIASES: Record<string, SettingsPane> = {
   addresses: "autofill",
   payments: "autofill",
   searchengines: "search",
+  web3: "advanced",
 };
 
 export type AppUrlAction = { kind: "newTab" } | { kind: "settings"; pane: SettingsPane | undefined };

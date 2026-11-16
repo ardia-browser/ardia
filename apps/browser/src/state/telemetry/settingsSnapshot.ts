@@ -8,6 +8,7 @@ import { systemIncreaseContrast } from "../app/systemContrast";
 import { isNavigationOrFunctionKey, storedShortcut } from "../commands/shortcuts";
 import { currentInterfaceScale } from "../settings/interfaceScale";
 import { INTERFACE_SCALE, interfaceScalePercent, rootLength } from "../../lib/interfaceScale";
+import { PUBLIC_NODE_RPC } from "../settings/web3Rpcs";
 
 export const SETTINGS_SNAPSHOT_EVENT = "settings_snapshot";
 
@@ -25,6 +26,12 @@ function measured(spec: SettingSpec<unknown>, value: unknown): string | null {
   if (typeof spec.default === "boolean") return typeof value === "boolean" ? encode(value) : null;
   if (typeof spec.default === "number" || spec.default === null) return value === null || typeof value === "number" ? encode(value) : null;
   return null;
+}
+
+function web3RpcKinds(rpcs: Settings["web3Rpcs"]): Record<string, string> {
+  const mainnet = rpcs["1"];
+  const kind = !mainnet ? "none" : mainnet === PUBLIC_NODE_RPC ? "publicnode" : /^http:\/\//i.test(mainnet) ? "local" : "other";
+  return { web3_rpc_chains: String(Object.keys(rpcs).length), web3_rpc_mainnet: kind };
 }
 
 function customShortcutCounts(overrides: Settings["shortcuts"]): Record<string, string> {
@@ -47,6 +54,7 @@ export function settingsSnapshot(settings: Settings): Record<string, string> {
     ...customShortcutCounts(settings.shortcuts),
     setting_interfaceScale: String(interfaceScalePercent(currentInterfaceScale())),
     default_interfaceScale: String(interfaceScalePercent(INTERFACE_SCALE.default)),
+    ...web3RpcKinds(settings.web3Rpcs),
     system_increase_contrast: encode(systemIncreaseContrast())!,
     unread_hidden_sites: String(Array.isArray(settings.unreadHiddenSites) ? settings.unreadHiddenSites.length : 0),
     custom_new_tab_url: customNewTabUrl({ newTabOpens: "page", minimalismMode: false, newTabUrl: typeof settings.newTabUrl === "string" ? settings.newTabUrl : "" }) ? "true" : "false",

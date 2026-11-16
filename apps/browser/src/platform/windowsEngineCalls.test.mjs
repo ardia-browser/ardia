@@ -22,7 +22,7 @@ function macTables() {
     const domain = text.match(/CallTable\(domain: "([a-zA-Z]+)"/)?.[1];
     if (!domain || MAC_ONLY.has(domain)) continue;
     const table = (tables[domain] = { verbs: [], passing: {} });
-    for (const [, verb, passing] of text.matchAll(/^ {4}"([a-zA-Z]+)": (?:EngineCall\.passing\("(ac_[a-z_]+)"\),?$)?/gm)) {
+    for (const [, verb, passing] of text.matchAll(/^ {4}"([a-zA-Z][a-zA-Z0-9]*)": (?:EngineCall\.passing\("(ac_[a-z0-9_]+)"\),?$)?/gm)) {
       table.verbs.push(verb);
       if (passing) table.passing[verb] = passing;
     }
@@ -94,11 +94,11 @@ test("Windows only names engine calls the Windows engine has", () => {
   const built = new Set(
     readdirSync(new URL(engineSources, repo))
       .filter((name) => name.endsWith(".cc"))
-      .flatMap((name) => [...read(engineSources + name).matchAll(/^AC_(?:PROFILE|ARGS)_CALL\((ac_[a-z_]+)/gm)].map((match) => match[1])),
+      .flatMap((name) => [...read(engineSources + name).matchAll(/^AC_(?:PROFILE|ARGS)_CALL\((ac_[a-z0-9_]+)/gm)].map((match) => match[1])),
   );
   const named = new Set(Object.values(rows.forwarded).flatMap((table) => Object.values(table)));
   for (const name of readdirSync(new URL(windowsDomains, repo)).filter((file) => file.endsWith(".ts")))
-    for (const [, call] of read(windowsDomains + name).matchAll(/"(ac_[a-z_]+)"/g)) named.add(call);
+    for (const [, call] of read(windowsDomains + name).matchAll(/"(ac_[a-z0-9_]+)"/g)) named.add(call);
   assert.ok(named.size > 40, "the scan found the calls");
   assert.deepEqual(sorted(named).filter((name) => !built.has(name)), []);
 });

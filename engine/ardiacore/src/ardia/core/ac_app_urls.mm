@@ -16,6 +16,7 @@
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
 #include "ardia/core/ac_browser.h"
+#include "chrome/browser/ardia/ac_web3.h"
 #import "ardia/core/ardiacore_internal.h"
 #include "url/gurl.h"
 #include "url/origin.h"
@@ -30,6 +31,18 @@ bool IsAppURL(const GURL& url) {
 
 bool IsWebUIURL(const GURL& url) {
   return url.SchemeIs("chrome") || url.SchemeIs("devtools");
+}
+
+bool IsWeb3SettingsRequest(content::NavigationHandle* navigation,
+                           const std::optional<url::Origin>& initiator) {
+  return ardia::IsWeb3SettingsURL(navigation->GetURL()) &&
+         navigation->HasUserGesture() && initiator &&
+         initiator->GetTupleOrPrecursorTupleIfOpaque().scheme() ==
+             ardia::kWeb3Scheme &&
+         navigation->GetWebContents()
+             ->GetPrimaryMainFrame()
+             ->GetLastCommittedURL()
+             .SchemeIs(ardia::kWeb3Scheme);
 }
 
 void ReportAppURLRequest(content::WebContents* contents,
@@ -65,10 +78,12 @@ class AppSchemeThrottle : public content::NavigationThrottle {
     content::NavigationEntry* committed =
         contents->GetController().GetLastCommittedEntry();
     const bool popup_start = !committed || committed->IsInitialEntry();
+    const bool from_webui =
+        initiator && IsWebUIURL(initiator->GetURL()) &&
+        IsWebUIURL(contents->GetPrimaryMainFrame()->GetLastCommittedURL());
     if (navigation->IsInPrimaryMainFrame() && !popup_start &&
-        !navigation->WasServerRedirect() && initiator &&
-        IsWebUIURL(initiator->GetURL()) &&
-        IsWebUIURL(contents->GetPrimaryMainFrame()->GetLastCommittedURL())) {
+        !navigation->WasServerRedirect() &&
+        (from_webui || IsWeb3SettingsRequest(navigation, initiator))) {
       base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(
                          [](base::WeakPtr<content::WebContents> contents, GURL url,

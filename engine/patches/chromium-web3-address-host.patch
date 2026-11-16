@@ -1,0 +1,36 @@
+--- a/url/url_canon_ip.cc
++++ b/url/url_canon_ip.cc
+@@ -7,6 +7,7 @@
+ #include <stdint.h>
+ #include <stdlib.h>
+ 
++#include <algorithm>
+ #include <limits>
+ 
+ #include "base/check.h"
+@@ -19,12 +20,25 @@
+ 
+ namespace {
+ 
++template <typename CHAR>
++bool IsEthereumAddress(std::basic_string_view<CHAR> host_view) {
++  return host_view.size() == 42 && host_view[0] == '0' &&
++         (host_view[1] == 'x' || host_view[1] == 'X') &&
++         std::ranges::all_of(host_view.substr(2), [](CHAR c) {
++           return c < 0x80 && IsHexChar(static_cast<unsigned char>(c));
++         });
++}
++
+ // Return true if we've made a final IPV4/BROKEN decision, false if the result
+ // is NEUTRAL, and we could use a second opinion.
+ template <typename CHAR, typename UCHAR>
+ bool DoCanonicalizeIPv4Address(std::basic_string_view<CHAR> host_view,
+                                CanonOutput* output,
+                                CanonHostInfo* host_info) {
++  if (IsEthereumAddress(host_view)) {
++    host_info->family = CanonHostInfo::NEUTRAL;
++    return false;
++  }
+   host_info->family = IPv4AddressToNumber(host_view, host_info->address,
+                                           &host_info->num_ipv4_components);
+ 

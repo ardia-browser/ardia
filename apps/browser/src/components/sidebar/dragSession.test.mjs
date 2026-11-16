@@ -291,3 +291,34 @@ test("a drag let go with no place to drop is counted; a dropped, cancelled or re
   assert.deepEqual(await run({ viewport: offScreen, to: belowD, commit: false }), { drop: "none", counted: 0 });
   assert.deepEqual((await run({ to: (m, b) => ({ x: b.x + 20, y: b.y + 12 }) })).counted, 0, "let go where it started");
 });
+
+test("a drag whose profile stops being current ends at once: nothing moves, no ghost stays or slides home, and an external drop is left alone", async () => {
+  const { DragItems } = await import("./dragItems.ts");
+  const m = listScene();
+  const { c, ghosts } = mount({ entries: m.L.entries, regions: m.regions });
+  const page = new DragItems(c, true);
+  for (const [key, item] of c.items) page.add(key, item);
+  const order = [...S().windows[m.w].tabIds];
+  const b = frameOf(m, entryKey("tab", m.id.b));
+  escapeCapture.length = 0;
+  await c.begin(entryKey("tab", m.id.b), b.x + 20, b.y + 10);
+  c.move(60, frameOf(m, entryKey("tab", m.id.d)).y + 30);
+  assert.ok(ghosts.at(-1), "the dragged row is lifted");
+  animations.held = true;
+  page.setLive(false);
+  assert.equal(c.items.size, 0);
+  c.abandon();
+  await D.settle();
+  animations.held = false;
+  assert.equal(c.active, false);
+  assert.equal(ghosts.at(-1), null, "the lifted row is gone, not landing on a page no longer shown");
+  assert.deepEqual(S().windows[m.w].tabIds, order);
+  assert.deepEqual(escapeCapture, [true, false]);
+  c.end(true);
+  assert.equal(ghosts.at(-1), null, "the gesture's late release finds nothing to drop");
+
+  await c.beginExternal(1, 60, 300);
+  c.abandon();
+  assert.equal(c.active, true, "a drop from another app is the native drag's to end");
+  c.finishExternal(false);
+});

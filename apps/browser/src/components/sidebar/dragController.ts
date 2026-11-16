@@ -180,6 +180,14 @@ export class DragController extends DragTargeting {
     });
   }
 
+  abandon() {
+    if (!this.active || this.session!.external) return;
+    this.end(false);
+    this.token = null;
+    this.setLanding(null);
+    this.setGhost(null);
+  }
+
   protected stopTimers() {
     clearInterval(this.session?.scrollTimer);
     this.clearHold();

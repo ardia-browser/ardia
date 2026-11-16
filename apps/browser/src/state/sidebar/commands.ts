@@ -9,6 +9,9 @@ import { newGroupWithSelection, openIconPicker, startRename } from "./actions";
 import { cleanUpWithUndo, closeAllTabs } from "./clearTabs";
 import { toggleNewTabBar } from "../omnibox/newTabBar";
 import { movePinnedTitle, togglePinnedRows } from "./movePinned";
+import { showToast } from "../app/toasts";
+import { notePinToast } from "../telemetry/usage";
+import { consentToken, type ConsentToken } from "../telemetry/client";
 import { setSidebarUi } from "./sidebarUi";
 import { tidy } from "./tidyUi";
 import { switcherStep } from "./switcher";
@@ -47,6 +50,7 @@ export function runSidebarCommand(command: BrowserCommand, arg: string | null, w
       return true;
     case "togglePinnedRow":
       togglePinnedRows(windowId);
+      showPinToast(windowId, s, consentToken());
       return true;
     case "returnToPinnedUrl":
       if (tabId) s.returnToPinnedUrl(tabId);
@@ -56,6 +60,18 @@ export function runSidebarCommand(command: BrowserCommand, arg: string | null, w
       return true;
   }
   return false;
+}
+
+export function showPinToast(windowId: string, before: BrowserState, consent: ConsentToken | null) {
+  const s = useBrowser.getState();
+  const changed = Object.values(before.tabs).filter((t) => t.windowId === windowId && s.tabs[t.id] && !t.pin !== !s.tabs[t.id]!.pin);
+  const first = changed[0];
+  if (!first) return;
+  const pinned = !!s.tabs[first.id]!.pin;
+  const tabs = changed.length === 1 ? "Tab" : plural(changed.length, "Tab");
+  const space = s.profiles[first.profileId]?.name ?? "Profile";
+  showToast(windowId, pinned ? `Pinned ${tabs} to "${space}"` : `Un-Pinned ${tabs} from "${space}"`, undefined, { icon: pinned ? "pin" : "pin.slash" });
+  notePinToast(consent);
 }
 
 export function sidebarMenuState(s: BrowserState, windowId: string | undefined) {

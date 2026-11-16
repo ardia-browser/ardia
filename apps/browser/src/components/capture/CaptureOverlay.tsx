@@ -7,6 +7,7 @@ import { dragRect, type Point, type Rect } from "../../state/capture/captureArea
 import { CAPTURE_EDGE, CAPTURE_SHADE, CAPTURE_SIZE_GAP } from "./tokens";
 
 const ESCAPE = [{ key: "Escape" }];
+const RETAINED_ANYWHERE = { top: 100000, left: 100000, right: 100000, bottom: 100000 };
 
 export function CaptureOverlay({ windowId, panes, origin, width, height }: {
   windowId: string;
@@ -49,7 +50,7 @@ export function CaptureOverlay({ windowId, panes, origin, width, height }: {
     const to = dragTo(e);
     if (from && to) setDrag({ from, to });
   };
-  const finish = (e: GestureResponderEvent) => {
+  const release = (e: GestureResponderEvent) => {
     const from = gesture.current?.from;
     const to = dragTo(e);
     gesture.current = null;
@@ -58,6 +59,13 @@ export function CaptureOverlay({ windowId, panes, origin, width, height }: {
     if (!from || !to || !now.origin) return endCapture(windowId);
     void finishCapture(windowId, dragRect(from, to, now), now.panes, now.origin);
   };
+  const cancelUnlessReleased = () =>
+    queueMicrotask(() => {
+      if (!gesture.current) return;
+      gesture.current = null;
+      setDrag(null);
+      endCapture(windowId);
+    });
 
   const r = drag ? dragRect(drag.from, drag.to, { width, height }) : null;
   return (
@@ -70,10 +78,13 @@ export function CaptureOverlay({ windowId, panes, origin, width, height }: {
         if (e.nativeEvent.key === "Escape") endCapture(windowId);
       }}
       accessibilityLabel="Drag to capture an area of the page"
+      cancelable={false}
+      pressRetentionOffset={RETAINED_ANYWHERE}
       onPressIn={begin}
       // @ts-expect-error
       onPressMove={move}
-      onPressOut={finish}
+      onPress={release}
+      onPressOut={cancelUnlessReleased}
       style={[StyleSheet.absoluteFill, { cursor: "crosshair" }]}
     >
       {r ? (

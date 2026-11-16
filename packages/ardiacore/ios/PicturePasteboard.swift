@@ -1,9 +1,11 @@
 import AppKit
 
 enum PicturePasteboard {
-  static func write(_ picture: CGImage?) -> [String: Int]? {
+  static func write(_ picture: CGImage?, pixelsPerPoint: CGFloat) -> [String: Int]? {
     guard let picture = picture.map(inSRGB) else { return nil }
     let bitmap = NSBitmapImageRep(cgImage: picture)
+    let density = max(pixelsPerPoint, 1)
+    bitmap.size = NSSize(width: CGFloat(picture.width) / density, height: CGFloat(picture.height) / density)
     guard let png = bitmap.representation(using: .png, properties: [:]) else { return nil }
     let pasteboard = NSPasteboard.general
     pasteboard.clearContents()

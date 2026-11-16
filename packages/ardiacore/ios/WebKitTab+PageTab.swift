@@ -69,10 +69,9 @@ extension WebKitTab: PageTab {
 
   func navigationEntries(_ completion: @escaping ([[String: Any]]) -> Void) { completion(navigationEntries()) }
 
-  func copyPicture(ofWindowArea area: NSRect, completion: @escaping (CGImage?) -> Void) {
+  func copyPicture(ofRootArea area: NSRect, completion: @escaping (CGImage?) -> Void) {
     guard let view = webView, let window, !view.isHidden else { return completion(nil) }
-    let top = window.contentView?.frame.height ?? 0
-    let inWindow = NSRect(x: area.minX, y: top - area.minY - area.height, width: area.width, height: area.height)
+    let inWindow = InterfaceScale.windowRect(fromRoot: area, in: window)
     let inPage = view.convert(inWindow, from: nil).intersection(view.bounds)
     guard !inPage.isEmpty else { return completion(nil) }
     let configuration = WKSnapshotConfiguration()

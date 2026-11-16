@@ -47,7 +47,7 @@ test("no capture over a Peek or an internal page", () => {
   assert.equal(capturing(), null);
 });
 
-test("a drag copies the area of the pane under it in window points, from the card's origin", async () => {
+test("a drag copies the area of the pane under it in root points, from the card's origin", async () => {
   const { w, t, calls } = setup();
   runCaptureCommand("capture", w);
   await finishCapture(w, { x: 100, y: 80, width: 200, height: 120 }, { [t]: { x: 0, y: 0, width: 1000, height: 700 } }, { x: 9, y: 40 });

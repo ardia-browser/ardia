@@ -3,6 +3,7 @@ import { webviews } from "../../platform/webviews";
 import { useBrowser } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { peekTabId } from "../peek/peek";
+import { UNAVAILABLE_COMMANDS } from "../commands/commandCatalog";
 import { isInternalTab } from "../pages/urls";
 import { paneUnder, type Point, type Rect } from "./captureArea";
 import { noteCaptureCancelled, noteCaptureCopied, noteCaptureFailed, noteCaptureStarted } from "../telemetry/captureCounts";
@@ -15,7 +16,7 @@ function canCapture(windowId: string): boolean {
   const s = useBrowser.getState();
   const shown = activeTabId(s, windowId);
   const tab = shown ? s.tabs[shown] : undefined;
-  return !!tab?.url && !isInternalTab(tab) && !peekTabId(s, windowId);
+  return !UNAVAILABLE_COMMANDS.has("capture") && !!tab?.url && !isInternalTab(tab) && !peekTabId(s, windowId);
 }
 
 export function runCaptureCommand(command: string, windowId: string): boolean {

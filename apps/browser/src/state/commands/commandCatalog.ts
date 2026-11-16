@@ -3,6 +3,7 @@ import type { Settings } from "../settings/settings";
 import { parseShortcut, type ShortcutSource } from "./shortcuts";
 import { defaultKeys, profileSwitchKey } from "./keyNotation";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { isWebDemo } from "../../platform/webDemo";
 import { splitViewAvailable } from "../splits/splits";
 
 type Keys = readonly string[];
@@ -223,11 +224,13 @@ export const SPLIT_VIEW_COMMANDS: readonly BrowserCommand[] = ["openSplitPane", 
 export const EXPORT_COMMANDS: readonly BrowserCommand[] = ["exportBookmarks"];
 export const WEBKIT_COMMANDS: readonly BrowserCommand[] = ["togglePageEngine"];
 export const HIDING_COMMANDS: readonly BrowserCommand[] = ["hideElement", "showHiddenElements"];
+export const CAPTURE_COMMANDS: readonly BrowserCommand[] = ["capture"];
 export const UNAVAILABLE_COMMANDS: ReadonlySet<string> = new Set([
   ...(splitViewAvailable ? [] : SPLIT_VIEW_COMMANDS),
   ...(PLATFORM_FEATURES.exportsBookmarksAndPasswords ? [] : EXPORT_COMMANDS),
   ...(PLATFORM_FEATURES.webKit ? [] : WEBKIT_COMMANDS),
   ...(PLATFORM_FEATURES.contentBlocker ? [] : HIDING_COMMANDS),
+  ...(PLATFORM_FEATURES.capturesPageArea && !isWebDemo ? [] : CAPTURE_COMMANDS),
 ]);
 export const LITTLE_ARDIA_PAGE_COMMANDS: ReadonlySet<string> = new Set(commandsWhere((c) => c.littleArdia === "page"));
 

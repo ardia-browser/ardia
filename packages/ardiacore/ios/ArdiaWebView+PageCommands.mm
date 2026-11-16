@@ -1,4 +1,5 @@
 #import "ArdiaWebViewInternal.h"
+#import "ArdiaInterfaceScale.h"
 #import "ArdiaRuntime.h"
 #import "ArdiaFairPlay.h"
 #import "ArdiaProtectedVideo.h"
@@ -145,26 +146,34 @@ static const NSTimeInterval kAreaPictureTimeout = 1.0;
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{ answer(nil); });
 }
 
-- (void)copyPictureOfWindowArea:(NSRect)area completion:(void (^)(CGImageRef))completion {
+- (void)copyPictureOfRootArea:(NSRect)area completion:(void (^)(CGImageRef))completion {
   NSView *page = _tab.view;
   NSWindow *window = self.window;
   if (!page || page.superview != self || !window || self.hidden || self.awaitsFirstDocument) return completion(NULL);
-  const CGFloat top = NSHeight(window.contentView.frame);
-  const NSRect inWindow = NSMakeRect(NSMinX(area), top - NSMinY(area) - NSHeight(area), NSWidth(area), NSHeight(area));
+  const NSRect inWindow = [ArdiaInterfaceScale windowRectFromRoot:area inWindow:window];
   const NSRect bounds = page.bounds;
   const NSRect inPage = NSIntersectionRect([page convertRect:inWindow fromView:nil], bounds);
   if (NSIsEmptyRect(inPage) || NSWidth(bounds) <= 0 || NSHeight(bounds) <= 0) return completion(NULL);
   const CGFloat fromTop = page.isFlipped ? NSMinY(inPage) - NSMinY(bounds) : NSMaxY(bounds) - NSMaxY(inPage);
   const CGFloat fromLeft = NSMinX(inPage) - NSMinX(bounds);
+  __block BOOL answered = NO;
+  void (^answer)(CGImageRef) = ^(CGImageRef picture) {
+    if (answered) return;
+    answered = YES;
+    completion(picture);
+  };
   [_tab copyPicture:kAreaPictureTimeout
          completion:^(CGImageRef picture) {
-           if (!picture) return completion(NULL);
+           if (!picture) return answer(NULL);
            const CGFloat sx = CGImageGetWidth(picture) / NSWidth(bounds), sy = CGImageGetHeight(picture) / NSHeight(bounds);
            const CGRect pixels = CGRectIntegral(CGRectMake(fromLeft * sx, fromTop * sy, NSWidth(inPage) * sx, NSHeight(inPage) * sy));
            CGImageRef cropped = CGImageCreateWithImageInRect(picture, pixels);
-           completion(cropped);
+           answer(cropped);
            if (cropped) CGImageRelease(cropped);
          }];
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)((kAreaPictureTimeout + 0.5) * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    answer(NULL);
+  });
 }
 
 - (void)navigationEntries:(void (^)(NSArray<NSDictionary<NSString *, id> *> *))completion {

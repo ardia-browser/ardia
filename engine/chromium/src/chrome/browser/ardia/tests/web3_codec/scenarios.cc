@@ -170,6 +170,8 @@ void ContractPoliciesLoseReporting() {
   Expect(WithoutCspReporting("default-src 'self'; report-uri https://t.example/r") == "default-src 'self'", "report-uri dropped, the rest kept");
   Expect(WithoutCspReporting("Report-To x;img-src *, script-src 'none'; REPORT-URI https://t.example") == "img-src *, script-src 'none'", "reporting dropped in each policy of a list, any case");
   Expect(WithoutCspReporting(" report-uri https://t.example ") == "", "a reporting-only policy leaves nothing");
+  Expect(WithoutCspReporting("default-src 'none'; report-uri\fhttps://t.example/r") == "default-src 'none'", "a form feed separates the directive name, as in Chromium's CSP parser");
+  Expect(WithoutCspReporting("\f\r\nreport-to x; img-src *") == "img-src *", "leading form feed, CR and LF are trimmed");
   Expect(WithoutCspReporting("default-src 'none'; style-src 'unsafe-inline'") == "default-src 'none'; style-src 'unsafe-inline'", "a policy without reporting is unchanged");
 }
 

@@ -24,10 +24,12 @@ std::vector<std::string_view> Split(std::string_view text, char separator) {
   }
 }
 
-std::string_view TrimSpace(std::string_view text) {
-  while (!text.empty() && (text.front() == ' ' || text.front() == '\t')) text.remove_prefix(1);
-  while (!text.empty() && (text.back() == ' ' || text.back() == '\t')) text.remove_suffix(1);
-  return text;
+constexpr std::string_view kCspSpace = " \t\n\f\r";
+
+std::string_view TrimCspSpace(std::string_view text) {
+  const size_t start = text.find_first_not_of(kCspSpace);
+  if (start == std::string_view::npos) return {};
+  return text.substr(start, text.find_last_not_of(kCspSpace) - start + 1);
 }
 
 std::vector<std::string_view> PathSegments(std::string_view path) {
@@ -410,8 +412,8 @@ std::string WithoutCspReporting(std::string_view header) {
   for (std::string_view policy : Split(header, ',')) {
     std::string directives;
     for (std::string_view directive : Split(policy, ';')) {
-      directive = TrimSpace(directive);
-      const std::string name = Lower(directive.substr(0, directive.find_first_of(" \t")));
+      directive = TrimCspSpace(directive);
+      const std::string name = Lower(directive.substr(0, directive.find_first_of(kCspSpace)));
       if (directive.empty() || name == "report-uri" || name == "report-to") continue;
       if (!directives.empty()) directives += "; ";
       directives += directive;

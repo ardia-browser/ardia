@@ -7,7 +7,10 @@ import { useBookmarkRoots, useBookmarks } from "../../state/bookmarks/hooks";
 import { plural } from "../../state/browser/model";
 import { moveBookmarks, openFolder, removeBookmarks, restoreBookmarks } from "../../state/bookmarks/actions";
 import { clickSelection, NO_SELECTION, rowWindow, selectAll, selectedInOrder, type ListSelection } from "../../state/bookmarks/bookmarkList";
-import { FolderTree } from "../bookmarks/FolderTree";
+import { FolderTree, folderTreeRowInset, type FolderTreeRowInfo } from "../bookmarks/FolderTree";
+import { canDragInTree, canDropInto, treeDrop } from "../../state/bookmarks/treeDrop";
+import { isWithin } from "../../state/bookmarks/bookmarks";
+import { noteBookmarkTreeDrag } from "../../state/telemetry/bookmarkMoves";
 import { Box, Button, Divider, EmptyState, radius, space, Text, Toast, useTheme } from "../ui";
 import { openOrganizeMenu } from "../../state/bookmarks/bookmarkMenus";
 import { BookmarkRow } from "./BookmarkRow";
@@ -18,8 +21,9 @@ import { bookmarkList, pagesColors, undoToast } from "./tokens";
 import { COMMAND_KEY, commandHeld } from "../../state/commands/keyNotation";
 
 
-type Target = { kind: "folder"; id: string } | { kind: "row"; id: string; index: number; folder: boolean };
-type Drop = { into: string } | { parentId: string; index: number };
+type Target = { kind: "tree"; id: string; expanded: boolean } | { kind: "row"; id: string; index: number; folder: boolean };
+type DropLineAt = { list: number } | { tree: string; edge: "before" | "after" };
+type Drop = { into: string } | { parentId: string; index: number; line: DropLineAt };
 
 export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: string }) {
   const theme = useTheme();
@@ -75,19 +79,34 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
     return () => clearTimeout(timer);
   }, [undo]);
 
-  const dragging = useRef<string[]>([]);
+  const dragging = useRef<{ ids: string[]; fromTree: boolean }>({ ids: [], fromTree: false });
   const onDragStart = (id: string) => {
-    dragging.current = selection.selected.has(id) ? selected : [id];
+    dragging.current = { ids: selection.selected.has(id) ? selected : [id], fromTree: false };
+    targets.measure();
+  };
+  const onTreeDragStart = (id: string) => {
+    dragging.current = { ids: [id], fromTree: true };
     targets.measure();
   };
   const dropFor = (x: number, y: number): Drop | null => {
     const hit = targets.hit(x, y);
-    if (!hit || !folderId) return null;
+    if (!hit) return null;
+    const b = currentBookmarks();
+    const moving = dragging.current.ids;
     const t = hit.data;
-    if (t.kind === "folder") return dragging.current.includes(t.id) ? null : { into: t.id };
-    if (t.folder && hit.fraction > 0.25 && hit.fraction < 0.75 && !dragging.current.includes(t.id)) return { into: t.id };
-    if (searching) return null;
-    return { parentId: folderId, index: hit.fraction < 0.5 ? t.index : t.index + 1 };
+    if (t.kind === "tree") {
+      const spot = treeDrop(b, moving, t, hit.fraction);
+      if (!spot || "into" in spot) return spot;
+      return { parentId: spot.parentId, index: spot.index, line: { tree: t.id, edge: spot.edge } };
+    }
+    if (!folderId) return null;
+    if (t.folder && hit.fraction > 0.25 && hit.fraction < 0.75 && !moving.includes(t.id)) return canDropInto(b, moving, t.id) ? { into: t.id } : null;
+    if (searching || isWithin(b, folderId, moving)) return null;
+    const slot = hit.fraction < 0.5 ? t.index : t.index + 1;
+    const picked = new Set(moving);
+    let index = slot;
+    for (let at = 0; at < slot && at < ids.length; at++) if (picked.has(ids[at]!)) index--;
+    return { parentId: folderId, index, line: { list: slot } };
   };
   const onDragMove = (x: number, y: number) => {
     const next = dropFor(x, y);
@@ -97,13 +116,12 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
     const target = dropFor(x, y);
     setDrop(null);
     if (!target) return;
-    const moving = dragging.current;
-    if ("into" in target) return moveBookmarks(moving, target.into);
-    const picked = new Set(moving);
-    let index = target.index;
-    for (let at = 0; at < target.index && at < ids.length; at++) if (picked.has(ids[at]!)) index--;
-    moveBookmarks(moving, target.parentId, index);
+    const { ids: moving, fromTree } = dragging.current;
+    if ("into" in target) moveBookmarks(moving, target.into);
+    else moveBookmarks(moving, target.parentId, target.index);
+    if (fromTree) noteBookmarkTreeDrag();
   };
+  const treeDrag = { canDrag: (id: string) => canDragInTree(currentBookmarks(), id), onDragStart: onTreeDragStart, onDragMove, onDragEnd };
 
   const actions =
     selected.length > 0 ? (
@@ -115,7 +133,13 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
       <Button variant="icon" icon="ellipsis.circle" onPress={() => void openOrganizeMenu(windowId, profileId, folderId)} tooltip="Organize" />
     );
 
-  const indicator = drop && "index" in drop ? drop.index : null;
+  const line = drop && "line" in drop ? drop.line : null;
+  const indicator = line && "list" in line ? line.list : null;
+  const treeLine = (row: FolderTreeRowInfo) => {
+    if (!line || !("tree" in line) || line.tree !== row.id) return null;
+    const nested = line.edge === "after" && drop && "parentId" in drop && drop.parentId === row.id;
+    return <TreeDropLine edge={line.edge} inset={folderTreeRowInset(nested ? row.depth + 1 : row.depth)} color={theme.formAccent} />;
+  };
 
   return (
     <View style={{ flex: 1 }}>
@@ -130,12 +154,14 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
               setFolderId(id);
             }}
             rowHeight={bookmarkList.treeRow}
-            wrapRow={(id, row) => (
+            drag={treeDrag}
+            wrapRow={(row, content) => (
               <View
-                ref={targets.ref(`tree:${id}`, { kind: "folder", id })}
-                style={{ borderRadius: radius.control, backgroundColor: drop && "into" in drop && drop.into === id ? colors.dropTarget : undefined }}
+                ref={targets.ref(`tree:${row.id}`, { kind: "tree", id: row.id, expanded: row.expanded })}
+                style={{ borderRadius: radius.control, backgroundColor: drop && "into" in drop && drop.into === row.id ? colors.dropTarget : undefined }}
               >
-                {row}
+                {content}
+                {treeLine(row)}
               </View>
             )}
           />
@@ -220,6 +246,10 @@ function DropLine({ top, color }: { top: number; color: string }) {
   return <View style={[DROP_LINE, { top: top - bookmarkList.dropLine / 2, backgroundColor: color }]} />;
 }
 
+function TreeDropLine({ edge, inset, color }: { edge: "before" | "after"; inset: number; color: string }) {
+  return <View style={[TREE_DROP_LINE, edge === "before" ? { top: 0 } : { bottom: 0 }, { left: inset, backgroundColor: color }]} />;
+}
+
 const LIST_KEYS = [{ key: "Backspace" }, { key: "Delete" }, { key: "a", [COMMAND_KEY]: true }];
 
 const BODY = { flex: 1, flexDirection: "row", paddingHorizontal: space.xl, paddingBottom: space.xl, gap: space.xl } as const;
@@ -230,4 +260,5 @@ const LIST_HEADER = { height: bookmarkList.headerHeight, alignItems: "center" } 
 const LIST_TITLE = { flex: 1 } as const;
 const LIST_KEYS_VIEW = { flex: 1 } as const;
 const LIST_CONTENT = { padding: space.s } as const;
+const TREE_DROP_LINE = { position: "absolute", right: space.s, height: bookmarkList.dropLine, borderRadius: bookmarkList.dropLineRadius } as const;
 const DROP_LINE = { position: "absolute", left: space.m, right: space.m, height: bookmarkList.dropLine, borderRadius: bookmarkList.dropLineRadius, zIndex: 5 } as const;

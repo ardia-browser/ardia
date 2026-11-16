@@ -6,8 +6,20 @@ import { currentBookmarkRoots, currentBookmarks } from "../../state/browser/curr
 import { radius, space, Symbol, Text, useHover, useTheme } from "../ui";
 import { folderTree, folderTreeInk } from "./tokens";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
+import { useRowDrag, type RowDragHandlers } from "./useRowDrag";
 
 type FolderRow = { id: string; title: string; depth: number; hasChildren: boolean };
+
+export type FolderTreeRowInfo = { id: string; depth: number; expanded: boolean };
+
+export type FolderTreeDrag = {
+  canDrag: (id: string) => boolean;
+  onDragStart: (id: string) => void;
+  onDragMove: (x: number, y: number) => void;
+  onDragEnd: (x: number, y: number) => void;
+};
+
+export const folderTreeRowInset = (depth: number) => folderTree.inset + depth * folderTree.indent;
 
 function useFolderRows(profileId: string, expanded: Set<string>): FolderRow[] {
   const roots = useBookmarkRoots(profileId);
@@ -43,12 +55,14 @@ export function FolderTree({
   onSelect,
   rowHeight,
   wrapRow,
+  drag,
 }: {
   profileId: string;
   selectedId: string | null;
   onSelect: (id: string) => void;
   rowHeight: number;
-  wrapRow?: (id: string, row: ReactNode) => ReactNode;
+  wrapRow?: (row: FolderTreeRowInfo, content: ReactNode) => ReactNode;
+  drag?: FolderTreeDrag;
 }) {
   const [expanded, setExpanded] = useState(() => {
     const b = currentBookmarks();
@@ -73,20 +87,19 @@ export function FolderTree({
 
   return (
     <View>
-      {rows.map((row) => {
-        const content = (
-          <FolderTreeRow
-            key={row.id}
-            row={row}
-            height={rowHeight}
-            selected={row.id === selectedId}
-            expanded={expanded.has(row.id)}
-            onToggle={() => toggle(row.id)}
-            onSelect={() => onSelect(row.id)}
-          />
-        );
-        return wrapRow ? <View key={row.id}>{wrapRow(row.id, content)}</View> : content;
-      })}
+      {rows.map((row) => (
+        <FolderTreeRow
+          key={row.id}
+          row={row}
+          height={rowHeight}
+          selected={row.id === selectedId}
+          expanded={expanded.has(row.id)}
+          onToggle={() => toggle(row.id)}
+          onSelect={() => onSelect(row.id)}
+          wrap={wrapRow}
+          drag={drag && drag.canDrag(row.id) ? drag : null}
+        />
+      ))}
     </View>
   );
 }
@@ -98,6 +111,8 @@ function FolderTreeRow({
   expanded,
   onToggle,
   onSelect,
+  wrap,
+  drag,
 }: {
   row: FolderRow;
   height: number;
@@ -105,12 +120,20 @@ function FolderTreeRow({
   expanded: boolean;
   onToggle: () => void;
   onSelect: () => void;
+  wrap?: (row: FolderTreeRowInfo, content: ReactNode) => ReactNode;
+  drag: FolderTreeDrag | null;
 }) {
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
   const pressMotion = usePressScaleMotion(row.hasChildren, buttonMotion.iconPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
-  return (
+  const handlers: RowDragHandlers | null = drag && {
+    onDragStart: () => drag.onDragStart(row.id),
+    onDragMove: drag.onDragMove,
+    onDragEnd: drag.onDragEnd,
+  };
+  const { panHandlers, dy, dragging } = useRowDrag(handlers);
+  const content = (
     <View {...hoverProps}>
       <Pressable onPress={onSelect}>
         <View
@@ -119,7 +142,7 @@ function FolderTreeRow({
             borderRadius: radius.control,
             flexDirection: "row",
             alignItems: "center",
-            paddingLeft: folderTree.inset + row.depth * folderTree.indent,
+            paddingLeft: folderTreeRowInset(row.depth),
             paddingRight: space.m,
             backgroundColor: selected ? theme.formAccent : hovered ? theme.rowHover : undefined,
           }}
@@ -150,6 +173,14 @@ function FolderTreeRow({
         </View>
       </Pressable>
     </View>
+  );
+  return (
+    <Animated.View
+      {...panHandlers}
+      style={{ zIndex: dragging ? folderTree.draggingLayer : 0, opacity: dragging ? folderTree.dragOpacity : 1, transform: [{ translateY: dy }] }}
+    >
+      {wrap ? wrap({ id: row.id, depth: row.depth, expanded }, content) : content}
+    </Animated.View>
   );
 }
 

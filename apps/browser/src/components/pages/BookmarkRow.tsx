@@ -1,5 +1,4 @@
-import { useMemo, useRef, useState } from "react";
-import { Animated, PanResponder, Pressable, View } from "react-native";
+import { Animated, Pressable, View } from "react-native";
 import { bookmarkAncestors } from "../../state/bookmarks/bookmarks";
 import { useBookmarks } from "../../state/bookmarks/hooks";
 import { openUrl } from "../../state/bookmarks/actions";
@@ -7,6 +6,7 @@ import { plural } from "../../state/browser/model";
 import { Favicon } from "../favicon/Favicon";
 import { Button, ContextMenuArea, MouseArea, radius, space, Symbol, Text, useHover, useTheme } from "../ui";
 import { openBookmarkRowMenu } from "../../state/bookmarks/bookmarkMenus";
+import { useRowDrag } from "../bookmarks/useRowDrag";
 import { hostLabel } from "./PageLayout";
 import { bookmarkList, pagesColors } from "./tokens";
 import { perLook } from "../ui/tokens";
@@ -54,35 +54,7 @@ export function BookmarkRow({
   const node = useBookmarks((b) => b.nodes[id]);
   const path = useBookmarks((b) => (showPath ? bookmarkAncestors(b, id).map((a) => a.title).reverse().join(" › ") : ""));
   const { hovered, hoverProps } = useHover();
-  const dy = useRef(new Animated.Value(0)).current;
-  const [dragging, setDragging] = useState(false);
-  const handlers = useRef({ onDragStart, onDragMove, onDragEnd });
-  handlers.current = { onDragStart, onDragMove, onDragEnd };
-  const responder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 4 || Math.abs(g.dx) > 8,
-        onPanResponderGrant: () => {
-          setDragging(true);
-          handlers.current.onDragStart();
-        },
-        onPanResponderMove: (_, g) => {
-          dy.setValue(g.dy);
-          handlers.current.onDragMove(g.moveX, g.moveY);
-        },
-        onPanResponderRelease: (_, g) => {
-          dy.setValue(0);
-          setDragging(false);
-          handlers.current.onDragEnd(g.moveX, g.moveY);
-        },
-        onPanResponderTerminate: () => {
-          dy.setValue(0);
-          setDragging(false);
-          handlers.current.onDragEnd(-1, -1);
-        },
-      }),
-    [],
-  );
+  const { panHandlers, dy, dragging } = useRowDrag({ onDragStart, onDragMove, onDragEnd });
   if (!node) return null;
 
   const open = (mode: Parameters<typeof openUrl>[2]) => node.kind === "url" && openUrl(node.url, windowId, mode);
@@ -94,7 +66,7 @@ export function BookmarkRow({
   return (
     <Animated.View
       ref={targetRef as never}
-      {...responder.panHandlers}
+      {...panHandlers}
       {...hoverProps}
       style={{ position: "absolute", top, left: 0, right: 0, zIndex: dragging ? 10 : 0, opacity: dragging ? bookmarkList.dragOpacity : 1, transform: [{ translateY: dy }] }}
     >

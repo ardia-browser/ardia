@@ -1,10 +1,15 @@
 let moves = 0;
 let moved = 0;
 let slowestSyncMs = 0;
+let treeDrags = 0;
 
 export function noteBookmarksMoved(count: number) {
   moves++;
   moved += count;
+}
+
+export function noteBookmarkTreeDrag() {
+  treeDrags++;
 }
 
 export function noteBookmarkSyncDiff(ms: number) {
@@ -12,9 +17,10 @@ export function noteBookmarkSyncDiff(ms: number) {
 }
 
 export function takeBookmarkMoveCounts() {
-  const taken = { bookmark_moves: moves, bookmarks_moved: moved, bookmark_sync_diff_ms_max: Math.round(slowestSyncMs) };
+  const taken = { bookmark_moves: moves, bookmarks_moved: moved, bookmark_sync_diff_ms_max: Math.round(slowestSyncMs), bookmark_tree_drags: treeDrags };
   moves = 0;
   moved = 0;
   slowestSyncMs = 0;
+  treeDrags = 0;
   return taken;
 }

@@ -17,6 +17,17 @@ enum WebKitMediaFaults {
     "hotstar.com",
     "jiohotstar.com",
     "v.qq.com",
+    "audible.com",
+    "audible.co.uk",
+    "audible.ca",
+    "audible.com.au",
+    "audible.de",
+    "audible.fr",
+    "audible.it",
+    "audible.es",
+    "audible.co.jp",
+    "audible.in",
+    "audible.com.br",
   ]
 
   static let reasons: Set<String> = [

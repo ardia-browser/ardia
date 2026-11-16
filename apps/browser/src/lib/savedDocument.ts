@@ -27,6 +27,20 @@ export function upgraded(doc: unknown, version: number, migrations: Migrations =
   return current;
 }
 
+export function newerSavedVersion(json: string | null | undefined, version: number, field = "version"): number | null {
+  if (!json) return null;
+  try {
+    const doc: unknown = JSON.parse(json);
+    if (!isFields(doc)) return null;
+    const saved = doc[field];
+    return typeof saved === "number" && Number.isSafeInteger(saved) && saved > version ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+export const keptAsideName = (name: string, version: number, copy = 1): string => `${name.replace(/\.json$/, "")}.v${version}${copy > 1 ? `-${copy}` : ""}.json`;
+
 export function parseSaved(json: string | null | undefined, version: number, migrations: Migrations = {}, field = "version"): SavedObject | null {
   if (!json) return null;
   try {

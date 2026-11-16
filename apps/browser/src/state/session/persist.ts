@@ -13,7 +13,7 @@ import type { BrowserWindow, ClosedWindow, ParkedPins, SplitView, Tab } from "..
 import { downloadSession, withoutRepeats } from "../downloads/downloadsSlice";
 import { anyDownloadProgress, withLiveProgress } from "../downloads/progress";
 import { noteDownloadHistoryWrite } from "../telemetry/downloadWork";
-import { parseSaved, versionedJson, unchanged, type Migrations, type SavedObject } from "../../lib/savedDocument";
+import { keptAsideName, newerSavedVersion, parseSaved, versionedJson, unchanged, type Migrations, type SavedObject } from "../../lib/savedDocument";
 import { sessionWithCleanUpMinutes } from "../settings/cleanUpAfter";
 import { parseSettingsMeta, sessionWithNewTabLinksInLittleArdia, sessionWithSettingsMeta, sessionWithUnreadCountsOffByDefault } from "../settings/settings";
 import { sessionWithOwnTabMutes } from "../tabs/mute";
@@ -207,6 +207,36 @@ function write(name: string, json: string): boolean {
   }
 }
 
+let keptAsideAtLaunch = 0;
+const copiesLanding = new Set<string>();
+
+function holdUntilLanded(name: string, aside: string) {
+  copiesLanding.add(name);
+  const landed = () =>
+    documentSaved(aside).then(
+      () => copiesLanding.delete(name),
+      () => setTimeout(landed, SAVE_DELAY_MS),
+    );
+  void landed();
+}
+
+function readSaved(name: string, version: number): string | null {
+  const json = read(name);
+  const newer = newerSavedVersion(json, version);
+  if (newer === null) return json;
+  for (let copy = 1; ; copy++) {
+    const aside = keptAsideName(name, newer, copy);
+    const kept = read(aside);
+    if (kept === json) return json;
+    if (kept !== null) continue;
+    if (write(aside, json!)) {
+      keptAsideAtLaunch++;
+      holdUntilLanded(name, aside);
+    }
+    return json;
+  }
+}
+
 let droppedPrivateDownloads = false;
 
 function forgetStaging(id: string) {
@@ -218,7 +248,7 @@ function forgetStaging(id: string) {
 }
 
 function savedDownloads(saved: Pick<BrowserState, "profiles">): Download[] {
-  const raw = parseSaved(read(DOWNLOADS_DOCUMENT), DOWNLOADS_VERSION, DOWNLOADS_MIGRATIONS);
+  const raw = parseSaved(readSaved(DOWNLOADS_DOCUMENT, DOWNLOADS_VERSION), DOWNLOADS_VERSION, DOWNLOADS_MIGRATIONS);
   const downloads = rows<Download>(raw?.downloads, (d) => isString(d.id) && isString(d.state));
   droppedPrivateDownloads = downloads.some((d) => downloadSession(saved, d) !== null);
   return withoutRepeats(downloads.filter((d) => downloadSession(saved, d) === null)).map((d, i) => {
@@ -259,7 +289,7 @@ function closedForLaunch(session: SavedSession): HydrateData {
 export type LaunchOverrides = { restoreSession?: boolean };
 
 export function loadSession({ restoreSession }: LaunchOverrides = {}): (HydrateData & { windowsAgainstAutoHideTabs: number }) | null {
-  const session = parseSession(read(SESSION_DOCUMENT));
+  const session = parseSession(readSaved(SESSION_DOCUMENT, SESSION_VERSION));
   if (!session) return null;
   const downloads = savedDownloads({ profiles: session.profiles ?? {} });
   const restore = restoreSession ?? session.settings?.restoreSession !== false;
@@ -302,8 +332,10 @@ let realignedAtLaunch = 0;
 
 export const sessionRestoredAtLaunch = () => restoredAtLaunch;
 export const windowsRealignedToAutoHideTabsAtLaunch = () => realignedAtLaunch;
+export const newerDocumentsKeptAsideAtLaunch = () => keptAsideAtLaunch;
 
 export function startPersistence(overrides: LaunchOverrides = {}) {
+  keptAsideAtLaunch = 0;
   const loaded = loadSession(overrides);
   restoredAtLaunch = !!loaded?.windowOrder?.length;
   realignedAtLaunch = loaded?.windowsAgainstAutoHideTabs ?? 0;
@@ -320,7 +352,7 @@ export function startPersistence(overrides: LaunchOverrides = {}) {
     timer = undefined;
     if (frozen) return;
     const s = useBrowser.getState();
-    for (const doc of DOCS.filter((d) => dirty.has(d))) {
+    for (const doc of DOCS.filter((d) => dirty.has(d) && !copiesLanding.has(d.name))) {
       const json = doc.json(s);
       const saved = lastJson.get(doc.name) === json;
       if (saved || write(doc.name, json)) {

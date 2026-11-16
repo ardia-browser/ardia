@@ -197,7 +197,10 @@ writeDocument(DOC, versionedJson(data, VERSION));
   n + 1). Never branch on the shape instead.
 - A document without the field is version 0. A version newer than the app knows, a field that isn't a non-negative
   integer, a missing step, or anything that isn't a plain object reads as nothing (the document's defaults), and is
-  overwritten on the next save. Downgrades aren't supported.
+  overwritten on the next save. Downgrades aren't supported, but `session.json` and `downloads.json` from a newer build
+  are first copied, as they were, to `<name>.v<version>.json` (`newerSavedVersion`, `keptAsideName`; a later, different
+  one gets `-2`, `-3`…, the same one no second copy), and the older build doesn't save that document until the copy is
+  on disk, so going back to an older build never destroys them.
 - `versionedJson` writes the version last, so the payload can't override it. The reader still checks the payload it
   depends on: a version says which shape to expect, not that the data is valid.
 - The field is `version`, except in `sync.json` (`v`) and `ardia-cli.json` (`schemaVersion`; its `version` is the

@@ -57,6 +57,7 @@ export const WHATS_SENT: { title: string; items: string[] }[] = [
     title: "Usage",
     items: [
       "Launches, updates, and whether the last session ended cleanly",
+      "At launch, how many of the files that keep your windows, tabs and downloads were saved by a newer version of Ardia and kept aside as a copy before this one started fresh. Never what they hold",
       "How many times a running download reported progress, how many times the download list was saved and how large those saves were in all, summed up once an hour. Never file names, folders or addresses",
       "How many times a click outside the Downloads panel closed it and went on to the page, how many times the panel opened by itself for a download that waits for Keep or Discard, and how many downloaded archives you opened, summed up once an hour. Never which files",
       "When you turn sharing on from the New Tab question: where it was shown and on how many New Tab pages it was shown first",

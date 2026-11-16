@@ -22,6 +22,7 @@
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/simple_url_loader.h"
+#include "services/network/public/mojom/client_security_state.mojom.h"
 #include "services/network/public/mojom/fetch_api.mojom-shared.h"
 
 namespace ardia::web3_internal {
@@ -121,6 +122,15 @@ void Rpc::Send(const GURL& endpoint, std::string body, Done done) {
   request->method = "POST";
   request->credentials_mode = network::mojom::CredentialsMode::kOmit;
   request->load_flags = net::LOAD_DISABLE_CACHE;
+  if (!IsPrivateTarget(endpoint)) {
+    auto security = network::mojom::ClientSecurityState::New();
+    security->ip_address_space = network::mojom::IPAddressSpace::kPublic;
+    security->is_web_secure_context = false;
+    security->local_network_access_request_policy =
+        network::mojom::LocalNetworkAccessRequestPolicy::kBlock;
+    request->trusted_params = network::ResourceRequest::TrustedParams();
+    request->trusted_params->client_security_state = std::move(security);
+  }
   done_ = std::move(done);
   endpoint_ = endpoint;
   loader_ = network::SimpleURLLoader::Create(std::move(request), kRpcAnnotation);

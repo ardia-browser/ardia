@@ -447,6 +447,11 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     guard let url = action.request.url else { return decide(.allow) }
     let scheme = url.scheme?.lowercased() ?? ""
     let webSchemes: Set<String> = ["http", "https", "file", "about", "data", "blob", "javascript", "webkit-pdfjs-viewer"]
+    if scheme == "web3" {
+      decide(.cancel)
+      guard action.navigationType == .linkActivated || action.targetFrame?.isMainFrame == true else { return }
+      return emit("openWindow", ["url": url.absoluteString, "disposition": "current", "userGesture": action.navigationType == .linkActivated])
+    }
     if !webSchemes.contains(scheme) {
       decide(.cancel)
       let fromMainFrame = action.sourceFrame.isMainFrame || action.targetFrame?.isMainFrame == true

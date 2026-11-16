@@ -1,6 +1,7 @@
 import { useRef, type ReactNode } from "react";
 import { Pressable, type StyleProp, type View, type ViewStyle } from "react-native";
 import { hostOf } from "@ardia/core";
+import { useShallow } from "zustand/react/shallow";
 import { useSettings } from "../../state/browser/hooks";
 import { tabTitle } from "../../state/browser/model";
 import type { Tab } from "../../state/browser/types";
@@ -26,7 +27,7 @@ export function TabPressArea({
   tooltip?: string;
   children: ReactNode | ((state: { pressed: boolean }) => ReactNode);
 }) {
-  const plainTooltip = useSettings((s) => !s.showTabHoverMenu);
+  const [plainTooltip, optShiftClickOpensInGroup] = useSettings(useShallow((s) => [!s.showTabHoverMenu, s.optShiftClickOpensInGroup]));
   const focus = useRef<View>(null);
   return (
     <MouseArea onMiddleClick={() => middleClickTab(tab.id)} style={style}>
@@ -42,7 +43,7 @@ export function TabPressArea({
           onPressIn={(e) => {
             holdTabPress(windowId, tab.id, e);
             const mods = modifiersOf(e);
-            if (mods.metaKey || (mods.shiftKey && !mods.altKey)) focus.current?.focus();
+            if (mods.metaKey || (mods.shiftKey && (!mods.altKey || !optShiftClickOpensInGroup))) focus.current?.focus();
           }}
           onPress={(e) => clickHeldTabPress(windowId, tab.id, e)}
           style={pressStyle}

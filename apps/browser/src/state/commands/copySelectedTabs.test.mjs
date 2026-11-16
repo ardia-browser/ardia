@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { createRequire } from "node:module";
+import { mount } from "../../test-hooks.mjs";
+const require = createRequire(import.meta.url);
+const { renderToStaticMarkup } = require("react-dom/server");
+const { pressables } = await import("react-native");
+const { TabPressArea } = await import("../../components/sidebar/TabPressArea.tsx");
 const { useBrowser } = await import("../browser/store.ts");
 const { runCommand } = await import("./commands.ts");
 const { menuState } = await import("./menuState.ts");
@@ -23,6 +29,29 @@ function fresh() {
 }
 
 const copied = () => clipboard.copied.at(-1);
+
+for (const intoGroup of [false, true]) {
+  test(`Option+Shift-click ${intoGroup ? "groups tabs without taking selection focus" : "selects a range and takes keyboard focus"}`, (t) => {
+    fresh();
+    const { w, ids: [a, b] } = windowWith("a", "b");
+    S().activate(a);
+    const mounted = mount(() => TabPressArea({ windowId: w, tab: S().tabs[b], children: null }));
+    t.after(() => mounted.unmount());
+    S().updateSettings({ optShiftClickOpensInGroup: intoGroup });
+    pressables.length = 0;
+    renderToStaticMarkup(mounted.value);
+    const row = pressables.find((props) => props.onPressIn && props.onPress);
+    assert.ok(row);
+    let focuses = 0;
+    row.ref.current = { focus: () => focuses++ };
+    const press = { nativeEvent: { altKey: true, shiftKey: true, identifier: 0 } };
+    row.onPressIn(press);
+    row.onPress(press);
+    assert.deepEqual(S().selection[w], intoGroup ? [] : [a, b]);
+    assert.equal(focuses, intoGroup ? 0 : 1);
+    if (intoGroup) assert.ok(Object.values(S().groups).some((group) => group.tabIds.includes(a) && group.tabIds.includes(b)));
+  });
+}
 
 test("⇧⌘C and plain ⌘C copy every selected tab's clean URL, one per line in sidebar order", () => {
   fresh();

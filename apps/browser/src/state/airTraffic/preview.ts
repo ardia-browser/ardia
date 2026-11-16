@@ -4,8 +4,8 @@ import { useBrowser } from "../browser/store";
 import { externalLinkOpen } from "../littleArdia/externalLinkOpen";
 import { lastActiveProfile } from "../windows/small";
 import { traceLink, traceOpening, type LinkTrace, type OpeningTrace } from "../automation/decisions";
-import type { OpenAs } from "./rules";
 import { routeGroupName } from "./groups";
+import { isSlackApp, slackWindowTitle, type OpenAs, type SourceApp } from "./rules";
 
 export type LinkPreview =
   | { ok: false }
@@ -16,6 +16,12 @@ export function previewUrl(typed: string): string | null {
   if (!text) return null;
   const parts = urlParts(/^[a-z][a-z\d+.-]*:\/\//i.test(text) ? text : `https://${text}`);
   return parts ? formatUrl(parts) : null;
+}
+
+export function tryLinkSource(app: SourceApp | null, workspace: string, screenRecordingAllowed: boolean | null): LinkSource {
+  if (!app) return null;
+  const named = isSlackApp(app) && !!workspace.trim() && screenRecordingAllowed !== false;
+  return { bundleId: app.bundleId, appName: app.name, ...(named ? { windowTitle: slackWindowTitle(workspace) } : {}) };
 }
 
 export function previewLink(typed: string, source: LinkSource): LinkPreview {

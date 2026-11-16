@@ -1,16 +1,17 @@
 import { useMemo, useState } from "react";
 import { View } from "react-native";
-import { useAirTrafficConfig, useLinkHooks, useRoutableProfiles, useRouteGroupName, useWatchRouteTargets, type LinkHookRow, type LinkHookState, type RoutableProfile } from "../../../state/airTraffic/hooks";
+import { useAirTrafficConfig, useLinkHooks, useRoutableProfiles, useRouteGroupName, useScreenRecordingAllowed, useWatchRouteTargets, type LinkHookRow, type LinkHookState, type RoutableProfile } from "../../../state/airTraffic/hooks";
 import { moveAirTrafficRule, removeAirTrafficRule, setAirTrafficFallback, updateAirTrafficRule } from "../../../state/airTraffic/store";
-import { previewLink, type LinkPreview } from "../../../state/airTraffic/preview";
+import { previewLink, tryLinkSource, type LinkPreview } from "../../../state/airTraffic/preview";
 import type { OpeningTrace } from "../../../state/automation/decisions";
-import type { AirTrafficRule, AirTrafficTarget, SourceApp } from "../../../state/airTraffic/rules";
+import { isSlackApp, type AirTrafficRule, type AirTrafficTarget, type SourceApp } from "../../../state/airTraffic/rules";
+import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { showMenu } from "../../../state/app/system";
 import { goToSettingsPane } from "../../../state/settings/settingsWindows";
 import { showSettingsSheet } from "../../../state/settings/sheet";
 import { Button, PopUp, Symbol, TextField, Toggle, useTheme, type Option } from "../../ui";
 import { Group, PaneIntro, Row, SectionHeader } from "../Form";
-import { AppPicker, CLOSED_GROUP, conditionLabel, fromLabel, GroupPicker, OPEN_LABELS, OPEN_OPTIONS, profileOptions, RuleSheet, USED_LAST } from "./AirTrafficSheet";
+import { AppPicker, CLOSED_GROUP, WORKSPACE_PLACEHOLDER, conditionLabel, fromLabel, GroupPicker, OPEN_LABELS, OPEN_OPTIONS, profileOptions, RuleSheet, USED_LAST } from "./AirTrafficSheet";
 
 const USUAL = "usual";
 const GROUP_CLOSED = "Its tab group isn't open, so links open as a plain tab in this profile. Edit it to pick another.";
@@ -22,14 +23,18 @@ function targetLabel(target: AirTrafficTarget, profiles: RoutableProfile[], grou
   return target.groupKey ? `${profile} › ${groupName ?? CLOSED_GROUP}` : `${profile} · ${OPEN_LABELS[target.open]}`;
 }
 
-function ruleProblem(target: string | null, groupGone: boolean): string | null {
+const WORKSPACE_NEEDS_PERMISSION = "Needs Screen Recording permission to see the Slack workspace.";
+
+function ruleProblem(target: string | null, groupGone: boolean, workspaceBlind: boolean): string | null {
   if (!target) return "Its profile is gone, so this rule is skipped. Edit it to pick another.";
-  return groupGone ? GROUP_CLOSED : null;
+  if (groupGone) return GROUP_CLOSED;
+  return workspaceBlind ? WORKSPACE_NEEDS_PERMISSION : null;
 }
 
 export function AirTrafficPane() {
   const { rules, fallback } = useAirTrafficConfig();
   const profiles = useRoutableProfiles();
+  const screenRecording = useScreenRecordingAllowed(rules.some((r) => r.enabled && !!r.workspace));
   const fallbackOpensTabIn = fallback?.open === "tab" ? profiles.find((p) => p.id === fallback.profileId) : undefined;
   return (
     <View>
@@ -43,7 +48,7 @@ export function AirTrafficPane() {
         {rules.length === 0 ? (
           <Row title="No rules yet" description="Add one to send links from an app, or links to a site, to a profile." />
         ) : (
-          rules.map((rule, i) => <RuleRow key={rule.id} rule={rule} index={i} last={i === rules.length - 1} profiles={profiles} />)
+          rules.map((rule, i) => <RuleRow key={rule.id} rule={rule} index={i} last={i === rules.length - 1} profiles={profiles} screenRecordingAllowed={screenRecording.allowed} />)
         )}
       </Group>
 
@@ -61,7 +66,7 @@ export function AirTrafficPane() {
   );
 }
 
-function RuleRow({ rule, index, last, profiles }: { rule: AirTrafficRule; index: number; last: boolean; profiles: RoutableProfile[] }) {
+function RuleRow({ rule, index, last, profiles, screenRecordingAllowed }: { rule: AirTrafficRule; index: number; last: boolean; profiles: RoutableProfile[]; screenRecordingAllowed: boolean | null }) {
   const groupName = useRouteGroupName(rule.profileId, rule.groupKey);
   const target = targetLabel(rule, profiles, groupName);
   const groupGone = !!rule.groupKey && !groupName;
@@ -80,8 +85,8 @@ function RuleRow({ rule, index, last, profiles }: { rule: AirTrafficRule; index:
   };
   return (
     <Row
-      title={`${fromLabel(rule.from)} · ${conditionLabel(rule.when)} → ${target ?? "a deleted profile"}`}
-      description={ruleProblem(target, groupGone)}
+      title={`${fromLabel(rule.from, rule.workspace)} · ${conditionLabel(rule.when)} → ${target ?? "a deleted profile"}`}
+      description={ruleProblem(target, groupGone, !!rule.workspace && screenRecordingAllowed === false)}
     >
       <Toggle value={rule.enabled} accessibilityLabel="Use this rule" onChange={(enabled) => updateAirTrafficRule(rule.id, { enabled })} />
       <Button variant="icon" icon="pencil" size="m" onPress={() => showSettingsSheet(<RuleSheet rule={rule} />)} tooltip="Edit" />
@@ -153,7 +158,7 @@ function caughtBy(preview: Extract<LinkPreview, { ok: true }>): { title: string;
   if (opening.by === "cancel") return { title: `hooks.json: ${opening.hook} blocks it`, detail: "Nothing opens." };
   const trace = preview.trace!;
   const lands = landing(preview) + openingNote(opening);
-  if (trace.by === "rule") return { title: `Rule ${trace.index + 1}: ${fromLabel(trace.rule.from)} · ${conditionLabel(trace.rule.when)}`, detail: lands };
+  if (trace.by === "rule") return { title: `Rule ${trace.index + 1}: ${fromLabel(trace.rule.from, trace.rule.workspace)} · ${conditionLabel(trace.rule.when)}`, detail: lands };
   if (trace.by === "hook") return { title: `hooks.json: ${trace.hook}`, detail: lands };
   if (trace.by === "program") return { title: `hooks.json: ${trace.hook.name} asks ${trace.hook.program?.[0] ?? "a program"}`, detail: `If it doesn't answer: ${lands}` };
   if (trace.by === "fallback") return { title: "Everything Else", detail: lands };
@@ -165,15 +170,19 @@ function TryLink() {
   const { rules } = useAirTrafficConfig();
   const [app, setApp] = useState<SourceApp | null>(null);
   const [typed, setTyped] = useState("");
+  const [workspace, setWorkspace] = useState("");
   useWatchRouteTargets();
   const extras = useMemo(() => rules.map((r) => r.from), [rules]);
-  const preview = typed.trim() ? previewLink(typed, app ? { bundleId: app.bundleId, appName: app.name } : null) : null;
+  const slack = PLATFORM_FEATURES.slackWorkspaces && isSlackApp(app);
+  const screenRecording = useScreenRecordingAllowed(slack && !!workspace.trim());
+  const preview = typed.trim() ? previewLink(typed, tryLinkSource(app, slack ? workspace : "", screenRecording.allowed)) : null;
   const result = preview?.ok ? caughtBy(preview) : null;
   return (
     <Group of="airTraffic.tryLink">
       <Row anchor="airTraffic.tryLink">
         <AppPicker value={app} onChange={(a) => setApp(a === "other" ? null : a)} anyTitle="An unknown app" extras={extras} />
       </Row>
+      {slack ? <Row title={<TextField value={workspace} onChangeText={setWorkspace} placeholder={WORKSPACE_PLACEHOLDER} />} /> : null}
       <Row title={<TextField value={typed} onChangeText={setTyped} placeholder="Paste a link, like github.com/ardia" />} />
       <Row
         icon={<Symbol name={result ? "airplane" : "link"} size={13} color={theme.icon} />}

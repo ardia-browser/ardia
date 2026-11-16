@@ -63,7 +63,7 @@ export const windows = {
 };
 export const emitAppEvent = (event: AppEvent) => shellEvents.emit("onAppEvent", event);
 export const emitCommand = (event: CommandEvent) => shellEvents.emit("onCommand", event);
-export const emitOpenURLs = (urls: string[], pointer?: [number, number], source?: { bundleId: string | null; appName: string | null }) =>
+export const emitOpenURLs = (urls: string[], pointer?: [number, number], source?: { bundleId: string | null; appName: string | null; windowTitle?: string }) =>
   shellEvents.emit("onOpenURLs", { urls, pointer, source });
 
 const shell: Modules["ArdiaShell"] = {
@@ -385,6 +385,8 @@ const automation: Modules["ArdiaAutomation"] = {
 export const systemSignals = {
   idleThresholds: [] as number[],
   holdsIncomingLinks: false,
+  readsSlackWorkspace: false,
+  readSlackWorkspaceThrows: false,
   hooksStamp: null as string | null,
   approvedDownloadFolders: [] as string[],
   moves: [] as { path: string; folder: string }[],
@@ -396,6 +398,10 @@ const systemSignalsModule: Modules["ArdiaSystemSignals"] = {
   watchIdle: (thresholds) => void (systemSignals.idleThresholds = [...thresholds]),
   holdsIncomingLinks: () => systemSignals.holdsIncomingLinks,
   setHoldIncomingLinks: (hold, hooksStamp) => void Object.assign(systemSignals, { holdsIncomingLinks: hold, hooksStamp }),
+  setReadSlackWorkspace: (read) => {
+    if (systemSignals.readSlackWorkspaceThrows) throw new Error("setReadSlackWorkspace failed");
+    systemSignals.readsSlackWorkspace = read;
+  },
   setApprovedDownloadFolders: (folders) => void (systemSignals.approvedDownloadFolders = [...folders]),
   moveCompletedDownload: async (path, folder) => (systemSignals.moves.push({ path, folder }), systemSignals.moveResult),
   devPost: async (name) => (emitSystemSignal({ type: name === "willSleep" ? "sleep" : "wake" }), true),

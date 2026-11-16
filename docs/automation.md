@@ -398,7 +398,7 @@ Hooks that answer before something happens, with a deadline after which Ardia do
 ## Air Traffic Control
 
 Settings › Air Traffic Control is the same `link.opening` route engine with rules the user makes in Settings, kept in
-the data dir (`air-traffic.json`, version 2: an ordered `rules` list and a `fallback`), not in the config folder.
+the data dir (`air-traffic.json`, version 3: an ordered `rules` list and a `fallback`), not in the config folder.
 
 - **Order.** For a link from another app (after `tab.opening` has had its say): the Settings rules from the top, the
   first enabled one that fits answering; then the hooks.json `link.opening` hooks as above; then the Everything Else
@@ -409,6 +409,20 @@ the data dir (`air-traffic.json`, version 2: an ordered `rules` list and a `fall
   id (`null` is the profile used last) and `open` (`tab`, `window`, `littleArdia`). Profiles are stored by id, so a
   rename keeps the rule; a rule or fallback whose profile was deleted, or is private, doesn't apply and the link
   goes on down the list.
+- **A Slack workspace.** A rule whose app is Slack may also name a `workspace`, and then fits only a link clicked
+  while that workspace is the active one in Slack. The link carries no workspace, so Ardia reads the title of Slack's
+  first titled window, `<channel or DM> - <workspace> - Slack`. Case and surrounding spaces don't matter. The title
+  must end with ` - Slack`; with that removed, the rest must be the workspace, or end with ` - <workspace>`, or end
+  with ` - <workspace> - <count>` (or be `<workspace> - <count>`), where the count is one part that has a digit in it,
+  like `2 new items` in any language. A rule with a workspace never fits a link that arrives without a title, so the
+  link goes on down the list. Only the standard Slack app (`com.tinyspeck.slackmacgap`) is supported, and only on
+  macOS: Windows and Linux send no sender, so the condition and its fields are hidden there
+  (`PLATFORM_FEATURES.slackWorkspaces`). Reading another app's window title needs Screen Recording permission, which
+  Ardia asks for only when the user presses the button in the rule's sheet, never when a link arrives. Native reads
+  the title when an enabled rule names a workspace (`setReadSlackWorkspace`, below), and, as with the incoming-link
+  hold, on the first link after the rules or hook files changed while Ardia was closed, before the app has reported
+  its rules. The title is kept in memory only and never saved or sent. The parser and the store drop a `workspace`
+  from any rule whose app isn't Slack.
 - **Patterns.** A pattern with `://` (or `<all_urls>`) is a userscript match pattern. One without is a wildcard, case
   blind, where `*` is any run of characters: with no `/` it matches the link's host (`*git*`, `*.github.com`), with one
   it matches host, path and query (`github.com/ardia/*`), and one with no `*` matches anywhere in that text (`github`
@@ -423,22 +437,35 @@ the data dir (`air-traffic.json`, version 2: an ordered `rules` list and a `fall
   plain tab.
 - **No approval.** The user makes these rules in Settings, so they count as approved. hooks.json route hooks still need
   approval in Advanced › Automation; the pane lists them read-only with their state.
+- **The title flag.** JS tells native whether any enabled rule names a workspace (`setReadSlackWorkspace`, called
+  with the hold on every change and at start). Native keeps it in the user defaults and reads it for links that arrive
+  before JS runs; until JS has reported, it reads the title when the hold's fingerprint (hooks.json, config.json,
+  approvals and `air-traffic.json`) no longer matches, as the hold does, so a rules file edited while Ardia was closed
+  doesn't leave a workspace rule blind.
 - **The hold.** An enabled rule or an Everything Else choice turns the incoming-link hold on, reported again on every
   change, so the native fast path never opens a link before the rules have seen it. `air-traffic.json` is in native's
   fast-path fingerprint, so a file changed while Ardia was closed holds the first link of the next launch too. A
   change is saved before the store takes it, so a save that fails changes neither the rules nor the hold.
-- **Versions.** Version 2 added `groupKey`; a version 1 file reads unchanged, its rules naming no group. A build from
+- **Versions.** Version 3 added `workspace` and version 2 added `groupKey`; a version 1 or 2 file reads unchanged,
+  its rules naming no group and no workspace. A build from
   before a version reads a newer file as no rules, since downgrades aren't supported.
 - **Source apps.** The app (bundle id, name) of the last 20 distinct apps that sent a link is kept in
-  `link-sources.json` for the app picker, on this Mac only and never sent.
+  `link-sources.json` for the app picker, on this Mac only and never sent. Slack's window title names a channel or a
+  person, so it lives only on the in-memory source of the link being routed: it is never written to
+  `link-sources.json` or `air-traffic.json`, never logged or counted, and never part of the `link.opening` hook
+  payload, which still carries only `bundleId` and `appName`.
 - **Try a Link** runs the same `traceOpening` and `traceLink` the real decision runs (`state/automation/decisions.ts`),
   so it can't drift: a `tab.opening` rule that cancels or rewrites the link comes first, then it names the rule, hook,
   Everything Else or usual routing that would take the link and where it would open, tab group included. A program
-  hook can't be asked without sending the link, so it shows what happens if the program doesn't answer.
+  hook can't be asked without sending the link, so it shows what happens if the program doesn't answer. With Slack
+  chosen it also takes a workspace name and tests it as the window title `<workspace> - Slack`, unless Screen Recording
+  is known to be off, when the real link would have no title and so the test gives none.
 - Code: `state/airTraffic/rules.ts` (the pure matching and the saved document), `store.ts`, `sourceApps.ts`,
   `preview.ts`, `groups.ts` (a profile's groups by key, their names and where they are) and `openAt.ts` (opening a
   link in a group); `state/littleArdia/actions.ts` opens links from other apps; the pane is
-  `components/settings/panes/AirTraffic.tsx` with its sheet `AirTrafficSheet.tsx`.
+  `components/settings/panes/AirTraffic.tsx` with its sheet `AirTrafficSheet.tsx`. Native reads the title in
+  `packages/ardiacore/ios/ArdiaHost+Launch.mm` (`WindowTitleOfApp`, from `CGWindowListCopyWindowInfo`, only for Slack,
+  only while an enabled rule names a workspace and only while Screen Recording is allowed) and sends it as `windowTitle` beside `bundleId` and `appName`.
 - Telemetry: `usage_counts.air_traffic_rule_links` and `air_traffic_fallback_links` (links from other apps) and
   `air_traffic_group_links` (those that joined a tab group), and `settings_snapshot`'s `air_traffic_rules` (enabled
   rules), `air_traffic_wildcard_rules` (enabled rules with a wildcard pattern), `air_traffic_group_rules` (enabled rules

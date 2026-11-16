@@ -193,6 +193,7 @@ test("automation's system signals answer truthfully on Linux: no idle watch and 
   assert.equal(signal("watchIdle")([60]), undefined);
   assert.equal(signal("holdsIncomingLinks")(), false);
   assert.equal(signal("setHoldIncomingLinks")(true, "stamp"), undefined);
+  assert.equal(signal("setReadSlackWorkspace")(true), undefined);
   assert.equal(signal("setApprovedDownloadFolders")(["/tmp/folder"]), undefined);
   for (const method of ["moveCompletedDownload", "devPost"]) {
     assert.equal(reachesNativeHostUnchecked(signal(method)), false, method);

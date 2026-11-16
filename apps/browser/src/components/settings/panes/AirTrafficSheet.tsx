@@ -1,9 +1,10 @@
 import { useState, type ReactNode } from "react";
 import { View } from "react-native";
 import { addAirTrafficRule, removeAirTrafficRule, updateAirTrafficRule, type RuleDraft } from "../../../state/airTraffic/store";
-import { patternProblem, siteHost, type AirTrafficRule, type LinkCondition, type OpenAs, type SourceApp } from "../../../state/airTraffic/rules";
+import { isSlackApp, patternProblem, siteHost, type AirTrafficRule, type LinkCondition, type OpenAs, type SourceApp } from "../../../state/airTraffic/rules";
 import { pickableApps, sourceAppKey } from "../../../state/airTraffic/sourceApps";
-import { useRecentSourceApps, useRoutableProfiles, useRouteGroups, type RoutableProfile } from "../../../state/airTraffic/hooks";
+import { useRecentSourceApps, useRoutableProfiles, useRouteGroups, useScreenRecordingAllowed, type RoutableProfile } from "../../../state/airTraffic/hooks";
+import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { closeSettingsSheet } from "../../../state/settings/sheet";
 import { Button, DialogActions, DialogTitle, PopUp, Sheet, space, Text, TextField, type Option } from "../../ui";
 
@@ -19,7 +20,9 @@ const ANY = "any";
 const OTHER = "other";
 
 export const conditionLabel = (when: LinkCondition) => (when.kind === "any" ? "any link" : when.kind === "site" ? when.host : when.pattern);
-export const fromLabel = (from: SourceApp | null) => (from ? `From ${from.name}` : "Any app");
+export const fromLabel = (from: SourceApp | null, workspace?: string) => (from ? `From ${from.name}${workspace ? ` (${workspace})` : ""}` : "Any app");
+export const WORKSPACE_PLACEHOLDER = "Any workspace, or a name like Acme";
+const SCREEN_RECORDING_NOTE = "Ardia tells workspaces apart by Slack's window title, which needs Screen Recording permission.";
 
 const NO_GROUP = "";
 export const CLOSED_GROUP = "A closed tab group";
@@ -67,6 +70,7 @@ function typedApp(text: string): SourceApp | null {
 export function RuleSheet({ rule }: { rule?: AirTrafficRule }) {
   const profiles = useRoutableProfiles();
   const [from, setFrom] = useState<SourceApp | null>(rule?.from ?? null);
+  const [workspace, setWorkspace] = useState(rule?.workspace ?? "");
   const [typing, setTyping] = useState(false);
   const [typed, setTyped] = useState("");
   const [kind, setKind] = useState<LinkCondition["kind"]>(rule?.when.kind ?? "any");
@@ -76,10 +80,13 @@ export function RuleSheet({ rule }: { rule?: AirTrafficRule }) {
   const [groupKey, setGroupKey] = useState(rule?.groupKey ?? NO_GROUP);
   const grouped = !!profileId && open === "tab";
   const [error, setError] = useState<string | null>(null);
+  const slack = PLATFORM_FEATURES.slackWorkspaces && !typing && isSlackApp(from);
+  const screenRecording = useScreenRecordingAllowed(slack && !!workspace.trim());
 
   const pickApp = (app: SourceApp | null | "other") => {
     setTyping(app === "other");
     if (app !== "other") setFrom(app);
+    if (app === "other" || !isSlackApp(app)) setWorkspace("");
   };
   const save = () => {
     const app = typing ? typedApp(typed) : from;
@@ -94,7 +101,7 @@ export function RuleSheet({ rule }: { rule?: AirTrafficRule }) {
       if (problem) return setError(`That pattern doesn't work: ${problem}.`);
       when = { kind: "pattern", pattern: text.trim() };
     }
-    const draft: RuleDraft = { enabled: rule?.enabled ?? true, from: app, when, profileId: profileId || null, open, groupKey: (grouped && groupKey) || undefined };
+    const draft: RuleDraft = { enabled: rule?.enabled ?? true, from: app, when, profileId: profileId || null, open, groupKey: (grouped && groupKey) || undefined, workspace: (slack && workspace.trim()) || undefined };
     if (rule) updateAirTrafficRule(rule.id, draft);
     else if (!addAirTrafficRule(draft)) return setError("That's the most rules Ardia keeps. Remove one first.");
     closeSettingsSheet();
@@ -109,6 +116,19 @@ export function RuleSheet({ rule }: { rule?: AirTrafficRule }) {
       {typing ? (
         <View style={FIELD_BELOW}>
           <TextField value={typed} onChangeText={setTyped} placeholder="App name or bundle ID" autoFocus onSubmit={save} onEscape={closeSettingsSheet} />
+        </View>
+      ) : null}
+      {slack ? (
+        <View style={FIELD_BELOW}>
+          <TextField value={workspace} onChangeText={setWorkspace} placeholder={WORKSPACE_PLACEHOLDER} onSubmit={save} onEscape={closeSettingsSheet} />
+          {workspace.trim() && screenRecording.allowed === false ? (
+            <View style={NOTICE}>
+              <Text size="caption" tone="textSecondary">
+                {SCREEN_RECORDING_NOTE}
+              </Text>
+              <Button variant="pill" title="Allow Screen Recording" onPress={screenRecording.ask} />
+            </View>
+          ) : null}
         </View>
       ) : null}
       <Line label="Links">
@@ -159,5 +179,6 @@ function Line({ label, children }: { label: string; children: ReactNode }) {
 const LINE = { marginTop: space.l, flexDirection: "row", alignItems: "center", gap: space.ml } as const;
 const LABEL_WIDTH = 52;
 const LINE_LABEL = { width: LABEL_WIDTH, textAlign: "right" } as const;
+const NOTICE = { marginTop: space.s, gap: space.m, alignItems: "flex-start" } as const;
 const ERROR = { marginTop: space.ml } as const;
 const FIELD_BELOW = { marginTop: space.s, marginLeft: LABEL_WIDTH + space.ml } as const;

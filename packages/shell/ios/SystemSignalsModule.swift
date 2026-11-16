@@ -97,6 +97,8 @@ public class SystemSignalsModule: Module {
 
     Function("setHoldIncomingLinks") { (hold: Bool, hooksStamp: String?) in ArdiaHost.setHoldIncomingLinks(hold, hooksStamp: hooksStamp) }
 
+    Function("setReadSlackWorkspace") { (read: Bool) in ArdiaHost.setReadSlackWorkspace(read) }
+
     Function("setApprovedDownloadFolders") { (folders: [String]) in ArdiaDownloadMover.shared.setApprovedFolders(folders) }
 
     AsyncFunction("moveCompletedDownload") { (path: String, folder: String) -> [String: Any] in

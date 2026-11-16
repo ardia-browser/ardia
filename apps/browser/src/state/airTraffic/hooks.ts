@@ -1,9 +1,11 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useAutomationApprovals } from "../automation/approvals";
 import { approvalFor } from "../automation/hookPolicy";
 import { useHookRules } from "../automation/hookRules";
 import type { HookSpec } from "../automation/hookFile";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { requestScreenRecording, screenRecordingAllowed } from "../../platform/media";
 import { useBrowser } from "../browser/store";
 import { isIncognitoProfile } from "../browser/model";
 import { useAirTraffic } from "./store";
@@ -30,6 +32,24 @@ export const useWatchRouteTargets = (): void => void useBrowser(routeTargetsStam
 
 export const useRouteGroupName = (profileId: string | null, groupKey: string | undefined): string | null =>
   useBrowser((s) => (profileId && groupKey ? routeGroupName(s, profileId, groupKey) : null));
+
+const SCREEN_RECORDING_POLL_MS = 3000;
+
+export function useScreenRecordingAllowed(watch: boolean): { allowed: boolean | null; ask: () => void } {
+  const [allowed, setAllowed] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!watch || !PLATFORM_FEATURES.slackWorkspaces) return;
+    let live = true;
+    const check = () => void screenRecordingAllowed().then((now) => live && setAllowed(now), () => live && setAllowed(null));
+    check();
+    const timer = setInterval(check, SCREEN_RECORDING_POLL_MS);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [watch]);
+  return { allowed, ask: () => void requestScreenRecording() };
+}
 
 export type LinkHookState = "active" | "approved" | "waiting" | "off";
 export type LinkHookRow = { name: string; from: string[]; patterns: string[]; answer: string; state: LinkHookState };

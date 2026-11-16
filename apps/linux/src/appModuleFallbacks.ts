@@ -81,6 +81,7 @@ const MODULE_FALLBACKS: Record<string, Record<string, Fallback>> = {
     watchIdle: () => undefined,
     holdsIncomingLinks: () => false,
     setHoldIncomingLinks: () => undefined,
+    setReadSlackWorkspace: () => undefined,
     setApprovedDownloadFolders: () => undefined,
     moveCompletedDownload: refuse("Moving a finished download"),
     devPost: refuse("The developer hook ArdiaSystemSignals.devPost"),

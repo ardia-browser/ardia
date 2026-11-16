@@ -1,6 +1,6 @@
 import type { LinkSource } from "../../lib/linkSource";
 import { parseSaved, unchanged, versionedJson, type Migrations } from "../../lib/savedDocument";
-import { sourceAppOf, type SourceApp } from "./rules";
+import { SLACK_BUNDLE_ID, sourceAppOf, type SourceApp } from "./rules";
 
 export const LINK_SOURCES_DOC = "link-sources.json";
 export const LINK_SOURCES_VERSION = 1;
@@ -8,7 +8,7 @@ export const MAX_RECENT_APPS = 20;
 const MIGRATIONS: Migrations = { 0: unchanged };
 
 export const COMMON_APPS: readonly SourceApp[] = [
-  { bundleId: "com.tinyspeck.slackmacgap", name: "Slack" },
+  { bundleId: SLACK_BUNDLE_ID, name: "Slack" },
   { bundleId: "com.apple.mail", name: "Mail" },
   { bundleId: "com.apple.MobileSMS", name: "Messages" },
   { bundleId: "notion.id", name: "Notion" },

@@ -25,10 +25,9 @@ export function setWeb3Rpc(chain: string, url: string) {
 export async function addWeb3Rpc(chain: string, url: string): Promise<string | null> {
   const problem = web3RpcProblem(chain, url);
   if (problem) return problem;
-  const current = useBrowser.getState().settings.web3Rpcs;
-  const { refused } = await setWeb3Rpcs({ ...current, [chain]: url });
+  const { refused } = await setWeb3Rpcs({ ...useBrowser.getState().settings.web3Rpcs, [chain]: url });
   if (refused.includes(chain)) {
-    void setWeb3Rpcs(current);
+    void setWeb3Rpcs(useBrowser.getState().settings.web3Rpcs);
     return "Ardia can't use this URL. Check the host and the port.";
   }
   setWeb3Rpc(chain, url);

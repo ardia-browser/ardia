@@ -26,6 +26,12 @@ test("Add RPC keeps only a URL the engine accepts, and puts the engine's map bac
   assert.deepEqual(useBrowser.getState().settings.web3Rpcs, { 1: "https://ethereum-rpc.publicnode.com" });
   assert.deepEqual(web3RpcsSent.at(-1), { 1: "https://ethereum-rpc.publicnode.com" });
 
+  const refusal = addWeb3Rpc("10", "https://[::::]");
+  useBrowser.getState().updateSettings({ web3Rpcs: {} });
+  assert.notEqual(await refusal, null);
+  assert.deepEqual(web3RpcsSent.at(-1), {}, "a refusal restores the map as it is now, not as it was before the check");
+  useBrowser.getState().updateSettings({ web3Rpcs: { 1: "https://ethereum-rpc.publicnode.com" } });
+
   assert.equal(await addWeb3Rpc("10", "https://optimism-rpc.publicnode.com"), null);
   assert.deepEqual(useBrowser.getState().settings.web3Rpcs, { 1: "https://ethereum-rpc.publicnode.com", 10: "https://optimism-rpc.publicnode.com" });
 });

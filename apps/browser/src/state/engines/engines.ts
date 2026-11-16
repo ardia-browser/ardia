@@ -66,6 +66,17 @@ export const PROTECTED_VIDEO_SITES: readonly string[] = [
   "hotstar.com",
   "jiohotstar.com",
   "v.qq.com",
+  "audible.com",
+  "audible.co.uk",
+  "audible.ca",
+  "audible.com.au",
+  "audible.de",
+  "audible.fr",
+  "audible.it",
+  "audible.es",
+  "audible.co.jp",
+  "audible.in",
+  "audible.com.br",
 ];
 
 export function protectedVideoSite(url: string | undefined | null): boolean {

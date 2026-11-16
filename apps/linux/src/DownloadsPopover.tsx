@@ -10,8 +10,6 @@ import { watchPageFocus } from "./pageFocus";
 
 export * from "../../browser/src/components/downloads/Downloads";
 
-const BACKDROP = ":scope > * > :first-child";
-
 export function DownloadsPopover() {
   const windowId = useWindowId();
   const open = useWindowUiOf(windowId, (ui) => !!ui?.downloadsOpen);
@@ -20,12 +18,7 @@ export function DownloadsPopover() {
     if (!open) return;
     return startDownloadsDismissal({
       target: window,
-      inside: (node) => {
-        const root = region.current;
-        if (!root || !(node instanceof Node) || !root.contains(node)) return false;
-        const backdrop = root.querySelector(BACKDROP);
-        return !backdrop || !backdrop.contains(node);
-      },
+      inside: (node) => node instanceof Node && !!region.current?.contains(node),
       close: () => setDownloadsOpen(windowId, false),
       watchPageFocus,
       activeElement: () => document.activeElement,

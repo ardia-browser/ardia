@@ -1746,6 +1746,21 @@ A background instance rejects without fetching.
   opens through handles and refuses symlinks.
 - **Private downloads.** These always ask where to save, as Chrome's incognito does. They reach only their own window
   and are never kept.
+- **Downloads panel presses.** `DownloadsPopover.tsx` counts any press inside the panel's region as inside the panel.
+  The region and the panel's root are `box-none`, so only the panel itself takes hits there. Before #2155 the check
+  looked for the full-window backdrop that #1610 removed. It found the panel instead, so every press in the panel
+  counted as outside, closed it and lost the click.
+  - A press outside closes the panel, and its pointer-down never reaches what it landed on. Its release and click
+    do reach it, because closing removes the swallow listeners. That was already true before #2155.
+  - Escape still closes it.
+  - Acceptance F08 presses the header, a finished row (open file), Show in Folder, View all downloads, Pause, Resume,
+    Cancel, Keep, Discard, Clear and a spot outside, with real CDP input in the packaged UI. A stand-in `xdg-open`
+    records what Open and Show in Folder ask for.
+  - Clear removes the rows, but the panel opens again, empty. The engine posts `downloads.changed` for each removed
+    item before `downloads.removed`, and `upsertDownload` takes it for a new download.
+  - No telemetry. No existing count tells whether a press inside reached its control.
+    `downloads_panel_press_closes` counts only the shared `OutsidePressArea` path, and the Linux dismissal runs
+    first and stops the press.
 
 ## Upstream syncs
 

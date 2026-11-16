@@ -1,10 +1,61 @@
-import { mkdir, readdir, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import { downloadById, duplicateIds } from "../lib/assertions.mjs";
 import { restartBrowser, startBrowser } from "../lib/flows.mjs";
 import { js, nonce, pause, until } from "../lib/util.mjs";
 
 const downloadsOf = (shell) => shell.state("return s.downloads ?? [];");
+const PANEL = '[data-testid="ardia-downloads-popover"]';
+const panelOpen = (shell) => shell.state("return s.windowUi[windowId]?.downloadsOpen === true;");
+
+function panelPoint(shell, { text = null, label = null }) {
+  return shell.eval(`(() => {
+    const panel = document.querySelector(${js(PANEL)});
+    if (!panel) return null;
+    let best = null;
+    for (const n of panel.querySelectorAll('*')) {
+      const match = ${js(label)} === null ? (n.innerText ?? '').trim() === ${js(text)} : n.getAttribute('aria-label') === ${js(label)};
+      if (!match) continue;
+      const r = n.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) continue;
+      if (!best || r.width * r.height < best.area) best = { x: r.left + r.width / 2, y: r.top + r.height / 2, area: r.width * r.height };
+    }
+    return best;
+  })()`);
+}
+
+async function pressInPanel(shell, target) {
+  const point = await until(() => panelPoint(shell, target), { timeout: 6000, label: `${target.label ?? target.text} in the downloads panel` });
+  await shell.mouse(point.x, point.y);
+  return point;
+}
+
+async function openPanel(shell) {
+  if (!(await panelOpen(shell))) await shell.command("downloads");
+  await shell.waitState("return s.windowUi[windowId]?.downloadsOpen === true;", { timeout: 5000, label: "downloads panel" });
+  await until(() => panelPoint(shell, { text: "RECENT DOWNLOADS" }), { timeout: 5000, label: "the downloads panel on screen" });
+  await pause(400);
+}
+
+async function closePanel(shell) {
+  if (await panelOpen(shell)) await shell.command("downloads");
+  await shell.waitState("return s.windowUi[windowId]?.downloadsOpen === false;", { timeout: 5000, label: "the downloads panel to close" });
+  await pause(400);
+}
+
+async function stillOpen(shell, action) {
+  await pause(500);
+  if (!(await panelOpen(shell))) throw new Error(`the downloads panel closed after ${action}`);
+}
+
+async function recordingXdgOpen(dir) {
+  const bin = join(dir, "bin");
+  const log = join(dir, "xdg-open.log");
+  await mkdir(bin, { recursive: true });
+  await writeFile(join(bin, "xdg-open"), `#!/bin/sh\nprintf '%s\\t%s\\n' "$PWD" "$1" >> '${log.replaceAll("'", "'\\''")}'\n`, { mode: 0o755 });
+  const opened = () => readFile(log, "utf8").then((text) => text.split("\n").filter(Boolean).map((line) => resolve(...line.split("\t"))), () => []);
+  return { env: { PATH: `${bin}:${process.env.PATH}` }, opened };
+}
 
 async function waitDownload(shell, test, label, timeout = 20000) {
   return until(async () => (await downloadsOf(shell)).find(test) ?? false, { timeout, label });
@@ -13,6 +64,13 @@ async function waitDownload(shell, test, label, timeout = 20000) {
 async function startDownload(shell, tabId, url, filename) {
   await shell.navigate(tabId, url);
   return waitDownload(shell, (d) => d.filename?.endsWith(filename) || d.path?.endsWith(filename), `download ${filename} to appear`);
+}
+
+async function waitEngineDownload(shell, test, label, timeout = 10000) {
+  return until(async () => {
+    const reply = await shell.call("downloads.list", {});
+    return (reply.ok && Array.isArray(reply.value) && reply.value.find(test)) || false;
+  }, { timeout, label });
 }
 
 async function control(shell, verb, id) {
@@ -42,7 +100,8 @@ export default {
     const folder = await t.scratch("downloads");
     const other = join(folder, "other");
     await mkdir(other, { recursive: true });
-    let state = await startBrowser(t, { name: "downloads", preferences: { downloads: folder }, extraArgs: [`--ardia-downloads-dir=${folder}`] });
+    const desktop = await recordingXdgOpen(await t.scratch("desktop"));
+    let state = await startBrowser(t, { name: "downloads", preferences: { downloads: folder }, extraArgs: [`--ardia-downloads-dir=${folder}`], env: desktop.env });
     const page = t.fixtures.url.page(1, run);
     const tabId = await state.shell.newTab(page);
     await state.shell.waitTabUrl(tabId, (u) => u === page);
@@ -67,6 +126,101 @@ export default {
       await state.shell.waitState("return s.windowUi[windowId]?.downloadsOpen === true;", { timeout: 5000, label: "downloads popover" });
       await until(async () => (await state.shell.text()).includes(small), { timeout: 5000, label: `${small} in the downloads list` });
       await state.shell.command("downloads");
+      return true;
+    });
+    await t.check("a press inside the downloads panel reaches it and leaves it open", async () => {
+      await closePanel(state.shell);
+      await openPanel(state.shell);
+      await t.screenshot(state.shell, "panel-before-inside-press");
+      const point = await pressInPanel(state.shell, { text: "RECENT DOWNLOADS" });
+      await pause(500);
+      await t.screenshot(state.shell, "panel-after-inside-press");
+      await stillOpen(state.shell, "a press on its header");
+      return point;
+    });
+    await t.check("a finished row in the downloads panel opens its file, and its reveal button shows it", async () => {
+      await openPanel(state.shell);
+      await pressInPanel(state.shell, { text: small });
+      await until(async () => (await desktop.opened()).includes(smallDownload.path) || false, { timeout: 8000, label: "xdg-open on the downloaded file" });
+      await stillOpen(state.shell, "opening a file");
+      const row = await panelPoint(state.shell, { text: small });
+      await state.shell.session.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: row.x, y: row.y });
+      const reveal = await until(() => state.shell.eval(`[...document.querySelectorAll(${js(`${PANEL} [aria-label^="Show in"]`)})].map(n => n.getAttribute('aria-label')).find(Boolean) ?? false`), { timeout: 5000, label: "the reveal button on the hovered row" });
+      await pressInPanel(state.shell, { label: reveal });
+      await until(async () => (await desktop.opened()).includes(dirname(smallDownload.path)) || false, { timeout: 8000, label: "xdg-open on the download's folder" });
+      await stillOpen(state.shell, "showing a file");
+      return { opened: await desktop.opened(), reveal };
+    });
+    await t.check("View all downloads in the panel opens the downloads page and closes the panel", async () => {
+      await openPanel(state.shell);
+      await pressInPanel(state.shell, { text: "View all downloads" });
+      await state.shell.waitState("return s.windowUi[windowId]?.downloadsOpen === false;", { timeout: 5000, label: "the panel to close" });
+      const active = await until(async () => {
+        const id = await state.shell.activeTabId();
+        const tab = id ? await state.shell.tab(id) : null;
+        return tab?.url?.startsWith("ardia://downloads") ? tab.url : false;
+      }, { timeout: 8000, label: "the downloads page in the active tab" });
+      await pause(400);
+      return { active };
+    });
+    await t.check("Pause, Resume and Cancel in the downloads panel control a running download", async () => {
+      const name = `panel-${run}.bin`;
+      const d = await startDownload(state.shell, tabId, t.fixtures.url.slow(name, 6 << 20), name);
+      await openPanel(state.shell);
+      await pressInPanel(state.shell, { label: "Pause" });
+      await waitEngineDownload(state.shell, (x) => x.id === d.id && x.paused === true, "the engine to pause it");
+      await stillOpen(state.shell, "Pause");
+      await pressInPanel(state.shell, { label: "Resume" });
+      await waitEngineDownload(state.shell, (x) => x.id === d.id && x.paused === false && x.state === "downloading", "the engine to resume it");
+      await stillOpen(state.shell, "Resume");
+      await pressInPanel(state.shell, { label: "Cancel" });
+      await waitEngineDownload(state.shell, (x) => x.id === d.id && x.state === "cancelled", "the engine to cancel it");
+      await stillOpen(state.shell, "Cancel");
+      t.fixtures.release(name);
+      return { id: d.id };
+    });
+    await t.check("Keep and Discard in the downloads panel decide a held insecure download", async () => {
+      const decided = {};
+      for (const [button, end] of [["Keep", "finished"], ["Discard", "cancelled"]]) {
+        const name = `held-${button.toLowerCase()}-${run}.bin`;
+        await state.shell.navigate(tabId, t.fixtures.url.http("plain.ardia.test", `/download/${name}?size=2048`));
+        const held = await waitDownload(state.shell, (d) => d.filename?.endsWith(name) && d.dangerous === true && d.state === "downloading", `${name} held for Keep or Discard`);
+        await openPanel(state.shell);
+        await pressInPanel(state.shell, { text: button });
+        decided[button] = (await waitEngineDownload(state.shell, (d) => d.id === held.id && d.state === end, `the engine to mark ${name} ${end} after ${button}`)).state;
+        await stillOpen(state.shell, button);
+      }
+      return decided;
+    });
+    await t.check("a press outside the downloads panel closes it, and its pointer-down doesn't reach the control under it", async () => {
+      await openPanel(state.shell);
+      const target = await state.shell.eval(`(() => {
+        const panel = document.querySelector(${js(PANEL)});
+        for (const n of document.querySelectorAll('[aria-label], [title]')) {
+          const r = n.getBoundingClientRect();
+          if (r.width <= 0 || r.height <= 0) continue;
+          const x = r.left + r.width / 2, y = r.top + r.height / 2;
+          const hit = document.elementFromPoint(x, y);
+          if (!hit || panel.contains(hit) || !n.contains(hit)) continue;
+          window.__outsidePress = [];
+          for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) hit.addEventListener(type, () => window.__outsidePress.push(type));
+          return { x, y, control: n.getAttribute('aria-label') ?? n.getAttribute('title') };
+        }
+        return null;
+      })()`);
+      if (!target) throw new Error("no labelled control outside the panel");
+      await state.shell.mouse(target.x, target.y);
+      await state.shell.waitState("return s.windowUi[windowId]?.downloadsOpen === false;", { timeout: 5000, label: "the panel to close" });
+      await pause(800);
+      const reached = await state.shell.eval("window.__outsidePress");
+      const pressed = reached.filter((type) => type === "pointerdown" || type === "mousedown");
+      if (pressed.length) throw new Error(`the closing press reached ${target.control}: ${pressed.join(", ")}`);
+      return { control: target.control, reached };
+    });
+    await t.check("Escape closes the downloads panel", async () => {
+      await openPanel(state.shell);
+      await state.shell.key("Escape", { code: "Escape", keyCode: 27 });
+      await state.shell.waitState("return s.windowUi[windowId]?.downloadsOpen === false;", { timeout: 5000, label: "Escape to close the panel" });
       return true;
     });
 
@@ -126,13 +280,17 @@ export default {
       await state.shell.call("downloads.setSettings", { folder });
       return { path: done.path };
     });
-    await t.check("clear removes finished and cancelled rows", async () => {
-      await state.shell.state("s.clearDownloads(windowId); return true;");
+    await t.check("Clear in the downloads panel removes finished and cancelled rows", async () => {
+      await openPanel(state.shell);
+      await pressInPanel(state.shell, { text: "Clear" });
       const left = await until(async () => {
         const list = await downloadsOf(state.shell);
         return list.every((d) => d.state === "downloading") ? list : false;
       }, { timeout: 5000, label: "cleared downloads" });
-      return { left: left.length };
+      await pause(500);
+      const panel = await panelOpen(state.shell);
+      await closePanel(state.shell);
+      return { left: left.length, panelOpenAfterClear: panel };
     });
     await t.check("restart restores no stale, live or duplicate downloads", async () => {
       const kept = `kept-${run}.bin`;

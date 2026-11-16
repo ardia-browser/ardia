@@ -26,6 +26,14 @@ final class LinkActivationOrder: NSObject {
     keepOthersWhereTheyWere()
   }
 
+  func summoned(_ window: NSWindow) {
+    guard !NSApp.isActive else { return }
+    placements = Self.placements()
+    activatedAt = nil
+    opened = window
+    openedAt = Date()
+  }
+
   @objc private func willBecomeActive(_ notification: Notification) {
     placements = Self.placements()
     activatedAt = nil

@@ -19,4 +19,5 @@ export const devSidebarEdgeStats = (reset = false) => Dev.devSidebarEdgeStats(re
 export const devTypeKeys = (windowId: string, text: string, interval: number) => Dev.devTypeKeys(windowId, text, interval);
 export const devKeyEquivalent = (windowId: string, press: KeyPress): Promise<KeyPressResult> => Dev.devKeyEquivalent(windowId, press);
 export const devClick = (windowId: string, click: Click): Promise<ClickResult> => Dev.devClick(windowId, click);
+export const devLittleArdiaHotKey = (press = false) => Dev.devLittleArdiaHotKey(press);
 export const devMenuCommand = (command: string, arg: string | null = null) => Dev.devMenuCommand(command, arg);

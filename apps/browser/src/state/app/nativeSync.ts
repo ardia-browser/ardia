@@ -81,6 +81,7 @@ export function startNativeSync() {
     }
     if (e.type === "appLinkOpened") closeLittleArdiaForAppLink(e.windowId);
     if (e.type === "littleArdiaReturnedToApp") noteLittleArdiaAppHandoff("returnToApp");
+    if (e.type === "littleArdiaSummoned") noteLittleArdiaAppHandoff("openFromOtherApp");
     if (e.type === "quitWarningSuppressed") s.updateSettings({ warnBeforeQuitting: false });
     if (e.type === "willQuit") {
       setQuitting(true);

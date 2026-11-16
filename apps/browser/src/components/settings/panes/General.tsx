@@ -57,6 +57,7 @@ export function GeneralPane() {
               : `A link from Discord, Slack or Mail opens as a new tab in the ${APP} window you used last.`
           }
         />
+        <SettingToggle anchor="general.littleArdiaFromOtherApps" />
         <SettingToggle anchor="general.littleArdiaOpensNewTabLinks" />
         <SettingToggle anchor="general.littleWindowGestures" />
       </Group>

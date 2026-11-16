@@ -31,6 +31,17 @@ extension MainMenu {
     return items
   }
 
+  static func boundShortcut(of command: String) -> (key: String, mods: NSEvent.ModifierFlags)? {
+    var found: (key: String, mods: NSEvent.ModifierFlags)?
+    walk(NSApp.mainMenu) { item, _ in
+      guard found == nil, let item = item as? CommandItem, item.command == command, item.arg == nil,
+        item.commandAlternateOf == nil, !item.keyEquivalent.isEmpty
+      else { return }
+      found = shortcut(of: item)
+    }
+    return found
+  }
+
   static func heldModifiers(of item: NSMenuItem) -> NSEvent.ModifierFlags {
     let mods = shortcut(of: item).mods
     let held = mods.intersection([.control, .option, .command])

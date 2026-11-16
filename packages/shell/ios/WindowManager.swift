@@ -167,7 +167,21 @@ final class WindowManager: NSObject, NSWindowDelegate {
     } else {
       window.orderFront(nil)
     }
-    if small, focus, smallPointer != nil { linkActivation.openedFromLink(window) }
+    let summoned = small && focus && LittleArdiaHotKey.shared.takeSummon()
+    if summoned {
+      linkActivation.summoned(window)
+    } else if small, focus, smallPointer != nil {
+      linkActivation.openedFromLink(window)
+    }
+    if summoned {
+      LittleArdiaHotKey.shared.bringForward(window) { [weak self, weak window] in
+        guard let self, let window, self.managed[id]?.window === window else { return }
+        self.whenRevealed(id) { [weak window] in
+          guard let window, window.isVisible, !window.isKeyWindow else { return }
+          window.makeKeyAndOrderFront(nil)
+        }
+      }
+    }
     observeFrame(window)
     reportFrame(window)
     fullScreen.windowShown(id)

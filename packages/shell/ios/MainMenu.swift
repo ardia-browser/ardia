@@ -382,6 +382,7 @@ enum MainMenu {
     }
     for item in bookmarkItems where item.isHidden == state.bookmarksShown { item.isHidden = !state.bookmarksShown }
     applyShortcuts(state.shortcuts)
+    LittleArdiaHotKey.shared.refresh()
   }
 
   private static func emptyItem() -> NSMenuItem {

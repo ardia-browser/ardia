@@ -140,6 +140,7 @@ export function menuState(s: BrowserState): MenuState {
     warnBeforeQuitting: s.settings.warnBeforeQuitting,
     warnBeforeClosingWindow: s.settings.warnBeforeClosingWindow,
     undoReopensClosedTab: s.settings.undoReopensClosedTab,
+    littleArdiaFromOtherApps: s.settings.littleArdiaFromOtherApps,
     downloadsInProgress: s.downloads.filter((d) => d.state === "downloading").length,
     shortcuts: menuBarBindings(s),
     extensions: extensionMenu(s, windowId) };

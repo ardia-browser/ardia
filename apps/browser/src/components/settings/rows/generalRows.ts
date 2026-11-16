@@ -36,6 +36,12 @@ export const generalRows = {
           title: "Open links from other apps in Little Ardia",
           keywords: ["little ardia", "little arc", "arc", "little window", "small window", "mini window", "external links", "links from other apps", "open links", "discord", "slack", "mail", "messages"],
         },
+        littleArdiaFromOtherApps: {
+          shown: () => PLATFORM_FEATURES.opensLittleArdiaFromOtherApps,
+          title: "Open Little Ardia from any app with its keyboard shortcut",
+          description: `${keyText("⌥⌘N")} (or the shortcut you set in Settings › Shortcuts) opens Little Ardia over whatever app you're in, without bringing your other windows forward. Closing it takes you back to that app.`,
+          keywords: ["global shortcut", "global hotkey", "hotkey", "system-wide", "any app", "other apps", "everywhere", "quick search", "option cmd n"],
+        },
         littleArdiaOpensNewTabLinks: {
           shown: () => PLATFORM_FEATURES.keepsNewTabLinksInLittleArdia,
           title: "Keep new-tab links inside a Little Ardia window",

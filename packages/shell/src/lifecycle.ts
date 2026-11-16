@@ -17,7 +17,8 @@ export type AppEvent =
   | { type: "unclaimedEscape"; windowId: string }
   | { type: "centeredResize" }
   | { type: "appLinkOpened"; windowId: string | null }
-  | { type: "littleArdiaReturnedToApp" };
+  | { type: "littleArdiaReturnedToApp" }
+  | { type: "littleArdiaSummoned" };
 
 export type AppearanceMode = "auto" | "light" | "dark";
 

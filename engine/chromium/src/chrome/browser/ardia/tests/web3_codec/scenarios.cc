@@ -119,8 +119,16 @@ void ResourceRequests() {
   std::string segments_path;
   for (int i = 0; i < 256; ++i) segments_path += "/s";
   Expect(ResourceRequestCall(segments_path, pairs).has_value(), "256 path segments and 256 query pairs are encoded");
+  std::optional<Bytes> trailing = ResourceRequestCall(segments_path + "/", "");
+  std::optional<std::vector<AbiValue>> trailing_values =
+      trailing ? AbiDecode(type, std::string_view(*trailing).substr(4)) : std::nullopt;
+  std::string auto_path = "/m";
+  for (int i = 1; i < 256; ++i) auto_path += "/1";
+  Expect(trailing_values && (*trailing_values)[0].items.size() == 256 && !std::holds_alternative<std::string>(ParseAutoCall(auto_path + "/", "")),
+         "256 segments and a trailing slash are still 256 segments, in both modes");
   Expect(!ResourceRequestCall(segments_path + "/s", "") && !ResourceRequestCall("/", pairs + "&a"), "a 257th segment or pair is refused before anything is built");
-  Expect(std::holds_alternative<std::string>(ParseAutoCall(segments_path + "/s", "")), "auto mode refuses as many segments");
+  std::variant<AutoCall, std::string> too_many = ParseAutoCall(auto_path + "/1", "");
+  Expect(std::holds_alternative<std::string>(too_many) && std::get<std::string>(too_many).starts_with("Too many"), "auto mode refuses a 257th segment for its count");
 }
 
 void ResourceResponses() {

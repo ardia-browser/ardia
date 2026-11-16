@@ -309,8 +309,15 @@ std::optional<ContentContract> ParseContentContract(std::string_view record) {
   return contract;
 }
 
+size_t SegmentCount(std::string_view path) {
+  if (!path.empty() && path.front() == '/') path.remove_prefix(1);
+  size_t count = static_cast<size_t>(std::count(path.begin(), path.end(), '/')) + 1;
+  if (path.empty() || path.back() == '/') --count;
+  return count;
+}
+
 bool FewRequestParts(std::string_view path, std::string_view query) {
-  return static_cast<size_t>(std::count(path.begin(), path.end(), '/')) <= kMaxRequestParts &&
+  return SegmentCount(path) <= kMaxRequestParts &&
          static_cast<size_t>(std::count(query.begin(), query.end(), '&')) < kMaxRequestParts;
 }
 

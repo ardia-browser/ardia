@@ -11,13 +11,13 @@ struct IncognitoToggle: View {
         if isOn {
           Text("Incognito")
             .font(.footnote.weight(.medium))
-            .foregroundStyle(.white.opacity(0.75))
+            .foregroundStyle(BrowsePalette.incognitoBadgeLabel)
             .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .trailing)))
         }
         Image(systemName: "eyeglasses")
           .font(.system(size: 17, weight: .semibold))
           .frame(width: 22)
-          .foregroundStyle(isOn ? Color.white.opacity(0.85) : BrowsePalette.foregroundTertiary)
+          .foregroundStyle(isOn ? BrowsePalette.incognitoBadgeGlyph : BrowsePalette.foregroundTertiary)
       }
       .padding(.horizontal, 6)
       .frame(minWidth: 36, minHeight: 40)

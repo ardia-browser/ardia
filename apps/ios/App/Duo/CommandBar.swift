@@ -12,21 +12,3 @@ struct CommandBarPlacement: Equatable {
     maxHeight = max(min(DuoLayout.commandMaxHeight, keyboardTop - top - DuoLayout.commandAboveKeyboard), 0)
   }
 }
-
-struct CommandBarFrame: ViewModifier {
-  let placement: CommandBarPlacement?
-  let isUp: Bool
-
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-  func body(content: Content) -> some View {
-    if let placement {
-      content
-        .padding(.horizontal, DuoLayout.commandSide)
-        .padding(.top, placement.top)
-        .scaleEffect(isUp || reduceMotion ? 1 : 0.96, anchor: .top)
-    } else {
-      content
-    }
-  }
-}

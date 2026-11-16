@@ -196,13 +196,33 @@ The fastest bug to fix is one with a screen recording. Include:
 - the same steps recorded in Dia, if Dia behaves differently,
 - the crash report from `~/Library/Logs/DiagnosticReports`, if it crashed.
 
+## Claiming an issue
+
+One person works on an issue at a time, so two people don't fix the same bug. Before you start, look at the issue's
+assignee and its linked pull requests. If either is someone else, the issue is taken: pick another one, or ask on
+it. [This search](https://github.com/ardia-browser/ardia/issues?q=is%3Aissue+is%3Aopen+no%3Aassignee+-linked%3Apr)
+lists the free ones.
+
+- **Take it.** Comment `/take` and you're assigned; or open a pull request, a draft is fine, with `Closes #<issue>`.
+  From outside the vouched list you can take issues labelled `bug`, and be assigned 3 at a time.
+- **Give it back.** Comment `/drop` when you stop, and close your pull request if you opened one: an open pull
+  request holds the issue for as long as it stays open. A claim with no pull request lapses by itself after 5 quiet
+  days: no comment from you, no pull request of yours closed in that time.
+- **Who holds it.** The assignee, or else the author of the earliest open pull request that closes it.
+- **When it's taken.** A pull request for an issue someone else holds gets `already-claimed` and waits. Nothing is
+  closed for it. When two people collide, a maintainer settles it by assigning the issue, and the assignee wins.
+
+This covers pull requests opened from 12:00 UTC on 16 November 2026. Earlier ones still count as holding their
+issue.
+
 ## Pull requests
 
 - **Issue first.** Every PR closes an issue. Open one (or find the existing one) describing the bug or the request
   before you open the PR, then put `Closes #<issue>` in the PR description. A PR with no linked issue fails the
-  "Linked issue" check and won't be reviewed. Several PRs can point at the same issue. GitHub links an issue
-  only for a PR into `main`; for a PR stacked on another PR's branch the check reads `Closes #<issue>` from the
-  description itself.
+  "Linked issue" check and won't be reviewed. Take the issue first ([Claiming an issue](#claiming-an-issue)): one
+  person's PRs may close the same issue, but a PR for an issue someone else holds gets `already-claimed`. GitHub
+  links an issue only for a PR into `main`; for a PR stacked on another PR's branch the check reads
+  `Closes #<issue>` from the description itself.
 - **A bug fix, unless you're vouched.** From outside the vouched list, the issue your PR closes has to carry the
   `bug` label. If it doesn't, the PR gets `not-a-bug-fix` and a failed `bug-fix-only` status. When a maintainer
   labels the issue `bug`, both clear by themselves.

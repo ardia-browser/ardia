@@ -8,10 +8,11 @@ const RUN_CI = "run-ci";
 const VOUCH_LABELS = [TRUSTED, UNVOUCHED, DENOUNCED];
 const NOT_A_BUG_FIX = "not-a-bug-fix";
 const OVER_LIMIT = "over-limit";
+const ALREADY_CLAIMED = "already-claimed";
 const NEEDS_REBASE = "needs-rebase";
 const READY = "ready";
 const INCOMPLETE = "incomplete";
-const RULE_LABELS = [NOT_A_BUG_FIX, OVER_LIMIT, NEEDS_REBASE, READY, INCOMPLETE];
+const RULE_LABELS = [NOT_A_BUG_FIX, OVER_LIMIT, ALREADY_CLAIMED, NEEDS_REBASE, READY, INCOMPLETE];
 const LABEL_SPECS = [
   { name: TRUSTED, color: "1f883d", description: "The author is a collaborator, a bot or vouched for" },
   { name: UNVOUCHED, color: "fbca04", description: "The author is not vouched for yet" },
@@ -19,11 +20,18 @@ const LABEL_SPECS = [
   { name: RUN_CI, color: "0969da", description: "A maintainer started CI for this pull request" },
   { name: NOT_A_BUG_FIX, color: "e99695", description: "From outside the team we take bug fixes only, and no linked issue is labelled bug" },
   { name: OVER_LIMIT, color: "c5def5", description: "The author has more pull requests open than the limit, so this one waits" },
+  { name: ALREADY_CLAIMED, color: "d4c5f9", description: "Someone else holds an issue this pull request closes, so it waits" },
   { name: NEEDS_REBASE, color: "b60205", description: "This pull request conflicts with its base branch" },
   { name: READY, color: "0e8a16", description: "Meets every rule in CONTRIBUTING.md and waits for review" },
   { name: INCOMPLETE, color: "ededed", description: "Something in CONTRIBUTING.md is still missing" },
 ];
 const RULES_START = "2026-11-14T11:00:00Z";
+const CLAIMS_START = "2026-11-16T12:00:00Z";
+const CLAIM_QUIET_DAYS = 5;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const TAKE = "/take";
+const DROP = "/drop";
+const WORKFLOW_BOT = "github-actions[bot]";
 const OPEN_PR_LIMIT = 3;
 const RULED_TIERS = ["outsider", "trusted"];
 const BUG_LABEL = "bug";
@@ -71,6 +79,10 @@ function loadRepoFiles(root = REPO_ROOT) {
     unvouchedNote: read(".github/vouch/pr-unvouched.md"),
     denouncedNote: read(".github/vouch/denounced.md"),
     overLimitNote: read(".github/vouch/pr-over-limit.md"),
+    takenNote: read(".github/vouch/issue-taken.md"),
+    takenPullNote: read(".github/vouch/issue-taken-pull.md"),
+    takeNotABugNote: read(".github/vouch/issue-take-not-a-bug.md"),
+    takeOverLimitNote: read(".github/vouch/issue-take-over-limit.md"),
   };
 }
 
@@ -191,6 +203,93 @@ function closesABug(linkedIssues) {
   );
 }
 
+function createdSinceClaims(createdAt) {
+  const time = Date.parse(createdAt || "");
+  return Number.isFinite(time) && time >= Date.parse(CLAIMS_START);
+}
+
+function isBotActor(actor) {
+  if (!actor) return false;
+  return actor.__typename === "Bot" || actor.type === "Bot" || String(actor.login || "").endsWith("[bot]");
+}
+
+function personLogin(actor) {
+  return actor && actor.login && !isBotActor(actor) ? actor.login : null;
+}
+
+function sameLogin(a, b) {
+  return Boolean(a) && Boolean(b) && a.toLowerCase() === b.toLowerCase();
+}
+
+function issueHolder(issue) {
+  if (!issue || String(issue.state || "").toLowerCase() !== "open") return null;
+  const assignees = (issue.assignees || []).filter(Boolean);
+  if (assignees.length) return { logins: assignees, pull: null };
+  const earliest = (issue.pulls || [])
+    .filter((pull) => pull.login)
+    .sort((a, b) => (Date.parse(a.createdAt) - Date.parse(b.createdAt)) || a.number - b.number)[0];
+  return earliest ? { logins: [earliest.login], pull: earliest.number } : null;
+}
+
+function holdsIssue(holder, login) {
+  return Boolean(holder) && holder.logins.some((held) => sameLogin(held, login));
+}
+
+function claimedByOthers(linkedIssues, login) {
+  return (linkedIssues || []).some((issue) => {
+    const holder = issueHolder(issue);
+    return Boolean(holder) && !holdsIssue(holder, login);
+  });
+}
+
+function claimCommand(body) {
+  const text = String(body || "").trim().toLowerCase();
+  return text === TAKE || text === DROP ? text : null;
+}
+
+function takeDecision({ login, tier, issue, held = 0 }) {
+  const holder = issueHolder(issue);
+  if (holder && !holdsIssue(holder, login)) return { outcome: "taken", holder };
+  if ((issue.assignees || []).some((assignee) => sameLogin(assignee, login))) return { outcome: "kept" };
+  if (tier === "outsider" && !closesABug([issue])) return { outcome: "not-a-bug" };
+  if (tier === "outsider" && held >= OPEN_PR_LIMIT) return { outcome: "at-limit" };
+  return { outcome: "assign" };
+}
+
+function dropDecision({ login, issue }) {
+  const assigned = (issue.assignees || []).some((assignee) => sameLogin(assignee, login));
+  return { outcome: assigned ? "release" : "refuse" };
+}
+
+function claimLastActive(thread, login) {
+  const mine = (item) => sameLogin(item.login, login);
+  const times = [
+    CLAIMS_START,
+    ...(thread.assignedEvents || []).filter(mine).map((event) => event.createdAt),
+    ...(thread.comments || []).filter(mine).map((comment) => comment.createdAt),
+    ...(thread.everyPull || []).filter((pull) => mine(pull) && pull.state !== "open").map((pull) => pull.closedAt),
+  ];
+  return Math.max(...times.map((time) => Date.parse(time || "")).filter(Number.isFinite));
+}
+
+function claimIsStale(thread, login, now) {
+  const openPulls = [...(thread.pulls || []), ...(thread.everyPull || []).filter((pull) => pull.state === "open")];
+  if (openPulls.some((pull) => sameLogin(pull.login, login))) return false;
+  return now - claimLastActive(thread, login) > CLAIM_QUIET_DAYS * DAY_MS;
+}
+
+function holderPattern(template, values) {
+  const source = fillTemplate(template, values)
+    .split(/(\{holder\}|\{pull\})/)
+    .map((part) => {
+      if (part === "{holder}") return "([A-Za-z0-9-]+)";
+      if (part === "{pull}") return "(\\d+)";
+      return part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    })
+    .join("");
+  return new RegExp(`^${source}$`);
+}
+
 function ruleLabels(pull) {
   if (!RULED_TIERS.includes(pull.tier)) return null;
   if (String(pull.state || "").toLowerCase() !== "open" || !createdSinceRules(pull.createdAt)) return null;
@@ -198,6 +297,7 @@ function ruleLabels(pull) {
   const wanted = new Set();
   if (outsider && !closesABug(pull.linkedIssues)) wanted.add(NOT_A_BUG_FIX);
   if (outsider && (pull.position || 1) > OPEN_PR_LIMIT) wanted.add(OVER_LIMIT);
+  if (createdSinceClaims(pull.createdAt) && claimedByOthers(pull.linkedIssues, pull.login)) wanted.add(ALREADY_CLAIMED);
   const conflicting = isConflicting(pull);
   if (conflicting) wanted.add(NEEDS_REBASE);
   const ready =
@@ -207,6 +307,7 @@ function ruleLabels(pull) {
     !conflicting &&
     !wanted.has(NOT_A_BUG_FIX) &&
     !wanted.has(OVER_LIMIT) &&
+    !wanted.has(ALREADY_CLAIMED) &&
     !hasFailedCheck(pull.checks);
   wanted.add(ready ? READY : INCOMPLETE);
   return RULE_LABELS.filter((name) => wanted.has(name));
@@ -241,7 +342,7 @@ function ignoreStatus(...statuses) {
   };
 }
 
-function createSession({ github, context, core, files, env = process.env, pace, settle }) {
+function createSession({ github, context, core, files, env = process.env, pace, settle, now }) {
   const loaded = files || loadRepoFiles();
   return {
     github,
@@ -251,6 +352,7 @@ function createSession({ github, context, core, files, env = process.env, pace, 
     files: loaded,
     pace: pace || (() => sleep(SWEEP_WRITE_INTERVAL_MS)),
     settle: settle || (() => sleep(RUN_SETTLE_INTERVAL_MS)),
+    now: now || (() => Date.now()),
     pacing: false,
     repo: { owner: context.repo.owner, repo: context.repo.repo },
     list: parseVouchedList(loaded.list),
@@ -470,6 +572,15 @@ async function openIssuesBy(session, login) {
   return (issues || []).filter((issue) => !issue.pull_request);
 }
 
+const CLAIM_ISSUE_FRAGMENT = `
+fragment ClaimIssue on Issue {
+  number
+  state
+  labels(first: 50) { nodes { name } }
+  assignees(first: 10) { nodes { __typename login } }
+  closedByPullRequestsReferences(first: 20, includeClosedPrs: false) { nodes { number state createdAt author { __typename login } } }
+}`;
+
 const RULE_PULL_FRAGMENT = `
 fragment RulePull on PullRequest {
   number
@@ -483,7 +594,7 @@ fragment RulePull on PullRequest {
   authorAssociation
   author { __typename login }
   labels(first: 100) { nodes { name } }
-  closingIssuesReferences(first: 20) { nodes { number labels(first: 50) { nodes { name } } } }
+  closingIssuesReferences(first: 20) { nodes { ...ClaimIssue } }
   reviewThreads(last: 100) { nodes { isResolved comments(first: 1) { nodes { author { __typename login } } } } }
   commits(last: 1) {
     nodes {
@@ -508,7 +619,8 @@ fragment RulePull on PullRequest {
       }
     }
   }
-}`;
+}
+${CLAIM_ISSUE_FRAGMENT}`;
 
 const RULE_PULL_QUERY = `
 query VouchRulePull($owner: String!, $repo: String!, $number: Int!) {
@@ -539,10 +651,52 @@ query VouchMergeable($owner: String!, $repo: String!, $number: Int!) {
 const ISSUE_PULLS_QUERY = `
 query VouchIssuePulls($owner: String!, $repo: String!, $number: Int!) {
   repository(owner: $owner, name: $repo) {
-    issue(number: $number) {
-      closedByPullRequestsReferences(first: 50, includeClosedPrs: false) { nodes { number state createdAt } }
+    issueOrPullRequest(number: $number) {
+      __typename
+      ... on Issue { closedByPullRequestsReferences(first: 50, includeClosedPrs: false) { nodes { number state createdAt } } }
     }
   }
+}`;
+
+const PULL_ISSUES_QUERY = `
+query VouchPullIssues($owner: String!, $repo: String!, $number: Int!) {
+  repository(owner: $owner, name: $repo) {
+    defaultBranchRef { name }
+    pullRequest(number: $number) { body baseRefName closingIssuesReferences(first: 20) { nodes { number } } }
+  }
+}`;
+
+const ISSUE_CLAIM_QUERY = `
+query VouchIssueClaim($owner: String!, $repo: String!, $number: Int!) {
+  repository(owner: $owner, name: $repo) {
+    issueOrPullRequest(number: $number) { __typename ... on Issue { ...ClaimIssue } }
+  }
+}
+${CLAIM_ISSUE_FRAGMENT}`;
+
+const ISSUE_THREAD_QUERY = `
+query VouchIssueThread($owner: String!, $repo: String!, $number: Int!) {
+  repository(owner: $owner, name: $repo) {
+    issueOrPullRequest(number: $number) {
+      __typename
+      ... on Issue {
+        ...ClaimIssue
+        timelineItems(itemTypes: [ASSIGNED_EVENT], last: 20) {
+          nodes { ... on AssignedEvent { createdAt assignee { __typename ... on User { login } ... on Bot { login } } } }
+        }
+        comments(last: 100) { nodes { id databaseId isMinimized createdAt authorAssociation author { __typename login } body } }
+        everyPull: closedByPullRequestsReferences(first: 100, includeClosedPrs: true) {
+          nodes { number state createdAt closedAt author { __typename login } }
+        }
+      }
+    }
+  }
+}
+${CLAIM_ISSUE_FRAGMENT}`;
+
+const MINIMIZE_MUTATION = `
+mutation VouchMinimize($id: ID!, $classifier: ReportedContentClassifiers!) {
+  minimizeComment(input: { subjectId: $id, classifier: $classifier }) { minimizedComment { isMinimized } }
 }`;
 
 function nodesOf(connection) {
@@ -585,6 +739,45 @@ function rollupChecks(commit) {
   );
 }
 
+function claimFacts(node) {
+  return {
+    number: node.number,
+    state: String(node.state || "").toLowerCase(),
+    labels: nodesOf(node.labels).map((label) => label.name),
+    assignees: nodesOf(node.assignees).map(personLogin).filter(Boolean),
+    pulls: nodesOf(node.closedByPullRequestsReferences)
+      .filter((pull) => String(pull.state || "").toUpperCase() === "OPEN")
+      .map((pull) => ({ number: pull.number, createdAt: pull.createdAt, login: personLogin(pull.author) }))
+      .filter((pull) => pull.login),
+  };
+}
+
+function threadFacts(node) {
+  return {
+    ...claimFacts(node),
+    assignedEvents: nodesOf(node.timelineItems)
+      .map((event) => ({ login: personLogin(event.assignee), createdAt: event.createdAt }))
+      .filter((event) => event.login),
+    comments: nodesOf(node.comments).map((comment) => ({
+      id: comment.id,
+      databaseId: comment.databaseId,
+      minimized: Boolean(comment.isMinimized),
+      createdAt: comment.createdAt,
+      association: comment.authorAssociation,
+      login: actorLogin(comment.author),
+      bot: isBotActor(comment.author),
+      body: comment.body || "",
+    })),
+    everyPull: nodesOf(node.everyPull).map((pull) => ({
+      number: pull.number,
+      state: String(pull.state || "").toLowerCase(),
+      createdAt: pull.createdAt,
+      closedAt: pull.closedAt,
+      login: personLogin(pull.author),
+    })),
+  };
+}
+
 function pullFacts(node, defaultBranch) {
   const commit = (nodesOf(node.commits)[0] || {}).commit || null;
   const current = commit && commit.status ? commit.status.context : null;
@@ -601,10 +794,7 @@ function pullFacts(node, defaultBranch) {
     association: node.authorAssociation,
     login: actorLogin(node.author),
     labels: nodesOf(node.labels).map((label) => label.name),
-    linkedIssues: nodesOf(node.closingIssuesReferences).map((issue) => ({
-      number: issue.number,
-      labels: nodesOf(issue.labels).map((label) => label.name),
-    })),
+    linkedIssues: nodesOf(node.closingIssuesReferences).map(claimFacts),
     reviewThreads: nodesOf(node.reviewThreads).map((thread) => {
       const first = nodesOf(thread.comments)[0];
       return { resolved: Boolean(thread.isResolved), startedByBot: Boolean(first && first.author && first.author.__typename === "Bot") };
@@ -661,13 +851,31 @@ async function settleMergeable(session, facts) {
   }
 }
 
-function issueLabelsOf(session, number) {
-  if (!session.issues.has(number)) {
-    const lookup = session.github.rest.issues
-      .get({ ...session.repo, issue_number: number })
-      .then(({ data }) => (data.pull_request ? null : { number, labels: labelNames(data) }), ignoreStatus(404, 410));
-    session.issues.set(number, lookup);
-  }
+function ignoreGraphNotFound(error) {
+  const errors = error.errors || [];
+  if (!errors.length || !errors.every((item) => item.type === "NOT_FOUND")) throw error;
+  return null;
+}
+
+async function readIssueNode(session, query, number) {
+  const { github, repo } = session;
+  const data = await github.graphql(query, { owner: repo.owner, repo: repo.repo, number }).catch(ignoreGraphNotFound);
+  const found = data && data.repository && data.repository.issueOrPullRequest;
+  return found && found.__typename === "Issue" ? found : null;
+}
+
+async function readIssueClaim(session, number) {
+  const node = await readIssueNode(session, ISSUE_CLAIM_QUERY, number);
+  return node ? claimFacts(node) : null;
+}
+
+async function readIssueThread(session, number) {
+  const node = await readIssueNode(session, ISSUE_THREAD_QUERY, number);
+  return node ? threadFacts(node) : null;
+}
+
+function linkedIssueOf(session, number) {
+  if (!session.issues.has(number)) session.issues.set(number, readIssueClaim(session, number));
   return session.issues.get(number);
 }
 
@@ -675,10 +883,22 @@ async function linkedIssuesOf(session, facts) {
   if (facts.linkedIssues.length || facts.baseRef === facts.defaultBranch) return facts.linkedIssues;
   const found = [];
   for (const number of closingIssueNumbers(facts.body)) {
-    const issue = await issueLabelsOf(session, number);
+    const issue = await linkedIssueOf(session, number);
     if (issue) found.push(issue);
   }
   return found;
+}
+
+async function closingIssuesOfPull(session, number) {
+  const { github, repo } = session;
+  const data = await github.graphql(PULL_ISSUES_QUERY, { owner: repo.owner, repo: repo.repo, number });
+  const repository = (data && data.repository) || {};
+  const pull = repository.pullRequest;
+  if (!pull) return [];
+  const linked = nodesOf(pull.closingIssuesReferences).map((issue) => issue.number);
+  const defaultBranch = (repository.defaultBranchRef || {}).name || payloadDefaultBranch(session);
+  if (linked.length || pull.baseRefName === defaultBranch) return linked;
+  return closingIssueNumbers(pull.body);
 }
 
 async function tierOf(session, login, association) {
@@ -720,7 +940,7 @@ async function planRules(session, facts, around) {
   const tier = await tierOf(session, facts.login, facts.association);
   if (!RULED_TIERS.includes(tier)) return null;
   const position = tier === "outsider" ? await positionOf(session, facts, around) : 1;
-  const linkedIssues = tier === "outsider" ? await linkedIssuesOf(session, facts) : facts.linkedIssues;
+  const linkedIssues = await linkedIssuesOf(session, facts);
   const wanted = ruleLabels({ ...facts, tier, position, linkedIssues });
   const present = RULE_LABELS.filter((name) => facts.labels.includes(name));
   const add = wanted.filter((name) => !present.includes(name));
@@ -790,41 +1010,179 @@ async function evaluatePullRules(session, number, options = {}) {
 async function evaluateAuthorRules(session, pull, { closed }) {
   const login = loginOf(pull);
   const changes = [];
+  const evaluated = new Set([pull.number]);
   const opened = closed ? null : openPullEntry({ ...pull, state: "open" });
   const around = closed ? { closed: pull.number } : { opened };
-  if (!closed && createdSinceRules(pull.created_at)) {
-    const change = await evaluatePullRules(session, pull.number, { around });
+  const evaluate = async (number) => {
+    evaluated.add(number);
+    const change = await evaluatePullRules(session, number, { around });
     if (change) changes.push(change);
+  };
+  if (!closed && createdSinceRules(pull.created_at)) await evaluate(pull.number);
+  const tier = login ? await tierOf(session, login, pull.author_association) : null;
+  if (tier === "outsider") {
+    const others = (await openPullsOf(session)).filter(
+      (other) =>
+        other.number !== pull.number &&
+        (other.login || "").toLowerCase() === login.toLowerCase() &&
+        createdSinceRules(other.createdAt),
+    );
+    for (const other of others) await evaluate(other.number);
   }
-  if (!login) return changes;
-  const tier = await tierOf(session, login, pull.author_association);
-  if (tier !== "outsider") return changes;
-  const others = (await openPullsOf(session)).filter(
-    (other) =>
-      other.number !== pull.number &&
-      (other.login || "").toLowerCase() === login.toLowerCase() &&
-      createdSinceRules(other.createdAt),
+  for (const number of await closingIssuesOfPull(session, pull.number)) {
+    await retireOutdatedReplies(session, number);
+    changes.push(...(await evaluateIssuePulls(session, { number }, { around, evaluated })));
+  }
+  return changes;
+}
+
+async function evaluateIssuePulls(session, issue, { around = {}, evaluated = new Set() } = {}) {
+  const found = await readIssueNode(session, ISSUE_PULLS_QUERY, issue.number);
+  const pulls = nodesOf(found && found.closedByPullRequestsReferences).filter(
+    (pull) => String(pull.state).toUpperCase() === "OPEN" && createdSinceRules(pull.createdAt) && !evaluated.has(pull.number),
   );
-  for (const other of others) {
-    const change = await evaluatePullRules(session, other.number, { around });
+  const changes = [];
+  for (const pull of pulls) {
+    evaluated.add(pull.number);
+    const change = await evaluatePullRules(session, pull.number, { around });
     if (change) changes.push(change);
   }
   return changes;
 }
 
-async function evaluateIssuePulls(session, issue) {
+function outdatedReplies(session, thread) {
+  const holder = issueHolder(thread);
+  const values = templateValues(session, null);
+  const patterns = [session.files.takenNote, session.files.takenPullNote].map((template) => holderPattern(template, values));
+  return thread.comments.filter((comment) => {
+    if (comment.minimized || !comment.bot || comment.login !== WORKFLOW_BOT) return false;
+    const named = patterns.map((pattern) => pattern.exec(comment.body.trim())).find(Boolean);
+    if (!named) return false;
+    const namesAnotherPull = Boolean(named[2]) && Number(named[2]) !== (holder && holder.pull);
+    return !holdsIssue(holder, named[1]) || namesAnotherPull;
+  });
+}
+
+async function minimize(session, comment, classifier) {
+  await write(session, () => session.github.graphql(MINIMIZE_MUTATION, { id: comment.id, classifier }));
+}
+
+async function retireOutdatedReplies(session, number) {
+  const thread = await readIssueThread(session, number);
+  if (!thread) return 0;
+  const outdated = outdatedReplies(session, thread);
+  for (const comment of outdated) await minimize(session, comment, "OUTDATED");
+  return outdated.length;
+}
+
+async function react(session, comment, content) {
   const { github, repo } = session;
-  const data = await github.graphql(ISSUE_PULLS_QUERY, { owner: repo.owner, repo: repo.repo, number: issue.number });
-  const found = data && data.repository && data.repository.issue;
-  const pulls = nodesOf(found && found.closedByPullRequestsReferences).filter(
-    (pull) => String(pull.state).toUpperCase() === "OPEN" && createdSinceRules(pull.createdAt),
-  );
-  const changes = [];
-  for (const pull of pulls) {
-    const change = await evaluatePullRules(session, pull.number);
-    if (change) changes.push(change);
+  await write(session, () => github.rest.reactions.createForIssueComment({ ...repo, comment_id: comment.databaseId, content }));
+}
+
+async function otherIssuesHeldBy(session, login, except) {
+  const { github, repo } = session;
+  const issues = await github
+    .paginate(github.rest.issues.listForRepo, { ...repo, assignee: login, state: "open", per_page: 100 })
+    .catch(ignoreStatus(404, 422));
+  return (issues || []).filter((issue) => !issue.pull_request && issue.number !== except).map((issue) => issue.number);
+}
+
+function refusalNote(session, decision, login) {
+  const values = { ...templateValues(session, login), limit: OPEN_PR_LIMIT };
+  const { files } = session;
+  if (decision.outcome === "taken") {
+    const holder = { holder: decision.holder.logins[0], pull: decision.holder.pull };
+    return fillTemplate(decision.holder.pull ? files.takenPullNote : files.takenNote, { ...values, ...holder });
   }
-  return changes;
+  if (decision.outcome === "not-a-bug") return fillTemplate(files.takeNotABugNote, values);
+  if (decision.outcome === "at-limit") return fillTemplate(files.takeOverLimitNote, values);
+  return null;
+}
+
+function standingReply(thread, body) {
+  return thread.comments.some((comment) => !comment.minimized && comment.bot && comment.body.trim() === body);
+}
+
+async function handleClaimCommand(session, number, comment) {
+  const { github, repo, core } = session;
+  const command = claimCommand(comment.body);
+  const login = comment.login;
+  if (!login || comment.bot) return null;
+  const tier = await tierOf(session, login, comment.association);
+  if (tier === "denounced" || tier === "bot") return null;
+  const issue = await readIssueThread(session, number);
+  if (!issue || issue.state !== "open") return null;
+  const capped = command === TAKE && tier === "outsider";
+  const held = capped ? (await otherIssuesHeldBy(session, login, number)).length : 0;
+  let decision = command === DROP ? dropDecision({ login, issue }) : takeDecision({ login, tier, issue, held });
+  const result = { number, login, command, outcome: decision.outcome };
+  core.info(`Issue #${number}: ${command} by ${login}: ${decision.outcome}`);
+  if (decision.outcome === "assign") {
+    const { data } = await write(session, () => github.rest.issues.addAssignees({ ...repo, issue_number: number, assignees: [login] }));
+    if (!((data && data.assignees) || []).some((assignee) => sameLogin(assignee.login, login))) {
+      core.warning(`GitHub did not assign ${login} to issue #${number}`);
+      await react(session, comment, "confused");
+      await minimize(session, comment, "RESOLVED");
+      return { ...result, outcome: "not-assignable" };
+    }
+    if (capped && (await otherIssuesHeldBy(session, login, number)).length >= OPEN_PR_LIMIT) {
+      core.info(`Issue #${number}: ${login} took another issue meanwhile and is over the limit`);
+      await write(session, () => github.rest.issues.removeAssignees({ ...repo, issue_number: number, assignees: [login] }));
+      decision = { outcome: "at-limit" };
+      result.outcome = decision.outcome;
+    }
+  }
+  if (decision.outcome === "release") {
+    await write(session, () => github.rest.issues.removeAssignees({ ...repo, issue_number: number, assignees: [login] }));
+  }
+  const accepted = ["assign", "kept", "release"].includes(decision.outcome);
+  await react(session, comment, accepted ? "+1" : "-1");
+  const note = refusalNote(session, decision, login);
+  if (note && !standingReply(issue, note)) {
+    await write(session, () => github.rest.issues.createComment({ ...repo, issue_number: number, body: note }));
+  }
+  await minimize(session, comment, "RESOLVED");
+  return result;
+}
+
+async function handleClaimCommands(session, number) {
+  const thread = await readIssueThread(session, number);
+  if (!thread || thread.state !== "open") return [];
+  const commands = thread.comments
+    .filter((comment) => !comment.minimized && claimCommand(comment.body))
+    .sort((a, b) => (Date.parse(a.createdAt) - Date.parse(b.createdAt)) || a.databaseId - b.databaseId);
+  const results = [];
+  for (const comment of commands) {
+    const result = await handleClaimCommand(session, thread.number, comment);
+    if (result) results.push(result);
+  }
+  return results;
+}
+
+async function settleIssueClaims(session, number) {
+  const commands = await handleClaimCommands(session, number);
+  await retireOutdatedReplies(session, number);
+  const changes = await evaluateIssuePulls(session, { number });
+  return { commands, changes };
+}
+
+async function claimsPass(session, report, { dryRun }) {
+  const { github, repo, core } = session;
+  const assigned = await github.paginate(github.rest.issues.listForRepo, { ...repo, state: "open", assignee: "*", per_page: 100 });
+  for (const issue of assigned) {
+    if (issue.pull_request || !(issue.assignees || []).some((assignee) => personLogin(assignee))) continue;
+    const thread = await readIssueThread(session, issue.number);
+    if (!thread || thread.state !== "open" || !thread.assignees.length) continue;
+    report.claims.held += 1;
+    const stale = thread.assignees.filter((login) => claimIsStale(thread, login, session.now()));
+    if (!stale.length) continue;
+    core.info(`${dryRun ? "Would release" : "Releasing"} issue #${thread.number} from ${stale.join(", ")}`);
+    report.claims.released.push({ number: thread.number, logins: stale });
+    if (dryRun) continue;
+    await write(session, () => github.rest.issues.removeAssignees({ ...repo, issue_number: thread.number, assignees: stale }));
+    await retireOutdatedReplies(session, thread.number);
+  }
 }
 
 async function rulesPass(session, report, { dryRun }) {
@@ -867,6 +1225,20 @@ function ruleSummaryLines(report) {
   ];
 }
 
+function claimSummaryLines(report) {
+  const { held, released } = report.claims;
+  return [
+    "### Issue claims",
+    "",
+    `${held} open ${held === 1 ? "issue is" : "issues are"} held by an assignee.`,
+    "",
+    released.length
+      ? `#### ${report.dryRun ? "Would release" : "Released"} after ${CLAIM_QUIET_DAYS} quiet days (${released.length})`
+      : "No claims to release.",
+    ...released.map((claim) => `- issue #${claim.number} from ${claim.logins.map((login) => `@${login}`).join(", ")}`),
+  ];
+}
+
 async function writeSweepSummary(session, report) {
   const lines = [
     `## Vouch sweep${report.dryRun ? " (dry run, nothing written)" : ""}`,
@@ -888,6 +1260,8 @@ async function writeSweepSummary(session, report) {
     report.rerun.length ? `### Builds started (${report.rerun.length})` : "No waiting builds to start.",
     ...report.rerun.map((item) => `- ${item.workflow} for pull request #${item.number}`),
     "",
+    ...claimSummaryLines(report),
+    "",
     ...ruleSummaryLines(report),
   ];
   await session.core.summary.addRaw(lines.join("\n")).write();
@@ -904,6 +1278,7 @@ async function sweep(session, { dryRun }) {
     rerun: [],
     rules: [],
     ruleCounts: Object.fromEntries(RULE_LABELS.map((label) => [label, 0])),
+    claims: { held: 0, released: [] },
   };
   const mayHaveWaitingBuild = [];
   const pulls = await github.paginate(github.rest.pulls.list, { ...repo, state: "all", per_page: 100 });
@@ -941,6 +1316,7 @@ async function sweep(session, { dryRun }) {
   if (!dryRun) {
     for (const pr of mayHaveWaitingBuild) report.rerun.push(...(await rerunSkippedBuilds(session, pr)));
   }
+  await claimsPass(session, report, { dryRun });
   await rulesPass(session, report, { dryRun });
   await writeSweepSummary(session, report);
   return report;
@@ -950,6 +1326,11 @@ function isRecheck(payload) {
   const issue = payload.issue || {};
   const body = ((payload.comment || {}).body || "").trim();
   return Boolean(issue.pull_request) && issue.state === "open" && body === "/recheck";
+}
+
+function isOpenIssueComment(payload) {
+  const issue = payload.issue || {};
+  return Boolean(payload.comment) && !issue.pull_request && issue.state === "open";
 }
 
 async function run(args) {
@@ -976,12 +1357,21 @@ async function run(args) {
     return evaluatePullRules(session, pull.number);
   }
   if (eventName === "issues" && (action === "opened" || action === "reopened")) {
-    return handleIssue(session, payload.issue);
+    await handleIssue(session, payload.issue);
+    if (action === "reopened" && !payload.issue.pull_request) await settleIssueClaims(session, payload.issue.number);
+    return null;
   }
   if (eventName === "issues" && (action === "labeled" || action === "unlabeled")) {
     const label = String((payload.label || {}).name || "").toLowerCase();
     if (label !== BUG_LABEL || !payload.issue || payload.issue.pull_request) return null;
-    return evaluateIssuePulls(session, payload.issue);
+    return (await settleIssueClaims(session, payload.issue.number)).changes;
+  }
+  if (eventName === "issues" && (action === "assigned" || action === "unassigned")) {
+    if (!payload.issue || payload.issue.pull_request) return null;
+    return (await settleIssueClaims(session, payload.issue.number)).changes;
+  }
+  if (eventName === "issue_comment" && isOpenIssueComment(payload)) {
+    return (await settleIssueClaims(session, payload.issue.number)).commands;
   }
   if (eventName === "issue_comment" && isRecheck(payload)) {
     await handlePullRequest(session, payload.issue, { isNew: false });
@@ -1037,11 +1427,14 @@ module.exports = {
   LABEL_SPECS,
   NOT_A_BUG_FIX,
   OVER_LIMIT,
+  ALREADY_CLAIMED,
   NEEDS_REBASE,
   READY,
   INCOMPLETE,
   RULE_LABELS,
   RULES_START,
+  CLAIMS_START,
+  CLAIM_QUIET_DAYS,
   OPEN_PR_LIMIT,
   BUG_FIX_STATUS_CONTEXT,
   loadRepoFiles,
@@ -1058,6 +1451,12 @@ module.exports = {
   closingIssueNumbers,
   openPositions,
   latestChecks,
+  issueHolder,
+  claimCommand,
+  takeDecision,
+  dropDecision,
+  claimLastActive,
+  claimIsStale,
   run,
   listChanged,
   gate,

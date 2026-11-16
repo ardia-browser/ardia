@@ -8,6 +8,7 @@ export type SystemSignalsNative = {
   watchIdle(thresholds: number[]): void;
   holdsIncomingLinks(): boolean;
   setHoldIncomingLinks(hold: boolean, hooksStamp: string | null): void;
+  setReadSlackWorkspace(read: boolean): void;
   devPost(name: "willSleep" | "didWake"): Promise<boolean>;
   setApprovedDownloadFolders(folders: string[]): void;
   moveCompletedDownload(path: string, folder: string): Promise<MovedDownload>;

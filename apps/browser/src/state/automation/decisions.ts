@@ -118,7 +118,7 @@ function routeOf(profile: unknown, open: unknown, window: unknown): LinkVerdict 
   return { profileId, open: (open as OpenAs | undefined) ?? null, windowId, groupKey: null };
 }
 
-const linkData = (url: string, source: LinkSource) => ({ url, source: source ?? { bundleId: null, appName: null } });
+const linkData = (url: string, source: LinkSource) => ({ url, source: { bundleId: source?.bundleId ?? null, appName: source?.appName ?? null } });
 
 const linkPlan = (url: string, source: LinkSource): Plan<LinkVerdict> => ({
   applies: (hook) => urlApplies(hook, url) && fromApplies(hook, source),

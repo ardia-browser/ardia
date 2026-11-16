@@ -248,6 +248,22 @@ test("link.opening routes or drops links from other apps before any tab exists",
   assert.equal(Object.values(S().windows).filter((x) => x.kind === "small").length, 0);
 });
 
+test("a link.opening program hook gets the sender's bundleId and appName, never its window title", async () => {
+  const { decideLink } = await import("./decisions.ts");
+  const hooks = [{ name: "prog", on: "link.opening", run: ["~/bin/route"] }];
+  fresh(hooks);
+  await controlOn();
+  approveRule(approvalFor(useHookRules.getState().hooks[0]).key);
+  const runner = ++nextConnection;
+  assert.deepEqual(call("subscribe", { events: ["tab.opened"], hooks }, runner).result.served, ["prog"]);
+  const from = stub.controlSocket.broadcasts.length;
+  void decideLink("https://a.example/", { bundleId: "com.tinyspeck.slackmacgap", appName: "Slack", windowTitle: "Jane Doe (DM) - Acme - Slack" });
+  const request = linesFor(runner, from).find((l) => l.decide);
+  assert.deepEqual(request.data.source, { bundleId: "com.tinyspeck.slackmacgap", appName: "Slack" });
+  assert.deepEqual(Object.keys(request.data).sort(), ["source", "url"]);
+  assert.ok(!JSON.stringify(request).includes("Acme"));
+});
+
 test("an approved omnibox hook becomes a provider only while its runner serves it", async () => {
   const hooks = [{ name: "jira", omnibox: { title: "Jira", keyword: "j" }, run: ["~/bin/jira"] }];
   fresh(hooks);

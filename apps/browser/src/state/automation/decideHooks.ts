@@ -1,4 +1,4 @@
-import { moveCompletedDownload, setApprovedDownloadFolders, setHoldIncomingLinks } from "../../platform/systemSignals";
+import { moveCompletedDownload, setApprovedDownloadFolders, setHoldIncomingLinks, setReadSlackWorkspace } from "../../platform/systemSignals";
 import { setOpeningGate } from "../tabs/openingGate";
 import { setLinkGate, type LinkGateResult, type LinkSourceInfo } from "../littleArdia/linkGate";
 import { setPermissionGate } from "../site/permissionGate";
@@ -8,7 +8,8 @@ import { activeHook, decideHooks, onHooksChanged, startHookRules, useHookRules }
 import { startOmniboxApprovals } from "./omniboxApprovals";
 import { startOmniboxHooks } from "./omniboxHooks";
 import { startDownloadHooks } from "./downloadHooks";
-import { airTrafficHolds } from "../airTraffic/rules";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { airTrafficHolds, airTrafficReadsWorkspace } from "../airTraffic/rules";
 import { currentAirTraffic, loadAirTraffic, noteLinkSource, useAirTraffic } from "../airTraffic/store";
 
 function linkResult(url: string, verdict: LinkVerdict | null): LinkGateResult {
@@ -31,6 +32,13 @@ function gateLink(url: string, source: LinkSourceInfo): LinkGateResult | Promise
 
 function updateLinkHold() {
   const wanted = airTrafficHolds(currentAirTraffic()) || [...decideHooks("link.opening"), ...decideHooks("tab.opening")].some(activeHook);
+  if (PLATFORM_FEATURES.slackWorkspaces) {
+    try {
+      setReadSlackWorkspace(airTrafficReadsWorkspace(currentAirTraffic()));
+    } catch (error) {
+      console.warn("[automation] couldn't set the Slack workspace flag", error);
+    }
+  }
   try {
     setHoldIncomingLinks(wanted, useHookRules.getState().stamp);
   } catch (error) {
@@ -59,7 +67,7 @@ export function startDecideHooks() {
   });
   loadAirTraffic();
   useAirTraffic.subscribe((s, prev) => {
-    if (airTrafficHolds(s.config) !== airTrafficHolds(prev.config)) updateLinkHold();
+    if (airTrafficHolds(s.config) !== airTrafficHolds(prev.config) || airTrafficReadsWorkspace(s.config) !== airTrafficReadsWorkspace(prev.config)) updateLinkHold();
   });
   updateLinkHold();
 }

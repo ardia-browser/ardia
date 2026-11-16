@@ -67,6 +67,8 @@ export function onUserIdle(thresholdSeconds: number, listener: (idle: boolean) =
 
 export const setHoldIncomingLinks = (hold: boolean, hooksStamp: string | null): void => Signals().setHoldIncomingLinks(hold, hooksStamp);
 
+export const setReadSlackWorkspace = (read: boolean): void => Signals().setReadSlackWorkspace(read);
+
 export const setApprovedDownloadFolders = (folders: string[]): void => Signals().setApprovedDownloadFolders(folders);
 
 export const moveCompletedDownload = (path: string, folder: string): Promise<MovedDownload> => Signals().moveCompletedDownload(path, folder);

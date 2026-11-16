@@ -1,4 +1,4 @@
-export type LinkSource = { bundleId: string | null; appName: string | null } | null;
+export type LinkSource = { bundleId: string | null; appName: string | null; windowTitle?: string } | null;
 
 export function sourceMatches(names: readonly string[], source: LinkSource): boolean {
   if (!names.length) return true;

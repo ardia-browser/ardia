@@ -6,16 +6,17 @@ import { parseSaved, unchanged, versionedJson, type Migrations } from "../../lib
 import { urlParts } from "../../lib/urlParts";
 
 export const AIR_TRAFFIC_DOC = "air-traffic.json";
-export const AIR_TRAFFIC_VERSION = 2;
+export const AIR_TRAFFIC_VERSION = 3;
 export const MAX_AIR_TRAFFIC_RULES = 100;
-const MIGRATIONS: Migrations = { 0: unchanged, 1: unchanged };
+export const SLACK_BUNDLE_ID = "com.tinyspeck.slackmacgap";
+const MIGRATIONS: Migrations = { 0: unchanged, 1: unchanged, 2: unchanged };
 
 export const OPEN_AS = ["tab", "window", "littleArdia"] as const;
 export type OpenAs = (typeof OPEN_AS)[number];
 export type SourceApp = { bundleId: string | null; name: string };
 export type LinkCondition = { kind: "any" } | { kind: "site"; host: string } | { kind: "pattern"; pattern: string };
 export type AirTrafficTarget = { profileId: string | null; open: OpenAs; groupKey?: string };
-export type AirTrafficRule = AirTrafficTarget & { id: string; enabled: boolean; from: SourceApp | null; when: LinkCondition };
+export type AirTrafficRule = AirTrafficTarget & { id: string; enabled: boolean; from: SourceApp | null; when: LinkCondition; workspace?: string };
 export type AirTrafficConfig = { rules: AirTrafficRule[]; fallback: AirTrafficTarget | null };
 export type TargetUsable = (profileId: string, groupKey: string | null) => boolean;
 export type AirTrafficMatch = { by: "rule"; rule: AirTrafficRule; index: number; target: AirTrafficTarget } | { by: "fallback"; target: AirTrafficTarget };
@@ -76,6 +77,30 @@ export function linkMatches(when: LinkCondition, url: string): boolean {
 
 export const appMatches = (from: SourceApp | null, source: LinkSource) => !from || sourceMatches([from.bundleId ?? from.name], source);
 
+export const isSlackApp = (from: SourceApp | null) => from?.bundleId?.toLowerCase() === SLACK_BUNDLE_ID.toLowerCase();
+
+export const slackWindowTitle = (workspace: string) => `${workspace.trim()} - Slack`;
+
+const SLACK_TITLE_SUFFIX = " - slack";
+
+export function workspaceMatches(workspace: string | undefined, source: LinkSource): boolean {
+  if (!workspace) return true;
+  const title = source?.windowTitle?.trim().toLowerCase();
+  if (!title?.endsWith(SLACK_TITLE_SUFFIX)) return false;
+  const wanted = workspace.trim().toLowerCase();
+  const rest = title.slice(0, -SLACK_TITLE_SUFFIX.length).trim();
+  if (rest === wanted || rest.endsWith(` - ${wanted}`)) return true;
+  const split = rest.lastIndexOf(" - ");
+  if (split < 0 || !/\d/.test(rest.slice(split + 3))) return false;
+  const head = rest.slice(0, split);
+  return head === wanted || head.endsWith(` - ${wanted}`);
+}
+
+function workspaceFor(from: SourceApp | null, workspace: unknown): { workspace?: string } {
+  const name = typeof workspace === "string" ? workspace.trim() : "";
+  return name && isSlackApp(from) ? { workspace: name } : {};
+}
+
 const targetUsable = (target: AirTrafficTarget, usable: TargetUsable) => target.profileId === null || usable(target.profileId, null);
 
 const targetOf = (target: AirTrafficTarget, usable: TargetUsable): AirTrafficTarget => ({
@@ -89,16 +114,17 @@ export function cleanTarget(target: AirTrafficTarget): AirTrafficTarget {
   return groupKey && profileId !== null && open === "tab" ? { profileId, open, groupKey } : { profileId, open };
 }
 
-export const cleanRule = ({ groupKey, ...rule }: AirTrafficRule): AirTrafficRule => ({
+export const cleanRule = ({ groupKey, workspace, ...rule }: AirTrafficRule): AirTrafficRule => ({
   ...rule,
   ...cleanTarget({ profileId: rule.profileId, open: rule.open, groupKey }),
+  ...workspaceFor(rule.from, workspace),
 });
 
 export const sameTarget = (a: AirTrafficTarget | null, b: AirTrafficTarget | null) =>
   a === b || (!!a && !!b && a.profileId === b.profileId && a.open === b.open && (a.groupKey ?? null) === (b.groupKey ?? null));
 
 export function airTrafficRule(config: AirTrafficConfig, url: string, source: LinkSource, usable: TargetUsable): AirTrafficMatch | null {
-  const index = config.rules.findIndex((r) => r.enabled && appMatches(r.from, source) && linkMatches(r.when, url) && targetUsable(r, usable));
+  const index = config.rules.findIndex((r) => r.enabled && appMatches(r.from, source) && workspaceMatches(r.workspace, source) && linkMatches(r.when, url) && targetUsable(r, usable));
   if (index < 0) return null;
   const rule = config.rules[index]!;
   return { by: "rule", rule, index, target: targetOf(rule, usable) };
@@ -107,6 +133,8 @@ export function airTrafficRule(config: AirTrafficConfig, url: string, source: Li
 export function airTrafficFallback(config: AirTrafficConfig, usable: TargetUsable): AirTrafficMatch | null {
   return config.fallback && targetUsable(config.fallback, usable) ? { by: "fallback", target: targetOf(config.fallback, usable) } : null;
 }
+
+export const airTrafficReadsWorkspace = (config: AirTrafficConfig) => config.rules.some((r) => r.enabled && !!r.workspace);
 
 export const airTrafficHolds = (config: AirTrafficConfig) => !!config.fallback || config.rules.some((r) => r.enabled);
 
@@ -139,7 +167,7 @@ function ruleOf(v: unknown): AirTrafficRule | null {
   const when = conditionOf(v.when);
   const target = targetFrom(v);
   if ((v.from !== null && !from) || !when || !target) return null;
-  return { id: v.id, enabled: v.enabled, from, when, ...target };
+  return { id: v.id, enabled: v.enabled, from, when, ...target, ...workspaceFor(from, v.workspace) };
 }
 
 export function parseAirTraffic(json: string | null | undefined): AirTrafficConfig {

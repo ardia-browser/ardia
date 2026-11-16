@@ -207,6 +207,9 @@ struct SystemSignalsModule {
     SystemSignalsParts::HoldsIncomingLinks().store(hold);
   }
 
+  REACT_METHOD(setReadSlackWorkspace)
+  void setReadSlackWorkspace(bool) noexcept {}
+
   REACT_METHOD(setApprovedDownloadFolders)
   void setApprovedDownloadFolders(std::vector<std::string> folders) noexcept {
     m_approvedDownloadFolders = std::move(folders);

@@ -65,6 +65,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(class, readonly) NSDictionary<NSString *, NSNumber *> *launchMarks;
 @property(class, readonly, nullable) NSNumber *launchedHidden;
 + (void)markMainStarted;
++ (void)setReadSlackWorkspace:(BOOL)read NS_SWIFT_NAME(setReadSlackWorkspace(_:));
 + (void)setHoldIncomingLinks:(BOOL)hold hooksStamp:(nullable NSString *)hooksStamp NS_SWIFT_NAME(setHoldIncomingLinks(_:hooksStamp:));
 + (NSString *)fileStampOfDescriptor:(int)fd NS_SWIFT_NAME(fileStamp(ofDescriptor:));
 @property(class, readonly) NSString *missingFileStamp;

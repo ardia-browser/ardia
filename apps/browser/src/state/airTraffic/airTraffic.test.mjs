@@ -6,7 +6,7 @@ const { useBrowser } = await import("../browser/store.ts");
 const rules = await import("./rules.ts");
 const sources = await import("./sourceApps.ts");
 const store = await import("./store.ts");
-const { previewLink } = await import("./preview.ts");
+const { previewLink, tryLinkSource } = await import("./preview.ts");
 const { groupWindow, routeTargetsStamp } = await import("./groups.ts");
 const { startClosingWindow, stopClosingWindow } = await import("../windows/closingWindows.ts");
 const { decideLink, traceLink } = await import("../automation/decisions.ts");
@@ -224,6 +224,7 @@ test("the saved rules read back, an unversioned file upgrades, and a newer or br
   assert.deepEqual(rules.parseAirTraffic(JSON.stringify({ ...JSON.parse(json), version: 99 })), rules.NO_AIR_TRAFFIC);
   assert.deepEqual(rules.parseAirTraffic("{ nope"), rules.NO_AIR_TRAFFIC);
   assert.deepEqual(rules.parseAirTraffic(JSON.stringify({ ...JSON.parse(json), version: 1 })), config, "a version 1 file reads unchanged: its rules name no group");
+  assert.deepEqual(rules.parseAirTraffic(JSON.stringify({ ...JSON.parse(json), version: 2 })), config, "a version 2 file reads unchanged: its rules name no Slack workspace");
   const mixed = { version: 1, rules: [config.rules[0], { ...config.rules[1], when: { kind: "site", host: "Not A Host" } }, { ...config.rules[0] }, { id: "x", enabled: true, from: null, when: { kind: "any" }, profileId: null, open: "split" }], fallback: { open: "tab" } };
   assert.deepEqual(rules.parseAirTraffic(JSON.stringify(mixed)), { rules: [config.rules[0]], fallback: null });
 });
@@ -401,4 +402,169 @@ test("a link from another app lands where its rule says, before any tab exists",
   assert.equal(tab?.profileId, work);
   assert.notEqual(S().windows[tab.windowId].kind, "small");
   assert.equal(store.useAirTraffic.getState().recentApps[0].name, "Slack");
+});
+
+const SLACK_AT = (title) => ({ ...SLACK, windowTitle: title });
+const ACME_DM = "Jane Doe (DM) - Acme - Slack";
+
+test("a Slack rule with a workspace fits only links clicked while that workspace is the active one", () => {
+  const work = fresh({ rules: [(w) => rule({ from: slackApp, workspace: "Acme", profileId: w, open: "window" }), rule({ from: slackApp, open: "littleArdia" })] });
+  assert.equal(verdictOf(decideLink("https://a.example/", SLACK_AT(ACME_DM))), `${work}:window`);
+  assert.equal(verdictOf(decideLink("https://a.example/", SLACK_AT("general (Channel) - Globex - Slack"))), "last:littleArdia", "another workspace falls through to the next rule");
+  assert.equal(verdictOf(decideLink("https://a.example/", SLACK)), "last:littleArdia", "no window title falls through");
+  assert.equal(verdictOf(decideLink("https://a.example/", SLACK_AT(""))), "last:littleArdia");
+});
+
+test("two Slack rules with different workspaces route to their own profile", () => {
+  const work = fresh();
+  const other = S().createProfile({ name: "Client" });
+  store.addAirTrafficRule({ enabled: true, from: slackApp, workspace: "Acme", when: { kind: "any" }, profileId: work, open: "tab" });
+  store.addAirTrafficRule({ enabled: true, from: slackApp, workspace: "Globex", when: { kind: "any" }, profileId: other, open: "tab" });
+  assert.equal(verdictOf(decideLink("https://a.example/", SLACK_AT(ACME_DM))), `${work}:tab`);
+  assert.equal(verdictOf(decideLink("https://a.example/", SLACK_AT("general (Channel) - Globex - Slack"))), `${other}:tab`);
+  assert.equal(decideLink("https://a.example/", SLACK_AT("general (Channel) - Initech - Slack")), null);
+});
+
+test("the workspace is matched against the title's shape: the Slack suffix, then the workspace as its last or second to last part", () => {
+  const fits = (workspace, title) => rules.workspaceMatches(workspace, { ...SLACK, windowTitle: title });
+  assert.equal(fits("Acme", "Acme - Slack"), true);
+  assert.equal(fits("Acme", ACME_DM), true);
+  assert.equal(fits("Acme", "general (Channel) - Acme - 2 new items - Slack"), true);
+  assert.equal(fits("Acme", "general (Channel) - Acme - Slack "), true, "a trailing space");
+  assert.equal(fits("ACME", "general (channel) - acme - slack"), true, "case blind");
+  assert.equal(fits("Acme - EU", "general (Channel) - Acme - EU - Slack"), true, "a workspace name with a dash");
+  assert.equal(fits("Slack", ACME_DM), false, "a workspace named Slack doesn't fit every title");
+  assert.equal(fits("Acme", "acme (Channel) - Globex - Slack"), false, "a channel named like another workspace");
+  assert.equal(fits("Acme", "Acme2 - Slack"), false);
+  assert.equal(fits("Acme", "general - Acme - Corp - Slack"), false, "a workspace in the middle needs a count after it");
+  assert.equal(fits("Acme", "dev - Acme - Globex - Slack"), false);
+  assert.equal(fits("Acme", "general (Canal) - Acme - 3 elementos nuevos - Slack"), true, "a localized count");
+  assert.equal(fits("Acme", "Acme - 2 new items - Slack"), true, "no channel in front");
+  assert.equal(fits("Acme - EU", "general (Channel) - Acme - EU - Slack"), true);
+  assert.equal(fits("Acme - EU", "general (Channel) - Acme - EU - 1 new item - Slack"), true);
+  assert.equal(fits("Acme", "Jane Doe (DM) - Acme"), false, "no Slack suffix");
+  assert.equal(fits("Acme", "Slack"), false);
+  assert.equal(rules.workspaceMatches(undefined, SLACK), true);
+  assert.equal(rules.workspaceMatches("Acme", null), false);
+});
+
+test("a workspace belongs to a Slack rule: the store and the parser drop it from any other", () => {
+  fresh();
+  const id = store.addAirTrafficRule({ enabled: true, from: slackApp, workspace: "  Acme ", when: { kind: "any" }, profileId: null, open: "tab" });
+  assert.equal(store.useAirTraffic.getState().config.rules[0].workspace, "Acme");
+  store.updateAirTrafficRule(id, { from: { bundleId: "com.apple.mail", name: "Mail" } });
+  assert.ok(!("workspace" in store.useAirTraffic.getState().config.rules[0]));
+  store.updateAirTrafficRule(id, { from: slackApp, workspace: "Globex" });
+  store.updateAirTrafficRule(id, { workspace: undefined });
+  assert.ok(!("workspace" in store.useAirTraffic.getState().config.rules[0]));
+  assert.ok(!("workspace" in rules.cleanRule(rule({ from: null, workspace: "Globex" }))));
+  const raw = { version: 3, rules: [rule({ from: slackApp, workspace: "Globex" }), rule({ from: null, workspace: "Globex" }), rule({ from: slackApp, workspace: "  " })], fallback: null };
+  assert.deepEqual(rules.parseAirTraffic(JSON.stringify(raw)).rules.map((r) => r.workspace ?? null), ["Globex", null, null]);
+});
+
+test("turning a Slack rule off keeps its workspace", () => {
+  fresh();
+  const id = store.addAirTrafficRule({ enabled: true, from: slackApp, workspace: "Acme", when: { kind: "any" }, profileId: null, open: "tab" });
+  store.updateAirTrafficRule(id, { enabled: false });
+  assert.deepEqual(store.useAirTraffic.getState().config.rules[0].workspace, "Acme");
+  store.updateAirTrafficRule(id, { enabled: true });
+  assert.equal(store.useAirTraffic.getState().config.rules[0].workspace, "Acme");
+});
+
+test("native is told to read Slack's window title only while an enabled rule names a workspace", () => {
+  fresh();
+  startDecideHooks();
+  const flag = () => stub.systemSignals.readsSlackWorkspace;
+  assert.equal(flag(), false);
+  store.addAirTrafficRule({ enabled: true, from: slackApp, when: { kind: "any" }, profileId: null, open: "tab" });
+  assert.equal(flag(), false, "a Slack rule with no workspace");
+  const id = store.addAirTrafficRule({ enabled: true, from: slackApp, workspace: "Acme", when: { kind: "any" }, profileId: null, open: "tab" });
+  assert.equal(flag(), true);
+  store.updateAirTrafficRule(id, { enabled: false });
+  assert.equal(flag(), false, "disabled");
+  store.updateAirTrafficRule(id, { enabled: true });
+  assert.equal(flag(), true);
+  store.updateAirTrafficRule(id, { workspace: undefined });
+  assert.equal(flag(), false, "workspace cleared");
+  store.updateAirTrafficRule(id, { workspace: "Acme" });
+  assert.equal(flag(), true);
+  store.updateAirTrafficRule(id, { from: { bundleId: "com.apple.mail", name: "Mail" } });
+  assert.equal(flag(), false, "no longer a Slack rule");
+  store.updateAirTrafficRule(id, { from: slackApp, workspace: "Acme" });
+  assert.equal(flag(), true);
+  store.removeAirTrafficRule(id);
+  assert.equal(flag(), false, "removed");
+});
+
+test("the workspace survives a save and a read", () => {
+  const config = { rules: [rule({ from: slackApp, workspace: "Acme", profileId: "p1", open: "window" })], fallback: null };
+  assert.deepEqual(rules.parseAirTraffic(rules.airTrafficJson(config)), config);
+  assert.equal(JSON.parse(rules.airTrafficJson(config)).version, 3);
+});
+
+test("Try a Link honors the workspace through the title built from it", () => {
+  const work = fresh({ rules: [(w) => rule({ from: slackApp, workspace: "Acme", profileId: w, open: "window" })] });
+  assert.equal(verdictOf(decideLink("https://github.com/ardia", SLACK_AT("Acme - Slack"))), `${work}:window`);
+  const fits = previewLink("github.com/ardia", { ...SLACK, windowTitle: rules.slackWindowTitle("acme") });
+  assert.equal(fits.trace.by, "rule");
+  assert.equal(fits.profileName, "Work");
+  assert.equal(previewLink("github.com/ardia", { ...SLACK, windowTitle: rules.slackWindowTitle("Globex") }).trace.by, "usual");
+  assert.equal(previewLink("github.com/ardia", SLACK).trace.by, "usual");
+  const noPermission = previewLink("github.com/ardia", tryLinkSource(slackApp, "Acme", false));
+  assert.equal(noPermission.trace.by, "usual", "without Screen Recording the real link has no title, so the preview gives none");
+  assert.equal(previewLink("github.com/ardia", tryLinkSource(slackApp, "Acme", true)).trace.by, "rule");
+  assert.equal(previewLink("github.com/ardia", tryLinkSource(slackApp, "Acme", null)).trace.by, "rule");
+  assert.equal(previewLink("github.com/ardia", tryLinkSource(slackApp, "", true)).trace.by, "usual");
+  assert.equal(tryLinkSource(null, "Acme", true), null);
+  assert.deepEqual(tryLinkSource({ bundleId: "com.apple.mail", name: "Mail" }, "Acme", true), { bundleId: "com.apple.mail", appName: "Mail" });
+});
+
+test("a link that reaches the app with a Slack window title is routed by its workspace", async () => {
+  const { openExternalUrls } = await import("../littleArdia/actions.ts");
+  const { onOpenURLs } = await import("../../platform/app.ts");
+  fresh();
+  const client = S().createProfile({ name: "Client" });
+  store.addAirTrafficRule({ enabled: true, from: slackApp, workspace: "Acme", when: { kind: "any" }, profileId: client, open: "tab" });
+  takeAirTrafficCounts();
+  startDecideHooks();
+  onOpenURLs((urls, pointer, source, returnTo) => openExternalUrls(urls, pointer, source, returnTo));
+  S().updateSettings({ openLinksInLittleArdia: false });
+  S().createWindow({ url: "https://a.example/" });
+  stub.emitOpenURLs(["https://ws.example/out"], undefined, { ...SLACK, windowTitle: "general (Channel) - Globex - Slack" });
+  stub.emitOpenURLs(["https://ws.example/in"], undefined, { ...SLACK, windowTitle: ACME_DM });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const tabOf = (url) => Object.values(S().tabs).find((t) => t.url === url);
+  assert.equal(tabOf("https://ws.example/in")?.profileId, client);
+  assert.deepEqual(takeAirTrafficCounts(), counted({ air_traffic_rule_links: 1 }), "only the link from the Acme window was routed by the rule");
+  assert.ok(!stub.docs.get(sources.LINK_SOURCES_DOC).includes("Acme"), "the window title is never saved");
+  assert.ok(!stub.docs.get(rules.AIR_TRAFFIC_DOC)?.includes("Jane Doe"));
+});
+
+test("the hold is still set when the Slack workspace flag can't be, and the flag is left alone off the Mac", async () => {
+  const { PLATFORM_FEATURES } = await import("../../lib/platformFeatures.ts");
+  fresh();
+  startDecideHooks();
+  stub.systemSignals.readSlackWorkspaceThrows = true;
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    store.addAirTrafficRule({ enabled: true, from: slackApp, workspace: "Acme", when: { kind: "any" }, profileId: null, open: "tab" });
+  } finally {
+    console.warn = warn;
+    stub.systemSignals.readSlackWorkspaceThrows = false;
+  }
+  assert.equal(stub.systemSignals.holdsIncomingLinks, true);
+  const id = store.useAirTraffic.getState().config.rules[0].id;
+  store.updateAirTrafficRule(id, { enabled: false });
+  store.updateAirTrafficRule(id, { enabled: true });
+  assert.equal(stub.systemSignals.readsSlackWorkspace, true);
+  PLATFORM_FEATURES.slackWorkspaces = false;
+  try {
+    stub.systemSignals.readsSlackWorkspace = false;
+    store.updateAirTrafficRule(id, { enabled: false });
+    store.updateAirTrafficRule(id, { enabled: true });
+    assert.equal(stub.systemSignals.readsSlackWorkspace, false);
+  } finally {
+    PLATFORM_FEATURES.slackWorkspaces = true;
+  }
 });

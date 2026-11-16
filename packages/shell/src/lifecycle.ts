@@ -21,7 +21,7 @@ export type AppEvent =
 
 export type AppearanceMode = "auto" | "light" | "dark";
 
-export type OpenURLSource = { bundleId: string | null; appName: string | null };
+export type OpenURLSource = { bundleId: string | null; appName: string | null; windowTitle?: string };
 
 type ShellEvents = {
   onAppEvent: (e: AppEvent) => void;

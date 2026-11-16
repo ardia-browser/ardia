@@ -31,6 +31,7 @@ static bool gReplayingLaunchURLs;
 
 static NSString *const kHoldIncomingLinksDefault = @"ArdiaHoldIncomingLinks";
 
+static NSString *const kReadSlackWorkspaceDefault = @"ArdiaReadSlackWorkspace";
 static NSString *const kLinkPolicyStampDefault = @"ArdiaLinkPolicyStamp";
 static NSString *const kMissingFileStamp = @"missing";
 static std::atomic<bool> gLinkPolicyReady{false};
@@ -76,6 +77,16 @@ static bool HoldsIncomingLinks() {
   return SavedLinkHold() || ![saved isEqualToString:LinkPolicyFingerprint(HooksFileStamp())];
 }
 
+static bool SavedReadSlackWorkspace() {
+  return [NSUserDefaults.standardUserDefaults boolForKey:kReadSlackWorkspaceDefault];
+}
+
+static bool ReadsSlackWorkspace() {
+  if (gLinkPolicyReady) return SavedReadSlackWorkspace();
+  NSString *saved = [NSUserDefaults.standardUserDefaults stringForKey:kLinkPolicyStampDefault];
+  return SavedReadSlackWorkspace() || ![saved isEqualToString:LinkPolicyFingerprint(HooksFileStamp())];
+}
+
 static pid_t SenderPID(NSAppleEventDescriptor *event) {
   NSData *token = [event attributeDescriptorForKeyword:keySenderAuditTokenAttr].data;
   if (token.length == sizeof(audit_token_t)) {
@@ -84,6 +95,20 @@ static pid_t SenderPID(NSAppleEventDescriptor *event) {
     if ((pid_t)audit.val[5] > 0) return (pid_t)audit.val[5];
   }
   return [event attributeDescriptorForKeyword:keySenderPIDAttr].int32Value;
+}
+
+static NSString *const kSlackBundleId = @"com.tinyspeck.slackmacgap";
+
+static NSString *WindowTitleOfApp(pid_t pid) {
+  if (!ArdiaHost.screenRecordingAllowed) return nil;
+  NSArray<NSDictionary *> *windows =
+      CFBridgingRelease(CGWindowListCopyWindowInfo(kCGWindowListOptionAll | kCGWindowListExcludeDesktopElements, kCGNullWindowID));
+  for (NSDictionary *window in windows) {
+    if ([window[(id)kCGWindowOwnerPID] intValue] != pid || [window[(id)kCGWindowLayer] intValue] != 0) continue;
+    NSString *name = window[(id)kCGWindowName];
+    if ([name isKindOfClass:NSString.class] && name.length) return name;
+  }
+  return nil;
 }
 
 static NSDictionary *SenderOfCurrentURLEvent() {
@@ -97,7 +122,10 @@ static NSDictionary *SenderOfCurrentURLEvent() {
   NSString *name = app.localizedName;
   char process[2 * MAXCOMLEN + 1] = {};
   if (!name.length && pid > 0 && proc_name(pid, process, sizeof process) > 0) name = @(process);
-  return @{@"bundleId" : app.bundleIdentifier ?: NSNull.null, @"appName" : name.length ? name : NSNull.null};
+  NSMutableDictionary *sender = [@{@"bundleId" : app.bundleIdentifier ?: NSNull.null, @"appName" : name.length ? name : NSNull.null} mutableCopy];
+  if ([app.bundleIdentifier isEqualToString:kSlackBundleId] && ReadsSlackWorkspace())
+    if (NSString *title = WindowTitleOfApp(pid)) sender[@"windowTitle"] = title;
+  return sender;
 }
 
 @implementation ArdiaBootstrapDelegate
@@ -366,6 +394,13 @@ void StartEarlyWindow() {
   else [defaults removeObjectForKey:kLinkPolicyStampDefault];
   [defaults synchronize];
   gLinkPolicyReady = true;
+}
+
++ (void)setReadSlackWorkspace:(BOOL)read {
+  NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+  if (read) [defaults setBool:YES forKey:kReadSlackWorkspaceDefault];
+  else [defaults removeObjectForKey:kReadSlackWorkspaceDefault];
+  [defaults synchronize];
 }
 
 + (NSString *)fileStampOfDescriptor:(int)fd {

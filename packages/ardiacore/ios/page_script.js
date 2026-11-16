@@ -442,6 +442,7 @@
   };
 
   const typedByUser = new WeakSet();
+  const filledByBrowser = new WeakSet();
   let revealedField = null;
   let eyeField = null;
   let eyeHost = null;
@@ -482,6 +483,13 @@
     if (el.type === "text") el.type = "password";
     if (eyeButton) eyeButton.innerHTML = EYE;
   };
+  const fromAutofill = (el) => {
+    if (!el.value) filledByBrowser.delete(el);
+    else if (el.matches(":autofill")) filledByBrowser.add(el);
+    if (!filledByBrowser.has(el)) return false;
+    if (revealedField === el) conceal();
+    return true;
+  };
   const ensureEye = () => {
     if (eyeHost && eyeHost.isConnected) return;
     eyeHost = document.createElement("ardia-reveal");
@@ -499,6 +507,7 @@
       e.stopPropagation();
       const el = eyeField;
       if (!el) return;
+      if (fromAutofill(el)) return hideEye();
       const [start, end] = [el.selectionStart, el.selectionEnd];
       if (revealedField === el) conceal();
       else {
@@ -517,7 +526,7 @@
   };
   const updateEye = guard(() => {
     const el = document.activeElement;
-    const show = el instanceof HTMLInputElement && isPassword(el) && el.value && typedByUser.has(el) && el.getBoundingClientRect().width >= 80;
+    const show = el instanceof HTMLInputElement && isPassword(el) && !fromAutofill(el) && el.value && typedByUser.has(el) && el.getBoundingClientRect().width >= 80;
     if (!show) return hideEye();
     if (eyeField !== el && hasOwnToggle(el)) return hideEye();
     ensureEye();
@@ -532,7 +541,9 @@
       if (!(el instanceof HTMLInputElement) || !isPassword(el)) return;
       if (!el.value) typedByUser.delete(el);
       else if (e.isTrusted) typedByUser.add(el);
+      fromAutofill(el);
       updateEye();
+      setTimeout(guard(() => fromAutofill(el) && updateEye()), 0);
     }),
     true,
   );

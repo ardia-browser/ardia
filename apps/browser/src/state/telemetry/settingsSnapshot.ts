@@ -28,9 +28,13 @@ function measured(spec: SettingSpec<unknown>, value: unknown): string | null {
   return null;
 }
 
+const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
+const sameRpc = (url: string) => url.toLowerCase().replace(/^(https:\/\/[^/?#]+):443(?=[/?#]|$)/, "$1").replace(/\/+$/, "");
+
 function web3RpcKinds(rpcs: Settings["web3Rpcs"]): Record<string, string> {
   const mainnet = rpcs["1"];
-  const kind = !mainnet ? "none" : mainnet === PUBLIC_NODE_RPC ? "publicnode" : /^http:\/\//i.test(mainnet) ? "local" : "other";
+  const host = mainnet && /^[a-z]+:\/\/(\[[^\]]+\]|[^/?#:]+)/i.exec(mainnet)?.[1]?.toLowerCase();
+  const kind = !mainnet ? "none" : sameRpc(mainnet) === PUBLIC_NODE_RPC ? "publicnode" : host && LOCAL_HOSTS.has(host) ? "local" : "other";
   return { web3_rpc_chains: String(Object.keys(rpcs).length), web3_rpc_mainnet: kind };
 }
 

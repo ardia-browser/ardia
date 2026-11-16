@@ -397,13 +397,12 @@ void Resolver::GotResource(Rpc::Answer answer) {
       const std::string encoding =
           base::ToLowerASCII(base::TrimWhitespaceASCII(value, base::TRIM_ALL));
       if (encoding == "identity") continue;
-      const uint32_t size =
-          encoding == "gzip" ? compression::GetUncompressedSize(base::as_byte_span(page.body)) : 0;
+      const uint32_t size = compression::GetUncompressedSize(base::as_byte_span(page.body));
       std::string decoded;
       if (encoding == "gzip" && size <= kMaxBodyBytes) {
         decoded.resize(size);
       }
-      if (decoded.size() != size || size == 0 ||
+      if (encoding != "gzip" || size > kMaxBodyBytes ||
           !compression::GzipUncompress(base::as_byte_span(page.body),
                                        base::as_writable_byte_span(decoded))) {
         return Fail(Outcome::kBadResponse, 502, "Can't decode the page",

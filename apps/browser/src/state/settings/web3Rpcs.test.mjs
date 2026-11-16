@@ -35,3 +35,13 @@ test("Add RPC keeps only a URL the engine accepts, and puts the engine's map bac
   assert.equal(await addWeb3Rpc("10", "https://optimism-rpc.publicnode.com"), null);
   assert.deepEqual(useBrowser.getState().settings.web3Rpcs, { 1: "https://ethereum-rpc.publicnode.com", 10: "https://optimism-rpc.publicnode.com" });
 });
+
+test("telemetry puts an RPC in the same cohort however its URL is written", async () => {
+  const { settingsSnapshot } = await import("../telemetry/settingsSnapshot.ts");
+  const { DEFAULT_SETTINGS } = await import("./settings.ts");
+  const kind = (rpc) => settingsSnapshot({ ...DEFAULT_SETTINGS, web3Rpcs: rpc ? { 1: rpc } : {} }).web3_rpc_mainnet;
+  assert.equal(kind(null), "none");
+  for (const rpc of ["https://ethereum-rpc.publicnode.com", "https://Ethereum-RPC.publicnode.com/", "https://ethereum-rpc.publicnode.com:443/"]) assert.equal(kind(rpc), "publicnode", rpc);
+  for (const rpc of ["http://127.0.0.1:8545", "https://127.0.0.1", "http://LOCALHOST:8545/", "http://[::1]:8545"]) assert.equal(kind(rpc), "local", rpc);
+  for (const rpc of ["https://rpc.example", "https://ethereum-rpc.publicnode.com/v2/key"]) assert.equal(kind(rpc), "other", rpc);
+});

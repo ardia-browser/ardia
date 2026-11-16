@@ -243,11 +243,11 @@ LIBRARY = r"""
     scope() {
       const text = ((document.body && document.body.innerText) || "").slice(0, 200000);
       const counts = [];
-      const range = text.match(/\b\d[\d,.]*\s*[-–—]\s*\d[\d,.]*\s+of\s+(about\s+|over\s+)?\d[\d,.]*\+?(\s+[A-Za-z]+)?/);
+      const range = text.match(/\b\d[\d,.]*[ \u00a0]*[-–—][ \u00a0]*\d[\d,.]*[ \u00a0]+of[ \u00a0]+(about[ \u00a0]+|over[ \u00a0]+)?\d[\d,.]*\+?([ \u00a0]+[A-Za-z]+)?/);
       if (range) counts.push(range[0]);
-      const total = text.match(/\b\d[\d,.]*\+?\s+(results|items|products|listings|jobs|homes|properties|matches|reviews|rentals|vehicles|cars|hotels|apartments|roles|positions|articles|stores|locations|courses|events|deals)\b/i);
+      const total = text.match(/\b\d[\d,.]*\+?[ \u00a0]+(results|items|products|listings|jobs|homes|properties|matches|reviews|rentals|vehicles|cars|hotels|apartments|roles|positions|articles|stores|locations|courses|events|deals)\b/i);
       if (total && !(range && range[0].includes(total[0]))) counts.push(total[0]);
-      const paged = text.match(/\bpage\s+\d+\s+of\s+\d+\b/i);
+      const paged = text.match(/\bpage[ \u00a0]+\d+[ \u00a0]+of[ \u00a0]+\d+\b/i);
       if (paged) counts.push(paged[0]);
       const controls = [];
       const named = (pattern) => {
@@ -361,7 +361,7 @@ LIBRARY = r"""
     readable(root) {
       root = root || document.body || document.documentElement;
       const lines = [];
-      const SKIP = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "SVG", "HEAD", "IFRAME"]);
+      const SKIP = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "SVG", "HEAD"]);
       const ASIDE_TITLE = /^(related|recently viewed|you (may|might) also like|similar (items|products)|sponsored|recommended|customers (also|who)|more (from|like this)|frequently bought|people also)/i;
       const ASIDE_NAME = /(^|[-_\s])(related|recently-?viewed|recommend\w*|sponsored|similar-?(items|products)|also-?(bought|viewed))([-_\s]|$)/i;
       const asideLabel = (el) => {
@@ -406,7 +406,32 @@ LIBRARY = r"""
       };
       let buffer = "";
       let row = null;
+      let frameDepth = 0;
       const flush = () => { const t = norm(buffer); if (t) lines.push(t); buffer = ""; };
+      const frameText = (el) => {
+        const box = el.getBoundingClientRect();
+        if (box.width < 120 || box.height < 80) return;
+        const title = norm(el.getAttribute("title") || el.getAttribute("name") || "") || "frame";
+        let doc = null;
+        try { doc = el.contentDocument; } catch (error) { doc = null; }
+        const body = doc && (doc.body || doc.documentElement);
+        if (body && frameDepth < 3) {
+          flush();
+          lines.push("");
+          lines.push(`[frame "${title}"]`);
+          frameDepth++;
+          try { walk(body); } finally { frameDepth--; }
+          flush();
+          lines.push(`[end of frame "${title}"]`);
+          lines.push("");
+          return;
+        }
+        const src = el.src || "";
+        if (!doc && /^https?:/.test(src) && box.width >= 400 && box.height >= 300) {
+          flush();
+          lines.push(`[frame "${title}" from another site, not read here: read ${src}]`);
+        }
+      };
       const walk = (node) => {
         if (node.nodeType === 3) { buffer += node.nodeValue; return; }
         if (node.nodeType !== 1) return;
@@ -419,6 +444,7 @@ LIBRARY = r"""
         const style = getComputedStyle(node);
         if (style.display === "none" || style.visibility === "hidden") return;
         const tag = node.tagName;
+        if (tag === "IFRAME" || tag === "FRAME") { frameText(node); return; }
         if (!/^(INPUT|SELECT|TEXTAREA|IMG|A|BUTTON)$/.test(tag) && node.hasAttribute("aria-label") && !norm(node.textContent || "")) {
           const label = iconLabel(node);
           if (label) buffer += " [" + label + "] ";

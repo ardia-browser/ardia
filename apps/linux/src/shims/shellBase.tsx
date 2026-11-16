@@ -26,6 +26,7 @@ export {
   WindowDragRegion,
 } from "./web/chrome";
 export { FadeLabel } from "./web/FadeLabel";
+export { EdgeFadeMask } from "./web/EdgeFadeMask";
 export { MouseArea } from "./web/MouseArea";
 export { FileDropArea } from "./web/FileDropArea";
 export { PopoverBubble } from "./web/PopoverBubble";

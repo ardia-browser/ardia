@@ -27,6 +27,7 @@ import { isLastRegularWindow, isOpenRegularWindow, isRegularWindow, isSmall, isS
 import { activated, apply, removeTabs, withNewTab } from "../tabs/tabs";
 import type { AdoptId, BrowserWindow, ClosedWindow, Frame, ParkedPins, Tab, WindowKind } from "../browser/types";
 import { emptyWindow, smallWindow, withWindow } from "./newWindow";
+import { withWindowFrame, withWindowMaximized } from "./windowPlacement";
 import { newTabHome } from "../tabs/newTabHome";
 import { noteAutoHideTabsChosen, noteTornOffWindowKeptAutoHide } from "../telemetry/autoHideTabsChoices";
 import { lastClosedEntry, lastClosedTab, restoreTab, restoreWindow, withoutRecentlyClosed } from "./reopenClosed";
@@ -62,7 +63,8 @@ export type WindowsSlice = {
 
   createWindow(options?: CreateWindowOptions): string;
   closeWindow(id: string, options?: CloseWindowOptions): void;
-  setWindowFrame(id: string, frame: Frame): void;
+  setWindowFrame(id: string, frame: Frame, restored?: Frame): void;
+  setWindowMaximized(id: string, on: boolean): void;
   setWindowFullScreen(id: string, on: boolean): void;
   toggleSidebar(windowId: string): void;
   switchProfile(windowId: string, profileId: string): void;
@@ -237,16 +239,12 @@ export const createWindowsSlice: StateCreator<BrowserState, [], [], WindowsSlice
     });
   },
 
-  setWindowFrame(id, frame) {
-    set((s) => {
-      const w = s.windows[id];
-      if (!w || (w.frame && w.frame.every((v, i) => v === frame[i]))) return {};
-      const windows = { ...s.windows, [id]: { ...w, frame } };
-      if (!isSmallWindow(w)) return { windows };
-      const size: [number, number] = [Math.round(frame[2]), Math.round(frame[3])];
-      const [width, height] = s.settings.littleArdiaSize;
-      return size[0] === width && size[1] === height ? { windows } : { windows, settings: { ...s.settings, littleArdiaSize: size } };
-    });
+  setWindowFrame(id, frame, restored) {
+    set((s) => withWindowFrame(s, id, frame, restored));
+  },
+
+  setWindowMaximized(id, on) {
+    set((s) => withWindowMaximized(s, id, on));
   },
 
   setWindowFullScreen(id, on) {

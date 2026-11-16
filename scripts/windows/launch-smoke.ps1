@@ -537,6 +537,95 @@ elseif (Select-String -Path $browserLog -Pattern "^(js-error|fatal|error) " -Qui
 }
 elseif (-not (Select-String -Path $browserLog -Pattern "\[ardia windows\] first window" -Quiet)) { $failures += "the browser window never rendered with onboarding done" }
 
+function Start-PlacementRun([string]$Name) {
+  $runLog = Join-Path $Out "placement-$Name.log"
+  Remove-Item -Force -ErrorAction SilentlyContinue $runLog
+  $run = Start-Process -FilePath $App -ArgumentList "--log-file=`"$runLog`"" -PassThru
+  $by = (Get-Date).AddSeconds(40)
+  while ((Get-Date) -lt $by -and -not $run.HasExited) {
+    $run.Refresh()
+    if ($run.MainWindowHandle -ne [IntPtr]::Zero -and (Test-Path $runLog) -and (Select-String -Path $runLog -Pattern "\[ardia windows\] first window" -Quiet)) { break }
+    Start-Sleep -Milliseconds 300
+  }
+  Start-Sleep -Seconds 3
+  $run.Refresh()
+  return [pscustomobject]@{ Process = $run; Log = $runLog; Handle = $run.MainWindowHandle }
+}
+
+function Stop-PlacementRun($Run, [string]$What) {
+  if ($Run.Process.HasExited) { return @("placement: the app had exited before $What") }
+  [ArdiaInput]::PostMessage($Run.Handle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
+  if ($Run.Process.WaitForExit(20000)) { return @() }
+  Stop-Process -Id $Run.Process.Id -Force -ErrorAction SilentlyContinue
+  $Run.Process.WaitForExit(10000) | Out-Null
+  return @("placement: closing the last window did not quit the app within 20 s ($What)")
+}
+
+function Test-RectNear($Rect, $Expected, [string]$What) {
+  if (-not $Rect) { return @("placement: no window to measure $What") }
+  $got = "$($Rect.Left),$($Rect.Top) $($Rect.Right - $Rect.Left)x$($Rect.Bottom - $Rect.Top)"
+  $want = "$($Expected.Left),$($Expected.Top) $($Expected.Right - $Expected.Left)x$($Expected.Bottom - $Expected.Top)"
+  $near = [Math]::Abs($Rect.Left - $Expected.Left) -le 4 -and [Math]::Abs($Rect.Top - $Expected.Top) -le 4 -and [Math]::Abs($Rect.Right - $Expected.Right) -le 4 -and [Math]::Abs($Rect.Bottom - $Expected.Bottom) -le 4
+  if ($near) { Write-Host "Placement: $What came back at $got."; return @() }
+  return @("placement: $What came back at $got, not $want")
+}
+
+function Test-WindowPlacementKept {
+  $env:ARDIA_DATA_DIR = New-DataDirectory "placement-data"
+  Set-Content -Path (Join-Path $env:ARDIA_DATA_DIR "onboarding.json") -Value '{"completedAt":1700000000000,"version":1}' -Encoding utf8NoBOM
+  $notes = @()
+  $first = Start-PlacementRun "first"
+  if ($first.Handle -eq [IntPtr]::Zero) { Stop-Process -Id $first.Process.Id -Force -ErrorAction SilentlyContinue; return @("placement: the first run showed no window") }
+  $work = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+  $placeWidth = [int]($work.Width * 0.7)
+  $placeHeight = [int]($work.Height * 0.7)
+  $placeX = $work.X + [int](($work.Width - $placeWidth) / 3)
+  $placeY = $work.Y + [int](($work.Height - $placeHeight) / 3)
+  Write-Host "Placement: the work area is $($work.Width)x$($work.Height); the window goes to $placeX,$placeY ${placeWidth}x$placeHeight."
+  [ArdiaInput]::SetWindowPos($first.Handle, [IntPtr]::Zero, $placeX, $placeY, $placeWidth, $placeHeight, 0x0014) | Out-Null
+  Start-Sleep -Milliseconds 800
+  $placed = Get-WindowRect $first.Process
+  [ArdiaInput]::ShowWindow($first.Handle, 3) | Out-Null
+  Start-Sleep -Milliseconds 1200
+  if (-not [ArdiaInput]::IsZoomed($first.Handle)) { $notes += "placement: the window did not maximize before the app quit" }
+  Save-Screenshot (Join-Path $Out "placement-before-quit.png")
+  $notes += @(Stop-PlacementRun $first "the maximized run")
+  $saved = Join-Path $env:ARDIA_DATA_DIR "window-placement.txt"
+  if (Test-Path $saved) { Write-Host "Placement: the app saved '$((Get-Content -Raw $saved).Trim())' as the last window placement." }
+  else { $notes += "placement: the app saved no window-placement.txt when it quit" }
+
+  $second = Start-PlacementRun "maximized"
+  Save-Screenshot (Join-Path $Out "placement-relaunched-maximized.png")
+  $how = Get-LastLogLine $second.Log "^window \d+ (placed |opened \S+ maximized)"
+  Write-Host "Placement: the relaunch logged '$how'."
+  if ($second.Handle -eq [IntPtr]::Zero) { $notes += "placement: the relaunch showed no window" }
+  elseif (-not [ArdiaInput]::IsZoomed($second.Handle)) { $notes += "placement: a window maximized when the app quit came back not maximized ($(Get-WindowRect $second.Process | ForEach-Object { "$($_.Left),$($_.Top) $($_.Right - $_.Left)x$($_.Bottom - $_.Top)" }))" }
+  else {
+    Write-Host "Placement: a window maximized when the app quit came back maximized."
+    [ArdiaInput]::ShowWindow($second.Handle, 9) | Out-Null
+    Start-Sleep -Milliseconds 1200
+    $notes += @(Test-RectNear (Get-WindowRect $second.Process) $placed "the maximized window, restored,")
+  }
+  $notes += @(Stop-PlacementRun $second "the restored run")
+
+  $third = Start-PlacementRun "restored"
+  Save-Screenshot (Join-Path $Out "placement-relaunched-restored.png")
+  if ($third.Handle -eq [IntPtr]::Zero) { $notes += "placement: the third run showed no window" }
+  elseif ([ArdiaInput]::IsZoomed($third.Handle)) { $notes += "placement: a window restored before the app quit came back maximized" }
+  else { $notes += @(Test-RectNear (Get-WindowRect $third.Process) $placed "a window left restored") }
+  $notes += @(Stop-PlacementRun $third "the last run")
+  foreach ($name in "first", "maximized", "restored") {
+    $runLog = Join-Path $Out "placement-$name.log"
+    if ((Test-Path $runLog) -and (Select-String -Path $runLog -Pattern "^(js-error|fatal|error) " -Quiet)) {
+      Select-String -Path $runLog -Pattern "^(js-error|fatal|error) " | ForEach-Object { Write-Host $_.Line }
+      $notes += "placement: the $name run logged errors"
+    }
+  }
+  return $notes
+}
+
+if (-not $NoInput) { Test-WindowPlacementKept | ForEach-Object { $failures += $_ } }
+
 function Get-PageEvents {
   if (-not (Test-Path -LiteralPath $httpPagesLog)) { return @() }
   return @(Get-Content -LiteralPath $httpPagesLog | Where-Object { $_ -like "/event/*" })

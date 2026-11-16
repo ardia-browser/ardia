@@ -373,12 +373,30 @@ async def start(page, handle: str, source: str, state: str = "{}"):
     await control(page, handle, "function (source, offset) { return this.start(source, offset); }", code, offset)
 
 
+def split_command_line(argv: list[str]) -> list[str]:
+    import shlex
+
+    from ardia_cli.browse.commands import ALIASES, COMMANDS
+
+    if len(argv) != 1 or not argv[0].strip() or argv[0].split()[0] == argv[0]:
+        return argv
+    try:
+        words = shlex.split(argv[0])
+    except ValueError:
+        return argv
+    if not words or ALIASES.get(words[0], words[0]) not in COMMANDS:
+        return argv
+    command_metrics.flag("script_command_line_split", True)
+    return words
+
+
 async def answer_call(ctx, argv) -> dict:
     from ardia_cli.browse.commands import ALIASES, Ctx
     from ardia_cli.browse.daemon import run_one
 
     if not isinstance(argv, list) or not argv or not all(isinstance(word, str) for word in argv):
         return {"ok": False, "error": "browse() takes a command and its arguments as strings", "code": "usage"}
+    argv = split_command_line(argv)
     name = ALIASES.get(argv[0], argv[0])
     if name == "batch":
         return {"ok": False, "error": "batch can't run inside a script; loop in the script instead", "code": "usage"}
@@ -404,6 +422,8 @@ async def drive(ctx, page, handle: str, source: str, current: dict, done: list |
         message = await control(page, handle, "function () { return this.next(); }", timeout=MAX_TIMEOUT + 30)
         if message.get("kind") != "request":
             return message
+        if isinstance(message.get("argv"), list) and all(isinstance(word, str) for word in message["argv"]):
+            message["argv"] = split_command_line(message["argv"])
         current.clear()
         current.update(message)
         if message.get("type") == "sleep":

@@ -12,8 +12,10 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <mutex>
 #include <string>
@@ -21,154 +23,14 @@
 #include <vector>
 
 #include "MaterialEffects.h"
+#include "MaterialGrainTiles.h"
 #include "MaterialSupport.h"
 
 #pragma comment(lib, "d3d11.lib")
 
 namespace Ardia::Grain {
 
-constexpr int TextureSide = 128;
-constexpr float TextureTileDips = 64.0f;
-constexpr int HashSide = 256;
-constexpr float SmallestCell = 0.25f;
 constexpr wchar_t TileSource[] = L"Tile";
-
-struct Darkening {
-  float gain;
-  float floor;
-};
-
-inline bool IsHash(std::string_view texture) noexcept {
-  return texture == "hash";
-}
-
-inline std::string Known(std::string_view texture) noexcept {
-  if (texture == "sand" || texture == "denim" || texture == "tweed" || texture == "hash") return std::string{texture};
-  return "grain";
-}
-
-inline Darkening ArcDarkening(std::string_view texture) noexcept {
-  if (texture == "sand") return {0.937f, 0.132f};
-  if (texture == "denim") return {0.226f, 0.068f};
-  if (texture == "tweed") return {0.23f, 0.261f};
-  return {0.211f, 0.0f};
-}
-
-struct Xorshift {
-  uint32_t state{0x9E3779B9u};
-
-  float Next() noexcept {
-    state ^= state << 13;
-    state ^= state >> 17;
-    state ^= state << 5;
-    return static_cast<float>(state % 10000u) / 10000.0f;
-  }
-};
-
-inline std::vector<float> TextureAlpha(std::string_view texture) {
-  constexpr int n = TextureSide;
-  std::vector<float> alpha(static_cast<size_t>(n * n), 0.0f);
-  Xorshift random;
-  auto add = [&alpha](int x, int y, float v) noexcept {
-    const size_t i = static_cast<size_t>(((y % n + n) % n) * n + (x % n + n) % n);
-    alpha[i] = (std::min)(1.0f, alpha[i] + v);
-  };
-  if (texture == "sand") {
-    for (float &value : alpha) value = random.Next() * 0.25f;
-    for (int grains = 0; grains < n * n / 18; grains++) {
-      const int x = static_cast<int>(random.Next() * static_cast<float>(n));
-      const int y = static_cast<int>(random.Next() * static_cast<float>(n));
-      const float v = 0.5f + random.Next() * 0.5f;
-      add(x, y, v);
-      add(x + 1, y, v * 0.6f);
-      add(x, y + 1, v * 0.6f);
-      add(x + 1, y + 1, v * 0.4f);
-    }
-  } else if (texture == "denim") {
-    for (int y = 0; y < n; y++) {
-      for (int x = 0; x < n; x++) {
-        const float twill = (x + y) % 4 < 2 ? 0.75f : 0.15f;
-        alpha[static_cast<size_t>(y * n + x)] = (std::min)(1.0f, twill * (0.6f + random.Next() * 0.4f) + (y % 2 == 0 ? 0.08f : 0.0f));
-      }
-    }
-  } else if (texture == "tweed") {
-    for (float &value : alpha) value = random.Next() * 0.15f;
-    for (int threads = 0; threads < n * n / 40; threads++) {
-      const int x = static_cast<int>(random.Next() * static_cast<float>(n));
-      const int y = static_cast<int>(random.Next() * static_cast<float>(n));
-      const float v = 0.4f + random.Next() * 0.6f;
-      const bool horizontal = random.Next() < 0.5f;
-      const int length = 3 + static_cast<int>(random.Next() * 4.0f);
-      for (int k = 0; k < length; k++) {
-        if (horizontal) add(x + k, y, v);
-        else add(x, y + k, v);
-      }
-    }
-  } else {
-    for (float &value : alpha) {
-      const float u = random.Next();
-      value = u * u;
-    }
-  }
-  return alpha;
-}
-
-inline float Fract(float value) noexcept {
-  return value - std::floor(value);
-}
-
-inline float HashOfCell(float x, float y) noexcept {
-  float px = Fract(x * 0.1031f);
-  float py = Fract(y * 0.1031f);
-  float pz = Fract(x * 0.1031f);
-  const float lift = px * (py + 33.33f) + py * (pz + 33.33f) + pz * (px + 33.33f);
-  px += lift;
-  py += lift;
-  pz += lift;
-  return Fract((px + py) * pz);
-}
-
-struct Tile {
-  int side{0};
-  std::vector<uint8_t> alpha;
-  uint64_t alphaSum{0};
-};
-
-inline Tile MakeTile(std::string_view texture) {
-  Tile tile;
-  if (IsHash(texture)) {
-    tile.side = HashSide;
-    tile.alpha.resize(static_cast<size_t>(HashSide * HashSide));
-    for (int y = 0; y < HashSide; y++) {
-      for (int x = 0; x < HashSide; x++) {
-        const float darkening = 1.0f - HashOfCell(static_cast<float>(x), static_cast<float>(y));
-        tile.alpha[static_cast<size_t>(y * HashSide + x)] = static_cast<uint8_t>(std::lround(std::clamp(darkening, 0.0f, 1.0f) * 255.0f));
-      }
-    }
-  } else {
-    tile.side = TextureSide;
-    const std::vector<float> alpha = TextureAlpha(texture);
-    const Darkening match = ArcDarkening(texture);
-    tile.alpha.resize(alpha.size());
-    for (size_t i = 0; i < alpha.size(); i++) {
-      tile.alpha[i] = static_cast<uint8_t>((std::min)(255.0f, (std::max)(0.0f, match.floor + match.gain * alpha[i]) * 255.0f));
-    }
-  }
-  for (uint8_t value : tile.alpha) tile.alphaSum += value;
-  return tile;
-}
-
-inline Tile const &TileFor(std::string const &texture) {
-  static std::map<std::string, Tile> tiles;
-  auto found = tiles.find(texture);
-  if (found != tiles.end()) return found->second;
-  return tiles.emplace(texture, MakeTile(texture)).first->second;
-}
-
-inline int TilePixels(std::string_view texture, float scale, float cellSize) noexcept {
-  if (IsHash(texture)) return (std::max)(1, static_cast<int>(std::lround(HashSide * (std::max)(SmallestCell, cellSize))));
-  return (std::max)(TextureSide, static_cast<int>(std::lround(TextureTileDips * scale)));
-}
 
 struct Border : MaterialEffects::Effect<Border> {
   IFACEMETHODIMP GetEffectId(GUID *id) noexcept override {
@@ -185,7 +47,12 @@ struct Border : MaterialEffects::Effect<Border> {
 
   IFACEMETHODIMP GetProperty(UINT index, MaterialEffects::AbiFoundation::IPropertyValue **value) noexcept override {
     if (index != D2D1_BORDER_PROP_EDGE_MODE_X && index != D2D1_BORDER_PROP_EDGE_MODE_Y) return E_INVALIDARG;
-    return MaterialEffects::WriteProperty(value, winrt::Windows::Foundation::PropertyValue::CreateUInt32(static_cast<uint32_t>(D2D1_BORDER_EDGE_MODE_WRAP)));
+    try {
+      auto wrap = winrt::Windows::Foundation::PropertyValue::CreateUInt32(static_cast<uint32_t>(D2D1_BORDER_EDGE_MODE_WRAP));
+      return MaterialEffects::WriteProperty(value, wrap);
+    } catch (...) {
+      return winrt::to_hresult();
+    }
   }
 
   std::array<MaterialEffects::NamedProperty, 2> NamedProperties() const noexcept {
@@ -205,6 +72,7 @@ struct TileSurface {
   winrt::Microsoft::UI::Composition::CompositionDrawingSurface surface{nullptr};
   std::string texture;
   int pixels{0};
+  int users{0};
 };
 
 struct Device {
@@ -217,6 +85,7 @@ struct Device {
   const wchar_t *adapter{L"none"};
   std::wstring failure;
   DWORD removalCookie{0};
+  bool removalWatchable{true};
 };
 
 struct RemovalWatch {
@@ -236,8 +105,8 @@ inline Device &Shared() noexcept {
   return device;
 }
 
-inline bool &Failed() noexcept {
-  static bool failed = false;
+inline std::atomic<bool> &Failed() noexcept {
+  static std::atomic<bool> failed{false};
   return failed;
 }
 
@@ -261,6 +130,59 @@ inline void Forget(Device &device) noexcept {
   device.graphics = nullptr;
   device.d2d = nullptr;
   device.d3d = nullptr;
+}
+
+inline std::map<uint64_t, std::function<void()>> &FailureListeners() noexcept {
+  static std::map<uint64_t, std::function<void()>> listeners;
+  return listeners;
+}
+
+inline uint64_t ListenForFailure(std::function<void()> listener) noexcept {
+  static uint64_t next = 0;
+  try {
+    FailureListeners().emplace(++next, std::move(listener));
+    return next;
+  } catch (...) {
+    Materials::NoteOnce(L"grain-listen", L"grain: a view could not listen for grain failures, so it keeps its brush if grain fails");
+    return 0;
+  }
+}
+
+inline void StopListeningForFailure(uint64_t id) noexcept {
+  if (id) FailureListeners().erase(id);
+}
+
+inline void MarkFailed(Device &device, std::wstring const &reason, std::wstring const &noteKey, std::wstring const &note) noexcept {
+  Forget(device);
+  device.failure = reason;
+  Materials::NoteOnce(noteKey, note);
+  if (Failed().exchange(true)) return;
+  std::vector<std::function<void()>> told;
+  try {
+    for (auto const &[id, listener] : FailureListeners()) told.push_back(listener);
+  } catch (...) {
+    Materials::NoteOnce(L"grain-tell", L"grain: failed, and could not tell every mounted view to stop drawing");
+  }
+  for (auto const &tell : told) {
+    try {
+      tell();
+    } catch (...) {
+      Materials::NoteOnce(L"grain-tell-view", L"grain: failed, and a mounted view could not clear its brush");
+    }
+  }
+}
+
+inline void Retain(Device &device, std::string const &key) noexcept {
+  auto found = device.surfaces.find(key);
+  if (found != device.surfaces.end()) found->second.users++;
+}
+
+inline void Release(Device &device, std::string const &key) noexcept {
+  if (key.empty()) return;
+  auto found = device.surfaces.find(key);
+  if (found == device.surfaces.end()) return;
+  if (found->second.users > 0) found->second.users--;
+  if (found->second.users == 0) device.surfaces.erase(found);
 }
 
 inline HRESULT MakeD3D(winrt::com_ptr<ID3D11Device> &made, const wchar_t *&adapter) noexcept {
@@ -323,10 +245,7 @@ inline bool Ready(Device &device, winrt::Microsoft::UI::Composition::Compositor 
   } catch (...) {
     reason = std::wstring{L"failed while "}.append(stage).append(L": unknown error");
   }
-  Forget(device);
-  device.failure = reason;
-  Failed() = true;
-  Materials::NoteOnce(L"grain-none", std::wstring{L"grain: none drawn ("}.append(reason).append(L")"));
+  MarkFailed(device, reason, L"grain-none", std::wstring{L"grain: none drawn ("}.append(reason).append(L")"));
   return false;
 }
 
@@ -405,17 +324,17 @@ inline bool Replace(Device &device, std::wstring &reason, std::wstring const &wh
   } catch (...) {
     reason = std::wstring{L"failed while "}.append(stage).append(L": unknown error");
   }
-  Forget(device);
-  device.failure = reason;
-  Failed() = true;
-  Materials::NoteOnce(L"grain-none", std::wstring{L"grain: none drawn after "}.append(why).append(L" (").append(reason).append(L")"));
+  MarkFailed(device, reason, L"grain-none-after-replacing", std::wstring{L"grain: none drawn after "}.append(why).append(L" (").append(reason).append(L")"));
   return false;
 }
 
 inline void RecoverIfLost(winrt::Microsoft::UI::Composition::Compositor const &compositor) noexcept {
   Device &device = Shared();
   if (!compositor || !device.graphics || device.compositor != compositor || !device.d3d) return;
-  if (device.d3d->GetDeviceRemovedReason() == S_OK) return;
+  if (device.d3d->GetDeviceRemovedReason() == S_OK) {
+    if (!device.removalCookie && device.removalWatchable) WatchForRemoval(device);
+    return;
+  }
   std::wstring reason;
   Ready(device, compositor, reason);
 }
@@ -427,19 +346,25 @@ inline void CALLBACK DeviceRemoved(PTP_CALLBACK_INSTANCE, PVOID, PTP_WAIT, TP_WA
     std::scoped_lock lock{watch.mutex};
     queue = watch.queue;
   }
-  if (!queue) return;
+  bool queued = false;
   try {
-    queue.TryEnqueue([]() noexcept {
+    queued = queue && queue.TryEnqueue([]() noexcept {
       const auto compositor = Shared().compositor;
       RecoverIfLost(compositor);
     });
   } catch (...) {
   }
+  if (!queued) Materials::NoteOnce(L"grain-removal-queue", L"grain: the device removal notice could not reach the UI thread; the next grain paint finds the lost device");
 }
 
 inline void WatchForRemoval(Device &device) noexcept {
+  if (!device.compositor) return;
   auto latest = device.d3d.try_as<ID3D11Device4>();
-  if (!latest || !device.compositor) return;
+  if (!latest) {
+    device.removalWatchable = false;
+    Materials::NoteOnce(L"grain-removal-unsupported", L"grain: this Direct3D device has no removal notice; the next grain paint finds a lost device");
+    return;
+  }
   RemovalWatch &watch = Removals();
   try {
     {
@@ -448,13 +373,20 @@ inline void WatchForRemoval(Device &device) noexcept {
     }
     if (!watch.signal) watch.signal = ::CreateEventW(nullptr, FALSE, FALSE, nullptr);
     if (!watch.wait) watch.wait = ::CreateThreadpoolWait(DeviceRemoved, nullptr, nullptr);
-    if (!watch.signal || !watch.wait) return;
-    if (FAILED(latest->RegisterDeviceRemovedEvent(watch.signal, &device.removalCookie))) {
+    if (!watch.signal || !watch.wait) {
+      Materials::NoteOnce(L"grain-removal-wait", std::wstring{L"grain: the device removal notice could not be set up (error "}.append(std::to_wstring(::GetLastError())).append(L"); retrying on the next grain paint"));
+      return;
+    }
+    const HRESULT registered = latest->RegisterDeviceRemovedEvent(watch.signal, &device.removalCookie);
+    if (FAILED(registered)) {
       device.removalCookie = 0;
+      Materials::NoteOnce(L"grain-removal-register", std::wstring{L"grain: the device removal notice was refused ("}.append(Materials::HexOf(registered)).append(L"); retrying on the next grain paint"));
       return;
     }
     ::SetThreadpoolWait(watch.wait, watch.signal, nullptr);
   } catch (...) {
+    device.removalCookie = 0;
+    Materials::NoteOnce(L"grain-removal-error", L"grain: setting up the device removal notice failed; retrying on the next grain paint");
   }
 }
 
@@ -486,10 +418,7 @@ inline Painted WrappedTile(winrt::Microsoft::UI::Composition::Compositor const &
     painted.outcome.reason = std::wstring{L"failed while "}.append(stage).append(L": unknown error");
   }
   painted.brush = nullptr;
-  Forget(device);
-  device.failure = painted.outcome.reason;
-  Failed() = true;
-  Materials::NoteOnce(std::wstring{L"grain-failed-"}.append(Paths::Wide(texture)), std::wstring{L"grain: "}.append(Paths::Wide(texture)).append(L" none drawn (").append(painted.outcome.reason).append(L")"));
+  MarkFailed(device, painted.outcome.reason, std::wstring{L"grain-failed-"}.append(Paths::Wide(texture)), std::wstring{L"grain: "}.append(Paths::Wide(texture)).append(L" none drawn (").append(painted.outcome.reason).append(L")"));
   return painted;
 }
 
@@ -575,6 +504,20 @@ inline Redrawn RedrawnOnReplacedDevice(winrt::Microsoft::UI::Composition::Compos
   answer.sameSurface = again != device.surfaces.end() && again->second.surface == surface;
   answer.outcome = after.outcome;
   return answer;
+}
+
+inline void FailForCheck() noexcept {
+  MarkFailed(Shared(), L"the self-check failed the grain on purpose", L"grain-failed-for-check", L"grain: the self-check failed the grain on purpose");
+}
+
+inline std::vector<std::string> KeptTiles() noexcept {
+  std::vector<std::string> kept;
+  try {
+    for (auto const &[key, tile] : Shared().surfaces) kept.push_back(key + " used by " + std::to_string(tile.users));
+  } catch (...) {
+    Materials::NoteOnce(L"grain-kept-tiles", L"grain: the kept tiles could not be listed");
+  }
+  return kept;
 }
 
 struct LastPath {

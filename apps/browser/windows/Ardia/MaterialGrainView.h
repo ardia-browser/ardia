@@ -47,7 +47,24 @@ struct MaterialGrainProps : winrt::implements<MaterialGrainProps, winrt::Microso
 };
 
 struct MaterialGrainView : winrt::implements<MaterialGrainView, winrt::Windows::Foundation::IInspectable> {
-  void Initialize(MaterialView::ViewComponentView const &) noexcept {}
+  void Initialize(MaterialView::ViewComponentView const &view) noexcept {
+    try {
+      m_mounted = view.Mounted([](winrt::Windows::Foundation::IInspectable const &, MaterialView::ComponentView const &mounted) noexcept {
+        if (auto grain = MaterialView::Of<MaterialGrainView>(mounted)) grain->Paint();
+      });
+      m_unmounted = view.Unmounted([](winrt::Windows::Foundation::IInspectable const &, MaterialView::ComponentView const &unmounted) noexcept {
+        if (auto grain = MaterialView::Of<MaterialGrainView>(unmounted)) grain->LetGo();
+      });
+      m_destroying = view.Destroying([](winrt::Windows::Foundation::IInspectable const &, MaterialView::ComponentView const &destroyed) noexcept {
+        if (auto grain = MaterialView::Of<MaterialGrainView>(destroyed)) grain->Retire();
+      });
+    } catch (...) {
+      Materials::NoteOnce(L"grain-view-events", L"grain: a view could not follow its mounting, so its tile stays kept after it goes");
+    }
+    m_failureListener = Grain::ListenForFailure([weak = get_weak()]() noexcept {
+      if (auto grain = weak.get()) grain->ShowNothing(Grain::Shared().failure);
+    });
+  }
 
   MaterialView::Visual CreateVisual(MaterialView::ComponentView const &view) noexcept {
     try {
@@ -59,6 +76,7 @@ struct MaterialGrainView : winrt::implements<MaterialGrainView, winrt::Windows::
       Paint();
       return m_root;
     } catch (...) {
+      Materials::NoteOnce(L"grain-view-visual", L"grain: a view could not make its visuals, so it draws nothing");
     }
     return MaterialView::PlainVisual(view);
   }
@@ -66,7 +84,7 @@ struct MaterialGrainView : winrt::implements<MaterialGrainView, winrt::Windows::
   void UpdateProps(MaterialView::ComponentView const &, winrt::com_ptr<MaterialGrainProps> const &props) noexcept {
     m_texture = Grain::Known(props ? std::string_view{props->texture} : std::string_view{});
     m_amount = props ? std::clamp(MaterialView::Finite(props->amount, 0.0f), 0.0f, 1.0f) : 0.0f;
-    m_cellSize = props ? (std::max)(Grain::SmallestCell, MaterialView::Finite(props->cellSize, 1.0f)) : 1.0f;
+    m_cellSize = props ? std::clamp(MaterialView::Finite(props->cellSize, 1.0f), Grain::SmallestCell, Grain::LargestCell) : 1.0f;
     const std::string request = props ? props->requestId : std::string{};
     if (request != m_requestId) {
       m_requestId = request;
@@ -84,25 +102,62 @@ struct MaterialGrainView : winrt::implements<MaterialGrainView, winrt::Windows::
  private:
   void Paint() noexcept {
     if (!m_sprite || !m_compositor || !m_measured) return;
+    if (Grain::Failed()) {
+      ShowNothing(Grain::Shared().failure);
+      return;
+    }
     try {
       m_sprite.Opacity(m_amount);
     } catch (...) {
+      Materials::NoteOnce(L"grain-view-opacity", L"grain: a view refused its grain amount and keeps its last one");
     }
     Grain::RecoverIfLost(m_compositor);
     const int pixels = Grain::TilePixels(m_texture, m_scale, m_cellSize);
     const std::string key = Grain::SurfaceKey(m_texture, pixels);
     if (key == m_paintedKey) return;
-    m_paintedKey = key;
-    Grain::Painted painted;
-    if (Grain::Failed()) painted.outcome.reason = Grain::Shared().failure;
-    else painted = Grain::WrappedTile(m_compositor, m_texture, pixels);
+    Grain::Painted painted = Grain::WrappedTile(m_compositor, m_texture, pixels);
+    if (!painted.outcome.drawn) {
+      ShowNothing(painted.outcome.reason);
+      return;
+    }
     try {
       m_sprite.Brush(painted.brush);
     } catch (...) {
-      painted.outcome = {false, L"the sprite refused the wrap brush"};
+      ShowNothing(L"the sprite refused the wrap brush");
+      return;
     }
-    if (!painted.outcome.drawn) m_paintedKey.clear();
-    Record(painted.outcome, pixels);
+    m_paintedKey = key;
+    Hold(key);
+    Record({true, {}}, pixels);
+  }
+
+  void ShowNothing(std::wstring const &reason) noexcept {
+    try {
+      if (m_sprite) m_sprite.Brush(nullptr);
+    } catch (...) {
+      Materials::NoteOnce(L"grain-view-clear", L"grain: a view could not clear its brush");
+    }
+    LetGo();
+    Record({false, reason.empty() ? std::wstring{L"grain failed"} : reason}, 0);
+  }
+
+  void Hold(std::string const &key) noexcept {
+    if (key == m_held) return;
+    Grain::Release(Grain::Shared(), m_held);
+    Grain::Retain(Grain::Shared(), key);
+    m_held = key;
+  }
+
+  void LetGo() noexcept {
+    Grain::Release(Grain::Shared(), m_held);
+    m_held.clear();
+    m_paintedKey.clear();
+  }
+
+  void Retire() noexcept {
+    LetGo();
+    Grain::StopListeningForFailure(m_failureListener);
+    m_failureListener = 0;
   }
 
   std::wstring Described(int pixels) const noexcept {
@@ -114,10 +169,14 @@ struct MaterialGrainView : winrt::implements<MaterialGrainView, winrt::Windows::
 
   void Record(Grain::Outcome const &outcome, int pixels) noexcept {
     Grain::Remember({outcome.drawn ? "tiled" : "none", Paths::Utf8(outcome.drawn ? Described(pixels) : outcome.reason), m_texture}, m_requestId);
-    if (!outcome.drawn) return;
+    const std::wstring texture = Paths::Wide(m_texture);
+    if (!outcome.drawn) {
+      Materials::NoteOnce(std::wstring{L"grain-view-none-"}.append(texture), std::wstring{L"grain: a "}.append(texture).append(L" view draws nothing (").append(outcome.reason).append(L")"));
+      return;
+    }
     Materials::NoteOnce(
-        std::wstring{L"grain-"}.append(Paths::Wide(m_texture)).append(L"-").append(std::to_wstring(pixels)),
-        std::wstring{L"grain: "}.append(Paths::Wide(m_texture)).append(L" ").append(Described(pixels)).append(L" wrapped across the view"));
+        std::wstring{L"grain-"}.append(texture).append(L"-").append(std::to_wstring(pixels)),
+        std::wstring{L"grain: "}.append(texture).append(L" ").append(Described(pixels)).append(L" wrapped across the view"));
   }
 
   winrt::Microsoft::UI::Composition::Compositor m_compositor{nullptr};
@@ -125,11 +184,16 @@ struct MaterialGrainView : winrt::implements<MaterialGrainView, winrt::Windows::
   winrt::Microsoft::UI::Composition::SpriteVisual m_sprite{nullptr};
   std::string m_texture{"grain"};
   std::string m_paintedKey;
+  std::string m_held;
   std::string m_requestId;
   float m_amount{0};
   float m_cellSize{1};
   float m_scale{1};
   bool m_measured{false};
+  uint64_t m_failureListener{0};
+  winrt::event_token m_mounted{};
+  winrt::event_token m_unmounted{};
+  winrt::event_token m_destroying{};
 };
 
 inline void RegisterMaterialGrainView(winrt::Microsoft::ReactNative::IReactPackageBuilder const &packageBuilder) noexcept {

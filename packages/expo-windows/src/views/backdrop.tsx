@@ -20,6 +20,7 @@ const THEME_REACH = 0.75;
 const WINDOW_MATERIAL = "acrylic";
 const DEFAULT_GRAIN_OPACITY = 0.09;
 const SMALLEST_GRAIN_CELL = 0.25;
+const LARGEST_GRAIN_CELL = 4;
 
 function underColor(dark: boolean, baseAlpha?: number): Rgba {
   const look = dark ? VIBRANCY.dark : VIBRANCY.light;
@@ -134,7 +135,7 @@ export const WindowBackdrop = forwardRef<View, WindowBackdropProps>(function Win
     layers = (
       <>
         <Bands stops={ends} angle={finite(angle, 180)} />
-        <Grain texture="hash" amount={unit(grainOpacity, DEFAULT_GRAIN_OPACITY)} cellSize={Math.max(SMALLEST_GRAIN_CELL, finite(grainScale, 1))} />
+        <Grain texture="hash" amount={unit(grainOpacity, DEFAULT_GRAIN_OPACITY)} cellSize={Math.min(LARGEST_GRAIN_CELL, Math.max(SMALLEST_GRAIN_CELL, finite(grainScale, 1)))} />
       </>
     );
   }

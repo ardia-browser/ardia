@@ -25,6 +25,8 @@ export type MaterialsNative = {
   grainPath(request: string): MaterialPath;
   probeGrain(texture: string): Promise<GrainProbe>;
   probeGrainRecovery(texture: string): Promise<GrainRecoveryProbe>;
+  failGrainForCheck(): Promise<boolean>;
+  keptGrainTiles(): Promise<string[]>;
 };
 
 let capabilities: MaterialCapabilities | null | undefined;

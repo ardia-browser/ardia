@@ -370,7 +370,10 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
   which path each one took. The tiles live on one Direct3D device shared by every grain view. When that device is lost
   (a driver update, a GPU reset), its removal event, or the next paint that finds it gone, hands the same Composition
   graphics device a new one (`SetRenderingDevice`) and redraws every tile, so the surfaces and the brushes mounted
-  views hold stay valid and refill without a repaint (`Replace` in `MaterialGrain.h`).
+  views hold stay valid and refill without a repaint (`Replace` in `MaterialGrain.h`). A grain failure (a tile that
+  can't be drawn, a replacement that fails) turns grain off for the process and clears the brush of every mounted grain
+  view, which listen for it. Each tile size is kept while a view uses it and dropped when the last one goes, and the
+  hash cell is clamped to 0.25 to 4 px, so its tile is at most 1024 px. The tile recipes are in `MaterialGrainTiles.h`.
 - Switching profiles slides the sidebar's pages and crossfades the tint as on the Mac. The Mac's native pager
   (`Pager.swift`) has a TypeScript version in `packages/expo-windows/src/pager`: the `ArdiaSwipe` view and module with
   the same events (`onPagerPosition` every frame, `onPagerState` on select and settle), sequence numbers and spring

@@ -209,6 +209,19 @@ struct MaterialsModule {
     });
   }
 
+  REACT_METHOD(failGrainForCheck)
+  void failGrainForCheck(winrt::Microsoft::ReactNative::ReactPromise<bool> promise) noexcept {
+    RunOnUI(m_context, [promise]() noexcept {
+      Grain::FailForCheck();
+      promise.Resolve(Grain::Failed().load());
+    });
+  }
+
+  REACT_METHOD(keptGrainTiles)
+  void keptGrainTiles(winrt::Microsoft::ReactNative::ReactPromise<std::vector<std::string>> promise) noexcept {
+    RunOnUI(m_context, [promise]() noexcept { promise.Resolve(Grain::KeptTiles()); });
+  }
+
   REACT_METHOD(probeGrainRecovery)
   void probeGrainRecovery(std::string texture, winrt::Microsoft::ReactNative::ReactPromise<GrainRecoveryProbe> promise) noexcept {
     RunOnUI(m_context, [texture = Grain::Known(texture), promise]() noexcept {

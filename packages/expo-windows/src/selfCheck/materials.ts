@@ -5,7 +5,7 @@ import { windowBackdropColors } from "../views/backdrop";
 import { gradientColors } from "../views/Bands";
 import { gradientFill } from "../views/gradientFill";
 import type { Rgba } from "../views/color";
-import { bubblePath, NativeMaterialBlur, NativeMaterialGradient, NativeMaterialGrain, NativeWindowMaterial, type MaterialsNative } from "../views/nativeMaterials";
+import { bubblePath, NativeMaterialBlur, NativeMaterialGradient, NativeMaterialGrain, NativeWindowMaterial, type GrainTexture, type MaterialsNative } from "../views/nativeMaterials";
 import { viewNamed } from "../views/registry";
 import { Surface } from "../views/Surface";
 import { expectEqual, expectTrue, type Check } from "./check";
@@ -17,6 +17,10 @@ const WINDOW_MATERIALS = ["micaAlt", "mica", "acrylic"];
 const MAC_TILE_ALPHA_SUMS: Record<string, number> = { grain: 287662, sand: 1429150, denim: 653735, tweed: 1227414 };
 const GRAIN_PATH_DEADLINE_MS = 3000;
 const STAGED_GRAIN_TEXTURE = "denim";
+const OVERSIZED_HASH_CELL = 16;
+const LARGEST_HASH_TILE_PIXELS = 1024;
+const UNUSED_HASH_CELL = 2;
+const UNUSED_HASH_TILE = "hash@512";
 let stagedGrainViews = 0;
 const VIEWS_WITH_MATERIALS = ["ArdiaVisualEffect", "ArdiaGlassEffect", "ArdiaPopoverBubble", "ArdiaWindowBackdrop", "ArdiaThemeSwatch"];
 const MATERIAL_PROPS: Record<string, Record<string, unknown>> = {
@@ -39,11 +43,26 @@ function expectPath(answer: unknown, allowed: string[], what: string) {
 
 const settled = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-async function until(condition: () => boolean, ms: number) {
+async function until(condition: () => boolean | Promise<boolean>, ms: number) {
   const deadline = Date.now() + ms;
-  while (Date.now() < deadline && !condition()) await settled(20);
-  return condition();
+  while (Date.now() < deadline && !(await condition())) await settled(20);
+  return await condition();
 }
+
+async function stagedGrain(texture: GrainTexture, cellSize?: number) {
+  const requestId = `self-check-grain-${Date.now()}-${++stagedGrainViews}`;
+  const release = await holdOnStage(
+    createElement(NativeMaterialGrain, { pointerEvents: "none", texture, amount: 0.5, cellSize, requestId, style: { width: 200, height: 40 } }),
+    "ArdiaMaterialGrain",
+  );
+  const reported = await until(() => materials().grainPath(requestId).path !== "", GRAIN_PATH_DEADLINE_MS);
+  const last = () => materials().grainPath(requestId);
+  if (!reported) release();
+  expectTrue(reported, `the grain view ${requestId} reported nothing within ${GRAIN_PATH_DEADLINE_MS} ms: ${JSON.stringify(last())}`);
+  return { release, last };
+}
+
+const keeps = async (tile: string) => (await materials().keptGrainTiles()).some((kept) => kept.startsWith(`${tile} `));
 
 const linear = (channel: number) => (channel <= 0.04045 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4));
 
@@ -139,19 +158,12 @@ export const checks: Check[] = [
   {
     name: "materials: the grain view mounts and reports its own path",
     async run() {
-      const requestId = `self-check-grain-${Date.now()}-${++stagedGrainViews}`;
-      const release = await holdOnStage(
-        createElement(NativeMaterialGrain, { pointerEvents: "none", texture: STAGED_GRAIN_TEXTURE, amount: 0.5, requestId, style: { width: 200, height: 40 } }),
-        "ArdiaMaterialGrain",
-      );
+      const staged = await stagedGrain(STAGED_GRAIN_TEXTURE);
       try {
-        const reported = await until(() => materials().grainPath(requestId).path !== "", GRAIN_PATH_DEADLINE_MS);
-        const last = materials().grainPath(requestId);
-        expectTrue(reported, `the grain view ${requestId} reported nothing within ${GRAIN_PATH_DEADLINE_MS} ms: ${JSON.stringify(last)}`);
-        expectEqual(last.step, STAGED_GRAIN_TEXTURE, "the staged grain view's texture");
-        expectPath(last, materials().capabilities().grain ? ["tiled"] : ["none"], "mounted grain view");
+        expectEqual(staged.last().step, STAGED_GRAIN_TEXTURE, "the staged grain view's texture");
+        expectPath(staged.last(), materials().capabilities().grain ? ["tiled"] : ["none"], "mounted grain view");
       } finally {
-        release();
+        staged.release();
       }
     },
   },
@@ -169,6 +181,55 @@ export const checks: Check[] = [
       expectEqual(probe.after, probe.before, `the ${STAGED_GRAIN_TEXTURE} tile read back after the new device`);
       expectEqual(probe.before, MAC_TILE_ALPHA_SUMS[STAGED_GRAIN_TEXTURE], `the ${STAGED_GRAIN_TEXTURE} tile against the Mac's`);
       console.info(`[ardia windows] materials: grain recovery kept the surface and read back ${probe.after} after a new device`);
+    },
+  },
+  {
+    name: "materials: the hash grain's cell size is clamped, so its tile stays bounded",
+    async run() {
+      const staged = await stagedGrain("hash", OVERSIZED_HASH_CELL);
+      try {
+        if (!materials().capabilities().grain) {
+          expectPath(staged.last(), ["none"], "an oversized hash cell without grain");
+          return;
+        }
+        expectPath(staged.last(), ["tiled"], "an oversized hash cell");
+        expectTrue(staged.last().reason.startsWith(`${LARGEST_HASH_TILE_PIXELS} px tile`), `a ${OVERSIZED_HASH_CELL} px hash cell drew ${staged.last().reason}`);
+      } finally {
+        staged.release();
+      }
+    },
+  },
+  {
+    name: "materials: a tile size no view uses any more is dropped",
+    async run() {
+      const staged = await stagedGrain("hash", UNUSED_HASH_CELL);
+      let released = false;
+      try {
+        if (!materials().capabilities().grain) return;
+        expectTrue(await keeps(UNUSED_HASH_TILE), `the ${UNUSED_HASH_TILE} tile is not kept while its view shows: ${JSON.stringify(await materials().keptGrainTiles())}`);
+        staged.release();
+        released = true;
+        const dropped = await until(async () => !(await keeps(UNUSED_HASH_TILE)), GRAIN_PATH_DEADLINE_MS);
+        expectTrue(dropped, `the ${UNUSED_HASH_TILE} tile is still kept after its only view went: ${JSON.stringify(await materials().keptGrainTiles())}`);
+      } finally {
+        if (!released) staged.release();
+      }
+    },
+  },
+  {
+    name: "materials: a grain failure clears the views already drawing grain",
+    async run() {
+      const staged = await stagedGrain(STAGED_GRAIN_TEXTURE);
+      try {
+        if (!materials().capabilities().grain) return;
+        expectPath(staged.last(), ["tiled"], "the view before the failure");
+        expectTrue(await materials().failGrainForCheck(), "the grain did not report its failure");
+        const cleared = await until(() => staged.last().path === "none", GRAIN_PATH_DEADLINE_MS);
+        expectTrue(cleared, `the mounted view kept drawing after the failure: ${JSON.stringify(staged.last())}`);
+        expectEqual(materials().capabilities().grain, false, "grain after the failure");
+      } finally {
+        staged.release();
+      }
     },
   },
   {

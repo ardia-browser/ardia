@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useSettings } from "../../../state/browser/hooks";
-import { removeWeb3Rpc, setWeb3Rpc } from "../../../state/settings/actions";
+import { addWeb3Rpc, removeWeb3Rpc, setWeb3Rpc } from "../../../state/settings/actions";
 import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
-import { PUBLIC_NODE_RPC, web3RpcProblem } from "../../../state/settings/web3Rpcs";
+import { PUBLIC_NODE_RPC } from "../../../state/settings/web3Rpcs";
 import { Button, DialogActions, DialogTitle, Sheet, space, Text, TextField } from "../../ui";
 import { FormField, Group, Row, SectionHeader } from "../Form";
 
@@ -38,10 +38,9 @@ function Web3RpcSheet({ chain: startChain }: { chain: string }) {
   const [chain, setChain] = useState(startChain);
   const [url, setUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const add = () => {
-    const problem = web3RpcProblem(chain.trim(), url.trim());
+  const add = async () => {
+    const problem = await addWeb3Rpc(chain.trim(), url.trim());
     if (problem) return setError(problem);
-    setWeb3Rpc(chain.trim(), url.trim());
     closeSettingsSheet();
   };
   return (

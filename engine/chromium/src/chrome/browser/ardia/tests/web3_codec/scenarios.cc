@@ -1,3 +1,4 @@
+#include <chrono>
 #include <cstdio>
 #include <string>
 #include <variant>
@@ -79,6 +80,9 @@ void HostsAndRecords() {
 
   std::optional<ContentContract> optimism = ParseContentContract("oeth:0x2b7C11e49FB41580787C599A29721c3D5Daf65Db");
   Expect(optimism && optimism->chain_id == 10u && Hex(optimism->address) == "0x2b7c11e49fb41580787c599a29721c3d5daf65db", "ERC-3770 record moves the chain");
+  std::optional<ContentContract> bnb = ParseContentContract("bnb:0x2b7C11e49FB41580787C599A29721c3D5Daf65Db");
+  std::optional<ContentContract> scroll = ParseContentContract("SCR:0x2b7C11e49FB41580787C599A29721c3D5Daf65Db");
+  Expect(bnb && bnb->chain_id == 56u && scroll && scroll->chain_id == 534352u, "registered ERC-3770 short names beyond the first few, in any case");
   std::optional<ContentContract> bare = ParseContentContract(" 0xe8389E061c8AE56fa7e17B8fe9f80A8c8e31B450 ");
   Expect(bare && !bare->chain_id, "a bare address keeps the URL's chain");
   Expect(!ParseContentContract("w3q-g:0xEbcA4860ebBe969E9Bc42643fcb437879dBDa9C6"), "an unknown chain short name");
@@ -175,6 +179,17 @@ void ContractPoliciesLoseReporting() {
   Expect(WithoutCspReporting("default-src 'none'; style-src 'unsafe-inline'") == "default-src 'none'; style-src 'unsafe-inline'", "a policy without reporting is unchanged");
 }
 
+void HugeStaticTypesFailFast() {
+  std::string tuple = "(uint256";
+  for (int i = 1; i < 2000; ++i) tuple += ",uint256";
+  tuple += ")";
+  const AutoCall huge = Auto("/x", "returns=(" + tuple + "[9999])");
+  const auto start = std::chrono::steady_clock::now();
+  Expect(!AutoCallBody(huge, Unhex(Words({"1"}))), "a huge static array fails on a short answer");
+  Expect(std::chrono::steady_clock::now() - start < std::chrono::milliseconds(300), "it fails before 9999 copies of a 2000-member tuple are made");
+  Expect(!AutoCallBody(Auto("/x", "returns=(uint256[9999][9999][9999][9999][9999][9999])"), Unhex(Words({"1"}))), "fixed lengths whose size overflows fail");
+}
+
 int main() {
   KeccakMatchesEthereum();
   NameHashMatchesErc137();
@@ -184,6 +199,7 @@ int main() {
   ResourceResponses();
   AutoCalls();
   ContractPoliciesLoseReporting();
+  HugeStaticTypesFailFast();
   if (g_failures) {
     std::printf("%d web3 codec scenarios failed\n", g_failures);
     return 1;

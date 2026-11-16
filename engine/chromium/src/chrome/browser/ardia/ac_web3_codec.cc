@@ -214,8 +214,16 @@ bool IsMethodName(std::string_view name) {
 
 std::optional<uint64_t> ChainOfShortName(std::string_view name) {
   static constexpr std::pair<std::string_view, uint64_t> kChains[] = {
-      {"eth", 1},     {"sep", 11155111}, {"holesky", 17000}, {"oeth", 10},
-      {"arb1", 42161}, {"base", 8453},   {"pol", 137},       {"matic", 137},
+      {"eth", 1},          {"oeth", 10},         {"bnb", 56},
+      {"gno", 100},        {"unichain", 130},    {"pol", 137},
+      {"matic", 137},      {"obnb", 204},        {"ftm", 250},
+      {"zksync", 324},     {"wc", 480},          {"zkevm", 1101},
+      {"soneium", 1868},   {"mantle", 5000},     {"base", 8453},
+      {"holesky", 17000},  {"mode", 34443},      {"arb1", 42161},
+      {"arb-nova", 42170}, {"celo", 42220},      {"avax", 43114},
+      {"ink", 57073},      {"linea", 59144},     {"blastmainnet", 81457},
+      {"basesep", 84532},  {"arb-sep", 421614},  {"scr", 534352},
+      {"zora", 7777777},   {"sep", 11155111},    {"opsep", 11155420},
   };
   for (const auto& [short_name, chain] : kChains) {
     if (name == short_name) return chain;

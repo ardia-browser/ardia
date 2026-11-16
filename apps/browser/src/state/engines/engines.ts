@@ -27,7 +27,7 @@ export function siteOf(url: string | undefined | null): string | null {
 
 export const canSwitchEngine = (url: string | undefined | null) => PLATFORM_FEATURES.webKit && !!url && isWebPageUrl(url);
 export const offersEngineChoice = () => PLATFORM_FEATURES.webKit;
-export const chromiumOnly = (url: string | undefined | null) => !!url && /^(ardia|chrome|chrome-extension|chrome-untrusted|devtools|view-source):/i.test(url);
+export const chromiumOnly = (url: string | undefined | null) => !!url && /^(ardia|chrome|chrome-extension|chrome-untrusted|devtools|view-source|web3):/i.test(url);
 
 const offered = <Engine extends PageEngine | undefined>(engine: Engine): Engine | "chromium" => (engine === "webkit" && !PLATFORM_FEATURES.webKit ? "chromium" : engine);
 

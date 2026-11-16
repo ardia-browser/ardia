@@ -2,6 +2,8 @@
 
 #include "chrome/browser/ardia/ac_web3_codec.h"
 
+#include <algorithm>
+#include <limits>
 
 namespace ardia::web3 {
 namespace {
@@ -71,14 +73,24 @@ bool IsDynamic(const AbiType& type) {
   }
 }
 
+constexpr size_t kUnbounded = std::numeric_limits<size_t>::max();
+
+size_t SaturatingAdd(size_t a, size_t b) {
+  return a > kUnbounded - b ? kUnbounded : a + b;
+}
+
+size_t SaturatingMultiply(size_t a, size_t b) {
+  return b != 0 && a > kUnbounded / b ? kUnbounded : a * b;
+}
+
 size_t HeadSize(const AbiType& type) {
   if (IsDynamic(type)) return kWord;
   if (type.kind == AbiType::Kind::kArray) {
-    return *type.length * HeadSize(type.items[0]);
+    return SaturatingMultiply(*type.length, HeadSize(type.items[0]));
   }
   if (type.kind == AbiType::Kind::kTuple) {
     size_t size = 0;
-    for (const AbiType& item : type.items) size += HeadSize(item);
+    for (const AbiType& item : type.items) size = SaturatingAdd(size, HeadSize(item));
     return size;
   }
   return kWord;
@@ -155,7 +167,7 @@ struct Decoder {
       }
       if (!value) return std::nullopt;
       values.push_back(std::move(*value));
-      head += HeadSize(type);
+      head = SaturatingAdd(head, HeadSize(type));
     }
     return values;
   }
@@ -184,7 +196,11 @@ struct Decoder {
           if (!size) return std::nullopt;
           count = *size;
         }
-        if (!Spend(count * kWord)) return std::nullopt;
+        const size_t element = std::max(HeadSize(type.items[0]), kWord);
+        if (start > data.size() || count > (data.size() - start) / element ||
+            !Spend(count * kWord)) {
+          return std::nullopt;
+        }
         std::optional<std::vector<AbiValue>> items =
             Sequence(Repeated(type.items[0], count), start);
         if (!items) return std::nullopt;

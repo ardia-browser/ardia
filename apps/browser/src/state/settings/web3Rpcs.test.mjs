@@ -13,3 +13,19 @@ test("a chain ID is a whole number above 0", () => {
   assert.equal(web3RpcProblem("10", "https://rpc.example"), null);
   for (const chain of ["0", "01", "-1", "1.5", "eth", ""]) assert.notEqual(web3RpcProblem(chain, "https://rpc.example"), null, chain);
 });
+
+test("Add RPC keeps only a URL the engine accepts, and puts the engine's map back when it refuses", async () => {
+  const { web3RpcsRefused, web3RpcsSent } = await import("../../test-native/index.ts");
+  const { useBrowser } = await import("../browser/store.ts");
+  const { addWeb3Rpc } = await import("./actions.ts");
+  useBrowser.getState().updateSettings({ web3Rpcs: { 1: "https://ethereum-rpc.publicnode.com" } });
+  web3RpcsRefused.add("https://[::::]");
+  web3RpcsSent.length = 0;
+
+  assert.notEqual(await addWeb3Rpc("10", "https://[::::]"), null);
+  assert.deepEqual(useBrowser.getState().settings.web3Rpcs, { 1: "https://ethereum-rpc.publicnode.com" });
+  assert.deepEqual(web3RpcsSent.at(-1), { 1: "https://ethereum-rpc.publicnode.com" });
+
+  assert.equal(await addWeb3Rpc("10", "https://optimism-rpc.publicnode.com"), null);
+  assert.deepEqual(useBrowser.getState().settings.web3Rpcs, { 1: "https://ethereum-rpc.publicnode.com", 10: "https://optimism-rpc.publicnode.com" });
+});

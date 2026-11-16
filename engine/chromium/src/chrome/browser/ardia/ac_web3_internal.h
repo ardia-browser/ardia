@@ -14,6 +14,8 @@
 #include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "chrome/browser/ardia/ac_web3_codec.h"
+#include "net/url_request/redirect_info.h"
+#include "services/network/public/mojom/url_response_head.mojom-forward.h"
 #include "url/gurl.h"
 
 namespace network {
@@ -76,10 +78,15 @@ class Rpc {
 
  private:
   void Send(const GURL& endpoint, std::string body, Done done);
-  void Loaded(Done done, std::optional<std::string> body);
+  void Redirected(const GURL& from,
+                  const net::RedirectInfo& redirect,
+                  const network::mojom::URLResponseHead& head,
+                  std::vector<std::string>* removed_headers);
+  void Loaded(std::optional<std::string> body);
 
   scoped_refptr<network::SharedURLLoaderFactory> factory_;
   std::unique_ptr<network::SimpleURLLoader> loader_;
+  Done done_;
 };
 
 class Resolver {

@@ -113,16 +113,28 @@ void Rpc::Send(const GURL& endpoint, std::string body, Done done) {
   request->method = "POST";
   request->credentials_mode = network::mojom::CredentialsMode::kOmit;
   request->load_flags = net::LOAD_DISABLE_CACHE;
+  done_ = std::move(done);
   loader_ = network::SimpleURLLoader::Create(std::move(request), kRpcAnnotation);
+  loader_->SetOnRedirectCallback(
+      base::BindRepeating(&Rpc::Redirected, base::Unretained(this)));
   loader_->AttachStringForUpload(std::move(body), "application/json");
   loader_->SetTimeoutDuration(kRpcTimeout);
   loader_->DownloadToString(
       factory_.get(),
-      base::BindOnce(&Rpc::Loaded, base::Unretained(this), std::move(done)),
+      base::BindOnce(&Rpc::Loaded, base::Unretained(this)),
       network::SimpleURLLoader::kMaxBoundedStringDownloadSize);
 }
 
-void Rpc::Loaded(Done done, std::optional<std::string> body) {
+void Rpc::Redirected(const GURL& from,
+                     const net::RedirectInfo& redirect,
+                     const network::mojom::URLResponseHead& head,
+                     std::vector<std::string>* removed_headers) {
+  if (UsableRpcUrl(redirect.new_url)) return;
+  loader_.reset();
+  std::move(done_).Run(Answer());
+}
+
+void Rpc::Loaded(std::optional<std::string> body) {
   Answer answer;
   std::optional<base::DictValue> reply =
       body ? base::JSONReader::ReadDict(*body, base::JSON_PARSE_RFC)
@@ -137,7 +149,7 @@ void Rpc::Loaded(Done done, std::optional<std::string> body) {
       if (IsRevert(*error)) answer.kind = Answer::Kind::kReverted;
     }
   }
-  std::move(done).Run(std::move(answer));
+  std::move(done_).Run(std::move(answer));
 }
 
 const char* OutcomeName(Outcome outcome) {

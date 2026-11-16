@@ -6,6 +6,7 @@ import { SYMBOL_NAMES } from "../src/shims/web/symbols/data.ts";
 import { BUILT_IN_ENGINES, suggestRequestUrl } from "../../../packages/core/src/engines.ts";
 import { createSuggestFetcher } from "../src/suggestFetcher.ts";
 import { LAUNCH_STEPS, claimAppLaunch, hostLaunchRecord } from "../src/appServices.ts";
+import { introMusicTrack } from "../src/introMusicTrack.ts";
 
 const hostileColor = '\"><img src=x onerror="window.__symbolInjection=1"><svg onload="window.__symbolInjection=2" data-x="&\'';
 const gallery = document.getElementById("symbol-fixture");
@@ -43,6 +44,15 @@ const probeConnect = async () => {
   };
 };
 
+const mediaLoads = (src) => new Promise((resolve) => {
+  const audio = new Audio();
+  const timer = setTimeout(() => resolve(false), 5000);
+  audio.preload = "metadata";
+  audio.addEventListener("loadedmetadata", () => { clearTimeout(timer); resolve(audio.duration > 0); }, { once: true });
+  audio.addEventListener("error", () => { clearTimeout(timer); resolve(false); }, { once: true });
+  audio.src = src;
+});
+
 const deadline = Date.now() + 10000;
 const verify = async () => {
   const svgCount = gallery.querySelectorAll("svg[data-symbol]").length;
@@ -72,6 +82,10 @@ const verify = async () => {
   check(duplicatePolicyBlocked, "CSP allowed duplicate symbol policies");
   check(stringEvaluationBlocked, "CSP allowed string evaluation");
   const connect = await probeConnect();
+  const introMusicLoads = await mediaLoads(new URL(introMusicTrack, location.href).href);
+  const foreignMediaBlocked = !(await mediaLoads("https://example.com/intro.wav"));
+  check(introMusicLoads, "The bundled intro music didn't load under media-src");
+  check(foreignMediaBlocked, "media-src allowed audio from another origin");
   const launchSteps = [...window.__ardiaCspFixture.launchSteps];
   const secondClaim = await claimAppLaunch({ locks: navigator.locks, record: hostLaunchRecord(window.__ardiaHost), run: async () => { errors.push("A second window ran the launch services"); } });
   check(LAUNCH_STEPS.every((step) => launchSteps.includes(step)), `The launch services did not finish: ${launchSteps.join(", ")}`);
@@ -82,6 +96,7 @@ const verify = async () => {
     rawHtmlBlocked, unknownPolicyBlocked, duplicatePolicyBlocked, stringEvaluationBlocked,
     launchSteps: launchSteps.length, secondClaim,
     directFetchBlocked: connect.directFetchBlocked, bridgedSuggestions: connect.bridged?.length ?? 0,
+    introMusicLoads, foreignMediaBlocked,
   };
 };
 setTimeout(verify, 100);

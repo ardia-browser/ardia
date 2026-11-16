@@ -1,5 +1,6 @@
 import { hoverHeld } from "../app/transientUi";
 import { noteTabHoverCardShown } from "../telemetry/hoverCardCounts";
+import { noteSidebarHoverHeld, noteSidebarScrolled } from "../telemetry/sidebarScrollCounts";
 import { sidebarSliding, useDockMotion } from "../windows/dockMotion";
 import { cardReach, pointInRect, type Point, type Rect } from "./hoverAim";
 import { measureRow, setSidebarUi, sidebarUi, type Target } from "./sidebarUi";
@@ -216,6 +217,41 @@ export function rowLeft(windowId: string, target: Target | null, event: HoverPoi
   if (shownHere) card.exit = pointerIn(windowId, event);
   if (target && onPage) hoverLeave(target.id, shownHere && leftAwayFromCard());
 }
+
+const SCROLL_SETTLE_MS = 150;
+const scrolledAt = new Map<string, number>();
+const settleTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const heldEnters = new Map<string, Map<object, () => void>>();
+
+function settleWhenStill(windowId: string) {
+  const left = (scrolledAt.get(windowId) ?? 0) + SCROLL_SETTLE_MS - Date.now();
+  if (left > 0) return void settleTimers.set(windowId, setTimeout(() => settleWhenStill(windowId), left));
+  settleTimers.delete(windowId);
+  scrolledAt.delete(windowId);
+  const held = heldEnters.get(windowId);
+  heldEnters.delete(windowId);
+  for (const enter of held?.values() ?? []) enter();
+}
+
+export function noteRowsScrolled(windowId: string) {
+  const now = Date.now();
+  noteSidebarScrolled(now);
+  scrolledAt.set(windowId, now);
+  if (!settleTimers.has(windowId)) settleTimers.set(windowId, setTimeout(() => settleWhenStill(windowId), SCROLL_SETTLE_MS));
+}
+
+export const rowsScrolling = (windowId: string) => scrolledAt.has(windowId);
+
+export function holdEnterWhileScrolling(windowId: string, row: object, enter: () => void): boolean {
+  if (!scrolledAt.has(windowId)) return false;
+  let held = heldEnters.get(windowId);
+  if (!held) heldEnters.set(windowId, (held = new Map()));
+  if (!held.has(row)) noteSidebarHoverHeld();
+  held.set(row, enter);
+  return true;
+}
+
+export const dropHeldEnter = (windowId: string, row: object) => !!heldEnters.get(windowId)?.delete(row);
 
 const pointedGroups = new Set<string>();
 

@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <memory>
 #include <type_traits>
 #include <utility>
@@ -34,5 +35,20 @@ class OnceCallback<R(Args...)> {
     F function;
   };
   std::unique_ptr<Callable> call_;
+};
+template <typename Signature>
+class RepeatingCallback;
+template <typename R, typename... Args>
+class RepeatingCallback<R(Args...)> {
+ public:
+  RepeatingCallback() = default;
+  template <typename F, typename = std::enable_if_t<!std::is_same_v<std::decay_t<F>, RepeatingCallback> &&
+                                                    std::is_invocable_r_v<R, std::decay_t<F>&, Args...>>>
+  RepeatingCallback(F function) : call_(std::make_shared<std::function<R(Args...)>>(std::move(function))) {}
+  explicit operator bool() const { return !!call_; }
+  R Run(Args... args) const { return (*call_)(std::forward<Args>(args)...); }
+
+ private:
+  std::shared_ptr<std::function<R(Args...)>> call_;
 };
 }

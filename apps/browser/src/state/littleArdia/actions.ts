@@ -16,7 +16,9 @@ import type { AdoptId } from "../browser/types";
 import { linkGate, type LinkGateResult, type LinkRouteChoice, type LinkSourceInfo } from "./linkGate";
 import { externalLinkOpen, type ExternalLinkOpen } from "./externalLinkOpen";
 import { noteExternalLink } from "../telemetry/usage";
+import { openInRouteGroup } from "../airTraffic/openAt";
 import { noteLittleArdiaAppHandoff, noteLittleArdiaEscapeClose, type EscapePressedIn } from "../telemetry/littleArdiaEscapes";
+import { askBeforeQuitting, quitWarningMayAsk } from "../windows/quitWarning";
 
 const store = () => useBrowser.getState();
 
@@ -59,6 +61,10 @@ function openRoutedUrl(url: string, route: LinkRouteChoice, pointer?: [number, n
     noteExternalLink("tab", store().settings.openLinksInLittleArdia);
     store().newTab(route.windowId, { url, profileId, gated: true });
     return focus(route.windowId);
+  }
+  if (route.groupKey) {
+    noteExternalLink("tab", store().settings.openLinksInLittleArdia);
+    return openInRouteGroup(url, profileId, route.groupKey);
   }
   const open = decideExternal([url], route.open);
   if (open === "littleArdia") return void openLittleArdia(url, profileId, undefined, pointer, app);
@@ -178,7 +184,11 @@ export async function openLittleArdiaProfileMenu(windowId: string) {
 }
 
 export function closeLittleArdia(windowId: string) {
-  if (isSmall(store(), windowId)) closeWindowAnimated(windowId);
+  if (!isSmall(store(), windowId)) return;
+  if (!quitWarningMayAsk()) return closeWindowAnimated(windowId);
+  void askBeforeQuitting(windowId).then((answer) => {
+    if (answer !== "cancelled" && isSmall(store(), windowId) && !isWindowClosing(windowId)) closeWindowAnimated(windowId);
+  });
 }
 
 export function closeLittleArdiaForAppLink(windowId: string | null) {

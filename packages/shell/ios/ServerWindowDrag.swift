@@ -24,8 +24,18 @@ enum ServerWindowDrag {
 
   private static let lastWindow = NSMapTable<NSView, NSWindow>.weakToWeakObjects()
 
+  private static let scaleChanges: NSObjectProtocol = NotificationCenter.default.addObserver(
+    forName: .ArdiaInterfaceScaleDidChange, object: nil, queue: .main
+  ) { _ in
+    for window in trackedWindows() {
+      refresh(window)
+      scheduleRefresh(window)
+    }
+  }
+
   static func track(_ region: NSView, bridge: AnyObject? = nil) {
     guard enabled, capable else { return }
+    _ = scaleChanges
     if let bridge { observeMounting(bridge) }
     if let old = lastWindow.object(forKey: region), old !== region.window { refresh(old) }
     if let window = region.window {
@@ -192,7 +202,15 @@ enum ServerWindowDrag {
 
   private static func transformed(_ view: NSView) -> Bool {
     guard let layer = view.layer else { return false }
-    return !CATransform3DIsIdentity(layer.transform) || !layer.affineTransform().isIdentity
+    let boundsScale = CATransform3DMakeScale(
+      view.bounds.width > 0 ? view.frame.width / view.bounds.width : 1, view.bounds.height > 0 ? view.frame.height / view.bounds.height : 1, 1)
+    return !nearlyEqual(layer.transform, boundsScale)
+  }
+
+  private static func nearlyEqual(_ a: CATransform3D, _ b: CATransform3D) -> Bool {
+    let lhs = [a.m11, a.m12, a.m13, a.m14, a.m21, a.m22, a.m23, a.m24, a.m31, a.m32, a.m33, a.m34, a.m41, a.m42, a.m43, a.m44]
+    let rhs = [b.m11, b.m12, b.m13, b.m14, b.m21, b.m22, b.m23, b.m24, b.m31, b.m32, b.m33, b.m34, b.m41, b.m42, b.m43, b.m44]
+    return zip(lhs, rhs).allSatisfy { abs($0 - $1) < 0.0001 }
   }
 
   private static func zOrdered(_ view: NSView) -> [NSView] {

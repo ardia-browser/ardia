@@ -13,6 +13,7 @@ import { BADGE_FALLBACK_FILL, TOOLBAR_DRAG_START } from "./tokens";
 import { SLIDE } from "../tabstrip/tokens";
 import { isLight } from "../../lib/color";
 import { dropToolbarAnchor, setToolbarAnchor } from "../../state/extensions/toolbarAnchors";
+import { onInterfaceScaleSettled } from "../../state/settings/interfaceScale";
 import {
   activateExtension,
   extensionOverflowItems,
@@ -148,11 +149,12 @@ function useAnchor(windowId: string, tabId: string, slot: string) {
         const anchor = { x, y, width, height };
         if (ref.current) {
           mine.current = anchor;
-          setToolbarAnchor(owner.windowId, owner.tabId, owner.slot, anchor);
+          setToolbarAnchor(owner.windowId, owner.tabId, owner.slot, anchor, measure);
         }
         resolve(anchor);
       });
     });
+  useEffect(() => onInterfaceScaleSettled(() => void measure()), [owner]);
   return { ref, measure };
 }
 
@@ -209,6 +211,7 @@ function ExtensionButton({ ext, index, pitch, reorder, windowId, tabId, ready, p
   const title = state?.title || ext.actionTitle || ext.name;
   const icon = state?.icon || ext.actionIcon || ext.icon;
   const fill = state?.badgeColor && state.badgeColor !== ink.black ? state.badgeColor : BADGE_FALLBACK_FILL;
+  const badgeRoom = useToolbarRowContext().extensionButton - BADGE_PLACE.right;
   const pressMotion = usePressScaleMotion(true, buttonMotion.iconPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
   const responder = useReorderResponder(ext.id, index, reorder);
@@ -238,7 +241,7 @@ function ExtensionButton({ ext, index, pitch, reorder, windowId, tabId, ready, p
             onActivate?.();
             return activateExtension(windowId, ext, await measure(), fetched?.[ext.id], tabId);
           }}
-          badge={badge ? <Badge text={badge.slice(0, 4)} size="s" fill={fill} color={state?.badgeTextColor ?? contrastText(fill)} style={BADGE_PLACE} /> : null}
+          badge={badge ? <Badge text={badge.slice(0, 4)} size="s" fit={badgeRoom} fill={fill} color={state?.badgeTextColor ?? contrastText(fill)} style={BADGE_PLACE} /> : null}
         >
           <Animated.View pointerEvents="none" style={[{ width: GLYPH_BOX, height: GLYPH_BOX, alignItems: "center", justifyContent: "center" }, scaleStyle]}>
             {icon ? (

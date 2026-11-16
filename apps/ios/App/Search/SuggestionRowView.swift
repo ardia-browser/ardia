@@ -30,7 +30,7 @@ struct SuggestionRowView: View {
   }
 
   private var rowHighlight: Color {
-    isIncognito ? .white.opacity(0.1) : Color.adaptive(light: .black.opacity(0.05), dark: .white.opacity(0.08))
+    isIncognito ? BrowsePalette.incognitoRowHighlight : BrowsePalette.rowHighlight
   }
 
   @ViewBuilder
@@ -93,7 +93,7 @@ struct SuggestionRowView: View {
   }
 
   private var primary: Color {
-    isIncognito ? .white.opacity(0.92) : BrowsePalette.foregroundPrimary
+    isIncognito ? BrowsePalette.incognitoRowText : BrowsePalette.foregroundPrimary
   }
 
   private var secondary: Color {

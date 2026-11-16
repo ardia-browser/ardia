@@ -38,7 +38,7 @@ function png(width, height, rows, color = 2) {
 }
 
 test("parseArgs needs a package and results, validates the deadline and rejects unknown flags", () => {
-  assert.deepEqual(parseArgs(["--package", "a.tar.xz", "--results", "out"]), { package: "a.tar.xz", results: "out", timeoutMs: 300000, keep: false, help: false });
+  assert.deepEqual(parseArgs(["--package", "a.tar.xz", "--results", "out"]), { package: "a.tar.xz", results: "out", timeoutMs: 300000, keep: false, help: false, format: "tar" });
   assert.equal(parseArgs(["--package", "a", "--results", "b", "--timeout-ms", "9000", "--keep"]).timeoutMs, 9000);
   assert.equal(parseArgs(["--help"]).help, true);
   assert.throws(() => parseArgs(["--package", "a"]), /required/);

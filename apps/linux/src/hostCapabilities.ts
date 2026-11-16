@@ -79,7 +79,7 @@ export function linuxCapabilities(host: ArdiaHost | undefined = ardiaHost): Linu
 }
 
 export function unavailableSettingIds(capabilities: LinuxCapabilities, settingIds: readonly string[]): Set<string> {
-  const ids = new Set<string>();
+  const ids = new Set<string>(["general.autoUpdate"]);
   if (!capabilities.defaultBrowser) ids.add("general.defaultBrowser");
   if (!capabilities.launchAtLogin) ids.add("general.openAtLogin");
   if (!capabilities.thinScrollBars) ids.add("appearance.pageScrollBars");

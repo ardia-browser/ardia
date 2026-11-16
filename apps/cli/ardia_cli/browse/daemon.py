@@ -12,7 +12,7 @@ from ardia_cli import command_metrics
 from ardia_cli.browse import paths
 from ardia_cli.caller import parse as parse_caller
 from ardia_cli.browse.errors import BrowseError, ConnectionLost, Unreachable, Usage
-from ardia_cli.browse.limits import QUEUE_WAIT, command_limit, queue_wait
+from ardia_cli.browse.limits import BEHIND_SCRIPT_WAIT, QUEUE_WAIT, command_limit, queue_wait
 
 CONNECTED_IDLE = 30.0
 DEFAULT_DAEMON_IDLE = 3600.0
@@ -188,8 +188,10 @@ def spill(text: str) -> str | None:
         if not folder.is_dir() or folder.is_symlink() or info.st_uid != os.getuid() or info.st_mode & 0o077:
             return None
         fd, path = tempfile.mkstemp(prefix="output-", suffix=".txt", dir=folder)
+        from ardia_cli.printable import well_formed
+
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(text)
+            handle.write(well_formed(text))
         older = sorted(folder.glob("output-*.txt"), key=lambda item: item.stat().st_mtime)[:-SPILL_KEEP]
         for item in older:
             item.unlink(missing_ok=True)
@@ -432,7 +434,10 @@ class Daemon:
             request["busy_elsewhere"] = True
             return render(options, error=self.busy_error(waited=False), name=name)
         patience = queue_wait(name, [str(arg) for arg in argv[1:]], QUEUE_WAIT, name == "read" and bool(request.get("patient_queue")))
-        if patience > QUEUE_WAIT and self.lock.locked():
+        if self.lock.locked() and (self.state.extras.get("running") or {}).get("name") == "script" and patience < BEHIND_SCRIPT_WAIT:
+            patience = BEHIND_SCRIPT_WAIT
+            command_metrics.flag("queued_behind_script", True)
+        elif patience > QUEUE_WAIT and self.lock.locked():
             command_metrics.flag("read_queued_beside" if request.get("patient_queue") else "script_queued_behind_busy", True)
         try:
             await asyncio.wait_for(self.lock.acquire(), patience)
@@ -579,7 +584,9 @@ def timed_out(name: str, limit: float) -> BrowseError:
 
 
 def encode_answer(code: int, out: str, err: str, fields: dict | None = None) -> bytes:
-    data = (json.dumps({"exit": code, "out": out, "err": err, **(fields or {})}, ensure_ascii=False) + "\n").encode()
+    from ardia_cli.printable import well_formed
+
+    data = (well_formed(json.dumps({"exit": code, "out": out, "err": err, **(fields or {})}, ensure_ascii=False)) + "\n").encode()
     if len(data) <= MAX_RESPONSE:
         return data
     message = f"✗ The answer was too large ({len(data)} bytes, the limit is {MAX_RESPONSE}); narrow it (snapshot -s, -d, --max-output)\n"

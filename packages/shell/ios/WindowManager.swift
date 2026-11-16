@@ -128,6 +128,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     controller.view = makeContentView(id)
     controller.view.frame = NSRect(origin: .zero, size: window.contentRect(forFrameRect: window.frame).size)
     window.contentViewController = controller
+    InterfaceScale.rootAttached(controller.view)
     window.delegate = self
     if options.incognito { window.appearance = NSAppearance(named: .darkAqua) }
     if small {
@@ -260,27 +261,36 @@ final class WindowManager: NSObject, NSWindowDelegate {
   private func openAux(id: String, kind: WindowKind, title: String) {
     guard let makeContentView = WindowHost.makeContentView else { return }
     let settings = kind == .settings
-    let size = settings ? NSSize(width: 820, height: 640) : NSSize(width: 640, height: 600)
+    let design = settings ? NSSize(width: 820, height: 640) : NSSize(width: 640, height: 600)
     var style: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
     if settings { style.insert(.resizable) }
-    let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: style, backing: .buffered, defer: false)
+    let window = NSWindow(contentRect: NSRect(origin: .zero, size: design), styleMask: style, backing: .buffered, defer: false)
+    let size = ArdiaChromeWindowHost.windowSize(fromInterface: design, for: window)
     window.setAccessibilitySubrole(.dialog)
     window.titlebarAppearsTransparent = true
     window.titleVisibility = .hidden
     window.title = title
     window.isReleasedWhenClosed = false
-    window.minSize = settings ? NSSize(width: 720, height: 480) : size
     window.tabbingMode = .disallowed
     let controller = UtilityContentController()
     let root = makeContentView(id)
     controller.view = root
     controller.view.frame = NSRect(origin: .zero, size: size)
     window.contentViewController = controller
+    InterfaceScale.rootAttached(root)
     window.setContentSize(size)
     window.delegate = self
     let entry = ManagedWindow(id: id, kind: kind, window: window)
     managed[id] = entry
-    if !window.setFrameUsingName(Self.auxFrameName(kind)) { window.center() }
+    if !window.setFrameUsingName(Self.auxFrameName(kind)) {
+      window.center()
+    } else if !settings {
+      let top = window.frame.maxY
+      window.setContentSize(size)
+      window.setFrameTopLeftPoint(NSPoint(x: window.frame.minX, y: top))
+    }
+    ArdiaChromeWindowHost.setInterfaceMinSize(settings ? NSSize(width: 720, height: 480) : design, of: window)
+    ArdiaChromeWindowHost.keepInterfaceContentSize(of: window)
     for name in [NSWindow.didMoveNotification, NSWindow.didResizeNotification] {
       NotificationCenter.default.addObserver(self, selector: #selector(auxFrameChanged(_:)), name: name, object: window)
     }
@@ -309,6 +319,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     window.identifier = NSUserInterfaceItemIdentifier("ardia.window.small")
     ArdiaChromeWindowHost.float(forWindowManagers: window)
     window.minSize = NSSize(width: 420, height: 300)
+    ArdiaChromeWindowHost.setInterfaceMinSize(window.minSize, of: window)
     window.tabbingMode = .disallowed
     window.collectionBehavior.insert(.moveToActiveSpace)
   }

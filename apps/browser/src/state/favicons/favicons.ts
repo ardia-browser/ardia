@@ -344,7 +344,7 @@ function forget(key: string) {
   update(key, () => EMPTY_ICONS, true);
 }
 
-export const pruneProfileFavicons = (profileId: string) => forget(cacheKey(profileId));
+export const pruneEngineFavicons = (engine: string) => forget(engine);
 
 function removeLegacyFiles(s: Pick<BrowserState, "profiles">) {
   for (const id of Object.keys(s.profiles)) {

@@ -6,6 +6,8 @@ import type { BrowserWindow } from "../browser/types";
 import { shownSidebarWidth } from "../../lib/windowLayout";
 import { systemIncreaseContrast } from "../app/systemContrast";
 import { isNavigationOrFunctionKey, storedShortcut } from "../commands/shortcuts";
+import { currentInterfaceScale } from "../settings/interfaceScale";
+import { INTERFACE_SCALE, interfaceScalePercent, rootLength } from "../../lib/interfaceScale";
 
 export const SETTINGS_SNAPSHOT_EVENT = "settings_snapshot";
 
@@ -43,6 +45,8 @@ export function settingsSnapshot(settings: Settings): Record<string, string> {
     ...out,
     ...commandBarStartFlags(settings.commandBarStart),
     ...customShortcutCounts(settings.shortcuts),
+    setting_interfaceScale: String(interfaceScalePercent(currentInterfaceScale())),
+    default_interfaceScale: String(interfaceScalePercent(INTERFACE_SCALE.default)),
     system_increase_contrast: encode(systemIncreaseContrast())!,
     unread_hidden_sites: String(Array.isArray(settings.unreadHiddenSites) ? settings.unreadHiddenSites.length : 0),
     custom_new_tab_url: customNewTabUrl({ newTabOpens: "page", minimalismMode: false, newTabUrl: typeof settings.newTabUrl === "string" ? settings.newTabUrl : "" }) ? "true" : "false",
@@ -56,10 +60,14 @@ export const customColorProfiles = (profiles: Record<string, { theme?: unknown }
   custom_color_profiles: String(Object.values(profiles).filter((profile) => !!profile.theme).length),
 });
 
+export const openTabSyncProfiles = (profiles: Record<string, { syncTabs?: true }>): Record<string, string> => ({
+  sync_open_tabs_profiles: String(Object.values(profiles).filter((profile) => !!profile.syncTabs).length),
+});
+
 const FORMER_MIN_WINDOW_WIDTH = 720;
 
-export function narrowWindows(windows: Record<string, Pick<BrowserWindow, "kind" | "frame" | "fullScreen">>, sidebarWidth: number): Record<string, string> {
-  const widths = Object.values(windows).flatMap((w) => (w.kind !== "small" && !w.fullScreen && w.frame ? [w.frame[2]] : []));
+export function narrowWindows(windows: Record<string, Pick<BrowserWindow, "kind" | "frame" | "fullScreen">>, sidebarWidth: number, scale = currentInterfaceScale()): Record<string, string> {
+  const widths = Object.values(windows).flatMap((w) => (w.kind !== "small" && !w.fullScreen && w.frame ? [rootLength(w.frame[2], scale)] : []));
   return {
     narrow_windows: String(widths.filter((width) => width < FORMER_MIN_WINDOW_WIDTH).length),
     sidebar_narrowed_windows: String(widths.filter((width) => shownSidebarWidth(sidebarWidth, width) < sidebarWidth).length),

@@ -90,7 +90,7 @@ export function PinFieldZone({ top, height }: { top: number; height: number }) {
   );
 }
 
-export function PinSlotZone() {
+export function PinSlotZone({ top = 0 }: { top?: number }) {
   const theme = useTheme();
   const controller = useDragController();
   const active = useDropPins();
@@ -110,7 +110,7 @@ export function PinSlotZone() {
           left: layout.sidebarInset,
           right: layout.sidebarInset,
           top: 0,
-          height: active ? firstRowTop + layout.pinnedHeight : firstRowTop - layout.rowGap,
+          height: top + (active ? firstRowTop + layout.pinnedHeight : firstRowTop - layout.rowGap),
         }}
       />
       <Animated.View
@@ -119,7 +119,7 @@ export function PinSlotZone() {
           position: "absolute",
           left: layout.sidebarInset,
           right: layout.sidebarInset,
-          top: firstRowTop,
+          top: top + firstRowTop,
           height: layout.pinnedHeight,
           opacity,
           borderRadius: radius.pinned,

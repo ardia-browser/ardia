@@ -1,5 +1,6 @@
 import { systemInfo, type SystemInfo } from "../../platform/app";
 import { devTestValue } from "../../platform/launchConfig";
+import { PLATFORM_IDS, PLATFORM_TERMS } from "../../lib/platformTerms";
 import { APP_INGEST_KEY, INGEST_KEY_HEADER } from "@ardia/core";
 import { DEV_SEND_TEST_KEY, LOGS_URL } from "./config";
 import { logRequest, type RequestLogEntry } from "./requestLog";
@@ -15,8 +16,8 @@ export const mayPost = (kind: RequestLogEntry["kind"]) =>
 export type TelemetrySend = (body: string, signal?: AbortSignal) => Promise<number>;
 export type TelemetryHost = { os: string; osType: string; send: TelemetrySend | null };
 
-const MAC_HOST: TelemetryHost = { os: "macOS", osType: "darwin", send: null };
-let host = MAC_HOST;
+const PLATFORM_HOST: TelemetryHost = { os: PLATFORM_TERMS.os, osType: PLATFORM_IDS.otel, send: null };
+let host = PLATFORM_HOST;
 
 export const telemetryHost = (): Readonly<TelemetryHost> => host;
 export const setTelemetryHost = (next: TelemetryHost) => void (host = next);

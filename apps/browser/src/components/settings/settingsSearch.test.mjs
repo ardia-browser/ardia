@@ -320,6 +320,11 @@ test("arrowing through results scrolls only as far as the selected row needs", a
   assert.equal(scrollToShow(260, 40, 200, 400, true), 0);
 });
 
+test("Interface size turns up for every word people use for UI scaling", () => {
+  for (const query of ["scale", "scaling", "zoom", "UI size", "interface size", "fractional scaling", "1440p", "bigger", "smaller", "display"]) assert.ok(ids(query).includes("appearance.interfaceScale"), query);
+  for (const query of ["interface size", "ui size", "scaling", "fractional scaling", "1440p", "ui scale"]) assert.equal(first(query), "appearance.interfaceScale", query);
+});
+
 test("Minimalism mode turns up for every word people use for it", () => {
   for (const query of ["minimal", "minimalism", "clean", "compact", "zen", "distraction free", "no toolbar"]) assert.ok(ids(query).includes("appearance.minimalismMode"), query);
 });

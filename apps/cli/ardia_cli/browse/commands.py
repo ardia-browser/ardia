@@ -174,11 +174,26 @@ def failed_navigation(ctx: Ctx, url: str, error_text: str) -> BrowseError:
         command_metrics.flag("navigation_dropped_hint", True)
         again = f" ({failures[host]} failures on {host} in this session)" if failures[host] > 1 else ""
         message += (f". The site dropped the connection{again}; sites often do this to automated or foreign traffic, and the same URL "
-                    "rarely loads on a retry. Try another way in: the site's other hosts or pages, `read --http <url>`, "
-                    "its public API or feed, an archived copy, or another source with the same data, and name the source you used")
+                    "rarely loads on a retry. Its other pages, `read --http <url>` or its public API may still answer; "
+                    "if nothing does, say what couldn't be reached")
     elif "ERR_NAME_NOT_RESOLVED" in error_text:
         message += f". {host} has no address: check the spelling, or search for the site's current address"
+    elif https_only_block(url, error_text):
+        message += f". {HTTPS_ONLY_NOTE}"
     return BrowseError(message, code="navigation_failed")
+
+
+HTTPS_ONLY_NOTE = ("Ardia loads http:// addresses over https and blocks the page when the site has no working https, which is what this "
+                   "error usually means for an http:// address. Try the https:// address; if that fails too, say the site couldn't be reached")
+
+
+def https_only_block(url: str, error_text: str) -> bool:
+    from ardia_cli import command_metrics
+
+    blocked = "ERR_BLOCKED_BY_CLIENT" in error_text and url.lower().startswith("http://")
+    if blocked:
+        command_metrics.flag("navigation_https_only_hint", True)
+    return blocked
 
 
 async def navigate(ctx: Ctx, page, url: str, until: str = "load"):
@@ -702,6 +717,7 @@ async def cmd_fill(ctx: Ctx, argv):
         finally:
             await actions.unwatch_suggestions(page, element)
 
+    text_before = await page_text_mark(page, element)
     ((retargeted, stored), found), report = await changes.observe(ctx, page, run, None if typeahead else (element, None))
     result = filled_result("filled", args[0], retargeted, text, stored)
     if found:
@@ -709,7 +725,49 @@ async def cmd_fill(ctx: Ctx, argv):
         best = text if actions.unique_match(text, found) else found[0]["text"]
         result.text += (f"\n→ {len(found)} suggestion{'s' if len(found) != 1 else ''} showing, none picked. "
                         f"To pick one: ardia browse select {args[0]} {shlex.quote(best)}")
-    return changes.attach(result, report)
+    result = changes.attach(result, report)
+    if (text and not typeahead and not found and stored is None and text_before is not None and only_the_field_changed(report)
+            and await is_input(page, element) and await page_text_mark(page, element) == text_before):
+        from ardia_cli import command_metrics
+
+        command_metrics.flag("fill_no_reaction_hint", True)
+        result.text += NO_REACTION_HINT
+    return result
+
+
+NO_REACTION_HINT = ("\n→ Nothing else on the page changed yet. Some fields only apply when you press Enter or leave them: "
+                    "`press Enter` or `press Tab`, then check again")
+
+
+def only_the_field_changed(report: dict | None) -> bool:
+    if not report or report.get("document") != "same" or report.get("unsettled"):
+        return False
+    quiet = not (report.get("added") or report.get("removed") or report.get("network") or report.get("text")
+                 or report.get("url") or report.get("title"))
+    return quiet and len(report.get("changed") or []) <= 1
+
+
+PAGE_TEXT_MARK = """() => {
+  const text = document.body ? document.body.innerText : "";
+  let hash = 0;
+  for (let index = 0; index < text.length; index++) hash = (hash * 31 + text.charCodeAt(index)) | 0;
+  return [text.length, hash];
+}"""
+
+
+async def page_text_mark(page, element):
+    try:
+        return await page.call(PAGE_TEXT_MARK, frame=element.frame, read=True)
+    except BrowseError:
+        return None
+
+
+async def is_input(page, element) -> bool:
+    try:
+        info = await page.call("(el) => ardiaBrowse.info(el)", element, frame=element.frame, read=True)
+    except BrowseError:
+        return False
+    return info.get("tag") == "input" and (info.get("type") or "text") in ("text", "number", "search", "tel")
 
 
 def filled_result(key: str, selector: str, retargeted: bool, text: str, stored: str | dict | None) -> Result:
@@ -935,7 +993,7 @@ async def cmd_mouse(ctx: Ctx, argv):
     if action == "move":
         need(args, 3, "mouse move <x> <y>")
         x, y = float(args[1]), float(args[2])
-        needs = {} if await page.call("(x, y) => ardiaBrowse.overFrame(x, y)", x, y, frame=page.main_frame, read=True) else {"mousemove": 1}
+        needs = {} if await actions.over_frame(page, x, y) else {"mousemove": 1}
         await actions.expect_input(page, page.main_frame, lambda: page.input.gesture("mouse move", lambda: mouse.move(x, y, humanize=humanize), keep_held=True),
                                    needs, "The mouse move")
         return Result({"moved": True})
@@ -943,7 +1001,7 @@ async def cmd_mouse(ctx: Ctx, argv):
         button = actions.mouse_button(args[1] if len(args) > 1 else None)
         run = (lambda: mouse.down(button)) if action == "down" else (lambda: mouse.up(button))
         x, y = mouse._position
-        over = await page.call("(x, y) => ardiaBrowse.overFrame(x, y)", x, y, frame=page.main_frame, read=True)
+        over = await actions.over_frame(page, x, y)
         await actions.expect_input(page, page.main_frame, lambda: page.input.gesture(f"mouse {action}", run, keep_held=True),
                                    {} if over else {"mousedown" if action == "down" else "mouseup": 1}, f"The mouse {action}")
         return Result({action: True})
@@ -952,7 +1010,7 @@ async def cmd_mouse(ctx: Ctx, argv):
         dy = float(args[1])
         dx = float(args[2]) if len(args) > 2 else 0
         x, y = mouse._position
-        over = await page.call("(x, y) => ardiaBrowse.overFrame(x, y)", x, y, frame=page.main_frame, read=True)
+        over = await actions.over_frame(page, x, y)
         wheel = {"type": "mouseWheel", "x": int(x), "y": int(y), "deltaX": dx, "deltaY": dy}
         await actions.expect_input(page, page.main_frame, lambda: page.input.gesture("mouse wheel", lambda: page.send("Input.dispatchMouseEvent", wheel, input_event=True), keep_held=True),
                                    {} if over else {"wheel": 1}, "The wheel")
@@ -1085,6 +1143,7 @@ async def cmd_eval(ctx: Ctx, argv):
     page = await ctx.state.page()
     if FETCHING.search(script):
         hint_once(ctx.state, "fetch", FETCH_HINT)
+    script, quoted = quote_selector_literals(script)
     try:
         value = await evaluate_main(page, script, limit)
     except OutcomeUnknown as error:
@@ -1097,7 +1156,40 @@ async def cmd_eval(ctx: Ctx, argv):
                              f"be running in the page. Give it longer with `eval --timeout 5m` (up to {MAX_TIMEOUT / 60:g}m), "
                              "or split the work into smaller batches") from None
     origin = page.frames.get(page.main_frame, {}).get("origin") or ""
-    return Result({"origin": origin + "/" if origin and not origin.endswith("/") else origin, "result": value}, render_json(value), page_content=True)
+    text = render_json(value)
+    if quoted:
+        from ardia_cli import command_metrics
+
+        command_metrics.flag("eval_selectors_quoted", True)
+        text += "\n(quoted the attribute values in " + ", ".join(quoted) + ", which CSS needs for values with spaces or punctuation)"
+    return Result({"origin": origin + "/" if origin and not origin.endswith("/") else origin, "result": value}, text, page_content=True)
+
+
+SELECTOR_CALL = re.compile(r"""\b(querySelectorAll|querySelector|closest|matches)\(\s*(['"])((?:\\.|(?!\2).)*)\2""")
+UNQUOTED_VALUE = re.compile(r"""\[\s*([^\s~|^$*!=\]"']+)\s*([~|^$*]?=)\s*([^"'\\\]\s][^\]]*?)(\s+[iIsS])?\s*\]""")
+PLAIN_VALUE = re.compile(r"-?[A-Za-z_][\w-]*")
+
+
+def quote_selector_literals(script: str) -> tuple[str, list[str]]:
+    quoted = []
+
+    def fix_call(match):
+        name, quote, selector = match.groups()
+        inner = "'" if quote == '"' else '"'
+
+        def fix_value(part):
+            attribute, op, value, flag = part.groups()
+            if PLAIN_VALUE.fullmatch(value.strip()):
+                return part.group(0)
+            return f"[{attribute}{op}{inner}{value.strip()}{inner}{flag or ''}]"
+
+        fixed = UNQUOTED_VALUE.sub(fix_value, selector)
+        if fixed == selector:
+            return match.group(0)
+        quoted.append(fixed)
+        return f"{name}({quote}{fixed}{quote}"
+
+    return SELECTOR_CALL.sub(fix_call, script), quoted
 
 
 @command("get")
@@ -1869,15 +1961,15 @@ async def cmd_read(ctx: Ctx, argv):
         content = readurl.post_process(await pdftext.page_text(page), options)
         return Result({"content": content, "contentType": "application/pdf", "finalUrl": page.url, "source": "pdf", "truncated": False, "url": page.url},
                       content, page_content=True)
+    empty_note = ""
     if selector:
-        content = await page.call("(s) => ardiaBrowse.queryAll(s).map((el) => ardiaBrowse.readable(el)).filter(Boolean).join('\\n\\n')",
-                                  selector, frame=frame, read=True)
+        content, empty_note = await read_scoped(page, frame, selector)
     else:
         content = await page.call("() => ardiaBrowse.readable()", frame=frame, read=True)
     content = readurl.post_process(content, options)
     readpages.note_virtualized(content)
     scope = "" if options.get("selector") else await page_scope(page, frame)
-    shown = f"{content}\n[scope: {scope}]" if scope else content
+    shown = f"{content}\n[scope: {scope}]" if scope else (content or empty_note)
     return Result({"content": content, "contentType": "text/html", "finalUrl": page.url, "source": "active-tab-html", "truncated": False, "url": page.url,
                    "scope": scope or None}, shown, page_content=True)
 
@@ -1886,6 +1978,42 @@ def render_json(value) -> str:
     from ardia_cli.browse.script import render_json as render
 
     return render(value)
+
+
+READ_SCOPED = "(s) => { const found = ardiaBrowse.queryAll(s); return {matched: found.length, text: found.map((el) => ardiaBrowse.readable(el)).filter(Boolean).join('\\n\\n')}; }"
+
+
+async def read_scoped(page, frame, selector: str) -> tuple[str, str]:
+    from ardia_cli import command_metrics
+    from ardia_cli.browse.readpages import THIN_POLL, THIN_WAIT
+
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + THIN_WAIT
+    got = {"matched": 0, "text": ""}
+    in_main = frame == page.main_frame
+    while True:
+        try:
+            got = await page.call(READ_SCOPED, selector, frame=frame, read=True)
+        except BrowseError as error:
+            if error.code not in ("document_changed", "page_navigated", "frame_gone") or (error.code == "frame_gone" and not in_main):
+                raise
+            got = {"matched": 0, "text": ""}
+            if in_main:
+                frame = page.main_frame
+        if (got.get("matched") and (got.get("text") or "").strip()) or loop.time() + THIN_POLL >= deadline:
+            break
+        await asyncio.sleep(THIN_POLL)
+    matched = got.get("matched") or 0
+    if not matched:
+        raise BrowseError(f"Nothing on the page matches {selector} (waited {THIN_WAIT:g} s for it). Read without -s, or check it with snapshot -i",
+                          code="not_found")
+    text = got.get("text") or ""
+    if text.strip():
+        return text, ""
+    command_metrics.flag("read_scope_empty", True)
+    what = "1 element" if matched == 1 else f"{matched} elements"
+    return text, (f"({selector} matched {what} with no text after {THIN_WAIT:g} s: the page may still be loading into it, or its content "
+                  "is elsewhere. Read without -s, or snapshot -i to see what's there)")
 
 
 async def page_scope(page, frame) -> str:

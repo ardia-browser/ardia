@@ -1,4 +1,5 @@
 import AppKit
+import ArdiaCore
 import Carbon.HIToolbox
 import ExpoModulesCore
 import SwiftUI
@@ -7,6 +8,7 @@ final class PopoverBubble: ExpoView {
   enum Edge: String { case top, bottom, none }
 
   let effect = NSVisualEffectView()
+  private let lens = NSView()
   private let overlay = PopoverBubbleOverlay()
   private let shadowLayer = CALayer()
   private let shadowMask = CAShapeLayer()
@@ -36,7 +38,9 @@ final class PopoverBubble: ExpoView {
     effect.state = .active
     effect.blendingMode = .withinWindow
     effect.material = .popover
-    addSubview(effect)
+    lens.addSubview(effect)
+    addSubview(lens)
+    NotificationCenter.default.addObserver(self, selector: #selector(interfaceScaleDidChange), name: .ArdiaInterfaceScaleDidChange, object: nil)
     overlay.wantsLayer = true
     overlay.layer?.masksToBounds = false
     shadowMask.fillRule = .evenOdd
@@ -66,6 +70,10 @@ final class PopoverBubble: ExpoView {
 
   override func layout() {
     super.layout()
+    apply()
+  }
+
+  @objc private func interfaceScaleDidChange() {
     apply()
   }
 
@@ -115,30 +123,36 @@ final class PopoverBubble: ExpoView {
     } else {
       let host = NSHostingView(rootView: view)
       host.sizingOptions = []
-      addSubview(host, positioned: .below, relativeTo: overlay)
+      lens.addSubview(host)
       glassHost = host
     }
     glassKey = next
-    glassHost?.frame = bounds
+    glassHost?.frame = lens.bounds
   }
 
   private func apply() {
     let size = bounds.size
-    effect.frame = bounds
+    lens.frame = bounds
+    InterfaceScale.fitPageHost(lens)
+    effect.frame = lens.bounds
     overlay.frame = bounds
     guard size.width > 0, size.height > 0 else { return }
     let path = Self.shape(
       size: size, radius: cornerRadius, edge: arrowEdge, arrowX: arrowX, arrowWidth: arrowWidth, arrowHeight: arrowHeight)
+    let unscale = lens.bounds.width / size.width
+    var toLens = CGAffineTransform(scaleX: unscale, y: unscale)
+    let lensPath = unscale == 1 ? path : path.copy(using: &toLens) ?? path
+    let lensSize = lens.bounds.size
 
-    let key = "\(size.width)x\(size.height) \(cornerRadius) \(arrowEdge.rawValue) \(arrowX) \(arrowWidth) \(arrowHeight)"
-    applyGlass(path: path, key: key)
+    let key = "\(size.width)x\(size.height) \(cornerRadius) \(arrowEdge.rawValue) \(arrowX) \(arrowWidth) \(arrowHeight) \(unscale)"
+    applyGlass(path: lensPath, key: key)
     let glassy = drawsGlass
     if key != maskKey {
       maskKey = key
-      effect.maskImage = NSImage(size: size, flipped: true) { _ in
+      effect.maskImage = NSImage(size: lensSize, flipped: true) { _ in
         guard let context = NSGraphicsContext.current?.cgContext else { return false }
         context.setFillColor(NSColor.black.cgColor)
-        context.addPath(path)
+        context.addPath(lensPath)
         context.fillPath()
         return true
       }

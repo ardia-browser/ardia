@@ -1,5 +1,5 @@
-import { useContext, useMemo, useRef } from "react";
-import { Animated, Pressable, View } from "react-native";
+import { useContext, useMemo } from "react";
+import { Animated, Pressable, StyleSheet, View } from "react-native";
 import { useIsActiveTab, useTab, useWindowId } from "../../state/browser/hooks";
 import { folderIdOfCell } from "../../state/pins/tileFolders";
 import { openTileFolderMenu } from "../../state/sidebar/tileFolderUi";
@@ -23,7 +23,7 @@ import { TabPressArea } from "../sidebar/TabPressArea";
 
 export function PinnedDock({ tabIds }: { tabIds: string[] }) {
   const theme = useTheme();
-  const strip = useContext(DockContext)!;
+  const strip = useContext(DockContext)!.current;
   const geometry = strip.dock!.geometry;
   const width = dockWidth(tabIds.length);
   const box = useMemo(() => Animated.add(strip.grow, width), [strip.grow, width]);
@@ -67,9 +67,8 @@ function PinnedCell({ tabId, geometry, from }: { tabId: string; geometry: DragGe
   const active = useIsActiveTab(tabId);
   const hover = useChipHover();
   const hovered = useChipHovered(hover);
-  const strip = useContext(DockContext);
-  const latestStrip = useRef(strip);
-  latestStrip.current = strip;
+  const stripRef = useContext(DockContext);
+  const strip = stripRef?.current ?? null;
   const dock = strip?.dock;
   const top = strip?.top;
   const end = top && top.slots.length ? top.lefts.at(-1)! + top.slots.at(-1)!.width : MAX_CHIP;
@@ -84,13 +83,14 @@ function PinnedCell({ tabId, geometry, from }: { tabId: string; geometry: DragGe
     width: PINNED_CELL,
     gap: PINNED_SPACING,
     range,
-    cross: dock ? pinOut(() => latestStrip.current, from) : undefined,
+    cross: dock ? pinOut(() => stripRef?.current ?? null, from) : undefined,
     levels: 2,
   });
   const card = useStripCardHover(windowId, tabId, drag.ref, hover);
   if (!tab) return null;
   return (
     <Animated.View ref={drag.ref} {...card} mouseDownCanMoveWindow={false} style={[drag.style, { width: PINNED_CELL, height: ITEM_HEIGHT - 1 }]}>
+      <Animated.View pointerEvents="box-none" style={StyleSheet.absoluteFillObject}>
       <View
         {...drag.panHandlers}
         {...hover.hoverProps}
@@ -112,6 +112,7 @@ function PinnedCell({ tabId, geometry, from }: { tabId: string; geometry: DragGe
           <TabChip tabId={tabId} width={strip.chip} dragged />
         </FadeIn>
       )}
+      </Animated.View>
     </Animated.View>
   );
 }

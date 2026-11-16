@@ -5,6 +5,7 @@ import { backdropTint, opaqueTint, tintForHue, type BackdropTint } from "../../l
 import { isRgbFunction, luminance, mix, over, parseColor, rgbToHsl, toHex } from "../../lib/color";
 import { CARD_INSET, DEFAULT_SIDEBAR_WIDTH } from "../../lib/windowLayout";
 import { SIDEBAR_ROW } from "../../lib/sidebarMetrics";
+import { WINDOW_CHROME } from "../../lib/windowChrome";
 import { arcSelectedFill, colorRoles, HIGH_CONTRAST_INK, ink, INCOGNITO_TINT, withAlpha, PROFILE_COLORS, radius, type ColorRoles, type ProfileColorSpec, type ShadowLevel } from "./tokens";
 import type { BasePalette } from "../../lib/themeFile";
 import { visibleLine, visibleSelection } from "../../lib/selectionContrast";
@@ -263,5 +264,5 @@ export const layout = {
   toolbarButton: 30,
   toolbarIconCenters: [21, 56, 92, 127],
   breadcrumbX: 153,
-  trafficLightsWidth: 78,
+  trafficLightsWidth: WINDOW_CHROME.leadingWidth,
 } as const;

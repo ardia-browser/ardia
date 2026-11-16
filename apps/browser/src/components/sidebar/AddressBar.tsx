@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { Pressable, View, type ViewStyle } from "react-native";
 import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
 import { layout, useTheme } from "../ui/theme";
@@ -11,7 +11,8 @@ import { useHistoryAvailability } from "../../state/tabs/navigation";
 import { toolbarPalette, type ToolbarPalette } from "../ui/toolbarColors";
 import { Button, type ButtonHit, FadeLabel, radius, space, ToolbarRowContext, useHover } from "../ui";
 import { TOOLBAR_ROWS } from "../../lib/toolbarRow";
-import { setUrlAnchor } from "../../state/windows/layout";
+import { setUrlAnchor, useSidebarCaptionRoom, watchSidebarControlsRow } from "../../state/windows/layout";
+import { onInterfaceScaleSettled } from "../../state/settings/interfaceScale";
 import { useSidebarPart } from "../../state/sidebar/chrome";
 import { SIDEBAR_FIELD } from "./geometry";
 import { SIDEBAR_TYPE, TAB_ROW } from "./tokens";
@@ -41,9 +42,10 @@ export function SidebarHeaderTools({ width }: { width: number }) {
   const right = useSidebarSide(windowId) === "right";
   const sidebarHint = useShortcutHint("toggleSidebar");
   const toggleX = headerToggleX(useWindowFullScreen(windowId));
-  const { buttons, step } = navButtonsFitting(width, BUTTON, toggle, toggleX);
+  const usable = width - useSidebarCaptionRoom();
+  const { buttons, step } = navButtonsFitting(usable, BUTTON, toggle, toggleX);
   const shown = tab && navShown ? buttons : [];
-  const last = width - EDGE - BUTTON / 2;
+  const last = usable - EDGE - BUTTON / 2;
   const centres = shown.map((_, i) => last - (shown.length - 1 - i) * step);
   const at = toggle ? [toggleX, ...centres] : centres;
   const plate = Math.min(PLATE, step);
@@ -109,10 +111,15 @@ export function SidebarAddressRow({ width, top }: { width: number; top: number }
   const windowId = useWindowId();
   const tab = useToolbarTab(useActiveTabId());
   const field = useRef<View>(null);
+  const fieldWidth = width - 2 * layout.sidebarInset;
   const anchor = () =>
     field.current?.measureInWindow((x, y, width, height) => {
       if (width && isAddressBarInSidebar(windowId)) setUrlAnchor(windowId, { left: x, top: y, width, sidebar: { height } });
     });
+  const remeasure = useRef(anchor);
+  remeasure.current = anchor;
+  useEffect(() => watchSidebarControlsRow(windowId, () => requestAnimationFrame(() => remeasure.current())), [windowId]);
+  useEffect(() => onInterfaceScaleSettled(() => remeasure.current()), [windowId]);
 
   return (
     <View
@@ -123,9 +130,9 @@ export function SidebarAddressRow({ width, top }: { width: number; top: number }
       <SidebarTextScope>
         <ToolbarRowContext.Provider value={TOOLBAR_ROWS.regular}>
           {tab?.url ? (
-            <PageField tab={tab} windowId={windowId} width={width - 2 * layout.sidebarInset} />
+            <PageField tab={tab} windowId={windowId} width={fieldWidth} />
           ) : (
-            <EmptyField windowId={windowId} tabId={tab?.id} width={width - 2 * layout.sidebarInset} />
+            <EmptyField windowId={windowId} tabId={tab?.id} width={fieldWidth} />
           )}
         </ToolbarRowContext.Provider>
       </SidebarTextScope>

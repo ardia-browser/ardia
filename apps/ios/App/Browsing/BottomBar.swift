@@ -3,36 +3,21 @@ import ArdiaDesign
 import SwiftUI
 
 struct BottomBar: View {
-  enum Arrangement {
-    case row
-    case column(ScreenLayout.SideColumn, CGSize)
-  }
-
   let address: BarAddress
   let isCollapsed: Bool
-  var arrangement = Arrangement.row
-  var sideInset: CGFloat = 0
+  let sideInset: CGFloat
+  let sidesShown: Bool
+  let centreShown: Bool
   let actions: BarActions
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
-    if case .column(let column, let size) = arrangement {
-      SideColumnStack(column: column, size: size) {
-        BarTabsButton(actions: actions)
-        BarSiteButton(address: address, action: actions.onAddress)
-        BarRoundMenuButton(action: actions.onMore)
-        BarPlusButton(action: actions.onPlus)
-      }
-    } else {
-      rowBar
-    }
-  }
-
-  private var rowBar: some View {
     ZStack(alignment: .bottom) {
       if isCollapsed {
         BarCollapsedPill(address: address, action: actions.onExpand)
+          .reportsBarAnchor(.page, face: .collapsedAddress(address))
+          .barReturn(.centre, isShown: centreShown)
           .transition(.scale(scale: reduceMotion ? 1 : 1 / BrowseLayout.barCollapsedScale, anchor: .bottom).combined(with: .opacity))
       } else {
         expanded
@@ -43,17 +28,31 @@ struct BottomBar: View {
     .padding(.horizontal, sideInset + BrowseLayout.barEdgeInset)
   }
 
-  @ViewBuilder
   private var expanded: some View {
-    switch arrangement {
-    case .row:
-      HStack(spacing: BrowseLayout.barGap) {
-        BarTabsButton(actions: actions)
-        BarAddressField(address: address, onAddress: actions.onAddress, onMore: actions.onMore)
-        BarPlusButton(action: actions.onPlus)
-      }
-    case .column:
-      EmptyView()
+    HStack(spacing: BrowseLayout.barGap) {
+      BarTabsButton(actions: actions)
+        .barReturn(.leading, isShown: sidesShown)
+      BarAddressField(address: address, onAddress: actions.onAddress, onMore: actions.onMore)
+        .reportsBarAnchor(.page, face: .address(address))
+        .barReturn(.centre, isShown: centreShown)
+      BarPlusButton(action: actions.onPlus)
+        .barReturn(.trailing, isShown: sidesShown)
+    }
+  }
+}
+
+struct BarColumn: View {
+  let address: BarAddress
+  let column: ScreenLayout.SideColumn
+  let size: CGSize
+  let actions: BarActions
+
+  var body: some View {
+    SideColumnStack(column: column, size: size) {
+      BarTabsButton(actions: actions)
+      BarSiteButton(address: address, action: actions.onAddress)
+      BarRoundMenuButton(action: actions.onMore)
+      BarPlusButton(action: actions.onPlus)
     }
   }
 }

@@ -65,13 +65,13 @@ test("unavailable choices map to exact settings ids and the Engines pane", () =>
   const unrouted = ["general.littleArdiaOpensNewTabLinks", "general.openLinksInLittleArdia", "privacy.commandScrollZoom", "tabs.appLinksFirst", "tabs.peekLinksToOtherSites", "tabs.popupsOpenAsTabs", "tabs.tabReorderHaptics"];
   const routedRows = { commandScrollZoom: true, littleArdiaNewTabLinks: true, peekOtherSites: true, popupsOpenAsTabs: true, haptics: true, linksFromOtherApps: true };
   const none = linuxCapabilities(fakeHost().host);
-  assert.deepEqual([...unavailableSettingIds(none, ids)].sort(), [...unrouted, "advanced.cliControl", "advanced.cliInstall", "advanced.compactCliPill", "advanced.unloadProfilesAfter", "appearance.pageScrollBars", "engines.defaultEngine", "engines.protectedVideo", "general.defaultBrowser", "general.openAtLogin", "privacy.blockAutoplayEverywhere", "tabs.videoUpscaling"].sort());
+  assert.deepEqual([...unavailableSettingIds(none, ids)].sort(), [...unrouted, "advanced.cliControl", "advanced.cliInstall", "advanced.compactCliPill", "advanced.unloadProfilesAfter", "appearance.pageScrollBars", "engines.defaultEngine", "engines.protectedVideo", "general.autoUpdate", "general.defaultBrowser", "general.openAtLogin", "privacy.blockAutoplayEverywhere", "tabs.videoUpscaling"].sort());
   for (const [capability, rows] of Object.entries({ commandScrollZoom: ["privacy.commandScrollZoom"], littleArdiaNewTabLinks: ["general.littleArdiaOpensNewTabLinks"], peekOtherSites: ["tabs.peekLinksToOtherSites"], popupsOpenAsTabs: ["tabs.popupsOpenAsTabs"], haptics: ["tabs.tabReorderHaptics"], linksFromOtherApps: ["general.openLinksInLittleArdia", "tabs.appLinksFirst"] })) {
     const shown = unavailableSettingIds({ ...none, [capability]: true }, ids);
     assert.deepEqual(unrouted.filter((id) => !shown.has(id)), rows, capability);
   }
   assert.deepEqual([...unavailablePanes(none)], ["engines"]);
-  assert.deepEqual([...unavailableSettingIds({ ...none, defaultBrowser: true, launchAtLogin: true, thinScrollBars: true, cliControl: true, cliInstall: true, videoUpscaling: true, unloadIdleProfiles: true, blockAutoplayEverywhere: true, ...routedRows }, ids)].sort(), ["engines.defaultEngine", "engines.protectedVideo"]);
+  assert.deepEqual([...unavailableSettingIds({ ...none, defaultBrowser: true, launchAtLogin: true, thinScrollBars: true, cliControl: true, cliInstall: true, videoUpscaling: true, unloadIdleProfiles: true, blockAutoplayEverywhere: true, ...routedRows }, ids)].sort(), ["engines.defaultEngine", "engines.protectedVideo", "general.autoUpdate"]);
   const cliRows = (capabilities) => [...unavailableSettingIds(capabilities, ids)].filter((id) => id.startsWith("advanced.cli")).sort();
   assert.deepEqual(cliRows({ ...none, cliControl: true }), ["advanced.cliInstall"]);
   assert.deepEqual(cliRows({ ...none, cliInstall: true }), ["advanced.cliControl", "advanced.cliInstall"]);

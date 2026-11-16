@@ -73,3 +73,41 @@ let installScrollViewInsetFix: Void = {
     method_setImplementation(method, imp)
   }
 }()
+
+enum StripWheel {
+  static let identifier = "ardia-top-strip"
+  static let pointsPerLine: CGFloat = 40
+
+  static func tagged(_ scroll: NSScrollView) -> Bool {
+    scroll.accessibilityIdentifier() == identifier || scroll.superview?.accessibilityIdentifier() == identifier
+  }
+
+  static func redirect(_ event: NSEvent, in scroll: NSScrollView) -> Bool {
+    guard event.phase.isEmpty, event.momentumPhase.isEmpty, !event.hasPreciseScrollingDeltas,
+          !event.modifierFlags.contains(.shift), abs(event.scrollingDeltaY) > abs(event.scrollingDeltaX),
+          tagged(scroll), let document = scroll.documentView else { return false }
+    let clip = scroll.contentView
+    let end = max(0, document.frame.width - clip.bounds.width)
+    let x = min(end, max(0, clip.bounds.origin.x - event.scrollingDeltaY * pointsPerLine))
+    if abs(x - clip.bounds.origin.x) >= 0.5 {
+      clip.scroll(to: NSPoint(x: x, y: clip.bounds.origin.y))
+      scroll.reflectScrolledClipView(clip)
+    }
+    return true
+  }
+}
+
+let installStripWheel: Void = {
+  guard let cls = NSClassFromString("RCTCustomScrollView"),
+        let method = class_getInstanceMethod(cls, #selector(NSResponder.scrollWheel(with:))) else { return }
+  typealias Wheel = @convention(c) (AnyObject, Selector, NSEvent) -> Void
+  let original = unsafeBitCast(method_getImplementation(method), to: Wheel.self)
+  let block: @convention(block) (AnyObject, NSEvent) -> Void = { receiver, event in
+    if let scroll = receiver as? NSScrollView, StripWheel.redirect(event, in: scroll) { return }
+    original(receiver, #selector(NSResponder.scrollWheel(with:)), event)
+  }
+  let imp = imp_implementationWithBlock(block)
+  if !class_addMethod(cls, #selector(NSResponder.scrollWheel(with:)), imp, method_getTypeEncoding(method)) {
+    method_setImplementation(method, imp)
+  }
+}()

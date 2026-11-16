@@ -73,7 +73,7 @@ test("WebKit tabs follow the user's sight of their window the way Chromium views
   assert.match(sight, /forName: (?:NSNotification\.Name\.)?ArdiaWindowSeenDidChange, object: window/);
   assert.match(sight, /let activeCapture = webView\?\.cameraCaptureState == \.active \|\| webView\?\.microphoneCaptureState == \.active/);
   assert.match(sight, /playing: !playingFrames\.isEmpty \|\| activeCapture/);
-  assert.match(tab, /override func viewDidMoveToWindow\(\) \{ super\.viewDidMoveToWindow\(\); watchSight\(\) \}/);
+  assert.match(tab, /override func viewDidMoveToWindow\(\) \{\n    super\.viewDidMoveToWindow\(\)\n    if window != nil \{ followInterfaceScale\(\) \}\n    watchSight\(\)\n  \}/);
   assert.match(tab, /var visible = true \{ didSet \{ updateHidden\(\); updateSight\(\) \} \}/);
 });
 

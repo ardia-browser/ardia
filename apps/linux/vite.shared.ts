@@ -100,7 +100,7 @@ export function webShellConfig(options: { plugins?: Plugin[]; aliases?: { find: 
     },
     resolve: {
       dedupe: ["react", "react-dom", "react-native-web"],
-      extensions: [".web.tsx", ".web.ts", ".web.js", ".tsx", ".ts", ".mjs", ".js", ".jsx", ".json"],
+      extensions: [".linux.tsx", ".linux.ts", ".web.tsx", ".web.ts", ".web.js", ".tsx", ".ts", ".mjs", ".js", ".jsx", ".json"],
       alias: [
         ...(options.aliases ?? []),
         { find: /^react-native\/Libraries\/Animated\/useAnimatedProps$/, replacement: `${reactNativeWeb}/dist/vendor/react-native/Animated/useAnimatedProps.js` },

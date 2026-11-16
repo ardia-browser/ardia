@@ -17,6 +17,7 @@
 #include "chrome/browser/ardia/ac_web3_internal.h"
 #include "net/base/ip_address.h"
 #include "net/base/load_flags.h"
+#include "net/base/port_util.h"
 #include "net/base/url_util.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/public/cpp/resource_request.h"
@@ -55,7 +56,10 @@ std::map<uint64_t, GURL>& Rpcs() {
 }
 
 bool UsableRpcUrl(const GURL& url) {
-  if (!url.is_valid() || url.has_ref()) return false;
+  if (!url.is_valid() || url.has_ref() ||
+      !net::IsPortAllowedForScheme(url.EffectiveIntPort(), url.scheme())) {
+    return false;
+  }
   if (url.SchemeIs("https")) return true;
   return url.SchemeIs("http") && net::IsLocalhost(url);
 }

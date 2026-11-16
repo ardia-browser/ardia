@@ -220,7 +220,7 @@ bool Resolver::EnsureRpc(uint64_t chain) {
          "web3:// needs an RPC for chain " + base::NumberToString(chain),
          "Ardia reads web3:// pages straight from the chain, through an RPC "
          "you choose. Add one for chain " +
-             base::NumberToString(chain) + " in Settings, then reload.");
+             base::NumberToString(chain) + " in Settings \u203a Advanced \u203a web3://, then reload.");
     return false;
   }
   endpoint_ = std::move(*endpoint);

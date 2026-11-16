@@ -27,7 +27,10 @@ export const emitCommand = (event: CommandEvent) => emitWebCommand(ardiaHost
   ? { ...event, windowId: ardiaHost!.bootstrap.windowId }
   : event);
 
-export const menuShortcuts = async () => linuxMenuShortcuts(useBrowser.getState().settings.shortcuts);
+export const menuShortcuts = async () => {
+  const state = useBrowser.getState();
+  return linuxMenuShortcuts(state.settings.shortcuts, state.profileOrder, state.profiles);
+};
 
 const closeToken = (request: WindowCloseRequest) => JSON.stringify(request);
 const ownWindowId = ardiaHost?.bootstrap.windowId ?? "";

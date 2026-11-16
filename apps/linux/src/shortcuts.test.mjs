@@ -53,6 +53,17 @@ test("numbered profile commands use native profile identities and skip missing p
   assert(!commandAt(bindings, 51, 16));
 });
 
+test("per-profile shortcut rows are named after their profiles, under the menus that hold them", () => {
+  const profiles = { default: { name: "Personal" }, "p-mwjexflnk00i-p": { name: "Gallant AI" } };
+  const items = linuxMenuShortcuts({}, ["default", "p-mwjexflnk00i-p"], profiles);
+  const row = (id) => items.find((item) => item.id === id);
+  assert.deepEqual([row("switchProfile:default").title, row("switchProfile:default").path], ["Personal", ["Window", "Profiles"]]);
+  assert.deepEqual([row("switchProfile:p-mwjexflnk00i-p").title, row("switchProfile:p-mwjexflnk00i-p").defaultKey], ["Gallant AI", "2"]);
+  assert.deepEqual([row("newLittleArdia:p-mwjexflnk00i-p").title, row("newLittleArdia:p-mwjexflnk00i-p").path], ["Gallant AI", ["File", "New Little Ardia Window in Profile"]]);
+  assert.deepEqual(row("nextProfile").path, ["Window", "Profiles"]);
+  assert(!items.some((item) => item.title.includes("p-mwjexflnk00i-p")));
+});
+
 test("function-key bindings record and dispatch without modifiers", () => {
   const combo = keyboardCombo(event("F6"));
   const binding = commandAt(linuxBindings({ focusCommandBar: [combo.key] }), combo.keyCode, combo.flags);

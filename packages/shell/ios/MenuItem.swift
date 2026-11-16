@@ -12,6 +12,11 @@ struct MenuItem: Record {
   @Field var enabled: Bool = true
   @Field var checked: Bool = false
   @Field var alternate: Bool = false
+  @Field var keepOpen: Bool = false
   @Field var children: [MenuItem]?
   @Field var share: Bool = false
+
+  static func anyKeepOpen(_ items: [MenuItem]) -> Bool {
+    items.contains { $0.keepOpen || anyKeepOpen($0.children ?? []) }
+  }
 }

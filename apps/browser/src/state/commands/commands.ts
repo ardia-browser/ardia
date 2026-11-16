@@ -1,4 +1,3 @@
-import { closeWindow as closeNativeWindow } from "../../platform/windows";
 import { copyText } from "../../platform/clipboard";
 import { openExternalURL } from "../../platform/app";
 import { pickFiles, prompt } from "../../platform/dialogs";
@@ -21,21 +20,26 @@ import {
   toggleSiteMute,
 } from "../browser/actions";
 import { bookmarkAllTabs, bookmarkTab } from "../bookmarks/actions";
-import { exportBookmarksFromWindow } from "../bookmarks/exportHtml";
+import { isBookmarklet, runBookmarklet } from "../bookmarks/bookmarklets";
+import { exportBookmarksFromWindow, toggleDownloadsPanel } from "./platformCommands";
 import { requestClearData } from "../profiles/clearDataRequest";
+import { showHistory } from "../history/showHistory";
 import { openInternalPage } from "../pages/urls";
 import { isUtilityWindowId, openImport, openSettings, SETTINGS_WINDOW_ID } from "../settings/settingsWindows";
 import { focusSettingsSearch } from "../settings/searchState";
 import { closePanelToHeroBar, focusHeroBar } from "../omnibox/barState";
 import { closeNewTabBar, isEmptyCardTab, showNewTabBar, toggleNewTabBar } from "../omnibox/newTabBar";
 import { NEW_TAB_BAR_POLICY } from "../omnibox/newTabBarPolicy";
-import { addressBarInSidebar, commandBarCentred } from "../windows/layout";
+import { addressBarInSidebar } from "../windows/layout";
+import { commandKeyPlacement } from "../omnibox/barPlacement";
 import { addFolderToSidebar, restoreArcFolders } from "../bookmarks/bookmarkGroups";
 import { withLivePage } from "../tabs/livePage";
 import { webviews } from "../../platform/webviews";
 import { togglePageEngine } from "../engines/actions";
+import { runReaderCommand } from "../reader/reader";
 import { goBack, goForward } from "../tabs/navigation";
-import { openSplitPane } from "../splits/actions";
+import { awaitsFirstPage } from "../tabs/pendingAddress";
+import { focusSplitPane, openSplitPane } from "../splits/actions";
 import { isAppCommand, LITTLE_ARDIA_PAGE_COMMANDS, settingChange, variantArg } from "./commandCatalog";
 import { APP_COMMAND_HANDLERS } from "./appCommands";
 import { runSidebarCommand } from "../sidebar/commands";
@@ -47,6 +51,9 @@ import { requestAutofill } from "../site/autofill";
 import { copyPageUrl, jumpToSelection } from "../site/selection";
 import { shareTab } from "../site/share";
 import { groupOf } from "../pins/tabGrouping";
+import { selectedTabIds } from "../pins/organize";
+import { noteSelectionClosedByKey } from "../telemetry/usage";
+import { noteUrlCopied } from "../telemetry/urlCopies";
 import { isSmall, mainWindowFor, newWindowProfile, originalProfile } from "../windows/small";
 import {
   closeLittleArdia,
@@ -61,6 +68,8 @@ import { peekTabId } from "../peek/peek";
 import { expectFocus, findFocus } from "../focus/focusClaims";
 import { isWebPageUrl } from "../../lib/url";
 import { findStep, openFind } from "../find/actions";
+import { runHidingCommand } from "../site/hiddenElements";
+import { requestWindowClose } from "../windows/windowClose";
 
 const newOrId = (arg: string) => (arg === "new" ? null : arg);
 
@@ -71,7 +80,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
   const s = useBrowser.getState();
 
   if (isUtilityWindowId(requested)) {
-    if (command === "closeTab") return void closeNativeWindow(requested!);
+    if (command === "closeTab") return requestWindowClose(requested!);
     if (command === "findInPage" && requested === SETTINGS_WINDOW_ID) return focusSettingsSearch();
     requested = null;
   }
@@ -144,6 +153,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
   const page = tab?.url ? tab : undefined;
   const web = tabId ? webviews.get(tabId) : undefined;
   const ui = s.windowUi[windowId];
+  if (page && (runHidingCommand(command, page.id) || runReaderCommand(command, page.id))) return;
   if (!targeted && runSidebarCommand(command, arg, windowId)) return;
 
   switch (command) {
@@ -154,12 +164,14 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
       return s.reopenClosed(windowId);
     case "restoreClosed":
       return arg ? s.restoreClosed(arg, windowId) : undefined;
-    case "focusCommandBar":
-      if (page) return s.openPanel(windowId, page.url);
+    case "focusCommandBar": {
+      const placement = commandKeyPlacement(s, windowId);
+      if (page) return s.openPanel(windowId, page.url, undefined, placement);
       if (isEmptyCardTab(s, tab) && showNewTabBar(windowId)) return;
-      if (tab && addressBarInSidebar(s, windowId) && !commandBarCentred(s, windowId)) return s.openPanel(windowId, "");
-      if (!focusHeroBar(windowId, tabId)) return tab ? s.openPanel(windowId, "") : undefined;
+      if (tab && addressBarInSidebar(s, windowId) && placement === "field") return s.openPanel(windowId, "", undefined, placement);
+      if (!focusHeroBar(windowId, tabId)) return tab ? s.openPanel(windowId, "", undefined, placement) : undefined;
       return ui?.panel.open ? s.closePanel(windowId) : undefined;
+    }
     case "closeTab":
       if (targeted) return void closeTab(targeted);
       if (ui?.panel.newTab) {
@@ -168,6 +180,15 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
         return void closeTab(tabId);
       }
       if (ui?.panel.open) return tabId ? closePanelToHeroBar(windowId, tabId, "closeKey") : s.closePanel(windowId);
+      if ((s.selection[windowId]?.length ?? 0) > 1) {
+        const ids = selectedTabIds(s, windowId);
+        if (ids.length > 1) {
+          s.closeTabs(ids);
+          s.setSelection(windowId, []);
+          noteSelectionClosedByKey(ids.length);
+          return;
+        }
+      }
       return tabId ? void closeTab(tabId) : undefined;
     case "print":
       return void web?.print();
@@ -189,7 +210,9 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
     case "copyUrl":
       return page ? void copyPageUrl(page.id) : undefined;
     case "copyUrlAsMarkdown":
-      return page ? copyText(markdownLink(page.customTitle || page.title, page.url)) : undefined;
+      if (!page) return;
+      noteUrlCopied(awaitsFirstPage(page.id));
+      return copyText(markdownLink(page.customTitle || page.title, page.url));
     case "findInPage":
       if (page) expectFocus(windowId, findFocus(page.id));
       return page ? openFind(page.id, { replace: false }) : undefined;
@@ -214,9 +237,8 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
     case "openSplitPane":
       return void openSplitPane(windowId);
     case "focusNextPane":
-      return s.focusPane(windowId, 1);
     case "focusPreviousPane":
-      return s.focusPane(windowId, -1);
+      return focusSplitPane(windowId, command === "focusNextPane" ? 1 : -1);
     case "toggleSidebar":
       return s.toggleSidebar(windowId);
     case "zoomIn":
@@ -226,7 +248,6 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
     case "zoomReset":
       return page ? void web?.zoomStep(0) : undefined;
     case "devTools":
-      return void web?.showDevTools();
     case "toggleDevTools":
       return void web?.showDevTools("toggle");
     case "inspectElements":
@@ -278,6 +299,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
       return page && arg ? void addBookmarkToFolder(windowId, page.id, arg) : undefined;
     case "openBookmark": {
       const node = arg ? s.bookmarks.nodes[arg] : undefined;
+      if (node?.kind === "url" && isBookmarklet(node.url)) return void runBookmarklet(node.url, windowId, tabId);
       return node?.kind === "url" && tab ? s.navigate(tab.id, node.url) : undefined;
     }
     case "togglePageEngine":
@@ -285,11 +307,11 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
     case "toggleMute":
       return page ? (arg === "site" ? toggleSiteMute(page.id) : toggleMute(page.id)) : undefined;
     case "downloads":
-      return s.setDownloadsOpen(windowId, !ui?.downloadsOpen);
+      return toggleDownloadsPanel(windowId, !ui?.downloadsOpen);
     case "cast":
       return void toggleCastPicker(windowId, tabId);
     case "showHistory":
-      return openInternalPage("history", windowId);
+      return showHistory(windowId);
     case "clearBrowsingData":
       openInternalPage("history", windowId);
       return requestClearData(windowId);

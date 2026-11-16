@@ -2,6 +2,9 @@ import json
 import sys
 from pathlib import Path
 
+from ardia_cli.printable import complain, say
+from ardia_cli import endpoint
+
 SCRIPTS_DESCRIPTION = """\
 Write userscripts in TypeScript or JavaScript, test them against real pages, and install them so Ardia runs them.
 
@@ -69,6 +72,10 @@ ENDPOINT_EPILOG = """\
 Endpoint: --ws, else --port (plain DevTools servers only), else $ARDIA_CDP_URL, else
 <data dir>/Chromium/ArdiaControl.json with --data-dir or $ARDIA_DATA_DIR, else the installed Ardia's.
 """
+if endpoint.LINUX:
+    ENDPOINT_EPILOG = ENDPOINT_EPILOG.replace("<data dir>/Chromium/ArdiaControl.json", "<data dir>/ArdiaControl.json").replace(
+        "the installed Ardia's.", f"the installed Ardia's\n({endpoint.LINUX_DATA_DIR_SHOWN})."
+    )
 UNKNOWN_EXIT = 3
 
 
@@ -136,17 +143,6 @@ def run(args, parser) -> int:
         return listing(args)
     parser.parse_args(["scripts", "--help"])
     return 0
-
-
-def say(text: str) -> None:
-    sys.stdout.write(text + "\n")
-    sys.stdout.flush()
-
-
-def complain(text: str) -> None:
-    sys.stdout.flush()
-    sys.stderr.write(text + "\n")
-    sys.stderr.flush()
 
 
 def new(args) -> int:

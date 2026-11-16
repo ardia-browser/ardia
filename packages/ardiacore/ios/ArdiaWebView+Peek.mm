@@ -22,11 +22,19 @@ static const NSEventModifierFlags kPeekKeyMask = NSEventModifierFlagOption | NSE
 static NSEventModifierFlags gPeekUpKeys = 0;
 static CFTimeInterval gPeekUpAt = -1;
 static __weak ArdiaWebView *gPeekUpView;
+static NSPoint gPeekUpPoint;
 static NSUInteger gPeekUpSeq = 0;
 static NSUInteger gPeekUsedSeq = 0;
 static BOOL gPeekPressedSinceUp = NO;
 static const CFTimeInterval kPeekGestureLifetime = 10;
 static const CFTimeInterval kPeekFallbackLifetime = 60;
+static const CFTimeInterval kUserActivationLifespan = 5;
+static const NSEventMask kActivatingInputMask = NSEventMaskLeftMouseDown | NSEventMaskLeftMouseUp | NSEventMaskRightMouseDown |
+                                                NSEventMaskOtherMouseDown | NSEventMaskOtherMouseUp | NSEventMaskKeyDown;
+static NSMapTable<NSWindow *, NSNumber *> *InputTimesByWindow() {
+  static NSMapTable *times = [NSMapTable weakToStrongObjectsMapTable];
+  return times;
+}
 
 static ArdiaWebView *PageViewUnder(NSEvent *event) {
   NSView *content = event.window.contentView;
@@ -56,8 +64,10 @@ namespace ardia_web_view {
 void InstallPeekMonitor() {
   static id monitor;
   if (monitor) return;
-  monitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown | NSEventMaskLeftMouseUp
+  monitor = [NSEvent addLocalMonitorForEventsMatchingMask:kActivatingInputMask
                                                   handler:^NSEvent *(NSEvent *event) {
+                                                    if (event.window) [InputTimesByWindow() setObject:@(CACurrentMediaTime()) forKey:event.window];
+                                                    if (event.type != NSEventTypeLeftMouseDown && event.type != NSEventTypeLeftMouseUp) return event;
                                                     if (event.type == NSEventTypeLeftMouseDown) {
                                                       gPeekPressedSinceUp = YES;
                                                       return event;
@@ -65,6 +75,7 @@ void InstallPeekMonitor() {
                                                     gPeekUpKeys = event.modifierFlags & kPeekKeyMask;
                                                     gPeekUpAt = CACurrentMediaTime();
                                                     gPeekUpView = PageViewUnder(event);
+                                                    gPeekUpPoint = event.locationInWindow;
                                                     gPeekPressedSinceUp = NO;
                                                     gPeekUpSeq++;
                                                     return event;
@@ -92,6 +103,18 @@ void PeekTrace(NSDictionary *entry) {
 
 NSString *SplitLinkModifier() {
   return [gSplitLinkModifier isEqualToString:@"alt"] && ![gPeekModifier isEqualToString:@"alt"] ? @"alt" : @"altShift";
+}
+
+NSDictionary *RecentClickPoint(ArdiaWebView *view) {
+  NSWindow *window = view.window;
+  if (!window || gPeekUpView != view || gPeekUpAt < 0 || CACurrentMediaTime() - gPeekUpAt > kPeekGestureLifetime) return nil;
+  const NSPoint inRoot = RootPointFromWindow(window, gPeekUpPoint);
+  return @{@"x" : @(inRoot.x), @"y" : @(inRoot.y)};
+}
+
+BOOL MayHoldUserActivation(NSWindow *window) {
+  NSNumber *at = window ? [InputTimesByWindow() objectForKey:window] : nil;
+  return at && CACurrentMediaTime() - at.doubleValue <= kUserActivationLifespan;
 }
 
 NSString *PeekConfigJSON(ArdiaWebView *view) {
@@ -258,18 +281,19 @@ static NSString *LinkKeyAction(NSString *key) {
   if ([action isEqualToString:@"split"]) return [self emit:@"openWindow" payload:@{@"url" : url, @"disposition" : @"split", @"userGesture" : @YES}];
   double x, y;
   NSPoint point;
+  NSView *page = _tab.view;
+  const NSRect area = page.superview == self ? page.frame : self.bounds;
   if (main && Finite(dict, @"x", &x) && Finite(dict, @"y", &y)) {
     const CGFloat scale = window.backingScaleFactor > 0 ? window.backingScaleFactor : 1;
-    point = NSMakePoint(x / scale, y / scale);
+    point = NSMakePoint(NSMinX(area) + x / scale, NSMinY(area) + y / scale);
   } else {
     point = [self convertPoint:[window convertPointFromScreen:NSEvent.mouseLocation] fromView:nil];
   }
-  point.x = MIN(MAX(point.x, 0), NSWidth(self.bounds));
-  point.y = MIN(MAX(point.y, 0), NSHeight(self.bounds));
-  const NSPoint inWindow = [self convertPoint:point toView:nil];
-  const CGFloat top = window.contentView.frame.size.height - inWindow.y;
+  point.x = MIN(MAX(point.x, NSMinX(area)), NSMaxX(area));
+  point.y = MIN(MAX(point.y, NSMinY(area)), NSMaxY(area));
+  const NSPoint inRoot = RootPointFromWindow(window, [self convertPoint:point toView:nil]);
   [self emit:@"openWindow"
-      payload:@{@"url" : url, @"disposition" : @"peek", @"userGesture" : @YES, @"point" : @{@"x" : @(inWindow.x), @"y" : @(top)}}];
+      payload:@{@"url" : url, @"disposition" : @"peek", @"userGesture" : @YES, @"site" : @(otherSite), @"point" : @{@"x" : @(inRoot.x), @"y" : @(inRoot.y)}}];
 }
 
 @end

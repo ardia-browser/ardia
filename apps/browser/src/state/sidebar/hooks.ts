@@ -1,29 +1,33 @@
 import { useShallow } from "zustand/react/shallow";
 import { useBrowser } from "../browser/store";
-import { activeTabId, tabTitle, viewTabIds } from "../browser/model";
-import { liveTabPlace } from "../live/rows";
+import { activeTabId, isPinnedRow, tabTitle, viewTabIds } from "../browser/model";
+import { liveTabOpen, liveTabPlace, stackMembers } from "../live/rows";
+import { useLive } from "../live/store";
 import type { Tab } from "../browser/types";
 import { awayFromPin } from "../pins/organize";
 import { cleanedTabsFor } from "../pins/closedTabs";
 import { groupLabel } from "../pins/tabGrouping";
-import { canTidyPins } from "../pins/tidyPins";
+import { offersTidyTabs } from "../pins/tidy";
 import { folderIn } from "../pins/tileFolders";
+import { ownIcon } from "../pins/rowIcons";
+import { usePage } from "../tabs/pageState";
+import { usePeekOpenedFrom } from "../peek/hooks";
+import { useTabShared } from "../media/screenShare";
 import { useStoreWhile } from "../tabs/tabWatch";
-import { splitOf, splitRowPanes } from "../splits/splits";
+import { splitRowPanes } from "../splits/splits";
 import { downloadsIn } from "../downloads/downloadsSlice";
-import { groupEntries, keptEntry, sidebarEntries } from "./entries";
+import { groupEntries, keptEntries, showsExtraTabs, sidebarEntries } from "./entries";
 import { groupTabIds } from "./groupPanelRows";
 import { capture, type Capture } from "./listCapture";
 import { pinnedCollapsed, pinnedKept } from "./pinnedFold";
 import { useSidebarUi, type Hover } from "./sidebarUi";
+import { useShownSidebarWidth } from "./shownWidth";
 
 export function useSidebarWidth(windowId: string): number {
-  const saved = useBrowser((s) => s.settings.sidebarWidth);
+  const shown = useShownSidebarWidth(windowId);
   const dragging = useSidebarUi((u) => u.dragWidth[windowId]);
-  return dragging ?? saved;
+  return dragging ?? shown;
 }
-
-export const useIsInSplit = (tabId: string) => useBrowser((s) => !!splitOf(s, tabId));
 
 export const useDragGhostLabel = (folderName: string | undefined, groupId: string | undefined, tab: Tab | undefined) =>
   useBrowser((s) => folderName ?? (groupId && s.groups[groupId] ? groupLabel(s, s.groups[groupId]!) : tab ? tabTitle(tab) : ""));
@@ -35,7 +39,16 @@ export const useSplitRowPanes = (splitId: string) => useBrowser(useShallow((s) =
 export const useGroupTabIds = (groupId: string) => useBrowser(useShallow((s) => s.groups[groupId]?.tabIds ?? NO_TABS));
 
 export const useIconPickerCurrent = (kind: "tab" | "group" | "live" | "folder", id: string, liveIcon: string | null | undefined) =>
-  useBrowser((s) => (kind === "tab" ? s.tabs[id]?.customIcon : kind === "live" ? liveIcon : s.groups[id]?.icon) ?? null);
+  useBrowser((s) => (kind === "tab" ? ownIcon(s.tabs[id]) : kind === "live" ? liveIcon : s.groups[id]?.icon) ?? null);
+
+export function useTabBadged(tabId: string): boolean {
+  const capturing = usePage(tabId, (p) => !!p.mediaAccess);
+  const shared = useTabShared(tabId);
+  const peeked = !!usePeekOpenedFrom(tabId);
+  return capturing || shared || peeked;
+}
+
+export const useIsPinnedRow = (kind: "tab" | "group" | "live" | "folder", id: string) => useBrowser((s) => kind === "tab" && isPinnedRow(s.tabs[id]));
 
 export const useCapturedGroupEntries = (groupId: string, captured: Capture) =>
   useBrowser(
@@ -51,19 +64,13 @@ export const useCapturedSidebarEntries = (windowId: string, profileId: string, c
     return capture(captured, s, entries.list, entries);
   });
 
-export const useKeptEntry = (windowId: string, profileId: string, entries: string[]) => useBrowser((s) => keptEntry(s, windowId, profileId, entries));
+export const useKeptEntries = (windowId: string, profileId: string, groupId: string) => useBrowser(useShallow((s) => keptEntries(s, windowId, profileId, groupId)));
+
+export const useShowsExtraTabs = (windowId: string, profileId: string, groupId: string) => useBrowser((s) => showsExtraTabs(s, windowId, profileId, groupId));
 
 export const usePinnedCollapsed = (profileId: string) => useBrowser((s) => pinnedCollapsed(s, profileId));
 
 export const usePinnedKept = (windowId: string, profileId: string, entries: string[]) => useBrowser((s) => pinnedKept(s, windowId, profileId, entries));
-
-export const useGroupFirstTabIcon = (groupId: string) =>
-  useBrowser(
-    useShallow((s) => {
-      const t = s.tabs[s.groups[groupId]?.tabIds[0] ?? ""];
-      return t && { url: t.url, favicon: t.favicon, customIcon: t.customIcon, profileId: t.profileId };
-    }),
-  );
 
 export const useHasDownloads = (windowId: string) => useBrowser((s) => downloadsIn(s, windowId).length > 0);
 
@@ -74,7 +81,7 @@ const NO_CELLS: string[] = [];
 export const useSidebarCells = (windowId: string, profileId: string, offScreen: boolean) =>
   useBrowser((s) => (offScreen ? NO_CELLS : sidebarEntries(s, windowId, profileId).cells));
 
-export const useCanTidyPins = (windowId: string, profileId: string, offScreen: boolean) => useBrowser((s) => !offScreen && canTidyPins(s, windowId, profileId));
+export const useOffersTidyTabs = (windowId: string, profileId: string, skip: boolean) => useBrowser((s) => !skip && offersTidyTabs(s, windowId, profileId));
 
 export const useCleanedCount = (windowId: string) => useBrowser((s) => cleanedTabsFor(s, windowId).length);
 
@@ -113,6 +120,13 @@ export const useLiveActiveTab = (windowId: string, profileId: string, folderId: 
 
 export const useLiveItemTab = (windowId: string, profileId: string, folderId: string, itemId: string) =>
   useBrowser((s) => viewTabIds(s, windowId, profileId).find((id) => s.tabs[id]?.liveItem?.itemId === itemId && s.tabs[id]?.liveItem?.folderId === folderId) ?? null);
+
+export const useLiveTabOpen = (folderId: string, itemIds: string[]) => useBrowser((s) => liveTabOpen(s.tabs, folderId, itemIds));
+
+export function useStackTabOpen(folderId: string, stackId: string) {
+  const ids = useLive(useShallow((s) => stackMembers(s.items[folderId] ?? [], stackId).map((it) => it.id)));
+  return useLiveTabOpen(folderId, ids);
+}
 
 export const useIsActiveIn = (windowId: string, profileId: string, tabId: string | null) => useBrowser((s) => !!tabId && activeTabId(s, windowId, profileId) === tabId);
 

@@ -16,6 +16,7 @@ export type InstalledExtension = {
   sites: string[];
   optionsUrl: string | null;
   pinned: boolean;
+  pinnedIndex?: number;
   incognito: boolean;
   incognitoSplit?: boolean;
   fileAccess: boolean;
@@ -152,6 +153,10 @@ export type ExtensionsSyncApply = {
   record: { on: boolean; inc: boolean; pin: boolean } | { removed: true };
   approval?: { v: string; fps: string[] };
 };
+
+export type ExtensionDisableReason = "user" | "permissions" | "corrupted" | "developer" | "unsupported" | "policy" | "external" | "reload" | "other";
+
+export type ExtensionsLoadHealth = { dropped: number; enabled: number; disabled: Partial<Record<ExtensionDisableReason, number>> };
 
 export type ExtensionsSyncApplied = {
   state: "invalid" | "kept" | "absent" | "cancelled" | "blocked" | "pending" | "refused" | "updating" | "installed";

@@ -4,9 +4,17 @@ import json
 import time
 from dataclasses import dataclass, field
 
-from ardia_cli.browse.errors import BrowseError, CdpError, CdpTimeout, OutcomeUnknown
+from ardia_cli.browse.errors import BrowseError, CdpError, CdpTimeout, Gated, NotFocusable, OutcomeUnknown
 from ardia_cli.browse.inputs import Input
 from ardia_cli.browse.js import LIBRARY
+
+FOCUS_INSIDE = """(el) => {
+  const fields = 'input:not([type=hidden]):not([disabled]), textarea:not([disabled]), select:not([disabled]), [contenteditable=""], [contenteditable=true], [tabindex]:not([tabindex="-1"])';
+  const target = el.matches(fields) ? el : el.querySelector(fields) || el;
+  if (target.focus) target.focus();
+  const active = document.activeElement;
+  return !!active && active !== document.body && (active === el || el.contains(active));
+}"""
 
 WORLD_NAME = "ardia-browse"
 CONSOLE_LIMIT = 1000
@@ -21,6 +29,18 @@ HIDDEN_TAB = (
     "use: ardia browse tab {tab} --show (or open <url> --show)"
 )
 LIVE_WAIT = 0.5
+DETACHED = "Ardia detached this tab from the ardia command while it was in use (the tab closed, crashed, went to sleep or moved to a window Ardia keeps for itself). Run the command again"
+CRASHED = "This tab's page crashed. `ardia browse reload` brings it back; `ardia browse close` or `tab close` closes it"
+CRASH_PROBE = 5.0
+CRASH_SAFE = frozenset({"Inspector.enable", "Page.reload", "Page.navigate"})
+SETUP_NAMES = {
+    "Emulation.setDeviceMetricsOverride": "the viewport or device size", "Emulation.setTouchEmulationEnabled": "touch emulation",
+    "Emulation.setUserAgentOverride": "the device user agent", "Emulation.setGeolocationOverride": "the geolocation",
+    "Emulation.setEmulatedMedia": "the emulated media", "Network.emulateNetworkConditions": "offline mode",
+    "Network.setExtraHTTPHeaders": "the extra headers",
+}
+ROUTE_PATTERNS = [{"urlPattern": "*", "requestStage": "Request"}]
+OTHER_WORLD = "same JavaScript world"
 STALE_CONTEXT = ("Cannot find context", "Execution context was destroyed", "Cannot find default execution context", "Inspected target navigated")
 
 
@@ -126,16 +146,47 @@ class Page:
         self.input = Input(self)
         self.navigations = 0
         self.init_scripts: dict[str, str] = {}
+        self.script_sources: dict[str, str] = {}
+        self.script_ids: dict[str, str] = {}
+        self.overrides: dict[str, dict] = {}
+        self.attaches = 0
+        self.needs_restore = False
         self.url = ""
         self.title = ""
         self.drag_intercepted: asyncio.Future | None = None
+        self.calls: set = set()
+        self.dropped: set = set()
+        self.crashed = False
+        self.needs_enable = False
 
     async def attach(self, browser):
         self.browser = browser
         self.worlds.clear()
-        result = await browser.send("Target.attachToTarget", {"targetId": self.target_id, "flatten": True})
+        try:
+            result = await browser.send("Target.attachToTarget", {"targetId": self.target_id, "flatten": True})
+        except Gated as error:
+            from ardia_cli import command_metrics
+            from ardia_cli.browse import tabs
+
+            command_metrics.flag("attach_refused", True)
+            raise error.during(None, await tabs.where_app_has(self.state, self.target_id) if error.reason else None) from None
         self.session_id = result["sessionId"]
         self.state.sessions[self.session_id] = self
+        self.attaches += 1
+        self.needs_restore = self.needs_restore or self.attaches > 1
+        known, self.crashed = self.crashed, False
+        try:
+            await self.send("Inspector.enable", timeout=CRASH_PROBE)
+        except Gated:
+            self.crashed = known
+        except BrowseError:
+            pass
+        if self.crashed:
+            self.needs_enable = True
+            return
+        await self.enable_page()
+
+    async def enable_page(self):
         await self.send("Page.enable")
         await self.send("Page.setLifecycleEventsEnabled", {"enabled": True})
         await self.refresh_frames()
@@ -145,6 +196,8 @@ class Page:
         if self.network_on:
             self.network_on = False
             await self.enable_network()
+        if self.needs_restore:
+            await self.restore_setup()
         viewport = None
         try:
             metrics = await self.send("Page.getLayoutMetrics")
@@ -153,22 +206,126 @@ class Page:
         except BrowseError:
             pass
         self.input.bind(viewport)
+        self.needs_enable = False
+
+    async def restore_setup(self):
+        from ardia_cli import command_metrics
+
+        self.needs_restore = False
+        lost = []
+        restored = 0
+        for visible in list(self.init_scripts):
+            source = self.script_sources.get(visible)
+            try:
+                if source is None:
+                    raise BrowseError("no source kept")
+                result = await self.send("Page.addScriptToEvaluateOnNewDocument", {"source": source})
+                self.script_ids[visible] = result["identifier"]
+                restored += 1
+            except BrowseError:
+                lost.append(f"init script {visible}")
+                self.init_scripts.pop(visible, None)
+                self.script_sources.pop(visible, None)
+                self.script_ids.pop(visible, None)
+        for method, params in list(self.overrides.items()):
+            try:
+                await self.send(method, params)
+                restored += 1
+            except BrowseError:
+                lost.append(SETUP_NAMES.get(method, method))
+                self.overrides.pop(method, None)
+        claims = self.state.extras.get("claims") or set()
+        if (self.target_id, "route") in claims:
+            params = {"patterns": ROUTE_PATTERNS}
+            if self.state.extras.get("credentials"):
+                params["handleAuthRequests"] = True
+            try:
+                await self.send("Fetch.enable", params)
+                restored += 1
+            except BrowseError:
+                lost.append("network routes and HTTP credentials")
+                claims.discard((self.target_id, "route"))
+                self.release_route_claim()
+        if lost:
+            command_metrics.flag("setup_restore_failed", True)
+            raise BrowseError(
+                f"Ardia detached this tab from the ardia command and it was attached again, but {', '.join(lost)} couldn't be put back, "
+                "so they are off now. Set them again (addinitscript, set …, network route) and run the command again",
+                data={"lost": lost}, code="setup_lost",
+            )
+        if restored:
+            command_metrics.flag("setup_restored", True)
+
+    def release_route_claim(self):
+        config = getattr(self.state, "config", None) or {}
+        if config.get("browse_fd") is None or not config.get("key"):
+            return
+        from ardia_cli.browse import claims
+
+        try:
+            claims.release(config["browse_fd"], config["key"], self.target_id, "route")
+        except (BrowseError, OSError):
+            pass
+
+    def mark_crashed(self):
+        self.crashed = True
+        self.worlds.clear()
+        for call in self.calls:
+            self.dropped.add(call)
+            call.cancel()
+
+    async def revive(self, timeout: float):
+        await self.send("Page.reload", {})
+        await self.recovered(timeout)
+
+    async def recovered(self, timeout: float):
+        from ardia_cli import command_metrics
+        from ardia_cli.browse.state import wait_until
+
+        command_metrics.flag("crashed_reloaded", True)
+        self.crashed = False
+        await self.enable_page()
+
+        async def loaded():
+            return await self.call("() => document.readyState", frame=self.main_frame) == "complete"
+
+        await wait_until(loaded, timeout, 0.1, "the crashed page to reload")
 
     def detach(self):
         if self.session_id:
             self.state.sessions.pop(self.session_id, None)
         self.session_id = None
         self.worlds.clear()
+        for call in self.calls:
+            self.dropped.add(call)
+            call.cancel()
 
     async def send(self, method: str, params: dict | None = None, input_event: bool = False, timeout: float = 30, mutation: bool = False):
         from ardia_cli.browse.connection import is_mutation
 
+        if self.session_id is None:
+            raise BrowseError(DETACHED, code="tab_detached")
+        if self.crashed and method not in CRASH_SAFE:
+            raise BrowseError(CRASHED, code="tab_crashed")
+        call = asyncio.ensure_future(self.browser.send(method, params, self.session_id, timeout))
+        self.calls.add(call)
         try:
-            return await self.browser.send(method, params, self.session_id, timeout)
+            return await call
+        except asyncio.CancelledError:
+            if call not in self.dropped:
+                raise
+            if input_event or mutation or is_mutation(method):
+                raise OutcomeUnknown(f"`{method}`", f"Ardia detached the tab before it answered {method}") from None
+            if self.crashed:
+                raise BrowseError(CRASHED, code="tab_crashed") from None
+            raise BrowseError(DETACHED, code="tab_detached") from None
         except CdpTimeout:
             if input_event or mutation or is_mutation(method):
                 raise OutcomeUnknown(f"`{method}`", f"Ardia didn't answer {method} in {timeout:g}s after it was sent") from None
             raise
+        finally:
+            self.calls.discard(call)
+            self.dropped.discard(call)
 
     async def refresh_frames(self) -> dict:
         tree = (await self.send("Page.getFrameTree"))["frameTree"]
@@ -202,7 +359,7 @@ class Page:
         if frame_id not in self.frames:
             await self.refresh_frames()
             if frame_id not in self.frames:
-                raise BrowseError("That frame is gone. Run `ardia browse frame main` or snapshot again")
+                raise BrowseError("That frame is gone. Run `ardia browse frame main` or snapshot again", code="frame_gone")
         loader = self.loader(frame_id)
         cached = self.worlds.get(frame_id)
         if cached and cached[0] == loader:
@@ -234,7 +391,9 @@ class Page:
             try:
                 result = await self.send("Runtime.callFunctionOn", params, timeout=timeout, mutation=not read)
             except CdpError as error:
-                if not any(marker in error.cdp_message for marker in STALE_CONTEXT):
+                if OTHER_WORLD in error.cdp_message and attempt == 0 and await self.rehome(args, context):
+                    continue
+                if OTHER_WORLD not in error.cdp_message and not any(marker in error.cdp_message for marker in STALE_CONTEXT):
                     raise
                 self.worlds.pop(frame or self.main_frame, None)
                 if read and attempt == 0 and not any(isinstance(a, Element) for a in args):
@@ -246,10 +405,28 @@ class Page:
             if "exceptionDetails" in result:
                 details = result["exceptionDetails"]
                 description = (details.get("exception") or {}).get("description") or details.get("text") or "error"
-                raise BrowseError(description.split("\n    at ")[0])
+                raise BrowseError(description.split("\n    at ")[0], code="page_script_error")
             remote = result.get("result") or {}
             return remote.get("value") if by_value else remote
-        raise BrowseError("the page navigated while reading it; try again")
+        raise BrowseError("the page navigated while reading it; try again", code="page_navigated")
+
+    async def rehome(self, args, context) -> bool:
+        from ardia_cli import command_metrics
+
+        elements = [arg for arg in args if isinstance(arg, Element)]
+        if not elements:
+            return False
+        for element in elements:
+            try:
+                result = await self.send("DOM.resolveNode", {"backendNodeId": element.backend_id, "executionContextId": context})
+            except CdpError:
+                return False
+            remote = result.get("object") or {}
+            if "objectId" not in remote:
+                return False
+            element.object_id = remote["objectId"]
+        command_metrics.flag("element_rehomed", True)
+        return True
 
     async def element_from(self, remote: dict, frame: str, label: str) -> Element | None:
         if not remote or remote.get("subtype") == "null" or remote.get("type") == "undefined" or "objectId" not in remote:
@@ -311,7 +488,20 @@ class Page:
             raise BrowseError(self.show_hint(), data={"tabId": tab, "use": f"ardia browse tab {tab} --show"}, code="tab_hidden")
 
     async def focus_element(self, element: Element):
-        await self.send("DOM.focus", {"backendNodeId": element.backend_id})
+        try:
+            await self.send("DOM.focus", {"backendNodeId": element.backend_id})
+        except CdpError as error:
+            if "focusable" not in error.cdp_message:
+                raise
+            try:
+                landed = await self.call(FOCUS_INSIDE, element, frame=element.frame)
+            except BrowseError:
+                landed = False
+            if not landed:
+                raise NotFocusable(element.label) from None
+            from ardia_cli import command_metrics
+
+            command_metrics.flag("focused_inner_field", True)
 
     async def enable_runtime(self):
         if not self.runtime_on:
@@ -345,6 +535,7 @@ class Page:
                 }
                 self.worlds.pop(frame_id, None)
                 if not frame.get("parentId"):
+                    self.crashed = False
                     self.main_frame = frame_id
                     self.url = self.frames[frame_id]["url"]
                     self.navigations += 1

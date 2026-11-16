@@ -1,4 +1,39 @@
-export const View = () => null;
+import type { ComponentProps, PropsWithChildren } from "react";
+
+export const View = ({ children }: PropsWithChildren) => children ?? null;
+export const Text = () => null;
+export const Image = () => null;
+export const ScrollView = () => null;
+export const TextInput = () => null;
+export const StyleSheet = { create: <Styles,>(styles: Styles) => styles };
+export const PixelRatio = { get: () => 2, roundToNearestPixel: (size: number) => Math.round(size * 2) / 2 };
+
+export const pressables: ComponentProps<typeof import("react-native").Pressable>[] = [];
+export const Pressable = (props: (typeof pressables)[number]) => {
+  pressables.push(props);
+  return null;
+};
+
+export const turboModules: Record<string, unknown> = {};
+
+export const TurboModuleRegistry = {
+  get: (name: string) => turboModules[name] ?? null,
+  getEnforcing: (name: string) => turboModules[name],
+};
+
+const deviceListeners = new Map<string, Set<(payload: unknown) => void>>();
+
+export const DeviceEventEmitter = {
+  addListener: (name: string, listener: (payload: unknown) => void) => {
+    let named = deviceListeners.get(name);
+    if (!named) deviceListeners.set(name, (named = new Set()));
+    named.add(listener);
+    return { remove: () => void named.delete(listener) };
+  },
+  emit: (name: string, payload: unknown) => {
+    for (const listener of [...(deviceListeners.get(name) ?? [])]) listener(payload);
+  },
+};
 
 export const NativeModules: Record<string, unknown> = {
   ACFieldTiming: { setEnabled: () => {}, markFrame: () => {}, lastInput: () => [0, 0], drain: () => [] },
@@ -61,6 +96,9 @@ class AnimatedValue {
   }
   removeListener(id: string) {
     this.listeners.delete(id);
+  }
+  removeAllListeners() {
+    this.listeners.clear();
   }
   interpolate(config: { inputRange: number[]; outputRange: number[] }) {
     return { config, source: this };
@@ -131,6 +169,10 @@ function animate(value: AnimatedValue | AnimatedValueXY, toValue: number | { x: 
   return animateOne(value, toValue as number);
 }
 
+type Readable = number | Pick<AnimatedValue, "__getValue">;
+const read = (node: Readable) => (typeof node === "number" ? node : node.__getValue());
+const combined = (get: () => number) => ({ __getValue: get });
+
 export const Animated = {
   createAnimatedComponent: <Component>(component: Component) => component,
   Value: AnimatedValue,
@@ -138,6 +180,9 @@ export const Animated = {
   spring: (value: AnimatedValue | AnimatedValueXY, config: { toValue: number | { x: number; y: number } }) => animate(value, config.toValue),
   timing: (value: AnimatedValue | AnimatedValueXY, config: { toValue: number | { x: number; y: number } }) => animate(value, config.toValue),
   parallel: (list: Animation[]): Animation => ({ start: (done) => together(list, done), stop: () => list.forEach((a) => a.stop()) }),
+  add: (a: Readable, b: Readable) => combined(() => read(a) + read(b)),
+  subtract: (a: Readable, b: Readable) => combined(() => read(a) - read(b)),
+  multiply: (a: Readable, b: Readable) => combined(() => read(a) * read(b)),
 };
 
 export const findNodeHandle = () => null;
@@ -161,3 +206,9 @@ export const Easing = {
 };
 
 export const AppState = { currentState: "active", addEventListener: () => ({ remove() {} }) };
+
+export const AccessibilityInfo = {
+  isHighContrastEnabled: async () => false,
+  isReduceMotionEnabled: async () => false,
+  addEventListener: () => ({ remove() {} }),
+};

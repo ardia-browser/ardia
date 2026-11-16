@@ -1,13 +1,14 @@
-import { useState } from "react";
-import { Pressable, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { findNodeHandle, Pressable, View, type TextInput } from "react-native";
 import { useTheme } from "../ui/theme";
-import { useTab } from "../../state/browser/hooks";
+import { useTab, useWindowId } from "../../state/browser/hooks";
+import { claimFocusTag, heroBarFocus } from "../../state/focus/focusClaims";
 import { navigate } from "../../state/tabs/actions";
 import { replaceSplitPane } from "../../state/splits/actions";
 import { useSplitSuggestions } from "../../state/splits/hooks";
 import { tabLabel } from "../../state/browser/model";
 import { Panel, SearchField, shadow, space, Symbol, Text, useHover } from "../ui";
-import { EMPTY_STATE_RADIUS, EMPTY_STATE_WIDTH, SPLIT_ROW_HEIGHT, SPLIT_ROW_RADIUS, splitColors } from "./tokens";
+import { EMPTY_STATE_WIDTH, emptyStateRadius, SPLIT_ROW_HEIGHT, splitColors, splitRowRadius } from "./tokens";
 import { Favicon } from "../favicon/Favicon";
 
 export function SplitEmptyState({ tabId, focused }: { tabId: string; focused: boolean }) {
@@ -15,6 +16,17 @@ export function SplitEmptyState({ tabId, focused }: { tabId: string; focused: bo
   const [typing, setTyping] = useState(focused);
   const [text, setText] = useState("");
   const suggestions = useSplitSuggestions(tabId);
+  const windowId = useWindowId();
+  const input = useRef<TextInput>(null);
+  const wasFocused = useRef(focused);
+  useEffect(() => {
+    const activated = focused && !wasFocused.current;
+    wasFocused.current = focused;
+    if (!activated) return;
+    setTyping(true);
+    input.current?.focus();
+    claimFocusTag(windowId, heroBarFocus(tabId), () => findNodeHandle(input.current));
+  }, [focused, windowId, tabId]);
   const go = () => {
     if (text.trim()) navigate(tabId, text.trim());
   };
@@ -23,7 +35,7 @@ export function SplitEmptyState({ tabId, focused }: { tabId: string; focused: bo
     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: space.xl }}>
       <Panel
         fill={splitColors(theme.dark).emptyStateFill}
-        radius={EMPTY_STATE_RADIUS}
+        radius={emptyStateRadius()}
         border={theme.ntpBarBorder}
         shadow={shadow.card}
         style={{ width: "100%", maxWidth: EMPTY_STATE_WIDTH, paddingVertical: space.ml }}
@@ -32,10 +44,11 @@ export function SplitEmptyState({ tabId, focused }: { tabId: string; focused: bo
           Add a tab to this Split View
         </Text>
         {typing ? (
-          <View style={{ height: SPLIT_ROW_HEIGHT, marginHorizontal: space.s, paddingHorizontal: space.ml, borderRadius: SPLIT_ROW_RADIUS, justifyContent: "center", backgroundColor: theme.rowHover }}>
+          <View style={{ height: SPLIT_ROW_HEIGHT, marginHorizontal: space.s, paddingHorizontal: space.ml, borderRadius: splitRowRadius(), justifyContent: "center", backgroundColor: theme.rowHover }}>
             <SearchField
               look="bare"
               autoFocus
+              inputRef={input}
               value={text}
               onChangeText={setText}
               placeholder="Search or Ask a Question"
@@ -76,7 +89,7 @@ function Row({ icon, label, detail, secondary, onPress }: { icon: React.ReactNod
               height: SPLIT_ROW_HEIGHT,
               marginHorizontal: space.s,
               paddingHorizontal: space.ml,
-              borderRadius: SPLIT_ROW_RADIUS,
+              borderRadius: splitRowRadius(),
               flexDirection: "row",
               alignItems: "center",
               gap: space.m,

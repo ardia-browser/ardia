@@ -20,8 +20,10 @@ final class AppDelegate: ExpoAppDelegate {
 
     WindowHost.makeWindow = { BrowserWindow() }
     WindowHost.makeContentView = { [weak factory] windowId in
-      (factory?.rootViewFactory as? ExpoReactRootViewFactory)?.superView(
+      let root = (factory?.rootViewFactory as? ExpoReactRootViewFactory)?.superView(
         withModuleName: "main", initialProperties: ["windowId": windowId], launchOptions: nil) ?? NSView()
+      InterfaceScale.follow(root)
+      return root
     }
     factory.rootViewFactory.initializeReactHost(launchOptions: nil)
 

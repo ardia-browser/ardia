@@ -6,6 +6,7 @@ import { capsule, font, radius as radii, space, type ShadowLevel } from "../../u
 import { TAB_ROW } from "../../sidebar/tokens";
 import type { ToolbarPalette } from "../../ui/toolbarColors";
 import { trafficLights } from "../tokens";
+import { WINDOW_CHROME } from "../../../lib/windowChrome";
 import { NEW_TAB, tab, type Tab } from "./content";
 import { at, atRect, CHIP, CRUMB_X, FIELD, fill, hairline, LIGHTS_Y, ROW, rowY, STRIP_H, TOOLBAR_H, TOOLBAR_ICONS, type Geo, type Rect } from "./geometry";
 import type { Look } from "./look";
@@ -27,7 +28,7 @@ export function Glyph({ g, name, size, color, weight, box }: { g: Geo; name: str
   return <Symbol name={name} size={size * g.s} weight={weight} color={color} style={{ width: b, height: b }} />;
 }
 
-export function Backdrop({ g, look }: { g: Geo; look: Look }) {
+export function Backdrop({ look }: { look: Look }) {
   const bands = 10;
   return (
     <View style={[fill, { backgroundColor: look.tint[0] }]} pointerEvents="none">
@@ -39,6 +40,7 @@ export function Backdrop({ g, look }: { g: Geo; look: Look }) {
 }
 
 export function Lights({ g, y = LIGHTS_Y.toolbar, x = 25, style }: { g: Geo; y?: number; x?: number; style?: Styles }) {
+  if (!WINDOW_CHROME.leadingWidth) return null;
   return (
     <Animated.View style={[at(g, x - 6, y - 6, 52, 12), style as ViewStyle]} pointerEvents="none">
       {trafficLights.map((color, i) => (
@@ -196,11 +198,11 @@ export function MockSurface({ g, look, radius, shadow, fill: surfaceFill, edge, 
   );
 }
 
-export function WindowFrame({ g, look, edge, style, children }: { g: Geo; look: Look; edge: string; style?: Styles; children?: ReactNode }) {
+export function WindowFrame({ g, look, edge, cornerRadius = radii.panel, style, children }: { g: Geo; look: Look; edge: string; cornerRadius?: number; style?: Styles; children?: ReactNode }) {
   return (
     <View style={style as ViewStyle}>
-      <MockSurface g={g} look={look} radius={radii.panel} shadow={mockShadow.window} fill={look.tint[1]} edge={edge} style={fill} />
-      <View style={[fill, { borderRadius: radii.panel * g.s, overflow: "hidden" }]}>{children}</View>
+      <MockSurface g={g} look={look} radius={cornerRadius} shadow={mockShadow.window} fill={look.tint[1]} edge={edge} style={fill} />
+      <View style={[fill, { borderRadius: cornerRadius * g.s, overflow: "hidden" }]}>{children}</View>
     </View>
   );
 }

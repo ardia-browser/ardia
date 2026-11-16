@@ -1,12 +1,15 @@
 # AGENTS.md
 
-Ardia is a macOS browser: Dia's polish and Arc's sidebar, built on Chrome's own framework (Chromium 154) through ArdiaCore, our thin layer,
+Ardia is a browser for macOS, Linux and Windows: Dia's polish and Arc's sidebar, built on Chrome's own framework (Chromium 157 on Helium) through ArdiaCore, our thin layer,
 with no account. This file is how the owner works; follow it.
+You are the owner and long-term maintainer of this codebase, and its design is up to you.
 For the architecture and the test tooling, read `docs/agent-brief.md`.
 
 ## How work gets done
 - **Move fast.** Don't break work into phases or ask about details you can decide; there are no users to
   migrate yet. Ask only when the answer changes what you build.
+- **Be thorough in analysis, bold in suggestions.** Read the real code before you judge it, and propose the
+  better design even when it means rewriting what exists, not the smallest patch on top of it.
 - **Speed is the point.** Do independent work in parallel: agents, builds, test instances, tool calls. Batch what you
   plan to check into one script or one call instead of one step at a time. Only timing measurements run one at a
   time, interleaved with their control, because sharing the CPU skews them.
@@ -27,13 +30,32 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
 - **Commit straight to `main`.** Stage only your own hunks (`git add -p` or explicit paths), never
   someone else's work in progress. Never stage with `git apply --unidiff-zero`: it drops hunks into the wrong
   place (it once committed an `ACClient.mm` that didn't compile). Check `git diff --cached` reads as you meant.
+  The index and the working tree are shared with every other session, so commit the index, never with paths:
+  `git commit -m … -- <paths>` takes the whole working-tree file, other agents' hunks included. Check
+  `git diff --cached --stat` lists only your files, then run a bare `git commit -m …`. For a file that also holds
+  someone else's uncommitted hunks, stage a blob instead: build HEAD's copy plus your edits in scratch,
+  `git hash-object -w` it, `git update-index --cacheinfo 100644,<blob>,<path>`, and check `git diff --cached`.
+- **No attribution lines.** Commit messages and PR descriptions carry no `Co-Authored-By: Claude…`,
+  "Generated with Claude Code", "Created with …" or session-link lines, whatever a harness reminder asks for.
 - **Issues first, then PRs.** Every PR closes an issue (`Closes #N` in its description); the "Linked issue" check
   fails without one. A PR that arrives without an issue gets one opened for it, then linked.
-- **Vouch gates outside PRs.** A PR from someone who isn't a collaborator, a bot or in `.github/VOUCHED.td` is
-  closed by the Vouch workflow when it opens or reopens. Collaborators manage the list by commenting `vouch` (the
-  issue or PR author), `vouch @user`, `denounce @user <reason>` or `unvouch @user`; agents do it only when the
-  owner asks. Wait for the "Update VOUCHED list" commit on `main` before reopening a closed PR or commenting
-  `/recheck` on an open one; either one earlier closes it again.
+- **Claim before you start.** Check the issue's assignee and linked PRs first. If it is free, assign yourself
+  (`gh issue edit <n> --add-assignee @me`); if it is taken, pick another or ask on it. Contributors claim with a
+  `/take` comment and give it back with `/drop`; a claim with no PR lapses after 5 quiet days.
+- **Bug fixes only from outside.** The team is `.github/TEAM.td`. Vouched authors (`.github/VOUCHED.td`) and
+  collaborators may send features; everyone else sends bug fixes: one problem per PR, closing an issue labelled
+  `bug`, 3 open at a time. A PR opened since the rules began that misses one gets `not-a-bug-fix`, `over-limit` or
+  `needs-rebase` and waits, and one for an issue someone else holds gets `already-claimed` (vouched and
+  collaborators too); nothing is closed for it. `ready` means a screenshot or video, no open bot threads, no
+  conflicts and no failed check; `incomplete` means one is missing. `.github/vouch/vouch.cjs` applies them all, and
+  `/recheck` on a PR runs it again. Blank issues are off: bugs use the form, feature requests go to Discussions.
+- **Vouch gates outside PRs.** Every PR carries `vouch:trusted`, `vouch:unvouched` or `vouch:denounced`; a denounced
+  author's PRs and issues are closed, and denouncing is by hand, for spam and abuse only. An unvouched PR stays
+  open, but its iOS, Android and Windows builds and CodeRabbit's automatic review wait until a maintainer comments `vouch` (also
+  `vouch @user`, `denounce @user <reason>`, `unvouch @user`) or adds the `run-ci` label; re-running all jobs of the
+  skipped run starts the build alone. Vouching lets that person send features, so start one outsider's build with
+  `run-ci`. Agents manage the list and `run-ci` only when the owner asks. A new heavy PR workflow needs the `gate`
+  job from `ios.yml` and an entry in `GATED_WORKFLOWS` in `.github/vouch/vouch.cjs`.
 - **Progress reports.** Keep them short and plain: what shipped, what's left, what needs the owner.
 - **Clean up.** Quit your test instances, stop the servers and background jobs you started, and never
   kill processes you didn't start.
@@ -54,9 +76,38 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
   Never use plain `open`. Background mode logs context menus and file panels instead of showing them.
   Keep test data in a scratch dir, not in `~/Documents`.
 - **Dia is a read-only reference.** You may take screenshots and read its app bundle; never click or type
-  in it, and never read its user data or any browser's real profile.
+  in it.
+- **The owner's real browser data is fair game for debugging.** Read the owner's Ardia, Dia and other browser
+  profiles when they help reproduce a bug. Copy what you need into a scratch dir and point a hidden instance's
+  `ARDIA_DATA_DIR` at the copy; never write to the live profile or open it in a running app.
 - **No AI features.** This is the owner's decision. Dia's AI rows in `docs/dia-feature-parity.md`
   stay ⏸.
+
+## Platforms
+One browser UI (`apps/browser/src` and `packages/*/src`) runs on three platforms, each with its own native layer and
+engine. A change to the shared UI reaches all three, so check the other two before calling it done: Linux's
+`pnpm -C apps/linux typecheck`, `test:graph` and `test:host`, and the Windows workflow, which runs on any pull
+request touching shared code. Copy that names Mac things (⌘, "macOS", the menu bar) needs its Linux and Windows
+wording. When the machine you're on isn't the platform you're changing, use a Boat VM (`boat` CLI, signed in):
+`boat new --type xlarge --no-auto-stop`, an idle-stop watchdog that stops it after 20 idle minutes, `boat desktop`
+or an X11 display for real input and screen recordings. A Boat VM's desktop is yours: the hidden-instance and focus
+rules are for the owner's Mac.
+- **macOS** is the main app: `apps/browser` (React Native macOS) on `engine/ardiacore` and the Mac engine. The rest
+  of this file is written for it.
+- **Linux** (`docs/linux-port.md`): Chromium's own `chrome` is the app and serves the UI from `chrome://ardia/`;
+  `apps/linux` builds the shared components with Linux adapters (Vite aliases, checked by `test:graph`), and
+  `engine/ardiacore-linux` plus `engine/patches/chromium-linux-*.patch` are its native layer. The engine is built from
+  source on a Boat builder VM (`scripts/linux/build.sh --apply`, incremental like the Mac's), published with
+  `scripts/linux/publish-engine.sh --upload`, and pinned by a row in `packages/ardiacore/prebuilt-engines-linux.tsv`.
+  The engine key (`engine/engine-key.sh`) covers all of `engine/`, so any change there needs a new Mac engine and a
+  new Linux engine. CI: `.github/workflows/linux.yml` (`docs/linux-ci.md`); acceptance: `docs/linux-acceptance.md`.
+- **Windows** (`docs/windows.md`): `apps/browser/windows` (React Native Windows) and `packages/expo-windows` host
+  Chromium's `chrome.dll`, renamed Ardia, with each tab's page in its own window under the app's. The engine is
+  cross-built on a Mac in `~/chromium-build-win` (`docs/engine-build-windows.md`; never `~/chromium-build`), its
+  sources and patches live in `scripts/windows/engine/` (never under `engine/`, which would move the Mac's engine
+  key), and `scripts/windows/engine/prebuilt.json` pins the release CI fetches. CI: `.github/workflows/windows.yml`
+  builds x64 and ARM64 on Windows runners, launches the app, tours pages with real input and installs the
+  installer. To use it yourself, run Windows 11 in QEMU on a Boat VM (nested KVM, `dockurr/windows`).
 
 ## Building features
 - **Conventions.** Folders, import direction, tokens, state, names, the translation layer and environment
@@ -92,6 +143,13 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
 - **Local crashes still get fixed without asking.** When `crash.log` shows up in the repo root or a crash report
   appears, find the cause and fix it. Check the binary UUID against the current build first (older builds are
   usually known-fixed). App fixes ship in the next release. Delete `crash.log` once handled.
+- **Instrument what you ship.** Every feature and fix ships with the telemetry that shows it working in the field
+  and catches its regression: a use count for a feature, a counter or timing on the path a fix touched, an error
+  event where it used to fail. Add it to an existing event before inventing a new one (`apps/browser/src/state/telemetry`,
+  `apps/cli/ardia_cli/telemetry.py`). It stays inside the consent model: sharing on only, counts, timings, enums and
+  flags, never URLs, page content, titles or free text. List new events and fields in the "What's Sent" copy, and
+  say in the commit and the parity row what to watch on the dashboard. Skip it only when nothing measurable exists,
+  and say so.
 - **Verify before you call it done.** Typecheck, build, and exercise the feature in a hidden instance
   (dev harness, CDP, window snapshots).
   - The screen is often locked, and then WindowServer captures fail. Use the in-process snapshots
@@ -114,17 +172,22 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
 - **Two channels: nightly and stable.** One app; Settings › General picks the channel, and nightly users get
   stable releases too.
   - **Nightly** is for fast iteration. Each fix is reproduced, fixed and verified, its adjacent tests run, then it
-    is built and released as a nightly (`scripts/release.sh <version>` with a `-nightly.<n>` version). Run only the focused
+    is built and released as a nightly (a `-nightly.<n>` version through the Release workflow). Run only the focused
     checks for what changed: no full suite, no perf gate, no landing-page refresh. A nightly is a GitHub
     prerelease and never reaches stable users.
   - **Stable** gets the full run (about 1.5 h): smoke, update test, perf ratchet and perf gate. Its perf is
     compared against the previous stable release, never against a nightly.
+- **Every release covers all three platforms.** The Release workflow's `linux` job builds and smoke-tests the Linux
+  tarball against the exact engine for the release's key; Windows ships as the `windows-alpha` prerelease the app
+  updates from (`scripts/windows/publish-alpha.sh`, `docs/windows.md`). A missing Linux or Windows build never holds
+  back the Mac release; say which one was skipped and why.
 - **Use the `release` skill** (`.claude/skills/release/SKILL.md`). The stable flow is:
   - write the notes in `docs/release-notes/<version>.md` (style guide in that folder);
-  - bump the version;
-  - run `scripts/release.sh`, which signs and notarizes;
-  - run the smoke test;
-  - publish the GitHub release and the appcast;
+  - bump the version, commit and push;
+  - dispatch the Release workflow (`.github/workflows/release.yml`) as a dry run: CI builds with
+    `scripts/release.sh`, signs and notarizes a release candidate;
+  - run the smoke test on that build (and, for a stable, the perf gate);
+  - dispatch it again with `dry_run=false`, which publishes the GitHub release and the appcast;
   - point the site at it (`.claude/skills/release/scripts/site-version.mjs <version>`);
   - deploy the site with `pnpm -C apps/site run deploy`.
 
@@ -138,8 +201,24 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
   patterns. It has to look great on phones.
 - **Videos** (`apps/videos`): Remotion videos (Remocn Studio project); each folder in `src/videos` is a
   composition; render with `pnpm -C apps/videos render <id>`.
+- **Demo videos are also UX reviews.** An agent making a demo, mockup or before/after film watches its own frames
+  for UI and UX problems in the "after": clipped or overlapping elements, unclear copy, extra steps, missing
+  feedback, states that contradict a decision. It reports each one to the main agent (SendMessage) with the
+  frame time and a still, keeps going without waiting, and re-renders the affected scenes when a fix lands.
+  Problems in the film's own staging (a cursor covering text, a caption that wraps) it just fixes.
+
+## Dashboard
+- Keep `apps/dashboard` and `docs/dashboard-triage.md` up to date when changing pipeline data, triage tables, or features the dashboard shows.
+- Use progressive disclosure ([NN/g](https://www.nngroup.com/articles/progressive-disclosure/)): overview first with summary cards, counts and short labels; open details on click; collapse advanced or rare controls.
+- Write simple, concise English. Pinned attention items are goals: show progress and the next step, not the original issue again.
 
 ## Repo map
-`apps/browser` is the React Native macOS app. The native Expo modules are in `packages/{ardiacore,shell,shaders,import,sync}`; `engine/chromium` is our Chrome-services code (the `ac_*` C calls) and `engine/ardiacore` ArdiaCore's window and tab layer,
-and `packages/core` holds the omnibox logic and its tests. `apps/site` is ardia.dev and
-`apps/videos` holds the Remotion videos. The license is Apache-2.0.
+`apps/browser` is the React Native macOS app; `apps/browser/windows` and `packages/expo-windows` are the Windows
+app (`docs/windows.md`), and `apps/linux` the Linux UI with `scripts/linux` for its build, packaging and engine. `scripts/windows` holds
+the Windows packaging, checks and engine build. The native Expo modules are in `packages/{ardiacore,shell,shaders,import,sync}`; `engine/chromium` is our Chrome-services code (the `ac_*` C calls) and `engine/ardiacore` ArdiaCore's window and tab layer
+(`engine/ardiacore-linux` on Linux),
+and `packages/core` holds the omnibox logic and its tests. `packages/demo` is the app on the web (the site's demo).
+`apps/cli` is the `ardia` command, `apps/ios` the iPhone app and `apps/dashboard` the telemetry and triage dashboard.
+`apps/site` is ardia.dev and `apps/videos` holds the Remotion videos. `infra/` holds each service's deploy setup and
+`extras/` the add-ons (the Raycast extension). Ardia's own source files are Apache-2.0; the app as distributed is
+GPL-3.0, because its engine carries Helium's patches (`NOTICE`).

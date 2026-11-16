@@ -1,17 +1,22 @@
 import asyncio
 import contextlib
-import json
 import random
 import re
 
-from ardia_cli.browse import fields
+from ardia_cli import command_metrics
+from ardia_cli.browse import fields, human
 from ardia_cli.browse.errors import BrowseError, CdpError, Gated, OutcomeUnknown
 
 SCROLL_DEFAULT = 300
 DELIVERY_TIMEOUT = 1.5
 NOT_DELIVERED = (
-    "{action} was sent, but the page received none of its {missing} events. The tab may not be on screen in Ardia "
-    "(just switched, or covered by another tab); check it's shown (`ardia browse tab <id> --show`) before trying again"
+    "{action} was sent, but the page received none of its {missing} events. Something may have caught them first (an overlay, "
+    "or a frame this check can't see into), or the tab may have just been switched away from; take a screenshot to see what's "
+    "at that point, or show the tab (`ardia browse tab <id> --show`), before trying again"
+)
+TARGET_REPLACED = (
+    "{action} didn't land: {target} was removed from the page before it arrived (the page redrew it, as a list does after "
+    "a search or filter changes), so nothing was entered. Find the element again (snapshot -i) and retry"
 )
 INTERCEPT_TIMEOUT = 1.5
 CLEANUP_TIMEOUT = 2.0
@@ -26,6 +31,171 @@ SUGGESTION_SETTLE = 0.35
 EXACT = 3
 MAX_SUGGESTIONS = 8
 EMAIL = re.compile(r"[^\s@<>()\[\],;:\"']+@[^\s@<>()\[\],;:\"']+\.[A-Za-z]{2,}")
+ENABLE_WAIT = 1.5
+EDITOR_WAIT = 1.0
+COMMIT_WAIT = 0.5
+CLOSING_MODAL_WAIT = 0.5
+POLL = 0.05
+INSERTED_INPUT_TYPES = frozenset({"text", "search", "email", "url", "tel", "number"})
+DRAG_FAR_SHARE = 0.75
+DISABLED_STATE = """(el) => ({
+  native: el.matches(":disabled") || !!(el.closest && el.closest("button:disabled, fieldset:disabled")),
+  aria: el.getAttribute("aria-disabled") === "true",
+})"""
+CELL_OF = "(el) => el.closest('[role=gridcell], [role=cell], td')"
+CELL_START = """(cell) => {
+  globalThis.ardiaCellFocusBefore = document.activeElement;
+  const editable = (n) => !n.disabled && (n.tagName === "SELECT" || n.isContentEditable
+    || ((n.tagName === "INPUT" || n.tagName === "TEXTAREA") && !n.readOnly && n.type !== "hidden"));
+  const grid = cell.closest("[role=grid], [role=treegrid], [role=table], table");
+  const row = cell.closest("[role=row], tr");
+  const rows = grid ? Array.from(grid.querySelectorAll("[role=row], tr")) : [];
+  globalThis.ardiaCellSpot = {
+    cell, grid, id: cell.id || null,
+    row: row && row.getAttribute("aria-rowindex"), column: cell.getAttribute("aria-colindex"),
+    rowIndex: row ? rows.indexOf(row) : -1, cellIndex: row ? Array.from(row.children).indexOf(cell) : -1,
+  };
+  const was = (cell.innerText || cell.textContent || "").trim();
+  let active = document.activeElement;
+  while (active && active.shadowRoot && active.shadowRoot.activeElement) active = active.shadowRoot.activeElement;
+  const box = cell.getBoundingClientRect();
+  const hit = box.width && box.height ? document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2) : null;
+  if (active && editable(active) && (cell.contains(active) || hit && (hit === active || active.contains(hit)))) {
+    globalThis.ardiaCellInner = active;
+    return { was, inner: true, open: true };
+  }
+  const inner = Array.from(cell.querySelectorAll("input, textarea, select, [contenteditable=true], [role=combobox], [role=textbox]"))
+    .find((n) => editable(n) || n.getAttribute("role") === "combobox");
+  globalThis.ardiaCellInner = inner || null;
+  return { was, inner: !!inner, open: false };
+}"""
+CELL_INNER = "() => globalThis.ardiaCellInner || null"
+CELL_EDITOR = """(cell) => {
+  let active = document.activeElement;
+  while (active && active.shadowRoot && active.shadowRoot.activeElement) active = active.shadowRoot.activeElement;
+  if (!active || active === document.body || active === document.documentElement) return null;
+  const editable = !active.disabled && (active.tagName === "SELECT" || active.isContentEditable
+    || ((active.tagName === "INPUT" || active.tagName === "TEXTAREA") && !active.readOnly));
+  if (!editable) return null;
+  return cell.contains(active) || active !== globalThis.ardiaCellFocusBefore ? active : null;
+}"""
+CELL_EDITOR_STATE = """(editor) => {
+  let active = document.activeElement;
+  while (active && active.shadowRoot && active.shadowRoot.activeElement) active = active.shadowRoot.activeElement;
+  const open = editor.isConnected && active === editor;
+  if (!open) return { open: false };
+  const ids = (editor.getAttribute("aria-errormessage") || "") + " " + (editor.getAttribute("aria-describedby") || "");
+  const said = ids.split(/\\s+/).filter(Boolean).map((id) => document.getElementById(id)).filter(Boolean)
+    .map((n) => (n.innerText || n.textContent || "").trim()).filter(Boolean);
+  const message = said.join(" ") || editor.validationMessage || "";
+  return { open: true, invalid: editor.getAttribute("aria-invalid") === "true" || !!editor.validationMessage, message };
+}"""
+CELL_FIND = """() => {
+  const spot = globalThis.ardiaCellSpot;
+  if (!spot) return null;
+  if (spot.cell.isConnected) return spot.cell;
+  if (spot.id && document.getElementById(spot.id)) return document.getElementById(spot.id);
+  if (!spot.grid || !spot.grid.isConnected) return null;
+  const rows = Array.from(spot.grid.querySelectorAll("[role=row], tr"));
+  if (spot.row && spot.column) {
+    const row = rows.find((r) => r.getAttribute("aria-rowindex") === spot.row);
+    const cell = row && row.querySelector('[aria-colindex="' + spot.column + '"]');
+    if (cell) return cell;
+  }
+  const row = spot.rowIndex >= 0 ? rows[spot.rowIndex] : null;
+  return row && spot.cellIndex >= 0 ? row.children[spot.cellIndex] || null : null;
+}"""
+CELL_NOW = "() => { const cell = (" + CELL_FIND + ")(); return cell ? (cell.innerText || cell.textContent || '').trim() : null; }"
+SETTLED_FRAMES = "() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(true))))"
+CELL_REVEAL = """() => {
+  const cell = (""" + CELL_FIND + """)();
+  if (!cell) return false;
+  const margin = 16;
+  const box = cell.getBoundingClientRect();
+  let scroller = cell.parentElement;
+  while (scroller && scroller !== document.body && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowX + getComputedStyle(scroller).overflowY)) {
+    scroller = scroller.parentElement;
+  }
+  let area = { left: 0, top: 0, right: innerWidth, bottom: innerHeight };
+  if (scroller && scroller !== document.body) {
+    const outer = scroller.getBoundingClientRect();
+    const left = outer.left + scroller.clientLeft, top = outer.top + scroller.clientTop;
+    area = { left: Math.max(0, left), top: Math.max(0, top), right: Math.min(innerWidth, left + scroller.clientWidth),
+             bottom: Math.min(innerHeight, top + scroller.clientHeight) };
+  }
+  const inside = box.left >= area.left && box.top >= area.top && box.right <= area.right - margin && box.bottom <= area.bottom - margin;
+  const hit = inside && document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+  if (!hit || !cell.contains(hit)) cell.scrollIntoView({ block: "center", inline: "center" });
+  return true;
+}"""
+LIST_BEFORE = """(source, target) => {
+  let item = source;
+  while (item.parentElement && !item.parentElement.contains(target)) item = item.parentElement;
+  const list = item.parentElement;
+  if (!list || item.contains(target)) return null;
+  const like = (n) => n.tagName === item.tagName;
+  const items = Array.from(list.children).filter(like);
+  const onto = Array.from(list.children).find((n) => n.contains(target));
+  if (!onto || !like(onto) || items.length < 2) return null;
+  const role = (item.getAttribute("role") || "").toLowerCase();
+  const carrier = source.closest("[draggable=true]") || source;
+  const sortable = /^(LI|TR|OPTION|DT)$/.test(item.tagName) || ["listitem", "row", "option", "treeitem"].includes(role)
+    || carrier === item || !!source.closest("[aria-roledescription*=sortable i]");
+  if (!sortable) return null;
+  const key = (n) => (n.textContent || "").replace(/\\s+/g, " ").trim();
+  const text = key(item);
+  if (!text || items.filter((n) => key(n) === text).length !== 1) return null;
+  globalThis.ardiaDragList = { list, tag: item.tagName, text };
+  return { from: items.indexOf(item) + 1, count: items.length };
+}"""
+LIST_AFTER = """() => {
+  const spot = globalThis.ardiaDragList;
+  globalThis.ardiaDragList = null;
+  if (!spot || !spot.list.isConnected) return null;
+  const key = (n) => (n.textContent || "").replace(/\\s+/g, " ").trim();
+  const items = Array.from(spot.list.children).filter((n) => n.tagName === spot.tag);
+  const hits = items.filter((n) => key(n) === spot.text);
+  return hits.length === 1 ? { to: items.indexOf(hits[0]) + 1, count: items.length } : null;
+}"""
+
+
+FRAME_OWNERS = frozenset({"IFRAME", "FRAME", "EMBED", "OBJECT"})
+MAX_FOCUS_PROBES = 24
+
+
+async def over_frame(page, x: float, y: float) -> bool:
+    try:
+        hit = await page.send("DOM.getNodeForLocation", {"x": round(x), "y": round(y), "includeUserAgentShadowDOM": False})
+        if hit.get("frameId") and hit["frameId"] != page.main_frame:
+            command_metrics.flag("input_in_inner_frame", True)
+            return True
+        node = (await page.send("DOM.describeNode", {"backendNodeId": hit["backendNodeId"]}))["node"]
+    except (CdpError, KeyError):
+        return bool(await page.call("(x, y) => ardiaBrowse.overFrame(x, y)", x, y, frame=page.main_frame, read=True))
+    if node.get("nodeName") in FRAME_OWNERS:
+        command_metrics.flag("input_in_inner_frame", True)
+        return True
+    return False
+
+
+FOCUSED_HERE = "() => document.hasFocus() && !['IFRAME', 'FRAME', 'EMBED', 'OBJECT'].includes((document.activeElement || {}).tagName)"
+KEY_EVENTS = ("keydown", "keyup", "input")
+
+
+async def focus_in_other_frame(page, frame) -> bool:
+    focused = set()
+    for other in list(page.frames)[:MAX_FOCUS_PROBES]:
+        try:
+            if await page.call(FOCUSED_HERE, frame=other, read=True, timeout=2):
+                focused.add(other)
+        except BrowseError:
+            continue
+    parents = {page.frames[other].get("parent") for other in focused if other in page.frames}
+    leaves = focused - parents
+    if leaves and frame not in leaves:
+        command_metrics.flag("input_in_inner_frame", True)
+        return True
+    return False
 
 
 async def input_counts(page, frame):
@@ -36,7 +206,7 @@ def delivered(now: dict, before: dict, name: str) -> int:
     return sum(now.get(part, 0) - before.get(part, 0) for part in name.split("|"))
 
 
-async def expect_input(page, frame, run, needs: dict, action: str):
+async def expect_input(page, frame, run, needs: dict, action: str, element=None):
     from ardia_cli.browse.errors import ConnectionLost, OutcomeUnknown
 
     frame = frame or page.main_frame
@@ -70,23 +240,31 @@ async def expect_input(page, frame, run, needs: dict, action: str):
         if loop.time() >= deadline:
             names = " or ".join(part for name in missing for part in name.split("|"))
             if all(delivered(now, before, name) == 0 for name in needs):
+                if any(key in name for name in needs for key in KEY_EVENTS) and await focus_in_other_frame(page, frame):
+                    return result
+                if element is not None and not await still_attached(page, element):
+                    raise BrowseError(TARGET_REPLACED.format(action=action, target=element.label), code="target_replaced")
                 raise BrowseError(NOT_DELIVERED.format(action=action, missing="/".join(needs).replace("|", "/")), data={"missing": missing}, code="input_not_delivered")
             raise OutcomeUnknown(action.lower(), PARTLY_DELIVERED.format(missing=names))
         await asyncio.sleep(0.05)
+
+
+async def still_attached(page, element) -> bool:
+    try:
+        return bool(await page.call("(el) => el.isConnected", element, frame=element.frame, read=True))
+    except BrowseError:
+        return False
 
 
 def left_document(error: BrowseError) -> bool:
     return error.code == "document_changed" or error.code == "outcome_unknown" and "changed document" in error.message
 
 
-def mouse_button(name: str | None):
-    from pydoll.protocol.input.types import MouseButton
-
+def mouse_button(name: str | None) -> str:
     name = (name or "left").lower()
-    mapping = {"left": MouseButton.LEFT, "right": MouseButton.RIGHT, "middle": MouseButton.MIDDLE}
-    if name not in mapping:
+    if name not in ("left", "right", "middle"):
         raise BrowseError(f"Unknown mouse button: {name} (left, right or middle)")
-    return mapping[name]
+    return name
 
 
 class ScrollDriver:
@@ -97,29 +275,15 @@ class ScrollDriver:
         self.scripted = scripted
         self.element = element
 
-    async def _execute_command(self, command):
-        from pydoll.constants import Scripts
-
-        method = command["method"]
-        params = command.get("params") or {}
-        if method == "Runtime.evaluate":
-            expression = params.get("expression", "")
-            if expression == Scripts.GET_VIEWPORT_CENTER:
-                return {"result": {"result": {"value": json.dumps([int(self.point[0]), int(self.point[1])])}}}
-            value = await self.page.call(f"() => ({expression})", frame=self.frame)
-            return {"result": {"result": {"value": value}}}
-        if method == "Input.dispatchMouseEvent":
-            params = dict(params)
-            params["x"], params["y"] = int(self.point[0]), int(self.point[1])
-            if self.scripted:
-                dx, dy = params.get("deltaX") or 0, params.get("deltaY") or 0
-                if self.element is not None:
-                    await self.page.call("(el, x, y) => el.scrollBy(x, y)", self.element, dx, dy, frame=self.element.frame)
-                else:
-                    await self.page.call("(x, y) => scrollBy(x, y)", dx, dy, frame=self.frame)
-                return {"result": {}}
-        await self.page.send(method, params, input_event=True)
-        return {"result": {}}
+    async def wheel(self, dx: int, dy: int):
+        if self.scripted:
+            if self.element is not None:
+                await self.page.call("(el, x, y) => el.scrollBy(x, y)", self.element, dx, dy, frame=self.element.frame)
+            else:
+                await self.page.call("(x, y) => scrollBy(x, y)", dx, dy, frame=self.frame)
+            return
+        await self.page.send("Input.dispatchMouseEvent", {"type": "mouseWheel", "x": int(self.point[0]), "y": int(self.point[1]), "deltaX": dx, "deltaY": dy},
+                             input_event=True)
 
 
 async def viewport(page, frame=None):
@@ -142,9 +306,6 @@ async def frame_offset(page, frame: str) -> tuple[float, float]:
 
 
 async def scroll_wheel(page, distance: float, vertical: bool, humanize: bool, point=None, frame=None, element=None):
-    from pydoll.constants import ScrollPosition
-    from pydoll.interactions.scroll import Scroll
-
     mouse = page.input.mouse
     scripted = await page.hidden()
     if point is None:
@@ -162,12 +323,11 @@ async def scroll_wheel(page, distance: float, vertical: bool, humanize: bool, po
     if distance == 0:
         return
     if humanize:
-        position = (ScrollPosition.DOWN if distance > 0 else ScrollPosition.UP) if vertical else (ScrollPosition.RIGHT if distance > 0 else ScrollPosition.LEFT)
-        await Scroll(ScrollDriver(page, point, frame or page.main_frame, scripted, element)).by(position, abs(distance), humanize=True)
+        driver = ScrollDriver(page, point, frame or page.main_frame, scripted, element)
+        await human.scroll(driver.wheel, abs(distance), vertical, 1 if distance > 0 else -1)
         return
     if scripted:
-        await ScrollDriver(page, point, frame or page.main_frame, True, element)._execute_command({
-            "method": "Input.dispatchMouseEvent", "params": {"type": "mouseWheel", "deltaX": 0 if vertical else int(distance), "deltaY": int(distance) if vertical else 0}})
+        await ScrollDriver(page, point, frame or page.main_frame, True, element).wheel(0 if vertical else int(distance), int(distance) if vertical else 0)
         return
     await page.send("Input.dispatchMouseEvent", {
         "type": "mouseWheel", "x": int(point[0]), "y": int(point[1]),
@@ -190,7 +350,7 @@ async def laid_out(page):
         vp = await viewport(page)
         if vp["width"] >= 1 and vp["height"] >= 1:
             return
-    if "emulation" not in page.state.leases:
+    if not {"emulation", "offscreen"} & page.state.leases:
         try:
             await page.send("Emulation.setDeviceMetricsOverride", {**SANE_VIEWPORT, "deviceScaleFactor": 0, "mobile": False})
         except (Gated, CdpError):
@@ -216,7 +376,12 @@ async def restore_metrics(page):
 
 async def scroll_into_view(page, element, humanize: bool):
     if not humanize or element.frame != page.main_frame:
-        await page.send("DOM.scrollIntoViewIfNeeded", {"backendNodeId": element.backend_id})
+        try:
+            await page.send("DOM.scrollIntoViewIfNeeded", {"backendNodeId": element.backend_id})
+        except CdpError as error:
+            if "layout object" not in error.cdp_message:
+                raise
+            raise BrowseError(f"Element {element.label} has no visible box (hidden or zero-size)", code="not_visible") from None
         return
     for _ in range(5):
         r = await rect(page, element)
@@ -241,7 +406,12 @@ async def scroll_into_view(page, element, humanize: bool):
     r = await rect(page, element)
     vp = await viewport(page)
     if _outside(r, vp):
-        await page.send("DOM.scrollIntoViewIfNeeded", {"backendNodeId": element.backend_id})
+        try:
+            await page.send("DOM.scrollIntoViewIfNeeded", {"backendNodeId": element.backend_id})
+        except CdpError as error:
+            if "layout object" not in error.cdp_message:
+                raise
+            raise BrowseError(f"Element {element.label} has no visible box (hidden or zero-size)", code="not_visible") from None
 
 
 async def target_point(page, element, humanize: bool, check_cover: bool = True):
@@ -250,31 +420,50 @@ async def target_point(page, element, humanize: bool, check_cover: bool = True):
         raise BrowseError(f"Element {element.label} was removed from the page")
     await laid_out(page)
     await scroll_into_view(page, element, humanize)
-    quads = (await page.send("DOM.getContentQuads", {"backendNodeId": element.backend_id})).get("quads") or []
-    best = None
-    for quad in quads:
-        xs, ys = quad[0::2], quad[1::2]
-        area = (max(xs) - min(xs)) * (max(ys) - min(ys))
-        if area > 1 and (best is None or area > best[0]):
-            best = (area, min(xs), min(ys), max(xs), max(ys))
-    if best is None:
-        raise BrowseError(f"Element {element.label} has no visible box (hidden or zero-size)", code="not_visible")
-    _, left, top, right, bottom = best
-    cx, cy = (left + right) / 2, (top + bottom) / 2
-    if humanize:
-        cx += random.uniform(-0.2, 0.2) * (right - left)
-        cy += random.uniform(-0.2, 0.2) * (bottom - top)
-    if check_cover:
+    tried = set()
+    for _ in range(4):
+        box = await settled_box(page, element)
+        if box is None:
+            raise BrowseError(f"Element {element.label} has no visible box (hidden or zero-size)", code="not_visible")
+        left, top, right, bottom = box
+        cx, cy = (left + right) / 2, (top + bottom) / 2
+        if humanize:
+            cx += random.uniform(-0.2, 0.2) * (right - left)
+            cy += random.uniform(-0.2, 0.2) * (bottom - top)
+        if not check_cover:
+            return cx, cy, info
         ox, oy = await frame_offset(page, element.frame)
         cover = await page.call("(el, x, y) => ardiaBrowse.hitTest(el, x, y)", element, cx - ox, cy - oy, frame=element.frame)
         if cover and humanize:
             cx, cy = (left + right) / 2, (top + bottom) / 2
             cover = await page.call("(el, x, y) => ardiaBrowse.hitTest(el, x, y)", element, cx - ox, cy - oy, frame=element.frame)
+        if not cover:
+            break
+        if f"consent {cover}" not in tried and not cover.startswith("nothing"):
+            tried.add(f"consent {cover}")
+            if await dismissed_consent(page, element, cx - ox, cy - oy):
+                continue
+        if "center" not in tried:
+            tried.add("center")
+            if await centered(page, element):
+                continue
+        break
+    if check_cover:
         if cover and cover.startswith("nothing"):
             vp = await viewport(page)
+            where = f"{element.label} is outside the visible page (its middle is at {cx - ox:.0f},{cy - oy:.0f} in a {vp['width']}×{vp['height']} viewport)"
+            lock = await scroll_lock(page, element)
+            if lock:
+                from ardia_cli import command_metrics
+
+                command_metrics.flag("click_scroll_locked", True)
+                raise BrowseError(
+                    f"Element {where}, and the page won't scroll to it: {lock}. Close that first (press Escape, or its close button), "
+                    "then retry",
+                    data={"point": [cx, cy], "viewport": [vp["width"], vp["height"]], "scrollLock": lock}, code="outside_viewport",
+                )
             raise BrowseError(
-                f"Element {element.label} is outside the visible page (its middle is at {cx - ox:.0f},{cy - oy:.0f} in a {vp['width']}×{vp['height']} "
-                "viewport), so a click there would land on nothing. Scroll it into view (scrollintoview), or snapshot again if the page moved",
+                f"Element {where}, so a click there would land on nothing. Scroll it into view (scrollintoview), or snapshot again if the page moved",
                 data={"point": [cx, cy], "viewport": [vp["width"], vp["height"]]}, code="outside_viewport",
             )
         if cover:
@@ -286,8 +475,84 @@ async def target_point(page, element, humanize: bool, check_cover: bool = True):
     return cx, cy, info
 
 
+async def dismissed_consent(page, element, x, y) -> bool:
+    from ardia_cli import command_metrics
+
+    try:
+        done = await page.call("(x, y) => ardiaBrowse.dismissConsent(x, y)", x, y, frame=element.frame)
+    except BrowseError:
+        return False
+    if not done:
+        return False
+    popup = done.get("kind") == "popup"
+    command_metrics.flag("popup_dismissed" if popup else "consent_dismissed", True)
+    what = "A signup popup" if popup else "A consent banner"
+    page.state.consent_dismissed = f'{what} was in the way: {done["layer"]} covered {element.label}, so its "{done["name"]}" button was clicked ({done["choice"]})'
+    await asyncio.sleep(CONSENT_SETTLE)
+    return True
+
+
+async def centered(page, element) -> bool:
+    from ardia_cli import command_metrics
+
+    try:
+        moved = await page.call(CENTER, element, frame=element.frame)
+    except BrowseError:
+        return False
+    if moved:
+        command_metrics.flag("click_recentered", True)
+        await asyncio.sleep(0.1)
+    return bool(moved)
+
+
+async def disabled_state(page, element) -> dict:
+    state = await page.call(DISABLED_STATE, element, frame=element.frame, read=True)
+    return state if isinstance(state, dict) else {}
+
+
+async def wait_enabled(page, element, strict: bool = True):
+    state = await disabled_state(page, element)
+    if not (state.get("native") or state.get("aria")):
+        return
+    command_metrics.flag("waited_for_enabled", True)
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + ENABLE_WAIT
+    while loop.time() < deadline:
+        await asyncio.sleep(POLL)
+        state = await disabled_state(page, element)
+        if not (state.get("native") or state.get("aria")):
+            return
+    if state.get("native") or strict:
+        raise BrowseError(
+            f"Element {element.label} is disabled, and it stayed disabled for {ENABLE_WAIT:g} s. Do what enables it first "
+            "(it usually depends on another field: To after From); in a batch, put that line before this one",
+            code="disabled",
+        )
+
+
 async def click(page, element, humanize: bool, count: int = 1, button: str = "left"):
-    x, y, _ = await target_point(page, element, humanize)
+    await wait_enabled(page, element, strict=False)
+    try:
+        x, y, _ = await target_point(page, element, humanize)
+    except BrowseError as error:
+        if error.code == "not_visible":
+            stand_in = await visible_label(page, element)
+            if stand_in is not None:
+                command_metrics.flag("clicked_label_of_hidden_input", True)
+                await click(page, stand_in, humanize, count, button)
+                page.state.click_note = f"{element.label} is hidden and drawn by its label, so the click went to the label"
+                return
+            stand_in = await visible_content(page, element)
+            if stand_in is None:
+                raise
+            command_metrics.flag("clicked_visible_content", True)
+            await click(page, stand_in, humanize, count, button)
+            page.state.click_note = f"{element.label} has no box of its own, so the click went to its visible content"
+            return
+        if error.code != "outside_viewport" or count != 1 or button != "left":
+            raise
+        await dom_click(page, element, error)
+        return
     mouse = page.input.mouse
     which = mouse_button(button)
     async def press():
@@ -296,7 +561,53 @@ async def click(page, element, humanize: bool, count: int = 1, button: str = "le
         for number in range(1, count + 1):
             await mouse.click(x, y, button=which, click_count=number, humanize=False)
 
-    await expect_input(page, element.frame, lambda: page.input.gesture("click", press), {"mousedown": count, "mouseup": count}, "The click")
+    await expect_input(page, element.frame, lambda: page.input.gesture("click", press), {"mousedown": count, "mouseup": count}, "The click", element)
+
+
+async def visible_label(page, element):
+    remote = await page.call(VISIBLE_LABEL, element, frame=element.frame, by_value=False)
+    return await page.element_from(remote, element.frame, f"the label of {element.label}")
+
+
+async def visible_content(page, element):
+    remote = await page.call(VISIBLE_CONTENT, element, frame=element.frame, by_value=False)
+    return await page.element_from(remote, element.frame, f"the visible content of {element.label}")
+
+
+async def scroll_lock(page, element) -> str | None:
+    try:
+        return await page.call(SCROLL_LOCK, element, frame=element.frame)
+    except BrowseError:
+        return None
+
+
+async def dom_click(page, element, error: BrowseError):
+    from ardia_cli import command_metrics
+
+    clicked = await page.call(DOM_CLICK, element, frame=element.frame)
+    if isinstance(clicked, dict):
+        async def unblocked():
+            nonlocal clicked
+            clicked = await page.call(DOM_CLICK, element, frame=element.frame)
+            return not isinstance(clicked, dict)
+
+        if await poll(unblocked, CLOSING_MODAL_WAIT) and clicked:
+            command_metrics.flag("dom_click_waited_for_modal", True)
+    if isinstance(clicked, dict):
+        command_metrics.flag("dom_click_behind_modal", True)
+        name = clicked.get("modal")
+        lock = f'the modal dialog "{name}" is open over it' if name else "a modal dialog is open over it"
+        raise BrowseError(
+            f"Element {element.label} is outside the visible page, and {lock}. Close that first (press Escape, or its close button), then retry",
+            data={**(error.data or {}), "scrollLock": lock}, code="outside_viewport",
+        )
+    if not clicked:
+        raise error
+    command_metrics.flag("dom_click_fallback", True)
+    point = (error.data or {}).get("point") or ["?", "?"]
+    page.state.click_note = (f"{element.label} sits outside the page (at {point[0]:.0f},{point[1]:.0f}) where scrolling can't reach, so it got a "
+                             "DOM click instead of a pointer click" if isinstance(point[0], (int, float)) else
+                             f"{element.label} sits outside the page, so it got a DOM click instead of a pointer click")
 
 
 async def hover(page, element, humanize: bool):
@@ -318,6 +629,120 @@ async def focus_field(page, element, info, humanize: bool, tolerate_detach: bool
             raise
 
 
+BOX_SETTLE_POLL = 0.05
+BOX_SETTLE_LIMIT = 1.0
+CENTER = "(el) => { const before = el.getBoundingClientRect(); el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' }); const after = el.getBoundingClientRect(); return Math.abs(after.top - before.top) + Math.abs(after.left - before.left) > 1; }"
+CONSENT_SETTLE = 0.5
+VISIBLE_LABEL = """(el) => {
+  if (!(el instanceof HTMLInputElement) || !/^(checkbox|radio)$/.test(el.type)) return null;
+  const shown = (node) => {
+    const rect = node.getBoundingClientRect();
+    return rect.width >= 2 && rect.height >= 2 && (!node.checkVisibility || node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }));
+  };
+  const labels = [...(el.labels || [])];
+  const wrapping = el.closest("label");
+  if (wrapping && !labels.includes(wrapping)) labels.push(wrapping);
+  return labels.find(shown) || null;
+}"""
+VISIBLE_CONTENT = """(el) => {
+  const box = el.getBoundingClientRect();
+  if (box.width >= 2 && box.height >= 2) return null;
+  const shown = (node) => {
+    const rect = node.getBoundingClientRect();
+    return rect.width >= 2 && rect.height >= 2 && (!node.checkVisibility || node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }));
+  };
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_ELEMENT);
+  for (let node = walker.nextNode(), seen = 0; node && seen < 400; node = walker.nextNode(), seen++) {
+    if (shown(node)) return node;
+  }
+  return null;
+}"""
+SCROLL_LOCK = """(el) => {
+  const shown = (node) => node.checkVisibility ? node.checkVisibility({ checkVisibilityCSS: true }) : !!node.offsetParent;
+  const dialogs = [...document.querySelectorAll("dialog[open], [role=dialog], [role=alertdialog], [aria-modal=true]")]
+    .filter((node) => shown(node) && !node.contains(el));
+  const dialog = dialogs[dialogs.length - 1];
+  if (dialog) {
+    const labelled = dialog.getAttribute("aria-labelledby");
+    const name = (dialog.getAttribute("aria-label") || (labelled && document.getElementById(labelled)?.innerText) || dialog.innerText || "")
+      .trim().split("\\n")[0].slice(0, 60);
+    return name ? `the dialog "${name}" is open and holds the page still` : "an open dialog holds the page still";
+  }
+  const locked = (node) => {
+    const style = node && getComputedStyle(node);
+    return !!style && (style.position === "fixed" || /hidden|clip/.test(style.overflowY));
+  };
+  if (locked(document.body) || locked(document.documentElement)) return "the page's scrolling is locked, usually by an open menu or overlay";
+  return null;
+}"""
+DOM_CLICK = """(el) => {
+  if (!el.isConnected || (el.checkVisibility && !el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }))) return false;
+  const rect = el.getBoundingClientRect();
+  if (rect.width < 4 || rect.height < 4) return false;
+  const style = getComputedStyle(el);
+  if ((style.clip && style.clip !== "auto") || (style.clipPath && style.clipPath !== "none")) return false;
+  let clipped = false;
+  for (let node = el.parentElement; node && node !== document.body; node = node.parentElement) {
+    const overflow = getComputedStyle(node).overflowX + " " + getComputedStyle(node).overflow;
+    if (/hidden|auto|scroll|clip/.test(overflow)) { clipped = true; break; }
+  }
+  if (!clipped) return false;
+  const within = (outer, node) => {
+    for (; node; node = node.parentNode || node.host) if (node === outer) return true;
+    return false;
+  };
+  const modals = el.checkVisibility && CSS.supports("selector(:modal)")
+    ? [...document.querySelectorAll("dialog:modal, [aria-modal=true]")].filter((modal) => !/opacity\\(0\\)/.test(getComputedStyle(modal).filter))
+    : [];
+  const owner = (node) => modals.filter((modal) => within(modal, node)).pop();
+  const ownerAt = (x, y) => {
+    let hit = document.elementFromPoint(x, y);
+    for (let inner = hit?.shadowRoot?.elementFromPoint(x, y); inner && inner !== hit; inner = hit.shadowRoot?.elementFromPoint(x, y)) hit = inner;
+    return hit?.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) ? owner(hit) : undefined;
+  };
+  function* tree(node) {
+    yield node;
+    if (node.shadowRoot) for (const child of node.shadowRoot.children) yield* tree(child);
+    for (const child of node.children) yield* tree(child);
+  }
+  const boxes = new Map(), hits = [];
+  for (const modal of modals) {
+    const sampled = [];
+    boxes.set(modal, sampled);
+    let seen = 0, tried = 0;
+    walk: for (const node of tree(modal)) {
+      if (++seen > 200 || tried >= 40) break;
+      const box = node.getBoundingClientRect();
+      const left = Math.max(box.left, 0), right = Math.min(box.right, innerWidth), top = Math.max(box.top, 0), bottom = Math.min(box.bottom, innerHeight);
+      if (right - left < 2 || bottom - top < 2 || getComputedStyle(node).pointerEvents === "none") continue;
+      sampled.push({ left, right, top, bottom });
+      for (const [fx, fy] of [[0.5, 0.5], [0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75]]) {
+        const x = left + (right - left) * fx, y = top + (bottom - top) * fy, over = ownerAt(x, y);
+        tried++;
+        if (over) hits.push({ over, x, y });
+        if (over === modal) break walk;
+      }
+    }
+  }
+  const open = modals.filter((modal) => hits.some((hit) => hit.over === modal));
+  if (open.length) {
+    const under = (modal, { over, x, y }) => over !== modal && boxes.get(modal).some((box) => x >= box.left && x <= box.right && y >= box.top && y <= box.bottom);
+    const top = open.filter((modal) => !hits.some((hit) => under(modal, hit)));
+    const ranked = top.length ? top : open.slice(-1);
+    const focused = owner(document.activeElement);
+    const holding = ranked.length > 1 && ranked.includes(focused) ? [focused] : ranked;
+    if (!holding.some((modal) => within(modal, el))) {
+      const blocking = holding[holding.length - 1];
+      const labelled = blocking.getAttribute("aria-labelledby");
+      const name = (blocking.getAttribute("aria-label") || (labelled && document.getElementById(labelled)?.innerText) || blocking.innerText || "")
+        .trim().split("\\n")[0].slice(0, 60);
+      return { modal: name };
+    }
+  }
+  el.focus && el.focus({ preventScroll: true });
+  el.click();
+  return true;
+}"""
 REPLACEMENT = """(old) => {
   const active = document.activeElement;
   if (!active || active === old || active === document.body) return null;
@@ -351,7 +776,7 @@ async def settle_focus(page, element, loader: str | None):
 async def type_into(page, element, text: str, humanize: bool, guard=None):
     keyboard = page.input.keyboard(element=element, guard=guard)
     await expect_input(page, element.frame, lambda: page.input.gesture("type", lambda: keyboard.type_text(text, humanize=humanize)),
-                       {"keydown": len(text), "keyup": len(text)}, "The typing")
+                       {"keydown": len(text), "keyup": len(text)}, "The typing", element)
 
 
 async def clear_field(page, element, humanize: bool):
@@ -359,27 +784,49 @@ async def clear_field(page, element, humanize: bool):
     if not info.get("value"):
         return
     await expect_input(page, element.frame, lambda: page.input.gesture("clear", lambda: page.input.press_combo("Meta+a", humanize)),
-                       {"keydown": 2}, "Select all")
+                       {"keydown": 2}, "Select all", element)
     await expect_input(page, element.frame, lambda: page.input.gesture("clear", lambda: page.input.press_combo("Backspace", humanize)),
-                       {"keydown": 1}, "Backspace")
+                       {"keydown": 1}, "Backspace", element)
     info = await page.call("(el) => ardiaBrowse.info(el)", element, frame=element.frame)
     if info.get("value"):
         raise BrowseError(f"Couldn't clear {element.label}; it still holds text")
 
 
+async def not_editable_message(page, element) -> str:
+    try:
+        facts = await page.call("""(el) => ({ role: (el.getAttribute("role") || el.tagName).toLowerCase(), name: ardiaBrowse.accessibleText(el).trim().slice(0, 60),
+            popup: (el.getAttribute("aria-haspopup") || "").toLowerCase(), expands: el.hasAttribute("aria-expanded"),
+            combo: ardiaBrowse.comboKind(el) })""", element, frame=element.frame, read=True)
+    except BrowseError:
+        return f"Element {element.label} isn't an editable field"
+    named = f'{facts["role"]} "{facts["name"]}"' if facts.get("name") else facts["role"]
+    if facts.get("combo"):
+        return f"{element.label} is a {named}, not a text field: pick from it with `select {element.label} <option>`"
+    if facts.get("popup") and facts["popup"] != "false" or facts.get("expands"):
+        return (f"{element.label} is a {named} that opens a picker, not a text field: click it, then click the value in what opens "
+                "(a date picker's day button usually carries the full date as its name)")
+    return f"{element.label} is a {named}, which takes no typing; use click, select or check"
+
+
 async def fill(page, element, text: str, humanize: bool, guard=None):
     info = await page.call("(el) => ardiaBrowse.info(el)", element, frame=element.frame)
-    if info.get("tag") == "select":
-        raise BrowseError(f"{element.label} is a <select>; use `ardia browse select {element.label} <value>`")
+    if info.get("disabled"):
+        await wait_enabled(page, element)
+        info = await page.call("(el) => ardiaBrowse.info(el)", element, frame=element.frame)
+    if info.get("tag") == "select" and guard is None:
+        return False, await pick_option(page, element, text)
     if not info.get("editable") or info.get("disabled"):
-        raise BrowseError(f"Element {element.label} isn't an editable field", code="not_editable")
+        cell = await cell_of(page, element) if guard is None else None
+        if cell is not None:
+            return False, await fill_cell(page, element, cell, text, humanize)
+        raise BrowseError(await not_editable_message(page, element), code="not_editable")
     if info.get("tag") == "input" and info.get("type") in fields.SET_DIRECTLY:
         return False, await set_value(page, element, info["type"], text)
     loader = page.loader(element.frame)
     await focus_field(page, element, info, humanize, tolerate_detach=True)
     element, retargeted = await settle_focus(page, element, loader)
     await clear_field(page, element, humanize)
-    if text and inserts_at_once(info, humanize, guard):
+    if text and inserts_at_once(info, humanize, guard) and await plain_input(page, element, info):
         await insert_text(page, element, text)
     elif text:
         await type_into(page, element, text, humanize, guard)
@@ -387,12 +834,144 @@ async def fill(page, element, text: str, humanize: bool, guard=None):
 
 
 def inserts_at_once(info: dict, humanize: bool, guard) -> bool:
-    return not humanize and guard is None and (info.get("tag") == "textarea" or info.get("tag") not in ("input",) and bool(info.get("editable")))
+    if humanize or guard is not None:
+        return False
+    if info.get("tag") == "input":
+        return (info.get("type") or "text") in INSERTED_INPUT_TYPES
+    return info.get("tag") == "textarea" or bool(info.get("editable"))
+
+
+async def plain_input(page, element, info: dict) -> bool:
+    if info.get("tag") != "input":
+        return True
+    return await combo_kind(page, element) is None
+
+
+async def pick_option(page, element, text: str) -> str:
+    options = await page.call(
+        "(el) => Array.from(el.options).filter((o) => !o.disabled).map((o) => ({ text: (o.label || o.textContent || '').trim(), exact: [o.value] }))",
+        element, frame=element.frame, read=True,
+    )
+    try:
+        index = pick_suggestion(text, options or [], element.label)
+    except BrowseError as error:
+        raise BrowseError(error.message.replace("suggestion", "option"), data=error.data, code=error.code) from None
+    await select(page, element, [options[index]["exact"][0]])
+    command_metrics.flag("fill_picked_option", True)
+    return options[index]["text"]
+
+
+async def cell_of(page, element):
+    remote = await page.call(CELL_OF, element, frame=element.frame, by_value=False, read=True)
+    return await page.element_from(remote, element.frame, f"the cell of {element.label}") if isinstance(remote, dict) else None
+
+
+async def press_key(page, frame, key: str, humanize: bool):
+    await expect_input(page, frame, lambda: page.input.gesture("press", lambda: page.input.press_combo(key, humanize)), {"keydown": 1}, "The key press")
+
+
+async def poll(check, timeout: float):
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while True:
+        found = await check()
+        if found or loop.time() >= deadline:
+            return found
+        await asyncio.sleep(POLL)
+
+
+async def cell_editor(page, cell, humanize: bool):
+    started = await page.call(CELL_START, cell, frame=cell.frame)
+    if started.get("inner"):
+        inner = await page.call(CELL_INNER, frame=cell.frame, by_value=False)
+        field = await page.element_from(inner, cell.frame, f"the field in {cell.label}")
+        if field is not None:
+            return started["was"], field, bool(started.get("open"))
+
+    await scroll_into_view(page, cell, humanize)
+    await page.call(SETTLED_FRAMES, frame=cell.frame, read=True)
+    await page.call(CELL_REVEAL, frame=cell.frame)
+    await page.call(SETTLED_FRAMES, frame=cell.frame, read=True)
+    found = await page.call(CELL_FIND, frame=cell.frame, by_value=False, read=True)
+    shown = await page.element_from(found, cell.frame, cell.label) if isinstance(found, dict) else None
+    if shown is None:
+        raise BrowseError(f"The grid redrew {cell.label} when it scrolled into view, and the cell couldn't be found again; snapshot and retry",
+                          code="element_replaced")
+
+    async def focused():
+        remote = await page.call(CELL_EDITOR, shown, frame=shown.frame, by_value=False, read=True)
+        return await page.element_from(remote, shown.frame, f"the editor of {cell.label}") if isinstance(remote, dict) else None
+
+    await click(page, shown, humanize, 2)
+    editor = await poll(focused, EDITOR_WAIT)
+    if editor is None:
+        await press_key(page, cell.frame, "Enter", humanize)
+        editor = await poll(focused, EDITOR_WAIT)
+    if editor is None:
+        raise BrowseError(
+            f"Double-clicking {cell.label} and pressing Enter opened no editor, so nothing was typed. Snapshot to see what it "
+            "opened, or focus the cell and use `keyboard type <text>` then `press Enter`",
+            code="not_editable",
+        )
+    return started["was"], editor, True
+
+
+async def set_editor(page, editor, text: str, humanize: bool):
+    kind = await combo_kind(page, editor)
+    if kind == "select":
+        await pick_option(page, editor, text)
+    elif kind == "datalist":
+        known = await page.call("(el) => ardiaBrowse.datalistValues(el)", editor, frame=editor.frame, read=True) or []
+        items = [{"text": item, "pieces": []} for item in known]
+        levels = [match_level(text, item) for item in items]
+        best = max(levels, default=0)
+        await fill(page, editor, known[levels.index(best)] if best and levels.count(best) == 1 else text, humanize)
+    elif kind in ("typeahead", "button"):
+        await choose(page, editor, [text], humanize, editor.label)
+    else:
+        await fill(page, editor, text, humanize)
+
+
+async def commit_cell(page, editor, humanize: bool):
+    state = await page.call(CELL_EDITOR_STATE, editor, frame=editor.frame, read=True)
+    if not state.get("open"):
+        return
+    await press_key(page, editor.frame, "Enter", humanize)
+
+    async def closed():
+        now = await page.call(CELL_EDITOR_STATE, editor, frame=editor.frame, read=True)
+        return None if now.get("open") else True
+
+    if await poll(closed, COMMIT_WAIT):
+        return
+    state = await page.call(CELL_EDITOR_STATE, editor, frame=editor.frame, read=True)
+    with contextlib.suppress(BrowseError):
+        await press_key(page, editor.frame, "Escape", humanize)
+    said = f": {state['message'].rstrip('.')}" if state.get("message") else ""
+    raise BrowseError(
+        f"The cell's editor stayed open after Enter{said}. The edit was cancelled (Escape), so the cell keeps its old value",
+        data={"message": state.get("message") or None}, code="rejected",
+    )
+
+
+async def fill_cell(page, element, cell, text: str, humanize: bool) -> dict | None:
+    cell.label = element.label
+    was, editor, opened = await cell_editor(page, cell, humanize)
+    names = await page.call("(el) => ardiaBrowse.labelText(el)", editor, frame=editor.frame, read=True) or []
+    name = next((" ".join(str(item).split()) for item in names if str(item).strip()), "")
+    await set_editor(page, editor, text, humanize)
+    command_metrics.add("cell_edits")
+    if not opened:
+        return None
+    await commit_cell(page, editor, humanize)
+    now = await page.call(CELL_NOW, frame=cell.frame, read=True)
+    return {"cell": name or element.label, "value": now, "was": was}
 
 
 async def insert_text(page, element, text: str):
+    command_metrics.flag("fill_inserted_text", True)
     await expect_input(page, element.frame, lambda: page.input.gesture("fill", lambda: page.send("Input.insertText", {"text": text}, input_event=True)),
-                       {"beforeinput|input": 1}, "The text insert")
+                       {"beforeinput|input": 1}, "The text insert", element)
 
 
 async def set_value(page, element, kind: str, text: str) -> str:
@@ -422,7 +1001,7 @@ async def set_checked(page, element, wanted: bool, humanize: bool):
     if info.get("checked") == wanted:
         return
     if info.get("disabled"):
-        raise BrowseError(f"Element {element.label} is disabled")
+        await wait_enabled(page, element)
     target = element
     try:
         await target_point(page, element, humanize, check_cover=False)
@@ -441,6 +1020,7 @@ async def set_checked(page, element, wanted: bool, humanize: bool):
 
 
 async def select(page, element, values: list[str]):
+    await wait_enabled(page, element)
     await page.focus_element(element)
     return await page.call("(el, values) => ardiaBrowse.selectOptions(el, values)", element, values, frame=element.frame)
 
@@ -567,6 +1147,8 @@ async def stale_refusal(page, element, value: str, items: list[dict], where: str
 
 async def choose(page, element, values: list[str], humanize: bool, where: str, timeout: float = SUGGESTION_TIMEOUT) -> list[dict]:
     kind = await combo_kind(page, element)
+    if kind is not None:
+        await wait_enabled(page, element)
     if kind is None:
         raise BrowseError(f"{element.label} isn't a <select> or a combobox, so there's nothing to pick from; use fill or click", code="not_selectable")
     picked = []
@@ -592,6 +1174,8 @@ async def choose(page, element, values: list[str], humanize: bool, where: str, t
                     fresh = True
             if not fresh and exact_pick(value, items) is None:
                 raise await stale_refusal(page, element, value, items, where, timeout)
+            if items and await page.call("(el) => ardiaBrowse.usedOpenedList(el)", element, frame=element.frame, read=True):
+                command_metrics.flag("select_opened_list", True)
         finally:
             await unwatch_suggestions(page, element)
         index = exact_pick(value, items) if not fresh else pick_suggestion(value, items, where)
@@ -624,10 +1208,10 @@ class DragInterception:
         self.cleaned = False
         try:
             await self.page.send("Input.setInterceptDrags", {"enabled": True})
-        except Gated:
+        except Gated as error:
             self.page.drag_intercepted = None
             self.cleaned = True
-            raise Gated("Input.setInterceptDrags", "drag", DRAG_GATED) from None
+            raise error.during("drag", DRAG_GATED) from None
         except BaseException:
             await self.finish()
             raise
@@ -731,7 +1315,66 @@ def interrupted_drag(error: BrowseError) -> BrowseError:
     return OutcomeUnknown("drag", f"the drag was interrupted ({error.message}); any held button was released at the last position")
 
 
-async def drag(page, source, target, humanize: bool) -> dict:
+def drop_point(box: tuple, source: tuple, side: str | None) -> tuple[float, float]:
+    left, top, right, bottom = box
+    cx, cy = (left + right) / 2, (top + bottom) / 2
+    vertical = abs(cy - source[1]) >= abs(cx - source[0])
+    forward = cy > source[1] if vertical else cx > source[0]
+    after = forward if side is None else side == "after"
+    share = DRAG_FAR_SHARE if after else 1 - DRAG_FAR_SHARE
+    if vertical:
+        return cx, top + (bottom - top) * share
+    return left + (right - left) * share, cy
+
+
+async def settled_box(page, element) -> tuple | None:
+    box = await element_box(page, element)
+    deadline = asyncio.get_running_loop().time() + BOX_SETTLE_LIMIT
+    while box is not None and asyncio.get_running_loop().time() < deadline:
+        await asyncio.sleep(BOX_SETTLE_POLL)
+        now = await element_box(page, element)
+        if now is None or max(abs(before - after) for before, after in zip(box, now)) <= 1:
+            return now
+        command_metrics.flag("waited_for_box_to_settle", True)
+        box = now
+    return box
+
+
+async def element_box(page, element) -> tuple | None:
+    try:
+        quads = (await page.send("DOM.getContentQuads", {"backendNodeId": element.backend_id})).get("quads") or []
+    except CdpError as error:
+        if "content quads" not in error.cdp_message:
+            raise
+        return None
+    best = None
+    for quad in quads:
+        xs, ys = quad[0::2], quad[1::2]
+        area = (max(xs) - min(xs)) * (max(ys) - min(ys))
+        if area > 1 and (best is None or area > best[0]):
+            best = (area, min(xs), min(ys), max(xs), max(ys))
+    return best[1:] if best else None
+
+
+async def list_before(page, source, target) -> dict | None:
+    if source.frame != target.frame:
+        return None
+    found = await page.call(LIST_BEFORE, source, target, frame=source.frame)
+    return found if isinstance(found, dict) else None
+
+
+async def list_after(page, frame: str, before: dict) -> dict | None:
+    try:
+        found = await page.call(LIST_AFTER, frame=frame, read=True)
+    except BrowseError:
+        return None
+    if not isinstance(found, dict):
+        return None
+    command_metrics.flag("drag_list_position", True)
+    return {"from": before["from"], "to": found["to"], "count": found["count"]}
+
+
+async def drag(page, source, target, humanize: bool, side: str | None = None) -> dict:
     interception = DragInterception(page, source.frame, target.frame) if await draggable(page, source) else None
     if interception is not None:
         await interception.start()
@@ -739,6 +1382,9 @@ async def drag(page, source, target, humanize: bool) -> dict:
     try:
         x1, y1, _ = await target_point(page, source, humanize)
         x2, y2, _ = await target_point(page, target, humanize, check_cover=False)
+        box = await element_box(page, target)
+        if box is not None:
+            x2, y2 = drop_point(box, (x1, y1), side)
 
         async def run():
             try:
@@ -781,6 +1427,13 @@ async def scroll(page, direction: str, amount: float, humanize: bool, selector_e
         ox, oy = await frame_offset(page, selector_element.frame)
         point = (ox + r["x"] + r["width"] * random.uniform(0.35, 0.65), oy + r["y"] + r["height"] * random.uniform(0.35, 0.65))
         frame = selector_element.frame
-    needs = {} if distance == 0 or not await page.takes_input() else {"wheel": 1}
+    else:
+        vp = await viewport(page)
+        x, y = page.input.mouse._position
+        if not (8 <= x <= vp["width"] - 8 and 8 <= y <= vp["height"] - 8):
+            x, y = vp["width"] * random.uniform(0.35, 0.65), vp["height"] * random.uniform(0.35, 0.65)
+        point = (x, y)
+    landed_inside = frame is None and distance != 0 and await over_frame(page, *point)
+    needs = {} if distance == 0 or landed_inside or not await page.takes_input() else {"wheel": 1}
     await expect_input(page, frame, lambda: page.input.gesture("scroll", lambda: scroll_wheel(page, distance, vertical, humanize, point, frame, selector_element), allow_hidden=True),
                        needs, "The scroll")

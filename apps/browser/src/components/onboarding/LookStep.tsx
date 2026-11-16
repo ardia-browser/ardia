@@ -7,20 +7,22 @@ import { useWindowProfileValue } from "../../state/profiles/hooks";
 import type { Settings } from "../../state/settings/settings";
 import { ChoiceList, type ChoiceOption } from "./ChoiceList";
 import { ThemePicker } from "../settings/ThemeEditor";
-import { MockPanel, useScreen } from "./Screen";
-import { previewColor, previewLive, previewTheme, setOnboardingExtras, useOnboarding } from "../../state/onboarding/onboarding";
+import { MockPanel, StylePanel, useScreen } from "./Screen";
+import { liquidGlass, previewColor, previewLive, previewTheme, setOnboardingExtras, useOnboarding } from "../../state/onboarding/onboarding";
 import { keysOf } from "../../state/onboarding/questions";
 import { change, Page, useQuestion } from "./LayoutSteps";
 import { OptionCard } from "./OptionCard";
-import { OptionRow } from "./Parts";
+import { OptionRow, useOnboardingCard } from "./Parts";
 import { Slider } from "../settings/ThemeControls";
 import { Text } from "../ui";
-import { PAGE_FRAME } from "../../lib/windowLayout";
+import { noteOnboardingStyle } from "../../state/telemetry/usage";
+import { PAGE_FRAME, pageFrameInset } from "../../lib/windowLayout";
+import { PLATFORM_TERMS } from "../../lib/platformTerms";
 
 const LOOK_KEYS = keysOf("look");
 
 const APPEARANCE_CHOICES: ChoiceOption<Settings["appearance"]>[] = [
-  { value: "auto", preview: "appearance-auto", title: "Automatic", subtitle: "Light by day, dark by night, like your Mac" },
+  { value: "auto", preview: "appearance-auto", title: "Automatic", subtitle: `Light by day, dark by night, like your ${PLATFORM_TERMS.computer}` },
   { value: "light", preview: "appearance-light", title: "Light", subtitle: "Always light" },
   { value: "dark", preview: "appearance-dark", title: "Dark", subtitle: "Always dark" },
 ];
@@ -29,7 +31,7 @@ const SITE_COLOR_CHOICES: ChoiceOption<boolean>[] = [
   { value: false, preview: "sitecolor-off", title: "Keep my theme color", subtitle: "The same color on every site" },
 ];
 const STYLE_CHOICES: ChoiceOption<Settings["interfaceStyle"]>[] = [
-  { value: "glass", preview: "style-glass", title: "Liquid Glass", subtitle: "Buttons and panels catch the light, as in macOS Tahoe" },
+  { value: "glass", preview: "style-glass", title: "Liquid Glass", subtitle: "Buttons and panels catch the light, as in Tahoe" },
   { value: "classic", preview: "style-classic", title: "Classic", subtitle: "Flat and quiet, as in Dia" },
 ];
 const SWITCHER_CHOICES: ChoiceOption<boolean>[] = [
@@ -53,6 +55,7 @@ const framePicked = (frame: number) => (frame === PAGE_FRAME.default ? [] : fram
 export function LookStep() {
   const { id, focus } = useQuestion("look");
   const { values, mock } = useScreen(LOOK_KEYS);
+  const { compact } = useOnboardingCard();
   const windowId = useOnboarding((s) => s.windowId) ?? "";
   const appIcon = useOnboarding((s) => s.extras.appIcon);
   const color = useWindowProfileValue(windowId, (p) => p?.color);
@@ -60,7 +63,7 @@ export function LookStep() {
   const [icons, setIcons] = useState<{ list: AppIcon[]; current: string | null }>({ list: [], current: null });
   const preview = <MockPanel settings={mock} focus={focus.focus} />;
   useEffect(() => {
-    previewLive({ appearance: values.appearance, interfaceStyle: values.interfaceStyle, extendWebsiteColor: values.extendWebsiteColor });
+    previewLive({ appearance: values.appearance, extendWebsiteColor: values.extendWebsiteColor, ...(liquidGlass ? { interfaceStyle: values.interfaceStyle } : {}) });
     void Promise.all([appIcons(56), currentAppIcon()]).then(
       ([list, current]) => setIcons({ list, current }),
       () => {},
@@ -88,15 +91,16 @@ export function LookStep() {
         subtitle="Change it any time in Settings › Appearance."
         patch={{ interfaceStyle: values.interfaceStyle, glassTintWithTheme: values.glassTintWithTheme, glassTintAmount: values.glassTintAmount }}
         picked={values.interfaceStyle === "classic" ? ["Classic style"] : values.glassTintWithTheme ? [`Glass tinted ${Math.round(values.glassTintAmount * 100)} %`] : []}
-        preview={preview}
+        preview={<StylePanel settings={mock} focus={focus.focus} />}
+        onConfirm={() => noteOnboardingStyle(values.interfaceStyle, values.glassTintWithTheme)}
       >
         <ChoiceList options={STYLE_CHOICES} value={values.interfaceStyle} onChange={(interfaceStyle) => change({ interfaceStyle }, true)} mock={focus} />
         {values.interfaceStyle === "glass" ? (
-          <View style={{ gap: space.ml, marginTop: space.xl }}>
+          <View style={{ gap: compact ? space.m : space.ml }}>
             <OptionCard
               control="check"
               title="Tint the glass with your color"
-              subtitle="Buttons and fields take on your theme color"
+              subtitle={compact ? undefined : "Buttons and fields take on your theme color"}
               selected={values.glassTintWithTheme}
               onPress={() => change({ glassTintWithTheme: !values.glassTintWithTheme }, true)}
             />
@@ -107,30 +111,32 @@ export function LookStep() {
         ) : null}
       </Page>
     );
-  if (id === "frame")
+  if (id === "frame") {
+    const frame = pageFrameInset(values);
     return (
       <Page
         id={id}
         title="How much frame?"
         subtitle="The room between the page and the window. Change it any time in Settings › Appearance."
-        patch={{ pageFrame: values.pageFrame }}
-        picked={framePicked(values.pageFrame)}
+        patch={{ pageFrame: values.pageFrame, borderlessMode: values.borderlessMode }}
+        picked={framePicked(frame)}
         preview={preview}
       >
         <View style={{ gap: space.ml }}>
           {FRAME_CHOICES.map((c) => (
-            <OptionCard key={c.value} control="radio" title={c.title} subtitle={c.subtitle} selected={values.pageFrame === c.value} onPress={() => change({ pageFrame: c.value }, true)} />
+            <OptionCard key={c.value} control="radio" title={c.title} subtitle={c.subtitle} selected={frame === c.value} onPress={() => change({ pageFrame: c.value, borderlessMode: false }, true)} />
           ))}
           <View style={{ marginTop: space.m }}>
-            <Slider stacked label="Thickness" value={values.pageFrame / PAGE_FRAME.max} onChange={(v) => change({ pageFrame: Math.round(v * PAGE_FRAME.max) }, true)}>
+            <Slider stacked label="Thickness" value={frame / PAGE_FRAME.max} onChange={(v) => change({ pageFrame: Math.round(v * PAGE_FRAME.max), borderlessMode: false }, true)}>
               <Text size="small" tone="textSecondary" style={{ width: FRAME_VALUE_WIDTH, textAlign: "right" }}>
-                {`${values.pageFrame} pt`}
+                {`${frame} pt`}
               </Text>
             </Slider>
           </View>
         </View>
       </Page>
     );
+  }
   if (id === "switcher")
     return (
       <Page
@@ -159,12 +165,7 @@ export function LookStep() {
         picked={[]}
         preview={preview}
       >
-        <ChoiceList
-          options={SITE_COLOR_CHOICES}
-          value={values.extendWebsiteColor}
-          onChange={(extendWebsiteColor) => change({ extendWebsiteColor }, true)}
-          mock={focus}
-        />
+        <ChoiceList options={SITE_COLOR_CHOICES} value={values.extendWebsiteColor} onChange={(extendWebsiteColor) => change({ extendWebsiteColor }, true)} mock={focus} />
       </Page>
     );
   if (id === "lookMore")

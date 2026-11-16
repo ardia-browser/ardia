@@ -99,6 +99,8 @@ class WindowHost : public TabStripModelObserver,
   bool IsActiveBrowser(const Browser* browser) const;
   void set_internal(bool internal) { internal_ = internal; }
   bool internal() const { return internal_; }
+  void set_automation(bool automation) { automation_ = automation; }
+  bool automation() const { return automation_; }
   bool closing() const { return close_state_ == CloseState::kClosing; }
   void Close();
   void CloseRequestedByUser();
@@ -166,6 +168,7 @@ class WindowHost : public TabStripModelObserver,
   int close_attempt_ = 0;
   bool widget_close_allowed_ = false;
   bool internal_ = false;
+  bool automation_ = false;
   bool acted_fullscreen_ = false;
   OpenOrigin pending_open_;
   base::ObserverList<web_modal::ModalDialogHostObserver> modal_observers_;
@@ -187,13 +190,16 @@ class ScopedNotifying {
 };
 
 bool IsNotifyingTabStrip();
+bool IsNotifyingAny();
 bool DeferWhileTabStripNotifies(dispatch_block_t retry);
 bool DeferWhileAnyNotifies(dispatch_block_t retry);
 void InitialMainDocumentAccessed(content::WebContents* contents);
 
 bool OnlyShowedBlank(content::WebContents* contents);
 void CloseBlankTabsBeforeWindowCloses(Browser* browser);
-void DeleteTabClosedByHost(content::WebContents* contents);
+enum class ClosedTabRecord { kRecentlyClosed, kNone };
+void DeleteTabClosedByHost(content::WebContents* contents,
+                           ClosedTabRecord record = ClosedTabRecord::kRecentlyClosed);
 
 bool HostExtensionSidePanel(content::WebContents* contents,
                             const std::string& extension_id,
@@ -218,6 +224,7 @@ void HostExtensionInstallFailed(content::WebContents* contents, const std::u16st
 void InstallRuleMatchedHook();
 
 void StartMediaCaptureObserver();
+bool IsCapturingScreen(content::WebContents* contents);
 
 void ConfirmQuitWithDownloads(int count, base::OnceCallback<void(bool)> callback);
 void NotifyWindowsQuitCancelled();

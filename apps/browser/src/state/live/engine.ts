@@ -4,10 +4,16 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId, inPinnedContainer, viewTabIds } from "../browser/model";
 import { awayFromPin } from "../pins/organize";
 import { pinnedGroupMembers } from "../browser/structure";
+import { shownTabIds } from "../tabs/shownTabs";
 import { repoKey } from "./rows";
+import { hideNewRepos } from "./repoFilter";
 import { SOURCES } from "./sources";
-import { applyFetch, createFolder, releaseShownRepos, finishCompleting, live, markRead, removeFolder, setStatus, unhide, useLive } from "./store";
+import { beginLiveRefresh, applyFetch, createFolder, finishCompleting, live, markRead, removeFolder, setStatus, unhide, useLive } from "./store";
 import { LiveError, type CompletionState, type LiveFolderKind, type LiveItem, type LiveSourceId, type PullRequestSection } from "./types";
+import { noteLiveCompletedTabsClosed } from "../telemetry/liveCompletedTabs";
+import { isPlaying, useMedia } from "../media/media";
+import { usePages } from "../tabs/pageState";
+import type { MediaAccess } from "../../platform/tabs";
 
 const INTERVAL_MS: Record<LiveFolderKind, number> = { pullRequests: 3 * 60_000, documents: 10 * 60_000 };
 const STALE_ON_FOCUS_MS = 60_000;
@@ -37,7 +43,23 @@ export function manualRefresh(folderId: string): Promise<void> {
   return refreshFolder(folderId);
 }
 
+const sortedKeys = (_key: string, value: unknown) =>
+  value && typeof value === "object" && !Array.isArray(value) ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) : value;
+const sameFolder = (a: unknown, b: unknown) => JSON.stringify(a, sortedKeys) === JSON.stringify(b, sortedKeys);
+
+function claimRefresh(folderId: string) {
+  const refresh = beginLiveRefresh(folderId);
+  return refresh?.catch((error: unknown) => { console.warn("Couldn't claim the live folder refresh", error); return null; }).then((fence) => {
+    if (fence === null && live().folders[folderId]) setStatus(folderId, { state: "idle" });
+    return fence;
+  });
+}
+
 async function run(folderId: string) {
+  if (!live().folders[folderId]) return;
+  const claim = claimRefresh(folderId);
+  let fence = claim ? await claim : undefined;
+  if (fence === null) return;
   const folder = live().folders[folderId];
   if (!folder) return;
   const before = live();
@@ -71,6 +93,18 @@ async function run(folderId: string) {
     Object.assign(gone, await resolve(missing.filter((it) => it.source === source)).catch(() => ({})));
   }
 
+  const folderBeforeHiding = live().folders[folderId];
+  hideNewRepos(folderId, fetched);
+  const folderAfterHiding = live().folders[folderId];
+  if (fence !== undefined && sameFolder(folderBeforeHiding, folder) && !sameFolder(folderAfterHiding, folderBeforeHiding)) {
+    const reclaim = claimRefresh(folderId);
+    fence = reclaim ? await reclaim : undefined;
+    if (fence === null || !live().folders[folderId]) return;
+    if (!sameFolder(live().folders[folderId], folderAfterHiding)) {
+      setStatus(folderId, { state: "idle" });
+      return;
+    }
+  }
   const current = live();
   const prev = current.items[folderId] ?? [];
   const animating = new Set(current.completing[folderId] ?? []);
@@ -85,11 +119,11 @@ async function run(folderId: string) {
   const quiet = new Set(lastSources ? next.filter((it) => !lastSources.has(it.source)).map((it) => it.id) : []);
   const succeeded = new Set(folder.sources.filter((id) => !failed.some((f) => f.source === id)));
   fetchedSources.set(folderId, succeeded);
-  applyFetch(folderId, order(next), gone, Date.now(), quiet);
-  releaseShownRepos(folderId, succeeded);
+  applyFetch(folderId, order(next), gone, Date.now(), quiet, fence, succeeded);
+  markCompletedTabs(folderId, gone, ids);
   if (firstFailure) setStatus(folderId, { state: "error", error: describe(firstFailure.source, firstFailure.error) });
   const leaving = Object.keys(gone);
-  if (leaving.length) setTimeout(() => finishCompleting(folderId, leaving), COMPLETION_MS);
+  if (leaving.length) setTimeout(() => finishCompleting(folderId, leaving, fence), COMPLETION_MS);
 }
 
 function describe(source: LiveSourceId, error: unknown) {
@@ -158,7 +192,8 @@ export function openLiveItem(windowId: string, folderId: string, item: LiveItem,
     return existing;
   }
   const id = s.newTab(windowId, { url: item.url, background: options.background });
-  useBrowser.getState().updateTab(id, { liveItem: { folderId, itemId: item.id }, pinnedUrl: home });
+  const completed = live().completed[folderId]?.some((c) => c.item.id === item.id && ended(c.state));
+  useBrowser.getState().updateTab(id, { liveItem: completed ? { folderId, itemId: item.id, completed } : { folderId, itemId: item.id }, pinnedUrl: home });
   return id;
 }
 
@@ -193,6 +228,41 @@ export function syncLiveHomes() {
   }
 }
 
+const ended = (state: CompletionState | undefined) => state === "merged" || state === "closed";
+
+function markCompletedTabs(folderId: string, gone: Record<string, CompletionState>, listed: Set<string>) {
+  const s = useBrowser.getState();
+  const hidden = new Set((live().hidden[folderId] ?? []).map((it) => it.id));
+  for (const t of Object.values(s.tabs)) {
+    const ref = t.liveItem;
+    if (ref?.folderId !== folderId) continue;
+    if (ended(gone[ref.itemId]) && !hidden.has(ref.itemId) && !ref.completed) s.updateTab(t.id, { liveItem: { ...ref, completed: true } });
+    else if (ref.completed && listed.has(ref.itemId)) s.updateTab(t.id, { liveItem: { folderId, itemId: ref.itemId } });
+  }
+  closeCompletedTabs();
+}
+
+const capturing = (access: MediaAccess | null | undefined) => !!access && (access.camera || access.microphone || access.screen);
+
+const inUse = (s: BrowserState, id: string) => {
+  const media = useMedia.getState();
+  return !!s.live[id]?.playingAudio || !!media.pipOpen[id] || isPlaying(media.sessions[id]) || capturing(usePages.getState().pages[id]?.mediaAccess) || !!media.tabShares[id] || Object.values(media.tabShares).some((share) => share.capturedTabId === id);
+};
+
+const playbackEnded = (s: BrowserState, prev: BrowserState) => s.live !== prev.live && Object.keys(prev.live).some((id) => prev.live[id]?.playingAudio && !s.live[id]?.playingAudio);
+
+function closeCompletedTabs() {
+  const s = useBrowser.getState();
+  const { folders, items } = live();
+  const shown = shownTabIds(s);
+  const tabs = Object.values(s.tabs)
+    .filter(({ id, liveItem: ref }) => ref?.completed && folders[ref.folderId]?.showCompleted === false && !shown.has(id) && !inPinnedContainer(s, id) && !inUse(s, id) && !items[ref.folderId]?.some((it) => it.id === ref.itemId))
+    .map((t) => t.id);
+  if (!tabs.length) return;
+  s.closeTabs(tabs);
+  noteLiveCompletedTabsClosed(tabs.length);
+}
+
 let started = false;
 const lastNudge = new Map<string, number>();
 
@@ -210,13 +280,12 @@ export function startLiveEngine() {
   useLive.subscribe((s, prev) => {
     if (s.folders !== prev.folders) orphans();
     if (s.items !== prev.items || s.hidden !== prev.hidden || s.completed !== prev.completed) syncLiveHomes();
+    if (s.folders !== prev.folders || s.items !== prev.items) closeCompletedTabs();
   });
+  closeCompletedTabs();
 
   useBrowser.subscribe((s, prev) => {
     if (s.groups !== prev.groups) syncLiveHomes();
-  });
-
-  useBrowser.subscribe((s, prev) => {
     if (s.profiles === prev.profiles) return;
     for (const f of Object.values(live().folders)) if (!s.profiles[f.profileId]) removeFolder(f.id);
   });
@@ -237,6 +306,16 @@ export function startLiveEngine() {
   });
   onWindowEvent((e) => {
     if (e.type === "focus") for (const id of live().folderOrder) if (due(id, STALE_ON_FOCUS_MS)) void refreshFolder(id);
+  });
+
+  useBrowser.subscribe((s, prev) => {
+    if (s.windows !== prev.windows || s.splits !== prev.splits || s.peeks !== prev.peeks || playbackEnded(s, prev)) closeCompletedTabs();
+  });
+  usePages.subscribe((p, prev) => {
+    if (p.pages !== prev.pages && Object.keys(prev.pages).some((id) => capturing(prev.pages[id]?.mediaAccess) && !capturing(p.pages[id]?.mediaAccess))) closeCompletedTabs();
+  });
+  useMedia.subscribe((m, prev) => {
+    if (m.pipOpen !== prev.pipOpen || m.sessions !== prev.sessions || m.tabShares !== prev.tabShares) closeCompletedTabs();
   });
 
   useBrowser.subscribe((s, prev) => {

@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 import shutil
+import sys
 import tempfile
 from pathlib import Path
 
@@ -38,6 +39,48 @@ def shipped_files() -> list[str]:
             if not name.endswith(".pyc"):
                 files.append((Path(root) / name).relative_to(source).as_posix())
     return sorted(files)
+
+
+def front_matter(text: str) -> dict[str, str]:
+    lines = text.split("\n")
+    if not lines or lines[0].strip() != "---":
+        return {}
+    fields = {}
+    for line in lines[1:]:
+        if line.strip() == "---":
+            return fields
+        key, separator, value = line.partition(":")
+        if separator and key and not key.startswith(" "):
+            fields[key.strip()] = value.strip()
+    return {}
+
+
+def skill_text(full: bool = False) -> str:
+    source = skill_source()
+    text = (source / "SKILL.md").read_text(encoding="utf-8")
+    if not full:
+        return text
+    parts = [text]
+    for name in shipped_files():
+        if name != "SKILL.md" and name.endswith(".md"):
+            body = (source / name).read_text(encoding="utf-8")
+            parts.append(f"\n--- {name} ---\n\n{body}")
+    return "".join(parts)
+
+
+def print_skill(full: bool = False) -> int:
+    from ardia_cli import telemetry
+
+    text = skill_text(full)
+    telemetry.note_count("output_chars", len(text))
+    sys.stdout.write(text)
+    return 0
+
+
+def list_skills() -> int:
+    fields = front_matter((skill_source() / "SKILL.md").read_text(encoding="utf-8"))
+    print(f"{fields.get('name', SKILL_NAME)}\t{fields.get('description', '')}")
+    return 0
 
 
 def legacy_versions() -> list[dict]:
@@ -215,8 +258,9 @@ def companion_line(folder: Path) -> tuple[str, int]:
 
 
 def record_path() -> Path:
-    cli_home = os.environ.get("ARDIA_CLI_HOME") or str(Path.home() / "Library" / "Application Support" / "Ardia" / "CLI")
-    return Path(cli_home).expanduser() / "skills.json"
+    from ardia_cli import usage
+
+    return usage.cli_home() / "skills.json"
 
 
 def recorded_folders() -> list[Path]:
@@ -263,6 +307,39 @@ def install(targets: list[str], project: bool, computer_use: bool = True, replac
     if installed:
         save_record(recorded_folders() + installed)
     return status
+
+
+AGENT_HOMES = {
+    "claude-code": ".claude",
+    "codex": ".codex",
+    "cursor": ".cursor",
+    "opencode": ".config/opencode",
+}
+
+
+def detected_targets() -> list[str]:
+    found = [target for target, home in AGENT_HOMES.items() if (Path.home() / home).is_dir()]
+    return found or ["general"]
+
+
+def install_detected(computer_use: bool = True) -> int:
+    recorded = set(recorded_folders())
+    targets = []
+    for target in detected_targets():
+        folder = destination(target, False).absolute()
+        exists = folder.is_symlink() or folder.exists()
+        if not exists and folder in recorded:
+            print(f"{target}: skipped {folder}: removed after an earlier install")
+            continue
+        if exists and owned_files(folder) is None:
+            print(f"{target}: skipped {folder}: not installed by ardia")
+            continue
+        targets.append(target)
+    from ardia_cli import telemetry
+
+    telemetry.note_count("skills_installed", len(targets))
+    telemetry.note_count("skills_skipped", len(detected_targets()) - len(targets))
+    return install(targets, False, computer_use) if targets else 0
 
 
 def refresh() -> int:

@@ -8,7 +8,7 @@ import { forgetOpeners, joinedWithCurrent, newTabPlacement, switchKeepsOpeners }
 import { onUrlChange } from "../pins/organize";
 import { groupWithOpener } from "../pins/tabGrouping";
 import { stepDrop } from "../drag/drops";
-import { resolveTyped } from "../settings/settings";
+import { customNewTabUrl, resolveTyped } from "../settings/settings";
 import { openSettings } from "../settings/settingsWindows";
 import { appUrlAction } from "../pages/appUrls";
 import { handOffPinPage } from "../pins/pinHandoff";
@@ -63,6 +63,8 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
   closedTabs: [],
 
   newTab(windowId, options) {
+    const home = options?.newTabCommand && !options.url && !options.adoptId && !options.gated ? customNewTabUrl(get().settings) : undefined;
+    if (home) return get().newTab(windowId, { ...options, url: home });
     const small = get().windows[windowId];
     if (small?.kind === "small" && small.tabIds.length) {
       const profileId = options?.profileId ?? small.profileId;
@@ -73,7 +75,7 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
       }
       return get().newTab(main, { ...options, profileId, index: undefined });
     }
-    if (options?.url && !options.adoptId && openOutsideTab(get(), resolveTyped(get().settings, options.url), windowId)) return "";
+    if (options?.url && !options.adoptId && !options.enginePage && openOutsideTab(get(), resolveTyped(get().settings, options.url), windowId)) return "";
     if (options?.url && !options.adoptId && !options.gated && isGatedUrl(options.url)) {
       const profileId = options.profileId ?? get().windows[windowId]?.profileId ?? null;
       const gated = gateOpening(options.url, { tabId: null, windowId, profileId, via: "newTab" }, null);
@@ -96,7 +98,10 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
     const typed = beside && navigationOf(next.tabs[id]);
     if (typed) next = { ...next, tabs: { ...next.tabs, [id]: { ...next.tabs[id]!, engine: engineForUrl(next, typed.url) } } };
     if (id && options?.openerId) next = groupWithOpener(next, id, options.openerId, !!options.background);
-    else if (id && beside) next = joinedWithCurrent(next, [id], beside.openerId);
+    else if (id && beside) {
+      next = { ...next, tabs: { ...next.tabs, [id]: { ...next.tabs[id]!, linkOpenerId: undefined } } };
+      next = joinedWithCurrent(next, [id], beside.openerId);
+    }
     set(next);
     return id;
   },
@@ -219,7 +224,7 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
     const [next, copy] = withNewTab(s, w.id, {
       url: source.url || undefined,
       profileId: source.profileId,
-      snapshot: { ...snapshotTab(source), pin: null },
+      snapshot: { ...snapshotTab(source), pin: null, lastActiveAt: undefined },
       index: w.tabIds.indexOf(id) + 1,
       adoptId: source.url ? cloneId(id) : undefined,
     });

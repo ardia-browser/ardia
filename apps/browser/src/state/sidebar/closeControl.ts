@@ -46,13 +46,18 @@ export const useGroupCloseControlWhile = (groupId: string, live: boolean) => use
 export function pressGroupClose(groupId: string) {
   const s = useBrowser.getState();
   const control = groupCloseControl(s, groupId);
-  if (control === UNLOAD_GROUP) s.closeTabs(openMembers(s, groupId));
+  if (control === UNLOAD_GROUP) s.closeTabs(openMembers(s, groupId), { keepTopApps: false });
   else if (control === CLOSE_GROUP) void closeGroup(groupId);
 }
 
 export function pressTabClose(tabId: string) {
   const s = useBrowser.getState();
   const intent = closeIntent(s, tabId);
-  if (intent.kind === "unload") s.closeTabs(intent.ids);
+  if (intent.kind === "unload") s.closeTabs(intent.ids, { keepTopApps: false });
   else middleClickTab(tabId);
+}
+
+export function pressPaneClose(tabId: string, pullOut: boolean) {
+  if (pullOut) useBrowser.getState().removeTabFromSplit(tabId);
+  else pressTabClose(tabId);
 }

@@ -4,10 +4,13 @@ import type {
   CallArgs,
   CallName,
   CallResult,
+  ChromeWindowState,
   CliControlStatus,
   CliTabTarget,
   EngineBookmark,
   EngineEvents,
+  EngineTask,
+  EventData,
   EventName,
   HistoryChange,
   HistoryChangedBatch,
@@ -18,6 +21,7 @@ import type {
 } from "@ardia/ardiacore";
 import type { EventSubscription } from "expo-modules-core";
 import { nativeEvents, unfaked } from "./events";
+import type { AutofillToggle } from "../platform/autofill";
 
 
 type TabStripHost = {
@@ -36,7 +40,11 @@ const testGlobals = globalThis as {
   acTestCliControl?: (on: boolean | null) => Promise<CliControlStatus> | undefined;
   acTestCliActive?: (tabId: string | null) => Promise<CliControlStatus> | undefined;
   acTestCliTargets?: (tabId: string) => CliTabTarget | undefined;
+  acTestCliOwns?: (tabId: string) => { owned: boolean; shown: boolean };
+  acTestCliMoveOffscreen?: (tabId: string) => { ok: boolean; reason?: string };
+  acTestTasks?: () => EngineTask[];
   acTestUserScripts?: { engine: ExtensionEngine };
+  acTestSuggest?: (args: { url: string; id: number; profile: string }) => CallResult<"search.suggest"> | undefined;
 };
 
 type VerbOf<D extends string, N extends string = CallName> = N extends `${D}.${infer V}` ? V : never;
@@ -51,13 +59,15 @@ const eventsOf = (domain: string) => {
   if (!domainEvents.has(domain)) domainEvents.set(domain, nativeEvents());
   return domainEvents.get(domain)!;
 };
-export const emitEvent = <E extends EventName>(name: E, data: EngineEvents[E]) => {
+export const emitEvent = <E extends EventName>(name: E, data: EventData<E>) => {
   const domain = name.slice(0, name.indexOf("."));
   eventsOf(domain).emit(domain, { name, data });
 };
 
+export const chromeWindowList: ChromeWindowState[] = [];
 export const engineCalls: { domain: string; verb: string; profile: string }[] = [];
 export const loadedEngineProfiles = new Set<string>([""]);
+export const idleProfileUnloads = new Map<string, CallResult<"profiles.unloadIdle"> & { closing?: () => void }>();
 export const profilesLoadedCall = { known: true };
 
 function domain<D extends string, Sync extends object>(name: D, handlers: Handlers<D>, sync?: Sync): FakeDomain & Sync {
@@ -78,7 +88,7 @@ function domain<D extends string, Sync extends object>(name: D, handlers: Handle
   return Object.assign(fake, sync);
 }
 
-const laterEvent = <E extends EventName>(name: E, data: EngineEvents[E]) => queueMicrotask(() => emitEvent(name, data));
+const laterEvent = <E extends EventName>(name: E, data: EventData<E>) => queueMicrotask(() => emitEvent(name, data));
 export const emitDownload = (download: EngineEvents["downloads.changed"]) => emitEvent("downloads.changed", download);
 export const emitPermission = (request: EngineEvents["permissions.requested"]) => emitEvent("permissions.requested", request);
 
@@ -285,6 +295,24 @@ export const extensionAnswers = {
 
 const tabStripHost = () => testGlobals.acTestTabStrip!;
 let autofillIds = 0;
+export const profileToggles = {
+  user: new Map<string, Partial<Record<AutofillToggle, boolean>>>(),
+  extension: new Map<string, Partial<Record<AutofillToggle, boolean>>>(),
+  unloaded: new Set<string>(),
+  unloadable: new Set<string>(),
+};
+const withProfile = (profile: string) => {
+  if (profileToggles.unloadable.has(profile)) throw new Error("profile not loaded");
+  profileToggles.unloaded.delete(profile);
+};
+const profileToggle = (profile: string, name: AutofillToggle) => {
+  withProfile(profile);
+  return profileToggles.extension.get(profile)?.[name] ?? profileToggles.user.get(profile)?.[name] ?? true;
+};
+const setProfileToggle = (profile: string, name: AutofillToggle, on: boolean | undefined) => {
+  withProfile(profile);
+  if (on !== undefined) profileToggles.user.set(profile, { ...profileToggles.user.get(profile), [name]: on });
+};
 
 const extensionEngine = () => testGlobals.acTestUserScripts?.engine;
 function withStrips<Fake extends FakeDomain>(fake: Fake): Fake {
@@ -304,7 +332,7 @@ const fakeModules = {
     "engine",
     {
       components: () => [],
-      tasks: () => [],
+      tasks: () => testGlobals.acTestTasks?.() ?? [],
       beginTracing: () => false,
       endTracing: () => null,
       isTracing: () => false,
@@ -315,6 +343,9 @@ const fakeModules = {
       cliControlStatus: () => cliControl(null),
       setCliControl: ({ on }) => cliControl(on),
       setCliActiveTab: ({ tabId }) => testGlobals.acTestCliActive?.(tabId) ?? cliStatus(null),
+      cliOwnsTab: ({ tabId }) => testGlobals.acTestCliOwns?.(tabId) ?? { owned: false, shown: false },
+      cliMoveOffscreen: ({ tabId }) => testGlobals.acTestCliMoveOffscreen?.(tabId) ?? { ok: false },
+      cliCloseOffscreenTabs: () => null,
       cliTabTargets: ({ tabIds }) => Object.fromEntries(tabIds.map((id) => [id, testGlobals.acTestCliTargets?.(id) ?? { targetId: null, pageGeneration: 0 }])),
     },
     { inputIdleSeconds: () => 3600 },
@@ -337,7 +368,7 @@ const fakeModules = {
       discardOffered: async (adoptId: string) => (discardedOffers.push(adoptId), true),
     },
   )),
-  ArdiaWindows: domain("windows", { list: () => [], dev: () => "" }),
+  ArdiaWindows: domain("windows", { list: () => chromeWindowList, dev: () => "" }),
   ArdiaDownloads: domain("downloads", {
     cancel: ({ id }) => (cancelledDownloads.push(id), null),
     pause: () => null,
@@ -358,6 +389,12 @@ const fakeModules = {
       return { profiles: [...loadedEngineProfiles] };
     },
     release: () => null,
+    unloadIdle: ({ profile }) => {
+      const { closing, ...unload } = idleProfileUnloads.get(profile) ?? { status: "busy" as const, tabs: [] };
+      closing?.();
+      if (unload.status !== "busy") loadedEngineProfiles.delete(profile);
+      return unload;
+    },
     deleteData: ({ profile }) => (deletedProfileData.push(profile), { remaining: profileDataLeft.get(profile) ?? [] }),
     clearBrowsingData: () => null,
   }),
@@ -381,8 +418,8 @@ const fakeModules = {
       neverSaveOrigins: () => ({ origins: [] }),
       allowSaving: () => ({ ok: true }),
       export: () => ({ status: "cancelled" }),
-      autofillEnabled: () => true,
-      setAutofillEnabled: () => null,
+      autofillEnabled: ({ profile }) => profileToggle(profile, "passwords"),
+      setAutofillEnabled: ({ profile, enabled }) => (setProfileToggle(profile, "passwords", enabled), null),
     },
     {
       save: async (_profile: string, origin: string, username: string, password: string) => {
@@ -408,8 +445,12 @@ const fakeModules = {
   ArdiaAutofill: domain(
     "autofill",
     {
-      settings: () => ({ addresses: true, cards: true }),
-      setSettings: () => null,
+      settings: ({ profile }) => ({ addresses: profileToggle(profile, "addresses"), cards: profileToggle(profile, "cards") }),
+      setSettings: ({ profile, addresses, cards }) => {
+        setProfileToggle(profile, "addresses", addresses);
+        setProfileToggle(profile, "cards", cards);
+        return null;
+      },
       addresses: () => ({ addresses: [] }),
       saveAddress: () => ({ id: `address-${++autofillIds}` }),
       cards: () => ({ cards: [] }),
@@ -445,7 +486,12 @@ const fakeModules = {
     syncState: () => ({ ready: false, extensions: [], pending: [], settling: [], queued: [], intents: [] }),
     syncApply: () => ({ state: "pending" }),
   }),
-  ArdiaSearch: domain("search", { engines: () => ({ list: { engines: [] } }), setEngineName: () => null }),
+  ArdiaSearch: domain("search", {
+    engines: () => ({ list: { engines: [] } }),
+    setEngineName: () => null,
+    suggest: (args) => testGlobals.acTestSuggest?.(args) ?? { status: 200, body: JSON.stringify([args.url, []]) },
+    stopSuggest: () => null,
+  }),
   ArdiaMedia: domain("media", {
     displayMediaSources: () => [],
     selectDevice: () => null,
@@ -464,6 +510,8 @@ const fakeModules = {
   ArdiaContentBlocker: domain("contentBlocker", {
     setEnabled: () => null,
     setListEnabled: () => null,
+    addList: ({ url }) => ({ id: url, custom: true, existed: false, filters: 1, failed: false }),
+    removeList: () => null,
     isAllowed: () => false,
     setAllowed: () => null,
   }),
@@ -490,12 +538,16 @@ const fakeModules = {
     setSplitLinkModifier: () => null,
     setPeekOtherSiteTabs: () => null,
     setSelectionPopover: () => null,
+    setBlockAutoplayEverywhere: () => null,
+    setFairPlayInChromium: () => null,
     setCommandScrollZoom: () => null,
     setLittleArdiaOpensNewTabLinks: () => null,
+    setPopupsOpenAsTabs: () => null,
     setAutoPictureInPicture: () => null,
     setVideoUpscaling: () => null,
     setVideoUpscalingTestConditions: () => null,
     videoUpscalingState: () => null,
+    takeContentDrift: () => ({ layouts: 0, fits: 0, maxPoints: 0 }),
   }),
   ArdiaWebKit: domain("webKit", {
     endPrivateSession: ({ session }) => (endedWebKitSessions.push(session), null),

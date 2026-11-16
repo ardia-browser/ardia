@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "ardia/core/ac_content_hooks.h"
+#include "ardia/core/ac_launch_switches.h"
 #include "base/base64url.h"
 #include "base/command_line.h"
 #include "base/containers/span.h"
@@ -36,6 +37,12 @@
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
+#include "build/build_config.h"
+#include "ardia/core/ac_host_visibility.h"
+#include "chrome/browser/ardia/ac_cli_owned_tabs.h"
+#if BUILDFLAG(IS_MAC)
+#include "ardia/core/ac_windowless_page.h"
+#endif
 #include "chrome/browser/ardia/ac_cli_token_policy.h"
 #include "chrome/browser/ardia/ac_engine.h"
 #include "chrome/browser/browser_process.h"
@@ -238,6 +245,25 @@ class ControlServer {
 
   base::DictValue Status() const {
     base::DictValue status;
+    status.Set("dragsEnded",
+               base::DictValue()
+                   .Set("ownerGone", g_ardia_drags_ended[kArdiaDragEndOwnerGone])
+                   .Set("debuggerUnowned",
+                        g_ardia_drags_ended[kArdiaDragEndDebuggerUnowned])
+                   .Set("nativeRefused",
+                        g_ardia_drags_ended[kArdiaDragEndNativeRefused])
+                   .Set("sourceGone",
+                        g_ardia_drags_ended[kArdiaDragEndSourceGone]));
+#if BUILDFLAG(IS_MAC)
+    const ardiacore::WindowlessPageTotals windowless =
+        ardiacore::WindowlessPagesSoFar();
+    status.Set("windowlessPages", base::DictValue()
+                                      .Set("given", windowless.given)
+                                      .Set("missed", windowless.missed));
+#endif
+    if (ardiacore::TestFlag("nativeDragRefused")) {
+      status.Set("nativeDragsRefused", true);
+    }
     if (ServerStartedBySwitch()) {
       status.Set("state", "external");
       return status;
@@ -518,4 +544,14 @@ AC_ARGS_CALL(ac_cli_control) {
     server.Disable();
   }
   out.Send(server.Status());
+}
+
+AC_ARGS_CALL(ac_cli_owns_tab) {
+  ardia::Reply out = call.TakeReply();
+  std::optional<int> tab = call.args().FindInt("tab");
+  content::WebContents* contents = tab ? ardia::TabWithId(*tab) : nullptr;
+  out.Send(base::DictValue()
+               .Set("owned", ardia::IsCliOwnedTab(contents))
+               .Set("shown",
+                    contents && ardiacore::TabWasInShownSlot(contents)));
 }

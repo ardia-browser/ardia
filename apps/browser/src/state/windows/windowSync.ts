@@ -1,4 +1,3 @@
-import { useBrowser } from "../browser/store";
 import type { LightsPlace, OpenWindowOptions, WindowEvent } from "../../platform/windows";
 import type { BrowserState } from "../browser/store";
 import { engineProfile, windowTitle } from "../browser/model";
@@ -30,8 +29,13 @@ export function createWindowSync({ port, getState, isQuitting, lightsCenter, isU
   const open = new Set<string>();
   const titles = new Map<string, string>();
 
-  const releaseIfIncognito = (w: BrowserState["windows"][string] | undefined) => {
-    if (w?.kind === "private") port.releaseProfile(engineProfile(useBrowser.getState(), w.profileId));
+  const privateProfiles = new Map<string, string>();
+
+  const releasePrivateProfile = (id: string) => {
+    const profile = privateProfiles.get(id);
+    if (profile === undefined) return;
+    privateProfiles.delete(id);
+    port.releaseProfile(profile);
   };
 
   const listen = () =>
@@ -44,7 +48,7 @@ export function createWindowSync({ port, getState, isQuitting, lightsCenter, isU
         if (isQuitting()) return;
         open.delete(e.id);
         s.closeWindow(e.id);
-        releaseIfIncognito(s.windows[e.id]);
+        releasePrivateProfile(e.id);
       }
     });
 
@@ -55,14 +59,16 @@ export function createWindowSync({ port, getState, isQuitting, lightsCenter, isU
       open.add(id);
       titles.set(id, windowTitle(s, id));
       const profile = engineProfile(s, w.profileId);
+      if (w.kind === "private") privateProfiles.set(id, profile);
       const claim = w.kind === "small" ? adoptOf(s.tabs[w.tabIds[0] ?? ""]) : undefined;
       const small = w.kind === "small"
-        ? { kind: "small" as const, size: s.settings.littleArdiaSize, ...(claim?.startsWith("link:") ? { claim } : {}), ...(w.linkPointer ? { pointer: w.linkPointer } : {}) }
+        ? { kind: "small" as const, size: s.settings.littleArdiaSize, ...(claim?.startsWith("link:") ? { claim } : {}), ...(w.linkPointer ? { pointer: w.linkPointer } : {}), ...(w.linkApp ? { returnTo: w.linkApp } : {}) }
         : {};
       const made = w.kind !== "small" && w.chromeWindow ? { chromeWindow: w.chromeWindow } : {};
+      const under = behind ?? (w.kind === "main" ? w.opensBehind : undefined);
       port.open(
         id,
-        { frame: w.frame, incognito: w.kind === "private", title: titles.get(id), focus, profile, ...(behind ? { behind } : {}), ...(prev && w.kind !== "small" && !w.chromeWindow ? { animated: true } : {}), ...small, ...made },
+        { frame: w.frame, incognito: w.kind === "private", title: titles.get(id), focus, profile, ...(under ? { behind: under } : {}), ...(prev && w.kind !== "small" && !w.chromeWindow ? { animated: true } : {}), ...small, ...made },
         lightsCenter(s, id),
       );
     }
@@ -71,7 +77,7 @@ export function createWindowSync({ port, getState, isQuitting, lightsCenter, isU
       open.delete(id);
       titles.delete(id);
       port.close(id);
-      releaseIfIncognito(prev?.windows[id]);
+      releasePrivateProfile(id);
     }
     if (prev && s.tabs === prev.tabs && s.windows === prev.windows && s.profiles === prev.profiles) return;
     for (const id of open) {

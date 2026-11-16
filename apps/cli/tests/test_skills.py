@@ -67,6 +67,44 @@ class Refresh(unittest.TestCase):
             (folder / name).parent.mkdir(parents=True, exist_ok=True)
             (folder / name).write_text("---\nname: ardia\n---\nold\n" if name == "SKILL.md" else "old\n", encoding="utf-8")
 
+    def test_auto_installs_for_each_agent_found_and_general_when_none_is(self):
+        status, _ = quiet(skills.install_detected)
+        self.assertEqual(status, 0)
+        self.assertTrue((self.home / ".agents/skills/ardia/SKILL.md").is_file())
+        (self.home / ".claude").mkdir()
+        (self.home / ".cursor").mkdir()
+        status, _ = quiet(skills.install_detected)
+        self.assertEqual(status, 0)
+        self.assertTrue((self.home / ".claude/skills/ardia/SKILL.md").is_file())
+        self.assertTrue((self.home / ".cursor/skills/ardia/SKILL.md").is_file())
+        self.assertFalse((self.home / ".config/opencode/skills/ardia").exists())
+
+    def test_auto_leaves_a_foreign_folder_and_a_copy_the_user_removed(self):
+        (self.home / ".claude").mkdir()
+        (self.home / ".codex").mkdir()
+        foreign = self.home / ".agents/skills/ardia"
+        foreign.mkdir(parents=True)
+        (foreign / "SKILL.md").write_text("---\nname: ardia\ndescription: mine\n---\nmine\n", encoding="utf-8")
+        status, out = quiet(skills.install_detected)
+        self.assertEqual(status, 0)
+        self.assertIn("not installed by ardia", out)
+        self.assertEqual((foreign / "SKILL.md").read_text(encoding="utf-8"), "---\nname: ardia\ndescription: mine\n---\nmine\n")
+        claude = self.home / ".claude/skills/ardia"
+        self.assertTrue((claude / "SKILL.md").is_file())
+        shutil.rmtree(claude)
+        status, out = quiet(skills.install_detected)
+        self.assertEqual(status, 0)
+        self.assertIn("removed after an earlier install", out)
+        self.assertFalse(claude.exists())
+
+    def test_cli_auto_flag_runs_the_detected_install(self):
+        (self.home / ".claude").mkdir()
+        with contextlib.redirect_stdout(io.StringIO()):
+            status = cli.main(["skills", "install", "--auto", "--no-cua"])
+        self.assertEqual(status, 0)
+        self.assertTrue((self.home / ".claude/skills/ardia/SKILL.md").is_file())
+        self.assertFalse((self.home / ".claude/skills/cua-driver").exists())
+
     def test_install_remembers_project_and_user_folders(self):
         self.assertEqual(quiet(skills.install, ["claude-code"], True)[0], 0)
         self.assertEqual(quiet(skills.install, ["codex", "general"], False)[0], 0)
@@ -286,6 +324,48 @@ class Refresh(unittest.TestCase):
         status, out = quiet(cli.main, ["skills", "refresh"])
         self.assertEqual(status, 0)
         self.assertEqual((copy / "SKILL.md").read_text(encoding="utf-8"), self.current_skill())
+
+
+class Printing(Refresh):
+    def run_cli(self, *argv):
+        with contextlib.redirect_stdout(io.StringIO()) as out, contextlib.redirect_stderr(io.StringIO()) as err:
+            status = cli.main(list(argv))
+        return status, out.getvalue(), err.getvalue()
+
+    def written(self) -> list[str]:
+        return sorted(str(path.relative_to(self.root)) for folder in (self.home, self.project) for path in folder.rglob("*") if path.is_file())
+
+    def test_get_and_the_skill_flag_print_the_shipped_skill_md_and_write_nothing(self):
+        for argv in (["skills", "get"], ["--skill"]):
+            status, out, err = self.run_cli(*argv)
+            self.assertEqual((status, err), (0, ""), argv)
+            self.assertEqual(out, self.current_skill(), argv)
+        self.assertEqual(self.written(), [])
+
+    def test_get_full_adds_every_reference_after_a_line_naming_it(self):
+        status, out, err = self.run_cli("skills", "get", "--full")
+        self.assertEqual((status, err), (0, ""))
+        self.assertTrue(out.startswith(self.current_skill()))
+        source = skills.skill_source()
+        references = [name for name in skills.shipped_files() if name.startswith("references/")]
+        self.assertGreater(len(references), 3)
+        for name in references:
+            self.assertIn(f"\n--- {name} ---\n\n" + (source / name).read_text(encoding="utf-8"), out)
+        self.assertEqual(self.run_cli("--skill", "--full")[1], out)
+        self.assertEqual(self.written(), [])
+
+    def test_list_names_the_skill_and_its_description(self):
+        status, out, err = self.run_cli("skills", "list")
+        self.assertEqual((status, err), (0, ""))
+        name, description = out.rstrip("\n").split("\t")
+        self.assertEqual(name, "ardia")
+        self.assertTrue(description.startswith("Drives the user's own Ardia browser"))
+        self.assertEqual(self.written(), [])
+
+    def test_get_refuses_a_shared_option(self):
+        status, out, err = self.run_cli("--json", "--skill")
+        self.assertEqual(status, 2)
+        self.assertIn("doesn't take --json", err)
 
 
 class Contents(unittest.TestCase):

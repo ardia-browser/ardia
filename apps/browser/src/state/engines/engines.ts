@@ -2,6 +2,7 @@ import type { PageEngine } from "../../platform/tabs";
 import type { BrowserState } from "../browser/store";
 import type { Tab } from "../browser/types";
 import { isWebPageUrl } from "../../lib/url";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { adoptKind } from "../tabs/adoptIds";
 import { adoptOf, navigationOf } from "../tabs/pageSession";
 
@@ -24,14 +25,17 @@ export function siteOf(url: string | undefined | null): string | null {
   }
 }
 
-export const canSwitchEngine = (url: string | undefined | null) => !!url && isWebPageUrl(url);
+export const canSwitchEngine = (url: string | undefined | null) => PLATFORM_FEATURES.webKit && !!url && isWebPageUrl(url);
+export const offersEngineChoice = () => PLATFORM_FEATURES.webKit;
 export const chromiumOnly = (url: string | undefined | null) => !!url && /^(ardia|chrome|chrome-extension|chrome-untrusted|devtools|view-source):/i.test(url);
 
-export const defaultEngine = (s: Pick<BrowserState, "settings">): PageEngine => (s.settings.pageEngine === "webkit" ? "webkit" : "chromium");
+const offered = <Engine extends PageEngine | undefined>(engine: Engine): Engine | "chromium" => (engine === "webkit" && !PLATFORM_FEATURES.webKit ? "chromium" : engine);
+
+export const defaultEngine = (s: Pick<BrowserState, "settings">): PageEngine => offered(s.settings.pageEngine === "webkit" ? "webkit" : "chromium");
 
 export function ruleFor(s: Pick<BrowserState, "settings">, url: string | undefined | null): PageEngine | undefined {
   const site = siteOf(url);
-  return site ? s.settings.websiteEngines?.[site] : undefined;
+  return offered(site ? s.settings.websiteEngines?.[site] : undefined);
 }
 
 export const PROTECTED_VIDEO_SITES: readonly string[] = [
@@ -43,7 +47,6 @@ export const PROTECTED_VIDEO_SITES: readonly string[] = [
   "hulu.com",
   "tv.apple.com",
   "music.apple.com",
-  "open.spotify.com",
   "peacocktv.com",
   "paramountplus.com",
   "crunchyroll.com",
@@ -52,6 +55,8 @@ export const PROTECTED_VIDEO_SITES: readonly string[] = [
   "v.qq.com",
 ];
 
+export const FAIRPLAY_IN_CHROMIUM_ORIGINS: readonly string[] = ["https://open.spotify.com", "https://www.netflix.com", "https://www.disneyplus.com"];
+
 export function protectedVideoSite(url: string | undefined | null): boolean {
   const site = siteOf(url);
   if (!site?.startsWith("https://")) return false;
@@ -59,8 +64,13 @@ export function protectedVideoSite(url: string | undefined | null): boolean {
   return PROTECTED_VIDEO_SITES.some((domain) => host === domain || host.endsWith(`.${domain}`));
 }
 
+export const fairPlaySite = (url: string | undefined | null) => FAIRPLAY_IN_CHROMIUM_ORIGINS.includes(siteOf(url) ?? "");
+
+const fairPlayStaysInChromium = (s: Pick<BrowserState, "settings">, url: string | undefined | null) =>
+  s.settings.fairPlayInChromium === true && fairPlaySite(url);
+
 export const builtInEngine = (s: Pick<BrowserState, "settings">, url: string | undefined | null): PageEngine | undefined =>
-  s.settings.protectedVideoInWebKit === true && protectedVideoSite(url) ? "webkit" : undefined;
+  PLATFORM_FEATURES.webKit && s.settings.protectedVideoInWebKit === true && (protectedVideoSite(url) || fairPlaySite(url)) && !fairPlayStaysInChromium(s, url) ? "webkit" : undefined;
 
 export const chosenEngine = (s: Pick<BrowserState, "settings">, url: string | undefined | null): PageEngine | undefined => ruleFor(s, url) ?? builtInEngine(s, url);
 
@@ -79,11 +89,11 @@ const fromAdoption = (s: EngineState, t: Tab, depth: number): PageEngine | undef
 
 function engineOf(s: EngineState, t: Tab, depth: number): PageEngine {
   if (chromiumOnly(navigationOf(t)?.url ?? t.url)) return "chromium";
-  if (t.engine) return t.engine;
+  if (t.engine) return offered(t.engine);
   const adopted = fromAdoption(s, t, depth);
-  if (adopted) return adopted;
+  if (adopted) return offered(adopted);
   const opener = t.openerId ? s.tabs[t.openerId] : undefined;
-  if (opener?.engine && (opener.url || navigationOf(opener))) return opener.engine;
+  if (opener?.engine && (opener.url || navigationOf(opener))) return offered(opener.engine);
   return engineForUrl(s, navigationOf(t)?.url ?? t.url);
 }
 

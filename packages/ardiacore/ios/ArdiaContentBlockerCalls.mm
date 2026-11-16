@@ -100,6 +100,8 @@ constexpr double kRetryMs = 250;
 
 constexpr double kOpSeconds = 20;
 
+constexpr long long kReloadWaitMs = 4000;
+
 NSString *const kPrelude =
     @"let failing = %@;"
      "const offDirective = %@;"
@@ -149,19 +151,28 @@ NSString *const kPrelude =
      "  return l;"
      "});"
      "const selected = (l) => Object.keys(l.available).filter((k) => l.available[k] && l.available[k].off !== true);"
+     "const imported = (l) => Object.keys(l.available).filter((k) => l.available[k] && l.available[k].group === 'custom').sort();"
      "const covers = (directive, host) => !directive.includes('/') && (host === directive || host.endsWith('.' + directive));"
      "const sameSet = (a, b) => [...a].sort().join('\\n') === [...b].sort().join('\\n');"
      "const storageCall = (name, arg) => expired ? Promise.reject(new Error(`storage ${name}: timed out`))"
      "  : new Promise((resolve, reject) => chrome.storage.local[name](arg, (v) =>"
      "    chrome.runtime.lastError ? reject(new Error(chrome.runtime.lastError.message)) : resolve(v || {})));"
      "const local = {get: (k) => storageCall('get', k), set: (v) => storageCall('set', v), remove: (k) => storageCall('remove', k)};"
-     "const reloadLists = () => send({what: 'reloadAllFilters'}).then(() => local.remove('ardiaReloadPending'));"
-     "const applyLists = (toSelect) => local.set({ardiaReloadPending: true})"
-     "  .then(() => send({what: 'applyFilterListSelection', toSelect})).then(reloadLists);"
-     "const settlePending = () => local.get('ardiaReloadPending').then((b) => b.ardiaReloadPending ? reloadLists() : null);"
+     "const pendingReload = () => local.get('ardiaReloadPending').then((b) => b.ardiaReloadPending);"
+     "const reloadLists = () => pendingReload().then((asked) => send({what: 'reloadAllFilters'})"
+     "  .then(pendingReload)"
+     "  .then((now) => now === asked ? local.remove('ardiaReloadPending') : reloadLists()));"
+     "const reloadWait = (ms = %@) => new Promise((resolve) => setTimeout(resolve, Math.min(ms, Math.max(0, left() - 1000))));"
+     "const askReload = () => local.set({ardiaReloadPending: `${Date.now()}-${Math.random()}`});"
+     "const applySelection = (details, waitMs) => askReload()"
+     "  .then(() => send({what: 'applyFilterListSelection', ...details}))"
+     "  .then(askReload)"
+     "  .then(() => Promise.race([reloadLists(), reloadWait(waitMs)]));"
+     "const applyLists = (toSelect) => applySelection({toSelect});"
+     "const resumePendingReload = () => { pendingReload().then((asked) => asked ? reloadLists() : null).catch(() => {}); };"
      "Promise.resolve().then(() => { if (location.origin !== extensionOrigin) throw new Error(`not the extension page: ${location.href}`); })"
      ".then(() => withDeadline(ready(), 'uBlock Origin'))"
-     ".then(() => withDeadline(settlePending().then(() => (%@)), 'the call'))"
+     ".then(() => { resumePendingReload(); return withDeadline(Promise.resolve().then(() => (%@)), 'the call'); })"
      ".then((v) => post('result', JSON.stringify({value: v === undefined ? null : v})),"
      "(e) => post('result', JSON.stringify({error: String(e && e.message || e)})))";
 
@@ -225,7 +236,7 @@ void Attempt(ArdiaContentBlockerOp *op) {
   if (!page) return Finish(op, nil, @"not loaded");
   const double leftMs = MAX(0, (op.deadline - NSDate.timeIntervalSinceReferenceDate) * 1000);
   NSString *script = [NSString stringWithFormat:kPrelude, op.failNext ? @"true" : @"false", ScriptWith(@"%@", @[ kOffDirective ]),
-                                                ScriptWith(@"%@", @[ [@"chrome-extension://" stringByAppendingString:ExtensionId()] ]), @((long long)leftMs), op.expression];
+                                                ScriptWith(@"%@", @[ [@"chrome-extension://" stringByAppendingString:ExtensionId()] ]), @((long long)leftMs), @(kReloadWaitMs), op.expression];
   const NSUInteger attempt = ++op.attempt;
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)((leftMs + 2000) * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
     if (op.attempt == attempt && Queues()[profile].firstObject == op) [page fail:@"the call timed out"];

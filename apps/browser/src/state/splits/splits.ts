@@ -1,4 +1,5 @@
 import type { StateCreator } from "zustand";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import type { BrowserState } from "../browser/store";
 import { innermostGroupOf, leaveGroups, syncGroupOrder } from "../groups/groups";
 import { inPinnedContainer, isPinnedRow, newId, tabLayoutOf } from "../browser/model";
@@ -33,9 +34,23 @@ export type OpenPaneOptions = {
   adoptId?: AdoptId;
   inPlaceOf?: string;
 };
-export type OpenPaneResult = { ok: true; tabId: string; splitId: string } | { ok: false; reason: "max" | "invalid" };
+export type OpenPaneResult = { ok: true; tabId: string; splitId: string } | { ok: false; reason: "max" | "invalid" | "unavailable" };
 
 export const MAX_SPLIT_PANES = 3;
+
+export const splitViewAvailable = PLATFORM_FEATURES.splitView;
+
+export const splitsWhereUnavailable = (s: Pick<BrowserState, "splits">, available = splitViewAvailable): Pick<BrowserState, "splits"> | null =>
+  available || !Object.keys(s.splits).length ? null : { splits: {} };
+
+export function paneChunks(ids: string[]): string[][] {
+  const out: string[][] = [];
+  for (let i = 0; i < ids.length; i += MAX_SPLIT_PANES) {
+    const chunk = ids.slice(i, i + MAX_SPLIT_PANES);
+    if (chunk.length >= 2) out.push(chunk);
+  }
+  return out;
+}
 
 const flatIds = new WeakMap<SplitSlot[], string[]>();
 
@@ -195,7 +210,14 @@ function withPane(existing: SplitView | undefined, anchorId: string, tabId: stri
     slots.splice(before ? k : k + 1, 0, { size: 0, tabId });
     return { ...existing, slots: evened(slots) };
   }
-  slots[k] = { size: slots[k]!.size, stack: before ? [tabId, anchorId] : [anchorId, tabId], stackSizes: [0.5, 0.5] };
+  const slot = slots[k]!;
+  if ("stack" in slot) {
+    if (slots.length > 1) return null;
+    const ids = [...slot.stack];
+    ids.splice(ids.indexOf(anchorId) + (before ? 0 : 1), 0, tabId);
+    return { ...existing, orientation: horizontal ? "horizontal" : "vertical", slots: evenSlots(ids) };
+  }
+  slots[k] = { size: slot.size, stack: before ? [tabId, anchorId] : [anchorId, tabId], stackSizes: [0.5, 0.5] };
   return { ...existing, slots };
 }
 
@@ -203,6 +225,7 @@ export const createSplitsSlice: StateCreator<BrowserState, [], [], SplitsSlice> 
   splits: {},
 
   createSplit(tabIds, orientation = "horizontal") {
+    if (!splitViewAvailable) return "";
     const s = get();
     const tabs = [...new Set(tabIds)].map((id) => s.tabs[id]).filter((t): t is Tab => !!t);
     const first = tabs[0];
@@ -216,6 +239,7 @@ export const createSplitsSlice: StateCreator<BrowserState, [], [], SplitsSlice> 
   },
 
   openSplitPane(windowId, o = {}) {
+    if (!splitViewAvailable) return { ok: false, reason: "unavailable" };
     let s = get();
     const w = s.windows[windowId];
     const anchorId = o.anchorTabId ?? (w ? w.activeTabIds[w.profileId] : undefined);

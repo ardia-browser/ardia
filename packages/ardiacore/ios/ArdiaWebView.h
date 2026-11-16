@@ -55,8 +55,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface ArdiaWebView (Tab)
 + (void)setLittleArdiaOpensNewTabLinks:(BOOL)enabled NS_SWIFT_NAME(setLittleArdiaOpensNewTabLinks(_:));
++ (void)setPopupsOpenAsTabs:(BOOL)enabled NS_SWIFT_NAME(setPopupsOpenAsTabs(_:));
 - (void)resolveUnresponsive:(BOOL)terminate NS_SWIFT_NAME(resolveUnresponsive(terminate:));
 - (NSString *)discard:(BOOL)unload NS_SWIFT_NAME(discard(unload:));
+- (NSArray<NSNumber *> *)sleepIfHiddenFor:(NSTimeInterval)seconds NS_SWIFT_NAME(sleepIfHidden(for:));
 @end
 
 @interface ArdiaWebView (Reveals)
@@ -87,9 +89,22 @@ NS_ASSUME_NONNULL_BEGIN
                                browser:(int)browserId NS_SWIFT_NAME(devScrollZoom(_:browserId:));
 @end
 
+@interface ArdiaWebView (Recording)
+- (void)copyRecordingPicture:(void (^)(CGImageRef _Nullable picture))completion NS_SWIFT_NAME(copyRecordingPicture(_:));
+@property (nonatomic, readonly) BOOL recordingShowsPage;
++ (NSArray<NSWindow *> *)recordingPictureInPictureWindowsOfWindow:(NSWindow *)window NS_SWIFT_NAME(recordingPictureInPictureWindows(of:));
++ (BOOL)recordingWindowIsPrivate:(NSWindow *)window NS_SWIFT_NAME(recordingWindowIsPrivate(_:));
++ (CGFloat)recordingCornerRadiusOfWindow:(NSWindow *)window NS_SWIFT_NAME(recordingCornerRadius(of:));
++ (nullable NSView *)recordingControlsOfWindow:(NSWindow *)window NS_SWIFT_NAME(recordingControls(of:));
++ (void)copyRecordingPictureOfWindow:(NSWindow *)window
+                          completion:(void (^)(CGImageRef _Nullable picture))completion NS_SWIFT_NAME(copyRecordingPicture(of:_:));
+@end
+
 @interface ArdiaWebView (PageMessages)
 + (void)setDisplayMediaPicker:(BOOL)enabled;
 + (void)setSelectionPopoverEnabled:(BOOL)enabled NS_SWIFT_NAME(setSelectionPopoverEnabled(_:));
++ (void)setBlockAutoplayEverywhere:(BOOL)enabled NS_SWIFT_NAME(setBlockAutoplayEverywhere(_:));
++ (void)setFairPlayInChromium:(BOOL)enabled NS_SWIFT_NAME(setFairPlayInChromium(_:));
 - (void)resolveDisplayMedia:(NSString *)requestId sourceId:(nullable NSString *)sourceId audio:(BOOL)audio
     NS_SWIFT_NAME(resolveDisplayMedia(_:sourceId:audio:));
 @end
@@ -113,6 +128,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)setVideoUpscalingTestConditions:(NSDictionary<NSString *, NSNumber *> *)conditions
     NS_SWIFT_NAME(setVideoUpscalingTestConditions(_:));
 + (NSDictionary<NSString *, id> *)videoUpscalingState;
++ (NSDictionary<NSString *, NSNumber *> *)takeContentDrift;
 - (BOOL)takeControlPressAt:(double)clickMs control:(NSInteger)target NS_SWIFT_NAME(takeControlPress(clickAt:control:));
 - (void)requestPictureInPictureForClickAt:(double)clickMs
                                   control:(NSInteger)target
@@ -158,6 +174,7 @@ NS_ASSUME_NONNULL_BEGIN
            completion:(void (^)(NSDictionary<NSString *, id> *_Nullable result))completion
     NS_SWIFT_NAME(downloadImage(_:maxPixels:completion:));
 - (void)mediaCommand:(NSString *)action seconds:(double)seconds NS_SWIFT_NAME(mediaCommand(_:seconds:));
+- (void)seekPictureInPictureBy:(double)seconds;
 @end
 
 @interface ArdiaWebView (Site)

@@ -7,10 +7,11 @@ import { SiteLogo } from "./SiteLogo";
 import { useSiteRing } from "./GlassBacking";
 import { ChoiceCard } from "./ChoiceCard";
 import { Dot } from "../ui";
-import { capsule, radius, space } from "../ui/tokens";
+import { capsule, ink, radius, space } from "../ui/tokens";
 import { SelectTile, useOnboardingColors } from "./Parts";
 import { StepActions, StepLayout } from "./StepLayout";
 import { trafficLights } from "./tokens";
+import { WINDOW_CHROME } from "../../lib/windowChrome";
 
 export function PinnedTabsStep() {
   const windowId = useOnboarding((s) => s.windowId);
@@ -72,11 +73,13 @@ function PinnedPreview({ selected }: { selected: string[] }) {
   const slots = Math.max(6, Math.ceil(sites.length / 3) * 3);
   return (
     <ChoiceCard plain radius={radius.sheet} style={{ width: PREVIEW.width, padding: space.xl, gap: space.l }}>
-      <View style={{ flexDirection: "row", gap: space.m * PREVIEW.scale }}>
-        {trafficLights.map((c) => (
-          <Dot key={c} size={LIGHT * PREVIEW.scale} color={c} />
-        ))}
-      </View>
+      {WINDOW_CHROME.leadingWidth ? (
+        <View style={{ flexDirection: "row", gap: space.m * PREVIEW.scale }}>
+          {trafficLights.map((c) => (
+            <Dot key={c} size={LIGHT * PREVIEW.scale} color={c} />
+          ))}
+        </View>
+      ) : null}
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.s }}>
         {Array.from({ length: slots }, (_, i) => {
           const site = sites[i];
@@ -86,7 +89,7 @@ function PinnedPreview({ selected }: { selected: string[] }) {
               <SiteLogo url={site.url} size={18} />
             </ChoiceCard>
           ) : (
-            <ChoiceCard key={`empty-${i}`} dashed radius={radius.chrome * PREVIEW.scale} fill="transparent" style={tile} />
+            <ChoiceCard key={`empty-${i}`} dashed radius={radius.chrome * PREVIEW.scale} fill={ink.clear} style={tile} />
           );
         })}
       </View>

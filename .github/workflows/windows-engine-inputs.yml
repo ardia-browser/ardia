@@ -1,0 +1,27 @@
+name: Windows engine inputs
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-engine-inputs-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  inputs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: The shared engine inputs still make a Windows engine build
+        run: python3 scripts/windows/engine/check_inputs.py
+      - name: The check refuses to accept what it could not read
+        run: python3 scripts/windows/engine/check_inputs_test.py

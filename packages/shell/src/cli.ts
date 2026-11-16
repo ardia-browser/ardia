@@ -13,6 +13,7 @@ export type CliInstallResult = {
 
 export type CliNative = {
   installedVersion(): string | null;
+  canInstallUnattended(): boolean;
   install(): Promise<CliInstallResult>;
   addListener(name: "onInstallLine", listener: (e: { line: string }) => void): EventSubscription;
 };

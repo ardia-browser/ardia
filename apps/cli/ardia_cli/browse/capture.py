@@ -112,6 +112,8 @@ def request_row(record):
             if record.get(key) is not None}
 
 
+RELOAD_SETTLE = 1.5
+
 @command("network")
 async def cmd_network(ctx, argv):
     if not argv:
@@ -131,11 +133,20 @@ async def cmd_network(ctx, argv):
 
 
 async def network_requests(ctx, argv):
-    options, _ = parse(argv, {"--clear": "bool", "--filter": "value", "--type": "value", "--method": "value", "--status": "value"})
+    options, _ = parse(argv, {"--clear": "bool", "--filter": "value", "--type": "value", "--method": "value", "--status": "value",
+                              "--reload": "bool"})
     page = await ctx.state.page()
     started = not page.network_on
     await activate(ctx, page, "network", page.enable_network)
     ctx.state.leases.add("network")
+    if options.get("reload"):
+        from ardia_cli import command_metrics
+        from ardia_cli.browse.commands import navigate
+
+        command_metrics.flag("network_reloaded", True)
+        await navigate(ctx, page, page.url)
+        await asyncio.sleep(RELOAD_SETTLE)
+        started = False
     if options.get("clear"):
         page.requests.clear()
         page.requests_dropped = 0
@@ -152,7 +163,8 @@ async def network_requests(ctx, argv):
         rows = [row for row in rows if status_matches(row.get("status"), options["status"])]
     lines = [f"[{row['requestId']}] {row.get('method')} {row.get('url')} ({row.get('resourceType')}) {row.get('status') or row.get('failed') or 'pending'}" for row in rows]
     if started and not rows:
-        lines.append("Network capture started; requests from now on are kept")
+        lines.append("Network capture started; requests from now on are kept. To see what the page loaded, "
+                     "run `network requests --reload` (add `--type xhr,fetch` for its data calls)")
     return Result({"requests": [request_row(row) for row in rows], "dropped": page.requests_dropped, "started": started},
                   "\n".join(lines) or "(no requests)", page_content=True)
 
@@ -266,8 +278,8 @@ async def network_route(ctx, argv):
     async def enable():
         try:
             await page.send("Fetch.enable", {"patterns": [{"urlPattern": "*", "requestStage": "Request"}]})
-        except Gated:
-            raise Gated("Fetch.enable", "network route") from None
+        except Gated as error:
+            raise error.during("network route") from None
 
     await activate(ctx, page, "route", enable)
     routes.append(route)
@@ -280,8 +292,8 @@ async def enable_credentials(ctx, page, username, password):
     async def enable():
         try:
             await page.send("Fetch.enable", {"patterns": [{"urlPattern": "*", "requestStage": "Request"}], "handleAuthRequests": True})
-        except Gated:
-            raise Gated("Fetch.enable", "set credentials", "HTTP auth answers Fetch.authRequired") from None
+        except Gated as error:
+            raise error.during("set credentials", "HTTP auth answers Fetch.authRequired") from None
 
     await activate(ctx, page, "route", enable)
     ctx.state.extras["credentials"] = {"username": username, "password": password}
@@ -387,8 +399,8 @@ async def tracing(ctx, argv, kind):
                 await page.send("Tracing.start", {"traceConfig": {"includedCategories": [c for c in categories if not c.startswith("-")],
                                                                    "excludedCategories": [c[1:] for c in categories if c.startswith("-") and c != "-*"]},
                                                    "transferMode": "ReportEvents"})
-            except Gated:
-                raise Gated("Tracing.start", f"{kind} start") from None
+            except Gated as error:
+                raise error.during(f"{kind} start") from None
 
         await activate(ctx, page, "trace", enable)
         ctx.state.listeners.append(listener)
@@ -503,8 +515,8 @@ async def cmd_record(ctx, argv):
     async def enable():
         try:
             await cast.start(ctx.state)
-        except Gated:
-            raise Gated("Page.startScreencast", "record start") from None
+        except Gated as error:
+            raise error.during("record start") from None
 
     await activate(ctx, page, "record", enable)
     path = ctx.path(args[1])
@@ -594,8 +606,8 @@ async def cmd_stream(ctx, argv):
     async def enable():
         try:
             await cast.start(ctx.state)
-        except Gated:
-            raise Gated("Page.startScreencast", "stream enable") from None
+        except Gated as error:
+            raise error.during("stream enable") from None
 
     await activate(ctx, page, "stream", enable)
     port = int(options.get("port") or ctx.env.get("AGENT_BROWSER_STREAM_PORT") or 0)

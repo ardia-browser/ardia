@@ -16,6 +16,17 @@ channel_of() {
   fi
 }
 
+apple_version_of() {
+  channel_of "$1" >/dev/null || return 1
+  echo "${1%%-*}"
+}
+
+mac_marketing_version() {
+  local root
+  root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+  sed -n 's/.*MARKETING_VERSION = "\{0,1\}\([^";]*\)"\{0,1\};/\1/p' "$root/apps/browser/macos/Ardia.xcodeproj/project.pbxproj" | sort -u
+}
+
 appcast() { python3 -I "$APPCAST_PY" "$@"; }
 
 latest_stable_tag() {

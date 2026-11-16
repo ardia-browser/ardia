@@ -3,6 +3,7 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { shownPageId } from "../peek/peek";
 import { startActionStates, watchActionsOf } from "./actionWatch";
 import { startExtensionSearchEngines } from "./searchEngines";
+import { reportExtensionsLoaded } from "./loadHealth";
 import { watchExtensionInstallFailures } from "./crxDrop";
 import { onSyncedExtensionChange } from "../sync/extensions";
 import { openRequestedTab } from "./tabsRequests";
@@ -15,6 +16,7 @@ import {
   closeSidePanel,
   extensionProfile,
   findExtension,
+  isPrivate,
   openSidePanel,
   refreshExtensions,
   refreshExtensionsAfterChange,
@@ -33,6 +35,7 @@ export function startExtensionsBridge() {
   const loadProfiles = (s: BrowserState) => {
     for (const id of s.windowOrder) {
       const profile = extensionProfile(s, id);
+      if (!isPrivate(s, id)) reportExtensionsLoaded(profile);
       if (watchActionsOf(profile)) void refreshExtensions(profile);
     }
   };
@@ -52,14 +55,14 @@ export function startExtensionsBridge() {
 
 export function openExtensionFromMenu(windowId: string, extensionId: string, tabId?: string) {
   const ext = findExtension(extensionProfile(useBrowser.getState(), windowId), extensionId);
-  if (ext) void activateExtension(windowId, ext, toolbarAnchor(windowId, ext.id, tabId), undefined, tabId);
+  if (ext) void toolbarAnchor(windowId, ext.id, tabId).then((anchor) => activateExtension(windowId, ext, anchor, undefined, tabId));
 }
 
 function startActionPopups() {
   onExtensionActionPopup(({ tabId, extensionId }) => {
     const windowId = tabId ? useBrowser.getState().tabs[tabId]?.windowId : undefined;
     if (!tabId || !windowId) return console.warn(`action.openPopup for ${extensionId}: ${tabId ? "its tab has no window" : "no app tab"}`);
-    void state.openActionPopup(windowId, extensionId, toolbarAnchor(windowId, extensionId, tabId), tabId);
+    void toolbarAnchor(windowId, extensionId, tabId).then((anchor) => state.openActionPopup(windowId, extensionId, anchor, tabId));
   });
   onExtensionActionShortcut(({ tabId, extensionId }) => {
     const windowId = tabId ? useBrowser.getState().tabs[tabId]?.windowId : undefined;

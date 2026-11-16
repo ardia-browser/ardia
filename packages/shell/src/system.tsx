@@ -52,7 +52,7 @@ export type MouseAreaProps = ViewProps & {
   onMiddleClick?: (e: MiddleClickEvent) => void;
 };
 
-type NativeMouseAreaProps = Omit<MouseAreaProps, "onMiddleClick"> & { onMiddleClick?: (e: { nativeEvent: MiddleClickEvent }) => void };
+export type NativeMouseAreaProps = Omit<MouseAreaProps, "onMiddleClick"> & { onMiddleClick?: (e: { nativeEvent: MiddleClickEvent }) => void };
 
 const NativeMouseArea = requireNativeViewManager<NativeMouseAreaProps>("ArdiaFileDrag");
 
@@ -63,13 +63,15 @@ export function MouseArea({ path, onMiddleClick, ...props }: MouseAreaProps) {
 export type DroppedItem = { kind: "file"; url: string } | { kind: "url"; url: string } | { kind: "text"; text: string };
 export type DropUpdate = { phase: "enter" | "move" | "exit" | "drop"; x: number; y: number; count: number; items: DroppedItem[] };
 export type FileDropAreaProps = ViewProps & {
-  accepts?: "links" | "extensionPackages";
+  accepts?: "links" | "linksAndText" | "extensionPackages";
+  enabled?: boolean;
   onDropUpdate?: (e: DropUpdate) => void;
 };
 
-type NativeFileDropAreaProps = ViewProps & {
-  accepts?: "links" | "extensionPackages";
-  ref?: (instance: { nativeRef?: { current: View | null } } | null) => void;
+export type FileDropHandle = { nativeRef?: { current: View | null } };
+
+export type NativeFileDropAreaProps = Omit<FileDropAreaProps, "onDropUpdate"> & {
+  ref?: (instance: FileDropHandle | null) => void;
   onDropUpdate?: (e: { nativeEvent: DropUpdate }) => void;
 };
 
@@ -82,7 +84,7 @@ export type MagnifyAreaProps = ViewProps & {
   onMagnify?: (e: MagnifyUpdate) => void;
 };
 
-type NativeMagnifyAreaProps = ViewProps & { enabled?: boolean; onMagnify?: (e: { nativeEvent: MagnifyUpdate }) => void };
+export type NativeMagnifyAreaProps = Omit<MagnifyAreaProps, "onMagnify"> & { onMagnify?: (e: { nativeEvent: MagnifyUpdate }) => void };
 
 const NativeMagnifyArea = requireNativeViewManager<NativeMagnifyAreaProps>("ArdiaMagnifyArea");
 export type MagnifyAreaNative = {

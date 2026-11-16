@@ -68,15 +68,15 @@ export const SWITCHES = {
 } as const satisfies Record<string, SwitchDef>;
 
 export const EXPERIMENTS = {
-  beginFrameBridge: {
-    about: "While a shown tab waits for the display link's first callback, the GPU process sends up to 4 warm-up BeginFrames on the display's last vsync grid (engine, chromium-begin-frame-warm-up.patch).",
-    owner: "tab switch",
-    removeBy: "2026-12-15",
-  },
   serverWindowDragAllOpen: {
     about: "With serverWindowDrag, every view in the titlebar band is also left open to window moves (a probe for the geometry work).",
     owner: "window",
     removeBy: "2026-12-15",
+  },
+  dragRegionEveryMount: {
+    about: "With serverWindowDrag, every React Native mount rebuilds each window's title-bar drag region, as it used to, instead of only the window whose title bar the pointer is in (packages/shell ServerWindowDrag.swift).",
+    owner: "window",
+    removeBy: "2026-12-31",
   },
   webkitSignIn: {
     about: "Moving a Chromium page to WebKit first copies the cookies that page's own address gets into the profile's WebKit store, at most 1.5 s (state/engines/engineSignIn.ts).",

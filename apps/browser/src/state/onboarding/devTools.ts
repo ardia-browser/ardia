@@ -4,6 +4,7 @@ import { resolveWindowId } from "../browser/model";
 import { DEFAULT_SETTINGS } from "../settings/settings";
 import {
   activeSteps,
+  cancelOnboarding,
   chooseSource,
   confirmAnswer,
   finishOnboarding,
@@ -11,8 +12,10 @@ import {
   goToStep,
   nextStep,
   presetPatch,
+  previewLive,
   PRESETS,
   questionsFor,
+  redoOnboarding,
   resolveDraft,
   startOnboarding,
   useOnboarding,
@@ -41,6 +44,9 @@ if (__DEV__)
     nextStep,
     activeSteps,
     finish: finishOnboarding,
+    redo: redoOnboarding,
+    cancel: cancelOnboarding,
+    previewLive,
     pinSites,
     resolveDraft,
     questionsFor,

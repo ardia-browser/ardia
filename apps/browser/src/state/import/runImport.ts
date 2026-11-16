@@ -2,12 +2,16 @@ import { ardiaError } from "@ardia/core";
 import { orWarn } from "../../lib/fallback";
 import { confirm } from "../app/system";
 import { plural } from "../browser/model";
+import { useBrowser } from "../browser/store";
 import { MAX_DRAFT_LINKS } from "../groups/draftGroups";
 import { createProfile } from "../profiles/actions";
+import { noteImportedSpaces } from "../telemetry/usage";
+import { noteImportRun } from "../telemetry/importRuns";
 import {
   applyResult,
   emptyCounts,
   importArcSpace,
+  importFavorites,
   importDiaProfile,
   profileColorFor,
   profileNamed,
@@ -19,6 +23,7 @@ import {
   type ImportResult,
 } from "./apply";
 import { diaProfilesFor } from "./diaTabs";
+import { planSidebar } from "./sidebarPlan";
 import {
   APP_TAB_KINDS,
   ENCRYPTED_KINDS,
@@ -71,7 +76,7 @@ export function skipEncryptedData() {
   void runImport(kinds, true);
 }
 
-async function destination(target: string, index: number, name: string, color?: string, emoji?: string, shareWith?: string | null): Promise<string> {
+async function destination(target: string, index: number, name: string, color?: string, emoji?: string, shareWith?: string | null, shareTopApps?: boolean): Promise<string> {
   if (index === 0) return target;
   const clash = profileNamed(name);
   if (clash) {
@@ -84,7 +89,7 @@ async function destination(target: string, index: number, name: string, color?: 
     });
     if (!confirmed) return clash;
   }
-  return createProfile({ name, color: profileColorFor(color), icon: emoji ?? null, shareWith });
+  return createProfile({ name, color: profileColorFor(color), icon: emoji ?? null, shareWith, shareTopApps });
 }
 
 type AppTabs = { result: DiaTabsResult } | { note: string };
@@ -130,11 +135,12 @@ export async function runImport(wanted: ReadonlySet<ImportKind>, withoutKey = fa
   const failed = new Map<ImportKind, string[]>();
   const add = (c: ImportCounts) => (Object.keys(total) as (keyof ImportCounts)[]).forEach((k) => (total[k] += c[k]));
   let destinationIndex = 0;
-  const nextDestination = (name: string, color?: string, emoji?: string, shareWith?: string | null) =>
-    destination(target, destinationIndex++, name, color, emoji, shareWith);
+  const nextDestination = (name: string, color?: string, emoji?: string, shareWith?: string | null, shareTopApps?: boolean) =>
+    destination(target, destinationIndex++, name, color, emoji, shareWith, shareTopApps);
   const found = new Map<string, ImportedExtension>();
   const left: string[] = [];
   let extensionsProfile = "";
+  let secretsLeft = 0;
   const appTabs = fromApp.length ? readAppTabs() : null;
   if (source.family === "firefox" && requested.includes("passwords") && !api.isBrowserUnlocked(source.id)) {
     await api.unlockBrowser(source.id).catch(orWarn(undefined));
@@ -164,7 +170,8 @@ export async function runImport(wanted: ReadonlySet<ImportKind>, withoutKey = fa
     }
     for (const k of result.failed) failed.set(k, [...(failed.get(k) ?? []), profile.name]);
     for (const w of result.warnings) {
-      if ((w.code === "undecryptable" || w.code === "skipped" || w.code === "locked") && !result.failed.includes(w.kind)) left.push(`${w.message}.`);
+      if (w.code === "undecryptable") secretsLeft += 1;
+      if (w.code === "locked" || ((w.code === "undecryptable" || w.code === "skipped") && !result.failed.includes(w.kind))) left.push(`${w.message}.`);
     }
     const refused = (k: ImportKind) => {
       const names = failed.get(k) ?? [];
@@ -172,17 +179,35 @@ export async function runImport(wanted: ReadonlySet<ImportKind>, withoutKey = fa
     };
 
     if (bySpaces) {
-      let first: string | null = null;
-      for (const space of result.spaces) {
+      const plan = planSidebar(source.sidebar!, result, profile.spaces);
+      const members: string[][] = [];
+      for (const { space, partition } of plan.spaces) {
         const name = space.name || "Space";
-        const dest = await nextDestination(name, space.color, space.emoji, first);
-        first ??= dest;
+        const head = members[partition]?.[0] ?? null;
+        const shared = plan.sharesTopApps && plan.spaces.filter((p) => p.partition === partition).length > 1;
+        const dest = await nextDestination(name, space.color, space.emoji, head, shared);
+        (members[partition] ??= []).push(dest);
         const r = importArcSpace(dest, space, result.favicons);
         add({ ...emptyCounts(), tabs: r.tabs, bookmarks: r.bookmarks });
         if (r.skipped) left.push(`${plural(r.skipped, "link")} in ${name}'s folders weren't imported: each folder brings up to ${MAX_DRAFT_LINKS.toLocaleString("en-US")} links.`);
       }
-      const dest = first ?? (await nextDestination(result.profile?.name ?? profile.name, result.profile?.color));
-      add(await applyResult(dest, result, source.name, profileKinds, refused));
+      const dest = members[plan.dataPartition]?.[0] ?? (await nextDestination(result.profile?.name ?? profile.name, result.profile?.color));
+      members[plan.dataPartition] ??= [dest];
+      add(await applyResult(dest, { ...result, favorites: [] }, source.name, profileKinds, refused));
+      let essentials = 0;
+      plan.favorites.forEach((tabs, partition) => {
+        const group = members[partition] ?? [];
+        const sharing = group.every((id) => useBrowser.getState().profiles[id]?.shareTopApps);
+        const into = !plan.sharesTopApps || sharing ? group.slice(0, 1) : group;
+        for (const id of into) essentials += importFavorites(id, tabs, result.favicons);
+      });
+      total.tabs += essentials;
+      noteImportedSpaces({
+        spaces: plan.spaces.length,
+        containerSpaces: plan.spaces.filter((p) => p.partition !== plan.dataPartition).length,
+        dataProfiles: members.filter(Boolean).length,
+        essentials,
+      });
       extensionsProfile ||= dest;
     } else {
       const dest = await nextDestination(result.profile?.name ?? profile.name, result.profile?.color ?? profile.color);
@@ -207,10 +232,11 @@ export async function runImport(wanted: ReadonlySet<ImportKind>, withoutKey = fa
   }
   updateStatus(signal, (st) => Object.fromEntries(Object.entries(st).map(([k, v]) => [k, failed.has(k as ImportKind) ? "failed" : v === "failed" ? v : "done"])));
   api.forgetUnlockedKeys();
+  noteImportRun({ done: order.filter((k) => !failed.has(k)).length, failed: failed.size, secretsLeft });
   finishImport(signal, {
     counts: total,
     failures: [...failed].map(([kind, names]) => ({ kind, profiles: selected.length > 1 ? names : [] })),
-    notes: left,
+    notes: [...new Set(left)],
     extensions: { profileId: extensionsProfile, list: [...found.values()], opened: false },
   });
 }

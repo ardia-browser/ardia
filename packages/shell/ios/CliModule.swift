@@ -9,6 +9,8 @@ public class CliModule: Module {
 
     Function("installedVersion") { () -> String? in CliInstaller.installedVersion() }
 
+    Function("canInstallUnattended") { () -> Bool in CliInstaller.canInstallUnattended() }
+
     AsyncFunction("install") { (promise: Promise) in
       CliInstaller.shared.install(
         onLine: { [weak self] line in self?.sendEvent("onInstallLine", ["line": line]) },

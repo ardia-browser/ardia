@@ -2,6 +2,8 @@
 #import "ArdiaRuntime.h"
 #import "ArdiaLaunchConfig.h"
 #import "ArdiaPictureInPicture.h"
+#import "ArdiaProtectedVideo.h"
+#import "ArdiaHLSVideo.h"
 
 #import <objc/runtime.h>
 
@@ -152,6 +154,8 @@ BOOL TracingPictureInPicture() {
   const NSTimeInterval clickAt = TakeControlPress(clickMs, target, self.window);
   [self traceManualPictureInPicture:[NSString stringWithFormat:@"%@ %@ (control %ld)", clickMs > 0 ? @"click" : @"key or accessibility press", clickAt > 0 ? @"verified" : @"not verified", (long)target]];
   if (clickAt <= 0) return completion(NO);
+  if ([ArdiaProtectedVideo activeInTab:_tab]) return completion([ArdiaProtectedVideo startPictureInPictureInTab:_tab]);
+  if ([ArdiaHLSVideo activeInTab:_tab]) return completion([ArdiaHLSVideo startPictureInPictureInTab:_tab]);
   [self thawHiddenPage];
   __weak ArdiaWebView *weakSelf = self;
   [_tab enterPictureInPictureForClickAt:clickAt
@@ -174,11 +178,44 @@ BOOL TracingPictureInPicture() {
   });
 }
 
+- (BOOL)playsForAutoPictureInPicture {
+  NSDictionary *np = _reports.nowPlaying.selected;
+  return _autoPictureInPicture && ([np[@"playbackState"] isEqual:@"playing"] || _reports.capturing || [ArdiaProtectedVideo playsInTab:_tab] || [ArdiaHLSVideo playsInTab:_tab]);
+}
+
+- (BOOL)leftAppInPictureInPicture {
+  return !NSApp.isActive;
+}
+
++ (BOOL)playsForAutoPictureInPictureInWindow:(NSWindow *)window {
+  for (ArdiaWebView *view in LiveViews().allObjects)
+    if (view.window == window && view->_visible && view->_tab && view.playsForAutoPictureInPicture) return YES;
+  return NO;
+}
+
+- (void)autoPictureInPictureInputsChanged {
+  const BOOL plays = _tab && self.playsForAutoPictureInPicture;
+  if (plays == _reports.playedForAutoPictureInPicture) return;
+  _reports.playedForAutoPictureInPicture = plays;
+  if (!self.window) return;
+  [ArdiaWindowController reconsiderSightOf:self.window];
+  [self userSightChanged];
+}
+
+- (void)noteStayedOnAppSwitch {
+  if (!_tab || !_visible || _reports.inPictureInPicture || !self.seenByUser || !self.playsForAutoPictureInPicture) return;
+  [self traceAutoPictureInPicture:@"app: the user left Ardia, the window server still shows the tab"];
+  [self emit:@"autoPictureInPictureKept" payload:@{@"appSwitch" : @YES}];
+}
+
 - (void)updateAutoPictureInPicture {
   if (!_tab) return;
-  NSDictionary *np = _reports.nowPlaying.selected;
-  const BOOL playing = [np[@"playbackState"] isEqual:@"playing"] || _reports.capturing;
-  if (!_reports.seenByUser && _autoPictureInPicture && playing) {
+  if (!_reports.seenByUser && self.playsForAutoPictureInPicture) {
+    if (([ArdiaProtectedVideo playsInTab:_tab] && [ArdiaProtectedVideo startPictureInPictureInTab:_tab]) ||
+        ([ArdiaHLSVideo playsInTab:_tab] && [ArdiaHLSVideo startPictureInPictureInTab:_tab])) {
+      _reports.autoPictureInPictureActive = YES;
+      return [self traceAutoPictureInPicture:@"app: auto PiP for the native protected video"];
+    }
     [self traceAutoPictureInPicture:@"app: auto PiP left to Chrome"];
   } else if (_reports.seenByUser && (_reports.autoPictureInPictureActive || _reports.inPictureInPicture)) {
     _reports.autoPictureInPictureActive = NO;
@@ -187,6 +224,8 @@ BOOL TracingPictureInPicture() {
 }
 
 - (void)exitPictureInPicture {
+  [ArdiaProtectedVideo exitPictureInPictureInTab:_tab];
+  [ArdiaHLSVideo exitPictureInPictureInTab:_tab];
   [_tab exitPictureInPicture];
 }
 
@@ -203,6 +242,7 @@ BOOL TracingPictureInPicture() {
   }
   _reports.inPictureInPicture = [state[@"active"] boolValue];
   [self emit:@"pictureInPicture" payload:@{@"kind" : @"document", @"active" : @([state[@"active"] boolValue])}];
+  if (_reports.inPictureInPicture) ardia_pip::DocumentEntered(self);
 }
 
 - (void)tab:(ArdiaCoreTab *)tab requestsActivation:(NSString *)reason {

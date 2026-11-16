@@ -2,9 +2,11 @@ import type { BrowserState } from "../browser/store";
 import { isWindowClosing } from "./closingWindows";
 import { engineProfile, incognitoOriginal } from "../browser/model";
 import type { BrowserWindow, MainWindow } from "../browser/types";
+import { WINDOW_CHROME } from "../../lib/windowChrome";
 
 export const SMALL_BAR_HEIGHT = 38;
 export const SMALL_LIGHTS_CENTER: [number, number] = [20, SMALL_BAR_HEIGHT / 2];
+export const SMALL_WINDOW_BAR_HEIGHT = Math.max(SMALL_BAR_HEIGHT, WINDOW_CHROME.titleBarHeight);
 
 export const isSmallWindow = (w: BrowserWindow | undefined): boolean => w?.kind === "small";
 
@@ -14,6 +16,9 @@ export const isSmall = (s: Pick<BrowserState, "windows">, windowId?: string | nu
   !!windowId && s.windows[windowId]?.kind === "small";
 
 export const isOpenRegularWindow = (w: BrowserWindow | undefined): boolean => isRegularWindow(w) && !isWindowClosing(w.id);
+
+export const isLastRegularWindow = (s: Pick<BrowserState, "windows">, id: string): boolean =>
+  isRegularWindow(s.windows[id]) && !Object.values(s.windows).some((o) => o.id !== id && isOpenRegularWindow(o));
 
 export function mainWindowFor(s: BrowserState, profileId?: string): string | undefined {
   const order = [...new Set([...s.ui.focusOrder, ...s.windowOrder])].filter((id) => isOpenRegularWindow(s.windows[id]));

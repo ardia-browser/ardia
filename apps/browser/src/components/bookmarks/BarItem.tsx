@@ -12,6 +12,7 @@ import type { SidebarEdge } from "../../state/bookmarks/sidebarEdge";
 import { ContextMenuArea, MouseArea, Symbol, Text, useHover, useTheme } from "../ui";
 import { openBarMenu, openImportButtonMenu, type ClickMods } from "../../state/bookmarks/barMenus";
 import { bookmarksBar, type BarSize } from "./tokens";
+import { chipFrame } from "./chipFrame";
 import { measureRect, useEased, useSlide } from "./barMotion";
 import { useBarSize } from "./barSize";
 
@@ -105,8 +106,8 @@ export const BarItem = memo(function BarItem({
           <BarButton
             favicon={node.kind === "url" ? node : undefined}
             icon={folder ? "folder" : undefined}
-            title={node.title || (node.kind === "url" ? node.url : "")}
-            tooltip={node.kind === "url" ? `${node.title}\n${node.url}` : node.title}
+            title={node.title.trim()}
+            tooltip={node.kind === "url" && node.title.trim() ? `${node.title}\n${node.url}` : node.kind === "url" ? node.url : node.title}
             active={menuOpen}
             dropRing={dropInto}
             onPress={open}
@@ -131,9 +132,9 @@ export const BarButton = forwardRef<View, {
   const size = useBarSize();
   return (
     <View ref={ref} collapsable={false} {...hoverProps} tooltip={tooltip}>
-      <Pressable accessibilityRole="button" accessibilityLabel={title ?? tooltip} onPress={(e) => onPress(e.nativeEvent as unknown as ClickMods)}>
+      <Pressable accessibilityRole="button" accessibilityLabel={title || tooltip} onPress={(e) => onPress(e.nativeEvent as unknown as ClickMods)}>
         {({ pressed }) => (
-          <Chip size={size} width={width} padded={!!title} hovered={hovered || active || dropRing} pressed={pressed || !!active} dropRing={dropRing}>
+          <Chip size={size} width={width} titled={!!title} hovered={hovered || active || dropRing} pressed={pressed || !!active} dropRing={dropRing}>
             <ChipIcon size={size} favicon={favicon} icon={icon} />
             {title ? (
               <Text lines={1} size={size.text} tone="textTab" style={TITLE}>
@@ -150,7 +151,7 @@ export const BarButton = forwardRef<View, {
 export function Chip({
   size,
   width,
-  padded,
+  titled,
   hovered = false,
   pressed = false,
   dropRing = false,
@@ -158,7 +159,7 @@ export function Chip({
 }: {
   size: BarSize;
   width?: number;
-  padded: boolean;
+  titled: boolean;
   hovered?: boolean;
   pressed?: boolean;
   dropRing?: boolean;
@@ -172,9 +173,8 @@ export function Chip({
     <View
       style={{
         height: size.item,
-        width,
+        ...chipFrame(size, { titled, width }),
         maxWidth: size.itemMaxWidth,
-        paddingHorizontal: padded ? size.padding : 0,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",

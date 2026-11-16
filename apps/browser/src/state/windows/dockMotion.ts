@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { CARD_INSET } from "../../lib/windowLayout";
 import { compactLift, toolbarRowOf } from "../../lib/toolbarRow";
 import type { LightsPlace } from "../../platform/windows";
+import { snappedToDevicePixels } from "../settings/interfaceScale";
 
 const LIGHTS_X = 25;
 const LIGHTS_BELOW_CARD_TOP = 21;
@@ -17,7 +18,7 @@ export const ARC_LIGHTS_CENTER: readonly [number, number] = [25, 24];
 export const TOP_STRIP_LIGHTS_CENTER: readonly [number, number] = [20.75, 20.75];
 
 export function lightsCenter(offset: number, down = 0, base: readonly [number, number] = LIGHTS_CENTER): [number, number] {
-  const dx = Math.round(offset * 2) / 2;
+  const dx = snappedToDevicePixels(offset);
   return [base[0] - dx, base[1] + down];
 }
 
@@ -29,8 +30,8 @@ export function sidebarLightsCenter(right: boolean, width: number, offset: numbe
 
 export type PeekSpan = readonly [from: number, to: number];
 
-type DockMotion = { moving: Record<string, true>; peeks: Record<string, PeekSpan> };
-export const useDockMotion = create<DockMotion>()(() => ({ moving: {}, peeks: {} }));
+type DockMotion = { moving: Record<string, true>; peeks: Record<string, PeekSpan>; leaving: Record<string, true> };
+export const useDockMotion = create<DockMotion>()(() => ({ moving: {}, peeks: {}, leaving: {} }));
 
 export const dockMoving = (windowId: string) => !!useDockMotion.getState().moving[windowId];
 
@@ -61,6 +62,16 @@ export const peekShown = (windowId: string) => windowId in useDockMotion.getStat
 export const overPeek = (windowId: string, x: number) => {
   const span = useDockMotion.getState().peeks[windowId];
   return !!span && x >= span[0] && x < span[1];
+};
+export function setPeekLeaving(windowId: string, leaving: boolean) {
+  const current = useDockMotion.getState().leaving;
+  if (!!current[windowId] === leaving) return;
+  const { [windowId]: _, ...rest } = current;
+  useDockMotion.setState({ leaving: leaving ? { ...current, [windowId]: true } : rest });
+}
+export const sidebarSliding = (windowId: string) => {
+  const m = useDockMotion.getState();
+  return !!m.moving[windowId] || !!m.leaving[windowId];
 };
 export const usePeekSpan = (windowId: string): PeekSpan | undefined => useDockMotion((m) => m.peeks[windowId]);
 export const devPeeks: Record<string, { show(): void; hide(): void }> = {};

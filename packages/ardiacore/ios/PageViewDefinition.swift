@@ -35,6 +35,11 @@ enum PageViewDefinition {
       AsyncFunction("forceReload") { (view: V) in view.page.reloadIgnoringCache() }.runOnQueue(.main)
       AsyncFunction("stopLoading") { (view: V) in view.page.stopLoading() }.runOnQueue(.main)
       AsyncFunction("focus") { (view: V) in view.page.focusPage() }.runOnQueue(.main)
+      AsyncFunction("focusIfUnfocused") { (view: V) -> Bool in
+        guard let window = view.window, window.firstResponder == nil || window.firstResponder === window else { return false }
+        view.page.focusPage()
+        return true
+      }.runOnQueue(.main)
       AsyncFunction("setMuted") { (view: V, muted: Bool) in view.page.setMuted(muted) }.runOnQueue(.main)
       AsyncFunction("zoomStep") { (view: V, direction: Int) in view.page.zoomStep(direction) }.runOnQueue(.main)
       AsyncFunction("find") { (view: V, text: String, forward: Bool, findNext: Bool) in
@@ -109,6 +114,8 @@ enum PageViewDefinition {
       AsyncFunction("resolveUnresponsive") { (view: V, terminate: Bool) in view.page.resolveUnresponsive(terminate: terminate) }
         .runOnQueue(.main)
       AsyncFunction("discard") { (view: V, unload: Bool?) -> String in view.page.discard(unload: unload ?? false) }.runOnQueue(.main)
+      AsyncFunction("sleepIfHidden") { (view: V, seconds: Double) -> [Int] in view.page.sleepIfHidden(for: seconds).map(\.intValue) }
+        .runOnQueue(.main)
       AsyncFunction("setFrozen") { (view: V, frozen: Bool) in view.page.frozen = frozen }.runOnQueue(.main)
 
       OnViewDidUpdateProps { (view: V) in view.propsDidUpdate() }

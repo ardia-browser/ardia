@@ -1,5 +1,6 @@
 #import "ArdiaSwipeInternal.h"
 #import "ArdiaChromeWindowHost.h"
+#import "ArdiaInterfaceScale.h"
 
 #import <dlfcn.h>
 
@@ -19,9 +20,15 @@ NSDictionary *ResponderReport(NSView *hit) {
   return @{@"takesSwipes" : @([ArdiaCorePageView takesSwipes:page]), @"valid" : valid};
 }
 
-NSPoint LocalPoint(NSWindow *window, NSPoint point) {
-  NSView *content = window.contentView;
-  return content.isFlipped ? point : NSMakePoint(point.x, NSHeight(content.bounds) - point.y);
+NSPoint WindowPointFromRoot(NSWindow *window, NSPoint point) {
+  NSView *root = [ArdiaInterfaceScale rootOfWindow:window] ?: [ArdiaChromeWindowHost rootViewOfWindow:window];
+  if (!root) {
+    NSView *content = window.contentView;
+    return [content convertPoint:content.isFlipped ? point : NSMakePoint(point.x, NSHeight(content.bounds) - point.y) toView:nil];
+  }
+  const NSRect bounds = root.bounds;
+  return [root convertPoint:NSMakePoint(NSMinX(bounds) + point.x, root.isFlipped ? NSMinY(bounds) + point.y : NSMaxY(bounds) - point.y)
+                     toView:nil];
 }
 
 CGScrollPhase ScrollPhaseOf(NSString *phase) {
@@ -33,7 +40,7 @@ CGScrollPhase ScrollPhaseOf(NSString *phase) {
   return (CGScrollPhase)0;
 }
 
-NSEvent *SyntheticScroll(NSWindow *window, NSPoint point, NSDictionary *step, uint64_t startNs) {
+NSEvent *SyntheticScroll(NSWindow *window, NSPoint inWindow, NSDictionary *step, uint64_t startNs) {
   NSString *phase = step[@"phase"];
   double dx = [step[@"dx"] doubleValue], dy = [step[@"dy"] doubleValue];
   BOOL wheel = [phase isEqualToString:@"wheel"];
@@ -61,13 +68,11 @@ NSEvent *SyntheticScroll(NSWindow *window, NSPoint point, NSDictionary *step, ui
   }
   if (step[@"rawPhase"]) CGEventSetIntegerValueField(cg, kCGScrollWheelEventScrollPhase, [step[@"rawPhase"] longLongValue]);
   if (step[@"rawMomentumPhase"]) CGEventSetIntegerValueField(cg, kCGScrollWheelEventMomentumPhase, [step[@"rawMomentumPhase"] longLongValue]);
-  NSPoint local = LocalPoint(window, point);
-  NSPoint screen = [window convertPointToScreen:[window.contentView convertPoint:local toView:nil]];
+  NSPoint screen = [window convertPointToScreen:inWindow];
   CGFloat mainHeight = NSHeight(NSScreen.screens.firstObject.frame);
   CGEventSetLocation(cg, CGPointMake(screen.x, mainHeight - screen.y));
   CGEventSetIntegerValueField(cg, (CGEventField)51, window.windowNumber);
   static auto setWindowLocation = (void (*)(CGEventRef, CGPoint))dlsym(RTLD_DEFAULT, "CGEventSetWindowLocation");
-  NSPoint inWindow = [window.contentView convertPoint:local toView:nil];
   if (setWindowLocation) setWindowLocation(cg, CGPointMake(inWindow.x, NSHeight(window.frame) - inWindow.y));
   NSEvent *event = [NSEvent eventWithCGEvent:cg];
   CFRelease(cg);
@@ -86,8 +91,7 @@ NSEvent *SyntheticScroll(NSWindow *window, NSPoint point, NSDictionary *step, ui
   gTrace = [NSMutableArray array];
   NSMutableArray *log = [NSMutableArray array];
   const uint64_t startNs = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
-  NSPoint local = LocalPoint(window, point);
-  NSPoint inWindow = [window.contentView convertPoint:local toView:nil];
+  const NSPoint inWindow = WindowPointFromRoot(window, point);
   NSView *hit = HitView(window, inWindow);
   NSDictionary *where = @{
     @"hit" : hit ? NSStringFromClass(hit.class) : @"",
@@ -112,7 +116,7 @@ NSEvent *SyntheticScroll(NSWindow *window, NSPoint point, NSDictionary *step, ui
       BOOL handled = HandleDiscreteSwipe(window, inWindow, [s[@"dx"] doubleValue]);
       [log addObject:@{@"phase" : phase, @"swallowed" : @(handled)}];
     } else {
-      NSEvent *event = SyntheticScroll(window, point, s, startNs);
+      NSEvent *event = SyntheticScroll(window, inWindow, s, startNs);
       if (event.window != window || fabs(event.locationInWindow.x - inWindow.x) > 1 || fabs(event.locationInWindow.y - inWindow.y) > 1) {
         [log addObject:@{@"phase" : phase, @"error" : [NSString stringWithFormat:@"event window %@ at %@, expected %@",
                                                                   event.window, NSStringFromPoint(event.locationInWindow), NSStringFromPoint(inWindow)]}];

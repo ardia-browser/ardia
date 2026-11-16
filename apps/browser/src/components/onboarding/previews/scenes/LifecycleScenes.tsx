@@ -1,4 +1,4 @@
-import { Animated, View } from "react-native";
+import { Animated } from "react-native";
 import { fill, type Rect, ROW, rowY, sideCard, TOOLBAR_H } from "../geometry";
 import { BLANK, tab, TRIP } from "../content";
 import { linear, tracker } from "../timeline";
@@ -9,6 +9,7 @@ import { sceneMs } from "../tokens";
 import { font } from "../../../ui/tokens";
 import type { Scene } from "../scene";
 import { Chrome, Desktop, KeyPress, listTop, MINI_SIDE, MiniArdia, Std } from "./SceneParts";
+import { keyText } from "../../../../state/commands/keyText";
 
 export function tidy(auto: boolean): Scene {
   return ({ g, look, p, opts }) => {
@@ -55,7 +56,7 @@ export function quit(fresh: boolean): Scene {
     const quiet = { ...opts };
     return (
       <>
-        <Backdrop g={g} look={look} />
+        <Backdrop look={look} />
         <Animated.View style={[fill, fresh ? away : both]}>
           <Std g={g} look={look} opts={quiet} n={5} sel={0} />
         </Animated.View>
@@ -69,7 +70,7 @@ export function quit(fresh: boolean): Scene {
             </Card>
           </Animated.View>
         ) : null}
-        <KeyPress g={g} look={look} t={t} label="⌘Q" />
+        <KeyPress g={g} t={t} label={keyText("⌘Q")} />
       </>
     );
   };
@@ -94,7 +95,7 @@ export function windows(shared: boolean): Scene {
     };
     return (
       <>
-        <Desktop g={g} look={look} />
+        <Desktop look={look} />
         <MiniArdia
           g={g}
           look={look}

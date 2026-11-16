@@ -1,0 +1,15 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Fixture Invite</title>
+<style>body { margin: 0; } #modal { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; } #modal div { background: #fff; padding: 20px; }</style>
+</head>
+<body>
+<button id="target">Open settings</button>
+<pre id="report">{"clicked": []}</pre>
+<div id="modal" role="dialog" aria-modal="true"><div>Join the team workspace? We keep your personal data private. <button id="decline">Decline</button> <button id="continue">Continue</button></div></div>
+<script>
+  const state = { clicked: [] };
+  for (const id of ["target", "decline", "continue"]) document.getElementById(id).addEventListener("click", () => { state.clicked.push(id); document.getElementById("report").textContent = JSON.stringify(state); });
+</script>
+</body>
+</html>

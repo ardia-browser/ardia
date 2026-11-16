@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Fixture Locked</title>
+<style>
+  body { margin: 0; font: 16px system-ui; }
+  body.locked { position: fixed; top: 0; left: 0; right: 0; overflow: hidden; }
+  .gap { height: 3000px; }
+  #language { position: fixed; top: 40px; left: 40px; width: 320px; padding: 16px; background: #fff; border: 1px solid #888; z-index: 10; }
+</style>
+</head>
+<body>
+<button id="open-language">Language</button>
+<div class="gap"></div>
+<footer><button id="currency">Currency</button></footer>
+<div id="language" role="dialog" aria-modal="true" aria-label="Language and region" hidden>
+  Choose a language. <button id="close-language">Close</button>
+</div>
+<pre id="report">{}</pre>
+<script>
+  const state = { clicked: [] };
+  const show = () => { document.getElementById("report").textContent = JSON.stringify(state); };
+  const dialog = document.getElementById("language");
+  const close = () => { dialog.hidden = true; document.body.classList.remove("locked"); };
+  document.getElementById("open-language").addEventListener("click", () => { dialog.hidden = false; document.body.classList.add("locked"); });
+  document.getElementById("close-language").addEventListener("click", close);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") close(); });
+  document.getElementById("currency").addEventListener("click", () => { state.clicked.push("currency"); show(); });
+  show();
+</script>
+</body>
+</html>

@@ -2,12 +2,13 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Animated, Pressable, StyleSheet, View, type ViewStyle } from "react-native";
 import { useTheme } from "../ui/theme";
 import { pageHostLabel } from "../../lib/url";
-import { useSettings, useTab, useTabLive } from "../../state/browser/hooks";
+import { useTab } from "../../state/browser/hooks";
 import { useBrowserWhile, useStoreWhile } from "../../state/tabs/tabWatch";
 import type { ToolbarGeometry } from "../window/geometry";
-import { toolbarPalette, useEasedColor } from "../ui/toolbarColors";
+import { useEasedColor } from "../ui/toolbarColors";
+import { useSitePalette } from "./useSitePalette";
 import { useToolbarHeld } from "../../state/app/transientUi";
-import { revealToolbar, setToolbarPeek, STRIP_HEIGHT, toolbarMode, useToolbarAutoHide, type ToolbarMode } from "../../state/windows/toolbarAutoHide";
+import { addressFieldShownIn, revealToolbar, setToolbarPeek, STRIP_HEIGHT, toolbarMode, useToolbarAutoHide, type ToolbarMode } from "../../state/windows/toolbarAutoHide";
 import { Toolbar } from "./Toolbar";
 import { curve } from "../ui/motion";
 import { reduceMotion, space, Text } from "../ui";
@@ -36,20 +37,17 @@ type ToolbarMotion = {
   bar: Animated.Value;
   fade: Animated.Value;
   groupStyle: Animated.WithAnimatedValue<ViewStyle>;
-  pageHeight: number;
   bottomStyle: Animated.WithAnimatedValue<ViewStyle>;
 };
 
 export function useToolbarMotion({
   enabled,
   mode,
-  height,
   extra,
   doc,
 }: {
   enabled: boolean;
   mode: ToolbarMode;
-  height: number;
   extra: number;
   doc: string;
 }): ToolbarMotion {
@@ -105,9 +103,9 @@ export function useToolbarMotion({
       left: 0,
       right: 0,
       top: (collapsed ? STRIP_HEIGHT : shownTop) - extra,
+      bottom: (tall.on ? STRIP_HEIGHT : shownTop) - (collapsed ? STRIP_HEIGHT : shownTop),
       transform: [{ translateY }],
     },
-    pageHeight: height - (tall.on ? STRIP_HEIGHT : shownTop),
     bottomStyle: { transform: [{ translateY: bottomShift }] },
   };
 }
@@ -121,9 +119,7 @@ function useMovedOnce(mode: ToolbarMode) {
 export function AutoHideBackdrop({ tabId, mode, motion }: { tabId: string; mode: ToolbarMode; motion: Pick<ToolbarMotion, "bar"> }) {
   const theme = useTheme();
   const url = useTab(tabId, (t) => t?.url ?? "");
-  const themeColor = useTabLive(tabId, (l) => l.themeColor);
-  const extendColor = useSettings((s) => s.extendWebsiteColor);
-  const palette = toolbarPalette(theme, extendColor && url ? themeColor : null);
+  const palette = useSitePalette(tabId);
   const band = useEasedColor(palette.background);
   const { bar } = motion;
   const H = useToolbarRow().height;
@@ -170,11 +166,8 @@ export function AutoHideToolbar({
   mode: ToolbarMode;
   motion: Pick<ToolbarMotion, "bar" | "fade">;
 }) {
-  const theme = useTheme();
   const url = useTab(tabId, (t) => t?.url ?? "");
-  const themeColor = useTabLive(tabId, (l) => l.themeColor);
-  const extendColor = useSettings((s) => s.extendWebsiteColor);
-  const palette = toolbarPalette(theme, extendColor && url ? themeColor : null);
+  const palette = useSitePalette(tabId);
   const collapsed = mode === "collapsed";
   const modeNow = useRef(mode);
   modeNow.current = mode;
@@ -211,7 +204,7 @@ export function AutoHideToolbar({
         onMouseLeave={() => modeNow.current === "peek" && peekLater(false, UNPEEK_DELAY)}
         style={{ position: "absolute", left: 0, right: 0, top: 0, height: H, opacity: anim ? anim.controls : 1, transform: anim ? anim.shrink : undefined }}
       >
-        <Toolbar tabId={tabId} geometry={geometry} windowId={windowId} inSplit={inSplit} focused={focused} bare />
+        <Toolbar tabId={tabId} geometry={geometry} windowId={windowId} inSplit={inSplit} focused={focused} bare loadFill={addressFieldShownIn(mode)} />
       </Animated.View>
       {anim && (
         <Animated.View pointerEvents={collapsed ? "auto" : "none"} style={{ position: "absolute", left: 0, right: 0, top: 0, height: STRIP_HEIGHT, opacity: anim.label }}>

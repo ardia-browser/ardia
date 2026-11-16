@@ -2,14 +2,16 @@ import asyncio
 import json
 import os
 import signal
+import subprocess
 import sys
 import time
 from pathlib import Path
 
-from ardia_cli import control, hooks
+from ardia_cli import control, endpoint, hooks
 from ardia_cli.control import MethodError, Unreachable
+from ardia_cli.endpoint import DATA_DIR_HELP
+from ardia_cli.printable import complain, say, shown
 
-DATA_DIR_HELP = "the Ardia data dir (default: $ARDIA_DATA_DIR, else the installed app's)"
 RUN_DESCRIPTION = """\
 Run one of Ardia's commands, exactly as its menu item or shortcut would, in the last focused window or --window.
 ARG is one of the command's variants (ardia commands lists them); COMMAND:ARG works too.
@@ -49,8 +51,8 @@ Examples:
   ardia on tab.idle --idle 30m -- ~/bin/park-tab
 """
 HOOKS_DESCRIPTION = """\
-Run hooks from hooks.json in the config folder (~/.config/ardia, or <data dir>/config with --data-dir or
-$ARDIA_DATA_DIR) in one process:
+Run hooks from hooks.json in the config folder ({config_folder}, or <data dir>/config with
+--data-dir or $ARDIA_DATA_DIR) in one process:
 
   {
     "hooks": [
@@ -69,14 +71,46 @@ hooks (tab.opening, link.opening, download.deciding, permission.requested) answe
 Ardia applies itself or as a program whose stdout is the answer; scheduled hooks get a schedule.fired event.
 Rules that route or rewrite links, pick folders, run decide programs or read the address bar wait for approval in
 Ardia's Settings › Advanced › Automation. run re-reads hooks.json when it changes; an invalid file keeps the hooks
-loaded before. Output goes to ~/Library/Logs/Ardia/hooks.log (rotated at 5 MB). See docs/automation.md.
+loaded before. Output goes to {log} (rotated at 5 MB). See docs/automation.md.
 
 Commands:
   run         run the hooks until interrupted
-  install     run them at login: a LaunchAgent (dev.ardia.hooks) that keeps ardia hooks run alive
-  uninstall   remove the LaunchAgent
-  list        the hooks in hooks.json and whether the LaunchAgent runs
+  install     run them at login: {agent_a} ({agent_name}) that keeps ardia hooks run alive
+  uninstall   remove the {agent}
+  list        the hooks in hooks.json and whether the {agent} runs
 """
+
+
+def agent_words(linux: bool | None = None) -> dict:
+    if endpoint.LINUX if linux is None else linux:
+        return {"agent": "systemd user service", "agent_a": "a systemd user service", "agent_name": hooks.SERVICE, "log": "${XDG_STATE_HOME:-~/.local/state}/ardia/hooks.log", "config_folder": f"{endpoint.LINUX_DATA_DIR_SHOWN}/config"}
+    return {"agent": "LaunchAgent", "agent_a": "a LaunchAgent", "agent_name": hooks.LABEL, "log": "~/Library/Logs/Ardia/hooks.log", "config_folder": "~/.config/ardia"}
+
+
+def fill(template: str, words: dict) -> str:
+    for key, value in words.items():
+        template = template.replace("{" + key + "}", value)
+    return template
+
+
+def hooks_help(linux: bool | None = None) -> dict:
+    linux = endpoint.LINUX if linux is None else linux
+    words = agent_words(linux)
+    if linux:
+        install = f"Write ${{XDG_CONFIG_HOME:-~/.config}}/systemd/user/{hooks.SERVICE}, which runs the installed ardia's hooks run\nat login and restarts it when it fails, then enable and start it (systemctl --user). Refused with --data-dir or\n$ARDIA_DATA_DIR."
+        uninstall = f"Stop, disable and remove the {hooks.SERVICE} systemd user service. Refused with --data-dir or $ARDIA_DATA_DIR."
+        listing = "List the hooks in hooks.json, check them, and show whether the systemd user service is active. Exit 1 if hooks.json is invalid."
+    else:
+        install = "Write ~/Library/LaunchAgents/dev.ardia.hooks.plist, which runs the installed ardia's hooks run at login\nand keeps it alive, and load it. Refused with --data-dir or $ARDIA_DATA_DIR."
+        uninstall = "Unload and remove the dev.ardia.hooks LaunchAgent. Refused with --data-dir or $ARDIA_DATA_DIR."
+        listing = "List the hooks in hooks.json, check them, and show whether the LaunchAgent is loaded. Exit 1 if hooks.json is invalid."
+    return {
+        "description": fill(HOOKS_DESCRIPTION, words),
+        "log": f"where output goes (default {words['log']}; - for the terminal)",
+        "install": (f"run the hooks at login ({words['agent']} {words['agent_name']})", install),
+        "uninstall": (f"remove the {words['agent']}", uninstall),
+        "list": (f"list the hooks and the {words['agent']}'s state", listing),
+    }
 
 
 def add_parsers(commands, formatter):
@@ -94,7 +128,7 @@ def add_parsers(commands, formatter):
     listing = data_dir(commands.add_parser("commands", help="list the commands ardia run can run", description="List the commands ardia run can run: ids, titles and variants."))
     listing.add_argument("--json", action="store_true", help="print JSON")
 
-    windows = data_dir(commands.add_parser("windows", help="list Ardia's windows and their tabs", description="List Ardia's windows and their tabs (private windows are never included)."))
+    windows = data_dir(commands.add_parser("windows", help="list Ardia's windows and their tabs", description="List Ardia's windows and their tabs (private windows are never included). For each tab's process id, CPU and memory, use ardia tabs --usage."))
     windows.add_argument("--json", action="store_true", help="print JSON")
 
     events = data_dir(commands.add_parser("events", help="print events as they happen", description=EVENTS_DESCRIPTION, formatter_class=formatter))
@@ -110,13 +144,14 @@ def add_parsers(commands, formatter):
     on.add_argument("--idle", metavar="DURATION", help="the threshold for tab.idle, tab.resumed, user.idle and user.active, like 30m")
     on.add_argument("--full-urls", action="store_true", help="keep each URL's query and fragment")
 
-    group = commands.add_parser("hooks", help="run hooks from hooks.json, at login if you like", description=HOOKS_DESCRIPTION, formatter_class=formatter)
+    texts = hooks_help()
+    group = commands.add_parser("hooks", help="run hooks from hooks.json, at login if you like", description=texts["description"], formatter_class=formatter)
     sub = group.add_subparsers(dest="hooks_command", metavar="<command>")
     hooks_run = data_dir(sub.add_parser("run", help="run the hooks until interrupted", description="Run every hook in hooks.json until interrupted, reloading the file when it changes."))
-    hooks_run.add_argument("--log", metavar="PATH", help="where output goes (default ~/Library/Logs/Ardia/hooks.log; - for the terminal)")
-    data_dir(sub.add_parser("install", help="run the hooks at login (LaunchAgent dev.ardia.hooks)", description="Write ~/Library/LaunchAgents/dev.ardia.hooks.plist, which runs the installed ardia's hooks run at login\nand keeps it alive, and load it. Refused with --data-dir or $ARDIA_DATA_DIR.", formatter_class=formatter))
-    data_dir(sub.add_parser("uninstall", help="remove the LaunchAgent", description="Unload and remove the dev.ardia.hooks LaunchAgent. Refused with --data-dir or $ARDIA_DATA_DIR."))
-    hooks_list = data_dir(sub.add_parser("list", help="list the hooks and the LaunchAgent's state", description="List the hooks in hooks.json, check them, and show whether the LaunchAgent is loaded. Exit 1 if hooks.json is invalid."))
+    hooks_run.add_argument("--log", metavar="PATH", help=texts["log"])
+    data_dir(sub.add_parser("install", help=texts["install"][0], description=texts["install"][1], formatter_class=formatter))
+    data_dir(sub.add_parser("uninstall", help=texts["uninstall"][0], description=texts["uninstall"][1]))
+    hooks_list = data_dir(sub.add_parser("list", help=texts["list"][0], description=texts["list"][1]))
     hooks_list.add_argument("--json", action="store_true", help="print JSON")
 
 
@@ -125,17 +160,6 @@ def split_program(argv: list[str]) -> tuple[list[str], list[str] | None]:
         return argv, None
     index = argv.index("--")
     return argv[:index], argv[index + 1:]
-
-
-def say(text: str) -> None:
-    sys.stdout.write(text + "\n")
-    sys.stdout.flush()
-
-
-def complain(text: str) -> None:
-    sys.stdout.flush()
-    sys.stderr.write(text + "\n")
-    sys.stderr.flush()
 
 
 def dispatch(args, parser) -> int:
@@ -156,18 +180,6 @@ def dispatch(args, parser) -> int:
 
 def socket_for(args) -> Path:
     return control.socket_path(args.data_dir)
-
-
-async def with_connection(args, work):
-    connection = await control.connect(socket_for(args))
-    try:
-        return await work(connection)
-    finally:
-        await connection.close()
-
-
-def call(args, method: str, params=None, timeout=control.CALL_TIMEOUT):
-    return asyncio.run(with_connection(args, lambda c: c.call(method, params, timeout)))
 
 
 def closest_commands(name: str, catalog) -> str:
@@ -202,8 +214,9 @@ def cmd_run(args) -> int:
             return error, catalog
 
     try:
-        result, catalog = asyncio.run(with_connection(args, work))
+        result, catalog = asyncio.run(control.with_connection(args.data_dir, work))
     except Unreachable as error:
+        error.noted()
         if error.sent:
             complain(f"ardia run: the connection dropped after the request went out, so {command} may or may not have run ({error})")
         else:
@@ -240,13 +253,14 @@ def parse_id(text: str):
 
 
 def unreachable_exit(error: Unreachable) -> int:
+    error.noted()
     complain(f"ardia: {error}")
     return 2
 
 
 def cmd_commands(args) -> int:
     try:
-        catalog = call(args, "commands")
+        catalog = control.call(args.data_dir, "commands")
     except Unreachable as error:
         return unreachable_exit(error)
     except MethodError as error:
@@ -260,13 +274,13 @@ def cmd_commands(args) -> int:
     for item in rows:
         variants = item.get("variants")
         tail = f"  [{', '.join(map(str, variants))}]" if variants else ""
-        say(f"{str(item.get('id', '')).ljust(width)}  {item.get('title', '')}{tail}")
+        say(shown(f"{str(item.get('id', '')).ljust(width)}  {item.get('title', '')}{tail}"))
     return 0
 
 
 def cmd_windows(args) -> int:
     try:
-        windows = call(args, "windows")
+        windows = control.call(args.data_dir, "windows")
     except Unreachable as error:
         return unreachable_exit(error)
     except MethodError as error:
@@ -280,12 +294,12 @@ def cmd_windows(args) -> int:
             continue
         flags = [str(window.get("kind", "normal"))] + (["focused"] if window.get("focused") else [])
         profile = window.get("profileName") or window.get("profile") or ""
-        say(f"window {window.get('id')}  {', '.join(flags)}  {profile}".rstrip())
+        say(shown(f"window {window.get('id')}  {', '.join(flags)}  {profile}".rstrip()))
         for tab in window.get("tabs") or []:
             marks = ("*" if tab.get("active") else " ") + ("p" if tab.get("pinned") else " ")
             group = f"  (group {tab['group']})" if tab.get("group") is not None else ""
             title = tab.get("title") or ""
-            say(f"  {marks} {tab.get('id')}  {title}  {tab.get('url', '')}{group}")
+            say(shown(f"  {marks} {tab.get('id')}  {title}  {tab.get('url', '')}{group}"))
     return 0
 
 
@@ -308,7 +322,7 @@ def describe_event(event: dict) -> str:
         parts.append(", ".join(map(str, data["keys"])))
     if "tabId" not in data and data.get("profile"):
         parts.append(str(data["profile"]))
-    return "  ".join(parts)
+    return "  ".join(shown(part) for part in parts)
 
 
 def cmd_events(args) -> int:
@@ -337,7 +351,7 @@ def cmd_events(args) -> int:
             say(raw if args.json else describe_event(event))
 
     try:
-        asyncio.run(with_connection(args, work))
+        asyncio.run(control.with_connection(args.data_dir, work))
     except Unreachable as error:
         return unreachable_exit(error)
     except MethodError as error:
@@ -427,19 +441,30 @@ def hooks_run(args) -> int:
 
 def refuse_scratch(args, verb: str) -> bool:
     if args.data_dir or os.environ.get("ARDIA_DATA_DIR"):
-        complain(f"ardia hooks {verb}: refused while --data-dir or $ARDIA_DATA_DIR picks a data dir; the LaunchAgent is for the installed Ardia only")
+        complain(f"ardia hooks {verb}: refused while --data-dir or $ARDIA_DATA_DIR picks a data dir; the {agent_words()['agent']} is for the installed Ardia only")
         return True
     return False
 
 
-def hooks_install(args, launchctl=None, sleep=time.sleep) -> int:
+def launchctl_stuck(verb: str, error) -> int:
+    complain(f"ardia hooks {verb}: launchctl didn't answer in {error.timeout:g} s; try again, or check launchctl print {hooks.domain()}/{hooks.LABEL}")
+    return 1
+
+
+def hooks_install(args, launchctl=None, sleep=time.sleep, systemctl=None) -> int:
+    try:
+        return install_agent(args, launchctl, sleep, systemctl)
+    except subprocess.TimeoutExpired as error:
+        return launchctl_stuck("install", error)
+
+
+def install_agent(args, launchctl, sleep, systemctl) -> int:
     import plistlib
 
     from ardia_cli import config_files
 
     if refuse_scratch(args, "install"):
         return 1
-    launchctl = launchctl or hooks.launchctl
     paths = hooks.agent_paths()
     if not os.path.exists(paths.launcher):
         complain(f"ardia hooks install: the ardia command isn't installed at {paths.launcher}; turn on \"Let the ardia command control Ardia\" in Ardia's Settings to install it")
@@ -450,6 +475,9 @@ def hooks_install(args, launchctl=None, sleep=time.sleep) -> int:
         complain(f"warning: there's no {hooks_file(args)} yet; the hooks start once it exists")
     except (hooks.HooksError, OSError) as error:
         complain(f"warning: {error}")
+    if paths.linux:
+        return service_install(paths, systemctl or hooks.systemctl)
+    launchctl = launchctl or hooks.launchctl
     paths.agents.mkdir(parents=True, exist_ok=True)
     paths.logs.mkdir(parents=True, exist_ok=True)
     data = plistlib.dumps(hooks.agent_plist(paths, os.environ.get("PATH")), sort_keys=False)
@@ -469,12 +497,69 @@ def hooks_install(args, launchctl=None, sleep=time.sleep) -> int:
     return 0
 
 
-def hooks_uninstall(args, launchctl=None) -> int:
+def run_systemctl(systemctl, arguments: list[str]):
+    try:
+        return systemctl(arguments), None
+    except FileNotFoundError:
+        return None, "systemctl isn't installed; ardia hooks needs a systemd user session"
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return None, f"systemctl --user {' '.join(arguments)} failed ({getattr(error, 'strerror', None) or error})"
+
+
+def systemctl_failure(result, arguments: list[str]) -> str:
+    detail = (result.stderr or result.stdout).strip().splitlines()
+    return f"systemctl --user {' '.join(arguments)} failed ({detail[-1] if detail else result.returncode})"
+
+
+def service_install(paths, systemctl) -> int:
+    from ardia_cli import config_files
+
+    try:
+        unit = hooks.service_unit(paths, os.environ.get("PATH"))
+    except hooks.HooksError as error:
+        complain(f"ardia hooks install: {error}")
+        return 1
+    paths.agents.mkdir(parents=True, exist_ok=True)
+    paths.logs.mkdir(parents=True, exist_ok=True)
+    config_files.write_text(paths.unit, unit)
+    for arguments in (["daemon-reload"], ["enable", hooks.SERVICE], ["restart", hooks.SERVICE]):
+        result, problem = run_systemctl(systemctl, arguments)
+        if result is not None and result.returncode != 0:
+            problem = systemctl_failure(result, arguments)
+        if problem:
+            complain(f"ardia hooks install: {problem}")
+            return 1
+    say(f"installed {hooks.SERVICE}: {paths.unit}")
+    say(f"it runs {paths.launcher} hooks run at login and restarts it when it fails; output goes to {paths.log}")
+    return 0
+
+
+def service_uninstall(paths, systemctl) -> int:
+    result, problem = run_systemctl(systemctl, ["disable", "--now", hooks.SERVICE])
+    existed = os.path.lexists(paths.unit)
+    if existed:
+        os.unlink(paths.unit)
+        run_systemctl(systemctl, ["daemon-reload"])
+    if not existed:
+        say(f"{hooks.SERVICE} wasn't installed")
+        return 0
+    if problem or result.returncode != 0:
+        complain(f"warning: {problem or systemctl_failure(result, ['disable', '--now', hooks.SERVICE])}")
+    say(f"uninstalled {hooks.SERVICE}")
+    return 0
+
+
+def hooks_uninstall(args, launchctl=None, systemctl=None) -> int:
     if refuse_scratch(args, "uninstall"):
         return 1
-    launchctl = launchctl or hooks.launchctl
     paths = hooks.agent_paths()
-    result = launchctl(["bootout", f"{hooks.domain()}/{hooks.LABEL}"])
+    if paths.linux:
+        return service_uninstall(paths, systemctl or hooks.systemctl)
+    launchctl = launchctl or hooks.launchctl
+    try:
+        result = launchctl(["bootout", f"{hooks.domain()}/{hooks.LABEL}"])
+    except subprocess.TimeoutExpired as error:
+        return launchctl_stuck("uninstall", error)
     existed = os.path.lexists(paths.plist)
     if existed:
         os.unlink(paths.plist)
@@ -485,7 +570,7 @@ def hooks_uninstall(args, launchctl=None) -> int:
     return 0
 
 
-def hooks_list(args, launchctl=None) -> int:
+def hooks_list(args, launchctl=None, systemctl=None) -> int:
     path = hooks_file(args)
     problem = None
     found = []
@@ -496,8 +581,14 @@ def hooks_list(args, launchctl=None) -> int:
     except (hooks.HooksError, OSError) as error:
         problem = f"{path}: {getattr(error, 'strerror', None) or error}"
     paths = hooks.agent_paths()
-    installed = os.path.lexists(paths.plist)
-    state = hooks.agent_state(launchctl) if installed and not (args.data_dir or os.environ.get("ARDIA_DATA_DIR")) else {"loaded": False}
+    installed = os.path.lexists(paths.definition)
+    scratch = bool(args.data_dir or os.environ.get("ARDIA_DATA_DIR"))
+    if not installed or scratch:
+        state = {"loaded": False}
+    elif paths.linux:
+        state = hooks.service_state(systemctl)
+    else:
+        state = hooks.agent_state(launchctl)
     if args.json:
         say(json.dumps({"file": str(path), "problem": problem, "hooks": [h.to_dict() for h in found], "agent": {"installed": installed, **state}}, indent=2, ensure_ascii=False))
         return 1 if problem and os.path.lexists(path) else 0
@@ -506,7 +597,16 @@ def hooks_list(args, launchctl=None) -> int:
         say(f"{hook.name}  [{hook.kind()}]  {hook.trigger()}{match}  {hook.action()}")
     if problem:
         complain(f"ardia hooks: {problem}")
-    if not installed:
+    if paths.linux:
+        if not installed:
+            say(f"systemd user service {hooks.SERVICE}: not installed (ardia hooks install)")
+        elif state.get("loaded") is None:
+            say(f"systemd user service {hooks.SERVICE}: installed, state unknown (systemctl --user didn't answer)")
+        else:
+            running = f" (pid {state['pid']})" if state.get("pid") else ""
+            active = "active" if state.get("active") else f"installed, {state.get('state') or 'not loaded'}"
+            say(f"systemd user service {hooks.SERVICE}: {active}{running}")
+    elif not installed:
         say(f"LaunchAgent {hooks.LABEL}: not installed (ardia hooks install)")
     else:
         running = f", running (pid {state['pid']})" if state.get("pid") else ""

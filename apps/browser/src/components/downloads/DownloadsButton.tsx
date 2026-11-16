@@ -1,12 +1,14 @@
 import { useEffect, useRef } from "react";
-import { View } from "react-native";
+import { View, type GestureResponderEvent } from "react-native";
 import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
 import { toggleDownloadsOpen } from "../../state/windows/actions";
 import { useWindowUiOf } from "../../state/windows/hooks";
 import { SIDEBAR_FOOTER_DOWNLOADS } from "../sidebar/geometry";
 import { Button } from "../ui";
+import { perLook } from "../ui/tokens";
 import { anchorInside, type Rect } from "./downloadsPlacement";
 import { DOWNLOADS_BUTTON } from "./tokens";
+import { noteDownloadsPanelToggle } from "../../state/telemetry/downloadsPanelCauses";
 
 const downloadsButtons = new Map<string, Set<View>>();
 
@@ -23,12 +25,13 @@ export async function locateDownloadsButton(windowId: string, origin: Rect): Pro
   return null;
 }
 
-const DOWNLOADS_HIT = { width: SIDEBAR_FOOTER_DOWNLOADS.size, height: SIDEBAR_FOOTER_DOWNLOADS.size, plateX: 0, plateY: 0, box: SIDEBAR_FOOTER_DOWNLOADS.size, radius: DOWNLOADS_BUTTON.radius };
+const DOWNLOADS_HIT = perLook(() => ({ width: SIDEBAR_FOOTER_DOWNLOADS.size, height: SIDEBAR_FOOTER_DOWNLOADS.size, plateX: 0, plateY: 0, box: SIDEBAR_FOOTER_DOWNLOADS.size, radius: DOWNLOADS_BUTTON.radius }));
 
 export function DownloadsButton({ windowId }: { windowId: string }) {
   const open = useWindowUiOf(windowId, (ui) => !!ui?.downloadsOpen);
   const hint = useShortcutHint("downloads");
   const view = useRef<View>(null);
+  const pressedAt = useRef<number | undefined>(undefined);
   useEffect(() => {
     const node = view.current;
     if (!node) return;
@@ -41,14 +44,22 @@ export function DownloadsButton({ windowId }: { windowId: string }) {
     };
   }, [windowId]);
   return (
-    <View ref={view} collapsable={false}>
+    <View ref={view} collapsable={false} onStartShouldSetResponderCapture={(press) => {
+      pressedAt.current = press.nativeEvent.timestamp;
+      return false;
+    }}>
       <Button variant="icon"
         icon="arrow.down.circle"
         glyph={DOWNLOADS_BUTTON.icon}
-        hit={DOWNLOADS_HIT}
+        hit={DOWNLOADS_HIT()}
         active={open}
         tooltip={open ? undefined : withShortcut("Downloads", hint)}
-        onPress={() => toggleDownloadsOpen(windowId)}
+        onPress={(press: GestureResponderEvent) => {
+          const startedAt = pressedAt.current;
+          pressedAt.current = undefined;
+          noteDownloadsPanelToggle(!open, "button");
+          toggleDownloadsOpen(windowId, "key" in press.nativeEvent ? undefined : startedAt);
+        }}
       />
     </View>
   );

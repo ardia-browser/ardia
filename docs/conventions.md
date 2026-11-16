@@ -6,7 +6,7 @@ How Ardia's code is laid out and written. `apps/browser/src/conventions.test.mjs
 ## Backwards compatibility: migrations only
 
 The app and its engine ship together (a release bundles its engine; a dev build fetches the prebuilt engine matching
-its commit's `engine/` tree), so code never tolerates a mismatched engine.
+its commit's engine key, `engine/engine-key.sh`), so code never tolerates a mismatched engine.
 
 - No `respondsToSelector` guards for ArdiaCore's API, no optional `?.()` native calls, no always-true `isAvailable`
   checks, no metadata probes, no aliases for old names, no duplicate overloads. Keep `respondsToSelector` only for
@@ -92,7 +92,7 @@ lib/                    pure helpers: url, color, time, keys
 | Hand-built today | Use |
 | --- | --- |
 | `theme.dark ? "rgba(…)" : "rgba(…)"` | a role on the theme (`theme.popoverBorder`, `theme.scrim`, …), added to both palettes in `tokens.ts` |
-| `useFormColors().accent` and friends | the theme role: `formAccent`, `groupFill`, `control`, `field`, `destructive`, `searchFlash`, … (`useFormColors` stays only until its callers move) |
+| `useFormColors().accent` and friends | the theme role: `formAccent`, `groupFill`, `control`, `field`, `destructive`, `searchFlash`, … |
 | `Easing.out(Easing.quad)`, `Easing.bezier(…)` | `curve.enter`, `curve.exit`, `curve.move`, `curve.pulse`, … from `motion.ts` |
 | a numeric `duration:` | `duration.fast`, `duration.base`, `duration.slow`, `duration.long`; a loop's period is `period.spinner` / `period.pulse` |
 | `stiffness: (2π/response)²` written by hand | `springs.snappy` / `smooth` / `bouncy`, or `spring({ response, damping })` for a measured spring |
@@ -114,6 +114,31 @@ lib/                    pure helpers: url, color, time, keys
 | an on/off switch | `<Toggle>` (settings) or `<Toggle look="panel">` (popovers) |
 | a radio dot | `<Radio on look="form" \| "compact" \| "ring">` |
 | a colour swatch with a selection ring | `<Swatch selected ring fill>` (children instead of `fill` for a gradient) |
+
+## Coordinates: root points
+
+Settings › Appearance › Interface size (`interfaceScale`, 0.8 to 1.5) scales every window's React root: the root
+keeps its frame and takes bounds of frame / scale, so React lays out in **root points** and AppKit scales drawing,
+hit-testing and conversions. JS speaks root points everywhere: styles, `onLayout`, `measure`, `measureInWindow`
+(from the root's top left), touch `pageX`/`pageY`, and every rect or point it sends to native or gets from native for
+layout. Native converts at the boundary with `ArdiaInterfaceScale` (Swift `InterfaceScale`).
+
+- **Physical, never scaled:** NSWindow frames and screen coordinates (`window.frame`, saved and closed window frames,
+  `littleArdiaSize`, `openWindow` frame and pointer, `windowFrame()`), PiP geometry, image pixel sizes, CSS
+  coordinates that go back into a page, and diagnostics that say they are physical. A frame's size used for layout is
+  divided by the scale: `windowRootSize` / `useWindowRootWidth` (`state/windows/rootSize.ts`) prefer the root's own
+  `onLayout` size and fall back to `rootSizeOfFrame`. A point crossing between windows goes through the screen:
+  `screenPoint` and `rootPointIn` (`state/drag/windowDrop.ts`).
+- **Page points** (CSS pixels at zoom 1) are window points: a page's own size divides by the scale on its way into
+  React (the extension popup's DOM size).
+- The current scale lives in `state/settings/interfaceScale.ts` (`useCurrentInterfaceScale`, `currentInterfaceScale`,
+  `onInterfaceScaleChange`, `onInterfaceScaleSettled` for re-measuring once the relayout is done). A cached measurement
+  re-measures there; anchored popovers and menus close on a change (`state/app/interfaceScaleRefresh.ts`).
+- One device pixel is `1 / (PixelRatio.get() × scale)` root points (`PixelRatio` stays the backing scale). Snap with
+  `snappedToDevicePixels`, never `Math.round(x * 2) / 2`. `StyleSheet.hairlineWidth` stays half a root point at 2×: a
+  hairline scales with the interface like every other length.
+- Persisted UI lengths (`sidebarWidth`, `extensionSidePanelWidth`, theme metrics) are root points, so they mean the
+  same at every scale.
 
 ## State
 
@@ -146,7 +171,7 @@ export const requestClearData = (windowId: string | null) => useClearDataRequest
 `getState()`:
 
 - A hook keeps the selector as narrow as the component needs: `useSettings((s) => s.tabLayout)`,
-  `useTab(id, (t) => t?.title)`, `useWindow(id, (w) => w?.sidebarOpen)`. Pass `useShallow(…)` through when the
+  `useTab(id, (t) => t?.title)`, `useWindow(id, (w) => w?.frame)`. Pass `useShallow(…)` through when the
   selector builds an array or object. Moving a selector into a hook never widens it: a component re-renders exactly
   when it did before.
 - A selector that combines domains, or that two components share, becomes a named hook (`useWindowProfile`,
@@ -177,12 +202,12 @@ writeDocument(DOC, versionedJson(data, VERSION));
   depends on: a version says which shape to expect, not that the data is valid.
 - The field is `version`, except in `sync.json` (`v`) and `ardia-cli.json` (`schemaVersion`; its `version` is the
   installed CLI's version).
-- Covered: `session.json` (9), `downloads.json` (3), `launch-look.json` (2), `bookmarks-cache.json`, `telemetry.json`,
+- Covered: `session.json` (10), `downloads.json` (3), `launch-look.json` (2), `air-traffic.json` (2), `bookmarks-cache.json`, `telemetry.json`,
   `telemetry-queue.json`, `telemetry-daily.json`, `release-notes.json`, `onboarding.json`,
   `default-browser-offer.json`, `sync.json`, `sync-extensions.json`, `live.json`, `shared-folders.json`, `ardia-cli.json`,
-  `bangs-state.json` and `Scripts/status.json` (all 1).
+  `bangs-state.json`, `Scripts/status.json` and `link-sources.json` (all 1).
 - Native code reads through `ArdiaSavedDocument` (packages/ardiacore/ios), with the same rules: `session.json` and
-  `onboarding.json` (any version up to the one JS writes; a test pins each) and `launch-layout.json` (3, written and
+  `onboarding.json` (any version up to the one JS writes; a test pins each) and `launch-layout.json` (5, written and
   read by native code only, so any other version reads as nothing).
 - The sealed sync files carry their own `version` inside the sealed JSON, because they're written apart from
   `sync.json` and its `v` doesn't cover them: the `sync-state.nns` checkpoint (`{ covers, clock, scopes }`, 1; version 0
@@ -196,7 +221,8 @@ writeDocument(DOC, versionedJson(data, VERSION));
 ## Files
 
 - Components are `PascalCase.tsx`; every other module is `camelCase.ts`. Tests sit next to the code as
-  `camelCase.test.mjs` (or `PascalCase.test.mjs` for a component).
+  `camelCase.test.mjs` (or `PascalCase.test.mjs` for a component). A platform's twin of a file adds its suffix:
+  `.macos`, `.ios`, `.windows`, `.linux`, `.web`, `.native`. `apps/linux` resolves `.linux.*` ahead of `.web.*`.
 - At most 400 lines per TS/TSX file (`apps/browser/src`, `packages/*/src`), 600 per native file (`packages/*/ios`,
   `engine/ardiacore/src`, `engine/chromium/src`). Tests, fixtures and generated files (`packages/core/src/bangList.ts`,
   `packages/demo/src/shims/web/symbols/data.ts`, `apps/browser/src/lib/emojiData.ts` from `apps/browser/scripts/emoji-data.mjs`)
@@ -266,10 +292,17 @@ still counts:
 | `ARDIA_SWITCHES` | `name=on,…` | The only feature toggle, backed by the registry `platform/killSwitches.ts`: kill switches (on by default, at most 8) and experiments (off by default), each with an owner and `removeBy` |
 | `ARDIA_TRACE` | `pip,visibility,…` | Trace logging per area |
 | `ARDIA_TEST` | `keychain=file,reauth=granted,…` | All test fakes and fixtures |
+| `ARDIA_FEEDBACK_URL` | URL | Where Report a Problem sends (`https://ardia.dev/api/feedback` otherwise); the `ardia` CLI reads the same variable (`docs/feedback.md`) |
 
 - `ARDIA_TEST` and `ARDIA_TRACE` work only in a test instance (not signed for distribution, a scratch data dir, the
   mock keychain); a release build ignores them and logs that once. CDP, argv and extra switches reach Chrome only with
   the mock keychain.
+- On Windows the launch config is `apps/browser/windows/Ardia/LaunchConfig.h` (with `Paths.h` and `TestGate.h`), and
+  no other native file reads the environment (`platform/windowsLaunchConfig.test.mjs`). Windows builds aren't signed,
+  so a test instance there is an absolute scratch `ARDIA_DATA_DIR` that isn't, inside or around the real profile
+  folders (compared by final path) and an `Ardia.test-build` marker beside `Ardia.exe`, which only test harnesses
+  write and no installer ships. `ARDIA_CONFIG_DIR` and the test-only `ARDIA_INSTANCE` keys need it too
+  (`docs/windows.md` › Test instances).
 - An experiment ends by keeping the winning path and deleting the other branch and its toggle. One still being tried
   is an entry in the registry (`EXPERIMENTS`), not a new variable.
 - Every key, area and value: `docs/agent-brief.md` › Launch variables.
@@ -283,7 +316,7 @@ still counts:
 | `layout` | an app file outside the folders above |
 | `imports` | an import against the direction table, or into a file outside the folders (a component importing `platform/` included, except `components/dev/devHarness.ts`) |
 | `native-calls` | a native package, `expo-modules-core` or `NativeModules` used outside `platform/` and `components/ui/` |
-| `tokens` | a colour literal, `Easing.` curve or numeric duration outside `tokens.ts`/`motion.ts` |
+| `tokens` | a colour literal (`"transparent"` included: use `ink.clear`), `Easing.` curve or numeric duration outside `tokens.ts`/`motion.ts` |
 | `scale` | in `components/` and `App.tsx`, outside `tokens.ts`/`motion.ts`: a `fontSize`, `letterSpacing`, radius (`radius`, `borderRadius`, `cornerRadius`, `shadowRadius`, …), `padding*`, `margin*`, `gap`/`rowGap`/`columnGap`, or spring `damping`/`stiffness`/`friction`/`tension`/`bounciness` whose value starts with a non-zero number (`9`, `-3.5`, `10 * g.s`) or has a numeric ternary branch; use the `font`, `radius`, `space` and `springs` scales (`concentric()`, `capsule()` for derived radii). Sizes, offsets, `lineHeight`, computed values and `lib/`/`state/` geometry don't count |
 | `get-state` | `getState(` in `components/` |
 | `set-state` | `.setState(` in `components/` |

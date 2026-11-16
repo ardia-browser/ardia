@@ -2,13 +2,17 @@ import asyncio
 import json
 import re
 
+from ardia_cli import command_metrics
 from ardia_cli.browse.errors import BrowseError, ConnectionLost, OutcomeUnknown, Usage
+from ardia_cli.browse.readpages import MAX_LIMIT
 
 DEFAULT_TIMEOUT = 90.0
+READ_HINT_OPENS = 3
 MAX_TIMEOUT = 600.0
 MAX_SOURCE = 1024 * 1024
+STATE_LIMIT = 16 * 1024 * 1024
 LOG_LIMIT = 1024 * 1024
-CONTROL_TIMEOUT = 5.0
+CONTROL_TIMEOUT = 20.0
 SOURCE_URL = "ardia-script.js"
 REFUSED = ("close", "script", "batch")
 FATAL = ("outcome_unknown", "connection_lost")
@@ -24,6 +28,7 @@ CONTROLLER = r"""
   let logsDropped = 0;
   let wake = null;
   let finished = null;
+  let state = null;
   let worker = null;
   let ready = false;
   const signal = () => { if (wake) { const resolve = wake; wake = null; resolve(); } };
@@ -41,6 +46,7 @@ CONTROLLER = r"""
         if (message.type === "ready") ready = true;
         else if (message.type === "log") keep(String(message.line));
         else if (message.type === "request") { pending.push(message.request); signal(); }
+        else if (message.type === "state") state = message.value;
         else if (message.type === "done") finish(message.result);
       };
       worker.onerror = (event) => {
@@ -53,7 +59,7 @@ CONTROLLER = r"""
     },
     async next() {
       while (true) {
-        if (finished) return { ...finished, unawaited: pending.length, logs, logsDropped };
+        if (finished) return { ...finished, unawaited: pending.length, logs, logsDropped, state };
         if (pending.length) return { kind: "request", ...pending.shift() };
         await new Promise((resolve) => { wake = resolve; });
       }
@@ -66,7 +72,7 @@ CONTROLLER = r"""
       if (worker) worker.terminate();
       worker = null;
       finish({ kind: "stopped" });
-      return { logs, logsDropped };
+      return { logs, logsDropped, state };
     },
   };
   globalThis.__ardiaScript = api;
@@ -77,6 +83,21 @@ CONTROLLER = r"""
 
 WORKER = r"""const SOURCE = "ardia-script.js";
 const OFFSET = %(offset)d;
+const READ_BATCH = %(read_batch)d;
+const STATE_LIMIT = %(state_limit)d;
+let state = %(state)s;
+let stateSent = "";
+let stateCheckedAt = 0;
+const syncState = (force) => {
+  const now = Date.now();
+  if (!force && now - stateCheckedAt < 1000) return;
+  stateCheckedAt = now;
+  let text;
+  try { text = JSON.stringify(state === undefined ? {} : state); } catch (e) { return; }
+  if (text === stateSent || text.length > STATE_LIMIT) return;
+  stateSent = text;
+  postMessage({ type: "state", value: text });
+};
 const waiting = new Map();
 let nextId = 1;
 const show = (value) => {
@@ -97,6 +118,7 @@ const request = (kind, payload) => {
   const origin = new Error();
   const line = lineOf(origin.stack);
   const id = nextId++;
+  syncState(false);
   return new Promise((resolve, reject) => {
     waiting.set(id, { resolve, reject, origin, argv: payload.argv });
     postMessage({ type: "request", request: { id, type: kind, line, ...payload } });
@@ -136,13 +158,20 @@ const flags = (options, table) => {
   }
   return out;
 };
+const evaluateAs = (via) => (fn, arg) => request("call", {
+  argv: ["eval", typeof fn === "function" ? "(" + fn + ")(" + (arg === undefined ? "" : JSON.stringify(arg)) + ")" : String(fn)], via,
+}).then(data("result"));
 const read = async (what, options) => {
   options = options || {};
   let argv = ["read"];
   if (what && typeof what === "object" && !Array.isArray(what)) { options = { ...what, ...options }; what = options.urls; }
-  for (const url of words(what)) argv.push(await absolute(url));
-  argv = argv.concat(flags(options, { links: "--links", selector: "-s", limit: "--limit", timeout: "--timeout", http: "--http" }));
-  return (await browse(argv)).data.pages;
+  const urls = [];
+  for (const url of words(what)) urls.push(await absolute(url));
+  const rest = flags(options, { links: "--links", selector: "-s", limit: "--limit", timeout: "--timeout", http: "--http" });
+  if (options.links != null || options.limit != null || urls.length <= READ_BATCH) return (await browse(argv.concat(urls, rest))).data.pages;
+  const pages = [];
+  for (let i = 0; i < urls.length; i += READ_BATCH) pages.push(...(await browse(argv.concat(urls.slice(i, i + READ_BATCH), rest))).data.pages);
+  return pages;
 };
 const page = {
   goto: async (url) => (await browse("open", await absolute(url))).data,
@@ -151,9 +180,12 @@ const page = {
   reload: () => browse("reload").then(data("url")),
   click: (selector, options) => browse("click", selector, flags(options, { newTab: "--new-tab", button: "--button" })).then(text),
   dblclick: (selector) => browse("dblclick", selector).then(text),
+  focus: (selector) => browse("focus", selector).then(text),
   fill: (selector, value) => browse("fill", selector, String(value)).then(text),
   type: (selector, value) => browse("type", selector, String(value)).then(text),
-  press: (key) => browse("press", key).then(text),
+  press: (...args) => browse("press", ...args.slice(-2)).then(text),
+  waitForTimeout: (ms) => new Promise((resolve) => setTimeout(resolve, Number(ms) || 0)),
+  keyboard: (value) => browse("keyboard", "type", String(value)).then(text),
   select: (selector, ...values) => browse("select", selector, ...values.flat()).then(text),
   check: (selector) => browse("check", selector).then(text),
   uncheck: (selector) => browse("uncheck", selector).then(text),
@@ -175,7 +207,8 @@ const page = {
     if (what && typeof what === "object") { options = what; what = undefined; }
     return browse("wait", ...words(what), ...flags(options, { text: "--text", url: "--url", load: "--load", fn: "--fn", state: "--state", timeout: "--timeout" })).then(text);
   },
-  evaluate: (fn, arg) => browse("eval", typeof fn === "function" ? "(" + fn + ")(" + (arg === undefined ? "" : JSON.stringify(arg)) + ")" : String(fn)).then(data("result")),
+  evaluate: evaluateAs("page.evaluate"),
+  eval: evaluateAs("page.eval"),
 };
 const sleep = (ms) => request("sleep", { ms: Number(ms) || 0 }).then(() => undefined);
 const clean = (value) => {
@@ -197,6 +230,7 @@ const __ardiaRun = (run) => {
         command: error && error.argv ? error.argv : null,
       };
     }
+    syncState(true);
     postMessage({ type: "done", result });
   })();
 };
@@ -220,10 +254,11 @@ def parse_timeout(value) -> float:
     return seconds
 
 
-def worker_source(source: str) -> tuple[str, int]:
-    api = WORKER % {"offset": 0}
+def worker_source(source: str, state: str = "{}") -> tuple[str, int]:
+    fields = {"read_batch": MAX_LIMIT, "state_limit": STATE_LIMIT, "state": state}
+    api = WORKER % {"offset": 0, **fields}
     offset = api.count("\n") + 2
-    api = WORKER % {"offset": offset}
+    api = WORKER % {"offset": offset, **fields}
     return f"{api}\n__ardiaRun(async () => {{\n{source}\n}});\n//# sourceURL={SOURCE_URL}", offset
 
 
@@ -246,6 +281,21 @@ def render_value(message: dict) -> str | None:
     value = message.get("value")
     if isinstance(value, str):
         return value
+    return render_json(value)
+
+
+def render_json(value) -> str:
+    if isinstance(value, list) and value and all(isinstance(item, (dict, list)) for item in value):
+        return "\n".join(json.dumps(item, ensure_ascii=False) for item in value)
+    if isinstance(value, dict) and any(isinstance(item, list) and item and all(isinstance(row, (dict, list)) for row in item) for item in value.values()):
+        lines = []
+        for key, item in value.items():
+            if isinstance(item, list) and item and all(isinstance(row, (dict, list)) for row in item):
+                lines.append(f"{key}: {len(item)} rows")
+                lines.extend(json.dumps(row, ensure_ascii=False) for row in item)
+            else:
+                lines.append(f"{key}: {json.dumps(item, ensure_ascii=False)}")
+        return "\n".join(lines)
     return json.dumps(value, ensure_ascii=False, indent=2)
 
 
@@ -254,6 +304,24 @@ def tail(lines: list[str], limit: int = 3000) -> str:
     if len(text) <= limit:
         return text
     return f"… [{len(text) - limit:,} earlier characters]\n" + text[-limit:]
+
+
+PAGE_GLOBAL = re.compile(r"\b(document|window|localStorage|sessionStorage|getComputedStyle) is not defined")
+PAGE_MISSING = re.compile(r"ReferenceError: (\w+) is not defined")
+
+
+def page_world_hint(text: str, command) -> str | None:
+    if command:
+        missing = PAGE_MISSING.search(text) if command[0] == "eval" else None
+        if missing and not PAGE_GLOBAL.search(text):
+            name = missing.group(1)
+            return (f"page.evaluate(fn) runs fn inside the page, where the script's own variables don't exist: "
+                    f"pass {name} as its argument, page.evaluate(({name}) => …, {name})")
+        return None
+    if PAGE_GLOBAL.search(text):
+        return ("the script runs outside the page, so it has no document or window: put page code in "
+                "page.evaluate(() => …), or use `ardia browse eval`")
+    return None
 
 
 def failure(message: str, logs: list[str], data: dict, code: str | None = None) -> BrowseError:
@@ -300,8 +368,8 @@ async def install(page) -> str:
     return handle
 
 
-async def start(page, handle: str, source: str):
-    code, offset = worker_source(source)
+async def start(page, handle: str, source: str, state: str = "{}"):
+    code, offset = worker_source(source, state)
     await control(page, handle, "function (source, offset) { return this.start(source, offset); }", code, offset)
 
 
@@ -330,8 +398,8 @@ async def answer_call(ctx, argv) -> dict:
     return {"ok": True, "text": result.text, "data": json.loads(json.dumps(result.data, default=str))}
 
 
-async def drive(ctx, page, handle: str, source: str, current: dict):
-    await start(page, handle, source)
+async def drive(ctx, page, handle: str, source: str, current: dict, done: list | None = None):
+    await start(page, handle, source, getattr(ctx.state, "script_state", "{}"))
     while True:
         message = await control(page, handle, "function () { return this.next(); }", timeout=MAX_TIMEOUT + 30)
         if message.get("kind") != "request":
@@ -342,12 +410,16 @@ async def drive(ctx, page, handle: str, source: str, current: dict):
             await asyncio.sleep(max(float(message.get("ms") or 0), 0) / 1000)
             answer = {"ok": True, "text": "", "data": {}}
         else:
+            if message.get("via") == "page.eval":
+                command_metrics.flag("script_eval_alias", True)
             answer = await answer_call(ctx, message.get("argv"))
+            if done is not None:
+                done.append((message.get("argv") or [""])[0])
         current.clear()
         await control(page, handle, "function (id, answer) { return this.reply(id, answer); }", message["id"], answer)
 
 
-def timed_out(seconds: float, current: dict, source: str, logs: list[str]) -> BrowseError:
+def timed_out(seconds: float, current: dict, source: str, logs: list[str], kept: str = "", done: list | None = None) -> BrowseError:
     where = ""
     if current.get("argv"):
         where = f", in `{show_argv(current['argv'])}`"
@@ -361,6 +433,15 @@ def timed_out(seconds: float, current: dict, source: str, logs: list[str]) -> Br
     name = ALIASES.get((current.get("argv") or [""])[0], (current.get("argv") or [""])[0])
     unknown = "; that command was cut off, so its outcome is unknown" if name in MUTATING else ""
     message = f"The script timed out after {seconds:g}s{where}{unknown}. Give it longer with --timeout 3m (at most 10m), or do less per run"
+    if kept:
+        message += f". What it kept in state survives for the next script: {kept}"
+    else:
+        message += ". Nothing it gathered was kept: push results into `state` as you go (state.rows = [...state.rows || [], row]) so the next run picks up where this one stopped"
+    opened = sum(1 for name in (done or []) if ALIASES.get(name, name) == "open") + (1 if name == "open" else 0)
+    if opened >= READ_HINT_OPENS:
+        command_metrics.flag("script_timeout_read_hint", True)
+        message += (f". It opened {opened} pages one after another; to take text from many pages, "
+                    "`ardia browse read <url> <url> …` (or `await read(urls)` here) loads them side by side, each with its own time limit")
     return failure(message, logs, {"line": line, "command": current.get("argv")}, "timeout")
 
 
@@ -377,17 +458,25 @@ async def run(ctx, source: str, seconds: float):
     await state.connect()
     await temptabs.sweep(state)
     current: dict = {}
+    done: list[str] = []
     owned: list[str] = []
     try:
         page = await open_controller(state, owned)
         handle = await install(page)
         try:
-            message = await asyncio.wait_for(drive(ctx, page, handle, source, current), seconds)
+            message = await asyncio.wait_for(drive(ctx, page, handle, source, current, done), seconds)
         except asyncio.TimeoutError:
-            logs = await stopped_logs(page, handle)
-            raise timed_out(seconds, current, source, logs) from None
+            stopped = await stop_worker(page, handle)
+            kept = keep_state(ctx.state, stopped.get("state"))
+            raise timed_out(seconds, current, source, list(stopped.get("logs") or []), kept, done) from None
+        except asyncio.CancelledError:
+            stopped = await stop_worker(page, handle)
+            if keep_state(ctx.state, stopped.get("state")):
+                command_metrics.flag("script_state_kept_on_interrupt", True)
+            raise
     finally:
         await temptabs.release(state, owned)
+    keep_state(ctx.state, message.get("state"))
     logs = list(message.get("logs") or [])
     if message.get("logsDropped"):
         logs.append(f"[{message['logsDropped']} more log lines dropped past {LOG_LIMIT // 1024} KB]")
@@ -401,16 +490,41 @@ async def run(ctx, source: str, seconds: float):
             text = f"{message['name']}: {text}"
         where = f"line {line}: " if line else ""
         command = f" (in `{show_argv(message['command'])}`)" if message.get("command") else ""
-        raise failure(f"{where}{text}{command}", logs + notes, {"line": line, "command": message.get("command")}, message.get("code"))
+        hint = page_world_hint(text, message.get("command"))
+        if hint:
+            command_metrics.flag("script_page_world_hint", True)
+        hint = f"\n{hint}" if hint else ""
+        raise failure(f"{where}{text}{command}{hint}", logs + notes, {"line": line, "command": message.get("command")}, message.get("code"))
     value = render_value(message)
     parts = logs + ([value] if value is not None else []) + notes
     return Result({"value": None if message.get("undefined") else message.get("value"), "logs": logs},
                   "\n".join(parts) if parts else "✓ Done", page_content=True)
 
 
-async def stopped_logs(page, handle: str) -> list[str]:
+async def stop_worker(page, handle: str) -> dict:
     try:
         got = await control(page, handle, "function () { return this.stop(); }", timeout=CONTROL_TIMEOUT)
     except (BrowseError, asyncio.TimeoutError):
-        return []
-    return list((got or {}).get("logs") or [])
+        return {}
+    return got or {}
+
+
+def keep_state(session, text) -> str:
+    if not isinstance(text, str):
+        return ""
+    try:
+        value = json.loads(text)
+    except ValueError:
+        return ""
+    session.script_state = text
+    if not value:
+        return ""
+    command_metrics.flag("script_state_kept", True)
+    return state_summary(value)
+
+
+def state_summary(value) -> str:
+    if not isinstance(value, dict):
+        return "state holds a value"
+    parts = [f"state.{key} ({len(item)} items)" if isinstance(item, (list, dict)) else f"state.{key}" for key, item in list(value.items())[:8]]
+    return ", ".join(parts) + (", …" if len(value) > 8 else "")

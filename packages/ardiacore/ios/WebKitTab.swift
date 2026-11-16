@@ -13,25 +13,26 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
   var initialURL: String?
   var adoptId: String?
   var transferKey: String?
-  var visible = true { didSet { updateHidden() } }
-  var warm = false { didSet { updateHidden() } }
+  var visible = true { didSet { updateHidden(); updateSight() } }
+  var autoPictureInPicture = false
   var pageBackgroundColor: NSColor? { didSet { if let color = pageBackgroundColor { webView?.underPageBackgroundColor = color } } }
   let browserId = WebKitHub.shared.nextBrowserId()
 
   private(set) var webView: WebKitWebView?
   private var observations: [NSKeyValueObservation] = []
   private var started = false
-  private var closed = false
+  private(set) var closed = false { didSet { if closed { stopWatchingSight() } } }
   private var navigationQueued = false
   private var mediaFrames: [String: WKFrameInfo] {
     get { webView?.mediaFrames ?? [:] }
     set { webView?.mediaFrames = newValue }
   }
-  private var playingFrames: Set<String> {
+  var playingFrames: Set<String> {
     get { webView?.playingFrames ?? [] }
     set { webView?.playingFrames = newValue }
   }
   private var muted = false
+  var sightObserver: NSObjectProtocol?
   private var errorURL: URL?
   private var committedAt: Double = 0
   private var respondedStatus = 0
@@ -46,7 +47,20 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
 
   override func setFrameSize(_ newSize: NSSize) {
     super.setFrameSize(newSize)
-    webView?.frame = bounds
+    fitPageToInterfaceScale()
+  }
+
+  override func resizeSubviews(withOldSize oldSize: NSSize) { fillWithPage() }
+
+  override func layout() {
+    super.layout()
+    fillWithPage()
+  }
+
+  override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+    if window != nil { followInterfaceScale() }
+    watchSight()
   }
 
   func emit(_ name: String, _ payload: [String: Any] = [:]) {
@@ -90,7 +104,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     WebKitHub.shared.permissions.drop(browserId: browserId)
     if let key = transferKey { WebKitHub.shared.transfers.forgetLive(self, key: key) }
     webView = nil
-    view.onFocus = nil
+    stopListening(to: view)
     WebKitHub.shared.transfers.unregister(view)
     view.navigationDelegate = nil
     view.uiDelegate = nil
@@ -115,13 +129,14 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     view.allowsMagnification = true
     view.isInspectable = WebKitHub.inspectable && !WebKitStores.isPrivate(profile)
     if let color = pageBackgroundColor { view.underPageBackgroundColor = color }
-    view.onFocus = { [weak self] in self?.emit("focus") }
+    listen(to: view)
     view.frame = bounds
     view.autoresizingMask = [.width, .height]
     addSubview(view)
     updateHidden()
     observe(view)
     WebKitHub.shared.permissions.reconcileCapture(view, profile: profile)
+    updateSight()
   }
 
   private func observe(_ view: WKWebView) {
@@ -143,7 +158,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
   }
 
   private func updateHidden() {
-    webView?.isHidden = !(visible || warm)
+    webView?.isHidden = !visible
   }
 
   func close() {
@@ -154,7 +169,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     if let key = transferKey { WebKitHub.shared.transfers.forgetLive(self, key: key) }
     guard let view = webView else { return }
     webView = nil
-    view.onFocus = nil
+    stopListening(to: view)
     if let key = transferKey, WebKitHub.shared.transfers.isPrepared(key) {
       WebKitHub.shared.transfers.unregister(view)
       view.navigationDelegate = nil
@@ -250,7 +265,6 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
 
   private var muteScript: String { "window.__ardia && window.__ardia.mute(\(muted ? "true" : "false"))" }
 
-
   private func runInWorld(_ code: String, frame: WKFrameInfo? = nil, completion: ((Any?) -> Void)? = nil) {
     guard let view = webView else {
       completion?(nil)
@@ -321,18 +335,6 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     return String(json.dropFirst().dropLast())
   }
 
-  func print() {
-    guard let view = webView, let window else { return }
-    if LaunchConfig.shared.background { return NSLog("[webkit] print panel (background mode, not shown)") }
-    let operation = view.printOperation(with: NSPrintInfo.shared)
-    operation.view?.frame = view.bounds
-    operation.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
-  }
-
-  func runPageCommand(_ name: String) {
-    if name == "systemPrint" { print() }
-  }
-
   func executeJavaScript(_ code: String) {
     webView?.evaluateJavaScript(code, in: nil, in: .page) { _ in }
   }
@@ -342,21 +344,6 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     let body = "return await new Promise((resolve) => { const post = (kind, json) => { if (kind === \"result\") resolve(json); }; setTimeout(() => resolve(null), 3000); try {\n\(code)\n} catch (e) { resolve(null); } });"
     view.callAsyncJavaScript(body, arguments: [:], in: nil, in: WebKitHub.world) { result in
       if case .success(let value) = result { completion(value as? String) } else { completion(nil) }
-    }
-  }
-
-  func capturePicture(_ scale: Double, completion: @escaping ([String: Any]?) -> Void) {
-    guard let view = webView, let window, !view.isHidden else { return completion(nil) }
-    let inWindow = convert(bounds, to: nil)
-    let top = window.contentView?.frame.height ?? 0
-    let frame: [Double] = [inWindow.minX, top - inWindow.maxY, inWindow.width, inWindow.height]
-    let configuration = WKSnapshotConfiguration()
-    configuration.snapshotWidth = NSNumber(value: Double(view.bounds.width) * max(0.1, min(scale, 2)))
-    view.takeSnapshot(with: configuration) { image, _ in
-      guard let image, let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff),
-        let jpeg = bitmap.representation(using: .jpeg, properties: [.compressionFactor: scale < 0.5 ? 0.55 : 0.75])
-      else { return completion(nil) }
-      completion(["data": jpeg.base64EncodedString(), "frame": frame])
     }
   }
 
@@ -384,13 +371,13 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     runInWorld("window.__ardia && window.__ardia.media(\(Self.jsString(action)), \(seconds.isFinite ? seconds : 0))", frame: nowPlayingSubframe)
   }
 
-  func setPictureInPicture(_ on: Bool, completion: @escaping (Bool) -> Void) {
-    let code = "window.__ardia ? window.__ardia.pictureInPicture(\(on ? "true" : "false")) : false"
+  func setPictureInPicture(_ on: Bool, automatic: Bool = false, completion: @escaping (PictureInPictureAnswer) -> Void) {
+    let code = "window.__ardia ? window.__ardia.pictureInPicture(\(on ? "true" : "false"), \(automatic ? "true" : "false")) : false"
     if !on {
       for frame in mediaFrames.values where !frame.isMainFrame { runInWorld(code, frame: frame) }
     }
     runInWorld(code, frame: on ? nowPlayingSubframe : nil) { value in
-      completion((value as? NSNumber)?.boolValue ?? false)
+      completion(value as? String == "nothingPlaying" ? .nothingPlaying : (value as? NSNumber)?.boolValue == true ? .opened : .failed)
     }
   }
 
@@ -437,7 +424,11 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
       if let dict, !dict.isEmpty { mediaFrames[frame] = frameInfo }
       emit("nowPlaying", ["state": view.nowPlaying.noteFrame(frame, page: data, main: main) ?? NSNull()])
     case "pip":
-      emit("pictureInPicture", ["kind": "video", "active": dict?["active"] as? Bool ?? false])
+      let active = dict?["active"] as? Bool ?? false
+      autoPictureInPictureRule.reported(active: active)
+      emit("pictureInPicture", ["kind": "video", "active": active])
+    case "mediaFault":
+      if let fault = WebKitMediaFaults.event(dict, from: frameInfo, muted: muted, blockerActive: WebKitContentBlocker.shared.isFiltering && !blocked.exemptLoad) { emit("mediaFault", fault) }
     case "status":
       emit("status", ["text": data as? String ?? ""])
     case "icons":

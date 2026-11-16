@@ -2,6 +2,7 @@ import { cancelDownload, keepDownload, pauseDownload, resumeDownload, type Downl
 import {
   ContextMenuArea,
   MouseArea,
+  OutsidePressArea,
   PopoverBubble,
   Symbol,
   Button,
@@ -29,10 +30,10 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Image, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useShallow } from "zustand/react/shallow";
 import { useDownloads, useSidebarOpen, useSidebarSide, useWindowId, useWindowUi } from "../../state/browser/hooks";
-import { clearDownloads, setDownloadsOpen } from "../../state/windows/actions";
+import { clearDownloads, dismissDownloadsByPress, setDownloadsOpen } from "../../state/windows/actions";
 import { watchNewDownloads } from "../../state/windows/downloadWatch";
-import { useDownload } from "../../state/windows/hooks";
-import { useAddressBarInSidebar, useTabLayout, useToolbarLightsCenter } from "../../state/windows/layout";
+import { useDownload } from "../../state/downloads/hooks";
+import { useDownloadsInSidebarFooter, useTabLayout, useToolbarLightsCenter } from "../../state/windows/layout";
 import { SIDEBAR_FOOTER_DOWNLOADS } from "../sidebar/geometry";
 import { PROFILE_DOTS_HEIGHT } from "../profiles/ProfileDots";
 import { openInternalPage } from "../../state/pages/urls";
@@ -44,7 +45,9 @@ import { dangerWarning, downloadStatus } from "../../state/downloads/status";
 import { useDownloadView } from "./useDownloadView";
 import { FooterButton } from "./FooterButton";
 import { useDownloadsPlacement } from "./useDownloadsPlacement";
+import { sameSize, useSettled, type Size } from "../ui/useSettled";
 import { DOWNLOADS_LIST as L, FILE_ICON_GLYPH_SHARE, MAGNET, useDownloadsColors } from "./tokens";
+import { PLATFORM_TERMS } from "../../lib/platformTerms";
 
 const rowFill = (theme: Theme, hovered: boolean, pressed: boolean) => (hovered || pressed ? menuRowFill(theme, pressed) : undefined);
 
@@ -84,7 +87,7 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
   if (!closing) shownList.current = { ids: liveIds, clearable: liveClearable };
   const { ids, clearable } = shownList.current;
   const topStrip = useTabLayout() === "top";
-  const addressBar = useAddressBarInSidebar();
+  const addressBar = useDownloadsInSidebarFooter();
   const sidebarRight = useSidebarSide(windowId) === "right";
   const setOpen = (value: boolean) => setDownloadsOpen(windowId, value);
   const { root, placement: p, onLayout } = useDownloadsPlacement(windowId, closing, { topStrip, footer: addressBar, footerBottom: PROFILE_DOTS_HEIGHT + 2, sidebarRight });
@@ -99,8 +102,7 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
   const listMax = p ? Math.max(L.row, Math.min(L.visibleRows * L.row, p.room - L.chrome)) : L.visibleRows * L.row;
 
   return (
-    <View ref={root} collapsable={false} onLayout={onLayout} pointerEvents={closing ? "none" : "auto"} style={StyleSheet.absoluteFill}>
-      <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpen(false)} />
+    <View ref={root} collapsable={false} onLayout={onLayout} pointerEvents={closing ? "none" : "box-none"} style={StyleSheet.absoluteFill}>
       {p ? (
         <Animated.View
           style={{
@@ -111,44 +113,46 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
             ...motion,
           }}
         >
-          <PanelBackground placement={p} />
-          <View style={{ marginTop: upward ? 0 : arrowRoom, marginBottom: upward ? arrowRoom : 0, paddingTop: L.padTop, paddingBottom: L.padBottom }}>
-            <View style={{ flexDirection: "row", alignItems: "center", paddingLeft: PANEL.inset, paddingRight: PANEL.inset - L.textButtonPad, height: L.header }}>
-              <Text size="caption" weight="semibold" tone="textSecondary" style={{ flex: 1, letterSpacing: L.headerTracking }}>
-                RECENT DOWNLOADS
-              </Text>
-              {clearable && (
-                <Button
-                  variant="text"
-                  look="panel"
-                  title="Clear"
-                  onPress={() => {
-                    setOpen(false);
-                    clearDownloads(windowId);
-                  }}
-                />
-              )}
-            </View>
-            {ids.length === 0 ? (
-              <View style={{ height: PANEL.rowHeight, paddingHorizontal: PANEL.inset, justifyContent: "center" }}>
-                <Text tone="textSecondary">No downloads yet</Text>
+          <OutsidePressArea onOutsidePress={closing ? undefined : (press) => dismissDownloadsByPress(windowId, press)}>
+            <PanelBackground placement={p} />
+            <View style={{ marginTop: upward ? 0 : arrowRoom, marginBottom: upward ? arrowRoom : 0, paddingTop: L.padTop, paddingBottom: L.padBottom }}>
+              <View style={{ flexDirection: "row", alignItems: "center", paddingLeft: PANEL.inset, paddingRight: PANEL.inset - L.textButtonPad, height: L.header }}>
+                <Text size="caption" weight="semibold" tone="textSecondary" style={{ flex: 1, letterSpacing: L.headerTracking }}>
+                  RECENT DOWNLOADS
+                </Text>
+                {clearable && (
+                  <Button
+                    variant="text"
+                    look="panel"
+                    title="Clear"
+                    onPress={() => {
+                      setOpen(false);
+                      clearDownloads(windowId);
+                    }}
+                  />
+                )}
               </View>
-            ) : (
-              <ScrollView style={{ maxHeight: listMax }} showsVerticalScrollIndicator={ids.length * L.row > listMax} contentContainerStyle={{ paddingHorizontal: PANEL.rowInset }}>
-                {ids.map((id) => (
-                  <DownloadRowItem key={id} id={id} windowId={windowId} />
-                ))}
-              </ScrollView>
-            )}
-            <MenuSeparator />
-            <FooterButton
-              title="View all downloads"
-              onPress={() => {
-                setOpen(false);
-                openInternalPage("downloads", windowId);
-              }}
-            />
-          </View>
+              {ids.length === 0 ? (
+                <View style={{ height: PANEL.rowHeight, paddingHorizontal: PANEL.inset, justifyContent: "center" }}>
+                  <Text tone="textSecondary">No downloads yet</Text>
+                </View>
+              ) : (
+                <ScrollView style={{ maxHeight: listMax }} showsVerticalScrollIndicator={ids.length * L.row > listMax} contentContainerStyle={{ paddingHorizontal: PANEL.rowInset }}>
+                  {ids.map((id) => (
+                    <DownloadRowItem key={id} id={id} windowId={windowId} />
+                  ))}
+                </ScrollView>
+              )}
+              <MenuSeparator />
+              <FooterButton
+                title="View all downloads"
+                onPress={() => {
+                  setOpen(false);
+                  openInternalPage("downloads", windowId);
+                }}
+              />
+            </View>
+          </OutsidePressArea>
         </Animated.View>
       ) : null}
     </View>
@@ -252,7 +256,7 @@ function DownloadRow({ d, windowId }: { d: Download; windowId: string }) {
                     hovered={hovered}
                     width={L.rowButton}
                     style={{ marginRight: -L.rowButtonBearing }}
-                    hover={<RowButton icon="magnifyingglass.circle.fill" onPress={() => void revealFile(d.path)} tooltip="Show in Finder" />}
+                    hover={<RowButton icon="magnifyingglass.circle.fill" onPress={() => void revealFile(d.path)} tooltip={`Show in ${PLATFORM_TERMS.fileManager}`} />}
                   />
                 ) : null}
               </View>
@@ -270,10 +274,11 @@ export function DownloadMagnet() {
   const sidebarWidth = useSidebarWidth(windowId);
   const topStrip = useTabLayout() === "top";
   const right = useSidebarSide(windowId) === "right";
-  const addressBar = useAddressBarInSidebar();
+  const addressBar = useDownloadsInSidebarFooter();
   const lightsY = useToolbarLightsCenter()[1];
   const [flight, setFlight] = useState<{ id: string; path: string } | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const settleSize = useSettled((next: Size) => setSize((prev) => (sameSize(prev, next) ? prev : next)));
   const t = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -286,7 +291,7 @@ export function DownloadMagnet() {
 
   const sidebar = !topStrip && sidebarOpen ? sidebarWidth : 0;
   const sidebarLeft = right ? size.width - sidebarWidth : 0;
-  const footer = { x: sidebarLeft + layout.sidebarInset + SIDEBAR_FOOTER_DOWNLOADS.size / 2, y: size.height - SIDEBAR_FOOTER_DOWNLOADS.bottom - SIDEBAR_FOOTER_DOWNLOADS.size / 2 };
+  const footer = { x: sidebarLeft + SIDEBAR_FOOTER_DOWNLOADS.left + SIDEBAR_FOOTER_DOWNLOADS.size / 2, y: size.height - SIDEBAR_FOOTER_DOWNLOADS.bottom - SIDEBAR_FOOTER_DOWNLOADS.size / 2 };
   const target = topStrip
     ? { x: size.width - MAGNET.topStripTarget.right, y: MAGNET.topStripTarget.y }
     : addressBar
@@ -303,7 +308,7 @@ export function DownloadMagnet() {
   const y = t.interpolate({ inputRange: steps, outputRange: steps.map((p) => start.y + (target.y - start.y) * p - Math.sin(Math.PI * p) * MAGNET.arc - icon / 2) });
 
   return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill} onLayout={(e) => setSize(e.nativeEvent.layout)}>
+    <View pointerEvents="none" style={StyleSheet.absoluteFill} onLayout={(e) => settleSize({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}>
       {flight && (
         <Animated.View
           style={{

@@ -10,7 +10,8 @@ import { tab } from "./content";
 import { DEMOS } from "./demos";
 import { Pill } from "./Floating";
 import { CHIP, CRUMB_X, FIELD, fill, geo, LIGHTS_Y, ROW, SIDEBAR_ICONS, SIDEBAR_W, STRIP_H, TOOLBAR_H, TOOLBAR_ICONS, type Geo } from "./geometry";
-import { CARD_INSET, pageFrameOf } from "../../../lib/windowLayout";
+import { CARD_INSET, pageFrameInset, pageFrameOf } from "../../../lib/windowLayout";
+import { windowCornerRadius } from "../../../state/windows/layout";
 import { font, radius as radii } from "../../ui/tokens";
 import { Backdrop, Card, Crumb, FieldPlate, Glyph, Label, Lights, NavIcons, Rows, TabRow, ToolbarBand, TopTabPlate, WindowFrame } from "./Kit";
 import { lookFor, type Look } from "./look";
@@ -20,6 +21,7 @@ import type { SceneOpts } from "./scene";
 import { tracker, useDemo } from "./timeline";
 import { MockSwitcher } from "./Switcher";
 import { mockInk, mockMotion, sceneMs } from "./tokens";
+import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 
 const INSET = { x: 8, top: 5, bottom: 13 };
 
@@ -32,7 +34,7 @@ function shapeOf(settings: Partial<Settings>): Shape {
     addressInSidebar: !top && (settings.addressBar ?? DEFAULT_SETTINGS.addressBar) === "sidebar",
     appearance: settings.appearance ?? DEFAULT_SETTINGS.appearance,
     siteColor: settings.extendWebsiteColor ?? DEFAULT_SETTINGS.extendWebsiteColor,
-    frame: settings.pageFrame ?? DEFAULT_SETTINGS.pageFrame,
+    frame: pageFrameInset({ pageFrame: settings.pageFrame ?? DEFAULT_SETTINGS.pageFrame, borderlessMode: settings.borderlessMode }),
   };
 }
 
@@ -104,7 +106,7 @@ function Window({ width, height, settings, accent, theme: custom, focus, switche
   const layer = (isDark: boolean) => <WindowState g={g} look={lookFor(isDark, accent, palette)} accent={accent} custom={custom ?? null} lay={lay} addr={addr} site={site} icons={switcher ? icons : null} frame={shape.frame} />;
   return (
     <View style={{ width, height }}>
-      <WindowFrame g={g} look={look} edge={dark ? mockInk.windowEdge.dark : mockInk.windowEdge.light} style={{ position: "absolute", left: INSET.x, top: INSET.top, width: inner.w, height: inner.h }}>
+      <WindowFrame g={g} look={look} edge={dark ? mockInk.windowEdge.dark : mockInk.windowEdge.light} cornerRadius={windowCornerRadius()} style={{ position: "absolute", left: INSET.x, top: INSET.top, width: inner.w, height: inner.h }}>
         <Animated.View style={[fill, { opacity: focusShown.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }]}>
           {theme.layers.below !== null ? <View style={fill}>{layer(theme.layers.below)}</View> : null}
           <Animated.View style={[fill, { opacity: theme.layers.below !== null ? theme.fade : 1 }]}>{layer(theme.layers.above)}</Animated.View>
@@ -135,21 +137,21 @@ function AutoBadge({ g, look }: { g: Geo; look: Look }) {
         <Glyph g={g} name={look.dark ? "moon.fill" : "sun.max.fill"} size={14} color={look.dark ? mockInk.moon : mockInk.sun} weight="medium" box={18} />
       </Animated.View>
       <Label g={g} size={font.body.fontSize} color={look.t.textPrimary} weight="500">
-        {`Auto · ${look.dark ? "Dark" : "Light"} like your Mac`}
+        {`Auto · ${look.dark ? "Dark" : "Light"} like your ${PLATFORM_TERMS.computer}`}
       </Label>
     </Pill>
   );
 }
 
-function AccentBackdrop({ g, look, accent, custom }: { g: Geo; look: Look; accent: string; custom: ProfileTheme | null }) {
+function AccentBackdrop({ look, accent, custom }: { look: Look; accent: string; custom: ProfileTheme | null }) {
   const { layers, fade } = useFadeBetween(accent);
   const palette = useBasePaletteValue();
   const customShown = useTo(custom ? 1 : 0, true, mockMotion.fade);
   return (
     <View style={fill} pointerEvents="none">
-      {layers.below !== null ? <Backdrop g={g} look={lookFor(look.dark, layers.below, palette)} /> : null}
+      {layers.below !== null ? <Backdrop look={lookFor(look.dark, layers.below, palette)} /> : null}
       <Animated.View style={[fill, { opacity: layers.below !== null ? fade : 1 }]}>
-        <Backdrop g={g} look={lookFor(look.dark, layers.above, palette)} />
+        <Backdrop look={lookFor(look.dark, layers.above, palette)} />
       </Animated.View>
       {custom ? (
         <Animated.View style={[fill, { opacity: customShown }]}>
@@ -166,7 +168,7 @@ const WindowState = memo(function WindowState({ g, look, accent, custom, lay, ad
   const s = g.s;
   const sideCardX = SIDEBAR_W + Math.max(0, frame - ROW.x);
   const lightsY = LIGHTS_Y.toolbar - CARD_INSET + frame;
-  const cardRadius = pageFrameOf(frame, radii.chrome, radii.panel).radius * s;
+  const cardRadius = pageFrameOf(frame, windowCornerRadius(), radii.panel).radius * s;
   const lerp = (v: Animated.Value, a: number, b: number) => v.interpolate({ inputRange: [0, 1], outputRange: [a * s, b * s] });
   const fade = (v: Animated.Value, a: number, b: number) => v.interpolate({ inputRange: [0, 1], outputRange: [a, b] });
   const sideCardW = g.W - sideCardX - frame;
@@ -182,7 +184,7 @@ const WindowState = memo(function WindowState({ g, look, accent, custom, lay, ad
   );
   return (
     <View style={fill}>
-      <AccentBackdrop g={g} look={look} accent={accent} custom={custom} />
+      <AccentBackdrop look={look} accent={accent} custom={custom} />
       <Animated.View style={{ position: "absolute", left: 0, top: 0, width: 80 * s, height: 50 * s, transform: [{ translateX: lerp(lay, 0, 20.75 - 25) }, { translateY: Animated.add(lerp(lay, lightsY - LIGHTS_Y.toolbar, LIGHTS_Y.strip - LIGHTS_Y.toolbar), lerp(addr, 0, LIGHTS_Y.field - lightsY)) }] }}>
         <Lights g={g} />
       </Animated.View>

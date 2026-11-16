@@ -37,7 +37,7 @@ another. Disclosed in Settings › What's Sent (“Even with sharing off”) and
 
 `ARDIA_SWITCHES="newTabPrewarm=off,lazySidebarRows=off"` sets a launch's values over everything else, in every build.
 `ArdiaLaunchConfig` parses it once; native code asks it (`switchOn:`, `experimentOn:`), JS through
-`platform/launchConfig.ts`, and the engine gets it as `--ardia-switches` (the GPU process too). A test instance has no
+`platform/launchConfig.ts`, and the engine's browser process gets it as `--ardia-switches`. A test instance has no
 updater, so it never fetches.
 
 ## The switches (see `SWITCHES` for owners and dates)
@@ -60,9 +60,9 @@ and a `removeBy` like the switches, don't count against the 8, and the site's sw
 
 | Experiment | On means |
 |---|---|
-| `beginFrameBridge` | while a shown tab waits for the display link's first callback, the GPU process sends up to 4 warm-up BeginFrames on the display's last vsync grid (`chromium-begin-frame-warm-up.patch`; engine, read in every process) |
 | `serverWindowDragAllOpen` | with `serverWindowDrag`, every view in the titlebar band is left open to window moves (`ServerWindowDrag.swift`) |
-| `webkitSignIn` | moving a Chromium page to WebKit first copies the cookies that page's own address gets (HttpOnly included, partitioned ones left out) into the profile's WebKit store, so a cookie sign-in (Netflix, Spotify…) comes along; at most 1.5 s, then the move goes ahead either way (`state/engines/engineSignIn.ts`, `WebKitCookieImport.swift`) |
+| `dragRegionEveryMount` | with `serverWindowDrag`, every React Native mount rebuilds each window's title-bar drag region 0.1 s later, as before #1682; off, a mount rebuilds only the window whose title bar the pointer is in and leaves the others for the pointer's arrival (read natively, once a launch: `ServerWindowDrag.swift`) |
+| `webkitSignIn` | moving a Chromium page to WebKit first copies the cookies that page's own address gets (HttpOnly included, partitioned ones left out) into the profile's WebKit store, so a cookie sign-in (Netflix, Disney+…) comes along; at most 1.5 s, then the move goes ahead either way (`state/engines/engineSignIn.ts`, `WebKitCookieImport.swift`) |
 
 The environment-only switches of 2026-10-17 to 10-20 (`ARDIA_EARLY_WINDOW_FIRST`, `ARDIA_SCROLL_FULL_RATE`,
 `ARDIA_WALLET_PASSES`, …) shipped their default in 0.2.40 and are gone with their other branch.

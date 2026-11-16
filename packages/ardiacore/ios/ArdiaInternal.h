@@ -46,12 +46,18 @@ void LogActivation(NSString *what);
 void WatchFocusChanges();
 NSString *FocusState();
 NSString *PageMoveAt(NSWindow *window, NSPoint point);
+NSString *HoverProbeDev(NSWindow *window, NSString *_Nullable argument);
+NSString *HoverProbeLine();
+void WatchHover();
+NSString *DescribeFocusWindow(NSWindow *_Nullable window);
+void NoteFocusChange(NSString *what, NSWindow *_Nullable window);
 void SetAppActive(bool active);
 void ActToggleFullScreen(NSWindow *window);
 void InstallTestCrashGuard(NSString *_Nullable dataDir);
 
 void OpenPopupWindow(ArdiaCoreTab *tab, ArdiaWebView *_Nullable opener);
 ArdiaCoreWindow *_Nullable PopupWindowForChromeBrowser(ArdiaCoreProfile *profile);
+void ChromeMakesAppWindow(ArdiaCoreProfile *profile);
 bool IsReservedKeyEvent(NSEvent *event);
 bool IsReservedBinding(NSString *key, NSString *unshiftedKey, NSEventModifierFlags modifiers);
 NSUInteger PopupWindowCount();

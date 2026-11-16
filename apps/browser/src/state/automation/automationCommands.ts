@@ -1,5 +1,5 @@
 import type { BrowserCommand } from "../../platform/commands";
-import { COMMANDS, commandBarTitle } from "../commands/commandCatalog";
+import { COMMANDS, commandBarTitle, UNAVAILABLE_COMMANDS } from "../commands/commandCatalog";
 import { isConfigSettingKey } from "../settings/configAllowlist";
 
 export type AutomationDecision = "run" | "endsApp" | "changesEngine" | "leftOutSetting" | "control" | "needsArgument";
@@ -13,6 +13,7 @@ export const AUTOMATION: Readonly<Record<BrowserCommand, AutomationDecision>> = 
   reopenClosedTab: "run",
   reopenClosedWindow: "run",
   restoreClosed: "needsArgument",
+  clearRecentlyClosed: "run",
   focusCommandBar: "run",
   closeTab: "run",
   closeAllTabs: "run",
@@ -22,6 +23,8 @@ export const AUTOMATION: Readonly<Record<BrowserCommand, AutomationDecision>> = 
   findInPage: "run",
   findNext: "run",
   findPrevious: "run",
+  hideElement: "run",
+  showHiddenElements: "run",
   setAppearance: "run",
   reload: "run",
   forceReload: "run",
@@ -37,6 +40,7 @@ export const AUTOMATION: Readonly<Record<BrowserCommand, AutomationDecision>> = 
   toggleFullUrl: "run",
   toggleJavaScriptFromAppleEvents: "leftOutSetting",
   toggleAddressBar: "run",
+  toggleMinimalism: "run",
   cast: "run",
   zoomReset: "run",
   zoomIn: "run",
@@ -64,6 +68,7 @@ export const AUTOMATION: Readonly<Record<BrowserCommand, AutomationDecision>> = 
   restoreArcFolders: "needsArgument",
   toggleMute: "run",
   togglePageEngine: "changesEngine",
+  toggleReader: "run",
   downloads: "run",
   mergeAllWindows: "run",
   switchProfile: "needsArgument",
@@ -89,10 +94,9 @@ export const AUTOMATION: Readonly<Record<BrowserCommand, AutomationDecision>> = 
   returnToPinnedUrl: "run",
   tabSwitcher: "run",
   share: "run",
-  sendFeedback: "run",
+  reportProblem: "run",
   keyboardShortcuts: "run",
   copyDiagnostics: "run",
-  recordPerformanceIssue: "run",
   toolTour: "run",
   videoTour: "run",
   releaseNotes: "run",
@@ -139,6 +143,6 @@ export type AutomationCommand = { id: BrowserCommand; title: string; scope: stri
 
 export function automationCommands(): AutomationCommand[] {
   return (Object.keys(SPECS) as BrowserCommand[])
-    .filter(isAutomatable)
+    .filter((id) => isAutomatable(id) && !UNAVAILABLE_COMMANDS.has(id))
     .map((id) => ({ id, title: SPECS[id].title ?? (commandBarTitle(id) || id), scope: SPECS[id].scope ?? null, variants: variantsOf(id) }));
 }

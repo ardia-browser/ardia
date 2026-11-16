@@ -11,7 +11,7 @@ const markActivation = () => {
 export function watchWindowActivation() {
   if (watching) return;
   watching = true;
-  onWindowEvent((e) => e.type === "focus" && markActivation());
+  onWindowEvent((e) => e.type === "focus" && !e.fromPage && markActivation());
   AppState.addEventListener("change", (state) => state === "active" && markActivation());
 }
 

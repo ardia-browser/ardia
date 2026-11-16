@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
-const { isPeekTab, otherSitePeekTabIds, peekSourceOf, peekTabId } = await import("./peek.ts");
+const { isPeekTab, otherSitePeekTabIds, peekOpenedFrom, peekSourceOf, peekTabId, shownPageId } = await import("./peek.ts");
 const { DEFAULT_SETTINGS, splitLinkModifierOf } = await import("../settings/settings.ts");
 const peekModifierOf = (settings) => settings.peekModifier;
 const { stripPlan } = await import("../tabs/liveTabs.ts");
@@ -37,13 +37,13 @@ test("a peek is a live tab of the window that stays out of its tab list", () => 
   assert.equal(S().tabs[id].windowId, w);
   assert.equal(S().tabs[id].page.nav.url, "https://peek.example/page");
   assert.equal(S().tabs[id].openerId, a);
-  assert.deepEqual(S().peeks[w].from, { x: 100, y: 200 });
+  assert.deepEqual(S().peeks[a].from, { x: 100, y: 200 });
   assert.deepEqual(order(w), before);
   assert.ok(!viewTabIds(S(), w).includes(id));
   assert.equal(S().windows[w].activeTabIds.default, a);
 });
 
-test("only http(s) links peek, and one peek per window: a new one replaces it", () => {
+test("only http(s) links peek, and one peek per tab: a new one from the same tab replaces it", () => {
   const { w, a } = windowWithTabs();
   assert.equal(S().openPeek(a, "file:///etc/hosts"), "");
   assert.equal(S().openPeek(a, "javascript:alert(1)"), "");
@@ -58,10 +58,10 @@ test("closing a peek throws its page away without a closed-tab entry", () => {
   const { w, a } = windowWithTabs();
   const closed = S().closedTabs.length;
   const id = S().openPeek(a, "https://peek.example/");
-  S().closePeek(w);
+  S().closePeek(a);
   assert.equal(S().tabs[id], undefined);
   assert.equal(S().live[id], undefined);
-  assert.equal(S().peeks[w], undefined);
+  assert.equal(S().peeks[a], undefined);
   assert.equal(S().closedTabs.length, closed);
   assert.equal(S().windows[w].activeTabIds.default, a);
 });
@@ -72,7 +72,7 @@ test("Open as Tab keeps the same tab, puts it right after its source and shows i
   S().updateTab(id, { url: "https://peek.example/next", title: "Next" }, { isLoading: false, canGoBack: true });
   const moved = S().peekToTab(w);
   assert.equal(moved, id);
-  assert.equal(S().peeks[w], undefined);
+  assert.equal(S().peeks[a], undefined);
   assert.deepEqual(order(w).slice(0, 3), [a, id, b]);
   assert.equal(S().windows[w].activeTabIds.default, id);
   assert.equal(S().tabs[id].url, "https://peek.example/next");
@@ -106,12 +106,79 @@ test("Open in Split View: the same tab joins a split with its source", () => {
   assert.ok(!Object.values(S().groups).some((g) => g.tabIds.includes(id) || g.tabIds.includes(a)));
 });
 
-test("switching tab closes the peek", () => {
+test("switching tab hides the peek with its tab, and switching back shows the same page again", () => {
+  const { w, a, b, c } = windowWithTabs();
+  const id = S().openPeek(a, "https://peek.example/");
+  S().updateTab(id, { url: "https://peek.example/next", title: "Next" }, { isLoading: false, canGoBack: true });
+  const page = S().tabs[id].page;
+  const before = [...order(w)];
+  S().activate(b);
+  assert.equal(peekTabId(S(), w), undefined);
+  assert.equal(shownPageId(S(), w), b);
+  assert.ok(isPeekTab(S(), id));
+  assert.equal(peekOpenedFrom(S(), a), id);
+  assert.deepEqual(order(w), before);
+  assert.ok(!viewTabIds(S(), w).includes(id));
+  const strip = (keys, active) => ({ strip: 1, window: 1, profile: "default", tabs: keys.map((key, index) => ({ key, browser: index + 1, index, active: key === active, pinned: false })) });
+  assert.deepEqual(stripPlan(S(), strip([a, b, c, id], b)), { keys: [a, b, c], pinned: 0, active: b });
+  S().activate(a);
+  assert.equal(peekTabId(S(), w), id);
+  assert.equal(shownPageId(S(), w), id);
+  assert.equal(S().tabs[id].page, page);
+  assert.equal(S().tabs[id].url, "https://peek.example/next");
+  assert.equal(S().live[id].canGoBack, true);
+  assert.deepEqual(order(w), before);
+});
+
+test("each tab keeps its own peek and the window shows only its active tab's", () => {
+  const { w, a, b } = windowWithTabs();
+  const fromA = S().openPeek(a, "https://one.example/");
+  S().activate(b);
+  const fromB = S().openPeek(b, "https://two.example/");
+  assert.ok(S().tabs[fromA]);
+  assert.equal(peekTabId(S(), w), fromB);
+  assert.equal(peekOpenedFrom(S(), a), fromA);
+  assert.equal(peekOpenedFrom(S(), b), fromB);
+  S().activate(a);
+  assert.equal(peekTabId(S(), w), fromA);
+  S().closePeek(a);
+  assert.equal(S().tabs[fromA], undefined);
+  assert.ok(S().tabs[fromB]);
+  S().activate(b);
+  assert.equal(peekTabId(S(), w), fromB);
+  assert.equal(S().peekToTab(w), fromB);
+  assert.ok(order(w).includes(fromB));
+});
+
+test("a hidden peek closes with its source tab and with its window", () => {
+  let { w, a, b } = windowWithTabs();
+  let id = S().openPeek(a, "https://peek.example/");
+  S().activate(b);
+  assert.ok(S().tabs[id]);
+  S().closeTab(a);
+  assert.equal(S().peeks[a], undefined);
+  assert.equal(S().tabs[id], undefined);
+
+  ({ w, a, b } = windowWithTabs());
+  id = S().openPeek(a, "https://peek.example/");
+  S().activate(b);
+  assert.ok(S().tabs[id]);
+  S().closeWindow(w);
+  assert.deepEqual(S().peeks, {});
+  assert.equal(S().tabs[id], undefined);
+});
+
+test("a hidden peek still closes when its source tab goes to another page", () => {
   const { w, a, b } = windowWithTabs();
   const id = S().openPeek(a, "https://peek.example/");
   S().activate(b);
-  assert.equal(S().peeks[w], undefined);
+  S().updateTab(a, { url: "https://a.example/#section", title: "A" }, {});
+  assert.ok(S().tabs[id]);
+  S().updateTab(a, { url: "https://a.example/elsewhere", title: "A" }, {});
+  assert.equal(S().peeks[a], undefined);
   assert.equal(S().tabs[id], undefined);
+  S().activate(a);
+  assert.equal(peekTabId(S(), w), undefined);
 });
 
 test("the source tab closing or navigating away closes the peek, a same-page hash change doesn't", () => {
@@ -120,21 +187,40 @@ test("the source tab closing or navigating away closes the peek, a same-page has
   S().updateTab(a, { url: "https://a.example/#section", title: "A" }, {});
   assert.equal(peekTabId(S(), w), id);
   S().updateTab(a, { url: "https://a.example/elsewhere", title: "A" }, {});
-  assert.equal(S().peeks[w], undefined);
+  assert.equal(S().peeks[a], undefined);
   assert.equal(S().tabs[id], undefined);
 
   id = S().openPeek(a, "https://peek.example/");
   S().closeTab(a);
-  assert.equal(S().peeks[w], undefined);
+  assert.equal(S().peeks[a], undefined);
   assert.equal(S().tabs[id], undefined);
 });
 
-test("switching the window's profile closes the peek", () => {
+test("switching the window's profile hides the peek with its tab until that profile and tab are back", () => {
   const { w, a } = windowWithTabs();
   const work = S().createProfile({ name: "Work" });
   const id = S().openPeek(a, "https://peek.example/");
   S().switchProfile(w, work);
-  assert.equal(S().peeks[w], undefined);
+  assert.equal(peekTabId(S(), w), undefined);
+  assert.ok(S().tabs[id]);
+  S().switchProfile(w, "default");
+  assert.equal(peekTabId(S(), w), id);
+});
+
+test("a pinned tab keeps its peek across a tab switch and closing the pinned tab closes it", () => {
+  const { w, a, b } = windowWithTabs();
+  S().pinTabs([a], true);
+  S().activate(a);
+  const id = S().openPeek(a, "https://peek.example/");
+  S().activate(b);
+  assert.ok(S().tabs[id]);
+  assert.equal(peekTabId(S(), w), undefined);
+  S().activate(a);
+  assert.equal(peekTabId(S(), w), id);
+  S().activate(b);
+  S().closeTab(a);
+  assert.ok(S().tabs[a]);
+  assert.equal(S().peeks[a], undefined);
   assert.equal(S().tabs[id], undefined);
 });
 
@@ -218,7 +304,9 @@ test("the split link setting: ⌥⇧-click by default or ⌥-click, synced, neve
 test("links to other sites peek only in Top Apps, pinned rows and pinned groups, once the setting is on", () => {
   const { w, a, b, c } = windowWithTabs();
   const d = S().newTab(w, { url: "https://d.example/", background: true });
-  assert.equal(DEFAULT_SETTINGS.peekLinksToOtherSites, false);
+  assert.equal(DEFAULT_SETTINGS.peekLinksToOtherSites, true);
+  assert.equal(DEFAULT_SETTINGS.newTabLinksOpenIn, "peek");
+  S().updateSettings({ peekLinksToOtherSites: false });
   assert.ok(SYNCED_SETTINGS.includes("peekLinksToOtherSites"));
   S().togglePin(a);
   S().placeTabs([b], { pinned: true, row: true });
@@ -246,7 +334,165 @@ test("another window taking a shared pin's page closes the peek opened from it",
   const copy = viewTabIds(S(), b).find((t) => !!S().tabs[t].pin);
   S().activate(copy);
   assert.equal(S().tabs[mail].windowId, b);
-  assert.equal(S().peeks[a], undefined);
-  assert.equal(S().peeks[b], undefined);
+  assert.equal(S().peeks[mail], undefined);
+  assert.equal(peekTabId(S(), b), undefined);
   assert.equal(S().tabs[id], undefined);
+});
+
+test("a clicked new-tab link peeks from a pinned tab when its destination, unwrapped, leaves the site", async () => {
+  const { newTabLinkRoute, leavesSite } = await import("./newTabLinkRoute.ts");
+  const { linkDestination } = await import("../../lib/linkWrappers.ts");
+  assert.equal(linkDestination("https://www.google.com/url?q=https%3A%2F%2Fdocs.example%2Fa%3Fb%3D1&sa=D"), "https://docs.example/a?b=1");
+  assert.equal(linkDestination("https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fx.example%2F&data=1"), "https://x.example/");
+  assert.equal(linkDestination("https://l.facebook.com/l.php?u=https%3A%2F%2Fy.example%2F&h=AT0"), "https://y.example/");
+  assert.equal(linkDestination("https://slack-redir.net/link?url=https%3A%2F%2Fz.example"), "https://z.example");
+  assert.equal(linkDestination("https://www.google.com/url?q=javascript:alert(1)"), "https://www.google.com/url?q=javascript:alert(1)");
+  assert.equal(linkDestination("https://www.google.com/search?q=https%3A%2F%2Fa.example"), "https://www.google.com/search?q=https%3A%2F%2Fa.example");
+  assert.ok(leavesSite("https://www.google.com/url?q=https://dest.example/", "https://mail.google.com/mail/u/0/"));
+  assert.ok(!leavesSite("https://www.google.com/url?q=https://mail.google.com/x", "https://mail.google.com/mail/u/0/"));
+  assert.ok(!leavesSite("https://example.com/a", "https://www.example.com/b"));
+
+  S().hydrate({ profiles: { default: PERSONAL }, profileOrder: ["default"] });
+  const w = S().createWindow({ url: "https://mail.example/" });
+  const [pinned] = S().windows[w].tabIds;
+  S().pinTabs([pinned], true);
+  const regular = S().newTab(w, { url: "https://mail.example/" });
+  const away = "https://www.google.com/url?q=https%3A%2F%2Fother.example%2F";
+  S().updateSettings({ newTabLinksOpenIn: "tab", peekLinksToOtherSites: false });
+  assert.equal(newTabLinkRoute(S(), pinned, away), "tab");
+  S().updateSettings({ peekLinksToOtherSites: true });
+  assert.equal(newTabLinkRoute(S(), pinned, away), "otherSite");
+  assert.equal(newTabLinkRoute(S(), pinned, "https://mail.example/inbox"), "tab");
+  assert.equal(newTabLinkRoute(S(), regular, away), "tab");
+  S().updateSettings({ newTabLinksOpenIn: "peek" });
+  assert.equal(newTabLinkRoute(S(), regular, "https://mail.example/inbox"), "peek");
+  assert.equal(newTabLinkRoute(S(), regular, "about:blank"), "tab");
+  S().activate(pinned);
+  const peek = S().openPeek(pinned, "https://peek.example/");
+  assert.equal(newTabLinkRoute(S(), peek, away), "tab");
+  S().updateSettings({ newTabLinksOpenIn: "littleArdia" });
+  assert.equal(newTabLinkRoute(S(), regular, away), "littleArdia");
+  assert.equal(newTabLinkRoute(S(), pinned, away), "otherSite");
+  const small = S().createWindow({ kind: "small", url: "https://little.example/" });
+  assert.equal(newTabLinkRoute(S(), S().windows[small].tabIds[0], away), "tab");
+  S().updateSettings({ newTabLinksOpenIn: "tab", peekLinksToOtherSites: false });
+});
+
+test("out of the box a new-tab link peeks, a pinned tab's link to another site peeks, and the classic browser presets keep tabs", async () => {
+  const { newTabLinkRoute } = await import("./newTabLinkRoute.ts");
+  const { PRESETS } = await import("../onboarding/presets.ts");
+  S().hydrate({ profiles: { default: PERSONAL }, profileOrder: ["default"], settings: DEFAULT_SETTINGS });
+  const w = S().createWindow({ url: "https://mail.example/" });
+  const [pinned] = S().windows[w].tabIds;
+  S().pinTabs([pinned], true);
+  const regular = S().newTab(w, { url: "https://mail.example/" });
+  assert.equal(newTabLinkRoute(S(), regular, "https://other.example/"), "peek");
+  assert.equal(newTabLinkRoute(S(), pinned, "https://other.example/"), "otherSite");
+  for (const preset of ["arc", "zen", "dia", "fresh"]) {
+    const settings = { ...DEFAULT_SETTINGS, ...PRESETS[preset] };
+    assert.equal(settings.peekLinksToOtherSites, true, preset);
+    assert.equal(settings.newTabLinksOpenIn, "peek", preset);
+  }
+  for (const preset of ["chrome", "firefox", "safari", "brave", "edge"]) {
+    const settings = { ...DEFAULT_SETTINGS, ...PRESETS[preset] };
+    assert.equal(settings.peekLinksToOtherSites, false, preset);
+    assert.equal(settings.newTabLinksOpenIn, "tab", preset);
+  }
+  for (const preset of ["arc", "zen", "dia"]) {
+    const afterChrome = { ...DEFAULT_SETTINGS, ...PRESETS.chrome, ...PRESETS[preset] };
+    assert.equal(afterChrome.peekLinksToOtherSites, true, preset);
+    assert.equal(afterChrome.newTabLinksOpenIn, "peek", preset);
+  }
+});
+
+test("a peek can adopt the page Chrome already opened for the link", () => {
+  const { w, a } = windowWithTabs();
+  const id = S().openPeek(a, "https://peek.example/", { x: 1, y: 2 }, { adoptId: "ardiacore:7" });
+  assert.equal(S().tabs[id].page.kind, "adopted");
+  assert.equal(S().tabs[id].page.adopt, "ardiacore:7");
+  assert.equal(peekTabId(S(), w), id);
+});
+
+test("a private window's new-tab links stay tabs whatever the setting", async () => {
+  const { newTabLinkRoute } = await import("./newTabLinkRoute.ts");
+  S().hydrate({ profiles: { default: PERSONAL }, profileOrder: ["default"] });
+  const w = S().createWindow({ kind: "private", url: "https://mail.example/" });
+  const [tab] = S().windows[w].tabIds;
+  for (const choice of ["peek", "littleArdia"]) {
+    S().updateSettings({ newTabLinksOpenIn: choice });
+    assert.equal(newTabLinkRoute(S(), tab, "https://other.example/"), "tab", choice);
+  }
+  S().updateSettings({ newTabLinksOpenIn: "tab" });
+});
+
+test("a peek from a pinned tab becomes a tab only when its first settled page past any wrapper is the pinned site", async () => {
+  const { startPeeks } = await import("./actions.ts");
+  const { siteLanding } = await import("./newTabLinkRoute.ts");
+  startPeeks();
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+  const load = async (id, url) => {
+    S().updateTab(id, { url }, { isLoading: true });
+    await settle();
+    S().updateTab(id, { url }, { isLoading: false });
+    await settle();
+  };
+  const open = (url) => {
+    S().hydrate({ profiles: { default: PERSONAL }, profileOrder: ["default"] });
+    const w = S().createWindow({ url: "https://www.youtube.com/" });
+    const [pinned] = S().windows[w].tabIds;
+    S().pinTabs([pinned], true);
+    S().activate(pinned);
+    const id = S().openPeek(pinned, url, null, { landing: siteLanding("https://www.youtube.com/", "tab") });
+    return { w, id };
+  };
+  let { w, id } = open("https://www.youtube.com/redirect?q=https%3A%2F%2Fother.example%2F");
+  await settle();
+  assert.equal(peekTabId(S(), w), id, "the wrapper's own address on the pinned host doesn't promote it");
+  await load(id, "https://www.youtube.com/redirect?q=https%3A%2F%2Fother.example%2F");
+  assert.equal(peekTabId(S(), w), id, "nor does the wrapper page settling");
+  await load(id, "https://other.example/");
+  assert.equal(peekTabId(S(), w), id);
+  await load(id, "https://www.youtube.com/watch");
+  assert.equal(peekTabId(S(), w), id, "going back to the pinned site by hand keeps the peek");
+  ({ w, id } = open("https://bit.example/x"));
+  await load(id, "https://www.youtube.com/watch?v=1");
+  await settle();
+  assert.equal(peekTabId(S(), w), undefined, "a redirector landing on the pinned site becomes a tab");
+  assert.ok(S().windows[w].tabIds.includes(id));
+});
+
+test("a redirector from a pinned tab that lands while you are on another tab still becomes a tab, in the background", async () => {
+  const { startPeeks } = await import("./actions.ts");
+  const { siteLanding } = await import("./newTabLinkRoute.ts");
+  startPeeks();
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+  S().hydrate({ profiles: { default: PERSONAL }, profileOrder: ["default"] });
+  const w = S().createWindow({ url: "https://www.youtube.com/" });
+  const [pinned] = S().windows[w].tabIds;
+  const other = S().newTab(w, { url: "https://other.example/", background: true });
+  S().pinTabs([pinned], true);
+  S().activate(pinned);
+  const id = S().openPeek(pinned, "https://bit.example/x", null, { landing: siteLanding("https://www.youtube.com/", "tab") });
+  await settle();
+  S().activate(other);
+  S().updateTab(id, { url: "https://www.youtube.com/watch?v=1" }, { isLoading: true });
+  await settle();
+  S().updateTab(id, { url: "https://www.youtube.com/watch?v=1" }, { isLoading: false });
+  await settle();
+  assert.equal(S().peeks[pinned], undefined, "the landed page is no longer a Peek");
+  assert.ok(S().windows[w].tabIds.includes(id), "it is a tab in the window");
+  assert.equal(S().windows[w].activeTabIds.default, other, "the tab you are on stays in front");
+});
+
+test("Open as Tab keeps a pinned row that sits after a pinned group where it was", () => {
+  const { w, a, b, c } = windowWithTabs();
+  const group = S().groupTabs([b], { pinned: true, name: "Work" });
+  const member = S().groups[group].tabIds[0];
+  S().placeTabs([c], { pinned: true, row: true, beforeId: a });
+  const pinnedBefore = order(w).filter((id) => id === member || id === c);
+  assert.deepEqual(pinnedBefore, [member, c]);
+  const id = S().openPeek(a, "https://peek.example/");
+  S().peekToTab(w);
+  assert.ok(order(w).includes(id));
+  assert.deepEqual(order(w).filter((t) => t === member || t === c), pinnedBefore);
 });

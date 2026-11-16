@@ -1,5 +1,7 @@
 import asyncio
+import socket
 import sys
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -7,8 +9,9 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from ardia_cli.browse import actions, commands, daemon
-from ardia_cli.browse.errors import BrowseError, Gated
+from ardia_cli import telemetry
+from ardia_cli.browse import actions, client, commands, daemon, limits
+from ardia_cli.browse.errors import BrowseError, Gated, OutcomeUnknown, Unreachable
 from tests.test_browse_review import make_daemon
 
 
@@ -18,12 +21,43 @@ def run(coro):
 
 class CommandsAreBounded(unittest.TestCase):
     def test_limits_follow_the_command(self):
-        self.assertEqual(daemon.command_limit("select", ["#guests", "a", "b"], 25), daemon.COMMAND_LIMIT)
-        self.assertEqual(daemon.command_limit("batch", [], 25), 600)
-        self.assertEqual(daemon.command_limit("script", ["--timeout", "5m"], 25), 300 + daemon.LIMIT_MARGIN)
-        self.assertEqual(daemon.command_limit("script", [], 25), daemon.SCRIPT_DEFAULT + daemon.LIMIT_MARGIN)
-        self.assertEqual(daemon.command_limit("wait", ["400000"], 25), 400 + daemon.LIMIT_MARGIN)
-        self.assertEqual(daemon.command_limit("wait", ["--text", "x", "--timeout", "180000"], 25), 180 + daemon.LIMIT_MARGIN)
+        self.assertEqual(limits.command_limit("select", ["#guests", "a", "b"], 25), limits.COMMAND_LIMIT)
+        self.assertEqual(limits.command_limit("batch", [], 25), 600)
+        self.assertEqual(limits.command_limit("script", ["--timeout", "5m"], 25), 300 + limits.LIMIT_MARGIN)
+        self.assertEqual(limits.command_limit("script", [], 25), limits.SCRIPT_DEFAULT + limits.LIMIT_MARGIN)
+        self.assertEqual(limits.command_limit("wait", ["400000"], 25), 400 + limits.LIMIT_MARGIN)
+        self.assertEqual(limits.command_limit("wait", ["--text", "x", "--timeout", "180000"], 25), 180 + limits.LIMIT_MARGIN)
+
+    def test_the_client_waits_past_the_daemons_own_limits(self):
+        self.assertEqual(limits.answer_deadline({"argv": ["click", "@e1"], "options": {}}),
+                         limits.BEHIND_SCRIPT_WAIT + limits.COMMAND_LIMIT + limits.LIMIT_MARGIN)
+        self.assertEqual(limits.answer_deadline({"argv": ["wait", "400000"], "options": {}}),
+                         limits.BEHIND_SCRIPT_WAIT + 400 + 2 * limits.LIMIT_MARGIN)
+        self.assertEqual(limits.answer_deadline({"argv": ["wait", "--text", "x"], "options": {"timeout_ms": 200000}}),
+                         limits.BEHIND_SCRIPT_WAIT + 200 + 2 * limits.LIMIT_MARGIN)
+        self.assertEqual(limits.answer_deadline({"argv": [], "options": {}}),
+                         limits.BEHIND_SCRIPT_WAIT + limits.COMMAND_LIMIT + limits.LIMIT_MARGIN)
+
+    def test_a_queued_script_waits_its_turn_for_as_long_as_it_may_run(self):
+        self.assertEqual(limits.queue_wait("click", ["@e1"]), limits.QUEUE_WAIT)
+        self.assertEqual(limits.queue_wait("script", []), limits.SCRIPT_DEFAULT)
+        self.assertEqual(limits.queue_wait("script", ["--timeout", "10m"]), 600)
+        self.assertEqual(limits.queue_wait("script", ["--timeout", "10s"]), limits.QUEUE_WAIT)
+        self.assertEqual(limits.answer_deadline({"argv": ["script", "--timeout", "5m"], "options": {}}),
+                         300 + 300 + 2 * limits.LIMIT_MARGIN)
+
+    def test_a_read_sent_beside_a_busy_session_waits_there_for_its_own_limit(self):
+        self.assertEqual(limits.queue_wait("read", ["a", "b"], patient=True), 600 - limits.LIMIT_MARGIN)
+        self.assertEqual(limits.queue_wait("read", ["a", "--timeout", "15m"], patient=True), 900)
+        self.assertEqual(limits.queue_wait("read", ["a"]), limits.QUEUE_WAIT)
+        self.assertEqual(limits.answer_deadline({"argv": ["read", "a"], "options": {}, "patient_queue": True}),
+                         570 + 600 + limits.LIMIT_MARGIN)
+
+    def test_an_inline_timeout_counts_like_a_separate_one(self):
+        self.assertEqual(limits.command_limit("eval", ["1", "--timeout=5m"], 25), 300 + limits.LIMIT_MARGIN)
+        self.assertEqual(limits.command_limit("script", ["--timeout=5m"], 25), 300 + limits.LIMIT_MARGIN)
+        self.assertEqual(limits.queue_wait("script", ["--timeout=5m"]), 300)
+        self.assertEqual(limits.command_limit("eval", ["--", "--timeout=5m"], 25), limits.COMMAND_LIMIT)
 
     def test_a_hung_command_is_stopped_and_frees_the_session(self):
         instance = make_daemon(self)
@@ -68,6 +102,116 @@ class CommandsAreBounded(unittest.TestCase):
         code, _, err = run(scenario())
         self.assertEqual(code, 1)
         self.assertIn("This session is still running `select`", err)
+
+
+    def test_a_queued_script_runs_after_the_busy_one_instead_of_giving_up(self):
+        instance = make_daemon(self)
+        started = asyncio.Event()
+
+        async def slow(ctx, name, argv):
+            if not started.is_set():
+                started.set()
+                await asyncio.sleep(0.5)
+            return commands.Result()
+
+        async def scenario():
+            with mock.patch.object(daemon, "dispatch", slow), mock.patch.object(daemon, "QUEUE_WAIT", 0.2):
+                running = asyncio.ensure_future(instance.execute({"argv": ["script", "--timeout", "5s"], "options": {}}))
+                await started.wait()
+                queued = await instance.execute({"argv": ["script", "--timeout", "5s"], "options": {}})
+                plain = asyncio.ensure_future(instance.execute({"argv": ["tab", "list"], "options": {}}))
+                await running
+                return queued, await plain
+
+        queued, plain = run(scenario())
+        self.assertEqual(queued[0], 0)
+        self.assertEqual(plain[0], 0)
+        self.assertFalse(instance.lock.locked())
+
+
+    def test_a_command_queued_behind_a_busy_session_yields_to_a_pending_close(self):
+        instance = make_daemon(self)
+        started = asyncio.Event()
+        ran = []
+
+        async def slow(ctx, name, argv):
+            ran.append(name)
+            if not started.is_set():
+                started.set()
+                await asyncio.sleep(0.3)
+            return commands.Result()
+
+        async def scenario():
+            with mock.patch.object(daemon, "dispatch", slow):
+                running = asyncio.ensure_future(instance.execute({"argv": ["script", "--timeout", "5s"], "options": {}}))
+                await started.wait()
+                queued = asyncio.ensure_future(instance.execute({"argv": ["script", "--timeout", "5s"], "options": {}}))
+                await asyncio.sleep(0.05)
+                closing = asyncio.ensure_future(instance.execute({"argv": ["close"], "options": {}}))
+                await asyncio.gather(running, closing)
+                return await queued
+
+        code, _, err = run(scenario())
+        self.assertEqual(ran, ["script"])
+        self.assertEqual(code, 1)
+        self.assertIn("is closing", err)
+
+    def test_any_command_waits_its_turn_behind_a_running_script(self):
+        instance = make_daemon(self)
+        started = asyncio.Event()
+
+        async def slow(ctx, name, argv):
+            if not started.is_set():
+                started.set()
+                await asyncio.sleep(0.6)
+            return commands.Result()
+
+        async def scenario():
+            with mock.patch.object(daemon, "dispatch", slow), mock.patch.object(daemon, "QUEUE_WAIT", 0.2):
+                running = asyncio.ensure_future(instance.execute({"argv": ["script", "--timeout", "5s"], "options": {}}))
+                await started.wait()
+                waited = await instance.execute({"argv": ["tab", "list"], "options": {}})
+                await running
+                return waited
+
+        code, _, err = run(scenario())
+        self.assertEqual(code, 0, err)
+
+    def test_patient_queue_only_lets_a_read_wait_longer(self):
+        instance = make_daemon(self)
+        started = asyncio.Event()
+
+        async def slow(ctx, name, argv):
+            if not started.is_set():
+                started.set()
+                await asyncio.sleep(0.6)
+            return commands.Result()
+
+        async def scenario():
+            with mock.patch.object(daemon, "dispatch", slow), mock.patch.object(daemon, "QUEUE_WAIT", 0.2):
+                running = asyncio.ensure_future(instance.execute({"argv": ["select", "#g", "a"], "options": {}}))
+                await started.wait()
+                waited = await instance.execute({"argv": ["click", "#a"], "options": {}, "patient_queue": True})
+                await running
+                return waited
+
+        code, _, err = run(scenario())
+        self.assertEqual(code, 1)
+        self.assertIn("still running `select`", err)
+
+    def test_an_eval_that_runs_long_keeps_its_outcome_unknown(self):
+        state = SimpleNamespace(page=mock.AsyncMock(return_value=SimpleNamespace(frames={}, main_frame=None)))
+        ctx = commands.Ctx(state, {}, "/", {}, None, "eval")
+        timed_out = OutcomeUnknown("`Runtime.evaluate`", "Ardia didn't answer Runtime.evaluate in 60s after it was sent")
+        with mock.patch.object(commands, "evaluate_main", mock.AsyncMock(side_effect=timed_out)):
+            with self.assertRaises(OutcomeUnknown) as raised:
+                run(commands.cmd_eval(ctx, ["1", "--timeout", "2s"]))
+        self.assertIn("didn't finish within 2 s", raised.exception.message)
+        other = OutcomeUnknown("`eval`", "the tab detached")
+        with mock.patch.object(commands, "evaluate_main", mock.AsyncMock(side_effect=other)):
+            with self.assertRaises(OutcomeUnknown) as raised:
+                run(commands.cmd_eval(ctx, ["1"]))
+        self.assertIs(raised.exception, other)
 
 
 class Element(SimpleNamespace):
@@ -161,6 +305,31 @@ class TextareaFill(unittest.TestCase):
         self.assertEqual(self.fill("textarea"), [("insert", "line one\nline two")])
         self.assertEqual(self.fill("div"), [("insert", "line one\nline two")])
         self.assertEqual(self.fill("input"), [("type", "line one\nline two")])
+
+
+class SilentDaemon(unittest.TestCase):
+    def ask(self, argv):
+        ours, daemon_end = socket.socketpair()
+        self.addCleanup(daemon_end.close)
+        metrics = {}
+        with mock.patch.object(limits, "answer_deadline", return_value=0.2), \
+                mock.patch.object(telemetry, "note_count", lambda key, value: metrics.update({key: value})):
+            started = time.monotonic()
+            with self.assertRaises(BrowseError) as caught:
+                client.request(ours, {"argv": argv, "options": {}})
+        self.assertLess(time.monotonic() - started, 5)
+        self.assertEqual(metrics, {"daemon_answer_timed_out": True})
+        return caught.exception
+
+    def test_a_read_that_gets_no_answer_is_unreachable(self):
+        error = self.ask(["snapshot"])
+        self.assertIsInstance(error, Unreachable)
+        self.assertIn("didn't answer in 0.2 s", error.message)
+
+    def test_an_action_that_gets_no_answer_has_an_unknown_outcome(self):
+        error = self.ask(["click", "@e1"])
+        self.assertIsInstance(error, OutcomeUnknown)
+        self.assertEqual(error.code, "outcome_unknown")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,4 @@
 import asyncio
-import inspect
 import json
 import os
 import shlex
@@ -16,7 +15,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from ardia_cli.browse import actions, claims, client, inputs, media, paths, plugins, readurl, snapshot, vault
+from ardia_cli.browse import actions, claims, client, human, inputs, media, paths, plugins, readurl, snapshot, vault
 from ardia_cli.browse import cli as browse_cli
 from ardia_cli.browse import commands, daemon
 from ardia_cli.browse.errors import BrowseError, ConnectionLost, Gated, OutcomeUnknown, StaleRef, Usage
@@ -72,36 +71,41 @@ async def no_sleep(_seconds, *args, **kwargs):
 
 
 class SteadyKeyboardTest(unittest.TestCase):
-    def test_pydoll_still_routes_typos_through_should_make_typo(self):
-        from pydoll.interactions.keyboard import Keyboard
-
-        self.assertTrue(hasattr(Keyboard, "_should_make_typo"), "pydoll renamed Keyboard._should_make_typo")
-        source = inspect.getsource(Keyboard._process_char_with_typo)
-        self.assertIn("self._should_make_typo()", source, "pydoll no longer asks _should_make_typo before a typo")
-        humanized = inspect.getsource(Keyboard._type_text_humanized)
-        self.assertIn("_process_char_with_typo", humanized, "pydoll's humanized typing bypasses _process_char_with_typo")
-
-    def test_no_typos_even_when_pydoll_would_always_make_one(self):
-        text = "The quick brown fox, jumps over 13 lazy dogs!"
-        with mock.patch("pydoll.interactions.keyboard.DEFAULT_TYPO_PROBABILITY", 1.0), mock.patch("asyncio.sleep", no_sleep):
-            from pydoll.interactions.keyboard import Keyboard
-
-            plain = RecordingExecutor()
-            asyncio.run(Keyboard(plain)._type_text_humanized(text))
-            self.assertNotEqual(typed_text(plain.commands), text, "the control run should make typos at probability 1")
-            steady = RecordingExecutor()
-            asyncio.run(inputs.steady_keyboard_class()(steady).type_text(text, humanize=True))
+    def test_humanized_typing_never_makes_a_typo(self):
+        text = "The quick brown fox, jumps over 13 lazy dogs!\n"
+        steady = RecordingExecutor()
+        with mock.patch("asyncio.sleep", no_sleep):
+            asyncio.run(human.Keyboard(steady).type_text(text, humanize=True))
         self.assertEqual(typed_text(steady.commands), text)
         downs = [c for c in steady.commands if c["params"]["type"] == "keyDown"]
         ups = [c for c in steady.commands if c["params"]["type"] == "keyUp"]
         self.assertEqual(len(downs), len(text))
         self.assertEqual(len(ups), len(text))
+        self.assertNotIn("Backspace", {c["params"]["key"] for c in steady.commands})
 
-    def test_default_timing_is_pydolls(self):
-        from pydoll.interactions.keyboard import TimingConfig
+    def test_typing_events_carry_the_key_fields(self):
+        down, up = human.Keyboard.key_events("A")
+        self.assertEqual(down, {"method": "Input.dispatchKeyEvent", "params": {"type": "keyDown", "text": "A", "unmodifiedText": "A", "code": "KeyA",
+                                                                                "key": "A", "windowsVirtualKeyCode": 65, "nativeVirtualKeyCode": 65}})
+        self.assertEqual(up["params"], {"type": "keyUp", "code": "KeyA", "key": "A", "windowsVirtualKeyCode": 65, "nativeVirtualKeyCode": 65})
+        self.assertEqual(human.CHAR_TO_KEY_INFO["?"], ("?", "Slash", 191))
+        self.assertEqual(human.CHAR_TO_KEY_INFO["("], ("(", "Digit9", 57))
+        self.assertEqual(human.CHAR_TO_KEY_INFO["\n"], ("Enter", "Enter", 13))
+        self.assertEqual(len(human.CHAR_TO_KEY_INFO), 97)
 
-        keyboard = inputs.steady_keyboard_class()(RecordingExecutor())
-        self.assertEqual(keyboard._timing, TimingConfig())
+    def test_humanized_scroll_adds_up_to_the_distance(self):
+        deltas = []
+
+        async def wheel(dx, dy):
+            deltas.append((dx, dy))
+
+        async def run():
+            await human.scroll(wheel, 600, True, -1)
+
+        asyncio.run(run())
+        self.assertTrue(all(dx == 0 for dx, _ in deltas))
+        self.assertGreater(len(deltas), 10)
+        self.assertLess(abs(sum(dy for _, dy in deltas) + 600), 60)
 
 
 class KeysTest(unittest.TestCase):
@@ -205,7 +209,7 @@ class HeldInputTest(unittest.TestCase):
         self.assertEqual((page.sent[-1][1]["x"], page.sent[-1][1]["y"]), (10, 20))
 
     def test_human_mouse_marks_the_button_held_before_dispatch(self):
-        cls = inputs.human_mouse_class()
+        cls = human.Mouse
         seen = []
 
         class Handler:
@@ -214,15 +218,14 @@ class HeldInputTest(unittest.TestCase):
                 return {}
 
         mouse = cls(Handler())
-        from pydoll.protocol.input.types import MouseButton, MouseEventType
 
-        asyncio.run(mouse._dispatch_button(MouseEventType.MOUSE_PRESSED, MouseButton.LEFT))
-        self.assertEqual(seen, [MouseButton.LEFT])
-        asyncio.run(mouse._dispatch_button(MouseEventType.MOUSE_RELEASED, MouseButton.LEFT))
+        asyncio.run(mouse._dispatch_button("mousePressed", "left"))
+        self.assertEqual(seen, ["left"])
+        asyncio.run(mouse._dispatch_button("mouseReleased", "left"))
         self.assertIsNone(mouse.held)
 
     def test_humanized_click_moves_before_pressing_and_holds(self):
-        cls = inputs.human_mouse_class()
+        cls = human.Mouse
         events = []
 
         class Handler:
@@ -700,6 +703,64 @@ class RefsTest(unittest.TestCase):
         with self.assertRaisesRegex(BrowseError, "Unknown ref"):
             asyncio.run(state.resolve_ref("e9"))
 
+    def follow(self, old: Ref, nodes):
+        state = self.state_with({"F": {"loader": "L"}})
+        page = asyncio.run(state.page())
+        replacement = object()
+        page.loader = lambda frame: "L"
+
+        async def resolve_backend(backend, frame, label):
+            return replacement if backend == 9 else None
+
+        async def call(*args, **kwargs):
+            return True
+
+        async def collect(*args, **kwargs):
+            return nodes
+
+        page.resolve_backend = resolve_backend
+        page.call = call
+        state.refs = {old.id: old}
+        with mock.patch.object(snapshot, "collect", collect):
+            found = asyncio.run(state.resolve_ref(old.id))
+        return state, found[1], replacement
+
+    def dialog(self, title, *buttons):
+        return [snapshot.Node("dialog", title, children=[snapshot.Node("button", "Save", backend=backend, ref=ref, frame="F")
+                                                       for backend, ref in buttons])]
+
+    def saved(self, unique=True, title="Edit order #1"):
+        return Ref("e1", "1:1:/devtools/browser/x", "T", "F", "L", 1, 5, "button", "Save", unique, (("dialog", title),))
+
+    def test_a_redrawn_unique_element_is_followed_with_a_notice(self):
+        state, element, replacement = self.follow(self.saved(), self.dialog("Edit order #1", (9, "e2")))
+        self.assertIs(element, replacement)
+        self.assertEqual(state.extras["notice"], '→ @e1 was redrawn, so this used the same button "Save", now @e2')
+
+    def test_a_redrawn_element_is_only_named_when_it_had_twins_moved_or_has_twins(self):
+        cases = {
+            "had twins": (self.saved(unique=False), self.dialog("Edit order #1", (9, "e2")), "is now @e2"),
+            "another dialog": (self.saved(), self.dialog("Edit order #2", (9, "e2")), "is now @e2"),
+            "has twins": (self.saved(), self.dialog("Edit order #1", (9, "e2"), (10, "e3")), "no longer in the page. Run"),
+        }
+        for label, (old, nodes, message) in cases.items():
+            with self.subTest(label), self.assertRaisesRegex(StaleRef, message):
+                self.follow(old, nodes)
+
+    def test_refs_know_whether_their_role_and_name_are_unique_in_their_context(self):
+        state = self.state_with({"F": {"loader": "L"}})
+        page = asyncio.run(state.page())
+        page.loader = lambda frame: "L"
+        nodes = [snapshot.Node("RootWebArea", "Title", children=[*self.dialog("Edit", (9, "e2"), (10, "e3")),
+                                                                  snapshot.Node("button", "Close", backend=11, ref="e4", frame="F")])]
+        refs = {ref.id: ref for ref in snapshot.refs_of(state, page, nodes)}
+        self.assertEqual([refs[ref].unique for ref in ("e2", "e3", "e4")], [False, False, True])
+        self.assertEqual(refs["e2"].context, (("dialog", "Edit"),))
+        self.assertEqual(refs["e4"].context, ())
+        state.refs = refs
+        scoped = {ref.id: ref for ref in snapshot.refs_of(state, page, nodes[0].children[:1], whole_page=False)}
+        self.assertEqual((scoped["e2"].unique, scoped["e2"].context), (False, (("dialog", "Edit"),)))
+
     def test_restarted_browser_is_refused(self):
         class Endpoint:
             instance = "2:1:/devtools/browser/y"
@@ -716,11 +777,41 @@ class RefsTest(unittest.TestCase):
         with self.assertRaises(ConnectionLost):
             asyncio.run(state.connect())
 
+    def test_eval_quotes_unquoted_attribute_values_in_selector_strings(self):
+        from ardia_cli.browse.commands import quote_selector_literals
+
+        fixed, quoted = quote_selector_literals("document.querySelectorAll('a[href*=/jobs/view/]')")
+        self.assertEqual(fixed, "document.querySelectorAll('a[href*=\"/jobs/view/\"]')")
+        self.assertEqual(quoted, ['a[href*="/jobs/view/"]'])
+        self.assertEqual(quote_selector_literals('el.closest("[aria-label=Two words]")')[0], "el.closest(\"[aria-label='Two words']\")")
+        for untouched in ("document.querySelector('[data-x=plain]')", "document.querySelector('a[href*=\"/ok/\"]')", "find('a[href*=/x/]')",
+                          "document.querySelector('input[value=\\\"Save/Load\\\"]')"):
+            self.assertEqual(quote_selector_literals(untouched), (untouched, []))
+
+    def test_an_empty_untitled_page_says_it_was_likely_turned_away(self):
+        from ardia_cli.browse import readpages
+
+        empty = readpages.render([{"url": "https://example.test/a", "status": 200, "title": "", "text": ""}], {})
+        self.assertIn("the site sent an empty page", empty)
+        titled = readpages.render([{"url": "https://example.test/b", "status": 200, "title": "Blank", "text": ""}], {})
+        self.assertIn("(no text)", titled)
+        self.assertNotIn("empty page", titled)
+
+    def test_a_missing_name_lists_the_closest_names_first(self):
+        from ardia_cli.browse.commands import closest_names
+
+        links = ["Skip to Main Content", "Homepage", "Deals", "Pharmacy", "Gifts", "Registry", "Help", "Account", "Page 1", "Page 2", "Next Page"]
+        self.assertEqual(closest_names("Go to Page 2", links)[:2], ["Page 2", "Next Page"])
+        self.assertEqual(closest_names("Zebra", links), links[:8])
+
     def test_ref_parsing(self):
         from ardia_cli.browse.state import parse_ref
 
         self.assertEqual(parse_ref("@e12"), "e12")
         self.assertEqual(parse_ref("ref=e3"), "e3")
+        self.assertEqual(parse_ref("[ref=e80]"), "e80")
+        self.assertIsNone(parse_ref("[ref=e80"))
+        self.assertIsNone(parse_ref("[data-ref=e80]"))
         self.assertIsNone(parse_ref("#e3"))
         self.assertIsNone(parse_ref("@ex"))
 
@@ -745,7 +836,8 @@ class RenderTest(unittest.TestCase):
 
     def test_page_output_limits(self):
         result = commands.Result({}, "x" * 50, page_content=True)
-        _, out, _ = daemon.render({"max_output": "10"}, result=result)
+        with mock.patch.object(daemon, "spill", return_value=None):
+            _, out, _ = daemon.render({"max_output": "10"}, result=result)
         self.assertTrue(out.startswith("x" * 10 + "\n[output capped at 10 of 50 characters. Narrow it instead:"))
         self.assertIn("Only if you need every line: --max-output 50]", out)
         _, out, _ = daemon.render({"content_boundaries": True}, result=commands.Result({}, "hi", page_content=True))
@@ -756,6 +848,39 @@ class RenderTest(unittest.TestCase):
         self.assertIn("`network route` needs Fetch.enable", error.message)
         self.assertIn("isn't allowed for the ardia command", error.message)
         self.assertEqual(error.code, "policy_refused")
+
+    def test_a_conditional_refusal_keeps_the_engines_reason(self):
+        from ardia_cli.browse.errors import refusal_reason
+
+        said = "Command failed: ardia: Target.attachToTarget to that target isn't allowed for the ardia command (code -32000)"
+        self.assertEqual(refusal_reason(said, "Target.attachToTarget"), "to that target")
+        self.assertEqual(refusal_reason("ardia: Network.getCookies isn't allowed for the ardia command", "Network.getCookies"), "")
+        self.assertEqual(refusal_reason("ardia: Target.getTargetInfo on that target isn't allowed for the ardia command", "Target.getTargetInfo"),
+                         "on that target")
+        error = Gated("Target.attachToTarget", reason="to that target")
+        self.assertIn("which Ardia allows for the ardia command, but not to that target", error.message)
+        self.assertIn("(Target.attachToTarget to that target isn't allowed for the ardia command)", error.message)
+        self.assertNotIn("once the engine's token policy allows it", error.message)
+        self.assertEqual((error.code, error.data), ("policy_refused", {"method": "Target.attachToTarget", "reason": "to that target"}))
+        named = error.during("open", "Ardia has it open as tab-1 at chrome://settings/")
+        self.assertTrue(named.message.startswith("`open` needs Target.attachToTarget, which Ardia allows"))
+        self.assertTrue(named.message.endswith("(Ardia has it open as tab-1 at chrome://settings/)"))
+        self.assertEqual(named.reason, "to that target")
+        self.assertEqual(Gated("Fetch.enable").data, {"method": "Fetch.enable", "reason": ""})
+
+    def test_a_viewport_refused_on_a_tab_the_command_didnt_open_says_where_it_works(self):
+        from ardia_cli.browse.errors import refusal_reason
+
+        method = "Emulation.setDeviceMetricsOverride"
+        said = f"ardia: {method} on a tab the ardia command didn't open isn't allowed for the ardia command"
+        reason = refusal_reason(said, method)
+        self.assertEqual(reason, "on a tab the ardia command didn't open")
+        error = Gated(method, reason=reason).during("set viewport")
+        self.assertTrue(error.message.startswith("`set viewport` needs Emulation.setDeviceMetricsOverride, which Ardia allows"))
+        self.assertIn("only on a tab this command opened: `ardia browse open <url>`", error.message)
+        taken = Gated(method, reason="on a tab that isn't off-screen").during("set viewport")
+        self.assertIn("only on a tab it has taken off-screen", taken.message)
+        self.assertNotIn("once the engine's token policy allows it", error.message)
 
     def test_every_documented_command_is_registered_or_skipped(self):
         daemon.load_commands()

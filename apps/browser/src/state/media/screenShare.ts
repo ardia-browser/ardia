@@ -1,11 +1,13 @@
-import { changeCaptureSource, stopCapture, type DisplayMediaRequest } from "../../platform/media";
+import { changeCaptureSource, requestScreenRecording, stopCapture, type DisplayMediaRequest } from "../../platform/media";
+import { noteScreenRecordingAsked, noteSharePicked } from "../telemetry/usage";
 import { webviews } from "../../platform/webviews";
 import { useBrowser } from "../browser/store";
 import { engineProfile } from "../browser/model";
 import { usePages } from "../tabs/pageState";
 import { useMedia, type TabShare } from "./media";
 
-export { getDisplayMediaSources, type DisplayMediaAudio, type DisplayMediaSource } from "../../platform/media";
+export { getDisplayMediaSources, screenRecordingAllowed, type DisplayMediaAudio, type DisplayMediaSource } from "../../platform/media";
+export { noteScreenRecordingMissing } from "../telemetry/usage";
 
 export function useShareFor(tabId: string): [string, TabShare] | null {
   const shares = useMedia((m) => m.tabShares);
@@ -22,6 +24,11 @@ export function useShareFor(tabId: string): [string, TabShare] | null {
     if (owner && engineProfile(useBrowser.getState(), owner.profileId) === profile) return [capturer, share];
   }
   return null;
+}
+
+export function useTabShared(tabId: string): boolean {
+  const capturers = useMedia((m) => Object.keys(m.tabShares).filter((id) => m.tabShares[id]!.capturedTabId === tabId).join(","));
+  return usePages((p) => !!capturers && capturers.split(",").some((id) => !!p.pages[id]?.mediaAccess?.screen));
 }
 
 export function noteTabShare(capturerTabId: string, capturedTabId: string, origin: string) {
@@ -95,9 +102,17 @@ if (__DEV__)
     shareTab: (tabId: string, sharedTabId: string, audio = true) => shareTab(tabId, sharedTabId, audio),
   };
 
+export function askForScreenRecording() {
+  noteScreenRecordingAsked();
+  return requestScreenRecording();
+}
+
+const sourceKind = (sourceId: string) => (sourceId.startsWith("screen:") ? "screen" : sourceId.startsWith("window:") ? "window" : "tab");
+
 export function answerDisplayMedia(tabId: string, sourceId: string | null, audio = false) {
   const request = useMedia.getState().displayRequests[tabId];
   if (!request) return;
+  if (sourceId) noteSharePicked(sourceKind(sourceId));
   void webviews.get(tabId)?.resolveDisplayMedia(request.id, sourceId, audio);
   useMedia.setState((m) => {
     const displayRequests = { ...m.displayRequests };

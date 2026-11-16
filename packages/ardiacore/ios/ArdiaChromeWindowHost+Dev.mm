@@ -1,4 +1,5 @@
 #import "ArdiaChromeWindowInternal.h"
+#import "ArdiaInterfaceScale.h"
 #import "ArdiaLaunchConfig.h"
 #import "ArdiaWebView.h"
 #import "ArdiaRuntime.h"
@@ -23,8 +24,12 @@ NSString *Describe(NSView *view) {
 NSPoint WindowPoint(NSWindow *window, NSString *spec) {
   NSArray<NSString *> *n = [spec componentsSeparatedByString:@","];
   if (n.count < 2) return NSMakePoint(-1, -1);
-  CGFloat height = window.contentView.superview.bounds.size.height;
-  return NSMakePoint(n[0].doubleValue, height - n[1].doubleValue);
+  const CGFloat x = n[0].doubleValue, y = n[1].doubleValue;
+  NSView *root = [ArdiaInterfaceScale rootOfWindow:window] ?: [ArdiaChromeWindowHost rootViewOfWindow:window];
+  if (!root) return NSMakePoint(x, window.contentView.superview.bounds.size.height - y);
+  const NSRect bounds = root.bounds;
+  const NSPoint local = NSMakePoint(NSMinX(bounds) + x, root.isFlipped ? NSMinY(bounds) + y : NSMaxY(bounds) - y);
+  return [root convertPoint:local toView:nil];
 }
 
 NSEvent *Mouse(NSWindow *window, NSEventType type, NSPoint at) {
@@ -201,10 +206,11 @@ NSString *Click(NSWindow *window, NSString *argument) {
 
 NSString *MouseEvent(NSWindow *window, NSString *argument) {
   NSArray<NSString *> *parts = Fields(argument);
-  if (parts.count < 2) return @"mouse:<down|up|dragged|moved|otherdown|otherup>:<x>,<y>[,<clickCount>[,<flags>]]";
+  if (parts.count < 2) return @"mouse:<down|up|dragged|moved|rightdown|rightup|otherdown|otherup>:<x>,<y>[,<clickCount>[,<flags>[,<eventNumber>]]]";
   NSDictionary<NSString *, NSNumber *> *types = @{
     @"down" : @(NSEventTypeLeftMouseDown), @"up" : @(NSEventTypeLeftMouseUp),
     @"dragged" : @(NSEventTypeLeftMouseDragged), @"moved" : @(NSEventTypeMouseMoved),
+    @"rightdown" : @(NSEventTypeRightMouseDown), @"rightup" : @(NSEventTypeRightMouseUp),
     @"otherdown" : @(NSEventTypeOtherMouseDown), @"otherup" : @(NSEventTypeOtherMouseUp),
   };
   NSNumber *type = types[parts[0]];
@@ -213,13 +219,13 @@ NSString *MouseEvent(NSWindow *window, NSString *argument) {
   NSPoint p = WindowPoint(window, parts[1]);
   const NSEventType t = (NSEventType)type.unsignedIntegerValue;
   NSEvent *event = [NSEvent mouseEventWithType:t location:p modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime
-                                  windowNumber:window.windowNumber context:nil eventNumber:0
+                                  windowNumber:window.windowNumber context:nil eventNumber:n.count > 4 ? n[4].integerValue : 0
                                     clickCount:n.count > 2 ? n[2].integerValue : (t == NSEventTypeMouseMoved ? 0 : 1)
-                                      pressure:t == NSEventTypeLeftMouseUp || t == NSEventTypeMouseMoved ? 0 : 1];
+                                      pressure:t == NSEventTypeLeftMouseUp || t == NSEventTypeRightMouseUp || t == NSEventTypeMouseMoved ? 0 : 1];
   const bool other = t == NSEventTypeOtherMouseDown || t == NSEventTypeOtherMouseUp;
   if (other || n.count > 3) {
     CGEventRef cg = event.CGEvent;
-    if (n.count > 3) CGEventSetFlags(cg, (CGEventFlags)n[3].longLongValue);
+    if (n.count > 3 && n[3].longLongValue) CGEventSetFlags(cg, (CGEventFlags)n[3].longLongValue);
     if (other) CGEventSetIntegerValueField(cg, kCGMouseEventButtonNumber, kCGMouseButtonCenter);
     event = [NSEvent eventWithCGEvent:cg];
   }
@@ -229,19 +235,30 @@ NSString *MouseEvent(NSWindow *window, NSString *argument) {
 
 NSString *Drag(NSWindow *window, NSString *argument) {
   NSMutableArray<NSValue *> *points = [NSMutableArray array];
-  for (NSString *spec in [argument componentsSeparatedByString:@";"]) [points addObject:[NSValue valueWithPoint:WindowPoint(window, spec)]];
-  if (points.count < 2) return @"drag needs two points";
-  NSMutableArray<NSEvent *> *events = [NSMutableArray arrayWithObject:Mouse(window, NSEventTypeLeftMouseDown, points[0].pointValue)];
+  NSEventModifierFlags flags = 0;
+  for (NSString *spec in [argument componentsSeparatedByString:@";"]) {
+    if ([spec hasPrefix:@"flags="]) flags = (NSEventModifierFlags)[spec substringFromIndex:6].longLongValue;
+    else [points addObject:[NSValue valueWithPoint:WindowPoint(window, spec)]];
+  }
+  if (points.count < 2) return @"drag:[flags=<modifier flags>;]<x>,<y>;<x>,<y>[;…]";
+  NSEvent * (^held)(NSEventType, NSPoint) = ^NSEvent *(NSEventType type, NSPoint at) {
+    NSEvent *event = Mouse(window, type, at);
+    if (!flags) return event;
+    CGEventRef cg = event.CGEvent;
+    CGEventSetFlags(cg, (CGEventFlags)flags);
+    return [NSEvent eventWithCGEvent:cg];
+  };
+  NSMutableArray<NSEvent *> *events = [NSMutableArray arrayWithObject:held(NSEventTypeLeftMouseDown, points[0].pointValue)];
   for (NSUInteger i = 1; i < points.count; i++) {
     NSPoint a = points[i - 1].pointValue, b = points[i].pointValue;
     for (int k = 1; k <= 12; k++)
-      [events addObject:Mouse(window, NSEventTypeLeftMouseDragged, NSMakePoint(a.x + (b.x - a.x) * k / 12, a.y + (b.y - a.y) * k / 12))];
+      [events addObject:held(NSEventTypeLeftMouseDragged, NSMakePoint(a.x + (b.x - a.x) * k / 12, a.y + (b.y - a.y) * k / 12))];
   }
-  [events addObject:Mouse(window, NSEventTypeLeftMouseUp, points.lastObject.pointValue)];
+  [events addObject:held(NSEventTypeLeftMouseUp, points.lastObject.pointValue)];
   NSString *hit = Describe([window.contentView.superview hitTest:points[0].pointValue]);
   for (NSUInteger i = 0; i < events.count; i++)
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)((i ? 150 + i * 16 : 0) * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
-      [window sendEvent:events[i]];
+      [NSApp sendEvent:events[i]];
     });
   return [NSString stringWithFormat:@"%@ (%lu events)", hit, (unsigned long)events.count];
 }
@@ -312,10 +329,12 @@ NSString *WindowInfo(NSWindow *window, NSString *) {
   info[@"frameView"] = [NSString stringWithFormat:@"%@ %@", window.contentView.superview.className, NSStringFromRect(window.contentView.superview.frame)];
   info[@"root"] = NSStringFromRect([ArdiaChromeWindowHost rootViewOfWindow:window].frame);
   info[@"styleMask"] = @(window.styleMask);
+  info[@"minSize"] = NSStringFromSize(window.minSize);
   info[@"opaque"] = @(window.opaque);
   info[@"hasShadow"] = @(window.hasShadow);
   info[@"alpha"] = @(window.alphaValue);
   info[@"level"] = @(window.level);
+  info[@"collectionBehavior"] = @(window.collectionBehavior);
   info[@"background"] = window.backgroundColor.description ?: @"";
   NSButton *close = [window standardWindowButton:NSWindowCloseButton];
   info[@"closeButton"] = close ? NSStringFromRect([close convertRect:close.bounds toView:nil]) : @"";
@@ -371,12 +390,12 @@ NSString *TabViews(NSWindow *window, NSString *) {
   while (queue.count) {
     NSView *v = queue.lastObject;
     [queue removeLastObject];
-    if ([v isKindOfClass:ArdiaWebView.class]) {
+    if ([v isKindOfClass:ArdiaWebView.class] || [v isKindOfClass:NSClassFromString(@"ArdiaCore.WebKitTab")]) {
       if (v.hiddenOrHasHiddenAncestor) continue;
       NSMutableArray *subs = [NSMutableArray array];
       for (NSView *sub in v.subviews)
         [subs addObject:[NSString stringWithFormat:@"%@ %@%@", NSStringFromClass(sub.class), NSStringFromRect(sub.frame), sub.hidden ? @" hidden" : @""]];
-      [out addObject:@{@"frame" : NSStringFromRect(v.frame), @"subviews" : subs}];
+      [out addObject:@{@"class" : NSStringFromClass(v.class), @"frame" : NSStringFromRect(v.frame), @"bounds" : NSStringFromRect(v.bounds), @"subviews" : subs}];
       continue;
     }
     [queue addObjectsFromArray:v.subviews];
@@ -431,16 +450,12 @@ NSDictionary<NSString *, DevHandler> *DevHandlers() {
       ActOcclusion(w, [to isEqualToString:@"off"] ? nil : @([to isEqualToString:@"visible"]));
       return @((w.occlusionState & NSWindowOcclusionStateVisible) != 0).stringValue;
     },
+    @"fakeWindowServer" : ^NSString *(NSWindow *w, NSString *to) {
+      ActWindowServer(w, [to isEqualToString:@"shows"]);
+      return @"ok";
+    },
     @"fullScreen" : ^NSString *(NSWindow *w, NSString *) { return FullScreen(w, nil); },
     @"fakeFullScreen" : ^NSString *(NSWindow *w, NSString *a) { return FullScreen(w, a); },
-    @"fullScreenReveal" : ^NSString *(NSWindow *w, NSString *amount) {
-      if (amount.length) SetFullScreenRevealAmount(w, amount.doubleValue);
-      return JSONText(FullScreenRevealState(w), @"{}");
-    },
-    @"fullScreenLightsHover" : ^NSString *(NSWindow *w, NSString *inside) {
-      SetFullScreenLightsPointerInside(w, inside.boolValue);
-      return JSONText(FullScreenRevealState(w), @"{}");
-    },
     @"snapshotFrame" : ^NSString *(NSWindow *w, NSString *path) { return SnapshotFrameView(w, path); },
     @"children" : ^NSString *(NSWindow *w, NSString *) {
       NSMutableArray *children = [NSMutableArray array];
@@ -457,12 +472,22 @@ NSDictionary<NSString *, DevHandler> *DevHandlers() {
     @"mouse" : ^NSString *(NSWindow *w, NSString *a) { return MouseEvent(w, a); },
     @"pageMove" : ^NSString *(NSWindow *w, NSString *a) { return ardia_host::PageMoveAt(w, WindowPoint(w, a)); },
     @"focusState" : ^NSString *(NSWindow *, NSString *) { return ardia_host::FocusState(); },
+    @"hoverProbe" : ^NSString *(NSWindow *w, NSString *a) { return ardia_host::HoverProbeDev(w, a); },
     @"drag" : ^NSString *(NSWindow *w, NSString *a) { return Drag(w, a); },
     @"type" : ^NSString *(NSWindow *w, NSString *a) { return TypeText(w, a); },
     @"reserved" : ^NSString *(NSWindow *w, NSString *a) { return Reserved(w, a); },
     @"keys" : ^NSString *(NSWindow *w, NSString *a) { return Keys(w, a); },
     @"ax" : ^NSString *(NSWindow *w, NSString *a) { return AccessibilityTree(w, a); },
     @"winfo" : ^NSString *(NSWindow *w, NSString *a) { return WindowInfo(w, a); },
+    @"subroles" : ^NSString *(NSWindow *, NSString *) {
+      NSMutableArray *windows = [NSMutableArray array];
+      for (NSWindow *w in NSApp.orderedWindows) {
+        if (!w.visible || w.parentWindow) continue;
+        [windows addObject:@{@"number" : @(w.windowNumber), @"title" : w.title ?: @"", @"identifier" : w.identifier ?: @"",
+                             @"subrole" : w.accessibilitySubrole ?: @""}];
+      }
+      return JSONText(windows, @"[]");
+    },
     @"ns" : ^NSString *(NSWindow *w, NSString *to) {
       if ([to isEqualToString:@"out"]) [w orderOut:nil];
       else [w orderFront:nil];

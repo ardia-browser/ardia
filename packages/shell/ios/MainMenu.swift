@@ -197,12 +197,17 @@ enum MainMenu {
       .separator(),
       cmd(.toggleFullUrl),
       cmd(.toggleAddressBar),
+      cmd(.toggleMinimalism),
       cmd(.cast),
       cmd(.togglePageEngine),
+      cmd(.toggleReader),
       .separator(),
       cmd(.zoomReset),
       cmd(.zoomIn),
       cmd(.zoomOut),
+      .separator(),
+      cmd(.hideElement),
+      cmd(.showHiddenElements),
       .separator(),
       std("Enter Full Screen", #selector(NSWindow.toggleFullScreen(_:))),
       .separator(),
@@ -334,14 +339,13 @@ enum MainMenu {
 
   private static func helpItems() -> [NSMenuItem] {
     var items: [NSMenuItem] = [
-      CommandItem(.sendFeedback),
+      CommandItem(.reportProblem),
       CommandItem(.keyboardShortcuts),
       CommandItem(.toolTour),
       videoTourItem(),
       releaseNotesItem(),
       .separator(),
       CommandItem(.copyDiagnostics),
-      CommandItem(.recordPerformanceIssue),
     ]
     #if DEBUG
     items += [.separator(), CommandItem(.showOnboarding)]
@@ -545,5 +549,7 @@ enum MainMenu {
       history.addItem(groupsHeader)
       for entry in state.recentlyClosedGroups { history.addItem(CommandItem(entry.title, "restoreClosed", arg: entry.id)) }
     }
+    history.addItem(.separator())
+    history.addItem(CommandItem(.clearRecentlyClosed))
   }
 }

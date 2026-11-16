@@ -1,16 +1,30 @@
 # The `ardia` command
 
 `ardia` drives a running Ardia from the terminal. `ardia browse` is how an agent drives the browser: agent-browser's
-commands on top of [pydoll](https://pydoll.tech) 3.0. The other commands run Ardia's own commands, stream its events,
+commands on a small CDP client of its own (`ardia_cli/cdp.py` over the WebSocket client in `ardia_cli/wsclient.py`). The other commands run Ardia's own commands, stream its events,
 run hooks and userscripts, edit its config and read its browsing data. It's a separate download, not part of the app
-bundle. The app ships `install.sh`, and runs it when the user opts in during onboarding or in Settings ("Let the ardia
-command control Ardia").
+bundle. The app ships `install.sh` and runs it on its own: about 8 s after the first window of a launch, when no CLI
+is installed and `ardia-cli.json` says none ever was (no `version`, `binPath` or `autoInstalledAt`), it installs one
+(at most 3 tries across launches, `autoInstallTries`, saved before each try; no try when it can't be saved) and, once
+that works, turns on "Let the ardia command control Ardia" unless the user turned it off themselves (`cliControl` in
+`settingsMeta.chosen`, not `inferred`), checked again when the install ends. A launch that finds a started auto install
+with no `autoInstalledAt` (the app quit mid-install) finishes it. A CLI the user removed after it was installed stays
+removed. An installed CLI older than the app is upgraded on the same schedule, and each upgrade installs and
+refreshes the agent skill (`ardia skills install --auto`, `ardia skills refresh`). Settings › Advanced installs or
+reinstalls it by hand. Test instances install only with `cliHome` and `cliBinDir` set (the installer's `HOME` is then
+`<cliHome>/home`, so the skill copies land there), and on their own only with a `file://` `cliUrl`; a build without a pinned digest never installs on its own (`CliInstaller.canInstallUnattended`).
+Dashboard: `usage_counts.cli_auto_installs`, `cli_auto_install_failures`, `cli_auto_enables`, `cli_upgrades`,
+`cli_upgrade_failures`, `cli_settings_installs`, `cli_settings_install_failures`.
 
-While it's connected, a pill floats over the bottom centre of the page ("Claude Code is controlling Ardia · Stop"; Stop
-turns the setting off). It overlays the page and never resizes it. It shows at the first connection and stays 3 s after
+While it drives a page, a pill floats over the bottom centre of the page ("Claude Code is controlling Ardia · Stop", or
+"The ardia command is controlling Ardia" when it can't tell who runs it; Stop turns the setting off). It shows for a
+DevTools connection (`browse`, `scripts test`) and for `ardia run`, which presses Ardia's own commands; reading and
+organizing (`tabs`, `groups`, `apply`, `windows`, `commands`, `events`, `pinned`, `history`, `config`) never shows it. It overlays the page and never resizes it. It shows at the first connection and stays 3 s after
 the last one closes, so a burst of commands shows one steady pill; turning the setting off hides it at once. One per
 window: the focused pane of a split, the full screen page, or the Peek while one is open
-(`apps/browser/src/components/window/CliControlPill.tsx`, `useCliIndicator` in `state/app/cliControl.ts`).
+(`apps/browser/src/components/window/CliControlPill.tsx`, `useCliIndicator` in `state/app/cliControl.ts`). Settings › Advanced ›
+Command line › Show the control pill as an icon and Stop (`compactCliPill`) keeps only the caller's icon and Stop, the
+line moving to its tooltip and accessibility label; nothing hides it.
 
 The pill names who runs the command (`ardia_cli/caller.py`). The command walks its own process ancestry once (parent
 pids through libproc's `proc_pidinfo`, each one's executable through `proc_pidpath` and its first two arguments
@@ -26,12 +40,16 @@ the client, tells the app over a short socket connection (`hello`, then `caller`
 whenever a request comes from someone else. `scripts test` does the same as it connects. The name is display only:
 it never changes what a connection may do, and both ends strip control and invisible characters and keep 40
 characters (the app keeps `app` only when it's an absolute, outermost `.app` path). When several run at once the pill
-names the most recent one; a pill that hid and shows again without a new name says "ardia".
+names the most recent one; a pill that hid and shows again without a new name says "The ardia command".
 
-Code: `apps/cli` (`ardia_cli`, `install.sh`, `scripts/build.sh`). Dependencies are pinned with hashes in
-`apps/cli/requirements.lock` (regenerate with `uv pip compile requirements.in --python-version 3.13
---python-platform aarch64-apple-darwin --generate-hashes --no-annotate --no-header -o requirements.lock`, then copy
-the pins into `pyproject.toml`).
+Code: `apps/cli` (`ardia_cli`, `install.sh`, `scripts/build.sh`). It runs on macOS (Apple silicon) and Linux
+(x86_64). Dependencies are pinned with hashes in `apps/cli/requirements.lock` (regenerate with `uv pip compile
+requirements.in --python-version 3.13 --python-platform aarch64-apple-darwin --generate-hashes --no-annotate
+--no-header -o requirements.lock`, then copy the pins into `pyproject.toml`). uv writes the hash of every file a
+pinned version publishes, so the one lock covers both platforms: compiled with `--python-platform
+x86_64-manylinux_2_28` it comes out byte for byte the same, and it carries the cp313 manylinux x86_64 wheels of the
+native packages (aiohttp, pydantic-core, multidict, yarl, frozenlist, propcache, websockets). Check that again when
+you bump a pin.
 
 ## Commands
 
@@ -45,12 +63,11 @@ the pins into `pyproject.toml`).
   couldn't be read or ran out of time, 2 Ardia can't be reached.
 - `ardia notes [get|set|append|list|rm] [SITE] [TEXT|-]` keeps plain-text notes per site for the user's own agent
   (see Site notes). It hands its arguments to `ardia_cli/notes.py` (`main(argv)`), which runs them as
-  `ardia browse notes …`, with the shared options given before `notes` put first. When the module isn't there it
-  prints one line and exits 1; nothing else depends on it.
+  `ardia browse notes …`, with the shared options given before `notes` put first.
 - `ardia skills install --target general|codex|claude-code|cursor|opencode [--target …] [--project]` installs the
   agent skill (`ardia_cli/skill`: a `SKILL.md` of about 5K characters with the fast paths (read, batch, select,
-  script, notes), plus `references/troubleshooting.md`, `script.md`, `userscripts.md`, `config.md`, `automation.md`
-  and `daily-reports.md` read only when a task needs them) into `~/.agents/skills` (general, codex),
+  script, notes), plus `references/troubleshooting.md`, `script.md`, `flows.md`, `userscripts.md`, `config.md`,
+  `automation.md` and `daily-reports.md` read only when a task needs them) into `~/.agents/skills` (general, codex),
   `~/.claude/skills`, `~/.cursor/skills` or `~/.config/opencode/skills`; with `--project`, into `./.agents/skills`,
   `./.claude/skills`, `./.cursor/skills` or `./.opencode/skills`. It writes each file it ships in place (temp file,
   then rename, so a linked file is replaced, never written through) plus a `.ardia-skill` marker (vendor, version and
@@ -65,12 +82,20 @@ the pins into `pyproject.toml`).
   `skipped <folder>` for the rest, refuses a linked subfolder, and keeps only our folders in the list. `install.sh` runs it after
   each upgrade, so installed copies follow the CLI. Both also install cua-driver's skill next to ours (see Computer
   use); `--no-cua` skips it.
+- `ardia skills get [--full]` (and `ardia --skill [--full]`, the same command) prints the skill that ships inside
+  this CLI to stdout, byte for byte, so an agent reads the version that matches the command it is about to run:
+  `SKILL.md` alone, or with `--full` followed by every file under `references/`, each after a `--- references/<name> ---`
+  line. `ardia skills list` prints each shipped skill's name and description (the front matter), tab-separated.
+  Neither needs Ardia, writes a file or prints to stderr, and both exit 0 (141, quietly, when the reader closes the
+  pipe). `ardia --help` tells an agent to run `ardia --skill` unless an ardia skill is already in its context.
 - `ardia computer <cua-driver command> [args]`, `ardia computer setup [--no-grant]` and
   `ardia computer mcp-config [--target …]` operate native Mac apps through the pinned cua-driver (see Computer use).
 - `ardia scripts new|test|install|uninstall|list` writes, tests and installs userscripts (see Userscripts).
 - `ardia config path|init|get|set|unset|list|edit|check` reads, writes and checks `config.json` (see
   `docs/config.md`, The ardia command). Never needs Ardia running.
-- `ardia theme new|use|list|check` makes, picks and checks colour themes (see `docs/config.md`).
+- `ardia theme new|use|list|check|get|set|unset` makes, picks, edits and checks themes: colours, type, metrics,
+  layout and icons. `ardia theme set KEY VALUE` changes one key of the active theme (`dark.accent`,
+  `metrics.radius.row`, `icons.chevron.down`) and a running Ardia restyles at once (see `docs/config.md`, Themes).
 - `ardia run COMMAND [ARG]` runs one of Ardia's commands over `<data dir>/ArdiaControl.sock` (see
   `docs/automation.md`).
 - `ardia commands` lists the commands `run` takes (see `docs/automation.md`).
@@ -78,23 +103,60 @@ the pins into `pyproject.toml`).
   `targetId`, the DevTools page target `ardia browse` attaches to (null when the tab's page isn't loaded), and
   `pageGeneration`, bumped whenever that target changes (a slept tab reloading). The app asks each live tab through
   ArdiaCore's `devToolsCall` (`Target.getTargetInfo`, engine call `engine.cliTabTargets`); an older build leaves both
-  out.
+  out. A tab a page opened whose first page is still loading isn't asked and has a null `targetId` until that page
+  commits: the DevTools attach counts as a touch of its blank initial document, after which Chrome and the tab show
+  about:blank instead of the pending address (`awaitsFirstDocument`; `packages/ardiacore/scripts/pending-address-check.mjs
+  <Debug app>` checks it).
+- `ardia tabs --usage` lists each tab with its renderer's process id, CPU and memory, hottest first, and
+  `ardia tabs --pid N` names the tabs in a process, so a pid from `top -o power` leads to its tab (`workspace`'s
+  `usage`, `docs/automation.md` › Tabs and groups). Use counts come from the option names on the command event;
+  `error_code` `no_pid` means an engine that reports no process ids.
+- `ardia tabs`, `ardia groups` and `ardia apply` list and organize tabs and groups by id: open URLs into a window,
+  profile, group or spot, move tabs between groups, windows and profiles without reloading, pin, mute, sleep, wake,
+  close, rename and set icons; create, nest, reorder, pin, collapse, recolour, ungroup, close and delete groups; and
+  apply a JSON batch of those in one call (`ardia_cli/workspace_cli.py`; protocol, operations and rules in
+  `docs/automation.md` › Tabs and groups). Groups can be named by id or by name (`--group Work`, `ardia groups update
+  Work …`); output names them next to their ids (`created group 💼 Work (g-…) with 4 tabs`, `moved Inbox (tab-…)`).
+  `--json` prints the app's reply. Exit 0 done, 1 refused, a bad request
+  or a batch stopped at a failing operation, 2 Ardia can't be reached or the connection dropped after sending. Human
+  output shows control characters in page text, titles and names as `\u00NN` (`ardia_cli/printable.py`), so a page
+  title can't drive the terminal (an OSC 52 clipboard write, say): see Terminal output.
 - `ardia events [EVENT…]` streams browser events (see `docs/automation.md`).
-- `ardia on EVENT[,EVENT…] -- PROGRAM` runs a program for each event (see `docs/automation.md`).
-- `ardia hooks run|install|uninstall|list` runs the hooks in `hooks.json`, at login through a LaunchAgent (see
-  `docs/automation.md`).
-- `ardia feedback [--command CMD] [--data-dir DIR] TEXT|-` sends the developer a note about what got in the way
-  (see Feedback and the star nudge). Exit 0 whether it was sent or kept on the Mac, 2 with no text.
+- `ardia on EVENT[,EVENT…] -- PROGRAM` runs a program for each event (see `docs/automation.md`). PROGRAM's output goes
+  to the terminal untouched; event data such as `ARDIA_TITLE` and `ARDIA_URL` comes from pages, so a program that
+  prints it should escape control characters, as the CLI's own output does.
+- `ardia hooks run|install|uninstall|list` runs the hooks in `hooks.json`, at login through a LaunchAgent on macOS
+  or a systemd user service on Linux (see Linux below and `docs/automation.md`).
+- `ardia feedback --title TITLE [--kind bug|slow|idea|other] [--attach FILE]… [--command CMD] [--data-dir DIR] TEXT|-`
+  reports a problem or an idea to the developer (see Feedback and the star nudge). Exit 0 sent (or the same report
+  already went out today), 1 not sent and kept on the Mac (the line says why), 2 a missing or bad title, description
+  or attachment.
 - `ardia star [--data-dir DIR]` stars github.com/mantrakp04/ardia for the user, run only after they said yes (see
   Feedback and the star nudge). Exit 0 starred or the page opened, 1 neither worked.
 - `ardia --version`, `ardia --help`, `ardia browse --help`, `ardia scripts <command> --help`,
   `ardia config <command> --help`, `ardia theme <command> --help`, `ardia hooks <command> --help` and `--help` on
-  each of `pinned`, `history`, `run`, `commands`, `windows`, `events` and `on`.
+  each of `pinned`, `history`, `run`, `commands`, `windows`, `events`, `on`, `apply`, and `tabs` and `groups` and
+  their commands. `ardia browse <command> --help` (or `ardia browse help <command>`) prints that command's entry; a
+  command without one prints its line from the overview and `flags: none`, never the whole overview.
 
 `ardia exec` is gone: `ardia browse` is the one way to drive the browser. `ardia exec …` (and any other unknown
 command) prints `ardia: unknown command '…'` with where to go instead, and exits 2. What `exec` offered maps to
 `ardia browse` for pages, `ardia pinned` and `ardia history` for `pinned()` and `history()`, and `ardia run`,
 `ardia windows` and `ardia events` for `run()`, `windows()` and `events()`.
+
+### Terminal output
+
+Page text, titles, notes, names and other text from pages or files reach the terminal only with their control
+characters (C0, C1 and DEL) shown as `\u00NN`, so a page can't write escape sequences (an OSC 52 clipboard write, a
+screen clear) through the CLI. Two places do it, so new commands get it without asking: `ardia browse` and
+`ardia notes` text output in `render` (`browse/daemon.py`), keeping line breaks and tabs, so snapshots, page text and
+notes read as before; and `cli.main` wraps stdout and stderr for every other command (`printable.inert_output`), with
+single-line fields (titles in `tabs`, `windows`, `events`, `pinned`, `history`) escaping line breaks too. Other text
+(accents, CJK, Arabic, emoji) is untouched. JSON output (`--json`, and `AGENT_BROWSER_JSON` for browse) keeps
+C0 controls as `json.dumps` writes them and escapes only U+007F–U+009F (raw there because of `ensure_ascii=False`) as
+`\u00NN` (`printable.json_safe`, in browse's JSON render and in the JSON-mode stdout writer), so it decodes to the
+same values and non-ASCII text stays readable; stderr is always guarded. The `\u00NN` form keeps text that is itself
+JSON (a script's result) valid JSON.
 
 ### Shared options
 
@@ -128,8 +190,8 @@ globals and runs the commands that need no browser, `daemon.py` owns the connect
 `readurl.py`; site notes in `ardia_cli/notes.py`).
 
 An agent's loop is short: `snapshot -i` once, then actions, each of which prints what it changed, so it rarely needs
-another snapshot; repetitive work goes in one `batch` on stdin. Input is instant unless `--humanize`, a session with
-no tab uses the user's active one, and text output stops at about 6,000 characters.
+another snapshot; repetitive work goes in one `batch` on stdin. Input is instant unless `--humanize`, a session works
+in background tabs of its own until it picks the user's with `tab active`, and text output stops at about 12,000 characters.
 
 ### Process model
 
@@ -157,7 +219,10 @@ mouse position, so a humanized path starts where the last one ended. `ardia brow
   interleaves with another, and cancels a command whose client went away (Ctrl-C). Every command has a limit (120 s;
   `batch`, `read` and `record` 600 s; `script` its `--timeout` plus 30 s; `wait` its own timeout plus 30 s), after which
   it's stopped with `command_timeout` (outcome unknown for one that changes something) and the session is free again;
-  a command queued behind another gives up after 30 s with `session_busy`, naming what's running.
+  a command queued behind another gives up after 30 s with `session_busy`, naming what's running and pointing at
+  `--session <name>` for independent work. A `read` of named URLs (or URLs on stdin) doesn't queue: it uses its own
+  background tabs, so when the session is busy it runs at once in a sibling session `<session>-side`. Coding agents
+  ran a long `script` and a `read` in parallel and lost the read after 30 s.
 - **Idle disconnect.** After 30 s with no admitted or queued command, no held key or button and no capture lease
   (console or errors, network log, HAR, route, trace, record, stream, init scripts, emulation; an action's own network
   watch, see Changes after actions, ends with the action and never counts), the daemon drops the
@@ -166,8 +231,8 @@ mouse position, so a humanized path starts where the last one ended. `ardia brow
   (`pid:generation:browser path`, or the browser WebSocket path) changed. Admission and the idle check run on one
   event loop under the command lock, so a disconnect never races a command.
 - **Connection loss is terminal.** When Ardia closes the connection itself (Stop, control turned off, Ardia quit),
-  the session ends: queued commands fail, nothing reconnects and nothing is replayed. pydoll's `ConnectionHandler`
-  is subclassed so it never reconnects on its own, with a 256 MB `max_size`. A link found dead when a command
+  the session ends: queued commands fail, nothing reconnects and nothing is replayed. `cdp.Connection` opens once
+  and never reconnects, with a 256 MB `max_size`; a message over it closes the connection (1009). A link found dead when a command
   starts is treated the same way, before any endpoint is resolved again; only the daemon's own idle disconnect
   reconnects. A command that may already have been dispatched is never retried; it reports that its outcome is
   unknown (exit 2 on connection loss, 1 otherwise). That covers a timeout on any method that changes something
@@ -177,6 +242,33 @@ mouse position, so a humanized path starts where the last one ended. `ardia brow
   run and is reported as `not_run`. Isolated-world reads are retried once when the document changes under them;
   writes (`history.go`, `storage set`, `select`, `pushstate`, scripted scrolls) fail with `document_changed` and are
   never replayed on the new document.
+- **A detached tab.** Ardia can detach a tab from the connection while a command uses it: the tab closed, crashed,
+  went to sleep (Memory Saver, `ardia tabs sleep`) or moved to a window Ardia keeps for itself. The page then has no
+  CDP session, and a command sent without one goes to the browser target, which answered `'Page.getFrameTree' wasn't
+  found` (a multi-page `read` printed that for each page whose reading tab went away). `Page.send` now refuses to send
+  without a session (`code: "tab_detached"`), `Page.detach` fails the calls still waiting for an answer at once (a
+  mutating one as an unknown outcome) instead of leaving them to their timeout (a `Page.navigate` waited its 30 s). A
+  multi-page `read` reads that page again in a new tab, once (`READER_TRIES`; telemetry `read_tabs_reopened`); a second
+  detach fails that page only. When the tab is still open, `open`, the load wait and an action's change report attach
+  to it again (`State.reattach`) and put back what the session set on it: init scripts, the `set` overrides (viewport,
+  device, geolocation, media, offline, headers) and request interception for routes and credentials. What can't be put
+  back is dropped from the session's bookkeeping and the command fails with `code: "setup_lost"`, naming it. The CLI
+  never detaches a tab itself: a `Network.disable` the page doesn't confirm in 2 s (Chromium waits on the page's main
+  thread and on a pending navigation) leaves the session as it is, and a change report counts only requests that began
+  after its own `Network.enable` returned, so a late event from an earlier capture isn't reported as this action's
+  write. `Inspector.detached` ("Render process gone.") is only an event, sent when the tab's renderer exits normally:
+  the session stays attached, and Chromium sends its calls on to the next renderer, so the CLI keeps it.
+- **A crashed tab.** A renderer that dies leaves the CDP session attached but answers nothing, so `Page.enable` on
+  attach waited its 30 s and every command after it too, `reload` included. `Inspector.targetCrashed` now marks the
+  page crashed instead of detaching it, and attach asks `Inspector.enable` first (on the token policy's list; Chrome
+  answers it from the browser and reports a dead renderer at once), so a session that attaches later knows too. A
+  crashed page refuses every method but `Page.reload` and `Page.navigate` at once (`code: "tab_crashed"`, which says
+  to reload or close it), and fails the calls still waiting. `reload` on it sends `Page.reload`, enables the page
+  again and waits for `document.readyState` to be `complete` (about a second); `open <url>` on it navigates first the
+  same way; `close`, `tab close`, `--show` and `set viewport reset` need no answer from the page. A main-frame
+  navigation or `Inspector.targetReloadedAfterCrash` (someone else reloaded it) clears the mark. A session that
+  attached to an already crashed tab skipped `Page.enable` (it would never answer), so the page is enabled before
+  the next command once the mark is gone (`needs_enable`).
 - `close` takes the command lock, marks the session closing, and only then closes its tabs; requests already queued
   or arriving later get `session_closing`. On any stop the daemon lets running handlers settle (up to 5 s, then
   cancels them) before it touches the browser. Every answer is sanitized (registered tokens and any `token=` query
@@ -209,32 +301,41 @@ mouse position, so a humanized path starts where the last one ended. `ardia brow
 Refs keep agent-browser's `@eN` form with stable numbers: a node (same browser instance, target, frame, document
 and backend node id) keeps its number across snapshots and `find`, so repeat snapshots of an unchanged page give
 identical refs. A node seen for the first time takes the next unused number, and a number never moves to another
-node, so a delayed `click @e1` can't land on a different element; once its node or document is gone it fails as
-stale. Numbers keep rising across documents (a new page's nodes are new nodes), and refs of documents a tab has left
-are forgotten. Each ref keeps the browser instance, target id, frame id,
+node, so a delayed `click @e1` can't land on a different element, short of the strict redraw follow below; once its
+node or document is gone it fails as stale. Numbers keep rising across documents (a new page's nodes are new
+nodes), and refs of documents a tab has left are forgotten. Each ref keeps the browser instance, target id, frame id,
 the frame's loader id, the snapshot generation and the backend DOM node id (with role and name for display). A ref
 resolves only within that lifetime: the instance must match, the frame must still have the same loader
 (`Page.getFrameTree`), and `DOM.resolveNode` must find the node, connected, in the isolated world. Anything else is
-`Stale ref @eN: <why>. Run snapshot again` (`code: "stale_ref"`); there's no fallback by role or name. Refs survive
-the idle disconnect (backend node ids outlive CDP sessions). `find` gives its element the next ref. A stale ref whose
-node the page redrew (same role and name, one match) names the new ref in its error.
+`Stale ref @eN: <why>. Run snapshot again` (`code: "stale_ref"`). Refs survive the idle disconnect (backend node ids
+outlive CDP sessions). `find` gives its element the next ref. When a ref's node is gone but its document isn't, a fresh
+collection looks for the same role and name. The ref follows that node, with a `→ @eN was redrawn…` notice on stderr
+and `followed_redrawn_ref` in telemetry, only when all of this holds: the old ref was the only node with that role
+and name in the last whole-page collection that saw it (a scoped `snapshot -s` keeps what the ref had); the new node
+is the only one now; both sit in the same frame; and both have the same chain of named ancestors (`walk_in_context`
+in `snapshot.py`: dialog, row, form, region names, the page title left out). So a row's "Delete" that had siblings,
+or a dialog reopened for another item, never resolves to the wrong element. Otherwise the error names the new ref.
 
 Selectors are CSS, `@eN`, `xpath=…` (or `//…`), `text=Save` (substring, case-insensitive; `text="Save"` exact),
-`role=button[name="Save"]`, and `:has-text("…")` anywhere in a CSS selector (`[role=row]:has-text("FAS-1") td`).
+`role=button[name="Save"]`, and `:has-text("…")` (`:text("…")` too) or `:text-is("…")` (whole text, exact) anywhere
+in a CSS selector (`[role=row]:has-text("FAS-1") td`). `A >> B` finds B inside each A, and `>> nth=N` keeps the Nth
+match from 0 (`-1` the last): `main >> text=Save`, `[role=option] >> nth=3`.
 `[role=main]` also matches `<main>`, and so on for the other implicit roles (`nav`, `dialog`, `tr`, `a[href]`, `h1`–`h6`,
-`select`, text inputs, …); a bare role word such as `grid` that matches no element is tried as that role. A selector
-that matches several elements takes the first visible one. `find` waits up to 1.5 s for its element to appear.
+`select`, text inputs, `input[type=search]` as `searchbox`, `option`, `progress`, …); a bare role word such as `grid`
+that matches no element is tried as that role. A selector that matches several elements takes the first visible one.
+`find` waits up to 1.5 s for its element to appear. `find label`, `text`, `placeholder`, `alt` and `title` take an exact
+match first (case and spacing aside, a trailing `*` or `:` too), then a whole-word one, then any substring.
 
 ### Input
 
 Input is instant by default: clicks dispatch straight at the target point, `fill` focuses the field with `DOM.focus`,
-selects all, presses Backspace and types each character with no delay (about 0.1 s for a field), and scrolls are
-single wheel events. `--humanize` (or `AGENT_BROWSER_HUMANIZE=1` for the session) turns on pydoll's own humanized
-classes: `Mouse` (`click`, `dblclick`, `hover`, `drag`, `mouse move`; Bézier paths with Fitts timing, overshoot and
+selects all, presses Backspace and puts the text in (one `Input.insertText` for a plain field, see below), and scrolls
+are single wheel events. `--humanize` (or `AGENT_BROWSER_HUMANIZE=1` for the session) turns on the humanized
+classes in `browse/human.py`, ported from pydoll 3.0 (MIT): `Mouse` (`click`, `dblclick`, `hover`, `drag`, `mouse move`; Bézier paths with Fitts timing, overshoot and
 tremor, press and hold timing), `Scroll` (`scroll`, `scrollintoview`, and scrolling a target into view before a
 click), and `Keyboard` (`type`, `fill` (click in, select all, Backspace, then type), `keyboard type`, `press`), with
-pydoll's default timing. Typos are off: `SteadyKeyboard` overrides `Keyboard._should_make_typo` to return False, and
-`tests/test_browse.py` fails if a pydoll update renames it or stops routing humanized typing through it.
+pydoll's default timing. Typos are left out: the port has no typo code, and `tests/test_browse.py` checks humanized
+typing types exactly the text.
 `keyboard inserttext` stays an instant `Input.insertText`. `--no-humanize` and `AGENT_BROWSER_NO_HUMANIZE=1` are
 still accepted; they force it off, so `AGENT_BROWSER_HUMANIZE=1 AGENT_BROWSER_NO_HUMANIZE=1` is off and a
 `--humanize` flag beats both.
@@ -243,11 +344,39 @@ input on first focus): if the target is detached after the focusing click or `DO
 editable field in the same frame and document that matches it (same tag and type, and a shared id, name, placeholder,
 aria-label or title), they type there and report `retargeted: true` (the text output says so too). Anything else
 fails with `element_replaced` and types nothing. `auth login` never follows a replacement. Click points get a small
-random offset inside the box; a click whose point is covered fails with
+random offset inside the box. A selector (not a ref) that matches nothing yet is polled every 0.15 s for up to 3 s
+before `not_found` ("waited 3 s for it to appear") on every command that acts on or reads one element (`is` checks
+presence, so it doesn't wait): agents on hydrating pages, and scripts written Playwright-style, failed on elements
+that showed up a moment later. A click whose point is covered first tries two fixes, each once: when the cover is a
+cookie or consent layer (the cover's nearest fixed, sticky, dialog or CMP-vendor ancestor, or a CMP layer behind a fixed
+backdrop over half the viewport, whose text names cookies or consent and is under 3,000 characters, or 20,000 for a layer named after a consent
+platform such as OneTrust, consentmanager, Cookiebot, iubenda, Termly, Klaro, Complianz or CookieYes, whose banners and
+preference centers run long), it clicks that
+layer's reject button ("Reject all", "Necessary only"…), else accept ("Accept all", "I agree", "OK"…), else
+close, never a bare "Continue" or "Decline" on some other dialog, says so in the output
+(`A consent banner was in the way: … "Reject all" button was clicked (reject)`) and retries; otherwise it scrolls
+the element to the middle of the viewport (a sticky header over it) and retries. A left click on an element that still sits outside the page after that
+(a carousel slide translated to x = -2700) gets a DOM `click()` instead, and the output says so, but only when it is
+visible to CSS, at least 4×4, not clipped (sr-only), and inside a container that clips overflow; a honeypot at
+left:-9999px still fails (`dom_click_fallback`): one BU Bench agent hit `outside_viewport` 20 times on carousel cards.
+While a modal dialog is open, that DOM click only goes to an element inside the open dialog on top; anything else
+fails with `outside_viewport`, naming the dialog and saying to close it first (`dom_click_behind_modal`). A dialog
+still fading out is given up to 0.5 s to go, so `click <close>` or `press Escape` straight before the click works
+(`dom_click_waited_for_modal` when that wait ends in the click). A dialog counts as open when a click at it would
+land in it: the page is hit-tested at points on the dialog and on up to 200 of its elements (40 hit tests at most),
+so one closed by clipping, collapsing, sliding off screen, `inert` or `pointer-events: none` doesn't count, nor does
+one faded to `opacity: 0` or `filter: opacity(0)`, and one whose only visible part comes after its first 200
+elements isn't seen. An open dialog hit at a point inside
+another one's box is above it. Of open dialogs that don't overlap, the one holding focus takes the click, or any of
+them when none does, and the error names the focused one or the last in the document. Only a
+`<dialog>` opened with `showModal()` and an element marked `aria-modal="true"` are recognised. These aren't, so the
+click goes through them as before: `role="dialog"` or `role="alertdialog"` without `aria-modal` (Radix, MUI 5, React
+Aria Components), a modal in a parent frame, a modal in a child iframe over a target in the parent, and a modal
+element inside a shadow root (a shadow host can itself be the modal). A menu portaled out of the dialog counts as outside it. If the element is still covered it fails with
 `covered by <tag#id.class>`, and one outside the laid-out viewport with `outside_viewport` (the point and the viewport
 size). A tab with no size yet (0×0, seen on a loaded hidden test instance) is waited for up to 2 s, then given a
 1280×800 device metrics override for that command, cleared afterwards and never over the session's own `set viewport`;
-where Emulation is gated (the token path) it fails with `no_viewport`.
+where the policy refuses it (the token path: the tab isn't off-screen) it fails with `no_viewport`.
 
 `fill` on a `date`, `time`, `datetime-local`, `month`, `week`, `color` or `range` input doesn't type (typing
 `2026-11-09` into the segmented date field stored `0009-02-06`, and a time field stayed empty). As Playwright's
@@ -258,9 +387,34 @@ or a space for `datetime-local`, `YYYY-MM`, `YYYY-Www`, `#rrggbb` or `#rgb`, and
 clears the field. A value in another format fails before anything is touched (`code: "bad_value"`, naming the
 format), and so does one the input refuses (it's put back the way it was). The answer carries what the field holds
 (`data.value`; the text says so when it differs from what was given, such as `#3b82f6` for `#3B82F6` or a range
-snapped to its step). It needs no visible tab and sends no key events. Text inputs still type; a textarea or
-contenteditable field gets the whole text in one `Input.insertText` (per-key typing took 1.8 s for 400 characters and
-dropped newlines), unless `--humanize`.
+snapped to its step). It needs no visible tab and sends no key events. A textarea, a contenteditable field and a
+`text`, `search`, `email`, `url`, `tel` or `number` input get the whole text in one `Input.insertText` (confirmed by
+its `beforeinput`/`input`; per-key typing took 1.8 s for 400 characters in a textarea and dropped newlines, and on the
+bench 1.3 to 1.5 s per 9-field form). A combobox, typeahead or datalist input, a password field, `auth login` (its
+guard) and `--humanize` still type per character, since suggestion lists and some masks listen for keys. e3915e9be,
+which moved textareas to one insert, kept inputs typing without giving a reason; frameworks (React, Vue) handle the
+insert's `input` event as they do a paste. `fill` on a `<select>` picks the option whose label or value is the text,
+else a whole line of one, else the only one containing it, as `select` does for suggestions (no match or two fail
+and list the options); the answer names the option's label.
+
+`fill` on something that isn't a field but is, or sits inside, a grid cell (`[role=gridcell]`, `[role=cell]` or `td`)
+edits the cell: a field already in the cell is filled in place, and so is an editor that's already open over it (a
+grid that opens one on "Add row"); otherwise it double-clicks the cell, waits up to 1 s for an editor to take focus
+(inside the cell, or any field focused by the double-click, since grids often float the editor above the rows), and
+presses Enter and waits again if the double-click opened nothing. It sets the editor the way the editor needs (picks
+on a `<select>`, takes the matching `<datalist>` entry or the text as given, picks from a combobox's suggestions,
+else fills), presses Enter to commit and waits up to 0.5 s for the editor to close. The answer reads the cell again
+(by the cell, its id, or its row and column indexes after a redraw) and prints
+`~ gridcell "Reorder level, FAS-53565 Reno": 250 (was 150)`, named by the editor's label. When the editor stays open
+(the grid rejected the value) it presses Escape and fails with `rejected` and the grid's message (the editor's
+`aria-errormessage` or `aria-describedby` text, or its validation message). So a whole grid edit is one batch of
+`fill <cell> <value>` lines.
+
+`click`, `fill`, `select` (both kinds), `check` and `uncheck` wait up to 1.5 s for a disabled target (`:disabled`, a
+disabled ancestor button or fieldset, or `aria-disabled="true"`) to become enabled, so a dependent field (To after
+From, City after Country) can follow the one that enables it in the same batch. One still disabled after that fails
+with `disabled` and says to do what enables it first; a `click` on an element that's only `aria-disabled` goes ahead
+after the wait, since the page gets that click.
 
 `select` on a combobox picks from its suggestions per value: a typeahead or chip input is filled with the value, a
 button that opens a listbox is clicked, an input with a `<datalist>` takes the matching entry. Options come only from
@@ -280,10 +434,17 @@ Every input command confirms the page got it. Capture listeners in the isolated 
 waits up to 1.5 s for the counts it needs (a click's `mousedown` and `mouseup`, one `keydown` and `keyup` per typed
 character, a `wheel` per scroll, a `beforeinput` or `input` for `keyboard inserttext`). If the listeners can't be set
 up the command fails before sending anything (`input_unconfirmable`). If none of the events arrive it fails with
-`input_not_delivered`; if only some do (a `mousedown` without its `mouseup`), or confirmation fails after sending, it
+`input_not_delivered`, or `target_replaced` when the target had left the page by then (the page redrew it, as a list
+does after a search); if only some do (a `mousedown` without its `mouseup`), or confirmation fails after sending, it
 reports an unknown outcome, since part of the gesture may have landed. A navigation or a closed frame counts as
 delivered, and so do keys sent while focus is in an iframe and a raw `mouse` event over one, since those land in
-another frame. The listeners add no DOM and nothing the page's world can enumerate.
+another frame. A raw `mouse` event asks Chrome which frame is under the point (`DOM.getNodeForLocation`), so a frame
+inside a shadow root, closed ones included, counts too, as do `embed` and `object` (a PDF): a bot check's "Press &
+Hold" button lives in such a frame, and `elementFromPoint` only sees its shadow host. Keys whose `keydown` never reaches
+the target's frame count as delivered when another frame, deeper in the page, holds focus (`document.hasFocus()` with no
+frame focused inside it), as after a press into that button. Chrome delivers this input to a background tab as to the one
+on screen; a failure there is a frame this check missed, not a hidden tab. The listeners add no DOM and nothing the
+page's world can enumerate.
 
 Held keys and buttons are tracked before each dispatch, and a gesture that's interrupted releases them in a
 bounded (2 s), shielded `finally`; `keydown` and `mouse down` stay held across commands on purpose (and keep the
@@ -294,7 +455,15 @@ through drag interception, the way Playwright does it, since a synthetic mouse d
 session. It turns on `Input.setInterceptDrags` for the tab's CDP session before sending anything, presses on the
 source and moves toward the target; when the page starts a drag, Ardia hands it over as `Input.dragIntercepted`
 (the `dataTransfer` items), and from then on each point of the path is an `Input.dispatchDragEvent`: `dragEnter`,
-`dragOver` along the rest of the path, then `drop` at the target, and the button is released. With `--humanize` the
+`dragOver` along the rest of the path, then `drop` at the target, and the button is released. The drop point (for
+both kinds of drag) is the target's far half: 75% of its height when the target is below the source and 25% when
+it's above, or the same along its width when the two sit side by side, so in a sortable list (most of them read the
+target's middle as the line between "before" and "after") the source takes the target's place. `--before` and
+`--after` pick the side. Before the drag it looks for the list: the source's ancestor whose parent also holds the
+target, when both are the same kind of element and it's a list row (`li`, `tr`, a `listitem`, `row`, `option` or
+`treeitem`), the draggable itself or inside `aria-roledescription="sortable"`, and its text is unique among its
+siblings. After the change report it finds that text again and the answer says `moved to 5 of 5 (was 4)` or `the
+order didn't change: still 2 of 3` (`--json`: `position`), so the agent needn't read the list again. With `--humanize` the
 path is the same curved one a mouse drag takes; without it, it's one move. If the page started a drag (a trusted
 `dragstart` that wasn't cancelled) but the handover hasn't come by the release, it waits up to 1.5 s for it. On the way
 out, always, one shielded cleanup that the command waits for (also when it's cancelled), so nothing it sends can land
@@ -302,7 +471,7 @@ in the next command: a drag that was handed over but not confirmed dropped (a dr
 included) gets a `dragCancel`; a held button is released, while interception is still on, even when the cancel
 fails; and only then is interception turned off. Each of its CDP calls is bounded (2 s, plus up to 1.5 s for a
 late handover), instead of one deadline that could cut a release short and leave it running. Interception
-belongs to the CDP session, so it also ends when the session disconnects. If the token policy refuses
+belongs to the CDP session, so it also ends when the session disconnects, and a drag the session still holds then (the daemon killed, Stop pressed mid-drag) is ended by the engine, so the page doesn't stay deaf to clicks and keys (`chromium-drag-always-ends.patch`). If the token policy refuses
 `Input.setInterceptDrags` (an Ardia older than this engine), the command fails before any input with the gated message (`policy_refused`). Ardia hands a drag to a session only when the drag started from that session's own press (`docs/engine-build.md`, the control-token patch); sessions still share control of the tab, so one session's drag timing and payload aren't isolated from another session's. It reports
 what happened: `✓ Done (HTML5 drag and drop)`, `the target didn't accept the drop` (the page cancelled no `dragover`, so
 no `drop` event arrived) or `the page didn't start an HTML5 drag, so it was a plain mouse drag` (its `dragstart` was
@@ -322,7 +491,7 @@ without waiting). A hidden tab fails with `code: "tab_hidden"` and the exact
 fix, `[t2] is a background tab, … use: ardia browse tab t2 --show (or open <url> --show)` (`data.use` carries the
 command). `open --show`, `tab new --show`, `tab <id> --show` or `AGENT_BROWSER_SHOW_TAB=1` show the tab
 (`Target.activateTarget`, retried until the page reports visible and the tab target's `embedderData.tabActive` has
-held for 0.3 s, since the app could switch back right after). `scroll` on a hidden tab keeps pydoll's
+held for 0.3 s, since the app could switch back right after). `scroll` on a hidden tab keeps the
 humanized timing but applies each step with `scrollBy` in the isolated world; `record` and `stream` refuse a hidden
 tab (it paints no frames). The tab probe that picks the active tab on `--port`/`--ws` reads visibility straight after
 attaching, before an engine that keeps attached tabs live has made them visible.
@@ -342,6 +511,13 @@ action's network watch uses the Network domain of the command's own CDP session,
 main world. `wait --fn` is the caller's JavaScript like `eval`, so it runs where the page's own globals are; it's
 evaluated every 100 ms until it's truthy. There's no `--enable-automation`.
 
+A tab `open` makes in the background tells its page the window it belongs to from its first script:
+`outerWidth`/`outerHeight` are that window's size, `screenX`/`screenY` its position and `innerWidth`/`innerHeight` the
+content area, though the tab isn't shown (`chromium-windowless-page-screen-rects.patch`). Stock Chrome on macOS says
+0x0 at 0,0 for a background tab until it's shown, which pages read as a headless tell. Background tabs throttle their
+timers as Chrome's do (a hidden page's timers wake about once a second) unless the engine keeps them live.
+`tests/fixtures/browse/geometry.html` and the end-to-end test check it.
+
 The one deviation from agent-browser: the Runtime domain stays off until console or error capture starts (the first
 `console` or `errors`, or `open --capture-console`); from then on it's on for that tab for the rest of the session.
 `tests/fixtures/browse/probe.html` records `navigator.webdriver`, new window globals, DOM mutations, and the extra
@@ -355,25 +531,34 @@ final value).
 ### Ardia etiquette
 
 `open` without a session tab opens a new background tab in the sidebar (`Target.createTarget` at `about:blank`,
-init scripts registered, then `Page.navigate`); later `open`s navigate the session's tab. A session that has
-never had a tab uses the user's active tab for any command that needs one, with the rule `tab active` uses:
-on the token path `GET /ardia/active?token=…` (the page shown in Ardia's last focused window); on `--port`/`--ws`
-test servers, or when that route fails, the page that's visible and focused, else one that's visible (each tab is
-probed through a flat session and an isolated world, then detached). It errors (`no_tab`) only when there's no such
-page, as on New Tab. Once a session's tab closes it doesn't move on to whatever the user is looking at: commands
-fail with `tab_gone` until `tab active`, `tab <id>` or `open`. The session keeps the tab it took, and the command's stderr says so once (`→ This session had no
-tab, so it uses the active one: [t1] Title - URL`). `open` never navigates a tab taken this way: it opens its own
-background tab, as with no tab; to navigate the user's tab, pick it with `tab <id>` or `tab active`. The same goes
-for every command that loads a URL (`vitals <url>`, `diff url`, `a11y <url>`, `record start <path> <url>`, and `auth
-login` when the tab isn't on the credential's origin; script's `page.goto` is `open`), while `back`, `forward`,
-`reload` and `pushstate` refuse a borrowed tab (`borrowed_tab`), and so does anything that changes its site data:
-storage set/remove/clear, cookies set/clear, every `set`, `state load`, `addinitscript` and `network route` (reads still
-work; `auth login` logs in in the session's own tab). `eval` is left alone. `open` stays in
-the background and never switches the user's view unless `--show`. When it opens a background tab it checks whether
-the tab takes input (`--json`: `tabId`, `background`, `takesInput`) and says so in its own output when the session
-borrowed the user's tab or the tab won't take input, so an agent learns it before its first click fails:
-`→ Opened in its own background tab [t2], since this session uses your tab [t1]; this Ardia doesn't deliver input
-there. use: ardia browse tab t2 --show (or open <url> --show)`, or `…; it takes input without being shown`. `close` and `tab close` close only tabs this session opened, and not one another live session
+init scripts registered, then `Page.navigate`); later `open`s navigate the session's tab. A session works in the
+background by default: it never takes the tab the user is looking at on its own. Until it has a tab (`open`, `tab
+new`, `tab active` or `tab <id>`), every command that needs a page fails with `no_session_tab` and names both ways in
+(`ardia browse open <url>`, or `ardia browse tab active` to work in the user's tab). Before #1738 such a session took
+the active tab for its first command, so an agent's first `snapshot`, click or fill landed in the page the user was
+on. `tab active` picks the page shown in Ardia's last focused window: on the token path `GET /ardia/active?token=…`;
+on `--port`/`--ws` test servers, or when that route fails, the page that's visible and focused, else one that's
+visible (each tab is probed through a flat session and an isolated world, then detached). It errors (`no_tab`) only
+when there's no such page, as on New Tab. Once a session's tab closes it doesn't move on to whatever the user is
+looking at: commands fail with `tab_gone` until `tab active`, `tab <id>` or `open`. A tab taken with `tab active` is
+the user's: the session reads it, clicks and types in it, but `open` never navigates it: it opens its own background
+tab, as with no tab; to navigate the user's tab, pick it by id with `tab <id>`. The same goes for every command that
+loads a URL (`vitals <url>`, `diff url`, `a11y <url>`, `record start <path> <url>`, and `auth login` when the tab isn't
+on the credential's origin; script's `page.goto` is `open`), while `back`, `forward`, `reload` and `pushstate` refuse
+it (`borrowed_tab`), and so does anything that changes its site data: storage set/remove/clear, cookies set/clear,
+every `set`, `state load`, `addinitscript` and `network route` (reads still work; `auth login` logs in in the
+session's own tab). `eval` is left alone. `open` stays in the background and never switches the user's view unless
+`--show`. When it opens a background tab it checks whether the tab takes input (`--json`: `tabId`, `background`,
+`takesInput`) and says so in its own output when the session was in the user's tab or the tab won't take input, so an
+agent learns it before its first click fails: `→ [t2] is this session's tab now, a background tab of its own, since
+this session uses your tab [t1] and won't navigate it; `tab t1` goes back; this Ardia doesn't deliver input there.
+use: ardia browse tab t2 --show (or open <url> --show)`, or `…; it takes input without being shown`. It names the tab
+it left (`--json`: `left`) so an agent switches back with `tab t1` instead of running `tab list` (telemetry:
+`open_moved_tab`); a command that opens its own tab for the same reason (`vitals <url>`, say) ends its notice the same
+way. A tab that won't take input and wasn't a move says `→ Opened in its own background tab [t2]; this Ardia doesn't
+deliver input there…`. Telemetry: `error_code` `no_session_tab` counts agents that tried to act before opening or
+picking a tab (it should fall as the skill's `batch "tab active" "snapshot -i"` start spreads), and `tab` commands with
+no error count the picks. `close` and `tab close` close only tabs this session opened, and not one another live session
 uses (reserved through the tab registry; the answer says which stayed open); the guard refuses `Browser.close` on every
 socket. `tab list` shows the user's tabs too (minus prewarmed `about:blank` pages, read/script tabs and tabs another
 session is closing), with the `tab-…` id `ardia windows` prints when the app reports the tab's target, and which
@@ -400,6 +585,11 @@ readers never ask for sources, so they hear the right name. Hiding the pieces me
 agent; the engine fix is to give the ancestor its own `NameSources`. A clickable element with no accessible name
 (found by `cursor: pointer`, `onclick`, `tabindex` or `contenteditable`) is named by its text in full snapshots too,
 so both kinds of snapshot agree on what each ref is.
+
+`snapshot -i` cuts names past 100 characters with `…` (text in a full snapshot stays whole), and in a run of one role
+at one level (as long as the ones the change report folds) with three or more disabled members it lists the enabled
+members as usual and puts one count line where the first disabled one was (`- 108 disabled buttons (Seat 1A … Seat
+30F)`), dropping the disabled members and what they hold, so a seat map lists every free seat within the output cap.
 
 When the session's tab is a web page with site notes, `snapshot` (full or `-i`) starts with them (see Site notes).
 `snapshot --diff` (with or without `-i`) prints only what changed since this session's previous snapshot of the same
@@ -433,10 +623,28 @@ POST http://127.0.0.1:8792/api/events → 200
   one role at one level (6 or more options, links, menu items, tree items or generic clickables; 12 or more buttons,
   radios, checkboxes, switches or tabs) is one line with its count, parent, first and last name, ref range and how
   many are disabled (`+   48 options in combobox "Start time" (12:00 AM … 11:30 PM; e8…e55)`), followed by any
-  selected, pressed, expanded or checked member verbatim; nodes redrawn unchanged under new refs are one line
-  (`+ 13 redrawn as they were, with new refs: …`). A new document (or a changed URL) prints the new page's whole
-  interactive tree that way, up to 150 lines, so no follow-up snapshot is needed; landing on another site prints its
-  notes first, as `snapshot` does. A same-page report stops after 40 lines with a pointer at `snapshot -i -s <css>`.
+  selected, pressed, expanded or checked member verbatim. A run with both enabled and disabled members lists the
+  enabled ones one by one (up to 40) and counts the rest, so the choices are never folded away
+  (`+ 35 enabled …` lines, then `+ 119 disabled buttons (Seat 1A … Seat 30F)`). Nodes redrawn unchanged under new
+  refs are one line (`+ 13 redrawn as they were, with new refs: …`). A new document (or a changed URL or title)
+  prints the new page's whole interactive tree that way, up to 150 lines, so no follow-up snapshot is needed; landing
+  on another site prints its notes first, as `snapshot` does. A same-page report stops after 40 lines with a pointer
+  at `snapshot -i -s <css>`. Names longer than 100 characters end in `…`, here and in `snapshot`; `find … --name`
+  takes such a clipped name (with or without the `…`) as a prefix of the full one.
+- **Text** (`text:` lines, `changes.add_text`). After a navigation (new document, URL or title) the report adds the
+  readable text of the page's `main` (else `body`), about 3,000 characters; when an action opens something on the same
+  page (a new heading of level 1 or 2, or a new dialog, article or region holding new nodes) it adds that container's
+  text (`closest('article, dialog, [role=dialog], [role=region], section, main > *')`), about 1,200 characters. Short
+  blocks such as a card or a table row are one line, joined with `·` (cells with `|`). Enabled controls carry their
+  ref inline (`Main $129 per person [@e92]`, using the control's `aria-label` when its visible text is short); a
+  disabled control shows only its visible text. A canvas, image or `role=img` of 48 px or more is
+  `[image "receipt.png": screenshot @e91]` (the ref is new, made for it), and a child frame is
+  `[frame "Folio.pdf preview": frame @e95; read]` followed by the frame's own text when it's in reach. Rows the text
+  already shows with their ref and no state or value aren't repeated as `+` lines, and when the text says no more
+  than the new rows' names (a form dialog) it's left out. Cut text ends with `… more: read -s <css>`; after a
+  navigation the `+` list gets what's left of about 5,400 characters and the removed nodes of the last view are a
+  count. Values of password fields never show. `open <url>` reports the page it lands on the same way, as a click
+  that navigates does (not inside `script`, where `goto` stays light).
 - **URL and title** of the session's tab, when they changed. The URLs keep their path and query, but the values of
   keys that look like credentials (`code`, `token`, `pass`, `secret`, `key`, `sig`, `auth`, `session`, `state`,
   `nonce`, …) and a fragment holding `=` become `…`.
@@ -455,21 +663,92 @@ POST http://127.0.0.1:8792/api/events → 200
 - **JSON.** `data.changes`: `document` (`same`, `new`, or `unknown` when the view before couldn't be taken),
   `url`/`title` (`{"from","to"}` or null), `added`, `removed` (each `{ref, role, name, value, attrs}`), `changed`
   (`{ref, from, to}`), `back` (refs), `network` (`{method, url, type, statuses, status}` plus `failed` or
-  `pending`), `rerendered` (`{ref, was}`), `notes` (the arrival header) and `unsettled`/`error` when they apply. Every
+  `pending`), `rerendered` (`{ref, was}`), `notes` (the arrival header), `text` (`{lines, more, where}`) and
+  `unsettled`/`error` when they apply. Every
   node is listed, folded or not. Names are redacted before the 200-character cut and before folding, and everything
   is sanitized like any other answer.
-- `--no-changes` skips all of it for one command (no snapshots, no network watch). If the view afterwards can't be
+- `--no-text` leaves out only the `text:` lines. `--no-changes` skips all of it for one command (no snapshots, no
+  network watch), and `open` then prints only its title and URL. If the view afterwards can't be
   taken (the tab closed, say), the action's result stands and the report says why.
 
 ### Output cap
 
-Text output of every command stops at 6,000 characters, at a line break when there's one in the last fifth, and
-ends with one line that points at narrowing, tailored to the command, and names `--max-output` last: `[output capped
-at 6,000 of 15,920 characters. Narrow it instead: snapshot -i (interactive only), snapshot -s <css> (one region), find
+Text output of every command stops at 12,000 characters (20,000 for `script`, whose result the agent asked for), at a
+line break when there's one in the last fifth, and ends with one line that says where the whole output was saved,
+points at narrowing, tailored to the command, and names `--max-output` last: `[output capped at 6,000 of 15,920
+characters; all of it is in …/ardia-browse-output-501/output-k2x9.txt. Narrow it instead: snapshot -i (interactive only), snapshot -s <css> (one region), find
 role <role> <action> --name <text> (act without a snapshot). Only if you need every line: --max-output 15920]`. It
-used to suggest `--full`, and agents ran `snapshot --full` at up to 35K characters a time. `--max-output N` (or
-`AGENT_BROWSER_MAX_OUTPUT`) sets another limit (`0` for none), `--full` turns it off; JSON output is never cut. `--full` after `screenshot` or `diff` is still their
-full-page flag.
+used to suggest `--full`, and agents ran `snapshot --full` at up to 35K characters a time. The same line also goes to
+stderr (so does `read`'s own "pages cut to fit" line), so it survives `| head`, `| grep` and `> file`. `--max-output N` (or
+`AGENT_BROWSER_MAX_OUTPUT`) sets another limit (`0` for none), `--full` turns it off; JSON output is never cut, and
+neither is output redirected to a regular file (`> out.json`), which never reaches the agent's context. `script`, `eval`,
+`read`, `snapshot` and `get` take `--out <file>` (`snapshot` and `get` save their full text, uncapped, and print the
+first 12 lines; `read --scroll` saves its rows): the client asks the daemon for JSON, writes the whole result to the file (a script's or
+eval's value as JSON, or a string as is; `read` pages as JSON for a `.json` path, else as text), redacted, through a
+temporary file, and prints a short digest (`✓ Saved to rows.json (84,210 characters): a list of 900 items with fields i, name`, then
+the first and last rows) plus the script's last 20 log lines. A failure prints the error and writes nothing. `read --out` lists each page with its status,
+read time and a 500-character excerpt (12 pages at most); a saved list also prints its first rows, up to 3,000
+characters, so the agent reads what it saved and the transcript keeps evidence of what each page said. A `.csv` or
+`.tsv` path turns a returned list of objects (or an object holding one such list) into a table, columns in first-seen
+order, nested values as JSON (`saved_as_csv`): two bu9 tasks were zeroed for reward hacking because the agent typed
+rows into a build script instead of deriving them from saved data:
+a BU Bench judge failed `bu3` items whose values lived only in a file. A script starts with `state`, one JSON object per
+session that the daemon keeps between scripts: the worker sends it back (at most once a second, on each command it
+awaits, and at the end), so a script that times out keeps what it gathered, and the timeout error lists what's in
+it; when nothing was kept, it says to push results into `state` as they come. A timed-out script that had opened three
+or more pages one after another is pointed at `read <url> <url> …`, which loads them side by side with a time limit
+each: a `bu12` task lost three minutes to a script that opened seven pages in a row and saved nothing. Browser Use's agent keeps data in a persistent REPL and Betterwright's in a `state` object; Ardia's agents lost
+whole loops to timeouts and rebuilt them through files. Browser Use's agent on
+BU Bench keeps extracted data in its program and writes deliverables from it; Ardia's agents saw the output cap in
+every transcript and retyped values, and the judge's faithfulness items were met half as often. The saved
+copy goes in a `0700` folder in the user's temp dir, which keeps the newest 40: agents on BU Bench reran long
+scripts with `--max-output` only to see the result the cap had cut, and complained most about that. `--full` after `screenshot` or `diff` is still their
+full-page flag. A `read` reads every URL it's given (up to 100, so a script's `read(urls)` goes 100 at a time); only
+`--links` stops at 20 unless `--limit`, since agents passed 27-URL lists and lost the last seven. A `read` of a PDF
+prints its text page by page (`[page 1 of 3]`), taken with macOS's PDFKit from bytes fetched with the page's cookies
+(40 MB at most; a scanned PDF says it has no text layer). A page that reads thinner than 120 characters (or whose `-s` matches nothing yet) after it
+settles is read again every 0.5 s for up to 5 s: single-page apps that render their results after the load event
+used to read as a heading or nothing. Each page's header carries its HTTP status and the UTC time it was read
+(`=== Title (HTTP 200, read 2026-11-14 06:04:19 UTC)`), so a judge or reviewer can see when and how each source
+answered. A page that reads like a bot check or block (a 401/403/429, or a short page saying "Just a moment",
+"verify you are human", CAPTCHA, "access denied"…) gets a note under its header: wait 30-60 s and read it again,
+try the site's other pages or another source, and name what stayed blocked. On BU Bench, 60% of the tasks Ardia's
+agents lost by 30+ points showed such a block, and the agent usually gave up after one try. Each page read also carries a scope line
+when the page states its own extent: `(scope: page says "1–20 of 340 results"; has a Next page link, pages up to 17)`
+(a count range, an "N results"-style total, "page N of M", a rel=next or Next link, a Load more button, the highest
+number in a pagination nav); `read` of the session's tab ends with `[scope: …]`. On BU Bench, coverage was the rubric
+family Ardia's agents failed most (45% violated), and Browser Use's prompt has its agent check counts and coverage
+against the source. The cap rose from 6,000 to 12,000 (6,000 a page for multi-page reads, up to 36,000): 746 of
+5,755 baseline commands hit it and 704 of those reran with `--max-output`; Browser Use's agent allows 12,000. A script
+or eval value that is a list of objects prints one compact JSON row per line (as does an object holding such lists). A `read` of several pages gets 6,000 characters a page instead (at least 12,000, at most 36,000) and
+shares it between them (`readpages.pages_cap`): research reads of 8 to 12 pages used to come back cut to a few hundred
+characters each.
+
+### Reading lists and grids
+
+`read` (and `read -s`) prints a table or an ARIA grid one row per line: `tr` and `[role=row]` are rows, and `td`, `th`
+and the `gridcell`, `cell`, `columnheader` and `rowheader` roles are cells, split by ` | ` (`js.py` `readable`). A grid
+built from `display: grid` divs used to come out one cell per line, so 80 lines held 6 rows. When `aria-rowcount` is
+larger than the rows in the DOM it adds `(25 of 2682 rows rendered; the grid is virtualized: sort, filter or scroll it
+to see others, or read -s <grid> --scroll)`.
+
+`read [-s <list>] --scroll [--limit rows] [--match <text>] [--timeout ms]` reads a long or virtualized list on the
+session's tab in one call, the loop agents used to hand-write in 3 to 4 calls (`readpages.run_scroll`). `-s` takes a
+selector or a ref; without it, the page's main repeated list is used: the element with the most children of one tag
+and class (at least 4), weighted toward children holding links and toward more text (`MAIN_LIST`), or `no_list`. Rows are the list's outermost `option`, `row`, `listitem`, `treeitem` or `article` roles, `li`, `tr`
+or `article` elements, else its children; when the selector matches several elements and they hold no such rows,
+those elements are the rows. It finds the scroll box (the nearest scrollable ancestor of a row, else of the list, else
+a scrollable box inside it, else the page), starts at the top, and each step jumps to the last row rendered (at least
+nine tenths of the box), then waits for the rows to stay the same for 0.1 s (up to 1.5 s, 8 s while the list shows
+`aria-busy` or a `Loading…` row). It stops when the box can't move and stopped growing, at `--limit` rows (1,000;
+10,000 with `--match`) or at `--timeout` (30 s), and then scrolls the box back where it was. Virtualized lists
+recycle nodes, so a row is keyed by `aria-posinset`, `aria-rowindex` or `data-index`, else `data-id`, `data-key` or
+its id, else its offset in the box plus its text, and rows print in that order, a row's lines joined by ` · `.
+`--match` keeps rows containing the text, ignoring case. The last line says how many rows it read and why it
+stopped: `[2 of 200 rows match "staples"; scrolled to the end of the list]`. A hidden tab (plain Chrome without
+`--show`) draws no animation frames, so lists that render rows in one stop early; then that line adds `the tab is
+hidden, so the page may not have drawn every row: ardia browse tab t3 --show, then read again`. The inbox of the expenses fixture (200
+mails, 40 a page) reads in about 3 s, and its 2,682-row grid in about 16 s.
 
 ### Batch
 
@@ -477,7 +756,7 @@ full-page flag.
 command arguments it reads them from stdin, one per line, so a heredoc works; blank lines and lines starting with `#`
 are skipped. A line is a command as you'd type it after `ardia browse` (shell quoting rules, through `shlex`), or a
 JSON array of strings. The session's flags (`--session`, `--port`, `--data-dir`, …) go on the `batch` command; a line
-takes its command's own flags and the per-command ones (`--full`, `--max-output`, `--no-changes`, `--humanize`,
+takes its command's own flags and the per-command ones (`--full`, `--max-output`, `--no-changes`, `--no-text`, `--humanize`,
 `--show`); `--full` or a larger `--max-output` on a line widens the whole batch's cap, never narrows it. Each
 command's answer, changes included, is printed in order, separated by a blank line; `--bail` stops at the first
 failure, and a command whose outcome is unknown stops the rest (`not_run`). `batch` can't run inside a batch. `close`
@@ -507,6 +786,14 @@ Refs stay valid across the batch as long as their nodes do (a dialog that's reop
 every selector form (see Refs) and `find` line works as on the command line. `eval` with `fetch(`, `DOMParser` or
 XHR, and open → `get text` on three pages in a row, print a one-time tip on stderr pointing at `read` and `script`.
 
+`ardia browse script` (`browse/script.py`) runs its JavaScript in a Worker of a blank background page, outside the
+page it drives: each `page.*` call is a browse command on the session, and `page.evaluate(fn, arg)` (also
+`page.eval`) is `eval` of `(fn)(arg)` in the page's main world. `page.dblclick`, `page.focus` and `page.keyboard(text)`
+(`keyboard type`) cover cells and fields that only take typing. Two mistakes get a hint under the error: a
+`ReferenceError` for `document`, `window`, `localStorage`, `sessionStorage` or `getComputedStyle` in the script itself
+says the script runs outside the page and points at `page.evaluate` or `ardia browse eval`, and one from inside
+`page.evaluate` for a script variable says to pass it as the argument.
+
 ### Site notes
 
 `ardia notes` (and `ardia browse notes`, the same command) keeps plain notes per site for the user's own agent;
@@ -529,17 +816,125 @@ Ardia runs no AI and never reads them itself.
   page could have talked an agent into writing them. Writes take an exclusive lock on the folder, reads never block
   on a FIFO.
 
+### Saved flows
+
+A flow is a read-only task done once in the page (a search, a filtered list, a lookup) saved as the GET request
+behind it, so the next run is one call that returns just the data (`browse/flowlog.py` records, `flows.py` builds,
+checks and stores, `flowurl.py` parses and masks URLs, `flowrun.py` runs, `shape.py` shapes). Modeled on
+agent-browser's saved flows, without its launch flag, direct HTTP tier, command replay, writes or MCP tools.
+
+**What a run does.** A flow run opens the flow's start page like `open` and sends GET requests to the flow's site; it
+never replays clicks or typing, and a site whose GET endpoints change state (some logout links) isn't protected
+against that. When anything goes wrong it stops and says why; the agent then drives the page itself (open, click,
+read). Flows keep and send GET requests only: a task whose answer comes from a POST, GraphQL over POST included,
+can't be saved (`flow_not_get`), and GraphQL over GET works only when its URL values pass the literal rule below.
+
+- **Recording.** Every session keeps its last 200 actions (`open`, `click`, `dblclick`, `fill`, `type`, `press`,
+  `keyboard`, `select`, `check`/`uncheck`, `find`, `back`/`forward`/`reload`, `scroll`, `hover`, `focus`, `wait`,
+  `pushstate`; also inside `batch` and `script`) in memory, never on disk: the command, the URL before and after,
+  whether it worked, the first-party (same base domain) origins its GET requests went to, and the answers of up to 8
+  first-party GET XHR, fetch and document requests with a 2xx status, JSON or HTML, under 2 MB each, at most 2 s in
+  all (`Network.getResponseBody`, read off the change report's network watch before it turns `Network` off). A
+  document is kept only when a `<script>` holds JSON: `type="application/json"`, `__NEXT_DATA__`, JSON-LD, or a plain
+  `window.x = {...}`. Answers stay under 16 MB per session (the oldest are dropped first). Request bodies are never
+  read; other methods are only counted, so `flow steps` and `flow save` can say they weren't kept. `--no-changes`
+  records the step without its requests. After a typing command it reads the focused field once: a password field,
+  an `autocomplete` of `current-password`, `new-password`, `one-time-code` or `cc-*`, a name, id, label, placeholder or
+  selector with `pass`, `secret`, `token`, `otp`, `pin`, `cvv`, `cvc` or `card`, or a value the CLI redacts (a vault
+  password) makes the value a secret.
+- **URLs** (`flowurl.parse`, one parser for the start URL and request URLs). An absolute `http` or `https` URL in
+  plain ASCII (an IDN host must already be punycode), with no backslash, whitespace, control character or user info,
+  a host of DNS labels (lowercased) or a bracketed IPv6 address, and a port from 1 to 65535. A host whose last label is
+  a number in any spelling (`127.1`, `2130706433`, `0x7f000001`, `0177.0.0.1`) or an IPv6 address is an IP literal;
+  it, and `localhost`, are allowed only when the flow was recorded on that exact host and port. Other hosts must sit
+  on the start URL's base domain, on its port or the scheme's default. Origins are compared by exact equality after
+  that normalization.
+- **The literal rule.** A saved request URL keeps a path segment or query value only when it is a param, a number,
+  or a short value (up to 24 letters, digits, `-` and `_`, plus `.` inside a path segment) with no `@`, isn't a typed
+  secret in any encoding (as is, percent-encoded, JSON-escaped, base64, hex or as decimal bytes), isn't under a
+  credential-named query key (`token`, `key`, `sig`, `session`, `password`, `csrf`, …), and the path has no
+  credential word (`sessions`, `tokens`, …). Anything else leaves the whole request out, and the save report says why.
+  This is a limit, not a guarantee: a short opaque token or a numeric id under a query key the rule doesn't
+  recognize (`?u=a8f3k2`, `?ref=1234567`) is kept. Param examples follow the same rule; a value that fails it is a
+  param with no example. `flow steps`, the save report and each saved step's command and page URL show URLs with every
+  value that fails the rule, or carries a known typed secret, as `<hidden>` (a bare secret word is `<redacted>`), and
+  user info and fragments dropped.
+- **Answer shapes.** The recorded shape keeps an object key only when it is a short identifier
+  (`[A-Za-z_][A-Za-z0-9_]{0,31}`) and not a typed secret; other keys become `*`, so a map keyed by emails or ids is one
+  stable shape (drift checks skip `*`). The main list's path and item fields follow the same rule, and a document's
+  JSON block is found again only by a plain `id`.
+- **`flow steps [--all]`** lists the steps since the last save (`[3] click #go → <url>`, then each kept GET as
+  `s3r1 GET <url> 200 json` and a count of other requests not kept), text and `--json` (`data.steps`).
+- **`flow save <name> [--from n] [--to n] [--param k=v]… [--output s3r1] [--description text]`** saves steps from the
+  last `open` after the previous save to the latest (or `--from`/`--to`). It keeps the GET requests on the start
+  page's site whose answer was JSON (or a document's largest JSON block) and whose URL passes the literal rule, and
+  for each: the URL, the `accept` header when it is CORS-safelisted, and the answer's status, MIME type, size,
+  shape, main list and its item fields (only names of up to 24 letters, digits and `_`, dotted once). Params: every
+  value typed into an ordinary field becomes `{{name}}` (named after the field's name, id or label when that is a short
+  identifier, `[a-z][a-z0-9_]{0,23}`, else `p1`, `p2`, …) wherever it appears in a request's path segments and query
+  values (whole value, or inside a longer one when 3 or more characters), with no copy kept, so a run must pass it;
+  `--param k=v` names a typed value and keeps it as the example; a query value of the start or an opened URL that a
+  request also sent becomes a param. `--output` defaults to the largest answer among requests that use a param, else
+  the largest; it must name a kept GET. The steps are kept only so `flow show` can list them; nothing runs them. The
+  saved flow is checked with the same validation as a load before it's written. Cookies and credential headers are
+  never kept (the request is marked `strippedAuth`). The known secrets are every value typed into a secret field
+  anywhere in the session's recording, including steps outside the saved range and steps already dropped from it
+  (up to 200 values); a request whose URL (path, query key or value) or kept header carries one is left out.
+- **Storage.** `<data dir>/Flows/<site>/<name>.json`, where `<site>` is the start URL's base domain (`example.com`
+  for `shop.example.com`, `example.co.uk` for `www.example.co.uk`, an IP or `localhost` as is) plus a non-default
+  port. Folders are 0700 and must be real folders the user owns, files 0600, opened relative to the folder with
+  `O_NOFOLLOW`, written to a temp file renamed over the old one, at most 4 MB. The file is `version: 1`:
+  `name`, `description`, `site`, `origin`, `startUrl`, `hosts` (the origins the flow may contact), `createdAt`,
+  `createdBy`, `params` (`{name, example, source}`, source `typed`, `given` or `query`), `output`, `verified` and
+  `steps` (`{seq, command, url, ok, requests}`, each request `{id, method: "GET", url, headers, kind, expect}`, never a
+  body). Loading fails with `code: "flow_invalid"` for an unknown field, another version, a site or name that doesn't
+  match where the file sits, an `origin` that isn't the start URL's, an origin in `hosts` the URL rules don't allow, a
+  request that isn't a GET, has a body or another field, or whose URL fails the parser, the rule or isn't on a listed
+  origin, a header other than a CORS-safelisted `accept`, a param name, example or item field that isn't a short
+  identifier or value, a description over 120 characters or with a line break, a step command that isn't a short list
+  of words, or a missing output request.
+- **`flow run <name> [--param k=v]… [--fields a,b.c] [--where f=v]… [--limit n] [--site s] [--timeout 60s]`.**
+  Unknown params fail with the list of real ones; a param with no example must be given. Values are encoded for where
+  they land, and the filled URL must still parse and sit on a listed origin (`off_site`). The request is sent with
+  `fetch(url, {method: "GET", credentials: "include", cache: "no-store", redirect: "manual"})` with no header but the
+  recorded `accept` (so no CORS preflight), once and never retried, from a tab the session opened itself (never the
+  user's tab picked with `tab active`) when it is already on the request's or the start page's origin, else from a
+  temporary background tab that loads the start URL the way `open` does (closed again afterwards); a start page that
+  lands off the flow's origins (a sign-in page) is `redirected`. No body is ever sent and cookies stay in Ardia.
+  There is no direct-HTTP tier (it would need the cookies through `Network.getCookies`, which the token policy
+  refuses) and no command replay.
+- **Outcomes.** One answer, checked once; every failure says to drive the page instead: a redirect is `redirected`
+  (a flow never follows one), a 401 or 403 `auth_expired` (or `credential_not_sendable` for a request recorded with
+  a stripped credential header), 429 `rate_limited` (`data.retryAfter`), a bot-check page `blocked`, another status
+  `http_error`, a network or CORS failure `fetch_failed`, a page that navigated or closed while the GET was in flight
+  `fetch_interrupted` (whether it reached the site is unknown), an answer over 8 MB `answer_too_large`. The answer is
+  compared with the recorded shape: a missing key, a changed type, or the main list gone or no longer a list is
+  `drifted` (a present, empty list isn't), and the file is marked `verified: false` (true again after a clean run).
+- **Output.** The list at the path the recording saw, else the answer's heaviest list of objects (or the answer
+  itself when it's a list), as `{list, total, matched, items}` after `--where` (case-insensitive contains, dotted
+  paths, all must match), `--limit` and `--fields`; a field no item has fails with `unknown_field` and the items'
+  fields, and a list that is now empty gives zero items. An answer with no list comes back as `value`. Text output is
+  a header (`✓ search: 2 of 3 items in results`) and one JSON line per item; `data` has `verified` and `result`.
+- **Discovery.** When `open` lands on a site, or `snapshot` runs on it, with saved flows, the answer starts with
+  `# saved flows for <site> (…): name(params) [saved description: "…"]; …` (up to five, the description quoted and
+  cut at 80 characters, since a page could have shaped it), once per site per session (a session that saved a flow
+  there doesn't get it). It follows the site's notes; `snapshot --json` has it in `data.flows`. `flow list` and
+  `flow show` count as page content too (`--content-boundaries`).
+- **`flow list [site]`, `flow show <name> [--site s]`, `flow rm <name> [--site s]`** run without the browser; a name
+  saved for several sites needs `--site`.
+
 ### Gated by the token policy
 
 The engine's ardia-command policy (`ac_cli_token_policy_methods.cc`) refuses these methods, so on the real connection
-these commands fail with exit 1, naming the method and the command (`code: "policy_refused"`, `data.method`). Each is
-implemented and works against a plain `--port` test server, so allowing the method is the only change needed.
+these commands fail with exit 1, naming the method and the command (`code: "policy_refused"`, `data.method`, and
+`data.reason` empty). Each is implemented and works against a plain `--port` test server, so allowing the method is the
+only change needed.
 
 | Command | Needs |
 | --- | --- |
 | `cookies get\|set\|clear`, `cookies set --curl` | `Network.getCookies`, `Network.setCookie`, `Network.clearBrowserCookies` |
 | `state save\|load` | `Network.getAllCookies`, `Network.setCookies` |
-| `set viewport\|device\|geo\|media` | `Emulation.setDeviceMetricsOverride`, `Emulation.setTouchEmulationEnabled`, `Emulation.setUserAgentOverride`, `Emulation.setGeolocationOverride`, `Emulation.setEmulatedMedia` |
+| `set device\|geo\|media` | `Emulation.setTouchEmulationEnabled`, `Emulation.setUserAgentOverride`, `Emulation.setGeolocationOverride`, `Emulation.setEmulatedMedia` |
 | `set offline`, `set headers` | `Network.emulateNetworkConditions`, `Network.setExtraHTTPHeaders` |
 | `set credentials`, `network route\|unroute` | `Fetch.enable` (and `Fetch.fulfillRequest`, `failRequest`, `continueRequest`) |
 | `upload` | `DOM.setFileInputFiles` |
@@ -553,6 +948,71 @@ implemented and works against a plain `--port` test server, so allowing the meth
 
 On the token path Ardia also strips `Cookie`, `Set-Cookie` and `Authorization` from network events, so
 `network requests` and HAR files never contain them.
+
+The policy also refuses some uses of methods it allows (`ac_cli_token_policy.cc`), and says which in its reply:
+`ardia: <method> <reason> isn't allowed for the ardia command`. The command keeps that reason (`data.reason`, same
+`code`) and words the error around it, so it never reads as a method that is off the list:
+
+| Reason | Methods | Means |
+| --- | --- | --- |
+| `to that target`, `on that target` | `Target.attachToTarget`, `activateTarget`, `closeTarget`, `getTargetInfo` | The tab is gone, isn't a web page (an Ardia or extension page), or sits in a window Ardia keeps for itself |
+| `without flatten` | `Target.attachToTarget`, `setAutoAttach` | The command always sends `flatten`, so this is a bug in it |
+| `to that URL`, `in another browser context` | `Target.createTarget`, `Page.navigate` | Only http, https, data and about:blank pages, in the user's own profile |
+| `in that execution context`, `on that object` | `Runtime.*`, `DOM.*` | A context or object the connection didn't make |
+| `on a tab the ardia command didn't open`, `on a tab that isn't off-screen`, `with that option` | `Emulation.setDeviceMetricsOverride`, `clearDeviceMetricsOverride` | The viewport override is for tabs the command opened (below), with a width, height, scale and `mobile` only |
+| `in a named world`, `as a stream`, `with the command line API`, `without a button`, `with those editing commands` | `Page.addScriptToEvaluateOnNewDocument`, `Page.printToPDF`, `Runtime.evaluate`, `Input.dispatchMouseEvent`, `Input.dispatchKeyEvent` | That option isn't allowed |
+
+`set viewport <w> <h> [scale]` works on the token path only in a window the user never sees. An emulated page is
+never in a user's window, so nothing has to be restored in place or held off the screen (five reviews found each
+version of that unsound: e7f251520 and the commits before it).
+
+- **The automation window.** One per profile, made on first use (`OffscreenWindowFor`, `ArdiaHost.mm`): an
+  `ArdiaCoreWindow` that is `internal` (never ordered on screen, hidden from extensions, not in `ardia windows`) and
+  `automation`, 1280×800. The token policy treats a tab in an internal window as not a web target; the automation
+  window is the exception (`IsPrivilegedContents`), and only tabs the command created ever get into it.
+- **Going off-screen.** `set viewport` first asks the app, over the control socket, to take the session's tab there
+  (`offscreen` `{tab}`, `state/automation/offscreen.ts`). It is refused unless the tab is one a token connection
+  created (`ac_cli_owns_tab`), has never been in a shown slot (the shown-slot report, kept as this check), and isn't
+  shown, warm or being revealed now. The page's view lets go of the tab (`releasePageForOffscreen`), the window
+  adopts the same `WebContents` (`adoptTab:`, no reload), and the store drops the row with no closed-tab record
+  (`removeTabs(…, false)`): the tab has no sidebar row while it is off-screen. `ardia browse tab list` still lists it
+  for its session.
+- **The policy.** `Emulation.setDeviceMetricsOverride` and `clearDeviceMetricsOverride` are allowed only on a session
+  attached to a tab the command created that is in the automation window now and was never in a shown slot
+  (`CliEmulationRefusal`; otherwise `on a tab the ardia command didn't open` or `on a tab that isn't off-screen`),
+  with `width`, `height`, `deviceScaleFactor` and `mobile` only (`with that option`). A tab never leaves the
+  automation window: `canAdoptTab:` refuses to move one out.
+- **Showing it.** `tab <id> --show`, `open --show` and `set viewport reset` don't move the page back. The command
+  opens a new tab of its own at the same address in the user's window, in the background, waits for it to load,
+  closes the off-screen one, and only then shows the new one (not for `reset`). The output says the page was reloaded
+  in a new tab; form state, scroll position and `sessionStorage` are gone. The first frame a user's window gets is
+  from a page that never had an override.
+- **Ending.** `close` and `tab close` close the off-screen tab like any tab the session opened. A session keeps
+  every tab it took off-screen (`State.offscreen`), and the engine is the authority for the rest: on the token path
+  `Target.getTargets` and `Target.getTargetInfo` mark a target in an automation window `"ardiaOffscreen": true`, so
+  `--show`, `reset` and `set viewport` from a session that didn't move it (another session, or the same session's new
+  daemon) take the off-screen path too. Each tab the command created has an owner in the engine
+  (`ac_cli_owned_tabs.cc`): the token connection that created it, then whichever one last set its viewport
+  (`ClaimCliOwnedTarget`, on `setDeviceMetricsOverride` only). When a connection goes (the daemon died, Stop,
+  control turned off), every tab it owned is checked 5 s later and closed if it is still in an automation window and
+  no connection has claimed it since, whatever other connections are open (`ReleaseCliOwnedTargets`); each change
+  of owner bumps the tab's generation, so an older release's check does nothing and a later owner gets its own 5 s.
+  The `offscreen` lease keeps a daemon connected while any of its tabs is off-screen; `State.set_offscreen` derives
+  it from the set, so a reset of another tab or a close (the session's own or anyone's) can't leave it wrong. The app's sweep stays as a backstop for a tab
+  moved off-screen whose viewport was never set: 5 s after the last connection goes it closes every tab in the
+  automation windows (`noteCliConnections`, `cliCloseOffscreenTabs`). Off-screen tabs aren't in the store, so
+  `session.json` never has them, and Chrome's restore list never gets one either: `LiveTabSkipsRestore`
+  (`g_ardia_live_tab_skips_restore`, `ac_seams.mm`) answers yes for a tab in an automation window, so neither a
+  closed tab nor the window snapshot a quit takes (`TabRestoreService::BrowserClosing`) records it, and an
+  automation window with no other tab records no window. A crashed page stays off-screen with no row; `reload`
+  brings it back there.
+- `set device` still fails, before changing anything, on `Emulation.setTouchEmulationEnabled`. A session on a plain
+  `--port` server sets the override where the tab is, as before. Telemetry: `viewport_set` on the command event;
+  watch `error_code` `viewport_needs_hidden_tab` and `viewport_unsupported` on `set`.
+
+A refused `Target.attachToTarget` also says what Ardia's own tab list has for that page (`ardia windows`): the tab and
+its address, or that no tab holds it. The command used to print the off-the-list sentence for every refusal, which hid
+the reason.
 
 ### Skipped
 
@@ -616,6 +1076,15 @@ built app (never `/Applications`):
 ARDIA_BROWSE_E2E_APP=<build>/Ardia.app python -m unittest apps/cli/tests/test_browse_e2e.py
 ```
 
+A Debug build takes its JavaScript from Metro, and the token instance has no DevTools port to find it by, so name it:
+`ARDIA_BROWSE_E2E_JS=localhost:8081`. Without it that instance never turns control on and `BrowseTokenPath` times out
+waiting for `ArdiaControl.json`.
+
+`apps/cli/scripts/token-smoke.sh <Ardia.app> <ardia command> [metro host:port]` is the short version: one hidden
+instance on the token connection, then `read <url>`, `open <url>`, `read` and a refused `cookies`. The release smoke
+test runs it with the release's own CLI tarball against the release candidate, since nothing else runs the command
+against a real token connection.
+
 It serves `tests/fixtures/browse` on 127.0.0.1, launches one hidden instance with a DevTools port (`ac launch
 --no-wait`) and one on the token path (`open -g -n`, `ARDIA_BACKGROUND=1`, control on in `session.json`), both under
 `~/ardia-scratch/browse-impl/e2e` (`ARDIA_BROWSE_E2E_DIR`), runs the core loop, the probe (humanized with
@@ -641,12 +1110,18 @@ checks as the token path first (regular file, owned, 0600, live pid), so they wo
 on (exit 2 otherwise). Neither reads cookies, passwords, Login Data or Web Data. Text output is one line per row;
 `--json` prints the rows.
 
-- `ardia pinned` reads `<data dir>/session.json` (the app's persisted state, `apps/browser/src/state/session/persist.ts`) and lists
-  one row per pin: `title` (custom title first), `url` (else the pinned URL), `pinned_url`, `kind` (`favorite` for a
-  tile, `pinned` for a tab in a pinned folder), `folder`, `profile` (its name) and `parked` (pins of a profile no
-  window shows, from `parkedPins`). Pins mirrored across windows count once. Incognito profiles are skipped.
+- `ardia pinned` reads `<data dir>/session.json` (the app's persisted state, `apps/browser/src/state/session/persist.ts`;
+  version 2 or later) and, on Linux, `<data dir>/<app profile>/Ardia/linux-session.json` (see Linux) and lists one
+  row per pin: `title` (custom title first), `url` (else the pinned URL), `pinned_url`, `kind` (`favorite` for a
+  Top Apps tile, `pinned` for a pinned row or a tab in a pinned folder), `folder` (the pinned folder, the innermost
+  one when they nest, or the tile's folder), `profile` (its name) and `parked` (pins of a profile no window shows,
+  from `parkedPins`). It takes each tab's `pin` (`{"as": "tile" | "row", "folder"?}`), or the older `pinned`,
+  `pinnedAsRow` and `tileFolder` fields when a tab still has them. Rows follow `profileOrder`, then `windowOrder`,
+  then each window's tab order. Pins mirrored across windows (one `pinKey`) count once. Incognito profiles, private
+  and small windows are skipped. A missing file gives no rows; a symlink, a file that isn't regular, one past the
+  size cap (256 MB for `session.json`, the host's 8 MB for `linux-session.json`) or invalid JSON is an error.
 - `ardia history [--days N] [--limit N] [--profile P] [--domains]` (default 1 day, 200 rows, `--limit 0` for all) reads Chromium's `History` for each `Default` and
-  `Profile <id>` folder under `<data dir>/Chromium/` (never incognito, guest or system profiles; `--profile` must be a
+  `Profile <id>` folder under `<data dir>/Chromium/` (on Linux, the data dir itself) (never incognito, guest or system profiles; `--profile` must be a
   profile name or one of those folder names, never a path). Rows per URL, newest first: `url`, `title`, `visits` in
   the window, `total_visits`, `last_visit` (ISO 8601, local time), `profile`. Only http(s) pages; subframe
   navigations and hidden URLs are left out. `--domains` rolls rows up per domain (`domain`, `visits`, `pages`,
@@ -683,7 +1158,8 @@ resolving symlinks), not by path spelling, since APFS is case-insensitive. A scr
 before anything is injected or published, so a script can't bundle `ArdiaControl.json` or other files and send
 them to a page. `data:` imports are allowed. The tarball ships esbuild in `ardia_cli/bin/esbuild` and an installed
 CLI uses only that one; from the repo (`python -m ardia_cli`) it falls back to
-`node_modules/@esbuild/darwin-arm64/bin/esbuild` in a parent folder of the package, then `esbuild` on PATH. It never
+`node_modules/@esbuild/darwin-arm64/bin/esbuild` (`@esbuild/linux-x64` on Linux) in a parent folder of the package,
+then `esbuild` on PATH. It never
 looks in the cwd.
 
 - `ardia scripts new NAME [--match PATTERN]…` writes `NAME.user.ts` in the cwd (default match
@@ -721,12 +1197,15 @@ looks in the cwd.
 
 ### Install contract with the app
 
-The data dir is `--data-dir`, else `$ARDIA_DATA_DIR`, else `~/Library/Application Support/com.ardia.browser`.
+The data dir is `--data-dir`, else `$ARDIA_DATA_DIR`, else the installed app's (`~/Library/Application
+Support/com.ardia.browser`; on Linux `${ARDIA_CONFIG_HOME:-${XDG_CONFIG_HOME:-~/.config}}/ardia`, see How it finds
+Ardia).
 
 1. The CLI takes an exclusive `flock` on `<data dir>/Scripts/.lock` (polled, 30 s deadline). The app takes a shared
    one while it reads and validates. `Scripts/`, `Scripts/scripts/`, record folders and `extension/` must be real
    folders the user owns: each is opened with `O_NOFOLLOW`, and everything below works relative to those folder
-   descriptors (`renameatx_np`, `openat`, `rmtree(dir_fd=)`), so a planted symlink is refused, not followed.
+   descriptors (`renameatx_np` on macOS, `renameat2` on Linux, `openat`, `rmtree(dir_fd=)`), so a planted symlink is
+   refused, not followed.
 2. It keeps its record in `Scripts/scripts/<id>/`: `meta.json` (the parsed metadata, `id`, `world`, `source_file`,
    `installed_at`, `updated_at`), `script.js` (the build) and `source.<ext>` (a copy of the entry file). A new record
    is staged in a temp sibling and only swapped in after the extension built from it validated and was published; if
@@ -739,7 +1218,8 @@ The data dir is `--data-dir`, else `$ARDIA_DATA_DIR`, else `~/Library/Applicatio
    one bad script can't make the shared extension unloadable, along with the engine's limits: at most 256 content
    script entries, 256 files per entry, 512 distinct files, and a 256 KB manifest. A script with `@match` gets one entry; one with `@include` gets an entry with `matches` `*://*/*` and
    the globs, excluding its `@match` patterns so no page runs it twice. Entries follow install order. When
-   `extension/` exists the new folder replaces it with `renamex_np(RENAME_SWAP)` and the old one is deleted, so the
+   `extension/` exists the new folder replaces it with `renameatx_np(RENAME_SWAP)` (`renameat2(RENAME_EXCHANGE)` on
+   Linux) and the old one is deleted, so the
    path never goes missing; a plain rename only when there's none. With no scripts left, `extension/` is removed.
 4. It writes `Scripts/generation` (temp file and rename): one more than the largest of `Scripts/generation`,
    `extension/generation` and the last reported one. A crashed run is repaired by the next install or
@@ -767,6 +1247,10 @@ The data dir is `--data-dir`, else `$ARDIA_DATA_DIR`, else `~/Library/Applicatio
 4. `$ARDIA_CDP_URL`, like `--ws`.
 5. `<data dir>/Chromium/ArdiaControl.json`, with `--data-dir` or `$ARDIA_DATA_DIR`, else the installed app's
    `~/Library/Application Support/com.ardia.browser/Chromium/ArdiaControl.json`.
+   On Linux the browser is Chromium itself and its user data dir is the data dir, so it's `<data dir>/ArdiaControl.json`
+   and the installed app's is `${XDG_CONFIG_HOME:-~/.config}/ardia/ArdiaControl.json` (`$ARDIA_CONFIG_HOME/ardia` when
+   that's set, as the engine does). The control socket is `<data dir>/ArdiaControl.sock` on both, checked with
+   `LOCAL_PEERCRED` on macOS and `SO_PEERCRED` on Linux; its path may be 103 bytes on macOS and 107 on Linux.
 
 The active-page route is `GET http://127.0.0.1:P/ardia/active?token=<token>`: `{"targetId": "<id>"}`, or `null` when
 New Tab or an Ardia view is showing; anything else is a 404. The CLI calls it directly (no proxy, no Origin header)
@@ -775,12 +1259,12 @@ with the token redacted like everywhere else, and falls back to the visibility c
 The app writes `ArdiaControl.json` when the setting is on:
 `{"port":P,"browser":"/devtools/browser/<guid>","token":"…","pid":…,"generation":N}`. The CLI opens it without
 following links and trusts it only when it's a regular file the user owns, mode 0600, and `pid` is alive. It connects
-to `ws://127.0.0.1:P<browser>?token=<token>`; pydoll keeps the query on every `/devtools/page/<id>` URL, so page
-sockets carry the token too. A missing, stale or unsafe file, or a refused connection, prints one line and exits 2:
+to `ws://127.0.0.1:P<browser>?token=<token>`; every CDP call goes over that one browser socket
+(flattened sessions), so it always carries the token. A missing, stale or unsafe file, or a refused connection, prints one line and exits 2:
 `Ardia isn't running, or "Let the ardia command control Ardia" is off in Settings.` There's no port scanning and no
 `/json` fallback on this path. The token never reaches the output: stdout and stderr are redacted as a stream (a token
 split across writes is held back until it's complete), and so are log records and everything a logging handler
-formats, tracebacks included. pydoll's loggers stay at ERROR. The stream holds back only a tail that could start a
+formats, tracebacks included. The `websockets` logger (only the `stream` server uses it) stays at ERROR. The stream holds back only a tail that could start a
 registered token and releases everything on `flush()`, at exit and on SIGTERM or SIGHUP (exit 143). A token printed in
 two parts with an explicit flush between them gets through; that gap is accepted.
 
@@ -788,9 +1272,10 @@ two parts with an explicit flush between them gets through; that gap is accepted
 
 `ardia_cli/telemetry.py` records crash reports and usage only while the app's "Share anonymous crash reports and usage
 stats" is on for the data dir the command resolved (`--data-dir`, else `$ARDIA_DATA_DIR`, else the installed app's):
-`<data dir>/telemetry.json`, the app's own saved choice, must say `"sharing": true` with an `installId`. That id is the
-events' `distinct_id`, so the command's events join the install's. Nothing is recorded or sent when the file is
-missing, unreadable or says sharing is off, with `DO_NOT_TRACK` set (anything but empty, `0` or `false`) or
+`<data dir>/telemetry.json`, the app's own saved choice, must say `"sharing": true` with an `installId` (and, during a
+14-day watch, a `sharingUntil` still in the future). That id is the events' `distinct_id`, so the command's events join
+the install's. The CLI reads only the fields it needs and ignores the rest, at any `version`, so a newer app format never
+silently stops CLI telemetry. Nothing is sent when the file is missing, unreadable or says sharing is off, with `DO_NOT_TRACK` set (anything but empty, `0` or `false`) or
 `ARDIA_TELEMETRY=0` (or `false`, `off`, `no`), for a command pointed at a test endpoint (`--port`, `--ws`, `--cdp`,
 `ARDIA_PORT`, `ARDIA_WS`, `ARDIA_CDP_URL`, `AGENT_BROWSER_CDP`), or from a checkout (version `0.0.0.dev0`). `ardia
 --version` records nothing.
@@ -799,7 +1284,10 @@ The wire format is the app's: OTLP log records (`otlp.ts` `eventRecord`/`logsReq
 to `https://ardia.dev/otel/v1/logs`, scope `ardia.analytics`, resource `service.name` `ardia-cli`, so they land in
 `telemetry.events` with `source = 'ardia-cli'`. Every event carries `$lib` `ardia-cli`, `cli_version`, `$os_version`,
 `arch`, `python_version`, `$environment` (`production` for the installed app's data dir, `test` for any other, `dev`
-from a checkout), `$geoip_disable` and `$process_person_profile: false`.
+from a checkout), `$geoip_disable`, `$process_person_profile: false` and `$session_id`: the app's `sessionId` from
+`telemetry.json` while it says `sessionOpen`, else one UUIDv7 per CLI process. During a watch, events also carry
+`watch_report` (`FB-…`). Every post sends `X-Ardia-Key` with the CLI's public ingest key (`CLI_INGEST_KEY` in
+`telemetry.py`, the same value as `packages/core/src/ingestKeys.ts`; a test keeps them equal).
 
 - `cli_command`, one per run: `command` (the first command word; `unknown` for a word it doesn't know, `none` for
   bare `ardia` and `--help`), `subcommand` (the second word; for `browse`, the browse command, or `other` when it
@@ -812,7 +1300,9 @@ from a checkout), `$geoip_disable` and `$process_person_profile: false`.
   `snapshot`, `eval_ms` for `eval` or `action_ms` for the rest (the daemon's time less connect, attach and settle),
   `settle_ms` (the wait for the change report's network to settle, `changes.observe`), `snapshot_nodes` and
   `snapshot_chars`, `network_writes_count` and `unsettled` from the change report,
-  `output_chars` and `output_truncated`, `humanize`, `batch_steps`, and `cdp_calls` with `cdp_ms_total` (the
+  `output_chars` and `output_truncated`, `humanize`, `followed_redrawn_ref` (a stale ref followed its redrawn node), `followed_ref_after_reload` (a ref from before the page reloaded the same address was used, its element was unique by role and name before and after, so the command used the new one and said so; a different address still fails as a stale ref), `stale_ref_after_navigation` (a ref from before the page navigated was used; the error says the page navigated, where it used to say only that the ref came from an earlier snapshot, and names the same role and name on the new page when there is one; watch `error_code` `stale_ref`), `attach_refused` (the policy refused the attach to a tab; watch it with `error_code` `policy_refused` on `read` and `open`, where it should stay at zero), `network_disable_unconfirmed` (a command's change report turned network capture off and the page didn't confirm within 2 s, usually because it was mid-navigation or its main thread was busy; the tab is kept, where it used to be detached and the command failed with `error_code` `tab_detached`), `reattached_after_detach` (`open`, or an action's change report, found its tab detached from the command while the tab was still open, attached to it again and finished; watch `error_code` `tab_detached` on `open` and `script`, which should stay near zero), `setup_restored` and `setup_restore_failed` (after attaching again, the session's init scripts, `set` overrides and interception were put back, or something couldn't be and the command failed with `error_code` `setup_lost`, which should stay near zero), `renderer_exit_kept_session` (Chromium said a tab's renderer exited and the session was kept), `earlier_requests_ignored` (a change report left out requests that began before its capture was on), `cell_edits` (grid cells `fill` edited through their editor; watch `error_code` `rejected` and `not_editable` on `fill`), `fill_picked_option` (`fill` picked a `<select>` option), `fill_inserted_text` (`fill` put the text in with one `Input.insertText`), `fill_no_reaction_hint` (a `fill` into a text, number, search or phone input changed nothing else on the page, neither its text nor its controls nor a request, and the answer said some fields only apply on Enter or when left; watch it against `press` right after `fill`), `waited_for_enabled` (a `click`, `fill`, `select` or `check` target was disabled and was waited for; `error_code` `disabled` when it stayed so), `drag_side_given` (`drag --before`/`--after`) and `drag_list_position` (the drag answer named the new place in a list), `select_opened_list` (`select` picked from the one list that opened when it opened a field with no linked list; watch `error_code` `no_fresh_suggestions` on `select`, which it should lower), `press_targeted` (`press <sel> <key>` focused the element first), `find_closest_names` (`find role … --name` matched nothing and the error listed the names closest to the one asked for first, where it used to list the first eight on the page, usually navigation links; watch `error_code` `not_found` on `find`), `focused_inner_field` (an element that couldn't take focus itself, like a combobox wrapper, had the field inside it focused instead; a hidden or inert one now fails with `error_code` `not_focusable` and says to click it open, where it used to print the raw `DOM.focus: Element is not focusable`), `waited_for_reaction` (after typing into a search or filter field, the next command that targets something else waited, best effort, at least 0.6 s from the last keystroke for the page to redraw and go quiet, longer while anything is `aria-busy`, counting only the results the field `aria-controls` when it names them, up to 1.5 s; key presses without a target, `tab`, `notes`, `frame` and `get url`/`title` don't wait, and `--no-changes` keeps the wait; watch `error_code` `target_replaced` and `input_not_delivered` on `fill`, which it should keep low), `selector_nth` (a selector ended in `>> nth=N`; a CSS selector with an unquoted attribute value that has spaces or punctuation, like `[aria-label=Two words]`, is quoted for you, in `eval` too when it's a string literal passed to `querySelector`, `querySelectorAll`, `closest` or `matches` (`eval_selectors_quoted`; the answer names what it quoted), and an `eval` that still fails on one says how to quote it; watch `error_code` `page_script_error` on `click` and `eval`), `saved_as_csv` (`--out` wrote a CSV or TSV table), `script_state_kept` (a script ended or timed out with something in `state`), `script_state_kept_on_interrupt` (a script was interrupted, its caller's Ctrl-C or a closed connection, and what it had put in `state` was kept for the next script, where it used to be thrown away; the interrupt message says to read it with `script 'return state'`), `eval_timed_out` (an `eval`'s page code, usually an awaited promise, ran past its limit, 60 s or `--timeout` up to 10m, and the error said so and pointed at `--timeout`, where it used to say Ardia didn't answer `Runtime.evaluate`; it stays an unknown outcome, so a `batch` stops after it; watch `error_code` `outcome_unknown` on `eval`), `navigation_dropped_hint` (a navigation failed because the site dropped or refused the connection, and the error said a retry of the same URL rarely loads, named what may still answer and asked to say what couldn't be reached, counting the failures on that host; watch `error_code` `navigation_failed` on `open`), `queued_behind_script` (a command arrived while its session was running a `script` and waited its turn, up to 5 minutes, where it used to give up after 30 s; watch `error_code` `session_busy`), `script_queued_behind_busy` (a `script` arrived while its session was busy and waited its turn, up to its own `--timeout` or 90 s, where every command used to give up after 30 s; watch `error_code` `session_busy` on `script`, which it should lower), `script_timeout_read_hint` (a timed-out script had opened three or more pages one after another and was pointed at `read <url> <url> …`; watch `error_code` `timeout` on `script`, which it should lower), `saved_to_file` (`script`, `eval` or `read` ran with `--out`; watch `output_truncated` on `script`, which it should lower), `batch_line_saved` (a `batch` line carried `--out` and saved its file, where it used to fail with Unknown flag), `batch_saved` (`batch … --out <file>` saved everything the batch printed and listed the lines that failed, where it used to fail with Unknown flag), `waited_for_element` (a selector matched only after polling; watch `error_code` `not_found`, which it should lower), `output_saved` (a capped output was saved whole to a file; watch `output_truncated` on `script`, which it should lower), `consent_dismissed` (a click dismissed the consent banner covering it; watch `error_code` `covered` on `click`, which it should lower), `popup_dismissed` (a click closed an email-signup popup covering it, through its close, No thanks or × button, never its signup button; watch `error_code` `covered` on `click`), `dom_click_fallback` (a click target outside the page got a DOM click), `dom_click_behind_modal` (a click target outside the page sat outside the modal dialog showing over it, so it got no DOM click and the error named that dialog; watch `error_code` `outside_viewport` on `click` and `dom_click_fallback` against it), `dom_click_waited_for_modal` (that dialog was still closing and went within 0.5 s, so the click went through after the wait; watch it against `dom_click_behind_modal`), `input_in_inner_frame` (a raw `mouse` event's point, or a key press's focus, was in a frame inside the page, a cross-process iframe, a frame in a shadow root or an `embed`, so delivery counted as confirmed instead of failing with `input_not_delivered`; watch `error_code` `input_not_delivered` on `mouse` and `press`, which it should lower), `screenshot_unchanged` (`screenshot --if-changed` found the view unchanged since its last screenshot and saved nothing), `flow_saved` with `flow_requests_kept` and `flow_params` (a `flow save` and what it kept), `flow_run_page` (a `flow run` got its answer), `flow_drifted` (an answer's shape changed; watch it with `error_code` `drifted`, `redirected`, `auth_expired`, `blocked`, `rate_limited`, `fetch_failed` and `flow_not_get` on `flow`), `flow_shaped` with `flow_items` (`--fields`, `--where` or `--limit` were given, and the items returned), `flow_hint_shown` (`open` or `snapshot` listed a site's saved flows), `frame_cross_process_box` (`frame` on a cross-process iframe, which ardia browse can't enter, answered with `error_code` `cross_process_frame`, the iframe's viewport box and the `mouse move`/`down`/`up` recipe for clicking inside it), `click_scroll_locked` (a click target the page couldn't scroll to was held back by an open dialog or a scroll lock, and the error named it and said to close it; watch `error_code` `outside_viewport` on `click`), `click_recentered` (a covered or off-screen click target was scrolled to the middle and retried; watch `error_code` `outside_viewport`), `element_rehomed` (a page call was refused because an element's handle belonged to an older JavaScript world of the page, so the element was resolved again in the current world by its node and the call retried, where the command used to fail with a raw `Runtime.callFunctionOn` error), `clicked_visible_content` (a click target with no box of its own, like a zero-size wrapper around its visible content, was clicked through its first visible descendant, which the event reaches it from; a hidden target still fails with `error_code` `not_visible`, now in plain words where a raw `DOM.scrollIntoViewIfNeeded` error used to leak), `clicked_label_of_hidden_input` (a click on a checkbox or radio drawn by its label, with the input itself hidden, went to the label; watch `error_code` `not_visible` on `click`), `waited_for_box_to_settle` (a click target was still moving, from a scroll or a layout change, and the click waited up to 1 s for it to stop before aiming), `read_scope_shown` (a read printed the page's own total or pagination), `read_data` with `read_data_blocks` and `read_data_shaped` (`read --data` listed the JSON blocks the page embeds, how many, and whether `--fields`/`--where`/`--limit` shaped one; watch `error_code` `no_data` on `read`), `read_bot_check` (a page read like a bot check or block and got the retry note), `network_reloaded` (`network requests --reload` started recording and reloaded the page so its own loads were listed; plain `network requests` that starts recording now points at it), `read_empty_page` (a page came back with no title and no text and was marked as a likely block; watch `read_pages` against it), `read_scroll_guessed` (`read --scroll` without `-s` picked the page's main repeated list; watch `error_code` `no_list`), `read_beside_busy` (a `read` of named URLs ran in the sibling session because its own was busy; watch `error_code` `session_busy` on `read`, which it should lower), `read_queued_beside` (that sibling session was itself busy, so the read waited its turn there, up to its own time limit, where it used to give up after 30 s), `read_waited_for_content` (a page read thin after settling and was read again until it filled in or 5 s passed; watch `read_pages` against it), `read_pdf` (`read` extracted a PDF's text; watch `error_code` `pdf_unreadable`), `script_eval_alias` (a script called `page.eval`), `script_page_world_hint` (a script's error got the page-world hint), `read_scrolled` with `read_rows` (a `read --scroll` and the rows it read) and `read_matched` (it had `--match`), `read_pages` (the pages a multi-page `read` read; watch `output_truncated` on those), `read_tabs_reopened` (reading tabs Ardia detached mid-read that were opened again; watch it with `error_code` `tab_detached`, which should stay near zero), `read_virtualized_grid` (a read printed the virtualized-grid note); `read` marks navigation, asides and blocks titled or named like related, recently viewed, sponsored or recommended items with `[<title>: not the main content]` … `[end of <title>]`, so they're easy to skip or scope away from (nothing is removed, and reading such a block itself with `-s` doesn't mark it); `read` writes the label of an icon that carries one (an `aria-label` on a textless element, or an SVG's `aria-label` or `<title>`) in brackets beside its value, like `[Customer care] 1-800-…`, where it used to drop it; nothing extra is counted for this, `change_text` with `change_text_chars` (a change report carried `text:` lines, and their length), `change_run_choices` (a mixed run listed its enabled members), `open_report` (`open` printed a change report), `open_moved_tab` (`open` moved the session off the user's tab to its own and named the way back), `open_still_loading` (`open` hit its time limit waiting for the load event on a page that already showed content, and returned it with a note instead of failing; watch `error_code` `timeout` on `open`, which it should lower), `snapshot_disabled_folded` (`snapshot -i` folded disabled members into a count), `snapshot_repeat_labels` (`snapshot -i` labeled controls that share a name, or have none, with the nearest heading, link, cell or text around them, as `(near "…")`; headings get none, a text that is itself a repeated name is never used, and a label two of the same controls would share is left out), `names_clipped` (a name was cut at 100 characters), `daemon_answer_timed_out` (the client gave up waiting for the
+  daemon's answer: the queue wait plus the command's own limit plus 30 s, `browse/limits.py`), `batch_steps` (also the operations an `ardia apply`, `tabs …`
+  or `groups …` call sent), and `cdp_calls` with `cdp_ms_total` (the
   command's own DevTools calls, counted in `connection.py`). The daemon returns its share as `metrics` in its answer
   (`command_metrics.py`).
 - `$exception` for a crash the CLI didn't handle (`source` and mechanism `cli_unhandled`, level `fatal`) or one inside
@@ -826,13 +1316,16 @@ from a checkout), `$geoip_disable` and `$process_person_profile: false`.
   endpoints, a checkout): it reports a command's crash only when that request was eligible, and a crash of the
   daemon itself only when the last request it took was.
 
-- `cli_feedback`, one per `ardia feedback`: `text` (the note), `text_truncated`, `text_chars` (its length before
-  scrubbing), `about_command` (`--command`, scrubbed and capped at 300), `agent` (the caller name the control pill
-  shows, from `caller.py`), `recent_commands` (the last five command names this CLI home ran, like `browse click` or
-  `browse fill (exit 1)`, never their arguments) and `cli_version`. See Feedback and the star nudge.
+It never sends argv values, URLs, page text, selectors, refs, typed text, JS, notes, file paths, cookies or anything
+from the page. Reports from `ardia feedback` don't go through this pipeline (see Feedback and the star nudge).
 
-Apart from `cli_feedback`'s scrubbed text, it never sends argv values, URLs, page text, selectors, refs, typed text,
-JS, notes, file paths, cookies or anything from the page.
+Every event it builds, sent or not, is also appended to a 7-day local copy, `<data dir>/Telemetry/local/cli-<UTC
+day>.jsonl` (folder 0700 when the CLI makes it; the app shares it, so one it made without group or other write access
+is used too), one record per line with `sent` true when it was queued for ardia.dev and false when sharing is off
+(`distinct_id` is then `local`). Files older than 7 days are deleted and the total is capped at 4 MB, oldest lines
+first, on every append, under `cli-local.lock`. It's written whenever the command would send if sharing were on, so
+the opt-outs, test endpoints and a checkout above keep no copy either. It leaves the Mac only as the normal events
+(sharing on) or when someone attaches it to a report.
 
 Nothing waits on the network. Events go to `<data dir>/Telemetry/cli-queue.jsonl` (folder 0700, file 0600, under
 `cli-queue.lock`; at most 500 events and 256 KB, the oldest dropped). At exit, once at least 60 s have passed since the
@@ -852,28 +1345,65 @@ runs against a local stub with fixture data dirs.
 
 ## Feedback and the star nudge
 
-`ardia feedback "<what annoyed you, what you expected>"` (or the text on stdin, or `-`) is for agents to tell the
-developer about friction: a confusing error, a missing command, output that cost turns. `telemetry_scrub.free_text`
-first replaces control characters. Then, from the first sensitive word (password, passwd, pwd, secret, token, api
-key/api_key/apikey, authorization, bearer, basic, digest, cookie, session, credential, private key, auth; any case,
-inside other words too), everything to the end of the note becomes `<redacted>`, whatever quoting, line breaks or
-continuations follow. This over-redacts on purpose: the note is about the CLI, and nothing after someone writes
-"token" is worth the risk. On what's left it drops a URL's login and query (`https://host/path?<redacted>`), known
-token shapes (`ghp_…`, `github_pat_…`, `sk-…`, `xox?-…`, `AKIA…`, `AIza…`, JWTs), emails, mixed letter-and-digit runs of 32 or more,
-card-like numbers and the user name in `/Users/<name>`, then caps it at 1,000 characters. It goes out under exactly the
-consent and opt-outs above, as a `cli_feedback` event; the flush starts at once instead of waiting out the 60 s
-interval, unless the flusher is backing off after a failure. At most 20 notes a rolling day go out per CLI home, and
-the same text twice in a day is sent once (`$ARDIA_CLI_HOME/Usage/usage.json`, under `usage.lock`). Anything not
-sent (sharing off, an opt-out, a test endpoint, over the limit) is kept, scrubbed, in
-`$ARDIA_CLI_HOME/Usage/feedback.jsonl` (newest 200), and the one line it prints says so.
+`ardia feedback --title "<short title>" "<what you ran, what happened, what you expected>"` (or the description on
+stdin, or `-`) is for agents and people to report a problem or an idea: a confusing error, a missing command, output
+that cost turns, something slow. It follows the contract in `docs/feedback.md`: `--title` is required, 1-67 characters
+once runs of whitespace are folded into one space; the description is required and kept to 4,000 characters after
+scrubbing; `--kind` is `bug` (the default), `slow`, `idea` or `other`; `--command` names the command that misbehaved.
 
-The owner reads them on dash.ardia.dev › Errors › Agent feedback, or with
-`SELECT timestamp, properties['agent'], properties['cli_version'], properties['about_command'],
-properties['recent_commands'], properties['text'] FROM telemetry.events WHERE event = 'cli_feedback' AND
-source = 'ardia-cli' ORDER BY timestamp DESC`.
+Sending a report is consent for that report, so it goes out whether or not the app's sharing is on. With sharing on
+(`telemetry.json` for `--data-dir`, `$ARDIA_DATA_DIR` or the installed app's data dir; from a checkout, only an
+explicit data dir is read) the report carries the install id, so it joins that install's events; otherwise a one-time
+UUIDv4 made for that report. `session_id` is the same one the events carry. It posts to `https://ardia.dev/api/feedback`
+with `X-Ardia-Key` (the CLI key): `kind`, `title`, `description`, `source: "cli"`, `install_id`, `session_id`,
+`app_version` and `app_build` (the app's `lastVersion`/`lastBuild` from `telemetry.json`), `channel`, `os_version`,
+`arch`, `cli_version`, `watch_days: 0`, `diagnostics` (`agent`, the caller name the control pill shows from
+`caller.py`; `about_command`, scrubbed and capped at 300; `recent_commands`, the last five command names this CLI home
+ran, like `browse click` or `browse fill (exit 1)`, never their arguments; `description_truncated`; `environment`;
+`python_version`) and `attachments`. Then it uploads each file with `PUT <endpoint>/<id>/files/<name>` and the
+`upload_token` as a Bearer token, and calls `POST <endpoint>/<id>/complete`. It prints `Sent. Reference FB-…`, the
+GitHub issue link and "You appear to us as <name>" from the service's answer, and says "Sent" only after a 2xx from
+`complete`.
+
+`--attach FILE` (repeatable, 10 at most) takes the contract's kinds: one `.mp4` as `recording.mp4` (100 MB), one
+`.json.gz` as `trace.json.gz` (50 MB), `.ips` crash reports as `crash-<n>.ips`, and `.png`, `.jpg`, `.jpeg`, `.gif`,
+`.webp`, `.heic`, `.mov`, `.txt`, `.log`, `.md`, `.json`, `.jsonl` or `.csv` as `attachment-<n>.<ext>` (10 MB each).
+Anything else, an empty file or one over its cap is refused before anything is sent. Files aren't scrubbed; they stay
+private and never reach GitHub.
+
+`telemetry_scrub.scrub` removes secrets by exact pattern, never by cutting at a keyword, so a report about
+`ardia browse session`, `auth save` or an expired token keeps its words. It replaces control characters, then
+removes: private key blocks; every parameter of a Digest header; the value of `Authorization`, `Proxy-Authorization`,
+`Cookie`, `Set-Cookie`, `Api-Key`, `Private-Token` and `X-…-Token/Key/Secret/Auth/Session/Password` headers; URL logins
+and queries (`https://host/path?<redacted>`); `key=value`, `key: value`, `key => value` and `--key value` where the key
+names a secret (`password`, `passwd`, `pwd`, `passphrase`, `secret`, `token`, `api_key`, `access_key`, `private_key`,
+`credential(s)`, `session_id`/`session_key`/`session_token`, `sessionid`, `auth_token`/`auth_key`/`auth_code`,
+`cookie`, `signature`, `otp`, and names ending in them like `client_secret` or `access_token`), quoted values whole,
+escapes and unclosed quotes included; session cookie pairs (`sid=`, `PHPSESSID=`, `connect.sid=`, `_x_session=`…);
+`Bearer`/`Basic` followed by something credential-shaped (a digit or `._~+/=-`, 20 letters, or quoted); known key
+formats (`ghp_…`, `github_pat_…`, `sk-…`, `sk_live_…`, `xox?-…`, `glpat-…`, `npm_…`, `AKIA…`/`ASIA…`, `AIza…`,
+`ya29.…`, `hf_…`) and JWTs as `<secret>`; emails as `<email>`; mixed letter-and-digit runs of 32 or more as
+`<secret>`; card numbers that pass the Luhn check as `<number>`; and the name in `/Users/<name>` and `/home/<name>`.
+A title or description with nothing left but those placeholders is refused (exit 2). The raw length isn't sent.
+
+When it isn't sent, the report is kept, scrubbed, in `$ARDIA_CLI_HOME/Usage/feedback.jsonl` (newest 200, with the
+reason and any reference the service gave), and the line says exactly why: `DO_NOT_TRACK=… is set`,
+`ARDIA_TELEMETRY=… is set`, `ARDIA_PORT points ardia at a test browser` (any of the test endpoint variables), a
+checkout build (`0.0.0.dev0`, which never sends to ardia.dev), an `ARDIA_FEEDBACK_URL` that isn't loopback, the daily
+limit, the network failing (with the system's reason), or the service's HTTP status and message. At most 20 reports a
+rolling day go out per CLI home, and the same kind, title and description twice in a day is sent once
+(`$ARDIA_CLI_HOME/Usage/usage.json`, under `usage.lock`); a report that fails gives its slot back, and when another
+`ardia` holds that lock the report is kept with that reason. From a checkout without `ARDIA_CLI_HOME`, nothing is
+counted or saved, and the line says so.
+
+`ARDIA_FEEDBACK_URL` is for tests: a loopback `http://` URL gets the reports instead of ardia.dev, from a checkout too
+(an origin alone gets `/api/feedback` added); any other value keeps reports on the Mac. `tests/test_feedback.py` runs
+against a stub of the service and, when `node` is there, against `node infra/feedback/server.mjs --local <tmp dir>`.
+
+The owner reads them on dash.ardia.dev › Feedback, and each opens a GitHub issue.
 
 Every command (but `feedback` and `star`) also leaves its name and, when it failed, its exit code in that state's
-`recent` list (five at most), for the next note's `recent_commands`. From a checkout (`0.0.0.dev0`) nothing is recorded
+`recent` list (five at most), for the next report's `recent_commands`. From a checkout (`0.0.0.dev0`) nothing is recorded
 unless `ARDIA_CLI_HOME` is set, so tests never touch the installed CLI's state.
 
 A task is a stretch of `ardia browse` work: it starts with a successful command that does something (`open`, `click`,
@@ -1003,8 +1533,9 @@ The app runs `install.sh` with its own environment minus every `ARDIA_*` variabl
 
 `install.sh [--version V] [--sha256 DIGEST] [--uninstall]` (run with `/bin/sh`; `--help`):
 
-- Downloads `https://github.com/mantrakp04/ardia/releases/download/v<V>/ardia-cli-<V>-macos-arm64.tar.gz` (https only)
-  into a private temp dir; it runs on Apple silicon only and stops with an error anywhere else. Without `--version` it
+- Downloads `https://github.com/mantrakp04/ardia/releases/download/v<V>/ardia-cli-<V>-macos-arm64.tar.gz` on macOS
+  and `…/ardia-cli-<V>-linux-x64.tar.gz` on Linux (https only) into a private temp dir; it runs on Apple silicon and
+  x86_64 Linux and stops with an error anywhere else. Without `--version` it
   takes the latest release that has the asset. `--sha256` is the only
   digest it trusts (the app passes `Ardia.app/Contents/Resources/ardia-cli.sha256`, which the signed bundle pins), and
   a download needs it: a `.sha256` from the same release would only prove the tarball came from wherever the tarball
@@ -1019,15 +1550,22 @@ The app runs `install.sh` with its own environment minus every `ARDIA_*` variabl
   against the lease's mtime), so a reused pid doesn't pin a version.
 - Links `$ARDIA_CLI_BIN_DIR/ardia` (default `~/.local/bin`) to `current/bin/ardia`. It replaces only a link that
   already points into `$ARDIA_CLI_HOME` and refuses anything else. With the default bin dir off the login shell's
-  PATH, it adds `export PATH="$HOME/.local/bin:$PATH"` to `~/.zprofile` once.
+  PATH, it adds `export PATH="$HOME/.local/bin:$PATH"` to the shell's login file once: on macOS `~/.zprofile`
+  (`~/.bash_profile` for bash); on Linux `~/.zprofile` for zsh, `~/.bash_profile` for bash when it exists, else
+  `~/.profile`, and `~/.profile` for any other shell. Fish reads none of those, so for fish (on both) it writes
+  `contains -- $HOME/.local/bin $PATH; or set -gx PATH $HOME/.local/bin $PATH` to
+  `${XDG_CONFIG_HOME:-~/.config}/fish/conf.d/ardia.fish` instead. The login shell comes from `dscl` on macOS and
+  `getent passwd` on Linux, else `$SHELL`.
 - A version that is already current is a no-op. Two runs never overlap: each takes a flock on
-  `$ARDIA_CLI_HOME/.lock` through fd 9 (`/usr/bin/lockf -s -t 120 9`). The kernel drops it when the run exits, even on
+  `$ARDIA_CLI_HOME/.lock` through fd 9 (`/usr/bin/lockf -s -t 120 9`; `flock -w 120 9` on Linux). The kernel drops it
+  when the run exits, even on
   SIGKILL; a run that waits 120 s prints `error another install is still running`. Uninstall leaves the empty `.lock`
   file, since deleting a lock file other runs may have open would split the lock.
 - Output for the app, one line each: `step resolve|download|verify|install|link`, `version <v>`, `path <rc file>`,
   then `installed <bin path>` or `uninstalled`, or `error <message>` with exit 1.
 
-`$ARDIA_CLI_HOME` defaults to `~/Library/Application Support/Ardia/CLI`. The installed version is
+`$ARDIA_CLI_HOME` defaults to `~/Library/Application Support/Ardia/CLI` (on Linux
+`${XDG_DATA_HOME:-~/.local/share}/ardia/cli`). The installed version is
 `basename "$(readlink "$ARDIA_CLI_HOME/current")"`; the app reads that link to decide whether to upgrade, and after an
 app update it runs `install.sh --version <app version> --sha256 <pinned digest>` in the background. The CLI never
 updates itself. After switching `current` to a new version, `install.sh` runs `current/bin/ardia skills refresh`
@@ -1035,12 +1573,18 @@ updates itself. After switching `current` to a new version, `install.sh` runs `c
 
 ## Build and release
 
-`apps/cli/scripts/build.sh <version> <out dir>` writes `ardia-cli-<version>-macos-arm64.tar.gz` and its `.sha256`:
-python-build-standalone CPython 3.13 (release and sha256 pinned in the script), the locked dependencies and
-`ardia_cli` in its site-packages, pruned of tests, idlelib, Tk, ensurepip, the unused libpython dylib and
-`__pycache__`, plus `bin/ardia`, an sh launcher that resolves its links and runs `python3 -I -m ardia_cli`, and
-esbuild (the npm `@esbuild/darwin-arm64` tarball, version, sha256 and sha512 pinned in the script) in
-`ardia_cli/bin/esbuild`. About 18 MB; 52 MB installed. `ardia --version` takes about 10 ms; the first command about 1 s while Python writes its
+`apps/cli/scripts/build.sh <version> <out dir> [--platform macos-arm64|linux-x64]` writes
+`ardia-cli-<version>-<platform>.tar.gz` and its `.sha256` (`sha256sum` format). The platform defaults to the host's
+and must be the host's, since the bundled Python installs the wheels and runs the checks; the Linux tarball builds on
+any x86_64 Linux with uv. Both hold python-build-standalone CPython 3.13 (release and sha256 pinned in the script per
+platform: `aarch64-apple-darwin` and `x86_64-unknown-linux-gnu` `install_only_stripped`), the locked dependencies and
+`ardia_cli` in its site-packages, pruned of tests, idlelib, Tk, ensurepip, the unused libpython (a dylib on macOS; on
+Linux `python3.13` links it statically, so the `.so` goes too) and `__pycache__`, plus `bin/ardia`, an sh launcher
+that resolves its links and runs `python3 -I -m ardia_cli`, and esbuild (the npm `@esbuild/darwin-arm64` or
+`@esbuild/linux-x64` tarball, the same version, its sha256 and npm's sha512 pinned in the script) in
+`ardia_cli/bin/esbuild`. Downloads are cached in `~/Library/Caches/ardia-cli-build` on macOS and
+`${XDG_CACHE_HOME:-~/.cache}/ardia-cli-build` on Linux. The macOS tarball is about 18 MB, 52 MB installed; the Linux
+one about 26 MB, 76 MB installed. `ardia --version` takes about 10 ms; the first command about 1 s while Python writes its
 bytecode cache, later ones about 0.15 s.
 
 `scripts/release.sh` builds it into the release's dist dir after the export and writes its digest to
@@ -1073,5 +1617,70 @@ helpers need the token path: an instance launched without `ARDIA_REMOTE_DEBUGGIN
 control server when the port switch is set) and with control on, for example a scratch dir whose `session.json` has
 `"settings": {"cliControl": true}`, opened with `open -g -n --env ARDIA_BACKGROUND=1 --env ARDIA_DATA_DIR=<dir>`.
 Unit tests (matching parity with node, import confinement, store rollback and recovery, symlink refusal; config
-and theme commands against hand-written schemas in `tests/fixtures` that use every keyword of the subset):
-`python -m unittest discover -s apps/cli/tests` with the locked dependencies installed.
+and theme commands against the schemas in `tests/fixtures`: a hand-written `config.schema.json` that uses every keyword
+of the subset, and `theme.schema.json` as the app's `themeSchema` writes it; the Linux paths, the systemd unit
+against a fake `systemctl`, and `install.sh` run end to end from `file://` tarballs in a scratch home in `tests/test_linux.py`): `python -m unittest discover -s apps/cli/tests` with the locked dependencies
+installed. On Linux, the installer:
+
+```sh
+apps/cli/scripts/build.sh 0.0.1 /tmp/ardia-cli-out --platform linux-x64
+HOME=/tmp/ardia-cli-home ARDIA_CLI_URL=file:///tmp/ardia-cli-out/ardia-cli-0.0.1-linux-x64.tar.gz \
+  /bin/sh apps/cli/install.sh
+/tmp/ardia-cli-home/.local/bin/ardia browse --port <port> open https://example.com
+/tmp/ardia-cli-home/.local/bin/ardia browse --port <port> get title
+```
+
+Any Chromium works for `--port`: `chromium --headless=new --remote-debugging-port=<port> --user-data-dir=<scratch>`.
+
+## Linux
+
+The same CLI, with these differences:
+
+- Paths: data dir `${ARDIA_CONFIG_HOME:-${XDG_CONFIG_HOME:-~/.config}}/ardia` (the engine's Chromium user data dir,
+  holding `ArdiaControl.json`, `ArdiaControl.sock` and the `Default`/`Profile N` folders), config folder
+  `<data dir>/config` (`${ARDIA_CONFIG_HOME:-${XDG_CONFIG_HOME:-~/.config}}/ardia/config` by default, which the app
+  reads too; on macOS the default is `~/.config/ardia`), so `hooks.json` lives there as well, CLI home
+  `${XDG_DATA_HOME:-~/.local/share}/ardia/cli`, bin dir `~/.local/bin`, hooks log
+  `${XDG_STATE_HOME:-~/.local/state}/ardia/hooks.log` (rotated at 5 MB as on macOS). An `XDG_*_HOME` that isn't an
+  absolute path is ignored, as the XDG spec, systemd and the engine's CLI installer do, except `XDG_CONFIG_HOME` (and
+  `ARDIA_CONFIG_HOME`) for the data dir and config folder, where Chromium takes any non-empty value.
+- `ardia hooks install` writes `${XDG_CONFIG_HOME:-~/.config}/systemd/user/dev.ardia.hooks.service` (`Type=exec`,
+  `ExecStart` the installed `current/bin/ardia hooks run --log <log>`, `WorkingDirectory` the home folder, `PATH`
+  from the installing shell, an empty `ARDIA_DATA_DIR` and `ARDIA_CONFIG_HOME` set to the folder the installing
+  shell resolved (`$ARDIA_CONFIG_HOME`, else `${XDG_CONFIG_HOME:-~/.config}`), so the service reads the same
+  `hooks.json` and reaches the same Ardia as `ardia hooks list` even when the systemd user manager's environment
+  differs, `Restart=on-failure` with `RestartSec=10` and
+  `StartLimitIntervalSec=0` so it never gives up, output to null, `WantedBy=default.target`), then runs `systemctl
+  --user daemon-reload`, `enable` and `restart` (so a reinstall picks up a new unit). `hooks run` exits 0 only on
+  SIGTERM or SIGHUP, so `systemctl --user stop` sticks and every crash restarts it. `uninstall` runs `disable --now`,
+  removes the unit and reloads; `list` reads `systemctl --user show` and prints whether it's active. Paths in the unit
+  escape `%`, `$`, `"` and `\`; control characters are refused.
+- `ardia config edit` uses `$VISUAL`, then `$EDITOR`; with neither, in a desktop session (`$DISPLAY` or
+  `$WAYLAND_DISPLAY` set) it opens the file with `xdg-open`, which returns at once, so it prints a reminder to run
+  `ardia config check` instead of checking. Without a display (an SSH session) or without `xdg-open` it uses `vi`.
+- `ardia scripts install|uninstall|list` use `<data dir>/Scripts`, which is where the engine's scripts policy looks on
+  Linux (the Mac's `Chromium/..` parent would be `~/.config` here). The Linux host reads, watches and reports the
+  folder with the same contract as the Mac (`ac_linux_user_scripts*.cc`, see [linux-port.md](linux-port.md) › "The
+  `ardia` command"); one regular window applies the scripts, and another takes over when it closes.
+- `ardia browse` runs on Linux for opening, reading, snapshots and screenshots, with two gaps. `open --show` and
+  `tab <id> --show` switch Ardia to the tab, but a tab it opened in the background stays hidden to the page, so `click`
+  and typing refuse it with the hidden-tab error. `auth` stores passwords through `/usr/bin/security`, the macOS
+  Keychain tool, which Linux doesn't have.
+- `ardia computer` is macOS only (cua-driver drives macOS apps): `setup` and every passthrough print `ardia computer:
+  computer use through cua-driver needs macOS here` and exit 1, and `computer refresh`, which `install.sh` starts after
+  an upgrade, does nothing. `skills refresh` works as on macOS.
+- The caller name (`ardia_cli/caller.py`) walks the parent processes through `/proc/<pid>/stat`, `exe` and `cmdline`
+  instead of libproc and `sysctl`; app bundles don't exist here, so a process with no known agent above it is
+  `ardia`. Telemetry's `startup_ms` reads the process start from `/proc/self/stat` against `CLOCK_BOOTTIME`.
+- `ardia pinned` reads the host's session, `<data dir>/<app profile>/Ardia/linux-session.json`
+  (`engine/ardiacore-linux/src/ardia/linux/ac_linux_host.cc`, `MergeAndWriteSession`; the shape is
+  `snapshotHostSession` in `apps/linux/src/hostSession.ts`), never `session.json`. The app profile is the folder
+  `profile.last_used` names in `<data dir>/Local State`, which the host pins to its app profile, when it's `Default`
+  or a regular `Profile …` folder; else `Default`. The shape differs from macOS's only in packaging: `windows`,
+  `tabs`, `groups` and `splits` are objects keyed by id rather than lists, there's no `version`, and windows carry
+  `kind` instead of `incognito`. Nothing macOS's pins need is missing: profile names, `profileOrder`,
+  `windowOrder`, tab order, pin keys, folders and `parkedPins` are all there, so the rows match macOS's. The host
+  writes it with `ImportantFileWriter::WriteFileAtomically` (a temp file in `Ardia/`, then a rename), so the CLI
+  opens the profile folder, `Ardia` and the file each with `O_NOFOLLOW` (relative to the folder above) and reads
+  the one file it opened, which is always a whole version; it never writes there. `ardia history` takes its profile
+  labels from the same file (`Profile <dataId>` is that profile's folder).

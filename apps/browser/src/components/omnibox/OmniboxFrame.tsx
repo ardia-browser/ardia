@@ -1,7 +1,7 @@
 import type { SearchScope } from "@ardia/core";
 import { memo, type ReactNode, type RefObject } from "react";
 import { View } from "react-native";
-import { Button, capsule, ContextMenuArea, useHover, useTheme } from "../ui";
+import { Button, capsule, ContextMenuArea, ink, useHover, useTheme } from "../ui";
 import { GlassFill, useGlass } from "../ui/Glass";
 import { GoButton } from "./GoButton";
 import { ScopeChip } from "./ScopeChip";
@@ -73,8 +73,7 @@ export function PanelFrame({ rootRef, onContextMenu, leadingIcon, scope, field, 
   );
 }
 
-export function BottomRow({ hero, addChip, onDictate, label, enabled, onGo }: { hero: boolean; addChip: ReactNode; onDictate(): void; label: string; enabled: boolean; onGo(): void }) {
-  const theme = useTheme();
+export function BottomRow({ hero, addChip, onDictate, label, enabled, onGo }: { hero: boolean; addChip: ReactNode; onDictate?: () => void; label: string; enabled: boolean; onGo(): void }) {
   return (
     <View
       style={{
@@ -88,7 +87,7 @@ export function BottomRow({ hero, addChip, onDictate, label, enabled, onGo }: { 
     >
       {addChip}
       <View style={{ flex: 1 }} />
-      <DictateButton onPress={onDictate} />
+      {onDictate && <DictateButton onPress={onDictate} />}
       <GoButton label={label} enabled={enabled} onPress={onGo} />
     </View>
   );
@@ -109,7 +108,7 @@ const DictateButton = memo(function DictateButton({ onPress }: { onPress(): void
         capsule
         glyph={BAR.bottom.mic}
         color={theme.textTertiary}
-        palette={{ icon: theme.textTertiary, iconDisabled: theme.iconDisabled, hover: "transparent", pressed: theme.toolbarPressed }}
+        palette={{ icon: theme.textTertiary, iconDisabled: theme.iconDisabled, hover: ink.clear, pressed: theme.toolbarPressed }}
         tooltip="Dictate"
         onPress={onPress}
       />

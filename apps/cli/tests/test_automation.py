@@ -7,6 +7,7 @@ import plistlib
 import shutil
 import signal
 import socket
+import subprocess
 import sys
 import tempfile
 import threading
@@ -207,9 +208,10 @@ class Base(unittest.TestCase):
         self.home = self.temp / "h"
         self.home.mkdir()
         patches = [
-            mock.patch.dict(os.environ, {"HOME": str(self.home), "ARDIA_DATA_DIR": str(self.data), "ARDIA_CLI_HOME": str(self.temp / "cli")}),
+            mock.patch.dict(os.environ, {"HOME": str(self.home), "ARDIA_DATA_DIR": str(self.data), "ARDIA_CLI_HOME": str(self.temp / "cli"), "XDG_CONFIG_HOME": "", "XDG_STATE_HOME": "", "XDG_DATA_HOME": "", "ARDIA_CONFIG_HOME": ""}),
             mock.patch.object(endpoint, "INSTALLED_DATA_DIR", self.temp / "installed"),
             mock.patch.object(hooks, "launchctl", side_effect=AssertionError("real launchctl")),
+            mock.patch.object(hooks, "systemctl", side_effect=AssertionError("real systemctl")),
         ]
         for patch in patches:
             patch.start()
@@ -229,11 +231,6 @@ class Base(unittest.TestCase):
             except SystemExit as exit:
                 status = exit.code
         return status, out.getvalue(), err.getvalue()
-
-    def interrupt_after(self, seconds):
-        timer = threading.Timer(seconds, os.kill, (os.getpid(), signal.SIGINT))
-        timer.start()
-        self.addCleanup(timer.cancel)
 
 
 class Discovery(Base):
@@ -287,7 +284,7 @@ class Discovery(Base):
         deep = self.temp / ("x" * 120)
         status, _, err = self.run_cli("windows", "--data-dir", str(deep))
         self.assertEqual(status, 2)
-        self.assertIn("over the 103 a Unix socket allows", err)
+        self.assertIn(f"over the {107 if endpoint.LINUX else 103} a Unix socket allows", err)
 
     def test_stale_socket(self):
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -922,6 +919,7 @@ class Reload(Base):
                 await self.until(lambda: [p for m, p in server.requests if m == "subscribe"][-1:] == [{"events": ["tab.activated"]}])
                 os.unlink(path)
                 await self.until(lambda: service.runners == {})
+                await self.until(lambda: [p for m, p in server.requests if m == "subscribe"][-1:] == [{"events": []}])
             finally:
                 for task in tasks:
                     task.cancel()
@@ -943,8 +941,10 @@ class Reload(Base):
 
     def test_hooks_file_follows_config_resolver(self):
         self.assertEqual(automation_cli.hooks_file(SimpleNamespace(data_dir=None)), self.data / "config" / "hooks.json")
-        with mock.patch.dict(os.environ, {"ARDIA_DATA_DIR": ""}):
+        with mock.patch.dict(os.environ, {"ARDIA_DATA_DIR": ""}), mock.patch.object(endpoint, "LINUX", False):
             self.assertEqual(automation_cli.hooks_file(SimpleNamespace(data_dir=None)), self.home / ".config" / "ardia" / "hooks.json")
+        with mock.patch.dict(os.environ, {"ARDIA_DATA_DIR": ""}), mock.patch.object(endpoint, "LINUX", True), mock.patch.object(endpoint, "INSTALLED_DATA_DIR", self.data):
+            self.assertEqual(automation_cli.hooks_file(SimpleNamespace(data_dir=None)), self.data / "config" / "hooks.json")
 
     def test_reads_bounded_regular_files(self):
         config = self.data / "config"
@@ -973,9 +973,9 @@ class LaunchAgent(Base):
             out = "\tstate = running\n\tpid = 4242\n" if arguments[0] == "print" else ""
             return SimpleNamespace(returncode=0, stdout=out, stderr="")
 
-        patch = mock.patch.object(hooks, "launchctl", side_effect=fake)
-        patch.start()
-        self.addCleanup(patch.stop)
+        for patch in (mock.patch.object(hooks, "launchctl", side_effect=fake), mock.patch.object(endpoint, "LINUX", False)):
+            patch.start()
+            self.addCleanup(patch.stop)
 
     def installed_env(self):
         return mock.patch.dict(os.environ, {"ARDIA_DATA_DIR": "", "PATH": "/opt/homebrew/bin:/usr/bin:/bin"})
@@ -1034,6 +1034,17 @@ class LaunchAgent(Base):
         self.assertEqual(status, 1)
         self.assertIn("Input/output error", err)
         self.assertEqual([c[0] for c in self.calls], ["bootout", "bootstrap", "bootstrap", "bootstrap"])
+
+    def test_a_stuck_launchctl_is_one_line(self):
+        def stuck(arguments):
+            raise subprocess.TimeoutExpired(["/bin/launchctl", *arguments], 20)
+
+        for verb in ("install", "uninstall"):
+            with self.subTest(verb=verb), self.installed_env(), mock.patch.object(hooks, "launchctl", side_effect=stuck):
+                status, _, err = self.run_cli("hooks", verb)
+            self.assertEqual(status, 1)
+            self.assertEqual(err.strip().splitlines()[-1], f"ardia hooks {verb}: launchctl didn't answer in 20 s; try again, or check launchctl print gui/{os.getuid()}/dev.ardia.hooks")
+            self.assertNotIn("Traceback", err)
 
     def test_list_reports_hooks(self):
         config = self.data / "config"

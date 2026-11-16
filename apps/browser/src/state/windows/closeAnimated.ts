@@ -1,7 +1,12 @@
 import { animateWindowClose, focusWindow } from "../../platform/windows";
+import { managesWindowClose } from "../../platform/windowClose";
 import { useBrowser, type BrowserState } from "../browser/store";
+import type { CloseWindowOptions } from "./windows";
 import { familyKeyOf } from "../browser/model";
 import { isWindowClosing, startClosingWindow, stopClosingWindow } from "./closingWindows";
+import { tabsHandedOver } from "../tabs/sharedWindowClose";
+import { isOpenRegularWindow } from "./small";
+import { noteWindowCloseTabsKept } from "../telemetry/usage";
 
 export { isWindowClosing };
 
@@ -16,10 +21,13 @@ function familyCounts(s: BrowserState, tabIds: readonly string[]) {
   return counts;
 }
 
-export function closeWindowAnimated(windowId: string, replacedBy: string | null = null, then?: () => void) {
+type AnimatedCloseOptions = CloseWindowOptions & { replacedBy?: string | null; then?: () => void };
+
+export function closeWindowAnimated(windowId: string, { replacedBy = null, then, ...options }: AnimatedCloseOptions = {}) {
   const s = useBrowser.getState();
   const w = s.windows[windowId];
   if (isWindowClosing(windowId) || !w) return;
+  if (!replacedBy && !then && managesWindowClose(windowId, "window")) return;
   const leaving = familyCounts(s, w.tabIds);
   const close = () => {
     if (!pending.delete(windowId)) return;
@@ -28,7 +36,9 @@ export function closeWindowAnimated(windowId: string, replacedBy: string | null 
     const now = after.windows[windowId];
     if (!now) return;
     if ([...familyCounts(after, now.tabIds)].some(([key, n]) => n > (leaving.get(key) ?? 0))) return void focusWindow(windowId);
-    useBrowser.getState().closeWindow(windowId);
+    const kept = tabsHandedOver(after, windowId, isOpenRegularWindow).length;
+    if (kept) noteWindowCloseTabsKept(kept);
+    useBrowser.getState().closeWindow(windowId, options);
     then?.();
   };
   startClosingWindow(windowId);

@@ -1,7 +1,7 @@
 # Browser-agent bench
 
 Claude Code and Codex driving Ardia through `ardia browse` against Aside's built-in agent. Every contender gets the
-same eight local web apps and the same prompt. A checker on the app's own server grades each run.
+same nine local web apps and the same prompt. A checker on the app's own server grades each run.
 
 ```
 tasks.json          the registry both harnesses read
@@ -23,16 +23,28 @@ plans/*.json        plans: tasks x contenders x repeats
 | `grid` | Virtualized inventory sheet: filter, sort, inline edits with validation, add a row, save | 8831 | 480 s |
 | `kanban` | Sprint board: HTML5 drag and drop (with a keyboard alternative), labels, due date, archive | 8841 | 480 s |
 | `multitab` | Inbox, team directory and room scheduler on three origins: book the meeting | 8851-8853 | 600 s |
+| `bulk` | Storefront admin: tag the legacy orders and archive the delivered ones, nothing else | 8861 | 600 s |
 
 Each server is Python stdlib only, run from this folder as `python3 -I tasks/<id>/server.py`, on fixed ports, and
-stops on SIGTERM. Each server has these endpoints:
+stops on SIGTERM. With `BENCH_PORT_OFFSET=N` in its environment, `benchhttp.serve_forever` binds each port + N, and
+`Handler.send` and `redirect` rewrite `127.0.0.1:<port>` and `localhost:<port>` to `<port> + N` in text bodies (HTML,
+JS, CSS, JSON, SVG) and headers, for that server's own ports only. So the links between a task's apps keep working on
+any copy, and no `server.py` handles the offset itself. A server that binds its own sockets instead of
+`serve_forever` ignores the offset. Each server has these endpoints:
 
 - `POST /api/reset` puts everything back to its initial state.
-- `GET /api/check` returns `{pass, matched, total, completed_at_ms, reset_at_ms, details}`.
+- `GET /api/check` returns `{pass, matched, total, completed_at_ms, reset_at_ms, details}`, and, on tasks that
+  track how writes arrived, `method` (`{label, accepted, ui, ui_scripted, no_event, rejected, rejected_reasons,
+  trigger_events, public_api?}`, where `label` is `ui`, `ui_scripted`, `no_event`, `public_api`, `mixed` or `none`) and
+  `invariants` (`{name: bool}`).
   - `completed_at_ms` is when the user action that made the state pass happened, so a run's time to correct is
     `completed_at_ms` minus the agent's start.
   - `details` says what's wrong and what the user entered, never the expected values.
-  - A run where `reset_at_ms` moved (someone reset during the run) doesn't count as a pass.
+  - Every side grades a run the same way (`harness/grading.py`): it passes only when the check passes, the run
+    finished before its deadline and nobody reset the task during it (`reset_at_ms` moved from the baseline taken
+    after the harness's reset, or, for Aside, past the moment the prompt went out). Results recorded before
+    2026-11-09 counted runs that hit the deadline (all sides but Aside) or were reset (Aside) as passes, so they
+    aren't comparable for those runs.
 
 Neither endpoint is linked from the apps. `python3 -I tasks/<id>/selftest.py` (with the server running) checks
 three things:
@@ -54,6 +66,7 @@ three things:
 | `reset`, `check` | `{method, url}` |
 | `deadline_s` | the run is killed after this |
 | `prompt` | the user's request, verbatim, the same for every contender |
+| `today` | the date the task's app treats as today; every side's prompt ends with "Today is Friday, November 6, 2026." so an agent whose own clock has moved past the fixture's dates doesn't stop to ask |
 
 The Ardia side appends one line to the prompt, naming how to reach the instance: ``Use the `ardia` command with
 `--port 9371` to reach this Ardia instance.``
@@ -71,11 +84,15 @@ python3 -I harness/bench.py freeze-cli
 python3 -I harness/bench.py run research claude try-1 --results ~/ardia-scratch/bench-proper/results/adhoc
 python3 -I harness/bench.py plan plans/full.json --dry-run
 python3 -I harness/bench.py plan plans/full.json --results ~/ardia-scratch/bench-proper/results/<name>
+python3 -I harness/bench.py plan plans/realism.json --dry-run --max-lanes 12
+python3 -I harness/bench.py servers start calendar --port-offset 1000
 python3 -I harness/bench.py stop
 ```
 
 - **`freeze-cli`** snapshots `apps/cli` into its own venv. Every run uses that `ardia` (`--cli installed` uses
-  `~/.local/bin/ardia` instead), so edits made during a plan don't leak into it.
+  `~/.local/bin/ardia` instead), so edits made during a plan don't leak into it. `freeze-cli --name N` freezes into
+  `devbin-N` and `cli/N.json` instead and leaves the default alone; a plan with `"cli": "dev:N"` uses it, so a rerun
+  of a changed CLI can run next to a plan still using the old one.
 - **Each Ardia-side run** does the following, in order:
   1. Starts the task's server.
   2. Reuses or launches one hidden instance: `open -g -n` with `ARDIA_BACKGROUND=1`, its own `ARDIA_DATA_DIR`, a
@@ -85,12 +102,28 @@ python3 -I harness/bench.py stop
   5. Installs the skill into a fresh workdir.
   6. Starts `claude -p` (stream-json) or `codex exec --json`, with the agent's own variables stripped from its
      environment.
-  7. Records the check, `notes_after`, tokens, turns, commands, focus and timing in `runs/<run_id>.json`.
+  7. Records the check, `notes_after`, tokens, turns, commands, focus and timing in `runs/<run_id>.json`. Every
+     side's record also has `port_offset`, plus the check's `method` and `invariants` at the top level (null when the
+     check doesn't report them).
+  - `run … --port-offset N` runs against the task's copy on its ports + N.
 - **A plan** runs `tasks x contenders x repeats`, with each round rotating the task order and the contender order.
-  Runs go out in parallel lanes (`--max-lanes N`, default 6; 1 runs them one at a time). A central scheduler hands
-  out runs and decides when to add a lane:
-  - Two runs never use the same task at once, since they'd share its server and resets, so 8 is the hard ceiling.
-    Each task server is started once and shared.
+  Runs go out in parallel lanes (`--max-lanes N`, else the plan's `max_lanes`, else 6; 1 runs them one at a time).
+  A central scheduler hands out runs and decides when to add a lane:
+  - Each lane has its own copy of every task server. Lane `k` (all non-Aside sides share the index space) runs its
+    copies with `BENCH_PORT_OFFSET=1000(k+1)`, so lane 0 is on 9791-9853, lane 1 on 10791-10853 and so on. Aside
+    stays on +0, since its driver reads `tasks.json`. The harness rewrites `start_url`, `extra_urls`, the prompt and the
+    reset and check URLs with the same mapping. One server process runs per `(task, offset)`, shared by that lane's
+    runs, and all of them stop at the end.
+  - Two runs never use the same `(task, offset)` at once, since they'd share its server and resets. Several runs of
+    one task can run at once on different lanes, so concurrency is capped by `--max-lanes` and memory, not by tasks.
+  - Before a plan starts, each task's server is probed at the first lane's offset (+1000). One that doesn't bind
+    the offset ports (it ignores `BENCH_PORT_OFFSET`) is pinned: all its runs share the +0 server, one at a time.
+  - `"lane_base": N` in the plan numbers its lanes from `N`, so two plans can run at once without sharing task
+    servers, ports or lane dirs: with 10, the first lane is `lane10` on +11000. Give the second plan its own
+    `BENCH_HOME` too, since `state/servers.json` isn't shared safely between processes.
+  - The plan refuses to start when an offset task port would hit a harness port for any lane (Ardia `port + k`,
+    OpenCode CDP `9571 + k` and relay `19990 + k`, Browser Use CDP `9671 + k`) or land in the ephemeral range
+    (49152 and up). `--dry-run` prints that check first.
   - Aside has one lane, which its contenders take in turn. Each Ardia contender can have several lanes; lane `k`
     gets its own copied app (`app-lane<k>/`), port (`port + k`), data dir and Codex home.
   - Lanes are gated on memory. Used memory is (active + wired + compressed pages) / `hw.memsize`, from `vm_stat`:
@@ -98,25 +131,41 @@ python3 -I harness/bench.py stop
     - At 75% nothing new opens until memory is back under 70%.
     - Above 80%, a lane that finishes doesn't start its next run until memory is back under 75%.
     - A running run is never killed.
+    - With `"normal_pressure_only": true` in the plan, nothing new starts next to a running run unless macOS memory
+      pressure (`kern.memorystatus_vm_pressure_level`) is 1.
+    - With `"max_load_1m": N` in the plan, nothing new starts while the 1-minute load average is above `N`. A browser
+      that takes 30 s to open a page on a thrashing Mac measures the Mac. The plan stops after 15 minutes without a
+      start; run it again to resume.
     - Extra lanes that sit idle for 2 minutes are quit.
   - Contenders progress together: a contender may be at most 15% of its runs ahead of the slowest one, and at most
     one round ahead (`pace_slack`, `max_round_lead` in the plan). That way no contender gets all its runs at quiet
     moments.
   - A rate limit or overloaded error counts as a harness error, is retried after 2 minutes, and drops that
     contender to one lane. Other harness errors are retried too, at most 3 times per session.
-  - Every run records `lane`, `lanes_active`, `memory_used_pct_at_start` and `concurrent_runs`.
+  - Every run records `lane`, `port_offset`, `lanes_active`, `memory_used_pct_at_start`, `load_1m_at_start` and
+    `concurrent_runs`.
     `<results>/memory.jsonl` samples memory and the active runs every 3 s.
   - `--dry-run` prints the simulated timeline. It uses durations from the results dir if there are any, and a
     modeled memory curve.
-  - `python3 -I harness/test_scheduler.py` tests the scheduler.
+  - `python3 -I harness/test_scheduler.py` tests the scheduler, and `python3 -I harness/test_grading.py` the pass rule
+    and the cleanup of a Chrome or relay that never came up.
   - Aside contenders shell out to `node ~/ardia-scratch/aside-bench/bin/aside_run.mjs <run_id> --task <id>
     --registry tasks.json --out <results>/aside-raw --model <name> --visibility covered` (`BENCH_ASIDE_DRIVER`
     overrides the path). Their record is normalized into `runs/<run_id>.json`.
   - A plan resumes: finished runs are skipped, and runs that hit a harness error are retried.
+- **A plan file** has `name`, `repeats`, `tasks` (`"all"` or a list of ids; `"all"` is every task in the registry, so
+  `full.json`, `opencode.json` and `browseruse.json` now include `bulk`), `contenders`, `results`, and optionally
+  `max_lanes`, `lane_base`, `normal_pressure_only`, `max_load_1m`, `pace_slack`, `max_round_lead` and the Ardia keys (`app`, `port`, `cli`, `ardia_test`). A task the
+  registry doesn't have stops the plan, dry run included, with the list of known ids.
+  - `plans/realism.json` re-runs `expenses`, `kanban` and `bulk` three times for all eight contenders (Ardia, OpenCode
+    Browse and Browser Use with Claude Code and Codex, and the two Aside agents) on up to 24 lanes (memory gating still
+    caps them), into `results/realism-1`.
 - **`summary.json`** is rewritten after every run, in a shape the site renders directly:
   - `tasks` and `contenders` list what was run.
   - `cells[]` has one entry per task and contender: `pass_rate`, `median_time_s`, `median_time_to_correct_s`,
-    `median_tokens` and `median_commands`.
+    `median_tokens` and `median_commands`. It also has `method_labels` (runs per write method label),
+    `rejected_writes` (summed) and `invariant_failures` (runs per invariant that came back false). Each is null when
+    no run's check reported it.
   - `overall[]` gives the same figures per contender.
   - A cell has `serial_vs_parallel` when it has both runs that ran alone and runs that ran alongside others.
   - `parallel` has the peak and median memory %, the average and maximum number of lanes, and the total wall time
@@ -160,6 +209,38 @@ Each run does the following, in order:
 8. Quits Chrome and the relay.
 
 One run: `python3 -I harness/bench.py run calendar claude try-1 --side opencode --results …`.
+
+## Betterwright side
+
+Contenders with `"kind": "betterwright"` (`plans/betterwright.json`) run the same agents, models, effort, prompt,
+deadline, checks and token accounting. The browser is [Betterwright](https://www.npmjs.com/package/betterwright)'s
+headless BetterChromium, driven with Playwright JavaScript through `betterwright run`.
+
+Everything lives in `BENCH_BETTERWRIGHT_HOME` (default `~/ardia-scratch/betterwright`):
+
+- `bun/`: Bun 1.4 or newer and `BUN_INSTALL=… bun install -g betterwright` (the contender's `bin` key points at
+  another `bun/bin`).
+- `chromium/`: the BetterChromium that `betterwright setup` downloads. Setup always writes to `~/.betterwright`, so
+  move `~/.betterwright/chromium` here; runs find it through `BETTERWRIGHT_CHROMIUM_ROOT` (`chromium_root`).
+- `lanes/lane<k>/`: wiped before every run. It holds `home/` (that lane's `BETTERWRIGHT_HOME`: its own daemon,
+  profile and artifacts), `bin/` and the Codex `HOME`.
+
+Each run does the following, in order:
+
+1. Starts the task server and resets the task.
+2. Starts the lane's session daemon by opening `start_url` in session `lane<k>` with the harness's own
+   `betterwright run`. Betterwright's defaults stay: headless, ad blocking on, loopback allowed.
+3. Writes `betterwright skill --claude` to `.claude/skills/browser/SKILL.md` (Claude) or
+   `.agents/skills/browser/SKILL.md` (Codex) in a fresh workdir. `betterwright skill --install` is never run, since
+   it writes into the real home.
+4. Starts the agent with the lane's `bin/` first on `PATH`. Its `betterwright` passes every call through, except
+   that it refuses `--headed` and `--headed-invisible`, which would put a window on the owner's screen. The prompt's
+   last line is ``Use `betterwright run --session lane<k>` to reach this browser.``
+5. Records the same fields as an Ardia run, plus `betterwright_calls`, `shell_commands`,
+   `failed_betterwright_calls` (results with `"ok": false`) and `headed_refused`.
+6. Closes every session, which stops the daemon and the browser.
+
+One run: `python3 -I harness/bench.py run calendar claude try-1 --side betterwright --results …`.
 
 Scratch lives in `BENCH_HOME` (default `~/ardia-scratch/bench-proper`): `app/`, `cli/`, `devbin/`, `data-ardia/`,
 `work/`, `state/`, `logs/` and `results/`, plus `app-lane<k>/`, `data-ardia-lane<k>/` and `codex-home-lane<k>/`

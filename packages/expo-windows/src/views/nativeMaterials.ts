@@ -2,7 +2,7 @@ import type { WindowBackdropProps } from "@ardia/shaders";
 import { processColor, type ViewProps } from "react-native";
 import * as NativeComponentRegistry from "react-native/Libraries/NativeComponent/NativeComponentRegistry";
 
-export { gradientDrawsNow, materialCapabilities, nativeBlur, nativeGradient, nativeGrain, nativeWindowMaterial, type GrainProbe, type GrainRecoveryProbe, type MaterialCapabilities, type MaterialPath, type MaterialsNative } from "./materialCapabilities";
+export { gradientDrawsNow, materialCapabilities, nativeBlur, nativeGradient, nativeGrain, nativeWindowMaterial, type GrainPath, type GrainProbe, type GrainRecoveryProbe, type MaterialCapabilities, type MaterialPath, type MaterialsNative } from "./materialCapabilities";
 
 export type WindowMaterialKind = "micaAlt" | "mica" | "acrylic";
 

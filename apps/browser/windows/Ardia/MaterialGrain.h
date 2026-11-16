@@ -154,7 +154,11 @@ inline void StopListeningForFailure(uint64_t id) noexcept {
 
 inline void MarkFailed(Device &device, std::wstring const &reason, std::wstring const &noteKey, std::wstring const &note) noexcept {
   Forget(device);
-  device.failure = reason;
+  try {
+    device.failure = reason;
+  } catch (...) {
+    device.failure.clear();
+  }
   Materials::NoteOnce(noteKey, note);
   if (Failed().exchange(true)) return;
   std::vector<std::function<void()>> told;
@@ -175,6 +179,11 @@ inline void MarkFailed(Device &device, std::wstring const &reason, std::wstring 
 inline void Retain(Device &device, std::string const &key) noexcept {
   auto found = device.surfaces.find(key);
   if (found != device.surfaces.end()) found->second.users++;
+}
+
+inline void DropUnused(Device &device, std::string const &key) noexcept {
+  auto found = device.surfaces.find(key);
+  if (found != device.surfaces.end() && found->second.users == 0) device.surfaces.erase(found);
 }
 
 inline void Release(Device &device, std::string const &key) noexcept {
@@ -524,6 +533,7 @@ struct LastPath {
   std::string path;
   std::string reason;
   std::string texture;
+  bool brushed{false};
 };
 
 struct LastPathStore {

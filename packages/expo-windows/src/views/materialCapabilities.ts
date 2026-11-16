@@ -12,6 +12,8 @@ export type MaterialCapabilities = {
 
 export type MaterialPath = { path: string; reason: string; step?: string };
 
+export type GrainPath = MaterialPath & { brushed: boolean };
+
 export type GrainProbe = MaterialPath & { pixels: number; tileAlphaSum: number; drawnAlphaSum: number };
 
 export type GrainRecoveryProbe = MaterialPath & { sameSurface: boolean; before: number; after: number };
@@ -22,7 +24,7 @@ export type MaterialsNative = {
   clearWindowMaterial(windowId: string): Promise<boolean>;
   probeBlur(): Promise<MaterialPath>;
   probeGradient(): Promise<MaterialPath>;
-  grainPath(request: string): MaterialPath;
+  grainPath(request: string): GrainPath;
   probeGrain(texture: string): Promise<GrainProbe>;
   probeGrainRecovery(texture: string): Promise<GrainRecoveryProbe>;
   failGrainForCheck(): Promise<boolean>;

@@ -6,6 +6,7 @@ import { adjustingLightness, flatStops, hslToRgb, parseColor, rgbaString, type R
 import { useAppDark } from "./appearance";
 import { NativeMaterialGrain, nativeGrain, NativeWindowMaterial, nativeWindowMaterial, type GrainTexture } from "./nativeMaterials";
 import { finite, useFirstWindow } from "./shared";
+import { grainCellOf } from "./grainCell";
 
 const VIBRANCY = {
   dark: { material: [68.3 / 255, 68.0 / 255, 68.4 / 255], white: 0, alpha: 0.4, gradientOpacity: 0.5 },
@@ -19,8 +20,6 @@ const PAD_CELLS = 16;
 const THEME_REACH = 0.75;
 const WINDOW_MATERIAL = "acrylic";
 const DEFAULT_GRAIN_OPACITY = 0.09;
-const SMALLEST_GRAIN_CELL = 0.25;
-const LARGEST_GRAIN_CELL = 4;
 
 function underColor(dark: boolean, baseAlpha?: number): Rgba {
   const look = dark ? VIBRANCY.dark : VIBRANCY.light;
@@ -135,7 +134,7 @@ export const WindowBackdrop = forwardRef<View, WindowBackdropProps>(function Win
     layers = (
       <>
         <Bands stops={ends} angle={finite(angle, 180)} />
-        <Grain texture="hash" amount={unit(grainOpacity, DEFAULT_GRAIN_OPACITY)} cellSize={Math.min(LARGEST_GRAIN_CELL, Math.max(SMALLEST_GRAIN_CELL, finite(grainScale, 1)))} />
+        <Grain texture="hash" amount={unit(grainOpacity, DEFAULT_GRAIN_OPACITY)} cellSize={grainCellOf(grainScale)} />
       </>
     );
   }

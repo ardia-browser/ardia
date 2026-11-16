@@ -160,8 +160,10 @@ export const checks: Check[] = [
     async run() {
       const staged = await stagedGrain(STAGED_GRAIN_TEXTURE);
       try {
+        const grain = materials().capabilities().grain;
         expectEqual(staged.last().step, STAGED_GRAIN_TEXTURE, "the staged grain view's texture");
-        expectPath(staged.last(), materials().capabilities().grain ? ["tiled"] : ["none"], "mounted grain view");
+        expectPath(staged.last(), grain ? ["tiled"] : ["none"], "mounted grain view");
+        expectEqual(staged.last().brushed, grain, "the mounted grain view's brush");
       } finally {
         staged.release();
       }
@@ -223,9 +225,11 @@ export const checks: Check[] = [
       try {
         if (!materials().capabilities().grain) return;
         expectPath(staged.last(), ["tiled"], "the view before the failure");
+        expectTrue(staged.last().brushed, "the view had no brush before the failure");
         expectTrue(await materials().failGrainForCheck(), "the grain did not report its failure");
         const cleared = await until(() => staged.last().path === "none", GRAIN_PATH_DEADLINE_MS);
-        expectTrue(cleared, `the mounted view kept drawing after the failure: ${JSON.stringify(staged.last())}`);
+        expectTrue(cleared, `the mounted view never heard of the failure: ${JSON.stringify(staged.last())}`);
+        expectEqual(staged.last().brushed, false, "the mounted view's brush after the failure");
         expectEqual(materials().capabilities().grain, false, "grain after the failure");
       } finally {
         staged.release();

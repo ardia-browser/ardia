@@ -57,6 +57,18 @@ struct GrainProbe {
   double drawnAlphaSum{0};
 };
 
+REACT_STRUCT(GrainPathAnswer)
+struct GrainPathAnswer {
+  REACT_FIELD(path)
+  std::string path;
+  REACT_FIELD(reason)
+  std::string reason;
+  REACT_FIELD(step)
+  std::string step;
+  REACT_FIELD(brushed)
+  bool brushed{false};
+};
+
 REACT_STRUCT(GrainRecoveryProbe)
 struct GrainRecoveryProbe {
   REACT_FIELD(path)
@@ -175,12 +187,13 @@ struct MaterialsModule {
   }
 
   REACT_SYNC_METHOD(grainPath)
-  MaterialPath grainPath(std::string request) noexcept {
-    MaterialPath answer;
+  GrainPathAnswer grainPath(std::string request) noexcept {
+    GrainPathAnswer answer;
     const Grain::LastPath last = Grain::Last(request);
     answer.path = last.path;
     answer.reason = last.reason;
     answer.step = last.texture;
+    answer.brushed = last.brushed;
     return answer;
   }
 

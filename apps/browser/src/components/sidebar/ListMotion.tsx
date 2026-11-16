@@ -5,7 +5,7 @@ import { layout, useTheme } from "../ui/theme";
 import type { BrowserState } from "../../state/browser/store";
 import { workspaceSnapshot } from "../../state/browser/current";
 import type { Capture, ListSnapshot } from "../../state/sidebar/listCapture";
-import { useAnimatedStyle, type ClipSource, type EntryMotion } from "./EntryMotion";
+import { setSliding, useAnimatedStyle, type ClipSource, type EntryMotion } from "./EntryMotion";
 import { groupEntries } from "../../state/sidebar/entries";
 import { entryHeight } from "../../state/sidebar/geometry";
 import { ghostEntry, snapshotEntry, type EntrySnapshot } from "./GhostEntry";
@@ -268,9 +268,13 @@ function useMotion({ devKey, entries, from, planner, height, enabled, nativeTail
       slide.landed = false;
       const run = Animated.timing(slide.value, { toValue: 0, duration: slideMs, easing: SLIDE_EASING, useNativeDriver: nativeTail || m.key !== TAIL });
       slide.run = run;
+      setSliding(slide.value, true);
       const clips = i === 0 && token;
       run.start(({ finished }) => {
-        if (slide.run === run) slide.run = null;
+        if (slide.run === run) {
+          slide.run = null;
+          setSliding(slide.value, false);
+        }
         if (!finished) return;
         slide.landed = true;
         if (!clips) return;

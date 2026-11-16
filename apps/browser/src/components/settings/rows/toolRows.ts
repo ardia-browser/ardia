@@ -101,9 +101,9 @@ export const toolRows = {
         protectedVideo: {
           advanced: true,
           title: "Open streaming sites in WebKit",
-          description: "Netflix, Disney+, Max, Prime Video, Hulu, Apple TV+, Apple Music, Spotify and other sites whose video is protected open in WebKit, which plays it. A website rule wins.",
+          description: "Netflix, Disney+, Max, Prime Video, Hulu, Apple TV+, Apple Music, Spotify, Audible and other sites whose video or audio is protected open in WebKit, which plays it. A website rule wins.",
           shown: (s) => s.pageEngine !== "webkit",
-          keywords: ["drm", "netflix", "disney", "hbo", "max", "prime video", "hulu", "spotify", "apple tv", "apple music", "fairplay", "widevine", "streaming", "tencent video", "v.qq.com"],
+          keywords: ["drm", "netflix", "disney", "hbo", "max", "prime video", "hulu", "spotify", "apple tv", "apple music", "fairplay", "widevine", "streaming", "tencent video", "v.qq.com", "audible", "audiobooks"],
         },
         fairPlayInChromium: {
           advanced: true,

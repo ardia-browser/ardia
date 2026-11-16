@@ -5,8 +5,28 @@ import { openWindow, switchProfile, switchToTab } from "../browser/actions";
 import { JAVASCRIPT_FROM_APPLE_EVENTS_REFUSED, runsJavaScript } from "../settings/scriptUrls";
 import { webviews } from "../../platform/webviews";
 import { errorText } from "../../lib/errors";
+import { changedIds } from "../browser/changes";
 
-function scriptState(s: BrowserState): ScriptState {
+const STRUCTURE_DELAY_MS = 100;
+const TITLE_DELAY_MS = 1000;
+const SCRIPTS_RUNNING_MS = 30_000;
+
+type Scripted = Pick<BrowserState, "tabs" | "windows" | "windowOrder" | "live" | "profiles" | "profileOrder">;
+
+export function scriptChange(s: Scripted, prev: Scripted): "structure" | "titles" | null {
+  if (s.windows !== prev.windows || s.windowOrder !== prev.windowOrder || s.profiles !== prev.profiles || s.profileOrder !== prev.profileOrder) return "structure";
+  let titles = false;
+  for (const id of changedIds(s.tabs, prev.tabs)) {
+    const a = s.tabs[id];
+    const b = prev.tabs[id];
+    if (!a || !b || a.url !== b.url || !a.pin !== !b.pin || a.customTitle !== b.customTitle || a.profileId !== b.profileId || a.windowId !== b.windowId) return "structure";
+    if (a.title !== b.title) titles = true;
+  }
+  for (const id of changedIds(s.live, prev.live)) if (!s.live[id]?.isLoading !== !prev.live[id]?.isLoading) return "structure";
+  return titles ? "titles" : null;
+}
+
+export function scriptState(s: BrowserState): ScriptState {
   return {
     windows: s.windowOrder.map((id) => {
       const w = s.windows[id]!;
@@ -29,26 +49,50 @@ function scriptState(s: BrowserState): ScriptState {
     profiles: s.profileOrder.map((id) => ({ id, name: s.profiles[id]!.name })) };
 }
 
-export function startScripting() {
+export function scriptStatePublisher(read: () => ScriptState, publish: (state: ScriptState) => Promise<unknown>): () => Promise<void> {
   let lastJson = "";
-  const push = () => {
-    const state = scriptState(useBrowser.getState());
+  let arriving: Promise<void> = Promise.resolve();
+  return () => {
+    const state = read();
     const json = JSON.stringify(state);
-    if (json === lastJson) return Promise.resolve();
+    if (json === lastJson) return arriving;
     lastJson = json;
-    return setScriptState(state);
+    const sent = new Promise<unknown>((resolve) => resolve(publish(state))).then(
+      () => {},
+      () => {
+        if (lastJson === json) lastJson = "";
+      },
+    );
+    arriving = sent;
+    return sent;
   };
+}
+
+export function startScripting() {
+  const push = scriptStatePublisher(() => scriptState(useBrowser.getState()), setScriptState);
   let timer: ReturnType<typeof setTimeout> | undefined;
-  useBrowser.subscribe((s, prev) => {
-    if (s.tabs === prev.tabs && s.windows === prev.windows && s.live === prev.live && s.profiles === prev.profiles) return;
-    timer ??= setTimeout(() => {
+  let dueAt = Infinity;
+  let scriptedAt = -Infinity;
+  const pushWithin = (ms: number) => {
+    const at = Date.now() + ms;
+    if (at >= dueAt) return;
+    clearTimeout(timer);
+    dueAt = at;
+    timer = setTimeout(() => {
       timer = undefined;
+      dueAt = Infinity;
       void push();
-    }, 100);
+    }, ms);
+  };
+  useBrowser.subscribe((s, prev) => {
+    const change = scriptChange(s, prev);
+    if (change) pushWithin(change === "structure" || Date.now() - scriptedAt < SCRIPTS_RUNNING_MS ? STRUCTURE_DELAY_MS : TITLE_DELAY_MS);
   });
   void push();
 
   onScriptCommand((request) => {
+    scriptedAt = Date.now();
+    if (request.command === "reading") return void push();
     let result: Record<string, unknown> | null = null;
     Promise.resolve()
       .then(async () => {
@@ -61,7 +105,7 @@ export function startScripting() {
   });
 }
 
-async function runScriptCommand(request: ScriptCommand): Promise<Record<string, unknown> | void> {
+async function runScriptCommand(request: Exclude<ScriptCommand, { command: "reading" }>): Promise<Record<string, unknown> | void> {
   const s = useBrowser.getState();
   const tabOf = (tabId: string) => {
     const tab = s.tabs[tabId];

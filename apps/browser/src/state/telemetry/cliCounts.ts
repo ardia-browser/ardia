@@ -2,6 +2,7 @@ export type CliInstallReason = "auto" | "settings" | "upgrade";
 
 const NONE = {
   cli_pill_shows: 0,
+  cli_pill_compact_shows: 0,
   cli_auto_installs: 0,
   cli_auto_install_failures: 0,
   cli_auto_enables: 0,
@@ -20,7 +21,10 @@ const FIELDS = {
 let counts = { ...NONE };
 
 export const noteCliInstall = (reason: CliInstallReason, ok: boolean) => void counts[FIELDS[reason][ok ? 0 : 1]]++;
-export const noteCliPillShown = () => void counts.cli_pill_shows++;
+export function noteCliPillShown(compact: boolean) {
+  counts.cli_pill_shows++;
+  if (compact) counts.cli_pill_compact_shows++;
+}
 export const noteCliAutoEnabled = () => void counts.cli_auto_enables++;
 
 export function takeCliCounts() {

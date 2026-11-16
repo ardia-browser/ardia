@@ -3,7 +3,7 @@ import { requireNativeModule } from "../modules";
 import { expectEqual, expectTrue, type Check } from "./check";
 
 
-const windows = () => requireNativeModule<Pick<AppWindowsModule, "windowIds" | "windowFrame" | "setWindowTitle" | "openWindow" | "closeWindow" | "animateWindowClose" | "debugWindowFade">>("ArdiaAppWindows");
+const windows = () => requireNativeModule<Pick<AppWindowsModule, "windowIds" | "windowFrame" | "setWindowTitle" | "openWindow" | "closeWindow" | "requestClose" | "animateWindowClose" | "debugWindowFade">>("ArdiaAppWindows");
 const settled = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 const MAIN_EXIT_MS = 180;
@@ -43,6 +43,17 @@ async function firstWindowLayered() {
   return (await fadeOf(ids[0]!)).layered;
 }
 
+const CLOSED_BY_REQUEST_MS = 3000;
+
+async function goneWithin(id: string, withinMs: number) {
+  const began = Date.now();
+  while (Date.now() - began < withinMs) {
+    if (!(await windows().windowIds()).includes(id)) return Date.now() - began;
+    await settled(50);
+  }
+  return null;
+}
+
 async function closeAndForget(id: string) {
   await windows().closeWindow(id);
   await settled(300);
@@ -50,6 +61,21 @@ async function closeAndForget(id: string) {
 }
 
 export const checks: Check[] = [
+  {
+    name: "windows: a Settings and an Import window closed the way a user closes them (WM_CLOSE) close, through the app's close request",
+    async run() {
+      for (const [id, kind] of [["self-check-close-settings", "settings"], ["self-check-close-import", "import"]] as const) {
+        await windows().openWindow(id, { kind, title: "Self check", focus: false });
+        await settled(300);
+        expectTrue((await windows().windowIds()).includes(id), `the ${kind} window is not listed`);
+        await windows().requestClose(id);
+        const took = await goneWithin(id, CLOSED_BY_REQUEST_MS);
+        if (took === null) await windows().closeWindow(id);
+        expectTrue(took !== null, `the ${kind} window was still open ${CLOSED_BY_REQUEST_MS} ms after a user's close`);
+        console.info(`[ardia windows] a ${kind} window closed ${took} ms after a user's close`);
+      }
+    },
+  },
   {
     name: "windows: the first window exists and has a frame",
     async run() {

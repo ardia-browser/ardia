@@ -344,6 +344,10 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
             completion:^(NSDictionary *) {}];
 }
 
+- (void)forgetRestoreKey {
+  if (_transferKey.length) [BoundRestoreKeys() removeObject:_transferKey];
+}
+
 - (void)closeBrowser {
   ArdiaCoreTab *tab = _tab;
   if (tab && _life.handingOff && _transferKey.length && !tab.closed) {

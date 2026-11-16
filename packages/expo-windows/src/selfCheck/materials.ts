@@ -3,10 +3,13 @@ import { requireNativeModule } from "../modules";
 import { appDarkNow } from "../views/appearance";
 import { windowBackdropColors } from "../views/backdrop";
 import { gradientColors } from "../views/Bands";
+import { gradientFill } from "../views/gradientFill";
 import type { Rgba } from "../views/color";
 import { bubblePath, NativeMaterialBlur, NativeMaterialGradient, NativeWindowMaterial, type MaterialsNative } from "../views/nativeMaterials";
 import { viewNamed } from "../views/registry";
+import { Surface } from "../views/Surface";
 import { expectEqual, expectTrue, type Check } from "./check";
+import { renderOnStage } from "./stage";
 
 const materials = () => requireNativeModule<MaterialsNative>("ArdiaMaterials");
 
@@ -96,6 +99,15 @@ export const checks: Check[] = [
       expectTrue(["saturated", "tinted", "plain", "flat"].includes(String(blur.step)), `in-window blur step ${JSON.stringify(blur.step)} is unknown`);
       console.info(`[ardia windows] materials: in-window blur reached step ${blur.step}; in-window blur available: ${caps.inWindowBlur}`);
       expectPath(await materials().probeGradient(), ["gradient"], "gradient");
+    },
+  },
+  {
+    name: "materials: a Surface with fill colours and a fade draws through the native gradient's mask",
+    async run() {
+      const fill = { fillColors: ["#ff000000", "#ff0000ff"], fillStops: [0, 1], fade: [1, 0], fadeStops: [0, 1] };
+      const filled = gradientFill(fill);
+      expectTrue(!!filled && filled.places?.length === 2 && filled.fade?.length === 2, `gradient fill read as ${JSON.stringify(filled)}`);
+      await renderOnStage(createElement(Surface, { ...fill, style: { width: 120, height: 30 } }), "a gradient Surface with a fade");
     },
   },
   {

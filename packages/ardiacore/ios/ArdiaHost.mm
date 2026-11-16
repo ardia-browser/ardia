@@ -155,6 +155,36 @@ static void (^gQuitCancelledHandler)(void);
   if (p) [engine releaseProfile:p];
 }
 
++ (NSDictionary<NSString *, id> *)unloadIdleProfile:(NSString *)profile {
+  profile = profile ?: @"";
+  ArdiaCoreEngine *engine = ArdiaCoreEngine.sharedEngine;
+  ArdiaCoreProfile *p = ardia_host::LoadedProfile(profile);
+  NSDictionary * (^busy)(NSString *) = ^(NSString *heldBy) {
+    return @{@"status" : @"busy", @"tabs" : @[], @"heldBy" : heldBy};
+  };
+  if (!p) return ProfileWaiters()[profile] ? busy(@"profile") : @{@"status" : @"released", @"tabs" : @[]};
+  if (!engine || p.offTheRecord || ardia_host::IsPrivateSessionId(profile) || ardia_host::IsDeletedProfile(profile)) return busy(@"profile");
+  NSMutableArray<ArdiaWebView *> *views = [NSMutableArray array];
+  NSMutableArray<ArdiaCoreTab *> *hosted = [NSMutableArray array];
+  for (ArdiaWindowController *controller in ArdiaWindowController.all) {
+    for (ArdiaCoreTab *tab in [controller.coreWindow tabsForProfile:p]) {
+      ArdiaWebView *view = [ArdiaTabRegistry viewForTab:tab];
+      if (!view) return busy(@"tab");
+      if (NSString *heldBy = view.keptFromUnloadingBy) return busy(heldBy);
+      [views addObject:view];
+      [hosted addObject:tab];
+    }
+  }
+  if (NSString *heldBy = [engine sleepIdleProfile:p hostedTabs:hosted]) return busy(heldBy);
+  NSMutableArray<NSString *> *tabs = [NSMutableArray array];
+  for (ArdiaWebView *view in views) {
+    NSString *key = view.transferKey;
+    if (![view unloadKeepingHistory]) return @{@"status" : @"busy", @"tabs" : tabs, @"heldBy" : @"history"};
+    [tabs addObject:key];
+  }
+  return @{@"status" : [engine unloadIdleProfile:p], @"tabs" : tabs};
+}
+
 + (NSArray<NSString *> *)loadedProfiles {
   return ardia_host::LoadedDataProfileNames();
 }

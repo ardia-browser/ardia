@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { View } from "react-native";
+import { View, type GestureResponderEvent } from "react-native";
 import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
 import { toggleDownloadsOpen } from "../../state/windows/actions";
 import { useWindowUiOf } from "../../state/windows/hooks";
@@ -8,7 +8,7 @@ import { Button } from "../ui";
 import { perLook } from "../ui/tokens";
 import { anchorInside, type Rect } from "./downloadsPlacement";
 import { DOWNLOADS_BUTTON } from "./tokens";
-import { noteDownloadsPanelToggle } from "../../state/telemetry/downloadsPanelCounts";
+import { noteDownloadsPanelToggle } from "../../state/telemetry/downloadsPanelCauses";
 
 const downloadsButtons = new Map<string, Set<View>>();
 
@@ -31,6 +31,7 @@ export function DownloadsButton({ windowId }: { windowId: string }) {
   const open = useWindowUiOf(windowId, (ui) => !!ui?.downloadsOpen);
   const hint = useShortcutHint("downloads");
   const view = useRef<View>(null);
+  const pressedAt = useRef<number | undefined>(undefined);
   useEffect(() => {
     const node = view.current;
     if (!node) return;
@@ -43,16 +44,21 @@ export function DownloadsButton({ windowId }: { windowId: string }) {
     };
   }, [windowId]);
   return (
-    <View ref={view} collapsable={false}>
+    <View ref={view} collapsable={false} onStartShouldSetResponderCapture={(press) => {
+      pressedAt.current = press.nativeEvent.timestamp;
+      return false;
+    }}>
       <Button variant="icon"
         icon="arrow.down.circle"
         glyph={DOWNLOADS_BUTTON.icon}
         hit={DOWNLOADS_HIT()}
         active={open}
         tooltip={open ? undefined : withShortcut("Downloads", hint)}
-        onPress={() => {
+        onPress={(press: GestureResponderEvent) => {
+          const startedAt = pressedAt.current;
+          pressedAt.current = undefined;
           noteDownloadsPanelToggle(!open, "button");
-          toggleDownloadsOpen(windowId);
+          toggleDownloadsOpen(windowId, "key" in press.nativeEvent ? undefined : startedAt);
         }}
       />
     </View>

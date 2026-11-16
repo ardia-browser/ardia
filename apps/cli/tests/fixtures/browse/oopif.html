@@ -1,0 +1,22 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Fixture Cross-Site Frame</title>
+<style>
+  body { margin: 0; font: 16px system-ui; }
+  #child { position: absolute; left: 40px; top: 60px; width: 300px; height: 80px; border: 0; }
+</style>
+</head>
+<body>
+<iframe id="child" title="Check box"></iframe>
+<pre id="report" style="margin-top: 160px">{"clicked":[]}</pre>
+<script>
+  const state = { clicked: [] };
+  const child = new URL("oopchild.html", location.href);
+  child.hostname = location.hostname === "localhost" ? "127.0.0.1" : "localhost";
+  document.getElementById("child").src = child.href;
+  addEventListener("message", (event) => { state.clicked.push(event.data); document.getElementById("report").textContent = JSON.stringify(state); });
+</script>
+</body>
+</html>

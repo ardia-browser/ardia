@@ -9,10 +9,17 @@ enum ServerWindowDrag {
   private static let refreshSelector = NSSelectorFromString("_updateDragRegionForHiddenStateChange")
   private static let enabled = LaunchConfig.shared.switchOn("serverWindowDrag") || allOpen
   private static let allOpen = LaunchConfig.shared.experimentOn("serverWindowDragAllOpen")
+  private static let everyMount = LaunchConfig.shared.experimentOn("dragRegionEveryMount")
 
   private static let refreshEvery: CFTimeInterval = 0.1
   private static var targets: [ObjectIdentifier: (blocking: [ObjectIdentifier: Bool], open: [NSRect])] = [:]
   private static var refreshedAt: [ObjectIdentifier: CFTimeInterval] = [:]
+  private static let staleAtMost: TimeInterval = 2
+  private static var stale: [ObjectIdentifier: DispatchWorkItem] = [:]
+  private(set) static var counts = (rebuilds: 0, deferred: 0, stalePresses: 0)
+  #if DEBUG
+  static var pointerOverride: NSPoint?
+  #endif
   private static let watchers = NSMapTable<NSWindow, PointerWatcher>.weakToStrongObjects()
 
   private static let lastWindow = NSMapTable<NSView, NSWindow>.weakToWeakObjects()
@@ -38,30 +45,83 @@ enum ServerWindowDrag {
 
   static func refresh(_ window: NSWindow) {
     guard enabled, capable, let content = window.contentView else { return }
-    targets[ObjectIdentifier(window)] = nil
-    refreshedAt[ObjectIdentifier(window)] = CACurrentMediaTime()
+    let key = ObjectIdentifier(window)
+    targets[key] = nil
+    stale.removeValue(forKey: key)?.cancel()
+    refreshedAt[key] = CACurrentMediaTime()
+    counts.rebuilds += 1
     content.perform(refreshSelector)
   }
+
+  private static func markStale(_ window: NSWindow) {
+    let key = ObjectIdentifier(window)
+    guard stale[key] == nil else { return }
+    let work = DispatchWorkItem { [weak window] in
+      if let window, stale[key] != nil { refresh(window) }
+    }
+    stale[key] = work
+    counts.deferred += 1
+    DispatchQueue.main.asyncAfter(deadline: .now() + staleAtMost, execute: work)
+  }
+
+  private static let pointerArrives: [Notification.Name] = [
+    NSWindow.didMoveNotification, NSWindow.didResizeNotification, NSWindow.didChangeScreenNotification,
+    NSWindow.didEnterFullScreenNotification, NSWindow.didExitFullScreenNotification, NSWindow.didDeminiaturizeNotification,
+    NSWindow.didBecomeKeyNotification, NSWindow.didBecomeMainNotification, NSWindow.didChangeOcclusionStateNotification,
+  ]
 
   private static func watch(_ window: NSWindow) {
     guard watchers.object(forKey: window) == nil, let frame = window.contentView?.superview else { return }
     watchers.setObject(PointerWatcher(frame), forKey: window)
     let key = ObjectIdentifier(window)
+    let arrivals = pointerArrives.map { name in
+      NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak window] _ in
+        if let window, stale[key] != nil, inBand(window, pointer()) { refresh(window) }
+      }
+    }
     var closing: NSObjectProtocol?
     closing = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { _ in
       targets[key] = nil
       refreshedAt[key] = nil
+      stale.removeValue(forKey: key)?.cancel()
       pending[key]?.cancel()
       pending[key] = nil
+      arrivals.forEach(NotificationCenter.default.removeObserver)
       if let closing { NotificationCenter.default.removeObserver(closing) }
+    }
+  }
+
+  private static func pointer() -> NSPoint {
+    #if DEBUG
+    if let pointerOverride { return pointerOverride }
+    #endif
+    return NSEvent.mouseLocation
+  }
+
+  private static func inBand(_ window: NSWindow, _ screenPoint: NSPoint) -> Bool {
+    let frame = window.frame
+    return screenPoint.x >= frame.minX && screenPoint.x <= frame.maxX && screenPoint.y >= frame.maxY - band(window) && screenPoint.y <= frame.maxY
+  }
+
+  private static func catchUpAll() {
+    guard !stale.isEmpty else { return }
+    let at = pointer()
+    for window in trackedWindows() where stale[ObjectIdentifier(window)] != nil && inBand(window, at) { refresh(window) }
+  }
+
+  private static func trackedWindows() -> [NSWindow] {
+    var seen = Set<ObjectIdentifier>()
+    return regions.allObjects.compactMap { region in
+      guard let window = region.window, seen.insert(ObjectIdentifier(window)).inserted else { return nil }
+      return window
     }
   }
 
   static func pointerMoved(in window: NSWindow, at point: NSPoint) {
     guard point.y >= window.frame.height - band(window) else { return }
     scheduleRefresh(window)
-    let now = CACurrentMediaTime()
-    if let last = refreshedAt[ObjectIdentifier(window)], now - last < refreshEvery { return }
+    let key = ObjectIdentifier(window)
+    if stale[key] == nil, let last = refreshedAt[key], CACurrentMediaTime() - last < refreshEvery { return }
     refresh(window)
   }
 
@@ -78,11 +138,10 @@ enum ServerWindowDrag {
     DispatchQueue.main.asyncAfter(deadline: .now() + refreshEvery, execute: work)
   }
 
-  static func scheduleRefreshAll() {
-    var seen = Set<ObjectIdentifier>()
-    for region in regions.allObjects {
-      guard let window = region.window, seen.insert(ObjectIdentifier(window)).inserted else { continue }
-      scheduleRefresh(window)
+  static func mounted() {
+    let at = pointer()
+    for window in trackedWindows() {
+      if everyMount || inBand(window, at) { scheduleRefresh(window) } else { markStale(window) }
     }
   }
 
@@ -99,10 +158,17 @@ enum ServerWindowDrag {
     guard coordinator.responds(to: add) else { return }
     _ = coordinator.perform(add, with: watcher)
     mounting = watcher
-    eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseUp, .rightMouseUp, .otherMouseUp, .keyUp, .flagsChanged]) { event in
-      if let window = event.window { scheduleRefresh(window) }
+    eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp, .rightMouseUp, .otherMouseUp, .keyUp, .flagsChanged]) { event in
+      guard let window = event.window else { return event }
+      if event.type != .leftMouseDown {
+        scheduleRefresh(window)
+      } else if stale[ObjectIdentifier(window)] != nil, event.locationInWindow.y >= window.frame.height - band(window) {
+        counts.stalePresses += 1
+        refresh(window)
+      }
       return event
     }
+    NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in catchUpAll() }
   }
 
   static func band(_ window: NSWindow) -> CGFloat {
@@ -266,8 +332,10 @@ enum ServerWindowDrag {
   }
 
   #if DEBUG
-  static func blockedRects(_ window: NSWindow) -> [[Double]] {
-    targets[ObjectIdentifier(window)] = nil
+  static func isStale(_ window: NSWindow) -> Bool { stale[ObjectIdentifier(window)] != nil }
+
+  static func blockedRects(_ window: NSWindow, rebuilt: Bool = true) -> [[Double]] {
+    if rebuilt { targets[ObjectIdentifier(window)] = nil }
     guard let frame = window.contentView?.superview, let rects = blockingRects(window, in: frame.bounds) else { return [] }
     return rects.map { [$0.minX, frame.bounds.height - $0.maxY, $0.width, $0.height] }
   }

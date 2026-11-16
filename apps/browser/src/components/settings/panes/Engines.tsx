@@ -29,6 +29,7 @@ export function EnginesPane() {
   const rules = useSettings((s) => s.websiteEngines);
   const sites = Object.keys(rules).sort((a, b) => siteLabel(a).localeCompare(siteLabel(b)));
   const protectedVideo = useSettings((s) => s.protectedVideoInWebKit);
+  const fairPlayInChromium = useSettings((s) => s.fairPlayInChromium);
   const setDefault = (value: PageEngine) => updateSettings({ pageEngine: value });
 
   return (
@@ -43,6 +44,9 @@ export function EnginesPane() {
         </Row>
         <Row anchor="engines.protectedVideo">
           <Toggle value={protectedVideo} onChange={(value) => updateSettings({ protectedVideoInWebKit: value })} />
+        </Row>
+        <Row anchor="engines.fairPlayInChromium">
+          <Toggle value={fairPlayInChromium} onChange={(value) => updateSettings({ fairPlayInChromium: value })} />
         </Row>
       </Group>
 

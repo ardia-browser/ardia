@@ -1,3 +1,4 @@
+import ArdiaDesign
 import SwiftUI
 
 nonisolated enum DuoLayout {
@@ -49,5 +50,5 @@ nonisolated enum DuoLayout {
   static let columnButton: CGFloat = 48
   static let columnFieldSide: CGFloat = 12
 
-  static let slide = Animation.spring(response: 0.32, dampingFraction: 0.9)
+  static let slide = Motion.smooth
 }

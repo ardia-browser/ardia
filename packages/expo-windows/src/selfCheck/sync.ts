@@ -15,7 +15,7 @@ const native = () => {
 
 const contract = () => requireNativeModule<NonNullable<typeof SyncNative>>("ArdiaSync");
 
-const PRIMITIVES = ["aead", "kdf", "hmac", "tags", "words", "padding", "logins", "protectedStorage"];
+const PRIMITIVES = ["aead", "kdf", "hmac", "tags", "words", "padding", "logins", "passwordless", "passwordWins", "protectedStorage"];
 
 const checkWith = (action: string, first = "", second = "", third = "") => native().checkWith(MAC_VAULT.entropy, action, first, second, third);
 

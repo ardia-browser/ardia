@@ -27,3 +27,7 @@ export function useGlassSettings() {
 export function useSelectedTabGlowSetting() {
   return useBrowser((s) => s.settings.selectedTabGlow);
 }
+
+export function useSelectedTopApp() {
+  return useBrowser((s) => (s.settings.elementOutlines ? s.settings.selectedTopApp : "fill"));
+}

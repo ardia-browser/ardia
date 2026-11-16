@@ -50,3 +50,25 @@ test("with it off, app links follow Add new tabs as before", async () => {
   await opened(["https://one.example/"]);
   assert.deepEqual(urlsOf(main), ["https://pinned.example/", "https://b.example/", "https://c.example/", "https://one.example/"]);
 });
+
+test("each Little Ardia a link opens remembers the app that sent its link, even when two arrive together", async () => {
+  mainWindow({ openLinksInLittleArdia: true });
+  openExternalUrls(["https://slack.example/"], undefined, { bundleId: "com.tinyspeck.slackmacgap", appName: "Slack" });
+  openExternalUrls(["https://mail.example/"], undefined, { bundleId: "com.apple.mail", appName: "Mail" });
+  await new Promise((resolve) => setImmediate(resolve));
+  const little = Object.values(S().windows).filter((w) => w.kind === "small");
+  const appOf = (url) => little.find((w) => S().tabs[w.tabIds[0]].url === url)?.linkApp;
+  assert.equal(appOf("https://slack.example/"), "com.tinyspeck.slackmacgap");
+  assert.equal(appOf("https://mail.example/"), "com.apple.mail");
+});
+
+test("a link whose sender isn't an app still remembers the app it came from, and that beats the sender", async () => {
+  mainWindow({ openLinksInLittleArdia: true });
+  openExternalUrls(["https://terminal.example/"], undefined, { bundleId: null, appName: "open" }, "com.apple.Terminal");
+  openExternalUrls(["https://helper.example/"], undefined, { bundleId: "com.tinyspeck.slackmacgap.helper", appName: "Slack Helper" }, "com.tinyspeck.slackmacgap");
+  await new Promise((resolve) => setImmediate(resolve));
+  const little = Object.values(S().windows).filter((w) => w.kind === "small");
+  const appOf = (url) => little.find((w) => S().tabs[w.tabIds[0]].url === url)?.linkApp;
+  assert.equal(appOf("https://terminal.example/"), "com.apple.Terminal");
+  assert.equal(appOf("https://helper.example/"), "com.tinyspeck.slackmacgap");
+});

@@ -104,6 +104,8 @@ inline constexpr CommandRow kCommandRows[] = {
     {"stop", "Stop", "View", "cmd+.", "ctrl+."},
     {"reload", "Refresh", "View", "cmd+r", "ctrl+r|f5"},
     {"forceReload", "Force Refresh the Page", "View", "shift+cmd+r", "ctrl+shift+r|ctrl+f5|shift+f5"},
+    {"toggleReader", "Show Reader", "View", "option+cmd+r", "ctrl+alt+r|f9"},
+    {"toggleMinimalism", "Minimalism Mode", "View", "ctrl+cmd+m", "ctrl+alt+m"},
     {"toggleTabLayout", "Show Tabs in Sidebar", "View", "shift+cmd+s", "ctrl+shift+s"},
     {"toggleSidebar", "Auto-Hide Tabs", "View", "cmd+s|shift+cmd+l|shift+cmd+f", "ctrl+s|ctrl+shift+l|ctrl+shift+f"},
     {"toggleSidebarSide", "Sidebar on Right", "View", "", ""},

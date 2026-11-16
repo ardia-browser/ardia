@@ -10,6 +10,7 @@ from ardia_cli.browse import snapshot
 from ardia_cli.browse.commands import Result, command, parse
 from ardia_cli.browse.errors import BrowseError
 
+UNCHANGED_PERCENT = 0.5
 FONT = {
     "0": ["01110", "10001", "10011", "10101", "11001", "10001", "01110"],
     "1": ["00100", "01100", "00100", "00100", "00100", "00100", "01110"],
@@ -218,7 +219,7 @@ def draw_annotations(png: bytes, rows: list, viewport: dict, full_offset: tuple[
 @command("screenshot")
 async def cmd_screenshot(ctx, argv):
     options, args = parse(argv, {"--full": "bool", "--annotate": "bool", "--screenshot-dir": "value", "--screenshot-format": "value",
-                                 "--screenshot-quality": "value"}, {"-f": "--full"})
+                                 "--screenshot-quality": "value", "--out": "value", "--if-changed": "bool", "--threshold": "value"}, {"-f": "--full"})
     for key in ("screenshot_dir", "screenshot_format", "screenshot_quality"):
         if options.get(key):
             ctx.options[key] = options[key]
@@ -232,7 +233,7 @@ async def cmd_screenshot(ctx, argv):
     quality = ctx.options.get("screenshot_quality") or ctx.env.get("AGENT_BROWSER_SCREENSHOT_QUALITY")
     quality = int(quality) if quality else None
     selector = None
-    path = None
+    path = options.get("out") or None
     for arg in args:
         if path is None and (arg.lower().endswith((".png", ".jpg", ".jpeg")) or "/" in arg and not arg.startswith("@")):
             path = arg
@@ -263,6 +264,14 @@ async def cmd_screenshot(ctx, argv):
             vp = await page.call("() => ardiaBrowse.viewport()", frame=page.main_frame, read=True)
             offset = (vp["scrollX"], vp["scrollY"])
         data = draw_annotations(data, rows, viewport, offset)
+    shots = ctx.state.extras.setdefault("last_shots", {})
+    view = (page.target_id, selector, full, fmt, annotate)
+    before, shots[view] = shots.get(view), data
+    if options.get("if_changed") and before is not None and unchanged(before, data, fmt, threshold_of(options.get("threshold"))):
+        from ardia_cli import command_metrics
+
+        command_metrics.flag("screenshot_unchanged", True)
+        return Result({"path": None, "unchanged": True}, "= Unchanged since the last screenshot of this view, so nothing was saved")
     target = ctx.path(path) if path else default_path(ctx, "jpg" if fmt == "jpeg" else "png")
     Path(target).parent.mkdir(parents=True, exist_ok=True)
     Path(target).write_bytes(data)
@@ -274,6 +283,27 @@ async def cmd_screenshot(ctx, argv):
         legend = [f"   [{row['number']}] @{row['ref']} {row['role']}" + (f" \"{row['name']}\"" if row.get("name") else "") for row in rows]
         text = "\n".join([text] + legend)
     return Result(result, text)
+
+
+def threshold_of(value) -> float:
+    if value is None:
+        return UNCHANGED_PERCENT
+    try:
+        percent = float(str(value).rstrip("%"))
+    except ValueError:
+        raise BrowseError(f"--threshold takes a percent of changed pixels, like 0.5, not {value}") from None
+    if not 0 <= percent <= 100:
+        raise BrowseError(f"--threshold is a percent from 0 to 100, not {value}")
+    return percent
+
+
+def unchanged(before: bytes, after: bytes, fmt: str, percent: float) -> bool:
+    if before == after:
+        return True
+    if fmt != "png" or percent <= 0:
+        return False
+    compared = compare_pngs(before, after, 0.1, None)
+    return compared.get("diffPixels") is not None and compared.get("diffPercent", 100) <= percent
 
 
 @command("pdf")

@@ -1,0 +1,15 @@
+{
+  "id": "fixes-custom-lists",
+  "segments": [
+    {
+      "scene": "customlists",
+      "title": "Add your own filter lists",
+      "body": "Settings › Privacy › Advanced… now opens with Your lists. Paste a list's address and press Add: uBlock Origin downloads it, names it from the list's own title and keeps it updated. 0.2.47-nightly.2 only offered the lists uBlock Origin ships.",
+      "note": "oisd small, a real list from small.oisd.nl",
+      "layout": "side",
+      "cam": [0, 0, 820, 640],
+      "lead": 7.0,
+      "tail": 8.6
+    }
+  ]
+}

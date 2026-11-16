@@ -33,9 +33,9 @@ type WindowBase = {
 };
 
 export type BrowserWindow =
-  | (WindowBase & { kind: "main"; chromeWindow?: string })
+  | (WindowBase & { kind: "main"; chromeWindow?: string; opensBehind?: string })
   | (WindowBase & { kind: "private"; chromeWindow?: string })
-  | (WindowBase & { kind: "small"; linkPointer?: [number, number] });
+  | (WindowBase & { kind: "small"; linkPointer?: [number, number]; linkApp?: string });
 
 export type WindowKind = BrowserWindow["kind"];
 export type MainWindow = Extract<BrowserWindow, { kind: "main" }>;

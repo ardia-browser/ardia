@@ -6,6 +6,7 @@ public enum OpenURLInbox {
     var urls: [String]
     var pointer: NSPoint
     let source: NSDictionary?
+    let returnTo: String?
   }
 
   private static var pending: [Batch] = []
@@ -15,7 +16,7 @@ public enum OpenURLInbox {
     let pointer = NSEvent.mouseLocation
     for batch in batches(urls.map(\.absoluteString), pointer) {
       if deliver(batch) { continue }
-      if let last = pending.last, sameSource(last.source, batch.source) {
+      if let last = pending.last, sameSource(last.source, batch.source), last.returnTo == batch.returnTo {
         pending[pending.count - 1].urls += batch.urls
         pending[pending.count - 1].pointer = pointer
       } else {
@@ -35,7 +36,8 @@ public enum OpenURLInbox {
       if let last = result.last, sameSource(last.source, source) {
         result[result.count - 1].urls.append(url)
       } else {
-        result.append(Batch(urls: [url], pointer: pointer, source: source))
+        let returnTo = LittleArdiaHandoff.shared.appForLink(sentBy: source?["bundleId"] as? String)
+        result.append(Batch(urls: [url], pointer: pointer, source: source, returnTo: returnTo))
       }
     }
     return result
@@ -48,6 +50,7 @@ public enum OpenURLInbox {
   private static func deliver(_ batch: Batch) -> Bool {
     var body: [String: Any] = ["urls": batch.urls, "pointer": [batch.pointer.x, batch.pointer.y]]
     if let source = batch.source { body["source"] = source }
+    if let returnTo = batch.returnTo { body["returnTo"] = returnTo }
     guard ShellEvents.send(.openURLs, body) else { return false }
     if LaunchConfig.shared.isolated { testDeliveries = Array((testDeliveries + [body]).suffix(20)) }
     return true

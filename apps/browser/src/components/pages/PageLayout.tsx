@@ -31,7 +31,7 @@ export function PageToolbar({ size, divider, drag, children }: { size: PageToolb
   );
 }
 
-export function PageHeader({ title, query, onQuery, actions, searchRef }: { title: string; query: string; onQuery: (q: string) => void; actions?: ReactNode; searchRef?: Ref<TextInput> }) {
+export function PageHeader({ title, query, onQuery, actions, searchRef, onArrow }: { title: string; query: string; onQuery: (q: string) => void; actions?: ReactNode; searchRef?: Ref<TextInput>; onArrow?: (step: 1 | -1) => void }) {
   return (
     <PageToolbar size="page">
       <Text weight="semibold" style={HEADER_TITLE()}>
@@ -39,7 +39,7 @@ export function PageHeader({ title, query, onQuery, actions, searchRef }: { titl
       </Text>
       <View style={HEADER_SEARCH}>
         <View style={SEARCH_WIDTH}>
-          <SearchField value={query} onChangeText={onQuery} placeholder={`Search ${title.toLowerCase()}`} inputRef={searchRef} />
+          <SearchField value={query} onChangeText={onQuery} placeholder={`Search ${title.toLowerCase()}`} inputRef={searchRef} onArrow={onArrow} />
         </View>
       </View>
       <Box row gap="m" style={HEADER_ACTIONS}>

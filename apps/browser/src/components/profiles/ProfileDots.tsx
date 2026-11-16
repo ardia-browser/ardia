@@ -23,7 +23,8 @@ const SIDE_ROOM_BESIDE_DOWNLOADS = SIDEBAR_FOOTER_DOWNLOADS.left + SIDEBAR_FOOTE
 export function useProfileDotsShown() {
   const incognito = useIsIncognito();
   const count = useProfileOrder((o) => o.length);
-  return !incognito && count > 1;
+  const enabled = useSettings((s) => s.showProfileDots);
+  return enabled && !incognito && count > 1;
 }
 
 export function ProfileDots({ windowId, width, besideDownloads }: { windowId: string; width: number; besideDownloads: boolean }) {

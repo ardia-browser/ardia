@@ -255,11 +255,11 @@ inline void Log(std::string const &what) noexcept {
 }
 
 struct ModalOverWindow {
-  ModalOverWindow(HWND owner, std::string_view kind) noexcept : watch(owner), pages(owner), parent(owner, !Background()) {
+  ModalOverWindow(HWND owner, std::string_view kind) noexcept : watch(owner, kind), pages(owner), parent(owner, !Background()) {
     if (pages.Count()) LaunchLog::Write(L"info", Paths::Wide(std::string{kind} + " holds " + std::to_string(pages.Count()) + " page window(s) until it closes"));
     ModalWatch::OnTick([this] {
       pages.Refresh();
-      parent.KeepDialogAboveOwner();
+      if (!ModalWatch::Cancelled()) parent.KeepDialogAboveOwner();
     });
   }
   ~ModalOverWindow() noexcept {
@@ -382,6 +382,11 @@ struct DialogsModule {
     return DialogParts::OpenCount().load();
   }
 
+  REACT_SYNC_METHOD(shownCount)
+  int shownCount() noexcept { return DialogParts::ShownDialogCount(); }
+  REACT_SYNC_METHOD(settledCount)
+  int settledCount() noexcept { return DialogParts::SettledDialogCount(); }
+
   REACT_SYNC_METHOD(openCount)
   int openCount() noexcept {
     return DialogParts::OpenCount().load();
@@ -399,6 +404,21 @@ struct DialogsModule {
       bool started = DialogParts::RunModal(owner, [promise, hold](bool usable) noexcept {
         bool confirmed = usable && hold();
         if (!DialogParts::Stopping()) promise.Resolve(confirmed);
+      });
+      if (!started) promise.Resolve(false);
+    });
+  }
+
+  REACT_METHOD(devHoldFileDialog)
+  void devHoldFileDialog(std::string windowId, bool save, winrt::Microsoft::ReactNative::ReactPromise<bool> promise) noexcept {
+    if (!AppLaunch::Shared().testInstance) return promise.Reject("held dialogs are for test instances only");
+    RunOnUI(m_context, [promise, windowId, save]() noexcept {
+      HWND owner = DialogParts::Owner(windowId);
+      bool started = DialogParts::RunModal(owner, [promise, owner, save](bool usable) noexcept {
+        bool picked = false;
+        if (usable && save) picked = DialogParts::ShowSaveFile(owner, DialogParts::SaveRequest{L"held.txt", L"txt", L"Text", L""}).has_value();
+        else if (usable) picked = !DialogParts::ShowOpenFiles(owner).empty();
+        if (!DialogParts::Stopping()) promise.Resolve(picked);
       });
       if (!started) promise.Resolve(false);
     });

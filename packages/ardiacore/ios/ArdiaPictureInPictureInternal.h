@@ -1,13 +1,8 @@
 #import "ArdiaPictureInPicture.h"
 #import "ArdiaWebViewInternal.h"
+#import "ArdiaPiPThrowMath.h"
 
 #include <vector>
-
-namespace ardia_pip_throw {
-struct Point;
-struct Rect;
-struct Screen;
-}
 
 @interface NSWindow (ArdiaPreventsActivation)
 - (void)_setPreventsActivation:(BOOL)prevents;
@@ -58,7 +53,6 @@ typedef NS_ENUM(NSInteger, ArdiaPiPEdge) { ArdiaPiPEdgeNone = 0, ArdiaPiPEdgeLef
 - (void)stopMotion;
 - (void)abandonSwipe;
 - (NSScreen *)gestureHome;
-- (void)dragReleasedAt:(NSPoint)pointer velocity:(NSPoint)velocity;
 - (NSDictionary *)throwInfo;
 @end
 
@@ -80,6 +74,18 @@ typedef NS_ENUM(NSInteger, ArdiaPiPEdge) { ArdiaPiPEdgeNone = 0, ArdiaPiPEdgeLef
   CFTimeInterval _swipeBeganAt;
   NSTimeInterval _swipeLastAt;
   NSRect _swipeStart;
+  BOOL _dragging;
+  BOOL _dragMoving;
+  NSPoint _dragGrab;
+  NSPoint _dragFrom;
+  NSTimeInterval _dragBeganAt;
+  NSInteger _dragOffCursor;
+  double _dragMaxOff;
+  double _dragSlowestMove;
+  NSMutableArray *_dragTrace;
+  std::vector<ardia_pip_throw::Sample> _dragSamples;
+  __weak NSScreen *_dragHome;
+  NSDictionary *_lastDrag;
   NSDictionary *_lastRelease;
   NSDictionary *_lastSkip;
   NSInteger _skips;
@@ -110,6 +116,7 @@ typedef NS_ENUM(NSInteger, ArdiaPiPEdge) { ArdiaPiPEdgeNone = 0, ArdiaPiPEdgeLef
 - (void)moveBy:(ardia_pip_throw::Point)delta;
 - (void)swipeMoved:(NSEvent *)event;
 - (void)swipeEnded:(NSEvent *)event cancelled:(BOOL)cancelled;
+- (void)dragReleasedAt:(NSPoint)pointer velocity:(NSPoint)velocity;
 @end
 
 @interface ArdiaPiPController (Workspaces)
@@ -121,6 +128,10 @@ typedef NS_ENUM(NSInteger, ArdiaPiPEdge) { ArdiaPiPEdgeNone = 0, ArdiaPiPEdgeLef
 @interface ArdiaPiPController (Swipe)
 + (BOOL)handleSwipe:(NSEvent *)event;
 + (void)abandonSwipeOn:(NSWindow *)window;
+- (void)dragBegan:(NSEvent *)event;
+- (void)followPointer:(NSEvent *)event;
+- (void)dragMoved:(NSEvent *)event;
+- (void)dragEnded:(NSEvent *)event;
 - (void)devSwipe:(NSArray<NSString *> *)args;
 - (void)devDrag:(NSArray<NSString *> *)args;
 @end

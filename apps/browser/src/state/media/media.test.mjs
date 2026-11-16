@@ -270,3 +270,43 @@ test("a session that ends while its tab is in the background stops being left pa
   media.setNowPlaying(b, null);
   assert.equal(M().leftPaused[b], undefined);
 });
+
+test("a looping clip's position wraps past its end instead of stopping there", () => {
+  const at = 1_000_000;
+  const looping = report({ position: 11, duration: 12, timestamp: at, loop: true });
+  assert.equal(media.positionOf(looping, at + 3000), 2);
+  assert.equal(media.positionOf({ ...looping, loop: false }, at + 3000), 12);
+  assert.equal(media.positionOf({ ...looping, playbackState: "paused" }, at + 3000), 11);
+});
+
+test("a looping clip's report from its start counts as a restart, a report moving on does not", () => {
+  const at = 1_000_000;
+  const before = report({ position: 0, duration: 12, timestamp: at, loop: true });
+  assert.equal(media.isLoopRestart(before, report({ position: 0.1, duration: 12, timestamp: at + 12_000, loop: true })), true);
+  assert.equal(media.isLoopRestart(before, report({ position: 5, duration: 12, timestamp: at + 5_000, loop: true })), false);
+  assert.equal(media.isLoopRestart(before, report({ position: 0.1, duration: 12, timestamp: at + 12_000 })), false);
+  assert.equal(media.isLoopRestart({ ...before, playbackState: "paused" }, report({ position: 0.1, duration: 12, timestamp: at + 12_000, loop: true })), false);
+});
+
+test("a page's report moving back is counted, a loop's restart and the card's own seek are not", async () => {
+  const { takeMediaCardCounts } = await import("../telemetry/mediaCardCounts.ts");
+  const positions = () => {
+    const { now_playing_loop_restarts, media_position_rewinds, media_reports_past_end } = takeMediaCardCounts();
+    return { now_playing_loop_restarts, media_position_rewinds, media_reports_past_end };
+  };
+  S().hydrate({});
+  const w = S().createWindow({ url: "a.com" });
+  const b = S().newTab(w, { url: "b.com", background: true });
+  takeMediaCardCounts();
+  media.setNowPlaying(b, report({ position: 1, duration: 12, timestamp: 0 }));
+  media.setNowPlaying(b, report({ position: 0.4, duration: 12, timestamp: 11_500 }));
+  media.setNowPlaying(b, report({ position: 0.2, duration: 12, timestamp: 30_000 }));
+  assert.deepEqual(positions(), { now_playing_loop_restarts: 0, media_position_rewinds: 2, media_reports_past_end: 1 }, "the second report came after the countdown ran out");
+
+  media.setNowPlaying(b, report({ position: 10, duration: 12, timestamp: 40_000, loop: true }));
+  media.setNowPlaying(b, report({ position: 0.1, duration: 12, timestamp: 45_000, loop: true }));
+  assert.deepEqual(positions(), { now_playing_loop_restarts: 1, media_position_rewinds: 0, media_reports_past_end: 0 }, "a loop wraps instead of running out");
+
+  media.seekTo(b, M().sessions[b], 0);
+  assert.deepEqual(positions(), { now_playing_loop_restarts: 0, media_position_rewinds: 0, media_reports_past_end: 0 }, "the card's own seek isn't a page report");
+});

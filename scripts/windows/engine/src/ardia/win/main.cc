@@ -347,6 +347,9 @@ void Trace(const MSG& msg, bool engine_window, bool taken) {
 }
 
 bool PreTranslate(const MSG& msg) {
+  if (TakeTopEdgePress(msg)) {
+    return true;
+  }
   App& app = TheApp();
   const bool engine_window = ForEngineWindow(msg);
   bool taken = false;

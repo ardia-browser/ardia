@@ -24,6 +24,7 @@ import type {
   PageSelection,
   PasswordPrompt,
   PictureInPictureState,
+  PictureInPictureDrag,
   ProtectedMediaRequest,
   ScrollState,
   SecurityInfo,
@@ -56,6 +57,7 @@ type NativeEvents = {
   onNotificationClose: { id: string };
   onPictureInPicture: PictureInPictureState;
   onAutoPictureInPictureKept: { appSwitch?: boolean; reason?: string };
+  onPictureInPictureDragged: PictureInPictureDrag;
   onPictureInPictureSkip: { seconds: number };
   onMediaFault: MediaFault;
   onActivateRequest: ActivateRequest;
@@ -63,7 +65,7 @@ type NativeEvents = {
   onWindowClose: object;
   onCommand: PageCommand;
   onPageFocus: object;
-  onPagePress: object;
+  onPagePress: { refused?: boolean };
   onSelection: { selection: PageSelection | null };
   onScroll: { state: ScrollState };
   onProtectedMedia: ProtectedMediaRequest;
@@ -105,6 +107,7 @@ const PAGE_EVENTS = {
   onNotificationClose: "notificationClose",
   onPictureInPicture: "pictureInPicture",
   onAutoPictureInPictureKept: "autoPictureInPictureKept",
+  onPictureInPictureDragged: "pictureInPictureDragged",
   onPictureInPictureSkip: "pictureInPictureSkip",
   onMediaFault: "mediaFault",
   onActivateRequest: "activateRequest",
@@ -154,6 +157,7 @@ const unwrap: { [K in Handlers]: (e: NativeEvents[K]) => Parameters<NonNullable<
   onNotificationClose: (e) => [e.id],
   onPictureInPicture: (e) => [e],
   onAutoPictureInPictureKept: (e) => [e.reason === "nothingPlaying" ? "nothingPlaying" : e.appSwitch ? "appSwitch" : "onScreen"],
+  onPictureInPictureDragged: (e) => [{ offCursor: !!e.offCursor, slowMove: !!e.slowMove }],
   onPictureInPictureSkip: (e) => [e.seconds],
   onMediaFault: (e) => [e],
   onActivateRequest: (e) => [e],
@@ -161,7 +165,7 @@ const unwrap: { [K in Handlers]: (e: NativeEvents[K]) => Parameters<NonNullable<
   onWindowClose: () => [],
   onCommand: (e) => [e],
   onPageFocus: () => [],
-  onPagePress: () => [],
+  onPagePress: (e) => [e.refused === true],
   onSelection: (e) => [e.selection],
   onScroll: (e) => [e.state],
   onProtectedMedia: (e) => [e],

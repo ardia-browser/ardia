@@ -1,10 +1,11 @@
 import { TurboModuleRegistry } from "react-native";
-import type { AppWindowsModule, WindowsHostModule } from "./nativeModuleTypes";
+import type { WindowsHostModule } from "./nativeModuleTypes";
 import { installAnimation } from "./animation";
 import { watchRelaunches } from "./engine/relaunch";
 import { openLaunchLinks } from "./launchLinks";
 import { requireNativeModule } from "./modules";
 import { runSelfCheck } from "./selfCheck";
+import { endByClosingTheLastWindow } from "./selfCheck/lastWindow";
 import { installTextFocusReport } from "./textFocus";
 import { startUpdateChecks } from "./updater";
 import { viewNamed } from "./views/registry";
@@ -34,7 +35,7 @@ const secureHex = (byteCount: number) => windowsHost().secureRandomHex(byteCount
 
 if (windowsHost().getConstants?.()?.selfCheck) {
   setTimeout(() => {
-    void runSelfCheck().finally(() => requireNativeModule<Pick<AppWindowsModule, "quit">>("ArdiaAppWindows").quit());
+    void runSelfCheck().finally(() => void endByClosingTheLastWindow());
   }, SELF_CHECK_AFTER_MS);
 }
 

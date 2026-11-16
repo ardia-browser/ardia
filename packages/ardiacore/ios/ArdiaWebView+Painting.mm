@@ -30,6 +30,45 @@ NSString *const kLingeringPane = @"ardia.lingeringPane";
 @end
 
 namespace {
+constexpr CGFloat kContentDriftCounted = 0.5;
+constexpr CAAutoresizingMask kFillsWidget = kCALayerWidthSizable | kCALayerHeightSizable;
+NSUInteger gContentDriftFits = 0;
+NSUInteger gWidgetLayouts = 0;
+CGFloat gContentDriftMaxPoints = 0;
+}
+
+@interface ArdiaWidgetLayerFit : NSObject <CALayoutManager>
+@end
+
+@implementation ArdiaWidgetLayerFit
+
++ (instancetype)shared {
+  static ArdiaWidgetLayerFit *fit = [ArdiaWidgetLayerFit new];
+  return fit;
+}
+
+- (void)layoutSublayersOfLayer:(CALayer *)layer {
+  gWidgetLayouts++;
+  const CGRect bounds = layer.bounds;
+  for (CALayer *sublayer in layer.sublayers) {
+    const CGRect frame = sublayer.frame;
+    if (sublayer.autoresizingMask != kFillsWidget || CGRectEqualToRect(frame, bounds)) continue;
+    const CGFloat drift = MAX(MAX(fabs(CGRectGetMinX(frame) - CGRectGetMinX(bounds)), fabs(CGRectGetMaxX(frame) - CGRectGetMaxX(bounds))),
+                              MAX(fabs(CGRectGetMinY(frame) - CGRectGetMinY(bounds)), fabs(CGRectGetMaxY(frame) - CGRectGetMaxY(bounds))));
+    if (drift >= kContentDriftCounted) {
+      gContentDriftFits++;
+      gContentDriftMaxPoints = MAX(gContentDriftMaxPoints, drift);
+    }
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    sublayer.frame = bounds;
+    [CATransaction commit];
+  }
+}
+
+@end
+
+namespace {
 
 NSMapTable<NSWindow *, ArdiaNeighbourWake *> *NeighbourPagesAwake() {
   static NSMapTable *windows = [NSMapTable weakToStrongObjectsMapTable];
@@ -59,6 +98,24 @@ NSView *RenderWidgetIn(NSView *page) {
     [queue addObjectsFromArray:view.subviews];
   }
   return nil;
+}
+
+void FitRenderWidgetsIn(NSView *page) {
+  static Class widgetClass = NSClassFromString(@"RenderWidgetHostViewCocoa");
+  if (!page || !widgetClass) return;
+  NSMutableArray<NSView *> *queue = [NSMutableArray arrayWithObject:page];
+  while (queue.count) {
+    NSView *view = queue.firstObject;
+    [queue removeObjectAtIndex:0];
+    if (![view isKindOfClass:widgetClass]) {
+      [queue addObjectsFromArray:view.subviews];
+      continue;
+    }
+    CALayer *layer = view.layer;
+    if (!layer) continue;
+    if (layer.layoutManager != ArdiaWidgetLayerFit.shared) layer.layoutManager = ArdiaWidgetLayerFit.shared;
+    [layer setNeedsLayout];
+  }
 }
 
 NSArray *FrameMarkOf(NSView *widget) {
@@ -117,6 +174,15 @@ BOOL Above(NSView *a, NSView *b) {
   } else {
     page.frame = self.bounds;
   }
+  FitRenderWidgetsIn(page);
+}
+
++ (NSDictionary<NSString *, NSNumber *> *)takeContentDrift {
+  NSDictionary *drift = @{@"layouts" : @(gWidgetLayouts), @"fits" : @(gContentDriftFits), @"maxPoints" : @(gContentDriftMaxPoints)};
+  gWidgetLayouts = 0;
+  gContentDriftFits = 0;
+  gContentDriftMaxPoints = 0;
+  return drift;
 }
 
 - (BOOL)paints {

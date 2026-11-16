@@ -41,7 +41,7 @@ export function BookmarkRow({
   selected: boolean;
   highlighted: boolean;
   targetRef: (v: View | null) => void;
-  onSelect: (e: { metaKey?: boolean; shiftKey?: boolean }) => void;
+  onSelect: (e: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean }) => void;
   onOpenFolder: (folder?: string) => void;
   onDelete: () => void;
   menuSelection: () => string[];
@@ -100,7 +100,7 @@ export function BookmarkRow({
     >
       <ContextMenuArea onContextMenu={() => void menu()}>
         <MouseArea onMiddleClick={() => open("background")}>
-          <Pressable onPress={(e) => onSelect(e.nativeEvent as unknown as { metaKey?: boolean; shiftKey?: boolean })}>
+          <Pressable onPress={(e) => onSelect(e.nativeEvent as unknown as { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean })}>
             <View
               onDoubleClick={() => (node.kind === "folder" ? onOpenFolder() : void open("current"))}
               style={[ROW_LOOK(), { backgroundColor: selected ? colors.rowSelected : highlighted ? colors.dropTarget : hovered ? theme.rowHover : undefined }]}

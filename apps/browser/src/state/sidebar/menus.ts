@@ -10,6 +10,7 @@ import { setSidebarUi } from "./sidebarUi";
 import { cleanUpWithUndo, closeAllTabs } from "./clearTabs";
 import { DAILY_CLEAN_UP_MINUTES } from "../settings/cleanUpAfter";
 import { sep } from "./menuParts";
+import { clearableRecentlyClosed, closedWindowTitle } from "../windows/recentlyClosedList";
 
 export { openTabMenu } from "./tabMenu";
 export { openGroupMenu } from "./groupMenu";
@@ -25,11 +26,12 @@ export async function openOverflowMenu(windowId: string) {
   if (!w) return;
   const muted = allMuted(windowId);
   const open = viewTabIds(s, windowId).map((id) => s.tabs[id]!);
+  const clearable = clearableRecentlyClosed(s, windowId);
+  const listed = clearable ?? { tabs: s.closedTabs.filter((c) => c.tab.profileId === w.profileId), windows: [], groups: w.kind === "private" ? s.closedGroups : [] };
   const closed = [
-    ...s.closedTabs
-      .filter((c) => c.tab.profileId === w.profileId)
-      .map((c) => ({ value: { restore: c.id }, title: tabTitle(c.tab), symbol: "clock.arrow.circlepath", at: c.closedAt })),
-    ...s.closedGroups.map((c) => ({ value: { restore: c.id }, title: `${c.group.name} (${plural(c.tabs.length, "Tab")})`, symbol: "rectangle.stack", at: c.closedAt })),
+    ...listed.tabs.map((c) => ({ value: { restore: c.id }, title: tabTitle(c.tab), symbol: "clock.arrow.circlepath", at: c.closedAt })),
+    ...listed.windows.map((c) => ({ value: { restore: c.id }, title: closedWindowTitle(c), symbol: "macwindow", at: c.closedAt })),
+    ...listed.groups.map((c) => ({ value: { restore: c.id }, title: `${c.group.name} (${plural(c.tabs.length, "Tab")})`, symbol: "rectangle.stack", at: c.closedAt })),
   ]
     .sort((a, b) => b.at - a.at)
     .slice(0, 15)
@@ -52,7 +54,7 @@ export async function openOverflowMenu(windowId: string) {
       children: open.map((t) => ({ value: { open: t.id }, title: tabTitle(t), checked: w.activeTabIds[w.profileId] === t.id })),
     },
     ...(synced ? [synced] : []),
-    { id: "closed", title: "Recently Closed", symbol: "clock.arrow.circlepath", enabled: closed.length > 0, children: closed.length ? closed : [{ id: "none", title: "Empty", enabled: false }] },
+    { id: "closed", title: "Recently Closed", symbol: "clock.arrow.circlepath", enabled: closed.length > 0, children: closed.length ? [...closed, ...(clearable ? [sep, { id: "clearClosed", title: "Clear Recently Closed" }] : [])] : [{ id: "none", title: "Empty", enabled: false }] },
     {
       id: "cleaned",
       title: "Recently Cleaned",
@@ -82,6 +84,7 @@ export async function openOverflowMenu(windowId: string) {
   } else if (choice === "search") setSidebarUi({ searchTabs: windowId });
   else if (openSyncedTab(choice, windowId, w.profileId)) return;
   else if (choice === "restoreAll") s.restoreCleaned(undefined, windowId);
+  else if (choice === "clearClosed") s.clearRecentlyClosed(windowId);
   else if (choice === "clean") cleanUpWithUndo(windowId);
   else if (choice === "daily") s.updateSettings({ cleanUpInactiveTabsAfterMinutes: daily ? null : DAILY_CLEAN_UP_MINUTES });
   else if (choice === "mute") muteAll(windowId, !muted);

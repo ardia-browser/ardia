@@ -1,5 +1,7 @@
-import { capture, ensureInstallId, setSharing } from "./client";
+import { capture, setSharing } from "./client";
+import { ensureInstallId } from "./installId";
 import { NO_WATCH, save, savedChoice } from "./choice";
+import { telemetryRelay } from "./relay";
 
 export const WATCH_DAYS = 14;
 const DAY_MS = 86_400_000;
@@ -19,6 +21,8 @@ export function watchStatus(): WatchStatus {
 }
 
 export function startWatch(reportId: string, days = WATCH_DAYS, now = Date.now()) {
+  const relay = telemetryRelay();
+  if (relay) return relay.change({ kind: "watchStarted", reportId, days });
   const span = Math.max(1, Math.min(WATCH_DAYS, days)) * DAY_MS;
   const until = now + span;
   const current = savedChoice();
@@ -54,7 +58,11 @@ function endWatch(reason: "expired" | "clock" | "stopped") {
   timer = undefined;
 }
 
-export const stopWatch = () => endWatch("stopped");
+export function stopWatch() {
+  const relay = telemetryRelay();
+  if (relay) return relay.change({ kind: "watchStopped" });
+  endWatch("stopped");
+}
 
 export function checkWatch(now = Date.now(), sameSession = lastMonotonic !== null) {
   const s = savedChoice();
@@ -87,4 +95,8 @@ export function startWatchChecks() {
 
 export const pendingWatchNotice = () => savedChoice().watchEndedNotice;
 
-export const watchNoticeShown = () => save({ watchEndedNotice: null });
+export function watchNoticeShown() {
+  const relay = telemetryRelay();
+  if (relay) return relay.change({ kind: "watchNoticeShown" });
+  save({ watchEndedNotice: null });
+}

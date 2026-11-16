@@ -2,7 +2,7 @@ import { displayUrl, asksForBackspace, keywordBySpace, resolveInput, searchUrl, 
 import { Symbol, useTheme } from "../ui";
 import { copyText, pickFiles } from "../../state/app/system";
 import { chooseFromMenu } from "../../state/app/menuChoice";
-import { startDictation } from "../../state/omnibox/textInput";
+import { dictationAvailable, startDictation } from "../../state/omnibox/textInput";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { findNodeHandle, type TextInput, type View } from "react-native";
 import { journeyBarCommitted, journeyBarFocused, journeyKeystroke, journeyNavigate, journeySuggestions } from "../../state/telemetry/journeys";
@@ -375,7 +375,7 @@ export function Omnibox({
         <BottomRow
           hero={hero}
           addChip={<AddChip onPress={barActions.openTabOrFile} />}
-          onDictate={barActions.dictate}
+          onDictate={dictationAvailable() ? barActions.dictate : undefined}
           label={destinationLabel(current)}
           enabled={!hero || !!typed.trim() || previewing}
           onGo={barActions.choose}

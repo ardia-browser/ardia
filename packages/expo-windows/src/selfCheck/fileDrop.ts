@@ -1,7 +1,7 @@
 import type { DevDragPayload, WindowsNative } from "@ardia/shell";
 import type { FileDropModule } from "../nativeModuleTypes";
 import { requireNativeModule } from "../modules";
-import type { DropAccepts, DropAreaFrame, DroppedItem, WindowDrop } from "../views/fileDropAreas";
+import type { DropAreaFrame, DroppedItem, WindowDrop } from "../views/fileDropAreas";
 import { expectEqual, expectTrue, type Check } from "./check";
 
 
@@ -21,7 +21,7 @@ async function firstWindow() {
   return ids[0]!;
 }
 
-type Area = { accepts: DropAccepts; enabled?: boolean; depth?: number };
+type Area = Pick<DropAreaFrame, "accepts"> & Partial<Pick<DropAreaFrame, "enabled" | "depth">>;
 type Outcome = { moved: string; dropped: string; events: WindowDrop[]; areas: string[] };
 
 async function drag(windowId: string, layers: Area[], payload: DevDragPayload): Promise<Outcome> {

@@ -13,13 +13,18 @@ using namespace ardia_web_view;
 
 namespace {
 
-NSString *const kSpotifyOrigin = @"https://open.spotify.com";
 constexpr NSUInteger kMaxCertificate = 64 * 1024;
 constexpr NSUInteger kMaxLicense = 64 * 1024;
 constexpr NSUInteger kMaxPlaylistPart = 60 * 1024;
 constexpr NSUInteger kMaxPlaylist = 2 * 1024 * 1024;
 constexpr NSInteger kMaxParts = 40;
 constexpr NSUInteger kMaxLine = 4 * 1024 * 1024;
+BOOL gEnabled = NO;
+
+NSSet<NSString *> *FairPlayOrigins() {
+  static NSSet<NSString *> *origins = [NSSet setWithArray:@[ @"https://open.spotify.com" ]];
+  return origins;
+}
 
 NSString *HelperPath() {
   return [NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"Contents/Helpers/ArdiaFairPlay.app/Contents/MacOS/ArdiaFairPlay"];
@@ -90,12 +95,30 @@ NSString *HttpsURL(NSDictionary *d, NSString *key) {
   return [NSFileManager.defaultManager isExecutableFileAtPath:HelperPath()];
 }
 
++ (BOOL)enabled {
+  return gEnabled;
+}
+
++ (void)setEnabled:(BOOL)enabled {
+  if (enabled == gEnabled) return;
+  gEnabled = enabled;
+  if (enabled) return;
+  ArdiaFairPlay *shared = self.shared;
+  if (ArdiaCoreTab *owner = shared->_owner)
+    [shared deliver:@{@"event" : @"stolen", @"gen" : @(shared->_generation)} to:owner frame:shared->_frame];
+  [shared stop];
+}
+
 + (BOOL)servesOrigin:(NSString *)origin {
-  return [origin isEqualToString:kSpotifyOrigin];
+  return origin && [FairPlayOrigins() containsObject:origin];
 }
 
 + (void)tab:(ArdiaCoreTab *)tab frame:(NSString *)frameId message:(NSDictionary *)message {
-  [self.shared tab:tab frame:frameId message:message];
+  if (gEnabled) return [self.shared tab:tab frame:frameId message:message];
+  NSInteger generation, part;
+  if ([Text(message, @"op", 16) isEqualToString:@"load"] && WholeNumber(message, @"gen", 1, INT_MAX, &generation) &&
+      WholeNumber(message, @"part", 0, 0, &part))
+    [self.shared deliver:@{@"event" : @"failed", @"gen" : @(generation), @"step" : @"player"} to:tab frame:frameId];
 }
 
 + (void)pageGoneFromTab:(ArdiaCoreTab *)tab {

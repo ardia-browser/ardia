@@ -4,7 +4,7 @@ import { captureEscape } from "../../platform/focus";
 import { useBrowser } from "../browser/store";
 import { dismissZoomPopover } from "../site/zoomBubble";
 import { notePopoverClosed } from "../telemetry/usage";
-import { noteDownloadsPanelClose } from "../telemetry/downloadsPanelCounts";
+import { noteDownloadsPanelClose } from "../telemetry/downloadsPanelCauses";
 import { focusedWindowOf } from "../windows/ui";
 import { popoverOf, setPopover, usePages, type PagePopover } from "./pageState";
 

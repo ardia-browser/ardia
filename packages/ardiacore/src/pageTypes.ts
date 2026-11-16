@@ -35,6 +35,7 @@ export type NowPlaying = {
   hasVideo: boolean;
   actions: string[];
   controllable: boolean;
+  loop?: boolean;
 };
 export type MediaCommand = "play" | "pause" | "toggle" | "next" | "previous" | "seekBy" | "seekTo" | "stop";
 export type MediaAccess = { camera: boolean; microphone: boolean; screen: boolean };
@@ -52,6 +53,7 @@ export type OpenWindowRequest = {
   site?: boolean;
   fromClick?: boolean;
   linkWait?: "matched" | "skipped" | "timedOut";
+  popup?: boolean;
 };
 
 export type BlockedPopup = { id: string; url: string; origin: string };
@@ -65,8 +67,9 @@ export type PageShare = {
   fileUrl?: string;
 };
 export type PageCommand = {
-  command: "search" | "ask" | "copyLinkToHighlight" | "escape" | "share";
+  command: "search" | "ask" | "copyLinkToHighlight" | "escape" | "share" | "hideElement";
   text: string;
+  point?: [number, number];
   modifiers?: { metaKey?: boolean; shiftKey?: boolean; altKey?: boolean; middle?: boolean };
   share?: PageShare;
   anchor?: [number, number, number, number];
@@ -112,6 +115,7 @@ export type WebNotification = {
 };
 
 export type PictureInPictureState = { kind: "video" | "document"; active: boolean; fullScreenSpaces?: boolean; leftApp?: boolean; leftTab?: boolean };
+export type PictureInPictureDrag = { offCursor: boolean; slowMove: boolean };
 export type AutoPictureInPictureHold = "onScreen" | "appSwitch" | "nothingPlaying";
 export type MediaFault = { reason: string; muted?: boolean; blockerActive?: boolean };
 export type ControlPress = { clickAt: number; control: number };
@@ -138,6 +142,7 @@ export type PasswordPrompt = {
   passwordLength: number;
   federation: string;
   usernames: string[];
+  offer?: string;
 };
 export type PasswordPromptAnswer = "save" | "update" | "never" | "nope" | "dismiss";
 export type AutofillPrompt = {
@@ -203,6 +208,7 @@ export type WebViewProps = ViewProps & {
   onNotificationClose?: (id: string) => void;
   onPictureInPicture?: (state: PictureInPictureState) => void;
   onAutoPictureInPictureKept?: (reason: AutoPictureInPictureHold) => void;
+  onPictureInPictureDragged?: (drag: PictureInPictureDrag) => void;
   onPictureInPictureSkip?: (seconds: number) => void;
   onMediaFault?: (fault: MediaFault) => void;
   onActivateRequest?: (request: ActivateRequest) => void;
@@ -210,7 +216,7 @@ export type WebViewProps = ViewProps & {
   onWindowClose?: () => void;
   onCommand?: (command: PageCommand) => void;
   onPageFocus?: () => void;
-  onPagePress?: () => void;
+  onPagePress?: (refused: boolean) => void;
   onSelection?: (selection: PageSelection | null) => void;
   onScroll?: (state: ScrollState) => void;
   onProtectedMedia?: (request: ProtectedMediaRequest) => void;
@@ -235,6 +241,7 @@ export type WebViewHandle = {
   forceReload(): Promise<void>;
   stopLoading(): Promise<void>;
   focus(): Promise<void>;
+  focusIfUnfocused(): Promise<boolean>;
   setMuted(muted: boolean): Promise<void>;
   zoomStep(direction: 1 | -1 | 0): Promise<void>;
   find(text: string, forward: boolean, findNext: boolean): Promise<void>;
@@ -259,7 +266,7 @@ export type WebViewHandle = {
   openBlockedPopup(id: string, always?: boolean): Promise<void>;
   clearSiteData(): Promise<{ cookies: number | false; storage: boolean }>;
 
-  resolvePasswordPrompt(answer: PasswordPromptAnswer, edits?: { username?: string; password?: string }): Promise<void>;
+  resolvePasswordPrompt(answer: PasswordPromptAnswer, edits?: { username?: string; password?: string; offer?: string }): Promise<void>;
   resolveAutofillPrompt(id: number, answer: AutofillPromptAnswer): Promise<void>;
   executeExtensionAction(extensionId: string): Promise<ExtensionActionResult | null>;
 
@@ -269,8 +276,10 @@ export type WebViewHandle = {
 
   resolveUnresponsive(terminate: boolean): Promise<void>;
   discard(options?: { unload?: boolean }): Promise<DiscardOutcome>;
+  sleepIfHidden(seconds: number): Promise<DiscardRefusal[]>;
   setFrozen(frozen: boolean): Promise<void>;
 };
 
 export type DiscardOutcome = "discarded" | "already" | "refused" | "unsupported";
+export type DiscardRefusal = number;
 export type DiscardReason = "external" | "urgent" | "proactive" | "suggested" | "frozen";

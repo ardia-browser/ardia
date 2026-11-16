@@ -373,7 +373,7 @@ struct SystemInfo {
 REACT_MODULE(AppModule, L"ArdiaApp")
 struct AppModule {
   REACT_CONSTANT(windowsApiVersion)
-  const int windowsApiVersion = 18;
+  const int windowsApiVersion = 23;
 
   REACT_SYNC_METHOD(systemInfo)
   SystemInfo systemInfo() noexcept {
@@ -471,7 +471,7 @@ struct AppModule {
 
   REACT_METHOD(isInDock)
   void isInDock(winrt::Microsoft::ReactNative::ReactPromise<bool> promise) noexcept {
-    promise.Resolve(false);
+    promise.Reject("Windows has no Dock");
   }
 
   REACT_METHOD(setWindowActivity)

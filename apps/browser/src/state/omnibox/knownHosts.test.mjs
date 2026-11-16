@@ -26,3 +26,10 @@ test("known hosts follow a new tabs map and a new history list", () => {
   assert.deepEqual(knownHosts(s3, "p"), ["b.com", "c.com", "d.com"]);
   assert.deepEqual(knownHosts({ tabs: {}, profiles: {}, history: {} }, "none"), []);
 });
+
+test("with history suggestions off, known hosts come from open tabs only, and come back with them on", () => {
+  const tabs = { a: tab("a", "p", "https://b.com/") };
+  const history = { p: view([entry("https://a.com/")]) };
+  assert.deepEqual(knownHosts({ tabs, profiles: {}, history, settings: { commandBarHistory: false } }, "p"), ["b.com"]);
+  assert.deepEqual(knownHosts({ tabs, profiles: {}, history, settings: { commandBarHistory: true } }, "p"), ["b.com", "a.com"]);
+});

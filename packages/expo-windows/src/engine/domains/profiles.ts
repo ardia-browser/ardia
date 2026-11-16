@@ -1,4 +1,4 @@
-import { ok, served, type Engine, type Handlers } from "./calling";
+import { callError, ok, served, type Engine, type Handlers } from "./calling";
 import { deleteOriginalProfileData } from "./originalProfile";
 import { releaseProfile } from "../privateWindows";
 
@@ -30,7 +30,8 @@ export const profileCalls: Handlers = {
     const types = args.strings("types");
     const since = args.optionalDouble("since") ?? 0;
     if (!types.length) return ok();
-    await served(engine, "ac_browsing_data_clear", args.profile, { types, since });
+    const reply = await served(engine, "ac_browsing_data_clear", args.profile, { types, since });
+    if (reply.ok !== true) throw callError("ERR_ENGINE", "Some browsing data could not be cleared.");
     return ok();
   },
   deleteData: async (args, engine) => {

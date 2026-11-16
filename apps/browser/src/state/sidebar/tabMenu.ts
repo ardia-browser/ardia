@@ -3,15 +3,18 @@ import { chooseFromMenu, type ChoiceItem } from "../app/menuChoice";
 import { closeTab, moveTabsToProfile, moveTabToWindow, openWindow, toggleMute, toggleSiteMute } from "../browser/actions";
 import { muteState, muteSymbol, muteTitle, siteMuteTitle } from "../tabs/mute";
 import { useBrowser, type BrowserState } from "../browser/store";
-import { activeTabId, inPinnedContainer, isIncognitoProfile, pinnedSectionTitle, pinSection, togglePinTitle, viewTabIds, tabLayoutOf } from "../browser/model";
+import { activeTabId, bookmarkProfileId, inPinnedContainer, isIncognitoProfile, pinnedSectionTitle, pinSection, tabTitle, togglePinTitle, viewTabIds, tabLayoutOf } from "../browser/model";
 import { awayFromPin, selectedTabIds } from "../pins/organize";
 import { groupOf } from "../pins/tabGrouping";
 import { splitOf, splitRowPanes, splitViewAvailable } from "../splits/splits";
 import { closeSplitView, openSplitPane } from "../splits/actions";
 import type { Tab } from "../browser/types";
-import { bookmarkTabs, copyUrls, editPinnedPage, newGroupWithSelection, openIconPicker, startRename } from "./actions";
+import { bookmarkTabs, copyUrls, editPinnedPage, newGroupWithSelection, openIconPicker, startRename, toggleBookmarkInWindow } from "./actions";
 import { isCalendarUrl } from "../live/meetings";
 import { bookmarkTab } from "../bookmarks/actions";
+import { isBookmarked } from "../bookmarks/bookmarks";
+import { exitPictureInPicture, useMedia } from "../media/media";
+import { noteTabMenuPinnedReset } from "../telemetry/hoverCardCounts";
 import { bookmarksShown } from "../bookmarks/visibility";
 import { calendarMenuItem, dismissNowMenuItems, runCalendarMenu } from "./liveMenus";
 import { newFolderWithTab, removeFromFolder } from "./tileFolderUi";
@@ -22,6 +25,8 @@ import { openMultiMenu } from "./multiTabMenu";
 import { tileFolderOf } from "../pins/tileFolders";
 import { sendTabFromMenu, sendTabMenuItem } from "../sync/menu";
 import { pageUnread } from "../tabs/unread";
+import { closeIntent, openPages } from "../tabs/tabs";
+import { noteTopAppUnloadedFromMenu } from "../telemetry/tabSleepCounts";
 import { ALL_UNREAD_TITLE, canChooseSiteUnread, isUnreadSiteHidden, showUnreadCounts, toggleSiteUnread, unreadSiteTitle } from "../tabs/unreadSites";
 
 const store = () => useBrowser.getState();
@@ -51,21 +56,19 @@ type Facts = ReturnType<typeof tabMenuFacts>;
 
 function pinItems(s: BrowserState, tab: Tab, f: Facts): MenuItem[] {
   const toRows = `Move to ${pinnedSectionTitle(s, tab)}`;
+  const backToPin: MenuItem[] = f.housed
+    ? [{ id: "backToPin", title: "Reset Pinned Tab", symbol: "arrow.uturn.backward", enabled: awayFromPin(tab), ...hintWhen(f.active, "returnToPinnedUrl", s) }]
+    : [];
   const editPinned: MenuItem[] = f.housed
     ? [
         {
           id: "pinnedPage",
           title: "Edit Pinned Page",
-          children: [
-            { id: "backToPin", title: "Back to Pinned URL", symbol: "arrow.uturn.backward", enabled: awayFromPin(tab), ...hintWhen(f.active, "returnToPinnedUrl", s) },
-            { id: "replacePin", title: "Replace Pinned URL with Current", enabled: awayFromPin(tab) },
-            { separator: true },
-            { id: "editPin", title: "Edit Pinned URL…" },
-          ],
+          children: [{ id: "replacePin", title: "Replace Pinned URL with Current", enabled: awayFromPin(tab) }, { separator: true }, { id: "editPin", title: "Edit Pinned URL…" }],
         },
       ]
     : [];
-  if (f.memberPin) return [{ id: "unpinMember", title: "Unpin", symbol: "pin.slash" }, ...editPinned];
+  if (f.memberPin) return [{ id: "unpinMember", title: "Unpin", symbol: "pin.slash" }, ...backToPin, ...editPinned];
   const row = f.section === "row";
   const toggle: MenuItem = { id: "pin", title: togglePinTitle(tab), symbol: tab.pin ? "pin.slash" : "pin", ...(row ? hintWhen(f.active, "togglePinnedRow", s) : {}) };
   const other: MenuItem[] = f.splitRow
@@ -75,7 +78,7 @@ function pinItems(s: BrowserState, tab: Tab, f: Facts): MenuItem[] {
       : f.section === "tile"
         ? [{ id: "pinRow", title: toRows }]
         : [{ id: "pinTile", title: "Move to Top Apps" }];
-  return [toggle, ...other, ...editPinned];
+  return [toggle, ...backToPin, ...other, ...editPinned];
 }
 
 function openItems(s: BrowserState, tab: Tab, f: Facts): MenuItem[] {
@@ -119,6 +122,19 @@ function organiseItems(s: BrowserState, windowId: string, tab: Tab, f: Facts): T
   ];
 }
 
+function pictureInPictureItems(tab: Tab): MenuItem[] {
+  return useMedia.getState().pipOpen[tab.id] ? [{ id: "exitPip", title: "Exit Picture in Picture", symbol: "pip.exit" }] : [];
+}
+
+function bookmarkItems(s: BrowserState, windowId: string, tab: Tab, f: Facts): TabMenuItem[] {
+  const saved = !!tab.url && isBookmarked(s, bookmarkProfileId(s, s.windows[windowId]), tab.url);
+  return [
+    { id: "bookmark", title: saved ? "Edit Bookmark…" : "Add to Bookmarks…", symbol: saved ? "bookmark.fill" : "bookmark", enabled: !!tab.url, ...hintWhen(f.active, "bookmarkPage", s) },
+    ...(saved ? [{ id: "unbookmark", title: "Remove Bookmark" }] : []),
+    { id: "bookmarkTo", title: "Add Bookmark to Folder", enabled: !!tab.url, children: bookmarkFolderItems(s, windowId) },
+  ];
+}
+
 function muteItems(s: BrowserState, tab: Tab): MenuItem[] {
   if (!tab.url) return [];
   const state = muteState(s, tab);
@@ -136,8 +152,14 @@ function unreadItems(s: BrowserState, tab: Tab): MenuItem[] {
   return [{ id: "siteUnread", title: unreadSiteTitle(hidden), symbol: "app.badge" }];
 }
 
-function closeItems(f: Facts): MenuItem[] {
-  if (f.housed) return [];
+function unloadTopApp(tabId: string) {
+  const s = store();
+  noteTopAppUnloadedFromMenu();
+  s.closeTabs(closeIntent(s, tabId).ids, { keepTopApps: false });
+}
+
+function closeItems(s: BrowserState, tab: Tab, f: Facts): MenuItem[] {
+  if (f.housed) return f.section === "tile" && s.settings.keepTopAppsRunning && openPages(s, tab.id).length > 0 ? [{ id: "unloadTopApp", title: "Unload", symbol: "moon.zzz" }] : [];
   return [
     { id: "close", title: "Close", symbol: "xmark", ...hintWhen(f.active, "closeTab") },
     ...(f.split ? [{ id: "closeSplit", title: "Close Split View" }] : []),
@@ -161,12 +183,7 @@ export function tabMenuItems(s: BrowserState, windowId: string, tab: Tab, f: Fac
     openItems(s, tab, f),
     calendarItems(tab),
     organiseItems(s, windowId, tab, f),
-    bookmarksShown(s.settings)
-      ? [
-          { id: "bookmark", title: "Add to Bookmarks…", symbol: "bookmark", enabled: !!tab.url, ...hintWhen(f.active, "bookmarkPage", s) },
-          { id: "bookmarkTo", title: "Add Bookmark to Folder", enabled: !!tab.url, children: bookmarkFolderItems(s, windowId) },
-        ]
-      : [],
+    bookmarksShown(s.settings) ? bookmarkItems(s, windowId, tab, f) : [],
     [
       ...withAlternate(
         { id: "copy", title: "Copy Link", symbol: "link", enabled: !!tab.url },
@@ -182,9 +199,10 @@ export function tabMenuItems(s: BrowserState, windowId: string, tab: Tab, f: Fac
       { id: "icon", title: "Change Icon…", symbol: "photo" },
       ...(tab.customIcon ? [{ id: "resetIcon", title: "Reset Icon" }] : []),
       ...muteItems(s, tab),
+      ...pictureInPictureItems(tab),
       ...unreadItems(s, tab),
     ],
-    closeItems(f),
+    closeItems(s, tab, f),
   );
 }
 
@@ -219,7 +237,11 @@ function runTabChoice(windowId: string, tab: Tab, f: Facts, choice: string | Des
   const s = store();
   const t = { kind: "tab" as const, id: tab.id };
   if (runCalendarMenu(choice) || sendTabFromMenu(choice, tab)) return;
-  if (choice === "backToPin") s.returnToPinnedUrl(tab.id);
+  if (choice === "backToPin") {
+    noteTabMenuPinnedReset();
+    s.returnToPinnedUrl(tab.id);
+  } else if (choice === "unbookmark") toggleBookmarkInWindow(windowId, { url: tab.url, title: tabTitle(tab), favicon: tab.favicon });
+  else if (choice === "exitPip") exitPictureInPicture(tab.id);
   else if (choice === "replacePin") s.setPinnedUrl(tab.id);
   else if (choice === "editPin") void editPinnedPage(windowId, tab.id);
   else if (choice === "rename") void startRename(windowId, t);
@@ -247,6 +269,7 @@ function runTabChoice(windowId: string, tab: Tab, f: Facts, choice: string | Des
   else if (choice === "copyMd") copyUrls([tab.id], true);
   else if (choice === "bookmark") bookmarkTab(windowId, tab.id);
   else if (choice === "close") void closeTab(tab.id);
+  else if (choice === "unloadTopApp") unloadTopApp(tab.id);
   else if (choice === "closeSplit" && f.split) closeSplitView(f.split.id);
   else if (choice === "closeOthers") s.closeTabs(f.others);
   else if (choice === "closeAbove") s.closeTabs(f.above);

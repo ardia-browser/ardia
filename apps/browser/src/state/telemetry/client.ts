@@ -1,17 +1,17 @@
 import { engineInfo, updaterState } from "../../platform/app";
-import { PLATFORM_IDS, PLATFORM_TERMS } from "../../lib/platformTerms";
 import { readDocument, saveDocument, writeDocument } from "../../platform/documents";
 import { MAX_BODY_BYTES } from "./config";
 import { EVENTS_SCOPE, eventRecord, LOGS_SCOPE, logRecord, logsRequest, outcome, type OtlpLogRecord, type QueuedEvent } from "./otlp";
 import { cleanProperties } from "./sanitize";
 import type { SavedContext } from "./savedContext";
 import type { RequestLogEntry } from "./requestLog";
-import { appInfo, mayPost, post } from "./transport";
+import { appInfo, mayPost, post, telemetryHost } from "./transport";
+import { telemetryRelay, type AskPlacement, type CaptureOptions, type SharingSource } from "./relay";
 import { uuidv4, uuidv7 } from "./ids";
 import { parseSaved, versionedJson } from "../../lib/savedDocument";
 import { withDeadline } from "../../lib/deadline";
 import { isFields, isString } from "../../lib/decode";
-import { dismissAsk, isSharing, loadChoice, NO_WATCH, save, savedChoice as saved, sessionId, startNewSession, useTelemetry } from "./choice";
+import { dismissAsk, isSharing, loadChoice, NO_WATCH, resumeSession, save, savedChoice as saved, sessionId, startNewSession, useTelemetry } from "./choice";
 import { flushLocalNow, LOCAL_KEEP_DAYS, recordLocal } from "./localStore";
 
 const QUEUE_DOC = "telemetry-queue.json";
@@ -39,7 +39,7 @@ function context(): Record<string, unknown> {
     $app_name: "Ardia",
     $app_version: info.appVersion,
     $app_build: info.appBuild,
-    $os: PLATFORM_TERMS.os,
+    $os: telemetryHost().os,
     $os_version: info.osVersion,
     arch: info.arch,
     engine_version: engineVersion,
@@ -125,13 +125,11 @@ function clearQueue() {
 
 let droppedWhileOff = 0;
 
-export type CaptureOptions = {
-  raw?: Record<string, unknown>;
-  urgent?: boolean;
-  persist?: boolean;
-};
+export type { CaptureOptions };
 
 export function capture(event: string, props: Record<string, unknown> = {}, options: CaptureOptions = {}) {
+  const relay = telemetryRelay();
+  if (relay) return relay.capture(event, props, options);
   try {
     const { sharing, installId } = saved();
     const at = Date.now();
@@ -156,6 +154,8 @@ export function capture(event: string, props: Record<string, unknown> = {}, opti
 }
 
 export function queueLog(level: "warn" | "error", message: string, attributes: Record<string, string | number | boolean>) {
+  const relay = telemetryRelay();
+  if (relay) return relay.log(level, message, attributes);
   try {
     const sharing = saved().sharing;
     const at = Date.now();
@@ -203,7 +203,7 @@ export function resource(): Record<string, unknown> {
     "service.name": "ardia-app",
     "service.version": info.appVersion,
     "deployment.environment": environment() === "production" ? "production" : "development",
-    "os.type": PLATFORM_IDS.otel,
+    "os.type": telemetryHost().osType,
     "os.version": info.osVersion,
     "host.arch": info.arch,
     "engine.version": engineVersion,
@@ -269,11 +269,11 @@ export async function flush() {
   }
 }
 
-export type SharingSource = "settings" | "onboarding" | "ask" | "watch" | "watch_ended";
-
-export type AskPlacement = { ask_place: "new_tab_corner"; ask_shown_tabs: number };
+export type { AskPlacement, SharingSource };
 
 export function setSharing(on: boolean, source: SharingSource, placement?: AskPlacement) {
+  const relay = telemetryRelay();
+  if (relay) return relay.change({ kind: "sharing", on, source, ...(placement ? { placement } : {}) });
   const now = Date.now();
   const current = saved();
   if (on === current.sharing) return save({ decidedAt: now, askDoneAt: current.askDoneAt ?? now });
@@ -302,14 +302,6 @@ export function setSharing(on: boolean, source: SharingSource, placement?: AskPl
   capture("sharing_turned_on", { source, ...placement });
 }
 
-export function ensureInstallId(): string {
-  const current = saved();
-  if (current.installId) return current.installId;
-  const installId = uuidv4();
-  save({ sharing: false, installId });
-  return installId;
-}
-
 export function replaceInstallId(): string {
   const current = saved();
   const installId = uuidv4();
@@ -335,7 +327,7 @@ type ClientSession = {
   context: SavedContext | null;
 };
 
-export function startClient(): ClientSession {
+export function startClient(continuing = false): ClientSession {
   loadChoice();
   void engineInfo()
     .then((e) => (engineVersion = `ArdiaCore / Chromium ${e.chromiumVersion}`))
@@ -347,6 +339,13 @@ export function startClient(): ClientSession {
     })
     .catch(() => {});
   const current = saved();
+  if (continuing) {
+    resumeSession(current.sessionId);
+    if (current.sharing) loadQueue();
+    if (current.sessionOpen) save({ sessionOpen: true, sessionId: sessionId() });
+    scheduleFlush(2_000);
+    return { previous: "clean", updatedFrom: null, lastLaunchAt: current.lastLaunchAt, lastQuitAt: current.lastQuitAt, firstOfVersion: false, context: current.context };
+  }
   if (current.sharing) loadQueue();
   else {
     const stale = storedQueue();

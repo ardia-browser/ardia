@@ -38,6 +38,7 @@ export type FadeLabelProps = ViewProps & {
   fontFamily?: string;
   color?: string;
   fadeWidth?: number;
+  strikethrough?: boolean;
 };
 
 export const FadeLabel = requireNativeViewManager<FadeLabelProps>("ArdiaFadeLabel");
@@ -45,6 +46,16 @@ export const FadeLabel = requireNativeViewManager<FadeLabelProps>("ArdiaFadeLabe
 export type ActivitySpinnerProps = ViewProps;
 
 export const ActivitySpinner = requireNativeViewManager<ActivitySpinnerProps>("ArdiaActivitySpinner");
+
+export type FolderIconProps = ViewProps & {
+  open: boolean;
+  stroke?: string;
+  face?: string;
+  insideTop?: string;
+  insideBottom?: string;
+};
+
+export const FolderIcon = requireNativeViewManager<FolderIconProps>("ArdiaFolderIcon");
 
 export type ContextMenuAreaProps = ViewProps & {
   onContextMenu?: () => void;
@@ -180,6 +191,7 @@ export type DockSelectionProps = ViewProps & {
   dark: boolean;
   glass?: boolean;
   colorRing?: boolean;
+  outline?: boolean;
 };
 
 export const DockSelection = requireNativeViewManager<DockSelectionProps>("ArdiaDockSelection");

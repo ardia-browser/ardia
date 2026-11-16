@@ -32,6 +32,8 @@ export const WINDOWS_KEYS: Readonly<Record<string, readonly (string | null)[]>> 
   stop: ["Ctrl+."],
   reload: ["Ctrl+R", "F5"],
   forceReload: ["Ctrl+Shift+R", "Ctrl+F5", "Shift+F5"],
+  toggleReader: ["Ctrl+Alt+R", "F9"],
+  toggleMinimalism: ["Ctrl+Alt+M"],
   toggleTabLayout: ["Ctrl+Shift+S"],
   toggleSidebar: ["Ctrl+S", "Ctrl+Shift+L", "Ctrl+Shift+F"],
   openSplitPane: ["Ctrl+\\", null],

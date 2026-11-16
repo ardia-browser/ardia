@@ -149,7 +149,7 @@ struct BrowsingView: View {
         .background(alignment: .top) {
           top.color
             .ignoresSafeArea(edges: .top)
-            .animation(.easeOut(duration: 0.25), value: top)
+            .animation(Motion.barTone, value: top)
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
@@ -197,25 +197,14 @@ struct BrowsingView: View {
 
   private func openDeck() {
     app.browse.thawOrder()
-    saveCurrentSnapshot()
     app.showTabSwitcher()
+    keepHandoffAsCover()
   }
 
-  private func saveCurrentSnapshot() {
-    rememberCurrentCover()
-    guard let id = app.tabs.selectedTabID, let image = app.browse.covers.image(for: id), let cgImage = image.cgImage else { return }
-    let snapshots = app.web.snapshots
-    let tabs = app.tabs
-    if tabs.isPrivate(id) {
-      tabs.update(id, snapshotFileName: snapshots.keepInMemory(cgImage, for: id))
-      return
-    }
-    let scale = image.scale
-    Task {
-      if let name = await snapshots.save(cgImage, scale: scale, for: id) {
-        tabs.update(id, snapshotFileName: name)
-      }
-    }
+  private func keepHandoffAsCover() {
+    guard let handoff = app.deck.handoff, let page = app.web.existingWebTab(handoff.tabID), page.webView != nil,
+          !page.isLoading, page.failure == nil else { return }
+    app.browse.covers.store(handoff.image, for: handoff.tabID)
   }
 
   private func rememberCurrentCover() {

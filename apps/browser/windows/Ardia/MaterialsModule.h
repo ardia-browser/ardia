@@ -6,6 +6,7 @@
 #include <string>
 
 #include "Events.h"
+#include "GradientFailures.h"
 #include "Host.h"
 #include "MaterialEffects.h"
 #include "MaterialSupport.h"
@@ -44,6 +45,7 @@ struct MaterialsModule {
   REACT_INIT(Initialize)
   void Initialize(winrt::Microsoft::ReactNative::ReactContext const &context) noexcept {
     m_context = context;
+    Materials::ReportGradientFailuresTo(context);
     Materials::NoteOnce(L"capabilities", Summary());
   }
 
@@ -156,8 +158,17 @@ struct MaterialsModule {
           gradient.ColorStops().Append(host->compositor.CreateColorGradientStop(1.0f, winrt::Windows::UI::Color{255, 253, 2, 245}));
           gradient.StartPoint({0.0f, 0.0f});
           gradient.EndPoint({0.0f, 100.0f});
+          auto fade = host->compositor.CreateLinearGradientBrush();
+          fade.MappingMode(winrt::Microsoft::UI::Composition::CompositionMappingMode::Absolute);
+          fade.ColorStops().Append(host->compositor.CreateColorGradientStop(0.0f, winrt::Windows::UI::Color{255, 0, 0, 0}));
+          fade.ColorStops().Append(host->compositor.CreateColorGradientStop(1.0f, winrt::Windows::UI::Color{0, 0, 0, 0}));
+          fade.StartPoint({0.0f, 0.0f});
+          fade.EndPoint({100.0f, 0.0f});
+          auto masked = host->compositor.CreateMaskBrush();
+          masked.Source(gradient);
+          masked.Mask(fade);
           auto sprite = host->compositor.CreateSpriteVisual();
-          sprite.Brush(gradient);
+          sprite.Brush(masked);
           answer.path = "gradient";
         }
       } catch (winrt::hresult_error const &error) {

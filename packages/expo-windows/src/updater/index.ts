@@ -9,7 +9,7 @@ const PREFERENCES = "windows-updates.json";
 const FIRST_CHECK_AFTER_MS = 30_000;
 const CHECK_EVERY_MS = 6 * 60 * 60 * 1000;
 
-type Preferences = { automaticChecks: boolean; automaticDownloads: boolean; lastCheck: number | null };
+type Preferences = Pick<Extract<UpdaterState, { available: true }>, "automaticChecks" | "automaticDownloads" | "lastCheck">;
 
 const native = () => TurboModuleRegistry.get<WindowsUpdateModule>("ArdiaWindowsUpdate");
 const constants = (): WindowsUpdateConstants => native()?.getConstants?.() ?? {};

@@ -18,8 +18,15 @@ export function noteLiveRepoMenuPick(choice: string, showNewRepos: boolean) {
   if (choice === "repos:new" && !showNewRepos) newReposHiddenTurnedOn++;
 }
 
+let folderColorPicks = 0;
+
+export function noteLiveFolderColorPick() {
+  folderColorPicks++;
+}
+
 export function takeLiveHideCounts() {
   const taken = {
+    live_folder_color_picks: folderColorPicks,
     live_row_hides: rowHides,
     live_stack_hides: stackHides,
     live_repo_menu_picks: repoMenuPicks,
@@ -31,5 +38,6 @@ export function takeLiveHideCounts() {
   repoMenuPicks = 0;
   repoHideAlls = 0;
   newReposHiddenTurnedOn = 0;
+  folderColorPicks = 0;
   return taken;
 }

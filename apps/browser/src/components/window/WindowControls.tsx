@@ -65,11 +65,12 @@ export type WindowControlsProps = {
   ink?: Partial<Ink>;
   opacity?: Animated.AnimatedInterpolation<number> | number;
   hidden?: boolean;
+  leading?: boolean;
 };
 
 export const controlsShown = WINDOW_CHROME.trailingWidth > 0;
 
-export const WindowControls = memo(function WindowControls({ windowId, centerY, size, maximizable = true, minimizable = true, onMenu, ink, opacity = 1, hidden = false }: WindowControlsProps) {
+export const WindowControls = memo(function WindowControls({ windowId, centerY, size, maximizable = true, minimizable = true, onMenu, ink, opacity = 1, hidden = false, leading = false }: WindowControlsProps) {
   const theme = useTheme();
   const maximized = useWindowMaximized(windowId);
   if (!controlsShown) return null;
@@ -82,7 +83,7 @@ export const WindowControls = memo(function WindowControls({ windowId, centerY, 
       pointerEvents={hidden ? "none" : "box-none"}
       style={{
         position: "absolute",
-        right: WINDOW_CONTROLS.edge,
+        [leading ? "left" : "right"]: WINDOW_CONTROLS.edge,
         top: centerY - size / 2,
         width: windowControlsWidth(count),
         height: size,

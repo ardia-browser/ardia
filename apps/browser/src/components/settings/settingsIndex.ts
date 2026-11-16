@@ -5,6 +5,7 @@ import { airTrafficRows } from "./rows/airTrafficRows";
 import { appearanceRows } from "./rows/appearanceRows";
 import { generalRows } from "./rows/generalRows";
 import { privacyRows } from "./rows/privacyRows";
+import { profileRows } from "./rows/profileRows";
 import { toolRows } from "./rows/toolRows";
 import type { SettingSection, SettingsEnv } from "./rows/types";
 
@@ -31,7 +32,7 @@ const neverShown = () => false;
 
 export const PANES: { id: SettingsPane; title: string; icon: string }[] = SETTINGS_PANES.filter(paneOffered).map((id) => ({ id, ...PANE_LOOKS[id] }));
 
-const ROWS = { ...generalRows, ...airTrafficRows, ...appearanceRows, ...privacyRows, ...toolRows };
+const ROWS = { ...generalRows, ...profileRows, ...airTrafficRows, ...appearanceRows, ...privacyRows, ...toolRows };
 
 type RowKeysOf<P extends SettingsPane> = (typeof ROWS)[P][number] extends infer S ? (S extends { rows: infer R } ? keyof R & string : never) : never;
 export type SettingId = { [P in SettingsPane]: `${P}.${RowKeysOf<P>}` }[SettingsPane];

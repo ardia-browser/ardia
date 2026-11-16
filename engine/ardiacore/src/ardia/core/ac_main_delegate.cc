@@ -26,7 +26,9 @@
 #include "chrome/browser/chrome_browser_main.h"
 #include "chrome/browser/chrome_browser_main_extra_parts.h"
 #include "chrome/browser/ardia/ac_scripts_policy.h"
+#include "chrome/browser/ardia/ac_web3.h"
 #include "chrome/browser/chrome_content_browser_client.h"
+#include "chrome/common/chrome_content_client.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/chrome_paths_internal.h"
 #include "chrome/common/chrome_switches.h"
@@ -37,6 +39,9 @@
 #include "components/os_crypt/common/os_crypt_switches.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_main_parts.h"
+#include "content/public/browser/child_process_security_policy.h"
+#include "content/public/browser/render_process_host.h"
+#include "content/public/browser/web_contents.h"
 #include "content/public/common/content_switches.h"
 #include "extensions/common/switches.h"
 #include "third_party/blink/public/common/switches.h"
@@ -58,6 +63,7 @@
 #include "ardia/core/ac_strings.h"
 #include "content/public/browser/web_contents_view_delegate.h"
 #include "ardia/core/renderer/ac_content_renderer_client.h"
+#include "url/url_util.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_registry.h"
 
 namespace ardiacore {
@@ -158,6 +164,8 @@ std::unique_ptr<ScopedKeepAlive>& AppKeepAlive() {
 class ACBrowserMainExtraParts : public ChromeBrowserMainExtraParts {
  public:
   void PreBrowserStart() override {
+    content::ChildProcessSecurityPolicy::GetInstance()->RegisterWebSafeScheme(
+        ardia::kWeb3Scheme);
     AppKeepAlive() = std::make_unique<ScopedKeepAlive>(
         KeepAliveOrigin::APP_CONTROLLER, KeepAliveRestartOption::DISABLED);
     StartLifetimeObservers();
@@ -238,8 +246,44 @@ class ACContentBrowserClient : public ChromeContentBrowserClient {
       content::NavigationThrottleRegistry& registry) override {
     ChromeContentBrowserClient::CreateThrottlesForNavigation(registry);
     AddAppSchemeThrottle(registry);
+    ardia::AddWeb3EmbedThrottle(registry);
     MaybeAddNavigationHoldThrottle(registry);
     ardia::AddScriptsPagesThrottle(registry);
+  }
+  bool IsHandledURL(const GURL& url) override {
+    return url.SchemeIs(ardia::kWeb3Scheme) ||
+           ChromeContentBrowserClient::IsHandledURL(url);
+  }
+  mojo::PendingRemote<network::mojom::URLLoaderFactory>
+  CreateNonNetworkNavigationURLLoaderFactory(
+      const std::string& scheme,
+      content::FrameTreeNodeId frame_tree_node_id) override {
+    if (scheme == ardia::kWeb3Scheme) {
+      return ardia::CreateWeb3URLLoaderFactory(
+          content::WebContents::FromFrameTreeNodeId(frame_tree_node_id)
+              ->GetBrowserContext(),
+          ardia::Web3Loads::kNavigation);
+    }
+    return ChromeContentBrowserClient::CreateNonNetworkNavigationURLLoaderFactory(
+        scheme, frame_tree_node_id);
+  }
+  void RegisterNonNetworkSubresourceURLLoaderFactories(
+      int render_process_id,
+      int render_frame_id,
+      const std::optional<url::Origin>& request_initiator_origin,
+      NonNetworkURLLoaderFactoryMap* factories) override {
+    ChromeContentBrowserClient::RegisterNonNetworkSubresourceURLLoaderFactories(
+        render_process_id, render_frame_id, request_initiator_origin, factories);
+    content::RenderProcessHost* process =
+        content::RenderProcessHost::FromID(render_process_id);
+    if (process && request_initiator_origin &&
+        request_initiator_origin->GetTupleOrPrecursorTupleIfOpaque().scheme() ==
+            ardia::kWeb3Scheme) {
+      factories->emplace(ardia::kWeb3Scheme,
+                         ardia::CreateWeb3URLLoaderFactory(
+                             process->GetBrowserContext(),
+                             ardia::Web3Loads::kSubresource));
+    }
   }
   std::optional<base::TimeDelta> GetSpareRendererDelayForSiteURL(
       const GURL& site_url) override {
@@ -272,6 +316,16 @@ class ACContentBrowserClient : public ChromeContentBrowserClient {
     static_cast<ChromeBrowserMainParts*>(chrome.get())
         ->AddParts(std::make_unique<ACBrowserMainExtraParts>());
     return std::make_unique<ACBrowserMainParts>(std::move(chrome));
+  }
+};
+
+class ACContentClient : public ChromeContentClient {
+ public:
+  void AddAdditionalSchemes(Schemes* schemes) override {
+    ChromeContentClient::AddAdditionalSchemes(schemes);
+    url::AddStandardScheme(ardia::kWeb3Scheme, url::SCHEME_WITH_HOST_AND_PORT);
+    schemes->secure_schemes.push_back(ardia::kWeb3Scheme);
+    schemes->cors_enabled_schemes.push_back(ardia::kWeb3Scheme);
   }
 };
 
@@ -406,6 +460,11 @@ void ACMainDelegate::PreSandboxStartup() {
     InstallChromeHooks();
   }
   ChromeMainDelegate::PreSandboxStartup();
+}
+
+content::ContentClient* ACMainDelegate::CreateContentClient() {
+  static base::NoDestructor<ACContentClient> client;
+  return client.get();
 }
 
 content::ContentRendererClient* ACMainDelegate::CreateContentRendererClient() {

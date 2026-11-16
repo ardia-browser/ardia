@@ -158,6 +158,17 @@ export const toolRows = {
       },
     },
     {
+      section: "web3://",
+      rows: {
+        chainRpcs: {
+          shown: () => PLATFORM_FEATURES.web3Urls,
+          title: "web3:// RPC",
+          description: "web3:// pages come straight from a smart contract: Ardia calls it through the Ethereum RPC you set for its chain. None is set at first, so nothing is sent until you choose one.",
+          keywords: ["web3", "ethereum", "eth", "ens", "rpc", "node", "blockchain", "smart contract", "erc-4804", "erc-6860", "erc-5219", "publicnode", "helios", "chain"],
+        },
+      },
+    },
+    {
       section: "Performance",
       rows: {
         memorySaver: {

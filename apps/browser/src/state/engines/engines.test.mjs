@@ -125,6 +125,12 @@ test("Chromium's own pages always open in Chromium", () => {
   assert.equal(typedNavigationEngine(s, s.tabs.w, "chrome-extension://abc/options.html"), "chromium");
 });
 
+test("web3:// pages open in Chromium, which has the loader, even from a WebKit tab or default", () => {
+  const s = state([tab("p", { engine: "webkit", url: "web3://0xe8389e061c8ae56fa7e17b8fe9f80a8c8e31b450/" }), tab("w", { engine: "webkit", url: "https://a.com/" })], { pageEngine: "webkit" });
+  assert.equal(tabEngine(s, "p"), "chromium");
+  assert.equal(typedNavigationEngine(s, s.tabs.w, "web3://ocweb.eth/"), "chromium");
+});
+
 test("the mark shows only on web pages away from the default engine", () => {
   const s = state([tab("w", { engine: "webkit", url: "https://a.com/" }), tab("c", { engine: "chromium", url: "https://a.com/" }), tab("n", { engine: "webkit", url: "ardia://history" })]);
   assert.equal(engineMark(s, "w"), "webkit");

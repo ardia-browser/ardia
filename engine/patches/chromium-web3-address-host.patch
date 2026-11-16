@@ -1,0 +1,112 @@
+--- a/url/scheme_host_port.cc
++++ b/url/scheme_host_port.cc
+@@ -58,6 +58,13 @@
+   return host == canon_host;
+ }
+ 
++bool IsWeb3AddressHost(std::string_view scheme, std::string_view host) {
++  return scheme == "web3" && host.size() == 42 && host.starts_with("0x") &&
++         std::ranges::all_of(host.substr(2), [](char c) {
++           return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
++         });
++}
++
+ // Note: When changing IsValidInput, consider also updating
+ // ShouldTreatAsOpaqueOrigin in Blink (there might be existing differences in
+ // behavior between these 2 layers, but we should avoid introducing new
+@@ -105,6 +112,10 @@
+       if (host.empty())
+         return false;
+ 
++      if (IsWeb3AddressHost(scheme, host)) {
++        return true;
++      }
++
+       // Don't do an expensive canonicalization if the host is already
+       // canonicalized.
+       DCHECK(policy == SchemeHostPort::CHECK_CANONICALIZATION ||
+--- a/url/url_canon_stdurl.cc
++++ b/url/url_canon_stdurl.cc
+@@ -15,6 +15,33 @@
+ namespace {
+ 
+ template <typename CHAR>
++bool IsWeb3AddressHost(std::string_view scheme,
++                       std::optional<std::basic_string_view<CHAR>> host) {
++  if (scheme != "web3" || !host || host->size() != 42 || (*host)[0] != '0' ||
++      ((*host)[1] != 'x' && (*host)[1] != 'X')) {
++    return false;
++  }
++  for (CHAR c : host->substr(2)) {
++    if (c >= 0x80 || !IsHexChar(static_cast<unsigned char>(c))) {
++      return false;
++    }
++  }
++  return true;
++}
++
++template <typename CHAR>
++void AppendLowercaseHost(std::basic_string_view<CHAR> host,
++                         CanonOutput* output,
++                         Component* out_host) {
++  out_host->begin = output->length();
++  for (CHAR c : host) {
++    output->push_back(
++        static_cast<char>(c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c));
++  }
++  out_host->len = output->length() - out_host->begin;
++}
++
++template <typename CHAR>
+ bool DoCanonicalizeStandardUrl(const Replacements<CHAR>& source,
+                                SchemeType scheme_type,
+                                CharsetConverter* query_converter,
+@@ -57,8 +84,13 @@
+       new_parsed->password.reset();
+     }
+ 
+-    success &= CanonicalizeHost(source.SpecUntilHostOrEmpty(), parsed.host,
+-                                output, &new_parsed->host);
++    if (IsWeb3AddressHost<CHAR>(
++            new_parsed->scheme.AsViewOn(output->view()), source.MaybeHost())) {
++      AppendLowercaseHost(*source.MaybeHost(), output, &new_parsed->host);
++    } else {
++      success &= CanonicalizeHost(source.SpecUntilHostOrEmpty(), parsed.host,
++                                  output, &new_parsed->host);
++    }
+ 
+     // Host must not be empty for standard URLs.
+     if (parsed.host.is_empty())
+--- a/third_party/blink/renderer/core/url_pattern/url_pattern_dummy_url_canon.cc
++++ b/third_party/blink/renderer/core/url_pattern/url_pattern_dummy_url_canon.cc
+@@ -70,6 +70,19 @@
+       input_utf8.AsStringView(), allow_ipv6_delimiters);
+ }
+ 
++bool IsEthereumAddressHostname(const String& hostname) {
++  if (hostname.length() != 42 || hostname[0] != '0' ||
++      (hostname[1] != 'x' && hostname[1] != 'X')) {
++    return false;
++  }
++  for (wtf_size_t i = 2; i < hostname.length(); ++i) {
++    if (!IsAsciiHexDigit(hostname[i])) {
++      return false;
++    }
++  }
++  return true;
++}
++
+ String StringFromCanonOutput(const url::CanonOutput& output,
+                              const url::Component& component) {
+   return String::FromUtf8(output.view().substr(component.begin, component.len));
+@@ -205,6 +218,10 @@
+ 
+   if (stripped.empty()) {
+     return base::ok(stripped);
++  }
++
++  if (IsEthereumAddressHostname(stripped)) {
++    return base::ok(stripped.ToAsciiLower());
+   }
+ 
+   dummy_url.SetHost(stripped);

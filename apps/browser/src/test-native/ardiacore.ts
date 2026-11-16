@@ -66,6 +66,8 @@ export const emitEvent = <E extends EventName>(name: E, data: EventData<E>) => {
 
 export const chromeWindowList: ChromeWindowState[] = [];
 export const engineCalls: { domain: string; verb: string; profile: string }[] = [];
+export const web3RpcsSent: Record<string, string>[] = [];
+export const web3RpcsRefused = new Set<string>();
 export const loadedEngineProfiles = new Set<string>([""]);
 export const idleProfileUnloads = new Map<string, CallResult<"profiles.unloadIdle"> & { closing?: () => void }>();
 export const profilesLoadedCall = { known: true };
@@ -347,6 +349,10 @@ const fakeModules = {
       cliMoveOffscreen: ({ tabId }) => testGlobals.acTestCliMoveOffscreen?.(tabId) ?? { ok: false },
       cliCloseOffscreenTabs: () => null,
       cliTabTargets: ({ tabIds }) => Object.fromEntries(tabIds.map((id) => [id, testGlobals.acTestCliTargets?.(id) ?? { targetId: null, pageGeneration: 0 }])),
+      setWeb3Rpcs: ({ rpcs }) => {
+        web3RpcsSent.push(rpcs);
+        return { refused: Object.keys(rpcs).filter((chain) => web3RpcsRefused.has(rpcs[chain]!)) };
+      },
     },
     { inputIdleSeconds: () => 3600 },
   ),

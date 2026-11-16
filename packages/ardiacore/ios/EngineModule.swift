@@ -35,6 +35,7 @@ public class EngineModule: Module {
       EngineCall.passing("ac_memory_saver", profile: args.profile, args: ["validate": try args.text("site")], reply: reply)
     },
     "trimMemory": EngineCall.passing("ac_memory_trim"),
+    "setWeb3Rpcs": EngineCall.passing("ac_web3_set_rpcs"),
     "openTaskManager": EngineCall.passing("ac_task_manager_open"),
     "cliControlStatus": EngineCall.passing("ac_cli_control"),
     "setCliControl": { args, reply in

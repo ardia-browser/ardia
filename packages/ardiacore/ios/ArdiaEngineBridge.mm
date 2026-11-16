@@ -38,7 +38,7 @@ bool gForwarding = false;
 NSMutableArray<NSArray *> *gPendingForwards;
 
 NSSet<NSString *> *ForwardedTopics() {
-  static NSSet *topics = [NSSet setWithArray:@[ @"history.changed", @"bookmarks.changed", @"extensions.action", @"extensions.sync", @"cliControl" ]];
+  static NSSet *topics = [NSSet setWithArray:@[ @"history.changed", @"bookmarks.changed", @"extensions.action", @"extensions.sync", @"cliControl", @"engine.web3Load" ]];
   return topics;
 }
 

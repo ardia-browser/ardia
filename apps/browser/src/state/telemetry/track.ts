@@ -96,3 +96,5 @@ export { takeRecentlyClosedCounts } from "./recentlyClosedCounts";
 export { takeHistoryRemovalCounts } from "./historyRemovalCounts";
 
 export const devOmniboxSampler = () => ({ keystrokes, pending: latency.length });
+
+export { takeWeb3Counts } from "./web3Counts";

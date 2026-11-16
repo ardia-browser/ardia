@@ -5,6 +5,7 @@ import { closeWindow, onWindowEvent, openWindow, restoreFullScreen, setTrafficLi
 import { isDarkAppearance, onAppEvent, onOpenURLs, replyToTerminate } from "../../platform/app";
 import { startNativeSettings } from "../settings/nativeSettings";
 import { startInterfaceScaleRefresh } from "./interfaceScaleRefresh";
+import { watchWeb3Loads } from "../telemetry/web3Counts";
 import { menuShortcuts, onCommand, setMenuStateParts } from "../../platform/commands";
 import { Appearance } from "react-native";
 import { useBrowser } from "../browser/store";
@@ -72,6 +73,7 @@ export function startNativeSync() {
   store.getState().setAppDark(Appearance.getColorScheme() === "dark");
   startNativeSettings();
   startInterfaceScaleRefresh();
+  watchWeb3Loads();
   void isDarkAppearance().then((dark) => store.getState().setAppDark(dark));
 
   onAppEvent((e) => {

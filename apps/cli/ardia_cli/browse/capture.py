@@ -252,7 +252,9 @@ async def network_har(ctx, argv):
         })
     document = {"log": {"version": "1.2", "creator": {"name": "ardia browse", "version": "1"}, "pages": [], "entries": entries}}
     path = ctx.path(args[1]) if len(args) > 1 else os.path.join(os.path.dirname(default_dir(ctx)), f"capture-{int(time.time())}.har")
-    Path(path).write_text(json.dumps(document, ensure_ascii=False), encoding="utf-8")
+    from ardia_cli.printable import well_formed
+
+    Path(path).write_text(well_formed(json.dumps(document, ensure_ascii=False)), encoding="utf-8")
     shown = args[1] if len(args) > 1 else path
     note = " (Ardia strips Cookie, Set-Cookie and Authorization headers on the token path)" if not ctx.state.endpoint.explicit else ""
     return Result({"path": shown, "entries": len(entries)}, f"✓ HAR saved to {shown} ({len(entries)} entries){note}")

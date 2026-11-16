@@ -1,8 +1,10 @@
 import asyncio
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 from ardia_cli.browse.errors import BrowseError, ConnectionLost, Usage
+from ardia_cli.browse.page import FETCH_FRESH
 
 READ_TABS = 4
 READER_TRIES = 2
@@ -77,8 +79,18 @@ SETTLE_PROBE = r"""() => {
   const text = document.body ? document.body.innerText || "" : "";
   let hash = 0;
   for (let index = 0; index < text.length; index++) hash = (hash * 31 + text.charCodeAt(index)) | 0;
+  let shadowNodes = 0, shadowText = 0;
+  const walk = (root) => {
+    for (const el of root.querySelectorAll("*")) {
+      if (!el.shadowRoot) continue;
+      shadowNodes += el.shadowRoot.querySelectorAll("*").length;
+      shadowText += (el.shadowRoot.textContent || "").length;
+      walk(el.shadowRoot);
+    }
+  };
+  walk(document);
   const busy = /(^|\n)\s*loading(\.\.\.|…)?\s*(\n|$)/i.test(text) || !!document.querySelector("[aria-busy=true]");
-  return [document.readyState, text.length + ":" + hash, busy];
+  return [document.readyState, text.length + ":" + hash + ":" + shadowNodes + ":" + shadowText, busy];
 }"""
 HTTP_ONLY = ("llms", "require_md", "raw")
 
@@ -332,11 +344,16 @@ VIRTUALIZED_MARK = "rows rendered; the grid is virtualized"
 EMPTY_PAGE = ("(no text: the site sent an empty page with no title, which usually means it turns away automated or foreign "
               "traffic; reading it again rarely helps)")
 
+FRAME_MARK = '[frame "'
+
+
 def note_virtualized(*texts: str) -> None:
     from ardia_cli import command_metrics
 
     if any(VIRTUALIZED_MARK in (text or "") for text in texts):
         command_metrics.flag("read_virtualized_grid", True)
+    if any(FRAME_MARK in (text or "") for text in texts):
+        command_metrics.flag("read_frame_text", True)
 
 
 def pages_cap(pages: int) -> int:
@@ -419,6 +436,8 @@ async def open_reader(state, opened: list[str]):
     state.target_infos.setdefault(target_id, {"targetId": target_id, "url": "about:blank", "title": "", "type": "page"})
     page = state.pages[target_id] = Page(state, target_id)
     await page.attach(state.browser)
+    await page.keep_awake()
+    await page.enable_network()
     return page
 
 
@@ -431,13 +450,26 @@ async def probe(page):
         return None, None, True
 
 
-async def settle(page, deadline: float):
+def fetching(page, earlier: frozenset) -> bool:
+    if not page.network_on:
+        return False
+    now = time.monotonic()
+    return now < page.fetches_busy_until or any(request_id not in earlier and now - started < FETCH_FRESH
+                                                for request_id, started in page.fetches_started.items())
+
+
+async def settle(page, deadline: float, earlier: frozenset = frozenset()):
+    from ardia_cli import command_metrics
+
     loop = asyncio.get_running_loop()
     last = None
     since = loop.time()
     while loop.time() < deadline:
         ready, fingerprint, busy = await probe(page)
         now = loop.time()
+        if not busy and fetching(page, earlier):
+            busy = True
+            command_metrics.flag("read_waited_for_requests", True)
         if (ready, fingerprint, busy) != last:
             last, since = (ready, fingerprint, busy), now
         elif ready == "complete" and not busy and now - since >= SETTLE_QUIET:
@@ -463,35 +495,59 @@ async def before_navigating(page, url: str):
     return (await probe(page))[1] if same_document(page, url) else None
 
 
-async def after_same_document(page, before, deadline: float):
+async def after_same_document(page, before, deadline: float, earlier: frozenset = frozenset()):
     loop = asyncio.get_running_loop()
     await route_changed(page, before, min(deadline, loop.time() + SAME_DOCUMENT_WAIT))
-    await settle(page, min(deadline, loop.time() + SETTLE_LIMIT))
+    await settle(page, min(deadline, loop.time() + SETTLE_LIMIT), earlier)
 
 
-async def goto(ctx, page, url: str, timeout: float):
+async def arrived_text(page, loader: str) -> bool:
+    try:
+        length = await page.call("() => (document.body && document.body.innerText || '').trim().length", frame=page.main_frame, read=True)
+    except BrowseError:
+        return False
+    return page.loader(page.main_frame) == loader and bool(length)
+
+
+async def goto(ctx, page, url: str, timeout: float, keep_partial: bool = False) -> str | None:
     from ardia_cli.browse.commands import wait_for_load
     from ardia_cli.browse.errors import Gated
 
     loop = asyncio.get_running_loop()
     deadline = loop.time() + timeout
     before = await before_navigating(page, url)
+    earlier = frozenset(page.fetches_started)
+    old_loaders = frozenset(frame["loader"] for frame in page.frames.values() if frame.get("loader"))
+    page.fetches_busy_until = 0.0
     try:
         result = await page.send("Page.navigate", {"url": url}, timeout=timeout)
     except Gated:
         raise BrowseError(f"Ardia's policy only lets the ardia command open web pages; {url} isn't one", code="policy_refused") from None
     if result.get("errorText"):
-        raise BrowseError(f"couldn't load it: {result['errorText']}", code="navigation_failed")
+        from ardia_cli.browse.commands import HTTPS_ONLY_NOTE, https_only_block
+
+        note = f". {HTTPS_ONLY_NOTE}" if https_only_block(url, result["errorText"]) else ""
+        raise BrowseError(f"couldn't load it: {result['errorText']}{note}", code="navigation_failed")
     loader = result.get("loaderId")
     if loader:
-        await wait_for_load(page, loader, max(deadline - loop.time(), 0.1), "domcontentloaded")
+        try:
+            await wait_for_load(page, loader, max(deadline - loop.time(), 0.1), "domcontentloaded")
+        except BrowseError as error:
+            if not keep_partial or error.code != "timeout" or not await arrived_text(page, loader):
+                raise
+            from ardia_cli import command_metrics
+
+            command_metrics.flag("read_partial_page", True)
+            await page.refresh_frames()
+            return f"the page was still loading after {timeout:g} s; this is the part that had arrived"
         try:
             await wait_for_load(page, loader, min(LOAD_GRACE, max(deadline - loop.time(), 0.1)), "load")
         except BrowseError:
             pass
-        await settle(page, min(deadline, loop.time() + SETTLE_LIMIT))
+        earlier |= frozenset(request_id for request_id, fetch_loader in page.fetch_loaders.items() if fetch_loader in old_loaders)
+        await settle(page, min(deadline, loop.time() + SETTLE_LIMIT), earlier)
     else:
-        await after_same_document(page, before, deadline)
+        await after_same_document(page, before, deadline, earlier)
     await page.refresh_frames()
 
 
@@ -559,7 +615,7 @@ async def read_in(ctx, page, url: str, selector: str | None, timeout: float, opt
 
     record = {"url": url, "source": "browser"}
     try:
-        await goto(ctx, page, url, timeout)
+        partial = await goto(ctx, page, url, timeout, keep_partial=True)
         if await pdftext.page_is_pdf(page):
             record.update(finalUrl=page.url, title=page.url.rsplit("/", 1)[-1], source="pdf",
                           text=readurl.post_process(await pdftext.page_text(page), options))
@@ -578,8 +634,9 @@ async def read_in(ctx, page, url: str, selector: str | None, timeout: float, opt
         record["scope"] = got["scope"]
         command_metrics_flag("read_scope_shown")
     challenge = bot_check(record["title"], record["text"], record.get("status"))
-    if challenge:
-        record["note"] = challenge
+    notes = [note for note in (partial, challenge) if note]
+    if notes:
+        record["note"] = "; ".join(notes)
     if selector and not got.get("matched"):
         record["error"] = f"nothing on the page matches {selector}"
     return record

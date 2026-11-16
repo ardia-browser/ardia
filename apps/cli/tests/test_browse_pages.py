@@ -66,6 +66,11 @@ class SameDocumentRead(unittest.TestCase):
                 self.url = "http://s/#/people/1"
                 self.main_frame = "F"
                 self.lifecycle = {}
+                self.network_on = False
+                self.fetches_started = {}
+                self.fetches_busy_until = 0.0
+                self.fetch_loaders = {}
+                self.frames = {}
 
             async def send(self, method, params=None, timeout=30, mutation=False):
                 self.url = params["url"]
@@ -180,6 +185,17 @@ class FakeReader:
         self.browser = browser
         self.fail = fail
         self.url = "about:blank"
+        self.network_on = False
+        self.fetches_started = {}
+        self.fetches_busy_until = 0.0
+        self.fetch_loaders = {}
+        self.frames = {}
+
+    async def enable_network(self):
+        self.network_on = True
+
+    async def keep_awake(self):
+        pass
 
     async def attach(self, browser):
         if self.target_id in self.state.refuse_attach:

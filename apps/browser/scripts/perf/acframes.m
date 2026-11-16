@@ -46,7 +46,7 @@ static void Flush(void) {
   fflush(gOut);
 }
 
-static _Atomic long gLayoutPasses, gMountBatches, gUIBlocks, gViewUpdates, gViewCreates, gTicks;
+static _Atomic long gLayoutPasses, gMountBatches, gUIBlocks, gViewUpdates, gViewCreates, gTicks, gScrollEvents, gRootHitTests;
 
 static void Swizzle(Class cls, SEL sel, id (^make)(IMP original)) {
   Method m = class_getInstanceMethod(cls, sel);
@@ -79,6 +79,13 @@ static void SwizzleUIManager(void) {
     return ^(id self, NSNumber *tag, NSString *name, NSDictionary *props) {
       atomic_fetch_add(&gViewUpdates, 1);
       ((void (*)(id, SEL, id, id, id))orig)(self, NSSelectorFromString(@"updateView:viewName:props:"), tag, name, props);
+    };
+  });
+  Class root = NSClassFromString(@"RCTRootContentView");
+  if (root) Swizzle(root, NSSelectorFromString(@"hitTest:withEvent:"), ^id(IMP orig) {
+    return ^NSView *(id self, NSPoint p, id event) {
+      atomic_fetch_add(&gRootHitTests, 1);
+      return ((NSView * (*)(id, SEL, NSPoint, id)) orig)(self, NSSelectorFromString(@"hitTest:withEvent:"), p, event);
     };
   });
   Swizzle(cls, NSSelectorFromString(@"createView:viewName:rootTag:props:"), ^id(IMP orig) {
@@ -197,6 +204,10 @@ static void FindJSThread(void) {
   [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown handler:^NSEvent *(NSEvent *event) {
     double now = EpochMs();
     Push('k', 0, now - (NSProcessInfo.processInfo.systemUptime - event.timestamp) * 1000, now, 0, 0, 0);
+    return event;
+  }];
+  [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskScrollWheel handler:^NSEvent *(NSEvent *event) {
+    atomic_fetch_add(&gScrollEvents, 1);
     return event;
   }];
   [self startOn:w];
@@ -335,13 +346,116 @@ static void FindJSThread(void) {
   };
 }
 
+- (void)runGesture:(NSDictionary *)cmd id:(NSString *)cid {
+  NSWindow *w = self.appWindow;
+  if (!w) return [self answer:cid with:@{@"ok": @NO, @"error": @"no window"}];
+  NSString *kind = cmd[@"kind"] ?: @"trackpad";
+  double rate = [cmd[@"rate"] doubleValue] ?: 120;
+  double sign = [cmd[@"reverse"] boolValue] ? -1 : 1;
+  BOOL horizontal = [cmd[@"horizontal"] boolValue];
+  double wx = [cmd[@"x"] doubleValue], wy = [cmd[@"y"] doubleValue];
+  NSRect frame = w.frame;
+  CGFloat top = NSMaxY(NSScreen.screens.firstObject.frame);
+  CGPoint global = CGPointMake(frame.origin.x + wx, top - NSMaxY(frame) + wy);
+  NSInteger number = w.windowNumber;
+  typedef void (*SetWindowLocation)(CGEventRef, CGPoint);
+  SetWindowLocation setWindowLocation = (SetWindowLocation)dlsym(RTLD_DEFAULT, "CGEventSetWindowLocation");
+  void (^post)(double, int64_t, int64_t, BOOL) = ^(double raw, int64_t phase, int64_t momentum, BOOL continuous) {
+    double d = raw * sign;
+    int32_t step = continuous ? (int32_t)lround(d) : (d < 0 ? -1 : 1);
+    CGEventRef e = CGEventCreateScrollWheelEvent2(NULL, continuous ? kCGScrollEventUnitPixel : kCGScrollEventUnitLine, 2, horizontal ? 0 : step, horizontal ? step : 0, 0);
+    if (!e) return;
+    CGEventSetLocation(e, global);
+    CGEventSetIntegerValueField(e, kCGScrollWheelEventIsContinuous, continuous ? 1 : 0);
+    if (continuous) {
+      CGEventSetDoubleValueField(e, horizontal ? kCGScrollWheelEventPointDeltaAxis2 : kCGScrollWheelEventPointDeltaAxis1, d);
+      CGEventSetDoubleValueField(e, horizontal ? kCGScrollWheelEventFixedPtDeltaAxis2 : kCGScrollWheelEventFixedPtDeltaAxis1, d);
+      CGEventSetIntegerValueField(e, horizontal ? kCGScrollWheelEventDeltaAxis2 : kCGScrollWheelEventDeltaAxis1, MAX(-10, MIN(10, lround(d / 10))));
+      CGEventSetIntegerValueField(e, kCGScrollWheelEventScrollPhase, phase);
+      CGEventSetIntegerValueField(e, kCGScrollWheelEventMomentumPhase, momentum);
+    }
+    CGEventSetIntegerValueField(e, (CGEventField)51, number);
+    if (setWindowLocation) setWindowLocation(e, CGPointMake(wx, wy));
+    NSEvent *ev = [NSEvent eventWithCGEvent:e];
+    CFRelease(e);
+    if (ev) [NSApp postEvent:ev atStart:NO];
+  };
+  _driverOp = @"gesture";
+  dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
+    double tick = 1 / rate, start = CACurrentMediaTime();
+    __block double elapsed = 0;
+    int events = 0;
+    void (^wait)(double) = ^(double secs) {
+      elapsed += secs;
+      double left;
+      while ((left = start + elapsed - CACurrentMediaTime()) > 0) usleep(left > 0.002 ? (useconds_t)((left - 0.0015) * 1e6) : 100);
+    };
+    if ([kind isEqualToString:@"pan"]) {
+      int fingers = (int)lround(0.3 * rate);
+      for (int i = 0; i < fingers; i++) {
+        post(-(4 + 22 * sin((double)i / fingers * M_PI * 0.85)) * 120 / rate, 0, 0, YES);
+        events++;
+        wait(tick);
+      }
+      for (double velocity = -24.0 * 120 / rate; fabs(velocity) > 0.4 * 120 / rate; velocity *= pow(0.972, 120 / rate)) {
+        post(velocity, 0, 0, YES);
+        events++;
+        wait(tick);
+      }
+    } else if ([kind isEqualToString:@"wheel"]) {
+      for (int i = 0; i < 12; i++) {
+        post(-1, 0, 0, NO);
+        events++;
+        wait(0.09);
+      }
+    } else {
+      post(0, 128, 0, YES);
+      wait(tick);
+      int fingers = (int)lround(0.3 * rate);
+      for (int i = 0; i < fingers; i++) {
+        post(-(4 + 22 * sin((double)i / fingers * M_PI * 0.85)) * 120 / rate, i == 0 ? 1 : 2, 0, YES);
+        events++;
+        wait(tick);
+      }
+      post(0, 4, 0, YES);
+      wait(tick);
+      if ([kind isEqualToString:@"trackpad"]) {
+        double velocity = -24.0 * 120 / rate;
+        BOOL first = YES;
+        while (fabs(velocity) > 0.4 * 120 / rate) {
+          post(velocity, 0, first ? 1 : 2, YES);
+          first = NO;
+          events++;
+          velocity *= pow(0.972, 120 / rate);
+          wait(tick);
+        }
+        post(0, 0, 3, YES);
+      }
+    }
+    double ms = (CACurrentMediaTime() - start) * 1000;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [self answer:cid with:@{@"ok": @YES, @"op": @"gesture", @"events": @(events), @"ms": @(ms)}];
+    });
+  });
+}
+
 - (void)handle:(NSDictionary *)cmd {
   NSString *cid = cmd[@"id"], *op = cmd[@"op"];
   if ([op isEqualToString:@"info"]) {
     return [self answer:cid with:@{@"ok": @YES, @"screen": self.screenName ?: @"", @"maxFPS": @(self.maxFPS), @"js": @(gJSObserved), @"link": @(self.link != nil)}];
   } else if ([op isEqualToString:@"counters"]) {
     return [self answer:cid with:@{@"ok": @YES, @"layoutPasses": @(gLayoutPasses), @"mountBatches": @(gMountBatches), @"uiBlocks": @(gUIBlocks),
-                                   @"viewUpdates": @(gViewUpdates), @"viewCreates": @(gViewCreates), @"ticks": @(gTicks)}];
+                                   @"viewUpdates": @(gViewUpdates), @"viewCreates": @(gViewCreates), @"ticks": @(gTicks), @"scrollEvents": @(gScrollEvents), @"rootHitTests": @(gRootHitTests)}];
+  } else if ([op isEqualToString:@"scrollpos"]) {
+    NSScrollView *sv = [self tallestScrollView];
+    if (!sv) return [self answer:cid with:@{@"ok": @NO, @"error": @"no tall scroll view"}];
+    if (cmd[@"y"]) [self setScrollY:[cmd[@"y"] doubleValue] of:sv];
+    NSClipView *clip = sv.contentView;
+    CGFloat docH = sv.documentView.frame.size.height, viewH = clip.bounds.size.height;
+    CGFloat y = sv.documentView.isFlipped ? clip.bounds.origin.y : docH - viewH - clip.bounds.origin.y;
+    return [self answer:cid with:@{@"ok": @YES, @"y": @(y), @"content": @(docH), @"viewport": @(viewH)}];
+  } else if ([op isEqualToString:@"gesture"]) {
+    return [self runGesture:cmd id:cid];
   } else if ([op isEqualToString:@"scroll"]) {
     return [self runScroll:cmd id:cid];
   } else if ([op isEqualToString:@"hover"]) {

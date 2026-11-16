@@ -15,6 +15,7 @@ export const REMOTE_METHODS = [
   "stopSync",
   "setTypeSynced",
   "setProfileSynced",
+  "setOpenTabsSynced",
   "addRemoteProfile",
   "adoptProfileTheme",
   "useFolder",

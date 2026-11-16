@@ -259,7 +259,7 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
       <SectionHeader
         anchor="sync.allOpenTabs"
         title="All Open Tabs"
-        description="Every open tab syncs, not just pinned ones. Closing a tab closes it on your other Macs too."
+        description={`Every open tab syncs, not just pinned ones. Closing a tab closes it on your other ${PLATFORM_TERMS.syncedComputer}s too.`}
       />
       <Group>
         {profiles

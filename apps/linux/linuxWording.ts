@@ -74,6 +74,7 @@ export const LINUX_WORDING: readonly Wording[] = [
   {
     file: "state/telemetry/copy.ts",
     replacements: [
+      ["how many tab changes this Mac sent,", "how many tab changes this computer sent,"],
       ["Sent to ardia.dev with a random ID made on this Mac, and kept", "Sent to ardia.dev with a random ID made on this computer, and kept"],
       [`keptOnThisMac: "Kept on this Mac"`, `keptOnThisMac: "Kept on this computer"`],
       ["browsing data removed from this Mac and", "browsing data removed from this computer and"],
@@ -131,6 +132,7 @@ export const LINUX_WORDING: readonly Wording[] = [
       ["closing the Top App in front (⌘W, or a middle click on it)", "closing the Top App in front (Ctrl+W, or a middle click on it)"],
       ["Bringing your last window back from the Dock or at launch", "Bringing your last window back from the taskbar or at launch"],
       ["How many times ⌘Y asked for the History", "How many times Ctrl+Y asked for the History"],
+      ["how many times the macOS Now Playing controls played,", "how many times the desktop's media controls played,"],
     ],
   },
   {

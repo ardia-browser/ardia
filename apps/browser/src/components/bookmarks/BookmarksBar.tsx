@@ -9,7 +9,7 @@ import { barFit } from "../../state/bookmarks/barFit";
 import { openFolderMenu, toggleFolderMenu, useFolderMenus, type MenuRect } from "../../state/bookmarks/folderMenus";
 import type { Settings } from "../../state/settings/settings";
 import { ContextMenuArea, FileDropArea, space, Text, useTheme, type DropUpdate } from "../ui";
-import { ThemeContext } from "../ui/theme";
+import { ThemeOverride } from "../ui/ThemeOverride";
 import { siteScopedTheme, useEasedColor } from "../ui/toolbarColors";
 import { useSitePalette } from "../toolbar/useSitePalette";
 import { BarButton, BarItem, ImportButton } from "./BarItem";
@@ -29,12 +29,12 @@ function SiteColoredBar({ windowId, tabId }: { windowId: string; tabId: string }
   const palette = useSitePalette(tabId);
   const band = useEasedColor(palette.background);
   return (
-    <ThemeContext.Provider value={siteScopedTheme(theme, palette)}>
+    <ThemeOverride theme={siteScopedTheme(theme, palette)}>
       <View>
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: band }]} />
         <Bar windowId={windowId} />
       </View>
-    </ThemeContext.Provider>
+    </ThemeOverride>
   );
 }
 

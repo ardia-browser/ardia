@@ -118,6 +118,12 @@ test("search rows describing reworded panes read as Linux too", () => {
   assert.doesNotMatch(section(linuxCopy("components/settings/rows/privacyRows.ts"), "whatsSent: {", "keywords"), /\bMacs?\b|macOS|iCloud|Keychain|keychain/);
 });
 
+test("open-tab sync telemetry describes this computer on Linux", () => {
+  const copy = linuxCopy("state/telemetry/copy.ts");
+  assert.match(copy, /how many tab changes this computer sent,/);
+  assert.doesNotMatch(copy, /\bMacs?\b/);
+});
+
 test("a shared copy change fails with 'no longer contains', and unlisted files pass through", () => {
   for (const { name, reword, probe } of MODULES) {
     assert.throws(() => reword(shared(probe), "export const nothing = 1;"), /no longer contains/, name);

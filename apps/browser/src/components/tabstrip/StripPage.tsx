@@ -230,7 +230,7 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
       style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: pageWidth + flare * 2, display: resting ? "none" : "flex", ...pageStyle }}
     >
       <PageProfileContext.Provider value={profileId}>
-        <ThemeScope>
+        <ThemeScope page>
           <TintInk>
             <DockContext.Provider value={strip}>
               <StripScrollContext.Provider value={scroller}>

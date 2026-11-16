@@ -59,6 +59,7 @@ function nativeLease(ttl = 200) {
 function renderer(name, { candidate, lease, engines, channelName }) {
   const mirror = store({ status: "starting", error: null, folder: null });
   const log = [];
+  const calls = [];
   const authority = startSyncAuthority({
     id: name, candidate, channel: new BroadcastChannel(channelName), mirror, timers: fast, report: () => {},
     claim: async () => lease.claim(name),
@@ -68,6 +69,7 @@ function renderer(name, { candidate, lease, engines, channelName }) {
       const real = store({ status: "off", error: null, folder: null, owner: name });
       const remote = Object.fromEntries(REMOTE_METHODS.map((method) => [method, async (...args) => {
         log.push(method);
+        calls.push({ method, args });
         if (!lease.holds(name)) throw new Error("ERR_SYNC_NOT_AUTHORITY");
         if (method === "turnOnSync") real.setState({ ...real.getState(), status: "starting", folder: args[0] }, true);
         return method === "turnOnSync" || method === "enterRecoveryPhrase" ? { ok: true } : null;
@@ -75,7 +77,7 @@ function renderer(name, { candidate, lease, engines, channelName }) {
       return { store: real, remote };
     },
   });
-  return { authority, mirror, log };
+  return { authority, mirror, log, calls };
 }
 
 function heldIo(docs = new Map(), { openFails = false } = {}) {
@@ -205,13 +207,14 @@ test("opening a keyring that was locked at launch resumes sync once from the sto
   assert.equal(resumed, 1);
 });
 
-test("one renderer runs sync, the others mirror it and forward their actions, and it fails over when that window closes", async () => {
+test("one renderer runs sync, the others mirror it and forward their actions, and it fails over when that window closes", async (t) => {
   const channelName = `sync-${Math.random()}`;
   const lease = nativeLease();
   const engines = [];
   const a = renderer("a", { candidate: true, lease, engines, channelName });
   const b = renderer("b", { candidate: true, lease, engines, channelName });
   const settings = renderer("settings", { candidate: false, lease, engines, channelName });
+  t.after(() => { a.authority.stop(); b.authority.stop(); settings.authority.stop(); });
   await tick(80);
   assert.deepEqual(engines, ["a"]);
   assert.equal(settings.authority.role(), "client");
@@ -219,11 +222,25 @@ test("one renderer runs sync, the others mirror it and forward their actions, an
   assert.deepEqual(a.log, ["turnOnSync"]);
   await tick();
   assert.equal(settings.mirror.getState().folder, "/home/tux/Sync");
+  await settings.authority.call("setOpenTabsSynced", ["work", true]);
+  await settings.authority.call("setOpenTabsSynced", ["work", false]);
+  assert.deepEqual(a.calls.slice(1), [
+    { method: "setOpenTabsSynced", args: ["work", true] },
+    { method: "setOpenTabsSynced", args: ["work", false] },
+  ]);
   a.authority.stop();
   await tick(300);
   assert.deepEqual(engines, ["a", "b"]);
   assert.equal(await settings.authority.call("syncNow", []), null);
   assert.deepEqual(b.log, ["syncNow"]);
+  await settings.authority.call("setOpenTabsSynced", ["work", true]);
+  await settings.authority.call("setOpenTabsSynced", ["work", false]);
+  assert.deepEqual(b.calls, [
+    { method: "syncNow", args: [] },
+    { method: "setOpenTabsSynced", args: ["work", true] },
+    { method: "setOpenTabsSynced", args: ["work", false] },
+  ]);
+  assert.equal(a.calls.length, 3);
   b.authority.stop();
   await tick(60);
   await assert.rejects(settings.authority.call("syncNow", []), { message: NO_AUTHORITY_MESSAGE });

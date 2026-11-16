@@ -2,6 +2,7 @@ import { ActivitySpinner } from "./ActivitySpinner";
 import { ClipView } from "./ClipView";
 import { ThemeSwatch, WindowBackdrop } from "./backdrop";
 import { DockSelection } from "./DockSelection";
+import { EdgeFadeMask } from "./EdgeFadeMask";
 import { FadeLabel } from "./FadeLabel";
 import { FolderIcon } from "./FolderIcon";
 import { ContextMenuArea, FileDrop, MagnifyArea, MouseArea, OutsidePressArea, WindowProfile } from "./inputAreas";
@@ -19,6 +20,7 @@ export const viewsDrawnInJs = new Map<string, ViewByName>([
   ["ArdiaClipView", ClipView],
   ["ArdiaPageCoverGate", PageCoverGate],
   ["ArdiaFadeLabel", FadeLabel],
+  ["ArdiaEdgeFadeMask", EdgeFadeMask],
   ["ArdiaActivitySpinner", ActivitySpinner],
   ["ArdiaVisualEffect", VisualEffect],
   ["ArdiaGlassEffect", GlassEffect],

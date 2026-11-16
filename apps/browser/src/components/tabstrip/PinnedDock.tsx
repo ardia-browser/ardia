@@ -20,7 +20,6 @@ import { useStripDrag } from "./useStripDrag";
 import { useStripCardHover } from "./StripHoverCard";
 import { useChipHover, useChipHovered } from "./reachableHover";
 import { TabPressArea } from "../sidebar/TabPressArea";
-import { useEdgeOpacity } from "./edgeFade";
 
 export function PinnedDock({ tabIds }: { tabIds: string[] }) {
   const theme = useTheme();
@@ -88,11 +87,10 @@ function PinnedCell({ tabId, geometry, from }: { tabId: string; geometry: DragGe
     levels: 2,
   });
   const card = useStripCardHover(windowId, tabId, drag.ref, hover);
-  const edge = useEdgeOpacity(tabId, () => (stripRef?.current.dock ? [stripRef.current.dock.left + geometry.lefts[from]!, PINNED_CELL] : null));
   if (!tab) return null;
   return (
     <Animated.View ref={drag.ref} {...card} mouseDownCanMoveWindow={false} style={[drag.style, { width: PINNED_CELL, height: ITEM_HEIGHT - 1 }]}>
-      <Animated.View pointerEvents="box-none" style={{ ...StyleSheet.absoluteFillObject, opacity: drag.dragging ? 1 : edge }}>
+      <Animated.View pointerEvents="box-none" style={StyleSheet.absoluteFillObject}>
       <View
         {...drag.panHandlers}
         {...hover.hoverProps}

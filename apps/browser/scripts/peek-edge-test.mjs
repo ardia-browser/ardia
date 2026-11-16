@@ -8,7 +8,7 @@ import { launch, reporter, session } from "../../../scripts/lib/instance.mjs";
 const args = process.argv.slice(2);
 const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
-  console.error("usage: node peek-edge-test.mjs <Debug Ardia.app> [--port=<DevTools port>] [--keep-data]\n\nThe auto-hidden sidebar's peek, through the native edge watcher: a pointer resting on the window's bottom or top edge beside the peek keeps it out instead of flicking it shut and open, one that goes well past the edge closes it, an edge crossing outside the sidebar's column never opens it, once it slides away only the window's edge brings it back, pressing the other space's dot keeps it out, and with the window against a screen edge another display shares, the pointer stops at that edge to show the sidebar and a second push goes on through. Also (#1297, #1393, #1679): only the last 3 pt or past the edge open it, it stays out 40 pt past its edge and closes 200 ms after the pointer leaves, a drag on its edge resizes it instead of closing it, and Reveal hidden tabs on hover off leaves the edge alone.");
+  console.error("usage: node peek-edge-test.mjs <Debug Ardia.app> [--port=<DevTools port>] [--keep-data]\n\nThe auto-hidden sidebar's peek, through the native edge watcher: a pointer resting on the window's bottom or top edge beside the peek keeps it out instead of flicking it shut and open, one that goes well past the edge closes it, an edge crossing outside the sidebar's column never opens it, once it slides away only the window's edge brings it back, in a full-screen window the pointer resting at the screen's edge keeps it out, pressing the other space's dot keeps it out, and with the window against a screen edge another display shares, the pointer stops at that edge to show the sidebar and a second push goes on through. Also (#1297, #1393, #1679): only the last 3 pt or past the edge open it, it stays out 40 pt past its edge and closes 200 ms after the pointer leaves, a drag on its edge resizes it instead of closing it, and Reveal hidden tabs on hover off leaves the edge alone.");
   process.exit(2);
 }
 const appPath = resolve(appArg);
@@ -118,6 +118,20 @@ try {
       await run(`return away();`);
     });
   }
+
+  await rep.check("in a full-screen window, a pointer resting on the left edge keeps the peek out, and moving onto it keeps it too", async () => {
+    const fullScreen = (on) => `return ac.engine.call("windows.list", {}).then((l) => ac.engine.call("windows.dev", { window: l.find((w) => w.hasRoot).window, action: "fakeFullScreen:${on ? 1 : 0}" })).then(() => settle(900));`;
+    await run(fullScreen(true));
+    try {
+      const rest = await run(`return at(300, 400).then(() => settle(400)).then(() => { const done = watchCalls(); return at(0, 400).then(() => settle(1500)).then(() => ({ calls: done(), live: live() })); });`);
+      assert.deepEqual(rest.calls.filter((c) => c === "hide"), [], `no hide with the pointer at the edge: ${rest.calls}`);
+      assert.equal(rest.live, true, "out with the pointer resting at the screen's edge");
+      assert.equal(await run(`return at(80, 400).then(() => settle(700)).then(live);`), true, "out with the pointer over it");
+      assert.equal(await run(`return away();`), false, "closes over the page");
+    } finally {
+      await run(fullScreen(false));
+    }
+  });
 
   await rep.check("with Reveal hidden tabs on hover off, the edge doesn't open it (#1393)", async () => {
     await run(`st().updateSettings({ revealTabsOnHover: false }); return settle(300);`);

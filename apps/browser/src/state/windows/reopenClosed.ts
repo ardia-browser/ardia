@@ -123,6 +123,8 @@ export function restoreWindow(s: BrowserState, entry: ClosedWindow): BrowserStat
   const id = newId("w");
   const profileOk = (p: string) => (s.profiles[p] ? p : s.settings.defaultProfileId);
   const w = emptyWindow(id, profileOk(entry.window.profileId), "main", entry.window.frame);
+  if (entry.window.restoredFrame) w.restoredFrame = entry.window.restoredFrame;
+  if (entry.window.maximized) w.maximized = true;
   if (entry.window.tabLayout) w.tabLayout = entry.window.tabLayout;
   if (entry.window.autoHideTabs !== undefined) w.autoHideTabs = entry.window.autoHideTabs;
   const tabs = { ...s.tabs };

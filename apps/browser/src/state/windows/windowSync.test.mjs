@@ -169,3 +169,49 @@ test("full screen comes back oldest first", () => {
   sync.restoreFullScreen({ ...s, windows: { ...s.windows, [a]: { ...s.windows[a], fullScreen: 2 }, [b]: { ...s.windows[b], fullScreen: 1 } } });
   assert.deepEqual(native.of("restoreFullScreen"), [["restoreFullScreen", [b, a], (s.ui.focusOrder[0] ?? null)]]);
 });
+
+test("a window maximized when the app quit opens maximized at its restored frame, and a closed one comes back the same", () => {
+  reset();
+  const id = S().createWindow({ url: "https://example.com" });
+  const native = fakePort();
+  start(native);
+  native.emit({ type: "frame", id, frame: [100, 80, 1100, 700] });
+  native.emit({ type: "maximized", id, on: true });
+  native.emit({ type: "frame", id, frame: [-8, -8, 1936, 1056], restored: [100, 80, 1100, 700] });
+  assert.deepEqual(S().windows[id].frame, [-8, -8, 1936, 1056]);
+  assert.deepEqual(S().windows[id].restoredFrame, [100, 80, 1100, 700]);
+  assert.equal(S().windows[id].maximized, true);
+
+  const relaunch = fakePort();
+  start(relaunch).sync(S());
+  const [, , options] = relaunch.of("open")[0];
+  assert.deepEqual(options.frame, [100, 80, 1100, 700]);
+  assert.equal(options.maximized, true);
+
+  S().closeWindow(id, { keepsLastWindow: true });
+  assert.deepEqual(S().closedWindows.at(-1).window.restoredFrame, [100, 80, 1100, 700]);
+  assert.equal(S().closedWindows.at(-1).window.maximized, true);
+  S().restoreClosed(S().closedWindows.at(-1).id);
+  const back = S().windowOrder.at(-1);
+  assert.deepEqual(S().windows[back].restoredFrame, [100, 80, 1100, 700]);
+  assert.equal(S().windows[back].maximized, true);
+});
+
+test("restoring a maximized window clears its restored frame and the flag, and quitting keeps them", () => {
+  reset();
+  const id = S().createWindow();
+  const native = fakePort();
+  const quitting = { on: false };
+  start(native, quitting);
+  native.emit({ type: "maximized", id, on: true });
+  native.emit({ type: "frame", id, frame: [-8, -8, 1936, 1056], restored: [100, 80, 1100, 700] });
+  quitting.on = true;
+  native.emit({ type: "maximized", id, on: false });
+  assert.equal(S().windows[id].maximized, true);
+  quitting.on = false;
+  native.emit({ type: "maximized", id, on: false });
+  native.emit({ type: "frame", id, frame: [100, 80, 1100, 700] });
+  assert.equal(S().windows[id].maximized, undefined);
+  assert.equal(S().windows[id].restoredFrame, undefined);
+  assert.deepEqual(S().windows[id].frame, [100, 80, 1100, 700]);
+});

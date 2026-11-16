@@ -5,7 +5,8 @@ import { answerExternalApp } from "../site/prompts";
 import { setPageSelection } from "../site/selection";
 import { clearEngineOffer, followSiteChoice } from "../engines/actions";
 import { revealToolbar } from "../windows/toolbarAutoHide";
-import { noteCaptureIndicatorCleared } from "../telemetry/tabSleepCounts";
+import { noteCaptureIndicatorCleared, noteMediaCardCleared } from "../telemetry/tabSleepCounts";
+import { setNowPlaying, useMedia } from "../media/media";
 import { patchPage, pageOf, setPopover } from "./pageState";
 import { isQuitting } from "../app/quit";
 import { closeTabNow } from "./actions";
@@ -23,6 +24,10 @@ export function leftPage(tabId: string, url: string, previousPage: string, engin
 }
 
 export function pageEnded(tabId: string) {
+  if (useMedia.getState().sessions[tabId]) {
+    noteMediaCardCleared();
+    setNowPlaying(tabId, null);
+  }
   if (!pageOf(tabId).mediaAccess) return;
   noteCaptureIndicatorCleared();
   patchPage(tabId, { mediaAccess: null });

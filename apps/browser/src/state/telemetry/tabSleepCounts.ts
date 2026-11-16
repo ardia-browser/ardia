@@ -1,11 +1,15 @@
 import { takeCleanUpCounts } from "./cleanUpCounts";
 
-const none = () => ({ captureIndicatorsCleared: 0, pinnedTabsSleptByMemorySaver: 0, tabsSleptOverBudget: 0, tabsSleptOverBudgetReopened: 0, tabsOverBudgetSkippedLoading: 0, tabsOverBudgetAsksPassedOn: 0, topAppsKeptRunning: 0, topAppsUnloadedFromMenu: 0 });
+const none = () => ({ captureIndicatorsCleared: 0, mediaCardsCleared: 0, pinnedTabsSleptByMemorySaver: 0, tabsSleptOverBudget: 0, tabsSleptOverBudgetReopened: 0, tabsOverBudgetSkippedLoading: 0, tabsOverBudgetAsksPassedOn: 0, topAppsKeptRunning: 0, topAppsUnloadedFromMenu: 0 });
 
 let pending = none();
 
 export function noteCaptureIndicatorCleared() {
   pending.captureIndicatorsCleared++;
+}
+
+export function noteMediaCardCleared() {
+  pending.mediaCardsCleared++;
 }
 
 export function noteTabSlept(pinned: boolean, reason: string | null) {
@@ -56,6 +60,7 @@ export function takeTabSleepCounts() {
   pending = none();
   return {
     capture_indicators_cleared: taken.captureIndicatorsCleared,
+    media_cards_cleared: taken.mediaCardsCleared,
     pinned_tabs_slept_by_memory_saver: taken.pinnedTabsSleptByMemorySaver,
     top_app_closes_kept_running: taken.topAppsKeptRunning,
     top_apps_unloaded_from_menu: taken.topAppsUnloadedFromMenu,

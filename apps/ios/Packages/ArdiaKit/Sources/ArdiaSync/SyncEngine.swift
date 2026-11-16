@@ -60,6 +60,8 @@ public actor SyncEngine {
   private let host: SyncHost
   private let now: @Sendable () -> Date
   private let coordination: SyncCoordination
+  private let keys: SyncKeys
+  private let current: Mutex<any SyncStore>
   private var loaded = false
   private var retired = false
 
@@ -74,6 +76,18 @@ public actor SyncEngine {
     coordinationTimeout: TimeInterval = SyncFolderAccess.defaultTimeout,
     now: @escaping @Sendable () -> Date = Date.init
   ) throws {
+    try self.init(directory: directory, deviceId: deviceId, entropy: entropy, location: .folder(folder), chainSeen: chainSeen, coordinationTimeout: coordinationTimeout, now: now)
+  }
+
+  public init(
+    directory: URL,
+    deviceId: String,
+    entropy: Data,
+    location: SyncLocation,
+    chainSeen: Bool = false,
+    coordinationTimeout: TimeInterval = SyncFolderAccess.defaultTimeout,
+    now: @escaping @Sendable () -> Date = Date.init
+  ) throws {
     let token = UUID()
     guard Self.live.withLock({ live in
       guard live[deviceId] == nil else { return false }
@@ -83,13 +97,16 @@ public actor SyncEngine {
     do {
       let keys = SyncKeys(entropy: entropy)
       let coordination = SyncCoordination(timeout: coordinationTimeout)
-      let host = SyncHost(device: deviceId, files: SyncFiles(directory: directory), keys: keys, grant: folder, coordination: coordination)
+      let store = location.makeStore(keys: keys, coordination: coordination)
+      let host = SyncHost(device: deviceId, files: SyncFiles(directory: directory), keys: keys, store: store)
       host.chainSeen = chainSeen
       let script = try ScriptEngine(scripts: [.sync])
       host.register(on: script)
       self.host = host
       self.script = script
       self.coordination = coordination
+      self.keys = keys
+      current = Mutex(store)
     } catch {
       Self.release(deviceId, token)
       throw error
@@ -114,18 +131,28 @@ public actor SyncEngine {
   }
 
   public static func check(entropy: Data, folder: URL) -> FolderCheck {
-    guard SyncFolderAccess.isDirectory(folder), let names = SyncFolderAccess.coordinatedListing(folder) else { return .unavailable }
-    if names.contains(SyncVault(folder: folder, keys: SyncKeys(entropy: entropy)).chainURL.lastPathComponent) { return .matches }
+    check(entropy: entropy, names: SyncFolderAccess.isDirectory(folder) ? SyncFolderAccess.coordinatedListing(folder) : nil)
+  }
+
+  static func check(entropy: Data, names: [String]?) -> FolderCheck {
+    guard let names else { return .unavailable }
+    if names.contains(SyncKeys(entropy: entropy).chainTag) { return .matches }
     return names.contains(where: SyncFolderAccess.isChainTag) ? .mismatch : .noSyncData
   }
 
   public nonisolated func cancelCoordination() {
-    coordination.cancelAll()
+    current.withLock { $0 }.cancel()
   }
 
   public func changeFolder(_ grant: SyncFolderGrant) throws {
+    try changeLocation(.folder(grant))
+  }
+
+  public func changeLocation(_ location: SyncLocation) throws {
     try checkLive()
-    host.use(grant)
+    let store = location.makeStore(keys: keys, coordination: coordination)
+    current.withLock { $0 = store }
+    host.use(store)
   }
 
   public func cachedSnapshot() -> SyncSnapshot? {
@@ -136,7 +163,7 @@ public actor SyncEngine {
   public func cycle(_ local: LocalBrowsing, retiring: Bool = false) throws -> CycleOutcome {
     try checkLive()
     try Task.checkCancellation()
-    coordination.resume()
+    host.store.resume()
     host.timedOut = false
     try load()
     let input = CycleInput(

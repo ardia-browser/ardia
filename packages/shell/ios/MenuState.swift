@@ -17,6 +17,7 @@ struct MenuState {
   var warnBeforeQuitting = false
   var warnBeforeClosingWindow = false
   var undoReopensClosedTab = false
+  var littleArdiaFromOtherApps = false
   var bookmarksShown = true
   var downloadsInProgress = 0
   var shortcuts: [String: [[String]]] = [:]
@@ -37,6 +38,7 @@ struct MenuState {
     warnBeforeQuitting = update.warnBeforeQuitting
     warnBeforeClosingWindow = update.warnBeforeClosingWindow
     undoReopensClosedTab = update.undoReopensClosedTab
+    littleArdiaFromOtherApps = update.littleArdiaFromOtherApps
     bookmarksShown = update.bookmarksShown
     downloadsInProgress = update.downloadsInProgress
     shortcuts = update.shortcuts

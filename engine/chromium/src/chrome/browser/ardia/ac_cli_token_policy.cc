@@ -137,6 +137,10 @@ bool TokenClient::MayAttachToRenderFrameHost(content::RenderFrameHost* frame) {
   return IsWebFrame(frame);
 }
 
+bool TokenClient::MayReadLocalFiles() {
+  return true;
+}
+
 std::string TokenClient::Refusal(const std::string& method,
                                  const std::string& session,
                                  base::DictValue& params) {
@@ -230,6 +234,17 @@ std::string TokenClient::Refusal(const std::string& method,
     if (type && (*type == "mousePressed" || *type == "mouseReleased") &&
         (!button || *button == "none")) {
       return "without a button";
+    }
+  } else if (method == "DOM.setFileInputFiles") {
+    if (!IsWebDocumentHost(HostOf(session))) {
+      return "on that target";
+    }
+    if (!FileInputFilesAllowed(params.Find("files"))) {
+      return "with those files";
+    }
+  } else if (method == "Input.dispatchDragEvent") {
+    if (DragDataCarriesFiles(params.FindDict("data"))) {
+      return "with files";
     }
   } else if (method == "Input.dispatchKeyEvent") {
     if (!EditingCommandsAllowed(params.Find("commands"))) {

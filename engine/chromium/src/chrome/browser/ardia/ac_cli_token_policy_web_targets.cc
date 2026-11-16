@@ -182,6 +182,13 @@ bool IsWebHost(content::DevToolsAgentHost* host) {
   return false;
 }
 
+bool IsWebDocumentHost(content::DevToolsAgentHost* host) {
+  return host &&
+         (host->GetType() == content::DevToolsAgentHost::kTypePage ||
+          host->GetType() == content::DevToolsAgentHost::kTypeFrame) &&
+         IsWebHost(host);
+}
+
 bool IsWebTarget(const std::string* target_id) {
   return target_id &&
          IsWebHost(content::ArdiaDevToolsAgentHostForId(*target_id));

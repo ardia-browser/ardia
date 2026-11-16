@@ -3,8 +3,10 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include "base/containers/span.h"
 #include "base/functional/bind.h"
@@ -18,6 +20,7 @@
 #include "net/base/mime_util.h"
 #include "net/http/http_util.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
+#include "third_party/icu/source/common/unicode/uidna.h"
 #include "third_party/zlib/google/compression_utils.h"
 
 namespace ardia::web3_internal {
@@ -33,7 +36,6 @@ constexpr const char* kKeptHeaders[] = {
     "content-type",
     "content-language",
     "content-security-policy",
-    "content-security-policy-report-only",
     "cross-origin-embedder-policy",
     "cross-origin-opener-policy",
     "cross-origin-resource-policy",
@@ -115,6 +117,22 @@ void Sniff(Page& page, const GURL& url) {
   page.mime_type = mime.empty() ? "text/plain" : mime;
 }
 
+std::string UnicodeName(const std::string& host) {
+  if (host.find("xn--") == std::string::npos) return host;
+  UErrorCode status = U_ZERO_ERROR;
+  UIDNA* idna = uidna_openUTS46(UIDNA_NONTRANSITIONAL_TO_UNICODE, &status);
+  if (U_FAILURE(status)) return host;
+  std::string unicode(host.size() * 4, '\0');
+  UIDNAInfo info = UIDNA_INFO_INITIALIZER;
+  const int32_t length = uidna_nameToUnicodeUTF8(
+      idna, host.data(), static_cast<int32_t>(host.size()), unicode.data(),
+      static_cast<int32_t>(unicode.size()), &info, &status);
+  uidna_close(idna);
+  if (U_FAILURE(status) || info.errors != 0) return host;
+  unicode.resize(length);
+  return unicode;
+}
+
 bool KeptHeader(const std::string& name) {
   const std::string lower = base::ToLowerASCII(name);
   for (const char* kept : kKeptHeaders) {
@@ -186,7 +204,7 @@ void Resolver::Start() {
     address_ = std::move(*host->address);
     return ResolveMode();
   }
-  name_ = std::move(host->name);
+  name_ = UnicodeName(host->name);
   if (std::optional<Target> cached = Names().Get(CacheKey(chain_, name_))) {
     chain_ = cached->chain;
     address_ = std::move(cached->address);
@@ -393,6 +411,10 @@ void Resolver::GotResource(Rpc::Answer answer) {
       bool had_charset = false;
       net::HttpUtil::ParseContentType(value, &page.mime_type, &page.charset,
                                       &had_charset, nullptr);
+    }
+    if (lower == "content-security-policy") {
+      value = web3::WithoutCspReporting(value);
+      if (value.empty()) continue;
     }
     if (KeptHeader(lower)) page.headers.emplace_back(std::move(name), std::move(value));
   }

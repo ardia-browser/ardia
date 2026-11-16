@@ -15,6 +15,7 @@ import { FormField, Group, Row, SectionHeader, SettingToggle } from "../Form";
 import { engineVersion, widevine as widevineComponent } from "../../../state/settings/paneData";
 import { useResource } from "../../../state/settings/resources";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
+import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { AutomationRules } from "./AutomationRules";
 import { Web3RpcSection } from "./Web3Rpcs";
 import { perLook } from "../../ui/tokens";
@@ -66,7 +67,7 @@ export function AdvancedPane() {
         </Row>
       </Group>
 
-      <Web3RpcSection />
+      {PLATFORM_FEATURES.web3Urls && <Web3RpcSection />}
 
       <SectionHeader title="Performance" />
       <Group>

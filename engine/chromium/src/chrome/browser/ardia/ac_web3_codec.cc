@@ -24,6 +24,12 @@ std::vector<std::string_view> Split(std::string_view text, char separator) {
   }
 }
 
+std::string_view TrimSpace(std::string_view text) {
+  while (!text.empty() && (text.front() == ' ' || text.front() == '\t')) text.remove_prefix(1);
+  while (!text.empty() && (text.back() == ' ' || text.back() == '\t')) text.remove_suffix(1);
+  return text;
+}
+
 std::vector<std::string_view> PathSegments(std::string_view path) {
   if (!path.empty() && path.front() == '/') path.remove_prefix(1);
   std::vector<std::string_view> segments = Split(path, '/');
@@ -397,6 +403,24 @@ std::optional<AutoBody> AutoCallBody(const AutoCall& call,
     }
   }
   return std::nullopt;
+}
+
+std::string WithoutCspReporting(std::string_view header) {
+  std::string policies;
+  for (std::string_view policy : Split(header, ',')) {
+    std::string directives;
+    for (std::string_view directive : Split(policy, ';')) {
+      directive = TrimSpace(directive);
+      const std::string name = Lower(directive.substr(0, directive.find_first_of(" \t")));
+      if (directive.empty() || name == "report-uri" || name == "report-to") continue;
+      if (!directives.empty()) directives += "; ";
+      directives += directive;
+    }
+    if (directives.empty()) continue;
+    if (!policies.empty()) policies += ", ";
+    policies += directives;
+  }
+  return policies;
 }
 
 }

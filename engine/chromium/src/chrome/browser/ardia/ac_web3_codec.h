@@ -73,6 +73,7 @@ struct Resource {
   std::vector<std::pair<std::string, std::string>> headers;
 };
 std::optional<Resource> DecodeResource(std::string_view returned);
+std::string WithoutCspReporting(std::string_view header);
 
 struct AutoCall {
   Bytes calldata;

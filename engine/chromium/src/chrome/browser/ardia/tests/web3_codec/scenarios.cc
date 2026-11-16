@@ -166,6 +166,13 @@ void AutoCalls() {
 
 }
 
+void ContractPoliciesLoseReporting() {
+  Expect(WithoutCspReporting("default-src 'self'; report-uri https://t.example/r") == "default-src 'self'", "report-uri dropped, the rest kept");
+  Expect(WithoutCspReporting("Report-To x;img-src *, script-src 'none'; REPORT-URI https://t.example") == "img-src *, script-src 'none'", "reporting dropped in each policy of a list, any case");
+  Expect(WithoutCspReporting(" report-uri https://t.example ") == "", "a reporting-only policy leaves nothing");
+  Expect(WithoutCspReporting("default-src 'none'; style-src 'unsafe-inline'") == "default-src 'none'; style-src 'unsafe-inline'", "a policy without reporting is unchanged");
+}
+
 int main() {
   KeccakMatchesEthereum();
   NameHashMatchesErc137();
@@ -174,6 +181,7 @@ int main() {
   ResourceRequests();
   ResourceResponses();
   AutoCalls();
+  ContractPoliciesLoseReporting();
   if (g_failures) {
     std::printf("%d web3 codec scenarios failed\n", g_failures);
     return 1;

@@ -178,6 +178,7 @@ source_set("ardia") {
     "//skia",
     "//third_party/blink/public/common",
     "//third_party/boringssl",
+    "//third_party/icu",
     "//third_party/zlib/google:compression_utils",
     "//ui/base",
     "//ui/gfx",

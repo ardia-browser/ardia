@@ -5,6 +5,7 @@ import { setPopupsOpenAsTabs } from "../../platform/pageOptions";
 import { setBlockAutoplayEverywhere, setFairPlayInChromium } from "../../platform/pageOptions";
 import { setWeb3Rpcs } from "../../platform/web3";
 import { useBrowser } from "../browser/store";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import type { Settings } from "./settings";
 import { startInterfaceScale } from "./interfaceScaleSync";
 
@@ -21,7 +22,7 @@ const NATIVE_SETTINGS: Mirror[] = [
   mirror("popupsOpenAsTabs", setPopupsOpenAsTabs),
   mirror("blockAutoplayEverywhere", setBlockAutoplayEverywhere),
   mirror("fairPlayInChromium", setFairPlayInChromium),
-  mirror("web3Rpcs", setWeb3Rpcs),
+  ...(PLATFORM_FEATURES.web3Urls ? [mirror("web3Rpcs", setWeb3Rpcs)] : []),
 ];
 
 export function startNativeSettings() {

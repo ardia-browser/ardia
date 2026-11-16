@@ -11,6 +11,7 @@ namespace {
 constexpr size_t kWord = 32;
 constexpr int kMaxTypeDepth = 8;
 constexpr size_t kMaxDecoded = 64u << 20;
+constexpr size_t kMaxValues = 1u << 18;
 constexpr size_t kMaxJson = 16u << 20;
 
 int HexDigit(char c) {
@@ -142,6 +143,7 @@ Bytes EncodeOne(const AbiType& type, const AbiValue& value) {
 struct Decoder {
   std::string_view data;
   size_t budget = kMaxDecoded;
+  size_t values_left = kMaxValues;
 
   bool Spend(size_t size) {
     if (size > budget) return false;
@@ -149,12 +151,16 @@ struct Decoder {
     return true;
   }
 
-  std::optional<std::vector<AbiValue>> Sequence(
-      const std::vector<AbiType>& types,
-      size_t base) {
+  template <typename TypeAt>
+  std::optional<std::vector<AbiValue>> Sequence(size_t count,
+                                                TypeAt type_at,
+                                                size_t base) {
     std::vector<AbiValue> values;
     size_t head = base;
-    for (const AbiType& type : types) {
+    for (size_t i = 0; i < count; ++i) {
+      if (values_left == 0) return std::nullopt;
+      --values_left;
+      const AbiType& type = type_at(i);
       std::optional<AbiValue> value;
       if (IsDynamic(type)) {
         std::optional<std::string_view> word = WordAt(data, head);
@@ -201,13 +207,16 @@ struct Decoder {
             !Spend(count * kWord)) {
           return std::nullopt;
         }
-        std::optional<std::vector<AbiValue>> items =
-            Sequence(Repeated(type.items[0], count), start);
+        std::optional<std::vector<AbiValue>> items = Sequence(
+            count, [&](size_t) -> const AbiType& { return type.items[0]; },
+            start);
         if (!items) return std::nullopt;
         return AbiList(std::move(*items));
       }
       case AbiType::Kind::kTuple: {
-        std::optional<std::vector<AbiValue>> items = Sequence(type.items, at);
+        std::optional<std::vector<AbiValue>> items = Sequence(
+            type.items.size(),
+            [&](size_t i) -> const AbiType& { return type.items[i]; }, at);
         if (!items) return std::nullopt;
         return AbiList(std::move(*items));
       }
@@ -510,7 +519,9 @@ Bytes AbiEncode(const AbiType& tuple, const std::vector<AbiValue>& values) {
 std::optional<std::vector<AbiValue>> AbiDecode(const AbiType& tuple,
                                                std::string_view data) {
   Decoder decoder{data};
-  return decoder.Sequence(tuple.items, 0);
+  return decoder.Sequence(
+      tuple.items.size(),
+      [&](size_t i) -> const AbiType& { return tuple.items[i]; }, 0);
 }
 
 std::optional<std::string> AbiJson(const AbiType& tuple,

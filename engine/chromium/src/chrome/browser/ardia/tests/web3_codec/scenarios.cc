@@ -1,4 +1,5 @@
 #include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <string>
 #include <variant>
@@ -190,6 +191,26 @@ void HugeStaticTypesFailFast() {
   Expect(!AutoCallBody(Auto("/x", "returns=(uint256[9999][9999][9999][9999][9999][9999])"), Unhex(Words({"1"}))), "fixed lengths whose size overflows fail");
 }
 
+Bytes Word(uint64_t n) {
+  Bytes word(32, '\0');
+  for (int i = 0; i < 8; ++i) word[31 - i] = static_cast<char>(n >> (8 * i));
+  return word;
+}
+
+void AliasedDynamicElementsFailFast() {
+  std::string tuple = "(string";
+  for (int i = 1; i < 2000; ++i) tuple += ",string";
+  tuple += ")";
+  const AutoCall call = Auto("/x", "returns=(" + tuple + "[9999])");
+  Bytes answer = Word(32);
+  for (int i = 0; i < 9999; ++i) answer += Word(9999 * 32);
+  for (int i = 0; i < 2000; ++i) answer += Word(2000 * 32);
+  answer += Word(0);
+  const auto start = std::chrono::steady_clock::now();
+  Expect(!AutoCallBody(call, answer), "9999 aliased copies of a 2000-string tuple exceed the value cap");
+  Expect(std::chrono::steady_clock::now() - start < std::chrono::seconds(3), "they fail before 20 million types and values are made");
+}
+
 int main() {
   KeccakMatchesEthereum();
   NameHashMatchesErc137();
@@ -200,6 +221,7 @@ int main() {
   AutoCalls();
   ContractPoliciesLoseReporting();
   HugeStaticTypesFailFast();
+  AliasedDynamicElementsFailFast();
   if (g_failures) {
     std::printf("%d web3 codec scenarios failed\n", g_failures);
     return 1;

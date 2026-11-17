@@ -87,7 +87,7 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
     const inPages = list === pages;
     for (let at = 0; at < list.length; at++) {
       const c = list[at]!;
-      const m = again && inPages ? scores[at]! : score(c.text, parsed);
+      const m = again && inPages ? scores[at]! : c.named ? Math.max(score(c.text, parsed), score(c.named, parsed)) : score(c.text, parsed);
       if (m <= 0) continue;
       if (inPages && !again) {
         matched[found] = c;

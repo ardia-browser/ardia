@@ -2809,7 +2809,7 @@ function buildSuggestions(raw        , source                  , options        
     const inPages = list === pages;
     for (let at = 0; at < list.length; at++) {
       const c = list[at] ;
-      const m = again && inPages ? scores[at]  : score(c.text, parsed);
+      const m = again && inPages ? scores[at]  : c.named ? Math.max(score(c.text, parsed), score(c.named, parsed)) : score(c.text, parsed);
       if (m <= 0) continue;
       if (inPages && !again) {
         matched[found] = c;
@@ -2977,12 +2977,13 @@ const { logVisits, pageText, pageTexts, tabPageText, withRootSlash } = __require
                  
                   
                  
+                   
   
 
                                                                                      
                                                         
 
-                                                                                                                           
+                                                                                                        
                 
                      
                                  
@@ -3001,7 +3002,7 @@ const SLICE_CHECK = 64;
 
 function baseFor(bookmarks                        )               {
   let base = bases.get(bookmarks);
-  if (!base) bases.set(bookmarks, (base = { list: [], byKey: new Map(), keys: new Set(), cursor: 0, done: false }));
+  if (!base) bases.set(bookmarks, (base = { list: [], byKey: new Map(), cursor: 0, done: false }));
   return base;
 }
 
@@ -3013,7 +3014,6 @@ function advance(b         , bookmarks                        , deadline        
   while (!base.done && base.cursor < bookmarks.length) {
     const row = bookmarks[base.cursor++] ;
     const text = pageText(row);
-    base.keys.add(text.key);
     if (!base.byKey.has(text.key)) {
       const c            = { url: row.url, title: row.title, favicon: row.favicon, visits: 0, lastVisit: 0, logVisits: 0, bookmarked: true, text };
       base.list.push(c);
@@ -3026,10 +3026,11 @@ function advance(b         , bookmarks                        , deadline        
     const h = b.history[b.historyCursor++] ;
     const text = pageText(h);
     if (!b.byKey.has(text.key)) {
-      const bookmarked = base.keys.has(text.key);
+      const mark = base.byKey.get(text.key);
+      const named = mark?.title && mark.text.titleLower !== text.titleLower ? mark.text : undefined;
       let c = historyCandidates.get(h);
-      if (!c || c.bookmarked !== bookmarked) {
-        c = { url: h.url, title: h.title, favicon: h.favicon, visits: h.visits, lastVisit: h.lastVisit, logVisits: logVisits(h.visits), bookmarked, text };
+      if (!c || c.bookmarked !== !!mark || c.named !== named) {
+        c = { url: h.url, title: named ? mark .title : h.title, favicon: h.favicon, visits: h.visits, lastVisit: h.lastVisit, logVisits: logVisits(h.visits), bookmarked: !!mark, text, named };
         historyCandidates.set(h, c);
       }
       b.list.push(c);

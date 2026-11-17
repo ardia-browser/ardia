@@ -18,12 +18,13 @@ export type Candidate = {
   tabId?: string;
   fresh?: boolean;
   text: PageText;
+  named?: PageText;
 };
 
 type Lookup = { get(key: string): Candidate | undefined; has(key: string): boolean };
 export type Pool = { list: Candidate[]; byKey: Lookup };
 
-type BookmarkBase = { list: Candidate[]; byKey: Map<string, Candidate>; keys: Set<string>; cursor: number; done: boolean };
+type BookmarkBase = { list: Candidate[]; byKey: Map<string, Candidate>; cursor: number; done: boolean };
 type Builder = {
   base: BookmarkBase;
   history: readonly HistoryRow[];
@@ -42,7 +43,7 @@ const SLICE_CHECK = 64;
 
 function baseFor(bookmarks: readonly BookmarkRow[]): BookmarkBase {
   let base = bases.get(bookmarks);
-  if (!base) bases.set(bookmarks, (base = { list: [], byKey: new Map(), keys: new Set(), cursor: 0, done: false }));
+  if (!base) bases.set(bookmarks, (base = { list: [], byKey: new Map(), cursor: 0, done: false }));
   return base;
 }
 
@@ -54,7 +55,6 @@ function advance(b: Builder, bookmarks: readonly BookmarkRow[], deadline: number
   while (!base.done && base.cursor < bookmarks.length) {
     const row = bookmarks[base.cursor++]!;
     const text = pageText(row);
-    base.keys.add(text.key);
     if (!base.byKey.has(text.key)) {
       const c: Candidate = { url: row.url, title: row.title, favicon: row.favicon, visits: 0, lastVisit: 0, logVisits: 0, bookmarked: true, text };
       base.list.push(c);
@@ -67,10 +67,11 @@ function advance(b: Builder, bookmarks: readonly BookmarkRow[], deadline: number
     const h = b.history[b.historyCursor++]!;
     const text = pageText(h);
     if (!b.byKey.has(text.key)) {
-      const bookmarked = base.keys.has(text.key);
+      const mark = base.byKey.get(text.key);
+      const named = mark?.title && mark.text.titleLower !== text.titleLower ? mark.text : undefined;
       let c = historyCandidates.get(h);
-      if (!c || c.bookmarked !== bookmarked) {
-        c = { url: h.url, title: h.title, favicon: h.favicon, visits: h.visits, lastVisit: h.lastVisit, logVisits: logVisits(h.visits), bookmarked, text };
+      if (!c || c.bookmarked !== !!mark || c.named !== named) {
+        c = { url: h.url, title: named ? mark!.title : h.title, favicon: h.favicon, visits: h.visits, lastVisit: h.lastVisit, logVisits: logVisits(h.visits), bookmarked: !!mark, text, named };
         historyCandidates.set(h, c);
       }
       b.list.push(c);

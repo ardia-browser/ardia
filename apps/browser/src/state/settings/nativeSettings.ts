@@ -2,7 +2,7 @@ import { setAppearance, setThinScrollBars } from "../../platform/app";
 import { setAutoPictureInPicture, setVideoUpscaling } from "../../platform/media";
 import { setCommandScrollZoom } from "../../platform/siteSettings";
 import { setPopupsOpenAsTabs } from "../../platform/pageOptions";
-import { setBlockAutoplayEverywhere, setFairPlayInChromium } from "../../platform/pageOptions";
+import { setBlockAutoplayEverywhere } from "../../platform/pageOptions";
 import { useBrowser } from "../browser/store";
 import type { Settings } from "./settings";
 import { startInterfaceScale } from "./interfaceScaleSync";
@@ -17,7 +17,6 @@ const NATIVE_SETTINGS: Mirror[] = [
   mirror("videoUpscaling", setVideoUpscaling),
   mirror("popupsOpenAsTabs", setPopupsOpenAsTabs),
   mirror("blockAutoplayEverywhere", setBlockAutoplayEverywhere),
-  mirror("fairPlayInChromium", setFairPlayInChromium),
 ];
 
 export function startNativeSettings() {

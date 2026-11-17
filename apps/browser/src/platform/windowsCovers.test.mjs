@@ -165,3 +165,87 @@ test("a missing callback times out and stop releases its pending promise", async
   measurer.stop();
   await pending;
 });
+
+test("the final measurement still publishes at 150 ms after its wait timed out", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let callback;
+  const surface = { measureInWindow: (reply) => callback = reply };
+  const measurer = coverMeasurer("late-idle-window", "surface", 8, () => surface, []);
+  const pending = measurer.measure();
+  t.mock.timers.tick(100);
+  await pending;
+  assert.deepEqual(coversIn("late-idle-window"), []);
+  t.mock.timers.tick(50);
+  callback(4, 8, 80, 40);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(coversIn("late-idle-window"), [{ x: 4, y: 8, width: 80, height: 40, radius: 8 }]);
+  measurer.stop();
+});
+
+test("a timed-out answer cannot overwrite a newer pass on the same native node", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const callbacks = [];
+  const surface = { measureInWindow: (reply) => callbacks.push(reply) };
+  const measurer = coverMeasurer("late-newer-window", "surface", 0, () => surface, []);
+  const old = measurer.measure();
+  t.mock.timers.tick(100);
+  await old;
+  const fresh = measurer.measure();
+  callbacks[1](0, 0, 30, 40);
+  await fresh;
+  callbacks[0](0, 0, 90, 90);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(coversIn("late-newer-window")[0].width, 30);
+  measurer.stop();
+});
+
+test("a timeout drains a queued pass without letting the older answer publish", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const callbacks = [];
+  const surface = { measureInWindow: (reply) => callbacks.push(reply) };
+  const measurer = coverMeasurer("late-dirty-window", "surface", 0, () => surface, []);
+  const pending = [measurer.measure(), measurer.measure()];
+  t.mock.timers.tick(100);
+  assert.equal(callbacks.length, 2);
+  callbacks[0](0, 0, 90, 90);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(coversIn("late-dirty-window"), []);
+  callbacks[1](0, 0, 30, 40);
+  await Promise.all(pending);
+  assert.equal(coversIn("late-dirty-window")[0].width, 30);
+  measurer.stop();
+});
+
+test("a late answer after the timeout cannot revive a stopped surface", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let callback;
+  const surface = { measureInWindow: (reply) => callback = reply };
+  const measurer = coverMeasurer("late-stopped-window", "surface", 0, () => surface, []);
+  const pending = measurer.measure();
+  t.mock.timers.tick(100);
+  await pending;
+  measurer.stop();
+  callback(0, 0, 90, 90);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(coversIn("late-stopped-window"), []);
+});
+
+test("late answers validate surface and clip identities even without another request", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  for (const replaced of ["surface", "clip"]) {
+    let callback;
+    let surface = { measureInWindow: (reply) => callback = reply };
+    let clip = { measureInWindow: (reply) => reply(0, 0, 100, 100) };
+    const windowId = `late-identity-${replaced}`;
+    const measurer = coverMeasurer(windowId, "surface", 0, () => surface, [coverClip(() => clip)]);
+    const pending = measurer.measure();
+    t.mock.timers.tick(100);
+    await pending;
+    if (replaced === "surface") surface = node(0, 0, 30, 30);
+    else clip = node(0, 0, 30, 30);
+    callback(0, 0, 90, 90);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(coversIn(windowId), []);
+    measurer.stop();
+  }
+});

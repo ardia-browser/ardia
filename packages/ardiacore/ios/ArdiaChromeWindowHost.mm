@@ -1,6 +1,7 @@
 #import "ArdiaChromeWindowInternal.h"
 #import "ArdiaEarlyWindow.h"
 #import "ArdiaInterfaceScale.h"
+#import "ArdiaPictureInPictureInternal.h"
 #import "ArdiaRuntime.h"
 #import "ArdiaWebViewInternal.h"
 
@@ -17,6 +18,8 @@ namespace {
 BOOL (^gShouldClose)(NSWindow *);
 
 void (^gSwapped)(NSWindow *, NSWindow *);
+
+NSString *(^gFocusHandoffSummary)(NSWindow *);
 
 const void *const kFloatsForWindowManagersKey = &kFloatsForWindowManagersKey;
 
@@ -179,6 +182,11 @@ NSView *ArdiaWindowRootView(NSWindow *window) {
   AnswerFloatingSubrole(window.class);
 }
 
++ (void)floatOverActiveSpace:(NSWindow *)window {
+  if (!window) return;
+  ardia_pip::FloatOverActiveSpace(window);
+}
+
 + (void)recordLaunchLayout {
   [ArdiaEarlyWindow recordNow];
 }
@@ -208,6 +216,7 @@ NSView *ArdiaWindowRootView(NSWindow *window) {
     ArdiaWindowController *shown = weakController;
     if (!p || !coreWindow || !shown) return;
     coreWindow.activeProfile = p;
+    ardia_host::NoteProfileSwitch(p, coreWindow.window);
     const double activeMs = (CACurrentMediaTime() - started) * 1000;
     ArdiaCoreTab *tab = [ArdiaTabStrip activeTabInWindow:shown profile:p];
     ArdiaWebView *view = tab ? [ArdiaTabRegistry viewForTab:tab] : nil;
@@ -235,17 +244,23 @@ NSView *ArdiaWindowRootView(NSWindow *window) {
 }
 
 + (void)setTrafficLightsCenter:(NSValue *)center trailing:(BOOL)trailing inWindow:(NSWindow *)window {
-  if (objc_getAssociatedObject(window, kLightsShownKey)) {
+  const BOOL translated = objc_getAssociatedObject(window, kLightsShownKey) != nil;
+  NSValue *current = objc_getAssociatedObject(window, kLightsCenterKey);
+  const BOOL placed = ArdiaTrafficLightsTrailing(window) == trailing && (current == center || [current isEqual:center]);
+  if (placed && !translated) return;
+  [CATransaction begin];
+  [CATransaction setDisableActions:YES];
+  if (translated) {
     objc_setAssociatedObject(window, kLightsShownKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(window, kLightsMoveKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     TranslateTrafficLights(window, 0);
   }
-  const BOOL wasTrailing = ArdiaTrafficLightsTrailing(window);
-  NSValue *current = objc_getAssociatedObject(window, kLightsCenterKey);
-  if (wasTrailing == trailing && (current == center || [current isEqual:center])) return;
-  objc_setAssociatedObject(window, kLightsTrailingKey, trailing ? @YES : nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-  objc_setAssociatedObject(window, kLightsCenterKey, center, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-  RetileTrafficLights(window);
+  if (!placed) {
+    objc_setAssociatedObject(window, kLightsTrailingKey, trailing ? @YES : nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(window, kLightsCenterKey, center, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    RetileTrafficLights(window);
+  }
+  [CATransaction commit];
 }
 
 + (void)moveTrafficLightsCenter:(NSValue *)center trailing:(BOOL)trailing inWindow:(NSWindow *)window {
@@ -323,6 +338,14 @@ NSView *ArdiaWindowRootView(NSWindow *window) {
 
 + (BOOL (^)(NSWindow *, NSEvent *))refusesUnhandledKeyHandler {
   return gRefusesUnhandledKey;
+}
+
++ (void)setFocusHandoffSummaryHandler:(NSString *(^)(NSWindow *))handler {
+  gFocusHandoffSummary = [handler copy];
+}
+
++ (NSString *(^)(NSWindow *))focusHandoffSummaryHandler {
+  return gFocusHandoffSummary;
 }
 
 + (void)embedRootView:(NSView *)root inWindow:(NSWindow *)window {

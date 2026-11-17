@@ -14,6 +14,7 @@ import { devLocalStore, exportLocalCopy, flushLocal, localEventsSince, pruneLoca
 import { reportLocalStore } from "./localStoreReport";
 import { checkWatch, startWatch, stopWatch, watchStatus } from "./watch";
 import { startWatchNotice } from "./watchNotice";
+import { watchPressLoops } from "./pressLoops";
 import { reportIdentity, resetAnonymousId, telemetryIdentity } from "./identity";
 import { diagnosticsText } from "./diagnosticsSnapshot";
 
@@ -27,6 +28,7 @@ export function startTelemetry({ continuing = false }: { continuing?: boolean } 
   startUsage(continuing);
   watchPlatformCounts();
   startWatchNotice();
+  watchPressLoops();
   startDaily(onboardingCompletedAt() !== null);
   if (__DEV__) {
     (globalThis as { acTelemetry?: unknown }).acTelemetry = {

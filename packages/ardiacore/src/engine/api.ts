@@ -10,7 +10,7 @@ import type { HistoryChangedBatch, HistoryWireRow } from "../history";
 import type { FaviconImage } from "../favicons";
 import type { Download, DownloadSettings } from "../downloads";
 import type {
-  BatterySaverMode, BatterySaverState, CliControlStatus, CliTabTarget, EngineComponent, EngineInfo, EngineTask, HoverLostEpisode, MemorySaverRequest, MemorySaverState, PopupProtectedMedia, SystemState,
+  BatterySaverMode, BatterySaverState, CliControlStatus, CliTabTarget, EngineComponent, EngineInfo, EngineTask, HoverLostEpisode, MemorySaverRequest, PressLoopLongReport, MemorySaverState, PopupProtectedMedia, SystemState,
 } from "../engineDomain";
 import type { ExternalAppAllowance, PermissionRequest, PermissionResult } from "../permissions";
 import type { BrowsingDataType } from "../profiles";
@@ -185,7 +185,6 @@ export type EngineCalls = {
   "webView.setPeekOtherSiteTabs": [{ tabIds: string[] }, null];
   "webView.setSelectionPopover": [{ enabled: boolean }, null];
   "webView.setBlockAutoplayEverywhere": [{ enabled: boolean }, null];
-  "webView.setFairPlayInChromium": [{ enabled: boolean }, null];
   "webView.setCommandScrollZoom": [{ enabled: boolean }, null];
   "webView.setLittleArdiaOpensNewTabLinks": [{ enabled: boolean }, null];
   "webView.setPopupsOpenAsTabs": [{ enabled: boolean }, null];
@@ -214,6 +213,7 @@ export type EngineEvents = {
   "engine.hoverLost": HoverLostEpisode;
   "engine.popupProtectedMedia": PopupProtectedMedia;
   "engine.cursorRestored": { hidden: boolean };
+  "engine.pressLoopLong": PressLoopLongReport;
   "tabs.strips": TabStripTransaction;
   "downloads.changed": Download;
   "permissions.requested": PermissionRequest;

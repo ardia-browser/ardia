@@ -81,6 +81,7 @@ class TabBinding : public content::WebContentsObserver {
   std::unique_ptr<int> media;
   bool frozen = false;
   bool discard_reported = false;
+  bool wake_ready_pending = false;
   int reveals = 0;
   void Reveal() { ++reveals; }
   std::vector<std::pair<std::string, base::Value>> SnapshotExtras() {
@@ -104,6 +105,7 @@ class TabBinding : public content::WebContentsObserver {
   void RetirePage();
   std::unique_ptr<ardiacore::LinuxPageState> TakePage();
   void ReportPresentation(std::string name, base::DictValue data);
+  bool PresentNow(std::string name, base::DictValue data);
   void ReportNavigation();
   void Rebind(content::WebContents* contents);
   void WebContentsDestroyed() override;
@@ -345,7 +347,7 @@ class PageHostJoinTests(unittest.TestCase):
                 header.parent.mkdir(parents=True, exist_ok=True)
                 header.write_text(f'#include "{FIXTURE}"\n')
         host = HOST.read_text()
-        methods = [body(host, 'void TabBinding::' + name + '(') for name in ['AttachPage', 'RetirePage', 'ReportPresentation', 'ReportNavigation', 'Rebind', 'WebContentsDestroyed']]
+        methods = [body(host, 'void TabBinding::' + name + '(') for name in ['AttachPage', 'RetirePage', 'ReportPresentation', 'ReportNavigation', 'Rebind', 'WebContentsDestroyed']] + [body(host, 'bool TabBinding::PresentNow(')]
         methods.append(body(host, 'std::unique_ptr<ardiacore::LinuxPageState> TabBinding::TakePage('))
         methods.append(body(host, 'std::unique_ptr<ardiacore::LinuxPageState> ShellHostView::MountPage('))
         methods.append(body(host, 'void ShellHostView::ReplaceTabContents('))

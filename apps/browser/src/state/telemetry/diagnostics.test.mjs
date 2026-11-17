@@ -395,6 +395,17 @@ test("a lost-hover episode sends only its enums, flags and duration, capped per 
   assert.equal(healed.heal_worked, true);
   assert.equal(healed.ended_by, "heal");
   assert.equal(healed.lost_seconds, 3);
+  assert.equal(healed.responder, "unknown");
+  assert.equal(healed.cover_window, "none");
+  diagnostics.trackHoverLost({ ...episode, reason: "coveredByWindow", responder: "window", coverWindow: "other" });
+  diagnostics.trackHoverLost({ ...episode, responder: "Some View Class" });
+  await new Promise((resolve) => setTimeout(resolve, 1100));
+  await client.saveQueueNow();
+  const [covered, oddResponder] = events("page_hover_lost").slice(2).map((e) => e.properties);
+  assert.equal(covered.reason, "coveredByWindow");
+  assert.equal(covered.responder, "window");
+  assert.equal(covered.cover_window, "other");
+  assert.equal(oddResponder.responder, "unknown");
   assert.equal(odd.reason, "unknown");
   assert.equal(odd.key_window, "unknown");
   assert.equal(odd.ended_by, "unknown");

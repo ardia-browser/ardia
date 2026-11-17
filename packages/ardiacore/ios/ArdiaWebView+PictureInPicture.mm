@@ -2,8 +2,6 @@
 #import "ArdiaRuntime.h"
 #import "ArdiaLaunchConfig.h"
 #import "ArdiaPictureInPicture.h"
-#import "ArdiaProtectedVideo.h"
-#import "ArdiaHLSVideo.h"
 
 #import <objc/runtime.h>
 
@@ -154,8 +152,6 @@ BOOL TracingPictureInPicture() {
   const NSTimeInterval clickAt = TakeControlPress(clickMs, target, self.window);
   [self traceManualPictureInPicture:[NSString stringWithFormat:@"%@ %@ (control %ld)", clickMs > 0 ? @"click" : @"key or accessibility press", clickAt > 0 ? @"verified" : @"not verified", (long)target]];
   if (clickAt <= 0) return completion(NO);
-  if ([ArdiaProtectedVideo activeInTab:_tab]) return completion([ArdiaProtectedVideo startPictureInPictureInTab:_tab]);
-  if ([ArdiaHLSVideo activeInTab:_tab]) return completion([ArdiaHLSVideo startPictureInPictureInTab:_tab]);
   [self thawHiddenPage];
   __weak ArdiaWebView *weakSelf = self;
   [_tab enterPictureInPictureForClickAt:clickAt
@@ -180,7 +176,7 @@ BOOL TracingPictureInPicture() {
 
 - (BOOL)playsForAutoPictureInPicture {
   NSDictionary *np = _reports.nowPlaying.selected;
-  return _autoPictureInPicture && ([np[@"playbackState"] isEqual:@"playing"] || _reports.capturing || [ArdiaProtectedVideo playsInTab:_tab] || [ArdiaHLSVideo playsInTab:_tab]);
+  return _autoPictureInPicture && ([np[@"playbackState"] isEqual:@"playing"] || _reports.capturing);
 }
 
 - (BOOL)leftAppInPictureInPicture {
@@ -211,11 +207,6 @@ BOOL TracingPictureInPicture() {
 - (void)updateAutoPictureInPicture {
   if (!_tab) return;
   if (!_reports.seenByUser && self.playsForAutoPictureInPicture) {
-    if (([ArdiaProtectedVideo playsInTab:_tab] && [ArdiaProtectedVideo startPictureInPictureInTab:_tab]) ||
-        ([ArdiaHLSVideo playsInTab:_tab] && [ArdiaHLSVideo startPictureInPictureInTab:_tab])) {
-      _reports.autoPictureInPictureActive = YES;
-      return [self traceAutoPictureInPicture:@"app: auto PiP for the native protected video"];
-    }
     [self traceAutoPictureInPicture:@"app: auto PiP left to Chrome"];
   } else if (_reports.seenByUser && (_reports.autoPictureInPictureActive || _reports.inPictureInPicture)) {
     _reports.autoPictureInPictureActive = NO;
@@ -224,8 +215,6 @@ BOOL TracingPictureInPicture() {
 }
 
 - (void)exitPictureInPicture {
-  [ArdiaProtectedVideo exitPictureInPictureInTab:_tab];
-  [ArdiaHLSVideo exitPictureInPictureInTab:_tab];
   [_tab exitPictureInPicture];
 }
 

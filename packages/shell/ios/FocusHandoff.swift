@@ -61,6 +61,14 @@ final class FocusHandoff {
   private(set) var trace: [String] = []
   var afterPendingUI: (@escaping () -> Void) -> Void = { DispatchQueue.main.async(execute: $0) }
 
+  func summary(of window: NSWindow) -> String {
+    let epoch = keyEpochs.epoch(of: window.windowNumber)
+    guard let gate = gates[ObjectIdentifier(window)] else { return "key epoch \(epoch), no paste gate" }
+    let remaining = Int((gate.deadline - CACurrentMediaTime()) * 1000)
+    let state = remaining > 0 ? "open, \(remaining) ms left" : "expired \(-remaining) ms ago, not yet ended"
+    return "key epoch \(epoch), paste gate \(state), \(gate.generations.count) generations, \(gate.held.count) held"
+  }
+
   var gatesKeyWindow: Bool { NSApp.keyWindow.map { gates[ObjectIdentifier($0)] != nil } ?? false }
 
   @discardableResult
@@ -322,9 +330,16 @@ final class FocusHandoff {
     note("end restoring=\(restoring && gate.restoresSource)")
     drop(in: gate) { _ in true }
     close(gate)
-    guard restoring, gate.restoresSource, let window = gate.window, Self.unfocused(window), let page = gate.resigned,
-      page.window === window, !page.isHiddenOrHasHiddenAncestor else { return }
-    window.makeFirstResponder(page)
+    guard let window = gate.window, Self.unfocused(window) else { return }
+    if restoring, gate.restoresSource, let page = gate.resigned, page.window === window, !page.isHiddenOrHasHiddenAncestor {
+      window.makeFirstResponder(page)
+      return
+    }
+    afterPendingUI { [weak self, weak window] in
+      guard let self, let window, window.isKeyWindow, Self.unfocused(window), self.gates[ObjectIdentifier(window)] == nil else { return }
+      self.note("refocus page")
+      ArdiaWebView.focusVisiblePage(in: window)
+    }
   }
 
   private func close(_ gate: Gate) {

@@ -6,7 +6,6 @@ export const setSplitLinkModifier = (modifier: "alt" | "altShift") => call("webV
 export const setPeekOtherSiteTabs = (tabIds: string[]) => call("webView.setPeekOtherSiteTabs", { tabIds });
 export const setSelectionPopover = (enabled: boolean) => call("webView.setSelectionPopover", { enabled });
 export const setBlockAutoplayEverywhere = (enabled: boolean) => call("webView.setBlockAutoplayEverywhere", { enabled });
-export const setFairPlayInChromium = (enabled: boolean) => call("webView.setFairPlayInChromium", { enabled });
 export type SearchEngineIdentity = Pick<SearchEngine, "name" | "keyword" | "url">;
 
 export const setSearchEngineName = ({ name, keyword, url }: SearchEngineIdentity) =>

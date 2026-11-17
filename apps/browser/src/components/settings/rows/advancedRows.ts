@@ -55,13 +55,6 @@ export const advancedRows = {
           keywords: ["engine", "webkit", "chromium", "safari", "drm", "netflix", "fairplay", "widevine", "reset", "recommended", "use recommended default", "cookies", "site data", "sign in", "logged out", "separate sign-ins", "extensions", "ad blocker", "ublock", "content blocker", "extensions and ad blocking are chromium only", "passkey", "webauthn", "icloud keychain", "passwords app", "security key", "passkeys"],
           shown: webKitOffered,
         },
-        fairPlayInChromium: {
-          title: "FairPlay in Chromium",
-          explained: true,
-          description: "Plays FairPlay sites like Spotify in Chromium instead of WebKit.",
-          keywords: ["fairplay", "spotify", "drm", "chromium", "helper", "protected", "music", "video", "streaming", "play protected media in chromium with fairplay"],
-          shown: webKitOffered,
-        },
         websiteEngines: {
           title: "Engine per site",
           description: "Sites that always open in a chosen engine.",

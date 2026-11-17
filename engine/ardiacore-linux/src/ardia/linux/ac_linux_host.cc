@@ -25,6 +25,7 @@
 #include "ardia/linux/ac_linux_report_core.h"
 #include "ardia/linux/ac_linux_sidebar_edge.h"
 #include "ardia/linux/ac_linux_status_geometry.h"
+#include "ardia/linux/ac_linux_switcher_keys.h"
 #include "ardia/linux/ac_linux_auto_pip_service.h"
 #include "ardia/linux/ac_linux_automation_window.h"
 #include "ardia/linux/ac_linux_capture.h"
@@ -988,6 +989,8 @@ class TabBinding : public content::WebContentsObserver {
   std::unique_ptr<ardiacore::LinuxPageState> TakePage();
   std::vector<int> replaced_ids;
   void ReportPresentation(std::string name, base::DictValue data);
+  bool PresentNow(std::string name, base::DictValue data);
+  void ReportWoke();
   void ReportOpened(content::WebContents* opened, const GURL& url, std::string_view disposition, bool link = false);
   base::WeakPtr<TabBinding> GetWeakPtr() { return weak_factory_.GetWeakPtr(); }
   void MoveTo(ShellHostView* owner);
@@ -1005,6 +1008,7 @@ class TabBinding : public content::WebContentsObserver {
   std::unique_ptr<ardiacore::LinuxPageMedia> media;
   bool frozen = false;
   bool discard_reported = false;
+  bool wake_ready_pending = false;
   std::unique_ptr<ardiacore::LinuxPageCommands> page_commands;
   std::optional<ardiacore::LinuxPageRequest> page_command_request;
   std::unique_ptr<DevToolsFrontendWatch> devtools_watch;
@@ -1518,11 +1522,14 @@ class ShellHostView : public views::View,
   struct StartupTab {
     GURL url;
     base::WeakPtr<content::WebContents> contents;
+    std::string key;
   };
   std::optional<StartupTab> startup_tab_;
   base::OneShotTimer startup_tab_timer_;
   void StartStartupTab();
   void StartedStartupTab(std::optional<linux_startup_tab::StartupTab> saved);
+  void OpenStartupTab(linux_startup_tab::StartupTab saved, std::string history);
+  content::WebContents* TakeStartupTabForKey(const std::string& key, const GURL& url, Profile* profile);
   content::WebContents* TakeStartupTab(const GURL& url, TabStripModel* model);
   void DropStartupTab();
   friend class HostMessageHandler;
@@ -2715,29 +2722,51 @@ void ShellHostView::StartedStartupTab(std::optional<linux_startup_tab::StartupTa
   if (!saved || !browser_ || !bindings_.empty() || startup_tab_) return;
   const GURL url(saved->url);
   if (!url.is_valid() || !url.SchemeIsHTTPOrHTTPS()) return;
+  const std::string key = saved->tab_id;
+  const std::string address = saved->url;
+  ardiacore::ReadLinuxSavedTabHistory(browser_->GetProfile(), key, address,
+                                      base::BindOnce(&ShellHostView::OpenStartupTab, GetWeakPtr(), std::move(*saved)));
+}
+
+void ShellHostView::OpenStartupTab(linux_startup_tab::StartupTab saved, std::string history) {
+  if (!browser_ || !bindings_.empty() || startup_tab_) return;
+  const GURL url(saved.url);
   TabStripModel* model = browser_->GetTabStripModel();
-  content::WebContents* contents = nullptr;
-  for (int index = 0; index < model->count() && !contents; ++index) {
-    content::WebContents* candidate = model->GetWebContentsAt(index);
-    if (BlankTabUrl(candidate->GetVisibleURL()) && !TabClaimed(candidate)) contents = candidate;
-  }
+  content::WebContents* contents = history.empty() ? nullptr : InsertRestored(browser_->GetProfile(), history);
   if (contents) {
-    content::NavigationController::LoadURLParams params(url);
-    params.transition_type = ui::PAGE_TRANSITION_TYPED;
-    contents->GetController().LoadURLWithParams(params);
+    contents->GetController().LoadIfNecessary();
+    for (int index = model->count() - 1; index >= 0; --index) {
+      content::WebContents* candidate = model->GetWebContentsAt(index);
+      if (candidate == contents || !BlankTabUrl(candidate->GetVisibleURL()) || TabClaimed(candidate)) continue;
+      const auto weak = GetWeakPtr();
+      app_operation_ = true;
+      model->CloseWebContentsAt(index, TabCloseTypes::CLOSE_NONE);
+      if (!weak) return;
+      app_operation_ = false;
+    }
   } else {
-    NavigateParams navigation(browser_.get(), url, ui::PAGE_TRANSITION_TYPED);
-    navigation.disposition = WindowOpenDisposition::NEW_BACKGROUND_TAB;
-    navigation.window_action = NavigateParams::WindowAction::kNoAction;
-    const auto weak = GetWeakPtr();
-    app_operation_ = true;
-    Navigate(&navigation);
-    if (!weak) return;
-    app_operation_ = false;
-    contents = navigation.navigated_or_inserted_contents;
+    for (int index = 0; index < model->count() && !contents; ++index) {
+      content::WebContents* candidate = model->GetWebContentsAt(index);
+      if (BlankTabUrl(candidate->GetVisibleURL()) && !TabClaimed(candidate)) contents = candidate;
+    }
+    if (contents) {
+      content::NavigationController::LoadURLParams params(url);
+      params.transition_type = ui::PAGE_TRANSITION_TYPED;
+      contents->GetController().LoadURLWithParams(params);
+    } else {
+      NavigateParams navigation(browser_.get(), url, ui::PAGE_TRANSITION_TYPED);
+      navigation.disposition = WindowOpenDisposition::NEW_BACKGROUND_TAB;
+      navigation.window_action = NavigateParams::WindowAction::kNoAction;
+      const auto weak = GetWeakPtr();
+      app_operation_ = true;
+      Navigate(&navigation);
+      if (!weak) return;
+      app_operation_ = false;
+      contents = navigation.navigated_or_inserted_contents;
+    }
   }
   if (!contents || TabId(contents) <= 0) return;
-  startup_tab_ = StartupTab{url, contents->GetWeakPtr()};
+  startup_tab_ = StartupTab{url, contents->GetWeakPtr(), saved.tab_id};
   startup_tab_timer_.Start(FROM_HERE, base::Milliseconds(linux_startup_tab::kUnclaimedCloseMs),
                            base::BindOnce(&ShellHostView::DropStartupTab, base::Unretained(this)));
 }
@@ -2748,6 +2777,19 @@ content::WebContents* ShellHostView::TakeStartupTab(const GURL& url, TabStripMod
   if (!contents || startup_tab_->url != url || model->GetIndexOfWebContents(contents) == TabStripModel::kNoTab ||
       TabClaimed(contents)) {
     return nullptr;
+  }
+  startup_tab_.reset();
+  startup_tab_timer_.Stop();
+  return contents;
+}
+
+content::WebContents* ShellHostView::TakeStartupTabForKey(const std::string& key, const GURL& url,
+                                                         Profile* profile) {
+  if (!startup_tab_ || key.empty() || startup_tab_->key != key || startup_tab_->url != url) return nullptr;
+  content::WebContents* contents = startup_tab_->contents.get();
+  if (!contents || contents->GetBrowserContext() != profile || !OwnerOf(contents)) return nullptr;
+  for (const auto& [window, host] : Hosts()) {
+    if (host->BindsTab(contents)) return nullptr;
   }
   startup_tab_.reset();
   startup_tab_timer_.Stop();
@@ -4621,11 +4663,12 @@ bool ShellHostView::AcceleratorPressed(const ui::Accelerator& accelerator) {
   const base::DictValue& binding = found->second;
   const std::string command = String(binding, "command");
   if (switcher_capture_) {
-    std::string key;
-    if (accelerator.key_code() == ui::VKEY_ESCAPE) key = "escape";
-    if (accelerator.key_code() == ui::VKEY_RIGHT) key = "next";
-    if (accelerator.key_code() == ui::VKEY_LEFT) key = "previous";
-    if (!key.empty()) {
+    const char* key = ardia::linux_switcher::SwitcherKey({.key_code = accelerator.key_code(),
+                                                          .control = accelerator.IsCtrlDown(),
+                                                          .alt = accelerator.IsAltDown(),
+                                                          .command = accelerator.IsCmdDown(),
+                                                          .repeat = accelerator.IsRepeat()});
+    if (key) {
       Event("ArdiaShell", "onAppEvent", base::Value(base::DictValue()
           .Set("type", "switcherKey").Set("key", key)));
       return true;
@@ -5320,6 +5363,9 @@ void ShellHostView::CreateTabFromSavedHistory(Profile* profile, const base::Dict
   base::DictValue plain = args.Clone();
   plain.Set(ardiacore::linux_saved_history::kReadArg, true);
   const std::string key = String(args, "key");
+  if (content::WebContents* startup = TakeStartupTabForKey(key, GURL(String(args, "url")), profile)) {
+    return CreateTabAdopting(profile, std::move(plain), startup, std::move(done));
+  }
   const uint64_t ticket = ++restore_tickets_;
   pending_restores_[key] = ticket;
   ardiacore::ReadLinuxSavedTabHistory(profile, key, String(args, "url"), base::BindOnce(
@@ -7558,7 +7604,16 @@ void TabBinding::RetirePage() {
 }
 
 void TabBinding::ReportPresentation(std::string name, base::DictValue data) {
-  if (page_) page_->EmitPresentation(std::move(name), base::Value(std::move(data)));
+  PresentNow(std::move(name), std::move(data));
+}
+
+bool TabBinding::PresentNow(std::string name, base::DictValue data) {
+  return page_ && page_->EmitPresentation(std::move(name), base::Value(std::move(data)));
+}
+
+void TabBinding::ReportWoke() {
+  if (!wake_ready_pending) return;
+  wake_ready_pending = !PresentNow("ready", base::DictValue());
 }
 
 void TabBinding::StartMedia() {
@@ -7621,13 +7676,14 @@ std::vector<std::pair<std::string, base::Value>> TabBinding::SnapshotExtras() {
 void TabBinding::WasDiscarded() {
   if (!contents_ || discard_reported || !contents_->WasDiscarded()) return;
   discard_reported = true;
+  wake_ready_pending = false;
   ReportPresentation("discarded", base::DictValue().Set("url", DiscardedUrl(contents_)));
 }
 
 void TabBinding::DidStartNavigation(content::NavigationHandle* handle) {
   if (!contents_ || !discard_reported || !handle->IsInPrimaryMainFrame() || contents_->WasDiscarded()) return;
   discard_reported = false;
-  ReportPresentation("ready", base::DictValue());
+  wake_ready_pending = !PresentNow("ready", base::DictValue());
 }
 
 void TabBinding::Rebind(content::WebContents* contents) {
@@ -7649,6 +7705,7 @@ void TabBinding::Rebind(content::WebContents* contents) {
   contents_ = contents;
   frozen = false;
   discard_reported = false;
+  wake_ready_pending = false;
   StartMedia();
   ardiacore::TrackLinuxAutofillFocus(contents_);
   if (viewport_ && viewport_->GetVisible()) viewport_->SetWebContents(contents);
@@ -7769,6 +7826,10 @@ void TabBinding::DidFinishNavigation(content::NavigationHandle* handle) {
     const net::HttpResponseHeaders* headers = handle->GetResponseHeaders();
     commits_.Note(static_cast<double>(base::Time::Now().InMillisecondsSinceUnixEpoch()),
                   headers ? headers->response_code() : 0);
+    if (wake_ready_pending) {
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, base::BindOnce(&TabBinding::ReportWoke, GetWeakPtr()));
+    }
   }
   ReportNavigation();
 }

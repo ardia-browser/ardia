@@ -79,7 +79,7 @@ final class SearchSuggestionsModel {
     }
     if !rows.contains(where: { $0.kind == .query && $0.title.caseInsensitiveCompare(trimmed) == .orderedSame }) {
       rows.removeAll { $0.id == SearchSuggestion.query(trimmed).id }
-      rows.insert(.query(trimmed), at: min(isCurrent ? 1 : 0, rows.count))
+      rows.insert(.query(trimmed), at: min(1, rows.count))
       if rows.count > Self.rowLimit { rows.removeLast() }
     }
     return rows

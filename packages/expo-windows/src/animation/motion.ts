@@ -1,7 +1,5 @@
 import type { MotionBurst, MotionNative } from "@ardia/shell";
 import type { Running as Animation } from "./index";
-import { createFrameQueue } from "./frameQueue";
-import { nativeFrameDriver } from "./nativeFrameClock";
 
 type Running = Pick<Animation, "__active">;
 type Frame = (time: number) => void;
@@ -17,19 +15,43 @@ const REPORT_AFTER_FRAMES = 3;
 const now = () => performance.now();
 const timers = globalThis as unknown as Timers;
 
+let waiting = new Map<number, Frame>();
+let turn = new Map<number, Frame>();
+let lastId = 0;
+let due = 0;
+let timer: ReturnType<typeof setTimeout> | null = null;
+
 const report = (error: unknown) => console.error("[ardia windows] an animation frame failed", error);
-const frames = createFrameQueue(now, report);
+
+function runFrame() {
+  timer = null;
+  const time = now();
+  due = Math.max(due + FRAME_MS, time + FRAME_MS / 2);
+  turn = waiting;
+  waiting = new Map();
+  for (const [id, frame] of turn) {
+    turn.delete(id);
+    try {
+      frame(time);
+    } catch (error) {
+      report(error);
+    }
+  }
+}
 
 export function requestFrame(frame: Frame): number {
-  return frames.request(frame);
+  const id = ++lastId;
+  waiting.set(id, frame);
+  if (timer === null) timer = setTimeout(runFrame, Math.max(0, due - now()));
+  return id;
 }
 
 export function cancelFrame(id: number) {
-  frames.cancel(id);
+  waiting.delete(id);
+  turn.delete(id);
 }
 
 export function installFramePacing() {
-  frames.useDriver(nativeFrameDriver());
   timers.requestAnimationFrame = requestFrame;
   timers.cancelAnimationFrame = cancelFrame;
 }
@@ -64,7 +86,7 @@ function watch(time: number) {
   watching = false;
   if (burst.frames < REPORT_AFTER_FRAMES) return;
   const ended: MotionBurst = { frames: burst.frames, milliseconds: Math.round(time - burst.startedAt), longest: Math.round(burst.longest), long: burst.long };
-  console.log(`[ardia windows] motion ${ended.frames} frames in ${ended.milliseconds} ms, longest ${ended.longest} ms, ${ended.long} long, ${frames.usesNativeClock() ? "native" : "fallback"} clock`);
+  console.log(`[ardia windows] motion ${ended.frames} frames in ${ended.milliseconds} ms, longest ${ended.longest} ms, ${ended.long} long`);
   each(burstListeners, (listen) => listen(ended));
 }
 

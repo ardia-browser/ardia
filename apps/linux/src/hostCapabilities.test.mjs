@@ -61,10 +61,10 @@ test("the command bar's Dictate button follows the dictation capability: off whi
 });
 
 test("unavailable choices map to exact settings ids and the Web engine rows", () => {
-  const ids = ["general.defaultBrowser", "general.openAtLogin", "general.askBefore", "advanced.pageEngine", "advanced.fairPlayInChromium", "advanced.websiteEngines", "profiles.otherEngines", "advanced.ardiaCommand", "advanced.compactCliPill", "advanced.showFullUrl", "tabs.videoUpscaling", "tabs.autoPictureInPicture"];
+  const ids = ["general.defaultBrowser", "general.openAtLogin", "general.askBefore", "advanced.pageEngine", "advanced.websiteEngines", "profiles.otherEngines", "advanced.ardiaCommand", "advanced.compactCliPill", "advanced.showFullUrl", "tabs.videoUpscaling", "tabs.autoPictureInPicture"];
   const unrouted = ["tabs.openLinksInLittleArdia", "tabs.appLinksFirst", "tabs.peekLinksToOtherSites", "tabs.popupsOpenAsTabs"];
   const routedRows = { peekOtherSites: true, popupsOpenAsTabs: true, linksFromOtherApps: true };
-  const webEngine = ["advanced.fairPlayInChromium", "advanced.pageEngine", "advanced.websiteEngines"];
+  const webEngine = ["advanced.pageEngine", "advanced.websiteEngines"];
   const none = linuxCapabilities(fakeHost().host);
   assert.deepEqual([...unavailableSettingIds(none, ids)].sort(), [...unrouted, ...webEngine, "advanced.ardiaCommand", "advanced.compactCliPill", "general.autoUpdate", "general.defaultBrowser", "general.openAtLogin", "tabs.videoUpscaling"].sort());
   for (const [capability, rows] of Object.entries({ peekOtherSites: ["tabs.peekLinksToOtherSites"], popupsOpenAsTabs: ["tabs.popupsOpenAsTabs"], linksFromOtherApps: ["tabs.openLinksInLittleArdia", "tabs.appLinksFirst"] })) {
@@ -278,7 +278,7 @@ test("the native bootstrap advertises every route list, and every shared perform
   const used = uses.map((use) => use.name);
   for (const call of ["engine.memorySaver", "engine.validateKeepActiveSite", "engine.tasks"]) assert.ok(used.includes(call), call);
   const gated = { "engine.beginTracing": "performanceRecording", "engine.endTracing": "performanceRecording", "engine.isTracing": "performanceRecording" };
-  const macOnlyEvents = new Set(["engine.hoverLost", "engine.cursorRestored", "engine.popupProtectedMedia"]);
+  const macOnlyEvents = new Set(["engine.hoverLost", "engine.cursorRestored", "engine.pressLoopLong", "engine.popupProtectedMedia"]);
   for (const name of macOnlyEvents) assert.deepEqual(uses.filter((use) => use.name === name).map((use) => use.kind), ["on"], `${name} is only listened to`);
   const none = linuxCapabilities(fakeHost().host);
   for (const call of used) {

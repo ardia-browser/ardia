@@ -292,7 +292,6 @@ BOOL Above(NSView *a, NSView *b) {
   if (_frameHold.awaiting && !_visible && !_reveal.active) [self finishFrameHold];
   if (_visible || _reveal.active) [self exposePage];
   if (_visible) [self sinkLingeringPane];
-  if (_visible) [self takeFocusFromLingeringPane];
   [self beginFrameHoldIfCold];
   [CATransaction begin];
   [CATransaction setDisableActions:YES];
@@ -304,6 +303,7 @@ BOOL Above(NSView *a, NSView *b) {
     AcceptDrops(sub, _visible);
   }
   [CATransaction commit];
+  if (_visible) [self takeFocusFromLingeringPane];
   if (TraceVisibility())
     NSLog(@"[ardiacore-vis] %@ paint visible=%d warm=%d tab=%d page=%@ inWindow=%ld hiddenAncestor=%d alpha=%d reveal=%d awaiting=%d",
           _transferKey, _visible, _warm, _tab ? (int)_tab.tabId : -1, _tab.view.superview == self ? @"here" : @"elsewhere",
@@ -552,7 +552,7 @@ BOOL Above(NSView *a, NSView *b) {
   NSView *lingering = focused ? LingeringPaneOver(self) : nil;
   if (!lingering || ![focused isDescendantOf:lingering]) return;
   if (TraceVisibility()) NSLog(@"[ardiacore-vis] %@ takes focus from the lingering New Tab pane", _transferKey);
-  [window makeFirstResponder:nil];
+  if ([window makeFirstResponder:nil]) [self focusAfterLingeringPane];
 }
 
 - (void)sinkLingeringPane {

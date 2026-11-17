@@ -117,10 +117,12 @@ extension MainMenu {
     if bound != announcedShortcuts {
       announcedShortcuts = bound
       ArdiaHost.menuShortcutsChanged()
+      LittleArdiaHotKey.shared.shortcutsChanged()
     }
   }
 
   static func applyShortcuts(_ bindings: [String: [[String]]]) {
+    LittleArdiaHotKey.bindingHoldsFunction = LittleArdiaHotKey.holdsFunction(bindings)
     defer { announceShortcuts() }
     for (id, group) in shortcutGroups() {
       guard let bound = bindings[id] else {

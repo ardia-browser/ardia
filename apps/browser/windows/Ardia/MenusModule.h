@@ -17,6 +17,7 @@ namespace Ardia {
 REACT_MODULE(MenusModule, L"ArdiaMenus")
 struct MenusModule {
   using JSValue = winrt::Microsoft::ReactNative::JSValue;
+  using JSValueObject = winrt::Microsoft::ReactNative::JSValueObject;
   using Promise = winrt::Microsoft::ReactNative::ReactPromise<JSValue>;
   using DonePromise = winrt::Microsoft::ReactNative::ReactPromise<void>;
 
@@ -30,7 +31,7 @@ struct MenusModule {
   REACT_METHOD(showMenu)
   void showMenu(JSValue items, Promise promise) noexcept {
     auto parsed = std::make_shared<std::vector<Menus::PopupItem>>(Menus::PopupItemsOf(items));
-    RunOnUI(m_context, [parsed, promise]() noexcept {
+    RunOnUI(m_context, [context = m_context, parsed, promise]() noexcept {
       try {
         Menus::MenuLog("showMenu asked: " + std::to_string(Menus::VisibleItemCount(*parsed)) + " items");
         if (Menus::TestFlag(L"appMenu")) {
@@ -43,15 +44,58 @@ struct MenusModule {
           promise.Resolve(JSValue{nullptr});
           return;
         }
-        Menus::MenuKeyboard &keyboard = Menus::MenuKeyboard::Shared();
-        keyboard.trackingMenu = true;
-        std::optional<std::string> chosen = Menus::TrackPopup(*parsed, Menus::MenuOwnerWindow());
-        keyboard.trackingMenu = false;
-        promise.Resolve(chosen ? JSValue{std::string{*chosen}} : JSValue{nullptr});
+        std::shared_ptr<Menus::Popup> popup = Menus::PreparePopup(*parsed, Menus::MenuOwnerWindow());
+        if (!popup) return promise.Resolve(JSValue{nullptr});
+        popup->pageLeft = Menus::MenuKeyboard::Shared().PageTheMenuPressLeft(popup->owner);
+        bool started = DialogParts::RunModal(popup->owner, [context, popup, promise](bool usable) noexcept {
+          if (usable) Menus::TrackOnThisThread(*popup, true);
+          if (DialogParts::Stopping()) return;
+          RunOnUI(context, [context, popup, promise]() noexcept {
+            if (DialogParts::ModalRegistry::Shared().withheldResign.exchange(false) && !Menus::ForegroundIsOurs()) EmitEvent(context, L"ArdiaShell", L"onAppEvent", JSValueObject{{"type", "resignActive"}});
+            Menus::MenuKeyboard::Shared().ReconcileAfterMenu();
+            std::optional<std::string> chosen = Menus::ChoiceOf(*popup);
+            if (popup->pageLeft) Menus::MenuKeyboard::Shared().GivePageBackAfterMenu(*popup->pageLeft, chosen.has_value());
+            promise.Resolve(chosen ? JSValue{std::string{*chosen}} : JSValue{nullptr});
+          });
+        });
+        if (!started) {
+          Menus::ChoiceOf(*popup);
+          promise.Resolve(JSValue{nullptr});
+        }
       } catch (...) {
-        Menus::MenuKeyboard::Shared().trackingMenu = false;
         promise.Resolve(JSValue{nullptr});
       }
+    });
+  }
+
+  REACT_SYNC_METHOD(openCount)
+  int openCount() noexcept {
+    return Menus::OpenMenus().load();
+  }
+
+  REACT_METHOD(devHoldMenu)
+  void devHoldMenu(std::string windowId, bool onUiThread, winrt::Microsoft::ReactNative::ReactPromise<bool> promise) noexcept {
+    if (!AppLaunch::Shared().testInstance) return promise.Reject("held menus are for test instances only");
+    RunOnUI(m_context, [context = m_context, promise, windowId, onUiThread]() noexcept {
+      std::vector<Menus::PopupItem> items(1);
+      items[0].id = "held";
+      items[0].title = "Self-check: a held menu";
+      std::shared_ptr<Menus::Popup> popup = Menus::PreparePopup(items, WindowManager::Shared().Hwnd(windowId));
+      if (!popup) return promise.Resolve(false);
+      bool foreground = !WindowManager::Background();
+      if (onUiThread) {
+        Menus::TrackOnThisThread(*popup, foreground);
+        return promise.Resolve(Menus::ChoiceOf(*popup).has_value());
+      }
+      bool started = DialogParts::RunModal(popup->owner, [context, popup, promise, foreground](bool usable) noexcept {
+        if (usable) Menus::TrackOnThisThread(*popup, foreground);
+        if (DialogParts::Stopping()) return;
+        RunOnUI(context, [popup, promise]() noexcept {
+          Menus::MenuKeyboard::Shared().ReconcileAfterMenu();
+          promise.Resolve(Menus::ChoiceOf(*popup).has_value());
+        });
+      });
+      if (!started) promise.Resolve(Menus::ChoiceOf(*popup).has_value());
     });
   }
 

@@ -308,7 +308,6 @@ The only variables the app and engine read, through `ArdiaLaunchConfig` (`packag
 | | `pip` · `pipZoom` | PiP windows to `/tmp/ac-pip-trace.log` · PiP zoom gestures, `[pip-zoom]` |
 | | `trafficLights` | Every traffic-light change to `<data dir>/traffic-lights.log` |
 | | `profileGate` | The browser process's parsed and gated command lines, at startup and after chrome://flags |
-| | `protectedVideo` | The Netflix and Disney+ FairPlay bridge (keys, the local HLS server, the player's state each second), `[protectedVideo]` in the system log; YouTube's FairPlay HLS bridge (`ArdiaHLSVideo`: key requests, CKCs, the player each second, PiP) as `[hlsVideo]` |
 | `ARDIA_TEST` | `keychain=file` (+ `keychainHiddenReads=<n>`, `keychainFail=decode\|denied\|interaction\|entitlement\|io`) | A file-backed keychain in the data dir instead of the login keychain |
 | | `safeStorageAnswer=start-over` | Answers the Safe Storage dialog with Start Over (background mode) |
 | | `reauth=granted` | Grants macOS re-auth requests in background mode (otherwise refused) |
@@ -320,8 +319,6 @@ The only variables the app and engine read, through `ArdiaLaunchConfig` (`packag
 | | `systemLocationPermission=ask\|denied\|granted` | The app's macOS location access (`ArdiaLocation`): `ask` is not determined and a request answers Allow. A background instance never asks macOS and reads as not determined without it |
 | | `appMenu` · `appDialog` | The app's own menus (`showMenu`) dump to `<data dir>/menu.json` and take their pick from `….pick` · `confirm` and `prompt` dump to `dialog.json` and take their answer from `….pick` |
 | | `pipSelfTest=close\|backToTab\|hover\|style` · `pipHover=close\|back` | PiP self-tests on the first PiP window (background mode), results in the data dir |
-| | `videoMirror` | The video controls mirror runs on any page's playing `<video>` and shows without protected playback; its timings go to `<data dir>/video-mirror.json` and a snapshot of the mirror to `video-mirror.png` |
-| | `protectedVideoOrigin=http://127.0.0.1:<port>` | The Netflix and Disney+ FairPlay bridge also serves that local origin's `/play/` pages, so a clear fMP4 test page drives it end to end (with the FairPlay in Chromium setting on) |
 | | `fakeFullScreenMs=<ms>` | Length of the acted-out full-screen transition |
 | | `shadersKeyWindow` | Metal views act as in the key window (the New Tab intro) |
 | | `peekStrict` | Peek's test hooks stop relaxing its click checks |

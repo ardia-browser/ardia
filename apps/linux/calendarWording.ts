@@ -32,7 +32,7 @@ export const CALENDAR_WORDING: readonly Wording[] = [
       ],
       [
         "Allow Ardia in System Settings › Privacy & Security › Calendars to see your meetings here.",
-        "Ardia can't read your calendars from Evolution Data Server. Settings › Calendar shows how to fix it.",
+        "Ardia can't read your calendars from Evolution Data Server. Settings › Automations › Calendar shows how to fix it.",
       ],
     ],
   },

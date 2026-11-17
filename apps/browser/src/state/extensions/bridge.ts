@@ -21,6 +21,7 @@ import {
   refreshExtensions,
   refreshExtensionsAfterChange,
   wantedSidePanels,
+  watchSidePanelCards,
   syncSidePanel,
   useExtensions,
   windowExtensions,
@@ -71,6 +72,7 @@ function startActionPopups() {
 }
 
 function startSidePanels() {
+  watchSidePanelCards();
   onExtensionSidePanel(({ tabId, extensionId, open }) => {
     const windowId = tabId ? useBrowser.getState().tabs[tabId]?.windowId : undefined;
     if (!windowId) return;

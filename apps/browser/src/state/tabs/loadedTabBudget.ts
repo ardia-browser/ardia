@@ -40,7 +40,7 @@ export function loadedTabBudget(settings: Pick<Settings, "memorySaver" | "memory
   return { tabs: Math.max(mode.floor, Math.round((sys.physicalMemory / GIB) * mode.perGib)), hiddenMs: mode.hiddenMs };
 }
 
-function inUse(s: BrowserState, id: string): boolean {
+export function inUse(s: BrowserState, id: string): boolean {
   const media = useMedia.getState();
   const access = usePages.getState().pages[id]?.mediaAccess;
   return (

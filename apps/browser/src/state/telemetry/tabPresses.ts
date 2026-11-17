@@ -60,7 +60,7 @@ export function noteRowPress(shownTabEmpty: boolean): Promise<void> {
   });
 }
 
-useTelemetry.subscribe((s, prev) => prev.sharing && !s.sharing && forgetPresses());
+useTelemetry.subscribe((s, prev) => prev.sharing !== s.sharing && forgetPresses());
 
 export function notePressStarted(switchedOnPress = false) {
   if (pending) tally.unanswered++;

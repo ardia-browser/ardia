@@ -43,10 +43,10 @@ test("Linux capabilities come from the host contract, and WebKit is never offere
   assert.deepEqual(linuxCapabilities(fakeHost().host), {
     defaultBrowser: false, launchAtLogin: false, thinScrollBars: false, webkit: false, cliControl: false, cliInstall: false, userScripts: false, externalLinks: false, performanceRecording: false, taskManager: false, videoUpscaling: false,
     commandScrollZoom: false, littleArdiaNewTabLinks: false, peekOtherSites: false, popupsOpenAsTabs: false, haptics: false, linksFromOtherApps: false, dictation: false, fullScreen: false, pageEdits: false,
-    unloadIdleProfiles: false, hiddenElements: false, blockAutoplayEverywhere: false,
+    unloadIdleProfiles: false, hiddenElements: false, blockAutoplayEverywhere: false, topicModel: false,
   });
   const full = linuxCapabilities(fakeHost(["ArdiaSystem.isDefaultBrowser", "ArdiaSystem.setAsDefaultBrowser", "ArdiaSystem.launchAtLoginStatus", "ArdiaSystem.setLaunchAtLogin", "ArdiaSystem.setThinScrollBars", "engine.beginTracing", "engine.endTracing", "engine.isTracing", "engine.openTaskManager", "ArdiaApp.openExternalURL"]).host);
-  assert.deepEqual(full, { defaultBrowser: true, launchAtLogin: true, thinScrollBars: true, webkit: false, cliControl: false, cliInstall: false, userScripts: false, externalLinks: true, performanceRecording: true, taskManager: true, videoUpscaling: false, commandScrollZoom: false, littleArdiaNewTabLinks: false, peekOtherSites: false, popupsOpenAsTabs: false, haptics: false, linksFromOtherApps: false, dictation: false, fullScreen: false, pageEdits: false, unloadIdleProfiles: false, hiddenElements: false, blockAutoplayEverywhere: false });
+  assert.deepEqual(full, { defaultBrowser: true, launchAtLogin: true, thinScrollBars: true, webkit: false, cliControl: false, cliInstall: false, userScripts: false, externalLinks: true, performanceRecording: true, taskManager: true, videoUpscaling: false, commandScrollZoom: false, littleArdiaNewTabLinks: false, peekOtherSites: false, popupsOpenAsTabs: false, haptics: false, linksFromOtherApps: false, dictation: false, fullScreen: false, pageEdits: false, unloadIdleProfiles: false, hiddenElements: false, blockAutoplayEverywhere: false, topicModel: false });
   const routed = linuxCapabilities(fakeHost(["webView.setCommandScrollZoom", "webView.setLittleArdiaOpensNewTabLinks", "webView.setPeekOtherSiteTabs", "ArdiaSystem.hapticTick", LINKS_FROM_OTHER_APPS, DICTATION_METHOD]).host);
   assert.deepEqual([routed.commandScrollZoom, routed.littleArdiaNewTabLinks, routed.peekOtherSites, routed.haptics, routed.linksFromOtherApps, routed.dictation], [true, true, true, true, true, true]);
   assert.equal(linuxCapabilities(undefined).taskManager, false);
@@ -62,8 +62,8 @@ test("the command bar's Dictate button follows the dictation capability: off whi
 
 test("unavailable choices map to exact settings ids and the Web engine rows", () => {
   const ids = ["general.defaultBrowser", "general.openAtLogin", "general.askBefore", "advanced.pageEngine", "advanced.websiteEngines", "profiles.otherEngines", "advanced.ardiaCommand", "advanced.compactCliPill", "advanced.showFullUrl", "tabs.videoUpscaling", "tabs.autoPictureInPicture"];
-  const unrouted = ["tabs.openLinksInLittleArdia", "tabs.appLinksFirst", "tabs.littleArdiaOpensNewTabLinks", "tabs.peekLinksToOtherSites", "tabs.popupsOpenAsTabs"];
-  const routedRows = { littleArdiaNewTabLinks: true, peekOtherSites: true, popupsOpenAsTabs: true, linksFromOtherApps: true };
+  const unrouted = ["tabs.openLinksInLittleArdia", "tabs.appLinksFirst", "tabs.littleArdiaOpensNewTabLinks", "tabs.peekLinksToOtherSites", "tabs.popupsOpenAsTabs", "tabs.tidyTopicTabs"];
+  const routedRows = { littleArdiaNewTabLinks: true, peekOtherSites: true, popupsOpenAsTabs: true, linksFromOtherApps: true, topicModel: true };
   const webEngine = ["advanced.pageEngine", "advanced.websiteEngines"];
   const none = linuxCapabilities(fakeHost().host);
   assert.deepEqual([...unavailableSettingIds(none, ids)].sort(), [...unrouted, ...webEngine, "advanced.ardiaCommand", "advanced.compactCliPill", "general.autoUpdate", "general.defaultBrowser", "general.openAtLogin", "tabs.videoUpscaling"].sort());

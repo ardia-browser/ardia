@@ -218,6 +218,14 @@ writeDocument(DOC, versionedJson(data, VERSION));
   `bookmarks.json` / `history.json`, which are migration inputs read once. The sync payload (log and snapshot files,
   `v: 1`) and `switches-cache.json` have their own versions.
 
+## Workspaces
+
+- Two pnpm workspaces. The root one is the Mac app and its packages (`apps/browser`, `packages/*` but
+  `packages/phone`), on the Mac's Expo and react-native-macos. `apps/phone` is its own workspace with `packages/phone`,
+  on the phone's Expo and React Native, with its own lockfile (docs/phone.md › Layout). They share only `@ardia/core`,
+  plain TypeScript linked into the phone.
+- A package belongs to one workspace, never both. Install each from its own root under `scripts/agent/locked pod`.
+
 ## Files
 
 - Components are `PascalCase.tsx`; every other module is `camelCase.ts`. Tests sit next to the code as

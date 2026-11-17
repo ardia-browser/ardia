@@ -101,10 +101,14 @@ phones a build that isn't a release says Dev.
   failed jobs of the same run, or dispatch iOS Release with `mode=upload` and the version; never re-run the whole
   release. Builds already in TestFlight under the iPhone app's old 1.0 don't block the shared version, since nothing
   was released on the App Store; any App Store version drafted under 1.0 has to move to the shared version before it
-  is submitted. Sending a build to App Store review stays a step a person takes (`docs/ios.md` › Releasing to
-  TestFlight).
-- **Android.** `-PardiaVersion=<version>` gives the build that version and its channel (`docs/android.md` › Build and
-  test). Nothing distributes it yet: that needs a Play Console account and an upload key.
+  is submitted. Sending a build to App Store review stays a step a person takes (`docs/phone.md` › TestFlight). On the
+  Expo branch the iPhone app is the Expo app, and an upload with public testers is refused until the owner moves it
+  to them, so a real run with `iphone=true` stops at that job.
+- **Android.** The Expo app's release version is its versionName, and its versionCode is major × 100,000,000 + minor ×
+  1,000,000 + patch × 1,000 plus the nightly number, or 999 for a stable (0.2.47-nightly.2 is 2047002, 0.2.47 is
+  2047999; `apps/phone/scripts/android-version.ts`). A build without one is Dev. It ships as an APK on GitHub Releases
+  through `android-release.yml`, as a draft prerelease `android-v<version>` that only the owner publishes
+  (`docs/phone.md` › Android release). No Play listing.
 - **CLI.** It follows the app: the app installs the CLI of its own version, with the digest pinned in its bundle
   (`docs/cli.md`), so a Nightly Mac runs the nightly CLI.
 - **Windows.** Every release, nightly or stable, builds it in the Release workflow's `windows` job, attaches

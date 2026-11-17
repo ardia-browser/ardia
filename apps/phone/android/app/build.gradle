@@ -1,0 +1,148 @@
+apply plugin: "com.android.application"
+apply plugin: "org.jetbrains.kotlin.android"
+apply plugin: "org.jetbrains.kotlin.plugin.compose"
+apply plugin: "com.facebook.react"
+
+def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
+def repoRoot = new File(projectRoot).getParentFile().getParentFile()
+def nodeResolve = { String expression -> ["node", "--print", expression].execute(null, rootDir).text.trim() }
+def reactNativePackage = nodeResolve("require.resolve('react-native/package.json')")
+def bundleExport = findProperty('ardiaBundleExport')
+def bundleExportRecord = bundleExport ? new File(bundleExport.toString(), ".ardia-bundle.json") : null
+if (bundleExportRecord && !bundleExportRecord.isFile()) {
+    throw new GradleException("-PardiaBundleExport=${bundleExport} is not a folder made by apps/phone/scripts/bundle-export.ts")
+}
+def bundleProjectRoot = bundleExport ? new File(bundleExport.toString(), "apps/phone").canonicalPath : projectRoot
+def bundleExportCommit = bundleExportRecord ? new groovy.json.JsonSlurper().parse(bundleExportRecord).commit.toString() : null
+
+react {
+    root = file(bundleProjectRoot)
+    entryFile = file(["node", "-e", "require('expo/scripts/resolveAppEntry')", bundleProjectRoot, "android", "absolute"].execute(null, rootDir).text.trim())
+    reactNativeDir = new File(reactNativePackage).getParentFile().getAbsoluteFile()
+    hermesCommand = new File(nodeResolve("require.resolve('hermes-compiler/package.json', { paths: [require.resolve('react-native/package.json')] })")).getParentFile().getAbsolutePath() + "/hermesc/%OS-BIN%/hermesc"
+    codegenDir = new File(nodeResolve("require.resolve('@react-native/codegen/package.json', { paths: [require.resolve('react-native/package.json')] })")).getParentFile().getAbsoluteFile()
+    enableBundleCompression = (findProperty('android.enableBundleCompression') ?: false).toBoolean()
+    cliFile = new File(nodeResolve("require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json', { paths: [${groovy.json.JsonOutput.toJson(bundleProjectRoot)}] })] })"))
+    bundleCommand = "export:embed"
+    autolinkLibrariesWithApp()
+}
+
+def ardiaLab = findProperty('ardiaLab') == 'true'
+if (ardiaLab != (System.getenv('EXPO_PUBLIC_ARDIA_LAB') == 'true')) {
+    throw new GradleException("-PardiaLab and EXPO_PUBLIC_ARDIA_LAB disagree: build through apps/phone/scripts/gradle-locked, or set both or neither")
+}
+def bundleGuard = "${projectRoot}/scripts/bundle-guard.ts"
+def runBundleGuard = { List<String> arguments ->
+    def process = new ProcessBuilder((["node", "--no-warnings", bundleGuard] + arguments + ["--root", repoRoot.absolutePath]).collect { it.toString() }).directory(repoRoot).redirectErrorStream(true).start()
+    def output = process.inputStream.text.trim()
+    [process.waitFor(), output]
+}
+def nativeCommit = ["git", "rev-parse", "HEAD"].execute(null, repoRoot).text.trim()
+def ardiaCommit = bundleExportCommit ?: nativeCommit
+def ardiaDirty = bundleExport ? "no" : (runBundleGuard(["dirty"])[1] == "no" ? "no" : "yes")
+def ardiaBundleSource = bundleExport ? "export of the commit" : "working tree"
+def ardiaNative = runBundleGuard(["native"])[1]
+def ardiaReleaseVersion = findProperty('ardiaVersionName') ?: ''
+def ardiaVersionCode = (findProperty('ardiaVersionCode') ?: '2') as int
+if (ardiaReleaseVersion && ardiaLab) throw new GradleException("a release version is for builds without the lab switch: drop -PardiaLab or the version")
+def bundleGuardState = new File(buildDir, "bundle-guard/state.json")
+tasks.matching { it.name.startsWith('createBundle') && it.name.endsWith('JsAndAssets') }.configureEach { task ->
+    inputs.property('ardiaLab', ardiaLab)
+    inputs.property('ardiaCommit', ardiaCommit)
+    inputs.property('ardiaBundleSource', ardiaBundleSource)
+    outputs.upToDateWhen { false }
+    doFirst {
+        if (bundleExport) {
+            def recorded = new groovy.json.JsonSlurper().parse(bundleExportRecord).commit.toString()
+            if (recorded != ardiaCommit) throw new GradleException("the bundle export at ${bundleExport} is of ${recorded}, but the build stamped ${ardiaCommit}")
+            logger.lifecycle("bundle-export: bundling ${ardiaCommit} from ${bundleExport}")
+            return
+        }
+        def (status, output) = runBundleGuard(["before", "--state", bundleGuardState.absolutePath, "--expect", ardiaCommit])
+        logger.lifecycle(output)
+        if (status != 0) throw new GradleException(output)
+    }
+    doLast {
+        if (bundleExport) return
+        def (status, output) = runBundleGuard(["after", "--state", bundleGuardState.absolutePath])
+        logger.lifecycle(output)
+        if (status != 0) throw new GradleException(output)
+    }
+}
+
+def enableMinifyInReleaseBuilds = (findProperty('android.enableMinifyInReleaseBuilds') ?: false).toBoolean()
+
+android {
+    ndkVersion rootProject.ext.ndkVersion
+    buildToolsVersion rootProject.ext.buildToolsVersion
+    compileSdk rootProject.ext.compileSdkVersion
+
+    namespace 'com.ardia.browser.android'
+    sourceSets.main.res.srcDirs += "src/main/res-system"
+    testOptions {
+        unitTests.includeAndroidResources = true
+        unitTests.returnDefaultValues = true
+        unitTests.all { test -> test.filter.failOnNoMatchingTests = false }
+    }
+    defaultConfig {
+        applicationId 'com.ardia.browser.android'
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode ardiaVersionCode
+        versionName ardiaReleaseVersion ?: "dev"
+        resValue "string", "ardia_release_version", ardiaReleaseVersion
+        resValue "string", "ardia_build_commit", ardiaCommit
+        resValue "string", "ardia_build_dirty", ardiaDirty
+        resValue "string", "ardia_build_source", ardiaBundleSource
+        resValue "string", "ardia_build_native", ardiaNative
+        resValue "bool", "ardia_sync_offered", ardiaLab ? "true" : "false"
+        manifestPlaceholders += [ardiaProfileable: ardiaLab ? "true" : "false", ardiaScreenOrientation: ardiaLab ? "unspecified" : "portrait"]
+        buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
+    }
+    signingConfigs {
+        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
+        release {
+            signingConfig signingConfigs.debug
+            shrinkResources((findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false').toBoolean())
+            minifyEnabled enableMinifyInReleaseBuilds
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+            crunchPngs((findProperty('android.enablePngCrunchInReleaseBuilds') ?: 'true').toBoolean())
+        }
+    }
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging((findProperty('expo.useLegacyPackaging') ?: 'false').toBoolean())
+        }
+        dex {
+            useLegacyPackaging((findProperty('ardiaCompressDex') ?: 'false').toBoolean())
+        }
+    }
+    androidResources {
+        ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
+    }
+}
+
+dependencies {
+    implementation("com.facebook.react:react-android")
+    implementation("com.facebook.react:hermes-android")
+    implementation(project(":ardia-design"))
+    implementation("androidx.glance:glance-appwidget:1.2.0")
+    implementation(platform("androidx.compose:compose-bom:2026.06.01"))
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.foundation:foundation")
+    implementation("androidx.activity:activity-compose:1.13.0")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.17")
+    testImplementation("androidx.test:core:1.7.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+}

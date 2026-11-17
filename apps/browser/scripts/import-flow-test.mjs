@@ -5,8 +5,12 @@
 //
 //   <scratch dir>     home/ is a copy of packages/import/fixtures/home (the fake Chrome, Arc, Dia, Firefox, Safari… data)
 //                     and data/ the instance's ARDIA_DATA_DIR; both are wiped first; Dia's fixture windows get a pinned
-//                     tab in "Side project", a Dia profile with no folder on disk
-//   flow              chrome, chromeSkip, chromeBack, arc, zen, firefox, dia, diaOpenOnly, safariDirect, safariExport, safariBadFile
+//                     tab in "Side project", a Dia profile with no folder on disk. Dia's Personal profile has a sidebar
+//                     file (tabs.db) and Work doesn't, so dia reads one and asks the stand-in app for the other.
+//                     It must be a folder Launch Services finds apps in (not under /private/tmp; ~/Library/Caches/<name>
+//                     works), or the stand-in Dia isn't found and Dia's profiles without a sidebar file get no tabs
+//   flow              chrome, chromeSkip, chromeBack, arc, zen, firefox, diaFilesOnly, dia, diaOpenOnly, safariDirect,
+//                     safariExport, safariBadFile
 //                     (default: all of them, in that order)
 //   --record <file>   writes what each flow did (the steps it passed through, counts, failures, notes, extensions and
 //                     what it added to the store) as JSON
@@ -21,7 +25,7 @@
 // opens a fresh import window and drives it through globalThis.acImport. Exit code 1 if any check failed.
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { launch, reporter, sleep } from "../../../scripts/lib/instance.mjs";
@@ -57,7 +61,8 @@ const diaWindows = JSON.parse(readFileSync(join(FIXTURES, "dia/applescript-windo
 for (const window of diaWindows)
   for (const profile of window.profiles)
     if (profile.name === "Side project") profile.tabs.push({ id: "t17", title: "Board", url: "https://board.example.com/", isPinned: true, isFocused: false });
-writeFileSync(join(exportsDir, "dia-windows.json"), JSON.stringify(diaWindows));
+const diaWindowsFile = join(exportsDir, "dia-windows.json");
+writeFileSync(diaWindowsFile, JSON.stringify(diaWindows));
 
 const FAKE_DIA_ID = "dev.ardia.fixture.dia";
 const fakeDia = join(scratch, "FakeDia.app");
@@ -91,7 +96,8 @@ const run = (body, timeout = 90_000) => app.eval(`${HELPERS}\n${body}`, { timeou
 
 const storeSummary = `const s = ac.store.getState();
   const tabs = {}; for (const t of Object.values(s.tabs)) { const p = s.profiles[t.profileId]?.name ?? t.profileId; tabs[p] ??= { open: 0, pinned: 0 }; tabs[p][t.pin ? "pinned" : "open"]++; }
-  return { profiles: Object.values(s.profiles).map((p) => [p.name, p.color, p.icon]).sort(), tabs, groups: Object.keys(s.groups ?? {}).length };`;
+  const groupList = Object.values(s.groups ?? {}).map((g) => [s.profiles[g.profileId]?.name ?? g.profileId, g.name, g.pinned, s.groups[g.parentId]?.name ?? null, g.icon, g.color, g.tabIds.length].join("|")).sort();
+  return { profiles: Object.values(s.profiles).map((p) => [p.name, p.color, p.icon]).sort(), tabs, groups: Object.keys(s.groups ?? {}).length, groupList };`;
 
 async function openWindow() {
   await run(`return steps(
@@ -120,7 +126,14 @@ async function flowRun(body) {
     const b = before.tabs[p] ?? { open: 0, pinned: 0 };
     if (c.open !== b.open || c.pinned !== b.pinned) added[p] = { open: c.open - b.open, pinned: c.pinned - b.pinned };
   }
-  out.store = { newProfiles: after.profiles.filter((p) => !before.profiles.some((q) => JSON.stringify(q) === JSON.stringify(p))), tabs: added, groups: after.groups - before.groups };
+  const earlier = [...before.groupList];
+  const newGroups = after.groupList.filter((g) => {
+    const i = earlier.indexOf(g);
+    if (i === -1) return true;
+    earlier.splice(i, 1);
+    return false;
+  });
+  out.store = { newProfiles: after.profiles.filter((p) => !before.profiles.some((q) => JSON.stringify(q) === JSON.stringify(p))), tabs: added, groups: after.groups - before.groups, newGroups };
   return out;
 }
 
@@ -141,8 +154,9 @@ const FLOWS = {
   arc: `${pick("arc")}, ${next}, ${throughProfilesAndUnlock}, ${done}`,
   zen: `${pick("zen")}, () => g().setKinds(g().kinds.filter((k) => k !== "passwords")), () => settle(200), ${next}, ${throughProfilesAndUnlock}, ${done}`,
   firefox: `${pick("firefox")}, () => g().setKinds(g().kinds.filter((k) => k !== "passwords")), () => settle(200), ${next}, ${throughProfilesAndUnlock}, ${done}`,
+  diaFilesOnly: `${pick("dia")}, () => g().setSourceProfiles(["Default"]), () => settle(200), ${next}, ${throughProfilesAndUnlock}, ${done}`,
   dia: `${pick("dia")}, ${next}, ${throughProfilesAndUnlock}, ${done}`,
-  diaOpenOnly: `${pick("dia")}, () => g().setKinds(g().kinds.filter((k) => k !== "pinnedTabs")), () => settle(200), ${next}, ${throughProfilesAndUnlock}, ${done}`,
+  diaOpenOnly: `${pick("dia")}, () => g().setKinds(g().kinds.filter((k) => k !== "pinnedTabs" && k !== "favorites")), () => settle(200), ${next}, ${throughProfilesAndUnlock}, ${done}`,
   safariDirect: `${pick("safari")}, ${next}, ${stepIs("safari")}, () => settle(200), () => g().importSafariDirect(), ${done}`,
   safariExport: `${pick("safari")}, ${next}, ${stepIs("safari")}, () => g().importSafari(${JSON.stringify(join(exportsDir, "Safari Export.zip"))}), ${done}`,
   safariBadFile: `${pick("safari")}, ${next}, ${stepIs("safari")}, () => g().importSafari(${JSON.stringify(join(exportsDir, "not-an-export.zip"))}),
@@ -172,10 +186,25 @@ const CHECKS = {
     assert.equal(r.step, "done");
     assert.ok(r.counts.history > 0, `Zen's history comes over: ${JSON.stringify(r.counts)}`);
   },
+  diaFilesOnly: (r) => {
+    assert.equal(r.step, "done");
+    assert.ok(!r.notes.some((n) => n.startsWith("Dia's tabs couldn't be brought over:")), `a profile with a sidebar file never asks Dia: ${JSON.stringify(r.notes)}`);
+    assert.ok(!r.notes.some((n) => n.startsWith("Dia's sidebar file couldn't be read")), JSON.stringify(r.notes));
+    assert.ok(!r.store.newProfiles.some(([name]) => name === "Side project"), JSON.stringify(r.store.newProfiles));
+  },
   dia: (r) => {
     assert.equal(r.step, "done");
     assert.ok(r.counts.tabs > 0 && !r.notes.some((n) => n.startsWith("Dia's tabs couldn't be brought over:")), JSON.stringify(r));
     for (const name of ["Work", "Side project"]) assert.ok(r.store.tabs[name]?.pinned > 0, `${name} gets its pinned tabs: ${JSON.stringify(r.store.tabs)}`);
+    if (recordedFirst("diaFilesOnly")) return;
+    const groups = r.store.newGroups.map((g) => g.split("|"));
+    const named = (name) => groups.find((g) => g[1] === name);
+    assert.deepEqual(named("Reading")?.slice(2, 6), ["true", "", "📚", "blue"], JSON.stringify(groups));
+    assert.deepEqual(named("Deep")?.slice(2, 4), ["true", "Reading"], JSON.stringify(groups));
+    assert.deepEqual(named("Research")?.slice(2, 6), ["false", "", "🔬", "purple"], JSON.stringify(groups));
+    assert.deepEqual(named("Sources")?.slice(2, 4), ["false", "Research"], JSON.stringify(groups));
+    assert.ok(named("Later"), `the edit only in tabs.db-wal comes over: ${JSON.stringify(groups)}`);
+    assert.equal(named("Errands")?.[0], "Side", `Dia's second space becomes a profile of its own: ${JSON.stringify(groups)}`);
   },
   diaOpenOnly: (r) => {
     assert.equal(r.step, "done");
@@ -196,7 +225,14 @@ const CHECKS = {
   },
 };
 
+const SETUP = {
+  diaFilesOnly: () => chmodSync(diaWindowsFile, 0o000),
+};
+const TEARDOWN = {
+  diaFilesOnly: () => chmodSync(diaWindowsFile, 0o644),
+};
 const wanted = only.length ? only : Object.keys(FLOWS);
+const recordedFirst = (flow) => wanted.indexOf(flow) !== -1 && wanted.indexOf(flow) < wanted.indexOf("dia");
 const unknown = wanted.filter((f) => !FLOWS[f]);
 if (unknown.length) throw new Error(`unknown flow: ${unknown.join(", ")}`);
 const expected = compareWith ? JSON.parse(readFileSync(compareWith, "utf8")) : null;
@@ -217,7 +253,13 @@ try {
   for (const name of wanted) {
     await rep.check(name, async () => {
       await openWindow();
-      const r = await flowRun(FLOWS[name]);
+      SETUP[name]?.();
+      let r;
+      try {
+        r = await flowRun(FLOWS[name]);
+      } finally {
+        TEARDOWN[name]?.();
+      }
       recorded[name] = r;
       rep.log(name, JSON.stringify(r));
       CHECKS[name](r);

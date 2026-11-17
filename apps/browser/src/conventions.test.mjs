@@ -27,7 +27,7 @@ const HANDS_PLATFORM_TO_SCRIPTS = new Set(["components/dev/devHarness.ts"]);
 const RULES = ["layout", "imports", "native-calls", "tokens", "scale", "get-state", "set-state", "store-reads", "store-shape", "size", "env", "naming", "comments", "file-names"];
 const SIZE_CAP = { js: 400, native: 600 };
 const SCOPES = ["apps/browser/src", "packages", "engine/ardiacore/src", "engine/chromium/src"];
-const GENERATED = new Set(["packages/core/src/bangList.ts", "packages/demo/src/shims/web/symbols/data.ts", "apps/browser/src/lib/emojiData.ts"]);
+const GENERATED = new Set(["packages/core/src/bangList.ts", "packages/demo/src/shims/web/symbols/data.ts", "apps/browser/src/lib/emojiData.ts", "packages/phone/ios/ArdiaKit/Sources/ArdiaShared/Scripts/ardia-core.js", "packages/phone/ios/ArdiaKit/Sources/ArdiaShared/Scripts/ardia-sync.js"]);
 const ONE_INJECTED_SCRIPT = new Set(["packages/ardiacore/ios/page_script.js"]);
 const FROZEN_SPECS = new Set(["packages/core/src/suggest.reference.ts"]);
 const LAUNCH_CONFIG = [/^packages\/ardiacore\/ios\/ArdiaLaunchConfig\.\w+$/, /^apps\/browser\/src\/platform\/launchConfig\.ts$/];
@@ -50,7 +50,7 @@ const SCOPE_FILE = /^(?:apps\/browser\/src\/|packages\/[^/]+\/(?:src|ios)\/|engi
 const TEST_FILE = /\.test\.[cm]?[jt]sx?$|(?:^|\/)(?:test-native|fixtures|tests|Tests)\/|(?:^|\/)test-(?:loader|hooks)\.mjs$/;
 
 const TOOL_DIRECTIVE =
-  /^(?:\/\/+|\/\*+)\s*(?:@ts-(?:expect-error|ignore|nocheck)|eslint-(?:disable|enable)|swiftlint:|swift-format-ignore|prettier-ignore|clang-format (?:on|off)|NOLINT|nogncheck|IWYU pragma|[#@]__PURE__|# sourceURL=|# sourceMappingURL=)/;
+  /^(?:\/\/+|\/\*+)\s*(?:@ts-(?:expect-error|ignore|nocheck)|eslint-(?:disable|enable)|swiftlint:|swift-format-ignore|swift-tools-version:|prettier-ignore|clang-format (?:on|off)|NOLINT|nogncheck|IWYU pragma|[#@]__PURE__|# sourceURL=|# sourceMappingURL=)/;
 const LICENSE_HEADER = /copyright|licen[cs]e|spdx/i;
 const REGEX_AFTER_WORDS = new Set(["return", "typeof", "case", "do", "else", "in", "of", "new", "delete", "void", "throw", "instanceof", "yield", "await"]);
 
@@ -564,6 +564,11 @@ if (process.argv.includes("--write-baseline")) {
     });
     return found;
   };
+  test("a Swift package manifest's tools version line is a compiler directive", () => {
+    assert.deepEqual(violationsOf("packages/phone/ios/PhoneSync/Package.swift", "// swift-tools-version:6.2\nimport PackageDescription\n"), {});
+    assert.deepEqual(violationsOf("packages/phone/ios/PhoneSync/Package.swift", "// swift-tools-version:6.2\n// a note\nimport PackageDescription\n"), { comments: 1 });
+  });
+
   test("a closing JSX tag doesn't hide a comment after it", () => {
     assert.deepEqual(violationsOf("apps/browser/src/components/hello/Hello.tsx", "<Text>Hello</Text>; // comment\n"), { comments: 1 });
   });

@@ -99,6 +99,36 @@ public final class Importer: @unchecked Sendable {
       }
     }
 
+    var dia: DiaSidebar?
+    let readsDiaSidebar = def.id == BrowserDefinition.dia.id && DiaSidebar.exists(profile: dir)
+    func diaSidebar() throws -> DiaSidebar {
+      if let dia { return dia }
+      guard let key = key(browserId) else { throw ImportError.locked("Unlock \(def.name) to read its sidebar") }
+      let read = try DiaSidebar.load(profile: dir, folder: profileId, rootKey: key)
+      dia = read
+      return read
+    }
+
+    func takeDia(_ sidebar: DiaSidebar, for kind: ImportKind) -> Int {
+      result.diaSidebar = DiaSidebarRead(primarySpaceId: sidebar.primarySpaceId)
+      result.spaces = sidebar.spaces.map { space in
+        var s = space
+        if !kinds.contains(.pinnedTabs) { s.pinned = [] }
+        if !kinds.contains(.tabs) {
+          s.tabs = []
+          s.openGroups = []
+        }
+        if !kinds.contains(.favorites) { s.favorites = [] }
+        return s
+      }.filter { !($0.pinned.isEmpty && $0.tabs.isEmpty && ($0.openGroups ?? []).isEmpty && ($0.favorites ?? []).isEmpty) }
+      let links = { (nodes: [BookmarkNode]) in nodes.reduce(0) { $0 + $1.linkCount } }
+      switch kind {
+      case .tabs: return sidebar.spaces.reduce(0) { $0 + $1.tabs.count + links($1.openGroups ?? []) }
+      case .pinnedTabs: return sidebar.spaces.reduce(0) { $0 + links($1.pinned) }
+      default: return sidebar.spaces.reduce(0) { $0 + ($1.favorites ?? []).count }
+      }
+    }
+
     func take(_ all: [SpaceSuggestion], for kind: ImportKind) -> Int {
       let spaces = all.filter { options.spaceIds?.contains($0.id) ?? true }
       result.spaces = spaces.map { space in
@@ -127,6 +157,8 @@ public final class Importer: @unchecked Sendable {
       var succeeded = false
       do {
         switch (kind, def.family) {
+        case (_, .chromium) where readsDiaSidebar && DiaSidebar.kinds.contains(kind):
+          count = takeDia(try diaSidebar(), for: kind)
         case (.bookmarks, .chromium), (.bookmarks, .arc):
           result.bookmarks = try ChromiumBookmarks.load(profile: dir)
           count = result.bookmarks?.linkCount ?? 0

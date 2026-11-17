@@ -108,6 +108,7 @@ public struct BrowserProfile: Codable, Equatable, Sendable {
   public var available: [ImportKind]
   public var spaces: [SpaceSummary]?
   public var tabsNeedKey = false
+  public var diaSidebar = false
 }
 
 public struct BrowserSource: Codable, Equatable, Sendable {
@@ -165,6 +166,13 @@ public struct BrowserDiscovery {
       for i in profiles.indices {
         profiles[i].available = profiles[i].available.filter { $0 != .tabs } + [.tabs, .pinnedTabs]
         profiles[i].tabsNeedKey = false
+      }
+    }
+    if def.id == BrowserDefinition.dia.id {
+      for i in profiles.indices where DiaSidebar.exists(profile: URL(fileURLWithPath: profiles[i].path, isDirectory: true)) {
+        profiles[i].diaSidebar = true
+        profiles[i].tabsNeedKey = true
+        profiles[i].available += DiaSidebar.kinds.filter { !profiles[i].available.contains($0) }
       }
     }
     let denied = def.family != .safari && profiles.isEmpty && dataDirectory(def).map { root in

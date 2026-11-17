@@ -1,0 +1,294 @@
+{
+  "inputs": "84eff2d2918d2f1f866c07fa2841565caa54c9beaa4c59bcffca9a252cdf542b",
+  "packages": [
+    {
+      "name": "@babel/runtime",
+      "version": "7.29.14",
+      "license": "MIT",
+      "url": "https://github.com/babel/babel"
+    },
+    {
+      "name": "@expo/cli",
+      "version": "58.1.20",
+      "license": "MIT",
+      "url": "https://github.com/expo/expo"
+    },
+    {
+      "name": "@expo/devtools",
+      "version": "58.0.2",
+      "license": "MIT",
+      "url": "https://github.com/expo/expo"
+    },
+    {
+      "name": "@expo/ui",
+      "version": "58.0.28",
+      "license": "MIT",
+      "url": "https://github.com/expo/expo"
+    },
+    {
+      "name": "@react-native/asset-utils",
+      "version": "0.88.1",
+      "license": "MIT",
+      "url": "https://github.com/react/react-native"
+    },
+    {
+      "name": "@react-native/js-polyfills",
+      "version": "0.88.1",
+      "license": "MIT",
+      "url": "https://github.com/react/react-native"
+    },
+    {
+      "name": "@react-native/normalize-colors",
+      "version": "0.88.1",
+      "license": "MIT",
+      "url": "https://github.com/react/react-native"
+    },
+    {
+      "name": "@react-native/virtualized-lists",
+      "version": "0.88.1",
+      "license": "MIT",
+      "url": "https://github.com/react/react-native"
+    },
+    {
+      "name": "@ungap/structured-clone",
+      "version": "1.4.0",
+      "license": "ISC",
+      "url": "https://github.com/ungap/structured-clone"
+    },
+    {
+      "name": "await-lock",
+      "version": "2.2.2",
+      "license": "MIT",
+      "url": "https://github.com/ide/await-lock"
+    },
+    {
+      "name": "base64-js",
+      "version": "1.5.1",
+      "license": "MIT",
+      "url": "https://github.com/beatgammit/base64-js"
+    },
+    {
+      "name": "expo",
+      "version": "58.0.25",
+      "license": "MIT",
+      "url": "https://github.com/expo/expo"
+    },
+    {
+      "name": "expo-asset",
+      "version": "58.0.21",
+      "license": "MIT",
+      "url": "https://github.com/expo/expo"
+    },
+    {
+      "name": "expo-clipboard",
+      "version": "58.0.4",
+      "license": "MIT",
+      "url": "https://github.com/expo/expo"
+    },
+    {
+      "name": "expo-constants",
+      "version": "58.0.16",
+      "license": "MIT",
+      "url": "https://github.com/expo/expo"
+    },
+    {
+      "name": "expo-haptics",
+      "version": "58.0.8",
+      "license": "MIT",
+      "url": "https://github.com/expo/expo"
+    },
+    {
+      "name": "expo-localization",
+      "version": "58.0.5",
+      "license": "MIT",
+      "url": "https://github.com/expo/expo"
+    },
+    {
+      "name": "expo-modules-core",
+      "version": "58.1.0",
+      "license": "MIT",
+      "url": "https://github.com/expo/expo"
+    },
+    {
+      "name": "expo-sqlite",
+      "version": "58.0.17",
+      "license": "MIT",
+      "url": "https://github.com/expo/expo"
+    },
+    {
+      "name": "flow-enums-runtime",
+      "version": "0.0.6",
+      "license": "MIT",
+      "url": "https://github.com/facebook/flow"
+    },
+    {
+      "name": "invariant",
+      "version": "2.2.4",
+      "license": "MIT",
+      "url": "https://github.com/zertosh/invariant"
+    },
+    {
+      "name": "memoize-one",
+      "version": "5.2.1",
+      "license": "MIT",
+      "url": "https://github.com/alexreardon/memoize-one"
+    },
+    {
+      "name": "nullthrows",
+      "version": "1.1.1",
+      "license": "MIT",
+      "url": "https://github.com/zertosh/nullthrows"
+    },
+    {
+      "name": "promise",
+      "version": "8.3.0",
+      "license": "MIT",
+      "url": "https://github.com/then/promise"
+    },
+    {
+      "name": "react",
+      "version": "19.3.0",
+      "license": "MIT",
+      "url": "https://github.com/react/react"
+    },
+    {
+      "name": "react-native",
+      "version": "0.88.1",
+      "license": "MIT",
+      "url": "https://github.com/react/react-native"
+    },
+    {
+      "name": "react-native-gesture-handler",
+      "version": "3.3.0",
+      "license": "MIT",
+      "url": "https://github.com/software-mansion/react-native-gesture-handler"
+    },
+    {
+      "name": "react-native-is-edge-to-edge",
+      "version": "1.3.1",
+      "license": "MIT",
+      "url": "https://github.com/zoontek/react-native-edge-to-edge"
+    },
+    {
+      "name": "react-native-reanimated",
+      "version": "4.7.1",
+      "license": "MIT",
+      "url": "https://github.com/software-mansion/react-native-reanimated"
+    },
+    {
+      "name": "react-native-safe-area-context",
+      "version": "5.11.1",
+      "license": "MIT",
+      "url": "https://github.com/appandflow/react-native-safe-area-context"
+    },
+    {
+      "name": "react-native-svg",
+      "version": "15.16.0",
+      "license": "MIT",
+      "url": "https://github.com/software-mansion/react-native-svg"
+    },
+    {
+      "name": "react-native-worklets",
+      "version": "0.13.0",
+      "license": "MIT",
+      "url": "https://github.com/software-mansion/react-native-reanimated"
+    },
+    {
+      "name": "regenerator-runtime",
+      "version": "0.13.11",
+      "license": "MIT",
+      "url": "https://github.com/facebook/regenerator/tree/main/packages/runtime"
+    },
+    {
+      "name": "scheduler",
+      "version": "0.28.0",
+      "license": "MIT",
+      "url": "https://github.com/react/react"
+    },
+    {
+      "name": "semver",
+      "version": "7.8.6",
+      "license": "ISC",
+      "url": "https://github.com/npm/node-semver"
+    },
+    {
+      "name": "stacktrace-parser",
+      "version": "0.1.11",
+      "license": "MIT",
+      "url": "https://github.com/errwischt/stacktrace-parser"
+    },
+    {
+      "name": "whatwg-fetch",
+      "version": "3.6.20",
+      "license": "MIT",
+      "url": "https://github.com/github/fetch"
+    },
+    {
+      "name": "whatwg-url-minimum",
+      "version": "0.2.0",
+      "license": "MIT",
+      "url": "https://github.com/expo/whatwg-url-minimum"
+    },
+    {
+      "name": "zustand",
+      "version": "5.1.0",
+      "license": "MIT",
+      "url": "https://github.com/pmndrs/zustand"
+    }
+  ],
+  "native": [
+    {
+      "name": "Android Jetpack (AndroidX)",
+      "artifacts": [
+        "androidx.annotation:annotation",
+        "androidx.activity:activity",
+        "androidx.core:core",
+        "androidx.webkit:webkit",
+        "androidx.work:work-runtime-ktx",
+        "androidx.camera:camera-core",
+        "androidx.camera:camera-camera2",
+        "androidx.camera:camera-lifecycle",
+        "androidx.camera:camera-view",
+        "androidx.compose.foundation:foundation-android",
+        "androidx.compose.ui:ui-android",
+        "androidx.compose.material3:material3",
+        "androidx.compose.ui:ui-text"
+      ],
+      "license": "Apache-2.0",
+      "url": "https://developer.android.com/jetpack/androidx"
+    },
+    {
+      "name": "Kotlin coroutines and serialization",
+      "artifacts": [
+        "org.jetbrains.kotlinx:kotlinx-coroutines-android",
+        "org.jetbrains.kotlinx:kotlinx-serialization-json"
+      ],
+      "license": "Apache-2.0",
+      "url": "https://github.com/Kotlin"
+    },
+    {
+      "name": "OkHttp",
+      "artifacts": [
+        "com.squareup.okhttp3:okhttp"
+      ],
+      "license": "Apache-2.0",
+      "url": "https://github.com/square/okhttp"
+    },
+    {
+      "name": "RE2/J",
+      "artifacts": [
+        "com.google.re2j:re2j"
+      ],
+      "license": "BSD-3-Clause",
+      "url": "https://github.com/google/re2j"
+    },
+    {
+      "name": "ZXing",
+      "artifacts": [
+        "com.google.zxing:core"
+      ],
+      "license": "Apache-2.0",
+      "url": "https://github.com/zxing/zxing"
+    }
+  ]
+}

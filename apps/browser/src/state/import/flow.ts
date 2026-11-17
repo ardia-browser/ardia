@@ -38,6 +38,7 @@ export type ImportFlow = {
 export const IMPORT_KINDS: ImportKind[] = ["bookmarks", "history", "passwords", "cookies", "autofill", "tabs", "spaces", "pinnedTabs", "favorites"];
 export const ENCRYPTED_KINDS: ImportKind[] = ["passwords", "cookies", "autofill"];
 export const APP_TAB_KINDS: ImportKind[] = ["tabs", "pinnedTabs"];
+export const DIA_SIDEBAR_KINDS: ImportKind[] = ["tabs", "pinnedTabs", "favorites"];
 export const NO_EXTENSIONS: FoundExtensions = { profileId: "", list: [], opened: false };
 
 const freshFlow = (target: string): ImportFlow => ({

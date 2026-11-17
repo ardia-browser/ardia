@@ -8,9 +8,19 @@
   "set-state": {},
   "store-reads": {},
   "store-shape": {},
-  "size": {},
+  "size": {
+    "packages/phone/ios/ArdiaKit/Sources/ArdiaBrowser/Blocking/FilterListConverter.swift": 1,
+    "packages/phone/ios/ArdiaKit/Sources/ArdiaBrowser/Blocking/FilterLists.swift": 1,
+    "packages/phone/ios/ArdiaKit/Sources/ArdiaBrowser/Tabs/TabStore.swift": 1,
+    "packages/phone/ios/ArdiaKit/Sources/ArdiaBrowser/Web/WebTab.swift": 1,
+    "packages/phone/ios/ArdiaKit/Sources/ArdiaSync/SyncService.swift": 1
+  },
   "env": {},
-  "naming": {},
-  "comments": {},
+  "naming": {
+    "packages/phone/ios/ArdiaKit/Sources/ArdiaSync/SyncFolderAccess.swift": 1
+  },
+  "comments": {
+    "packages/phone/ios/ArdiaKit/Tests/ArdiaBrowserTests/BlockingTests.swift": 2
+  },
   "file-names": {}
 }

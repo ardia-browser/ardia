@@ -7,7 +7,7 @@ results; a cold run spends most of its time in `swift test`'s first build. Each 
 | Package | Command | What runs |
 | --- | --- | --- |
 | `apps/browser` | `pnpm --filter @ardia/browser test` | Every `src/**/*.test.mjs` under the test loader (below) |
-| `packages/core` | `pnpm --filter @ardia/core test` | `apps/ios/scripts/bundle-shared.mjs --check`, then `src/**/*.test.ts` |
+| `packages/core` | `pnpm --filter @ardia/core test` | `apps/phone/scripts/bundle-shared.mjs --check`, then `src/**/*.test.ts` |
 | `packages/sync` | `pnpm --filter @ardia/sync test` | `swift test`, `node --test`, the shared bundle check, then the rename's launch migration end to end (`scripts/legacy-migration-e2e.mjs`) |
 | `packages/import` | `pnpm --filter @ardia/import test` | `swift test` |
 | `packages/shell` | `pnpm --filter @ardia/shell test` | `swift test` (the updater's channel switch among them) |

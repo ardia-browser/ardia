@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: status lists what App Store Connect holds; dry-run builds and signs; upload sends the build to TestFlight and to public testers; device registers an iPhone's UDID on the team and builds a development-signed .ipa it can install over a cable; public-link submits a build for Beta App Review and prints the link to share; add-tester invites an email to the Public Testers group; expire ends testing of an older build for good; certificate makes the development certificate CI signs with
+        description: status lists what App Store Connect holds; dry-run builds and signs the archive and sends nothing to App Store Connect; upload sends the build to TestFlight's Internal group; device registers an iPhone's UDID on the team and builds a development-signed .ipa it can install over a cable; public-link submits a build for Beta App Review and prints the link to share; add-tester invites an email to the Public Testers group; expire ends testing of an older build for good; certificate makes the development certificate CI signs with
         type: choice
         options: [status, dry-run, upload, device, public-link, add-tester, expire, certificate]
         default: status
@@ -17,9 +17,9 @@ on:
         type: boolean
         default: false
       public_testers:
-        description: upload mode only, also put the build in the Public Testers group and submit it for Beta App Review
+        description: upload mode only, also put the build in the Public Testers group and submit it for Beta App Review (refused until the owner moves the Expo app to public testers)
         type: boolean
-        default: true
+        default: false
       signing_request:
         description: certificate mode only, the base64 of a certificate signing request
         type: string
@@ -52,7 +52,7 @@ on:
         default: false
       public_testers:
         type: boolean
-        default: true
+        default: false
       signing_request:
         type: string
         default: ""
@@ -88,7 +88,7 @@ jobs:
           key="$RUNNER_TEMP/AuthKey.p8"
           (umask 077 && printf '%s' "$ASC_KEY_P8" | base64 -d > "$key")
           trap 'rm -f "$key"' EXIT
-          ASC_KEY="$key" node apps/ios/scripts/asc.mjs status | tee -a "$GITHUB_STEP_SUMMARY"
+          ASC_KEY="$key" node apps/phone/scripts/asc.mjs status | tee -a "$GITHUB_STEP_SUMMARY"
 
   public-link:
     if: inputs.mode == 'public-link'
@@ -113,8 +113,8 @@ jobs:
           key="$RUNNER_TEMP/AuthKey.p8"
           (umask 077 && printf '%s' "$ASC_KEY_P8" | base64 -d > "$key")
           trap 'rm -f "$key"' EXIT
-          ASC_KEY="$key" node apps/ios/scripts/asc.mjs public-link --build "$BUILD" \
-            --what-to-test apps/ios/Config/TestFlight-WhatToTest.txt --privacy-policy https://ardia.dev/privacy | tee -a "$GITHUB_STEP_SUMMARY"
+          ASC_KEY="$key" node apps/phone/scripts/asc.mjs public-link --build "$BUILD" \
+            --what-to-test apps/phone/ios/Config/TestFlight-WhatToTest.txt --privacy-policy https://ardia.dev/privacy | tee -a "$GITHUB_STEP_SUMMARY"
 
   add-tester:
     if: inputs.mode == 'add-tester'
@@ -140,7 +140,7 @@ jobs:
           key="$RUNNER_TEMP/AuthKey.p8"
           (umask 077 && printf '%s' "$ASC_KEY_P8" | base64 -d > "$key")
           trap 'rm -f "$key"' EXIT
-          ASC_KEY="$key" node apps/ios/scripts/asc.mjs add-tester --email "$EMAIL" | tee -a "$GITHUB_STEP_SUMMARY"
+          ASC_KEY="$key" node apps/phone/scripts/asc.mjs add-tester --email "$EMAIL" | tee -a "$GITHUB_STEP_SUMMARY"
 
   expire:
     if: inputs.mode == 'expire'
@@ -165,7 +165,7 @@ jobs:
           key="$RUNNER_TEMP/AuthKey.p8"
           (umask 077 && printf '%s' "$ASC_KEY_P8" | base64 -d > "$key")
           trap 'rm -f "$key"' EXIT
-          ASC_KEY="$key" node apps/ios/scripts/asc.mjs expire --build "$BUILD" | tee -a "$GITHUB_STEP_SUMMARY"
+          ASC_KEY="$key" node apps/phone/scripts/asc.mjs expire --build "$BUILD" | tee -a "$GITHUB_STEP_SUMMARY"
 
   certificate:
     if: inputs.mode == 'certificate'
@@ -192,7 +192,7 @@ jobs:
           trap 'rm -f "$key"' EXIT
           printf '%s' "$SIGNING_REQUEST" | base64 -d > "$RUNNER_TEMP/request.csr"
           mkdir -p "$RUNNER_TEMP/certificate"
-          ASC_KEY="$key" node apps/ios/scripts/asc.mjs certificates --create "$RUNNER_TEMP/request.csr" --out "$RUNNER_TEMP/certificate/development.cer"
+          ASC_KEY="$key" node apps/phone/scripts/asc.mjs certificates --create "$RUNNER_TEMP/request.csr" --out "$RUNNER_TEMP/certificate/development.cer"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: ios-development-certificate
@@ -221,6 +221,11 @@ jobs:
       - if: inputs.mode == 'device'
         name: Mask the UDID
         run: jq -r '.inputs.udid // empty' "$GITHUB_EVENT_PATH" | sed 's/^/::add-mask::/'
+      - name: Uploads go to the Internal group first
+        if: inputs.mode == 'upload' && inputs.public_testers
+        run: |
+          echo "::error::an upload goes to the Internal group only until the owner moves the Expo app to public testers: run it with public_testers=false"
+          exit 1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
@@ -229,6 +234,14 @@ jobs:
           node-version: 24
       - name: Toolchain
         run: xcodebuild -version
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+      - name: The Expo app's dependencies and Pods
+        run: |
+          set -euo pipefail
+          (cd apps/phone && pnpm install --frozen-lockfile)
+          (cd apps/phone/ios && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 pod install)
+          git diff --exit-code -- apps/phone/ios/Podfile.lock || { echo "::error::pod install changed apps/phone/ios/Podfile.lock: commit the lockfile pod install writes"; exit 1; }
+          git diff --exit-code -- apps/phone/ios ':!apps/phone/ios/Pods' || { echo "::error::pod install rewrote the iPhone project (diff above): run pod install locally and commit what it writes"; exit 1; }
       - name: App Store Connect key
         env:
           ASC_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
@@ -237,14 +250,14 @@ jobs:
           mkdir -p "$(dirname "$ASC_KEY")" && chmod 700 "$(dirname "$ASC_KEY")"
           (umask 077 && printf '%s' "$ASC_KEY_P8" | base64 -D > "$ASC_KEY")
           grep -q 'BEGIN PRIVATE KEY' "$ASC_KEY" || { echo "::error::NOTARY_KEY_P8 isn't a base64 .p8 key"; exit 1; }
-          node apps/ios/scripts/asc.mjs certificates --save "$(dirname "$ASC_KEY")/certificates.json"
+          node apps/phone/scripts/asc.mjs certificates --save "$(dirname "$ASC_KEY")/certificates.json"
       - name: Development certificate
         env:
           IOS_DEVELOPMENT_P12: ${{ secrets.IOS_DEVELOPMENT_P12 }}
           IOS_DEVELOPMENT_P12_PASSWORD: ${{ secrets.IOS_DEVELOPMENT_P12_PASSWORD }}
         run: |
           set -euo pipefail
-          [ -n "$IOS_DEVELOPMENT_P12" ] && [ -n "$IOS_DEVELOPMENT_P12_PASSWORD" ] || { echo "::error::missing secrets IOS_DEVELOPMENT_P12 and IOS_DEVELOPMENT_P12_PASSWORD (docs/ios.md)"; exit 1; }
+          [ -n "$IOS_DEVELOPMENT_P12" ] && [ -n "$IOS_DEVELOPMENT_P12_PASSWORD" ] || { echo "::error::missing secrets IOS_DEVELOPMENT_P12 and IOS_DEVELOPMENT_P12_PASSWORD (docs/phone.md)"; exit 1; }
           secrets="$(dirname "$ASC_KEY")"
           keychain="$secrets/signing.keychain-db"
           password="$(openssl rand -hex 24)"
@@ -266,7 +279,7 @@ jobs:
         run: |
           set -euo pipefail
           build="$BUILD_INPUT"
-          [ -n "$build" ] || build="$(node apps/ios/scripts/asc.mjs next-build)"
+          [ -n "$build" ] || build="$(node apps/phone/scripts/asc.mjs next-build)"
           echo "build=$build" >> "$GITHUB_OUTPUT"
           echo "### Ardia for iPhone ${RELEASE_VERSION:-from MARKETING_VERSION}, build $build ($MODE)" >> "$GITHUB_STEP_SUMMARY"
       - if: inputs.mode == 'device'
@@ -276,7 +289,7 @@ jobs:
         run: |
           set -euo pipefail
           [ -n "$UDID" ] || { echo "::error::device mode needs udid"; exit 1; }
-          node apps/ios/scripts/asc.mjs register-device --udid "$UDID"
+          node apps/phone/scripts/asc.mjs register-device --udid "$UDID"
       - name: Archive, sign${{ inputs.mode == 'upload' && ', upload' || '' }}
         env:
           BUILD: ${{ steps.plan.outputs.build }}
@@ -286,25 +299,25 @@ jobs:
           [ -z "$RELEASE_VERSION" ] || args+=(--version "$RELEASE_VERSION")
           if [ "$MODE" = device ]; then args+=(--development); elif [ "$MODE" != upload ]; then args+=(--no-upload); fi
           [ "$DEFAULT_BROWSER" != true ] || args+=(--default-browser)
-          scripts/release-ios.sh "${args[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
+          apps/phone/scripts/release-ios "${args[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
       - if: inputs.mode == 'upload'
         name: Wait for App Store Connect to process the build
         env:
           BUILD: ${{ steps.plan.outputs.build }}
-        run: node apps/ios/scripts/asc.mjs wait --build "$BUILD" --timeout 2400 | tee -a "$GITHUB_STEP_SUMMARY"
+        run: node apps/phone/scripts/asc.mjs wait --build "$BUILD" --timeout 2400 | tee -a "$GITHUB_STEP_SUMMARY"
       - if: inputs.mode == 'upload' && inputs.public_testers
         name: Send the build to public testers
         env:
           BUILD: ${{ steps.plan.outputs.build }}
         run: |
           set -euo pipefail
-          node apps/ios/scripts/asc.mjs public-link --build "$BUILD" \
-            --what-to-test apps/ios/Config/TestFlight-WhatToTest.txt --privacy-policy https://ardia.dev/privacy | tee -a "$GITHUB_STEP_SUMMARY"
+          node apps/phone/scripts/asc.mjs public-link --build "$BUILD" \
+            --what-to-test apps/phone/ios/Config/TestFlight-WhatToTest.txt --privacy-policy https://ardia.dev/privacy | tee -a "$GITHUB_STEP_SUMMARY"
       - if: always()
         name: No certificate was made
         run: |
           snapshot="$(dirname "$ASC_KEY")/certificates.json"
-          [ ! -f "$snapshot" ] || node apps/ios/scripts/asc.mjs certificates --new-since "$snapshot" \
+          [ ! -f "$snapshot" ] || node apps/phone/scripts/asc.mjs certificates --new-since "$snapshot" \
             || echo "::error::this run made a development certificate instead of signing with the stored one; it is still on the team"
       - if: always()
         name: Remove the key
@@ -327,5 +340,6 @@ jobs:
           path: |
             ${{ github.workspace }}/.ci/ios-release/*.log
             ${{ github.workspace }}/.ci/ios-release/export/*.plist
+            ${{ github.workspace }}/.ci/ios-release/bundle/stamp.plist
           if-no-files-found: ignore
           retention-days: 14

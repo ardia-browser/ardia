@@ -38,6 +38,7 @@ export type BrowserProfile = {
   available: ImportKind[];
   spaces?: SpaceSummary[];
   tabsNeedKey?: boolean;
+  diaSidebar?: boolean;
 };
 
 export type BrowserSource = {
@@ -65,6 +66,8 @@ export type BookmarkNode = {
   children?: BookmarkNode[];
   role?: BookmarkRole;
   pageTitle?: string;
+  icon?: string;
+  color?: TabGroupColor | (string & {});
 };
 
 export type ImportedHistoryEntry = { url: string; title: string; visits: number; lastVisit: number; typedCount?: number };
@@ -109,6 +112,8 @@ export type SpaceSuggestion = {
   tabs: ImportedTab[];
   theme?: string;
   container?: number;
+  openGroups?: BookmarkNode[];
+  favorites?: ImportedTab[];
 };
 
 export type ProfileSuggestion = { name: string; color?: string; avatarPath?: string };
@@ -137,6 +142,7 @@ export type ImportResult = {
   favorites: ImportedTab[];
   favicons: ImportedFavicon[];
   separateEssentials?: boolean;
+  diaSidebar?: { primarySpaceId?: string };
   failed: ImportKind[];
   warnings: ImportWarning[];
 };

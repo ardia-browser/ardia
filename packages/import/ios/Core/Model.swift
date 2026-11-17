@@ -18,6 +18,8 @@ public struct BookmarkNode: Codable, Equatable, Sendable {
   public var children: [BookmarkNode]?
   public var role: String?
   public var pageTitle: String?
+  public var icon: String? = nil
+  public var color: String? = nil
 
   public static func folder(_ title: String, _ children: [BookmarkNode], role: String? = nil, dateAdded: Double? = nil) -> BookmarkNode {
     BookmarkNode(type: .folder, title: title, url: nil, dateAdded: dateAdded, children: children, role: role, pageTitle: nil)
@@ -212,6 +214,8 @@ public struct SpaceSuggestion: Codable, Equatable, Sendable {
   public var tabs: [ImportedTab]
   public var theme: String? = nil
   public var container: Int? = nil
+  public var openGroups: [BookmarkNode]? = nil
+  public var favorites: [ImportedTab]? = nil
 }
 
 public struct ProfileSuggestion: Codable, Equatable, Sendable {
@@ -243,6 +247,10 @@ public struct ImportedFavicon: Codable, Equatable, Sendable {
   public var png: String
 }
 
+public struct DiaSidebarRead: Codable, Equatable, Sendable {
+  public var primarySpaceId: String?
+}
+
 public struct ImportResult: Codable, Equatable, Sendable {
   public var browserId: String
   public var profileId: String
@@ -257,6 +265,7 @@ public struct ImportResult: Codable, Equatable, Sendable {
   public var favorites: [ImportedTab] = []
   public var favicons: [ImportedFavicon] = []
   public var separateEssentials: Bool?
+  public var diaSidebar: DiaSidebarRead?
   public var failed: [ImportKind] = []
   public var warnings: [ImportWarning] = []
   public var vaultToken: String?
@@ -270,7 +279,7 @@ public struct ImportResult: Codable, Equatable, Sendable {
 
   enum CodingKeys: String, CodingKey {
     case browserId, profileId, profile, bookmarks, history, historyCount, tabs, tabGroups, credentials, spaces, favorites, favicons,
-         separateEssentials, failed, warnings, vaultToken, cookieCount, addressCount, cardCount
+         separateEssentials, diaSidebar, failed, warnings, vaultToken, cookieCount, addressCount, cardCount
   }
 
   public init(browserId: String, profileId: String) {

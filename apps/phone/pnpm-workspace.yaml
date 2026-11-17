@@ -1,0 +1,13 @@
+packages:
+  - "."
+  - "../../packages/phone"
+
+nodeLinker: hoisted
+
+autoInstallPeers: false
+
+ignoreWorkspaceRootCheck: true
+
+allowBuilds:
+  '@parcel/watcher': false
+  esbuild: false

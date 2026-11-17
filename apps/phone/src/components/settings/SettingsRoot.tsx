@@ -1,0 +1,182 @@
+import { useEffect } from "react";
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import Animated, { FadeIn, FadeOut, LayoutAnimationConfig } from "react-native-reanimated";
+import { refreshDefaultBrowser, useDefaultBrowser } from "../../state/settings/defaultBrowser";
+import { offersDefaultBrowser } from "../../state/settings/settingsRules";
+import { markSheetFromSettings, openArchive, openSpaces } from "../../state/browse/store";
+import { useSyncEnabled, useSyncStatus, useSyncView } from "../../state/sync/hooks";
+import { syncedEngineName, syncRowSubtitle } from "../../state/sync/syncRules";
+import { showOnboardingFromSettings } from "../../state/onboarding/store";
+import { appVersion, exportOpenTabs, setAppLinks, setArchiveInterval, setAutoOpenKeyboard, setSearchSuggestions, useEngines } from "../../state/settings/actions";
+import { usePreferences } from "../../state/settings/hooks";
+import { closeSettings, pushSettings } from "../../state/settings/nav";
+import { AUTO_ARCHIVE_INTERVALS, autoArchiveTitle, type AutoArchiveInterval } from "../../state/tabs/tabModels";
+import { capsule, duration, font, settingsLayout, settingsTint, space, Symbol, useDesign, useTheme, useWarningInk } from "../ui";
+import { PHONE_SHARING_COPY } from "../../lib/telemetryCopy";
+import { setUsageSharing, useUsageSharing } from "../../state/telemetry/telemetry";
+import { AppearanceRow, ColorRow, MatchMyMac } from "./AppearancePage";
+import { BarButton, Group, IconTile, NavRow, PickerRow, SettingsPage, ToggleRow } from "./SettingsKit";
+import { syncOffered } from "../../state/sync/offer";
+
+const APP_LINKS = [
+  { id: "ardia" as const, title: "Ardia" },
+  { id: "app" as const, title: "App" },
+];
+
+const INTERVALS = (Object.keys(AUTO_ARCHIVE_INTERVALS) as AutoArchiveInterval[]).map((id) => ({ id, title: autoArchiveTitle(id) }));
+
+export function SettingsRoot() {
+  const theme = useTheme();
+  const engineId = usePreferences((p) => p.searchEngineId);
+  const suggestions = usePreferences((p) => p.searchSuggestions);
+  const keyboard = usePreferences((p) => p.autoOpensKeyboard);
+  const interval = usePreferences((p) => p.autoArchiveInterval);
+  const engines = useEngines((s) => s.engines);
+  const appLinks = useEngines((s) => s.appLinks);
+  const sharing = useUsageSharing((s) => s.sharing);
+  const syncEnabled = useSyncEnabled();
+  const offersDefault = offersDefaultBrowser(useDefaultBrowser((s) => s.status));
+  useEffect(() => {
+    void refreshDefaultBrowser();
+  }, []);
+  const synced = useSyncView().search;
+  const engineName = syncEnabled && synced ? syncedEngineName(synced, engines) : (engines.find((engine) => engine.id === engineId)?.name ?? "");
+  const stacks = useWindowDimensions().fontScale >= settingsLayout.accessibilityFontScale;
+  const redesigned = useDesign() === "redesigned";
+  return (
+    <SettingsPage title="Settings" trailing={<BarButton title="Done" emphasized onPress={closeSettings} />}>
+      {syncOffered() ? (
+        <Group>
+          <SyncCard stacks={stacks} />
+        </Group>
+      ) : null}
+      <View testID="settingsShortcuts" style={[styles.shortcuts, { flexDirection: stacks ? "column" : "row" }]}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            closeSettings();
+            openArchive();
+            markSheetFromSettings();
+          }}
+          style={[styles.shortcut, stacks ? null : styles.fill, { backgroundColor: theme.groupFill }]}
+        >
+          <Symbol name="archivebox" size={20} color={theme.label} />
+          <Text style={[font.body, styles.medium, { color: theme.label }]}>Archive</Text>
+        </Pressable>
+        {syncOffered() ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              closeSettings();
+              openSpaces();
+              markSheetFromSettings();
+            }}
+            style={[styles.shortcut, stacks ? null : styles.fill, { backgroundColor: theme.groupFill }]}
+          >
+            <Symbol name="squareStack" size={20} color={theme.label} />
+            <Text style={[font.body, styles.medium, { color: theme.label }]}>Spaces</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      {redesigned ? (
+        <Group>
+          <AppearanceRow />
+        </Group>
+      ) : (
+        <Group>
+          <ColorRow />
+          {syncEnabled ? <MatchMyMac /> : null}
+        </Group>
+      )}
+      <Group>
+        <NavRow title="Site Settings" icon="globe" tint={settingsTint.neutral} divider={offersDefault} onPress={() => pushSettings({ page: "siteSettings" })} />
+        {offersDefault ? <NavRow title="Default Browser" icon="safariFill" tint={settingsTint.defaultBrowser} onPress={() => pushSettings({ page: "defaultBrowser" })} /> : null}
+      </Group>
+      <Group>
+        <NavRow title="Search Engine" icon="magnifyingglass" tint={settingsTint.search} value={engineName} divider onPress={() => pushSettings({ page: "searchEngine" })} />
+        <ToggleRow title="Search Suggestions" icon="textMagnifyingglass" tint={settingsTint.blue} value={suggestions} divider onChange={setSearchSuggestions} />
+        <ToggleRow title="Auto-Open Keyboard" icon="keyboardFill" tint={settingsTint.keyboard} value={keyboard} onChange={setAutoOpenKeyboard} />
+      </Group>
+      <Group>
+        <PickerRow title="Archive Inactive Tabs" icon="archivebox" tint={settingsTint.archive} options={INTERVALS} selected={interval} divider onSelect={setArchiveInterval} />
+        <PickerRow title="Open App Links In" icon="arrowUpForwardAppFill" tint={settingsTint.appLinks} options={APP_LINKS} selected={appLinks} divider onSelect={setAppLinks} />
+        <NavRow title="Clear Browsing Data" icon="eraserFill" tint={settingsTint.clearData} divider onPress={() => pushSettings({ page: "clearData" })} />
+        <Pressable accessibilityRole="button" onPress={exportOpenTabs} style={({ pressed }) => [styles.row, pressed ? { backgroundColor: theme.rowHighlight } : null]}>
+          <IconTile icon="squareAndArrowUp" tint={settingsTint.export} />
+          <Text style={[font.body, { color: theme.label }]}>Export Open Tabs</Text>
+        </Pressable>
+      </Group>
+      <Group footer={PHONE_SHARING_COPY.summary}>
+        <ToggleRow
+          title={PHONE_SHARING_COPY.toggle}
+          icon="checkmarkShield"
+          tint={settingsTint.neutral}
+          value={sharing}
+          divider
+          onChange={(on) => setUsageSharing(on, "settings")}
+        />
+        <NavRow title={PHONE_SHARING_COPY.whatsSent} icon="info" tint={settingsTint.neutral} onPress={() => pushSettings({ page: "whatsSent" })} />
+      </Group>
+      <Group>
+        <Pressable accessibilityRole="button" onPress={showOnboardingFromSettings} style={({ pressed }) => [styles.row, pressed ? { backgroundColor: theme.rowHighlight } : null]}>
+          <IconTile icon="handWave" tint={settingsTint.onboarding} />
+          <Text style={[font.body, { color: theme.label }]}>Show Onboarding</Text>
+        </Pressable>
+        <View style={[styles.divider, { backgroundColor: theme.separator }]} />
+        <NavRow title="About Ardia" icon="info" tint={settingsTint.neutral} onPress={() => pushSettings({ page: "about" })} />
+      </Group>
+      <Text style={[font.footnote, styles.centered, { color: theme.secondaryLabel }]}>{appVersion()}</Text>
+    </SettingsPage>
+  );
+}
+
+function SyncCard({ stacks }: { stacks: boolean }) {
+  const theme = useTheme();
+  const warningInk = useWarningInk();
+  const status = useSyncStatus();
+  const line = syncRowSubtitle(status);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Sync With Mac"
+      accessibilityValue={{ text: line.text }}
+      onPress={() => pushSettings({ page: "sync" })}
+      style={({ pressed }) => [styles.syncCard, pressed ? { backgroundColor: theme.rowHighlight } : null]}
+    >
+      <View testID="syncCardContent" style={[styles.fill, stacks ? styles.syncStacked : styles.syncBeside]}>
+        <IconTile icon="macAndPhone" tint={settingsTint.sync} side={stacks ? settingsLayout.syncTileLarge : settingsLayout.syncTile} />
+        <View style={styles.syncText}>
+          <Text style={[font.title3, styles.bold, { color: theme.label }]}>Sync With Mac</Text>
+          <LayoutAnimationConfig skipEntering>
+            <Animated.Text
+              key={line.text}
+              testID="syncStatusLine"
+              entering={FadeIn.duration(duration.crossfade)}
+              exiting={FadeOut.duration(duration.crossfade)}
+              style={[font.subheadline, { color: line.isWarning ? warningInk : theme.secondaryLabel }]}
+              numberOfLines={stacks ? undefined : 2}
+            >
+              {line.text}
+            </Animated.Text>
+          </LayoutAnimationConfig>
+        </View>
+      </View>
+      <Symbol name="chevronRight" size={14} color={theme.tertiaryLabel} />
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  shortcuts: { paddingHorizontal: space.l, gap: space.s },
+  fill: { flex: 1 },
+  shortcut: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: space.s, minHeight: 48, borderRadius: capsule(48) },
+  medium: { fontWeight: "500" },
+  bold: { fontWeight: "600" },
+  syncCard: { flexDirection: "row", alignItems: "center", gap: space.m, paddingHorizontal: settingsLayout.rowInset, paddingVertical: space.m },
+  syncText: { flexShrink: 1, gap: space.tight },
+  syncBeside: { flexDirection: "row", alignItems: "center", gap: space.s + 2 },
+  syncStacked: { flexDirection: "column", alignItems: "flex-start", gap: space.s },
+  row: { flexDirection: "row", alignItems: "center", gap: settingsLayout.labelGap, minHeight: settingsLayout.rowMinHeight, paddingHorizontal: settingsLayout.rowInset },
+  divider: { height: StyleSheet.hairlineWidth, marginLeft: settingsLayout.rowInset + settingsLayout.tile + settingsLayout.labelGap },
+  centered: { textAlign: "center" },
+});

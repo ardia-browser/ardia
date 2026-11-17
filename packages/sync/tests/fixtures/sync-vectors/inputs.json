@@ -1,0 +1,213 @@
+{
+  "entropies": {
+    "ordinary": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e",
+    "sparse": "ff000000000000000000000000ff0000000000000000000000000000000000ff"
+  },
+  "scopes": [
+    "app",
+    "p:personal000000000000000000"
+  ],
+  "payloads": {
+    "log-line": "eyJraW5kIjoibG9nIiwiZGV2aWNlIjoidmVjdG9ycyIsIm5vdGUiOiJjYWbDqSDwn5iAIiwiYXQiOjE3NjMyNTEyMDB9",
+    "pattern-1019": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmqq6ytrq+wsbKztLW2t7i5uru8vb6/wMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t/g4eLj5OXm5+jp6uvs7e7v8PHy8/T19vf4+foAAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8wMTIzNDU2Nzg5Ojs8PT4/QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl9gYWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXp7fH1+f4CBgoOEhYaHiImKi4yNjo+QkZKTlJWWl5iZmpucnZ6foKGio6SlpqeoqaqrrK2ur7CxsrO0tba3uLm6u7y9vr/AwcLDxMXGx8jJysvMzc7P0NHS09TV1tfY2drb3N3e3+Dh4uPk5ebn6Onq6+zt7u/w8fLz9PX29/j5+gABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj9AQUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVpbXF1eX2BhYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3h5ent8fX5/gIGCg4SFhoeIiYqLjI2Oj5CRkpOUlZaXmJmam5ydnp+goaKjpKWmp6ipqqusra6vsLGys7S1tre4ubq7vL2+v8DBwsPExcbHyMnKy8zNzs/Q0dLT1NXW19jZ2tvc3d7f4OHi4+Tl5ufo6err7O3u7/Dx8vP09fb3+Pn6AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmqq6ytrq+wsbKztLW2t7i5uru8vb6/wMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t/g4eLj5OXm5+jp6uvs7e7v8PHy8/T19vf4+foAAQIDBAUGBwgJCgsMDQ4=",
+    "pattern-1020": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmqq6ytrq+wsbKztLW2t7i5uru8vb6/wMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t/g4eLj5OXm5+jp6uvs7e7v8PHy8/T19vf4+foAAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8wMTIzNDU2Nzg5Ojs8PT4/QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl9gYWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXp7fH1+f4CBgoOEhYaHiImKi4yNjo+QkZKTlJWWl5iZmpucnZ6foKGio6SlpqeoqaqrrK2ur7CxsrO0tba3uLm6u7y9vr/AwcLDxMXGx8jJysvMzc7P0NHS09TV1tfY2drb3N3e3+Dh4uPk5ebn6Onq6+zt7u/w8fLz9PX29/j5+gABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj9AQUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVpbXF1eX2BhYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3h5ent8fX5/gIGCg4SFhoeIiYqLjI2Oj5CRkpOUlZaXmJmam5ydnp+goaKjpKWmp6ipqqusra6vsLGys7S1tre4ubq7vL2+v8DBwsPExcbHyMnKy8zNzs/Q0dLT1NXW19jZ2tvc3d7f4OHi4+Tl5ufo6err7O3u7/Dx8vP09fb3+Pn6AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmqq6ytrq+wsbKztLW2t7i5uru8vb6/wMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t/g4eLj5OXm5+jp6uvs7e7v8PHy8/T19vf4+foAAQIDBAUGBwgJCgsMDQ4P",
+    "pattern-1021": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmqq6ytrq+wsbKztLW2t7i5uru8vb6/wMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t/g4eLj5OXm5+jp6uvs7e7v8PHy8/T19vf4+foAAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8wMTIzNDU2Nzg5Ojs8PT4/QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl9gYWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXp7fH1+f4CBgoOEhYaHiImKi4yNjo+QkZKTlJWWl5iZmpucnZ6foKGio6SlpqeoqaqrrK2ur7CxsrO0tba3uLm6u7y9vr/AwcLDxMXGx8jJysvMzc7P0NHS09TV1tfY2drb3N3e3+Dh4uPk5ebn6Onq6+zt7u/w8fLz9PX29/j5+gABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj9AQUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVpbXF1eX2BhYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3h5ent8fX5/gIGCg4SFhoeIiYqLjI2Oj5CRkpOUlZaXmJmam5ydnp+goaKjpKWmp6ipqqusra6vsLGys7S1tre4ubq7vL2+v8DBwsPExcbHyMnKy8zNzs/Q0dLT1NXW19jZ2tvc3d7f4OHi4+Tl5ufo6err7O3u7/Dx8vP09fb3+Pn6AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmqq6ytrq+wsbKztLW2t7i5uru8vb6/wMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t/g4eLj5OXm5+jp6uvs7e7v8PHy8/T19vf4+foAAQIDBAUGBwgJCgsMDQ4PEA==",
+    "empty": "",
+    "local-state": "eyJkZXZpY2UiOiJ2ZWN0b3JzIiwibGFzdFN5bmMiOjE3NjMyNTEyMDB9"
+  },
+  "passwords": [
+    {
+      "origin": "https://bank.example",
+      "username": "luke",
+      "password": "hunter2 é😀"
+    },
+    {
+      "origin": "https://bücher.example",
+      "username": "zoë@例え.jp",
+      "password": "correct horse battery staple"
+    },
+    {
+      "origin": "https://ardia.dev",
+      "username": "",
+      "password": "correct horse battery staplé"
+    }
+  ],
+  "localStates": [
+    {
+      "entropy": "ordinary",
+      "fileId": "state",
+      "payload": "local-state",
+      "nonce": "3c9bc15b7b08154da7fb1ddb"
+    },
+    {
+      "entropy": "sparse",
+      "fileId": "state",
+      "payload": "local-state",
+      "nonce": "35ba9b3299cbe58bc3a558af"
+    }
+  ],
+  "vaultFiles": [
+    {
+      "entropy": "ordinary",
+      "scope": "app",
+      "payload": "log-line",
+      "id": "k6s5tui52jhfei32qihguzxuui",
+      "nonce": "b78742b247d35164d5d400a3"
+    },
+    {
+      "entropy": "ordinary",
+      "scope": "app",
+      "payload": "pattern-1019",
+      "id": "zsiw2mzu7zuwbq7s2mwin4l3lm",
+      "nonce": "7e2c3b44611eeff5a0442140"
+    },
+    {
+      "entropy": "ordinary",
+      "scope": "app",
+      "payload": "pattern-1020",
+      "id": "ccpuxwjb5kpwrzbb5rbq22h67e",
+      "nonce": "765756868de070dd0565e7c5"
+    },
+    {
+      "entropy": "ordinary",
+      "scope": "app",
+      "payload": "pattern-1021",
+      "id": "fhjq3vviqu324hbk7nbpkb7tgm",
+      "nonce": "b39af08c0e84be1d8c39a230"
+    },
+    {
+      "entropy": "ordinary",
+      "scope": "app",
+      "payload": "empty",
+      "id": "3wnslogvisgp7f575zgpacu6pm",
+      "nonce": "1160db3a32e39b9356945f4e"
+    },
+    {
+      "entropy": "ordinary",
+      "scope": "p:personal000000000000000000",
+      "payload": "log-line",
+      "id": "f4rawqixsaa3k33nrr4bugb3s4",
+      "nonce": "da414be9ed19dc4bd1f423c2"
+    },
+    {
+      "entropy": "ordinary",
+      "scope": "p:personal000000000000000000",
+      "payload": "pattern-1019",
+      "id": "rrgrtggdupj322fc5hap5dqt4a",
+      "nonce": "3ec93998d23bd642c78541ad"
+    },
+    {
+      "entropy": "ordinary",
+      "scope": "p:personal000000000000000000",
+      "payload": "pattern-1020",
+      "id": "pvngvksg3kgiq543ypnqwwemle",
+      "nonce": "69d7ee273cd47794d3f17ffb"
+    },
+    {
+      "entropy": "ordinary",
+      "scope": "p:personal000000000000000000",
+      "payload": "pattern-1021",
+      "id": "eguzsq6yz35xvhrxcvub2g24te",
+      "nonce": "d1c2b6a2f8e925a842a2c34c"
+    },
+    {
+      "entropy": "ordinary",
+      "scope": "p:personal000000000000000000",
+      "payload": "empty",
+      "id": "3pfiw4stjrg2cbxsyzsmyl6lxm",
+      "nonce": "c6c915cf664fba18dc72cbf3"
+    },
+    {
+      "entropy": "sparse",
+      "scope": "app",
+      "payload": "log-line",
+      "id": "tn5r3jy25atxndyxojo7vkrupe",
+      "nonce": "efead3004a73759328c0efa7"
+    },
+    {
+      "entropy": "sparse",
+      "scope": "app",
+      "payload": "pattern-1019",
+      "id": "zqqawygfemf3i6erxpdfveamqm",
+      "nonce": "13f65dadb10657640b483d43"
+    },
+    {
+      "entropy": "sparse",
+      "scope": "app",
+      "payload": "pattern-1020",
+      "id": "s35ujfjy55rnznuto4rnqaheiy",
+      "nonce": "3d0e056478835dbcb9093f84"
+    },
+    {
+      "entropy": "sparse",
+      "scope": "app",
+      "payload": "pattern-1021",
+      "id": "kyyl4sq6k2zqbddvcfuzy7ausa",
+      "nonce": "84a39a836eac96ca585fab96"
+    },
+    {
+      "entropy": "sparse",
+      "scope": "app",
+      "payload": "empty",
+      "id": "6q3gizgkovs4b4cmrukgxamnpu",
+      "nonce": "fd49b2969b23d7ff847b5bcd"
+    },
+    {
+      "entropy": "sparse",
+      "scope": "p:personal000000000000000000",
+      "payload": "log-line",
+      "id": "ivhc7pp6vhr36y37niqy6t4x2u",
+      "nonce": "dde617ac2505d64a084f8940"
+    },
+    {
+      "entropy": "sparse",
+      "scope": "p:personal000000000000000000",
+      "payload": "pattern-1019",
+      "id": "yc73l22a43bvwu4epys3tgygqq",
+      "nonce": "0880c1d898b01596f47ea0a7"
+    },
+    {
+      "entropy": "sparse",
+      "scope": "p:personal000000000000000000",
+      "payload": "pattern-1020",
+      "id": "vmyas2bciwu7m72h52ehaxpjm4",
+      "nonce": "15e0fbac318770df47bb2322"
+    },
+    {
+      "entropy": "sparse",
+      "scope": "p:personal000000000000000000",
+      "payload": "pattern-1021",
+      "id": "ppd6w6ujwxlpgs3jthdyjnm7uu",
+      "nonce": "c48f998312ec388f6dfb8782"
+    },
+    {
+      "entropy": "sparse",
+      "scope": "p:personal000000000000000000",
+      "payload": "empty",
+      "id": "pazq3jg5uk4423bykeab2ja46e",
+      "nonce": "70620367b84bcd75fd939787"
+    }
+  ],
+  "damaged": [
+    {
+      "entropy": "ordinary",
+      "scope": "app",
+      "payload": "log-line",
+      "id": "tzkhnvckqz2ccwfw2msp5c6jky",
+      "nonce": "e1ac79b16047c99cc457ffee",
+      "flipByte": 40
+    }
+  ],
+  "pending": [
+    {
+      "entropy": "ordinary",
+      "scope": "app",
+      "id": "3kxt2wmd3uerpyxu3p7jvb4er4"
+    },
+    {
+      "entropy": "sparse",
+      "scope": "p:personal000000000000000000",
+      "id": "q4h573z3uboqstapl763capi7e"
+    }
+  ]
+}

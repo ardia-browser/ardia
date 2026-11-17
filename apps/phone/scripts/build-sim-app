@@ -1,0 +1,167 @@
+#!/bin/bash
+# Builds a Release iPhone simulator app whose JavaScript is one commit, and stamps it with that commit and the native tree's state.
+#
+#   apps/phone/scripts/build-sim-app <name> [--commit REV]
+#
+# The bundle comes from an export of REV (default HEAD at start, see bundle-export.ts), so edits and commits in the
+# working tree during the build don't reach it; the export is deleted afterwards. The native app is built from the
+# working tree with JS bundling skipped, and cached once in $ARDIA_SIM_CACHE (default /tmp/ardia-phone/.sim-native)
+# under a hash of its inputs (apps/phone/ios with its Podfile.lock, packages/phone/ios, ArdiaKit, app.json, the
+# module config, the lockfile and patches). When that hash is unchanged the cached app is copied, the commit's
+# bundle is compiled into it with Hermes and the copy is re-signed ad hoc; otherwise xcodebuild runs first, through
+# scripts/agent/locked. Writes $ARDIA_APK_DIR/<name>.app (default /tmp/ardia-phone) and <name>.txt beside it; the app
+# logs "ARDIA build <commit> dirty: … from the …; native …" at launch.
+# Refuses under 4 GB free on the data volume, under 6 GB when the native app is rebuilt over its cached build products,
+# and under 10 GB when it is built from nothing.
+set -euo pipefail
+if [ $# -lt 1 ] || [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+  sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+  [ $# -ge 1 ] && exit 0 || exit 64
+fi
+here="$(cd "$(dirname "$0")" && pwd)"
+root="$(cd "$here/../../.." && pwd)"
+out="${ARDIA_APK_DIR:-/tmp/ardia-phone}"
+cache="${ARDIA_SIM_CACHE:-$out/.sim-native}"
+mkdir -p "$out" "$cache"
+if [ -z "${ARDIA_SIM_APP_LOCKED:-}" ]; then
+  ARDIA_SIM_APP_LOCKED=1 exec /usr/bin/lockf -t "${ARDIA_SIM_APP_WAIT:-540}" "$cache.lock" "$0" "$@"
+fi
+name="$1"
+shift
+rev=HEAD
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --commit) rev="$2"; shift ;;
+    *) echo "unknown option $1" >&2; exit 64 ;;
+  esac
+  shift
+done
+case "$name" in
+  */*|.*|"") echo "name $name must be a plain file name" >&2; exit 64 ;;
+esac
+df -h /System/Volumes/Data | sed -n '2p' | awk '{print "data volume: " $4 " free of " $2}'
+needsFree() {
+  local floor="$1" what="$2" free
+  free=$(df -g /System/Volumes/Data | awk 'NR==2 {print $4}')
+  if [ "$free" -lt "$floor" ]; then
+    echo "only ${free} GB free on the data volume, and $what needs ${floor}: not building" >&2
+    exit 1
+  fi
+}
+needsFree 4 "a bundle over the cached native app"
+started=$(date +%s)
+nativePaths=(apps/phone/ios packages/phone/ios apps/phone/app.json packages/phone/expo-module.config.json apps/phone/pnpm-lock.yaml apps/phone/pnpm-workspace.yaml patches)
+nativeHash() {
+  (cd "$root" && git ls-files -z -co --exclude-standard -- "${nativePaths[@]}" | sort -z | while IFS= read -r -d '' file; do
+    [ -f "$file" ] && printf '%s %s\n' "$(git hash-object -- "$file")" "$file"
+  done) | shasum -a 256 | cut -c1-16
+}
+nativeState() {
+  local changed
+  changed="$(cd "$root" && git status --porcelain=v1 --untracked-files=all -- "${nativePaths[@]}" | cut -c4- | tr '\n' ',' | sed 's/,$//; s/,/, /g')"
+  if [ -z "$changed" ]; then
+    echo "$(git -C "$root" rev-parse HEAD), clean"
+  else
+    echo "$(git -C "$root" rev-parse HEAD), dirty ($changed)"
+  fi
+}
+work="$(mktemp -d "$out/.sim-work-$name-XXXXXX")"
+exportDir=""
+cleanUp() {
+  if [ -n "$exportDir" ]; then
+    node --no-warnings "$here/bundle-export.ts" remove "$exportDir" || echo "could not remove the bundle export $exportDir" >&2
+  fi
+  rm -rf "$work"
+  rm -rf "$out/$name.building.app"
+}
+trap cleanUp EXIT
+made="$(node --no-warnings "$here/bundle-export.ts" create --commit "$rev" --root "$root")"
+exportDir="$(printf '%s' "$made" | node -e 'console.log(JSON.parse(require("fs").readFileSync(0, "utf8")).dir)')"
+commit="$(printf '%s' "$made" | node -e 'console.log(JSON.parse(require("fs").readFileSync(0, "utf8")).commit)')"
+source="export of the commit"
+echo "bundling $commit from the $source"
+hashBefore="$(nativeHash)"
+stateBefore="$(nativeState)"
+cachedApp="$cache/Ardia.app"
+native=reused
+if [ ! -d "$cachedApp" ] || [ "$(cat "$cache/native.hash" 2>/dev/null)" != "$hashBefore" ]; then
+  native=built
+  if [ -d "$cache/dd/Build/Intermediates.noindex" ]; then
+    needsFree 6 "an incremental native build"
+  else
+    needsFree 10 "a native build from nothing"
+  fi
+  echo "native inputs $hashBefore differ from the cached build: running xcodebuild"
+  rm -rf "$cachedApp" "$cache/native.hash"
+  export LANG=en_US.UTF-8
+  (cd "$root" && scripts/agent/locked xcodebuild --wait 540 --as build-sim-app -- xcodebuild -workspace apps/phone/ios/Ardia.xcworkspace -scheme Ardia -configuration Release -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$cache/dd" ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= PROVISIONING_PROFILE_SPECIFIER= ARDIA_TEST_BUILD=YES SKIP_BUNDLING=1 build) > "$work/xcodebuild.log" 2>&1 || {
+    grep -E "error:|BUILD FAILED" "$work/xcodebuild.log" | head -20 >&2
+    echo "xcodebuild failed; its log was $work/xcodebuild.log" >&2
+    cp "$work/xcodebuild.log" "$out/$name.xcodebuild.log"
+    exit 1
+  }
+  cp -R "$cache/dd/Build/Products/Release-iphonesimulator/Ardia.app" "$cachedApp"
+  rm -f "$cachedApp/main.jsbundle"
+  echo "$hashBefore" > "$cache/native.hash"
+else
+  echo "native inputs $hashBefore match the cached build: reusing it"
+fi
+built="$out/$name.building.app"
+rm -rf "$built"
+cp -R "$cachedApp" "$built"
+phone="$exportDir/apps/phone"
+entry="$(cd "$phone" && node -e "require('expo/scripts/resolveAppEntry')" "$phone" ios absolute | tail -n 1)"
+cli="$(cd "$phone" && node --print "require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })")"
+reactNative="$(cd "$phone" && node --print "require('path').dirname(require.resolve('react-native/package.json'))")"
+hermesc="$root/apps/phone/ios/Pods/hermes-engine/destroot/bin/hermesc"
+[ -x "$hermesc" ] || { echo "no hermesc at $hermesc: run pod install for apps/phone/ios" >&2; exit 1; }
+(cd "$phone" && EXPO_PUBLIC_ARDIA_LAB=true node "$cli" export:embed --entry-file "$entry" --platform ios --dev false --reset-cache --bundle-output "$work/main.jsbundle" --assets-dest "$built" --minify false --config-cmd "'$(command -v node)' '$reactNative/cli.js' config") > "$work/bundle.log" 2>&1 || {
+  tail -30 "$work/bundle.log" >&2
+  echo "bundling failed" >&2
+  exit 1
+}
+"$hermesc" -emit-binary -max-diagnostic-width=80 -O -out "$built/main.jsbundle" "$work/main.jsbundle" > "$work/hermes.log" 2>&1 || {
+  grep -E "error:" "$work/hermes.log" | head -20 >&2
+  echo "Hermes failed to compile the bundle" >&2
+  exit 1
+}
+stateAfter="$(nativeState)"
+hashAfter="$(nativeHash)"
+nativeAfter="$stateAfter"
+[ "$hashAfter" = "$hashBefore" ] || nativeAfter="$stateAfter, written during the build"
+plist="$built/Info.plist"
+for key in ArdiaBuildCommit ArdiaBuildDirty ArdiaBuildSource ArdiaBuildNative; do
+  /usr/libexec/PlistBuddy -c "Delete :$key" "$plist" >/dev/null 2>&1 || true
+done
+/usr/libexec/PlistBuddy -c "Add :ArdiaBuildCommit string $commit" -c "Add :ArdiaBuildDirty string no" -c "Add :ArdiaBuildSource string $source" -c "Add :ArdiaBuildNative string $stateBefore" "$plist"
+codesign --force --sign - --preserve-metadata=identifier,entitlements,flags --timestamp=none "$built" 2> "$work/codesign.log" || { cat "$work/codesign.log" >&2; exit 1; }
+codesign --verify "$built"
+read_stamp() { /usr/libexec/PlistBuddy -c "Print :$1" "$plist" 2>/dev/null; }
+stamped="$(read_stamp ArdiaBuildCommit)"
+dirty="$(read_stamp ArdiaBuildDirty)"
+stampedSource="$(read_stamp ArdiaBuildSource)"
+magic="$(head -c 4 "$built/main.jsbundle" | xxd -p)"
+if [ "$stamped" != "$commit" ] || [ "$dirty" != "no" ] || [ "$stampedSource" != "$source" ] || [ "$magic" != "c61fbc03" ]; then
+  rm -rf "$out/$name.rejected.app"
+  mv "$built" "$out/$name.rejected.app"
+  echo "the app says ${stamped:-no commit}, dirty: ${dirty:-unknown}, from the ${stampedSource:-unknown}, bundle magic $magic, but this build bundled $commit from the $source as Hermes bytecode: kept as $name.rejected.app, not shipped" >&2
+  exit 1
+fi
+app="$out/$name.app"
+rm -rf "$app"
+mv "$built" "$app"
+sum="$(shasum -a 256 "$app/main.jsbundle" | cut -d' ' -f1)"
+{
+  echo "app: $name.app"
+  echo "commit: $commit"
+  echo "dirty: $dirty"
+  echo "bundle: from the $source"
+  echo "native at the start: $stateBefore"
+  echo "native after the build: $nativeAfter"
+  echo "native inputs: $hashBefore, $native"
+  echo "lab: on"
+  echo "bundle id: $(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")"
+  echo "main.jsbundle sha256: $sum"
+  echo "seconds: $(( $(date +%s) - started ))"
+} > "$out/$name.txt"
+cat "$out/$name.txt"

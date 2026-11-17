@@ -584,6 +584,188 @@ def build_dia():
                        bar=[bookmark("Work", "https://work.dia.example/", t, "00000000-0000-4000-8000-000000000705")],
                        other=[], synced=[])
 
+    build_dia_sidebar(d, "Default")
+
+
+DIA_LABEL_SALT = base64.b64decode("iOe1Ue/XtonbieE/5m1nAgewvWQlePHRcKnoU10EyOM=")
+DIA_PAGE = 4096
+DIA_RESERVED = 80
+DIA_WAL_SALT = bytes.fromhex("5a1e5a1e0d1a0d1a")
+DIA_FILE_SALT = hashlib.sha256(b"dia-fixture-salt").digest()[:16]
+DIA_SCHEMA = """
+CREATE TABLE "spaces" ("id" TEXT PRIMARY KEY NOT NULL, "title" TEXT NOT NULL, "creation_date" DATE NOT NULL, "last_updated_at" DATE NOT NULL, "theme" TEXT NOT NULL DEFAULT 'neutral', "theme_intensity" DOUBLE);
+CREATE TABLE "nodes" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "kind" TEXT NOT NULL CHECK ("kind" IN ('tab', 'group', 'favorites', 'window', 'content_pane', 'pinned_container')), "entity_id" TEXT NOT NULL, "parent_id" INTEGER REFERENCES "nodes"("id") ON DELETE CASCADE, "order" INTEGER NOT NULL, "deleted_at" DATETIME, "space_id" TEXT NOT NULL DEFAULT '', UNIQUE ("parent_id", "order"));
+CREATE TABLE "tabs" ("id" TEXT PRIMARY KEY NOT NULL, "node_id" INTEGER NOT NULL UNIQUE REFERENCES "nodes"("id") ON DELETE CASCADE, "creation_date" DATE NOT NULL, "last_active_date" DATE, "split_view_widths" TEXT);
+CREATE TABLE "tab_groups" ("id" TEXT PRIMARY KEY NOT NULL, "node_id" INTEGER NOT NULL UNIQUE REFERENCES "nodes"("id") ON DELETE CASCADE, "creation_date" DATE NOT NULL, "title" TEXT, "theme" TEXT NOT NULL DEFAULT 'neutral', "icon" TEXT, "last_closed_at" DATETIME, "title_source" TEXT, "icon_source" TEXT, "behavior" TEXT, "open_new_tabs_in_group" BOOLEAN);
+CREATE TABLE "content_panes" ("id" TEXT PRIMARY KEY NOT NULL, "node_id" INTEGER NOT NULL UNIQUE REFERENCES "nodes"("id") ON DELETE CASCADE, "creation_date" DATE NOT NULL, "last_active_date" DATE, "tab_session_id" INTEGER, "custom_title" TEXT, "custom_icon" TEXT, "variant" TEXT);
+CREATE TABLE "web_contents" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "content_pane_id" NOT NULL REFERENCES "content_panes"("id") ON DELETE CASCADE, "url" TEXT NOT NULL, "title" TEXT);
+CREATE TABLE "windows" ("id" TEXT PRIMARY KEY NOT NULL, "node_id" INTEGER NOT NULL UNIQUE REFERENCES "nodes"("id") ON DELETE CASCADE, "selected_tab_id" TEXT, "focused_space_id" TEXT);
+"""
+DIA_DATE = "2026-11-01 09:00:00.000"
+
+
+class DiaTree:
+    def __init__(self, db):
+        self.db = db
+        self.next = (db.execute("SELECT max(id) FROM nodes").fetchone()[0] or 0) + 1
+
+    def node(self, kind, parent, order, space, deleted=None):
+        nid = self.next
+        self.next += 1
+        entity = "%s-%04d" % (kind, nid)
+        self.db.execute('INSERT INTO nodes (id, kind, entity_id, parent_id, "order", deleted_at, space_id) VALUES (?,?,?,?,?,?,?)',
+                        (nid, kind, entity, parent, order, deleted, "" if kind == "content_pane" else space))
+        return nid, entity
+
+    def container(self, kind, order, space, deleted=None):
+        nid, entity = self.node(kind, None, order, space, deleted)
+        if kind == "window":
+            self.db.execute("INSERT INTO windows VALUES (?,?,NULL,NULL)", (entity, nid))
+        return nid
+
+    def tab(self, parent, order, space, *pages, deleted=None):
+        nid, entity = self.node("tab", parent, order, space, deleted)
+        self.db.execute("INSERT INTO tabs VALUES (?,?,?,NULL,NULL)", (entity, nid, DIA_DATE))
+        for i, (url, title, custom) in enumerate(pages):
+            pid, pane = self.node("content_pane", nid, i, space)
+            self.db.execute("INSERT INTO content_panes VALUES (?,?,?,NULL,NULL,?,NULL,?)",
+                            (pane, pid, DIA_DATE, custom, "web_content" if url else "new_tab_page"))
+            if url:
+                self.db.execute("INSERT INTO web_contents (content_pane_id, url, title) VALUES (?,?,?)", (pane, url, title))
+        return nid
+
+    def group(self, parent, order, space, title, emoji=None, theme="neutral"):
+        nid, entity = self.node("group", parent, order, space)
+        icon = json.dumps({"emoji": emoji}, ensure_ascii=False) if emoji else None
+        self.db.execute("INSERT INTO tab_groups VALUES (?,?,?,?,?,?,NULL,'userGenerated',NULL,NULL,NULL)",
+                        (entity, nid, DIA_DATE, title, theme, icon))
+        return nid
+
+
+def dia_sidebar_plain(path):
+    subprocess.run(["sqlite3", path, ".filectrl reserve_bytes %d" % DIA_RESERVED, DIA_SCHEMA], check=True, capture_output=True)
+    db = sqlite3.connect(path)
+    db.execute("INSERT INTO spaces VALUES ('space-home','Home','2026-10-01 08:00:00.000',?,'yellow',NULL)", (DIA_DATE,))
+    db.execute("INSERT INTO spaces VALUES ('space-side','Side','2026-10-02 08:00:00.000',?,'green',NULL)", (DIA_DATE,))
+    t = DiaTree(db)
+    fav = t.container("favorites", 0, "space-home")
+    t.tab(fav, 0, "space-home", ("https://mail.dia.example/", "Mail", None))
+    t.tab(fav, 1, "space-home", ("https://calendar.dia.example/", "Calendar", None))
+    pinned = t.container("pinned_container", 0, "space-home")
+    t.tab(pinned, 0, "space-home", ("https://docs.dia.example/", "Docs", "Team docs"))
+    reading = t.group(pinned, 1, "space-home", "Reading", "\U0001F4DA", "blue")
+    t.tab(reading, 0, "space-home", ("https://read.dia.example/one", "Read one", None))
+    deep = t.group(reading, 1, "space-home", "Deep")
+    t.tab(deep, 0, "space-home", ("https://read.dia.example/deep", "Deep read", None))
+    t.tab(pinned, 2, "space-home", ("https://left.dia.example/", "Left", None), ("https://right.dia.example/", "Right", None))
+    t.tab(pinned, 3, "space-home", ("https://gone.dia.example/", "Gone", None), deleted=DIA_DATE)
+    window = t.container("window", 0, "space-home")
+    t.tab(window, 0, "space-home", ("https://news.dia.example/story", "Story", None))
+    t.tab(window, 1, "space-home", ("https://code.dia.example/", "Code", None), ("https://preview.dia.example/", "Preview", None))
+    t.tab(window, 2, "space-home", (None, None, None))
+    research = t.group(window, 3, "space-home", "Research", "\U0001F52C", "purple")
+    t.tab(research, 0, "space-home", ("https://paper.dia.example/", "Paper", None))
+    sources = t.group(research, 1, "space-home", "Sources", None, "green")
+    t.tab(sources, 0, "space-home", ("https://source.dia.example/a", "Source A", "Primary source"))
+    closed = t.container("window", 1, "space-home", deleted=DIA_DATE)
+    t.tab(closed, 0, "space-home", ("https://closed.dia.example/", "Closed window", None))
+    side_fav = t.container("favorites", 1, "space-side")
+    t.tab(side_fav, 0, "space-side", ("https://chat.dia.example/", "Chat", None))
+    t.container("pinned_container", 1, "space-side")
+    side_window = t.container("window", 2, "space-side")
+    errands = t.group(side_window, 0, "space-side", "Errands", "\U0001F6D2")
+    t.tab(errands, 0, "space-side", ("https://shop.dia.example/list", "List", None))
+    db.commit()
+    db.close()
+
+
+def dia_sidebar_edit(path, edit):
+    db = sqlite3.connect(path)
+    t = DiaTree(db)
+    window = db.execute("SELECT id FROM nodes WHERE kind = 'window' AND space_id = 'space-home' AND deleted_at IS NULL").fetchone()[0]
+    order = db.execute('SELECT max("order") FROM nodes WHERE parent_id = ?', (window,)).fetchone()[0] + 1
+    edit(t, window, order)
+    db.commit()
+    db.close()
+
+
+def dia_committed_edit(t, window, order):
+    later = t.group(window, order, "space-home", "Later", "\u23F0", "orange")
+    t.tab(later, 0, "space-home", ("https://later.dia.example/", "Later", None))
+
+
+def dia_uncommitted_edit(t, window, order):
+    t.tab(window, order, "space-home", ("https://uncommitted.dia.example/", "Not committed", None))
+
+
+def dia_key(label):
+    salt = hmac.new(DIA_LABEL_SALT, label.encode(), hashlib.sha256).digest()
+    prk = hmac.new(salt, CHROMIUM_KEY, hashlib.sha256).digest()
+    return hmac.new(prk, label.encode() + b"\x01", hashlib.sha256).digest()
+
+
+def dia_encrypt_page(page, number, key):
+    if number == 1:
+        page = page[:18] + b"\x02\x02" + page[20:]
+    start = 16 if number == 1 else 0
+    end = DIA_PAGE - DIA_RESERVED
+    iv = hmac.new(b"dia-fixture-iv", struct.pack(">I", number) + page, hashlib.sha256).digest()[:16]
+    body = openssl("aes-256-cbc", key, iv, page[start:end], nopad=True)
+    tag = hmac.new(dia_hmac_key(key), body + iv + struct.pack("<I", number), hashlib.sha512).digest()
+    salt = DIA_FILE_SALT if number == 1 else b""
+    return salt + body + iv + tag
+
+
+def dia_hmac_key(key):
+    return hashlib.pbkdf2_hmac("sha512", key, bytes(b ^ 0x3A for b in DIA_FILE_SALT), 2, len(key))
+
+
+def dia_pages(path):
+    raw = open(path, "rb").read()
+    return [raw[i:i + DIA_PAGE] for i in range(0, len(raw), DIA_PAGE)]
+
+
+def dia_wal_sum(data, s0, s1):
+    for i in range(0, len(data), 8):
+        a, b = struct.unpack("<II", data[i:i + 8])
+        s0 = (s0 + a + s1) & 0xFFFFFFFF
+        s1 = (s1 + b + s0) & 0xFFFFFFFF
+    return s0, s1
+
+
+def dia_wal(steps, key):
+    header = struct.pack(">IIII", 0x377F0682, 3007000, DIA_PAGE, 0) + DIA_WAL_SALT
+    s0, s1 = dia_wal_sum(header, 0, 0)
+    out = header + struct.pack(">II", s0, s1)
+    for before, after, commit in steps:
+        changed = [n for n in range(1, len(after) + 1) if n > len(before) or before[n - 1] != after[n - 1]]
+        for i, n in enumerate(changed):
+            size = len(after) if commit and i == len(changed) - 1 else 0
+            data = dia_encrypt_page(after[n - 1], n, key)
+            head = struct.pack(">II", n, size)
+            s0, s1 = dia_wal_sum(head + data, s0, s1)
+            out += head + DIA_WAL_SALT + struct.pack(">II", s0, s1) + data
+    return out
+
+
+def build_dia_sidebar(profile_dir, folder_name):
+    key = dia_key("profile/%s/tabs" % folder_name)
+    tmp = tempfile.mkdtemp()
+    try:
+        base = os.path.join(tmp, "base.db")
+        dia_sidebar_plain(base)
+        committed = os.path.join(tmp, "committed.db")
+        shutil.copy(base, committed)
+        dia_sidebar_edit(committed, dia_committed_edit)
+        pending = os.path.join(tmp, "pending.db")
+        shutil.copy(committed, pending)
+        dia_sidebar_edit(pending, dia_uncommitted_edit)
+        a, b, c = dia_pages(base), dia_pages(committed), dia_pages(pending)
+        write(os.path.join(profile_dir, "tabs.db"), b"".join(dia_encrypt_page(p, i + 1, key) for i, p in enumerate(a)))
+        write(os.path.join(profile_dir, "tabs.db-wal"), dia_wal([(a, b, True), (b, c, False)], key))
+    finally:
+        shutil.rmtree(tmp)
+
 
 
 def safari_leaf(url, title, reading_list_date=None):

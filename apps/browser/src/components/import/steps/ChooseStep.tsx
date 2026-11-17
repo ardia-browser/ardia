@@ -1,7 +1,7 @@
 import { View } from "react-native";
 import { Button, Checkbox, space, Text } from "../../ui";
 import { SectionHeader } from "../../settings/Form";
-import { APP, DIA_NOT_SHARED, KINDS, type ImportKind } from "../model";
+import { APP, diaTabsNote, KINDS, type ImportKind } from "../model";
 import { ErrorText, Note, Spacer, TargetPicker, Title } from "../Parts";
 import { BrowserRow } from "../Rows";
 import { importType } from "../tokens";
@@ -17,9 +17,10 @@ export function ChooseBody({ flow }: { flow: ImportFlow }) {
   const bySpaces = importsBySpaces(source);
   const error = step.name === "choose" ? step.error : null;
   const appTabs = !!source?.asksAppForTabs;
+  const diaTabs = appTabs || !!source?.profiles.some((p) => p.diaSidebar);
   const shown = !source
     ? []
-    : KINDS.filter((k) => source.profiles.some((p) => p.available.includes(k.kind)) && (!HIDDEN_KINDS.includes(k.kind) || (appTabs && k.kind === "pinnedTabs")));
+    : KINDS.filter((k) => source.profiles.some((p) => p.available.includes(k.kind)) && (!HIDDEN_KINDS.includes(k.kind) || (diaTabs && k.kind === "pinnedTabs")));
   return (
     <>
       <Title title="Import from Another Browser" subtitle="Import once and stay in your flow. Your tabs, passwords, bookmarks and history come with you, and you stay signed in." />
@@ -39,15 +40,15 @@ export function ChooseBody({ flow }: { flow: ImportFlow }) {
             {shown.map((k) => (
               <Checkbox
                 key={k.kind}
-                label={k.kind === "tabs" && bySpaces ? "Spaces and tabs" : k.kind === "tabs" && appTabs ? "Open tabs" : k.kind === "favorites" && source.sidebar === "zen" ? "Essentials" : k.title}
+                label={k.kind === "tabs" && bySpaces ? "Spaces and tabs" : k.kind === "tabs" && diaTabs ? "Open tabs" : k.kind === "favorites" && source.sidebar === "zen" ? "Essentials" : k.title}
                 value={kinds.has(k.kind)}
                 onChange={(v) => toggleImportKind(k.kind, v)}
               />
             ))}
           </View>
-          {appTabs && (
+          {source && diaTabs && (
             <Text size="caption" tone="textSecondary" style={{ lineHeight: importType.smallLine, marginTop: space.ml }}>
-              {`${APP} asks Dia for its open and pinned tabs, opening it in the background if it isn't running. ${DIA_NOT_SHARED}`}
+              {diaTabsNote(source.profiles)}
             </Text>
           )}
         </View>

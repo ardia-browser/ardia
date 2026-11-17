@@ -3,16 +3,17 @@ import SQLite3
 
 final class SQLiteSnapshot {
   private var db: OpaquePointer?
-  private let tempDir: URL
+  private let tempDir: URL?
 
   init(copying source: URL) throws {
     let fm = FileManager.default
     guard fm.fileExists(atPath: source.path) else {
       throw ImportError.notFound("\(source.lastPathComponent) not found")
     }
-    tempDir = fm.temporaryDirectory.appendingPathComponent("\(Self.prefix)\(getpid())-\(UUID().uuidString)", isDirectory: true)
-    try fm.createDirectory(at: tempDir, withIntermediateDirectories: true)
-    let copy = tempDir.appendingPathComponent("db.sqlite")
+    let dir = fm.temporaryDirectory.appendingPathComponent("\(Self.prefix)\(getpid())-\(UUID().uuidString)", isDirectory: true)
+    tempDir = dir
+    try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+    let copy = dir.appendingPathComponent("db.sqlite")
     do {
       try fm.copyItem(at: source, to: copy)
       for suffix in ["-wal", "-journal"] {
@@ -22,7 +23,7 @@ final class SQLiteSnapshot {
         }
       }
     } catch {
-      try? fm.removeItem(at: tempDir)
+      try? fm.removeItem(at: dir)
       throw ImportError.unreadable("Couldn't copy \(source.lastPathComponent): \(error.localizedDescription)")
     }
 
@@ -34,16 +35,51 @@ final class SQLiteSnapshot {
         let message = db.map { String(cString: sqlite3_errmsg($0)) } ?? "open failed"
         sqlite3_close(db)
         db = nil
-        try? fm.removeItem(at: tempDir)
+        try? fm.removeItem(at: dir)
         throw ImportError.unreadable("Couldn't open \(source.lastPathComponent): \(message)")
       }
     }
     sqlite3_busy_timeout(db, 2000)
   }
 
+  init(memory bytes: Data, name: String) throws {
+    tempDir = nil
+    guard !bytes.isEmpty, let buffer = sqlite3_malloc64(sqlite3_uint64(bytes.count)) else {
+      throw ImportError.unreadable("Couldn't open \(name)")
+    }
+    bytes.withUnsafeBytes { buffer.copyMemory(from: $0.baseAddress!, byteCount: bytes.count) }
+    guard sqlite3_open_v2(":memory:", &db, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK else {
+      sqlite3_free(buffer)
+      sqlite3_close(db)
+      db = nil
+      throw ImportError.unreadable("Couldn't open \(name)")
+    }
+    let flags = UInt32(SQLITE_DESERIALIZE_FREEONCLOSE | SQLITE_DESERIALIZE_READONLY)
+    let size = sqlite3_int64(bytes.count)
+    guard sqlite3_deserialize(db, "main", buffer.assumingMemoryBound(to: UInt8.self), size, size, flags) == SQLITE_OK else {
+      let message = String(cString: sqlite3_errmsg(db))
+      sqlite3_close(db)
+      db = nil
+      throw ImportError.unreadable("Couldn't open \(name): \(message)")
+    }
+    guard sqlite3_compileoption_used("TEMP_STORE=0") == 0,
+          sqlite3_exec(db, "PRAGMA temp_store=MEMORY", nil, nil, nil) == SQLITE_OK,
+          (try? scalar("PRAGMA temp_store")) == 2 else {
+      sqlite3_close(db)
+      db = nil
+      throw ImportError.unreadable("Couldn't keep \(name) in memory")
+    }
+  }
+
   deinit {
+    if tempDir == nil, let db {
+      var size: sqlite3_int64 = 0
+      if let bytes = sqlite3_serialize(db, "main", &size, UInt32(SQLITE_SERIALIZE_NOCOPY)), size > 0 {
+        _ = memset_s(bytes, Int(size), 0, Int(size))
+      }
+    }
     sqlite3_close(db)
-    try? FileManager.default.removeItem(at: tempDir)
+    if let tempDir { try? FileManager.default.removeItem(at: tempDir) }
   }
 
   static let prefix = "ardia-import-"

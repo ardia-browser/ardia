@@ -1,0 +1,104 @@
+import { useEffect, useRef } from "react";
+import { Platform, StyleSheet } from "react-native";
+import Animated, { SlideInLeft, SlideInRight, SlideOutRight } from "react-native-reanimated";
+import { refreshSettings } from "../../state/settings/actions";
+import { useSettingsNav, type SettingsRoute } from "../../state/settings/hooks";
+import { tabsMotion } from "../ui";
+import { FilterListDetailPage, FilterListsPage, MyFiltersPage, TrustedSitesPage } from "./BlockingPages";
+import { AboutPage, ClearDataPage, LicensesPage } from "./DataPages";
+import { AppearancePage } from "./AppearancePage";
+import { SettingsRoot } from "./SettingsRoot";
+import { SearchEnginePage, SiteSettingsPage } from "./SitePages";
+import { SyncConnect } from "../sync/SyncConnect";
+import { SyncScan } from "../sync/SyncScan";
+import { haptics } from "../../state/app/haptics";
+import { setConnectPhrase } from "../../state/sync/connectDraft";
+import { SyncPage } from "../sync/SyncPage";
+import { DefaultBrowserPage } from "./DefaultBrowserPage";
+import { WhatsSentPage } from "./WhatsSentPage";
+import { popSettings, pushSettings } from "../../state/settings/nav";
+import { ExpoSettingsStack } from "./ExpoSettingsStack";
+
+const push = SlideInRight.springify().stiffness(tabsMotion.sheetIn.stiffness).damping(tabsMotion.sheetIn.damping);
+const reveal = SlideInLeft.springify().stiffness(tabsMotion.sheetIn.stiffness).damping(tabsMotion.sheetIn.damping);
+const leave = SlideOutRight.springify().stiffness(tabsMotion.sheetOut.stiffness).damping(tabsMotion.sheetOut.damping);
+
+export function SettingsPageFor({ route }: { route: SettingsRoute }) {
+  switch (route.page) {
+    case "root":
+      return <SettingsRoot />;
+    case "appearance":
+      return <AppearancePage />;
+    case "searchEngine":
+      return <SearchEnginePage />;
+    case "siteSettings":
+      return <SiteSettingsPage />;
+    case "filterLists":
+      return <FilterListsPage />;
+    case "filterList":
+      return <FilterListDetailPage id={route.id} />;
+    case "myFilters":
+      return <MyFiltersPage />;
+    case "trustedSites":
+      return <TrustedSitesPage />;
+    case "clearData":
+      return <ClearDataPage />;
+    case "sync":
+      return <SyncPage />;
+    case "defaultBrowser":
+      return <DefaultBrowserPage />;
+    case "syncConnect":
+      return <SyncConnect onClose={popSettings} onConnected={popSettings} />;
+    case "syncWords":
+      return <SyncConnect onClose={popSettings} onConnected={popSettings} />;
+    case "syncScan":
+      return (
+        <SyncScan
+          onScan={(text) => {
+            haptics.success();
+            setConnectPhrase(text);
+            popSettings();
+          }}
+          onEnterWords={() => {
+            popSettings();
+            pushSettings({ page: "syncWords" });
+          }}
+          onCancel={popSettings}
+        />
+      );
+    case "about":
+      return <AboutPage />;
+    case "licenses":
+      return <LicensesPage />;
+    case "whatsSent":
+      return <WhatsSentPage />;
+  }
+}
+
+export function SettingsView() {
+  if (Platform.OS === "ios") return <ExpoSettingsStack />;
+  return <HandBuiltSettings />;
+}
+
+function HandBuiltSettings() {
+  const open = useSettingsNav((s) => s.open);
+  const stack = useSettingsNav((s) => s.stack);
+  const popping = useSettingsNav((s) => s.popping);
+  useEffect(() => {
+    if (open) void refreshSettings();
+  }, [open]);
+  const shown = useRef<{ depth: number; route: SettingsRoute } | null>(null);
+  if (open && stack.length) shown.current = { depth: stack.length, route: stack[stack.length - 1]! };
+  const last = shown.current;
+  if (!last) return null;
+  return (
+    <Animated.View
+      key={`${last.depth}:${last.route.page}`}
+      entering={last.depth === 1 || !open ? undefined : popping ? reveal : push}
+      exiting={popping && open ? leave : undefined}
+      style={StyleSheet.absoluteFill}
+    >
+      <SettingsPageFor route={last.route} />
+    </Animated.View>
+  );
+}

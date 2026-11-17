@@ -24,7 +24,7 @@ Code:
   - `scope.ts`: replica, logs, snapshots, compaction.
   - `hlc.ts`: hybrid logical clocks.
   - `order.ts`: fractional positions.
-  - `companion/`: the iPhone's adapters and cycle, bundled for JavaScriptCore (`docs/ios.md`).
+  - `companion/`: the iPhone's adapters and cycle, bundled for JavaScriptCore (`docs/phone.md` › Sync on iPhone).
 - `apps/browser/src/state/sync`:
   - `adapters.ts`: store ↔ records.
   - `pinned.ts`: the pinned area (`pin:`, `pinn:`, `pinrow:`, `pord:g:`, `tilefold:`, `pgc:`, `pgh:`). `pinnedAreaAdapters` gives
@@ -546,6 +546,14 @@ bookmark, settings, profile or group edit, and on Sync Now. A cycle:
     - `SyncCoreTests`: BIP39 reference vectors; tampering and truncation are detected; the wrong phrase opens nothing;
       the folder holds no plaintext in names or contents; deleting one chain leaves another; a missing scope reads
       empty while an unreadable one throws; removing skips files already gone and reports the rest.
+    - `SyncVectorsTests`: the Swift side of the test vectors the phone's Kotlin `SyncVectorsTest` shares, in
+      `tests/fixtures/sync-vectors`. `inputs.json` fixes two entropies, the scopes, logins, payloads, file ids and
+      nonces; both sides seal them to exactly the bytes in `expected.json` and `vault/`, open every sealed file to its
+      plaintext, read the vault's exact inventory (with one damaged and two pending files), and reject tampered and
+      wrong-scope, wrong-file and wrong-chain opens. `swift/` and `kotlin/` are random-nonce sets each side wrote once
+      with its own code; both sides open both. `ARDIA_SYNC_VECTORS_WRITE=<that folder> swift test --filter
+      SyncVectorsTests/testWriteVectors` rewrites `expected.json`, `vault/` and `swift/`; the same variable on a
+      `corex-test` run of `KotlinSyncVectorSetTest` rewrites `kotlin/`. A sealing change that moves a byte fails both.
     - `SyncCoordinationTests`: work a coordinated read or write had started when the timeout came isn't reported as
       timed out; a shared folder whose file presenter never answers times out instead of blocking, and the next change
       goes through.
@@ -566,7 +574,7 @@ bookmark, settings, profile or group edit, and on Sync Now. A cycle:
       version or other permissions; pending installs (retried, changed, cancelled by a removal); older Macs keep the
       records through their snapshots; on a framework without the engine calls nothing is published or applied.
     - `companion/companion.test.ts`: the iPhone's adapters and cycle.
-  - `apps/ios/scripts/bundle-shared.mjs --check`: the iPhone's bundle of this code is up to date.
+  - `apps/phone/scripts/bundle-shared.mjs --check`: the iPhone's bundle of this code is up to date.
   - `scripts/legacy-migration-e2e.mjs`: the migration tool run end to end on a scratch install.
 - `pnpm --filter @ardia/browser test` runs `src/state/sync/adapters.test.mjs` (4 tests against the real
   store: delete versus add, concurrent moves that would make a cycle, parked pinned tabs, passwords
@@ -625,7 +633,7 @@ bookmark, settings, profile or group edit, and on Sync Now. A cycle:
 
 Ardia for iPhone is one more device in the same chain, with the same file format: it writes `dev:` (`k: "phone"`),
 `tabs:`, history visits by the union rule, bookmarks it adds to Other Bookmarks and `send:` records, and keeps every
-other record untouched. It never compacts. Its side is in `docs/ios.md`.
+other record untouched. It never compacts. Its side is in `docs/phone.md` › Sync on iPhone.
 
 ## Left for a person
 

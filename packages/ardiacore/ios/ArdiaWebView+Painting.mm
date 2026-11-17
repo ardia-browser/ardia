@@ -19,6 +19,33 @@ constexpr CFTimeInterval kSwapReportSeconds = 10;
 NSString *const kLingeringPane = @"ardia.lingeringPane";
 }
 
+namespace ardia_web_view {
+
+NSView *RenderWidgetIn(NSView *page) {
+  static Class widgetClass = NSClassFromString(@"RenderWidgetHostViewCocoa");
+  if (!page || !widgetClass) return nil;
+  NSMutableArray<NSView *> *queue = [NSMutableArray arrayWithObject:page];
+  while (queue.count) {
+    NSView *view = queue.firstObject;
+    [queue removeObjectAtIndex:0];
+    if ([view isKindOfClass:widgetClass]) return view;
+    [queue addObjectsFromArray:view.subviews];
+  }
+  return nil;
+}
+
+NSArray *FrameMarkOf(NSView *widget) {
+  NSMutableArray *mark = [NSMutableArray array];
+  for (CALayer *tree in widget.layer.sublayers)
+    for (CALayer *content in tree.sublayers) {
+      [mark addObject:content];
+      [mark addObject:content.contents ?: NSNull.null];
+    }
+  return mark;
+}
+
+}
+
 @interface ArdiaNeighbourWake : NSObject
 @property(nonatomic) CFTimeInterval committedUntil;
 @property(nonatomic) CFTimeInterval speculativeUntil;
@@ -89,19 +116,6 @@ NSHashTable<ArdiaWebView *> *AwaitingFrames() {
 }
 bool gFrameWatchScheduled = false;
 
-NSView *RenderWidgetIn(NSView *page) {
-  static Class widgetClass = NSClassFromString(@"RenderWidgetHostViewCocoa");
-  if (!page || !widgetClass) return nil;
-  NSMutableArray<NSView *> *queue = [NSMutableArray arrayWithObject:page];
-  while (queue.count) {
-    NSView *view = queue.firstObject;
-    [queue removeObjectAtIndex:0];
-    if ([view isKindOfClass:widgetClass]) return view;
-    [queue addObjectsFromArray:view.subviews];
-  }
-  return nil;
-}
-
 void FitRenderWidgetsIn(NSView *page) {
   static Class widgetClass = NSClassFromString(@"RenderWidgetHostViewCocoa");
   if (!page || !widgetClass) return;
@@ -118,16 +132,6 @@ void FitRenderWidgetsIn(NSView *page) {
     if (layer.layoutManager != ArdiaWidgetLayerFit.shared) layer.layoutManager = ArdiaWidgetLayerFit.shared;
     [layer setNeedsLayout];
   }
-}
-
-NSArray *FrameMarkOf(NSView *widget) {
-  NSMutableArray *mark = [NSMutableArray array];
-  for (CALayer *tree in widget.layer.sublayers)
-    for (CALayer *content in tree.sublayers) {
-      [mark addObject:content];
-      [mark addObject:content.contents ?: NSNull.null];
-    }
-  return mark;
 }
 
 NSRect InWindow(NSView *view) {
@@ -245,47 +249,6 @@ BOOL Above(NSView *a, NSView *b) {
 + (void)repaintWarmPagesIn:(NSWindow *)window {
   for (ArdiaWebView *view in LiveViews().allObjects)
     if (view->_warm && view.window == window) [view schedulePainting];
-}
-
-- (void)holdLittlePage {
-  NSView *page = _tab.view;
-  if (_littlePage.held || _littlePage.settled || !page || page.superview != self ||
-      ![self.window.identifier isEqualToString:@"ardia.window.small"])
-    return;
-  _littlePage.held = YES;
-  page.wantsLayer = YES;
-  _littlePage.opacity = page.layer.opacity;
-  [CATransaction begin];
-  [CATransaction setDisableActions:YES];
-  page.layer.opacity = 0;
-  [CATransaction commit];
-  [self callFrame:@"" kind:@"firstPaint" json:@"{}"];
-  const NSUInteger generation = ++_littlePage.generation;
-  __weak ArdiaWebView *weakSelf = self;
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-    ArdiaWebView *view = weakSelf;
-    if (view && view->_littlePage.generation == generation) [view revealLittlePage:YES];
-  });
-}
-
-- (void)revealLittlePage:(BOOL)animated {
-  if (!_littlePage.held) return;
-  _littlePage.held = NO;
-  _littlePage.settled = YES;
-  _littlePage.generation++;
-  CALayer *layer = _tab.view.layer;
-  [CATransaction begin];
-  [CATransaction setDisableActions:YES];
-  layer.opacity = _littlePage.opacity;
-  if (animated) {
-    CABasicAnimation *fade = [CABasicAnimation animationWithKeyPath:@"opacity"];
-    fade.fromValue = @0;
-    fade.toValue = @(_littlePage.opacity);
-    fade.duration = 0.16;
-    fade.timingFunction = [CAMediaTimingFunction functionWithControlPoints:0.23 :1 :0.32 :1];
-    [layer addAnimation:fade forKey:@"ardia.little.page"];
-  }
-  [CATransaction commit];
 }
 
 - (void)applyPainting {

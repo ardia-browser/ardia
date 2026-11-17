@@ -256,6 +256,7 @@ void AcceptDrops(NSView *root, BOOL accept) {
   if (!visible) [self storePageFocus];
   _visible = visible;
   if (visible) [self exposePage];
+  if (visible) [self holdCreatedPageShown];
   if (visible) [self stopHolding];
   if (visible) [self settleRevealsInWindow];
   if (visible) [self settleFirstShowFocus];

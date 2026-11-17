@@ -136,6 +136,10 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)exitPictureInPicture;
 @end
 
+@interface ArdiaWebView (FirstPaint)
++ (NSDictionary<NSString *, NSNumber *> *)takeFirstPaintHolds;
+@end
+
 @interface ArdiaWebView (PictureInPictureDev)
 + (NSArray<NSDictionary<NSString *, id> *> *)devPictureInPicture NS_SWIFT_NAME(devPictureInPicture());
 + (NSString *)devPictureInPictureAction:(NSString *)action NS_SWIFT_NAME(devPictureInPictureAction(_:));

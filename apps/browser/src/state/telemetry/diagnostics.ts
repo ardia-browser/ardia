@@ -124,6 +124,19 @@ export async function takeContentDriftCounts(): Promise<Record<string, number>> 
   return { content_layer_layouts: drift.layouts, content_layer_refits: drift.fits, content_layer_drift_max_pt: drift.maxPoints };
 }
 
+export async function takeColdTabHoldCounts(): Promise<Record<string, number>> {
+  const holds = await call("webView.takeFirstPaintHolds", {}).catch(() => null);
+  if (!holds) return {};
+  return {
+    cold_tab_holds: holds.held,
+    cold_tab_holds_painted: holds.painted,
+    cold_tab_holds_loaded: holds.loaded,
+    cold_tab_holds_pressed: holds.pressed,
+    cold_tab_holds_timed_out: holds.timedOut,
+    cold_tab_hold_ms: holds.heldMs,
+  };
+}
+
 export const contextSamples = () => samples;
 
 function forgetContext() {

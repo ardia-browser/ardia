@@ -1,5 +1,5 @@
 import { useTelemetry } from "./choice";
-import { takeContentDriftCounts, takeMainProcessWork } from "./diagnostics";
+import { takeColdTabHoldCounts, takeContentDriftCounts, takeMainProcessWork } from "./diagnostics";
 import { takeHourlyExtras } from "./hourlyExtras";
 import { takeOmniboxLatency, takeSearchSuggests } from "./track";
 
@@ -13,6 +13,7 @@ useTelemetry.subscribe((current, previous) => {
   takeSearchSuggests();
   void takeMainProcessWork().catch(() => null);
   void takeContentDriftCounts().catch(() => null);
+  void takeColdTabHoldCounts().catch(() => null);
 });
 
 export function watchConsentBoundary(dropUsage: () => void) {

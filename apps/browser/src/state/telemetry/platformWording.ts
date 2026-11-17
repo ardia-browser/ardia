@@ -10,6 +10,8 @@ type FeatureFlag = { [K in keyof PlatformFeatures]: PlatformFeatures[K] extends 
 export const PHRASES_ONLY_WITH: Readonly<Partial<Record<FeatureFlag, string>>> = {
   memoryPressure: ", the Mac's memory pressure",
   launchLoad: ". Also at launch: the Mac's load average (one number, how busy it was) and whether the app was started as a login item",
+  holdsColdPagesUntilPainted:
+    ". Also how many times a tab that hadn't loaded yet kept the New Tab page's background until its page first drew, how many of those waits ended because the page drew, finished loading, was clicked or took over 4 seconds, and how long they took in all",
 };
 
 export const termRules = (terms: PlatformTerms): readonly { mac: RegExp; platform: string }[] => [

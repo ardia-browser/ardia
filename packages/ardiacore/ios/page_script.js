@@ -772,7 +772,15 @@
   let firstPaintObserver = null;
   handlers.firstPaint = () => {
     if (!isTop || firstPaintObserver) return;
-    const painted = () => send("firstPaint", { url: location.href });
+    let sent = false;
+    const painted = (loaded) => {
+      if (sent) return;
+      sent = true;
+      send("firstPaint", { url: location.href, loaded: !!loaded });
+    };
+    const afterFrames = () => apply(raf, window, [() => apply(raf, window, [() => painted(true)])]);
+    if (document.readyState === "complete") afterFrames();
+    else apply(listen, window, ["load", afterFrames, { once: true }]);
     try {
       firstPaintObserver = new PO((list) => {
         for (const e of list.getEntries())
@@ -784,7 +792,7 @@
       firstPaintObserver.observe({ type: "paint", buffered: true });
     } catch (e) {
       firstPaintObserver = true;
-      onReady(() => apply(raf, window, [painted]));
+      onReady(() => apply(raf, window, [() => painted(true)]));
     }
   };
   handlers.wakeFrames = () => apply(raf, window, [() => {}]);

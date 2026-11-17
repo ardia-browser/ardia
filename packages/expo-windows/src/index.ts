@@ -4,8 +4,6 @@ import { installAnimation } from "./animation";
 import { watchRelaunches } from "./engine/relaunch";
 import { openLaunchLinks } from "./launchLinks";
 import { requireNativeModule } from "./modules";
-import { runSelfCheck } from "./selfCheck";
-import { endByClosingTheLastWindow } from "./selfCheck/lastWindow";
 import { installTextFocusReport } from "./textFocus";
 import { startUpdateChecks } from "./updater";
 import { viewNamed } from "./views/registry";
@@ -35,6 +33,8 @@ const secureHex = (byteCount: number) => windowsHost().secureRandomHex(byteCount
 
 if (windowsHost().getConstants?.()?.selfCheck) {
   setTimeout(() => {
+    const { runSelfCheck } = require("./selfCheck") as typeof import("./selfCheck");
+    const { endByClosingTheLastWindow } = require("./selfCheck/lastWindow") as typeof import("./selfCheck/lastWindow");
     void runSelfCheck().finally(() => void endByClosingTheLastWindow());
   }, SELF_CHECK_AFTER_MS);
 }

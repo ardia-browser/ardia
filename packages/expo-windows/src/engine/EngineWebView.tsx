@@ -132,7 +132,19 @@ export const EngineWebView = forwardRef<unknown, Props>(function EngineWebView(p
     });
   }, [key, windowId]);
 
-  useEffect(() => onCoversChange((changed) => changed === windowId && place()), [windowId, place]);
+  const refreshCovers = useCallback(() => {
+    if (!shown.current.visible || !shown.current.placed || latest.current.visible === false || hiddenByFullScreen(windowId, key)) return place();
+    const old = JSON.parse(shown.current.placed) as PageShape;
+    const page = { x: old.x, y: old.y, width: old.width, height: old.height };
+    const shape: PageShape = fullScreen.current
+      ? { ...page, radius: 0, holes: [] }
+      : { ...page, radius: pageRadiusIn(windowId), holes: holesFor(page, coversIn(windowId, above.current), latest.current.temporary === true, latest.current.onTop === true) };
+    const placed = JSON.stringify(shape);
+    if (shown.current.placed === placed || !showPage(key, true, shape, windowId)) return;
+    shown.current = { visible: true, placed, shows: shown.current.shows + 1 };
+  }, [key, windowId, place]);
+
+  useEffect(() => onCoversChange((changed) => changed === windowId && refreshCovers()), [windowId, refreshCovers]);
 
   useEffect(() => followMotion(place), [place]);
 

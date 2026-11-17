@@ -1,7 +1,7 @@
 import { forgetAnimation, installFramePacing, noteAnimation } from "./motion";
 import { aroundCentre } from "./pivot";
-
 type Config = { useNativeDriver?: boolean; iterations?: number };
+
 type Helper = { default: { shouldUseNativeDriver(config: Config): boolean } };
 type AnimatedValue = { __makeNative(platformConfig?: unknown): void };
 type NodeClass = { default: { prototype: AnimatedValue } };
@@ -43,6 +43,7 @@ export function installAnimation() {
     try {
       const native = startNatively.call(this, target);
       if (native) forgetAnimation(this);
+      else if (this.__isLooping !== true) noteAnimation(this);
       return native;
     } finally {
       startingNatively = false;
@@ -53,12 +54,6 @@ export function installAnimation() {
     forgetAnimation(this);
     notifyEnd.call(this, result);
   };
-  const start = running.start;
-  running.start = function (this: Running, ...args: unknown[]) {
-    start.apply(this, args);
-    if (this.__isLooping !== true) noteAnimation(this);
-  };
-
   const process = styleAttributes.default.transform.process;
   styleAttributes.default.transform = { process: (transform) => aroundCentre(process(transform)) };
 }

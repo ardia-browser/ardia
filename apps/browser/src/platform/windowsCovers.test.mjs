@@ -106,3 +106,62 @@ test("a surface told not to cover (a Peek hidden with its tab) cuts no hole, and
   assert.deepEqual(holesFor(page, coversIn(windowId), false), [[400, 80, 500, 400, 12]], "shown again, the hole is back");
   back.stop();
 });
+
+test("many motion requests share one in-flight measurement and drain one fresh pass", async () => {
+  const callbacks = [];
+  const surface = { measureInWindow: (callback) => callbacks.push(callback) };
+  const measurer = coverMeasurer("coalesced-window", "surface", 0, () => surface, []);
+  const requests = Array.from({ length: 100 }, () => measurer.measure());
+  assert.equal(callbacks.length, 1);
+  callbacks[0](0, 0, 50, 10);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(callbacks.length, 2);
+  assert.equal(coversIn("coalesced-window")[0].height, 10, "a valid active result is published even with a newer request");
+  callbacks[1](0, 0, 50, 20);
+  await Promise.all(requests);
+  assert.equal(coversIn("coalesced-window")[0].height, 20);
+  measurer.stop();
+});
+
+test("node replacement releases a measurement whose removed native tag never answered", async () => {
+  const callbacks = [];
+  let current = { measureInWindow: (callback) => callbacks.push(callback) };
+  const measurer = coverMeasurer("replaced-window", "surface", 0, () => current, []);
+  const old = measurer.measure();
+  current = node(5, 5, 30, 30);
+  await measurer.measure();
+  await old;
+  callbacks[0](0, 0, 100, 100);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(coversIn("replaced-window")[0].width, 30);
+  measurer.stop();
+});
+
+test("clip replacement invalidates its old measurement without blocking a newer pass", async () => {
+  let oldCallback;
+  let clipNode = { measureInWindow: (callback) => oldCallback = callback };
+  const surface = node(0, 0, 100, 100);
+  const measurer = coverMeasurer("replaced-clip-window", "surface", 0, () => surface, [coverClip(() => clipNode)]);
+  const old = measurer.measure();
+  clipNode = node(0, 0, 20, 20);
+  await measurer.measure();
+  await old;
+  oldCallback(0, 0, 90, 90);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(coversIn("replaced-clip-window")[0].width, 20);
+  measurer.stop();
+});
+
+test("a missing callback times out and stop releases its pending promise", async () => {
+  let reply = false;
+  const surface = { measureInWindow: (callback) => { if (reply) callback(1, 2, 30, 40); } };
+  const measurer = coverMeasurer("timeout-window", "surface", 0, () => surface, []);
+  await measurer.measure();
+  reply = true;
+  await measurer.measure();
+  assert.equal(coversIn("timeout-window")[0].height, 40);
+  reply = false;
+  const pending = measurer.measure();
+  measurer.stop();
+  await pending;
+});

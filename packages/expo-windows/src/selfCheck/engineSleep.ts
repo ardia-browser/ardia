@@ -50,6 +50,8 @@ export async function until<T>(what: string, ms: number, read: () => Promise<T>,
   return value;
 }
 
+export const painted = (key: string) => until(`the page ${key} has its first contentful paint`, LOAD_MS, async () => evaluate(key, 'post("result", JSON.stringify(performance.getEntriesByName("first-contentful-paint").length));'), (count) => Number(count) > 0);
+
 export const loaded = (key: string, title = TITLE) => until(`the page ${key} loads`, LOAD_MS, () => listed(key), (tab) => tab?.title === title && tab.loading === false && tab.discarded !== true);
 
 function withDeadline<T>(work: Promise<T>, what: string): Promise<T> {
@@ -206,6 +208,7 @@ const sleepChecks: Check[] = [
         async ([page], windowId) => {
           await show(page!, windowId, LEFT);
           await sleepOnce(page!, windowId, LINKS_TITLE);
+          await painted(page!);
           const opened = heard("tab.opened", (event) => event.opener === page, "a new tab from a target=_blank click");
           await click(page!, 110, 90);
           const tab = await opened;

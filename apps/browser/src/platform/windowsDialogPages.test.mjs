@@ -143,7 +143,7 @@ test("a dialog counts as settled only once its window shows and its thread's las
 });
 
 test("a switcher whose key was let go while a menu was open commits when the menu closes, read from the keyboard on the UI thread", () => {
-  const native = (name) => readFileSync(new URL(`../../windows/Ardia/${name}`, import.meta.url), "utf8");
+  const native = (name) => readFileSync(new URL(`../../windows/Ardia/${name}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
   const module = native("MenusModule.h");
   const shown = module.slice(module.indexOf("REACT_METHOD(showMenu)"), module.indexOf("REACT_SYNC_METHOD(openCount)"));
   assert.match(shown, /RunOnUI\(context, \[context, popup, promise\]\(\) noexcept \{\n\s+if \(DialogParts::ModalRegistry::Shared\(\)\.withheldResign[^\n]*\n\s+Menus::MenuKeyboard::Shared\(\)\.ReconcileAfterMenu\(\);/, "the menu's completion reconciles on the UI thread, after the resign it held back");
@@ -159,7 +159,7 @@ test("a switcher whose key was let go while a menu was open commits when the men
 });
 
 test("a right-click that took the keyboard from a page gives it back when its menu is dismissed, on the UI thread, never to a window that is not in front", () => {
-  const native = (name) => readFileSync(new URL(`../../windows/Ardia/${name}`, import.meta.url), "utf8");
+  const native = (name) => readFileSync(new URL(`../../windows/Ardia/${name}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
   const manager = native("WindowManager.h");
   const activated = manager.slice(manager.indexOf("void Activated(HWND hwnd, HWND previous)"), manager.indexOf("static bool LeftButtonDown()"));
   assert.match(activated, /ClearPageLeftBySecondaryPress\(\);\n\s+if \(fromPage && SecondaryButtonDown\(\)\)/, "only a right press from its own page is remembered, and any other activation forgets it");
@@ -195,7 +195,7 @@ test("a right-click that took the keyboard from a page gives it back when its me
 });
 
 test("a pop-up menu tracks on a RunModal thread, owned by that thread's own window, so pages keep loading while it is open (#1687)", () => {
-  const native = (name) => readFileSync(new URL(`../../windows/Ardia/${name}`, import.meta.url), "utf8");
+  const native = (name) => readFileSync(new URL(`../../windows/Ardia/${name}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
   const module = native("MenusModule.h");
   const shown = module.slice(module.indexOf("REACT_METHOD(showMenu)"), module.indexOf("REACT_SYNC_METHOD(openCount)"));
   assert.match(shown, /DialogParts::RunModal\(popup->owner, \[context, popup, promise\]\(bool usable\) noexcept \{\n\s+if \(usable\) Menus::TrackOnThisThread\(\*popup, true\);/);

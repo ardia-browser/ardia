@@ -87,7 +87,8 @@ test("only names are kept: anything that is not a recognised type identifier bec
   });
   const event = queued().at(-1);
   assert.equal(event.properties.type_ids, "public.html,other,dyn,text/html,Apple PNG pasteboard type,CorePasteboardFlavorType 0x54455854");
-  assert.equal("keyboard_layout" in event.properties, false);
+  assert.equal(event.properties.keyboard_layout, "other");
+  assert.equal(JSON.stringify(event.properties).includes("/Users/someone"), false);
   assert.equal("responder" in event.properties, false);
   assert.doesNotMatch(JSON.stringify(event), /example\.com|secret|Users|alice/);
 });
@@ -146,6 +147,31 @@ test("a name an app made up goes out as other, even when it looks like a standar
     assert.equal(event.properties.type_count, 2, type);
     assert.equal(JSON.stringify(event.properties).includes(type), false, type);
   }
+});
+
+test("Apple's keyboard layouts and input methods go out by name, and any other layout as other, its name never sent", () => {
+  for (const layout of ["com.apple.keylayout.US", "com.apple.keylayout.ABC", "com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", "com.apple.inputmethod.SCIM.ITABC"]) {
+    stub.emitAppEvent({ type: "pasteRefused", reason: "deadline", gateOpen: false, layout });
+    assert.equal(queued().at(-1).properties.keyboard_layout, layout);
+  }
+  const outside = [
+    "org.unknown.keylayout.JohnsLayout",
+    "com.vendor.inputmethod.secret-42",
+    `com.apple.keylayout.${"x".repeat(70)}`,
+    "x".repeat(90),
+    "com.apple.keylayout.",
+    "com.apple.keylayout.US Personal",
+    "com.apple.keylayoutish.US",
+    "com.apple.inputmethod.Kotoeri/../../alice",
+  ];
+  for (const layout of outside) {
+    stub.emitAppEvent({ type: "pasteRefused", reason: "deadline", gateOpen: false, layout });
+    const event = queued().at(-1);
+    assert.equal(event.properties.keyboard_layout, "other", layout);
+    assert.equal(JSON.stringify(event).includes(layout), false, layout);
+  }
+  stub.emitAppEvent({ type: "pasteRefused", reason: "deadline", gateOpen: false, layout: 42 });
+  assert.equal("keyboard_layout" in queued().at(-1).properties, false);
 });
 
 test("nothing is sent while sharing is off", () => {

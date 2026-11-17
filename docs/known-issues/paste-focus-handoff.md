@@ -44,7 +44,7 @@ Every beep in `FocusHandoff` goes through `FocusHandoff.refuse(_:_:)` with a `Re
 - `type_count`: how many types the pasteboard offered, so a pasteboard whose types were all collapsed reads differently from an empty one.
 - `responder`: the first responder's class name for `deferred` and `refused`, on the first one of a session only. Later ones are still recorded, without it.
 - `gate_open`: whether the key window had a focus gate open.
-- `keyboard_layout`: the current keyboard layout's input source id.
+- `keyboard_layout`: the current keyboard layout's input source id, only when it is Apple's (`com.apple.keylayout.` or `com.apple.inputmethod.` and 1 to 60 letters, digits, dots or hyphens). Any other layout, such as a third-party input method's or one a user made (`org.unknown.keylayout.…`), whose id that vendor or user chose, is sent as `other`. The source is `TISCopyCurrentKeyboardLayoutInputSource`, which always answers a keyboard layout (while an input method is active, the layout it types with), so there is no separate layout-or-input-method flag.
 - `$os_version`: the macOS version, from the common context.
 - `dropped`: how many inputs were dropped, including ones rejected before they entered a gate.
 

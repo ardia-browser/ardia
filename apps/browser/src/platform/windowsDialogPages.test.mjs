@@ -36,7 +36,7 @@ test("the hourly extras name the counts, and the Mac sends zeros", () => {
 });
 
 test("every native modal runs through RunModal off the UI thread, and the app stops them before the UI queue goes", () => {
-  const native = (name) => readFileSync(new URL(`../../windows/Ardia/${name}`, import.meta.url), "utf8");
+  const native = (name) => readFileSync(new URL(`../../windows/Ardia/${name}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
   const module = native("DialogsModule.h");
   for (const shown of ["ShowConfirm(owner, title", "ShowPrompt(owner,", "ShowOpenFiles(owner)", "ShowSaveFile(owner,", "ShowOpenFolder(owner,"]) {
     const at = module.indexOf(shown);
@@ -73,8 +73,8 @@ test("every native modal runs through RunModal off the UI thread, and the app st
 });
 
 test("a file dialog cancelled at quit closes through Close and, if still open, through its own window, and says how long it took", () => {
-  const source = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
-  const native = (name) => readFileSync(new URL(`../../windows/Ardia/${name}`, import.meta.url), "utf8");
+  const source = (path) => readFileSync(new URL(path, import.meta.url), "utf8").replace(/\r\n/g, "\n");
+  const native = (name) => readFileSync(new URL(`../../windows/Ardia/${name}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
   const dialogs = native("NativeDialogs.h");
   assert.match(dialogs, /NoteCancel\(timing\.kind, L"cancelled \(Close: " \+ HexResult\(dialog->Close\(HRESULT_FROM_WIN32\(ERROR_CANCELLED\)\)\) \+ L"\)"\);\n\s+CancelThroughWindow\(dialog\);\n\s+ModalWatch::OnStubborn\(\[this, dialog\] \{ CancelThroughWindow\(dialog\); \}\);/, "Close and the window's Cancel go together, and the Cancel is sent again until the dialog returns");
   assert.match(dialogs, /if \(!PostMessageW\(window, WM_COMMAND, IDCANCEL, 0\)\) return;/);
@@ -99,7 +99,7 @@ test("a file dialog cancelled at quit closes through Close and, if still open, t
 });
 
 test("every dialog's thread logs when it started, when its window showed, when a file dialog opened its first folder, and how late it took a cancel", () => {
-  const native = (name) => readFileSync(new URL(`../../windows/Ardia/${name}`, import.meta.url), "utf8");
+  const native = (name) => readFileSync(new URL(`../../windows/Ardia/${name}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
   const thread = native("ModalThread.h");
   assert.match(thread, /LaunchLog::Write\(L"dialog", state\.kind \+ L" thread started"\);/);
   assert.match(thread, /NoteModalDialog\(m_owner, dialog\);\n\s+ModalWatch::NoteShown\(\);/, "shown is noted where the shown count learns of the window");
@@ -110,12 +110,12 @@ test("every dialog's thread logs when it started, when its window showed, when a
   assert.match(dialogs, /HRESULT __stdcall OnFolderChange\(IFileDialog \*\) noexcept override \{\n\s+ModalWatch::NoteFirstFolder\(\);/);
   assert.match(dialogs, /dialog->Advise\(events\.get\(\), &m_events\)/);
   assert.ok(native("DialogsModule.h").includes("watch(owner, kind)"), "each dialog's watch knows its kind");
-  const smoke = readFileSync(new URL("../../../../scripts/windows/launch-smoke.ps1", import.meta.url), "utf8");
+  const smoke = readFileSync(new URL("../../../../scripts/windows/launch-smoke.ps1", import.meta.url), "utf8").replace(/\r\n/g, "\n");
   assert.ok(smoke.includes('-Pattern "self-check|webgl2 probe|^dialog |^(js-error|fatal|error) "'), "CI prints the dialog lines beside the self-check's");
 });
 
 test("a cancel reaches each dialog's thread at once, not at its next 250 ms check, and a cancelled dialog is no longer brought forward", () => {
-  const native = (name) => readFileSync(new URL(`../../windows/Ardia/${name}`, import.meta.url), "utf8");
+  const native = (name) => readFileSync(new URL(`../../windows/Ardia/${name}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
   const thread = native("ModalThread.h");
   assert.match(thread, /registry\.stopping = true;\n\s+registry\.freed\.notify_all\(\);\n\s+WakeModals\(\);/, "a quit wakes every dialog thread");
   assert.match(thread, /ModalRegistry::Shared\(\)\.releases\+\+;\n\s+WakeModals\(\);/, "so does the self-check's release");
@@ -129,7 +129,7 @@ test("a cancel reaches each dialog's thread at once, not at its next 250 ms chec
 });
 
 test("a dialog counts as settled only once its window shows and its thread's last two checks came on time, the sign the shell's startup work is done", () => {
-  const native = (name) => readFileSync(new URL(`../../windows/Ardia/${name}`, import.meta.url), "utf8");
+  const native = (name) => readFileSync(new URL(`../../windows/Ardia/${name}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
   const thread = native("ModalThread.h");
   assert.match(thread, /bool onTime = state\.lastTickAt && now - state\.lastTickAt <= OwnerWatchMs \+ LateTickSlackMs;/, "a timer message only comes when the thread's queue is empty, so a late one means the thread was busy");
   assert.match(thread, /state\.idleTicks = state\.shownAt && onTime \? state\.idleTicks \+ 1 : 0;/);

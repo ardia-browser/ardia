@@ -6,7 +6,7 @@ const native = new URL("../../windows/Ardia/", import.meta.url);
 const scripts = new URL("../../../../scripts/windows/", import.meta.url);
 const ENVIRONMENT_READ = /\bGetEnvironmentVariable[AW]?\s*\(|\b_?w?getenv(?:_s)?\s*\(|\bPaths::Environment\s*\(|\bEnvironment\s*\(\s*L"/g;
 const READERS = new Set(["Paths.h", "LaunchConfig.h"]);
-const source = (name) => readFileSync(new URL(name, native), "utf8");
+const source = (name) => readFileSync(new URL(name, native), "utf8").replace(/\r\n/g, "\n");
 
 test("Windows native code reads the environment only in the launch config", () => {
   const files = readdirSync(native).filter((name) => /\.(?:h|cpp)$/.test(name));
@@ -16,7 +16,7 @@ test("Windows native code reads the environment only in the launch config", () =
 });
 
 test("the launcher, which runs before the app's DLL, reads only ARDIA_BACKGROUND, and only to keep a failure quiet", () => {
-  const launcher = readFileSync(new URL("../../windows/ArdiaLauncher/Launcher.cpp", import.meta.url), "utf8");
+  const launcher = readFileSync(new URL("../../windows/ArdiaLauncher/Launcher.cpp", import.meta.url), "utf8").replace(/\r\n/g, "\n");
   const reads = launcher.match(ENVIRONMENT_READ) ?? [];
   assert.equal(reads.length, 1);
   assert.match(launcher, /DWORD length = GetEnvironmentVariableW\(L"ARDIA_BACKGROUND", value, 4\);/);
@@ -48,7 +48,7 @@ test("a test instance needs an absolute scratch folder clear of the real profile
 });
 
 test("the test-build marker never reaches an installer, and the harnesses that need test keys write it", () => {
-  const script = (name) => readFileSync(new URL(name, scripts), "utf8");
+  const script = (name) => readFileSync(new URL(name, scripts), "utf8").replace(/\r\n/g, "\n");
   assert.match(script("assemble.ps1"), /if \(\$relative -ieq "Ardia\.test-build"\) \{ continue \}/);
   assert.match(script("make-installer.ps1"), /-Filter "Ardia\.test-build"[^\n]*throw/);
   assert.match(script("installer-check.ps1"), /-Filter "Ardia\.test-build"[^\n]*throw/);

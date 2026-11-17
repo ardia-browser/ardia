@@ -199,7 +199,7 @@ test("the self-check's gate, which skips the engine's liveness check, still need
 });
 
 test("ARDIA_TEST=externalAppLaunch reaches only the native background refusal and the self-check's opt-in", () => {
-  const source = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+  const source = (path) => readFileSync(new URL(path, import.meta.url), "utf8").replace(/\r\n/g, "\n");
   const mentions = (text) => text.split("externalAppLaunch").length - 1;
   for (const path of ["../../../../packages/expo-windows/src/engine/domains/externalApps.ts", "../../../../packages/expo-windows/src/engine/domains/externalAppsNative.ts", "../../../../packages/expo-windows/src/engine/pages.ts", "../state/site/prompts.ts"]) {
     assert.equal(mentions(source(path)), 0, path);

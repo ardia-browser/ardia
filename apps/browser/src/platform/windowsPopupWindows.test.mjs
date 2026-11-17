@@ -496,7 +496,7 @@ test("a private pop-up still reaches its opener: a tab it opens goes to the open
 const { domainCall } = await import("../../../../packages/expo-windows/src/engine/domains/tables.ts");
 const { noteAppWindow } = await import("../../../../packages/expo-windows/src/engine/popupsAsTabs.ts");
 const { readFileSync } = await import("node:fs");
-const windowsSource = (path) => readFileSync(new URL(`../../../../packages/expo-windows/src/${path}`, import.meta.url), "utf8");
+const windowsSource = (path) => readFileSync(new URL(`../../../../packages/expo-windows/src/${path}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const forwardedRows = JSON.parse(windowsSource("engine/domains/forwarded.json"));
 const settingEngine = { call: async () => "{}", emit: () => {}, missing: async () => "null", host: async () => ({}) };
 const setPopupsAsTabs = async (enabled) => JSON.parse(await domainCall(forwardedRows, settingEngine, "webView")("setPopupsOpenAsTabs", "", JSON.stringify({ enabled })));

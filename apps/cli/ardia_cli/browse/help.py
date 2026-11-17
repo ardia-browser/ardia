@@ -143,7 +143,9 @@ Examples:
 """
 
 COMMANDS = {
-    "open": "ardia browse open [url] [--enable react-devtools] [--init-script <path>] [--capture-console] [--label name]\n\n"
+    "open": "ardia browse open [url] [--read] [--enable react-devtools] [--init-script <path>] [--capture-console] [--label name]\n\n"
+            "--read prints the page's full text, as `read` does, in place of the change report, so opening a page to read\n"
+            "it is one call.\n\n"
             "Without a tab, opens a new background tab in Ardia's sidebar (the user's own tab is never navigated\n"
             "unless the session picked it with `tab <id>`). When the session was using the user's tab (`tab active`), the answer\n"
             "names both: `→ [t4] is this session's tab now …; `tab t3` goes back`. Later opens navigate the\n"

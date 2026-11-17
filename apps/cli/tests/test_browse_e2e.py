@@ -1135,6 +1135,33 @@ class BrowseEndToEnd(unittest.TestCase):
         self.assertIn("A popup was in the way", out)
         self.assertEqual(self.report(session), {"clicked": ["next"], "closed": True})
 
+    def test_a_covered_click_names_the_layers_close_control(self):
+        import re
+
+        session = "store-banner"
+        self.browse("open", self.url("storebanner.html"), "--show", session=session)
+        failed = self.browse("click", "#go", session=session, check=False)
+        said = failed.stdout + failed.stderr
+        self.assertIn("its close control is @e", said)
+        ref = re.search(r"its close control is (@e\d+)", said).group(1)
+        self.browse("click", ref, session=session)
+        self.browse("click", "#go", session=session)
+        self.assertEqual(self.report(session), {"clicked": ["go"], "closed": True})
+
+    def test_open_with_read_prints_the_page_text_in_the_same_call(self):
+        out = self.browse("open", self.url("scopebadge.html"), "--read", session="open-read").stdout
+        self.assertIn("Kombucha starter kit", out)
+        self.assertRegex(out, r"\[read \d{4}-\d{2}-\d{2} ")
+
+    def test_a_timed_out_script_shows_what_it_kept(self):
+        session = "script-kept"
+        self.browse("open", self.url("scopebadge.html"), session=session)
+        done = self.browse("script", "--timeout", "5s", session=session, check=False,
+                           stdin="state.rows = ['alpha', 'beta']; await sleep(20000); return 1;")
+        said = done.stdout + done.stderr
+        self.assertIn("timed out", said)
+        self.assertIn('So far: {"rows":["alpha","beta"]}', said.replace(" ", "").replace("Sofar:", "So far: "))
+
     def test_text_with_half_an_emoji_still_reads(self):
         session = "surrogate"
         out = self.browse("read", self.url("surrogate.html"), session=session).stdout

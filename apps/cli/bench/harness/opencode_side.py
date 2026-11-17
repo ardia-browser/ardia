@@ -155,6 +155,14 @@ def launch_chrome(opts, home, logs):
     return dict(record_of(proc), browser=version.get("Browser"), user_agent=version.get("User-Agent"), args=args)
 
 
+def launch_browser(opts, home, logs):
+    if opts.get("browser") != "ardia":
+        return launch_chrome(opts, home, logs)
+    import browsers
+    switches = [f"--load-extension={opts['extension']}", "--enable-unsafe-extension-debugging"]
+    return browsers.launch_ardia(opts.get("app"), home / "ardia-data", opts["cdp_port"], switches)
+
+
 def chrome_ready(proc, opts):
     wait_until(lambda: proc.pid in listener_pids(opts["cdp_port"]), 30, "Chrome DevTools port", pid=proc.pid)
     return wait_until(lambda: http("GET", f"http://127.0.0.1:{opts['cdp_port']}/json/version"), 20,
@@ -220,13 +228,17 @@ def prepare(opts, task, home):
     t0 = time.monotonic()
     state = {}
     with open(home / "chrome.log", "ab") as chrome_log, open(home / "relay.log", "ab") as relay_log:
-        state["chrome"] = launch_chrome(opts, home, chrome_log)
+        state["chrome"] = launch_browser(opts, home, chrome_log)
         write_json(state_path(opts), state)
         state["relay"] = start_relay(opts, home, relay_log)
         write_json(state_path(opts), state)
     pair_lines = pair(opts, home)
     opened = helper(opts, "open", task["start_url"])
-    helper(opts, "lend", EXTENSION_ID, task["start_url"])
+    if opts.get("browser") == "ardia":
+        import browsers
+        browsers.cdp_tab("lend", opts["cdp_port"], EXTENSION_ID, task["start_url"])
+    else:
+        helper(opts, "lend", EXTENSION_ID, task["start_url"])
     status, target = wait_until(lambda: lent_target(opts, home, task["start_url"]), 20,
                                 f"lent tab on {task['start_url']}")
     state["setup_s"] = round(time.monotonic() - t0, 2)
@@ -423,7 +435,8 @@ def run(task_id, agent, run_id, results_dir, overrides=None, contender=None, on_
         "agent_saw": tools_seen_claude(lines) if agent == "claude" else None,
         "prompt": prompt, "command": cmd, "workdir": str(workdir), "mcp_server": server,
         "mcp_config": str(mcp_config) if mcp_config else None,
-        "instance": {"chrome": {k: state["chrome"][k] for k in ("pid", "browser", "user_agent", "args")},
+        "browser": opts.get("browser") or "chrome",
+        "instance": {"chrome": {k: state["chrome"].get(k) for k in ("pid", "browser", "user_agent", "args", "app")},
                      "relay_pid": state["relay"]["pid"], "cdp_port": opts["cdp_port"],
                      "relay_port": opts["relay_port"], "setup_s": state.get("setup_s"), "home": str(home),
                      "browse_entry": opts["browse_entry"], "extension": opts["extension"], **setup},

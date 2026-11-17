@@ -439,7 +439,18 @@ async def drive(ctx, page, handle: str, source: str, current: dict, done: list |
         await control(page, handle, "function (id, answer) { return this.reply(id, answer); }", message["id"], answer)
 
 
-def timed_out(seconds: float, current: dict, source: str, logs: list[str], kept: str = "", done: list | None = None) -> BrowseError:
+STATE_PREVIEW_CHARS = 1500
+
+
+def kept_preview(state_text) -> str:
+    if not isinstance(state_text, str) or not state_text.strip() or state_text.strip() == "{}":
+        return ""
+    if len(state_text) <= STATE_PREVIEW_CHARS:
+        return state_text
+    return f"{state_text[:STATE_PREVIEW_CHARS]}… ({len(state_text):,} characters in all; `ardia browse script 'return state' --out <file>` saves it)"
+
+
+def timed_out(seconds: float, current: dict, source: str, logs: list[str], kept: str = "", done: list | None = None, state_text: str | None = None) -> BrowseError:
     where = ""
     if current.get("argv"):
         where = f", in `{show_argv(current['argv'])}`"
@@ -455,6 +466,10 @@ def timed_out(seconds: float, current: dict, source: str, logs: list[str], kept:
     message = f"The script timed out after {seconds:g}s{where}{unknown}. Give it longer with --timeout 3m (at most 10m), or do less per run"
     if kept:
         message += f". What it kept in state survives for the next script: {kept}"
+        preview = kept_preview(state_text)
+        if preview:
+            command_metrics.flag("script_timeout_state_shown", True)
+            message += f". So far: {preview}"
     else:
         message += ". Nothing it gathered was kept: push results into `state` as you go (state.rows = [...state.rows || [], row]) so the next run picks up where this one stopped"
     opened = sum(1 for name in (done or []) if ALIASES.get(name, name) == "open") + (1 if name == "open" else 0)
@@ -488,7 +503,7 @@ async def run(ctx, source: str, seconds: float):
         except asyncio.TimeoutError:
             stopped = await stop_worker(page, handle)
             kept = keep_state(ctx.state, stopped.get("state"))
-            raise timed_out(seconds, current, source, list(stopped.get("logs") or []), kept, done) from None
+            raise timed_out(seconds, current, source, list(stopped.get("logs") or []), kept, done, stopped.get("state")) from None
         except asyncio.CancelledError:
             stopped = await stop_worker(page, handle)
             if keep_state(ctx.state, stopped.get("state")):

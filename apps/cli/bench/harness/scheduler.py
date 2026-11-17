@@ -174,13 +174,16 @@ class Scheduler:
 
     def idle_lanes_to_quit(self, now):
         groups_pending = {self.group_of(it) for it in self.pending}
+        laneless = any(not any(x.group == g for x in self.lanes) for g in groups_pending)
+        starved = laneless and len(self.lanes) >= self.max_lanes
         out = []
         for ln in self.lanes:
             if ln.kind != "ardia" or ln.busy:
                 continue
             mine = sorted((x for x in self.lanes if x.group == ln.group), key=lambda x: x.index)
             extra = mine.index(ln) >= 1
-            surplus = (extra and (self.holding or now - ln.idle_since >= IDLE_QUIT_S)) or mine.index(ln) >= self.cap(ln.group)
+            surplus = ((extra and (self.holding or now - ln.idle_since >= IDLE_QUIT_S)) or mine.index(ln) >= self.cap(ln.group)
+                       or (starved and now - ln.idle_since >= self.settle_s))
             if ln.group not in groups_pending or surplus:
                 out.append(ln)
         return out

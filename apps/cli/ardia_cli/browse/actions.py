@@ -476,12 +476,52 @@ async def target_point(page, element, humanize: bool, check_cover: bool = True):
                 data={"point": [cx, cy], "viewport": [vp["width"], vp["height"]]}, code="outside_viewport",
             )
         if cover:
+            closer = await close_control(page, element, cx - ox, cy - oy)
+            way = f"; its close control is {closer} (`click {closer.split()[0]}`), then retry" if closer else "; interact with that element first, snapshot again, then retry"
             raise BrowseError(
-                f"Element {element.label} is covered by {cover}; interact with that element first, snapshot again, then retry",
-                data={"coveredBy": cover},
+                f"Element {element.label} is covered by {cover}{way}",
+                data={"coveredBy": cover, "closeRef": closer.split()[0] if closer else None},
                 code="covered",
             )
     return cx, cy, info
+
+
+CLOSE_CONTROL = r"""(x, y) => {
+  const hit = document.elementFromPoint(x, y);
+  if (!hit) return [];
+  let layer = null;
+  for (let el = hit; el && el !== document.body && el !== document.documentElement; el = el.parentElement) {
+    const style = getComputedStyle(el);
+    if (style.position === "fixed" || style.position === "sticky" || el.getAttribute("role") === "dialog" || el.getAttribute("aria-modal") === "true" || el.tagName === "DIALOG") layer = el;
+  }
+  if (!layer) return [];
+  const closeName = /^(close|dismiss|close (dialog|modal|popup|window|banner)|no,? thanks?|no thank you|not now|maybe later|skip|×|✕|✖|x)$/i;
+  for (const control of layer.querySelectorAll("button, [role=button], a, [aria-label]")) {
+    if (!ardiaBrowse.visible(control)) continue;
+    const shown = ((control.innerText || control.value || "").trim()).replace(/\s+/g, " ");
+    const label = (control.getAttribute("aria-label") || control.getAttribute("title") || "").trim();
+    if (closeName.test(shown) || (shown.length <= 2 && closeName.test(label))) return [control];
+  }
+  return [];
+}"""
+
+
+async def close_control(page, element, x, y) -> str | None:
+    from ardia_cli import command_metrics
+
+    try:
+        remote = await page.call(CLOSE_CONTROL, x, y, frame=element.frame, by_value=False, read=True)
+        found = await page.elements_from(remote, element.frame, "close control", limit=1)
+    except BrowseError:
+        return None
+    if not found:
+        return None
+    try:
+        name = await page.call("(el) => ((el.innerText || '').trim() || el.getAttribute('aria-label') || el.getAttribute('title') || 'close').replace(/\\s+/g, ' ').slice(0, 40)", found[0], frame=element.frame, read=True)
+    except BrowseError:
+        name = "close"
+    command_metrics.flag("covered_close_ref", True)
+    return f"@{page.state.ref_for_node(page, element.frame, found[0].backend_id)} \"{name}\""
 
 
 async def dismissed_consent(page, element, x, y) -> bool:

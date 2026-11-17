@@ -462,7 +462,8 @@ def refuse_on_borrowed(ctx: Ctx, page, what: str):
 
 @command("open")
 async def cmd_open(ctx: Ctx, argv):
-    options, args = parse(argv, {"--enable": "multi", "--init-script": "multi", "--capture-console": "bool", "--headers": "value", "--label": "value", "--show": "bool"})
+    options, args = parse(argv, {"--enable": "multi", "--init-script": "multi", "--capture-console": "bool", "--headers": "value", "--label": "value", "--show": "bool",
+                                 "--read": "bool"})
     if options.get("headers"):
         raise Usage("ardia browse can't scope headers to an origin at launch; run `ardia browse set headers <json>` before `open`")
     ctx.options.setdefault("enable", []).extend(sum((value.split(",") for value in options.get("enable") or []), []))
@@ -475,7 +476,7 @@ async def cmd_open(ctx: Ctx, argv):
     show = wants_show(ctx, options)
     borrowed = state.extras.get("attached") if state.current and state.current == state.extras.get("attached") else None
     came_from = "about:blank"
-    reporting = bool(url) and not ctx.options.get("no_changes") and state.extras.get("top_command") != "script"
+    reporting = bool(url) and not ctx.options.get("no_changes") and state.extras.get("top_command") != "script" and not options.get("read")
     fresh_tab = not (state.current and state.current in state.target_infos and not borrowed)
     if fresh_tab:
         page = await new_tab(ctx, None if reporting else url, options.get("label"), show=show and not reporting)
@@ -517,6 +518,13 @@ async def cmd_open(ctx: Ctx, argv):
             where = f"→ Opened in its own background tab [{tab}]"
         if borrowed or not background:
             text += f"\n{where}; " + ("it takes input without being shown" if background else f"this Ardia doesn't deliver input there. use: ardia browse tab {tab} --show (or open <url> --show)")
+    if options.get("read"):
+        from ardia_cli import command_metrics
+
+        command_metrics.flag("open_read", True)
+        read = await cmd_read(ctx, [])
+        data["read"] = read.data
+        return Result(data, f"{text}\n\n{read.text}", page_content=True)
     result = Result(data, text)
     if reporting:
         report = await changes.arrival(ctx, page, came_from)

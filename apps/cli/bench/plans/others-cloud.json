@@ -1,0 +1,31 @@
+{
+  "name": "others-cloud-2026-11-16",
+  "repeats": 3,
+  "tasks": "all",
+  "max_lanes": 2,
+  "lane_base": 10,
+  "cli": "dev:bu43",
+  "results": "~/ardia-scratch/bench-others/results/others-cloud-1",
+  "memory_headroom_pct": 100,
+  "contenders": [
+    {
+      "id": "bh-cloud",
+      "label": "Browser Harness, Browser Use cloud browser + Codex (GPT-6.1 Terra medium)",
+      "kind": "browserharness",
+      "browser": "cloud",
+      "agent": "codex",
+      "model": "gpt-6.1-terra",
+      "effort": "medium",
+      "max_lanes": 2
+    },
+    {
+      "id": "ardia-cli-cloud",
+      "label": "ardia CLI, Browser Use cloud browser + Codex (GPT-6.1 Terra medium)",
+      "kind": "ardiacloud",
+      "agent": "codex",
+      "model": "gpt-6.1-terra",
+      "effort": "medium",
+      "max_lanes": 2
+    }
+  ]
+}

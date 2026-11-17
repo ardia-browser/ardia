@@ -10,13 +10,18 @@ import time
 from pathlib import Path
 
 import ardia_side
+import ardiacloud_side
 import betterwright_side
+import browseragent_side
+import browserharness_side
+import browsers
 import browseruse_side
 import grading
 import opencode_side
 import registry
 import servers
 import summary
+import tunnel
 from procs import kill_agents, read_json, sh, write_json
 from scheduler import LANE_PORT_STRIDE, Scheduler
 
@@ -140,7 +145,7 @@ def lane_overrides(plan, contender, lane, port_offset=0):
     o["port"] = int(o.get("port") or ardia_side.DEFAULTS["port"]) + lane.index
     if lane.index:
         o["lane"] = f"lane{lane.index}"
-        o["app"] = str(lane_app(base_app, lane.index))
+        o["app"] = str(base_app if contender.get("shared_app", plan.get("shared_app")) else lane_app(base_app, lane.index))
     return o
 
 
@@ -159,7 +164,8 @@ def rate_limit_reason(rec):
     if rec.get("pass"):
         return None
     texts = [str(rec.get("harness_error") or ""), str(rec.get("error") or ""), str(rec.get("status") or "")]
-    if rec.get("side") in ("ardia", "opencode", "browseruse", "betterwright"):
+    if rec.get("side") in ("ardia", "opencode", "browseruse", "betterwright", "browserharness", "ardiacloud",
+                           "browseragent"):
         failed_cli = rec.get("cli_is_error") or rec.get("errors") or rec.get("exit_code") not in (0, None) or not rec.get("tokens")
         if not failed_cli:
             return None
@@ -173,7 +179,8 @@ def rate_limit_reason(rec):
 
 
 def opencode_overrides(plan, contender, lane, port_offset=0):
-    keys = ("model", "effort", "browse_entry", "extension", "chrome", "cdp_port", "relay_port", "reach_line")
+    keys = ("model", "effort", "browse_entry", "extension", "chrome", "cdp_port", "relay_port", "reach_line", "browser",
+            "app")
     return dict({k: contender.get(k) for k in keys}, lane=f"lane{lane.index}", lane_index=lane.index,
                 port_offset=port_offset)
 
@@ -189,6 +196,39 @@ def betterwright_overrides(plan, contender, lane, port_offset=0):
     return dict({k: contender.get(k) for k in keys}, lane=f"lane{lane.index}", port_offset=port_offset)
 
 
+def browserharness_overrides(plan, contender, lane, port_offset=0):
+    keys = ("browser", "model", "effort", "venv", "repo", "chrome", "app", "cdp_port", "cloud_country")
+    return dict({k: contender.get(k) for k in keys}, lane=f"lane{lane.index}", lane_index=lane.index,
+                port_offset=port_offset)
+
+
+def browseragent_overrides(plan, contender, lane, port_offset=0):
+    keys = ("browser", "model", "effort", "venv", "app", "chrome", "cdp_port", "max_steps")
+    return dict({k: contender.get(k) for k in keys}, lane=f"lane{lane.index}", lane_index=lane.index,
+                port_offset=port_offset)
+
+
+def ardiacloud_overrides(plan, contender, lane, port_offset=0):
+    keys = ("cli", "model", "effort", "cloud_country", "reach_line")
+    o = {k: contender.get(k, plan.get(k)) for k in keys}
+    return dict(o, lane=f"lane{lane.index}", port_offset=port_offset)
+
+
+def scratch_roots():
+    return [ardia_side.WORK, opencode_side.ROOT / "lanes", browserharness_side.ROOT / "lanes",
+            browseragent_side.ROOT / "lanes", registry.HOME]
+
+
+def clean_run_scratch(rec):
+    instance = rec.get("instance") if isinstance(rec.get("instance"), dict) else {}
+    for raw in (rec.get("workdir"), instance.get("home")):
+        if not raw:
+            continue
+        path = Path(raw).resolve()
+        if any(root.resolve() in path.parents for root in scratch_roots()):
+            shutil.rmtree(path, ignore_errors=True)
+
+
 def run_item(item, lane, results_dir, plan, on_start):
     c, offset = item["contender"], item.get("port_offset", 0)
     if c["kind"] == "aside":
@@ -199,6 +239,18 @@ def run_item(item, lane, results_dir, plan, on_start):
     if c["kind"] == "browseruse":
         return browseruse_side.run(item["task"], c["agent"], item["run_id"], results_dir,
                                    browseruse_overrides(plan, c, lane, offset), contender=c["id"],
+                                   on_agent_start=on_start)
+    if c["kind"] == "browserharness":
+        return browserharness_side.run(item["task"], c.get("agent", "codex"), item["run_id"], results_dir,
+                                       browserharness_overrides(plan, c, lane, offset), contender=c["id"],
+                                       on_agent_start=on_start)
+    if c["kind"] == "browseragent":
+        return browseragent_side.run(item["task"], None, item["run_id"], results_dir,
+                                     browseragent_overrides(plan, c, lane, offset), contender=c["id"],
+                                     on_agent_start=on_start)
+    if c["kind"] == "ardiacloud":
+        return ardiacloud_side.run(item["task"], c.get("agent", "codex"), item["run_id"], results_dir,
+                                   ardiacloud_overrides(plan, c, lane, offset), contender=c["id"],
                                    on_agent_start=on_start)
     if c["kind"] == "betterwright":
         return betterwright_side.run(item["task"], c["agent"], item["run_id"], results_dir,
@@ -222,9 +274,11 @@ def lane_base(plan):
 
 
 def make_scheduler(plan, results_dir, max_lanes, pinned_tasks=()):
-    return Scheduler(pending_items(plan, results_dir), max_lanes=max_lanes, lead=int(plan.get("max_round_lead", 1)),
-                     pace_slack=float(plan.get("pace_slack", 0.15)), pinned_tasks=set(pinned_tasks),
-                     lane_base=lane_base(plan))
+    sched = Scheduler(pending_items(plan, results_dir), max_lanes=max_lanes, lead=int(plan.get("max_round_lead", 1)),
+                      pace_slack=float(plan.get("pace_slack", 0.15)), pinned_tasks=set(pinned_tasks),
+                      lane_base=lane_base(plan))
+    sched.caps.update({c["id"]: int(c["max_lanes"]) for c in plan["contenders"] if c.get("max_lanes")})
+    return sched
 
 
 class Executor:
@@ -273,6 +327,8 @@ class Executor:
                    "side": item["contender"]["kind"], "pass": False, "method": None, "invariants": None,
                    "harness_error": f"{type(e).__name__}: {e}"}
         on_start()
+        if self.plan.get("clean_run_scratch"):
+            clean_run_scratch(rec)
         reason = rate_limit_reason(rec)
         if reason:
             rec["harness_error"] = f"rate_limited: {reason}"
@@ -314,7 +370,7 @@ class Executor:
                 for lane in quits:
                     ardia_side.log(f"quitting idle lane {lane.id}")
                     self.quit_lane(lane)
-                used = memory_used_pct()
+                used = max(0.0, memory_used_pct() - float(self.plan.get("memory_headroom_pct") or 0))
                 with self.lock:
                     if self.plan.get("normal_pressure_only") and self.sched.running and memory_pressure_level() != 1:
                         used = max(used, 100.0)
@@ -348,6 +404,14 @@ class Executor:
                 browseruse_side.stop_all()
             if any(c["kind"] == "betterwright" for c in self.plan["contenders"]):
                 betterwright_side.stop_all()
+            if any(c["kind"] == "browserharness" for c in self.plan["contenders"]):
+                browserharness_side.stop_all()
+            if any(c["kind"] == "browseragent" for c in self.plan["contenders"]):
+                browseragent_side.stop_all()
+            if any(c["kind"] == "ardiacloud" for c in self.plan["contenders"]):
+                ardiacloud_side.stop_all()
+            browsers.cloud_stop_all()
+            tunnel.stop_all()
             if self.plan.get("stop_after", True):
                 for lane_id in list(self.lanes_used):
                     ardia_side.quit_instance(self.lanes_used.pop(lane_id))
@@ -420,6 +484,10 @@ def reserved_ports(plan, max_lanes):
                       ("OpenCode relay", int(c.get("relay_port") or opencode_side.DEFAULTS["relay_port"]))]
         if c["kind"] == "browseruse":
             bases.append(("Browser Use CDP", int(c.get("cdp_port") or browseruse_side.DEFAULTS["cdp_port"])))
+        if c["kind"] == "browserharness" and c.get("browser") != "cloud":
+            bases.append(("Browser Harness CDP", int(c.get("cdp_port") or browserharness_side.DEFAULTS["cdp_port"])))
+        if c["kind"] == "browseragent":
+            bases.append(("Browser Use agent CDP", int(c.get("cdp_port") or browseragent_side.DEFAULTS["cdp_port"])))
     first = lane_base(plan)
     return {base + k: f"{name} lane {k}" for name, base in bases for k in range(first, first + max_lanes)}
 

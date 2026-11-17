@@ -386,6 +386,7 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
   const parsed = parseQuery(q, tokens);
   const matched: Candidate[] = [];
   const top = new TopList(limit + 1);
+  const tabTop = new TabList();
   const onSite = scope ? new TopList(4) : null;
   let inline: Ranked | null = null;
   for (const list of [pages, extra]) {
@@ -400,6 +401,7 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
       const derank = currentKey !== null && c.text.key === currentKey ? 80 : 0;
       const r: Ranked = { c, tabId, m, s: m + frecency(c, tabId, now) - derank };
       top.offer(r);
+      if (tabId && !scope) tabTop.offer(r);
       if (onSite) {
         const host = hostOfPage(c.text);
         if (host === scope!.host || host.endsWith(`.${scope!.host}`)) onSite.offer(r);
@@ -449,9 +451,9 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
   out.push(...actionMatches.map((m) => actionRow(m.action)));
   out.push(...creates.map(createRow));
   const pageRows = ranked.map((x) => pageSuggestion(x.c, x.tabId));
-  out.push(...pageRows.slice(0, 3));
+  out.push(...leadingRows(ranked, tabTop.items).map((x) => pageSuggestion(x.c, x.tabId)));
   out.push(...remoteRows((text) => searchUrl(engine, text), engine.name));
-  out.push(...pageRows.slice(3));
+  out.push(...pageRows);
   return { items: out.items, completion };
 }
 
@@ -517,4 +519,30 @@ function dedupeSuggestions(remote: readonly string[], query: string): string[] {
     seen.add(key);
     return true;
   });
+}
+
+const LEADING_ROWS = 5;
+
+const matchesAhead = (a: Ranked, b: Ranked) => a.m > b.m || (a.m === b.m && a.s > b.s);
+
+class TabList {
+  readonly items: Ranked[] = [];
+  offer(r: Ranked) {
+    const items = this.items;
+    if (items.length === LEADING_ROWS && !matchesAhead(r, items[items.length - 1]!)) return;
+    let i = items.length;
+    while (i > 0 && matchesAhead(r, items[i - 1]!)) i--;
+    items.splice(i, 0, r);
+    if (items.length > LEADING_ROWS) items.pop();
+  }
+}
+
+function leadingRows(ranked: readonly Ranked[], tabs: readonly Ranked[]): Ranked[] {
+  const lead = ranked.slice(0, 3);
+  const bar = lead.length ? lead[lead.length - 1]!.m : 0;
+  for (const t of tabs) {
+    if (lead.length >= LEADING_ROWS) break;
+    if (t.m >= bar && !lead.some((x) => x.c === t.c)) lead.push(t);
+  }
+  return lead;
 }

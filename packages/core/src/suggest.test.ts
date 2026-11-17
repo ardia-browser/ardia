@@ -566,3 +566,47 @@ test("each new path tags its row, so the bar can report which path a pick came f
   assert.equal(buildSuggestions("you", { tabs: [], history: yt }, { now }).via, undefined, "website first completes as it always did");
   for (const r of [literal, renamed, site, searchFirst]) for (const key of Object.keys(r.via ?? {})) assert.ok(r.items.some((x) => suggestionKey(x) === key), key);
 });
+
+test("open tabs that match as well as the third page row come before remote suggestions", () => {
+  const teams = ["Alpha", "Beta", "Gamma", "Delta"];
+  const url = (t: string) => `https://${t.toLowerCase()}.example.com/board`;
+  const hist = teams.map((t, i) => ({ url: url(t), title: "Board - Tracker", favicon: null, visits: 40 - i * 10, lastVisit: now - 1000 }));
+  const tabs = teams.map((t) => ({ id: `t-${t}`, url: url(t), title: "Board - Tracker", favicon: null, customTitle: `Sprint Board (${t})` }));
+  const remote = ["sprint board template", "sprint board app", "sprint board online", "sprint board ideas"];
+  const { items } = buildSuggestions("sprint board", { tabs, history: hist }, { now, preference: "search", remote });
+  const firstRemote = items.findIndex((s) => s.kind === "search" && s.suggested);
+  const tabRows = items.filter((s) => s.kind === "page" && s.tabId);
+  assert.equal(tabRows.length, 4);
+  assert.ok(items.indexOf(tabRows[3]!) < firstRemote, "the fourth matching tab sits above the remote suggestions");
+  const lifted = buildSuggestions("sprint board", { tabs, history: hist }, { now, preference: "search", remote });
+  assert.equal(lifted.via?.[suggestionKey(tabRows[3]!)], "leading_tab", "a tab row lifted above the remote suggestions is reported as such");
+
+  const weak = buildSuggestions("a", { tabs, history: hist }, { now, preference: "search", remote: ["amazon", "apple", "airbnb", "aws"] }).items;
+  assert.ok(weak.some((s) => s.kind === "search" && s.suggested), "remote suggestions still show for a broad query");
+});
+test("a well-matching open tab isn't pushed out by many weaker but busier history pages", () => {
+  const busy = Array.from({ length: 12 }, (_, i) => ({ url: `https://boards.example.com/item-${i}`, title: `sprint item ${i} - Board`, favicon: null, visits: 400, lastVisit: now - 1000 }));
+  const quiet = "https://boards.example.com/team/delta";
+  const hist = [...busy, { url: quiet, title: "delta - Board", favicon: null, visits: 8, lastVisit: now - DAY * 3 }];
+  const tabs = [{ id: "t-delta", url: quiet, title: "delta - Board", favicon: null, customTitle: "Sprint Board (Delta)" }];
+  const remote = ["sprint board template", "sprint board app", "sprint board online", "sprint board ideas"];
+  const { items } = buildSuggestions("sprint board", { tabs, history: hist }, { now, preference: "search", remote });
+  const at = items.findIndex((s) => s.kind === "page" && s.tabId === "t-delta");
+  assert.ok(at >= 0, "the renamed tab is listed");
+  assert.ok(at < items.findIndex((s) => s.kind === "search" && s.suggested), "and sits above the remote suggestions");
+});
+test("busy open tabs that match less well don't crowd out a better-matching renamed tab", () => {
+  const archive = Array.from({ length: 9 }, (_, i) => ({ url: `https://boards.example.com/archive-${i}`, title: "Sprint Board archive", favicon: null, visits: 400, lastVisit: now - 1000 }));
+  const items5 = Array.from({ length: 5 }, (_, i) => ({ url: `https://boards.example.com/item-${i}`, title: "sprint item - Board", favicon: null, visits: 400, lastVisit: now - 1000 }));
+  const quiet = "https://boards.example.com/team/delta";
+  const hist = [...archive, ...items5, { url: quiet, title: "delta - Board", favicon: null, visits: 8, lastVisit: now - DAY * 3 }];
+  const tabs = [
+    ...items5.map((h, i) => ({ id: `t-item-${i}`, url: h.url, title: h.title, favicon: null })),
+    { id: "t-delta", url: quiet, title: "delta - Board", favicon: null, customTitle: "Sprint Board (Delta)" },
+  ];
+  const remote = ["sprint board template", "sprint board app", "sprint board online", "sprint board ideas"];
+  const { items } = buildSuggestions("sprint board", { tabs, history: hist }, { now, preference: "search", remote });
+  const at = items.findIndex((s) => s.kind === "page" && s.tabId === "t-delta");
+  assert.ok(at >= 0, "the renamed tab is listed");
+  assert.ok(at < items.findIndex((s) => s.kind === "search" && s.suggested), "and sits above the remote suggestions");
+});

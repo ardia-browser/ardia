@@ -2727,7 +2727,7 @@ const { extensionSuggestions } = __require("packages/core/src/extensionRows.ts")
 const { BUILT_IN_ENGINES, searchUrl } = __require("packages/core/src/engines.ts");
 const { matchActions } = __require("packages/core/src/fuzzy.ts");
 const { fixupUrl, hostOf, searchUrlFor } = __require("packages/core/src/omnibox.ts");
-const { matchScore, matchScoreWord, narrowing, parseQuery, remember, TopList } = __require("packages/core/src/pageMatch.ts");
+const { leadingRows, matchScore, matchScoreWord, narrowing, parseQuery, remember, TabList, TopList } = __require("packages/core/src/pageMatch.ts");
 const { hostLowerOfPage, hostOfPage, hostPart, originOfPage, pageKey, withRootSlash } = __require("packages/core/src/pageText.ts");
 const { globalProviderRows, providerUrl, safeProviderRows } = __require("packages/core/src/providerRows.ts");
 const { matchQuickCreate } = __require("packages/core/src/quickCreate.ts");
@@ -2770,7 +2770,7 @@ function buildSuggestions(raw        , source                  , options        
   let tagged = false;
   const tag = (s            , as                                   )             => {
     if (as) {
-      via[suggestionKey(s)] = as;
+      via[suggestionKey(s)] ??= as;
       tagged = true;
     }
     return s;
@@ -2801,6 +2801,7 @@ function buildSuggestions(raw        , source                  , options        
   const scores           = again ? from.scores : [];
   let found = 0;
   const top = new TopList(limit + 1);
+  const tabTop = new TabList();
   const onSite = scope ? new TopList(4) : null;
   const score = oneWord ? matchScoreWord : matchScore;
   const bound = Boolean(scope);
@@ -2825,12 +2826,13 @@ function buildSuggestions(raw        , source                  , options        
         age = d < 0 ? 0 : d > 30 ? 30 : d;
       }
       const base = c.logVisits - age + (c.bookmarked ? 20 : 0);
+      const tabId = c.tabId ?? tabIds.get(key);
+      if (tabId && !bound) tabTop.offer({ c, tabId, m, s: m + base + 6 - derank });
       if (!bound && top.floor >= m + base - derank + 7) {
         if (!completes) continue;
         if (inline === null ? false : inline.s >= m + base - derank + 7) continue;
         if (c.visits <= 0 || !c.text.shownLower.startsWith(q)) continue;
       }
-      const tabId = c.tabId ?? tabIds.get(key);
       const s = m + (base + (tabId ? 6 : 0)) - derank;
       let r                    ;
       if (top.floor < s || top.items.length < limit + 1) {
@@ -2888,12 +2890,12 @@ function buildSuggestions(raw        , source                  , options        
   out.push(...actionMatches.map((m) => actionRow(m.action)));
   out.push(...extensionMatches.rows);
   out.push(...creates.map(createRow));
+  out.push(...leadingRows(ranked, tabTop.items).map((x, at) => tag(pageSuggestion(x.c, x.tabId), at >= 3 ? "leading_tab" : x.c.renamed && "renamed_tab")));
   const pageRows = ranked.map((x) => tag(pageSuggestion(x.c, x.tabId), x.c.renamed && "renamed_tab"));
-  out.push(...pageRows.slice(0, 3));
   out.push(...(options.remoteSites ?? []).slice(0, 2).map((site)             => known(site.url) ?? tag({ kind: "page", url: site.url, title: site.title, favicon: null }, "engine_site")));
   const providerAt = out.items.length;
   out.push(...remoteRows((text) => searchUrl(engine, text), engine.name));
-  out.push(...pageRows.slice(3));
+  out.push(...pageRows);
   const providerRows = options.providers?.length ? globalProviderRows(options.providers, out.items) : [];
   const items = providerRows.length ? [...out.items.slice(0, providerAt), ...providerRows, ...out.items.slice(providerAt)] : out.items;
   const shownVia = tagged ? viaOf(items, via) : undefined;
@@ -3224,6 +3226,8 @@ __define("packages/core/src/pageMatch.ts", function (exports, __require) {
   __export(exports, "narrowing", () => narrowing);
   __export(exports, "remember", () => remember);
   __export(exports, "TopList", () => TopList);
+  __export(exports, "TabList", () => TabList);
+  __export(exports, "leadingRows", () => leadingRows);
                                                           
 const { shownWordsOf } = __require("packages/core/src/pageText.ts");
 
@@ -3342,6 +3346,32 @@ class TopList {
     if (items.length > this.size) items.pop();
     if (items.length === this.size) this.floor = items[items.length - 1] .s;
   }
+}
+
+const LEADING_ROWS = 5;
+
+const matchesAhead = (a        , b        ) => a.m > b.m || (a.m === b.m && a.s > b.s);
+
+class TabList {
+           items           = [];
+  offer(r        ) {
+    const items = this.items;
+    if (items.length === LEADING_ROWS && !matchesAhead(r, items[items.length - 1] )) return;
+    let i = items.length;
+    while (i > 0 && matchesAhead(r, items[i - 1] )) i--;
+    items.splice(i, 0, r);
+    if (items.length > LEADING_ROWS) items.pop();
+  }
+}
+
+function leadingRows(ranked                   , tabs                   )           {
+  const lead = ranked.slice(0, 3);
+  const bar = lead.length ? lead[lead.length - 1] .m : 0;
+  for (const t of tabs) {
+    if (lead.length >= LEADING_ROWS) break;
+    if (t.m >= bar && !lead.some((x) => x.c === t.c)) lead.push(t);
+  }
+  return lead;
 }
 
 });

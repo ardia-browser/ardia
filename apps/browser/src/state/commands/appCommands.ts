@@ -7,6 +7,7 @@ import { useBrowser } from "../browser/store";
 import { focusedWindowOf } from "../windows/ui";
 import { openReport } from "../report/actions";
 import { openReleaseNotesPage } from "../releaseNotes/releaseNotesPage";
+import { popupBlockLine } from "../telemetry/popupBlockCounts";
 import { webKitMediaFaultsLine } from "../telemetry/webkitMediaFaults";
 import type { AppCommand } from "./commandCatalog";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
@@ -45,6 +46,7 @@ export async function diagnostics(): Promise<string> {
         ? "Updates: not set up for this build"
         : `Updates: automatic checks ${updates.automaticChecks ? "on" : "off"}, feed ${updates.feedURL ?? "none"}`,
     webKitMediaFaultsLine(),
+    popupBlockLine(),
     ...(engine?.focus ? [`Focus: ${engine.focus.replace(/\n/g, "\n  ")}`] : []),
   ].join("\n");
 }

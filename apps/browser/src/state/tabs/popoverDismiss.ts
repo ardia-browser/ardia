@@ -5,6 +5,7 @@ import { useBrowser } from "../browser/store";
 import { dismissZoomPopover } from "../site/zoomBubble";
 import { notePopoverClosed } from "../telemetry/usage";
 import { noteDownloadsPanelClose } from "../telemetry/downloadsPanelCauses";
+import { notePopupAnswer } from "../telemetry/popupBlockCounts";
 import { focusedWindowOf } from "../windows/ui";
 import { popoverOf, setPopover, usePages, type PagePopover } from "./pageState";
 
@@ -22,6 +23,7 @@ function closePopover(tabId: string) {
 export function dismissPopoverByPress(tabId: string) {
   const popover = popoverOf(tabId);
   if (!popover) return;
+  if (popover === "popups") notePopupAnswer("dismissed");
   pressedAway = { tabId, popover, at: Date.now() };
   closePopover(tabId);
   notePopoverClosed("press");
@@ -78,7 +80,10 @@ export function startPopoverEscape(closesDownloads = PLATFORM_FEATURES.escapeClo
     if (e.type !== "dragEscape") return;
     const windowId = focusedWindowOf(useBrowser.getState());
     const open = popoverTabsIn(windowId);
-    for (const id of open) closePopover(id);
+    for (const id of open) {
+      if (popoverOf(id) === "popups") notePopupAnswer("dismissed");
+      closePopover(id);
+    }
     const downloads = downloadsOpenIn(windowId);
     if (downloads) {
       useBrowser.getState().setDownloadsOpen(windowId!, false);

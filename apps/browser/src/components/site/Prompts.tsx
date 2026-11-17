@@ -9,6 +9,7 @@ import {
   usePage,
 } from "../../state/tabs/pageState";
 import { dismissPopoverByPress } from "../../state/tabs/popoverDismiss";
+import { notePopupAnswer } from "../../state/telemetry/popupBlockCounts";
 import { useState } from "react";
 import { Image, View } from "react-native";
 import { useTheme } from "../ui/theme";
@@ -107,6 +108,7 @@ export function BlockedPopupsPrompt({ tabId, right, left, top }: { tabId: string
           <Button variant="pill"
             title="Always Deny"
             onPress={() => {
+              notePopupAnswer("always_deny");
               void setSiteSetting(profile(), origin, "popups", "block");
               done();
             }}
@@ -114,6 +116,7 @@ export function BlockedPopupsPrompt({ tabId, right, left, top }: { tabId: string
           <Button variant="pill"
             title="Only Once"
             onPress={() => {
+              notePopupAnswer("only_once");
               for (const p of popups) void web()?.openBlockedPopup(p.id, false);
               done();
             }}
@@ -122,6 +125,7 @@ export function BlockedPopupsPrompt({ tabId, right, left, top }: { tabId: string
             title="Always Allow"
             primary
             onPress={() => {
+              notePopupAnswer("always_allow");
               for (const p of popups) void web()?.openBlockedPopup(p.id, true);
               done();
             }}
@@ -134,6 +138,7 @@ export function BlockedPopupsPrompt({ tabId, right, left, top }: { tabId: string
             icon="arrow.up.forward.app"
             title={p.url.replace(/^https?:\/\//, "") || "about:blank"}
             onPress={() => {
+              notePopupAnswer("only_once");
               void web()?.openBlockedPopup(p.id, false);
               const rest = pageOf(tabId).popups.filter((x) => x.id !== p.id);
               patchPage(tabId, { popups: rest });

@@ -4,6 +4,7 @@ import { patchPage, pageOf, setPopover, type AutofillPrompt, type PasswordPrompt
 import type { ExternalAppRequest } from "../../platform/siteSettings";
 import { currentEngineProfile, currentTab } from "../browser/current";
 import { noteExternalApp } from "../telemetry/externalAppCounts";
+import { notePopupBlocked, notePopupPrompt } from "../telemetry/popupBlockCounts";
 import { noteExternalAppRequest } from "../telemetry/track";
 
 async function shouldPromptForPopups(profile: string, origin: string): Promise<boolean> {
@@ -17,9 +18,15 @@ async function shouldPromptForPopups(profile: string, origin: string): Promise<b
 
 export function popupBlocked(tabId: string, popup: BlockedPopup) {
   const first = !pageOf(tabId).popups.length;
+  if (!pageOf(tabId).popups.some((p) => p.id === popup.id)) notePopupBlocked();
   patchPage(tabId, { popups: [...pageOf(tabId).popups, popup] });
   const tab = currentTab(tabId);
-  if (first && tab) void shouldPromptForPopups(currentEngineProfile(tab.profileId), popup.origin).then((ask) => ask && setPopover(tabId, "popups"));
+  if (first && tab) {
+    void shouldPromptForPopups(currentEngineProfile(tab.profileId), popup.origin).then((ask) => {
+      notePopupPrompt(ask);
+      if (ask) setPopover(tabId, "popups");
+    });
+  }
 }
 
 export function showPasswordPrompt(tabId: string, prompt: PasswordPrompt) {

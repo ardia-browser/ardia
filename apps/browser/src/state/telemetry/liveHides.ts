@@ -1,3 +1,5 @@
+import { takeLiveGithubCounts } from "./liveGithub";
+
 let rowHides = 0;
 let stackHides = 0;
 let repoMenuPicks = 0;
@@ -32,6 +34,7 @@ export function takeLiveHideCounts() {
     live_repo_menu_picks: repoMenuPicks,
     live_repo_hide_alls: repoHideAlls,
     live_new_repos_hidden_turned_on: newReposHiddenTurnedOn,
+    ...takeLiveGithubCounts(),
   };
   rowHides = 0;
   stackHides = 0;

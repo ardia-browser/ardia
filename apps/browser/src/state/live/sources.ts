@@ -1,5 +1,5 @@
 import { CONFLUENCE_CQL, DRIVE_QUERY, mapBitbucket, mapConfluence, mapDrive, mapNotion, NOTION_SEARCH_BODY, type BitbucketPR, type BitbucketStatuses, type ConfluenceSearch, type DriveFiles, type NotionSearch, type NotionUsers } from "./documents";
-import { DETAILS_PAGE, detailIds, detailNodes, GITHUB_DETAILS_QUERY, GITHUB_QUERY, GITHUB_STATE_QUERY, GITHUB_VARIABLES, mapGithub, VIEWER_QUERY, withDetails, type DetailsResponse, type GithubResponse } from "./github";
+import { githubClient } from "./githubClient";
 import { basic, deleteSecret, endpoints, form, getSecret, request, setSecret } from "./net";
 import { live, setAccount, updateConfig } from "./store";
 import { LiveError, type CompletionState, type LiveAccount, type LiveFolder, type LiveItem, type LiveSourceId } from "./types";
@@ -10,9 +10,12 @@ export type LiveSource = {
   name: string;
   kind: LiveFolder["kind"];
   site: string;
-  fetch(folder: LiveFolder): Promise<LiveItem[]>;
-  resolveGone?(items: LiveItem[]): Promise<Record<string, CompletionState>>;
+  fetch(folder: LiveFolder, options?: FetchOptions): Promise<LiveItem[]>;
+  resolveGone?(items: LiveItem[], options?: FetchOptions): Promise<Record<string, CompletionState>>;
+  pausedUntil?(): number | null;
 };
+
+export type FetchOptions = { interactive?: boolean };
 
 async function secret(source: LiveSourceId): Promise<string> {
   const value = await getSecret(source);
@@ -20,50 +23,19 @@ async function secret(source: LiveSourceId): Promise<string> {
   return value;
 }
 
-async function githubGraphql<T>(token: string, query: string, variables: Record<string, unknown> = {}): Promise<T> {
-  const json = await request<T & { errors?: { type?: string; message: string }[] }>(endpoints.githubGraphql, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ query, variables }),
-  });
-  const error = json.errors?.[0];
-  if (error && !(json as { data?: unknown }).data) throw new LiveError(error.type === "RATE_LIMITED" ? "rateLimited" : "other", error.message);
-  return json;
-}
-
 const github: LiveSource = {
   id: "github",
   name: "GitHub",
   kind: "pullRequests",
   site: "https://github.com",
-  async fetch(folder) {
-    const token = await secret("github");
-    const json = await githubGraphql<GithubResponse>(token, GITHUB_QUERY, GITHUB_VARIABLES);
-    const ids = detailIds(json, folder.filters);
-    const pages = Array.from({ length: Math.ceil(ids.length / DETAILS_PAGE) }, (_, i) => ids.slice(i * DETAILS_PAGE, (i + 1) * DETAILS_PAGE));
-    const page = async (ids: string[]) => detailNodes(ids, await githubGraphql<DetailsResponse>(token, GITHUB_DETAILS_QUERY, { ids }));
-    const retry = (ids: string[]) => (error: unknown) =>
-      error instanceof LiveError && (error.kind === "other" || error.kind === "network") ? page(ids) : Promise.reject(error);
-    const details = await Promise.all(pages.map((ids) => page(ids).catch(retry(ids))));
-    return mapGithub(withDetails(json, details.flat()), folder.filters);
+  async fetch(folder, options) {
+    return githubClient.fetchFolder(await secret("github"), folder, !!options?.interactive);
   },
-  async resolveGone(items) {
-    const prs = items.filter((it) => it.source === "github");
-    if (!prs.length) return {};
-    const token = await secret("github");
-    const ids = prs.map((it) => it.id.slice("github:".length));
-    const json = await githubGraphql<{ data?: { nodes: ({ id: string; state: string } | null)[] } }>(token, GITHUB_STATE_QUERY, { ids });
-    const out: Record<string, CompletionState> = {};
-    for (const n of json.data?.nodes ?? []) {
-      if (!n) continue;
-      const item = prs.find((it) => it.id === `github:${n.id}`);
-      if (!item) continue;
-      if (n.state === "MERGED") out[item.id] = "merged";
-      else if (n.state === "CLOSED") out[item.id] = "closed";
-      else if (item.section === "review" || item.section === "team") out[item.id] = "reviewed";
-    }
-    return out;
+  async resolveGone(items, options) {
+    if (!items.some((it) => it.source === "github")) return {};
+    return githubClient.resolveGone(await secret("github"), items, !!options?.interactive);
   },
+  pausedUntil: () => githubClient.pausedUntil(),
 };
 
 const BITBUCKET_STATE_BATCH = 10;
@@ -174,8 +146,7 @@ export const SOURCES: Record<LiveSourceId, LiveSource> = { github, bitbucket, no
 const account = (login: string, name: string | null, avatar: string | null): LiveAccount => ({ login, name, avatar, connectedAt: Date.now() });
 
 export async function connectGithub(token: string) {
-  const json = await githubGraphql<{ data?: { viewer: { login: string; name: string | null; avatarUrl: string } } }>(token.trim(), VIEWER_QUERY);
-  const viewer = json.data?.viewer;
+  const viewer = await githubClient.viewer(token.trim());
   if (!viewer) throw new LiveError("signedOut", "GitHub didn't accept the token");
   await setSecret("github", token.trim());
   setAccount("github", account(viewer.login, viewer.name, viewer.avatarUrl));

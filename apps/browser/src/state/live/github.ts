@@ -18,10 +18,17 @@ const PR_FIELDS = `
     }
   }`;
 
+const CHANGE_FIELDS = `... on PullRequest {
+    id updatedAt isDraft mergeable reviewDecision
+    commits(last: 1) { nodes { commit { oid statusCheckRollup { state contexts(first: 0) {
+      checkRunCountsByState { state count } statusContextCountsByState { state count }
+    } } } } }
+  }`;
+
 export const GITHUB_QUERY = `query LiveFolder($authored: String!, $review: String!, $direct: String!) {
   viewer { login name avatarUrl(size: 64) }
-  authored: search(query: $authored, type: ISSUE, first: 50) { nodes { ... on PullRequest { id } } }
-  review: search(query: $review, type: ISSUE, first: 50) { nodes { ... on PullRequest { id } } }
+  authored: search(query: $authored, type: ISSUE, first: 50) { nodes { ${CHANGE_FIELDS} } }
+  review: search(query: $review, type: ISSUE, first: 50) { nodes { ${CHANGE_FIELDS} } }
   direct: search(query: $direct, type: ISSUE, first: 50) { nodes { ... on PullRequest { id } } }
 }`;
 
@@ -66,6 +73,33 @@ export type RawPR = {
   reviewThreads?: { nodes: { isResolved: boolean }[] };
   commits: { nodes: { commit: { statusCheckRollup: { state: string; contexts: { nodes: RawCheck[] } } | null } }[] };
 };
+
+type StateCount = { state: string; count: number };
+
+export type ListedPR = {
+  id: string;
+  updatedAt?: string;
+  isDraft?: boolean;
+  mergeable?: string;
+  reviewDecision?: string | null;
+  commits?: { nodes: { commit: { oid?: string; statusCheckRollup: { state: string; contexts?: { checkRunCountsByState?: StateCount[]; statusContextCountsByState?: StateCount[] } } | null } }[] };
+};
+
+export function changeKey(listed: ListedPR | undefined): string | null {
+  if (!listed?.updatedAt) return null;
+  const commit = listed.commits?.nodes[0]?.commit;
+  const rollup = commit?.statusCheckRollup;
+  const counts = (list: StateCount[] | undefined) => (list ?? []).filter((c) => c.count).map((c) => `${c.state}:${c.count}`).sort().join(",");
+  return JSON.stringify([listed.updatedAt, listed.isDraft, listed.mergeable, listed.reviewDecision, commit?.oid ?? null, rollup?.state ?? null, counts(rollup?.contexts?.checkRunCountsByState), counts(rollup?.contexts?.statusContextCountsByState)]);
+}
+
+export function listedById(json: GithubResponse): Map<string, ListedPR> {
+  const data = json.data;
+  const out = new Map<string, ListedPR>();
+  if (!data) return out;
+  for (const n of [...data.authored.nodes, ...data.review.nodes]) if ("id" in n && n.id && !out.has(n.id)) out.set(n.id, n as ListedPR);
+  return out;
+}
 
 export type GithubResponse = {
   data?: {

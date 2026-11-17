@@ -1,10 +1,9 @@
 import { Button, ListRow, NativeFormContext, space, Symbol, Text, VisualEffect, WindowDragRegion } from "../ui";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { useTheme } from "../ui/theme";
 import { useProfile } from "../../state/browser/hooks";
 import { trackSettingsSection } from "../../state/telemetry/track";
-import { preparePane, usePaneLoaded } from "../../state/settings/paneData";
 import { clearSettingsReveal, flashSetting, useSettingsSearch } from "../../state/settings/searchState";
 import { anchorView } from "./anchors";
 import { findSetting, PANES, paneTitle } from "./settingsIndex";
@@ -37,44 +36,15 @@ const TOOLBAR = pageToolbar.window.height;
 const SIDEBAR_TOP = WINDOW_CHROME.leadingWidth ? TOOLBAR : space.ml;
 const TITLE_LEFT = SIDEBAR + 96;
 const CONTROLS_ROOM = WINDOW_CONTROLS.edge + windowControlsWidth() + WINDOW_CONTROLS.gap;
-const HOLD_CAP_MS = 250;
 const REVEAL_MARGIN = 16;
 
 const shownKey = (s: SettingsPlace) => `${s.pane}:${s.profileId ?? ""}:${s.detail ?? ""}`;
 const pageKey = (s: SettingsPlace) => (s.pane === "profiles" && !s.detail ? "profiles::" : shownKey(s));
 
-function useShownPane(): SettingsPlace | null {
-  const nav = useSettingsNav();
-  const target = { pane: nav.pane, profileId: nav.profileId, detail: nav.detail };
-  const key = shownKey(target);
-  const loaded = usePaneLoaded(nav.pane, nav.profileId);
-  const [expired, setExpired] = useState<string | null>(null);
-  const [last, setLast] = useState<SettingsPlace | null>(null);
-  const ready = loaded || expired === key;
-  useEffect(() => {
-    if (ready) return setLast(target);
-    void preparePane(target.pane, target.profileId);
-    const timer = setTimeout(() => setExpired(key), HOLD_CAP_MS);
-    return () => clearTimeout(timer);
-  }, [key, ready]);
-  return ready ? target : last;
-}
-
-function usePrefetchAllPanes(enabled: boolean) {
-  useEffect(() => {
-    if (!enabled) return;
-    const timer = setTimeout(() => {
-      for (const p of PANES) void preparePane(p.id, null);
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [enabled]);
-}
-
 export function SettingsWindow() {
   const look = useSettingsColors();
   const nav = useSettingsNav();
-  const shown = useShownPane();
-  usePrefetchAllPanes(!!shown);
+  const shown = nav;
   const profileName = useProfile(shown?.profileId, (p) => p?.name);
   const title = shown ? (shown.pane === "profiles" && profileName ? profileName : paneTitle(shown.pane)) : "";
   const sheet = useSettingsSheet((s) => s.sheet);

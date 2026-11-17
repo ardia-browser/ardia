@@ -298,6 +298,7 @@ source_set("linux") {
     "ac_linux_window_caption.cc",
     "ac_linux_window_caption.h",
     "ac_linux_window_commands.h",
+    "ac_linux_window_picture.h",
     "ac_linux_window_lifecycle.cc",
     "ac_linux_window_lifecycle.h",
     "ac_linux_suggest.cc",

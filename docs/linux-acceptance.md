@@ -71,6 +71,7 @@ Requirements: `openssl` and Node 22 or newer (for the built-in WebSocket client)
 | F26 | #36 | Unsupported platform settings are hidden and startup has no backend rejections |
 | F27 | #37 | Onboarding starts once on a fresh profile and app services run once per launch |
 | F28 | #2341 | Sidebar rows and Top Apps tiles reorder by drag in a space the window switched to, not only the one it opened in |
+| F29 | #2238 | `ArdiaApp.devSnapshotWindow` writes the whole window (shell and page) to a PNG in an isolated instance, and answers false for a relative path, an unknown window or an unwritable directory |
 
 Each scenario's report lists its manual steps, such as touchpad pinch zoom, Web Store installs, popup placement and
 onboarding by hand.
@@ -82,6 +83,9 @@ check's `detail` what it waited for. The kept scratch profile has the browser lo
 
 - **Shell hooks:** `ardiaLinux.store`, `emitCommand`, `webviews`, `extensions` and `openExtension`.
 - **Bridge:** `__ardiaHost.invoke`, `__ardiaHost.call` and `__ardiaHost.on`.
+- **Window picture:** `shell.snapshotWindow(file, { transparent })` calls `ArdiaApp.devSnapshotWindow` for the shell's
+  window, and `lib/png.mjs` reads the PNG back. Unlike `screenshot()`, which is CDP's capture of one target, it shows
+  the shell, the page views and overlays together.
 - **Window marker:** `[data-ardia-linux-window]`.
 - **Visible labels:** labels from the shared components, such as `Site Controls`, `Zoom: N%`, `Find on Page` and the
   Settings pane names.

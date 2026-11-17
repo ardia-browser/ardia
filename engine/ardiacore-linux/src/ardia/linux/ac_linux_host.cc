@@ -100,6 +100,7 @@
 #include "ardia/linux/ac_linux_window_caption.h"
 #include "ardia/linux/ac_linux_window_commands.h"
 #include "ardia/linux/ac_linux_window_lifecycle.h"
+#include "ardia/linux/ac_linux_window_picture.h"
 #include "ardia/linux/ac_linux_favicons.h"
 #include "ardia/linux/ac_linux_page_status.h"
 #include "ardia/linux/ac_linux_suggest.h"
@@ -201,6 +202,8 @@
 #include "components/sessions/core/serialized_user_agent_override.h"
 #include "components/sessions/core/session_id.h"
 #include "components/version_info/version_info.h"
+#include "components/viz/common/frame_sinks/copy_output_request.h"
+#include "components/viz/common/frame_sinks/copy_output_result.h"
 #include "components/zoom/zoom_controller.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/navigation_controller.h"
@@ -228,7 +231,9 @@
 #include "services/network/public/mojom/content_security_policy.mojom.h"
 #include "third_party/blink/public/common/page/page_zoom.h"
 #include "third_party/skia/include/core/SkBitmap.h"
+#include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "third_party/skia/include/core/SkImage.h"
 #include "third_party/blink/public/common/frame/user_activation_state.h"
 #include "third_party/blink/public/mojom/favicon/favicon_url.mojom.h"
 #include "ui/aura/client/focus_client.h"
@@ -238,6 +243,7 @@
 #include "ui/aura/window_event_dispatcher.h"
 #include "ui/aura/window_targeter.h"
 #include "ui/aura/window_tree_host.h"
+#include "ui/color/color_provider.h"
 #include "ui/compositor/compositor.h"
 #include "ui/compositor/compositor_observer.h"
 #include "ui/compositor/layer.h"
@@ -753,6 +759,25 @@ bool WriteDocument(const base::FilePath& directory,
   }
   return contents ? base::ImportantFileWriter::WriteFileAtomically(file, *contents)
                   : !base::PathExists(file) || base::DeleteFile(file);
+}
+
+bool WriteWindowPicture(const SkBitmap& captured,
+                        const std::optional<SkColor>& background,
+                        const base::FilePath& path) {
+  if (captured.drawsNothing()) return false;
+  SkBitmap flattened;
+  if (!flattened.tryAllocN32Pixels(captured.width(), captured.height())) return false;
+  SkCanvas canvas(flattened);
+  if (background) {
+    canvas.drawColor(*background);
+  } else {
+    canvas.clear(SK_ColorTRANSPARENT);
+  }
+  canvas.drawImage(captured.asImage(), 0, 0);
+  const auto png = gfx::PNGCodec::EncodeBGRASkBitmap(flattened, false);
+  return png && !png->empty() &&
+         base::ImportantFileWriter::WriteFileAtomically(
+             path, std::string_view(reinterpret_cast<const char*>(png->data()), png->size()));
 }
 
 std::optional<base::DictValue> ReadSession(const base::FilePath& directory) {
@@ -3277,6 +3302,7 @@ base::DictValue ShellHostView::Bootstrap() const {
     for (const char* capability : ardia::linux_open_urls::kOpenUrlCapabilities) capabilities.Append(capability);
   }
   for (const char* capability : ardia::linux_commands::kWindowCommandCapabilities) capabilities.Append(capability);
+  if (IsolatedInstance()) for (const char* capability : ardia::linux_window_picture::kWindowPictureCapabilities) capabilities.Append(capability);
   for (const char* capability : ardiacore::linux_capture::kCaptureCapabilities) capabilities.Append(capability);
   for (const char* capability : ardiacore::linux_cast::kCastCapabilities) capabilities.Append(capability);
   for (const char* capability : ardiacore::linux_automation_window::kCapabilities) capabilities.Append(capability);
@@ -7214,6 +7240,55 @@ void ShellHostView::Invoke(
       if (Reaches(host)) ids.Append(host->window_id());
     }
     return std::move(done).Run(true, base::Value(std::move(ids)));
+  }
+  if (method == ardia::linux_window_picture::kSnapshotCall) {
+    if (!IsolatedInstance()) {
+      return std::move(done).Run(false, base::Value("Window snapshots are offered to isolated dev instances only"));
+    }
+    if (values.size() < 2 || values.size() > 3 || !(values[0].is_string() && values[1].is_string()) ||
+        (values.size() == 3 && !(values[2].is_bool() || values[2].is_none()))) {
+      return std::move(done).Run(
+          false, base::Value("devSnapshotWindow takes a window id, a path and an optional transparent flag"));
+    }
+    const auto request = ardia::linux_window_picture::ParseRequest(
+        values[0].GetString(), values[1].GetString(),
+        values.size() == 3 && values[2].is_bool() ? std::optional<bool>(values[2].GetBool()) : std::nullopt);
+    if (!request) return std::move(done).Run(true, base::Value(false));
+    ShellHostView* target = nullptr;
+    for (const auto& [id, host] : Hosts()) {
+      if (host->window_id() == request->window_id && Reaches(host)) target = host;
+    }
+    if (!target) return std::move(done).Run(true, base::Value(false));
+    views::Widget* widget = target->GetWidget();
+    ui::Compositor* compositor = widget ? widget->GetCompositor() : nullptr;
+    ui::Layer* root = compositor ? compositor->root_layer() : nullptr;
+    const ui::ColorProvider* colors = target->GetColorProvider();
+    if (!root || !colors) {
+      return std::move(done).Run(true, base::Value(false));
+    }
+    root->RequestCopyOfOutput(std::make_unique<viz::CopyOutputRequest>(
+        viz::CopyOutputRequest::ResultFormat::RGBA,
+        viz::CopyOutputRequest::ResultDestination::kSystemMemory,
+        base::BindOnce(
+            [](base::FilePath path, std::optional<SkColor> background,
+               base::OnceCallback<void(bool, base::Value)> reply,
+               std::unique_ptr<viz::CopyOutputResult> result) {
+              if (!result || result->IsEmpty()) return std::move(reply).Run(true, base::Value(false));
+              auto access = result->ScopedAccessSkBitmap();
+              SkBitmap captured = access.GetOutScopedBitmap();
+              FileRunner()->PostTaskAndReplyWithResult(
+                  FROM_HERE,
+                  base::BindOnce(&WriteWindowPicture, std::move(captured), background, std::move(path)),
+                  base::BindOnce(
+                      [](base::OnceCallback<void(bool, base::Value)> reply, bool written) {
+                        std::move(reply).Run(true, base::Value(written));
+                      },
+                      std::move(reply)));
+            },
+            base::FilePath(request->path),
+            request->transparent ? std::nullopt : std::optional<SkColor>(colors->GetColor(kColorWebContentsBackground)),
+            mojo::WrapCallbackWithDefaultInvokeIfNotRun(std::move(done), true, base::Value(false)))));
+    return;
   }
   if (method == "ArdiaShell.startWindowMove" || method == "ArdiaShell.captionDoubleClick") {
     const bool handled = method == "ArdiaShell.startWindowMove" ? linux_window::StartCaptionMove(GetWidget())

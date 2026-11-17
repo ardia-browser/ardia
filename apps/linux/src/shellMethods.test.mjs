@@ -200,6 +200,27 @@ test("automation's system signals answer truthfully on Linux: no idle watch and 
   }
 });
 
+test("the window snapshot hook reaches an engine that offers it, only an isolated dev instance offers it, and any other engine still refuses it", async () => {
+  const call = "ArdiaApp.devSnapshotWindow";
+  assert.ok(advertised.includes(call), "the host's bootstrap doesn't list the window snapshot hook");
+  const gated = bootstrap.indexOf("kWindowPictureCapabilities");
+  const offer = bootstrap.slice(bootstrap.lastIndexOf("\n", gated) + 1, bootstrap.indexOf("\n", gated));
+  assert.match(offer, /^\s*if \(IsolatedInstance\(\)\) for \(const char\* capability : ardia::linux_window_picture::kWindowPictureCapabilities\)/, "a regular launch would offer the snapshot hook");
+  const host = linuxHost();
+  const reached = [];
+  host.invoke = async (method, payload) => (reached.push([method, payload]), true);
+  const snapshot = resolveHostModule(host, "ArdiaApp", "devSnapshotWindow");
+  assert.equal(reachesNativeHostUnchecked(snapshot), true);
+  assert.equal(await snapshot("main", "/tmp/window.png", false), true);
+  assert.deepEqual(reached, [[call, { args: ["main", "/tmp/window.png", false] }]]);
+  const regular = olderEngine(call);
+  regular.invoke = host.invoke;
+  const refused = resolveHostModule(regular, "ArdiaApp", "devSnapshotWindow");
+  assert.equal(reachesNativeHostUnchecked(refused), false);
+  await assert.rejects(refused("main", "/tmp/window.png"), (error) => error.code === "ERR_UNAVAILABLE");
+  assert.equal(reached.length, 1, "a regular launch's snapshot call reached the engine");
+});
+
 test("translation's synchronous methods answer synchronously on Linux, as the shared code does when translation is absent", () => {
   const host = linuxHost();
   assert.deepEqual(resolveHostModule(host, "ArdiaTranslate", "userLanguages")(), []);

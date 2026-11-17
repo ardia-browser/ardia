@@ -270,6 +270,10 @@ export class Shell {
     return this.eval("__ardiaHost.invoke('ArdiaShell.windowIds', { args: [] })");
   }
 
+  snapshotWindow(file, { transparent } = {}) {
+    return this.invoke("ArdiaApp.devSnapshotWindow", { args: [this.windowId, file, ...(transparent === undefined ? [] : [transparent])] });
+  }
+
   activeTabId() {
     return this.state("const w = s.windows[windowId]; return w ? (w.activeTabIds?.[w.profileId] ?? null) : null;");
   }

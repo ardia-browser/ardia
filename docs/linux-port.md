@@ -1467,6 +1467,18 @@ Mac leaves `source` out too when it doesn't know.
   as `tab.edit`.
 - The app menu offers both when the host advertises them (see Windows, focus and input › Menu button).
 
+### Window snapshots for dev tools
+
+- **`ArdiaApp.devSnapshotWindow(windowId, path, transparent?)`** is the Mac's `devSnapshotWindow`: it writes the window's
+  composited contents (the shell, the page views and any overlay) as a PNG at the absolute `path` and answers `true`, or
+  `false` for a relative path, an unknown window or a failed capture. It reads the window's compositor
+  (`RequestCopyOfOutput` on the root layer), so a covered or off-screen window is captured too. The picture is
+  flattened onto the window's background unless `transparent` is true, and the file is written atomically off the UI
+  thread.
+- The host advertises it only when `isolatedInstance` is true (`--user-data-dir` or `ARDIA_DATA_DIR`) and refuses it
+  again when called, so a regular launch keeps the "unavailable on Linux" refusal for `ArdiaApp.dev*`.
+- It is an engine change, so the next release publishes a new prebuilt Linux engine (`prebuilt-engines-linux.tsv`).
+
 ### Links in pinned tabs and Little Ardia windows
 
 Both are ports of the Mac's native code (`ArdiaWebView+Peek.mm`, `ArdiaWebView+Tab.mm`), with the rules in

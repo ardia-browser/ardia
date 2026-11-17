@@ -130,6 +130,10 @@ describe("Ardia launch plumbing and shell driver against a mock host", () => {
       assert.deepEqual(JSON.parse(JSON.stringify(shells.main.commands)), [{ command: "findNext", windowId: "main" }]);
       const refused = await main.invoke("tab.create", { profile: "default" });
       assert.deepEqual(refused, { ok: false, code: "ERR_PROFILE_WINDOW", message: "Profile not hosted" });
+      const snapshot = await main.snapshotWindow("/tmp/window.png");
+      assert.deepEqual(snapshot, { ok: true, value: { method: "ArdiaApp.devSnapshotWindow", args: { args: ["main", "/tmp/window.png"] } } });
+      const clear = await main.snapshotWindow("/tmp/clear.png", { transparent: true });
+      assert.deepEqual(clear.value.args, { args: ["main", "/tmp/clear.png", true] });
       const reply = await main.call("downloads.pause", { id: "x" });
       assert.deepEqual(reply, { ok: true, value: { name: "downloads.pause", profile: "", args: { id: "x" } } });
       assert.equal(await main.text(), "window main");

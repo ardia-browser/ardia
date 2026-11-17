@@ -1028,7 +1028,7 @@ index 61242af88da2f235e5ae506e79dfb9898742eb51..259868183aa018ac6c0e7a83a9008ad6
  #if TARGET_OS_OSX // [macOS
  @property (nonatomic, copy, nullable) NSString *text;
 diff --git a/Libraries/Text/TextInput/Singleline/RCTUITextField.mm b/Libraries/Text/TextInput/Singleline/RCTUITextField.mm
-index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..72a1aa82945dc5fe13630e3c63b2e8a6b93a6f98 100644
+index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..3263f3c6957a19b817221e40cdc3bfc5f2fec892 100644
 --- a/Libraries/Text/TextInput/Singleline/RCTUITextField.mm
 +++ b/Libraries/Text/TextInput/Singleline/RCTUITextField.mm
 @@ -10,6 +10,7 @@
@@ -1220,7 +1220,23 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..72a1aa82945dc5fe13630e3c63b2e8a6
  #endif // macOS]
  }
  
-@@ -155,6 +312,11 @@ - (BOOL)hasMarkedText
+@@ -136,8 +293,13 @@ - (void)_textDidChange
+ {
+   _textWasPasted = NO;
+ #if TARGET_OS_OSX // [macOS
+-  [self setAttributedText:[[NSAttributedString alloc] initWithString:[self text]
+-                                                          attributes:[self defaultTextAttributes]]];
++  NSTextView *editor = (NSTextView *)self.currentEditor; // [Ardia
++  if (editor && !editor.hasMarkedText) {
++    [editor.textStorage setAttributes:[self defaultTextAttributes] range:NSMakeRange(0, editor.textStorage.length)];
++  } else { // Ardia]
++    [self setAttributedText:[[NSAttributedString alloc] initWithString:[self text]
++                                                            attributes:[self defaultTextAttributes]]];
++  } // [Ardia Ardia]
+   if([[self text] length] == 0) {
+     self.font = [[self defaultTextAttributes] objectForKey:NSFontAttributeName];
+   }
+@@ -155,6 +317,11 @@ - (BOOL)hasMarkedText
  	return ((NSTextView *)self.currentEditor).validAttributesForMarkedText ?: @[];
  }
  
@@ -1232,7 +1248,7 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..72a1aa82945dc5fe13630e3c63b2e8a6
  #endif // macOS]
  
  #pragma mark - Accessibility
-@@ -304,8 +466,110 @@ - (RCTUIColor*)cursorColor
+@@ -304,8 +471,110 @@ - (RCTUIColor*)cursorColor
  - (void)setFont:(UIFont *)font
  {
    ((RCTUITextFieldCell*)self.cell).font = font;
@@ -1343,7 +1359,7 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..72a1aa82945dc5fe13630e3c63b2e8a6
  - (UIFont *)font
  {
    return ((RCTUITextFieldCell*)self.cell).font;
-@@ -330,7 +594,9 @@ - (void)setPlaceholder:(NSString *)placeholder
+@@ -330,7 +599,9 @@ - (void)setPlaceholder:(NSString *)placeholder
  #if !TARGET_OS_OSX // [macOS]
    [super setPlaceholder:placeholder];
  #else // [macOS
@@ -1353,7 +1369,7 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..72a1aa82945dc5fe13630e3c63b2e8a6
  #endif // macOS]
    [self _updatePlaceholder];
  }
-@@ -385,6 +651,20 @@ - (void)_updatePlaceholder
+@@ -385,6 +656,20 @@ - (void)_updatePlaceholder
    _isUpdatingPlaceholderText = YES;
    self.placeholderAttributedString = [[NSAttributedString alloc] initWithString:self.placeholder ?: @""
  																	 attributes:[self _placeholderTextAttributes]];
@@ -1374,7 +1390,7 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..72a1aa82945dc5fe13630e3c63b2e8a6
    _isUpdatingPlaceholderText = NO;
  #endif // macOS]
  }
-@@ -710,6 +990,9 @@ - (void)keyUp:(NSEvent *)event {
+@@ -710,6 +995,9 @@ - (void)keyUp:(NSEvent *)event {
  - (void)setReadablePasteBoardTypes:(NSArray<NSPasteboardType> *)readablePasteboardTypes
  {
    _readablePasteboardTypes = readablePasteboardTypes;

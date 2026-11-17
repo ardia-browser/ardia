@@ -53,8 +53,8 @@ export type PageFrame = {
   peek: { left: number; top: number; bottom: number; radius: number };
 };
 
-export function pageFrameOf(inset: number, windowRadius: number, peekRadius: number): PageFrame {
-  const concentric = Math.max(windowRadius - inset, 2);
+export function pageFrameOf(inset: number, windowRadius: number, peekRadius: number, fixedRadius: number | null = null): PageFrame {
+  const concentric = fixedRadius ?? Math.max(windowRadius - inset, 2);
   const peekGap = Math.max(MIN_PEEK_GAP, inset);
   return {
     inset,

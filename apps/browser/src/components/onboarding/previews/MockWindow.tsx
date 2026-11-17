@@ -11,6 +11,7 @@ import { DEMOS } from "./demos";
 import { Pill } from "./Floating";
 import { CHIP, CRUMB_X, FIELD, fill, geo, LIGHTS_Y, ROW, SIDEBAR_ICONS, SIDEBAR_W, STRIP_H, TOOLBAR_H, TOOLBAR_ICONS, type Geo } from "./geometry";
 import { CARD_INSET, pageFrameInset, pageFrameOf } from "../../../lib/windowLayout";
+import { WINDOW_CHROME } from "../../../lib/windowChrome";
 import { windowCornerRadius } from "../../../state/windows/layout";
 import { font, radius as radii } from "../../ui/tokens";
 import { Backdrop, Card, Crumb, FieldPlate, Glyph, Label, Lights, NavIcons, Rows, TabRow, ToolbarBand, TopTabPlate, WindowFrame } from "./Kit";
@@ -168,7 +169,7 @@ const WindowState = memo(function WindowState({ g, look, accent, custom, lay, ad
   const s = g.s;
   const sideCardX = SIDEBAR_W + Math.max(0, frame - ROW.x);
   const lightsY = LIGHTS_Y.toolbar - CARD_INSET + frame;
-  const cardRadius = pageFrameOf(frame, windowCornerRadius(), radii.panel).radius * s;
+  const cardRadius = pageFrameOf(frame, windowCornerRadius(), radii.panel, WINDOW_CHROME.pageCornerRadius).radius * s;
   const lerp = (v: Animated.Value, a: number, b: number) => v.interpolate({ inputRange: [0, 1], outputRange: [a * s, b * s] });
   const fade = (v: Animated.Value, a: number, b: number) => v.interpolate({ inputRange: [0, 1], outputRange: [a, b] });
   const sideCardW = g.W - sideCardX - frame;

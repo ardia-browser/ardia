@@ -1,3 +1,5 @@
+import type { WebViewProps } from "@ardia/ardiacore";
+
 export type CoverRect = { x: number; y: number; width: number; height: number; radius: number };
 
 type Listener = (windowId: string) => void;
@@ -54,6 +56,8 @@ export function setPageRadius(radius: number, windowId = "") {
 }
 
 export const pageRadiusIn = (windowId: string) => radii.get(windowId) ?? defaultRadius;
+
+export const pageRadiusOf = (windowId: string, page: Pick<WebViewProps, "tabId" | "temporary">) => (page.tabId && !page.temporary ? pageRadiusIn(windowId) : 0);
 
 export function setFullScreenPage(windowId: string, key: string, on: boolean) {
   if (on) {

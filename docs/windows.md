@@ -209,6 +209,15 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
   - With no lights on the left, a sidebar header with nothing in it collapses to the page frame on Windows
     (`sidebarHeaderCollapsed`), so the tabs start at the top; the downloads button then sits in the sidebar's footer.
     The header stays for a profile indicator, an incognito window, the address row, and a right sidebar.
+  - The card's corners: where the Mac keeps the card concentric with its window (window radius minus the page frame),
+    Windows rounds it to the window's own 8 px (`pageCornerRadius` in `lib/platformChrome.windows.ts`), and square with
+    no page frame (borderless mode, a frame of 0, full screen when set). The page is a window of its own above the
+    card, and the engine host rounds all four of its corners or none (`ArdiaPageCovers.setRadius`), so
+    `state/windows/pageCorners.ts` sends the window's radius only while a tab's page reaches its card's top (address bar
+    in the sidebar, Little Ardia) and 0 below the toolbar or an always-shown bookmarks bar, where rounded top corners
+    would cut into the card. A Peek's page sits under the Peek's bar and an extension's page has no tab, so both stay
+    square (`pageRadiusOf` in `engine/covers.ts`). Rounding only the bottom corners below the toolbar needs per-corner
+    shapes in the engine host.
   - Resizing from the top edge over a page: Windows keeps the top resize band inside the client area, and the page is
     its own window above it. The page window's hit test (`HostedFrameView::NonClientHitTest` in `ardia/win/frame_view.cc`)
     answers what the app window answers at that point when that is its top edge or a top corner (so the band's size,

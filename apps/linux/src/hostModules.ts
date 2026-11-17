@@ -34,7 +34,6 @@ export const PAGE_OPTION_CALLS = [
   "webView.setLittleArdiaOpensNewTabLinks",
   "webView.setPopupsOpenAsTabs",
   "webView.setBlockAutoplayEverywhere",
-  "webView.setFairPlayInChromium",
 ] as const;
 const pageOptionCalls: ReadonlySet<string> = new Set(PAGE_OPTION_CALLS);
 

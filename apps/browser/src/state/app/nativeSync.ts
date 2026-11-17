@@ -27,6 +27,7 @@ import { openLastWindowOrNew } from "../windows/lastWindow";
 import { noteDockReopen } from "../telemetry/usage";
 import { noteWindowReopenedMaximized } from "../telemetry/windowPlacementCounts";
 import { noteLittleArdiaAppHandoff } from "../telemetry/littleArdiaEscapes";
+import { notePageFocusReturnRequestAfterMenu } from "../telemetry/pageFocusReturns";
 import { startExtensionsBridge } from "../extensions/bridge";
 import { useExtensions } from "../extensions/actions";
 import { useReader } from "../reader/reader";
@@ -83,7 +84,9 @@ export function startNativeSync() {
     }
     if (e.type === "appLinkOpened") closeLittleArdiaForAppLink(e.windowId);
     if (e.type === "snapKeyHandedBack") followHandedBack(e.windowId);
+    if (e.type === "snapKeyHandedBack" && e.afterMenu) notePageFocusReturnRequestAfterMenu();
     if (e.type === "littleArdiaReturnedToApp") noteLittleArdiaAppHandoff("returnToApp");
+    if (e.type === "littleArdiaGlobalShortcut") noteLittleArdiaAppHandoff("globalShortcut");
     if (e.type === "quitWarningSuppressed") s.updateSettings({ warnBeforeQuitting: false });
     if (e.type === "willQuit") {
       setQuitting(true);

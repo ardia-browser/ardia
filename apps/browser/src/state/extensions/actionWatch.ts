@@ -4,7 +4,7 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { usePages } from "../tabs/pageState";
 import { extensionProfile, useExtensions, windowExtensions } from "./store";
-import { syncSidePanel, wantedSidePanels } from "./sidePanels";
+import { recheckKeptSidePanels, syncSidePanel, wantedSidePanels } from "./sidePanels";
 import { refreshExtensionsAfterChange } from "./actions";
 import { refreshActionStates } from "./actionStates";
 import { focusedWindowOf } from "../windows/ui";
@@ -46,7 +46,11 @@ function flushActionChanges() {
     dirtyActions.clear();
     void refreshActionStates(profiles);
     const s = useBrowser.getState();
-    for (const [windowId] of wantedSidePanels()) if (profiles.includes(extensionProfile(s, windowId))) void syncSidePanel(windowId);
+    for (const [windowId] of wantedSidePanels()) {
+      if (!profiles.includes(extensionProfile(s, windowId))) continue;
+      void syncSidePanel(windowId);
+      void recheckKeptSidePanels(windowId);
+    }
   }
 }
 

@@ -11,7 +11,7 @@ import { Button, DialogActions, DialogTitle, lineHeight, PopUp, Sheet, space, Sy
 import { perLook } from "../../ui/tokens";
 import { useTheme } from "../../ui/theme";
 import { Favicon } from "../../favicon/Favicon";
-import { FormField, Group, Row, SectionHeader, SettingToggle } from "../Form";
+import { FormField, Group, Row, SectionHeader } from "../Form";
 import { setting } from "../settingsIndex";
 
 const ENGINE_OPTIONS: { value: PageEngine; title: string }[] = [
@@ -49,7 +49,6 @@ export function WebEngineSection() {
         >
           <PopUp value={engine} options={DEFAULT_ENGINE_OPTIONS} onChange={(value) => updateSettings({ pageEngine: value })} minWidth={190} />
         </Row>
-        <SettingToggle anchor="advanced.fairPlayInChromium" />
         <Row anchor="advanced.websiteEngines">
           {!protectedVideo && <Button title="Add Streaming Sites" onPress={() => updateSettings({ protectedVideoInWebKit: true })} />}
           <Button title="Add Rule…" icon="plus" onPress={() => showSettingsSheet(<RuleSheet />)} />

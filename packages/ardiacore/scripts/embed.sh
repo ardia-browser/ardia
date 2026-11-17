@@ -5,6 +5,7 @@ repo=$(cd "$here/../../.." && pwd)
 staged=${ARDIACORE_STAGE_DIR:-$repo/apps/browser/build-ardiacore/ArdiaCoreFramework}/"Chromium Framework.framework"
 frameworks="$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH"
 mkdir -p "$frameworks"
+rm -rf "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/ArdiaFairPlay.app"
 stamp="$DERIVED_FILE_DIR/ardiacore-embedded.stamp"
 mkdir -p "$DERIVED_FILE_DIR"
 identity="${EXPANDED_CODE_SIGN_IDENTITY:--}"
@@ -32,8 +33,6 @@ if ! [[ -f "$stamp" && "$(cat "$stamp")" == "$want" && -d "$frameworks/Chromium 
   echo "$want" > "$stamp"
 fi
 
-"$repo/packages/ardiacore/fairplay/build.sh"
-
 "$here/ubo.sh"
 ubo="$repo/packages/ardiacore/vendor/ubo/ext"
 if [ -n "${UNLOCALIZED_RESOURCES_FOLDER_PATH:-}" ] && [ -f "$ubo/manifest.json" ]; then
@@ -44,11 +43,6 @@ if [ -n "${UNLOCALIZED_RESOURCES_FOLDER_PATH:-}" ] && [ -f "$ubo/manifest.json" 
   (cd "$extensions/ublock" && find . -type f ! -path './_metadata/*' -print0 | LC_ALL=C sort -z \
     | xargs -0 shasum -a 256 | shasum -a 256 | cut -d' ' -f1) > "$extensions/ublock.fingerprint"
   rsync -a --delete "$repo/packages/ardiacore/extensions/ublock-lite-settings/" "$extensions/ublock-lite-settings/"
-fi
-if [ -n "${UNLOCALIZED_RESOURCES_FOLDER_PATH:-}" ]; then
-  extensions="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/Extensions"
-  mkdir -p "$extensions"
-  rsync -a --delete "$repo/packages/ardiacore/extensions/protected-video-ua/" "$extensions/protected-video-ua/"
 fi
 
 "$here/ubol.sh"

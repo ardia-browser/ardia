@@ -142,6 +142,7 @@ const focus: Modules["ArdiaFocus"] = {
   restoreKeyResponder: () => Promise.resolve(false),
   discardKeyResponder: () => Promise.resolve(),
   takeEditKeyAcks: () => editKeyAcks.take(),
+  takeInputSourceKeys: () => inputSourceKeys.take(),
   switcherPointerMoved: () => true,
   cancelFocusMove: () => Promise.resolve(),
   claimFocus: () => Promise.resolve(),
@@ -224,7 +225,7 @@ const notifications: Modules["ArdiaNotifications"] = {
   addListener: notificationEvents.addListener,
   notificationPermission: () => Promise.resolve("notDetermined"),
   requestNotificationPermission: () => Promise.resolve(false),
-  postNotification: () => Promise.resolve(null),
+  postNotification: (options) => Promise.resolve({ id: options.id, icon: "none" }),
   removeNotifications: () => Promise.resolve(),
   openNotificationSettings: () => Promise.resolve(),
 };
@@ -441,6 +442,15 @@ export const shellNativeModules: Modules = {
   ArdiaSystemSignals: systemSignalsModule,
   ArdiaTelemetryLocal: telemetryLocalModule,
   ArdiaReport: reportModule,
+};
+
+export const inputSourceKeys = {
+  pending: 0,
+  take() {
+    const taken = this.pending;
+    this.pending = 0;
+    return taken;
+  },
 };
 
 export const editKeyAcks = {

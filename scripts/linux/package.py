@@ -20,6 +20,7 @@ REPO = pathlib.Path(__file__).resolve().parents[2]
 BRIDGE = REPO / 'engine/ardiacore-linux/content-blocker'
 BRIDGE_SCRIPTS = ('js/vapi.js', 'js/vapi-common.js', 'js/vapi-client.js')
 CLI_INSTALLER = REPO / 'apps/cli/install.sh'
+UBO_SEED = REPO / 'scripts/linux/ubo-seed.mjs'
 CLI_PLATFORM = 'linux-x64'
 VERSION_PATTERN = re.compile(r'^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$')
 REQUIRED = runtime_files.REQUIRED
@@ -103,7 +104,12 @@ def normalize_modes(root):
         path.chmod(0o755 if path.is_dir() or path.stat().st_mode & 0o111 else 0o644)
 
 
-def package(output, ui, destination, content_blocker=None, version=None, cli=None, deb=None, appimage=None):
+def seed_content_blocker(runtime, blocker):
+    subprocess.run(['node', str(UBO_SEED), '--chrome', str(runtime / 'chrome'), '--ui', str(runtime / 'ardia-ui'), '--blocker', str(blocker)],
+                   check=True, stdout=subprocess.DEVNULL)
+
+
+def package(output, ui, destination, content_blocker=None, version=None, cli=None, deb=None, appimage=None, ubo_seed=False):
     if version is not None:
         check_version(version)
     cli_digest = None
@@ -143,6 +149,8 @@ def package(output, ui, destination, content_blocker=None, version=None, cli=Non
             shutil.copytree(content_blocker, blocker, ignore=shutil.ignore_patterns('_metadata'))
             for path in sorted(BRIDGE.iterdir()):
                 shutil.copy2(path, blocker / path.name)
+            if ubo_seed:
+                seed_content_blocker(runtime, blocker)
         launcher = root / 'bin/ardia'
         launcher.parent.mkdir()
         launcher.write_text('#!/usr/bin/env sh\nardia_bin_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nexec "$ardia_bin_dir/../lib/ardia/ardia-launch" "$@"\n')
@@ -184,6 +192,7 @@ def main():
     parser.add_argument('--cli', type=pathlib.Path, help=f'the ardia-cli-<version>-{CLI_PLATFORM}.tar.gz to bundle in lib/ardia/cli (needs --version)')
     parser.add_argument('--deb', type=pathlib.Path, help='also build a .deb at this path (dpkg-deb)')
     parser.add_argument('--appimage', type=pathlib.Path, help='also build an AppImage at this path (a pinned type 2 runtime and mksquashfs)')
+    parser.add_argument('--no-ubo-seed', action='store_true', help="don't seed the content blocker (by default package.py runs the staged chrome once to save uBlock Origin's compiled engine, so a new profile filters from its first page)")
     args = parser.parse_args()
     if args.cli is not None and args.version is None:
         parser.error('--cli needs --version')
@@ -192,7 +201,7 @@ def main():
         cli = args.cli.resolve() if args.cli else None
         deb = args.deb.resolve() if args.deb else None
         appimage = args.appimage.resolve() if args.appimage else None
-        print(package(args.out.resolve(), args.ui.resolve(), args.destination.resolve(), blocker, args.version, cli, deb, appimage))
+        print(package(args.out.resolve(), args.ui.resolve(), args.destination.resolve(), blocker, args.version, cli, deb, appimage, ubo_seed=not args.no_ubo_seed))
     except (ValueError, OSError, json.JSONDecodeError, subprocess.CalledProcessError) as error:
         parser.error(str(error))
 

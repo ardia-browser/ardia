@@ -12,6 +12,8 @@ import { toggleNewTabBar } from "../omnibox/newTabBar";
 import { hintWhen, profileItems, sections, windowItems, withAlternate, type Destination } from "./menuParts";
 import { confirmRemovingShared } from "../sharedFolders/removal";
 import { runSharedFolderChoice, sharedFolderMenuItems } from "../sharedFolders/menu";
+import { canSleep, sleepTabsFromMenu } from "../tabs/manualSleep";
+import { groupTabIds } from "./groupPanelRows";
 
 type GroupChoice = Destination | { kind: "color"; color: GroupColor | null };
 
@@ -58,6 +60,7 @@ export function groupMenuItems(s: BrowserState, windowId: string, groupId: strin
     [
       { id: "ungroup", title: "Ungroup", symbol: "folder.badge.minus" },
       bookmarksShown(s.settings) && { id: "bookmarkBar", title: "Move to Bookmarks Bar", symbol: "bookmark" },
+      { id: "sleep", title: "Sleep Tabs", symbol: "moon.zzz", enabled: groupTabIds(s.groups, groupId).some((id) => canSleep(s, id)) },
       { id: "close", title: "Close Group", symbol: "xmark", ...hintWhen(shown, "closeTabGroup", s) },
       { id: "delete", title: "Delete Group", symbol: "trash" },
     ],
@@ -104,6 +107,7 @@ function runGroupChoice(windowId: string, groupId: string, choice: string | Grou
   else if (choice === "copyMd") copyUrls(g.tabIds, true);
   else if (choice === "ungroup") s.ungroup(groupId);
   else if (choice === "bookmarkBar") s.moveGroupToBookmarksBar(groupId);
+  else if (choice === "sleep") void sleepTabsFromMenu(groupTabIds(s.groups, groupId).filter((id) => canSleep(s, id)), "group");
   else if (choice === "close") void closeGroup(groupId);
   else if (choice === "delete") s.deleteGroup(groupId);
 }

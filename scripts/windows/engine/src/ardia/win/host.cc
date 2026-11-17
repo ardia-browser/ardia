@@ -342,6 +342,15 @@ void Host::Call(const std::string& verb,
                 base::DictValue args,
                 HWND window,
                 Reply reply) {
+  if (ardiacore::TestInstance()) {
+    NoteForTest("host call " + verb + " " + Text(args, "key"));
+    reply = base::BindOnce(
+        [](std::string verb, Reply reply, base::DictValue answer) {
+          NoteForTest("host answered " + verb);
+          std::move(reply).Run(std::move(answer));
+        },
+        verb, std::move(reply));
+  }
   if (verb == "tab.create") {
     CreateTab(std::move(args), window, std::move(reply));
     return;
@@ -398,6 +407,9 @@ void Host::Call(const std::string& verb,
     PageLinks* links = contents ? PageLinks::FromWebContents(contents) : nullptr;
     result = Ok();
     result.Set("scriptFrames", links ? links->ScriptFrames() : 0);
+    if (ardiacore::TestInstance()) {
+      result.Set("reports", links ? links->ReportsForTest() : base::ListValue());
+    }
   } else if (verb == "profile.release") {
     PrivateSessions::Get()->Release(Text(args, "profile"));
     result = Ok();

@@ -8,6 +8,7 @@ import { createProfile } from "../profiles/actions";
 import { noteImportedSpaces } from "../telemetry/usage";
 import { noteDiaTabProfiles, noteImportRun } from "../telemetry/importRuns";
 import {
+  adoptSpaceIdentity,
   applyResult,
   emptyCounts,
   importArcSpace,
@@ -168,6 +169,7 @@ export async function runImport(wanted: ReadonlySet<ImportKind>, withoutKey = fa
       }
       continue;
     }
+    if (signal.aborted) return;
     for (const k of result.failed) failed.set(k, [...(failed.get(k) ?? []), profile.name]);
     for (const w of result.warnings) {
       if (w.code === "undecryptable") secretsLeft += 1;
@@ -181,11 +183,14 @@ export async function runImport(wanted: ReadonlySet<ImportKind>, withoutKey = fa
     if (bySpaces) {
       const plan = planSidebar(source.sidebar!, result, profile.spaces);
       const members: string[][] = [];
+      let startersNamed = 0;
       for (const { space, partition } of plan.spaces) {
         const name = space.name || "Space";
         const head = members[partition]?.[0] ?? null;
         const shared = plan.sharesTopApps && plan.spaces.filter((p) => p.partition === partition).length > 1;
+        const first = destinationIndex === 0;
         const dest = await nextDestination(name, space.color, space.emoji, head, shared);
+        if (first && adoptSpaceIdentity(dest, space)) startersNamed += 1;
         (members[partition] ??= []).push(dest);
         const r = importArcSpace(dest, space, result.favicons);
         add({ ...emptyCounts(), tabs: r.tabs, bookmarks: r.bookmarks });
@@ -207,6 +212,7 @@ export async function runImport(wanted: ReadonlySet<ImportKind>, withoutKey = fa
         containerSpaces: plan.spaces.filter((p) => p.partition !== plan.dataPartition).length,
         dataProfiles: members.filter(Boolean).length,
         essentials,
+        startersNamed,
       });
       extensionsProfile ||= dest;
     } else {

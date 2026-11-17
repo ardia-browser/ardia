@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { chosenEngine, engineForUrl, engineMark, fairPlaySite, offersEngineChoice, protectedVideoSite, recommendedEngineFor, ruleFor, siteOf, tabEngine, typedNavigationEngine, visitRecorder } from "./engines.ts";
+import { chosenEngine, engineForUrl, engineMark, offersEngineChoice, protectedVideoSite, recommendedEngineFor, ruleFor, siteOf, tabEngine, typedNavigationEngine, visitRecorder } from "./engines.ts";
 import { makeTab, snapshotTab } from "../browser/model.ts";
 import { carriableCookies, cookieAddresses } from "./signInCookies.ts";
 
@@ -60,7 +60,7 @@ test("typing an address follows a rule, else keeps the page's engine", () => {
 test("streaming sites open in WebKit when the setting is on, over https, subdomains included", () => {
   assert.equal(protectedVideoSite("https://www.netflix.com/watch/1"), true);
   assert.equal(protectedVideoSite("https://netflix.com/"), true);
-  assert.equal(protectedVideoSite("https://open.spotify.com/track/1"), false);
+  assert.equal(protectedVideoSite("https://open.spotify.com/track/1"), true);
   assert.equal(protectedVideoSite("https://www.spotify.com/"), false);
   assert.equal(protectedVideoSite("https://netflix.com.example.com/"), false);
   assert.equal(protectedVideoSite("https://notnetflix.com/"), false);
@@ -77,37 +77,14 @@ test("streaming sites open in WebKit when the setting is on, over https, subdoma
   assert.equal(recommendedEngineFor(on, "https://example.com/"), "chromium");
 });
 
-test("a FairPlay site is its exact https origin", () => {
-  assert.equal(fairPlaySite("https://open.spotify.com/track/1"), true);
-  assert.equal(fairPlaySite("https://OPEN.spotify.com/"), true);
-  assert.equal(fairPlaySite("https://www.netflix.com/watch/1"), true);
-  assert.equal(fairPlaySite("https://www.disneyplus.com/play/1"), true);
-  for (const url of ["http://open.spotify.com/", "https://www.spotify.com/", "https://x.open.spotify.com/", "https://open.spotify.com.example.com/", "https://open.spotify.com:8443/", "https://netflix.com/", "https://help.netflix.com/", "https://disneyplus.com/", "https://www.max.com/", "", null]) {
-    assert.equal(fairPlaySite(url), false, String(url));
-  }
-});
-
-test("a FairPlay site opens in WebKit unless FairPlay in Chromium is on, and a rule still wins", () => {
+test("Spotify's player opens in WebKit with the streaming sites, and a rule still wins", () => {
   const spotify = "https://open.spotify.com/track/1";
   assert.equal(engineForUrl(state([], { protectedVideoInWebKit: true }), spotify), "webkit");
-  assert.equal(engineForUrl(state([], { protectedVideoInWebKit: true, fairPlayInChromium: false }), spotify), "webkit");
-  assert.equal(recommendedEngineFor(state([], { protectedVideoInWebKit: true, fairPlayInChromium: false }), spotify), "webkit");
-  const bridged = state([], { protectedVideoInWebKit: true, fairPlayInChromium: true });
-  assert.equal(chosenEngine(bridged, spotify), undefined);
-  assert.equal(engineForUrl(bridged, spotify), "chromium");
-  assert.equal(recommendedEngineFor(bridged, spotify), "chromium");
-  assert.equal(engineForUrl(bridged, "https://www.netflix.com/watch/1"), "chromium");
-  assert.equal(engineForUrl(bridged, "https://www.disneyplus.com/play/1"), "chromium");
-  assert.equal(engineForUrl(bridged, "https://netflix.com/"), "webkit");
-  assert.equal(engineForUrl(bridged, "https://www.max.com/"), "webkit");
-  assert.equal(engineForUrl(state([], { protectedVideoInWebKit: true }), "https://www.netflix.com/watch/1"), "webkit");
-  assert.equal(engineForUrl(state([], { protectedVideoInWebKit: true, fairPlayInChromium: false }), "https://www.disneyplus.com/"), "webkit");
-  assert.equal(engineForUrl(state([], { protectedVideoInWebKit: true, fairPlayInChromium: true, websiteEngines: { "https://www.netflix.com": "webkit" } }), "https://www.netflix.com/"), "webkit");
+  assert.equal(recommendedEngineFor(state([], { protectedVideoInWebKit: true }), spotify), "webkit");
   assert.equal(engineForUrl(state([], { protectedVideoInWebKit: true }), "http://open.spotify.com/"), "chromium");
   assert.equal(engineForUrl(state([], { protectedVideoInWebKit: true }), "https://www.spotify.com/"), "chromium");
-  assert.equal(engineForUrl(state([], { protectedVideoInWebKit: true, fairPlayInChromium: true, websiteEngines: { "https://open.spotify.com": "webkit" } }), spotify), "webkit");
   assert.equal(engineForUrl(state([], { protectedVideoInWebKit: true, websiteEngines: { "https://open.spotify.com": "chromium" } }), spotify), "chromium");
-  assert.equal(engineForUrl(state([], { protectedVideoInWebKit: false, fairPlayInChromium: false }), spotify), "chromium");
+  assert.equal(engineForUrl(state([], { protectedVideoInWebKit: false }), spotify), "chromium");
 });
 
 test("a website rule wins over the streaming default", () => {

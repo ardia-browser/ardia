@@ -55,6 +55,12 @@ class PageMessageTests(unittest.TestCase):
     def test_link_modifier_options_match_macos(self):
         self.run_case('options')
 
+    def test_block_autoplay_everywhere_covers_local_files_as_well_as_web_pages(self):
+        self.run_case('options')
+        autoplay = (SOURCE / 'ardia/linux/ac_linux_autoplay.cc').read_text()
+        self.assertIn('if (!LinuxAutoplayCoversScheme(url.scheme())) return false;', autoplay)
+        self.assertNotIn('SchemeIsHTTPOrHTTPS', autoplay)
+
     def test_peek_and_split_require_a_matching_trusted_mouse_up(self):
         self.run_case('gestures')
 

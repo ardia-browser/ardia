@@ -1,14 +1,10 @@
 #import "ArdiaWebViewInternal.h"
 #import "ArdiaRuntime.h"
 #import "ArdiaEarlyWindow.h"
-#import "ArdiaFairPlay.h"
-#import "ArdiaProtectedVideo.h"
-#import "ArdiaHLSVideo.h"
 #import "ArdiaFieldTiming.h"
 #import "ArdiaHost.h"
 #import "ArdiaPictureInPicture.h"
 #import "ArdiaServices.h"
-#import "ArdiaVideoMirror.h"
 
 #import <objc/runtime.h>
 
@@ -60,10 +56,6 @@ static NSString *DisplayMediaAudioFor(NSDictionary *offer, NSString *sourceId) {
 
 namespace ardia_web_view {
 
-static NSString *FairPlayConfig() {
-  return JSONText(@{@"event" : @"config", @"on" : @(ArdiaFairPlay.enabled && ArdiaFairPlay.available)});
-}
-
 void AnswerHello(ArdiaCoreTab *tab, NSString *profile, NSString *frameId, BOOL main, NSString *verifiedOrigin) {
   NSString *origin = (main ? VerifiedOrigin(verifiedOrigin) : nil) ?: OriginOf(tab.url);
   __weak ArdiaCoreTab *weakTab = tab;
@@ -82,8 +74,6 @@ void AnswerHello(ArdiaCoreTab *tab, NSString *profile, NSString *frameId, BOOL m
     if (TracingPictureInPicture()) config[@"pipTrace"] = @YES;
     [to callFrame:frameId kind:@"config" json:JSONText(config)];
   };
-  if (main && frameId.length && [ArdiaFairPlay servesOrigin:VerifiedOrigin(verifiedOrigin)])
-    [tab callFrame:frameId kind:@"fairPlay" json:FairPlayConfig()];
   if (origin && [origin hasPrefix:@"http"])
     [ArdiaServices siteSettings:profile ?: @"" origin:origin reply:^(NSDictionary *settings, NSString *) {
       NSDictionary *autoplay = [settings[@"autoplay"] isKindOfClass:NSDictionary.class] ? settings[@"autoplay"] : nil;
@@ -115,16 +105,6 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
   gBlockAutoplayEverywhere = enabled;
 }
 
-+ (void)setFairPlayInChromium:(BOOL)enabled {
-  if (enabled == ArdiaFairPlay.enabled) return;
-  ArdiaFairPlay.enabled = enabled;
-  for (ArdiaWebView *view in LiveViews().allObjects) [view pushFairPlay];
-  ArdiaProtectedVideo.enabled = enabled;
-  ArdiaHLSVideo.enabled = enabled;
-  for (ArdiaWebView *view in LiveViews().allObjects)
-    if (view->_tab && ([ArdiaProtectedVideo servesOrigin:OriginOf(view->_tab.url)] || [ArdiaHLSVideo servesOrigin:OriginOf(view->_tab.url)])) [view->_tab reload];
-}
-
 + (void)setSelectionPopoverEnabled:(BOOL)enabled {
   if (enabled == gSelectionPopover) return;
   gSelectionPopover = enabled;
@@ -148,10 +128,6 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
     [self noteScriptFrame:frameId main:main];
     [self callFrame:frameId kind:@"peekConfig" json:PeekConfigJSON(self)];
     AnswerHello(tab, _profile, frameId, main, verifiedOrigin);
-    if (main) [ArdiaVideoMirror helloFromTab:tab frame:frameId];
-    double startedMs = 0;
-    if (main) [ArdiaProtectedVideo helloFromTab:tab origin:VerifiedOrigin(verifiedOrigin) bridged:Flag(dict, @"protectedVideo") started:Finite(dict, @"started", &startedMs) ? startedMs / 1000 : 0];
-    if (main) [ArdiaHLSVideo helloFromTab:tab origin:VerifiedOrigin(verifiedOrigin) bridged:Flag(dict, @"protectedVideo")];
     if (main && _littlePage.held) [self callFrame:frameId kind:@"firstPaint" json:@"{}"];
   } else if ([kind isEqualToString:@"displayMediaHello"]) {
     [self callFrame:frameId kind:@"config" json:gDisplayMediaPicker ? @"{\"displayMediaPicker\":true}" : @"{}"];
@@ -204,20 +180,11 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
       [self emit:@"scroll" payload:@{@"state" : state}];
   } else if ([kind isEqualToString:@"drm"] && dict) {
     [self emit:@"protectedMedia" payload:@{@"keySystem" : Text(dict, @"keySystem", 64) ?: @"", @"main" : @(main)}];
-  } else if ([kind isEqualToString:@"fairPlay"] && main && dict && [ArdiaFairPlay servesOrigin:VerifiedOrigin(verifiedOrigin)]) {
-    [ArdiaFairPlay tab:tab frame:frameId message:dict];
-  } else if ([kind isEqualToString:@"protectedVideo"] && main && dict && [ArdiaProtectedVideo servesOrigin:VerifiedOrigin(verifiedOrigin)]) {
-    [ArdiaProtectedVideo tab:tab frame:frameId message:dict];
-  } else if ([kind isEqualToString:@"hlsVideo"] && main && dict && [ArdiaHLSVideo servesOrigin:VerifiedOrigin(verifiedOrigin)]) {
-    [ArdiaHLSVideo tab:tab frame:frameId message:dict];
-  } else if ([kind isEqualToString:@"videoMirror"] && main && dict && [ArdiaVideoMirror acceptsOrigin:VerifiedOrigin(verifiedOrigin)]) {
-    [ArdiaVideoMirror tab:tab frame:frameId message:dict];
   } else if ([kind isEqualToString:@"nowPlaying"]) {
     if (!_reports.nowPlaying) _reports.nowPlaying = [ArdiaNowPlaying new];
     NSDictionary *state = [_reports.nowPlaying noteFrame:frameId page:dict main:main];
     [self emit:@"nowPlaying" payload:@{@"state" : state ?: NSNull.null}];
     [self autoPictureInPictureInputsChanged];
-    [self systemNowPlayingChanged];
   } else if ([kind isEqualToString:@"theme"]) {
     if (!main || !dict) return;
     NSString *color = [dict[@"color"] isKindOfClass:NSString.class] ? Text(dict, @"color", 64) : nil;
@@ -307,10 +274,6 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
   if (frameId.length) [ScriptFramesOf(_tab) removeObject:frameId];
 }
 
-- (void)pushFairPlay {
-  if (_tab && [ArdiaFairPlay servesOrigin:OriginOf(_tab.url)]) [_tab callPage:@"fairPlay" json:FairPlayConfig()];
-}
-
 - (void)pushSelectionPopover {
   if (_tab) [self callFrame:@"" kind:@"selectionPopover" json:gSelectionPopover ? @"true" : @"false"];
 }
@@ -321,13 +284,8 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
 }
 
 - (void)resetPageMedia {
-  [ArdiaFairPlay pageGoneFromTab:_tab];
-  [ArdiaProtectedVideo pageGoneFromTab:_tab];
-  [ArdiaHLSVideo pageGoneFromTab:_tab];
-  [ArdiaVideoMirror pageGoneFromTab:_tab];
   if ([_reports.nowPlaying reset]) [self emit:@"nowPlaying" payload:@{@"state" : NSNull.null}];
   [self autoPictureInPictureInputsChanged];
-  [self withdrawSystemNowPlaying];
 }
 
 - (void)resolveDisplayMedia:(NSString *)requestId sourceId:(NSString *)sourceId audio:(BOOL)shareAudio {

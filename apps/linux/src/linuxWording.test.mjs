@@ -69,7 +69,7 @@ const EXPECTED = [
   ["state/releaseNotes/releaseNotes.ts", ["from any page with Ctrl+L."], ["⌘L"]],
   ["state/sync/scopeAdapters.ts", ["`This Computer`"], ["This ${PLATFORM_TERMS.computerTitle}"]],
   ["components/import/steps/ChooseStep.tsx", ["were found on this computer."], []],
-  ["state/telemetry/copy.ts", ["Ctrl+Tab switcher", "Alt+Enter in the command bar", "from the taskbar or at launch", "the crash dump Chromium's crash handler keeps on this computer", "the signal that ended it"], ["Dock", "Touch ID", "⌘", "⌥", "⌃", "from this app's crash report", "code-signing kill", "writable memory regions"]],
+  ["state/telemetry/copy.ts", ["Ctrl+Tab switcher", "Alt+Enter in the command bar", "from the taskbar or at launch", "the crash dump Chromium's crash handler keeps on this computer", "the signal that ended it", "reached Ardia's page script, summed up once an hour. Never the notification's text"], ["Dock", "Touch ID", "⌘", "⌥", "⌃", "from this app's crash report", "code-signing kill", "writable memory regions", "the error code the system gave"]],
   ["state/report/details.ts", ["`Linux ${app.osVersion}`, app.model"], ["`${PLATFORM_TERMS.os} ${app.osVersion}`"]],
   ["components/report/ReportPreview.tsx", ["Exactly what leaves your computer when you press Send."], ["leaves your ${PLATFORM_TERMS.computer}"]],
   ["components/report/ReportSheet.tsx", ["Contact and details stay private.", "share errors and usage for 14 days"], ["Recordings, contact and details stay private.", "share crash reports and usage"]],

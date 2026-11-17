@@ -75,6 +75,7 @@ void InstallDragMonitor() {
                                                       gGrabTravel = 0;
                                                       gGrabSkip = ClickSkipSeconds(window, event.locationInWindow);
                                                       gGrabClicks = event.clickCount;
+                                                      ardia_host::NotePointer(event, @"pipDrag");
                                                       return nil;
                                                     }
                                                     ArdiaPiPController *dragged = gDragged;
@@ -85,6 +86,7 @@ void InstallDragMonitor() {
                                                       [dragged dragEnded:event];
                                                       if (gGrabSkip && ardia_pip_seek::IsClick(gGrabTravel))
                                                         [dragged skipBy:gGrabSkip at:gGrabLocal clickCount:gGrabClicks];
+                                                      ardia_host::NotePointer(event, @"pipDrag");
                                                     } else {
                                                       [dragged dragMoved:event];
                                                     }
@@ -213,6 +215,8 @@ NSString *DevLayerTree(NSWindow *window) {
 namespace ardia_pip {
 
 void WatchZoom() { InstallZoomMonitor(); }
+
+NSWindow *GrabbedWindow() { return gDragged.window; }
 
 void TabRequestedActivation(ArdiaWebView *view) {
   for (NSWindow *window in NSApp.windows)

@@ -57,7 +57,9 @@ class TabBinding {
   bool presented = false;
   bool pane_visible = false;
   std::vector<std::pair<std::string, base::DictValue>> sent;
+  bool wake_ready_pending = false;
   void ReportPresentation(std::string name, base::DictValue data) { sent.emplace_back(std::move(name), std::move(data)); }
+  bool PresentNow(std::string name, base::DictValue data) { ReportPresentation(std::move(name), std::move(data)); return true; }
   base::WeakPtr<TabBinding> GetWeakPtr() { return weak_.GetWeakPtr(); }
   void WasDiscarded();
   void DidStartNavigation(content::NavigationHandle* handle);

@@ -249,7 +249,8 @@ export function trackPageProcessGone(info: { reason: string; code: number }, vis
   void memoryPressure().then((memory_pressure) => capture("page_process_gone", { ...props, memory_pressure }));
 }
 
-const HOVER_REASONS = new Set(["halfActive", "staleMenu", "notKeyOrMain", "coveredByView", "responderLost"]);
+const HOVER_REASONS = new Set(["halfActive", "staleMenu", "notKeyOrMain", "coveredByView", "responderLost", "coveredByWindow"]);
+const HOVER_RESPONDERS = new Set(["none", "window", "otherWindow", "page", "control"]);
 const HOVER_WINDOW_KINDS = new Set(["none", "hidden", "blockerPage", "internal", "ardiaPanel", "popup", "browser", "other"]);
 const HOVER_COVERS = new Set(["none", "reactNative", "chromium", "other"]);
 const HOVER_ENDINGS = new Set(["hover", "heal", "appInactive", "windowClosed"]);
@@ -273,6 +274,8 @@ export function hoverLostProperties(e: HoverLostEpisode) {
     over_page: e.overPage === true,
     cover: oneOf(HOVER_COVERS, e.cover),
     cover_clear: e.coverClear === true,
+    responder: oneOf(HOVER_RESPONDERS, e.responder),
+    cover_window: oneOf(HOVER_WINDOW_KINDS, e.coverWindow ?? "none"),
     healed: e.healed === true,
     heal_worked: typeof e.healWorked === "boolean" ? e.healWorked : null,
     ended_by: oneOf(HOVER_ENDINGS, e.endedBy),

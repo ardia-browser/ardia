@@ -1,4 +1,5 @@
 import { takeFocusHandoffCounts as takeNativeCounts } from "../../platform/focus";
+import { isSharing } from "./choice";
 
 const FIELDS = {
   delivered: "focus_handoffs_delivered",
@@ -14,10 +15,11 @@ type Field = (typeof FIELDS)[keyof typeof FIELDS];
 
 export function takeFocusHandoffCounts(): Record<Field, number> {
   const raw = takeNativeCounts();
+  const shared = isSharing();
   const counts = {} as Record<Field, number>;
   for (const [key, field] of Object.entries(FIELDS) as [keyof typeof FIELDS, Field][]) {
     const n = raw[key] ?? 0;
-    counts[field] = Number.isSafeInteger(n) && n > 0 ? n : 0;
+    counts[field] = shared && Number.isSafeInteger(n) && n > 0 ? n : 0;
   }
   return counts;
 }

@@ -1,9 +1,5 @@
 #import "ArdiaWebViewInternal.h"
 #import "ArdiaEarlyWindow.h"
-#import "ArdiaFairPlay.h"
-#import "ArdiaProtectedVideo.h"
-#import "ArdiaHLSVideo.h"
-#import "ArdiaVideoMirror.h"
 
 #import <objc/runtime.h>
 
@@ -324,6 +320,7 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
   if (tab.profile.offTheRecord) payload[@"profile"] = ardia_host::OriginalProfileNameOf(tab.profile);
   if (clicked) payload[@"point"] = RecentClickPoint(self);
   if (linkWait) payload[@"linkWait"] = linkWait;
+  if ([disposition isEqualToString:@"window"] && TakeShiftClick(self)) payload[@"shiftClick"] = @YES;
   if (objc_getAssociatedObject(tab, &kPopupTabKey)) {
     objc_setAssociatedObject(tab, &kPopupTabKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     payload[@"popup"] = @YES;
@@ -374,10 +371,6 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
 
 - (void)tabWillClose:(ArdiaCoreTab *)tab {
   [ArdiaEarlyWindow dropPage:tab];
-  [ArdiaFairPlay pageGoneFromTab:tab];
-  [ArdiaProtectedVideo pageGoneFromTab:tab];
-  [ArdiaHLSVideo pageGoneFromTab:tab];
-  [ArdiaVideoMirror pageGoneFromTab:tab];
   if (_life.closed() || tab != _tab) return;
   [self detach];
   [self emit:@"windowClose" payload:@{}];
@@ -431,9 +424,6 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
 }
 
 - (void)tabDidChangeDiscarded:(ArdiaCoreTab *)tab {
-  if (tab.discarded) [ArdiaProtectedVideo pageGoneFromTab:tab];
-  if (tab.discarded) [ArdiaHLSVideo pageGoneFromTab:tab];
-  if (tab.discarded) [ArdiaVideoMirror pageGoneFromTab:tab];
   if (tab.discarded) [self emit:@"discarded" payload:@{@"url" : tab.url ?: @"", @"reason" : tab.discardReason ?: @""}];
   else [self emit:@"ready" payload:@{}];
 }

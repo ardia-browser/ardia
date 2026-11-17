@@ -35,3 +35,15 @@ test("focus handoff outcomes and pickup times are sent with the hourly counts, o
   ]);
   assert.deepEqual(stub.focusHandoffCounts.pending, {});
 });
+
+test("focus handoffs from while sharing was off are never sent, and handoffs after sharing turns on are", async () => {
+  client.loadChoice();
+  client.setSharing(false, "settings");
+  stub.focusHandoffCounts.pending = { delivered: 5, timedOut: 2 };
+  client.setSharing(true, "settings");
+  usage.sessionEnding();
+  assert.ok((await sentUsageCounts()).every((sent) => !sent.focus_handoffs_delivered && !sent.focus_handoffs_timed_out));
+  stub.focusHandoffCounts.pending = { delivered: 1 };
+  usage.sessionEnding();
+  assert.equal((await sentUsageCounts()).at(-1).focus_handoffs_delivered, 1);
+});

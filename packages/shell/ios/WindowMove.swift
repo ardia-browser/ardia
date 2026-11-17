@@ -22,7 +22,7 @@ let installWindowMoveFallback: Void = {
 
 enum WindowMove {
   static let willDrag = Notification.Name("ArdiaWindowMoveWillDrag")
-  static let replacesNativeDrag = ProcessInfo.processInfo.isOperatingSystemAtLeast(OperatingSystemVersion(majorVersion: 27, minorVersion: 0, patchVersion: 0))
+  static let replacesNativeDrag = ProcessInfo.processInfo.isOperatingSystemAtLeast(OperatingSystemVersion(majorVersion: 27, minorVersion: 2, patchVersion: 0))
   private static var following = false
   private static weak var moving: NSWindow?
   private static let staleAfter: TimeInterval = 0.012
@@ -90,6 +90,12 @@ enum WindowMove {
   }
 
   #if DEBUG
+  static var moveTimes: [CFTimeInterval] = []
+  static var frameTimes: [CFTimeInterval] = []
+  static var traceOverflowed = false
+  static let traceLimit = 20000
+  static func traceMove() { if moveTimes.count < traceLimit { moveTimes.append(CACurrentMediaTime()) } else { traceOverflowed = true } }
+  static func traceFrame() { if frameTimes.count < traceLimit { frameTimes.append(CACurrentMediaTime()) } else { traceOverflowed = true } }
   static var afterMoveTrace: [[String: Any]] = []
   static func traceAfterMove(_ window: NSWindow, _ rect: NSRect, _ outcome: String) {
     if afterMoveTrace.count < 4000 {
@@ -100,6 +106,8 @@ enum WindowMove {
     }
   }
   #else
+  @inline(__always) static func traceMove() {}
+  @inline(__always) static func traceFrame() {}
   @inline(__always) static func traceAfterMove(_ window: NSWindow, _ rect: NSRect, _ outcome: String) {}
   #endif
 
@@ -122,8 +130,11 @@ enum WindowMove {
     else { return false }
     following = true
     moving = window
+    ArdiaHost.beginPressLoop("windowMove")
+    ShellEvents.send(.app, ["type": "windowDragLoop"])
     if holdsPlacement { placements.setObject(Placements(), forKey: window) }
     defer {
+      ArdiaHost.endPressLoop()
       following = false
       moving = nil
       placements.object(forKey: window)?.drainsUntil = CACurrentMediaTime() + echoDrain
@@ -132,19 +143,22 @@ enum WindowMove {
     let origin = window.frame.origin
     var wasActive = NSApp.isActive
     var announced = false
-    func move(to event: NSEvent) {
-      let target = place(window, origin, start, screenPoint(event))
+    let pacer = WindowMovePacer(window: window) { pointer in
+      let target = place(window, origin, start, pointer)
       guard !near(window.frame.origin, target) else { return }
       if !announced {
         announced = true
         announceDrag(of: window)
       }
       window.setFrameOrigin(target)
+      traceMove()
       record(window)
     }
+    defer { pacer.finish(at: nil) }
     while window.isVisible {
       if NSApp.isActive { wasActive = true } else if wasActive { return true }
-      guard var next = nextGestureEvent() else {
+      guard var next = nextGestureEvent(waiting: pacer.untilStall) else {
+        pacer.idle()
         if NSEvent.pressedMouseButtons & 1 == 0 { return true }
         continue
       }
@@ -156,8 +170,11 @@ enum WindowMove {
         else { break }
         next = queued
       }
-      if next.type == .leftMouseUp, next.windowNumber == window.windowNumber { latest = next }
-      if let latest { move(to: latest) }
+      if next.type == .leftMouseUp, next.windowNumber == window.windowNumber {
+        pacer.finish(at: screenPoint(next))
+      } else if let latest {
+        pacer.moved(to: screenPoint(latest))
+      }
       if next.type != .leftMouseDragged || next.windowNumber != window.windowNumber {
         NSApp.postEvent(next, atStart: true)
         return true
@@ -168,9 +185,9 @@ enum WindowMove {
 
   private static let gestureEvents: NSEvent.EventTypeMask = [.leftMouseDown, .leftMouseDragged, .leftMouseUp]
 
-  private static func nextGestureEvent() -> NSEvent? {
+  private static func nextGestureEvent(waiting stall: TimeInterval?) -> NSEvent? {
     let pressed = NSEvent.pressedMouseButtons & 1 != 0
-    return NSApp.nextEvent(matching: gestureEvents, until: pressed ? Date(timeIntervalSinceNow: 0.1) : .distantPast, inMode: .eventTracking, dequeue: true)
+    return NSApp.nextEvent(matching: gestureEvents, until: pressed ? Date(timeIntervalSinceNow: min(0.1, stall ?? 0.1)) : .distantPast, inMode: .eventTracking, dequeue: true)
   }
 
   private static func place(_ window: NSWindow, _ origin: NSPoint, _ start: NSPoint, _ pointer: NSPoint) -> NSPoint {

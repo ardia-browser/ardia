@@ -15,6 +15,7 @@ export function captureEscape(owner: string, active: boolean) {
 export const cancelFocusMove = (generation: number, restoringSource: boolean) => void Focus.cancelFocusMove(generation, restoringSource);
 export const claimFocus = (generation: number, tag: number) => void Focus.claimFocus(generation, tag);
 export const takeEditKeyAcks = (): Record<string, number> => Focus.takeEditKeyAcks?.() ?? {};
+export const takeInputSourceKeys = (): number => Focus.takeInputSourceKeys?.() ?? 0;
 export const saveKeyResponder = (windowId: string): Promise<number> => Focus.saveKeyResponder(windowId);
 export const restoreKeyResponder = (token: number): Promise<boolean> => (token ? Focus.restoreKeyResponder(token) : Promise.resolve(false));
 export const discardKeyResponder = (token: number): void => {

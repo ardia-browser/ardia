@@ -1,4 +1,5 @@
 import AppKit
+import ArdiaCore
 import ExpoModulesCore
 
 public class FocusModule: Module {
@@ -43,6 +44,7 @@ public class FocusModule: Module {
     Function("takeFocusHandoffCounts") { () -> [String: Int] in FocusHandoff.shared.takeOutcomes() }
     AsyncFunction("pressRepeated") { () -> [String: Any]? in PressRelease.pressRepeated }.runOnQueue(.main)
     Function("takeEditKeyAcks") { () -> [String: Int] in FocusHandoff.shared.takeEditKeyAcks() }
+    Function("takeInputSourceKeys") { () -> Int in InputSourceKeys.takeWebKitTabKeys() }
     AsyncFunction("cancelFocusMove") { (generation: Int, restoringSource: Bool) in
       FocusHandoff.shared.cancel(generation, restoringSource: restoringSource)
     }.runOnQueue(.main)

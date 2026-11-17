@@ -152,6 +152,8 @@ final class WindowManager: NSObject, NSWindowDelegate {
       observeFrame(window)
       return reportFrame(window)
     }
+    let summoned = small && focus && smallPointer == nil && LittleArdiaHotKey.shared.takePress() && !NSApp.isActive
+    if summoned { ArdiaChromeWindowHost.floatOverActiveSpace(window) }
     if focus, entry.isWaitingToReveal {
       window.orderFront(nil)
       typeAhead.keyOnReveal = window
@@ -172,6 +174,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
       window.orderFront(nil)
     }
     if small, focus, smallPointer != nil { linkActivation.openedFromLink(window) }
+    if summoned { bringForwardOverActiveApp(window) }
     observeFrame(window)
     reportFrame(window)
     if small { fitToLanding(entry) }
@@ -263,7 +266,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     NotificationCenter.default.removeObserver(self, name: nil, object: from)
     entry.window = to
     if !from.title.isEmpty { to.title = from.title }
-    if entry.kind == .small { ArdiaChromeWindowHost.float(forWindowManagers: to) }
+    if entry.kind == .small { configureSmall(to) }
     Self.identify(to, id: id, kind: entry.kind)
     if lastPlaced === from { lastPlaced = to }
     observeDelegateNotifications(to)
@@ -335,7 +338,14 @@ final class WindowManager: NSObject, NSWindowDelegate {
     window.minSize = NSSize(width: 420, height: 300)
     ArdiaChromeWindowHost.setInterfaceMinSize(window.minSize, of: window)
     window.tabbingMode = .disallowed
-    window.collectionBehavior.insert(.moveToActiveSpace)
+    let fullScreenRoles: NSWindow.CollectionBehavior = [.fullScreenPrimary, .fullScreenNone]
+    window.collectionBehavior = window.collectionBehavior.subtracting(fullScreenRoles).union([.moveToActiveSpace, .fullScreenAuxiliary])
+  }
+
+  private func bringForwardOverActiveApp(_ window: NSWindow) {
+    linkActivation.openedFromLink(window)
+    window.orderFrontRegardless()
+    window.makeKey()
   }
 
   private func placeSmall(_ window: NSWindow, id: String, size: CGSize?, pointer: NSPoint?) {

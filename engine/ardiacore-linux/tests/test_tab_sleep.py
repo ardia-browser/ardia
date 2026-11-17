@@ -33,7 +33,7 @@ class WeakPtr {
 ''',
     'content/public/browser/web_contents.h': r'''
 #pragma once
-namespace content { class WebContents { public: int id = 0; }; }
+namespace content { class WebContents { public: int id = 0; bool discarded = false; bool WasDiscarded() const { return discarded; } }; }
 ''',
     'components/performance_manager/public/graph/graph.h': r'''
 #pragma once
@@ -147,6 +147,12 @@ class TabSleepTests(unittest.TestCase):
                 LINUX / 'ac_linux_tab_sleep.cc', ROOT / 'tests/fixtures/tab_sleep_scenarios.cc',
             ], extra_includes=[include])
         self.assertIn('tab sleep scenarios passed', output)
+
+    def test_the_mac_answers_an_asleep_tab_the_same_way(self):
+        mac = (ROOT.parent / 'ardiacore/src/ardia/core/ardiacore_tab.mm').read_text()
+        body = mac[mac.index('- (NSArray<NSNumber*>*)sleepIfHiddenFor:(NSTimeInterval)seconds {'):]
+        body = body[:body.index('\n}\n')]
+        self.assertLess(body.index('if (_contents->WasDiscarded()) {\n    return @[];'), body.index('GetPrimaryPageNodeForWebContents'))
 
 
 if __name__ == '__main__':

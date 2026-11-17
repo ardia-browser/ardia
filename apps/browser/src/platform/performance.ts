@@ -1,7 +1,7 @@
-import { call, inputIdleSeconds, on, type BatterySaverMode, type EngineTask, type HoverLostEpisode, type MemorySaverMode, type MemorySaverRequest, type PopupProtectedMedia, type SystemState } from "@ardia/ardiacore";
+import { call, inputIdleSeconds, on, type BatterySaverMode, type EngineTask, type HoverLostEpisode, type MemorySaverMode, type MemorySaverRequest, type PressLoopLongReport, type PopupProtectedMedia, type SystemState } from "@ardia/ardiacore";
 
 export { inputIdleSeconds };
-export type { EngineTask, HoverLostEpisode, MemorySaverMode, PopupProtectedMedia, SystemState };
+export type { EngineTask, HoverLostEpisode, MemorySaverMode, PressLoopLongReport, PopupProtectedMedia, SystemState };
 
 export const listTasks = () => call("engine.tasks");
 export const systemState = () => call("engine.systemState");
@@ -9,6 +9,7 @@ export const onSystemState = (listener: (state: SystemState) => void) => on("eng
 export const onHoverLost = (listener: (episode: HoverLostEpisode) => void) => on("engine.hoverLost", listener);
 export const onPopupProtectedMedia = (listener: (media: PopupProtectedMedia) => void) => on("engine.popupProtectedMedia", listener);
 export const onCursorRestored = (listener: (restore: { hidden: boolean }) => void) => on("engine.cursorRestored", listener);
+export const onPressLoopLong = (listener: (report: PressLoopLongReport) => void) => on("engine.pressLoopLong", listener);
 export const setBatterySaver = (mode: BatterySaverMode) => call("engine.batterySaver", { mode });
 export const setMemorySaver = (request: MemorySaverRequest) => call("engine.memorySaver", request);
 export const isKeepActiveSiteValid = (site: string) => call("engine.validateKeepActiveSite", { site }).then((reply) => reply.valid);

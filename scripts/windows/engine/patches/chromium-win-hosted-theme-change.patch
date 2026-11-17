@@ -1,0 +1,24 @@
+--- a/chrome/browser/ui/views/frame/browser_widget.cc
++++ b/chrome/browser/ui/views/frame/browser_widget.cc
+@@ -36,6 +36,7 @@
+ #include "chrome/browser/ui/views/helium/native_frame_materials.h"
+ #include "chrome/browser/ui/web_applications/app_browser_controller.h"
+ #include "chrome/common/chrome_switches.h"
++#include "ardia/win/hooks.h"  // nogncheck
+ #include "ui/base/hit_test.h"
+ #include "ui/base/mojom/menu_source_type.mojom-shared.h"
+ #include "ui/base/mojom/window_show_state.mojom.h"
+@@ -574,6 +575,13 @@
+   // always needs to be regenerated on Linux.
+   need_regenerate = true;
+ #elif BUILDFLAG(IS_WIN)
++  // Ardia: a hosted window draws no frame of its own, so a theme change has
++  // no frame type to change; regenerating it would ask the window for a DWM
++  // transition its custom-drawn frame can't make.
++  if (g_ardia_win_hosts_normal_windows && browser_view_ &&
++      browser_view_->GetIsNormalType()) {
++    return false;
++  }
+   need_regenerate |=
+       (theme_change_type == BrowserThemeChangeType::kBrowserTheme) &&
+       !IsFullscreen();

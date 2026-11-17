@@ -52,6 +52,7 @@ export type OpenWindowRequest = {
   point?: { x: number; y: number };
   site?: boolean;
   fromClick?: boolean;
+  shiftClick?: boolean;
   linkWait?: "matched" | "skipped" | "timedOut";
   popup?: boolean;
 };
@@ -166,13 +167,6 @@ export type PageSelection = { text: string; rect: { x: number; y: number; width:
 export type ScrollState = "down" | "up" | "top";
 export type FocusRestoreOutcome = "focused" | "kept" | "refused" | "gaveUp" | "unknown";
 export type ProtectedMediaRequest = { keySystem: string; main: boolean };
-export type FairPlayReport = {
-  event: "played" | "failed" | "mirrored" | "mirrorResync" | "pip" | "pipReopen" | "choppy" | "nowPlayingCommand";
-  step?: "license" | "playback" | "player";
-  video?: boolean;
-  site?: "youtube";
-  fitted?: boolean;
-};
 
 export type WebViewProps = ViewProps & {
   engine?: PageEngine;
@@ -229,7 +223,6 @@ export type WebViewProps = ViewProps & {
   onSelection?: (selection: PageSelection | null) => void;
   onScroll?: (state: ScrollState) => void;
   onProtectedMedia?: (request: ProtectedMediaRequest) => void;
-  onFairPlay?: (report: FairPlayReport) => void;
   onAutoplayBlocked?: (count: number) => void;
   onReady?: () => void;
   onDiscarded?: (url: string, reason: DiscardReason | null) => void;

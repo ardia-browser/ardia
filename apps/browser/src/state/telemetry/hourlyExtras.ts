@@ -7,6 +7,7 @@ import { takeExternalAppCounts } from "./externalAppCounts";
 import { takeFindCounts } from "./findCounts";
 import { takeFirstRunCounts } from "./firstRunCounts";
 import { takeImportRuns } from "./importRuns";
+import { takeInputSourceKeyCounts } from "./inputSourceKeys";
 import { takeInlineCompletionCounts } from "./inlineCompletionCounts";
 import { takeKeyboardFollowCounts } from "./keyboardFollowCounts";
 import { takeMemoryTrimCounts } from "./memoryTrimCounts";
@@ -21,7 +22,7 @@ export { watchPlatformCounts };
 
 export const USAGE_COUNTS_EVENT = "usage_counts";
 
-export const takeHourlyExtras = () => ({ ...takePlatformCounts(), ...takeImportRuns(), ...takeProfileDataCounts(), ...takeExportCounts(), ...takeInlineCompletionCounts(), ...takeFirstRunCounts(), ...takeMemoryTrimCounts(), ...takeDownloadsPanelCauses(), ...takeExternalAppCounts(), ...takeDialogPageCounts(), ...takeFindCounts(), ...takeSyncFileCounts(), ...takeKeyboardFollowCounts(), ...takePagerCounts(), ...takeSwipeHistoryListCounts(), ...takeEditKeyAckCounts(), ...takeQuitWarningCounts() });
+export const takeHourlyExtras = () => ({ ...takePlatformCounts(), ...takeImportRuns(), ...takeProfileDataCounts(), ...takeExportCounts(), ...takeInlineCompletionCounts(), ...takeFirstRunCounts(), ...takeMemoryTrimCounts(), ...takeDownloadsPanelCauses(), ...takeExternalAppCounts(), ...takeDialogPageCounts(), ...takeFindCounts(), ...takeSyncFileCounts(), ...takeKeyboardFollowCounts(), ...takePagerCounts(), ...takeSwipeHistoryListCounts(), ...takeEditKeyAckCounts(), ...takeQuitWarningCounts(), ...takeInputSourceKeyCounts() });
 
 type Send = typeof send;
 

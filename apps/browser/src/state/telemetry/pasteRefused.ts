@@ -20,13 +20,53 @@ const REASONS = new Set([
 ]);
 
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/;
-const STANDARD_TYPES = [
-  /^(public|com\.apple|org\.chromium|org\.webkit)\.[A-Za-z0-9._+-]{1,60}$/,
-  /^(Apple|NeXT) [A-Za-z0-9 .-]{1,60} pasteboard type$/,
-  /^CorePasteboardFlavorType 0x[0-9A-Fa-f]{1,8}$/,
-  /^(text|image|audio|video|font)\/[a-z0-9.+-]{1,40}$/,
-  /^application\/(pdf|rtf|json|xml|zip|octet-stream)$/,
-];
+const STANDARD_TYPES = new Set([
+  "public.utf8-plain-text",
+  "public.utf16-plain-text",
+  "public.utf16-external-plain-text",
+  "public.plain-text",
+  "public.utf8-tab-separated-values-text",
+  "public.html",
+  "public.rtf",
+  "public.url",
+  "public.url-name",
+  "public.file-url",
+  "public.png",
+  "public.jpeg",
+  "public.tiff",
+  "public.heic",
+  "com.adobe.pdf",
+  "com.apple.webarchive",
+  "com.apple.flat-rtfd",
+  "org.chromium.web-custom-data",
+  "org.chromium.source-url",
+  "NSStringPboardType",
+  "NSFilenamesPboardType",
+  "NeXT TIFF v4.0 pasteboard type",
+  "NeXT Rich Text Format v1.0 pasteboard type",
+  "NeXT RTFD pasteboard type",
+  "Apple PNG pasteboard type",
+  "Apple PDF pasteboard type",
+  "Apple HTML pasteboard type",
+  "Apple URL pasteboard type",
+  "Apple Web Archive pasteboard type",
+  "CorePasteboardFlavorType 0x75743136",
+  "CorePasteboardFlavorType 0x75747874",
+  "CorePasteboardFlavorType 0x6675726C",
+  "CorePasteboardFlavorType 0x75726C20",
+  "CorePasteboardFlavorType 0x75726C6E",
+  "CorePasteboardFlavorType 0x4A504547",
+  "CorePasteboardFlavorType 0x54455854",
+  "text/plain",
+  "text/html",
+  "text/uri-list",
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "application/pdf",
+  "application/rtf",
+]);
 const UNRECOGNISED_TYPE = "other";
 const CLASS_NAME = /^[A-Za-z_][A-Za-z0-9_.]{0,79}$/;
 const DYNAMIC_TYPE = /^dyn\./;
@@ -41,7 +81,7 @@ function identifier(value: unknown, pattern = IDENTIFIER): string | null {
 function typeName(type: unknown): string | null {
   if (typeof type !== "string") return null;
   if (DYNAMIC_TYPE.test(type)) return "dyn";
-  return STANDARD_TYPES.some((pattern) => pattern.test(type)) ? type : UNRECOGNISED_TYPE;
+  return STANDARD_TYPES.has(type) ? type : UNRECOGNISED_TYPE;
 }
 
 function typeIds(types: unknown): string | null {

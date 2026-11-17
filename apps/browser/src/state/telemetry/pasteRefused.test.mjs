@@ -22,6 +22,17 @@ const local = () => {
   return stub.telemetryLocal.records().filter((r) => r.event === "paste_refused");
 };
 
+const KNOWN_TYPES = [
+  "public.utf8-plain-text", "public.utf16-plain-text", "public.utf16-external-plain-text", "public.plain-text", "public.utf8-tab-separated-values-text",
+  "public.html", "public.rtf", "public.url", "public.url-name", "public.file-url", "public.png", "public.jpeg", "public.tiff", "public.heic",
+  "com.adobe.pdf", "com.apple.webarchive", "com.apple.flat-rtfd", "org.chromium.web-custom-data", "org.chromium.source-url",
+  "NSStringPboardType", "NSFilenamesPboardType", "NeXT TIFF v4.0 pasteboard type", "NeXT Rich Text Format v1.0 pasteboard type", "NeXT RTFD pasteboard type",
+  "Apple PNG pasteboard type", "Apple PDF pasteboard type", "Apple HTML pasteboard type", "Apple URL pasteboard type", "Apple Web Archive pasteboard type",
+  "CorePasteboardFlavorType 0x75743136", "CorePasteboardFlavorType 0x75747874", "CorePasteboardFlavorType 0x6675726C", "CorePasteboardFlavorType 0x75726C20",
+  "CorePasteboardFlavorType 0x75726C6E", "CorePasteboardFlavorType 0x4A504547", "CorePasteboardFlavorType 0x54455854",
+  "text/plain", "text/html", "text/uri-list", "image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf", "application/rtf",
+];
+
 test("a paste that finds no text records its reason, the pasteboard's type names, the OS, the layout and the gate flag", () => {
   stub.emitAppEvent({ type: "pasteRefused", reason: "no_text", gateOpen: true, layout: "com.apple.keylayout.US", types: ["public.rtf", "NeXT TIFF v4.0 pasteboard type", "public.png"] });
   const [event] = queued();
@@ -82,10 +93,10 @@ test("only names are kept: anything that is not a recognised type identifier bec
 });
 
 test("an unknown reason is recorded as unknown and the type list is capped", () => {
-  stub.emitAppEvent({ type: "pasteRefused", reason: "something else", gateOpen: false, types: Array.from({ length: 60 }, (_, i) => `public.type${i}`) });
+  stub.emitAppEvent({ type: "pasteRefused", reason: "something else", gateOpen: false, types: KNOWN_TYPES.slice(0, 30) });
   const event = queued().at(-1);
   assert.equal(event.properties.reason, "unknown");
-  assert.equal(event.properties.type_ids.split(",").length, 24);
+  assert.equal(event.properties.type_ids, KNOWN_TYPES.slice(0, 24).join(","));
 });
 
 test("other app events record nothing", () => {
@@ -105,6 +116,36 @@ test("only standard pasteboard type names are sent: an app's own type is just ot
   const empty = queued().at(-1);
   assert.equal(empty.properties.type_ids, "");
   assert.equal(empty.properties.type_count, 0);
+});
+
+test("every well-known pasteboard and MIME type on the list goes out under its own name", () => {
+  for (let i = 0; i < KNOWN_TYPES.length; i += 20) {
+    const types = KNOWN_TYPES.slice(i, i + 20);
+    stub.emitAppEvent({ type: "pasteRefused", reason: "no_text", gateOpen: true, types });
+    assert.equal(queued().at(-1).properties.type_ids, types.join(","));
+  }
+});
+
+test("a name an app made up goes out as other, even when it looks like a standard one", () => {
+  const invented = [
+    "text/x-customer-alice-invoice-123456",
+    "public.acme-secret-doc",
+    "com.apple.someapp.internal-id-42",
+    "org.chromium.acme-session-9f3a",
+    "org.webkit.acme-private",
+    "CorePasteboardFlavorType 0x12345678",
+    "Apple Customer 42 pasteboard type",
+    "NeXT Secret Ledger pasteboard type",
+    "image/x-acme-scan-777",
+    "application/vnd.acme.account+json",
+  ];
+  for (const type of invented) {
+    stub.emitAppEvent({ type: "pasteRefused", reason: "no_text", gateOpen: true, types: ["public.html", type] });
+    const event = queued().at(-1);
+    assert.equal(event.properties.type_ids, "public.html,other", type);
+    assert.equal(event.properties.type_count, 2, type);
+    assert.equal(JSON.stringify(event.properties).includes(type), false, type);
+  }
 });
 
 test("nothing is sent while sharing is off", () => {

@@ -87,6 +87,12 @@ value was read). Both, and `main_ms`, `startup_ms` and `chromium_ms`, come from 
 `launch_source` (`login_item`, `documents` when another app opened a link or file with Ardia, `user`; null before AppKit
 finished launching, nothing else ever sent), `appkit_will_finish_ms` and `appkit_did_finish_ms` (`NSApplicationWillFinishLaunching`
 and `NSApplicationDidFinishLaunching`, from process start) come from the first nightly after 0.2.47-nightly.4.
+`main_majflt`, `main_inblock`, `engine_majflt` and `engine_inblock` are plain counts from `getrusage(RUSAGE_SELF)` read at
+the `main` mark and when the engine has started: `ru_majflt` (page faults that needed a disk read) and `ru_inblock`
+(blocks read in), counted for the process since it began, so `main_*` is what loading the app read before `main` and `engine_* - main_*` what the process read between `main` and the engine starting.
+A high count with a long `main_ms` or `engine_ms` points at a cold page cache (disk), a low one at a busy processor
+(see `load_1m`). A mark the app didn't reach, or a failed `getrusage`, leaves the field null, never 0, and a real 0 stays
+0. They come from the first nightly after this lands.
 
 ### A session's payload
 

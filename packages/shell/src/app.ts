@@ -42,6 +42,12 @@ export type SystemInfo = {
     engineStarted?: number;
     earlyWindowShown?: number;
     reactNativeStarted?: number;
+    // Page-in counts from getrusage at the main and engine-started marks: faults that needed a disk read and blocks read
+    // in. Plain counts, absent until the mark is reached.
+    mainMajflt?: number;
+    mainInblock?: number;
+    engineMajflt?: number;
+    engineInblock?: number;
   } | null;
   launchedHidden?: boolean | null;
   launchSource?: "login_item" | "documents" | "user" | null;

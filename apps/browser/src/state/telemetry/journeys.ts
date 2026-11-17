@@ -250,6 +250,7 @@ function sendLaunch(l: Launch, content: number | null, paints: number[]) {
   const { lastLaunchAt, lastQuitAt, firstOfVersion } = previousLaunch;
   const prewarm = firstOfVersion && updatePrewarm?.build === appBuild ? updatePrewarm : null;
   const ms = (at: number | null | undefined) => (at == null || !(at - l.t0 >= 0 && at - l.t0 < 10 * MINUTE) ? null : Math.round(at - l.t0));
+  const count = (n: number | null | undefined) => (typeof n === "number" && Number.isFinite(n) && n >= 0 ? Math.round(n) : null);
   capture("perf_launch", {
     launch_ms: ms(l.firstWindow),
     main_ms: ms(launchMarks?.mainStarted),
@@ -260,6 +261,10 @@ function sendLaunch(l: Launch, content: number | null, paints: number[]) {
     engine_ms: ms(launchMarks?.engineStarted),
     early_window_ms: ms(launchMarks?.earlyWindowShown),
     rn_ms: ms(launchMarks?.reactNativeStarted),
+    main_majflt: count(launchMarks?.mainMajflt),
+    main_inblock: count(launchMarks?.mainInblock),
+    engine_majflt: count(launchMarks?.engineMajflt),
+    engine_inblock: count(launchMarks?.engineInblock),
     js_ms: ms(jsStartedAt),
     commit_ms: ms(l.commit),
     content_ms: ms(content),

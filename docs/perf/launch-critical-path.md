@@ -401,6 +401,13 @@ the launch was a hidden one (a login item) or the user opening the app. `launch_
 `login_item`, `documents` (another app opened a link or file with Ardia) or `user`; null until AppKit finished launching. Together with `since_boot` and `since_quit`
 (`unclean`) they tell the first launch after a reboot or an unclean quit from the rest.
 
+`main_majflt` and `main_inblock` (read at the `main` mark) and `engine_majflt` and `engine_inblock` (read when
+`engineDidStart` is stamped) are `getrusage(RUSAGE_SELF)` counts, `ru_majflt` and `ru_inblock`, so a cold page cache can
+be told from a busy processor: many faults or blocks by `main_ms` or `engine_ms` mean the time went on disk reads, few
+with a high `load_1m` mean it went on waiting for a processor. `engine_* - main_*` is what the process read between `main` and the engine starting.
+They are counts only, null when the mark was not reached or `getrusage` failed, and they change nothing about the
+launch. This is only the data for the cold launches over 10 s above: the fix follows once it is in.
+
 How to read a slow launch once these ship (nightly first, since stable builds carry no `engine_ms` today): when
 `main_ms` is close to `engine_ms`, the time is before `main` and is the OS's (the next change would be a login-time
 prewarm); when `startup_ms - main_ms`, `chromium_ms - startup_ms` or `engine_ms - chromium_ms` holds the 5 to 10 s, that

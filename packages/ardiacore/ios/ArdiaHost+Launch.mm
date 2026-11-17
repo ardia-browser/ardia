@@ -339,6 +339,7 @@ void StartEarlyWindow() {
 
 + (void)markMainStarted {
   ArdiaLaunchSequence.shared.mainStartedAt = LaunchNowMs();
+  [ArdiaLaunchSequence.shared stampMainPageIn];
 }
 
 + (nullable NSNumber *)launchedHidden {
@@ -364,6 +365,11 @@ void StartEarlyWindow() {
   if (launch.engineStartedAt > 0) marks[@"engineStarted"] = @(launch.engineStartedAt);
   if (launch.reactNativeStartedAt > 0) marks[@"reactNativeStarted"] = @(launch.reactNativeStartedAt);
   if (launch.earlyWindowShownAt > 0) marks[@"earlyWindowShown"] = @(launch.earlyWindowShownAt);
+  // Page-in counts at the main and engine-started marks, left out until reached.
+  if (launch.mainMajorFaults) marks[@"mainMajflt"] = launch.mainMajorFaults;
+  if (launch.mainBlockInputs) marks[@"mainInblock"] = launch.mainBlockInputs;
+  if (launch.engineMajorFaults) marks[@"engineMajflt"] = launch.engineMajorFaults;
+  if (launch.engineBlockInputs) marks[@"engineInblock"] = launch.engineBlockInputs;
   return marks;
 }
 

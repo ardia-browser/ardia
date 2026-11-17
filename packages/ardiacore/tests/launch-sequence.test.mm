@@ -133,6 +133,18 @@ int main() {
       [l after:0 do:^{ ran++; }];
       CHECK(ran == 0 && !l.engineRunning && ![l reached:ArdiaLaunchJSStarted]);
     }
+    {
+      // Page-in counters stay nil until their mark is reached, then hold counts, and the engine's never trail main's.
+      ArdiaLaunchSequence *l = [ArdiaLaunchSequence new];
+      CHECK(l.mainMajorFaults == nil && l.mainBlockInputs == nil && l.engineMajorFaults == nil && l.engineBlockInputs == nil);
+      [l stampMainPageIn];
+      CHECK(l.mainMajorFaults != nil && l.mainMajorFaults.longValue >= 0);
+      CHECK(l.mainBlockInputs != nil && l.mainBlockInputs.longValue >= 0);
+      CHECK(l.engineMajorFaults == nil && l.engineBlockInputs == nil);
+      [l stampEnginePageIn];
+      CHECK(l.engineMajorFaults != nil && l.engineMajorFaults.longValue >= l.mainMajorFaults.longValue);
+      CHECK(l.engineBlockInputs != nil && l.engineBlockInputs.longValue >= l.mainBlockInputs.longValue);
+    }
   }
   if (failures) return 1;
   std::printf("launch-sequence: ok\n");

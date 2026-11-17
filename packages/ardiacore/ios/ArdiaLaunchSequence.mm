@@ -1,5 +1,7 @@
 #import "ArdiaLaunchSequence.h"
 
+#include <sys/resource.h>
+
 @interface ArdiaLaunchWaiter : NSObject
 @property(nonatomic) ArdiaLaunchMilestone milestones;
 @property(nonatomic, copy) dispatch_block_t block;
@@ -7,6 +9,22 @@
 
 @implementation ArdiaLaunchWaiter
 @end
+
+@interface ArdiaLaunchSequence ()
+@property(atomic, strong, nullable) NSNumber *mainMajorFaults;
+@property(atomic, strong, nullable) NSNumber *mainBlockInputs;
+@property(atomic, strong, nullable) NSNumber *engineMajorFaults;
+@property(atomic, strong, nullable) NSNumber *engineBlockInputs;
+@end
+
+// This process's page-in counters so far. False when getrusage fails, so the caller leaves its counters nil.
+static BOOL ReadPageIn(long *majorFaults, long *blockInputs) {
+  struct rusage usage;
+  if (getrusage(RUSAGE_SELF, &usage) != 0) return NO;
+  *majorFaults = usage.ru_majflt;
+  *blockInputs = usage.ru_inblock;
+  return YES;
+}
 
 @implementation ArdiaLaunchSequence {
   ArdiaLaunchMilestone _reached;
@@ -45,6 +63,20 @@
   _launchedHidden = hidden;
   _launchedForDocuments = documents;
   [self reach:ArdiaLaunchAppKitDidFinish];
+}
+
+- (void)stampMainPageIn {
+  long faults = 0, blocks = 0;
+  if (!ReadPageIn(&faults, &blocks)) return;
+  self.mainMajorFaults = @(faults);
+  self.mainBlockInputs = @(blocks);
+}
+
+- (void)stampEnginePageIn {
+  long faults = 0, blocks = 0;
+  if (!ReadPageIn(&faults, &blocks)) return;
+  self.engineMajorFaults = @(faults);
+  self.engineBlockInputs = @(blocks);
 }
 
 - (void)after:(ArdiaLaunchMilestone)milestones do:(dispatch_block_t)block {

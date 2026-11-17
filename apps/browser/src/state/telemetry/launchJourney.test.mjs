@@ -20,6 +20,10 @@ Object.assign(stub.appInfo, {
     engineStarted: processStart + 6400,
     earlyWindowShown: processStart + 6600,
     reactNativeStarted: processStart + 6900,
+    mainMajflt: 310,
+    mainInblock: 1200,
+    engineMajflt: 9800,
+    engineInblock: 54_000,
   },
   launchedHidden: true,
   launchSource: "login_item",
@@ -84,4 +88,10 @@ test("perf_launch says whether a login item, another app's link or file, or the 
   const { launch_source, appkit_will_finish_ms, appkit_did_finish_ms } = saved.events.find((e) => e.event === "perf_launch").properties;
   assert.equal(launch_source, "login_item");
   assert.deepEqual([appkit_will_finish_ms, appkit_did_finish_ms], [5200, 6100]);
+});
+
+test("perf_launch carries the page-in counts at the main and engine-started marks, so a cold page cache can be told from a busy processor", () => {
+  const saved = JSON.parse(stub.docs.get("telemetry-queue.json"));
+  const { main_majflt, main_inblock, engine_majflt, engine_inblock } = saved.events.find((e) => e.event === "perf_launch").properties;
+  assert.deepEqual([main_majflt, main_inblock, engine_majflt, engine_inblock], [310, 1200, 9800, 54_000]);
 });

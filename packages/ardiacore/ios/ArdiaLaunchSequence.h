@@ -22,6 +22,13 @@ typedef NS_OPTIONS(NSUInteger, ArdiaLaunchMilestone) {
 @property(nonatomic) double engineStartedAt;
 @property(nonatomic) double reactNativeStartedAt;
 @property(nonatomic) double earlyWindowShownAt;
+// Page-in counters of this process from getrusage, kept at the main mark and when the engine started: faults that
+// needed a disk read (ru_majflt) and blocks read in (ru_inblock). Counts only. Nil until that mark is reached, and nil
+// when getrusage failed, never 0.
+@property(atomic, readonly, nullable) NSNumber *mainMajorFaults;
+@property(atomic, readonly, nullable) NSNumber *mainBlockInputs;
+@property(atomic, readonly, nullable) NSNumber *engineMajorFaults;
+@property(atomic, readonly, nullable) NSNumber *engineBlockInputs;
 @property(nonatomic, readonly) BOOL launchedHidden;
 @property(nonatomic, readonly) BOOL launchedForDocuments;
 @property(nonatomic, readonly) BOOL shutDown;
@@ -29,6 +36,8 @@ typedef NS_OPTIONS(NSUInteger, ArdiaLaunchMilestone) {
 - (BOOL)reached:(ArdiaLaunchMilestone)milestones;
 - (void)reach:(ArdiaLaunchMilestone)milestone;
 - (void)appKitFinishedHidden:(BOOL)hidden forDocuments:(BOOL)documents;
+- (void)stampMainPageIn;
+- (void)stampEnginePageIn;
 - (void)after:(ArdiaLaunchMilestone)milestones do:(dispatch_block_t)block;
 - (void)engineShutDown;
 

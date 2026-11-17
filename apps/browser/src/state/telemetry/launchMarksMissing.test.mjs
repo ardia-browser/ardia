@@ -11,7 +11,7 @@ Object.assign(stub.appInfo, {
   arch: "arm64",
   isolatedInstance: false,
   processStart,
-  launchMarks: { engineStarted: processStart + 150 },
+  launchMarks: { engineStarted: processStart + 150, engineInblock: 0, engineMajflt: Number.NaN },
   launchedHidden: null,
   launchSource: "someone@example.com",
   loadAverage1m: Number.NaN,
@@ -44,4 +44,8 @@ test("perf_launch leaves out a mark, a load average, a hidden flag or a launch s
   assert.equal(engine_ms, 150);
   const { appkit_will_finish_ms, appkit_did_finish_ms, launch_source } = launches[0].properties;
   assert.deepEqual([appkit_will_finish_ms, appkit_did_finish_ms, launch_source], [null, null, null]);
+  // A page-in count the app did not report is null, a count that is not a number is null, and a real 0 stays 0.
+  const { main_majflt, main_inblock, engine_majflt, engine_inblock } = launches[0].properties;
+  assert.deepEqual([main_majflt, main_inblock, engine_majflt], [null, null, null]);
+  assert.equal(engine_inblock, 0);
 });

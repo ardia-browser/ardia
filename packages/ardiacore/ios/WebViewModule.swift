@@ -24,7 +24,6 @@ public class WebViewModule: Module {
     "setPeekOtherSiteTabs": setting { ArdiaWebView.setPeekOtherSiteTabs(try $0.strings("tabIds")) },
     "setSelectionPopover": setting { ArdiaWebView.setSelectionPopoverEnabled(try $0.bool("enabled")) },
     "setBlockAutoplayEverywhere": setting { ArdiaWebView.setBlockAutoplayEverywhere(try $0.bool("enabled")) },
-    "setFairPlayInChromium": setting { ArdiaWebView.setFairPlayInChromium(try $0.bool("enabled")) },
     "setCommandScrollZoom": setting { ArdiaWebView.setCommandScrollZoomEnabled(try $0.bool("enabled")) },
     "setLittleArdiaOpensNewTabLinks": setting { ArdiaWebView.setLittleArdiaOpensNewTabLinks(try $0.bool("enabled")) },
     "setPopupsOpenAsTabs": setting { ArdiaWebView.setPopupsOpenAsTabs(try $0.bool("enabled")) },

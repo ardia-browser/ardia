@@ -602,10 +602,26 @@ is plain Chromium.
   into a site being torn down, and `Microsoft.UI.Input` fails fast (`0xc0000602`, seen in a VM dump). Keys typed in it no longer reach the app's shortcut hook. One dialog per window at a time; a dialog whose window goes away, or every
   dialog when the app stops, is cancelled within 250 ms, except the open-file picker: quitting with it open waits the
   stop's full 2 s and leaves its thread running (exit code 0, no crash; #1747). The launch log notes how many dialogs
-  were open at stop, how long they took and how many were left. Pop-up menus (`TrackPopupMenuEx`) still run on the UI thread
-  and stall pages while a menu is open (#1687). The self-check holds a real confirm on both threads and checks that a
-  page loads only in the first case; `dialog_pages_asked` and `dialog_pages_stalled` count pages asked while a dialog
-  was open and how many hadn't loaded 10 s later.
+  were open at stop, how long they took and how many were left. Pop-up menus run the same way (#1687): the UI thread
+  builds the menu and takes the cursor point, and `TrackPopupMenuEx` runs on a `RunModal` thread, owned by that
+  thread's hidden `ModalParent` at the app window, which takes the foreground so keys and outside clicks reach the
+  menu. The app window stays enabled, the `resignActive` its deactivation would send is held back
+  (`ActivatesMenuThread`) and sent after the menu only if another app took the foreground, and a menu is closed
+  (`EndMenu`) when its window goes or the app stops. A right press in the sidebar while a page has the keyboard
+  activates the app window first, before any menu, so the page lost the keyboard to the sidebar for good (#2218, seen on
+  the CI runner: the field kept its caret but `document.hasFocus()` was false and the keys went nowhere). The app window
+  now remembers the page it was activated from when the secondary button was down (`TakePageLeftBySecondaryPress`). The
+  sidebar's presses reach WinUI without passing the UI thread's mouse messages or a `WH_MOUSE` hook (the CI input trace
+  had none and the hook was never called), so the window reads the physical buttons on a 15 ms timer from that press
+  until 2 s after its release, at most 10 s held (`FollowSecondaryPress`); another button or a new right press forgets
+  the page. The menu reads it on the UI thread before its thread starts (`PageTheMenuPressLeft`, within 2 s of the button release and only for
+  the menu's own window), and when the menu is dismissed without a choice it gives the keyboard back through the same
+  follow path the Windows key uses (`snapKeyHandedBack` with `afterMenu`), only if that window is still in front,
+  enabled, not minimized and holds no dialog, the page is still that window's and shown, and no switcher, popover,
+  Windows-key or command-bar hold is under way. A choice keeps today's behaviour, since its command may focus a field.
+  The launch log records each request and why a request was skipped ("menu: …"), and `page_focus_return_requests_after_menu` counts the requests, including ones a focused app field or a later foreground change refuses. The self-check holds a real confirm and a real menu on both
+  threads and checks that a page loads only in the first case; `dialog_pages_asked` and `dialog_pages_stalled` count
+  pages asked while a dialog or a menu was open and how many hadn't loaded 10 s later.
 - A launch while the previous Ardia on the same profile is still closing waits for it to end (up to 45 s) instead of
   handing its command line to a browser that is shutting down, or starting a second browser on the same profile once
   that one has let go of Chromium's process singleton (which happens before its shutdown is over: the old process

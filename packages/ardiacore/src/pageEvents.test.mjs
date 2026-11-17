@@ -13,7 +13,6 @@ const table = pageEvents.slice(pageEvents.indexOf("const PAGE_EVENTS = {"), page
 const PAGE_EVENTS = collect([table], /^ {2}on[A-Za-z]+: "([A-Za-z]+)",$/gm);
 
 const chromiumView = files(/^ArdiaWebView.*\.mm$/).map(native);
-const frameCallers = [...chromiumView, native("ArdiaFairPlay.mm"), native("ArdiaVideoMirror.mm"), ...files(/^ArdiaHLSVideo.*\.mm$/).map(native), ...files(/^ArdiaPVSession.*\.mm$/).map(native)];
 const chromiumEmitters = files(/\.mm$/).map(native);
 const webKitTab = files(/^WebKitTab.*\.swift$/).map(native);
 const pageScript = native("page_script.js");
@@ -81,7 +80,7 @@ test("the popup's streaming-site list is PROTECTED_VIDEO_SITES, https only, subd
 });
 
 test("every kind native sends into a frame has a page-script handler, and every handler has a sender", () => {
-  const called = collect(frameCallers, /kind:@"([A-Za-z]+)"/g);
+  const called = collect(chromiumView, /kind:@"([A-Za-z]+)"/g);
   const handled = collect([pageScript], /\bhandlers\.([A-Za-z]+) =/g);
   assert.deepEqual(sorted(handled), sorted(called));
 });

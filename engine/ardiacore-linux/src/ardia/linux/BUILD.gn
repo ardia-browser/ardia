@@ -306,6 +306,7 @@ source_set("linux") {
     "ac_linux_typeahead_input.cc",
     "ac_linux_typeahead_input.h",
     "ac_linux_suggest_policy.h",
+    "ac_linux_switcher_keys.h",
     "ac_linux_system.cc",
     "ac_linux_system.h",
     "ac_linux_telemetry.cc",

@@ -12,7 +12,7 @@ import * as engines from "./hostEngines.ts";
 const hidden = [
   "general.defaultBrowser", "general.openAtLogin", "advanced.ardiaCommand", "advanced.compactCliPill", "tabs.videoUpscaling",
   "tabs.openLinksInLittleArdia", "tabs.peekLinksToOtherSites", "tabs.appLinksFirst", "tabs.popupsOpenAsTabs",
-  "advanced.pageEngine", "advanced.fairPlayInChromium", "advanced.websiteEngines",
+  "advanced.pageEngine", "advanced.websiteEngines",
 ];
 
 test("Settings navigation and search leave out the unavailable Web engine rows and platform rows", () => {

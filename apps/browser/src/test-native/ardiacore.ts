@@ -548,7 +548,6 @@ const fakeModules = {
     setPeekOtherSiteTabs: () => null,
     setSelectionPopover: () => null,
     setBlockAutoplayEverywhere: () => null,
-    setFairPlayInChromium: () => null,
     setCommandScrollZoom: () => null,
     setLittleArdiaOpensNewTabLinks: () => null,
     setPopupsOpenAsTabs: () => null,

@@ -50,6 +50,7 @@ check patches-build-tests python3 -m unittest discover -s engine/patches/build/t
 check chromium-ardia-tests python3 -m unittest discover -s engine/chromium/src/chrome/browser/ardia/tests
 check ardiacore-linux-bootstrap node --test engine/ardiacore-linux/tests/bootstrap.test.mjs
 check linux-smoke-gate node --test scripts/linux/smoke.test.mjs
+check linux-ubo-seed node --test scripts/linux/ubo-seed.test.mjs
 
 modules=$(cd engine/ardiacore-linux/tests && ls test_*.py | sed 's/\.py$//')
 started=$(date +%s)

@@ -102,7 +102,8 @@ package job red after almost every merge.
   4. installs uv and builds the CLI with `apps/cli/scripts/build.sh <version> <dist> --platform linux-x64`; its Python
      and esbuild downloads are cached;
   5. prepares uBlock Origin with `scripts/linux/fetch-ubo.sh` (cached);
-  6. runs `scripts/linux/package.py --out <engine> --version <version> --cli <CLI tarball>`;
+  6. runs `scripts/linux/package.py --out <engine> --version <version> --cli <CLI tarball>`, which seeds the packaged
+     uBlock Origin by running the staged `chrome` once (`scripts/linux/ubo-seed.mjs`);
   7. runs the smoke gate, with `--allow-old-engine` when the engine is a nearest one;
   8. uploads the tarball, the CLI tarball, their SHA-256 files and `results.json` for seven days.
 

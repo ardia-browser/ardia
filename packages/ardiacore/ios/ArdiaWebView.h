@@ -105,7 +105,6 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)setDisplayMediaPicker:(BOOL)enabled;
 + (void)setSelectionPopoverEnabled:(BOOL)enabled NS_SWIFT_NAME(setSelectionPopoverEnabled(_:));
 + (void)setBlockAutoplayEverywhere:(BOOL)enabled NS_SWIFT_NAME(setBlockAutoplayEverywhere(_:));
-+ (void)setFairPlayInChromium:(BOOL)enabled NS_SWIFT_NAME(setFairPlayInChromium(_:));
 - (void)resolveDisplayMedia:(NSString *)requestId sourceId:(nullable NSString *)sourceId audio:(BOOL)audio
     NS_SWIFT_NAME(resolveDisplayMedia(_:sourceId:audio:));
 @end

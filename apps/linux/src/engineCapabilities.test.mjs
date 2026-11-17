@@ -103,7 +103,7 @@ test("with every new capability on, each Settings row the engine unlocks is show
     if (id !== "automations.meetingAlertCondition") assert.ok(without.has(id), `${id} stays hidden on an engine without it`);
   }
   for (const id of ["tabs.videoUpscaling", "advanced.ardiaCommand", "advanced.compactCliPill"]) assert.equal(settings.settingUnavailable(id), true, `${id} still waits for its own backend`);
-  for (const id of ["advanced.pageEngine", "advanced.fairPlayInChromium", "advanced.websiteEngines"]) assert.equal(searchable.has(id), false, id);
+  for (const id of ["advanced.pageEngine", "advanced.websiteEngines"]) assert.equal(searchable.has(id), false, id);
 });
 
 test("with every new capability on, each command, menu entry and shortcut row appears", () => {

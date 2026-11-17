@@ -2,8 +2,6 @@
 #import "ArdiaWebViewInternal.h"
 #import "ArdiaPiPThrowMath.h"
 
-#import <QuartzCore/QuartzCore.h>
-
 #include <vector>
 
 @interface NSWindow (ArdiaPreventsActivation)
@@ -175,11 +173,5 @@ NSPoint PointerOf(NSEvent *event);
 ardia_pip_throw::Rect ThrowRect(NSRect r);
 int ScreenIndex(NSScreen *screen);
 std::vector<ardia_pip_throw::Screen> ThrowScreens();
-void PrepareSystemPictureInPicture();
-BOOL UserAskedToRestore();
-void ForceActivate(NSString *why);
-void RoundVideoCorners(CALayer *layer, CAShapeLayer *caps, CGFloat radius, NSColor *backdrop, NSRect full, NSRect visible, BOOL hostFlipped,
-                       BOOL layerFlipped);
-void BackToTab(ArdiaCoreTab *tab, NSString *why);
 
 }

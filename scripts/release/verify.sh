@@ -26,7 +26,7 @@ for key in SUFeedURL SUPublicEDKey NSDockTilePlugIn NSCameraUsageDescription NSM
 done
 [ -d "$app/Contents/Frameworks/Sparkle.framework" ] || die "no Sparkle.framework"
 [ -d "$app/Contents/PlugIns/ArdiaDockTile.plugin" ] || die "no dock tile plug-in"
-[ -x "$app/Contents/Helpers/ArdiaFairPlay.app/Contents/MacOS/ArdiaFairPlay" ] || die "no FairPlay helper"
+[ ! -e "$app/Contents/Helpers/ArdiaFairPlay.app" ] || die "the removed FairPlay helper is still in the app"
 [ -f "$app/Contents/embedded.provisionprofile" ] || die "no Developer ID provisioning profile (keychain groups need it)"
 [ -f "$app/Contents/Resources/Extensions/ublock/manifest.json" ] || die "no uBlock Origin in the app"
 [ -f "$app/Contents/Resources/ContentRules/rulesets.json" ] || die "no WebKit content rules in the app"
@@ -45,10 +45,6 @@ if grants_browser_passkeys "$app/Contents/embedded.provisionprofile"; then
 else
   [[ "$app_ents" != *web-browser.public-key-credential* ]] || die "the app is signed with com.apple.developer.web-browser.public-key-credential, which its profile doesn't grant"
 fi
-fairplay_ents="$(entitlements "$app/Contents/Helpers/ArdiaFairPlay.app")"
-for key in com.apple.security.app-sandbox com.apple.security.network.client; do
-  [ "$(plutil -extract "${key//./\\.}" raw -o - - <<< "$fairplay_ents" 2>/dev/null)" = true ] || die "the FairPlay helper lacks $key"
-done
 for helper in "$fwv"/Helpers/*"Renderer).app" "$fwv"/Helpers/*"GPU).app"; do
   [[ "$(entitlements "$helper")" == *cs.allow-jit* ]] || die "$(basename "$helper") lost allow-jit"
 done

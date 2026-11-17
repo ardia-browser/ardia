@@ -82,7 +82,8 @@ The acceptance suite is in [linux-acceptance.md](linux-acceptance.md) and CI in 
   `setBlockAutoplayEverywhere`.
 - **Block autoplay on every site.** As on macOS, a page's autoplay is blocked when its site's autoplay setting is Block,
   or when `webView.setBlockAutoplayEverywhere` is on and the site has no exception of its own (`ac_linux_autoplay.cc`).
-  Turning it on or off re-sends the config to open pages and updates Chromium's own autoplay policy for them.
+  It covers web pages and local files (`http`, `https` and `file`); the shell and extension pages keep Chromium's
+  own policy. Turning it on or off re-sends the config to open pages and updates Chromium's own autoplay policy for them.
 - **Theme swatches.** `ThemeSwatch` (the Mac's `ThemeSwatchView`: the anonymous-ID avatar, the theme editor's
   swatches, preview and colour pad) is drawn by the shell (`shims/shaders.tsx`, `shims/web/gl/themeSwatch.ts`): the
   same 17 Oklab samples and start and end points as `ArcGradientLayer`, the third colour's overlay, the hue pad, and
@@ -536,6 +537,14 @@ command ([linux-ci.md](linux-ci.md) › Linux releases).
 - **Content blocker.** `fetch-ubo.sh` prepares the same pinned, patched uBlock Origin build macOS embeds, by running
   `packages/ardiacore/scripts/ubo.sh` with `flock` and `sha256sum` standing in for `lockf` and `shasum`. Without
   `--content-blocker` the package has no blocker, and Settings says so.
+- **Seeded blocker.** With a blocker, package.py runs `scripts/linux/ubo-seed.mjs` on its staged copy (skip it with
+  `--no-ubo-seed`). The script starts the staged `chrome` once on a scratch profile in English, waits for uBlock
+  Origin to fetch and compile its default lists and save its engine, and writes that storage to
+  `extensions/ublock/ardia-seed/storage.json`, without the raw and compiled list copies uBlock Origin can rebuild. It
+  also patches the staged `js/start.js` to load the seed first thing into a profile whose uBlock Origin storage is
+  empty, when the seed's uBlock Origin version is the running one and the profile's languages select no regional list
+  the seed lacks (otherwise uBlock Origin compiles its own lists, as before). A seeded profile skips uBlock Origin's
+  first-install restart and list compile and loads the saved engine. Packaging takes about a minute longer.
 - **Modes.** package.py sets every directory and executable to 0755 and every other file to 0644 before archiving,
   so a package built under a umask of 002, Ubuntu's default, matches one built under 022.
 - **Archive contents.**
@@ -987,14 +996,15 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
   At most 512 lists and 10,000 directives of 2 KiB.
 - **Navigation hold.** Until an isolated profile's blocker is ready on its first load in a run,
   `chromium-linux-navigation-hold-hook.patch` holds its page navigations for at most 2 s. Internal schemes aren't held.
-  The app profile is never held, as on macOS: on a fresh profile uBlock Origin restarts itself once and compiles its
-  lists, about 12 s on a loaded Xvfb box, so the first pages of a new install load unfiltered rather than wait.
+  The app profile is never held, as on macOS. A new profile loads the packaged seed (see Seeded blocker), so its
+  first pages wait only for the saved engine to load; without a seed uBlock Origin restarts itself once and compiles
+  its lists, about 12 s on a loaded Xvfb box, and the first pages of a new install load unfiltered meanwhile.
 - **Saved engine.** `ubo.sh` makes uBlock Origin save its compiled engine (its selfie) 3 s after its lists change
   instead of 53 s. Without it, a launch that ended within about a minute of the first one left no selfie, and the next
   launch rebuilt the engine from the compiled lists (about 3.2 s here) while its page requests waited on uBlock's
-  blocking listener: first tab paint was about 3.8 s instead of 2.0 s on an existing profile. A new install still
-  pays uBlock's own restart and list compile once, about 11 s on the same box. The smoke test's `content-blocker` check fails a
-  package whose `js/background.js` lacks this delay or the 600 s update delay after launch.
+  blocking listener: first tab paint was about 3.8 s instead of 2.0 s on an existing profile. The smoke test's
+  `content-blocker` check fails a package whose `js/background.js` lacks this delay or the 600 s update delay after
+  launch, or whose blocker has no seed that `js/start.js` loads.
 
 ### Memory Saver
 

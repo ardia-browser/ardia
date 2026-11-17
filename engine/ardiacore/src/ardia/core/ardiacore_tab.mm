@@ -182,7 +182,13 @@ using ardiacore::NS;
   namespace policies = performance_manager::policies;
   using performance_manager::PerformanceManager;
   NSArray<NSNumber*>* unavailable = @[ @-1 ];
-  if (!_contents || !PerformanceManager::IsAvailable()) {
+  if (!_contents) {
+    return unavailable;
+  }
+  if (_contents->WasDiscarded()) {
+    return @[];
+  }
+  if (!PerformanceManager::IsAvailable()) {
     return unavailable;
   }
   base::WeakPtr<performance_manager::PageNode> page =

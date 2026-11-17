@@ -35,6 +35,8 @@ struct ModalRegistry {
   std::atomic<int> threads{0};
   std::atomic<ULONGLONG> stoppedAt{0};
   std::atomic<ULONGLONG> releasedAt{0};
+  std::atomic<DWORD> menuThread{0};
+  std::atomic<bool> withheldResign{false};
   std::mutex parentsLock;
   std::set<HWND> parents;
 
@@ -77,6 +79,10 @@ inline void ReleaseAllModals() noexcept {
   ModalRegistry::Shared().releasedAt = GetTickCount64();
   ModalRegistry::Shared().releases++;
   WakeModals();
+}
+
+inline bool ActivatesMenuThread(DWORD thread) noexcept {
+  return thread && thread == ModalRegistry::Shared().menuThread.load();
 }
 
 inline ULONGLONG AskedToCloseAt() noexcept {
@@ -327,14 +333,14 @@ inline bool RegisterModalParent() noexcept {
 }
 
 struct ModalParent {
-  ModalParent(HWND owner, bool givesFocusBack) noexcept : m_owner(owner), m_givesFocusBack(givesFocusBack) {
+  ModalParent(HWND owner, bool givesFocusBack, bool disablesOwner = true) noexcept : m_owner(owner), m_givesFocusBack(givesFocusBack), m_disablesOwner(disablesOwner) {
     if (!owner || !RegisterModalParent()) return;
     RECT area{};
     if (!GetWindowRect(owner, &area)) return;
     m_window = CreateWindowExW(WS_EX_TOOLWINDOW, ModalParentClass, L"", WS_POPUP, area.left, area.top, area.right - area.left, area.bottom - area.top, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
     if (m_window) Listed(true);
     m_ownerWasEnabled = IsWindowEnabled(owner) != FALSE;
-    if (m_ownerWasEnabled) EnableWindow(owner, FALSE);
+    if (m_ownerWasEnabled && m_disablesOwner) EnableWindow(owner, FALSE);
   }
   ~ModalParent() noexcept {
     Release();
@@ -368,7 +374,7 @@ struct ModalParent {
     NoteModalDialog(m_owner, nullptr);
     if (!m_owner || !IsWindow(m_owner) || !m_ownerWasEnabled || Stopping()) return;
     bool hadFocus = m_givesFocusBack && DialogInFront();
-    EnableWindow(m_owner, TRUE);
+    if (m_disablesOwner) EnableWindow(m_owner, TRUE);
     if (hadFocus) SetForegroundWindow(m_owner);
   }
 
@@ -406,6 +412,7 @@ struct ModalParent {
 
   HWND m_owner;
   bool m_givesFocusBack;
+  bool m_disablesOwner;
   HWND m_window = nullptr;
   bool m_ownerWasEnabled = false;
   bool m_released = false;

@@ -61,10 +61,10 @@ test("the command bar's Dictate button follows the dictation capability: off whi
 });
 
 test("unavailable choices map to exact settings ids and the Web engine rows", () => {
-  const ids = ["general.defaultBrowser", "general.openAtLogin", "general.askBefore", "advanced.pageEngine", "advanced.fairPlayInChromium", "advanced.websiteEngines", "profiles.otherEngines", "advanced.ardiaCommand", "advanced.compactCliPill", "advanced.showFullUrl", "tabs.videoUpscaling", "tabs.autoPictureInPicture"];
+  const ids = ["general.defaultBrowser", "general.openAtLogin", "general.askBefore", "advanced.pageEngine", "advanced.websiteEngines", "profiles.otherEngines", "advanced.ardiaCommand", "advanced.compactCliPill", "advanced.showFullUrl", "tabs.videoUpscaling", "tabs.autoPictureInPicture"];
   const unrouted = ["tabs.openLinksInLittleArdia", "tabs.appLinksFirst", "tabs.peekLinksToOtherSites", "tabs.popupsOpenAsTabs"];
   const routedRows = { peekOtherSites: true, popupsOpenAsTabs: true, linksFromOtherApps: true };
-  const webEngine = ["advanced.fairPlayInChromium", "advanced.pageEngine", "advanced.websiteEngines"];
+  const webEngine = ["advanced.pageEngine", "advanced.websiteEngines"];
   const none = linuxCapabilities(fakeHost().host);
   assert.deepEqual([...unavailableSettingIds(none, ids)].sort(), [...unrouted, ...webEngine, "advanced.ardiaCommand", "advanced.compactCliPill", "general.autoUpdate", "general.defaultBrowser", "general.openAtLogin", "tabs.videoUpscaling"].sort());
   for (const [capability, rows] of Object.entries({ peekOtherSites: ["tabs.peekLinksToOtherSites"], popupsOpenAsTabs: ["tabs.popupsOpenAsTabs"], linksFromOtherApps: ["tabs.openLinksInLittleArdia", "tabs.appLinksFirst"] })) {

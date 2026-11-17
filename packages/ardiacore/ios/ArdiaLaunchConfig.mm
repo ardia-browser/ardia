@@ -40,7 +40,6 @@ NSArray<NSString *> *AppTestKeys() {
     @"pipSelfTest", @"pipHover", @"fakeFullScreenMs", @"shadersKeyWindow", @"peekStrict", @"importSecret", @"importDiaBundleId", @"importDiaWindows",
     @"cliInstallScript", @"legacySource", @"legacyCrashAfter", @"bangsUrl", @"onboarding", @"whatsNew", @"telemetry",
     @"liveMock", @"calendarFixture", @"appMenu", @"appDialog", @"loginsTimeout", @"screenRecording", @"systemLocationPermission",
-    @"videoMirror", @"protectedVideoOrigin",
   ];
 }
 
@@ -52,7 +51,7 @@ NSArray<NSString *> *KeysWhoseValuesHoldCommas() {
 }
 
 NSArray<NSString *> *TraceAreas() {
-  return @[ @"visibility", @"pip", @"pipZoom", @"trafficLights", @"profileGate", @"protectedVideo", @"videoMirror" ];
+  return @[ @"visibility", @"pip", @"pipZoom", @"trafficLights", @"profileGate" ];
 }
 
 void Note(NSString *line) {

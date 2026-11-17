@@ -187,7 +187,6 @@ export type EngineCalls = {
   "webView.setPeekOtherSiteTabs": [{ tabIds: string[] }, null];
   "webView.setSelectionPopover": [{ enabled: boolean }, null];
   "webView.setBlockAutoplayEverywhere": [{ enabled: boolean }, null];
-  "webView.setFairPlayInChromium": [{ enabled: boolean }, null];
   "webView.setCommandScrollZoom": [{ enabled: boolean }, null];
   "webView.setLittleArdiaOpensNewTabLinks": [{ enabled: boolean }, null];
   "webView.setPopupsOpenAsTabs": [{ enabled: boolean }, null];

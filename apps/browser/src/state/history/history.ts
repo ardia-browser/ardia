@@ -3,7 +3,8 @@ import type { StateCreator } from "zustand";
 import type { BrowserState } from "../browser/store";
 import { engineProfile, isIncognitoProfile } from "../browser/model";
 import { engineProfiles } from "../profiles/engineProfiles";
-import type { HistoryEntry } from "../browser/types";
+import type { ClosedTab, HistoryEntry } from "../browser/types";
+import { withImportedCleaned } from "../pins/importedCleaned";
 import { isWebPageUrl } from "../../lib/url";
 
 export type HistoryView = { list: HistoryEntry[]; floor: number; ready: boolean };
@@ -14,6 +15,7 @@ export type HistorySlice = {
   removeHistory(profileId: string, urls: string[]): void;
   clearHistory(profileId: string, since?: number, until?: number): void;
   importHistory(profileId: string, entries: Omit<HistoryEntry, "favicon">[]): number;
+  importCleanedTabs(entries: ClosedTab[]): { added: number; already: number };
 };
 
 export const MAX_HISTORY = 100_000;
@@ -76,6 +78,12 @@ export const createHistorySlice: StateCreator<BrowserState, [], [], HistorySlice
     const gone = new Set(urls);
     set((s) => withHistoryList(s, engineProfile(s, profileId), historyOf(s, profileId).filter((h) => !gone.has(h.url))));
     void deleteHistoryUrls(engineProfile(get(), profileId), urls).catch(failed("delete"));
+  },
+
+  importCleanedTabs(entries) {
+    const { cleanedTabs, added, already } = withImportedCleaned(get(), entries);
+    if (added) set({ cleanedTabs });
+    return { added, already };
   },
 
   importHistory(profileId, entries) {

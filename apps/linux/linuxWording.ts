@@ -155,6 +155,10 @@ export const LINUX_WORDING: readonly Wording[] = [
         "`${NOT_BROUGHT} macOS didn't allow Ardia to ask Dia for them. Allow it in System Settings › Privacy & Security › Automation, then import again.`",
         "`${NOT_BROUGHT} Ardia wasn't allowed to ask Dia for them.`",
       ],
+      [
+        "\"Dia's Favorites weren't imported: they're in its sidebar file, which needs the keychain access you skipped.\"",
+        "\"Dia's Favorites weren't imported: they're in its sidebar file, which needs the keyring access you skipped.\"",
+      ],
     ],
   },
   {

@@ -238,6 +238,8 @@ function shownReposReleased(s: LiveState, folderId: string, fetchedSources: Set<
   return keptOut && still && still.length !== keptOut.length ? { repoHidden: { ...s.repoHidden, [folderId]: still } } : {};
 }
 
+const sameList = <T>(a: readonly T[], b: readonly T[]) => a.length === b.length && a.every((x, i) => x === b[i]);
+
 export function applyFetch(folderId: string, fetched: LiveItem[], gone: Record<string, CompletionState>, now = Date.now(), quiet: Set<string> = new Set(), fence?: unknown, fetchedSources: Set<LiveSourceId> = new Set()) {
   const intent: LivePersistenceIntent = { kind: "refresh", folderId, fence, completionIds: [] };
   setLive((s) => {
@@ -268,11 +270,12 @@ export function applyFetch(folderId: string, fetched: LiveItem[], gone: Record<s
       ...(s.completed[folderId] ?? []).filter((c) => !ids.has(c.item.id) && !leaving.some((l) => l.id === c.item.id)),
     ].slice(0, MAX_COMPLETED);
     const stillThere = new Set(merged.map((it) => it.id));
+    const unread = first ? [] : [...new Set([...(s.unread[folderId] ?? []), ...unreadFresh])].filter((id) => stillThere.has(id));
     return {
-      items: { ...s.items, [folderId]: merged },
+      items: sameList(merged, prev) ? s.items : { ...s.items, [folderId]: merged },
       hidden: stillHidden.length === wasHidden.length && stillHidden.every((it, i) => it === wasHidden[i]) ? s.hidden : { ...s.hidden, [folderId]: stillHidden },
-      known: { ...s.known, [folderId]: [...known, ...fresh].slice(-MAX_KNOWN) },
-      unread: { ...s.unread, [folderId]: first ? [] : [...new Set([...(s.unread[folderId] ?? []), ...unreadFresh])].filter((id) => stillThere.has(id)) },
+      known: fresh.length || !s.known[folderId] ? { ...s.known, [folderId]: [...known, ...fresh].slice(-MAX_KNOWN) } : s.known,
+      unread: s.unread[folderId] && sameList(unread, s.unread[folderId]) ? s.unread : { ...s.unread, [folderId]: unread },
       completed: leaving.length || (s.completed[folderId] ?? []).length !== completed.length ? { ...s.completed, [folderId]: completed } : s.completed,
       completing: leaving.length ? { ...s.completing, [folderId]: [...(s.completing[folderId] ?? []), ...leaving.map((l) => l.id)] } : s.completing,
       status: { ...s.status, [folderId]: { state: "idle", lastFetch: now, error: null } },

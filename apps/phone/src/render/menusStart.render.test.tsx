@@ -96,19 +96,12 @@ test("the start page's plus keeps its tap, and its long press is the system menu
   unmount(privately);
 });
 
-test("the space switcher is a tap menu of the spaces in fixed order, checked and with main's symbols, and picking one switches", () => {
+test("the space's name opens no menu of the spaces, with one space or several", () => {
   withSpaces([profile("work", "Work", [], "briefcase"), profile("home", "Home")]);
-  const select = jest.spyOn(syncActions, "selectProfile").mockImplementation(() => undefined);
   const root = start();
-  const switcher = menuAround(root, "Space, Work")!;
-  expect(switcher.props.trigger).toBe("tap");
-  expect(switcher.props.fixedOrder).toBe(true);
-  expect(items(switcher)).toEqual([
-    { id: "0", title: "Work", systemImage: "briefcase", checked: true },
-    { id: "1", title: "Home", systemImage: "h.circle.fill" },
-  ]);
-  choose(switcher, "Home");
-  expect(select).toHaveBeenCalledWith("home");
+  expect(menuAround(root, "Space, Work")).toBeUndefined();
+  expect(contextMenus(root).filter((menu) => titles(items(menu)).includes("Home"))).toHaveLength(0);
+  expect(root.root.findAll((node) => node.props.accessibilityRole === "header" && node.props.accessibilityLabel === "Work")).not.toHaveLength(0);
   unmount(root);
 });
 

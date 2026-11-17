@@ -10,6 +10,7 @@ import { useOnboarding } from "../../../state/onboarding/onboarding";
 import { Button, space, Symbol, Text, useTheme } from "../../ui";
 import { APP, kindTitle } from "../model";
 import { Spacer, Title } from "../Parts";
+import { ExtensionListingView } from "./ExtensionListing";
 import { importLayout, importMotion, importType } from "../tokens";
 
 function summaryOf(counts: ImportCounts) {
@@ -21,14 +22,19 @@ function summaryOf(counts: ImportCounts) {
     counts.addresses && `${counts.addresses} ${counts.addresses === 1 ? "address" : "addresses"}`,
     counts.cards && plural(counts.cards, "card"),
     counts.tabs && plural(counts.tabs, "tab"),
+    counts.rules && plural(counts.rules, "Air Traffic Control rule"),
+    counts.archived && plural(counts.archived, "archived tab"),
+    counts.settings && plural(counts.settings, "setting"),
   ].filter(Boolean) as string[];
 }
 
 function ExtensionList({ flow }: { flow: ImportFlow }) {
   const { source, step } = flow;
   const onboarding = useOnboarding((s) => s.windowId !== null);
-  if (step.name !== "done" || !step.extensions.list.length) return null;
+  if (step.name !== "done") return null;
   const { extensions } = step;
+  if (extensions.listing) return <ExtensionListingView listing={extensions.listing} sourceName={source?.name ?? "Your browser"} />;
+  if (!extensions.list.length) return null;
   const centered = { textAlign: "center" } as const;
   return (
     <View style={{ alignSelf: "stretch", marginTop: space.xl, gap: space.m }}>

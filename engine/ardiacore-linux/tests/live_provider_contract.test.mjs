@@ -185,7 +185,7 @@ test("GitHub: bad credentials, the primary and secondary rate limits and SAML en
   serve("api.github.com /graphql", "badCredentials");
   await rejectsWith(SOURCES.github.fetch(prFolder), "signedOut");
   serve("api.github.com /graphql", "primaryRateLimit");
-  await rejectsWith(SOURCES.github.fetch(prFolder), "rateLimited", /rate limit already exceeded/);
+  await rejectsWith(SOURCES.github.fetch(prFolder), "rateLimited", /^Rate Limit Exceeded$/);
   serve("api.github.com /graphql", "secondaryRateLimit");
   await rejectsWith(SOURCES.github.fetch(prFolder), "rateLimited");
   serve("api.github.com /graphql", "secondaryRateLimitNoRetryAfter");

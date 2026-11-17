@@ -63,7 +63,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
     return () => cancelAnimationFrame(frame);
   }, [beside]);
   const offScreen = beside && !current;
-  const playerTab = useSidebarPlayerTab(windowId, profileId);
+  const playerTab = useSidebarPlayerTab(windowId, profileId, current);
   const playerHeight = playerTab ? SIDEBAR_PLAYER_HEIGHT : 0;
   const playerMotion = usePlayerMotion();
   const cells = useSidebarCells(windowId, profileId, offScreen);

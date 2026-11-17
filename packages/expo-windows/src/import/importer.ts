@@ -2,10 +2,12 @@ import { findBrowser, isChromiumBased, type Browser } from "./browsers";
 import { chromiumBookmarks, faviconPages, readFavicons, readHistory } from "./chromium";
 import { dataDirectory, profileDirectory } from "./discovery";
 import { firefoxBookmarks, loadFirefoxSession } from "./firefox";
+import { mergeFirefoxFavicons } from "./firefoxFavicons";
 import { entries, join, type ImportHost, type Secrets } from "./host";
 import { checkCancelled, ImportFailure, KIND_ORDER, linkCount, plural, warningCode, type ImportKind, type Observer, type Options, type Result } from "./model";
 import { loadSession } from "./sessions";
-import { Sidebars, takeSpaces } from "./sidebars";
+import { arcFilePath, readArcArchive, readArcRouting, Sidebars, takeSpaces } from "./sidebars";
+import { ARC_ICON_CACHE, cachedArcFavicons, preferringCached } from "./arcExtras";
 import { snapshotFailure } from "./sqlite";
 import { zenFavicons } from "./zenSidebar";
 
@@ -113,6 +115,12 @@ export async function importProfile(
       } else if (kind === "favorites" && browser.sidebar === "zen") {
         result.favorites = (await sidebars.zenSidebar()).essentials;
         count = result.favorites.length;
+      } else if (kind === "linkRules" && browser.sidebar === "arc") {
+        result.arcRouting = await readArcRouting(host, await sidebars.arcSidebar().catch(() => null));
+        count = result.arcRouting.rules.length;
+      } else if (kind === "archive" && browser.sidebar === "arc") {
+        result.arcArchive = await readArcArchive(host, await sidebars.arcSidebar().catch(() => null));
+        count = result.arcArchive.tabs.length;
       } else if (kind === "autofill" && chromium) {
         if (!(await entries(host, dir)).some((e) => e.name === "Web Data")) throw new ImportFailure("notFound", "No autofill data in this profile");
         const file = join(dir, "Web Data");
@@ -186,10 +194,21 @@ export async function importProfile(
     checkCancelled(observer);
     result.favicons = await readFavicons(host, [dir], faviconPages(result)).catch(() => []);
   }
+  const arc = sidebars.loadedArc();
+  if (arc) {
+    const read = (name: string, largest: number) => host.readBase64Within(arcFilePath(host), arcFilePath(host, ARC_ICON_CACHE, name), largest);
+    const cached = await cachedArcFavicons(read, arc.iconItems, faviconPages(result), result.favicons).catch(() => []);
+    result.favicons = preferringCached(cached, result.favicons);
+    result.arcCachedIcons = cached.length;
+  }
   const zen = sidebars.loadedZen();
   if (zen) {
     result.favicons = zenFavicons(zen, faviconPages(result));
     result.separateEssentials = zen.separateEssentials;
+  }
+  if (browser.family === "firefox") {
+    checkCancelled(observer);
+    result.favicons = await mergeFirefoxFavicons(host, dir, faviconPages(result), result.favicons, () => observer.cancelled());
   }
   return result;
 }

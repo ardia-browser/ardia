@@ -29,6 +29,7 @@ import struct
 import subprocess
 import tempfile
 import zipfile
+import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SUPPORT = os.path.join(HERE, "home", "Library", "Application Support")
@@ -364,6 +365,41 @@ PNG_1PX = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
 
 
+def chromium_extensions(profile_dir, pinned, entries):
+    path = os.path.join(profile_dir, "Preferences")
+    with open(path) as f:
+        prefs = json.load(f)
+    settings = {}
+    for ext_id, entry, manifest in entries:
+        settings[ext_id] = entry
+        if manifest and "path" in entry and not entry["path"].startswith("/"):
+            write_json(os.path.join(profile_dir, "Extensions", entry["path"], "manifest.json"), manifest)
+    prefs["extensions"] = {"pinned_extensions": pinned, "settings": settings}
+    write_json(path, prefs)
+
+
+def chrome_extensions(root):
+    clip, notes, focus, old, dev, sso, later = ("f" * 32, "g" * 32, "h" * 32, "i" * 32, "j" * 32, "k" * 32, "l" * 32)
+    clip_saver = (clip, {"from_webstore": True, "location": 1, "path": f"{clip}/3.2_0", "disable_reasons": []},
+                  {"name": "Clip Saver", "version": "3.2", "manifest_version": 3})
+    chromium_extensions(os.path.join(root, "Default"), [clip, notes], [
+        clip_saver,
+        (notes, {"from_webstore": True, "location": 1, "path": f"{notes}/1.5_0", "disable_reasons": [1]},
+         {"name": "Tab Notes", "version": "1.5", "manifest_version": 3}),
+        (old, {"from_webstore": True, "location": 1, "path": f"{old}/2.0_0"},
+         {"name": "Old Toolbar", "version": "2.0", "manifest_version": 2}),
+        (dev, {"from_webstore": False, "location": 4, "path": "/Users/someone/dev-helper", "manifest": {"name": "Dev Helper"}}, None),
+        (sso, {"from_webstore": True, "location": 9, "manifest": {"name": "Company SSO"}}, None),
+    ])
+    chromium_extensions(os.path.join(root, "Profile 1"), [focus, clip], [
+        clip_saver,
+        (focus, {"from_webstore": True, "location": 1, "path": f"{focus}/4.0_0", "disable_reasons": []},
+         {"name": "Focus Timer", "version": "4.0", "manifest_version": 3}),
+        (later, {"from_webstore": True, "location": 1, "path": f"{later}/2.0_0", "disable_reasons": []},
+         {"name": "Read Later", "version": "2.0", "manifest_version": 3}),
+    ])
+
+
 def build_chrome():
     root = os.path.join(SUPPORT, "Google", "Chrome")
     chromium_local_state(root, {
@@ -458,6 +494,7 @@ def build_chrome():
                        bar=[bookmark("Work wiki", "https://wiki.work.example/", t, "00000000-0000-4000-8000-000000000301")],
                        other=[], synced=[])
     chromium_history(os.path.join(p1, "History"), [("https://work.example/", "Work", 3, 1, BASE_UNIX - 10, 0)])
+    chrome_extensions(root)
 
 
 def build_brave():
@@ -973,7 +1010,7 @@ def build_arc():
         {"id": "S-WORK", "title": "Work",
          "profile": {"custom": {"_0": {"directoryBasename": "Profile 1", "machineID": "M-1"}}},
          "newContainerIDs": [{"pinned": {}}, "W-PIN", {"unpinned": {"_0": {"shared": {}}}}, "W-TODAY"],
-         "customInfo": {"iconType": {"icon": "briefcase"},
+         "customInfo": {"iconType": {"icon": "construction"},
                         "windowTheme": arc_theme("blue-teal")}},
         {"id": "S-UNTITLED",
          "profile": {"default": True},
@@ -998,6 +1035,85 @@ def build_arc():
         "version": 1,
     }
     write_json(os.path.join(arc, "StorableSidebar.json"), sidebar)
+    build_arc_extras(arc, ref)
+
+
+ARC_ICON_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGP8z8DAwMDAxMDAwMDAAAANHQEDasKb6QAAAABJRU5ErkJggg==")
+
+
+def arc_route(text, destination, matches=False):
+    style = {"matches": {}} if matches else {"contains": {}}
+    return {"id": "R-" + hashlib.md5(text.encode()).hexdigest()[:8], "destination": destination,
+            "sourceComponents": [{"id": "C-" + text, "componentType": {"urlMatch": {"_0": style, "_1": text}}}]}
+
+
+def build_arc_extras(arc, ref):
+    most_recent = {"space": {"_0": {"mostRecent": {}}}}
+    write_json(os.path.join(arc, "StorableLinkRouting.json"), {
+        "rules": [
+            arc_route("meet.google.com", most_recent),
+            arc_route("jira.example/browse", {"space": {"_0": {"space": {"_0": "S-WORK"}}}}),
+            arc_route("https://www.docs.example/", {"littleArc": {"_0": {"mostRecent": {}}}}),
+            arc_route("calendar.example", {"littleArc": {"_0": {"space": {"_0": "S-PERSONAL"}}}}, matches=True),
+            arc_route("gone.example", {"space": {"_0": {"space": {"_0": "S-DELETED"}}}}),
+            arc_route("  ", most_recent),
+            {"id": "R-unknown-op", "destination": most_recent,
+             "sourceComponents": [{"id": "C-op", "componentType": {"urlMatch": {"_0": {"startsWith": {}}, "_1": "x.example"}}}]},
+            {"id": "R-two-parts", "destination": most_recent,
+             "sourceComponents": [{"id": "C-a", "componentType": {"urlMatch": {"_0": {"contains": {}}, "_1": "a.example"}}},
+                                  {"id": "C-b", "componentType": {"urlMatch": {"_0": {"contains": {}}, "_1": "b.example"}}}]},
+            arc_route("profile.example", {"space": {"_0": {"profile": {"_0": "P-1"}}}}),
+        ],
+        "defaultDestination": most_recent,
+        "version": 1,
+    })
+
+    def archived(id_, url, title, seconds_ago, space, rename=None, reason="manual"):
+        return {"archivedAt": ref - seconds_ago, "reason": reason,
+                "source": {"space": {"_0": space}} if space else {"littleArc": {}},
+                "sidebarItem": {"id": id_, "parentID": None, "childrenIds": [], "title": rename, "isUnread": False,
+                                "createdAt": ref - seconds_ago - 600,
+                                "data": {"tab": {"savedURL": url, "savedTitle": title, "timeLastActiveAt": ref - seconds_ago}}}}
+
+    items = [
+        archived("A-1", "https://old-news.example/", "Old news", 7200, "S-PERSONAL", reason="auto"),
+        archived("A-2", "https://report.example/q3", "Q3 report", 3600, "S-WORK", rename="Report"),
+        archived("A-3", "https://little.example/", "From Little Arc", 1800, None),
+        archived("A-4", "https://ghost.example/", "Deleted space", 900, "S-DELETED"),
+        {"archivedAt": ref - 600, "reason": "manual", "source": {"space": {"_0": "S-PERSONAL"}},
+         "sidebarItem": {"id": "A-5", "title": "A folder", "data": {"list": {}}}},
+        archived("A-6", "file:///Users/someone/notes.txt", "Local file", 300, "S-PERSONAL"),
+    ]
+    flat = []
+    for item in items:
+        flat += [item["sidebarItem"]["id"], item]
+    write_json(os.path.join(arc, "StorableArchiveItems.json"), {"items": flat, "version": 1})
+
+    preferences = os.path.join(os.path.dirname(SUPPORT), "Preferences", "company.thebrowser.Browser.plist")
+    os.makedirs(os.path.dirname(preferences), exist_ok=True)
+    with open(preferences, "wb") as f:
+        plistlib.dump({"autoArchiveTimeThreshold": "sevenDays"}, f, fmt=plistlib.FMT_BINARY)
+
+    cache = os.path.join(arc, "SidebarItemsFaviconCache")
+    for item_id in ["T-1", "T-6", "T-10", "T-13"]:
+        write(os.path.join(cache, hashlib.md5(item_id.encode()).hexdigest()), ARC_ICON_PNG)
+    write(os.path.join(cache, hashlib.md5(b"T-8").hexdigest()), b"not a png")
+
+    db = new_db(os.path.join(arc, "User Data", "Default", "Favicons"))
+    db.executescript("""
+        CREATE TABLE favicons(id INTEGER PRIMARY KEY, url LONGVARCHAR NOT NULL, icon_type INTEGER DEFAULT 1);
+        CREATE TABLE favicon_bitmaps(id INTEGER PRIMARY KEY, icon_id INTEGER NOT NULL, last_updated INTEGER DEFAULT 0,
+            image_data BLOB, width INTEGER DEFAULT 0, height INTEGER DEFAULT 0, last_requested INTEGER DEFAULT 0);
+        CREATE TABLE icon_mapping(id INTEGER PRIMARY KEY, page_url LONGVARCHAR NOT NULL, icon_id INTEGER);
+    """)
+    for i, (page, icon) in enumerate([("https://calendar.example/", "https://calendar.example/icon.png"),
+                                      ("https://blog.example/post", "https://blog.example/favicon.ico")], start=1):
+        db.execute("INSERT INTO favicons(id, url, icon_type) VALUES (?, ?, 1)", (i, icon))
+        db.execute("INSERT INTO icon_mapping(page_url, icon_id) VALUES (?, ?)", (page, i))
+        db.execute("INSERT INTO favicon_bitmaps(icon_id, image_data, width, height) VALUES (?, ?, 16, 16)", (i, PNG_1PX))
+    db.commit()
+    db.close()
 
 
 
@@ -1223,6 +1339,45 @@ def places(path):
     shutil.rmtree(tmp)
 
 
+def solid_png(side, rgb):
+    def chunk(kind, body):
+        return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body) & 0xFFFFFFFF)
+    rows = b"".join(b"\0" + bytes(rgb) * side for _ in range(side))
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", side, side, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(rows, 9)) + chunk(b"IEND", b""))
+
+
+FAVICON_SVG = (b'<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="100000" height="100000" '
+               b'viewBox="0 0 16 16"><rect width="16" height="16" rx="3" fill="#2a7"/></svg>')
+
+
+def firefox_favicons(path, pages, roots):
+    db = new_db(path)
+    db.executescript("""
+        CREATE TABLE moz_icons (id INTEGER PRIMARY KEY, icon_url TEXT NOT NULL, fixed_icon_url_hash INTEGER NOT NULL,
+          width INTEGER NOT NULL DEFAULT 0, root INTEGER NOT NULL DEFAULT 0, color INTEGER, expire_ms INTEGER NOT NULL DEFAULT 0,
+          flags INTEGER NOT NULL DEFAULT 0, data BLOB);
+        CREATE TABLE moz_pages_w_icons (id INTEGER PRIMARY KEY, page_url TEXT NOT NULL, page_url_hash INTEGER NOT NULL);
+        CREATE TABLE moz_icons_to_pages (page_id INTEGER NOT NULL, icon_id INTEGER NOT NULL, expire_ms INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY (page_id, icon_id)) WITHOUT ROWID;
+        CREATE INDEX moz_icons_iconurlhashindex ON moz_icons (fixed_icon_url_hash);
+        CREATE INDEX moz_pages_w_icons_urlhashindex ON moz_pages_w_icons (page_url_hash);
+    """)
+
+    def icon(url, width, data, root=0):
+        return db.execute("INSERT INTO moz_icons (icon_url, fixed_icon_url_hash, width, root, data) VALUES (?,?,?,?,?)",
+                          (url, 0, width, root, data)).lastrowid
+
+    for page_id, (page, icons) in enumerate(pages, 1):
+        db.execute("INSERT INTO moz_pages_w_icons (id, page_url, page_url_hash) VALUES (?,?,?)", (page_id, page, 0))
+        for url, width, data in icons:
+            db.execute("INSERT INTO moz_icons_to_pages (page_id, icon_id) VALUES (?,?)", (page_id, icon(url, width, data)))
+    for url, width, data in roots:
+        icon(url, width, data, root=1)
+    db.commit()
+    db.close()
+
+
 def firefox_cookies(path):
     db = new_db(path)
     db.executescript("""
@@ -1280,6 +1435,16 @@ Locked=1
     d = os.path.join(root, "Profiles", "abcd1234.default-release")
     places(os.path.join(d, "places.sqlite"))
     firefox_cookies(os.path.join(d, "cookies.sqlite"))
+    firefox_favicons(os.path.join(d, "favicons.sqlite"), [
+        ("https://www.mozilla.example/", [("https://www.mozilla.example/icon-16.png", 16, solid_png(16, (200, 30, 30))),
+                                          ("https://www.mozilla.example/icon-32.png", 32, solid_png(32, (200, 30, 30))),
+                                          ("https://www.mozilla.example/icon-96.png", 96, solid_png(96, (200, 30, 30)))]),
+        ("https://a.example/", [("https://a.example/logo.svg", 65535, FAVICON_SVG)]),
+        ("https://second.example/other", [("https://second.example/other.png", 32, solid_png(32, (30, 30, 200)))]),
+    ], [
+        ("https://developer.mozilla.example/favicon.ico", 32, solid_png(32, (30, 160, 30))),
+        ("https://unrelated.example/favicon.ico", 32, solid_png(32, (1, 2, 3))),
+    ])
     session = {
         "version": ["sessionrestore", 1],
         "windows": [
@@ -1384,6 +1549,15 @@ Locked=1
     d = os.path.join(root, "Profiles", "zen12345.Default (release)")
     places(os.path.join(d, "places.sqlite"))
     firefox_cookies(os.path.join(d, "cookies.sqlite"))
+    firefox_favicons(os.path.join(d, "favicons.sqlite"), [
+        ("https://mail.example/", [("https://mail.example/mail.png", 32, solid_png(32, (220, 60, 40)))]),
+        ("https://chat.example/room", [("https://chat.example/stored.png", 32, solid_png(32, (9, 9, 9)))]),
+        ("https://news.example/", [("https://news.example/news.svg", 65535, FAVICON_SVG)]),
+        ("https://games.example/", [("https://games.example/big.png", 128, solid_png(128, (120, 40, 200)))]),
+        ("https://nested.example/", [("https://nested.example/broken.svg", 65535, b"<svg xmlns='http://www.w3.org/2000/svg'><<<")]),
+    ], [
+        ("https://www.docs.example/favicon.ico", 16, solid_png(16, (40, 90, 220))),
+    ])
     session = {
         "lastCollected": BASE_UNIX * 1000,
         "spaces": [

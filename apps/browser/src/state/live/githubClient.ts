@@ -1,75 +1,88 @@
-import { changeKey, DETAILS_PAGE, detailIds, detailNodes, GITHUB_DETAILS_QUERY, GITHUB_QUERY, GITHUB_STATE_QUERY, GITHUB_VARIABLES, listedById, mapGithub, VIEWER_QUERY, withDetails, type DetailsResponse, type GithubResponse, type RawPR } from "./github";
-import { createGithubLimits, graphqlRateLimited, retryAtFromHeaders, type HeaderReader } from "./githubLimits";
-import { endpoints, request } from "./net";
-import { LiveError, type CompletionState, type LiveFolder, type LiveItem } from "./types";
+import { changeKey, DETAILS_PAGE, detailNodes, GITHUB_DETAILS_QUERY, GITHUB_QUERY, GITHUB_STATE_QUERY, GITHUB_VARIABLES, listingOf, prItem, sectioned, VIEWER_QUERY, withStacks, type DetailsResponse, type GithubResponse, type ListedPR, type Listing, type RateLimitInfo } from "./github";
+import { createGithubLimits, graphqlRateLimited, retryAtFromHeaders, type GithubLimits, type HeaderReader } from "./githubLimits";
+import { LiveError, type CompletionState, type LiveFolder, type LiveItem, type PullRequestSection } from "./types";
 import { noteLiveGithubDetails, noteLiveGithubRequest } from "../telemetry/liveGithub";
 
 export const LIST_SHARED_MS = 30_000;
 export const DETAILS_FRESH_MS = 10 * 60_000;
 
-type GraphqlErrors = { errors?: { type?: string; message: string }[] };
-type Cached = { key: string | null; node: RawPR | null; at: number };
+export type GraphqlPayload = { query: string; variables: Record<string, unknown> };
+export type GithubSend = (scope: string, payload: GraphqlPayload, onHeaders: (headers: HeaderReader) => void) => Promise<unknown>;
+
+type Reply = { data?: { rateLimit?: RateLimitInfo | null } | null; errors?: { type?: string; message: string }[] };
+type Listed = Listing & { keys: Map<string, string | null> };
+type Detail = {
+  key: string | null;
+  at: number;
+  item: LiveItem | null;
+  bySection: Partial<Record<PullRequestSection, LiveItem>>;
+  stacked: { from: LiveItem; item: LiveItem } | null;
+};
 type Account = {
-  list: { at: number; done: boolean; promise: Promise<GithubResponse> } | null;
-  details: Map<string, Cached>;
-  pending: Map<string, Promise<RawPR | null>>;
+  scope: string;
+  list: { at: number; done: boolean; promise: Promise<Listed> } | null;
+  details: Map<string, Detail>;
+  pending: Map<string, Promise<void>>;
 };
 
-export function createGithubClient(clock: () => number = Date.now, limits = createGithubLimits(clock)) {
-  const accounts = new Map<string, Account>();
-  let lastToken: string | null = null;
+const sameJson = (a: unknown, b: unknown) => a === b || JSON.stringify(a) === JSON.stringify(b);
 
-  const account = (token: string) => {
-    let a = accounts.get(token);
-    if (!a) accounts.set(token, (a = { list: null, details: new Map(), pending: new Map() }));
-    return a;
+function toListed(json: GithubResponse): Listed {
+  const keys = new Map<string, string | null>();
+  for (const n of [...(json.data?.authored.nodes ?? []), ...(json.data?.review.nodes ?? [])]) if ("id" in n && n.id && !keys.has(n.id)) keys.set(n.id, changeKey(n as ListedPR));
+  return { ...listingOf(json), keys };
+}
+
+export function createGithubClient(send: GithubSend, clock: () => number = Date.now, limits: GithubLimits = createGithubLimits(clock)) {
+  let current: Account | null = null;
+
+  const account = (scope: string): Account => {
+    if (current?.scope === scope) return current;
+    if (current) limits.forget(current.scope);
+    return (current = { scope, list: null, details: new Map(), pending: new Map() });
   };
 
-  async function graphql<T extends GraphqlErrors>(token: string, interactive: boolean, query: string, variables: Record<string, unknown>): Promise<T> {
-    lastToken = token;
+  async function graphql<T extends Reply>(scope: string, interactive: boolean, query: string, variables: Record<string, unknown>): Promise<T> {
     return limits.withSlot(async () => {
-      if (limits.blockedUntil(token, interactive) !== null) {
+      if (limits.blockedUntil(scope, interactive) !== null) {
         noteLiveGithubRequest("held");
         throw new LiveError("rateLimited", "Waiting for the GitHub rate limit to reset");
       }
       let headers: HeaderReader | null = null;
       const limited = () => {
         noteLiveGithubRequest("rateLimited");
-        limits.rateLimited(token, retryAtFromHeaders(headers, clock()));
+        limits.rateLimited(scope, retryAtFromHeaders(headers, clock()));
         return new LiveError("rateLimited", "Rate Limit Exceeded");
       };
+      noteLiveGithubRequest("sent");
       let json: T;
       try {
-        json = await request<T>(
-          endpoints.githubGraphql,
-          { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ query, variables }) },
-          (h) => {
-            headers = h;
-            noteLiveGithubRequest("sent");
-            limits.observe(token, h);
-          },
-        );
+        json = (await send(scope, { query, variables }, (h) => {
+          headers = h;
+          limits.observe(scope, h);
+        })) as T;
       } catch (error) {
         throw error instanceof LiveError && error.kind === "rateLimited" ? limited() : error;
       }
+      limits.observeBody(scope, json.data?.rateLimit);
       if (graphqlRateLimited(json.errors, headers)) throw limited();
-      limits.succeeded(token);
+      limits.succeeded(scope);
       const error = json.errors?.[0];
-      if (error && !(json as { data?: unknown }).data) throw new LiveError("other", error.message);
+      if (error && !json.data) throw new LiveError("other", error.message);
       return json;
     });
   }
 
-  function list(token: string, interactive: boolean): Promise<GithubResponse> {
-    const a = account(token);
+  function list(a: Account, interactive: boolean): Promise<Listed> {
     const shared = a.list;
     if (shared && (!shared.done || (!interactive && clock() - shared.at < LIST_SHARED_MS))) return shared.promise;
-    const entry = { at: clock(), done: false, promise: graphql<GithubResponse>(token, interactive, GITHUB_QUERY, GITHUB_VARIABLES) };
+    const entry = { at: clock(), done: false, promise: graphql<GithubResponse>(a.scope, interactive, GITHUB_QUERY, GITHUB_VARIABLES).then(toListed) };
     a.list = entry;
     entry.promise.then(
-      () => {
+      (listed) => {
         entry.done = true;
         entry.at = clock();
+        for (const id of a.details.keys()) if (!listed.keys.has(id)) a.details.delete(id);
       },
       () => {
         if (a.list === entry) a.list = null;
@@ -78,61 +91,83 @@ export function createGithubClient(clock: () => number = Date.now, limits = crea
     return entry.promise;
   }
 
-  async function details(token: string, interactive: boolean, json: GithubResponse, ids: string[]): Promise<RawPR[]> {
-    const a = account(token);
-    const listed = listedById(json);
-    const now = clock();
-    const stale = ids.filter((id) => {
-      const cached = a.details.get(id);
-      const key = changeKey(listed.get(id));
-      return !cached || key === null || cached.key !== key || now - cached.at >= DETAILS_FRESH_MS;
-    });
-    const toFetch = stale.filter((id) => !a.pending.has(id));
-    const page = async (ids: string[]) => detailNodes(ids, await graphql<DetailsResponse>(token, interactive, GITHUB_DETAILS_QUERY, { ids }));
-    const retry = (ids: string[]) => (error: unknown) => (error instanceof LiveError && (error.kind === "other" || error.kind === "network") ? page(ids) : Promise.reject(error));
-    for (let i = 0; i < toFetch.length; i += DETAILS_PAGE) {
-      const ids = toFetch.slice(i, i + DETAILS_PAGE);
-      const fetched = page(ids)
-        .catch(retry(ids))
-        .then((nodes) => {
-          const byId = new Map(nodes.map((n) => [n.id, n]));
-          const at = clock();
-          for (const id of ids) a.details.set(id, { key: changeKey(listed.get(id)), node: byId.get(id) ?? null, at });
-          return byId;
-        });
+  function readPage(a: Account, interactive: boolean, listed: Listed, ids: string[]): Promise<void> {
+    const page = () => graphql<DetailsResponse & Reply>(a.scope, interactive, GITHUB_DETAILS_QUERY, { ids }).then((res) => detailNodes(ids, res));
+    const retried = page().catch((error: unknown) => (error instanceof LiveError && (error.kind === "other" || error.kind === "network") ? page() : Promise.reject(error)));
+    const done = retried.then((nodes) => {
+      const at = clock();
+      const byId = new Map(nodes.map((n) => [n.id, n]));
       for (const id of ids) {
-        const one = fetched.then((byId) => byId.get(id) ?? null);
-        const settle = () => void (a.pending.get(id) === one && a.pending.delete(id));
-        one.then(settle, settle);
-        a.pending.set(id, one);
+        const node = byId.get(id);
+        const item = node && node.state === "OPEN" ? prItem(node) : null;
+        const previous = a.details.get(id);
+        const key = listed.keys.get(id) ?? null;
+        if (previous && sameJson(previous.item, item)) a.details.set(id, { ...previous, key, at });
+        else a.details.set(id, { key, at, item, bySection: {}, stacked: null });
       }
-    }
-    const waited = await Promise.all(stale.map((id) => a.pending.get(id) ?? Promise.resolve(a.details.get(id)?.node ?? null)));
-    noteLiveGithubDetails(toFetch.length, ids.length - stale.length);
-    const fresh = new Map(stale.map((id, i) => [id, waited[i]]));
-    for (const id of a.details.keys()) if (!listed.has(id)) a.details.delete(id);
-    return ids.flatMap((id) => {
-      const node = fresh.has(id) ? fresh.get(id) : a.details.get(id)?.node;
-      return node ? [node] : [];
     });
+    const settle = () => {
+      for (const id of ids) if (a.pending.get(id) === done) a.pending.delete(id);
+    };
+    done.then(settle, settle);
+    for (const id of ids) a.pending.set(id, done);
+    return done;
   }
 
-  async function fetchFolder(token: string, folder: LiveFolder, interactive: boolean): Promise<LiveItem[]> {
-    const json = await list(token, interactive);
-    const nodes = await details(token, interactive, json, detailIds(json, folder.filters));
-    return mapGithub(withDetails(json, nodes), folder.filters);
+  async function ensureDetails(a: Account, interactive: boolean, listed: Listed, ids: string[]) {
+    const now = clock();
+    const stale: string[] = [];
+    const waits = new Set<Promise<void>>();
+    let joined = 0;
+    for (const id of ids) {
+      const detail = a.details.get(id);
+      const key = listed.keys.get(id) ?? null;
+      if (detail && key !== null && detail.key === key && now - detail.at < DETAILS_FRESH_MS) continue;
+      const pending = a.pending.get(id);
+      if (pending) (waits.add(pending), joined++);
+      else stale.push(id);
+    }
+    for (let i = 0; i < stale.length; i += DETAILS_PAGE) waits.add(readPage(a, interactive, listed, stale.slice(i, i + DETAILS_PAGE)));
+    noteLiveGithubDetails(stale.length, ids.length - stale.length - joined);
+    await Promise.all(waits);
   }
 
-  async function resolveGone(token: string, items: LiveItem[], interactive: boolean): Promise<Record<string, CompletionState>> {
-    const prs = items.filter((it) => it.source === "github");
-    if (!prs.length) return {};
-    const ids = prs.map((it) => it.id.slice("github:".length));
-    const json = await graphql<{ data?: { nodes: ({ id: string; state: string } | null)[] } } & GraphqlErrors>(token, interactive, GITHUB_STATE_QUERY, { ids });
+  function itemsFor(a: Account, listed: Listed, filters: LiveFolder["filters"]): LiveItem[] {
+    const items: LiveItem[] = [];
+    for (const { id, section } of sectioned(listed, filters)) {
+      const detail = a.details.get(id);
+      if (!detail?.item) continue;
+      items.push((detail.bySection[section] ??= { ...detail.item, section }));
+    }
+    const stacked = withStacks(items);
+    for (let i = 0; i < stacked.length; i++) {
+      const from = items[i]!;
+      const out = stacked[i]!;
+      if (out === from) continue;
+      const detail = a.details.get(from.id.slice("github:".length));
+      if (!detail) continue;
+      const memo = detail.stacked;
+      if (memo && memo.from === from && sameJson(memo.item.pr?.stack, out.pr?.stack)) stacked[i] = memo.item;
+      else detail.stacked = { from, item: out };
+    }
+    return stacked;
+  }
+
+  async function fetchFolder(scope: string, folder: LiveFolder, interactive: boolean): Promise<LiveItem[]> {
+    const a = account(scope);
+    const listed = await list(a, interactive);
+    await ensureDetails(a, interactive, listed, sectioned(listed, folder.filters).map((s) => s.id));
+    return itemsFor(a, listed, folder.filters);
+  }
+
+  async function resolveGone(scope: string, items: LiveItem[], interactive: boolean): Promise<Record<string, CompletionState>> {
+    const byId = new Map(items.filter((it) => it.source === "github").map((it) => [it.id.slice("github:".length), it]));
+    if (!byId.size) return {};
+    const json = await graphql<{ data?: { nodes: ({ id: string; state: string } | null)[] } } & Reply>(scope, interactive, GITHUB_STATE_QUERY, { ids: [...byId.keys()] });
     const out: Record<string, CompletionState> = {};
     for (const n of json.data?.nodes ?? []) {
-      if (!n) continue;
-      const item = prs.find((it) => it.id === `github:${n.id}`);
-      if (!item) continue;
+      const item = n && byId.get(n.id);
+      if (!n || !item) continue;
       if (n.state === "MERGED") out[item.id] = "merged";
       else if (n.state === "CLOSED") out[item.id] = "closed";
       else if (item.section === "review" || item.section === "team") out[item.id] = "reviewed";
@@ -140,14 +175,14 @@ export function createGithubClient(clock: () => number = Date.now, limits = crea
     return out;
   }
 
-  const pausedUntil = () => (lastToken ? limits.blockedUntil(lastToken, false) : null);
-
-  async function viewer(token: string) {
-    const json = await graphql<{ data?: { viewer: { login: string; name: string | null; avatarUrl: string } } } & GraphqlErrors>(token, true, VIEWER_QUERY, {});
+  async function viewer(scope: string) {
+    const json = await graphql<{ data?: { viewer: { login: string; name: string | null; avatarUrl: string } } } & Reply>(scope, true, VIEWER_QUERY, {});
     return json.data?.viewer ?? null;
   }
 
-  return { fetchFolder, resolveGone, pausedUntil, viewer };
+  const pausedUntil = () => (current ? limits.blockedUntil(current.scope, false) : null);
+
+  return { fetchFolder, resolveGone, viewer, pausedUntil };
 }
 
-export const githubClient = createGithubClient();
+export type GithubClient = ReturnType<typeof createGithubClient>;

@@ -112,6 +112,7 @@ export const SETTING_SPECS = {
   unreadHiddenSites: shaped<string[]>([], isStringList, STRING_LIST, SYNCED),
   neverTranslateSites: shaped<Record<string, string[]>>({}, (v) => isRecordOf(v, isStringList), recordOf(STRING_LIST)),
   autoPictureInPicture: flag(true, SYNCED),
+  playingNowAcrossProfiles: flag(false, SYNCED),
   blockAutoplayEverywhere: flag(false, SYNCED),
   blockNotificationRequests: flag(false, SYNCED),
   videoUpscaling: flag(true, SYNCED),

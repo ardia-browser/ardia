@@ -1,5 +1,47 @@
 {
   "profile": {
     "name": "Personal"
+  },
+  "extensions": {
+    "pinned_extensions": [
+      "ffffffffffffffffffffffffffffffff",
+      "gggggggggggggggggggggggggggggggg"
+    ],
+    "settings": {
+      "ffffffffffffffffffffffffffffffff": {
+        "from_webstore": true,
+        "location": 1,
+        "path": "ffffffffffffffffffffffffffffffff/3.2_0",
+        "disable_reasons": []
+      },
+      "gggggggggggggggggggggggggggggggg": {
+        "from_webstore": true,
+        "location": 1,
+        "path": "gggggggggggggggggggggggggggggggg/1.5_0",
+        "disable_reasons": [
+          1
+        ]
+      },
+      "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii": {
+        "from_webstore": true,
+        "location": 1,
+        "path": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii/2.0_0"
+      },
+      "jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj": {
+        "from_webstore": false,
+        "location": 4,
+        "path": "/Users/someone/dev-helper",
+        "manifest": {
+          "name": "Dev Helper"
+        }
+      },
+      "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk": {
+        "from_webstore": true,
+        "location": 9,
+        "manifest": {
+          "name": "Company SSO"
+        }
+      }
+    }
   }
 }

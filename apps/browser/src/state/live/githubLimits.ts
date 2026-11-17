@@ -55,7 +55,16 @@ export function createGithubLimits(clock: () => number = Date.now, concurrency =
   }
 
   function observe(scope: string, headers: HeaderReader) {
-    const quota = quotaFromHeaders(headers);
+    record(scope, quotaFromHeaders(headers));
+  }
+
+  function observeBody(scope: string, rateLimit: { limit: number; remaining: number; resetAt: string } | null | undefined) {
+    const resetAt = rateLimit ? Date.parse(rateLimit.resetAt) : NaN;
+    if (!rateLimit || !Number.isFinite(resetAt) || !(rateLimit.limit > 0) || !(rateLimit.remaining >= 0)) return;
+    record(scope, { limit: rateLimit.limit, remaining: rateLimit.remaining, resetAt });
+  }
+
+  function record(scope: string, quota: Quota | null) {
     if (!quota) return;
     const previous = quotas.get(scope);
     if (previous && quota.resetAt < previous.resetAt) return;
@@ -87,7 +96,12 @@ export function createGithubLimits(clock: () => number = Date.now, concurrency =
     }
   }
 
-  return { blockedUntil, observe, rateLimited, succeeded, withSlot };
+  function forget(scope: string) {
+    quotas.delete(scope);
+    pauses.delete(scope);
+  }
+
+  return { blockedUntil, observe, observeBody, rateLimited, succeeded, withSlot, forget };
 }
 
 export type GithubLimits = ReturnType<typeof createGithubLimits>;

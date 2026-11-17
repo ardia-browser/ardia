@@ -43,6 +43,8 @@ const TOP = [
   ["pip", ["tabs.autoPictureInPicture"]],
   ["picture in picture", ["tabs.autoPictureInPicture"]],
   ["mini player", ["tabs.autoPictureInPicture"]],
+  ["playing now", ["tabs.playingNowAcrossProfiles"]],
+  ["now playing profiles", ["tabs.playingNowAcrossProfiles"]],
   ["downloads", ["general.downloadsFolder"]],
   ["download folder", ["general.downloadsFolder"]],
   ["shortcuts", ["shortcuts.menuCommands", "shortcuts.extensionShortcuts"]],

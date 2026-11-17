@@ -31,6 +31,7 @@ const testGlobals = globalThis as { acTestUserScripts?: UserScriptsHost };
 
 export const docs = new Map<string, string>();
 export const heldSaves = { on: false, queue: [] as (() => void)[] };
+export const refusedWrites = { on: false, returnsFalse: false };
 export const bangListServer: { reply: ((etag: string | null) => Promise<BangListReply>) | null } = { reply: null };
 export const appInfo: Partial<SystemInfo> = { appVersion: "1.0" };
 export const interfaceScaleNative = { scale: 1, applied: [] as number[], refuses: false, asked: [] as number[] };
@@ -171,14 +172,18 @@ const dialogs: Modules["ArdiaDialogs"] = {
 
 const documents: Modules["ArdiaDocuments"] = {
   readDocument: (name) => docs.get(name) ?? null,
-  writeDocument: (name, contents) => void docs.set(name, contents),
+  writeDocument: (name, contents) => {
+    if (refusedWrites.on) throw new Error("write refused");
+    if (refusedWrites.returnsFalse) return false as unknown as void;
+    docs.set(name, contents);
+  },
   saveDocument: (name, contents) =>
     new Promise((resolve) => {
       const land = () => (docs.set(name, contents), resolve());
       if (heldSaves.on) heldSaves.queue.push(land);
       else land();
     }),
-  documentSaved: () => Promise.resolve(),
+  documentSaved: () => (refusedWrites.on ? Promise.reject(new Error("save refused")) : Promise.resolve()),
   removeDocument: (name) => void docs.delete(name),
 };
 

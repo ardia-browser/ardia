@@ -202,29 +202,29 @@ test("in a private tab a swipe still switches space but is never counted", () =>
   unmount(root);
 });
 
-test("with more than one space the switcher is a button whose menu lists the spaces, the current one checked, and picking one switches, counted as a pick and not a swipe", () => {
+test("with more than one space the name is still a plain header with no chevron and no menu, and adjusting the dots switches space, counted as a pick and not a swipe", () => {
   withSpaces([profile("work", "Work"), profile("home", "Home")]);
   const root = start();
-  const button = root.root.findAll((node) => node.props.accessibilityLabel === "Space, Work" && typeof node.props.onPress === "function")[0]!;
-  act(() => button.props.onPress());
-  const menu = root.root.findAll((node) => node.type === FloatingMenu)[0]!;
-  expect(menu.props.items.map((item: { label: string; checked: boolean }) => [item.label, item.checked])).toEqual([
-    ["Work", true],
-    ["Home", false],
-  ]);
-  act(() => menu.props.items[1].onPress());
+  expect(root.root.findAll((node) => node.props.accessibilityRole === "header" && node.props.accessibilityLabel === "Work")).not.toHaveLength(0);
+  expect(root.root.findAll((node) => node.props.accessibilityLabel === "Space, Work")).toHaveLength(0);
+  expect(root.root.findAll((node) => node.type === FloatingMenu && node.props.items.some((item: { label: string }) => item.label === "Home"))).toHaveLength(0);
+  const dots = host(root, "startPageDots")!;
+  expect(dots.props.accessibilityRole).toBe("adjustable");
+  expect(dots.props.accessibilityValue).toEqual({ text: "Work" });
+  act(() => dots.props.onAccessibilityAction({ nativeEvent: { actionName: "decrement" } }));
+  expect(select).not.toHaveBeenCalled();
+  act(() => dots.props.onAccessibilityAction({ nativeEvent: { actionName: "increment" } }));
   expect(select).toHaveBeenCalledWith("home");
   expect(tick).toHaveBeenCalledTimes(1);
   expect(counted.mock.calls).toEqual([["spaces_picked"]]);
   unmount(root);
 });
 
-test("in a private tab a pick from the switcher still switches space but is never counted", () => {
+test("in a private tab adjusting the dots still switches space but is never counted", () => {
   act(() => useTabs.setState({ incognito: true }));
   withSpaces([profile("work", "Work"), profile("home", "Home")]);
   const root = start();
-  act(() => root.root.findAll((node) => node.props.accessibilityLabel === "Space, Work" && typeof node.props.onPress === "function")[0]!.props.onPress());
-  act(() => root.root.findAll((node) => node.type === FloatingMenu)[0]!.props.items[1].onPress());
+  act(() => host(root, "startPageDots")!.props.onAccessibilityAction({ nativeEvent: { actionName: "increment" } }));
   expect(select).toHaveBeenCalledWith("home");
   expect(counted).not.toHaveBeenCalled();
   unmount(root);

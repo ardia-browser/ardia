@@ -34,7 +34,7 @@ import {
   type MenuItem,
   type SymbolName,
 } from "../ui";
-import { MenuTrigger, spaceSystemImage, type MenuHandlers } from "../ui/MenuTrigger";
+import { MenuTrigger, type MenuHandlers } from "../ui/MenuTrigger";
 import { syncOffered } from "../../state/sync/offer";
 
 export type StartGeometry = { width: number; height: number; safeSide: number; barCenterY: number; dotsOnBar?: boolean };
@@ -84,7 +84,7 @@ export function StartSpaces({ geometry, dark, incognito }: { geometry: StartGeom
     if (!incognito) countUsage("spaces_swiped");
     select(page.syncId);
   };
-  const page = (space: SyncedProfile) => <StartSpacePage geometry={geometry} space={space} spaces={spaces} dark={dark} incognito={incognito} onChoose={choose} />;
+  const page = (space: SyncedProfile) => <StartSpacePage geometry={geometry} space={space} dark={dark} incognito={incognito} />;
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       {spaces.length > 1 && current ? (
@@ -112,7 +112,17 @@ export function StartSpaces({ geometry, dark, incognito }: { geometry: StartGeom
               );
             }}
           />
-          <SpacePageDots count={spaces.length} index={index} dark={dark} y={geometry.dotsOnBar ? geometry.barCenterY : geometry.barCenterY - startLayout.pageDotsAboveBar} />
+          <SpacePageDots
+            count={spaces.length}
+            index={index}
+            name={current.name}
+            onStep={(by) => {
+              const next = spaces[index + by];
+              if (next) choose(next.syncId);
+            }}
+            dark={dark}
+            y={geometry.dotsOnBar ? geometry.barCenterY : geometry.barCenterY - startLayout.pageDotsAboveBar}
+          />
         </>
       ) : spaces.length === 1 ? (
         page(spaces[0]!)
@@ -126,39 +136,22 @@ export function StartSpaces({ geometry, dark, incognito }: { geometry: StartGeom
 function StartSpacePage({
   geometry,
   space: profile,
-  spaces,
   dark,
   incognito,
-  onChoose,
 }: {
   geometry: StartGeometry;
   space: SyncedProfile;
-  spaces: SyncedProfile[];
   dark: boolean;
   incognito: boolean;
-  onChoose: (id: string) => void;
 }) {
   const switcherY = geometry.height * startLayout.switcherRatio;
-  const many = spaces.length > 1;
   const menuPlace = { left: (geometry.width - tabsLayout.menuWidth) / 2, width: tabsLayout.menuWidth };
-  const spaceItems: MenuItem[] = spaces.map((other) => ({ label: other.name, icon: spaceMenuSymbol(other) ?? undefined, systemImage: spaceSystemImage(other.name, other.icon), checked: other.syncId === profile.syncId, onPress: () => onChoose(other.syncId) }));
-  const title = <SpaceTitle space={profile} dark={dark} showsChevron={many} />;
   return (
     <View style={{ width: geometry.width, height: geometry.height }} pointerEvents="box-none">
       <View testID="startSwitcher" pointerEvents="box-none" style={[styles.switcherRow, { top: switcherY - browseLayout.hitTarget / 2, height: browseLayout.hitTarget }]}>
-        {many ? (
-          <MenuTrigger items={spaceItems} trigger="tap" fixedOrder haptic={menuOpenedHaptic} place={menuPlace}>
-            {({ onPress }) => (
-              <Pressable accessibilityRole="button" accessibilityLabel={`Space, ${profile.name}`} accessibilityHint="Shows your Mac’s spaces." onPress={onPress}>
-                {title}
-              </Pressable>
-            )}
-          </MenuTrigger>
-        ) : (
-          <View accessible accessibilityRole="header" accessibilityLabel={profile.name}>
-            {title}
-          </View>
-        )}
+        <View accessible accessibilityRole="header" accessibilityLabel={profile.name}>
+          <SpaceTitle space={profile} dark={dark} showsChevron={false} />
+        </View>
       </View>
       {profile.pinned.tiles.length ? (
         <View testID="startTiles" style={[styles.tiles, { top: switcherY + startLayout.tilesGap, paddingHorizontal: geometry.safeSide + startLayout.tileSide }]}>
@@ -282,13 +275,17 @@ function SpaceGlyph({ space: profile, dark }: { space: SyncedProfile; dark: bool
   );
 }
 
-function SpacePageDots({ count, index, dark, y }: { count: number; index: number; dark: boolean; y: number }) {
+function SpacePageDots({ count, index, name, onStep, dark, y }: { count: number; index: number; name: string; onStep: (by: 1 | -1) => void; dark: boolean; y: number }) {
   return (
     <View
       testID="startPageDots"
       pointerEvents="none"
       accessible
+      accessibilityRole="adjustable"
       accessibilityLabel={`Space ${index + 1} of ${count}`}
+      accessibilityValue={{ text: name }}
+      accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
+      onAccessibilityAction={(event) => onStep(event.nativeEvent.actionName === "increment" ? 1 : -1)}
       style={[styles.dots, { top: y - startLayout.pageDot / 2, height: startLayout.pageDot }]}
     >
       {Array.from({ length: count }, (_, dot) => (

@@ -103,7 +103,12 @@ test("A Zen import maps spaces, tabs and essentials, and a plain profile falls b
   assert.equal(all.tabs.length, 3);
   assert.ok(!all.tabs.some((t) => t.url === "https://firefox-only.example/"));
   assert.deepEqual(all.favorites.map((t) => t.url), ["https://mail.example/"]);
-  assert.deepEqual(all.favicons.map((f) => f.page), ["https://chat.example/room", "https://play.example/"]);
+  assert.deepEqual(all.favicons.map((f) => [f.page, f.icon]), [
+    ["https://chat.example/room", "https://chat.example/favicon.ico"],
+    ["https://play.example/", "https://play.example/favicon.ico"],
+    ["https://mail.example/", "https://mail.example/mail.png"],
+    ["https://docs.example/a", "https://www.docs.example/favicon.ico"],
+  ]);
   assert.equal(all.separateEssentials, true);
   const play = await importProfile(fakeHost(), new Unlocks(), "zen", ZEN_MAIN, ["tabs", "spaces", "pinnedTabs"], { spaceIds: ["{play-space}"] }, quiet);
   assert.deepEqual(play.spaces.map((s) => s.name), ["Space 2"]);

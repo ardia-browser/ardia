@@ -23,6 +23,8 @@ const KIND_LOOK: Record<ImportKind, { title: string; icon: string }> = {
   spaces: { title: "Spaces", icon: "square.stack" },
   pinnedTabs: { title: "Pinned tabs", icon: "pin" },
   favorites: { title: "Favorites", icon: "star" },
+  linkRules: { title: "Air Traffic Control", icon: "airplane" },
+  archive: { title: "Archived tabs", icon: "archivebox" },
 };
 export const KINDS: { kind: ImportKind; title: string; icon: string }[] = IMPORT_KINDS.map((kind) => ({ kind, ...KIND_LOOK[kind] }));
 export const kindTitle = (k: ImportKind) => KIND_LOOK[k].title;

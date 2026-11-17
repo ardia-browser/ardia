@@ -1,5 +1,6 @@
 import { capture as send } from "./client";
 import { takeDownloadsPanelCauses } from "./downloadsPanelCauses";
+import { takeSessionWrites } from "./sessionWrites";
 import { takeEditKeyAckCounts } from "./editKeyAcks";
 import { takeExportCounts } from "./exportCounts";
 import { takeDevToolsKeyCounts } from "./devToolsKeyCounts";
@@ -7,7 +8,7 @@ import { takeDialogPageCounts } from "./dialogPageCounts";
 import { takeExternalAppCounts } from "./externalAppCounts";
 import { takeFindCounts } from "./findCounts";
 import { takeFirstRunCounts } from "./firstRunCounts";
-import { takeImportRuns } from "./importRuns";
+import { takeArcImportCounts, takeImportRuns } from "./importRuns";
 import { takeInputSourceKeyCounts } from "./inputSourceKeys";
 import { takeInlineCompletionCounts } from "./inlineCompletionCounts";
 import { takeKeyboardFollowCounts } from "./keyboardFollowCounts";
@@ -23,7 +24,7 @@ export { watchPlatformCounts };
 
 export const USAGE_COUNTS_EVENT = "usage_counts";
 
-export const takeHourlyExtras = () => ({ ...takePlatformCounts(), ...takeImportRuns(), ...takeProfileDataCounts(), ...takeExportCounts(), ...takeInlineCompletionCounts(), ...takeFirstRunCounts(), ...takeMemoryTrimCounts(), ...takeDownloadsPanelCauses(), ...takeExternalAppCounts(), ...takeDialogPageCounts(), ...takeFindCounts(), ...takeSyncFileCounts(), ...takeKeyboardFollowCounts(), ...takePagerCounts(), ...takeSwipeHistoryListCounts(), ...takeEditKeyAckCounts(), ...takeQuitWarningCounts(), ...takeInputSourceKeyCounts(), ...takeDevToolsKeyCounts() });
+export const takeHourlyExtras = () => ({ ...takePlatformCounts(), ...takeImportRuns(), ...takeArcImportCounts(), ...takeProfileDataCounts(), ...takeExportCounts(), ...takeInlineCompletionCounts(), ...takeFirstRunCounts(), ...takeMemoryTrimCounts(), ...takeDownloadsPanelCauses(), ...takeExternalAppCounts(), ...takeDialogPageCounts(), ...takeFindCounts(), ...takeSyncFileCounts(), ...takeKeyboardFollowCounts(), ...takePagerCounts(), ...takeSwipeHistoryListCounts(), ...takeEditKeyAckCounts(), ...takeQuitWarningCounts(), ...takeInputSourceKeyCounts(), ...takeDevToolsKeyCounts(), ...takeSessionWrites() });
 
 type Send = typeof send;
 

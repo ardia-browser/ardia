@@ -1,5 +1,5 @@
 import { mapBitbucket, mapConfluence, mapDrive, mapNotion, type BitbucketPR, type BitbucketStatuses, type ConfluenceSearch, type DriveFiles, type NotionSearch, type NotionUsers } from "../../browser/src/state/live/documents";
-import { DETAILS_PAGE, detailIds, detailNodes, GITHUB_DETAILS_QUERY, GITHUB_QUERY, GITHUB_STATE_QUERY, GITHUB_VARIABLES, mapGithub, withDetails, type DetailsResponse, type GithubResponse } from "../../browser/src/state/live/github";
+import { createGithubClient } from "../../browser/src/state/live/githubClient";
 import { live, setAccount, updateConfig } from "../../browser/src/state/live/store";
 import { LiveError, type CompletionState, type LiveAccount, type LiveFolder, type LiveItem, type LiveSourceId } from "../../browser/src/state/live/types";
 import { hostLiveClient, type LiveClient } from "./hostLive.ts";
@@ -20,44 +20,20 @@ export function normalizeConfluenceSite(site: string): string {
 }
 
 export function linuxLiveSources(client: LiveClient) {
-  async function githubGraphql<T>(query: string, variables: Record<string, unknown> = {}): Promise<T> {
-    const json = await client.request<T & { errors?: { type?: string; message: string }[] }>("github", "graphql", { query, variables });
-    const error = json.errors?.[0];
-    if (error && !(json as { data?: unknown }).data) throw new LiveError(error.type === "RATE_LIMITED" ? "rateLimited" : "other", error.message);
-    return json;
-  }
+  const githubClient = createGithubClient((_scope, payload) => client.request("github", "graphql", payload));
+  const githubScope = () => `host:${live().accounts.github?.connectedAt ?? ""}`;
 
   const github: LiveSource = {
     id: "github",
     name: "GitHub",
     kind: "pullRequests",
     site: "https://github.com",
-    async fetch(folder) {
-      const json = await githubGraphql<GithubResponse>(GITHUB_QUERY, GITHUB_VARIABLES);
-      const ids = detailIds(json, folder.filters);
-      const pages = Array.from({ length: Math.ceil(ids.length / DETAILS_PAGE) }, (_, i) => ids.slice(i * DETAILS_PAGE, (i + 1) * DETAILS_PAGE));
-      const page = async (ids: string[]) => detailNodes(ids, await githubGraphql<DetailsResponse>(GITHUB_DETAILS_QUERY, { ids }));
-      const retry = (ids: string[]) => (error: unknown) =>
-        error instanceof LiveError && (error.kind === "other" || error.kind === "network") ? page(ids) : Promise.reject(error);
-      const details = await Promise.all(pages.map((ids) => page(ids).catch(retry(ids))));
-      return mapGithub(withDetails(json, details.flat()), folder.filters);
+    fetch: (folder, options) => githubClient.fetchFolder(githubScope(), folder, !!options?.interactive),
+    async resolveGone(items, options) {
+      if (!items.some((it) => it.source === "github")) return {};
+      return githubClient.resolveGone(githubScope(), items, !!options?.interactive);
     },
-    async resolveGone(items) {
-      const prs = items.filter((it) => it.source === "github");
-      if (!prs.length) return {};
-      const ids = prs.map((it) => it.id.slice("github:".length));
-      const json = await githubGraphql<{ data?: { nodes: ({ id: string; state: string } | null)[] } }>(GITHUB_STATE_QUERY, { ids });
-      const out: Record<string, CompletionState> = {};
-      for (const n of json.data?.nodes ?? []) {
-        if (!n) continue;
-        const item = prs.find((it) => it.id === `github:${n.id}`);
-        if (!item) continue;
-        if (n.state === "MERGED") out[item.id] = "merged";
-        else if (n.state === "CLOSED") out[item.id] = "closed";
-        else if (item.section === "review" || item.section === "team") out[item.id] = "reviewed";
-      }
-      return out;
-    },
+    pausedUntil: () => githubClient.pausedUntil(),
   };
 
   const bitbucket: LiveSource = {

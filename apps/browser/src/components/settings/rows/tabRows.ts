@@ -95,6 +95,12 @@ export const tabRows = {
           description: "Videos and calls pop out when you switch tabs or leave the window.",
           keywords: ["pip", "video", "floating", "mini player"],
         },
+        playingNowAcrossProfiles: {
+          title: "Keep Playing now across profiles",
+          explained: true,
+          description: "Media playing in one profile stays in the sidebar of every profile, like Arc's spaces.",
+          keywords: ["playing now", "now playing", "media card", "media controls", "sidebar player", "music", "spotify", "youtube", "spaces", "swipe", "follow", "persist", "every space", "all spaces", "arc"],
+        },
         videoUpscaling: {
           title: "Video upscaling",
           description: "Sharpens low-resolution video in the tab you're watching, on Apple silicon.",

@@ -1,5 +1,31 @@
 {
   "profile": {
     "name": "Work"
+  },
+  "extensions": {
+    "pinned_extensions": [
+      "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh",
+      "ffffffffffffffffffffffffffffffff"
+    ],
+    "settings": {
+      "ffffffffffffffffffffffffffffffff": {
+        "from_webstore": true,
+        "location": 1,
+        "path": "ffffffffffffffffffffffffffffffff/3.2_0",
+        "disable_reasons": []
+      },
+      "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh": {
+        "from_webstore": true,
+        "location": 1,
+        "path": "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh/4.0_0",
+        "disable_reasons": []
+      },
+      "llllllllllllllllllllllllllllllll": {
+        "from_webstore": true,
+        "location": 1,
+        "path": "llllllllllllllllllllllllllllllll/2.0_0",
+        "disable_reasons": []
+      }
+    }
   }
 }

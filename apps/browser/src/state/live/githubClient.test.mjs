@@ -3,6 +3,8 @@ import { test } from "node:test";
 import { createGithubClient, DETAILS_FRESH_MS, LIST_SHARED_MS } from "./githubClient.ts";
 import { createGithubLimits, FALLBACK_COOLDOWN_MS, graphqlRateLimited, retryAtFromHeaders } from "./githubLimits.ts";
 import { takeLiveGithubCounts } from "../telemetry/liveGithub.ts";
+import { request } from "./net.ts";
+import { LiveError } from "./types.ts";
 
 const fixture = JSON.parse(await import("node:fs").then((fs) => fs.readFileSync(new URL("./fixtures/github.json", import.meta.url), "utf8")));
 const folder = { id: "f", filters: { authored: true, reviewRequests: true } };
@@ -14,6 +16,7 @@ function fakeGithub(clock) {
   const calls = [];
   let quota = { limit: 5000, remaining: 4000, reset: Math.floor((clock.now + 3_600_000) / 1000) };
   let limitNext = null;
+  const closed = new Set();
   globalThis.fetch = async (_url, init) => {
     const { query, variables } = JSON.parse(init.body);
     const kind = query.includes("LiveFolderDetails") ? "details" : query.includes("LiveFolderGone") ? "gone" : query.includes("LiveFolder") ? "list" : "viewer";
@@ -28,23 +31,27 @@ function fakeGithub(clock) {
       kind === "list"
         ? list
         : kind === "details"
-          ? { data: { nodes: variables.ids.map((id) => ({ ...all().find((n) => n.id === id), state: "OPEN" })) } }
+          ? { data: { nodes: variables.ids.map((id) => ({ ...all().find((n) => n.id === id), state: closed.has(id) ? "MERGED" : "OPEN" })) } }
           : { data: { viewer: { login: "me", name: null, avatarUrl: "" } } };
     return new Response(JSON.stringify(body), { status: 200, headers: h });
   };
   return {
     list,
     calls,
+    closed,
     setQuota: (q) => (quota = { ...quota, ...q }),
     limitNext: (status, extra = {}) => (limitNext = { status, extra }),
     detailIds: () => calls.filter((c) => c.kind === "details").flatMap((c) => c.ids),
   };
 }
 
-const setup = () => {
+const sendThroughFetch = (token, payload, onHeaders) =>
+  request("https://api.github.test/graphql", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(payload) }, onHeaders);
+
+const setup = (send = sendThroughFetch) => {
   const clock = { now: 1_800_000_000_000 };
   const gh = fakeGithub(clock);
-  const client = createGithubClient(() => clock.now);
+  const client = createGithubClient(send, () => clock.now);
   takeLiveGithubCounts();
   return { clock, gh, client };
 };
@@ -173,4 +180,83 @@ test("rate limit answers are recognised the way GitHub sends them", () => {
   assert.equal(retryAtFromHeaders(headers({ "retry-after": "5" }), 1000), 6000);
   assert.equal(retryAtFromHeaders(headers({ "x-ratelimit-reset": "100" }), 1000), 100_000);
   assert.equal(retryAtFromHeaders(null, 1000), undefined);
+});
+
+test("a refresh with nothing changed hands back the very same items, stacked ones included", async () => {
+  const { clock, gh, client } = setup();
+  const [base, top] = gh.list.data.authored.nodes;
+  top.baseRefName = base.headRefName;
+  top.repository = base.repository;
+  top.updatedAt = "2099-01-01T00:00:00Z";
+  const first = await client.fetchFolder("t", folder, false);
+  assert.ok(first.some((it) => it.pr?.stack));
+  clock.now += LIST_SHARED_MS;
+  const second = await client.fetchFolder("t", folder, false);
+  assert.equal(second.length, first.length);
+  second.forEach((it, i) => assert.equal(it, first[i]));
+  clock.now += DETAILS_FRESH_MS;
+  const third = await client.fetchFolder("t", folder, false);
+  third.forEach((it, i) => assert.equal(it, first[i]));
+});
+
+test("a pull request that closed between the search and its details drops out", async () => {
+  const { gh, client } = setup();
+  const id = gh.list.data.authored.nodes[1].id;
+  gh.closed.add(id);
+  const items = await client.fetchFolder("t", folder, true);
+  assert.ok(!items.some((it) => it.id === `github:${id}`));
+  assert.ok(items.length > 0);
+});
+
+test("details of pull requests that left the search are let go, and a new account starts clean", async () => {
+  const { clock, gh, client } = setup();
+  await client.fetchFolder("t", folder, false);
+  const before = gh.detailIds().length;
+  const gone = gh.list.data.authored.nodes.shift();
+  clock.now += LIST_SHARED_MS;
+  await client.fetchFolder("t", folder, false);
+  gh.list.data.authored.nodes.unshift(gone);
+  clock.now += LIST_SHARED_MS;
+  await client.fetchFolder("t", folder, false);
+  assert.deepEqual(gh.detailIds().slice(before), [gone.id]);
+  const total = gh.detailIds().length;
+  await client.fetchFolder("other", folder, false);
+  assert.equal(gh.detailIds().length, total + before);
+});
+
+test("without headers (Linux's host) the quota comes from the answer's rateLimit", async () => {
+  const clock = { now: 1_800_000_000_000 };
+  const reset = new Date(clock.now + 3_600_000).toISOString();
+  let remaining = 4000;
+  const calls = [];
+  const send = async (_scope, { query, variables }) => {
+    calls.push(query);
+    const rateLimit = { limit: 5000, remaining, resetAt: reset };
+    if (query.includes("LiveFolderDetails")) return { data: { rateLimit, nodes: variables.ids.map((id) => ({ ...[...fixture.data.authored.nodes, ...fixture.data.review.nodes].find((n) => n.id === id), state: "OPEN" })) } };
+    return { data: { ...structuredClone(fixture).data, rateLimit } };
+  };
+  const client = createGithubClient(send, () => clock.now);
+  await client.fetchFolder("host", folder, false);
+  remaining = 100;
+  clock.now += LIST_SHARED_MS;
+  await client.fetchFolder("host", folder, true);
+  const sent = calls.length;
+  clock.now += LIST_SHARED_MS;
+  await assert.rejects(client.fetchFolder("host", folder, false), (e) => e.kind === "rateLimited");
+  assert.equal(calls.length, sent);
+  assert.equal(client.pausedUntil(), Date.parse(reset));
+});
+
+test("a rate limit the host reports pauses background reads with the fallback backoff", async () => {
+  const clock = { now: 0 };
+  let fail = true;
+  const send = async () => {
+    if (fail) throw new LiveError("rateLimited", "host says slow down");
+    return structuredClone(fixture);
+  };
+  const client = createGithubClient(send, () => clock.now);
+  await assert.rejects(client.fetchFolder("host", folder, false), (e) => e.kind === "rateLimited");
+  assert.equal(client.pausedUntil(), FALLBACK_COOLDOWN_MS);
+  fail = false;
+  await assert.rejects(client.fetchFolder("host", folder, false), (e) => e.kind === "rateLimited");
 });

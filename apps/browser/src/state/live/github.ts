@@ -25,14 +25,16 @@ const CHANGE_FIELDS = `... on PullRequest {
     } } } } }
   }`;
 
+const RATE_LIMIT = "rateLimit { limit remaining resetAt }";
+
 export const GITHUB_QUERY = `query LiveFolder($authored: String!, $review: String!, $direct: String!) {
-  viewer { login name avatarUrl(size: 64) }
+  ${RATE_LIMIT}
   authored: search(query: $authored, type: ISSUE, first: 50) { nodes { ${CHANGE_FIELDS} } }
   review: search(query: $review, type: ISSUE, first: 50) { nodes { ${CHANGE_FIELDS} } }
   direct: search(query: $direct, type: ISSUE, first: 50) { nodes { ... on PullRequest { id } } }
 }`;
 
-export const GITHUB_DETAILS_QUERY = `query LiveFolderDetails($ids: [ID!]!) { nodes(ids: $ids) { ${PR_FIELDS} ... on PullRequest { state } } }`;
+export const GITHUB_DETAILS_QUERY = `query LiveFolderDetails($ids: [ID!]!) { ${RATE_LIMIT} nodes(ids: $ids) { ${PR_FIELDS} ... on PullRequest { state } } }`;
 
 export const DETAILS_PAGE = 10;
 
@@ -93,17 +95,11 @@ export function changeKey(listed: ListedPR | undefined): string | null {
   return JSON.stringify([listed.updatedAt, listed.isDraft, listed.mergeable, listed.reviewDecision, commit?.oid ?? null, rollup?.state ?? null, counts(rollup?.contexts?.checkRunCountsByState), counts(rollup?.contexts?.statusContextCountsByState)]);
 }
 
-export function listedById(json: GithubResponse): Map<string, ListedPR> {
-  const data = json.data;
-  const out = new Map<string, ListedPR>();
-  if (!data) return out;
-  for (const n of [...data.authored.nodes, ...data.review.nodes]) if ("id" in n && n.id && !out.has(n.id)) out.set(n.id, n as ListedPR);
-  return out;
-}
+export type RateLimitInfo = { limit: number; remaining: number; resetAt: string };
 
 export type GithubResponse = {
   data?: {
-    viewer: { login: string; name: string | null; avatarUrl: string };
+    rateLimit?: RateLimitInfo | null;
     authored: { nodes: (RawPR | { id: string } | Record<string, never>)[] };
     review: { nodes: (RawPR | { id: string } | Record<string, never>)[] };
     direct: { nodes: ({ id: string } | Record<string, never>)[] };
@@ -130,7 +126,7 @@ export function checkState(c: RawCheck): CheckState {
   }
 }
 
-function mapPR(raw: RawPR, section: PullRequestSection): LiveItem {
+export function prItem(raw: RawPR, section?: PullRequestSection): LiveItem {
   const rollup = raw.commits.nodes[0]?.commit.statusCheckRollup;
   const checks: PullRequestCheck[] = (rollup?.contexts.nodes ?? []).map((c) => ({
     name: c.__typename === "CheckRun" ? c.name : c.context,
@@ -169,15 +165,28 @@ function mapPR(raw: RawPR, section: PullRequestSection): LiveItem {
 
 const isPR = (n: object): n is RawPR => "number" in n;
 
-export function detailIds(json: GithubResponse, filters: { authored: boolean; reviewRequests: boolean }): string[] {
+export type Listing = { authored: string[]; review: string[]; direct: Set<string> };
+
+const idsOf = (nodes: { id?: string }[]) => nodes.flatMap((n) => (n.id ? [n.id] : []));
+
+export function listingOf(json: GithubResponse): Listing {
   const data = json.data;
-  if (!data) return [];
-  const sections = [filters.authored && data.authored, filters.reviewRequests && data.review].filter((x) => !!x);
-  return [...new Set(sections.flatMap((section) => section.nodes.map((n) => ("id" in n ? n.id : "")).filter(Boolean)))];
+  return { authored: idsOf(data?.authored.nodes ?? []), review: idsOf(data?.review.nodes ?? []), direct: new Set(idsOf(data?.direct.nodes ?? [])) };
+}
+
+export type Sectioned = { id: string; section: PullRequestSection };
+
+export function sectioned(listing: Listing, filters: { authored: boolean; reviewRequests: boolean }): Sectioned[] {
+  const out: Sectioned[] = [];
+  const seen = new Set<string>();
+  const add = (id: string, section: PullRequestSection) => void (seen.has(id) || (seen.add(id), out.push({ id, section })));
+  if (filters.authored) for (const id of listing.authored) add(id, "authored");
+  if (filters.reviewRequests) for (const id of listing.review) add(id, listing.direct.has(id) ? "review" : "team");
+  return out;
 }
 
 type GraphqlError = { type?: string; message: string; path?: (string | number)[] };
-export type DetailsResponse = { data?: { nodes?: (RawPR | null)[] } | null; errors?: GraphqlError[] };
+export type DetailsResponse = { data?: { rateLimit?: RateLimitInfo | null; nodes?: (RawPR | null)[] } | null; errors?: GraphqlError[] };
 
 export function detailNodes(ids: string[], res: DetailsResponse): RawPR[] {
   const errors = res.errors ?? [];
@@ -194,28 +203,15 @@ export function detailNodes(ids: string[], res: DetailsResponse): RawPR[] {
   });
 }
 
-export function withDetails(json: GithubResponse, details: (RawPR | null)[]): GithubResponse {
-  const data = json.data;
-  if (!data) return json;
-  const byId = new Map(details.filter((d): d is RawPR => !!d && isPR(d) && d.state === "OPEN").map((d) => [d.id, d]));
-  const fill = (nodes: (RawPR | { id: string } | Record<string, never>)[]) =>
-    nodes.flatMap((n) => ("id" in n && byId.has(n.id) ? [byId.get(n.id)!] : []));
-  return { ...json, data: { ...data, authored: { nodes: fill(data.authored.nodes) }, review: { nodes: fill(data.review.nodes) } } };
-}
-
 export function mapGithub(json: GithubResponse, filters: { authored: boolean; reviewRequests: boolean }): LiveItem[] {
   const data = json.data;
   if (!data) return [];
-  const direct = new Set(data.direct.nodes.map((n) => ("id" in n ? n.id : "")));
-  const out: LiveItem[] = [];
-  const seen = new Set<string>();
-  if (filters.authored) {
-    for (const n of data.authored.nodes) if (isPR(n) && !seen.has(n.id)) (seen.add(n.id), out.push(mapPR(n, "authored")));
-  }
-  if (filters.reviewRequests) {
-    for (const n of data.review.nodes) if (isPR(n) && !seen.has(n.id)) (seen.add(n.id), out.push(mapPR(n, direct.has(n.id) ? "review" : "team")));
-  }
-  return withStacks(out);
+  const byId = new Map<string, RawPR>();
+  for (const n of [...data.authored.nodes, ...data.review.nodes]) if (isPR(n) && !byId.has(n.id)) byId.set(n.id, n);
+  return withStacks(sectioned(listingOf(json), filters).flatMap(({ id, section }) => {
+    const raw = byId.get(id);
+    return raw ? [prItem(raw, section)] : [];
+  }));
 }
 
 export function withStacks(items: LiveItem[]): LiveItem[] {

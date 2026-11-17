@@ -3,6 +3,7 @@ import { emptyCounts, type ImportKind } from "../../state/import/apply";
 import { importSafariDirect, importSafariExport } from "../../state/import/fileImports";
 import { backTo, chooseSource, closeImport, NO_EXTENSIONS, patchImport, setImportKinds, type ImportFlow } from "../../state/import/flow";
 import { continueImport, skipEncryptedData, unlockAndImport } from "../../state/import/runImport";
+import { openListedExtensionsInStore } from "../../state/import/listedExtensions";
 import { devRegister } from "../dev/devRegister";
 
 export function useImportDevHandle(flow: ImportFlow) {
@@ -22,6 +23,7 @@ export function useImportDevHandle(flow: ImportFlow) {
       importSafariDirect,
       importSafari: importSafariExport,
       close: closeImport,
+      openListedExtensions: openListedExtensionsInStore,
       kinds: [...flow.kinds],
       setKinds: (list: ImportKind[]) => setImportKinds(list),
       setSpaces: (spaces: string[]) => patchImport({ spaces }),

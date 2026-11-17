@@ -1,4 +1,5 @@
 #import "ArdiaChromeWindowInternal.h"
+#import "ArdiaDevKeyPress.h"
 #import "ArdiaInterfaceScale.h"
 #import "ArdiaLaunchConfig.h"
 #import "ArdiaWebView.h"
@@ -290,13 +291,7 @@ NSString *Keys(NSWindow *window, NSString *argument) {
   [NSApp postEvent:KeyDownOf(window, parts) atStart:YES];
   NSEvent *down = [NSApp nextEventMatchingMask:NSEventMaskKeyDown untilDate:NSDate.distantPast inMode:NSDefaultRunLoopMode dequeue:YES];
   if (!down) return @"keys: the key event didn't come back";
-  NSString *handler = @"none";
-  if ([window performKeyEquivalent:down]) handler = @"window";
-  else if ([NSApp.mainMenu performKeyEquivalent:down]) handler = @"mainMenu";
-  else {
-    [window.firstResponder keyDown:down];
-    handler = @"keyDown";
-  }
+  NSString *handler = ardia_dev::PressKey(window, down);
   return [NSString stringWithFormat:@"%@ (first responder %@)", handler, Describe((NSView *)window.firstResponder)];
 }
 

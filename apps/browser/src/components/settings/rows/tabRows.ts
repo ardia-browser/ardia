@@ -157,6 +157,12 @@ export const tabRows = {
           description: "When you click a link that would open a new tab.",
           keywords: ["peek", "new tab", "target blank", "links", "preview", "open links", "open new-tab links in"],
         },
+        peekButtons: {
+          title: "Show Peek buttons",
+          explained: true,
+          description: "In the Peek's title bar, or beside it on the left or right.",
+          keywords: ["peek", "buttons", "close", "expand", "open as tab", "split view", "left", "right", "side", "position", "traffic lights", "arc", "zen", "glance", "peek buttons"],
+        },
         popupsOpenAsTabs: {
           title: "Open pop-ups as tabs",
           explained: true,

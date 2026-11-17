@@ -14,7 +14,7 @@ $tourFile = Join-Path $Out "tour.md"
 $script:Lines = [System.Collections.Generic.List[string]]::new()
 $script:Sessions = [System.Collections.Generic.List[object]]::new()
 $script:StopNumber = 0
-$script:Required = [System.Collections.Generic.List[string]]::new()
+$script:FailedStops = [System.Collections.Generic.List[string]]::new()
 $script:PreviousSignature = $null
 $script:UiaReady = $null
 $script:LightBrightness = $null
@@ -1014,7 +1014,7 @@ function Invoke-BarTypingStop($Session, [string]$Slug, [string]$Title, [string]$
     $stop.Facts.Add("lost a letter in $lost of $Tries tries")
     Set-Seen $stop ($lost -eq 0)
   }
-  if ($stop.Seen -ne "yes") { $script:Required.Add("$($stop.Number) $Title") }
+  if ($stop.Seen -ne "yes") { $script:FailedStops.Add("$($stop.Number) $Title") }
 }
 
 function Close-Bar {
@@ -1025,7 +1025,7 @@ function Close-Bar {
 
 function Invoke-TypingTour {
   $session = Start-Ardia "typing-sidebar" -Onboarded
-  if (-not (Test-Usable $session)) { $script:Required.Add("Typing (typing-sidebar): no usable window") }
+  if (-not (Test-Usable $session)) { $script:FailedStops.Add("Typing (typing-sidebar): no usable window") }
   if (Test-Usable $session) {
     $opened = Invoke-Stop $session "typing-page" "Not a first run: open Example Domain to type over" {
       param($stop)
@@ -1033,14 +1033,14 @@ function Invoke-TypingTour {
       $stop.Expected = "the window's title names example.com, the host Ardia shows for the open page."
       Set-Seen $stop (Open-Page $session $stop "example.com" "example\.com")
     }
-    if ($opened.Seen -ne "yes") { $script:Required.Add("$($opened.Number) Not a first run: open Example Domain to type over") }
+    if ($opened.Seen -ne "yes") { $script:FailedStops.Add("$($opened.Number) Not a first run: open Example Domain to type over") }
     Invoke-BarTypingStop $session "typing-ctrl-l" "Not a first run: Ctrl+L on a page, typing at 80 ms a key, ten tries" "On Example Domain, pressed Ctrl+L, typed example.com from 300 ms after it at 80 ms a key, reading the field after every key, then closed the bar with Escape; ten times." { Send-QuickChord @(0x11) 0x4C } { Close-Bar } 300 80 10
     Invoke-BarTypingStop $session "typing-ctrl-t" "Not a first run: Ctrl+T, typing at 80 ms a key from 100 ms after it, ten tries" "Pressed Ctrl+T, typed example.com from 100 ms after it at 80 ms a key, reading the field after every key, then closed the tab with Ctrl+W; ten times." { Send-QuickChord @(0x11) 0x54 } { Send-Chord @(0x11) 0x57 } 100 80 10
   }
   Stop-Ardia $session
 
   $session = Start-Ardia "typing-top" -Onboarded -Settings @{ tabLayout = "top" }
-  if (-not (Test-Usable $session)) { $script:Required.Add("Typing (typing-top): no usable window") }
+  if (-not (Test-Usable $session)) { $script:FailedStops.Add("Typing (typing-top): no usable window") }
   if (Test-Usable $session) {
     $opened = Invoke-Stop $session "typing-top-page" "Not a first run, tabs on top: open Example Domain to type over" {
       param($stop)
@@ -1048,13 +1048,13 @@ function Invoke-TypingTour {
       $stop.Expected = "the window's title names example.com, the host Ardia shows for the open page."
       Set-Seen $stop (Open-Page $session $stop "example.com" "example\.com")
     }
-    if ($opened.Seen -ne "yes") { $script:Required.Add("$($opened.Number) Not a first run, tabs on top: open Example Domain to type over") }
+    if ($opened.Seen -ne "yes") { $script:FailedStops.Add("$($opened.Number) Not a first run, tabs on top: open Example Domain to type over") }
     Invoke-BarTypingStop $session "typing-toolbar" "Not a first run, tabs on top: Ctrl+L into the toolbar's address field, typing at 80 ms a key, ten tries" "With tabs on top, on Example Domain, pressed Ctrl+L, typed example.com from 300 ms after it at 80 ms a key, reading the field after every key, then closed the bar with Escape; ten times." { Send-QuickChord @(0x11) 0x4C } { Close-Bar } 300 80 10
   }
   Stop-Ardia $session
 
   $session = Start-Ardia "typing-floating" -Onboarded -Settings @{ newTabOpens = "commandBar" }
-  if (-not (Test-Usable $session)) { $script:Required.Add("Typing (typing-floating): no usable window") }
+  if (-not (Test-Usable $session)) { $script:FailedStops.Add("Typing (typing-floating): no usable window") }
   if (Test-Usable $session) {
     Invoke-BarTypingStop $session "typing-floating" "Not a first run, new tabs open the command bar: Ctrl+T into the floating bar, typing at 80 ms a key, ten tries" "With newTabOpens = commandBar, pressed Ctrl+T, typed example.com from 100 ms after it at 80 ms a key, reading the field after every key, then closed the floating bar with Escape; ten times." { Send-QuickChord @(0x11) 0x54 } { Close-Bar } 100 80 10
   }
@@ -1134,7 +1134,7 @@ function Invoke-HoldStop($Session, [string]$Slug, [string]$Title, [string]$Did, 
     Send-Chord @(0x11) 0x57
     Start-Sleep -Milliseconds 500
   }
-  if ($stop.Seen -ne "yes") { $script:Required.Add("$($stop.Number) $Title") }
+  if ($stop.Seen -ne "yes") { $script:FailedStops.Add("$($stop.Number) $Title") }
 }
 
 function Invoke-WholeTextTries($Session, [string]$Slug, [string]$Title, [string]$How) {
@@ -1164,21 +1164,21 @@ function Invoke-WholeTextTries($Session, [string]$Slug, [string]$Title, [string]
     $stop.Facts.Add("the bar read 'example.com' in $kept of 10")
     Set-Seen $stop ($kept -eq 10)
   }
-  if ($stop.Seen -ne "yes") { $script:Required.Add("$($stop.Number) $Title") }
+  if ($stop.Seen -ne "yes") { $script:FailedStops.Add("$($stop.Number) $Title") }
 }
 
 function Invoke-HoldTour {
   $env:ARDIA_TEST = "keyHoldReadyMs=$($script:HoldReadyMs)"
   $session = Start-Ardia "hold" -Onboarded
   $env:ARDIA_TEST = ""
-  if (-not (Test-Usable $session)) { $script:Required.Add("Hold (hold): no usable window"); Stop-Ardia $session; return }
+  if (-not (Test-Usable $session)) { $script:FailedStops.Add("Hold (hold): no usable window"); Stop-Ardia $session; return }
   $opened = Invoke-Stop $session "hold-page" "Key hold: open Example Domain in the first tab" {
     param($stop)
     $stop.Did = "Launched onboarded, opened example.com in a tab."
     $stop.Expected = "the window's title names example.com."
     Set-Seen $stop (Open-Page $session $stop "example.com" "example\.com")
   }
-  if ($opened.Seen -ne "yes") { $script:Required.Add("$($opened.Number) Key hold: open Example Domain in the first tab") }
+  if ($opened.Seen -ne "yes") { $script:FailedStops.Add("$($opened.Number) Key hold: open Example Domain in the first tab") }
 
   Invoke-HoldStop $session "hold-capitals" "Key hold: capitals from a held Shift and from Caps Lock, typed 15 ms after Ctrl+T" "Pressed Ctrl+T, and from 15 ms after it typed A with Shift held, then b, then Caps Lock, c, d, Caps Lock, 30 ms a key." "the new tab's bar reads 'AbCD' (#2099)." {
     param($stop)
@@ -1250,7 +1250,7 @@ function Invoke-HoldTour {
     [ArdiaTour]::PostMessageW($second.Handle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
     Start-Sleep -Milliseconds 800
   } else {
-    $script:Required.Add("Key hold: Ctrl+N opened no second window")
+    $script:FailedStops.Add("Key hold: Ctrl+N opened no second window")
   }
 
   $padsBefore = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match "^notepad$" } | ForEach-Object { $_.Id })
@@ -1299,14 +1299,14 @@ function Invoke-HoldTour {
   Stop-Ardia $session
 
   $live = Start-Ardia "hold-live" -Onboarded
-  if (-not (Test-Usable $live)) { $script:Required.Add("Hold (hold-live): no usable window"); Stop-Ardia $live; return }
+  if (-not (Test-Usable $live)) { $script:FailedStops.Add("Hold (hold-live): no usable window"); Stop-Ardia $live; return }
   $page = Invoke-Stop $live "hold-live-page" "Key hold, runner's own timing: open Example Domain in the first tab" {
     param($stop)
     $stop.Did = "Launched onboarded without a readiness floor, opened example.com in a tab."
     $stop.Expected = "the window's title names example.com."
     Set-Seen $stop (Open-Page $live $stop "example.com" "example\.com")
   }
-  if ($page.Seen -ne "yes") { $script:Required.Add("$($page.Number) Key hold, runner's own timing: open Example Domain") }
+  if ($page.Seen -ne "yes") { $script:FailedStops.Add("$($page.Number) Key hold, runner's own timing: open Example Domain") }
   Invoke-WholeTextTries $live "hold-whole-live" "Key hold, runner's own timing: example.com typed from 15 ms after Ctrl+T, ten tries" "at the runner's own timing, so the first letters are held and the rest arrive live"
   Stop-Ardia $live
 }
@@ -1426,7 +1426,7 @@ function Invoke-TypeStop($Session, [string]$Slug, [string]$Title, [string]$Did, 
     }
     Set-Seen $stop ($(if ($JudgeLaterLetters) { $laterKept } elseif ($JudgeWholeText) { $whole } elseif ($RequireGoHold) { $firstKeyOk -and [bool]$loaded -and $heldUnderPointer } else { $firstKeyOk }))
   }
-  if ($Required -and $stop.Seen -ne "yes") { $script:Required.Add("$($stop.Number) $Title") }
+  if ($Required -and $stop.Seen -ne "yes") { $script:FailedStops.Add("$($stop.Number) $Title") }
   return $stop
 }
 
@@ -1512,7 +1512,7 @@ function Start-SuggestServer([string]$Log) {
       Start-Sleep -Milliseconds 200
     }
   }
-  if (-not $ready) { $script:Required.Add("the tour's suggest server never answered on port $($script:SuggestPort)") }
+  if (-not $ready) { $script:FailedStops.Add("the tour's suggest server never answered on port $($script:SuggestPort)") }
   return $job
 }
 
@@ -1560,7 +1560,7 @@ function Invoke-FirstRunLaunch([string]$Name, [string]$Exe, [scriptblock]$Body, 
       $stop.Expected = "a window within $LaunchSeconds s."
       $stop.Seen = "no"
     } | Out-Null
-    $script:Required.Add("First run ($Name): no usable window")
+    $script:FailedStops.Add("First run ($Name): no usable window")
   }
   Stop-Ardia $session
 }
@@ -1596,7 +1596,7 @@ function Invoke-FirstRunTour {
       $engineMs = @(Read-LogLines $session.Log | Where-Object { $_ -match "engine" } | Select-Object -First 3)
       Write-Host "[tour] slow launch, first engine lines: $($engineMs -join ' / ')"
       $walk = Walk-OnboardingToOutro $session -SkipEach
-      Invoke-TypeStop $session "slow-engine" "First run under load from a cold copy: Ctrl+T about 400 ms after Get Started, then Enter" "With CPU and disk hogs running and the app copied to a fresh folder (first window $($session.FirstWindowMs) ms after start), skipped to the last onboarding screen ($($walk.Screens)), clicked Get Started, pressed Ctrl+T about 400 ms after the click (the click waits 300 ms after the mouse button comes up, then 100 ms more) and typed example.com from 100 ms after it, 30 ms a key, then pressed Enter." { param($stop) $clicked = Click-Named $session "Get Started"; $stop.Facts.Add("Get Started clicked: $clicked"); Start-Sleep -Milliseconds 100 } "ctrl+t" "Enter" "#2101" -Required | Out-Null
+      Invoke-TypeStop $session "slow-engine" "First run under load from a cold copy: Ctrl+T about 400 ms after Get Started, then Enter" "With CPU and disk hogs running and the app copied to a fresh folder (first window $($session.FirstWindowMs) ms after start), skipped to the last onboarding screen ($($walk.Screens)), clicked Get Started, pressed Ctrl+T about 400 ms after the click (the click waits 300 ms after the mouse button comes up, then 100 ms more) and typed example.com from 100 ms after it, 30 ms a key, then pressed Enter." { param($stop) $clicked = Click-Named $session "Get Started"; $stop.Facts.Add("Get Started clicked: $clicked"); Start-Sleep -Milliseconds 100 } "ctrl+t" "Enter" "#2101, #2059" -Required -JudgeWholeText | Out-Null
     }
   } finally {
     $hogs | Stop-Job -ErrorAction SilentlyContinue
@@ -1642,7 +1642,7 @@ function Invoke-FirstRunTour {
     $stop.Facts.Add("first letter lost in $($lost.Count) of $($script:FirstLetters.Count); with the bar focused before it: lost in $($lostInTime.Count) of $($inTime.Count)")
     foreach ($try in $lost) { $stop.Facts.Add("stop $($try.Number) $($try.Slug): '$($try.Field)', focus first $($try.FocusFirst), page mounted $($try.Mounts) time(s), first read $($try.FirstRead)") }
     Set-Seen $stop ($lost.Count -eq 0 -and $script:FirstLetters.Count -gt 0)
-  } | ForEach-Object { if ($_.Seen -ne "yes") { $script:Required.Add("$($_.Number) the first letter after Ctrl+T (#2124)") } }
+  } | ForEach-Object { if ($_.Seen -ne "yes") { $script:FailedStops.Add("$($_.Number) the first letter after Ctrl+T (#2124)") } }
 
 }
 
@@ -2813,7 +2813,7 @@ foreach ($tour in $tours) {
   } catch {
     $script:Lines.Add("- The $($tour.Name) part stopped early: $($_.Exception.Message)")
     Write-Host "[tour] the $($tour.Name) part stopped early: $($_.Exception.Message)"
-    if ($tour.Required) { $script:Required.Add("the $($tour.Name) part stopped early: $($_.Exception.Message)") }
+    if ($tour.Required) { $script:FailedStops.Add("the $($tour.Name) part stopped early: $($_.Exception.Message)") }
   } finally {
     foreach ($session in @($script:Sessions | Where-Object { -not $_.Stopping })) { Stop-Ardia $session }
   }
@@ -2832,10 +2832,10 @@ Write-Tour
 $elapsed = [Math]::Round(((Get-Date) - $script:Started).TotalSeconds)
 $crashed = @($script:Sessions | Where-Object { $_.Crashed })
 Write-Host "[tour] $($script:StopNumber) stops in $elapsed s; tour.md and the screenshots are in $Out"
-if ($script:Required.Count) {
-  foreach ($failed in $script:Required) { Write-Host "::error::required tour stop failed: $failed" }
+if ($script:FailedStops.Count) {
+  foreach ($failed in $script:FailedStops) { Write-Host "::error::required tour stop failed: $failed" }
 }
-if ($crashed.Count -or $script:Required.Count) {
+if ($crashed.Count -or $script:FailedStops.Count) {
   foreach ($session in $crashed) { Write-Host "::error::the app crashed or exited on its own during the '$($session.Name)' launch: $($session.Summary)" }
   exit 1
 }

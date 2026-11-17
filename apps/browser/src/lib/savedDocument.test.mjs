@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-const { parseSaved, versionedJson, unchanged, upgraded } = await import("./savedDocument.ts");
+const { keptAsideName, newerSavedVersion, parseSaved, versionedJson, unchanged, upgraded } = await import("./savedDocument.ts");
 
 test("a document without a version runs migration 0 exactly once and comes out at the current version", () => {
   let runs = 0;
@@ -48,4 +48,18 @@ test("parse errors and empty documents read as nothing", () => {
 test("a write puts the version last, so the payload can't override it", () => {
   assert.equal(versionedJson({ version: 7, a: 1 }, 2), '{"version":2,"a":1}');
   assert.equal(versionedJson({ version: "0.3.1" }, 1, "schemaVersion"), '{"version":"0.3.1","schemaVersion":1}');
+});
+
+test("only a readable document with a version newer than the app's counts as newer", () => {
+  assert.equal(newerSavedVersion(JSON.stringify({ version: 3 }), 2), 3);
+  assert.equal(newerSavedVersion(JSON.stringify({ v: 5 }), 1, "v"), 5);
+  for (const json of [JSON.stringify({ version: 2 }), JSON.stringify({ version: 1 }), JSON.stringify({}), JSON.stringify({ version: "3" }), JSON.stringify({ version: 2.5 }), "[3]", "{", "", null, undefined])
+    assert.equal(newerSavedVersion(json, 2), null);
+});
+
+test("a newer document's copy is named after its version", () => {
+  assert.equal(keptAsideName("session.json", 12), "session.v12.json");
+  assert.equal(keptAsideName("Scripts/status.json", 2), "Scripts/status.v2.json");
+  assert.equal(keptAsideName("session.json", 12, 1), "session.v12.json");
+  assert.equal(keptAsideName("session.json", 12, 3), "session.v12-3.json");
 });

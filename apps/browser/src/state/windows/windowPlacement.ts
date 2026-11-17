@@ -4,12 +4,13 @@ import { isSmallWindow } from "./small";
 
 const sameFrame = (a: Frame | null | undefined, b: Frame | null | undefined) => a === b || (!!a && !!b && a.every((v, i) => v === b[i]));
 
-export function withWindowFrame(s: BrowserState, id: string, frame: Frame, restored?: Frame): Partial<BrowserState> {
+export function withWindowFrame(s: BrowserState, id: string, frame: Frame, restored?: Frame, fitted?: boolean): Partial<BrowserState> {
   const w = s.windows[id];
   if (!w || (sameFrame(w.frame, frame) && sameFrame(w.restoredFrame, restored))) return {};
   const { restoredFrame: _, ...rest } = w;
   const windows = { ...s.windows, [id]: { ...rest, frame, ...(restored ? { restoredFrame: restored } : {}) } };
-  if (!isSmallWindow(w)) return { windows };
+  const resized = !w.frame || w.frame[2] !== frame[2] || w.frame[3] !== frame[3];
+  if (fitted || !resized || !isSmallWindow(w)) return { windows };
   const size: [number, number] = [Math.round(frame[2]), Math.round(frame[3])];
   const [width, height] = s.settings.littleArdiaSize;
   return size[0] === width && size[1] === height ? { windows } : { windows, settings: { ...s.settings, littleArdiaSize: size } };

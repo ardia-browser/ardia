@@ -1,3 +1,4 @@
+import { hermesHeapBytes } from "../../lib/hermesHeap";
 import { inputIdleSeconds, trimEngineMemory } from "../../platform/performance";
 import { useBrowser } from "../browser/store";
 import { isQuitting } from "../app/quit";
@@ -12,10 +13,9 @@ const MAX_POSTPONES = 30;
 const INPUT_IDLE_SECONDS = 2;
 const TIMER_LATE_MS = 50;
 
-type HermesStats = { js_heapSize?: number };
-const runtime = globalThis as { gc?: () => void; HermesInternal?: { getInstrumentedStats?: () => HermesStats } };
+const runtime = globalThis as { gc?: () => void };
 
-const heapSize = () => runtime.HermesInternal?.getInstrumentedStats?.().js_heapSize ?? null;
+const heapSize = hermesHeapBytes;
 
 let started = false;
 

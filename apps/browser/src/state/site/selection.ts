@@ -10,7 +10,11 @@ import { showToast } from "../app/toasts";
 import { openModeFor } from "../bookmarks/actions";
 import { openFromPage } from "../tabs/openFromPage";
 import { awaitsFirstPage } from "../tabs/pendingAddress";
-import { noteUrlCopied } from "../telemetry/urlCopies";
+import { noteSelectedTabUrlsCopied, noteUrlCopied } from "../telemetry/urlCopies";
+import { selectedTabIds } from "../pins/organize";
+import { copyLinks } from "../bookmarks/linkMenus";
+import { tabTitle } from "../browser/model";
+import type { BrowserState } from "../browser/store";
 
 export type { PageSelection };
 
@@ -96,6 +100,19 @@ export async function copyLinkToSelection(tabId: string) {
 }
 
 const HAS_SELECTION = `post("result", JSON.stringify(!!String(getSelection() || "").trim()))`;
+
+export function copySelectedTabUrls(s: BrowserState, windowId: string, markdown: boolean): boolean {
+  if ((s.selection[windowId]?.length ?? 0) < 2) return false;
+  const links = selectedTabIds(s, windowId)
+    .map((id) => s.tabs[id])
+    .filter((t) => !!t?.url)
+    .map((t) => ({ url: t!.url, title: tabTitle(t!) }));
+  if (links.length < 2) return false;
+  copyLinks(links, markdown);
+  noteSelectedTabUrlsCopied();
+  showToast(windowId, `Copied ${links.length} Links`, undefined, { icon: "link" });
+  return true;
+}
 
 export async function copyPageUrl(tabId: string) {
   const tab = store().tabs[tabId];

@@ -1,5 +1,5 @@
 import type { StripDock, StripEntry, StripGroupEntry, StripMember } from "../../state/tabs/topStrip";
-import type { Dock, DropTarget } from "./model";
+import type { Dock } from "./model";
 import { COMPACT_CHIP, DOCK_GAP, GAP, MAX_CHIP, NEW_TAB_ROOM, PEEK_BORDER, PEEK_LEFT, PINNED_CELL, PINNED_SPACING, SELECTED_MIN_CHIP, TITLED_CHIP } from "./tokens";
 import { captionRoom, WINDOW_CHROME, type WindowChrome } from "../../lib/windowChrome";
 
@@ -98,22 +98,6 @@ export function dropIndex({ slots, lefts }: DragGeometry, from: number, dx: numb
   return index;
 }
 
-export type Aim = { to: number; onto: number | null };
-
-export function aimDrop({ slots, lefts }: DragGeometry, from: number, pointer: number, target: (index: number) => boolean, edge: number): Aim {
-  let to = 0;
-  let onto: number | null = null;
-  slots.forEach((slot, i) => {
-    if (i === from) return;
-    const left = lefts[i]!;
-    const right = left + slot.width;
-    const zone = target(i) ? Math.min(slot.width / 4, edge) : slot.width / 2;
-    if (target(i) && pointer > left + zone && pointer < right - zone) onto = i;
-    if (i < from ? pointer > left + zone : pointer > right - zone) to++;
-  });
-  return { to, onto };
-}
-
 export function leaveIndex({ slots, lefts }: DragGeometry, slot: number, chip: number, expanded: boolean, left: number, width: number): number | null {
   const start = lefts[slot]!;
   const end = start + slots[slot]!.width;
@@ -162,7 +146,6 @@ export type StripLayout = {
   widths: TabWidths;
   tabWidth: (tabId: string) => number;
   top: DragGeometry;
-  targets: (DropTarget | null)[];
   memberWidth: (m: StripMember) => number;
   spanOf: (tabId: string) => [number, number] | null;
   tabsEnd: number;
@@ -224,7 +207,6 @@ export function layoutStrip(entries: StripEntry[], activeId: string, pageWidth: 
     }),
     GAP,
   );
-  const targets = rows.map((e) => (e.kind === "split" || e.kind === "folder" ? null : { kind: e.kind, id: e.id }));
   const spanOf = (tabId: string): [number, number] | null => {
     const cell = dock && dockLayout ? dockCellOf(dock.ids, (id) => dockTabs(dock, id), tabId) : -1;
     if (cell >= 0) return [dockLayout!.geometry.lefts[cell]!, PINNED_CELL];
@@ -239,7 +221,7 @@ export function layoutStrip(entries: StripEntry[], activeId: string, pageWidth: 
     return [left + groupChip(row) + MEMBERS_INSET + offsets[at]!, widths[at]!];
   };
   const end = top.slots.length ? top.lefts.at(-1)! + top.slots.at(-1)!.width : 0;
-  return { chip, selected, widths, tabWidth, top, targets, memberWidth, spanOf, tabsEnd: dockSpan(dock) + end, tabsShrink: tabUnits > 0 };
+  return { chip, selected, widths, tabWidth, top, memberWidth, spanOf, tabsEnd: dockSpan(dock) + end, tabsShrink: tabUnits > 0 };
 }
 
 export function heldWideTab(entries: StripEntry[], wide: { tabId: string; slot: number }): { tabId: string; atEnd: boolean } {

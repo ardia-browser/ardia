@@ -180,7 +180,7 @@ export async function openLiveFolderMenu(windowId: string, folderId: string) {
     void refreshFolder(folderId);
   } else if (choice.startsWith("source:")) {
     const id = choice.slice(7) as LiveSourceId;
-    if (!live().accounts[id]) return openSettings("liveFolders");
+    if (!live().accounts[id]) return openSettings("automations");
     const sources = folder.sources.includes(id) ? folder.sources.filter((x) => x !== id) : [...folder.sources, id];
     updateFolder(folderId, { sources: sources.length ? sources : folder.sources });
     void refreshFolder(folderId);
@@ -196,7 +196,7 @@ export async function openLiveFolderMenu(windowId: string, folderId: string) {
   else if (choice === "read") markRead(folderId);
   else if (choice === "up") moveLiveFolder(windowId, folderId, -1);
   else if (choice === "down") moveLiveFolder(windowId, folderId, 1);
-  else if (choice === "settings") openSettings("liveFolders");
+  else if (choice === "settings") openSettings("automations");
   else if (choice === "delete") deleteLiveFolder(folderId);
 }
 
@@ -286,6 +286,6 @@ export function runCalendarMenu(choice: string): boolean {
   else if (choice.startsWith("cal:toggle:")) {
     const id = choice.slice(11);
     setCalendarHidden(id, !settings.hiddenCalendarIds.includes(id));
-  } else if (choice === "cal:settings") openSettings("calendar");
+  } else if (choice === "cal:settings") openSettings("automations");
   return true;
 }

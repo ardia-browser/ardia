@@ -3,21 +3,21 @@ import { rewordWith, wordingPlugin, type Wording } from "./credentialWording";
 
 export const SYNC_WORDING: readonly Wording[] = [
   {
-    file: "components/settings/panes/Sync.tsx",
+    file: "components/settings/panes/SyncSection.tsx",
     replacements: [
       [
-        "{SYNCED_KINDS} across your {PLATFORM_TERMS.syncedComputer}s. It all goes through a folder you choose, like one in {PLATFORM_TERMS.cloudDrive}, and it’s end-to-end encrypted: only your devices can read it.",
-        "{SYNCED_KINDS} across your computers. It all goes through a folder you choose, like one that Syncthing, Nextcloud or Dropbox keeps in sync, and it’s end-to-end encrypted: only your devices can read it.",
-      ],
-      [
-        "            icon={<Symbol name=\"exclamationmark.icloud\" size={14} color={theme.warning} style={{ width: 28, height: 20 }} />}\n            title={`${PLATFORM_TERMS.cloudDrive} is off on this ${PLATFORM_TERMS.computer}`}\n            description={`${PLATFORM_TERMS.turnOnCloudDrive}, or choose another folder that syncs between your ${PLATFORM_TERMS.syncedComputer}s, like one in Dropbox, on a NAS or on a USB drive.`}\n          >\n            {PLATFORM_TERMS.cloudDriveSettingsUrl ? <Button title=\"Open iCloud Settings\" onPress={() => void Linking.openURL(PLATFORM_TERMS.cloudDriveSettingsUrl)} /> : null}",
-        `            icon={<Symbol name="exclamationmark.triangle.fill" size={13} color={theme.warning} style={{ width: 28, height: 20 }} />}
+        `            icon={<Symbol name="exclamationmark.icloud" size={14} color={theme.warning} style={WARNING_ICON} />}
+            title={\`\${PLATFORM_TERMS.cloudDrive} is off on this \${PLATFORM_TERMS.computer}\`}
+            description={\`\${PLATFORM_TERMS.turnOnCloudDrive}, or pick any folder that syncs, like Dropbox.\`}
+          >
+            {PLATFORM_TERMS.cloudDriveSettingsUrl ? <Button title="Open iCloud Settings" onPress={() => void Linking.openURL(PLATFORM_TERMS.cloudDriveSettingsUrl)} /> : null}
+`,
+        `            icon={<Symbol name="exclamationmark.triangle.fill" size={13} color={theme.warning} style={WARNING_ICON} />}
             title="The default sync folder’s location is missing"
             description="Choose a folder that syncs between your computers, like one that Syncthing, Nextcloud or Dropbox keeps in sync, or one on a NAS or a USB drive."
           >
-            <Button title="Choose…" onPress={() => void chooseSyncFolder()} />`,
+`,
       ],
-      ["No server and no account: your {PLATFORM_TERMS.syncedComputer}s meet in the sync folder.", "No server and no account: your devices meet in the sync folder."],
       ["title: `Show Sync Folder in ${PLATFORM_TERMS.fileManager}`", `title: "Open Sync Folder"`],
     ],
   },
@@ -52,7 +52,7 @@ export const SYNC_WORDING: readonly Wording[] = [
       ["return `Couldn’t save the sync key in ${PLATFORM_TERMS.secretStore}.`;", `return "Couldn’t save the sync key in your system keyring.";`],
       [
         "On your other ${PLATFORM_TERMS.syncedComputer}, open Ardia › Settings › Sync and choose the same sync folder.",
-        `On your other device, open Ardia › Settings › Sync and choose the same sync folder.`,
+        `On your other device, open Ardia › Settings › General › Sync and choose the same sync folder.`,
       ],
       [
         "Click Show Code. On your iPhone, open Ardia, tap Sync With Mac, and scan the code. For another Mac, you can also scan it with your iPhone’s camera and paste the words there with Universal Clipboard.",
@@ -72,11 +72,8 @@ export const SYNC_WORDING: readonly Wording[] = [
   {
     file: "components/settings/rows/generalRows.ts",
     replacements: [
-      [
-        "description: `Sync your profiles, bookmarks, history, tabs, ${PLATFORM_FEATURES.syncsPasswords ? \"passwords, \" : \"\"}extensions and settings across your ${PLATFORM_TERMS.syncedComputer}s.`, keywords: [PLATFORM_TERMS.cloudDrive.toLowerCase(), \"recovery phrase\",",
-        `description: "Sync your profiles, bookmarks, history, tabs, passwords, extensions and settings across your computers.", keywords: ["syncthing", "recovery phrase",`,
-      ],
       [`keywords: ["icloud drive", "dropbox", "folder"]`, `keywords: ["syncthing", "nextcloud", "dropbox", "folder"]`],
+      [`keywords: ["devices", "computers", "macs", "remove device"]`, `keywords: ["devices", "computers", "remove device"]`],
     ],
   },
   {

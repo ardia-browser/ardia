@@ -1083,7 +1083,57 @@ class BrowseEndToEnd(unittest.TestCase):
             self.assertIn('[frame "Job board"]', out)
             self.assertIn("Field Service Technician | Oklahoma City", out)
             self.assertNotIn("Tiny tracker", out)
+            self.assertNotIn("Buy the Pro plan", out)
+            self.assertNotIn("Empty widget", out)
         self.assertIn('[frame "Partner board" from another site, not read here: read http://localhost:', self.browse("read", session=session).stdout)
+
+    def test_a_read_of_the_tab_says_when_it_read_it(self):
+        session = "read-time"
+        self.browse("open", self.url("scopebadge.html"), session=session)
+        last = self.browse("read", session=session).stdout.rstrip().splitlines()[-1]
+        self.assertRegex(last, r"^\[read \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC\]$")
+        self.assertIn("readAt", self.browse("read", "--json", session=session).stdout)
+
+    def test_scroll_read_waits_at_the_bottom_for_a_feed_that_loads_slowly(self):
+        session = "slow-feed"
+        self.browse("open", self.url("slowfeed.html"), "--show", session=session)
+        out = self.browse("read", "-s", "#feed", "--scroll", "--timeout", "60000", session=session).stdout
+        self.assertIn("Maker 500", out)
+        self.assertIn("[500 rows; scrolled to the end of the list]", out)
+
+    def test_a_page_stuck_in_its_own_scripts_fails_fast_after_the_first_wait(self):
+        import time
+
+        session = "busy-page"
+        self.browse("open", self.url("busypage.html"), session=session)
+        time.sleep(2.5)
+        first = self.browse("snapshot", session=session, check=False)
+        self.assertIn("isn't answering", first.stdout + first.stderr)
+        started = time.monotonic()
+        second = self.browse("read", session=session, check=False)
+        self.assertLess(time.monotonic() - started, 12)
+        self.assertIn("isn't answering", second.stdout + second.stderr)
+
+    def test_a_click_declines_a_survey_invite_in_its_way(self):
+        session = "survey"
+        self.browse("open", self.url("surveyinvite.html"), "--show", session=session)
+        out = self.browse("click", "#go", session=session).stdout
+        self.assertIn("No thanks", out)
+        self.assertEqual(self.report(session), {"clicked": ["go"], "survey": "declined"})
+
+    def test_a_click_closes_an_open_menu_in_its_way(self):
+        session = "open-menu"
+        self.browse("open", self.url("openmenu.html"), "--show", session=session)
+        out = self.browse("click", "#save", session=session).stdout
+        self.assertIn("Escape was pressed", out)
+        self.assertEqual(self.report(session), {"clicked": ["save"], "closed": True})
+
+    def test_a_click_closes_a_site_popup_in_its_way_through_its_close_button(self):
+        session = "site-popup"
+        self.browse("open", self.url("sitepopup.html"), "--show", session=session)
+        out = self.browse("click", "#next", session=session).stdout
+        self.assertIn("A popup was in the way", out)
+        self.assertEqual(self.report(session), {"clicked": ["next"], "closed": True})
 
     def test_text_with_half_an_emoji_still_reads(self):
         session = "surrogate"
@@ -1260,7 +1310,7 @@ class BrowseEndToEnd(unittest.TestCase):
         out = self.browse("read", self.url("results.html"), self.url("picker.html"), session=session).stdout
         self.assertIn('(scope: page says "1–20 of 340 results"; has a Next page link, pages up to 17)', out)
         self.browse("open", self.url("results.html"), session=session)
-        self.assertTrue(self.browse("read", session=session).stdout.rstrip().endswith('[scope: page says "1–20 of 340 results"; has a Next page link, pages up to 17]'))
+        self.assertEqual(self.browse("read", session=session).stdout.rstrip().splitlines()[-2], '[scope: page says "1–20 of 340 results"; has a Next page link, pages up to 17]')
 
     def test_click_falls_back_to_a_dom_click_off_the_page(self):
         session = "carousel"

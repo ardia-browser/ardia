@@ -1,7 +1,11 @@
-const NO_COUNTS = { downloads_panel_press_closes: 0, downloads_panel_held_opens: 0 };
+const NO_COUNTS = { downloads_panel_press_closes: 0, downloads_panel_held_opens: 0, download_archives_opened: 0 };
 let counts = { ...NO_COUNTS };
 
-const KEYS = { pressClose: "downloads_panel_press_closes", heldOpen: "downloads_panel_held_opens" } as const;
+const KEYS = {
+  pressClose: "downloads_panel_press_closes",
+  heldOpen: "downloads_panel_held_opens",
+  archiveOpen: "download_archives_opened",
+} as const;
 
 export const noteDownloadsPanel = (event: keyof typeof KEYS) => void counts[KEYS[event]]++;
 

@@ -41,39 +41,13 @@ export const LINUX_WORDING: readonly Wording[] = [
     replacements: [["`Auto · ${toDark ? \"Dark\" : \"Light\"} like your ${PLATFORM_TERMS.computer}`", "`Auto · ${toDark ? \"Dark\" : \"Light\"} like your desktop`"]],
   },
   {
-    file: "components/settings/panes/Appearance.tsx",
-    replacements: [["{ value: \"system\", title: `Follow ${PLATFORM_TERMS.os}` }", `{ value: "system", title: "Follow system" }`]],
-  },
-  {
-    file: "components/settings/rows/generalRows.ts",
-    replacements: [
-      ["description: PLATFORM_FEATURES.quitsWithLastWindow ? `Asks before ${APP} quits when you close its last window.` : `Asks before ${APP} quits with ${keyText(\"⌘Q\")}.`", "description: `Asks before ${APP} quits with Ctrl+Shift+Q.`"],
-      ["description: `Asks before ${keyText(\"⇧⌘W\")} or the close button closes its tabs.`", `description: "Asks before the close button or File › Close Window closes its tabs."`],
-      ["The window buttons stay at the top left.", "The window buttons move with the sidebar."],
-    ],
-  },
-  {
-    file: "components/settings/rows/appearanceRows.ts",
-    replacements: [
-      [
-        `"Follow macOS uses System Settings › Appearance › Show scroll bars. Thin shows slim scroll bars over the page only while you scroll, even with a mouse."`,
-        `"Follow system keeps the scroll bars your desktop shows. Thin shows slim scroll bars over the page only while you scroll, even with a mouse."`,
-      ],
-    ],
-  },
-  {
-    file: "components/settings/panes/Privacy.tsx",
-    replacements: [[`description="Built on EasyList and EasyPrivacy. Blocking happens on this Mac."`, `description="Built on EasyList and EasyPrivacy. Blocking happens on this computer."`]],
-  },
-  {
-    file: "components/settings/rows/privacyRows.ts",
-    replacements: [
-      ["title: `Zoom with ${keyText(\"⌘\")} and the mouse wheel`", `title: "Zoom with Ctrl and the mouse wheel"`],
-    ],
+    file: "components/settings/panes/General.tsx",
+    replacements: [["label: PLATFORM_FEATURES.quitsWithLastWindow ? `Quitting when you close the last window` : `Quitting with ${keyText(\"⌘Q\")}`", `label: "Quitting with Ctrl+Shift+Q"`]],
   },
   {
     file: "state/telemetry/copy.ts",
     replacements: [
+      ["how many tab changes this Mac sent,", "how many tab changes this computer sent,"],
       ["Sent to ardia.dev with a random ID made on this Mac, and kept", "Sent to ardia.dev with a random ID made on this computer, and kept"],
       [`keptOnThisMac: "Kept on this Mac"`, `keptOnThisMac: "Kept on this computer"`],
       ["browsing data removed from this Mac and", "browsing data removed from this computer and"],
@@ -94,11 +68,19 @@ export const LINUX_WORDING: readonly Wording[] = [
         "change it any time in Settings › Privacy & Security. Either way, Ardia sends one anonymous “opened today” count a day, with its version and macOS version and no persistent ID.",
         "change it any time in Settings › Privacy & Security. Either way, Ardia sends one anonymous “opened today” count a day, with its version and operating system version and no persistent ID.",
       ],
+      [
+        "After a crash: the exception type and name (never its message), and the function names where it was thrown and on the crashing thread, from this app's crash report",
+        "After a crash: the signal and its code, and for each step on the crashing thread the file it ran in (like chrome or libc.so.6) and the position inside that file, with the build IDs of Ardia's own files, read from the crash dump Chromium's crash handler keeps on this computer. Never the dump itself, which can hold page content",
+      ],
+      [
+        "plus the version that crashed, how long the process had run, the total size of its writable memory regions, and how the system ended it (its termination reason, like a signal or a code-signing kill)",
+        "plus the engine version that crashed, how long the process had run, and the signal that ended it",
+      ],
       ["A random install ID, made on this Mac once", "A random install ID, made on this computer once"],
       ["App version and build, macOS version, chip", "App version and build, operating system version, chip"],
       [
-        "Every 10 minutes Ardia notes on this Mac its tab, window and profile counts, its memory use, rough free disk space, the Mac's memory pressure, how long it has been open, and which of Ardia's own pages (like Settings or History) the tab in front was on, never a website's address. Ardia also takes that note when you open or leave one of those pages. That note is sent only with a crash report, or at the next launch after Ardia didn't quit cleanly, with whether the Mac restarted since.",
-        "Every 10 minutes Ardia notes on this computer its tab, window and profile counts, its memory use, rough free disk space, the system's memory pressure, how long it has been open, and which of Ardia's own pages (like Settings or History) the tab in front was on, never a website's address. Ardia also takes that note when you open or leave one of those pages. That note is sent only with a crash report, or at the next launch after Ardia didn't quit cleanly, with whether the computer restarted since.",
+        "Every 10 minutes Ardia notes on this Mac its tab, window and profile counts, its memory use, rough free disk space, the Mac's memory pressure, how long it has been open, and which of Ardia's own pages (like Settings or History) the tab in front was on, never a website's address. Ardia also takes that note when you open or leave one of those pages, and keeps the last 3 of those pages with how many minutes ago you were on each. That note is sent only with a crash report, or at the next launch after Ardia didn't quit cleanly, with whether the Mac restarted since.",
+        "Every 10 minutes Ardia notes on this computer its tab, window and profile counts, its memory use, rough free disk space, the system's memory pressure, how long it has been open, and which of Ardia's own pages (like Settings or History) the tab in front was on, never a website's address. Ardia also takes that note when you open or leave one of those pages, and keeps the last 3 of those pages with how many minutes ago you were on each. That note is sent only with a crash report, or at the next launch after Ardia didn't quit cleanly, with whether the computer restarted since.",
       ],
       [
         "how much memory the Mac has, how many displays and their scale, and whether the Mac decodes",
@@ -131,6 +113,11 @@ export const LINUX_WORDING: readonly Wording[] = [
       ["closing the Top App in front (⌘W, or a middle click on it)", "closing the Top App in front (Ctrl+W, or a middle click on it)"],
       ["Bringing your last window back from the Dock or at launch", "Bringing your last window back from the taskbar or at launch"],
       ["How many times ⌘Y asked for the History", "How many times Ctrl+Y asked for the History"],
+      ["how many times the macOS Now Playing controls played,", "how many times the desktop's media controls played,"],
+      [
+        "summed up once an hour, and when Ardia can't post one or the system refuses it: how long its title and message were, whether it had an icon, whether posting failed in Ardia itself and the kind of error it was, and the error code the system gave. Never the notification's text",
+        "summed up once an hour. Never the notification's text",
+      ],
     ],
   },
   {

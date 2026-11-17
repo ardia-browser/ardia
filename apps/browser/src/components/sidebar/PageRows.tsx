@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState, type RefObject } from "react";
+import { memo, useCallback, useEffect, useMemo, useState, type RefObject } from "react";
 import { Animated, View } from "react-native";
 import { radius, space, Symbol, Text } from "../ui";
 import { layout, useTheme } from "../ui/theme";
@@ -9,7 +9,8 @@ import { useCapturedSidebarEntries, useOffersTidyTabs, usePinnedCollapsed, usePi
 import { useAddressBarInSidebar } from "../../state/windows/layout";
 import { useNewTabAtTop } from "../../state/sidebar/chrome";
 import { ClearDivider } from "./ClearDivider";
-import { useDragController, useDragItem } from "./DragProvider";
+import { PinnedSectionHeader } from "./PinnedSectionHeader";
+import { DragScope, useDragController, useDragItem } from "./DragProvider";
 import { Fold, useFold } from "./Fold";
 import { SidebarEntry } from "./GroupBlock";
 import { GhostSlot, ListMotionContext, useListMotion } from "./ListMotion";
@@ -73,7 +74,8 @@ export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, 
   const newTabButtonAtTop = useNewTabAtTop();
   const animated = current && !offScreen;
   const motion = useListMotion(windowId, profileId, all, captured, animated);
-  const scope = useMemo(() => ({ enabled: animated, slideBelow: motion.slideBelow }), [animated, motion.slideBelow]);
+  const scope = useMemo(() => ({ slideBelow: motion.slideBelow }), [motion.slideBelow]);
+  const pinnedHeaderRegion = useCallback((view: View | null) => void controller?.regions.set("pinnedHeader", view), [controller]);
   if (geometry) geometry.current.newTabAtTop = newTabButtonAtTop && inlineNewTab;
   return (
     <ListMotionContext.Provider value={scope}>
@@ -81,13 +83,18 @@ export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, 
         onLayout={(e) => onListHeight(e.nativeEvent.layout.height + SCROLL_EDGE.inset - (inlineNewTab ? rowPitch() : 0))}
       >
         {isIncognitoProfile(profileId) ? <IncognitoBadge /> : null}
-        {tiles.length ? <PinnedGrid tabs={tiles} innerWidth={innerWidth} flush /> : null}
+        {tiles.length ? (
+          <DragScope enabled={current}>
+            <PinnedGrid tabs={tiles} innerWidth={innerWidth} flush />
+          </DragScope>
+        ) : null}
+        {pinnedSection ? <PinnedSectionHeader windowId={windowId} profileId={profileId} collapsed={collapsed} open={pinnedFold.open} top={tiles.length ? space.s : 0} bottom={pinnedGap} dragRegion={pinnedHeaderRegion} /> : null}
         <View
           ref={(v) => {
             controller?.regions.set("pinnedGroups", v);
           }}
           onLayout={(e) => void (regions.pinnedGroups = e.nativeEvent.layout.y)}
-          style={{ marginTop: tiles.length && pinnedSection ? space.s : 0, gap: pinnedGap }}
+          style={{ gap: pinnedGap }}
         >
           {pinnedSection ? (
             <Fold
@@ -107,7 +114,6 @@ export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, 
             lift={underDockedTiles && !pinnedSection && !isIncognitoProfile(profileId) ? DOCKED_TILES_GAP : 0}
             clear={clearable}
             tidy={tidy}
-            pinned={pinnedSection ? { collapsed, open: pinnedFold.open } : null}
           />
         ) : null}
         <View

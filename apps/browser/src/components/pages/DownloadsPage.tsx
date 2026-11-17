@@ -1,5 +1,6 @@
 import { cancelDownload, keepDownload, pauseDownload, resumeDownload, type Download } from "../../state/downloads/actions";
-import { openFile, revealFile } from "../../state/app/system";
+import { revealFile } from "../../state/app/system";
+import { openDownload } from "../../state/downloads/openDownload";
 import { useState } from "react";
 import { FlatList, Pressable, View } from "react-native";
 import { useShallow } from "zustand/react/shallow";
@@ -66,7 +67,7 @@ function DownloadCard({ d: listed, windowId }: { d: Download; windowId: string }
             <FileIcon path={d.path || d.filename} size={downloadCard.iconSize} />
           </View>
           <View style={CARD_TEXT}>
-            <Pressable disabled={!done} onPress={() => void openFile(d.path)}>
+            <Pressable disabled={!done} onPress={() => void openDownload(d.path)}>
               <Text
                 lines={1}
                 weight="medium"

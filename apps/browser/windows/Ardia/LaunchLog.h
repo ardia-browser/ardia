@@ -2,6 +2,8 @@
 
 #include <share.h>
 
+#include "Paths.h"
+
 namespace Ardia {
 
 struct LaunchLog {
@@ -15,13 +17,27 @@ struct LaunchLog {
       if (argument.starts_with(logFileSwitch)) Open(std::wstring{argument.substr(logFileSwitch.size())});
     }
     LocalFree(arguments);
+    if (!File()) OpenDefault();
+  }
+
+  static std::filesystem::path DefaultPath() noexcept {
+    try {
+      std::filesystem::path folder = Paths::DataDirectory() / L"Logs";
+      std::error_code ignored;
+      std::filesystem::create_directories(folder, ignored);
+      return folder / L"launch.log";
+    } catch (...) {
+      return {};
+    }
   }
 
   static void Write(std::wstring_view level, std::wstring_view message) noexcept {
     std::scoped_lock lock{Mutex()};
     FILE *file = File();
-    if (!file) return;
+    if (!file || Written() >= kMaxBytes) return;
     std::string line = winrt::to_string(level) + " " + std::to_string(ElapsedMs()) + " " + winrt::to_string(message) + "\n";
+    Written() += line.size();
+    if (Written() >= kMaxBytes) line.append("warning ").append(std::to_string(ElapsedMs())).append(" the launch log reached its size limit; nothing more is written this run\n");
     fwrite(line.data(), 1, line.size(), file);
     fflush(file);
   }
@@ -39,6 +55,24 @@ struct LaunchLog {
   }
 
  private:
+  static constexpr size_t kMaxBytes = 16 * 1024 * 1024;
+  static constexpr uintmax_t kRotateBytes = 4 * 1024 * 1024;
+
+  static size_t &Written() noexcept {
+    static size_t written = 0;
+    return written;
+  }
+
+  static void OpenDefault() noexcept {
+    std::filesystem::path path = DefaultPath();
+    if (path.empty()) return;
+    std::error_code ignored;
+    if (std::filesystem::file_size(path, ignored) > kRotateBytes) {
+      std::filesystem::rename(path, path.parent_path() / L"launch.previous.log", ignored);
+    }
+    Open(path.wstring());
+  }
+
   static void Open(const std::wstring &path) noexcept {
     std::scoped_lock lock{Mutex()};
     if (File()) return;

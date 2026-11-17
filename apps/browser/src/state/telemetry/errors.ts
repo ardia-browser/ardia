@@ -1,11 +1,11 @@
 import { crashReports } from "../../platform/app";
 import { advanceCrashCursor, capture, crashCursor, loadChoice, saveQueueNow } from "./client";
-import { contextAt, contextProperties, sessionStart } from "./diagnostics";
+import { contextAt, contextProperties, recentWebuiPages, sessionStart } from "./diagnostics";
 import type { SavedContext } from "./savedContext";
 import { recordLog } from "./logs";
-import { errorCode, errorMessage, errorType, nativeCrashExceptions, nativeCrashTermination, parseStack, type ExceptionFrame } from "./sanitize";
+import { errorCode, errorMessage, errorType, jsFatalKind, nativeCrashExceptions, nativeCrashTermination, parseStack, type ExceptionFrame } from "./sanitize";
 
-type Mechanism = "onerror" | "onunhandledrejection" | "react" | "console" | "native_crash" | "helper_crash";
+type Mechanism = "onerror" | "onunhandledrejection" | "react" | "react_recovered" | "console" | "native_crash" | "helper_crash";
 
 const MAX_PER_SESSION = 25;
 const reported = new WeakSet<object>();
@@ -157,7 +157,9 @@ export async function reportNativeCrashes(contexts: (SavedContext | null)[] = []
         crashed_engine_version: browser ? null : optional(report.engineVersion, ENGINE_VERSION),
         crash_uptime_s: whole(report.uptimeSeconds),
         crash_vm_writable_mb: whole(report.vmWritableMB),
+        crash_js_fatal: browser ? jsFatalKind(report.jsFatalSource, report.jsFatal) : null,
         ...contextProperties(context, "ctx_", report.time),
+        ctx_webui_pages: recentWebuiPages(context, report.time),
       },
       {
         urgent: true,

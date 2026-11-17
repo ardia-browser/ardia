@@ -408,8 +408,8 @@
   "How many times Ardia ended a page drag that would otherwise have left the page ignoring clicks and typing: one the ardia command or a debugger started and left behind, or one macOS refused to start. Summed up once an hour, never which page"
  ],
  [
-  "Opening split view, switching profiles and opening the command bar, with where it opened: at the address, in the centre, in the centre because the address was out of sight, or for a new tab",
-  "Opening split view, switching profiles and opening the command bar, with where it opened: at the address, in the centre, in the centre because the address was out of sight, or for a new tab"
+  "Opening split view, switching profiles and opening the command bar, with where it opened: at the address, in the center, in the center because the address was out of sight, or for a new tab",
+  "Opening split view, switching profiles and opening the command bar, with where it opened: at the address, in the center, in the center because the address was out of sight, or for a new tab"
  ],
  [
   "Opening Picture in Picture: video or page, whether its window can show over full-screen apps, and whether it opened while you were in another app because the video's window was out of sight",

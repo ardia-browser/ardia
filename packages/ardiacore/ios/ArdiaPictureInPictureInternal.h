@@ -164,6 +164,7 @@ BOOL IsChromeVideoPictureInPicture(NSWindow *window);
 BOOL IsChromeDocumentPictureInPicture(NSWindow *window);
 BOOL JoinsFullScreenSpaces(NSWindow *window);
 void JoinFullScreenSpaces(NSWindow *window);
+void FloatOverActiveSpace(NSWindow *window);
 NSScreen *ScreenFor(NSRect frame);
 void PreventActivation(NSWindow *window);
 BOOL PreventsActivation(NSWindow *window);

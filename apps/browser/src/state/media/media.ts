@@ -216,7 +216,7 @@ export function hasPlayer(m: Pick<Store, "sessions" | "dismissed">, tabId: strin
 
 function isHiddenPlayerTab(s: BrowserState, tabId: string): boolean {
   const tab = s.tabs[tabId];
-  return !!tab && !!s.windows[tab.windowId] && s.settings.sidebarMediaControls && !isTabShown(s, tabId, tab.profileId);
+  return !!tab && !!s.windows[tab.windowId] && !isTabShown(s, tabId, tab.profileId);
 }
 
 let hiddenBefore = new Set<string>();
@@ -333,4 +333,4 @@ export const useHiddenPlayerTabs = (windowId: string, profileId: string, session
 
 export const sidebarPlayerCandidates = (m: Pick<Store, "leftPaused">, hidden: string[]) => hidden.filter((id) => !m.leftPaused[id]);
 
-export const usePinnedWithMediaControls = (tabId: string | undefined) => useBrowser((s) => !!tabId && !!s.tabs[tabId]?.pin && s.settings.sidebarMediaControls);
+export const usePinnedWithMediaControls = (tabId: string | undefined) => useBrowser((s) => !!tabId && !!s.tabs[tabId]?.pin);

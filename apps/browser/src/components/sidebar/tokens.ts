@@ -1,3 +1,4 @@
+import { Easing } from "react-native";
 import { useTheme } from "../ui/theme";
 import { duration } from "../ui/motion";
 import { font, ink, radius, shadow, sidebarFont, sidebarIconSize, sidebarPoints, space, withAlpha, type ShadowLevel } from "../ui/tokens";
@@ -19,9 +20,10 @@ const DARK = {
   newTabLabel: "#FFFFFF8C",
   newTabIcon: "#FFFFFF40",
   folderDropFill: "rgba(255,255,255,0.08)",
-  folderMosaic: "rgba(255,255,255,0.1)",
   liveDotRing: "rgba(0,0,0,0.3)",
   engineMarkPlate: "#2C2C2E",
+  selectedRowPillFill: "#141617",
+  selectedRowPillStroke: "rgba(255,255,255,0.1)",
   incognitoBadge: "rgba(255,255,255,0.08)",
   tileGlow: "#FFFFFF",
   fieldButtonPlate: "rgba(255,255,255,0.08)",
@@ -49,9 +51,10 @@ const LIGHT: typeof DARK = {
   newTabLabel: "#00000080",
   newTabIcon: "#00000042",
   folderDropFill: "rgba(0,0,0,0.05)",
-  folderMosaic: "rgba(0,0,0,0.06)",
   liveDotRing: "rgba(0,0,0,0.1)",
   engineMarkPlate: "#FFFFFF",
+  selectedRowPillFill: "#FFFFFF",
+  selectedRowPillStroke: "rgba(0,0,0,0.1)",
   incognitoBadge: "rgba(0,0,0,0.06)",
   tileGlow: "#000000",
   fieldButtonPlate: "rgba(255,255,255,0.75)",
@@ -184,10 +187,10 @@ export function groupTint(color: GroupColor | null | undefined): string | null {
 
 export const groupBoxAtRest = (color: GroupColor | null | undefined) => groupTint(color) !== null;
 
-const FOLDER_ACCENT = "#443AFF";
+const FOLDER_NEUTRAL = { dark: "#FFFFFF", light: "#6E6E73" } as const;
 
 export function folderPalette(color: GroupColor | null | undefined, dark: boolean) {
-  const tint = groupTint(color) ?? FOLDER_ACCENT;
+  const tint = groupTint(color) ?? FOLDER_NEUTRAL[dark ? "dark" : "light"];
   return dark
     ? { stroke: mix("#FFFFFF", tint, 0.64), face: mix("#211E29", tint, 0.12), insideTop: mix("#211E29", tint, 0.4), insideBottom: mix("#15121E", tint, 0.24) }
     : { stroke: tint, face: mix("#FFFFFF", tint, 0.06), insideTop: mix("#FFFFFF", tint, 0.34), insideBottom: mix("#FFFFFF", tint, 0.64) };
@@ -201,3 +204,20 @@ export function groupSurface(color: GroupColor | null | undefined, tokens: Sideb
 
 export { SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH } from "../../lib/windowLayout";
 export const SIDEBAR_RESIZE_HANDLE = { top: 46, width: 8 } as const;
+export const SELECTED_ROW_PILL = {
+  height: 28,
+  gap: 6,
+  icon: 16,
+  padLeft: 10,
+  padRight: 9,
+  iconGap: 6,
+  arrow: 10,
+  enter: { scale: 0.3, rise: 18 },
+  exit: { scale: 0.8, drop: 4 },
+} as const;
+export const SELECTED_ROW_PILL_MOTION = {
+  enter: { duration: 140, easing: Easing.out(Easing.quad) },
+  exit: { duration: 60, easing: Easing.linear },
+} as const;
+export const SELECTED_ROW_REVEAL_SETTLE_MS = 400;
+export const REVEAL_GLIDE = { duration: 300, easing: Easing.inOut(Easing.quad), margin: space.s } as const;

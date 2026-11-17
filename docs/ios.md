@@ -294,6 +294,10 @@ are `.widgets`, `.share` and `.open`, and they share the app group `group.com.ar
   `mode=certificate` with `signing_request` set to the request's base64, download the `ios-development-certificate`
   artifact, pack it with the key into a .p12 with macOS's `/usr/bin/openssl`, and set both secrets. Distribution signing
   is Apple's cloud-managed certificate and needs nothing stored.
+- **On a cable.** `-f mode=device -f udid=<udid>` registers that iPhone on the team (`xcrun devicectl list devices`
+  shows the UDID) and uploads a development-signed `ios-device-build` .ipa, built from the ref the run starts on. It
+  uploads nothing to App Store Connect and takes no build number. Install it on the plugged-in iPhone, with Developer
+  Mode on, by `xcrun devicectl device install app --device <udid> Ardia.ipa`.
 - **On a Mac.** `scripts/release-ios.sh <build number>` does the same with the account Xcode is signed in to, or with
   `ASC_KEY`, `ASC_KEY_ID` and `ASC_ISSUER`. `node apps/ios/scripts/asc.mjs` is the App Store Connect client behind
   both (`--help` lists its commands).
@@ -321,7 +325,8 @@ are `.widgets`, `.share` and `.open`, and they share the app group `group.com.ar
   arrives from another app also proves it. The simulator ignores the Settings deep link and opens Settings where it
   was left, so where the button lands is a real-phone check.
 - **Testers.** A processed build reaches the Internal group at once. An upload also sends it to everyone else: it
-  puts the build in the Public Testers group (made with a public link the first time), sets its What to Test text from
+  puts the build in the Public Testers group (made with a public link the first time, and kept off Apple silicon
+  Macs, where the iPhone-only build crashes on open), sets its What to Test text from
   `Config/TestFlight-WhatToTest.txt`, submits it for Beta App Review and prints the link. The link stays the same for
   every build and works once Apple approves one; later builds of the same version usually pass without a full review.
   Apple has no setting that gives an external group every build, so each one is submitted. `-f public_testers=false`

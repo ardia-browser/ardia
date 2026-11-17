@@ -1,5 +1,6 @@
 import { createLivePersistence, type LivePersistenceIntent, type LiveProjection } from "../../platform/livePersistence";
 import { create } from "zustand";
+import { noteLiveSave } from "../telemetry/workCounts";
 import { repoKey, stackMembers } from "./rows";
 import type { CompletedItem, CompletionState, FolderStatus, LiveAccount, LiveFolder, LiveFolderKind, LiveItem, LiveSourceId } from "./types";
 import { DEFAULT_COUNTDOWN_LEAD, keepDismissedNow, type DismissedNow } from "./meetings";
@@ -66,7 +67,7 @@ export const DEFAULT_CALENDAR: CalendarSettings = {
 };
 
 const PERSISTED = ["folders", "folderOrder", "items", "known", "unread", "hidden", "repoHidden", "completed", "expandedStacks", "accounts", "config", "calendar", "meetingGroups", "dismissedAlerts", "dismissedNow"] as const;
-const persistence = createLivePersistence();
+const persistence = createLivePersistence(noteLiveSave);
 const saved = persistence.load() as Partial<LiveState>;
 
 const FOLDER_OPTION_DEFAULTS = { groupStacks: true, showCompleted: true, hiddenRepos: [] as string[], showNewRepos: true, shownRepos: [] as string[] } satisfies Partial<LiveFolder>;

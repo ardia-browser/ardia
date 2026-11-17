@@ -4,6 +4,8 @@ import { SETUP_CODE_PREFIX } from "../../../state/presets/setupCode";
 import { Button, TextField } from "../../ui";
 import { Row } from "../Form";
 
+const SETUP_CODE_HINT = "Paste the code from the demo on ardia.dev to bring over the layout, look and pinned apps you picked there.";
+
 export function SetupCodeRow() {
   const [code, setCode] = useState("");
   const [result, setResult] = useState<SetupCodeApplied | null>(null);
@@ -13,9 +15,9 @@ export function SetupCodeRow() {
     setResult(applied);
     if (applied.ok) setCode("");
   };
-  const description = result ? (result.ok ? `Applied: ${result.lines.join(", ")}.` : result.error) : undefined;
+  const description = result ? (result.ok ? `Applied: ${result.lines.join(", ")}.` : result.error) : SETUP_CODE_HINT;
   return (
-    <Row anchor="general.setupCode" description={description}>
+    <Row title="Apply a setup code" description={description}>
       <TextField
         value={code}
         onChangeText={(text) => {

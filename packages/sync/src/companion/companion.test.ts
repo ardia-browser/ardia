@@ -3,9 +3,10 @@ import { test } from "node:test";
 import { canonical } from "../canon.ts";
 import { Clock } from "../hlc.ts";
 import { compact, syncScope, visible } from "../scope.ts";
-import { emptyScope, type Adapter, type Listing, type LogFile, type ScopeState, type Transport } from "../scopeState.ts";
+import { emptyScope, type Adapter, type SyncRecord, type Listing, type LogFile, type ScopeState, type Transport } from "../scopeState.ts";
 import { companionAcknowledge, companionAddBookmark, companionRemoveBookmark, companionRemovalsDone, companionSend, runCompanionCycle, type CycleInput } from "./cycle.ts";
 import { companionLoad, type CompanionState, type Host } from "./state.ts";
+import { buildView } from "./view.ts";
 import type { LocalTab, LocalVisit } from "./adapters.ts";
 
 const DAY = 86_400_000;
@@ -941,4 +942,68 @@ test("a phone that starts over under a new id deletes its old device and tabs re
   for (const scope of [s1, s2, s3]) assert.equal(mac.store[scope]!.has(`tabs:${PHONE}`), false);
   assert.ok(mac.store.app!.has(`dev:${fresh.id}`));
   assert.ok(mac.store[s1]!.has("bm:f1"));
+});
+
+test("spaces take the order of the Mac that last republished its device record, and browsing on another Mac never moves it", async () => {
+  const { folder, mac, phone } = await joined();
+  const names = async () => {
+    folder.now += 1000;
+    return (await phone.cycle()).view!.profiles.map((p) => p.name);
+  };
+  assert.deepEqual(await names(), ["Personal", "School", "Work"]);
+  mac.put("app", `dev:${MAC}`, { n: "MacBook Pro", k: "mac", f: ["send"], o: [P2, P3, P1] });
+  await mac.sync();
+  assert.deepEqual(await names(), ["Work", "School", "Personal"]);
+  folder.now += 60_000;
+  const mini = new Mac(folder, MAC2);
+  mini.put("app", `dev:${MAC2}`, { n: "Mac mini", k: "mac", f: ["send"], o: [42, P3, "notaprofile", P3, P1] });
+  await mini.sync(["app"]);
+  assert.deepEqual(await names(), ["School", "Personal", "Work"]);
+  for (let i = 0; i < 3; i++) {
+    folder.now += 60_000;
+    mac.put(s1, `bm:browsing${i}`, { k: "u", p: "other", t: `Page ${i}`, u: `https://page${i}.example/`, a: i, pos: `z${i}` });
+    mac.visit(s1, `https://visit${i}.example/`, "Visit", folder.now);
+    await mac.sync();
+    assert.deepEqual(await names(), ["School", "Personal", "Work"], "the other Mac's browsing leaves the order alone");
+  }
+  folder.now += 60_000;
+  mac.put("app", `dev:${MAC}`, { n: "MacBook Pro", k: "mac", f: ["send"], o: [P1, P2, P3] });
+  await mac.sync();
+  assert.deepEqual(await names(), ["Personal", "Work", "School"]);
+  folder.now += 60_000;
+  mini.clock = new Clock(MAC2, mini.clock.last, () => folder.now + 30 * DAY);
+  mini.put("app", `dev:${MAC2}`, { n: "Mac mini", k: "mac", f: ["send"], o: [P3, P2, P1] });
+  await mini.sync(["app"]);
+  assert.deepEqual(await names(), ["School", "Work", "Personal"]);
+  folder.now += 60_000;
+  await mac.sync(["app"]);
+  mac.put("app", `dev:${MAC}`, { n: "MacBook Pro", k: "mac", f: ["send"], o: [P2, P1, P3] });
+  await mac.sync(["app"]);
+  assert.deepEqual(await names(), ["Work", "Personal", "School"], "a reorder made after seeing a record from a Mac whose clock runs ahead still wins");
+  folder.now += 60_000;
+  await mini.sync(["app"]);
+  mini.put("app", `dev:${MAC2}`, { n: "Mac mini", k: "mac", f: ["send"], o: [] });
+  await mini.sync(["app"]);
+  assert.deepEqual(await names(), ["Work", "Personal", "School"], "a newer record with no order passes to the next");
+  mac.put("app", `dev:${MAC}`, { n: "MacBook Pro", k: "mac", f: ["send"], o: "Work" });
+  await mac.sync(["app"]);
+  assert.deepEqual(await names(), ["Personal", "School", "Work"]);
+  const written = new Set(folder.logs(PHONE).flatMap((f) => f.ops.map((op) => op.k)));
+  assert.deepEqual([...written].sort(), [`dev:${PHONE}`, `tabs:${PHONE}`]);
+});
+
+test("two device records stamped alike give the order of the lower device id, whatever order they are read in", () => {
+  const record = (v: unknown, h: string): SyncRecord => ({ h, v, o: ["x", 1] });
+  for (const flipped of [false, true]) {
+    const app = emptyScope();
+    app.records[`prof:${P1}`] = record({ n: "Personal", c: "blue", i: null, d: true }, "a");
+    app.records[`prof:${P2}`] = record({ n: "Work", c: "green", i: null }, "a");
+    app.records[`prof:${P3}`] = record({ n: "School", c: "pink", i: null }, "a");
+    const devices: [string, SyncRecord][] = [
+      [`dev:${MAC2}`, record({ n: "Mac mini", o: [P3, P1, P2] }, "same")],
+      [`dev:${MAC}`, record({ n: "MacBook Pro", o: [P2, P3, P1] }, "same")],
+    ];
+    for (const [key, value] of flipped ? [...devices].reverse() : devices) app.records[key] = value;
+    assert.deepEqual(buildView({ app }, PHONE).profiles.map((p) => p.name), MAC2 < MAC ? ["School", "Personal", "Work"] : ["Work", "School", "Personal"]);
+  }
 });

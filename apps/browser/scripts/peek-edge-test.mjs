@@ -39,6 +39,8 @@ const watchCalls = () => { const p = globalThis.acLayout.peek.w1; const calls = 
 const jitter = (x, ys, ms) => { const done = watchCalls(); let i = 0;
   return new Promise((r) => { const iv = setInterval(() => at(x, ys[i++ % ys.length]), ms); setTimeout(() => { clearInterval(iv); r(); }, ms * ys.length * 4); })
     .then(() => settle(400)).then(() => ({ calls: done(), live: live() })); };
+const until = (test, ms) => { const end = Date.now() + ms; const poll = () => (test() ? Promise.resolve(true) : Date.now() > end ? Promise.resolve(false) : settle(50).then(poll)); return poll(); };
+const ROW_Y = 94;
 const peek = () => at(-4, 400).then(() => settle(500)).then(() => at(80, 400)).then(() => settle(300)).then(live);
 const away = () => at(700, 400).then(() => settle(700)).then(live);
 `;
@@ -93,11 +95,14 @@ try {
     assert.equal(await run(`return peek();`), true);
     const out = await run(`let win;
       return ac.engine.call("windows.list", {}).then((l) => { win = l.find((w) => w.hasRoot).window; })
-        .then(() => at(60, 66)).then(() => settle(200))
-        .then(() => ac.engine.call("windows.dev", { window: win, action: "mouse:down:60,66" })).then(() => settle(80))
-        .then(() => ac.engine.call("windows.dev", { window: win, action: "mouse:dragged:100,66" })).then(() => at(9 + 160 + 160, 66))
-        .then(() => ac.engine.call("windows.dev", { window: win, action: "mouse:dragged:" + (9 + 160 + 160) + ",66" }))
-        .then(() => settle(700)).then(() => { const held = live(); return ac.engine.call("windows.dev", { window: win, action: "mouse:up:" + (9 + 160 + 160) + ",66" }).then(() => settle(600)).then(() => ({ held, after: live() })); });`);
+        .then(() => at(60, ROW_Y)).then(() => settle(200))
+        .then(() => ac.engine.call("windows.dev", { window: win, action: "mouse:down:60," + ROW_Y })).then(() => settle(80))
+        .then(() => ac.engine.call("windows.dev", { window: win, action: "mouse:dragged:100," + ROW_Y })).then(() => settle(80))
+        .then(() => ac.engine.call("windows.dev", { window: win, action: "mouse:dragged:140," + ROW_Y }))
+        .then(() => until(() => globalThis.acTabDrag.getState().phase === "tab", 1500)).then((dragging) => at(9 + 160 + 160, ROW_Y).then(() => dragging))
+        .then((dragging) => ac.engine.call("windows.dev", { window: win, action: "mouse:dragged:" + (9 + 160 + 160) + "," + ROW_Y }).then(() => dragging))
+        .then((dragging) => settle(700).then(() => { const held = live(); return ac.engine.call("windows.dev", { window: win, action: "mouse:up:" + (9 + 160 + 160) + "," + ROW_Y }).then(() => settle(600)).then(() => ({ dragging, held, after: live() })); }));`);
+    assert.equal(out.dragging, true, "the press on the first tab row became a tab drag");
     assert.equal(out.held, true, "out while the button is down");
     assert.equal(out.after, false, "closes once the button comes up away from it");
     await run(`return away();`);
@@ -131,14 +136,6 @@ try {
     } finally {
       await run(fullScreen(false));
     }
-  });
-
-  await rep.check("with Reveal hidden tabs on hover off, the edge doesn't open it (#1393)", async () => {
-    await run(`st().updateSettings({ revealTabsOnHover: false }); return settle(300);`);
-    assert.equal(await run(`return peek();`), false);
-    await run(`st().updateSettings({ revealTabsOnHover: true }); return away();`);
-    assert.equal(await run(`return peek();`), true, "back on");
-    assert.equal(await run(`return away();`), false);
   });
 
   await rep.check("a pointer resting on the bottom edge beside the peek keeps it out", async () => {

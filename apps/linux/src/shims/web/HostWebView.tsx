@@ -14,7 +14,7 @@ import { refreshTabViewports, watchTabViewport, type TabViewport } from "../../h
 import { inputRegions } from "../../shellAbove";
 import type { InputRegionsRegistry } from "../../inputRegions";
 import type { CornerRadii } from "../../hostExtensionView";
-import { notePageFocusRequest, notingPageFocus } from "../../pageFocus";
+import { focusPageIfShellUnfocused, notePageFocusRequest, notingPageFocus } from "../../pageFocus";
 import { withPopupDismissal } from "../../popupDismissal";
 import { registerSwitchView } from "../../tabSwitchAhead";
 
@@ -72,6 +72,7 @@ const HostTabWebView = forwardRef<WebViewHandle, WebViewProps>(function HostTabW
           args[0] = toEngineUrl(args[0] as string);
           if (current.repeatsCreate(args[0] as string)) return undefined;
         }
+        if (property === "focusIfUnfocused") return focusPageIfShellUnfocused(() => current.command("focus", []));
         if (property === "focus") notePageFocusRequest();
         if (property === "getSecurityInfo") return current.pageResult(property, args);
         const script = hostPageScript(property, args);

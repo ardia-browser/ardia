@@ -344,8 +344,9 @@ builds and signs it, the real run sends it to TestFlight and its public testers 
 the same version (`docs/releasing.md` › Every platform). Never add it unasked: a TestFlight upload goes out to testers.
 
 The engine is never packed by a release: when engine/ changed since the last prebuilt engine, release.sh stops and
-asks for `scripts/publish-engine.sh` first, which publishes `engine-<tree:12>` (with the Helium source) and appends
-its line to `packages/ardiacore/prebuilt-engines.tsv`; commit that line before the release. Every release's notes end
+asks for `scripts/publish-engine.sh` first, which publishes `engine-<tree:12>` (with the Helium source and the unstripped
+symbols that `scripts/symbolicate-crash.sh` reads) and appends its line to `packages/ardiacore/prebuilt-engines.tsv`;
+commit that line before the release. Every release's notes end
 with a Source section linking its tag, so never delete or move a published tag (`docs/releasing.md` › Source and
 licenses).
 

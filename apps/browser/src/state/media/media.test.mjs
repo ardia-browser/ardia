@@ -181,17 +181,6 @@ test("a left-paused tab gets its player back when it plays again or when you go 
   assert.equal(M().leftPaused[b], undefined, "shown again");
 });
 
-test("with sidebar media controls off nothing is left paused, and turning them on counts paused background players as left paused", async () => {
-  const { a, b } = await playingIn("b.com");
-  media.setNowPlaying(b, report({ playbackState: "paused" }));
-  S().activate(a);
-  assert.equal(M().leftPaused[b], true);
-  S().updateSettings({ sidebarMediaControls: false });
-  assert.equal(M().leftPaused[b], undefined);
-  S().updateSettings({ sidebarMediaControls: true });
-  assert.equal(M().leftPaused[b], true);
-});
-
 function sidebarPlayer(windowId) {
   let shown;
   return () => {

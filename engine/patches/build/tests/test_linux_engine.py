@@ -288,6 +288,47 @@ class PublisherTests(unittest.TestCase):
         self.assertNotEqual(again.returncode, 0)
         self.assertIn('refusing to overwrite', again.stderr)
 
+    def test_the_symbols_of_every_stripped_file_are_kept_by_build_id_beside_the_engine(self):
+        compiler = shutil.which('cc')
+        if compiler:
+            source = self.root / 'probe.c'
+            source.write_text('int ardia_symbol_probe(int value) { return value + 1; }\nint main(int argc, char **argv) { return ardia_symbol_probe(argc) - argc - 1; }\n')
+            subprocess.run([compiler, '-O0', '-Wl,--build-id', '-o', str(self.out / 'chrome'), str(source)], check=True)
+        dest = self.root / 'dest'
+        result = self.publish(self.fixture.repo, dest)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        key = self.fixture.key()
+        symbols = dest / f'ArdiaCore-{key[:12]}-linux-x64-symbols.tar.xz'
+        digest = hashlib.sha256(symbols.read_bytes()).hexdigest()
+        self.assertEqual((dest / (symbols.name + '.sha256')).read_text(), f'{digest}  {symbols.name}\n')
+        with tarfile.open(dest / f'ArdiaCore-{key[:12]}-linux-x64.tar.xz') as packed:
+            build_id = json.load(packed.extractfile('ardiacore-linux-x64/manifest.json'))['chrome_build_id']
+        with tarfile.open(symbols) as packed:
+            names = packed.getnames()
+            self.assertTrue(all(name == 'ardiacore-linux-x64-symbols' or name.startswith('ardiacore-linux-x64-symbols/') for name in names), names)
+            listed = json.load(packed.extractfile('ardiacore-linux-x64-symbols/symbols.json'))
+            self.assertEqual({entry['file'] for entry in listed}, {path.name for path in runtime.strippable(self.out)})
+            self.assertIn({'file': 'chrome', 'build_id': build_id}, listed)
+            debug = packed.extractfile(f'ardiacore-linux-x64-symbols/.build-id/{build_id[:2]}/{build_id[2:]}.debug').read()
+            self.assertEqual(debug[:4], b'\x7fELF')
+            self.assertEqual({member.uid for member in packed.getmembers()}, {0})
+        if compiler:
+            self.assertIn(b'ardia_symbol_probe', debug)
+            with tarfile.open(dest / f'ArdiaCore-{key[:12]}-linux-x64.tar.xz') as packed:
+                self.assertNotIn(b'ardia_symbol_probe', packed.extractfile('ardiacore-linux-x64/chrome').read())
+        if compiler and shutil.which('addr2line') and shutil.which('nm'):
+            symbols_table = subprocess.run(['nm', str(self.out / 'chrome')], capture_output=True, text=True, check=True).stdout
+            address = lambda name: int(next(line.split()[0] for line in symbols_table.splitlines() if line.endswith(f' {name}')), 16)
+            probe, entry = address('ardia_symbol_probe'), address('main')
+            named = run([sys.executable, LINUX / 'symbolize.py', '--symbols', symbols, '--build-id', build_id, hex(entry), hex(probe + 1), hex(entry)])
+            self.assertEqual(named.returncode, 0, named.stderr)
+            lines = [line.split('\t') for line in named.stdout.splitlines()]
+            self.assertEqual(lines[:2], [[hex(entry), 'main'], [hex(probe + 1), 'ardia_symbol_probe']])
+            self.assertNotEqual(lines[2][1], 'main')
+            missing = run([sys.executable, LINUX / 'symbolize.py', '--symbols', symbols, '--build-id', 'ab' * 20, '0x10'])
+            self.assertEqual(missing.returncode, 1)
+            self.assertIn('has no symbols for build ID', missing.stderr)
+
     def test_dirty_checkout_is_refused(self):
         for index, relative in enumerate(('engine/version.txt', 'apps/browser/assets/offline-game-pipeline/version.txt')):
             with self.subTest(path=relative):

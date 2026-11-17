@@ -59,6 +59,10 @@ export function watchUncaughtErrors(target: ErrorTarget, reportError: typeof cap
 
 export const reportUncaughtRender = (error: unknown) => captureException(error, "react", { fatal: true });
 
+const recoveredCause = (error: unknown) => (error instanceof Error && error.cause !== undefined ? error.cause : error);
+
+export const reportRecoverableRender = (error: unknown) => captureException(recoveredCause(error), "react_recovered", { handled: true });
+
 let sessionEnded = false;
 const ends = createEndLedger();
 

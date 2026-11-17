@@ -5,23 +5,10 @@ import { AppMenuButton } from "./AppMenuButton";
 import { profileNameColor, useTheme } from "../../browser/src/components/ui/theme";
 import { useIsIncognito, useProfiles, useWindowId, useWindowProfile } from "../../browser/src/state/browser/hooks";
 import { setMeasuredWidth, useMeasuredWidth } from "../../browser/src/state/windows/measuredWidths";
+import { useMenuBesideWindowButtons } from "./sidebarHeaderLayout";
+import { headerIndicatorLayout } from "./profileIndicatorLayout";
 
 export { PROFILE_INDICATOR_X } from "../../browser/src/components/profiles/ProfileIndicator";
-
-const PAD = 5;
-const MIN_CUT_NAME = 52;
-const ICON_WIDTH = 32;
-const MENU_WIDTH = 32;
-const GAP = 2;
-
-export function profileIndicatorLayout({ room, textWidth, named }: { room: number; textWidth: number | undefined; named: boolean }) {
-  const nameRoom = room - MENU_WIDTH - GAP;
-  const shown = named && nameRoom >= ICON_WIDTH;
-  const textRoom = nameRoom - 2 * PAD;
-  const showName = shown && !!textWidth && (textWidth <= textRoom || textRoom >= MIN_CUT_NAME);
-  const nameWidth = !shown ? 0 : showName ? Math.min(nameRoom, textWidth + 2 * PAD) : ICON_WIDTH;
-  return { shown, showName, nameWidth, width: Math.max(0, Math.min(room, nameWidth + (shown ? GAP : 0) + MENU_WIDTH)) };
-}
 
 function useIndicator(room: number) {
   const incognito = useIsIncognito();
@@ -29,7 +16,8 @@ function useIndicator(room: number) {
   const profile = useWindowProfile();
   const name = incognito ? "Incognito" : profile?.name ?? "Personal";
   const textWidth = useMeasuredWidth(`linux-profile-name|${name}`);
-  return { incognito, profile, name, textWidth, ...profileIndicatorLayout({ room, textWidth, named: incognito || profiles.length >= 2 }) };
+  const menuInHeader = !useMenuBesideWindowButtons();
+  return { incognito, profile, name, textWidth, ...headerIndicatorLayout({ room, textWidth, named: incognito || profiles.length >= 2, menuInHeader }) };
 }
 
 export const useProfileIndicatorWidth = (room: number) => useIndicator(room).width;
@@ -37,7 +25,7 @@ export const useProfileIndicatorWidth = (room: number) => useIndicator(room).wid
 export function ProfileIndicator({ room }: { room: number }) {
   const theme = useTheme();
   const windowId = useWindowId();
-  const { incognito, profile, name, textWidth, shown, showName, nameWidth, width } = useIndicator(room);
+  const { incognito, profile, name, textWidth, shown, showName, nameWidth, width, menuInHeader } = useIndicator(room);
   const measure = useRef<HTMLSpanElement>(null);
   useLayoutEffect(() => {
     if (measure.current) setMeasuredWidth(`linux-profile-name|${name}`, Math.ceil(measure.current.getBoundingClientRect().width));
@@ -57,7 +45,7 @@ export function ProfileIndicator({ room }: { room: number }) {
           {showName ? <span>{name}</span> : textWidth ? <Symbol name="person.fill" size={14} weight="semibold" color={color} style={{ width: 16, height: 16 }} /> : null}
         </button>
       ) : null}
-      <AppMenuButton windowId={windowId} />
+      {menuInHeader ? <AppMenuButton windowId={windowId} /> : null}
     </div>
   );
 }

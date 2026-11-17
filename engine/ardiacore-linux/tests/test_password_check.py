@@ -16,6 +16,7 @@ SCENARIOS = r'''#include <cassert>
 #include <map>
 #include <string>
 #include "ardia/linux/ac_linux_password_check.h"
+#include "ardia/linux/ac_linux_secret_text.h"
 using namespace ardia::linux_password;
 
 int main(int, char** argv) {
@@ -76,21 +77,17 @@ int main(int, char** argv) {
   throttle.NoteRight();
   assert(throttle.WaitMs(50000) == 0 && throttle.wrong() == 0);
 
-  std::string right = "correct horse";
-  assert(RunHelper(helper, "me", right) == Verdict::kMatch);
-  assert(right.empty());
-  std::string wrong = "wrong horse";
-  assert(RunHelper(helper, "me", wrong) == Verdict::kMismatch);
-  std::string other_user = "correct horse";
-  assert(RunHelper(helper, "someone", other_user) == Verdict::kFailed);
-  std::string slow = "correct horse";
-  assert(RunHelper(sleeper, "me", slow, 300) == Verdict::kFailed);
-  std::string missing = "x";
-  assert(RunHelper("/nonexistent/unix_chkpwd", "me", missing) == Verdict::kFailed);
+  SecretText typed(kMaxPasswordBytes);
+  assert(typed.Insert(u"correct horse"));
+  std::unique_ptr<SecretBytes> right = typed.Utf8();
+  assert(right && right->view() == "correct horse");
+  assert(RunHelper(helper, "me", right->view()) == Verdict::kMatch);
+  assert(RunHelper(helper, "me", "wrong horse") == Verdict::kMismatch);
+  assert(RunHelper(helper, "me", "correct") == Verdict::kMismatch);
+  assert(RunHelper(helper, "someone", right->view()) == Verdict::kFailed);
+  assert(RunHelper(sleeper, "me", right->view(), 300) == Verdict::kFailed);
+  assert(RunHelper("/nonexistent/unix_chkpwd", "me", "x") == Verdict::kFailed);
   assert(CurrentUser() && !CurrentUser()->empty());
-  std::string secret = "wipe me";
-  Wipe(secret);
-  assert(secret.empty());
   std::puts("password check scenarios passed");
 }
 '''
@@ -122,7 +119,7 @@ class PasswordCheckTests(unittest.TestCase):
             binary = scratch / 'scenarios'
             compiled = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g', '-fsanitize=address,undefined',
                                        '-I', str(SOURCE), str(scratch / 'scenarios.cc'), str(LINUX / 'ac_linux_password_check.cc'),
-                                       '-o', str(binary)], capture_output=True, text=True, timeout=180)
+                                       str(LINUX / 'ac_linux_secret_text.cc'), '-o', str(binary)], capture_output=True, text=True, timeout=180)
             self.assertEqual(compiled.returncode, 0, compiled.stderr)
             result = subprocess.run([str(binary), str(helper), str(sleeper)], capture_output=True, text=True, timeout=60)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -130,14 +127,17 @@ class PasswordCheckTests(unittest.TestCase):
 
     def test_the_prompt_is_native_installed_at_startup_and_hands_reauth_its_answer(self):
         prompt = (LINUX / 'ac_linux_password_prompt.cc').read_text()
-        for needle in ['TEXT_INPUT_TYPE_PASSWORD', 'ModalType::kWindow', 'ForEachCurrentBrowserWindowInterfaceOrderedByActivation(',
-                       'ardia::SetReauthFallback(', 'base::MayBlock()', 'Wipe(password)', 'TheThrottle().WaitMs(NowMs())']:
+        for needle in ['PasswordField>(u"Login password")', 'ModalType::kWindow', 'ForEachCurrentBrowserWindowInterfaceOrderedByActivation(',
+                       'ardia::SetReauthFallback(', 'base::MayBlock()', 'field_->TakeUtf8()', 'std::unique_ptr<SecretBytes> password',
+                       'TheThrottle().WaitMs(NowMs())']:
             self.assertIn(needle, prompt)
-        self.assertNotIn('LOG(', prompt)
+        for needle in ['LOG(', 'Textfield', 'SetPromptField', 'GetText(', 'UTF16ToUTF8(', 'std::string password']:
+            self.assertNotIn(needle, prompt)
         host = (LINUX / 'ac_linux_host.cc').read_text()
         self.assertIn('ardia::linux_password::InstallReauthFallback();', host)
         build = (LINUX / 'BUILD.gn').read_text()
-        for name in ['"ac_linux_password_check.cc"', '"ac_linux_password_prompt.cc"']:
+        for name in ['"ac_linux_password_check.cc"', '"ac_linux_password_field.cc"', '"ac_linux_password_prompt.cc"',
+                     '"ac_linux_secret_text.cc"']:
             self.assertIn(name, build)
 
 

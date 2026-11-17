@@ -430,8 +430,35 @@ bool MoveTrafficLights(NSWindow *window, NSValue *center) {
   return true;
 }
 
+const void *const kTitledForAccessibilityKey = &kTitledForAccessibilityKey;
+const void *const kTitleReadKey = &kTitleReadKey;
+void (^gTitleRead)(NSWindow *) = nil;
+
+void NoteTitleRead(NSWindow *window) {
+  if (objc_getAssociatedObject(window, kTitleReadKey)) return;
+  objc_setAssociatedObject(window, kTitleReadKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  if (gTitleRead) gTitleRead(window);
+}
+
+void AnswerAccessibilityTitleFromWindowTitle(NSWindow *window) {
+  objc_setAssociatedObject(window, kTitledForAccessibilityKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  static NSMutableSet<Class> *answered = [NSMutableSet set];
+  Class windowClass = window.class;
+  if ([answered containsObject:windowClass]) return;
+  [answered addObject:windowClass];
+  ReplaceMethod(windowClass, @selector(accessibilityTitle), ^id(IMP original) {
+    return ^NSString *(NSWindow *titled) {
+      NSString *title = objc_getAssociatedObject(titled, kTitledForAccessibilityKey) ? titled.title : nil;
+      if (!title.length) return ((NSString * (*)(id, SEL))original)(titled, @selector(accessibilityTitle));
+      NoteTitleRead(titled);
+      return title;
+    };
+  });
+}
+
 void ConfigureWindow(NSWindow *window) {
   InstallTrafficLightsLog();
+  AnswerAccessibilityTitleFromWindowTitle(window);
   const NSRect frame = window.frame;
   window.styleMask |= NSWindowStyleMaskFullSizeContentView;
   if (!NSEqualRects(window.frame, frame)) [window setFrame:frame display:NO];
@@ -446,6 +473,10 @@ void ConfigureWindow(NSWindow *window) {
   WindowCornerRadius(window);
 }
 
+void InsetUtilityTrafficLights(NSWindow *window) {
+  InsetTrafficLights(window);
+}
+
 }
 
 NSValue *ArdiaTrafficLightsCenter(NSWindow *window) {
@@ -455,3 +486,15 @@ NSValue *ArdiaTrafficLightsCenter(NSWindow *window) {
 BOOL ArdiaTrafficLightsTrailing(NSWindow *window) {
   return window && objc_getAssociatedObject(window, kLightsTrailingKey) != nil;
 }
+
+@implementation ArdiaChromeWindowHost (AccessibilityTitle)
+
++ (void)setAccessibilityTitleReadHandler:(void (^)(NSWindow *))handler {
+  ardia_window::gTitleRead = [handler copy];
+}
+
++ (void (^)(NSWindow *))accessibilityTitleReadHandler {
+  return ardia_window::gTitleRead;
+}
+
+@end

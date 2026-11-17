@@ -39,12 +39,8 @@ test("the bookmarks bar background: Add Page…, New Folder…, then Manage Book
     "---",
     "Manage Bookmarks ⌥⌘B [book]",
     "✓ Show Bookmarks Bar ⇧⌘B",
-    "Bookmarks Bar Size",
   ]);
-  assert.deepEqual(render(barMenuItems(null, { barShown: false, keys: () => ({}) })).slice(3), ["Manage Bookmarks [book]", "Show Bookmarks Bar", "Bookmarks Bar Size"]);
-  const sizes = (size) => render(barMenuItems(null, { barShown: true, size }).at(-1).children);
-  assert.deepEqual(sizes("default"), ["✓ Default", "Large"]);
-  assert.deepEqual(sizes("large"), ["Default", "✓ Large"]);
+  assert.deepEqual(render(barMenuItems(null, { barShown: false, keys: () => ({}) })).slice(3), ["Manage Bookmarks [book]", "Show Bookmarks Bar"]);
 });
 
 test("a Bookmarks page row matches the bar, adds Show in Folder for a search result, and a selection acts on all of it", () => {

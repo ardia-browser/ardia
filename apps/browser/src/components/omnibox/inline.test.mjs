@@ -278,3 +278,13 @@ test("a completion that was cleared is taken as cleared wherever the caret is, a
   assert.equal(settlesInline(true, "mple.com", true), true);
   assert.equal(settlesInline(false, "", true), false);
 });
+
+test("Windows: the whole completion arriving as typed text is typing, not the echo of a completion computed for an older text", async () => {
+  const older = [{ typed: "e", completion: "xample.com", orphaned: true }];
+  assert.deepEqual(fieldChange("example.co", "", "example.com", older), { echo: true, settled: 1, inline: { typed: "e", completion: "xample.com" }, stale: true });
+  assert.deepEqual(fieldChange("example.co", "", "example.com", []), { echo: false, typed: "example.com", suppress: false });
+  const { PLATFORM_FEATURES: windows } = await import("../../lib/platformFeatures.windows.ts");
+  const { PLATFORM_FEATURES: mac } = await import("../../lib/platformFeatures.ts");
+  assert.equal(windows.inlineWritesEcho, false);
+  assert.equal(mac.inlineWritesEcho, true);
+});

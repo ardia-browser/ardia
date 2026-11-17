@@ -311,6 +311,7 @@ public final class WebTab: DiscardablePage, Identifiable {
     url = newURL
     if let webView { securityChanged(webView) }
     engine?.tabs.update(id, url: newURL.absoluteString)
+    if !isPrivate, let language = PageTranslation.chosenLanguage(in: newURL) { engine?.preferences.rememberTranslation(into: language) }
     let sameDocument = !(webView?.isLoading ?? false) && previous != nil
     if sameDocument, let previous, Self.withoutFragment(previous) != Self.withoutFragment(newURL) {
       lastVisit = engine?.tabs.recordVisit(url: newURL.absoluteString, title: title, transition: .link, fromTab: id)

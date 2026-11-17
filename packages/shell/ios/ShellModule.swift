@@ -44,6 +44,7 @@ public class ShellModule: Module {
         }
         self.observeForSidebar()
         LittleArdiaHandoff.shared.start()
+        LittleArdiaHotKey.shared.start()
         ArdiaHost.quitCancelledHandler = { ShellEvents.send(.app, ["type": "quitCancelled"]) }
         Self.quitCancelledOwner = ObjectIdentifier(self)
       }

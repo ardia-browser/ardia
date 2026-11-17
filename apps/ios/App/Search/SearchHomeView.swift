@@ -58,6 +58,10 @@ struct SearchHomeView: View {
   }
 
   private func openTrayIfWanted() {
+    if app.browse.startRestsOnce {
+      app.browse.startRestsOnce = false
+      return
+    }
     guard app.settings.autoOpensKeyboard, !app.settings.isShowingOnboarding, app.browse.search == nil, app.sheet == nil else { return }
     app.browse.presentSearch(from: .home, incognitoOnCancel: app.isIncognito)
   }

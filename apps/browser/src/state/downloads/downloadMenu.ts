@@ -1,5 +1,6 @@
 import { copyText } from "../../platform/clipboard";
-import { fileExists, moveToTrash, openFile, revealFile } from "../../platform/files";
+import { fileExists, moveToTrash, revealFile } from "../../platform/files";
+import { openDownload } from "./openDownload";
 import { showMenu, type MenuItem } from "../../platform/menus";
 import { menuSections } from "../app/menuSections";
 import { openInternalPage } from "../pages/urls";
@@ -50,7 +51,7 @@ export async function downloadMenu(d: Download, windowId: string) {
   if (choice === "resume") void resumeDownload(d.id);
   if (choice === "keep") void keepDownload(d.id);
   if (choice === "cancel") void cancelDownload(d.id);
-  if (choice === "open") void openFile(d.path);
+  if (choice === "open") void openDownload(d.path);
   if (choice === "reveal") void revealFile(d.path);
   if (choice === "copy") copyText(d.url);
   if (choice === "page") openInternalPage("downloads", windowId);

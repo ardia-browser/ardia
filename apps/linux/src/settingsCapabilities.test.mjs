@@ -10,14 +10,13 @@ import * as form from "./settingsForm.tsx";
 import * as engines from "./hostEngines.ts";
 
 const hidden = [
-  "general.defaultBrowser", "general.openAtLogin", "appearance.pageScrollBars", "advanced.cliControl", "advanced.cliInstall", "tabs.videoUpscaling", "privacy.viewData",
-  "privacy.commandScrollZoom", "general.littleArdiaOpensNewTabLinks", "general.openLinksInLittleArdia", "tabs.peekLinksToOtherSites", "tabs.tabReorderHaptics", "tabs.appLinksFirst",
-  "tabs.popupsOpenAsTabs",
+  "general.defaultBrowser", "general.openAtLogin", "advanced.ardiaCommand", "advanced.compactCliPill", "tabs.videoUpscaling",
+  "tabs.openLinksInLittleArdia", "tabs.peekLinksToOtherSites", "tabs.appLinksFirst", "tabs.popupsOpenAsTabs",
+  "advanced.pageEngine", "advanced.fairPlayInChromium", "advanced.websiteEngines",
 ];
 
-test("Settings navigation and search leave out the unavailable Engines pane and platform rows", () => {
-  assert.ok(sharedIndex.PANES.some((pane) => pane.id === "engines"));
-  assert.deepEqual(index.PANES.map((pane) => pane.id), sharedIndex.PANES.map((pane) => pane.id).filter((id) => id !== "engines"));
+test("Settings navigation and search leave out the unavailable Web engine rows and platform rows", () => {
+  assert.deepEqual(index.PANES, sharedIndex.PANES);
   const searchable = new Set(index.SETTINGS_INDEX.map((item) => item.entry.id));
   for (const id of hidden) {
     assert.ok(sharedIndex.SETTINGS_INDEX.some((item) => item.entry.id === id), id);
@@ -25,9 +24,8 @@ test("Settings navigation and search leave out the unavailable Engines pane and 
     assert.equal(index.settingUnavailable(id), true, id);
     assert.equal(index.setting(id).id, id);
   }
-  assert.equal([...searchable].some((id) => id.startsWith("engines.")), false);
-  assert.ok(searchable.has("general.warnBeforeQuitting"));
-  assert.equal(index.settingUnavailable("general.warnBeforeQuitting"), false);
+  assert.ok(searchable.has("general.askBefore"));
+  assert.equal(index.settingUnavailable("general.askBefore"), false);
   assert.equal(index.settingUnavailable(undefined), false);
 });
 
@@ -35,32 +33,25 @@ test("Settings form primitives drop unavailable rows and keep available ones unc
   for (const anchor of hidden) assert.equal(form.Row({ anchor }), null, anchor);
   assert.equal(form.Anchor({ id: "general.defaultBrowser", children: null }), null);
   const header = (props, pane = null) => renderToStaticMarkup(createElement(sharedForm.SettingsPaneContext.Provider, { value: pane }, createElement(form.SectionHeader, props)));
-  assert.equal(header({ anchor: "engines.websiteRules" }), "");
-  assert.equal(header({ title: "Command line" }, "advanced"), "");
-  assert.equal(header({ title: "Default engine" }, "engines"), "");
-  assert.equal(index.sectionUnavailable("advanced", "Command line"), true);
+  assert.equal(header({ anchor: "advanced.websiteEngines" }), "");
+  assert.equal(header({ title: "Web engine" }, "advanced"), "");
+  assert.equal(index.sectionUnavailable("advanced", "Web engine"), true);
+  assert.equal(index.sectionUnavailable("advanced", "Command line and automation"), false);
   assert.equal(index.sectionUnavailable("advanced", "Browsing"), false);
-  assert.equal(header({ title: "Kept on this Mac" }, "privacy"), "");
-  assert.equal(index.sectionUnavailable("privacy", "Crash reports and usage"), false);
+  assert.equal(index.sectionUnavailable("general", "Crash reports"), false);
   assert.equal(index.sectionUnavailable("general", "No such section"), false);
-  assert.equal(form.Group({ of: "engines.websiteRules", children: null }), null);
-  const kept = form.Row({ anchor: "general.warnBeforeQuitting" });
+  assert.equal(form.Group({ of: "advanced.websiteEngines", children: null }), null);
+  const kept = form.Row({ anchor: "general.askBefore" });
   assert.equal(kept.type, sharedForm.Row);
-  assert.equal(form.Anchor({ id: "general.warnBeforeQuitting", children: null }).type, sharedForm.Anchor);
+  assert.equal(form.Anchor({ id: "general.askBefore", children: null }).type, sharedForm.Anchor);
   const group = form.Group({ children: [
     createElement(form.Row, { key: "a", anchor: "general.openAtLogin" }),
-    createElement(form.Row, { key: "b", anchor: "general.warnBeforeQuitting" }),
+    createElement(form.Row, { key: "b", anchor: "general.askBefore" }),
   ] });
   assert.equal(group.type, sharedForm.Group);
-  assert.deepEqual(group.props.children.map((child) => child.props.anchor), ["general.warnBeforeQuitting"]);
-  assert.equal(form.Group({ children: [createElement(form.Row, { key: "a", anchor: "engines.defaultEngine" })] }), null);
+  assert.deepEqual(group.props.children.map((child) => child.props.anchor), ["general.askBefore"]);
+  assert.equal(form.Group({ children: [createElement(form.Row, { key: "a", anchor: "advanced.pageEngine" })] }), null);
   assert.equal(form.SettingsPaneContext, sharedForm.SettingsPaneContext);
-  const newTabLinks = form.Row({ anchor: "tabs.newTabLinksOpenIn" });
-  assert.ok(index.setting("tabs.newTabLinksOpenIn").description.endsWith(form.LINKS_FROM_OTHER_APPS_NOTE));
-  assert.equal(newTabLinks.type, sharedForm.Row);
-  assert.ok(index.setting("tabs.newTabLinksOpenIn").description.includes(form.POPUPS_AS_TABS_SWITCH_NOTE));
-  assert.ok(newTabLinks.props.description.endsWith(`and ${form.POPUPS_OPEN_AS_TABS_NOTE}.`));
-  assert.equal(newTabLinks.props.description.includes("Open pop-up windows as tabs"), false);
 });
 
 test("every engine decision is Chromium on Linux even with stored WebKit settings, rules and streaming routes", () => {

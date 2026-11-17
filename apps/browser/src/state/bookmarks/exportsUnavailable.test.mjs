@@ -36,7 +36,7 @@ console.log(JSON.stringify({
   unavailable: UNAVAILABLE_COMMANDS.has("exportBookmarks"),
   bar: barActions(S(), w).some((a) => a.id === "exportBookmarks"),
   organize: organizeMenuItems().filter((i) => !i.separator).map((i) => i.id),
-  unshown: ["general.exportBookmarks", "passwords.exportPasswords"].filter((id) => unshown.includes(id)),
+  unshown: ["profiles.exportBookmarks"].filter((id) => unshown.includes(id)),
   cli: automationCommands().some((c) => c.id === "exportBookmarks"),
   menuDisabled: menuState(S()).disabled.includes("exportBookmarks"),
 }));
@@ -71,7 +71,7 @@ test("a platform without exports offers no menu, bar action, command, shortcut o
     unavailable: true,
     bar: false,
     organize: ["bookmark", "folder", "import"],
-    unshown: ["general.exportBookmarks", "passwords.exportPasswords"],
+    unshown: ["profiles.exportBookmarks"],
     cli: false,
     menuDisabled: true,
   });

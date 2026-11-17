@@ -24,7 +24,7 @@ export const AwayTitleLabel = memo(function AwayTitleLabel({
 }) {
   const fontWeight = weight === "medium" ? "500" : undefined;
   return (
-    <View accessible accessibilityLabel={`${away.pinned ?? "Pinned tab"}, now on ${away.page}`} style={[{ flexDirection: "row", alignItems: "center", height }, style, struck && { opacity: SLEEPING_TITLE_OPACITY }]}>
+    <View accessible accessibilityLabel={away.renamed ? `${away.page}, away from its pinned page` : `${away.pinned ?? "Pinned tab"}, now on ${away.page}`} style={[{ flexDirection: "row", alignItems: "center", height }, style, struck && { opacity: SLEEPING_TITLE_OPACITY }]}>
       {away.pinned ? (
         <Text numberOfLines={1} style={{ fontSize, fontWeight, color, flexShrink: 1, maxWidth: AWAY_TITLE.pinnedMaxWidth, textDecorationLine: struck ? "line-through" : "none" }}>
           {away.pinned}

@@ -32,6 +32,7 @@ type WindowBase = {
   restoredFrame?: Frame;
   maximized?: boolean;
   fullScreen?: number;
+  display?: string;
   createdAt: number;
 };
 

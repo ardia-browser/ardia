@@ -59,15 +59,27 @@ final class SyncVaultTests: XCTestCase {
   }
 
   func testFolderHoldsNoPlaintext() throws {
+    let keys = SyncKeys(entropy: Data(repeating: 0, count: 30) + Data([4, 84]))
+    XCTAssertEqual(keys.chainTag, "6happ6iw6rqt67wxcfun6lltsi")
+    vault = SyncVault(folder: folder, keys: keys)
     try vault.createChain()
     let secrets = ["https://secret-bank.example/login", "Quarterly Plans", "hunter2-password", "alice@example.com"]
-    try vault.write(scope: "p:default", payload: try JSONSerialization.data(withJSONObject: ["secrets": secrets]))
+    let payload = try JSONSerialization.data(withJSONObject: ["secrets": secrets])
+    var expectedPaths: Set<String> = [keys.chainTag]
+    for scope in ["p:default", "app"] {
+      let id = try vault.write(scope: scope, payload: payload)
+      let scopePath = "\(keys.chainTag)/\(keys.scopeTag(scope))"
+      expectedPaths.insert(scopePath)
+      expectedPaths.insert("\(scopePath)/\(id).nns")
+    }
     let files = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: nil)!.compactMap { $0 as? URL }
-    XCTAssertFalse(files.isEmpty)
+    let folderPath = folder.resolvingSymlinksInPath().path + "/"
+    let relativePaths = Set(files.map { String($0.resolvingSymlinksInPath().path.dropFirst(folderPath.count)) })
+    XCTAssertEqual(relativePaths, expectedPaths)
     for url in files {
       let name = url.deletingPathExtension().lastPathComponent
       XCTAssertTrue(Base32.isTag(name), name)
-      for secret in secrets + ["default", "app"] {
+      for secret in secrets {
         XCTAssertFalse(url.path.dropFirst(folder.path.count).contains(secret))
       }
       guard let data = try? Data(contentsOf: url) else { continue }

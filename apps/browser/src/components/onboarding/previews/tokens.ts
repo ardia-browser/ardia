@@ -14,7 +14,6 @@ export const sceneMs = {
   style: 1300,
   siteColor: 1300,
   switcher: 1300,
-  typed: 1300,
   block: 1300,
   links: 1500,
   autoBadge: 900,

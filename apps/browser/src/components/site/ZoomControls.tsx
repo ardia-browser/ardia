@@ -10,10 +10,10 @@ import { markHoverProps } from "../../lib/hoverMarks";
 import { type ToolbarPalette } from "../ui/toolbarColors";
 import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
 
-export const ZoomIndicator = memo(function ZoomIndicator({ tabId, zoom, palette, onFocus }: { tabId: string; zoom: number; palette: ToolbarPalette; onFocus: () => void }) {
+export const ZoomIndicator = memo(function ZoomIndicator({ tabId, zoom, palette, onFocus, quiet = false }: { tabId: string; zoom: number; palette: ToolbarPalette; onFocus: () => void; quiet?: boolean }) {
   const open = usePages((p) => p.popover[tabId] === "zoom");
   const actualSize = Math.abs(zoom - 1) < 0.001;
-  if (actualSize && !open) return null;
+  if ((actualSize || quiet) && !open) return null;
   return (
     <Button variant="icon" toolbar
       look="field"

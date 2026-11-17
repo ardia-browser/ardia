@@ -95,5 +95,11 @@ class CdpTimeout(BrowseError):
         self.method = method
 
 
+class PageBusy(CdpTimeout):
+    def __init__(self, method: str, seconds: float, why: str):
+        BrowseError.__init__(self, f"{method} got no answer in {seconds:g}s: {why}", code="page_busy")
+        self.method = method
+
+
 class Usage(BrowseError):
     pass

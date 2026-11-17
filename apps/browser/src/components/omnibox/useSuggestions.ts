@@ -4,11 +4,13 @@ import {
   engineById,
   findBang,
   prepareSuggestions,
+  type RemoteSite,
   type SearchEngine,
   type SearchScope,
   type SuggestionResult,
 } from "@ardia/core";
 import { useEffect, useMemo, useState } from "react";
+import { noteSiteSuggestionShown } from "../../state/telemetry/inlineCompletionCounts";
 import { bookmarksByUrl } from "../../state/bookmarks/bookmarks";
 import { useMenuBarRevision } from "../../state/commands/commandShortcuts";
 import { useSettings } from "../../state/browser/hooks";
@@ -22,9 +24,11 @@ import { useBangs } from "../../state/omnibox/bangs";
 import { useBarExtensions } from "./extensions";
 import { historyHosts } from "../../state/omnibox/knownHosts";
 import { useProviderSections } from "./useProviderSections";
+import { barFieldMarks } from "../../state/omnibox/barMarks";
 import { browserSuggestFetch, remoteSuggestionsAllowed, suggestProfileKey } from "../../state/omnibox/suggestTransport";
 
 const NO_REMOTE: string[] = [];
+const NO_SITES: RemoteSite[] = [];
 const EMPTY: SuggestionResult = { items: [], completion: "" };
 const WARM_SLICE_MS = 4;
 
@@ -77,7 +81,6 @@ export function useSuggestions({
   const bookmarkEngine = useBookmarkEngine(windowId);
   const engines = useSettings((st) => searchEngines(st));
   const engine = useSettings((st) => defaultSearchEngine(st));
-  const preference = useSettings((st) => st.commandBarPreference);
   const suggestionsOn = useSettings((st) => st.searchSuggestions);
   const extensions = useBarExtensions(windowId);
   const shortcuts = useSettings((st) => st.shortcuts);
@@ -98,12 +101,12 @@ export function useSuggestions({
     return () => clearTimeout(timer);
   }, [source]);
 
-  const [remote, setRemote] = useState<{ text: string; list: string[] }>({ text: "", list: [] });
+  const [remote, setRemote] = useState<{ text: string; list: string[]; sites: RemoteSite[] }>({ text: "", list: [], sites: NO_SITES });
   const suggestProfile = suggestProfileKey(profileId);
   const remoteAllowed = remoteSuggestionsAllowed(profileId);
   const fetcher = useMemo(() => createSuggestFetcher({ fetch: browserSuggestFetch(suggestProfile) }), [suggestProfile]);
   useEffect(() => {
-    setRemote({ text: "", list: [] });
+    setRemote({ text: "", list: [], sites: NO_SITES });
     return () => fetcher.cancel();
   }, [fetcher]);
   const query = text.trim();
@@ -116,7 +119,7 @@ export function useSuggestions({
       fetcher.cancel();
       return;
     }
-    fetcher.request(fromEngine, q, (list) => setRemote({ text: query, list }));
+    fetcher.request(fromEngine, q, (list, sites) => setRemote({ text: query, list, sites }));
   }, [active, suggestionsOn, remoteAllowed, query, bang, fromEngine, scope, fetcher]);
 
   const providers = useProviderSections({ text, active, scope, windowId, skip: !!bang });
@@ -128,12 +131,21 @@ export function useSuggestions({
     return remote.list.filter((s) => s.toLowerCase().startsWith(q));
   }, [remote, query]);
 
-  return useMemo(() => {
+  const remoteSites = useMemo(() => {
+    if (remote.text === query) return remote.sites;
+    const q = query.toLowerCase();
+    if (!remote.text || !q.startsWith(remote.text.toLowerCase())) return NO_SITES;
+    return remote.sites.filter((site) => site.title.toLowerCase().startsWith(q) || site.url.replace(/^https?:\/\/(www\.)?/i, "").toLowerCase().startsWith(q));
+  }, [remote, query]);
+
+  const result = useMemo(() => {
     if (!active || (!query && scope?.kind !== "provider")) return EMPTY;
-    return buildSuggestions(text, source, {
+    const started = performance.now();
+    const built = buildSuggestions(text, source, {
       engine,
-      preference,
+      preference: "website",
       remote: remoteList,
+      remoteSites: scope ? NO_SITES : remoteSites,
       actions: currentBarActions(windowId),
       extensions,
       currentTabId,
@@ -143,5 +155,12 @@ export function useSuggestions({
       bangs,
       providers,
     });
-  }, [active, text, query, source, engine, preference, remoteList, windowId, extensions, shortcuts, menuBar, currentTabId, currentUrl, scope, preventInline, bangs, providers]);
+    barFieldMarks.suggestions(performance.now() - started, text.length);
+    return built;
+  }, [active, text, query, source, engine, remoteList, remoteSites, windowId, extensions, shortcuts, menuBar, currentTabId, currentUrl, scope, preventInline, bangs, providers]);
+  const siteListed = !scope && remoteSites.some((site) => result.items.some((i) => i.kind === "page" && i.url === site.url && !i.tabId));
+  useEffect(() => {
+    if (siteListed) noteSiteSuggestionShown();
+  }, [siteListed, query]);
+  return result;
 }

@@ -1,3 +1,4 @@
+import { ardiaError } from "@ardia/core";
 import { addHistoryVisits, onHistoryChanged, queryHistory, watchHistory, type EngineHistoryEntry, type HistoryChange } from "../../platform/history";
 import { readDocument } from "../../platform/documents";
 import { useBrowser, type BrowserState } from "../browser/store";
@@ -14,9 +15,49 @@ const LEGACY_FILE = "history.json";
 const LEGACY_TOLERANCE_MS = 60_000;
 const CHUNK = 500;
 const LEGACY_KEPT_MS = 15_000;
+export const GAP_REPORT_MS = 30_000;
+const MAX_GAP_REPORTS = 10;
 
 const store = () => useBrowser.getState();
+const profileLabel = (engine: string) => (engine ? "another profile" : "the default profile");
 
+export type HistoryGap = `${HistoryChange["kind"]}-${"unloaded" | "moving"}` | "modified-unknown" | "visit-untitled";
+export type NoteGap = (gap: HistoryGap, count?: number) => void;
+
+const gaps = new Map<string, Map<HistoryGap, number>>();
+let gapTimer: ReturnType<typeof setTimeout> | null = null;
+let gapReports = 0;
+
+function noteGap(engine: string, gap: HistoryGap, count = 1) {
+  let counts = gaps.get(engine);
+  if (!counts) gaps.set(engine, (counts = new Map()));
+  counts.set(gap, (counts.get(gap) ?? 0) + count);
+  if (gap !== "visit-untitled" && !gapTimer && gapReports < MAX_GAP_REPORTS) gapTimer = setTimeout(reportGaps, GAP_REPORT_MS);
+}
+
+const gapNoter =
+  (engine: string): NoteGap =>
+  (gap, count) =>
+    noteGap(engine, gap, count);
+
+function reportGaps() {
+  gapTimer = null;
+  for (const [engine, counts] of gaps) {
+    if ([...counts.keys()].every((gap) => gap === "visit-untitled")) continue;
+    if (gapReports >= MAX_GAP_REPORTS) break;
+    gapReports++;
+    const summary = [...counts].map(([gap, count]) => `${gap}=${count}`).join(" ");
+    console.warn(`[history] changes the list missed for ${profileLabel(engine)}: ${summary}`);
+  }
+  gaps.clear();
+}
+
+function forgetGaps() {
+  if (gapTimer) clearTimeout(gapTimer);
+  gapTimer = null;
+  gaps.clear();
+  gapReports = 0;
+}
 
 const toEntry = (e: EngineHistoryEntry): HistoryEntry => ({
   url: e.url,
@@ -54,7 +95,7 @@ const isListChange = (change: HistoryChange): change is ListChange => change.kin
 const urlsOf = (change: ListChange): string[] =>
   change.kind === "visit" ? [change.url] : change.kind === "modified" ? change.rows.map((r) => r.url) : change.urls;
 
-export function applyHistoryChanges(list: HistoryEntry[], changes: readonly ListChange[]): HistoryEntry[] {
+export function applyHistoryChanges(list: HistoryEntry[], changes: readonly ListChange[], note?: NoteGap): HistoryEntry[] {
   const wanted = new Set(changes.flatMap(urlsOf));
   const touched = new Map<string, Touched>();
   for (let i = 0; i < list.length; i++) {
@@ -84,6 +125,7 @@ export function applyHistoryChanges(list: HistoryEntry[], changes: readonly List
           lastVisit: times[times.length - 1]!,
           visitTimes: times,
         };
+        if (!state.entry.title) note?.("visit-untitled");
         state.moved = true;
         state.seq = ++seq;
         dirty = true;
@@ -93,6 +135,7 @@ export function applyHistoryChanges(list: HistoryEntry[], changes: readonly List
         for (const row of new Map(change.rows.map((r) => [r.url, r])).values()) {
           const state = touched.get(row.url);
           const h = state?.entry;
+          if (!h && isWebPageUrl(row.url)) note?.("modified-unknown");
           if (!state || !h || ((row.title === h.title || !row.title) && row.visits === h.visits)) continue;
           state.entry = { ...h, title: row.title || h.title, visits: row.visits };
           dirty = true;
@@ -154,13 +197,14 @@ function load(engine: string): Promise<void> {
         const read = await queryHistory(engine, MAX_HISTORY, MAX_VISIT_TIMES);
         const floor = read.length >= MAX_HISTORY ? read.reduce((oldest, e) => Math.min(oldest, e.visitTimes.at(-1) ?? 0), Infinity) : -Infinity;
         let list = read.filter((e) => isWebPageUrl(e.url)).map(toEntry).sort(byLastVisit);
-        list = applyHistoryChanges(list, state.queued.filter(isListChange));
+        list = applyHistoryChanges(list, state.queued.filter(isListChange), gapNoter(engine));
         if (state.queued.some((c) => c.kind === "deleted" && c.all)) state.again = true;
         setView(engine, list, floor);
         if (inApp(engine)) loaded.add(engine);
       } while (state.again && inApp(engine));
     } catch (error) {
-      console.warn(`[history] couldn't read ${engine || "the default profile"}'s history`, error);
+      const failure = ardiaError(error);
+      console.warn(`[history] couldn't read ${profileLabel(engine)}'s history: ${failure.code} ${failure.message}`, error);
     } finally {
       loads.delete(engine);
     }
@@ -180,18 +224,24 @@ function applyPending() {
   pending = [];
   const batches = new Map<string, ListChange[]>();
   const show = () => {
-    for (const [engine, batch] of batches) setView(engine, applyHistoryChanges(viewOf(engine), batch));
+    for (const [engine, batch] of batches) setView(engine, applyHistoryChanges(viewOf(engine), batch, gapNoter(engine)));
     batches.clear();
   };
   for (const change of changes) {
     const engine = change.profile;
-    if (migrating.has(engine)) continue;
+    if (migrating.has(engine)) {
+      noteGap(engine, `${change.kind}-moving`);
+      continue;
+    }
     const running = loads.get(engine);
     if (running) {
       running.queued.push(change);
       continue;
     }
-    if (!loaded.has(engine)) continue;
+    if (!loaded.has(engine)) {
+      noteGap(engine, `${change.kind}-unloaded`);
+      continue;
+    }
     if (!isListChange(change)) {
       show();
       void load(engine);
@@ -275,6 +325,7 @@ export function startHistory() {
     unloaded();
     pending = [];
     loaded.clear();
+    forgetGaps();
     legacyMoved = false;
   };
 }

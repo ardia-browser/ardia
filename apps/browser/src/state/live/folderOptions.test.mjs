@@ -195,6 +195,34 @@ test("a pull request counts as open while any window has its tab, so another win
   assert.equal(liveTabOpen(tabs, "f", ["pr3"]), false);
 });
 
+test("rows asking whether their pull request is open read the tab list once, not once per row", () => {
+  const raw = Object.fromEntries(Array.from({ length: 1000 }, (_, i) => [`t${i}`, { id: `t${i}`, windowId: "w" }]));
+  raw.t7.liveItem = { folderId: "f", itemId: "pr7" };
+  let scans = 0;
+  const tabs = new Proxy(raw, { ownKeys: (o) => (scans++, Reflect.ownKeys(o)) });
+  const open = Array.from({ length: 100 }, (_, i) => liveTabOpen(tabs, "f", [`pr${i}`]));
+  assert.deepEqual(open.flatMap((o, i) => (o ? [i] : [])), [7]);
+  assert.equal(scans, 1);
+});
+
+test("folders in different profiles refreshing at once share one fetch per service, and each lists the pull requests", async () => {
+  const ids = ["p1", "p2", "p3"].map((profile) => createFolder(profile, "pullRequests", ["github"]));
+  const { fetch } = SOURCES.github;
+  let calls = 0;
+  SOURCES.github.fetch = async () => (calls++, [pr("shared", 1, "one", "main")]);
+  try {
+    await Promise.all(ids.map(refreshFolder));
+    assert.equal(calls, 1);
+    for (const id of ids) assert.deepEqual(live().items[id].map((it) => it.id), ["shared"]);
+    updateFolder(ids[2], { filters: { authored: true, reviewRequests: false } });
+    await Promise.all(ids.map(refreshFolder));
+    assert.equal(calls, 3);
+  } finally {
+    SOURCES.github.fetch = fetch;
+    ids.forEach(removeFolder);
+  }
+});
+
 test("a stack split across sections counts as open when a member in the other section has its tab open", () => {
   const spanning = [stacked[0], { ...stacked[1], section: "review" }];
   const header = folderRows({ id: "f", kind: "pullRequests", groupStacks: true }, spanning, {}).find((r) => r.kind === "stack");

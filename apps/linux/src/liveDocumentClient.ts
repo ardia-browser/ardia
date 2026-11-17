@@ -196,6 +196,7 @@ export function createLiveDocumentClient(host: ArdiaHost) {
       try {
         const operations = captureLiveIntent(before, after, canonical, intent);
         if (operations.length) { pending.push({ operations, completion: completions.capture(intent, before, after, canonical) }); void drain().catch(() => {}); }
+        return operations.length > 0;
       } catch (error) { captureFailure = failure = error; throw error; }
     },
     beginRefresh: async (id: string) => {

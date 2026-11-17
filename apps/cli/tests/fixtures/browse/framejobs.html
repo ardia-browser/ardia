@@ -5,7 +5,9 @@
 <h1>Careers</h1>
 <span id="board"><iframe title="Job board" src="framejobs-inner.html" width="600" height="400"></iframe></span>
 <iframe title="Tiny tracker" src="framejobs-inner.html" width="10" height="10"></iframe>
-<iframe title="Partner board" id="partner" width="500" height="320"></iframe>
+<iframe title="3rd party ad content" srcdoc="<p>Buy the Pro plan today</p>" width="300" height="250"></iframe>
+<iframe title="Empty widget" srcdoc="<div></div>" width="300" height="250"></iframe>
+<iframe title="Partner board" id="partner" width="700" height="450"></iframe>
 <script>
   const partner = document.getElementById("partner");
   partner.src = location.href.replace("127.0.0.1", "localhost").replace("framejobs.html", "framejobs-inner.html");

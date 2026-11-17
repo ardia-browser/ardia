@@ -19,6 +19,7 @@ import { shownPageId } from "../peek/peek";
 import { isTabReady, pageOf, usePages } from "../tabs/pageState";
 import { isInternalTab } from "../pages/urls";
 import { afterFirstWindow } from "../../lib/afterFirstWindow";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { parseSaved, unchanged, versionedJson, type Migrations } from "../../lib/savedDocument";
 import { errorText } from "../../lib/errors";
 import { focusedWindowOf } from "../windows/ui";
@@ -144,6 +145,7 @@ export function installCliInBackground(reason: CliInstallReason): Promise<CliIns
     if (step) useCli.setState({ step });
   });
   running = installCli()
+    .then((result): CliInstallResult => result ?? { ok: false, appVersion: "", error: "The installer stopped.", lines: [] })
     .catch((e: unknown): CliInstallResult => ({ ok: false, appVersion: "", error: errorText(e), lines: [] }))
     .then((result) => {
       lines.remove();
@@ -282,7 +284,7 @@ export function startCliControl() {
   });
   useCli.subscribe(pushActiveTab);
   usePages.subscribe(pushActiveTab);
-  afterFirstWindow(() => setTimeout(installOrUpgrade, UPGRADE_DELAY_MS));
+  if (PLATFORM_FEATURES.ardiaCommand) afterFirstWindow(() => setTimeout(installOrUpgrade, UPGRADE_DELAY_MS));
 }
 
 if (__DEV__) (globalThis as { acCli?: unknown }).acCli = { store: useCli, indicator: useCliIndicator, install: installCliInBackground, installOrUpgrade };

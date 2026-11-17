@@ -570,6 +570,7 @@ struct TabDeck: View {
       }
       if reduceMotion { withAnimation(TabsMotion.fade, update) } else { withAnimation(TabsMotion.gapClose, update) }
       app.closeTab(id)
+      app.leaveDeckIfEmpty()
       Task { @MainActor in
         try? await Task.sleep(for: .seconds(0.6))
         lifts[id] = nil
@@ -614,6 +615,7 @@ struct TabDeck: View {
 
   private func closeAll() {
     app.closeAllTabs()
+    app.leaveDeckIfEmpty()
   }
 
   private var renderedRange: Range<Int> {

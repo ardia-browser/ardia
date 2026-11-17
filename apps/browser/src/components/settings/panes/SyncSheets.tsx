@@ -1,4 +1,4 @@
-import { showMenu } from "../../../state/app/system";
+import { confirm, showMenu } from "../../../state/app/system";
 import { Box, Button, Checkbox, DialogActions, DialogTitle, ink, lineHeight, proseLineHeight, radius, Sheet, space, Symbol, tabularNums, Text, TextField } from "../../ui";
 import {
   copyRecoveryKit,
@@ -13,8 +13,8 @@ import {
 import { useEffect, useState, type ReactNode } from "react";
 import { Image, View } from "react-native";
 import { useTheme } from "../../ui/theme";
-import { addRemoteProfile, enterRecoveryPhrase, stopSync, useSync } from "../../../state/sync/engine";
-import type { RemoteProfile } from "../../../state/sync/syncDoc";
+import { addRemoteProfile, enterRecoveryPhrase, removeRemoteProfile, removeSyncedDevice, stopSync, useSync } from "../../../state/sync/engine";
+import type { RemoteProfile, SyncedDevice } from "../../../state/sync/syncDoc";
 import { ProfileBadge } from "../../profiles/ProfileIcons";
 import { Group, Row } from "../Form";
 import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
@@ -191,15 +191,41 @@ function PhraseSheet({ folder, onChooseFolder }: { folder: FolderInfo | null; on
   );
 }
 
-export function remoteProfileDescription(p: Pick<RemoteProfile, "sharesWith" | "waiting">): string {
+function sharingDescription(p: Pick<RemoteProfile, "sharesWith" | "waiting">): string {
   if (p.waiting) return "On your other devices. Waiting for the profile it shares data with to sync.";
   if (!p.sharesWith) return "On your other devices";
   const { name, added } = p.sharesWith;
   return added ? `On your other devices. Shares data with ${name}, which is added too.` : `On your other devices. Shares data with ${name}.`;
 }
 
+export function remoteProfileDescription(p: Pick<RemoteProfile, "sharesWith" | "waiting" | "sharedByOthers">): string {
+  const sharing = sharingDescription(p);
+  if (!p.sharedByOthers) return sharing;
+  return `${sharing.endsWith(".") ? sharing : `${sharing}.`} To remove it, first remove the profiles that share its data.`;
+}
+
 export function addAllRemoteProfiles(profiles: RemoteProfile[]) {
   for (const p of profiles) if (!p.waiting) addRemoteProfile(p.syncId);
+}
+
+async function confirmRemoveFromSync(profile: RemoteProfile) {
+  const { confirmed } = await confirm({
+    title: `Remove “${profile.name}” from Sync?`,
+    message: "It leaves this list on all your devices. A device that still has this profile keeps it, and it comes back here.",
+    confirmTitle: "Remove",
+    destructive: true,
+  });
+  if (confirmed) removeRemoteProfile(profile.syncId);
+}
+
+export async function confirmRemoveDevice(device: SyncedDevice) {
+  const { confirmed } = await confirm({
+    title: `Remove “${device.name}” from Sync?`,
+    message: "It leaves this list on all your devices, with the tabs it shared. Its data stays on it, and if it still syncs, it comes back here.",
+    confirmTitle: "Remove",
+    destructive: true,
+  });
+  if (confirmed) removeSyncedDevice(device.id);
 }
 
 export function RemoteProfileRow({ profile }: { profile: RemoteProfile }) {
@@ -209,7 +235,10 @@ export function RemoteProfileRow({ profile }: { profile: RemoteProfile }) {
       title={profile.name}
       description={remoteProfileDescription(profile)}
     >
-      <Button title={`Add to This ${PLATFORM_TERMS.computerTitle}`} disabled={!!profile.waiting} onPress={() => addRemoteProfile(profile.syncId)} />
+      <Box row gap="s">
+        <Button title="Remove…" disabled={!!profile.sharedByOthers} onPress={() => void confirmRemoveFromSync(profile)} />
+        <Button title={`Add to This ${PLATFORM_TERMS.computerTitle}`} disabled={!!profile.waiting} onPress={() => addRemoteProfile(profile.syncId)} />
+      </Box>
     </Row>
   );
 }

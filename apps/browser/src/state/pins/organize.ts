@@ -36,11 +36,16 @@ export function selectedTabIds(s: BrowserState, windowId: string): string[] {
 
 export const awayFromPin = (t: Pick<Tab, "url" | "pinnedUrl">) => !!t.pinnedUrl && !!t.url && !samePage(t.url, t.pinnedUrl);
 
-export type AwayTitle = { pinned: string | null; page: string };
+export type AwayTitle = { pinned: string | null; page: string; renamed?: true };
 
 type TitledTab = Pick<Tab, "url" | "pinnedUrl" | "customTitle" | "title">;
 
 export const awayTitle = (t: TitledTab): AwayTitle | null => (awayFromPin(t) ? { pinned: t.customTitle || null, page: tabTitle({ ...t, customTitle: null }) } : null);
+
+export function rowAwayTitle(t: TitledTab): AwayTitle | null {
+  const away = awayTitle(t);
+  return away?.pinned ? { pinned: null, page: tabTitle(t), renamed: true } : away;
+}
 
 export const awayTitleText = (away: AwayTitle) => (away.pinned ? `${away.pinned} / ${away.page}` : `/ ${away.page}`);
 

@@ -47,6 +47,14 @@ setuid_ready() {
   ! findmnt -n -o OPTIONS --target "$helper" 2>/dev/null | tr , '\n' | grep -qx nosuid
 }
 
+if [[ -z "${BREAKPAD_DUMP_LOCATION:-}" ]]; then
+  for argument in "$@"; do
+    if [[ "$argument" == --user-data-dir=?* ]]; then
+      export BREAKPAD_DUMP_LOCATION="${argument#--user-data-dir=}/Crash Reports"
+    fi
+  done
+fi
+
 for argument in "$@"; do
   if [[ "$argument" == --no-sandbox ]]; then
     exec "$chrome" "--ardia-sandbox-decision=Ardia was started with --no-sandbox" "$@"

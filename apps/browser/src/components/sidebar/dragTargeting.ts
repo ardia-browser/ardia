@@ -29,6 +29,7 @@ export class DragTargeting extends DragGeometry {
     this.clearHold();
     hold.key = target.key;
     if (folderOf(target)) return void (hold.ready = target.key);
+    if (!currentSettings().topAppFolders) return;
     hold.timer = setTimeout(() => {
       if (this.session !== session || hold.key !== target.key || !session.sources.length) return;
       hold.ready = target.key;
@@ -133,7 +134,7 @@ export class DragTargeting extends DragGeometry {
     if (folderAway !== dragMarksOf(this.marks).folderAway) markDrag(this.marks, { folderAway });
     const key = JSON.stringify(drop);
     if (key === session.dropKey && gapKey === session.gapKey) return;
-    if (session.dropKey && drop.type !== "none" && currentSettings().tabReorderHaptics) hapticTick();
+    if (session.dropKey && drop.type !== "none") hapticTick();
     session.dropKey = key;
     session.drop = drop;
     session.into = into;

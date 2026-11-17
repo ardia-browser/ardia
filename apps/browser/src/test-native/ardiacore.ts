@@ -288,9 +288,10 @@ export const crxInstallFailure: { next: string | null } = { next: null };
 export const linkRoute: { next: LinkRoute } = { next: {} };
 export const resolvedPermissions: { id: string; result: string; remember: boolean }[] = [];
 export const extensionAnswers = {
-  actionStates: async (_tabId: string, _ids: string[]): Promise<Record<string, ActionState>> => ({}),
-  sidePanelUrl: async (_tabId: string, _extensionId: string): Promise<string | null> => null,
+  actionStates: async (_tabId: string, _ids: string[], _profile?: string): Promise<Record<string, ActionState>> => ({}),
+  sidePanelUrl: async (_tabId: string, _extensionId: string, _profile?: string): Promise<string | null> => null,
   change: async (_verb: string, _id: string): Promise<void> => {},
+  resolveInstallPrompt: async (_requestId: string, _accepted: boolean, _profile?: string): Promise<null> => null,
 };
 
 const tabStripHost = () => testGlobals.acTestTabStrip!;
@@ -479,9 +480,9 @@ const fakeModules = {
       installedCrx.push({ path: path, profile });
       return { id: "crx" };
     },
-    resolveInstallPrompt: () => null,
-    actionStates: ({ tabId, ids }) => extensionAnswers.actionStates(tabId, ids),
-    sidePanelUrl: ({ tabId, extensionId }) => extensionAnswers.sidePanelUrl(tabId, extensionId),
+    resolveInstallPrompt: ({ requestId, accepted, profile }) => extensionAnswers.resolveInstallPrompt(requestId, accepted, profile),
+    actionStates: ({ tabId, ids, profile }) => extensionAnswers.actionStates(tabId, ids, profile),
+    sidePanelUrl: ({ tabId, extensionId, profile }) => extensionAnswers.sidePanelUrl(tabId, extensionId, profile),
     watchActions: () => null,
     syncState: () => ({ ready: false, extensions: [], pending: [], settling: [], queued: [], intents: [] }),
     syncApply: () => ({ state: "pending" }),

@@ -26,8 +26,10 @@ static NSPoint gPeekUpPoint;
 static NSUInteger gPeekUpSeq = 0;
 static NSUInteger gPeekUsedSeq = 0;
 static BOOL gPeekPressedSinceUp = NO;
+static BOOL gPeekOtherPressSinceUp = NO;
 static const CFTimeInterval kPeekGestureLifetime = 10;
 static const CFTimeInterval kPeekFallbackLifetime = 60;
+static const CFTimeInterval kShiftClickLifetime = 3;
 static const CFTimeInterval kUserActivationLifespan = 5;
 static const NSEventMask kActivatingInputMask = NSEventMaskLeftMouseDown | NSEventMaskLeftMouseUp | NSEventMaskRightMouseDown |
                                                 NSEventMaskOtherMouseDown | NSEventMaskOtherMouseUp | NSEventMaskKeyDown;
@@ -67,6 +69,7 @@ void InstallPeekMonitor() {
   monitor = [NSEvent addLocalMonitorForEventsMatchingMask:kActivatingInputMask
                                                   handler:^NSEvent *(NSEvent *event) {
                                                     if (event.window) [InputTimesByWindow() setObject:@(CACurrentMediaTime()) forKey:event.window];
+                                                    if (event.type == NSEventTypeRightMouseDown || event.type == NSEventTypeOtherMouseDown) gPeekOtherPressSinceUp = YES;
                                                     if (event.type != NSEventTypeLeftMouseDown && event.type != NSEventTypeLeftMouseUp) return event;
                                                     if (event.type == NSEventTypeLeftMouseDown) {
                                                       gPeekPressedSinceUp = YES;
@@ -77,6 +80,7 @@ void InstallPeekMonitor() {
                                                     gPeekUpView = PageViewUnder(event);
                                                     gPeekUpPoint = event.locationInWindow;
                                                     gPeekPressedSinceUp = NO;
+                                                    gPeekOtherPressSinceUp = NO;
                                                     gPeekUpSeq++;
                                                     return event;
                                                   }];
@@ -110,6 +114,13 @@ NSDictionary *RecentClickPoint(ArdiaWebView *view) {
   if (!window || gPeekUpView != view || gPeekUpAt < 0 || CACurrentMediaTime() - gPeekUpAt > kPeekGestureLifetime) return nil;
   const NSPoint inRoot = RootPointFromWindow(window, gPeekUpPoint);
   return @{@"x" : @(inRoot.x), @"y" : @(inRoot.y)};
+}
+
+BOOL TakeShiftClick(ArdiaWebView *view) {
+  const BOOL fresh = gPeekUpAt >= 0 && CACurrentMediaTime() - gPeekUpAt <= kShiftClickLifetime && !gPeekPressedSinceUp && !gPeekOtherPressSinceUp;
+  if (!fresh || gPeekUpView != view || gPeekUpKeys != NSEventModifierFlagShift || gPeekUpSeq == gPeekUsedSeq) return NO;
+  gPeekUsedSeq = gPeekUpSeq;
+  return YES;
 }
 
 BOOL MayHoldUserActivation(NSWindow *window) {

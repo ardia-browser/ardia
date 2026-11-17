@@ -33,6 +33,7 @@ final class BrowseSession {
   var desktopTabs: Set<UUID> = []
   var stepRequest: StepRequest?
   var deckRequested = false
+  @ObservationIgnored var startRestsOnce = false
   var tones: [UUID: PageTone] = [:]
 
   var isSearchTrayOnScreen: Bool {

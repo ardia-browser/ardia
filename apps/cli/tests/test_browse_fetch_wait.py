@@ -142,3 +142,33 @@ class KeepAwake(unittest.TestCase):
         asyncio.run(Page.keep_awake(page))
         self.assertEqual(page.sent, [])
         self.assertFalse(page.awake)
+
+
+class SilentSite(unittest.TestCase):
+    def test_a_site_that_never_answers_is_a_timeout_naming_it(self):
+        from ardia_cli.browse.errors import BrowseError, OutcomeUnknown
+
+        page = CrossDocumentPage("L1")
+
+        async def send(method, params=None, timeout=30, mutation=False):
+            raise OutcomeUnknown("`Page.navigate`", f"Ardia didn't answer Page.navigate in {timeout:g}s after it was sent")
+
+        page.send = send
+        with self.assertRaises(BrowseError) as caught:
+            asyncio.run(readpages.goto(None, page, "https://slow.example.gov/report?id=7", 5))
+        self.assertNotIsInstance(caught.exception, OutcomeUnknown)
+        self.assertEqual(caught.exception.code, "timeout")
+        self.assertIn("slow.example.gov sent nothing back within 5 s", caught.exception.message)
+        self.assertIn("as the site gave it", caught.exception.message)
+
+    def test_a_tab_detached_mid_navigation_stays_an_unknown_outcome(self):
+        from ardia_cli.browse.errors import OutcomeUnknown
+
+        page = CrossDocumentPage("L1")
+
+        async def send(method, params=None, timeout=30, mutation=False):
+            raise OutcomeUnknown("`Page.navigate`", "Ardia detached the tab before it answered Page.navigate")
+
+        page.send = send
+        with self.assertRaises(OutcomeUnknown):
+            asyncio.run(readpages.goto(None, page, "http://s/next", 5))

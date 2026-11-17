@@ -3,10 +3,11 @@ import { takeAnimationBursts, watchAnimationBursts } from "./animationBursts";
 import { checkDefaultBrowserAtLaunch, takeDefaultBrowserCounts } from "./defaultBrowserCounts";
 import { takeIntroCounts } from "./introCounts";
 import { takeUpdateCounts } from "./updateCounts";
+import { takeWindowRootCounts } from "./windowRootCounts";
 
 export function watchPlatformCounts() {
   watchAnimationBursts();
   checkDefaultBrowserAtLaunch();
 }
 
-export const takePlatformCounts = () => ({ ...takeAnimationBursts(), ...takeDefaultBrowserCounts(), ...takeIntroCounts(), ...takeUpdateCounts(), launch_command_line_links: launchLinks.takeOpenedAtLaunch() });
+export const takePlatformCounts = () => ({ ...takeAnimationBursts(), ...takeDefaultBrowserCounts(), ...takeIntroCounts(), ...takeUpdateCounts(), ...takeWindowRootCounts(), launch_command_line_links: launchLinks.takeOpenedAtLaunch() });

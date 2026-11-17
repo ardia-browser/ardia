@@ -17,6 +17,7 @@ enum PageViewDefinition {
       Prop("temporarySource") { (view: V, source: String?) in view.page.temporarySource = source }
       Prop("extensionHost") { (view: V, kind: String?) in view.page.extensionHost = kind }
       Prop("visible") { (view: V, visible: Bool?) in view.page.visible = visible ?? true }
+      Prop("selected") { (view: V, selected: Bool?) in view.page.selected = selected ?? true }
       Prop("warm") { (view: V, warm: Bool?) in view.page.warm = warm ?? false }
       Prop("neighbour") { (view: V, neighbour: Bool?) in view.page.neighbour = neighbour ?? false }
       Prop("pageBackgroundColor") { (view: V, color: NSColor?) in view.page.pageBackgroundColor = color }

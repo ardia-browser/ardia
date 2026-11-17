@@ -484,7 +484,7 @@ class PackagingTests(unittest.TestCase):
         runtime.mkdir(parents=True)
         shutil.copyfile(REPO / 'scripts/linux/ardia-launch', runtime / 'ardia-launch')
         (runtime / 'ardia-launch').chmod(0o755)
-        (runtime / 'chrome').write_text('#!/usr/bin/env bash\nprintf "%s\\n" "$@"\n')
+        (runtime / 'chrome').write_text(env.get('chrome', '#!/usr/bin/env bash\nprintf "%s\\n" "$@"\n'))
         (runtime / 'chrome').chmod(0o755)
         proc = root / 'proc'
         for name, value in env.get('proc', {}).items():
@@ -529,6 +529,21 @@ class PackagingTests(unittest.TestCase):
                     self.assertIn('allow user namespaces with sudo sysctl -w kernel.unprivileged_userns_clone=1.', result.stderr)
                 if label in ('asked', 'AppImage, asked'):
                     self.assertEqual(lines, ['--ardia-sandbox-decision=Ardia was started with --no-sandbox', '--marker', '--no-sandbox'])
+
+    def test_an_instance_with_its_own_user_data_dir_keeps_its_crash_dumps_there(self):
+        cases = [
+            ('default profile', (), {}, ''),
+            ('own data dir', ('--user-data-dir=/scratch/one',), {}, '/scratch/one/Crash Reports'),
+            ('last data dir wins', ('--user-data-dir=/scratch/one', '--user-data-dir=/scratch/two'), {}, '/scratch/two/Crash Reports'),
+            ('no sandbox', ('--user-data-dir=/scratch/one', '--no-sandbox'), {}, '/scratch/one/Crash Reports'),
+            ('chosen by the caller', ('--user-data-dir=/scratch/one',), {'BREAKPAD_DUMP_LOCATION': '/dumps'}, '/dumps'),
+        ]
+        for label, extra, variables, expected in cases:
+            with self.subTest(label), tempfile.TemporaryDirectory() as scratch:
+                root = pathlib.Path(scratch)
+                result = self.launcher_run(root, {'vars': variables, 'chrome': '#!/usr/bin/env bash\nprintf "%s\\n" "${BREAKPAD_DUMP_LOCATION:-}"\n'}, extra)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.splitlines(), [expected])
 
     @unittest.skipUnless(shutil.which('dpkg-deb'), 'dpkg-deb is required')
     def test_the_deb_installs_under_usr_with_a_setuid_helper_the_policy_and_the_apparmor_profile(self):

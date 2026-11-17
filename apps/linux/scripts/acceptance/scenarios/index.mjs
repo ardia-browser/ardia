@@ -7,8 +7,9 @@ import f10 from "./f10-suggestions.mjs";
 import f23 from "./f23-history-zoom.mjs";
 import f26 from "./f26-platform-settings.mjs";
 import f27 from "./f27-app-services.mjs";
+import f28 from "./f28-space-drags.mjs";
 
-export const SCENARIOS = [f01, f02, f03, f23, f08, f09, f10, f26, f27];
+export const SCENARIOS = [f01, f02, f03, f23, f08, f09, f10, f26, f27, f28];
 
 export function selectScenarios(only, scenarios = SCENARIOS) {
   if (!only?.length) return scenarios;

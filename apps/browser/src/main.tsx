@@ -38,6 +38,7 @@ import { setStoreBatching, useBrowser } from "./state/browser/store";
 import { installErrorReporting, startTelemetry } from "./state/telemetry";
 import { launchCommitted } from "./state/telemetry/journeys";
 import { markFirstWindow } from "./state/telemetry/track";
+import { noteWindowRoot } from "./state/telemetry/windowRootCounts";
 
 probeStore("browser", useBrowser);
 installErrorReporting();
@@ -83,6 +84,7 @@ function Root({ windowId }: { windowId: string }) {
     return () => clearTimeout(timer);
   }, []);
   useLayoutEffect(() => launchCommitted(), []);
+  useLayoutEffect(() => noteWindowRoot(windowId), [windowId]);
   useEffect(() => {
     perfMark("firstWindow");
     markFirstWindow();

@@ -5,7 +5,7 @@ import type { usePeek } from "./usePeek";
 
 type SidebarDockLayer = { opacity: unknown; transform: { translateX: unknown }[] };
 
-type SidebarDockProbe = { peek: ReturnType<typeof usePeek>; open: boolean; moving: boolean; fullscreen: boolean; edgeOn: boolean; layer: SidebarDockLayer };
+type SidebarDockProbe = { peek: ReturnType<typeof usePeek>; open: boolean; moving: boolean; fullscreen: boolean; layer: SidebarDockLayer };
 
 type DockMoment = { label: string; ready(closingMs: number, slide: number): boolean };
 
@@ -95,10 +95,6 @@ async function checkSidebarPeek() {
   const windowId = probes.keys().next().value;
   if (windowId === undefined) {
     console.info("[ardia windows] self-check note: sidebar peek skipped, no window shows tabs in the sidebar");
-    return;
-  }
-  if (!probeFor(windowId).edgeOn) {
-    console.info("[ardia windows] self-check note: sidebar peek skipped, tabs don't reveal on hover");
     return;
   }
   if (probeFor(windowId).fullscreen) {

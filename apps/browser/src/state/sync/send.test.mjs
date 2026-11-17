@@ -306,7 +306,7 @@ test("only http and https pages are opened; anything else addressed here is dele
 test("this Mac's device record says it's a Mac that takes sent tabs, and older records still read as Macs", () => {
   const extraction = adapters.deviceAdapter("A", () => "Luke’s MacBook Pro").extract();
   const record = extraction.values.get("dev:A");
-  assert.deepEqual(record, { n: "Luke’s MacBook Pro", k: "mac", f: ["send"] });
+  assert.deepEqual(record, { n: "Luke’s MacBook Pro", k: "mac", f: ["send"], v: "1.0" }, "it also names the Ardia version (and system, where known) that wrote it, to tell same-named Macs apart");
   assert.equal(adapters.deviceKindOf({ n: "Old Mac" }), "mac");
   assert.equal(adapters.receivesTabs({ n: "Old Mac" }), false);
   assert.equal(adapters.deviceKindOf({ n: "iPhone", k: "phone", f: ["send"] }), "phone");

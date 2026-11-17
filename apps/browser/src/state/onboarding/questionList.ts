@@ -15,7 +15,6 @@ export type QuestionId =
   | "tabsMore"
   | "color" | "switcher" | "appearance" | "style" | "frame" | "siteColor" | "lookMore"
   | "engine"
-  | "typed"
   | "crash"
   | "pins"
   | "default"
@@ -50,7 +49,6 @@ export const QUESTIONS: Record<Exclude<OnboardingStep, "intro">, Question[]> = {
   ],
   searchPrivacy: [
     { id: "engine", keys: ["searchEngine"] },
-    { id: "typed", keys: ["commandBarPreference"] },
     { id: "crash", keys: [] },
   ],
   pins: [{ id: "pins", keys: [] }],

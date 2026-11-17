@@ -1,0 +1,11 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Fixture Busy Page</title></head>
+<body>
+<h1>Street view</h1>
+<p id="note">Loading imagery</p>
+<script>
+  setTimeout(() => { const until = Date.now() + 45000; while (Date.now() < until) {} document.getElementById("note").textContent = "Ready"; }, 1500);
+</script>
+</body>
+</html>

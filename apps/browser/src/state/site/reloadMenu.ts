@@ -76,7 +76,7 @@ export async function showReloadMenu(tabId: string) {
   const blocker: ReloadMenuState["blocker"] = !state ? "unavailable" : !state.enabled ? "offInSettings" : allowed ? "off" : "on";
   const choice = await showMenu(reloadMenuItems({ blocker }));
   if (choice === "blocking") {
-    if (blocker === "offInSettings") return openSettings("privacy");
+    if (blocker === "offInSettings") return openSettings("general");
     return void setSiteBlocking(tab, host, blocker === "off");
   }
   if (choice === "clearData") return void clearSiteDataAfterConfirm(tab, origin);

@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { create } from "zustand";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { usePageProfileId } from "../browser/hooks";
 import { activeTabId, tabLabel, viewTabIds } from "../browser/model";
@@ -249,7 +248,3 @@ export async function openTileFolderStripMenu(windowId: string, folderId: string
   if (choice === "rename") void renameFolder(windowId, folderId);
   else if (typeof choice === "object" && choice && useBrowser.getState().tabs[choice.tabId]) clickTab(windowId, choice.tabId);
 }
-
-const useStripOnto = create<{ key: string | null }>()(() => ({ key: null }));
-export const useStripOntoIs = (key: string | null) => useStripOnto((s) => s.key === key);
-export const setStripOnto = (key: string | null) => useStripOnto.setState({ key });

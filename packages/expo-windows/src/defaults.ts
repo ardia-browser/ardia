@@ -35,7 +35,11 @@ export const moduleDefaults: Record<string, Record<string, unknown>> = {
   ...engineDomains,
   ArdiaApp: { launchEnvironment: () => null, windowsApiVersion: 0, interfaceScale: () => 1, interfaceScaleRange: () => [1, 1], setInterfaceScale: async () => 1 },
   ArdiaCalendar: { authorizationStatus: () => "notDetermined" },
-  ArdiaCli: { installedVersion: () => null },
+  ArdiaCli: {
+    installedVersion: () => null,
+    canInstallUnattended: () => false,
+    install: async () => ({ ok: false, appVersion: "", error: "The ardia command isn't offered on Windows yet.", lines: [] }),
+  },
   ArdiaGlassEffect: { isLiquidGlass: () => false },
   ArdiaTranslate: { available: false, userLanguages: () => ["en"], languageName: (id: string) => id },
   ArdiaUserScripts: { watch: () => {}, read: async () => ({ state: "empty" }), readStatus: async () => null },

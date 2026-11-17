@@ -4,7 +4,7 @@ import json
 import time
 from dataclasses import dataclass, field
 
-from ardia_cli.browse.errors import BrowseError, CdpError, CdpTimeout, Gated, NotFocusable, OutcomeUnknown
+from ardia_cli.browse.errors import BrowseError, CdpError, CdpTimeout, Gated, NotFocusable, OutcomeUnknown, PageBusy
 from ardia_cli.browse.inputs import Input
 from ardia_cli.browse.js import LIBRARY
 
@@ -34,6 +34,11 @@ LIVE_WAIT = 0.5
 DETACHED = "Ardia detached this tab from the ardia command while it was in use (the tab closed, crashed, went to sleep or moved to a window Ardia keeps for itself). Run the command again"
 CRASHED = "This tab's page crashed. `ardia browse reload` brings it back; `ardia browse close` or `tab close` closes it"
 CRASH_PROBE = 5.0
+BUSY_PROBE = 3.0
+BUSY_MEMORY = 120.0
+BUSY_WHY = ("the page's own scripts are keeping its tab busy, so it isn't answering. While it stays that way, commands on this tab give up "
+            "after {probe:g} s instead of waiting; `ardia browse reload` it, or work from a lighter page (search results, the site's own API, "
+            "or `read --http <url>`)")
 CRASH_SAFE = frozenset({"Inspector.enable", "Page.reload", "Page.navigate"})
 SETUP_NAMES = {
     "Emulation.setDeviceMetricsOverride": "the viewport or device size", "Emulation.setTouchEmulationEnabled": "touch emulation",
@@ -164,6 +169,7 @@ class Page:
         self.crashed = False
         self.needs_enable = False
         self.awake = False
+        self.unanswered_at = 0.0
 
     async def attach(self, browser):
         self.browser = browser
@@ -215,6 +221,18 @@ class Page:
             pass
         self.input.bind(viewport)
         self.needs_enable = False
+
+    async def still_busy(self, method: str):
+        from ardia_cli import command_metrics
+
+        try:
+            await self.browser.send("Runtime.evaluate", {"expression": "1", "returnByValue": True}, self.session_id, BUSY_PROBE)
+        except CdpTimeout:
+            command_metrics.flag("page_busy_fast_fail", True)
+            raise PageBusy(method, BUSY_PROBE, BUSY_WHY.format(probe=BUSY_PROBE)) from None
+        except BrowseError:
+            pass
+        self.unanswered_at = 0.0
 
     async def keep_awake(self):
         from ardia_cli import command_metrics
@@ -328,6 +346,8 @@ class Page:
             raise BrowseError(DETACHED, code="tab_detached")
         if self.crashed and method not in CRASH_SAFE:
             raise BrowseError(CRASHED, code="tab_crashed")
+        if self.unanswered_at and time.monotonic() - self.unanswered_at < BUSY_MEMORY:
+            await self.still_busy(method)
         call = asyncio.ensure_future(self.browser.send(method, params, self.session_id, timeout))
         self.calls.add(call)
         try:
@@ -341,9 +361,10 @@ class Page:
                 raise BrowseError(CRASHED, code="tab_crashed") from None
             raise BrowseError(DETACHED, code="tab_detached") from None
         except CdpTimeout:
+            self.unanswered_at = time.monotonic()
             if input_event or mutation or is_mutation(method):
                 raise OutcomeUnknown(f"`{method}`", f"Ardia didn't answer {method} in {timeout:g}s after it was sent") from None
-            raise
+            raise PageBusy(method, timeout, BUSY_WHY.format(probe=BUSY_PROBE)) from None
         finally:
             self.calls.discard(call)
             self.dropped.discard(call)

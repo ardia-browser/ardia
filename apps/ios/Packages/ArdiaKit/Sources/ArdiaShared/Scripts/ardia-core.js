@@ -1053,6 +1053,7 @@ __define("packages/core/src/engines.ts", function (exports, __require) {
   __export(exports, "suggestRequestUrl", () => suggestRequestUrl);
   __export(exports, "engineHost", () => engineHost);
   __export(exports, "suggestReplyJson", () => suggestReplyJson);
+  __export(exports, "parseRemoteSuggestions", () => parseRemoteSuggestions);
   __export(exports, "parseSuggestions", () => parseSuggestions);
   __export(exports, "validateEngine", () => validateEngine);
   __export(exports, "makeCustomEngine", () => makeCustomEngine);
@@ -1180,17 +1181,31 @@ const suggestRequestUrl = (engine              , query        ) =>
 const engineHost = (engine                           ) => hostOf(engine.url.replace(/%s/g, "q"));
 
 const NOT_QUERIES = new Set(["NAVIGATION", "PERSONALIZED_NAVIGATION", "CALCULATOR"]);
+const SITES = new Set(["NAVIGATION", "PERSONALIZED_NAVIGATION"]);
+
+                                                        
+                                                                           
 
 const suggestReplyJson = (text        )          => JSON.parse(text.replace(/^\)\]\}'\s*/, ""));
 
-function parseSuggestions(body         )           {
-  if (!Array.isArray(body) || !Array.isArray(body[1])) return [];
+function parseRemoteSuggestions(body         )                    {
+  if (!Array.isArray(body) || !Array.isArray(body[1])) return { queries: [], sites: [] };
   const extras = body[4]                                                  ;
   const types = Array.isArray(extras?.["google:suggesttype"]) ? (extras["google:suggesttype"]             ) : [];
-  return (body[1]             )
-    .filter((s, i)              => typeof s === "string" && s.trim() !== "" && !NOT_QUERIES.has(String(types[i])))
-    .map((s) => s.trim());
+  const titles = Array.isArray(body[2]) ? (body[2]             ) : [];
+  const queries           = [];
+  const sites               = [];
+  (body[1]             ).forEach((s, i) => {
+    if (typeof s !== "string" || s.trim() === "") return;
+    const type = String(types[i]);
+    if (SITES.has(type)) {
+      if (/^https?:\/\/[^\s/?#]+/i.test(s.trim())) sites.push({ url: s.trim(), title: typeof titles[i] === "string" ? (titles[i]          ).trim() : "" });
+    } else if (!NOT_QUERIES.has(type)) queries.push(s.trim());
+  });
+  return { queries, sites };
 }
+
+const parseSuggestions = (body         )           => parseRemoteSuggestions(body).queries;
 
                                                                          
 
@@ -2319,21 +2334,26 @@ function globalProviderRows(sections                            , shown         
 __define("packages/core/src/pageText.ts", function (exports, __require) {
   __export(exports, "displayUrl", () => displayUrl);
   __export(exports, "pageKey", () => pageKey);
+  __export(exports, "withRootSlash", () => withRootSlash);
   __export(exports, "pageTexts", () => pageTexts);
   __export(exports, "logVisits", () => logVisits);
   __export(exports, "shownWordsOf", () => shownWordsOf);
   __export(exports, "pageText", () => pageText);
+  __export(exports, "tabPageText", () => tabPageText);
   __export(exports, "hostOfPage", () => hostOfPage);
   __export(exports, "hostPart", () => hostPart);
   __export(exports, "hostLowerOfPage", () => hostLowerOfPage);
   __export(exports, "originOfPage", () => originOfPage);
 const { hostOf, urlForDisplay } = __require("packages/core/src/omnibox.ts");
+                                                        
 
 function displayUrl(url        )         {
   return urlForDisplay(url).replace(/\/$/, "");
 }
 
 const pageKey = (url        ) => url.replace(/#.*$/, "").replace(/\/$/, "");
+
+const withRootSlash = (url        ) => url.replace(/^(https?:\/\/[^/?#]*)(?=[?#]|$)/i, "$1/");
 
                         
               
@@ -2369,6 +2389,21 @@ function pageText(row                                )           {
     pageTexts.set(row, text);
   }
   return text;
+}
+
+const renamedTexts = new WeakMap                                                          ();
+
+function tabPageText(row                                                                         , listed           )           {
+  const text = pageText(row);
+  if (!row.customTitle) return text;
+  const kept = renamedTexts.get(row);
+  if (kept && kept.listed === listed) return kept.text;
+  const titles = [row.customTitle.toLowerCase(), text.titleLower];
+  if (listed && listed.titleLower !== text.titleLower) titles.push(listed.titleLower);
+  const titleLower = titles.join("\n");
+  const renamed = { ...(listed ?? text), titleLower, titleWords: wordsOf(titleLower) };
+  renamedTexts.set(row, { listed, text: renamed });
+  return renamed;
 }
 
 const hostOfPage = (t          ) => (t.host ??= hostOf(t.url));
@@ -2538,7 +2573,7 @@ __define("packages/core/src/siteSearch.ts", function (exports, __require) {
 const { engineHost, searchUrl } = __require("packages/core/src/engines.ts");
 const { hostOf, searchUrlFor } = __require("packages/core/src/omnibox.ts");
 
-                                                                     
+                                                                                       
 
 const POPULAR_SITE_SEARCHES                        = [
   { host: "youtube.com", name: "YouTube", url: "https://www.youtube.com/results?search_query=%s" },
@@ -2550,9 +2585,9 @@ const POPULAR_SITE_SEARCHES                        = [
   { host: "twitter.com", name: "X", url: "https://x.com/search?q=%s" },
   { host: "stackoverflow.com", name: "Stack Overflow", url: "https://stackoverflow.com/search?q=%s" },
   { host: "npmjs.com", name: "npm", url: "https://www.npmjs.com/search?q=%s" },
-  { host: "maps.google.com", name: "Google Maps", url: "https://www.google.com/maps/search/%s" },
-  { host: "drive.google.com", name: "Google Drive", url: "https://drive.google.com/drive/search?q=%s" },
-  { host: "mail.google.com", name: "Gmail", url: "https://mail.google.com/mail/u/0/#search/%s" },
+  { host: "maps.google.com", name: "Google Maps", url: "https://www.google.com/maps/search/%s", keyword: "maps" },
+  { host: "drive.google.com", name: "Google Drive", url: "https://drive.google.com/drive/search?q=%s", keyword: "drive" },
+  { host: "mail.google.com", name: "Gmail", url: "https://mail.google.com/mail/u/0/#search/%s", keyword: "gmail" },
   { host: "imdb.com", name: "IMDb", url: "https://www.imdb.com/find/?q=%s" },
   { host: "open.spotify.com", name: "Spotify", url: "https://open.spotify.com/search/%s" },
   { host: "linkedin.com", name: "LinkedIn", url: "https://www.linkedin.com/search/results/all/?keywords=%s" },
@@ -2563,7 +2598,7 @@ const POPULAR_SITE_SEARCHES                        = [
   { host: "figma.com", name: "Figma", url: "https://www.figma.com/files/search?q=%s" },
   { host: "notion.so", name: "Notion", url: "https://www.notion.so/search?q=%s" },
   { host: "apps.apple.com", name: "App Store", url: "https://www.apple.com/us/search/%s?src=serp" },
-  { host: "translate.google.com", name: "Google Translate", url: "https://translate.google.com/?text=%s" },
+  { host: "translate.google.com", name: "Google Translate", url: "https://translate.google.com/?text=%s", keyword: "translate" },
 ];
 
                            
@@ -2617,7 +2652,7 @@ function findScope(text        , { engines, sites = POPULAR_SITE_SEARCHES, hosts
     if (e.keyword.toLowerCase() === host || eHost === host || (t.length >= 3 && t === siteLabel(eHost))) return engineScope(e);
   }
   for (const s of sites) {
-    if (s.host === host || host.endsWith(`.${s.host}`) || (t === host && t.length >= 3 && s.host.split(".").length === 2 && siteLabel(s.host) === t)) {
+    if (s.host === host || host.endsWith(`.${s.host}`) || s.keyword === t || (t === host && t.length >= 3 && s.host.split(".").length === 2 && siteLabel(s.host) === t)) {
       return { kind: "site", name: s.name, host: s.host, url: s.url };
     }
   }
@@ -2687,20 +2722,20 @@ __define("packages/core/src/suggest.ts", function (exports, __require) {
   __export(exports, "suggestionKey", () => __require("packages/core/src/suggestionRows.ts")["suggestionKey"]);
 const { findBang } = __require("packages/core/src/bangs.ts");
 const { calculate } = __require("packages/core/src/calculator.ts");
-const { NO_BOOKMARKS, poolFor, tabsOver } = __require("packages/core/src/candidatePool.ts");
+const { NO_BOOKMARKS, poolFor, savedBookmark, savedVisit, tabsOver } = __require("packages/core/src/candidatePool.ts");
 const { extensionSuggestions } = __require("packages/core/src/extensionRows.ts");
 const { BUILT_IN_ENGINES, searchUrl } = __require("packages/core/src/engines.ts");
 const { matchActions } = __require("packages/core/src/fuzzy.ts");
 const { fixupUrl, hostOf, searchUrlFor } = __require("packages/core/src/omnibox.ts");
 const { matchScore, matchScoreWord, narrowing, parseQuery, remember, TopList } = __require("packages/core/src/pageMatch.ts");
-const { hostLowerOfPage, hostOfPage, hostPart, originOfPage, pageKey } = __require("packages/core/src/pageText.ts");
+const { hostLowerOfPage, hostOfPage, hostPart, originOfPage, pageKey, withRootSlash } = __require("packages/core/src/pageText.ts");
 const { globalProviderRows, providerUrl, safeProviderRows } = __require("packages/core/src/providerRows.ts");
 const { matchQuickCreate } = __require("packages/core/src/quickCreate.ts");
 const { scopedSearchUrl } = __require("packages/core/src/siteSearch.ts");
-                                                                                                      
-const { actionRow, createRow, dedupeSuggestions, Output, pageSuggestion } = __require("packages/core/src/suggestionRows.ts");
-
                                                                                                                      
+const { actionRow, createRow, dedupeSuggestions, Output, pageSuggestion, suggestionKey } = __require("packages/core/src/suggestionRows.ts");
+
+                                                                                                                                    
 
 
 
@@ -2729,18 +2764,35 @@ function buildSuggestions(raw        , source                  , options        
   }
 
   const pool = poolFor(source.history, source.bookmarks ?? NO_BOOKMARKS);
-  const { tabIds, extra } = tabsOver(pool, source.tabs, options.currentTabId);
+  const { tabIds, extra, renamed } = tabsOver(pool, source.tabs, options.currentTabId);
   const currentKey = options.currentUrl ? pageKey(options.currentUrl) : null;
+  const via                                = {};
+  let tagged = false;
+  const tag = (s            , as                                   )             => {
+    if (as) {
+      via[suggestionKey(s)] = as;
+      tagged = true;
+    }
+    return s;
+  };
   const known = (url        ) => {
     const key = pageKey(url);
     const c = pool.byKey.get(key) ?? extra.find((x) => x.text.key === key);
-    return c && pageSuggestion(c, null);
+    if (!c) return undefined;
+    const shown = { ...c, title: c.pageTitle ?? c.title };
+    const opened = withRootSlash(url);
+    if (withRootSlash(c.url) === opened) return pageSuggestion(shown, null);
+    const visit = savedVisit(source.history, opened);
+    const bookmark = savedBookmark(source.bookmarks ?? NO_BOOKMARKS, opened);
+    const lent = visit ?? bookmark ?? shown;
+    const row          = { url: visit?.url ?? opened, title: lent.title, favicon: lent.favicon, visits: visit?.visits ?? 0, bookmarked: bookmark !== undefined };
+    return tag(pageSuggestion(row, null), "literal");
   };
 
   const websiteFirst = preference === "website";
   const oneWord = tokens.length === 1;
   const noInline = preventInline || (oneWord && raw.length !== query.length && /\s$/.test(raw));
-  const completes = websiteFirst && !scope && oneWord && !noInline;
+  const completes = !scope && oneWord && !noInline;
   const from = narrowing(pool, q, tokens);
   const pages = from ? from.pages : pool.list;
   const again = from !== null && from.q === q;
@@ -2764,6 +2816,7 @@ function buildSuggestions(raw        , source                  , options        
         scores[found++] = m;
       }
       const key = c.text.key;
+      if (inPages && renamed.has(key)) continue;
       const derank = currentKey !== null && key === currentKey ? 80 : 0;
       const lastVisit = c.fresh ? now : c.lastVisit;
       let age = 10;
@@ -2823,10 +2876,10 @@ function buildSuggestions(raw        , source                  , options        
   let first            ;
   if (creates.length && /^\S+\s+\S/.test(query)) first = createRow(creates[0] );
   else if (actionMatches[0]?.exact) first = actionRow(actionMatches[0].action);
-  else if (target && completion) first = known(target.url) ?? { kind: "page", url: target.url, title: "", favicon: target.favicon };
+  else if (target && completion) first = tag(known(target.url) ?? { kind: "page", url: target.url, title: "", favicon: target.favicon }, !websiteFirst && "search_first_inline");
   else if (typedUrl) first = known(typedUrl) ?? { kind: "page", url: typedUrl, title: "", favicon: null };
   else if (extensionMatches.exact) first = extensionMatches.rows[0] ;
-  else if (websiteFirst && best && best.m >= 40 && (!noInline || typedIsPage(best.c.text, q))) first = pageSuggestion(best.c, best.tabId);
+  else if (websiteFirst && best && best.m >= 40 && (!noInline || typedIsPage(best.c.text, q))) first = tag(pageSuggestion(best.c, best.tabId), best.c.renamed && "renamed_tab");
   else first = search;
 
   out.push(first);
@@ -2835,14 +2888,16 @@ function buildSuggestions(raw        , source                  , options        
   out.push(...actionMatches.map((m) => actionRow(m.action)));
   out.push(...extensionMatches.rows);
   out.push(...creates.map(createRow));
-  const pageRows = ranked.map((x) => pageSuggestion(x.c, x.tabId));
+  const pageRows = ranked.map((x) => tag(pageSuggestion(x.c, x.tabId), x.c.renamed && "renamed_tab"));
   out.push(...pageRows.slice(0, 3));
+  out.push(...(options.remoteSites ?? []).slice(0, 2).map((site)             => known(site.url) ?? tag({ kind: "page", url: site.url, title: site.title, favicon: null }, "engine_site")));
   const providerAt = out.items.length;
   out.push(...remoteRows((text) => searchUrl(engine, text), engine.name));
   out.push(...pageRows.slice(3));
   const providerRows = options.providers?.length ? globalProviderRows(options.providers, out.items) : [];
-  if (!providerRows.length) return { items: out.items, completion };
-  return { items: [...out.items.slice(0, providerAt), ...providerRows, ...out.items.slice(providerAt)], completion };
+  const items = providerRows.length ? [...out.items.slice(0, providerAt), ...providerRows, ...out.items.slice(providerAt)] : out.items;
+  const shownVia = tagged ? viaOf(items, via) : undefined;
+  return shownVia ? { items, completion, via: shownVia } : { items, completion };
 }
 
 function providerScopeSuggestions(query        , scope             , sections                            , limit        )                   {
@@ -2854,6 +2909,15 @@ function providerScopeSuggestions(query        , scope             , sections   
   const seen = new Set(items.map((x) => x.url));
   if (section) for (const row of safeProviderRows({ id, title: scope.name }, section.rows, limit)) if (!seen.has(row.url) && items.length < limit) items.push(row);
   return { items, completion: "" };
+}
+
+function viaOf(items                       , via                               )                                            {
+  let shown                                           ;
+  for (const item of items) {
+    const key = suggestionKey(item);
+    if (via[key]) (shown ??= {})[key] = via[key];
+  }
+  return shown;
 }
 
 function typedIsPage(t          , q        )          {
@@ -2869,7 +2933,7 @@ function inlineTarget(q        , c           )                                  
   const origin = originOfPage(c.text);
   const host = hostPart(c.text.shown);
   if (origin && host.toLowerCase().startsWith(q)) return { text: host, url: `${origin}/`, favicon: c.favicon };
-  return { text: c.text.shown, url: c.url, favicon: c.favicon };
+  return { text: c.text.shown, url: c.text.url, favicon: c.favicon };
 }
 
 function bangSuggestions(match           , source                  , options                , limit        )                   {
@@ -2890,8 +2954,10 @@ __define("packages/core/src/candidatePool.ts", function (exports, __require) {
   __export(exports, "NO_BOOKMARKS", () => NO_BOOKMARKS);
   __export(exports, "poolFor", () => poolFor);
   __export(exports, "prepareSuggestions", () => prepareSuggestions);
+  __export(exports, "savedVisit", () => savedVisit);
+  __export(exports, "savedBookmark", () => savedBookmark);
   __export(exports, "tabsOver", () => tabsOver);
-const { logVisits, pageText, pageTexts } = __require("packages/core/src/pageText.ts");
+const { logVisits, pageText, pageTexts, tabPageText, withRootSlash } = __require("packages/core/src/pageText.ts");
                                                         
 
                                                       
@@ -2901,6 +2967,8 @@ const { logVisits, pageText, pageTexts } = __require("packages/core/src/pageText
                          
               
                 
+                     
+                 
                          
                  
                     
@@ -3011,7 +3079,25 @@ function prepareSuggestions(source                  , deadline        )         
   return advance(b, bookmarks, deadline);
 }
 
-                                                                                                                                  
+const exactIndexes = new WeakMap                                                          ();
+
+function exactRows                             (rows                )                   {
+  let index = exactIndexes.get(rows)                                ;
+  if (!index) {
+    index = new Map();
+    for (const row of rows) {
+      const key = withRootSlash(row.url);
+      if (!index.has(key)) index.set(key, row);
+    }
+    exactIndexes.set(rows, index);
+  }
+  return index;
+}
+
+const savedVisit = (history                       , url        )                         => exactRows(history).get(withRootSlash(url));
+const savedBookmark = (bookmarks                        , url        )                          => exactRows(bookmarks).get(withRootSlash(url));
+
+                                                                                                                                                        
 const tabsOverCache = new WeakMap                             ();
 
 function tabsOver(pool      , tabs                   , currentTabId         )           {
@@ -3021,16 +3107,31 @@ function tabsOver(pool      , tabs                   , currentTabId         )   
     for (let i = 0; same && i < tabs.length; i++) same = cached.rows[i] === tabs[i];
     if (same) return cached;
   }
-  const tabIds = new Map                ();
-  const extra              = [];
+  const open           = [];
+  const chosen = new Map                ();
   for (const t of tabs) {
     if (!t.url || t.id === currentTabId) continue;
-    const text = pageText(t);
-    if (tabIds.has(text.key)) continue;
-    tabIds.set(text.key, t.id);
-    if (!pool.byKey.has(text.key)) extra.push({ url: t.url, title: t.title, favicon: t.favicon, visits: 0, lastVisit: 0, logVisits: 0, fresh: true, bookmarked: false, tabId: t.id, text });
+    open.push(t);
+    const key = pageText(t).key;
+    const kept = chosen.get(key);
+    if (!kept || (t.customTitle && !kept.customTitle)) chosen.set(key, t);
   }
-  const result = { pool, currentTabId, rows: tabs.slice(), tabIds, extra };
+  const tabIds = new Map                ();
+  for (const [key, t] of chosen) tabIds.set(key, t.id);
+  const extra              = [];
+  const renamed = new Set        ();
+  for (const t of open) {
+    const key = pageText(t).key;
+    const listed = pool.byKey.get(key);
+    if (!listed) {
+      if (!t.customTitle && chosen.get(key) !== t) continue;
+      extra.push({ url: t.url, title: t.customTitle || t.title, pageTitle: t.title, ...(t.customTitle ? { renamed: true          } : {}), favicon: t.favicon, visits: 0, lastVisit: 0, logVisits: 0, fresh: true, bookmarked: false, tabId: t.id, text: tabPageText(t) });
+    } else if (t.customTitle) {
+      renamed.add(key);
+      extra.push({ url: t.url, title: t.customTitle, renamed: true, favicon: t.favicon ?? listed.favicon, visits: listed.visits, lastVisit: listed.lastVisit, logVisits: listed.logVisits, bookmarked: listed.bookmarked, tabId: t.id, text: tabPageText(t, listed.text) });
+    }
+  }
+  const result = { pool, currentTabId, rows: tabs.slice(), tabIds, extra, renamed };
   tabsOverCache.set(tabs, result);
   return result;
 }
@@ -3044,10 +3145,12 @@ __define("packages/core/src/suggestionRows.ts", function (exports, __require) {
   __export(exports, "actionRow", () => actionRow);
   __export(exports, "dedupeSuggestions", () => dedupeSuggestions);
                                                     
-const { pageKey } = __require("packages/core/src/pageText.ts");
+const { pageKey, withRootSlash } = __require("packages/core/src/pageText.ts");
                                                                  
 
-const pageSuggestion = (c           , tabId                            = c.tabId)             => ({
+                                                                                                       
+
+const pageSuggestion = (c         , tabId                            = c.tabId)             => ({
   kind: "page",
   url: c.url,
   title: c.title,
@@ -3060,7 +3163,7 @@ const pageSuggestion = (c           , tabId                            = c.tabId
 function suggestionKey(s            )         {
   switch (s.kind) {
     case "page":
-      return `${s.tabId ? "tab" : "page"}:${pageKey(s.url)}`;
+      return s.tabId ? `tab:${pageKey(s.url)}` : `page:${withRootSlash(s.url)}`;
     case "search":
       return `search:${s.url}`;
     case "calc":
@@ -3244,13 +3347,13 @@ class TopList {
 });
 __define("packages/core/src/suggestFetcher.ts", function (exports, __require) {
   __export(exports, "createSuggestFetcher", () => createSuggestFetcher);
-const { parseSuggestions, suggestReplyJson, suggestRequestUrl } = __require("packages/core/src/engines.ts");
+const { parseRemoteSuggestions, suggestReplyJson, suggestRequestUrl } = __require("packages/core/src/engines.ts");
 
                                                               
                                                                                                
 
                               
-                                                                                                
+                                                                                                                     
                  
   
 
@@ -3263,7 +3366,8 @@ function createSuggestFetcher({
                  
                      
  )                 {
-  const cache = new Map                  ();
+  const cache = new Map                           ();
+  const none                    = { queries: [], sites: [] };
   let timer                                           ;
   let inFlight                             ;
   let generation = 0;
@@ -3276,7 +3380,7 @@ function createSuggestFetcher({
     inFlight = undefined;
   };
 
-  const remember = (url        , suggestions          ) => {
+  const remember = (url        , suggestions                   ) => {
     cache.delete(url);
     cache.set(url, suggestions);
     if (cache.size > cacheSize) cache.delete(cache.keys().next().value );
@@ -3291,7 +3395,7 @@ function createSuggestFetcher({
       const current = generation;
       const cached = cache.get(url);
       if (cached) {
-        void Promise.resolve().then(() => current === generation && onResult(cached));
+        void Promise.resolve().then(() => current === generation && onResult(cached.queries, cached.sites));
         return;
       }
       timer = setTimeout(() => {
@@ -3300,11 +3404,11 @@ function createSuggestFetcher({
         inFlight = controller;
         fetch(url, { signal: controller.signal })
           .then(async (res) => {
-            if (!res.ok) return [];
+            if (!res.ok) return none;
             try {
-              return parseSuggestions(suggestReplyJson(await res.text()));
+              return parseRemoteSuggestions(suggestReplyJson(await res.text()));
             } catch {
-              return [];
+              return none;
             }
           })
           .then(
@@ -3313,7 +3417,7 @@ function createSuggestFetcher({
               remember(url, suggestions);
               if (current === generation) {
                 inFlight = undefined;
-                onResult(suggestions);
+                onResult(suggestions.queries, suggestions.sites);
               }
             },
             () => {},

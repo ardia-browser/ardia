@@ -443,6 +443,15 @@ async def target_point(page, element, humanize: bool, check_cover: bool = True):
             tried.add(f"consent {cover}")
             if await dismissed_consent(page, element, cx - ox, cy - oy):
                 continue
+            if CONSENT_NAMES.search(cover) and "consent again" not in tried:
+                tried.add("consent again")
+                await asyncio.sleep(CONSENT_FADE)
+                if await dismissed_consent(page, element, cx - ox, cy - oy):
+                    continue
+        if MENU_NAMES.search(cover) and "escape" not in tried:
+            tried.add("escape")
+            if await closed_menu(page, cover):
+                continue
         if "center" not in tried:
             tried.add("center")
             if await centered(page, element):
@@ -484,10 +493,24 @@ async def dismissed_consent(page, element, x, y) -> bool:
         return False
     if not done:
         return False
-    popup = done.get("kind") == "popup"
-    command_metrics.flag("popup_dismissed" if popup else "consent_dismissed", True)
-    what = "A signup popup" if popup else "A consent banner"
+    kind = done.get("kind")
+    command_metrics.flag({"popup": "popup_dismissed", "modal": "modal_dismissed"}.get(kind, "consent_dismissed"), True)
+    what = {"popup": "A signup popup", "modal": "A popup"}.get(kind, "A consent banner")
     page.state.consent_dismissed = f'{what} was in the way: {done["layer"]} covered {element.label}, so its "{done["name"]}" button was clicked ({done["choice"]})'
+    await asyncio.sleep(CONSENT_SETTLE)
+    return True
+
+
+async def closed_menu(page, cover: str) -> bool:
+    from ardia_cli import command_metrics
+
+    try:
+        for kind in ("keyDown", "keyUp"):
+            await page.send("Input.dispatchKeyEvent", {"type": kind, "key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27}, input_event=True)
+    except BrowseError:
+        return False
+    command_metrics.flag("menu_closed_for_click", True)
+    page.state.consent_dismissed = f"An open menu or list ({cover}) was in the way, so Escape was pressed to close it before the click"
     await asyncio.sleep(CONSENT_SETTLE)
     return True
 
@@ -633,6 +656,9 @@ BOX_SETTLE_POLL = 0.05
 BOX_SETTLE_LIMIT = 1.0
 CENTER = "(el) => { const before = el.getBoundingClientRect(); el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' }); const after = el.getBoundingClientRect(); return Math.abs(after.top - before.top) + Math.abs(after.left - before.left) > 1; }"
 CONSENT_SETTLE = 0.5
+CONSENT_FADE = 0.8
+CONSENT_NAMES = re.compile(r"onetrust|consent|cookie|\bot-", re.I)
+MENU_NAMES = re.compile(r"^<?(ul|li)\b|menu|dropdown|listbox|popover|submenu|suggest|autocomplete", re.I)
 VISIBLE_LABEL = """(el) => {
   if (!(el instanceof HTMLInputElement) || !/^(checkbox|radio)$/.test(el.type)) return null;
   const shown = (node) => {

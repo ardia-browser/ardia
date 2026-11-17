@@ -165,12 +165,34 @@ def stage_locked(out, source, stage):
     return json.loads((stage / 'facts.json').read_text())
 
 
-def build_id(path):
+def read_build_id(path):
     notes = subprocess.run(['readelf', '-n', str(path)], text=True, capture_output=True, check=True).stdout
     match = re.search(r'Build ID:\s*([0-9a-f]+)', notes)
-    if match is None:
+    return match.group(1) if match else None
+
+
+def build_id(path):
+    found = read_build_id(path)
+    if found is None:
         raise PublishError(f'{path} has no GNU build id')
-    return match.group(1)
+    return found
+
+
+def keep_symbols(engine, into):
+    kept = []
+    for path in runtime_files.strippable(engine):
+        found = read_build_id(path)
+        if found is None:
+            say(f'{path.name} has no GNU build id: its symbols are not kept')
+            continue
+        target = into / '.build-id' / found[:2] / f'{found[2:]}.debug'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(['objcopy', '--only-keep-debug', str(path), str(target)], check=True)
+        kept.append({'file': path.name, 'build_id': found})
+    (into / 'symbols.json').write_text(json.dumps(sorted(kept, key=lambda entry: entry['file']), indent=2) + '\n')
+    when = (engine / 'chrome').stat().st_mtime_ns
+    for path in [into, *into.rglob('*')]:
+        os.utime(path, ns=(when, when))
 
 
 def strip(engine):
@@ -180,10 +202,10 @@ def strip(engine):
         path.chmod(mode)
 
 
-def write_archive(stage, destination):
+def write_archive(stage, destination, root=runtime_files.ARCHIVE_ROOT):
     partial = destination.with_name('.' + destination.name + '.partial')
     with partial.open('xb') as handle:
-        tar = subprocess.Popen(['tar', '--sort=name', '--owner=0', '--group=0', '--numeric-owner', '-C', str(stage), '-cf', '-', runtime_files.ARCHIVE_ROOT], stdout=subprocess.PIPE)
+        tar = subprocess.Popen(['tar', '--sort=name', '--owner=0', '--group=0', '--numeric-owner', '-C', str(stage), '-cf', '-', root], stdout=subprocess.PIPE)
         xz = subprocess.run(['xz', '-T0', '-6', '-c'], stdin=tar.stdout, stdout=handle)
         tar.stdout.close()
         if tar.wait() != 0 or xz.returncode != 0:
@@ -199,7 +221,22 @@ def gh(*args, check=True):
     return result
 
 
-def upload(repo, key, source_commit, archive, checksum, row):
+def pending_assets(repo, tag, assets, archive, checksum):
+    ours = checksum.read_text().split()[0]
+    if archive.name in assets:
+        if checksum.name not in assets:
+            raise PublishError(f'{tag} already has {archive.name} without its .sha256: check it by hand')
+        theirs = gh('release', 'download', tag, '-R', repo, '-p', checksum.name, '-O', '-').stdout.split()
+        if not theirs or theirs[0] != ours:
+            raise PublishError(f'{tag} already has a different {archive.name}: refusing to replace it')
+        say(f'{tag} already has this {archive.name}')
+        return []
+    if checksum.name in assets:
+        raise PublishError(f'{tag} has {checksum.name} but no {archive.name}: check it by hand')
+    return [str(archive), str(checksum)]
+
+
+def upload(repo, key, source_commit, pairs, row):
     tag = runtime_files.release_tag(key)
     view = gh('release', 'view', tag, '-R', repo, '--json', 'assets', check=False)
     if view.returncode != 0:
@@ -209,21 +246,9 @@ def upload(repo, key, source_commit, archive, checksum, row):
         assets = set()
     else:
         assets = {asset['name'] for asset in json.loads(view.stdout).get('assets', [])}
-    ours = checksum.read_text().split()[0]
-    pending = []
-    if archive.name in assets:
-        if checksum.name not in assets:
-            raise PublishError(f'{tag} already has {archive.name} without its .sha256: check it by hand')
-        theirs = gh('release', 'download', tag, '-R', repo, '-p', checksum.name, '-O', '-').stdout.split()
-        if not theirs or theirs[0] != ours:
-            raise PublishError(f'{tag} already has a different {archive.name}: refusing to replace it')
-        say(f'{tag} already has this {archive.name}')
-    else:
-        if checksum.name in assets:
-            raise PublishError(f'{tag} has {checksum.name} but no {archive.name}: check it by hand')
-        pending = [str(archive), str(checksum)]
+    pending = [path for archive, checksum in pairs for path in pending_assets(repo, tag, assets, archive, checksum)]
     if pending:
-        say(f'uploading {archive.name} to {repo} {tag}')
+        say(f'uploading {", ".join(pathlib.Path(path).name for path in pending)} to {repo} {tag}')
         gh('release', 'upload', tag, '-R', repo, *pending)
     lines = TABLE.read_text().splitlines() if TABLE.is_file() else []
     rows = [line.split('\t') for line in lines if line.strip()]
@@ -246,15 +271,20 @@ def publish(out, source, dest, repo, do_upload):
     dest.mkdir(parents=True, exist_ok=True)
     archive = dest / runtime_files.archive_name(key)
     checksum = dest / (archive.name + '.sha256')
-    for path in (archive, checksum):
+    symbols = dest / runtime_files.symbols_name(key)
+    symbols_checksum = dest / (symbols.name + '.sha256')
+    for path in (archive, checksum, symbols, symbols_checksum):
         if path.exists():
             raise PublishError(f'refusing to overwrite {path}')
     say(f'engine key {key} from {source_commit or "an unrecorded commit"}')
-    with tempfile.TemporaryDirectory(prefix='ardia-engine-stage-') as scratch:
+    with tempfile.TemporaryDirectory(prefix='ardia-engine-stage-') as scratch, tempfile.TemporaryDirectory(prefix='ardia-engine-symbols-') as symbols_scratch:
         stage = pathlib.Path(scratch)
         facts = stage_locked(out, source, stage)
         engine = stage / runtime_files.ARCHIVE_ROOT
         unstripped = (engine / 'chrome').stat().st_size
+        symbols_stage = pathlib.Path(symbols_scratch)
+        keep_symbols(engine, symbols_stage / runtime_files.SYMBOLS_ROOT)
+        write_archive(symbols_stage, symbols, runtime_files.SYMBOLS_ROOT)
         strip(engine)
         chrome = engine / 'chrome'
         manifest = {
@@ -275,10 +305,11 @@ def publish(out, source, dest, repo, do_upload):
         write_archive(stage, archive)
     digest = sha256(archive)
     checksum.write_text(f'{digest}  {archive.name}\n')
+    symbols_checksum.write_text(f'{sha256(symbols)}  {symbols.name}\n')
     row = f'{key}\t{runtime_files.release_tag(key)}\t{digest}'
-    say(f'{archive.name}: {archive.stat().st_size} bytes')
+    say(f'{archive.name}: {archive.stat().st_size} bytes; {symbols.name}: {symbols.stat().st_size} bytes')
     if do_upload:
-        upload(repo, key, source_commit, archive, checksum, row)
+        upload(repo, key, source_commit, [(archive, checksum), (symbols, symbols_checksum)], row)
     print(archive)
     print(row)
 

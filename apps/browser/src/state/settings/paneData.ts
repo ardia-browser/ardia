@@ -78,23 +78,25 @@ export function paneNeeds(pane: SettingsPane, profileId: string | null): Needed[
   const profile = profileId ? engineProfile(useBrowser.getState(), profileId) : defaultProfile();
   switch (pane) {
     case "general":
-      return [need(loginItem), need(defaultBrowser), need(updater), need(downloadSettings, profile)];
-    case "sync":
-      return [need(syncFolder, currentSyncFolder() ?? null)];
+      return [need(loginItem), need(defaultBrowser), need(updater), need(downloadSettings, profile), need(contentBlocker), need(syncFolder, currentSyncFolder() ?? null), need(engineVersion), need(widevine)];
+    case "profiles":
+      return [
+        need(downloadSettings, profile),
+        need(passwordAutofill, profile),
+        need(autofillToggleAsked, profile, "passwords"),
+        need(addresses, profile),
+        need(cards, profile),
+        need(autofillEnabled, profile),
+        need(autofillToggleAsked, profile, "addresses"),
+        need(autofillToggleAsked, profile, "cards"),
+        need(extensionList, engineProfile(useBrowser.getState(), extensionsProfileId(profileId))),
+      ];
     case "appearance":
       return [need(appIconChoices)];
-    case "privacy":
-      return [need(contentBlocker), need(siteOrigins, profile), need(appLinks, profile), need(zoomLevels, profile)];
-    case "passwords":
-      return [need(passwordAutofill, profile), need(autofillToggleAsked, profile, "passwords")];
-    case "autofill":
-      return [need(addresses, profile), need(cards, profile), need(autofillEnabled, profile), need(autofillToggleAsked, profile, "addresses"), need(autofillToggleAsked, profile, "cards")];
-    case "extensions":
-      return [need(extensionList, engineProfile(useBrowser.getState(), extensionsProfileId(profileId)))];
+    case "automations":
+      return [need(appLinks, profile)];
     case "shortcuts":
       return [need(shortcutItems)];
-    case "advanced":
-      return [need(engineVersion), need(widevine)];
     default:
       return [];
   }
@@ -126,6 +128,9 @@ export async function setAutofillFor(profile: string, kind: Exclude<AutofillTogg
   store(autofillEnabled, [profile], now);
   noteAsked(profile, kind, on, now[kind]);
 }
+
+export const downloadFoldersDiffer = (profiles: string[]) =>
+  Promise.all(profiles.map((p) => getDownloadSettings(p).catch(() => null))).then((all) => new Set(all.flatMap((d) => (d ? [d.folder] : []))).size > 1);
 
 export const setDownloadsFor = (patch: Partial<Pick<DownloadSettings, "folder" | "askWhereToSave">>, profiles: string[]) =>
   Promise.all(profiles.map((p) => setDownloadSettings(patch, p).then((next) => store(downloadSettings, [p], next), orWarn(undefined))));

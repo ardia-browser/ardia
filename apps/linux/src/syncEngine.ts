@@ -141,7 +141,10 @@ function remoteFor(host: ArdiaHost): SyncRemote {
     stopSync: (options?: { deleteData?: boolean }) => engine.stopSync(options),
     setTypeSynced: (type: DataType, enabled: boolean) => engine.setTypeSynced(type, enabled),
     setProfileSynced: (profileId: string, enabled: boolean) => engine.setProfileSynced(profileId, enabled),
+    setOpenTabsSynced: (profileId: string, enabled: boolean) => engine.setOpenTabsSynced(profileId, enabled),
     addRemoteProfile: (syncId: string) => engine.addRemoteProfile(syncId),
+    removeRemoteProfile: (syncId: string) => engine.removeRemoteProfile(syncId),
+    removeSyncedDevice: (deviceId: string) => engine.removeSyncedDevice(deviceId),
     adoptProfileTheme: (profileId: string) => engine.adoptProfileTheme(profileId),
     useFolder: (path: string) => withChosenSyncFolder(path, () => engine.chooseSyncFolder()),
     sendTargets: (profileIds: string[]) => Object.fromEntries(profileIds.map((profileId) => [profileId, engine.sendTargets(profileId)])),
@@ -277,10 +280,26 @@ export function setProfileSynced(profileId: string, enabled: boolean) {
   quietly(forward("setProfileSynced", [profileId, enabled]));
 }
 
+export function setOpenTabsSynced(profileId: string, enabled: boolean) {
+  quietly(forward("setOpenTabsSynced", [profileId, enabled]));
+}
+
 export function addRemoteProfile(syncId: string): string | null {
   if (leading()) return engine.addRemoteProfile(syncId);
   quietly(forward("addRemoteProfile", [syncId]));
   return null;
+}
+
+export function removeRemoteProfile(syncId: string): boolean {
+  if (leading()) return engine.removeRemoteProfile(syncId);
+  quietly(forward("removeRemoteProfile", [syncId]));
+  return true;
+}
+
+export function removeSyncedDevice(deviceId: string): boolean {
+  if (leading()) return engine.removeSyncedDevice(deviceId);
+  quietly(forward("removeSyncedDevice", [deviceId]));
+  return true;
 }
 
 let relayedTargets: Record<string, SendTarget[]> = {};
@@ -295,6 +314,7 @@ function refreshSendTargets() {
 
 export const onTabsReceived = engine.onTabsReceived;
 export const takeSnapshotWrites = engine.takeSnapshotWrites;
+export const takeOpenTabSyncCounts = engine.takeOpenTabSyncCounts;
 
 export function sendTargets(profileId: string): SendTarget[] {
   return leading() ? engine.sendTargets(profileId) : relayedTargets[profileId] ?? [];

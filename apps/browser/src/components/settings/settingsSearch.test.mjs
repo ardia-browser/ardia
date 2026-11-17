@@ -2,92 +2,91 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 import { editDistance, search, snippetAround, splitByRanges } from "./searchMatch.ts";
-import { ADVANCED_PANES, SETTINGS, SETTINGS_INDEX } from "./settingsIndex.ts";
+import { SETTINGS, SETTINGS_INDEX } from "./settingsIndex.ts";
 
 const ids = (query) => search(SETTINGS_INDEX, query).map((h) => h.entry.id);
 const first = (query) => ids(query)[0];
 
 const TOP = [
-  ["cli", ["advanced.cliInstall"]],
-  ["shell", ["advanced.cliInstall"]],
-  ["devtools", ["advanced.cliControl"]],
-  ["remote debugging", ["advanced.cliControl"]],
-  ["command line", ["advanced.cliInstall", "advanced.cliControl"]],
-  ["terminal", ["advanced.cliInstall", "advanced.cliControl"]],
-  ["ardia command", ["advanced.cliInstall"]],
+  ["cli", ["advanced.ardiaCommand"]],
+  ["shell", ["advanced.ardiaCommand"]],
+  ["devtools", ["advanced.ardiaCommand"]],
+  ["remote debugging", ["advanced.ardiaCommand"]],
+  ["command line", ["advanced.ardiaCommand"]],
+  ["terminal", ["advanced.ardiaCommand"]],
+  ["ardia command", ["advanced.ardiaCommand"]],
   ["dark", ["appearance.theme"]],
   ["dark mode", ["appearance.theme"]],
   ["theme", ["appearance.theme"]],
-  ["glass", ["appearance.glassTintWithTheme", "appearance.interfaceStyle"]],
-  ["liquid glass", ["appearance.interfaceStyle", "appearance.glassTintAmount"]],
-  ["tint", ["appearance.glassTintAmount", "appearance.glassTintWithTheme"]],
+  ["glass", ["appearance.glassTint", "appearance.interfaceStyle"]],
+  ["liquid glass", ["appearance.interfaceStyle", "appearance.glassTint"]],
+  ["tint", ["appearance.glassTint", "appearance.glassTint"]],
   ["default browser", ["general.defaultBrowser"]],
-  ["search engine", ["search.defaultEngine"]],
-  ["ad block", ["privacy.blockAds"]],
-  ["adblock", ["privacy.blockAds"]],
-  ["block ads", ["privacy.blockAds"]],
-  ["trackers", ["privacy.blockTrackers"]],
-  ["cookies", ["privacy.blockCookieBanners"]],
-  ["import", ["general.importBrowser", "passwords.importPasswords", "advanced.bookmarksImport"]],
+  ["search engine", ["profiles.searchEngine"]],
+  ["ad block", ["general.blockAds"]],
+  ["adblock", ["general.blockAds"]],
+  ["block ads", ["general.blockAds"]],
+  ["trackers", ["general.blockTrackers"]],
+  ["cookies", ["general.blockCookieBanners"]],
+  ["import", ["general.importBrowser", "profiles.importPasswords"]],
   ["import from chrome", ["general.importBrowser"]],
-  ["profile", ["profiles.defaultProfile", "profiles.list"]],
+  ["profile", ["profiles.defaultProfile", "profiles.profiles"]],
   ["sidebar", ["tabs.sidebarSide"]],
   ["right sidebar", ["tabs.sidebarSide"]],
   ["vertical tabs", ["tabs.layout"]],
-  ["pinned", ["profiles.shareTopApps", "tabs.balancedTopApps", "tabs.fadeUnloadedTabs"]],
-  ["strikethrough", ["tabs.strikeSleepingTabs"]],
-  ["sleeping tabs", ["tabs.strikeSleepingTabs"]],
-  ["split", ["tabs.splitLinkModifier"]],
-  ["split view", ["tabs.splitLinkModifier"]],
-  ["peek", ["tabs.peekModifier", "tabs.peekLinksToOtherSites"]],
+  ["pinned", ["profiles.shareTopApps", "tabs.balancedTopApps", "tabs.sleepingTabs"]],
+  ["strikethrough", ["tabs.sleepingTabs"]],
+  ["sleeping tabs", ["tabs.sleepingTabs"]],
+  ["split", ["shortcuts.splitLinkModifier"]],
+  ["split view", ["shortcuts.splitLinkModifier"]],
+  ["peek", ["shortcuts.peekModifier", "tabs.peekLinksToOtherSites"]],
   ["pip", ["tabs.autoPictureInPicture"]],
   ["picture in picture", ["tabs.autoPictureInPicture"]],
   ["mini player", ["tabs.autoPictureInPicture"]],
-  ["downloads", ["advanced.downloads", "general.downloadsFolder"]],
+  ["downloads", ["general.downloadsFolder"]],
   ["download folder", ["general.downloadsFolder"]],
-  ["shortcuts", ["shortcuts.actions", "shortcuts.extensionShortcuts"]],
-  ["keyboard shortcuts", ["shortcuts.actions"]],
-  ["hotkeys", ["shortcuts.actions", "shortcuts.extensionShortcuts"]],
+  ["shortcuts", ["shortcuts.menuCommands", "shortcuts.extensionShortcuts"]],
+  ["keyboard shortcuts", ["shortcuts.menuCommands"]],
+  ["hotkeys", ["shortcuts.menuCommands", "shortcuts.extensionShortcuts"]],
   ["⌘L", ["appearance.commandBarPlacement"]],
   ["shrink", ["tabs.hideToolbarWhileScrolling"]],
   ["⌘z", ["shortcuts.undoReopensClosedTab"]],
   ["update", ["general.updateChannel", "general.autoUpdate"]],
   ["nightly", ["general.updateChannel"]],
   ["channel", ["general.updateChannel"]],
-  ["sync", ["sync.sync"]],
-  ["extensions", ["extensions.installed"]],
-  ["zoom", ["privacy.commandScrollZoom"]],
+  ["sync", ["general.sync"]],
+  ["extensions", ["profiles.extensions"]],
   ["font", ["advanced.chromeSettings"]],
   ["default zoom", ["advanced.chromeSettings"]],
   ["chrome settings", ["advanced.chromeSettings"]],
-  ["telemetry", ["privacy.whatsSent", "privacy.shareDiagnostics", "privacy.viewData"]],
-  ["what's sent", ["privacy.whatsSent"]],
-  ["whats sent", ["privacy.whatsSent"]],
-  ["crash reports", ["privacy.shareDiagnostics"]],
+  ["telemetry", ["general.crashDetails", "general.shareDiagnostics", "general.crashDetails"]],
+  ["what's sent", ["general.crashDetails"]],
+  ["whats sent", ["general.crashDetails"]],
+  ["crash reports", ["general.shareDiagnostics"]],
   ["upscal", ["tabs.videoUpscaling"]],
   ["upscaling", ["tabs.videoUpscaling"]],
-  ["unread", ["tabs.showUnreadCounts"]],
-  ["notification", ["privacy.blockNotificationRequests"]],
-  ["notifications", ["privacy.blockNotificationRequests"]],
-  ["block notifications", ["privacy.blockNotificationRequests"]],
-  ["notis", ["tabs.showUnreadCounts"]],
-  ["badge", ["tabs.showUnreadCounts"]],
-  ["bubble", ["tabs.showUnreadCounts"]],
-  ["notification bubbles", ["tabs.showUnreadCounts"]],
-  ["count", ["tabs.showUnreadCounts"]],
-  ["dot", ["tabs.showUnreadCounts"]],
-  ["location", ["privacy.sitePermissions"]],
-  ["camera", ["privacy.sitePermissions"]],
-  ["microphone", ["privacy.sitePermissions"]],
+  ["unread", ["tabs.badges"]],
+  ["notification", ["tabs.badges", "profiles.siteSettings"]],
+  ["notifications", ["tabs.badges", "profiles.siteSettings"]],
+  ["block notifications", ["profiles.siteSettings"]],
+  ["notis", ["tabs.badges"]],
+  ["badge", ["tabs.badges"]],
+  ["bubble", ["tabs.badges"]],
+  ["notification bubbles", ["tabs.badges"]],
+  ["count", ["tabs.badges"]],
+  ["dot", ["tabs.badges"]],
+  ["location", ["profiles.siteSettings"]],
+  ["camera", ["profiles.siteSettings"]],
+  ["microphone", ["profiles.siteSettings"]],
   ["startup", ["general.openAtLogin"]],
-  ["little arc", ["general.openLinksInLittleArdia"]],
-  ["little ardia", ["general.openLinksInLittleArdia"]],
-  ["little window", ["general.openLinksInLittleArdia"]],
-  ["links from other apps", ["general.openLinksInLittleArdia", "tabs.appLinksFirst"]],
-  ["slack", ["general.openLinksInLittleArdia"]],
-  ["air traffic control", ["airTraffic.rules"]],
-  ["atc", ["airTraffic.rules"]],
-  ["open links in profile", ["airTraffic.rules"]],
+  ["little arc", ["tabs.openLinksInLittleArdia"]],
+  ["little ardia", ["tabs.openLinksInLittleArdia"]],
+  ["little window", ["tabs.openLinksInLittleArdia"]],
+  ["links from other apps", ["tabs.openLinksInLittleArdia", "tabs.appLinksFirst"]],
+  ["slack", ["tabs.openLinksInLittleArdia"]],
+  ["air traffic control", ["automations.linkRules"]],
+  ["atc", ["automations.linkRules"]],
+  ["open links in profile", ["automations.linkRules"]],
   ["onboarding", ["general.redoSetup"]],
   ["redo", ["general.redoSetup"]],
   ["welcome", ["general.redoSetup"]],
@@ -96,18 +95,16 @@ const TOP = [
   ["recently closed", ["general.windowsAndTabs"]],
   ["autohide", ["tabs.autoHideTabs"]],
   ["auto hide", ["tabs.autoHideTabs"]],
-  ["history", ["advanced.history"]],
-  ["borderless mode", ["appearance.borderlessMode"]],
+  ["borderless mode", ["appearance.pageFrame"]],
   ["minimal", ["appearance.minimalismMode"]],
   ["minimalism", ["appearance.minimalismMode"]],
-  ["mouse wheel", ["privacy.commandScrollZoom"]],
-  ["autoplay", ["privacy.blockAutoplayEverywhere"]],
-  ["1password", ["passwords.managerApps"]],
-  ["warn quitting", ["general.warnBeforeQuitting"]],
-  ["trakers", ["privacy.blockTrackers"]],
-  ["appearence", ["appearance.theme"]],
+  ["autoplay", ["profiles.siteSettings"]],
+  ["1password", ["profiles.passwords"]],
+  ["warn quitting", ["general.askBefore"]],
+  ["trakers", ["general.blockTrackers"]],
+  ["thme", ["appearance.theme"]],
   ["upscalling", ["tabs.videoUpscaling"]],
-  ["extensoins", ["extensions.installed"]],
+  ["extensoins", ["profiles.extensions", "profiles.webStore"]],
 ];
 
 test("real queries put the setting people mean first", () => {
@@ -118,8 +115,8 @@ test("real queries put the setting people mean first", () => {
 
 test("whole-word hits rank above word prefixes, and a loose keyword no longer wins", () => {
   const found = ids("cli");
-  assert.equal(found[0], "advanced.cliInstall");
-  assert.ok(!found.includes("privacy.whatsSent"));
+  assert.equal(found[0], "advanced.ardiaCommand");
+  assert.ok(!found.includes("general.crashDetails"));
   const clickRows = found.filter((id) => /[Cc]lick/.test(SETTINGS.find((s) => s.id === id).title));
   assert.ok(clickRows.length && clickRows.every((id) => found.indexOf(id) > 0));
 });
@@ -130,13 +127,8 @@ const placeOf = (id) => {
 };
 
 const COLLAPSED = [
-  ["cli", "advanced.cliInstall", ["advanced.cliControl"]],
-  ["terminal", "advanced.cliInstall", ["advanced.cliControl"]],
-  ["shell", "advanced.cliInstall", ["advanced.cliControl"]],
-  ["dark", "appearance.theme", ["appearance.adaptTextToColor", "appearance.spacesFollowAppearance"]],
-  ["telemetry", "privacy.whatsSent", ["privacy.shareDiagnostics"]],
-  ["downloads", "general.downloadsFolder", ["general.askWhereToSave", "general.downloadsAllProfiles"]],
-  ["import", "general.importBrowser", ["general.exportBookmarks", "general.setupCode"]],
+  ["telemetry", "general.crashDetails", ["general.shareDiagnostics"]],
+  ["downloads", "general.downloadsFolder", ["general.askWhereToSave", "general.separateDownloadFolders"]],
 ];
 
 test("results that land on the same place collapse into one", () => {
@@ -156,33 +148,33 @@ test("results that land on the same place collapse into one", () => {
 });
 
 test("rows named by the query stay apart even when they share a place", () => {
-  const tabs = search(SETTINGS_INDEX, "tabs").filter((h) => h.entry.section === "Tab layout");
-  assert.ok(tabs.length >= 2, "several Tab layout rows say tabs in their names");
-  assert.ok(tabs.every((h) => h.title.length));
-  assert.deepEqual(ids("command line").slice(0, 2).sort(), ["advanced.cliControl", "advanced.cliInstall"]);
-  assert.equal(first("devtools"), "advanced.cliControl");
+  const tabs = search(SETTINGS_INDEX, "tabs").filter((h) => h.entry.section === "Layout" && h.title.length);
+  assert.ok(tabs.length >= 2, "several Layout rows say tabs in their names");
+  assert.equal(first("command line"), "advanced.ardiaCommand");
+  assert.equal(first("devtools"), "advanced.ardiaCommand");
 });
 
 test("a pane's name finds that pane's rows", () => {
-  const found = search(SETTINGS_INDEX, "passwords");
-  const passwordsRows = SETTINGS.filter((s) => s.pane === "passwords").map((s) => s.id);
-  assert.ok(passwordsRows.every((id) => found.some((h) => h.entry.id === id)), "every Passwords row is found");
-  assert.equal(found[0].entry.pane, "passwords");
-  assert.equal(search(SETTINGS_INDEX, "privacy")[0].entry.pane, "privacy");
-  assert.equal(search(SETTINGS_INDEX, "pasword")[0].entry.pane, "passwords");
+  const found = search(SETTINGS_INDEX, "shortcuts");
+  const sections = new Set(SETTINGS.filter((s) => s.pane === "shortcuts").map((s) => s.section));
+  for (const section of sections) assert.ok(found.some((h) => h.entry.section === section), section);
+  assert.equal(found[0].entry.pane, "shortcuts");
+  assert.equal(search(SETTINGS_INDEX, "passwords")[0].entry.id, "profiles.passwords");
+  assert.equal(search(SETTINGS_INDEX, "pasword")[0].entry.id, "profiles.passwords");
 });
 
 test("titles rank above keywords, keywords above descriptions", () => {
   const dark = search(SETTINGS_INDEX, "dark");
   assert.equal(dark[0].entry.id, "appearance.theme");
   assert.ok(dark.slice(1).every((h) => h.tier < dark[0].tier || h.score < dark[0].score));
-  const theme = search(SETTINGS_INDEX, "theme");
-  assert.ok(theme.findIndex((h) => h.entry.id === "appearance.theme") < theme.findIndex((h) => h.note));
+  const sidebar = search(SETTINGS_INDEX, "sidebar");
+  const firstNote = sidebar.findIndex((h) => h.note);
+  assert.ok(firstNote > 0 && sidebar.findIndex((h) => h.entry.id === "tabs.sidebarSide") < firstNote);
 });
 
 test("every word of the query has to match", () => {
-  assert.ok(!ids("block ads").includes("privacy.blockTrackers"));
-  assert.ok(ids("the ardia command").includes("advanced.cliInstall"));
+  assert.ok(!ids("block ads").includes("general.blockTrackers"));
+  assert.ok(ids("the ardia command").includes("advanced.ardiaCommand"));
 });
 
 test("garbage finds nothing", () => {
@@ -191,7 +183,7 @@ test("garbage finds nothing", () => {
 
 test("short queries match word starts only", () => {
   assert.ok(ids("ta").length);
-  assert.ok(!ids("ar").includes("privacy.blockTrackers"));
+  assert.ok(!ids("ar").includes("general.blockTrackers"));
 });
 
 test("results come in one relevance order, not pane order", () => {
@@ -202,9 +194,9 @@ test("results come in one relevance order, not pane order", () => {
 });
 
 test("matches carry ranges to highlight, in the text shown", () => {
-  const [hit] = search(SETTINGS_INDEX, "what's sent");
-  assert.deepEqual(splitByRanges(hit.entry.title, hit.title), [{ text: "What's", highlighted: true }, { text: " ", highlighted: false }, { text: "Sent", highlighted: true }]);
-  const cli = search(SETTINGS_INDEX, "cli").find((h) => h.entry.id === "tabs.cmdClickCreatesTabGroup");
+  const [hit] = search(SETTINGS_INDEX, "ask before");
+  assert.deepEqual(splitByRanges(hit.entry.title, hit.title), [{ text: "Ask", highlighted: true }, { text: " ", highlighted: false }, { text: "before", highlighted: true }]);
+  const cli = search(SETTINGS_INDEX, "cli").find((h) => h.entry.id === "shortcuts.cmdClickCreatesTabGroup");
   assert.deepEqual(splitByRanges(cli.entry.title, cli.title).filter((p) => p.highlighted).map((p) => p.text), ["cli"]);
   const term = search(SETTINGS_INDEX, "terminal")[0];
   assert.deepEqual(term.title, []);
@@ -223,9 +215,18 @@ test("a long matching text shows the part around its match", () => {
   assert.equal(cut.text.slice(cut.ranges[0].start, cut.ranges[0].end), "Live");
 });
 
-test("every pane keeps a basic setting unless it hides whole", () => {
-  const panes = new Set(SETTINGS.map((s) => s.pane));
-  for (const pane of panes) if (!ADVANCED_PANES.has(pane)) assert.ok(SETTINGS.some((s) => s.pane === pane && !s.advanced), pane);
+test("every pane has settings", () => {
+  for (const pane of ["general", "profiles", "tabs", "appearance", "automations", "shortcuts", "advanced"]) assert.ok(SETTINGS.some((s) => s.pane === pane), pane);
+});
+
+test("search still finds a row hidden until something else is on, when the row says what it needs", async () => {
+  const { unshownSettings } = await import("./settingsIndex.ts");
+  const { DEFAULT_SETTINGS } = await import("../../state/settings/settings.ts");
+  const unshown = new Set(unshownSettings(DEFAULT_SETTINGS, { top: false, syncOn: false }).split("\n"));
+  assert.ok(unshown.has("general.syncFolder"));
+  const entry = SETTINGS.find((s) => s.id === "general.syncFolder");
+  assert.equal(entry.needs, "Turn on Sync to use this");
+  for (const s of SETTINGS) if (s.needs) assert.ok(s.shown, `${s.id} says what it needs but has no rule`);
 });
 
 test("an empty query finds nothing", () => {
@@ -248,7 +249,7 @@ test("every indexed setting is anchored in its pane, and every anchor is indexed
   const panes = new Set(SETTINGS.map((s) => s.pane));
   const anchors = new Set([
     ...[...sources.matchAll(/["`]([a-zA-Z]+)\.([a-zA-Z]+)["`]/g)].filter((m) => panes.has(m[1])).map((m) => `${m[1]}.${m[2]}`),
-    ...[...sources.matchAll(/<SourceRow id="(\w+)"/g)].map((m) => `liveFolders.${m[1]}`),
+    ...(sources.includes("anchor={`automations.${id}`}") ? ["github", "bitbucket", "notion", "confluence", "gdrive"].map((id) => `automations.${id}`) : []),
   ]);
   const indexed = new Set(SETTINGS.map((s) => s.id));
   for (const id of indexed) assert.ok(anchors.has(id), `${id} is in the index but no pane anchors it`);
@@ -257,8 +258,8 @@ test("every indexed setting is anchored in its pane, and every anchor is indexed
 
 test("every settings row with a fixed title is searchable", () => {
   const dir = new URL("./panes/", import.meta.url);
-  const notSettings = /Sheet$|Connect$|Details|List$/;
-  const statusRows = new Set(["iCloud Drive is off on this Mac", "uBlock Origin isn't answering"]);
+  const notSettings = /Sheet$|Connect$|Details|List$|Page$|^ThisProfileSection$/;
+  const statusRows = new Set(["iCloud Drive is off on this Mac", "uBlock Origin isn't answering", "Delete profile", "Apply a setup code", "Passkeys"]);
   for (const file of readdirSync(dir).filter((f) => f.endsWith(".tsx"))) {
     const source = readFileSync(new URL(file, dir), "utf8");
     for (const m of source.matchAll(/<Row\b([^>]*?)title="([^"]+)"/gs)) {
@@ -274,21 +275,23 @@ test("a row its pane doesn't draw is left out of search, by the same rule the pa
   const { DEFAULT_SETTINGS } = await import("../../state/settings/settings.ts");
   const unshown = (settings, env) => new Set(unshownSettings({ ...DEFAULT_SETTINGS, ...settings }, env).split("\n").filter(Boolean));
   const across = unshown({}, { top: true });
-  assert.ok(!across.has("tabs.showSidebarButton"), "the Hide Tabs button shows in both layouts");
-  for (const id of ["tabs.showClearButton", "tabs.balancedTopApps", "tabs.newTabButtonPosition"]) assert.ok(across.has(id), id);
-  assert.deepEqual([...unshown({ glassTintWithTheme: true }, { top: false, glass: true })], ["tabs.dragToGroupInTopStrip"]);
-  assert.ok(unshown({}, { top: false, glass: true }).has("appearance.glassTintAmount"));
-  for (const id of ["appearance.interfaceStyle", "appearance.glassTintWithTheme", "appearance.glassTintAmount"]) assert.ok(unshown({}, { top: false }).has(id), id);
-  const classic = unshown({ interfaceStyle: "classic" }, { top: false, glass: true });
-  assert.deepEqual([...classic], ["tabs.dragToGroupInTopStrip", "appearance.glassTintWithTheme", "appearance.glassTintAmount"]);
-  assert.ok(unshown({ memorySaver: false }, { top: false }).has("advanced.memorySaverMode"));
-  assert.ok(unshown({ pageEngine: "webkit" }, { top: false }).has("engines.protectedVideo"));
-  const borderless = unshown({ borderlessMode: true }, { top: false });
-  assert.ok(borderless.has("appearance.pageFrame"));
-  assert.ok(!borderless.has("appearance.borderlessMode"));
+  assert.ok(!across.has("tabs.buttons"), "the Hide Tabs button shows in both layouts");
+  for (const id of ["tabs.sidebarSide", "appearance.sidebarTextSize", "appearance.addressBar"]) assert.ok(across.has(id), id);
+  const sidebar = unshown({}, { top: false, glass: true, syncOn: true, calendarAccess: true });
+  for (const id of ["tabs.sidebarSide", "appearance.sidebarTextSize", "general.syncFolder", "automations.meetingAlert"]) assert.ok(!sidebar.has(id), id);
+  for (const id of ["appearance.interfaceStyle", "appearance.glassTint"]) assert.ok(unshown({}, { top: false }).has(id), id);
+  assert.ok(unshown({ interfaceStyle: "classic" }, { top: false, glass: true }).has("appearance.glassTint"));
+  assert.ok(unshown({ memorySaver: false }, { top: false }).has("advanced.keepActiveSites"));
+  assert.ok(!unshown({ memorySaver: true }, { top: false }).has("advanced.keepActiveSites"));
+  assert.ok(unshown({ newTabOpens: "commandBar" }, { top: false }).has("tabs.newTabUrl"));
+  assert.ok(unshown({ cleanUpInactiveTabsAfterMinutes: 60 }, { top: false }).has("tabs.suggestCleanUp"));
+  assert.ok(unshown({ separateDownloadFolders: true }, { top: false }).has("general.downloadsFolder"));
+  assert.ok(unshown({}, { top: false }).has("profiles.profileDownloadsFolder"));
+  assert.ok(unshown({ addressBar: "sidebar" }, { top: false }).has("appearance.compactToolbar"));
+  assert.ok(!unshown({ addressBar: "sidebar" }, { top: true }).has("appearance.compactToolbar"));
 });
 
-const SHOWN_BY_LOADED_DATA = ["General.tsx: general.downloadsAllProfiles", "General.tsx: general.updateChannel"];
+const SHOWN_BY_LOADED_DATA = ["UpdatesSection.tsx: general.autoUpdate", "UpdatesSection.tsx: general.updateChannel"];
 
 test("panes leave showing and hiding an anchored row to the row's own rule", () => {
   const dir = new URL("./panes/", import.meta.url);
@@ -326,16 +329,9 @@ test("Interface size turns up for every word people use for UI scaling", () => {
 });
 
 test("Minimalism mode turns up for every word people use for it", () => {
-  for (const query of ["minimal", "minimalism", "clean", "compact", "zen", "distraction free", "no toolbar"]) assert.ok(ids(query).includes("appearance.minimalismMode"), query);
+  for (const query of ["minimal", "minimalism", "clean", "zen", "distraction free", "no toolbar"]) assert.ok(ids(query).includes("appearance.minimalismMode"), query);
 });
 
-test("Block requests to send notifications sits in All sites, outside the per-profile Site permissions list, and says its blocks outlast it", () => {
-  const entry = SETTINGS_INDEX.find((p) => p.entry.id === "privacy.blockNotificationRequests").entry;
-  assert.equal(entry.section, "All sites");
-  assert.match(entry.description, /stay blocked after you turn it off, until you allow each one in its Site Controls/);
-});
-
-test("Block autoplay on every site sits in All sites, outside the per-profile Site permissions list", () => {
-  const entry = SETTINGS_INDEX.find((p) => p.entry.id === "privacy.blockAutoplayEverywhere").entry;
-  assert.equal(entry.section, "All sites");
+test("autoplay and notification blocking are found through each profile's Site settings", () => {
+  for (const query of ["block autoplay on every site", "block requests to send notifications", "camera", "autoplay"]) assert.equal(first(query), "profiles.siteSettings", query);
 });

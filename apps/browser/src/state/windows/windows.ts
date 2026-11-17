@@ -28,6 +28,7 @@ import { activated, apply, removeTabs, withNewTab } from "../tabs/tabs";
 import type { AdoptId, BrowserWindow, ClosedWindow, Frame, ParkedPins, Tab, WindowKind } from "../browser/types";
 import { emptyWindow, smallWindow, withWindow } from "./newWindow";
 import { withWindowFrame, withWindowMaximized } from "./windowPlacement";
+import { withFullScreen } from "./fullScreenDisplay";
 import { newTabHome } from "../tabs/newTabHome";
 import { noteAutoHideTabsChosen, noteTornOffWindowKeptAutoHide } from "../telemetry/autoHideTabsChoices";
 import { lastClosedEntry, lastClosedTab, restoreTab, restoreWindow, withoutRecentlyClosed } from "./reopenClosed";
@@ -63,9 +64,9 @@ export type WindowsSlice = {
 
   createWindow(options?: CreateWindowOptions): string;
   closeWindow(id: string, options?: CloseWindowOptions): void;
-  setWindowFrame(id: string, frame: Frame, restored?: Frame): void;
+  setWindowFrame(id: string, frame: Frame, restored?: Frame, fitted?: boolean): void;
   setWindowMaximized(id: string, on: boolean): void;
-  setWindowFullScreen(id: string, on: boolean): void;
+  setWindowFullScreen(id: string, on: boolean, display?: string): void;
   toggleSidebar(windowId: string): void;
   switchProfile(windowId: string, profileId: string): void;
   moveTabsToWindow(tabIds: string[], windowId: string | null, options?: MoveOptions): string | undefined;
@@ -239,20 +240,19 @@ export const createWindowsSlice: StateCreator<BrowserState, [], [], WindowsSlice
     });
   },
 
-  setWindowFrame(id, frame, restored) {
-    set((s) => withWindowFrame(s, id, frame, restored));
+  setWindowFrame(id, frame, restored, fitted) {
+    set((s) => withWindowFrame(s, id, frame, restored, fitted));
   },
 
   setWindowMaximized(id, on) {
     set((s) => withWindowMaximized(s, id, on));
   },
 
-  setWindowFullScreen(id, on) {
+  setWindowFullScreen(id, on, display) {
     set((s) => {
       const w = s.windows[id];
-      if (!w || !!w.fullScreen === on) return {};
-      const { fullScreen: _, ...rest } = w;
-      return { windows: { ...s.windows, [id]: on ? { ...rest, fullScreen: Date.now() } : rest } };
+      const next = w && withFullScreen(w, on, display);
+      return next ? { windows: { ...s.windows, [id]: next } } : {};
     });
   },
 

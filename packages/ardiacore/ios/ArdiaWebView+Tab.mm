@@ -130,6 +130,7 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
   if (_tabIndex >= 0) [self placeTab];
   if (ArdiaWindowController *controller = self.controller)
     [ArdiaTabStrip changedInWindow:controller profile:tab.profile cause:NSNull.null];
+  [self settleFirstShowFocus];
 }
 
 - (void)detach {
@@ -323,6 +324,7 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
   if (tab.profile.offTheRecord) payload[@"profile"] = ardia_host::OriginalProfileNameOf(tab.profile);
   if (clicked) payload[@"point"] = RecentClickPoint(self);
   if (linkWait) payload[@"linkWait"] = linkWait;
+  if ([disposition isEqualToString:@"window"] && TakeShiftClick(self)) payload[@"shiftClick"] = @YES;
   if (objc_getAssociatedObject(tab, &kPopupTabKey)) {
     objc_setAssociatedObject(tab, &kPopupTabKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     payload[@"popup"] = @YES;

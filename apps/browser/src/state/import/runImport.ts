@@ -6,8 +6,9 @@ import { useBrowser } from "../browser/store";
 import { MAX_DRAFT_LINKS } from "../groups/draftGroups";
 import { createProfile } from "../profiles/actions";
 import { noteImportedSpaces } from "../telemetry/usage";
-import { noteImportRun } from "../telemetry/importRuns";
+import { noteDiaTabProfiles, noteImportRun } from "../telemetry/importRuns";
 import {
+  adoptSpaceIdentity,
   applyResult,
   emptyCounts,
   importArcSpace,
@@ -22,7 +23,7 @@ import {
   type ImportKind,
   type ImportResult,
 } from "./apply";
-import { diaProfilesFor } from "./diaTabs";
+import { diaProfilesFor, diaProfilesWithoutFolder } from "./diaTabs";
 import { planSidebar } from "./sidebarPlan";
 import {
   APP_TAB_KINDS,
@@ -168,6 +169,7 @@ export async function runImport(wanted: ReadonlySet<ImportKind>, withoutKey = fa
       }
       continue;
     }
+    if (signal.aborted) return;
     for (const k of result.failed) failed.set(k, [...(failed.get(k) ?? []), profile.name]);
     for (const w of result.warnings) {
       if (w.code === "undecryptable") secretsLeft += 1;
@@ -181,11 +183,14 @@ export async function runImport(wanted: ReadonlySet<ImportKind>, withoutKey = fa
     if (bySpaces) {
       const plan = planSidebar(source.sidebar!, result, profile.spaces);
       const members: string[][] = [];
+      let startersNamed = 0;
       for (const { space, partition } of plan.spaces) {
         const name = space.name || "Space";
         const head = members[partition]?.[0] ?? null;
         const shared = plan.sharesTopApps && plan.spaces.filter((p) => p.partition === partition).length > 1;
+        const first = destinationIndex === 0;
         const dest = await nextDestination(name, space.color, space.emoji, head, shared);
+        if (first && adoptSpaceIdentity(dest, space)) startersNamed += 1;
         (members[partition] ??= []).push(dest);
         const r = importArcSpace(dest, space, result.favicons);
         add({ ...emptyCounts(), tabs: r.tabs, bookmarks: r.bookmarks });
@@ -207,6 +212,7 @@ export async function runImport(wanted: ReadonlySet<ImportKind>, withoutKey = fa
         containerSpaces: plan.spaces.filter((p) => p.partition !== plan.dataPartition).length,
         dataProfiles: members.filter(Boolean).length,
         essentials,
+        startersNamed,
       });
       extensionsProfile ||= dest;
     } else {
@@ -228,11 +234,22 @@ export async function runImport(wanted: ReadonlySet<ImportKind>, withoutKey = fa
   if (appTabsResult) {
     const note = "note" in appTabsResult ? appTabsResult.note : null;
     if (note) left.push(note);
+    if ("result" in appTabsResult) {
+      const kinds = { pinned: wanted.has("pinnedTabs"), open: wanted.has("tabs") };
+      const extra = diaProfilesWithoutFolder(appTabsResult.result, source.profiles, kinds);
+      for (const dia of extra) {
+        const dest = await nextDestination(dia.name);
+        if (signal.aborted) return;
+        total.tabs += importDiaProfile(dest, dia, kinds, appTabsResult.result.favicons);
+      }
+      noteDiaTabProfiles({ matched: diaProfilesFor(appTabsResult.result, source.profiles).size, withoutFolder: extra.length });
+    }
     updateStatus(signal, (st) => ({ ...st, ...Object.fromEntries(fromApp.map((k) => [k, note ? "failed" : "done"])) }));
   }
   updateStatus(signal, (st) => Object.fromEntries(Object.entries(st).map(([k, v]) => [k, failed.has(k as ImportKind) ? "failed" : v === "failed" ? v : "done"])));
   api.forgetUnlockedKeys();
   noteImportRun({ done: order.filter((k) => !failed.has(k)).length, failed: failed.size, secretsLeft });
+  if (total.bookmarks > 0) useBrowser.getState().updateSettings({ bookmarksImportDismissed: true });
   finishImport(signal, {
     counts: total,
     failures: [...failed].map(([kind, names]) => ({ kind, profiles: selected.length > 1 ? names : [] })),

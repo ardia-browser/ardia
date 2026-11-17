@@ -119,7 +119,7 @@ export const useLiveActiveTab = (windowId: string, profileId: string, folderId: 
   });
 
 export const useLiveItemTab = (windowId: string, profileId: string, folderId: string, itemId: string) =>
-  useBrowser((s) => viewTabIds(s, windowId, profileId).find((id) => s.tabs[id]?.liveItem?.itemId === itemId && s.tabs[id]?.liveItem?.folderId === folderId) ?? null);
+  useBrowser((s) => (liveTabOpen(s.tabs, folderId, [itemId]) ? (viewTabIds(s, windowId, profileId).find((id) => s.tabs[id]?.liveItem?.itemId === itemId && s.tabs[id]?.liveItem?.folderId === folderId) ?? null) : null));
 
 export const useLiveTabOpen = (folderId: string, itemIds: string[]) => useBrowser((s) => liveTabOpen(s.tabs, folderId, itemIds));
 

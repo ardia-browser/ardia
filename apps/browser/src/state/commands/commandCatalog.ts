@@ -82,8 +82,8 @@ export const COMMANDS = {
   viewSource: { title: "View Source", keys: ["⌥⌘U"], ...pageInLittleArdia },
   back: { title: "Go Back", keys: ["⌘[", "⌘←"], scope: "window", littleArdia: "page" },
   forward: { title: "Go Forward", keys: ["⌘]", "⌘→"], scope: "window", littleArdia: "page" },
-  nextTab: { title: "Next Tab", keys: ["⇧⌘]", "⌘}", "⌃⇟", "⌥⌘↓"], ...windowOffInLittleArdia },
-  previousTab: { title: "Previous Tab", keys: ["⇧⌘[", "⌘{", "⌃⇞", "⌥⌘↑"], ...windowOffInLittleArdia },
+  nextTab: { title: "Next Tab", keys: ["⇧⌘]", "⌘}", "⌃⇥", "⌃⇟", "⌥⌘↓"], ...windowOffInLittleArdia },
+  previousTab: { title: "Previous Tab", keys: ["⇧⌘[", "⌘{", "⌃⇧⇥", "⌃⇞", "⌥⌘↑"], ...windowOffInLittleArdia },
   selectTab: {
     ...windowOffInLittleArdia,
     variants: Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8].map((n) => [String(n), { title: `Select Tab ${n}`, keys: [`⌘${n}`] }])),
@@ -133,8 +133,8 @@ export const COMMANDS = {
   tabSwitcher: {
     ...windowOffInLittleArdia,
     variants: {
-      forward: { title: "Tab Switcher (forward)", keys: ["⌃⇥"] },
-      backward: { title: "Tab Switcher (backward)", keys: ["⌃⇧⇥"] },
+      forward: { title: "Tab Switcher (forward)" },
+      backward: { title: "Tab Switcher (backward)" },
     },
   },
   share: { title: "Share…", symbol: "square.and.arrow.up", keys: ["⌥⌘S"], ...pageInLittleArdia },

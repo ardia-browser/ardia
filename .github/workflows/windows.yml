@@ -357,6 +357,10 @@ jobs:
         if: env.SLUG == 'x64' && env.PART == 'launch'
         shell: pwsh
         run: scripts/windows/pe-imports.test.ps1
+      - name: Check the relaunch check's log reader
+        if: env.SLUG == 'x64' && env.PART == 'launch'
+        shell: pwsh
+        run: scripts/windows/relaunch-facts.test.ps1
       - name: Take the app this run compiled
         if: env.COMPILED == 'true'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
@@ -437,6 +441,21 @@ jobs:
         if: ${{ !cancelled() && steps.installer.outcome == 'success' }}
         shell: pwsh
         run: scripts/windows/installer-check.ps1 -Setup "${{ runner.temp }}/installer/Ardia-Setup-$env:SLUG.exe"
+      - name: Close and reopen the installed app
+        id: relaunch
+        if: ${{ !cancelled() && steps.installer.outcome == 'success' }}
+        timeout-minutes: 15
+        shell: pwsh
+        run: |
+          scripts/windows/relaunch-check.ps1 -Setup "${{ runner.temp }}/installer/Ardia-Setup-$env:SLUG.exe" -Out "${{ runner.temp }}/relaunch"
+          if (Test-Path "${{ runner.temp }}/relaunch/relaunch.md") { "### Close and reopen ($env:SLUG)" >> $env:GITHUB_STEP_SUMMARY; Get-Content "${{ runner.temp }}/relaunch/relaunch.md" | ForEach-Object { "- $_" } >> $env:GITHUB_STEP_SUMMARY }
+      - if: ${{ !cancelled() && steps.relaunch.outcome != 'skipped' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: relaunch-${{ env.SLUG }}
+          path: ${{ runner.temp }}/relaunch
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Name it for a release
         id: release-files
         if: ${{ !cancelled() && steps.installer.outcome == 'success' }}
@@ -466,11 +485,25 @@ jobs:
       - name: Tour the pages
         if: ${{ !cancelled() && env.SLUG == 'x64' && env.PART == 'launch' && env.FULL == 'true' && steps.engine.outcome == 'success' }}
         continue-on-error: true
-        timeout-minutes: 8
+        timeout-minutes: 20
         shell: pwsh
         run: |
-          scripts/windows/tour.ps1 -App "${{ runner.temp }}/Ardia/Ardia.exe" -Out "${{ runner.temp }}/tour-engine" -Only pages
+          scripts/windows/tour.ps1 -App "${{ runner.temp }}/Ardia/Ardia.exe" -Out "${{ runner.temp }}/tour-engine" -Only pages,peek,peek-dark,peek-tabs,peek-layouts
           if (Test-Path "${{ runner.temp }}/tour-engine/tour.md") { Get-Content "${{ runner.temp }}/tour-engine/tour.md" >> $env:GITHUB_STEP_SUMMARY }
+      - name: Tour the first run
+        if: ${{ !cancelled() && env.SLUG == 'x64' && env.PART == 'launch' && env.FULL == 'true' && steps.engine.outcome == 'success' }}
+        timeout-minutes: 40
+        shell: pwsh
+        run: |
+          scripts/windows/tour.ps1 -App "${{ runner.temp }}/Ardia/Ardia.exe" -Out "${{ runner.temp }}/tour-first-run" -Only first-run
+          if (Test-Path "${{ runner.temp }}/tour-first-run/tour.md") { Get-Content "${{ runner.temp }}/tour-first-run/tour.md" >> $env:GITHUB_STEP_SUMMARY }
+      - name: Tour the typing
+        if: ${{ !cancelled() && env.SLUG == 'x64' && env.PART == 'launch' && env.FULL == 'true' && steps.engine.outcome == 'success' }}
+        timeout-minutes: 18
+        shell: pwsh
+        run: |
+          scripts/windows/tour.ps1 -App "${{ runner.temp }}/Ardia/Ardia.exe" -Out "${{ runner.temp }}/tour-typing" -Only typing
+          if (Test-Path "${{ runner.temp }}/tour-typing/tour.md") { Get-Content "${{ runner.temp }}/tour-typing/tour.md" >> $env:GITHUB_STEP_SUMMARY }
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
@@ -487,6 +520,10 @@ jobs:
           path: |
             ${{ runner.temp }}/tour-engine
             !${{ runner.temp }}/tour-engine/data
+            ${{ runner.temp }}/tour-first-run
+            !${{ runner.temp }}/tour-first-run/data
+            ${{ runner.temp }}/tour-typing
+            !${{ runner.temp }}/tour-typing/data
           if-no-files-found: ignore
           retention-days: 14
       - name: Remove the test marker

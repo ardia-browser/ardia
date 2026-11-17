@@ -4,7 +4,7 @@ import { EDIT_ITEMS, createEditTargets, editField, editMenu } from "./editComman
 
 const element = (kind, extra = {}) => ({
   matches: (selector) => kind === "field" ? selector.startsWith("textarea") : false,
-  closest: (selector) => (kind === "menu" && selector.includes("ardia-menu") ? {} : null),
+  closest: (selector) => (kind === "menu" && selector.includes("ardia-menu") ? {} : kind === "cluster" && selector.includes('[role="button"][aria-label="Menu"]') ? {} : null),
   isConnected: true, selectionStart: 0, selectionEnd: 0, type: "text", value: "", readOnly: false, disabled: false,
   focused: 0,
   focus() { this.focused++; },
@@ -20,6 +20,8 @@ test("the edit target is the shell text field that had focus before the menu too
   assert.equal(targets.current().field, field);
   targets.focusIn(element("menu"));
   assert.equal(targets.current().field, field, "opening the menu doesn't change what the entries act on");
+  targets.focusIn(element("cluster"));
+  assert.equal(targets.current().field, field, "tabbing to the … beside the window buttons keeps the field for Edit › Copy and Paste");
   targets.pageFocused();
   assert.deepEqual(targets.current(), { kind: "page" }, "a page that took focus is the target, though the field is still the document's active element");
   targets.focusIn(field);

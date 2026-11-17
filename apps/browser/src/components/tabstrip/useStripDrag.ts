@@ -1,18 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, findNodeHandle, PanResponder, type View } from "react-native";
 import { beginTabDrag, cancelTabDrag, endTabDrag, setDragPicture, tabDragging, updateTabDrag } from "../../state/drag/tabDrag";
-import { setStripOnto, storeChangedSince, storeMark } from "../../state/tabs/topStrip";
+import { storeChangedSince, storeMark } from "../../state/tabs/topStrip";
 import { curve } from "../ui/motion";
-import { dropOnto, ontoKey, releaseDrop, reorder, type DropTarget, type Landing, type StripDrag } from "./model";
+import { releaseDrop, reorder, type Landing, type StripDrag } from "./model";
 import { raiseView } from "../../state/windows/nativeWindow";
-import { aimDrop, dragRange, dropIndex } from "./stripGroups";
+import { dragRange, dropIndex } from "./stripGroups";
 import { makeRoom, registerSlot, reorderOffsets, settleRoom } from "./stripReorder";
 import { SLIDE } from "./tokens";
-import { AUTO_SCROLL_MAX, AUTO_SCROLL_ZONE, LIFT_MS, LIFT_SLOP, ONTO_EDGE, TOP_STRIP_HEIGHT } from "./tokens";
+import { AUTO_SCROLL_MAX, AUTO_SCROLL_ZONE, LIFT_MS, LIFT_SLOP, TOP_STRIP_HEIGHT } from "./tokens";
 import { autoScrollSpeed } from "./stripScroll";
 import { noteTabStripEdgeScroll } from "../../state/telemetry/tabStripCounts";
 import { endHeldTabPress, TAB_CLICK_SLOP } from "../../state/sidebar/heldTabPress";
-import { currentSettings } from "../../state/browser/current";
 import { hapticTick } from "../../state/drag/dragNative";
 
 const IDLE = { kind: "idle" } as const;
@@ -26,19 +25,9 @@ export function useStripDrag(item: StripDrag) {
   const view = useRef<View>(null);
   const latest = useRef(item);
   latest.current = item;
-  const drag = useRef({ stripBottom: TOP_STRIP_HEIGHT, lifted: false, ids: [] as string[], dx: 0, to: -1, grab: item.width / 2, crossed: false, onto: null as DropTarget | null, far: 0, scrolled: 0, viewport: null as readonly [number, number] | null, gesture: null as { dx: number; moveX: number; moveY: number } | null, frame: 0 });
+  const drag = useRef({ stripBottom: TOP_STRIP_HEIGHT, lifted: false, ids: [] as string[], dx: 0, to: -1, grab: item.width / 2, crossed: false, far: 0, scrolled: 0, viewport: null as readonly [number, number] | null, gesture: null as { dx: number; moveX: number; moveY: number } | null, frame: 0 });
   useEffect(() => registerSlot(() => latest.current.geometry, () => latest.current.from, shift), []);
-  const aimAt = (dx: number) => {
-    const { geometry, from, targets } = latest.current;
-    if (!targets || from < 0) return null;
-    return aimDrop(geometry, from, geometry.lefts[from]! + drag.current.grab + dx, (i) => !!targets[i], ONTO_EDGE);
-  };
-  const indexAt = (dx: number) => aimAt(dx)?.to ?? dropIndex(latest.current.geometry, latest.current.from, dx);
-  const setOnto = (target: DropTarget | null) => {
-    if (ontoKey(drag.current.onto) === ontoKey(target)) return;
-    drag.current.onto = target;
-    setStripOnto(ontoKey(target));
-  };
+  const indexAt = (dx: number) => dropIndex(latest.current.geometry, latest.current.from, dx);
   const setLifted = (lifted: boolean) => {
     if (drag.current.lifted === lifted) return;
     drag.current.lifted = lifted;
@@ -81,7 +70,6 @@ export function useStripDrag(item: StripDrag) {
     stopAutoScroll();
     phase.current = IDLE;
     setCross(false);
-    setOnto(null);
     makeRoomAt(-1);
     setLifted(false);
     rest();
@@ -131,12 +119,10 @@ export function useStripDrag(item: StripDrag) {
     }
     const across = !lifted && !!cross?.at(drag.current.dx, drag.current.grab);
     setCross(across);
-    const aim = across || lifted ? null : aimAt(along);
-    const aimedBefore = drag.current.to >= 0 ? `${drag.current.to}:${ontoKey(drag.current.onto)}` : null;
-    setOnto(aim?.onto != null ? (latest.current.targets?.[aim.onto] ?? null) : null);
-    if (!across) makeRoomAt(lifted || from < 0 ? -1 : (aim?.to ?? dropIndex(geometry, from, along)));
-    const aimedNow = drag.current.to >= 0 ? `${drag.current.to}:${ontoKey(drag.current.onto)}` : null;
-    if (!across && aimedBefore && aimedNow && aimedNow !== aimedBefore && currentSettings().tabReorderHaptics) hapticTick();
+    const aimedBefore = drag.current.to;
+    if (!across) makeRoomAt(lifted || from < 0 ? -1 : dropIndex(geometry, from, along));
+    const aimedNow = drag.current.to;
+    if (!across && aimedBefore >= 0 && aimedNow >= 0 && aimedNow !== aimedBefore) hapticTick();
     if (!local) updateTabDrag(g.moveX, g.moveY, lifted);
     return lifted || across;
   };
@@ -168,7 +154,6 @@ export function useStripDrag(item: StripDrag) {
       stopAutoScroll();
       landSettle();
       if (phase.current.kind !== "dragging") return;
-      setOnto(null);
       if (drag.current.crossed) latest.current.cross?.clear();
       settleRoom(latest.current.geometry);
       if (!latest.current.local) cancelTabDrag();
@@ -192,9 +177,8 @@ export function useStripDrag(item: StripDrag) {
           landSettle();
           dx.stopAnimation();
           dx.setValue(0);
-          const mine = { stripBottom: TOP_STRIP_HEIGHT, lifted: false, ids, dx: 0, to: -1, grab: latest.current.width / 2, crossed: false, onto: null, far: travel(g.moveX, g.moveY), scrolled: 0, viewport: null as readonly [number, number] | null, gesture: null, frame: 0 };
+          const mine = { stripBottom: TOP_STRIP_HEIGHT, lifted: false, ids, dx: 0, to: -1, grab: latest.current.width / 2, crossed: false, far: travel(g.moveX, g.moveY), scrolled: 0, viewport: null as readonly [number, number] | null, gesture: null, frame: 0 };
           stopAutoScroll();
-          setOnto(null);
           drag.current = mine;
           phase.current = { kind: "dragging" };
           setLook("dragging");
@@ -225,7 +209,6 @@ export function useStripDrag(item: StripDrag) {
           phase.current = IDLE;
           const bounds = typeof range === "function" ? range(grab) : range;
           const travelled = bounds ? Math.max(bounds[0], Math.min(bounds[1], g.dx)) : g.dx;
-          let onto: DropTarget | null = null;
           let carried = false;
           const outcome = releaseDrop({
             local: !!local,
@@ -235,16 +218,7 @@ export function useStripDrag(item: StripDrag) {
             crossed,
             endWindowDrag: () => (carried = endTabDrag()),
             landAcross: () => latest.current.cross?.land(drag.current.dx, grab, ids),
-            clearAim: () => {
-              setCross(false);
-              onto = drag.current.onto;
-              setOnto(null);
-            },
-            dropOnto: () => {
-              const dropped = !!(onto && dropOnto(onto, ids));
-              if (dropped) settleRoom(geometry);
-              return dropped;
-            },
+            clearAim: () => setCross(false),
             move: () => {
               const mark = storeMark();
               const moved = drop?.(travelled, ids) || (from >= 0 && ids.length > 1 && reorder(ids, latest.current, indexAt(g.dx)));

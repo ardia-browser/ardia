@@ -1,3 +1,5 @@
+import { CLUSTER_MENU_BUTTON } from "./clusterMenu.ts";
+
 export type EditAction = "undo" | "redo" | "cut" | "copy" | "paste" | "pasteAndMatchStyle" | "selectAll";
 export type EditItem = { id: string; action: EditAction; title: string; key: string; modifiers: readonly ("command" | "shift")[] };
 export type EditField = Pick<HTMLInputElement, "focus" | "isConnected" | "selectionStart" | "selectionEnd" | "type" | "value" | "readOnly" | "disabled">;
@@ -19,7 +21,7 @@ export const editItem = (id: string) => byId.get(id);
 export const editActionOf = (id: string): EditAction | undefined => byId.get(id)?.action;
 
 const TEXT_FIELD = "textarea, input:not([type]), input[type=text], input[type=search], input[type=url], input[type=email], input[type=password], input[type=tel], input[type=number]";
-const MENU_SURFACE = "[data-ardia-app-menu], .ardia-menu";
+const MENU_SURFACE = `[data-ardia-app-menu], .ardia-menu, ${CLUSTER_MENU_BUTTON}`;
 
 type Matching = Pick<Element, "matches" | "closest">;
 

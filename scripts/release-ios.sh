@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # Build the iPhone app for App Store Connect and send it to TestFlight.
 #
-#   scripts/release-ios.sh <build number> [--version <release version>] [--no-upload] [--default-browser] [--out <dir>]
+#   scripts/release-ios.sh <build number> [--version <release version>] [--no-upload] [--development] [--default-browser] [--out <dir>]
 #   scripts/release-ios.sh -h | --help
 #
 # Archives the Ardia scheme in Release with <build number> as every target's build number, then exports
 # it signed for App Store Connect and uploads it. --no-upload stops at the signed .ipa. Output and logs
-# go to dist/ios/<release version>-<build>, or --out.
+# go to dist/ios/<release version>-<build>, or --out. --development exports a development-signed .ipa instead,
+# for the iPhones registered on the team (asc.mjs register-device), to install over a cable with
+# xcrun devicectl device install app; it never uploads.
 #
 # The iPhone app ships the Mac's version. The release version is --version, a stable 0.2.47 or a nightly
 # 0.2.47-nightly.2, and without it the Mac app's committed MARKETING_VERSION. Every target's
@@ -37,11 +39,12 @@ help() {
   exit 0
 }
 
-build="" release_version="" upload=1 default_browser=NO out=""
+build="" release_version="" upload=1 development=0 default_browser=NO out=""
 while [ $# -gt 0 ]; do
   case "$1" in
     -h | --help) help ;;
     --no-upload) upload=0; shift ;;
+    --development) development=1; upload=0; shift ;;
     --default-browser) default_browser=YES; shift ;;
     --out) [ $# -ge 2 ] || die "--out needs a directory"; out="$2"; shift 2 ;;
     --version) [ $# -ge 2 ] || die "--version needs a release version"; release_version="$2"; shift 2 ;;
@@ -125,6 +128,9 @@ if [ "$upload" = 1 ]; then step=upload; else
   step=export
   /usr/libexec/PlistBuddy -c "Set :destination export" "$options"
 fi
+if [ "$development" = 1 ]; then
+  /usr/libexec/PlistBuddy -c "Set :method debugging" -c "Delete :uploadSymbols" "$options"
+fi
 run_logged "$step" xcodebuild -exportArchive \
   -archivePath "$archive" -exportOptionsPlist "$options" -exportPath "$out/export" \
   -allowProvisioningUpdates ${auth[@]+"${auth[@]}"}
@@ -134,5 +140,5 @@ if [ "$upload" = 1 ]; then
 else
   ipa="$(find "$out/export" -maxdepth 1 -name '*.ipa' | head -1)"
   [ -n "$ipa" ] || die "the export wrote no .ipa"
-  echo "Signed, not uploaded: $ipa"
+  if [ "$development" = 1 ]; then echo "Development-signed for the team's registered devices: $ipa"; else echo "Signed, not uploaded: $ipa"; fi
 fi

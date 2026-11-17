@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 # Publishes this checkout's arm64 engine for CI releases: packs the local Chromium Framework (stripped, unpruned, as
-# release.sh packs it) and its source, then uploads both to the GitHub prerelease engine-<engine key:12> (never
-# latest) and appends the key's line to packages/ardiacore/prebuilt-engines.tsv. The key (engine/engine-key.sh)
-# covers engine/ and the offline game the framework packs.
+# release.sh packs it), the dSYMs the build wrote beside it (ArdiaCore-<key:12>-symbols.tar.xz, with
+# ArdiaCore-<key:12>-uuids.txt naming the dSYM of each image by its UUID: scripts/symbolicate-crash.sh reads them) and
+# its source, then uploads them to the GitHub prerelease engine-<engine key:12> (never latest) and appends the key's
+# line to packages/ardiacore/prebuilt-engines.tsv. The key (engine/engine-key.sh) covers engine/ and the offline game
+# the framework packs.
 #
 #   scripts/publish-engine.sh [--dry-run] [--out <dir>] [<Chromium Framework.framework>]
 #   scripts/publish-engine.sh -h | --help
 #
 # The framework defaults to $CHROMIUM_SRC/out/Release_GN_arm64 (~/chromium-build/chromium_git/chromium/src). It must
 # be fresh: the key's paths committed and pushed, the Chromium tree matching them and nothing in it newer than the build.
+# Its dSYMs are the *.dSYM folders beside it, copied with it under the chromium lock; the framework's own must match it.
 # --dry-run packs into <dir> (default dist/engine-<tree:12>), prints the gh commands and the table line, and
 # publishes nothing; staleness is a warning there instead of an error. Commit the table line after a real run.
 set -euo pipefail
@@ -55,14 +58,19 @@ rm -rf "$out" && mkdir -p "$out"
 out="$(cd "$out" && pwd -P)"
 archive="$out/ArdiaCore-$short.tar.xz"
 source_archive="$out/ArdiaCore-$short-source.tar.xz"
+symbols_archive="$out/$(engine_symbols_name "$tag")"
+uuids_file="$out/$(engine_uuids_name "$tag")"
 work="$out/pack"
 mkdir -p "$work/Ardia.app/Contents/Frameworks"
 echo "==> Copy the engine"
-copy=(cp -cR "$framework" "$work/Ardia.app/Contents/Frameworks/")
+copy=(bash -c 'cp -cR "$1" "$2" && mkdir -p "$4" && find "$3" -maxdepth 1 -name "*.dSYM" -exec cp -cR {} "$4/" ";"' copy
+  "$framework" "$work/Ardia.app/Contents/Frameworks/" "$(dirname "$framework")" "$out/dsyms")
 case "$framework" in
   "$chromium_src/"*) "$root/scripts/agent/locked" chromium --wait 500 -- "${copy[@]}" ;;
   *) "${copy[@]}" ;;
 esac
+echo "==> Symbols"
+"$root/scripts/lib/pack-symbols.sh" "$work/Ardia.app/Contents/Frameworks/Chromium Framework.framework" "$out/dsyms" "$symbols_archive" "$uuids_file"
 echo "==> Strip"
 "$root/packages/ardiacore/scripts/strip-engine.sh" "$work/Ardia.app" "$out/symbols"
 echo "==> Pack"
@@ -72,11 +80,11 @@ sha="$(shasum -a 256 "$archive" | awk '{ print $1 }')"
 echo "$sha  $(basename "$archive")" >"$archive.sha256"
 echo "==> Source"
 "$root/scripts/engine-source.sh" "$tag" "$source_archive" >/dev/null
-assets=("$archive" "$archive.sha256" "$source_archive")
+assets=("$archive" "$archive.sha256" "$symbols_archive" "$uuids_file" "$source_archive")
 line="$(printf '%s\t%s\t%s' "$tree" "$tag" "$sha")"
 
 echo "==> Publish"
-notes="ArdiaCore's engine for engine key $tree (commit $commit), for builds without a Chromium tree (packages/ardiacore/scripts/fetch-engine.sh). Not an app release."
+notes="ArdiaCore's engine for engine key $tree (commit $commit), for builds without a Chromium tree (packages/ardiacore/scripts/fetch-engine.sh), with its dSYMs for scripts/symbolicate-crash.sh. Not an app release."
 if [ "$dry" = 1 ] || ! gh release view "$tag" -R "$REPO" >/dev/null 2>&1; then
   run gh release create "$tag" -R "$REPO" --prerelease --latest=false --target "$commit" --title "Engine $short" --notes "$notes"
 fi

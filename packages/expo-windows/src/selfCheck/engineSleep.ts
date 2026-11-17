@@ -12,7 +12,7 @@ const INSPECTED_BY_ANOTHER_CLIENT = 105;
 const FORM_INTERACTIONS = 26;
 const USER_EDITS = 27;
 const TITLE = "sleep page";
-const LINKS_TITLE = "links page";
+export const LINKS_TITLE = "links page";
 const OPENS_LIVE_PAGE = 100;
 const EVENT_MS = 8000;
 const POPUP_NAME = "ardia-sleep-check-popup";
@@ -48,6 +48,24 @@ export async function until<T>(what: string, ms: number, read: () => Promise<T>,
     value = await read();
   }
   return value;
+}
+
+export const painted = (key: string) => until(`the page ${key} has its first contentful paint`, LOAD_MS, async () => evaluate(key, 'post("result", JSON.stringify(performance.getEntriesByName("first-contentful-paint").length));'), (count) => Number(count) > 0);
+
+const CALL_MS = 15000;
+
+export async function timedCall<Result = unknown>(verb: string, args: Record<string, unknown> = {}, windowId = ""): Promise<Result> {
+  const what = `${verb} ${String(args.key ?? "")}`.trim();
+  console.info(`[ardia windows] self-check step: ${what}`);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what} gave no answer within ${CALL_MS} ms`)), CALL_MS);
+  });
+  try {
+    return await Promise.race([hostCall<Result>(verb, args, windowId), late]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export const loaded = (key: string, title = TITLE) => until(`the page ${key} loads`, LOAD_MS, () => listed(key), (tab) => tab?.title === title && tab.loading === false && tab.discarded !== true);
@@ -92,7 +110,7 @@ export function heard(topic: string, wanted: (event: HeardEvent) => boolean, wha
 
 export const click = (key: string, x: number, y: number, modifiers = 0) => hostCall("tab.call", { key, method: "clickForTest", x, y, modifiers });
 
-async function sleepOnce(key: string, windowId: string, title: string) {
+export async function sleepOnce(key: string, windowId: string, title: string) {
   await hide(key, windowId);
   expectEqual(await keptBy(key, 0), [], "the hidden page sleeps");
   expectEqual((await listed(key))?.discarded, true, "the page is discarded");
@@ -206,6 +224,7 @@ const sleepChecks: Check[] = [
         async ([page], windowId) => {
           await show(page!, windowId, LEFT);
           await sleepOnce(page!, windowId, LINKS_TITLE);
+          await painted(page!);
           const opened = heard("tab.opened", (event) => event.opener === page, "a new tab from a target=_blank click");
           await click(page!, 110, 90);
           const tab = await opened;

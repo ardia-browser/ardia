@@ -20,9 +20,9 @@ import { noteContentBlockerUnavailable, noteContentBlockerWriteFailure, noteCust
 import { UI_LOCALE } from "../../../lib/uiLocale";
 
 export const CATEGORIES: { id: FilterListCategory; section: string; anchor?: SettingId }[] = [
-  { id: "ads", section: "Ad blockers", anchor: "privacy.blockAds" },
-  { id: "trackers", section: "Trackers", anchor: "privacy.blockTrackers" },
-  { id: "cookies", section: "Cookie banners", anchor: "privacy.blockCookieBanners" },
+  { id: "ads", section: "Ad blockers", anchor: "general.blockAds" },
+  { id: "trackers", section: "Trackers", anchor: "general.blockTrackers" },
+  { id: "cookies", section: "Cookie banners", anchor: "general.blockCookieBanners" },
   { id: "annoyances", section: "Annoyances" },
   { id: "security", section: "Malware and scams" },
   { id: "regional", section: "Regional blockers" },
@@ -74,40 +74,51 @@ export async function writeBlocker(write: () => Promise<unknown>, refresh: () =>
 
 const LISTS = { maxHeight: 420, marginTop: space.m } as const;
 
-export function FilterListsSheet() {
-  const [blocker, refresh] = useContentBlocker();
+export const blockerVersionNote = (blocker: ContentBlockerState | null) =>
+  blocker?.version ? `Blocking by uBlock Origin ${blocker.version}, included with Ardia. Its lists update on their own.` : "";
+
+export function FilterLists({ blocker, refresh }: { blocker: ContentBlockerState | null; refresh: () => void }) {
   const toggle = async (l: FilterList, on: boolean) => {
     if (!blocker) return;
     await writeBlocker(() => setFilterList(blocker, l.id, on), refresh);
   };
   return (
+    <View>
+      <CustomLists blocker={blocker} refresh={refresh} />
+      {CATEGORIES.map((c) => {
+        const lists = blocker?.lists.filter((l) => l.category === c.id) ?? [];
+        if (!lists.length) return null;
+        return (
+          <View key={c.id}>
+            <SectionHeader title={c.section} />
+            <Group>
+              {lists.map((l) => (
+                <Row
+                  key={l.id}
+                  title={<Checkbox value={l.enabled} onChange={(v) => void toggle(l, v)} label={l.title} />}
+                  description={l.defaultOn ? `${filtersText(l.filters)} · On by default` : filtersText(l.filters)}
+                />
+              ))}
+            </Group>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+export function FilterListsSheet() {
+  const [blocker, refresh] = useContentBlocker();
+  return (
     <Sheet size="l" onClose={closeSettingsSheet}>
-      <DialogTitle subtitle={setting("privacy.filterLists").description}>Advanced Ad Block Settings</DialogTitle>
+      <DialogTitle subtitle={setting("general.filterLists").description}>Advanced Ad Block Settings</DialogTitle>
       <ScrollView style={LISTS}>
-        <CustomLists blocker={blocker} refresh={refresh} />
-        {CATEGORIES.map((c) => {
-          const lists = blocker?.lists.filter((l) => l.category === c.id) ?? [];
-          if (!lists.length) return null;
-          return (
-            <View key={c.id}>
-              <SectionHeader title={c.section} />
-              <Group>
-                {lists.map((l) => (
-                  <Row
-                    key={l.id}
-                    title={<Checkbox value={l.enabled} onChange={(v) => void toggle(l, v)} label={l.title} />}
-                    description={l.defaultOn ? `${filtersText(l.filters)} · On by default` : filtersText(l.filters)}
-                  />
-                ))}
-              </Group>
-            </View>
-          );
-        })}
+        <FilterLists blocker={blocker} refresh={refresh} />
       </ScrollView>
       <DialogActions
         note={
           <Text size="caption" tone="textTertiary">
-            {blocker?.version ? `Blocking by uBlock Origin ${blocker.version}, included with Ardia. Its lists update on their own.` : ""}
+            {blockerVersionNote(blocker)}
           </Text>
         }
       >

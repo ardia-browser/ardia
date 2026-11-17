@@ -7,6 +7,12 @@ let running: Running | null = null;
 const awaiting = new Map<string, Awaiting>();
 const CLAIM_TRIES = 20;
 const CLAIM_RETRY_MS = 50;
+const expectedListeners = new Set<(windowId: string, destination: string) => void>();
+
+export function onFocusExpected(listener: (windowId: string, destination: string) => void) {
+  expectedListeners.add(listener);
+  return () => void expectedListeners.delete(listener);
+}
 
 export function runFocusMove(generation: number, windowId: string, source: string | undefined, run: () => void): boolean {
   const outer = running;
@@ -26,6 +32,7 @@ export function expectFocus(windowId: string, destination: string) {
   const current = awaiting.get(windowId);
   if (current?.generation === running.generation) current.destinations.add(destination);
   else awaiting.set(windowId, { generation: running.generation, source: running.source, destinations: new Set([destination]), claimed: false });
+  for (const listener of expectedListeners) listener(windowId, destination);
 }
 
 export function claimFocusTag(windowId: string, destination: string, tagOf: () => number | null) {

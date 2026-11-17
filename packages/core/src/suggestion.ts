@@ -1,12 +1,12 @@
 import type { BangTable } from "./bangs.ts";
 import type { ExtensionCandidate } from "./extensionRows.ts";
-import type { SearchEngine } from "./engines.ts";
+import type { RemoteSite, SearchEngine } from "./engines.ts";
 import type { ActionCandidate } from "./fuzzy.ts";
 import type { ProviderSection } from "./providerRows.ts";
 import type { SearchScope } from "./siteSearch.ts";
 
 export type SuggestionSource = {
-  tabs: readonly { id: string; url: string; title: string; favicon: string | null }[];
+  tabs: readonly { id: string; url: string; title: string; customTitle?: string | null; favicon: string | null }[];
   history: readonly { url: string; title: string; favicon: string | null; visits: number; lastVisit: number }[];
   bookmarks?: readonly { url: string; title: string; favicon: string | null }[];
 };
@@ -30,9 +30,12 @@ export type Suggestion =
   | { kind: "extension"; id: string; title: string; icon: string | null; open: "action" | "options" }
   | { kind: "provider"; providerId: string; provider: string; title: string; url: string; subtitle?: string; icon: string | null };
 
+export type SuggestionVia = "literal" | "renamed_tab" | "engine_site" | "search_first_inline";
+
 export type SuggestionResult = {
   items: Suggestion[];
   completion: string;
+  via?: Readonly<Record<string, SuggestionVia>>;
 };
 
 export type SuggestOptions = {
@@ -41,6 +44,7 @@ export type SuggestOptions = {
   engine?: Pick<SearchEngine, "name" | "url">;
   preference?: "website" | "search";
   remote?: readonly string[];
+  remoteSites?: readonly RemoteSite[];
   actions?: readonly CommandAction[];
   extensions?: readonly ExtensionCandidate[];
   currentTabId?: string;

@@ -27,6 +27,7 @@ final class FocusHandoff {
     let id: Int
     weak var destination: NSView?
     var claimed = false
+    let began = CACurrentMediaTime()
     init(_ id: Int) { self.id = id }
   }
 
@@ -35,37 +36,53 @@ final class FocusHandoff {
     weak var resigned: NSView?
     var restoresSource = true
     var deadline: CFTimeInterval = 0
+    var timer: DispatchWorkItem?
     var generations: [Generation] = []
     var held: [Held] = []
     var watches: [NSObjectProtocol] = []
     init(_ window: NSWindow) { self.window = window }
   }
 
-  private static let lifetime: CFTimeInterval = 0.4
+  private static let pickupLimit: CFTimeInterval = 3
   private static let capacity = 64
   private var gates: [ObjectIdentifier: Gate] = [:]
   private var generations = 0
   private var begun: Int?
   private var monitor: Any?
   private let editKeys = NSMapTable<NSEvent, NSArray>(keyOptions: .weakMemory, valueOptions: .strongMemory)
-  private var epochs: [Int: Int] = [:]
+  private var keyEpochs = KeyEpochs()
+  private let ackLock = NSLock()
+  private var editKeyAcks: [String: Int] = [:]
   private var releases: [UInt16: Release] = [:]
   private var closedAt: [Int: TimeInterval] = [:]
   private var typedAfterGate: [Int: TimeInterval] = [:]
   private weak var acknowledged: NSEvent?
+  private let outcomes = HandoffOutcomes()
   private(set) var trace: [String] = []
   var afterPendingUI: (@escaping () -> Void) -> Void = { DispatchQueue.main.async(execute: $0) }
+
+  func summary(of window: NSWindow) -> String {
+    let epoch = keyEpochs.epoch(of: window.windowNumber)
+    guard let gate = gates[ObjectIdentifier(window)] else { return "key epoch \(epoch), no paste gate" }
+    let remaining = Int((gate.deadline - CACurrentMediaTime()) * 1000)
+    let state = remaining > 0 ? "open, \(remaining) ms left" : "expired \(-remaining) ms ago, not yet ended"
+    return "key epoch \(epoch), paste gate \(state), \(gate.generations.count) generations, \(gate.held.count) held"
+  }
 
   var gatesKeyWindow: Bool { NSApp.keyWindow.map { gates[ObjectIdentifier($0)] != nil } ?? false }
 
   @discardableResult
   func begin(in window: NSWindow) -> Int? {
     guard window.isKeyWindow, WindowManager.shared.id(of: window) != nil else { return nil }
+    let existing = liveGate(in: window)
     let focused = window.firstResponder
-    let existing = gates[ObjectIdentifier(window)]
     guard existing != nil || Self.isPage(focused) else { return nil }
     if Self.isPage(focused), let input = focused as? NSTextInputClient, input.hasMarkedText() { return nil }
     let gate = existing ?? open(in: window)
+    if existing != nil {
+      setDeadline(of: gate, after: Self.pickupLimit)
+      outcomes.add("superseded")
+    }
     if let page = focused as? NSView, Self.isPage(page) {
       ArdiaWebView.keepOutgoingFocus(from: page)
       gate.resigned = page
@@ -73,7 +90,7 @@ final class FocusHandoff {
     }
     generations += 1
     drop(in: gate) { _ in true }
-    gate.generations.append(Generation(generations))
+    gate.generations = [Generation(generations)]
     begun = generations
     note("begin \(generations)")
     return generations
@@ -131,6 +148,11 @@ final class FocusHandoff {
     guard let gate = gate(of: id), live(gate), let newest = gate.generations.last, newest.id == id else { return }
     newest.destination = destination
     newest.claimed = true
+    if let window = gate.window, Self.unfocused(window), let page = gate.resigned, page.window === window, page.isDescendant(of: destination),
+      !page.isHiddenOrHasHiddenAncestor
+    {
+      window.makeFirstResponder(page)
+    }
     deliverIfReady(gate)
   }
 
@@ -145,14 +167,32 @@ final class FocusHandoff {
 
   func refusesUnhandledKey(_ event: NSEvent, in window: NSWindow) -> Bool {
     guard let tag = editKeys.object(forKey: event) as? [Int], tag.count == 2 else { return false }
-    let current = [window.windowNumber, epochs[window.windowNumber] ?? 0]
+    let current = [window.windowNumber, keyEpochs.epoch(of: window.windowNumber)]
+    let afterHandback = keyEpochs.takeHandback(of: window.windowNumber)
     guard tag != current || NSApp.keyWindow !== window else {
+      countEditKeyAck(afterHandback ? "afterHandbackAccepted" : "accepted")
       acknowledged = event
       DispatchQueue.main.async { [weak self] in if self?.acknowledged === event { self?.acknowledged = nil } }
       return false
     }
+    countEditKeyAck(afterHandback ? "afterHandbackRefused" : "refused")
     NSSound.beep()
     return true
+  }
+
+  func takeEditKeyAcks() -> [String: Int] {
+    ackLock.lock()
+    defer {
+      editKeyAcks = [:]
+      ackLock.unlock()
+    }
+    return editKeyAcks
+  }
+
+  private func countEditKeyAck(_ outcome: String) {
+    ackLock.lock()
+    editKeyAcks[outcome, default: 0] += 1
+    ackLock.unlock()
   }
 
   func install() {
@@ -165,7 +205,7 @@ final class FocusHandoff {
         return event
       }
       if event.type == .keyDown, Self.isEditKey(event) {
-        self.editKeys.setObject([window.windowNumber, self.epochs[window.windowNumber] ?? 0] as NSArray, forKey: event)
+        self.editKeys.setObject([window.windowNumber, self.keyEpochs.epoch(of: window.windowNumber)] as NSArray, forKey: event)
       }
       if event.type == .keyUp { return self.releases(event, in: gate) ? nil : event }
       if gate == nil, !event.modifierFlags.contains(.command) { self.noteTyped(event, in: window) }
@@ -178,9 +218,9 @@ final class FocusHandoff {
       return nil
     }
     let center = NotificationCenter.default
-    center.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { [weak self] note in
+    center.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: nil) { [weak self] note in
       guard let self, let window = note.object as? NSWindow else { return }
-      self.epochs[window.windowNumber, default: 0] += 1
+      self.keyEpochs.becameKey(window.windowNumber)
     }
     for name in [NSApplication.didResignActiveNotification, NSWindow.didResignKeyNotification] {
       center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in self?.releases.removeAll() }
@@ -193,6 +233,8 @@ final class FocusHandoff {
   }
 
   func noteForwarded(_ action: Selector) { note("forward \(action)") }
+
+  func takeOutcomes() -> [String: Int] { outcomes.take() }
 
   private func releases(_ up: NSEvent, in gate: Gate?) -> Bool {
     guard let release = releases.removeValue(forKey: up.keyCode) else { return false }
@@ -217,12 +259,7 @@ final class FocusHandoff {
     let gate = Gate(window)
     let key = ObjectIdentifier(window)
     gates[key] = gate
-    gate.deadline = CACurrentMediaTime() + Self.lifetime
-    DispatchQueue.main.asyncAfter(deadline: .now() + Self.lifetime) { [weak self, weak gate] in
-      guard let self, let gate, self.gates[key] === gate else { return }
-      self.note("deadline")
-      self.end(gate, restoring: true)
-    }
+    setDeadline(of: gate, after: Self.pickupLimit)
     gate.watches.append(window.observe(\.firstResponder) { [weak self, weak gate] _, _ in
       DispatchQueue.main.async {
         guard let self, let gate, self.gates[key] === gate else { return }
@@ -238,9 +275,28 @@ final class FocusHandoff {
     return gate
   }
 
+  private func setDeadline(of gate: Gate, after delay: CFTimeInterval) {
+    gate.deadline = CACurrentMediaTime() + delay
+    gate.timer?.cancel()
+    let timer = DispatchWorkItem { [weak self, weak gate] in
+      guard let self, let gate, let window = gate.window, self.gates[ObjectIdentifier(window)] === gate else { return }
+      self.note("deadline")
+      self.outcomes.add("timedOut")
+      self.end(gate, restoring: true)
+    }
+    gate.timer = timer
+    DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: timer)
+  }
+
+  private func liveGate(in window: NSWindow) -> Gate? {
+    guard let gate = gates[ObjectIdentifier(window)], live(gate) else { return nil }
+    return gate
+  }
+
   private func live(_ gate: Gate) -> Bool {
     if CACurrentMediaTime() < gate.deadline { return true }
     note("expired")
+    outcomes.add("timedOut")
     end(gate, restoring: true)
     return false
   }
@@ -258,6 +314,7 @@ final class FocusHandoff {
       self.drop(in: gate) { $0.generation != newest.id }
       gate.held = []
       self.close(gate)
+      self.outcomes.delivered(after: CACurrentMediaTime() - newest.began)
       if let destination = newest.destination { self.replay(mine, into: destination, in: window) }
     }
   }
@@ -273,9 +330,16 @@ final class FocusHandoff {
     note("end restoring=\(restoring && gate.restoresSource)")
     drop(in: gate) { _ in true }
     close(gate)
-    guard restoring, gate.restoresSource, let window = gate.window, Self.unfocused(window), let page = gate.resigned,
-      page.window === window, !page.isHiddenOrHasHiddenAncestor else { return }
-    window.makeFirstResponder(page)
+    guard let window = gate.window, Self.unfocused(window) else { return }
+    if restoring, gate.restoresSource, let page = gate.resigned, page.window === window, !page.isHiddenOrHasHiddenAncestor {
+      window.makeFirstResponder(page)
+      return
+    }
+    afterPendingUI { [weak self, weak window] in
+      guard let self, let window, window.isKeyWindow, Self.unfocused(window), self.gates[ObjectIdentifier(window)] == nil else { return }
+      self.note("refocus page")
+      ArdiaWebView.focusVisiblePage(in: window)
+    }
   }
 
   private func close(_ gate: Gate) {
@@ -284,6 +348,7 @@ final class FocusHandoff {
     typedAfterGate[window.windowNumber] = nil
     let key = ObjectIdentifier(window)
     if gates[key] === gate { gates[key] = nil }
+    gate.timer?.cancel()
     gate.watches.forEach { ($0 as? NSKeyValueObservation)?.invalidate() ?? NotificationCenter.default.removeObserver($0) }
     gate.watches = []
     if let resigned = gate.resigned { ArdiaWebView.endOutgoingFocus(from: resigned) }
@@ -329,6 +394,7 @@ final class FocusHandoff {
   private func beep(_ held: [Held]) {
     guard !held.isEmpty else { return }
     note("drop \(held.count)")
+    outcomes.add("dropped", held.count)
     NSSound.beep()
   }
 
@@ -351,5 +417,30 @@ final class FocusHandoff {
 
   private static func unfocused(_ window: NSWindow) -> Bool {
     window.firstResponder == nil || window.firstResponder === window
+  }
+}
+
+final class HandoffOutcomes {
+  private let lock = NSLock()
+  private var counts: [String: Int] = [:]
+
+  func add(_ outcome: String, _ by: Int = 1) {
+    lock.lock()
+    counts[outcome, default: 0] += by
+    lock.unlock()
+  }
+
+  func delivered(after seconds: CFTimeInterval) {
+    add("delivered")
+    add(seconds < 0.4 ? "pickupUnder400ms" : seconds < 1 ? "pickup400To1000ms" : "pickupOver1s")
+  }
+
+  func take() -> [String: Int] {
+    lock.lock()
+    defer {
+      counts = [:]
+      lock.unlock()
+    }
+    return counts
   }
 }

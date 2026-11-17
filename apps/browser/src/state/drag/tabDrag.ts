@@ -94,7 +94,7 @@ export function updateTabDrag(x: number, y: number, lifted: boolean | null = nul
   const { session } = drag;
   const s = useBrowser.getState();
   const { outside, overWindow } = windowUnder(s, drag.windowId, x, y, session.liveFrame);
-  if (overWindow && overWindow !== drag.overWindow && s.settings.tabReorderHaptics) hapticTick();
+  if (overWindow && overWindow !== drag.overWindow) hapticTick();
   const screen = overWindow ? screenPoint(s, drag.windowId, x, y, session.liveFrame) : null;
   const over = overWindow ? s.windows[overWindow]?.frame : null;
   const overPoint: [number, number] | null = screen && over ? rootPointIn(over, screen) : null;

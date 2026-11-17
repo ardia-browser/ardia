@@ -30,13 +30,29 @@ final class MenuTarget: NSObject, NSMenuItemValidation {
   @objc(selectAll:) func selectAllEdit(_ sender: Any?) { forwardEdit(#selector(NSText.selectAll(_:)), from: sender) }
 
   static let undoAction = Selector(("undo:"))
+  static let redoAction = Selector(("redo:"))
 
   @objc(undo:) func undoOrReopenClosedTab(_ sender: Any?) {
     if Self.undoReopensClosedTab {
       dispatch("reopenClosedTab", nil, windowId: WindowManager.shared.keyWindowId)
+    } else if let edits = Self.focusedTextEdits {
+      edits.undo()
     } else {
       NSApp.sendAction(Self.undoAction, to: nil, from: sender)
     }
+  }
+
+  @objc(redo:) func redoEdit(_ sender: Any?) {
+    if let edits = Self.focusedTextEdits {
+      edits.redo()
+    } else {
+      NSApp.sendAction(Self.redoAction, to: nil, from: sender)
+    }
+  }
+
+  private static var focusedTextEdits: UndoManager? {
+    guard let text = NSApp.keyWindow?.firstResponder as? NSTextView, text.allowsUndo else { return nil }
+    return text.undoManager
   }
 
   private static var undoReopensClosedTab: Bool {
@@ -81,7 +97,11 @@ final class MenuTarget: NSObject, NSMenuItemValidation {
       let reopens = Self.undoReopensClosedTab
       let title = reopens ? "Undo Close Tab" : (menuItem as? StandardItem)?.defaultTitle ?? menuItem.title
       if menuItem.title != title { menuItem.title = title }
-      return reopens || Self.validateForwarded(menuItem, Self.undoAction)
+      if reopens { return true }
+      return Self.focusedTextEdits.map(\.canUndo) ?? Self.validateForwarded(menuItem, Self.undoAction)
+    }
+    if menuItem.action == Self.redoAction {
+      return Self.focusedTextEdits.map(\.canRedo) ?? Self.validateForwarded(menuItem, Self.redoAction)
     }
     guard let item = menuItem as? CommandItem else { return true }
     let state = MenuState.current

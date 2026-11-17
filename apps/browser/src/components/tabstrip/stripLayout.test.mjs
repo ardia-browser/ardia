@@ -113,7 +113,6 @@ test("an open group lays out its chip, its members and a nested folder holding t
   assert.deepEqual(strip.spanOf("c"), [390, 212.5]);
   assert.deepEqual(strip.spanOf("d"), [606.5, 156]);
   assert.deepEqual(strip.spanOf("t2"), [800.75, 156]);
-  assert.deepEqual(strip.targets, [{ kind: "tab", id: "t1" }, { kind: "group", id: "G" }, { kind: "tab", id: "t2" }]);
 });
 
 test("a closed group shows only the member holding the selected tab, right after its chip, and reveals from its chip so the group stays readable", () => {
@@ -129,7 +128,6 @@ test("a folder without the selected tab is only its chip, and a split takes two 
   const strip = layout(entries, "a", measured({ G: 60 }, { F: 50 }));
   assert.equal(strip.memberWidth(entries[0].members[0]), 50);
   assert.equal(strip.top.slots[1].width, strip.chip * 2);
-  assert.deepEqual(strip.targets, [{ kind: "group", id: "G" }, null]);
 });
 
 test("an unmeasured group or folder chip counts as zero wide until it is measured", () => {

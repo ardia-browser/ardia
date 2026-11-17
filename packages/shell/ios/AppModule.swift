@@ -6,7 +6,7 @@ import ExpoModulesCore
 public class AppModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ArdiaApp")
-    Constant("apiVersion") { () -> Int in 74 }
+    Constant("apiVersion") { () -> Int in 75 }
 
     OnCreate {
       DispatchQueue.main.async { AppIcons.restore() }
@@ -78,6 +78,7 @@ public class AppModule: Module {
         "bootTime": Self.bootTime as Any,
         "launchMarks": ArdiaHost.launchMarks,
         "launchedHidden": ArdiaHost.launchedHidden as Any,
+        "launchSource": ArdiaHost.launchSource as Any,
         "loadAverage1m": Self.loadAverage1m as Any,
         "inApplicationsFolder": Self.inApplicationsFolder,
         "updatePrewarm": UserDefaults.standard.dictionary(forKey: UpdatePrewarm.lastRunKey) as Any,

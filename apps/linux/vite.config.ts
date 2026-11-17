@@ -28,8 +28,8 @@ const replacements = new Map([
   [here("../browser/src/components/sidebar/TileFace.tsx"), here("./src/TileFace.tsx")],
   [here("../browser/src/components/site/SiteConnection.tsx"), here("./src/SiteConnection.tsx")],
   [here("../browser/src/state/settings/paneData.ts"), here("./src/credentialPaneData.ts")],
-  [here("../browser/src/components/settings/panes/Passwords.tsx"), here("./src/LinuxPasswordsPane.tsx")],
-  [here("../browser/src/components/settings/panes/Autofill.tsx"), here("./src/LinuxAutofillPane.tsx")],
+  [here("../browser/src/components/settings/panes/ProfilePasswords.tsx"), here("./src/LinuxPasswordsPane.tsx")],
+  [here("../browser/src/components/settings/panes/ProfileAutofill.tsx"), here("./src/LinuxAutofillPane.tsx")],
   [here("../browser/src/state/import/apply.ts"), here("./src/importApply.ts")],
   [here("../browser/src/components/import/steps/UnlockStep.tsx"), here("./src/LinuxUnlockStep.tsx")],
   [here("../browser/src/state/sync/engine.ts"), here("./src/syncEngine.ts")],
@@ -37,10 +37,12 @@ const replacements = new Map([
   [here("../browser/src/state/live/sources.ts"), here("./src/liveSources.ts")],
   [here("../browser/src/state/live/net.ts"), here("./src/liveNet.ts")],
   [here("../browser/src/components/extensions/ActionPopup.tsx"), here("./src/ExtensionActionPopup.tsx")],
+  [here("../browser/src/platform/windowControls.ts"), here("./src/hostWindowControls.ts")],
+  [here("../browser/src/components/window/WindowControls.tsx"), here("./src/WindowControls.tsx")],
 ]);
 const importedPasswordSave = {
   source: here("../browser/src/state/site/passwords.ts"),
-  importers: new Set([here("../browser/src/components/settings/panes/Passwords.tsx"), here("../browser/src/state/site/savedPasswords.ts")]),
+  importers: new Set([here("../browser/src/components/settings/panes/ProfilePasswords.tsx"), here("../browser/src/state/site/savedPasswords.ts")]),
   replacement: here("./src/importedPasswordSave.ts"),
 };
 const tabLifecycle = here("../browser/src/state/tabs/tabLifecycle.ts");
@@ -51,13 +53,18 @@ const importerReplacements = new Map([
   [`${here("../browser/src/state/app/toasts.ts")}\0${tabLifecycle}`, here("./src/policyToasts.ts")],
   [`${here("../browser/src/platform/performance.ts")}\0${tabLifecycle}`, here("./src/policyPerformance.ts")],
   [`${here("../browser/src/state/site/webNotifications.ts")}\0${here("../browser/src/state/site/permissions.ts")}`, here("./src/notificationPermission.ts")],
-  [`${lazyComponentId(here("../browser/src/components/extensions/ExtensionOverlays.tsx"))}\0${here("../browser/src/components/settings/panes/Extensions.tsx")}`, here("./src/SettingsInstallDialog.tsx")],
+  [`${lazyComponentId(here("../browser/src/components/extensions/ExtensionOverlays.tsx"))}\0${here("../browser/src/components/settings/panes/ProfileExtensions.tsx")}`, here("./src/SettingsInstallDialog.tsx")],
   [`${here("../browser/src/platform/webviews.ts")}\0${here("../browser/src/state/drag/tabDrag.ts")}`, here("./src/dragWebviews.ts")],
   [`${here("../browser/src/platform/extensions.ts")}\0${here("../browser/src/state/extensions/actions.ts")}`, here("./src/extensionInstalls.ts")],
   [`${here("../browser/src/state/report/actions.ts")}\0${here("../browser/src/state/commands/appCommands.ts")}`, here("./src/reportProblem.ts")],
   [`${here("../browser/src/components/ui/Panel.tsx")}\0${here("../browser/src/components/ui/Popover.tsx")}`, here("./src/GlassPanel.tsx")],
   [`${here("../browser/src/components/ui/index.ts")}\0${here("../browser/src/components/window/SidebarDock.tsx")}`, here("./src/glassUi.tsx")],
   [`${here("../browser/src/components/ui/index.ts")}\0${here("../browser/src/components/omnibox/CommandPanel.tsx")}`, here("./src/glassUi.tsx")],
+  [`${here("../browser/src/state/windows/controls.ts")}\0${here("../browser/src/components/window/WindowControls.tsx")}`, here("./src/captionControls.ts")],
+  [`${here("../browser/src/state/app/appMenu.ts")}\0${here("../browser/src/components/window/BrowserWindowControls.tsx")}`, here("./src/clusterAppMenu.ts")],
+  [`${here("../browser/src/state/windows/layout.ts")}\0${here("../browser/src/components/sidebar/Sidebar.tsx")}`, here("./src/sidebarHeaderLayout.ts")],
+  [`${here("../browser/src/state/windows/layout.ts")}\0${here("../browser/src/components/downloads/Downloads.tsx")}`, here("./src/sidebarHeaderLayout.ts")],
+  [`${here("../browser/src/state/windows/layout.ts")}\0${here("../browser/src/components/sidebar/AddressBar.tsx")}`, here("./src/sidebarHeaderLayout.ts")],
 ]);
 const siteMeadow = here("../site/src/scripts/meadow/");
 const SITE_MEADOW_TSCONFIG = JSON.stringify({ compilerOptions: { target: "ESNext", verbatimModuleSyntax: true, strict: true } });

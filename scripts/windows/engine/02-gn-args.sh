@@ -10,7 +10,7 @@ src="$CB/chromium_git/chromium/src"
 out_dir="$src/out/$GN_OUT_CONFIGS"
 mkdir -p "$out_dir"
 for path in "$out_dir" "$out_dir/args.gn"; do
-  if [[ -L "$path" ]] || { [[ -f "$path" ]] && [[ "$(stat -f %l "$path")" -gt 1 ]]; }; then
+  if [[ -L "$path" ]] || { [[ -f "$path" ]] && [[ "$(stat -c %h "$path" 2>/dev/null || stat -f %l "$path")" -gt 1 ]]; }; then
     echo "02-gn-args.sh: $path is a link: refusing to write through it" >&2
     exit 64
   fi

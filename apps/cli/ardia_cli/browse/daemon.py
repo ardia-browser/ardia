@@ -484,6 +484,11 @@ class Daemon:
         what = f"`{running['name']}`" if running.get("name") else "another command"
         seconds = QUEUE_WAIT if waited is True else waited
         waiting = f"this command waited {seconds:g} s for it and gave up without running" if waited else "this command didn't run"
+        stuck = [self.state.tab_id(page.target_id) for page in list(self.state.pages.values())
+                 if getattr(page, "unanswered_at", 0.0) and time.monotonic() - page.unanswered_at < 120]
+        if stuck:
+            command_metrics.flag("session_busy_on_stuck_tab", True)
+            what += f", which is waiting on [{stuck[0]}], a tab whose page isn't answering (its own scripts keep it busy)"
         return BrowseError(f"This session is still running {what}{age}; {waiting}. A session runs one command at a time: wait for it "
                            "(a long `script` returns when done), or run independent work with `--session <name>`, which gets its own tab",
                            code="session_busy")

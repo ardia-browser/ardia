@@ -241,6 +241,67 @@ seen.lastTabQuit = { asked: [...asked], open: !!S().windows[plain] };
 console.log(JSON.stringify(seen));
 `;
 
+const OTHER_WINDOW_CLOSES_DURING_THE_TABS_CONFIRM = `
+const { useBrowser } = await import("./src/state/browser/store.ts");
+const { requestWindowClose } = await import("./src/state/windows/windowClose.ts");
+const { takeQuitWarningCounts } = await import("./src/state/telemetry/quitWarningCounts.ts");
+const { shellNativeModules, windows } = await import("./src/test-native/shell.ts");
+const S = () => useBrowser.getState();
+const settle = async () => { for (let turn = 0; turn < 12; turn++) await new Promise((resolve) => setTimeout(resolve, 0)); };
+const asked = [];
+const held = [];
+let holding = false;
+let answer = { confirmed: true, suppressed: false };
+shellNativeModules.ArdiaDialogs.confirm = (options) => {
+  asked.push(options.title);
+  return holding ? new Promise((resolve) => held.push(resolve)) : Promise.resolve(answer);
+};
+const seen = {};
+const race = async (quitAnswer) => {
+  S().hydrate({ profiles: { default: { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 } }, profileOrder: ["default"] });
+  S().updateSettings({ warnBeforeQuitting: true, warnBeforeClosingWindow: true, shareTabsAcrossWindows: false });
+  windows.open.clear();
+  asked.length = 0;
+  const a = S().createWindow({ url: "https://a.example/" });
+  S().newTab(a, { url: "https://b.example/" });
+  const b = S().createWindow({ url: "https://other.example/" });
+  windows.open.set(a, {});
+  windows.open.set(b, {});
+  holding = true;
+  requestWindowClose(a);
+  await settle();
+  const first = [...asked];
+  holding = false;
+  answer = { confirmed: true, suppressed: false };
+  requestWindowClose(b);
+  await settle();
+  windows.open.delete(b);
+  const otherGone = !S().windows[b];
+  answer = quitAnswer;
+  held.shift()({ confirmed: true, suppressed: false });
+  await settle();
+  return { first, otherGone, asked: [...asked], open: !!S().windows[a], counts: takeQuitWarningCounts() };
+};
+seen.cancelled = await race({ confirmed: false, suppressed: false });
+seen.quit = await race({ confirmed: true, suppressed: false });
+console.log(JSON.stringify(seen));
+`;
+
+test("on Windows, when the other window closes while a window's tabs confirm is open, confirming it asks the quit question: Cancel keeps the window, Quit closes it", () => {
+  const run = spawnSync(process.execPath, ["--no-warnings", "--import", "./src/test-loader.mjs", "--import", `data:text/javascript,${encodeURIComponent(ON_WINDOWS)}`, "--input-type=module", "-e", OTHER_WINDOW_CLOSES_DURING_THE_TABS_CONFIRM], { cwd: fileURLToPath(new URL("../../../", import.meta.url)), encoding: "utf8" });
+  assert.equal(run.status, 0, run.stderr);
+  const seen = JSON.parse(run.stdout.trim().split("\n").at(-1));
+  const quit = QUIT_WARNING.title;
+  assert.deepEqual(seen.cancelled.first, ["Close 2 tabs?"], "with another window open, only the tabs question asks");
+  assert.equal(seen.cancelled.otherGone, true, "the other window closes without a question while the first still asks");
+  assert.deepEqual(seen.cancelled.asked, ["Close 2 tabs?", quit], "confirming the tabs question asks the quit question, since this close now quits");
+  assert.equal(seen.cancelled.open, true, "Cancel keeps the window and its tabs");
+  assert.deepEqual(seen.cancelled.counts, { quit_warnings_after_tabs_confirm: 1, quit_warnings_after_tabs_confirm_cancelled: 1 });
+  assert.deepEqual(seen.quit.asked, ["Close 2 tabs?", quit]);
+  assert.equal(seen.quit.open, false, "Quit closes it");
+  assert.deepEqual(seen.quit.counts, { quit_warnings_after_tabs_confirm: 1, quit_warnings_after_tabs_confirm_cancelled: 0 });
+});
+
 test("on Windows, a browser window's close asks the quit question first: Cancel keeps it, a confirmed quit skips the tabs question and Don't ask again turns the quit warning off; a last tab asks the tabs question, or the quit question when that one is off", () => {
   const run = spawnSync(process.execPath, ["--no-warnings", "--import", "./src/test-loader.mjs", "--import", `data:text/javascript,${encodeURIComponent(ON_WINDOWS)}`, "--input-type=module", "-e", BROWSER_WINDOW_CLOSES], { cwd: fileURLToPath(new URL("../../../", import.meta.url)), encoding: "utf8" });
   assert.equal(run.status, 0, run.stderr);

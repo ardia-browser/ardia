@@ -6,6 +6,7 @@ import { movingTabsFrom } from "../../state/sidebar/current";
 import type { TabPlacement } from "../../state/pins/placing";
 import { SLIDE } from "../tabstrip/tokens";
 import { beginTabDrag, cancelTabDrag, endTabDrag, setDragPicture, updateTabDrag } from "../../state/drag/tabDrag";
+import { noteDragWithoutDrop } from "../../state/telemetry/tabPresses";
 import { arrangeLive } from "../../state/sidebar/pinnedOrder";
 import { suppressHover } from "../../state/sidebar/hover";
 import { closeFolderPanel } from "../../state/sidebar/tileFolderUi";
@@ -145,6 +146,7 @@ export class DragController extends DragTargeting {
         : null;
     const dragged = sources.flatMap((i) => i.tabIds);
     const places = dragged.map(tabPlace).join();
+    if (commit && !splitDrop && measured && drop.type === "none") noteDragWithoutDrop();
     if (commit && !splitDrop && measured && sources.length) {
       dropTabs(dragged, drop);
       if (drop.sequence) arrangeLive(drop.sequence);

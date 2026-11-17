@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Fixture Open Menu</title>
+<style>
+  body { margin: 0; font: 16px system-ui; }
+  nav { position: relative; padding: 10px; }
+  #menu { position: absolute; top: 40px; left: 10px; width: 260px; margin: 0; padding: 0; list-style: none; background: #eef; z-index: 20; }
+  #menu li { padding: 10px; }
+  #save { margin: 60px 30px; padding: 12px 24px; }
+</style>
+</head>
+<body>
+<pre id="report">{}</pre>
+<nav><button id="toggle">Products</button><ul id="menu" class="submenu"><li>Laptops</li><li>Phones</li><li>Tablets</li><li>Monitors</li></ul></nav>
+<button id="save">Save filters</button>
+<script>
+  const state = { clicked: [] };
+  const show = () => { document.getElementById("report").textContent = JSON.stringify(state); };
+  addEventListener("keydown", (event) => { if (event.key === "Escape") { document.getElementById("menu").style.display = "none"; state.closed = true; show(); } });
+  document.getElementById("save").addEventListener("click", () => { state.clicked.push("save"); show(); });
+  show();
+</script>
+</body>
+</html>

@@ -16,7 +16,6 @@ enum MainMenu {
   private static var history = NSMenu(title: "History")
   private static var extensions = NSMenu(title: "Extensions")
   private static var extensionIcons: [String: NSImage] = [:]
-  private static var undo: StandardItem?
 
   static func build() -> NSMenu {
     let appName = ProcessInfo.processInfo.processName
@@ -113,10 +112,12 @@ enum MainMenu {
     ]
     edits.forEach { $0.target = MenuTarget.shared }
     let undo = std("Undo", MenuTarget.undoAction)
-    Self.undo = undo
+    undo.target = MenuTarget.shared
+    let redo = std("Redo", MenuTarget.redoAction)
+    redo.target = MenuTarget.shared
     _ = top("Edit", [
       undo,
-      std("Redo", Selector(("redo:"))),
+      redo,
       .separator(),
       edits[0],
       edits[1],
@@ -376,10 +377,6 @@ enum MainMenu {
     if state.bookmarksRevision == nil || last?.bookmarks != state.bookmarksRevision { buildBookmarkMenus(state) }
     if last?.extensions != extensionKeys { buildExtensions(state) }
     if last?.history != history { buildHistory(state) }
-    if let undo, (undo.target != nil) != state.undoReopensClosedTab {
-      undo.target = state.undoReopensClosedTab ? MenuTarget.shared : nil
-      undo.title = undo.defaultTitle
-    }
     for item in bookmarkItems where item.isHidden == state.bookmarksShown { item.isHidden = !state.bookmarksShown }
     applyShortcuts(state.shortcuts)
   }

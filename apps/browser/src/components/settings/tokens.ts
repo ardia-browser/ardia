@@ -85,6 +85,18 @@ export const miniWindow: Record<"s" | "m" | "l", MiniWindowGeometry> = {
   l: { scale: 0.5, pad: space.m, gap: space.xs, side: "26%", sideTop: space.ml, sideFieldTop: space.xs, bar: 7, barGap: space.xs, tab: 10, tabsLeft: space.xxxl, sideField: 10, toolbar: 16, toolbarField: 9, nav: { width: 18, height: 5 } },
 };
 
+export const paneTints = {
+  gray: "#8E8E93",
+  blue: "#0A84FF",
+  orange: "#FF9500",
+  indigo: "#5856D6",
+  purple: "#AF52DE",
+  pink: "#FF2D55",
+  ink: "#FFFFFF",
+} as const;
+
+export const paneTile = { size: 20, radius: 5, symbol: 11 } as const;
+
 export const settingsLayout = { emptyTop: 40, sidebarWidth: 214, paneMaxWidth: 600, paneBottom: 40 } as const;
 
 export const pictureChoice = { m: 84, l: 104, icon: 70, iconWidth: 72 } as const;

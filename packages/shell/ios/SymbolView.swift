@@ -21,7 +21,7 @@ final class SymbolView: ExpoView {
     super.init(appContext: appContext)
     imageView.imageScaling = .scaleProportionallyDown
     imageView.imageAlignment = .alignCenter
-    imageView.autoresizingMask = [.width, .height]
+    imageView.translatesAutoresizingMaskIntoConstraints = false
     addSubview(imageView)
     glyph.actions = ["bounds": NSNull(), "position": NSNull(), "contents": NSNull(), "contentsScale": NSNull(), "opacity": NSNull()]
     glyph.contentsGravity = .resize
@@ -31,6 +31,11 @@ final class SymbolView: ExpoView {
   }
 
   override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+  override func layout() {
+    super.layout()
+    imageView.frame = bounds
+  }
 
   override func setFrameSize(_ newSize: NSSize) {
     super.setFrameSize(newSize)

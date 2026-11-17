@@ -35,3 +35,21 @@ test("a focus watcher that throws doesn't keep the other watchers or the page's 
   assert.equal(reported.length, 1);
   assert.equal(reported[0][1].message, "watcher failed");
 });
+
+test("focusIfUnfocused gives the page the keyboard unless a shell field has it, and answers whether it did", async () => {
+  const { focusPageIfShellUnfocused, watchPageFocusRequests } = await import("./pageFocus.ts");
+  const field = { matches: (selector) => selector.includes("input") };
+  const body = { matches: () => false };
+  const requests = [];
+  const stop = watchPageFocusRequests(() => requests.push("request"));
+  const focused = [];
+  const focusPage = () => (focused.push("page"), Promise.resolve());
+  assert.equal(await focusPageIfShellUnfocused(focusPage, field), false);
+  assert.deepEqual(focused, []);
+  assert.equal(await focusPageIfShellUnfocused(focusPage, body), true);
+  assert.equal(await focusPageIfShellUnfocused(focusPage, null), true);
+  assert.deepEqual(focused, ["page", "page"]);
+  assert.deepEqual(requests, ["request", "request"]);
+  assert.equal(await focusPageIfShellUnfocused(() => Promise.reject(new Error("Ardia tab is not mounted")), body), false, "a failed focus answers false instead of rejecting");
+  stop();
+});

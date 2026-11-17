@@ -111,6 +111,8 @@ struct ArdiaPageFocusState {
   ArdiaSentReports _sent;
   ArdiaLeave _leave;
   ArdiaFrameHold _frameHold;
+  void (^_swapReport)(BOOL heldTimedOut);
+  CFTimeInterval _swapReportAt;
   ArdiaStandIn _standIn;
   ArdiaLittlePage _littlePage;
   ArdiaReveal _reveal;
@@ -215,6 +217,7 @@ typedef NS_ENUM(NSInteger, ArdiaTransfer) {
 - (void)beginFrameHoldIfCold;
 - (void)exposePage;
 - (BOOL)releasePageForOffscreen;
+- (void)reportSwapShown:(void (^)(BOOL heldTimedOut))report;
 - (void)finishFrameHold;
 - (void)stopHolding;
 - (void)takeFocusFromLingeringPane;
@@ -235,6 +238,9 @@ typedef NS_ENUM(NSInteger, ArdiaTransfer) {
 - (void)requestFocusRestore;
 - (void)requestFocusRestoreIn:(NSWindow *)window;
 - (void)restoreFocusIfDue;
+- (BOOL)focusRememberedDevToolsIn:(NSWindow *)window;
+- (void)focusAfterLingeringPane;
+- (void)settleFirstShowFocus;
 - (void)focusAfterLoad;
 @end
 
@@ -346,6 +352,7 @@ NSPoint RootPointFromWindow(NSWindow *window, NSPoint inWindow);
 NSRect RootRectFromWindow(NSWindow *window, NSRect inWindow);
 CGFloat RootPointsPerLocalPoint(NSView *view);
 BOOL MayHoldUserActivation(NSWindow *window);
+BOOL TakeShiftClick(ArdiaWebView *view);
 
 void InstallControlPressMonitor();
 BOOL TracingPictureInPicture();

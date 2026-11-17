@@ -5,7 +5,8 @@ import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-n
 import { Button } from "./Button";
 import { PANEL_CLOSE_GLYPH, PANEL_CLOSE_SIZE } from "./ButtonKinds";
 import { curve, duration } from "./motion";
-import { surfaceTheme, ThemeContext, useTheme } from "./theme";
+import { surfaceTheme, useTheme } from "./theme";
+import { ThemeOverride } from "./ThemeOverride";
 import { concentric, font as typeScale, lineHeight, POPOVER_WIDTH, radius, shadow, space, typeFace, weight } from "./tokens";
 import { useHover } from "./useHover";
 import { Panel, type PanelProps } from "./Panel";
@@ -146,20 +147,20 @@ export function PopoverSurface({ children, glass = false, ...props }: Omit<Panel
   const paneGlass = useGlass("panes");
   if (glass && paneGlass)
     return (
-      <ThemeContext.Provider value={theme}>
+      <ThemeOverride theme={theme}>
         <Panel {...props} glass fill={theme.panel} radius={PANEL.radius}>
           {children}
         </Panel>
-      </ThemeContext.Provider>
+      </ThemeOverride>
     );
   return (
-    <ThemeContext.Provider value={theme}>
+    <ThemeOverride theme={theme}>
       <Panel {...props} fill={theme.popoverFill} radius={PANEL.radius} border={theme.popoverBorder} shadow={shadow.popover}>
         <VisualEffect material="menu" cornerRadius={PANEL.radius} style={StyleSheet.absoluteFill} />
         <View style={{ ...StyleSheet.absoluteFillObject, borderRadius: PANEL.radius, backgroundColor: theme.popoverTint }} />
         {children}
       </Panel>
-    </ThemeContext.Provider>
+    </ThemeOverride>
   );
 }
 

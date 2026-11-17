@@ -3,6 +3,7 @@ import { appInfo } from "./transport";
 import { launchFirstWindow } from "./journeys";
 import type { PanelState } from "../browser/types";
 import type { AutofillToggle } from "../../platform/autofill";
+import type { SuggestionVia } from "@ardia/core";
 
 export type SuggestionType = "history" | "bookmark" | "tab" | "url" | "search" | "calc" | "action" | "create" | "extension" | "provider" | "typed";
 
@@ -34,8 +35,8 @@ export function commandBarPlacementLabel(panel: Pick<PanelState, "newTab" | "pla
   return "field";
 }
 
-export const trackSuggestionChosen = (s: SuggestionLike) =>
-  capture("suggestion_chosen", { type: suggestionType(s), ...(s?.kind === "action" && s.id ? { command: s.id.split(":")[0] } : {}) });
+export const trackSuggestionChosen = (s: SuggestionLike, via?: SuggestionVia) =>
+  capture("suggestion_chosen", { type: suggestionType(s), ...(s?.kind === "action" && s.id ? { command: s.id.split(":")[0] } : {}), ...(via ? { via } : {}) });
 
 export type CalendarConnectReport = { before: string; after: string; responsible: string; errored: boolean; settingsOpened: boolean; ms: number };
 

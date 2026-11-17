@@ -19,7 +19,12 @@ src="$CB/chromium_git/chromium/src"
 chromium_hash=$(python3 -c 'import re,sys; print(re.search(r"^TOOLCHAIN_HASH = .(\w+).", open(sys.argv[1]).read(), re.M).group(1))' "$src/build/vs_toolchain.py")
 chromium_sdk=$(python3 -c 'import re,sys; print(re.search(r"^SDK_VERSION = .([\d.]+).", open(sys.argv[1]).read(), re.M).group(1))' "$src/build/vs_toolchain.py")
 [[ "$chromium_sdk" == "$WIN_SDK_VERSION" ]] || { echo "toolchain.sh: this Chromium wants SDK $chromium_sdk, not $WIN_SDK_VERSION" >&2; exit 1; }
-command -v msiextract >/dev/null || brew install msitools
+if ! command -v msiextract >/dev/null; then
+  case "$(uname -s)" in
+    Darwin) brew install msitools ;;
+    *) echo "toolchain.sh: install msitools for msiextract (Ubuntu: sudo apt-get install msitools)" >&2; exit 1 ;;
+  esac
+fi
 mkdir -p "$WIN_TOOLCHAIN_DIR"
 if [[ ! -d "$WIN_TOOLCHAIN_DIR/msvc-wine/.git" ]]; then
   git clone -q https://github.com/mstorsjo/msvc-wine.git "$WIN_TOOLCHAIN_DIR/msvc-wine"

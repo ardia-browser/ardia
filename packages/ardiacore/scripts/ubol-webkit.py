@@ -373,6 +373,19 @@ def exclusion_triggers(rule, made):
     return extra
 
 
+def without_media(rule):
+    condition = rule["condition"]
+    if "resourceTypes" in condition:
+        kept = [t for t in condition["resourceTypes"] if t != "media"]
+        if not kept:
+            return None
+        return dict(rule, condition=dict(condition, resourceTypes=kept))
+    excluded = list(condition.get("excludedResourceTypes", []))
+    if "media" not in excluded:
+        excluded.append("media")
+    return dict(rule, condition=dict(condition, excludedResourceTypes=excluded))
+
+
 def convert_network(rules, stats):
     prefix, block, allow = [], [], []
     for rule in rules:
@@ -388,6 +401,10 @@ def convert_network(rules, stats):
         if action == "redirect":
             path = rule["action"].get("redirect", {}).get("extensionPath", "")
             if not BLOCKABLE_REDIRECTS.match(path):
+                stats["skipped"] += 1
+                continue
+            rule = without_media(rule)
+            if rule is None:
                 stats["skipped"] += 1
                 continue
             action = "block"

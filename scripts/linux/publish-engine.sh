@@ -4,7 +4,9 @@ usage='usage: scripts/linux/publish-engine.sh --out <chromium out dir> --source 
 
 Packs a Linux Chromium build into the prebuilt engine archive CI fetches with
 packages/ardiacore/scripts/fetch-engine.sh --arch linux-x86_64:
-ArdiaCore-<key12>-linux-x64.tar.xz and its .sha256, where key is the engine
+ArdiaCore-<key12>-linux-x64.tar.xz and its .sha256, plus the symbols the
+stripping removes, ArdiaCore-<key12>-linux-x64-symbols.tar.xz and its .sha256
+(scripts/linux/symbolize.py reads it), where key is the engine
 key of <source> (engine/engine-key.sh: engine/ and the offline game it packs),
 from a git checkout whose key paths are clean, or computed the same way over a
 plain copy beside a <source>.commit file.
@@ -16,8 +18,8 @@ plain copy beside a <source>.commit file.
                    existing archives are never overwritten
   --repo SLUG      the GitHub repo for --upload (default: $ARDIACORE_PREBUILT_REPO
                    or ardia-browser/ardia)
-  --upload         create the engine-<key12> prerelease if needed, upload the
-                   archive and its .sha256, and add the row to
+  --upload         create the engine-<key12> prerelease if needed, upload both
+                   archives and their .sha256 files, and add the row to
                    packages/ardiacore/prebuilt-engines-linux.tsv (not committed)
 
 Prints the archive path, then the table row.'
@@ -25,7 +27,7 @@ for arg in "$@"; do
   case "$arg" in -h|--help) echo "$usage"; exit 0 ;; esac
 done
 [ $# -gt 0 ] || { echo "$usage" >&2; exit 64; }
-for tool in git python3 strip readelf tar xz flock; do
+for tool in git python3 strip objcopy readelf tar xz flock; do
   command -v "$tool" >/dev/null || { echo "publish-engine.sh: $tool is required" >&2; exit 69; }
 done
 exec python3 "$(cd "$(dirname "$0")" && pwd)/publish_engine.py" "$@"

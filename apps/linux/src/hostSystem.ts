@@ -4,6 +4,7 @@ import { openMailLink } from "./linkShare.ts";
 import { linuxIntroMusic } from "./introMusic.ts";
 import { noteIntroMusicFailed } from "../../browser/src/state/telemetry/introCounts.ts";
 import { UPDATE_METHODS, updatesAvailable } from "./hostUpdates.ts";
+import { linuxCrashReports, servesCrashDumps } from "./hostCrashReports.ts";
 
 const UPDATER_METHODS: ReadonlySet<string> = new Set(UPDATE_METHODS);
 
@@ -23,6 +24,7 @@ export function linuxModuleMethod(host: ArdiaHost, name: string, method: string)
   }
   if (INTRO_MUSIC.has(method)) return introMusicFor(host)[method as "playIntroMusic" | "setIntroMusicMuted" | "stopIntroMusic"] as (...args: unknown[]) => Promise<unknown>;
   if (method === "openExternalURL") return (url) => Promise.resolve(typeof url === "string" && openMailLink(url));
+  if (method === "crashReports" && servesCrashDumps(host)) return (since) => linuxCrashReports(host, typeof since === "number" && Number.isFinite(since) ? since : 0);
   return undefined;
 }
 

@@ -145,6 +145,12 @@ extension AppModel {
     tabs.close(id)
   }
 
+  func leaveDeckIfEmpty() {
+    guard surface == .tabSwitcher, deckTabs.isEmpty else { return }
+    browse.startRestsOnce = true
+    surface = .search
+  }
+
   func closeAllTabs() {
     deck.forget(Set(deckTabs.map(\.id)))
     tabs.closeAllPrivate()

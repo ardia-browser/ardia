@@ -333,7 +333,7 @@ export const FileDrop = forwardRef<FileDropHandle, NativeFileDropAreaProps>(func
   );
 });
 
-export const WindowProfile = forwardRef<View, WindowProfileProps>(function WindowProfile({ profile, selection: _selection, neighbours: _neighbours, style, children, ...rest }, ref) {
+export const WindowProfile = forwardRef<View, WindowProfileProps>(function WindowProfile({ profile, selection: _selection, switchId: _switchId, neighbours: _neighbours, onSwapped: _onSwapped, style, children, ...rest }, ref) {
   useEffect(() => noteMissing("<ArdiaWindowProfile> profile swap"), []);
   const windowId = useContext(WindowIdContext);
   useEffect(() => {

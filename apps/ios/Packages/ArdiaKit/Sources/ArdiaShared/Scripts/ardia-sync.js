@@ -152,20 +152,19 @@ function assignPositions(existing                        )           {
 
   const out = new Array        (existing.length);
   for (const i of keep) out[i] = existing[i] ;
+  const nextKept = new Array               (existing.length);
+  let next                = null;
+  for (let i = existing.length - 1; i >= 0; i--) {
+    nextKept[i] = next;
+    if (keep.has(i)) next = out[i] ;
+  }
   let before = "";
   for (let i = 0; i < existing.length; i++) {
     if (keep.has(i)) {
       before = out[i] ;
       continue;
     }
-    let next                = null;
-    for (let j = i + 1; j < existing.length; j++) {
-      if (keep.has(j)) {
-        next = out[j] ;
-        break;
-      }
-    }
-    out[i] = positionBetween(before, next);
+    out[i] = positionBetween(before, nextKept[i] ?? null);
     before = out[i] ;
   }
   return out;
@@ -175,7 +174,6 @@ function assignPositions(existing                        )           {
 __define("packages/sync/src/scope.ts", function (exports, __require) {
   __export(exports, "covered", () => covered);
   __export(exports, "ingestSnapshot", () => ingestSnapshot);
-  __export(exports, "visible", () => visible);
   __export(exports, "flush", () => flush);
   __export(exports, "restoreJournal", () => restoreJournal);
   __export(exports, "writtenSeq", () => writtenSeq);
@@ -183,9 +181,12 @@ __define("packages/sync/src/scope.ts", function (exports, __require) {
   __export(exports, "compactionDue", () => compactionDue);
   __export(exports, "compact", () => compact);
   __export(exports, "syncScope", () => syncScope);
+  __exportAll(exports, __require("packages/sync/src/scopeKeys.ts"));
 const { canonical } = __require("packages/sync/src/canon.ts");
 const { hlcWall } = __require("packages/sync/src/hlc.ts");
 const { holdsBack, noteFileHealth } = __require("packages/sync/src/fileHealth.ts");
+const { baseKeysWith, dropBase, dropRecord, putBase, putRecord, visible, withBaseIndex } = __require("packages/sync/src/scopeKeys.ts");
+
                                                                                                                                          
 
 const DEFAULTS                                                        = {
@@ -247,7 +248,7 @@ function mergeRecord(state            , key        , record            , clock  
   clock.observe(record.h);
   const current = state.records[key];
   if (current && current.h >= record.h) return false;
-  state.records[key] = record;
+  putRecord(state, key, record);
   return true;
 }
 
@@ -267,9 +268,9 @@ function ingestSnapshot(state            , file              , clock       , cha
     if (!(key in state.records) && isApplied(state, record.o)) continue;
     if (mergeRecord(state, key, record, clock)) changed.add(key);
   }
-  for (const [key, record] of Object.entries(state.records)) {
-    if (!(key in file.records) && covered(file.vv, record.o)) {
-      delete state.records[key];
+  for (const key in state.records) {
+    if (!(key in file.records) && covered(file.vv, state.records[key] .o)) {
+      dropRecord(state, key);
       changed.add(key);
     }
   }
@@ -282,14 +283,6 @@ function ingestSnapshot(state            , file              , clock       , cha
       else delete state.extra[device];
     }
   }
-}
-
-function visible(state            , prefix        )                       {
-  const out = new Map                 ();
-  for (const [key, record] of Object.entries(state.records)) {
-    if (record.v !== null && key.startsWith(prefix)) out.set(key, record.v);
-  }
-  return out;
 }
 
 const parseBase = (json                    ) => (json === undefined ? undefined : (JSON.parse(json)           ));
@@ -316,17 +309,20 @@ async function changesOf(state            , adapter         , now        ) {
   if (adapter.adoptRemoteOnJoin && !state.joined) return null;
   let pending                     = null;
   const queued = (key        ) => (pending ??= new Set([...state.outbox, ...(state.journal ?? []).flatMap((f) => f.ops)].map((op) => op.k))).has(key);
-  const extraction = await adapter.extract((key) => parseBase(state.base[key]), queued, now, (key) => key in state.records, (key) => state.records[key]?.v, (key) => state.records[key]?.h);
+  const extraction = await adapter.extract((key) => parseBase(state.base[key]), queued, now, (key) => key in state.records, (key) => state.records[key]?.v, (key) => state.records[key]?.h, (key) => state.base[key]);
   if (!extraction) return null;
   const changes           = [];
-  for (const [key, value] of extraction.values) {
+  const { values, json: knownJson, republish, ignore } = extraction;
+  values.forEach((value, key) => {
     if (value === null || value === undefined) throw new Error(`[sync] ${key}: a live value can't be null`);
-    const json = canonical(value);
-    if (state.base[key] === json && !extraction.republish?.(key)) continue;
+    const json = knownJson?.(key, value) ?? canonical(value);
+    if (state.base[key] === json && !republish?.(key)) return;
     changes.push({ key, value, json });
-  }
-  for (const key of Object.keys(state.base)) {
-    if (!key.startsWith(adapter.prefix) || extraction.values.has(key) || extraction.ignore?.(key)) continue;
+  });
+  const keys = baseKeysWith(state, adapter.prefix);
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i] ;
+    if (!(key in state.base) || values.has(key) || ignore?.(key)) continue;
     changes.push({ key, value: null, json: "null" });
   }
   return { changes, settle: extraction.published };
@@ -348,13 +344,13 @@ async function publishAdapter(state            , adapter         , clock       ,
   if (!found) return published;
   for (const change of found.changes) {
     const { key, value, json } = change;
-    if (value === null) delete state.base[key];
-    else state.base[key] = json;
+    if (value === null) dropBase(state, key);
+    else putBase(state, key, json);
     const candidate = stamps?.get(key);
     const h = candidate?.json === json ? candidate.h : stampOf(state, adapter, clock, change);
     const known = state.records[key];
     if (known && known.h >= h) continue;
-    state.records[key] = { h, v: value, o: [device, state.seq + 1] };
+    putRecord(state, key, { h, v: value, o: [device, state.seq + 1] });
     state.outbox.push({ k: key, h, v: value });
     published.add(key);
   }
@@ -394,8 +390,8 @@ function restoreJournal(state            , batches           , clock       , wri
     if (file.seq === saved + 1) state.outbox = [];
     for (const op of file.ops) {
       mergeRecord(state, op.k, { h: op.h, v: op.v, o: [file.device, file.seq] }, clock);
-      if (op.v === null) delete state.base[op.k];
-      else state.base[op.k] = canonical(op.v);
+      if (op.v === null) dropBase(state, op.k);
+      else putBase(state, op.k, canonical(op.v));
     }
     state.seq = file.seq;
     if (file.seq <= written) markApplied(state, file.device, file.seq);
@@ -440,8 +436,8 @@ async function applyAdapter(state            , adapter         , keys           
   const applyAs = (state.applyAs ??= {});
   applyAs[adapter.prefix] ??= state.joined ? "joined" : "joining";
   const settle = (key        ) => {
-    if (view.has(key)) state.base[key] = canonical(view.get(key));
-    else delete state.base[key];
+    if (view.has(key)) putBase(state, key, canonical(view.get(key)));
+    else dropBase(state, key);
   };
   const landed = new Set        ();
   let ok                 = false;
@@ -520,7 +516,7 @@ async function compact(state            , transport           , scope        , d
   const tombstoneTTL = Object.keys(state.extra).length ? 2 * o.tombstoneTTL : o.tombstoneTTL;
   for (const [key, record] of Object.entries(state.records)) {
     const drop = record.v === null ? now - hlcWall(record.h) > tombstoneTTL : o.expired(key, record.v, now);
-    if (drop) delete state.records[key];
+    if (drop) dropRecord(state, key);
     else records[key] = record;
   }
   const vv = { ...state.vv };
@@ -545,6 +541,10 @@ async function syncScope(args
                      
                          
  )                       {
+  return withBaseIndex(args.state, () => syncScopeIndexed(args));
+}
+
+async function syncScopeIndexed(args                                 )                       {
   const { scope, state, transport, adapters, clock, device, options } = args;
   const now = args.now ?? Date.now;
   let published = 0;
@@ -578,6 +578,114 @@ async function syncScope(args
   const compacted = await compact(state, transport, scope, device, now(), options);
   const snapshotBytes = compacted ? (newestSnapshot(Object.entries(state.files), device)?.[1].b ?? 0) : 0;
   return { published, changed: changed.size, pending: state.pending, compacted, snapshotBytes };
+}
+
+});
+__define("packages/sync/src/scopeKeys.ts", function (exports, __require) {
+  __export(exports, "visible", () => visible);
+  __export(exports, "recordsWith", () => recordsWith);
+  __export(exports, "trackTouchedKeys", () => trackTouchedKeys);
+  __export(exports, "putRecord", () => putRecord);
+  __export(exports, "dropRecord", () => dropRecord);
+  __export(exports, "baseKeysWith", () => baseKeysWith);
+  __export(exports, "putBase", () => putBase);
+  __export(exports, "dropBase", () => dropBase);
+  __export(exports, "withBaseIndex", () => withBaseIndex);
+                                                              
+
+function visible(state            , prefix        )                       {
+  const out = new Map                 ();
+  const { records } = state;
+  for (const key in records) {
+    if (!key.startsWith(prefix)) continue;
+    const value = records[key] .v;
+    if (value !== null) out.set(key, value);
+  }
+  return out;
+}
+
+function recordsWith(state            , prefix        )                         {
+  const out                         = [];
+  const { records } = state;
+  for (const key in records) if (key.startsWith(prefix)) out.push([key, records[key] ]);
+  return out;
+}
+
+                                                                      
+const touching = new WeakMap                              ();
+
+function trackTouchedKeys(state            )                                             {
+  const touched              = { records: new Set(), base: new Set() };
+  let all = touching.get(state);
+  if (!all) touching.set(state, (all = new Set()));
+  all.add(touched);
+  return {
+    touched,
+    stop: () => {
+      all.delete(touched);
+      if (!all.size && touching.get(state) === all) touching.delete(state);
+    },
+  };
+}
+
+function touch(state            , kind                   , key        ) {
+  const all = touching.get(state);
+  if (all) for (const touched of all) touched[kind].add(key);
+}
+
+function putRecord(state            , key        , record            ) {
+  state.records[key] = record;
+  touch(state, "records", key);
+}
+
+function dropRecord(state            , key        ) {
+  if (!(key in state.records)) return;
+  delete state.records[key];
+  touch(state, "records", key);
+}
+
+                                                                     
+const baseIndexes = new WeakMap                       ();
+
+function baseKeysWith(state            , prefix        )                    {
+  const index = baseIndexes.get(state);
+  if (!index) return Object.keys(state.base).filter((key) => key.startsWith(prefix));
+  let keys = index.byPrefix.get(prefix);
+  if (!keys) {
+    keys = [];
+    const all = index.keys;
+    for (let i = 0; i < all.length; i++) if (all[i] .startsWith(prefix)) keys.push(all[i] );
+    index.byPrefix.set(prefix, keys);
+  }
+  return keys;
+}
+
+function putBase(state            , key        , json        ) {
+  const known = state.base[key];
+  if (known === json) return;
+  const index = known === undefined ? baseIndexes.get(state) : undefined;
+  state.base[key] = json;
+  touch(state, "base", key);
+  if (!index) return;
+  index.keys.push(key);
+  index.byPrefix.forEach((keys, prefix) => {
+    if (key.startsWith(prefix)) keys.push(key);
+  });
+}
+
+function dropBase(state            , key        ) {
+  if (!(key in state.base)) return;
+  delete state.base[key];
+  touch(state, "base", key);
+}
+
+async function withBaseIndex   (state            , run                  )             {
+  baseIndexes.set(state, { keys: Object.keys(state.base), byPrefix: new Map() });
+  try {
+    return await run();
+  } finally {
+    baseIndexes.delete(state);
+  }
 }
 
 });
@@ -692,6 +800,7 @@ const emptyScope = ()             => ({
                                     
                                        
                                           
+                                                             
   
 
                             
@@ -712,6 +821,7 @@ const emptyScope = ()             => ({
                                     
                                      
                                             
+                                                  
                                                     
                                                                                                                                                               
                                                 
@@ -1217,7 +1327,7 @@ const MAX_DEVICE_TABS = 30;
 const MAX_VISIT_TIMES = 50;
 const SAME_VISIT_MS = 1;
 
-                                                                              
+                                                                                            
 
                                                                                
                                                                                    
@@ -1857,6 +1967,20 @@ function searchOf(app            )                    {
   return { engineId: typeof engine === "string" && engine ? engine : "google", customURL: optStr(customUrl), customEngines: engines };
 }
 
+function spaceOrder(app            , me        )           {
+  let newest                                                        = null;
+  for (const [k, v] of visible(app, "dev:")) {
+    const id = k.slice(4);
+    const stamp = app.records[k]?.h;
+    const listed = (v                      )?.o;
+    if (id === me || typeof stamp !== "string" || !Array.isArray(listed)) continue;
+    const order = [...new Set(listed.filter((profile)                    => typeof profile === "string"))];
+    if (!order.length) continue;
+    if (!newest || stamp > newest.stamp || (stamp === newest.stamp && id < newest.id)) newest = { stamp, id, order };
+  }
+  return newest?.order ?? [];
+}
+
 function buildView(scopes                            , me        )       {
   const app = scopes.app;
   if (!app) return { devices: [], profiles: [], search: null, look: null };
@@ -1897,7 +2021,9 @@ function buildView(scopes                            , me        )       {
       history: historyList(data),
     };
   });
-  profileList.sort((a, z) => Number(z.isDefault) - Number(a.isDefault) || a.name.localeCompare(z.name) || (a.syncId < z.syncId ? -1 : 1));
+  const rank = new Map(spaceOrder(app, me).map((id, i) => [id, i]));
+  const placed = (p             ) => rank.get(p.syncId) ?? rank.size;
+  profileList.sort((a, z) => placed(a) - placed(z) || Number(z.isDefault) - Number(a.isDefault) || a.name.localeCompare(z.name) || (a.syncId < z.syncId ? -1 : 1));
   return { devices: deviceList, profiles: profileList, search: searchOf(app), look: lookOf(app) };
 }
 

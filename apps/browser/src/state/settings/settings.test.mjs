@@ -11,10 +11,6 @@ test("every default passes its own check", () => {
   for (const key of SETTING_KEYS) assert.ok(SETTING_SPECS[key].valid(DEFAULT_SETTINGS[key]), key);
 });
 
-test("dragging a tab onto another in the top tab strip groups them only once turned on", () => {
-  assert.equal(DEFAULT_SETTINGS.dragToGroupInTopStrip, false);
-});
-
 test("page frame zero options and borderless mode are off by default and synced", () => {
   for (const key of ["borderlessMode", "pageFrameZeroInFullScreen", "pageFrameZeroWhenTabsHidden"]) {
     assert.equal(DEFAULT_SETTINGS[key], false, key);

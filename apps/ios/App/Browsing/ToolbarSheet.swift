@@ -256,9 +256,20 @@ struct ToolbarSheet: View {
     PageMenuRow("Print", enabled: isWebPage && page?.isLive == true) { close(then: .print) }
   }
 
+  private var translateTitle: LocalizedStringKey {
+    guard let language = app.preferences.translateLanguage, let name = PageTranslation.displayName(of: language) else { return "Translate" }
+    return "Translate to \(name)"
+  }
+
   private var translateRow: some View {
-    PageMenuRow("Translate", enabled: isWebPage) {
-      confirmsTranslation = true
+    PageMenuRow(translateTitle, enabled: isWebPage) {
+      guard let page else { return }
+      if app.needsTranslationConsent(for: page) {
+        confirmsTranslation = true
+      } else {
+        app.translate(page)
+        dismiss()
+      }
     }
   }
 

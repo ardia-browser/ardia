@@ -10,10 +10,10 @@ DURATIONS = frozenset({
 })
 COUNTS = frozenset({"cdp_calls", "read_data_blocks", "snapshot_nodes", "snapshot_chars", "output_chars", "network_writes_count", "batch_steps",
                     "read_rows", "read_pages", "read_tabs_reopened", "skills_installed", "skills_skipped"})
-READ_FLAGS = frozenset({"read_data", "read_data_shaped", "read_scrolled", "read_matched", "read_virtualized_grid", "read_pdf", "read_waited_for_content", "read_beside_busy", "read_bot_check", "read_scroll_guessed", "read_scope_shown", "read_scope_empty", "read_waited_for_requests", "read_partial_page", "read_frame_text"})
+READ_FLAGS = frozenset({"read_data", "read_data_shaped", "read_scrolled", "read_matched", "read_virtualized_grid", "read_pdf", "read_waited_for_content", "read_beside_busy", "read_bot_check", "read_scroll_guessed", "read_scope_shown", "read_scope_empty", "read_waited_for_requests", "read_partial_page", "read_frame_text", "read_scroll_waited_at_end"})
 ACT_FLAGS = frozenset({"waited_for_enabled", "fill_picked_option", "fill_inserted_text", "drag_side_given", "drag_list_position",
                        "select_opened_list", "press_targeted", "consent_dismissed", "popup_dismissed", "click_recentered", "dom_click_fallback",
-                       "dom_click_behind_modal", "dom_click_waited_for_modal", "input_in_inner_frame"})
+                       "dom_click_behind_modal", "dom_click_waited_for_modal", "input_in_inner_frame", "menu_closed_for_click", "modal_dismissed"})
 ACT_COUNTS = frozenset({"cell_edits"})
 CHANGE_FLAGS = frozenset({"change_text", "change_run_choices", "open_report", "open_moved_tab", "snapshot_disabled_folded", "snapshot_repeat_labels", "names_clipped",
                           "waited_for_reaction"})
@@ -21,7 +21,7 @@ CHANGE_COUNTS = frozenset({"change_text_chars"})
 FLOW_FLAGS = frozenset({"flow_saved", "flow_hint_shown", "flow_run_page", "flow_drifted", "flow_shaped"})
 FLOW_COUNTS = frozenset({"flow_requests_kept", "flow_params", "flow_items"})
 FLAGS = frozenset({"daemon_spawned", "reconnected_after_idle", "output_truncated", "humanize", "unsettled", "daemon_answer_timed_out",
-                   "followed_redrawn_ref", "script_eval_alias", "script_command_line_split", "script_page_world_hint", "attach_refused", "tab_kept_awake", "viewport_set", "crashed_reloaded",
+                   "followed_redrawn_ref", "script_eval_alias", "script_command_line_split", "script_page_world_hint", "attach_refused", "download_fetched_again", "page_busy_fast_fail", "session_busy_on_stuck_tab", "navigation_site_silent", "tab_kept_awake", "viewport_set", "crashed_reloaded",
                    "network_disable_unconfirmed", "reattached_after_detach", "earlier_requests_ignored", "renderer_exit_kept_session",
                    "setup_restored", "setup_restore_failed",
                    "selector_nth", "output_saved", "waited_for_element", "saved_to_file", "batch_line_saved", "script_state_kept", "saved_as_csv", "script_timeout_read_hint", "click_scroll_locked", "open_still_loading", "focused_inner_field", "stale_ref_after_navigation", "clicked_label_of_hidden_input", "waited_for_box_to_settle", "frame_cross_process_box", "screenshot_unchanged", "script_queued_behind_busy", "navigation_dropped_hint", "navigation_https_only_hint", "eval_timed_out", "read_queued_beside", "script_state_kept_on_interrupt", "find_closest_names", "batch_saved", "read_empty_page", "network_reloaded", "fill_no_reaction_hint", "eval_selectors_quoted", "queued_behind_script", "followed_ref_after_reload", "clicked_visible_content", "element_rehomed"})

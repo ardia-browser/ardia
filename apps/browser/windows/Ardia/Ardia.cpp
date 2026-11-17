@@ -13,6 +13,7 @@
 #include "GradientFailures.h"
 #include "LaunchConfig.h"
 #include "Host.h"
+#include "InstanceLoad.h"
 #include "LaunchLog.h"
 #include "LoggedErrors.h"
 #include "Modules.h"
@@ -80,7 +81,16 @@ static bool EnterApartment() noexcept {
   }
 }
 
+static std::wstring &StartFailure() noexcept {
+  static std::wstring failure;
+  return failure;
+}
+
 static int Refuse(int code, std::wstring const &why) noexcept {
+  try {
+    StartFailure() = why;
+  } catch (...) {
+  }
   Ardia::LaunchLog::OpenFromCommandLine();
   Ardia::LaunchLog::Write(L"error", why);
   OutputDebugStringW(std::wstring(L"Ardia: ").append(why).append(L"\n").c_str());
@@ -138,7 +148,7 @@ static int Prepare(const ArdiaEngineApi *engine) {
 #endif
 
   Ardia::WindowManager::Shared().Prewarm();
-  host->reactHost.ReloadInstance();
+  Ardia::InstanceLoad::Start();
   Ardia::LaunchLog::Write(L"launch", L"instance loading");
   return 0;
 }
@@ -210,6 +220,10 @@ __declspec(dllexport) int ArdiaAppPreTranslateMessage(const void *message) {
   return preTranslate(static_cast<const MSG *>(message)) ? 1 : 0;
 }
 
+__declspec(dllexport) const wchar_t *ArdiaAppStartFailure(void) {
+  return StartFailure().c_str();
+}
+
 __declspec(dllexport) void ArdiaAppStop(void) {
   int dialogsOpen = Ardia::DialogParts::ModalRegistry::Shared().threads.load();
   int waited = Ardia::DialogParts::StopAllModals();
@@ -232,6 +246,7 @@ static_assert(std::is_same_v<decltype(&ArdiaAppRun), ArdiaAppRunFunction>);
 static_assert(std::is_same_v<decltype(&ArdiaAppStart), ArdiaAppStartFunction>);
 static_assert(std::is_same_v<decltype(&ArdiaAppPreTranslateMessage), ArdiaAppPreTranslateFunction>);
 static_assert(std::is_same_v<decltype(&ArdiaAppStop), ArdiaAppStopFunction>);
+static_assert(std::is_same_v<decltype(&ArdiaAppStartFailure), ArdiaAppStartFailureFunction>);
 
 BOOL APIENTRY DllMain(HMODULE image, DWORD reason, LPVOID) {
   if (reason == DLL_PROCESS_ATTACH) Ardia::AppImage::Handle() = image;

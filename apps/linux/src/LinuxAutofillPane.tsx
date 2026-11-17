@@ -1,17 +1,22 @@
 import { View } from "react-native";
-import { AutofillPane as SharedAutofillPane } from "../../browser/src/components/settings/panes/Autofill";
+import { AddressesPage as SharedAddressesPage, CardsPage as SharedCardsPage } from "../../browser/src/components/settings/panes/ProfileAutofill";
 import { currentEngineProfile } from "../../browser/src/state/browser/current";
 import { CredentialNotice } from "./CredentialNotice";
-import { SettingsProfileWatch, useSettingsProfile } from "./settingsForm";
 
-export function AutofillPane(props: { profileId?: string | null }) {
-  const [profileId, setProfileId] = useSettingsProfile(props.profileId);
+export function AddressesPage({ profileId }: { profileId: string }) {
   return (
     <View>
       <CredentialNotice kind="autofill" profile={currentEngineProfile(profileId)} />
-      <SettingsProfileWatch.Provider value={setProfileId}>
-        <SharedAutofillPane {...props} />
-      </SettingsProfileWatch.Provider>
+      <SharedAddressesPage profileId={profileId} />
+    </View>
+  );
+}
+
+export function CardsPage({ profileId }: { profileId: string }) {
+  return (
+    <View>
+      <CredentialNotice kind="autofill" profile={currentEngineProfile(profileId)} />
+      <SharedCardsPage profileId={profileId} />
     </View>
   );
 }

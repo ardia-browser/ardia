@@ -170,28 +170,9 @@ test("an emphasised title on the tint can use textPrimary: the presets draw it a
   for (const mode of ["dark", "light"]) assert.equal(colorRoles[mode].textPrimary, colorRoles[mode].tabSelectedText);
 });
 
-test("with Adjust text to the colour off, a custom colour keeps the mode's own inks and Arc's selected fill", () => {
-  for (const look of [solid(grey(0.88)), solid(rgb(128, 92, 91)), solid(grey(0.02))]) {
-    const on = custom(look);
-    const off = profileTheme({ color: "neutral", theme: look }, true, "own", null, false);
-    assert.equal(off.adaptiveInk, false);
-    assert.equal(tintTheme(off), off);
-    assert.equal(off.rowSelectedText, colorRoles.dark.tabSelectedText);
-    assert.equal(off.tabSelectedText, colorRoles.dark.tabSelectedText);
-    assert.equal(off.textTab, colorRoles.dark.textTab);
-    assert.equal(off.tabSelected, on.tabSelected);
-    assert.equal(off.pinnedSelectedFill, on.pinnedSelectedFill);
-    assert.deepEqual(off.windowTint, on.windowTint);
-  }
+test("a custom colour adjusts its inks to the tint", () => {
   assert.equal(tintTheme(custom(solid(grey(0.88)))).textTab, colorRoles.light.textTab);
   assert.equal(custom(solid(grey(0.88))).rowSelectedText, "#000000");
-});
-
-test("Adjust text to the colour doesn't touch built-in colours or incognito", () => {
-  for (const dark of [true, false]) {
-    for (const color of Object.keys(PROFILE_COLORS)) assert.equal(profileTheme({ color }, dark, "own", null, false), profileTheme({ color }, dark, "own", null, true));
-    assert.equal(scopedTheme(true, undefined, dark, "own", null, false), scopedTheme(true, undefined, dark, "own", null, true));
-  }
 });
 
 test("the line under the pinned tabs keeps Dia's colour on built-in presets and reaches the selection floor on every custom colour", () => {

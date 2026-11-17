@@ -154,5 +154,6 @@ struct PressableStyle: ButtonStyle {
     configuration.label
       .scaleEffect(configuration.isPressed ? 0.94 : 1)
       .animation(Motion.press, value: configuration.isPressed)
+      .sensoryFeedback(.impact(weight: .light, intensity: 0.5), trigger: configuration.isPressed) { _, pressed in pressed }
   }
 }

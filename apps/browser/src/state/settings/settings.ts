@@ -66,6 +66,7 @@ export const SETTING_SPECS = {
   warnBeforeQuitting: flag(false, SYNCED),
   warnBeforeClosingWindow: flag(true, SYNCED),
   restoreSession: flag(true),
+  separateDownloadFolders: flag(false),
   searchEngine: text("google", SYNCED),
   customSearchUrl: text("", SYNCED),
   customSearchEngines: shaped<CustomSearchEngine[]>([], (v) => Array.isArray(v) && v.every((e) => hasStrings(e, ["id", "name", "keyword", "url"])), engineRecords(["id", "name", "keyword", "url"]), SYNCED),
@@ -77,33 +78,27 @@ export const SETTING_SPECS = {
   searchSuggestions: flag(true, SYNCED),
   commandBarHistory: flag(true, SYNCED),
   showSelectionSearch: flag(true, SYNCED),
-  commandBarPreference: oneOf(["website", "search"], "website", SYNCED),
   tabLayout: oneOf(["sidebar", "top"], "sidebar", SYNCED),
   sidebarSide: oneOf(["left", "right"], "left", SYNCED),
   autoHideTabs: flag(false, SYNCED),
-  revealTabsOnHover: flag(true, SYNCED),
   hideToolbarWhileScrolling: flag(true, SYNCED),
   newTabPosition: oneOf(["top", "bottom", "nextToCurrent"], "bottom", SYNCED),
   newTabButtonPosition: oneOf(["top", "bottom"], "bottom", SYNCED),
   appLinksFirst: flag(false, SYNCED),
   newTabOpens: oneOf(["page", "commandBar"], "page", SYNCED),
-  reuseEmptyNewTab: flag(false, SYNCED),
   newTabUrl: text("", SYNCED),
   warnBeforeClosingLastTab: flag(true, SYNCED),
   keepTopAppsRunning: flag(false, SYNCED),
   undoReopensClosedTab: flag(false, SYNCED),
   warnBeforeMovingTabsToProfile: flag(true, SYNCED),
   shareTabsAcrossWindows: flag(false),
-  tabReorderHaptics: flag(true, SYNCED),
   extendWebsiteColor: flag(true, SYNCED),
   cmdClickCreatesTabGroup: flag(true, SYNCED),
   optShiftClickOpensInGroup: flag(true, SYNCED),
-  dragToGroupInTopStrip: flag(false, SYNCED),
   peekModifier: oneOf(["alt", "shift", "off"], "shift", SYNCED),
   peekLinksToOtherSites: flag(true, SYNCED),
   newTabLinksOpenIn: oneOf(["tab", "peek", "littleArdia"], "peek", SYNCED),
   popupsOpenAsTabs: flag(false, SYNCED),
-  peekButtons: oneOf(["top", "left", "right"], "top", SYNCED),
   splitLinkModifier: oneOf(["altShift", "alt"], "altShift", SYNCED),
   autoGroupMeetingTabs: flag(true, SYNCED),
   cleanUpInactiveTabsAfterMinutes: shaped<number | null>(null, (v) => v === null || isWidth(v), { type: ["number", "null"], exclusiveMinimum: 0 }, SYNCED),
@@ -112,22 +107,19 @@ export const SETTING_SPECS = {
   showUnreadCounts: flag(false, SYNCED),
   showTopAppBadges: flag(false, SYNCED),
   showTabHoverMenu: flag(true, SYNCED),
-  closedTopAppTiles: flag(true, SYNCED),
+  showFullUrlInTabHoverMenu: flag(false, SYNCED),
+  closedTopAppTiles: flag(true, SYNCED), topAppFolders: flag(false, SYNCED),
   unreadHiddenSites: shaped<string[]>([], isStringList, STRING_LIST, SYNCED),
   neverTranslateSites: shaped<Record<string, string[]>>({}, (v) => isRecordOf(v, isStringList), recordOf(STRING_LIST)),
-  showTranslateButton: flag(true, SYNCED),
   autoPictureInPicture: flag(true, SYNCED),
   blockAutoplayEverywhere: flag(false, SYNCED),
-  commandScrollZoom: flag(true, SYNCED),
   blockNotificationRequests: flag(false, SYNCED),
   videoUpscaling: flag(true, SYNCED),
-  sidebarMediaControls: flag(true, SYNCED),
   sidebarWidth: width(DEFAULT_SIDEBAR_WIDTH),
   showSidebarButton: flag(true, SYNCED),
   showClearButton: flag(true, SYNCED),
   tidyTabs: flag(false, SYNCED),
   balancedTopApps: flag(false, SYNCED),
-  showAdvancedSettings: flag(false),
   selectedTabGlow: oneOf(["full", "soft", "off"], "full", SYNCED),
   interfaceScale: shaped<number>(INTERFACE_SCALE.default, validInterfaceScale, { type: "number", enum: INTERFACE_SCALE_STEPS }),
   sidebarTextSize: oneOf(SIDEBAR_TEXT_SIZES, "default"),
@@ -137,7 +129,6 @@ export const SETTING_SPECS = {
   interfaceStyle: oneOf(["glass", "classic"], "glass", SYNCED),
   glassTintWithTheme: flag(false, SYNCED),
   glassTintAmount: fraction(0.8, SYNCED),
-  pageScrollBars: oneOf(["system", "thin"], "system", SYNCED),
   fadeUnloadedTabs: flag(false, SYNCED),
   strikeSleepingTabs: flag(false, SYNCED),
   warnBeforeClosingTabGroup: flag(true, SYNCED),
@@ -154,8 +145,7 @@ export const SETTING_SPECS = {
   compactCliPill: flag(false, SYNCED),
   showBookmarks: flag(true, SYNCED),
   bookmarksBar: oneOf(["always", "newTab", "never"], "never", SYNCED),
-  bookmarksBarSize: oneOf(["default", "large"], "default", SYNCED),
-  hideBookmarksBarImport: flag(false),
+  bookmarksImportDismissed: flag(false),
   appearance: oneOf(["auto", "light", "dark"], "auto", SYNCED),
   addressBar: oneOf(["toolbar", "sidebar"], "toolbar", SYNCED),
   compactToolbar: flag(false, SYNCED),
@@ -169,14 +159,11 @@ export const SETTING_SPECS = {
   commandBarPlacement: oneOf(["field", "centred", "centredOnClick"], "field", SYNCED),
   commandBarStart: shaped<CommandBarStart>({}, isCommandBarStart, COMMAND_BAR_START_SCHEMA),
   spacesFollowAppearance: flag(true),
-  adaptTextToColor: flag(true, SYNCED),
   defaultProfileId: text(DEFAULT_PROFILE_ID),
   showProfileDots: flag(true, SYNCED),
   profileSwitcherIcons: flag(false, SYNCED),
   shortcuts: shaped<Record<string, string[]>>({}, (v) => isRecordOf(v, isStringList), recordOf(STRING_LIST), SYNCED),
   openLinksInLittleArdia: flag(true),
-  littleArdiaOpensNewTabLinks: flag(true, SYNCED),
-  littleWindowGestures: flag(true, SYNCED),
   littleArdiaSize: shaped<[number, number]>([900, 640], (v) => Array.isArray(v) && v.length === 2 && v.every(isWidth), { type: "array", prefixItems: [WIDTH, WIDTH], minItems: 2, maxItems: 2 }),
   pageEngine: oneOf(["chromium", "webkit"], "chromium"),
   websiteEngines: shaped<Record<string, "chromium" | "webkit">>({}, (v) => isRecordOf(v, (e) => e === "chromium" || e === "webkit"), recordOf({ type: "string", enum: ["chromium", "webkit"] })),
@@ -198,7 +185,6 @@ export const NO_SETTINGS_META: SettingsMeta = { chosen: [], inferred: [] };
 
 export type BatterySaverWhen = Settings["batterySaverWhen"];
 export type PeekModifier = Settings["peekModifier"];
-export type PeekButtons = Settings["peekButtons"];
 export type SplitLinkModifier = Settings["splitLinkModifier"];
 
 export const splitLinkModifierOf = (settings: Pick<Settings, "peekModifier" | "splitLinkModifier">): SplitLinkModifier =>
@@ -325,7 +311,7 @@ function withoutBatterySaver(saved: (Partial<Settings & SettingsMeta> & { batter
   };
 }
 
-function withoutUntouchedSetting(doc: SavedObject, key: SettingKey, oldDefault: unknown): SavedObject {
+function withoutUntouchedSetting(doc: SavedObject, key: string, oldDefault: unknown): SavedObject {
   if (!isFields(doc.settings) || doc.settings[key] !== oldDefault) return doc;
   const { chosen, inferred } = parseSettingsMeta(doc.settingsMeta);
   if (chosen.includes(key) && !inferred.includes(key)) return doc;

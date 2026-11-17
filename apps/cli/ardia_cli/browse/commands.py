@@ -187,6 +187,20 @@ HTTPS_ONLY_NOTE = ("Ardia loads http:// addresses over https and blocks the page
                    "error usually means for an http:// address. Try the https:// address; if that fails too, say the site couldn't be reached")
 
 
+def site_silent(url: str, timeout: float, error: OutcomeUnknown) -> BrowseError:
+    from ardia_cli import command_metrics
+
+    if "didn't answer Page.navigate" not in error.message:
+        return error
+    command_metrics.flag("navigation_site_silent", True)
+    host = urlsplit(url).hostname or url
+    advice = "Trying the same address again rarely helps; say the site couldn't be reached, or use another source"
+    if url.startswith("https://"):
+        advice += ", and if you changed the address from http:// to https://, use it as the site gave it"
+    return BrowseError(f"{host} sent nothing back within {timeout:g} s, so {url} never started loading: the site may be down, very slow, "
+                       f"or not answering automated traffic. {advice}", code="timeout")
+
+
 def https_only_block(url: str, error_text: str) -> bool:
     from ardia_cli import command_metrics
 
@@ -204,6 +218,8 @@ async def navigate(ctx: Ctx, page, url: str, until: str = "load"):
             result = await page.send("Page.navigate", {"url": url}, timeout=ctx.timeout)
         except Gated:
             raise BrowseError(f"Ardia's policy only lets the ardia command open web pages (http, https, data, about:blank); {url} isn't one", code="policy_refused") from None
+        except OutcomeUnknown as error:
+            raise site_silent(url, ctx.timeout, error) from None
         if result.get("errorText"):
             raise failed_navigation(ctx, url, result["errorText"])
         await page.recovered(ctx.timeout)
@@ -213,6 +229,8 @@ async def navigate(ctx: Ctx, page, url: str, until: str = "load"):
         result = await page.send("Page.navigate", {"url": url}, timeout=ctx.timeout)
     except Gated:
         raise BrowseError(f"Ardia's policy only lets the ardia command open web pages (http, https, data, about:blank); {url} isn't one", code="policy_refused") from None
+    except OutcomeUnknown as error:
+        raise site_silent(url, ctx.timeout, error) from None
     if result.get("errorText"):
         raise failed_navigation(ctx, url, result["errorText"])
     loader = result.get("loaderId")
@@ -1824,7 +1842,7 @@ async def wait_download(ctx: Ctx, trigger, destination: str | None, timeout: flo
 
     def listener(_page, method, params):
         if method == "Browser.downloadWillBegin" and not seen:
-            seen.update(guid=params.get("guid"), name=params.get("suggestedFilename") or "download")
+            seen.update(guid=params.get("guid"), name=params.get("suggestedFilename") or "download", url=params.get("url") or "")
         if method == "Browser.downloadProgress" and params.get("guid") == seen.get("guid") and params.get("state") in ("completed", "canceled") and not done.done():
             done.set_result(params.get("state"))
 
@@ -1844,8 +1862,44 @@ async def wait_download(ctx: Ctx, trigger, destination: str | None, timeout: flo
     if outcome != "completed":
         raise BrowseError("The download was canceled")
     target = destination or os.path.join(folder, os.path.basename(seen["name"]))
-    os.replace(os.path.join(folder, seen["guid"]), target)
+    saved = os.path.join(folder, seen["guid"])
+    if os.path.exists(saved):
+        os.replace(saved, target)
+    else:
+        Path(target).write_bytes(await fetch_again(ctx, seen.get("url") or ""))
     return target
+
+
+DOWNLOAD_FETCH_LIMIT = 50 * 1024 * 1024
+FETCH_BYTES = """async (url, limit) => {
+  const response = await fetch(url, { credentials: "include" });
+  if (!response.ok) return { status: response.status };
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.length > limit) return { size: bytes.length };
+  let text = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return { data: btoa(text) };
+}"""
+
+
+async def fetch_again(ctx: Ctx, url: str) -> bytes:
+    from ardia_cli import command_metrics
+
+    remote = ("The browser saved the file on its own machine (a browser reached with --ws on another host), "
+              "and fetching it again from the page failed")
+    if not url:
+        raise BrowseError(f"{remote}: the download had no address", code="download_remote")
+    page = await ctx.state.page()
+    try:
+        got = await page.call(FETCH_BYTES, url, DOWNLOAD_FETCH_LIMIT, frame=page.main_frame, read=True)
+    except BrowseError as error:
+        raise BrowseError(f"{remote}: {error.message}", code="download_remote") from None
+    if not got or got.get("status"):
+        raise BrowseError(f"{remote}: HTTP {got.get('status') if got else 'no answer'}", code="download_remote")
+    if got.get("size"):
+        raise BrowseError(f"{remote}: the file is {got['size']:,} bytes, over the {DOWNLOAD_FETCH_LIMIT:,}-byte limit", code="download_remote")
+    command_metrics.flag("download_fetched_again", True)
+    return base64.b64decode(got["data"])
 
 
 @command("download")
@@ -1969,9 +2023,11 @@ async def cmd_read(ctx: Ctx, argv):
     content = readurl.post_process(content, options)
     readpages.note_virtualized(content)
     scope = "" if options.get("selector") else await page_scope(page, frame)
+    read_time = readpages.read_at()
     shown = f"{content}\n[scope: {scope}]" if scope else (content or empty_note)
+    shown = f"{shown}\n[read {read_time}]" if shown else shown
     return Result({"content": content, "contentType": "text/html", "finalUrl": page.url, "source": "active-tab-html", "truncated": False, "url": page.url,
-                   "scope": scope or None}, shown, page_content=True)
+                   "scope": scope or None, "readAt": read_time}, shown, page_content=True)
 
 
 def render_json(value) -> str:

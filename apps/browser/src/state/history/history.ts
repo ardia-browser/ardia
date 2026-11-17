@@ -19,6 +19,8 @@ export type HistorySlice = {
 export const MAX_HISTORY = 100_000;
 export const MAX_VISIT_TIMES = 50;
 export const SUGGESTION_HISTORY = 5000;
+export const SUGGESTION_FREQUENT = 2000;
+export const FREQUENT_VISITS = 4;
 
 export const NO_HISTORY: HistoryEntry[] = [];
 
@@ -33,7 +35,16 @@ const newestPages = new WeakMap<HistoryEntry[], HistoryEntry[]>();
 export function suggestionHistory(list: HistoryEntry[]): HistoryEntry[] {
   if (list.length <= SUGGESTION_HISTORY) return list;
   let newest = newestPages.get(list);
-  if (!newest) newestPages.set(list, (newest = list.slice(0, SUGGESTION_HISTORY)));
+  if (!newest) {
+    newest = list.slice(0, SUGGESTION_HISTORY);
+    let frequent = 0;
+    for (let i = SUGGESTION_HISTORY; i < list.length && frequent < SUGGESTION_FREQUENT; i++) {
+      if (list[i]!.visits < FREQUENT_VISITS) continue;
+      newest.push(list[i]!);
+      frequent++;
+    }
+    newestPages.set(list, newest);
+  }
   return newest;
 }
 

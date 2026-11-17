@@ -122,17 +122,31 @@ export const suggestRequestUrl = (engine: SearchEngine, query: string) =>
 export const engineHost = (engine: Pick<SearchEngine, "url">) => hostOf(engine.url.replace(/%s/g, "q"));
 
 const NOT_QUERIES = new Set(["NAVIGATION", "PERSONALIZED_NAVIGATION", "CALCULATOR"]);
+const SITES = new Set(["NAVIGATION", "PERSONALIZED_NAVIGATION"]);
+
+export type RemoteSite = { url: string; title: string };
+export type RemoteSuggestions = { queries: string[]; sites: RemoteSite[] };
 
 export const suggestReplyJson = (text: string): unknown => JSON.parse(text.replace(/^\)\]\}'\s*/, ""));
 
-export function parseSuggestions(body: unknown): string[] {
-  if (!Array.isArray(body) || !Array.isArray(body[1])) return [];
+export function parseRemoteSuggestions(body: unknown): RemoteSuggestions {
+  if (!Array.isArray(body) || !Array.isArray(body[1])) return { queries: [], sites: [] };
   const extras = body[4] as { "google:suggesttype"?: unknown } | undefined;
   const types = Array.isArray(extras?.["google:suggesttype"]) ? (extras["google:suggesttype"] as unknown[]) : [];
-  return (body[1] as unknown[])
-    .filter((s, i): s is string => typeof s === "string" && s.trim() !== "" && !NOT_QUERIES.has(String(types[i])))
-    .map((s) => s.trim());
+  const titles = Array.isArray(body[2]) ? (body[2] as unknown[]) : [];
+  const queries: string[] = [];
+  const sites: RemoteSite[] = [];
+  (body[1] as unknown[]).forEach((s, i) => {
+    if (typeof s !== "string" || s.trim() === "") return;
+    const type = String(types[i]);
+    if (SITES.has(type)) {
+      if (/^https?:\/\/[^\s/?#]+/i.test(s.trim())) sites.push({ url: s.trim(), title: typeof titles[i] === "string" ? (titles[i] as string).trim() : "" });
+    } else if (!NOT_QUERIES.has(type)) queries.push(s.trim());
+  });
+  return { queries, sites };
 }
+
+export const parseSuggestions = (body: unknown): string[] => parseRemoteSuggestions(body).queries;
 
 export type EngineInput = { name: string; keyword: string; url: string };
 

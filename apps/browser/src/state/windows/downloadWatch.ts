@@ -1,4 +1,4 @@
-import { openFile } from "../../platform/files";
+import { openDownload } from "../downloads/openDownload";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { downloadVisibleIn } from "../downloads/downloadsSlice";
 import { focusedWindowOf } from "./ui";
@@ -13,7 +13,7 @@ export function startOpenWhenDone() {
   useBrowser.subscribe((s, prev) => {
     if (s.downloads === prev.downloads || !openWhenDone.size) return;
     for (const d of s.downloads) {
-      if (d.state !== "downloading" && openWhenDone.delete(d.id) && d.state === "finished") void openFile(d.path);
+      if (d.state !== "downloading" && openWhenDone.delete(d.id) && d.state === "finished") void openDownload(d.path);
     }
   });
 }

@@ -24,6 +24,9 @@ GitHub Actions. Each has these assets:
 - `ArdiaCore-<engine tree>-source.tar.xz`, with that archive when the engine is built on Helium (release.sh finds
   Helium's code in the framework): copies of the GitHub tags `engine/patches/build/env.sh` pins that aren't in this
   repo (`scripts/engine-source.sh`), and where Chromium's source is. See "Source and licenses" below.
+- `ArdiaCore-<engine tree:12>-symbols.tar.xz` and `ArdiaCore-<engine tree:12>-uuids.txt`, only on an `engine-<tree:12>`
+  prerelease: the dSYMs of the engine's unstripped build and the UUID of each image they name, which
+  `scripts/symbolicate-crash.sh` reads to name the frames of a crash in Chromium Framework. See "Engines" below.
 
 Each version's notes are a file in the repo, `docs/release-notes/<version>.md` (how to write one:
 `docs/release-notes/README.md`). The GitHub release, the update dialog and the website's
@@ -351,6 +354,26 @@ packs one (stripped, unpruned) with its Helium source, uploads both to the prere
 latest, so the feed and the download links never move to it) and appends `<tree> engine-<tree:12> <sha256>` to
 `packages/ardiacore/prebuilt-engines.tsv`: commit and push that line before dispatching. A release whose `engine/`
 tree has no engine fails its build at once, saying which script to run.
+
+The same script uploads the engine's symbols: `ArdiaCore-<tree:12>-symbols.tar.xz`, the dSYMs the official build writes
+beside the framework in `out/Release_GN_arm64` (`Chromium Framework.dSYM` and the helpers'; function names only, as
+`symbol_level=0` builds no line tables), and `ArdiaCore-<tree:12>-uuids.txt`, a `<uuid> <arch> <DWARF file>` row per
+image. It copies them with the framework under the chromium lock and refuses a framework whose own dSYM doesn't carry its
+UUID. The framework itself is already stripped, so strip-engine.sh's copies in `symbols/` name almost nothing. A crash's
+"Chromium Framework + 0x2e2334" is named with `scripts/symbolicate-crash.sh <Chromium Framework UUID> 0x2e2334 …`: it
+finds the engine release whose rows hold that UUID, downloads that dSYM into `dist/engine-symbols` and runs
+`atos -arch arm64 -l 0x0` on the offsets. Engines published before the symbols were uploaded have none: the next build
+overwrites `out/`'s dSYMs. To backfill one, rebuild its engine key; if the framework comes back with the published UUID,
+copy the framework and its dSYMs out of `out/` under the lock and upload the pair under the exact names
+`symbolicate-crash.sh` downloads (`key` is the release tag without `engine-`):
+
+```sh
+key=<tree:12> dir="dist/engine-$key-backfill" release_out="$HOME/chromium-build/chromium_git/chromium/src/out/Release_GN_arm64"
+mkdir -p "$dir/dsyms"
+scripts/agent/locked chromium -- bash -c 'cp -cR "$1/Chromium Framework.framework" "$2/" && cp -cR "$1"/*.dSYM "$2/dsyms/"' copy "$release_out" "$dir"
+scripts/lib/pack-symbols.sh "$dir/Chromium Framework.framework" "$dir/dsyms" "$dir/ArdiaCore-$key-symbols.tar.xz" "$dir/ArdiaCore-$key-uuids.txt"
+gh release upload "engine-$key" -R mantrakp04/ardia --clobber "$dir/ArdiaCore-$key-symbols.tar.xz" "$dir/ArdiaCore-$key-uuids.txt"
+```
 
 ## The engine switch (0.2.21 → 0.2.22)
 

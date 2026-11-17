@@ -35,7 +35,7 @@ function ControlButton({ kind, width, height, radius, ink, onPress }: { kind: Ki
   const close = kind === "close";
   return (
     <View {...hoverProps}>
-      <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={LABEL[kind]}>
+      <Pressable focusable onPress={onPress} accessibilityRole="button" accessibilityLabel={LABEL[kind]}>
         {({ pressed }) => (
           <View
             style={{

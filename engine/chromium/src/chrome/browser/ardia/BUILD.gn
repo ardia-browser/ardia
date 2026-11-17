@@ -82,6 +82,7 @@ if (is_linux) {
     "ac_reauth_linux.cc",
     "ac_reauth_linux.h",
     "ac_reauth_linux_policy.h",
+    "ac_windowless_page_linux.cc",
     "pip/ac_pip_hyprland.cc",
     "pip/ac_pip_hyprland.h",
     "pip/ac_pip_linux.cc",

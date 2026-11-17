@@ -8,7 +8,7 @@ export type TabPressEnd = "click" | "dragClick" | "drag";
 const MAX_SAMPLES = 500;
 const PAGE_CLICK_WINDOW_MS = 60_000;
 
-const empty = () => ({ presses: 0, down_switches: 0, clicks: 0, drag_clicks: 0, drags: 0, unanswered: 0, range_selects: 0, range_from_shown: 0, page_refused: 0 });
+const empty = () => ({ presses: 0, down_switches: 0, clicks: 0, drag_clicks: 0, drags: 0, drags_without_drop: 0, unanswered: 0, range_selects: 0, range_from_shown: 0, page_refused: 0 });
 let tally = empty();
 let pending = false;
 let shown: { tabId: string; at: number } | null = null;
@@ -60,7 +60,7 @@ export function noteRowPress(shownTabEmpty: boolean): Promise<void> {
   });
 }
 
-useTelemetry.subscribe((s, prev) => prev.sharing && !s.sharing && forgetPresses());
+useTelemetry.subscribe((s, prev) => prev.sharing !== s.sharing && forgetPresses());
 
 export function notePressStarted(switchedOnPress = false) {
   if (pending) tally.unanswered++;
@@ -97,6 +97,8 @@ export function notePagePress(tabId: string) {
 
 export const notePagePressRefused = () => void tally.page_refused++;
 
+export const noteDragWithoutDrop = () => void tally.drags_without_drop++;
+
 export function emitTabPresses() {
   const counts = tally;
   const samples = toPageClick.sort((a, b) => a - b);
@@ -110,7 +112,7 @@ export function emitTabPresses() {
   const landedOn = [...repeatsLandedOn].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
   forgetRepeats();
   const hoverCards = takeHoverCardCounts();
-  if (!counts.presses && !counts.range_selects && !counts.page_refused && !lostReleases && !repeated.presses && !Object.values(hoverCards).some(Boolean)) return;
+  if (!counts.presses && !counts.drags_without_drop && !counts.range_selects && !counts.page_refused && !lostReleases && !repeated.presses && !Object.values(hoverCards).some(Boolean)) return;
   const at = (list: number[], p: number) => (list.length ? percentile(list, p) : null);
   capture("tab_presses", {
     ...counts,

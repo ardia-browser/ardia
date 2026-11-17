@@ -263,7 +263,7 @@ function familySession(family, port) {
     add("c120", 120);
     add("k120", 120, { tabLayout: "sidebar" });
   } else for (const n of spec.counts) add(`c${n}`, n);
-  const s = session({ windows, tabs, groups, settings: { tabLayout: "top", appearance: "dark", revealTabsOnHover: true } });
+  const s = session({ windows, tabs, groups, settings: { tabLayout: "top", appearance: "dark" } });
   for (const w of s.windows) w.tabLayout = windows.find((x) => x.id === w.id)?.tabLayout ?? "top";
   return s;
 }

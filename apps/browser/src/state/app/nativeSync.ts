@@ -18,7 +18,7 @@ import { SMALL_LIGHTS_CENTER } from "../windows/small";
 import { runCommand } from "../commands/commands";
 import { setMenuBarShortcuts } from "../commands/commandShortcuts";
 import { finishAnimatedCloses } from "../windows/closeAnimated";
-import { startKeyboardFollows } from "../focus/keyboardFollows";
+import { followHandedBack, startKeyboardFollows } from "../focus/keyboardFollows";
 import { cancelAbandonedFocusMoves, settlingCommandFocus } from "../focus/focusHandoff";
 import { flushPersistence, resumePersistence } from "../session/persist";
 import { flushLive } from "../live/store";
@@ -82,7 +82,9 @@ export function startNativeSync() {
       openLastWindowOrNew("dock");
     }
     if (e.type === "appLinkOpened") closeLittleArdiaForAppLink(e.windowId);
+    if (e.type === "snapKeyHandedBack") followHandedBack(e.windowId);
     if (e.type === "littleArdiaReturnedToApp") noteLittleArdiaAppHandoff("returnToApp");
+    if (e.type === "littleArdiaGlobalShortcut") noteLittleArdiaAppHandoff("globalShortcut");
     if (e.type === "quitWarningSuppressed") s.updateSettings({ warnBeforeQuitting: false });
     if (e.type === "willQuit") {
       setQuitting(true);

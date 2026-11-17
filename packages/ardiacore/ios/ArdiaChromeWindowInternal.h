@@ -37,6 +37,7 @@ NSMapTable<NSWindow *, ArdiaWindowController *> *Controllers();
 extern BOOL (^gRefusesUnhandledKey)(NSWindow *, NSEvent *);
 
 void ConfigureWindow(NSWindow *window);
+void InsetUtilityTrafficLights(NSWindow *window);
 CGFloat WindowCornerRadius(NSWindow *window);
 extern const void *kLightsCenterKey;
 extern const void *kLightsShownKey;

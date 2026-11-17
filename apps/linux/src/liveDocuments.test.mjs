@@ -247,3 +247,14 @@ test("generic document writes keep the old cache on failure and reserved documen
   await assert.rejects(documents.write("live.json", "{}"), { code: "ERR_DOCUMENT_RESERVED" });
   assert.equal(documents.read("live.canonical.json"), null);
 });
+
+test("a change says whether it gave the document something to save, so telemetry can count skipped saves", async () => {
+  const native = authority();
+  const a = bind(native.connect("browser-a"));
+  await a.client.reconnect();
+  const before = a.state();
+  assert.equal(a.client.changed(before, { ...before }), false);
+  assert.equal(a.client.changed(before, { ...before, calendar: { ...before.calendar, showPreview: false } }), true);
+  await a.client.flush();
+  assert.equal(native.payload.calendar.showPreview, false);
+});

@@ -40,7 +40,7 @@ export function SettingsSearchField() {
         onSubmit={() => {
           const { query, selected } = currentSettingsSearch();
           const hit = settingsResults(query, unshown)[selected];
-          if (hit) revealSetting(hit.entry, "keyboard", selected);
+          if (hit) revealSetting(hit.entry, "keyboard", selected, unshown.has(hit.entry.id));
         }}
         onArrow={(step) => {
           const count = settingsResults(currentSettingsSearch().query, unshown).length;
@@ -60,7 +60,7 @@ let cached: { query: string; unshown: ReadonlySet<string>; results: SettingsHit[
 
 export function settingsResults(query: string, unshown: ReadonlySet<string>): SettingsHit[] {
   if (cached.query !== query || cached.unshown !== unshown) {
-    cached = { query, unshown, results: search(SETTINGS_INDEX.filter((p) => !unshown.has(p.entry.id)), query) };
+    cached = { query, unshown, results: search(SETTINGS_INDEX.filter((p) => !unshown.has(p.entry.id) || p.entry.needs), query) };
   }
   return cached.results;
 }
@@ -68,7 +68,8 @@ export function settingsResults(query: string, unshown: ReadonlySet<string>): Se
 export function SettingsSearchResults({ query }: { query: string }) {
   const selected = useSettingsSearch((s) => s.selected);
   const keyboardMove = useSettingsSearch((s) => s.keyboardMove);
-  const results = settingsResults(query, useUnshownSettings());
+  const unshown = useUnshownSettings();
+  const results = settingsResults(query, unshown);
   const scroller = useRef<ScrollView>(null);
   const viewport = useRef({ offset: 0, height: 0 });
   const rows = useRef<{ top: number; height: number }[]>([]);
@@ -110,7 +111,7 @@ export function SettingsSearchResults({ query }: { query: string }) {
     >
       {results.map((hit, index) => (
         <View key={hit.entry.id} style={ROW_GAP} onLayout={(e) => void (rows.current[index] = { top: e.nativeEvent.layout.y, height: e.nativeEvent.layout.height })}>
-          <ResultRow hit={hit} selected={index === selected} rank={index} />
+          <ResultRow hit={hit} selected={index === selected} rank={index} needs={unshown.has(hit.entry.id) ? (hit.entry.needs ?? null) : null} />
         </View>
       ))}
     </ScrollView>
@@ -120,7 +121,7 @@ export function SettingsSearchResults({ query }: { query: string }) {
 const RESULTS = { paddingHorizontal: space.ml, paddingTop: RESULTS_TOP, paddingBottom: RESULTS_BOTTOM } as const;
 const ROW_GAP = { marginBottom: RESULT_GAP } as const;
 
-function ResultRow({ hit, selected, rank }: { hit: SettingsHit; selected: boolean; rank: number }) {
+function ResultRow({ hit, selected, rank, needs }: { hit: SettingsHit; selected: boolean; rank: number; needs: string | null }) {
   const theme = useTheme();
   const { entry } = hit;
   const primary = selected ? theme.onAccent : theme.textPrimary;
@@ -134,7 +135,7 @@ function ResultRow({ hit, selected, rank }: { hit: SettingsHit; selected: boolea
       selectedTone="accent"
       onPress={() => {
         selectSettingsResult(rank);
-        revealSetting(entry, "click", rank);
+        revealSetting(entry, "click", rank, !!needs);
       }}
     >
       <View style={RESULT_TEXT}>
@@ -151,6 +152,11 @@ function ResultRow({ hit, selected, rank }: { hit: SettingsHit; selected: boolea
             {keyword ? "Also called “" : ""}
             <Marked text={note.text} ranges={note.ranges} color={secondary} />
             {keyword ? "”" : ""}
+          </Text>
+        ) : null}
+        {needs ? (
+          <Text size="caption" lines={2} color={secondary}>
+            {needs}
           </Text>
         ) : null}
       </View>

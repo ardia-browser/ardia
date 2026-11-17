@@ -78,6 +78,7 @@ chromium-background-instance-no-default-handlers.patch
 chromium-apple-passwords-host-skipped.patch
 chromium-extension-tab-move-closing-window.patch
 chromium-webstore-icon-optional.patch
+chromium-enterprise-context-info.patch
 chromium-ardia-layer.patch
 chromium-win-rtl-unittest-domsub.patch
 chromium-win-load-local-state-delegate.patch
@@ -98,3 +99,5 @@ chromium-win-strict-login-list.patch
 chromium-win-keep-every-login.patch
 chromium-win-discard-asks-the-host.patch
 chromium-win-devtools-other-clients.patch
+chromium-win-autoplay-policy.patch
+chromium-win-hosted-theme-change.patch

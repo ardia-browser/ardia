@@ -309,13 +309,15 @@ LIBRARY = r"""
         if (best && best.rank === 0) break;
       }
       if (!best) {
-        const signup = /\b(newsletter|subscribe|sign ?up|join|discount|coupon|offer|deal|email)\b|\d+ ?% ?off\b/i;
+        const signup = /\b(newsletter|subscribe|sign ?up|join|discount|coupon|offer|deal|email|survey|feedback|questionnaire)\b|\d+ ?% ?off\b|\b(tell us|rate your|share your) /i;
+        const surveyVendor = /kampyle|medallia|qualtrics|qsi_|hotjar|foresee|usabilla|survicate|invite/i;
         const dismiss = /^(close|dismiss|no,? thanks?|no thank you|not now|maybe later|skip|×|✕|✖)$/i;
         const popups = backdrop ? [...roots, ...document.querySelectorAll("[role=dialog], [aria-modal=true], dialog[open]")] : roots;
         for (const root of popups) {
           if (!api.visible(root)) continue;
           const text = (root.innerText || "").slice(0, 3001);
-          if (text.length > 3000 || !(root.querySelector("input[type=email]") || signup.test(text))) continue;
+          const named = root.id + " " + (typeof root.className === "string" ? root.className : "");
+          if (text.length > 3000 || !(root.querySelector("input[type=email]") || signup.test(text) || surveyVendor.test(named))) continue;
           for (const button of root.querySelectorAll("button, [role=button], a, input[type=button]")) {
             if (!api.visible(button)) continue;
             const shown = ((button.innerText || button.value || "").trim()).replace(/\s+/g, " ");
@@ -324,6 +326,23 @@ LIBRARY = r"""
             if (dismiss.test(shown) || (shown.length <= 2 && /^(close|dismiss)\b/i.test(label))) {
               button.click();
               return { name: name || "close", choice: "close", kind: "popup", layer: api.describe(root) };
+            }
+          }
+        }
+        const modalName = /(^|[\s_-])(modal|overlay|popup|pop-?layer|lightbox|interstitial)([\s_-]|$)|bx-group|wisepops|wiz-/i;
+        const closeLabel = /^(close|dismiss|close (dialog|modal|popup|window)|×|✕|✖|x)$/i;
+        const modals = backdrop ? [...roots, ...document.querySelectorAll("[role=dialog], [aria-modal=true], dialog[open]")] : roots;
+        for (const root of modals) {
+          if (!api.visible(root)) continue;
+          const named = root.id + " " + (typeof root.className === "string" ? root.className : "");
+          if (!modalName.test(named)) continue;
+          for (const button of root.querySelectorAll("button, [role=button], a, [aria-label]")) {
+            if (!api.visible(button)) continue;
+            const shown = ((button.innerText || button.value || "").trim()).replace(/\s+/g, " ");
+            const label = (button.getAttribute("aria-label") || button.getAttribute("title") || "").trim();
+            if (closeLabel.test(shown) || (shown.length <= 2 && closeLabel.test(label))) {
+              button.click();
+              return { name: shown || label || "close", choice: "close", kind: "modal", layer: api.describe(root) };
             }
           }
         }
@@ -408,14 +427,18 @@ LIBRARY = r"""
       let row = null;
       let frameDepth = 0;
       const flush = () => { const t = norm(buffer); if (t) lines.push(t); buffer = ""; };
+      const NOT_CONTENT = /(^|[^a-z])(ads?|advert\w*|sponsored|doubleclick|googlesyndication|adservice|recaptcha|captcha)([^a-z]|$)|3rd party ad/i;
       const frameText = (el) => {
         const box = el.getBoundingClientRect();
         if (box.width < 120 || box.height < 80) return;
         const title = norm(el.getAttribute("title") || el.getAttribute("name") || "") || "frame";
+        const src = el.getAttribute("src") || "";
+        if (NOT_CONTENT.test(`${title} ${el.id || ""} ${typeof el.className === "string" ? el.className : ""} ${src}`)) return;
         let doc = null;
         try { doc = el.contentDocument; } catch (error) { doc = null; }
         const body = doc && (doc.body || doc.documentElement);
         if (body && frameDepth < 3) {
+          if (!norm(body.innerText || "")) return;
           flush();
           lines.push("");
           lines.push(`[frame "${title}"]`);
@@ -426,10 +449,9 @@ LIBRARY = r"""
           lines.push("");
           return;
         }
-        const src = el.src || "";
-        if (!doc && /^https?:/.test(src) && box.width >= 400 && box.height >= 300) {
+        if (!doc && /^https?:/.test(el.src || "") && box.width >= Math.max(400, innerWidth / 2) && box.height >= 400) {
           flush();
-          lines.push(`[frame "${title}" from another site, not read here: read ${src}]`);
+          lines.push(`[frame "${title}" from another site, not read here: read ${el.src}]`);
         }
       };
       const walk = (node) => {

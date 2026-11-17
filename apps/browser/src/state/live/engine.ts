@@ -9,8 +9,9 @@ import { repoKey } from "./rows";
 import { hideNewRepos } from "./repoFilter";
 import { SOURCES } from "./sources";
 import { beginLiveRefresh, applyFetch, createFolder, finishCompleting, live, markRead, removeFolder, setStatus, unhide, useLive } from "./store";
-import { LiveError, type CompletionState, type LiveFolderKind, type LiveItem, type LiveSourceId, type PullRequestSection } from "./types";
+import { LiveError, type CompletionState, type LiveFolder, type LiveFolderKind, type LiveItem, type LiveSourceId, type PullRequestSection } from "./types";
 import { noteLiveCompletedTabsClosed } from "../telemetry/liveCompletedTabs";
+import { noteLiveSourceFetch } from "../telemetry/workCounts";
 import { isPlaying, useMedia } from "../media/media";
 import { usePages } from "../tabs/pageState";
 import type { MediaAccess } from "../../platform/tabs";
@@ -21,6 +22,17 @@ export const COMPLETION_MS = 2600;
 
 const inflight = new Map<string, Promise<void>>();
 const fetchedSources = new Map<string, Set<LiveSourceId>>();
+const sharedFetches = new Map<string, Promise<LiveItem[]>>();
+
+function fetchSource(source: LiveSourceId, folder: LiveFolder): Promise<LiveItem[]> {
+  const key = JSON.stringify([source, live().accounts[source]?.connectedAt ?? null, folder.filters]);
+  const running = sharedFetches.get(key);
+  noteLiveSourceFetch(!!running);
+  if (running) return running;
+  const task = SOURCES[source].fetch(folder).finally(() => sharedFetches.delete(key));
+  sharedFetches.set(key, task);
+  return task;
+}
 
 const SECTION_ORDER: Record<PullRequestSection, number> = { authored: 0, review: 1, team: 2 };
 
@@ -64,7 +76,7 @@ async function run(folderId: string) {
   if (!folder) return;
   const before = live();
   setStatus(folderId, { state: before.status[folderId]?.lastFetch ? "updating" : "initializing" });
-  const results = await Promise.allSettled(folder.sources.map((id) => SOURCES[id].fetch(folder)));
+  const results = await Promise.allSettled(folder.sources.map((id) => fetchSource(id, folder)));
 
   const fetched: LiveItem[] = [];
   const failed: { source: LiveSourceId; error: unknown }[] = [];

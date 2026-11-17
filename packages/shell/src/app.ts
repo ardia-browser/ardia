@@ -37,11 +37,14 @@ export type SystemInfo = {
     mainStarted?: number;
     startupPrepared?: number;
     chromiumEntered?: number;
+    appKitWillFinish?: number;
+    appKitDidFinish?: number;
     engineStarted?: number;
     earlyWindowShown?: number;
     reactNativeStarted?: number;
   } | null;
   launchedHidden?: boolean | null;
+  launchSource?: "login_item" | "documents" | "user" | null;
   loadAverage1m?: number | null;
   inApplicationsFolder?: boolean;
   updatePrewarm?: { build?: string; at?: number; ms?: number; status?: number } | null;
@@ -60,6 +63,8 @@ export type CrashReport = {
   terminationNamespace?: string;
   uptimeSeconds?: number;
   vmWritableMB?: number;
+  jsFatal?: string;
+  jsFatalSource?: "hermes" | "reactNative";
   exceptionType?: string;
   signal?: string;
   frames: NativeFrame[];

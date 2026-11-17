@@ -13,6 +13,10 @@ export const webViewCalls: Handlers = {
   setPeekModifier: (args, engine) => configure(engine, { peek: args.choice("modifier", PEEK_KEYS) }),
   setSplitLinkModifier: (args, engine) => configure(engine, { split: args.choice("modifier", SPLIT_KEYS) }),
   setPeekOtherSiteTabs: (args, engine) => configure(engine, { otherSitePages: args.strings("tabIds") }),
+  setBlockAutoplayEverywhere: async (args, engine) => {
+    await engine.host("autoplay.everywhere", { enabled: args.bool("enabled") });
+    return ok();
+  },
   setPopupsOpenAsTabs: async (args) => {
     setPopupsOpenAsTabs(args.bool("enabled"));
     return ok();

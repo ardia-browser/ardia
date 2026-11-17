@@ -93,17 +93,17 @@ test("with every new capability on, each Settings row the engine unlocks is show
     { defaultBrowser: capabilities.defaultBrowser, launchAtLogin: capabilities.launchAtLogin, thinScrollBars: capabilities.thinScrollBars, externalLinks: capabilities.externalLinks, commandScrollZoom: capabilities.commandScrollZoom, littleArdiaNewTabLinks: capabilities.littleArdiaNewTabLinks, peekOtherSites: capabilities.peekOtherSites, linksFromOtherApps: capabilities.linksFromOtherApps, fullScreen: capabilities.fullScreen, pageEdits: capabilities.pageEdits },
     { defaultBrowser: true, launchAtLogin: true, thinScrollBars: true, externalLinks: true, commandScrollZoom: true, littleArdiaNewTabLinks: true, peekOtherSites: true, linksFromOtherApps: true, fullScreen: true, pageEdits: true },
   );
-  const unlocked = ["general.defaultBrowser", "general.openAtLogin", "appearance.pageScrollBars", "privacy.commandScrollZoom", "general.littleArdiaOpensNewTabLinks", "tabs.peekLinksToOtherSites", "general.openLinksInLittleArdia", "tabs.appLinksFirst", "calendar.alertCondition"];
+  const unlocked = ["general.defaultBrowser", "general.openAtLogin", "tabs.peekLinksToOtherSites", "tabs.openLinksInLittleArdia", "tabs.appLinksFirst", "automations.meetingAlertCondition"];
   const searchable = new Set(settings.SETTINGS_INDEX.map((item) => item.entry.id));
   const without = unavailableSettingIds(linuxCapabilities(bare), sharedSettings.SETTINGS.map((entry) => entry.id));
   for (const id of unlocked) {
     assert.ok(sharedSettings.SETTINGS.some((entry) => entry.id === id), `${id} is a shared row`);
     assert.equal(settings.settingUnavailable(id), false, id);
     assert.ok(searchable.has(id), `${id} is searchable`);
-    if (id !== "calendar.alertCondition") assert.ok(without.has(id), `${id} stays hidden on an engine without it`);
+    if (id !== "automations.meetingAlertCondition") assert.ok(without.has(id), `${id} stays hidden on an engine without it`);
   }
-  for (const id of ["tabs.videoUpscaling", "tabs.tabReorderHaptics", "advanced.cliControl", "advanced.cliInstall"]) assert.equal(settings.settingUnavailable(id), true, `${id} still waits for its own backend`);
-  assert.equal(settings.PANES.some((pane) => pane.id === "engines"), false);
+  for (const id of ["tabs.videoUpscaling", "advanced.ardiaCommand", "advanced.compactCliPill"]) assert.equal(settings.settingUnavailable(id), true, `${id} still waits for its own backend`);
+  for (const id of ["advanced.pageEngine", "advanced.fairPlayInChromium", "advanced.websiteEngines"]) assert.equal(searchable.has(id), false, id);
 });
 
 test("with every new capability on, each command, menu entry and shortcut row appears", () => {

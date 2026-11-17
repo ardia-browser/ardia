@@ -5,6 +5,7 @@ globalThis.__DEV__ = false;
 const { useBrowser } = await import("../browser/store.ts");
 const { engineProfile, windowTitle } = await import("../browser/model.ts");
 const { createWindowSync } = await import("./windowSync.ts");
+const { takeLittleArdiaEscapeCloses } = await import("../telemetry/littleArdiaEscapes.ts");
 
 const S = () => useBrowser.getState();
 const PROFILES = { default: { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 } };
@@ -157,6 +158,58 @@ test("startup sweep: closes native windows the store doesn't have, keeps utility
   await sync.sweep();
   assert.deepEqual(native.of("close"), [["close", "orphan"]]);
   assert.deepEqual(native.of("setTitle"), [["setTitle", a, windowTitle(S(), a)]]);
+});
+
+test("a frame the host fitted to a smaller display keeps the saved Little Ardia size; a user's resize saves", () => {
+  reset();
+  S().updateSettings({ littleArdiaSize: [2406, 1085] });
+  const small = S().createWindow({ kind: "small", url: "https://link.example/" });
+  const native = fakePort();
+  const sync = start(native);
+  sync.sync(S());
+  native.emit({ type: "frame", id: small, frame: [517, 236, 2406, 1085] });
+  assert.deepEqual(S().settings.littleArdiaSize, [2406, 1085]);
+  native.emit({ type: "frame", id: small, frame: [-1512, 0, 1512, 950], fitted: true });
+  assert.deepEqual(S().windows[small].frame, [-1512, 0, 1512, 950]);
+  assert.deepEqual(S().settings.littleArdiaSize, [2406, 1085]);
+  native.emit({ type: "frame", id: small, frame: [-1512, 0, 1512, 950] });
+  assert.deepEqual(S().settings.littleArdiaSize, [2406, 1085]);
+  native.emit({ type: "frame", id: small, frame: [-1400, 20, 1200, 800] });
+  assert.deepEqual(S().settings.littleArdiaSize, [1200, 800]);
+});
+
+test("a fitted Little Ardia moved to another profile and then dragged keeps the saved size; only a resize saves", () => {
+  reset();
+  S().updateSettings({ littleArdiaSize: [2406, 1085] });
+  const replacement = S().createWindow({ kind: "small", url: "https://link.example/", frame: [-1512, 0, 1512, 950] });
+  const native = fakePort();
+  const sync = start(native);
+  sync.sync(S());
+  native.emit({ type: "frame", id: replacement, frame: [-1512, 0, 1512, 950] });
+  native.emit({ type: "frame", id: replacement, frame: [-1480, 30, 1512, 950] });
+  assert.deepEqual(S().windows[replacement].frame, [-1480, 30, 1512, 950]);
+  assert.deepEqual(S().settings.littleArdiaSize, [2406, 1085]);
+  native.emit({ type: "frame", id: replacement, frame: [-1480, 30, 1300, 900] });
+  assert.deepEqual(S().settings.littleArdiaSize, [1300, 900]);
+});
+
+test("each time the host fits a Little Ardia window below the saved size is counted once, a repeat of the fitted size or a fit that keeps the size is not", () => {
+  reset();
+  S().updateSettings({ littleArdiaSize: [2406, 1085] });
+  const small = S().createWindow({ kind: "small", url: "https://link.example/" });
+  const native = fakePort();
+  const sync = start(native);
+  sync.sync(S());
+  const fits = () => takeLittleArdiaEscapeCloses().little_ardia_fits_below_saved_size;
+  fits();
+  native.emit({ type: "frame", id: small, frame: [517, 236, 2406, 1085], fitted: true });
+  assert.equal(fits(), 0);
+  native.emit({ type: "frame", id: small, frame: [-1512, 0, 1512, 950], fitted: true });
+  assert.equal(fits(), 1);
+  native.emit({ type: "frame", id: small, frame: [-1500, 10, 1512, 950], fitted: true });
+  assert.equal(fits(), 0);
+  native.emit({ type: "frame", id: small, frame: [-1400, 20, 1200, 800] });
+  assert.equal(fits(), 0);
 });
 
 test("full screen comes back oldest first", () => {

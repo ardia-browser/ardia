@@ -25,6 +25,7 @@ final class AppDelegate: ExpoAppDelegate {
       InterfaceScale.follow(root)
       return root
     }
+    HermesFatal.install()
     factory.rootViewFactory.initializeReactHost(launchOptions: nil)
 
     super.applicationDidFinishLaunching(notification)

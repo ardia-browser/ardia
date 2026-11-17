@@ -67,7 +67,8 @@ public struct SiteSettings: Codable, Equatable, Sendable {
 public final class BrowsingPreferences {
   static let keys = (
     nightShade: "browsing.nightShade", swipe: "browsing.swipeNavigation", appLinks: "browsing.appLinks",
-    suggestions: "browsing.searchSuggestions", engine: "browsing.searchEngine", sites: "browsing.sites"
+    suggestions: "browsing.searchSuggestions", engine: "browsing.searchEngine", sites: "browsing.sites",
+    translateLanguage: "browsing.translateLanguage", translateConfirmed: "browsing.translateConfirmed"
   )
   static let siteLimit = 500
 
@@ -101,6 +102,20 @@ public final class BrowsingPreferences {
     didSet { defaults.set(searchEngineID, forKey: Self.keys.engine) }
   }
 
+  public var translateLanguage: String? {
+    didSet { defaults.set(translateLanguage, forKey: Self.keys.translateLanguage) }
+  }
+
+  public var translateConfirmed: Bool {
+    didSet { defaults.set(translateConfirmed, forKey: Self.keys.translateConfirmed) }
+  }
+
+  public var translationTarget: String { translateLanguage ?? PageTranslation.systemLanguage() }
+
+  public func rememberTranslation(into language: String) {
+    if translateLanguage != language { translateLanguage = language }
+  }
+
   public let sitePermissions: SitePermissions
   public private(set) var sites: [String: SiteSettings]
   private var privateSites: [String: SiteSettings] = [:]
@@ -112,6 +127,8 @@ public final class BrowsingPreferences {
     appLinks = defaults.string(forKey: Self.keys.appLinks).flatMap(AppLinkPreference.init(rawValue:)) ?? .ardia
     searchSuggestions = defaults.object(forKey: Self.keys.suggestions) as? Bool ?? true
     searchEngineID = defaults.string(forKey: Self.keys.engine) ?? "google"
+    translateLanguage = defaults.string(forKey: Self.keys.translateLanguage).flatMap { PageTranslation.isLanguageCode($0) ? $0 : nil }
+    translateConfirmed = defaults.bool(forKey: Self.keys.translateConfirmed)
     sitePermissions = SitePermissions(defaults: defaults)
     sites = (defaults.data(forKey: Self.keys.sites)).flatMap { try? JSONDecoder().decode([String: SiteSettings].self, from: $0) } ?? [:]
   }

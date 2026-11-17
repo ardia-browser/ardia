@@ -18,9 +18,11 @@ import {
   CAPSULE_SIZE_CONFIRMED,
   capsuleOffset,
   LIST_ROW,
+  LIST_FOLD_PROGRESS,
   listSelection,
   swipeProgress,
 } from "./swipeMotion";
+import { noteSwipeHistoryList } from "../../state/telemetry/swipeHistoryListCounts";
 
 const SIZE = CAPSULE_SIZE;
 const SIZE_CONFIRMED = CAPSULE_SIZE_CONFIRMED;
@@ -144,6 +146,16 @@ export function SwipeOverlay({ tabId }: { tabId: string }) {
     layoutTo(LIST_WIDTH, list.length * ROW + LIST_PAD * 2, listTop(height, list.length, 0), radius.sheet);
     Animated.timing(v.list, { toValue: 1, ...SWIPE_MOTION.list, useNativeDriver: true }).start();
     setShown((s) => (s ? { ...s, list, selected: 0 } : s));
+    noteSwipeHistoryList("opened");
+  };
+
+  const foldList = () => {
+    g.list = null;
+    g.selected = 0;
+    v.nudge.setValue(0);
+    Animated.timing(v.list, { toValue: 0, ...SWIPE_MOTION.list, useNativeDriver: true }).start();
+    setShown((s) => (s ? { ...s, list: null, selected: 0 } : s));
+    noteSwipeHistoryList("folded");
   };
 
   const select = (dy: number) => {
@@ -194,6 +206,7 @@ export function SwipeOverlay({ tabId }: { tabId: string }) {
     }
 
     const progress = swipeProgress(e.distance);
+    if (g.list && progress < LIST_FOLD_PROGRESS) foldList();
     if (g.list) select(e.dy);
     else setConfirmed(progress >= 1);
     v.x.setValue(capsuleOffset(progress, g.width));

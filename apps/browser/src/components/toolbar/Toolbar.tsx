@@ -228,7 +228,7 @@ export const ToolbarUrlField = memo(function ToolbarUrlField({ tab, palette, win
           </View>
         </Pressable>
       </ContextMenuArea>
-      <FieldButtons tab={tab} palette={palette} onFocus={onFocus} popover={popover} toggleSiteControls={toggleSiteControls}>
+      <FieldButtons tab={tab} palette={palette} onFocus={onFocus} popover={popover} toggleSiteControls={toggleSiteControls} quiet={!buttonsShown}>
         {buttonsShown && (
           <>
             <PageButton tab={tab} palette={palette} windowId={windowId} />
@@ -285,7 +285,7 @@ export const SidebarUrlField = memo(function SidebarUrlField({ tab, palette, win
         </Pressable>
       </ContextMenuArea>
       <ToolbarRowContext.Provider value={TOOLBAR_ROWS.regular}>
-        <FieldButtons tab={tab} palette={palette} onFocus={onFocus} popover={popover} toggleSiteControls={openSiteControls} accessory={shown.extensions ? accessory : null}>
+        <FieldButtons tab={tab} palette={palette} onFocus={onFocus} popover={popover} toggleSiteControls={openSiteControls} accessory={shown.extensions ? accessory : null} quiet={!shown.page}>
           {shown.page && <PageButton tab={tab} palette={palette} windowId={windowId} />}
           {shown.siteControls && <Button variant="icon" toolbar palette={palette} icon="slider.horizontal.3" look="field" onPress={openSiteControls} active={popover === "siteControls"} tooltip="Site Controls" />}
         </FieldButtons>
@@ -323,6 +323,7 @@ function FieldButtons({
   popover,
   toggleSiteControls,
   accessory,
+  quiet = false,
   children,
 }: {
   tab: ToolbarTab;
@@ -331,6 +332,7 @@ function FieldButtons({
   popover: string | null;
   toggleSiteControls: () => void;
   accessory?: ReactNode;
+  quiet?: boolean;
   children: ReactNode;
 }) {
   const popups = usePage(tab.id, (p) => p.popups.length);
@@ -339,9 +341,9 @@ function FieldButtons({
     <View style={{ flexDirection: "row", alignItems: "center", paddingRight: space.xs }}>
       {children}
       {capture && <CaptureIndicator camera={capture.camera} microphone={capture.microphone} screen={capture.screen} onPress={toggleSiteControls} />}
-      <ReaderButton tabId={tab.id} palette={palette} onFocus={onFocus} />
-      <TranslateButton tabId={tab.id} palette={palette} onFocus={onFocus} />
-      <ZoomIndicator tabId={tab.id} zoom={tab.zoom} palette={palette} onFocus={onFocus} />
+      <ReaderButton tabId={tab.id} palette={palette} onFocus={onFocus} quiet={quiet} />
+      <TranslateButton tabId={tab.id} palette={palette} onFocus={onFocus} quiet={quiet} />
+      <ZoomIndicator tabId={tab.id} zoom={tab.zoom} palette={palette} onFocus={onFocus} quiet={quiet} />
       {popups > 0 && (
         <Button variant="icon" toolbar
           palette={palette}

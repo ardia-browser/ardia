@@ -78,7 +78,7 @@ struct PlusButton: View {
         .frame(width: width, height: TabsLayout.barCircle)
         .contentShape(.capsule)
     }
-    .buttonStyle(.plain)
+    .buttonStyle(BarButtonStyle())
     .chromeSurface(in: .capsule)
     .contextMenu {
       if actions.isIncognito {
@@ -114,7 +114,7 @@ struct GlassCircleButton: View {
     Button(action: action) {
       GlassCircleFace(symbol: symbol, diameter: diameter)
     }
-    .buttonStyle(.plain)
+    .buttonStyle(BarButtonStyle())
     .accessibilityLabel(label)
   }
 }

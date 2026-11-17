@@ -20,3 +20,16 @@ test("flushing with nothing pending writes nothing", () => {
   store.flushLive();
   assert.equal(docs.get("live.json"), undefined);
 });
+
+test("refetching a settled folder with nothing new does not rewrite the file", () => {
+  const item = () => ({ id: "settled", source: "github", url: "https://example.test/settled", title: "Settled", subtitle: "", icon: null, updatedAt: 0 });
+  const id = store.createFolder("p", "pullRequests");
+  store.applyFetch(id, [item()], {}, 1);
+  store.flushLive();
+  docs.delete("live.json");
+  store.applyFetch(id, [item()], {}, 2);
+  store.flushLive();
+  store.applyFetch(id, [item()], {}, 3);
+  store.flushLive();
+  assert.equal(docs.get("live.json"), undefined);
+});

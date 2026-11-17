@@ -404,7 +404,10 @@ the Mac app does: chrome://inspect's approval mode would replace the process's o
 command's token server.
 
 `ARDIA_DATA_DIR` isn't read: pass `--user-data-dir`. Test hooks and authentication bypasses don't exist in this
-build (`SignedForDistribution()` is true and `TestInstance()` false).
+build (`SignedForDistribution()` is true and `TestInstance()` false), with one exception: `--ardia-test-cast-sink`,
+honoured only by the browser process of an instance started with its own `--user-data-dir`, registers Chromium's
+test media route provider (`ac_test_media_route_provider.cc`, `TestFlag("mediaRouteProvider")`), which offers one
+fake device, "Ardia Test Sink", and records routes without sending anything anywhere.
 
 ## How macOS stays unchanged
 
@@ -647,14 +650,41 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
 
 ### Windows, focus and input
 
-- **Window controls.** Ardia draws close, minimize and maximize in its own header, so they work on decorationless
-  desktops such as Hyprland. Chrome's own caption buttons are hidden: opacity 0, no input, ignored by accessibility.
+- **Window controls.** Linux uses the Windows build's caption buttons on the right: `…`, minimize, maximize (restore
+  while maximized) and close, drawn by the shared `WindowControls.tsx` in the places Windows puts them (the toolbar
+  row, the end of the top strip, a right sidebar's header, atop a left sidebar with the address bar in it, Little
+  Ardia's bar, Settings and Import). There are no traffic lights. They work on decorationless desktops such as
+  Hyprland; Chrome's own caption buttons are hidden: opacity 0, no input, ignored by accessibility.
+  - `lib/platformChrome.linux.ts` takes the Windows `WINDOW_CHROME`. `platform/windowControls.ts` is swapped for
+    `hostWindowControls.ts`: minimize and maximize call `ArdiaShell.minimizeWindow` and `toggleMaximizeWindow`, and
+    caption regions are a no-op because the shell's own drag regions move the window. Close goes straight to the
+    shell's close coordinator (`captionControls.ts`, swapped in for `WindowControls.tsx`'s close), so a window with
+    tabs to lose asks once, not first in the shared path and again in the coordinator.
+  - `WindowControls.tsx` wraps the shared one: right-clicking the buttons opens the window menu (`linuxWindowMenu.ts`)
+    except in Settings and Import, and the buttons hide while a page is in full screen.
+  - The `…` opens the Linux app menu (Menu button below) under itself (`clusterAppMenu.ts`, swapped in for
+    `BrowserWindowControls.tsx`'s `showAppMenu`): a pointer press anchors it to the pressed `…`, a key to the focused
+    one, and an activation with neither (assistive technology) to the visible one. Pressing it, or Enter on it, while
+    a menu is open closes the menu. The buttons take keyboard focus like any button (`focusable` on the shared
+    `ControlButton`), and the `…` counts as a menu surface, so tabbing to it keeps the field Edit › Copy and Paste act
+    on. There are never two menu buttons: the `…` while the window buttons are drawn, the header's hamburger
+    otherwise (window or page full screen). Linux keeps the sidebar header the Windows rule would collapse whenever
+    the hamburger has no other home (`sidebarHeaderLayout.ts`). Some full-screen layouts still have none, as before
+    this change: top tabs with minimalism, or a sidebar whose profile part is hidden.
+  - Restore: the engine sends no `maximized` event, so each window reads `ArdiaShell.windowFrame` at start and once
+    per animation frame of resizing, and marks itself maximized when the frame fills the work area, feeding the shared
+    `useMaximizedWindows` through `captionRegions.ts`'s `noteMaximized` (`windowMaximized.ts`). Settings and Import
+    too. Known limits: a window that fills the work area without being maximized, such as a lone tiled window on a
+    tiling window manager (X11 or Wayland), shows restore. On Wayland `windowFrame` is null and the work area is the
+    whole output, so the shell compares its outer size with that, and with a panel, a bar or gaps a maximized window
+    keeps the maximize glyph. Clicking still toggles correctly; the glyph needs the engine to report maximized state.
 - **Header drag and double-click.** Dragging the header moves the window (`DispatchHostWindowDragMovement`).
   Double-clicking it runs the desktop's titlebar action.
 - **Outer frame.** The host overlays Chromium's client view and doesn't replace its frame. Without the Wayland
   decoration protocol, Chromium draws its custom frame.
-- **Menu button.** Linux has no global menu bar, so a hamburger in the header stands in for the Mac one. It lists
-  Ardia, File, Edit, View, Tabs, Bookmarks, History, Extensions, Window and Help as submenus built from the same menu
+- **Menu button.** Linux has no global menu bar, so a menu button stands in for the Mac one: usually the `…` beside the
+  window buttons, and a hamburger in the header only while they're hidden (Window controls above). It lists Ardia,
+  File, Edit, View, Tabs, Bookmarks, History, Extensions, Window and Help as submenus built from the same menu
   state the Mac menu bar uses (checks, disabled commands, dynamic titles, bookmarks, recently closed entries, profiles
   and extensions), labelled with the effective Linux shortcuts (`apps/linux/src/appMenu.ts`). Items run through the
   shared command path; Close Window, Minimize and Maximize call the native window operations. App commands Linux runs
@@ -756,18 +786,17 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
     `sidebarEdge`. An engine with neither uses the shell-side watcher on both sides.
 - **Top-strip peek.** With Auto-hide tabs in the top-strip layout, the strip's hover zone and its peeked panel are a
   page overlay region (`TopStripPeekRegion.tsx`, swapped in for `App.tsx`'s import), so the host gives the shell the
-  pointer where they cover a page: 2 px of the panel with the default toolbar, 15 px with the compact one. The window
-  buttons are off screen while the strip is hidden, as on macOS; the peeked strip's menu button reaches Window ›
-  Minimize, Maximize and File › Close Window.
-- **Header.** The menu button always shows. The profile name beside it follows the Mac's rule
+  pointer where they cover a page: 2 px of the panel with the default toolbar, 15 px with the compact one. While the strip
+  is hidden the window buttons and the `…` sit at the end of the toolbar row, as on Windows.
+- **Header.** The menu button shows here whenever the window buttons are hidden (full screen); otherwise it is the
+  `…` beside them. The profile name beside it follows the Mac's rule
   (`ProfileIndicator.tsx`): only in an Incognito window or with two or more profiles, cut when at least 52 px of it
   fit, a person icon below that, and nothing when not even the icon fits (a 190 px sidebar with the Downloads button).
 - **Materials.** `VisualEffect`, `GlassEffect`, popover bubbles and the window's vibrancy take light or dark from the
   theme scope they render in (`useSurfaceDark`), not the app appearance, so an Incognito window is dark in a light
   app and a toast is light there.
-- **Window controls with the sidebar on the right.** They ride the sidebar, as on macOS: `setTrafficLightsCenter`'s
-  `trailing` flag measures the first button's center from the window's right edge, and the Linux buttons are placed
-  from that edge with CSS (`shims/web/windowChrome.tsx`), so a resize moves them with no round trip.
+- **Window controls with the sidebar on the right.** They sit in the right sidebar's header, at its outer edge, as on
+  Windows.
 - **Fullscreen restore.** A window saved fullscreen comes back fullscreen. On Wayland the saved output's name is kept
   in the profile pref `browser.app_window_placement.ArdiaLinuxWindowOutputs`. When exactly one display carries that
   name, the window goes fullscreen there.
@@ -847,6 +876,16 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
   capture of a different kind). Stop ends the capturer's display capture through Chromium's capture indicator. Both
   reach only tabs of the caller's own kind of session, regular or private. With an older engine the shell refuses
   them as before (`hostCast.ts`). Neither has run against a real capture on Linux yet.
+- **Casting.** Chromium's media router finds Cast devices over mDNS (DIAL discovery is off in Helium). Its device
+  picker is Ardia's own, as on the Mac: `ac_linux_cast.cc` fills `chromium-cast-dialog-hook.patch`'s two hooks, so a
+  cast request from a tab an Ardia window holds (Cast in the menu, a page's `PresentationRequest.start()`, a video's
+  remote playback) keeps Chromium's `MediaRouterUI` and its fullscreen blocker and sends `media.castDialog` (id, open,
+  header, sinks with their state, modes and route, `tabId`) to the window holding the tab. The host serves the six
+  calls: `media.showCastDialog {tabId}`, `media.startCasting {id, sink, mode}`, `media.stopCasting {id, route}`,
+  `media.closeCastDialog {id}`, `media.watchCastRoutes` (regular profiles only) and `media.terminateCastRoute
+  {route}`, and sends `media.castRoutes {profile, routes}` to every window that isn't private. The shell hands the
+  calls to the engine only when it advertises all six (`castsTabs` in `hostCast.ts`), so an older engine keeps the
+  "Casting Isn't Available" toast.
 
 ### ardia browse off-screen tabs
 
@@ -1127,7 +1166,19 @@ Linux reads calendars from Evolution Data Server, which GNOME Online Accounts, G
   (`ac_linux_password_check.cc`).
   - The helper must be a root-owned executable no one else can write, in root-owned folders no one else can write,
     at `/usr/sbin`, `/sbin`, `/usr/bin` or NixOS's `/run/wrappers/bin`; without one, reauth stays unavailable.
-  - The helper runs with an empty environment and is killed after 15 s; the typed password is wiped once checked.
+  - The helper runs with an empty environment and is killed after 15 s.
+  - The password field isn't a Views `Textfield` (its model, edit history and `RenderText` keep copies that are freed
+    without being overwritten). `PasswordField` (`ac_linux_password_field.cc`) keeps the typed text and any IME
+    composition in `SecretText` (`ac_linux_secret_text.cc`): a fixed-size buffer in its own mapped page, left out of
+    core dumps and forks, locked against swap where allowed, edited in place and zeroed before it's unmapped. It draws
+    bullets from a character count, has no undo, refuses paste and copy, gives the IME no surrounding text and
+    exposes no value to accessibility. On Confirm the text is encoded straight into another such page, which the
+    helper's stdin write reads from; submit, cancel, closing the window, a superseding request and teardown all zero
+    it. What it can't cover: each keystroke's own event, the IME's commit buffer for that keystroke, and the kernel's
+    socket buffer.
+  - `scripts/linux/password-heap-check.mjs` types random passwords into the real dialog of a package under Xvfb and
+    scans the browser process's memory, as UTF-8 and UTF-16: while typed the password must exist exactly once, text
+    typed over or erased must be gone while the dialog is still open, and nothing may be left once it closes.
   - Wrong passwords back off 2 s, 5 s, 30 s, then 60 s. The grant window and supersession are polkit's.
   - `ProbeReauth` reports such a system as available (`loginPassword`), and `reauth.requested` says which method ran.
 - **Secret routes.**
@@ -1272,8 +1323,29 @@ It works as on the Mac ([cli.md](cli.md), [automation.md](automation.md)); what 
 - **Opt-in, as on the Mac.** Sharing is off until the person turns it on: onboarding's last step asks, the new tab
   page asks once if onboarding didn't, and Settings › Privacy & Security has the toggle. With sharing off nothing is
   posted except the daily anonymous "opened today" count, which the Mac sends too (and a test instance skips).
-  Linux collects no native crash reports (`ArdiaApp.crashReports` answers an empty list), so "crash reports" there
-  means page-process exits and JavaScript errors; the group has no crash-report control of its own to hide.
+  Native crash reports come from Chromium's own crash handler (Crash reports, below); with an engine that doesn't
+  list its dumps `ArdiaApp.crashReports` answers an empty list, and "crash reports" there means page-process exits
+  and JavaScript errors. The group has no crash-report control of its own to hide.
+- **Crash reports.** `chrome_crashpad_handler` runs beside every Ardia process and writes a minidump for each crash of
+  the browser, page, GPU and helper processes into `~/.config/ardia/Crash Reports` (`pending/<uuid>.dmp`), or `<user
+  data dir>/Crash Reports` for an instance started with `--user-data-dir` (`ardia-launch` sets
+  `BREAKPAD_DUMP_LOCATION`, which Chromium reads before it starts the handler, so a test instance never leaves its
+  dumps for the everyday profile to report). An unbranded build never has consent to upload, so the dumps stay on the
+  computer. At launch the telemetry owner asks for the dumps written since its cursor (`ArdiaApp.crashReports`,
+  `hostCrashReports.ts`). The engine advertises `crash.dumps` to regular browser windows and serves two calls from
+  Chromium's crashpad database (`chrome::DIR_CRASH_DUMPS`, `ac_linux_crash_dumps.cc`) on the thread pool:
+  `ArdiaCrash.list(since)` answers the pending and completed reports written after `since` as `{id, time}` (the dump's
+  modification time in milliseconds), the newest 32; `ArdiaCrash.read(id)` answers one dump as base64, or null when
+  it's gone or over 8 MiB. Settings and private windows are refused. The shell reads up to the newest 16, parses each
+  one (`minidump.ts`) and keeps the newest five of the browser and five of the other processes, as the Mac does. A
+  report carries the process kind (from Chromium's `ptype` annotation), the signal and its code (`SIGSEGV`,
+  `SEGV_MAPERR`), the engine version (Ardia's own version for a browser crash, from the `ardia-ver` annotation the
+  engine sets at startup from `VERSION`), the process's uptime, the build IDs of the files beside `chrome`, and the
+  crashing thread's frames as file plus offset: a frame-pointer walk from the signal's registers (Linux builds keep
+  frame pointers), and when libc reused the frame pointer, from the first frame record on the stack. A dump written
+  without a crash (`DumpWithoutCrashing`) is skipped. Nothing else from the dump leaves the shell: it holds stack
+  memory, which can hold page content. The shared client sends it under the same consent as the Mac (sharing on only);
+  `chrome` is stripped, so its frames are offsets, named later against the engine's symbols by build ID.
 - **One owner for the choice.** A window that isn't the telemetry owner (Settings, a second browser window) doesn't
   write `telemetry.json`. Turning sharing on or off, dismissing the new-tab question, starting or stopping a report's
   14-day watch and making the first anonymous ID are `choice` requests the owner runs (`telemetryChoice.ts`,
@@ -1523,8 +1595,8 @@ answer at once on the Mac and with a promise here, so the shell has to opt in.
   refusal or a network failure is status 0 with the reason in `error`, and `cancelUploads()` ends every transfer
   with `error: "cancelled"`. A background instance sends nothing.
 - **Not served.** Recording (`startRecording`, `stopRecording`, `cancelRecording`, `isRecording`,
-  `recordingThumbnail`), `ArdiaApp.crashReports` and `ArdiaApp.diagnosticsSample`. The shell answers no crash
-  reports and an empty sample, so a report's `footprint_mb` and `free_disk_gb` are null: the shell can read neither
+  `recordingThumbnail`) and `ArdiaApp.diagnosticsSample`, and `ArdiaApp.crashReports` until the engine lists its
+  dumps (Crash reports). The shell answers an empty sample, so a report's `footprint_mb` and `free_disk_gb` are null: the shell can read neither
   the app's memory footprint nor free disk space (`navigator.storage.estimate()` reports a quota, not free space).
 
 ### Ardia's notifications
@@ -1752,13 +1824,11 @@ These were open at the time of the PR.
 - **Problem reports.** The sheet opens only with an engine that advertises `report.files` and `report.send`, and
   has no recording, trace or crash reports. The engine only accepts `https://ardia.dev/api/feedback`:
   there is no override for a local feedback server, and a background instance sends nothing, so the sheet can't be
-  exercised end to end from a hidden instance yet. Crash reports need more than the list Chromium keeps
-  (`crash_reporter::GetReports` gives an id and a time): the Mac's fields come from parsed `.ips` files, so Linux
-  would have to read each minidump for the process type and frames, and frames of a stripped `chrome` are module
-  offsets, not names. The handler (`chrome_crashpad_handler`) ships, its folder is `Crash Reports` beside the
-  default user data folder (`chrome::DIR_CRASH_DUMPS`), and a build without Google's branding never has consent to
-  upload (`ChromeCrashReporterClient::GetCollectStatsConsent`); whether dumps are written there at all without
-  consent hasn't been checked in a built engine.
+  exercised end to end from a hidden instance yet.
+- **Crash reports.** Only x86-64 dumps get frames, and frames are named only from the symbols archive the engine was
+  published with (`scripts/linux/symbolize.py`). An engine older than `crash.dumps` answers no crash reports.
+- **Casting.** Real Cast devices haven't been tried: the build network has none, so casting has run against the test
+  sink only. Mirroring a tab or the screen to a real device is Chromium's own Cast mirroring service, unchanged.
 - **Ardia's notifications.** A desktop without a notification service falls back to Chromium's own popups, as sites'
   notifications do. A click activates the window through the same Wayland activation path as above.
 - **Launch at login** starts Ardia as any launch does; it doesn't start hidden. A system-wide
@@ -1783,11 +1853,12 @@ These were open at the time of the PR.
     input, which never tells the shell the pointer left (Pointer hand-off). A real pointer closes it.
   - A played video removed from the DOM keeps its media entry until the element is collected.
 - **Not available on Linux:**
-  - casting (Cast shows a toast);
+  - casting with an engine that doesn't advertise all six cast calls (`media.showCastDialog`, `startCasting`,
+    `stopCasting`, `closeCastDialog`, `watchCastRoutes`, `terminateCastRoute`): Cast shows a toast;
   - translation (Bergamot isn't ported yet);
   - video upscaling;
   - installing updates: Ardia checks for them and opens the release page (Updates and kill switches);
-  - crash reports;
+  - crash reports with an engine that doesn't advertise `crash.dumps` (see Crash reports);
   - sending problem reports from the sheet with an engine older than `report.files` and `report.send` (see Problem
     reports), where `ArdiaTelemetryLocal.exportForReport` answers null;
   - notification icons, and a notification settings page to open (`openNotificationSettings`);

@@ -1,11 +1,15 @@
 import { takeCleanUpCounts } from "./cleanUpCounts";
 
-const none = () => ({ captureIndicatorsCleared: 0, pinnedTabsSleptByMemorySaver: 0, tabsSleptOverBudget: 0, tabsSleptOverBudgetReopened: 0, tabsOverBudgetSkippedLoading: 0, tabsOverBudgetAsksPassedOn: 0, topAppsKeptRunning: 0, topAppsUnloadedFromMenu: 0 });
+const none = () => ({ captureIndicatorsCleared: 0, mediaCardsCleared: 0, pinnedTabsSleptByMemorySaver: 0, tabsSleptOverBudget: 0, tabsSleptOverBudgetReopened: 0, tabsOverBudgetSkippedLoading: 0, tabsOverBudgetAsksPassedOn: 0, topAppsKeptRunning: 0, topAppsUnloadedFromMenu: 0, tabsSleptFromMenu: 0, groupsSleptFromMenu: 0, menuSleepsKeptAwake: 0 });
 
 let pending = none();
 
 export function noteCaptureIndicatorCleared() {
   pending.captureIndicatorsCleared++;
+}
+
+export function noteMediaCardCleared() {
+  pending.mediaCardsCleared++;
 }
 
 export function noteTabSlept(pinned: boolean, reason: string | null) {
@@ -51,14 +55,24 @@ export function noteTopAppUnloadedFromMenu() {
   pending.topAppsUnloadedFromMenu++;
 }
 
+export function noteTabsSleptFromMenu(from: "tab" | "group", keptAwake: number) {
+  if (from === "tab") pending.tabsSleptFromMenu++;
+  else pending.groupsSleptFromMenu++;
+  pending.menuSleepsKeptAwake += keptAwake;
+}
+
 export function takeTabSleepCounts() {
   const taken = pending;
   pending = none();
   return {
     capture_indicators_cleared: taken.captureIndicatorsCleared,
+    media_cards_cleared: taken.mediaCardsCleared,
     pinned_tabs_slept_by_memory_saver: taken.pinnedTabsSleptByMemorySaver,
     top_app_closes_kept_running: taken.topAppsKeptRunning,
     top_apps_unloaded_from_menu: taken.topAppsUnloadedFromMenu,
+    tabs_slept_from_menu: taken.tabsSleptFromMenu,
+    groups_slept_from_menu: taken.groupsSleptFromMenu,
+    menu_sleeps_kept_awake: taken.menuSleepsKeptAwake,
     ...takeProfileUnloadCounts(),
     ...takeCleanUpCounts(),
     tabs_slept_over_budget: taken.tabsSleptOverBudget,

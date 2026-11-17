@@ -69,14 +69,13 @@ extension AppModel {
   static let desktopUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15"
 
   func translate(_ page: WebTab) {
-    guard let url = page.url, var components = URLComponents(string: "https://translate.google.com/translate") else { return }
-    let language = Locale.preferredLanguages.first.map { String($0.prefix(2)) } ?? "en"
-    components.queryItems = [
-      URLQueryItem(name: "sl", value: "auto"),
-      URLQueryItem(name: "tl", value: language),
-      URLQueryItem(name: "u", value: url.absoluteString),
-    ]
-    if let target = components.url { page.load(target) }
+    guard let url = page.url, let target = PageTranslation.url(translating: url, into: preferences.translationTarget) else { return }
+    if !page.isPrivate { preferences.translateConfirmed = true }
+    page.load(target)
+  }
+
+  func needsTranslationConsent(for page: WebTab) -> Bool {
+    page.isPrivate || !preferences.translateConfirmed
   }
 
   func toggleBlockers(for page: WebTab) {

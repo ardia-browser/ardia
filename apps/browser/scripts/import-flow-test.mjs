@@ -4,12 +4,14 @@
 //   node apps/browser/scripts/import-flow-test.mjs <Debug Ardia.app> <scratch dir> [flow…] [--record <file>] [--compare <file>] [--keep]
 //
 //   <scratch dir>     home/ is a copy of packages/import/fixtures/home (the fake Chrome, Arc, Dia, Firefox, Safari… data)
-//                     and data/ the instance's ARDIA_DATA_DIR; both are wiped first
-//   flow              chrome, chromeSkip, chromeBack, arc, firefox, dia, safariDirect, safariExport, safariBadFile
+//                     and data/ the instance's ARDIA_DATA_DIR; both are wiped first; Dia's fixture windows get a pinned
+//                     tab in "Side project", a Dia profile with no folder on disk
+//   flow              chrome, chromeSkip, chromeBack, arc, zen, firefox, dia, diaOpenOnly, safariDirect, safariExport, safariBadFile
 //                     (default: all of them, in that order)
 //   --record <file>   writes what each flow did (the steps it passed through, counts, failures, notes, extensions and
 //                     what it added to the store) as JSON
 //   --compare <file>  fails each flow whose record differs from the one in <file>
+//   --js <location>   where the instance loads its JS (scripts/lib/instance.mjs: pinned, live, none or host:port)
 //   --keep            leaves the instance running
 //
 // The instance is hidden, reads the fake home through ARDIA_INSTANCE importSourceDir/importSafariHome, decrypts with
@@ -31,7 +33,8 @@ const flag = (name) => {
 };
 const recordTo = flag("--record");
 const compareWith = flag("--compare");
-const positional = args.filter((a, i) => !a.startsWith("--") && args[i - 1] !== "--record" && args[i - 1] !== "--compare");
+const jsLocation = flag("--js");
+const positional = args.filter((a, i) => !a.startsWith("--") && !["--record", "--compare", "--js"].includes(args[i - 1]));
 const [appArg, scratchArg, ...only] = positional;
 if (args.includes("-h") || args.includes("--help") || !appArg || !scratchArg) {
   const lines = readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1);
@@ -50,7 +53,11 @@ mkdirSync(exportsDir, { recursive: true });
 cpSync(join(FIXTURES, "home"), home, { recursive: true });
 cpSync(join(FIXTURES, "safari/Safari Export.zip"), join(exportsDir, "Safari Export.zip"));
 cpSync(join(FIXTURES, "safari/not-an-export.zip"), join(exportsDir, "not-an-export.zip"));
-cpSync(join(FIXTURES, "dia/applescript-windows.json"), join(exportsDir, "dia-windows.json"));
+const diaWindows = JSON.parse(readFileSync(join(FIXTURES, "dia/applescript-windows.json"), "utf8"));
+for (const window of diaWindows)
+  for (const profile of window.profiles)
+    if (profile.name === "Side project") profile.tabs.push({ id: "t17", title: "Board", url: "https://board.example.com/", isPinned: true, isFocused: false });
+writeFileSync(join(exportsDir, "dia-windows.json"), JSON.stringify(diaWindows));
 
 const FAKE_DIA_ID = "dev.ardia.fixture.dia";
 const fakeDia = join(scratch, "FakeDia.app");
@@ -132,8 +139,10 @@ const FLOWS = {
   chromeSkip: `${pick("chrome")}, ${next}, ${throughProfiles}, ${stepIs("unlock")}, () => g().skipEncrypted(), ${done}`,
   chromeBack: `${pick("chrome")}, ${next}, ${throughProfiles}, ${stepIs("unlock")}, () => g().back(), ${stepIs("choose")}, () => settle(200)`,
   arc: `${pick("arc")}, ${next}, ${throughProfilesAndUnlock}, ${done}`,
+  zen: `${pick("zen")}, () => g().setKinds(g().kinds.filter((k) => k !== "passwords")), () => settle(200), ${next}, ${throughProfilesAndUnlock}, ${done}`,
   firefox: `${pick("firefox")}, () => g().setKinds(g().kinds.filter((k) => k !== "passwords")), () => settle(200), ${next}, ${throughProfilesAndUnlock}, ${done}`,
   dia: `${pick("dia")}, ${next}, ${throughProfilesAndUnlock}, ${done}`,
+  diaOpenOnly: `${pick("dia")}, () => g().setKinds(g().kinds.filter((k) => k !== "pinnedTabs")), () => settle(200), ${next}, ${throughProfilesAndUnlock}, ${done}`,
   safariDirect: `${pick("safari")}, ${next}, ${stepIs("safari")}, () => settle(200), () => g().importSafariDirect(), ${done}`,
   safariExport: `${pick("safari")}, ${next}, ${stepIs("safari")}, () => g().importSafari(${JSON.stringify(join(exportsDir, "Safari Export.zip"))}), ${done}`,
   safariBadFile: `${pick("safari")}, ${next}, ${stepIs("safari")}, () => g().importSafari(${JSON.stringify(join(exportsDir, "not-an-export.zip"))}),
@@ -159,9 +168,19 @@ const CHECKS = {
     assert.ok(r.store.newProfiles.length > 0, "Arc's spaces become profiles");
   },
   firefox: (r) => assert.equal(r.step, "done"),
+  zen: (r) => {
+    assert.equal(r.step, "done");
+    assert.ok(r.counts.history > 0, `Zen's history comes over: ${JSON.stringify(r.counts)}`);
+  },
   dia: (r) => {
     assert.equal(r.step, "done");
     assert.ok(r.counts.tabs > 0 && !r.notes.some((n) => n.startsWith("Dia's tabs couldn't be brought over:")), JSON.stringify(r));
+    for (const name of ["Work", "Side project"]) assert.ok(r.store.tabs[name]?.pinned > 0, `${name} gets its pinned tabs: ${JSON.stringify(r.store.tabs)}`);
+  },
+  diaOpenOnly: (r) => {
+    assert.equal(r.step, "done");
+    assert.ok(!r.store.newProfiles.some(([name]) => name === "Side project"), `a Dia profile with only pinned tabs gets no profile when only open tabs come over: ${JSON.stringify(r.store.newProfiles)}`);
+    assert.ok(Object.values(r.store.tabs).every((c) => c.pinned === 0), JSON.stringify(r.store.tabs));
   },
   safariDirect: (r) => {
     assert.deepEqual(r.steps.slice(-3), ["safari", "progress", "done"]);
@@ -187,6 +206,7 @@ try {
   app = await launch(resolve(appArg), {
     data,
     onboarded: true,
+    ...(jsLocation ? { js: jsLocation } : {}),
     instance: { importSourceDir: join(home, "Library/Application Support"), importSafariHome: home },
     test: { importSecret: SECRET, importDiaBundleId: FAKE_DIA_ID, importDiaWindows: join(exportsDir, "dia-windows.json") },
     ready: { timeout: 90_000, test: "return ac.store.getState().windowOrder.length > 0" },

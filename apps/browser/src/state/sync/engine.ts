@@ -21,6 +21,8 @@ import { settleThemeAdoption, themeChosenHere } from "./syncThemes";
 import { editClock, startEditClock } from "./editClock";
 import { addLinkedProfile, appScopeOf, linkedProfileId, linkProfiles, readyToPair, remoteProfileRecord, sharedDataChain } from "./profileLinks";
 import { summarize } from "./syncSummary";
+import { takeCycleWork, timedCycle } from "./cycleWork";
+import { markDeviceRemoved, markRemoved, settleRemovals, takeSyncedDeviceRemovals, takeSyncedProfileRemovals } from "./profileRemoval";
 import { profileScope } from "./records";
 import { queueSend, sendTargetsIn } from "./sentTabs";
 import { errorText } from "../../lib/errors";
@@ -61,13 +63,11 @@ let snapshotWrites = { count: 0, bytes: 0 };
 const { read, loadState, persistJournal, watchScope, save, startOver, checkpoint } = syncFiles(() => doc);
 
 function noteSnapshot({ snapshotBytes }: { snapshotBytes: number }) {
-  if (!snapshotBytes) return;
-  snapshotWrites.count++;
-  snapshotWrites.bytes += snapshotBytes;
+  if (snapshotBytes) snapshotWrites = { count: snapshotWrites.count + 1, bytes: snapshotWrites.bytes + snapshotBytes };
 }
 
 export function takeSnapshotWrites() {
-  const taken = snapshotWrites;
+  const taken = { ...snapshotWrites, ...takeCycleWork(), removedProfiles: takeSyncedProfileRemovals(), removedDevices: takeSyncedDeviceRemovals() };
   snapshotWrites = { count: 0, bytes: 0 };
   return taken;
 }
@@ -119,7 +119,7 @@ async function runCycle({ retiring = false, forcePasswords = false }: CycleOptio
   }
   const options = { retiring, forcePasswords: forcePasswords || forcePasswordsNext };
   forcePasswordsNext = false;
-  cycle = cycleOnce(SyncNative, doc.folder, doc.deviceId, options);
+  cycle = timedCycle(Date.now(), cycleOnce(SyncNative, doc.folder, doc.deviceId, options));
   try {
     await cycle;
   } finally {
@@ -153,6 +153,7 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
     } finally {
       await appSettled();
     }
+    settleRemovals(doc, app);
     if (app.joined && readyToPair(doc, app) && !isQuitting()) linkProfiles(doc, app);
     settleThemeAdoption(doc.profiles, app, true);
     let pending = app.pending;
@@ -202,12 +203,8 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
     clearTimeout(slow);
     save();
     if (doc.enabled) {
-      if (again) {
-        again = false;
-        scheduleSync(0);
-      } else {
-        scheduleSync(CYCLE_MS);
-      }
+      scheduleSync(again ? 0 : CYCLE_MS);
+      again = false;
     }
   }
 }
@@ -356,6 +353,9 @@ export function addRemoteProfile(syncId: string): string | null {
   return shareWith;
 }
 
+export const removeRemoteProfile = (syncId: string): boolean => markRemoved(doc, syncId) && (docChanged(), true);
+export const removeSyncedDevice = (id: string): boolean => markDeviceRemoved(doc, id) && (docChanged(), true);
+
 export function startSync() {
   if (!SyncNative) return;
   load();
@@ -384,11 +384,11 @@ export function startSync() {
     if (!doc.enabled) return;
     const closed = !isQuitting() && recordOpenTabCloses(doc, openTabsClosed(s, prev));
     if (closed && !cycle) save();
-    if (closed || (!cycle && (s.bookmarks !== prev.bookmarks || s.settings !== prev.settings || s.profiles !== prev.profiles || s.groups !== prev.groups))) scheduleSync();
+    if (closed || (!cycle && (s.bookmarks !== prev.bookmarks || s.settings !== prev.settings || s.profiles !== prev.profiles || s.profileOrder !== prev.profileOrder || s.groups !== prev.groups))) scheduleSync();
   });
   if (__DEV__) {
     (globalThis as { acSync?: object }).acSync = {
-      useSync, syncNow, turnOnSync, enterRecoveryPhrase, stopSync, setTypeSynced, setProfileSynced, setOpenTabsSynced, addRemoteProfile, setSyncFolder, folderInfo,
+      useSync, syncNow, turnOnSync, enterRecoveryPhrase, stopSync, setTypeSynced, setProfileSynced, setOpenTabsSynced, addRemoteProfile, removeRemoteProfile, removeSyncedDevice, setSyncFolder, folderInfo,
       doc: () => doc,
       native: SyncNative,
       get menu(): typeof import("./menu") {

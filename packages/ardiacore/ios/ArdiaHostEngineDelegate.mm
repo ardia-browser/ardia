@@ -3,6 +3,7 @@
 #import "ArdiaServices.h"
 #import "ArdiaNavigationDownloads.h"
 #import "ArdiaProtectedVideo.h"
+#import "ArdiaRuntime.h"
 #import "ArdiaStartup.h"
 #import "ArdiaTabParking.h"
 #import "ArdiaWebViewInternal.h"
@@ -18,6 +19,18 @@
 
 using namespace ardia_host;
 
+static void EndFailedPageDragsAtMouseUp() {
+  const SEL begin = @selector(beginDraggingSessionWithItems:event:source:);
+  const bool installed = ardia_runtime::ReplaceMethod(NSClassFromString(@"WebContentsViewCocoa"), begin, ^id(IMP original) {
+    return ^NSDraggingSession *(NSView *view, NSArray<NSDraggingItem *> *items, NSEvent *event, id<NSDraggingSource> source) {
+      NSDraggingSession *session = ((NSDraggingSession * (*)(NSView *, SEL, NSArray<NSDraggingItem *> *, NSEvent *, id<NSDraggingSource>))original)(view, begin, items, event, source);
+      session.animatesToStartingPositionsOnCancelOrFail = NO;
+      return session;
+    };
+  });
+  if (!installed) NSLog(@"[ardiacore] page drag session override not installed: WebContentsViewCocoa has no %@", NSStringFromSelector(begin));
+}
+
 @implementation ArdiaHostEngineDelegate
 
 - (void)engineDidStart {
@@ -26,6 +39,7 @@ using namespace ardia_host;
   ArdiaLaunchSequence.shared.engineRunning = YES;
   WatchReservedShortcuts();
   ardia_host::InstallActivationGuardsLate();
+  EndFailedPageDragsAtMouseUp();
   if (gScratchDataDir && ardia_host::Background())
     ardia_host::InstallTestCrashGuard([gDataDirectory stringByDeletingLastPathComponent]);
   ArdiaCoreEngine *engine = ArdiaCoreEngine.sharedEngine;

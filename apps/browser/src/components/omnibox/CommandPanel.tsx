@@ -4,9 +4,9 @@ import { Animated, StyleSheet, View, type LayoutChangeEvent } from "react-native
 import { hex, useTheme } from "../ui/theme";
 import { useSidebarSide, useWindowId, useWindowUi } from "../../state/browser/hooks";
 import { useActiveTabIdWhile, useTabHasUrlWhile } from "../../state/omnibox/hooks";
-import { isCentred } from "../../state/omnibox/barPlacement";
+import { centredBarLeft, isCentred } from "../../state/omnibox/barPlacement";
 import { usePage } from "../../state/tabs/pageState";
-import { dismissHover, setRowsCovered } from "../../state/sidebar/hover";
+import { dismissHover, holdRowsCovered, panelCoversRows } from "../../state/sidebar/hover";
 import { useAddressBarInSidebar, useCardAnchors, useUrlAnchors, useWindowControlsBottom } from "../../state/windows/layout";
 import { useSidebarField } from "../../state/sidebar/chrome";
 import { barWidth } from "../ntp/NewTabPage";
@@ -48,13 +48,13 @@ export function CommandPanel({ windowWidth }: { windowWidth: number }) {
   const toolbarRow = useToolbarRow();
   const controlsBottom = useWindowControlsBottom();
   const sidebarRight = useSidebarSide(windowId) === "right";
-  const overRows = panel.open && !panel.newTab && !centred && !!anchor?.sidebar;
+  const overRows = panelCoversRows({ open: panel.open, newTab: !!panel.newTab, centred: centred && !!card, hasActiveTab: !!activeId, sidebarAnchor: !!anchor?.sidebar });
   useEffect(() => {
     if (panel.open) dismissHover();
-    setRowsCovered(windowId, overRows);
   }, [panel.open, overRows, windowId]);
+  useEffect(() => holdRowsCovered(windowId, overRows), [overRows, windowId]);
   if (!panel.open || !activeId) return null;
-  if (panel.newTab) return card ? <CentredBar windowId={windowId} tabId={activeId} target={panel.newTab} card={card} /> : null;
+  if (panel.newTab) return card ? <CentredBar windowId={windowId} tabId={activeId} target={panel.newTab} frame={centredFrame(card, windowWidth)} /> : null;
 
   const room = (left: number, top: number, fallback: number) => (windowWidth > 0 ? windowWidth - left - trailingClearance(top, WINDOW_MARGIN, controlsBottom) : fallback);
   const onCancel = () => cancelPanel(windowId);
@@ -65,7 +65,7 @@ export function CommandPanel({ windowWidth }: { windowWidth: number }) {
 
   if (centred && card) {
     return (
-      <Grow from={null} frame={centredFrame(card)} openHeight={PANEL_OPEN_HEIGHT} radius={radius.hero} surface={surface(radius.hero)}>
+      <Grow from={null} frame={centredFrame(card, windowWidth)} openHeight={PANEL_OPEN_HEIGHT} radius={radius.hero} surface={surface(radius.hero)}>
         <OutsidePressArea onOutsidePress={onCancel}>
           <Omnibox key={activeId} variant="panel" floating tabId={activeId} initialText={panel.initialText} onCancel={onCancel} onDone={onDone} />
         </OutsidePressArea>
@@ -119,21 +119,21 @@ function panelSurface(theme: ReturnType<typeof useTheme>, radius: number) {
   };
 }
 
-function centredFrame(card: Box) {
+function centredFrame(card: Box, windowWidth: number) {
   const width = barWidth(card.width);
-  const left = card.left + (card.width - width) / 2;
+  const left = centredBarLeft(card, width, windowWidth);
   const top = card.top + Math.max(WINDOW_MARGIN, Math.round(card.height * CENTRED_TOP_SHARE));
   return { left, top, width };
 }
 
-function CentredBar({ windowId, tabId, target, card }: { windowId: string; tabId: string; target: NewTabTarget; card: Box }) {
+function CentredBar({ windowId, tabId, target, frame }: { windowId: string; tabId: string; target: NewTabTarget; frame: { left: number; top: number; width: number } }) {
   const theme = useTheme();
   const onCancel = () => cancelPanel(windowId);
   const onDone = () => closeNewTabBar(windowId);
   return (
     <Grow
       from={null}
-      frame={centredFrame(card)}
+      frame={frame}
       openHeight={PANEL_OPEN_HEIGHT}
       radius={radius.hero}
       surface={panelSurface(theme, radius.hero)}

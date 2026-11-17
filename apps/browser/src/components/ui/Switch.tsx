@@ -3,6 +3,7 @@ import { Animated, Pressable, StyleSheet, View, type EasingFunction } from "reac
 import { curve, duration } from "./motion";
 import { useTheme } from "./theme";
 import { ink, opacity } from "./tokens";
+import { useNativeForm } from "./nativeForm";
 
 export type SwitchLook = {
   width: number;
@@ -92,6 +93,8 @@ function Switch({
 }
 
 const USER_CHANGE_WINDOW_MS = 2000;
+const FORM_SWITCH = { width: 32, height: 18, knob: 15, inset: 1.5 } as const;
+const NATIVE_FORM_SWITCH = { width: 26, height: 15, knob: 13, inset: 1 } as const;
 const SWITCH_HIT_SLOP = 6;
 
 export function Toggle({
@@ -108,6 +111,7 @@ export function Toggle({
   accessibilityLabel?: string;
 }) {
   const theme = useTheme();
+  const native = useNativeForm();
   if (look === "panel")
     return (
       <Switch
@@ -125,7 +129,7 @@ export function Toggle({
       disabled={disabled}
       accessibilityLabel={accessibilityLabel}
       animateExternalChanges={false}
-      look={{ width: 32, height: 18, knob: 15, inset: 1.5, offColor: theme.switchOff, onColor: theme.formAccent, knobBorder: theme.knobBorder, duration: duration.base, easing: curve.enter }}
+      look={{ ...(native ? NATIVE_FORM_SWITCH : FORM_SWITCH), offColor: theme.switchOff, onColor: theme.formAccent, knobBorder: theme.knobBorder, duration: duration.base, easing: curve.enter }}
     />
   );
 }

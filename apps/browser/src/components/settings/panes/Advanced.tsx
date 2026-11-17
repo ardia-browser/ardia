@@ -1,24 +1,21 @@
 import { useState } from "react";
 import { View } from "react-native";
-import { systemInfo } from "../../../state/app/system";
 import { describeCliInstall, installCliInBackground, useCli } from "../../../state/app/cliControl";
-import { openUrls } from "../../../state/browser/actions";
 import { useSettings } from "../../../state/browser/hooks";
 import { updateSettings } from "../../../state/settings/actions";
-import { openChromeSettings, openInternalPage } from "../../../state/pages/urls";
+import { openChromeSettings } from "../../../state/pages/urls";
 import type { BatterySaverWhen, Settings } from "../../../state/settings/settings";
 import { keepSiteActive, stopKeepingSiteActive, type MemorySaverMode } from "../../../state/tabs/memorySaver";
 import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
+import type { SettingsPlace } from "../../../state/settings/settingsWindows";
 import { Button, DialogActions, DialogTitle, lineHeight, PopUp, Sheet, space, Text, TextField, Toggle } from "../../ui";
+import { perLook } from "../../ui/tokens";
 import { Favicon } from "../../favicon/Favicon";
 import { FormField, Group, Row, SectionHeader, SettingToggle } from "../Form";
-import { engineVersion, widevine as widevineComponent } from "../../../state/settings/paneData";
-import { useResource } from "../../../state/settings/resources";
+import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
-import { AutomationRules } from "./AutomationRules";
-import { perLook } from "../../ui/tokens";
-
-const REPOSITORY = "https://github.com/mantrakp04/ardia";
+import { useAutomationRuleRows } from "./AutomationRules";
+import { WebEngineSection } from "./WebEngineSection";
 
 const BATTERY_SAVER_DESCRIPTIONS: Record<BatterySaverWhen, string> = {
   lowBattery: `At 20% battery or less, or in ${PLATFORM_TERMS.lowPowerMode}, busy background tabs pause and animations slow down.`,
@@ -26,56 +23,96 @@ const BATTERY_SAVER_DESCRIPTIONS: Record<BatterySaverWhen, string> = {
   never: "Background tabs and animations run at full speed on battery.",
 };
 
-const MEMORY_SAVER_MODES: Record<MemorySaverMode, { title: string; description: string }> = {
-  moderate: { title: "Moderate", description: "Get moderate memory savings. Your tabs become inactive after a longer period of time." },
-  balanced: { title: "Balanced (recommended)", description: "Get balanced memory savings. Your tabs become inactive after an optimal period of time." },
-  maximum: { title: "Maximum", description: "Get maximum memory savings. Your tabs become inactive after a shorter period of time." },
+type MemorySaverLevel = "off" | MemorySaverMode | "custom";
+type MemorySaverKeys = Pick<Settings, "memorySaver" | "memorySaverMode" | "loadProfilesWhenOpened" | "unloadProfilesAfter">;
+
+const profilesUnload = (after: string) => (PLATFORM_FEATURES.unloadsIdleProfiles ? ` Profiles you aren't using unload after ${after}.` : "");
+
+type MemorySaverPreset = Exclude<MemorySaverLevel, "custom">;
+
+const MEMORY_SAVER_LEVELS: Record<MemorySaverPreset, { title: string; description: () => string; settings: Partial<MemorySaverKeys> }> = {
+  off: {
+    title: "Off",
+    description: () => "Tabs stay loaded.",
+    settings: { memorySaver: false },
+  },
+  moderate: {
+    title: "Moderate",
+    description: () => "Tabs become inactive after a longer period of time. Profiles load when you first open them.",
+    settings: { memorySaver: true, memorySaverMode: "moderate", loadProfilesWhenOpened: true, unloadProfilesAfter: "never" },
+  },
+  balanced: {
+    title: "Balanced (recommended)",
+    description: () => "Tabs become inactive after an optimal period of time. Profiles load when you first open them.",
+    settings: { memorySaver: true, memorySaverMode: "balanced", loadProfilesWhenOpened: true, unloadProfilesAfter: "never" },
+  },
+  maximum: {
+    title: "Maximum",
+    description: () => `Tabs become inactive after a shorter period of time. Profiles load when you first open them.${profilesUnload("15 minutes")}`,
+    settings: { memorySaver: true, memorySaverMode: "maximum", loadProfilesWhenOpened: true, unloadProfilesAfter: "15m" },
+  },
 };
-const MEMORY_SAVER_OPTIONS = Object.entries(MEMORY_SAVER_MODES).map(([value, { title }]) => ({ value: value as MemorySaverMode, title }));
+const MEMORY_SAVER_PRESETS = Object.keys(MEMORY_SAVER_LEVELS) as MemorySaverPreset[];
 
-const UNLOAD_PROFILES_OPTIONS: { value: Settings["unloadProfilesAfter"]; title: string }[] = [
-  { value: "never", title: "Never" },
-  { value: "5m", title: "After 5 minutes" },
-  { value: "15m", title: "After 15 minutes" },
-  { value: "1h", title: "After 1 hour" },
-  { value: "2h", title: "After 2 hours" },
-];
+const UNLOAD_AFTER: Record<Settings["unloadProfilesAfter"], string> = { never: "", "5m": "5 minutes", "15m": "15 minutes", "1h": "an hour", "2h": "2 hours" };
 
-export function AdvancedPane() {
-  const hideBookmarksBarImport = useSettings((s) => s.hideBookmarksBarImport);
-  const memorySaverMode = useSettings((s) => s.memorySaverMode);
-  const unloadProfilesAfter = useSettings((s) => s.unloadProfilesAfter);
-  const batterySaverWhen = useSettings((s) => s.batterySaverWhen);
-  const keepActiveSites = useSettings((s) => s.keepActiveSites);
-  const warnBeforeMovingTabs = useSettings((s) => s.warnBeforeMovingTabsToProfile);
-  const [info] = useResource(engineVersion);
-  const [widevine] = useResource(widevineComponent);
-  const widevineVersion = widevine && widevine.version !== "0.0.0.0" ? widevine.version : null;
+function memorySaverLevel(s: MemorySaverKeys): MemorySaverLevel {
+  if (!s.memorySaver) return "off";
+  const preset = MEMORY_SAVER_LEVELS[s.memorySaverMode].settings;
+  return s.loadProfilesWhenOpened === preset.loadProfilesWhenOpened && s.unloadProfilesAfter === preset.unloadProfilesAfter ? s.memorySaverMode : "custom";
+}
 
+function customDescription(s: MemorySaverKeys) {
+  const tabs = MEMORY_SAVER_LEVELS[s.memorySaverMode].description().split(". ")[0];
+  const load = s.loadProfilesWhenOpened ? " Profiles load when you first open them." : " Every profile loads when Ardia opens.";
+  return `${tabs}.${load}${s.unloadProfilesAfter === "never" ? "" : profilesUnload(UNLOAD_AFTER[s.unloadProfilesAfter])} Pick a level to use its settings instead.`;
+}
+
+export function AdvancedPane(_: SettingsPlace) {
   return (
     <View>
       <SectionHeader title="Browsing" />
       <Group>
         <SettingToggle anchor="advanced.showFullUrl" />
-        <Row anchor="advanced.warnMovingTabs">
-          <Toggle value={warnBeforeMovingTabs} onChange={(v) => updateSettings({ warnBeforeMovingTabsToProfile: v })} />
-        </Row>
-        <Row anchor="advanced.bookmarksImport">
-          <Toggle value={!hideBookmarksBarImport} onChange={(v) => updateSettings({ hideBookmarksBarImport: !v })} />
+        <Row anchor="advanced.chromeSettings">
+          <Button title="Open Chromium Settings" onPress={openChromeSettings} />
         </Row>
       </Group>
+      <PerformanceSection />
+      {PLATFORM_FEATURES.webKit && <WebEngineSection />}
+      <CommandLineSection />
+    </View>
+  );
+}
 
+function PerformanceSection() {
+  const memorySaver = useSettings((s) => s.memorySaver);
+  const memorySaverMode = useSettings((s) => s.memorySaverMode);
+  const loadProfilesWhenOpened = useSettings((s) => s.loadProfilesWhenOpened);
+  const unloadProfilesAfter = useSettings((s) => s.unloadProfilesAfter);
+  const keys = { memorySaver, memorySaverMode, loadProfilesWhenOpened, unloadProfilesAfter };
+  const batterySaverWhen = useSettings((s) => s.batterySaverWhen);
+  const keepActiveSites = useSettings((s) => s.keepActiveSites);
+  const level = memorySaverLevel(keys);
+  const options = [...MEMORY_SAVER_PRESETS.map((value) => ({ value: value as MemorySaverLevel, title: MEMORY_SAVER_LEVELS[value].title })), ...(level === "custom" ? [{ value: "custom" as const, title: "Custom" }] : [])];
+  return (
+    <>
       <SectionHeader title="Performance" />
       <Group>
-        <SettingToggle anchor="advanced.memorySaver" />
-        <Row anchor="advanced.memorySaverMode" description={MEMORY_SAVER_MODES[memorySaverMode].description}>
-          <PopUp
-            value={memorySaverMode}
-            options={MEMORY_SAVER_OPTIONS}
-            onChange={(v) => updateSettings({ memorySaverMode: v })}
-            minWidth={190}
-          />
+        <Row anchor="advanced.memorySaver" description={level === "custom" ? customDescription(keys) : MEMORY_SAVER_LEVELS[level].description()}>
+          <PopUp value={level} options={options} onChange={(v) => v !== "custom" && updateSettings(MEMORY_SAVER_LEVELS[v].settings)} minWidth={190} />
         </Row>
+        <Row anchor="advanced.keepActiveSites">
+          <Button title="Add Site…" icon="plus" onPress={() => showSettingsSheet(<KeepActiveSiteSheet />)} />
+        </Row>
+        {memorySaver &&
+          [...keepActiveSites]
+            .sort((a, b) => a.localeCompare(b))
+            .map((site) => (
+              <Row key={site} icon={<Favicon url={siteUrl(site)} />} title={site}>
+                <Button variant="icon" icon="trash" size="m" onPress={() => stopKeepingSiteActive(site)} tooltip="Remove" />
+              </Row>
+            ))}
         <Row anchor="advanced.batterySaver" description={BATTERY_SAVER_DESCRIPTIONS[batterySaverWhen]}>
           <PopUp
             value={batterySaverWhen}
@@ -88,70 +125,15 @@ export function AdvancedPane() {
             minWidth={190}
           />
         </Row>
-        <SettingToggle anchor="advanced.loadProfilesWhenOpened" />
-        <Row anchor="advanced.unloadProfilesAfter">
-          <PopUp
-            value={unloadProfilesAfter}
-            options={UNLOAD_PROFILES_OPTIONS}
-            onChange={(v) => updateSettings({ unloadProfilesAfter: v })}
-            minWidth={190}
-          />
-        </Row>
       </Group>
-
-      <KeepActiveSites sites={keepActiveSites} />
-
-      <SectionHeader title="Data" />
-      <Group>
-        <Row anchor="advanced.history">
-          <Button title="Show History" onPress={() => openInternalPage("history")} />
-        </Row>
-        <Row anchor="advanced.downloads">
-          <Button title="Show Downloads" onPress={() => openInternalPage("downloads")} />
-        </Row>
-      </Group>
-
-      <CommandLineSection />
-      <AutomationRules />
-
-      <SectionHeader title="Web engine" />
-      <Group>
-        <Row anchor="advanced.chromium" description={info ? "ArdiaCore" : undefined}>
-          <Text selectable tone="textSecondary">
-            {info?.chromiumVersion ?? "…"}
-          </Text>
-        </Row>
-        <Row
-          anchor="advanced.widevine"
-          description={
-            widevine === undefined
-              ? "Checking…"
-              : widevineVersion
-                ? `Version ${widevineVersion}`
-                : "Not available in this build: video that needs it, like Netflix or Disney+, won't play."
-          }
-        />
-        <Row anchor="advanced.chromeSettings">
-          <Button title="Open Chrome Settings" onPress={openChromeSettings} />
-        </Row>
-      </Group>
-
-      <SectionHeader title="Source and licenses" />
-      <Group>
-        <Row anchor="advanced.source">
-          <Button title="Show on GitHub" onPress={() => openUrls([`${REPOSITORY}/tree/v${systemInfo().appVersion}`])} />
-        </Row>
-        <Row anchor="advanced.licenses">
-          <Button title="Show Licenses" onPress={() => openUrls(["chrome://credits"])} />
-        </Row>
-      </Group>
-    </View>
+    </>
   );
 }
 
 function CommandLineSection() {
   const on = useSettings((s) => s.cliControl);
   const cli = useCli();
+  const ruleRows = useAutomationRuleRows();
   const server = cli.server;
   const serverNote =
     server?.state === "external"
@@ -162,54 +144,43 @@ function CommandLineSection() {
           ? server.connections
             ? `Connected now: ${server.connections === 1 ? "1 session" : `${server.connections} sessions`}.`
             : "On. Nothing is connected."
-          : "While it's on, the command can open, read and act in every page you're signed in to, and it stays on after you quit.";
+          : "Installs the ardia command and lets it open, read and act in every page you're signed in to. It stays on after you quit.";
+  const failed = !!cli.error && !cli.installing;
+  const setOn = (next: boolean) => {
+    updateSettings({ cliControl: next });
+    if (next && !cli.installing && (!cli.installedVersion || cli.error)) void installCliInBackground("settings");
+  };
   return (
     <>
-      <SectionHeader title="Command line" />
+      <SectionHeader title="Command line and automation" />
       <Group>
-        <SettingToggle anchor="advanced.cliControl" description={serverNote} />
         <Row
-          anchor="advanced.cliInstall"
+          anchor="advanced.ardiaCommand"
           description={
-            <Text selectable size="caption" tone={cli.error && !cli.installing ? "destructive" : "textSecondary"} style={INSTALL_NOTE()}>
-              {describeCliInstall(cli)}
-            </Text>
+            <View>
+              <Text size="caption" tone="textSecondary" style={NOTE()}>
+                {serverNote}
+              </Text>
+              {on || cli.installedVersion || cli.installing || failed ? (
+                <Text selectable size="caption" tone={failed ? "destructive" : "textSecondary"} style={NOTE()}>
+                  {describeCliInstall(cli)}
+                </Text>
+              ) : null}
+            </View>
           }
         >
-          <Button
-            title={cli.installing ? "Installing…" : cli.installedVersion ? "Reinstall" : "Install"}
-            disabled={!!cli.installing}
-            onPress={() => void installCliInBackground("settings")}
-          />
+          {on && failed ? <Button title="Try Again" onPress={() => void installCliInBackground("settings")} /> : null}
+          {on && !failed && cli.installedVersion && !cli.installing ? <Button title="Reinstall" onPress={() => void installCliInBackground("settings")} /> : null}
+          <Toggle value={on} accessibilityLabel="ardia command" onChange={setOn} />
         </Row>
         <SettingToggle anchor="advanced.compactCliPill" />
+        {ruleRows}
       </Group>
     </>
   );
 }
 
 const siteUrl = (site: string) => (/^[a-z][\w+.-]*:\/\//i.test(site) ? site : `https://${site.replace(/^\[\*\.\]|^\*\.|^\./, "")}`);
-
-function KeepActiveSites({ sites }: { sites: string[] }) {
-  return (
-    <>
-      <SectionHeader anchor="advanced.keepActiveSites" description={null} action={<Button title="Add Site…" icon="plus" onPress={() => showSettingsSheet(<KeepActiveSiteSheet />)} />} />
-      <Group of="advanced.keepActiveSites">
-        {sites.length === 0 ? (
-          <Row title="No sites added" />
-        ) : (
-          [...sites]
-            .sort((a, b) => a.localeCompare(b))
-            .map((site) => (
-              <Row key={site} icon={<Favicon url={siteUrl(site)} />} title={site}>
-                <Button variant="icon" icon="trash" size="m" onPress={() => stopKeepingSiteActive(site)} tooltip="Remove" />
-              </Row>
-            ))
-        )}
-      </Group>
-    </>
-  );
-}
 
 function KeepActiveSiteSheet() {
   const [site, setSite] = useState("");
@@ -241,5 +212,5 @@ function KeepActiveSiteSheet() {
   );
 }
 
-const INSTALL_NOTE = perLook(() => ({ marginTop: space.xxs, lineHeight: lineHeight.caption }) as const);
+const NOTE = perLook(() => ({ marginTop: space.xxs, lineHeight: lineHeight.caption }) as const);
 const ERROR = { marginTop: space.ml } as const;

@@ -104,7 +104,7 @@ export function chooseSource(b: BrowserSource) {
   const available: ImportKind[] = b.requiresExport ? ["bookmarks", "history", "passwords"] : b.profiles.flatMap((p) => p.available);
   patchImport({
     source: b,
-    sourceProfiles: (defaults.length ? defaults : b.profiles.slice(0, 1)).map((p) => p.id),
+    sourceProfiles: (b.asksAppForTabs ? b.profiles : defaults.length ? defaults : b.profiles.slice(0, 1)).map((p) => p.id),
     spaces: spaceProfiles.flatMap((p) => p.spaces ?? []).map((sp) => sp.id),
     kinds: new Set(available),
     ...(b.family === "safari" ? { fullDiskAccess: importModule().safariHasFullDiskAccess() } : {}),

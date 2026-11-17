@@ -13,7 +13,9 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
   var initialURL: String?
   var adoptId: String?
   var transferKey: String?
-  var visible = true { didSet { updateHidden(); updateSight() } }
+  var visible = true { didSet { updateHidden(); updateSight(); noteShownChanged() } }
+  var selected = true { didSet { noteShownChanged() } }
+  var wasShown = true
   var autoPictureInPicture = false
   var pageBackgroundColor: NSColor? { didSet { if let color = pageBackgroundColor { webView?.underPageBackgroundColor = color } } }
   let browserId = WebKitHub.shared.nextBrowserId()

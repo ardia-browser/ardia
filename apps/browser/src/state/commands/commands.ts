@@ -48,7 +48,7 @@ import { openExtensionFromMenu } from "../extensions/bridge";
 import { toggleCastPicker } from "../media/cast";
 import { openManageExtensions, openPinDialog, openWebStore } from "../extensions/actions";
 import { requestAutofill } from "../site/autofill";
-import { copyPageUrl, jumpToSelection } from "../site/selection";
+import { copyPageUrl, copySelectedTabUrls, jumpToSelection } from "../site/selection";
 import { shareTab } from "../site/share";
 import { groupOf } from "../pins/tabGrouping";
 import { selectedTabIds } from "../pins/organize";
@@ -208,9 +208,9 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
     case "share":
       return void shareTab(page, windowId, arg?.startsWith("via:") ? arg.slice(4) : null);
     case "copyUrl":
-      return page ? void copyPageUrl(page.id) : undefined;
+      return (!targeted && copySelectedTabUrls(s, windowId, false)) || !page ? undefined : void copyPageUrl(page.id);
     case "copyUrlAsMarkdown":
-      if (!page) return;
+      if ((!targeted && copySelectedTabUrls(s, windowId, true)) || !page) return;
       noteUrlCopied(awaitsFirstPage(page.id));
       return copyText(markdownLink(page.customTitle || page.title, page.url));
     case "findInPage":

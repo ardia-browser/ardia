@@ -189,10 +189,17 @@ int main(int argc, char** argv) {
   assert(config.At("test").dict->values.empty());
   assert(!config.At("switches").dict->At("newTabPrewarm").boolean);
   if (scenario == "defaults") {
+    assert(!ardiacore::TestFlag("mediaRouteProvider"));
     assert(command->GetSwitchValueASCII("disable-features") == "DevToolsAcceptDebuggingConnections");
     assert(!ardiacore::BackgroundInstance());
     assert(!config.At("isolated").boolean);
     assert(config.At("instance").dict->values.empty());
+  } else if (scenario == "test-cast-sink") {
+    assert(ardiacore::TestFlag("mediaRouteProvider"));
+    assert(!ardiacore::TestFlag("reauth"));
+    assert(!ardiacore::TestInstance());
+  } else if (scenario == "no-test-cast-sink") {
+    assert(!ardiacore::TestFlag("mediaRouteProvider"));
   } else if (scenario == "test-authority") {
     assert(ardiacore::BackgroundInstance());
     assert(!config.At("isolated").boolean);
@@ -354,6 +361,13 @@ class LaunchSwitchTests(unittest.TestCase):
     def test_scratch_background_and_mock_keychain_never_grant_test_authority(self):
         result = self.run_case('test-authority', 'ardia-background', f'ardia-data-dir={self.root}', 'use-mock-keychain', 'headless', 'ardia-test=reauth=grant', 'ardia-trace=profileGate')
         self.assertIn('secure test mode is unavailable on Linux', result.stderr)
+
+    def test_the_test_cast_sink_needs_its_switch_an_own_user_data_dir_and_the_browser_process(self):
+        self.run_case('test-cast-sink', 'ardia-test-cast-sink', f'user-data-dir={self.user}')
+        self.run_case('no-test-cast-sink', 'ardia-test-cast-sink')
+        self.run_case('no-test-cast-sink', f'user-data-dir={self.user}')
+        self.run_case('no-test-cast-sink', 'ardia-test-cast-sink', f'user-data-dir={self.user}', 'type=renderer')
+        self.run_case('no-test-cast-sink', 'ardia-test=mediaRouteProvider', f'user-data-dir={self.user}')
 
     def test_data_directory_environment_does_not_claim_native_isolation(self):
         self.run_case('defaults', environment={'ARDIA_DATA_DIR': '/unselected/scratch', 'ARDIA_TEST': 'reauth=grant', 'ARDIA_TRACE': 'profileGate'})

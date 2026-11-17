@@ -1,5 +1,13 @@
+export type KeyHoldDrop = "modified" | "edit" | "character" | "dead" | "ime" | "mouse" | "window" | "command" | "cancelled" | "focus" | "reload" | "site" | "capacity" | "timeout";
+
+export type KeyHoldCounts = { holds: number; replayed: number; drops: Partial<Record<KeyHoldDrop, number>> };
+
+export type KeyHoldNative = { keyHoldCounts(): KeyHoldCounts };
+
 export type FocusNative = {
   setSwitcherCapture(active: boolean): Promise<void>;
+  takeEditKeyAcks?(): Record<string, number>;
+  takeInputSourceKeys?(): number;
   setDragEscapeCapture(active: boolean): Promise<void>;
   cancelFocusMove(generation: number, restoringSource: boolean): Promise<void>;
   claimFocus(generation: number, tag: number): Promise<void>;
@@ -8,5 +16,6 @@ export type FocusNative = {
   discardKeyResponder(token: number): Promise<void>;
   switcherPointerMoved(): boolean;
   pressesWithoutRelease(): number;
+  takeFocusHandoffCounts?(): Record<string, number>;
   pressRepeated(): Promise<{ landedOn: string; ms: number } | null>;
 };

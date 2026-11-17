@@ -28,22 +28,38 @@ const codeOf = (key: string): number | null => {
 };
 const commandOf = (id: string) => (LINUX_STANDARD_ITEMS[id]?.command ?? id.split(":")[0]) as BrowserCommand;
 const argOf = (id: string) => id in LINUX_STANDARD_ITEMS || !id.includes(":") ? null : id.slice(id.indexOf(":") + 1);
-const titleOf = (id: string) => {
+const commandTitle = (id: string) => {
   const standard = LINUX_STANDARD_ITEMS[id];
   if (standard) return standard.title;
   const [command, arg] = id.split(":");
   const spec = commandSpec(command!);
   return (arg && spec?.variants?.[arg]?.title) || spec?.title || `${command!.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase())}${arg ? ` ${arg}` : ""}`;
 };
-const pathOf = (command: string) => LINUX_STANDARD_ITEMS[command]?.path ?? (/Settings|Profile/.test(command) ? "Ardia" : /Tab|Window|Group/.test(command) ? "Tabs" : /find|Find|Selection|copy/.test(command) ? "Edit" : /bookmark|Bookmark/.test(command) ? "Bookmarks" : /History|Browsing|downloads|back|forward/.test(command) ? "History" : "View");
+const legacyPathOf = (command: string) => LINUX_STANDARD_ITEMS[command]?.path ?? (/Settings|Profile/.test(command) ? "Ardia" : /Tab|Window|Group/.test(command) ? "Tabs" : /find|Find|Selection|copy/.test(command) ? "Edit" : /bookmark|Bookmark/.test(command) ? "Bookmarks" : /History|Browsing|downloads|back|forward/.test(command) ? "History" : "View");
+const PROFILES_MENU = ["Window", "Profiles"];
+const PROFILES_MENU_COMMANDS: ReadonlySet<string> = new Set(["switchProfile", "nextProfile", "previousProfile", "newProfile"]);
+const PER_PROFILE_PATHS: Readonly<Record<string, readonly string[]>> = {
+  switchProfile: PROFILES_MENU,
+  newLittleArdia: ["File", "New Little Ardia Window in Profile"],
+};
+export type ProfileNames = Readonly<Record<string, { name: string } | undefined>>;
+const profileRow = (id: string, profileNames: ProfileNames) => {
+  const colon = id.indexOf(":");
+  if (colon < 0) return null;
+  const path = PER_PROFILE_PATHS[id.slice(0, colon)];
+  const name = profileNames[id.slice(colon + 1)]?.name;
+  return path && name ? { title: name, path: [...path] } : null;
+};
+const rowOf = (id: string, profileNames: ProfileNames) => profileRow(id, profileNames)
+  ?? { title: commandTitle(id), path: PROFILES_MENU_COMMANDS.has(id.split(":")[0]!) ? [...PROFILES_MENU] : [legacyPathOf(id)] };
 
-export function linuxMenuShortcuts(overrides: ShortcutOverrides = {}, profiles: readonly string[] = []): MenuShortcut[] {
+export function linuxMenuShortcuts(overrides: ShortcutOverrides = {}, profiles: readonly string[] = [], profileNames: ProfileNames = {}): MenuShortcut[] {
   const sources = shortcutSources(profiles, Object.keys(overrides));
   const resolved = resolveShortcuts(sources, overrides);
   return sources.map((source) => {
     const defaults = source.keys[0] ?? { key: "", modifiers: [] };
     const effective = resolved.bindings.get(source.id)?.[0] ?? { key: "", modifiers: [] };
-    return { id: source.id, title: titleOf(source.id), path: [pathOf(source.id)], ...effective,
+    return { id: source.id, ...rowOf(source.id, profileNames), ...effective,
       defaultKey: defaults.key, defaultModifiers: defaults.modifiers, remappable: true,
       aliases: source.keys.slice(1).map((shortcut) => [shortcut.key, ...shortcut.modifiers]) };
   });

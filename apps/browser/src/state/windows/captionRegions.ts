@@ -23,7 +23,7 @@ export const useMaximizedWindows = create<Record<string, true>>()(() => ({}));
 
 export const useWindowMaximized = (windowId: string): boolean => useMaximizedWindows((m) => !!m[windowId]);
 
-function noteMaximized(windowId: string, on: boolean) {
+export function noteMaximized(windowId: string, on: boolean) {
   useMaximizedWindows.setState((m) => {
     if (!!m[windowId] === on) return m;
     const { [windowId]: _, ...rest } = m;

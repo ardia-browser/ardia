@@ -88,8 +88,9 @@ export class DragGeometry {
   protected pinFloor(live: Item[], tiles: Frame): number {
     const list = this.at(this.drag.regionFrames.get("list") ?? null);
     const pinnedArea = this.at(this.drag.regionFrames.get("pinnedGroups") ?? null);
+    const pinnedHeader = this.at(this.drag.regionFrames.get("pinnedHeader") ?? null);
     const rows = live.filter((i) => i.kind !== "tail" && (i.section === "pinnedRows" || i.section === "pinnedGroups")).map((i) => this.at(i.frame)!.y);
-    const top = Math.min(list?.y ?? tiles.y + tiles.h + TILE_GAP, pinnedArea?.y ?? Infinity, ...rows);
+    const top = Math.min(list?.y ?? tiles.y + tiles.h + TILE_GAP, pinnedArea?.y ?? Infinity, pinnedHeader?.y ?? Infinity, ...rows);
     return this.tilesFixed ? Math.max(top, tiles.y + tiles.h + this.drag.gridGrowth + SCROLL_EDGE.gap + SCROLL_EDGE.line) : top;
   }
 

@@ -231,7 +231,7 @@ function SiteControlsPanel({
                       ? () => void toggleBlocker(blocker.allowed)
                       : () => {
                           close();
-                          openSettings("privacy");
+                          openSettings("general");
                         }
                 }
               />

@@ -157,6 +157,35 @@ test("a drag ended before its measurements arrive does nothing when they do", as
   traces.check(t, "begin pending", [...r.steps, r.name({ ghosts: ghostLog(ghosts, r.name) })]);
 });
 
+function headedScene() {
+  const W = world("a", "b", "c", "p1", "t1", "t2");
+  const { id } = W;
+  S().pinTabs([id.t1, id.t2], true);
+  S().pinTabs([id.p1], true, true);
+  const L = sceneLayout({ top: 60 });
+  const grid = L.tiles([id.t1, id.t2]).frame;
+  L.skip(6);
+  const headerTop = L.y;
+  L.skip(34 + 3);
+  const pinnedTop = L.y;
+  L.row(id.p1, { section: "pinnedRows" }).tail("pinnedGroups");
+  L.skip(10);
+  const listTop = L.y;
+  L.row(id.a).row(id.b).row(id.c).tail("list");
+  return { ...W, L, headerTop, regions: { tiles: grid, ...regionsOf(L, { pinnedHeader: [headerTop, headerTop + 34], pinnedGroups: [pinnedTop, listTop], list: [listTop, L.y] }) } };
+}
+
+test("a tab let go on the pinned section's header becomes a pinned row, not a Top Apps tile", async () => {
+  const m = headedScene();
+  const { c } = mount({ entries: m.L.entries, regions: m.regions });
+  const r = recorder(c, m.w);
+  const from = frameOf(m, entryKey("tab", m.id.c));
+  await r.begin(entryKey("tab", m.id.c), from.x + 20, from.y + 10);
+  r.move(60, m.headerTop + 17);
+  await r.end(true);
+  assert.deepEqual(S().tabs[m.id.c].pin, { as: "row" });
+});
+
 test("a late tilesLaidOut from an old drag doesn't retarget a newer one", async (t) => {
   const m = listScene();
   const { c } = mount({ entries: m.L.entries, regions: m.regions });
@@ -266,4 +295,28 @@ test("a drag begun over one that never ended stops the old one's autoscroll and 
   t.mock.timers.tick(1000);
   c.end(false);
   assert.equal(D.readDrag(c).gapKey, null);
+});
+
+test("a drag let go with no place to drop is counted; a dropped, cancelled or returned drag is not", async () => {
+  const { devTabPresses } = await import("../../state/telemetry/tabPresses.ts");
+  const counted = () => devTabPresses().drags_without_drop;
+  const offScreen = { x: -190, y: 100, w: 200, h: 700 };
+  const run = async ({ viewport, to, commit = true }) => {
+    const m = listScene();
+    const { c } = mount({ entries: m.L.entries, regions: m.regions, ...(viewport ? { viewport } : {}) });
+    const b = frameOf(m, entryKey("tab", m.id.b));
+    const before = counted();
+    await c.begin(entryKey("tab", m.id.b), b.x + 20, b.y + 10);
+    const p = to(m, b);
+    c.move(p.x, p.y);
+    const drop = D.readDrag(c).drop.type;
+    c.end(commit);
+    await D.settle();
+    return { drop, counted: counted() - before };
+  };
+  const belowD = (m) => ({ x: 60, y: frameOf(m, entryKey("tab", m.id.d)).y + 30 });
+  assert.deepEqual(await run({ viewport: offScreen, to: belowD }), { drop: "none", counted: 1 }, "another space's off-screen scroll view");
+  assert.deepEqual(await run({ to: belowD }), { drop: "tabs", counted: 0 });
+  assert.deepEqual(await run({ viewport: offScreen, to: belowD, commit: false }), { drop: "none", counted: 0 });
+  assert.deepEqual((await run({ to: (m, b) => ({ x: b.x + 20, y: b.y + 12 }) })).counted, 0, "let go where it started");
 });

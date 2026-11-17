@@ -10,10 +10,13 @@ import { profileOpened } from "../profiles/profileLoading";
 import { isPeekTab } from "../peek/peek";
 import { fromSync } from "../pins/pinOrderChoices";
 import { fromLegacy } from "../../lib/legacy";
+import { thisDeviceDetails } from "./deviceDetails";
 import type { BookmarkNode, HistoryEntry } from "../browser/types";
 import { isWebPageUrl } from "../../lib/url";
 import { BOOKMARK, DEVICE, DEVICE_TABS, HISTORY, RECEIVES_TABS, SHARE, bookmarkValue, historyValue, passwordValue, recordId, type BookmarkValue, type DeviceRecord, type DeviceTabs, type HistoryValue, type PasswordValue, type ShareRecord } from "./records";
 import { isAsleep } from "../tabs/pageSession";
+import { withSyncWorkCounts } from "../telemetry/workCounts";
+import { historyExtractsOf } from "./historyExtracts";
 
 const store = () => useBrowser.getState();
 
@@ -25,32 +28,35 @@ export const inTodaysNames = (adapter: Adapter): Adapter => ({
 
 type ShareLink = { syncId: string; enabled: boolean; retire?: boolean };
 
-export function sharedDataAdapter(links: () => Record<string, ShareLink>): Adapter {
+export function sharedDataAdapter(links: () => Record<string, ShareLink>, removed: () => ReadonlySet<string> = () => new Set()): Adapter {
   return {
     prefix: SHARE,
     adoptRemoteOnJoin: true,
     publishAfterPull: true,
-    extract: (_base, _queued, _now, known) => {
+    extract: (_base, _queued, _now, known, remote) => {
       const all = links();
       const synced = (id: string) => !!store().profiles[id] && !!all[id]?.enabled && !all[id]?.retire;
       const values = new Map<string, unknown>();
       for (const [id, link] of Object.entries(all)) {
         const ownerId = store().profiles[id]?.dataId;
-        if (!synced(id) || !ownerId || ownerId === id || !synced(ownerId)) continue;
+        if (!synced(id) || !ownerId || ownerId === id || !all[ownerId] || !store().profiles[ownerId]) continue;
         const key = `${SHARE}${link.syncId}`;
-        if (!known(key)) values.set(key, { o: all[ownerId]!.syncId } satisfies ShareRecord);
+        const removedElsewhere = known(key) && remote(key) === null;
+        if (removedElsewhere || !known(key)) values.set(key, { o: all[ownerId]!.syncId } satisfies ShareRecord);
       }
-      return { values, ignore: (key) => !values.has(key) };
+      const gone = removed();
+      return { values, ignore: (key) => !values.has(key) && !gone.has(key) };
     },
     apply: () => true,
   };
 }
 
-export function deviceAdapter(deviceId: string, name: () => string, retired = false): Adapter {
+export function deviceAdapter(deviceId: string, name: () => string, retired = false, spaceOrder: () => string[] = () => []): Adapter {
+  const recordOf = (order: string[]): DeviceRecord => ({ n: name(), k: "mac", f: [RECEIVES_TABS], ...thisDeviceDetails(), ...(order.length ? { o: order } : {}) });
   return {
     prefix: DEVICE,
     extract: () => ({
-      values: retired ? new Map() : new Map([[`${DEVICE}${deviceId}`, { n: name(), k: "mac", f: [RECEIVES_TABS] } satisfies DeviceRecord]]),
+      values: retired ? new Map() : new Map([[`${DEVICE}${deviceId}`, recordOf(spaceOrder())]]),
       ignore: (key) => key !== `${DEVICE}${deviceId}`,
     }),
     apply: () => true,
@@ -59,7 +65,7 @@ export function deviceAdapter(deviceId: string, name: () => string, retired = fa
 
 export function bookmarksAdapter(profileId: string): Adapter {
   const ready = () => !!store().bookmarksReady[engineProfile(store(), profileId)];
-  return {
+  return withSyncWorkCounts("bookmark", {
     prefix: BOOKMARK,
     extract: (base) => {
       if (!ready()) return null;
@@ -129,7 +135,11 @@ export function bookmarksAdapter(profileId: string): Adapter {
         }
       }
       const children = new Map<string, string[]>([[roots.bar, []], [roots.other, []]]);
-      for (const id of values.keys()) children.set(parentOf.get(id)!, [...(children.get(parentOf.get(id)!) ?? []), id]);
+      for (const id of values.keys()) {
+        const siblings = children.get(parentOf.get(id)!);
+        if (siblings) siblings.push(id);
+        else children.set(parentOf.get(id)!, [id]);
+      }
       const byPosition = (a: string, z: string) => {
         const pa = values.get(a)!.pos;
         const pz = values.get(z)!.pos;
@@ -160,13 +170,14 @@ export function bookmarksAdapter(profileId: string): Adapter {
       }
       useBrowser.setState({ bookmarks: { ...b, nodes } });
     },
-  };
+  });
 }
 
 const HISTORY_WINDOW_MS = 90 * 86_400_000;
 
 const lastVisitOf = (v: HistoryValue) => Math.max(0, ...v.vt);
 const SAME_VISIT_MS = 1;
+const sameVisits = (a: number[], b: number[]) => a.length === b.length && a.every((t, i) => Math.abs(b[i]! - t) <= SAME_VISIT_MS);
 
 export function historyExpired(key: string, value: unknown, now: number) {
   const v = key.startsWith(HISTORY) ? historyValue(value) : null;
@@ -175,32 +186,53 @@ export function historyExpired(key: string, value: unknown, now: number) {
 
 export function historyAdapter(profileId: string): Adapter {
   const ready = () => !!historyViewOf(store(), profileId)?.ready;
-  return {
+  const extracts = historyExtractsOf(profileId);
+  const { parsed, knownJson } = extracts;
+  const knownOf = (key: string, json: string | undefined) => {
+    if (json === undefined) return null;
+    const cached = parsed.get(key);
+    if (cached?.json === json) return cached.known;
+    const known = historyValue(JSON.parse(json));
+    parsed.set(key, { json, known });
+    if (known) knownJson.set(known, json);
+    return known;
+  };
+  const visitOf = (key: string, e: HistoryEntry, json: string | undefined): HistoryValue => {
+    const local: HistoryValue = { t: e.title, n: e.visits, vt: e.visitTimes?.length ? e.visitTimes : [e.lastVisit] };
+    const known = knownOf(key, json);
+    const edited = !known || (!sameVisits(local.vt, known.vt) && local.vt.some((t) => !known.vt.some((k) => Math.abs(k - t) <= SAME_VISIT_MS)));
+    return edited ? local : known;
+  };
+  return withSyncWorkCounts("history", {
     prefix: HISTORY,
-    extract: (base) => {
+    extract: (_base, _queued, _now, _known, _remote, _stamp, baseJson) => {
       if (!ready()) return null;
       const since = Date.now() - HISTORY_WINDOW_MS;
       const values = new Map<string, unknown>();
       const older = new Set<string>();
       const { list: view, floor } = historyViewOf(store(), profileId)!;
-      for (const e of view) {
-        if (!isWebPageUrl(e.url)) continue;
-        const key = `${HISTORY}${e.url}`;
+      for (let i = 0; i < view.length; i++) {
+        const e = view[i]!;
+        let visit = extracts.visits.get(e);
+        if (!visit) extracts.visits.set(e, (visit = { key: isWebPageUrl(e.url) ? `${HISTORY}${e.url}` : null, json: undefined, value: null }));
+        const { key } = visit;
+        if (key === null) continue;
         if (e.lastVisit < since) {
           older.add(key);
           continue;
         }
-        const local: HistoryValue = { t: e.title, n: e.visits, vt: e.visitTimes?.length ? e.visitTimes : [e.lastVisit] };
-        const known = historyValue(base(key));
-        const edited = !known || local.vt.some((t) => !known.vt.some((k) => Math.abs(k - t) <= SAME_VISIT_MS));
-        values.set(key, edited ? local : known);
+        const json = baseJson(key);
+        if (visit.value === null || visit.json !== json) Object.assign(visit, { json, value: visitOf(key, e, json) });
+        values.set(key, visit.value);
       }
+      if (parsed.size > 2 * values.size + 1000) for (const key of parsed.keys()) if (!values.has(key) && baseJson(key) === undefined) parsed.delete(key);
       const ignore = (key: string) => {
         if (older.has(key) || !isWebPageUrl(recordId(HISTORY, key))) return true;
-        const known = historyValue(base(key));
+        const known = knownOf(key, baseJson(key));
         return !!known && (lastVisitOf(known) < since || lastVisitOf(known) <= floor);
       };
-      return { values, ignore };
+      const json = (_key: string, value: unknown) => knownJson.get(value as HistoryValue);
+      return { values, ignore, json };
     },
     editedAt: (v) => {
       const value = historyValue(v);
@@ -256,7 +288,7 @@ export function historyAdapter(profileId: string): Adapter {
         return withHistoryList(s, engine, list);
       });
     },
-  };
+  });
 }
 
 const MAX_DEVICE_TABS = 30;

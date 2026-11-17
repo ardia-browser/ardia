@@ -452,5 +452,6 @@ export function syncModuleMethod(host: ArdiaHost, name: string, method: string):
     };
   }
   if (SYNC_METHODS.has(`ArdiaSync.${method}`)) return invoke(host, method);
+  if (method === "takeFileCounts") return null;
   return undefined;
 }

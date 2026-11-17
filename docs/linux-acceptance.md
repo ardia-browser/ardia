@@ -70,6 +70,7 @@ Requirements: `openssl` and Node 22 or newer (for the built-in WebSocket client)
 | F10 | #20 | Online search suggestions through the native host, only when enabled, and never from a private window |
 | F26 | #36 | Unsupported platform settings are hidden and startup has no backend rejections |
 | F27 | #37 | Onboarding starts once on a fresh profile and app services run once per launch |
+| F28 | #2341 | Sidebar rows and Top Apps tiles reorder by drag in a space the window switched to, not only the one it opened in |
 
 Each scenario's report lists its manual steps, such as touchpad pinch zoom, Web Store installs, popup placement and
 onboarding by hand.

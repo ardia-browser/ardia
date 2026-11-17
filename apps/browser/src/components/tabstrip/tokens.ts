@@ -57,7 +57,6 @@ export const EDGE_FADE = 88;
 export const EDGE_FADE_FLOOR = 0.25;
 export const EDGE_FADE_ONSET = 24;
 export const LIGHTS_GAP = 8;
-export const ONTO_EDGE = MAX_CHIP / 4;
 export const PROFILE_ROOM = 140;
 export const DOWNLOADS_BOX = 34;
 export const CONTROLS_GAP = 2;

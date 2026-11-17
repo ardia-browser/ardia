@@ -240,8 +240,14 @@ function GlassTile({ width, active, selected, hovered, pressed, tileTheme, topAp
             colorRing
             style={StyleSheet.absoluteFill}
           />
-        ) : selected ? (
-          <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: radius.pinned, borderWidth: 1, borderColor: tokens.dragBorder }]} />
+        ) : hovered || selected || pressed ? (
+          <View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFill,
+              { borderRadius: radius.pinned, borderWidth: selected ? 1 : 0, borderColor: tokens.dragBorder, backgroundColor: pressed ? theme.tabPressed : theme.tabHover },
+            ]}
+          />
         ) : null}
         {children}
       </GlassFill>

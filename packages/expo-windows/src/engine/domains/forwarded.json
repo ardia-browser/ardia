@@ -91,7 +91,6 @@
       "setCommandScrollZoom",
       "setLittleArdiaOpensNewTabLinks",
       "setAutoPictureInPicture",
-      "setBlockAutoplayEverywhere",
       "setFairPlayInChromium",
       "setVideoUpscaling",
       "setVideoUpscalingTestConditions",

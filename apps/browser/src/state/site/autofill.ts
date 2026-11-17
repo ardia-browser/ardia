@@ -2,7 +2,7 @@ import { showAutofillSuggestions, type CardNetwork } from "../../platform/autofi
 import { useBrowser } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { isTabReady } from "../tabs/pageState";
-import { openSettings } from "../settings/settingsWindows";
+import { openSettings, SETTINGS_DETAIL } from "../settings/settingsWindows";
 
 export { deleteAddress, deleteCard, revealCardNumber, saveAddress, saveCard, setAutofillSettings, type SavedAddress, type SavedCard } from "../../platform/autofill";
 
@@ -27,5 +27,5 @@ export async function requestAutofill(windowId: string, arg: string | null, tabI
   const s = useBrowser.getState();
   const w = s.windows[windowId];
   const profileId = w && w.kind !== "private" && s.profiles[w.profileId] ? w.profileId : null;
-  openSettings(passwords ? "passwords" : "autofill", profileId);
+  openSettings("profiles", profileId, passwords ? SETTINGS_DETAIL.passwords : null);
 }

@@ -30,6 +30,7 @@ import { PageOverlays } from "./PageOverlays";
 import { useProfileTheme } from "./ThemeScope";
 import { useCardFrame } from "./cardFrame";
 import { newTabOpensOf } from "../../state/settings/settings";
+import { markNewTabPane } from "../../state/omnibox/newTabMarks";
 
 const LINGERING_PANE = "ardia.lingeringPane";
 
@@ -90,6 +91,13 @@ export const TabPane = memo(function TabPane({
   useEffect(() => {
     if (visible && isNewTab && !mounted) patchPage(tabId, { wasNewTab: true });
   }, [visible, isNewTab, mounted]);
+  useLayoutEffect(() => {
+    markNewTabPane(tabId, "mounted");
+    return () => markNewTabPane(tabId, "gone");
+  }, []);
+  useLayoutEffect(() => {
+    if (isNewTab) markNewTabPane(tabId, `visible ${visible} small ${small} split ${inSplit} card ${emptyCard}`);
+  }, [visible, isNewTab, small, inSplit, emptyCard]);
   const prewarmed = usePrewarm(visible && isNewTab && !emptyCard && !mounted && !small && !inSplit);
   const toolbar = chrome.kind !== "none";
   const bar = paneBar(chrome, { visible, fullscreen, lingering });
@@ -137,7 +145,7 @@ export const TabPane = memo(function TabPane({
         <View style={{ flex: 1 }}>
           {visible && !fullscreen && <ShareBar tabId={tabId} />}
           <View style={{ flex: 1 }}>
-            {(mounted || prewarmed) && <TabWebView tabId={tabId} visible={visible && !newTabShown && !isNewTab} warm={!!warm && !newTabShown && !isNewTab} />}
+            {(mounted || prewarmed) && <TabWebView tabId={tabId} visible={visible && !newTabShown && !isNewTab} selected={focused} warm={!!warm && !newTabShown && !isNewTab} />}
             {visible && isNewTab && !small && (
               <TabContentArea contentAreaOf={tabId}>
                 <NewTabDropArea tabId={tabId} accepting={!covered && !lingering}>

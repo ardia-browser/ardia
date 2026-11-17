@@ -4,9 +4,10 @@ import { useTheme } from "../ui/theme";
 import { updateSplit } from "../../state/splits/actions";
 import { useDragFallbackPane } from "../../state/splits/hooks";
 import type { SplitView } from "../../state/browser/types";
-import { resize, type Divider, type Rect } from "../window/geometry";
+import { evenPair, resize, type Divider, type Rect } from "../window/geometry";
 import { capsule, OverPage, space, Symbol, Text, Toast, withAlpha } from "../ui";
 import { hideToast, useToasts } from "../../state/app/toasts";
+import { noteSplit } from "../../state/telemetry/usage";
 import { useWindowId } from "../../state/browser/hooks";
 import { useCardFrame } from "../window/cardFrame";
 import type { Size } from "../ui/useSettled";
@@ -79,11 +80,14 @@ function windowCorners(rect: Rect, origin: { x: number; y: number } | null, wind
 
 const sizesOf = (split: SplitView) => ({ sizes: split.slots.map((slot) => slot.size), stack: split.slots.find((slot) => "stack" in slot)?.stackSizes });
 
+const CLICK_SLOP = 3;
+
 function DividerHandle({ split, divider, width, height }: { split: SplitView; divider: Divider; width: number; height: number }) {
   const theme = useTheme();
   const [hovered, setHovered] = useState(false);
   const [dragging, setDragging] = useState(false);
   const start = useRef<{ sizes: number[]; stack?: [number, number] }>(sizesOf(split));
+  const dragged = useRef(false);
   const latest = useRef({ split, divider, width, height });
   latest.current = { split, divider, width, height };
 
@@ -94,11 +98,13 @@ function DividerHandle({ split, divider, width, height }: { split: SplitView; di
         onPanResponderGrant: () => {
           const { split: v } = latest.current;
           start.current = sizesOf(v);
+          dragged.current = false;
           setDragging(true);
         },
         onPanResponderMove: (_, g) => {
           const { split: v, divider: d, width: w, height: h } = latest.current;
           const delta = d.vertical ? g.dx : g.dy;
+          if (Math.abs(delta) > CLICK_SLOP) dragged.current = true;
           const gap = d.vertical ? d.rect.width : d.rect.height;
           if (d.kind === "root") {
             updateSplit(v.id, { sizes: resize(start.current.sizes, d.index, delta, d.vertical ? w : h, gap) });
@@ -113,12 +119,22 @@ function DividerHandle({ split, divider, width, height }: { split: SplitView; di
     [],
   );
 
+  const evenOut = () => {
+    if (dragged.current) return;
+    const { split: v, divider: d } = latest.current;
+    const now = sizesOf(v);
+    if (d.kind === "root") updateSplit(v.id, { sizes: evenPair(now.sizes, d.index) });
+    else if (now.stack) updateSplit(v.id, { stackSizes: [0.5, 0.5] });
+    noteSplit("splitDividerResets");
+  };
+
   const { rect, vertical } = divider;
   const active = hovered || dragging;
   const cursor = vertical ? "col-resize" : "row-resize";
   return (
     <View
       {...responder.panHandlers}
+      onDoubleClick={evenOut}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{

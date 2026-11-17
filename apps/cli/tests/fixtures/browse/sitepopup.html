@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Fixture Site Popup</title>
+<style>
+  body { margin: 0; font: 16px system-ui; }
+  #next { margin: 160px 40px; padding: 12px 24px; }
+  .modal-wrapper.is-open { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; z-index: 40; }
+  .modal-wrapper .panel { background: #fff; padding: 24px; width: 360px; }
+</style>
+</head>
+<body>
+<pre id="report">{}</pre>
+<button id="next">Next page</button>
+<div class="modal-wrapper is-open" id="promo"><div class="panel"><h2>New arrivals are here</h2><p>See what just landed in the spring collection.</p><button id="shop">Shop now</button><button id="x" aria-label="Close">×</button></div></div>
+<script>
+  const state = { clicked: [] };
+  const show = () => { document.getElementById("report").textContent = JSON.stringify(state); };
+  document.getElementById("x").addEventListener("click", () => { state.closed = true; document.getElementById("promo").remove(); show(); });
+  document.getElementById("shop").addEventListener("click", () => { state.shop = true; show(); });
+  document.getElementById("next").addEventListener("click", () => { state.clicked.push("next"); show(); });
+  show();
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 import { PowerUp, hex, ink, reduceMotion, springs, Surface, useTheme } from "../ui";
 import { TOOLBAR_ROWS } from "../../lib/toolbarRow";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import { useWindow, useWindowId } from "../../state/browser/hooks";
 import { useCardAnchors } from "../../state/windows/layout";
@@ -10,6 +10,8 @@ import { DIA_OFFSET, MARK_ABOVE_BAR, newTabBarTop } from "./newTabLayout";
 import { useOnboarding } from "../../state/onboarding/onboarding";
 import { Omnibox } from "../omnibox/Omnibox";
 import { NTP_BAR } from "./tokens";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { markNewTabBar } from "../../state/omnibox/newTabMarks";
 
 const BAR_HEIGHT = 112;
 const MARKS = {
@@ -62,6 +64,15 @@ export function NewTabPage({ tabId, toolbar = true }: { tabId: string; toolbar?:
   const [headingHeight, setHeadingHeight] = useState(0);
   const heading = !onboarding && incognito;
   const [playIntro] = useState(() => !introPlayed.has(tabId));
+  const [restShown, setRestShown] = useState(() => !PLATFORM_FEATURES.newTabBarFirst || !playIntro);
+  const showRest = () => void (restShown || requestAnimationFrame(() => setRestShown(true)));
+  useLayoutEffect(() => {
+    markNewTabBar("page", tabId);
+    return () => markNewTabBar("gone", tabId);
+  }, [tabId]);
+  useLayoutEffect(() => {
+    if (restShown && PLATFORM_FEATURES.newTabBarFirst) markNewTabBar("rest", tabId);
+  }, [restShown]);
   const [rise] = useState(() => {
     const intro = playIntro && !reduceMotion();
     const layers = MARK_LAYERS.map((l) => ({ ...l, y: new Animated.Value(intro ? l.hidden : 0) }));
@@ -93,7 +104,7 @@ export function NewTabPage({ tabId, toolbar = true }: { tabId: string; toolbar?:
 
   return (
     <View style={{ flex: 1 }} onLayout={(e) => setSize(e.nativeEvent.layout)}>
-      {playIntro && theme.powerUpPalette && (
+      {restShown && playIntro && theme.powerUpPalette && (
         <PowerUp
           style={StyleSheet.absoluteFill}
           palette={theme.powerUpPalette}
@@ -104,7 +115,7 @@ export function NewTabPage({ tabId, toolbar = true }: { tabId: string; toolbar?:
         />
       )}
       {heading && <IncognitoHeading left={x} barTop={top} width={width} onHeight={setHeadingHeight} />}
-      <View
+      {restShown && <View
         pointerEvents="none"
         style={{
           position: "absolute",
@@ -127,9 +138,9 @@ export function NewTabPage({ tabId, toolbar = true }: { tabId: string; toolbar?:
             }}
           />
         ))}
-      </View>
-      <View onLayout={(e) => setPanelHeight(e.nativeEvent.layout.height)} style={{ position: "absolute", left: x, top, width }}>
-        {NTP_BAR.shadows.map((level, i) => (
+      </View>}
+      <View onLayout={(e) => (setPanelHeight(e.nativeEvent.layout.height), showRest())} style={{ position: "absolute", left: x, top, width }}>
+        {restShown && NTP_BAR.shadows.map((level, i) => (
           <Surface
             key={i}
             style={StyleSheet.absoluteFill}
@@ -146,7 +157,7 @@ export function NewTabPage({ tabId, toolbar = true }: { tabId: string; toolbar?:
           <View pointerEvents="none" style={{ ...StyleSheet.absoluteFillObject, borderRadius: NTP_BAR.radius, borderWidth: NTP_BAR.border, borderColor: theme.ntpBarBorder }} />
         </Surface>
       </View>
-      <NewTabExtras size={size} bar={bar} />
+      {restShown && <NewTabExtras size={size} bar={bar} />}
     </View>
   );
 }

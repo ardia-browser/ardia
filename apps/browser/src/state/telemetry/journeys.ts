@@ -179,6 +179,7 @@ export const bucket = (n: number, edges: [number, string][], last: string) => ed
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
+const LAUNCH_SOURCES = new Set<string>(["login_item", "documents", "user"]);
 export const ago = (ms: number) =>
   bucket(ms, [[MINUTE, "<1m"], [10 * MINUTE, "<10m"], [HOUR, "<1h"], [8 * HOUR, "<8h"], [DAY, "<1d"], [7 * DAY, "<7d"]], "7d+");
 
@@ -245,7 +246,7 @@ function sendLaunch(l: Launch, content: number | null, paints: number[]) {
     history += view.list.length;
     oldestVisit = Math.min(oldestVisit, view.list.at(-1)?.lastVisit ?? Infinity);
   }
-  const { bootTime, appBuild, updatePrewarm, launchMarks, launchedHidden, loadAverage1m } = appInfo();
+  const { bootTime, appBuild, updatePrewarm, launchMarks, launchedHidden, launchSource, loadAverage1m } = appInfo();
   const { lastLaunchAt, lastQuitAt, firstOfVersion } = previousLaunch;
   const prewarm = firstOfVersion && updatePrewarm?.build === appBuild ? updatePrewarm : null;
   const ms = (at: number | null | undefined) => (at == null || !(at - l.t0 >= 0 && at - l.t0 < 10 * MINUTE) ? null : Math.round(at - l.t0));
@@ -254,6 +255,8 @@ function sendLaunch(l: Launch, content: number | null, paints: number[]) {
     main_ms: ms(launchMarks?.mainStarted),
     startup_ms: ms(launchMarks?.startupPrepared),
     chromium_ms: ms(launchMarks?.chromiumEntered),
+    appkit_will_finish_ms: ms(launchMarks?.appKitWillFinish),
+    appkit_did_finish_ms: ms(launchMarks?.appKitDidFinish),
     engine_ms: ms(launchMarks?.engineStarted),
     early_window_ms: ms(launchMarks?.earlyWindowShown),
     rn_ms: ms(launchMarks?.reactNativeStarted),
@@ -275,6 +278,7 @@ function sendLaunch(l: Launch, content: number | null, paints: number[]) {
     since_quit: lastQuitAt && (!lastLaunchAt || lastQuitAt >= lastLaunchAt) ? ago(l.t0 - lastQuitAt) : lastLaunchAt ? "unclean" : "unknown",
     load_1m: typeof loadAverage1m === "number" && Number.isFinite(loadAverage1m) && loadAverage1m >= 0 ? Math.round(loadAverage1m * 100) / 100 : null,
     launched_hidden: typeof launchedHidden === "boolean" ? launchedHidden : null,
+    launch_source: typeof launchSource === "string" && LAUNCH_SOURCES.has(launchSource) ? launchSource : null,
     since_boot: bootTime ? bucket(l.t0 - bootTime, [[2 * MINUTE, "<2m"], [10 * MINUTE, "<10m"], [HOUR, "<1h"], [DAY, "<1d"]], "1d+") : "unknown",
   });
 }

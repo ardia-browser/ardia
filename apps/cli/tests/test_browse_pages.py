@@ -230,7 +230,7 @@ def tearDownModule():
 
 def reader_state(registry=None):
     state = SimpleNamespace(opened=set(), target_infos={}, pages={}, connected=True, refuse_attach=set(), instance="I",
-                            registry=registry or scratch_registry(), extras={})
+                            registry=registry or scratch_registry(), extras={}, endpoint=None)
     state.browser = FakeBrowser(state)
 
     async def connect():

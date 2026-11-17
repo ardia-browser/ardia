@@ -78,6 +78,10 @@ const close = (id: string | null) => {
   menu?.resolve(id);
 };
 
+export const dismissMenu = () => {
+  if (open) close(null);
+};
+
 export function menuButtonPresses(show: () => void) {
   let openAtPointerDown = false;
   return {

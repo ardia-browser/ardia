@@ -49,7 +49,7 @@ export function startWebStoreIntegration() {
     const tabId = prompt.tabId ?? undefined;
     const windowId = (tabId && s.tabs[tabId]?.windowId) || focusedWindowOf(s) || s.windowOrder[0];
     if (windowId) showInstallPrompt(windowId, prompt);
-    else void resolveExtensionInstallPrompt(prompt.requestId, false);
+    else void resolveExtensionInstallPrompt(prompt, false);
   });
   const listening = new Map<string, string>();
   const listen = (tabId: string, url: string) => {

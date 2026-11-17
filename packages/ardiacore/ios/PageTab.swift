@@ -10,6 +10,7 @@ protocol PageTab: NSView {
   var temporarySource: String? { get set }
   var extensionHost: String? { get set }
   var visible: Bool { get set }
+  var selected: Bool { get set }
   var warm: Bool { get set }
   var neighbour: Bool { get set }
   var pageBackgroundColor: NSColor? { get set }

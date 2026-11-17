@@ -15,6 +15,7 @@ constexpr CFTimeInterval kLeaveScreenDelay = 0.1;
 constexpr CFTimeInterval kFirstFrameHoldSeconds = 0.25;
 constexpr CFTimeInterval kHolderBackstopSeconds = kFirstFrameHoldSeconds + 0.05;
 constexpr CFTimeInterval kLingeringPaneSunkSeconds = 0.5;
+constexpr CFTimeInterval kSwapReportSeconds = 10;
 NSString *const kLingeringPane = @"ardia.lingeringPane";
 }
 
@@ -291,7 +292,6 @@ BOOL Above(NSView *a, NSView *b) {
   if (_frameHold.awaiting && !_visible && !_reveal.active) [self finishFrameHold];
   if (_visible || _reveal.active) [self exposePage];
   if (_visible) [self sinkLingeringPane];
-  if (_visible) [self takeFocusFromLingeringPane];
   [self beginFrameHoldIfCold];
   [CATransaction begin];
   [CATransaction setDisableActions:YES];
@@ -303,11 +303,25 @@ BOOL Above(NSView *a, NSView *b) {
     AcceptDrops(sub, _visible);
   }
   [CATransaction commit];
+  if (_visible) [self takeFocusFromLingeringPane];
   if (TraceVisibility())
     NSLog(@"[ardiacore-vis] %@ paint visible=%d warm=%d tab=%d page=%@ inWindow=%ld hiddenAncestor=%d alpha=%d reveal=%d awaiting=%d",
           _transferKey, _visible, _warm, _tab ? (int)_tab.tabId : -1, _tab.view.superview == self ? @"here" : @"elsewhere",
           (long)self.window.windowNumber, _tab.view.isHiddenOrHasHiddenAncestor, (int)self.alphaValue, _reveal.active,
           _frameHold.awaiting);
+  if (_swapReport && _visible && shown && !_frameHold.awaiting && _tab.view.superview == self) [self finishSwapReport:NO];
+}
+
+- (void)reportSwapShown:(void (^)(BOOL))report {
+  _swapReport = [report copy];
+  _swapReportAt = CACurrentMediaTime();
+  [self schedulePainting];
+}
+
+- (void)finishSwapReport:(BOOL)heldTimedOut {
+  void (^report)(BOOL) = _swapReport;
+  _swapReport = nil;
+  if (report && CACurrentMediaTime() - _swapReportAt <= kSwapReportSeconds) report(heldTimedOut);
 }
 
 + (void)noteShown:(ArdiaCoreTab *)tab {
@@ -379,8 +393,11 @@ BOOL Above(NSView *a, NSView *b) {
   }
   for (ArdiaWebView *view in views)
     if (view->_visible) [view applyPainting];
-  for (ArdiaWebView *view in views)
-    if (view->_visible) [view restoreFocusIfDue];
+  for (ArdiaWebView *view in views) {
+    if (!view->_visible) continue;
+    [view settleFirstShowFocus];
+    [view restoreFocusIfDue];
+  }
 }
 
 - (void)leaveScreen {
@@ -473,6 +490,7 @@ BOOL Above(NSView *a, NSView *b) {
 - (void)frameShown:(BOOL)drawn {
   if (!_frameHold.awaiting) return;
   if (TraceVisibility()) NSLog(@"[ardiacore-vis] %@ first frame %@", _transferKey, drawn ? @"drawn" : @"late, shown anyway");
+  if (_visible) [self finishSwapReport:!drawn];
   WithoutActions(^{
     [self finishFrameHold];
     [self applyPainting];
@@ -534,7 +552,7 @@ BOOL Above(NSView *a, NSView *b) {
   NSView *lingering = focused ? LingeringPaneOver(self) : nil;
   if (!lingering || ![focused isDescendantOf:lingering]) return;
   if (TraceVisibility()) NSLog(@"[ardiacore-vis] %@ takes focus from the lingering New Tab pane", _transferKey);
-  [window makeFirstResponder:nil];
+  if ([window makeFirstResponder:nil]) [self focusAfterLingeringPane];
 }
 
 - (void)sinkLingeringPane {

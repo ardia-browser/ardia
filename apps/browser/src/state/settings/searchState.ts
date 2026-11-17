@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { goToSettingsPane, offeredPane, type SettingsPane, useSettingsNav } from "./settingsWindows";
+import { goToSettingsPane, type SettingsPane, useSettingsNav } from "./settingsWindows";
 import { settingsProfileFor } from "../extensions/store";
 import { noteSettingsSearch, noteSettingsSearchReveal } from "../telemetry/usage";
 
@@ -61,8 +61,8 @@ export const selectSettingsResult = (index: number) => useSettingsSearch.setStat
 
 export const clearSettingsReveal = () => useSettingsSearch.setState({ reveal: null });
 
-export function revealSetting({ id, pane, section }: Target, via: "keyboard" | "click", rank: number) {
-  noteSettingsSearchReveal(via, rank);
+export function revealSetting({ id, pane, section }: Target, via: "keyboard" | "click", rank: number, unshown = false) {
+  noteSettingsSearchReveal(via, rank, unshown);
   const key = settingsSectionKey(pane, section);
   useSettingsSearch.setState((s) => (s.revealedSections.includes(key) ? {} : { revealedSections: [...s.revealedSections, key] }));
   if (!useSettingsSearch.getState().previewing) goToSettingsPane(pane, settingsProfileFor(pane, useSettingsNav.getState()));
@@ -78,8 +78,7 @@ export function previewSetting({ id, pane, section }: Target) {
   useSettingsSearch.setState({ previewSection: settingsSectionKey(pane, section), previewing: true, reveal: { id, at: Date.now() } });
 }
 
-function showWithoutHistory(asked: SettingsPane) {
-  const pane = offeredPane(asked);
+function showWithoutHistory(pane: SettingsPane) {
   const nav = useSettingsNav.getState();
   const profileId = settingsProfileFor(pane, nav);
   if (nav.pane !== pane || nav.profileId !== profileId || nav.detail) useSettingsNav.setState({ pane, profileId, detail: null, forward: [] });

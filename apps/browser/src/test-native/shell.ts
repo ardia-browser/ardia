@@ -125,6 +125,14 @@ const windowsModule: Modules["ArdiaAppWindows"] & { requestClose(id: string): Pr
 };
 
 export const pressesWithoutRelease = { count: 0 };
+export const focusHandoffCounts = {
+  pending: {} as Record<string, number>,
+  take() {
+    const taken = this.pending;
+    this.pending = {};
+    return taken;
+  },
+};
 export const pressRepeated: { earlier: { landedOn: string; ms: number } | null } = { earlier: null };
 
 const focus: Modules["ArdiaFocus"] = {
@@ -133,10 +141,13 @@ const focus: Modules["ArdiaFocus"] = {
   saveKeyResponder: () => Promise.resolve(0),
   restoreKeyResponder: () => Promise.resolve(false),
   discardKeyResponder: () => Promise.resolve(),
+  takeEditKeyAcks: () => editKeyAcks.take(),
+  takeInputSourceKeys: () => inputSourceKeys.take(),
   switcherPointerMoved: () => true,
   cancelFocusMove: () => Promise.resolve(),
   claimFocus: () => Promise.resolve(),
   pressesWithoutRelease: () => pressesWithoutRelease.count,
+  takeFocusHandoffCounts: () => focusHandoffCounts.take(),
   pressRepeated: () => Promise.resolve(pressRepeated.earlier),
 };
 
@@ -214,7 +225,7 @@ const notifications: Modules["ArdiaNotifications"] = {
   addListener: notificationEvents.addListener,
   notificationPermission: () => Promise.resolve("notDetermined"),
   requestNotificationPermission: () => Promise.resolve(false),
-  postNotification: () => Promise.resolve(null),
+  postNotification: (options) => Promise.resolve({ id: options.id, icon: "none" }),
   removeNotifications: () => Promise.resolve(),
   openNotificationSettings: () => Promise.resolve(),
 };
@@ -431,4 +442,22 @@ export const shellNativeModules: Modules = {
   ArdiaSystemSignals: systemSignalsModule,
   ArdiaTelemetryLocal: telemetryLocalModule,
   ArdiaReport: reportModule,
+};
+
+export const inputSourceKeys = {
+  pending: 0,
+  take() {
+    const taken = this.pending;
+    this.pending = 0;
+    return taken;
+  },
+};
+
+export const editKeyAcks = {
+  pending: {} as Record<string, number>,
+  take() {
+    const taken = this.pending;
+    this.pending = {};
+    return taken;
+  },
 };

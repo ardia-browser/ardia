@@ -10,7 +10,7 @@ import { usePictureInPicture } from "../../state/media/media";
 import { HoverSlot } from "../ui/HoverSlot";
 import { ActivitySpinner, Button, Divider, FadeLabel, ink, OutsidePressArea, radius, sidebarFont, sidebarLineHeight, space, Symbol, typeFace, useHover, withAlpha } from "../ui";
 import { isPinnedRow, tabTitle } from "../../state/browser/model";
-import { awayFromPin, awayTitle } from "../../state/pins/organize";
+import { awayFromPin, rowAwayTitle } from "../../state/pins/organize";
 import { hidesRowIcon } from "../../state/pins/rowIcons";
 import { commitRename, endRename, startRename } from "../../state/sidebar/actions";
 import { useDragItem, useDropOnto } from "./DragProvider";
@@ -91,7 +91,7 @@ export const TabRow = memo(function TabRow({
   if (!tab) return null;
   const resetting = resettable && backToPin.hovered && !renaming;
   const title = resetting ? "Back to Pinned URL" : tab.customTitle ? tabTitle(tab) : titleWithoutUnread(tabTitle(tab), unread);
-  const away = resettable && !resetting ? awayTitle(tab) : null;
+  const away = resettable && !resetting ? rowAwayTitle(tab) : null;
   const textOnly = hidesRowIcon(tab, badged);
   const fill = quiet
     ? active ? tokens.quietWash : selected ? tokens.multiSelected : hovered ? tokens.quietHover : ink.clear

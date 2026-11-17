@@ -105,6 +105,7 @@ chromium chromium-background-instance-no-default-handlers.patch mac
 chromium chromium-apple-passwords-host-skipped.patch mac
 chromium chromium-extension-tab-move-closing-window.patch
 chromium chromium-webstore-icon-optional.patch
+chromium chromium-enterprise-context-info.patch
 chromium chromium-ardia-layer.patch mac
 chromium chromium-ardia-linux-layer.patch linux
 chromium chromium-linux-background-windows.patch linux

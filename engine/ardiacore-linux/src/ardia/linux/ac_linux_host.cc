@@ -28,6 +28,10 @@
 #include "ardia/linux/ac_linux_auto_pip_service.h"
 #include "ardia/linux/ac_linux_automation_window.h"
 #include "ardia/linux/ac_linux_capture.h"
+#include "ardia/linux/ac_linux_cast.h"
+#include "ardia/linux/ac_linux_cast_core.h"
+#include "ardia/linux/ac_linux_crash_dumps.h"
+#include "ardia/linux/ac_linux_crash_dumps_core.h"
 #include "ardia/linux/ac_linux_autoplay.h"
 #include "ardia/linux/ac_linux_web_store.h"
 #include "ardia/linux/ac_linux_background_dialogs.h"
@@ -1400,6 +1404,12 @@ class ShellHostView : public views::View,
     }
     return OwnerOf(contents);
   }
+  TabBinding* BindingForContents(content::WebContents* contents) const {
+    for (const auto& [id, binding] : bindings_) {
+      if (contents && binding->contents() == contents) return binding.get();
+    }
+    return nullptr;
+  }
   void FetchFavicon(Profile* profile, const GURL& url, ardiacore::LinuxFaviconReply reply) {
     ardiacore::FetchLinuxFavicon(profile, url, std::move(reply));
   }
@@ -2196,6 +2206,37 @@ class HostMessageHandler : public content::WebUIMessageHandler,
               .Set("pageGeneration", generation));
         }
         return Resolve(id, base::Value(std::move(targets)));
+      }
+      if (ardiacore::linux_cast::IsCastCall(name)) {
+        const auto request = ardiacore::linux_cast::ParseCastRequest(
+            name, input.FindString("tabId"), input.FindInt("id"), input.FindString("sink"), input.FindString("route"),
+            input.FindInt("mode"), input.size());
+        if (!request) return Fail(id, "ERR_ENGINE", name + " was given the wrong arguments");
+        switch (request->verb) {
+          case ardiacore::linux_cast::Verb::kShow: {
+            TabBinding* binding = host_->BindingForKey(request->tab);
+            return Resolve(id, base::Value(binding && binding->contents() &&
+                                           ardiacore::ShowLinuxCastDialog(binding->contents())));
+          }
+          case ardiacore::linux_cast::Verb::kStart:
+            ardiacore::StartLinuxCasting(request->dialog, request->sink, request->mode);
+            break;
+          case ardiacore::linux_cast::Verb::kStop:
+            ardiacore::StopLinuxCasting(request->dialog, request->route);
+            break;
+          case ardiacore::linux_cast::Verb::kClose:
+            ardiacore::CloseLinuxCastDialog(request->dialog);
+            break;
+          case ardiacore::linux_cast::Verb::kWatch: {
+            Profile* watched = ardiacore::LinuxProfile(profile);
+            if (watched && !watched->IsOffTheRecord() && !private_request) ardiacore::WatchLinuxCastRoutes(watched);
+            break;
+          }
+          case ardiacore::linux_cast::Verb::kTerminate:
+            ardiacore::TerminateLinuxCastRoute(request->route);
+            break;
+        }
+        return Resolve(id, base::Value());
       }
       if (name == ardiacore::linux_capture::kChangeCaptureSourceCall ||
           name == ardiacore::linux_capture::kStopCaptureCall) {
@@ -3195,6 +3236,7 @@ base::DictValue ShellHostView::Bootstrap() const {
   }
   for (const char* capability : ardia::linux_commands::kWindowCommandCapabilities) capabilities.Append(capability);
   for (const char* capability : ardiacore::linux_capture::kCaptureCapabilities) capabilities.Append(capability);
+  for (const char* capability : ardiacore::linux_cast::kCastCapabilities) capabilities.Append(capability);
   for (const char* capability : ardiacore::linux_automation_window::kCapabilities) capabilities.Append(capability);
   if (!is_utility()) {
     for (const char* capability : ardia::linux_keys::kPageKeyCapabilities) capabilities.Append(capability);
@@ -3207,6 +3249,9 @@ base::DictValue ShellHostView::Bootstrap() const {
   capabilities.Append("ArdiaShell.fetchBangList");
   if (!is_utility()) {
     for (const char* capability : ardia::linux_report::kReportCapabilities) capabilities.Append(capability);
+  }
+  if (!is_utility()) {
+    for (const char* capability : ardia::linux_crash::kCrashCapabilities) capabilities.Append(capability);
   }
   base::DictValue native_modules;
   native_modules.Set("ArdiaApp", base::DictValue().Set("systemInfo", std::move(info)));
@@ -6496,6 +6541,14 @@ void ShellHostView::Invoke(
     return ardiacore::LinuxSystemInvoke(method, values, std::move(done));
   }
   if (method == ardia::linux_bang_list::kCall) return ardiacore::FetchLinuxBangList(values, std::move(done));
+  if (ardiacore::LinuxCrashInvokes(method)) {
+    if (is_utility() || private_window() || !private_window_.empty()) {
+      return std::move(done).Run(false, base::Value(base::DictValue()
+          .Set("code", "ERR_UNAVAILABLE")
+          .Set("message", "Crash dumps are read only by a regular browser window")));
+    }
+    return ardiacore::LinuxCrashInvoke(method, values, std::move(done));
+  }
   if (ardiacore::LinuxReportInvokes(method)) {
     return ardiacore::LinuxReportInvoke(
         method, values, profile() ? DocumentDirectory(profile()) : base::FilePath(), id_,
@@ -7993,6 +8046,35 @@ void StartLinuxHost() {
   if (std::exchange(started, true)) return;
   ardiacore::InitializeLinuxLaunchConfig();
   ardiacore::DecideTestGateAtStartup();
+  ardiacore::AnnotateLinuxCrashVersion();
+  ardiacore::InstallLinuxCast(
+      base::BindRepeating([](content::WebContents* contents) {
+        for (const auto& [id, host] : Hosts()) {
+          if (host->BindingForContents(contents)) return true;
+        }
+        return false;
+      }),
+      base::BindRepeating([](content::WebContents* contents, base::DictValue state) {
+        for (const auto& [id, host] : Hosts()) {
+          TabBinding* binding = host->BindingForContents(contents);
+          if (!binding) continue;
+          state.Set("tabId", binding->key());
+          host->Event("ArdiaMedia", "media", base::Value(base::DictValue()
+              .Set("name", ardiacore::linux_cast::kDialogEvent)
+              .Set("data", std::move(state))));
+          return;
+        }
+      }),
+      base::BindRepeating([](Profile* profile, base::ListValue routes) {
+        const auto name = profile ? ardiacore::LinuxProfileNameForPath(profile->GetPath().value()) : std::nullopt;
+        if (!name) return;
+        for (const auto& [id, host] : Hosts()) {
+          if (host->private_window()) continue;
+          host->Event("ArdiaMedia", "media", base::Value(base::DictValue()
+              .Set("name", ardiacore::linux_cast::kRoutesEvent)
+              .Set("data", base::DictValue().Set("profile", *name).Set("routes", routes.Clone()))));
+        }
+      }));
   ardiacore::InstallLinuxBackgroundFileDialogs();
   g_ardia_auto_picture_in_picture_off = true;
   ardia::InstallCliVisibleTabs();

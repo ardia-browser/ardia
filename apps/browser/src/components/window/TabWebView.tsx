@@ -42,7 +42,7 @@ import { adoptOf, loadedPage, navigationOf } from "../../state/tabs/pageSession"
 import { noteCommit } from "../../state/automation/automationEvents";
 import { forgetUnreadIfGone, noteAppBadge, noteUnreadFavicon, noteUnreadLoading, noteUnreadPageEnded } from "../../state/tabs/unread";
 import { trackPageProcessGone } from "../../state/telemetry/diagnostics";
-import { releaseTranslation, translateCrashContext } from "../../state/site/translate";
+import { releaseTranslation, toggleTranslation, translateCrashContext, translation, translationMenuTitle, useTranslateState } from "../../state/site/translate";
 import { notePagePress, notePagePressRefused } from "../../state/telemetry/tabPresses";
 import { noteWebKitFocusRestore } from "../../state/telemetry/pageFocusReturns";
 import { noteAutoPictureInPictureKept, notePageOverlay, noteReopenedPage, noteSiteControls, noteWebKitPageKeptHidden } from "../../state/telemetry/usage";
@@ -64,6 +64,7 @@ export const TabWebView = memo(function TabWebView(props: TabWebViewProps) {
 
 function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine }: TabWebViewProps & { engine: PageEngine }) {
   const { navigation, adoptId, profileId, shownUrl } = useTabValue(tabId, webViewTab, shallowEqual);
+  const translationState = useTranslateState(tabId);
   const neighbour = useBrowserWhile(warm, (s) => warm && s.windows[s.tabs[tabId]?.windowId ?? ""]?.profileId !== profileId);
   const tab = () => currentTab(tabId);
   const ref = useMemo(() => webviewRef(tabId), [tabId]);
@@ -138,6 +139,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine }
 
   return (
     <WebView
+      {...(translation ? { translateMenuTitle: translationMenuTitle(shownUrl, translationState.status !== "idle") } : {})}
       ref={ref}
       engine={engine}
       style={StyleSheet.absoluteFill}
@@ -275,6 +277,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine }
       onNotification={(notification) => showWebNotification(tabId, notification)}
       onCommand={({ command, text, modifiers, share, anchor, point }) => {
         if (command === "search") searchSelection(tabId, text, modifiers);
+        else if (command === "translate") toggleTranslation(tabId);
         else if (command === "share" && share) void shareFromPage(tab(), share, anchor);
         else if (command === "copyLinkToHighlight") void copyLinkToSelection(tabId);
         else if (command === "escape") escapePressed(tabId, "page");

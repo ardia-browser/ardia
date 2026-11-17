@@ -179,11 +179,35 @@ enum CrashReports {
       report["uptimeSeconds"] = Int(captured.timeIntervalSince(launched).rounded())
     }
     if let writable = writableMegabytes(body["vmSummary"] as? String) { report["vmWritableMB"] = writable }
+    if let code = termination["code"] as? Int { report["terminationCode"] = code }
+    if let indicator = shortLabel(termination["indicator"]) { report["terminationIndicator"] = indicator }
+    let codes = exceptionCodes(exception)
+    if !codes.isEmpty { report["exceptionCodes"] = codes }
+    if threads.indices.contains(faulting) {
+      if let thread = shortLabel(threads[faulting]["name"]) { report["crashThread"] = thread }
+      if let queue = shortLabel(threads[faulting]["queue"]) { report["crashQueue"] = queue }
+    }
     if process == "browser", let reason = reactNativeFatal(body) {
       report["jsFatal"] = reason
       report["jsFatalSource"] = "reactNative"
     }
     return report
+  }
+
+  private static func shortLabel(_ value: Any?) -> String? {
+    guard let text = value as? String, !text.isEmpty, text.count <= 64,
+      text.unicodeScalars.allSatisfy({ $0.value >= 0x20 && $0.value < 0x7F }) else { return nil }
+    return text
+  }
+
+  private static func exceptionCodes(_ exception: [String: Any]) -> [Int] {
+    if let raw = exception["rawCodes"] as? [Int] { return Array(raw.prefix(2)) }
+    guard let text = exception["codes"] as? String, text.count <= 64 else { return [] }
+    return text.split(separator: ",").prefix(2).compactMap { part -> Int? in
+      let digits = part.trimmingCharacters(in: .whitespaces)
+      guard digits.hasPrefix("0x"), let value = UInt64(digits.dropFirst(2), radix: 16) else { return nil }
+      return Int(exactly: value)
+    }
   }
 
   private static func imageName(_ image: [String: Any]) -> String {

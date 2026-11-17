@@ -274,6 +274,24 @@ export function nativeCrashExceptions(report: NativeCrash) {
 
 export const nativeCrashTermination = (namespace: string | undefined) => (namespace && SUBTYPE.test(namespace) ? namespace : null);
 
+const INDICATOR = /^[A-Za-z][A-Za-z0-9 :,()-]{2,59}(?:\/[A-Za-z][A-Za-z0-9 :,()-]{0,40})?$/;
+const INDICATOR_TOKEN = /^[A-Z][A-Z0-9_]{2,47}$/;
+
+export function nativeCrashIndicator(indicator: unknown): string | null {
+  if (typeof indicator !== "string" || !INDICATOR.test(indicator)) return null;
+  const token = indicator.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+/, "").slice(0, 48).replace(/_+$/, "");
+  return INDICATOR_TOKEN.test(token) ? token : null;
+}
+
+const THREAD_LABEL = /^[A-Za-z][A-Za-z0-9_.:-]{0,47}(?: [A-Za-z0-9_.:-]{1,24})?$/;
+
+export const nativeCrashThreadLabel = (label: unknown): string | null => (typeof label === "string" && THREAD_LABEL.test(label) ? label : null);
+
+export function nativeCrashCode(codes: unknown, index: number): number | null {
+  const code = Array.isArray(codes) ? codes[index] : undefined;
+  return typeof code === "number" && Number.isSafeInteger(code) && code >= 0 ? code : null;
+}
+
 type PropertyValue = string | number | boolean | null;
 
 const WEBUI_PAGE_KEY = /(?:^|_)webui_page$/;

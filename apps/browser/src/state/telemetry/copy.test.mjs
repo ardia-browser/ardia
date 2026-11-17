@@ -8,3 +8,9 @@ const MAC_NOTE =
 test("the Mac's What's Sent keeps its ten-minute note word for word", () => {
   assert.ok(WHATS_SENT.some((group) => group.items.includes(MAC_NOTE)));
 });
+
+test("What's Sent says a crash report names the termination reason's code and description, the exception codes, and the crashed thread and queue", () => {
+  const crashes = WHATS_SENT.flatMap((group) => group.items).filter((item) => item.startsWith("The same for crashes of Ardia's page, graphics and helper processes"));
+  assert.equal(crashes.length, 1);
+  for (const phrase of ["termination reason", "code and short description", "exception codes", "thread and queue that crashed"]) assert.ok(crashes[0].includes(phrase), phrase);
+});

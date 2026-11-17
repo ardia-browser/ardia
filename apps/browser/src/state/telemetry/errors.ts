@@ -3,7 +3,19 @@ import { advanceCrashCursor, capture, crashCursor, loadChoice, saveQueueNow } fr
 import { contextAt, contextProperties, recentWebuiPages, sessionStart } from "./diagnostics";
 import type { SavedContext } from "./savedContext";
 import { recordLog } from "./logs";
-import { errorCode, errorMessage, errorType, jsFatalKind, nativeCrashExceptions, nativeCrashTermination, parseStack, type ExceptionFrame } from "./sanitize";
+import {
+  errorCode,
+  errorMessage,
+  errorType,
+  jsFatalKind,
+  nativeCrashCode,
+  nativeCrashExceptions,
+  nativeCrashIndicator,
+  nativeCrashTermination,
+  nativeCrashThreadLabel,
+  parseStack,
+  type ExceptionFrame,
+} from "./sanitize";
 
 type Mechanism = "onerror" | "onunhandledrejection" | "react" | "react_recovered" | "console" | "native_crash" | "helper_crash";
 
@@ -150,6 +162,10 @@ export async function reportNativeCrashes(contexts: (SavedContext | null)[] = []
         crash_signal: signal,
         crash_subtype: subtype,
         crash_termination: nativeCrashTermination(report.terminationNamespace),
+        crash_termination_code: whole(report.terminationCode),
+        crash_termination_indicator: nativeCrashIndicator(report.terminationIndicator),
+        crash_exception_code: nativeCrashCode(report.exceptionCodes, 0),
+        crash_exception_subcode: nativeCrashCode(report.exceptionCodes, 1),
         objc_exception: name,
         crashed_minutes_ago: Math.round((Date.now() - report.time) / 60_000),
         crashed_version: browser ? optional(report.appVersion, VERSION) : null,
@@ -164,7 +180,12 @@ export async function reportNativeCrashes(contexts: (SavedContext | null)[] = []
       {
         urgent: true,
         persist: true,
-        raw: { ...exceptionProperties(exceptions, mechanism, false), crash_images: images },
+        raw: {
+          ...exceptionProperties(exceptions, mechanism, false),
+          crash_images: images,
+          crash_thread: nativeCrashThreadLabel(report.crashThread),
+          crash_queue: nativeCrashThreadLabel(report.crashQueue),
+        },
       },
     );
   }

@@ -32,6 +32,28 @@ appcast() { python3 -I "$APPCAST_PY" "$@"; }
 engine_symbols_name() { echo "ArdiaCore-${1#engine-}-symbols.tar.xz"; }
 engine_uuids_name() { echo "ArdiaCore-${1#engine-}-uuids.txt"; }
 
+require_symbol_assets() {
+  local file
+  for file in "$@"; do
+    [ -s "$file" ] || {
+      echo "error: $(basename "$file") is missing or empty: an engine published without it can't have its crashes' frames named" >&2
+      exit 1
+    }
+  done
+}
+
+require_release_symbols() {
+  local tag="$1" names asset
+  names="$(gh release view "$tag" -R "$REPO" --json assets -q '.assets[].name')" \
+    || { echo "error: couldn't list $tag's assets" >&2; exit 1; }
+  for asset in "$(engine_symbols_name "$tag")" "$(engine_uuids_name "$tag")"; do
+    grep -Fxq "$asset" <<<"$names" || {
+      echo "error: $tag doesn't list $asset: an engine published without it can't have its crashes' frames named" >&2
+      exit 1
+    }
+  done
+}
+
 latest_stable_tag() {
   local tag
   tag="$(gh release view -R "$REPO" --json tagName -q .tagName)"

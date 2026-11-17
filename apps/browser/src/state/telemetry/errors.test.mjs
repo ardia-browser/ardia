@@ -154,3 +154,66 @@ test("a browser crash carries the kind of JS fatal that stopped it as crash_js_f
     for (const leak of ["example.com", "secret", "/Users", "someone", "page.json", "native module", "Max heap size", "cannot read"]) assert.equal(json.includes(leak), false, leak);
   }
 });
+
+test("a helper crash names how the system ended it and the thread that crashed: the termination code and indicator, the exception codes, the thread and queue", async () => {
+  const time = Date.now() + 6 * 60 * 60_000;
+  const crash = (at, extra) => ({
+    time: at,
+    fileTime: at,
+    process: "renderer",
+    engineVersion: "157.0.8103.50",
+    exceptionType: "EXC_BREAKPOINT",
+    signal: "SIGTRAP",
+    terminationNamespace: "SIGNAL",
+    frames: [{ image: "Chromium Framework", offset: 0x41a36e8 }],
+    ...extra,
+  });
+  stub.shellNativeModules.ArdiaApp.crashReports = async () => [
+    crash(time, {
+      terminationCode: 5,
+      terminationIndicator: "Trace/BPT trap: 5",
+      exceptionCodes: [1, 4381928416],
+      crashThread: "ThreadPoolForegroundWorker",
+      crashQueue: "com.apple.root.user-interactive-qos",
+    }),
+    crash(time + 1000, { crashThread: "CrRendererMain", terminationIndicator: "Namespace CODESIGNING, Code 2", terminationCode: 2, exceptionCodes: [0, 0] }),
+  ];
+  await reportNativeCrashes();
+  const [trap, signed] = queued().slice(-2).map((e) => e.properties);
+  assert.equal(trap.crash_termination, "SIGNAL");
+  assert.equal(trap.crash_termination_code, 5);
+  assert.equal(trap.crash_termination_indicator, "TRACE_BPT_TRAP_5");
+  assert.equal(trap.crash_exception_code, 1);
+  assert.equal(trap.crash_exception_subcode, 4381928416);
+  assert.equal(trap.crash_thread, "ThreadPoolForegroundWorker");
+  assert.equal(trap.crash_queue, "com.apple.root.user-interactive-qos");
+  assert.equal(signed.crash_termination_code, 2);
+  assert.equal(signed.crash_termination_indicator, "NAMESPACE_CODESIGNING_CODE_2");
+  assert.equal(signed.crash_exception_code, 0);
+  assert.equal(signed.crash_exception_subcode, 0);
+  assert.equal(signed.crash_thread, "CrRendererMain");
+  assert.equal(signed.crash_queue, null);
+});
+
+test("a crash from a build that doesn't read them yet sends the new fields as null, and a field that isn't the short plain kind is dropped, never the text", async () => {
+  const time = Date.now() + 7 * 60 * 60_000;
+  const base = { process: "renderer", exceptionType: "EXC_BREAKPOINT", signal: "SIGTRAP", frames: [{ image: "Chromium Framework", offset: 0x41a36e8 }] };
+  const odd = [
+    { terminationCode: -1, terminationIndicator: "Library not loaded: /Users/someone/Library/page.dylib", exceptionCodes: [-1, 2 ** 60], crashThread: "https://private.example/a", crashQueue: "Bank statement for someone" },
+    { terminationCode: 1.5, terminationIndicator: "see https://private.example/a?q=secret", exceptionCodes: ["0x1", null], crashThread: "me@private.example", crashQueue: "a".repeat(80) },
+    { terminationCode: "5", terminationIndicator: 5, exceptionCodes: "1, 2", crashThread: 7, crashQueue: { name: "x" } },
+  ];
+  stub.shellNativeModules.ArdiaApp.crashReports = async () => [
+    { ...base, time, fileTime: time },
+    ...odd.map((extra, i) => ({ ...base, ...extra, time: time + 1000 * (i + 1), fileTime: time + 1000 * (i + 1) })),
+  ];
+  await reportNativeCrashes();
+  const sent = queued().slice(-4);
+  for (const event of sent) {
+    for (const key of ["crash_termination_code", "crash_termination_indicator", "crash_exception_code", "crash_exception_subcode", "crash_thread", "crash_queue"]) {
+      assert.equal(event.properties[key], null, key);
+    }
+    const json = JSON.stringify(event);
+    for (const leak of ["private", "someone", "secret", "Bank", "page.dylib", "Library not loaded"]) assert.equal(json.includes(leak), false, leak);
+  }
+});

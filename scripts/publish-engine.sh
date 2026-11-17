@@ -81,6 +81,7 @@ echo "$sha  $(basename "$archive")" >"$archive.sha256"
 echo "==> Source"
 "$root/scripts/engine-source.sh" "$tag" "$source_archive" >/dev/null
 assets=("$archive" "$archive.sha256" "$symbols_archive" "$uuids_file" "$source_archive")
+require_symbol_assets "$symbols_archive" "$uuids_file"
 line="$(printf '%s\t%s\t%s' "$tree" "$tag" "$sha")"
 
 echo "==> Publish"
@@ -93,6 +94,7 @@ if [ "$dry" = 1 ]; then
   echo "dry run: nothing published. The table line would be:"
   echo "$line"
 else
+  require_release_symbols "$tag"
   [ "$(gh release view "$tag" -R "$REPO" --json isPrerelease -q .isPrerelease)" = true ] || die "$tag isn't a prerelease"
   printf '%s\n' "$line" >>"$table"
   echo "Published $tag. Commit packages/ardiacore/prebuilt-engines.tsv (appended: $line)."

@@ -172,8 +172,13 @@ owner's Mac ──▶ ardia.dev/_ch/ (read-only ClickHouse user)   ardia.dev/_re
     crashed process's main thread name, `CrRendererMain`, `CrGpuMain`, `CrUtilityMain`). New fields: `crash_process`
     (`browser`, `renderer`, `gpu`, `utility`, `alerts`, `plugin`), `crashed_version` and `crashed_build` (the app version
     that crashed, which is the previous one when the report is found after an update; empty for helpers),
-    `crashed_engine_version` (helpers), `crash_termination` (`SIGNAL`, `CODESIGNING`…), `crash_uptime_s` (how
-    long the process ran), `crash_vm_writable_mb` (the report's `Writable regions: Total=`, the virtual size of its
+    `crashed_engine_version` (helpers), `crash_termination` (`SIGNAL`, `CODESIGNING`…), `crash_termination_code`
+    (the termination's code, a whole number, like `5` for a `SIGNAL` trap), `crash_termination_indicator` (the
+    report's short description of it, like `Trace/BPT trap: 5`, sent as `TRACE_BPT_TRAP_5`; dropped unless it is
+    plain words), `crash_exception_code` and `crash_exception_subcode` (the report's first two exception codes, whole
+    numbers), `crash_thread` and `crash_queue` (the name of the crashed thread and its dispatch queue, like
+    `ThreadPoolForegroundWorker`; dropped unless it is one or two plain words, so never a URL or a title),
+    `crash_uptime_s` (how long the process ran), `crash_vm_writable_mb` (the report's `Writable regions: Total=`, the virtual size of its
     writable regions, not what it wrote), and the context saved before the crash:
     `ctx_tabs`, `ctx_windows`, `ctx_profiles`, `ctx_footprint_mb` (the app process's physical footprint),
     `ctx_app_memory_mb` (every Ardia process, from the last hourly memory sample), `ctx_free_disk_gb` (0.1 GB under
@@ -254,7 +259,8 @@ owner's Mac ──▶ ardia.dev/_ch/ (read-only ClickHouse user)   ardia.dev/_re
     profile, comes back.
   - Chromium Framework frames are named from the engine's own symbols, which the engine release publishes with
     their UUIDs (#1054: `publish-engine.sh` uploads the build's dSYMs, `scripts/symbolicate-crash.sh` resolves a
-    crash event's frames by the `crash_images` UUID). Nothing is sent from the app for this.
+    crash event's frames by the `crash_images` UUID, and fails when the release lacks the `-symbols.tar.xz` or
+    `-uuids.txt` asset). Nothing is sent from the app for this.
   - `crash_js_fatal` is data only, to find why the app's JS stops the app. Two crashes name no reason without it.
     A Hermes abort (0.2.45–0.2.46 `SIGABRT`s from `hermes + 0x19bea4`, #1980) is a Hades GC out-of-memory: resolved
     against React Native 0.81.6's `hermes-ios-release` tarball (the shipped hermes has the same UUID, 2CA494AE), the

@@ -304,3 +304,81 @@ test("the release names the symbolicate script looks for are the ones publish-en
   }).trimEnd().split("\n");
   assert.deepEqual(names, ["ArdiaCore-4f3a9c0d1e2b-symbols.tar.xz", "ArdiaCore-4f3a9c0d1e2b-uuids.txt"]);
 });
+
+const asBash = (script, extra = {}) => spawnSync("bash", ["-c", `set -euo pipefail; . "${join(scripts, "lib/releases.sh")}"; ${script}; echo reached`], { encoding: "utf8", env: { ...env, ...extra } });
+
+test("publish-engine.sh stops unless the symbols archive and the UUID list exist and are not empty", () => {
+  const dir = join(work, "guard");
+  mkdirSync(dir, { recursive: true });
+  const symbols = join(dir, "ArdiaCore-cccccccccccc-symbols.tar.xz");
+  const uuids = join(dir, "ArdiaCore-cccccccccccc-uuids.txt");
+  const check = `require_symbol_assets "${symbols}" "${uuids}"`;
+  rmSync(symbols, { force: true });
+  rmSync(uuids, { force: true });
+  const neither = asBash(check);
+  assert.equal(neither.status, 1);
+  assert.match(neither.stderr, /ArdiaCore-cccccccccccc-symbols\.tar\.xz is missing or empty/);
+  assert.equal(neither.stdout, "");
+  writeFileSync(symbols, "archive");
+  const noUuids = asBash(check);
+  assert.equal(noUuids.status, 1);
+  assert.match(noUuids.stderr, /ArdiaCore-cccccccccccc-uuids\.txt is missing or empty/);
+  writeFileSync(uuids, "");
+  assert.equal(asBash(check).status, 1, "an empty UUID list is as good as none");
+  writeFileSync(uuids, "4c4c44af-5555-3144-a1d1-8e024e2486d8\tarm64\tChromium Framework.dSYM/Contents/Resources/DWARF/Chromium Framework\n");
+  const both = asBash(check);
+  assert.equal(both.status, 0, both.stderr);
+  assert.equal(both.stdout, "reached\n");
+});
+
+test("publish-engine.sh stops when the release it uploaded to doesn't list the symbols archive and the UUID list", () => {
+  const stubBin = join(work, "guard-bin");
+  mkdirSync(stubBin, { recursive: true });
+  writeFileSync(
+    join(stubBin, "gh"),
+    `#!/usr/bin/env bash
+echo "gh $*" >>"$STUB_LOG"
+[ "$1 $2 $3 $4" = "release view engine-cccccccccccc -R" ] || { echo "unexpected: gh $*" >&2; exit 2; }
+[ -z "\${STUB_GH_FAIL:-}" ] || exit 1
+printf '%s' "$STUB_LISTED"
+`,
+  );
+  chmodSync(join(stubBin, "gh"), 0o755);
+  const path = `${stubBin}:${process.env.PATH}`;
+  const check = "require_release_symbols engine-cccccccccccc";
+  const listing = (...names) => names.join("\n");
+  const symbols = "ArdiaCore-cccccccccccc-symbols.tar.xz";
+  const uuids = "ArdiaCore-cccccccccccc-uuids.txt";
+  const engine = "ArdiaCore-cccccccccccc.tar.xz";
+
+  const withoutBoth = asBash(check, { PATH: path, STUB_LISTED: listing(engine, `${engine}.sha256`) });
+  assert.equal(withoutBoth.status, 1);
+  assert.match(withoutBoth.stderr, /engine-cccccccccccc doesn't list ArdiaCore-cccccccccccc-symbols\.tar\.xz/);
+  assert.equal(withoutBoth.stdout, "");
+
+  const withoutUuids = asBash(check, { PATH: path, STUB_LISTED: listing(engine, symbols) });
+  assert.equal(withoutUuids.status, 1);
+  assert.match(withoutUuids.stderr, /engine-cccccccccccc doesn't list ArdiaCore-cccccccccccc-uuids\.txt/);
+
+  const lookalike = asBash(check, { PATH: path, STUB_LISTED: listing(`${symbols}.part`, `x${uuids}`) });
+  assert.equal(lookalike.status, 1, "only the exact asset names count");
+
+  const unreadable = asBash(check, { PATH: path, STUB_LISTED: listing(symbols, uuids), STUB_GH_FAIL: "1" });
+  assert.equal(unreadable.status, 1);
+  assert.match(unreadable.stderr, /couldn't list engine-cccccccccccc's assets/);
+
+  const listed = asBash(check, { PATH: path, STUB_LISTED: listing(engine, symbols, uuids, "ArdiaCore-cccccccccccc-source.tar.xz") });
+  assert.equal(listed.status, 0, listed.stderr);
+  assert.equal(listed.stdout, "reached\n");
+});
+
+test("publish-engine.sh checks both before it records the engine in prebuilt-engines.tsv", () => {
+  const source = readFileSync(join(scripts, "publish-engine.sh"), "utf8");
+  const pack = source.indexOf('pack-symbols.sh" "$work/Ardia.app/Contents/Frameworks/Chromium Framework.framework"');
+  const before = source.indexOf('require_symbol_assets "$symbols_archive" "$uuids_file"');
+  const upload = source.indexOf('run gh release upload "$tag" -R "$REPO" --clobber "${assets[@]}"');
+  const after = source.indexOf('require_release_symbols "$tag"');
+  const record = source.indexOf('printf \'%s\\n\' "$line" >>"$table"');
+  assert.ok(pack > 0 && before > pack && upload > before, "the files are checked after packing and before the upload");
+  assert.ok(after > upload && record > after, "the release's asset list is checked after the upload and before the table line");
+});

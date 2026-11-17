@@ -91,6 +91,7 @@ void CopyColorTags(IOSurfaceRef from, IOSurfaceRef to, const gfx::ColorSpace& sp
 std::string SurfaceTags(IOSurfaceRef surface);
 bool HasExtendedPixels(CVPixelBufferRef buffer);
 bool VideoToolboxQuarantined();
+bool VideoToolboxBrokenOnThisOs();
 API_AVAILABLE(macos(26.0))
 void KeepQuarantinedProcessor(VTFrameProcessor* processor);
 

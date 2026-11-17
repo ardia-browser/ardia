@@ -23,8 +23,10 @@ const { values: flags, positionals } = parseArgs({
   allowPositionals: true,
   options: { out: { type: "string" }, keep: { type: "boolean" }, attach: { type: "boolean" }, seconds: { type: "string" }, list: { type: "boolean" }, help: { type: "boolean", short: "h" } },
 });
+const macMajor = Number(execFileSync("sw_vers", ["-productVersion"], { encoding: "utf8" }).split(".")[0]);
+const vtFactor = (factor) => (macMajor >= 27 ? 0 : factor);
 const CHECKS = {
-  "on-480": "854×480 H.264 in a 1280×720 box: VideoToolbox super resolution, then MetalFX to the box",
+  "on-480": "854×480 H.264 in a 1280×720 box: VideoToolbox super resolution (MetalFX only on macOS 27 and later), then MetalFX to the box",
   "on-360": "640×360 H.264 in a 1280×720 box",
   "on-720": "1280×720 H.264 in a 1600×900 box: VideoToolbox ×1.5, then MetalFX",
   "on-1080": "1920×1080 H.264 in a 1600×900 box on a 2x screen: MetalFX only",
@@ -292,15 +294,15 @@ async function playing(name, query, expectFactor) {
 }
 
 await engine("webView.setVideoUpscaling", { enabled: true });
-await playing("on-480", "src=clip_854x480.mp4&w=1280&h=720", 2);
-await playing("on-360", "src=clip_640x360.mp4&w=1280&h=720", 2);
-await playing("on-720", "src=clip_1280x720.mp4&w=1600&h=900", 1.5);
+await playing("on-480", "src=clip_854x480.mp4&w=1280&h=720", vtFactor(2));
+await playing("on-360", "src=clip_640x360.mp4&w=1280&h=720", vtFactor(2));
+await playing("on-720", "src=clip_1280x720.mp4&w=1600&h=900", vtFactor(1.5));
 await playing("on-1080", "src=clip_1920x1080.mp4&w=1600&h=900", 0);
 await playing("mse-720", "src=clip_1280x720_frag.mp4&mse=1&w=1600&h=900");
 await playing("vp9-480", "src=clip_854x480.webm&w=1280&h=720");
-await playing("hevc-720", "src=clip_1280x720_hevc.mp4&w=1920&h=1080", 1.5);
-await playing("vp9-720", "src=clip_1280x720.webm&w=1920&h=1080", 1.5);
-await playing("av1-720", "src=clip_1280x720_av1.mp4&w=1920&h=1080", 1.5);
+await playing("hevc-720", "src=clip_1280x720_hevc.mp4&w=1920&h=1080", vtFactor(1.5));
+await playing("vp9-720", "src=clip_1280x720.webm&w=1920&h=1080", vtFactor(1.5));
+await playing("av1-720", "src=clip_1280x720_av1.mp4&w=1920&h=1080", vtFactor(1.5));
 await playing("crop-cover", "src=clip_854x480.mp4&w=900&h=900&fit=cover");
 
 await check("paused", async () => {

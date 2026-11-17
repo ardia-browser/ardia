@@ -172,7 +172,12 @@ std::optional<Plan> Upscaler::MakePlan(const VideoUpscaleCandidate& candidate, c
   }
   const float ratio = std::min(key.target.width() / key.crop.width(),
                                key.target.height() / key.crop.height());
-  if (!VideoToolboxQuarantined() && VTLowLatencySuperResolutionScalerConfiguration.isSupported &&
+  const bool video_toolbox_broken = VideoToolboxBrokenOnThisOs();
+  if (video_toolbox_broken) {
+    TRACE_EVENT_INSTANT0("gpu", "ArdiaVSR.VideoToolboxSkippedForOs", TRACE_EVENT_SCOPE_THREAD);
+  }
+  if (!video_toolbox_broken && !VideoToolboxQuarantined() &&
+      VTLowLatencySuperResolutionScalerConfiguration.isSupported &&
       key.format == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange) {
     const gfx::Size aligned(AlignUp16(plan.region.width()), AlignUp16(plan.region.height()));
     const CMVideoDimensions max =

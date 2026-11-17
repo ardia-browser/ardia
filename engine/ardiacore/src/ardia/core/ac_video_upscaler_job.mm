@@ -179,6 +179,13 @@ bool VideoToolboxQuarantined() {
   return g_video_toolbox_quarantined;
 }
 
+bool VideoToolboxBrokenOnThisOs() {
+  if (@available(macOS 27.0, *)) {
+    return true;
+  }
+  return false;
+}
+
 API_AVAILABLE(macos(26.0))
 void KeepQuarantinedProcessor(VTFrameProcessor* processor) {
   NSMutableArray<VTFrameProcessor*>* processors = QuarantinedProcessors();

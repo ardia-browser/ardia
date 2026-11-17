@@ -67,7 +67,7 @@ export type PageShare = {
   fileUrl?: string;
 };
 export type PageCommand = {
-  command: "search" | "ask" | "copyLinkToHighlight" | "escape" | "share" | "hideElement";
+  command: "search" | "translate" | "ask" | "copyLinkToHighlight" | "escape" | "share" | "hideElement";
   text: string;
   point?: [number, number];
   modifiers?: { metaKey?: boolean; shiftKey?: boolean; altKey?: boolean; middle?: boolean };
@@ -192,6 +192,7 @@ export type WebViewProps = ViewProps & {
   contentsBackgroundColor?: string;
   pageColor?: string;
   shownUrl?: string;
+  translateMenuTitle?: string;
   autoPictureInPicture?: boolean;
   onNavigationChange?: (state: NavigationState) => void;
   onProgress?: (progress: number) => void;

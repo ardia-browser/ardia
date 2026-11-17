@@ -23,6 +23,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong, nullable) NSColor *contentsBackgroundColor;
 @property (nonatomic, copy, nullable) NSString *pageColor;
 @property (nonatomic, copy, nullable) NSString *shownURL;
+@property (nonatomic, copy, nullable) NSString *translateMenuTitle;
 @property (nonatomic) BOOL visible;
 @property (nonatomic) BOOL warm;
 @property (nonatomic) BOOL neighbour;

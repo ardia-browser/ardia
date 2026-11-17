@@ -23,6 +23,7 @@ enum PageViewDefinition {
       Prop("pageBackgroundColor") { (view: V, color: NSColor?) in view.page.pageBackgroundColor = color }
       Prop("pageColor") { (view: V, color: String?) in view.page.pageColor = color }
       Prop("contentsBackgroundColor") { (view: V, color: NSColor?) in view.page.contentsBackgroundColor = color }
+      Prop("translateMenuTitle") { (view: V, title: String?) in (view.page as? ArdiaWebView)?.translateMenuTitle = title }
       Prop("shownUrl") { (view: V, url: String?) in view.page.shownURL = url }
       Prop("autoPictureInPicture") { (view: V, enabled: Bool?) in view.page.autoPictureInPicture = enabled ?? false }
 

@@ -68,6 +68,11 @@ export const languageName = (language: string) => translation?.languageName(lang
 
 const translatableHost = (url: string) => (/^https?:/i.test(url) ? hostOf(url) : "");
 
+export function translationMenuTitle(url: string, translated: boolean): string {
+  if (!translation || !translatableHost(url)) return "";
+  return translated ? "Show Original" : `Translate to ${languageName(defaultTarget())}`;
+}
+
 function listOwner(profileId: string): string {
   return isIncognitoProfile(profileId) ? incognitoOriginal(profileId) : profileId;
 }

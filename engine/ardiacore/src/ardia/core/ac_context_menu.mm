@@ -182,7 +182,7 @@ class ACContextMenu : public RenderViewContextMenuMacCocoa {
     const std::u16string& selection = params().selection_text;
     ArdiaCoreTab* tab = TabOf(source_web_contents_);
     id<ArdiaCoreTabDelegate> delegate = tab.delegate;
-    if (selection.empty() || params().is_editable ||
+    if (params().is_editable ||
         ![delegate respondsToSelector:@selector(tab:contextMenuItemsForSelection:)]) {
       return;
     }

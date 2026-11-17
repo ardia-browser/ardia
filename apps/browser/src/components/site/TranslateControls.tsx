@@ -13,6 +13,7 @@ import {
   isTranslated,
   translationTarget,
   useTranslateState,
+  translationMenuTitle,
 } from "../../state/site/translate";
 import { translateMenuItems } from "../../state/site/translateMenu";
 import { memo } from "react";
@@ -76,7 +77,7 @@ export function TranslateRows({ tabId, onClose }: { tabId: string; onClose: () =
   const tab = useTab(tabId);
   useSettings((st) => st.neverTranslateSites);
   const never = tab ? isNeverTranslated(tab.profileId, tab.url) : false;
-  if (!translation || !tab || (!state.source && state.status === "idle" && !never)) return null;
+  if (!tab || !translationMenuTitle(tab.url, state.status !== "idle")) return null;
   const translated = state.status !== "idle";
   return (
     <>

@@ -225,19 +225,22 @@ NSDictionary *FindMenuItem(NSArray *items, NSString *label) {
 
 - (NSArray<NSDictionary<NSString *, NSString *> *> *)tab:(ArdiaCoreTab *)tab
                            contextMenuItemsForSelection:(NSString *)text {
-  return @[ @{
+  NSMutableArray *items = [NSMutableArray array];
+  if (text.length) [items addObject:@{
     @"id" : @"search",
     @"title" : [NSString stringWithFormat:@"Search %@ for “%@”", gSearchEngineName, SelectionLabel(text)],
     @"replaces" : @"search",
-  } ];
+  }];
+  if (self.translateMenuTitle.length) [items addObject:@{@"id" : @"translate", @"title" : self.translateMenuTitle}];
+  return items;
 }
 
 - (void)tab:(ArdiaCoreTab *)tab
     contextMenuCommand:(NSString *)itemId
                   text:(NSString *)selection
              modifiers:(NSDictionary<NSString *, NSNumber *> *)modifiers {
-  if ([itemId isEqualToString:@"search"])
-    [self emit:@"command" payload:@{@"command" : @"search", @"text" : selection ?: @"", @"modifiers" : modifiers ?: @{}}];
+  if ([itemId isEqualToString:@"search"] || [itemId isEqualToString:@"translate"])
+    [self emit:@"command" payload:@{@"command" : itemId, @"text" : selection ?: @"", @"modifiers" : modifiers ?: @{}}];
 }
 
 - (void)tab:(ArdiaCoreTab *)tab shareFromContextMenu:(NSDictionary<NSString *, id> *)share {

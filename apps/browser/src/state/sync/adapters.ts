@@ -184,6 +184,33 @@ export function historyExpired(key: string, value: unknown, now: number) {
   return !!v && lastVisitOf(v) < now - HISTORY_WINDOW_MS;
 }
 
+const newestFirstLists = new WeakMap<readonly HistoryEntry[], boolean>();
+
+function newestFirst(view: readonly HistoryEntry[]): boolean {
+  let sorted = newestFirstLists.get(view);
+  if (sorted === undefined) {
+    sorted = true;
+    for (let i = 1; i < view.length && sorted; i++) sorted = view[i]!.lastVisit <= view[i - 1]!.lastVisit;
+    newestFirstLists.set(view, sorted);
+  }
+  return sorted;
+}
+
+function olderThan(view: readonly HistoryEntry[], since: number, keyOf: (e: HistoryEntry) => string | null): (key: string) => boolean {
+  let older: Set<string> | undefined;
+  return (key) => {
+    if (!older) {
+      older = new Set();
+      for (const e of view) {
+        if (e.lastVisit >= since) continue;
+        const k = keyOf(e);
+        if (k !== null) older.add(k);
+      }
+    }
+    return older.has(key);
+  };
+}
+
 export function historyAdapter(profileId: string): Adapter {
   const ready = () => !!historyViewOf(store(), profileId)?.ready;
   const extracts = historyExtractsOf(profileId);
@@ -209,25 +236,30 @@ export function historyAdapter(profileId: string): Adapter {
       if (!ready()) return null;
       const since = Date.now() - HISTORY_WINDOW_MS;
       const values = new Map<string, unknown>();
-      const older = new Set<string>();
       const { list: view, floor } = historyViewOf(store(), profileId)!;
-      for (let i = 0; i < view.length; i++) {
-        const e = view[i]!;
+      const extractedVisit = (e: HistoryEntry) => {
         let visit = extracts.visits.get(e);
         if (!visit) extracts.visits.set(e, (visit = { key: isWebPageUrl(e.url) ? `${HISTORY}${e.url}` : null, json: undefined, value: null }));
-        const { key } = visit;
-        if (key === null) continue;
+        return visit;
+      };
+      const stopsAtWindow = newestFirst(view);
+      const isOlder = olderThan(view, since, (e) => extractedVisit(e).key);
+      for (let i = 0; i < view.length; i++) {
+        const e = view[i]!;
         if (e.lastVisit < since) {
-          older.add(key);
+          if (stopsAtWindow) break;
           continue;
         }
+        const visit = extractedVisit(e);
+        const { key } = visit;
+        if (key === null) continue;
         const json = baseJson(key);
         if (visit.value === null || visit.json !== json) Object.assign(visit, { json, value: visitOf(key, e, json) });
         values.set(key, visit.value);
       }
       if (parsed.size > 2 * values.size + 1000) for (const key of parsed.keys()) if (!values.has(key) && baseJson(key) === undefined) parsed.delete(key);
       const ignore = (key: string) => {
-        if (older.has(key) || !isWebPageUrl(recordId(HISTORY, key))) return true;
+        if (isOlder(key) || !isWebPageUrl(recordId(HISTORY, key))) return true;
         const known = knownOf(key, baseJson(key));
         return !!known && (lastVisitOf(known) < since || lastVisitOf(known) <= floor);
       };

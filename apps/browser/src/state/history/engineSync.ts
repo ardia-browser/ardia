@@ -155,16 +155,23 @@ export function applyHistoryChanges(list: HistoryEntry[], changes: readonly List
   }
   if (!dirty) return list;
 
-  const slots: (HistoryEntry | null)[] = list.slice();
+  const replaced: Touched[] = [];
   const moved: Touched[] = [];
   for (const state of touched.values()) {
     if (state.moved && state.entry) moved.push(state);
-    if (state.index >= 0) slots[state.index] = state.moved ? null : (state.entry ?? null);
+    if (state.index >= 0) replaced.push(state);
   }
+  replaced.sort((a, b) => a.index - b.index);
   moved.sort((a, b) => b.entry!.lastVisit - a.entry!.lastVisit || b.seq - a.seq);
   const next: HistoryEntry[] = [];
   let m = 0;
-  for (const h of slots) {
+  let r = 0;
+  for (let i = 0; i < list.length && next.length < MAX_HISTORY; i++) {
+    let h: HistoryEntry | undefined = list[i]!;
+    if (r < replaced.length && replaced[r]!.index === i) {
+      const state = replaced[r++]!;
+      h = state.moved ? undefined : state.entry;
+    }
     if (!h) continue;
     while (m < moved.length && moved[m]!.entry!.lastVisit >= h.lastVisit) next.push(moved[m++]!.entry!);
     next.push(h);

@@ -104,18 +104,25 @@ struct StartSpaces: View {
     let spaces = app.spaces
     ZStack {
       if spaces.count > 1 {
+        let index = spaces.firstIndex { $0.syncId == app.currentSpace?.syncId } ?? 0
         TabView(selection: $page) {
           ForEach(spaces) { space in
-            StartSpacePage(geometry: geometry, space: space, spaces: spaces)
+            StartSpacePage(geometry: geometry, space: space)
               .ignoresSafeArea()
               .tag(Optional(space.syncId))
           }
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
-        SpacePageDots(count: spaces.count, index: spaces.firstIndex { $0.syncId == app.currentSpace?.syncId } ?? 0)
+        SpacePageDots(count: spaces.count, index: index)
+          .accessibilityValue(spaces[index].name)
+          .accessibilityHint("Swipe up or down to change space.")
+          .accessibilityAdjustableAction { direction in
+            let next = direction == .increment ? index + 1 : index - 1
+            if spaces.indices.contains(next) { app.switchSpace(to: spaces[next].syncId) }
+          }
           .position(x: geometry.container.width / 2, y: screenLayout.column == nil ? geometry.barCenterY - TabsLayout.pageDotsAboveBar : geometry.barCenterY)
       } else if let space = spaces.first {
-        StartSpacePage(geometry: geometry, space: space, spaces: spaces)
+        StartSpacePage(geometry: geometry, space: space)
       } else if app.sync.phase == .off {
         SyncInvitation { app.sheet = .syncSetup }
           .position(x: geometry.container.width / 2, y: geometry.container.height * TabsLayout.startSwitcherRatio)
@@ -136,14 +143,14 @@ struct StartSpaces: View {
 struct StartSpacePage: View {
   let geometry: TabsDeckGeometry
   let space: SyncedProfile
-  let spaces: [SyncedProfile]
   @Environment(AppModel.self) private var app
 
   var body: some View {
     let switcherY = geometry.container.height * TabsLayout.startSwitcherRatio
     ZStack(alignment: .top) {
       Color.clear
-      SpaceSwitcher(spaces: spaces, current: space) { app.switchSpace(to: $0) }
+      SpaceTitle(space: space, showsChevron: false)
+        .accessibilityAddTraits(.isHeader)
         .position(x: geometry.container.width / 2, y: switcherY)
       if !space.pinned.tiles.isEmpty {
         PinnedTiles(tiles: space.pinned.tiles) { url, title in app.openPinned(url: url, title: title) }

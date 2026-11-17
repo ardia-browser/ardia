@@ -128,11 +128,12 @@ sizes, copy), on Apple's controls, in the Mac's colours:
   because that cycle may be uploading a visit the snapshot does not list yet. Bookmarks are the space's synced bookmarks, read-only. Downloads are the files in the app's Downloads folder, opened with Quick Look.
 - **Start.** The app opens on search over the profile's window tint (a synced profile's Mac theme replaces it,
   under a light white veil in light mode), keyboard up. Behind the search panel is the space's start screen
-  (`SearchHomeView`): the space switcher in the middle, the space's pinned tiles from the Mac under it (icons only,
+  (`SearchHomeView`): the space's name in the middle, the space's pinned tiles from the Mac under it (icons only,
   glass rounded rectangles, up to four to a row; a tile folder opens a menu of its tabs), page dots above the
   bottom bar, and three glass buttons: tabs, plus (touch and hold for New Incognito Tab and Reopen Closed Tab) and
-  settings. Swiping sideways moves between spaces. With sync off there are no spaces; a Sync With Your Mac button
-  stands where the switcher would be. Search is one rounded glass panel 8 pt above the keyboard (`SearchTray`, through `chromeSurface`
+  settings. Swiping sideways moves between spaces. The name is a title here, with no chevron and no menu (the owner's
+  call on 2026-11-18: the dots and the swipe are enough); VoiceOver changes space by adjusting the dots. With sync off
+  there are no spaces; a Sync With Your Mac button stands where the name would be. Search is one rounded glass panel 8 pt above the keyboard (`SearchTray`, through `chromeSurface`
   with the look's tint): the field at the top (text, clear, the Incognito eyeglasses toggle) and the suggestion rows
   below, words only except a site's favicon. Over a page it floats over the dimmed page. Suggestions come from the Mac's own omnibox code: open tabs, local and synced
   history, bookmarks, the Mac's tabs, network suggestions, bangs and the calculator. Dragging along the rows scrubs

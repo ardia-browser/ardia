@@ -15,6 +15,7 @@ let lateBelow = 0;
 let chances = 0;
 let misses = 0;
 let keyDismissals = 0;
+let keywordTabs = 0;
 
 export const noteInlineCompletionShown = () => void (shown += 1);
 
@@ -40,10 +41,12 @@ export const noteCommandBarKeyDismissal = (consent: ConsentToken | null) => coun
 
 export const noteReplayGuardExpired = (consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void (guardExpired += 1));
 
+export const noteKeywordTabOverCompletion = (consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void (keywordTabs += 1));
+
 export function takeInlineCompletionCounts() {
   const hold = takeKeyHoldCounts();
   const drops = Object.fromEntries(Object.entries(hold.drops).map(([reason, count]) => [`command_bar_key_hold_drops_${reason}`, count]));
-  const taken = { command_bar_inline_completions: shown, command_bar_inline_completions_kept: kept, command_bar_site_suggestions: sitesShown, command_bar_routes_listed: routesListed, command_bar_letters_restored: restored, command_bar_rows_held: held, command_bar_held_rows_key_moves: heldKeyMoves, command_bar_key_holds: hold.holds, command_bar_keys_replayed: hold.replayed, command_bar_replay_guards_expired: guardExpired, command_bar_open_relayouts: openRelayouts, command_bar_late_suggestions_below: lateBelow, command_bar_inline_chances: chances, command_bar_inline_misses: misses, command_bar_key_dismissals: keyDismissals, ...drops };
+  const taken = { command_bar_inline_completions: shown, command_bar_inline_completions_kept: kept, command_bar_site_suggestions: sitesShown, command_bar_routes_listed: routesListed, command_bar_letters_restored: restored, command_bar_rows_held: held, command_bar_held_rows_key_moves: heldKeyMoves, command_bar_key_holds: hold.holds, command_bar_keys_replayed: hold.replayed, command_bar_replay_guards_expired: guardExpired, command_bar_open_relayouts: openRelayouts, command_bar_late_suggestions_below: lateBelow, command_bar_inline_chances: chances, command_bar_inline_misses: misses, command_bar_key_dismissals: keyDismissals, command_bar_keyword_tabs_over_completion: keywordTabs, ...drops };
   shown = 0;
   kept = 0;
   sitesShown = 0;
@@ -57,5 +60,6 @@ export function takeInlineCompletionCounts() {
   chances = 0;
   misses = 0;
   keyDismissals = 0;
+  keywordTabs = 0;
   return taken;
 }

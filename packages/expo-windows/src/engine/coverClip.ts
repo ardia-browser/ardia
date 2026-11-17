@@ -62,7 +62,7 @@ export function coverMeasurer(windowId: string, id: string, radius: number, node
     if (!own || stopped || !covering) {
       active?.cancel();
       latest = null;
-      if (!covering) setCover(windowId, id, null);
+      if (!covering && own && !stopped) setCover(windowId, id, null);
       return Promise.resolve();
     }
     const clipNodes = clipNodesNow();

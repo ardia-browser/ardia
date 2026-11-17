@@ -249,3 +249,56 @@ test("late answers validate surface and clip identities even without another req
     measurer.stop();
   }
 });
+
+test("a stopped non-covering measurer cannot erase the replacement's cover", async () => {
+  const windowId = "stopped-owner-window";
+  const surface = node(4, 8, 80, 40);
+  const hidden = coverMeasurer(windowId, "surface", 8, () => surface, [], false);
+  await hidden.measure();
+  hidden.stop();
+  const shown = coverMeasurer(windowId, "surface", 8, () => surface, []);
+  await shown.measure();
+  await hidden.measure();
+  assert.deepEqual(coversIn(windowId), [{ x: 4, y: 8, width: 80, height: 40, radius: 8 }]);
+  shown.stop();
+});
+
+test("an unmounted non-covering measurer cannot erase a live cover", async () => {
+  const windowId = "unmounted-owner-window";
+  const surface = node(4, 8, 80, 40);
+  const shown = coverMeasurer(windowId, "surface", 8, () => surface, []);
+  await shown.measure();
+  const unmounted = coverMeasurer(windowId, "surface", 8, () => null, [], false);
+  await unmounted.measure();
+  assert.deepEqual(coversIn(windowId), [{ x: 4, y: 8, width: 80, height: 40, radius: 8 }]);
+  unmounted.stop();
+  shown.stop();
+});
+
+test("covers publish during continuous motion when native answers take three frames", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let position = 0;
+  const callbacks = [];
+  const pending = [];
+  const surface = { measureInWindow: (reply) => callbacks.push({ reply, x: position }) };
+  const measurer = coverMeasurer("continuous-motion-window", "surface", 0, () => surface, []);
+  for (let frame = 1; frame <= 9; frame++) {
+    pending.push(measurer.measure());
+    position += 16;
+    t.mock.timers.tick(16);
+    assert.equal(callbacks.length, 1, "one native pass remains in flight across frames");
+    if (frame % 3 === 0) {
+      const answer = callbacks.shift();
+      answer.reply(answer.x, 0, 80, 40);
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(coversIn("continuous-motion-window")[0].x, position - 48, "the hole moves before the animation stops");
+    }
+  }
+  const final = callbacks.shift();
+  assert.equal(final.x, position);
+  final.reply(final.x, 0, 80, 40);
+  await Promise.all(pending);
+  assert.equal(callbacks.length, 0);
+  assert.equal(coversIn("continuous-motion-window")[0].x, 144);
+  measurer.stop();
+});

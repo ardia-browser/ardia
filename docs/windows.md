@@ -209,6 +209,17 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
   - With no lights on the left, a sidebar header with nothing in it collapses to the page frame on Windows
     (`sidebarHeaderCollapsed`), so the tabs start at the top; the downloads button then sits in the sidebar's footer.
     The header stays for a profile indicator, an incognito window, the address row, and a right sidebar.
+  - The card's corners: where the Mac keeps the card concentric with its window (window radius minus the page frame),
+    Windows rounds it to the window's own 8 px (`pageCornerRadius` in `lib/platformChrome.windows.ts`), and square with
+    no page frame (borderless mode, a frame of 0, full screen when set). The page is a window of its own above the
+    card, so `state/windows/pageCorners.ts` tells the engine host how to round it (`ArdiaPageCovers.setCorners` and
+    `setRadius`): all four corners while a tab's page reaches its card's top (address bar in the sidebar, Little
+    Ardia), and only the bottom two below the toolbar or an always-shown bookmarks bar, where rounded top corners would
+    cut into the card. `tab.show` carries both a per-corner `corners` list and a single `radius`: an engine that knows
+    `corners` draws each corner from it, and an older one draws `radius`, which is the card's radius only when all four
+    corners round, so below the toolbar it keeps the page square rather than cutting into the card. A Peek's page sits
+    under the Peek's bar and an extension's page has no tab, so both stay square (`pageRoundingOf` in
+    `engine/covers.ts`).
   - Resizing from the top edge over a page: Windows keeps the top resize band inside the client area, and the page is
     its own window above it. The page window's hit test (`HostedFrameView::NonClientHitTest` in `ardia/win/frame_view.cc`)
     answers what the app window answers at that point when that is its top edge or a top corner (so the band's size,
@@ -429,7 +440,8 @@ is plain Chromium.
   Saver: a hidden page that sleeps keeps it, and the page holds its place again once it wakes (`engineSleepPlace.ts`). A window
   Chromium opens by itself (a link opened in a new window) stays off screen until the app adopts its tabs.
 - The verbs: `tab.create` (a key, a profile, a URL or a tab to adopt; the same key again moves the tab to the window
-  that asks), `tab.show` (visible, and where in the window, in the UI's points; a corner radius and holes),
+  that asks), `tab.show` (visible, and where in the window, in the UI's points; a corner radius, optional
+  per-corner radii as `corners` [top left, top right, bottom right, bottom left] that take its place, and holes),
   `tab.close`, `tab.call` (load, back, forward, reload, stop, find, zoom, scripts, DevTools, print, site info and the
   rest of the Mac tab's methods, `tab_calls.cc`), `tab.discard`, `tabs.list`, `host.info`, `app.quit`. Events come as
   the topic `tab` with a key, a name and data (navigation, progress, favicon, find, zoom, security, media, pagePress,

@@ -4,7 +4,7 @@ import { asOpenWindowRequest, listeningBrowserPages, offeredTabAdopting, openInB
 import { noteLoadAsked, openingPage, shapedPageEvent, type OpeningPage } from "./pageEvents";
 import { privateSessionOpened } from "./privateWindows";
 import type { ExternalAppRequest, NavigationState, OpenWindowRequest } from "@ardia/ardiacore";
-import type { CoverRect } from "./covers";
+import type { CoverRect, PageCorners } from "./covers";
 import type { ExternalApps } from "./domains/externalApps";
 import { notePageAsked, notePageSettled } from "./dialogPages";
 import { noteShowStep } from "./showTrace";
@@ -15,7 +15,7 @@ import { handPopupAsTab } from "./popupsAsTabs";
 
 export type PageListener = (name: string, data: unknown) => void;
 export type PageRect = Omit<CoverRect, "radius">;
-export type PageShape = PageRect & { radius: number; holes: number[][] };
+export type PageShape = PageRect & { radius: number; corners?: PageCorners; holes: number[][] };
 export type PageStart = { url?: string; profile?: string; adopt?: string; windowId: string };
 
 type ShowArgs = { key: string; visible: boolean } & Partial<PageShape>;

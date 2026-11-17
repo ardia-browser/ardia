@@ -1,5 +1,5 @@
 import { engineDomainModules } from "./domains";
-import { setCover, setPageRadius } from "./covers";
+import { setCover, setPageCorners, setPageRadius } from "./covers";
 import { discardOffered } from "./host";
 import { followPage, parkPage, releasePage } from "./pages";
 import { takeKeptFollows } from "./keptFollow";
@@ -8,6 +8,7 @@ const pageCovers = {
   set: (windowId: string, id: string, x: number, y: number, width: number, height: number, radius = 0) => setCover(windowId, id, { x, y, width, height, radius }),
   clear: (windowId: string, id: string) => setCover(windowId, id, null),
   setRadius: (radius: number, windowId?: string) => setPageRadius(radius, windowId ?? ""),
+  setCorners: setPageCorners,
 };
 
 export const engineModules: Record<string, Record<string, unknown>> = {

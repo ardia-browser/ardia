@@ -6,7 +6,7 @@ import { followMotion } from "../animation/motion";
 import { fieldFocusedIn } from "../appKeyboard";
 import { noteMissing } from "../missing";
 import { requireNativeModule } from "../modules";
-import { coversIn, hiddenByFullScreen, holesFor, onCoversChange, pageRadiusIn, setFullScreenPage } from "./covers";
+import { coversIn, hiddenByFullScreen, holesFor, onCoversChange, pageRoundingOf, setFullScreenPage } from "./covers";
 import { callPage, mountPage, showPage, type PageRect, type PageShape } from "./pages";
 import { noteShowStep } from "./showTrace";
 import { CoverAncestry } from "./usePageCover";
@@ -121,7 +121,7 @@ export const EngineWebView = forwardRef<unknown, Props>(function EngineWebView(p
         ? { ...page, radius: 0, holes: [] }
         : {
             ...page,
-            radius: pageRadiusIn(windowId),
+            ...pageRoundingOf(windowId, latest.current),
             holes: holesFor(page, coversIn(windowId, above.current), latest.current.temporary === true, latest.current.onTop === true),
           };
       const placed = JSON.stringify(shape);

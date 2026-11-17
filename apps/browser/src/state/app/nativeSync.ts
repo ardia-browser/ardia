@@ -35,6 +35,7 @@ import { menuInputsChanged, trackedMenuState, type MenuReads } from "../commands
 import { usePages } from "../tabs/pageState";
 import { openFromWindowlessPage } from "../tabs/openFromWindowlessPage";
 import { startCaptionRegionSync } from "../windows/captionRegions";
+import { startPageCornerSync } from "../windows/pageCorners";
 
 const QUIT_SAVES_WAIT_MS = 3_000;
 
@@ -149,4 +150,5 @@ export function startNativeSync() {
   });
   void windows.sweep();
   startCaptionRegionSync();
+  startPageCornerSync();
 }

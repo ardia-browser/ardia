@@ -1,3 +1,5 @@
+import type { WebViewProps } from "@ardia/ardiacore";
+
 export type CoverRect = { x: number; y: number; width: number; height: number; radius: number };
 
 type Listener = (windowId: string) => void;
@@ -5,6 +7,7 @@ type Listener = (windowId: string) => void;
 const covers = new Map<string, Map<string, CoverRect>>();
 const listeners = new Set<Listener>();
 const radii = new Map<string, number>();
+const pageCorners = new Map<string, PageCorners>();
 const fullScreenPages = new Map<string, string>();
 let defaultRadius = 0;
 
@@ -54,6 +57,18 @@ export function setPageRadius(radius: number, windowId = "") {
 }
 
 export const pageRadiusIn = (windowId: string) => radii.get(windowId) ?? defaultRadius;
+
+export type PageCorners = readonly [topLeft: number, topRight: number, bottomRight: number, bottomLeft: number];
+
+export function setPageCorners(corners: PageCorners, windowId: string) {
+  pageCorners.set(windowId, corners);
+  changed(windowId);
+}
+
+export function pageRoundingOf(windowId: string, page: Pick<WebViewProps, "tabId" | "temporary">) {
+  if (!page.tabId || page.temporary) return { radius: 0 };
+  return { radius: pageRadiusIn(windowId), corners: pageCorners.get(windowId) };
+}
 
 export function setFullScreenPage(windowId: string, key: string, on: boolean) {
   if (on) {

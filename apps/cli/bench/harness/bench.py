@@ -77,6 +77,8 @@ def main():
     rn.add_argument("--side", choices=["ardia", "opencode", "browseruse", "betterwright", "browserharness",
                                        "browseragent", "ardiacloud"], default="ardia")
     rn.add_argument("--browser")
+    rn.add_argument("--tool", choices=["cli", "mcp"])
+    rn.add_argument("--venv")
     rn.add_argument("--port-offset", type=int)
     pl = sub.add_parser("plan")
     pl.add_argument("plan")
@@ -110,7 +112,8 @@ def main():
         if a.side == "opencode" and not a.browser:
             rec = opencode_side.run(a.task, a.agent, a.run_id, a.results, browser_overrides)
         elif a.side == "browseruse":
-            rec = browseruse_side.run(a.task, a.agent, a.run_id, a.results, browser_overrides)
+            rec = browseruse_side.run(a.task, a.agent, a.run_id, a.results,
+                                      dict(browser_overrides, tool=a.tool, venv=a.venv))
         elif a.side == "betterwright":
             rec = betterwright_side.run(a.task, a.agent, a.run_id, a.results, browser_overrides)
         elif a.side == "browserharness":

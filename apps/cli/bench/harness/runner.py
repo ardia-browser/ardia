@@ -186,7 +186,7 @@ def opencode_overrides(plan, contender, lane, port_offset=0):
 
 
 def browseruse_overrides(plan, contender, lane, port_offset=0):
-    keys = ("model", "effort", "venv", "chrome", "cdp_port", "reach_line")
+    keys = ("model", "effort", "venv", "chrome", "cdp_port", "reach_line", "tool")
     return dict({k: contender.get(k) for k in keys}, lane=f"lane{lane.index}", lane_index=lane.index,
                 port_offset=port_offset)
 
@@ -216,7 +216,7 @@ def ardiacloud_overrides(plan, contender, lane, port_offset=0):
 
 def scratch_roots():
     return [ardia_side.WORK, opencode_side.ROOT / "lanes", browserharness_side.ROOT / "lanes",
-            browseragent_side.ROOT / "lanes", registry.HOME]
+            browseragent_side.ROOT / "lanes", browseruse_side.ROOT / "lanes", registry.HOME]
 
 
 def clean_run_scratch(rec):

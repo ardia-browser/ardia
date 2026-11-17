@@ -513,6 +513,8 @@ class BrowseEndToEnd(unittest.TestCase):
         done = self.browse("batch", "--bail", session=session, stdin="\n".join(lines) + "\n")
         elapsed = time.monotonic() - started
         self.assertEqual(done.stdout.count("POST http://"), 5, done.stdout)
+        self.assertEqual(done.stdout.count('✓ fill #i-title "Item'), 5, done.stdout)
+        self.assertNotIn("was empty", done.stdout.split("✓ fill #i-title \"Item 4\"")[0])
         self.assertEqual(self.report(session)["items"], [
             {"title": f"Item {index}", "day": f"2026-11-{9 + index:02d}", "at": f"{9 + index:02d}:30", "kind": "b"} for index in range(5)])
         self.assertLess(elapsed, 30)

@@ -24,8 +24,21 @@ final class MenuTarget: NSObject, NSMenuItemValidation {
     if item.command == "tabSwitcher" { SwitcherHold.opened(by: item) }
   }
 
-  @objc(cut:) func cutEdit(_ sender: Any?) { forwardEdit(#selector(NSText.cut(_:)), from: sender) }
-  @objc(copy:) func copyEdit(_ sender: Any?) { forwardEdit(#selector(NSText.copy(_:)), from: sender) }
+  @objc(cut:) func cutEdit(_ sender: Any?) {
+    let field = NSApp.keyWindow?.firstResponder
+    guard let url = FieldCopy.url(for: field) else { return forwardEdit(#selector(NSText.cut(_:)), from: sender) }
+    Self.writeToPasteboard(url)
+    (field as? NSText)?.delete(sender)
+  }
+  @objc(copy:) func copyEdit(_ sender: Any?) {
+    guard let url = FieldCopy.url(for: NSApp.keyWindow?.firstResponder) else { return forwardEdit(#selector(NSText.copy(_:)), from: sender) }
+    Self.writeToPasteboard(url)
+  }
+
+  private static func writeToPasteboard(_ text: String) {
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(text, forType: .string)
+  }
   @objc(paste:) func pasteEdit(_ sender: Any?) { forwardEdit(#selector(NSText.paste(_:)), from: sender) }
   @objc(selectAll:) func selectAllEdit(_ sender: Any?) { forwardEdit(#selector(NSText.selectAll(_:)), from: sender) }
 

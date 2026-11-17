@@ -2298,6 +2298,7 @@ async def cmd_batch(ctx: Ctx, argv):
         else:
             outcomes.append({"command": ["close"], "success": False, "result": None, "code": "not_run", "text": None,
                              "error": "close not run: an earlier line failed or didn't run, so the session stays open"})
+    compact_batch_lines(outcomes)
     text = "\n\n".join((outcome["text"] if outcome["success"] or outcome.get("text") else f"✗ {outcome['error']}") or "" for outcome in outcomes)
     if options.get("out"):
         text = save_batch(ctx, options["out"], text, outcomes)
@@ -2308,6 +2309,41 @@ async def cmd_batch(ctx: Ctx, argv):
     if any(not outcome["success"] for outcome in outcomes):
         result.failed = True
     return result
+
+
+VALUE_ONLY_LINE = re.compile(r"^~ .*\(was .*\)$|^~ option .*\(was (\[selected\]|plain)\)$")
+NOTHING_ELSE = "→ Nothing else on the page changed yet."
+COMPACTED_COMMANDS = {"fill", "select", "check", "uncheck", "type"}
+
+
+def value_only(text: str | None) -> bool:
+    lines = [line for line in (text or "").split("\n") if line.strip()]
+    if len(lines) < 2 or not lines[0].startswith("✓") or lines[1].strip() != "changes:":
+        return False
+    rest = [line for line in lines[2:] if not line.startswith(NOTHING_ELSE)]
+    return bool(rest) and all(VALUE_ONLY_LINE.match(line.strip()) for line in rest)
+
+
+def compact_batch_lines(outcomes: list[dict]):
+    from ardia_cli import command_metrics
+
+    succeeded = [index for index, outcome in enumerate(outcomes) if outcome["success"]]
+    if len(succeeded) < 2:
+        return
+    compacted = 0
+    for index in succeeded[:-1]:
+        outcome = outcomes[index]
+        command = outcome["command"]
+        words = command if isinstance(command, list) else shlex.split(str(command))
+        name = words[0] if words else ""
+        if words[:1] == ["find"] and len(words) >= 4:
+            name = words[3] if words[1] in ("role", "text", "label", "placeholder", "alt", "title", "testid") else words[2]
+        if name not in COMPACTED_COMMANDS or not value_only(outcome.get("text")):
+            continue
+        outcome["text"] = "✓ " + " ".join(word if re.fullmatch(r"[\w@#.:/=+,-]+", word) else json.dumps(word, ensure_ascii=False) for word in words)
+        compacted += 1
+    if compacted:
+        command_metrics.add("batch_lines_compacted", compacted)
 
 
 FETCHING = re.compile(r"\bfetch\s*\(|\bXMLHttpRequest\b|\bnew\s+DOMParser\b|\bwindow\.open\s*\(")

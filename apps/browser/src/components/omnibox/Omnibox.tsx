@@ -77,7 +77,7 @@ export function Omnibox({
   useEffect(() => () => bangEnter.cancel(), [bangEnter]);
   useEffect(() => bangEnter.cancel(), [bangEnter, typed, selected, scope]);
   const root = useRef<View>(null);
-  const { items, completion, via, inline, shownCompletion, value, selectedIndex, current, tabScope, previewing, rowsHover, rowsHeld, releaseRows } = useBarItems({
+  const { items, completion, via, inline, shownCompletion, value, selectedIndex, current, tabScope, previewing, rowsHover, rowsHeld, releaseRows, shownUrl } = useBarItems({
     input,
     caret: () => selection.current,
     typed,
@@ -212,7 +212,7 @@ export function Omnibox({
   };
 
   const onContextMenu = async () => {
-    const pick = await showFieldMenu(value, selection);
+    const pick = await showFieldMenu(value, selection, shownUrl);
     if (pick?.kind === "go") return go(pick.url);
     if (pick?.kind === "edit") {
       previewSelection.edited();

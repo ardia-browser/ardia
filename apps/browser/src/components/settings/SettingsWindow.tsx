@@ -31,6 +31,7 @@ import { markCaptionRegions } from "../../state/windows/controls";
 import { LIGHTS_CENTER } from "../../state/windows/dockMotion";
 import { setTrafficLightsCenter } from "../../state/windows/nativeWindow";
 import { WindowControls } from "../window/WindowControls";
+import { noteSettingsScroll } from "../../state/settings/growingRows";
 
 const SIDEBAR = settingsLayout.sidebarWidth;
 const TOOLBAR = pageToolbar.window.height;
@@ -147,7 +148,10 @@ export function SettingsWindow() {
         <ScrollView
           ref={scroller}
           scrollEventThrottle={16}
-          onScroll={(e) => void (scrollTop.current = e.nativeEvent.contentOffset.y)}
+          onScroll={({ nativeEvent: { contentOffset, layoutMeasurement, contentSize } }) => {
+            scrollTop.current = contentOffset.y;
+            noteSettingsScroll(contentOffset.y, layoutMeasurement.height, contentSize.height);
+          }}
           onLayout={(e) => void (viewport.current = e.nativeEvent.layout.height)}
           contentContainerStyle={PANE_SCROLL}>
           <View key={page} ref={content} collapsable={false} style={PANE_COLUMN}>

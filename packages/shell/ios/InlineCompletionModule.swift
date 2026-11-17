@@ -30,6 +30,21 @@ public final class InlineCompletionModule: Module {
       editor.scrollRangeToVisible(NSRange(location: typedLength, length: 0))
       return result
     }.runOnQueue(.main)
+
+    AsyncFunction("copyFieldAs") { (shown: String?, url: String?) in
+      FieldCopy.target = shown.flatMap { shown in url.map { (shown, $0) } }
+    }.runOnQueue(.main)
+  }
+}
+
+enum FieldCopy {
+  static var target: (shown: String, url: String)?
+
+  static func url(for responder: NSResponder?) -> String? {
+    guard let target, let editor = responder as? NSTextView, !editor.hasMarkedText(), editor.string == target.shown,
+          editor.selectedRange() == NSRange(location: 0, length: (editor.string as NSString).length)
+    else { return nil }
+    return target.url
   }
 }
 

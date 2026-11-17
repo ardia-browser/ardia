@@ -431,7 +431,7 @@ export const shellNativeModules: Modules = {
   ArdiaKeychain: keychain,
   ArdiaGlassEffect: { isLiquidGlass: () => false },
   ArdiaDockSelection: { iconTheme: () => Promise.resolve(null), iconAccent: () => Promise.resolve(null) },
-  ArdiaInlineCompletion: { complete: () => Promise.resolve(0) },
+  ArdiaInlineCompletion: { complete: () => Promise.resolve(0), copyFieldAs: () => Promise.resolve() },
   ArdiaTranslate: translate,
   ArdiaMagnifyArea: magnifyArea,
   ArdiaFileDrop: fileDrop,

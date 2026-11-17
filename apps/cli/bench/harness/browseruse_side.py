@@ -1,5 +1,7 @@
 import datetime
+import json
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -19,7 +21,11 @@ DEFAULTS = {
     "cdp_port": 9671,
     "window_size": "1440,900",
     "reach_line": "Use the `browser-use` command to reach this browser.",
+    "tool": "cli",
 }
+MCP_REACH_LINE = "Use the `browser-use` MCP tools to reach this browser."
+MCP_SERVER = "browser-use"
+MCP_TOOL = re.compile(r"^mcp__browser-use__(.+)$")
 STRIPPED_ENV_PREFIXES = ("BU_", "BH_", "BROWSER_USE_", "BROWSER_HARNESS_", "OPENCODE_")
 SKILL_DIRS = {"claude": ".claude/skills/browser-use", "codex": ".agents/skills/browser-use"}
 
@@ -79,9 +85,44 @@ def agent_env(opts, home, extra=None):
     env = ardia_side.agent_env({"cli": "installed"}, extra)
     env = {k: v for k, v in env.items() if not k.startswith(STRIPPED_ENV_PREFIXES)}
     keep = [p for p in env["PATH"].split(":") if p and Path(p) not in (ardia_side.DEV_BIN, ardia_side.INSTALLED_ARDIA.parent)]
+    if opts.get("tool") == "mcp":
+        env["PATH"] = ":".join(keep)
+        return env
     env["PATH"] = ":".join([str(bin_dir(opts))] + keep)
     env.update(harness_env(opts, home))
     return env
+
+
+def mcp_server(opts, home):
+    env = dict(harness_env(opts, home), BROWSER_USE_NO_UPDATE_CHECK="1", BH_UPDATE_CHECK="0")
+    return {"command": str(Path(opts["venv"]) / "bin/browser-use"), "args": ["--cli-mcp"], "env": env}
+
+
+def mcp_codex_command(model, effort, workdir, prompt, server):
+    cmd = ardia_side.codex_command(model, effort, workdir, prompt)
+    env = ", ".join(f"{k} = {json.dumps(v)}" for k, v in server["env"].items())
+    key = "mcp_servers.browser_use"
+    flags = ["-c", f"{key}.command={json.dumps(server['command'])}", "-c", f"{key}.args={json.dumps(server['args'])}",
+             "-c", f"{key}.env={{ {env} }}", "-c", f"{key}.tool_timeout_sec=300"]
+    return cmd[:-1] + flags + [prompt]
+
+
+def mcp_calls(agent, lines):
+    calls = []
+    if agent == "claude":
+        for e in lines:
+            if e.get("type") != "assistant" or e.get("parent_tool_use_id"):
+                continue
+            for block in e.get("message", {}).get("content", []):
+                m = MCP_TOOL.match(block.get("name") or "") if block.get("type") == "tool_use" else None
+                if m:
+                    calls.append({"tool": m.group(1)})
+        return calls
+    for e in lines:
+        item = e.get("item", {}) if e.get("type") == "item.completed" else {}
+        if item.get("type") == "mcp_tool_call" and item.get("server") in ("browser_use", MCP_SERVER):
+            calls.append({"tool": item.get("tool"), "status": item.get("status"), "error": item.get("error")})
+    return calls
 
 
 def agent_binary(name):
@@ -198,16 +239,25 @@ def run(task_id, agent, run_id, results_dir, overrides=None, contender=None, on_
         if workdir.exists():
             shutil.rmtree(workdir)
         workdir.mkdir(parents=True)
-        skill = install_skill(opts, home, agent, workdir)
-        prompt = f"{task['prompt']}\n\n{opts['reach_line']}" if opts.get("reach_line") else task["prompt"]
+        mcp = opts.get("tool") == "mcp"
+        skill = None if mcp else install_skill(opts, home, agent, workdir)
+        server = mcp_server(opts, home) if mcp else None
+        reach = MCP_REACH_LINE if mcp and opts.get("reach_line") == DEFAULTS["reach_line"] else opts.get("reach_line")
+        prompt = f"{task['prompt']}\n\n{reach}" if reach else task["prompt"]
         if agent == "codex":
             codex_home = home / "codex-home"
             codex_home.mkdir(parents=True, exist_ok=True)
             env = agent_env(opts, home, {"HOME": str(codex_home), "CODEX_HOME": str(Path.home() / ".codex")})
-            cmd = ardia_side.codex_command(model, effort, workdir, prompt)
+            cmd = (mcp_codex_command(model, effort, workdir, prompt, server) if mcp
+                   else ardia_side.codex_command(model, effort, workdir, prompt))
         else:
             env = agent_env(opts, home)
-            cmd = ardia_side.claude_command(model, effort, prompt)
+            if mcp:
+                mcp_config = home / "mcp.json"
+                write_json(mcp_config, {"mcpServers": {MCP_SERVER: {"type": "stdio", **server}}})
+                cmd = opencode_side.claude_command(model, effort, prompt, mcp_config)
+            else:
+                cmd = ardia_side.claude_command(model, effort, prompt)
         cmd = [agent_binary(cmd[0])] + cmd[1:]
         front_before = front_pid()
         started_at = datetime.datetime.now().astimezone()
@@ -241,6 +291,10 @@ def run(task_id, agent, run_id, results_dir, overrides=None, contender=None, on_
     parsed = (ardia_side.parse_claude if agent == "claude" else ardia_side.parse_codex)(lines)
     _, shell, other = (opencode_side.browse_calls_claude if agent == "claude" else opencode_side.browse_calls_codex)(lines)
     bu_calls, other_shell = split_shell(shell)
+    tool_calls = mcp_calls(agent, lines) if opts.get("tool") == "mcp" else []
+    by_tool = {}
+    for c in tool_calls:
+        by_tool[c["tool"]] = by_tool.get(c["tool"], 0) + 1
     record = {
         "run_id": run_id, "side": "browseruse", "contender": contender or f"browseruse-{agent}", "agent": agent,
         "task": task_id, "started_at": started_at.isoformat(timespec="milliseconds"),
@@ -248,13 +302,15 @@ def run(task_id, agent, run_id, results_dir, overrides=None, contender=None, on_
         "wall_s": round(wall, 3), "timed_out": timed_out, "deadline_s": deadline, "exit_code": code,
         "pass": passed, "reset_by_agent": reset_by_agent,
         "time_to_correct_s": round(completed / 1000 - start_epoch, 3) if passed and completed else None,
-        "commands": len(shell), "browser_use_calls": len(bu_calls), "shell_commands": len(other_shell),
+        "tool": opts.get("tool"), "commands": len(shell) + len(tool_calls),
+        "browser_use_calls": len(bu_calls) + len(tool_calls), "mcp_calls": len(tool_calls),
+        "mcp_calls_by_tool": by_tool, "shell_commands": len(other_shell),
         "shell": shell, "other_tools": other,
         "matched": check.get("matched"), "total": check.get("total"), "extra": check.get("extra"),
         "method": check.get("method"), "invariants": check.get("invariants"),
         "check": check, "check_details": check.get("details"), **parsed,
         "agent_saw": opencode_side.tools_seen_claude(lines) if agent == "claude" else None,
-        "prompt": prompt, "command": cmd, "workdir": str(workdir), "skill": skill,
+        "prompt": prompt, "command": cmd, "workdir": str(workdir), "skill": skill, "mcp_server": server,
         "instance": {"chrome": {k: state["chrome"][k] for k in ("pid", "browser", "user_agent", "args")},
                      "cdp_port": opts["cdp_port"], "setup_s": state.get("setup_s"), "home": str(home),
                      "browser_use": versions(opts), "daemon": daemon, **setup},

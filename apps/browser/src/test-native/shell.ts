@@ -174,6 +174,7 @@ const dialogs: Modules["ArdiaDialogs"] = {
 };
 
 const documents: Modules["ArdiaDocuments"] = {
+  writeDocumentImmediately: (name, contents) => { stagedDocs.delete(name); docs.set(name, contents); },
   readDocument: (name) => stagedDocs.get(name) ?? docs.get(name) ?? null,
   writeDocument: (name, contents) => {
     if (refusedWrites.on) throw new Error("write refused");

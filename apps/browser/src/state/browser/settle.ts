@@ -37,8 +37,8 @@ export const SETTLE_STEPS: readonly (readonly [string, SettleStep])[] = [
   ["pagesIntoSplits", pagesIntoSplits],
   ["settleSharedPins", settleSharedPins],
   ["settleTileFolders", settleTileFolders],
-  ["mirrorPins", mirrorPins],
   ["mirrorTopApps", mirrorTopApps],
+  ["mirrorPins", mirrorPins],
   ["mirrorTabs", mirrorTabs],
   ["pinnedTabsLeaveLive", patched(pinnedTabsLeaveLive)],
 ];

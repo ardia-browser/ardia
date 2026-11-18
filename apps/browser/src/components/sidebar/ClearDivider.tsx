@@ -21,9 +21,9 @@ const ACTIONS_DIVIDER = { marginLeft: space.m } as const;
 
 type PinnedFold = { collapsed: boolean; open: Animated.Value };
 
-type DividerProps = { windowId: string; profileId: string; lift: number; clear: boolean; tidy: boolean; pinned: PinnedFold | null };
+type DividerProps = { windowId: string; spaceId: string; lift: number; clear: boolean; tidy: boolean; pinned: PinnedFold | null };
 
-export const ClearDivider = memo(function ClearDivider({ windowId, profileId, lift, clear, tidy, pinned }: DividerProps) {
+export const ClearDivider = memo(function ClearDivider({ windowId, spaceId, lift, clear, tidy, pinned }: DividerProps) {
   const theme = useTheme();
   const { hovered: shown, hoverProps } = useHover();
   const [lineWidth, setLineWidth] = useState(0);
@@ -43,7 +43,7 @@ export const ClearDivider = memo(function ClearDivider({ windowId, profileId, li
           paddingRight: PADDING,
         }}
       >
-        {pinned ? <HoverSlot hovered={foldShown} width="content" reserve="hover" align="start" hover={<FoldButton pinned={pinned} onPress={() => togglePinnedFold(profileId)} />} /> : null}
+        {pinned ? <HoverSlot hovered={foldShown} width="content" reserve="hover" align="start" hover={<FoldButton pinned={pinned} onPress={() => togglePinnedFold(spaceId)} />} /> : null}
         <View style={{ flex: 1, height: 1, overflow: "hidden" }}>
           {lineWidth ? (
             <View style={{ position: "absolute", left: 0, bottom: 0, width: lineWidth, height: DASH_BOX_HEIGHT, borderBottomWidth: 1, borderStyle: "dashed", borderColor: theme.pinnedDivider }} />
@@ -60,7 +60,7 @@ export const ClearDivider = memo(function ClearDivider({ windowId, profileId, li
                   <DividerButton
                     title="Tidy"
                     label="Tidy Tabs"
-                    onPress={() => tidyTabs(windowId, "tabs", profileId)}
+                    onPress={() => tidyTabs(windowId, "tabs", spaceId)}
                     icon={(color) => <Image source={BROOM} style={{ width: 11, height: 11, marginRight: space.xs, tintColor: color }} />}
                   />
                 ) : null}

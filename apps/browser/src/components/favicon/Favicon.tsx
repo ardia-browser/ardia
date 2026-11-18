@@ -10,22 +10,22 @@ export const Favicon = memo(function Favicon({
   url,
   favicon,
   size = 16,
-  profileId,
+  spaceId,
   direct,
   opacity = 1,
 }: {
   url: string;
   favicon?: string | null;
   size?: number;
-  profileId?: string;
+  spaceId?: string;
   direct?: boolean;
   opacity?: number;
 }) {
   const theme = useTheme();
   useAppearanceDark();
-  const cached = useFavicon(url, direct ? null : favicon, profileId);
-  const resolved = direct && favicon ? { uri: favicon, profileId: "" } : cached;
-  const shape = useFaviconTheme(theme.dark || direct ? "" : url, favicon, profileId);
+  const cached = useFavicon(url, direct ? null : favicon, spaceId);
+  const resolved = direct && favicon ? { uri: favicon, spaceId: "" } : cached;
+  const shape = useFaviconTheme(theme.dark || direct ? "" : url, favicon, spaceId);
   const white = shape?.kind === "template" && !!shape.stroke;
   const [broken, setBroken] = useState<string | null>(null);
   if (!url && !resolved) return <NewTabIcon size={size} opacity={opacity} />;
@@ -36,7 +36,7 @@ export const Favicon = memo(function Favicon({
       source={{ uri: resolved.uri }}
       onError={() => {
         setBroken(resolved.uri);
-        if (resolved.profileId) faviconFailed(resolved.profileId, resolved.uri);
+        if (resolved.spaceId) faviconFailed(resolved.spaceId, resolved.uri);
       }}
       style={{ width: size, height: size, borderRadius: size > 18 ? radius.control : radius.hair, tintColor: white ? theme.textPrimary : undefined, opacity }}
     />
@@ -47,7 +47,7 @@ export const SiteFavicon = memo(function SiteFavicon({ host, profileId, size }: 
   const theme = useTheme();
   const url = `https://${host}`;
   if (bundledSiteIcon(url, theme.dark) !== undefined) return <Favicon url={url} size={size} />;
-  return <Favicon url={url} favicon={`${url}/favicon.ico`} profileId={profileId} size={size} />;
+  return <Favicon url={url} favicon={`${url}/favicon.ico`} spaceId={profileId} size={size} />;
 });
 
 export const FaviconFallback = memo(function FaviconFallback({ url, size = 16, opacity = 1 }: { url: string; size?: number; opacity?: number }) {

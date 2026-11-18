@@ -61,7 +61,7 @@ test("production graph uses current Linux adapters and one canonical shared stat
     ["components/window/PageOverlays.tsx", "PageOverlays.tsx", ["BesidePeekPopovers", "PageOverlays", "PeekPage"]],
     ["components/window/WindowOverlays.tsx", "WindowOverlays.tsx", ["WindowOverlays"]],
     ["components/downloads/Downloads.tsx", "DownloadsPopover.tsx", ["DownloadMagnet", "DownloadsPopover"]],
-    ["components/profiles/ProfileIndicator.tsx", "ProfileIndicator.tsx", ["PROFILE_INDICATOR_X", "ProfileIndicator", "useProfileIndicatorWidth"]],
+    ["components/spaces/SpaceIndicator.tsx", "ProfileIndicator.tsx", ["PROFILE_INDICATOR_X", "SpaceIndicator", "useSpaceIndicatorWidth"]],
     ["components/sidebar/AddressBar.tsx", "SidebarAddressBar.tsx", ["SidebarAddressRow", "SidebarHeaderTools"]],
     ["components/sidebar/TileFace.tsx", "TileFace.tsx", ["FolderDropRing", "RestingTile", "TileFace", "useSlotPosition"]],
     ["state/settings/settingsWindows.ts", "settingsWindows.ts", ["goToSettingsPane", "openImport", "openSettings", "useSettingsNav"]],
@@ -69,7 +69,7 @@ test("production graph uses current Linux adapters and one canonical shared stat
     ["components/settings/Form.tsx", "settingsForm.tsx", ["Anchor", "Group", "Row", "SectionHeader", "SettingsPaneContext"]],
     ["state/engines/engines.ts", "hostEngines.ts", ["canSwitchEngine", "chosenEngine", "defaultEngine", "offersEngineChoice", "tabEngine", "siteOf"]],
     ["state/import/apply.ts", "importApply.ts", ["applyResult", "applySafari", "emptyCounts", "importBookmarks"]],
-    ["state/extensions/store.ts", "extensionsStore.ts", ["extensionProfile", "shownIn", "useExtensions", "useWindowExtensions", "windowExtensions"]],
+    ["state/extensions/store.ts", "extensionsStore.ts", ["extensionSpace", "shownIn", "useExtensions", "useWindowExtensions", "windowExtensions"]],
   ];
   for (const [shared, adapter, names] of replacements) {
     const id = `${linux}${adapter}`;

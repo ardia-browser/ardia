@@ -18,6 +18,6 @@ export function formatShortcut({ key, modifiers }: Shortcut): string {
 }
 
 export function resolveShortcuts(sources: readonly ShortcutSource[], overrides: ShortcutOverrides) {
-  const profiles = sources.filter((source) => source.id.startsWith("switchProfile:")).map((source) => source.id.slice("switchProfile:".length));
+  const profiles = sources.filter((source) => source.id.startsWith("switchSpace:")).map((source) => source.id.slice("switchSpace:".length));
   return sharedResolve(sources, unshiftedShortcutOverrides(migrateProfileShortcuts(overrides, profiles)));
 }

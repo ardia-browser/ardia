@@ -21,7 +21,7 @@ export function closedWindowOf(s: BrowserState, w: BrowserWindow, tabs: Tab[], k
   const splits = Object.values(s.splits)
     .filter((v) => v.windowId === w.id && splitTabIds(v).every((t) => tabIds.includes(t)))
     .map((v) => ({ orientation: v.orientation, slots: mapSlotIds(v.slots, (t) => String(tabIds.indexOf(t))) }));
-  const shown = w.activeTabIds[w.profileId];
+  const shown = w.activeTabIds[w.spaceId];
   const activePin = keepsLastWindow && shown && s.tabs[shown] && inPinnedContainer(s, shown) ? pinKeyOf(s.tabs[shown]!) : undefined;
   return {
     ...entry,

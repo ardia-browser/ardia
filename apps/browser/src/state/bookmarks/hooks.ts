@@ -1,6 +1,6 @@
 import { useShallow } from "zustand/react/shallow";
 import { useBrowser } from "../browser/store";
-import { bookmarkProfileId, engineProfile, sidebarSideOf, tabLayoutOf, tabsShownIn } from "../browser/model";
+import { bookmarkSpaceId, engineProfileForSpace, sidebarSideOf, tabLayoutOf, tabsShownIn } from "../browser/model";
 import { sidebarEdgeOf, type SidebarEdge } from "./sidebarEdge";
 import { bookmarkRoots } from "./bookmarks";
 import { bookmarksShown } from "./visibility";
@@ -10,11 +10,11 @@ import { useWindowRootWidth } from "../windows/rootSize";
 
 export const useBookmarks = <T>(select: (bookmarks: Bookmarks) => T): T => useBrowser((s) => select(s.bookmarks));
 
-export const useBookmarkProfileId = (windowId: string): string => useBrowser((s) => bookmarkProfileId(s, s.windows[windowId]));
+export const useBookmarkSpaceId = (windowId: string): string => useBrowser((s) => bookmarkSpaceId(s, s.windows[windowId]));
 
-export const useBookmarkEngine = (windowId: string): string => useBrowser((s) => engineProfile(s, bookmarkProfileId(s, s.windows[windowId])));
+export const useBookmarkEngine = (windowId: string): string => useBrowser((s) => engineProfileForSpace(s, bookmarkSpaceId(s, s.windows[windowId])));
 
-export const useBookmarkRoots = (profileId: string) => useBrowser(useShallow((s) => bookmarkRoots(s, profileId)));
+export const useBookmarkRoots = (spaceId: string) => useBrowser(useShallow((s) => bookmarkRoots(s, spaceId)));
 
 export const useBookmarksShown = (): boolean => useBrowser((s) => bookmarksShown(s.settings));
 
@@ -31,5 +31,5 @@ export function useSidebarEdge(windowId: string, width: number): SidebarEdge {
   );
 }
 
-export const useTabBookmarkProfileId = (tabId: string): string =>
-  useBrowser((s) => bookmarkProfileId(s, s.windows[s.tabs[tabId]?.windowId ?? ""]));
+export const useTabBookmarkSpaceId = (tabId: string): string =>
+  useBrowser((s) => bookmarkSpaceId(s, s.windows[s.tabs[tabId]?.windowId ?? ""]));

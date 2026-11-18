@@ -89,11 +89,11 @@ function dropDeletedProfiles() {
   if (watchingProfiles) return;
   watchingProfiles = true;
   let last = useBrowser.getState().profiles;
-  let seen = new Set(Object.keys(last).map((id) => engineProfile({ profiles: last }, id)));
+  let seen = new Set(Object.values(last).map((profile) => profile.engineId));
   useBrowser.subscribe((state) => {
     if (state.profiles === last) return;
     last = state.profiles;
-    const live = new Set(Object.keys(last).map((id) => engineProfile({ profiles: last }, id)));
+    const live = new Set(Object.values(last).map((profile) => profile.engineId));
     if (live.size) {
       const consent = consentToken();
       void heldLogins?.dropProfiles([...seen].filter((profile) => !live.has(profile))).catch((error: unknown) =>
@@ -144,13 +144,18 @@ function remoteFor(host: ArdiaHost): SyncRemote {
     stopSync: (options?: { deleteData?: boolean }) => engine.stopSync(options),
     setTypeSynced: (type: DataType, enabled: boolean) => engine.setTypeSynced(type, enabled),
     setProfileSynced: (profileId: string, enabled: boolean) => engine.setProfileSynced(profileId, enabled),
-    setOpenTabsSynced: (profileId: string, enabled: boolean) => engine.setOpenTabsSynced(profileId, enabled),
-    addRemoteProfile: (syncId: string) => engine.addRemoteProfile(syncId),
+    setSpaceSynced: (spaceId: string, enabled: boolean) => engine.setSpaceSynced(spaceId, enabled),
+    setTopAppsSynced: (profileId: string, enabled: boolean) => engine.setTopAppsSynced(profileId, enabled),
+    setOpenTabsSynced: (spaceId: string, enabled: boolean) => engine.setOpenTabsSynced(spaceId, enabled),
+    keepSpaceProfile: (spaceId: string) => engine.keepSpaceProfile(spaceId),
+    acceptSpaceProfile: (spaceId: string) => engine.acceptSpaceProfile(spaceId),
+    upgradeSync: () => engine.upgradeSync(),
+    addRemoteSpace: (syncId: string) => engine.addRemoteSpace(syncId),
     removeRemoteProfile: (syncId: string) => engine.removeRemoteProfile(syncId),
     removeSyncedDevice: (deviceId: string) => engine.removeSyncedDevice(deviceId),
     adoptProfileTheme: (profileId: string) => engine.adoptProfileTheme(profileId),
     useFolder: (path: string) => withChosenSyncFolder(path, () => engine.chooseSyncFolder()),
-    sendTargets: (profileIds: string[]) => Object.fromEntries(profileIds.map((profileId) => [profileId, engine.sendTargets(profileId)])),
+    sendTargets: (spaceIds: string[]) => Object.fromEntries(spaceIds.map((spaceId) => [spaceId, engine.sendTargets(spaceId)])),
     sendTab: (tabId: string, deviceId: string) => engine.sendTab(tabId, deviceId),
   };
 }
@@ -287,13 +292,33 @@ export function setProfileSynced(profileId: string, enabled: boolean) {
   quietly(forward("setProfileSynced", [profileId, enabled]));
 }
 
-export function setOpenTabsSynced(profileId: string, enabled: boolean) {
-  quietly(forward("setOpenTabsSynced", [profileId, enabled]));
+export function setSpaceSynced(spaceId: string, enabled: boolean) {
+  quietly(forward("setSpaceSynced", [spaceId, enabled]));
 }
 
-export function addRemoteProfile(syncId: string): string | null {
-  if (leading()) return engine.addRemoteProfile(syncId);
-  quietly(forward("addRemoteProfile", [syncId]));
+export function setTopAppsSynced(profileId: string, enabled: boolean) {
+  quietly(forward("setTopAppsSynced", [profileId, enabled]));
+}
+
+export function setOpenTabsSynced(spaceId: string, enabled: boolean) {
+  quietly(forward("setOpenTabsSynced", [spaceId, enabled]));
+}
+
+export function keepSpaceProfile(spaceId: string) {
+  quietly(forward("keepSpaceProfile", [spaceId]));
+}
+
+export function acceptSpaceProfile(spaceId: string) {
+  return forward("acceptSpaceProfile", [spaceId], INTERACTIVE_CALL_TIMEOUT_MS);
+}
+
+export function upgradeSync() {
+  return forward("upgradeSync", [], INTERACTIVE_CALL_TIMEOUT_MS);
+}
+
+export function addRemoteSpace(syncId: string): string | null {
+  if (leading()) return engine.addRemoteSpace(syncId);
+  quietly(forward("addRemoteSpace", [syncId]));
   return null;
 }
 
@@ -302,6 +327,8 @@ export function removeRemoteProfile(syncId: string): boolean {
   quietly(forward("removeRemoteProfile", [syncId]));
   return true;
 }
+
+export const removeRemoteSpace = removeRemoteProfile;
 
 export function removeSyncedDevice(deviceId: string): boolean {
   if (leading()) return engine.removeSyncedDevice(deviceId);
@@ -313,7 +340,7 @@ let relayedTargets: Record<string, SendTarget[]> = {};
 
 function refreshSendTargets() {
   if (!authority || leading()) return;
-  forward<Record<string, SendTarget[]>>("sendTargets", [Object.keys(useBrowser.getState().profiles)]).then(
+  forward<Record<string, SendTarget[]>>("sendTargets", [Object.keys(useBrowser.getState().spaces)]).then(
     (targets) => { relayedTargets = targets; },
     () => { relayedTargets = {}; },
   );
@@ -323,14 +350,14 @@ export const onTabsReceived = engine.onTabsReceived;
 export const takeSnapshotWrites = engine.takeSnapshotWrites;
 export const takeOpenTabSyncCounts = engine.takeOpenTabSyncCounts;
 
-export function sendTargets(profileId: string): SendTarget[] {
-  return leading() ? engine.sendTargets(profileId) : relayedTargets[profileId] ?? [];
+export function sendTargets(spaceId: string): SendTarget[] {
+  return leading() ? engine.sendTargets(spaceId) : relayedTargets[spaceId] ?? [];
 }
 
 export function sendTab(tabId: string, deviceId: string): boolean {
   if (leading()) return engine.sendTab(tabId, deviceId);
-  const profileId = useBrowser.getState().tabs[tabId]?.profileId;
-  if (!profileId || !sendTargets(profileId).some((target) => target.id === deviceId)) return false;
+  const spaceId = useBrowser.getState().tabs[tabId]?.spaceId;
+  if (!spaceId || !sendTargets(spaceId).some((target) => target.id === deviceId)) return false;
   quietly(forward("sendTab", [tabId, deviceId]));
   return true;
 }

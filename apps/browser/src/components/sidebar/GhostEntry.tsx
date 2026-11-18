@@ -22,7 +22,7 @@ import { SidebarRowLabel } from "./SidebarRow";
 import { entryKey, parseEntry } from "../../state/sidebar/entryKey";
 import { shownLiveOf } from "../../state/tabs/tabLive";
 
-type TabShot = { kind: "tab"; key: string; title: string; url: string; favicon?: string | null; icon?: string | null; textOnly: boolean; profileId: string; uri: string | null; template: boolean; sound: "muted" | "playing" | null; hovered: boolean };
+type TabShot = { kind: "tab"; key: string; title: string; url: string; favicon?: string | null; icon?: string | null; textOnly: boolean; spaceId: string; uri: string | null; template: boolean; sound: "muted" | "playing" | null; hovered: boolean };
 type SplitShot = { kind: "split"; key: string; panes: TabShot[] };
 type GroupShot = {
   kind: "group";
@@ -39,7 +39,7 @@ export type EntrySnapshot = TabShot | SplitShot | GroupShot;
 function tabShot(s: BrowserState, tabId: string, hovered: boolean): TabShot | null {
   const tab = s.tabs[tabId];
   if (!tab) return null;
-  const uri = drawnIcon(tab.customIcon) ? null : (resolveFavicon(tab.url, tab.favicon, tab.profileId)?.uri ?? null);
+  const uri = drawnIcon(tab.customIcon) ? null : (resolveFavicon(tab.url, tab.favicon, tab.spaceId)?.uri ?? null);
   const shape = uri ? knownFaviconTheme(uri) : null;
   return {
     uri,
@@ -51,7 +51,7 @@ function tabShot(s: BrowserState, tabId: string, hovered: boolean): TabShot | nu
     favicon: tab.favicon,
     icon: drawnIcon(tab.customIcon),
     textOnly: hidesRowIcon(tab),
-    profileId: tab.profileId,
+    spaceId: tab.spaceId,
     sound: isSilenced(s, tab) ? "muted" : shownLiveOf(s, tabId).playingAudio ? "playing" : null,
     hovered,
   };
@@ -62,13 +62,13 @@ function splitShot(s: BrowserState, splitId: string): SplitShot {
   return { kind: "split", key: entryKey("split", splitId), panes: panes.flatMap((id) => tabShot(s, id, false) ?? []) };
 }
 
-export function snapshotEntry(s: BrowserState, windowId: string, profileId: string, entry: string): EntrySnapshot | null {
+export function snapshotEntry(s: BrowserState, windowId: string, spaceId: string, entry: string): EntrySnapshot | null {
   const { kind, id } = parseEntry(entry);
   if (kind === "split") return splitShot(s, id);
   if (kind !== "group") return tabShot(s, id, pointerOnRow(id));
   const group = s.groups[id];
   if (!group) return null;
-  const members = group.collapsed ? keptEntries(s, windowId, profileId, id) : groupEntries(s, id);
+  const members = group.collapsed ? keptEntries(s, windowId, spaceId, id) : groupEntries(s, id);
   return {
     kind: "group",
     key: entry,
@@ -77,7 +77,7 @@ export function snapshotEntry(s: BrowserState, windowId: string, profileId: stri
     icon: group.icon ?? null,
     collapsed: !!group.collapsed,
     hovered: pointerOnGroup(id),
-    members: members.flatMap((e) => (parseEntry(e).kind === "tab" ? tabShot(s, parseEntry(e).id, false) : snapshotEntry(s, windowId, profileId, e)) ?? []),
+    members: members.flatMap((e) => (parseEntry(e).kind === "tab" ? tabShot(s, parseEntry(e).id, false) : snapshotEntry(s, windowId, spaceId, e)) ?? []),
   };
 }
 
@@ -89,7 +89,7 @@ export function ghostEntry(snapshot: EntrySnapshot, theme: ReturnType<typeof use
 function ghostIcon(shot: TabShot, theme: ReturnType<typeof useTheme>) {
   const symbol = iconSymbol(shot.icon);
   if (symbol) return <Symbol name={symbol} size={13} weight="medium" color={theme.icon} style={{ width: 16, height: 16 }} />;
-  if (shot.icon) return <TabIcon url={shot.url} icon={shot.icon} profileId={shot.profileId} />;
+  if (shot.icon) return <TabIcon url={shot.url} icon={shot.icon} spaceId={shot.spaceId} />;
   if (shot.uri) return <Image source={{ uri: shot.uri }} style={{ width: 16, height: 16, borderRadius: radius.hair, tintColor: shot.template && !theme.dark ? theme.textPrimary : undefined }} />;
   return shot.url ? <FaviconFallback url={shot.url} /> : <NewTabIcon />;
 }
@@ -125,7 +125,7 @@ function SplitGhost({ shot }: { shot: SplitShot }) {
         <View key={pane.key} style={{ flex: 1, flexDirection: "row", alignItems: "center", minWidth: 0, gap: space.xxs }}>
           {i > 0 && <Divider vertical thick length={16} />}
           <View style={{ flex: 1, minWidth: 0, height: layout.rowHeight - 6, flexDirection: "row", alignItems: "center", paddingLeft: space.s }}>
-            <TabIcon url={pane.url} favicon={pane.favicon} icon={pane.icon} profileId={pane.profileId} compact />
+            <TabIcon url={pane.url} favicon={pane.favicon} icon={pane.icon} spaceId={pane.spaceId} compact />
             <FadeLabel text={pane.title} fontSize={SIDEBAR_TYPE.compact} color={theme.textTab} style={{ flex: 1, height: 16, marginLeft: space.xs }} />
           </View>
         </View>

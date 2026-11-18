@@ -13,9 +13,9 @@ import {
 import { useEffect, useState, type ReactNode } from "react";
 import { Image, View } from "react-native";
 import { useTheme } from "../../ui/theme";
-import { addRemoteProfile, enterRecoveryPhrase, removeRemoteProfile, removeSyncedDevice, stopSync, useSync } from "../../../state/sync/engine";
-import type { RemoteProfile, SyncedDevice } from "../../../state/sync/syncDoc";
-import { ProfileBadge } from "../../profiles/ProfileIcons";
+import { addRemoteSpace, enterRecoveryPhrase, removeRemoteSpace, removeSyncedDevice, stopSync, useSync } from "../../../state/sync/engine";
+import type { RemoteSpace, SyncedDevice } from "../../../state/sync/syncDoc";
+import { SpaceBadge } from "../../spaces/SpaceIcons";
 import { Group, Row } from "../Form";
 import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
 import { useSettingsColors } from "../useSettingsColors";
@@ -191,31 +191,27 @@ function PhraseSheet({ folder, onChooseFolder }: { folder: FolderInfo | null; on
   );
 }
 
-function sharingDescription(p: Pick<RemoteProfile, "sharesWith" | "waiting">): string {
+function sharingDescription(p: Pick<RemoteSpace, "sharesWith" | "waiting">): string {
   if (p.waiting) return "On your other devices. Waiting for the profile it shares data with to sync.";
   if (!p.sharesWith) return "On your other devices";
   const { name, added } = p.sharesWith;
   return added ? `On your other devices. Shares data with ${name}, which is added too.` : `On your other devices. Shares data with ${name}.`;
 }
 
-export function remoteProfileDescription(p: Pick<RemoteProfile, "sharesWith" | "waiting" | "sharedByOthers">): string {
+export function remoteSpaceDescription(p: Pick<RemoteSpace, "sharesWith" | "waiting" | "sharedByOthers">): string {
   const sharing = sharingDescription(p);
   if (!p.sharedByOthers) return sharing;
   return `${sharing.endsWith(".") ? sharing : `${sharing}.`} To remove it, first remove the profiles that share its data.`;
 }
 
-export function addAllRemoteProfiles(profiles: RemoteProfile[]) {
-  for (const p of profiles) if (!p.waiting) addRemoteProfile(p.syncId);
-}
-
-async function confirmRemoveFromSync(profile: RemoteProfile) {
+async function confirmRemoveFromSync(profile: RemoteSpace) {
   const { confirmed } = await confirm({
     title: `Remove “${profile.name}” from Sync?`,
     message: "It leaves this list on all your devices. A device that still has this profile keeps it, and it comes back here.",
     confirmTitle: "Remove",
     destructive: true,
   });
-  if (confirmed) removeRemoteProfile(profile.syncId);
+  if (confirmed) removeRemoteSpace(profile.syncId);
 }
 
 export async function confirmRemoveDevice(device: SyncedDevice) {
@@ -228,35 +224,39 @@ export async function confirmRemoveDevice(device: SyncedDevice) {
   if (confirmed) removeSyncedDevice(device.id);
 }
 
-export function RemoteProfileRow({ profile }: { profile: RemoteProfile }) {
+export function addAllRemoteSpaces(profiles: RemoteSpace[]) {
+  for (const p of profiles) if (!p.waiting) addRemoteSpace(p.syncId);
+}
+
+export function RemoteSpaceRow({ profile }: { profile: RemoteSpace }) {
   return (
     <Row
-      icon={<ProfileBadge profile={{ name: profile.name, color: profile.color, icon: profile.icon }} size={24} />}
+      icon={<SpaceBadge profile={{ name: profile.name, color: profile.color, icon: profile.icon }} size={24} />}
       title={profile.name}
-      description={remoteProfileDescription(profile)}
+      description={remoteSpaceDescription(profile)}
     >
       <Box row gap="s">
         <Button title="Remove…" disabled={!!profile.sharedByOthers} onPress={() => void confirmRemoveFromSync(profile)} />
-        <Button title={`Add to This ${PLATFORM_TERMS.computerTitle}`} disabled={!!profile.waiting} onPress={() => addRemoteProfile(profile.syncId)} />
+        <Button title={`Add to This ${PLATFORM_TERMS.computerTitle}`} disabled={!!profile.waiting} onPress={() => addRemoteSpace(profile.syncId)} />
       </Box>
     </Row>
   );
 }
 
-export function lookingForProfiles(pending: number): string {
-  const looking = "Looking for the profiles on your other devices…";
+export function lookingForSpaces(pending: number): string {
+  const looking = "Looking for the spaces on your other devices…";
   return pending ? `${looking} Waiting for ${pending === 1 ? "1 file" : `${pending} files`} to download.` : looking;
 }
 
 function joinedMessage(found: number, joining: boolean, pending: number, error: string | null): string {
   if (found) return `These profiles are on your other devices. Add them to this ${PLATFORM_TERMS.computer} to sync their pinned tabs, bookmarks, history${PLATFORM_FEATURES.syncsPasswords ? " and passwords" : ""} here too.`;
   if (error) return error;
-  if (joining) return lookingForProfiles(pending);
+  if (joining) return lookingForSpaces(pending);
   return `Every profile on your other devices is on this ${PLATFORM_TERMS.computer} too.`;
 }
 
 function JoinedSheet() {
-  const remote = useSync((s) => s.remoteProfiles);
+  const remote = useSync((s) => s.remoteSpaces);
   const joining = useSync((s) => s.joining);
   const pending = useSync((s) => s.pending);
   const error = useSync((s) => (s.status === "stalled" ? s.error : null));
@@ -268,14 +268,14 @@ function JoinedSheet() {
         <View style={SECTION_TOP}>
           <Group>
             {remote.map((p) => (
-              <RemoteProfileRow key={p.syncId} profile={p} />
+              <RemoteSpaceRow key={p.syncId} profile={p} />
             ))}
           </Group>
         </View>
       ) : null}
       <DialogActions>
         <Button title="Done" kind={addable > 1 ? "default" : "primary"} onPress={closeSettingsSheet} />
-        {addable > 1 ? <Button title="Add All" kind="primary" onPress={() => addAllRemoteProfiles(remote)} /> : null}
+        {addable > 1 ? <Button title="Add All" kind="primary" onPress={() => addAllRemoteSpaces(remote)} /> : null}
       </DialogActions>
     </Sheet>
   );
@@ -299,9 +299,7 @@ function ConnectDeviceSheet() {
       <Box row gap="xl" style={[SECTION_TOP, { alignItems: "center" }]}>
         <View style={syncCodeFrame(theme, qr !== null)}>{qr ? <Image source={{ uri: qr }} style={QR} /> : <Button title="Show Code" onPress={() => void recoveryQrCode().then(setQr)} />}</View>
         <Text size="small" tone="textSecondary" style={QR_NOTE()}>
-          {PLATFORM_FEATURES.syncsWithPhone
-            ? "Click Show Code. On your iPhone, open Ardia, tap Sync With Mac, and scan the code. For another Mac, you can also scan it with your iPhone’s camera and paste the words there with Universal Clipboard."
-            : "Click Show Code, then scan it with your phone’s camera to copy the words and enter them on your other computer."}
+          Click Show Code, then scan it with your phone’s camera to copy the words and enter them on your other computer.
         </Text>
       </Box>
       {words ? (

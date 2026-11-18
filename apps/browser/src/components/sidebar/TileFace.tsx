@@ -65,7 +65,7 @@ function LetterTile({ tabId, badge, width, active, selected, hovered, pressed }:
 const RichTileFace = memo(function RichTileFace({ tabId, badge, ...state }: FaceState & { tabId: string; badge?: ReactNode }) {
   const theme = useTheme();
   const tab = useTab(tabId);
-  const tileTheme = useTileTheme(tab?.url ?? "", tab?.favicon, tab?.customIcon, tab?.profileId ?? "");
+  const tileTheme = useTileTheme(tab?.url ?? "", tab?.favicon, tab?.customIcon, tab?.spaceId ?? "");
   const glass = useGlass();
   const topApp = useSelectedTopApp();
   const closed = useTabState(tabId, (s) => isClosedTopApp(s, tabId));

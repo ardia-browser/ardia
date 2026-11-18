@@ -128,7 +128,7 @@ function adoptMatchingTabs(profileId: string, state: ScopeState, missing: { key:
   if (!renamed.size) return;
   const tabs = { ...s.tabs };
   for (const t of Object.values(s.tabs)) {
-    const to = t.profileId === profileId ? renamed.get(pinKeyOf(t)) : undefined;
+    const to = t.spaceId === profileId ? renamed.get(pinKeyOf(t)) : undefined;
     if (!to) continue;
     const { pinKey: _, ...rest } = t;
     tabs[t.id] = to === t.id ? rest : { ...rest, pinKey: to };

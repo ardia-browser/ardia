@@ -7,7 +7,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { findNodeHandle, type TextInput, type View } from "react-native";
 import { journeyBarCommitted, journeyBarFocused, journeyKeystroke, journeyNavigate, journeySuggestions } from "../../state/telemetry/journeys";
 import { sampleOmniboxLatency, trackSuggestionChosen } from "../../state/telemetry/track";
-import { useSettings, useTab, useWindow, useWindowId, useWindowProfileId } from "../../state/browser/hooks";
+import { useSettings, useTab, useWindow, useWindowId, useWindowSpaceId } from "../../state/browser/hooks";
 import { removeHistory } from "../../state/history/actions";
 import { useWindowUiOf } from "../../state/windows/hooks";
 import { defaultSearchEngine } from "../../state/settings/settings";
@@ -65,7 +65,7 @@ export function Omnibox({
   const theme = useTheme();
   const windowId = useWindowId();
   const incognito = useWindow(windowId, (w) => w?.kind === "private");
-  const profileId = useWindowProfileId();
+  const spaceId = useWindowSpaceId();
   const engine = useSettings((st) => defaultSearchEngine(st));
   const currentUrl = useTab(tabId, (t) => (opensTab ? "" : (t?.url ?? "")));
   const hero = variant === "hero";
@@ -88,7 +88,7 @@ export function Omnibox({
     dropdown,
     opensTab: !!opensTab,
     windowId,
-    profileId,
+    spaceId,
     tabId,
     currentUrl,
   });
@@ -317,8 +317,8 @@ export function Omnibox({
     />
   );
 
-  const latest = useRef({ choose, profileId, go, current, onCancel, tabId, windowId, releaseRows });
-  latest.current = { choose, profileId, go, current, onCancel, tabId, windowId, releaseRows };
+  const latest = useRef({ choose, spaceId, go, current, onCancel, tabId, windowId, releaseRows });
+  latest.current = { choose, spaceId, go, current, onCancel, tabId, windowId, releaseRows };
   const [barActions] = useState(() => ({
     go: (url: string) => latest.current.go(url),
     openTabOrFile: () => void openTabOrFile(latest.current.windowId, latest.current.tabId, (url) => latest.current.go(url)),
@@ -332,7 +332,7 @@ export function Omnibox({
       setPopover(latest.current.tabId, "siteControls");
     },
   }));
-  const [rowActions] = useState<RowActions>(() => ({ choose: (s) => latest.current.choose(s), remove: (url) => (latest.current.releaseRows(), removeHistory(latest.current.profileId, [url])) }));
+  const [rowActions] = useState<RowActions>(() => ({ choose: (s) => latest.current.choose(s), remove: (url) => (latest.current.releaseRows(), removeHistory(latest.current.spaceId, [url])) }));
   const suggestionList = (
     <SuggestionList
       items={items}
@@ -344,7 +344,7 @@ export function Omnibox({
   );
 
   const onBarContextMenu = () => void onContextMenu();
-  const pulse = <ScopePulse scope={scope} shape={variant} profileId={profileId} />;
+  const pulse = <ScopePulse scope={scope} shape={variant} profileId={spaceId} />;
   if (dropdown)
     return (
       <DropdownFrame

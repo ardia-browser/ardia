@@ -29,6 +29,6 @@ export async function requestAutofill(windowId: string, arg: string | null, tabI
   if (isTabReady(tabId) && (await (systemPanel ? openSystemPanel(tabId!) : showAutofillSuggestions(tabId, passwords ? "passwords" : "field")))) return;
   const s = useBrowser.getState();
   const w = s.windows[windowId];
-  const profileId = w && w.kind !== "private" && s.profiles[w.profileId] ? w.profileId : null;
-  openSettings("profiles", profileId, passwords ? SETTINGS_DETAIL.passwords : null);
+  const spaceId = w && w.kind !== "private" && s.spaces[w.spaceId] ? w.spaceId : null;
+  openSettings("spaces", spaceId, passwords ? SETTINGS_DETAIL.passwords : null);
 }

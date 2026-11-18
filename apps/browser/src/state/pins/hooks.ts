@@ -1,24 +1,25 @@
+import { useContext } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useBrowser } from "../browser/store";
 import { useTabState } from "../tabs/tabStateWatch";
 import { activeTabId } from "../browser/model";
-import { usePageProfileId } from "../browser/hooks";
+import { usePageSpaceId } from "../browser/hooks";
 import { folderIn, folderLabel, folderMembers, tileFolderOf } from "./tileFolders";
 
 export function useTileFolderMembers(windowId: string, folderId: string) {
-  const profileId = usePageProfileId();
-  return useBrowser(useShallow((s) => folderMembers(s, windowId, folderId, profileId)));
+  const spaceId = usePageSpaceId();
+  return useBrowser(useShallow((s) => folderMembers(s, windowId, folderId, spaceId)));
 }
 
 export function useTileFolderLabel(windowId: string, folderId: string) {
-  const profileId = usePageProfileId();
-  return useBrowser((s) => folderLabel(folderIn(s, windowId, folderId, profileId)));
+  const spaceId = usePageSpaceId();
+  return useBrowser((s) => folderLabel(folderIn(s, windowId, folderId, spaceId)));
 }
 
 export function useShownFolderTab(windowId: string, folderId: string) {
-  const profileId = usePageProfileId();
+  const spaceId = usePageSpaceId();
   return useBrowser((s) => {
-    const id = activeTabId(s, windowId, profileId);
+    const id = activeTabId(s, windowId, spaceId);
     return id && tileFolderOf(s.tabs[id])?.id === folderId ? id : null;
   });
 }

@@ -6,7 +6,7 @@ import { isRgbFunction, luminance, mix, over, parseColor, rgbToHsl, toHex } from
 import { CARD_INSET, DEFAULT_SIDEBAR_WIDTH } from "../../lib/windowLayout";
 import { SIDEBAR_ROW } from "../../lib/sidebarMetrics";
 import { WINDOW_CHROME } from "../../lib/windowChrome";
-import { arcSelectedFill, colorRoles, HIGH_CONTRAST_INK, ink, INCOGNITO_TINT, withAlpha, PROFILE_COLORS, radius, type ColorRoles, type ProfileColorSpec, type ShadowLevel } from "./tokens";
+import { arcSelectedFill, colorRoles, HIGH_CONTRAST_INK, ink, INCOGNITO_TINT, withAlpha, PROFILE_COLORS, radius, type ColorRoles, type SpaceColorSpec, type ShadowLevel } from "./tokens";
 import type { BasePalette } from "../../lib/themeFile";
 import { visibleLine, visibleSelection } from "../../lib/selectionContrast";
 
@@ -17,7 +17,7 @@ export type Theme = ColorRoles & {
   pinnedDivider: string;
   adaptiveInk: boolean;
   highContrastText: boolean;
-  profileColor: ProfileColor | "incognito";
+  spaceColor: ProfileColor | "incognito";
   backdrop: BackdropTint & ThemeBackdropProps;
   windowTint: [string, string];
   powerUpColor: string | null;
@@ -48,7 +48,7 @@ export function hex(color: string): string {
   return toHex([r, g, b, a * 255]);
 }
 
-export function profileNameColor(profile: ProfileLookFields, dark: boolean): string {
+export function spaceNameColor(profile: ProfileLookFields, dark: boolean): string {
   const spec = PROFILE_COLORS[profile.color] ?? PROFILE_COLORS.plum;
   const base = profile.theme ? themeAccent(resolveTheme(profile.theme, dark)) : (spec.action ?? spec.swatch);
   return dark ? mix(base, ink.white, 0.6) : mix(base, ink.black, 0.4);
@@ -135,7 +135,7 @@ export function themeFor(key: string, palette?: BasePalette | null): Theme {
       pinnedDivider: base.divider,
       adaptiveInk: false,
       highContrastText: false,
-      profileColor: color,
+      spaceColor: color,
       backdrop: { ...backdrop, ...PRESET_BACKDROP },
       windowTint: opaqueTint(backdrop, base.dark),
       powerUpColor,
@@ -157,7 +157,7 @@ export function nearestPreset(hexColor: string): ProfileColor {
   if (s < 0.12) return "neutral";
   let best: ProfileColor = "plum";
   let distance = Infinity;
-  for (const [name, spec] of Object.entries(PROFILE_COLORS) as [ProfileColor, ProfileColorSpec][]) {
+  for (const [name, spec] of Object.entries(PROFILE_COLORS) as [ProfileColor, SpaceColorSpec][]) {
     if (name === "neutral") continue;
     const [sh] = hsl(spec.swatch);
     const d = Math.min(Math.abs(sh - h), 1 - Math.abs(sh - h));
@@ -183,7 +183,7 @@ function customTheme(custom: ProfileTheme, color: ProfileColor, appDark: boolean
       ...arcSelectionRoles(dark ? preset.palettes.dark : preset.palettes.light, windowTint),
       pinnedDivider: visibleLine(preset.divider, inkOn(windowTint, dark), windowTint),
       adaptiveInk: true,
-      profileColor: nearestPreset(accent),
+      spaceColor: nearestPreset(accent),
       backdrop: {
         ...backdropTint(accent, false),
         ...themeBackdrop(look, dark),
@@ -205,7 +205,7 @@ export function profileTheme(profile: ProfileLookFields | undefined, appDark: bo
   return themeFor(`${color}:${appDark ? "dark" : "light"}`, palette);
 }
 
-export function profileAccent(profile: ProfileLookFields | undefined): string {
+export function spaceAccent(profile: ProfileLookFields | undefined): string {
   if (profile?.theme) return themeAccent(profile.theme);
   return (PROFILE_COLORS[profile?.color ?? "plum"] ?? PROFILE_COLORS.plum).swatch;
 }

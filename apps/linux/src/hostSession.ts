@@ -7,7 +7,7 @@ import { canonicalSessionValue, cloneSessionValue, equalSessionValue, mergeSessi
 import { sessionStatePatch } from "./hostSessionState.ts";
 import { windowDeparture } from "./windowDeparture.ts";
 import { parkWindowPins } from "../../browser/src/state/pins/parkedPins";
-import { inPinnedContainer, isIncognitoProfile, snapshotTab } from "../../browser/src/state/browser/model";
+import { inPinnedContainer, isIncognitoSpace, snapshotTab } from "../../browser/src/state/browser/model";
 import { closedWindowEntry, MAX_CLOSED_WINDOWS } from "../../browser/src/state/pins/closedTabs";
 import { withPrivateWindow } from "./hostWindowProfiles.ts";
 import { withSmallWindow } from "./hostSmallWindows.ts";
@@ -149,7 +149,7 @@ export const unmigratedSessionShape = (saved: HydrateData): HydrateData => sniff
 const inClosingOrder = <T extends { closedAt: number }>(entries: T[]) => [...entries].sort((a, b) => a.closedAt - b.closedAt).slice(-MAX_CLOSED_WINDOWS);
 
 function withoutRestoredWindows(saved: HydrateData, now: number): HydrateData {
-  const source = { tabs: saved.tabs ?? {}, groups: saved.groups ?? {}, splits: saved.splits ?? {}, history: {}, profiles: saved.profiles ?? {} };
+  const source = { tabs: saved.tabs ?? {}, groups: saved.groups ?? {}, splits: saved.splits ?? {}, history: {}, profiles: saved.profiles ?? {}, spaces: saved.spaces ?? {} };
   const windows = Object.values(saved.windows ?? {}).filter((w) => w.kind === "main");
   let parkedPins = saved.parkedPins ?? {};
   for (const w of windows) parkedPins = parkWindowPins(parkedPins, w, source);
@@ -168,7 +168,7 @@ function withoutRestoredWindows(saved: HydrateData, now: number): HydrateData {
 }
 
 const seedProfile = ({ profileId, pageProfile }: ArdiaHost["bootstrap"]) =>
-  pageProfile && !isIncognitoProfile(pageProfile) ? pageProfile : profileId;
+  pageProfile && !isIncognitoSpace(pageProfile) ? pageProfile : profileId;
 
 type SeedTab = { url: string; page: Tab["page"]; active: boolean };
 
@@ -223,21 +223,33 @@ export function initialHostSession(host: ArdiaHost, saved: HydrateData | null | 
   const smallSession = withSmallWindow(host, saved ?? {}, undefined, now);
   if (smallSession) return smallSession;
   if (saved && host.bootstrap.startup === true && windowId === LAUNCH_WINDOW_ID) saved = withLaunchWindowAdopted(saved, windowId);
-  const profile = { id: profileId, name: "Personal", color: "plum" as const, icon: null, createdAt: now };
+
+  const engineId = profileId === "default" ? "" : profileId;
+  const requestedSpace = saved?.windows?.[windowId]?.spaceId;
+  const matchingSpaces = (saved?.spaceOrder ?? Object.keys(saved?.spaces ?? {})).filter((id) => {
+    const owner = saved?.spaces?.[id]?.profileId;
+    return owner !== undefined && saved?.profiles?.[owner]?.engineId === engineId;
+  });
+  const defaultSpace = saved?.settings?.defaultSpaceId;
+  const spaceId = requestedSpace ?? (defaultSpace && matchingSpaces.includes(defaultSpace) ? defaultSpace : matchingSpaces[0]) ?? profileId;
+  const existing = saved?.spaces?.[spaceId];
+  const owner = existing?.profileId ?? spaceId;
   const profiles = { ...saved?.profiles };
-  profiles[profileId] ??= profile;
-  if (saved?.windows?.[windowId]?.tabIds.some((id) => saved.tabs?.[id])) return { ...saved, profiles, focusedWindowId: windowId };
+  profiles[owner] ??= { id: owner, name: "Personal", engineId, icon: null, createdAt: now };
+  const spaces = { ...saved?.spaces };
+  spaces[spaceId] ??= { id: spaceId, name: profiles[owner].name, color: "plum", icon: null, createdAt: now, profileId: owner, shareTopApps: true };
+  if (saved?.windows?.[windowId]?.tabIds.some((id) => saved.tabs?.[id])) return { ...saved, profiles, spaces, focusedWindowId: windowId };
   const seeds = seedTabs(host.bootstrap);
   const tabs: Tab[] = seeds.map(({ url, page }) => ({
-    id: `t_${crypto.randomUUID()}`, windowId, profileId, url, title: "", favicon: null, pin: null, muted: false, zoom: 1,
+    id: `t_${crypto.randomUUID()}`, windowId, spaceId, url, title: "", favicon: null, pin: null, muted: false, zoom: 1,
     customTitle: null, customIcon: null, pinnedUrl: null, page, openerId: null, createdAt: now, lastActiveAt: now,
   }));
   const activeTab = tabs[Math.max(0, seeds.findIndex((seed) => seed.active))]!;
   const browserWindow: BrowserWindow = {
-    id: windowId, profileId, kind: "main", tabIds: tabs.map((tab) => tab.id), activeTabIds: { [profileId]: activeTab.id }, frame: null, createdAt: now,
+    id: windowId, spaceId, kind: "main", tabIds: tabs.map((tab) => tab.id), activeTabIds: { [spaceId]: activeTab.id }, frame: null, createdAt: now,
   };
   return {
-    ...saved, profiles, profileOrder: [...new Set([...(saved?.profileOrder ?? []), profileId])],
+    ...saved, profiles, spaces, spaceOrder: [...new Set([...(saved?.spaceOrder ?? []), spaceId])],
     windows: { ...saved?.windows, [windowId]: browserWindow },
     windowOrder: [...new Set([...(saved?.windowOrder ?? []), windowId])],
     tabs: { ...saved?.tabs, ...Object.fromEntries(tabs.map((tab) => [tab.id, tab])) }, focusedWindowId: windowId,
@@ -246,7 +258,7 @@ export function initialHostSession(host: ArdiaHost, saved: HydrateData | null | 
 
 const publicProfile = (profile: string) => !profile.startsWith("incognito:");
 const savedPageKind = (tab: Tab): Tab["page"] => ({ kind: tab.page.kind === "asleep" || tab.page.kind === "frozen" ? "asleep" : "idle" });
-const publicTabs = (entry: { tabs: { profileId: string }[] }) => entry.tabs.every((tab) => publicProfile(tab.profileId));
+const publicTabs = (entry: { tabs: { spaceId: string }[] }) => entry.tabs.every((tab) => publicProfile(tab.spaceId));
 const publicTable = <T,>(table: Record<string, T>) => Object.fromEntries(Object.entries(table).filter(([id]) => publicProfile(id)));
 
 export function hydrateLaunchSession(saved: HydrateData | null | undefined, initial: HydrateData) {
@@ -257,20 +269,20 @@ export function hydrateLaunchSession(saved: HydrateData | null | undefined, init
 export function snapshotHostSession(s: BrowserState): HydrateData {
   const windows = Object.fromEntries(Object.values(s.windows).filter((w): w is MainWindow => w.kind === "main").map(({ chromeWindow: _, ...w }) => [w.id, w]));
   const tabs = Object.fromEntries(Object.values(s.tabs)
-    .filter((t) => windows[t.windowId] && publicProfile(t.profileId) && !Object.values(s.peeks).some((p) => p.tabId === t.id))
+    .filter((t) => windows[t.windowId] && publicProfile(t.spaceId) && !Object.values(s.peeks).some((p) => p.tabId === t.id))
     .map((tab): [string, Tab] => [tab.id, { ...tab, page: savedPageKind(tab) }]));
   for (const w of Object.values(windows)) {
     w.tabIds = w.tabIds.filter((id) => tabs[id]);
     w.activeTabIds = Object.fromEntries(Object.entries(w.activeTabIds).filter(([, id]) => tabs[id]));
   }
   return {
-    profiles: publicTable(s.profiles), profileOrder: s.profileOrder.filter(publicProfile), orphanedProfileData: s.orphanedProfileData,
+    profiles: publicTable(s.profiles), spaces: publicTable(s.spaces), topApps: s.topApps, parkedTopApps: s.parkedTopApps, spaceOrder: s.spaceOrder.filter(publicProfile), orphanedProfileData: s.orphanedProfileData,
     windows, windowOrder: s.windowOrder.filter((id) => windows[id]), tabs,
-    focusedWindowId: s.ui.focusOrder.find((id) => windows[id]) ?? null, lastProfileId: s.ui.lastProfileId,
-    groups: Object.fromEntries(Object.entries(s.groups).filter(([, g]) => windows[g.windowId] && publicProfile(g.profileId)).map(([id, g]) => [id, { ...g, tabIds: g.tabIds.filter((key) => tabs[key]) }])),
+    focusedWindowId: s.ui.focusOrder.find((id) => windows[id]) ?? null, lastSpaceId: s.ui.lastSpaceId,
+    groups: Object.fromEntries(Object.entries(s.groups).filter(([, g]) => windows[g.windowId] && publicProfile(g.spaceId)).map(([id, g]) => [id, { ...g, tabIds: g.tabIds.filter((key) => tabs[key]) }])),
     splits: Object.fromEntries(Object.entries(s.splits).filter(([, split]) => windows[split.windowId] && splitTabIds(split).every((key) => tabs[key]))),
-    closedTabs: s.closedTabs.filter((c) => publicProfile(c.tab.profileId)), closedWindows: s.closedWindows.filter(publicTabs),
-    closedGroups: s.closedGroups.filter(publicTabs), deletedGroups: s.deletedGroups.filter(publicTabs), cleanedTabs: s.cleanedTabs.filter((c) => publicProfile(c.tab.profileId)),
+    closedTabs: s.closedTabs.filter((c) => publicProfile(c.tab.spaceId)), closedWindows: s.closedWindows.filter(publicTabs),
+    closedGroups: s.closedGroups.filter(publicTabs), deletedGroups: s.deletedGroups.filter(publicTabs), cleanedTabs: s.cleanedTabs.filter((c) => publicProfile(c.tab.spaceId)),
     parkedPins: publicTable(s.parkedPins), pinChoices: publicTable(s.pinChoices), pinSync: publicTable(s.pinSync),
     topAppsMerged: s.topAppsMerged,
     settings: s.settings, settingsMeta: s.settingsMeta,
@@ -392,27 +404,31 @@ type SessionStore = {
   subscribe(listener: (s: BrowserState) => void): () => void;
 };
 
-const withoutFocus = ({ focusedWindowId: _, lastProfileId: _last, ...session }: HydrateData) => session;
-const sessionSources = (s: BrowserState) => [s.profiles, s.profileOrder, s.orphanedProfileData, s.windows, s.windowOrder, s.tabs, s.groups, s.splits, s.peeks, s.closedTabs, s.closedWindows, s.closedGroups, s.deletedGroups, s.cleanedTabs, s.parkedPins, s.pinChoices, s.pinSync, s.topAppsMerged, s.settings, s.settingsMeta, s.ui.focusOrder, s.ui.lastProfileId];
+const withoutFocus = ({ focusedWindowId: _, lastSpaceId: _last, ...session }: HydrateData) => session;
+const sessionSources = (s: BrowserState) => [s.profiles, s.spaces, s.spaceOrder, s.topApps, s.parkedTopApps, s.orphanedProfileData, s.windows, s.windowOrder, s.tabs, s.groups, s.splits, s.peeks, s.closedTabs, s.closedWindows, s.closedGroups, s.deletedGroups, s.cleanedTabs, s.parkedPins, s.pinChoices, s.pinSync, s.topAppsMerged, s.settings, s.settingsMeta, s.ui.focusOrder, s.ui.lastSpaceId];
 
-type StandIn = { windowId: string; profileId?: string };
+type StandIn = { windowId: string; spaceId?: string; profileId?: string };
 
 function windowStandIn(host: ArdiaHost, state: BrowserState, initial: HydrateData): StandIn | undefined {
   const { windowId, startup, chromeMade } = host.bootstrap;
   const w = state.windows[windowId];
   if (startup !== false || chromeMade || w?.kind !== "main" || initial.windows?.[windowId]) return undefined;
-  return initial.profiles?.[w.profileId] ? { windowId } : { windowId, profileId: w.profileId };
+  if (initial.spaces?.[w.spaceId]) return { windowId };
+  const profileId = state.spaces[w.spaceId]?.profileId;
+  return { windowId, spaceId: w.spaceId, profileId: profileId && !initial.profiles?.[profileId] ? profileId : undefined };
 }
 
 function withoutStandIn(state: BrowserState, standIn: StandIn | undefined): BrowserState {
   if (!standIn) return state;
   const { [standIn.windowId]: _, ...windows } = state.windows;
+  const spaces = { ...state.spaces };
+  if (standIn.spaceId) delete spaces[standIn.spaceId];
   const profiles = { ...state.profiles };
-  if (standIn.profileId) delete profiles[standIn.profileId];
+  if (standIn.profileId && !Object.values(spaces).some((space) => space.profileId === standIn.profileId)) delete profiles[standIn.profileId];
   return {
-    ...state, windows, profiles,
+    ...state, windows, profiles, spaces,
     windowOrder: state.windowOrder.filter((id) => id !== standIn.windowId),
-    profileOrder: state.profileOrder.filter((id) => id !== standIn.profileId),
+    spaceOrder: state.spaceOrder.filter((id) => id !== standIn.spaceId),
     ui: { ...state.ui, focusOrder: state.ui.focusOrder.filter((id) => id !== standIn.windowId) },
   };
 }

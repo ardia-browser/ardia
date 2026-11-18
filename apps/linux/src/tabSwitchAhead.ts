@@ -1,7 +1,7 @@
 import { showInPlaceOf, type HostTab } from "./hostTab.ts";
 
 export type SwitchView = { tab: () => HostTab | null; slot: Element; regions: { setPage(slot: Element, visible: boolean): void } };
-type ActiveWindows = { windows: Record<string, { profileId: string; activeTabIds: Record<string, string> } | undefined> };
+type ActiveWindows = { windows: Record<string, { spaceId: string; activeTabIds: Record<string, string> } | undefined> };
 type ActiveStore = { subscribe(listener: (state: ActiveWindows, previous: ActiveWindows) => void): () => void };
 
 const views = new Map<string, SwitchView>();
@@ -34,9 +34,9 @@ export function watchTabSwitches(store: ActiveStore) {
     if (state.windows === previous.windows) return;
     for (const [id, window] of Object.entries(state.windows)) {
       const before = previous.windows[id];
-      if (!window || !before || before.profileId !== window.profileId) continue;
-      const next = window.activeTabIds[window.profileId];
-      const last = before.activeTabIds[window.profileId];
+      if (!window || !before || before.spaceId !== window.spaceId) continue;
+      const next = window.activeTabIds[window.spaceId];
+      const last = before.activeTabIds[window.spaceId];
       if (next && last && next !== last) switchAhead(last, next);
     }
   });

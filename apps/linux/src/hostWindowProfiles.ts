@@ -3,7 +3,7 @@ import type { BrowserState, HydrateData } from "../../browser/src/state/browser/
 import type { BrowserWindow, Tab } from "../../browser/src/state/browser/types";
 import type { ArdiaHost } from "./host";
 import { invokeHost, reportHostError } from "./host.ts";
-import { engineProfile, isIncognitoProfile } from "../../browser/src/state/browser/model";
+import { engineProfile, isIncognitoSpace } from "../../browser/src/state/browser/model";
 import { offerSmallWindow, relayedSmallWindow, relaysSmallWindows, smallWindowFrame, smallWindowSeed, withdrawSmallWindow, type ScreenArea, type SeedStorage } from "./hostSmallWindows.ts";
 
 export type PrivateWindowSeed = { window: BrowserWindow; tabs: Record<string, Tab> };
@@ -51,12 +51,12 @@ export function dropRefusedWindow(store: RefusableStore, id: string) {
 
 export function privateWindowSeed(state: Pick<BrowserState, "windows" | "tabs">, id: string): PrivateWindowSeed | undefined {
   const w = state.windows[id];
-  if (w?.kind !== "private" || !isIncognitoProfile(w.profileId)) return undefined;
+  if (w?.kind !== "private" || !isIncognitoSpace(w.spaceId)) return undefined;
   const { chromeWindow: _, ...window } = w;
   const tabs: Record<string, Tab> = {};
   for (const tabId of w.tabIds) {
     const tab = state.tabs[tabId];
-    if (tab && tab.windowId === id && tab.profileId === w.profileId) tabs[tabId] = tab;
+    if (tab && tab.windowId === id && tab.spaceId === w.spaceId) tabs[tabId] = tab;
   }
   const seed = { window: { ...window, tabIds: window.tabIds.filter((tabId) => tabs[tabId]) }, tabs };
   return JSON.stringify(seed).length <= PRIVATE_SEED_LIMIT ? seed : undefined;
@@ -83,7 +83,7 @@ function watchAttachments(host: ArdiaHost, drop: (id: string) => void) {
   return waiting;
 }
 
-export function createHostWindowOpener(host: ArdiaHost, state: () => Pick<BrowserState, "windows" | "tabs" | "profiles">, emit: (event: WindowEvent) => void, drop: (id: string) => void = () => {}, small: SmallWindowPort = {}) {
+export function createHostWindowOpener(host: ArdiaHost, state: () => Pick<BrowserState, "windows" | "tabs" | "profiles" | "spaces">, emit: (event: WindowEvent) => void, drop: (id: string) => void = () => {}, small: SmallWindowPort = {}) {
   const waiting = attaching.get(host) ?? watchAttachments(host, drop);
   const seeded = new Set<string>();
   return async (id: string, given: OpenOptions = {}) => {
@@ -119,13 +119,13 @@ export function createHostWindowOpener(host: ArdiaHost, state: () => Pick<Browse
 
 export function withPrivateWindow(host: ArdiaHost, session: HydrateData): HydrateData | undefined {
   const { windowId, pageProfile, privateWindow } = host.bootstrap;
-  if (!pageProfile || !isIncognitoProfile(pageProfile)) return undefined;
+  if (!pageProfile || !isIncognitoSpace(pageProfile)) return undefined;
   const w = privateWindow?.window;
-  if (!w || w.id !== windowId || w.kind !== "private" || !isIncognitoProfile(w.profileId) || engineProfile({ profiles: session.profiles ?? {} }, w.profileId) !== pageProfile) {
+  if (!w || w.id !== windowId || w.kind !== "private" || !isIncognitoSpace(w.spaceId) || engineProfile({ profiles: session.profiles ?? {}, spaces: session.spaces ?? {}, windows: { [w.id]: w } }, w.spaceId) !== pageProfile) {
     throw new Error("The private window state is unavailable");
   }
   const tabs = Object.fromEntries(Object.entries(privateWindow.tabs ?? {})
-    .filter(([id, tab]) => tab?.id === id && tab.windowId === windowId && tab.profileId === w.profileId));
+    .filter(([id, tab]) => tab?.id === id && tab.windowId === windowId && tab.spaceId === w.spaceId));
   const tabIds = w.tabIds.filter((id) => tabs[id]);
   const activeTabIds = Object.fromEntries(Object.entries(w.activeTabIds ?? {}).filter(([, id]) => tabs[id]));
   return {
@@ -138,20 +138,20 @@ export function withPrivateWindow(host: ArdiaHost, session: HydrateData): Hydrat
 }
 
 export type ActiveProfileStore = {
-  getState(): Pick<BrowserState, "windows" | "profiles">;
-  subscribe(listener: (state: Pick<BrowserState, "windows" | "profiles">) => void): () => void;
+  getState(): Pick<BrowserState, "windows" | "profiles" | "spaces">;
+  subscribe(listener: (state: Pick<BrowserState, "windows" | "profiles" | "spaces">) => void): () => void;
 };
 
-export function activeEngineProfile(s: Pick<BrowserState, "windows" | "profiles">, windowId: string): string | undefined {
+export function activeEngineProfile(s: Pick<BrowserState, "windows" | "profiles" | "spaces">, windowId: string): string | undefined {
   const w = s.windows[windowId];
-  if (!w || w.kind === "private" || isIncognitoProfile(w.profileId)) return undefined;
-  return engineProfile(s, w.profileId);
+  if (!w || w.kind === "private" || isIncognitoSpace(w.spaceId)) return undefined;
+  return engineProfile(s, w.spaceId);
 }
 
 export function watchActiveProfile(host: ArdiaHost, store: ActiveProfileStore, windowId = host.bootstrap.windowId) {
   let sent: string | undefined;
   let sequence = 0;
-  const select = (s: Pick<BrowserState, "windows" | "profiles">) => {
+  const select = (s: Pick<BrowserState, "windows" | "profiles" | "spaces">) => {
     const engine = activeEngineProfile(s, windowId);
     if (engine === undefined || engine === sent) return;
     sent = engine;

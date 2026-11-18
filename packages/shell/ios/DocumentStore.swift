@@ -69,6 +69,25 @@ enum DocumentStore {
     lock.unlock()
   }
 
+  static func writeImmediately(_ name: String, _ contents: String) throws {
+    let url = try url(name)
+    try queue.sync {
+      lock.lock()
+      let pending = staged.removeValue(forKey: url.lastPathComponent)
+      lock.unlock()
+      do {
+        try contents.write(to: url, atomically: true, encoding: .utf8)
+        let file = try FileHandle(forWritingTo: url)
+        try file.synchronize()
+        try file.close()
+        for waiter in pending?.waiters ?? [] { waiter(nil) }
+      } catch {
+        for waiter in pending?.waiters ?? [] { waiter(error) }
+        throw error
+      }
+    }
+  }
+
   static func remove(_ name: String) throws {
     let url = try url(name)
     lock.lock()

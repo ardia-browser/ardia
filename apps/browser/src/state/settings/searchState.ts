@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { goToSettingsPane, type SettingsPane, useSettingsNav } from "./settingsWindows";
-import { settingsProfileFor } from "../extensions/store";
+import { settingsSpaceFor } from "../extensions/store";
 import { noteSettingsSearch, noteSettingsSearchReveal } from "../telemetry/usage";
 
 type SearchUi = {
@@ -65,23 +65,26 @@ export function revealSetting({ id, pane, section }: Target, via: "keyboard" | "
   noteSettingsSearchReveal(via, rank, unshown);
   const key = settingsSectionKey(pane, section);
   useSettingsSearch.setState((s) => (s.revealedSections.includes(key) ? {} : { revealedSections: [...s.revealedSections, key] }));
-  if (!useSettingsSearch.getState().previewing) goToSettingsPane(pane, settingsProfileFor(pane, useSettingsNav.getState()));
-  else showWithoutHistory(pane);
+  if (!useSettingsSearch.getState().previewing) goToSettingsPane(pane, searchDestination(pane, id));
+  else showWithoutHistory(pane, id);
   useSettingsSearch.setState({ reveal: { id, at: Date.now() }, previewing: false });
 }
 
 export function previewSetting({ id, pane, section }: Target) {
   const { previewing, reveal } = useSettingsSearch.getState();
   if (reveal?.id === id && previewing && useSettingsNav.getState().pane === pane) return;
-  if (!previewing) goToSettingsPane(pane, settingsProfileFor(pane, useSettingsNav.getState()));
-  else showWithoutHistory(pane);
+  if (!previewing) goToSettingsPane(pane, searchDestination(pane, id));
+  else showWithoutHistory(pane, id);
   useSettingsSearch.setState({ previewSection: settingsSectionKey(pane, section), previewing: true, reveal: { id, at: Date.now() } });
 }
 
-function showWithoutHistory(pane: SettingsPane) {
+const searchDestination = (pane: SettingsPane, id: string) =>
+  id === "profiles.list" ? null : settingsSpaceFor(pane, useSettingsNav.getState());
+
+function showWithoutHistory(pane: SettingsPane, id: string) {
   const nav = useSettingsNav.getState();
-  const profileId = settingsProfileFor(pane, nav);
-  if (nav.pane !== pane || nav.profileId !== profileId || nav.detail) useSettingsNav.setState({ pane, profileId, detail: null, forward: [] });
+  const profileId = searchDestination(pane, id);
+  if (nav.pane !== pane || nav.spaceId !== profileId || nav.detail) useSettingsNav.setState({ pane, spaceId: profileId, detail: null, forward: [] });
 }
 
 export const flashSetting = (id: string) => useSettingsSearch.setState({ reveal: null, flash: { id, at: Date.now() } });

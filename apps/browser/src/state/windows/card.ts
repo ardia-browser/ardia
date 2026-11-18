@@ -13,7 +13,7 @@ import { wantsPage } from "../tabs/tabPages";
 import { useTabState } from "../tabs/tabStateWatch";
 import { removeTabs } from "../tabs/tabs";
 import { isSmallWindow } from "./small";
-import type { PagerPage } from "./profilePager";
+import type { PagerPage } from "./spacePager";
 import { isWebPageUrl } from "../../lib/url";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { webviews } from "../../platform/webviews";
@@ -25,6 +25,8 @@ export const useSplitOf = (tabId: string | undefined) => useBrowser((s) => split
 export const useIsSmallWindow = (windowId: string) => useBrowser((s) => isSmallWindow(s.windows[windowId]));
 
 export const useTabEngine = (tabId: string) => useTabState(tabId, (s) => tabEngine(s, tabId));
+
+export const useTabProfile = (tabId: string) => useBrowser((s) => s.tabs[tabId] ? engineProfile(s, s.tabs[tabId]!.spaceId) : "");
 
 export const currentTabEngine = (tabId: string) => tabEngine(useBrowser.getState(), tabId);
 
@@ -81,7 +83,7 @@ export const useWarmTabIds = (windowId: string, pagerPages: PagerPage[] | null, 
   useBrowser(
     useShallow((s) => {
       const w = s.windows[windowId];
-      const ids = !w || !pagerPages ? [] : pagerPages.map((p) => (p.id === w.profileId ? undefined : w.activeTabIds[p.id])).filter((id): id is string => !!id);
+      const ids = !w || !pagerPages ? [] : pagerPages.map((p) => (p.id === w.spaceId ? undefined : w.activeTabIds[p.id])).filter((id): id is string => !!id);
       return successor && s.tabs[successor]?.windowId === windowId && !ids.includes(successor) ? [...ids, successor] : ids;
     }),
   );
@@ -92,7 +94,7 @@ type ShownMemo = { mounted?: string[]; panes?: object; tabs?: object; profiles?:
 
 export const newShownMemo = (): ShownMemo => ({ keys: [], ids: [], found: [] });
 
-export const paneKeyOf = (s: Pick<BrowserState, "profiles">, t: Pick<Tab, "id" | "profileId">) => `${t.id}|${engineProfile(s, t.profileId)}`;
+export const paneKeyOf = (s: Pick<BrowserState, "profiles" | "spaces">, t: Pick<Tab, "id" | "spaceId">) => `${t.id}|${engineProfile(s, t.spaceId)}`;
 
 export function shownPaneKeys(shownMemo: { current: ShownMemo }, s: BrowserState, mounted: string[], panes: object): string[] {
   const memo = shownMemo.current;
@@ -139,7 +141,7 @@ export function downloadNavigated(tabId: string, committedUrl: string | null | u
     if (t.url !== committedUrl) useBrowser.getState().updateTab(tabId, { url: committedUrl });
     return;
   }
-  const others = s.windows[t.windowId]?.tabIds.some((id) => id !== tabId && s.tabs[id]?.profileId === t.profileId);
+  const others = s.windows[t.windowId]?.tabIds.some((id) => id !== tabId && s.tabs[id]?.spaceId === t.spaceId);
   const opened = !!(t.openerId || adoptOf(t)) && !pageOf(tabId).wasNewTab;
   if (!skipped && opened && !liveOf(tabId).canGoBack && others) return useBrowser.getState().closeTab(tabId);
   patchPage(tabId, { backToNewTab: false, newTabShown: null });

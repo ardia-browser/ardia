@@ -185,7 +185,7 @@ export function sidebarHeaderCollapsed(s: BrowserState, windowId: string, chrome
   const w = s.windows[windowId];
   if (chrome.leadingWidth || !chrome.trailingWidth || !w) return false;
   if (tabLayoutOf(s, windowId) !== "sidebar" || addressBarInSidebar(s, windowId) || sidebarSideOf(s, windowId) === "right") return false;
-  return w.kind !== "private" && s.profileOrder.length < 2;
+  return w.kind !== "private" && s.spaceOrder.length < 2;
 }
 
 export const COLLAPSED_SIDEBAR_HEADER_MIN = 6;

@@ -1,3 +1,4 @@
+import { profileIdForSpace } from "../profiles/current";
 import { focusWindow, openWindow } from "../../platform/windows";
 import { create } from "zustand";
 import { useBrowser } from "../browser/store";
@@ -8,30 +9,30 @@ export const IMPORT_WINDOW_ID = "import";
 export const isUtilityWindowId = (id: string | null | undefined) =>
   id === SETTINGS_WINDOW_ID || id === IMPORT_WINDOW_ID;
 
-export const SETTINGS_PANES = ["general", "profiles", "tabs", "appearance", "automations", "plugins", "shortcuts", "advanced"] as const;
+export const SETTINGS_PANES = ["general", "profiles", "spaces", "sync", "tabs", "appearance", "automations", "plugins", "shortcuts", "advanced"] as const;
 
 export type SettingsPane = (typeof SETTINGS_PANES)[number];
 
 
-export type SettingsPlace = { pane: SettingsPane; profileId: string | null; detail: string | null };
+export type SettingsPlace = { pane: SettingsPane; spaceId: string | null; detail: string | null };
 
 type Nav = SettingsPlace & { back: SettingsPlace[]; forward: SettingsPlace[] };
 
-const placeOf = ({ pane, profileId, detail }: SettingsPlace): SettingsPlace => ({ pane, profileId, detail });
+const placeOf = ({ pane, spaceId, detail }: SettingsPlace): SettingsPlace => ({ pane, spaceId, detail });
 
-export const useSettingsNav = create<Nav>()(() => ({ pane: "general", profileId: null, detail: null, back: [], forward: [] }));
+export const useSettingsNav = create<Nav>()(() => ({ pane: "general", spaceId: null, detail: null, back: [], forward: [] }));
 
-export function goToSettingsPane(pane: SettingsPane, profileId: string | null = null, detail: string | null = null) {
+export function goToSettingsPane(pane: SettingsPane, spaceId: string | null = null, detail: string | null = null) {
   const current = useSettingsNav.getState();
-  if (current.pane === pane && current.profileId === profileId && current.detail === detail) return;
-  useSettingsNav.setState({ pane, profileId, detail, back: [...current.back, placeOf(current)].slice(-30), forward: [] });
+  if (current.pane === pane && current.spaceId === spaceId && current.detail === detail) return;
+  useSettingsNav.setState({ pane, spaceId, detail, back: [...current.back, placeOf(current)].slice(-30), forward: [] });
 }
 
-export function replaceSettingsPlace(profileId: string | null, detail: string | null = null) {
+export function replaceSettingsPlace(spaceId: string | null, detail: string | null = null) {
   const { pane, back } = useSettingsNav.getState();
   const prev = back.at(-1);
-  const same = prev?.pane === pane && prev.profileId === profileId && prev.detail === detail;
-  useSettingsNav.setState({ profileId, detail, back: same ? back.slice(0, -1) : back, forward: [] });
+  const same = prev?.pane === pane && prev.spaceId === spaceId && prev.detail === detail;
+  useSettingsNav.setState({ spaceId, detail, back: same ? back.slice(0, -1) : back, forward: [] });
 }
 
 export function settingsBack() {
@@ -65,7 +66,12 @@ export function openSettings(pane?: SettingsPane, profileId?: string | null, det
   void openWindow(SETTINGS_WINDOW_ID, { kind: "settings", title: "Settings" });
 }
 
-export const openSiteSettings = (origin: string, profileId: string) => openSettings("profiles", profileId, SETTINGS_DETAIL.site(origin));
+export const openProfileSettings = (pane: "profiles" | "passwords" | "autofill" | "extensions", profileId: string) => {
+  goToSettingsPane("profiles", profileId, pane === "profiles" ? null : pane);
+  void openWindow(SETTINGS_WINDOW_ID, { kind: "settings", title: "Settings" });
+};
+
+export const openSiteSettings = (origin: string, spaceId: string) => openSettings("profiles", profileIdForSpace(spaceId), SETTINGS_DETAIL.site(origin));
 
 export const useImportRequest = create<{ source: string | null }>()(() => ({ source: null }));
 

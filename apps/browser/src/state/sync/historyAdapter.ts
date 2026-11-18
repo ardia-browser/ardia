@@ -49,8 +49,10 @@ function olderThan(view: readonly HistoryEntry[], since: number, keyOf: (e: Hist
   };
 }
 
-export function historyAdapter(profileId: string): Adapter {
-  const ready = () => !!historyViewOf(store(), profileId)?.ready;
+export function historyAdapter(profileId: string, context?: { profileId: string; engineId: string; enabled(): boolean }): Adapter {
+  const matches = (s: ReturnType<typeof store>) => !context || context.enabled() &&
+    s.spaces[profileId]?.profileId === context.profileId && s.profiles[context.profileId]?.engineId === context.engineId;
+  const ready = () => matches(store()) && !!historyViewOf(store(), profileId)?.ready;
   const extracts = historyExtractsOf(profileId);
   const { parsed, knownJson } = extracts;
   const knownOf = (key: string, json: string | undefined) => {
@@ -141,9 +143,11 @@ export function historyAdapter(profileId: string): Adapter {
         }
       }
       if (!updates.size) return;
-      const engine = engineProfile(useBrowser.getState(), profileId);
+      const engine = context?.engineId ?? engineProfile(store(), profileId);
       await Promise.all([addHistoryVisits(engine, add, SAME_VISIT_MS), deleteHistoryUrls(engine, remove)]);
+      if (!matches(store())) return false;
       useBrowser.setState((s) => {
+        if (!matches(s)) return {};
         const current = new Map(historyOf(s, profileId).map((e) => [e.url, e]));
         for (const [url, update] of updates) {
           const now = current.get(url);

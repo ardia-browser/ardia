@@ -4,10 +4,10 @@ import { addGroupsFromDrafts } from "../bookmarks/bookmarkGroups";
 import type { GroupDraft } from "../groups/draftGroups";
 import { syncGroupOrder } from "../groups/groups";
 import { useBrowser } from "../browser/store";
-import { newProfileLiveFolder } from "../live/engine";
+import { newSpaceLiveFolder } from "../live/engine";
 import { live } from "../live/store";
 import type { LiveSourceId } from "../live/types";
-import { setProfileTheme } from "../profiles/themeActions";
+import { setProfileTheme } from "../spaces/themeActions";
 import { noteImportedPins } from "../telemetry/usage";
 import type { ConsentToken } from "../telemetry/client";
 import { isRegularWindow, mainWindowFor } from "../windows/small";
@@ -44,8 +44,8 @@ const withoutLiveFolders = (nodes: ImportedNode[]): ImportedNode[] =>
 
 function importPullRequestsFolders(profileId: string, nodes: ImportedNode[]) {
   for (const source of new Set(liveSources(nodes))) {
-    const have = Object.values(live().folders).some((f) => f.profileId === profileId && f.kind === "pullRequests" && f.sources.includes(source));
-    if (!have) newProfileLiveFolder(profileId, "pullRequests", [source]);
+    const have = Object.values(live().folders).some((f) => f.spaceId === profileId && f.kind === "pullRequests" && f.sources.includes(source));
+    if (!have) newSpaceLiveFolder(profileId, "pullRequests", [source]);
   }
 }
 
@@ -53,7 +53,7 @@ function sidebarWindowFor(profileId: string): string {
   const near = windowFor(profileId);
   const s = useBrowser.getState();
   if (isRegularWindow(s.windows[near])) return near;
-  return mainWindowFor(s, profileId) ?? s.createWindow({ profileId });
+  return mainWindowFor(s, profileId) ?? s.createWindow({ spaceId: profileId });
 }
 
 type ImportedSection = { tabs: number; splits: number; skipped: number; groups: number };

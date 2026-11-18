@@ -3,7 +3,7 @@ import { AppState } from "react-native";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { usePages } from "../tabs/pageState";
-import { extensionProfile, useExtensions, windowExtensions } from "./store";
+import { extensionSpace, useExtensions, windowExtensions } from "./store";
 import { recheckKeptSidePanels, syncSidePanel, wantedSidePanels } from "./sidePanels";
 import { refreshExtensionsAfterChange } from "./actions";
 import { refreshActionStates } from "./actionStates";
@@ -29,7 +29,7 @@ const dirtyActions = new Set<string>();
 const dirtyLists = new Set<string>();
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
-const windowsOf = (s: BrowserState, profile: string) => s.windowOrder.filter((windowId) => extensionProfile(s, windowId) === profile);
+const windowsOf = (s: BrowserState, profile: string) => s.windowOrder.filter((windowId) => extensionSpace(s, windowId) === profile);
 
 function showsAction(profile: string, extensionId: string) {
   const s = useBrowser.getState();
@@ -50,7 +50,7 @@ function flushActionChanges() {
     void refreshActionStates(profiles);
     const s = useBrowser.getState();
     for (const [windowId] of wantedSidePanels()) {
-      if (!profiles.includes(extensionProfile(s, windowId))) continue;
+      if (!profiles.includes(extensionSpace(s, windowId))) continue;
       void syncSidePanel(windowId);
       void recheckKeptSidePanels(windowId);
     }
@@ -82,7 +82,7 @@ export function startActionStates() {
       const before = active ? prev.tabs[active] : undefined;
       return !!now && (active !== activeTabId(prev, id) || now.url !== before?.url || now.page !== before?.page);
     });
-    if (navigated.length) void refreshActionStates(navigated.map((id) => extensionProfile(s, id)));
+    if (navigated.length) void refreshActionStates(navigated.map((id) => extensionSpace(s, id)));
     else noteExtensionActionTabChangeSkipped();
   });
   useExtensions.subscribe((e, prev) => {

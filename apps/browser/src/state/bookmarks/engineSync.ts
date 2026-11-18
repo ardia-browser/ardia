@@ -4,9 +4,10 @@ import { parseSaved, versionedJson, type Migrations } from "../../lib/savedDocum
 import { bookmarkUuidFor, isBookmarkUuid, ROOT_TITLES, rootIdsFor } from "./bookmarks";
 import { applyOps, bookmarkOps, flatFromEngine, flatFromStore, type Flat } from "./flatBookmarks";
 import { useBrowser, type BrowserState } from "../browser/store";
-import { engineProfile, isIncognitoProfile } from "../browser/model";
+import { engineProfile, engineProfileForSpace, isIncognitoSpace } from "../browser/model";
 import type { BookmarkFolder, BookmarkNode, Bookmarks } from "../browser/types";
 import { engineProfiles } from "../profiles/engineProfiles";
+import { engineSpaces } from "../spaces/engineSpaces";
 import { onProfilesOpened, onProfilesUnloaded, openedEngineProfiles, openProfile, profileOpened } from "../profiles/profileLoading";
 import { migrateLegacyFile } from "../app/legacyFiles";
 import { noteBookmarkSyncDiff } from "../telemetry/bookmarkMoves";
@@ -40,6 +41,10 @@ const stateOf = (engine: string) => {
 };
 let legacyMoved = false;
 let adopting = false;
+
+function attachSpaces(engine: string) {
+  if (legacyMoved && stateOf(engine).shadow && !store().bookmarksReady[engine]) useBrowser.setState((s) => ({ bookmarksReady: { ...s.bookmarksReady, [engine]: true } }));
+}
 
 function adopt(engine: string, flat: Flat, { ready = legacyMoved } = {}) {
   adopting = true;
@@ -138,7 +143,7 @@ function work(engine: string) {
         }
       }
     } catch (error) {
-      warnFor(consent, `[bookmarks] couldn't read ${engine || "the default profile"}'s bookmarks`, error);
+      warnFor(consent, `[bookmarks] couldn't read ${engine || "the default space"}'s bookmarks`, error);
     } finally {
       state.busy = false;
     }
@@ -151,7 +156,7 @@ function read(engine: string) {
 }
 
 function push(s: BrowserState) {
-  for (const engine of engineProfiles(s)) {
+  for (const engine of engineSpaces(s)) {
     const state = stateOf(engine);
     if (!state.shadow) continue;
     state.needPush = true;
@@ -197,9 +202,9 @@ function launchTrees(): Record<string, Flat> {
       if (uuid === undefined) uuids.set(old, (uuid = bookmarkUuidFor(old)));
       return uuid;
     };
-    for (const [profileId, roots] of Object.entries(legacy?.roots ?? {})) {
-      if (!s.profiles[profileId] || isIncognitoProfile(profileId)) continue;
-      const engine = engineProfile(s, profileId);
+    for (const [spaceId, roots] of Object.entries(legacy?.roots ?? {})) {
+      if (!s.spaces[spaceId] || isIncognitoSpace(spaceId)) continue;
+      const engine = engineProfileForSpace(spaceId);
       if (out[engine]) continue;
       const ids = rootIdsFor(engine);
       const id = (old: string) => (old === roots.bar ? ids.bar : old === roots.other ? ids.other : uuidOf(old));
@@ -221,7 +226,7 @@ function saveCache() {
   const s = store();
   const trees: CacheDoc["trees"] = {};
   for (const [engine, state] of engines) {
-    if (!(state.shadow || state.shown) || !engineProfiles(s).includes(engine)) continue;
+    if (!(state.shadow || state.shown) || !engineSpaces(s).includes(engine)) continue;
     trees[engine] = [...flatFromStore(s.bookmarks, engine).nodes.keys()].map((id) => s.bookmarks.nodes[id]!);
   }
   try {
@@ -238,7 +243,7 @@ async function moveBookmarks(file: LegacyFile) {
   const s = store();
   const done = new Set<string>();
   for (const [profileId, roots] of Object.entries(b.roots ?? {})) {
-    if (!s.profiles[profileId] || isIncognitoProfile(profileId)) continue;
+    if (!s.spaces[profileId] || isIncognitoSpace(profileId)) continue;
     const engine = engineProfile(s, profileId);
     if (done.has(engine)) continue;
     done.add(engine);
@@ -268,7 +273,7 @@ async function moveBookmarks(file: LegacyFile) {
 
 export function startBookmarks() {
   for (const [engine, flat] of Object.entries(launchTrees())) {
-    if (!engineProfiles(store()).includes(engine)) continue;
+    if (!engineSpaces(store()).includes(engine)) continue;
     stateOf(engine).shown = flat;
     adopt(engine, flat, { ready: false });
   }

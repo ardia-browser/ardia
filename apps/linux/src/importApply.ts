@@ -1,5 +1,5 @@
 import { applyResult as sharedApplyResult, type ImportCounts } from "../../browser/src/state/import/apply.ts";
-import { engineProfile, isIncognitoProfile } from "../../browser/src/state/browser/model.ts";
+import { engineProfile, isIncognitoSpace } from "../../browser/src/state/browser/model.ts";
 import { useBrowser } from "../../browser/src/state/browser/store.ts";
 import type { ImportKind, ImportResult } from "../../browser/src/platform/importModule.ts";
 import type { PendingPasswords, WrittenPasswords } from "./hostImport.ts";
@@ -25,7 +25,7 @@ export async function applyPendingPasswords(
     sink.discard(pending.token);
     return 0;
   }
-  if (isIncognitoProfile(profileId)) {
+  if (isIncognitoSpace(profileId)) {
     sink.discard(pending.token);
     onFailed?.("passwords");
     return 0;

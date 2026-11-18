@@ -6,7 +6,7 @@ import { isQuitting } from "../app/quit";
 import { flushPersistence } from "../session/persist";
 import { newBookmarkId as newUuid } from "../bookmarks/bookmarks";
 import { deviceKindOf, deviceLabel, deviceRecords, deviceSymbol, offersTabs } from "./devices";
-import { SEND, profileScope, type DeviceRecord, type SendRecord } from "./records";
+import { SEND, spaceScope, type DeviceRecord, type SendRecord } from "./records";
 import { sendableUrl, type ReceivedSend, type SendLedger } from "./sentTabsAdapter";
 import { APP_SCOPE, type ReceivedTab, type SendTarget, type SyncDoc } from "./syncDoc";
 
@@ -15,25 +15,25 @@ export function sendLedger(doc: SyncDoc, scope: string): SendLedger {
   return (sends[scope] ??= { outgoing: {}, received: {} });
 }
 
-export function sendTargetsIn(doc: SyncDoc, profileId: string): SendTarget[] {
-  const link = doc.profiles[profileId];
+export function sendTargetsIn(doc: SyncDoc, spaceId: string): SendTarget[] {
+  const link = doc.spaces[spaceId];
   const app = doc.scopes[APP_SCOPE];
-  const scope = link ? doc.scopes[profileScope(link.syncId)] : undefined;
+  const scope = link ? doc.scopes[spaceScope(link.syncId)] : undefined;
   if (!doc.enabled || !doc.deviceId || !link?.enabled || link.retire || !app || !scope) return [];
   const now = Date.now();
   const seenAt = (id: string) => Math.max(...Object.values(doc.scopes).map((s) => s.seen[id] ?? -Infinity));
   return [...deviceRecords(app)]
-    .filter(([id, record]) => id !== doc.deviceId && offersTabs(record, seenAt(id), now) && (deviceKindOf(record) === "phone" || id in scope.seen))
+    .filter(([id, record]) => id !== doc.deviceId && offersTabs(record, seenAt(id), now) && (id in scope.seen || deviceKindOf(record) === "phone" && id in app.seen))
     .sort(([a], [b]) => (scope.seen[b] ?? app.seen[b] ?? 0) - (scope.seen[a] ?? app.seen[a] ?? 0))
     .map(([id, record]) => ({ id, name: record.n || "Unknown Device", kind: deviceKindOf(record) }));
 }
 
 export function queueSend(doc: SyncDoc, tabId: string, deviceId: string): boolean {
   const tab = useBrowser.getState().tabs[tabId];
-  const link = tab ? doc.profiles[tab.profileId] : undefined;
-  if (!tab || !link || !doc.deviceId || !sendableUrl(tab.url) || !sendTargetsIn(doc, tab.profileId).some((d) => d.id === deviceId)) return false;
+  const link = tab ? doc.spaces[tab.spaceId] : undefined;
+  if (!tab || !link || !doc.deviceId || !sendableUrl(tab.url) || !sendTargetsIn(doc, tab.spaceId).some((d) => d.id === deviceId)) return false;
   const send: SendRecord = { u: tab.url, t: tab.customTitle || tab.title || "", to: deviceId, from: doc.deviceId, at: Date.now() };
-  sendLedger(doc, profileScope(link.syncId)).outgoing[`${SEND}${newUuid()}`] = send;
+  sendLedger(doc, spaceScope(link.syncId)).outgoing[`${SEND}${newUuid()}`] = send;
   return true;
 }
 
@@ -44,23 +44,23 @@ export function onTabsReceived(listener: (tabs: ReceivedTab[]) => void): () => v
   return () => receivedListeners.delete(listener);
 }
 
-function frontWindowShowing(s: BrowserState, profileId: string): string | undefined {
+function frontWindowShowing(s: BrowserState, spaceId: string): string | undefined {
   return [...new Set([...s.ui.focusOrder, ...s.windowOrder])].find((id) => {
     const w = s.windows[id];
-    return w?.kind === "main" && w.profileId === profileId;
+    return w?.kind === "main" && w.spaceId === spaceId;
   });
 }
 
-export function deliverSentTabs(doc: SyncDoc, profileId: string, arrived: ReceivedSend[]): boolean {
-  if (isQuitting() || !useBrowser.getState().profiles[profileId]) return false;
+export function deliverSentTabs(doc: SyncDoc, spaceId: string, arrived: ReceivedSend[]): boolean {
+  if (isQuitting() || !useBrowser.getState().spaces[spaceId]) return false;
   const app = doc.scopes[APP_SCOPE];
   const devices = app ? deviceRecords(app) : new Map<string, DeviceRecord>();
   const opened: ReceivedTab[] = [];
   for (const { send } of arrived) {
     const s = useBrowser.getState();
-    const front = frontWindowShowing(s, profileId);
-    const windowId = front ?? s.createWindow({ profileId, url: send.u, background: true });
-    const tabId = front ? s.newTab(front, { url: send.u, background: true, profileId }) : activeTabId(useBrowser.getState(), windowId);
+    const front = frontWindowShowing(s, spaceId);
+    const windowId = front ?? s.createWindow({ spaceId, url: send.u, background: true });
+    const tabId = front ? s.newTab(front, { url: send.u, background: true, spaceId }) : activeTabId(useBrowser.getState(), windowId);
     const sender = devices.get(send.from);
     if (tabId) opened.push({ windowId, tabId, send, from: { name: sender?.n || "Unknown Device", kind: deviceKindOf(sender) } });
   }

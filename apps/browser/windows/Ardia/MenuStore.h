@@ -227,7 +227,7 @@ struct MenuStore {
             }
             std::vector<Combo> defaults;
             for (auto const &pair : primary) defaults.push_back(pair.second);
-            built.push_back(DynamicEntry("switchProfile", profile.id, profile.title, row.path, primary, defaults, true));
+            built.push_back(DynamicEntry("switchSpace", profile.id, profile.title, row.path, primary, defaults, true));
             built.push_back(DynamicEntry("newWindow", profile.id, profile.title + " \xE2\x86\x97", row.path, alternate, {}, false));
           }
           break;

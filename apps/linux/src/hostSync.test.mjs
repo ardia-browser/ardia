@@ -249,7 +249,10 @@ test("one renderer runs sync, the others mirror it and forward their actions, an
 });
 
 test("refreshing sync documents drops journal parts stranded after a gap", async () => {
-  const disk = new Set(["sync.json", "sync-state.nns", "sync-journal-1.nns", "sync-journal-2.nns", "sync-journal-4.nns", "sync-journal-7.nns"]);
-  const result = await refreshSyncDocuments({ refresh: async (name) => disk.has(name), remove: async (name) => void disk.delete(name), maxParts: 12, batch: 5 });
-  assert.deepEqual(result, { parts: 2, removed: ["sync-journal-4.nns", "sync-journal-7.nns"] });
+  const disk = new Set(["sync.json", "sync-state.nns", "sync-journal-1.nns", "sync-journal-4.nns", "sync-spaces-state.nns", "sync-spaces-journal-1.nns", "sync-spaces-journal-2.nns", "sync-spaces-journal-4.nns", "sync-spaces-journal-7.nns"]);
+  const read = [];
+  const result = await refreshSyncDocuments({ refresh: async (name) => { read.push(name); return disk.has(name); }, remove: async (name) => void disk.delete(name), maxParts: 12, batch: 5 });
+  assert.deepEqual(result, { parts: 2, removed: ["sync-spaces-journal-4.nns", "sync-spaces-journal-7.nns"] });
+  assert.ok(read.includes("sync-state.nns") && read.includes("sync-journal-1.nns"));
+  assert.ok(read.includes("sync-spaces-state.nns") && disk.has("sync-journal-4.nns"));
 });

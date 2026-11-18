@@ -47,12 +47,12 @@ export const sharingStartedBySync = () => syncStarted > 0;
 
 export const noteSavedTopAppsMerged = (marker: string) => void (savedMerged = marker);
 
-export function topAppsSharingCounts(s: Pick<BrowserState, "profiles">) {
-  const profiles = Object.values(s.profiles);
+export function topAppsSharingCounts(s: Pick<BrowserState, "spaces">) {
+  const profiles = Object.values(s.spaces);
   return { profile_count: profiles.length, sharing_profiles: profiles.filter((p) => p.shareTopApps).length };
 }
 
-export function topAppsSharingAtLaunch(s: Pick<BrowserState, "profiles" | "topAppsMerged">, updatedFrom: string | null) {
+export function topAppsSharingAtLaunch(s: Pick<BrowserState, "spaces" | "topAppsMerged">, updatedFrom: string | null) {
   const saved = savedMerged ?? s.topAppsMerged;
   const settled = s.topAppsMerged;
   return {
@@ -64,6 +64,6 @@ export function topAppsSharingAtLaunch(s: Pick<BrowserState, "profiles" | "topAp
   };
 }
 
-export function noteTopAppsSharingFromSync(s: Pick<BrowserState, "profiles">, path: TopAppsSharingPath, on: boolean) {
+export function noteTopAppsSharingFromSync(s: Pick<BrowserState, "spaces">, path: TopAppsSharingPath, on: boolean) {
   noteTopAppsSharing("top_apps_sharing_synced", { path, on, ...topAppsSharingCounts(s) });
 }

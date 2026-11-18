@@ -32,7 +32,7 @@ function HiddenElementsPanel({ tabId, right, left, top, closing, onClosed }: Sit
   }, [tabId, url, changes]);
   if (!tab) return null;
   const close = () => setPopover(tabId, null);
-  const profile = currentEngineProfile(tab.profileId);
+  const profile = currentEngineProfile(tab.spaceId);
   const elements = listed?.elements ?? [];
   const restore = (which: HiddenElement[]) => void restoreHiddenElements(profile, which);
   const hideAnother = () => {
@@ -45,7 +45,7 @@ function HiddenElementsPanel({ tabId, right, left, top, closing, onClosed }: Sit
     <Popover width={HIDDEN_ELEMENTS_WIDTH} top={top} right={right} left={left} onDismiss={() => dismissPopoverByPress(tabId)} fitHeight glass closing={closing} onClosed={onClosed}>
       <View style={{ paddingTop: PANEL.inset, paddingBottom: PANEL.rowInset }}>
         <PanelHeader
-          icon={<Favicon url={url} favicon={tab.favicon} size={PANEL.iconSlot} profileId={tab.profileId} />}
+          icon={<Favicon url={url} favicon={tab.favicon} size={PANEL.iconSlot} spaceId={tab.spaceId} />}
           title={host ? `Hidden on ${displayHost(host)}` : "Hidden Elements"}
           subtitle={!listed ? "…" : count ? `${count} element${count === 1 ? "" : "s"} hidden on every visit` : "Nothing hidden on this site"}
         />

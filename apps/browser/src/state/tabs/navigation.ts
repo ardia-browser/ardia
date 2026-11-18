@@ -23,7 +23,7 @@ export function backClosesTab(s: BrowserState, tabId: string): boolean {
   if (!tab?.openerId) return false;
   if (!isPeekTab(s, tabId) && tab.linkOpenerId !== tab.openerId) return false;
   const opener = s.tabs[tab.openerId];
-  if (!opener || opener.windowId !== tab.windowId || opener.profileId !== tab.profileId) return false;
+  if (!opener || opener.windowId !== tab.windowId || opener.spaceId !== tab.spaceId) return false;
   if (inPinnedContainer(s, tabId)) return false;
   return true;
 }
@@ -169,9 +169,9 @@ export const closeHistoryMenuOf = (tabId: string) => {
   if (useHistoryMenu.getState().menu?.tabId === tabId) closeHistoryMenu();
 };
 
-export function historyFavicons(profileId: string, items: readonly { url: string }[]): Map<string, string | null> {
+export function historyFavicons(spaceId: string, items: readonly { url: string }[]): Map<string, string | null> {
   const urls = new Set(items.map((i) => i.url));
-  return new Map(historyOf(useBrowser.getState(), profileId).filter((h) => urls.has(h.url)).map((h) => [h.url, h.favicon]));
+  return new Map(historyOf(useBrowser.getState(), spaceId).filter((h) => urls.has(h.url)).map((h) => [h.url, h.favicon]));
 }
 
 export function toggleHistoryMenu(tabId: string, direction: -1 | 1) {

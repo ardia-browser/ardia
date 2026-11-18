@@ -1,6 +1,6 @@
 import type { LightsPlace, OpenWindowOptions, WindowEvent } from "../../platform/windows";
 import type { BrowserState } from "../browser/store";
-import { engineProfile, windowTitle } from "../browser/model";
+import { engineProfile, engineProfileForSpace, windowTitle } from "../browser/model";
 import { windowOpens } from "./windowOpenOrder";
 import { focusedWindowOf } from "./ui";
 import { adoptOf } from "../tabs/pageSession";
@@ -69,7 +69,7 @@ export function createWindowSync({ port, getState, isQuitting, lightsCenter, isU
       const w = s.windows[id]!;
       open.add(id);
       titles.set(id, windowTitle(s, id));
-      const profile = engineProfile(s, w.profileId);
+      const profile = engineProfile(s, w.spaceId);
       if (w.kind === "private") privateProfiles.set(id, profile);
       const claim = w.kind === "small" ? adoptOf(s.tabs[w.tabIds[0] ?? ""]) : undefined;
       const small = w.kind === "small"
@@ -90,7 +90,7 @@ export function createWindowSync({ port, getState, isQuitting, lightsCenter, isU
       port.close(id);
       releasePrivateProfile(id);
     }
-    if (prev && s.tabs === prev.tabs && s.windows === prev.windows && s.profiles === prev.profiles) return;
+    if (prev && s.tabs === prev.tabs && s.windows === prev.windows && s.spaces === prev.spaces) return;
     for (const id of open) {
       const title = windowTitle(s, id);
       if (titles.get(id) !== title) {

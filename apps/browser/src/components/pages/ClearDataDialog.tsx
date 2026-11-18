@@ -1,15 +1,15 @@
-import { currentEngineProfile } from "../../state/browser/current";
-import { clearBrowsingData, type BrowsingDataType } from "../../state/profiles/profileData";
+import { clearBrowsingData, type BrowsingDataType } from "../../state/spaces/spaceData";
 import { useRef, useState } from "react";
 import { Pressable, View } from "react-native";
 import { cacheKey, pruneEngineFavicons } from "../../state/favicons/favicons";
-import { isIncognitoProfile } from "../../state/browser/model";
-import { useProfileName, useProfileOrder } from "../../state/profiles/hooks";
-import { clearHistory } from "../../state/history/actions";
+import { isIncognitoSpace } from "../../state/browser/model";
+import { clearEngineHistory } from "../../state/history/actions";
 import { noteBrowsingDataCleared } from "../../state/telemetry/historyRemovalCounts";
 import { consentToken } from "../../state/telemetry/client";
 import { Box, Button, Checkbox, Dialog, DialogActions, DialogTitle, Group, PopUp, Row, space, Text } from "../ui";
 import { clearDataDialog } from "./tokens";
+import { useProfile } from "../../state/profiles/hooks";
+import { useSpace } from "../../state/browser/hooks";
 
 const RANGES = [
   { value: "hour", title: "Last hour", ms: 3_600_000 },
@@ -20,9 +20,10 @@ const RANGES = [
 ] as const;
 type Range = (typeof RANGES)[number]["value"];
 
-export function ClearDataDialog({ profileId, onClose }: { profileId: string; onClose: () => void }) {
-  const profileName = useProfileName(profileId);
-  const multipleProfiles = useProfileOrder((o) => o.length > 1);
+export function ClearDataDialog({ spaceId, profileId, onClose }: { spaceId?: string; profileId?: string; onClose: () => void }) {
+  const workspace = useSpace(spaceId, (value) => value);
+  const profile = useProfile(profileId ?? workspace?.profileId ?? "");
+  const privateSpace = spaceId && isIncognitoSpace(spaceId) ? spaceId : undefined;
   const [range, setRange] = useState<Range>("hour");
   const [history, setHistory] = useState(true);
   const [siteData, setSiteData] = useState(true);
@@ -44,18 +45,23 @@ export function ClearDataDialog({ profileId, onClose }: { profileId: string; onC
     const startedAt = Date.now();
     const consent = consentToken();
     const since = ms === Infinity ? undefined : startedAt - ms;
-    const profile = currentEngineProfile(profileId);
-    const icons = cacheKey(profileId);
+    const selected = profile;
+    if (!selected && !privateSpace) {
+      pending.current = false;
+      setBusy(false);
+      return;
+    }
+    const engineId = privateSpace ? cacheKey(privateSpace) : selected!.engineId;
     const types: BrowsingDataType[] = [...(history ? ["history" as const] : []), ...(siteData ? ["siteData" as const, "cache" as const] : [])];
     let cleared = false;
     try {
-      if (!isIncognitoProfile(profileId)) {
-        await clearBrowsingData(profile, types, since);
+      if (!privateSpace) {
+        await clearBrowsingData(engineId, types, since);
         noteBrowsingDataCleared(true, consent);
       }
       if (history) {
-        if (currentEngineProfile(profileId) === profile) clearHistory(profileId, since, startedAt);
-        pruneEngineFavicons(icons);
+        if (!privateSpace) clearEngineHistory(engineId, since, startedAt);
+        pruneEngineFavicons(engineId);
       }
       cleared = true;
     } catch {
@@ -70,7 +76,7 @@ export function ClearDataDialog({ profileId, onClose }: { profileId: string; onC
 
   return (
     <Dialog width="m" onDismiss={leave} onSubmit={() => void clear()}>
-      <DialogTitle subtitle={multipleProfiles ? `From your ${profileName} profile` : undefined}>Clear Browsing Data</DialogTitle>
+      <DialogTitle subtitle={profile ? `From ${profile.name}, across all its spaces` : undefined}>Clear Browsing Data</DialogTitle>
       <Box row gap="ml" style={RANGE_ROW}>
         <Text>Time range</Text>
         <PopUp value={range} options={RANGES.map(({ value, title }) => ({ value, title }))} onChange={setRange} minWidth={clearDataDialog.rangeMinWidth} disabled={busy} />

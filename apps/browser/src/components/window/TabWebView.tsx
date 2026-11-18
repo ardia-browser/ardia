@@ -11,7 +11,7 @@ import { adoptIconPage, dropOutlivedFavicon, noteIconPage } from "../../state/fa
 import { restoredThemeColor } from "../../state/windows/launchLook";
 import { noteTabReady } from "../../state/app/cliControl";
 import { isQuitting } from "../../state/app/quit";
-import { useProfileTheme } from "./ThemeScope";
+import { useSpaceTheme } from "./ThemeScope";
 import { opaqueCard } from "../ui/opaqueCard";
 import { handOff, takeHandOff, wantsPage } from "../../state/tabs/tabPages";
 import { noteDiscarded, noteGone, noteReady } from "../../state/tabs/tabLifecycle";
@@ -21,10 +21,10 @@ import { noteIssued, takeStartedNavigation } from "../../state/tabs/earlyNavigat
 import { currentEngineProfile, currentTab, isTabSilenced } from "../../state/browser/current";
 import { updateLive, updateTab } from "../../state/tabs/actions";
 import { returnRefusedMove, setFind } from "../../state/windows/actions";
-import { activateFocusedPane, currentTabEngine, downloadNavigated, useTabEngine } from "../../state/windows/card";
+import { activateFocusedPane, currentTabEngine, downloadNavigated, useTabEngine , useTabProfile } from "../../state/windows/card";
 import { setPageProgress } from "../../state/tabs/pageProgress";
-import { shallowEqual, useBrowserWhile, useProfilesValue, useTabValue } from "../../state/tabs/tabWatch";
-import { isIncognitoProfile, navigationTo } from "../../state/browser/model";
+import { shallowEqual, useBrowserWhile, useSpacesValue, useTabValue } from "../../state/tabs/tabWatch";
+import { engineProfileForSpace, isIncognitoSpace, navigationTo } from "../../state/browser/model";
 import type { Tab } from "../../state/browser/types";
 import { zoomChangedByUser } from "../../state/site/zoomBubble";
 import { markTabReady, patchPage, pageOf } from "../../state/tabs/pageState";
@@ -57,29 +57,30 @@ import { startHidingElement } from "../../state/site/hiddenElements";
 import { forgetPeekHandover, notePeekRecipient, peekDonorTaken } from "../../state/peek/donors";
 import { promotedFromPeek } from "../../state/peek/actions";
 
-const webViewTab = (t: Tab | undefined) => ({ navigation: navigationOf(t), adoptId: adoptOf(t), profileId: t?.profileId ?? "", shownUrl: t?.url ?? "" });
+const webViewTab = (t: Tab | undefined) => ({ navigation: navigationOf(t), adoptId: adoptOf(t), spaceId: t?.spaceId ?? "", shownUrl: t?.url ?? "" });
 
 type TabWebViewProps = { tabId: string; visible: boolean; selected?: boolean; warm: boolean; peekOf?: string };
 
 export const TabWebView = memo(function TabWebView(props: TabWebViewProps) {
   const engine = useTabEngine(props.tabId);
-  return <EngineWebView key={engine} engine={engine} {...props} />;
+  const profile = useTabProfile(props.tabId);
+  return <EngineWebView key={JSON.stringify([engine, profile])} engine={engine} profile={profile} {...props} />;
 });
 
-function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine }: TabWebViewProps & { engine: PageEngine }) {
+function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, profile }: TabWebViewProps & { engine: PageEngine; profile: string }) {
   const asPeek = peekOf !== undefined;
   const isDonor = () => asPeek && promotedFromPeek(tabId);
   const handedToTab = () => isDonor() && peekDonorTaken(tabId);
-  const { navigation, adoptId, profileId, shownUrl } = useTabValue(tabId, webViewTab, shallowEqual);
-  const neighbour = useBrowserWhile(warm, (s) => warm && s.windows[s.tabs[tabId]?.windowId ?? ""]?.profileId !== profileId);
+  const { navigation, adoptId, spaceId, shownUrl } = useTabValue(tabId, webViewTab, shallowEqual);
+  const neighbour = useBrowserWhile(warm, (s) => warm && s.windows[s.tabs[tabId]?.windowId ?? ""]?.spaceId !== spaceId);
   const tab = () => currentTab(tabId);
   const ref = useMemo(() => {
     const register = webviewRef(tabId);
     return (handle: Parameters<typeof register>[0]) => (handle && peekOf !== undefined && promotedFromPeek(tabId) ? undefined : register(handle));
   }, [tabId]);
   const autoPictureInPicture = useAutoPictureInPicture(tabId, visible);
-  const pageColor = useProfilesValue(profileId, (profiles) => (isIncognitoProfile(profileId) ? "incognito" : (profiles[profileId]?.color ?? "plum")));
-  const theme = useProfileTheme(profileId);
+  const pageColor = useSpacesValue(spaceId, (spaces) => (isIncognitoSpace(spaceId) ? "incognito" : (spaces[spaceId]?.color ?? "plum")));
+  const theme = useSpaceTheme(spaceId);
   const backdrop = useMemo(() => opaqueCard(theme), [theme.card, theme.windowTint[0], theme.windowTint[1]]);
 
   const lastPage = useRef<string | null>(null);
@@ -127,13 +128,13 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine }
   useEffect(() => {
     if (waitsOffScreen) noteWebKitPageKeptHidden();
   }, [waitsOffScreen]);
-  const mountedProfile = useRef(profileId);
+  const mountedProfile = useRef(spaceId);
   useLayoutEffect(
     () => () => {
       if (handedToTab()) return;
       const t = tab();
       const sameEngine = currentTabEngine(tabId) === engine;
-      if (wantsPage(t) && sameEngine && currentEngineProfile(t.profileId) === currentEngineProfile(mountedProfile.current) && !isQuitting()) handOff(tabId, currentEngineProfile(t.profileId), engine);
+      if (wantsPage(t) && sameEngine && engineProfileForSpace(t.spaceId) === profile && !isQuitting()) handOff(tabId, profile, engine);
       else {
         setPageProgress(tabId, 0);
         if (!isQuitting()) pageEnded(tabId);
@@ -146,7 +147,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine }
 
   const onOpenWindow = (request: OpenWindowRequest) => {
     const t = tab();
-    if (t) openFromPage(request, { windowId: t.windowId, profileId: t.profileId, tabId });
+    if (t) openFromPage(request, { windowId: t.windowId, spaceId: t.spaceId, tabId });
   };
 
   return (
@@ -155,7 +156,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine }
       engine={engine}
       style={StyleSheet.absoluteFill}
       url={navigation?.url ?? (adoptId ? tab()?.url : undefined)}
-      profile={currentEngineProfile(profileId)}
+      profile={profile}
       adoptId={adoptId}
       tabId={tabId}
       temporary={peekOf !== undefined}

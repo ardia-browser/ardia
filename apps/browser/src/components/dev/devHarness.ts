@@ -175,7 +175,7 @@ export function startDevHarness() {
     get menus(): typeof import("../../state/sidebar/menus") &
       typeof import("../../state/sidebar/liveMenus") &
       typeof import("../../state/site/reloadMenu") &
-      typeof import("../profiles/profileMenu") &
+      typeof import("../spaces/spaceMenu") &
       typeof import("../../state/bookmarks/bookmarkMenus") &
       typeof import("../../state/bookmarks/barMenus") &
       typeof import("../../state/history/historyMenus") &
@@ -186,7 +186,7 @@ export function startDevHarness() {
         ...require("../../state/sidebar/menus"),
         ...require("../../state/sidebar/liveMenus"),
         ...require("../../state/site/reloadMenu"),
-        ...require("../profiles/profileMenu"),
+        ...require("../spaces/spaceMenu"),
         ...require("../../state/bookmarks/bookmarkMenus"),
         ...require("../../state/bookmarks/barMenus"),
         ...require("../../state/history/historyMenus"),

@@ -5,7 +5,6 @@ import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 
 const inSidebar = (_: unknown, env: SettingsEnv) => !env.top;
-const syncOn = (_: unknown, env: SettingsEnv) => !!env.syncOn;
 const blockerOffered = () => PLATFORM_FEATURES.contentBlocker;
 
 export const generalRows = {
@@ -95,26 +94,6 @@ export const generalRows = {
           explained: true,
           description: `Keep your profiles, tabs and settings the same on every ${PLATFORM_TERMS.syncedComputer}.`,
           keywords: [PLATFORM_TERMS.cloudDrive.toLowerCase(), "recovery phrase", "devices", "turn on sync", "end to end", "encrypted"],
-        },
-        syncFolder: {
-          title: "Sync folder",
-          keywords: ["icloud drive", "dropbox", "folder"],
-          shown: syncOn,
-          needs: "Turn on Sync to use this",
-        },
-        whatSyncs: {
-          title: "What syncs",
-          description: "What to sync.",
-          keywords: ["unpinned tabs", "regular tabs", "today tabs", "arc", "spaces", `tabs on every ${PLATFORM_TERMS.syncedComputer.toLowerCase()}`, "same tabs", `continue on another ${PLATFORM_TERMS.syncedComputer.toLowerCase()}`, "sync all open tabs", "open tabs", "data types"],
-          shown: syncOn,
-          needs: "Turn on Sync to use this",
-        },
-        syncDevices: {
-          title: "Devices",
-          description: "Computers syncing with this one.",
-          keywords: ["devices", "computers", "macs", "remove device"],
-          shown: syncOn,
-          needs: "Turn on Sync to use this",
         },
       },
     },

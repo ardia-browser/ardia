@@ -30,7 +30,7 @@ export function withFolder(s: BrowserState, groupId: string, level: TargetLevel,
   const root = s.groups[groupId];
   const w = root && s.windows[root.windowId];
   if (!root || !w) return s;
-  const { windowId, profileId } = root;
+  const { windowId, spaceId } = root;
   const links = new Set<string>();
   const dirs = new Set<string>();
   keysIn(level, links, dirs);
@@ -58,7 +58,7 @@ export function withFolder(s: BrowserState, groupId: string, level: TargetLevel,
       if (Object.keys(patch).length) (tabs[t.id] = { ...t, ...patch }, (dirty = true));
       return t.id;
     }
-    const tab: Tab = { ...makeTab(windowId, profileId, e.url, { title: e.name, customTitle: e.name }), pinnedUrl: e.url, page: ASLEEP };
+    const tab: Tab = { ...makeTab(windowId, spaceId, e.url, { title: e.name, customTitle: e.name }), pinnedUrl: e.url, page: ASLEEP };
     tabs[tab.id] = tab;
     created.push(tab.id);
     e.key = tab.id;
@@ -83,7 +83,7 @@ export function withFolder(s: BrowserState, groupId: string, level: TargetLevel,
         continue;
       }
       if (!existing) {
-        groups[id] = { id, windowId, profileId, name: e.name, icon: null, color: null, collapsed: true, pinned: true, tabIds: inner, createdAt: Date.now(), parentId };
+        groups[id] = { id, windowId, spaceId, name: e.name, icon: null, color: null, collapsed: true, pinned: true, tabIds: inner, createdAt: Date.now(), parentId };
         e.key = id;
         dirty = true;
       } else {
@@ -101,7 +101,7 @@ export function withFolder(s: BrowserState, groupId: string, level: TargetLevel,
   const leftover = root.tabIds.filter((id) => tabs[id] && !inPlace.has(id) && !released.includes(id) && !removed.includes(id));
   let members = [...placed, ...leftover];
   if (!members.length) {
-    const blank: Tab = { ...makeTab(windowId, profileId, EMPTY_FOLDER_URL, { title: EMPTY_FOLDER_TITLE, customTitle: EMPTY_FOLDER_TITLE }), page: ASLEEP };
+    const blank: Tab = { ...makeTab(windowId, spaceId, EMPTY_FOLDER_URL, { title: EMPTY_FOLDER_TITLE, customTitle: EMPTY_FOLDER_TITLE }), page: ASLEEP };
     tabs[blank.id] = blank;
     members = [blank.id];
     dirty = true;
@@ -122,6 +122,6 @@ export function withFolder(s: BrowserState, groupId: string, level: TargetLevel,
   const unchanged =
     !dirty && sameIds(arranged.tabIds, window.tabIds) && Object.values(groups).every((g) => g.windowId !== windowId || sameIds(g.tabIds, s.groups[g.id]?.tabIds ?? []));
   if (unchanged) return s;
-  const pinChoices = created.length ? markPinned(next.pinChoices, profileId, { placed: created }) : next.pinChoices;
+  const pinChoices = created.length ? markPinned(next.pinChoices, spaceId, { placed: created }) : next.pinChoices;
   return { ...next, tabs, groups, windows: { ...next.windows, [windowId]: arranged }, pinChoices };
 }

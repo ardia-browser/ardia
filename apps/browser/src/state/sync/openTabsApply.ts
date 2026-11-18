@@ -26,7 +26,7 @@ function synced(t: Tab, v: OpenTabValue): Tab {
   return next;
 }
 
-function arrange(s: BrowserState, profileId: string, tabValues: Map<string, OpenTabValue>, groupValues: Map<string, OpenGroupValue>): BrowserState {
+function arrange(s: BrowserState, spaceId: string, tabValues: Map<string, OpenTabValue>, groupValues: Map<string, OpenGroupValue>): BrowserState {
   const members = pinnedGroupMembers(s.groups);
   const chainOf = (group: string | null): string[] => {
     const out: string[] = [];
@@ -41,7 +41,7 @@ function arrange(s: BrowserState, profileId: string, tabValues: Map<string, Open
   for (const w of openWindows(s)) {
     const ranked = w.tabIds.filter((id) => {
       const t = s.tabs[id];
-      return t?.profileId === profileId && syncedOpenTab(s, t, members) && tabValues.has(pinKeyOf(t));
+      return t?.spaceId === spaceId && syncedOpenTab(s, t, members) && tabValues.has(pinKeyOf(t));
     });
     if (!ranked.length) continue;
     const valueOf = (id: string) => tabValues.get(pinKeyOf(s.tabs[id]!))!;
@@ -49,7 +49,7 @@ function arrange(s: BrowserState, profileId: string, tabValues: Map<string, Open
     const rankedSet = new Set(ranked);
     let slot = 0;
     const tabIds = w.tabIds.map((id) => (rankedSet.has(id) ? sorted[slot++]! : id));
-    const local = Object.values(groups).filter((g) => g.windowId === w.id && g.profileId === profileId && !g.pinned);
+    const local = Object.values(groups).filter((g) => g.windowId === w.id && g.spaceId === spaceId && !g.pinned);
     const idOfKey = new Map(local.map((g) => [pinKeyOf(g), g.id]));
     const wanted = new Map<string, string[]>();
     for (const id of sorted) for (const key of chainOf(valueOf(id).g)) wanted.set(key, [...(wanted.get(key) ?? []), id]);
@@ -70,7 +70,7 @@ function arrange(s: BrowserState, profileId: string, tabValues: Map<string, Open
       if (idOfKey.has(key)) continue;
       const look = groupValues.get(key)!;
       const id = groups[key] || before[key] ? newId("g") : key;
-      groups[id] = { id, ...(id !== key ? { pinKey: key } : {}), windowId: w.id, profileId, name: look.n, icon: look.i, color: look.c, collapsed: false, pinned: false, tabIds: ids, createdAt: Date.now() };
+      groups[id] = { id, ...(id !== key ? { pinKey: key } : {}), windowId: w.id, spaceId, name: look.n, icon: look.i, color: look.c, collapsed: false, pinned: false, tabIds: ids, createdAt: Date.now() };
       idOfKey.set(key, id);
       edited = true;
     }
@@ -101,9 +101,9 @@ function arrange(s: BrowserState, profileId: string, tabValues: Map<string, Open
   return { ...s, windows, groups };
 }
 
-export function applyOpenTabs(profileId: string, visible: Map<string, unknown>, changed: Set<string>, closed: Set<string>, seen: Map<string, string>): boolean {
+export function applyOpenTabs(spaceId: string, visible: Map<string, unknown>, changed: Set<string>, closed: Set<string>, seen: Map<string, string>): boolean {
   const s = store();
-  const home = homeWindow(s, profileId);
+  const home = homeWindow(s, spaceId);
   if (!home) return false;
   const tabValues = new Map<string, OpenTabValue>();
   const groupValues = new Map<string, OpenGroupValue>();
@@ -116,7 +116,7 @@ export function applyOpenTabs(profileId: string, visible: Map<string, unknown>, 
       if (value) groupValues.set(k.slice(OPEN_GROUP.length), value);
     }
   }
-  const local = localOpenTabs(s, profileId);
+  const local = localOpenTabs(s, spaceId);
   const changedTabs = [...changed].filter((k) => k.startsWith(OPEN_TAB)).map((k) => k.slice(OPEN_TAB.length));
   let tabs = s.tabs;
   const put = (t: Tab) => {
@@ -142,7 +142,7 @@ export function applyOpenTabs(profileId: string, visible: Map<string, unknown>, 
     }
     if (local.held.has(key) || closed.has(key)) continue;
     const id = tabs[key] ? newId("tab") : key;
-    put({ ...makeTab(home.id, profileId, v.u, { title: v.t }), id, ...(id !== key ? { pinKey: key } : {}), page: IDLE, lastActiveAt: v.a || Date.now() });
+    put({ ...makeTab(home.id, spaceId, v.u, { title: v.t }), id, ...(id !== key ? { pinKey: key } : {}), page: IDLE, lastActiveAt: v.a || Date.now() });
     homeTabs.push(id);
     seen.set(key, v.u);
     opened++;
@@ -151,10 +151,10 @@ export function applyOpenTabs(profileId: string, visible: Map<string, unknown>, 
   let next: BrowserState = { ...s, tabs, windows: opened ? { ...s.windows, [home.id]: { ...home, tabIds: homeTabs } } : s.windows };
   if (gone.length) {
     const leaving = new Set(gone);
-    for (const w of Object.values(next.windows)) if (w.tabIds.length && w.tabIds.every((id) => leaving.has(id))) [next] = withNewTab(next, w.id, { profileId });
+    for (const w of Object.values(next.windows)) if (w.tabIds.length && w.tabIds.every((id) => leaving.has(id))) [next] = withNewTab(next, w.id, { spaceId });
     next = removeTabs(next, gone, false);
   }
-  if (changed.size) next = arrange(next, profileId, tabValues, groupValues);
+  if (changed.size) next = arrange(next, spaceId, tabValues, groupValues);
   noteOpenTabsApplied({ opened, closed: gone.length, updated });
   if (next.tabs === s.tabs && next.windows === s.windows && next.groups === s.groups) return true;
   const { windows, groups, find, splits, selection, windowOrder, windowUi } = next;

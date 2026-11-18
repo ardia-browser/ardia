@@ -3,7 +3,7 @@ import { shallow } from "zustand/shallow";
 import type { Download } from "../../platform/downloads";
 import type { BrowserWindow } from "../browser/types";
 import type { BrowserState } from "../browser/store";
-import { engineProfile, isIncognitoProfile, privateSession } from "../browser/model";
+import { engineProfile, isIncognitoSpace, privateSession } from "../browser/model";
 import { focusedWindowOf, patchWindowUi } from "../windows/ui";
 import { awaitsKeep } from "./status";
 import { noteDownloadsPanel } from "../telemetry/downloadsPanelCounts";
@@ -20,20 +20,20 @@ export type DownloadsSlice = {
 
 const MAX_DOWNLOADS = 100;
 
-export function downloadSession(s: Pick<BrowserState, "profiles">, d: Pick<Download, "profile" | "offTheRecord">): string | null {
+export function downloadSession(s: Pick<BrowserState, "profiles" | "spaces">, d: Pick<Download, "profile" | "offTheRecord">): string | null {
   if (d.offTheRecord) return d.profile ?? "";
-  return d.profile && isIncognitoProfile(d.profile) ? privateSession(s, d.profile) : null;
+  return d.profile && isIncognitoSpace(d.profile) ? d.profile.slice(d.profile.indexOf("@") + 1) : null;
 }
 
-export function downloadVisibleIn(s: Pick<BrowserState, "profiles">, d: Pick<Download, "profile" | "offTheRecord">, window: Pick<BrowserWindow, "kind" | "profileId"> | undefined): boolean {
+export function downloadVisibleIn(s: Pick<BrowserState, "profiles" | "spaces">, d: Pick<Download, "profile" | "offTheRecord">, window: Pick<BrowserWindow, "kind" | "spaceId"> | undefined): boolean {
   if (!window) return false;
   const session = downloadSession(s, d);
-  if (window.kind === "private") return session !== null && session === privateSession(s, window.profileId);
-  return session === null && (d.profile ?? "") === engineProfile(s, window.profileId);
+  if (window.kind === "private") return session !== null && session === privateSession(s, window.spaceId);
+  return session === null && (d.profile ?? "") === engineProfile(s, window.spaceId);
 }
 
-const sessionOpen = (s: Pick<BrowserState, "windows" | "profiles">, session: string) =>
-  Object.values(s.windows).some((w) => w.kind === "private" && privateSession(s, w.profileId) === session);
+const sessionOpen = (s: Pick<BrowserState, "windows" | "profiles" | "spaces">, session: string) =>
+  Object.values(s.windows).some((w) => w.kind === "private" && privateSession(s, w.spaceId) === session);
 const endedPrivateDownloads = new Set<string>();
 
 export function withoutRepeats<Row extends Pick<Download, "url" | "path" | "profile" | "startTime">>(downloads: readonly Row[]): Row[] {
@@ -49,7 +49,7 @@ export function withoutRepeats<Row extends Pick<Download, "url" | "path" | "prof
 
 const shownDownloads = new WeakMap<BrowserState["downloads"], Map<string, { window: BrowserWindow | undefined; profiles: BrowserState["profiles"]; shown: BrowserState["downloads"] }>>();
 
-export function downloadsIn(s: Pick<BrowserState, "downloads" | "windows" | "profiles">, windowId: string): BrowserState["downloads"] {
+export function downloadsIn(s: Pick<BrowserState, "downloads" | "windows" | "profiles" | "spaces">, windowId: string): BrowserState["downloads"] {
   const window = s.windows[windowId];
   let byWindow = shownDownloads.get(s.downloads);
   const hit = byWindow?.get(windowId);
@@ -102,7 +102,7 @@ export const createDownloadsSlice: StateCreator<BrowserState, [], [], DownloadsS
   },
 
   forgetDownloads(profile) {
-    const session = privateSession(get(), profile);
+    const session = isIncognitoSpace(profile) ? profile.slice(profile.indexOf("@") + 1) : null;
     const gone = (d: Download) => (session !== null ? downloadSession(get(), d) === session : d.profile === profile);
     const forgotten = get().downloads.filter(gone).map((d) => d.id);
     if (session !== null) for (const id of forgotten) endedPrivateDownloads.add(id);

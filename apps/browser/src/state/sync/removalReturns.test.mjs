@@ -28,7 +28,7 @@ globalThis.acTestNativeModules = {
       return id;
     },
     read: async (_folder, scope, known) => {
-      if (gate && (gate.scope === scope || (gate.scope === "p:" && scope.startsWith("p:")))) {
+      if (gate && (gate.scope === scope || (gate.scope === "space:" && scope.startsWith("space:")))) {
         const held = gate;
         gate = null;
         held.reached();
@@ -49,6 +49,7 @@ globalThis.acTestNativeModules = {
 
 const shell = await import("../../test-native/index.ts");
 const { useBrowser } = await import("../browser/store.ts");
+const { APP_SCOPE } = await import("./syncDoc.ts");
 const S = () => useBrowser.getState();
 
 class Mac {
@@ -113,7 +114,7 @@ function pauseRead(scope) {
 async function removeWhileItComesBack(remover, removerEngine, other, otherEngine, remove) {
   await remover.with(async () => {
     assert.equal(remove(), true);
-    const pause = pauseRead("app");
+    const pause = pauseRead(APP_SCOPE);
     const cycle = removerEngine.syncNow();
     await pause.arrived;
     const browser = S();
@@ -158,44 +159,43 @@ test("a device that publishes itself again while the removal is still on its way
   assert.equal(writes - written, 0, "the folder stops growing");
 });
 
-test("a profile another Mac publishes again while the removal is still on its way back is deleted once, with its sharing link, and then left alone", async () => {
+test("a space another Mac publishes again during removal is deleted once while its browsing profile stays", async () => {
   folder.clear();
   const a = new Mac("A");
   const c = new Mac("C");
   const engineA = await import("./engine.ts?returnProfA");
   const engineC = await import("./engine.ts?returnProfC");
-  const work = await a.with(() => S().createProfile({ name: "Work", shareWith: "default" }));
+  const work = await a.with(() => S().createSpace({ name: "Work", profileId: "default" }));
   await turnOn(a, engineA);
   await join(c, engineC);
   await c.with(async () => {
-    const offered = engineC.useSync.getState().remoteProfiles.find((p) => p.name === "Work");
-    engineC.addRemoteProfile(offered.syncId);
+    const offered = engineC.useSync.getState().remoteSpaces.find((p) => p.name === "Work");
+    engineC.addRemoteSpace(offered.syncId);
     await engineC.syncNow();
   });
   const syncId = await a.with(async () => {
-    S().deleteProfile(work);
+    S().deleteSpace(work);
     await engineA.syncNow();
     await engineA.syncNow();
-    return engineA.useSync.getState().remoteProfiles.find((p) => p.name === "Work").syncId;
+    return engineA.useSync.getState().remoteSpaces.find((p) => p.name === "Work").syncId;
   });
-  await removeWhileItComesBack(a, engineA, c, engineC, () => engineA.removeRemoteProfile(syncId));
+  await removeWhileItComesBack(a, engineA, c, engineC, () => engineA.removeRemoteSpace(syncId));
   assert.equal(live(`prof:${syncId}`), true, "C published the profile again while A was between its publish and its pull");
   await rounds(4, [a, engineA], [c, engineC]);
   const written = writes;
   await rounds(10, [a, engineA], [c, engineC]);
   assert.equal(tombstones(`prof:${syncId}`), 1, "A deleted the profile record once");
-  assert.equal(tombstones(`share:${syncId}`), 1, "and its sharing link once");
-  await a.with(() => assert.ok(engineA.useSync.getState().remoteProfiles.some((p) => p.syncId === syncId), "A offers it again"));
+  await a.with(() => assert.ok(engineA.useSync.getState().remoteSpaces.some((p) => p.syncId === syncId), "A offers it again"));
   assert.equal(syncDoc(a).removing, undefined, "and has nothing left to remove");
   assert.equal(live(`prof:${syncId}`), true);
-  assert.equal(live(`share:${syncId}`), true);
+  assert.equal(live(`identity:${syncDoc(a).profiles.default.syncId}`), true);
   assert.equal(writes - written, 0, "the folder stops growing");
 });
 
 async function crashAfterTheTombstone(mac, engine, remove) {
   return mac.with(async () => {
     assert.equal(remove(), true);
-    const pause = pauseRead("app");
+    const pause = pauseRead(APP_SCOPE);
     void engine.syncNow();
     await pause.arrived;
     return new Map(shell.docs);
@@ -334,19 +334,19 @@ test("a profile removal saved as a list by an earlier version still deletes once
   const c = new Mac("C");
   const engineA = await import("./engine.ts?legacyProfA");
   const engineC = await import("./engine.ts?legacyProfC");
-  const work = await a.with(() => S().createProfile({ name: "Work", shareWith: "default" }));
+  const work = await a.with(() => S().createSpace({ name: "Work", profileId: "default" }));
   await turnOn(a, engineA);
   await join(c, engineC);
   await c.with(async () => {
-    const offered = engineC.useSync.getState().remoteProfiles.find((p) => p.name === "Work");
-    engineC.addRemoteProfile(offered.syncId);
+    const offered = engineC.useSync.getState().remoteSpaces.find((p) => p.name === "Work");
+    engineC.addRemoteSpace(offered.syncId);
     await engineC.syncNow();
   });
   const syncId = await a.with(async () => {
-    S().deleteProfile(work);
+    S().deleteSpace(work);
     await engineA.syncNow();
     await engineA.syncNow();
-    return engineA.useSync.getState().remoteProfiles.find((p) => p.name === "Work").syncId;
+    return engineA.useSync.getState().remoteSpaces.find((p) => p.name === "Work").syncId;
   });
   const again = withSavedRemoval(a, "removing", [syncId]);
   const engineAgain = await import("./engine.ts?legacyProfAgain");
@@ -357,7 +357,7 @@ test("a profile removal saved as a list by an earlier version still deletes once
   await rounds(10, [again, engineAgain], [c, engineC]);
   assert.equal(tombstones(`prof:${syncId}`), 1, "the saved removal deleted the profile once");
   assert.equal(syncDoc(again).removing, undefined);
-  await again.with(() => assert.ok(engineAgain.useSync.getState().remoteProfiles.some((p) => p.syncId === syncId), "and offers it again"));
+  await again.with(() => assert.ok(engineAgain.useSync.getState().remoteSpaces.some((p) => p.syncId === syncId), "and offers it again"));
   assert.equal(writes - written, 0, "the folder stops growing");
 });
 
@@ -372,7 +372,7 @@ test("a removal saved as a list targets the records present when it is frozen at
     joined: true,
     unapplied: [],
   };
-  const doc = { deviceId: "A", profiles: {}, types: {}, scopes: { app }, removingDevices: ["B"], removing: ["W"] };
+  const doc = { deviceId: "A", profiles: {}, types: {}, spaces: {}, scopes: { [APP_SCOPE]: app }, removingDevices: ["B"], removing: ["W"] };
   assert.equal(freezeRemovals(doc), true);
   assert.deepEqual(doc.removingDevices, { B: "1" }, "the list becomes the stamps of the records present");
   assert.equal(freezeRemovals(doc), false, "and isn't converted twice");
@@ -403,7 +403,7 @@ test("a removal saved as a list is saved with its stamps before it deletes, so a
   const engineAgain = await import("./engine.ts?frozenAgain");
   await again.with(() => startedUp(engineAgain));
   const onDisk = await again.with(async () => {
-    const atPull = pauseRead("app");
+    const atPull = pauseRead(APP_SCOPE);
     void engineAgain.syncNow();
     await atPull.arrived;
     const browser = S();
@@ -415,7 +415,7 @@ test("a removal saved as a list is saved with its stamps before it deletes, so a
     useBrowser.setState(browser, true);
     shell.docs.clear();
     for (const [k, v] of docs) shell.docs.set(k, v);
-    const inProfiles = pauseRead("p:");
+    const inProfiles = pauseRead("space:");
     atPull.release();
     await inProfiles.arrived;
     return new Map(shell.docs);

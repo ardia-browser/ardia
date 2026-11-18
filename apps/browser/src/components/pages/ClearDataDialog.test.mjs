@@ -33,9 +33,9 @@ function dialog(profileId = "default", iconKey = "") {
   const old = { url: "https://old.example/", title: "Old", lastVisit: Date.now() - 7_200_000, visits: 1, favicon: null };
   useBrowser.setState({ history: { "": { list: [recent, old], floor: -Infinity, ready: true } } });
   const icons = { pages: {}, srcs: {}, appearances: {} };
-  useFavicons.setState({ profiles: { [iconKey]: icons } });
+  useFavicons.setState({ spaces: { [iconKey]: icons } });
   let closes = 0;
-  const h = mount(() => ClearDataDialog({ profileId, onClose: () => closes++ }));
+  const h = mount(() => ClearDataDialog({ spaceId: profileId, onClose: () => closes++ }));
   return { h, recent, old, icons, closes: () => closes };
 }
 
@@ -76,7 +76,7 @@ test("clearing waits for native success, then removes the cleared range from His
     assert.equal(requests[0].profile, "");
     assert.deepEqual(requests[0].args.types, ["history", "siteData", "cache"]);
     assert.deepEqual(S().history[""].list, [recent, old]);
-    assert.equal(useFavicons.getState().profiles[""], icons);
+    assert.equal(useFavicons.getState().spaces[""], icons);
     assert.equal(closes(), 0);
     assert.equal(button(h, "Clear Data").props.disabled, true);
     assert.ok(nodes(h.value).filter((node) => node.props?.onChange).every((node) => node.props.disabled));
@@ -85,7 +85,7 @@ test("clearing waits for native success, then removes the cleared range from His
     requests[0].resolve("null");
     await tick();
     assert.deepEqual(S().history[""].list, [arrival, old]);
-    assert.equal(useFavicons.getState().profiles[""], EMPTY_ICONS);
+    assert.equal(useFavicons.getState().spaces[""], EMPTY_ICONS);
     assert.equal(closes(), 1);
     assert.equal(takeHistoryRemovalCounts().browsing_data_clears, 1);
   } finally {
@@ -107,7 +107,7 @@ test("Cancel, Esc and the backdrop still leave while a clear is pending, without
     await tick();
     assert.equal(closes(), 1);
     assert.deepEqual(S().history[""].list, [old]);
-    assert.equal(useFavicons.getState().profiles[""], EMPTY_ICONS);
+    assert.equal(useFavicons.getState().spaces[""], EMPTY_ICONS);
   } finally {
     h.unmount();
   }
@@ -120,7 +120,7 @@ test("Cancel, Esc and the backdrop still leave while a clear is pending, without
     await tick();
     assert.equal(again.closes(), 1);
     assert.deepEqual(S().history[""].list, [again.recent, again.old]);
-    assert.equal(useFavicons.getState().profiles[""], again.icons);
+    assert.equal(useFavicons.getState().spaces[""], again.icons);
     assert.equal(takeHistoryRemovalCounts().browsing_data_clear_failures, 1);
   } finally {
     again.h.unmount();
@@ -133,7 +133,7 @@ test("an incognito window's clear asks nothing of the engine and still prunes it
     button(h, "Clear Data").props.onPress();
     await tick();
     assert.equal(requests.length, 0);
-    assert.equal(useFavicons.getState().profiles["incognito:w1"], EMPTY_ICONS);
+    assert.equal(useFavicons.getState().spaces["incognito:w1"], EMPTY_ICONS);
     assert.deepEqual(S().history[""].list, [recent, old]);
     assert.equal(closes(), 1);
   } finally {
@@ -150,7 +150,7 @@ test("a native failure keeps the dialog and caches, releases busy state, and all
     assert.equal(closes(), 0);
     assert.equal(message(h), true);
     assert.deepEqual(S().history[""].list, [recent, old]);
-    assert.equal(useFavicons.getState().profiles[""], icons);
+    assert.equal(useFavicons.getState().spaces[""], icons);
     assert.equal(button(h, "Retry").props.disabled, false);
     assert.ok(nodes(h.value).filter((node) => node.props?.onChange).every((node) => !node.props.disabled));
     assert.equal(takeHistoryRemovalCounts().browsing_data_clear_failures, 1);
@@ -162,7 +162,7 @@ test("a native failure keeps the dialog and caches, releases busy state, and all
     await tick();
     assert.equal(closes(), 1);
     assert.deepEqual(S().history[""].list, [old]);
-    assert.equal(useFavicons.getState().profiles[""], EMPTY_ICONS);
+    assert.equal(useFavicons.getState().spaces[""], EMPTY_ICONS);
     assert.equal(takeHistoryRemovalCounts().browsing_data_clears, 1);
   } finally {
     h.unmount();
@@ -180,7 +180,7 @@ test("site data alone uses the chosen range without pruning history or favicon c
     await tick();
     assert.equal(closes(), 1);
     assert.deepEqual(S().history[""].list, [recent, old]);
-    assert.equal(useFavicons.getState().profiles[""], icons);
+    assert.equal(useFavicons.getState().spaces[""], icons);
   } finally {
     h.unmount();
   }
@@ -194,13 +194,13 @@ test("completion prunes the engine requested at the start even if the profile ma
     assert.ok(Math.abs(since - (Date.now() - 3_600_000)) < 1000);
     useBrowser.setState({ profiles: { ...S().profiles, default: { ...S().profiles.default, dataId: "other-engine" } } });
     const other = { pages: {}, srcs: {}, appearances: {} };
-    useFavicons.setState({ profiles: { ...useFavicons.getState().profiles, "other-engine": other } });
+    useFavicons.setState({ spaces: { ...useFavicons.getState().spaces, "other-engine": other } });
     requests[0].resolve("null");
     await tick();
     assert.equal(requests[0].profile, "");
     assert.equal(requests[0].args.since, since);
-    assert.equal(useFavicons.getState().profiles[""], EMPTY_ICONS);
-    assert.equal(useFavicons.getState().profiles["other-engine"], other);
+    assert.equal(useFavicons.getState().spaces[""], EMPTY_ICONS);
+    assert.equal(useFavicons.getState().spaces["other-engine"], other);
     assert.equal(closes(), 1);
   } finally {
     h.unmount();

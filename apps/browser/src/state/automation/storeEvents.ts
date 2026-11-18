@@ -1,5 +1,5 @@
 import { afterStoreTransactionIdempotent, inStoreTransaction, useBrowser, type BrowserState } from "../browser/store";
-import { activeTabId, isIncognitoProfile } from "../browser/model";
+import { activeTabId, isIncognitoSpace } from "../browser/model";
 import { usePages } from "../tabs/pageState";
 import { changedIds } from "../browser/changes";
 import { holderOfPage } from "../tabs/pageSession";
@@ -14,14 +14,14 @@ const IDLE_SCAN_MS = 30_000;
 
 function tabData(s: BrowserState, tabId: string) {
   const t = s.tabs[tabId]!;
-  return { windowId: t.windowId, tabId, profile: t.profileId, ...shownPage(t) };
+  return { windowId: t.windowId, tabId, profile: t.spaceId, ...shownPage(t) };
 }
 
 function peekData(s: BrowserState, sourceId: string) {
   const peek = s.peeks[sourceId]!;
   const t = s.tabs[peek.tabId];
-  if (!t || !eligibleKind(s, t.windowId) || isIncognitoProfile(t.profileId)) return null;
-  return { windowId: t.windowId, tabId: peek.tabId, profile: t.profileId, sourceTabId: peek.sourceId, ...shownPage(t) };
+  if (!t || !eligibleKind(s, t.windowId) || isIncognitoSpace(t.spaceId)) return null;
+  return { windowId: t.windowId, tabId: peek.tabId, profile: t.spaceId, sourceTabId: peek.sourceId, ...shownPage(t) };
 }
 
 const splitTabs = (s: BrowserState, id: string) => s.splits[id]!.slots.flatMap((slot) => ("tabId" in slot ? [slot.tabId] : slot.stack));
@@ -33,10 +33,10 @@ export function diffMore(s: BrowserState, prev: BrowserState, send: EventSend, w
       const before = prev.windows[id];
       if (wants.has("littleArdia.opened") && !before && eligibleKind(s, id) === "little") {
         const tabId = activeTabId(s, id);
-        send("littleArdia.opened", { windowId: id, profile: w.profileId, ...(tabId && isEligibleTab(s, tabId) ? { tabId, ...shownPage(s.tabs[tabId]!) } : {}) });
+        send("littleArdia.opened", { windowId: id, profile: w.spaceId, ...(tabId && isEligibleTab(s, tabId) ? { tabId, ...shownPage(s.tabs[tabId]!) } : {}) });
       }
-      if (wants.has("profile.switched") && before && before.profileId !== w.profileId && eligibleKind(s, id) && eligibleKind(prev, id)) {
-        send("profile.switched", { windowId: id, from: before.profileId, profile: w.profileId, profileName: s.profiles[w.profileId]?.name ?? "" });
+      if (wants.has("profile.switched") && before && before.spaceId !== w.spaceId && eligibleKind(s, id) && eligibleKind(prev, id)) {
+        send("profile.switched", { windowId: id, from: before.spaceId, profile: w.spaceId, profileName: s.spaces[w.spaceId]?.name ?? "" });
       }
     }
   }

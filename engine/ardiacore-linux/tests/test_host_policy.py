@@ -89,6 +89,7 @@ int main() {
   static_assert(linux_policy::kDocumentLimit == 8 * mib);
   assert(linux_policy::DocumentLimit(linux_policy::kSyncStateDocument) == linux_policy::kSyncStateDocumentLimit);
   assert(linux_policy::DocumentLimit("sync-state.nns") > linux_policy::kDocumentLimit);
+  assert(linux_policy::DocumentLimit("sync-spaces-state.nns") == linux_policy::kSyncStateDocumentLimit);
   for (const char* name : {"settings.json", "sync.json", "sync-journal.nns", "sync-journal-1.nns", "sync-state.nns.bak", "live.json"})
     assert(linux_policy::DocumentLimit(name) == linux_policy::kDocumentLimit);
   constexpr size_t plain = 4 + linux_sync::kMaxPayloadBytes;

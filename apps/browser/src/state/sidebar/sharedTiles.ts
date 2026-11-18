@@ -3,14 +3,14 @@ import { Animated } from "react-native";
 import { useShallow } from "zustand/react/shallow";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { topAppsShared } from "../pins/topApps";
-import { pagerFor } from "../windows/profilePager";
+import { pagerFor } from "../windows/spacePager";
 
 export type SharedSides = { before: boolean; after: boolean };
 
-export function sharedTileSides(s: Pick<BrowserState, "profiles" | "profileOrder">, slot: number): SharedSides {
-  const id = s.profileOrder[slot];
+export function sharedTileSides(s: Pick<BrowserState, "spaces" | "spaceOrder">, slot: number): SharedSides {
+  const id = s.spaceOrder[slot];
   const neighbour = (other: string | undefined) => !!id && !!other && topAppsShared(s, id, other);
-  return { before: neighbour(s.profileOrder[slot - 1]), after: neighbour(s.profileOrder[slot + 1]) };
+  return { before: neighbour(s.spaceOrder[slot - 1]), after: neighbour(s.spaceOrder[slot + 1]) };
 }
 
 export function sharedTilesMotion(pos: Animated.Value, slot: number, width: number, { before, after }: SharedSides) {

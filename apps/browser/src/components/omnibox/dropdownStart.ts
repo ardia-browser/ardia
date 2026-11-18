@@ -11,12 +11,12 @@ import { commandBarTabLimit, keepsOpenTab } from "../../state/omnibox/commandBar
 
 const RECENT = 4;
 
-export function useDropdownStart(enabled: boolean, tabId: string, profileId: string): Suggestion[] {
+export function useDropdownStart(enabled: boolean, tabId: string, spaceId: string): Suggestion[] {
   const url = useTab(tabId, (t) => (enabled ? (t?.url ?? "") : ""));
   const title = useTab(tabId, (t) => (enabled ? (t?.title ?? "") : ""));
   const favicon = useTab(tabId, (t) => (enabled ? (t?.favicon ?? null) : null));
   const historyOn = useSettings((st) => st.commandBarHistory);
-  const history = useSuggestionHistory(enabled && historyOn ? profileId : null);
+  const history = useSuggestionHistory(enabled && historyOn ? spaceId : null);
   const recent = useMemo(() => {
     const seen = new Set(url ? [withoutFragment(url)] : []);
     const out: Suggestion[] = [];
@@ -34,19 +34,19 @@ export function useDropdownStart(enabled: boolean, tabId: string, profileId: str
 
 const NO_TABS: Suggestion[] = [];
 
-export function useOpenTabsStart(enabled: boolean, windowId: string, profileId: string): Suggestion[] {
+export function useOpenTabsStart(enabled: boolean, windowId: string, spaceId: string): Suggestion[] {
   const tabs = useTabs((all) => (enabled ? all : null));
   const peeks = usePeeks((all) => (enabled ? all : null));
   const shared = useSettings((st) => !!st.shareTabsAcrossWindows);
   const start = useSettings((st) => st.commandBarStart);
-  const active = useWindow(windowId, (w) => (enabled ? w?.activeTabIds[profileId] : undefined));
+  const active = useWindow(windowId, (w) => (enabled ? w?.activeTabIds[spaceId] : undefined));
   return useMemo(() => {
     if (!tabs || !peeks) return NO_TABS;
     const limit = commandBarTabLimit(start);
     if (limit === 0) return NO_TABS;
-    const rows = openTabsByUse(tabs, peeks, { profileId, windowId, shared })
+    const rows = openTabsByUse(tabs, peeks, { spaceId, windowId, shared })
       .filter(({ tab: t }) => keepsOpenTab(start, t.pin))
       .map(({ tab: t, lastActiveAt }) => ({ id: t.id, url: t.url, title: tabTitle(t), favicon: t.favicon, lastActiveAt }));
     return recentTabSuggestions(rows, { exclude: active, limit });
-  }, [tabs, peeks, active, profileId, shared, windowId, start]);
+  }, [tabs, peeks, active, spaceId, shared, windowId, start]);
 }

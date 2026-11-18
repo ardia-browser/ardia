@@ -3,7 +3,7 @@ import { orWarn } from "../../lib/fallback";
 import { assignPositions, SyncNative, type Adapter, type SealedLogin } from "../../platform/sync";
 import { bookmarkRoots, bookmarkUuidFor, ensureRoots, isBookmarkUuid } from "../bookmarks/bookmarks";
 import { useBrowser } from "../browser/store";
-import { engineProfile } from "../browser/model";
+import { engineProfileForSpace } from "../browser/model";
 import { profileOpened } from "../profiles/profileLoading";
 import { isPeekTab } from "../peek/peek";
 import { fromSync } from "../pins/pinOrderChoices";
@@ -32,10 +32,10 @@ export function sharedDataAdapter(links: () => Record<string, ShareLink>, remove
     publishAfterPull: true,
     extract: (_base, _queued, _now, known, remote) => {
       const all = links();
-      const synced = (id: string) => !!store().profiles[id] && !!all[id]?.enabled && !all[id]?.retire;
+      const synced = (id: string) => !!store().spaces[id] && !!all[id]?.enabled && !all[id]?.retire;
       const values = new Map<string, unknown>();
       for (const [id, link] of Object.entries(all)) {
-        const ownerId = store().profiles[id]?.dataId;
+        const ownerId = store().spaces[id]?.profileId;
         if (!synced(id) || !ownerId || ownerId === id || !all[ownerId] || !store().profiles[ownerId]) continue;
         const key = `${SHARE}${link.syncId}`;
         const removedElsewhere = known(key) && remote(key) === null;
@@ -60,14 +60,17 @@ export function deviceAdapter(deviceId: string, name: () => string, retired = fa
   };
 }
 
-export function bookmarksAdapter(profileId: string): Adapter {
-  const ready = () => !!store().bookmarksReady[engineProfile(store(), profileId)];
+type ProfileSyncContext = { profileId: string; engineId: string; enabled: () => boolean };
+const matchesContext = (spaceId: string, context?: ProfileSyncContext) => !context || context.enabled() && store().spaces[spaceId]?.profileId === context.profileId && store().profiles[context.profileId]?.engineId === context.engineId;
+
+export function bookmarksAdapter(spaceId: string, context?: ProfileSyncContext): Adapter {
+  const ready = () => matchesContext(spaceId, context) && !!store().bookmarksReady[context?.engineId ?? engineProfileForSpace(store(), spaceId)];
   return withSyncWorkCounts("bookmark", {
     prefix: BOOKMARK,
     extract: (base) => {
       if (!ready()) return null;
       const b = store().bookmarks;
-      const roots = bookmarkRoots(store(), profileId);
+      const roots = bookmarkRoots(store(), spaceId);
       const values = new Map<string, unknown>();
       if (!roots) return { values };
       const keyOf = (id: string) => {
@@ -109,7 +112,7 @@ export function bookmarksAdapter(profileId: string): Adapter {
     apply: (visible) => {
       if (!ready()) return false;
       const s = store();
-      const [b, roots] = ensureRoots(s.bookmarks, engineProfile(s, profileId));
+      const [b, roots] = ensureRoots(s.bookmarks, engineProfileForSpace(s, spaceId));
       const decoded = [...visible].map(([k, v]) => [k, bookmarkValue(v)] as const);
       if (decoded.some(([, v]) => !v)) return false;
       const values = new Map(decoded.map(([k, v]) => [bookmarkUuidFor(recordId(BOOKMARK, k)), v!]));
@@ -172,15 +175,15 @@ export function bookmarksAdapter(profileId: string): Adapter {
 
 const MAX_DEVICE_TABS = 30;
 
-export function deviceTabsAdapter(profileId: string, deviceId: string, name: () => string, retired = false): Adapter {
-  const key = `${DEVICE_TABS}${deviceId}`;
+export function deviceTabsAdapter(spaceId: string, deviceId: string, name: () => string, retired = false): Adapter {
+  const key = `tabs:${deviceId}`;
   return {
     prefix: DEVICE_TABS,
     extract: () => {
       if (retired) return { values: new Map(), ignore: (k) => k !== key };
       const s = store();
       const open = Object.values(s.tabs)
-        .filter((t) => t.profileId === profileId && !t.pin && !isAsleep(t) && isWebPageUrl(t.url) && s.windows[t.windowId]?.kind !== "private" && !isPeekTab(s, t.id))
+        .filter((t) => t.spaceId === spaceId && !t.pin && !isAsleep(t) && isWebPageUrl(t.url) && s.windows[t.windowId]?.kind !== "private" && !isPeekTab(s, t.id))
         .sort((a, z) => z.lastActiveAt - a.lastActiveAt)
         .slice(0, MAX_DEVICE_TABS)
         .map((t) => ({ u: t.url, t: t.customTitle || t.title }));
@@ -193,8 +196,8 @@ export function deviceTabsAdapter(profileId: string, deviceId: string, name: () 
 const PASSWORD_READ_INTERVAL = 30_000;
 
 export type SealedPasswords = {
-  read: (engineProfile: string) => Promise<SealedLogin[] | null | undefined>;
-  save: (engineProfile: string, origin: string, username: string, sealed: string, replacing: boolean) => Promise<boolean>;
+  read: (engineProfileForSpace: string) => Promise<SealedLogin[] | null | undefined>;
+  save: (engineProfileForSpace: string, origin: string, username: string, sealed: string, replacing: boolean) => Promise<boolean>;
 };
 
 const nativePasswords: SealedPasswords = {
@@ -202,16 +205,16 @@ const nativePasswords: SealedPasswords = {
   save: async (p, origin, username, sealed, replacing) => !!(await SyncNative?.savePassword(p, origin, username, sealed, replacing)),
 };
 
-export function passwordsAdapter(profileId: string, logins: SealedPasswords = nativePasswords): (forced: boolean) => Adapter {
+export function passwordsAdapter(spaceId: string, logins: SealedPasswords = nativePasswords, context?: () => string): (forced: boolean) => Adapter {
   let lastRead = 0;
   let quietUntil = 0;
   let created = new Map<string, number>();
-  const profile = () => engineProfile(useBrowser.getState(), profileId);
+  const space = context ?? (() => engineProfileForSpace(spaceId));
   const keyOf = (origin: string, username: string) => `pws:${origin}\n${username}`;
   let passwordless = new Set<string>();
   const read = async () => {
-    if (!profileOpened(profile())) return null;
-    const list = await logins.read(profile());
+    if (!profileOpened(space())) return null;
+    const list = await logins.read(space());
     if (!list) return null;
     passwordless = new Set(list.filter((l) => l.passwordless).map((l) => keyOf(l.origin, l.username)));
     return new Map(list.flatMap((l) => (l.sealed === undefined ? [] : [[keyOf(l.origin, l.username), { o: l.origin, u: l.username, s: l.sealed, c: l.created }] as const])));
@@ -246,11 +249,11 @@ export function passwordsAdapter(profileId: string, logins: SealedPasswords = na
         if (have && known?.s !== have.s) continue;
         if (v) {
           if (have?.s === v.s) continue;
-          const saved = await logins.save(profile(), v.o, v.u, v.s, !!have).catch(orWarn(false));
+          const saved = await logins.save(space(), v.o, v.u, v.s, !!have).catch(orWarn(false));
           if (saved) records.landed(key);
           ok = saved && ok;
         } else if (have) {
-          const deleted = await deletePassword(profile(), have.o, have.u).catch(orWarn(false, "sync delete"));
+          const deleted = await deletePassword(space(), have.o, have.u).catch(orWarn(false, "sync delete"));
           if (deleted) records.landed(key);
           ok = deleted && ok;
         }

@@ -1,7 +1,7 @@
 import type { BrowserState } from "../browser/store";
 import { inPinnedContainer, pinKeyOf } from "../browser/model";
 import { orderSections, syncGroupOrder } from "../groups/groups";
-import { profilesOf } from "../pins/pinMirror";
+import { spacesOf } from "../pins/pinMirror";
 import { splitTabIds } from "../splits/splits";
 import { isRegularWindow } from "../windows/small";
 import { withNavigationAt } from "./pageSession";
@@ -14,7 +14,7 @@ type KeepsTabs = (w: BrowserWindow | undefined) => boolean;
 export function sharedElsewhere(s: BrowserState, t: Tab, keepsTabs: KeepsTabs = isRegularWindow): boolean {
   if (!sharedListTab(s, t)) return false;
   const key = pinKeyOf(t);
-  return Object.values(s.tabs).some((x) => x.id !== t.id && x.windowId !== t.windowId && x.profileId === t.profileId && pinKeyOf(x) === key && keepsTabs(s.windows[x.windowId]));
+  return Object.values(s.tabs).some((x) => x.id !== t.id && x.windowId !== t.windowId && x.spaceId === t.spaceId && pinKeyOf(x) === key && keepsTabs(s.windows[x.windowId]));
 }
 
 export function tabsClosedWithWindow(s: BrowserState, windowId: string, keepsTabs: KeepsTabs = isRegularWindow): Tab[] {
@@ -34,10 +34,10 @@ export function tabsHandedOver(s: BrowserState, windowId: string, keepsTabs: Kee
   const w = s.windows[windowId];
   if (!sharesTabs(s) || !isRegularWindow(w) || !heirWindow(s, windowId, keepsTabs)) return [];
   const held = new Set<string>();
-  for (const o of Object.values(s.windows)) if (o.id !== windowId && keepsTabs(o)) for (const p of profilesOf(s, o)) held.add(p);
+  for (const o of Object.values(s.windows)) if (o.id !== windowId && keepsTabs(o)) for (const p of spacesOf(s, o)) held.add(p);
   return w.tabIds.filter((id) => {
     const t = s.tabs[id];
-    return !!t && !held.has(t.profileId) && !!t.url && !t.liveItem && !inPinnedContainer(s, id) && !isPeekTab(s, id);
+    return !!t && !held.has(t.spaceId) && !!t.url && !t.liveItem && !inPinnedContainer(s, id) && !isPeekTab(s, id);
   });
 }
 
@@ -64,7 +64,7 @@ export function handOverTabs(s: BrowserState, windowId: string, keepsTabs: Keeps
   }
   const activeTabIds = { ...heir.activeTabIds };
   for (const id of ids) {
-    const profileId = tabs[id]!.profileId;
+    const profileId = tabs[id]!.spaceId;
     const was = w.activeTabIds[profileId];
     activeTabIds[profileId] ??= was && moving.has(was) ? was : id;
   }

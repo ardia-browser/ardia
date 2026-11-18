@@ -4,10 +4,11 @@ import { readDocument } from "../../platform/documents";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { afterFirstWindow } from "../../lib/afterFirstWindow";
 import { MAX_HISTORY, MAX_VISIT_TIMES } from "./history";
-import { engineProfile, isIncognitoProfile } from "../browser/model";
+import { engineProfileForSpace, isIncognitoSpace } from "../browser/model";
 import type { HistoryEntry } from "../browser/types";
 import { isWebPageUrl } from "../../lib/url";
 import { engineProfiles } from "../profiles/engineProfiles";
+import { engineSpaces } from "../spaces/engineSpaces";
 import { onProfilesOpened, onProfilesUnloaded, openedEngineProfiles } from "../profiles/profileLoading";
 import { migrateLegacyFile } from "../app/legacyFiles";
 import { during } from "../app/jobActivity";
@@ -79,7 +80,7 @@ let legacyMoved = false;
 
 function setView(engine: string, list: HistoryEntry[], floor?: number) {
   useBrowser.setState((s) => {
-    if (!engineProfiles(s).includes(engine)) return {};
+    if (!engineSpaces(s).includes(engine)) return {};
     const was = s.history[engine];
     const full = list.length >= MAX_HISTORY ? list[list.length - 1]!.lastVisit : -Infinity;
     const next = { list, floor: Math.max(floor ?? was?.floor ?? -Infinity, full), ready: legacyMoved || !!was?.ready };
@@ -274,9 +275,9 @@ export const migrateHistoryFile = ({ keepMs = LEGACY_KEPT_MS } = {}) => migrateL
 async function moveHistory(file: LegacyFile) {
   const s = store();
   const perEngine = new Map<string, HistoryEntry[]>();
-  for (const [profileId, list] of Object.entries(file.history ?? {})) {
-    if (!s.profiles[profileId] || isIncognitoProfile(profileId) || !Array.isArray(list)) continue;
-    const engine = engineProfile(s, profileId);
+  for (const [spaceId, list] of Object.entries(file.history ?? {})) {
+    if (!s.spaces[spaceId] || isIncognitoSpace(spaceId) || !Array.isArray(list)) continue;
+    const engine = engineProfileForSpace(spaceId);
     if (!perEngine.has(engine)) perEngine.set(engine, list);
   }
   for (const engine of perEngine.keys()) migrating.add(engine);

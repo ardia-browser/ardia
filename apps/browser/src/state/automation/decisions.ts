@@ -5,7 +5,7 @@ import { sourceMatches, type LinkSource as SourceInfo } from "../../lib/linkSour
 import { airTrafficFallback, airTrafficRule, type AirTrafficRule, type AirTrafficTarget, type OpenAs } from "../airTraffic/rules";
 import { currentAirTraffic, targetUsableNow } from "../airTraffic/store";
 import { noteAirTrafficLink } from "../telemetry/airTrafficCounts";
-import { isIncognitoProfile } from "../browser/model";
+import { isIncognitoSpace } from "../browser/model";
 import { useBrowser } from "../browser/store";
 import type { OpeningContext, OpeningVerdict } from "../tabs/openingGate";
 import { eligibleKind } from "./automationWindows";
@@ -53,7 +53,7 @@ const urlApplies = (hook: HookSpec, url: string) => !hook.specs.length || anyMat
 
 function eligibleContext(context: { windowId: string | null; profileId: string | null }): boolean {
   const s = useBrowser.getState();
-  if (context.profileId && isIncognitoProfile(context.profileId)) return false;
+  if (context.profileId && isIncognitoSpace(context.profileId)) return false;
   if (context.windowId && s.windows[context.windowId] && !eligibleKind(s, context.windowId)) return false;
   return true;
 }
@@ -102,8 +102,8 @@ const fromApplies = (hook: HookSpec, source: LinkSource) => sourceMatches(hook.f
 export function profileNamed(given: unknown): string | null {
   if (typeof given !== "string" || !given) return null;
   const s = useBrowser.getState();
-  const id = s.profiles[given] ? given : s.profileOrder.find((p) => s.profiles[p]?.name.toLowerCase() === given.toLowerCase());
-  return id && !isIncognitoProfile(id) ? id : null;
+  const id = s.spaces[given] ? given : s.spaceOrder.find((p) => s.spaces[p]?.name.toLowerCase() === given.toLowerCase());
+  return id && !isIncognitoSpace(id) ? id : null;
 }
 
 const OPEN = new Set(["tab", "littleArdia", "window"]);
@@ -171,9 +171,9 @@ export type PermissionVerdict = "deny" | "ask";
 export function decidePermission(request: { tabId: string | null; origin: string; permissions: string[] }, signal?: AbortSignal): PermissionVerdict | Promise<PermissionVerdict> {
   const s = useBrowser.getState();
   const tab = request.tabId ? s.tabs[request.tabId] : undefined;
-  if (!tab || !eligibleContext({ windowId: tab.windowId, profileId: tab.profileId })) return "ask";
+  if (!tab || !eligibleContext({ windowId: tab.windowId, profileId: tab.spaceId })) return "ask";
   const page = `${request.origin.replace(/\/$/, "")}/`;
-  const data = { origin: request.origin, kinds: request.permissions, windowId: tab.windowId, tabId: tab.id, profile: tab.profileId };
+  const data = { origin: request.origin, kinds: request.permissions, windowId: tab.windowId, tabId: tab.id, profile: tab.spaceId };
   const verdict = decide<PermissionVerdict>("permission.requested", data, {
     applies: (hook) => urlApplies(hook, page) && (!hook.kinds.length || request.permissions.some((k) => hook.kinds.includes(k))),
     rule: (hook) => (hook.rules!.permission === "deny" ? "deny" : "ask"),
@@ -196,7 +196,7 @@ const originOf = (url: string) => {
 };
 
 export function decideDownload(download: FinishedDownload, approvedFolders: readonly string[], signal?: AbortSignal): string | null | Promise<string | null> {
-  if (download.profile && isIncognitoProfile(download.profile)) return null;
+  if (download.profile && isIncognitoSpace(download.profile)) return null;
   const folderOf = (folder: unknown) => (typeof folder === "string" && downloadFolderAllowed(folder, approvedFolders) ? folder : null);
   const data = { url: download.url, origin: originOf(download.url), filename: download.filename, mime: download.mimeType, size: download.size, path: download.path, profile: download.profile };
   return decide<string>("download.deciding", data, {

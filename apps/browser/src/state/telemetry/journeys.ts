@@ -295,7 +295,7 @@ function watchStore(s: BrowserState, prev: BrowserState) {
   for (const id in s.windows) {
     const now = activeTabId(s, id);
     const before = activeTabId(prev, id);
-    if (!now || now === before || s.windows[id]!.profileId !== prev.windows[id]?.profileId) continue;
+    if (!now || now === before || s.windows[id]!.spaceId !== prev.windows[id]?.spaceId) continue;
     const heard = Date.now();
     if (prev.tabs[now]) pullMarks(heard);
     const t0 = (prev.tabs[now] ? nativePressTime(marks, switchingPress()) : null) ?? lastInput(heard);

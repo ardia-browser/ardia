@@ -13,7 +13,7 @@ export function routeGroups(s: GroupWorld, profileId: string): RouteGroup[] {
   const seen = new Set<string>();
   const groups: RouteGroup[] = [];
   const live = Object.values(s.groups)
-    .filter((g) => g.profileId === profileId)
+    .filter((g) => g.spaceId === profileId)
     .sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.createdAt - b.createdAt);
   for (const g of live) {
     const key = pinKeyOf(g);
@@ -29,21 +29,21 @@ export function routeGroups(s: GroupWorld, profileId: string): RouteGroup[] {
   return groups;
 }
 
-export const routeTargetsStamp = (s: GroupWorld & Pick<BrowserState, "profiles" | "profileOrder">): string =>
-  s.profileOrder
-    .filter((id) => s.profiles[id])
-    .map((id) => [`${id}=${s.profiles[id]!.name}`, ...routeGroups(s, id).map((g) => `${g.key}=${g.name}`)].join("\t"))
+export const routeTargetsStamp = (s: GroupWorld & Pick<BrowserState, "spaces" | "profiles" | "spaceOrder">): string =>
+  s.spaceOrder
+    .filter((id) => s.spaces[id])
+    .map((id) => [`${id}=${s.spaces[id]!.name}`, ...routeGroups(s, id).map((g) => `${g.key}=${g.name}`)].join("\t"))
     .join("\n");
 
 export const hasRouteGroup = (s: Pick<BrowserState, "groups" | "parkedPins">, profileId: string, key: string): boolean =>
-  Object.values(s.groups).some((g) => g.profileId === profileId && pinKeyOf(g) === key) || !!s.parkedPins[profileId]?.groups.some((g) => g.id === key);
+  Object.values(s.groups).some((g) => g.spaceId === profileId && pinKeyOf(g) === key) || !!s.parkedPins[profileId]?.groups.some((g) => g.id === key);
 
 export function routeGroupName(s: GroupWorld, profileId: string, key: string): string | null {
   return routeGroups(s, profileId).find((g) => g.key === key)?.name ?? null;
 }
 
 export function groupWindow(s: BrowserState, profileId: string, key: string): string | undefined {
-  const copies = Object.values(s.groups).filter((g) => g.profileId === profileId && pinKeyOf(g) === key && isOpenRegularWindow(s.windows[g.windowId]));
+  const copies = Object.values(s.groups).filter((g) => g.spaceId === profileId && pinKeyOf(g) === key && isOpenRegularWindow(s.windows[g.windowId]));
   const order = [...new Set([...s.ui.focusOrder, ...s.windowOrder])];
   return order.find((id) => copies.some((g) => g.windowId === id)) ?? copies[0]?.windowId;
 }

@@ -3,14 +3,14 @@ import { create } from "zustand";
 import { orWarn } from "../../lib/fallback";
 import { IMPORT_WINDOW_ID, takePreferredImportSource } from "../settings/settingsWindows";
 import { requestWindowClose } from "../windows/windowClose";
-import { defaultTarget, openInWebStore, type BrowserSource, type ImportCounts, type ImportedExtension, type ImportKind } from "./apply";
+import { IMPORT_DESTINATION_CHANGED, defaultTarget, openInWebStore, type BrowserSource, type ImportCounts, type ImportedExtension, type ImportKind , type ImportDestination } from "./apply";
 import type { ExtensionListing } from "./extensionListing";
 import { importModule } from "./importApi";
 
 export type KindStatus = "pending" | "active" | "done" | "failed";
 export type ImportStatus = Partial<Record<ImportKind, KindStatus>>;
 export type ImportFailure = { kind: ImportKind; profiles: string[] };
-export type FoundExtensions = { profileId: string; list: ImportedExtension[]; opened: boolean; listing: ExtensionListing | null };
+export type FoundExtensions = { groups: { destination: ImportDestination; list: ImportedExtension[] }[]; opened: boolean; listing: ExtensionListing | null };
 export type ImportResults = { counts: ImportCounts; failures: ImportFailure[]; notes: string[]; extensions: FoundExtensions };
 
 export type ImportStep =
@@ -41,7 +41,7 @@ export const ENCRYPTED_KINDS: ImportKind[] = ["passwords", "cookies", "autofill"
 export const APP_TAB_KINDS: ImportKind[] = ["tabs", "pinnedTabs"];
 export const DIA_SIDEBAR_KINDS: ImportKind[] = ["tabs", "pinnedTabs", "favorites"];
 export const ARC_ONCE_KINDS: ImportKind[] = ["linkRules", "archive"];
-export const NO_EXTENSIONS: FoundExtensions = { profileId: "", list: [], opened: false, listing: null };
+export const NO_EXTENSIONS: FoundExtensions = { groups: [], opened: false, listing: null };
 
 const freshFlow = (target: string): ImportFlow => ({
   browsers: [],
@@ -145,9 +145,13 @@ export async function recheckAccess() {
 }
 
 export function openFoundExtensions() {
-  const { step, target } = importNow();
+  const { step } = importNow();
   if (step.name !== "done") return;
-  openInWebStore(step.extensions.profileId || target, step.extensions.list.map((e) => e.webStoreUrl));
+  if (step.extensions.groups.some((g) => !g.destination.current())) {
+    patchImport({ step: { ...step, notes: [...step.notes, IMPORT_DESTINATION_CHANGED], extensions: NO_EXTENSIONS } });
+    return;
+  }
+  for (const { destination, list } of step.extensions.groups) openInWebStore(destination.spaceId, list.map((e) => e.webStoreUrl));
   patchImport({ step: { ...step, extensions: { ...step.extensions, opened: true } } });
 }
 

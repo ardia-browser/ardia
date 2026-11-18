@@ -24,12 +24,12 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { engineProfile } from "../browser/model";
 import { engineProfiles } from "../profiles/engineProfiles";
 import { shownPageId } from "../peek/peek";
-import { isOpenRegularWindow, mainWindowFor, originalProfile } from "../windows/small";
+import { isOpenRegularWindow, mainWindowFor, originalSpace } from "../windows/small";
 import { focusedWindowOf } from "../windows/ui";
 import { goToSettingsPane, openSettings, replaceSettingsPlace, SETTINGS_DETAIL, useSettingsNav } from "../settings/settingsWindows";
 import { closeSidePanelsOf, toggleSidePanel } from "./sidePanels";
 import { notePrivateWindowExtensionOpen, noteExtensionInstallPromptStale, noteExtensionProfilePageOpen, noteToolbarExtensionMove } from "../telemetry/usage";
-import { extensionPageUrl, extensionProfile, extensionsProfileId, isPrivate, pageProfile, shownIn, useExtensions, windowExtensions, readyTabOf, tabProfile, type Anchor } from "./store";
+import { extensionPageUrl, extensionSpace, extensionsProfileId, isPrivate, pageSpace, shownIn, useExtensions, windowExtensions, readyTabOf, tabProfile, type Anchor } from "./store";
 import { errorText } from "../../lib/errors";
 import { noteUnpackedInstall } from "../telemetry/exportCounts";
 import { consentToken } from "../telemetry/client";
@@ -83,13 +83,13 @@ export function refreshExtensionsAfterChange(profile: string): Promise<Installed
 
 export const findExtension = (profile: string, id: string) => useExtensions.getState().lists[profile]?.find((x) => x.id === id);
 
-export function addFromWebStore(windowId: string, urlOrId: string, profile = extensionProfile(useBrowser.getState(), windowId)) {
+export function addFromWebStore(windowId: string, urlOrId: string, space = extensionSpace(useBrowser.getState(), windowId)) {
   const id = webStoreExtensionId(urlOrId);
   if (!id) {
-    useExtensions.setState({ install: { windowId, profile, source: "webStore", status: "error", error: "That isn't a link to an extension in the Chrome Web Store." } });
+    useExtensions.setState({ install: { windowId, profile: space, source: "webStore", status: "error", error: "That isn't a link to an extension in the Chrome Web Store." } });
     return;
   }
-  openInExtensionProfile(`https://chromewebstore.google.com/detail/${id}`, profile, { windowId });
+  openInExtensionProfile(`https://chromewebstore.google.com/detail/${id}`, space, { windowId });
 }
 
 export const openWebStoreFor = (profile: string, profileId?: string | null) => openInExtensionProfile(WEB_STORE_HOME, profile, { profileId });
@@ -97,23 +97,31 @@ export const openWebStoreFor = (profile: string, profileId?: string | null) => o
 export function openInExtensionProfile(url: string, profile: string, { windowId, profileId }: { windowId?: string | null; profileId?: string | null } = {}) {
   const s = useBrowser.getState();
   const shows = (w: string | null | undefined): w is string =>
-    !!w && !!s.windows[w] && (w === windowId || isOpenRegularWindow(s.windows[w])) && extensionProfile(s, w) === profile;
+    !!w && !!s.windows[w] && (w === windowId || isOpenRegularWindow(s.windows[w])) && extensionSpace(s, w) === profile;
   const target = [windowId, ...s.ui.focusOrder, ...s.windowOrder].find(shows);
   noteExtensionProfilePageOpen(target !== (windowId && s.windows[windowId] ? windowId : focusedWindowOf(s)));
   if (target) {
     s.newTab(target, { url });
     focus(target);
-  } else openWindow({ profileId: profileId && engineProfile(s, profileId) === profile ? profileId : s.profileOrder.find((p) => engineProfile(s, p) === profile), url });
+    return;
+  }
+  const owner = profileId && s.profiles[profileId]?.engineId === profile
+    ? s.profiles[profileId]
+    : Object.values(s.profiles).find((value) => value.engineId === profile);
+  if (!owner) return;
+  const spaceId = s.spaceOrder.find((id) => s.spaces[id]?.profileId === owner.id)
+    ?? s.createSpace({ name: owner.name, profileId: owner.id });
+  openWindow({ spaceId, url });
 }
 
-export async function loadUnpacked(windowId: string, profile = extensionProfile(useBrowser.getState(), windowId)): Promise<boolean> {
+export async function loadUnpacked(windowId: string, space = extensionSpace(useBrowser.getState(), windowId)): Promise<boolean> {
   const path = await chooseExtensionFolder();
   if (!path) return false;
   try {
     const pkg = await inspectUnpackedExtension(path);
-    useExtensions.setState({ install: { windowId, profile, source: "unpacked", status: "ready", pkg } });
+    useExtensions.setState({ install: { windowId, profile: space, source: "unpacked", status: "ready", pkg } });
   } catch (error) {
-    useExtensions.setState({ install: { windowId, profile, source: "unpacked", status: "error", error: errorText(error) } });
+    useExtensions.setState({ install: { windowId, profile: space, source: "unpacked", status: "error", error: errorText(error) } });
   }
   return true;
 }
@@ -199,7 +207,7 @@ export function endToolbarDrag(windowId: string) {
 export async function moveToolbarExtension(windowId: string, id: string, to: number, via: "drag" | "menu") {
   const s = useBrowser.getState();
   if (isPrivate(s, windowId)) return;
-  const profile = extensionProfile(s, windowId);
+  const profile = extensionSpace(s, windowId);
   const shown = toolbarOrder(windowExtensions(s, windowId));
   const moved = movedToolbarOrder(shown, id, to);
   if (!moved) return;
@@ -248,9 +256,9 @@ export function openOptions(windowId: string, ext: InstalledExtension) {
   const s = useBrowser.getState();
   const w = s.windows[windowId];
   if (w?.kind !== "private" || ext.incognitoSplit) return void s.newTab(windowId, { url });
-  const profileId = originalProfile(s, w);
+  const profileId = originalSpace(s, w);
   const regular = profileId && mainWindowFor(s, profileId);
-  if (!regular || s.windows[regular]!.profileId !== profileId) return void openWindow({ profileId, url });
+  if (!regular || s.windows[regular]!.spaceId !== profileId) return void openWindow({ spaceId: profileId, url });
   s.newTab(regular, { url });
   focus(regular);
 }
@@ -258,12 +266,12 @@ export function openOptions(windowId: string, ext: InstalledExtension) {
 export const openManageExtensions = (windowId?: string | null) => openSettings("profiles", extensionsProfileId(null, windowId));
 
 export function openExtensionDetails(profileId: string, extensionId: string) {
-  if (useSettingsNav.getState().profileId !== profileId) replaceSettingsPlace(profileId);
+  if (useSettingsNav.getState().spaceId !== profileId) replaceSettingsPlace(profileId);
   goToSettingsPane("profiles", profileId, SETTINGS_DETAIL.extension(extensionId));
 }
 
 export const openPinDialog = (windowId: string) => useExtensions.setState({ pinDialog: { windowId } });
-export const openWebStore = (windowId: string) => openInExtensionProfile(WEB_STORE_HOME, extensionProfile(useBrowser.getState(), windowId), { windowId });
+export const openWebStore = (windowId: string) => openInExtensionProfile(WEB_STORE_HOME, extensionSpace(useBrowser.getState(), windowId), { windowId });
 
 export async function activateExtension(
   windowId: string,
@@ -285,7 +293,7 @@ export async function activateExtension(
   if (result === "none") return;
   if (result === "sidePanel") return void toggleSidePanel(windowId, ext.id);
   if (!url) return void (result === null && showExtensionMenu(windowId, ext));
-  useExtensions.setState({ popup: { windowId, pageProfile: pageProfile(useBrowser.getState(), windowId), extensionId: ext.id, url, anchor } });
+  useExtensions.setState({ popup: { windowId, pageSpace: pageSpace(useBrowser.getState(), windowId), extensionId: ext.id, url, anchor } });
 }
 
 export const closeExtensionPopup = () => useExtensions.setState({ popup: null });
@@ -300,7 +308,7 @@ export async function openActionPopup(windowId: string, extensionId: string, anc
   if (request !== popupRequests || shownPageId(useBrowser.getState(), windowId) !== tabId)
     return warnFor(consent, `action.openPopup for ${extensionId}: the tab changed or another call came first`);
   if (!url) return warnFor(consent, `action.openPopup for ${extensionId}: no popup for the tab`);
-  useExtensions.setState({ popup: { windowId, pageProfile: pageProfile(useBrowser.getState(), windowId), extensionId, url, anchor, opened: request } });
+  useExtensions.setState({ popup: { windowId, pageSpace: pageSpace(useBrowser.getState(), windowId), extensionId, url, anchor, opened: request } });
 }
 
 export function extensionMenuItems(ext: Pick<InstalledExtension, "name" | "enabled" | "pinned" | "optionsUrl" | "sidePanel" | "mayModify">, sidePanelOpen: boolean): MenuItem[] {
@@ -320,13 +328,13 @@ export function extensionMenuItems(ext: Pick<InstalledExtension, "name" | "enabl
 }
 
 export async function showExtensionMenu(windowId: string, ext: InstalledExtension) {
-  const profile = extensionProfile(useBrowser.getState(), windowId);
+  const space = extensionSpace(useBrowser.getState(), windowId);
   const panel = useExtensions.getState().sidePanels[windowId];
   const choice = await showMenu(extensionMenuItems(ext, panel?.extensionId === ext.id && !panel.hidden));
   if (choice === "options") openOptions(windowId, ext);
-  if (choice === "pin") void setPinned(profile, ext.id, !ext.pinned);
-  if (choice === "enable") void setEnabled(profile, ext.id, !ext.enabled);
-  if (choice === "remove") void removeExtension(profile, ext, windowId);
+  if (choice === "pin") void setPinned(space, ext.id, !ext.pinned);
+  if (choice === "enable") void setEnabled(space, ext.id, !ext.enabled);
+  if (choice === "remove") void removeExtension(space, ext, windowId);
   if (choice === "sidePanel") void toggleSidePanel(windowId, ext.id);
   if (choice === "manage") {
     openExtensionDetails(extensionsProfileId(null, windowId), ext.id);

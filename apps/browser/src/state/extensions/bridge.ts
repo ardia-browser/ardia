@@ -14,7 +14,7 @@ import {
   activateExtension,
   closeExtensionPopup,
   closeSidePanel,
-  extensionProfile,
+  extensionSpace,
   findExtension,
   isPrivate,
   openSidePanel,
@@ -33,16 +33,16 @@ export function startExtensionsBridge() {
   onExtensionsChanged(({ profile }) => void refreshExtensions(profile));
   onSyncedExtensionChange((profile) => void refreshExtensionsAfterChange(profile));
 
-  const loadProfiles = (s: BrowserState) => {
+  const loadSpaces = (s: BrowserState) => {
     for (const id of s.windowOrder) {
-      const profile = extensionProfile(s, id);
+      const profile = extensionSpace(s, id);
       if (!isPrivate(s, id)) reportExtensionsLoaded(profile);
       if (watchActionsOf(profile)) void refreshExtensions(profile);
     }
   };
-  loadProfiles(useBrowser.getState());
+  loadSpaces(useBrowser.getState());
   useBrowser.subscribe((s, prev) => {
-    if (s.windows !== prev.windows) loadProfiles(s);
+    if (s.windows !== prev.windows) loadSpaces(s);
     if (s.windows !== prev.windows || s.tabs !== prev.tabs) pruneToolbarAnchors(s);
   });
 
@@ -55,7 +55,7 @@ export function startExtensionsBridge() {
 }
 
 export function openExtensionFromMenu(windowId: string, extensionId: string, tabId?: string) {
-  const ext = findExtension(extensionProfile(useBrowser.getState(), windowId), extensionId);
+  const ext = findExtension(extensionSpace(useBrowser.getState(), windowId), extensionId);
   if (ext) void toolbarAnchor(windowId, ext.id, tabId).then((anchor) => activateExtension(windowId, ext, anchor, undefined, tabId));
 }
 

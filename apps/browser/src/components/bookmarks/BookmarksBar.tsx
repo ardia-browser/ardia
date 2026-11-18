@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useId, useReducer, useRef, useState } from "react";
 import { Animated, StyleSheet, View, type LayoutRectangle } from "react-native";
 import { currentBookmarks } from "../../state/browser/current";
-import { useBookmarkProfileId, useBookmarkRoots, useBookmarks } from "../../state/bookmarks/hooks";
+import { useBookmarkSpaceId, useBookmarkRoots, useBookmarks } from "../../state/bookmarks/hooks";
 import { useSettings, useWindowId } from "../../state/browser/hooks";
 import { dropLinksAt, linkDragAt, linkDragLeft, registerDropZone, useBarDrag } from "../../state/bookmarks/barDrag";
 import { roomOffsets, zoneHitAt } from "../../state/bookmarks/barDrop";
@@ -55,8 +55,8 @@ function Bar({ windowId }: { windowId: string }) {
   const theme = useTheme();
   const size = useBarSize();
   const zone = useId();
-  const profileId = useBookmarkProfileId(windowId);
-  const roots = useBookmarkRoots(profileId);
+  const spaceId = useBookmarkSpaceId(windowId);
+  const roots = useBookmarkRoots(spaceId);
   const barId = roots?.bar;
   const otherId = roots?.other;
   const children = useBookmarks((b) => {
@@ -175,7 +175,7 @@ function Bar({ windowId }: { windowId: string }) {
       onDropUpdate={onDropUpdate}
       style={{ height: size.height, flexDirection: "row", alignItems: "center", paddingHorizontal: space.m }}
     >
-      <ContextMenuArea onContextMenu={() => void openBarMenu(windowId, profileId, null)} style={StyleSheet.absoluteFill} />
+      <ContextMenuArea onContextMenu={() => void openBarMenu(windowId, spaceId, null)} style={StyleSheet.absoluteFill} />
       <View
         onLayout={(e) => {
           const frame = e.nativeEvent.layout;
@@ -198,7 +198,7 @@ function Bar({ windowId }: { windowId: string }) {
                   key={id}
                   id={id}
                   windowId={windowId}
-                  profileId={profileId}
+                  spaceId={spaceId}
                   hidden={i >= fit.shown}
                   offset={offsets[i] ?? 0}
                   onWidth={onItemWidth}

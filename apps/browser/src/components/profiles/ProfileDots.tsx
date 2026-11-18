@@ -12,6 +12,7 @@ import { TooltipAbove } from "../ui/TooltipAbove";
 import { SIDEBAR_FOOTER_DOWNLOADS } from "../sidebar/geometry";
 import { switcherCellWidth, switcherIcons, SwitcherMark } from "./ProfileIcons";
 import { openProfileItemMenu } from "./profileMenu";
+import { profileSwitcherShown } from "../../state/profiles/switcherShown";
 import { profileSwitcher } from "./tokens";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
 
@@ -24,7 +25,7 @@ export function useProfileDotsShown() {
   const incognito = useIsIncognito();
   const count = useProfileOrder((o) => o.length);
   const enabled = useSettings((s) => s.showProfileDots);
-  return enabled && !incognito && count > 1;
+  return profileSwitcherShown({ showProfileDots: enabled }, count, incognito);
 }
 
 export function ProfileDots({ windowId, width, besideDownloads }: { windowId: string; width: number; besideDownloads: boolean }) {

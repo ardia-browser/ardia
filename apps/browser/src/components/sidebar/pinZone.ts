@@ -5,8 +5,12 @@ export const PIN_ZONE_HYSTERESIS = 6;
 
 type Area = { x: number; y: number; w: number };
 
+const tilesFitting = (innerWidth: number) => Math.max(1, Math.floor((innerWidth + TILE_GAP) / (MIN_TILE + TILE_GAP)));
+
+export const narrowestWithSameColumns = (innerWidth: number) => tilesFitting(innerWidth) * (MIN_TILE + TILE_GAP) - TILE_GAP;
+
 function gridColumns(count: number, innerWidth: number, balanced: boolean) {
-  const fit = Math.max(1, Math.floor((innerWidth + TILE_GAP) / (MIN_TILE + TILE_GAP)));
+  const fit = tilesFitting(innerWidth);
   if (!balanced) return Math.min(count || 1, fit);
   const rows = Math.ceil((count || 1) / Math.min(BALANCED_MAX_COLUMNS, fit));
   return Math.ceil((count || 1) / rows);

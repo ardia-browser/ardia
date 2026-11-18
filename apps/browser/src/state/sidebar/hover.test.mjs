@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
-const { registerRow, setSidebarUi, sidebarUi } = await import("./sidebarUi.ts");
+const { registerRow, setLiveSidebarWidth, setSidebarUi, sidebarUi } = await import("./sidebarUi.ts");
 const hover = await import("./hover.ts");
 const { cardReach } = await import("./hoverAim.ts");
 const { setDockMoving, setPeekLeaving, setPeekShown } = await import("../windows/dockMotion.ts");
@@ -295,6 +295,27 @@ test("a drag suppresses the card until it ends", async (t) => {
   t.mock.timers.tick(REST);
   await settle();
   assert.equal(shown(), "c");
+});
+
+test("dragging its sidebar's edge closes the card when the resize starts; another window's resize leaves it", async (t) => {
+  fresh(t);
+  t.after(() => {
+    setLiveSidebarWidth("other", null);
+    setLiveSidebarWidth(W, null);
+  });
+  await cardFor(t, "a");
+  setLiveSidebarWidth("other", 250);
+  assert.equal(shown(), "a", "another window's resize leaves it");
+  setLiveSidebarWidth(W, 250);
+  assert.equal(shown(), null, "its own resize closes it");
+  setLiveSidebarWidth(W, null);
+  enter("b");
+  setLiveSidebarWidth(W, 250);
+  t.mock.timers.tick(1000);
+  await settle();
+  assert.equal(shown(), null, "a card on its way is dropped too");
+  setLiveSidebarWidth(W, null);
+  await cardFor(t, "c");
 });
 
 test("the command panel over the rows takes their highlight", () => {

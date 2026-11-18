@@ -27,8 +27,10 @@ export const windowRootWidth = (s: Pick<BrowserState, "windows">, windowId: stri
 
 export const onWindowRootSizes = (listener: () => void): (() => void) => useRootSizes.subscribe(listener);
 
-export function useWindowRootWidth(windowId: string): number | undefined {
+export function useWindowRootWidthAs<T>(windowId: string, select: (width: number | undefined) => T): T {
   const frameWidth = useBrowser((s) => s.windows[windowId]?.frame?.[2]);
   const scale = useInterfaceScale((s) => s.scale);
-  return useRootSizes((sizes) => sizes[windowId]?.width ?? (frameWidth === undefined ? undefined : frameWidth / scale));
+  return useRootSizes((sizes) => select(sizes[windowId]?.width ?? (frameWidth === undefined ? undefined : frameWidth / scale)));
 }
+
+export const useWindowRootWidth = (windowId: string): number | undefined => useWindowRootWidthAs(windowId, (width) => width);

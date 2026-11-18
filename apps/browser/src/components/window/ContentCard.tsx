@@ -12,6 +12,7 @@ import { startPermissionPrompts } from "../../state/site/permissions";
 import { useFullscreenTab } from "../../state/tabs/pageState";
 import { DropTargets, SplitDividers, SplitFocusRing, SplitToast, type WindowShape } from "../split/SplitChrome";
 import { dockMoving, usePeekSpan, whenDockStill } from "../../state/windows/dockMotion";
+import { sidebarResizing, watchSidebarResize } from "../../state/sidebar/sidebarUi";
 import { FrozenPage } from "./FrozenPage";
 import { setCardAnchor, setUrlAnchor, useAddressBarInSidebar, useCardCaptionRoom, useMinimalism, usePageFrameInset, useTabLayout, watchToolbarExtensionsWidth, onFullScreenLeft, onInterfaceScaleChange, windowRootShape } from "../../state/windows/layout";
 import { startSelectionTools } from "../../state/site/selection";
@@ -108,16 +109,20 @@ export function ContentCard() {
     noteCardResizeLayout(true);
     measure(width, height);
   });
-  useEffect(
-    () =>
-      whenDockStill(windowId, () => {
-        if (!settled.current) return;
-        const { width, height } = settled.current;
-        settled.current = null;
-        measure(width, height);
-      }),
-    [windowId],
-  );
+  useEffect(() => {
+    const measureSettled = () => {
+      if (!settled.current || dockMoving(windowId) || sidebarResizing(windowId)) return;
+      const { width, height } = settled.current;
+      settled.current = null;
+      measure(width, height);
+    };
+    const dock = whenDockStill(windowId, measureSettled);
+    const resize = watchSidebarResize(windowId, (resizing) => !resizing && measureSettled());
+    return () => {
+      dock();
+      resize();
+    };
+  }, [windowId]);
 
   const peek = usePeekSpan(windowId);
   const activeRect = activeId ? panes[activeId] : undefined;
@@ -129,7 +134,7 @@ export function ContentCard() {
       style={{ flex: 1 }}
       onLayout={(e) => {
         const { width, height } = e.nativeEvent.layout;
-        if (size.width > 0 && dockMoving(windowId) && !split) {
+        if (size.width > 0 && (dockMoving(windowId) || sidebarResizing(windowId)) && !split) {
           settleMeasure.cancel();
           settled.current = { width, height };
         } else if (size.width > 0 && !split && !peekId) {

@@ -82,5 +82,8 @@ export function resizeGesture(latest: { current: ResizeDragOptions }) {
     },
     onPanResponderTerminate: () => commit(clampWidth(live ?? latest.current.saved(), latest.current)),
     onPanResponderTerminationRequest: () => false,
+    abandon: () => {
+      if (live !== null && !spring) commit(clampWidth(live, latest.current));
+    },
   };
 }

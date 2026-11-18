@@ -4,7 +4,7 @@ import { updateSettings } from "../../state/settings/actions";
 import { resetSidebarWidth } from "../../state/sidebar/actions";
 import { useResizeDrag } from "./useResizeDrag";
 import { setLiveSidebarWidth } from "../../state/sidebar/sidebarUi";
-import { noteSidebarResize } from "../../state/telemetry/sidebarResizeCounts";
+import { noteSidebarResize, watchSidebarResizeFrames } from "../../state/telemetry/sidebarResizeCounts";
 import { SIDEBAR_MIN_WIDTH, SIDEBAR_RESIZE_HANDLE } from "./tokens";
 import { keptSidebarWidth, useShownSidebarWidth, useSidebarWidthLimit } from "../../state/sidebar/shownWidth";
 
@@ -20,9 +20,12 @@ export function ResizeHandle({ windowId }: { windowId: string }) {
     direction: right ? -1 : 1,
     saved: () => shown,
     pointerFromEdge: (e) => e.nativeEvent.locationX - HALF,
-    onLive: (w) => setLiveSidebarWidth(windowId, w),
+    onLive: (w) => {
+      if (w !== null) watchSidebarResizeFrames();
+      setLiveSidebarWidth(windowId, w);
+    },
     onCommit: (w, dragged) => {
-      if (dragged) noteSidebarResize();
+      noteSidebarResize(dragged);
       updateSettings({ sidebarWidth: keptSidebarWidth(w, limit) });
     },
   });

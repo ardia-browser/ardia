@@ -50,7 +50,8 @@ enum ServerWindowDrag {
   }
 
   static func refresh(_ view: NSView) {
-    if let window = view.window { refresh(window) }
+    guard let window = view.window else { return }
+    if NSEvent.pressedMouseButtons != 0 { markStale(window) } else { refresh(window) }
   }
 
   static func refresh(_ window: NSWindow) {
@@ -169,6 +170,8 @@ enum ServerWindowDrag {
     _ = coordinator.perform(add, with: watcher)
     mounting = watcher
     eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp, .rightMouseUp, .otherMouseUp, .keyUp, .flagsChanged]) { event in
+      if event.type == .leftMouseDown { pressedHere = true }
+      if [.leftMouseUp, .rightMouseUp, .otherMouseUp].contains(event.type) { releaseMargins() }
       guard let window = event.window else { return event }
       if event.type != .leftMouseDown {
         scheduleRefresh(window)
@@ -179,6 +182,7 @@ enum ServerWindowDrag {
       return event
     }
     NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in catchUpAll() }
+    NotificationCenter.default.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { _ in releaseMargins() }
   }
 
   static func band(_ window: NSWindow) -> CGFloat {
@@ -382,7 +386,45 @@ enum ServerWindowDrag {
     return true
   }()
 
+  private typealias ResetMargins = @convention(c) (AnyObject, Selector) -> Void
+  private static let resetMarginsSelector = NSSelectorFromString("_resetDragMarginsIfNeeded")
+  private static let structuralRegionsSelector = NSSelectorFromString("_updateStructuralRegionsOnNextDisplayCycle")
+  private static var pressedHere = false
+  private static var marginsDeferred = false
+
+  private static var healPending = false
+
+  private static func releaseMargins() {
+    guard pressedHere else { return }
+    pressedHere = false
+    if marginsDeferred { for window in trackedWindows() { _ = window.perform(structuralRegionsSelector) } }
+  }
+
+  private static func releaseMarginsOnceUp() {
+    guard !healPending else { return }
+    healPending = true
+    DispatchQueue.main.asyncAfter(deadline: .now() + refreshEvery) {
+      healPending = false
+      if NSEvent.pressedMouseButtons != 0 { releaseMarginsOnceUp() } else { releaseMargins() }
+    }
+  }
+
+  private static func deferMarginsWhilePressed() {
+    let noArguments = { (types: String) in types.hasPrefix("v") && types.hasSuffix("@0:8") }
+    guard matches(NSWindow.self, resetMarginsSelector, noArguments), matches(NSWindow.self, structuralRegionsSelector, noArguments),
+          let method = class_getInstanceMethod(NSWindow.self, resetMarginsSelector)
+    else { return }
+    let original = unsafeBitCast(method_getImplementation(method), to: ResetMargins.self)
+    let block: @convention(block) (NSWindow) -> Void = { window in
+      if pressedHere, NSEvent.pressedMouseButtons != 0, embeddedRoot(window) != nil { return releaseMarginsOnceUp() }
+      original(window, resetMarginsSelector)
+    }
+    method_setImplementation(method, imp_implementationWithBlock(block))
+    marginsDeferred = true
+  }
+
   private static func install(_ host: AnyClass) {
+    deferMarginsWhilePressed()
     replaceRect(host) { view, original in hostsRoot(view) ? .zero : original() }
     replaceCanMove(host) { view, original in hostsRoot(view) ? true : original() }
     replaceRect(NSView.self) { view, original in

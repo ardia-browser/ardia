@@ -139,7 +139,8 @@ final class FadeLabel: ExpoView {
     CATransaction.begin()
     CATransaction.setDisableActions(true)
     if ink.superlayer !== layer { layer?.addSublayer(ink) }
-    ink.frame = CGRect(x: 0, y: (bounds.height - fitting.height) / 2, width: max(bounds.width, fitting.width), height: fitting.height)
+    let placed = CGRect(x: 0, y: (bounds.height - fitting.height) / 2, width: fitting.width, height: fitting.height)
+    if ink.frame != placed { ink.frame = placed }
     if bounds.width > 0, fitting.width > bounds.width + 0.5 {
       fade.frame = CGRect(x: 0, y: 0, width: bounds.width, height: fitting.height)
       let start = max(0, 1 - fadeWidth / bounds.width)

@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useRef, useState } from "react";
 import { Animated, Pressable, View, type LayoutChangeEvent } from "react-native";
 import { Button, ContextMenuArea, HoverFill, perLook, radius, sidebarPoints, space, Symbol, Text, useHover, withAlpha } from "../ui";
 import { hex, layout, useTheme } from "../ui/theme";
@@ -39,14 +39,14 @@ export const NewTabRow = memo(function NewTabRow({ windowId, shift = null, clip 
   const [moved, movedRef] = useShift(shift);
   const [movedButtons, movedButtonsRef] = useShift(shift);
   const clipped = useClipped(clip);
-  const [widths, setWidths] = useState({ row: 0, label: 0, hint: 0 });
+  const widths = useRef({ row: 0, label: 0, hint: 0 }).current;
+  const [hintFits, setHintFits] = useState(false);
   const measure = (key: keyof typeof widths) => (e: LayoutChangeEvent) => {
-    const width = Math.ceil(e.nativeEvent.layout.width);
-    setWidths((w) => (w[key] === width ? w : { ...w, [key]: width }));
+    widths[key] = Math.ceil(e.nativeEvent.layout.width);
+    setHintFits(widths.hint > 0 && NEW_TAB_LABEL_X + widths.label + CLEANED_HINT_GAP + widths.hint <= widths.row - CLEANED_HINT_RIGHT);
   };
   const quietInk = hex(withAlpha(theme.textTab, hovered ? tokens.quietText : tokens.quietFaintText));
   const hint = `${cleaned} cleaned`;
-  const hintFits = widths.hint > 0 && NEW_TAB_LABEL_X + widths.label + CLEANED_HINT_GAP + widths.hint <= widths.row - CLEANED_HINT_RIGHT;
   return (
     <View {...hoverProps} onLayout={measure("row")} style={[{ flexDirection: "row", alignItems: "center" }, clipped ? clippedRow() : null]}>
       <View pointerEvents="none" style={MEASURE_OFFSCREEN}>

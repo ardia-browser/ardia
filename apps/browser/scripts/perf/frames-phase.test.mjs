@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ratchetCheck, ratchetInit, windowStats } from "./frames-phase.mjs";
+import { edgeLag, ratchetCheck, ratchetInit, windowStats } from "./frames-phase.mjs";
 
 const R = 1000 / 120;
 const ticks = (times) => times.map((ts) => ({ k: "f", ts, now: ts + 0.4, tgt: ts + R }));
@@ -82,4 +82,36 @@ test("ratchet: a count with no proof is advisory, one with proof gates", () => {
   const ratchet = { proof: { layoutPasses: null, uiBlocks: "docs/perf/frames.md" }, ceilings: { "tab switch": { layoutPasses: 25, uiBlocks: 100 } } };
   const rows = ratchetCheck(runs("tab switch", [{ layoutPasses: 30, uiBlocks: 120 }]), ratchet);
   assert.deepEqual(rows.map((r) => [r.key, r.over, r.proven]), [["layoutPasses", true, false], ["uiBlocks", true, true]]);
+});
+
+const dragged = (behind, moves = 10, grab = 1) =>
+  Array.from({ length: moves + 2 }, (_, i) => {
+    const step = Math.max(0, i - 1);
+    return { k: "z", ts: i * R, step, x: 100 + 2 * step, edge: 100 + 2 * Math.max(0, step - behind) - grab, card: 0 };
+  });
+
+test("edge lag: frames between the pointer's move and the edge reaching it, the grab offset taken out", () => {
+  const level = edgeLag(dragged(0), 0, 1000);
+  assert.equal(level.edgeLag, 0);
+  assert.equal(level.edgeLagWorst, 0);
+  const late = edgeLag(dragged(2), 0, 1000);
+  assert.equal(late.edgeLag, 2);
+  assert.equal(late.edgeLagWorst, 2);
+  assert.equal(late.edgeMoves, 10);
+});
+
+test("edge lag reads one drag: the next drag's samples, which start over at step 0, are not mixed in", () => {
+  const two = [...dragged(1), ...dragged(3).map((s) => ({ ...s, ts: s.ts + 500 }))];
+  assert.equal(edgeLag(two, 0, 2000).edgeLag, 1);
+  assert.equal(edgeLag(two, 400, 2000).edgeLag, 3);
+});
+
+test("a drag the edge never followed is reported as such, so the frame row doesn't count it as smooth", () => {
+  const still = dragged(0).map((s) => ({ ...s, edge: 100 }));
+  assert.deepEqual(edgeLag(still, 0, 1000), { edgeStill: true });
+});
+
+test("a resize the probe never ran (no handle to press) is reported as such, not read as smooth frames", () => {
+  assert.deepEqual(edgeLag([], 0, 1000), { edgeUndragged: true });
+  assert.deepEqual(edgeLag(dragged(0).map((s) => ({ ...s, ts: s.ts + 5000 })), 0, 1000), { edgeUndragged: true });
 });

@@ -71,7 +71,7 @@ export const BarItem = memo(function BarItem({
 }) {
   const node = useBookmarks((b) => b.nodes[id]);
   const size = useBarSize();
-  const width = useSidebarWidth(windowId);
+  const width = useSidebarWidth(windowId, false);
   const sidebarEdge = useSidebarEdge(windowId, width);
   const edge = useRef(sidebarEdge);
   edge.current = sidebarEdge;

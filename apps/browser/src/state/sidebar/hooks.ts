@@ -1,3 +1,5 @@
+import { useLayoutEffect, useState } from "react";
+import { Animated } from "react-native";
 import { useShallow } from "zustand/react/shallow";
 import { useBrowser } from "../browser/store";
 import { activeTabId, isPinnedRow, tabTitle, viewTabIds } from "../browser/model";
@@ -20,13 +22,32 @@ import { groupEntries, keptEntries, showsExtraTabs, sidebarEntries } from "./ent
 import { groupTabIds } from "./groupPanelRows";
 import { capture, type Capture } from "./listCapture";
 import { pinnedCollapsed, pinnedKept } from "./pinnedFold";
-import { useSidebarUi, type Hover } from "./sidebarUi";
-import { useShownSidebarWidth } from "./shownWidth";
+import { useSidebarResize, type Hover } from "./sidebarUi";
+import { sidebarWidthIn, useShownSidebarWidthAs } from "./shownWidth";
 
-export function useSidebarWidth(windowId: string): number {
-  const shown = useShownSidebarWidth(windowId);
-  const dragging = useSidebarUi((u) => u.dragWidth[windowId]);
-  return dragging ?? shown;
+export function useSidebarWidthAs<T>(windowId: string, select: (width: number) => T, live = true): T {
+  const shown = useShownSidebarWidthAs(windowId, select);
+  const dragged = useSidebarResize((r) => (live && windowId in r.widths ? select(r.widths[windowId]!) : undefined));
+  return dragged === undefined ? shown : dragged;
+}
+
+export const useSidebarWidth = (windowId: string, live = true) => useSidebarWidthAs(windowId, (width) => width, live);
+
+export const useSidebarResizing = (windowId: string, watching = true) => useSidebarResize((r) => watching && windowId in r.widths);
+
+export function useSidebarWidthValue(windowId: string): Animated.Value {
+  const settled = useSidebarWidth(windowId, false);
+  const [value] = useState(() => new Animated.Value(settled));
+  useLayoutEffect(() => {
+    let shown = NaN;
+    const follow = () => {
+      const width = useSidebarResize.getState().widths[windowId] ?? sidebarWidthIn(useBrowser.getState(), windowId);
+      if (width !== shown) value.setValue((shown = width));
+    };
+    follow();
+    return useSidebarResize.subscribe(follow);
+  }, [value, windowId, settled]);
+  return value;
 }
 
 export const useDragGhostLabel = (folderName: string | undefined, groupId: string | undefined, tab: Tab | undefined) =>

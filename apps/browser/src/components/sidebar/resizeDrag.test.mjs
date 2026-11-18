@@ -24,6 +24,7 @@ function sidebarDrag(saved = 190) {
     press: (fromEdge) => gesture.onPanResponderGrant({ fromEdge }),
     move: (dx) => gesture.onPanResponderMove({}, { dx }),
     release: (dx) => gesture.onPanResponderRelease({}, { dx }),
+    abandon: () => gesture.abandon(),
   };
 }
 
@@ -92,4 +93,24 @@ test("past min and max the width stretches and settles back inside", () => {
   assert.ok(Math.abs(unstretch(rubberBand(450, bounds), bounds) - 450) < 1e-6);
   assert.equal(clampWidth(450, bounds), 400);
   assert.equal(clampWidth(100, bounds), 160);
+});
+
+test("a handle that goes away mid-drag (the layout switched to top tabs) ends the drag where it was, as a drag, and leaves no live width", () => {
+  const drag = sidebarDrag();
+  drag.press(0);
+  drag.move(60);
+  drag.abandon();
+  assert.deepEqual(drag.commits, [{ width: 250, dragged: true }]);
+  assert.equal(drag.shown.at(-1), null);
+  drag.abandon();
+  assert.equal(drag.commits.length, 1);
+});
+
+test("a handle that goes away when no drag is running commits nothing", () => {
+  const drag = sidebarDrag();
+  drag.abandon();
+  drag.press(0);
+  drag.release(0);
+  drag.abandon();
+  assert.deepEqual(drag.commits, [{ width: 190, dragged: false }]);
 });

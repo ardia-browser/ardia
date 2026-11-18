@@ -363,7 +363,9 @@ command starts.
 ### What the frame rows measure
 
 `--only frames` (timings, run under the perflab lock) and `--only framecounts` (counts, no lock) run the app's own UI
-interactions on the big seed (200 tabs in two profiles) and ask, per interaction, how many frames the main thread
+interactions on the big seed (200 tabs in two profiles; `--seed profiles` runs them on a sidebar shaped like a heavy
+user's instead: 13 profiles, the shown one with 15 pinned rows and 85 more in 4 groups, 30 groups in all; `--seed one`
+on one tab in each of two profiles) and ask, per interaction, how many frames the main thread
 delivered. `--frames-n` repetitions (default 8; `framecounts` at most 3) per run, `--runs` runs per app, interleaved
 with `--control`. They need the display on: `acperf display` is checked before and after, a run on an asleep or
 locked display is left out ("runs skipped"), because macOS stops giving windows display-link frames then.
@@ -372,7 +374,7 @@ The probe (`acframes.m`, loaded with `AC_BENCH_FRAMES=1`) links a `CADisplayLink
 screen's maximum rate (`NSScreen.maximumFramesPerSecond`: 120 on a ProMotion built-in display, 60 on an external
 one; the "screen ..., maximum refresh rate" row says which). A tick is the main thread getting to a vsync. Each
 interaction's window starts at the interaction (a real key event for the command bar, the store call otherwise; the
-scroll and hover are driven in-process from the display link's own ticks, so they are stepped by frames) and ends a
+scroll, hover and sidebar resize are driven in-process from the display link's own ticks, so they are stepped by frames) and ends a
 fixed time later.
 
 The two "pointer on the rows" scrolls are the ones that stand for a person scrolling the sidebar: hover and the cursor
@@ -391,6 +393,7 @@ flick, real scroll events with phases and momentum.
 | worst frame | The longest gap between two ticks |
 | main thread busy / longest stall | Main-thread run-loop iterations (AfterWaiting → BeforeWaiting, past Core Animation's commit observer): their sum, clipped to the window, and the longest one that started in it. One iteration over 8.33 ms always costs a frame. Includes the Core Animation commit but not the render server or GPU. |
 | JS thread busy / longest task | The same on React Native's JS thread (`com.facebook.react.JavaScript`'s run loop) |
+| frames the edge is behind the pointer (median / most) | Sidebar resize only: the probe presses the col-resize handle and posts one drag per display-link tick (120 pt out and back, 2 pt a tick, the button and pointer faked to match), and at each tick reads where the handle is. The lag is how many posted moves ago the pointer was where the edge is now: 0 is the edge at the last posted move, 1 the one before (where a move that goes through JS, layout and the next mount lands with time to spare), more means moves waited or were coalesced. On a starved main thread the ticks slow down with it, so read it next to frames delivered |
 | layout passes, mount batches, UI blocks run, view updates sent by JS | **Deterministic**: `RCTUIManager`'s `_layoutAndMount` calls, `flushUIBlocksWithCompletion:` calls with work, the blocks in them, and `updateView:` calls. Taken in every frames run and in `framecounts`. |
 | React commits, host updates, renders, store updates | **Deterministic**, `framecounts` only (the JS probe is on): the counts the ratchet takes from js-bench, per interaction |
 

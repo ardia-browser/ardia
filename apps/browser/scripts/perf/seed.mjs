@@ -18,12 +18,14 @@ const WORDS = [
 const words = (n) => Array.from({ length: n }, () => pick(WORDS)).join(" ");
 const title = (n) => words(n).replace(/^\w/, (c) => c.toUpperCase());
 
-export function buildSeed(origin, appVersion = "") {
+const OWNER_PROFILES = ["Personal", "Work", "Side project", "Family", "Finance", "Travel", "Reading", "Home", "Music", "Health", "School", "Clients", "Archive"];
+const PROFILE_COLORS = ["plum", "blue", "green", "orange", "red"];
+
+export function buildSeed(origin, appVersion = "", shape = "big") {
   const now = Date.now();
-  const profiles = {
-    default: { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 },
-    work: { id: "work", name: "Work", color: "blue", icon: null, createdAt: 1 },
-  };
+  const names = shape === "profiles" ? OWNER_PROFILES : ["Personal", "Work"];
+  const profileIds = names.map((_, k) => (k === 0 ? "default" : k === 1 ? "work" : `p${k + 1}`));
+  const profiles = Object.fromEntries(profileIds.map((id, k) => [id, { id, name: names[k], color: PROFILE_COLORS[k % PROFILE_COLORS.length], icon: null, createdAt: k }]));
   const windowId = "w-bench";
   const tabs = [];
   const groups = [];
@@ -49,10 +51,10 @@ export function buildSeed(origin, appVersion = "") {
     tabs.push(t);
     return t;
   };
-  const layoutProfile = (profileId, count, pinned, groupSizes) => {
+  const layoutProfile = (profileId, count, pinned, groupSizes, pinnedAs = "tile") => {
     const ids = [];
     let i = 0;
-    for (; i < pinned; i++) ids.push(tab(profileId, i, { pinned: true, pinnedUrl: `${origin}/p/${profileId}-${i}` }).id);
+    for (; i < pinned; i++) ids.push(tab(profileId, i, { pinned: true, pinnedUrl: `${origin}/p/${profileId}-${i}`, ...(pinnedAs === "row" ? { pinnedAsRow: true } : {}) }).id);
     for (const [g, size] of groupSizes.entries()) {
       const members = [];
       for (let k = 0; k < size; k++, i++) members.push(tab(profileId, i).id);
@@ -65,20 +67,24 @@ export function buildSeed(origin, appVersion = "") {
     for (; i < count; i++) ids.push(tab(profileId, i).id);
     return ids;
   };
-  const personal = layoutProfile("default", 158, 8, [5, 5]);
-  const work = layoutProfile("work", 42, 4, [4]);
-  const active = { default: personal[20], work: work[10] };
+  const laidOut =
+    shape === "profiles"
+      ? profileIds.map((id, k) => (k === 0 ? layoutProfile(id, 100, 15, [5, 4, 6, 4], "row") : layoutProfile(id, 9, 0, k < 3 ? [2, 2, 2] : [2, 2])))
+      : shape === "one"
+        ? [layoutProfile("default", 1, 0, []), layoutProfile("work", 1, 0, [])]
+        : [layoutProfile("default", 158, 8, [5, 5]), layoutProfile("work", 42, 4, [4])];
+  const active = Object.fromEntries(profileIds.map((id, k) => [id, laidOut[k][shape === "profiles" ? (k === 0 ? 40 : 6) : shape === "one" ? 0 : k === 0 ? 20 : 10]]));
   for (const [p, id] of Object.entries(active)) tabs.find((t) => t.id === id).lastActiveAt = now - 1000 * (p === "default" ? 1 : 2);
 
   const session = {
     version: 2,
     profiles,
-    profileOrder: ["default", "work"],
+    profileOrder: profileIds,
     orphanedProfileData: [],
-    settings: { searchSuggestions: false, warnBeforeClosingLastTab: false, warnBeforeClosingWindow: false },
+    settings: { searchSuggestions: false, warnBeforeClosingLastTab: false, warnBeforeClosingWindow: false, ...(shape === "profiles" ? { sidebarWidth: 242, addressBar: "toolbar" } : {}) },
     windows: [
       {
-        id: windowId, profileId: "default", incognito: false, tabIds: [...personal, ...work], activeTabIds: active,
+        id: windowId, profileId: "default", incognito: false, tabIds: laidOut.flat(), activeTabIds: active,
         sidebarOpen: true, frame: [80, 80, 1440, 900], createdAt: now,
       },
     ],
@@ -145,15 +151,15 @@ export function buildSeed(origin, appVersion = "") {
   };
 }
 
-export function writeSeed(dir, origin, appVersion) {
+export function writeSeed(dir, origin, appVersion, shape) {
   mkdirSync(dir, { recursive: true });
-  for (const [name, value] of Object.entries(buildSeed(origin, appVersion))) {
+  for (const [name, value] of Object.entries(buildSeed(origin, appVersion, shape))) {
     writeFileSync(join(dir, name), typeof value === "string" ? value : JSON.stringify(value));
   }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const [dir, origin = "http://127.0.0.1:47817", version = ""] = process.argv.slice(2);
-  if (!dir) throw new Error("usage: node seed.mjs <data dir> [server origin] [app version]");
-  writeSeed(dir, origin, version);
+  const [dir, origin = "http://127.0.0.1:47817", version = "", shape = "big"] = process.argv.slice(2);
+  if (!dir) throw new Error("usage: node seed.mjs <data dir> [server origin] [app version] [big|profiles|one]");
+  writeSeed(dir, origin, version, shape);
 }

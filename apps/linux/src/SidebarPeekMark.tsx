@@ -5,11 +5,11 @@ import { Sidebar as BrowserSidebar } from "../../browser/src/components/sidebar/
 import { useWindowId } from "../../browser/src/state/browser/hooks";
 import { usePeekSpan } from "../../browser/src/state/windows/dockMotion";
 
-export function Sidebar(props: React.ComponentProps<typeof BrowserSidebar>) {
+export function Sidebar() {
   const peeking = usePeekSpan(useWindowId()) !== undefined;
   return (
     <>
-      <BrowserSidebar {...props} />
+      <BrowserSidebar />
       {peeking && <PeekMark />}
     </>
   );

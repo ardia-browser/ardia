@@ -1,8 +1,8 @@
-import { memo, useState, type ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import { Animated, Image, Pressable, View } from "react-native";
 import { useTheme } from "../ui/theme";
 import { ContextMenuArea, Divider, sidebarLineHeight, space, Symbol, Text, useHover } from "../ui";
-import { TAB_ROW } from "./tokens";
+import { SIDEBAR_MAX_WIDTH, TAB_ROW } from "./tokens";
 import { HoverSlot } from "../ui/HoverSlot";
 import { closeAllTabs } from "../../state/sidebar/clearTabs";
 import { tidy as tidyTabs } from "../../state/sidebar/tidyUi";
@@ -26,14 +26,12 @@ type DividerProps = { windowId: string; profileId: string; lift: number; clear: 
 export const ClearDivider = memo(function ClearDivider({ windowId, profileId, lift, clear, tidy, pinned }: DividerProps) {
   const theme = useTheme();
   const { hovered: shown, hoverProps } = useHover();
-  const [lineWidth, setLineWidth] = useState(0);
   const foldShown = !!pinned && (shown || pinned.collapsed);
   const actions = tidy || clear;
   return (
     <ContextMenuArea onContextMenu={() => void openSidebarMenu(windowId)}>
       <View
         {...hoverProps}
-        onLayout={(e) => setLineWidth(Math.max(0, e.nativeEvent.layout.width - 2 * PADDING))}
         style={{
           height: bandHeight(),
           marginTop: -lift,
@@ -45,9 +43,7 @@ export const ClearDivider = memo(function ClearDivider({ windowId, profileId, li
       >
         {pinned ? <HoverSlot hovered={foldShown} width="content" reserve="hover" align="start" hover={<FoldButton pinned={pinned} onPress={() => togglePinnedFold(profileId)} />} /> : null}
         <View style={{ flex: 1, height: 1, overflow: "hidden" }}>
-          {lineWidth ? (
-            <View style={{ position: "absolute", left: 0, bottom: 0, width: lineWidth, height: DASH_BOX_HEIGHT, borderBottomWidth: 1, borderStyle: "dashed", borderColor: theme.pinnedDivider }} />
-          ) : null}
+          <View style={{ position: "absolute", left: 0, bottom: 0, width: SIDEBAR_MAX_WIDTH, height: DASH_BOX_HEIGHT, borderBottomWidth: 1, borderStyle: "dashed", borderColor: theme.pinnedDivider }} />
         </View>
         {actions ? (
           <HoverSlot

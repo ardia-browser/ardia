@@ -1,0 +1,55 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        {
+          "header": "user-agent",
+          "operation": "set",
+          "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Safari/605.1.15"
+        },
+        {
+          "header": "sec-ch-ua",
+          "operation": "remove"
+        },
+        {
+          "header": "sec-ch-ua-mobile",
+          "operation": "remove"
+        },
+        {
+          "header": "sec-ch-ua-platform",
+          "operation": "remove"
+        },
+        {
+          "header": "sec-ch-ua-full-version-list",
+          "operation": "remove"
+        },
+        {
+          "header": "sec-ch-ua-platform-version",
+          "operation": "remove"
+        }
+      ]
+    },
+    "condition": {
+      "requestDomains": [
+        "netflix.com",
+        "www.youtube.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "xmlhttprequest",
+        "script",
+        "stylesheet",
+        "image",
+        "font",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  }
+]

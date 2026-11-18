@@ -5,6 +5,7 @@ import {
   gzipFile,
   onReportEvent,
   recordingThumbnail,
+  recordsReports,
   removeReportFile,
   startWindowRecording,
   stopWindowRecording,
@@ -24,12 +25,29 @@ export const lastRecordingStats = () => lastResult;
 export const recordedPictureInPicture = (result: RecordingResult | null) =>
   !!result?.windows?.some((w) => w.kind === "pictureInPicture" && w.frames > 0);
 
-export function ensureDraftDir(): string {
+export const canRecord = recordsReports;
+
+let makingDraftDir: Promise<string> | null = null;
+
+export function ensureDraftDir(): string | Promise<string> {
   const dir = currentReport().draftDir;
   if (dir) return dir;
+  if (makingDraftDir) return makingDraftDir;
   const made = draftDirectory();
-  patchReport({ draftDir: made });
-  return made;
+  if (typeof made === "string") {
+    patchReport({ draftDir: made });
+    return made;
+  }
+  const making = made.then((path) => {
+    patchReport({ draftDir: path });
+    return path;
+  });
+  makingDraftDir = making;
+  const settle = () => {
+    if (makingDraftDir === making) makingDraftDir = null;
+  };
+  making.then(settle, settle);
+  return making;
 }
 
 function listen() {
@@ -49,7 +67,8 @@ async function recordingStopped(result: RecordingResult | null) {
   const r = currentReport().recording;
   lastResult = result;
   if (!result) return patchReport({ recording: { phase: "failed", message: "The recording couldn't be saved." } });
-  const thumbnail = `${ensureDraftDir()}/recording-${Date.now()}.png`;
+  const dir = ensureDraftDir();
+  const thumbnail = `${typeof dir === "string" ? dir : await dir}/recording-${Date.now()}.png`;
   const made = await recordingThumbnail(result.path, thumbnail).catch(() => false);
   const pictureInPicture = recordedPictureInPicture(result);
   patchReport({
@@ -68,12 +87,13 @@ async function recordingStopped(result: RecordingResult | null) {
 
 export async function startRecording() {
   const s = currentReport();
-  if (!s.windowId || s.recording.phase === "starting" || s.recording.phase === "recording" || s.recording.phase === "saving") return;
+  if (!canRecord() || !s.windowId || s.recording.phase === "starting" || s.recording.phase === "recording" || s.recording.phase === "saving") return;
   listen();
   discardRecording();
   const includePages = s.draft.includePages && useBrowser.getState().windows[s.windowId]?.kind !== "private";
   patchReport({ recording: { phase: "starting" }, attachedOpen: false, preview: false });
-  const path = `${ensureDraftDir()}/recording.mp4`;
+  const dir = ensureDraftDir();
+  const path = `${typeof dir === "string" ? dir : await dir}/recording.mp4`;
   if (s.draft.kind === "slow" && s.draft.trace) await startTrace();
   const started = await startWindowRecording(s.windowId, includePages, path, RECORDING_MAX_SECONDS).catch(() => false);
   if (!started) {
@@ -118,7 +138,8 @@ async function finishTrace() {
   patchReport({ trace: { phase: "saving" } });
   const raw = await endTracing(true).catch(() => null);
   if (!raw) return patchReport({ trace: { phase: "failed" } });
-  const path = `${ensureDraftDir()}/trace.json.gz`;
+  const dir = ensureDraftDir();
+  const path = `${typeof dir === "string" ? dir : await dir}/trace.json.gz`;
   const bytes = await gzipFile(raw, path, true).catch(() => -1);
   if (bytes < 0) {
     removeReportFile(raw);

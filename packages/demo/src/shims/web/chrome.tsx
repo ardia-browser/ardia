@@ -28,6 +28,10 @@ function withOpacity(color: string, opacity: number) {
 export type SurfaceProps = ViewProps & {
   grayscale?: boolean;
   fill?: string;
+  fillColors?: string[];
+  fillStops?: number[];
+  fade?: number[];
+  fadeStops?: number[];
   cornerRadius?: number;
   borderColor?: string;
   borderWidth?: number;
@@ -40,7 +44,7 @@ export type SurfaceProps = ViewProps & {
 
 export const CA_SHADOW_BLUR = 2;
 
-export function Surface({ grayscale = false, fill, cornerRadius = 0, borderColor, borderWidth = 0, borderColors, shadowColor: color, shadowOpacity = 0, shadowRadius = 0, shadowOffset, style, children, ...props }: SurfaceProps) {
+export function Surface({ grayscale = false, fill, fillColors, fillStops, fade, fadeStops, cornerRadius = 0, borderColor, borderWidth = 0, borderColors, shadowColor: color, shadowOpacity = 0, shadowRadius = 0, shadowOffset, style, children, ...props }: SurfaceProps) {
   const gradientBorder = !!borderColors && borderColors.length >= 2 && borderWidth > 0;
   const surface: Style = {
     filter: grayscale ? "grayscale(1)" : undefined,
@@ -48,6 +52,16 @@ export function Surface({ grayscale = false, fill, cornerRadius = 0, borderColor
     borderRadius: cornerRadius,
     ...(borderColor && borderWidth > 0 && !gradientBorder ? { borderColor, borderWidth, borderStyle: "solid" } : {}),
   };
+  if (fillColors && fillColors.length >= 2) {
+    const placed = fillStops?.length === fillColors.length;
+    surface.backgroundImage = `linear-gradient(to bottom, ${fillColors.map((c, i) => (placed ? `${c} ${fillStops![i]! * 100}%` : c)).join(", ")})`;
+  }
+  if (fade && fade.length >= 2) {
+    const at = fadeStops?.length === fade.length ? fadeStops : null;
+    const mask = `linear-gradient(to right, ${fade.map((a, i) => `rgba(0,0,0,${a})${at ? ` ${at[i]! * 100}%` : ""}`).join(", ")})`;
+    surface.maskImage = mask;
+    surface.WebkitMaskImage = mask;
+  }
   if (color && shadowOpacity > 0) {
     const [x, y] = shadowOffset ?? [0, 0];
     surface.boxShadow = `${x}px ${y}px ${shadowRadius * CA_SHADOW_BLUR}px ${withOpacity(color, shadowOpacity)}`;
@@ -261,8 +275,8 @@ export function WindowDragRegion({
   return <Region {...props} onClick={onRegionClick} onDoubleClick={onRegionDoubleClick} />;
 }
 
-export type DockSelectionProps = ViewProps & { fill?: string; stroke?: string; cornerRadius?: number; strokeWidth?: number; dark: boolean };
+export type DockSelectionProps = ViewProps & { fill?: string; stroke?: string; cornerRadius?: number; strokeWidth?: number; dark: boolean; outline?: boolean };
 
-export function DockSelection({ fill, stroke, cornerRadius, strokeWidth, dark: _dark, style, ...props }: DockSelectionProps & Record<string, unknown>) {
-  return <View {...props} style={[{ backgroundColor: fill, borderColor: stroke, borderWidth: stroke ? (strokeWidth ?? 1) : 0, borderRadius: cornerRadius }, style]} />;
+export function DockSelection({ fill, stroke, cornerRadius, strokeWidth, dark: _dark, outline, style, ...props }: DockSelectionProps & Record<string, unknown>) {
+  return <View {...props} style={[{ backgroundColor: outline ? undefined : fill, borderColor: stroke, borderWidth: stroke ? (strokeWidth ?? 1) : 0, borderRadius: cornerRadius }, style]} />;
 }

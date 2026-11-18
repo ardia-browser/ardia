@@ -1,0 +1,92 @@
+name: Checks
+
+on:
+  pull_request:
+    paths: &code
+      - "apps/**"
+      - "packages/**"
+      - "extras/**"
+      - "scripts/**"
+      - "docs/**"
+      - "infra/**"
+      - "engine/**"
+      - ".claude/**"
+      - ".github/vouch/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - "tsconfig.base.json"
+      - ".nvmrc"
+      - "patches/**"
+      - ".github/workflows/checks.yml"
+  push:
+    branches: [main]
+    paths: *code
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: "typecheck and tests", part: rest }
+          - { name: "browser tests, share 1 of 4", part: browser, shard: 1 }
+          - { name: "browser tests, share 2 of 4", part: browser, shard: 2 }
+          - { name: "browser tests, share 3 of 4", part: browser, shard: 3 }
+          - { name: "browser tests, share 4 of 4", part: browser, shard: 4 }
+          - { name: "Mac bundle", part: bundle }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        if: matrix.part == 'rest'
+        run: pnpm typecheck
+      - name: Tests that need no Mac, the browser's aside
+        if: ${{ !cancelled() && matrix.part == 'rest' }}
+        run: pnpm run test:portable:packages --filter=!@ardia/browser
+      - name: The tests of the Mac packages that need no Mac
+        if: ${{ !cancelled() && matrix.part == 'rest' }}
+        run: pnpm run test:portable:mac
+      - name: Repository tests
+        if: ${{ !cancelled() && matrix.part == 'rest' }}
+        run: pnpm run test:root
+      - name: Vouch tests
+        if: ${{ !cancelled() && matrix.part == 'rest' }}
+        run: node --test .github/vouch/vouch.test.cjs
+      - name: This share of the browser's tests
+        if: matrix.part == 'browser'
+        env:
+          NODE_OPTIONS: --test-shard=${{ matrix.shard }}/4
+        run: pnpm --filter @ardia/browser test
+      - name: Bundle the Mac app's JavaScript as a release build does
+        if: matrix.part == 'bundle'
+        working-directory: apps/browser
+        run: |
+          npx react-native bundle --platform macos --entry-file index.js --dev false --minify false --reset-cache --bundle-output "$RUNNER_TEMP/main.jsbundle" --assets-dest "$RUNNER_TEMP/assets"
+          ls -l "$RUNNER_TEMP/main.jsbundle"
+      - name: Compile the bundle with Hermes
+        if: matrix.part == 'bundle'
+        run: |
+          hermesc=$(find node_modules -path '*linux64-bin/hermesc' -type f | head -1)
+          [ -n "$hermesc" ] || { echo "::error::no Linux hermesc under node_modules"; exit 1; }
+          echo "compiling with $hermesc"
+          "$hermesc" -emit-binary -O -out "$RUNNER_TEMP/main.hbc" "$RUNNER_TEMP/main.jsbundle"
+          ls -l "$RUNNER_TEMP/main.hbc"

@@ -140,7 +140,7 @@ def add_parsers(commands, formatter):
     rename.add_argument("name", nargs="?", metavar="NAME", help="the name")
     icon = common(verbs.add_parser("icon", help="set a tab's icon (no ICON resets it)", description="Set a tab's icon, as Change Icon… does; without ICON, the site's icon comes back."))
     icon.add_argument("id", metavar="ID", help="a tab id")
-    icon.add_argument("icon", nargs="?", metavar="ICON", help="an emoji from Ardia's icon picker or symbol:<SF Symbol name>")
+    icon.add_argument("icon", nargs="?", metavar="ICON", help="an emoji from Ardia's icon picker, symbol:<SF Symbol name>, or none (a pinned row: its title alone)")
 
     groups = common(commands.add_parser("groups", help="list and organize tab groups", description=GROUPS_DESCRIPTION, formatter_class=formatter), "print JSON")
     groups.add_argument("--window", metavar="ID", help="only this window")
@@ -305,6 +305,7 @@ def apply_ops(args, command: str, ops: list) -> int:
     try:
         reply = control.call(args.data_dir, "apply", {"ops": ops}, APPLY_TIMEOUT)
     except Unreachable as error:
+        error.noted()
         if error.sent:
             complain(f"ardia {command}: the connection dropped after the request went out, so it may or may not have run ({error})")
         else:
@@ -438,6 +439,7 @@ def read_workspace(args, command: str):
     try:
         return control.call(args.data_dir, "workspace", params)
     except Unreachable as error:
+        error.noted()
         complain(f"ardia: {error}")
         return 2
     except MethodError as error:

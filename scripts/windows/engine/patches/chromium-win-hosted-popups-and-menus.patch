@@ -1,0 +1,85 @@
+--- a/chrome/browser/ui/navigator/browser_navigator.cc
++++ b/chrome/browser/ui/navigator/browser_navigator.cc
+@@ -112,6 +112,17 @@
+ using content::WebContents;
+ using WebExposedIsolationLevel = content::WebExposedIsolationLevel;
+ 
++#if BUILDFLAG(IS_WIN)
++// Ardia: the Windows engine host (ardia/win) keeps a tab or pop-up a page opens
++// from a window it hosts in the background of that window, offered to the app,
++// until the app shows it where it belongs.
++bool (*g_ardia_win_open_as_offer)(
++    BrowserWindowInterface* browser,
++    WindowOpenDisposition disposition,
++    const blink::mojom::WindowFeatures& features) = nullptr;
++void (*g_ardia_win_offer_inserted)() = nullptr;
++#endif
++
+ namespace {
+ 
+ struct AdditionalParams {
+@@ -1212,6 +1223,25 @@
+ 
+ base::WeakPtr<content::NavigationHandle> Navigate(NavigateParams* params) {
+   AdditionalParams additional_params;
++#if BUILDFLAG(IS_WIN)
++  // Ardia: a tab or pop-up a page opens from a window the Windows engine host
++  // hosts.
++  if ((params->disposition == WindowOpenDisposition::NEW_POPUP ||
++       params->disposition == WindowOpenDisposition::NEW_FOREGROUND_TAB) &&
++      g_ardia_win_open_as_offer &&
++      g_ardia_win_open_as_offer(params->browser, params->disposition,
++                                params->window_features)) {
++    params->disposition = WindowOpenDisposition::NEW_BACKGROUND_TAB;
++    params->tabstrip_add_types |= AddTabTypes::ADD_INHERIT_OPENER;
++    params->window_action = NavigateParams::WindowAction::kNoAction;
++    base::WeakPtr<content::NavigationHandle> handle =
++        internal::NavigateImpl(params, additional_params);
++    if (g_ardia_win_offer_inserted) {
++      g_ardia_win_offer_inserted();
++    }
++    return handle;
++  }
++#endif
+   return internal::NavigateImpl(params, additional_params);
+ }
+ 
+--- a/chrome/browser/ui/views/tab_contents/chrome_web_contents_view_delegate_views.cc
++++ b/chrome/browser/ui/views/tab_contents/chrome_web_contents_view_delegate_views.cc
+@@ -28,6 +28,14 @@
+ #include "ui/base/data_transfer_policy/data_transfer_endpoint.h"
+ #include "ui/views/widget/widget.h"
+ 
++// Ardia: the Windows engine host (ardia/win) builds the right-click menu of the
++// pages it hosts, with only what the app can do.
++std::unique_ptr<RenderViewContextMenuBase> (*g_ardia_win_context_menu)(
++    content::RenderFrameHost& render_frame_host,
++    const content::ContextMenuParams& params,
++    bool is_paste_enabled,
++    bool is_paste_and_match_style_enabled) = nullptr;
++
+ ChromeWebContentsViewDelegateViews::ChromeWebContentsViewDelegateViews(
+     content::WebContents* web_contents)
+     : ContextMenuDelegate(web_contents), web_contents_(web_contents) {
+@@ -83,10 +91,18 @@
+ ChromeWebContentsViewDelegateViews::BuildMenu(
+     content::RenderFrameHost& render_frame_host,
+     const content::ContextMenuParams& params) {
++  // Ardia: the Windows engine host's menu for the pages it hosts.
+   std::unique_ptr<RenderViewContextMenuBase> menu =
+-      RenderViewContextMenuViews::Create(render_frame_host, params,
+-                                         is_paste_enabled_,
+-                                         is_paste_and_match_style_enabled_);
++      g_ardia_win_context_menu
++          ? g_ardia_win_context_menu(render_frame_host, params,
++                                     is_paste_enabled_,
++                                     is_paste_and_match_style_enabled_)
++          : nullptr;
++  if (!menu) {
++    menu = RenderViewContextMenuViews::Create(
++        render_frame_host, params, is_paste_enabled_,
++        is_paste_and_match_style_enabled_);
++  }
+   menu->Init();
+   return menu;
+ }

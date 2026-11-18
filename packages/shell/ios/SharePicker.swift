@@ -12,18 +12,14 @@ enum SharePicker {
       if link.isFileURL { ArdiaWebView.removeSharedImage(link) }
       return done()
     }
-    var rect = NSRect(x: view.bounds.midX - 1, y: view.isFlipped ? 40 : view.bounds.maxY - 42, width: 2, height: 2)
-    var edge = NSRectEdge.minY
-    if let a = anchor, a.count == 4 {
-      rect = view.convert(NSRect(x: a[0], y: view.frame.height - a[1] - a[3], width: a[2], height: a[3]), from: nil)
-      edge = rect.midX < view.bounds.midX ? .maxX : .minX
-    }
+    let (rect, edge) = placement(in: view, anchor: anchor)
     let item: Any =
       link.isFileURL
       ? link as NSURL
       : NSPreviewRepresentingActivityItem(item: link as NSURL, title: title?.isEmpty == false ? title : link.host, image: nil, icon: nil)
     if LaunchConfig.shared.background {
       log("share sheet (not shown): \(describe(url, title)) window=#\(window.windowNumber) anchor=\(NSStringFromRect(rect))"
+        + " inWindow=\(NSStringFromRect(view.convert(rect, to: nil)))"
         + " services=\(services(for: [link as NSURL]).map(\.title).joined(separator: "|"))")
       if link.isFileURL { ArdiaWebView.removeSharedImage(link) }
       return done()
@@ -44,6 +40,7 @@ enum SharePicker {
     let (rect, edge) = placement(in: view, anchor: anchor)
     if LaunchConfig.shared.background {
       log("share sheet (not shown): text of \(text.count) characters window=#\(window.windowNumber) anchor=\(NSStringFromRect(rect))"
+        + " inWindow=\(NSStringFromRect(view.convert(rect, to: nil)))"
         + " services=\(services(for: [text as NSString]).map(\.title).joined(separator: "|"))")
       return done()
     }
@@ -59,9 +56,12 @@ enum SharePicker {
 
   private static func placement(in view: NSView, anchor: [Double]?) -> (NSRect, NSRectEdge) {
     guard let a = anchor, a.count == 4 else {
-      return (NSRect(x: view.bounds.midX - 1, y: view.isFlipped ? 40 : view.bounds.maxY - 42, width: 2, height: 2), .minY)
+      let width = InterfaceScale.root(of: view.window)?.bounds.width ?? InterfaceScale.rootLength(fromWindow: view.bounds.width)
+      let inWindow = InterfaceScale.windowRect(fromRoot: NSRect(x: width / 2 - 1, y: 40, width: 2, height: 2), in: view.window)
+      return (view.convert(inWindow, from: nil), .minY)
     }
-    let rect = view.convert(NSRect(x: a[0], y: view.frame.height - a[1] - a[3], width: a[2], height: a[3]), from: nil)
+    let inWindow = InterfaceScale.windowRect(fromRoot: NSRect(x: a[0], y: a[1], width: a[2], height: a[3]), in: view.window)
+    let rect = view.convert(inWindow, from: nil)
     return (rect, rect.midX < view.bounds.midX ? .maxX : .minX)
   }
 

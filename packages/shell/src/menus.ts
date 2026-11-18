@@ -16,9 +16,12 @@ export type MenuItem =
       enabled?: boolean;
       checked?: boolean;
       alternate?: boolean;
+      keepOpen?: boolean;
       children?: MenuItem[];
       share?: boolean;
     };
+
+export type MenuPickEvent = { command: "menu.pick"; arg: string };
 
 export type MenuEntry = { id: string; title: string; current?: boolean };
 export type MenuBookmark = { id: string; title: string; url?: string; children?: MenuBookmark[] };
@@ -47,8 +50,9 @@ export type MenuState = {
 export type MenuBookmarkKey = "bookmarkFolders" | "recentBookmarks" | "bookmarksBar" | "otherBookmarks";
 
 export type MenusNative = {
-  addListener(name: "onCommand", listener: (e: CommandEvent) => void): EventSubscription;
+  addListener(name: "onCommand", listener: (e: CommandEvent | MenuPickEvent) => void): EventSubscription;
   showMenu(items: MenuItem[]): Promise<string | null>;
+  updateMenu(items: MenuItem[]): Promise<void>;
   setMenuState(state: Omit<MenuState, MenuBookmarkKey>): Promise<void>;
   setMenuBookmarks(bookmarks: Pick<MenuState, MenuBookmarkKey>): Promise<void>;
   menuShortcuts(): Promise<MenuShortcut[]>;
@@ -68,7 +72,12 @@ export function watchMenus(watcher: () => void): () => void {
   return () => void menuWatchers.delete(watcher);
 }
 
-export function showMenu(items: MenuItem[]): Promise<string | null> {
+export function showMenu(items: MenuItem[], onKeepOpenPick?: (id: string) => MenuItem[]): Promise<string | null> {
+  const menus = nativeModule("ArdiaMenus");
+  const picks = onKeepOpenPick && menus.addListener("onCommand", (e) => e.command === "menu.pick" && void menus.updateMenu(onKeepOpenPick(e.arg)));
   menusChanged(1);
-  return Promise.resolve(nativeModule("ArdiaMenus").showMenu(items)).finally(() => menusChanged(-1));
+  return Promise.resolve(menus.showMenu(items)).finally(() => {
+    picks?.remove();
+    menusChanged(-1);
+  });
 }

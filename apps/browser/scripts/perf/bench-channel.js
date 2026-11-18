@@ -3,6 +3,7 @@ import { readDocument, writeDocument } from "../../src/platform/documents";
 import * as actions from "../../src/state/browser/actions";
 import { runCommand } from "../../src/state/commands/commands";
 import { webviews } from "../../src/platform/webviews";
+import { loadedProfiles, unloadIdleProfile } from "../../src/platform/profiles";
 import { usePages } from "../../src/state/tabs/pageState";
 import { useBrowser } from "../../src/state/browser/store";
 import { devJourneys } from "../../src/state/telemetry/journeys";
@@ -19,6 +20,8 @@ const ac = {
   webviews,
   shell,
   now: () => Date.now(),
+  loadedProfiles,
+  unloadIdleProfile,
   journeys: devJourneys,
   telemetry: telemetryState,
   blockedFetches: () => globalThis.__acBlockedFetches?.() ?? [],

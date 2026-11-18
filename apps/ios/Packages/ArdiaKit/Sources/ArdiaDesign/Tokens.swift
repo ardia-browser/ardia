@@ -7,9 +7,7 @@ public enum Palette {
   public static let onPrimaryAction = Color.adaptive(light: .white, dark: .black)
   public static let success = Color.adaptive(light: Color(hex: 0x34C759), dark: Color(hex: 0x30D158))
   public static let panel = Color.adaptive(light: .white, dark: Color(hex: 0x2A2A2A))
-  public static let panelBorder = Color.adaptive(light: .black.opacity(0.1), dark: .white.opacity(0.1))
   public static let toast = Color.adaptive(light: .white.opacity(0.92), dark: Color(hex: 0x2C2A2B, opacity: 0.9))
-  public static let toastShadow = Color.adaptive(light: .black.opacity(0.18), dark: .black.opacity(0.5))
 }
 
 public enum Spacing {
@@ -29,10 +27,70 @@ public enum Radius {
 }
 
 public enum Motion {
-  public static let snappy = Animation.spring(response: 0.3, dampingFraction: 0.86)
-  public static let smooth = Animation.spring(response: 0.42, dampingFraction: 0.9)
-  public static let tabStack = Animation.spring(duration: 0.4, bounce: 0.2)
-  public static let modeToggle = Animation.spring(duration: 0.3, bounce: 0.15)
+  public static let arrive = Animation.timingCurve(0.05, 0.7, 0.1, 1, duration: 0.19)
+  public static let expand = Animation.spring(response: 0.18, dampingFraction: 1)
+  public static let leaveSpring = Spring(response: 0.14, dampingRatio: 1)
+  public static let leave = Animation.spring(leaveSpring)
+  public static let riseCurve = MotionCurve(0.2, 0, 0, 1, duration: 0.36)
+  public static let rise = riseCurve.animation
+  public static let snappy = Animation.spring(response: 0.2, dampingFraction: 1)
+  public static let smoothSpring = Spring(response: 0.26, dampingRatio: 1)
+  public static let smooth = Animation.spring(smoothSpring)
+  public static let fadeCurve = MotionCurve.easeOut(duration: 0.15)
+  public static let fade = fadeCurve.animation
+  public static let step = Animation.timingCurve(0.05, 0.7, 0.1, 1, duration: 0.3)
+  public static let tabStack = Animation.spring(response: 0.22, dampingFraction: 1)
+  public static let modeToggle = snappy
+
+  public static func settle(distance: Double, velocity: Double, duration: Double = 0.26) -> Animation {
+    .interpolatingSpring(duration: duration, bounce: 0, initialVelocity: relativeVelocity(velocity, over: distance))
+  }
+
+  public static func relativeVelocity(_ velocity: Double, over distance: Double) -> Double {
+    let initial = abs(distance) > 0.001 ? velocity / distance : 0
+    return max(min(initial, 30), -30)
+  }
+}
+
+public struct MotionCurve: Sendable {
+  public let start: CGPoint
+  public let end: CGPoint
+  public let duration: Double
+
+  public init(_ x1: Double, _ y1: Double, _ x2: Double, _ y2: Double, duration: Double) {
+    start = CGPoint(x: x1, y: y1)
+    end = CGPoint(x: x2, y: y2)
+    self.duration = duration
+  }
+
+  public static func easeOut(duration: Double) -> MotionCurve {
+    MotionCurve(0, 0, 0.58, 1, duration: duration)
+  }
+
+  public var animation: Animation {
+    .timingCurve(start.x, start.y, end.x, end.y, duration: duration)
+  }
+}
+
+extension Spring {
+  static let fullyThere: CGFloat = 0.98
+  static let progressSearchStep: Double = 0.002
+
+  public func criticalProgress(at time: Double) -> Double {
+    let omega = 2 * Double.pi / duration
+    return 1 - (1 + omega * time) * exp(-omega * time)
+  }
+
+  public func time(toReach progress: CGFloat) -> CFTimeInterval {
+    let target = min(max(progress, 0), Self.fullyThere)
+    guard target > 0 else { return 0 }
+    var time = 0.0
+    while time < settlingDuration {
+      if criticalProgress(at: time) >= Double(target) { return time }
+      time += Self.progressSearchStep
+    }
+    return settlingDuration
+  }
 }
 
 public enum Layout {

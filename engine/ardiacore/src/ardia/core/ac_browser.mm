@@ -77,8 +77,12 @@ bool DeferWhileTabStripNotifies(dispatch_block_t retry) {
   return Defer(IsNotifyingTabStrip(), retry);
 }
 
+bool IsNotifyingAny() {
+  return IsNotifyingTabStrip() || g_navigation_notifying > 0;
+}
+
 bool DeferWhileAnyNotifies(dispatch_block_t retry) {
-  return Defer(IsNotifyingTabStrip() || g_navigation_notifying > 0, retry);
+  return Defer(IsNotifyingAny(), retry);
 }
 
 void InitialMainDocumentAccessed(content::WebContents* contents) {
@@ -118,7 +122,7 @@ void CloseBlankTabsBeforeWindowCloses(Browser* browser) {
   }
 }
 
-void DeleteTabClosedByHost(content::WebContents* contents) {
+void DeleteTabClosedByHost(content::WebContents* contents, ClosedTabRecord record) {
   BrowserWindowInterface* browser =
       GlobalBrowserCollection::GetInstance()->FindBrowserWithTab(contents);
   if (!browser) {
@@ -131,7 +135,8 @@ void DeleteTabClosedByHost(content::WebContents* contents) {
   }
   content::NavigationEntry* committed =
       contents->GetController().GetLastCommittedEntry();
-  if (!Profile::FromBrowserContext(contents->GetBrowserContext())
+  if (record == ClosedTabRecord::kRecentlyClosed &&
+      !Profile::FromBrowserContext(contents->GetBrowserContext())
            ->IsOffTheRecord() &&
       committed && !committed->IsInitialEntry() && !OnlyShowedBlank(contents)) {
     model->delegate()->CreateHistoricalTab(contents);

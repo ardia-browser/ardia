@@ -1,0 +1,26 @@
+--- a/chrome/browser/performance_manager/policies/discard_eligibility_policy.cc
++++ b/chrome/browser/performance_manager/policies/discard_eligibility_policy.cc
+@@ -27,6 +27,9 @@
+ 
+ namespace performance_manager::policies {
+ 
++// Ardia: the embedding app's own reasons to keep a page, asked for every discard but one the user or one of their extensions asks for.
++bool (*g_ardia_keeps_page)(const PageNode* page_node) = nullptr;
++
+ namespace {
+ 
+ BASE_FEATURE(kIgnoreDiscardAttemptMarker, base::FEATURE_DISABLED_BY_DEFAULT);
+@@ -244,6 +247,13 @@
+   if (live_state_data && live_state_data->IsDiscarded()) {
+     add_reason(CannotDiscardReason::kAlreadyDiscarded);
+     return CanDiscardResult::kDisallowed;
++  }
++
++  // Ardia: before the early answers below, so frozen-with-growing-memory and urgent discards ask too.
++  if (g_ardia_keeps_page && discard_reason != DiscardReason::EXTERNAL &&
++      g_ardia_keeps_page(page_node)) {
++    add_reason(CannotDiscardReason::kExtensionProtected);
++    return CanDiscardResult::kProtected;
+   }
+ 
+   bool is_proactive_or_suggested;

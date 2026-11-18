@@ -1,5 +1,13 @@
-import { SETTING_SPECS, type Settings, type SettingSpec } from "../settings/settings";
+import { customNewTabUrl, SETTING_SPECS, type Settings, type SettingSpec } from "../settings/settings";
 import { commandBarStartFlags } from "../omnibox/commandBarStart";
+import { lookUse, type LookBlocks } from "../../lib/themeLook";
+import { currentThemeLook } from "../config/basePalette";
+import type { BrowserWindow } from "../browser/types";
+import { shownSidebarWidth } from "../../lib/windowLayout";
+import { systemIncreaseContrast } from "../app/systemContrast";
+import { isNavigationOrFunctionKey, storedShortcut } from "../commands/shortcuts";
+import { currentInterfaceScale } from "../settings/interfaceScale";
+import { INTERFACE_SCALE, interfaceScalePercent, rootLength } from "../../lib/interfaceScale";
 
 export const SETTINGS_SNAPSHOT_EVENT = "settings_snapshot";
 
@@ -19,6 +27,11 @@ function measured(spec: SettingSpec<unknown>, value: unknown): string | null {
   return null;
 }
 
+function customShortcutCounts(overrides: Settings["shortcuts"]): Record<string, string> {
+  const keys = Object.values(overrides).filter((stored) => stored[0]).map((stored) => storedShortcut(stored).key);
+  return { custom_shortcuts: String(keys.length), custom_shortcuts_navigation_keys: String(keys.filter(isNavigationOrFunctionKey).length) };
+}
+
 export function settingsSnapshot(settings: Settings): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [key, spec] of Object.entries(SETTING_SPECS) as [keyof Settings, SettingSpec<unknown>][]) {
@@ -28,7 +41,16 @@ export function settingsSnapshot(settings: Settings): Record<string, string> {
     out[`setting_${key}`] = value;
     out[`default_${key}`] = fallback;
   }
-  return { ...out, ...commandBarStartFlags(settings.commandBarStart), unread_hidden_sites: String(Array.isArray(settings.unreadHiddenSites) ? settings.unreadHiddenSites.length : 0) };
+  return {
+    ...out,
+    ...commandBarStartFlags(settings.commandBarStart),
+    ...customShortcutCounts(settings.shortcuts),
+    setting_interfaceScale: String(interfaceScalePercent(currentInterfaceScale())),
+    default_interfaceScale: String(interfaceScalePercent(INTERFACE_SCALE.default)),
+    system_increase_contrast: encode(systemIncreaseContrast())!,
+    unread_hidden_sites: String(Array.isArray(settings.unreadHiddenSites) ? settings.unreadHiddenSites.length : 0),
+    custom_new_tab_url: customNewTabUrl({ newTabOpens: "page", minimalismMode: false, newTabUrl: typeof settings.newTabUrl === "string" ? settings.newTabUrl : "" }) ? "true" : "false",
+  };
 }
 
 export const appIconSetting = (icon: string | null): Record<string, string> =>
@@ -37,3 +59,37 @@ export const appIconSetting = (icon: string | null): Record<string, string> =>
 export const customColorProfiles = (profiles: Record<string, { theme?: unknown }>): Record<string, string> => ({
   custom_color_profiles: String(Object.values(profiles).filter((profile) => !!profile.theme).length),
 });
+
+export const openTabSyncProfiles = (profiles: Record<string, { syncTabs?: true }>): Record<string, string> => ({
+  sync_open_tabs_profiles: String(Object.values(profiles).filter((profile) => !!profile.syncTabs).length),
+});
+
+const FORMER_MIN_WINDOW_WIDTH = 720;
+
+export function narrowWindows(windows: Record<string, Pick<BrowserWindow, "kind" | "frame" | "fullScreen">>, sidebarWidth: number, scale = currentInterfaceScale()): Record<string, string> {
+  const widths = Object.values(windows).flatMap((w) => (w.kind !== "small" && !w.fullScreen && w.frame ? [rootLength(w.frame[2], scale)] : []));
+  return {
+    narrow_windows: String(widths.filter((width) => width < FORMER_MIN_WINDOW_WIDTH).length),
+    sidebar_narrowed_windows: String(widths.filter((width) => shownSidebarWidth(sidebarWidth, width) < sidebarWidth).length),
+  };
+}
+
+export function themeFileSnapshot(theme: string | null, blocks: LookBlocks | null): Record<string, string> {
+  const use = lookUse(blocks);
+  const flag = (on: boolean) => (on ? "true" : "false");
+  return {
+    theme_file: flag(theme !== null),
+    theme_type: flag(use.type),
+    theme_metrics: flag(use.metrics),
+    theme_layout: flag(use.layout),
+    theme_icons: flag(use.icons),
+    theme_hidden_parts: String(use.hidden),
+    theme_moved_parts: String(use.moved),
+    theme_icon_overrides: String(use.iconOverrides),
+  };
+}
+
+export function currentThemeFileSnapshot(): Record<string, string> {
+  const { theme, blocks } = currentThemeLook();
+  return themeFileSnapshot(theme, blocks);
+}

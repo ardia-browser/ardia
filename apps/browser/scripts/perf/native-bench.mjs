@@ -37,6 +37,11 @@
 //                                          and JS thread busy time. --frames-n repetitions (default 8). Needs the display on.
 //                               framecounts the same interactions with the JS perf probe on: commits, host updates, layout
 //                                          passes, mount batches (counts, no timing; the ratchet's numbers)
+//                               profiles   memory kept by profiles no window shows, and the cost of going back to one:
+//                                          a session of --profile-count profiles in one window, each opened once, then
+//                                          Personal shown for --idle seconds with no DevTools session open, since a
+//                                          page being debugged keeps its profile loaded (alone, with its own seed).
+//                                          Compare two settings with --setting and --control-setting on the same app
 //                               windows    8 new windows per run, alone
 //                               throttle   hidden animating tabs' rAF and timer rates
 //                               churn      leak check: open and close 10 tabs 5 times
@@ -44,6 +49,12 @@
 //                               prepare    prepare the app copies and exit (see --prepared)
 //     --env K=V               repeatable: extra environment for every instance (DYLD_INSERT_LIBRARIES is appended to
 //                             the marker library). Instances stay muted; don't pass ARDIA_INSTANCE allowAudio.
+//     --profile-count <n>     profiles phase: profiles in the session (default 4, at least 2)
+//     --profile-visits <n>    profiles phase: how many of the other profiles to open before idling (default: all; 0
+//                             leaves them as a launch finds them, to measure what launch loads)
+//     --setting K=V           profiles phase and --seed big, repeatable: a setting in the seeded session (the value is
+//                             JSON, or a string), such as unloadProfilesAfter=5m; --control-setting K=V the same for
+//                             the control, so one app can be measured against itself with a setting changed
 //     --frames-n <n>          repetitions of each interaction per run in frames (default 8; framecounts uses at most 3)
 //     --frames-only <regex>   frames, framecounts: only the interactions whose name matches (case-insensitive)
 //     --frames-sample         frames: `sample` the app over the first repetition of each interaction (<out>/frames-sample/*.txt)
@@ -113,6 +124,11 @@
 //                                                        alpha > 0). 3 per session run (newwindow), 8 per windows run
 //   new window → on screen with its content newWindow   the later of that and acmark's commit for that window
 //   new window → first paint / first frame  newWindow   the window's page's FCP / first rAF
+//   profiles loaded / memory, N profiles   profilesRun profiles.loaded and footprint() of the tree 60 s after the last profile
+//                                                        was opened and again after --idle seconds on Personal
+//   back to a profile → its page shown      profilesRun store switchProfile to the first other profile → its page's
+//                                                        visibilitychange + 2 rAFs when the page was kept, its first
+//                                                        contentful paint when it had to load again
 //   ⌘T → …, keystroke → suggestions         journeyRun  newtabkey: acperf postkeys (CGEventPostToPid into this pid) → the app's field timing
 //                                                        (journeys.ts + ArdiaFieldTiming.mm; sharing on in the bench's data folder,
 //                                                        every non-local fetch answered by bench-offline.js so nothing is uploaded)
@@ -129,6 +145,7 @@ import { parseArgs } from "node:util";
 import { INJECTION_ENTITLEMENTS, prepareApp } from "../../../../scripts/lib/app-copy.mjs";
 import { appEnv, launchVariables, mergeLaunchEnv } from "../../../../scripts/lib/instance.mjs";
 import { buildSeed } from "./seed.mjs";
+import { parseSettings, profileSeed } from "./profile-seed.mjs";
 import { writeSwitches } from "./js-bench.mjs";
 import { frameRows, frameTable, framesLibrary, framesRun } from "./frames-phase.mjs";
 
@@ -154,6 +171,10 @@ const { values: opt } = parseArgs({
     prepared: { type: "boolean" },
     env: { type: "string", multiple: true, default: [] },
     seed: { type: "string" },
+    "profile-count": { type: "string", default: "4" },
+    "profile-visits": { type: "string" },
+    setting: { type: "string", multiple: true, default: [] },
+    "control-setting": { type: "string", multiple: true, default: [] },
     "fresh-copy": { type: "boolean" },
     "trace-startup": { type: "string" },
     "page-port": { type: "string", default: "0" },
@@ -520,12 +541,15 @@ let server;
 const FOCUSED = `(s.ui.focusOrder?.[0] ?? s.ui.focusedWindowId)`;
 const WINDOW = `(() => { const s = ac.store.getState(); const f = ${FOCUSED}; return f && s.windows[f] ? f : s.windowOrder.find((id) => s.windows[id] && (!s.windows[id].kind || s.windows[id].kind === "main")); })()`;
 
+const sideSettings = (side) => parseSettings(side.role === "control" ? opt["control-setting"] : opt.setting);
+
 function writeBigSeed(side) {
   const dir = side.template;
   const version = execFileSync("defaults", ["read", join(side.src, "Contents/Info.plist"), "CFBundleShortVersionString"], { encoding: "utf8" }).trim();
   const files = buildSeed(base(), version);
   delete files["perf-probe"];
   const session = files["session.json"];
+  Object.assign(session.settings, sideSettings(side));
   const win = session.windows[0];
   for (const t of session.tabs) {
     const id = t.id === win.activeTabIds.default ? "seed" : `p-${t.id}`;
@@ -540,6 +564,11 @@ async function makeTemplate(side) {
   const dir = side.template;
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
+  if (only.has("profiles")) {
+    writeFileSync(join(dir, "session.json"), JSON.stringify(profileSeed(base(), +opt["profile-count"], sideSettings(side))));
+    writeFileSync(join(dir, "onboarding.json"), JSON.stringify({ version: 1, completedAt: 1 }));
+    return;
+  }
   if (opt.seed) return writeBigSeed(side);
   log(`seeding a session (${side.label})`);
   writeFileSync(join(dir, "onboarding.json"), JSON.stringify({ version: 1, completedAt: 1 }));
@@ -902,6 +931,47 @@ async function journeyRun(side, i, parts) {
   }
 }
 
+const PROFILE_WARMUP_MS = 60_000;
+
+async function profilesRun(side, i) {
+  const app = new Instance(side, freshDir(side, `profiles-${i}`));
+  const count = +opt["profile-count"];
+  const visits = Math.min(count - 1, +(opt["profile-visits"] ?? count - 1));
+  const painted = (n, since = 0) => app.pageState(`id=profile-${n}`, 30_000, (s) => s.fcp > since || (s.shown ?? []).some(([, at]) => at > since));
+  const show = (n) => app.run(`const s = ac.store.getState(); const at = ac.now(); s.switchProfile(s.windowOrder[0], "${n ? `profile-${n}` : "default"}"); return at;`);
+  const loadedProfiles = () => app.run(`return ac.loadedProfiles().then((profiles) => profiles.length);`).catch(() => NaN);
+  try {
+    await app.launch();
+    if (!(await painted(0))) throw new Error("the Personal page didn't paint");
+    for (let n = 1; n <= visits; n++) {
+      await show(n);
+      if (!(await painted(n))) throw new Error(`profile ${n}'s page didn't paint`);
+    }
+    await show(0);
+    app.cdp.close();
+    const idleMs = +opt.idle * 1000;
+    const warmupMs = Math.min(idleMs, PROFILE_WARMUP_MS);
+    await sleep(warmupMs);
+    const before = { memory: footprint(usage(app.pid)), loaded: await loadedProfiles() };
+    await sleep(idleMs - warmupMs);
+    const settings = await app.run(`const s = ac.store.getState().settings; return { loadProfilesWhenOpened: s.loadProfilesWhenOpened, unloadProfilesAfter: s.unloadProfilesAfter ?? null, memorySaver: s.memorySaver };`);
+    const after = { memory: footprint(usage(app.pid)), loaded: await loadedProfiles() };
+    let back = NaN, reloaded = null;
+    if (visits) {
+      const at = await show(1);
+      const page = await painted(1, at);
+      reloaded = !!page && page.fcp > at;
+      back = page ? (reloaded ? page.fcp : Math.min(...page.shown.map(([, shown]) => shown).filter((shown) => shown > at))) - at : NaN;
+    }
+    const result = { profiles: count, visits, warmupMs, idleMs, settings, before, after, back, reloaded, loadedAfterBack: await loadedProfiles(), load: Math.round(loadavg()[0] * 10) / 10 };
+    side.results.profiles.push(result);
+    log(`${side.tag}profiles ${i}: ${before.loaded} → ${after.loaded} profiles loaded, ${before.memory.totalMB.toFixed(0)} → ${after.memory.totalMB.toFixed(0)} MB, back to a profile ${back.toFixed(0)} ms${reloaded ? " (loaded again)" : ""}`);
+    await app.done();
+  } finally {
+    await app.quit();
+  }
+}
+
 const SESSION_PARTS = ["idle", "memory", "switch", "newtab", "newwindow"];
 
 async function sessionRun(side, i, parts) {
@@ -1087,6 +1157,18 @@ function summary(res) {
   add("launch → JS running", res.launch.map((r) => r.js), "ms");
   add("launch → first page painted", res.launch.map((r) => r.firstPaint), "ms");
   add("launch → first page's first frame", res.launch.map((r) => r.firstFrame), "ms");
+  const P = res.profiles ?? [];
+  if (P.length) {
+    const of = `${P[0].profiles} profiles, ${P[0].visits} opened`;
+    add(`profiles loaded ${P[0].warmupMs / 1000} s after opening them (${of})`, P.map((r) => r.before.loaded), "");
+    add(`profiles loaded after ${P[0].idleMs / 1000} s on Personal`, P.map((r) => r.after.loaded), "");
+    add(`memory ${P[0].warmupMs / 1000} s after opening them (phys_footprint)`, P.map((r) => r.before.memory.totalMB), "MB");
+    add(`memory after ${P[0].idleMs / 1000} s on Personal (phys_footprint)`, P.map((r) => r.after.memory.totalMB), "MB");
+    add(`memory after ${P[0].idleMs / 1000} s on Personal, browser process`, P.map((r) => r.after.memory.kinds.browser), "MB");
+    add(`processes after ${P[0].idleMs / 1000} s on Personal`, P.map((r) => r.after.memory.processes), "");
+    add("back to a profile → its page shown", P.map((r) => r.back), "ms");
+    add("back to a profile: runs where it had to load again", [P.filter((r) => r.reloaded).length], "");
+  }
   const S = res.session;
   for (const t of ["tabs1", "tabs20"]) {
     add(`idle CPU, ${t.slice(4)} tab(s) (all processes)`, S.map((r) => r.idle[t]?.total.cpu), "%", 2);
@@ -1177,7 +1259,7 @@ const fail = (message) => {
 if (!opt.app) fail("usage: native-bench.mjs --app <Ardia.app> [--control <app>] [--out dir] [--only phases] … (--help)");
 const JOURNEY_PHASES = ["newtabkey", "navigate"];
 const FRAME_PHASES = ["frames", "framecounts"];
-const PHASES = ["launch", "session", ...SESSION_PARTS, ...JOURNEY_PHASES, ...FRAME_PHASES, "windows", "throttle", "churn", "sample", "prepare"];
+const PHASES = ["launch", "session", ...SESSION_PARTS, ...JOURNEY_PHASES, ...FRAME_PHASES, "profiles", "windows", "throttle", "churn", "sample", "prepare"];
 const only = new Set(opt.only.split(",").map((p) => p.trim()).filter(Boolean));
 for (const p of only) if (!PHASES.includes(p)) fail(`--only: no phase "${p}"; phases: ${PHASES.join(", ")}`);
 if (only.has("frames") || only.has("framecounts")) opt.seed ??= "big";
@@ -1187,6 +1269,16 @@ if (opt["trace-startup"] && ![...only].every((p) => p === "launch")) fail("--tra
 if (opt.seed && ![...only].every((p) => p === "launch" || p === "prepare" || JOURNEY_PHASES.includes(p) || FRAME_PHASES.includes(p))) fail("--seed big works with --only launch, newtabkey, navigate, frames and framecounts (the other phases measure a one-tab session)");
 for (const e of opt.env) if (!/^[A-Za-z_]\w*=/.test(e)) fail(`--env wants K=V, got "${e}"`);
 if (!(+opt.hold >= 0)) fail(`--hold wants seconds, got "${opt.hold}"`);
+if (only.has("profiles")) {
+  if (only.size !== 1 || opt.seed) fail("--only profiles runs alone, with its own seed");
+  if (!Number.isSafeInteger(+opt["profile-count"]) || +opt["profile-count"] < 2) fail(`--profile-count wants a whole number of at least 2, got "${opt["profile-count"]}"`);
+  if (opt["profile-visits"] !== undefined && !(Number.isSafeInteger(+opt["profile-visits"]) && +opt["profile-visits"] >= 0)) fail(`--profile-visits wants a whole number, got "${opt["profile-visits"]}"`);
+} else if ((opt.setting.length || opt["control-setting"].length) && !opt.seed) fail("--setting and --control-setting work with --only profiles and with --seed big");
+try {
+  parseSettings([...opt.setting, ...opt["control-setting"]]);
+} catch (error) {
+  fail(error.message);
+}
 if (opt.control && opt.compare) log("--compare is ignored with --control: the control is the before column");
 
 const labelOf = (app) => basename(dirname(dirname(resolve(app))));
@@ -1194,7 +1286,7 @@ function makeSide(app, label, role) {
   const dir = join(opt.out, label);
   mkdirSync(dir, { recursive: true });
   return { role, label, tag: "", src: resolve(app), dir, template: join(dir, "template"), app: null, bundle: null,
-    results: { meta: {}, launch: [], session: [], windows: [], journeys: [], frames: [], throttle: [], sample: [] } };
+    results: { meta: {}, profiles: [], launch: [], session: [], windows: [], journeys: [], frames: [], throttle: [], sample: [] } };
 }
 const candidate = makeSide(opt.app, opt.label ?? labelOf(opt.app), "candidate");
 let control = null;
@@ -1243,6 +1335,7 @@ try {
     process.exit(0);
   }
   for (const side of sides) await makeTemplate(side);
+  if (only.has("profiles")) await interleaved(+opt.runs, profilesRun);
   if (only.has("launch")) await interleaved(+opt["launch-runs"], launchRun);
   const parts = new Set(SESSION_PARTS.filter((p) => only.has("session") || only.has(p)));
   if (parts.size) await interleaved(+opt.runs, (side, i) => sessionRun(side, i, parts));

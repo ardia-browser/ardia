@@ -35,6 +35,8 @@ const TOP = [
   ["right sidebar", ["tabs.sidebarSide"]],
   ["vertical tabs", ["tabs.layout"]],
   ["pinned", ["profiles.shareTopApps", "tabs.balancedTopApps", "tabs.fadeUnloadedTabs"]],
+  ["strikethrough", ["tabs.strikeSleepingTabs"]],
+  ["sleeping tabs", ["tabs.strikeSleepingTabs"]],
   ["split", ["tabs.splitLinkModifier"]],
   ["split view", ["tabs.splitLinkModifier"]],
   ["peek", ["tabs.peekModifier", "tabs.peekLinksToOtherSites"]],
@@ -47,6 +49,7 @@ const TOP = [
   ["keyboard shortcuts", ["shortcuts.actions"]],
   ["hotkeys", ["shortcuts.actions", "shortcuts.extensionShortcuts"]],
   ["⌘L", ["appearance.commandBarPlacement"]],
+  ["shrink", ["tabs.hideToolbarWhileScrolling"]],
   ["⌘z", ["shortcuts.undoReopensClosedTab"]],
   ["update", ["general.updateChannel", "general.autoUpdate"]],
   ["nightly", ["general.updateChannel"]],
@@ -54,7 +57,9 @@ const TOP = [
   ["sync", ["sync.sync"]],
   ["extensions", ["extensions.installed"]],
   ["zoom", ["privacy.commandScrollZoom"]],
-  ["font", ["privacy.commandScrollZoom"]],
+  ["font", ["advanced.chromeSettings"]],
+  ["default zoom", ["advanced.chromeSettings"]],
+  ["chrome settings", ["advanced.chromeSettings"]],
   ["telemetry", ["privacy.whatsSent", "privacy.shareDiagnostics", "privacy.viewData"]],
   ["what's sent", ["privacy.whatsSent"]],
   ["whats sent", ["privacy.whatsSent"]],
@@ -62,8 +67,9 @@ const TOP = [
   ["upscal", ["tabs.videoUpscaling"]],
   ["upscaling", ["tabs.videoUpscaling"]],
   ["unread", ["tabs.showUnreadCounts"]],
-  ["notification", ["tabs.showUnreadCounts"]],
-  ["notifications", ["tabs.showUnreadCounts"]],
+  ["notification", ["privacy.blockNotificationRequests"]],
+  ["notifications", ["privacy.blockNotificationRequests"]],
+  ["block notifications", ["privacy.blockNotificationRequests"]],
   ["notis", ["tabs.showUnreadCounts"]],
   ["badge", ["tabs.showUnreadCounts"]],
   ["bubble", ["tabs.showUnreadCounts"]],
@@ -79,6 +85,9 @@ const TOP = [
   ["little window", ["general.openLinksInLittleArdia"]],
   ["links from other apps", ["general.openLinksInLittleArdia", "tabs.appLinksFirst"]],
   ["slack", ["general.openLinksInLittleArdia"]],
+  ["air traffic control", ["airTraffic.rules"]],
+  ["atc", ["airTraffic.rules"]],
+  ["open links in profile", ["airTraffic.rules"]],
   ["onboarding", ["general.redoSetup"]],
   ["redo", ["general.redoSetup"]],
   ["welcome", ["general.redoSetup"]],
@@ -89,7 +98,10 @@ const TOP = [
   ["auto hide", ["tabs.autoHideTabs"]],
   ["history", ["advanced.history"]],
   ["borderless mode", ["appearance.borderlessMode"]],
+  ["minimal", ["appearance.minimalismMode"]],
+  ["minimalism", ["appearance.minimalismMode"]],
   ["mouse wheel", ["privacy.commandScrollZoom"]],
+  ["autoplay", ["privacy.blockAutoplayEverywhere"]],
   ["1password", ["passwords.managerApps"]],
   ["warn quitting", ["general.warnBeforeQuitting"]],
   ["trakers", ["privacy.blockTrackers"]],
@@ -306,4 +318,24 @@ test("arrowing through results scrolls only as far as the selected row needs", a
   assert.equal(scrollToShow(100, 40, 200, 400, false), 100 - RESULTS_TOP);
   assert.equal(scrollToShow(260, 40, 200, 400, false), 200);
   assert.equal(scrollToShow(260, 40, 200, 400, true), 0);
+});
+
+test("Interface size turns up for every word people use for UI scaling", () => {
+  for (const query of ["scale", "scaling", "zoom", "UI size", "interface size", "fractional scaling", "1440p", "bigger", "smaller", "display"]) assert.ok(ids(query).includes("appearance.interfaceScale"), query);
+  for (const query of ["interface size", "ui size", "scaling", "fractional scaling", "1440p", "ui scale"]) assert.equal(first(query), "appearance.interfaceScale", query);
+});
+
+test("Minimalism mode turns up for every word people use for it", () => {
+  for (const query of ["minimal", "minimalism", "clean", "compact", "zen", "distraction free", "no toolbar"]) assert.ok(ids(query).includes("appearance.minimalismMode"), query);
+});
+
+test("Block requests to send notifications sits in All sites, outside the per-profile Site permissions list, and says its blocks outlast it", () => {
+  const entry = SETTINGS_INDEX.find((p) => p.entry.id === "privacy.blockNotificationRequests").entry;
+  assert.equal(entry.section, "All sites");
+  assert.match(entry.description, /stay blocked after you turn it off, until you allow each one in its Site Controls/);
+});
+
+test("Block autoplay on every site sits in All sites, outside the per-profile Site permissions list", () => {
+  const entry = SETTINGS_INDEX.find((p) => p.entry.id === "privacy.blockAutoplayEverywhere").entry;
+  assert.equal(entry.section, "All sites");
 });

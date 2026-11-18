@@ -6,6 +6,7 @@ LIBRARY = r"""
     "menuitemcheckbox", "menuitemradio", "slider", "spinbutton", "switch", "tab", "treeitem", "searchbox"]);
   const norm = (s) => String(s == null ? "" : s).replace(/\s+/g, " ").trim();
   const suggestionWatches = new WeakMap();
+  let reactionWatch = null;
   const SUGGESTION_ATTRIBUTES = ["hidden", "style", "class", "id", "role", "aria-busy", "aria-selected", "aria-disabled", "aria-label", "data-value",
     "value", "aria-controls", "aria-owns", "aria-expanded", "aria-activedescendant"];
   const CONTROLS = "input:not([type=hidden]), textarea, select, button[aria-haspopup], [aria-haspopup=listbox], [aria-haspopup=true], [role=combobox], [role=searchbox], [role=textbox], [contenteditable=true]";
@@ -13,8 +14,14 @@ LIBRARY = r"""
     main: "main", navigation: "nav", banner: "body > header", contentinfo: "body > footer", dialog: "dialog", form: "form",
     table: "table", row: "tr", cell: "td", columnheader: "th", list: "ul, ol", listitem: "li", article: "article", search: "search",
     button: "button, input[type=button], input[type=submit], input[type=reset], summary", link: "a[href], area[href]",
-    heading: "h1, h2, h3, h4, h5, h6", checkbox: "input[type=checkbox]", radio: "input[type=radio]", combobox: "select",
-    textbox: "input:not([type]), input[type=text], input[type=email], input[type=tel], input[type=url], textarea", img: "img[alt]",
+    heading: "h1, h2, h3, h4, h5, h6", checkbox: "input[type=checkbox]", radio: "input[type=radio]",
+    combobox: "select:not([multiple]):not([size]), select[size='']:not([multiple]), select[size='0']:not([multiple]), select[size='1']:not([multiple]), input[list]:not([type]), input[list][type=text], input[list][type=search], input[list][type=email], input[list][type=tel], input[list][type=url]",
+    listbox: "select[multiple], select[size]:not([size='']):not([size='0']):not([size='1']), datalist", option: "option",
+    textbox: "input:not([type]):not([list]), input[type=text]:not([list]), input[type=email]:not([list]), input[type=tel]:not([list]), input[type=url]:not([list]), textarea",
+    searchbox: "input[type=search]:not([list])", spinbutton: "input[type=number]", slider: "input[type=range]",
+    progressbar: "progress", meter: "meter", separator: "hr", group: "fieldset, details, optgroup", complementary: "aside",
+    region: "section[aria-label], section[aria-labelledby]", figure: "figure", rowgroup: "thead, tbody, tfoot", status: "output",
+    img: "img:not([alt=''])",
   };
   const ROLE_WORDS = new Set([...Object.keys(IMPLICIT_ROLES), "grid", "gridcell", "rowgroup", "tab", "tablist", "tabpanel", "menu", "menubar",
     "menuitem", "option", "listbox", "tree", "treeitem", "toolbar", "tooltip", "alert", "alertdialog", "status", "switch", "slider", "region"]);
@@ -52,6 +59,11 @@ LIBRARY = r"""
     },
     query(selector, root) {
       root = root || document;
+      const chain = api.chainParts(selector);
+      if (chain.length > 1) {
+        const found = api.queryAll(selector, root);
+        return /^nth=-?\d+$/.test(chain[chain.length - 1]) ? found[0] || null : found.find((el) => api.visible(el)) || found[0] || null;
+      }
       if (/^(\/\/|\(\/\/|xpath=)/.test(selector)) {
         const expr = selector.replace(/^xpath=/, "");
         const r = document.evaluate(expr, root, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
@@ -60,8 +72,34 @@ LIBRARY = r"""
       const found = api.queryAll(selector, root);
       return found.find((el) => api.visible(el)) || found[0] || null;
     },
+    validCss(css) {
+      try {
+        document.createDocumentFragment().querySelector(css);
+        return true;
+      } catch (error) {
+        return false;
+      }
+    },
+    quoteAttributeValues(css) {
+      return css.replace(/\[\s*([^\s~|^$*!=\]"']+)\s*([~|^$*]?=)\s*([^"'\]\s][^\]]*?)(\s+[iIsS])?\s*\]/g,
+        (whole, name, op, value, flag) => `[${name}${op}"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"${flag || ""}]`);
+    },
     queryAll(selector, root) {
       root = root || document;
+      const chain = api.chainParts(selector);
+      if (chain.length > 1) {
+        let found = api.queryAll(chain[0], root);
+        for (const part of chain.slice(1)) {
+          const nth = /^nth=(-?\d+)$/.exec(part);
+          if (nth) {
+            const picked = found.at(Number(nth[1]));
+            found = picked ? [picked] : [];
+          } else {
+            found = [...new Set(found.flatMap((el) => api.queryAll(part, el)))];
+          }
+        }
+        return found;
+      }
       if (/^(\/\/|\(\/\/|xpath=)/.test(selector)) {
         const expr = selector.replace(/^xpath=/, "");
         const r = document.evaluate(expr, root, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
@@ -83,20 +121,89 @@ LIBRARY = r"""
         return role[3] == null ? all : all.filter((el) => matches(api.accessibleText(el), role[3], false));
       }
       let css = selector.replace(/^css=/, "").replace(/\[role=(["']?)([A-Za-z]+)\1\]/g, (whole, q, name) => api.roleCss(name.toLowerCase()) === `[role="${name.toLowerCase()}"]` ? whole : `:is(${api.roleCss(name.toLowerCase())})`);
+      css = api.outsideStrings(css, (piece) => piece.replace(/:text\(/g, ":has-text("));
       if (/^[a-z]+$/.test(css) && ROLE_WORDS.has(css) && !root.querySelector(css)) css = api.roleCss(css);
-      const parts = css.split(/:has-text\(\s*(["'])(.*?)\1\s*\)/);
+      if (!api.validCss(css)) css = api.quoteAttributeValues(css);
+      const parts = api.textPseudos(css);
       if (parts.length === 1) return Array.from(root.querySelectorAll(css));
       let found = null;
-      for (let i = 0; i < parts.length; i += 3) {
+      for (let i = 0; i < parts.length; i += 4) {
         const piece = parts[i];
         if (piece.trim() || found === null) {
           const scoped = found === null ? Array.from(root.querySelectorAll(piece.trim() ? piece : "*"))
             : found.flatMap((el) => Array.from(el.querySelectorAll(":scope " + piece)));
           found = [...new Set(scoped)];
         }
-        if (i + 2 < parts.length) found = found.filter((el) => matches(el.innerText != null ? el.innerText : el.textContent, parts[i + 2], false));
+        if (i + 3 < parts.length) {
+          const exact = parts[i + 1] === "text-is";
+          found = found.filter((el) => matches(el.innerText != null ? el.innerText : el.textContent, parts[i + 3], exact));
+        }
       }
       return found;
+    },
+    textPseudos(css) {
+      const parts = [];
+      const pseudo = /:(has-text|text-is)\(\s*(["'])(.*?)\2\s*\)/y;
+      let quote = "";
+      let bracket = 0;
+      let start = 0;
+      for (let i = 0; i < css.length; i++) {
+        const c = css[i];
+        if (c === "\\") { i++; continue; }
+        if (quote) { if (c === quote) quote = ""; continue; }
+        if (c === '"' || c === "'") { quote = c; continue; }
+        if (c === "[") { bracket++; continue; }
+        if (c === "]") { bracket--; continue; }
+        if (bracket || c !== ":") continue;
+        pseudo.lastIndex = i;
+        const hit = pseudo.exec(css);
+        if (!hit) continue;
+        parts.push(css.slice(start, i), hit[1], hit[2], hit[3]);
+        start = pseudo.lastIndex;
+        i = start - 1;
+      }
+      parts.push(css.slice(start));
+      return parts;
+    },
+    outsideStrings(css, change) {
+      let out = "";
+      let plain = "";
+      let quote = "";
+      let bracket = 0;
+      for (let i = 0; i < css.length; i++) {
+        const c = css[i];
+        const free = !quote && !bracket;
+        if (free && c !== "\\" && c !== '"' && c !== "'" && c !== "[") { plain += c; continue; }
+        if (plain) { out += change(plain); plain = ""; }
+        if (c === "\\") { out += c + (css[i + 1] || ""); i++; continue; }
+        out += c;
+        if (quote) { if (c === quote) quote = ""; }
+        else if (c === '"' || c === "'") quote = c;
+        else if (c === "[") bracket++;
+        else if (c === "]") bracket--;
+      }
+      return out + (plain ? change(plain) : "");
+    },
+    chainParts(selector) {
+      const parts = [];
+      let depth = 0;
+      let quote = "";
+      let start = 0;
+      for (let i = 0; i < selector.length; i++) {
+        const c = selector[i];
+        if (c === "\\") { i++; continue; }
+        if (quote) { if (c === quote) quote = ""; continue; }
+        if (c === '"' || c === "'") quote = c;
+        else if (c === "(" || c === "[") depth++;
+        else if (c === ")" || c === "]") depth--;
+        else if (depth === 0 && c === ">" && selector[i + 1] === ">") {
+          parts.push(selector.slice(start, i).trim());
+          start = i + 2;
+          i++;
+        }
+      }
+      parts.push(selector.slice(start).trim());
+      return parts.filter(Boolean).length === parts.length ? parts : [selector];
     },
     roleCss(name) {
       const implicit = IMPLICIT_ROLES[name];
@@ -133,6 +240,98 @@ LIBRARY = r"""
       if (label) return null;
       return api.describe(hit);
     },
+    scope() {
+      const text = ((document.body && document.body.innerText) || "").slice(0, 200000);
+      const counts = [];
+      const range = text.match(/\b\d[\d,.]*[ \u00a0]*[-–—][ \u00a0]*\d[\d,.]*[ \u00a0]+of[ \u00a0]+(about[ \u00a0]+|over[ \u00a0]+)?\d[\d,.]*\+?([ \u00a0]+[A-Za-z]+)?/);
+      if (range) counts.push(range[0]);
+      const total = text.match(/\b\d[\d,.]*\+?[ \u00a0]+(results|items|products|listings|jobs|homes|properties|matches|reviews|rentals|vehicles|cars|hotels|apartments|roles|positions|articles|stores|locations|courses|events|deals)\b/i);
+      if (total && !(range && range[0].includes(total[0]))) counts.push(total[0]);
+      const paged = text.match(/\bpage[ \u00a0]+\d+[ \u00a0]+of[ \u00a0]+\d+\b/i);
+      if (paged) counts.push(paged[0]);
+      const controls = [];
+      const named = (pattern) => {
+        for (const el of document.querySelectorAll("a, button, [role=button], [role=link]")) {
+          const name = ((el.getAttribute("aria-label") || el.innerText || "").trim()).slice(0, 40);
+          if (pattern.test(name) && api.visible(el)) return true;
+        }
+        return false;
+      };
+      if (document.querySelector("a[rel=next], link[rel=next]") || named(/^(next( page)?|next ›|›|»)$/i)) controls.push("a Next page link");
+      if (named(/^(load|show|see|view) more\b/i)) controls.push("a Load more button");
+      const pager = document.querySelector("nav[aria-label*=pagination i], [class*=pagination i]");
+      if (pager) {
+        const numbers = Array.from(pager.querySelectorAll("a, button")).map((el) => parseInt((el.innerText || "").replace(/[^\d]/g, ""), 10)).filter((n) => n > 0 && n < 100000);
+        if (numbers.length) controls.push("pages up to " + Math.max(...numbers));
+      }
+      const parts = [];
+      if (counts.length) parts.push("page says " + counts.map((count) => JSON.stringify(count.trim())).join(", "));
+      if (controls.length) parts.push("has " + controls.join(", "));
+      return parts.join("; ");
+    },
+    dismissConsent(x, y) {
+      const about = /\b(cookies?|consent|gdpr|ccpa)\b/i;
+      const vendor = "[id*=cookie i],[class*=cookie i],[id*=consent i],[class*=consent i],[id*=onetrust i],[class*=onetrust i],[id*=osano i],[class*=osano i],[id*=didomi i],[id*=usercentrics i],[id*=truste i],[class*=truste i],[class*=qc-cmp i],[id*=sp_message i],[class*=cmp-],[id*=cmpbox i],[class*=cmpbox i],[id*=cookiebot i],[class*=cookiebot i],[id*=iubenda i],[class*=iubenda i],[id*=termly i],[class*=termly i],[id*=klaro i],[class*=klaro i],[id*=cmplz i],[class*=cmplz i],[class*=cky-consent i]";
+      const reject = /^(reject|decline|refuse)( all| optional| non-essential)?( cookies)?$|^(only|strictly) (essential|necessary)( cookies)?$|^(necessary|essential) (cookies )?only$|^use (only )?necessary cookies$|^just (necessary|essential)( cookies)?$|^(use|allow|accept) (only )?(necessary|essential)( cookies)?( only)?$|^deny( all)?$|^continue without accepting$/i;
+      const accept = /^(accept|allow)( all)?( cookies)?$|^(i agree|agree|got it|ok|okay)$/i;
+      const close = /^(close|dismiss)$|^(×|✕)$/i;
+      const layerOf = (node) => {
+        for (let el = node; el && el !== document.body && el !== document.documentElement; el = el.parentElement) {
+          const position = getComputedStyle(el).position;
+          if (el.matches(vendor) || position === "fixed" || position === "sticky" || el.getAttribute("role") === "dialog" ||
+              el.getAttribute("role") === "alertdialog" || el.getAttribute("aria-modal") === "true") return el;
+        }
+        return null;
+      };
+      const hit = document.elementFromPoint(x, y);
+      const roots = [];
+      const layer = hit && layerOf(hit);
+      if (layer) roots.push(layer);
+      const box = hit ? hit.getBoundingClientRect() : null;
+      const backdrop = box && getComputedStyle(hit).position === "fixed" && box.width * box.height >= innerWidth * innerHeight * 0.5 && !hit.querySelector("button, a, [role=button]");
+      if (backdrop) for (const el of document.querySelectorAll(vendor)) roots.push(el);
+      let best = null;
+      for (const root of roots) {
+        if (!api.visible(root)) continue;
+        const names = root.id + " " + (typeof root.className === "string" ? root.className : "") + " " + (root.getAttribute("aria-label") || "");
+        const declared = /cookie|consent|gdpr|ccpa|onetrust|didomi|usercentrics|truste|osano|qc-cmp|sp_message|cmpbox|cookiebot|iubenda|termly|klaro|cmplz|cky-/i.test(names);
+        const platform = /onetrust|didomi|usercentrics|truste|osano|qc-cmp|sp_message|cmpbox|cookiebot|iubenda|termly|klaro|cmplz|cky-/i.test(names);
+        const text = (root.innerText || "").slice(0, 20001);
+        if (text.length > (platform ? 20000 : 3000) || !(declared || about.test(text))) continue;
+        if (!declared && !/\bcookies?\b/i.test(text)) continue;
+        for (const button of root.querySelectorAll("button, [role=button], a, input[type=button], input[type=submit]")) {
+          if (!api.visible(button)) continue;
+          const name = ((button.innerText || button.value || "").trim() || button.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim();
+          if (!name || name.length > 40) continue;
+          const rank = reject.test(name) ? 0 : accept.test(name) ? 1 : close.test(name) ? 2 : -1;
+          if (rank >= 0 && (!best || rank < best.rank)) best = { rank, button, name, root };
+        }
+        if (best && best.rank === 0) break;
+      }
+      if (!best) {
+        const signup = /\b(newsletter|subscribe|sign ?up|join|discount|coupon|offer|deal|email)\b|\d+ ?% ?off\b/i;
+        const dismiss = /^(close|dismiss|no,? thanks?|no thank you|not now|maybe later|skip|×|✕|✖)$/i;
+        const popups = backdrop ? [...roots, ...document.querySelectorAll("[role=dialog], [aria-modal=true], dialog[open]")] : roots;
+        for (const root of popups) {
+          if (!api.visible(root)) continue;
+          const text = (root.innerText || "").slice(0, 3001);
+          if (text.length > 3000 || !(root.querySelector("input[type=email]") || signup.test(text))) continue;
+          for (const button of root.querySelectorAll("button, [role=button], a, input[type=button]")) {
+            if (!api.visible(button)) continue;
+            const shown = ((button.innerText || button.value || "").trim()).replace(/\s+/g, " ");
+            const label = (button.getAttribute("aria-label") || button.getAttribute("title") || "").trim();
+            const name = shown || label;
+            if (dismiss.test(shown) || (shown.length <= 2 && /^(close|dismiss)\b/i.test(label))) {
+              button.click();
+              return { name: name || "close", choice: "close", kind: "popup", layer: api.describe(root) };
+            }
+          }
+        }
+        return null;
+      }
+      best.button.click();
+      return { name: best.name, choice: ["reject", "accept", "close"][best.rank], kind: "consent", layer: api.describe(best.root) };
+    },
     clickables(root) {
       const out = [];
       const hints = [];
@@ -162,7 +361,35 @@ LIBRARY = r"""
     readable(root) {
       root = root || document.body || document.documentElement;
       const lines = [];
-      const SKIP = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "SVG", "HEAD", "IFRAME"]);
+      const SKIP = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "SVG", "HEAD"]);
+      const ASIDE_TITLE = /^(related|recently viewed|you (may|might) also like|similar (items|products)|sponsored|recommended|customers (also|who)|more (from|like this)|frequently bought|people also)/i;
+      const ASIDE_NAME = /(^|[-_\s])(related|recently-?viewed|recommend\w*|sponsored|similar-?(items|products)|also-?(bought|viewed))([-_\s]|$)/i;
+      const asideLabel = (el) => {
+        const tag = el.tagName, role = roleOf(el);
+        if (tag === "NAV" || role === "navigation") return "navigation";
+        const label = norm(el.getAttribute("aria-label") || "");
+        if (label && ASIDE_TITLE.test(label)) return label;
+        const first = el.firstElementChild;
+        const isHeading = (node) => !!node && /^H[2-4]$/.test(node.tagName);
+        const heading = isHeading(first) ? first : first && isHeading(first.firstElementChild) ? first.firstElementChild : null;
+        const title = heading ? norm(heading.innerText || "") : "";
+        if (title && ASIDE_TITLE.test(title) && title.length <= 60) return title;
+        const names = (el.id || "") + " " + (typeof el.className === "string" ? el.className : "");
+        if (ASIDE_NAME.test(names) && /^(SECTION|DIV|ASIDE|UL)$/.test(tag)) return title || "related items";
+        if (tag === "ASIDE" || role === "complementary") return title || label || "aside";
+        return "";
+      };
+      let insideAside = false;
+      const iconLabel = (el) => {
+        if (el.getAttribute("aria-hidden") === "true") return "";
+        const own = norm(el.getAttribute("aria-label") || "");
+        if (own) return own;
+        if (el.tagName === "SVG" || el.tagName === "svg") {
+          const title = el.querySelector("title");
+          return title ? norm(title.textContent || "") : "";
+        }
+        return "";
+      };
       const BLOCK = /^(P|DIV|SECTION|ARTICLE|MAIN|HEADER|FOOTER|NAV|ASIDE|FORM|FIELDSET|UL|OL|TABLE|TR|BLOCKQUOTE|PRE|FIGURE|DETAILS|DL|DT|DD|ADDRESS|HR|BR|LABEL|SELECT|TEXTAREA|BUTTON)$/;
       const CELL_ROLES = new Set(["gridcell", "cell", "columnheader", "rowheader"]);
       const GRID_ROLES = new Set(["grid", "treegrid", "table"]);
@@ -179,14 +406,50 @@ LIBRARY = r"""
       };
       let buffer = "";
       let row = null;
+      let frameDepth = 0;
       const flush = () => { const t = norm(buffer); if (t) lines.push(t); buffer = ""; };
+      const frameText = (el) => {
+        const box = el.getBoundingClientRect();
+        if (box.width < 120 || box.height < 80) return;
+        const title = norm(el.getAttribute("title") || el.getAttribute("name") || "") || "frame";
+        let doc = null;
+        try { doc = el.contentDocument; } catch (error) { doc = null; }
+        const body = doc && (doc.body || doc.documentElement);
+        if (body && frameDepth < 3) {
+          flush();
+          lines.push("");
+          lines.push(`[frame "${title}"]`);
+          frameDepth++;
+          try { walk(body); } finally { frameDepth--; }
+          flush();
+          lines.push(`[end of frame "${title}"]`);
+          lines.push("");
+          return;
+        }
+        const src = el.src || "";
+        if (!doc && /^https?:/.test(src) && box.width >= 400 && box.height >= 300) {
+          flush();
+          lines.push(`[frame "${title}" from another site, not read here: read ${src}]`);
+        }
+      };
       const walk = (node) => {
         if (node.nodeType === 3) { buffer += node.nodeValue; return; }
         if (node.nodeType !== 1) return;
+        if (node.tagName === "SVG" || node.tagName === "svg") {
+          const label = iconLabel(node);
+          if (label) buffer += " [" + label + "] ";
+          return;
+        }
         if (SKIP.has(node.tagName)) return;
         const style = getComputedStyle(node);
         if (style.display === "none" || style.visibility === "hidden") return;
         const tag = node.tagName;
+        if (tag === "IFRAME" || tag === "FRAME") { frameText(node); return; }
+        if (!/^(INPUT|SELECT|TEXTAREA|IMG|A|BUTTON)$/.test(tag) && node.hasAttribute("aria-label") && !norm(node.textContent || "")) {
+          const label = iconLabel(node);
+          if (label) buffer += " [" + label + "] ";
+          return;
+        }
         if (row) {
           if (isCell(node)) {
             if (row.cells++) buffer += " | ";
@@ -209,6 +472,25 @@ LIBRARY = r"""
           }
           flush();
           return;
+        }
+        if (!insideAside && node !== root && /^(NAV|ASIDE|SECTION|DIV|UL)$/.test(tag)) {
+          const label = asideLabel(node);
+          if (label) {
+            flush();
+            lines.push("");
+            lines.push(`[${label}: not the main content]`);
+            insideAside = true;
+            try {
+              for (const child of node.childNodes) walk(child);
+              if (node.shadowRoot) for (const child of node.shadowRoot.childNodes) walk(child);
+            } finally {
+              insideAside = false;
+            }
+            flush();
+            lines.push(`[end of ${label}]`);
+            lines.push("");
+            return;
+          }
         }
         const h = /^H([1-6])$/.exec(tag);
         if (h) { flush(); const t = norm(node.innerText); if (t) { lines.push(""); lines.push("#".repeat(Number(h[1])) + " " + t); lines.push(""); } return; }
@@ -239,11 +521,36 @@ LIBRARY = r"""
     innermost(candidates) {
       return candidates.filter((el) => !candidates.some((other) => other !== el && el.contains(other)));
     },
+    matchRank(value, wanted, exact) {
+      const v = norm(value);
+      if (!v) return 0;
+      if (exact) return v === wanted ? 3 : 0;
+      const have = v.toLowerCase();
+      const want = norm(wanted).toLowerCase();
+      if (!want) return 0;
+      if (have === want || have.replace(/[\s*:]+$/, "") === want) return 3;
+      const at = have.indexOf(want);
+      if (at < 0) return 0;
+      const word = (c) => /[\p{L}\p{N}]/u.test(c || "");
+      const whole = (index) => !word(have[index - 1]) && !word(have[index + want.length]);
+      for (let index = at; index >= 0; index = have.indexOf(want, index + 1)) if (whole(index)) return 2;
+      return 1;
+    },
+    bestMatch(candidates, rank) {
+      let best = 0;
+      let picked = [];
+      for (const el of candidates) {
+        const level = rank(el);
+        if (level > best) { best = level; picked = [el]; }
+        else if (level && level === best) picked.push(el);
+      }
+      return picked.find((el) => api.visible(el)) || picked[0] || null;
+    },
     findText(text, exact) {
       const hits = deep(document).filter((el) => !["SCRIPT", "STYLE", "HEAD", "TITLE", "NOSCRIPT"].includes(el.tagName)
         && matches(el.innerText != null ? el.innerText : el.textContent, text, exact));
       const inner = api.innermost(hits);
-      return inner.find((el) => api.visible(el)) || inner[0] || null;
+      return api.bestMatch(inner, (el) => api.matchRank(el.innerText != null ? el.innerText : el.textContent, text, exact));
     },
     labelText(el) {
       const parts = [];
@@ -254,16 +561,10 @@ LIBRARY = r"""
       return parts;
     },
     findLabel(text, exact) {
-      for (const el of deep(document)) {
-        if (api.labelText(el).some((t) => matches(t, text, exact))) return el;
-      }
-      return null;
+      return api.bestMatch(deep(document), (el) => Math.max(0, ...api.labelText(el).map((t) => api.matchRank(t, text, exact))));
     },
     findAttr(attr, text, exact) {
-      for (const el of deep(document)) {
-        if (el.hasAttribute(attr) && matches(el.getAttribute(attr), text, exact)) return el;
-      }
-      return null;
+      return api.bestMatch(deep(document).filter((el) => el.hasAttribute(attr)), (el) => api.matchRank(el.getAttribute(attr), text, exact));
     },
     styles(el) {
       const style = getComputedStyle(el);
@@ -339,7 +640,77 @@ LIBRARY = r"""
       if (activeNode) roots.push(activeNode.closest("[role=listbox]") || activeNode.parentElement);
       if (roots.length || api.popupIds(el).length || active) return roots;
       const component = api.componentOf(el);
-      return component ? Array.from(component.querySelectorAll("[role=listbox]")) : [];
+      if (component) return Array.from(component.querySelectorAll("[role=listbox]"));
+      const opened = api.openedList(el);
+      return opened ? [opened] : [];
+    },
+    filterField(el) {
+      if (!el || el.nodeType !== 1) return false;
+      const role = (el.getAttribute("role") || "").toLowerCase();
+      const editable = el.isContentEditable || ((el.tagName === "INPUT" || el.tagName === "TEXTAREA") && !el.readOnly);
+      if (!editable) return false;
+      if (role === "searchbox" || (el.tagName === "INPUT" && (el.type || "").toLowerCase() === "search") || el.closest("[role=search], search")) return true;
+      if (el.getAttribute("aria-controls")) return true;
+      const words = [el.getAttribute("placeholder"), el.getAttribute("aria-label"), el.getAttribute("name"), el.id, ...api.labelText(el)].join(" ");
+      return /\b(search|filter|find)\b/i.test(words);
+    },
+    watchReaction(el, id) {
+      const field = el || document.activeElement;
+      if (!api.filterField(field)) return false;
+      api.unwatchReaction();
+      const watch = { id, field, lastInput: performance.now(), last: 0, observer: null, timer: 0 };
+      const expire = () => {
+        clearTimeout(watch.timer);
+        watch.timer = setTimeout(() => { if (reactionWatch === watch) api.unwatchReaction(); }, 3000);
+      };
+      watch.onInput = () => { watch.lastInput = performance.now(); expire(); };
+      field.addEventListener("input", watch.onInput, true);
+      field.addEventListener("keydown", watch.onInput, true);
+      const results = api.popupIds(field).map((name) => document.getElementById(name)).filter(Boolean);
+      const relevant = (record) => !field.contains(record.target)
+        && (!results.length || results.some((node) => !node.isConnected || node === record.target || node.contains(record.target)));
+      watch.observer = new MutationObserver((records) => {
+        if (records.some(relevant)) watch.last = performance.now();
+      });
+      watch.observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true });
+      expire();
+      reactionWatch = watch;
+      return true;
+    },
+    reactionState(id) {
+      const watch = reactionWatch;
+      if (!watch || watch.id !== id) return null;
+      const now = performance.now();
+      const busy = watch.field.getAttribute("aria-busy") === "true" || Boolean(document.querySelector("[aria-busy=true]"));
+      return { sinceInput: now - watch.lastInput, sinceLast: watch.last > watch.lastInput ? now - watch.last : null, busy };
+    },
+    unwatchReaction(id) {
+      const watch = reactionWatch;
+      if (!watch || (id !== undefined && watch.id !== id)) return true;
+      watch.observer.disconnect();
+      clearTimeout(watch.timer);
+      watch.field.removeEventListener("input", watch.onInput, true);
+      watch.field.removeEventListener("keydown", watch.onInput, true);
+      reactionWatch = null;
+      return true;
+    },
+    usedOpenedList(el) {
+      const watch = suggestionWatches.get(el);
+      return Boolean(watch && watch.opened && !watch.ambiguous);
+    },
+    visibleListboxes(el) {
+      return deep(el.ownerDocument).filter((node) => node.getAttribute && node.getAttribute("role") === "listbox" && api.visible(node));
+    },
+    openedList(el) {
+      const watch = suggestionWatches.get(el);
+      if (!watch || !watch.listsBefore) return null;
+      const now = performance.now();
+      if (watch.checkedAt && now - watch.checkedAt < 50 && (!watch.opened || watch.opened.isConnected && api.visible(watch.opened))) return watch.ambiguous ? null : watch.opened;
+      watch.checkedAt = now;
+      const fresh = api.visibleListboxes(el).filter((node) => !watch.listsBefore.has(node) && !api.ownerOf(node, el));
+      watch.opened = fresh.length === 1 ? fresh[0] : null;
+      if (fresh.length > 1) watch.ambiguous = true;
+      return watch.ambiguous ? null : watch.opened;
     },
     componentOf(el) {
       const mine = (owner) => !owner || owner === el || owner.contains(el) || el.contains(owner);
@@ -397,7 +768,9 @@ LIBRARY = r"""
     },
     watchSuggestions(el) {
       api.unwatchSuggestions(el);
-      const watch = { lastInput: 0, lastChange: 0, observer: null, signature: api.optionSignature(el) };
+      const linked = api.popupIds(el).length || el.getAttribute("aria-activedescendant") || api.componentOf(el);
+      const watch = { lastInput: 0, lastChange: 0, observer: null, listsBefore: linked ? null : new Set(api.visibleListboxes(el)), opened: null };
+      watch.signature = api.optionSignature(el);
       watch.observer = new MutationObserver(() => {
         const signature = api.optionSignature(el);
         if (signature !== watch.signature) {
@@ -477,16 +850,22 @@ LIBRARY = r"""
       const drags = globalThis.ardiaBrowseDragStarts;
       drags.accepted += drags.dispatched.filter((event) => !event.defaultPrevented).length;
       drags.dispatched.length = 0;
-      const active = document.activeElement;
-      return Object.assign({ activeFrame: !!active && (active.tagName === "IFRAME" || active.tagName === "FRAME") }, globalThis.ardiaBrowseInput, {
+      let active = document.activeElement;
+      while (active && active.shadowRoot && active.shadowRoot.activeElement) active = active.shadowRoot.activeElement;
+      return Object.assign({ activeFrame: !!active && ["IFRAME", "FRAME", "EMBED", "OBJECT"].includes(active.tagName) }, globalThis.ardiaBrowseInput, {
         dragstart: drags.accepted,
         dragend: drags.dragend,
         drop: drags.drop,
       });
     },
     overFrame(x, y) {
-      const hit = document.elementFromPoint(x, y);
-      return !!hit && (hit.tagName === "IFRAME" || hit.tagName === "FRAME");
+      let hit = document.elementFromPoint(x, y);
+      while (hit && hit.shadowRoot) {
+        const inner = hit.shadowRoot.elementFromPoint(x, y);
+        if (!inner || inner === hit) break;
+        hit = inner;
+      }
+      return !!hit && ["IFRAME", "FRAME", "EMBED", "OBJECT"].includes(hit.tagName);
     },
     pushState(url) {
       history.pushState({}, "", url);

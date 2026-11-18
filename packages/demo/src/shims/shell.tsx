@@ -18,6 +18,8 @@ export {
   WindowDragRegion,
 } from "./web/chrome";
 export { FadeLabel } from "./web/FadeLabel";
+export { EdgeFadeMask } from "./web/EdgeFadeMask";
+export { FolderIcon } from "./web/FolderIcon";
 export { MouseArea } from "./web/MouseArea";
 export { showMenu } from "./web/menus";
 
@@ -53,6 +55,9 @@ provideNativeModule("ArdiaApp", {
   launchConfig: () => LAUNCH_CONFIG,
   appIcons: async () => [],
   appIcon: async () => null,
+  interfaceScale: () => 1,
+  interfaceScaleRange: () => [1, 1],
+  setInterfaceScale: async () => 1,
 });
 provideNativeModule("ArdiaCalendar", { authorizationStatus: () => "notDetermined" });
 provideNativeModule("ArdiaCli", { installedVersion: () => null });
@@ -90,6 +95,7 @@ provideNativeModule("ArdiaAppWindows", {
   windowCornerRadius: () => 19,
   windowIds: async () => [] as string[],
   windowFrame: async (_id: string): Promise<[number, number, number, number] | null> => null,
+  frameCornerRadius: async (_id: string): Promise<number> => 0,
   setTrafficLightsCenter: async (windowId: string, next: [number, number] | null, trailing: boolean) => setTrafficLightsCenter(windowId, next, trailing),
 });
 darkQuery?.addEventListener("change", (e) => appearance === "auto" && emitAppEvent({ type: "appearance", dark: e.matches }));

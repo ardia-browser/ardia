@@ -11,6 +11,25 @@ export const TAB_CLICK_SLOP = 10;
 export const devTabPress = { switchOnPress: true };
 
 let heldPress: { windowId: string; tabId: string; startedAt: number | undefined; switched: boolean } | null = null;
+const pressEnds = new Set<{ windowId: string; listener: () => void }>();
+
+export const tabPressHeld = (windowId: string) => heldPress?.windowId === windowId;
+
+export function onTabPressEnd(windowId: string, listener: () => void) {
+  const entry = { windowId, listener };
+  pressEnds.add(entry);
+  return () => void pressEnds.delete(entry);
+}
+
+function releasePress() {
+  const windowId = heldPress?.windowId;
+  heldPress = null;
+  for (const entry of [...pressEnds]) {
+    if (entry.windowId !== windowId) continue;
+    pressEnds.delete(entry);
+    entry.listener();
+  }
+}
 
 type WithHistory = GestureResponderEvent & { touchHistory?: { touchBank: ({ startTimeStamp: number } | null | undefined)[] } };
 
@@ -43,7 +62,7 @@ export function holdTabPress(windowId: string, tabId: string, press: GestureResp
 
 export function clickHeldTabPress(windowId: string, tabId: string, release: GestureResponderEvent) {
   const held = heldPress;
-  heldPress = null;
+  releasePress();
   notePressEnded("click", tabId);
   dismissHover();
   const start = pressStart(release);
@@ -53,7 +72,7 @@ export function clickHeldTabPress(windowId: string, tabId: string, release: Gest
 
 export function endHeldTabPress(tabIds: string[], release: GestureResponderEvent | null) {
   const held = heldPress;
-  heldPress = null;
+  releasePress();
   if (!held) return;
   if (!release || !tabIds.includes(held.tabId) || held.startedAt === undefined || held.startedAt !== pressStart(release)) return notePressEnded("drag");
   notePressEnded("dragClick", held.tabId);

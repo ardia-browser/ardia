@@ -1,4 +1,4 @@
-export type FilterListCategory = "ads" | "trackers" | "cookies" | "regional" | "annoyances" | "security";
+export type FilterListCategory = "ads" | "trackers" | "cookies" | "regional" | "annoyances" | "security" | "custom";
 
 export type FilterList = {
   id: string;
@@ -7,6 +7,15 @@ export type FilterList = {
   enabled: boolean;
   defaultOn: boolean;
   filters: number;
+  failed?: boolean;
+};
+
+export type AddedFilterList = {
+  id: string;
+  custom: boolean;
+  existed: boolean;
+  filters: number;
+  failed: boolean;
 };
 
 export type ContentBlockerStats = {

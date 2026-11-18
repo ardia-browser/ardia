@@ -1,5 +1,11 @@
+import { unloadedTabAppearance } from "./unloadedTabAppearance";
 import { APP, type SettingSection, type SettingsEnv } from "./types";
 import type { SettingsPane } from "../../../state/settings/settingsWindows";
+import { keyText } from "../../../state/commands/keyText";
+import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
+import { PLATFORM_TERMS } from "../../../lib/platformTerms";
+import { splitViewAvailable } from "../../../state/splits/splits";
+import { newTabOpensOf } from "../../../state/settings/settings";
 
 const inSidebar = (_: unknown, env: SettingsEnv) => !env.top;
 
@@ -15,11 +21,16 @@ export const generalRows = {
           keywords: ["onboarding", "setup", "redo", "welcome", "start over", "walkthrough", "first run"],
         },
         openAtLogin: { title: `Open ${APP} at login`, keywords: ["startup", "launch", "login items", "boot"] },
-        warnBeforeQuitting: { advanced: true, title: "Warn before quitting", description: `Asks before ${APP} quits with ⌘Q.`, keywords: ["quit", "confirm", "cmd q"] },
+        warnBeforeQuitting: {
+          advanced: true,
+          title: "Warn before quitting",
+          description: PLATFORM_FEATURES.quitsWithLastWindow ? `Asks before ${APP} quits when you close its last window.` : `Asks before ${APP} quits with ${keyText("⌘Q")}.`,
+          keywords: ["quit", "confirm", "cmd q", "last window", "exit"],
+        },
         warnBeforeClosingWindow: {
           advanced: true,
           title: "Warn before closing a window with multiple tabs",
-          description: "Asks before ⇧⌘W or the close button closes its tabs.",
+          description: `Asks before ${keyText("⇧⌘W")} or the close button closes its tabs.`,
           keywords: ["close window", "confirm"],
         },
         openLinksInLittleArdia: {
@@ -27,14 +38,16 @@ export const generalRows = {
           keywords: ["little ardia", "little arc", "arc", "little window", "small window", "mini window", "external links", "links from other apps", "open links", "discord", "slack", "mail", "messages"],
         },
         littleArdiaOpensNewTabLinks: {
+          shown: () => PLATFORM_FEATURES.keepsNewTabLinksInLittleArdia,
           title: "Keep new-tab links inside a Little Ardia window",
-          description: "For links clicked in a Little Ardia window: a link that would open a new tab loads right there instead of in a tab of the main window. ⌘-click still opens it behind. Links in the main window follow Settings › Tabs › Open new-tab links in.",
+          description: `For links clicked in a Little Ardia window: a link that would open a new tab loads right there instead of in a tab of the main window. ${keyText("⌘")}-click still opens it behind. Links in the main window follow Settings › Tabs › Open new-tab links in.`,
           keywords: ["little ardia", "target blank", "new tab", "links"],
         },
         littleWindowGestures: {
           title: "Close and expand Little Ardia and Peeks with trackpad gestures",
           description: "Pinch in to close, spread to open in the main window, and swipe back on a Little Ardia page with nothing to go back to to close it. Off, pinching zooms the page.",
           keywords: ["little ardia", "little arc", "peek", "pinch", "swipe", "gesture", "trackpad", "zoom", "close", "expand"],
+          shown: () => PLATFORM_FEATURES.trackpadGestures,
         },
       },
     },
@@ -43,7 +56,7 @@ export const generalRows = {
       rows: {
         windowsAndTabs: {
           title: "Windows and tabs",
-          description: "What you see the next time you open it. Closed windows stay in History › Recently Closed.",
+          description: `What you see the next time you open it. ${PLATFORM_FEATURES.menuBar ? "Closed windows stay in History › Recently Closed." : `${keyText("⇧⌘T")} reopens closed windows too.`}`,
           keywords: ["restore", "session", "reopen", "preserve tabs", "start fresh"],
         },
       },
@@ -79,10 +92,11 @@ export const generalRows = {
       rows: {
         importBrowser: {
           title: "Import from another browser",
-          description: "Bookmarks, history, passwords, tabs and Arc spaces from Chrome, Arc, Safari, Firefox and more.",
+          description: `Bookmarks, history, passwords, tabs and Arc spaces from Chrome, Arc, ${PLATFORM_FEATURES.hiddenBrowserSources.includes("safari") ? "Edge" : "Safari"}, Firefox and more.`,
           keywords: ["migrate", "switch", "transfer"],
         },
         exportBookmarks: {
+          shown: () => PLATFORM_FEATURES.exportsBookmarksAndPasswords,
           title: "Export bookmarks",
           description: "To an HTML file that Chrome, Safari, Firefox and every other browser can import.",
           keywords: ["backup", "html", "netscape", "bookmarks.html", "save bookmarks", "transfer"],
@@ -112,6 +126,11 @@ export const generalRows = {
     {
       section: "Profile switcher",
       rows: {
+        showProfileDots: {
+          title: "Show profile dots",
+          description: `The dots at the bottom of the sidebar that switch profiles. Swiping and ${keyText("⌃1")}–${keyText("⌃9")} still work.`,
+          keywords: ["dots", "pager", "profile switcher", "page dots", "sidebar footer", "hide"],
+        },
         switcherIcons: {
           title: "Show profile icons instead of dots",
           description: "As in Arc: the switcher at the bottom of the sidebar shows each profile's symbol or emoji, and a profile without one keeps its dot. Right-click the switcher to pick an icon.",
@@ -119,14 +138,24 @@ export const generalRows = {
         },
       },
     },
-    { section: "Profiles", rows: { list: { title: "Profiles", description: "Drag to reorder. ⌃1–⌃9 switch to the first nine.", keywords: ["create profile", "new profile", "delete profile", "reorder", "work", "personal"] } } },
+    { section: "Profiles", rows: { list: { title: "Profiles", description: `Drag to reorder. ${keyText("⌃1")}–${keyText("⌃9")} switch to the first nine.`, keywords: ["create profile", "new profile", "delete profile", "reorder", "work", "personal"] } } },
   ],
   sync: [
     {
       section: "Sync",
       rows: {
-        sync: { title: "Sync", description: "Sync your profiles, bookmarks, history, tabs, passwords, extensions and settings across your Macs.", keywords: ["icloud", "recovery phrase", "devices", "turn on sync", "end to end", "encrypted"] },
-        folder: { advanced: true, title: "Sync folder", keywords: ["icloud drive", "dropbox", "folder"] },
+        sync: { title: "Sync", description: `Sync your profiles, bookmarks, history, tabs, ${PLATFORM_FEATURES.syncsPasswords ? "passwords, " : ""}extensions and settings across your ${PLATFORM_TERMS.syncedComputer}s.`, keywords: [PLATFORM_TERMS.cloudDrive.toLowerCase(), "recovery phrase", "devices", "turn on sync", "end to end", "encrypted"] },
+        folder: { ...(PLATFORM_FEATURES.defaultCloudDrive ? { advanced: true as const } : {}), title: "Sync folder", keywords: ["icloud drive", "dropbox", "folder"] },
+      },
+    },
+    {
+      section: "All Open Tabs",
+      rows: {
+        allOpenTabs: {
+          title: "Sync all open tabs",
+          description: "Pick profiles whose open tabs are the same on all your Macs, not just their pinned tabs. Closing a tab closes it on your other Macs too.",
+          keywords: ["unpinned tabs", "regular tabs", "today tabs", "arc", "spaces", "tabs on every mac", "same tabs", "continue on another mac"],
+        },
       },
     },
   ],
@@ -137,8 +166,13 @@ export const generalRows = {
       rows: {
         autoHideTabs: {
           title: "Auto-hide tabs",
-          description: "In every window, the tabs slide out of view and come back when you move the pointer to the window's edge. Changing it here resets every window; ⌘S and View › Auto-Hide Tabs hide or show the tabs in one window only.",
+          description: `In every window, the tabs slide out of view and come back when you move the pointer to the window's edge. Changing it here resets every window; ${keyText("⌘S")} ${PLATFORM_FEATURES.menuBar ? "and View › Auto-Hide Tabs hide or show" : "hides or shows"} the tabs in one window only.`,
           keywords: ["hide tabs", "hide sidebar", "show sidebar", "toggle sidebar", "hide tab bar", "tab strip", "top tabs", "focus mode", "full screen", "zen"],
+        },
+        revealTabsOnHover: {
+          title: "Reveal hidden tabs on hover",
+          description: `With Auto-hide tabs on, the tabs slide back over the page while the pointer is at the window's edge. Off, they come back only with ${keyText("⌘S")}${PLATFORM_FEATURES.menuBar ? " or View › Auto-Hide Tabs" : ""}.`,
+          keywords: ["hover", "peek", "edge", "reveal", "pop out", "floating sidebar", "compact mode", "shortcut only", "accidental", "zen"],
         },
         sidebarSide: {
           title: "Sidebar position",
@@ -149,13 +183,13 @@ export const generalRows = {
         hideToolbarWhileScrolling: {
           title: "Hide toolbar while scrolling",
           description: "Scrolling down tucks the toolbar into a thin strip with the site's name. Scroll up, or click the strip, to bring it back. Your tabs stay put: hiding them is Auto-hide tabs.",
-          keywords: ["auto hide toolbar", "address bar hides", "collapse", "compact", "scroll"],
+          keywords: ["auto hide toolbar", "address bar hides", "collapse", "compact", "scroll", "shrink", "shrinking", "address bar shrinks", "toolbar shrinks", "page shifts", "page jumps"],
         },
-        showSidebarButton: { advanced: true, title: "Show the Hide Tabs button", description: "The button at the toolbar's leading edge. Auto-hide tabs, ⌘S and View › Auto-Hide Tabs still hide and show the tabs.", keywords: ["toggle sidebar", "sidebar button", "hide tabs button"] },
+        showSidebarButton: { advanced: true, title: "Show the Hide Tabs button", description: `The button at the toolbar's leading edge. Auto-hide tabs${PLATFORM_FEATURES.menuBar ? `, ${keyText("⌘S")} and View › Auto-Hide Tabs` : ` and ${keyText("⌘S")}`} still hide and show the tabs.`, keywords: ["toggle sidebar", "sidebar button", "hide tabs button"] },
         showClearButton: {
           advanced: true,
           title: "Show Clear button",
-          description: "The ↓ Clear between your pinned tabs and your tabs. ⇧⌘K and File › Close All Tabs still clear them.",
+          description: `The ↓ Clear between your pinned tabs and your tabs. ${keyText("⇧⌘K")}${PLATFORM_FEATURES.menuBar ? " and File › Close All Tabs" : ""} still ${PLATFORM_FEATURES.menuBar ? "clear" : "clears"} them.`,
           keywords: ["clear unpinned tabs", "close all tabs", "clear today", "divider", "arc"],
           shown: inSidebar,
         },
@@ -183,48 +217,42 @@ export const generalRows = {
           description: "A Top App's tile shows a speaker while its tab plays or is muted, a mark while it is in Picture in Picture, and its unread count when unread counts are on. Off, as in Dia, a tile shows only the site's icon.",
           keywords: ["pinned tiles", "favorites", "badges", "indicators", "unread count", "speaker", "audio", "muted", "playing", "clean", "dia"],
         },
-      },
-    },
-    {
-      section: "Unloaded tab appearance",
-      rows: {
-        fadeUnloadedTabTitles: {
-          advanced: true,
-          title: "Fade titles",
-          description: "Fade titles of sleeping tabs, closed pinned tabs, and tabs waiting to load after a restart.",
-          keywords: ["asleep", "discarded", "dim", "grey", "gray", "inactive", "pinned", "closed"],
+        showTabHoverMenu: {
+          title: "Show tab hover menu",
+          description: "Rest the pointer on a tab or Top App and a card shows its title, address, and Pin, Bookmark, Split and Reset. Off, resting on a tab, in the sidebar or the top tab strip, shows only its full title and site as a plain tooltip, and every one of those actions is in the tab's right-click menu. A playing tab's mini player still shows.",
+          keywords: ["hover", "hover card", "popup", "pop-up", "tooltip", "tab actions", "reset", "distracting", "dia"],
         },
-        fadeUnloadedTabs: {
-          advanced: true,
-          title: "Fade icons",
-          description: "A tab whose page isn't loaded, like a closed pinned tab or one restored after a relaunch, shows its icon faded, as sleeping tabs do. Clicking it loads the page.",
-          keywords: ["unloaded", "asleep", "sleeping", "discarded", "dim", "grey", "gray", "inactive", "pinned", "closed"],
-        },
-        grayscaleUnloadedFavicons: {
-          advanced: true,
-          title: "Grayscale favicons",
-          description: "Remove color from favicons of sleeping and unloaded tabs. Independent of title and icon fading.",
-          keywords: ["gray", "grey", "grayscale", "greyscale", "asleep", "sleeping", "unloaded", "icons", "color"],
+        closedTopAppTiles: {
+          title: "Draw tiles for closed Top Apps",
+          description: "As in Dia, every Top App sits on a tile. Off, a Top App whose page isn't open shows just its icon, faded, so you can tell at a glance which ones are open; it gets its tile back when you open it or point at it.",
+          keywords: ["pinned tiles", "favorites", "top apps", "tile", "tiles", "background", "closed", "open", "unloaded", "faded", "contrast", "prominent", "quiet", "subtle", "dia"],
         },
       },
     },
+    unloadedTabAppearance,
     {
       section: "General",
       rows: {
         newTabOpens: {
           title: "New tab opens",
-          description: "With Command Bar, ⌘T and New Tab open the command bar over the page, as in Arc. The tab appears when you pick a result; Esc leaves everything as it was.",
+          description: `With Command Bar, ${keyText("⌘T")} and New Tab open the command bar over the page, as in Arc. The tab appears when you pick a result; Esc leaves everything as it was.`,
           keywords: ["new tab page", "command bar", "cmd t"],
         },
         reuseEmptyNewTab: {
           title: "Reuse an empty New Tab page",
-          description: "When the tab you're on is still an empty New Tab page, ⌘T, + New Tab and a double-click under the tabs put the cursor in its address field instead of opening another empty tab. Off, each one opens a new tab.",
+          description: `When the tab you're on is still an empty New Tab page, ${keyText("⌘T")}, + New Tab and a double-click under the tabs put the cursor in its address field instead of opening another empty tab. Off, each one opens a new tab.`,
           keywords: ["blank tab", "empty tab", "reuse", "one new tab", "multiple new tabs", "cmd t"],
-          shown: (settings) => settings.newTabOpens === "page",
+          shown: (settings) => newTabOpensOf(settings) === "page",
+        },
+        newTabUrl: {
+          title: "New tab page address",
+          description: `Type a web address, or Ardia's History, Bookmarks or Downloads page, and ${keyText("⌘T")}, + New Tab, a group's New Tab and new windows, private windows included, open it instead of the New Tab page, as Chrome does with a custom New Tab page. Leave it empty for the New Tab page.`,
+          keywords: ["custom new tab", "new tab url", "home page", "homepage", "start page", "custom url", "cmd t"],
+          shown: (settings) => newTabOpensOf(settings) === "page",
         },
         newTabPosition: {
           title: "Add new tabs",
-          description: "Where ⌘T and + New Tab put the new tab. Next to the current tab, it joins that tab's group (from a pinned tab, it goes first in the list), and closing it brings you back. Links open next to their page either way.",
+          description: `Where ${keyText("⌘T")} and + New Tab put the new tab. Next to the current tab, it joins that tab's group (from a pinned tab, it goes first in the list), and closing it brings you back. Links open next to their page either way.`,
           keywords: ["new tab position", "next to current tab", "after current tab", "beside", "right of", "below", "adjacent", "end", "left", "top", "bottom", "order", "cmd t"],
         },
         newTabButtonPosition: {
@@ -246,11 +274,16 @@ export const generalRows = {
         },
         sleepingTabsInSwitcher: {
           title: "Show sleeping tabs in the tab switcher",
-          description: "Off, ⌃Tab skips tabs whose page is asleep or not loaded, such as a closed pinned tab, so the tabs you use stay close. The tab you're on always shows.",
+          description: `Off, ${keyText("⌃Tab")} skips tabs whose page is asleep or not loaded, such as a closed pinned tab, so the tabs you use stay close. The tab you're on always shows.`,
           keywords: ["ctrl tab", "control tab", "last used tabs", "mru", "cycle", "asleep", "sleeping", "discarded", "unloaded", "memory saver"],
         },
         warnBeforeClosingLastTab: { advanced: true, title: "Warn before closing last tab in a Profile", keywords: ["confirm", "close tab"] },
-        tabReorderHaptics: { advanced: true, title: "Haptic feedback when reordering tabs", keywords: ["trackpad", "vibration", "drag"] },
+        keepTopAppsRunning: {
+          title: "Keep Top Apps running when closed",
+          description: `${keyText("⌘W")} on a Top App switches away from it and leaves its page loaded, so a site like Slack keeps its notifications. A Top App split with another pinned tab stays together and loaded. Choose Unload from its right-click menu to put it to sleep. Off, as in Dia, ${keyText("⌘W")} unloads it. Memory Saver can still put a page to sleep unless the site is in its Always keep these sites active list.`,
+          keywords: ["top apps", "pinned tiles", "favorites", "essentials", "cmd w", "close", "unload", "keep loaded", "keep running", "background", "arc"],
+        },
+        tabReorderHaptics: { advanced: true, title: "Haptic feedback when reordering tabs", keywords: ["trackpad", "vibration", "drag"], shown: () => PLATFORM_FEATURES.haptics },
         extendWebsiteColor: { title: "Extend website color into tab bar", keywords: ["theme color", "tint", "colour"] },
         sidebarMediaControls: {
           advanced: true,
@@ -269,6 +302,7 @@ export const generalRows = {
           title: "Video upscaling",
           description: "Sharpens low-resolution videos shown larger than they are, on Apple silicon. Only in the tab you're watching, never in the background, in Low Power Mode or when the Mac runs hot.",
           keywords: ["super resolution", "sharpen", "video quality"],
+          shown: () => PLATFORM_FEATURES.videoUpscaling,
         },
       },
     },
@@ -277,13 +311,23 @@ export const generalRows = {
       rows: {
         peekLinksToOtherSites: {
           title: "Open a Peek window when clicking on links to other sites",
-          description: "Only from Top Apps and pinned tabs, however the page opens the link, through a redirect such as Gmail's included. Links on the same site, ⌘-clicks, downloads and sign-in pop-ups work as before.",
+          description: `Only from Top Apps and pinned tabs, however the page opens the link, through a redirect such as Gmail's included. Links on the same site, ${keyText("⌘")}-clicks, downloads and sign-in pop-ups work as before.`,
           keywords: ["peek", "preview", "external links", "other sites", "pinned", "pinned tabs", "top apps", "favorites", "glance", "arc", "zen", "gmail", "target blank"],
         },
         newTabLinksOpenIn: {
           title: "Open new-tab links in",
-          description: "Where a link that would open a new tab goes when you click it in a tab. ⌘-click still opens a tab behind, and sign-in pop-ups stay windows. Links from other apps follow Settings › General › Open links from other apps in Little Ardia.",
+          description: `Where a link that would open a new tab goes when you click it in a tab. ${keyText("⌘")}-click still opens a tab behind, and pop-ups stay windows unless Open pop-up windows as tabs is on. Links from other apps follow Settings › General › Open links from other apps in Little Ardia.`,
           keywords: ["peek", "new tab", "target blank", "links", "preview", "open links"],
+        },
+        popupsOpenAsTabs: {
+          title: "Open pop-up windows as tabs",
+          description: "A page that opens a pop-up window, like Outlook's Open in New Window or a sign-in pop-up, opens it as a tab next to the page instead. The page can still talk to it, and closing it brings you back. Extension pop-ups stay windows.",
+          keywords: ["popup", "pop-up", "pop up", "window.open", "new window", "outlook", "sign in", "oauth", "as tab", "links"],
+        },
+        peekButtons: {
+          title: "Show Peek buttons",
+          description: "Close, Open as Tab and Split View sit in the Peek's title bar, or float beside it on the left or right.",
+          keywords: ["peek", "buttons", "close", "expand", "split view", "left", "right", "side", "position", "arc", "zen"],
         },
         peekModifier: {
           advanced: true,
@@ -292,9 +336,10 @@ export const generalRows = {
           keywords: ["peek", "preview", "shift click", "option click", "arc"],
         },
         splitLinkModifier: {
+          shown: () => splitViewAvailable,
           advanced: true,
           title: "Open a link in split view with",
-          description: "Opens the link in a pane beside the page. ⌥⌘-click splits too, and so does ⌥⇧-click when ⌥-click is chosen. A link that downloads still downloads.",
+          description: `Opens the link in a pane beside the page. ${keyText("⌥⌘")}-click splits too, and so does ${keyText("⌥⇧")}-click when ${keyText("⌥")}-click is chosen. A link that downloads still downloads.`,
           keywords: ["split view", "split screen", "side by side", "option click", "alt click", "option shift click", "download", "dia"],
         },
       },
@@ -308,11 +353,11 @@ export const generalRows = {
           description: "Asks before Close Group closes a group and its tabs. A pinned group's − unloads its tabs instead, and keeps the group.",
           keywords: ["confirm", "close group", "folder", "accidentally"],
         },
-        cmdClickCreatesTabGroup: { advanced: true, title: "⌘-clicking links creates tab groups", keywords: ["command click", "cmd click"] },
+        cmdClickCreatesTabGroup: { advanced: true, title: `${keyText("⌘")}-clicking links creates tab groups`, keywords: ["command click", "cmd click"] },
         optShiftClickOpensInGroup: {
           advanced: true,
-          title: "⌥⇧-click opens tab in group",
-          description: "⌥⇧-click a tab to open it in a group with the current tab. (⌥⇧-clicking a link opens it in a split.)",
+          title: `${keyText("⌥⇧")}-click opens tab in group`,
+          description: `${keyText("⌥⇧")}-click a tab to open it in a group with the current tab. (${keyText("⌥⇧")}-clicking a link opens it in a split.)`,
           keywords: ["option shift click", "split"],
         },
         dragToGroupInTopStrip: {

@@ -1,13 +1,13 @@
 import { useBrowser, type BrowserState } from "../browser/store";
-import { useTab } from "../browser/hooks";
+import { useSettings, useTab } from "../browser/hooks";
 import { useKeyed } from "../browser/keyedWatch";
 import { watchTabState } from "../tabs/tabStateWatch";
-import { activeTabId } from "../browser/model";
+import { activeTabId, pinSection } from "../browser/model";
 import type { Tab } from "../browser/types";
 import { engineMark, type PageEngine } from "../engines/engines";
 import { isPageUnloaded } from "../pins/pinShare";
-import { useIsSleeping } from "../tabs/sleepingTabs";
 import { muteState, type MuteState } from "../tabs/mute";
+import { useIsSleeping } from "../tabs/sleepingTabs";
 
 export const ACTIVE = 1;
 export const SELECTED = 2;
@@ -19,8 +19,11 @@ const SITE_MUTED = 256;
 const ENGINE_MARKS: Record<PageEngine, number> = { chromium: 32, webkit: 64 };
 export const ICON_MARKS = FADED | ENGINE_MARKS.chromium | ENGINE_MARKS.webkit;
 
+export const isClosedTopApp = (s: BrowserState, tabId: string): boolean =>
+  !s.settings.closedTopAppTiles && pinSection(s.tabs[tabId]) === "tile" && isPageUnloaded(s, tabId);
+
 export function iconMarks(s: BrowserState, tabId: string): number {
-  const faded = s.settings.fadeUnloadedTabs && isPageUnloaded(s, tabId) ? FADED : 0;
+  const faded = (s.settings.fadeUnloadedTabs && isPageUnloaded(s, tabId)) || isClosedTopApp(s, tabId) ? FADED : 0;
   const mark = engineMark(s, tabId);
   return mark ? faded | ENGINE_MARKS[mark] : faded;
 }
@@ -41,6 +44,15 @@ export function useGrayscaleTabIcon(tabId: string): boolean {
 export function useFadeTabTitle(tabId: string): boolean {
   const sleeping = useIsSleeping(tabId);
   return useBrowser((s) => s.settings.fadeUnloadedTabTitles && (sleeping || isPageUnloaded(s, tabId)));
+}
+
+export const titleStruck = (strikeSleeping: boolean, sleeping: boolean, marks: number): boolean => strikeSleeping && (sleeping || !!(marks & FADED));
+
+export function useStruckTitle(tabId: string, marks?: number): boolean {
+  const on = useSettings((s) => s.strikeSleepingTabs);
+  const sleeping = useIsSleeping(on ? tabId : "");
+  const iconMarks = useIconMarks(on ? tabId : undefined, on ? marks : 0);
+  return titleStruck(on, sleeping, iconMarks);
 }
 
 export function rowFlags(s: BrowserState, windowId: string, tabId: string): number {

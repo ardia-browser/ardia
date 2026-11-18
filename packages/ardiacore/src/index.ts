@@ -1,6 +1,6 @@
 export * from "./WebView";
 export * from "./pageTypes";
-export type { PageEventName } from "./pageEvents";
+export type { NativeProps, PageEvent, PageEventName } from "./pageEvents";
 export * from "./downloads";
 export * from "./permissions";
 export * from "./engineDomain";
@@ -18,6 +18,7 @@ export * from "./bookmarks";
 export * from "./swipe";
 export * from "./tabs";
 export * from "./webkit";
-export { call, on, type CallArgs, type CallName, type CallResult, type EventName } from "./engine/call";
-export type { EngineCalls, EngineEvents } from "./engine/api";
+export { call, on, type CallArgs, type CallName, type CallResult, type EventData, type EventName } from "./engine/call";
+export type { EngineCalls, EngineEvents, LinuxHostEvents, WindowsHostEvents } from "./engine/api";
 export { nativeModule, type ArdiaCoreNativeModules } from "./nativeModules";
+export type { DomainModule } from "./engine/call";

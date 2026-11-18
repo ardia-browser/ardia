@@ -1,22 +1,37 @@
 public struct BottomBarVisibility: Equatable, Sendable {
-  public enum FindPhase: Equatable, Sendable {
+  public enum Presentation: Equatable, Sendable {
+    case expanded
+    case collapsed
+    case hidden
+  }
+
+  private enum FindPhase: Equatable, Sendable {
     case idle
     case finding
     case leaving
   }
 
-  public var scrollCollapsed = false
-  public private(set) var findPhase = FindPhase.idle
-  public private(set) var keyboardVisible = false
+  private var scrollCollapsed = false
+  private var findPhase = FindPhase.idle
+  private var keyboardVisible = false
 
   public init() {}
 
-  public var isShown: Bool {
-    !scrollCollapsed && findPhase == .idle
+  public var presentation: Presentation {
+    if findPhase != .idle { return .hidden }
+    return scrollCollapsed ? .collapsed : .expanded
   }
 
-  public func isShown(searchTrayPresented: Bool) -> Bool {
-    isShown && !searchTrayPresented
+  public var isShown: Bool {
+    presentation != .hidden
+  }
+
+  public mutating func scrolled(down: Bool, collapses: Bool) {
+    scrollCollapsed = collapses && down
+  }
+
+  public mutating func expand() {
+    scrollCollapsed = false
   }
 
   public mutating func findSessionChanged(isActive: Bool) {

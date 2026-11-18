@@ -2,6 +2,8 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
+const NO_METRO = "127.0.0.1:1";
+
 export const INJECTION_ENTITLEMENTS = ["com.apple.security.cs.allow-dyld-environment-variables", "com.apple.security.cs.disable-library-validation"];
 
 export const signingIdentity = (app) => spawnSync("codesign", ["-dvv", app], { encoding: "utf8" }).stderr.match(/^Authority=(.+)$/m)?.[1] ?? "-";
@@ -18,9 +20,10 @@ export function prepareApp(app, dir, { bundle = null, entitlements: extra = [] }
   const shipped = join(copy, "Contents/Resources/main.jsbundle");
   const swapped = !!bundle && !(existsSync(shipped) && readFileSync(bundle).equals(readFileSync(shipped)));
   if (swapped) cpSync(bundle, shipped);
+  if (bundle) writeFileSync(join(copy, "Contents/Resources/ip.txt"), `${NO_METRO}\n`);
   const granted = execFileSync("codesign", ["-d", "--entitlements", "-", "--xml", source], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   const missing = extra.filter((key) => !granted.includes(`<key>${key}</key>`));
-  if (!swapped && !missing.length) return copy;
+  if (!bundle && !missing.length) return copy;
   const plist = join(dir, "entitlements.plist");
   writeFileSync(plist, granted.replace(/<\/dict>\s*<\/plist>\s*$/, `${missing.map((key) => `<key>${key}</key><true/>`).join("")}</dict></plist>`));
   execFileSync("codesign", ["--force", "--sign", signingIdentity(source), "--timestamp=none", "--options", "runtime", "--entitlements", plist, copy], { stdio: "inherit" });

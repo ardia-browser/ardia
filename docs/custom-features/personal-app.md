@@ -16,3 +16,6 @@
   `ArdiaHost+Launch.mm`, `CliInstaller.swift`, and CLI `browse/vault.py`.
 - Manual when affected: existing login survives restart; profiles/settings, Bitwarden, scripts, and CLI routing work.
 - Details only when needed: [setup, snapshots, and recovery](../personal-app.md).
+
+- Replacement: `v0.2.47-nightly.5` provides no personal-app isolation or local-signing equivalent.
+  Preserve personal commands in all new CLI skill examples; refresh managed copies after activation.

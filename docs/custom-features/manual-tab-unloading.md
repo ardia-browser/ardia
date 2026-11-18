@@ -14,5 +14,10 @@
   tab menus, and generated native command tables.
 - Checks: `state/tabs/discardActions.test.mjs` and close/menu cases under `apps/browser/src`.
 - Manual: unload one/multiple tabs; check replacement, retained rows, wake, Back history, and a bound shortcut.
-- Open: #634 is not proven fixed for the real extension path. Simon accepts the native command and has
-  deferred further extension debugging; do not reopen it without new evidence or a request.
+- Open: #634 is not proven fixed for the real extension path. Further extension debugging is deferred.
+
+- Replacement: `v0.2.47-nightly.5` has no general manual-sleep menu or configurable unload shortcut.
+  Unreleased upstream `208ff58972d216409ba3122cb192549324523c6f` adds Sleep Tab/Tabs for hidden Chromium pages and nested groups with proactive protections. It cannot unload the shown tab
+  and offers no matching shortcut. The fork switches first and uses native discard. Keep the command.
+  Upstream `489dcb22da49ddf5af018777d4aeaa592a24c1d2`, also unreleased, follows an extension's
+  activation into another shared-data space; the fork deliberately keeps recovery in the current space.

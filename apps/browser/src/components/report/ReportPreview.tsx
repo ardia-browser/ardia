@@ -3,7 +3,9 @@ import { ScrollView, View } from "react-native";
 import { previewPayload, reportFiles, setPreview } from "../../state/report/actions";
 import { formatBytes, type ReportFile } from "../../state/report/form";
 import { Box, Button, DialogActions, DialogTitle, radius, space, Text, useTheme } from "../ui";
+import { monoFace } from "../ui/tokens";
 import { REPORT } from "./tokens";
+import { PLATFORM_TERMS } from "../../lib/platformTerms";
 
 export function ReportPreview() {
   const theme = useTheme();
@@ -15,7 +17,7 @@ export function ReportPreview() {
   }, []);
   return (
     <>
-      <DialogTitle subtitle="Exactly what leaves your Mac when you press Send. Only the title, description, kind and version go to the public GitHub issue.">
+      <DialogTitle subtitle={`Exactly what leaves your ${PLATFORM_TERMS.computer} when you press Send. Only the title, description, kind and version go to the public GitHub issue.`}>
         What's sent
       </DialogTitle>
       <View style={{ marginTop: space.xl, height: REPORT.previewHeight, borderRadius: radius.tile, backgroundColor: theme.groupFill, borderColor: theme.groupBorder, borderWidth: 1 }}>
@@ -23,7 +25,7 @@ export function ReportPreview() {
           <Text size="small" weight="semibold" tone="textSecondary">
             Report
           </Text>
-          <Text size="small" selectable style={MONO}>
+          <Text size="small" selectable style={monoFace()}>
             {payload || "…"}
           </Text>
           <Text size="small" weight="semibold" tone="textSecondary" style={{ marginTop: space.l }}>
@@ -32,7 +34,7 @@ export function ReportPreview() {
           {files.length ? (
             files.map((f) => (
               <Box key={f.name} row gap="m">
-                <Text size="small" style={MONO}>
+                <Text size="small" style={monoFace()}>
                   {f.name}
                 </Text>
                 <Text size="small" tone="textSecondary">
@@ -54,4 +56,3 @@ export function ReportPreview() {
   );
 }
 
-const MONO = { fontFamily: "Menlo" } as const;

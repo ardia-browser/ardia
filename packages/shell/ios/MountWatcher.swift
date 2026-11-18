@@ -4,6 +4,6 @@ import ExpoModulesCore
 
 final class MountWatcher: NSObject {
   @objc func uiManagerDidPerformMounting(_ manager: AnyObject) {
-    DispatchQueue.main.async { ServerWindowDrag.scheduleRefreshAll() }
+    DispatchQueue.main.async { ServerWindowDrag.mounted() }
   }
 }

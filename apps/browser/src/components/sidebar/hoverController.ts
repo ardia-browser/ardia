@@ -2,11 +2,13 @@ import { createContext, useContext, useEffect, useReducer, useRef, useState } fr
 import type { LayoutChangeEvent } from "react-native";
 import { markHoverProps } from "../../lib/hoverMarks";
 import { currentWindow } from "../../state/browser/current";
-import { PageProfileContext, useWindow } from "../../state/browser/hooks";
+import { PageProfileContext, useSettings, useWindow } from "../../state/browser/hooks";
 import {
   cardEntered,
   cardLaidOut,
   cardLeft,
+  dropHeldEnter,
+  holdEnterWhileScrolling,
   releaseAnchor,
   rowEntered,
   rowLeft,
@@ -17,6 +19,7 @@ import {
   type HoverPointerEvent,
 } from "../../state/sidebar/hover";
 import type { Target } from "../../state/sidebar/sidebarUi";
+import { useMedia, usePinnedWithMediaControls } from "../../state/media/media";
 
 export const FoldedAway = createContext(false);
 
@@ -26,7 +29,21 @@ export const cardHoverProps = {
   onLayout: (e: LayoutChangeEvent) => cardLaidOut(e.nativeEvent.layout),
 };
 
-export function useRowHover(windowId: string, target: Target | null) {
+export function useCardTarget<T extends Target>(target: T | null): T | null {
+  const cards = useSettings((s) => s.showTabHoverMenu);
+  const playerTab = !cards && target?.kind === "tab" ? target.id : undefined;
+  const pinned = usePinnedWithMediaControls(playerTab);
+  const playing = useMedia((m) => {
+    const session = playerTab ? m.sessions[playerTab] : undefined;
+    return !!session && session.controllable && session.playbackState !== "none" && !!(session.title || session.artwork);
+  });
+  const player = pinned && playing;
+  if (cards || !target || player) return target;
+  return target.kind === "tab" || target.kind === "folder" ? null : target;
+}
+
+export function useRowHover(windowId: string, rowTarget: Target | null) {
+  const target = useCardTarget(rowTarget);
   const [hovered, setHovered] = useState(false);
   const [, refresh] = useReducer((n: number) => n + 1, 0);
   const page = useContext(PageProfileContext);
@@ -34,6 +51,7 @@ export function useRowHover(windowId: string, target: Target | null) {
   const latest = useRef({ windowId, target, page, away });
   latest.current = { windowId, target, page, away };
   const inside = useRef<HoverPointerEvent | null>(null);
+  const [row] = useState(() => ({}));
   const onCurrentPage = () => {
     const { windowId, page } = latest.current;
     return !page || currentWindow(windowId)?.profileId === page;
@@ -41,6 +59,7 @@ export function useRowHover(windowId: string, target: Target | null) {
   const [enterRow] = useState(() => (event?: HoverPointerEvent) => {
     if (!onCurrentPage() || latest.current.away) return;
     const { windowId, target } = latest.current;
+    if (holdEnterWhileScrolling(windowId, row, () => inside.current && enterRow(inside.current))) return;
     watchCovered(windowId, refresh, true);
     const enter = () => {
       if (latest.current.away) return;
@@ -57,8 +76,9 @@ export function useRowHover(windowId: string, target: Target | null) {
       },
       onMouseLeave: (event?: HoverPointerEvent) => {
         inside.current = null;
-        setHovered(false);
         const { windowId, target } = latest.current;
+        if (dropHeldEnter(windowId, row)) return;
+        setHovered(false);
         watchCovered(windowId, refresh, false);
         rowLeft(windowId, target, event, onCurrentPage());
       },
@@ -94,12 +114,19 @@ export function useGroupHover(windowId: string, groupId: string) {
   const page = useContext(PageProfileContext);
   const away = useContext(FoldedAway);
   const onPage = useWindow(windowId, (w) => !page || w?.profileId === page);
-  const [hoverProps] = useState(() =>
-    markHoverProps({
-      onMouseEnter: () => setInside(true),
-      onMouseLeave: () => setInside(false),
-    }),
-  );
+  const windowRef = useRef(windowId);
+  windowRef.current = windowId;
+  const [hoverProps] = useState(() => {
+    const row = {};
+    return markHoverProps({
+      onMouseEnter: () => {
+        if (!holdEnterWhileScrolling(windowRef.current, row, () => setInside(true))) setInside(true);
+      },
+      onMouseLeave: () => {
+        if (!dropHeldEnter(windowRef.current, row)) setInside(false);
+      },
+    });
+  });
   useEffect(() => {
     watchCovered(windowId, refresh, true);
     return () => watchCovered(windowId, refresh, false);

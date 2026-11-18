@@ -18,6 +18,7 @@ class DevToolsAgentHost;
 class DevToolsAgentHostClient;
 class DevToolsSocketFactory;
 class RenderFrameHost;
+class RenderWidgetHost;
 class WebContents;
 
 extern bool g_ardia_opacity_from_default_color;
@@ -27,6 +28,12 @@ bool ArdiaHasAccessedInitialMainDocument(WebContents* contents);
 bool ArdiaMainFrameHandlesEnterPictureInPicture(WebContents* contents);
 
 DevToolsAgentHost* ArdiaDevToolsAgentHostForId(const std::string& id);
+}
+
+namespace gfx {
+class Point;
+class Rect;
+class Size;
 }
 
 namespace crypto::apple {
@@ -91,6 +98,15 @@ extern bool (*g_ardia_live_tab_skips_restore)(sessions::LiveTab* live_tab,
                                               SessionID* source);
 
 extern int (*g_ardia_permission_tab_shown)(content::WebContents*);
+
+extern bool (*g_ardia_windowless_page_screen_rects)(
+    content::RenderWidgetHost* host,
+    const gfx::Size& view_size,
+    gfx::Rect* window_frame_in_screen,
+    gfx::Point* view_origin_in_window);
+
+extern bool (*g_ardia_hidden_widget_takes_screen_rects)(
+    content::RenderWidgetHost* widget);
 
 extern void (*g_ardia_dnr_rule_matched)(
     content::BrowserContext* browser_context,

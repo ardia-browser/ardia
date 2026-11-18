@@ -7,7 +7,9 @@ import { useBrowser } from "../browser/store";
 import { focusedWindowOf } from "../windows/ui";
 import { openReport } from "../report/actions";
 import { openReleaseNotesPage } from "../releaseNotes/releaseNotesPage";
+import { webKitMediaFaultsLine } from "../telemetry/webkitMediaFaults";
 import type { AppCommand } from "./commandCatalog";
+import { PLATFORM_TERMS } from "../../lib/platformTerms";
 
 export const APP_COMMAND_HANDLERS: Readonly<Record<AppCommand, (windowId: string | null) => void>> = {
   reportProblem: (windowId) => reportProblem(windowId),
@@ -17,6 +19,7 @@ export const APP_COMMAND_HANDLERS: Readonly<Record<AppCommand, (windowId: string
   videoTour: (windowId) => openVideoTour(windowId),
   releaseNotes: (windowId) => openReleaseNotesPage(windowId),
   taskManager: () => void openTaskManager().catch(() => {}),
+  clearRecentlyClosed: (windowId) => useBrowser.getState().clearRecentlyClosed(windowId),
 };
 
 export function reportProblem(windowId?: string | null, source: "menu" | "check_in" = "menu") {
@@ -33,7 +36,7 @@ export async function diagnostics(): Promise<string> {
   return [
     `${app.appName} ${app.appVersion} (${app.appBuild}) — ${app.configuration}`,
     engine ? `Engine: ArdiaCore, Chromium ${engine.chromiumVersion}` : "Engine: unavailable",
-    `macOS ${app.osVersion} (${app.osBuild}), ${app.arch}, ${app.model}, ${Math.round(app.memoryGB)} GB`,
+    `${PLATFORM_TERMS.os} ${app.osVersion} (${app.osBuild}), ${app.arch}, ${app.model}, ${Math.round(app.memoryGB)} GB`,
     `Bundle: ${app.bundleId}, locale ${app.locale}`,
     `Windows: ${regular.length} (+${s.windowOrder.length - regular.length} incognito), tabs: ${Object.keys(s.tabs).length}, profiles: ${s.profileOrder.length}`,
     !updates?.available
@@ -41,6 +44,7 @@ export async function diagnostics(): Promise<string> {
       : !updates.configured
         ? "Updates: not set up for this build"
         : `Updates: automatic checks ${updates.automaticChecks ? "on" : "off"}, feed ${updates.feedURL ?? "none"}`,
+    webKitMediaFaultsLine(),
     ...(engine?.focus ? [`Focus: ${engine.focus.replace(/\n/g, "\n  ")}`] : []),
   ].join("\n");
 }

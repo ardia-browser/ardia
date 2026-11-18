@@ -7,6 +7,8 @@ struct PagerStage: View {
   let pager: PagerModel
   let reduceMotion: Bool
 
+  @Environment(\.profileLook) private var look
+
   var body: some View {
     GeometryReader { proxy in
       let size = CGSize(
@@ -16,7 +18,7 @@ struct PagerStage: View {
       let layout = PagerPhysics.layout(offset: pager.offset, width: size.width, hasLeft: pager.hasLeft, hasRight: pager.hasRight, reduceMotion: reduceMotion)
       let incoming = layout.incomingSide < 0 ? pager.left : layout.incomingSide > 0 ? pager.right : nil
       ZStack {
-        Color.black
+        Rectangle().fill(look.surface)
         if let current = pager.current {
           PagerCard(tab: current, image: pager.images[current.id], pose: layout.outgoing, size: size, statusHeight: proxy.safeAreaInsets.top, shadowEdge: 0)
         }

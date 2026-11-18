@@ -17,7 +17,7 @@ registerHooks({
     return next(specifier, context);
   },
 });
-const { adoptFavicons, faviconOutlived, noteFavicon, pruneProfileFavicons, resolveFavicon, startFavicons, useFavicon, useFavicons } = await import("./favicons.ts");
+const { adoptFavicons, faviconOutlived, noteFavicon, pruneEngineFavicons, resolveFavicon, startFavicons, useFavicon, useFavicons } = await import("./favicons.ts");
 const { seedFavicons } = await import("./launchFavicons.ts");
 const { adoptIconPage, dropOutlivedFavicon, noteIconPage } = await import("./iconPage.ts");
 const { useBrowser } = await import("../browser/store.ts");
@@ -158,7 +158,7 @@ test("pruning a profile's icons looks the pages still waiting on screen up again
   try {
     const row = mount(() => useFavicon(page, null, "default"));
     await waitFor(() => cached(page) === null);
-    pruneProfileFavicons("default");
+    pruneEngineFavicons(engineProfile(useBrowser.getState(), "default"));
     await waitFor(() => asked.filter((p) => p === page).length === 2);
     row.unmount();
   } finally {
@@ -245,7 +245,7 @@ for (const [n, [order, answersFor]] of Object.entries(pruneRaces).entries())
     try {
       const first = mount(() => useFavicon(page, null, "default"));
       await waitFor(() => held.length === 1);
-      pruneProfileFavicons("default");
+      pruneEngineFavicons(engineProfile(useBrowser.getState(), "default"));
       first.unmount();
       const second = mount(() => useFavicon(page, null, "default"));
       await waitFor(() => held.length === 2);

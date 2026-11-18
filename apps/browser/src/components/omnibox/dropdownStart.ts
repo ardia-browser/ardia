@@ -2,7 +2,7 @@ import { tabTitle } from "../../state/browser/model";
 import { recentTabSuggestions, type Suggestion } from "@ardia/core";
 import { useMemo } from "react";
 import { useSettings, useTab, useWindow } from "../../state/browser/hooks";
-import { useProfileHistory } from "../../state/history/hooks";
+import { useSuggestionHistory } from "../../state/history/hooks";
 import { usePeeks } from "../../state/peek/hooks";
 import { useTabs } from "../../state/tabs/hooks";
 import { openTabsByUse } from "../../state/tabs/tabShare";
@@ -15,7 +15,8 @@ export function useDropdownStart(enabled: boolean, tabId: string, profileId: str
   const url = useTab(tabId, (t) => (enabled ? (t?.url ?? "") : ""));
   const title = useTab(tabId, (t) => (enabled ? (t?.title ?? "") : ""));
   const favicon = useTab(tabId, (t) => (enabled ? (t?.favicon ?? null) : null));
-  const history = useProfileHistory(enabled ? profileId : null);
+  const historyOn = useSettings((st) => st.commandBarHistory);
+  const history = useSuggestionHistory(enabled && historyOn ? profileId : null);
   const recent = useMemo(() => {
     const seen = new Set(url ? [withoutFragment(url)] : []);
     const out: Suggestion[] = [];

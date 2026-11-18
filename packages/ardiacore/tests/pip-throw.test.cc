@@ -631,6 +631,46 @@ int main() {
     CHECK(overshoot > 0 && overshoot < 2);
   }
 
+  {
+    const Screen one[] = {{{0, 0, 1512, 982}, {0, 0, 1512, 949}}};
+    const Point grab{186.5, 63};
+    auto placed = [](Rect r) { return Rect{std::round(r.x), std::round(r.y), r.w, r.h}; };
+    Rect stepped{574, 386, 373, 210}, held = stepped;
+    Point pointer{stepped.x + grab.x, stepped.y + grab.y};
+    for (int i = 0; i < 600; i++) {
+      const Point next{pointer.x - 0.5005, pointer.y + 0.3337};
+      stepped = placed(DragStep(stepped, {next.x - pointer.x, next.y - pointer.y}, one, 1));
+      held = placed(DragTo(held, next, grab, one, 1));
+      pointer = next;
+    }
+    CHECK(std::fabs(stepped.x + grab.x - pointer.x) > 100 || std::fabs(stepped.y + grab.y - pointer.y) > 100);
+    CHECK(std::fabs(held.x + grab.x - pointer.x) <= 0.5 && std::fabs(held.y + grab.y - pointer.y) <= 0.5);
+    CHECK(!HeldBack(DragTo(held, pointer, grab, one, 1), pointer, grab));
+
+    Rect w{574, 386, 373, 210};
+    pointer = {w.x + grab.x, w.y + grab.y};
+    bool sawHeld = false;
+    for (int i = 0; i < 400; i++) {
+      pointer.x += 3.37;
+      const Rect next = DragTo(w, pointer, grab, one, 1);
+      sawHeld = sawHeld || HeldBack(next, pointer, grab);
+      w = placed(next);
+    }
+    CHECK(sawHeld && w.maxX() - 1512 > 0 && 1512 - w.x >= kMinVisibleWidth - 1e-9);
+    for (int i = 0; i < 400; i++) {
+      pointer.x -= 3.37;
+      w = placed(DragTo(w, pointer, grab, one, 1));
+    }
+    CHECK(std::fabs(w.x + grab.x - pointer.x) <= 0.5 && std::fabs(w.y + grab.y - pointer.y) <= 0.5);
+
+    Rect top{574, 700, 373, 210};
+    pointer = {top.x + grab.x, top.y + grab.y};
+    for (int i = 0; i < 200; i++) top = placed(DragTo(top, {pointer.x, pointer.y + 2.25 * (i + 1)}, grab, one, 1));
+    CHECK(top.maxY() <= 949 + 1e-9);
+    for (int i = 200; i >= 0; i--) top = placed(DragTo(top, {pointer.x, pointer.y + 2.25 * i}, grab, one, 1));
+    CHECK(Near(top.y, 700) && Near(top.x, 574));
+  }
+
   failures += PropertyTest();
   failures += ProgressTest();
   if (failures) return 1;

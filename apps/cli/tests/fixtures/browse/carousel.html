@@ -1,0 +1,16 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Fixture Carousel</title>
+<style>body { margin: 0; } .track { overflow: hidden; width: 600px; } .slides { display: flex; transform: translateX(-2700px); } .slides button { flex: 0 0 300px; height: 80px; }</style>
+</head>
+<body>
+<div class="track"><div class="slides">
+  <button id="s1">Slide one</button><button id="s2">Slide two</button><button id="s3">Slide three</button>
+</div></div>
+<pre id="report">{"clicked": []}</pre>
+<script>
+  const state = { clicked: [] };
+  for (const id of ["s1", "s2", "s3"]) document.getElementById(id).addEventListener("click", () => { state.clicked.push(id); document.getElementById("report").textContent = JSON.stringify(state); });
+</script>
+</body>
+</html>

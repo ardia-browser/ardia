@@ -63,7 +63,6 @@ export function StepProgress() {
   const step = useOnboarding((s) => s.step);
   const sub = useOnboarding((s) => s.sub);
   const redo = useOnboarding((s) => s.redo);
-  useOnboarding((s) => s.customizing);
   const count = useQuestions(step).length;
   const steps: OnboardingStep[] = activeSteps().filter((s) => s !== "intro");
   const index = steps.indexOf(step);

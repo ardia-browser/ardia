@@ -1,5 +1,6 @@
 import ArdiaSync
 import Foundation
+import Synchronization
 import Testing
 @testable import ArdiaBrowser
 
@@ -26,8 +27,9 @@ import Testing
     #expect(resolution.url.absoluteString == (URL(string: url)?.absoluteString ?? url))
   }
 
-  @Test func emptyInputResolvesToNothing() async {
-    #expect(await omnibox.resolve("   ") == nil)
+  @Test(arguments: ["   ", " \n\t "])
+  func blankInputResolvesToNothing(text: String) async {
+    #expect(await omnibox.resolve(text) == nil)
   }
 
   @Test func usesTheSyncedEngineAndItsCustomEngines() async throws {
@@ -100,9 +102,13 @@ import Testing
     #expect(slowest.1 < .milliseconds(16), "\"\(slowest.0)\" took \(slowest.1) of thread time at the median of \(samples[0].count) runs")
   }
 
-  @Test func remoteSuggestionsAreOffForURLsAndBangs() async {
-    #expect(await omnibox.remoteSuggestions(for: "https://example.com").isEmpty)
-    #expect(await omnibox.remoteSuggestions(for: "cats !w").isEmpty)
+  @Test func remoteSuggestionsAreOffForURLsAndBangsButAskedForPlainQueries() async {
+    let recorded = Omnibox(directory: nil, suggestionSession: RecordingURLProtocol.session())
+    _ = await recorded.remoteSuggestions(for: "https://example.com")
+    _ = await recorded.remoteSuggestions(for: "cats !w")
+    #expect(RecordingURLProtocol.requests.isEmpty)
+    _ = await recorded.remoteSuggestions(for: "cats")
+    #expect(RecordingURLProtocol.requests.count == 1)
   }
 
   @Test func suggestionRequestsKeepNoCookiesOrCache() {
@@ -121,6 +127,28 @@ import Testing
     #expect(display.host == "bücher.de")
     #expect(display.trail == ["Books", "Bücher"])
   }
+}
+
+final class RecordingURLProtocol: URLProtocol {
+  private static let recorded = Mutex<[URLRequest]>([])
+
+  static var requests: [URLRequest] { recorded.withLock { $0 } }
+
+  static func session() -> URLSession {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.protocolClasses = [RecordingURLProtocol.self]
+    return URLSession(configuration: configuration)
+  }
+
+  override class func canInit(with request: URLRequest) -> Bool { true }
+  override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+  override func startLoading() {
+    Self.recorded.withLock { $0.append(request) }
+    client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
+  }
+
+  override func stopLoading() {}
 }
 
 extension Omnibox {

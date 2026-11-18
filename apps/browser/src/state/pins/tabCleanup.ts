@@ -1,6 +1,6 @@
 import type { StateCreator } from "zustand";
 import type { BrowserState } from "../browser/store";
-import { activeTabId, inPinnedContainer, isIncognitoProfile, pinSection, viewTabIds, without } from "../browser/model";
+import { activeTabId, familyKeyOf, inPinnedContainer, isIncognitoProfile, pinSection, viewTabIds, without } from "../browser/model";
 import { hasPage, isAsleep, navigationOf } from "../tabs/pageSession";
 import { isSleeping } from "../tabs/sleepingTabs";
 import { holderOf, isPageUnloaded } from "./pinShare";
@@ -10,7 +10,7 @@ import type { ClosedTab, Tab, TabGroup } from "../browser/types";
 import { withoutFragment } from "../../lib/url";
 import { tileFolderOf } from "./tileFolders";
 import { syncGroupOrder, withParent } from "../groups/groups";
-import { closedEntries, closeQuietly, keptCleanedTabs, regroupRestored, restoreSnapshots, restoreTarget } from "./closedTabs";
+import { cleanedTabsFor, closedEntries, closeQuietly, keptCleanedTabs, regroupRestored, restoreSnapshots, restoreTarget } from "./closedTabs";
 import { activated, apply, removeTabs } from "../tabs/tabs";
 
 export type ClearedTabs = {
@@ -50,6 +50,7 @@ export function clearedTabIds(s: BrowserState, windowId: string): string[] {
 
 export const CLEAN_UP_AFTER_MS = 12 * 60 * 60 * 1000;
 export const MAX_CLEANED = 100;
+export const HIDDEN_REPLACES_CLEANED_AFTER_MS = 24 * 60 * 60 * 1000;
 
 function windowFingerprint(s: BrowserState, windowId: string): string {
   const w = s.windows[windowId];
@@ -99,31 +100,53 @@ function newClosedEntryIds(before: BrowserState, after: BrowserState): string[] 
 const deselectedAt = new Map<string, number>();
 
 export function noteDeselectedTabs(s: BrowserState, ids: readonly string[], at = Date.now()) {
-  for (const id of deselectedAt.keys()) if (!s.tabs[id]) deselectedAt.delete(id);
-  for (const id of ids) if (s.tabs[id]) deselectedAt.set(id, at);
+  const open = new Set(Object.values(s.tabs).flatMap((t) => [t.id, familyKeyOf(t)]));
+  for (const key of deselectedAt.keys()) if (!open.has(key)) deselectedAt.delete(key);
+  const left = new Set(ids.flatMap((id) => (s.tabs[id] ? [familyKeyOf(s.tabs[id]!)] : [])));
+  if (!left.size) return;
+  for (const key of left) deselectedAt.set(key, at);
+  for (const t of Object.values(s.tabs)) if (left.has(familyKeyOf(t))) deselectedAt.set(t.id, at);
 }
 
-function inactivity(s: BrowserState, windowId: string) {
-  const active = activeTabId(s, windowId);
-  const grouped = new Set(Object.values(s.groups).flatMap((g) => g.tabIds));
-  const inSplit = new Set(Object.values(s.splits).flatMap((v) => splitTabIds(v)));
-  const keep = (t: Tab) => t.id === active || inPinnedContainer(s, t.id) || s.live[t.id]?.playingAudio;
+function protectedFamilies(s: BrowserState): Set<string> {
+  const showing = new Set(Object.values(s.windows).map((w) => w.profileId));
+  const out = new Set<string>();
+  for (const w of Object.values(s.windows)) {
+    for (const [profileId, id] of Object.entries(w.activeTabIds)) {
+      if (profileId !== w.profileId && showing.has(profileId)) continue;
+      if (s.tabs[id]?.windowId === w.id) out.add(familyKeyOf(s.tabs[id]!));
+    }
+  }
+  return out;
+}
+
+function lastUseOf(s: BrowserState) {
   const used = sharedLastUsed(s);
   const restored = sharedRestoredAt(s);
-  return {
-    active,
-    inSplit,
-    used,
-    restored,
-    keep,
-    expires: (t: Tab) => !keep(t) && !grouped.has(t.id) && !inSplit.has(t.id),
-    lastUsed: (t: Tab) => Math.max(lastUsedOf(used, t), deselectedAt.get(t.id) ?? 0, restoredAtOf(restored, t)),
-  };
+  const lastUsed = (t: Tab) => Math.max(lastUsedOf(used, t), deselectedAt.get(t.id) ?? 0, deselectedAt.get(familyKeyOf(t)) ?? 0, restoredAtOf(restored, t));
+  return { used, restored, lastUsed };
 }
 
-export function cleanUpCandidates(s: BrowserState, windowId: string, inactiveForMs = CLEAN_UP_AFTER_MS, now = Date.now()): string[] {
-  const view = viewTabIds(s, windowId);
-  const { active, inSplit, used, restored, keep, expires, lastUsed } = inactivity(s, windowId);
+function inactivity(s: BrowserState, windowId: string, profileId?: string) {
+  const active = activeTabId(s, windowId, profileId);
+  const grouped = new Set(Object.values(s.groups).flatMap((g) => g.tabIds));
+  const inSplit = new Set(Object.values(s.splits).flatMap((v) => splitTabIds(v)));
+  const kept = protectedFamilies(s);
+  const keep = (t: Tab) => t.id === active || kept.has(familyKeyOf(t)) || inPinnedContainer(s, t.id) || s.live[t.id]?.playingAudio;
+  const expires = (t: Tab) => !keep(t) && !grouped.has(t.id) && !inSplit.has(t.id);
+  return { ...lastUseOf(s), active, inSplit, keep, expires };
+}
+
+function sweptView(s: BrowserState, windowId: string, profileId?: string): string[] {
+  const view = viewTabIds(s, windowId, profileId);
+  if (!profileId || profileId === s.windows[windowId]?.profileId) return view;
+  const onScreen = new Set(Object.values(s.windows).flatMap((w) => viewTabIds(s, w.id).map((id) => familyKeyOf(s.tabs[id]!))));
+  return view.filter((id) => !onScreen.has(familyKeyOf(s.tabs[id]!)));
+}
+
+export function cleanUpCandidates(s: BrowserState, windowId: string, inactiveForMs = CLEAN_UP_AFTER_MS, now = Date.now(), profileId?: string): string[] {
+  const view = sweptView(s, windowId, profileId);
+  const { active, inSplit, used, restored, keep, expires, lastUsed } = inactivity(s, windowId, profileId);
   const recency = (t: Tab) => Math.max(lastUsedOf(used, t), restoredAtOf(restored, t));
   const out = new Set<string>();
   const byPage = new Map<string, Tab[]>();
@@ -145,12 +168,47 @@ export function cleanUpCandidates(s: BrowserState, windowId: string, inactiveFor
   return view.filter((id) => out.has(id));
 }
 
-export function nextCleanUpAt(s: BrowserState, windowId: string, inactiveForMs: number): number {
-  const { expires, lastUsed } = inactivity(s, windowId);
+export function hiddenProfileIdsIn(s: BrowserState, windowId: string): string[] {
+  const shown = s.windows[windowId]?.profileId;
+  return [...new Set((s.windows[windowId]?.tabIds ?? []).flatMap((id) => s.tabs[id]?.profileId ?? []))].filter((id) => id !== shown);
+}
+
+export function hiddenCleanedRoom(s: BrowserState, windowId: string, now = Date.now()): number {
+  const list = cleanedTabsFor(s, windowId);
+  const young = list.findIndex((c) => now - c.closedAt < HIDDEN_REPLACES_CLEANED_AFTER_MS);
+  return Math.max(0, MAX_CLEANED - list.length + (young === -1 ? list.length : young));
+}
+
+function hiddenCleanUpCandidates(s: BrowserState, windowId: string, inactiveForMs: number): string[] {
+  const { lastUsed } = lastUseOf(s);
+  const ids = hiddenProfileIdsIn(s, windowId).flatMap((profileId) => cleanUpCandidates(s, windowId, inactiveForMs, undefined, profileId));
+  return ids.sort((a, b) => lastUsed(s.tabs[a]!) - lastUsed(s.tabs[b]!));
+}
+
+export function hiddenSweepLimits(s: BrowserState, inactiveForMs: number): Map<string, number> {
+  const { lastUsed } = lastUseOf(s);
+  const [room, limits, seen] = [new Map<string, number>(), new Map<string, number>(), new Set<string>()];
+  const queue = s.windowOrder
+    .flatMap((windowId) => hiddenCleanUpCandidates(s, windowId, inactiveForMs).map((id) => ({ windowId, tab: s.tabs[id]! })))
+    .sort((a, b) => lastUsed(a.tab) - lastUsed(b.tab));
+  for (const { windowId, tab } of queue) {
+    if (seen.size === seen.add(familyKeyOf(tab)).size) continue;
+    const list = s.windows[windowId]?.kind === "private" ? windowId : "";
+    const left = room.get(list) ?? hiddenCleanedRoom(s, windowId);
+    if (left <= 0) continue;
+    room.set(list, left - 1);
+    limits.set(windowId, (limits.get(windowId) ?? 0) + 1);
+  }
+  return limits;
+}
+
+export function nextCleanUpAt(s: BrowserState, windowId: string, inactiveForMs: number, profileId?: string, after = -Infinity): number {
+  const { expires, lastUsed } = inactivity(s, windowId, profileId);
   let next = Infinity;
-  for (const id of viewTabIds(s, windowId)) {
+  for (const id of sweptView(s, windowId, profileId)) {
     const t = s.tabs[id]!;
-    if (expires(t)) next = Math.min(next, lastUsed(t) + inactiveForMs);
+    const at = lastUsed(t) + inactiveForMs;
+    if (expires(t) && at > after) next = Math.min(next, at);
   }
   return next;
 }
@@ -226,36 +284,36 @@ export function sessionTabIds(s: BrowserState, windowId: string, sessionStart: n
   return fromSession.length >= 2 ? fromSession : fallback;
 }
 
-
 const addCleanedBatch = (list: ClosedTab[], batch: ClosedTab[]) =>
   [...keptCleanedTabs(list), ...batch].slice(-Math.max(MAX_CLEANED, batch.length));
 
 export type CleanUpSlice = {
   cleanedTabs: ClosedTab[];
   privateCleanedTabs: Record<string, ClosedTab[]>;
-
-  cleanUpTabs(windowId: string, options?: { inactiveForMs?: number }): number;
+  cleanUpTabs(windowId: string, options?: { inactiveForMs?: number; allProfiles?: boolean; hiddenProfilesUpTo?: number }): number;
   restoreCleaned(entryIds?: string | string[], windowId?: string): void;
   clearUnpinnedTabs(windowId: string): ClearedTabs | null;
   undoClearTabs(cleared: ClearedTabs): void;
   removeClosedPin(id: string): ClearedTabs | null;
   closeAbandonedNewTabs(): void;
 };
-
 export function forgetClosedWindowCleanUps(s: BrowserState, prev: BrowserState): Pick<BrowserState, "privateCleanedTabs"> | null {
   if (s.windows === prev.windows) return null;
   const gone = Object.keys(s.privateCleanedTabs).filter((id) => !s.windows[id]);
   return gone.length ? { privateCleanedTabs: without(s.privateCleanedTabs, gone) } : null;
 }
-
 export const createCleanUpSlice: StateCreator<BrowserState, [], [], CleanUpSlice> = (set, get) => ({
   cleanedTabs: [],
   privateCleanedTabs: {},
-
   cleanUpTabs(windowId, options = {}) {
     const s = get();
     const minutes = s.settings.cleanUpInactiveTabsAfterMinutes;
-    const ids = cleanUpCandidates(s, windowId, options.inactiveForMs ?? (minutes ? minutes * 60_000 : CLEAN_UP_AFTER_MS));
+    const after = options.inactiveForMs ?? (minutes ? minutes * 60_000 : CLEAN_UP_AFTER_MS);
+    const onlyHidden = options.hiddenProfilesUpTo !== undefined;
+    const shown = onlyHidden ? [] : cleanUpCandidates(s, windowId, after);
+    const limit = Math.max(0, options.hiddenProfilesUpTo ?? hiddenCleanedRoom(s, windowId) - shown.length);
+    const hidden = onlyHidden || options.allProfiles ? hiddenCleanUpCandidates(s, windowId, after).slice(0, limit) : [];
+    const ids = [...shown, ...hidden];
     if (!ids.length) return 0;
     const entries = closedEntries(s, ids);
     const next = closeQuietly(s, ids);
@@ -267,7 +325,6 @@ export const createCleanUpSlice: StateCreator<BrowserState, [], [], CleanUpSlice
     }
     return ids.length;
   },
-
   restoreCleaned(entryIds, fromWindowId) {
     const s = get();
     const wanted = entryIds === undefined ? null : new Set([entryIds].flat());
@@ -291,7 +348,6 @@ export const createCleanUpSlice: StateCreator<BrowserState, [], [], CleanUpSlice
     }
     set(next);
   },
-
   clearUnpinnedTabs(windowId) {
     const s = get();
     const ids = clearedTabIds(s, windowId);
@@ -300,7 +356,6 @@ export const createCleanUpSlice: StateCreator<BrowserState, [], [], CleanUpSlice
     get().closeTabs(ids);
     return undoable(s, get(), windowId, s.windows[windowId]!.profileId, entries);
   },
-
   undoClearTabs(cleared) {
     const s = get();
     if (!canUndoClear(s, cleared)) return;
@@ -328,7 +383,6 @@ export const createCleanUpSlice: StateCreator<BrowserState, [], [], CleanUpSlice
     });
     set({ ...restored, closedTabs, groups: syncGroupOrder(groups, window), windows: { ...restored.windows, [windowId]: window } });
   },
-
   removeClosedPin(id) {
     const s = get();
     if (!isClosedPin(s, id)) return null;
@@ -337,7 +391,6 @@ export const createCleanUpSlice: StateCreator<BrowserState, [], [], CleanUpSlice
     const after = get();
     return undoable(s, after, windowId, s.tabs[id]!.profileId, after.closedTabs.filter((c) => !s.closedTabs.includes(c)));
   },
-
   closeAbandonedNewTabs() {
     const s = get();
     const abandoned = Object.values(s.windows).flatMap((w) => abandonedNewTabs(s, w.id));

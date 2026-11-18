@@ -1,5 +1,6 @@
+import { Easing } from "react-native";
 import { curve, duration } from "../ui/motion";
-import { font, ink, radius, shadow, type ShadowLevel } from "../ui/tokens";
+import { font, ink, monoFace, radius, shadow, type ShadowLevel } from "../ui/tokens";
 
 const DARK = {
   statusFill: "rgba(40,38,39,0.96)",
@@ -31,7 +32,12 @@ export const windowColors = (dark: boolean): WindowColors => (dark ? DARK : LIGH
 
 export const SWIPE_CONFIRMED_WASH = "rgba(255,255,255,0.4)";
 
-export const DEV_ERROR = { background: "#1b1416", text: "#ff8a8a", ...font.body, fontFamily: "Menlo" } as const;
+export const DEV_ERROR = {
+  background: "#1b1416",
+  text: "#ff8a8a",
+  get fontSize() { return font.body.fontSize; },
+  get fontFamily() { return monoFace().fontFamily; },
+} as const;
 
 export const NATIVE_SKEW_PAD_TOP = 48;
 
@@ -53,6 +59,21 @@ export const CLI_PILL_MOTION = {
   hide: { duration: duration.base, easing: curve.exit },
 } as const;
 
+export const LOADING_PILL = {
+  width: 140,
+  height: 10,
+  top: 4,
+  leaveScale: 0.55,
+  longShowMs: 10_000,
+  track: { width: 128, height: 3, opacity: 0.4, fillOpacity: 0.8 },
+  motion: {
+    show: { duration: duration.base, easing: curve.enter },
+    hide: { duration: duration.slow, easing: curve.exit },
+    sweep: { duration: 330, easing: curve.move },
+    rest: 330,
+  },
+} as const;
+
 export const NEW_TAB_NOTICE = {
   height: 28,
   rise: 6,
@@ -68,10 +89,23 @@ export const SWIPE_MOTION = {
 
 export const SWIPE_PILL_SPRING = { response: 0.27, damping: 0.9 } as const;
 
-export const DOCK_SPRING = { response: 0.215, damping: 0.79 } as const;
+export const DOCK_SLIDE_CURVE = [0.7, 1, 0.5, 1] as const;
+export const DOCK_SLIDE = { duration: 160, easing: Easing.bezier(...DOCK_SLIDE_CURVE) } as const;
 
 export const ARC_PEEK_SPRING = { response: 0.18, damping: 0.8 } as const;
 export const ARC_PEEK_OUT_MS = 150;
 export const ARC_HIDE_MS = duration.fast;
 
-export const PEEK_RADIUS = radius.panel;
+export const peekRadius = () => radius.panel;
+
+export const WINDOW_BUTTONS = {
+  closeHover: "#C42B1C",
+  closePressed: "#B3271A",
+  closeInk: "#FFFFFF",
+  glyph: 10,
+  smallGlyph: 8,
+  smallBelow: 24,
+  glyphRadius: 1.5,
+  restoreCorner: 2,
+  plateRadius: { most: 7, share: 4 },
+} as const;

@@ -8,8 +8,12 @@ import { raiseView } from "../../state/windows/nativeWindow";
 import { aimDrop, dragRange, dropIndex } from "./stripGroups";
 import { makeRoom, registerSlot, reorderOffsets, settleRoom } from "./stripReorder";
 import { SLIDE } from "./tokens";
-import { LIFT_MS, LIFT_SLOP, ONTO_EDGE, TOP_STRIP_HEIGHT } from "./tokens";
+import { AUTO_SCROLL_MAX, AUTO_SCROLL_ZONE, LIFT_MS, LIFT_SLOP, ONTO_EDGE, TOP_STRIP_HEIGHT } from "./tokens";
+import { autoScrollSpeed } from "./stripScroll";
+import { noteTabStripEdgeScroll } from "../../state/telemetry/tabStripCounts";
 import { endHeldTabPress, TAB_CLICK_SLOP } from "../../state/sidebar/heldTabPress";
+import { currentSettings } from "../../state/browser/current";
+import { hapticTick } from "../../state/drag/dragNative";
 
 const IDLE = { kind: "idle" } as const;
 
@@ -22,7 +26,7 @@ export function useStripDrag(item: StripDrag) {
   const view = useRef<View>(null);
   const latest = useRef(item);
   latest.current = item;
-  const drag = useRef({ stripBottom: TOP_STRIP_HEIGHT, lifted: false, ids: [] as string[], dx: 0, to: -1, grab: item.width / 2, crossed: false, onto: null as DropTarget | null, far: 0 });
+  const drag = useRef({ stripBottom: TOP_STRIP_HEIGHT, lifted: false, ids: [] as string[], dx: 0, to: -1, grab: item.width / 2, crossed: false, onto: null as DropTarget | null, far: 0, scrolled: 0, viewport: null as readonly [number, number] | null, gesture: null as { dx: number; moveX: number; moveY: number } | null, frame: 0 });
   useEffect(() => registerSlot(() => latest.current.geometry, () => latest.current.from, shift), []);
   const aimAt = (dx: number) => {
     const { geometry, from, targets } = latest.current;
@@ -69,7 +73,12 @@ export function useStripDrag(item: StripDrag) {
     setLook("rest");
     raise(false);
   };
+  const stopAutoScroll = () => {
+    if (drag.current.frame) cancelAnimationFrame(drag.current.frame);
+    drag.current.frame = 0;
+  };
   const reset = () => {
+    stopAutoScroll();
     phase.current = IDLE;
     setCross(false);
     setOnto(null);
@@ -109,8 +118,54 @@ export function useStripDrag(item: StripDrag) {
   const landSettle = () => {
     if (phase.current.kind === "settling") phase.current.land();
   };
+  const moveTo = (g: { dx: number; moveX: number; moveY: number }) => {
+    const { geometry, from, tabId, range, local, cross } = latest.current;
+    const along = g.dx + drag.current.scrolled;
+    drag.current.far = Math.max(drag.current.far, travel(g.moveX, g.moveY));
+    const lifted = !local && !!tabId && drag.current.ids.length === 1 && g.moveY > drag.current.stripBottom + LIFT_SLOP;
+    setLifted(lifted);
+    const [min, max] = (typeof range === "function" ? range(drag.current.grab) : range) ?? (from < 0 ? [0, 0] : dragRange(geometry, from));
+    if (!lifted) {
+      drag.current.dx = Math.max(min, Math.min(max, along));
+      dx.setValue(drag.current.dx);
+    }
+    const across = !lifted && !!cross?.at(drag.current.dx, drag.current.grab);
+    setCross(across);
+    const aim = across || lifted ? null : aimAt(along);
+    const aimedBefore = drag.current.to >= 0 ? `${drag.current.to}:${ontoKey(drag.current.onto)}` : null;
+    setOnto(aim?.onto != null ? (latest.current.targets?.[aim.onto] ?? null) : null);
+    if (!across) makeRoomAt(lifted || from < 0 ? -1 : (aim?.to ?? dropIndex(geometry, from, along)));
+    const aimedNow = drag.current.to >= 0 ? `${drag.current.to}:${ontoKey(drag.current.onto)}` : null;
+    if (!across && aimedBefore && aimedNow && aimedNow !== aimedBefore && currentSettings().tabReorderHaptics) hapticTick();
+    if (!local) updateTabDrag(g.moveX, g.moveY, lifted);
+    return lifted || across;
+  };
+  const autoScroll = () => {
+    const scroll = latest.current.scroll;
+    const g = drag.current.gesture;
+    const viewport = drag.current.viewport;
+    if (!scroll || !g || !viewport || phase.current.kind !== "dragging" || latest.current.from < 0 || !scroll.active()) return stopAutoScroll();
+    const offset = scroll.offset();
+    const speed = autoScrollSpeed(g.moveX, viewport, offset, scroll.max(), AUTO_SCROLL_ZONE, AUTO_SCROLL_MAX);
+    if (!speed) return stopAutoScroll();
+    if (drag.current.frame) return;
+    drag.current.frame = requestAnimationFrame(() => {
+      drag.current.frame = 0;
+      const now = drag.current.gesture;
+      const view = drag.current.viewport;
+      if (!now || !view || phase.current.kind !== "dragging" || !scroll.active()) return;
+      const at = scroll.offset();
+      const step = autoScrollSpeed(now.moveX, view, at, scroll.max(), AUTO_SCROLL_ZONE, AUTO_SCROLL_MAX);
+      if (!step) return;
+      const next = Math.max(0, Math.min(scroll.max(), at + step));
+      scroll.scrollTo(next);
+      drag.current.scrolled += next - at;
+      if (!moveTo(now)) autoScroll();
+    });
+  };
   useEffect(
     () => () => {
+      stopAutoScroll();
       landSettle();
       if (phase.current.kind !== "dragging") return;
       setOnto(null);
@@ -137,39 +192,34 @@ export function useStripDrag(item: StripDrag) {
           landSettle();
           dx.stopAnimation();
           dx.setValue(0);
-          const mine = { stripBottom: TOP_STRIP_HEIGHT, lifted: false, ids, dx: 0, to: -1, grab: latest.current.width / 2, crossed: false, onto: null, far: travel(g.moveX, g.moveY) };
+          const mine = { stripBottom: TOP_STRIP_HEIGHT, lifted: false, ids, dx: 0, to: -1, grab: latest.current.width / 2, crossed: false, onto: null, far: travel(g.moveX, g.moveY), scrolled: 0, viewport: null as readonly [number, number] | null, gesture: null, frame: 0 };
+          stopAutoScroll();
           setOnto(null);
           drag.current = mine;
           phase.current = { kind: "dragging" };
           setLook("dragging");
           if (latest.current.from >= 0) raise(true);
+          latest.current.scroll?.measure((x, width) => {
+            if (drag.current === mine) mine.viewport = [x, x + width];
+          });
           if (latest.current.local) return;
           const seq = beginTabDrag(ids.length === 1 ? latest.current.tabId : null, ids);
           view.current?.measureInWindow((x, y, width, height) => {
             if (drag.current !== mine) return;
             mine.stripBottom = y + TOP_STRIP_HEIGHT;
             mine.grab = Math.max(0, Math.min(width, grab[0] - x));
-            setDragPicture(seq, () => [x + mine.dx, y, width, height], [grab[0] + mine.dx, grab[1]]);
+            setDragPicture(seq, () => [x + mine.dx - mine.scrolled, y, width, height], [grab[0] + mine.dx - mine.scrolled, grab[1]]);
           });
         },
         onPanResponderMove: (_, g) => {
-          const { geometry, from, tabId, range, local, cross } = latest.current;
-          drag.current.far = Math.max(drag.current.far, travel(g.moveX, g.moveY));
-          const lifted = !local && !!tabId && drag.current.ids.length === 1 && g.moveY > drag.current.stripBottom + LIFT_SLOP;
-          setLifted(lifted);
-          const [min, max] = (typeof range === "function" ? range(drag.current.grab) : range) ?? (from < 0 ? [0, 0] : dragRange(geometry, from));
-          if (!lifted) {
-            drag.current.dx = Math.max(min, Math.min(max, g.dx));
-            dx.setValue(drag.current.dx);
-          }
-          const across = !lifted && !!cross?.at(drag.current.dx, drag.current.grab);
-          setCross(across);
-          const aim = across || lifted ? null : aimAt(g.dx);
-          setOnto(aim?.onto != null ? (latest.current.targets?.[aim.onto] ?? null) : null);
-          if (!across) makeRoomAt(lifted || from < 0 ? -1 : (aim?.to ?? dropIndex(geometry, from, g.dx)));
-          if (!local) updateTabDrag(g.moveX, g.moveY, lifted);
+          drag.current.gesture = { dx: g.dx, moveX: g.moveX, moveY: g.moveY };
+          if (moveTo(drag.current.gesture)) stopAutoScroll();
+          else autoScroll();
         },
-        onPanResponderRelease: (e, g) => {
+        onPanResponderRelease: (e, gesture) => {
+          stopAutoScroll();
+          if (drag.current.scrolled) noteTabStripEdgeScroll();
+          const g = { dx: gesture.dx + drag.current.scrolled, moveX: gesture.moveX, moveY: gesture.moveY };
           const { local, drop, from, range, geometry } = latest.current;
           const { ids, lifted, crossed, grab, far } = drag.current;
           phase.current = IDLE;

@@ -75,6 +75,42 @@ test("after launch: a new window opens animated, a closed one closes and its pri
   assert.deepEqual(native.of("releaseProfile"), [["releaseProfile", profile]]);
 });
 
+test("a private window's profile is released when sync first hears of the close from an update made inside another subscriber", () => {
+  reset();
+  S().createWindow();
+  const native = fakePort();
+  const sync = start(native);
+  sync.sync(S());
+  let prev = S();
+  const priv = S().createWindow({ kind: "private" });
+  sync.sync(S(), prev);
+  const profile = engineProfile(S(), S().windows[priv].profileId);
+  prev = S();
+  S().closeWindow(priv);
+  const outer = S();
+  S().forgetDownloads(prev.windows[priv].profileId);
+  sync.sync(S(), outer);
+  sync.sync(outer, prev);
+  assert.deepEqual(native.of("close"), [["close", priv]]);
+  assert.deepEqual(native.of("releaseProfile"), [["releaseProfile", profile]]);
+});
+
+test("a private window closed natively releases its profile once, and the store update that follows releases nothing more", () => {
+  reset();
+  S().createWindow();
+  const native = fakePort();
+  const sync = start(native);
+  sync.sync(S());
+  let prev = S();
+  const priv = S().createWindow({ kind: "private" });
+  sync.sync(S(), prev);
+  const profile = engineProfile(S(), S().windows[priv].profileId);
+  prev = S();
+  native.emit({ type: "close", id: priv });
+  sync.sync(S(), prev);
+  assert.deepEqual(native.of("releaseProfile"), [["releaseProfile", profile]]);
+});
+
 test("a window native closed leaves the store without a second close, unless the app is quitting", () => {
   reset();
   const a = S().createWindow();

@@ -2,6 +2,7 @@ import type { BrowserCommand } from "../../platform/commands";
 import type { MenuEntry } from "../../platform/menus";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId, pinSection, plural } from "../browser/model";
+import { recentlyClosedIn } from "../windows/recentlyClosedList";
 import { awayFromPin, selectedTabIds } from "../pins/organize";
 import { groupOf } from "../pins/tabGrouping";
 import { newGroupWithSelection, openIconPicker, startRename } from "./actions";
@@ -71,8 +72,9 @@ export function sidebarMenuState(s: BrowserState, windowId: string | undefined) 
     const bar = s.windowUi[windowId]?.panel;
     if (selected.length > 1 && !bar?.open && !bar?.newTab) titles.closeTab = `Close ${plural(selected.length, "Tab")}`;
   }
-  const recentlyClosedGroups: MenuEntry[] = [...s.closedGroups]
-    .reverse()
+  const w = windowId ? s.windows[windowId] : undefined;
+  const recentlyClosedGroups: MenuEntry[] = recentlyClosedIn(s, w)
+    .groups.reverse()
     .slice(0, 10)
     .map((c) => ({ id: c.id, title: `${c.group.name} (${plural(c.tabs.length, "Tab")})` }));
   return { disabled, titles, recentlyClosedGroups };

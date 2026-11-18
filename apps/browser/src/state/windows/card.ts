@@ -3,7 +3,7 @@ import { useShallow } from "zustand/react/shallow";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId, engineProfile } from "../browser/model";
 import type { SplitView, Tab } from "../browser/types";
-import { tabEngine } from "../engines/engines";
+import { tabEngine, type PageEngine } from "../engines/engines";
 import { holderOf } from "../pins/pinShare";
 import { splitOf } from "../splits/splits";
 import { adoptOf, frozenOn, needsPage, wokenPage } from "../tabs/pageSession";
@@ -13,6 +13,7 @@ import { removeTabs } from "../tabs/tabs";
 import { isSmallWindow } from "./small";
 import type { PagerPage } from "./profilePager";
 import { isWebPageUrl } from "../../lib/url";
+import { notePageOverlay } from "../telemetry/usage";
 
 export const useSplitOf = (tabId: string | undefined) => useBrowser((s) => splitOf(s, tabId));
 
@@ -148,8 +149,15 @@ export function newTabLingeringOver(windowId: string, from: string | undefined, 
   const next = s.tabs[to];
   if (!was || !next || was.url || was.windowId !== windowId || next.windowId !== windowId || !isWebPageUrl(next.url)) return undefined;
   if (isSmallWindow(s.windows[windowId]) || splitOf(s, from) || splitOf(s, to)) return undefined;
+  if (!holdsForFirstFrame(tabEngine(s, to))) {
+    notePageOverlay("newTabLeftForWebKit");
+    return undefined;
+  }
+  notePageOverlay("newTabLingered");
   return from;
 }
+
+const holdsForFirstFrame = (engine: PageEngine) => engine === "chromium";
 
 export function activateFocusedPane(tabId: string) {
   const s = useBrowser.getState();

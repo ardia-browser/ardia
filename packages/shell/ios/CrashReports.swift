@@ -252,6 +252,20 @@ enum DiagnosticsInfo {
   static func sample() -> [String: Any] {
     var sample: [String: Any] = [:]
     if let footprint = physicalFootprint { sample["footprintMB"] = Int(footprint / 1_048_576) }
+    var usage = rusage_info_v4()
+    let read = withUnsafeMutablePointer(to: &usage) {
+      $0.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) { proc_pid_rusage(getpid(), RUSAGE_INFO_V4, $0) }
+    }
+    if read == 0 {
+      var timebase = mach_timebase_info_data_t()
+      mach_timebase_info(&timebase)
+      let ticks = Double(usage.ri_user_time + usage.ri_system_time)
+      sample["cpuMs"] = ticks * Double(timebase.numer) / Double(timebase.denom) / 1_000_000
+      sample["wakeups"] = Double(usage.ri_pkg_idle_wkups + usage.ri_interrupt_wkups)
+    }
+    let drag = Thread.isMainThread ? ServerWindowDrag.counts : DispatchQueue.main.sync { ServerWindowDrag.counts }
+    sample["dragRegionRebuilds"] = drag.rebuilds
+    sample["dragRegionStalePresses"] = drag.stalePresses
     let home = FileManager.default.homeDirectoryForCurrentUser
     if let free = (try? home.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]))?.volumeAvailableCapacityForImportantUsage {
       sample["freeDiskGB"] = Double(free / 104_857_600) / 10

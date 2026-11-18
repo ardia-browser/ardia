@@ -2,6 +2,7 @@ import { readDocument, writeDocument } from "../../platform/documents";
 import { create } from "zustand";
 import { readContext, type SavedContext } from "./savedContext";
 import { uuidv7 } from "./ids";
+import { telemetryRelay } from "./relay";
 import { parseSaved, versionedJson, unchanged, type Migrations, type SavedObject } from "../../lib/savedDocument";
 import { isFields, isString, numberOr, stringOr } from "../../lib/decode";
 
@@ -142,6 +143,7 @@ export const isSharing = () => saved.sharing;
 let currentSession: string | null = null;
 export const sessionId = () => (currentSession ??= uuidv7());
 export const startNewSession = () => (currentSession = uuidv7());
+export const resumeSession = (id: string | null) => (currentSession = id ?? uuidv7());
 
 function readStateDoc(): SavedObject | null {
   const json = readDocument(STATE_DOC);
@@ -164,4 +166,13 @@ export function loadChoice() {
   useTelemetry.setState(shown(saved));
 }
 
-export const dismissAsk = () => save({ askDoneAt: Date.now() });
+export function reloadChoice() {
+  loaded = false;
+  loadChoice();
+}
+
+export function dismissAsk() {
+  const relay = telemetryRelay();
+  if (relay) return relay.change({ kind: "askDismissed" });
+  save({ askDoneAt: Date.now() });
+}

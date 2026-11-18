@@ -21,11 +21,7 @@ IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,60}$")
 MODULE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]{0,120}$")
 FUNCTION = re.compile(r"^[A-Za-z0-9_<>.]{1,100}$")
 OUR_PACKAGE = "ardia_cli"
-BUNDLED_PACKAGES = frozenset({
-    "aiofiles", "aiohappyeyeballs", "aiohttp", "aiosignal", "annotated_types", "attr", "attrs", "frozenlist", "idna",
-    "multidict", "propcache", "pydantic", "pydantic_core", "pydoll", "typing_extensions", "typing_inspection", "websockets",
-    "yarl",
-})
+BUNDLED_PACKAGES = frozenset({"websockets"})
 OTHER = "<other>"
 MAX_FRAMES = 50
 

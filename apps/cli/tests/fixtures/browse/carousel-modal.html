@@ -1,0 +1,89 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Fixture Carousel Modal</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  #app { height: 100%; overflow-y: auto; }
+  .track { overflow: hidden; width: 600px; }
+  .slides { display: flex; transform: translateX(-2700px); }
+  .slides button { flex: 0 0 300px; height: 80px; }
+  #chat { position: fixed; right: 16px; bottom: 16px; }
+  #sheet { position: fixed; inset: 40px; background: #fff; opacity: 0; pointer-events: none; }
+  #sheet.open { opacity: 1; pointer-events: auto; }
+  #drawer { position: fixed; top: 0; right: 0; width: 300px; height: 100%; background: #fff; transform: translateX(100%); }
+  #popover { position: fixed; top: 0; left: 0; width: 0; height: 0; overflow: hidden; }
+  #panel { position: fixed; left: 16px; bottom: 16px; width: 200px; height: 60px; background: #fff; }
+  #headless { position: relative; z-index: 50; }
+  #headless .backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.3); }
+  #headless .centre { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  #headless .card { background: #fff; padding: 48px; }
+  #headless.leaving > * { opacity: 0; }
+  #lower { position: fixed; inset: 40px; background: #fff; }
+  #upper { position: fixed; left: 300px; top: 250px; width: 640px; height: 300px; background: #fff; border: 1px solid #000; }
+  #tip { position: fixed; left: 580px; top: 370px; width: 80px; height: 60px; background: #ff0; z-index: 99; }
+  #share-sheet { position: fixed; top: 0; left: 0; width: 0; height: 0; overflow: hidden; }
+  #share-sheet button { width: 120px; height: 40px; }
+  #site-menu { position: fixed; left: 0; right: 0; top: 0; max-height: 0; overflow: hidden; background: #fff; }
+  #site-menu a { display: block; height: 40px; }
+  #clipped { position: fixed; inset: 0; background: #fff; clip-path: inset(100%); }
+  #filtered { position: fixed; inset: 40px; background: #fff; filter: opacity(0); }
+  #fading { position: fixed; inset: 40px; background: #fff; transition: opacity 300ms; }
+  #fading.closing { opacity: 0; }
+</style>
+</head>
+<body>
+<div id="app">
+  <button id="open-modal">Cookies</button> <button id="open-sheet">Account</button>
+  <div class="track"><div class="slides">
+    <button id="s1">Slide one</button><button id="s2">Slide two</button><button id="s3">Slide three</button>
+  </div></div>
+  <pre id="report">{"clicked": []}</pre>
+</div>
+<div id="chat" role="dialog" aria-label="Chat">Need help?</div>
+<dialog id="modal" aria-label="Cookie settings">Cookie settings <button id="close-modal">Close</button>
+  <div class="track"><div class="slides"><button id="m1">Partner one</button><button id="m2">Partner two</button></div></div>
+  <div id="shadow-host"></div>
+  <dialog id="partner" aria-label="Partner details">Partner details <button id="close-partner">Close</button></dialog>
+</dialog>
+<dialog id="confirm" aria-label="Leave the page?">Leave the page? <button id="stay">Stay</button></dialog>
+<div id="sheet" role="dialog" aria-modal="true" aria-label="Account">Account <button id="close-sheet">Close</button></div>
+<div id="drawer" role="dialog" aria-modal="true" aria-label="Menu" hidden>Menu</div>
+<div id="popover" role="dialog" aria-modal="true" aria-label="Share" hidden>Share</div>
+<div id="panel" role="dialog" aria-modal="true" aria-label="Filters" inert hidden>Filters</div>
+<div id="headless" role="dialog" aria-modal="true" aria-label="Payment" hidden>
+  <div class="backdrop"></div>
+  <div class="centre"><div class="card">Payment <button id="pay">Pay</button></div></div>
+</div>
+<div id="lower" role="dialog" aria-modal="true" aria-label="Lower sheet" hidden>Lower sheet <button id="lower-button">Lower</button>
+  <div class="track"><div class="slides"><button id="l1">Lower one</button><button id="l2">Lower two</button></div></div>
+</div>
+<div id="upper" role="dialog" aria-modal="true" aria-label="Upper confirm" hidden>Upper confirm <button id="upper-button">Upper</button>
+  <div class="track"><div class="slides"><button id="u1">Upper one</button><button id="u2">Upper two</button></div></div>
+</div>
+<div id="tip" role="tooltip" hidden>Tip</div>
+<div id="share-sheet" role="dialog" aria-modal="true" aria-label="Share sheet" hidden><button>Share</button></div>
+<nav id="site-menu" role="dialog" aria-modal="true" aria-label="Site menu" hidden><a href="#home">Home</a><a href="#shop">Shop</a></nav>
+<div id="clipped" role="dialog" aria-modal="true" aria-label="Clipped" hidden><button>Clipped</button></div>
+<div inert><dialog id="locked" aria-label="Locked in">Locked in <button>OK</button></dialog></div>
+<div id="filtered" role="dialog" aria-modal="true" aria-label="Filtered" hidden><button>Filtered</button></div>
+<div id="fading" role="dialog" aria-modal="true" aria-label="Newsletter" hidden>Newsletter <button id="fade-close">Close</button></div>
+<script>
+  const state = { clicked: [] };
+  const record = (id) => { state.clicked.push(id); document.getElementById("report").textContent = JSON.stringify(state); };
+  for (const id of ["s1", "s2", "s3", "m1", "m2", "l1", "l2", "u1", "u2"]) document.getElementById(id).addEventListener("click", () => record(id));
+  const reveal = (...ids) => { for (const id of ids) document.getElementById(id).hidden = false; return "ok"; };
+  const fading = document.getElementById("fading");
+  const fadeOut = () => { if (fading.hidden || fading.classList.contains("closing")) return; fading.classList.add("closing"); setTimeout(() => { fading.hidden = true; fading.classList.remove("closing"); }, 300); };
+  document.getElementById("fade-close").addEventListener("click", fadeOut);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") fadeOut(); });
+  const shadow = document.getElementById("shadow-host").attachShadow({ mode: "open" });
+  shadow.innerHTML = `<style>.track { overflow: hidden; width: 600px; } .slides { display: flex; transform: translateX(-2700px); } button { flex: 0 0 300px; height: 80px; }</style>
+    <div class="track"><div class="slides"><button>Shadow one</button><button id="sh2">Shadow two</button></div></div>`;
+  shadow.getElementById("sh2").addEventListener("click", () => record("sh2"));
+  document.getElementById("open-modal").addEventListener("click", () => document.getElementById("modal").showModal());
+  document.getElementById("close-modal").addEventListener("click", () => document.getElementById("modal").close());
+  document.getElementById("open-sheet").addEventListener("click", () => document.getElementById("sheet").classList.add("open"));
+  document.getElementById("close-sheet").addEventListener("click", () => document.getElementById("sheet").classList.remove("open"));
+</script>
+</body>
+</html>

@@ -25,7 +25,7 @@ function Switch({
   accessibilityLabel,
 }: {
   value: boolean;
-  onChange: (value: boolean) => void;
+  onChange: (value: boolean) => void | Promise<unknown>;
   disabled?: boolean;
   look: SwitchLook;
   animateExternalChanges?: boolean;
@@ -33,6 +33,8 @@ function Switch({
 }) {
   const progress = useRef(new Animated.Value(value ? 1 : 0)).current;
   const target = useRef(value);
+  const shown = useRef(value);
+  shown.current = value;
   const pressedAt = useRef(0);
 
   const slideTo = (on: boolean) => {
@@ -63,7 +65,8 @@ function Switch({
         const next = !target.current;
         pressedAt.current = Date.now();
         slideTo(next);
-        onChange(next);
+        const settled = onChange(next);
+        if (settled instanceof Promise) void settled.finally(() => slideTo(shown.current));
       }}
       style={{ opacity: disabled ? opacity.disabled : 1 }}
     >
@@ -99,7 +102,7 @@ export function Toggle({
   accessibilityLabel,
 }: {
   value: boolean;
-  onChange: (value: boolean) => void;
+  onChange: (value: boolean) => void | Promise<unknown>;
   disabled?: boolean;
   look?: "form" | "panel";
   accessibilityLabel?: string;

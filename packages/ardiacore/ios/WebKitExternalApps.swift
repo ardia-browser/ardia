@@ -86,7 +86,7 @@ final class WebKitExternalApps {
 
   private func open(_ url: URL) {
     if LaunchConfig.shared.background { return NSLog("[webkit] external URL (background mode, not opened): %@", url.absoluteString) }
-    NSWorkspace.shared.open(url)
+    NSWorkspace.shared.open(url, configuration: NSWorkspace.OpenConfiguration())
   }
 
   static func iconURI(_ app: URL) -> String? {

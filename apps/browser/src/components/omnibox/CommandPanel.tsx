@@ -3,32 +3,31 @@ import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from
 import { Animated, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import { hex, useTheme } from "../ui/theme";
 import { useSidebarSide, useWindowId, useWindowUi } from "../../state/browser/hooks";
-import { closePanel } from "../../state/windows/actions";
 import { useActiveTabIdWhile, useTabHasUrlWhile } from "../../state/omnibox/hooks";
 import { isCentred } from "../../state/omnibox/barPlacement";
 import { usePage } from "../../state/tabs/pageState";
 import { dismissHover, setRowsCovered } from "../../state/sidebar/hover";
-import { useCardAnchors, useUrlAnchors } from "../../state/windows/layout";
+import { useAddressBarInSidebar, useCardAnchors, useUrlAnchors, useWindowControlsBottom } from "../../state/windows/layout";
+import { useSidebarField } from "../../state/sidebar/chrome";
 import { barWidth } from "../ntp/NewTabPage";
 import { closeNewTabBar } from "../../state/omnibox/newTabBar";
 import type { NewTabTarget } from "../../state/browser/types";
 import { Omnibox } from "./Omnibox";
 import { BAR, PANEL_TEXT_LEFT, GROW } from "./tokens";
-import { closePanelToHeroBar, type BarDismissal } from "../../state/omnibox/barState";
+import { cancelPanel, closePanelToHeroBar, type BarDismissal } from "../../state/omnibox/barState";
 import { closeBlankLittleArdiaOnEscape } from "../../state/littleArdia/actions";
 import { insecureLevel, urlTextLeft } from "../toolbar/Toolbar";
 import { useToolbarRow } from "../toolbar/useToolbarRow";
 import { compactLift, urlFieldOf } from "../../lib/toolbarRow";
 import { radius, shadow, space } from "../ui/tokens";
+import { trailingClearance } from "../../lib/windowChrome";
 
 const RIGHT_OF_URL = 40;
 const ABOVE_PANE = 5.5;
-const PANEL_RADIUS = radius.hero;
 const MIN_WIDTH = 420;
 const WINDOW_MARGIN = space.l;
 const DROPDOWN_MIN_WIDTH = 350;
 const DROPDOWN_PAST_FIELD = 137;
-const DROPDOWN_RADIUS = radius.panel;
 const PANEL_OPEN_HEIGHT = 107;
 const CENTRED_TOP_SHARE = 0.22;
 
@@ -42,9 +41,12 @@ export function CommandPanel({ windowWidth }: { windowWidth: number }) {
   const hasField = useTabHasUrlWhile(activeId, panel.open);
   const insecure = usePage(activeId, (p) => !!insecureLevel(p));
   const anchor = useUrlAnchors((s) => (panel.open ? s[windowId] : undefined));
-  const centred = panel.open && !panel.newTab && isCentred(panel.placement);
+  const sidebarField = useSidebarField();
+  const fieldAway = useAddressBarInSidebar() && sidebarField !== "top";
+  const centred = panel.open && !panel.newTab && (isCentred(panel.placement) || fieldAway);
   const card = useCardAnchors((s) => (panel.newTab || centred ? s[windowId] : undefined));
   const toolbarRow = useToolbarRow();
+  const controlsBottom = useWindowControlsBottom();
   const sidebarRight = useSidebarSide(windowId) === "right";
   const overRows = panel.open && !panel.newTab && !centred && !!anchor?.sidebar;
   useEffect(() => {
@@ -54,8 +56,8 @@ export function CommandPanel({ windowWidth }: { windowWidth: number }) {
   if (!panel.open || !activeId) return null;
   if (panel.newTab) return card ? <CentredBar windowId={windowId} tabId={activeId} target={panel.newTab} card={card} /> : null;
 
-  const room = (left: number, fallback: number) => (windowWidth > 0 ? windowWidth - left - WINDOW_MARGIN : fallback);
-  const onCancel = () => closePanel(windowId);
+  const room = (left: number, top: number, fallback: number) => (windowWidth > 0 ? windowWidth - left - trailingClearance(top, WINDOW_MARGIN, controlsBottom) : fallback);
+  const onCancel = () => cancelPanel(windowId);
   const onDone = (reason?: BarDismissal) => {
     if (reason !== "escape" || !closeBlankLittleArdiaOnEscape(windowId)) closePanelToHeroBar(windowId, activeId, reason);
   };
@@ -63,7 +65,7 @@ export function CommandPanel({ windowWidth }: { windowWidth: number }) {
 
   if (centred && card) {
     return (
-      <Grow from={null} frame={centredFrame(card)} openHeight={PANEL_OPEN_HEIGHT} radius={PANEL_RADIUS} surface={surface(PANEL_RADIUS)}>
+      <Grow from={null} frame={centredFrame(card)} openHeight={PANEL_OPEN_HEIGHT} radius={radius.hero} surface={surface(radius.hero)}>
         <OutsidePressArea onOutsidePress={onCancel}>
           <Omnibox key={activeId} variant="panel" floating tabId={activeId} initialText={panel.initialText} onCancel={onCancel} onDone={onDone} />
         </OutsidePressArea>
@@ -77,10 +79,10 @@ export function CommandPanel({ windowWidth }: { windowWidth: number }) {
     const wanted = Math.max(DROPDOWN_MIN_WIDTH, anchor.width + DROPDOWN_PAST_FIELD);
     const end = shown ? anchor.left + anchor.width : windowWidth - WINDOW_MARGIN;
     const left = sidebarRight ? Math.max(WINDOW_MARGIN, end - wanted) : shown ? anchor.left : WINDOW_MARGIN;
-    const width = sidebarRight ? end - left : Math.min(wanted, room(left, DROPDOWN_MIN_WIDTH));
+    const width = sidebarRight ? end - left : Math.min(wanted, room(left, anchor.top, DROPDOWN_MIN_WIDTH));
     const from = shown ? { left: anchor.left, top: anchor.top, width: anchor.width, height: anchor.sidebar.height } : null;
     return (
-      <Grow from={from} frame={{ left, top: anchor.top, width }} openHeight={anchor.sidebar.height} radius={DROPDOWN_RADIUS} surface={surface(DROPDOWN_RADIUS)}>
+      <Grow from={from} frame={{ left, top: anchor.top, width }} openHeight={anchor.sidebar.height} radius={radius.panel} surface={surface(radius.panel)}>
         <OutsidePressArea onOutsidePress={onCancel}>
           <Omnibox key={activeId} variant="sidebar" tabId={activeId} initialText={panel.initialText} onCancel={onCancel} onDone={onDone} />
         </OutsidePressArea>
@@ -91,12 +93,12 @@ export function CommandPanel({ windowWidth }: { windowWidth: number }) {
   const left = Math.max(WINDOW_MARGIN, anchor.left + urlTextLeft(insecure) - PANEL_TEXT_LEFT);
   const top = Math.max(0.5, anchor.top - ABOVE_PANE);
   const covering = anchor.left + anchor.width + RIGHT_OF_URL - left;
-  const width = Math.min(Math.max(covering, MIN_WIDTH), room(left, covering));
+  const width = Math.min(Math.max(covering, MIN_WIDTH), room(left, top, covering));
   const field = urlFieldOf(toolbarRow);
   const lift = compactLift(toolbarRow);
   const from = hasField ? { left: anchor.left, top: anchor.top + field.top, width: anchor.width, height: field.height } : null;
   return (
-    <Grow from={from} frame={{ left, top, width }} openHeight={PANEL_OPEN_HEIGHT - 2 * lift} radius={PANEL_RADIUS} surface={surface(PANEL_RADIUS)}>
+    <Grow from={from} frame={{ left, top, width }} openHeight={PANEL_OPEN_HEIGHT - 2 * lift} radius={radius.hero} surface={surface(radius.hero)}>
       <OutsidePressArea onOutsidePress={onCancel}>
         <Omnibox key={activeId} variant="panel" tabId={activeId} initialText={panel.initialText} fieldRowHeight={BAR.panel.height - 2 * lift} onCancel={onCancel} onDone={onDone} />
       </OutsidePressArea>
@@ -126,15 +128,15 @@ function centredFrame(card: Box) {
 
 function CentredBar({ windowId, tabId, target, card }: { windowId: string; tabId: string; target: NewTabTarget; card: Box }) {
   const theme = useTheme();
-  const onCancel = () => closePanel(windowId);
+  const onCancel = () => cancelPanel(windowId);
   const onDone = () => closeNewTabBar(windowId);
   return (
     <Grow
       from={null}
       frame={centredFrame(card)}
       openHeight={PANEL_OPEN_HEIGHT}
-      radius={PANEL_RADIUS}
-      surface={panelSurface(theme, PANEL_RADIUS)}
+      radius={radius.hero}
+      surface={panelSurface(theme, radius.hero)}
     >
       <OutsidePressArea onOutsidePress={onCancel}>
         <Omnibox key={`newTab:${target.kind}`} variant="panel" floating tabId={tabId} opensTab={target} onCancel={onCancel} onDone={onDone} />
@@ -192,7 +194,7 @@ function Grow({
     };
   }
   return (
-    <Animated.View onLayout={onLayout} style={[{ position: "absolute", ...frame }, outer]}>
+    <Animated.View testID="ardia-command-panel" onLayout={onLayout} style={[{ position: "absolute", ...frame }, outer]}>
       <Surface {...surface} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />
       <View style={box ? { overflow: "hidden", borderRadius: radius } : undefined}>
         <Animated.View style={inner}>{children}</Animated.View>

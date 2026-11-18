@@ -2,6 +2,7 @@ import { listExtensions } from "../../platform/extensions";
 import { stepPager } from "../../platform/pager";
 import { confirm } from "../../platform/dialogs";
 import { focusWindow } from "../../platform/windows";
+import { managesWindowClose } from "../../platform/windowClose";
 import { chooseFromMenu, type ChoiceItem } from "../app/menuChoice";
 import { pageToProfile } from "../windows/profilePager";
 import { profileNames, requestCreateProfile } from "../profiles/createProfileRequest";
@@ -12,17 +13,21 @@ import { leavesEmptyWindow } from "../omnibox/newTabBarPolicy";
 import { groupLabel } from "../pins/tabGrouping";
 import { sharingProfiles } from "../profiles/profiles";
 import { closeWindowAnimated } from "../windows/closeAnimated";
+import { quitWarningMayAsk } from "../windows/quitWarning";
 import { applyHeldReports } from "../../platform/nativeEvents";
-import { closeWindowDialog } from "../windows/windowClose";
+import { asksBeforeClosingLastTab, decideLastTabClose } from "../windows/windowClose";
 import { menuCommandAlternate, menuShortcut } from "../commands/commandShortcuts";
 import { openSettings } from "../settings/settingsWindows";
 import { profileAccentOf } from "../profiles/looks";
 import { isSiteMuted } from "../tabs/mute";
 import { groupCloseAllowed } from "../groups/closeGuard";
 import { focusedWindowOf } from "../windows/ui";
+import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import { splitOf } from "../splits/splits";
 import { closeKind } from "../tabs/tabs";
 import { noteSplit } from "../telemetry/usage";
+import { isPeekTab } from "../peek/peek";
+import { noteTabClosedByUser } from "../sync/openTabCloses";
 
 const store = () => useBrowser.getState();
 
@@ -46,15 +51,19 @@ export async function closeTab(tabId: string) {
   const w = tab && s.windows[tab.windowId];
   if (!tab || !w) return;
   const last = closesWindow(s, tabId) && !leavesEmptyWindow(s, tabId);
-  if (last && s.settings.warnBeforeClosingLastTab && w.kind !== "private") {
-    const { confirmed, suppressed } = await confirm({ ...closeWindowDialog(w.id), suppression: "Don’t ask me again", windowId: w.id });
-    if (suppressed) store().updateSettings({ warnBeforeClosingLastTab: false });
-    if (!confirmed) return;
+  if (last && managesWindowClose(w.id, "lastTab")) return;
+  if (last && (asksBeforeClosingLastTab(w.id) || quitWarningMayAsk())) {
+    const { decision, suppressWarning } = await decideLastTabClose(w.id);
+    if (suppressWarning) store().updateSettings({ warnBeforeClosingLastTab: false });
+    if (decision === "cancel") return;
     applyHeldReports();
   }
   const now = store();
-  const closesItsWindow = now.tabs[tabId]?.windowId === w.id && now.peeks[w.id]?.tabId !== tabId && closesWindow(now, tabId) && !leavesEmptyWindow(now, tabId);
-  if (last && closesItsWindow) return closeWindowAnimated(w.id);
+  const closesItsWindow = now.tabs[tabId]?.windowId === w.id && !isPeekTab(now, tabId) && closesWindow(now, tabId) && !leavesEmptyWindow(now, tabId);
+  if (last && closesItsWindow) {
+    noteTabClosedByUser(tabId);
+    return closeWindowAnimated(w.id);
+  }
   if (splitOf(now, tabId) && closeKind(now, tabId) === "close") noteSplit("splitPaneCloses");
   store().closeTab(tabId);
 }
@@ -122,7 +131,7 @@ async function keptExtensionsNote(): Promise<string> {
     () => null,
   );
   if (names && !names.length) return "";
-  return names ? ` Its extensions (${profileNames(names)}) stay installed on this Mac, turned off.` : " Its extensions stay installed on this Mac, turned off.";
+  return names ? ` Its extensions (${profileNames(names)}) stay installed on this ${PLATFORM_TERMS.computer}, turned off.` : ` Its extensions stay installed on this ${PLATFORM_TERMS.computer}, turned off.`;
 }
 
 type ProfileMove = { windowId: string; fromProfileId: string; title: (profileName: string) => string; confirmTitle: string };

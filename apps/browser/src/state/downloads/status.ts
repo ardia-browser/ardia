@@ -1,5 +1,6 @@
 import type { Download } from "./actions";
-import { awaitsKeep } from "./downloadMenu";
+
+export const awaitsKeep = (d: Pick<Download, "state" | "dangerous">) => d.state === "downloading" && d.dangerous === true;
 
 function formatBytes(n: number) {
   if (n < 0) return "";

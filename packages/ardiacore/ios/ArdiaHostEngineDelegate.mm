@@ -2,6 +2,7 @@
 #import "ArdiaEarlyWindow.h"
 #import "ArdiaServices.h"
 #import "ArdiaNavigationDownloads.h"
+#import "ArdiaProtectedVideo.h"
 #import "ArdiaStartup.h"
 #import "ArdiaTabParking.h"
 #import "ArdiaWebViewInternal.h"
@@ -30,6 +31,7 @@ using namespace ardia_host;
   ArdiaCoreEngine *engine = ArdiaCoreEngine.sharedEngine;
   if (ArdiaCoreProfile *profile = ardia_host::PersonalIfLoaded(engine)) Profiles()[@""] = profile;
   ardia_host::LoadContentBlocker(@"");
+  [ArdiaProtectedVideo loadIntoProfile:Profiles()[@""]];
   [ArdiaWebView installScrollZoom];
   [ArdiaWebView installSwitchPrewarm];
   [ArdiaWebView removeSharedImages];
@@ -38,7 +40,7 @@ using namespace ardia_host;
   NSBundle *bundle = [NSBundle bundleForClass:ArdiaHostEngineDelegate.class];
   NSString *path = [bundle pathForResource:@"page_script" ofType:@"js"];
   NSString *script = path ? [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil] : nil;
-  if (script) engine.pageScript = script;
+  if (script) engine.pageScript = [ArdiaProtectedVideo pageScriptFrom:script];
   [ArdiaLaunchSequence.shared reach:ArdiaLaunchEngineStarted];
 
   CFRunLoopObserverRef idle = CFRunLoopObserverCreateWithHandler(
@@ -192,6 +194,7 @@ using namespace ardia_host;
 }
 
 - (ArdiaCoreWindow *)engineWindowForNewBrowserOfProfile:(ArdiaCoreProfile *)profile type:(NSString *)type {
+  if ([type isEqualToString:@"app"]) ardia_host::ChromeMakesAppWindow(profile);
   if (![type isEqualToString:@"normal"] && ![type isEqualToString:@"popup"]) return nil;
   if ([type isEqualToString:@"popup"]) return ardia_host::PopupWindowForChromeBrowser(profile);
   if (!profile.offTheRecord)

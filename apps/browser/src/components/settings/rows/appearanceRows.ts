@@ -1,12 +1,16 @@
 import { type SettingSection } from "./types";
+import { keyText } from "../../../state/commands/keyText";
+import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
+import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 import type { SettingsPane } from "../../../state/settings/settingsWindows";
+import { interfaceScaleAdjustable } from "../../../state/settings/interfaceScale";
 
 export const appearanceRows = {
   appearance: [
     {
       section: "Appearance Theme",
       rows: {
-        theme: { title: "Appearance Theme", description: "Also in View › Appearance. Incognito windows are always dark.", keywords: ["dark mode", "light mode", "automatic", "night", "system"] },
+        theme: { title: "Appearance Theme", description: `${PLATFORM_FEATURES.menuBar ? "Also in View › Appearance. " : ""}Incognito windows are always dark.`, keywords: ["dark mode", "light mode", "automatic", "night", "system"] },
         spacesFollowAppearance: {
           advanced: true,
           title: "Profile themes follow this appearance",
@@ -17,6 +21,32 @@ export const appearanceRows = {
           title: "Adjust text to the colour",
           description: "Switch sidebar and tab text between light and dark so it stays readable on your colour. Only applies to custom colours.",
           keywords: ["contrast", "readable", "text colour", "text color", "white text", "black text", "custom colour", "theme", "arc"],
+        },
+      },
+    },
+    {
+      section: "Interface Size",
+      rows: {
+        interfaceScale: {
+          shown: () => PLATFORM_FEATURES.interfaceSize && interfaceScaleAdjustable(),
+          title: "Interface size",
+          description: "Resizes Ardia's sidebar, toolbar, tabs and panels. Web pages keep their size: page zoom (⌘+ and ⌘−) is separate.",
+          keywords: ["scale", "scaling", "ui scale", "ui size", "interface scale", "zoom", "zoom interface", "fractional scaling", "1440p", "4k", "high resolution", "retina", "bigger", "smaller", "larger", "display", "monitor", "density", "accessibility", "low vision"],
+        },
+      },
+    },
+    {
+      section: "Sidebar Text",
+      rows: {
+        sidebarTextSize: {
+          title: "Text size",
+          description: "Tab, folder and group titles in the sidebar, with their rows, icons and pinned tiles. Default is Dia's size.",
+          keywords: ["bigger text", "larger text", "large text", "text size", "small text", "readability", "readable", "low vision", "accessibility", "a11y", "tab titles", "arc"],
+        },
+        sidebarTextContrast: {
+          title: "Higher contrast text",
+          description: `Full-strength tab titles, and darker or brighter labels, icons and New Tab in the sidebar. On by default when ${PLATFORM_TERMS.systemContrast} is on.`,
+          keywords: ["contrast", "high contrast", "increase contrast", "grey text", "gray text", "light text", "faint", "readability", "readable", "low vision", "accessibility", "a11y", "wcag", "bold"],
         },
       },
     },
@@ -41,6 +71,21 @@ export const appearanceRows = {
           keywords: ["liquid glass", "tint", "strength", "intensity", "colour", "color", "glossy"],
           shown: (s, env) => !!env.glass && s.interfaceStyle === "glass" && s.glassTintWithTheme,
         },
+        elementOutlines: {
+          title: "Outlines around tiles and fields",
+          description: "Off drops the thin edge around pinned tiles, Top Apps, the address field and the top strip's chips, and the coloured ring on the selected Top App, for a flatter look like Arc's. On is Dia's.",
+          keywords: ["outline", "outlines", "border", "borders", "edge", "stroke", "ring", "flat", "arc", "pinned tiles", "top apps", "address field", "clean"],
+        },
+      },
+    },
+    {
+      section: "Minimalism",
+      rows: {
+        minimalismMode: {
+          title: "Minimalism mode",
+          description: `Just a column of tabs and the page, as in the Search browser: no toolbar, the page flat against the sidebar, quiet grey tabs and letter tiles, and ${keyText("⌘T")} opens the command bar. ${keyText("⌘L")} opens the command bar for the address; ${PLATFORM_FEATURES.menuBar ? "back, reload, downloads and extensions stay in the menus and their shortcuts" : `back and reload keep ${keyText("⌘[")} and ${keyText("⌘R")}, downloads stays in the … menu, and extension buttons go away with the toolbar`}. Turn it off and everything comes back as it was. Also ${PLATFORM_FEATURES.menuBar ? "in View › Minimalism Mode, " : ""}${keyText("⌃⌘M")}.`,
+          keywords: ["minimal", "minimalism", "minimalist", "clean", "compact", "zen", "simple", "distraction free", "no toolbar", "hide toolbar", "search browser", "quiet", "focus"],
+        },
       },
     },
     {
@@ -48,14 +93,24 @@ export const appearanceRows = {
       rows: {
         addressBar: { title: "Address Bar", description: "In the toolbar or in the sidebar.", keywords: ["url bar", "location bar", "toolbar"] },
         commandBarPlacement: {
-          title: "⌘L opens the command bar",
-          description: "In the centre, ⌘L shows it over the middle of the page, as in Arc. A click on the address always edits it where it is, and ⌘L opens in the centre whenever the address is out of sight.",
-          keywords: ["cmd l", "command bar", "centred", "centered", "arc", "url bar", "location bar"],
+          title: `${keyText("⌘L")} opens the command bar`,
+          description: `In the centre, ${keyText("⌘L")} shows it over the middle of the page, as in Arc, and a click on the address still edits it where it is. In the centre, also on click opens a click on the address there too. ${keyText("⌘L")} opens in the centre whenever the address is out of sight.`,
+          keywords: ["cmd l", "command bar", "centred", "centered", "arc", "url bar", "location bar", "click", "click address", "click url"],
         },
         compactToolbar: {
           title: "Compact toolbar",
           description: "A 28 pt toolbar instead of Dia's 41 pt, so the page gets more height and a 16:9 video can fill a maximized window. For the address bar in the toolbar and for tabs at the top.",
           keywords: ["toolbar height", "smaller toolbar", "thin toolbar", "slim", "dense", "helium", "video", "16:9", "black bars", "url bar"],
+        },
+        addressBarButtons: {
+          title: "Address bar buttons",
+          description: "Show on hover keeps Site Controls, Open Split View and Bookmark (or Copy URL) out of the address bar until the pointer is over it; in the sidebar the pinned extensions wait for the pointer too, as in Arc, and the not-secure lock always shows. Always show keeps them there.",
+          keywords: ["hover", "always show", "always visible", "site controls", "split view", "bookmark", "copy url", "buttons", "icons", "extensions", "pinned extensions", "clean", "arc", "url bar", "location bar"],
+        },
+        showTranslateButton: {
+          title: "Show Translate button",
+          description: "The button in the address bar on a page in a language you don't read. Off, translate a page, or show its original, from Site Controls.",
+          keywords: ["translate", "translation", "translate button", "hide translate", "language", "foreign language", "url bar", "address bar"],
         },
       },
     },
@@ -69,7 +124,7 @@ export const appearanceRows = {
         },
         bookmarksBar: {
           title: "Show bookmarks bar",
-          description: "Below the toolbar. Also in View › Show Bookmarks Bar, ⇧⌘B.",
+          description: `Below the toolbar. Also ${PLATFORM_FEATURES.menuBar ? "in View › Show Bookmarks Bar, " : ""}${keyText("⇧⌘B")}.`,
           keywords: ["bookmarks bar", "favorites bar", "favourites bar", "toolbar", "hide bookmarks", "show bookmarks"],
           shown: (s) => s.showBookmarks,
         },
@@ -95,14 +150,19 @@ export const appearanceRows = {
           keywords: ["border", "borderless", "edge to edge", "margin", "inset", "padding", "rounded corners", "corner radius", "frame", "gap", "full bleed", "arc", "compact"],
           shown: (s) => !s.borderlessMode,
         },
+        tabCornerRadius: {
+          title: "Tab corners",
+          description: "How round the corners of tabs are, in the sidebar and across the top. 10 pt is Dia's. A theme file's metrics.radius.row applies until you move this slider, and the arrow beside it goes back to following the theme.",
+          keywords: ["corner", "corners", "radius", "rounded", "round", "square", "tab shape", "tab corners", "rounded tabs", "pill"],
+        },
         pageFrameZeroInFullScreen: {
           title: "Zero in full screen",
-          description: "In macOS full screen the page goes edge to edge with square corners, whatever the frame above is set to.",
+          description: `In ${PLATFORM_TERMS.fullScreen} the page goes edge to edge with square corners, whatever the frame above is set to.`,
           keywords: ["fullscreen", "full screen", "borderless", "edge to edge", "zero", "none", "frame", "inset", "margin"],
         },
         pageFrameZeroWhenTabsHidden: {
           title: "Zero in full screen when tabs are hidden",
-          description: "In macOS full screen with Auto-Hide Tabs, the page goes edge to edge with square corners. Show the sidebar or top strip, or leave full screen, and the frame comes back.",
+          description: `In ${PLATFORM_TERMS.fullScreen} with Auto-Hide Tabs, the page goes edge to edge with square corners. Show the sidebar or top strip, or leave full screen, and the frame comes back.`,
           keywords: ["auto hide", "autohide", "sidebar", "tabs hidden", "fullscreen", "full screen", "borderless", "edge to edge", "zero", "none", "frame", "inset", "margin"],
         },
       },
@@ -116,6 +176,12 @@ export const appearanceRows = {
           description: "The soft light around the selected tab in the sidebar. Full is Dia's.",
           keywords: ["glow", "shadow", "halo", "highlight", "selected tab", "active tab"],
         },
+        selectedTopApp: {
+          title: "Selected Top App",
+          description: "How the selected pinned tile shows. Ring is Dia's: a coloured ring around a filled tile. Fill only drops the ring; Outline only keeps the ring around a clear tile.",
+          keywords: ["ring", "outline", "outlined", "border", "fill", "filled", "top apps", "pinned tile", "pinned tab", "selected tile", "active tile", "white ring", "classic"],
+          shown: (s) => s.elementOutlines,
+        },
       },
     },
     {
@@ -126,9 +192,10 @@ export const appearanceRows = {
           title: "Scroll bars",
           description: "Follow macOS uses System Settings › Appearance › Show scroll bars. Thin shows slim scroll bars over the page only while you scroll, even with a mouse.",
           keywords: ["scrollbar", "scroll bar", "overlay", "thin", "mouse", "trackpad"],
+          shown: () => PLATFORM_FEATURES.thinScrollBars,
         },
       },
     },
-    { section: "App Icon", rows: { appIcon: { title: "App Icon", description: "Shown in the Dock and the app switcher. The Dock keeps it after you quit.", keywords: ["dock icon", "logo"] } } },
+    { section: "App Icon", rows: { appIcon: { title: "App Icon", description: "Shown in the Dock and the app switcher. The Dock keeps it after you quit.", shown: () => PLATFORM_FEATURES.appIcon, keywords: ["dock icon", "logo"] } } },
   ],
 } satisfies Pick<Record<SettingsPane, SettingSection[]>, "appearance">;

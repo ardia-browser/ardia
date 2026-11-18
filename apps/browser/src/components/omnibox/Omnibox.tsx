@@ -2,7 +2,7 @@ import { displayUrl, asksForBackspace, keywordBySpace, resolveInput, searchUrl, 
 import { Symbol, useTheme } from "../ui";
 import { copyText, pickFiles } from "../../state/app/system";
 import { chooseFromMenu } from "../../state/app/menuChoice";
-import { startDictation } from "../../state/omnibox/textInput";
+import { dictationAvailable, startDictation } from "../../state/omnibox/textInput";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { findNodeHandle, type TextInput, type View } from "react-native";
 import { journeyBarCommitted, journeyBarFocused, journeyKeystroke, journeyNavigate, journeySuggestions } from "../../state/telemetry/journeys";
@@ -18,6 +18,7 @@ import { claimFocusTag, commandBarFocus, heroBarFocus } from "../../state/focus/
 import { registerHeroBar, saveNtpQuery, type BarDismissal, type BarSnapshot } from "../../state/omnibox/barState";
 import { barSplitsFrom, openFromBar, otherOpenTabs, switchFromBar, type Disposition } from "../../state/omnibox/openFromBar";
 import { openFromNewTabBar } from "../../state/omnibox/newTabBar";
+import { isBookmarklet, runBookmarklet } from "../../state/bookmarks/bookmarklets";
 import type { NewTabTarget } from "../../state/browser/types";
 import { showFieldMenu } from "../../state/omnibox/paste";
 import { SuggestionIcon, SuggestionList, isRemovable, type RowActions } from "./SuggestionRow";
@@ -74,9 +75,9 @@ export function Omnibox({
   useEffect(() => () => bangEnter.cancel(), [bangEnter]);
   useEffect(() => bangEnter.cancel(), [bangEnter, typed, selected, scope]);
   const root = useRef<View>(null);
-
   const { items, completion, inline, shownCompletion, value, selectedIndex, current, tabScope, previewing } = useBarItems({
     input,
+    caret: () => selection.current,
     typed,
     edited,
     scope,
@@ -173,6 +174,10 @@ export function Omnibox({
           switchFromBar(s.tabId, s.url, tabId, disposition);
           if (hero && disposition === "current") reset();
           return;
+        }
+        if (isBookmarklet(s.url)) {
+          dismiss();
+          return void runBookmarklet(s.url, windowId, tabId);
         }
         return go(s.url, disposition);
       case "search":
@@ -370,7 +375,7 @@ export function Omnibox({
         <BottomRow
           hero={hero}
           addChip={<AddChip onPress={barActions.openTabOrFile} />}
-          onDictate={barActions.dictate}
+          onDictate={dictationAvailable() ? barActions.dictate : undefined}
           label={destinationLabel(current)}
           enabled={!hero || !!typed.trim() || previewing}
           onGo={barActions.choose}

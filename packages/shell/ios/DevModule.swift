@@ -1,5 +1,8 @@
 import AppKit
+import ArdiaCore
 import ExpoModulesCore
+import ImageIO
+import UniformTypeIdentifiers
 
 public class DevModule: Module {
   #if DEBUG
@@ -106,6 +109,31 @@ public class DevModule: Module {
       return ServerWindowDrag.blockedRects(window)
     }.runOnQueue(.main)
 
+    AsyncFunction("devDragRegionRects") { (windowId: String) -> [[Double]] in
+      guard let window = WindowManager.shared.window(windowId) else { return [] }
+      return ServerWindowDrag.blockedRects(window, rebuilt: false)
+    }.runOnQueue(.main)
+
+    AsyncFunction("devDragRegionState") { (windowId: String) -> [String: Any] in
+      guard let window = WindowManager.shared.window(windowId) else { return [:] }
+      let counts = ServerWindowDrag.counts
+      return [
+        "stale": ServerWindowDrag.isStale(window), "rebuilds": counts.rebuilds, "deferred": counts.deferred, "stalePresses": counts.stalePresses,
+      ]
+    }.runOnQueue(.main)
+
+    AsyncFunction("devDragRegionPointer") { (windowId: String, x: Double, top: Double, on: Bool) -> Bool in
+      guard on else {
+        ServerWindowDrag.pointerOverride = nil
+        return true
+      }
+      guard let window = WindowManager.shared.window(windowId) else { return false }
+      let inWindow = SyntheticInput.windowPoint(x: x, top: top, in: window)
+      ServerWindowDrag.pointerOverride = window.convertPoint(toScreen: inWindow)
+      ServerWindowDrag.pointerMoved(in: window, at: inWindow)
+      return true
+    }.runOnQueue(.main)
+
     Function("devReceiveURLsWhenDetached") { (urls: [String], timeoutMs: Double) in
       DevModule.urlDelivery = ["state": "waiting"]
       let start = Date()
@@ -145,6 +173,18 @@ public class DevModule: Module {
       }
     }.runOnQueue(.main)
 
+    AsyncFunction("devWindowResizeProbe") { (id: String, probe: [String: Double], promise: Promise) in
+      guard let window = WindowManager.shared.window(id) else { return promise.resolve(["error": "no window \(id)"]) }
+      var modifiers: NSEvent.ModifierFlags = []
+      if (probe["option"] ?? 0) != 0 { modifiers.insert(.option) }
+      if (probe["shift"] ?? 0) != 0 { modifiers.insert(.shift) }
+      WindowResizeProbe.resize(
+        window, edgeInset: CGFloat(probe["edgeInset"] ?? 1), count: Int(probe["steps"] ?? 40), dx: CGFloat(probe["dx"] ?? 4),
+        interval: (probe["intervalMs"] ?? 16) / 1000, modifiers: modifiers, bypassFix: (probe["bypassFix"] ?? 0) != 0,
+        failEvents: (probe["failEvents"] ?? 0) != 0
+      ) { promise.resolve($0) }
+    }.runOnQueue(.main)
+
     AsyncFunction("devWindowReplayAfterMove") { (id: String, rect: [Double]) -> [String: Any] in
       guard let window = WindowManager.shared.window(id), rect.count == 4 else { return ["error": "no window \(id)"] }
       return WindowMoveProbe.replayAfterMove(window, NSRect(x: rect[0], y: rect[1], width: rect[2], height: rect[3]))
@@ -160,6 +200,10 @@ public class DevModule: Module {
       return Self.snapshot(windowId: windowId, path: path, transparent: transparent ?? false)
     }.runOnQueue(.main)
 
+    AsyncFunction("devSnapshotBurst") { (windowId: String, dir: String, rect: [Double], durationMs: Double, promise: Promise) in
+      DevSnapshotBurst.start(windowId: windowId, dir: dir, rect: rect, durationMs: durationMs, promise: promise)
+    }.runOnQueue(.main)
+
     AsyncFunction("devSetPointer") { (windowId: String, x: Double, y: Double, on: Bool) -> Bool in
       let select = NSSelectorFromString("ardia_setPointerOverride:")
       guard let view = NSClassFromString("RCTView"), (view as AnyObject).responds(to: select) else { return false }
@@ -167,9 +211,8 @@ public class DevModule: Module {
         _ = (view as AnyObject).perform(select, with: nil)
         return true
       }
-      guard let window = WindowManager.shared.window(windowId), let content = window.contentView else { return false }
-      let local = SyntheticInput.contentPoint(x: x, top: y, in: content)
-      let screen = window.convertPoint(toScreen: content.convert(local, to: nil))
+      guard let window = WindowManager.shared.window(windowId) else { return false }
+      let screen = SyntheticInput.screenPoint(x: x, top: y, in: window)
       _ = (view as AnyObject).perform(select, with: NSValue(point: screen))
       return true
     }.runOnQueue(.main)
@@ -181,7 +224,7 @@ public class DevModule: Module {
         return true
       }
       guard let window = WindowManager.shared.window(windowId) else { return false }
-      SidebarEdgeWatcher.shared.pointerOverride = NSPoint(x: window.frame.minX + x, y: window.frame.maxY - y)
+      SidebarEdgeWatcher.shared.pointerOverride = SyntheticInput.screenPoint(x: x, top: y, in: window)
       SidebarEdgeWatcher.shared.checkPointer()
       return true
     }.runOnQueue(.main)
@@ -285,11 +328,11 @@ public class DevModule: Module {
   private static let scriptQueue = DispatchQueue(label: "ardia.dev-applescript")
 
   private static func snapshot(windowId: String, path: String, transparent: Bool = false) -> Bool {
-    guard let view = WindowManager.shared.window(windowId)?.contentView, let layer = view.layer else { return false }
+    guard let view = WindowManager.shared.window(windowId)?.contentView, view.layer != nil else { return false }
     let scale = view.window?.backingScaleFactor ?? 2
-    let size = view.bounds.size
+    let area = view.convert(view.bounds, to: nil)
     guard let rep = NSBitmapImageRep(
-      bitmapDataPlanes: nil, pixelsWide: Int(size.width * scale), pixelsHigh: Int(size.height * scale), bitsPerSample: 8,
+      bitmapDataPlanes: nil, pixelsWide: Int(area.width * scale), pixelsHigh: Int(area.height * scale), bitsPerSample: 8,
       samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
       let context = NSGraphicsContext(bitmapImageRep: rep) else { return false }
     let cg = context.cgContext
@@ -297,15 +340,10 @@ public class DevModule: Module {
       NSGraphicsContext.saveGraphicsState()
       NSGraphicsContext.current = context
       (view.window?.backgroundColor ?? .windowBackgroundColor).setFill()
-      NSRect(origin: .zero, size: CGSize(width: size.width * scale, height: size.height * scale)).fill()
+      NSRect(origin: .zero, size: CGSize(width: area.width * scale, height: area.height * scale)).fill()
       NSGraphicsContext.restoreGraphicsState()
     }
-    cg.scaleBy(x: scale, y: scale)
-    if view.isFlipped || layer.isGeometryFlipped {
-      cg.translateBy(x: 0, y: size.height)
-      cg.scaleBy(x: 1, y: -1)
-    }
-    layer.render(in: cg)
+    DevSnapshotBurst.draw(view, windowArea: area, scale: scale, in: cg)
     guard let png = rep.representation(using: .png, properties: [:]) else { return false }
     return (try? png.write(to: URL(fileURLWithPath: path))) != nil
   }
@@ -335,3 +373,81 @@ public class DevModule: Module {
   }
   #endif
 }
+
+#if DEBUG
+final class DevSnapshotBurst: NSObject {
+  private static var running: DevSnapshotBurst?
+
+  private let view: NSView
+  private let crop: CGRect
+  private let dir: URL
+  private let until: CFTimeInterval
+  private let promise: Promise
+  private var frames: [(CGImage, Double)] = []
+  private var link: CADisplayLink?
+
+  private init(view: NSView, crop: CGRect, dir: URL, durationMs: Double, promise: Promise) {
+    self.view = view
+    self.crop = crop
+    self.dir = dir
+    self.until = CACurrentMediaTime() + durationMs / 1000
+    self.promise = promise
+  }
+
+  static func start(windowId: String, dir: String, rect: [Double], durationMs: Double, promise: Promise) {
+    guard running == nil, rect.count == 4, let view = WindowManager.shared.window(windowId)?.contentView, view.layer != nil else {
+      promise.resolve(nil)
+      return
+    }
+    let crop = InterfaceScale.windowRect(fromRoot: CGRect(x: rect[0], y: rect[1], width: rect[2], height: rect[3]), in: view.window)
+    let burst = DevSnapshotBurst(view: view, crop: crop, dir: URL(fileURLWithPath: dir), durationMs: durationMs, promise: promise)
+    running = burst
+    burst.link = view.displayLink(target: burst, selector: #selector(tick(_:)))
+    burst.link?.add(to: .main, forMode: .common)
+  }
+
+  @objc private func tick(_ link: CADisplayLink) {
+    if let image = render() { frames.append((image, Date().timeIntervalSince1970 * 1000)) }
+    guard CACurrentMediaTime() >= until else { return }
+    link.invalidate()
+    self.link = nil
+    Self.running = nil
+    promise.resolve(write())
+  }
+
+  private func render() -> CGImage? {
+    guard view.layer != nil else { return nil }
+    let scale = view.window?.backingScaleFactor ?? 2
+    guard let cg = CGContext(
+      data: nil, width: Int(crop.width * scale), height: Int(crop.height * scale), bitsPerComponent: 8, bytesPerRow: 0,
+      space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+    cg.setFillColor((view.window?.backgroundColor ?? .windowBackgroundColor).cgColor)
+    cg.fill(CGRect(x: 0, y: 0, width: crop.width * scale, height: crop.height * scale))
+    Self.draw(view, windowArea: crop, scale: scale, in: cg)
+    return cg.makeImage()
+  }
+
+  static func draw(_ view: NSView, windowArea: CGRect, scale: CGFloat, in cg: CGContext) {
+    guard let layer = view.layer, layer.bounds.width > 0, layer.bounds.height > 0 else { return }
+    let placed = view.convert(view.bounds, to: nil)
+    cg.scaleBy(x: scale, y: scale)
+    cg.translateBy(x: placed.minX - windowArea.minX, y: placed.minY - windowArea.minY)
+    cg.scaleBy(x: placed.width / layer.bounds.width, y: placed.height / layer.bounds.height)
+    if view.isFlipped || layer.isGeometryFlipped {
+      cg.translateBy(x: 0, y: layer.bounds.height)
+      cg.scaleBy(x: 1, y: -1)
+    }
+    layer.render(in: cg)
+  }
+
+  private func write() -> [[Any]] {
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    return frames.enumerated().compactMap { index, frame in
+      let name = String(format: "f%05d.png", index)
+      guard let dest = CGImageDestinationCreateWithURL(dir.appendingPathComponent(name) as CFURL, UTType.png.identifier as CFString, 1, nil) else { return nil }
+      CGImageDestinationAddImage(dest, frame.0, nil)
+      return CGImageDestinationFinalize(dest) ? [name, frame.1] : nil
+    }
+  }
+}
+#endif

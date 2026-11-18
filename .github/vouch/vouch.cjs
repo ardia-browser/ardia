@@ -6,18 +6,66 @@ const UNVOUCHED = "vouch:unvouched";
 const DENOUNCED = "vouch:denounced";
 const RUN_CI = "run-ci";
 const VOUCH_LABELS = [TRUSTED, UNVOUCHED, DENOUNCED];
+const NOT_A_BUG_FIX = "not-a-bug-fix";
+const OVER_LIMIT = "over-limit";
+const ALREADY_CLAIMED = "already-claimed";
+const NEEDS_REBASE = "needs-rebase";
+const READY = "ready";
+const INCOMPLETE = "incomplete";
+const RULE_LABELS = [NOT_A_BUG_FIX, OVER_LIMIT, ALREADY_CLAIMED, NEEDS_REBASE, READY, INCOMPLETE];
 const LABEL_SPECS = [
   { name: TRUSTED, color: "1f883d", description: "The author is a collaborator, a bot or vouched for" },
   { name: UNVOUCHED, color: "fbca04", description: "The author is not vouched for yet" },
   { name: DENOUNCED, color: "d1242f", description: "The author is denounced" },
   { name: RUN_CI, color: "0969da", description: "A maintainer started CI for this pull request" },
+  { name: NOT_A_BUG_FIX, color: "e99695", description: "From outside the team we take bug fixes only, and no linked issue is labelled bug" },
+  { name: OVER_LIMIT, color: "c5def5", description: "The author has more pull requests open than the limit, so this one waits" },
+  { name: ALREADY_CLAIMED, color: "d4c5f9", description: "Someone else holds an issue this pull request closes, so it waits" },
+  { name: NEEDS_REBASE, color: "b60205", description: "This pull request conflicts with its base branch" },
+  { name: READY, color: "0e8a16", description: "Meets every rule in CONTRIBUTING.md and waits for review" },
+  { name: INCOMPLETE, color: "ededed", description: "Something in CONTRIBUTING.md is still missing" },
 ];
-const GATED_WORKFLOWS = ["ios.yml", "android.yml"];
+const RULES_START = "2026-11-14T11:00:00Z";
+const CLAIMS_START = "2026-11-16T12:00:00Z";
+const CLAIM_QUIET_DAYS = 5;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const TAKE = "/take";
+const DROP = "/drop";
+const WORKFLOW_BOT = "github-actions[bot]";
+const OPEN_PR_LIMIT = 3;
+const RULED_TIERS = ["outsider", "trusted"];
+const BUG_LABEL = "bug";
+const BUG_FIX_STATUS_CONTEXT = "bug-fix-only";
+const BUG_FIX_DESCRIPTIONS = {
+  failure: "From outside the team we take bug fixes only: no linked issue is labelled bug",
+  outsider: "A linked issue is labelled bug",
+  trusted: "Vouched contributors may send features as well as bug fixes",
+};
+const FAILED_CHECK_CONCLUSIONS = ["failure", "timed_out", "cancelled", "action_required", "error", "startup_failure"];
+const KNOWN_MERGEABLE = ["MERGEABLE", "CONFLICTING"];
+const MERGEABLE_SETTLE_ATTEMPTS = 3;
+const RULES_PAGE_SIZE = 25;
+const PULL_RULE_ACTIONS = ["edited", "synchronize", "ready_for_review", "converted_to_draft"];
+const MEDIA_EXTENSIONS = "png|jpe?g|gif|webp|avif|heic|svg|bmp|mp4|mov|webm|m4v|mkv|avi";
+const MEDIA_PATTERNS = [
+  /!\[[^\]]*\]\([^)]+\)/,
+  /<img\b/i,
+  /<video\b/i,
+  /github\.com\/user-attachments\/assets\//i,
+  new RegExp(`https?:\\/\\/[^\\s<>()"'\\]]+\\.(?:${MEDIA_EXTENSIONS})(?:[?#][^\\s<>()"'\\]]*)?(?=$|[\\s<>()"'\\],;:!]|\\.(?:\\s|$))`, "i"),
+];
+const REVIEW_BOT_BLOCKS = [
+  /<!--\s*greptile_comment\s*-->[\s\S]*?(?:<!--\s*\/greptile_comment\s*-->|$)/gi,
+  /<!--\s*This is an auto-generated comment\b[^>]*-->[\s\S]*?(?:<!--\s*end of auto-generated comment\b[^>]*-->|$)/gi,
+];
+const CLOSING_REFERENCE = /(?:^|[^A-Za-z0-9_])(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?[^\S\n]+#(\d+)/gim;
+const GATED_WORKFLOWS = ["ios.yml", "android.yml", "linux.yml", "windows.yml"];
 const GATE_JOB = "gate";
-const TRUSTED_STATUSES = ["bot", "collaborator", "vouched"];
+const TRUSTED_STATUSES = ["bot", "team", "collaborator", "vouched"];
 const WRITE_PERMISSIONS = ["admin", "write"];
 const COLLABORATOR_ASSOCIATIONS = ["OWNER", "MEMBER", "COLLABORATOR"];
 const VOUCHED_LIST_PATH = ".github/VOUCHED.td";
+const TEAM_LIST_PATH = ".github/TEAM.td";
 const SWEEP_WRITE_INTERVAL_MS = 1000;
 const RUN_SETTLE_INTERVAL_MS = 15000;
 const RUN_SETTLE_ATTEMPTS = 6;
@@ -27,8 +75,14 @@ function loadRepoFiles(root = REPO_ROOT) {
   const read = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
   return {
     list: read(VOUCHED_LIST_PATH),
+    team: read(TEAM_LIST_PATH),
     unvouchedNote: read(".github/vouch/pr-unvouched.md"),
     denouncedNote: read(".github/vouch/denounced.md"),
+    overLimitNote: read(".github/vouch/pr-over-limit.md"),
+    takenNote: read(".github/vouch/issue-taken.md"),
+    takenPullNote: read(".github/vouch/issue-taken-pull.md"),
+    takeNotABugNote: read(".github/vouch/issue-take-not-a-bug.md"),
+    takeOverLimitNote: read(".github/vouch/issue-take-over-limit.md"),
   };
 }
 
@@ -91,6 +145,184 @@ function fillTemplate(text, values) {
   return text.replace(/\{(\w+)\}/g, (match, key) => (key in values ? String(values[key]) : match)).trim();
 }
 
+function createdSinceRules(createdAt) {
+  const time = Date.parse(createdAt || "");
+  return Number.isFinite(time) && time >= Date.parse(RULES_START);
+}
+
+function ruleTier(status) {
+  if (status === "bot" || status === "team" || status === "denounced") return status;
+  if (status === "collaborator" || status === "vouched") return "trusted";
+  return "outsider";
+}
+
+function authorsWords(body) {
+  return REVIEW_BOT_BLOCKS.reduce((text, block) => text.replace(block, ""), String(body || "")).replace(/<!--[\s\S]*?-->/g, "");
+}
+
+function hasMedia(body) {
+  const text = authorsWords(body);
+  return MEDIA_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+function closingIssueNumbers(body) {
+  const numbers = new Set();
+  for (const match of String(body || "").matchAll(CLOSING_REFERENCE)) numbers.add(Number(match[1]));
+  return [...numbers].sort((a, b) => a - b);
+}
+
+function openPositions(pulls) {
+  const byAuthor = new Map();
+  for (const pull of pulls) {
+    const key = pull.login ? pull.login.toLowerCase() : `#${pull.number}`;
+    if (!byAuthor.has(key)) byAuthor.set(key, []);
+    byAuthor.get(key).push(pull);
+  }
+  const positions = new Map();
+  for (const group of byAuthor.values()) {
+    group
+      .sort((a, b) => (Date.parse(a.createdAt) - Date.parse(b.createdAt)) || a.number - b.number)
+      .forEach((pull, index) => positions.set(pull.number, index + 1));
+  }
+  return positions;
+}
+
+function isConflicting({ mergeable, labels }) {
+  if (mergeable === "CONFLICTING") return true;
+  if (mergeable === "MERGEABLE") return false;
+  return (labels || []).includes(NEEDS_REBASE);
+}
+
+function hasFailedCheck(checks) {
+  return (checks || []).some((check) => FAILED_CHECK_CONCLUSIONS.includes(String(check.conclusion || "").toLowerCase()));
+}
+
+function closesABug(linkedIssues) {
+  return (linkedIssues || []).some((issue) =>
+    (issue.labels || []).some((name) => String(name).toLowerCase() === BUG_LABEL),
+  );
+}
+
+function createdSinceClaims(createdAt) {
+  const time = Date.parse(createdAt || "");
+  return Number.isFinite(time) && time >= Date.parse(CLAIMS_START);
+}
+
+function isBotActor(actor) {
+  if (!actor) return false;
+  return actor.__typename === "Bot" || actor.type === "Bot" || String(actor.login || "").endsWith("[bot]");
+}
+
+function personLogin(actor) {
+  return actor && actor.login && !isBotActor(actor) ? actor.login : null;
+}
+
+function sameLogin(a, b) {
+  return Boolean(a) && Boolean(b) && a.toLowerCase() === b.toLowerCase();
+}
+
+function issueHolder(issue) {
+  if (!issue || String(issue.state || "").toLowerCase() !== "open") return null;
+  const assignees = (issue.assignees || []).filter(Boolean);
+  if (assignees.length) return { logins: assignees, pull: null };
+  const earliest = (issue.pulls || [])
+    .filter((pull) => pull.login)
+    .sort((a, b) => (Date.parse(a.createdAt) - Date.parse(b.createdAt)) || a.number - b.number)[0];
+  return earliest ? { logins: [earliest.login], pull: earliest.number } : null;
+}
+
+function holdsIssue(holder, login) {
+  return Boolean(holder) && holder.logins.some((held) => sameLogin(held, login));
+}
+
+function claimedByOthers(linkedIssues, login) {
+  return (linkedIssues || []).some((issue) => {
+    const holder = issueHolder(issue);
+    return Boolean(holder) && !holdsIssue(holder, login);
+  });
+}
+
+function claimCommand(body) {
+  const text = String(body || "").trim().toLowerCase();
+  return text === TAKE || text === DROP ? text : null;
+}
+
+function takeDecision({ login, tier, issue, held = 0 }) {
+  const holder = issueHolder(issue);
+  if (holder && !holdsIssue(holder, login)) return { outcome: "taken", holder };
+  if ((issue.assignees || []).some((assignee) => sameLogin(assignee, login))) return { outcome: "kept" };
+  if (tier === "outsider" && !closesABug([issue])) return { outcome: "not-a-bug" };
+  if (tier === "outsider" && held >= OPEN_PR_LIMIT) return { outcome: "at-limit" };
+  return { outcome: "assign" };
+}
+
+function dropDecision({ login, issue }) {
+  const assigned = (issue.assignees || []).some((assignee) => sameLogin(assignee, login));
+  return { outcome: assigned ? "release" : "refuse" };
+}
+
+function claimLastActive(thread, login) {
+  const mine = (item) => sameLogin(item.login, login);
+  const times = [
+    CLAIMS_START,
+    ...(thread.assignedEvents || []).filter(mine).map((event) => event.createdAt),
+    ...(thread.comments || []).filter(mine).map((comment) => comment.createdAt),
+    ...(thread.everyPull || []).filter((pull) => mine(pull) && pull.state !== "open").map((pull) => pull.closedAt),
+  ];
+  return Math.max(...times.map((time) => Date.parse(time || "")).filter(Number.isFinite));
+}
+
+function claimIsStale(thread, login, now) {
+  const openPulls = [...(thread.pulls || []), ...(thread.everyPull || []).filter((pull) => pull.state === "open")];
+  if (openPulls.some((pull) => sameLogin(pull.login, login))) return false;
+  return now - claimLastActive(thread, login) > CLAIM_QUIET_DAYS * DAY_MS;
+}
+
+function holderPattern(template, values) {
+  const source = fillTemplate(template, values)
+    .split(/(\{holder\}|\{pull\})/)
+    .map((part) => {
+      if (part === "{holder}") return "([A-Za-z0-9-]+)";
+      if (part === "{pull}") return "(\\d+)";
+      return part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    })
+    .join("");
+  return new RegExp(`^${source}$`);
+}
+
+function ruleLabels(pull) {
+  if (!RULED_TIERS.includes(pull.tier)) return null;
+  if (String(pull.state || "").toLowerCase() !== "open" || !createdSinceRules(pull.createdAt)) return null;
+  const outsider = pull.tier === "outsider";
+  const wanted = new Set();
+  if (outsider && !closesABug(pull.linkedIssues)) wanted.add(NOT_A_BUG_FIX);
+  if (outsider && (pull.position || 1) > OPEN_PR_LIMIT) wanted.add(OVER_LIMIT);
+  if (createdSinceClaims(pull.createdAt) && claimedByOthers(pull.linkedIssues, pull.login)) wanted.add(ALREADY_CLAIMED);
+  const conflicting = isConflicting(pull);
+  if (conflicting) wanted.add(NEEDS_REBASE);
+  const ready =
+    !pull.draft &&
+    hasMedia(pull.body) &&
+    !(pull.reviewThreads || []).some((thread) => !thread.resolved && thread.startedByBot) &&
+    !conflicting &&
+    !wanted.has(NOT_A_BUG_FIX) &&
+    !wanted.has(OVER_LIMIT) &&
+    !wanted.has(ALREADY_CLAIMED) &&
+    !hasFailedCheck(pull.checks);
+  wanted.add(ready ? READY : INCOMPLETE);
+  return RULE_LABELS.filter((name) => wanted.has(name));
+}
+
+function bugFixStatus(tier, rules) {
+  if (!rules) return null;
+  if (tier === "outsider" && rules.includes(NOT_A_BUG_FIX)) {
+    return { state: "failure", description: BUG_FIX_DESCRIPTIONS.failure };
+  }
+  if (tier === "outsider") return { state: "success", description: BUG_FIX_DESCRIPTIONS.outsider };
+  if (tier === "trusted") return { state: "success", description: BUG_FIX_DESCRIPTIONS.trusted };
+  return null;
+}
+
 function labelNames(item) {
   return (item.labels || []).map((label) => (typeof label === "string" ? label : label.name));
 }
@@ -110,7 +342,7 @@ function ignoreStatus(...statuses) {
   };
 }
 
-function createSession({ github, context, core, files, env = process.env, pace, settle }) {
+function createSession({ github, context, core, files, env = process.env, pace, settle, now }) {
   const loaded = files || loadRepoFiles();
   return {
     github,
@@ -120,10 +352,16 @@ function createSession({ github, context, core, files, env = process.env, pace, 
     files: loaded,
     pace: pace || (() => sleep(SWEEP_WRITE_INTERVAL_MS)),
     settle: settle || (() => sleep(RUN_SETTLE_INTERVAL_MS)),
+    now: now || (() => Date.now()),
     pacing: false,
     repo: { owner: context.repo.owner, repo: context.repo.repo },
     list: parseVouchedList(loaded.list),
+    team: new Set(
+      [...parseVouchedList(loaded.team || "")].filter(([, entry]) => !entry.denounced).map(([login]) => login),
+    ),
     permissions: new Map(),
+    issues: new Map(),
+    openPulls: null,
     labelsReady: null,
   };
 }
@@ -149,6 +387,7 @@ function permissionOf(session, login) {
 
 async function statusOf(session, login, association) {
   if (!login || login.endsWith("[bot]")) return authorStatus({ list: session.list, login });
+  if (session.team.has(login.toLowerCase())) return "team";
   const mayHavePermission = association === undefined || COLLABORATOR_ASSOCIATIONS.includes(association);
   const permission = mayHavePermission ? await permissionOf(session, login) : "none";
   return authorStatus({ list: session.list, login, permission });
@@ -197,14 +436,22 @@ async function applyLabel(session, item, wanted, { dryRun = false, kind = "pull 
   return change;
 }
 
-function templateValues(session, login) {
-  const repository = session.context.payload.repository || {};
+function payloadDefaultBranch(session) {
+  return (session.context.payload.repository || {}).default_branch || "main";
+}
+
+function templateValues(session, login, defaultBranch = payloadDefaultBranch(session)) {
   return {
     author: login || "ghost",
     owner: session.repo.owner,
     repo: session.repo.repo,
-    default_branch: repository.default_branch || "main",
+    default_branch: defaultBranch,
   };
+}
+
+function contributingUrl(session, defaultBranch) {
+  const { owner, repo } = session.repo;
+  return `https://github.com/${owner}/${repo}/blob/${defaultBranch}/CONTRIBUTING.md#pull-requests`;
 }
 
 async function postOnce(session, number, body) {
@@ -244,11 +491,12 @@ async function handlePullRequest(session, pr, { isNew }) {
   session.core.info(`#${pr.number} by ${login || "a deleted account"}: ${status}, ${label}`);
   if (status === "denounced") {
     if (pr.state === "open") await closeDenounced(session, pr, "pull request");
-    return;
+    return status;
   }
   if (label === UNVOUCHED && isNew) {
     await postOnce(session, pr.number, fillTemplate(session.files.unvouchedNote, templateValues(session, login)));
   }
+  return status;
 }
 
 async function handleIssue(session, issue) {
@@ -324,8 +572,671 @@ async function openIssuesBy(session, login) {
   return (issues || []).filter((issue) => !issue.pull_request);
 }
 
+const CLAIM_ISSUE_FRAGMENT = `
+fragment ClaimIssue on Issue {
+  number
+  state
+  labels(first: 50) { nodes { name } }
+  assignees(first: 10) { nodes { __typename login } }
+  closedByPullRequestsReferences(first: 20, includeClosedPrs: false) { nodes { number state createdAt author { __typename login } } }
+}`;
+
+const RULE_PULL_FRAGMENT = `
+fragment RulePull on PullRequest {
+  number
+  state
+  isDraft
+  createdAt
+  body
+  mergeable
+  baseRefName
+  headRefOid
+  authorAssociation
+  author { __typename login }
+  labels(first: 100) { nodes { name } }
+  closingIssuesReferences(first: 20) { nodes { ...ClaimIssue } }
+  reviewThreads(last: 100) { nodes { isResolved comments(first: 1) { nodes { author { __typename login } } } } }
+  commits(last: 1) {
+    nodes {
+      commit {
+        oid
+        status { context(name: "${BUG_FIX_STATUS_CONTEXT}") { state description targetUrl } }
+        statusCheckRollup {
+          contexts(first: 100) {
+            nodes {
+              __typename
+              ... on CheckRun {
+                name
+                status
+                conclusion
+                startedAt
+                checkSuite { app { slug } workflowRun { workflow { name } } }
+              }
+              ... on StatusContext { context state createdAt }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+${CLAIM_ISSUE_FRAGMENT}`;
+
+const RULE_PULL_QUERY = `
+query VouchRulePull($owner: String!, $repo: String!, $number: Int!) {
+  repository(owner: $owner, name: $repo) {
+    defaultBranchRef { name }
+    pullRequest(number: $number) { ...RulePull }
+  }
+}
+${RULE_PULL_FRAGMENT}`;
+
+const RULE_PULLS_QUERY = `
+query VouchRulePulls($owner: String!, $repo: String!, $first: Int!, $after: String) {
+  repository(owner: $owner, name: $repo) {
+    defaultBranchRef { name }
+    pullRequests(states: OPEN, first: $first, after: $after, orderBy: { field: CREATED_AT, direction: DESC }) {
+      pageInfo { hasNextPage endCursor }
+      nodes { ...RulePull }
+    }
+  }
+}
+${RULE_PULL_FRAGMENT}`;
+
+const MERGEABLE_QUERY = `
+query VouchMergeable($owner: String!, $repo: String!, $number: Int!) {
+  repository(owner: $owner, name: $repo) { pullRequest(number: $number) { mergeable } }
+}`;
+
+const ISSUE_PULLS_QUERY = `
+query VouchIssuePulls($owner: String!, $repo: String!, $number: Int!) {
+  repository(owner: $owner, name: $repo) {
+    issueOrPullRequest(number: $number) {
+      __typename
+      ... on Issue { closedByPullRequestsReferences(first: 50, includeClosedPrs: false) { nodes { number state createdAt } } }
+    }
+  }
+}`;
+
+const PULL_ISSUES_QUERY = `
+query VouchPullIssues($owner: String!, $repo: String!, $number: Int!) {
+  repository(owner: $owner, name: $repo) {
+    defaultBranchRef { name }
+    pullRequest(number: $number) { body baseRefName closingIssuesReferences(first: 20) { nodes { number } } }
+  }
+}`;
+
+const ISSUE_CLAIM_QUERY = `
+query VouchIssueClaim($owner: String!, $repo: String!, $number: Int!) {
+  repository(owner: $owner, name: $repo) {
+    issueOrPullRequest(number: $number) { __typename ... on Issue { ...ClaimIssue } }
+  }
+}
+${CLAIM_ISSUE_FRAGMENT}`;
+
+const ISSUE_THREAD_QUERY = `
+query VouchIssueThread($owner: String!, $repo: String!, $number: Int!) {
+  repository(owner: $owner, name: $repo) {
+    issueOrPullRequest(number: $number) {
+      __typename
+      ... on Issue {
+        ...ClaimIssue
+        timelineItems(itemTypes: [ASSIGNED_EVENT], last: 20) {
+          nodes { ... on AssignedEvent { createdAt assignee { __typename ... on User { login } ... on Bot { login } } } }
+        }
+        comments(last: 100) { nodes { id databaseId isMinimized createdAt authorAssociation author { __typename login } body } }
+        everyPull: closedByPullRequestsReferences(first: 100, includeClosedPrs: true) {
+          nodes { number state createdAt closedAt author { __typename login } }
+        }
+      }
+    }
+  }
+}
+${CLAIM_ISSUE_FRAGMENT}`;
+
+const MINIMIZE_MUTATION = `
+mutation VouchMinimize($id: ID!, $classifier: ReportedContentClassifiers!) {
+  minimizeComment(input: { subjectId: $id, classifier: $classifier }) { minimizedComment { isMinimized } }
+}`;
+
+function nodesOf(connection) {
+  return (connection && connection.nodes) || [];
+}
+
+function actorLogin(actor) {
+  if (!actor || !actor.login) return null;
+  return actor.__typename === "Bot" && !actor.login.endsWith("[bot]") ? `${actor.login}[bot]` : actor.login;
+}
+
+function latestChecks(checks) {
+  const newest = new Map();
+  const startedAt = (check) => (check.startedAt ? Date.parse(check.startedAt) : Infinity);
+  for (const check of checks) {
+    const held = newest.get(check.key);
+    if (!held || startedAt(check) >= startedAt(held)) newest.set(check.key, check);
+  }
+  return [...newest.values()].map(({ name, conclusion }) => ({ name, conclusion }));
+}
+
+function rollupChecks(commit) {
+  const contexts = nodesOf(commit && commit.statusCheckRollup && commit.statusCheckRollup.contexts);
+  const ownStatus = (node) => node.__typename === "StatusContext" && node.context === BUG_FIX_STATUS_CONTEXT;
+  return latestChecks(
+    contexts.filter((node) => !ownStatus(node)).map((node) => {
+      if (node.__typename === "StatusContext") {
+        return { key: `status:${node.context}`, name: node.context, conclusion: node.state, startedAt: node.createdAt };
+      }
+      const suite = node.checkSuite || {};
+      const workflow = suite.workflowRun && suite.workflowRun.workflow ? suite.workflowRun.workflow.name : null;
+      const source = workflow || (suite.app ? suite.app.slug : "");
+      return {
+        key: `check:${source}/${node.name}`,
+        name: node.name,
+        conclusion: node.status === "COMPLETED" ? node.conclusion : null,
+        startedAt: node.startedAt,
+      };
+    }),
+  );
+}
+
+function claimFacts(node) {
+  return {
+    number: node.number,
+    state: String(node.state || "").toLowerCase(),
+    labels: nodesOf(node.labels).map((label) => label.name),
+    assignees: nodesOf(node.assignees).map(personLogin).filter(Boolean),
+    pulls: nodesOf(node.closedByPullRequestsReferences)
+      .filter((pull) => String(pull.state || "").toUpperCase() === "OPEN")
+      .map((pull) => ({ number: pull.number, createdAt: pull.createdAt, login: personLogin(pull.author) }))
+      .filter((pull) => pull.login),
+  };
+}
+
+function threadFacts(node) {
+  return {
+    ...claimFacts(node),
+    assignedEvents: nodesOf(node.timelineItems)
+      .map((event) => ({ login: personLogin(event.assignee), createdAt: event.createdAt }))
+      .filter((event) => event.login),
+    comments: nodesOf(node.comments).map((comment) => ({
+      id: comment.id,
+      databaseId: comment.databaseId,
+      minimized: Boolean(comment.isMinimized),
+      createdAt: comment.createdAt,
+      association: comment.authorAssociation,
+      login: actorLogin(comment.author),
+      bot: isBotActor(comment.author),
+      body: comment.body || "",
+    })),
+    everyPull: nodesOf(node.everyPull).map((pull) => ({
+      number: pull.number,
+      state: String(pull.state || "").toLowerCase(),
+      createdAt: pull.createdAt,
+      closedAt: pull.closedAt,
+      login: personLogin(pull.author),
+    })),
+  };
+}
+
+function pullFacts(node, defaultBranch) {
+  const commit = (nodesOf(node.commits)[0] || {}).commit || null;
+  const current = commit && commit.status ? commit.status.context : null;
+  return {
+    number: node.number,
+    state: String(node.state || "").toLowerCase(),
+    createdAt: node.createdAt,
+    draft: Boolean(node.isDraft),
+    body: node.body || "",
+    mergeable: node.mergeable,
+    baseRef: node.baseRefName,
+    defaultBranch,
+    headSha: (commit && commit.oid) || node.headRefOid,
+    association: node.authorAssociation,
+    login: actorLogin(node.author),
+    labels: nodesOf(node.labels).map((label) => label.name),
+    linkedIssues: nodesOf(node.closingIssuesReferences).map(claimFacts),
+    reviewThreads: nodesOf(node.reviewThreads).map((thread) => {
+      const first = nodesOf(thread.comments)[0];
+      return { resolved: Boolean(thread.isResolved), startedByBot: Boolean(first && first.author && first.author.__typename === "Bot") };
+    }),
+    checks: rollupChecks(commit),
+    currentStatus: current
+      ? { state: String(current.state || "").toLowerCase(), description: current.description || "", targetUrl: current.targetUrl || "" }
+      : null,
+  };
+}
+
+async function readRulePull(session, number) {
+  const { github, repo } = session;
+  const data = await github.graphql(RULE_PULL_QUERY, { owner: repo.owner, repo: repo.repo, number });
+  const repository = (data && data.repository) || {};
+  if (!repository.pullRequest) return null;
+  const defaultBranch = (repository.defaultBranchRef || {}).name || payloadDefaultBranch(session);
+  return pullFacts(repository.pullRequest, defaultBranch);
+}
+
+async function readNewRulePulls(session) {
+  const { github, repo } = session;
+  const found = [];
+  let after = null;
+  for (;;) {
+    const data = await github.graphql(RULE_PULLS_QUERY, { owner: repo.owner, repo: repo.repo, first: RULES_PAGE_SIZE, after });
+    const repository = data.repository;
+    const defaultBranch = (repository.defaultBranchRef || {}).name || payloadDefaultBranch(session);
+    const page = repository.pullRequests;
+    let reachedOlder = false;
+    for (const node of nodesOf(page)) {
+      if (!createdSinceRules(node.createdAt)) {
+        reachedOlder = true;
+        continue;
+      }
+      found.push(pullFacts(node, defaultBranch));
+    }
+    if (reachedOlder || !page.pageInfo.hasNextPage) return found;
+    after = page.pageInfo.endCursor;
+  }
+}
+
+async function settleMergeable(session, facts) {
+  const { github, repo } = session;
+  let unknown = facts.filter((pull) => !KNOWN_MERGEABLE.includes(pull.mergeable));
+  for (let attempt = 1; unknown.length && attempt <= MERGEABLE_SETTLE_ATTEMPTS; attempt += 1) {
+    await session.settle();
+    for (const pull of unknown) {
+      const data = await github.graphql(MERGEABLE_QUERY, { owner: repo.owner, repo: repo.repo, number: pull.number });
+      const found = data && data.repository && data.repository.pullRequest;
+      if (found) pull.mergeable = found.mergeable;
+    }
+    unknown = unknown.filter((pull) => !KNOWN_MERGEABLE.includes(pull.mergeable));
+  }
+}
+
+function ignoreGraphNotFound(error) {
+  const errors = error.errors || [];
+  if (!errors.length || !errors.every((item) => item.type === "NOT_FOUND")) throw error;
+  return null;
+}
+
+async function readIssueNode(session, query, number) {
+  const { github, repo } = session;
+  const data = await github.graphql(query, { owner: repo.owner, repo: repo.repo, number }).catch(ignoreGraphNotFound);
+  const found = data && data.repository && data.repository.issueOrPullRequest;
+  return found && found.__typename === "Issue" ? found : null;
+}
+
+async function readIssueClaim(session, number) {
+  const node = await readIssueNode(session, ISSUE_CLAIM_QUERY, number);
+  return node ? claimFacts(node) : null;
+}
+
+async function readIssueThread(session, number) {
+  const node = await readIssueNode(session, ISSUE_THREAD_QUERY, number);
+  return node ? threadFacts(node) : null;
+}
+
+function linkedIssueOf(session, number) {
+  if (!session.issues.has(number)) session.issues.set(number, readIssueClaim(session, number));
+  return session.issues.get(number);
+}
+
+async function linkedIssuesOf(session, facts) {
+  if (facts.linkedIssues.length || facts.baseRef === facts.defaultBranch) return facts.linkedIssues;
+  const found = [];
+  for (const number of closingIssueNumbers(facts.body)) {
+    const issue = await linkedIssueOf(session, number);
+    if (issue) found.push(issue);
+  }
+  return found;
+}
+
+async function closingIssuesOfPull(session, number) {
+  const { github, repo } = session;
+  const data = await github.graphql(PULL_ISSUES_QUERY, { owner: repo.owner, repo: repo.repo, number });
+  const repository = (data && data.repository) || {};
+  const pull = repository.pullRequest;
+  if (!pull) return [];
+  const linked = nodesOf(pull.closingIssuesReferences).map((issue) => issue.number);
+  const defaultBranch = (repository.defaultBranchRef || {}).name || payloadDefaultBranch(session);
+  if (linked.length || pull.baseRefName === defaultBranch) return linked;
+  return closingIssueNumbers(pull.body);
+}
+
+async function tierOf(session, login, association) {
+  return ruleTier(await statusOf(session, login, association));
+}
+
+async function openPullsOf(session) {
+  if (!session.openPulls) {
+    const { github, repo } = session;
+    session.openPulls = github
+      .paginate(github.rest.pulls.list, { ...repo, state: "open", per_page: 100 })
+      .then((pulls) => pulls.filter((pull) => pull.state === "open").map(openPullEntry));
+  }
+  return session.openPulls;
+}
+
+function openPullEntry(pull) {
+  return { number: pull.number, login: loginOf(pull), createdAt: pull.created_at };
+}
+
+async function positionOf(session, facts, { closed = null, opened = null } = {}) {
+  let pulls = (await openPullsOf(session)).filter((pull) => pull.number !== closed);
+  if (opened && !pulls.some((pull) => pull.number === opened.number)) pulls = [...pulls, opened];
+  if (!pulls.some((pull) => pull.number === facts.number)) {
+    pulls = [...pulls, { number: facts.number, login: facts.login, createdAt: facts.createdAt }];
+  }
+  const key = facts.login ? facts.login.toLowerCase() : null;
+  const mine = pulls.filter((pull) => (key ? (pull.login || "").toLowerCase() === key : pull.number === facts.number));
+  return openPositions(mine).get(facts.number);
+}
+
+function statusDiffers(current, wanted) {
+  if (!current) return true;
+  return current.state !== wanted.state || current.description !== wanted.description || current.targetUrl !== wanted.target_url;
+}
+
+async function planRules(session, facts, around) {
+  if (facts.state !== "open" || !createdSinceRules(facts.createdAt)) return null;
+  const tier = await tierOf(session, facts.login, facts.association);
+  if (!RULED_TIERS.includes(tier)) return null;
+  const position = tier === "outsider" ? await positionOf(session, facts, around) : 1;
+  const linkedIssues = await linkedIssuesOf(session, facts);
+  const wanted = ruleLabels({ ...facts, tier, position, linkedIssues });
+  const present = RULE_LABELS.filter((name) => facts.labels.includes(name));
+  const add = wanted.filter((name) => !present.includes(name));
+  const remove = present.filter((name) => !wanted.includes(name));
+  const status = bugFixStatus(tier, wanted);
+  const wantedStatus = status && { ...status, target_url: contributingUrl(session, facts.defaultBranch), context: BUG_FIX_STATUS_CONTEXT };
+  const writeStatus =
+    Boolean(wantedStatus) && Boolean(facts.headSha) && (tier === "outsider" || Boolean(facts.currentStatus)) &&
+    statusDiffers(facts.currentStatus, wantedStatus);
+  const note = add.includes(OVER_LIMIT);
+  if (!add.length && !remove.length && !writeStatus) return null;
+  const change = { number: facts.number, login: facts.login, tier, from: present, to: wanted, add, remove, status: writeStatus ? wantedStatus.state : null, note };
+  return { facts, change, add, remove, note, wantedStatus: writeStatus ? wantedStatus : null };
+}
+
+async function latestPlan(session, facts, around) {
+  const latest = await readRulePull(session, facts.number);
+  if (!latest) return null;
+  if (!KNOWN_MERGEABLE.includes(latest.mergeable)) latest.mergeable = facts.mergeable;
+  return planRules(session, latest, around);
+}
+
+async function applyRules(session, given, { dryRun = false, around = {}, readAgain = false } = {}) {
+  const { github, repo, core } = session;
+  let plan = await planRules(session, given, around);
+  if (plan && readAgain && !dryRun) plan = await latestPlan(session, given, around);
+  if (!plan) return null;
+  const { facts, change, add, remove, note, wantedStatus } = plan;
+  const writeStatus = Boolean(wantedStatus);
+  core.info(`${dryRun ? "Would change" : "Changing"} ${describeRuleChange(change)}`);
+  if (dryRun) return change;
+  if (add.length) {
+    await ensureLabels(session);
+    await write(session, () => github.rest.issues.addLabels({ ...repo, issue_number: facts.number, labels: add }));
+  }
+  for (const name of remove) {
+    await write(session, () =>
+      github.rest.issues.removeLabel({ ...repo, issue_number: facts.number, name }).catch(ignoreStatus(404)),
+    );
+  }
+  if (writeStatus) {
+    await write(session, () =>
+      github.rest.repos.createCommitStatus({
+        ...repo,
+        sha: facts.headSha,
+        state: wantedStatus.state,
+        context: wantedStatus.context,
+        description: wantedStatus.description.slice(0, 140),
+        target_url: wantedStatus.target_url,
+      }),
+    );
+  }
+  if (note) {
+    const values = { ...templateValues(session, facts.login, facts.defaultBranch), limit: OPEN_PR_LIMIT };
+    await postOnce(session, facts.number, fillTemplate(session.files.overLimitNote, values));
+  }
+  return change;
+}
+
+async function evaluatePullRules(session, number, options = {}) {
+  const facts = await readRulePull(session, number);
+  if (!facts || facts.state !== "open" || !createdSinceRules(facts.createdAt)) return null;
+  await settleMergeable(session, [facts]);
+  return applyRules(session, facts, options);
+}
+
+async function evaluateAuthorRules(session, pull, { closed }) {
+  const login = loginOf(pull);
+  const changes = [];
+  const evaluated = new Set([pull.number]);
+  const opened = closed ? null : openPullEntry({ ...pull, state: "open" });
+  const around = closed ? { closed: pull.number } : { opened };
+  const evaluate = async (number) => {
+    evaluated.add(number);
+    const change = await evaluatePullRules(session, number, { around });
+    if (change) changes.push(change);
+  };
+  if (!closed && createdSinceRules(pull.created_at)) await evaluate(pull.number);
+  const tier = login ? await tierOf(session, login, pull.author_association) : null;
+  if (tier === "outsider") {
+    const others = (await openPullsOf(session)).filter(
+      (other) =>
+        other.number !== pull.number &&
+        (other.login || "").toLowerCase() === login.toLowerCase() &&
+        createdSinceRules(other.createdAt),
+    );
+    for (const other of others) await evaluate(other.number);
+  }
+  for (const number of await closingIssuesOfPull(session, pull.number)) {
+    await retireOutdatedReplies(session, number);
+    changes.push(...(await evaluateIssuePulls(session, { number }, { around, evaluated })));
+  }
+  return changes;
+}
+
+async function evaluateIssuePulls(session, issue, { around = {}, evaluated = new Set() } = {}) {
+  const found = await readIssueNode(session, ISSUE_PULLS_QUERY, issue.number);
+  const pulls = nodesOf(found && found.closedByPullRequestsReferences).filter(
+    (pull) => String(pull.state).toUpperCase() === "OPEN" && createdSinceRules(pull.createdAt) && !evaluated.has(pull.number),
+  );
+  const changes = [];
+  for (const pull of pulls) {
+    evaluated.add(pull.number);
+    const change = await evaluatePullRules(session, pull.number, { around });
+    if (change) changes.push(change);
+  }
+  return changes;
+}
+
+function outdatedReplies(session, thread) {
+  const holder = issueHolder(thread);
+  const values = templateValues(session, null);
+  const patterns = [session.files.takenNote, session.files.takenPullNote].map((template) => holderPattern(template, values));
+  return thread.comments.filter((comment) => {
+    if (comment.minimized || !comment.bot || comment.login !== WORKFLOW_BOT) return false;
+    const named = patterns.map((pattern) => pattern.exec(comment.body.trim())).find(Boolean);
+    if (!named) return false;
+    const namesAnotherPull = Boolean(named[2]) && Number(named[2]) !== (holder && holder.pull);
+    return !holdsIssue(holder, named[1]) || namesAnotherPull;
+  });
+}
+
+async function minimize(session, comment, classifier) {
+  await write(session, () => session.github.graphql(MINIMIZE_MUTATION, { id: comment.id, classifier }));
+}
+
+async function retireOutdatedReplies(session, number) {
+  const thread = await readIssueThread(session, number);
+  if (!thread) return 0;
+  const outdated = outdatedReplies(session, thread);
+  for (const comment of outdated) await minimize(session, comment, "OUTDATED");
+  return outdated.length;
+}
+
+async function react(session, comment, content) {
+  const { github, repo } = session;
+  await write(session, () => github.rest.reactions.createForIssueComment({ ...repo, comment_id: comment.databaseId, content }));
+}
+
+async function otherIssuesHeldBy(session, login, except) {
+  const { github, repo } = session;
+  const issues = await github
+    .paginate(github.rest.issues.listForRepo, { ...repo, assignee: login, state: "open", per_page: 100 })
+    .catch(ignoreStatus(404, 422));
+  return (issues || []).filter((issue) => !issue.pull_request && issue.number !== except).map((issue) => issue.number);
+}
+
+function refusalNote(session, decision, login) {
+  const values = { ...templateValues(session, login), limit: OPEN_PR_LIMIT };
+  const { files } = session;
+  if (decision.outcome === "taken") {
+    const holder = { holder: decision.holder.logins[0], pull: decision.holder.pull };
+    return fillTemplate(decision.holder.pull ? files.takenPullNote : files.takenNote, { ...values, ...holder });
+  }
+  if (decision.outcome === "not-a-bug") return fillTemplate(files.takeNotABugNote, values);
+  if (decision.outcome === "at-limit") return fillTemplate(files.takeOverLimitNote, values);
+  return null;
+}
+
+function standingReply(thread, body) {
+  return thread.comments.some((comment) => !comment.minimized && comment.bot && comment.body.trim() === body);
+}
+
+async function handleClaimCommand(session, number, comment) {
+  const { github, repo, core } = session;
+  const command = claimCommand(comment.body);
+  const login = comment.login;
+  if (!login || comment.bot) return null;
+  const tier = await tierOf(session, login, comment.association);
+  if (tier === "denounced" || tier === "bot") return null;
+  const issue = await readIssueThread(session, number);
+  if (!issue || issue.state !== "open") return null;
+  const capped = command === TAKE && tier === "outsider";
+  const held = capped ? (await otherIssuesHeldBy(session, login, number)).length : 0;
+  let decision = command === DROP ? dropDecision({ login, issue }) : takeDecision({ login, tier, issue, held });
+  const result = { number, login, command, outcome: decision.outcome };
+  core.info(`Issue #${number}: ${command} by ${login}: ${decision.outcome}`);
+  if (decision.outcome === "assign") {
+    const { data } = await write(session, () => github.rest.issues.addAssignees({ ...repo, issue_number: number, assignees: [login] }));
+    if (!((data && data.assignees) || []).some((assignee) => sameLogin(assignee.login, login))) {
+      core.warning(`GitHub did not assign ${login} to issue #${number}`);
+      await react(session, comment, "confused");
+      await minimize(session, comment, "RESOLVED");
+      return { ...result, outcome: "not-assignable" };
+    }
+    if (capped && (await otherIssuesHeldBy(session, login, number)).length >= OPEN_PR_LIMIT) {
+      core.info(`Issue #${number}: ${login} took another issue meanwhile and is over the limit`);
+      await write(session, () => github.rest.issues.removeAssignees({ ...repo, issue_number: number, assignees: [login] }));
+      decision = { outcome: "at-limit" };
+      result.outcome = decision.outcome;
+    }
+  }
+  if (decision.outcome === "release") {
+    await write(session, () => github.rest.issues.removeAssignees({ ...repo, issue_number: number, assignees: [login] }));
+  }
+  const accepted = ["assign", "kept", "release"].includes(decision.outcome);
+  await react(session, comment, accepted ? "+1" : "-1");
+  const note = refusalNote(session, decision, login);
+  if (note && !standingReply(issue, note)) {
+    await write(session, () => github.rest.issues.createComment({ ...repo, issue_number: number, body: note }));
+  }
+  await minimize(session, comment, "RESOLVED");
+  return result;
+}
+
+async function handleClaimCommands(session, number) {
+  const thread = await readIssueThread(session, number);
+  if (!thread || thread.state !== "open") return [];
+  const commands = thread.comments
+    .filter((comment) => !comment.minimized && claimCommand(comment.body))
+    .sort((a, b) => (Date.parse(a.createdAt) - Date.parse(b.createdAt)) || a.databaseId - b.databaseId);
+  const results = [];
+  for (const comment of commands) {
+    const result = await handleClaimCommand(session, thread.number, comment);
+    if (result) results.push(result);
+  }
+  return results;
+}
+
+async function settleIssueClaims(session, number) {
+  const commands = await handleClaimCommands(session, number);
+  await retireOutdatedReplies(session, number);
+  const changes = await evaluateIssuePulls(session, { number });
+  return { commands, changes };
+}
+
+async function claimsPass(session, report, { dryRun }) {
+  const { github, repo, core } = session;
+  const assigned = await github.paginate(github.rest.issues.listForRepo, { ...repo, state: "open", assignee: "*", per_page: 100 });
+  for (const issue of assigned) {
+    if (issue.pull_request || !(issue.assignees || []).some((assignee) => personLogin(assignee))) continue;
+    const thread = await readIssueThread(session, issue.number);
+    if (!thread || thread.state !== "open" || !thread.assignees.length) continue;
+    report.claims.held += 1;
+    const stale = thread.assignees.filter((login) => claimIsStale(thread, login, session.now()));
+    if (!stale.length) continue;
+    core.info(`${dryRun ? "Would release" : "Releasing"} issue #${thread.number} from ${stale.join(", ")}`);
+    report.claims.released.push({ number: thread.number, logins: stale });
+    if (dryRun) continue;
+    await write(session, () => github.rest.issues.removeAssignees({ ...repo, issue_number: thread.number, assignees: stale }));
+    await retireOutdatedReplies(session, thread.number);
+  }
+}
+
+async function rulesPass(session, report, { dryRun }) {
+  const facts = await readNewRulePulls(session);
+  await settleMergeable(session, facts);
+  for (const pull of facts) {
+    const change = await applyRules(session, pull, { dryRun, readAgain: true });
+    if (change) report.rules.push(change);
+    const labels = change ? change.to : pull.labels;
+    for (const name of RULE_LABELS) if (labels.includes(name)) report.ruleCounts[name] += 1;
+  }
+}
+
+function describeRuleChange(change) {
+  const parts = [
+    ...change.add.map((name) => `+${name}`),
+    ...change.remove.map((name) => `-${name}`),
+    ...(change.status ? [`status ${change.status}`] : []),
+    ...(change.note ? ["note"] : []),
+  ];
+  return `pull request #${change.number}: ${parts.join(" ")}`;
+}
+
 function describeChange(change) {
   return `${change.kind} #${change.number}: ${change.from.join(" + ") || "no label"} -> ${change.to}`;
+}
+
+function ruleSummaryLines(report) {
+  return [
+    `### Contribution rules (pull requests opened since ${RULES_START})`,
+    "",
+    "| Label | Pull requests |",
+    "| --- | --- |",
+    ...RULE_LABELS.map((label) => `| \`${label}\` | ${report.ruleCounts[label]} |`),
+    "",
+    report.rules.length
+      ? `#### ${report.dryRun ? "Would change" : "Changed"} (${report.rules.length})`
+      : "No rule changes.",
+    ...report.rules.map((change) => `- ${describeRuleChange(change)}`),
+  ];
+}
+
+function claimSummaryLines(report) {
+  const { held, released } = report.claims;
+  return [
+    "### Issue claims",
+    "",
+    `${held} open ${held === 1 ? "issue is" : "issues are"} held by an assignee.`,
+    "",
+    released.length
+      ? `#### ${report.dryRun ? "Would release" : "Released"} after ${CLAIM_QUIET_DAYS} quiet days (${released.length})`
+      : "No claims to release.",
+    ...released.map((claim) => `- issue #${claim.number} from ${claim.logins.map((login) => `@${login}`).join(", ")}`),
+  ];
 }
 
 async function writeSweepSummary(session, report) {
@@ -348,6 +1259,10 @@ async function writeSweepSummary(session, report) {
     "",
     report.rerun.length ? `### Builds started (${report.rerun.length})` : "No waiting builds to start.",
     ...report.rerun.map((item) => `- ${item.workflow} for pull request #${item.number}`),
+    "",
+    ...claimSummaryLines(report),
+    "",
+    ...ruleSummaryLines(report),
   ];
   await session.core.summary.addRaw(lines.join("\n")).write();
 }
@@ -361,9 +1276,13 @@ async function sweep(session, { dryRun }) {
     changes: [],
     closed: [],
     rerun: [],
+    rules: [],
+    ruleCounts: Object.fromEntries(RULE_LABELS.map((label) => [label, 0])),
+    claims: { held: 0, released: [] },
   };
   const mayHaveWaitingBuild = [];
   const pulls = await github.paginate(github.rest.pulls.list, { ...repo, state: "all", per_page: 100 });
+  session.openPulls = Promise.resolve(pulls.filter((pr) => pr.state === "open").map(openPullEntry));
   for (const pr of pulls) {
     const login = loginOf(pr);
     const status = await statusOf(session, login, pr.author_association);
@@ -397,6 +1316,8 @@ async function sweep(session, { dryRun }) {
   if (!dryRun) {
     for (const pr of mayHaveWaitingBuild) report.rerun.push(...(await rerunSkippedBuilds(session, pr)));
   }
+  await claimsPass(session, report, { dryRun });
+  await rulesPass(session, report, { dryRun });
   await writeSweepSummary(session, report);
   return report;
 }
@@ -405,6 +1326,11 @@ function isRecheck(payload) {
   const issue = payload.issue || {};
   const body = ((payload.comment || {}).body || "").trim();
   return Boolean(issue.pull_request) && issue.state === "open" && body === "/recheck";
+}
+
+function isOpenIssueComment(payload) {
+  const issue = payload.issue || {};
+  return Boolean(payload.comment) && !issue.pull_request && issue.state === "open";
 }
 
 async function run(args) {
@@ -418,13 +1344,39 @@ async function run(args) {
     return null;
   }
   if (eventName === "pull_request_target" && (action === "opened" || action === "reopened")) {
-    return handlePullRequest(session, payload.pull_request, { isNew: action === "opened" });
+    const status = await handlePullRequest(session, payload.pull_request, { isNew: action === "opened" });
+    if (status === "denounced") return null;
+    return evaluateAuthorRules(session, payload.pull_request, { closed: false });
+  }
+  if (eventName === "pull_request_target" && action === "closed") {
+    return evaluateAuthorRules(session, payload.pull_request, { closed: true });
+  }
+  if (eventName === "pull_request_target" && PULL_RULE_ACTIONS.includes(action)) {
+    const pull = payload.pull_request;
+    if (pull.state !== "open" || !createdSinceRules(pull.created_at)) return null;
+    return evaluatePullRules(session, pull.number);
   }
   if (eventName === "issues" && (action === "opened" || action === "reopened")) {
-    return handleIssue(session, payload.issue);
+    await handleIssue(session, payload.issue);
+    if (action === "reopened" && !payload.issue.pull_request) await settleIssueClaims(session, payload.issue.number);
+    return null;
+  }
+  if (eventName === "issues" && (action === "labeled" || action === "unlabeled")) {
+    const label = String((payload.label || {}).name || "").toLowerCase();
+    if (label !== BUG_LABEL || !payload.issue || payload.issue.pull_request) return null;
+    return (await settleIssueClaims(session, payload.issue.number)).changes;
+  }
+  if (eventName === "issues" && (action === "assigned" || action === "unassigned")) {
+    if (!payload.issue || payload.issue.pull_request) return null;
+    return (await settleIssueClaims(session, payload.issue.number)).changes;
+  }
+  if (eventName === "issue_comment" && isOpenIssueComment(payload)) {
+    return (await settleIssueClaims(session, payload.issue.number)).commands;
   }
   if (eventName === "issue_comment" && isRecheck(payload)) {
-    return handlePullRequest(session, payload.issue, { isNew: false });
+    await handlePullRequest(session, payload.issue, { isNew: false });
+    if (!createdSinceRules(payload.issue.created_at)) return null;
+    return evaluatePullRules(session, payload.issue.number);
   }
   if (eventName === "schedule" || eventName === "push") return sweep(session, { dryRun: false });
   if (eventName === "workflow_dispatch") {
@@ -473,6 +1425,18 @@ module.exports = {
   RUN_CI,
   GATED_WORKFLOWS,
   LABEL_SPECS,
+  NOT_A_BUG_FIX,
+  OVER_LIMIT,
+  ALREADY_CLAIMED,
+  NEEDS_REBASE,
+  READY,
+  INCOMPLETE,
+  RULE_LABELS,
+  RULES_START,
+  CLAIMS_START,
+  CLAIM_QUIET_DAYS,
+  OPEN_PR_LIMIT,
+  BUG_FIX_STATUS_CONTEXT,
   loadRepoFiles,
   parseVouchedList,
   listStatus,
@@ -480,6 +1444,19 @@ module.exports = {
   labelForStatus,
   gateDecision,
   fillTemplate,
+  ruleTier,
+  ruleLabels,
+  bugFixStatus,
+  hasMedia,
+  closingIssueNumbers,
+  openPositions,
+  latestChecks,
+  issueHolder,
+  claimCommand,
+  takeDecision,
+  dropDecision,
+  claimLastActive,
+  claimIsStale,
   run,
   listChanged,
   gate,

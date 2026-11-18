@@ -6,11 +6,11 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { engineProfile, incognitoOriginal, isIncognitoProfile } from "../browser/model";
 import { engineProfiles } from "./engineProfiles";
 
-type ProfileLoading = { deferred: boolean; opened: Readonly<Record<string, true>> };
+type ProfileLoading = { deferred: boolean; opened: Readonly<Record<string, true>>; unloaded: Readonly<Record<string, true>> };
 
-export const useProfileLoading = create<ProfileLoading>()(() => ({ deferred: false, opened: {} }));
+export const useProfileLoading = create<ProfileLoading>()(() => ({ deferred: false, opened: {}, unloaded: {} }));
 
-export const profileOpened = (engine: string, l: ProfileLoading = useProfileLoading.getState()) => !l.deferred || !!l.opened[engine];
+export const profileOpened = (engine: string, l: ProfileLoading = useProfileLoading.getState()) => !l.unloaded[engine] && (!l.deferred || !!l.opened[engine]);
 
 export const openedEngineProfiles = (s: Pick<BrowserState, "profiles">) => engineProfiles(s).filter((engine) => profileOpened(engine));
 
@@ -32,13 +32,29 @@ export function shownEngineProfiles(s: Pick<BrowserState, "profiles" | "windows"
 export function openProfile(engine: string) {
   const l = useProfileLoading.getState();
   if (profileOpened(engine, l)) return;
-  useProfileLoading.setState({ opened: { ...l.opened, [engine]: true } });
+  const { [engine]: _, ...unloaded } = l.unloaded;
+  useProfileLoading.setState({ opened: { ...l.opened, [engine]: true }, unloaded });
+}
+
+export function markProfileUnloaded(engine: string) {
+  const l = useProfileLoading.getState();
+  if (!profileOpened(engine, l)) return;
+  const { [engine]: _, ...opened } = l.opened;
+  useProfileLoading.setState({ opened, unloaded: { ...l.unloaded, [engine]: true } });
 }
 
 export function onProfilesOpened(listener: (engines: string[]) => void): () => void {
   return useProfileLoading.subscribe((l, prev) => {
-    if (l.opened === prev.opened && l.deferred === prev.deferred) return;
+    if (l.opened === prev.opened && l.deferred === prev.deferred && l.unloaded === prev.unloaded) return;
     const now = engineProfiles(useBrowser.getState()).filter((engine) => profileOpened(engine, l) && !profileOpened(engine, prev));
+    if (now.length) listener(now);
+  });
+}
+
+export function onProfilesUnloaded(listener: (engines: string[]) => void): () => void {
+  return useProfileLoading.subscribe((l, prev) => {
+    if (l.unloaded === prev.unloaded) return;
+    const now = Object.keys(l.unloaded).filter((engine) => !prev.unloaded[engine]);
     if (now.length) listener(now);
   });
 }
@@ -47,21 +63,24 @@ export const loadsProfilesWhenOpened = (s: Pick<BrowserState, "settings">) => s.
 
 export function startProfileLoading(): () => void {
   const s = useBrowser.getState();
-  if (!loadsProfilesWhenOpened(s)) {
-    useProfileLoading.setState({ deferred: false, opened: {} });
-    return () => {};
-  }
-  useProfileLoading.setState({ deferred: true, opened: Object.fromEntries(shownEngineProfiles(s).map((engine) => [engine, true as const])) });
+  const deferred = loadsProfilesWhenOpened(s);
+  useProfileLoading.setState({
+    deferred,
+    opened: deferred ? Object.fromEntries(shownEngineProfiles(s).map((engine) => [engine, true as const])) : {},
+    unloaded: {},
+  });
   const loaded = onProfileLoaded(openProfile);
   let stopped = false;
-  loadedProfiles().then(
-    (engines) => {
-      if (!stopped) for (const engine of engines) openProfile(engine);
-    },
-    () => {
-      if (!stopped) useProfileLoading.setState({ deferred: false });
-    },
-  );
+  if (deferred) {
+    loadedProfiles().then(
+      (engines) => {
+        if (!stopped) for (const engine of engines) openProfile(engine);
+      },
+      () => {
+        if (!stopped) useProfileLoading.setState({ deferred: false });
+      },
+    );
+  }
   const shown = useBrowser.subscribe((next, prev) => {
     if (next.windows === prev.windows && next.profiles === prev.profiles) return;
     for (const engine of shownEngineProfiles(next)) openProfile(engine);

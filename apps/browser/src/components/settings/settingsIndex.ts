@@ -1,6 +1,7 @@
 import { prepare, type Searchable } from "./searchMatch";
-import { SETTINGS_PANES, type SettingsPane } from "../../state/settings/settingsWindows";
+import { paneOffered, SETTINGS_PANES, type SettingsPane } from "../../state/settings/settingsWindows";
 import type { Settings } from "../../state/settings/settings";
+import { airTrafficRows } from "./rows/airTrafficRows";
 import { appearanceRows } from "./rows/appearanceRows";
 import { generalRows } from "./rows/generalRows";
 import { privacyRows } from "./rows/privacyRows";
@@ -10,6 +11,7 @@ import type { SettingSection, SettingsEnv } from "./rows/types";
 const PANE_LOOKS: Record<SettingsPane, { title: string; icon: string }> = {
   general: { title: "General", icon: "gearshape" },
   profiles: { title: "Profiles", icon: "person.2" },
+  airTraffic: { title: "Air Traffic Control", icon: "airplane" },
   sync: { title: "Sync", icon: "arrow.triangle.2.circlepath" },
   tabs: { title: "Tabs", icon: "square.on.square" },
   appearance: { title: "Appearance", icon: "circle.lefthalf.filled" },
@@ -25,20 +27,30 @@ const PANE_LOOKS: Record<SettingsPane, { title: string; icon: string }> = {
   advanced: { title: "Advanced", icon: "slider.horizontal.3" },
 };
 
-export const PANES: { id: SettingsPane; title: string; icon: string }[] = SETTINGS_PANES.map((id) => ({ id, ...PANE_LOOKS[id] }));
+const neverShown = () => false;
 
-const ROWS = { ...generalRows, ...appearanceRows, ...privacyRows, ...toolRows };
+export const PANES: { id: SettingsPane; title: string; icon: string }[] = SETTINGS_PANES.filter(paneOffered).map((id) => ({ id, ...PANE_LOOKS[id] }));
+
+const ROWS = { ...generalRows, ...airTrafficRows, ...appearanceRows, ...privacyRows, ...toolRows };
 
 type RowKeysOf<P extends SettingsPane> = (typeof ROWS)[P][number] extends infer S ? (S extends { rows: infer R } ? keyof R & string : never) : never;
 export type SettingId = { [P in SettingsPane]: `${P}.${RowKeysOf<P>}` }[SettingsPane];
 
 export type SettingEntry = Searchable & { id: SettingId; pane: SettingsPane; section: string; advanced: boolean; shown?: (settings: Settings, env: SettingsEnv) => boolean };
 
-const paneTitle = (pane: SettingsPane) => PANE_LOOKS[pane].title;
+export const paneTitle = (pane: SettingsPane) => PANE_LOOKS[pane].title;
 
-export const SETTINGS: SettingEntry[] = PANES.flatMap(({ id: pane }) =>
+export const SETTINGS: SettingEntry[] = SETTINGS_PANES.flatMap((pane) =>
   (ROWS[pane] as SettingSection[]).flatMap(({ section, rows }) =>
-    Object.entries(rows).map(([key, row]) => ({ ...row, id: `${pane}.${key}` as SettingId, pane, paneTitle: paneTitle(pane), section, advanced: !!row.advanced })),
+    Object.entries(rows).map(([key, row]) => ({
+      ...row,
+      id: `${pane}.${key}` as SettingId,
+      pane,
+      paneTitle: paneTitle(pane),
+      section,
+      advanced: !!row.advanced,
+      ...(paneOffered(pane) ? {} : { shown: neverShown }),
+    })),
   ),
 );
 

@@ -13,6 +13,7 @@ import { SIDEBAR_FOOTER_DOWNLOADS } from "../sidebar/geometry";
 import { switcherCellWidth, switcherIcons, SwitcherMark } from "./ProfileIcons";
 import { openProfileItemMenu } from "./profileMenu";
 import { profileSwitcher } from "./tokens";
+import { buttonMotion, usePressScaleMotion } from "../ui/motion";
 
 export const PROFILE_DOTS_HEIGHT = profileSwitcher.height;
 const { band: BAND, dotTooltipLift } = profileSwitcher;
@@ -22,7 +23,8 @@ const SIDE_ROOM_BESIDE_DOWNLOADS = SIDEBAR_FOOTER_DOWNLOADS.left + SIDEBAR_FOOTE
 export function useProfileDotsShown() {
   const incognito = useIsIncognito();
   const count = useProfileOrder((o) => o.length);
-  return !incognito && count > 1;
+  const enabled = useSettings((s) => s.showProfileDots);
+  return enabled && !incognito && count > 1;
 }
 
 export function ProfileDots({ windowId, width, besideDownloads }: { windowId: string; width: number; besideDownloads: boolean }) {
@@ -47,6 +49,7 @@ function Dot({ id, windowId, icon, page, pos }: { id: string; windowId: string; 
   useNativePagerPosition(windowId);
   const name = useProfile(id, (p) => p?.name ?? "");
   const { hovered, hoverProps } = useHover();
+  const pressMotion = usePressScaleMotion(true, buttonMotion.iconPressScale);
   const [pressed, setPressed] = useState(false);
   if (pressed && !hovered) setPressed(false);
   const levels = icon ? profileSwitcher.icons : profileSwitcher.dots;
@@ -63,6 +66,8 @@ function Dot({ id, windowId, icon, page, pos }: { id: string; windowId: string; 
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={name}
+          onPressIn={pressMotion.onPressIn}
+          onPressOut={pressMotion.onPressOut}
           onPress={() => {
             setPressed(true);
             noteSwitcherPress(windowId, id, !!icon);
@@ -70,7 +75,7 @@ function Dot({ id, windowId, icon, page, pos }: { id: string; windowId: string; 
           }}
         >
           <View style={{ width: cell, height: BAND, alignItems: "center", justifyContent: "center" }}>
-            <Animated.View style={{ opacity }}>
+            <Animated.View style={[{ opacity }, pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : null]}>
               <SwitcherMark icon={icon} color={theme.mark} />
             </Animated.View>
           </View>

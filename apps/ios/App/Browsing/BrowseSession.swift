@@ -10,6 +10,11 @@ final class BrowseSession {
     case page
   }
 
+  enum SearchEnding: Equatable {
+    case cancelled
+    case submitted
+  }
+
   struct SearchRequest: Equatable {
     var origin: SearchOrigin
     var initialText: String
@@ -18,7 +23,9 @@ final class BrowseSession {
   }
 
   var search: SearchRequest?
+  @ObservationIgnored private(set) var searchEnding = SearchEnding.cancelled
   var trayHoldsKeyboard = false
+  @ObservationIgnored let bar = BarHandoff()
   var isToolbarPresented = false
   var readerTabID: UUID?
   var titleFeedback: String?
@@ -30,6 +37,15 @@ final class BrowseSession {
 
   var isSearchTrayOnScreen: Bool {
     search != nil || trayHoldsKeyboard
+  }
+
+  var barSidesShown: Bool { search == nil }
+  var barCentreShown: Bool {
+    search == nil && !(trayHoldsKeyboard && searchLandsInBar)
+  }
+
+  var searchLandsInBar: Bool {
+    searchEnding == .cancelled && bar.morphsIntoBar
   }
 
   struct StepRequest: Equatable {
@@ -69,7 +85,9 @@ final class BrowseSession {
     tones[id] = tone
   }
 
-  func dismissSearch() {
+  func dismissSearch(submitted: Bool = false) {
+    guard search != nil else { return }
+    searchEnding = submitted ? .submitted : .cancelled
     search = nil
   }
 

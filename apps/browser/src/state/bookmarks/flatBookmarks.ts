@@ -67,19 +67,100 @@ const flatParent = (engine: string, id: string) => {
   return id === "bar" ? roots.bar : id === "other" ? roots.other : id;
 };
 
+function longestRising(values: Int32Array): Uint8Array {
+  const kept = new Uint8Array(values.length);
+  const before = new Int32Array(values.length).fill(-1);
+  const tails: number[] = [];
+  for (let i = 0; i < values.length; i++) {
+    const value = values[i]!;
+    if (value < 0) continue;
+    let low = 0;
+    let high = tails.length;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if (values[tails[middle]!]! < value) low = middle + 1;
+      else high = middle;
+    }
+    if (low) before[i] = tails[low - 1]!;
+    tails[low] = i;
+  }
+  for (let i = tails.length ? tails[tails.length - 1]! : -1; i >= 0; i = before[i]!) kept[i] = 1;
+  return kept;
+}
+
+class SlotCounts {
+  readonly #sums: Int32Array;
+  constructor(filled: Uint8Array) {
+    const sums = (this.#sums = new Int32Array(filled.length + 1));
+    for (let i = 1; i <= filled.length; i++) {
+      sums[i]! += filled[i - 1]!;
+      const up = i + (i & -i);
+      if (up <= filled.length) sums[up]! += sums[i]!;
+    }
+  }
+  add(slot: number, by: number) {
+    for (let i = slot + 1; i < this.#sums.length; i += i & -i) this.#sums[i]! += by;
+  }
+  before(slot: number) {
+    let count = 0;
+    for (let i = slot; i > 0; i -= i & -i) count += this.#sums[i]!;
+    return count;
+  }
+}
+
+function childPlaces(have: readonly string[], want: readonly string[]): Map<string, () => number> {
+  const places = new Map<string, () => number>();
+  let same = have.length === want.length;
+  for (let i = 0; same && i < want.length; i++) same = have[i] === want[i];
+  if (same) return places;
+  const haveAt = new Map<string, number>();
+  have.forEach((id, i) => haveAt.set(id, i));
+  const kept = longestRising(Int32Array.from(want, (id) => haveAt.get(id) ?? -1));
+  const keptAt = new Map<string, number>();
+  const newSlot = new Int32Array(want.length);
+  const oldSlot = new Int32Array(have.length);
+  let slots = 0;
+  const run = (from: number) => {
+    for (let i = from; i < want.length && !kept[i]; i++) newSlot[i] = slots++;
+  };
+  want.forEach((id, i) => kept[i] && keptAt.set(id, i));
+  run(0);
+  have.forEach((id, i) => {
+    oldSlot[i] = slots++;
+    const at = keptAt.get(id);
+    if (at !== undefined) run(at + 1);
+  });
+  const filled = new Uint8Array(slots);
+  for (const slot of oldSlot) filled[slot] = 1;
+  const counts = new SlotCounts(filled);
+  want.forEach((id, i) => {
+    if (kept[i]) return;
+    places.set(id, () => {
+      const was = haveAt.get(id);
+      if (was !== undefined) counts.add(oldSlot[was]!, -1);
+      const index = counts.before(newSlot[i]!);
+      counts.add(newSlot[i]!, 1);
+      return index;
+    });
+  });
+  return places;
+}
+
 export function bookmarkOps(from: Flat, to: Flat, engine: string): BookmarkOp[] {
   const roots = rootIdsFor(engine);
-  const parentOf = new Map([...from.nodes].map(([id, n]) => [id, n.parent]));
-  const kids = new Map([...from.children].map(([id, c]) => [id, [...c]]));
+  const parentOf = new Map<string, string | null>();
+  for (const [id, n] of from.nodes) parentOf.set(id, n.parent);
   const ops: BookmarkOp[] = [];
   const queue = [roots.bar, roots.other];
-  while (queue.length) {
-    const folder = queue.shift()!;
-    if (!kids.has(folder)) kids.set(folder, []);
-    (to.children.get(folder) ?? []).forEach((id, index) => {
+  for (let next = 0; next < queue.length; next++) {
+    const folder = queue[next]!;
+    const want = to.children.get(folder) ?? [];
+    const have = (from.children.get(folder) ?? []).filter((id) => parentOf.get(id) === folder);
+    const places = childPlaces(have, want);
+    for (const id of want) {
       const node = to.nodes.get(id)!;
       const was = from.nodes.get(id);
-      const current = kids.get(folder)!;
+      const place = places.get(id);
       if (!parentOf.has(id)) {
         ops.push({
           op: "add",
@@ -90,30 +171,25 @@ export function bookmarkOps(from: Flat, to: Flat, engine: string): BookmarkOp[] 
           a: node.addedAt,
           ...(node.key ? { key: node.key } : {}),
           parent: opParent(engine, folder),
-          index,
+          index: place!(),
         });
-        current.splice(index, 0, id);
         parentOf.set(id, folder);
-        if (node.kind === "folder") kids.set(id, []);
       } else {
-        if (parentOf.get(id) !== folder || current.indexOf(id) !== index) {
-          const old = kids.get(parentOf.get(id)!);
-          if (old) old.splice(old.indexOf(id), 1);
-          current.splice(index, 0, id);
+        if (place) {
+          ops.push({ op: "move", id, parent: opParent(engine, folder), index: place() });
           parentOf.set(id, folder);
-          ops.push({ op: "move", id, parent: opParent(engine, folder), index });
         }
         if (was && (was.title !== node.title || (node.url !== undefined && was.url !== node.url))) {
           ops.push({ op: "update", id, t: node.title, ...(node.url !== undefined ? { u: node.url } : {}) });
         }
       }
       if (node.kind === "folder") queue.push(id);
-    });
+    }
   }
   for (const [id, n] of from.nodes) {
     if (to.nodes.has(id) || n.parent === null) continue;
     let under = false;
-    for (let at = parentOf.get(id); at; at = parentOf.get(at)) if (!to.nodes.has(at)) under = true;
+    for (let at = parentOf.get(id); at && !under; at = parentOf.get(at)) under = !to.nodes.has(at);
     if (!under) ops.push({ op: "remove", id });
   }
   return ops;

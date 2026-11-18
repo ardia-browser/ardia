@@ -147,24 +147,27 @@ enum KeyEquivalents {
   }
 
   static func click(windowId: String, _ click: [String: Any], _ done: @escaping ([String: Any]) -> Void) {
-    guard let window = WindowManager.shared.window(windowId), let content = window.contentView else {
+    guard let window = WindowManager.shared.window(windowId), let content = window.contentView, let root = SyntheticInput.root(of: window) else {
       return done(["error": "no window \(windowId)"])
     }
-    var origin = NSPoint.zero
+    let dx = click["x"] as? Double ?? 0, dy = click["y"] as? Double ?? 0
+    let point: NSPoint
     if let label = click["label"] as? String {
       guard let target = labeledView(label, in: content) else { return done(["error": "no view labeled \(label)"]) }
-      let frame = target.convert(target.bounds, to: content)
-      origin = SyntheticInput.contentPoint(x: frame.midX, top: frame.midY, in: content)
+      let center = SyntheticInput.topLeft(of: NSRect(origin: target.convert(NSPoint(x: target.bounds.midX, y: target.bounds.midY), to: root), size: .zero), in: root)
+      point = root.convert(SyntheticInput.localPoint(x: center.x + dx, top: center.y + dy, in: root), to: nil)
     } else if click["in"] as? String == "page" {
       guard let page = pageViews(in: window).first else { return done(["error": "no page in \(windowId)"]) }
-      let frame = page.convert(page.bounds, to: content)
-      origin = NSPoint(x: frame.minX, y: content.isFlipped ? frame.minY : content.bounds.height - frame.maxY)
+      point = page.convert(SyntheticInput.localPoint(x: dx, top: dy, in: page), to: nil)
+    } else {
+      point = root.convert(SyntheticInput.localPoint(x: dx, top: dy, in: root), to: nil)
     }
-    let x = origin.x + (click["x"] as? Double ?? 0), y = origin.y + (click["y"] as? Double ?? 0)
-    let point = content.convert(SyntheticInput.contentPoint(x: x, top: y, in: content), to: nil)
     let responderName = { window.firstResponder.map { String(describing: type(of: $0)) } ?? "nil" }
     let hit = content.superview.flatMap { $0.hitTest(point) }
-    var result: [String: Any] = ["firstResponder": responderName(), "hit": hit.map { String(describing: type(of: $0)) } ?? "nil"]
+    let inRoot = SyntheticInput.topLeft(of: NSRect(origin: root.convert(point, from: nil), size: .zero), in: root)
+    var result: [String: Any] = [
+      "firstResponder": responderName(), "hit": hit.map { String(describing: type(of: $0)) } ?? "nil", "root": [inRoot.x, inRoot.y],
+    ]
     let restoreKeyWindow = click["asKey"] as? Bool == false ? nil : standInKeyWindow(window)
     for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
       guard let event = NSEvent.mouseEvent(

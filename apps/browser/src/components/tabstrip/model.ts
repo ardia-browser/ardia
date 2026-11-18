@@ -2,6 +2,7 @@ import type { Animated } from "react-native";
 import type { DropSpot } from "../../state/drag/drops";
 import { dropTabsAt, dropTabsInSlot, useStripOntoIs } from "../../state/tabs/topStrip";
 import type { DragGeometry } from "./stripGroups";
+import type { StripScroll } from "./stripScroll";
 
 export type DropTarget = { kind: "tab" | "group"; id: string };
 
@@ -27,13 +28,14 @@ export type StripDrag = {
   targets?: (DropTarget | null)[];
   levels?: number;
   local?: boolean;
+  scroll?: StripScroll | null;
 };
 
 export type Landing = { dx: number; commit: () => void };
 export type Cross = { at: (dx: number, grab: number) => boolean; land: (dx: number, grab: number, ids: string[]) => Landing | null; clear: () => void };
 
 export type Dock = { ids: string[]; left: number; geometry: DragGeometry };
-export type Strip = { dock: Dock | null; top: DragGeometry; targets: (DropTarget | null)[]; chip: number; grow: Animated.Value };
+export type Strip = { dock: Dock | null; top: DragGeometry; targets: (DropTarget | null)[]; chip: number; grow: Animated.Value; slotOf: (tabId: string) => number; animateWidths: boolean };
 
 export function reorder(ids: string[], { geometry, from, pinned, groupId }: StripDrag, to: number): boolean {
   return dropTabsInSlot(ids, geometry.slots, from, to, { pinned, groupId });

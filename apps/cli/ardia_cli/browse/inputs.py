@@ -2,6 +2,7 @@ import asyncio
 import random
 
 from ardia_cli.browse.errors import ConnectionLost, OutcomeUnknown, Usage
+from ardia_cli.browse.human import CHAR_TO_KEY_INFO, Keyboard, Mouse
 
 RELEASE_TIMEOUT = 2.0
 MODIFIER_BITS = {"Alt": 1, "Control": 2, "Meta": 4, "Shift": 8}
@@ -53,8 +54,6 @@ def humanize_default(env: dict) -> bool:
 
 
 def parse_key(name: str) -> tuple[str, str, int, str | None]:
-    from pydoll.constants import CHAR_TO_KEY_INFO
-
     canonical = KEY_ALIASES.get(name.lower(), name)
     for known in NAMED_KEYS:
         if known.lower() == canonical.lower():
@@ -85,62 +84,6 @@ def parse_combo(combo: str) -> tuple[list[str], str | None]:
         return [MODIFIER_ALIASES[last.lower()]], None
     parse_key(last)
     return modifiers, last
-
-
-def steady_keyboard_class():
-    from pydoll.interactions.keyboard import Keyboard
-
-    class SteadyKeyboard(Keyboard):
-        @staticmethod
-        def _should_make_typo() -> bool:
-            return False
-
-    return SteadyKeyboard
-
-
-def human_mouse_class():
-    from pydoll.exceptions import CommandExecutionTimeout, WebSocketConnectionClosed
-    from pydoll.interactions.mouse import Mouse
-
-    class HumanMouse(Mouse):
-        held = None
-        interception = None
-
-        async def _dispatch_move(self, x: float, y: float, *, wait: bool = True) -> None:
-            interception = self.interception if self._pressed_button is not None else None
-            if interception is not None and interception.data is not None:
-                await interception.over(x, y)
-                self._position = (x, y)
-                return
-            await super()._dispatch_move(x, y, wait=wait)
-            if interception is not None:
-                await interception.moved(x, y)
-
-        async def _dispatch_button(self, event_type, button, click_count: int = 1):
-            pressed = getattr(event_type, "value", event_type) == "mousePressed"
-            if not pressed and self.interception is not None:
-                await self.interception.release(*self._position)
-            if pressed:
-                self.held = button
-            await super()._dispatch_button(event_type, button, click_count)
-            if not pressed:
-                self.held = None
-
-        async def _send(self, command):
-            try:
-                await super()._send(command)
-            except WebSocketConnectionClosed:
-                raise ConnectionLost() from None
-            except CommandExecutionTimeout:
-                raise OutcomeUnknown("the mouse input", "Ardia didn't answer an input event in time") from None
-
-        async def _send_nowait(self, command):
-            try:
-                await super()._send_nowait(command)
-            except WebSocketConnectionClosed:
-                raise ConnectionLost() from None
-
-    return HumanMouse
 
 
 class KeyTarget:
@@ -189,9 +132,8 @@ class Input:
         self.mouse = None
 
     def bind(self, viewport=None):
-        mouse_class = human_mouse_class()
         if self.mouse is None:
-            self.mouse = mouse_class(self.page.browser.link, session_id=self.page.session_id)
+            self.mouse = Mouse(self.page.browser.link, session_id=self.page.session_id)
             width, height = viewport or (1280, 800)
             self.mouse._position = (random.uniform(0.3, 0.7) * width, random.uniform(0.55, 0.9) * height)
         else:
@@ -203,9 +145,8 @@ class Input:
         return bool(self.held_keys) or (self.mouse is not None and self.mouse.held is not None)
 
     def keyboard(self, element=None, guard=None):
-        keyboard_class = steady_keyboard_class()
         target = FocusedKeyTarget(self.page, self.held_keys, element, guard) if element is not None else KeyTarget(self.page, self.held_keys)
-        return keyboard_class(target)
+        return Keyboard(target)
 
     async def release_held(self):
         for key, params in list(self.held_keys.items()):

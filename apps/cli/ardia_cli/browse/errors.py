@@ -81,6 +81,14 @@ class CdpError(BrowseError):
         self.cdp_message = message
 
 
+class NotFocusable(CdpError):
+    def __init__(self, label: str):
+        BrowseError.__init__(self, f"{label} can't take focus (it's hidden, inert or a wrapper with no field inside). Click it to open "
+                                   "its field, then snapshot -i and use the field that appears", code="not_focusable")
+        self.method = "DOM.focus"
+        self.cdp_message = "Element is not focusable"
+
+
 class CdpTimeout(BrowseError):
     def __init__(self, method: str, seconds: float):
         super().__init__(f"{method} got no answer in {seconds:g}s")

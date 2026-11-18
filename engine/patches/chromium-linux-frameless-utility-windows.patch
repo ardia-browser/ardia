@@ -1,0 +1,58 @@
+The Ardia Linux host draws its own window controls in every window it hosts. Its Settings and Import windows are
+legacy app windows (TYPE_APP with an app name and no web app controller), so on X11 Chromium asked the window manager
+for its frame and the window showed both the manager's title bar and Ardia's controls, and with a custom frame it
+drew a title bar of its own. The host names such windows through g_ardia_linux_frameless_app; they get Chromium's
+custom frame and no window title bar, as a normal browser window does. The hook is null outside the Linux host.
+--- a/chrome/browser/ui/views/frame/browser_native_widget_aura_linux.cc
++++ b/chrome/browser/ui/views/frame/browser_native_widget_aura_linux.cc
+@@ -17,6 +17,8 @@
+ #include "ui/ozone/public/ozone_platform.h"
+ #include "ui/views/widget/widget.h"
+ 
++bool ArdiaLinuxFramelessApp(const BrowserWindowInterface* browser);
++
+ BrowserNativeWidgetAuraLinux::BrowserNativeWidgetAuraLinux(
+     BrowserWidget* browser_widget,
+     BrowserView* browser_view)
+@@ -82,6 +84,10 @@ bool BrowserNativeWidgetAuraLinux::UseCustomFrame() const {
+     return false;
+   }
+ 
++  if (ArdiaLinuxFramelessApp(browser_view()->browser())) {
++    return true;
++  }
++
+   // If the platform does not support server side decorations, ignore the user
+   // preference and return true.
+   if (!ui::OzonePlatform::GetInstance()
+--- a/chrome/browser/ui/views/frame/browser_view.cc
++++ b/chrome/browser/ui/views/frame/browser_view.cc
+@@ -434,6 +434,18 @@ bool (*g_ardia_linux_shell_passes_point)(gfx::NativeView child,
+                                          const gfx::Point& location) = nullptr;
+ void (*g_ardia_linux_minimum_size)(const BrowserWindowInterface*,
+                                    gfx::Size* minimum) = nullptr;
++bool (*g_ardia_linux_frameless_app)(const std::string& app_name) = nullptr;
++
++bool ArdiaLinuxFramelessApp(const BrowserWindowInterface* browser);
++
++bool ArdiaLinuxFramelessApp(const BrowserWindowInterface* browser) {
++  if (!g_ardia_linux_frameless_app || !browser ||
++      browser->GetType() != BrowserWindowInterface::Type::TYPE_APP) {
++    return false;
++  }
++  const BrowserInitState* init = BrowserInitState::From(browser);
++  return init && g_ardia_linux_frameless_app(init->create_params().app_name);
++}
+ 
+ namespace {
+ 
+@@ -4023,6 +4035,9 @@ views::View* BrowserView::GetInitiallyFocusedView() {
+ }
+ 
+ bool BrowserView::ShouldShowWindowTitle() const {
++  if (ArdiaLinuxFramelessApp(browser_.get())) {
++    return false;
++  }
+   return WindowFeatureController::From(browser_)->SupportsWindowFeature(
+       WindowFeatureController::WindowFeature::kFeatureTitleBar);
+ }

@@ -1,0 +1,15 @@
+{
+  "id": "fixes-page-focus",
+  "segments": [
+    {
+      "scene": "pagefocus",
+      "title": "Pages take the keyboard as soon as they load",
+      "body": "Open a page from a New Tab and your keys go straight to it, so keyboard extensions like Vimium work without a click first. Before, the keys went nowhere until you clicked the page.",
+      "note": "a local article that scrolls on j and k, like Vimium",
+      "layout": "side",
+      "cam": [0, 0, 1180, 860],
+      "lead": 1.0,
+      "tail": 11.2
+    }
+  ]
+}

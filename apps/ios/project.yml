@@ -47,6 +47,7 @@ targets:
         INFOPLIST_FILE: Config/Ardia-Info.plist
         CODE_SIGN_ENTITLEMENTS: $(ARDIA_ENTITLEMENTS_$(ARDIA_DEFAULT_BROWSER))
         ARDIA_DEFAULT_BROWSER: NO
+        ARDIA_RELEASE_VERSION: ""
         ARDIA_ENTITLEMENTS_NO: Config/Ardia.entitlements
         ARDIA_ENTITLEMENTS_YES: Config/Ardia-DefaultBrowser.entitlements
         TARGETED_DEVICE_FAMILY: "1"

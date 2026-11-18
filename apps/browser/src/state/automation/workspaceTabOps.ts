@@ -1,7 +1,8 @@
 import type { BrowserState } from "../browser/store";
-import { inPinnedContainer } from "../browser/model";
+import { inPinnedContainer, isPinnedRow } from "../browser/model";
 import { NO_GROUP_ICON } from "../groups/groupIcons";
 import { withSharedFamily } from "../pins/pinShare";
+import { NO_ROW_ICON } from "../pins/rowIcons";
 import { splitOf, splitTabIdsOf, withPinnedPanes } from "../splits/splits";
 import { isSiteMuted } from "../tabs/mute";
 import { needsPage, wokenPage } from "../tabs/pageSession";
@@ -89,8 +90,10 @@ export function rename(results: OpResult[], op: Op): OpResult {
 
 export function tabIcon(results: OpResult[], op: Op): OpResult {
   const id = tabRef(results, str(op.tab));
-  if (op.icon === NO_GROUP_ICON) throw new OpError("bad_request", "\"none\" is for groups; give null to reset a tab's icon.");
-  store().updateTab(id, { customIcon: op.icon as IconValue });
-  if (store().tabs[id]?.customIcon !== op.icon) throw new OpError("failed", `Ardia didn't do that: tab ${id}'s icon didn't change.`);
+  const none = op.icon === NO_GROUP_ICON;
+  if (none && !isPinnedRow(store().tabs[id])) throw new OpError("bad_request", "\"none\" is for groups and pinned rows; give null to reset a tab's icon.");
+  const icon = none ? NO_ROW_ICON : (op.icon as IconValue);
+  store().updateTab(id, { customIcon: icon });
+  if (store().tabs[id]?.customIcon !== icon) throw new OpError("failed", `Ardia didn't do that: tab ${id}'s icon didn't change.`);
   return { tabs: [id] };
 }

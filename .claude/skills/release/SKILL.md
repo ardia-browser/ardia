@@ -51,13 +51,17 @@ For each fix:
      `gh workflow run release.yml -R mantrakp04/ardia -f version=<version> -f dry_run=false` and
      watch it (`gh run watch <id> --exit-status`, in pieces under 10 minutes). It builds, tags, and runs
      `.claude/skills/release/scripts/publish.sh <version>` (a prerelease with the DMG, zip, appcast and CLI
-     tarball; the merged feed onto the latest stable release; `Ardia-Nightly.dmg` behind https://ardia.dev/nightly;
-     it checks all of them), and the Homebrew tap's `ardia@nightly` cask when the `HOMEBREW_TAP_TOKEN` secret is set
+     tarball, plus the Linux and Windows files when their jobs passed; the merged feed onto the latest stable release;
+     `Ardia-Nightly.dmg` behind https://ardia.dev/nightly; it checks all of them), then refreshes the Windows update
+     feed (step 5e), and the Homebrew tap's `ardia@nightly` cask when the `HOMEBREW_TAP_TOKEN` secret is set
      (otherwise run `update-tap.sh <version>` yourself, step 5c). Locally the same is `git tag v<version> && git push
      origin main v<version>` and `publish.sh <version>` after `release.sh`.
    - Site: pushing the notes redeploys it (`.github/workflows/deploy.yml`), so the after-update tab finds the nightly's
-     entry; check the deploy run finished (no `release.ts` change, no claims or screenshots). The nightly download link
-     never changes.
+     entry; check the deploy run finished (no claims or screenshots). The Mac nightly link and the Windows installers
+     (`windows-alpha`) never change. The Linux download is versioned: once the release is published, run
+     `.claude/skills/release/scripts/site-version.mjs <version>`. It points `release.json`'s `linux` at the nightly when
+     the release carries `Ardia-<version>-linux-x64.tar.xz` and leaves it on the last one that did otherwise; commit it
+     as "Site: Linux download <version>" and push (another deploy).
    - Report in two lines: the version, the fix, the smoke result.
 
 Batch nightlies when fixes land close together; never hold a fix back for a stable. A stable release's notes cover
@@ -335,6 +339,10 @@ mkdir -p dist/<version>-rc/export && ditto "$mnt/Ardia.app" dist/<version>-rc/ex
 
 The release itself is then a second run with `dry_run=false` on the same commit.
 
+**iPhone in the same release.** Add `-f iphone=true` to both runs when the owner asked for the iPhone build: the dry run
+builds and signs it, the real run sends it to TestFlight and its public testers after the Mac release publishes, at
+the same version (`docs/releasing.md` › Every platform). Never add it unasked: a TestFlight upload goes out to testers.
+
 The engine is never packed by a release: when engine/ changed since the last prebuilt engine, release.sh stops and
 asks for `scripts/publish-engine.sh` first, which publishes `engine-<tree:12>` (with the Helium source) and appends
 its line to `packages/ardiacore/prebuilt-engines.tsv`; commit that line before the release. Every release's notes end
@@ -389,6 +397,50 @@ does nothing when the cask is already there. `publish.sh` runs it for both chann
 skips them, so a late tap push only delays new installs. Lint after a cask edit by hand (never `brew install` it: that
 writes `/Applications/Ardia.app`): `brew audit --cask --online ardia-browser/tap/ardia` and `brew style ardia-browser/tap`.
 
+### 5d. Linux package
+
+The Release workflow builds it in its `linux` job (`scripts/linux/release.sh <version> --engine exact`, smoke gate
+included), and `publish.sh` attaches `Ardia-<version>-linux-x64.tar.xz`, `ardia-cli-<version>-linux-x64.tar.gz` and
+their `.sha256` files to the release, nightly or stable. That needs the Linux engine for the release commit's engine
+key (`engine/engine-key.sh`) published in ardia-browser/ardia. Without it the `linux` job fails, the Mac release
+still ships, and `publish` warns that Linux was skipped.
+
+Linux engines are built on a Boat VM (boat.dev, `boat new --type xlarge`), never in GitHub Actions. On the VM, at the
+commit whose engine key needs one:
+
+```bash
+scripts/linux/build.sh --apply
+source engine/patches/build/env.sh
+scripts/linux/publish-engine.sh --out "$CB/chromium_git/chromium/src/out/$GN_OUT_CONFIGS" --source <ardia checkout> --upload
+```
+
+`--upload` creates the `engine-<key12>` prerelease in ardia-browser/ardia and adds the row to
+`packages/ardiacore/prebuilt-engines-linux.tsv` without committing it. Commit that row on `main` (stage it, then a
+bare `git commit`) before dispatching the release; fetches also read the table on `main`, so older commits find it.
+
+To add Linux to a release that shipped without it: publish the engine, then on a Linux machine at the release commit
+run `scripts/linux/release.sh <version>` and the `gh release upload` line it prints. `--engine nearest` or
+`--allow-dirty` make test builds, never releases (`docs/linux-ci.md` › Linux releases).
+
+### 5e. Windows installers
+
+The Release workflow's `windows` job calls `windows.yml` at the release commit with the version: the x64 and arm64
+builds with the engine pinned in `scripts/windows/engine/prebuilt.json` (a draft release in ardia-browser/ardia, read
+with the run's token), the same launch, tour and install checks as CI, and `Ardia-<version>-windows-<cpu>-setup.exe`
+with a `.sha256` for each, and the engine's source `Ardia-<version>-windows-source.tar.xz` with its `.sha256`
+(`scripts/windows/engine-source.sh`). `publish.sh` attaches the six files to the release, nightly or stable, and
+refuses the installers without their source. After `publish`, the
+`windows-update` job runs `scripts/windows/publish-alpha.sh --installers` on them, which puts them on the
+`windows-alpha` prerelease and points `windows-update.json` at them, so installed Windows apps offer the release. A dry
+run checks the files in `publish.sh --dry-run` and packs the feed with `publish-alpha.sh --dry-run`; nothing goes up.
+
+A failed `windows` job never blocks the Mac: `publish` warns, the release ships without Windows and the feed stays on
+the build before. Say so in the report. Don't re-run the release's failed jobs for it (that re-runs `publish`). If the
+cause is outside the code, dispatch `windows.yml` at `v<version>` with `-f version=<version>`, then upload its
+`windows-release-*` files and run `publish-alpha.sh --installers` (`docs/windows.md` › Releases has the four lines). If it's
+in the code, fix it on `main` and Windows ships with the next release. If only `windows-update` failed, re-run that
+job alone.
+
 ## 6. Deploy the site
 
 The download buttons and the root `README.md` (the landing page on GitHub) link the DMG of one tag
@@ -400,7 +452,7 @@ older version until this step. After a stable publish, point both at it:
 ```
 
 It reads the published DMG's size from GitHub, writes `apps/site/src/data/release.json` (`VERSION` and `DMG_SIZE`
-in `release.ts` come from it) and rewrites the README's links, labels and sizes. Commit both. If a release changes a
+in `release.ts` come from it, and `linux`, the Linux download, when the release has its tarball) and rewrites the README's links, labels and sizes. Commit both. If a release changes a
 claim on the landing page (below), change the README's matching line too.
 
 **Bring the landing page's claims up to date.** The home page makes specific promises; a release can make

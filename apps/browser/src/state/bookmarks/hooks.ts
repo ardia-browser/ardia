@@ -6,6 +6,7 @@ import { bookmarkRoots } from "./bookmarks";
 import { bookmarksShown } from "./visibility";
 import type { Bookmarks } from "../browser/types";
 import type { Settings } from "../settings/settings";
+import { useWindowRootWidth } from "../windows/rootSize";
 
 export const useBookmarks = <T>(select: (bookmarks: Bookmarks) => T): T => useBrowser((s) => select(s.bookmarks));
 
@@ -20,13 +21,15 @@ export const useBookmarksShown = (): boolean => useBrowser((s) => bookmarksShown
 export const useBookmarksBarMode = (windowId: string): Settings["bookmarksBar"] =>
   useBrowser((s) => (s.windows[windowId]?.kind === "private" || !bookmarksShown(s.settings) ? "never" : s.settings.bookmarksBar));
 
-export const useSidebarEdge = (windowId: string, width: number): SidebarEdge =>
-  useBrowser(
+export function useSidebarEdge(windowId: string, width: number): SidebarEdge {
+  const windowWidth = useWindowRootWidth(windowId);
+  return useBrowser(
     useShallow((s) => {
       const w = s.windows[windowId];
-      return sidebarEdgeOf({ shown: !!w && tabsShownIn(s, w.id) && tabLayoutOf(s, w.id) !== "top", side: sidebarSideOf(s, windowId), sidebarWidth: width, windowWidth: w?.frame?.[2] });
+      return sidebarEdgeOf({ shown: !!w && tabsShownIn(s, w.id) && tabLayoutOf(s, w.id) !== "top", side: sidebarSideOf(s, windowId), sidebarWidth: width, windowWidth });
     }),
   );
+}
 
 export const useTabBookmarkProfileId = (tabId: string): string =>
   useBrowser((s) => bookmarkProfileId(s, s.windows[s.tabs[tabId]?.windowId ?? ""]));

@@ -6,6 +6,7 @@ export type { CliControlStatus, CliInstallResult };
 const Cli = nativeModule("ArdiaCli");
 
 export const installedCliVersion = () => Cli.installedVersion();
+export const canInstallCliUnattended = () => Cli.canInstallUnattended();
 export const installCli = () => Cli.install();
 export const onCliInstallLine = (listener: (line: string) => void) => Cli.addListener("onInstallLine", (e) => listener(e.line));
 

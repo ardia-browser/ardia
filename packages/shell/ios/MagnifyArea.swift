@@ -45,7 +45,7 @@ final class MagnifyArea: ExpoView {
 
   static func devMagnify(windowId: String, x: Double, y: Double, steps: [[String: Any]]) -> [String: Any] {
     guard let window = WindowManager.shared.window(windowId), let content = window.contentView else { return ["error": "no window \(windowId)"] }
-    let location = content.convert(SyntheticInput.contentPoint(x: x, top: y, in: content), to: nil)
+    let location = SyntheticInput.windowPoint(x: x, top: y, in: window)
     let hit = content.superview?.hitTest(location)
     let phases: [String: NSEvent.Phase] = ["began": .began, "changed": .changed, "ended": .ended, "cancelled": .cancelled]
     var claims: [Bool] = []

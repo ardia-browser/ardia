@@ -34,7 +34,7 @@ func windows(_ pid: pid_t) -> [[String: Any]] {
     guard (w[kCGWindowOwnerPID as String] as? Int32) == pid else { return nil }
     let b = w[kCGWindowBounds as String] as? [String: Double] ?? [:]
     return ["id": w[kCGWindowNumber as String] ?? 0, "layer": w[kCGWindowLayer as String] ?? 0,
-            "alpha": w[kCGWindowAlpha as String] ?? 0, "w": b["Width"] ?? 0, "h": b["Height"] ?? 0]
+            "alpha": w[kCGWindowAlpha as String] ?? 0, "x": b["X"] ?? 0, "y": b["Y"] ?? 0, "w": b["Width"] ?? 0, "h": b["Height"] ?? 0]
   }
 }
 
@@ -182,23 +182,30 @@ case "postkeys":
 case "postscroll":
   guard args.count >= 9, let pid = pid_t(args[2]), pid > 1, let window = Int64(args[3]), let x = Double(args[4]), let y = Double(args[5]),
         let windowX = Double(args[6]), let windowY = Double(args[7]) else {
-    FileHandle.standardError.write("usage: acperf postscroll <pid> <window id> <x> <y> <window x> <window y> trackpad|fingers|wheel [events/s]\n".data(using: .utf8)!)
+    FileHandle.standardError.write("usage: acperf postscroll <pid> <window id> <x> <y> <window x> <window y> trackpad|fingers|wheel[-x] [events/s] [reverse]\n".data(using: .utf8)!)
     exit(64)
   }
-  let gesture = args[8]
+  let horizontal = args[8].hasSuffix("-x")
+  let gesture = horizontal ? String(args[8].dropLast(2)) : args[8]
   let rate = args.count > 9 ? Double(args[9]) ?? 120 : 120
+  let sign: Double = args.count > 10 && args[10] == "reverse" ? -1 : 1
   let point = CGPoint(x: x, y: y)
   typealias SetWindowLocation = @convention(c) (CGEvent, CGPoint) -> Void
   let setWindowLocation = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGEventSetWindowLocation").map { unsafeBitCast($0, to: SetWindowLocation.self) }
-  func scroll(_ dy: Double, phase: Int64 = 0, momentum: Int64 = 0, continuous: Bool = true) {
-    guard let event = CGEvent(scrollWheelEvent2Source: nil, units: continuous ? .pixel : .line, wheelCount: 1,
-                              wheel1: Int32(continuous ? dy.rounded() : (dy < 0 ? -1 : 1)), wheel2: 0, wheel3: 0) else { return }
+  func scroll(_ raw: Double, phase: Int64 = 0, momentum: Int64 = 0, continuous: Bool = true) {
+    let dy = raw * sign
+    let step = Int32(continuous ? dy.rounded() : (dy < 0 ? -1 : 1))
+    guard let event = CGEvent(scrollWheelEvent2Source: nil, units: continuous ? .pixel : .line, wheelCount: 2,
+                              wheel1: horizontal ? 0 : step, wheel2: horizontal ? step : 0, wheel3: 0) else { return }
     event.location = point
     event.setIntegerValueField(.scrollWheelEventIsContinuous, value: continuous ? 1 : 0)
     if continuous {
-      event.setDoubleValueField(.scrollWheelEventPointDeltaAxis1, value: dy)
-      event.setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis1, value: dy)
-      event.setIntegerValueField(.scrollWheelEventDeltaAxis1, value: Int64(max(-10, min(10, (dy / 10).rounded()))))
+      let (point, fixed, coarse): (CGEventField, CGEventField, CGEventField) = horizontal
+        ? (.scrollWheelEventPointDeltaAxis2, .scrollWheelEventFixedPtDeltaAxis2, .scrollWheelEventDeltaAxis2)
+        : (.scrollWheelEventPointDeltaAxis1, .scrollWheelEventFixedPtDeltaAxis1, .scrollWheelEventDeltaAxis1)
+      event.setIntegerValueField(coarse, value: Int64(max(-10, min(10, (dy / 10).rounded()))))
+      event.setIntegerValueField(point, value: Int64(dy.rounded()))
+      event.setDoubleValueField(fixed, value: dy)
       event.setIntegerValueField(.scrollWheelEventScrollPhase, value: phase)
       event.setIntegerValueField(.scrollWheelEventMomentumPhase, value: momentum)
     }
@@ -276,6 +283,6 @@ case "postmouse":
   click(middle ? .otherMouseUp : right ? .rightMouseUp : .leftMouseUp)
   printJSON(["heldMs": holdMs])
 default:
-  FileHandle.standardError.write("usage: acperf rusage <pid>... | windows <pid> | quit <pid> | waitwindow <pid> <secs> | newwindow <pid> <secs> | input <pid> <secs> | postkeys <pid> <gap ms> <spec>... | postscroll <pid> <window id> <x> <y> <window x> <window y> <gesture> [events/s] | postmouse <pid> <window id> <x> <y> <window x> <window y> <hold ms> [left|middle|right]\n".data(using: .utf8)!)
+  FileHandle.standardError.write("usage: acperf rusage <pid>... | windows <pid> | quit <pid> | waitwindow <pid> <secs> | newwindow <pid> <secs> | input <pid> <secs> | postkeys <pid> <gap ms> <spec>... | postscroll <pid> <window id> <x> <y> <window x> <window y> <gesture>[-x] [events/s] [reverse] | postmouse <pid> <window id> <x> <y> <window x> <window y> <hold ms> [left|middle|right]\n".data(using: .utf8)!)
   exit(64)
 }

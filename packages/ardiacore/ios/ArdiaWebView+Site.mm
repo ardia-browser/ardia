@@ -5,6 +5,11 @@
 using namespace ardia_web_view;
 using namespace ardia_runtime;
 
+namespace {
+constexpr NSSize kExtensionPopupMinimum = {25, 25};
+constexpr NSSize kExtensionPopupMaximum = {800, 600};
+}
+
 @implementation ArdiaWebView (Site)
 
 - (void)tabDidChangeSecurity:(ArdiaCoreTab *)tab {
@@ -36,7 +41,11 @@ using namespace ardia_runtime;
 }
 
 - (void)tab:(ArdiaCoreTab *)tab preferredSizeDidChange:(NSSize)size {
-  [self emit:@"preferredSize" payload:@{@"width" : @(size.width), @"height" : @(size.height)}];
+  const CGFloat rootPerPage = RootPointsPerLocalPoint(self);
+  const BOOL popup = _extensionHost.length > 0;
+  const CGFloat width = popup ? MIN(kExtensionPopupMaximum.width, MAX(kExtensionPopupMinimum.width, size.width)) : size.width;
+  const CGFloat height = popup ? MIN(kExtensionPopupMaximum.height, MAX(kExtensionPopupMinimum.height, size.height)) : size.height;
+  [self emit:@"preferredSize" payload:@{@"width" : @(width * rootPerPage), @"height" : @(height * rootPerPage)}];
 }
 
 - (void)clearSiteData:(ArdiaServiceReply)reply {

@@ -16,6 +16,7 @@ export type InstalledExtension = {
   sites: string[];
   optionsUrl: string | null;
   pinned: boolean;
+  pinnedIndex?: number;
   incognito: boolean;
   incognitoSplit?: boolean;
   fileAccess: boolean;

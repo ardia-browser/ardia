@@ -164,12 +164,16 @@ Snapshots and the original migration backup stay private and out of Git. Do not 
 
 Preserve README fork notice `2286d63b`, PR CI workflow `84beb05f`, and the personal-build feature record.
 Starting point after setup: fork `main` at `9d18a24e`.
-The installed update targets `v0.2.47-nightly.1`, commit `eea5edb931644dc903bb9118bc8aff52ea6a97a7`.
-The recorded candidate and installed app match current sources; the paired CLI is `0.2.47-personal.1`.
-Simon confirmed the requested manual checks passed, including the adapted upstream switcher, sleeping-tab
-filter, close/unload successors, split panes, and login/settings/script persistence. Use upstream behavior
-with the remaining personal layout and eligibility adaptations. Custom features remain active.
-Private build, installation, checks, and final merge evidence is in
-`apps/browser/build-personal-signed/update-0.2.47-nightly.1/` and update snapshot `20261114-003508-96a0487b`.
-For each update, record its target, candidate, checks, manual result, replacement choices, installed build,
-and final merge. Keep per-feature details in their separate ledger files.
+The installed update targets `v0.2.47-nightly.5`, commit `f6636c47bd20ac2c86d82f5b54898498594b0512`.
+Candidate and installed records match current sources; the paired CLI is `0.2.47-personal.1`.
+All custom features remain active. Upstream strikethrough partially overlaps title fading; Simon confirmed
+that the fork should retain fade-only alongside upstream strikethrough. Unreleased upstream Sleep Tab and cross-space extension recovery are documented in the ledger,
+not imported. No replacement or custom-code removal is approved.
+Workspace typechecks, package tests, personal lifecycle tests, and focused custom-feature tests pass.
+The browser suite's four initial failures were corrected and rechecked. The CLI suite passed except one
+personal-skill length assertion; shortening the text and rerunning its 52 tests passed.
+Hidden signed-candidate checks cover MRU selection, close/unload successors, switcher row closing,
+sleeping filtering, settings persistence, and no background startup warmup after 15 seconds.
+Simon confirmed all requested manual checks passed.
+Evidence: `apps/browser/build-personal-signed/update-0.2.47-nightly.5/`.
+Installation snapshot: `20261117-182424-c196d008`. The managed Ardia skill matches the activated CLI bundle.

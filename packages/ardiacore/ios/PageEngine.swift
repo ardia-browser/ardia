@@ -12,7 +12,7 @@ protocol PageEngine {
   func clearSiteData(profile: String, origin: String, done: @escaping (Any?, String?) -> Void)
   func prepareTransfer(_ key: String)
   func releaseTransfer(_ key: String)
-  func clearBrowsingData(profile: String, types: [String], since: Double, done: @escaping () -> Void)
+  func clearBrowsingData(profile: String, types: [String], since: Double, done: @escaping (String?) -> Void)
   func deleteProfileData(profile: String, done: @escaping ([String]) -> Void)
 }
 
@@ -53,7 +53,7 @@ struct ChromiumPageEngine: PageEngine {
 
   func releaseTransfer(_ key: String) { ArdiaWebView.releaseTransfer(key) }
 
-  func clearBrowsingData(profile: String, types: [String], since: Double, done: @escaping () -> Void) {
+  func clearBrowsingData(profile: String, types: [String], since: Double, done: @escaping (String?) -> Void) {
     ArdiaServices.clearBrowsingData(profile: profile, types: types, since: since, completion: done)
   }
 
@@ -101,8 +101,8 @@ struct WebKitPageEngine: PageEngine {
 
   func releaseTransfer(_ key: String) { hub.transfers.release(key) }
 
-  func clearBrowsingData(profile: String, types: [String], since: Double, done: @escaping () -> Void) {
-    hub.clearBrowsingData(profile: profile, types: types, since: since, completion: done)
+  func clearBrowsingData(profile: String, types: [String], since: Double, done: @escaping (String?) -> Void) {
+    hub.clearBrowsingData(profile: profile, types: types, since: since) { done(nil) }
   }
 
   func deleteProfileData(profile: String, done: @escaping ([String]) -> Void) {
@@ -131,12 +131,16 @@ enum PageEngines {
     for engine in all { engine.removeExternalAppAllowance(profile: profile, origin: origin, scheme: scheme) }
   }
 
-  static func clearBrowsingData(profile: String, types: [String], since: Double, done: @escaping () -> Void) {
+  static func clearBrowsingData(profile: String, types: [String], since: Double, done: @escaping (String?) -> Void) {
     var left = all.count
+    var failure: String?
     for engine in all {
-      engine.clearBrowsingData(profile: profile, types: types, since: since) {
-        left -= 1
-        if left == 0 { done() }
+      engine.clearBrowsingData(profile: profile, types: types, since: since) { error in
+        DispatchQueue.main.async {
+          if failure == nil { failure = error }
+          left -= 1
+          if left == 0 { done(failure) }
+        }
       }
     }
   }

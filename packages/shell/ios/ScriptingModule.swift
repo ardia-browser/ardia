@@ -16,7 +16,7 @@ public class ScriptingModule: Module {
       ShellEvents.detach(self)
     }
 
-    AsyncFunction("setScriptState") { (state: ScriptState) in ShellScripting.state = state }.runOnQueue(.main)
+    AsyncFunction("setScriptState") { (state: [String: Any]) in ShellScripting.setState(state) }
     AsyncFunction("replyToScript") { (id: String, result: [String: Any]?, error: String?) in
       ShellScripting.reply(id, result: result, error: error)
     }.runOnQueue(.main)

@@ -267,3 +267,161 @@ class ActInChrome(unittest.TestCase):
         out = self.browse("drag", "#html5 li:nth-child(1)", "#html5 li:nth-child(3)").stdout
         self.assertIn("HTML5 drag and drop", out)
         self.assertIn("moved to 3 of 3 (was 1)", out)
+
+    def open_carousel_modal(self):
+        self.browse("open", f"http://127.0.0.1:{self.http_port}/carousel-modal.html", "--show")
+
+    def assert_held_back(self, target: str, dialog: str):
+        stuck = self.browse("click", target, check=False)
+        self.assertNotEqual(stuck.returncode, 0)
+        said = stuck.stderr + stuck.stdout
+        self.assertIn("Close that first", said)
+        self.assertIn(f'the modal dialog "{dialog}" is open over it', said)
+        self.assertEqual(self.value("state.clicked.join()"), "")
+
+    def assert_dom_clicked(self, target: str, clicked: str):
+        said = self.browse("click", target).stdout
+        self.assertIn("got a DOM click instead of a pointer click", said)
+        self.assertEqual(self.value("state.clicked.join()"), clicked)
+
+    def test_an_off_page_slide_gets_a_dom_click_beside_a_non_modal_dialog_in_an_app_shell(self):
+        self.open_carousel_modal()
+        said = self.browse("click", "#s2").stdout
+        self.assertIn("got a DOM click instead of a pointer click", said)
+        self.assertEqual(self.value("state.clicked.join()"), "s2")
+
+    def test_an_off_page_slide_is_not_clicked_through_a_modal_dialog(self):
+        self.open_carousel_modal()
+        self.browse("click", "#open-modal")
+        self.assert_held_back("#s2", "Cookie settings")
+
+    def test_an_off_page_slide_inside_the_open_modal_dialog_gets_a_dom_click(self):
+        self.open_carousel_modal()
+        self.browse("click", "#open-modal")
+        self.assert_dom_clicked("#m2", "m2")
+
+    def test_an_off_page_slide_in_a_shadow_root_inside_the_open_modal_dialog_gets_a_dom_click(self):
+        self.open_carousel_modal()
+        self.browse("click", "#open-modal")
+        self.assert_dom_clicked('text="Shadow two"', "sh2")
+
+    def test_an_off_page_slide_in_a_modal_dialog_over_another_modal_gets_a_dom_click(self):
+        self.open_carousel_modal()
+        self.value("document.getElementById('sheet').classList.add('open'), document.getElementById('modal').showModal(), 'ok'")
+        self.assert_dom_clicked("#m2", "m2")
+
+    def test_an_off_page_slide_in_a_modal_dialog_under_another_modal_is_not_clicked(self):
+        self.open_carousel_modal()
+        self.value("document.getElementById('modal').showModal(), document.getElementById('confirm').showModal(), 'ok'")
+        self.assert_held_back("#m2", "Leave the page?")
+
+    def test_with_focus_in_no_modal_only_the_modal_on_top_takes_a_dom_click(self):
+        self.open_carousel_modal()
+        self.value("document.getElementById('modal').showModal(), document.getElementById('confirm').showModal(), document.activeElement.blur(), 'ok'")
+        self.assertEqual(self.value("document.activeElement.tagName"), "BODY")
+        self.assert_held_back("#m2", "Leave the page?")
+        self.value("document.getElementById('confirm').close(), document.activeElement.blur(), 'ok'")
+        self.assert_dom_clicked("#m2", "m2")
+
+    def test_an_off_page_slide_beside_a_nested_modal_dialog_is_not_clicked(self):
+        self.open_carousel_modal()
+        self.value("document.getElementById('modal').showModal(), document.getElementById('partner').showModal(), 'ok'")
+        self.assert_held_back("#m2", "Partner details")
+
+    def test_an_off_page_slide_is_not_clicked_through_an_aria_modal_sheet(self):
+        self.open_carousel_modal()
+        self.browse("click", "#open-sheet")
+        self.assert_held_back("#s2", "Account")
+
+    def test_a_closed_aria_modal_slid_off_screen_does_not_hold_back_a_dom_click(self):
+        self.open_carousel_modal()
+        self.value("document.getElementById('drawer').hidden = false, 'ok'")
+        self.assert_dom_clicked("#s2", "s2")
+
+    def test_a_closed_aria_modal_of_zero_size_does_not_hold_back_a_dom_click(self):
+        self.open_carousel_modal()
+        self.value("document.getElementById('popover').hidden = false, 'ok'")
+        self.assert_dom_clicked("#s2", "s2")
+
+    def test_an_inert_aria_modal_does_not_hold_back_a_dom_click(self):
+        self.open_carousel_modal()
+        self.value("document.getElementById('panel').hidden = false, 'ok'")
+        self.assert_dom_clicked("#s2", "s2")
+
+    def test_a_closed_zero_size_overflow_hidden_aria_modal_holding_a_button_does_not_hold_back_a_dom_click(self):
+        self.open_carousel_modal()
+        self.value("reveal('share-sheet')")
+        self.assert_dom_clicked("#s2", "s2")
+
+    def test_a_closed_max_height_0_menu_with_links_does_not_hold_back_a_dom_click(self):
+        self.open_carousel_modal()
+        self.value("reveal('site-menu')")
+        self.assert_dom_clicked("#s2", "s2")
+
+    def test_an_aria_modal_hidden_by_clip_path_does_not_hold_back_a_dom_click(self):
+        self.open_carousel_modal()
+        self.value("reveal('clipped')")
+        self.assert_dom_clicked("#s2", "s2")
+
+    def test_a_modal_dialog_inside_an_inert_container_holds_back_a_dom_click(self):
+        self.open_carousel_modal()
+        self.value("document.getElementById('locked').showModal(), 'ok'")
+        self.assert_held_back("#s2", "Locked in")
+
+    def test_an_aria_modal_faded_by_filter_opacity_0_does_not_hold_back_a_dom_click(self):
+        self.open_carousel_modal()
+        self.value("reveal('filtered')")
+        self.assert_dom_clicked("#s2", "s2")
+
+    def test_a_dialog_still_fading_out_after_its_close_gets_out_of_the_way_of_the_next_click(self):
+        self.open_carousel_modal()
+        for close in (("click", "#fade-close"), ("press", "Escape")):
+            for together in (True, False):
+                self.value("state.clicked.length = 0, reveal('fading')")
+                if together:
+                    said = self.browse("batch", " ".join(close), "click #s2").stdout
+                else:
+                    self.browse(*close)
+                    said = self.browse("click", "#s2").stdout
+                self.assertIn("got a DOM click instead of a pointer click", said, (close, together))
+                self.assertEqual(self.value("state.clicked.join()"), "s2", (close, together))
+
+    def test_a_dialog_that_stays_open_is_still_refused_after_the_short_wait(self):
+        self.open_carousel_modal()
+        started = time.monotonic()
+        self.assert_dom_clicked("#s2", "s2")
+        clicked_in = time.monotonic() - started
+        self.value("state.clicked.length = 0, reveal('fading')")
+        started = time.monotonic()
+        self.assert_held_back("#s2", "Newsletter")
+        refused_in = time.monotonic() - started
+        self.assertGreater(refused_in - clicked_in, 0.3)
+        self.assertLess(refused_in - clicked_in, 1.5)
+
+    def test_a_zero_height_aria_modal_wrapper_with_fixed_children_holds_back_a_dom_click(self):
+        self.open_carousel_modal()
+        self.value("reveal('headless'), document.getElementById('pay').focus(), 'ok'")
+        self.assertEqual(self.value("String(document.getElementById('headless').getBoundingClientRect().height)"), "0")
+        self.assert_held_back("#s2", "Payment")
+
+    def test_a_zero_height_aria_modal_wrapper_whose_children_faded_out_does_not_hold_back_a_dom_click(self):
+        self.open_carousel_modal()
+        self.value("reveal('headless'), document.getElementById('headless').classList.add('leaving'), 'ok'")
+        self.assert_dom_clicked("#s2", "s2")
+
+    def test_a_closed_drawer_at_the_scrollbar_edge_does_not_hold_back_a_dom_click(self):
+        self.browse("open", f"http://127.0.0.1:{self.http_port}/carousel-scrollbar.html", "--show")
+        self.assertEqual(self.value("String(innerWidth - document.documentElement.clientWidth)"), "14")
+        self.assert_dom_clicked("#s2", "s2")
+
+    def test_the_aria_modal_on_top_wins_over_focus_left_in_the_one_below(self):
+        self.open_carousel_modal()
+        self.value("reveal('lower', 'upper'), document.getElementById('lower-button').focus(), 'ok'")
+        self.assert_held_back("#l2", "Upper confirm")
+        self.assert_dom_clicked("#u2", "u2")
+
+    def test_a_tooltip_over_the_top_aria_modal_does_not_let_a_click_into_the_one_below(self):
+        self.open_carousel_modal()
+        self.value("reveal('lower', 'upper', 'tip'), 'ok'")
+        self.assertEqual(self.value("document.elementFromPoint(620, 400).id"), "tip")
+        self.assert_held_back("#l2", "Upper confirm")

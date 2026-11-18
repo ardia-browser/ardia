@@ -40,7 +40,7 @@ registerHooks({
       return next(specifier, context);
     } catch (error) {
       if (specifier.startsWith(".")) {
-        for (const ext of [".ts", ".tsx"]) {
+        for (const ext of [".ts", ".tsx", "/index.ts", "/index.tsx"]) {
           try {
             return next(specifier + ext, context);
           } catch {}

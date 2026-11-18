@@ -17,6 +17,7 @@ export { Panel, type PanelProps, type PanelShadow } from "./Panel";
 export { PinchArea, pinchSettle } from "./PinchArea";
 export { pinchFollow, pinchScale, type PinchMotion } from "./pinch";
 export { ProgressTrack } from "./ProgressTrack";
+export { GradientFill, type GradientStop } from "./GradientFill";
 export { curve, duration, period, spring, springs, springSpec, usePresence, type Fade, type SpringSpec } from "./motion";
 export { reduceMotion, reduceMotionKnown } from "./reduceMotion";
 export { PANEL, PanelCloseButton, PanelHeader, Popover, POPOVER_MARGIN, POPOVER_MOTION, PopoverSurface, PopoverValue, usePopoverMotion, usePopoverMotionStyle, usePopoverPresence } from "./Popover";
@@ -25,24 +26,27 @@ export { Segmented, type SegmentOption } from "./Segmented";
 export { Group, Row } from "./Row";
 export { Swatch } from "./Swatch";
 export { Toggle } from "./Switch";
-export { Text, type TextProps } from "./Text";
+export { Text, TextScopeContext, type TextProps, type TextScope } from "./Text";
 export { hex, layout, PROFILE_COLORS, useTheme, type Theme } from "./theme";
-export { capsule, colorRoles, concentric, display, emptyState, font, hairline, iconButton, ink, lineHeight, opacity, pillHeight, POPOVER_WIDTH, proseLineHeight, radius, shadow, sheetWidth, space, swatch, tabularNums, TOOLTIP, tracking, weight, withAlpha, type ColorRole, type IconButtonSize, type Radius, type ShadowLevel, type SheetSize, type Space, type TypeSize, type Weight } from "./tokens";
+export { capsule, colorRoles, concentric, display, monoFace, perLook, sidebarFont, sidebarIconSize, sidebarLineHeight, sidebarPoints, typeFace, withFace, withMono, emptyState, font, hairline, iconButton, ink, lineHeight, opacity, pillHeight, POPOVER_WIDTH, proseLineHeight, radius, shadow, sheetWidth, space, swatch, tabularNums, TOOLTIP, tracking, weight, withAlpha, type ColorRole, type IconButtonSize, type Radius, type ShadowLevel, type SheetSize, type Space, type TypeSize, type Weight } from "./tokens";
 export { Toast } from "./Toast";
 export { ToolbarRowContext, useToolbarRowContext } from "./toolbarRowContext";
 export { TooltipAbove } from "./TooltipAbove";
-export { useHover } from "./useHover";
+export { Offstage, useHover, useOffstage, useTooltip } from "./useHover";
 export {
   ActivitySpinner,
+  ClipView,
   ContextMenuArea,
   DIA_SPECTRUM,
   DockSelection,
   FadeLabel,
   FileDropArea,
+  FolderIcon,
   MagnifyArea,
   Meadow,
   meadowTextStyle,
   MouseArea,
+  PageCoverGate,
   OutsidePressArea,
   PopoverBubble,
   PowerUp,
@@ -59,6 +63,8 @@ export {
   type DroppedItem,
   type DropUpdate,
   type MagnifyUpdate,
+  type MeadowIntro,
+  type MeadowIntroEvent,
   type MeadowTone,
   type SurfaceProps,
   type SwipeAreaHandle,
@@ -66,3 +72,4 @@ export {
   type SymbolProps,
   type WebViewHandle,
 } from "./native";
+export { OverPage } from "./OverPage";

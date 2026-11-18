@@ -13,17 +13,16 @@ public class AutofillModule: Module {
 
   static let calls = CallTable(domain: "autofill", handlers: [
     "settings": { args, reply in
-      reply.ok([
-        "addresses": ArdiaServices.profileToggle(.addressesAutofilled, profile: args.profile),
-        "cards": ArdiaServices.profileToggle(.cardsAutofilled, profile: args.profile),
-      ])
+      ArdiaServices.profileToggles(profile: args.profile, set: nil) { toggles, error in
+        guard let toggles = toggles as? [String: Bool] else { return reply.service(nil, error ?? "no autofill settings") }
+        reply.ok(["addresses": toggles["addresses"] ?? true, "cards": toggles["cards"] ?? true])
+      }
     },
     "setSettings": { args, reply in
-      let addresses = try args.optionalBool("addresses")
-      let cards = try args.optionalBool("cards")
-      if let addresses { ArdiaServices.setProfileToggle(.addressesAutofilled, value: addresses, profile: args.profile) }
-      if let cards { ArdiaServices.setProfileToggle(.cardsAutofilled, value: cards, profile: args.profile) }
-      reply.ok()
+      var values: [String: NSNumber] = [:]
+      if let addresses = try args.optionalBool("addresses") { values["addresses"] = NSNumber(value: addresses) }
+      if let cards = try args.optionalBool("cards") { values["cards"] = NSNumber(value: cards) }
+      ArdiaServices.profileToggles(profile: args.profile, set: values) { _, error in reply.service(nil, error) }
     },
     "addresses": { args, reply in ArdiaServices.addresses(profile: args.profile) { reply.service($0, $1) } },
     "saveAddress": { args, reply in ArdiaServices.saveAddress(try args.dict("address"), profile: args.profile) { reply.service($0, $1) } },

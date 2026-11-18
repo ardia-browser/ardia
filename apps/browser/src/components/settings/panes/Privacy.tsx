@@ -1,14 +1,12 @@
 import {
   clearSiteData,
   getSiteSettings,
-  onContentBlockerChange,
   removeExternalAppAllowance,
   resetSiteSettings,
   setContentBlockerAllowed,
   setSiteSetting,
   setZoom,
   type ClearSiteDataResult,
-  type FilterList,
   type FilterListCategory,
   type SiteSettings,
   type SiteSettingType,
@@ -19,68 +17,23 @@ import { useEffect, useState } from "react";
 import { Image, ScrollView, View } from "react-native";
 import { currentEngineProfile } from "../../../state/browser/current";
 import { useSettings } from "../../../state/browser/hooks";
-import { Button, Checkbox, DialogActions, DialogTitle, PopUp, Sheet, space, Text, Toggle } from "../../ui";
+import { effectiveSettingValue, offersSiteSetting } from "../../../state/site/siteControls";
+import { Button, DialogActions, DialogTitle, PopUp, Sheet, space, Text, Toggle } from "../../ui";
 import { Favicon } from "../../favicon/Favicon";
-import { Group, ProfilePicker, Row, SectionHeader, useSettingsProfile } from "../Form";
-import { setting, type SettingId } from "../settingsIndex";
-import { appLinks, contentBlocker, siteOrigins, zoomLevels } from "../../../state/settings/paneData";
+import { Group, ProfilePicker, Row, SectionHeader, SettingToggle, useSettingsProfile } from "../Form";
+import { appLinks, siteOrigins, zoomLevels } from "../../../state/settings/paneData";
 import { useResource } from "../../../state/settings/resources";
 import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
+import { replaceSettingsPlace } from "../../../state/settings/settingsWindows";
 import { updateSettings } from "../../../state/settings/actions";
-import { blockerAvailable, categoryOn, setBlockingCategory, setFilterList } from "../../../state/site/contentBlocking";
-import { noteContentBlockerUnavailable, noteContentBlockerWriteFailure } from "../../../state/telemetry/usage";
+import { categoryOn, setBlockingCategory } from "../../../state/site/contentBlocking";
 import { ShareDiagnosticsSection } from "./ShareDiagnostics";
+import { CATEGORIES, FilterListsSheet, useContentBlocker, writeBlocker } from "./FilterListsSheet";
+import { HiddenElementsSection } from "./HiddenElementsSection";
 import { UI_LOCALE } from "../../../lib/uiLocale";
+import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 
-const CATEGORIES: { id: FilterListCategory; section: string; anchor?: SettingId }[] = [
-  { id: "ads", section: "Ad blockers", anchor: "privacy.blockAds" },
-  { id: "trackers", section: "Trackers", anchor: "privacy.blockTrackers" },
-  { id: "cookies", section: "Cookie banners", anchor: "privacy.blockCookieBanners" },
-  { id: "annoyances", section: "Annoyances" },
-  { id: "security", section: "Malware and scams" },
-  { id: "regional", section: "Regional blockers" },
-];
-
-const filtersText = (n: number) => `${n.toLocaleString(UI_LOCALE)} ${n === 1 ? "filter" : "filters"}`;
-
-const UNAVAILABLE_RETRY_MS = 3000;
-
-function useContentBlocker({ countOutages = false } = {}) {
-  const [state, reload] = useResource(contentBlocker);
-  const refresh = () => void reload();
-  useEffect(() => {
-    const sub = onContentBlockerChange(refresh);
-    return () => sub.remove();
-  }, []);
-  const unavailable = !!state && !blockerAvailable(state);
-  useEffect(() => {
-    if (!unavailable) return;
-    if (countOutages) noteContentBlockerUnavailable();
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let stopped = false;
-    const retry = () => {
-      timer = setTimeout(() => void reload().finally(() => !stopped && retry()), UNAVAILABLE_RETRY_MS);
-    };
-    retry();
-    return () => {
-      stopped = true;
-      clearTimeout(timer);
-    };
-  }, [unavailable]);
-  return [blockerAvailable(state ?? null) ? state! : null, refresh, unavailable] as const;
-}
-
-async function writeBlocker(write: () => Promise<unknown>, refresh: () => void) {
-  try {
-    await write();
-  } catch {
-    noteContentBlockerWriteFailure();
-  } finally {
-    refresh();
-  }
-}
-
-export function PrivacyPane() {
+export function PrivacyPane({ profileId, site }: { profileId: string | null; site: string | null }) {
   const [blocker, refresh, unavailable] = useContentBlocker({ countOutages: true });
   const commandScrollZoom = useSettings((s) => s.commandScrollZoom);
 
@@ -99,40 +52,45 @@ export function PrivacyPane() {
 
   return (
     <View>
-      <SectionHeader title="Content blocking" description="Built on EasyList and EasyPrivacy. Blocking happens on this Mac." />
-      <Group>
-        {CATEGORIES.filter((c) => c.anchor).map((c) => (
-          <Row key={c.id} anchor={c.anchor}>
-            <Toggle value={!!blocker && categoryOn(blocker, c.id)} disabled={!blocker} onChange={(v) => void toggleCategory(c.id, v)} />
-          </Row>
-        ))}
-        <Row anchor="privacy.filterLists">
-          <Button title="Advanced…" disabled={!blocker} onPress={() => showSettingsSheet(<FilterListsSheet />)} />
-        </Row>
-        {unavailable && (
-          <Row title="uBlock Origin isn't answering" description="Its settings show here once it responds. Pages keep the blocking they had.">
-            <Button title="Try Again" onPress={refresh} />
-          </Row>
-        )}
-      </Group>
-
-      {!!blocker?.allowedHosts.length && (
+      {PLATFORM_FEATURES.contentBlocker && (
         <>
-          <SectionHeader title="Sites without blocking" description="Turned off from a site's controls. Blocking applies to subdomains too." />
+          <SectionHeader title="Content blocking" description="Built on EasyList and EasyPrivacy. Blocking happens on this Mac." />
           <Group>
-            {blocker.allowedHosts.map((host) => (
-              <Row key={host} icon={<Favicon url={`https://${host}`} />} title={host}>
-                <Button
-                  title="Block Again"
-                  onPress={() => void setContentBlockerAllowed(host, false).then(refresh)}
-                />
+            {CATEGORIES.filter((c) => c.anchor).map((c) => (
+              <Row key={c.id} anchor={c.anchor}>
+                <Toggle value={!!blocker && categoryOn(blocker, c.id)} disabled={!blocker} onChange={(v) => void toggleCategory(c.id, v)} />
               </Row>
             ))}
+            <Row anchor="privacy.filterLists">
+              <Button title="Advanced…" disabled={!blocker} onPress={() => showSettingsSheet(<FilterListsSheet />)} />
+            </Row>
+            {unavailable && (
+              <Row title="uBlock Origin isn't answering" description="Its settings show here once it responds. Pages keep the blocking they had.">
+                <Button title="Try Again" onPress={refresh} />
+              </Row>
+            )}
           </Group>
+
+          {!!blocker?.allowedHosts.length && (
+            <>
+              <SectionHeader title="Sites without blocking" description="Turned off from a site's controls. Blocking applies to subdomains too." />
+              <Group>
+                {blocker.allowedHosts.map((host) => (
+                  <Row key={host} icon={<Favicon url={`https://${host}`} />} title={host}>
+                    <Button
+                      title="Block Again"
+                      onPress={() => void setContentBlockerAllowed(host, false).then(refresh)}
+                    />
+                  </Row>
+                ))}
+              </Group>
+            </>
+          )}
         </>
       )}
 
-      <SitePermissions />
+      {PLATFORM_FEATURES.contentBlocker && <HiddenElementsSection />}
+      <SitePermissions shownProfileId={profileId} site={site} />
       <AppLinks />
       <SectionHeader anchor="privacy.commandScrollZoom" description={null} />
       <Group>
@@ -141,7 +99,7 @@ export function PrivacyPane() {
         </Row>
       </Group>
       <ZoomLevels />
-      {blocker && (
+      {PLATFORM_FEATURES.contentBlocker && blocker && (
         <Text size="caption" tone="textTertiary" style={RULES_LOADED}>
           {`${(blocker.stats.networkFilters ?? 0).toLocaleString(UI_LOCALE)} network and ${(blocker.stats.cosmeticFilters ?? 0).toLocaleString(UI_LOCALE)} cosmetic rules loaded.`}
         </Text>
@@ -152,50 +110,7 @@ export function PrivacyPane() {
 }
 
 const RULES_LOADED = { marginTop: space.xl } as const;
-const LISTS = { maxHeight: 420, marginTop: space.m } as const;
 const SITE_LIST = { maxHeight: 380, marginTop: space.l } as const;
-
-function FilterListsSheet() {
-  const [blocker, refresh] = useContentBlocker();
-  const toggle = async (l: FilterList, on: boolean) => {
-    if (!blocker) return;
-    await writeBlocker(() => setFilterList(blocker, l.id, on), refresh);
-  };
-  return (
-    <Sheet size="l" onClose={closeSettingsSheet}>
-      <DialogTitle subtitle={setting("privacy.filterLists").description}>Advanced Ad Block Settings</DialogTitle>
-      <ScrollView style={LISTS}>
-        {CATEGORIES.map((c) => {
-          const lists = blocker?.lists.filter((l) => l.category === c.id) ?? [];
-          if (!lists.length) return null;
-          return (
-            <View key={c.id}>
-              <SectionHeader title={c.section} />
-              <Group>
-                {lists.map((l) => (
-                  <Row
-                    key={l.id}
-                    title={<Checkbox value={l.enabled} onChange={(v) => void toggle(l, v)} label={l.title} />}
-                    description={l.defaultOn ? `${filtersText(l.filters)} · On by default` : filtersText(l.filters)}
-                  />
-                ))}
-              </Group>
-            </View>
-          );
-        })}
-      </ScrollView>
-      <DialogActions
-        note={
-          <Text size="caption" tone="textTertiary">
-            {blocker?.version ? `Blocking by uBlock Origin ${blocker.version}, included with Ardia. Its lists update on their own.` : ""}
-          </Text>
-        }
-      >
-        <Button title="Done" kind="primary" onPress={closeSettingsSheet} />
-      </DialogActions>
-    </Sheet>
-  );
-}
 
 function ZoomLevels() {
   const [selected, setSelected] = useSettingsProfile();
@@ -248,14 +163,33 @@ const VALUE_OPTIONS: { value: SiteSettingValue; title: string }[] = [
   { value: "ask", title: "Ask" },
 ];
 
-function SitePermissions() {
-  const [profileId, setProfileId] = useSettingsProfile();
+function SitePermissions({ shownProfileId, site }: { shownProfileId: string | null; site: string | null }) {
+  const [profileId, setProfileId] = useSettingsProfile(shownProfileId);
   const [loaded, reload] = useResource(siteOrigins, currentEngineProfile(profileId));
   const origins = loaded ?? null;
   const refresh = () => void reload();
+  useEffect(() => {
+    if (!site) return;
+    const siteProfileId = shownProfileId ?? profileId;
+    setProfileId(siteProfileId);
+    const close = () => {
+      closeSettingsSheet();
+      replaceSettingsPlace(shownProfileId, null);
+    };
+    showSettingsSheet(<SiteSheet key={`${siteProfileId}|${site}`} profileId={siteProfileId} origin={site} onChanged={refresh} onClose={close} />);
+  }, [site, shownProfileId]);
 
   return (
     <>
+      {(PLATFORM_FEATURES.blocksAutoplay || PLATFORM_FEATURES.answersPermissionRequests) && (
+        <>
+          <SectionHeader title="All sites" description="These apply in every profile." />
+          <Group>
+            {PLATFORM_FEATURES.blocksAutoplay && <SettingToggle anchor="privacy.blockAutoplayEverywhere" />}
+            {PLATFORM_FEATURES.answersPermissionRequests && <SettingToggle anchor="privacy.blockNotificationRequests" />}
+          </Group>
+        </>
+      )}
       <SectionHeader
         anchor="privacy.sitePermissions"
         action={<ProfilePicker value={profileId} onChange={setProfileId} />}
@@ -271,7 +205,7 @@ function SitePermissions() {
               key={origin}
               icon={<Favicon url={origin} />}
               title={origin.replace(/^https?:\/\//, "")}
-              onPress={() => showSettingsSheet(<SiteSheet profileId={profileId} origin={origin} onChanged={refresh} />)}
+              onPress={() => showSettingsSheet(<SiteSheet profileId={profileId} origin={origin} onChanged={refresh} onClose={closeSettingsSheet} />)}
             />
           ))
         )}
@@ -317,10 +251,11 @@ function AppLinks() {
   );
 }
 
-function SiteSheet({ profileId, origin, onChanged }: { profileId: string; origin: string; onChanged: () => void }) {
+function SiteSheet({ profileId, origin, onChanged, onClose }: { profileId: string; origin: string; onChanged: () => void; onClose: () => void }) {
   const profile = currentEngineProfile(profileId);
   const [settings, setSettings] = useState<SiteSettings | null>(null);
   const [status, setStatus] = useState("");
+  useSettings((s) => s.blockAutoplayEverywhere);
   const load = () => void getSiteSettings(profile, origin).catch((): SiteSettings => ({}) as SiteSettings).then(setSettings).catch(() => {});
   useEffect(load, []);
   const set = async (type: SiteSettingType, value: SiteSettingValue) => {
@@ -329,12 +264,12 @@ function SiteSheet({ profileId, origin, onChanged }: { profileId: string; origin
     onChanged();
   };
   return (
-    <Sheet size="l" onClose={closeSettingsSheet}>
+    <Sheet size="l" onClose={onClose}>
       <DialogTitle icon={<Favicon url={origin} size={20} />}>{origin.replace(/^https?:\/\//, "")}</DialogTitle>
       <ScrollView style={SITE_LIST}>
         <Group>
-          {SETTING_LABELS.filter(([type]) => settings?.[type]).map(([type, label]) => (
-            <Row key={type} title={label} description={settings![type].isDefault ? `Default (${settings![type].value})` : undefined}>
+          {SETTING_LABELS.filter(([type]) => settings?.[type] && offersSiteSetting(type)).map(([type, label]) => (
+            <Row key={type} title={label} description={settings![type].isDefault ? `Default (${effectiveSettingValue(type, settings)})` : undefined}>
               <PopUp
                 value={settings![type].isDefault ? "default" : settings![type].value}
                 options={VALUE_OPTIONS}
@@ -369,7 +304,7 @@ function SiteSheet({ profileId, origin, onChanged }: { profileId: string; origin
           </>
         }
       >
-        <Button title="Done" kind="primary" onPress={closeSettingsSheet} />
+        <Button title="Done" kind="primary" onPress={onClose} />
       </DialogActions>
     </Sheet>
   );

@@ -1,7 +1,8 @@
 import AppKit
+import ArdiaCore
 
 final class BrowserWindow: NSWindow {
-  private let trafficLightInset = NSPoint(x: 16, y: 20)
+  private let trafficLightDesignInset = NSPoint(x: 16, y: 20)
 
   init() {
     super.init(
@@ -13,7 +14,7 @@ final class BrowserWindow: NSWindow {
     titlebarAppearsTransparent = true
     titleVisibility = .hidden
     title = "Ardia"
-    minSize = NSSize(width: 720, height: 460)
+    ArdiaChromeWindowHost.setInterfaceMinSize(NSSize(width: 720, height: 460), of: self)
     isReleasedWhenClosed = false
     backgroundColor = NSColor(name: nil) { appearance in
       appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
@@ -24,6 +25,7 @@ final class BrowserWindow: NSWindow {
     for name in [NSWindow.didResizeNotification, NSWindow.didExitFullScreenNotification, NSWindow.didBecomeKeyNotification] {
       NotificationCenter.default.addObserver(self, selector: #selector(layoutTrafficLights), name: name, object: self)
     }
+    NotificationCenter.default.addObserver(self, selector: #selector(layoutTrafficLights), name: .ArdiaInterfaceScaleDidChange, object: nil)
     layoutTrafficLights()
   }
 
@@ -39,7 +41,10 @@ final class BrowserWindow: NSWindow {
           let zoom = standardWindowButton(.zoomButton),
           let container = close.superview?.superview else { return }
 
-    let height = close.frame.height + trafficLightInset.y * 2
+    let scale = InterfaceScale.scale
+    let size = close.frame.size
+    let center = NSPoint(x: (trafficLightDesignInset.x + size.width / 2) * scale, y: (trafficLightDesignInset.y + size.height / 2) * scale)
+    let height = center.y * 2
     var frame = container.frame
     frame.size.height = height
     frame.origin.y = self.frame.height - height
@@ -48,7 +53,7 @@ final class BrowserWindow: NSWindow {
     let spacing = mini.frame.minX - close.frame.minX
     for (i, button) in [close, mini, zoom].enumerated() {
       button.setFrameOrigin(NSPoint(
-        x: trafficLightInset.x + CGFloat(i) * spacing,
+        x: center.x - size.width / 2 + CGFloat(i) * spacing,
         y: (height - button.frame.height) / 2
       ))
     }

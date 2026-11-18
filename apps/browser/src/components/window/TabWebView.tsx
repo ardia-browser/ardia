@@ -5,7 +5,7 @@ import type { PageEngine } from "../../state/engines/engines";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet } from "react-native";
 import { focus, switchToTab } from "../../state/browser/actions";
-import { notePictureInPictureBackToTab } from "../../state/telemetry/pictureInPictureCounts";
+import { notePictureInPictureBackToTab, notePictureInPictureClickSkip, notePictureInPictureDragged } from "../../state/telemetry/pictureInPictureCounts";
 import { noteFavicon } from "../../state/favicons/favicons";
 import { adoptIconPage, dropOutlivedFavicon, noteIconPage } from "../../state/favicons/iconPage";
 import { restoredThemeColor } from "../../state/windows/launchLook";
@@ -19,7 +19,7 @@ import { noteWebKitPage, offerWebKit, persistEngine } from "../../state/engines/
 import { webviewRef, webviews } from "../../state/tabs/webviewHandles";
 import { noteIssued, takeStartedNavigation } from "../../state/tabs/earlyNavigate";
 import { currentEngineProfile, currentTab, isTabSilenced } from "../../state/browser/current";
-import { closeTabNow, updateLive, updateTab } from "../../state/tabs/actions";
+import { updateLive, updateTab } from "../../state/tabs/actions";
 import { returnRefusedMove, setFind } from "../../state/windows/actions";
 import { activateFocusedPane, currentTabEngine, downloadNavigated, useTabEngine } from "../../state/windows/card";
 import { setPageProgress } from "../../state/tabs/pageProgress";
@@ -28,8 +28,8 @@ import { isIncognitoProfile, navigationTo } from "../../state/browser/model";
 import type { Tab } from "../../state/browser/types";
 import { zoomChangedByUser } from "../../state/site/zoomBubble";
 import { markTabReady, patchPage, pageOf } from "../../state/tabs/pageState";
-import { popupBlocked, showAutofillPrompt, showPasswordPrompt } from "../../state/site/prompts";
-import { leftPage, pageEnded } from "../../state/tabs/pageEvents";
+import { popupBlocked, showAutofillPrompt, showExternalApp, showPasswordPrompt } from "../../state/site/prompts";
+import { leftPage, pageAskedToClose, pageEnded } from "../../state/tabs/pageEvents";
 import { copyLinkToSelection, searchSelection, setPageSelection } from "../../state/site/selection";
 import { shareFromPage } from "../../state/site/share";
 import { useAutoPictureInPicture } from "../../state/media/pip";
@@ -44,11 +44,14 @@ import { noteCommit } from "../../state/automation/automationEvents";
 import { forgetUnreadIfGone, noteAppBadge, noteUnreadFavicon, noteUnreadLoading, noteUnreadPageEnded } from "../../state/tabs/unread";
 import { trackPageProcessGone } from "../../state/telemetry/diagnostics";
 import { releaseTranslation, translateCrashContext } from "../../state/site/translate";
-import { notePagePress } from "../../state/telemetry/tabPresses";
+import { notePagePress, notePagePressRefused } from "../../state/telemetry/tabPresses";
 import { noteAutoPictureInPictureKept, notePageOverlay, noteReopenedPage, noteWebKitPageKeptHidden } from "../../state/telemetry/usage";
+import { noteWebKitMediaFault } from "../../state/telemetry/webkitMediaFaults";
+import { noteFairPlay } from "../../state/telemetry/fairPlayCounts";
 import { isAdoptKind } from "../../state/tabs/adoptIds";
 import { firstPagePending, isBlankAddress, noteFirstPagePending, reportedAddress, reportedTitle } from "../../state/tabs/pendingAddress";
 import { STATUS_FLIP_BAND } from "./tokens";
+import { startHidingElement } from "../../state/site/hiddenElements";
 
 const webViewTab = (t: Tab | undefined) => ({ navigation: navigationOf(t), adoptId: adoptOf(t), profileId: t?.profileId ?? "", shownUrl: t?.url ?? "" });
 
@@ -230,6 +233,9 @@ function EngineWebView({ tabId, visible, warm, peekOf, engine }: TabWebViewProps
       onNowPlaying={(state) => setNowPlaying(tabId, state)}
       onPictureInPicture={(state) => setPictureInPictureState(tabId, state)}
       onAutoPictureInPictureKept={noteAutoPictureInPictureKept}
+      onPictureInPictureDragged={notePictureInPictureDragged}
+      onPictureInPictureSkip={notePictureInPictureClickSkip}
+      onMediaFault={noteWebKitMediaFault}
       onDisplayMediaRequest={(request) => requestDisplayMedia(tabId, request)}
       onOpenWindow={onOpenWindow}
       onStatus={(status, fromBottom) => {
@@ -255,24 +261,27 @@ function EngineWebView({ tabId, visible, warm, peekOf, engine }: TabWebViewProps
       onPopupBlocked={(popup) => popupBlocked(tabId, popup)}
       onPasswordPrompt={(prompt) => showPasswordPrompt(tabId, prompt)}
       onAutofillPrompt={(prompt, id) => showAutofillPrompt(tabId, prompt, id)}
-      onExternalApp={(externalApp) => patchPage(tabId, { externalApp })}
+      onExternalApp={(externalApp) => showExternalApp(tabId, externalApp)}
       onPageFocus={() => activateFocusedPane(tabId)}
-      onPagePress={() => {
+      onPagePress={(refused) => {
+        if (refused) return notePagePressRefused();
         notePagePress(tabId);
         activateFocusedPane(tabId);
       }}
-      onWindowClose={() => !isQuitting() && closeTabNow(tabId)}
+      onWindowClose={() => pageAskedToClose(tabId)}
       onTransferRefused={(from) => returnRefusedMove(tabId, from)}
       onNotification={(notification) => showWebNotification(tabId, notification)}
-      onCommand={({ command, text, modifiers, share, anchor }) => {
+      onCommand={({ command, text, modifiers, share, anchor, point }) => {
         if (command === "search") searchSelection(tabId, text, modifiers);
         else if (command === "share" && share) void shareFromPage(tab(), share, anchor);
         else if (command === "copyLinkToHighlight") void copyLinkToSelection(tabId);
         else if (command === "escape") escapePressed(tabId, "page");
+        else if (command === "hideElement" && point) void startHidingElement(tabId, point);
       }}
       onSelection={(selection) => setPageSelection(tabId, selection)}
       onScroll={(state) => noteScroll(tabId, state)}
       onProtectedMedia={(request) => offerWebKit(tabId, request)}
+      onFairPlay={noteFairPlay}
       onNotificationClose={closeWebNotification}
       onDiscarded={(url, reason) => {
         releaseTranslation(tabId);

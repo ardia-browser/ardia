@@ -145,6 +145,19 @@ command substitutions to installed copies without copying newer command document
 Compare installed files with the activated bundle plus these substitutions and report any other differences.
 Verify each consuming agent also has the personal-command instruction.
 
+## Fork CI
+
+Require the `checks` summary from [CI](../.github/workflows/ci.yml) on PRs to `main`. Linux runners
+parallelize browser unit tests, typechecks, and the macOS JavaScript bundle. The macOS runner tests
+native packages. Build, sign, and install Ardia Personal locally.
+
+Disable workflows in the fork with `gh workflow disable <file> -R simon-ami/ardia`. Keep the upstream
+workflow files for clean merges. Disable the duplicate Checks workflow, Android, iOS, Linux, Windows,
+and Windows engine inputs. The personal app runs on Mac, and some other jobs need upstream engine assets
+the fork cannot fetch. Disable Deploy and release workflows because the fork ships locally. Disable CLA,
+Linked issue, Vouch, and Vouch manage for the personal fork. Leave scheduled Caches off unless needed.
+Check for new workflows after each upstream merge with `gh workflow list --all -R simon-ami/ardia`.
+
 ## GitHub and rollback
 
 Prepare a fork integration PR for protected `main`. For a useful new product change, also prepare a focused

@@ -7,7 +7,6 @@ import { useDragGhostLabel } from "../../state/sidebar/hooks";
 import { useTabDrag } from "../../state/drag/tabDrag";
 import type { Ghost } from "./dragModel";
 import { FolderOrIcon } from "./AnimatedFolder";
-import { LiveFolderIcon } from "./LiveFolderIcon";
 import { FolderMosaic } from "./FolderTile";
 import { TabIcon } from "./TabIcon";
 import { SIDEBAR_SHADOW, SIDEBAR_TYPE, TAB_ROW, useSidebarTokens } from "./tokens";
@@ -48,7 +47,7 @@ export function DragGhost({ ghost }: { ghost: Ghost }) {
           opacity: 0.96,
         }}
       >
-        {folder ? <LiveFolderIcon folder={folder} /> : null}
+        {folder ? <FolderOrIcon icon={folder.icon} open={false} color={folder.color} /> : null}
         {groupId ? <FolderOrIcon icon={groupIcon} open={false} color={groupColor} /> : null}
         {folderTile ? <FolderMosaic tabIds={item.tabIds} width={width - TAB_ROW.trailing} /> : null}
         {drawn ? <TabIcon url={tab?.url ?? ""} favicon={tab?.favicon} icon={drawn.icon} profileId={tab?.profileId} /> : null}

@@ -20,7 +20,7 @@ import { useHoverFade } from "./hoverMotion";
 import { iconButton } from "../ui/tokens";
 import { openLiveFolderMenu } from "../../state/sidebar/liveMenus";
 import { registerRow } from "../../state/sidebar/sidebarUi";
-import { LiveFolderIcon } from "./LiveFolderIcon";
+import { FolderOrIcon } from "./AnimatedFolder";
 import { groupBoxAtRest, groupSurface, TAB_ROW, useSidebarTokens } from "./tokens";
 import { RefreshSpinner } from "./RefreshSpinner";
 import { SidebarRowLabel, SidebarRowSurface } from "./SidebarRow";
@@ -146,7 +146,7 @@ function FolderHeader({ folderId, windowId, collapsed }: { folderId: string; win
               cornerRadius={GROUP_INNER_RADIUS}
               padLeft={TAB_ROW.contentLeft + PAD}
             >
-              <LiveFolderIcon folder={folder} />
+              <FolderOrIcon icon={folder.icon} open={!collapsed} color={folder.color} />
               <SidebarRowLabel text={folder.name} weight="medium" color={tokens.groupTitle} />
               {status?.error ? (
                 <Pressable onPress={() => openSettings("automations")} tooltip={errorText(status.error.kind, status.error.source)} style={{ marginRight: space.xxs }}>

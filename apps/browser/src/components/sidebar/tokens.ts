@@ -189,10 +189,10 @@ export function groupTint(color: GroupColor | null | undefined): string | null {
 
 export const groupBoxAtRest = (color: GroupColor | null | undefined) => groupTint(color) !== null;
 
-const FOLDER_NEUTRAL = { dark: "#FFFFFF", light: "#6E6E73" } as const;
+const FOLDER_ACCENT = "#443AFF";
 
 export function folderPalette(color: GroupColor | null | undefined, dark: boolean) {
-  const tint = groupTint(color) ?? FOLDER_NEUTRAL[dark ? "dark" : "light"];
+  const tint = groupTint(color) ?? FOLDER_ACCENT;
   return dark
     ? { stroke: mix("#FFFFFF", tint, 0.64), face: mix("#211E29", tint, 0.12), insideTop: mix("#211E29", tint, 0.4), insideBottom: mix("#15121E", tint, 0.24) }
     : { stroke: tint, face: mix("#FFFFFF", tint, 0.06), insideTop: mix("#FFFFFF", tint, 0.34), insideBottom: mix("#FFFFFF", tint, 0.64) };

@@ -63,6 +63,8 @@ export function closeIntent(s: BrowserState, tabId: string): CloseIntent {
 const isTopApp = (t: Tab | undefined) => t?.pin?.as === "tile";
 const keptWithTopApp = (s: BrowserState, id: string) => inPinnedContainer(s, id) && withPinnedPanes(s, [id]).some((pane) => isTopApp(s.tabs[pane]));
 const runningKept = (s: BrowserState, id: string) => keptWithTopApp(s, id) && hasOwnOrSharedPage(s.tabs[id]!);
+export const pinnedPanesAreTopApps = (s: BrowserState, id: string) => withPinnedPanes(s, [id]).every((pane) => isTopApp(s.tabs[pane]));
+const withPinnedSplits = (s: BrowserState, ids: string[]) => [...new Set([...ids, ...withPinnedPanes(s, ids.filter((id) => !pinnedPanesAreTopApps(s, id)))])];
 
 function withoutTopApps(s: BrowserState, ids: string[]): string[] {
   if (!s.settings.keepTopAppsRunning) return ids;
@@ -205,9 +207,9 @@ function adoptOrphans(tabs: Record<string, Tab>, before: Record<string, Tab>, go
 export function unloadPinnedTabs(s: BrowserState, requested: string[], keepTopApps = false): BrowserState {
   const asked = requested.filter((id) => inPinnedContainer(s, id));
   const withTopApp = (id: string) => withPinnedPanes(s, [id]).some((pane) => isTopApp(s.tabs[pane]));
-  const switchedAway = keepTopApps ? withPinnedPanes(s, asked.filter(withTopApp)) : [];
+  const switchedAway = keepTopApps ? withPinnedSplits(s, asked.filter(withTopApp)) : [];
   const leaving = new Set(switchedAway);
-  const ids = withSharedFamily(s, withPinnedPanes(s, asked.filter((id) => !leaving.has(id))));
+  const ids = withSharedFamily(s, withPinnedSplits(s, asked.filter((id) => !leaving.has(id))));
   const closing = new Set([...requested, ...ids, ...switchedAway]);
   const unloading = ids.filter((id) => inPinnedContainer(s, id) && !leaving.has(id) && !(keepTopApps && isTopApp(s.tabs[id])));
   if (!unloading.length && !switchedAway.length) return s;
@@ -244,7 +246,7 @@ export function unloadPinnedTabs(s: BrowserState, requested: string[], keepTopAp
       if (!gone.has(activeId)) continue;
       const shown = profileId === w.profileId;
       if (shown && leaving.has(activeId) && runningInFront(activeId)) noteTopAppsKeptRunning(1);
-      let replacement = lastRegularTab(s, w, activeId, closing) ?? lastLivePinnedTab(s, w, activeId, closing, keepTopApps);
+      let replacement = otherPane(s, activeId, closing) ?? lastRegularTab(s, w, activeId, closing) ?? lastLivePinnedTab(s, w, activeId, closing, keepTopApps);
       if (!replacement) [next, replacement] = withNewTab(next, w.id, { profileId, background: !shown });
       if (shown) next = apply(next, activated(next, replacement));
       else {
@@ -266,9 +268,7 @@ function backToPin(s: BrowserState, t: Tab): Partial<Tab> {
 function lastRegularTab(s: BrowserState, w: BrowserWindow, id: string, closing: Set<string>): string | undefined {
   const profileId = s.tabs[id]!.profileId;
   const candidates = w.tabIds.filter((t) => !closing.has(t) && s.tabs[t]?.profileId === profileId && !inPinnedContainer(s, t));
-  const panes = splitTabIdsOf(splitOf(s, id))?.filter((t) => candidates.includes(t)) ?? [];
-  const pool = panes.length ? panes : candidates;
-  return pool.reduce<string | undefined>((best, t) => (!best || byRecentUse(s.tabs[t]!, s.tabs[best]!) < 0 ? t : best), undefined);
+  return candidates.reduce<string | undefined>((best, t) => (!best || byRecentUse(s.tabs[t]!, s.tabs[best]!) < 0 ? t : best), undefined);
 }
 
 function lastLivePinnedTab(s: BrowserState, w: BrowserWindow, id: string, closing: Set<string>, skipTopApps: boolean): string | undefined {

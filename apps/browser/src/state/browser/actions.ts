@@ -24,7 +24,7 @@ import { groupCloseAllowed } from "../groups/closeGuard";
 import { focusedWindowOf } from "../windows/ui";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import { splitOf } from "../splits/splits";
-import { closeKind } from "../tabs/tabs";
+import { closeKind, pinnedPanesAreTopApps } from "../tabs/tabs";
 import { noteSplit } from "../telemetry/usage";
 import { isPeekTab } from "../peek/peek";
 import { noteTabClosedByUser } from "../sync/openTabCloses";
@@ -64,7 +64,7 @@ export async function closeTab(tabId: string) {
     noteTabClosedByUser(tabId);
     return closeWindowAnimated(w.id);
   }
-  if (splitOf(now, tabId) && closeKind(now, tabId) === "close") noteSplit("splitPaneCloses");
+  if (splitOf(now, tabId) && (closeKind(now, tabId) === "close" || pinnedPanesAreTopApps(now, tabId))) noteSplit("splitPaneCloses");
   store().closeTab(tabId);
 }
 

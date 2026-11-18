@@ -102,6 +102,12 @@ if (is_linux) {
   }
 }
 
+if (is_win) {
+  ardia_sources += [
+    "ac_input_frame_rate_win.cc",
+  ]
+}
+
 source_set("ardia") {
   sources = ardia_sources
 

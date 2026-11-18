@@ -49,7 +49,8 @@ Ardia never creates the folder. `ardia config init` does, or the user does.
   left out, so a new setting never becomes file-writable by accident. Left out, because they grant control, send
   data somewhere or change which engine handles a site: `cliControl`, `allowJavaScriptFromAppleEvents`,
   `extensionSearchEngines`, `defaultProfileId`, `customSearchUrl`, `newTabUrl`, `customSearchEngines`, `pageEngine`,
-  `websiteEngines`, `protectedVideoInWebKit`. `searchEngine` must name an engine that already exists (built in, or
+  `websiteEngines`, `protectedVideoInWebKit`, `pushMessaging` (it connects Ardia to Google's push service, so only the
+  switch in Settings turns it on). `searchEngine` must name an engine that already exists (built in, or
   one the user added in Settings).
 - `interfaceScale` (0.8 to 1.5 in steps of 0.05, default 1; this Mac only, not synced) is Settings › Appearance ›
   Interface size: it scales the whole app's UI, not web pages, and applies live.

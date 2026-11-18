@@ -235,6 +235,15 @@ owner's Mac ──▶ ardia.dev/_ch/ (read-only ClickHouse user)   ardia.dev/_re
     `web_notification_clicks` (clicks on Ardia's website notifications) and `worker_notification_responses` (clicks or
     dismissals of a service worker's notifications that the app handed to Chrome). These three count only while
     sharing is on, and a pending count is dropped whenever sharing is turned on or off.
+  - `usage_counts` adds web push (#401, Mac only): `push_subscribes` (subscriptions Google's push service made),
+    `push_subscribe_failures` (subscriptions it failed with a service or network error while Use Google services for
+    push messaging was on), `push_subscribes_refused_off` (subscriptions refused because it was off: demand for the
+    setting) and `push_messages_delivered` (push events a site's service worker took). The engine keeps running totals
+    (`g_ardia_push_counts`, reported by `ac_cli_control`'s status as `pushMessaging`); the app reads them with the
+    10-minute context while sharing is on and sends the increase, starting again from the next reading when sharing is
+    turned on or off. `settings_snapshot` carries `setting_pushMessaging`. Watch `push_subscribe_failures` against
+    `push_subscribes` (a broken check-in or a host Google moves shows there first) and `push_messages_delivered` per
+    install with the setting on.
   - `web_notification_failed` (a website notification macOS refused or the app couldn't post): `title_length`,
     `body_length` (never the text), `icon_requested`, `icon_sent`, `icon_status` (`none`, `attached`, `invalid_url`,
     `download_failed`, `empty`, `write_failed`, `attachment_rejected`, or `unknown` when the call threw; `none` also

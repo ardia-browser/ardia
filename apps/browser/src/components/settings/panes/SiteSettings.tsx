@@ -58,6 +58,7 @@ export function SitesPage({ profileId }: { profileId: string }) {
   const profile = currentEngineProfile(profileId);
   const blockAutoplay = useSettings((s) => s.blockAutoplayEverywhere);
   const blockNotifications = useSettings((s) => s.blockNotificationRequests);
+  const pushMessaging = useSettings((s) => s.pushMessaging);
   const [origins] = useResource(siteOrigins, profile);
   const [zooms, reloadZooms] = useResource(zoomLevels, profile);
   const levels = zooms ?? {};
@@ -66,7 +67,7 @@ export function SitesPage({ profileId }: { profileId: string }) {
 
   return (
     <ProfileSubPage>
-      {(PLATFORM_FEATURES.blocksAutoplay || PLATFORM_FEATURES.answersPermissionRequests) && (
+      {(PLATFORM_FEATURES.blocksAutoplay || PLATFORM_FEATURES.answersPermissionRequests || PLATFORM_FEATURES.pushMessaging) && (
         <>
           <SectionHeader title="All sites" description="Defaults for every site. These apply in every profile." />
           <Group>
@@ -88,6 +89,14 @@ export function SitesPage({ profileId }: { profileId: string }) {
                   accessibilityLabel="Block requests to send notifications"
                   onChange={(v) => updateSettings({ blockNotificationRequests: v })}
                 />
+              </Row>
+            ) : null}
+            {PLATFORM_FEATURES.pushMessaging ? (
+              <Row
+                title="Use Google services for push messaging"
+                description="Sites you allow can notify you while their tabs are closed, through Google's push service. Applies after you restart Ardia."
+              >
+                <Toggle value={pushMessaging} accessibilityLabel="Use Google services for push messaging" onChange={(v) => updateSettings({ pushMessaging: v })} />
               </Row>
             ) : null}
           </Group>

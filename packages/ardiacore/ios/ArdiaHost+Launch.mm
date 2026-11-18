@@ -508,6 +508,14 @@ void StartEarlyWindow() {
   }
   std::vector<const char *> args = {argc > 0 && argv[0] ? argv[0] : "Ardia"};
   for (const std::string &s : extra) args.push_back(s.c_str());
+  for (int i = 1; !mockKeychain && i < argc; i++) {
+    const char *arg = argv[i];
+    if (!arg || !strcmp(arg, "--")) break;
+    if (!strcmp(arg, "--enable-macos-platform-policy")) {
+      args.push_back(arg);
+      break;
+    }
+  }
   for (int i = 1; mockKeychain && i < argc; i++) {
     const char *arg = argv[i];
     if (!arg) break;

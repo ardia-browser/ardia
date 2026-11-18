@@ -8,6 +8,7 @@
 
 #include "ardia/linux/ac_linux_password_check.h"
 #include "ardia/linux/ac_linux_password_field.h"
+#include "ardia/linux/ac_linux_password_log.h"
 #include "ardia/linux/ac_linux_secret_text.h"
 #include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
@@ -65,6 +66,11 @@ std::string WaitText(int64_t wait_ms) {
   return " Wait " + base::NumberToString((wait_ms + 999) / 1000) + " seconds, then try again.";
 }
 
+struct CheckResult {
+  Verdict verdict = Verdict::kFailed;
+  std::string detail;
+};
+
 class Confirmation;
 
 std::map<Profile*, std::unique_ptr<Confirmation>>& Pending() {
@@ -72,7 +78,7 @@ std::map<Profile*, std::unique_ptr<Confirmation>>& Pending() {
   return *pending;
 }
 
-void Finish(Profile* profile, bool granted, bool cancelled);
+void Finish(Profile* profile, reauth_linux::Outcome outcome);
 
 views::Widget* ParentFor(Profile* profile) {
   views::Widget* parent = nullptr;
@@ -90,7 +96,7 @@ class Confirmation : public views::WidgetObserver {
  public:
   Confirmation(Profile* profile,
                std::u16string purpose,
-               base::OnceCallback<void(bool, bool)> done)
+               ReauthFallbackAnswer done)
       : profile_(profile), purpose_(std::move(purpose)), done_(std::move(done)) {}
 
   ~Confirmation() override {
@@ -98,13 +104,17 @@ class Confirmation : public views::WidgetObserver {
     Close();
   }
 
-  base::OnceCallback<void(bool, bool)> TakeDone() { return std::move(done_); }
+  ReauthFallbackAnswer TakeDone() { return std::move(done_); }
+
+  reauth_linux::Outcome Ended(reauth_linux::Outcome outcome) const {
+    return outcome != reauth_linux::Outcome::kGranted && unanswered_ ? *unanswered_ : outcome;
+  }
 
   void Show(const std::string& problem) {
     DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
     views::Widget* parent = ParentFor(profile_);
     if (!parent || parent->IsClosed() || parent->is_destroying()) {
-      return Finish(profile_, false, false);
+      return Finish(profile_, reauth_linux::Outcome::kDenied);
     }
     delegate_ = std::make_unique<views::DialogDelegate>();
     delegate_->SetOwnershipOfNewWidget(views::Widget::InitParams::CLIENT_OWNS_WIDGET);
@@ -118,7 +128,7 @@ class Confirmation : public views::WidgetObserver {
     text += base::UTF8ToUTF16(problem.empty() ? "Enter the password you use to log in to this computer." : problem);
     auto field = std::make_unique<PasswordField>(u"Login password");
     if (!field->usable()) {
-      return Finish(profile_, false, false);
+      return Finish(profile_, reauth_linux::Outcome::kDenied);
     }
     const views::LayoutProvider* layout = views::LayoutProvider::Get();
     gfx::Insets sides = layout->GetInsetsMetric(views::INSETS_DIALOG);
@@ -164,7 +174,7 @@ class Confirmation : public views::WidgetObserver {
     field_ = nullptr;
     if (!checking_) {
       base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
-          FROM_HERE, base::BindOnce(&Finish, profile_.get(), false, true));
+          FROM_HERE, base::BindOnce(&Finish, profile_.get(), reauth_linux::Outcome::kCancelled));
     }
   }
 
@@ -178,7 +188,7 @@ class Confirmation : public views::WidgetObserver {
     observation_.Reset();
     Close();
     if (!accepted) {
-      return Finish(profile_, false, true);
+      return Finish(profile_, reauth_linux::Outcome::kCancelled);
     }
     if (!password) {
       return Show("That password is too long to check.");
@@ -191,7 +201,7 @@ class Confirmation : public views::WidgetObserver {
     }
     const Checker& checker = TheChecker();
     if (!checker.helper || !checker.user) {
-      return Finish(profile_, false, false);
+      return Finish(profile_, reauth_linux::Outcome::kDenied);
     }
     checking_ = true;
     base::ThreadPool::PostTaskAndReplyWithResult(
@@ -200,28 +210,43 @@ class Confirmation : public views::WidgetObserver {
          base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN},
         base::BindOnce(
             [](std::string helper, std::string user, std::unique_ptr<SecretBytes> password) {
-              return RunHelper(helper, user, password->view());
+              CheckResult result;
+              result.verdict = RunHelper(helper, user, password->view(), kHelperDeadlineMs, std::nullopt, &result.detail);
+              return result;
             },
             *checker.helper, *checker.user, std::move(password)),
-        base::BindOnce(&Confirmation::Checked, weak_factory_.GetWeakPtr()));
+        base::BindOnce(&Confirmation::Answered, weak_factory_.GetWeakPtr()));
   }
 
-  void Checked(Verdict verdict) {
+  void Answered(CheckResult result) {
     checking_ = false;
-    if (verdict == Verdict::kMatch) {
+    unanswered_.reset();
+    if (result.verdict == Verdict::kMatch) {
       TheThrottle().NoteRight();
-      return Finish(profile_, true, false);
+      return Finish(profile_, reauth_linux::Outcome::kGranted);
     }
-    if (verdict == Verdict::kMismatch) {
+    if (result.verdict == Verdict::kMismatch) {
       TheThrottle().NoteWrong(NowMs());
       return Show("That isn't your login password." + WaitText(TheThrottle().WaitMs(NowMs())));
     }
-    Finish(profile_, false, false);
+    LogUnansweredCheck(result.detail);
+    if (result.verdict == Verdict::kUnverifiable) {
+      unanswered_ = reauth_linux::Outcome::kUnverifiable;
+      return Show(
+          "Ardia can't check your login password in this session, so it can't tell whether yours is right. "
+          "This happens when Ardia runs in a sandbox, or when the system's password helper is on a disk "
+          "mounted without setuid. Your Recovery Kit, if you saved one when you turned sync on, has the same "
+          "words. Cancel to close this window.");
+    }
+    unanswered_ = reauth_linux::Outcome::kHelperFailed;
+    Show("Ardia couldn't check your login password because the system's password helper didn't answer. "
+         "Try again, or cancel. Your Recovery Kit, if you saved one when you turned sync on, has the same words.");
   }
 
   raw_ptr<Profile> profile_;
   std::u16string purpose_;
-  base::OnceCallback<void(bool, bool)> done_;
+  ReauthFallbackAnswer done_;
+  std::optional<reauth_linux::Outcome> unanswered_;
   std::unique_ptr<views::DialogDelegate> delegate_;
   std::unique_ptr<views::Widget> widget_;
   raw_ptr<PasswordField> field_ = nullptr;
@@ -230,7 +255,7 @@ class Confirmation : public views::WidgetObserver {
   base::WeakPtrFactory<Confirmation> weak_factory_{this};
 };
 
-void Finish(Profile* profile, bool granted, bool cancelled) {
+void Finish(Profile* profile, reauth_linux::Outcome outcome) {
   auto& pending = Pending();
   const auto found = pending.find(profile);
   if (found == pending.end()) {
@@ -238,18 +263,17 @@ void Finish(Profile* profile, bool granted, bool cancelled) {
   }
   std::unique_ptr<Confirmation> confirmation = std::move(found->second);
   pending.erase(found);
-  base::OnceCallback<void(bool, bool)> done = confirmation->TakeDone();
+  ReauthFallbackAnswer done = confirmation->TakeDone();
+  const reauth_linux::Outcome ended = confirmation->Ended(outcome);
   base::SequencedTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE, std::move(confirmation));
   if (done) {
-    std::move(done).Run(granted, cancelled);
+    std::move(done).Run(ended);
   }
 }
 
-void Confirm(Profile* profile,
-             const std::u16string& purpose,
-             base::OnceCallback<void(bool, bool)> done) {
+void Confirm(Profile* profile, const std::u16string& purpose, ReauthFallbackAnswer done) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  Finish(profile, false, true);
+  Finish(profile, reauth_linux::Outcome::kCancelled);
   auto confirmation = std::make_unique<Confirmation>(profile, purpose, std::move(done));
   Confirmation* shown = confirmation.get();
   Pending()[profile] = std::move(confirmation);

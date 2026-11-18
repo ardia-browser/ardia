@@ -195,7 +195,7 @@ test("a launch started with --no-sandbox says why once, in the window that ran t
   assert.equal(takeUpdateCounts().launches_without_sandbox, 1);
 });
 
-test("only the telemetry leader counts login-password confirmations, by outcome, and polkit's are left out", async () => {
+test("only the telemetry leader counts login-password confirmations, by outcome (including checks that could not verify), and polkit's are left out", async () => {
   const { countLoginPasswordChecks } = await import("./reauthCounts.ts");
   takeUpdateCounts();
   let emit;
@@ -203,8 +203,12 @@ test("only the telemetry leader counts login-password confirmations, by outcome,
   countLoginPasswordChecks(() => leading, (listener) => (emit = listener));
   emit({ method: "loginPassword", result: "granted" });
   leading = true;
-  for (const result of ["granted", "denied", "denied", "cancelled", "unavailable"]) emit({ method: "loginPassword", result });
+  for (const result of ["granted", "denied", "denied", "cancelled", "unavailable", "unverifiable", "helperFailed", "helperFailed", "wrong"]) emit({ method: "loginPassword", result });
   emit({ method: "polkit", result: "granted" });
+  emit({ method: "polkit", result: "unverifiable" });
   const counts = takeUpdateCounts();
-  assert.deepEqual([counts.login_password_checks_granted, counts.login_password_checks_denied, counts.login_password_checks_cancelled], [1, 2, 1]);
+  assert.deepEqual(
+    [counts.login_password_checks_granted, counts.login_password_checks_denied, counts.login_password_checks_cancelled, counts.login_password_checks_unverifiable, counts.login_password_checks_helper_failed],
+    [1, 2, 1, 1, 2],
+  );
 });

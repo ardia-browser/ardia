@@ -9,11 +9,13 @@
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 
 #include <algorithm>
+#include <utility>
 #include <vector>
 
 namespace ardia::linux_password {
@@ -39,6 +41,33 @@ bool WriteAll(int fd, const char* data, size_t size) {
 void SleepMs(int ms) {
   timespec wait{0, static_cast<long>(ms) * 1000000L};
   while (nanosleep(&wait, &wait) != 0 && errno == EINTR) {
+  }
+}
+
+std::string ReadWholeFile(const char* path) {
+  std::string contents;
+  const int fd = open(path, O_RDONLY | O_CLOEXEC);
+  if (fd < 0) {
+    return contents;
+  }
+  char buffer[4096];
+  while (true) {
+    const ssize_t got = read(fd, buffer, sizeof(buffer));
+    if (got < 0 && errno == EINTR) {
+      continue;
+    }
+    if (got <= 0) {
+      break;
+    }
+    contents.append(buffer, static_cast<size_t>(got));
+  }
+  close(fd);
+  return contents;
+}
+
+void Say(std::string* detail, std::string text) {
+  if (detail) {
+    *detail = std::move(text);
   }
 }
 
@@ -84,12 +113,58 @@ std::optional<std::string> CurrentUser() {
   return std::string(found->pw_name);
 }
 
-Verdict VerdictForExit(std::optional<int> exit_code) {
+std::optional<std::string> WhyUnverifiable(const HelperContext& context) {
+  if (context.root) {
+    return std::nullopt;
+  }
+  if (context.no_new_privs && context.nosuid_mount) {
+    return std::string("no_new_privs, nosuid_mount");
+  }
+  if (context.no_new_privs) {
+    return std::string("no_new_privs");
+  }
+  if (context.nosuid_mount) {
+    return std::string("nosuid_mount");
+  }
+  return std::nullopt;
+}
+
+bool NoNewPrivsIn(std::string_view proc_status) {
+  constexpr std::string_view kKey = "NoNewPrivs:";
+  size_t start = 0;
+  while (start < proc_status.size()) {
+    size_t end = proc_status.find('\n', start);
+    if (end == std::string_view::npos) {
+      end = proc_status.size();
+    }
+    std::string_view line = proc_status.substr(start, end - start);
+    if (line.substr(0, kKey.size()) == kKey) {
+      line.remove_prefix(kKey.size());
+      while (!line.empty() && (line.front() == ' ' || line.front() == '\t')) {
+        line.remove_prefix(1);
+      }
+      return line == "1";
+    }
+    start = end + 1;
+  }
+  return false;
+}
+
+HelperContext ReadHelperContext(const std::string& helper) {
+  HelperContext context;
+  context.root = geteuid() == 0;
+  context.no_new_privs = NoNewPrivsIn(ReadWholeFile("/proc/self/status"));
+  struct statvfs mount;
+  context.nosuid_mount = statvfs(helper.c_str(), &mount) == 0 && (mount.f_flag & ST_NOSUID) != 0;
+  return context;
+}
+
+Verdict VerdictForExit(std::optional<int> exit_code, const HelperContext& context) {
   if (exit_code == 0) {
     return Verdict::kMatch;
   }
   if (exit_code == kWrongPasswordExit) {
-    return Verdict::kMismatch;
+    return WhyUnverifiable(context) ? Verdict::kUnverifiable : Verdict::kMismatch;
   }
   return Verdict::kFailed;
 }
@@ -107,9 +182,15 @@ std::optional<std::string> UnusablePassword(std::string_view password) {
   return std::nullopt;
 }
 
-Verdict RunHelper(const std::string& helper, const std::string& user, std::string_view password, int deadline_ms) {
+Verdict RunHelper(const std::string& helper,
+                  const std::string& user,
+                  std::string_view password,
+                  int deadline_ms,
+                  const std::optional<HelperContext>& context,
+                  std::string* detail) {
   int ends[2];
   if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, ends) != 0) {
+    Say(detail, "no socket for the helper");
     return Verdict::kFailed;
   }
   const int nowhere = open("/dev/null", O_RDWR | O_CLOEXEC);
@@ -134,6 +215,7 @@ Verdict RunHelper(const std::string& helper, const std::string& user, std::strin
   }
   if (spawned != 0) {
     close(ends[1]);
+    Say(detail, "could not start, error " + std::to_string(spawned));
     return Verdict::kFailed;
   }
   constexpr char kTerminator = '\0';
@@ -149,17 +231,31 @@ Verdict RunHelper(const std::string& helper, const std::string& user, std::strin
       break;
     }
     if (done < 0 && errno != EINTR) {
+      Say(detail, "could not wait for the helper");
       return Verdict::kFailed;
     }
     if (waited >= deadline_ms) {
       kill(child, SIGKILL);
       while (waitpid(child, &status, 0) < 0 && errno == EINTR) {
       }
+      Say(detail, "timed out");
       return Verdict::kFailed;
     }
     SleepMs(10);
   }
-  return VerdictForExit(WIFEXITED(status) ? std::optional<int>(WEXITSTATUS(status)) : std::nullopt);
+  if (!WIFEXITED(status)) {
+    Say(detail, "ended by a signal");
+    return Verdict::kFailed;
+  }
+  const int code = WEXITSTATUS(status);
+  const HelperContext surroundings = context ? *context : ReadHelperContext(helper);
+  const Verdict verdict = VerdictForExit(code, surroundings);
+  std::string account = "exit " + std::to_string(code);
+  if (verdict == Verdict::kUnverifiable) {
+    account += ", " + WhyUnverifiable(surroundings).value_or(std::string());
+  }
+  Say(detail, std::move(account));
+  return verdict;
 }
 
 void Throttle::NoteWrong(int64_t now_ms) {

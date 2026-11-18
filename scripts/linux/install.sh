@@ -13,7 +13,7 @@ Installs an extracted Ardia Linux package.
 Ardia goes under PREFIX/lib/ardia with PREFIX/bin/ardia, its desktop entry
 and icon. Run as root without --destdir, it makes lib/ardia/chrome-sandbox
 setuid root, Chromium's sandbox where user namespaces are unavailable. The polkit policy always goes to DESTDIR/usr/share/polkit-1/actions,
-the only directory polkit reads actions from, whatever the prefix.
+the one directory every polkit version reads actions from, whatever the prefix.
 Without --destdir it must run as root, and installed files are owned by root.
 On a host whose AppArmor reads the 4.0 ABI (Ubuntu 24.04 and later), an install
 without --destdir also writes /etc/apparmor.d/ardia and loads it, so the

@@ -316,6 +316,8 @@ source_set("linux") {
     "ac_linux_password_check.h",
     "ac_linux_password_field.cc",
     "ac_linux_password_field.h",
+    "ac_linux_password_log.cc",
+    "ac_linux_password_log.h",
     "ac_linux_password_prompt.cc",
     "ac_linux_password_prompt.h",
     "ac_linux_secret_text.cc",

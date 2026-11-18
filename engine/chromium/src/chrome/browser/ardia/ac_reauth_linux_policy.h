@@ -18,7 +18,7 @@ inline constexpr uint32_t kAllowUserInteraction = 1;
 inline constexpr int64_t kPromptTimeoutMs = 120000;
 inline constexpr int64_t kProbeTimeoutMs = 5000;
 
-enum class Outcome { kGranted, kDenied, kCancelled, kExpired, kUnavailable };
+enum class Outcome { kGranted, kDenied, kCancelled, kExpired, kUnavailable, kUnverifiable, kHelperFailed };
 
 enum class Availability { kAvailable, kBackground, kNoPolkit, kPolicyMissing, kNotPermitted, kUnavailable };
 
@@ -43,6 +43,10 @@ inline const char* OutcomeName(Outcome outcome) {
       return "expired";
     case Outcome::kUnavailable:
       return "unavailable";
+    case Outcome::kUnverifiable:
+      return "unverifiable";
+    case Outcome::kHelperFailed:
+      return "helperFailed";
   }
   return "unavailable";
 }

@@ -6,6 +6,7 @@
 #include <string>
 
 #include "base/functional/callback.h"
+#include "chrome/browser/ardia/ac_reauth_linux_policy.h"
 
 class Profile;
 
@@ -13,11 +14,11 @@ namespace ardia {
 
 void ProbeReauth(base::OnceCallback<void(bool available, std::string reason)> done);
 
+using ReauthFallbackAnswer = base::OnceCallback<void(reauth_linux::Outcome)>;
+
 struct ReauthFallback {
   base::RepeatingCallback<bool()> available;
-  base::RepeatingCallback<void(Profile*, const std::u16string& purpose,
-                               base::OnceCallback<void(bool granted, bool cancelled)>)>
-      confirm;
+  base::RepeatingCallback<void(Profile*, const std::u16string& purpose, ReauthFallbackAnswer)> confirm;
 };
 
 void SetReauthFallback(ReauthFallback fallback);

@@ -15,6 +15,7 @@
 namespace {
 
 using device_reauth::DeviceAuthSource;
+using ardia::reauth_linux::Outcome;
 
 struct Result {
   std::optional<bool> granted;
@@ -355,14 +356,14 @@ struct FallbackSpy {
   bool available = true;
   int asked = 0;
   std::u16string purpose;
-  base::OnceCallback<void(bool, bool)> answer;
+  ardia::ReauthFallbackAnswer answer;
 };
 
 void InstallFallback(FallbackSpy& spy) {
   ardia::SetReauthFallback({
       base::RepeatingCallback<bool()>([&spy] { return spy.available; }),
-      base::RepeatingCallback<void(Profile*, const std::u16string&, base::OnceCallback<void(bool, bool)>)>(
-          [&spy](Profile*, const std::u16string& purpose, base::OnceCallback<void(bool, bool)> answer) {
+      base::RepeatingCallback<void(Profile*, const std::u16string&, ardia::ReauthFallbackAnswer)>(
+          [&spy](Profile*, const std::u16string& purpose, ardia::ReauthFallbackAnswer answer) {
             ++spy.asked;
             spy.purpose = purpose;
             spy.answer = std::move(answer);
@@ -382,7 +383,7 @@ void LoginPasswordStandsInOnlyWhenPolkitCantAsk() {
   dbus::SentCall check = Take(0);
   Fail(check, "org.freedesktop.PolicyKit1.Error.Failed", "Action dev.ardia.linux.reauthenticate is not registered");
   assert(spy.asked == 1 && spy.purpose == u"see passwords" && !granted.granted);
-  std::move(spy.answer).Run(true, false);
+  std::move(spy.answer).Run(Outcome::kGranted);
   assert(granted.granted == true && granted.runs == 1);
   assert(LastResult() == "granted" && ardia::emitted.back().values.at("method") == "loginPassword");
   Result remembered;
@@ -397,7 +398,7 @@ void LoginPasswordStandsInOnlyWhenPolkitCantAsk() {
   dbus::SentCall unknown = Take(0);
   Fail(unknown, "org.freedesktop.DBus.Error.ServiceUnknown");
   assert(spy.asked == 2);
-  std::move(spy.answer).Run(false, true);
+  std::move(spy.answer).Run(Outcome::kCancelled);
   assert(cancelled.granted == false && LastResult() == "cancelled");
 
   Reset();
@@ -407,7 +408,7 @@ void LoginPasswordStandsInOnlyWhenPolkitCantAsk() {
   Request(no_bus, denied);
   Pump();
   assert(spy.asked == 3 && dbus::sent_calls.empty());
-  std::move(spy.answer).Run(false, false);
+  std::move(spy.answer).Run(Outcome::kDenied);
   assert(denied.granted == false && LastResult() == "denied");
 
   Reset();
@@ -432,13 +433,13 @@ void LoginPasswordStandsInOnlyWhenPolkitCantAsk() {
   auto stale = std::move(spy.answer);
   Request(superseded, newer);
   assert(older.granted == false && older.runs == 1);
-  std::move(stale).Run(true, false);
+  std::move(stale).Run(Outcome::kGranted);
   assert(!newer.granted.has_value());
   Pump();
   dbus::SentCall second = Take(1);
   Fail(second, "org.freedesktop.DBus.Error.NameHasNoOwner");
   assert(spy.asked == 5);
-  std::move(spy.answer).Run(true, false);
+  std::move(spy.answer).Run(Outcome::kGranted);
   assert(newer.granted == true && newer.runs == 1);
 
   Reset();
@@ -451,8 +452,32 @@ void LoginPasswordStandsInOnlyWhenPolkitCantAsk() {
   Fail(last, "org.freedesktop.DBus.Error.ServiceUnknown");
   assert(unavailable.granted == false && LastResult() == "unavailable" && spy.asked == 5);
 
-  Reset();
   spy.available = true;
+  struct Unanswered {
+    Outcome answered;
+    const char* result;
+  };
+  const Unanswered unanswered[] = {
+      {Outcome::kUnverifiable, "unverifiable"},
+      {Outcome::kHelperFailed, "helperFailed"},
+  };
+  int asked = spy.asked;
+  for (const Unanswered& test : unanswered) {
+    Reset();
+    Profile profile;
+    Result left;
+    Request(profile, left);
+    Pump();
+    dbus::SentCall unknown_service = Take(0);
+    Fail(unknown_service, "org.freedesktop.DBus.Error.ServiceUnknown");
+    assert(spy.asked == ++asked);
+    std::move(spy.answer).Run(test.answered);
+    assert(left.granted == false && left.runs == 1 && LastResult() == test.result);
+    assert(ardia::emitted.back().values.at("method") == "loginPassword" &&
+           ardia::emitted.back().values.at("granted") == "false");
+  }
+
+  Reset();
   Probed probed;
   Probe(probed);
   Pump();

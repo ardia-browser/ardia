@@ -276,14 +276,8 @@ class ReauthState : public ProfileState {
     using_fallback_ = true;
     Fallback().confirm.Run(
         profile(), purpose_,
-        base::BindOnce(&ReauthState::FallbackAnswered,
-                       weak_factory_.GetWeakPtr(), generation));
-  }
-
-  void FallbackAnswered(uint64_t generation, bool granted, bool cancelled) {
-    Finish(generation, granted     ? Outcome::kGranted
-                       : cancelled ? Outcome::kCancelled
-                                   : Outcome::kDenied);
+        base::BindOnce(&ReauthState::Finish, weak_factory_.GetWeakPtr(),
+                       generation));
   }
 
   void Finish(uint64_t generation, Outcome outcome) {

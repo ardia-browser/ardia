@@ -30,7 +30,17 @@ inline constexpr size_t kMaxPasswordBytes = 512;
 inline constexpr int kHelperDeadlineMs = 15000;
 inline constexpr mode_t kWritableByOthers = 0022;
 
-enum class Verdict { kMatch, kMismatch, kFailed };
+enum class Verdict { kMatch, kMismatch, kUnverifiable, kFailed };
+
+struct HelperContext {
+  bool root = false;
+  bool no_new_privs = false;
+  bool nosuid_mount = false;
+};
+
+std::optional<std::string> WhyUnverifiable(const HelperContext& context);
+bool NoNewPrivsIn(std::string_view proc_status);
+HelperContext ReadHelperContext(const std::string& helper);
 
 template <typename Stat>
 std::optional<std::string> TrustedHelperAt(const std::string& real_path, Stat&& stat) {
@@ -60,13 +70,15 @@ std::optional<std::string> RealPath(const std::string& path);
 std::optional<std::string> FindHelper();
 std::optional<std::string> CurrentUser();
 
-Verdict VerdictForExit(std::optional<int> exit_code);
+Verdict VerdictForExit(std::optional<int> exit_code, const HelperContext& context = HelperContext());
 std::optional<std::string> UnusablePassword(std::string_view password);
 
 Verdict RunHelper(const std::string& helper,
                   const std::string& user,
                   std::string_view password,
-                  int deadline_ms = kHelperDeadlineMs);
+                  int deadline_ms = kHelperDeadlineMs,
+                  const std::optional<HelperContext>& context = std::nullopt,
+                  std::string* detail = nullptr);
 
 class Throttle {
  public:

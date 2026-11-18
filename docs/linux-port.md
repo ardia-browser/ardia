@@ -569,8 +569,9 @@ command ([linux-ci.md](linux-ci.md) › Linux releases).
     files are owned by root.
   - It copies `lib/ardia` whole, so `VERSION` and `cli/` come along.
   - It always installs the polkit policy at `<destdir>/usr/share/polkit-1/actions` (mode 0644), whatever the prefix,
-    because polkit reads actions only from there. Without the policy Ardia can't ask for the system password, so saved
-    passwords and card numbers stay hidden.
+    because every polkit version reads actions from there (polkit 126 and later also read actions from `/etc`,
+    `/run` and `/usr/local/share`). Without the policy Ardia asks for the login
+    password instead, as the AppImage does.
 - **Arch.** Copy `scripts/linux/arch/PKGBUILD` and the archive, renamed `ardia-linux-x64.tar.xz`, into an empty folder
   and run `makepkg -si` there. The package (`ardia-bin`) depends on `polkit` and installs through the same script.
   Its `pkgver()` reads the package's `VERSION`, with `-` turned into `_` (`0.2.44_nightly.3`), and falls back to
@@ -642,7 +643,9 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
 - **Kill switches.** `ArdiaShell.fetchKillSwitches` fetches `ardia.dev/switches.json` (at most 16 KiB) once per
   browser process for every window, and the shared refresh runs under the Mac's rule (automatic checks on).
 - **Telemetry.** `update_checks_asked`, `update_checks_automatic`, `update_check_failures`, `update_checks_found`,
-  `update_release_page_opens`, `kill_switch_refreshes`, `kill_switch_refresh_failures`.
+  `update_release_page_opens`, `kill_switch_refreshes`, `kill_switch_refresh_failures`,
+  `login_password_checks_granted`, `login_password_checks_denied`, `login_password_checks_cancelled`,
+  `login_password_checks_unverifiable`, `login_password_checks_helper_failed`.
 
 ### System signals and location
 
@@ -1189,8 +1192,24 @@ Linux reads calendars from Evolution Data Server, which GNOME Online Accounts, G
   - `scripts/linux/password-heap-check.mjs` types random passwords into the real dialog of a package under Xvfb and
     scans the browser process's memory, as UTF-8 and UTF-16: while typed the password must exist exactly once, text
     typed over or erased must be gone while the dialog is still open, and nothing may be left once it closes.
-  - Wrong passwords back off 2 s, 5 s, 30 s, then 60 s. The grant window and supersession are polkit's.
+  - `unix_chkpwd` reads the password database only because it is setuid or setgid, and it exits 7 both for a wrong
+    password and for a database it can't read. `RunHelper` therefore trusts exit 7 as a wrong password (`kMismatch`)
+    only when the process is root or can gain the helper's privilege. Under `no_new_privs` (a sandbox, a container,
+    a service with `NoNewPrivileges`) or with the helper on a `nosuid` mount, exit 7 is `kUnverifiable`: the dialog
+    says Ardia can't check the password in this session, and stays open for Cancel. A helper that doesn't start,
+    times out or exits with another code is `kFailed`, and the dialog says the helper didn't answer. Both messages
+    point to the Recovery Kit saved when sync was turned on, which holds the same words, since Show Code, Show Words
+    and Save Recovery Kit all wait on this confirmation.
+  - A check that gave no verdict logs `[ardia] the login password was not checked: helper <detail>` at warning level
+    (`ac_linux_password_log.cc`), where the detail is `exit N` with the reason, `timed out` or `could not start`. It
+    never holds the password.
+  - Wrong passwords back off 2 s, 5 s, 30 s, then 60 s. Only a real mismatch counts, and an unverifiable or failed
+    check doesn't. The grant window and supersession are polkit's.
   - `ProbeReauth` reports such a system as available (`loginPassword`), and `reauth.requested` says which method ran.
+  - A confirmation that is cancelled or closed after a check that gave no verdict ends as `unverifiable` or
+    `helperFailed` in `reauth.requested`'s `result`, not as `cancelled` (the last verdict the person saw wins, and a
+    later mismatch or match replaces it). The telemetry leader counts them as `login_password_checks_unverifiable`
+    and `login_password_checks_helper_failed`, which the What's Sent copy lists.
 - **Secret routes.**
   - Secrets travel only on typed calls (`ArdiaPasswords.reveal|save|update|export|unlock`,
     `ArdiaAutofill.cardNumber|saveCard`), as hex buffers sized exactly and wiped after use.

@@ -122,7 +122,7 @@ test("the auto-hidden toolbar stays shown for what's anchored in it: its menus, 
 test("no hover card starts in a window while anything is open in it, and something open in another window doesn't stop it", async () => {
   assert.deepEqual(await heldWhileOpen(({ w }) => hoverHeld(w)), {
     menuFromSidebar: true, menuFromToolbar: true, menuFromPage: true, menuElsewhere: false,
-    rename: true, renameElsewhere: false, iconPicker: true, iconPickerElsewhere: false, deletedProfileIconPicker: false, profileIconPicker: true, hoverCard: false, resize: false, resizeElsewhere: false, downloads: true,
+    rename: true, renameElsewhere: false, iconPicker: true, iconPickerElsewhere: false, deletedProfileIconPicker: false, profileIconPicker: true, hoverCard: false, resize: true, resizeElsewhere: false, downloads: true,
     popover: true, panel: true, find: true, historyMenu: true, extensionPopup: true,
   });
 });

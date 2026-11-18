@@ -7,12 +7,12 @@ import { curve, useGated } from "../ui/motion";
 import { Panel, reduceMotion, WindowBackdrop, WindowDragRegion } from "../ui";
 import { useSidebarSide, useWindowFullScreen, useWindowId } from "../../state/browser/hooks";
 import { useSidebarDockState } from "../../state/windows/hooks";
-import { useSidebarWidth } from "../../state/sidebar/hooks";
 import { useCardTopInset, useSidebarControlsRowIn, useToolbarLightsCenter } from "../../state/windows/layout";
 import { Sidebar } from "../sidebar/Sidebar";
 import { ResizeHandle } from "../sidebar/ResizeHandle";
 import { dismissHoverIn } from "../../state/sidebar/hover";
-import { sidebarUi, useSidebarUi } from "../../state/sidebar/sidebarUi";
+import { sidebarResizing } from "../../state/sidebar/sidebarUi";
+import { useSidebarResizing, useSidebarWidth, useSidebarWidthValue } from "../../state/sidebar/hooks";
 import { peekHeld, watchHolds } from "../../state/app/transientUi";
 import { noteSidebarPeek } from "../../state/telemetry/usage";
 import {
@@ -34,8 +34,8 @@ import {
   TAB_DRAG_EDGE_STRIP,
   dockMove,
   dockState,
-  dockedCardInset,
   edgeClosed,
+  sidebarCardGap,
   edgeEventReveals,
   edgeSeen,
   edgeStripOverPage,
@@ -119,8 +119,9 @@ export function DockedLayout({
   const windowId = useWindowId();
   const [open, addressBar] = useSidebarDockState(windowId);
   const right = useSidebarSide(windowId) === "right";
-  const dragWidth = useSidebarUi((u) => u.dragWidth[windowId]);
-  const width = useSidebarWidth(windowId);
+  const width = useSidebarWidth(windowId, false);
+  const liveWidth = useSidebarWidthValue(windowId);
+  const resizing = useSidebarResizing(windowId);
   const arc = addressBar && !topTabs && switchOn("sidebarSlide");
   const toolbarLights = useToolbarLightsCenter();
   const lights = addressBar && !topTabs ? ARC_LIGHTS_CENTER : toolbarLights;
@@ -128,12 +129,8 @@ export function DockedLayout({
   const frame = useCardFrame();
   const sideInset = right ? inset.right : inset.left;
   const edge = useMemo(
-    () =>
-      dock.interpolate({
-        inputRange: [0, 1],
-        outputRange: [sideInset, dockedCardInset(width, frame.inset)],
-      }),
-    [dock, width, sideInset, frame.inset],
+    () => Animated.add(sideInset, Animated.multiply(dock, Animated.add(liveWidth, sidebarCardGap(frame.inset) - sideInset))),
+    [dock, liveWidth, sideInset, frame.inset],
   );
   const hiddenTop = useCardTopInset(frame.inset);
   const top = useMemo(() => dock.interpolate({ inputRange: [0, 1], outputRange: [hiddenTop, inset.top] }), [dock, hiddenTop, inset.top]);
@@ -175,6 +172,7 @@ export function DockedLayout({
           dock={dock}
           open={open}
           width={width}
+          liveWidth={liveWidth}
           fullscreen={fullscreen}
           arc={arc}
           lights={lights}
@@ -182,7 +180,7 @@ export function DockedLayout({
           windowWidth={windowWidth}
         />
       )}
-      {dragWidth !== undefined && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { cursor: "col-resize" }]} />}
+      {resizing && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { cursor: "col-resize" }]} />}
     </>
   );
 }
@@ -191,6 +189,7 @@ function SidebarDock({
   dock,
   open,
   width,
+  liveWidth,
   fullscreen,
   arc,
   lights,
@@ -200,6 +199,7 @@ function SidebarDock({
   dock: Animated.Value;
   open: boolean;
   width: number;
+  liveWidth: Animated.Value;
   fullscreen: boolean;
   arc: boolean;
   lights: readonly [number, number];
@@ -226,7 +226,7 @@ function SidebarDock({
   };
   const closed = () => {
     arm.current = edgeClosed(arm.current);
-    if (windowId in sidebarUi().dragWidth) noteSidebarPeekClosedWhileResizing();
+    if (sidebarResizing(windowId)) noteSidebarPeekClosedWhileResizing();
     if (fullScreenPeekAt.current !== null) noteFullScreenPeekClosed(Date.now() - fullScreenPeekAt.current);
     fullScreenPeekAt.current = null;
     dismissHoverIn(windowId);
@@ -277,7 +277,7 @@ function SidebarDock({
   useEffect(() => {
     if (!open) arm.current = EDGE_DISARMED;
   }, [open]);
-  const resizing = useSidebarUi((u) => windowId in u.dragWidth);
+  const resizing = useSidebarResizing(windowId);
   useEffect(() => {
     if (resizing && peek.live) noteSidebarPeekResize();
   }, [resizing]);
@@ -293,15 +293,15 @@ function SidebarDock({
     () => peek.slide.interpolate({ inputRange: [0, 1], outputRange: [-12 * outward, width * outward] }),
     [peek.slide, width, outward],
   );
-  useSidebarLights(windowId, dock, peek.slide, { width, peeking, fullscreen, lights, right, peekAt });
+  useSidebarLights(windowId, dock, peek.slide, liveWidth, { peeking, fullscreen, lights, right, peekAt });
   const edgeSide = right ? "right" : "left";
   const sidebar = useMemo(
     () => (
       <ProfileSwipe>
-        <Sidebar width={width} />
+        <Sidebar />
       </ProfileSwipe>
     ),
-    [width],
+    [],
   );
 
   const enterStrip = () => {
@@ -354,7 +354,7 @@ function SidebarDock({
           ...(away ? { left: -10_000 } : { [edgeSide]: peeking ? peekAt.left : 0 }),
           top: peeking ? peekAt.top : 0,
           bottom: peeking ? peekAt.bottom : 0,
-          width,
+          width: liveWidth,
           transform: [{ translateX: restingPeek ? 0 : fullscreen ? -width * outward : slideOut }],
         }}
       >

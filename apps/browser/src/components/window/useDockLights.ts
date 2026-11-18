@@ -20,12 +20,12 @@ export function useTopStripLights(windowId: string, dock: Animated.Value, on: bo
 
 export type SidebarLights = { width: number; peeking: boolean; fullscreen: boolean; lights: readonly [number, number]; right: boolean; peekAt: { left: number; top: number } };
 
-export function useSidebarLights(windowId: string, dock: Animated.Value, slide: Animated.Value, o: SidebarLights) {
-  const values = useRef({ dock: 1, slide: 0 });
+export function useSidebarLights(windowId: string, dock: Animated.Value, slide: Animated.Value, width: Animated.Value, o: Omit<SidebarLights, "width">) {
+  const values = useRef({ dock: 1, slide: 0, width: 0 });
   const apply = useRef<() => void>(() => {});
   const sent = useRef<string | undefined>(undefined);
   apply.current = () => {
-    const center = slidingCenter(o, values.current.dock, values.current.slide);
+    const center = slidingCenter({ ...o, width: values.current.width }, values.current.dock, values.current.slide);
     const key = center.join(",");
     if (key === sent.current) return;
     sent.current = key;
@@ -33,17 +33,23 @@ export function useSidebarLights(windowId: string, dock: Animated.Value, slide: 
   };
   useEffect(() => {
     values.current.dock = currentValue(dock);
+    values.current.width = currentValue(width);
     const a = dock.addListener(({ value }) => {
       values.current.dock = value;
+      apply.current();
+    });
+    const w = width.addListener(({ value }) => {
+      values.current.width = value;
       apply.current();
     });
     apply.current();
     return () => {
       dock.removeListener(a);
+      width.removeListener(w);
       sent.current = undefined;
       void setTrafficLightsCenter(windowId, null);
     };
-  }, [windowId, dock]);
+  }, [windowId, dock, width]);
   useEffect(() => {
     if (!o.peeking) return;
     const b = slide.addListener(({ value }) => {
@@ -52,7 +58,7 @@ export function useSidebarLights(windowId: string, dock: Animated.Value, slide: 
     });
     return () => slide.removeListener(b);
   }, [slide, o.peeking]);
-  useEffect(() => apply.current(), [o.width, o.peeking, o.fullscreen, o.lights, o.right, o.peekAt.left, o.peekAt.top]);
+  useEffect(() => apply.current(), [o.peeking, o.fullscreen, o.lights, o.right, o.peekAt.left, o.peekAt.top]);
 }
 
 export function slidingCenter(o: SidebarLights, dock: number, slide: number) {

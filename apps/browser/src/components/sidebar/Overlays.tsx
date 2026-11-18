@@ -13,7 +13,7 @@ import { sameSize, useSettled, type Size } from "../ui/useSettled";
 
 export function SidebarOverlays({ windowWidth }: { windowWidth: number }) {
   const windowId = useWindowId();
-  const sidebarWidth = useSidebarWidth(windowId);
+  const sidebarWidth = useSidebarWidth(windowId, false);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const settleSize = useSettled((next: Size) => setSize((prev) => (sameSize(prev, next) ? prev : next)));
   useEffect(startSidebarEffects, []);

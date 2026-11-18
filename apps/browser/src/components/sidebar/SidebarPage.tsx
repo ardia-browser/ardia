@@ -8,7 +8,7 @@ import { SidebarTextScope } from "./SidebarTextScope";
 import { ThemeScope } from "../window/ThemeScope";
 import { PageProfileContext, useSettings, useWindowId } from "../../state/browser/hooks";
 import { newTab } from "../../state/tabs/actions";
-import { useSidebarCells } from "../../state/sidebar/hooks";
+import { useSidebarCells, useSidebarResizing, useSidebarWidth, useSidebarWidthAs } from "../../state/sidebar/hooks";
 import { useSidebarField, useSidebarPart } from "../../state/sidebar/chrome";
 import { SIDEBAR_PLAYER_HEIGHT, SidebarPlayer, usePlayerMotion, useSidebarPlayerTab } from "../media/SidebarPlayer";
 import { usePageStyle } from "../../state/windows/profilePager";
@@ -17,7 +17,7 @@ import { DragPage, DragScope, useDragController, useDragging, usePinnedCount } f
 import { openSidebarMenu } from "../../state/sidebar/menus";
 import { noteRowsScrolled } from "../../state/sidebar/hover";
 import { PinnedGrid } from "./PinnedGrid";
-import { pinGridHeight } from "./pinZone";
+import { narrowestWithSameColumns, pinGridHeight } from "./pinZone";
 import { SCROLL_EDGE, ScrollEdgeLine, useScrollEdge, useScrollEdgeBelow } from "./ScrollEdge";
 import { listTopGap, sidebarHeaderOf, toolbarEdgeLift } from "./geometry";
 import { useAddressBarInSidebar, usePageFrameInset, useToolbarLightsCenter } from "../../state/windows/layout";
@@ -38,7 +38,6 @@ type PageProps = {
   profileId: string;
   slot: number;
   paging: boolean;
-  width: number;
   current: boolean;
   resting: boolean;
   dockAbove: number;
@@ -49,11 +48,12 @@ type PageProps = {
   onScrollY: (y: number) => void;
 };
 
-export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, width, current, resting, dockAbove, height, rows, geometry, onScrollView, onScrollY }: PageProps) {
+export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, current, resting, dockAbove, height, rows, geometry, onScrollView, onScrollY }: PageProps) {
   const windowId = useWindowId();
   const topGap = listTopGap(useSidebarField() === "top");
   const pinnedShown = useSidebarPart("pinned");
   const newTabShown = useSidebarPart("newTab");
+  const width = useSidebarWidth(windowId, false);
   const pageStyle = usePageStyle(windowId, slot, width);
   const sharedTiles = useSharedTilesStyle(windowId, slot, width, paging);
   const [lazy] = useState(() => switchOn("lazySidebarRows"));
@@ -64,17 +64,19 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
     return () => cancelAnimationFrame(frame);
   }, [beside]);
   const offScreen = beside && !current;
+  const besideResize = useSidebarResizing(windowId, !current);
+  const hidden = resting || besideResize;
   const playerTab = useSidebarPlayerTab(windowId, profileId, current);
   const playerHeight = playerTab ? SIDEBAR_PLAYER_HEIGHT : 0;
   const playerMotion = usePlayerMotion();
   const cells = useSidebarCells(windowId, profileId, offScreen);
   const tiles = pinnedShown ? cells : NONE;
-  const innerWidth = width - layout.sidebarInset * 2;
+  const columnsWidth = useSidebarWidthAs(windowId, (w) => narrowestWithSameColumns(w - layout.sidebarInset * 2), current);
   const dragging = useDragging() && current;
   const previewed = usePinnedCount(tiles);
   const dockRoom = height ? (height - playerHeight) * DOCK_SHARE - topGap - SCROLL_EDGE.gap - SCROLL_EDGE.line : Infinity;
   const balanced = useSettings((st) => st.balancedTopApps);
-  const gridHeight = (count: number) => pinGridHeight(count, innerWidth, layout.pinnedHeight, balanced);
+  const gridHeight = (count: number) => pinGridHeight(count, columnsWidth, layout.pinnedHeight, balanced);
   const fits = tilesFitDock({ tiles: tiles.length, gridHeight, dockRoom });
   const fixedBeforeDrag = useRef(true);
   useLayoutEffect(() => {
@@ -170,7 +172,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
   return (
     <Animated.View
       pointerEvents={current ? "auto" : "none"}
-      style={{ position: "absolute", top: 0, bottom: 0, left: 0, width, display: resting ? "none" : "flex", ...pageStyle }}
+      style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: 0, display: hidden ? "none" : "flex", ...pageStyle }}
     >
       <PageProfileContext.Provider value={profileId}>
         <ThemeScope page>
@@ -181,7 +183,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
                 <Animated.View style={[{ paddingHorizontal: layout.sidebarInset }, capped ? { maxHeight: topGap + dockRoom, overflow: "hidden" } : null, dockFixed ? sharedTiles : null]}>
                   {dockFixed ? (
                     <DragScope enabled={current}>
-                      <PinnedGrid tabs={fixedTiles} innerWidth={innerWidth} />
+                      <PinnedGrid tabs={fixedTiles} current={current} />
                     </DragScope>
                   ) : null}
                 </Animated.View>
@@ -214,7 +216,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
                           scrollEdgeBelow.measure({ content });
                           selectedRow.relocate();
                         }}
-                        contentContainerStyle={{ flexGrow: 1, width, paddingHorizontal: layout.sidebarInset, paddingTop: LIST_PAD, paddingBottom: docked ? GLOW_ROOM : 0 }}
+                        contentContainerStyle={{ flexGrow: 1, width: "100%", paddingHorizontal: layout.sidebarInset, paddingTop: LIST_PAD, paddingBottom: docked ? GLOW_ROOM : 0 }}
                       >
                         <PageRows
                           windowId={windowId}
@@ -225,7 +227,6 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
                           offScreen={offScreen}
                           tiles={scrolledTiles}
                           underDockedTiles={fixedTiles.length > 0}
-                          innerWidth={innerWidth}
                           inlineNewTab={inlineNewTab}
                           controller={liveDrag}
                           geometry={geometry}

@@ -4,7 +4,7 @@ import { useBrowser } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { useExtensions } from "../extensions/store";
 import { pointerOnCard } from "../sidebar/hover";
-import { sidebarUi, useSidebarUi } from "../sidebar/sidebarUi";
+import { sidebarResizing, sidebarUi, useSidebarResize, useSidebarUi } from "../sidebar/sidebarUi";
 import { profileIconPickerIn, useProfileIconPicker } from "../profiles/iconPicker";
 import { useHistoryMenu } from "../tabs/navigation";
 import { usePages } from "../tabs/pageState";
@@ -22,6 +22,7 @@ type MenuOrigin = { windowId: string; sidebar: boolean; toolbarTabs: string[] };
 
 const onBrowser: Watch = (changed) => useBrowser.subscribe(changed);
 const onSidebarUi: Watch = (changed) => useSidebarUi.subscribe(changed);
+const onSidebarResize: Watch = (changed) => useSidebarResize.subscribe(changed);
 const onProfileIconPicker: Watch = (changed) => useProfileIconPicker.subscribe(changed);
 const onPages: Watch = (changed) => usePages.subscribe(changed);
 const onHistoryMenu: Watch = (changed) => useHistoryMenu.subscribe(changed);
@@ -54,7 +55,7 @@ const SURFACES: Record<Surface, { open: (at: Where) => boolean; watch: Watch[] }
   rename: { open: (at) => sidebarUi().renaming?.windowId === at.windowId, watch: [onSidebarUi] },
   iconPicker: { open: (at) => sidebarUi().iconPicker?.windowId === at.windowId || profileIconPickerIn(at.windowId), watch: [onSidebarUi, onProfileIconPicker, onBrowser] },
   hoverCard: { open: (at) => sidebarUi().hover?.windowId === at.windowId && pointerOnCard(), watch: [onSidebarUi] },
-  resize: { open: (at) => at.windowId in sidebarUi().dragWidth, watch: [onSidebarUi] },
+  resize: { open: (at) => sidebarResizing(at.windowId), watch: [onSidebarResize] },
   downloads: { open: (at) => !!browser().windowUi[at.windowId]?.downloadsOpen, watch: [onBrowser] },
   panel: { open: (at) => !!browser().windowUi[at.windowId]?.panel.open, watch: [onBrowser] },
   popover: { open: (at) => Object.entries(usePages.getState().popover).some(([id, open]) => !!open && at.tab(id)), watch: [onPages, onBrowser] },
@@ -67,7 +68,7 @@ export const HOLDS: Record<Held, { chrome: Chrome | null; surfaces: Surface[] }>
   peek: { chrome: "sidebar", surfaces: ["menu", "rename", "iconPicker", "hoverCard", "resize", "downloads", "popover", "historyMenu"] },
   topStrip: { chrome: null, surfaces: ["menu", "downloads"] },
   toolbar: { chrome: "toolbar", surfaces: ["menu", "panel", "find", "popover", "historyMenu", "extensionPopup"] },
-  hover: { chrome: null, surfaces: ["menu", "rename", "iconPicker", "downloads", "popover", "panel", "find", "historyMenu", "extensionPopup"] },
+  hover: { chrome: null, surfaces: ["menu", "rename", "iconPicker", "resize", "downloads", "popover", "panel", "find", "historyMenu", "extensionPopup"] },
 };
 
 const noTab = () => false;

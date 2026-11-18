@@ -4,7 +4,7 @@ import { consentToken } from "../telemetry/client";
 import { noteSidebarHoverHeld, noteSidebarScrolled } from "../telemetry/sidebarScrollCounts";
 import { sidebarSliding, useDockMotion } from "../windows/dockMotion";
 import { cardReach, pointInRect, type Point, type Rect } from "./hoverAim";
-import { measureRow, setSidebarUi, sidebarUi, type Target } from "./sidebarUi";
+import { measureRow, setSidebarUi, sidebarUi, useSidebarResize, type Target } from "./sidebarUi";
 
 export type HoverPointerEvent = { nativeEvent?: { screenX?: unknown; screenY?: unknown } } | undefined;
 type Row = { windowId: string; id: string };
@@ -19,6 +19,9 @@ useDockMotion.subscribe((m, prev) => {
   if (m.peeks === prev.peeks) return;
   for (const id of Object.keys(m.peeks)) if (!(id in prev.peeks)) peekArrivedAt.set(id, Date.now());
   for (const id of [...peekArrivedAt.keys()]) if (!(id in m.peeks)) peekArrivedAt.delete(id);
+});
+useSidebarResize.subscribe((r, prev) => {
+  for (const id of Object.keys(r.widths)) if (!(id in prev.widths)) dismissHoverIn(id);
 });
 const sliding = (windowId: string) => sidebarSliding(windowId) || Date.now() - (peekArrivedAt.get(windowId) ?? -Infinity) < PEEK_ARRIVAL_MS;
 const timers: Record<keyof typeof DELAY_MS, ReturnType<typeof setTimeout> | undefined> = { show: undefined, hide: undefined, aim: undefined };

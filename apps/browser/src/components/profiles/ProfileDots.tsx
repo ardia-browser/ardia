@@ -5,12 +5,13 @@ import { switchProfile } from "../../state/browser/actions";
 import { noteSwitcherPress } from "../../state/telemetry/switcherPresses";
 import { layout, useTheme } from "../ui/theme";
 import { useIsIncognito, useProfile, useSettings } from "../../state/browser/hooks";
+import { useSidebarWidthAs } from "../../state/sidebar/hooks";
 import { useProfileOrder, useProfileRecords } from "../../state/profiles/hooks";
 import { useNativePagerPosition, usePagerPages, type PagerPage } from "../../state/windows/profilePager";
 import { ContextMenuArea, useHover } from "../ui";
 import { TooltipAbove } from "../ui/TooltipAbove";
 import { SIDEBAR_FOOTER_DOWNLOADS } from "../sidebar/geometry";
-import { switcherCellWidth, switcherIcons, SwitcherMark } from "./ProfileIcons";
+import { switcherCellWidth, switcherIconsWidth, SwitcherMark } from "./ProfileIcons";
 import { openProfileItemMenu } from "./profileMenu";
 import { profileSwitcher } from "./tokens";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
@@ -27,11 +28,12 @@ export function useProfileDotsShown() {
   return enabled && !incognito && count > 1;
 }
 
-export function ProfileDots({ windowId, width, besideDownloads }: { windowId: string; width: number; besideDownloads: boolean }) {
+export function ProfileDots({ windowId, besideDownloads }: { windowId: string; besideDownloads: boolean }) {
   const ids = useProfileOrder(useShallow((o) => o));
   const saved = useProfileRecords(useShallow((profiles) => ids.map((id) => profiles[id]?.icon ?? null)));
   const shown = useSettings((s) => s.profileSwitcherIcons);
-  const icons = switcherIcons(saved, shown, width - 2 * (besideDownloads ? SIDE_ROOM_BESIDE_DOWNLOADS : SIDE_ROOM));
+  const fits = useSidebarWidthAs(windowId, (width) => switcherIconsWidth(saved) <= width - 2 * (besideDownloads ? SIDE_ROOM_BESIDE_DOWNLOADS : SIDE_ROOM));
+  const icons = shown && fits ? saved : saved.map(() => null);
   const { pages, pager } = usePagerPages(windowId);
   return (
     <View style={{ height: PROFILE_DOTS_HEIGHT, alignItems: "center" }}>

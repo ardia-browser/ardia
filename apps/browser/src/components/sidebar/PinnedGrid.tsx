@@ -16,6 +16,7 @@ import { useDragController, useDragging, useDragItem, useDropPins, useFolderTarg
 import { FolderTile } from "./FolderTile";
 import { useRowHover } from "./hoverController";
 import { pinGrid, pinGridHeight, TILE_GAP } from "./pinZone";
+import { useSidebarWidth } from "../../state/sidebar/hooks";
 import { registerRow } from "../../state/sidebar/sidebarUi";
 import { FolderDropRing, TileFace, useSlotPosition } from "./TileFace";
 import { folderIdOfCell } from "../../state/pins/tileFolders";
@@ -23,8 +24,9 @@ import { useSidebarTokens } from "./tokens";
 import { TabPressArea } from "./TabPressArea";
 import { entryKey } from "../../state/sidebar/entryKey";
 
-export const PinnedGrid = memo(function PinnedGrid({ tabs, innerWidth, flush = false }: { tabs: string[]; innerWidth: number; flush?: boolean }) {
+export const PinnedGrid = memo(function PinnedGrid({ tabs, current, flush = false }: { tabs: string[]; current: boolean; flush?: boolean }) {
   const controller = useDragController();
+  const innerWidth = useSidebarWidth(useWindowId(), current) - layout.sidebarInset * 2;
   const count = usePinnedCount(tabs);
   const balanced = useSettings((st) => st.balancedTopApps);
   const { columns, width } = pinGrid(count, innerWidth, balanced);

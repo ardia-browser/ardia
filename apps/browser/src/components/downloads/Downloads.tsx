@@ -272,7 +272,7 @@ function DownloadRow({ d, windowId }: { d: Download; windowId: string }) {
 export function DownloadMagnet() {
   const windowId = useWindowId();
   const sidebarOpen = useSidebarOpen();
-  const sidebarWidth = useSidebarWidth(windowId);
+  const sidebarWidth = useSidebarWidth(windowId, false);
   const topStrip = useTabLayout() === "top";
   const right = useSidebarSide(windowId) === "right";
   const addressBar = useDownloadsInSidebarFooter();

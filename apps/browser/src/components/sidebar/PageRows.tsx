@@ -34,7 +34,6 @@ type PageRowsProps = {
   offScreen: boolean;
   tiles: string[];
   underDockedTiles: boolean;
-  innerWidth: number;
   inlineNewTab: boolean;
   controller: ReturnType<typeof useDragController>;
   geometry: RefObject<SidebarGeometry> | undefined;
@@ -45,7 +44,7 @@ type PageRowsProps = {
 
 const DOCKED_TILES_GAP = SCROLL_EDGE.gap + SCROLL_EDGE.line + SCROLL_EDGE.inset;
 
-export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, tiles, underDockedTiles, innerWidth, inlineNewTab, controller, geometry, regions, viewport, onListHeight }: PageRowsProps) {
+export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, tiles, underDockedTiles, inlineNewTab, controller, geometry, regions, viewport, onListHeight }: PageRowsProps) {
   const [captured] = useState(newCapture);
   const { list: all } = useCapturedSidebarEntries(windowId, profileId, captured);
   const [mountedRows, setMountedRows] = useState(() => firstPaintEntriesNow(windowId, profileId, all, lazy));
@@ -85,7 +84,7 @@ export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, 
         {isIncognitoProfile(profileId) ? <IncognitoBadge /> : null}
         {tiles.length ? (
           <DragScope enabled={current}>
-            <PinnedGrid tabs={tiles} innerWidth={innerWidth} flush />
+            <PinnedGrid tabs={tiles} current={current} flush />
           </DragScope>
         ) : null}
         <View

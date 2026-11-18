@@ -29,6 +29,7 @@
   #filtered { position: fixed; inset: 40px; background: #fff; filter: opacity(0); }
   #fading { position: fixed; inset: 40px; background: #fff; transition: opacity 300ms; }
   #fading.closing { opacity: 0; }
+  #profile { position: fixed; inset: 120px; background: #fff; }
 </style>
 </head>
 <body>
@@ -67,6 +68,7 @@
 <div inert><dialog id="locked" aria-label="Locked in">Locked in <button>OK</button></dialog></div>
 <div id="filtered" role="dialog" aria-modal="true" aria-label="Filtered" hidden><button>Filtered</button></div>
 <div id="fading" role="dialog" aria-modal="true" aria-label="Newsletter" hidden>Newsletter <button id="fade-close">Close</button></div>
+<div id="profile" role="dialog" aria-label="Edit profile" hidden>Edit profile <button>Save</button></div>
 <script>
   const state = { clicked: [] };
   const record = (id) => { state.clicked.push(id); document.getElementById("report").textContent = JSON.stringify(state); };

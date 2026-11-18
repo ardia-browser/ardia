@@ -757,8 +757,15 @@ DOM_CLICK = """(el) => {
     for (; node; node = node.parentNode || node.host) if (node === outer) return true;
     return false;
   };
+  const shutOutBy = (dialog) => {
+    for (let node = el; node; node = node.parentNode || node.host) {
+      if (node.nodeType === 1 && (node.inert || node.getAttribute("aria-hidden") === "true") && !within(node, dialog) && within(node.parentNode, dialog)) return true;
+    }
+    return false;
+  };
   const modals = el.checkVisibility && CSS.supports("selector(:modal)")
-    ? [...document.querySelectorAll("dialog:modal, [aria-modal=true]")].filter((modal) => !/opacity\\(0\\)/.test(getComputedStyle(modal).filter))
+    ? [...document.querySelectorAll("dialog:modal, [aria-modal=true], [role=dialog]:not([aria-modal]), [role=alertdialog]:not([aria-modal])")]
+      .filter((modal) => (modal.matches("dialog:modal, [aria-modal=true]") || shutOutBy(modal)) && !/opacity\\(0\\)/.test(getComputedStyle(modal).filter))
     : [];
   const owner = (node) => modals.filter((modal) => within(modal, node)).pop();
   const ownerAt = (x, y) => {

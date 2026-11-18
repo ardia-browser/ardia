@@ -368,11 +368,12 @@ so one closed by clipping, collapsing, sliding off screen, `inert` or `pointer-e
 one faded to `opacity: 0` or `filter: opacity(0)`, and one whose only visible part comes after its first 200
 elements isn't seen. An open dialog hit at a point inside
 another one's box is above it. Of open dialogs that don't overlap, the one holding focus takes the click, or any of
-them when none does, and the error names the focused one or the last in the document. Only a
-`<dialog>` opened with `showModal()` and an element marked `aria-modal="true"` are recognised. These aren't, so the
-click goes through them as before: `role="dialog"` or `role="alertdialog"` without `aria-modal` (Radix, MUI 5, React
-Aria Components), a modal in a parent frame, a modal in a child iframe over a target in the parent, and a modal
-element inside a shadow root (a shadow host can itself be the modal). A menu portaled out of the dialog counts as outside it. If the element is still covered it fails with
+them when none does, and the error names the focused one or the last in the document. A
+`<dialog>` opened with `showModal()`, an element marked `aria-modal="true"`, and a `role="dialog"` or
+`role="alertdialog"` without `aria-modal` while the branch of the page holding the target is marked `aria-hidden="true"`
+or `inert` beside it (how Radix, MUI 5 and React Aria Components open a modal) are recognised; a carousel's own hidden
+slide doesn't make a dialog modal. These aren't, so the click goes through them as before: a modal in a parent frame,
+a modal in a child iframe over a target in the parent, and a modal element inside a shadow root (a shadow host can itself be the modal). A menu portaled out of the dialog counts as outside it. If the element is still covered it fails with
 `covered by <tag#id.class>`, and one outside the laid-out viewport with `outside_viewport` (the point and the viewport
 size). A tab with no size yet (0×0, seen on a loaded hidden test instance) is waited for up to 2 s, then given a
 1280×800 device metrics override for that command, cleared afterwards and never over the session's own `set viewport`;

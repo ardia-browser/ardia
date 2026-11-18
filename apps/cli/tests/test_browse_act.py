@@ -295,6 +295,21 @@ class ActInChrome(unittest.TestCase):
         self.browse("click", "#open-modal")
         self.assert_held_back("#s2", "Cookie settings")
 
+    def test_an_off_page_slide_is_not_clicked_through_a_dialog_that_hides_the_rest_of_the_page(self):
+        self.open_carousel_modal()
+        self.value("document.getElementById('app').setAttribute('aria-hidden', 'true'), reveal('profile')")
+        self.assert_held_back("#s2", "Edit profile")
+
+    def test_an_off_page_slide_is_not_clicked_through_a_dialog_that_makes_the_rest_of_the_page_inert(self):
+        self.open_carousel_modal()
+        self.value("document.getElementById('app').inert = true, reveal('profile')")
+        self.assert_held_back("#s2", "Edit profile")
+
+    def test_an_off_page_slide_its_carousel_hides_from_screen_readers_gets_a_dom_click_beside_a_non_modal_dialog(self):
+        self.open_carousel_modal()
+        self.value("document.getElementById('s2').setAttribute('aria-hidden', 'true'), 'ok'")
+        self.assert_dom_clicked("#s2", "s2")
+
     def test_an_off_page_slide_inside_the_open_modal_dialog_gets_a_dom_click(self):
         self.open_carousel_modal()
         self.browse("click", "#open-modal")

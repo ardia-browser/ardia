@@ -4,10 +4,14 @@
 #include <string>
 #include <string_view>
 
+#include "base/files/file_path.h"
 #include "base/no_destructor.h"
+#include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/values.h"
 #include "chrome/browser/ardia/ac_cli_token_policy_internal.h"
+#include "content/public/common/url_constants.h"
+#include "url/gurl.h"
 
 namespace ardia {
 namespace cli_token_policy_internal {
@@ -89,6 +93,7 @@ const std::set<std::string_view>& AllowedMethods() {
       "DOM.requestNode",
       "DOM.resolveNode",
       "DOM.scrollIntoViewIfNeeded",
+      "DOM.setFileInputFiles",
       "Emulation.clearDeviceMetricsOverride",
       "Emulation.setDeviceMetricsOverride",
       "Input.dispatchDragEvent",
@@ -184,6 +189,61 @@ bool EditingCommandsAllowed(const base::Value* commands) {
     }
   }
   return true;
+}
+
+bool FileInputFilesAllowed(const base::Value* files) {
+  if (!files || !files->is_list()) {
+    return false;
+  }
+  for (const base::Value& file : files->GetList()) {
+    if (!file.is_string() || file.GetString().empty() ||
+        file.GetString().find('\0') != std::string::npos) {
+      return false;
+    }
+    const base::FilePath path =
+        base::FilePath::FromUTF8Unsafe(file.GetString());
+    if (!path.IsAbsolute() || path.ReferencesParent()) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool DragDataCarriesFiles(const base::DictValue* data) {
+  if (!data) {
+    return false;
+  }
+  if (data->Find("files")) {
+    return true;
+  }
+  const base::ListValue* items = data->FindList("items");
+  if (!items) {
+    return false;
+  }
+  for (const base::Value& item : *items) {
+    const base::DictValue* entry = item.GetIfDict();
+    const std::string* mime_type =
+        entry ? entry->FindString("mimeType") : nullptr;
+    const std::string* text = entry ? entry->FindString("data") : nullptr;
+    if (!mime_type || !text ||
+        !base::EqualsCaseInsensitiveASCII(*mime_type, "text/uri-list")) {
+      continue;
+    }
+    for (std::string_view line : base::SplitStringPiece(
+             *text, "\r\n", base::KEEP_WHITESPACE, base::SPLIT_WANT_NONEMPTY)) {
+      if (line.starts_with('#')) {
+        continue;
+      }
+      GURL url(line);
+      while (url.SchemeIs(content::kViewSourceScheme)) {
+        url = GURL(url.GetContent());
+      }
+      if (url.SchemeIsFile()) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 }

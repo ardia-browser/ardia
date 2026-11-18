@@ -36,12 +36,15 @@ inline constexpr size_t kMaxPending = 4096;
 const std::set<std::string_view>& AllowedMethods();
 bool NeedsResponse(const std::string& method, const base::DictValue& params);
 bool EditingCommandsAllowed(const base::Value* commands);
+bool FileInputFilesAllowed(const base::Value* files);
+bool DragDataCarriesFiles(const base::DictValue* data);
 
 bool IsWebUrl(const GURL& url);
 bool IsWebDestination(std::string_view spec);
 bool IsWebFrame(content::RenderFrameHost* frame);
 bool IsPendingWebFrameHost(content::DevToolsAgentHost* host);
 bool IsWebHost(content::DevToolsAgentHost* host);
+bool IsWebDocumentHost(content::DevToolsAgentHost* host);
 bool IsWebTarget(const std::string* target_id);
 bool IsOffscreenTarget(const std::string* target_id);
 
@@ -67,6 +70,7 @@ class TokenClient : public ArdiaDevToolsTokenClient {
   bool ShouldClose() const override;
   bool MayAttachToURL(const GURL& url, bool is_webui) override;
   bool MayAttachToRenderFrameHost(content::RenderFrameHost* frame) override;
+  bool MayReadLocalFiles() override;
 
  private:
   struct Contexts {

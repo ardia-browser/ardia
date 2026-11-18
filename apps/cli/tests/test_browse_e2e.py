@@ -1982,12 +1982,22 @@ class BrowseTokenPath(unittest.TestCase):
         self.assertEqual(self.size(alive), "390x844")
         self.browse("close", session=watcher, check=False)
 
+    def test_upload_hands_the_named_files_to_the_page(self):
+        session = "token-upload"
+        self.browse("open", self.url("upload.html"), session=session)
+        done = self.browse("upload", "#files", str(FIXTURES / "upload-a.txt"), str(FIXTURES / "upload-b.txt"), session=session)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(self.browse("wait", "--text", "read:upload-a.txt=first file|upload-b.txt=second file", session=session).returncode, 0)
+        self.assertEqual(self.browse("get", "text", "#events", session=session).stdout, "input change\n")
+        missing = self.browse("upload", "#files", str(SCRATCH / "no-such-file.txt"), session=session, check=False)
+        self.assertEqual(missing.returncode, 1)
+        self.assertIn("No such file", missing.stderr)
+
     def test_gated_commands_name_the_refused_method(self):
         session = "token-gated"
         self.browse("open", self.url("login.html"), session=session)
         for args, method in ((["cookies"], "Network.getCookies"), (["network", "route", "*", "--abort"], "Fetch.enable"),
-                             (["set", "geo", "1", "2"], "Emulation.setGeolocationOverride"), (["trace", "start"], "Tracing.start"),
-                             (["upload", "#email", str(FIXTURES / "login.html")], "DOM.setFileInputFiles")):
+                             (["set", "geo", "1", "2"], "Emulation.setGeolocationOverride"), (["trace", "start"], "Tracing.start")):
             done = self.browse(*args, session=session, check=False)
             self.assertEqual(done.returncode, 1, args)
             self.assertIn(f"needs {method}", done.stderr)

@@ -1,0 +1,25 @@
+<!doctype html>
+<html><head><title>Fixture Upload</title></head>
+<body>
+<main>
+<h1>Upload</h1>
+<label for="files">Screenshots</label><input id="files" type="file" multiple>
+<p id="events"></p>
+<p id="out"></p>
+</main>
+<script>
+const input = document.getElementById("files");
+const seen = [];
+for (const type of ["input", "change"]) {
+  input.addEventListener(type, () => {
+    seen.push(type);
+    document.getElementById("events").textContent = seen.join(" ");
+  });
+}
+input.addEventListener("change", async () => {
+  const read = await Promise.all([...input.files].map(async (file) => `${file.name}=${(await file.text()).trim()}`));
+  document.getElementById("out").textContent = `read:${read.join("|")}`;
+});
+</script>
+</body>
+</html>

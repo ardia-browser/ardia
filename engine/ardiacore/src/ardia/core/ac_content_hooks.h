@@ -146,6 +146,7 @@ class ArdiaDevToolsTokenClient {
   virtual bool MayAttachToURL(const GURL& url, bool is_webui) = 0;
   virtual bool MayAttachToRenderFrameHost(
       content::RenderFrameHost* render_frame_host) = 0;
+  virtual bool MayReadLocalFiles() = 0;
 };
 
 extern std::unique_ptr<ArdiaDevToolsTokenClient> (*g_ardia_devtools_token_client)(

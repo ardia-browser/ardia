@@ -926,6 +926,20 @@ can't be saved (`flow_not_get`), and GraphQL over GET works only when its URL va
 - **`flow list [site]`, `flow show <name> [--site s]`, `flow rm <name> [--site s]`** run without the browser; a name
   saved for several sites needs `--site`.
 
+### Uploading files
+
+`upload <sel> <files...>` sets a file input's files the way its file dialog would, and the page gets its `input` and
+`change` events, so a site's own upload flow (a store listing's screenshots, an attachment) runs without a native
+picker. Paths are resolved against the current directory and must be regular files. On the token path the engine
+allows `DOM.setFileInputFiles` (an Ardia whose engine predates that refuses it, and the command fails with
+`policy_refused`), with two checks in `ac_cli_token_policy.cc`: the session must be attached to a web page or
+frame (`on that target`), and every path must be absolute with no `..` component (`with those files`). Chrome then
+grants that page's renderer read access to exactly the files named, nothing else. Since the token connection now
+answers yes to `MayReadLocalFiles`, the policy refuses `Input.dispatchDragEvent` when its data carries files or a
+`file:` URL in a `text/uri-list` item (`with files`), as Chrome does for clients that can't read local files; every
+other way to a local file stays shut (navigation takes only web destinations, and `DOM.getFileInfo` and
+`Network.loadNetworkResource` aren't on the list).
+
 ### Gated by the token policy
 
 The engine's ardia-command policy (`ac_cli_token_policy_methods.cc`) refuses these methods, so on the real connection
@@ -940,7 +954,6 @@ only change needed.
 | `set device\|geo\|media` | `Emulation.setTouchEmulationEnabled`, `Emulation.setUserAgentOverride`, `Emulation.setGeolocationOverride`, `Emulation.setEmulatedMedia` |
 | `set offline`, `set headers` | `Network.emulateNetworkConditions`, `Network.setExtraHTTPHeaders` |
 | `set credentials`, `network route\|unroute` | `Fetch.enable` (and `Fetch.fulfillRequest`, `failRequest`, `continueRequest`) |
-| `upload` | `DOM.setFileInputFiles` |
 | `download <sel> <path>`, `wait --download [path]` | `Browser.setDownloadBehavior` (`wait --download` waits for the next download that starts after it; `download` clicks and saves) |
 | `highlight` | `Overlay.enable`, `Overlay.highlightNode` |
 | `clipboard copy\|paste` | `Input.dispatchKeyEvent` with the `copy`/`paste` editing commands |
@@ -962,6 +975,8 @@ The policy also refuses some uses of methods it allows (`ac_cli_token_policy.cc`
 | `without flatten` | `Target.attachToTarget`, `setAutoAttach` | The command always sends `flatten`, so this is a bug in it |
 | `to that URL`, `in another browser context` | `Target.createTarget`, `Page.navigate` | Only http, https, data and about:blank pages, in the user's own profile |
 | `in that execution context`, `on that object` | `Runtime.*`, `DOM.*` | A context or object the connection didn't make |
+| `on that target`, `with those files` | `DOM.setFileInputFiles` | The session isn't on a web page or frame, or a path isn't absolute or has a `..` in it |
+| `with files` | `Input.dispatchDragEvent` | A drag can't carry local files; use `upload` on the page's file input |
 | `on a tab the ardia command didn't open`, `on a tab that isn't off-screen`, `with that option` | `Emulation.setDeviceMetricsOverride`, `clearDeviceMetricsOverride` | The viewport override is for tabs the command opened (below), with a width, height, scale and `mobile` only |
 | `in a named world`, `as a stream`, `with the command line API`, `without a button`, `with those editing commands` | `Page.addScriptToEvaluateOnNewDocument`, `Page.printToPDF`, `Runtime.evaluate`, `Input.dispatchMouseEvent`, `Input.dispatchKeyEvent` | That option isn't allowed |
 

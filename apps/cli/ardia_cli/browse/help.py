@@ -30,7 +30,7 @@ Core Commands:
   check <sel> / uncheck <sel>  Set a checkbox
   select <sel> <val...>      Pick option(s): a <select>, or a combobox/typeahead (types, picks the match)
   drag <src> <dst>           Drag onto dst's far half, taking its place [--before|--after]
-  upload <sel> <files...>    Upload files                        (gated, see below)
+  upload <sel> <files...>    Set a file input's files from local paths
   download <sel> <path>      Download by clicking element        (gated)
   scroll [dir] [px]          Scroll (up/down/left/right, default down 300) [-s <sel>]
   scrollintoview <sel>       Scroll element into view
@@ -362,7 +362,8 @@ COMMANDS = {
              "Raw mouse input at viewport coordinates; a held button stays down until `mouse up`.",
     "keydown": "ardia browse keydown <key> | keyup <key>\n\nHolds a key down until keyup (keys and modifiers as press).",
     "keyup": "ardia browse keyup <key>\n\nReleases a key held with keydown.",
-    "upload": "ardia browse upload <sel> <files...>\n\nSets the files of a file input (gated: DOM.setFileInputFiles).",
+    "upload": "ardia browse upload <sel> <files...>\n\nSets the files of a file input, as if they were picked in its file dialog, and fires its input and change events.\n"
+              "Paths are local files, relative to the current directory; the page gets read access to exactly those files.",
     "download": "ardia browse download <sel> <path>\n\nClicks the element and saves the download it starts to path (gated).",
     "cookies": "ardia browse cookies [get] | set <name> <value> [--url u] [--domain d] [--path p] [--httpOnly] [--secure]\n"
                "  [--sameSite Strict|Lax|None] [--expires epoch] | set --curl <file> | clear\n\n"

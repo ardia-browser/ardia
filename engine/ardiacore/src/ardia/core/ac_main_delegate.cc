@@ -343,6 +343,7 @@ std::optional<int> ACMainDelegate::BasicStartupComplete() {
                 "GlicZeroStateSuggestions,SettingsGlowupJourneys");
   if (!command_line->HasSwitch(switches::kProcessType)) {
     g_ardia_background_instance = BackgroundInstance();
+    g_ardia_push_messaging = command_line->HasSwitch(kPushMessagingSwitch);
     DecideTestGateAtStartup();
     KeepRealProfileClosed(command_line, "at startup");
     GuardSafeStorageKey(*command_line);

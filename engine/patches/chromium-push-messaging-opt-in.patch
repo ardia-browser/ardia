@@ -1,0 +1,386 @@
+SPDX-License-Identifier: GPL-3.0-only
+Web push through Google's push service (GCM and FCM), only for users who turn it on. Reverts, behind
+g_ardia_push_messaging, ungoogled-chromium's disable-gcm.patch (BSD-3-Clause) and Helium's
+helium/core/fix-instance-id-stuck.patch (GPL-3.0, The Helium Authors), and puts back the hosts domain substitution
+changed on that path.
+
+ArdiaCore sets g_ardia_push_messaging from --ardia-push-messaging, which the Mac app passes at launch when Settings'
+push messaging switch is on; nothing sets it on Linux. While it is false, GCMDriverDesktop::EnsureStarted answers
+GCM_DISABLED, as disable-gcm made it: no check-in, no registration, no MCS connection, and PushManager.subscribe()
+fails as before. While it is true, EnsureStarted and GCMClientImpl are Chromium's (check-in, MCS login and heartbeats,
+registration), InstanceIDImpl waits for the stored instance ID before it runs a request (Helium's fix runs it at once,
+so a token request could make a new ID over the stored one), and a subscription's endpoint is FCM's production one
+(https://fcm.googleapis.com/fcm/send/), as in Chrome Stable, instead of the staging host Chromium's unknown channel
+picks. Hosts put back: android.clients.google.com (check-in and registration), mtalk.google.com (MCS),
+mcs.android.com (the MCS login domain), gcm@android.com and gcm@chrome.com (MCS sender fields), and the
+fcm.googleapis.com and jmt17.google.com endpoints.
+
+g_ardia_push_counts counts, for telemetry, subscriptions the push service made, subscriptions it failed (service or
+network errors) while the switch was on, subscriptions refused while it was off, and push events a service worker
+took; ac_cli_control's status reports them as pushMessaging.
+
+--- a/chrome/browser/push_messaging/push_messaging_service_impl.cc
++++ b/chrome/browser/push_messaging/push_messaging_service_impl.cc
+@@ -8,6 +8,7 @@
+ #include <sstream>
+ #include <vector>
+ 
++#include "ardia/core/ac_content_hooks.h"  // nogncheck
+ #include "base/barrier_closure.h"
+ #include "base/base64url.h"
+ #include "base/command_line.h"
+@@ -54,6 +55,7 @@
+ #include "components/push_messaging/push_messaging_constants.h"
+ #include "components/push_messaging/push_messaging_features.h"
+ #include "components/push_messaging/push_messaging_utils.h"
++#include "components/version_info/channel.h"
+ #include "content/public/browser/browser_context.h"
+ #include "content/public/browser/child_process_host.h"
+ #include "content/public/browser/devtools_background_services_context.h"
+@@ -95,6 +97,8 @@
+ 
+ using instance_id::InstanceID;
+ 
++int g_ardia_push_counts[kArdiaPushCountKinds] = {};
++
+ namespace {
+ 
+ // Scope passed to getToken to obtain GCM registration tokens.
+@@ -187,7 +191,8 @@ PendingMessage& PendingMessage::operator=(PendingMessage&& other) = default;
+ PendingMessage::~PendingMessage() = default;
+ 
+ GURL CreateEndpointFromChromeChannel(const std::string& subscription_id) {
+-  return push_messaging::CreateEndpoint(chrome::GetChannel(), subscription_id);
++  return push_messaging::CreateEndpoint(version_info::Channel::STABLE,
++                                        subscription_id);
+ }
+ 
+ }  // namespace
+@@ -581,6 +586,9 @@ void PushMessagingServiceImpl::DeliverMessageCallback(
+     bool did_enqueue_message,
+     blink::mojom::PushEventStatus status) {
+   RecordDeliveryStatus(status);
++  if (status == blink::mojom::PushEventStatus::SUCCESS) {
++    ++g_ardia_push_counts[kArdiaPushDelivered];
++  }
+ 
+   // Note: It's important that |message_handled_callback| is run or passed to
+   // another function before this function returns.
+@@ -1075,6 +1083,15 @@ void PushMessagingServiceImpl::SubscribeEnd(
+     const std::vector<uint8_t>& p256dh,
+     const std::vector<uint8_t>& auth,
+     blink::mojom::PushRegistrationStatus status) {
++  if (status ==
++      blink::mojom::PushRegistrationStatus::SUCCESS_FROM_PUSH_SERVICE) {
++    ++g_ardia_push_counts[kArdiaPushSubscribed];
++  } else if (status == blink::mojom::PushRegistrationStatus::SERVICE_ERROR ||
++             status == blink::mojom::PushRegistrationStatus::NETWORK_ERROR) {
++    ++g_ardia_push_counts[g_ardia_push_messaging
++                              ? kArdiaPushSubscribeFailed
++                              : kArdiaPushSubscribeRefusedOff];
++  }
+   std::move(callback).Run(subscription_id, endpoint, expiration_time, p256dh,
+                           auth, status);
+ }
+--- a/components/gcm_driver/gcm_client_impl.cc
++++ b/components/gcm_driver/gcm_client_impl.cc
+@@ -77,6 +77,7 @@ const char kMessageTypeDeletedMessagesKey[] = "deleted_messages";
+ const char kMessageTypeKey[] = "message_type";
+ const char kMessageTypeSendErrorKey[] = "send_error";
+ const char kSubtypeKey[] = "subtype";
++const char kSendMessageFromValue[] = "gcm@chrome.com";
+ const int64_t kDefaultUserSerialNumber = 0LL;
+ const int kDestroyGCMStoreDelayMS = 5 * 60 * 1000;  // 5 minutes.
+ constexpr base::TimeDelta kTokenInvalidationInterval = base::Days(7);
+@@ -196,6 +197,38 @@ void GCMClientImpl::Initialize(
+ }
+ 
+ void GCMClientImpl::Start(StartMode start_mode) {
++  DCHECK_NE(UNINITIALIZED, state_);
++  DCHECK(io_task_runner_->RunsTasksInCurrentSequence());
++
++  if (state_ == LOADED) {
++    // Start the GCM if not yet.
++    if (start_mode == IMMEDIATE_START) {
++      // Give up the scheduling to wipe out the store since now some one starts
++      // to use GCM.
++      destroying_gcm_store_ptr_factory_.InvalidateWeakPtrs();
++
++      StartGCM();
++    }
++    return;
++  }
++
++  // The delay start behavior will be abandoned when Start has been called
++  // once with IMMEDIATE_START behavior.
++  if (start_mode == IMMEDIATE_START)
++    start_mode_ = IMMEDIATE_START;
++
++  // Bail out if the loading is not started or completed.
++  if (state_ != INITIALIZED)
++    return;
++
++  // Once the loading is completed, the check-in will be initiated.
++  // If we're in lazy start mode, don't create a new store since none is really
++  // using GCM functionality yet.
++  gcm_store_->Load((start_mode == IMMEDIATE_START) ? GCMStore::CREATE_IF_MISSING
++                                                   : GCMStore::DO_NOT_CREATE,
++                   base::BindOnce(&GCMClientImpl::OnLoadCompleted,
++                                  weak_ptr_factory_.GetWeakPtr()));
++  state_ = LOADING;
+ }
+ 
+ void GCMClientImpl::OnLoadCompleted(
+@@ -299,7 +332,6 @@ void GCMClientImpl::StartGCM() {
+ 
+ void GCMClientImpl::InitializeMCSClient() {
+   DCHECK(network_connection_tracker_);
+-  if ((true)) return;
+   std::vector<GURL> endpoints;
+   endpoints.push_back(gservices_settings_.GetMCSMainEndpoint());
+   GURL fallback_endpoint = gservices_settings_.GetMCSFallbackEndpoint();
+@@ -351,6 +383,8 @@ void GCMClientImpl::OnReady(const std::vector<AccountMapping>& account_mappings,
+ void GCMClientImpl::StartMCSLogin() {
+   DCHECK_EQ(READY, state_);
+   DCHECK(device_checkin_info_.IsValid());
++  mcs_client_->Login(device_checkin_info_.android_id(),
++                     device_checkin_info_.secret());
+ }
+ 
+ void GCMClientImpl::DestroyStoreWhenNotNeeded() {
+@@ -421,6 +455,8 @@ void GCMClientImpl::SetLastTokenFetchTime(const base::Time& time) {
+ void GCMClientImpl::UpdateHeartbeatTimer(
+     std::unique_ptr<base::RetainingOneShotTimer> timer) {
+   DCHECK(io_task_runner_->RunsTasksInCurrentSequence());
++  DCHECK(mcs_client_);
++  mcs_client_->UpdateHeartbeatTimer(std::move(timer));
+ }
+ 
+ void GCMClientImpl::AddInstanceIDData(const std::string& app_id,
+@@ -463,14 +499,36 @@ void GCMClientImpl::GetInstanceIDData(const std::string& app_id,
+ void GCMClientImpl::AddHeartbeatInterval(const std::string& scope,
+                                          int interval_ms) {
+   DCHECK(io_task_runner_->RunsTasksInCurrentSequence());
++  DCHECK(mcs_client_);
++  mcs_client_->AddHeartbeatInterval(scope, interval_ms);
+ }
+ 
+ void GCMClientImpl::RemoveHeartbeatInterval(const std::string& scope) {
+   DCHECK(io_task_runner_->RunsTasksInCurrentSequence());
++  DCHECK(mcs_client_);
++  mcs_client_->RemoveHeartbeatInterval(scope);
+ }
+ 
+ void GCMClientImpl::StartCheckin() {
+   DCHECK(io_task_runner_->RunsTasksInCurrentSequence());
++
++  // Make sure no checkin is in progress.
++  if (checkin_request_)
++    return;
++
++  checkin_proto::ChromeBuildProto chrome_build_proto;
++  fcm::ToCheckinProtoVersion(chrome_build_info_, &chrome_build_proto);
++
++  CheckinRequest::RequestInfo request_info(
++      device_checkin_info_.android_id(), device_checkin_info_.secret(),
++      gservices_settings_.digest(), chrome_build_proto);
++  checkin_request_ = std::make_unique<CheckinRequest>(
++      gservices_settings_.GetCheckinURL(), request_info,
++      fcm::GetBackoffPolicy(),
++      base::BindOnce(&GCMClientImpl::OnCheckinCompleted,
++                     weak_ptr_factory_.GetWeakPtr()),
++      url_loader_factory_, io_task_runner_, &recorder_);
++  checkin_request_->Start();
+ }
+ 
+ void GCMClientImpl::OnCheckinCompleted(
+@@ -527,6 +585,25 @@ void GCMClientImpl::SetGServicesSettingsCallback(bool success) {
+ 
+ void GCMClientImpl::SchedulePeriodicCheckin() {
+   DCHECK(io_task_runner_->RunsTasksInCurrentSequence());
++
++  // Make sure no checkin is in progress.
++  if (checkin_request_.get() || !device_checkin_info_.accounts_set()) {
++    return;
++  }
++
++  // There should be only one periodic checkin pending at a time. Removing
++  // pending periodic checkin to schedule a new one.
++  periodic_checkin_ptr_factory_.InvalidateWeakPtrs();
++
++  base::TimeDelta time_to_next_checkin = GetTimeToNextCheckin();
++  if (time_to_next_checkin.is_negative())
++    time_to_next_checkin = base::TimeDelta();
++
++  io_task_runner_->PostDelayedTask(
++      FROM_HERE,
++      base::BindOnce(&GCMClientImpl::StartCheckin,
++                     periodic_checkin_ptr_factory_.GetWeakPtr()),
++      time_to_next_checkin);
+ }
+ 
+ base::TimeDelta GCMClientImpl::GetTimeToNextCheckin() const {
+@@ -946,6 +1023,25 @@ void GCMClientImpl::Send(const std::string& app_id,
+                          const OutgoingMessage& message) {
+   DCHECK_EQ(state_, READY);
+   DCHECK(io_task_runner_->RunsTasksInCurrentSequence());
++
++  mcs_proto::DataMessageStanza stanza;
++  stanza.set_ttl(message.time_to_live);
++  stanza.set_sent(clock_->Now().ToInternalValue() /
++                  base::Time::kMicrosecondsPerSecond);
++  stanza.set_id(message.id);
++  stanza.set_from(kSendMessageFromValue);
++  stanza.set_to(receiver_id);
++  stanza.set_category(app_id);
++
++  for (auto iter = message.data.begin(); iter != message.data.end(); ++iter) {
++    mcs_proto::AppData* app_data = stanza.add_app_data();
++    app_data->set_key(iter->first);
++    app_data->set_value(iter->second);
++  }
++
++  MCSMessage mcs_message(stanza);
++  DVLOG(1) << "MCS message size: " << mcs_message.size();
++  mcs_client_->SendMessage(mcs_message);
+ }
+ 
+ std::string GCMClientImpl::GetStateString() const {
+--- a/components/gcm_driver/gcm_driver_desktop.cc
++++ b/components/gcm_driver/gcm_driver_desktop.cc
+@@ -7,6 +7,7 @@
+ #include <memory>
+ #include <utility>
+ 
++#include "ardia/core/ac_content_hooks.h"  // nogncheck
+ #include "base/files/file_path.h"
+ #include "base/functional/bind.h"
+ #include "base/functional/callback_helpers.h"
+@@ -34,6 +35,8 @@
+ #include "services/network/public/cpp/network_connection_tracker.h"
+ #include "services/network/public/cpp/shared_url_loader_factory.h"
+ 
++bool g_ardia_push_messaging = false;
++
+ namespace gcm {
+ 
+ class GCMDriverDesktop::IOWorker : public GCMClient::Delegate {
+@@ -1184,7 +1187,29 @@ GCMClient::Result GCMDriverDesktop::EnsureStarted(
+     GCMClient::StartMode start_mode) {
+   DCHECK(ui_thread_->RunsTasksInCurrentSequence());
+ 
+-  return GCMClient::GCM_DISABLED;
++  if (!g_ardia_push_messaging) {
++    return GCMClient::GCM_DISABLED;
++  }
++
++  if (gcm_started_)
++    return GCMClient::SUCCESS;
++
++  // Have any app requested the service?
++  if (app_handlers().empty())
++    return GCMClient::UNKNOWN_ERROR;
++
++  if (!delayed_task_controller_)
++    delayed_task_controller_ = std::make_unique<GCMDelayedTaskController>();
++
++  // Note that we need to pass weak pointer again since the existing weak
++  // pointer in IOWorker might have been invalidated when GCM is stopped.
++  io_thread_->PostTask(
++      FROM_HERE, base::BindOnce(&GCMDriverDesktop::IOWorker::Start,
++                                base::Unretained(io_worker_.get()), start_mode,
++                                weak_ptr_factory_.GetWeakPtr(),
++                                /*time_task_posted=*/base::TimeTicks::Now()));
++
++  return GCMClient::SUCCESS;
+ }
+ 
+ void GCMDriverDesktop::RemoveCachedData() {
+--- a/components/gcm_driver/instance_id/instance_id_impl.cc
++++ b/components/gcm_driver/instance_id/instance_id_impl.cc
+@@ -10,6 +10,7 @@
+ #include <memory>
+ #include <string>
+ 
++#include "ardia/core/ac_content_hooks.h"  // nogncheck
+ #include "base/base64.h"
+ #include "base/functional/bind.h"
+ #include "base/logging.h"
+@@ -263,8 +264,13 @@ gcm::InstanceIDHandler* InstanceIDImpl::Handler() {
+ }
+ 
+ void InstanceIDImpl::RunWhenReady(base::OnceClosure task) {
+-    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+-        FROM_HERE, std::move(task));
++  if (g_ardia_push_messaging &&
++      !delayed_task_controller_.CanRunTaskWithoutDelay()) {
++    delayed_task_controller_.AddTask(std::move(task));
++    return;
++  }
++  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
++      FROM_HERE, std::move(task));
+ }
+ 
+ }  // namespace instance_id
+--- a/components/push_messaging/push_messaging_constants.cc
++++ b/components/push_messaging/push_messaging_constants.cc
+@@ -4,15 +4,15 @@
+ 
+ #include "components/push_messaging/push_messaging_constants.h"
+ 
+-const char kPushMessagingGcmEndpoint[] = "https://fcm.9oo91eapis.qjz9zk/fcm/send/";
++const char kPushMessagingGcmEndpoint[] = "https://fcm.googleapis.com/fcm/send/";
+ 
+ const char kPushMessagingStagingGcmEndpoint[] =
+-    "https://jmt17.9oo91e.qjz9zk/fcm/send/";
++    "https://jmt17.google.com/fcm/send/";
+ 
+-const char kPushMessagingWebpushEndpoint[] = "https://fcm.9oo91eapis.qjz9zk/wp/";
++const char kPushMessagingWebpushEndpoint[] = "https://fcm.googleapis.com/wp/";
+ 
+ const char kPushMessagingStagingWebpushEndpoint[] =
+-    "https://fcm.9oo91eapis.qjz9zk/preprod/wp/";
++    "https://fcm.googleapis.com/preprod/wp/";
+ 
+ const char kPushMessagingForcedNotificationTag[] =
+     "user_visible_auto_notification";
+--- a/google_apis/gcm/base/mcs_util.cc
++++ b/google_apis/gcm/base/mcs_util.cc
+@@ -46,7 +46,7 @@ static_assert(std::size(kProtoNames) == kNumProtoTypes,
+               "Proto Names Must Include All Tags");
+ 
+ const char kLoginId[] = "chrome-";
+-const char kLoginDomain[] = "mcs.8n6r01d.qjz9zk";
++const char kLoginDomain[] = "mcs.android.com";
+ const char kLoginDeviceIdPrefix[] = "android-";
+ const char kLoginSettingDefaultName[] = "new_vc";
+ const char kLoginSettingDefaultValue[] = "1";
+--- a/google_apis/gcm/engine/gservices_settings.cc
++++ b/google_apis/gcm/engine/gservices_settings.cc
+@@ -29,12 +29,12 @@ const char kRegistrationURLKey[] = "gcm_registration_url";
+ 
+ const int64_t kDefaultCheckinInterval = 2 * 24 * 60 * 60;  // seconds = 2 days.
+ const int64_t kMinimumCheckinInterval = 12 * 60 * 60;  // seconds = 12 hours.
+-const char kDefaultCheckinURL[] = "https://android.clients.9oo91e.qjz9zk/checkin";
+-const char kDefaultMCSHostname[] = "mtalk.9oo91e.qjz9zk";
++const char kDefaultCheckinURL[] = "https://android.clients.google.com/checkin";
++const char kDefaultMCSHostname[] = "mtalk.google.com";
+ const int kDefaultMCSMainSecurePort = 5228;
+ const int kDefaultMCSFallbackSecurePort = 443;
+ const char kDefaultRegistrationURL[] =
+-    "https://android.clients.9oo91e.qjz9zk/c2dm/register3";
++    "https://android.clients.google.com/c2dm/register3";
+ // Settings that are to be deleted are marked with this prefix in checkin
+ // response.
+ const char kDeleteSettingPrefix[] = "delete_";
+--- a/google_apis/gcm/engine/mcs_client.cc
++++ b/google_apis/gcm/engine/mcs_client.cc
+@@ -32,7 +32,7 @@ typedef std::unique_ptr<google::protobuf::MessageLite> MCSProto;
+ const char kMCSCategory[] = "com.google.android.gsf.gtalkservice";
+ 
+ // The from field for messages originating in the GCM client.
+-const char kGCMFromField[] = "gcm@8n6r01d.qjz9zk";
++const char kGCMFromField[] = "gcm@android.com";
+ 
+ // MCS status message types.
+ // TODO(zea): handle these at the GCMClient layer.

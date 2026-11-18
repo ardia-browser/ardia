@@ -42,6 +42,7 @@ chromium chromium-linux-extension-keybindings.patch linux
 chromium chromium-webstore-direct.patch
 chromium chromium-extension-updates.patch
 chromium chromium-component-updater-security-only.patch
+chromium chromium-push-messaging-opt-in.patch
 chromium chromium-extension-omaha-attributes.patch
 chromium chromium-extension-management-policy-hook.patch
 chromium chromium-extension-sync-installer-hook.patch

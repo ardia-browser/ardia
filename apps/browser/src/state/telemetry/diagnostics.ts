@@ -6,11 +6,10 @@ import { withDeadline } from "../../lib/deadline";
 import { hermesHeapMegabytes } from "../../lib/hermesHeap";
 import { activeTab } from "../browser/model";
 import { useBrowser } from "../browser/store";
-import { capture, consentNow, consentToken, counted, isSharing, saveContext, stillValid, onConsentPeriodChange } from "./client";
+import { capture, consentNow, consentToken, isSharing, saveContext, stillValid, onConsentPeriodChange } from "./client";
 import { nativeConsent } from "./nativeConsent";
 import { formatRecentPages, readRecentPages, type RecentPage, type SavedContext } from "./savedContext";
-import { noteDragsEnded } from "./stuckDrags";
-import { noteWindowlessPages } from "./cliCounts";
+import { noteCliControlStatus } from "./cliStatusCounts";
 import { mainProcessWork } from "./mainProcessWork";
 import { appInfo } from "./transport";
 import { readDocument } from "../../platform/documents";
@@ -84,10 +83,7 @@ export const noteAppMemory = (totalMb: number) => (appMemoryMb = totalMb);
 export async function recordContext(): Promise<SavedContext | null> {
   const consent = consentToken();
   if (!consent) return null;
-  void cliControlStatus().then((status) => counted(consent, () => {
-    noteDragsEnded(status.dragsEnded);
-    noteWindowlessPages(status.windowlessPages);
-  }), () => {});
+  void cliControlStatus().then((status) => noteCliControlStatus(status, consent), () => {});
   const epoch = contextEpoch;
   const [sample, pressure] = await Promise.all([diagnosticsSample().catch(() => ({ footprintMB: undefined, freeDiskGB: undefined })), memoryPressure()]);
   if (!stillValid(consent) || epoch !== contextEpoch) return null;

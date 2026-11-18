@@ -6,6 +6,8 @@ import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 
 const syncOn = (_: unknown, env: SettingsEnv) => !!env.syncOn;
 
+const pushMessagingKeywords = PLATFORM_FEATURES.pushMessaging ? ["use google services for push messaging", "push messaging", "web push", "gcm", "fcm"] : [];
+
 export const profileRows = {
   profiles: [
     {
@@ -69,7 +71,7 @@ export const profileRows = {
         siteSettings: {
           title: "Site settings",
           description: "Permissions, autoplay, notifications and zoom.",
-          keywords: ["camera", "microphone", "location", "popups", "cookies", "javascript", "clear site data", "website settings", "site permissions", "autoplay", "auto play", "videos playing", "stop videos", "media autoplay", "muted autoplay", "block autoplay on every site", "push notifications", "notification prompts", "notification requests", "stop asking", "notification spam", "block requests to send notifications", "zoom levels", "permissions", "notifications"],
+          keywords: ["camera", "microphone", "location", "popups", "cookies", "javascript", "clear site data", "website settings", "site permissions", "autoplay", "auto play", "videos playing", "stop videos", "media autoplay", "muted autoplay", "block autoplay on every site", "push notifications", "notification prompts", "notification requests", "stop asking", "notification spam", "block requests to send notifications", "zoom levels", "permissions", "notifications", ...pushMessagingKeywords],
         },
       },
     },

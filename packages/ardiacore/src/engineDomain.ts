@@ -112,7 +112,9 @@ export type CliDragsEnded = { ownerGone: number; debuggerUnowned: number; native
 
 export type CliWindowlessPages = { given: number; missed: number };
 
-export type CliControlStatus = { dragsEnded?: CliDragsEnded; windowlessPages?: CliWindowlessPages } & (
+export type CliPushMessaging = { subscribed: number; subscribeFailed: number; subscribeRefusedOff: number; delivered: number };
+
+export type CliControlStatus = { dragsEnded?: CliDragsEnded; windowlessPages?: CliWindowlessPages; pushMessaging?: CliPushMessaging } & (
   | { state: "external" }
   | ({ state: "off" | "starting" } & CliServer)
   | ({ state: "on"; port: number } & CliServer)

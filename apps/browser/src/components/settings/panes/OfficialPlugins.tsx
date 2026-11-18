@@ -55,7 +55,7 @@ function useInstall(plugin: OfficialPlugin) {
     if (!wasCancelled(result)) noteOfficialPlugin("settings", result.ok ? "installed" : "failed", plugin.name, consent);
     if (!mounted.current) return;
     setBusy(false);
-    setFailure(result.ok || wasCancelled(result) ? null : (result.reason ?? "Something went wrong."));
+    setFailure(result.ok || wasCancelled(result) ? null : result.reason);
   };
   const attempt: OfficialAttempt = busy ? { state: asking ? "asking" : "installing" } : failure ? { state: "failed", reason: failure } : null;
   return { attempt, install };

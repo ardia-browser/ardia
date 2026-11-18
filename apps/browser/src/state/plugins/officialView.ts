@@ -2,9 +2,7 @@ import type { InstallResult } from "./installWaiters";
 import type { OfficialPlugin } from "./official";
 import type { ProgramsState } from "./store";
 
-export const CANCELLED_REASON = "Cancelled.";
-
-export const wasCancelled = (result: InstallResult) => !result.ok && result.reason === CANCELLED_REASON;
+export const wasCancelled = (result: InstallResult) => !result.ok && result.cancelled === true;
 
 export type OfficialAttempt = { state: "asking" } | { state: "installing" } | { state: "failed"; reason: string } | null;
 
@@ -27,7 +25,7 @@ const FIRST_COMMANDS: Record<string, { command: string; does: string }> = {
 
 const HIDDEN: OfficialView = { shown: false, note: null, status: null, failed: false, busy: false, action: null, opens: false, firstCommand: null };
 
-const failure = (reason: string | undefined) => `Couldn't install it: ${reason ?? "something went wrong."}`;
+const failure = (reason: string) => `Couldn't install it: ${reason}`;
 
 function installedView(plugin: OfficialPlugin, programs: ProgramsState | undefined, attempt: OfficialAttempt): OfficialView {
   const base = { ...HIDDEN, shown: true, note: "installed" as const, opens: true };

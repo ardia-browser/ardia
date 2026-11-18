@@ -6,12 +6,12 @@ const { startPlugins } = await import("./start.ts");
 const { usePlugins } = await import("./store.ts");
 const lifecycle = await import("./lifecycle.ts");
 const { installOfficialPlugin, officialPlugins } = await import("./official.ts");
-const { CANCELLED_REASON, isOffered, officialView, wasCancelled } = await import("./officialView.ts");
+const { isOffered, officialView, wasCancelled } = await import("./officialView.ts");
 const { noteOfficialPlugin, officialPluginField, takeOfficialPluginCounts, OFFICIAL_EVENTS, OFFICIAL_SURFACES } = await import("../telemetry/officialPluginCounts.ts");
 const { takeHourlyExtras } = await import("../telemetry/hourlyExtras.ts");
 const { WHATS_SENT } = await import("../telemetry/copy.ts");
 
-const plugin = (state, name = "cli") => ({ name, title: "Command Line", blurb: "The ardia command.", icon: "terminal", version: "0.3.0", state });
+const plugin = (state, name = "cli") => ({ name, title: "Command Line", blurb: "The ardia command.", icon: "terminal.fill", version: "0.3.0", state });
 const LINKED = { state: "linked", hash: "h", linked: ["ardia"], refused: {}, binDir: "/Users/me/.local/bin" };
 
 test("an unsupported plugin shows nothing, and a coming-soon one shows no button", () => {
@@ -55,21 +55,23 @@ test("only a plugin that can still be chosen counts as offered", () => {
   assert.deepEqual(["available", "comingSoon", "installed", "unsupported"].map((s) => isOffered(plugin(s))), [true, true, false, false]);
 });
 
-const CLI = JSON.stringify({ manifest: 1, name: "cli", title: "Command Line", version: "0.3.0", alwaysOn: true, official: true, icon: "terminal", permissions: ["control"], programs: [{ name: "ardia", path: "bin/ardia" }] });
+const CLI = JSON.stringify({ manifest: 1, name: "cli", title: "Command Line", version: "0.3.0", alwaysOn: true, official: true, icon: "terminal.fill", permissions: ["control"], programs: [{ name: "ardia", path: "bin/ardia" }] });
 useBrowser.getState().hydrate({});
 stub.pluginHost.folders = [{ name: "cli", text: CLI, status: "ok", folderId: "bundled", bundled: true }];
 startPlugins();
 for (let i = 0; i < 8; i++) await new Promise((resolve) => setTimeout(resolve, 0));
 
-test("closing the consent sheet is told apart from a failure by the reason the seam gives", async () => {
+test("closing the consent is no error: the seam marks it cancelled, and nothing else counts as cancelled", async () => {
   const asked = installOfficialPlugin("cli", { showSheet: false });
   assert.equal(usePlugins.getState().consent.name, "cli");
   lifecycle.dismissPluginConsent("cli");
   const result = await asked;
-  assert.deepEqual(result, { ok: false, reason: CANCELLED_REASON });
+  assert.equal(result.cancelled, true);
   assert.equal(wasCancelled(result), true);
   assert.equal(wasCancelled({ ok: false, reason: "cli can't load." }), false);
+  assert.equal(wasCancelled({ ok: false, reason: "Cancelled." }), false);
   assert.equal(wasCancelled({ ok: true }), false);
+  assert.equal(wasCancelled(await installOfficialPlugin("nope", { showSheet: false })), false);
   assert.equal(officialPlugins(usePlugins.getState(), true, () => false)[0].state, "available");
 });
 

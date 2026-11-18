@@ -19,11 +19,11 @@ const host = stub.pluginHost;
 const settle = async () => {
   for (let i = 0; i < 8; i++) await new Promise((resolve) => setTimeout(resolve, 0));
 };
-const CLI = JSON.stringify({ manifest: 1, name: "cli", title: "Command Line", version: "0.3.0", alwaysOn: true, official: true, icon: "terminal", permissions: ["control"], programs: [{ name: "ardia", path: "bin/ardia" }] });
+const CLI = JSON.stringify({ manifest: 1, name: "cli", title: "Command Line", version: "0.3.0", alwaysOn: true, official: true, icon: "terminal.fill", permissions: ["control"], programs: [{ name: "ardia", path: "bin/ardia" }] });
 const TOOL = JSON.stringify({ manifest: 1, name: "tool", title: "Tool", alwaysOn: true, official: true, programs: [{ name: "tool-x", path: "bin/x" }] });
 const BUILT_IN = { status: "ok", folderId: "bundled", bundled: true };
 const offered = (soon = false) => offeredInOnboarding(officialPlugins(P(), true, () => soon));
-const plugin = (state, name = "cli") => ({ name, title: name, blurb: "", icon: "terminal", version: null, state });
+const plugin = (state, name = "cli") => ({ name, title: name, blurb: "", icon: "terminal.fill", version: null, state });
 
 async function fresh(folders) {
   host.linkResult = null;

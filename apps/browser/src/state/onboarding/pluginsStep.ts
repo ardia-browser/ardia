@@ -57,7 +57,7 @@ async function installEach(names: readonly string[], run: number, consent: Conse
     noteOfficialPlugin("onboarding", result.ok ? "installed" : "failed", name, consent);
     if (!inPluginsStep(run)) continue;
     if (result.ok) usePluginsStep.setState((s) => ({ installed: [...s.installed, name] }));
-    else usePluginsStep.setState((s) => ({ failures: { ...s.failures, [name]: result.reason ?? "Something went wrong." } }));
+    else usePluginsStep.setState((s) => ({ failures: { ...s.failures, [name]: result.reason } }));
   }
   return inPluginsStep(run) ? "done" : "left";
 }

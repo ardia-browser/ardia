@@ -90,15 +90,35 @@ inline Rect operator+(Rect rect, Vector2d offset) { rect.Offset(offset.x, offset
 struct RoundedCornersF { explicit RoundedCornersF(float) {} };
 }
 
+namespace ui {
+struct Layer {
+  Layer* parent() const { return parent_; }
+  Layer* parent_ = nullptr;
+};
+}
+
+namespace views {
+inline const int* const kHostViewKey = nullptr;
+inline bool manages_layers = true;
+}
+
 namespace aura {
 struct Window {
   void Show() { shows++; visible = true; }
   void Hide() { visible = false; }
   bool IsVisible() const { return visible; }
+  ui::Layer* layer() { return &layer_; }
+  const void* GetProperty(const int*) const { return host_view; }
   bool visible = true;
   int shows = 0;
-  const void* parent = nullptr;
+  bool parented = false;
+  const void* host_view = nullptr;
+  ui::Layer layer_;
 };
+}
+
+namespace gfx {
+using NativeView = aura::Window*;
 }
 
 namespace content {
@@ -199,18 +219,40 @@ class FocusManager {
 };
 inline FocusManager focus_manager;
 inline void View::RequestFocus() { focus_manager.focused = this; }
-struct NativeViewHolder { void SetNativeViewCornerRadii(gfx::RoundedCornersF) {} };
+struct NativeViewHolder {
+  void SetNativeViewCornerRadii(gfx::RoundedCornersF) {}
+  gfx::NativeView native_view() const { return native_; }
+  bool layer_managed_by_views() const { return manages_layers; }
+  ui::Layer* layer() { return native_ ? &layer_ : nullptr; }
+  bool Holds(gfx::NativeView native) {
+    if (native_ != native || !native->parented) return false;
+    return manages_layers ? native->layer()->parent() == &layer_ : native->host_view == this;
+  }
+  void Attach(gfx::NativeView native) {
+    native_ = native;
+    native->parented = true;
+    if (manages_layers) native->layer_.parent_ = &layer_;
+    else native->host_view = this;
+  }
+  void Detach() {
+    gfx::NativeView native = std::exchange(native_, nullptr);
+    native->parented = false;
+    if (native->layer_.parent_ == &layer_) native->layer_.parent_ = nullptr;
+    if (native->host_view == this) native->host_view = nullptr;
+    native->Hide();
+  }
+  gfx::NativeView native_ = nullptr;
+  ui::Layer layer_;
+};
+using NativeViewHost = NativeViewHolder;
 class WebView : public View {
  public:
   void SetWebContents(content::WebContents* contents) {
     if (contents == contents_) return;
-    if (contents_ && contents_->GetNativeView()->parent == this) {
-      contents_->GetNativeView()->Hide();
-      contents_->GetNativeView()->parent = nullptr;
-    }
+    if (contents_) holder_.Detach();
     contents_ = contents;
     if (!contents) return;
-    contents->GetNativeView()->parent = this;
+    holder_.Attach(contents->GetNativeView());
     if (GetVisible()) contents->GetNativeView()->Show();
   }
   content::WebContents* web_contents() const { return contents_; }

@@ -961,6 +961,16 @@ The policy also refuses some uses of methods it allows (`ac_cli_token_policy.cc`
 | `in that execution context`, `on that object` | `Runtime.*`, `DOM.*` | A context or object the connection didn't make |
 | `on a tab the ardia command didn't open`, `on a tab that isn't off-screen`, `with that option` | `Emulation.setDeviceMetricsOverride`, `clearDeviceMetricsOverride` | The viewport override is for tabs the command opened (below), with a width, height, scale and `mobile` only |
 | `in a named world`, `as a stream`, `with the command line API`, `without a button`, `with those editing commands` | `Page.addScriptToEvaluateOnNewDocument`, `Page.printToPDF`, `Runtime.evaluate`, `Input.dispatchMouseEvent`, `Input.dispatchKeyEvent` | That option isn't allowed |
+| `without skip` | `Debugger.setSkipAllPauses` | Pauses can only be skipped, never un-skipped |
+| `for that URL` | `Page.getResourceContent` | Only a web URL the frame loaded |
+
+The policy's list also carries a read-only inspection set, so a devtools-style client on the real connection can list the
+scripts a page has loaded and read their source (`Debugger.enable`, the `scriptParsed` events, then
+`Debugger.getScriptSource`), take a DOM snapshot (`DOMSnapshot.captureSnapshot`) and list a frame's resources
+(`Page.getResourceTree` and `Page.getResourceContent`, whose tree drops frames that aren't web pages, an extension's
+iframe among them). The engine sends `setSkipAllPauses {skip: true}` itself after every `Debugger.enable`, so a page
+with a `debugger;` statement can't be left paused on a resume the connection can't send; `Debugger.resume`, `pause`,
+`setBreakpoint*`, `setScriptSource` and `evaluateOnCallFrame` stay refused.
 
 `set viewport <w> <h> [scale]` works on the token path only in a window the user never sees. An emulated page is
 never in a user's window, so nothing has to be restored in place or held off the screen (five reviews found each

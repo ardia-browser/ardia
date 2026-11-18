@@ -2,19 +2,25 @@
 
 #include "chrome/browser/ardia/ac_cli_token_policy.h"
 
+#include <algorithm>
 #include <map>
 #include <memory>
 #include <optional>
 #include <string>
 #include <utility>
 
+#include "base/containers/span.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
+#include "base/location.h"
 #include "base/no_destructor.h"
 #include "base/strings/strcat.h"
 #include "base/values.h"
 #include "chrome/browser/ardia/ac_cli_owned_tabs.h"
 #include "chrome/browser/ardia/ac_cli_token_policy_internal.h"
+#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/devtools_agent_host_client.h"
 #include "url/gurl.h"
@@ -121,8 +127,49 @@ bool TokenClient::FilterCommand(std::string& message, std::string* reply) {
     return false;
   }
   outstanding_[key] = NeedsResponse(*method, params) ? *method : std::string();
+  if (*method == "Debugger.enable") {
+    ScheduleForcedSkipAllPauses(session);
+  }
   message = base::WriteJson(command).value_or(std::string());
   return !message.empty();
+}
+
+void TokenClient::ScheduleForcedSkipAllPauses(const std::string& session) {
+  int id = kForcedSkipAllPausesId;
+  while (outstanding_.contains({session, id})) {
+    --id;
+  }
+  base::DictValue command;
+  command.Set("id", id);
+  if (!session.empty()) {
+    command.Set("sessionId", session);
+  }
+  command.Set("method", "Debugger.setSkipAllPauses");
+  base::DictValue params;
+  params.Set("skip", true);
+  command.Set("params", std::move(params));
+  const std::string message = base::WriteJson(command).value_or(std::string());
+  if (message.empty()) {
+    return;
+  }
+  outstanding_[{session, id}] = std::string(kForcedSkipAllPausesMarker);
+  content::GetUIThreadTaskRunner({})->PostTask(
+      FROM_HERE,
+      base::BindOnce(&TokenClient::DispatchForcedSkipAllPauses,
+                     weak_factory_.GetWeakPtr(), session, message));
+}
+
+void TokenClient::DispatchForcedSkipAllPauses(const std::string& session,
+                                              const std::string& message) {
+  auto held = std::find_if(outstanding_.begin(), outstanding_.end(),
+                           [&](const auto& entry) {
+                             return entry.first.first == session &&
+                                    entry.second == kForcedSkipAllPausesMarker;
+                           });
+  if (held == outstanding_.end()) {
+    return;
+  }
+  root_host_->DispatchProtocolMessage(client_, base::as_byte_span(message));
 }
 
 bool TokenClient::ShouldClose() const {
@@ -223,6 +270,15 @@ std::string TokenClient::Refusal(const std::string& method,
   } else if (method == "Runtime.evaluate") {
     if (params.FindBool("includeCommandLineAPI").value_or(false)) {
       return "with the command line API";
+    }
+  } else if (method == "Debugger.setSkipAllPauses") {
+    if (params.FindBool("skip") != true) {
+      return "without skip";
+    }
+  } else if (method == "Page.getResourceContent") {
+    const std::string* url = params.FindString("url");
+    if (!url || !IsWebDestination(*url)) {
+      return "for that URL";
     }
   } else if (method == "Input.dispatchMouseEvent") {
     const std::string* type = params.FindString("type");

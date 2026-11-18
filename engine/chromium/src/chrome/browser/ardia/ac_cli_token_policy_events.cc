@@ -128,6 +128,22 @@ void ForgetDestroyedTarget(const std::string& message) {
   }
 }
 
+void DropNonWebFrames(base::DictValue* tree) {
+  base::ListValue* children = tree ? tree->FindList("childFrames") : nullptr;
+  if (!children) {
+    return;
+  }
+  children->EraseIf([](const base::Value& child) {
+    const base::DictValue* frame =
+        child.is_dict() ? child.GetDict().FindDict("frame") : nullptr;
+    const std::string* url = frame ? frame->FindString("url") : nullptr;
+    return !frame || !url || !IsWebUrl(GURL(*url));
+  });
+  for (base::Value& child : *children) {
+    DropNonWebFrames(child.GetIfDict());
+  }
+}
+
 }
 
 bool TokenClient::FilterEvent(std::string& message) {
@@ -227,6 +243,9 @@ bool TokenClient::FilterResponse(int id,
   base::DictValue& response = parsed->GetDict();
   const std::string* session_id = response.FindString("sessionId");
   const std::string session = session_id ? *session_id : std::string();
+  if (method == kForcedSkipAllPausesMarker) {
+    return false;
+  }
   base::DictValue* result = response.FindDict("result");
   if (!result) {
     return true;
@@ -269,6 +288,13 @@ bool TokenClient::FilterResponse(int id,
       AllowContext(session, *context);
     }
     return true;
+  }
+  if (method == "Page.getResourceTree") {
+    if (base::DictValue* tree = result->FindDict("frameTree")) {
+      DropNonWebFrames(tree);
+      message = base::WriteJson(response).value_or(std::string());
+    }
+    return !message.empty();
   }
   if (method == "Runtime.evaluate") {
     LearnDefaultContext(session, result->FindDict("result"));

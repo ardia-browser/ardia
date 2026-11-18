@@ -72,6 +72,10 @@ const std::set<std::string_view>& AllowedMethods() {
       "Accessibility.getPartialAXTree",
       "Accessibility.queryAXTree",
       "Browser.getVersion",
+      "Debugger.disable",
+      "Debugger.enable",
+      "Debugger.getScriptSource",
+      "Debugger.setSkipAllPauses",
       "DOM.describeNode",
       "DOM.disable",
       "DOM.enable",
@@ -89,6 +93,7 @@ const std::set<std::string_view>& AllowedMethods() {
       "DOM.requestNode",
       "DOM.resolveNode",
       "DOM.scrollIntoViewIfNeeded",
+      "DOMSnapshot.captureSnapshot",
       "Emulation.clearDeviceMetricsOverride",
       "Emulation.setDeviceMetricsOverride",
       "Input.dispatchDragEvent",
@@ -116,6 +121,8 @@ const std::set<std::string_view>& AllowedMethods() {
       "Page.getFrameTree",
       "Page.getLayoutMetrics",
       "Page.getNavigationHistory",
+      "Page.getResourceContent",
+      "Page.getResourceTree",
       "Page.handleJavaScriptDialog",
       "Page.navigate",
       "Page.printToPDF",
@@ -148,7 +155,8 @@ const std::set<std::string_view>& AllowedMethods() {
 bool NeedsResponse(const std::string& method, const base::DictValue& params) {
   if (method == "Target.getTargets" || method == "Target.getTargetInfo" ||
       method == "Target.createTarget" ||
-      method == "Page.createIsolatedWorld") {
+      method == "Page.createIsolatedWorld" ||
+      method == "Page.getResourceTree") {
     return true;
   }
   if (method == "Runtime.evaluate") {

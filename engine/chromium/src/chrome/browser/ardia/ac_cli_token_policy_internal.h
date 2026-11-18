@@ -13,6 +13,7 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/values.h"
 #include "chrome/browser/ardia/ac_cli_token_policy.h"
 #include "content/public/browser/devtools_agent_host.h"
@@ -31,6 +32,9 @@ inline constexpr int kMethodNotAllowed = -32601;
 inline constexpr int kInvalidRequest = -32600;
 inline constexpr int kParseError = -32700;
 inline constexpr int kRefused = -32000;
+inline constexpr int kForcedSkipAllPausesId = -32001;
+inline constexpr std::string_view kForcedSkipAllPausesMarker =
+    "ardia: Debugger.setSkipAllPauses";
 inline constexpr size_t kMaxPending = 4096;
 
 const std::set<std::string_view>& AllowedMethods();
@@ -92,6 +96,9 @@ class TokenClient : public ArdiaDevToolsTokenClient {
   bool FilterRuntimeEvent(std::string_view method, std::string& message);
   bool FilterTargetEvent(std::string_view method, const std::string& message);
   bool FilterPageEvent(const std::string& message);
+  void ScheduleForcedSkipAllPauses(const std::string& session);
+  void DispatchForcedSkipAllPauses(const std::string& session,
+                                   const std::string& message);
 
   const raw_ptr<content::DevToolsAgentHostClient> client_;
   const scoped_refptr<content::DevToolsAgentHost> root_host_;
@@ -99,6 +106,7 @@ class TokenClient : public ArdiaDevToolsTokenClient {
   std::map<std::string, Contexts> sessions_;
   std::map<std::pair<std::string, int>, std::string> outstanding_;
   bool wedged_ = false;
+  base::WeakPtrFactory<TokenClient> weak_factory_{this};
 };
 
 }

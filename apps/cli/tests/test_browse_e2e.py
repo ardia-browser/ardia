@@ -1465,6 +1465,67 @@ async def main(data_dir):
 asyncio.run(main(sys.argv[1]))
 """
 
+DEBUGGER = """
+import asyncio, json, sys
+from ardia_cli import endpoint
+from ardia_cli.browse.connection import Browser
+from ardia_cli.browse.errors import Gated
+
+
+async def refused(browser, method, params, session):
+    try:
+        await browser.send(method, params, session)
+    except Gated as error:
+        return error.reason
+    return None
+
+
+async def main(data_dir, url):
+    browser = Browser(endpoint.resolve(data_dir=data_dir), lambda *event: None)
+    await browser.open()
+    scripts = []
+    browser.link.on("Debugger.scriptParsed", lambda method, params, session: scripts.append(params))
+    try:
+        target = (await browser.send("Target.createTarget", {"url": url, "background": True}))["targetId"]
+        session = (await browser.send("Target.attachToTarget", {"targetId": target, "flatten": True}))["sessionId"]
+        await browser.send("Debugger.enable", {}, session)
+        mine = None
+        for _ in range(100):
+            mine = next((script for script in scripts if script.get("url", "").endswith("/debugger.js")), None)
+            if mine:
+                break
+            await asyncio.sleep(0.1)
+        if not mine:
+            print(json.dumps({"parsed": False}))
+        else:
+            source = (await browser.send("Debugger.getScriptSource", {"scriptId": mine["scriptId"]}, session))["scriptSource"]
+            passed = 0
+            for _ in range(100):
+                passed = (await browser.send("Runtime.evaluate", {"expression": "window.passed", "returnByValue": True}, session))["result"]["value"]
+                if passed == 1:
+                    break
+                await asyncio.sleep(0.1)
+            snapshot = await browser.send("DOMSnapshot.captureSnapshot", {"computedStyles": []}, session)
+            tree = (await browser.send("Page.getResourceTree", {}, session))["frameTree"]
+            content = (await browser.send("Page.getResourceContent", {"frameId": tree["frame"]["id"], "url": mine["url"]}, session))["content"]
+            print(json.dumps({
+                "parsed": True,
+                "source": source,
+                "passed": passed,
+                "snapshotted": bool(snapshot.get("strings")),
+                "resource": content,
+                "unskipped": await refused(browser, "Debugger.setSkipAllPauses", {"skip": False}, session),
+                "paused": await refused(browser, "Debugger.pause", {}, session),
+                "resumed": await refused(browser, "Debugger.resume", {}, session),
+            }))
+        await browser.send("Target.closeTarget", {"targetId": target})
+    finally:
+        await browser.close()
+
+
+asyncio.run(main(sys.argv[1], sys.argv[2]))
+"""
+
 CLAIM = """
 import asyncio, sys
 from ardia_cli import endpoint
@@ -1601,6 +1662,20 @@ class BrowseTokenPath(unittest.TestCase):
         self.assertIn("Target.attachToTarget to that target isn't allowed for the ardia command", said["gone"]["message"])
         self.assertEqual(said["unlisted"]["reason"], "")
         self.assertIn("It works once the engine's token policy allows it", said["unlisted"]["message"])
+
+    def test_the_inspection_subset_reads_a_page_over_the_token_policy(self):
+        done = subprocess.run([sys.executable, "-c", DEBUGGER, str(self.data), self.url("debugger.html")], capture_output=True, text=True, timeout=120,
+                              env=dict(os.environ, PYTHONPATH=str(CLI)))
+        self.assertEqual(done.returncode, 0, done.stderr)
+        said = json.loads(done.stdout)
+        self.assertTrue(said["parsed"], said)
+        self.assertIn("window.passed = 1", said["source"])
+        self.assertEqual(said["passed"], 1)
+        self.assertTrue(said["snapshotted"])
+        self.assertIn("window.passed = 1", said["resource"])
+        self.assertEqual(said["unskipped"], "without skip")
+        self.assertEqual(said["paused"], "")
+        self.assertEqual(said["resumed"], "")
 
     def test_probe_over_the_token_policy(self):
         session = "token-probe"

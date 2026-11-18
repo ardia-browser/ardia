@@ -92,6 +92,8 @@ export function markFirstWindow() {
 
 export { takeNotificationRequestCounts } from "./notificationRequestCounts";
 
+export { takePushMessagingCounts } from "./pushMessagingCounts";
+
 export { takeRecentlyClosedCounts } from "./recentlyClosedCounts";
 
 export { takeHistoryRemovalCounts } from "./historyRemovalCounts";

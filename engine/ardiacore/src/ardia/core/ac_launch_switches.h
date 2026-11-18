@@ -12,6 +12,7 @@ inline constexpr char kDataDirSwitch[] = "ardia-data-dir";
 inline constexpr char kTestSwitch[] = "ardia-test";
 inline constexpr char kTraceSwitch[] = "ardia-trace";
 inline constexpr char kSwitchesSwitch[] = "ardia-switches";
+inline constexpr char kPushMessagingSwitch[] = "ardia-push-messaging";
 
 bool BackgroundInstance();
 

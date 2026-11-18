@@ -256,6 +256,15 @@ class ControlServer {
     status.Set("windowlessPages", base::DictValue()
                                       .Set("given", windowless.given)
                                       .Set("missed", windowless.missed));
+    status.Set(
+        "pushMessaging",
+        base::DictValue()
+            .Set("subscribed", g_ardia_push_counts[kArdiaPushSubscribed])
+            .Set("subscribeFailed",
+                 g_ardia_push_counts[kArdiaPushSubscribeFailed])
+            .Set("subscribeRefusedOff",
+                 g_ardia_push_counts[kArdiaPushSubscribeRefusedOff])
+            .Set("delivered", g_ardia_push_counts[kArdiaPushDelivered]));
     if (ardiacore::TestFlag("nativeDragRefused")) {
       status.Set("nativeDragsRefused", true);
     }

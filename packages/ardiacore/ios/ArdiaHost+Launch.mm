@@ -494,6 +494,8 @@ void StartEarlyWindow() {
                           !strncmp(sw, "--auto-accept-camera-and-microphone-capture", 43));
   };
   for (NSString *sw in config.engineSwitches) extra.push_back(sw.UTF8String);
+  id pushMessaging = [ArdiaSavedSession atLaunch:AppDataDirectory()].settings[@"pushMessaging"];
+  if ([pushMessaging isKindOfClass:NSNumber.class] && CFGetTypeID((__bridge CFTypeRef)pushMessaging) == CFBooleanGetTypeID() && [pushMessaging boolValue]) extra.push_back("--ardia-push-messaging");
   if (NSNumber *port = config.remoteDebuggingPort; port && mockKeychain) {
     extra.push_back(std::string("--remote-debugging-port=") + port.stringValue.UTF8String);
     extra.push_back("--remote-allow-origins=*");

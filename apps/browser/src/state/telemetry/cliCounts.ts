@@ -33,12 +33,13 @@ export function noteCliPillShown(compact: boolean) {
 }
 export const noteCliAutoEnabled = () => void counts.cli_auto_enables++;
 
-export function noteWindowlessPages(totals: { given: number; missed: number } | undefined) {
+export function noteWindowlessPages(totals: { given: number; missed: number } | undefined, consent?: ConsentToken | null) {
   if (!totals) return;
   const given = Number(totals.given) || 0, missed = Number(totals.missed) || 0;
-  counts.windowless_pages_given_geometry += Math.max(0, given - windowlessSeen.given);
-  counts.windowless_pages_missing_geometry += Math.max(0, missed - windowlessSeen.missed);
+  const added = { windowless_pages_given_geometry: Math.max(0, given - windowlessSeen.given), windowless_pages_missing_geometry: Math.max(0, missed - windowlessSeen.missed) };
   windowlessSeen = { given: Math.max(given, windowlessSeen.given), missed: Math.max(missed, windowlessSeen.missed) };
+  if (added.windowless_pages_given_geometry || added.windowless_pages_missing_geometry)
+    countFor(consent, () => void ((counts.windowless_pages_given_geometry += added.windowless_pages_given_geometry), (counts.windowless_pages_missing_geometry += added.windowless_pages_missing_geometry)), added);
 }
 
 export function takeCliCounts() {

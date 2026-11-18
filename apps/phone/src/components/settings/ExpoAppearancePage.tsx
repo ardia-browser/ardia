@@ -1,12 +1,14 @@
 import { PlatformColor } from "react-native";
 import { Button, Form, HStack, Section, Text, Toggle, VStack } from "@expo/ui/swift-ui";
 import { accessibilityAddTraits, accessibilityLabel, buttonStyle, frame, navigationBarTitleDisplayMode, navigationTitle, padding, tint } from "@expo/ui/swift-ui/modifiers";
-import { INTERFACE_STYLE_NAMES, INTERFACE_STYLES, offeredInterfaceStyle, offeredScheme, SCHEME_CHOICES, SCHEME_NAMES } from "../../lib/appearance";
+import { INTERFACE_STYLE_NAMES, INTERFACE_STYLES, offeredInterfaceStyle, offeredScheme, SCHEME_CHOICES, SCHEME_NAMES, TABS_STYLE_FOOTER } from "../../lib/appearance";
 import { setColorChoice, setInterfaceStyle, setSchemeChoice } from "../../state/settings/actions";
 import { usePreferences } from "../../state/settings/hooks";
 import { matchMyMac } from "../../state/sync/actions";
 import { useSyncEnabled } from "../../state/sync/hooks";
 import { syncOffered } from "../../state/sync/offer";
+import { deckGridOffered, setDeckGrid, useDeckGrid } from "../../state/browse/deckGrid";
+import { useIncognito } from "../../state/tabs/hooks";
 import { CheckmarkLabel, ColorSwatch, contentMargins, modifierList, PROFILE_COLORS, settingsChrome, settingsLayout, settingsSwitchStyle, settingsUIAvailable, useProfileLook, type ProfileColor } from "../ui";
 
 const COLORS = Object.keys(PROFILE_COLORS) as ProfileColor[];
@@ -22,6 +24,8 @@ export function ExpoAppearancePage() {
   const schemeChoices = offersSync ? SCHEME_CHOICES : SCHEME_CHOICES.filter((choice) => choice !== "matchMac");
   const chosen = usePreferences((p) => p.colorChoice);
   const look = useProfileLook();
+  const grid = useDeckGrid();
+  const incognito = useIncognito();
   return (
     <Form modifiers={modifierList(navigationTitle("Appearance"), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
       <Section>
@@ -49,6 +53,12 @@ export function ExpoAppearancePage() {
           <Choice key={choice} title={SCHEME_NAMES[choice]} checked={scheme === choice} onPress={() => setSchemeChoice(choice)} />
         ))}
       </Section>
+      {deckGridOffered() ? (
+        <Section title="Tabs" footer={<Text>{TABS_STYLE_FOOTER}</Text>}>
+          <Choice title="Stack" checked={!grid} onPress={() => setDeckGrid(false, !incognito)} />
+          <Choice title="Grid" checked={grid} onPress={() => setDeckGrid(true, !incognito)} />
+        </Section>
+      ) : null}
     </Form>
   );
 }

@@ -111,12 +111,19 @@ export function setPopover(tabId: string, popover: Store["popover"][string]) {
   usePages.setState((s) => ({ popover: { ...s.popover, [tabId]: popover } }));
 }
 
+const fullscreenScans = new WeakMap<Store["pages"], string>();
+
+function fullscreenIds(pages: Store["pages"]): string {
+  let ids = fullscreenScans.get(pages);
+  if (ids !== undefined) return ids;
+  ids = "";
+  for (const id in pages) if (pages[id]!.fullscreen) ids += `${id}\n`;
+  fullscreenScans.set(pages, ids);
+  return ids;
+}
+
 export function useFullscreenTab(windowId: string): string | undefined {
-  const fullscreen = usePages((s) => {
-    let ids = "";
-    for (const id in s.pages) if (s.pages[id]!.fullscreen) ids += `${id}\n`;
-    return ids;
-  });
+  const fullscreen = usePages((s) => fullscreenIds(s.pages));
   return useBrowser((s) => {
     if (!fullscreen) return undefined;
     const active = activeTabId(s, windowId);

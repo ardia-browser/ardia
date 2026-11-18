@@ -27,7 +27,7 @@ class SpaceRulesTest {
         assertEquals("star.fill", SpaceRules.menuSymbol("Work", "star"))
         assertEquals("star.fill", SpaceRules.menuSymbol("Work", "star.fill"))
         val initial = SpaceRules.menuSymbol("work", null)
-        assertEquals(true, initial == "w.circle.fill" || initial == "circle.fill")
+        assertEquals(true, initial == "w.square.fill" || initial == "square.fill")
         assertEquals("an unknown icon is the initial", initial, SpaceRules.menuSymbol("work", "not.a.symbol"))
         assertNull(SpaceRules.symbol("not.a.symbol"))
         assertNull(SpaceRules.symbol(null))

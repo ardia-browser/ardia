@@ -1,4 +1,3 @@
-import { Platform } from "react-native";
 import { act } from "react-test-renderer";
 import { StartScreen } from "../components/search/StartScreen";
 import { TabDeck } from "../components/tabs/TabDeck";
@@ -92,7 +91,7 @@ test("the deck's round buttons give the bar's press haptic on press down", () =>
   withTabs(3);
   act(() => useBrowse.setState({ surface: "deck", sheet: null, deckEntrance: null, frozenOrder: null, opening: null }));
   const root = render(<TabDeck />);
-  const labels = ["More", "New Tab", ...(Platform.OS === "ios" ? ["Show as Grid"] : [])];
+  const labels = ["More", "New Tab"];
   for (const label of labels) pressIn(root, label);
   expect(press).toHaveBeenCalledTimes(labels.length);
   unmount(root);

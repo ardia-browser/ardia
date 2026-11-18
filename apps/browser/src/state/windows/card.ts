@@ -10,6 +10,7 @@ import { adoptOf, frozenOn, needsPage, wokenPage } from "../tabs/pageSession";
 import { adoptKind } from "../tabs/adoptIds";
 import { pageOf, patchPage } from "../tabs/pageState";
 import { wantsPage } from "../tabs/tabPages";
+import { useTabState } from "../tabs/tabStateWatch";
 import { removeTabs } from "../tabs/tabs";
 import { isSmallWindow } from "./small";
 import type { PagerPage } from "./profilePager";
@@ -22,7 +23,7 @@ export const useSplitOf = (tabId: string | undefined) => useBrowser((s) => split
 
 export const useIsSmallWindow = (windowId: string) => useBrowser((s) => isSmallWindow(s.windows[windowId]));
 
-export const useTabEngine = (tabId: string) => useBrowser((s) => tabEngine(s, tabId));
+export const useTabEngine = (tabId: string) => useTabState(tabId, (s) => tabEngine(s, tabId));
 
 export const currentTabEngine = (tabId: string) => tabEngine(useBrowser.getState(), tabId);
 
@@ -35,18 +36,18 @@ export function useMountedTabIds(windowId: string): string[] {
       if (memo.tabIds === tabIds && memo.tabs === s.tabs) return memo.ids;
       if (tabIds && memo.tabIds === tabIds) {
         let same = true;
-        const seen = memo.seen.slice();
-        const wants = memo.wants.slice();
-        for (let i = 0; i < tabIds.length; i++) {
+        let seen = memo.seen;
+        for (let i = 0; i < tabIds.length && same; i++) {
           const t = s.tabs[tabIds[i]!];
           if (t === seen[i]) continue;
-          seen[i] = t;
-          const want = wantsPage(t);
-          if (want !== wants[i]) same = false;
-          wants[i] = want;
+          if (wantsPage(t) !== memo.wants[i]) same = false;
+          else {
+            if (seen === memo.seen) seen = seen.slice();
+            seen[i] = t;
+          }
         }
         if (same) {
-          mountedMemo.current = { ...memo, tabs: s.tabs, seen, wants };
+          mountedMemo.current = { ...memo, tabs: s.tabs, seen };
           return memo.ids;
         }
       }

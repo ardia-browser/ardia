@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
-const adapters = await import("./adapters.ts");
+const adapters = await import("./historyAdapter.ts");
 const { historyExtractsOf } = await import("./historyExtracts.ts");
 const { isWebPageUrl } = await import("../../lib/url.ts");
 

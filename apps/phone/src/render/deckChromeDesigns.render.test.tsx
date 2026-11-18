@@ -218,7 +218,7 @@ test("the Incognito pill shows only while there are private tabs, with their cou
   unmount(root);
 });
 
-test("the bottom bar is a 48-point grid circle on iPhone, the Search Tabs capsule and a 48-point plus, 8 apart, 12 in from the sides, centred 11 points above the safe bottom", () => {
+test("the bottom bar is the Search Tabs capsule and a 48-point plus, with no grid button, 8 apart, 12 in from the sides, centred 11 points above the safe bottom", () => {
   const { height } = Dimensions.get("window");
   const root = deck();
   const bar = style(root, "deckBottomBar");
@@ -226,10 +226,10 @@ test("the bottom bar is a 48-point grid circle on iPhone, the Search Tabs capsul
   let place = host(root, "deckBottomBar")!.parent;
   while (place && StyleSheet.flatten(place.props.style)?.position !== "absolute") place = place.parent;
   expect((StyleSheet.flatten(place!.props.style).top as number) + 24).toBe(height - Math.max(SAFE_BOTTOM, 20) - 11);
-  if (Platform.OS === "ios") expect(style(root, "deckBarGrid")).toMatchObject({ width: 48, height: 48, borderRadius: 24 });
+  expect(host(root, "deckBarGrid")).toBeUndefined();
   expect(style(root, "deckBarPlus")).toMatchObject({ width: 48, height: 48, borderRadius: 24 });
   expect(style(root, "deckSearchTabs")).toMatchObject({ borderRadius: 24, paddingLeft: 13, paddingRight: 16 });
-  if (Platform.OS === "ios") expect(pressable(root, "Show as Grid")).toBeDefined();
+  expect(pressable(root, "Show as Grid")).toBeUndefined();
   unmount(root);
 });
 

@@ -3,7 +3,8 @@ import { mock, test } from "node:test";
 
 const { useBrowser } = await import("../browser/store.ts");
 const { versionedJson } = await import("../../lib/savedDocument.ts");
-const { SESSION_VERSION, cosmeticTabsChange, flushPersistence, loadSession, savedDocumentJson, savedDocumentValue, startPersistence } = await import("./persist.ts");
+const { SESSION_VERSION, flushPersistence, loadSession, startPersistence } = await import("./persist.ts");
+const { cosmeticTabsChange, savedDocumentJson, savedDocumentValue } = await import("./documentJson.ts");
 const { SESSION_DOCUMENT } = await import("./sessionDocument.ts");
 const stub = await import("../../test-native/index.ts");
 

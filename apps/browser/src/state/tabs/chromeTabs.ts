@@ -17,7 +17,8 @@ const mirror = new Map<number, StripState>();
 let lastRev = -1;
 let early: TabStripTransaction[] = [];
 const seen = new Set<string>();
-type Kind = "arrange" | "activate" | "group";
+const KINDS = ["arrange", "activate", "group"] as const;
+type Kind = (typeof KINDS)[number];
 const inflight = new Map<number, { kind: Kind; cmd: number; keys?: string[]; makes?: string; successor?: boolean; moves?: boolean }>();
 const groups: GroupBindings = new Map();
 const tried = new Map<string, { sig: string; since: number }>();
@@ -33,6 +34,8 @@ if (__DEV__) {
     state: () => ({ lastRev, inflight: Object.fromEntries(inflight), tried: Object.fromEntries(tried), groups: Object.fromEntries(groups) }),
   };
 }
+
+export const chromeTabsBookkeeping = () => ({ groups: groups.size, tried: tried.size, changedAt: changedAt.size });
 
 export function startChromeTabs() {
   if (started) return;
@@ -50,6 +53,7 @@ export function startChromeTabs() {
     scheduleProject();
   });
   useBrowser.subscribe((s, prev) => {
+    if (s.groups !== prev.groups) for (const [token, id] of groups) if (!s.groups[id]) groups.delete(token);
     if (s.windows !== prev.windows || s.groups !== prev.groups || placed(s, prev)) scheduleProject();
   });
 }
@@ -78,8 +82,10 @@ function receive(tx: TabStripTransaction) {
     if (strip.closed) {
       mirror.delete(strip.strip);
       madeInFront.delete(strip.strip);
+      changedAt.delete(strip.strip);
+      for (const kind of KINDS) tried.delete(`${strip.strip}:${kind}`);
     } else mirror.set(strip.strip, strip);
-    if (tx.cmd === null || tx.cmd < 0) changedAt.set(strip.strip, tx.rev);
+    if (!strip.closed && (tx.cmd === null || tx.cmd < 0)) changedAt.set(strip.strip, tx.rev);
     if (tx.cmd === null) {
       const waiting = inflight.get(strip.strip);
       const siblings = [...mirror.values()].filter((x) => x.window === strip.window && x.strip !== strip.strip);

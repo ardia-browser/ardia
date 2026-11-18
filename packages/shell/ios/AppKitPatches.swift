@@ -69,11 +69,11 @@ let installScrollViewInsetFix: Void = {
 }()
 
 enum StripWheel {
-  static let identifier = "ardia-top-strip"
+  static let identifiers: Set<String> = ["ardia-top-strip", "ardia-tab-switcher"]
   static let pointsPerLine: CGFloat = 40
 
   static func tagged(_ scroll: NSScrollView) -> Bool {
-    scroll.accessibilityIdentifier() == identifier || scroll.superview?.accessibilityIdentifier() == identifier
+    identifiers.contains(scroll.accessibilityIdentifier()) || identifiers.contains(scroll.superview?.accessibilityIdentifier() ?? "")
   }
 
   static func redirect(_ event: NSEvent, in scroll: NSScrollView) -> Bool {

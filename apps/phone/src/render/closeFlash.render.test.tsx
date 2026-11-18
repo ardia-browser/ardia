@@ -1,7 +1,7 @@
 import { getAnimatedStyle, makeMutable } from "react-native-reanimated";
 import { act } from "react-test-renderer";
 import { DECK_PHASE, DeckCard, type DeckMotion } from "../components/tabs/DeckCard";
-import { deckGeometry, deckSlotsNow, type DeckSlots } from "../lib/deckGeometry";
+import { deckGeometry, deckSlotsNow, type DeckLeave, type DeckLeaving, type DeckSlots } from "../lib/deckGeometry";
 import { renderSurface, someTabs, unmount } from "../../test/render/harness";
 
 beforeEach(() => jest.useFakeTimers());
@@ -22,31 +22,39 @@ const motion = (): DeckMotion => ({
   positionProgress: makeMutable(1),
   dragIndex: makeMutable(-1),
   dragLift: makeMutable(0),
-  flyIndex: makeMutable(-1),
-  flyLift: makeMutable(0),
-  flyVanish: makeMutable(0),
+  leaving: makeMutable<DeckLeaving>({}),
+  flyClock: makeMutable(0),
   covering: makeMutable(""),
 });
 
-test("a card that has vanished stays vanished when the deck resets its fly-away values before React removes the card, so the closed card never flashes back at its old place", () => {
+test("a card the order drops is drawn only while it is leaving: never at its old place once it has left, so a closed card can't flash back before React removes it", () => {
   const moves = motion();
   const tab = someTabs(3)[1]!;
+  const g = deckGeometry(393, 873, 40, 24);
   const root = renderSurface(
-    <DeckCard tab={tab} index={1} geometry={deckGeometry(393, 873, 40, 24)} motion={moves} onOpen={() => undefined} onClose={() => undefined} onCloseNow={() => undefined} />,
+    <DeckCard tab={tab} index={1} geometry={g} motion={moves} onOpen={() => undefined} onClose={() => undefined} onCloseNow={() => undefined} />,
   );
   const card = () => root.root.findAll((node) => node.props.testID === "deckCard" && typeof node.type === "string")[0]!;
   const opacity = () => (getAnimatedStyle(card()).opacity as number | undefined) ?? 1;
+  const y = () => ((getAnimatedStyle(card()).transform as { translateY?: number }[]) ?? []).reduce((sum, step) => sum + (step.translateY ?? 0), 0);
   expect(opacity()).toBe(1);
+  const rest = y();
+  const leave: DeckLeave = { at: 1, z: 2, t0: 0, lift: 0, away: -(g.cardCenterY + g.cardHeight), push: 0, response: 0.32, fadeMs: 0, last: false };
   act(() => {
-    moves.flyIndex.value = 1;
-    moves.flyVanish.value = 1;
+    moves.fromSlots.value = deckSlotsNow(moves.orderIds.value, moves.fromSlots.value, moves.shiftBy.value, moves.gap.value);
+    moves.orderIds.value = ["t0", "t2"];
+    moves.leaving.value = { t1: leave };
   });
   act(() => jest.advanceTimersByTime(16));
-  expect(opacity()).toBe(0);
+  expect(opacity()).toBe(1);
+  expect(y()).toBeCloseTo(rest, 3);
   act(() => {
-    moves.flyIndex.value = -1;
-    moves.flyVanish.value = 0;
-    moves.flyLift.value = 0;
+    moves.flyClock.value = 120;
+  });
+  act(() => jest.advanceTimersByTime(16));
+  expect(y()).toBeLessThan(rest - g.cardHeight / 2);
+  act(() => {
+    moves.leaving.value = {};
   });
   act(() => jest.advanceTimersByTime(16));
   expect(opacity()).toBe(0);

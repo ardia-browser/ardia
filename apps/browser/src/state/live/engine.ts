@@ -1,3 +1,4 @@
+import { changedIds } from "../browser/changes";
 import { onWindowEvent } from "../../platform/windows";
 import { everySlowly } from "../../platform/slowTimers";
 import { useBrowser, type BrowserState } from "../browser/store";
@@ -265,7 +266,7 @@ const inUse = (s: BrowserState, id: string) => {
   return !!s.live[id]?.playingAudio || !!media.pipOpen[id] || isPlaying(media.sessions[id]) || capturing(usePages.getState().pages[id]?.mediaAccess) || !!media.tabShares[id] || Object.values(media.tabShares).some((share) => share.capturedTabId === id);
 };
 
-const playbackEnded = (s: BrowserState, prev: BrowserState) => s.live !== prev.live && Object.keys(prev.live).some((id) => prev.live[id]?.playingAudio && !s.live[id]?.playingAudio);
+const playbackEnded = (s: BrowserState, prev: BrowserState) => s.live !== prev.live && changedIds(s.live, prev.live).some((id) => prev.live[id]?.playingAudio && !s.live[id]?.playingAudio);
 
 function closeCompletedTabs() {
   const s = useBrowser.getState();

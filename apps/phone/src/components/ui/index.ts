@@ -8,7 +8,7 @@ export { barCenterFromBottom, barHeight, deckCenterFromBottom } from "./barGeome
 export { CodeCamera } from "./CodeCamera";
 export { Favicon } from "./Favicon";
 export { LoadingLine, type LoadWatch } from "./LoadingLine";
-export { barReturnMotion, deckChromeMotion, duration, iPhoneOr, moveTo, pageMenuMotion, poofMs, trayLandingDelayMs, settingsMotion, spring, springs, stageMotion, startMotion, tabsCurve, tabsMotion, toastMotion, trayMotion } from "./motion";
+export { barReturnMotion, deckChromeMotion, duration, iPhoneOr, moveTo, pageMenuMotion, trayLandingDelayMs, settingsMotion, spring, springs, stageMotion, startMotion, tabsCurve, tabsMotion, toastMotion, trayMotion } from "./motion";
 export { ConfirmDialog, Dialog, showActionSheet, type Confirmation, type DialogButton } from "./Dialog";
 export { FloatingMenu, Menu, type MenuAction, type MenuItem, type MenuSubmenu } from "./Menu";
 export { confirmInSheet, MenuTrigger, nativeMenus, onNativeMenuOpened, spaceSystemImage, type MenuHandlers } from "./MenuTrigger";

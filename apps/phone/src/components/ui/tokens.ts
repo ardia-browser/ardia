@@ -440,7 +440,6 @@ export const spacesLayout = {
 
 export const tabsInk = {
   incognitoCard: "#1C1D22",
-  poof: "#F7F5FF",
   incognitoCardRaised: "#2A2B31",
   incognitoBackdrop: ["#1A1A1E", "#0E0E10"] as const,
   incognitoSheet: "#151517",
@@ -517,6 +516,7 @@ export const font = {
 
 export const browseLayout = {
   barCollapseTravel: 30,
+  barSwipeUp: 22,
   searchFieldHeight: 47.5,
   searchFieldInset: 15,
   fieldLeading: 18,

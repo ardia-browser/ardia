@@ -169,6 +169,12 @@ export const tabRows = {
           description: "Pop-up windows from pages open as tabs instead.",
           keywords: ["popup", "pop-up", "pop up", "window.open", "new window", "outlook", "sign in", "oauth", "as tab", "links", "open pop-up windows as tabs"],
         },
+        peekButtons: {
+          title: "Show Peek buttons",
+          explained: true,
+          description: "Close, Open as Tab and Split View sit in the Peek's title bar, or float beside it on the left or right.",
+          keywords: ["peek", "buttons", "close", "expand", "split view", "left", "right", "side", "position", "arc", "zen", "glance"],
+        },
       },
     },
     {

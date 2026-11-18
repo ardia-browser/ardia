@@ -9,7 +9,7 @@ import { noteDeckBarTop, watchDeckBar } from "../../state/toasts/store";
 import { capsule, ChromeSurface, deckChromeLayout, deckChromeMotion, font, iPhoneOr, startLayout, Symbol, tabsCurve, tabsLayout, useTheme, type MenuItem, SystemGlyph } from "../ui";
 import { MenuTrigger } from "../ui/MenuTrigger";
 import { useKeyboardHeight } from "../search/useKeyboardHeight";
-import { FadingGlyphs, GlassCircleButton, GlassPlusButton, type ChromeFade } from "./ChromeButtons";
+import { FadingGlyphs, GlassPlusButton, type ChromeFade } from "./ChromeButtons";
 
 type Props = {
   shown: boolean;
@@ -17,9 +17,6 @@ type Props = {
   deckHeight: number;
   safeSide: number;
   incognito: boolean;
-  grid?: boolean;
-  gridAvailable: boolean;
-  onGrid: () => void;
   onQuery: (needle: string) => void;
   menusShown?: boolean;
   onMenu?: (open: boolean) => void;
@@ -113,12 +110,12 @@ export function SearchTabsField({ search, testID = "deckSearchTabs", style, glas
   );
 }
 
-export function DeckBottomBar({ shown, barCenterY, deckHeight, safeSide, incognito, grid = false, gridAvailable, onGrid, onQuery, menusShown = true, onMenu, glassShown, glassShownMs, glyphFade }: Props) {
+export function DeckBottomBar({ shown, barCenterY, deckHeight, safeSide, incognito, onQuery, menusShown = true, onMenu, glassShown, glassShownMs, glyphFade }: Props) {
   const fade = { glassShown, glassShownMs, glyphFade };
   const roles = useTheme();
   const dark = roles.dark;
   const search = useSearchTabs(shown, incognito, onQuery);
-  const { input, focused } = search;
+  const { focused } = search;
   const row = useRef<ViewInstance>(null);
   const keyboard = useKeyboardHeight(shown);
   const lift = focused && keyboard > 0 ? Math.max(0, barCenterY - deckBarAboveKeyboard(deckHeight, keyboard)) : 0;
@@ -138,20 +135,6 @@ export function DeckBottomBar({ shown, barCenterY, deckHeight, safeSide, incogni
   return (
     <Animated.View pointerEvents="box-none" style={[styles.place, { top: barCenterY - deckChromeLayout.barCircle / 2 }, riseStyle]}>
       <View ref={row} testID="deckBottomBar" onLayout={measure} pointerEvents="box-none" style={[styles.bar, { paddingHorizontal: safeSide + deckChromeLayout.barSideInset }]}>
-        {gridAvailable ? (
-          <GlassCircleButton
-            icon={grid ? "squareStack" : "squareGrid2x2"}
-            label={grid ? "Show as Stack" : "Show as Grid"}
-            testID="deckBarGrid"
-            diameter={deckChromeLayout.barCircle}
-            dark={dark}
-            {...fade}
-            onPress={() => {
-              input.current?.blur();
-              onGrid();
-            }}
-          />
-        ) : null}
         <SearchTabsField search={search} style={styles.searchHit} {...fade} />
         <PlusMenuButton width={deckChromeLayout.barCircle} label={incognito ? "New Incognito Tab" : "New Tab"} testID="deckBarPlus" dark={dark} place={{ bottom: deckHeight - barCenterY + deckChromeLayout.barCircle / 2 + deckChromeLayout.menuGap, right: deckChromeLayout.barSideInset, width: tabsLayout.menuWidth }} menusShown={menusShown} onMenu={onMenu} {...fade} />
       </View>

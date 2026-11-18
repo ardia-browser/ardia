@@ -150,14 +150,14 @@ test("the deck in a trailing column lays out in the 382-wide content with no sid
   unmount(root);
 });
 
-test("the deck column holds grid, Search Tabs, ··· and Plus, and its Search Tabs field floats 358 wide centred at 191, 245", () => {
+test("the deck column holds Search Tabs, ··· and Plus, with no grid button, and its Search Tabs field floats 358 wide centred at 191, 245", () => {
   showDeck();
   const root = redesigned(<TabDeck />);
   const stack = flat(host(root, "deckColumn"));
   expect(stack).toMatchObject({ top: 166, width: 48, gap: 7 });
   expect((stack.left as number) + 24).toBe(418);
   const buttons = inOrder(root, "deckColumn", ["deckColumnGrid", "deckColumnSearch", "deckColumnMore", "deckColumnPlus"]);
-  expect(buttons).toEqual(Platform.OS === "ios" ? ["deckColumnGrid", "deckColumnSearch", "deckColumnMore", "deckColumnPlus"] : ["deckColumnSearch", "deckColumnMore", "deckColumnPlus"]);
+  expect(buttons).toEqual(["deckColumnSearch", "deckColumnMore", "deckColumnPlus"]);
   for (const id of buttons) expect(flat(host(root, id))).toMatchObject({ width: 48, height: 48 });
   const field = flat(host(root, "deckColumnField"));
   expect(field.width).toBe(358);

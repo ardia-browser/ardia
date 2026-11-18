@@ -12,9 +12,8 @@ import { renderSurface, unmount, withTabs } from "../../test/render/harness";
 
 const lookModule = require("@ardia/phone-native/src/look") as typeof import("@ardia/phone-native/src/look");
 
-const HAS_GRID = Platform.OS === "ios";
-const CHROME = ["deckHeaderMore", ...(HAS_GRID ? ["deckBarGrid"] : []), "deckSearchTabs", "deckBarPlus"];
-const GLYPHS = ["deckHeaderMoreGlyph", ...(HAS_GRID ? ["deckBarGridGlyph"] : []), "deckSearchTabsContent", "deckBarPlusGlyph", "deckSwitcher"];
+const CHROME = ["deckHeaderMore", "deckSearchTabs", "deckBarPlus"];
+const GLYPHS = ["deckHeaderMoreGlyph", "deckSearchTabsContent", "deckBarPlusGlyph", "deckSwitcher"];
 
 beforeEach(() => {
   jest.useFakeTimers();

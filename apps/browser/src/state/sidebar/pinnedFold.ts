@@ -1,6 +1,7 @@
 import type { MenuItem } from "../../platform/menus";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId, isPinnedRow, tabLayoutOf } from "../browser/model";
+import { changedIds } from "../browser/changes";
 import { live } from "../live/store";
 import { updateProfile } from "../profiles/actions";
 import { keptEntry } from "./entries";
@@ -44,7 +45,14 @@ function pinnedSectionTabs(s: Pick<BrowserState, "tabs" | "groups">, profileId: 
   return ids;
 }
 
+const pinnedRowIn = (t: BrowserState["tabs"][string] | undefined, profileId: string) => !!t && t.profileId === profileId && isPinnedRow(t);
+
+const inPinnedGroupOf = (s: Pick<BrowserState, "groups">, id: string, profileId: string) =>
+  Object.values(s.groups).some((g) => g.pinned && g.profileId === profileId && g.tabIds.includes(id));
+
 export function enteredPinnedSection(s: Pick<BrowserState, "tabs" | "groups">, prev: Pick<BrowserState, "tabs" | "groups">, profileId: string): boolean {
+  if (s.groups === prev.groups)
+    return changedIds(s.tabs, prev.tabs).some((id) => !!prev.tabs[id] && pinnedRowIn(s.tabs[id], profileId) && !pinnedRowIn(prev.tabs[id], profileId) && !inPinnedGroupOf(s, id, profileId));
   const before = pinnedSectionTabs(prev, profileId);
   for (const id of pinnedSectionTabs(s, profileId)) if (prev.tabs[id] && !before.has(id)) return true;
   return false;

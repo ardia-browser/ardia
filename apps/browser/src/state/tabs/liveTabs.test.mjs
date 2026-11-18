@@ -223,7 +223,7 @@ const chrome = new FakeChrome();
 globalThis.acTestTabStrip = chrome;
 const { useBrowser } = await import("../browser/store.ts");
 const model = await import("../browser/model.ts");
-const { startChromeTabs } = await import("./chromeTabs.ts");
+const { chromeTabsBookkeeping, startChromeTabs } = await import("./chromeTabs.ts");
 const { splitTabIdsOf } = await import("../splits/splits.ts");
 startChromeTabs();
 
@@ -418,6 +418,31 @@ test("an extension's tab groups reach the sidebar, and the sidebar's groups reac
   await settle(win);
   assert.equal(chrome.strips.get(win.strip).groups.get(token).color, "grey");
   assert.equal(S().groups[mine].color, "magenta");
+});
+
+test("a binding to a group the sidebar removed is dropped, and a closed strip leaves no bookkeeping behind", async () => {
+  const win = windowWith("a", "b", "c");
+  await settle(win);
+  const id = (u) => S().windows[win.w].tabIds.find((t) => urlOf(t) === u);
+  chrome.group([id("b"), id("c")], "Reading");
+  await settle(win);
+  const made = Object.values(S().groups).find((g) => g.windowId === win.w);
+  assert.ok(made, "the store made the group");
+  const bound = chromeTabsBookkeeping().groups;
+  assert.ok(bound >= 1);
+  S().ungroup(made.id);
+  await settle(win);
+  assert.deepEqual(Object.keys(S().groups), []);
+  assert.equal(chromeTabsBookkeeping().groups, 0);
+  const open = chromeTabsBookkeeping();
+  assert.ok(open.changedAt >= 1);
+  chrome.outbox.push({ rev: ++chrome.rev, cmd: null, strips: [{ ...chrome.state(win.strip), closed: true }] });
+  chrome.strips.delete(win.strip);
+  chrome.deliver();
+  await tick();
+  const closed = chromeTabsBookkeeping();
+  assert.equal(closed.changedAt, open.changedAt - 1);
+  assert.ok(closed.tried <= open.tried);
 });
 
 test("an extension that closes the shown tab and shows another in one go is obeyed", async () => {

@@ -1,9 +1,12 @@
+import { Platform } from "react-native";
 import { create } from "zustand";
 import { readPreferences, writePreference } from "../store/browserDatabase";
 import { browserDatabase } from "../store/database";
 import { countUsage } from "../telemetry/telemetry";
 
 export const DECK_GRID_KEY = "tabs.deckGrid";
+
+export const deckGridOffered = () => Platform.OS === "ios";
 
 const useDeckGridStore = create<{ grid: boolean | null }>()(() => ({ grid: null }));
 

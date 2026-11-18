@@ -47,3 +47,5 @@ const TELEMETRY_STYLE = { matchMac: "match_mac", glass: "glass", classic: "class
 const TELEMETRY_SCHEME = { matchMac: "match_mac", system: "system", light: "light", dark: "dark" } as const;
 
 export const appearanceTelemetry = (style: InterfaceStyleChoice, scheme: SchemeChoice) => ({ interface_style: TELEMETRY_STYLE[style], color_scheme: TELEMETRY_SCHEME[scheme] });
+
+export const TABS_STYLE_FOOTER = "How your open tabs are laid out. Swipe up on the bottom bar to see them.";

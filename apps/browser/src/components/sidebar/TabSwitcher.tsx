@@ -1,17 +1,23 @@
-import { memo, useEffect, useSyncExternalStore } from "react";
-import { Image, Pressable, StyleSheet, View } from "react-native";
+import { memo, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Image, Pressable, ScrollView, StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { tabTitle } from "../../state/browser/model";
 import { useTab } from "../../state/browser/hooks";
 import { useSidebarUi } from "../../state/sidebar/sidebarUi";
 import { lastPicture, onPicturesChanged } from "../../state/tabs/tabPictures";
 import { commitSwitcher, hoverSwitcherRow, leaveSwitcherRow, subscribeSwitcherTabChanges } from "../../state/sidebar/switcher";
+import { noteTabSwitcherOverflowClick, noteTabSwitcherOverflowOpened, noteTabSwitcherWheelScrolled } from "../../state/telemetry/tabSwitcherOpens";
 import { Symbol, Text, Panel } from "../ui";
 import { useTheme } from "../ui/theme";
 import { TabIcon } from "./TabIcon";
-import { SIDEBAR_SHADOW, TAB_SWITCHER as T } from "./tokens";
+import { revealedOffset } from "./switcherScroll";
+import { SIDEBAR_SHADOW, TAB_SWITCHER as T, TAB_SWITCHER_SCROLL_ID } from "./tokens";
 
 const SHOT = Math.round(T.card / T.shotAspect);
 const SHOT_WIDTH = T.card - 2 * T.cardInset;
+const ROW_HEIGHT = SHOT + T.label + 2 * T.cardInset;
+const STRIDE = T.card + T.gap;
+const OWN_SCROLL_MS = 120;
+const OWN_ANIMATED_SCROLL_MS = 450;
 
 export function TabSwitcher({ windowId, windowWidth, windowHeight }: { windowId: string; windowWidth: number; windowHeight: number }) {
   const theme = useTheme();
@@ -26,10 +32,9 @@ export function TabSwitcher({ windowId, windowWidth, windowHeight }: { windowId:
   if (!switcher) return null;
   const fits = Math.max(1, Math.floor((windowWidth - T.windowMargin - 2 * T.pad + T.gap) / (T.card + T.gap)));
   const count = Math.min(fits, switcher.ids.length);
-  const start = Math.max(0, Math.min(switcher.index - Math.floor(count / 2), switcher.ids.length - count));
-  const ids = switcher.ids.slice(start, start + count);
-  const width = 2 * T.pad + count * T.card + (count - 1) * T.gap;
-  const height = 2 * T.pad + SHOT + T.label + 2 * T.cardInset;
+  const viewport = count * T.card + (count - 1) * T.gap;
+  const width = 2 * T.pad + viewport;
+  const height = 2 * T.pad + ROW_HEIGHT;
 
   return (
     <View
@@ -48,16 +53,71 @@ export function TabSwitcher({ windowId, windowWidth, windowHeight }: { windowId:
         shadow={SIDEBAR_SHADOW.tabSwitcher}
         style={StyleSheet.absoluteFill}
       />
-      <View style={{ flexDirection: "row", gap: T.gap, padding: T.pad }}>
-        {ids.map((id, i) => (
-          <SwitcherCard key={id} tabId={id} index={start + i} focused={start + i === switcher.index} accent={theme.accent} />
-        ))}
-      </View>
+      <SwitcherRow ids={switcher.ids} index={switcher.index} viewport={viewport} overflows={count < switcher.ids.length} accent={theme.accent} />
     </View>
   );
 }
 
-const SwitcherCard = memo(function SwitcherCard({ tabId, index, focused, accent }: { tabId: string; index: number; focused: boolean; accent: string }) {
+function SwitcherRow({ ids, index, viewport, overflows, accent }: { ids: string[]; index: number; viewport: number; overflows: boolean; accent: string }) {
+  const scroll = useRef<ScrollView>(null);
+  const [opening] = useState(() => ({ x: revealedOffset(index, 0, viewport, T.card, STRIDE), y: 0 }));
+  const offset = useRef(opening.x);
+  const placed = useRef(false);
+  const shownIndex = useRef(index);
+  const ownScrollUntil = useRef(0);
+  const wheeled = useRef(false);
+
+  const scrollTo = (x: number, animated: boolean) => {
+    offset.current = x;
+    ownScrollUntil.current = performance.now() + (animated ? OWN_ANIMATED_SCROLL_MS : OWN_SCROLL_MS);
+    scroll.current?.scrollTo({ x, animated });
+  };
+
+  useEffect(() => {
+    if (overflows) noteTabSwitcherOverflowOpened();
+  }, []);
+
+  useEffect(() => {
+    const moved = shownIndex.current !== index;
+    shownIndex.current = index;
+    if (!placed.current) return;
+    const next = revealedOffset(index, offset.current, viewport, T.card, STRIDE);
+    if (Math.abs(next - offset.current) >= 0.5) scrollTo(next, moved);
+  }, [index, viewport]);
+
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    offset.current = e.nativeEvent.contentOffset.x;
+    if (wheeled.current || performance.now() < ownScrollUntil.current) return;
+    wheeled.current = true;
+    noteTabSwitcherWheelScrolled();
+  };
+
+  return (
+    <ScrollView
+      ref={scroll}
+      horizontal
+      testID={TAB_SWITCHER_SCROLL_ID}
+      showsHorizontalScrollIndicator={false}
+      scrollEnabled={overflows}
+      scrollEventThrottle={16}
+      contentOffset={opening}
+      onContentSizeChange={() => {
+        if (placed.current) return void (ownScrollUntil.current = performance.now() + OWN_SCROLL_MS);
+        placed.current = true;
+        scrollTo(revealedOffset(shownIndex.current, offset.current, viewport, T.card, STRIDE), false);
+      }}
+      onScroll={onScroll}
+      style={{ margin: T.pad, width: viewport, height: ROW_HEIGHT }}
+      contentContainerStyle={{ gap: T.gap }}
+    >
+      {ids.map((id, i) => (
+        <SwitcherCard key={id} tabId={id} index={i} focused={i === index} accent={accent} overflows={overflows} />
+      ))}
+    </ScrollView>
+  );
+}
+
+const SwitcherCard = memo(function SwitcherCard({ tabId, index, focused, accent, overflows }: { tabId: string; index: number; focused: boolean; accent: string; overflows: boolean }) {
   const tab = useTab(tabId);
   const picture = useSyncExternalStore(onPicturesChanged, () => lastPicture(tabId));
   useEffect(() => () => leaveSwitcherRow(index), [index]);
@@ -65,7 +125,12 @@ const SwitcherCard = memo(function SwitcherCard({ tabId, index, focused, accent 
   const url = tab.url || tab.pinnedUrl || "";
 
   return (
-    <Pressable onPressIn={() => commitSwitcher(index)}>
+    <Pressable
+      onPressIn={() => {
+        if (overflows) noteTabSwitcherOverflowClick();
+        commitSwitcher(index);
+      }}
+    >
       <View
         onMouseEnter={() => hoverSwitcherRow(index)}
         onMouseLeave={() => leaveSwitcherRow(index)}

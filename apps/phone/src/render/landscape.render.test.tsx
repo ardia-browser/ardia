@@ -68,8 +68,7 @@ test("in landscape the deck's header and bottom bar pad by the wider side inset 
   const sides = header.map(flat).flatMap((style) => [style.paddingHorizontal, style.left, style.right, style.paddingLeft, style.paddingRight]).filter((value) => typeof value === "number");
   expect(sides).toContain(59 + 12);
   if (Platform.OS !== "ios") return unmount(root);
-  const grid = root.root.findAll((node) => typeof node.props.accessibilityLabel === "string" && node.props.accessibilityLabel === "Show as Grid" && typeof node.props.onPress === "function")[0]!;
-  act(() => grid.props.onPress());
+  act(() => deckGrid.setDeckGrid(true));
   act(() => jest.advanceTimersByTime(1000));
   const scroll = hosts(root, "tabGridScroll")[0]!;
   expect(StyleSheet.flatten(scroll.props.contentContainerStyle).paddingHorizontal).toBe(59 + 16);

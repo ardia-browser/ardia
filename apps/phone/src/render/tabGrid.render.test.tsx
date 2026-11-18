@@ -66,10 +66,11 @@ const deck = () =>
 
 const byTestId = (root: Root, id: string) => root.root.findAll((node) => node.props.testID === id && typeof node.type !== "string");
 const hosts = (root: Root, id: string) => root.root.findAll((node) => node.props.testID === id && typeof node.type === "string");
-const gridButton = (root: Root) => root.root.findAll((node) => node.props.accessibilityRole === "button" && typeof node.props.onPress === "function" && /Show as (Grid|Stack)/.test(node.props.accessibilityLabel ?? ""))[0]!;
+const gridButton = (root: Root) => root.root.findAll((node) => node.props.accessibilityRole === "button" && typeof node.props.onPress === "function" && /Show as (Grid|Stack)/.test(node.props.accessibilityLabel ?? ""))[0];
 const settle = () => act(() => jest.advanceTimersByTime(1000));
-const toggle = (root: Root) => {
-  act(() => gridButton(root).props.onPress());
+const pick = (grid: boolean) => act(() => deckGrid.setDeckGrid(grid));
+const toggle = () => {
+  pick(!deckGrid.deckIsGrid());
   settle();
 };
 const flat = (node: ReactTestInstance) => StyleSheet.flatten(node.props.style) ?? {};
@@ -84,14 +85,16 @@ const pressOf = (node: ReactTestInstance): (() => void) => {
 const motion = (root: Root, id: string) => root.root.findAll((node) => node.props.testID === id && typeof node.type !== "string" && node.props.to !== undefined)[0]!;
 const target = (root: Root, id: string) => motion(root, id).props.to.opacity;
 
-onIPhone("the bottom bar's grid button switches the deck to main's grid and back, cross-fading the two and remembering the choice", () => {
+onIPhone("the deck is the stack by default and its bars have no grid button; picking Grid in Settings switches the open deck to main's grid and back, cross-fading the two and remembering the choice", () => {
   const root = deck();
-  expect(gridButton(root).props.accessibilityLabel).toBe("Show as Grid");
+  expect(deckGrid.deckIsGrid()).toBe(false);
+  expect(gridButton(root)).toBeUndefined();
+  expect(byTestId(root, "deckBarGrid")).toHaveLength(0);
   expect(hosts(root, "tabGrid")).toHaveLength(0);
   expect(deckCards(root).length).toBeGreaterThan(0);
 
-  act(() => gridButton(root).props.onPress());
-  expect(gridButton(root).props.accessibilityLabel).toBe("Show as Stack");
+  pick(true);
+  expect(gridButton(root)).toBeUndefined();
   expect(hosts(root, "tabGridLayer")).toHaveLength(1);
   expect(motion(root, "tabGridLayer").props.from).toEqual({ opacity: 0 });
   expect(target(root, "tabGridLayer")).toBe(1);
@@ -106,8 +109,8 @@ onIPhone("the bottom bar's grid button switches the deck to main's grid and back
   expect(readPreferences(browserDatabase())[deckGrid.DECK_GRID_KEY]).toBe("true");
   expect(counted).toHaveBeenCalledWith("deck_grid_shown");
 
-  toggle(root);
-  expect(gridButton(root).props.accessibilityLabel).toBe("Show as Grid");
+  toggle();
+  expect(deckGrid.deckIsGrid()).toBe(false);
   expect(hosts(root, "tabGridLayer")).toHaveLength(0);
   expect(target(root, "deckStackLayer")).toBe(1);
   expect(deckCards(root).length).toBeGreaterThan(0);
@@ -119,7 +122,7 @@ onIPhone("the bottom bar's grid button switches the deck to main's grid and back
 onIPhone("the grid lists the deck's tabs in the deck's order, so a search filters it the same way", () => {
   const root = deck();
   const stackOrder = root.root.findAll((node) => node.props.testID === "deckHeaderTitle" && typeof node.type === "string").map((node) => node.props.children);
-  toggle(root);
+  toggle();
   expect(cardLabels(root)).toEqual(stackOrder);
   unmount(root);
 });
@@ -130,7 +133,7 @@ onIPhone("a remembered grid opens straight in the grid, and a deck opened from a
   const selected = tabStore.currentTabs().selectedId!;
   act(() => browse.useBrowse.setState({ surface: "deck", deckEntrance: selected, leaving: selected }));
   const root = deck();
-  expect(gridButton(root).props.accessibilityLabel).toBe("Show as Stack");
+  expect(deckGrid.deckIsGrid()).toBe(true);
   expect(motion(root, "tabGridLayer").props.from).toBeUndefined();
   expect(target(root, "tabGridLayer")).toBe(1);
   expect(deckCards(root)).toHaveLength(0);
@@ -149,7 +152,7 @@ onIPhone("main's grid layout: adaptive columns of 150 to 260 pt, 14 pt apart, ro
   expect(tabGridInsets(62, deckHeaderBottom(), 874, 800, 48, 12)).toEqual({ top: 62 + 48 + 8, bottom: 874 - 800 + 48, side: 16 });
 
   const root = deck();
-  toggle(root);
+  toggle();
   const scroll = hosts(root, "tabGridScroll")[0]!;
   const content = StyleSheet.flatten(scroll.props.contentContainerStyle);
   expect(content).toMatchObject({ flexDirection: "row", flexWrap: "wrap", columnGap: 14, rowGap: 18, paddingTop: 14, paddingHorizontal: 16 });
@@ -176,7 +179,7 @@ onIPhone("main's grid layout: adaptive columns of 150 to 260 pt, 14 pt apart, ro
 
 onIPhone("the selected tab's card carries main's 2.5 pt accent edge and the selected trait; the rest keep the 0.5 pt card edge", () => {
   const root = deck();
-  toggle(root);
+  toggle();
   const selected = tabStore.currentTabs().open.find((tab) => tab.id === tabStore.currentTabs().selectedId)!;
   const roles = rolesFor(false);
   const at = cardLabels(root).indexOf(selected.title);
@@ -191,7 +194,7 @@ onIPhone("the selected tab's card carries main's 2.5 pt accent edge and the sele
 onIPhone("the grid starts scrolled so the selected tab's row sits in the middle, as main's scrollTo(anchor: .center), held inside the content", () => {
   act(() => tabStore.useTabs.setState({ ...launchTabs(someTabs(20), 3), incognito: false, listing: 0 }));
   const root = deck();
-  toggle(root);
+  toggle();
   const scroll = hosts(root, "tabGridScroll")[0]!;
   const selectedId = tabStore.currentTabs().selectedId;
   const at = cardLabels(root).indexOf(tabStore.currentTabs().open.find((tab) => tab.id === selectedId)!.title);
@@ -218,7 +221,7 @@ onIPhone("the grid starts scrolled so the selected tab's row sits in the middle,
 onIPhone("once the selected cell, the viewport and the content are measured, the grid scrolls once to centre the cell as laid out, not as estimated", () => {
   act(() => tabStore.useTabs.setState({ ...launchTabs(someTabs(20), 3), incognito: false, listing: 0 }));
   const root = deck();
-  toggle(root);
+  toggle();
   const scroll = hosts(root, "tabGridScroll")[0]!;
   const scrollTo = jest.fn();
   const withInstance = (node: ReactTestInstance) => (node as ReactTestInstance & { instance?: unknown }).instance;
@@ -244,7 +247,7 @@ onIPhone("once the selected cell, the viewport and the content are measured, the
 onIPhone("a tap on a grid card opens its tab plainly, as main's grid does: no growing card", () => {
   const opened = jest.spyOn(browse, "openTab").mockImplementation(() => undefined);
   const root = deck();
-  toggle(root);
+  toggle();
   const target = cards(root)[1]!;
   const id = tabStore.currentTabs().open.find((tab) => tab.title === target.props.accessibilityLabel)!.id;
   act(() => pressOf(target)());
@@ -253,15 +256,15 @@ onIPhone("a tap on a grid card opens its tab plainly, as main's grid does: no gr
   unmount(root);
 });
 
-onIPhone("the close button closes the tab without the deck's poof, and the grid closes up", () => {
+onIPhone("the close button closes the tab without the deck's fly-away, and the grid closes up", () => {
   const closed = jest.spyOn(browse, "closeTabFromDeck").mockImplementation((id) => tabStore.useTabs.setState((state) => ({ ...state, open: state.open.filter((tab) => tab.id !== id) })));
   const root = deck();
-  toggle(root);
+  toggle();
   const label = cards(root)[0]!.props.accessibilityLabel;
   const id = tabStore.currentTabs().open.find((tab) => tab.title === label)!.id;
   act(() => pressOf(hosts(root, "tabGridClose")[0]!)());
   expect(closed).toHaveBeenCalledWith(id);
-  expect(byTestId(root, "poofBurst")).toHaveLength(0);
+  expect(hosts(root, "deckCard")).toHaveLength(0);
   settle();
   expect(cards(root)).toHaveLength(4);
   expect(cardLabels(root)).not.toContain(label);
@@ -271,7 +274,7 @@ onIPhone("the close button closes the tab without the deck's poof, and the grid 
 onIPhone("each grid card is main's CardMenu on a long press, through the system menu, and its Close Tab closes the tab", () => {
   const closed = jest.spyOn(browse, "closeTabFromDeck").mockImplementation(() => undefined);
   const root = deck();
-  toggle(root);
+  toggle();
   const menus = root.root.findAll((node) => node.type === ("ContextMenuView" as never) && node.props.testID === "tabGridCardMenu");
   expect(menus).toHaveLength(5);
   expect(menus[0]!.props.trigger).toBe("longPress");
@@ -288,7 +291,7 @@ onIPhone("VoiceOver reads each card as main's: the title, the host as its value,
   const closed = jest.spyOn(browse, "closeTabFromDeck").mockImplementation(() => undefined);
   const opened = jest.spyOn(browse, "openTab").mockImplementation(() => undefined);
   const root = deck();
-  toggle(root);
+  toggle();
   const card = cards(root)[0]!;
   const tab = tabStore.currentTabs().open.find((one) => one.title === card.props.accessibilityLabel)!;
   expect(card.props.accessibilityRole).toBe("button");
@@ -306,7 +309,7 @@ onIPhone("VoiceOver reads each card as main's: the title, the host as its value,
 onIPhone("an Incognito tab's cell is titled Incognito, and its card reads Incognito with the host", () => {
   act(() => tabStore.useTabs.setState((state) => ({ ...state, privates: someTabs(1, true) })));
   const root = deck();
-  toggle(root);
+  toggle();
   const at = hosts(root, "tabGridTitle").findIndex((node) => node.props.children === "Incognito");
   expect(at).toBeGreaterThanOrEqual(0);
   expect(cards(root)[at]!.props.accessibilityValue).toEqual({ text: "Incognito, site0.example" });
@@ -317,12 +320,12 @@ onIPhone("the Archive capsule yields to the grid, as main hides its archive card
   const root = deck();
   act(() => useArchiveCard.setState({ showing: true }));
   expect(byTestId(root, "archiveCapsule").length + hosts(root, "archiveCapsule").length).toBeGreaterThan(0);
-  toggle(root);
+  toggle();
   expect(byTestId(root, "archiveCapsule").length + hosts(root, "archiveCapsule").length).toBe(0);
   unmount(root);
 });
 
-onAndroid("Android keeps the stack and shows no grid button until its grid exists: the bottom bar is the Search Tabs field and +, as Compose has no grid", () => {
+onAndroid("Android keeps the stack and offers no grid, in the bar or in Settings: the bottom bar is the Search Tabs field and +, as Compose has no grid", () => {
   const root = deck();
   expect(gridButton(root)).toBeUndefined();
   expect(byTestId(root, "deckBarGrid")).toHaveLength(0);
@@ -331,6 +334,7 @@ onAndroid("Android keeps the stack and shows no grid button until its grid exist
   expect(hosts(root, "deckStackLayer")).toHaveLength(0);
   expect(deckCards(root).length).toBeGreaterThan(0);
   expect(counted).not.toHaveBeenCalledWith("deck_grid_shown");
+  expect(deckGrid.deckGridOffered()).toBe(false);
   unmount(root);
 });
 

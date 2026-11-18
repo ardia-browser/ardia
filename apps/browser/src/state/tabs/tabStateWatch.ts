@@ -12,17 +12,28 @@ const wakeIds = (ids: Iterable<string> | undefined, wake: (id: string) => void) 
 
 const openerEngine = (t: Tab | undefined) => (t?.engine && (t.url || navigationOf(t)) ? t.engine : undefined);
 
+const sharingShapeChanged = (tab: Tab, was: Tab | undefined) =>
+  !was ||
+  tab.pin?.as !== was.pin?.as ||
+  tab.pinKey !== was.pinKey ||
+  tab.profileId !== was.profileId ||
+  tab.windowId !== was.windowId ||
+  tab.page.kind !== was.page.kind ||
+  !tab.url !== !was.url ||
+  !tab.liveItem !== !was.liveItem;
+
 function reachesOtherTabs(s: BrowserState, prev: BrowserState, id: string): boolean {
   const tab = s.tabs[id];
   const was = prev.tabs[id];
-  if (!tab || openerEngine(tab) !== openerEngine(was) || shares(s, tab) || shares(prev, was)) return true;
+  if (!tab || openerEngine(tab) !== openerEngine(was)) return true;
+  if ((shares(s, tab) || shares(prev, was)) && sharingShapeChanged(tab, was)) return true;
   return tabEngine(s, id) !== tabEngine(prev, id);
 }
 
 const pinnedGroupChanged = (s: BrowserState, prev: BrowserState) =>
   s.groups !== prev.groups && changedIds(s.groups, prev.groups).some((id) => s.groups[id]?.pinned || prev.groups[id]?.pinned);
 
-export const watchTabState = keyedWatch<BrowserState>(() => useBrowser, (s, prev, wake) => {
+export function tabStateChanges(s: BrowserState, prev: BrowserState, wake: (id: string) => void): true | undefined {
   const wide = s.settings !== prev.settings || s.profiles !== prev.profiles || s.privateSiteMutes !== prev.privateSiteMutes;
   if (wide || s.splits !== prev.splits || s.peeks !== prev.peeks || pinnedGroupChanged(s, prev)) return true;
   if (s.windows !== prev.windows)
@@ -45,7 +56,9 @@ export const watchTabState = keyedWatch<BrowserState>(() => useBrowser, (s, prev
       wakeIds(s.selection[id], wake);
       wakeIds(prev.selection[id], wake);
     }
-});
+}
+
+export const watchTabState = keyedWatch<BrowserState>(() => useBrowser, tabStateChanges);
 
 export const useTabState = <T,>(tabId: string | null | undefined, read: (s: BrowserState) => T): T =>
   useKeyed(watchTabState, tabId, () => read(useBrowser.getState()));

@@ -11,7 +11,7 @@ import {
 import { create } from "zustand";
 import { useBrowser } from "../browser/store";
 import { engineProfile } from "../browser/model";
-import { historyExpired } from "./adapters";
+import { historyExpired } from "./historyAdapter";
 import { settingsToReapply } from "./settingsAdapter";
 import { watchExtensionIntents } from "./extensions";
 import { appAdapters, extensionsOf, forgetScopeAdapters, profileAdapters, typeSynced } from "./scopeAdapters";

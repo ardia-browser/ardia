@@ -100,7 +100,7 @@ test("each deck card is a system context menu on a long press with main's CardMe
   expect(itemOf(items(menus[0]!), "Studio")!.systemImage).toBe("desktopcomputer");
   expect(itemOf(items(menus[0]!), "Shivam’s MacBook Pro")!.systemImage).toBe("laptopcomputer");
   expect(itemOf(items(menus[0]!), "Pixel")!.systemImage).toBe("iphone");
-  expect(itemOf(items(menus[0]!), "Home")!.systemImage).toBe("h.circle.fill");
+  expect(itemOf(items(menus[0]!), "Home")!.systemImage).toBe("h.square.fill");
   expect(itemOf(items(menus[0]!), "Close Tab")!.destructive).toBe(true);
   expect(getByGestureTestId("deckLongPress").config.enabled).toBe(false);
   unmount(root);
@@ -176,11 +176,26 @@ test("the space switcher lists the spaces with a check on the current one and th
   expect(switcher.props.trigger).toBe("tap");
   expect(items(switcher)).toEqual([
     { id: "0", title: "Work", systemImage: "briefcase", checked: true },
-    { id: "1", title: "Home", systemImage: "h.circle.fill" },
+    { id: "1", title: "Home", systemImage: "h.square.fill" },
   ]);
   choose(switcher, "Home");
   expect(select).toHaveBeenCalledWith("home");
   unmount(root);
+});
+
+test("the deck header shows a space's name alone when it has no icon of its own, with no initial in a circle, and the space's icon beside its name when it has one", () => {
+  withSpaces([HOME, WORK]);
+  const plain = deck();
+  const title = menuAround(plain, "Space, Home");
+  expect(title.findAll((node) => node.props.testID === "startSpaceGlyph")).toHaveLength(0);
+  expect(title.findAll((node) => node.props.testID === "deckSpaceTitle" && typeof node.type === "string")).toHaveLength(1);
+  const words = title.findAll((node) => typeof node.type === "string" && node.type === "Text").map((node) => node.children.join(""));
+  expect(words).toEqual(["Home"]);
+  unmount(plain);
+  withSpaces([profile("garden", "Garden", "🌱"), HOME]);
+  const marked = deck();
+  expect(menuAround(marked, "Space, Garden").findAll((node) => node.props.testID === "startSpaceGlyph" && typeof node.type === "string")).toHaveLength(1);
+  unmount(marked);
 });
 
 test("the Incognito pill's menu is Close Incognito Tabs, which asks with an action sheet first", async () => {

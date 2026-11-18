@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
-import { INTERFACE_STYLE_NAMES, INTERFACE_STYLES, offeredInterfaceStyle, offeredScheme, SCHEME_CHOICES, SCHEME_NAMES } from "../../lib/appearance";
+import { INTERFACE_STYLE_NAMES, INTERFACE_STYLES, offeredInterfaceStyle, offeredScheme, SCHEME_CHOICES, SCHEME_NAMES, TABS_STYLE_FOOTER } from "../../lib/appearance";
 import { syncOffered } from "../../state/sync/offer";
 import { setColorChoice, setInterfaceStyle, setSchemeChoice } from "../../state/settings/actions";
 import { useAppearanceSummary } from "../../state/settings/appearance";
@@ -9,6 +9,8 @@ import { usePreferences } from "../../state/settings/hooks";
 import { popSettings, pushSettings } from "../../state/settings/nav";
 import { matchMyMac } from "../../state/sync/actions";
 import { useSyncEnabled } from "../../state/sync/hooks";
+import { deckGridOffered, setDeckGrid, useDeckGrid } from "../../state/browse/deckGrid";
+import { useIncognito } from "../../state/tabs/hooks";
 import { capsule, font, PROFILE_COLORS, settingsLayout, settingsMotion, settingsTint, space, Symbol, useProfileLook, useTheme, type ProfileColor } from "../ui";
 import { Divider, Group, IconTile, NavRow, SettingsPage, ToggleRow } from "./SettingsKit";
 
@@ -29,6 +31,8 @@ export function AppearancePage() {
   const scheme = offeredScheme(usePreferences((p) => p.schemeChoice), offersSync);
   const styleChoices = offersSync ? INTERFACE_STYLES : INTERFACE_STYLES.filter((choice) => choice !== "matchMac");
   const schemeChoices = offersSync ? SCHEME_CHOICES : SCHEME_CHOICES.filter((choice) => choice !== "matchMac");
+  const grid = useDeckGrid();
+  const incognito = useIncognito();
   return (
     <SettingsPage title="Appearance" onBack={popSettings}>
       <Group>
@@ -45,6 +49,12 @@ export function AppearancePage() {
           <CheckRow key={choice} title={SCHEME_NAMES[choice]} checked={scheme === choice} divider={index < schemeChoices.length - 1} onPress={() => setSchemeChoice(choice)} />
         ))}
       </Group>
+      {deckGridOffered() ? (
+        <Group header="Tabs" footer={TABS_STYLE_FOOTER}>
+          <CheckRow title="Stack" checked={!grid} divider onPress={() => setDeckGrid(false, !incognito)} />
+          <CheckRow title="Grid" checked={grid} divider={false} onPress={() => setDeckGrid(true, !incognito)} />
+        </Group>
+      ) : null}
     </SettingsPage>
   );
 }

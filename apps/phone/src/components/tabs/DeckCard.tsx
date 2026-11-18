@@ -1,9 +1,9 @@
 import { memo, useEffect, useState, type ReactNode } from "react";
 import { countRender } from "../../state/app/interactionPerf";
 import { PixelRatio, Platform, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
-import Animated, { useAnimatedReaction, useAnimatedStyle, useDerivedValue, useSharedValue, type SharedValue } from "react-native-reanimated";
+import Animated, { useAnimatedStyle, useDerivedValue, useSharedValue, type SharedValue } from "react-native-reanimated";
 import { isUnseenReceived } from "../../lib/tabFace";
-import { DECK, DECK_HEADER, deckBarBand, deckHeaderIconReveal, deckStatusStrip, deckHeaderLeading, deckHeaderPlacement, deckLeading, deckSlot, deckVisibleWidth, lerp, titleReveal, type DeckGeometry, type DeckSlots } from "../../lib/deckGeometry";
+import { DECK, DECK_HEADER, deckBarBand, deckFlyLift, deckHeaderIconReveal, deckLeaveFade, deckStatusStrip, deckHeaderLeading, deckHeaderPlacement, deckLeading, deckSlot, deckVisibleWidth, lerp, titleReveal, type DeckGeometry, type DeckLeaving, type DeckSlots } from "../../lib/deckGeometry";
 import { useHeldPageTone } from "../../state/browse/deckHold";
 import { display } from "../../state/search/omnibox";
 import type { BrowserTab } from "../../state/tabs/tabModels";
@@ -53,6 +53,13 @@ export function deckRole(phase: number, expanded: number, index: number): DeckRo
 
 export const EXPANDED_Z = 100_000;
 
+export const DECK_Z_STEP = 4;
+
+export const leavingZ = (index: number) => {
+  "worklet";
+  return Math.max(index, 0) * DECK_Z_STEP - DECK_Z_STEP / 2;
+};
+
 export type DeckMotion = {
   orderIds: SharedValue<readonly string[]>;
   shiftBy: SharedValue<number>;
@@ -65,11 +72,72 @@ export type DeckMotion = {
   positionProgress: SharedValue<number>;
   dragIndex: SharedValue<number>;
   dragLift: SharedValue<number>;
-  flyIndex: SharedValue<number>;
-  flyLift: SharedValue<number>;
-  flyVanish: SharedValue<number>;
+  leaving: SharedValue<DeckLeaving>;
+  flyClock: SharedValue<number>;
   covering: SharedValue<string>;
 };
+
+export type DeckNow = {
+  ids: readonly string[];
+  scroll: number;
+  phase: number;
+  expanded: number;
+  scaleProgress: number;
+  positionProgress: number;
+  dragIndex: number;
+  dragLift: number;
+  leaving: DeckLeaving;
+  flyClock: number;
+  covering: string;
+  fromSlots: DeckSlots;
+  shiftBy: number;
+  gap: number;
+};
+
+export function deckNow(motion: DeckMotion): DeckNow {
+  "worklet";
+  return {
+    ids: motion.orderIds.value,
+    scroll: motion.scroll.value,
+    phase: motion.phase.value,
+    expanded: motion.expandedIndex.value,
+    scaleProgress: motion.scaleProgress.value,
+    positionProgress: motion.positionProgress.value,
+    dragIndex: motion.dragIndex.value,
+    dragLift: motion.dragLift.value,
+    leaving: motion.leaving.value,
+    flyClock: motion.flyClock.value,
+    covering: motion.covering.value,
+    fromSlots: motion.fromSlots.value,
+    shiftBy: motion.shiftBy.value,
+    gap: motion.gap.value,
+  };
+}
+
+export type CardMotion = { role: DeckRole; slot: number; relative: number; lift: number; fade: number; isLast: boolean; z: number; leaving: boolean };
+
+export function deckCardMotion(now: DeckNow, index: number, id: string): CardMotion {
+  "worklet";
+  const leave = now.leaving[id];
+  if (leave) {
+    const ms = now.flyClock - leave.t0;
+    const slot = deckSlot(id, leave.at, now.fromSlots, now.shiftBy, now.gap);
+    return { role: "stay", slot, relative: slot - now.scroll, lift: leave.fadeMs > 0 ? leave.lift : deckFlyLift(leave, ms), fade: deckLeaveFade(leave, ms), isLast: leave.last, z: leave.z, leaving: true };
+  }
+  const listed = index >= 0;
+  const role = deckRole(now.phase, now.expanded, index);
+  const slot = listed ? deckSlot(id, index, now.fromSlots, now.shiftBy, now.gap) : 0;
+  return {
+    role,
+    slot,
+    relative: slot - now.scroll,
+    lift: listed && now.dragIndex === index ? now.dragLift : 0,
+    fade: listed ? 0 : 1,
+    isLast: index === now.ids.length - 1,
+    z: Math.max(index, 0) * DECK_Z_STEP + (role === "expanded" ? EXPANDED_Z : 0),
+    leaving: false,
+  };
+}
 
 type Props = {
   tab: BrowserTab;
@@ -81,9 +149,9 @@ type Props = {
   onCloseNow: (index: number) => void;
 };
 
-type Pose = { x: number; y: number; scale: number; corner: number; opacity: number; header: number; visible: number; lift: number; vanish: number };
+type Pose = { x: number; y: number; scale: number; corner: number; opacity: number; header: number; visible: number; lift: number; fade: number };
 
-export function cardPose(g: DeckGeometry, role: DeckRole, relative: number, sp: number, pp: number, lift: number, vanish: number, isLast: boolean): Pose {
+export function cardPose(g: DeckGeometry, role: DeckRole, relative: number, sp: number, pp: number, lift: number, fade: number, isLast: boolean): Pose {
   "worklet";
   const cx = deckLeading(g, relative) + g.cardWidth / 2;
   const cy = g.cardCenterY;
@@ -108,13 +176,12 @@ export function cardPose(g: DeckGeometry, role: DeckRole, relative: number, sp: 
   } else if (role === "slideRight") {
     x += (1 - pp) * g.width;
   }
-  const fade = Math.min(Math.max(vanish, 0), 1);
+  const shown = 1 - Math.min(Math.max(fade, 0), 1);
   y += lift;
-  scale *= 1 - 0.28 * fade;
-  opacity *= 1 - fade;
+  opacity *= shown;
   const settle = role === "stay" ? 1 : Math.max(0, (pp - 0.7) / 0.3);
   const liftFade = Math.max(0, 1 + lift / 120);
-  return { x, y, scale, corner, opacity, header: Math.min(1, settle) * Math.min(1, liftFade) * (1 - fade), visible: deckVisibleWidth(g, relative, isLast), lift, vanish: fade };
+  return { x, y, scale, corner, opacity, header: Math.min(1, settle) * Math.min(1, liftFade) * shown, visible: deckVisibleWidth(g, relative, isLast), lift, fade: 1 - shown };
 }
 
 export const DeckCard = memo(function DeckCard({ tab, index, geometry: g, motion, onOpen, onClose, onCloseNow }: Props) {
@@ -122,29 +189,17 @@ export const DeckCard = memo(function DeckCard({ tab, index, geometry: g, motion
   const theme = useTheme();
   const design = useDesign();
   const tone = shownTone(useHeldPageTone(tab.id), tab.themeColorHex);
-  const { orderIds, shiftBy, fromSlots, gap, phase, expandedIndex, scroll, scaleProgress, positionProgress, dragIndex, dragLift, flyIndex, flyLift, flyVanish, covering } = motion;
+  const { orderIds, scaleProgress, covering } = motion;
   const id = tab.id;
 
   const at = useDerivedValue(() => orderIds.value.indexOf(id), [id]);
-  const vanished = useSharedValue(false);
-  useAnimatedReaction(
-    () => at.value >= 0 && flyIndex.value === at.value && flyVanish.value >= 1,
-    (gone) => {
-      if (gone) vanished.value = true;
-    },
-  );
 
   const placed = useDerivedValue(() => {
-    const i = at.value;
-    const listed = i >= 0;
-    const role = deckRole(phase.value, expandedIndex.value, i);
-    const flying = listed && flyIndex.value === i;
-    const lift = listed && dragIndex.value === i ? dragLift.value : flying ? flyLift.value : 0;
-    const isLast = i === orderIds.value.length - 1;
-    const slot = listed ? deckSlot(id, i, fromSlots.value, shiftBy.value, gap.value) : 0;
-    const p = cardPose(g, role, slot - scroll.value, scaleProgress.value, positionProgress.value, lift, flying ? flyVanish.value : vanished.value || !listed ? 1 : 0, isLast);
+    const now = deckNow(motion);
+    const m = deckCardMotion(now, at.value, id);
+    const p = cardPose(g, m.role, m.relative, now.scaleProgress, now.positionProgress, m.lift, m.fade, m.isLast);
     const top = p.y - (g.cardHeight * p.scale) / 2 - tabsLayout.headerGap - tabsLayout.headerHeight;
-    return { pose: p, top, place: deckHeaderPlacement(p.x - (g.cardWidth * p.scale) / 2, p.visible), z: Math.max(i, 0) * 2 + (role === "expanded" ? EXPANDED_Z : 0), expanded: role === "expanded" };
+    return { pose: p, top, place: deckHeaderPlacement(p.x - (g.cardWidth * p.scale) / 2, p.visible), z: m.z, expanded: m.role === "expanded" };
   }, [g, id]);
   const cardStyle = useAnimatedStyle(() => {
     const p = placed.value.pose;

@@ -1,11 +1,11 @@
 import { memo, useEffect, useMemo, useState, type ReactNode } from "react";
 import { countRender } from "../../state/app/interactionPerf";
 import { Platform, StyleSheet, useWindowDimensions, View } from "react-native";
-import { GestureDetector } from "react-native-gesture-handler";
-import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BAR_SHOWN, barShown, followScroll, obscuredBottom, pageInsets } from "../../lib/barCollapse";
-import { neighbours } from "../../lib/pagerPhysics";
+import { neighbours, PAGER } from "../../lib/pagerPhysics";
 import { useSystemBars } from "../../state/app/systemBars";
 import { useFrozenOrder, useNavigation, usePageTone, watchPageLoad } from "../../state/browse/hooks";
 import { closePageMenu, editPageQuery, openPageMenu } from "../../state/page/actions";
@@ -17,8 +17,9 @@ import { reportBarPill } from "../../state/search/stageBar";
 import { searchStageIsNative } from "../../platform/searchStage";
 import { usePreferences } from "../../state/settings/hooks";
 import { closeFrontTab, menuOpenedHaptic, recentTabs, switchToTab, tabTitle } from "../../state/browse/tabMenus";
-import { useDeckOrder } from "../../state/tabs/hooks";
+import { useDeckOrder, useIncognito } from "../../state/tabs/hooks";
 import type { BrowserTab } from "../../state/tabs/tabModels";
+import { countUsage } from "../../state/telemetry/telemetry";
 import {
   barCenterFromBottom,
   barHeight,
@@ -120,6 +121,13 @@ export const BrowsingScreen = memo(function BrowsingScreen({ tab }: { tab: Brows
     const id = delta < 0 ? left?.id : right?.id;
     if (id) switchToNeighbour(id);
   };
+  const incognito = useIncognito();
+  const swipesUp = !column && !searching && !collapse.hidden;
+  const openDeckFromBar = () => {
+    if (!incognito) countUsage("deck_bar_swipes");
+    void showDeck();
+  };
+  const barGesture = useMemo(() => Gesture.Race(pager.gesture, barSwipeUp(swipesUp, pager.active, openDeckFromBar)), [pager.gesture, swipesUp, incognito]);
   const statusStyle = useAnimatedStyle(() => ({ backgroundColor: painted.value ? withTiming(top, { duration: tabsMotion.barTone }) : top }), [top]);
   const barStyle = useAnimatedStyle(() => ({ backgroundColor: painted.value ? withTiming(bottom, { duration: tabsMotion.barTone }) : bottom }), [bottom]);
   return (
@@ -159,7 +167,7 @@ export const BrowsingScreen = memo(function BrowsingScreen({ tab }: { tab: Brows
             onMore={openPageMenu}
           />
         ) : (
-          <GestureDetector gesture={pager.gesture}>
+          <GestureDetector gesture={barGesture}>
             <Animated.View
               testID="pageBar"
               pointerEvents={collapse.hidden ? "none" : design === "redesigned" ? "box-none" : "auto"} collapsable={false}
@@ -268,6 +276,19 @@ function useBarCollapse(tabId: string, finding: boolean, folds: boolean) {
 function tabsMenuItems(order: BrowserTab[]): MenuItem[] {
   const others = recentTabs(order).map((tab): MenuItem => ({ label: tabTitle(tab), onPress: () => switchToTab(tab.id) }));
   return [...others, ...(others.length ? ["divider" as const] : []), { label: "Close Tab", icon: "xmark", destructive: true, onPress: closeFrontTab }];
+}
+
+export function barSwipeUp(enabled: boolean, pagerActive: { value: number }, open: () => void) {
+  return Gesture.Pan()
+    .withTestId("barSwipeUp")
+    .enabled(enabled)
+    .activeOffsetY(-browseLayout.barSwipeUp)
+    .failOffsetY(PAGER.minimumDistance)
+    .failOffsetX([-PAGER.minimumDistance, PAGER.minimumDistance])
+    .onStart(() => {
+      if (pagerActive.value) return;
+      runOnJS(open)();
+    });
 }
 
 function PageLoadingLine({ tabId, color }: { tabId: string; color: string }) {

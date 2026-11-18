@@ -25,7 +25,7 @@ export function nativeMenusModule(actual: { settingsUI: object }) {
       mockNative.sheets.push(options);
       return Promise.resolve(mockNative.answer);
     },
-    settingsUI: { ...actual.settingsUI, spaceMenuSymbol: (name: string, icon: string | null) => icon ?? `${name.slice(0, 1).toLowerCase()}.circle.fill` },
+    settingsUI: { ...actual.settingsUI, spaceMenuSymbol: (name: string, icon: string | null) => icon ?? `${name.slice(0, 1).toLowerCase()}.square.fill` },
   };
 }
 

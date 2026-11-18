@@ -80,8 +80,10 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
 - **The owner's real browser data is fair game for debugging.** Read the owner's Ardia, Dia and other browser
   profiles when they help reproduce a bug. Copy what you need into a scratch dir and point a hidden instance's
   `ARDIA_DATA_DIR` at the copy; never write to the live profile or open it in a running app.
-- **No AI features.** This is the owner's decision. Dia's AI rows in `docs/dia-feature-parity.md`
-  stay ⏸.
+- **AI only through the plugin.** This is the owner's decision. The base browser has no AI feature and runs no AI
+  code. AI ships as a first-party plugin on the plugin host (#2462, #2463), off until the user enables it, and
+  whatever it needs from the browser becomes a public extension point any plugin can use, never a private hook.
+  Dia's AI rows in `docs/dia-feature-parity.md` stay ⏸ until the plugin ships them.
 
 ## Platforms
 One browser UI (`apps/browser/src` and `packages/*/src`) runs on three platforms, each with its own native layer and

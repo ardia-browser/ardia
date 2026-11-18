@@ -124,6 +124,7 @@ onAndroid("on the hand-built Appearance Android keeps, the page has main's choic
   expect(text).toContain("Match My Mac follows your Mac. System follows this device.");
   const choices = root.root.findAll((node) => node.props.accessibilityRole === "button" && node.props.accessibilityState && typeof node.props.onPress === "function").map((node) => node.props.accessibilityLabel);
   expect(choices).toEqual(["Match My Mac", "Glass", "Classic", "Match My Mac", "System", "Light", "Dark"]);
+  expect(text).not.toContain("How your open tabs are laid out.");
   expect(root.root.findAll((node) => node.props.testID === "swatchRing" && typeof node.type === "string").length).toBe(9);
   expect(root.root.findAll((node) => node.props.accessibilityRole === "switch" && node.props.accessibilityLabel === "Match My Mac").length).toBe(0);
   unmount(root);

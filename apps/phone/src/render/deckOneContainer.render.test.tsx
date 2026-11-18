@@ -130,7 +130,7 @@ function staysOnRoundedTrueX(root: ReactTestRenderer, where: string) {
   let checked = 0;
   for (const card of cardsOf(root)) {
     const index = ids.indexOf(card.id);
-    if (index < 0 || m.phase.value !== 0 || m.dragIndex.value === index || m.flyIndex.value === index) continue;
+    if (index < 0 || m.phase.value !== 0 || m.dragIndex.value === index) continue;
     const slot = deckSlot(card.id, index, m.fromSlots.value, m.shiftBy.value, m.gap.value);
     const wanted = Math.round(deckLeading(g, slot - m.scroll.value) * RATIO);
     const shown = screenLeft(card.host) * RATIO;
@@ -202,21 +202,21 @@ onAndroid("with ArdiaOneContainerScroll, every on-screen card is within half a p
 function closeWatched(root: ReactTestRenderer, label: string) {
   const last = new Map<string, number>();
   let worst = 0;
-  let faded = false;
+  let flew = false;
   for (let f = 0; f < 90; f++) {
     frame();
     staysOnRoundedTrueX(root, `${label}, frame ${f}`);
-    if (hosts(root, "deckCard").some((card) => (styleOf(card).opacity ?? 1) < 1)) faded = true;
-    const flying = motionOf(root).flyIndex.value;
+    const flying = new Set(Object.keys(motionOf(root).leaving.value));
+    if (flying.size) flew = true;
     for (const card of cardsOf(root)) {
-      if (motionOf(root).orderIds.value.indexOf(card.id) === flying) continue;
+      if (flying.has(card.id) || motionOf(root).orderIds.value.indexOf(card.id) < 0) continue;
       const x = screenLeft(card.host);
       const was = last.get(card.id);
       if (was !== undefined) worst = Math.max(worst, Math.abs(x - was));
       last.set(card.id, x);
     }
   }
-  expect(faded).toBe(true);
+  expect(flew).toBe(true);
   expect(hosts(root, "deckCard").every((card) => styleOf(card).opacity === 1)).toBe(true);
   return worst;
 }
@@ -233,7 +233,7 @@ onAndroid("with ArdiaOneContainerScroll, closing the last card (the scroll moves
   done(root);
 });
 
-onAndroid("with ArdiaOneContainerScroll, closing a card in the middle of 26 fades it and slides the rest along without a jumped frame", () => {
+onAndroid("with ArdiaOneContainerScroll, closing a card in the middle of 26 flies it away and slides the rest along without a jumped frame", () => {
   const root = deck(true);
   scrollTo(root, 20);
   act(() => jest.advanceTimersByTime(2000));

@@ -1,5 +1,5 @@
 import { Platform } from "react-native";
-import { duration, poofMs, spring, tabsMotion, trayLandingDelayMs, trayMotion } from "../components/ui";
+import { duration, spring, tabsMotion, trayLandingDelayMs, trayMotion } from "../components/ui";
 import { delay } from "../components/ui/motion";
 
 const onIPhone = Platform.OS === "ios";
@@ -49,7 +49,6 @@ test("fades, flights and waits are SwiftUI's lengths on iPhone and Compose's on 
     surfaceFade: tabsMotion.surfaceFade,
     trayDim: trayMotion.dim,
     resultsIn: trayMotion.resultsIn,
-    poof: poofMs,
     panelLanding: trayLandingDelayMs,
     progressFill: duration.progressFill,
     progressFade: duration.progressFade,
@@ -58,8 +57,13 @@ test("fades, flights and waits are SwiftUI's lengths on iPhone and Compose's on 
   };
   expect(lengths).toEqual(
     onIPhone
-      ? { fade: 150, flyAway: 160, barTone: 200, surfaceFade: 150, trayDim: 200, resultsIn: 100, poof: 300, panelLanding: 220, progressFill: 150, progressFade: 200, progressAdvance: 300, progressReveal: 100 }
-      : { fade: 200, flyAway: 200, barTone: 250, surfaceFade: 200, trayDim: 300, resultsIn: 140, poof: 420, panelLanding: 450, progressFill: 200, progressFade: 250, progressAdvance: 450, progressReveal: 150 },
+      ? { fade: 150, flyAway: 160, barTone: 200, surfaceFade: 150, trayDim: 200, resultsIn: 100, panelLanding: 220, progressFill: 150, progressFade: 200, progressAdvance: 300, progressReveal: 100 }
+      : { fade: 200, flyAway: 200, barTone: 250, surfaceFade: 200, trayDim: 300, resultsIn: 140, panelLanding: 450, progressFill: 200, progressFade: 250, progressAdvance: 450, progressReveal: 150 },
   );
   expect(spring(1, 1).mass).toBe(1);
+});
+
+test("a closed card flies off on main's fly-away spring on both phones: response 0.32 with no bounce, and the gap closes on each phone's own gap spring", () => {
+  expect(tabsMotion.cardFlyAway).toBe(0.32);
+  expect(asSpring(tabsMotion.gapClose)).toEqual(onIPhone ? [0.22, 1] : [0.4, 0.8]);
 });

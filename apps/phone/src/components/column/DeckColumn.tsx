@@ -18,17 +18,14 @@ type Props = {
   width: number;
   shown: boolean;
   incognito: boolean;
-  grid: boolean;
-  gridAvailable: boolean;
   hasTabs: boolean;
-  onGrid: () => void;
   onQuery: (needle: string) => void;
   onCloseAll: () => void;
   menusShown?: boolean;
   onMenu?: (open: boolean) => void;
 } & ChromeFade;
 
-export function DeckColumn({ column, width, shown, incognito, grid, gridAvailable, hasTabs, onGrid, onQuery, onCloseAll, menusShown = true, onMenu, glassShown, glassShownMs, glyphFade }: Props) {
+export function DeckColumn({ column, width, shown, incognito, hasTabs, onQuery, onCloseAll, menusShown = true, onMenu, glassShown, glassShownMs, glyphFade }: Props) {
   const fade = { glassShown, glassShownMs, glyphFade };
   const dark = useTheme().dark;
   const syncEnabled = useSyncStatus().isEnabled;
@@ -43,7 +40,7 @@ export function DeckColumn({ column, width, shown, incognito, grid, gridAvailabl
   const content = columnContentFrame(column, width);
   const fieldWidth = Math.max(columnContentWidth(column, width) - SCREEN_COLUMN.fieldSide * 2, 0);
   const menu = { fixedOrder: true, haptic: menuOpenedHaptic, disabled: !menusShown, onOpen: () => onMenu?.(true), onClose: () => onMenu?.(false) };
-  const moreTop = SCREEN_COLUMN.top + (SCREEN_COLUMN.button + SCREEN_COLUMN.spacing) * (gridAvailable ? 2 : 1);
+  const moreTop = SCREEN_COLUMN.top + SCREEN_COLUMN.button + SCREEN_COLUMN.spacing;
   const plusTop = moreTop + SCREEN_COLUMN.button + SCREEN_COLUMN.spacing;
   return (
     <>
@@ -58,20 +55,6 @@ export function DeckColumn({ column, width, shown, incognito, grid, gridAvailabl
         <SearchTabsField search={search} style={styles.fieldHit} {...fade} />
       </Animated.View>
       <SideColumn column={column} width={width} testID="deckColumn">
-        {gridAvailable ? (
-          <GlassCircleButton
-            icon={grid ? "squareStack" : "squareGrid2x2"}
-            label={grid ? "Show as Stack" : "Show as Grid"}
-            testID="deckColumnGrid"
-            diameter={SCREEN_COLUMN.button}
-            dark={dark}
-            {...fade}
-            onPress={() => {
-              search.input.current?.blur();
-              onGrid();
-            }}
-          />
-        ) : null}
         <GlassCircleButton icon="magnifyingglass" label="Search Tabs" testID="deckColumnSearch" diameter={SCREEN_COLUMN.button} dark={dark} {...fade} onPress={() => search.input.current?.focus()} />
         <MenuTrigger items={deckMoreMenuItems({ syncEnabled, canReopen, hasTabs, onCloseAll })} trigger="tap" {...menu} place={{ ...columnMenuPlace(column, width, moreTop), width: tabsLayout.menuWidth }}>
           {({ onPress }) => <GlassCircleButton icon="ellipsis" label="More" testID="deckColumnMore" diameter={SCREEN_COLUMN.button} dark={dark} {...fade} onPress={onPress ?? noop} />}

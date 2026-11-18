@@ -1,3 +1,4 @@
+import { changedIds } from "../browser/changes";
 import { create } from "zustand";
 import { getHiddenElements, hideElements, restoreElements } from "../../platform/contentBlocker";
 import { useBrowser, type BrowserState } from "../browser/store";
@@ -193,7 +194,7 @@ const sessionHidingKey = (s: BrowserState, tabId: string) => {
 useBrowser.subscribe((s, prev) => {
   const session = useHiddenElements.getState().session;
   if (!Object.keys(session).length || (s.tabs === prev.tabs && s.live === prev.live)) return;
-  for (const tabId of Object.keys(s.tabs)) {
+  for (const tabId of new Set([...changedIds(s.tabs, prev.tabs), ...changedIds(s.live, prev.live)])) {
     const key = sessionHidingKey(s, tabId);
     if (!key || key === sessionHidingKey(prev, tabId)) continue;
     const tab = s.tabs[tabId]!;

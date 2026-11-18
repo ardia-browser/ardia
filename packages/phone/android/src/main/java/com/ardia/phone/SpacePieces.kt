@@ -115,8 +115,8 @@ internal object SpaceRules {
 
     fun menuSymbol(name: String, icon: String?): String {
         symbol(icon)?.let { return filled(it) }
-        val circled = "${initial(name).lowercase()}.circle.fill"
-        return if (ArdiaSymbols.named(circled) != null) circled else "circle.fill"
+        val squared = "${initial(name).lowercase()}.square.fill"
+        return if (ArdiaSymbols.named(squared) != null) squared else "square.fill"
     }
 
     fun tones(color: String?, themeColors: List<String>, themeDarkColors: List<String>?, dark: Boolean, increasedContrast: Boolean): List<Color> {

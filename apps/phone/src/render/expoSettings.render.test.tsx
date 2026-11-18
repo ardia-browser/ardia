@@ -3,6 +3,10 @@ import { act, type ReactTestInstance } from "react-test-renderer";
 import { SettingsView } from "../components/settings/SettingsView";
 import { SettingsShortcuts } from "../components/ui";
 import { useBrowse } from "../state/browse/store";
+import * as deckGrid from "../state/browse/deckGrid";
+import { writePreference } from "../state/store/browserDatabase";
+import { browserDatabase } from "../state/store/database";
+import * as telemetry from "../state/telemetry/telemetry";
 import { openSettings, pushSettings, settingsNav } from "../state/settings/nav";
 import { usePreferences } from "../state/settings/store";
 import { PHONE_SHARING_COPY } from "../lib/telemetryCopy";
@@ -88,8 +92,8 @@ onIos("on iPhone Appearance is main's page on Expo UI: Color with nine swatches,
   expect(footers).toEqual(["Match My Mac follows your Mac. Reduce Transparency in iOS Settings always uses Classic.", "Match My Mac follows your Mac. System follows this device."]);
   const buttons = (root: Root) => hosts(root, (props) => Array.isArray(props.modifiers) && (props.modifiers as { $type: string }[]).some((modifier) => modifier.$type === "accessibilityAddTraits"));
   const traitsOf = (node: ReactTestInstance) => ((node.props.modifiers as { $type: string; traits?: string[] }[]).find((modifier) => modifier.$type === "accessibilityAddTraits")?.traits ?? []);
-  expect(buttons(root).length).toBe(9 + 3 + 4);
-  expect(buttons(root).filter((node) => traitsOf(node).includes("isSelected"))).toHaveLength(3);
+  expect(buttons(root).length).toBe(9 + 3 + 4 + 2);
+  expect(buttons(root).filter((node) => traitsOf(node).includes("isSelected"))).toHaveLength(4);
   const glass = buttons(root).find((node) => node.findAll((inner) => typeof inner.props.text === "string" && (inner.props.text as string).startsWith("Glass")).length > 0)!;
   act(() => (glass.props.onButtonPress ?? glass.props.onPress)({ nativeEvent: {} }));
   expect(usePreferences.getState().interfaceStyle).toBe("glass");
@@ -106,12 +110,39 @@ onIos("where sync isn't offered, the Expo UI Appearance page has no Match My Mac
   expect(texts).toContain("System follows this device.");
   const traitsOf = (node: ReactTestInstance) => ((node.props.modifiers as { $type: string; traits?: string[] }[]).find((modifier) => modifier.$type === "accessibilityAddTraits")?.traits ?? []);
   const buttons = hosts(root, (props) => Array.isArray(props.modifiers) && (props.modifiers as { $type: string }[]).some((modifier) => modifier.$type === "accessibilityAddTraits"));
-  expect(buttons.length).toBe(9 + 2 + 3);
+  expect(buttons.length).toBe(9 + 2 + 3 + 2);
   const selected = buttons.filter((node) => traitsOf(node).includes("isSelected")).flatMap((node) => node.findAll((inner) => typeof inner.props.text === "string").map((inner) => inner.props.text as string));
   expect(selected.some((text) => text.startsWith("Glass"))).toBe(true);
   expect(selected.some((text) => text.startsWith("System"))).toBe(true);
   unmount(root);
   jest.restoreAllMocks();
+});
+
+onIos("on iPhone Appearance ends with main's Tabs section: Stack and Grid as checkmark rows with main's footer, Stack chosen by default, and a tap switching the deck's style and remembering it", () => {
+  writePreference(browserDatabase(), deckGrid.DECK_GRID_KEY, null);
+  act(() => deckGrid.forgetDeckGrid());
+  const counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
+  openSettings({ page: "appearance" });
+  const root = renderSurface(<SettingsView />);
+  const sections = hosts(root, (props) => typeof props.title === "string" && ["Interface Style", "Light or Dark", "Tabs"].includes(props.title as string));
+  expect(sections.map((node) => node.props.title)).toEqual(["Interface Style", "Light or Dark", "Tabs"]);
+  const tabs = sections[2]!;
+  expect(tabs.findAll((node) => typeof node.type === "string" && node.props.text === "How your open tabs are laid out. Swipe up on the bottom bar to see them.")).toHaveLength(1);
+  const rows = tabs.findAll((node) => typeof node.type === "string" && Array.isArray(node.props.modifiers) && (node.props.modifiers as { $type: string }[]).some((modifier) => modifier.$type === "accessibilityAddTraits"));
+  const traitsOf = (node: ReactTestInstance) => ((node.props.modifiers as { $type: string; traits?: string[] }[]).find((modifier) => modifier.$type === "accessibilityAddTraits")?.traits ?? []);
+  const titleOf = (node: ReactTestInstance) => node.findAll((inner) => typeof inner.props.title === "string" || typeof inner.props.text === "string").map((inner) => (inner.props.title ?? inner.props.text) as string)[0]?.replace(" ✓", "");
+  expect(rows.map(titleOf)).toEqual(["Stack", "Grid"]);
+  expect(rows.map((node) => traitsOf(node).includes("isSelected"))).toEqual([true, false]);
+  const press = (node: ReactTestInstance) => act(() => (node.props.onButtonPress ?? node.props.onPress)({ nativeEvent: {} }));
+  press(rows[1]!);
+  expect(deckGrid.deckIsGrid()).toBe(true);
+  expect(counted).toHaveBeenCalledWith("deck_grid_shown");
+  press(rows[0]!);
+  expect(deckGrid.deckIsGrid()).toBe(false);
+  unmount(root);
+  writePreference(browserDatabase(), deckGrid.DECK_GRID_KEY, null);
+  act(() => deckGrid.forgetDeckGrid());
+  counted.mockRestore();
 });
 
 onIos("Archive and Spaces are main's own SwiftUI buttons, the settings piece SettingsShortcuts, so a screen reader finds both; each opens its surface; the Sync row has main's 6-point vertical padding and 14-point gap", () => {

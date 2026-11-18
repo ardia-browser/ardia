@@ -63,6 +63,12 @@ const NEW_TAB_LINKS: Option<Settings["newTabLinksOpenIn"]>[] = [
   { value: "littleArdia", title: "Little Ardia" },
 ];
 
+const PEEK_BUTTONS: Option<Settings["peekButtons"]>[] = [
+  { value: "top", title: "In the title bar" },
+  { value: "left", title: "On the left" },
+  { value: "right", title: "On the right" },
+];
+
 const NEVER_CLEAN_UP = "never";
 
 const DURATION_UNITS: Option<DurationUnit>[] = [
@@ -210,6 +216,7 @@ function LinksSection() {
   const littleArdia = useSettings((s) => s.openLinksInLittleArdia);
   const peekOtherSites = useSettings((s) => s.peekLinksToOtherSites);
   const newTabLinks = useSettings((s) => s.newTabLinksOpenIn);
+  const peekButtons = useSettings((s) => s.peekButtons);
   return (
     <>
       <SectionHeader title="Links" />
@@ -229,6 +236,9 @@ function LinksSection() {
           <PopUp value={newTabLinks} options={NEW_TAB_LINKS} onChange={(newTabLinksOpenIn) => updateSettings({ newTabLinksOpenIn })} />
         </Row>
         <SettingToggle anchor="tabs.popupsOpenAsTabs" />
+        <Row anchor="tabs.peekButtons">
+          <PopUp value={peekButtons} options={PEEK_BUTTONS} onChange={(peekButtons) => updateSettings({ peekButtons })} />
+        </Row>
       </Group>
     </>
   );

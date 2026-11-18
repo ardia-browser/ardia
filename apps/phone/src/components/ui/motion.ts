@@ -1,5 +1,4 @@
 import { Easing, Platform } from "react-native";
-import { POOF } from "../../lib/poof";
 import { TRAY_LIFT } from "../../lib/trayMotion";
 import { Easing as WorkletEasing, withSpring, withTiming, type AnimationCallback, type WithTimingConfig } from "react-native-reanimated";
 
@@ -44,6 +43,7 @@ export const tabsMotion = {
   pagerSettle: iPhoneOr(spring(0.26, 1), spring(0.38, 1)),
   fade: iPhoneOr(150, 200),
   flyAway: iPhoneOr(160, 200),
+  cardFlyAway: 0.32,
   barTone: iPhoneOr(200, 250),
   menu: 160,
   longPress: 400,
@@ -74,8 +74,6 @@ export const trayMotion = {
 export const barReturnMotion = { leaveMs: 100, delayMs: 120, fadeMs: 150, scale: 0.8, shift: 12, back: spring(0.26, 1) } as const;
 
 export const stageMotion = { dimMs: 200, heldLiftGraceMs: 650, settle: spring(0.26, 1) } as const;
-
-export const poofMs = iPhoneOr(POOF.iPhoneDurationMs, POOF.durationMs);
 
 export const trayLandingDelayMs = iPhoneOr(TRAY_LIFT.iPhoneLandingDelayMs, TRAY_LIFT.landingDelayMs);
 

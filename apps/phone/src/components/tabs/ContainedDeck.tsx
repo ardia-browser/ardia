@@ -3,7 +3,7 @@ import { PixelRatio, Platform, StyleSheet, View } from "react-native";
 import Animated, { makeMutable, startMapper, stopMapper, useAnimatedStyle, useSharedValue, type SharedValue } from "react-native-reanimated";
 import { countRender } from "../../state/app/interactionPerf";
 import { isUnseenReceived } from "../../lib/tabFace";
-import { DECK_HEADER, deckBarBand, deckHeaderIconReveal, deckHeaderLeading, deckHeaderPlacement, deckSlot, deckStatusStrip, titleReveal, type DeckGeometry, type DeckSlots } from "../../lib/deckGeometry";
+import { DECK_HEADER, deckBarBand, deckHeaderIconReveal, deckHeaderLeading, deckHeaderPlacement, deckStatusStrip, titleReveal, type DeckGeometry } from "../../lib/deckGeometry";
 import { useHeldPageTone } from "../../state/browse/deckHold";
 import { display } from "../../state/search/omnibox";
 import { shownTone } from "../../lib/pageTone";
@@ -12,7 +12,7 @@ import { barHeight, FadeView, font, screenReaderActions, TabFace, tabsInk, tabsL
 import { nativeMenus } from "../ui/MenuTrigger";
 import { isLabBuild } from "../../platform/lab";
 import { launchArguments } from "../../state/app/launchFlags";
-import { CardIcon, cardPose, deckHeaderTitle, DeckCard, DeckCardMenu, deckCardStyles, deckRole, EXPANDED_Z, ReceivedBadge, sameCard, type DeckMotion } from "./DeckCard";
+import { CardIcon, cardPose, deckCardMotion, deckHeaderTitle, DeckCard, DeckCardMenu, deckCardStyles, deckNow, ReceivedBadge, sameCard, type DeckMotion, type DeckNow } from "./DeckCard";
 
 export const containedDeckScroll = (): boolean => Platform.OS === "android" && isLabBuild && launchArguments().oneContainerScroll;
 
@@ -23,23 +23,7 @@ type HeaderLook = { x: number; y: number; opacity: number };
 
 export type ContainedPlacement = { z: number; move: CardMove; look: CardLook; reach: ReachLook; header: HeaderLook; available: number; expanded: boolean; stacked: boolean };
 
-export type ContainedInputs = {
-  ids: readonly string[];
-  scroll: number;
-  phase: number;
-  expanded: number;
-  scaleProgress: number;
-  positionProgress: number;
-  dragIndex: number;
-  dragLift: number;
-  flyIndex: number;
-  flyLift: number;
-  flyVanish: number;
-  covering: string;
-  fromSlots: DeckSlots;
-  shiftBy: number;
-  gap: number;
-};
+export type ContainedInputs = DeckNow;
 
 export type DeviceGrid = { ratio: number; spacing: number; focus: number };
 
@@ -51,7 +35,6 @@ type CardFeed = {
   header: SharedValue<HeaderLook>;
   available: SharedValue<number>;
   expanded: SharedValue<boolean>;
-  gone: SharedValue<boolean>;
 };
 
 type Feeds = Record<string, CardFeed>;
@@ -77,17 +60,16 @@ export function containedOffsetPx(grid: DeviceGrid, scroll: number): number {
   return Math.round(-grid.spacing * scroll);
 }
 
-export function containedPlacement(g: DeckGeometry, grid: DeviceGrid, now: ContainedInputs, index: number, gone: boolean, id: string): ContainedPlacement {
+export function containedPlacement(g: DeckGeometry, grid: DeviceGrid, now: ContainedInputs, index: number, id: string): ContainedPlacement {
   "worklet";
   const ratio = grid.ratio;
-  const listed = index >= 0;
-  const role = deckRole(now.phase, now.expanded, index);
-  const flying = listed && now.flyIndex === index;
-  const lift = listed && now.dragIndex === index ? now.dragLift : flying ? now.flyLift : 0;
-  const slotAt = listed ? deckSlot(id, index, now.fromSlots, now.shiftBy, now.gap) : 0;
-  const relative = slotAt - now.scroll;
-  const p = cardPose(g, role, relative, now.scaleProgress, now.positionProgress, lift, flying ? now.flyVanish : gone || !listed ? 1 : 0, index === now.ids.length - 1);
-  const exact = role !== "stay";
+  const m = deckCardMotion(now, index, id);
+  const role = m.role;
+  const lift = m.lift;
+  const slotAt = m.slot;
+  const relative = m.relative;
+  const p = cardPose(g, role, relative, now.scaleProgress, now.positionProgress, lift, m.fade, m.isLast);
+  const exact = role !== "stay" || m.leaving;
   const fit = (value: number) => (exact ? value : devicePixel(value, ratio));
   const shade = (value: number) => (exact ? value : opacityStep(value));
   const offsetPx = containedOffsetPx(grid, now.scroll);
@@ -99,34 +81,14 @@ export function containedPlacement(g: DeckGeometry, grid: DeviceGrid, now: Conta
   const place = deckHeaderPlacement(cardLeft, p.visible);
   const available = fit(place.available);
   return {
-    z: Math.max(index, 0) * 2 + (role === "expanded" ? EXPANDED_Z : 0),
+    z: m.z,
     move: { x, y: fit(p.y - g.cardHeight / 2), scale: p.scale },
     look: { opacity: now.covering === id ? 0 : shade(p.opacity), corner: p.corner / Math.max(p.scale, 0.01) },
     reach: { x: x + fit(cardLeft - left), y: fit(top), scaleX: Math.max(1, fit(p.visible * p.scale)) / g.cardWidth, scaleY: p.scale },
     header: { x: x + fit(place.left + place.available - g.cardWidth - left), y: fit(top - tabsLayout.headerGap - tabsLayout.headerHeight), opacity: shade(p.header * deckHeaderIconReveal(available, tabsLayout.faviconSize)) },
     available,
     expanded: role === "expanded",
-    stacked: !exact && lift === 0 && !flying && relative <= STACK_DEPTH,
-  };
-}
-
-function readInputs(motion: DeckMotion): ContainedInputs {
-  return {
-    ids: motion.orderIds.value,
-    scroll: motion.scroll.value,
-    phase: motion.phase.value,
-    expanded: motion.expandedIndex.value,
-    scaleProgress: motion.scaleProgress.value,
-    positionProgress: motion.positionProgress.value,
-    dragIndex: motion.dragIndex.value,
-    dragLift: motion.dragLift.value,
-    flyIndex: motion.flyIndex.value,
-    flyLift: motion.flyLift.value,
-    flyVanish: motion.flyVanish.value,
-    covering: motion.covering.value,
-    fromSlots: motion.fromSlots.value,
-    shiftBy: motion.shiftBy.value,
-    gap: motion.gap.value,
+    stacked: !exact && lift === 0 && relative <= STACK_DEPTH,
   };
 }
 
@@ -139,7 +101,6 @@ function makeFeed(placed: ContainedPlacement): CardFeed {
     header: makeMutable(placed.header),
     available: makeMutable(placed.available),
     expanded: makeMutable(placed.expanded),
-    gone: makeMutable(false),
   };
 }
 
@@ -157,15 +118,15 @@ function ContainedCards({ ids, geometry, motion, children }: ContainedCardsProps
   const g = useMemo(() => gridGeometry(geometry, grid), [geometry, grid]);
   const made = useRef<Map<string, CardFeed>>(new Map());
   const feeds = useMemo(() => {
-    const now = readInputs(motion);
+    const now = deckNow(motion);
     const at = new Map(now.ids.map((id, index) => [id, index]));
     const next: Feeds = {};
-    for (const id of ids) next[id] = made.current.get(id) ?? makeFeed(containedPlacement(g, grid, now, at.get(id) ?? -1, false, id));
+    for (const id of ids) next[id] = made.current.get(id) ?? makeFeed(containedPlacement(g, grid, now, at.get(id) ?? -1, id));
     made.current = new Map(Object.entries(next));
     return next;
   }, [ids]);
   const offset = useSharedValue(containedOffsetPx(grid, motion.scroll.value) / ratio);
-  const { orderIds, scroll, phase, expandedIndex, scaleProgress, positionProgress, dragIndex, dragLift, flyIndex, flyLift, flyVanish, covering, fromSlots, shiftBy, gap } = motion;
+  const { orderIds, scroll, phase, expandedIndex, scaleProgress, positionProgress, dragIndex, dragLift, leaving, flyClock, covering, fromSlots, shiftBy, gap } = motion;
   useEffect(() => {
     const cardIds = Object.keys(feeds);
     const place = () => {
@@ -179,9 +140,8 @@ function ContainedCards({ ids, geometry, motion, children }: ContainedCardsProps
         positionProgress: positionProgress.value,
         dragIndex: dragIndex.value,
         dragLift: dragLift.value,
-        flyIndex: flyIndex.value,
-        flyLift: flyLift.value,
-        flyVanish: flyVanish.value,
+        leaving: leaving.value,
+        flyClock: flyClock.value,
         covering: covering.value,
         fromSlots: fromSlots.value,
         shiftBy: shiftBy.value,
@@ -196,8 +156,7 @@ function ContainedCards({ ids, geometry, motion, children }: ContainedCardsProps
         const id = cardIds[c]!;
         const feed = feeds[id]!;
         const index = at[id] ?? -1;
-        if (index >= 0 && now.flyIndex === index && now.flyVanish >= 1 && !feed.gone.value) feed.gone.value = true;
-        const next = containedPlacement(g, grid, now, index, feed.gone.value, id);
+        const next = containedPlacement(g, grid, now, index, id);
         if (feed.z.value !== next.z) feed.z.value = next.z;
         const move = feed.move.value;
         if (move.x !== next.move.x || move.y !== next.move.y || move.scale !== next.move.scale) feed.move.value = next.move;
@@ -212,7 +171,7 @@ function ContainedCards({ ids, geometry, motion, children }: ContainedCardsProps
       }
     };
     const outputs = [offset, ...cardIds.flatMap((id) => Object.values(feeds[id]!))] as unknown as Parameters<typeof startMapper>[2];
-    const mapper = startMapper(place, [orderIds, scroll, phase, expandedIndex, scaleProgress, positionProgress, dragIndex, dragLift, flyIndex, flyLift, flyVanish, covering, fromSlots, shiftBy, gap], outputs);
+    const mapper = startMapper(place, [orderIds, scroll, phase, expandedIndex, scaleProgress, positionProgress, dragIndex, dragLift, leaving, flyClock, covering, fromSlots, shiftBy, gap], outputs);
     return () => stopMapper(mapper);
   }, [feeds, g, grid]);
   const containerStyle = useAnimatedStyle(() => ({ transform: [{ translateX: offset.value }] }));

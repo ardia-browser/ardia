@@ -112,8 +112,8 @@ public struct SpaceGlyph: View {
   nonisolated public static func menuSymbol(for space: SyncedProfile) -> String {
     if let symbol = SpaceColors.symbol(space.icon) { return filled(symbol) }
     let letter = initial(of: space.name).lowercased()
-    let circled = "\(letter).circle.fill"
-    return UIImage(systemName: circled) == nil ? "circle.fill" : circled
+    let squared = "\(letter).square.fill"
+    return UIImage(systemName: squared) == nil ? "square.fill" : squared
   }
 }
 

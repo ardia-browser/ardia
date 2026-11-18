@@ -1,5 +1,5 @@
 import { layout } from "../ui/theme";
-import { Animated, type GestureResponderEvent, type View } from "react-native";
+import { Animated, type View } from "react-native";
 import { NO_DROP } from "../../state/drag/drops";
 import { dropTabs } from "../../state/pins/actions";
 import { movingTabsFrom } from "../../state/sidebar/current";
@@ -17,7 +17,6 @@ import { type DragSession, newDragSession } from "./dragGeometry";
 import { captureEscape } from "../../state/drag/dragNative";
 import { entryKey } from "../../state/sidebar/entryKey";
 import { endHeldTabPress } from "../../state/sidebar/heldTabPress";
-import { tabPlace } from "../../state/sidebar/actions";
 
 export class DragController extends DragTargeting {
   create(key: string): Item {
@@ -129,7 +128,7 @@ export class DragController extends DragTargeting {
     this.retarget();
   }
 
-  end(commit: boolean, release: GestureResponderEvent | null = null) {
+  end(commit: boolean) {
     const session = this.session;
     if (session?.external) return void this.finishExternal(false);
     if (!session?.sources.length) return endHeldTabPress([], null);
@@ -145,15 +144,13 @@ export class DragController extends DragTargeting {
         ? this.landingSpot(commit ? drop : { type: "none" })
         : null;
     const dragged = sources.flatMap((i) => i.tabIds);
-    const places = dragged.map(tabPlace).join();
     if (commit && !splitDrop && measured && drop.type === "none") noteDragWithoutDrop();
     if (commit && !splitDrop && measured && sources.length) {
       dropTabs(dragged, drop);
       if (drop.sequence) arrangeLive(drop.sequence);
     }
     this.reset();
-    const stayed = commit && !splitDrop && !into && dragged.map(tabPlace).join() === places;
-    endHeldTabPress(dragged, stayed ? release : null);
+    endHeldTabPress(dragged, null);
     if (leftPanel) closeFolderPanel();
     if (!spot || !ghost) {
       this.token = null;

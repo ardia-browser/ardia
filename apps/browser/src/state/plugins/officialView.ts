@@ -35,7 +35,7 @@ function installedView(plugin: OfficialPlugin, programs: ProgramsState | undefin
   if (programs?.state === "failed") return { ...base, status: `Its command couldn't go on your PATH: ${programs.reason}`, failed: true, action: "again" };
   if (programs?.state === "linked") {
     const refused = Object.values(programs.refused);
-    if (refused.length) return { ...base, status: refused.join("; "), failed: true, action: "again" };
+    if (refused.length) return { ...base, status: `Its command isn't on your PATH yet: ${refused.join("; ")}`, failed: true, action: "again" };
     if (programs.linked.length) return { ...base, status: `${programs.linked.join(", ")} is on your PATH (${programs.binDir})`, firstCommand: FIRST_COMMANDS[plugin.name] ?? null };
   }
   if (attempt?.state === "failed") return { ...base, status: failure(attempt.reason), failed: true, action: "again" };

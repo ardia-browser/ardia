@@ -46,7 +46,7 @@ test("an installed plugin whose command isn't on PATH says why and offers Retry"
   const failed = officialView(plugin("installed"), { state: "failed", hash: "h", reason: "busy" }, null);
   assert.deepEqual([failed.failed, failed.action, failed.status, failed.firstCommand], [true, "again", "Its command couldn't go on your PATH: busy", null]);
   const refused = officialView(plugin("installed"), { ...LINKED, linked: [], refused: { ardia: "ardia is someone else's command" } }, null);
-  assert.deepEqual([refused.failed, refused.action, refused.status], [true, "again", "ardia is someone else's command"]);
+  assert.deepEqual([refused.failed, refused.action, refused.status], [true, "again", "Its command isn't on your PATH yet: ardia is someone else's command"]);
   const bare = officialView(plugin("installed"), undefined, null);
   assert.deepEqual([bare.note, bare.status, bare.action], ["installed", null, null]);
 });

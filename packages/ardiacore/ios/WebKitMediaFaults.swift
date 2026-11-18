@@ -30,6 +30,7 @@ enum WebKitMediaFaults {
     "audible.com.br",
     "canalplus.com",
     "mycanal.fr",
+    "tv.youtube.com",
   ]
 
   static let reasons: Set<String> = [

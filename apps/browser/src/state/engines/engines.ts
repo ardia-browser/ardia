@@ -79,6 +79,7 @@ export const PROTECTED_VIDEO_SITES: readonly string[] = [
   "audible.com.br",
   "canalplus.com",
   "mycanal.fr",
+  "tv.youtube.com",
 ];
 
 export function protectedVideoSite(url: string | undefined | null): boolean {

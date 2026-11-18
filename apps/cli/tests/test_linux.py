@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import io
 import json
@@ -92,6 +93,17 @@ class DataDir(unittest.TestCase):
             self.assertEqual(endpoint.resolve().source, str(installed / endpoint.CONTROL_FILE))
             self.assertEqual(control.socket_path(), installed / control.SOCKET_FILE)
 
+    def test_discovered_endpoint_finds_its_control_socket_on_both_platforms(self):
+        from ardia_cli.browse.tabs import control_socket
+
+        for linux, name in ((True, "data"), (True, "Chromium"), (False, "mac")):
+            with self.subTest(linux=linux, name=name), mock.patch.object(endpoint, "LINUX", linux):
+                data = self.temp / name
+                write_control(data if linux else data / "Chromium")
+                found = endpoint.resolve(data_dir=str(data))
+                state = SimpleNamespace(endpoint=found, config={})
+                self.assertEqual(control_socket(state), data / "ArdiaControl.sock")
+
     def test_history_profiles_sit_in_the_data_dir_on_linux(self):
         for name in ("Default", "Profile 1", "Guest Profile", "System Profile"):
             (self.temp / name).mkdir()
@@ -100,6 +112,39 @@ class DataDir(unittest.TestCase):
             self.assertEqual([p.name for _, p in browsing.profile_dirs(self.temp, {})], ["Default", "Profile 1"])
         with mock.patch.object(endpoint, "LINUX", False):
             self.assertEqual(browsing.profile_dirs(self.temp, {}), [])
+
+
+@unittest.skipUnless(ON_LINUX, "Linux only")
+class BrowseSocketDiscovery(Base):
+    def test_discovered_endpoint_maps_loaded_tabs_over_its_socket(self):
+        from ardia_cli.browse import tabs
+        from ardia_cli.caller import Caller
+
+        write_control(self.data)
+        server = self.serve()
+        server.replies["windows"] = lambda params: {"result": [{"id": 1, "tabs": [{"id": "tab-11", "targetId": "PAGE-11", "pageGeneration": 7}]}]}
+        found = endpoint.resolve(data_dir=str(self.data))
+        state = SimpleNamespace(endpoint=found, config={}, caller=Caller("Terminal"), target_infos={"PAGE-11": {"targetId": "PAGE-11"}}, app_tabs={}, app_generations={})
+        self.assertEqual(asyncio.run(tabs.app_tab_map(state)), {"PAGE-11": "tab-11"})
+        self.assertEqual(state.app_tabs, {"PAGE-11": "tab-11"})
+        self.assertEqual(state.app_generations, {"PAGE-11": 7})
+        self.assertEqual([method for method, _ in server.requests], ["hello", "windows"])
+
+    def test_discovered_endpoint_announces_browse_and_script_callers(self):
+        from ardia_cli import caller, scripts_test
+        from ardia_cli.browse.state import State
+
+        write_control(self.data)
+        server = self.serve()
+        found = endpoint.resolve(data_dir=str(self.data))
+        terminal = caller.Caller("Terminal")
+        state = SimpleNamespace(caller=terminal, announced=None)
+        asyncio.run(State.announce_caller(state, found))
+        with mock.patch.object(caller, "current", return_value=terminal):
+            asyncio.run(scripts_test.announce_caller(found))
+        self.assertEqual([method for method, _ in server.requests], ["hello", "caller", "hello", "caller"])
+        self.assertEqual([params for method, params in server.requests if method == "hello"], [{"caller": {"name": "Terminal"}}] * 2)
+        self.assertEqual(state.announced, terminal)
 
 
 class LinuxConfig(Sandbox):

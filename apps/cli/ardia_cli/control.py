@@ -357,7 +357,8 @@ async def announce(path: Path, caller: Caller) -> None:
 
 
 def announce_path(control_file: str) -> Path:
-    return Path(control_file).parent.parent / SOCKET_FILE
+    folder = Path(control_file).parent
+    return (folder if endpoint.LINUX else folder.parent) / SOCKET_FILE
 
 
 async def _connect_socket(sock: socket.socket, path: Path, timeout: float) -> None:

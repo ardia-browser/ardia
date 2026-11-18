@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import type { HistoryEntry } from "../../state/browser/types";
 import { type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent, ScrollView, View } from "react-native";
 import { assignSlots, historyScroll, rowAt, type Layout } from "./historyLayout";
@@ -11,6 +11,7 @@ const HEADER = historyRow.header;
 
 export function HistoryList({
   layout,
+  cursor,
   profileId,
   windowId,
   selected,
@@ -20,9 +21,10 @@ export function HistoryList({
   menuTargets,
 }: {
   layout: Layout;
+  cursor: string | null;
   profileId: string;
   windowId: string;
-  selected: Set<string>;
+  selected: ReadonlySet<string>;
   onToggle: (url: string, shift: boolean) => void;
   onMoreFromSite: (url: string) => void;
   onRemove: (urls: string[]) => void;
@@ -46,6 +48,14 @@ export function HistoryList({
     if (rowAt(rows, scrollY.current - overscan) !== band) rerender((n) => n + 1);
   });
   const onLayout = useCallback((e: LayoutChangeEvent) => setViewport(Math.max(ROW, Math.round(e.nativeEvent.layout.height))), []);
+  const scroller = useRef<ScrollView>(null);
+  useEffect(() => {
+    const row = cursor ? rows.find((r) => r.entry.url === cursor) : undefined;
+    if (!row) return;
+    const above = row.first ? HEADER : 0;
+    if (row.offset - above < scrollY.current) scroller.current?.scrollTo({ y: Math.max(0, row.offset - above), animated: false });
+    else if (row.offset + ROW > scrollY.current + viewport) scroller.current?.scrollTo({ y: row.offset + ROW - viewport, animated: false });
+  }, [cursor, viewport]);
 
   const top = Math.min(band, rows.length - 1);
   const rowCount = Math.min(rowPool, rows.length);
@@ -73,6 +83,7 @@ export function HistoryList({
           first={row.first}
           last={row.last}
           selected={selected.has(row.entry.url)}
+          highlighted={cursor === row.entry.url}
           selecting={selecting}
           windowId={windowId}
           onToggle={onToggle}
@@ -85,7 +96,7 @@ export function HistoryList({
   }
 
   return (
-    <ScrollView onLayout={onLayout} onScroll={onScroll} scrollEventThrottle={16} contentContainerStyle={LIST}>
+    <ScrollView ref={scroller} onLayout={onLayout} onScroll={onScroll} scrollEventThrottle={16} contentContainerStyle={LIST}>
       <View style={{ width: PAGE_WIDTH, maxWidth: "100%", height: layout.height }}>{slots}</View>
     </ScrollView>
   );

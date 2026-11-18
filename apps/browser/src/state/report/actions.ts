@@ -1,5 +1,5 @@
 import { APP_INGEST_KEY, INGEST_KEY_HEADER } from "@ardia/core";
-import { cancelUploads, fileSize, onReportEvent, removeReportFile, uploadFile } from "../../platform/report";
+import { cancelUploads, fileSize, onReportEvent, postReportJson, removeReportFile, uploadFile } from "../../platform/report";
 import { feedbackURLOverride } from "../../platform/launchConfig";
 import { confirm } from "../../platform/dialogs";
 import { readDocument, removeDocument, writeDocument } from "../../platform/documents";
@@ -136,19 +136,12 @@ export function reportFiles(s = currentReport()): ReportFile[] {
 }
 
 async function postJson(url: string, body: unknown, headers: Record<string, string>) {
-  const abort = new AbortController();
-  const timer = setTimeout(() => abort.abort(), POST_TIMEOUT_MS);
+  const { status, text } = await postReportJson(url, JSON.stringify(body), { "Content-Type": "application/json", ...headers }, POST_TIMEOUT_MS);
+  let json: unknown = null;
   try {
-    const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body), signal: abort.signal });
-    const text = await response.text();
-    let json: unknown = null;
-    try {
-      json = text ? JSON.parse(text) : null;
-    } catch {}
-    return { status: response.status, json };
-  } finally {
-    clearTimeout(timer);
-  }
+    json = text ? JSON.parse(text) : null;
+  } catch {}
+  return { status, json };
 }
 
 function listenProgress() {

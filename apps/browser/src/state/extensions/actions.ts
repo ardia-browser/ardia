@@ -22,13 +22,17 @@ import { focus, openWindow } from "../browser/actions";
 import { webviews } from "../../platform/webviews";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { engineProfile } from "../browser/model";
+import { engineProfiles } from "../profiles/engineProfiles";
 import { shownPageId } from "../peek/peek";
 import { mainWindowFor, originalProfile } from "../windows/small";
 import { goToSettingsPane, openSettings, replaceSettingsPlace, settingsBack, useSettingsNav } from "../settings/settingsWindows";
 import { closeSidePanelsOf, toggleSidePanel } from "./sidePanels";
-import { notePrivateWindowExtensionOpen } from "../telemetry/usage";
+import { notePrivateWindowExtensionOpen, noteToolbarExtensionMove } from "../telemetry/usage";
 import { extensionPageUrl, extensionProfile, extensionsProfileId, isPrivate, pageProfile, shownIn, useExtensions, windowExtensions, readyTabOf, type Anchor } from "./store";
 import { errorText } from "../../lib/errors";
+import { noteUnpackedInstall } from "../telemetry/exportCounts";
+import { PLATFORM_TERMS } from "../../lib/platformTerms";
+import { movedToolbarOrder, toolbarOrder, type ToolbarDrag } from "./toolbarOrder";
 
 export * from "./sidePanels";
 export * from "./store";
@@ -38,6 +42,7 @@ const EMPTY: InstalledExtension[] = [];
 const loading = new Map<string, Promise<InstalledExtension[]>>();
 
 export function refreshExtensions(profile: string): Promise<InstalledExtension[]> {
+  if (!engineProfiles(useBrowser.getState()).includes(profile)) return Promise.resolve(useExtensions.getState().lists[profile] ?? EMPTY);
   const running = loading.get(profile);
   if (running) return running;
   const job = listExtensions(profile)
@@ -117,6 +122,7 @@ export async function confirmInstall() {
   useExtensions.setState({ install: { ...request, status: "installing" } });
   try {
     await installExtension(request.pkg, request.profile);
+    if (request.source === "unpacked") noteUnpackedInstall();
     useExtensions.setState({ install: null });
     await refreshExtensions(request.profile);
   } catch (error) {
@@ -134,7 +140,7 @@ export function cancelInstall() {
 export async function removeExtension(profile: string, ext: InstalledExtension, windowId?: string) {
   const { confirmed } = await confirm({
     title: `Remove “${ext.name}”?`,
-    message: ext.fromWebStore ? "Its data and settings will be removed too." : "The extension's folder stays on your Mac.",
+    message: ext.fromWebStore ? "Its data and settings will be removed too." : `The extension's folder stays on your ${PLATFORM_TERMS.computer}.`,
     confirmTitle: "Remove",
     destructive: true,
     windowId,
@@ -153,6 +159,28 @@ export async function setEnabled(profile: string, id: string, enabled: boolean) 
 export async function setPinned(profile: string, id: string, pinned: boolean) {
   patchExtension(profile, id, { pinned });
   const done = await changed(pinned ? "pin" : "unpin", () => configureExtension(id, profile, { pinned }));
+  if (!done) await refreshExtensions(profile);
+}
+
+export const setToolbarDrag = (windowId: string, drag: ToolbarDrag | null) => useExtensions.setState({ toolbarDrag: drag && { ...drag, windowId } });
+
+export function endToolbarDrag(windowId: string) {
+  if (useExtensions.getState().toolbarDrag?.windowId === windowId) useExtensions.setState({ toolbarDrag: null });
+}
+
+export async function moveToolbarExtension(windowId: string, id: string, to: number, via: "drag" | "menu") {
+  const s = useBrowser.getState();
+  if (isPrivate(s, windowId)) return;
+  const profile = extensionProfile(s, windowId);
+  const shown = toolbarOrder(windowExtensions(s, windowId));
+  const moved = movedToolbarOrder(shown, id, to);
+  if (!moved) return;
+  const { slots } = moved;
+  useExtensions.setState((e) => ({
+    lists: { ...e.lists, [profile]: (e.lists[profile] ?? EMPTY).map((x) => (slots.has(x.id) ? { ...x, pinnedIndex: slots.get(x.id) } : x)) },
+  }));
+  noteToolbarExtensionMove(via);
+  const done = await changed("move", () => configureExtension(id, profile, { pinnedIndex: moved.pinnedIndex }));
   if (!done) await refreshExtensions(profile);
 }
 
@@ -288,6 +316,17 @@ export const EXTENSION_LIST_ITEMS: ChoiceItem<never, ExtensionListChoice>[] = [
   { id: "manage", title: "Manage Extensions…", symbol: "puzzlepiece.extension" },
   { id: "pin", title: "Pin Extensions…", symbol: "pin" },
 ];
+
+export type ExtensionOverflowChoice = InstalledExtension | { front: InstalledExtension };
+
+export function extensionOverflowItems(enabled: InstalledExtension[], hidden: InstalledExtension[]): ChoiceItem<ExtensionOverflowChoice, ExtensionListChoice | "front">[] {
+  return [
+    ...enabled.map((x) => ({ value: x, title: x.name, symbol: x.pinned ? "pin.fill" : undefined })),
+    ...(enabled.length ? [{ separator: true as const }] : []),
+    ...(hidden.length ? [{ id: "front" as const, title: "Move to Front", symbol: "arrow.left.to.line", children: hidden.map((x) => ({ value: { front: x }, title: x.name })) }, { separator: true as const }] : []),
+    ...EXTENSION_LIST_ITEMS,
+  ];
+}
 
 export function runExtensionListChoice(choice: ExtensionListChoice | null, windowId: string) {
   if (choice === "add") openWebStore(windowId);

@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 import shutil
+import sys
 import tempfile
 from pathlib import Path
 
@@ -38,6 +39,48 @@ def shipped_files() -> list[str]:
             if not name.endswith(".pyc"):
                 files.append((Path(root) / name).relative_to(source).as_posix())
     return sorted(files)
+
+
+def front_matter(text: str) -> dict[str, str]:
+    lines = text.split("\n")
+    if not lines or lines[0].strip() != "---":
+        return {}
+    fields = {}
+    for line in lines[1:]:
+        if line.strip() == "---":
+            return fields
+        key, separator, value = line.partition(":")
+        if separator and key and not key.startswith(" "):
+            fields[key.strip()] = value.strip()
+    return {}
+
+
+def skill_text(full: bool = False) -> str:
+    source = skill_source()
+    text = (source / "SKILL.md").read_text(encoding="utf-8")
+    if not full:
+        return text
+    parts = [text]
+    for name in shipped_files():
+        if name != "SKILL.md" and name.endswith(".md"):
+            body = (source / name).read_text(encoding="utf-8")
+            parts.append(f"\n--- {name} ---\n\n{body}")
+    return "".join(parts)
+
+
+def print_skill(full: bool = False) -> int:
+    from ardia_cli import telemetry
+
+    text = skill_text(full)
+    telemetry.note_count("output_chars", len(text))
+    sys.stdout.write(text)
+    return 0
+
+
+def list_skills() -> int:
+    fields = front_matter((skill_source() / "SKILL.md").read_text(encoding="utf-8"))
+    print(f"{fields.get('name', SKILL_NAME)}\t{fields.get('description', '')}")
+    return 0
 
 
 def legacy_versions() -> list[dict]:

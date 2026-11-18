@@ -8,7 +8,6 @@ import {
   isDefaultBrowser,
   launchAtLoginStatus,
   setAppIcon,
-  setAsDefaultBrowser,
   setAutomaticUpdateChecks,
   setAutomaticUpdateDownloads,
   setUpdateChannel,
@@ -16,7 +15,8 @@ import {
   type UpdateChannel,
   type UpdaterState,
 } from "../../platform/app";
-import { getAutofillSettings, listAddresses, listCards, setAutofillSettings, type SavedAddress, type SavedCard } from "../../platform/autofill";
+import { setAsDefaultBrowser } from "../app/appSettings";
+import { getAutofillSettings, listAddresses, listCards, setAutofillSettings, type AutofillToggle, type SavedAddress, type SavedCard } from "../../platform/autofill";
 import { getContentBlocker } from "../../platform/contentBlocker";
 import { getDownloadSettings, setDownloadSettings, type DownloadSettings } from "../../platform/downloads";
 import { getExternalAppAllowances, getSiteSettingsOrigins, getZoomLevels } from "../../platform/siteSettings";
@@ -24,6 +24,7 @@ import { getPasswordAutofill, setPasswordAutofill } from "../../platform/passwor
 import { orWarn } from "../../lib/fallback";
 import { menuShortcuts } from "../../platform/commands";
 import { setMenuBarShortcuts } from "../commands/commandShortcuts";
+import { UNAVAILABLE_COMMANDS } from "../commands/commandCatalog";
 import { currentSettings } from "../browser/current";
 import { engineProfile } from "../browser/model";
 import { currentSyncFolder, folderInfo } from "../sync/engine";
@@ -32,6 +33,8 @@ import { cached, load, loadAll, need, resource, store, useAllLoaded, type Needed
 import type { SettingsPane } from "./settingsWindows";
 import { FOLLOW_EVERY_MS, FOLLOW_FOR_MS, switchOutcome, updaterBusy } from "./updateStatus";
 import { noteUpdateChannelSwitch } from "../telemetry/usage";
+import { trackAutofillToggleKept } from "../telemetry/track";
+import { askedValue, rememberAsked } from "./autofillAsked";
 
 export const APP_ICON_SIZE = 56;
 
@@ -52,11 +55,12 @@ export const cards = resource("cards", (profile: string) => listCards(profile).c
 export const autofillEnabled = resource("autofillEnabled", (profile: string) =>
   load(addresses, [profile]).then(() => getAutofillSettings(profile).catch(() => ({ addresses: true, cards: true }))),
 );
+export const autofillToggleAsked = resource("autofillToggleAsked", (profile: string, toggle: AutofillToggle) => Promise.resolve(askedValue(profile, toggle)));
 export const downloadSettings = resource("downloadSettings", (profile: string) => getDownloadSettings(profile).catch(() => null));
 export const extensionList = resource("extensions", (profile: string) => refreshExtensions(profile));
 export const shortcutItems = resource("menuShortcuts", () =>
   menuShortcuts().then(
-    (items) => (setMenuBarShortcuts(items), items),
+    (items) => (setMenuBarShortcuts(items), items.filter((item) => !UNAVAILABLE_COMMANDS.has(item.id))),
     () => [],
   ),
 );
@@ -82,9 +86,9 @@ export function paneNeeds(pane: SettingsPane, profileId: string | null): Needed[
     case "privacy":
       return [need(contentBlocker), need(siteOrigins, profile), need(appLinks, profile), need(zoomLevels, profile)];
     case "passwords":
-      return [need(passwordAutofill, profile)];
+      return [need(passwordAutofill, profile), need(autofillToggleAsked, profile, "passwords")];
     case "autofill":
-      return [need(addresses, profile), need(cards, profile), need(autofillEnabled, profile)];
+      return [need(addresses, profile), need(cards, profile), need(autofillEnabled, profile), need(autofillToggleAsked, profile, "addresses"), need(autofillToggleAsked, profile, "cards")];
     case "extensions":
       return [need(extensionList, engineProfile(useBrowser.getState(), extensionsProfileId(profileId)))];
     case "shortcuts":
@@ -100,15 +104,27 @@ export const usePaneLoaded = (pane: SettingsPane, profileId: string | null) => u
 
 export const preparePane = (pane: SettingsPane, profileId: string | null) => loadAll(paneNeeds(pane, profileId));
 
-export async function setPasswordAutofillFor(profile: string, on: boolean) {
-  await setPasswordAutofill(on, profile);
-  store(passwordAutofill, [profile], on);
+function noteAsked(profile: string, toggle: AutofillToggle, asked: boolean, now: boolean) {
+  rememberAsked(profile, toggle, asked, now);
+  store(autofillToggleAsked, [profile, toggle], asked);
+  if (now !== asked) trackAutofillToggleKept(toggle);
 }
 
-export async function setAutofillFor(profile: string, kind: "addresses" | "cards", on: boolean) {
-  await setAutofillSettings({ [kind]: on }, profile);
+const written = (write: Promise<unknown>) => write.then(() => true, orWarn(false));
+
+export async function setPasswordAutofillFor(profile: string, on: boolean) {
+  if (!(await written(setPasswordAutofill(on, profile)))) return;
+  const now = await getPasswordAutofill(profile).catch(() => on);
+  store(passwordAutofill, [profile], now);
+  noteAsked(profile, "passwords", on, now);
+}
+
+export async function setAutofillFor(profile: string, kind: Exclude<AutofillToggle, "passwords">, on: boolean) {
+  if (!(await written(setAutofillSettings({ [kind]: on }, profile)))) return;
   const enabled = cached(autofillEnabled, [profile]);
-  if (enabled) store(autofillEnabled, [profile], { ...enabled, [kind]: on });
+  const now = await getAutofillSettings(profile).catch(() => ({ ...(enabled ?? { addresses: true, cards: true }), [kind]: on }));
+  store(autofillEnabled, [profile], now);
+  noteAsked(profile, kind, on, now[kind]);
 }
 
 export const setDownloadsFor = (patch: Partial<Pick<DownloadSettings, "folder" | "askWhereToSave">>, profiles: string[]) =>

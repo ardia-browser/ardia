@@ -468,6 +468,63 @@ class DeliveryIsNeverAssumed(unittest.TestCase):
             run(commands.cmd_keyboard(ctx, ["inserttext", "abc"]))
 
 
+class ElementsFromAnotherWorld(unittest.TestCase):
+    def test_an_element_from_an_older_world_is_resolved_again_and_the_call_retried(self):
+        from ardia_cli.browse.errors import CdpError
+        from ardia_cli.browse.page import Element
+
+        page = Page(SimpleNamespace(sessions={}, frame_for=lambda page: None), "T")
+        page.session_id = "S"
+        page.main_frame = "F"
+        sent = []
+
+        async def world(frame):
+            return 7
+
+        async def send(method, params=None, session=None, timeout=30, mutation=False):
+            sent.append((method, dict(params or {})))
+            if method == "Runtime.callFunctionOn" and params["arguments"][0]["objectId"] == "old":
+                raise CdpError(method, "Argument should belong to the same JavaScript world as target object")
+            if method == "DOM.resolveNode":
+                return {"object": {"objectId": "new"}}
+            return {"result": {"value": True}}
+
+        page.world = world
+        page.send = send
+        element = Element("F", "old", 42, "@e1")
+        self.assertTrue(run(page.call("(el) => true", element, frame="F", read=True)))
+        self.assertEqual(element.object_id, "new")
+        self.assertEqual([method for method, _ in sent], ["Runtime.callFunctionOn", "DOM.resolveNode", "Runtime.callFunctionOn"])
+        self.assertEqual(sent[1][1], {"backendNodeId": 42, "executionContextId": 7})
+
+
+class ElementsFromAGonePage(unittest.TestCase):
+    def test_an_element_whose_page_is_gone_says_the_page_changed(self):
+        from ardia_cli.browse.errors import CdpError
+        from ardia_cli.browse.page import Element
+
+        page = Page(SimpleNamespace(sessions={}, frame_for=lambda page: None), "T")
+        page.session_id = "S"
+        page.main_frame = "F"
+
+        async def world(frame):
+            return 7
+
+        async def send(method, params=None, session=None, timeout=30, mutation=False):
+            if method == "Runtime.callFunctionOn":
+                raise CdpError(method, "Argument should belong to the same JavaScript world as target object")
+            if method == "DOM.resolveNode":
+                raise CdpError(method, "No node with given id found")
+            return {}
+
+        page.world = world
+        page.send = send
+        with self.assertRaises(BrowseError) as raised:
+            run(page.call("(el) => true", Element("F", "old", 42, "@e1"), frame="F", read=True))
+        self.assertEqual(raised.exception.code, "document_changed")
+        self.assertNotIn("JavaScript world", raised.exception.message)
+
+
 class MutationsCarryUnknownOutcomes(unittest.TestCase):
     def test_navigate_timeout_is_unknown(self):
         page = Page(SimpleNamespace(sessions={}), "T")

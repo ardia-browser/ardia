@@ -80,10 +80,18 @@ void ReleasePrepared(NSTimeInterval timestamp) {
   [prepared pagerInput:@"abandon" distance:0 direction:0 timestamp:timestamp];
 }
 
+CGFloat TargetPointsPerWindowPoint(NSView *target) {
+  const NSSize unit = [target convertSize:NSMakeSize(100, 100) fromView:nil];
+  return unit.width != 0 ? fabs(unit.width) / 100 : 1;
+}
+
 void Emit(NSString *phase, CGFloat velocity) {
   NSView<ArdiaSwipeTarget> *target = gGesture.target;
   if (!target) return;
-  CGFloat distance = gGesture.dx * gGesture.direction;
+  const CGFloat perWindowPoint = TargetPointsPerWindowPoint(target);
+  const CGFloat distance = gGesture.dx * gGesture.direction * perWindowPoint;
+  const CGFloat dy = gGesture.dy * perWindowPoint;
+  velocity *= perWindowPoint;
   Diag(@{
     @"diag" : @"emit",
     @"seq" : @(gGesture.seq),
@@ -93,6 +101,7 @@ void Emit(NSString *phase, CGFloat velocity) {
     @"distance" : @(distance),
     @"dx" : @(gGesture.dx),
     @"dy" : @(gGesture.dy),
+    @"perWindowPoint" : @(perWindowPoint),
     @"velocity" : @(velocity * gGesture.direction),
     @"available" : @(gGesture.available),
     @"width" : @(NSWidth(target.bounds)),
@@ -106,7 +115,7 @@ void Emit(NSString *phase, CGFloat velocity) {
     @"phase" : phase,
     @"direction" : gGesture.direction > 0 ? @"back" : @"forward",
     @"distance" : @(distance),
-    @"dy" : @(gGesture.dy),
+    @"dy" : @(dy),
     @"velocity" : @(velocity * gGesture.direction),
     @"available" : @(gGesture.available),
     @"width" : @(NSWidth(target.bounds)),
@@ -149,7 +158,7 @@ NSEvent *HandleWheel(NSEvent *event, NSWindow *window, NSPoint location) {
   [target swipeEvent:@{
     @"phase" : @"wheel",
     @"direction" : back ? @"back" : @"forward",
-    @"distance" : @(fabs(dx)),
+    @"distance" : @(fabs(dx) * TargetPointsPerWindowPoint(target)),
     @"dy" : @0,
     @"velocity" : @0,
     @"available" : @(back ? target.canSwipeBack : target.canSwipeForward),

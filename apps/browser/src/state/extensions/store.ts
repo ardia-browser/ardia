@@ -6,6 +6,7 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId, engineProfile, incognitoOriginal, isIncognitoProfile, privateSession } from "../browser/model";
 import { shownPageId } from "../peek/peek";
 import { isTabReady } from "../tabs/pageState";
+import type { ToolbarDrag } from "./toolbarOrder";
 
 export type { ActionState, InstalledExtension } from "../../platform/extensions";
 
@@ -27,6 +28,7 @@ type ExtensionsStore = {
   pinDialog: { windowId: string } | null;
   sidePanels: Record<string, SidePanel>;
   sidePanelLookups: Record<string, number>;
+  toolbarDrag: (ToolbarDrag & { windowId: string }) | null;
 };
 
 export type SidePanel = {
@@ -37,7 +39,7 @@ export type SidePanel = {
   opened: number;
 };
 
-export const useExtensions = create<ExtensionsStore>()(() => ({ lists: {}, actions: {}, popup: null, install: null, pinDialog: null, sidePanels: {}, sidePanelLookups: {} }));
+export const useExtensions = create<ExtensionsStore>()(() => ({ lists: {}, actions: {}, popup: null, install: null, pinDialog: null, sidePanels: {}, sidePanelLookups: {}, toolbarDrag: null }));
 
 const EMPTY: InstalledExtension[] = [];
 
@@ -76,6 +78,12 @@ export function useWindowExtensions(windowId: string): InstalledExtension[] {
   const list = useExtensionList(profile);
   return useMemo(() => list.filter((x) => showsExtension(priv, x)), [list, priv]);
 }
+
+export const useToolbarReorderable = (windowId: string) => !useBrowser((s) => isPrivate(s, windowId));
+
+export const useToolbarDrag = (windowId: string) => useExtensions((e) => (e.toolbarDrag?.windowId === windowId ? e.toolbarDrag : null));
+
+export const useFieldExtensionsHeld = (windowId: string) => useExtensions((e) => e.popup?.windowId === windowId || e.toolbarDrag?.windowId === windowId);
 
 export function windowExtensions(s: BrowserState, windowId: string | undefined): InstalledExtension[] {
   if (!windowId) return EMPTY;

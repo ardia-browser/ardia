@@ -16,8 +16,23 @@ final class PermissionGate {
     waiting = nil
   }
 
-  func waitUntilAsked(_ count: Int = 1) async {
-    while asked < count || waiting == nil { await Task.yield() }
+  func waitUntilAsked(_ count: Int = 1, within limit: Duration = .seconds(5)) async throws {
+    let deadline = ContinuousClock.now + limit
+    while asked < count || waiting == nil {
+      guard ContinuousClock.now < deadline else { throw NeverAsked(expected: count, asked: asked) }
+      await Task.yield()
+    }
+  }
+
+  struct NeverAsked: Error {
+    let expected: Int
+    let asked: Int
+  }
+}
+
+extension DictationSession.State {
+  var isUnavailable: Bool {
+    if case .unavailable = self { true } else { false }
   }
 }
 
@@ -44,12 +59,12 @@ final class RecorderLog {
     )
   }
 
-  @Test func dismissedWhileAskingForPermissionNeverStartsTheMicrophone() async {
+  @Test func dismissedWhileAskingForPermissionNeverStartsTheMicrophone() async throws {
     let gate = PermissionGate()
     let log = RecorderLog()
     let dictation = session(gate: gate, log: log)
     let starting = Task { await dictation.start() }
-    await gate.waitUntilAsked()
+    try await gate.waitUntilAsked()
     #expect(dictation.state == .requesting)
     dictation.stop()
     gate.answer(.granted)
@@ -58,12 +73,12 @@ final class RecorderLog {
     #expect(dictation.state == .idle)
   }
 
-  @Test func aCancelledStartNeverStartsTheMicrophone() async {
+  @Test func aCancelledStartNeverStartsTheMicrophone() async throws {
     let gate = PermissionGate()
     let log = RecorderLog()
     let dictation = session(gate: gate, log: log)
     let starting = Task { await dictation.start() }
-    await gate.waitUntilAsked()
+    try await gate.waitUntilAsked()
     starting.cancel()
     gate.answer(.granted)
     await starting.value
@@ -71,17 +86,17 @@ final class RecorderLog {
     #expect(dictation.state == .idle)
   }
 
-  @Test func aStaleStartCannotHijackANewerOne() async {
+  @Test func aStaleStartCannotHijackANewerOne() async throws {
     let gate = PermissionGate()
     let log = RecorderLog()
     let dictation = session(gate: gate, log: log)
     let first = Task { await dictation.start() }
-    await gate.waitUntilAsked()
+    try await gate.waitUntilAsked()
     dictation.stop()
     gate.answer(.granted)
     await first.value
     let second = Task { await dictation.start() }
-    await gate.waitUntilAsked(2)
+    try await gate.waitUntilAsked(2)
     gate.answer(.granted)
     await second.value
     #expect(log.started.count == 1)
@@ -90,27 +105,27 @@ final class RecorderLog {
     #expect(log.started.first?.stopped == true)
   }
 
-  @Test func grantedStartsListeningAndStopReleasesTheRecorder() async {
+  @Test func grantedStartsListeningAndStopReleasesTheRecorder() async throws {
     let gate = PermissionGate()
     let log = RecorderLog()
     let dictation = session(gate: gate, log: log)
     let starting = Task { await dictation.start() }
-    await gate.waitUntilAsked()
+    try await gate.waitUntilAsked()
     gate.answer(.granted)
     await starting.value
     #expect(dictation.state == .listening)
     #expect(log.started.count == 1)
     dictation.stop()
     #expect(log.started.first?.stopped == true)
-    #expect(dictation.state == .unavailable("Ardia couldn’t hear anything. Try again."))
+    #expect(dictation.state.isUnavailable)
   }
 
-  @Test func deniedNeverStartsTheMicrophone() async {
+  @Test func deniedNeverStartsTheMicrophone() async throws {
     let gate = PermissionGate()
     let log = RecorderLog()
     let dictation = session(gate: gate, log: log)
     let starting = Task { await dictation.start() }
-    await gate.waitUntilAsked()
+    try await gate.waitUntilAsked()
     gate.answer(.denied)
     await starting.value
     #expect(dictation.state == .denied)

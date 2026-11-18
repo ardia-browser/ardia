@@ -12,10 +12,12 @@ public class AreaLightModule: Module {
         let name = String(describing: type(of: view))
         let path = (dir as NSString).appendingPathComponent("\(index)-\(name).png")
         let r = view.convert(view.bounds, to: nil)
-        let top = content.bounds.height - r.maxY
+        let top = content.frame.height - r.maxY
+        let drawable = view.metalView.drawableSize
         return [
           "file": path, "class": name, "ok": view.writeSnapshot(to: path), "window": window.windowNumber,
           "frame": [r.minX, top, r.width, r.height], "key": window.isKeyWindow, "main": window.isMainWindow,
+          "drawable": [drawable.width, drawable.height],
           "hidden": view.isHiddenOrHasHiddenAncestor, "alpha": view.alphaValue,
         ]
       }

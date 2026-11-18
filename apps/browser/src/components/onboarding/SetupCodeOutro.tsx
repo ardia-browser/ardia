@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { finishOnboarding, useOnboarding } from "../../state/onboarding/onboarding";
-import { CustomizeMoreLink } from "./OutroStep";
+import { finishOnboarding } from "../../state/onboarding/onboarding";
 import { requestAppDownload } from "../../state/onboarding/demoSteps";
 import { copySetupCode, onboardingSetupCode } from "../../state/presets/actions";
 import { StepActions, StepLayout } from "./StepLayout";
 import { SecondaryButton } from "./Buttons";
 import { useOnboardingColors } from "./Parts";
-import { MONO } from "./tokens";
 import { Text } from "../ui";
-import { proseLineHeight, radius, space } from "../ui/tokens";
+import { monoFace, proseLineHeight, radius, space } from "../ui/tokens";
 import { ChoiceCard } from "./ChoiceCard";
 import { SetupLines } from "./SetupLines";
 
@@ -16,7 +14,6 @@ const COPIED_FOR_MS = 2400;
 
 export function SetupCodeOutro() {
   const colors = useOnboardingColors();
-  const customizing = useOnboarding((s) => s.customizing);
   const { code, lines } = useMemo(onboardingSetupCode, []);
   const [copied, setCopied] = useState(false);
 
@@ -42,11 +39,10 @@ export function SetupCodeOutro() {
           <SecondaryButton title={copied ? "Copied, downloading" : "Download & Copy"} filled onPress={downloadAndCopy} />
         </>
       }
-      footer={customizing ? null : <CustomizeMoreLink />}
       preview={<SetupLines heading="You picked:" lines={lines} />}
     >
       <ChoiceCard dashed radius={radius.panel} style={{ paddingVertical: space.xl, paddingHorizontal: space.xl }}>
-        <Text selectable accessibilityLabel={`Setup code ${code}`} color={colors.title} style={{ fontFamily: MONO, lineHeight: proseLineHeight.body }}>
+        <Text selectable accessibilityLabel={`Setup code ${code}`} color={colors.title} style={{ ...monoFace(), lineHeight: proseLineHeight.body }}>
           {code}
         </Text>
       </ChoiceCard>

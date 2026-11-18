@@ -13,5 +13,5 @@
   and settings search under `apps/browser/src`.
 - Manual: unload a tab; toggle the setting and check its card disappears/returns. Check selection and persistence
   after restart. The separate [Auto Tab Discard limitation](manual-tab-unloading.md) remains open.
-- Replacement: upstream `v0.2.47-nightly.1` always hides sleeping pages. The fork uses its ordering and live
+- Replacement: upstream `v0.2.47-nightly.5` always hides sleeping pages. The fork uses its ordering and live
   updates with one shared eligibility check that retains this toggle, including selection on release.

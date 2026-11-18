@@ -1,5 +1,17 @@
 export const DEFAULT_SIDEBAR_WIDTH = 190;
 
+export const SIDEBAR_MIN_WIDTH = 160;
+export const SIDEBAR_MAX_WIDTH = 400;
+
+export const MIN_WINDOW_WIDTH = 500;
+
+export const SIDEBAR_PAGE_ROOM = MIN_WINDOW_WIDTH - DEFAULT_SIDEBAR_WIDTH;
+
+export const sidebarWidthLimit = (windowWidth: number | null | undefined): number =>
+  windowWidth ? Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, Math.floor(windowWidth - SIDEBAR_PAGE_ROOM))) : SIDEBAR_MAX_WIDTH;
+
+export const shownSidebarWidth = (saved: number, windowWidth: number | null | undefined): number => Math.min(saved, sidebarWidthLimit(windowWidth));
+
 export const CARD_INSET = 9;
 
 export const PAGE_FRAME = { min: 0, max: 12, default: CARD_INSET } as const;

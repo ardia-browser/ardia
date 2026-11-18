@@ -146,7 +146,7 @@ def shown_name(name: str) -> str:
     return name[: SHOWN_NAME - 1].rstrip() + "…"
 
 
-def _line(node: Node, depth: int, urls: bool) -> str:
+def _line(node: Node, depth: int, urls: bool, near: str | None = None) -> str:
     parts = ["  " * depth + "- " + node.role]
     if node.name:
         parts.append(" " + _quote(node.name if node.role == "StaticText" else shown_name(node.name)))
@@ -157,7 +157,83 @@ def _line(node: Node, depth: int, urls: bool) -> str:
         parts.append(": " + node.value.replace("\n", " "))
     if node.hints:
         parts.append(" clickable [" + ", ".join(node.hints) + "]")
+    if near:
+        parts.append(f" (near {_quote(near)})")
     return "".join(parts)
+
+
+def labels_for_repeats(nodes: list[Node], rows: list[tuple[int, Node]]) -> dict[int, str]:
+    seen: dict[tuple, int] = {}
+    for _, node in rows:
+        seen[(node.role, node.name.strip())] = seen.get((node.role, node.name.strip()), 0) + 1
+    wanted = {id(node) for _, node in rows
+              if node.role not in UNLABELED_ROLES and (not node.name.strip() or seen[(node.role, node.name.strip())] > 1)}
+    if not wanted:
+        return {}
+    repeated = {" ".join(name.split()) for (_, name), count in seen.items() if count > 1 and name}
+    parents: dict[int, Node] = {}
+
+    def link(node: Node):
+        for child in node.children:
+            parents[id(child)] = node
+            link(child)
+
+    for node in nodes:
+        link(node)
+    labels: dict[int, str] = {}
+    groups: dict[tuple, list[int]] = {}
+    for _, node in rows:
+        if id(node) not in wanted:
+            continue
+        found = nearby_label(node, parents, repeated)
+        if found:
+            labels[id(node)] = found
+            groups.setdefault((node.role, node.name.strip()), []).append(id(node))
+    for members in groups.values():
+        shared = Counter(labels[member] for member in members)
+        for member in members:
+            if shared[labels[member]] > 1:
+                del labels[member]
+    if labels:
+        command_metrics.flag("snapshot_repeat_labels", True)
+    return labels
+
+
+def nearby_label(node: Node, parents: dict[int, Node], repeated: set[str] = frozenset()) -> str | None:
+    own = node.name.strip()
+    current = node
+    for _ in range(NEAR_LEVELS):
+        parent = parents.get(id(current))
+        if parent is None:
+            return None
+        best = None
+        budget = [NEAR_SCAN]
+        for candidate in near_candidates(parent, node, budget):
+            text = " ".join(candidate.name.split())
+            if not text or text == own or len(text) < 2 or text in repeated:
+                continue
+            rank = NEAR_ROLES.get(candidate.role, len(NEAR_ROLES))
+            if best is None or rank < best[0]:
+                best = (rank, text)
+            if rank == 0:
+                break
+        if best is not None:
+            text = best[1]
+            return text if len(text) <= NEAR_CHARS else text[: NEAR_CHARS - 1].rstrip() + "…"
+        current = parent
+    return None
+
+
+def near_candidates(root: Node, skip: Node, budget: list[int]):
+    for child in root.children:
+        if budget[0] <= 0:
+            return
+        budget[0] -= 1
+        if child is skip:
+            continue
+        if child.role in NEAR_ROLES:
+            yield child
+        yield from near_candidates(child, skip, budget)
 
 
 def interactive_rows(nodes: list[Node]) -> list[tuple[int, Node]]:
@@ -188,7 +264,8 @@ def run_span(nodes: list[Node]) -> str:
     return f"{span_label(nodes[0])} … {span_label(nodes[-1])}" if len(nodes) > 1 else span_label(nodes[0])
 
 
-def interactive_lines(rows: list[tuple[int, Node]], urls: bool) -> list[str]:
+def interactive_lines(rows: list[tuple[int, Node]], urls: bool, near: dict[int, str] | None = None) -> list[str]:
+    near = near or {}
     lines = []
     index = 0
     while index < len(rows):
@@ -203,7 +280,7 @@ def interactive_lines(rows: list[tuple[int, Node]], urls: bool) -> list[str]:
             end += 1
         off = [member for _, member in members if disabled(member)]
         if len(members) < DISABLED_RUN.get(node.role, len(members) + 1) or len(off) < MIN_DISABLED:
-            lines.append(_line(node, level, urls))
+            lines.append(_line(node, level, urls, near.get(id(node))))
             index += 1
             continue
         noted = False
@@ -219,14 +296,15 @@ def interactive_lines(rows: list[tuple[int, Node]], urls: bool) -> list[str]:
                     lines.append("  " * level + f"- {len(off)} disabled {row.role}{'s' if len(off) > 1 else ''} ({run_span(off)})")
                     noted = True
                 continue
-            lines.append(_line(row, row_level, urls))
+            lines.append(_line(row, row_level, urls, near.get(id(row))))
         index = end
     return lines
 
 
 def render(nodes: list[Node], interactive: bool = False, compact: bool = False, depth: int | None = None, urls: bool = False) -> str:
     if interactive:
-        return "\n".join(interactive_lines([(level, node) for level, node in interactive_rows(nodes) if depth is None or level <= depth], urls))
+        rows = [(level, node) for level, node in interactive_rows(nodes) if depth is None or level <= depth]
+        return "\n".join(interactive_lines(rows, urls, labels_for_repeats(nodes, rows)))
     lines = []
 
     def keep_compact(node: Node) -> bool:
@@ -384,6 +462,11 @@ async def collect(state, page, selector=None, cursor=True) -> list[Node]:
 
 
 UNNAMED_CONTEXTS = frozenset({"RootWebArea", "WebArea"})
+NEAR_ROLES = {"heading": 0, "link": 1, "cell": 2, "gridcell": 2, "rowheader": 2, "StaticText": 3, "img": 4}
+NEAR_LEVELS = 4
+UNLABELED_ROLES = {"heading"}
+NEAR_SCAN = 120
+NEAR_CHARS = 60
 
 
 def walk_in_context(nodes, context: tuple = ()):

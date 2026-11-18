@@ -26,3 +26,5 @@ export const EXTENSION_ICON = 36;
 export const PERMISSIONS_MAX_HEIGHT = 180;
 
 export const PIN_LIST_MAX_HEIGHT = 300;
+
+export const TOOLBAR_DRAG_START = 4;

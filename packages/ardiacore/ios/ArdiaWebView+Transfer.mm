@@ -344,6 +344,10 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
             completion:^(NSDictionary *) {}];
 }
 
+- (void)forgetRestoreKey {
+  if (_transferKey.length) [BoundRestoreKeys() removeObject:_transferKey];
+}
+
 - (void)closeBrowser {
   ArdiaCoreTab *tab = _tab;
   if (tab && _life.handingOff && _transferKey.length && !tab.closed) {
@@ -354,6 +358,7 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
   }
   _life.close();
   if (!tab) return;
+  [self tabWillClose:tab];
   if (_transferKey.length && !ardia_host::IsPrivateProfile(_profile) && ArdiaHost.isStarted)
     [ArdiaServices call:@"ac_tab_restore_tag" profile:_profile args:@{@"tab" : @(tab.tabId), @"key" : _transferKey}
               completion:^(NSDictionary *) {}];

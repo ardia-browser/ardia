@@ -33,7 +33,6 @@ extension AppModel {
     case .query:
       if let url { openPage(url, origin: .search) } else { openSearch(suggestion.query) }
     case .openTab(let id):
-      browse.dismissSearch()
       openTab(id)
     case .remoteTab:
       if let url { openPage(url, origin: .sync) }
@@ -48,8 +47,7 @@ extension AppModel {
   }
 
   func openSearch(_ query: String) {
-    let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmed.isEmpty else { return }
+    guard let trimmed = SearchInput.submission(from: query) else { return }
     let tab = tabs.open(.search(trimmed), isPrivate: isIncognito)
     finishOpening(tab.id)
   }
@@ -57,6 +55,10 @@ extension AppModel {
   func openPage(_ url: URL, origin: TabOrigin) {
     let tab = tabs.open(.url(url, origin: origin), isPrivate: isIncognito)
     finishOpening(tab.id)
+  }
+
+  var searchFieldMayFocus: Bool {
+    !settings.isShowingOnboarding && !browse.isVoicePresented
   }
 
   func cancelSearch() {
@@ -71,7 +73,7 @@ extension AppModel {
 
   private func finishOpening(_ id: UUID) {
     _ = web.webTab(for: id)
-    browse.dismissSearch()
+    browse.dismissSearch(submitted: true)
     surface = .browsing
   }
 

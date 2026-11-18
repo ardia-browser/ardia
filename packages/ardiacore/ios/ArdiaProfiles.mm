@@ -3,6 +3,7 @@
 #import "ArdiaEvents.h"
 #import "ArdiaServices.h"
 #import "ArdiaNavigationDownloads.h"
+#import "ArdiaProtectedVideo.h"
 #import "ArdiaStartup.h"
 #import "ArdiaTabParking.h"
 #import "ArdiaWebViewInternal.h"
@@ -208,6 +209,7 @@ void WithProfile(NSString *name, void (^completion)(ArdiaCoreProfile *)) {
              ArdiaCoreProfile *profile = [DeletedProfiles() containsObject:name] ? nil : loaded;
              if (profile) RememberProfile(name, profile);
              if (profile) ardia_host::LoadContentBlocker(name);
+             [ArdiaProtectedVideo loadIntoProfile:profile];
              if (profile) [ArdiaServices watchDownloads:name];
              for (void (^waiter)(ArdiaCoreProfile *) in pending) waiter(profile);
            }];

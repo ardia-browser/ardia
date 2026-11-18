@@ -99,5 +99,4 @@ def install_log_redaction() -> None:
 
     logging.setLogRecordFactory(redacting_record)
     logging.Handler.format = redacting_format
-    logging.getLogger("pydoll").setLevel(logging.ERROR)
     logging.getLogger("websockets").setLevel(logging.WARNING)

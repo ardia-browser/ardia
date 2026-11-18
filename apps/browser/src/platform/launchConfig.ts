@@ -14,6 +14,16 @@ export const switchOverride = (name: string): boolean | undefined => current().s
 
 const testValue = (key: string): string | null => current().test[key] ?? null;
 
+export const introStartDelayMs = (): number => {
+  const asked = Number(testValue("introStartDelayMs"));
+  return Number.isFinite(asked) && asked > 0 ? asked : 0;
+};
+
 export const devTestValue = (key: string): string | null => (typeof __DEV__ !== "undefined" && __DEV__ ? testValue(key) : null);
 
 export const reloadLaunchConfigForTests = () => void (config = null);
+
+export const httpPagesPort = (): string | null => {
+  const port = testValue("httpPages");
+  return port && /^\d+$/.test(port) ? port : null;
+};

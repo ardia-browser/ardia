@@ -38,6 +38,7 @@ export const configureExtension = async (
   profile: string,
   options: {
     pinned?: boolean;
+    pinnedIndex?: number;
     incognito?: boolean;
     fileAccess?: boolean;
     userScripts?: boolean;

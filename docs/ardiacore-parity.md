@@ -156,6 +156,7 @@ Moved to `docs/testing.md` › "ArdiaCore acceptance".
 | frozen | `setFrozen(true/false)` on a background page: the page sees freeze and resume |
 | discard | A background tab discarded in place → `onDiscarded` |
 | permission-prompt, popup-blocked | A permission request → the app's prompt → Chrome; a popup without a gesture → `onPopupBlocked` → `openBlockedPopup` |
+| popup-window-full-screen | A sized `window.open` popup and an extension's `chrome.windows.create` popup (a `TYPE_APP_POPUP` Chrome makes its own window for) opened from a full-screen window can join that window's Space (`NSWindowCollectionBehaviorFullScreenAuxiliary`), so macOS doesn't show them on another desktop; from a window that isn't full screen a popup keeps its own full screen |
 | camera-mic-allow | 0.2.21's crash case, on the media copy (above): a camera + microphone getUserMedia is one prompt; Allow starts the stream with both tracks live |
 | permission-answer-once | A double Allow and two more answers straight to the engine decide nothing twice; a late answer to that prompt doesn't answer the tab's next one |
 | permission-element-allow | The `<usermedia>` element (0.2.21's crash path): with macOS "not asked yet" (`--ardia-test-system-media-permission=ask`), one prompt, one Allow, Chrome's "ask macOS" step handled in the engine, no second prompt, the element's stream live |
@@ -262,7 +263,7 @@ over, `-[ArdiaCoreTab setTemporarySource:]`) is the tab a closed window's entry 
 | `onPermission`, `resolvePermission` | done | One answer per prompt (`ac_permissions.mm`): a page's permission element (Chrome's embedded flow) reaches the app only for its site question; the steps after Allow ("ask macOS", "open System Settings", policy) stay in the engine, as Chrome's own view does, and a later step is never a question even if the site's setting was reset meanwhile. 0.2.21 answered those steps with a second Accept and aborted (`camera-mic-allow`, `permission-answer-once`, `permission-element-allow`) |
 | `getExternalAppAllowances`, `removeExternalAppAllowance` | done | |
 | `clearBrowsingData`, `deleteProfileData` | done | A profile never loaded this session is its folder alone |
-| `getContentBlocker`, `setContentBlockerEnabled`, `setFilterListEnabled`, `isContentBlockerAllowed`, `setContentBlockerAllowed` | done | uBlock Origin Lite as a component extension (`loadComponentExtension:`), driven through its runtime messages |
+| `getContentBlocker`, `setContentBlockerEnabled`, `setFilterListEnabled`, `addFilterList`, `removeFilterList`, `isContentBlockerAllowed`, `setContentBlockerAllowed` | done | uBlock Origin as a component extension (`loadComponentExtension:`), driven through its runtime messages; `addFilterList`/`removeFilterList` import and drop custom lists by URL (`applyFilterListSelection` `toImport`/`toRemove`), and other profiles follow them |
 | `setSiteSetting`, `getSiteSettings`, `getSiteSettingsOrigins`, `resetSiteSettings`, `clearSiteData` | done | Chrome's content settings under CEF's type names; the page script's `blockAutoplay` comes from them as on CEF |
 | `setZoom`, `getZoomLevels` | done | |
 | `listPasswords`, `unlockPasswords`, `getPassword`, `savePassword`, `updatePassword`, `deletePassword`, `getNeverSavePasswordOrigins`, `allowSavingPasswords`, `exportPasswords`, `getPasswordAutofill`, `setPasswordAutofill` | done | |

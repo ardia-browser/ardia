@@ -254,9 +254,9 @@ async def login(ctx, argv):
 
         async def run():
             for char in text:
-                await keyboard._type_char(char, None if humanize else 0)
+                await keyboard.type_char(char, None if humanize else 0)
                 if humanize:
-                    await keyboard._apply_realistic_delay(char)
+                    await keyboard.pause_after(char)
 
         await actions.expect_input(page, frame, lambda: page.input.gesture("auth login", run), {"keydown": len(text)}, "The typing")
 

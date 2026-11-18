@@ -1,13 +1,20 @@
 #!/usr/bin/env node
 const HELP = `Builds the onboarding intro's meadow from ardia.dev's hero scene.
 
-  node scripts/meadow.mjs           write ios/Meadow (index.html, posters.json and the posters)
-  node scripts/meadow.mjs --check   fail if ios/Meadow differs from what the site's sources build
+  node scripts/meadow.mjs           write ios/Meadow (index.html, posters.json and the posters) and windows/meadow/page.ts
+  node scripts/meadow.mjs --check   fail if either differs from what the site's sources build
 
 The page runs apps/site/src/scripts/meadowApp.ts, which starts the site's own createMeadow and
 startSunrise (apps/site/src/scripts/meadow), bundled inline so the pod ships one HTML file. The
 posters are the site's desktop dawn and morning frames from apps/site/src/data/heroPoster.ts; the
-native view shows the one nearest the window's shape until the scene's first frame.`;
+native view shows the one nearest the window's shape until the scene's first frame.
+
+windows/meadow/page.ts is the same page for the Windows intro, which runs it as an engine page. The
+page itself has no text and no scripts: the app opens it as a small data: URL (its two halves are
+base64 of whole 3-byte groups, joined around the config and first-paint style the app writes into its
+head), then adds MEADOW_PAGE_SCRIPT, which is src/meadowPage/shim.ts (it draws the app's icon,
+wordmark, tagline, Skip and Mute from that config, and carries the app icon) followed by the scene.
+Images load only from data: URLs; the dawn posters come as data: URLs too.`;
 
 import { build } from "esbuild";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -25,6 +32,9 @@ const check = args.includes("--check");
 const repo = fileURLToPath(new URL("../../../", import.meta.url));
 const site = join(repo, "apps/site/src");
 const out = fileURLToPath(new URL("../ios/Meadow/", import.meta.url));
+const windowsPage = fileURLToPath(new URL("../windows/meadow/page.ts", import.meta.url));
+const shim = fileURLToPath(new URL("../src/meadowPage/shim.ts", import.meta.url));
+const appIcon = join(repo, "apps/browser/assets/app-icon.png");
 const posterDir = join(site, "assets/hero");
 const DESKTOP_FRAMES = new Set(["wider", "wide", "laptop", "mid"]);
 
@@ -69,24 +79,60 @@ const STYLE = `html,body{margin:0;width:100%;height:100%;overflow:hidden;backgro
 .wordmark{font-size:64px;font-weight:200;letter-spacing:-1.5px}
 .tagline{font-size:17px;font-weight:300}`;
 
-function page(script) {
+const MAC_LOOK = {
+  csp: "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'",
+  body: ' aria-hidden="true"',
+  title: '<span class="line"><span class="icon"></span></span><span class="line"><span class="wordmark">Ardia</span></span><span class="line"><span class="tagline">Your new home on the internet</span></span>',
+  shim: "",
+  scripts: true,
+};
+
+function page(script, look = MAC_LOOK) {
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'">
+<meta http-equiv="Content-Security-Policy" content="${look.csp}">
 <style>${STYLE}</style>
 </head>
-<body aria-hidden="true">
+<body${look.body}>
 <section class="hero" data-meadow>
 <canvas class="meadow-canvas" data-meadow-canvas></canvas>
-<div class="hero-text"><div class="hero-title"><span class="line"><span class="icon"></span></span><span class="line"><span class="wordmark">Ardia</span></span><span class="line"><span class="tagline">Your new home on the internet</span></span></div></div>
+<div class="hero-text"><div class="hero-title">${look.title}</div></div>
 </section>
-<script>${script.trim()}</script>
-</body>
+${look.scripts === false ? "" : `${look.shim}<script>${script.trim()}</script>\n`}</body>
 </html>
 `;
+}
+
+const inThrees = (text) => {
+  const bytes = Buffer.from(text);
+  return Buffer.concat([bytes, Buffer.alloc((3 - (bytes.length % 3)) % 3, "\n")]).toString("base64");
+};
+
+async function windowsPageModule(script, posters) {
+  const icon = `data:image/png;base64,${readFileSync(appIcon).toString("base64")}`;
+  const shimScript = (await bundle(shim, { format: "iife", platform: "browser", target: "chrome120", minify: true, define: { MEADOW_ICON: JSON.stringify(icon) } })).trim();
+  if (shimScript.includes("</script")) throw new Error("the meadow shim can't hold </script");
+  const html = page(script, {
+    csp: "default-src 'none'; img-src data:; script-src 'unsafe-inline'; style-src 'unsafe-inline'",
+    body: "",
+    title: "",
+    shim: "",
+    scripts: false,
+  });
+  const split = html.indexOf("</head>");
+  const dawn = posters
+    .filter((poster) => poster.state === "dawn")
+    .map(({ file, aspect, horizon }) => ({ file, aspect, horizon, uri: `data:image/webp;base64,${readFileSync(join(posterDir, file)).toString("base64")}` }));
+  return [
+    `export const MEADOW_PAGE_HEAD = ${JSON.stringify(inThrees(html.slice(0, split)))};`,
+    `export const MEADOW_PAGE_BODY = ${JSON.stringify(inThrees(html.slice(split)))};`,
+    `export const MEADOW_PAGE_SCRIPT = ${JSON.stringify(`${shimScript}\n;\n${script.trim()}`)};`,
+    `export const MEADOW_POSTERS = ${JSON.stringify(dawn)};`,
+    "",
+  ].join("\n");
 }
 
 async function generate() {
@@ -103,10 +149,10 @@ async function generate() {
     ["posters.json", Buffer.from(`${JSON.stringify(posters, null, 2)}\n`)],
   ]);
   for (const poster of posters) files.set(poster.file, readFileSync(join(posterDir, poster.file)));
-  return files;
+  return { files, windows: Buffer.from(await windowsPageModule(script, posters)) };
 }
 
-const files = await generate();
+const { files, windows } = await generate();
 if (check) {
   const present = (() => {
     try {
@@ -115,22 +161,25 @@ if (check) {
       return [];
     }
   })();
-  const stale = [...files].filter(([name, bytes]) => {
+  const differs = (path, bytes) => {
     try {
-      return !readFileSync(join(out, name)).equals(bytes);
+      return !readFileSync(path).equals(bytes);
     } catch {
       return true;
     }
-  });
+  };
+  const stale = [...files].filter(([name, bytes]) => differs(join(out, name), bytes)).map(([name]) => name);
+  if (differs(windowsPage, windows)) stale.push("windows/meadow/page.ts");
   const extra = present.filter((name) => !files.has(name));
   if (stale.length || extra.length) {
-    console.error(`packages/shaders/ios/Meadow is out of date (${[...stale.map(([name]) => name), ...extra].join(", ")}): run node packages/shaders/scripts/meadow.mjs`);
+    console.error(`packages/shaders/ios/Meadow or windows/meadow/page.ts is out of date (${[...stale, ...extra].join(", ")}): run node packages/shaders/scripts/meadow.mjs`);
     process.exit(1);
   }
-  console.log(`✓ ios/Meadow matches the site's meadow (${files.size} files)`);
+  console.log(`✓ ios/Meadow and windows/meadow/page.ts match the site's meadow (${files.size + 1} files)`);
 } else {
   rmSync(out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
   for (const [name, bytes] of files) writeFileSync(join(out, name), bytes);
-  console.log(`wrote ${files.size} files to packages/shaders/ios/Meadow`);
+  writeFileSync(windowsPage, windows);
+  console.log(`wrote ${files.size} files to packages/shaders/ios/Meadow and windows/meadow/page.ts`);
 }

@@ -1,19 +1,38 @@
 import { type SettingSection } from "./types";
 import type { SettingsPane } from "../../../state/settings/settingsWindows";
+import { PLATFORM_TERMS } from "../../../lib/platformTerms";
+import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
+import { keyText } from "../../../state/commands/keyText";
 
+
+const blockerOffered = () => PLATFORM_FEATURES.contentBlocker;
 export const privacyRows = {
   privacy: [
     {
       section: "Content blocking",
       rows: {
-        blockAds: { title: "Block ads", keywords: ["ad blocker", "adblock", "ublock origin", "easylist"] },
-        blockTrackers: { title: "Block trackers", keywords: ["tracking", "easyprivacy", "fingerprinting"] },
-        blockCookieBanners: { title: "Block cookie banners", keywords: ["cookies", "consent", "gdpr", "popups"] },
+        blockAds: { title: "Block ads", keywords: ["ad blocker", "adblock", "ublock origin", "easylist"], shown: blockerOffered },
+        blockTrackers: { title: "Block trackers", keywords: ["tracking", "easyprivacy", "fingerprinting"], shown: blockerOffered },
+        blockCookieBanners: { title: "Block cookie banners", keywords: ["cookies", "consent", "gdpr", "popups"], shown: blockerOffered },
         filterLists: {
           advanced: true,
+          shown: blockerOffered,
           title: "Advanced Settings",
           description: "Block common components found across the web by using additional rules and filters.",
-          keywords: ["filter lists", "annoyances", "malware", "regional", "ad block settings"],
+          keywords: ["filter lists", "annoyances", "malware", "regional", "ad block settings", "custom filter list", "add filter list", "import list", "subscribe"],
+        },
+      },
+    },
+    {
+      section: "All sites",
+      rows: {
+        blockAutoplayEverywhere: {
+          shown: () => PLATFORM_FEATURES.blocksAutoplay,
+          title: "Block autoplay on every site", description: "Sites you set to Allow in Site Controls still autoplay. A click on a player always plays. Applies to pages you open or reload. Covers Chromium tabs only: WebKit tabs still autoplay for now.", keywords: ["autoplay", "auto play", "videos playing", "stop videos", "media autoplay", "muted autoplay"],
+        },
+        blockNotificationRequests: {
+          shown: () => PLATFORM_FEATURES.answersPermissionRequests,
+          title: "Block requests to send notifications", description: "A site that asks is set to Block, so it stops asking. Sites that asked while this was on stay blocked after you turn it off, until you allow each one in its Site Controls. Sites you already allowed keep sending them.", keywords: ["push notifications", "notification prompts", "notification requests", "stop asking", "notification spam"],
         },
       },
     },
@@ -32,8 +51,9 @@ export const privacyRows = {
       section: "Zoom",
       rows: {
         commandScrollZoom: {
-          title: "Zoom with ⌘ and the mouse wheel",
-          description: "Sites that use ⌘-scroll themselves, like maps, still get it. ⌘+, ⌘− and ⌘0 zoom either way.",
+          shown: () => PLATFORM_FEATURES.commandScrollZoom,
+          title: `Zoom with ${keyText("⌘")} and the mouse wheel`,
+          description: `Sites that use ${keyText("⌘")}-scroll themselves, like maps, still get it. ${keyText("⌘+")}, ${keyText("⌘−")} and ${keyText("⌘0")} zoom either way.`,
           keywords: ["scroll wheel", "command scroll", "cmd scroll", "mouse zoom", "accidental zoom", "page zoom", "font size", "text size", "bigger text"],
         },
       },
@@ -42,7 +62,7 @@ export const privacyRows = {
       section: "Crash reports and usage",
       rows: {
         shareDiagnostics: { title: "Share anonymous crash reports and usage stats", keywords: ["telemetry", "analytics", "diagnostics", "crash"] },
-        whatsSent: { title: "What's Sent", description: "Every field, and what never leaves this Mac.", keywords: ["telemetry", "data collection", "analytics", "usage data"] },
+        whatsSent: { title: "What's Sent", description: `Every field, and what never leaves this ${PLATFORM_TERMS.computer}.`, keywords: ["telemetry", "data collection", "analytics", "usage data"] },
         anonymousId: {
           title: "Your anonymous ID",
           description: "The name and colours you appear to us as, and resetting the ID.",
@@ -51,7 +71,7 @@ export const privacyRows = {
       },
     },
     {
-      section: "Kept on this Mac",
+      section: `Kept on this ${PLATFORM_TERMS.computer}`,
       rows: {
         viewData: {
           title: "The last 7 days",
@@ -66,12 +86,13 @@ export const privacyRows = {
       section: "Passwords",
       rows: {
         offerToSave: {
+          shown: () => PLATFORM_FEATURES.passwordAutofillSwitch,
           title: "Offer to save and fill passwords",
           description: "Offers to save a login after you sign in, and suggests saved ones when you click a login field.",
           keywords: ["password manager", "logins", "credentials", "keychain"],
         },
         importPasswords: { title: "Import passwords", description: "From a CSV exported by Chrome, Safari, Firefox, 1Password, Bitwarden…", keywords: ["csv", "logins"] },
-        exportPasswords: { advanced: true, title: "Export passwords", description: "To a CSV file. Anyone who can open the file can read your passwords.", keywords: ["csv", "backup", "logins"] },
+        exportPasswords: { advanced: true, shown: () => PLATFORM_FEATURES.exportsBookmarksAndPasswords, title: "Export passwords", description: "To a CSV file. Anyone who can open the file can read your passwords.", keywords: ["csv", "backup", "logins"] },
         managerApps: { advanced: true, title: "Password manager apps", keywords: ["1password", "bitwarden", "keepassxc", "proton pass"] },
       },
     },
@@ -81,7 +102,7 @@ export const privacyRows = {
       section: "Autofill",
       rows: {
         addresses: { title: "Save and fill addresses", description: "Names, addresses, email addresses and phone numbers.", keywords: ["forms", "contact", "phone", "email"] },
-        cards: { title: "Save and fill credit cards", description: "Filling in or showing a card number asks for Touch ID or your password.", keywords: ["payment", "debit card", "forms"] },
+        cards: { title: "Save and fill credit cards", description: `Filling in or showing a card number asks for ${PLATFORM_TERMS.deviceUnlock}.`, keywords: ["payment", "debit card", "forms"] },
       },
     },
     { section: "Addresses", rows: { addressList: { title: "Addresses", keywords: ["add address", "saved addresses"] } } },
@@ -104,7 +125,17 @@ export const privacyRows = {
       section: "Other search engines",
       rows: { otherEngines: { advanced: true, title: "Other search engines", description: "Type a shortcut and press Tab in the command bar to search a site directly.", keywords: ["custom search", "site search", "keyword"] } },
     },
-    { section: "Suggestions", rows: { suggestions: { title: "Show search suggestions", description: "Sends what you type to your search engine to suggest searches.", keywords: ["autocomplete"] } } },
+    {
+      section: "Suggestions",
+      rows: {
+        suggestions: { title: "Show search suggestions", description: "Sends what you type to your search engine to suggest searches.", keywords: ["autocomplete"] },
+        commandBarHistory: {
+          title: "Suggest pages from history",
+          description: `Pages you visited show in the command bar as you type and complete the address for you. Off, it suggests open tabs, bookmarks, searches and actions only; your history stays in History, ${keyText("⌘Y")}.`,
+          keywords: ["history", "visited pages", "browsing history", "hide history", "autocomplete", "autofill", "inline completion", "recent pages", "command bar", "omnibox"],
+        },
+      },
+    },
     {
       section: "Text selection",
       rows: {

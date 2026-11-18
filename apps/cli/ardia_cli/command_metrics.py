@@ -8,15 +8,23 @@ DURATIONS = frozenset({
     "total_ms", "startup_ms", "daemon_start_ms", "connect_ms", "attach_ms", "snapshot_build_ms", "action_ms", "eval_ms",
     "settle_ms", "cdp_ms_total",
 })
-COUNTS = frozenset({"cdp_calls", "snapshot_nodes", "snapshot_chars", "output_chars", "network_writes_count", "batch_steps",
+COUNTS = frozenset({"cdp_calls", "read_data_blocks", "snapshot_nodes", "snapshot_chars", "output_chars", "network_writes_count", "batch_steps",
                     "read_rows", "read_pages", "read_tabs_reopened", "skills_installed", "skills_skipped"})
-READ_FLAGS = frozenset({"read_scrolled", "read_matched", "read_virtualized_grid"})
-ACT_FLAGS = frozenset({"waited_for_enabled", "fill_picked_option", "fill_inserted_text", "drag_side_given", "drag_list_position"})
+READ_FLAGS = frozenset({"read_data", "read_data_shaped", "read_scrolled", "read_matched", "read_virtualized_grid", "read_pdf", "read_waited_for_content", "read_beside_busy", "read_bot_check", "read_scroll_guessed", "read_scope_shown", "read_scope_empty", "read_waited_for_requests", "read_partial_page", "read_frame_text"})
+ACT_FLAGS = frozenset({"waited_for_enabled", "fill_picked_option", "fill_inserted_text", "drag_side_given", "drag_list_position",
+                       "select_opened_list", "press_targeted", "consent_dismissed", "popup_dismissed", "click_recentered", "dom_click_fallback",
+                       "dom_click_behind_modal", "dom_click_waited_for_modal", "input_in_inner_frame"})
 ACT_COUNTS = frozenset({"cell_edits"})
-CHANGE_FLAGS = frozenset({"change_text", "change_run_choices", "open_report", "open_moved_tab", "snapshot_disabled_folded", "names_clipped"})
+CHANGE_FLAGS = frozenset({"change_text", "change_run_choices", "open_report", "open_moved_tab", "snapshot_disabled_folded", "snapshot_repeat_labels", "names_clipped",
+                          "waited_for_reaction"})
 CHANGE_COUNTS = frozenset({"change_text_chars"})
+FLOW_FLAGS = frozenset({"flow_saved", "flow_hint_shown", "flow_run_page", "flow_drifted", "flow_shaped"})
+FLOW_COUNTS = frozenset({"flow_requests_kept", "flow_params", "flow_items"})
 FLAGS = frozenset({"daemon_spawned", "reconnected_after_idle", "output_truncated", "humanize", "unsettled", "daemon_answer_timed_out",
-                   "followed_redrawn_ref", "script_eval_alias", "script_page_world_hint", "attach_refused", "viewport_set", "crashed_reloaded"})
+                   "followed_redrawn_ref", "script_eval_alias", "script_command_line_split", "script_page_world_hint", "attach_refused", "tab_kept_awake", "viewport_set", "crashed_reloaded",
+                   "network_disable_unconfirmed", "reattached_after_detach", "earlier_requests_ignored", "renderer_exit_kept_session",
+                   "setup_restored", "setup_restore_failed",
+                   "selector_nth", "output_saved", "waited_for_element", "saved_to_file", "batch_line_saved", "script_state_kept", "saved_as_csv", "script_timeout_read_hint", "click_scroll_locked", "open_still_loading", "focused_inner_field", "stale_ref_after_navigation", "clicked_label_of_hidden_input", "waited_for_box_to_settle", "frame_cross_process_box", "screenshot_unchanged", "script_queued_behind_busy", "navigation_dropped_hint", "navigation_https_only_hint", "eval_timed_out", "read_queued_beside", "script_state_kept_on_interrupt", "find_closest_names", "batch_saved", "read_empty_page", "network_reloaded", "fill_no_reaction_hint", "eval_selectors_quoted", "queued_behind_script", "followed_ref_after_reload", "clicked_visible_content", "element_rehomed"})
 MAIN_PHASE = {"snapshot": "snapshot_build_ms", "eval": "eval_ms"}
 OUTPUT_MARKERS = ("\n[output capped at ", "\n[truncated ", "\n[pages cut to fit ", " not shown. Narrow it instead: ")
 
@@ -126,9 +134,9 @@ def clean(values) -> dict:
     if not isinstance(values, dict):
         return out
     for key, value in values.items():
-        if key in FLAGS | READ_FLAGS | ACT_FLAGS | CHANGE_FLAGS and isinstance(value, bool):
+        if key in FLAGS | READ_FLAGS | ACT_FLAGS | CHANGE_FLAGS | FLOW_FLAGS and isinstance(value, bool):
             out[key] = value
-        elif key in DURATIONS | COUNTS | ACT_COUNTS | CHANGE_COUNTS and isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value):
+        elif key in DURATIONS | COUNTS | ACT_COUNTS | CHANGE_COUNTS | FLOW_COUNTS and isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value):
             ceiling = MAX_MS if key in DURATIONS else MAX_COUNT
             out[key] = int(min(max(round(value), 0), ceiling))
     return out

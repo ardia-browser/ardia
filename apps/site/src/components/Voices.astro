@@ -1,0 +1,325 @@
+---
+import type { ImageMetadata } from "astro";
+import { Image } from "astro:assets";
+import { VOICES } from "../data/voices";
+import andywang from "../assets/voices/andywang.jpg";
+import charlielamb from "../assets/voices/charlielamb.jpg";
+import itsomsarraf from "../assets/voices/itsomsarraf.jpg";
+import jsmasterypro from "../assets/voices/jsmasterypro.jpg";
+import lukeJudges from "../assets/voices/luke_judges.jpg";
+import mielkeJack from "../assets/voices/mielke_jack.jpg";
+import mkbhd from "../assets/voices/mkbhd.jpg";
+import pablopunk from "../assets/voices/pablopunk.jpg";
+import sprice from "../assets/voices/sprice.jpg";
+import thaetos from "../assets/voices/thaetos.png";
+
+const avatars: Record<string, ImageMetadata> = {
+  andywang,
+  charlielamb,
+  itsomsarraf,
+  jsmasterypro,
+  luke_judges: lukeJudges,
+  mielke_jack: mielkeJack,
+  mkbhd,
+  pablopunk,
+  sprice,
+  thaetos,
+};
+
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+
+const restCount = VOICES.filter((v) => !v.featured).length;
+---
+
+<section class="voices paint edge" id="voices" aria-labelledby="voices-title" data-shot="voices">
+  <div class="wrap">
+    <header class="voices-head">
+      <p class="label kicker">From the feed</p>
+      <h2 class="poster" id="voices-title" data-reveal>They switched.</h2>
+    </header>
+
+    <ul class="quotes" role="list" aria-label="Testimonials" data-rest={restCount % 3}>
+      {
+        VOICES.map((v, i) => {
+          const avatar = avatars[v.avatar];
+          return (
+            <li class:list={["quote", { featured: v.featured }]} data-reveal style={`--i: ${i + 2}`}>
+              <a class="card" href={v.href} rel="noopener">
+                <blockquote>
+                  <p>“{v.quote}”</p>
+                </blockquote>
+                <footer>
+                  <span class="avatar">
+                    {avatar ? (
+                      <Image src={avatar} alt="" width={80} height={80} densities={[1, 2]} />
+                    ) : (
+                      <span class="initials" aria-hidden="true">
+                        {initials(v.name)}
+                      </span>
+                    )}
+                  </span>
+                  <span class="who">
+                    <span class="name">{v.name}</span>
+                    <span class="meta">
+                      <span class="handle">{v.handle}</span>
+                      <span class="dot" aria-hidden="true">
+                        ·
+                      </span>
+                      <span class="label source">{v.sourceLabel}</span>
+                    </span>
+                  </span>
+                </footer>
+              </a>
+            </li>
+          );
+        })
+      }
+    </ul>
+  </div>
+</section>
+
+<style>
+  .voices {
+    --bg: #9a6580;
+    --bg-top: var(--dusk-late);
+    --wash: linear-gradient(180deg, var(--dusk-late) 0%, #9a6580 55%, #8a5f7f 100%);
+    --dab: var(--sun);
+    --ink-2: #3f3437;
+    --ink-3: #5a4a4e;
+    --card: var(--paper);
+    --card-edge: rgb(22 19 15 / 0.18);
+    padding: var(--section) 0;
+  }
+
+  .voices-head {
+    max-width: 22em;
+  }
+
+  h2 {
+    font-size: var(--t-h2);
+  }
+
+  .quotes {
+    display: grid;
+    /* 6-col base: featured cards span 3 (two-up), the rest span 2 (three-up). */
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 14px;
+    margin: clamp(36px, 4.4vw, 64px) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .quote.featured {
+    grid-column: span 3;
+  }
+
+  .quote:not(.featured) {
+    grid-column: span 2;
+  }
+
+  /* 8 regular cards leave two in the last row; let them fill the width. */
+  .quotes[data-rest="2"] .quote:not(.featured):nth-last-child(-n + 2) {
+    grid-column: span 3;
+  }
+
+  .card {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 28px;
+    height: 100%;
+    min-width: 0;
+    padding: clamp(16px, 1.6vw, 24px);
+    border: 1.5px solid var(--card-edge);
+    border-radius: 4px;
+    background-color: var(--card);
+    background-image: var(--impasto-soft);
+    background-size: 520px;
+    background-blend-mode: soft-light;
+    box-shadow: 0 16px 28px -22px rgb(90 40 50 / 0.5);
+    color: inherit;
+    text-decoration: none;
+    transition:
+      transform 200ms var(--ease-out),
+      box-shadow 200ms var(--ease-out);
+  }
+
+  .card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 22px 32px -20px rgb(60 20 40 / 0.55);
+  }
+
+  .quote.featured .card {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 28px;
+    padding: clamp(22px, 2.2vw, 32px);
+  }
+
+  blockquote {
+    margin: 0;
+  }
+
+  blockquote p {
+    font-size: var(--t-body);
+    font-weight: 440;
+    line-height: 1.45;
+    text-wrap: pretty;
+  }
+
+  .quote.featured blockquote p {
+    font-size: clamp(1.22rem, 0.95rem + 0.9vw, 1.6rem);
+    font-weight: 480;
+    line-height: 1.28;
+    letter-spacing: -0.015em;
+  }
+
+  footer {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .avatar {
+    flex: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--dusk-late) 55%, var(--paper));
+    box-shadow: inset 0 0 0 1px rgb(22 19 15 / 0.12);
+  }
+
+  .quote.featured .avatar {
+    width: 52px;
+    height: 52px;
+  }
+
+  .avatar :global(img) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .initials {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    font-family: var(--poster);
+    font-weight: 740;
+    font-stretch: 85%;
+    font-size: 0.85rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+
+  .who {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  .name {
+    font-weight: 620;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+  }
+
+  .meta {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0 0.4em;
+    color: var(--ink-3);
+    line-height: 1.3;
+  }
+
+  .handle {
+    font-size: 0.84rem;
+    font-weight: 450;
+  }
+
+  .dot {
+    font-size: 0.84rem;
+  }
+
+  .source {
+    color: var(--ink-3);
+  }
+
+  /* Tablet and mobile: horizontal snap carousel. Desktop grid above 960 is unchanged. */
+  @media (max-width: 960px) {
+    .quotes {
+      display: flex;
+      align-items: stretch;
+      gap: 12px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      overscroll-behavior-x: contain;
+      scroll-snap-type: x mandatory;
+      scroll-padding-inline: var(--gutter);
+      /* Break out of .wrap so the scroller is full-bleed; padding keeps the first
+         card on the site gutter, and the end padding lets the last card snap there too. */
+      width: calc(100% + 2 * var(--gutter));
+      margin-inline: calc(var(--gutter) * -1);
+      padding-inline: var(--gutter) calc(15vw - var(--gutter));
+      padding-block: 8px;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      -webkit-overflow-scrolling: touch;
+    }
+    .quotes::-webkit-scrollbar {
+      display: none;
+    }
+    .quote {
+      flex: 0 0 85vw;
+      width: 85vw;
+      display: flex;
+      scroll-snap-align: start;
+      scroll-snap-stop: always;
+    }
+    .quote .card {
+      flex: 1;
+      gap: 20px;
+      padding: 16px;
+    }
+    .quote.featured .card {
+      gap: 20px;
+      padding: 16px;
+    }
+    .quote.featured blockquote p {
+      max-width: none;
+      font-size: clamp(1.12rem, 0.9rem + 1.2vw, 1.45rem);
+    }
+    /* Cards off to the side never intersect the viewport on load; keep them visible. */
+    :global(.js) .quote[data-reveal],
+    :global(.js) .quote[data-reveal].in {
+      opacity: 1;
+      transform: none;
+      transition: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card,
+    .card:hover {
+      transform: none;
+      transition: none;
+    }
+    .quotes {
+      scroll-behavior: auto;
+    }
+  }
+</style>

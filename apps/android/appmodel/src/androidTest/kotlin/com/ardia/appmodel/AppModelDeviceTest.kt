@@ -57,15 +57,17 @@ class AppModelDeviceTest {
             while (!server.isClosed) {
                 val client = runCatching { server.accept() }.getOrNull() ?: break
                 kotlin.concurrent.thread(isDaemon = true) {
-                    client.use { socket ->
-                        val reader = socket.getInputStream().bufferedReader()
-                        while (reader.readLine()?.isNotEmpty() == true) Unit
-                        val body = "<html><head><title>Served Page</title></head><body>hello</body></html>".toByteArray()
-                        val head = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n"
-                        socket.getOutputStream().apply {
-                            write(head.toByteArray())
-                            write(body)
-                            flush()
+                    runCatching {
+                        client.use { socket ->
+                            val reader = socket.getInputStream().bufferedReader()
+                            while (reader.readLine()?.isNotEmpty() == true) Unit
+                            val body = "<html><head><title>Served Page</title></head><body>hello</body></html>".toByteArray()
+                            val head = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n"
+                            socket.getOutputStream().apply {
+                                write(head.toByteArray())
+                                write(body)
+                                flush()
+                            }
                         }
                     }
                 }

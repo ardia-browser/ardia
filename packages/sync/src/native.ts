@@ -20,7 +20,7 @@ export type PhraseResult =
   | { error: "mismatch" }
   | { error: "keychain" };
 
-export type SealedLogin = { origin: string; username: string; sealed: string; created: number };
+export type SealedLogin = { origin: string; username: string; created: number } & ({ sealed: string; passwordless?: undefined } | { passwordless: true; sealed?: undefined });
 
 type SyncNative = {
   folderInfo(path: string | null): Promise<FolderInfo>;
@@ -49,6 +49,7 @@ type SyncNative = {
   revealFolder(path: string): Promise<void>;
   readPasswords(engineProfile: string): Promise<SealedLogin[] | null>;
   savePassword(engineProfile: string, origin: string, username: string, sealed: string, replacing: boolean): Promise<boolean>;
+  takeFileCounts?(): { placeholders: number; busy: number; hydrated: number };
 };
 
 export const SyncNative = requireOptionalNativeModule<SyncNative>("ArdiaSync");

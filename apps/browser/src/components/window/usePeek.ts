@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Animated, AppState } from "react-native";
-import { easeInOutCubic } from "./dockMotion";
+import { easeInOutCubic, PEEK_CLOSE_DELAY_MS } from "./dockMotion";
 import { curve, duration, spring } from "../ui/motion";
 import { ARC_PEEK_OUT_MS, ARC_PEEK_SPRING } from "./tokens";
 import { backgroundInstance } from "../../state/app/appSettings";
 
 const SLIDE_MS = duration.base;
-const HIDE_DELAY_MS = 120;
 const ARC_IN = spring(ARC_PEEK_SPRING);
 const appInFront = () => backgroundInstance || AppState.currentState === "active";
 
@@ -64,12 +63,22 @@ export function usePeek(
     hideTimer.current = setTimeout(() => {
       heldBack.current = held();
       if (!heldBack.current) slideOut();
-    }, HIDE_DELAY_MS);
+    }, PEEK_CLOSE_DELAY_MS);
   };
   const recheck = () => {
     if (!heldBack.current || held()) return;
     heldBack.current = false;
     hide();
+  };
+  const reset = () => {
+    clearTimeout(hideTimer.current);
+    slide.stopAnimation();
+    slide.setValue(0);
+    out.current = false;
+    heldBack.current = false;
+    waitingForFocus.current = false;
+    setLive(false);
+    setLeaving(false);
   };
   const latestShow = useRef(show);
   latestShow.current = show;
@@ -84,5 +93,5 @@ export function usePeek(
     if (live) slideOut();
   }, [enabled]);
   useEffect(() => () => clearTimeout(hideTimer.current), []);
-  return { slide, live, leaving, show, hide, recheck, cancelPending };
+  return { slide, live, leaving, show, hide, recheck, cancelPending, reset };
 }

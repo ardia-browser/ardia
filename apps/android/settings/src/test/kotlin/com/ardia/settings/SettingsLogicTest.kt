@@ -16,6 +16,15 @@ class SettingsLogicTest {
     private val validPhrase = (List(23) { "abandon" } + "art").joinToString(" ")
 
     @Test
+    fun versionTextNamesTheChannelLikeTheMac() {
+        assertEquals("0.2.47", AppVersion.releaseText("0.2.47"))
+        assertEquals("0.2.47 Nightly 2", AppVersion.releaseText("0.2.47-nightly.2"))
+        assertNull(AppVersion.releaseText("dev"))
+        assertNull(AppVersion.releaseText(null))
+        assertNull(AppVersion.releaseText("0.2.47-beta.1"))
+    }
+
+    @Test
     fun backStackPushesPopsAndIgnoresARepeatedPush() {
         val stack = SettingsBackStack()
         assertTrue(stack.isAtRoot)

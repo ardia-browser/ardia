@@ -69,9 +69,14 @@ function SitePage() {
             {(d) => <TimeSeriesChart buckets={d.window.buckets} series={d.trend} step={d.window.step} zone={d.window.zone} height={260} />}
           </Loaded>
         </Panel>
-        <Panel source="site" className="xl:col-span-2" title="Where they clicked Download" description="Download clicks by the button's place on the page. The Mac funnel is on Funnels.">
+        <Panel source="site" className="xl:col-span-2" title="Where they clicked Download" description="Download clicks by platform, then by the button's place on the page. The Mac funnel is on Funnels.">
           <Loaded query={clicks} skeleton={<ListSkeleton rows={6} />}>
-            {(d) => <BarList items={d.locations} dimension="Location" valueLabel="People" secondaryLabel="Clicks" color="var(--chart-2)" limit={8} />}
+            {(d) => (
+              <div className="grid gap-4">
+                <BarList items={d.platforms} dimension="Platform" valueLabel="People" secondaryLabel="Clicks" color="var(--chart-3)" limit={4} />
+                <BarList items={d.locations} dimension="Location" valueLabel="People" secondaryLabel="Clicks" color="var(--chart-2)" limit={8} />
+              </div>
+            )}
           </Loaded>
         </Panel>
       </div>

@@ -1,0 +1,84 @@
+{
+  "fill": {
+    "solid": "srgb:0.04706,0.13333,0.11765,1.00000"
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "glass": false,
+          "image-name": "sun.png",
+          "name": "sun"
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "specular": false,
+      "translucency": {
+        "enabled": false,
+        "value": 0.5
+      }
+    },
+    {
+      "layers": [
+        {
+          "glass": false,
+          "image-name": "front.png",
+          "name": "front"
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "specular": false,
+      "translucency": {
+        "enabled": false,
+        "value": 0.5
+      }
+    },
+    {
+      "layers": [
+        {
+          "glass": false,
+          "image-name": "back.png",
+          "name": "back"
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "specular": false,
+      "translucency": {
+        "enabled": false,
+        "value": 0.5
+      }
+    },
+    {
+      "layers": [
+        {
+          "glass": false,
+          "image-name": "board.png",
+          "name": "board"
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0
+      },
+      "specular": false,
+      "translucency": {
+        "enabled": false,
+        "value": 0.5
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": [
+      "macOS"
+    ]
+  }
+}

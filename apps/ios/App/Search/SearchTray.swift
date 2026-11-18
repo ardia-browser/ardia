@@ -7,9 +7,9 @@ struct SearchTray<Drag: Gesture>: View {
   @Binding var isFocused: Bool
   let maxHeight: CGFloat
   let dismissDrag: Drag
+  let reveal: TrayReveal
 
   @Environment(AppModel.self) private var app
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
   @Environment(\.colorScheme) private var colorScheme
@@ -38,13 +38,15 @@ struct SearchTray<Drag: Gesture>: View {
         .frame(maxWidth: .infinity)
         .frame(height: rowsBudget, alignment: .top)
         .clipped()
+        .trayReveal(reveal.revealsContents, with: Motion.trayRevealRows)
     }
     .frame(maxWidth: .infinity)
-    .background(alignment: .top) {
-      panelBackground
-        .padding(.bottom, -BrowseLayout.sheetTopRadius * 12)
-        .ignoresSafeArea(edges: .horizontal)
-    }
+    .background { panelShape.fill(panelTint) }
+    .clipShape(panelShape)
+    .chromeSurface(in: panelShape, interactive: false, tinted: true)
+    .shadow(color: .black.opacity(isIncognito ? 0.3 : 0.1), radius: 18, y: 4)
+    .padding(.horizontal, BrowseLayout.panelInset)
+    .padding(.bottom, BrowseLayout.panelAboveKeyboard)
     .environment(\.colorScheme, isIncognito ? .dark : colorScheme)
     .onAppear(perform: start)
     .onDisappear { model?.cancel() }
@@ -62,26 +64,21 @@ struct SearchTray<Drag: Gesture>: View {
 
   private var header: some View {
     field
-      .padding(.horizontal, BrowseLayout.searchFieldInset)
-      .padding(.top, BrowseLayout.trayFieldTop)
-      .padding(.bottom, Spacing.tight)
+      .padding(.horizontal, BrowseLayout.panelFieldInset)
+      .padding(.top, BrowseLayout.panelFieldInset)
+      .padding(.bottom, Spacing.hairline)
       .frame(maxWidth: .infinity)
       .contentShape(.rect)
       .highPriorityGesture(dismissDrag)
       .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
   }
 
-  private var panelBackground: some View {
-    let shape = UnevenRoundedRectangle(topLeadingRadius: BrowseLayout.sheetTopRadius, topTrailingRadius: BrowseLayout.sheetTopRadius, style: .continuous)
-    return shape
-      .fill(isIncognito || reduceTransparency ? AnyShapeStyle(.clear) : AnyShapeStyle(.regularMaterial))
-      .overlay { shape.fill(panelTint) }
-      .shadow(color: .black.opacity(0.14), radius: 24, y: -4)
+  private var panelShape: RoundedRectangle {
+    RoundedRectangle(cornerRadius: BrowseLayout.panelRadius, style: .continuous)
   }
 
   private var panelTint: Color {
-    if isIncognito { return BrowsePalette.incognitoSheet }
-    return reduceTransparency ? look.surface : look.surface.opacity(BrowseLayout.sheetTintShare)
+    TrayPanel.tint(look: look, isIncognito: isIncognito, reduceTransparency: reduceTransparency)
   }
 
   private var field: some View {
@@ -93,6 +90,7 @@ struct SearchTray<Drag: Gesture>: View {
         placeholder: String(localized: "Search..."),
         isIncognito: isIncognito,
         selectsAllOnFocus: request.selectsAll,
+        reveal: reveal,
         onSubmit: submit
       )
       .frame(maxWidth: .infinity)
@@ -101,27 +99,29 @@ struct SearchTray<Drag: Gesture>: View {
         if text.isEmpty, !isFocused {
           Text("Search...")
             .font(.system(size: placeholderSize))
-            .foregroundStyle(isIncognito ? Color.white.opacity(0.45) : BrowsePalette.foregroundTertiary)
+            .foregroundStyle(isIncognito ? BrowsePalette.incognitoPlaceholder : BrowsePalette.foregroundTertiary)
             .lineLimit(1)
             .padding(.leading, CompletingTextField.horizontalInset)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
+            .trayReveal(reveal.revealsContents, with: Motion.trayRevealField)
         }
       }
       .layoutPriority(1)
       fieldAccessories
         .fixedSize()
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        .trayReveal(reveal.revealsContents, with: Motion.trayRevealField)
     }
     .padding(.leading, 18)
     .padding(.trailing, 10)
     .frame(minHeight: fieldHeight)
     .background {
       Capsule(style: .continuous)
-        .fill(isIncognito ? BrowsePalette.incognitoField : BrowsePalette.fieldFill)
+        .fill(isIncognito ? BrowsePalette.incognitoField : BrowsePalette.searchField)
         .overlay {
           Capsule(style: .continuous)
-            .strokeBorder(isIncognito ? Color.white.opacity(0.1) : BrowsePalette.fieldStroke, lineWidth: 1)
+            .strokeBorder(isIncognito ? BrowsePalette.incognitoFieldStroke : BrowsePalette.fieldStroke, lineWidth: 0.5)
         }
     }
   }
@@ -245,18 +245,16 @@ struct SearchTray<Drag: Gesture>: View {
     switch suggestion.kind {
     case .query:
       Button(isIncognito ? "Search in New Tab" : "Search in Incognito Tab", systemImage: isIncognito ? "plus.square.on.square" : "eyes") {
-        leave()
-        app.isIncognito.toggle()
-        app.openSearch(suggestion.query)
+        openSwitchingMode { app.activate(suggestion) }
       }
     case .calculation:
-      if let value = suggestion.copyValue {
-        Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = value }
+      if suggestion.copyValue != nil {
+        Button("Copy", systemImage: "doc.on.doc") { activate(suggestion) }
       }
     default:
       if let link = suggestion.url.flatMap(URL.init(string:)) {
         Button(isIncognito ? "Open in New Tab" : "Open in Incognito Tab", systemImage: isIncognito ? "plus.square.on.square" : "eyes") {
-          openSwitchingMode(link)
+          openSwitchingMode { app.openPage(link, origin: .typed) }
         }
         Button("Copy Link", systemImage: "link") {
           app.web.copyLink(link)
@@ -269,10 +267,10 @@ struct SearchTray<Drag: Gesture>: View {
     }
   }
 
-  private func openSwitchingMode(_ link: URL) {
+  private func openSwitchingMode(_ open: () -> Void) {
     leave()
     app.isIncognito.toggle()
-    app.openPage(link, origin: .typed)
+    open()
   }
 
   private func scrub(_ rows: [SearchSuggestion]) -> some Gesture {
@@ -308,7 +306,7 @@ struct SearchTray<Drag: Gesture>: View {
     guard point.y <= rowsBudget else { return nil }
     return rows.first { suggestion in
       guard let frame = rowFrames[suggestion.id] else { return false }
-      return frame.minY <= point.y && point.y < frame.maxY && frame.minX - 8 <= point.x && point.x <= frame.maxX + 8
+      return frame.minY <= point.y && point.y < frame.maxY && frame.minX - Spacing.tight <= point.x && point.x <= frame.maxX + Spacing.tight
     }?.id
   }
 
@@ -320,7 +318,7 @@ struct SearchTray<Drag: Gesture>: View {
   }
 
   private var mayFocus: Bool {
-    !app.settings.isShowingOnboarding && !app.browse.isVoicePresented
+    !reveal.isLeaving && app.searchFieldMayFocus
   }
 
   private func rebuildModel() {
@@ -334,12 +332,16 @@ struct SearchTray<Drag: Gesture>: View {
     let model = model
     Task {
       let resolution = await model?.resolve(value)
-      guard resolution != nil || SearchInput.resolve(value) != nil else { return }
+      guard isStillPresented, resolution != nil || SearchInput.resolve(value) != nil else { return }
       isSubmitting = true
       text = value
       leave()
       app.submitSearch(value, resolution: resolution)
     }
+  }
+
+  private var isStillPresented: Bool {
+    app.browse.search != nil
   }
 
   private func activate(_ suggestion: SearchSuggestion) {
@@ -349,6 +351,26 @@ struct SearchTray<Drag: Gesture>: View {
 
   private func leave() {
     isFocused = false
-    app.browse.dismissSearch()
+    app.browse.dismissSearch(submitted: true)
+  }
+}
+
+enum TrayPanel {
+  static func tint(look: ProfileLook, isIncognito: Bool, reduceTransparency: Bool) -> Color {
+    if isIncognito { return BrowsePalette.incognitoSheet.opacity(reduceTransparency ? 1 : BrowseLayout.panelIncognitoShare) }
+    return reduceTransparency ? look.surface : look.surface.opacity(BrowseLayout.panelTintShare)
+  }
+}
+
+struct TrayReveal {
+  var revealsContents: Bool
+  var isLeaving: Bool
+  var onReveal: (CFTimeInterval) -> Void
+}
+
+extension View {
+  func trayReveal(_ isRevealed: Bool, with animation: Animation) -> some View {
+    opacity(isRevealed ? 1 : 0)
+      .animation(isRevealed ? animation : nil, value: isRevealed)
   }
 }

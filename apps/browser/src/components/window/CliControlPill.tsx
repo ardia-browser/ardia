@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Animated, Image, StyleSheet, View, type ViewStyle } from "react-native";
 import { stopCliControl, useCliIndicator } from "../../state/app/cliControl";
+import { useSettings } from "../../state/browser/hooks";
 import { controlLine, controlLineText } from "../../state/app/cliCaller";
 import { fileIcon } from "../../state/app/system";
 import { useTheme } from "../ui/theme";
@@ -17,6 +18,7 @@ export function CliControlPill({ style }: { style?: Animated.WithAnimatedValue<V
   const caller = useCliIndicator((s) => s.caller);
   const icon = useAppIcon(caller?.app ?? null);
   const line = controlLine(caller);
+  const compact = useSettings((s) => s.compactCliPill);
   const { shown: mounted, appear } = usePresence(shown || null, CLI_PILL_MOTION);
   if (!mounted) return null;
   return (
@@ -31,7 +33,7 @@ export function CliControlPill({ style }: { style?: Animated.WithAnimatedValue<V
           }}
         >
           <Hud shape="capsule" height={PILL_HEIGHT} accessibilityRole="alert" accessibilityLabel={controlLineText(line)}>
-            <View style={PILL_ROW}>
+            <View style={compact ? COMPACT_ROW : PILL_ROW} tooltip={compact ? controlLineText(line) : undefined}>
               {icon ? (
                 <Image source={{ uri: icon }} style={APP_ICON} />
               ) : (
@@ -39,13 +41,15 @@ export function CliControlPill({ style }: { style?: Animated.WithAnimatedValue<V
                   <Symbol name="terminal.fill" size={9} weight="bold" color={theme.onPrimary} style={TERMINAL_GLYPH} />
                 </Dot>
               )}
-              <Text numberOfLines={1} size="small" tone="textSecondary" style={SHRINK}>
-                {line.lead}
-                <Text size="small" weight="semibold">
-                  {line.name}
+              {compact ? null : (
+                <Text numberOfLines={1} size="small" tone="textSecondary" style={SHRINK}>
+                  {line.lead}
+                  <Text size="small" weight="semibold">
+                    {line.name}
+                  </Text>
+                  {line.rest}
                 </Text>
-                {line.rest}
-              </Text>
+              )}
               <Button variant="pill" tone="chip" title="Stop" onPress={stopCliControl} />
             </View>
           </Hud>
@@ -60,6 +64,7 @@ const APP_ICON = { width: TERMINAL_DOT, height: TERMINAL_DOT } as const;
 const TERMINAL_GLYPH = { width: 14, height: 14 } as const;
 const SHRINK = { flexShrink: 1 } as const;
 const PILL_ROW = { height: PILL_HEIGHT, flexDirection: "row", alignItems: "center", gap: space.m, paddingLeft: space.s, paddingRight: space.xs } as const;
+const COMPACT_ROW = { ...PILL_ROW, gap: space.s } as const;
 
 const appIcons = new Map<string, string | null>();
 

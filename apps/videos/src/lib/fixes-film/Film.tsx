@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import { AbsoluteFill, Easing, Img, interpolate, OffthreadVideo, Sequence, staticFile, useCurrentFrame } from "remotion";
 import { color, font, loadFonts } from "../ac-launch/theme";
 import { AlertReplica, MenuReplica, NoteBubble, NotificationBanner, OverlayWindow, PageGoneCover, WindowGoneCover } from "./extras";
+import { CalloutPill, ClickRipples, EdgeGlow } from "./marks";
 import { CARD, clamp, FPS, HOLD_IN, HOLD_OUT, INTRO, label, OUTRO } from "./look";
 import type { Clip, Event, Segment } from "./types";
 
@@ -87,7 +88,7 @@ const HELD_RATE = 0.0001;
 function Footage({ clip, seg, play, symbols }: { clip: Clip; seg: Segment; play: number; symbols: string }) {
   const t = useClipTime(clip, seg, play);
   const rate = rateOf(seg);
-  const { w: boxW } = boxFor(seg);
+  const { w: boxW, h: boxH } = boxFor(seg);
   const zoomed = seg.zoom ? interpolate(t - clip.inS, [seg.zoom.from, seg.zoom.to], [0, 1], { ...clamp, easing: Easing.inOut(Easing.cubic) }) : 0;
   const camAt = (i: number) => seg.cam[i]! + ((seg.zoom?.cam[i] ?? seg.cam[i]!) - seg.cam[i]!) * zoomed;
   const [cx, cy, cw] = [camAt(0), camAt(1), camAt(2)];
@@ -135,6 +136,8 @@ function Footage({ clip, seg, play, symbols }: { clip: Clip; seg: Segment; play:
       {(clip.banners ?? []).map((b) => (
         <NotificationBanner key={`${b.t}`} banner={b} t={t} />
       ))}
+      {clip.highlights ? <EdgeGlow highlights={clip.highlights} t={t} cam={cam} k={k} /> : null}
+      {seg.ripple ? <ClickRipples events={clip.events} t={t} cam={cam} k={k} /> : null}
       {(clip.notes ?? []).map((n) => (
         <NoteBubble key={`${n.t}`} note={n} t={t} cam={cam} k={k} />
       ))}
@@ -156,6 +159,7 @@ function Footage({ clip, seg, play, symbols }: { clip: Clip; seg: Segment; play:
           }}
         />
       ) : null}
+      {clip.callouts ? <CalloutPill callouts={clip.callouts} t={t} width={boxW} height={boxH} /> : null}
     </>
   );
 }

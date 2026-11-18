@@ -1,0 +1,1 @@
+@{author}, you hold {limit} issues already. Finish one or `/drop` it, then `/take` this one. The rule is in [CONTRIBUTING.md](https://github.com/{owner}/{repo}/blob/{default_branch}/CONTRIBUTING.md#claiming-an-issue).

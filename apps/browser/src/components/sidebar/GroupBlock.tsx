@@ -7,10 +7,10 @@ import { noteGroupHeaderHide } from "../../state/telemetry/usage";
 import { useGroupLabel } from "../../state/groups/hooks";
 import { useSelectionInGroup } from "../../state/pins/hooks";
 import { newCapture } from "../../state/sidebar/listCapture";
-import { useCapturedGroupEntries, useGroupFirstTabIcon, useGroupTabIds, useKeptEntries, useShowsExtraTabs } from "../../state/sidebar/hooks";
+import { useCapturedGroupEntries, useGroupTabIds, useKeptEntries, useShowsExtraTabs } from "../../state/sidebar/hooks";
 import { MeetingTimeLabel, useMeetingCountdown } from "../live/MeetingCountdown";
 import { HoverSlot } from "../ui/HoverSlot";
-import { Button, ContextMenuArea, FadeLabel, font, ink, space, Symbol, Text, weight, withAlpha } from "../ui";
+import { Button, ContextMenuArea, FadeLabel, ink, space, Symbol, Text, weight, withAlpha } from "../ui";
 import { commitRename, endRename } from "../../state/sidebar/actions";
 import { useDragFolded, useDragItem, useDropInto } from "./DragProvider";
 import { useShift, type EntryMotion } from "./EntryMotion";
@@ -24,9 +24,9 @@ import { GhostSlot, ListMotionContext, useGroupMotion } from "./ListMotion";
 import { pressGroupClose, useGroupCloseControlWhile } from "../../state/sidebar/closeControl";
 import { openGroupMenu } from "../../state/sidebar/menus";
 import { registerRow, useSidebarUi } from "../../state/sidebar/sidebarUi";
-import { TabIcon } from "./TabIcon";
+import { FolderOrIcon } from "./AnimatedFolder";
 import { RenameField, SplitRowItem, TabRowItem } from "./TabRow";
-import { groupBoxAtRest, groupSurface, TAB_ROW, TABULAR_NUMS, useSidebarTokens } from "./tokens";
+import { groupBoxAtRest, groupSurface, SIDEBAR_TYPE, TAB_ROW, TABULAR_NUMS, useSidebarTokens } from "./tokens";
 import { SidebarRowSurface } from "./SidebarRow";
 import { curve } from "../ui/motion";
 import { entryKey, parseEntry } from "../../state/sidebar/entryKey";
@@ -175,7 +175,6 @@ function GroupHeader({ groupId, windowId, collapsed, open }: { groupId: string; 
   const tokens = useSidebarTokens();
   const group = useGroup(groupId, (g) => g);
   const label = useGroupLabel(groupId);
-  const firstTab = useGroupFirstTabIcon(groupId);
   const renaming = useSidebarUi((u) => u.renaming?.kind === "group" && u.renaming.id === groupId);
   const dropInto = useDropInto() === groupId;
   const { hovered, hoverProps } = useRowHover(windowId, collapsed && !renaming ? { kind: "group", id: groupId } : null);
@@ -205,11 +204,7 @@ function GroupHeader({ groupId, windowId, collapsed, open }: { groupId: string; 
         >
           {() => (
             <SidebarRowSurface fill={dropInto ? theme.tabPressed : ink.clear} cornerRadius={GROUP_INNER_RADIUS}>
-              {group.icon || firstTab ? (
-                <TabIcon url={firstTab?.url ?? ""} favicon={firstTab?.favicon} icon={group.icon ?? firstTab?.customIcon} profileId={firstTab?.profileId} />
-              ) : (
-                <View style={{ width: 16 }} />
-              )}
+              <FolderOrIcon icon={group.icon} open={!collapsed || dropInto} color={group.color} />
               {renaming ? (
                 <RenameField
                   initial={group.name}
@@ -224,7 +219,7 @@ function GroupHeader({ groupId, windowId, collapsed, open }: { groupId: string; 
                     <Text lines={1} weight="medium" style={MEASURE_LABEL}>
                       {label}
                     </Text>
-                    <FadeLabel text={label} fontSize={font.body.fontSize} weight="medium" color={tokens.groupTitle} style={{ position: "absolute", left: 0, right: 0, top: 0, height: TAB_ROW.titleHeight }} />
+                    <FadeLabel text={label} fontSize={SIDEBAR_TYPE.title} weight="medium" color={tokens.groupTitle} style={{ position: "absolute", left: 0, right: 0, top: 0, height: TAB_ROW.titleHeight }} />
                   </View>
                   <SharedFolderMark groupId={groupId} />
                   <Animated.View

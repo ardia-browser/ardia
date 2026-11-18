@@ -26,6 +26,23 @@ export interface Note {
   text: string;
 }
 
+export interface Callout {
+  t: number;
+  until?: number;
+  text: string;
+  tone?: "good" | "bad" | "plain";
+  place?: "top" | "bottom";
+}
+
+export interface Highlight {
+  t: number;
+  until: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface Dialog {
   t: number;
   until: number;
@@ -96,6 +113,8 @@ export interface Clip {
   dialogs?: Dialog[];
   banners?: Banner[];
   notes?: Note[];
+  callouts?: Callout[];
+  highlights?: Highlight[];
   menus?: Menu[];
   gone?: Gone;
   w: number;
@@ -119,6 +138,7 @@ export interface Segment {
   beforeVersion?: string;
   note?: string;
   cursor?: boolean;
+  ripple?: boolean;
   afterOnly?: string;
   before?: Clip;
   after: Clip;

@@ -35,6 +35,11 @@
       "dependsOn": [
         "^build"
       ]
+    },
+    "test:portable": {
+      "dependsOn": [
+        "^build"
+      ]
     }
   }
 }

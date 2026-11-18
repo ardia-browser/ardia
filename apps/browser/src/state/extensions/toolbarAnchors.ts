@@ -2,13 +2,17 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { shownPageId } from "../peek/peek";
 import type { Anchor } from "./store";
+import { noteToolbarAnchor } from "../telemetry/usage";
 
-type AnchorEntry = { windowId: string; tabId: string; anchor: Anchor };
+type AnchorEntry = { windowId: string; tabId: string; anchor: Anchor; measure: () => Promise<Anchor> };
 const toolbarAnchors = new Map<string, AnchorEntry>();
 const anchorKey = (windowId: string, tabId: string, slot: string) => `${windowId}|${tabId}|${slot}`;
 
-export const setToolbarAnchor = (windowId: string, tabId: string, slot: string, anchor: Anchor) =>
-  void toolbarAnchors.set(anchorKey(windowId, tabId, slot), { windowId, tabId, anchor });
+const MEASURE_WAIT_MS = 100;
+const OFF_TOOLBAR: Anchor = { x: 100_000, y: 13, width: 28, height: 28 };
+
+export const setToolbarAnchor = (windowId: string, tabId: string, slot: string, anchor: Anchor, measure: () => Promise<Anchor>) =>
+  void toolbarAnchors.set(anchorKey(windowId, tabId, slot), { windowId, tabId, anchor, measure });
 
 export function dropToolbarAnchor(windowId: string, tabId: string, slot: string, anchor: Anchor) {
   const key = anchorKey(windowId, tabId, slot);
@@ -20,12 +24,25 @@ export function pruneToolbarAnchors(s: BrowserState) {
   for (const [key, entry] of toolbarAnchors) if (!s.windows[entry.windowId] || s.tabs[entry.tabId]?.windowId !== entry.windowId) toolbarAnchors.delete(key);
 }
 
-export function toolbarAnchor(windowId: string, extensionId: string, tabId?: string): Anchor {
+function anchorEntry(windowId: string, extensionId: string, tabId?: string): AnchorEntry | null {
   const s = useBrowser.getState();
   for (const pane of new Set([tabId ?? shownPageId(s, windowId), activeTabId(s, windowId)])) {
     if (!pane) continue;
     const entry = toolbarAnchors.get(anchorKey(windowId, pane, extensionId)) ?? toolbarAnchors.get(anchorKey(windowId, pane, "*"));
-    if (entry) return entry.anchor;
+    if (entry) return entry;
   }
-  return { x: 100_000, y: 13, width: 28, height: 28 };
+  return null;
+}
+
+export async function toolbarAnchor(windowId: string, extensionId: string, tabId?: string): Promise<Anchor> {
+  const entry = anchorEntry(windowId, extensionId, tabId);
+  if (!entry) return OFF_TOOLBAR;
+  const cached = entry.anchor;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<null>((resolve) => (timer = setTimeout(() => resolve(null), MEASURE_WAIT_MS)));
+  const fresh = await Promise.race([entry.measure(), timedOut]);
+  clearTimeout(timer);
+  if (!fresh) noteToolbarAnchor("missed");
+  else if (fresh.x !== cached.x || fresh.y !== cached.y) noteToolbarAnchor("moved");
+  return fresh ?? cached;
 }

@@ -3,6 +3,7 @@ import { memo, useState } from "react";
 import { Image, Text, View } from "react-native";
 import { faviconFailed, useAppearanceDark, useFavicon, useFaviconTheme } from "../../state/favicons/favicons";
 import { radius, Surface, Symbol, useTheme, weight } from "../ui";
+import { typeFace } from "../ui/tokens";
 import { bundledSiteIcon } from "./siteIcons";
 
 export const Favicon = memo(function Favicon({
@@ -43,6 +44,13 @@ export const Favicon = memo(function Favicon({
   return grayscale ? <Surface grayscale style={{ width: size, height: size }}>{image}</Surface> : image;
 });
 
+export const SiteFavicon = memo(function SiteFavicon({ host, profileId, size }: { host: string; profileId: string; size?: number }) {
+  const theme = useTheme();
+  const url = `https://${host}`;
+  if (bundledSiteIcon(url, theme.dark) !== undefined) return <Favicon url={url} size={size} />;
+  return <Favicon url={url} favicon={`${url}/favicon.ico`} profileId={profileId} size={size} />;
+});
+
 export const FaviconFallback = memo(function FaviconFallback({ url, size = 16, grayscale = false }: { url: string; size?: number; grayscale?: boolean }) {
   const theme = useTheme();
   const bundled = bundledSiteIcon(url, theme.dark);
@@ -51,7 +59,7 @@ export const FaviconFallback = memo(function FaviconFallback({ url, size = 16, g
     return grayscale ? <Surface grayscale style={{ width: size, height: size }}>{image}</Surface> : image;
   }
   const initial = hostInitial(url);
-  if (!initial) return <Symbol name="globe" size={size - 3} color={theme.textSecondary} style={{ width: size, height: size }} />;
+  if (!initial) return <Symbol name="globe" size={size - 2}color={theme.textSecondary} style={{ width: size, height: size }} />;
   const tile = Math.round((size * 14) / 16);
   return (
     <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
@@ -66,7 +74,7 @@ export const FaviconFallback = memo(function FaviconFallback({ url, size = 16, g
           justifyContent: "center",
         }}
       >
-        <Text style={{ fontSize: Math.round(tile * 0.64), lineHeight: tile, fontWeight: weight.semibold, color: theme.textSecondary }}>{initial}</Text>
+        <Text style={{ ...typeFace(), fontSize: Math.round(tile * 0.64), lineHeight: tile, fontWeight: weight.semibold, color: theme.textSecondary }}>{initial}</Text>
       </View>
     </View>
   );

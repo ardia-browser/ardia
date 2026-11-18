@@ -297,11 +297,13 @@ export function passwordsAdapter(profileId: string, logins: SealedPasswords = na
   let created = new Map<string, number>();
   const profile = () => engineProfile(useBrowser.getState(), profileId);
   const keyOf = (origin: string, username: string) => `pws:${origin}\n${username}`;
+  let passwordless = new Set<string>();
   const read = async () => {
     if (!profileOpened(profile())) return null;
     const list = await logins.read(profile());
     if (!list) return null;
-    return new Map(list.map((l) => [keyOf(l.origin, l.username), { o: l.origin, u: l.username, s: l.sealed, c: l.created }] as const));
+    passwordless = new Set(list.filter((l) => l.passwordless).map((l) => keyOf(l.origin, l.username)));
+    return new Map(list.flatMap((l) => (l.sealed === undefined ? [] : [[keyOf(l.origin, l.username), { o: l.origin, u: l.username, s: l.sealed, c: l.created }] as const])));
   };
   return (forced) => ({
     prefix: "pws:",
@@ -312,7 +314,8 @@ export function passwordsAdapter(profileId: string, logins: SealedPasswords = na
       if (!local) return null;
       lastRead = now;
       created = new Map([...local].map(([k, v]) => [k, v.c]));
-      return { values: new Map([...local].map(([k, { o, u, s }]) => [k, { o, u, s } satisfies PasswordValue])) };
+      const blank = new Set(passwordless);
+      return { values: new Map([...local].map(([k, { o, u, s }]) => [k, { o, u, s } satisfies PasswordValue])), ignore: (k) => blank.has(k) };
     },
     editedAt: (v) => {
       const value = passwordValue(v);
@@ -324,6 +327,7 @@ export function passwordsAdapter(profileId: string, logins: SealedPasswords = na
       let ok = true;
       for (const key of changed) {
         if (records.held()) return false;
+        if (passwordless.has(key)) continue;
         const v = passwordValue(visible.get(key));
         if (visible.has(key) && !v) return false;
         const have = local.get(key);
@@ -335,7 +339,7 @@ export function passwordsAdapter(profileId: string, logins: SealedPasswords = na
           if (saved) records.landed(key);
           ok = saved && ok;
         } else if (have) {
-          const deleted = await deletePassword(profile(), have.o, have.u).catch(orWarn(false));
+          const deleted = await deletePassword(profile(), have.o, have.u).catch(orWarn(false, "sync delete"));
           if (deleted) records.landed(key);
           ok = deleted && ok;
         }
@@ -349,7 +353,7 @@ export function passwordsAdapter(profileId: string, logins: SealedPasswords = na
       for (let i = 0; i < 20 && !settled; i++) {
         if (records.held()) return false;
         const now = await read();
-        settled = !!now && [...changed].every((k) => landed(now, k));
+        settled = !!now && [...changed].every((k) => passwordless.has(k) || landed(now, k));
         if (!settled) await new Promise((r) => setTimeout(r, 250));
       }
       if (!settled) quietUntil = Date.now() + 30_000;

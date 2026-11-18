@@ -26,6 +26,11 @@ export function useShareFor(tabId: string): [string, TabShare] | null {
   return null;
 }
 
+export function useTabShared(tabId: string): boolean {
+  const capturers = useMedia((m) => Object.keys(m.tabShares).filter((id) => m.tabShares[id]!.capturedTabId === tabId).join(","));
+  return usePages((p) => !!capturers && capturers.split(",").some((id) => !!p.pages[id]?.mediaAccess?.screen));
+}
+
 export function noteTabShare(capturerTabId: string, capturedTabId: string, origin: string) {
   useMedia.setState((m) => ({ tabShares: { ...m.tabShares, [capturerTabId]: { capturedTabId, origin, dismissed: {} } } }));
 }

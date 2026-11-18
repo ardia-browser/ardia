@@ -2,16 +2,37 @@ import type { InstalledExtension } from "../../state/extensions/store";
 import { chooseFromMenu } from "../../state/app/menuChoice";
 import { useRef } from "react";
 import type { View } from "react-native";
-import { activateExtension, EXTENSION_LIST_ITEMS, openWebStore, runExtensionListChoice, showExtensionMenu, useWindowExtensions, type Anchor } from "../../state/extensions/actions";
+import { activateExtension, EXTENSION_LIST_ITEMS, openManageExtensions, openWebStore, runExtensionListChoice, showExtensionMenu, useWindowExtensions, type Anchor } from "../../state/extensions/actions";
 import { ExtensionTile, SITE_PANEL, TileGrid } from "./SiteControlsParts";
 import { SectionLabel } from "../sidebar/SectionLabel";
-import { PANEL } from "../ui";
+import { noteSiteControls } from "../../state/telemetry/usage";
+import { Button, PANEL } from "../ui";
 
 export function SiteExtensions({ windowId, tabId, columns, onClose }: { windowId: string; tabId: string; columns: number; onClose: () => void }) {
   const extensions = useWindowExtensions(windowId);
   return (
     <>
-      <SectionLabel title="Extensions" inset={PANEL.inset} top={SITE_PANEL.sectionTop} bottom={SITE_PANEL.sectionGap} />
+      <SectionLabel
+        title="Extensions"
+        inset={PANEL.inset}
+        top={SITE_PANEL.sectionTop}
+        bottom={SITE_PANEL.sectionGap}
+        accessory={
+          <Button
+            variant="text"
+            look="link"
+            pad="none"
+            size="caption"
+            title="Manage"
+            label="Manage Extensions"
+            onPress={() => {
+              onClose();
+              noteSiteControls("manageExtensions");
+              openManageExtensions(windowId);
+            }}
+          />
+        }
+      />
       <TileGrid columns={columns}>
         {extensions.map((ext) => (
           <ExtensionGridTile key={ext.id} ext={ext} windowId={windowId} tabId={tabId} onClose={onClose} />

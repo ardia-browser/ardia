@@ -23,6 +23,15 @@ final class IconStyleTests: XCTestCase {
     }
   }
 
+  func testADevBuildKeepsItsOwnIconWhateverWasPicked() {
+    for saved in ["default", "mono", "midnight", "ocean", "noir"] {
+      XCTAssertEqual(IconStyle.shown(saved: saved, theme: nil, bundleIcon: IconStyle.devBundleIcon), "default", saved)
+      XCTAssertEqual(IconStyle.shown(saved: saved, theme: "RegularDark", bundleIcon: IconStyle.devBundleIcon), "default", saved)
+    }
+    XCTAssertEqual(IconStyle.shown(saved: "midnight", theme: nil, bundleIcon: "AppIcon"), "midnight")
+    XCTAssertEqual(IconStyle.shown(saved: "midnight", theme: nil, bundleIcon: nil), "midnight")
+  }
+
   func testTheWatcherHearsAStyleChangeMadeByAnotherProcess() throws {
     let suite = "com.ardia.icon-style-test-\(UUID().uuidString)"
     let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

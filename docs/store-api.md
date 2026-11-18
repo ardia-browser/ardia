@@ -17,6 +17,11 @@ store but through `storeAction` wrappers in each domain's `actions.ts` (`newTab`
   profile share a session (`privateSession(profileId)`, the regular engine name), another profile's never. Downloads
   carry `offTheRecord` and their regular profile (`downloadSession`, state/windows/ui.ts); a session's go with its last window.
 - `tabs` (persisted) vs `live` (loading/progress/back-forward/audio/theme colour; never persisted).
+- `downloads`: one record per download. A running download's `received`, `total` and `speed` are zero there: they live in
+  `useDownloadProgress` (state/downloads/progress.ts), so progress wakes only the rows that show it and never rewrites
+  downloads.json. Read a record with its progress through `useDownload(id)` (state/downloads/hooks.ts) in a component,
+  `withLiveProgress(downloads)` elsewhere (`ac.downloads.withLiveProgress` in the dev harness). A download that has
+  ended holds its final bytes in the record.
 - `groups`: `{ windowId, profileId, name, icon, color, collapsed, pinned, tabIds }` (members contiguous). `color` is
   `null` for Neutral, `"none"` for a transparent group, or one of Chrome's nine group colours.
 - `splits` (state/splits/splits.ts): `{ windowId, tabIds (2–3, pane order), orientation, sizes, stack? }` — `stack` = two panes sharing a slot the other way (Add Bottom Split). Members are contiguous in `window.tabIds`; the window's active tab is the focused pane. A split is one sidebar row (`splitRowPanes`): its panes are all unpinned, or all pinned rows; `placing`, `withGroup`, `createGroup`, `addTabsToGroup` and `removeTabsFromGroup` take every pane of a row they're given one of (`withSplitRows`), pinned panes are always rows, and a pinned split is mirrored to the profile's windows (pinMirror) and parked with them (`ParkedPins.splits`). `window.tabLayout` ("sidebar" | "top", unset = Settings).
@@ -26,6 +31,11 @@ store but through `storeAction` wrappers in each domain's `actions.ts` (`newTab`
   regular window closed with the close button is marked `lastWindow`, with `activePin` when a pinned tab was showing, and
   `openLastWindowOrNew` (state/windows/lastWindow.ts) brings it back on a Dock click or at launch);
   `downloads`; `settings` (typed, state/settings/settings.ts).
+- Interface size: `settings.interfaceScale` is the chosen size (this Mac only); `useInterfaceScale`
+  (state/settings/interfaceScale.ts) holds the applied one, which every root-point conversion reads
+  (`currentInterfaceScale`, `onInterfaceScaleChange`). `chooseInterfaceScale` (state/settings/actions.ts) snaps to a 5 %
+  step; `startInterfaceScale` (interfaceScaleSync.ts) pushes it to native. Window frames stay physical: lay out with
+  `windowRootSize` (state/windows/rootSize.ts).
 - `parkedPins[profileId]` (state/pins/parkedPins.ts): pinned tabs belong to the profile's sidebar, as in Dia. Closing a
   window (⌘W on its last tab, the close button, ⇧⌘W, "Start fresh" on launch) parks its pinned tiles (at their pinned
   URL) and pinned groups, with their order and tab/group ids; the next window that shows the profile takes them back,

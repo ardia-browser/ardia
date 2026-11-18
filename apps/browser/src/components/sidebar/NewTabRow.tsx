@@ -1,20 +1,24 @@
 import { memo, useState } from "react";
 import { Animated, Pressable, View, type LayoutChangeEvent } from "react-native";
-import { Button, ContextMenuArea, radius, space, Symbol, Text, useHover } from "../ui";
-import { layout, useTheme } from "../ui/theme";
+import { Button, ContextMenuArea, perLook, radius, sidebarPoints, space, Symbol, Text, useHover, withAlpha } from "../ui";
+import { hex, layout, useTheme } from "../ui/theme";
 import { HoverSlot } from "../ui/HoverSlot";
 import { newTab } from "../../state/tabs/actions";
 import { useCleanedCount } from "../../state/sidebar/hooks";
 import { openNewTabInSplit } from "../../state/splits/actions";
+import { splitViewAvailable } from "../../state/splits/splits";
 import { openOverflowMenu, openSidebarMenu } from "../../state/sidebar/menus";
 import { toggleNewTabBar } from "../../state/omnibox/newTabBar";
 import { noteRowPressIn } from "../../state/sidebar/heldTabPress";
 import { modifiersOf } from "../../lib/keys";
+import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
 import { useClipped, useShift, type ClipSource } from "./EntryMotion";
-import { TAB_ROW, useSidebarTokens } from "./tokens";
+import { ROW_GLYPH, TAB_ROW, useSidebarTokens } from "./tokens";
 import { SidebarRowLabel } from "./SidebarRow";
+import { useQuietRows } from "./rowLook";
+import { buttonMotion, usePressScaleMotion } from "../ui/motion";
 
-const CLIPPED = { marginTop: -layout.rowGap, paddingTop: layout.rowGap, overflow: "hidden" } as const;
+const clippedRow = perLook(() => ({ marginTop: -layout.rowGap, paddingTop: layout.rowGap, overflow: "hidden" as const }));
 const NEW_TAB_LABEL_X = 30;
 const CLEANED_HINT_RIGHT = 30;
 const CLEANED_HINT_GAP = space.m;
@@ -27,7 +31,11 @@ export const NewTabRow = memo(function NewTabRow({ windowId, shift = null, clip 
   const theme = useTheme();
   const tokens = useSidebarTokens();
   const cleaned = useCleanedCount(windowId);
+  const quiet = useQuietRows();
   const { hovered, hoverProps } = useHover();
+  const newTabHint = useShortcutHint("newTab");
+  const pressMotion = usePressScaleMotion(true, buttonMotion.iconPressScale);
+  const iconScale = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
   const [moved, movedRef] = useShift(shift);
   const [movedButtons, movedButtonsRef] = useShift(shift);
   const clipped = useClipped(clip);
@@ -36,10 +44,11 @@ export const NewTabRow = memo(function NewTabRow({ windowId, shift = null, clip 
     const width = Math.ceil(e.nativeEvent.layout.width);
     setWidths((w) => (w[key] === width ? w : { ...w, [key]: width }));
   };
+  const quietInk = hex(withAlpha(theme.textTab, hovered ? tokens.quietText : tokens.quietFaintText));
   const hint = `${cleaned} cleaned`;
   const hintFits = widths.hint > 0 && NEW_TAB_LABEL_X + widths.label + CLEANED_HINT_GAP + widths.hint <= widths.row - CLEANED_HINT_RIGHT;
   return (
-    <View {...hoverProps} onLayout={measure("row")} style={[{ flexDirection: "row", alignItems: "center" }, clipped ? CLIPPED : null]}>
+    <View {...hoverProps} onLayout={measure("row")} style={[{ flexDirection: "row", alignItems: "center" }, clipped ? clippedRow() : null]}>
       <View pointerEvents="none" style={MEASURE_OFFSCREEN}>
         <Text lines={1} style={MEASURE_TEXT} onLayout={measure("label")}>
           New Tab
@@ -52,9 +61,14 @@ export const NewTabRow = memo(function NewTabRow({ windowId, shift = null, clip 
       </View>
       <ContextMenuArea style={{ flex: 1 }} onContextMenu={() => void openSidebarMenu(windowId)}>
         <Pressable
-          onPressIn={() => noteRowPressIn(windowId)}
+          tooltip={`${withShortcut("New Tab", newTabHint)} — ⌥-click to open in Split View`}
+          onPressIn={() => {
+            pressMotion.onPressIn?.();
+            noteRowPressIn(windowId);
+          }}
+          onPressOut={pressMotion.onPressOut}
           onPress={(e) => {
-            if (modifiersOf(e).altKey) openNewTabInSplit(windowId);
+            if (modifiersOf(e).altKey && splitViewAvailable) openNewTabInSplit(windowId);
             else toggleNewTabBar(windowId) || newTab(windowId, { newTabCommand: true });
           }}
         >
@@ -70,13 +84,15 @@ export const NewTabRow = memo(function NewTabRow({ windowId, shift = null, clip 
                   alignItems: "center",
                   paddingLeft: TAB_ROW.contentLeft,
                   paddingRight: BUTTONS_ROOM,
-                  backgroundColor: pressed ? theme.tabPressed : hovered ? theme.tabHover : undefined,
+                  backgroundColor: pressed ? (quiet ? tokens.quietPressed : theme.tabPressed) : hovered ? (quiet ? tokens.quietHover : theme.tabHover) : undefined,
                 },
                 moved.style as object,
               ]}
             >
-              <Symbol name="plus" size={13} weight="medium" color={tokens.newTabIcon} style={{ width: 16, height: 16 }} />
-              <SidebarRowLabel text="New Tab" color={tokens.newTabLabel} />
+              <Animated.View pointerEvents="none" style={iconScale}>
+                <Symbol name="plus" size={quiet ? sidebarPoints(10) : ROW_GLYPH.plus} weight="medium" color={quiet ? quietInk : tokens.newTabIcon} style={{ width: ROW_GLYPH.box, height: ROW_GLYPH.box }} />
+              </Animated.View>
+              <SidebarRowLabel text="New Tab" color={quiet ? quietInk : tokens.newTabLabel} compact={quiet} />
             </View>
           )}
         </Pressable>
@@ -88,14 +104,14 @@ export const NewTabRow = memo(function NewTabRow({ windowId, shift = null, clip 
             </Text>
           }
         />
-        <Button variant="icon"
+        {quiet && !hovered ? null : <Button variant="icon"
           icon="chevron.down"
           size="s"
           weight="semibold"
           color={hovered ? theme.textSecondary : theme.textTertiary}
           tooltip="Open and recently closed tabs"
           onPress={() => void openOverflowMenu(windowId)}
-        />
+        />}
       </View>
     </View>
   );

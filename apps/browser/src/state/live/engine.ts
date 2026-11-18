@@ -6,8 +6,9 @@ import { awayFromPin } from "../pins/organize";
 import { pinnedGroupMembers } from "../browser/structure";
 import { shownTabIds } from "../tabs/shownTabs";
 import { repoKey } from "./rows";
+import { hideNewRepos } from "./repoFilter";
 import { SOURCES } from "./sources";
-import { applyFetch, createFolder, releaseShownRepos, finishCompleting, live, markRead, removeFolder, setStatus, unhide, useLive } from "./store";
+import { beginLiveRefresh, applyFetch, createFolder, finishCompleting, live, markRead, removeFolder, setStatus, unhide, useLive } from "./store";
 import { LiveError, type CompletionState, type LiveFolderKind, type LiveItem, type LiveSourceId, type PullRequestSection } from "./types";
 import { noteLiveCompletedTabsClosed } from "../telemetry/liveCompletedTabs";
 import { isPlaying, useMedia } from "../media/media";
@@ -42,7 +43,23 @@ export function manualRefresh(folderId: string): Promise<void> {
   return refreshFolder(folderId);
 }
 
+const sortedKeys = (_key: string, value: unknown) =>
+  value && typeof value === "object" && !Array.isArray(value) ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) : value;
+const sameFolder = (a: unknown, b: unknown) => JSON.stringify(a, sortedKeys) === JSON.stringify(b, sortedKeys);
+
+function claimRefresh(folderId: string) {
+  const refresh = beginLiveRefresh(folderId);
+  return refresh?.catch((error: unknown) => { console.warn("Couldn't claim the live folder refresh", error); return null; }).then((fence) => {
+    if (fence === null && live().folders[folderId]) setStatus(folderId, { state: "idle" });
+    return fence;
+  });
+}
+
 async function run(folderId: string) {
+  if (!live().folders[folderId]) return;
+  const claim = claimRefresh(folderId);
+  let fence = claim ? await claim : undefined;
+  if (fence === null) return;
   const folder = live().folders[folderId];
   if (!folder) return;
   const before = live();
@@ -76,6 +93,18 @@ async function run(folderId: string) {
     Object.assign(gone, await resolve(missing.filter((it) => it.source === source)).catch(() => ({})));
   }
 
+  const folderBeforeHiding = live().folders[folderId];
+  hideNewRepos(folderId, fetched);
+  const folderAfterHiding = live().folders[folderId];
+  if (fence !== undefined && sameFolder(folderBeforeHiding, folder) && !sameFolder(folderAfterHiding, folderBeforeHiding)) {
+    const reclaim = claimRefresh(folderId);
+    fence = reclaim ? await reclaim : undefined;
+    if (fence === null || !live().folders[folderId]) return;
+    if (!sameFolder(live().folders[folderId], folderAfterHiding)) {
+      setStatus(folderId, { state: "idle" });
+      return;
+    }
+  }
   const current = live();
   const prev = current.items[folderId] ?? [];
   const animating = new Set(current.completing[folderId] ?? []);
@@ -90,12 +119,11 @@ async function run(folderId: string) {
   const quiet = new Set(lastSources ? next.filter((it) => !lastSources.has(it.source)).map((it) => it.id) : []);
   const succeeded = new Set(folder.sources.filter((id) => !failed.some((f) => f.source === id)));
   fetchedSources.set(folderId, succeeded);
-  applyFetch(folderId, order(next), gone, Date.now(), quiet);
-  releaseShownRepos(folderId, succeeded);
+  applyFetch(folderId, order(next), gone, Date.now(), quiet, fence, succeeded);
   markCompletedTabs(folderId, gone, ids);
   if (firstFailure) setStatus(folderId, { state: "error", error: describe(firstFailure.source, firstFailure.error) });
   const leaving = Object.keys(gone);
-  if (leaving.length) setTimeout(() => finishCompleting(folderId, leaving), COMPLETION_MS);
+  if (leaving.length) setTimeout(() => finishCompleting(folderId, leaving, fence), COMPLETION_MS);
 }
 
 function describe(source: LiveSourceId, error: unknown) {

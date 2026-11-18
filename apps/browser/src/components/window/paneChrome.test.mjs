@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 const { cardChrome, paneBar } = await import("./paneChrome.ts");
 
-const card = (o = {}) => cardChrome({ addressInSidebar: false, small: false, split: false, fullscreen: false, hideWhileScrolling: false, ...o });
+const card = (o = {}) => cardChrome({ addressInSidebar: false, small: false, minimal: false, split: false, fullscreen: false, hideWhileScrolling: false, ...o });
 const shown = { visible: true, fullscreen: false, lingering: false };
 const warm = { visible: false, fullscreen: false, lingering: false };
 const lingering = { visible: true, fullscreen: false, lingering: true };
@@ -27,7 +27,7 @@ test("the full-screen page itself has no toolbar", () => {
 });
 
 test("a small window and the address bar in the sidebar draw no toolbar on the card, and never hide one while scrolling", () => {
-  for (const o of [{ small: true }, { addressInSidebar: true }, { small: true, hideWhileScrolling: true }, { addressInSidebar: true, hideWhileScrolling: true, split: true }]) {
+  for (const o of [{ small: true }, { addressInSidebar: true }, { minimal: true }, { minimal: true, split: true, hideWhileScrolling: true }, { small: true, hideWhileScrolling: true }, { addressInSidebar: true, hideWhileScrolling: true, split: true }]) {
     assert.deepEqual(card(o), { kind: "none" });
     assert.deepEqual(paneBar(card(o), shown), { kind: "none" });
   }

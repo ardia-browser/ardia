@@ -15,3 +15,6 @@
   Browser paths are relative to `apps/browser/src`.
 - Manual: toggle a colorful favicon across sidebar, top strip, folder, split, and switcher; wake the tab.
   Check fading independence and advanced-section visibility/search.
+
+- Replacement: no equivalent in `v0.2.47-nightly.5`. Upstream strikethrough and icon fading do not remove
+  favicon color. Keep the native filter and demo adapter; the new Linux adapter accepts the same CSS filter.

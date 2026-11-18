@@ -52,10 +52,14 @@ enum SearchInput {
   }
 
   static func resolve(_ raw: String) -> Destination? {
-    let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !text.isEmpty else { return nil }
+    guard let text = submission(from: raw) else { return nil }
     if let url = url(from: text) { return .url(url) }
     return .search(text)
+  }
+
+  static func submission(from raw: String) -> String? {
+    let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    return text.isEmpty ? nil : text
   }
 
   static func url(from text: String) -> URL? {

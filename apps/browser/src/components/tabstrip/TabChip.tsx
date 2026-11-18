@@ -1,17 +1,16 @@
-import { useContext, useRef } from "react";
+import { memo, useContext, useLayoutEffect, useRef, type ReactNode } from "react";
 import { Animated, Pressable, StyleSheet, View } from "react-native";
 import { toggleMute } from "../../state/browser/actions";
 import { useIsActiveTab, useSettings, useTab, useTabLive, useWindowId } from "../../state/browser/hooks";
 import { useMuteState } from "../../state/tabs/hooks";
-import { muteTitle } from "../../state/tabs/mute";
+import { muteTitle, type MuteState } from "../../state/tabs/mute";
 import { firstStaying } from "../../state/drag/drops";
 import { pressTabClose, useTabCloseControl } from "../../state/sidebar/closeControl";
 import { currentMovingTabIds } from "../../state/tabs/topStrip";
 import { TabBadges } from "../media/TabBadges";
 import { TabIcon } from "../sidebar/TabIcon";
-import { FADED_TAB_OPACITY } from "../sidebar/tokens";
 import { useFadeTabTitle } from "../../state/sidebar/rowState";
-import { Button, FadeLabel, Symbol, useHover } from "../ui";
+import { Button, FadeLabel, Symbol, useTooltip } from "../ui";
 import { HoverSlot } from "../ui/HoverSlot";
 import { surfaceTheme, ThemeContext, useTheme } from "../ui/theme";
 import { toolbarPalette, useEasedColor } from "../ui/toolbarColors";
@@ -23,30 +22,36 @@ import { dropAt, useOnto, type GroupOut, type StripDrag } from "./model";
 import { PinnedFace } from "./PinnedFace";
 import { SelectedTab } from "./SelectedTab";
 import { CELL_STEP, dragRange, leaveIndex, type DragGeometry } from "./stripGroups";
-import { CHIP_LABEL_GAP, CHIP_PAD, DROP_RING_WIDTH, GAP, ITEM_HEIGHT, ITEM_TOP, PINNED_CELL, TAB_RADIUS, TOP_STRIP_HEIGHT } from "./tokens";
+import { AUDIO_BADGE, CHIP_LABEL_GAP, CHIP_PAD, CLOSE_MIN_CHIP, DROP_RING_WIDTH, FAVICON, GAP, ITEM_HEIGHT, ITEM_TOP, PINNED_CELL, tabRadius, TITLE_FADE_MAX, TITLE_FADE_MIN, TITLE_MIN_CHIP, TOP_STRIP_HEIGHT, WIDTH_SPRING } from "./tokens";
 import { useStripDrag } from "./useStripDrag";
+import { StripScrollContext } from "./stripScroll";
 import { useStripCardHover } from "./StripHoverCard";
+import { useChipHover, useChipHovered, useOwnChipHover, type ChipHover } from "./reachableHover";
 import { TabPressArea } from "../sidebar/TabPressArea";
 import { tabTitle } from "../../state/browser/model";
 import { awayTitle } from "../../state/pins/organize";
 import { AwayTitleLabel } from "../sidebar/AwayTitle";
+import { useStruckTitle } from "../../state/sidebar/rowState";
+import { FADED_TAB_OPACITY, SLEEPING_TITLE_OPACITY } from "../sidebar/tokens";
 import { UnreadCount } from "../unread/UnreadBadge";
 import { useTabUnread } from "../../state/tabs/unread";
 import { titleWithoutUnread } from "../../lib/unread";
+import { buttonMotion, usePressScaleMotion } from "../ui/motion";
+import { reduceMotion } from "../ui/reduceMotion";
 
-export function DraggableChip({
+export const DraggableChip = memo(function DraggableChip({
   tabId,
   width,
-  geometry,
-  from,
+  geometry: givenGeometry,
+  from: givenFrom,
   group,
   tuck,
   out,
 }: {
   tabId: string;
   width: number;
-  geometry: DragGeometry;
-  from: number;
+  geometry?: DragGeometry;
+  from?: number;
   group: string | null;
   tuck?: () => void;
   out?: GroupOut;
@@ -55,28 +60,42 @@ export function DraggableChip({
   const windowId = useWindowId();
   const dragToGroup = useSettings((s) => s.dragToGroupInTopStrip);
   const strip = useContext(DockContext);
-  const latestStrip = useRef(strip);
-  latestStrip.current = strip;
-  const dock = !group && from >= 0 ? (strip?.dock ?? null) : null;
+  const scroll = useContext(StripScrollContext);
+  const topLevel = !givenGeometry && !group;
+  const geometryOf = () => givenGeometry ?? strip!.current.top;
+  const fromOf = () => givenFrom ?? strip?.current.slotOf(tabId) ?? -1;
+  const dockOf = () => (topLevel && fromOf() >= 0 ? (strip?.current.dock ?? null) : null);
   const member = group && out && out.slot >= 0 ? out : null;
   const stripEnd = member ? member.top.lefts.at(-1)! + member.top.slots.at(-1)!.width : 0;
-  const range: StripDrag["range"] = dock
-    ? (grab) => [Math.min(0, dock.left - geometry.lefts[from]! - grab + PINNED_CELL / 2), dragRange(geometry, from)[1]]
-    : member
-      ? [member.top.lefts[0]! - member.left - width / 2, stripEnd - member.left - width / 2]
-      : undefined;
   const drag = useStripDrag({
     tabId,
     ids: () => currentMovingTabIds(tabId),
     pinned: false,
     groupId: group,
-    geometry,
-    from,
+    get geometry() {
+      return geometryOf();
+    },
+    get from() {
+      return fromOf();
+    },
     width,
     gap: GAP,
-    range,
-    cross: dock ? tabIn(() => latestStrip.current, from, width) : undefined,
-    targets: dragToGroup && !group && from >= 0 ? strip?.targets : undefined,
+    scroll,
+    get range(): StripDrag["range"] {
+      const dock = dockOf();
+      if (dock) {
+        const geometry = geometryOf();
+        const from = fromOf();
+        return (grab) => [Math.min(0, dock.left - geometry.lefts[from]! - grab + PINNED_CELL / 2), dragRange(geometry, from)[1]];
+      }
+      return member ? [member.top.lefts[0]! - member.left - width / 2, stripEnd - member.left - width / 2] : undefined;
+    },
+    get cross() {
+      return dockOf() ? tabIn(() => strip?.current ?? null, fromOf(), width) : undefined;
+    },
+    get targets() {
+      return dragToGroup && topLevel && fromOf() >= 0 ? strip?.current.targets : undefined;
+    },
     drop: (dx, ids) => {
       if (!member) return false;
       const at = leaveIndex(member.top, member.slot, member.chip, member.expanded, member.left + dx, width);
@@ -85,18 +104,21 @@ export function DraggableChip({
       return true;
     },
   });
-  const card = useStripCardHover(windowId, tabId, drag.ref);
+  const hover = useChipHover();
+  const card = useStripCardHover(windowId, tabId, drag.ref, hover);
+  const dock = drag.crossed ? dockOf() : null;
+  const drawn = useChipWidth(width, () => topLevel && !!strip?.current.animateWidths);
   return (
     <Animated.View ref={drag.ref} {...drag.panHandlers} {...card} mouseDownCanMoveWindow={false} style={{ ...drag.style, zIndex: drag.dragging ? 10 : active ? 1 : 0 }}>
-      <View style={{ opacity: drag.crossed ? 0 : 1 }}>
-        <TabChip tabId={tabId} width={width} tuck={tuck} dragged={drag.dragging} />
-      </View>
-      {drag.crossed && dock && (
+      <Animated.View style={{ opacity: drag.crossed ? 0 : 1 }}>
+        <TabChip tabId={tabId} width={width} drawn={drawn} tuck={tuck} dragged={drag.dragging} hover={hover} />
+      </Animated.View>
+      {dock && (
         <FadeIn
           style={{
             left: drag.grab - PINNED_CELL / 2,
             top: ITEM_TOP + 0.5,
-            transform: [{ translateX: tileHold(drag.dx, dock.left + dock.ids.length * CELL_STEP - geometry.lefts[from]! - drag.grab + PINNED_CELL / 2) }],
+            transform: [{ translateX: tileHold(drag.dx, dock.left + dock.ids.length * CELL_STEP - geometryOf().lefts[fromOf()]! - drag.grab + PINNED_CELL / 2) }],
           }}
         >
           <PinnedFace tabId={tabId} active={active} hovered={false} pressed={false} />
@@ -104,18 +126,31 @@ export function DraggableChip({
       )}
     </Animated.View>
   );
-}
+});
 
 export function useWebsiteBand(tabId: string) {
   const theme = useTheme();
-  const extend = useSettings((s) => s.extendWebsiteColor);
+  const extend = useSettings((s) => s.extendWebsiteColor && !s.minimalismMode);
   const url = useTab(tabId)?.url;
   const themeColor = useTabLive(tabId, (l) => l.themeColor);
   const palette = toolbarPalette(theme, extend && url ? themeColor : null);
   return { palette, band: useEasedColor(palette.background) };
 }
 
-export function TabChip({ tabId, width, tuck, dragged }: { tabId: string; width: number; tuck?: () => void; dragged: boolean }) {
+export function useChipWidth(width: number, animate: () => boolean) {
+  const value = useRef(new Animated.Value(width)).current;
+  const shown = useRef(width);
+  useLayoutEffect(() => {
+    if (shown.current === width) return;
+    shown.current = width;
+    value.stopAnimation();
+    if (animate() && !reduceMotion()) Animated.spring(value, { toValue: width, ...WIDTH_SPRING }).start();
+    else value.setValue(width);
+  }, [width]);
+  return value;
+}
+
+export const TabChip = memo(function TabChip({ tabId, width, drawn, tuck, dragged, hover }: { tabId: string; width: number; drawn?: Animated.Value; tuck?: () => void; dragged: boolean; hover?: ChipHover }) {
   const onTint = useTheme();
   const windowId = useWindowId();
   const tab = useTab(tabId);
@@ -128,59 +163,117 @@ export function TabChip({ tabId, width, tuck, dragged }: { tabId: string; width:
   const mute = useMuteState(tabId);
   const { palette, band } = useWebsiteBand(tabId);
   const closeControl = useTabCloseControl(tabId);
-  const { hovered, hoverProps } = useHover();
+  const ownHover = useOwnChipHover();
+  const chipHover = hover ?? ownHover;
   const unread = useTabUnread(tabId);
+  const struck = useStruckTitle(tabId);
   if (!tab) return null;
   const title = tab.customTitle ? tabTitle(tab) : titleWithoutUnread(tabTitle(tab), unread);
   const away = awayTitle(tab);
+  const compact = !active && !tuck && width < TITLE_MIN_CHIP;
+  const titleFade = Math.max(TITLE_FADE_MIN, Math.min(TITLE_FADE_MAX, (width - CHIP_PAD.left - FAVICON - CHIP_LABEL_GAP - CHIP_PAD.right) / 3));
+  const closable = active || !!tuck || width >= CLOSE_MIN_CHIP;
   const onBand = active && !floating && !!palette.background;
   const ink = onBand ? palette.text : active ? theme.tabSelectedText : theme.textTab;
   return (
     <ThemeContext.Provider value={theme}>
-      <View {...hoverProps} style={{ width, height: TOP_STRIP_HEIGHT }}>
-        {active && <SelectedTab width={width} band={band} opaque={dragged} />}
+      <Animated.View {...chipHover.hoverProps} style={{ width: drawn ?? width, height: TOP_STRIP_HEIGHT }}>
+        {active && <SelectedTab width={drawn ?? width} band={band} opaque={dragged} />}
         {dragged && !active && (
-          <View pointerEvents="none" style={{ position: "absolute", left: 0, width, top: ITEM_TOP, height: ITEM_HEIGHT, borderRadius: TAB_RADIUS, backgroundColor: theme.windowTint[0] }} />
+          <View pointerEvents="none" style={{ position: "absolute", left: 0, width, top: ITEM_TOP, height: ITEM_HEIGHT, borderRadius: tabRadius(), backgroundColor: theme.windowTint[0] }} />
         )}
         {onto && <OntoRing width={width} />}
         <TabPressArea windowId={windowId} tab={tab} style={StyleSheet.absoluteFill} pressStyle={{ flex: 1 }}>
           {({ pressed }) => (
-            <ItemRow hovered={(hovered || dragged) && !active && !onto} pressed={pressed && !active}>
+            <ChipRow
+              hover={chipHover}
+              dragged={dragged}
+              quiet={active || onto}
+              pressed={pressed && !active}
+              inset={compact ? (width - FAVICON) / 2 : undefined}
+              action={closable &&
+                <Button variant="icon"
+                  icon={tuck ? "minus" : closeControl.icon}
+                  size="xs"
+                  weight="semibold"
+                  color={onBand ? palette.icon : undefined}
+                  onPress={tuck ?? (() => pressTabClose(tab.id))}
+                  tooltip={tuck ? "Hide in Group" : closeControl.tooltip}
+                />
+              }
+              badge={<UnreadCount unread={unread} ink={ink} />}
+            >
               <View pointerEvents="none">
                 <TabIcon tabId={tab.id} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} />
                 <TabBadges tabId={tab.id} />
+                {compact && (playing || mute) ? <AudioBadge mute={mute} color={theme.textTab} plate={theme.windowTint[0]} /> : null}
               </View>
-              {(playing || mute) && (
-                <Pressable onPress={() => toggleMute(tab.id)} style={{ marginLeft: CHIP_LABEL_GAP }} tooltip={muteTitle(mute)}>
-                  <Symbol name={mute ? "speaker.slash" : "speaker.wave.2"} size={11} color={onBand ? palette.icon : theme.textTab} style={{ width: 16, height: 16 }} />
-                </Pressable>
+              {!compact && (playing || mute) && (
+                <MuteToggle tabId={tab.id} mute={mute} color={onBand ? palette.icon : theme.textTab} />
               )}
-              {away ? (
-                <AwayTitleLabel away={away} color={ink} fontSize={font.small.fontSize} height={16} style={{ flex: 1, marginLeft: CHIP_LABEL_GAP, opacity: fadeTitle ? FADED_TAB_OPACITY : 1 }} />
+              {compact ? null : away ? (
+                <AwayTitleLabel away={away} color={ink} fontSize={font.small.fontSize} height={16} struck={struck} faded={fadeTitle} style={{ flex: 1, marginLeft: CHIP_LABEL_GAP }} />
               ) : (
-                <FadeLabel text={title} fontSize={font.small.fontSize} color={ink} style={{ flex: 1, height: 16, marginLeft: CHIP_LABEL_GAP, opacity: fadeTitle ? FADED_TAB_OPACITY : 1 }} />
+                <FadeLabel text={title} fontSize={font.small.fontSize} fadeWidth={titleFade} color={ink} strikethrough={struck} style={{ flex: 1, height: 16, marginLeft: CHIP_LABEL_GAP, opacity: fadeTitle ? FADED_TAB_OPACITY : struck ? SLEEPING_TITLE_OPACITY : 1 }} />
               )}
-              <HoverSlot
-                hovered={hovered}
-                width={iconButton.xs.box}
-                hover={
-                  <Button variant="icon"
-                    icon={tuck ? "minus" : closeControl.icon}
-                    size="xs"
-                    weight="semibold"
-                    color={onBand ? palette.icon : undefined}
-                    onPress={tuck ?? (() => pressTabClose(tab.id))}
-                    tooltip={tuck ? "Hide in Group" : closeControl.tooltip}
-                  />
-                }
-              >
-                <UnreadCount unread={unread} ink={ink} />
-              </HoverSlot>
-            </ItemRow>
+            </ChipRow>
           )}
         </TabPressArea>
-      </View>
+      </Animated.View>
     </ThemeContext.Provider>
+  );
+});
+
+function AudioBadge({ mute, color, plate }: { mute: MuteState; color: string; plate: string }) {
+  return (
+    <View style={{ position: "absolute", right: -AUDIO_BADGE / 2 + 2, bottom: -AUDIO_BADGE / 2 + 2, width: AUDIO_BADGE, height: AUDIO_BADGE, borderRadius: AUDIO_BADGE / 2, backgroundColor: plate, alignItems: "center", justifyContent: "center" }}>
+      <Symbol name={mute ? "speaker.slash.fill" : "speaker.wave.2.fill"} size={7} color={color} style={{ width: AUDIO_BADGE - 2, height: AUDIO_BADGE - 2 }} />
+    </View>
+  );
+}
+
+function MuteToggle({ tabId, mute, color }: { tabId: string; mute: MuteState; color: string }) {
+  const tip = useTooltip(muteTitle(mute));
+  const pressMotion = usePressScaleMotion(true, buttonMotion.iconPressScale);
+  const pressStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
+  return (
+    <Pressable onPress={() => toggleMute(tabId)} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} style={{ marginLeft: CHIP_LABEL_GAP }} tooltip={tip}>
+      <Animated.View pointerEvents="none" style={pressStyle}>
+        <Symbol name={mute ? "speaker.slash" : "speaker.wave.2"} size={11} color={color} style={{ width: 16, height: 16 }} />
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+function ChipRow({
+  hover,
+  dragged,
+  quiet,
+  pressed,
+  inset,
+  action,
+  badge,
+  children,
+}: {
+  hover: ChipHover;
+  dragged: boolean;
+  quiet: boolean;
+  pressed: boolean;
+  inset?: number;
+  action: ReactNode;
+  badge: ReactNode;
+  children: ReactNode;
+}) {
+  const hovered = useChipHovered(hover);
+  return (
+    <ItemRow hovered={(hovered || dragged) && !quiet} pressed={pressed} inset={inset}>
+      {children}
+      {inset === undefined && (
+        <HoverSlot hovered={hovered && !!action} width={action ? iconButton.xs.box : 0} reserve="hover" hover={action || null}>
+          {badge}
+        </HoverSlot>
+      )}
+    </ItemRow>
   );
 }
 
@@ -193,7 +286,7 @@ export function OntoRing({ width }: { width: number | Animated.Value }) {
         top: ITEM_TOP,
         width,
         height: ITEM_HEIGHT,
-        borderRadius: TAB_RADIUS,
+        borderRadius: tabRadius(),
         borderWidth: DROP_RING_WIDTH,
         borderColor: theme.accent,
         backgroundColor: theme.tabPressed,
@@ -204,7 +297,7 @@ export function OntoRing({ width }: { width: number | Animated.Value }) {
   );
 }
 
-export function ItemRow({ hovered, pressed, padded = true, children }: { hovered: boolean; pressed: boolean; padded?: boolean; children: React.ReactNode }) {
+export function ItemRow({ hovered, pressed, padded = true, inset, children }: { hovered: boolean; pressed: boolean; padded?: boolean; inset?: number; children: React.ReactNode }) {
   const theme = useTheme();
   return (
     <View
@@ -214,12 +307,12 @@ export function ItemRow({ hovered, pressed, padded = true, children }: { hovered
         right: 0,
         top: ITEM_TOP,
         height: ITEM_HEIGHT,
-        borderRadius: TAB_RADIUS,
+        borderRadius: tabRadius(),
         backgroundColor: pressed ? theme.tabPressed : hovered ? theme.tabHover : undefined,
         flexDirection: "row",
         alignItems: "center",
-        paddingLeft: padded ? CHIP_PAD.left : 0,
-        paddingRight: padded ? CHIP_PAD.right : 0,
+        paddingLeft: inset ?? (padded ? CHIP_PAD.left : 0),
+        paddingRight: inset ?? (padded ? CHIP_PAD.right : 0),
       }}
     >
       {children}

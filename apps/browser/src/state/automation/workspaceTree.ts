@@ -3,6 +3,7 @@ import type { GroupColor, Tab, TabGroup } from "../browser/types";
 import { activeTabId, inPinnedContainer, isIncognitoProfile, pinSection } from "../browser/model";
 import { groupPath, innermostGroupOf, rootOf } from "../groups/groups";
 import { NO_GROUP_ICON } from "../groups/groupIcons";
+import { NO_ROW_ICON } from "../pins/rowIcons";
 import { groupLabel } from "../pins/tabGrouping";
 import { tileFolderOf } from "../pins/tileFolders";
 import { splitOf } from "../splits/splits";
@@ -62,7 +63,7 @@ type Snapshot = Pick<BrowserState, "windows" | "windowOrder" | "tabs" | "peeks" 
 
 export const colorName = (color: GroupColor | null): string => color ?? "neutral";
 
-export const iconName = (icon: string | null): string | null => (icon === NO_GROUP_ICON ? "none" : icon);
+export const iconName = (icon: string | null): string | null => (icon === NO_GROUP_ICON || icon === NO_ROW_ICON ? "none" : icon);
 
 export function tabNode(s: Snapshot, id: string, index = -1): TabNode {
   const t = s.tabs[id] as Tab;
@@ -73,7 +74,7 @@ export function tabNode(s: Snapshot, id: string, index = -1): TabNode {
     id,
     ...shownPage(t),
     customTitle: t.customTitle,
-    icon: t.customIcon,
+    icon: iconName(t.customIcon),
     pin: section === "none" ? null : section,
     pinned: inPinnedContainer(s, id),
     folder: folder ? { id: folder.id, name: folder.name } : null,

@@ -1,4 +1,5 @@
 #import "ArdiaChromeWindowInternal.h"
+#import "ArdiaInterfaceScale.h"
 #import "ArdiaLaunchConfig.h"
 #import "ArdiaWebView.h"
 #import "ArdiaRuntime.h"
@@ -23,8 +24,12 @@ NSString *Describe(NSView *view) {
 NSPoint WindowPoint(NSWindow *window, NSString *spec) {
   NSArray<NSString *> *n = [spec componentsSeparatedByString:@","];
   if (n.count < 2) return NSMakePoint(-1, -1);
-  CGFloat height = window.contentView.superview.bounds.size.height;
-  return NSMakePoint(n[0].doubleValue, height - n[1].doubleValue);
+  const CGFloat x = n[0].doubleValue, y = n[1].doubleValue;
+  NSView *root = [ArdiaInterfaceScale rootOfWindow:window] ?: [ArdiaChromeWindowHost rootViewOfWindow:window];
+  if (!root) return NSMakePoint(x, window.contentView.superview.bounds.size.height - y);
+  const NSRect bounds = root.bounds;
+  const NSPoint local = NSMakePoint(NSMinX(bounds) + x, root.isFlipped ? NSMinY(bounds) + y : NSMaxY(bounds) - y);
+  return [root convertPoint:local toView:nil];
 }
 
 NSEvent *Mouse(NSWindow *window, NSEventType type, NSPoint at) {
@@ -324,10 +329,12 @@ NSString *WindowInfo(NSWindow *window, NSString *) {
   info[@"frameView"] = [NSString stringWithFormat:@"%@ %@", window.contentView.superview.className, NSStringFromRect(window.contentView.superview.frame)];
   info[@"root"] = NSStringFromRect([ArdiaChromeWindowHost rootViewOfWindow:window].frame);
   info[@"styleMask"] = @(window.styleMask);
+  info[@"minSize"] = NSStringFromSize(window.minSize);
   info[@"opaque"] = @(window.opaque);
   info[@"hasShadow"] = @(window.hasShadow);
   info[@"alpha"] = @(window.alphaValue);
   info[@"level"] = @(window.level);
+  info[@"collectionBehavior"] = @(window.collectionBehavior);
   info[@"background"] = window.backgroundColor.description ?: @"";
   NSButton *close = [window standardWindowButton:NSWindowCloseButton];
   info[@"closeButton"] = close ? NSStringFromRect([close convertRect:close.bounds toView:nil]) : @"";
@@ -383,12 +390,12 @@ NSString *TabViews(NSWindow *window, NSString *) {
   while (queue.count) {
     NSView *v = queue.lastObject;
     [queue removeLastObject];
-    if ([v isKindOfClass:ArdiaWebView.class]) {
+    if ([v isKindOfClass:ArdiaWebView.class] || [v isKindOfClass:NSClassFromString(@"ArdiaCore.WebKitTab")]) {
       if (v.hiddenOrHasHiddenAncestor) continue;
       NSMutableArray *subs = [NSMutableArray array];
       for (NSView *sub in v.subviews)
         [subs addObject:[NSString stringWithFormat:@"%@ %@%@", NSStringFromClass(sub.class), NSStringFromRect(sub.frame), sub.hidden ? @" hidden" : @""]];
-      [out addObject:@{@"frame" : NSStringFromRect(v.frame), @"subviews" : subs}];
+      [out addObject:@{@"class" : NSStringFromClass(v.class), @"frame" : NSStringFromRect(v.frame), @"bounds" : NSStringFromRect(v.bounds), @"subviews" : subs}];
       continue;
     }
     [queue addObjectsFromArray:v.subviews];
@@ -472,6 +479,15 @@ NSDictionary<NSString *, DevHandler> *DevHandlers() {
     @"keys" : ^NSString *(NSWindow *w, NSString *a) { return Keys(w, a); },
     @"ax" : ^NSString *(NSWindow *w, NSString *a) { return AccessibilityTree(w, a); },
     @"winfo" : ^NSString *(NSWindow *w, NSString *a) { return WindowInfo(w, a); },
+    @"subroles" : ^NSString *(NSWindow *, NSString *) {
+      NSMutableArray *windows = [NSMutableArray array];
+      for (NSWindow *w in NSApp.orderedWindows) {
+        if (!w.visible || w.parentWindow) continue;
+        [windows addObject:@{@"number" : @(w.windowNumber), @"title" : w.title ?: @"", @"identifier" : w.identifier ?: @"",
+                             @"subrole" : w.accessibilitySubrole ?: @""}];
+      }
+      return JSONText(windows, @"[]");
+    },
     @"ns" : ^NSString *(NSWindow *w, NSString *to) {
       if ([to isEqualToString:@"out"]) [w orderOut:nil];
       else [w orderFront:nil];

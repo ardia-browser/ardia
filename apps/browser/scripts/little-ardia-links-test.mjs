@@ -24,6 +24,10 @@ const state = (inst) =>
     return { small: ws.filter((w) => w.kind === "small").map((w) => w.tabIds.map((t) => s.tabs[t]?.url ?? "")).flat(),
       main: ws.filter((w) => w.kind !== "small").map((w) => w.tabIds.map((t) => s.tabs[t]?.url ?? "")).flat() };`);
 
+const littleSubrole = (inst) =>
+  inst.eval(`return ac.engine.call("windows.list").then((ws) => ac.engine.call("windows.dev", { window: ws[0].window, action: "subroles" }))
+    .then((text) => JSON.parse(text).find((w) => w.identifier === "ardia.window.small")?.subrole ?? "no Little Ardia window");`);
+
 const outcome = (st, url) => (st.small.some((u) => u.startsWith(url)) ? "little" : st.main.some((u) => u.startsWith(url)) ? "tab" : "nothing");
 
 async function settle(inst, url, ms) {
@@ -88,6 +92,7 @@ async function cold(name, setting, relaunch) {
   const inst = await launch(app, { data, js: "live", urls: [url] });
   try {
     record(name, await settle(inst, url, 15000), setting ? "little" : "tab");
+    if (setting) record(`${name} floats for window managers`, await littleSubrole(inst), "AXSystemFloatingWindow");
   } finally {
     await inst.quit();
   }

@@ -7,9 +7,11 @@ import { ChoiceList, useMockFocus, type ChoiceOption } from "./ChoiceList";
 import { MockPanel, useScreen } from "./Screen";
 import { confirmAnswer, previewLive, PRESET_NAMES, PRESETS, setOnboardingDraft, skipStep, useOnboarding, type Preset, type QuestionId } from "../../state/onboarding/onboarding";
 import { keysOf, questionKeys, useQuestions } from "../../state/onboarding/questions";
+import { placementCard, placementFromCard } from "../../state/omnibox/barPlacement";
 import { StepActions, StepLayout } from "./StepLayout";
 import { OptionCard } from "./OptionCard";
 import { OptionRow } from "./Parts";
+import { keyText } from "../../state/commands/keyText";
 
 export function Page({
   id,
@@ -49,7 +51,7 @@ export function Page({
   );
 }
 
-export function useQuestion(step: "layout" | "tabs" | "look" | "details") {
+export function useQuestion(step: "layout" | "tabs" | "look") {
   const sub = useOnboarding((s) => s.sub);
   const id = useQuestions(step)[sub]?.id;
   return { id, focus: useMockFocus(id) };
@@ -109,17 +111,17 @@ export function LayoutStep() {
     return (
       <Page
         id={id}
-        title="Where does ⌘L open?"
+        title={`Where does ${keyText("⌘L")} open?`}
         subtitle="The command bar, for going anywhere."
         tag={tag}
         patch={{ commandBarPlacement: values.commandBarPlacement }}
-        picked={[values.commandBarPlacement === "centred" ? "⌘L opens in the centre" : "⌘L opens under the address"]}
+        picked={[values.commandBarPlacement !== "field" ? `${keyText("⌘L")} opens in the centre` : `${keyText("⌘L")} opens under the address`]}
         preview={preview}
       >
         <ChoiceList
           options={CMDL_CHOICES}
-          value={values.commandBarPlacement}
-          onChange={(commandBarPlacement) => change({ commandBarPlacement }, true)}
+          value={placementCard(values.commandBarPlacement)}
+          onChange={(card) => change({ commandBarPlacement: placementFromCard(card, values.commandBarPlacement) }, true)}
           mock={focus}
         />
       </Page>
@@ -163,8 +165,8 @@ const TIDY_AFTER = [
   { value: 7 * 24 * 60, title: "1 week" },
 ];
 const PEEK_WITH: { value: PeekModifier; title: string }[] = [
-  { value: "shift", title: "⇧-click" },
-  { value: "alt", title: "⌥-click" },
+  { value: "shift", title: `${keyText("⇧")}-click` },
+  { value: "alt", title: `${keyText("⌥")}-click` },
   { value: "off", title: "Off" },
 ];
 
@@ -266,10 +268,10 @@ export function TabsStep() {
         <View style={{ gap: space.m }}>
           <OptionCard control="check" title="Top Apps grow with the sidebar" subtitle="Up to four across, as in Arc" selected={values.balancedTopApps} onPress={() => change({ balancedTopApps: !values.balancedTopApps })} />
           <OptionRow title="Peek a link with" value={values.peekModifier} options={PEEK_WITH} onChange={(peekModifier) => change({ peekModifier })} />
-          <OptionCard control="check" title="⌘Z reopens closed tabs" subtitle="Outside text fields, as in Arc" selected={values.undoReopensClosedTab} onPress={() => change({ undoReopensClosedTab: !values.undoReopensClosedTab })} />
+          <OptionCard control="check" title={`${keyText("⌘Z")} reopens closed tabs`} subtitle="Outside text fields, as in Arc" selected={values.undoReopensClosedTab} onPress={() => change({ undoReopensClosedTab: !values.undoReopensClosedTab })} />
           <OptionCard
             control="check"
-            title="⌘-click on a link makes a tab group"
+            title={`${keyText("⌘")}-click on a link makes a tab group`}
             subtitle="Keeps related tabs together"
             selected={values.cmdClickCreatesTabGroup}
             onPress={() => change({ cmdClickCreatesTabGroup: !values.cmdClickCreatesTabGroup })}
@@ -280,10 +282,10 @@ export function TabsStep() {
   return (
     <Page
       id="newTab"
-      title="What does ⌘T open?"
+      title={`What does ${keyText("⌘T")} open?`}
       subtitle="What you see when you open a tab."
       patch={{ newTabOpens: values.newTabOpens }}
-      picked={[values.newTabOpens === "commandBar" ? "⌘T opens the command bar" : "⌘T opens the New Tab page"]}
+      picked={[values.newTabOpens === "commandBar" ? `${keyText("⌘T")} opens the command bar` : `${keyText("⌘T")} opens the New Tab page`]}
       preview={preview}
     >
       <ChoiceList options={NEW_TAB_CHOICES} value={values.newTabOpens} onChange={(newTabOpens) => change({ newTabOpens })} mock={focus} />

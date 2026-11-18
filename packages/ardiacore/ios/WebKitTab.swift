@@ -47,10 +47,21 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
 
   override func setFrameSize(_ newSize: NSSize) {
     super.setFrameSize(newSize)
-    webView?.frame = bounds
+    fitPageToInterfaceScale()
   }
 
-  override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); watchSight() }
+  override func resizeSubviews(withOldSize oldSize: NSSize) { fillWithPage() }
+
+  override func layout() {
+    super.layout()
+    fillWithPage()
+  }
+
+  override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+    if window != nil { followInterfaceScale() }
+    watchSight()
+  }
 
   func emit(_ name: String, _ payload: [String: Any] = [:]) {
     delegate?.webKitTab(self, event: name, payload: payload)
@@ -93,7 +104,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     WebKitHub.shared.permissions.drop(browserId: browserId)
     if let key = transferKey { WebKitHub.shared.transfers.forgetLive(self, key: key) }
     webView = nil
-    view.onFocus = nil
+    stopListening(to: view)
     WebKitHub.shared.transfers.unregister(view)
     view.navigationDelegate = nil
     view.uiDelegate = nil
@@ -118,7 +129,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     view.allowsMagnification = true
     view.isInspectable = WebKitHub.inspectable && !WebKitStores.isPrivate(profile)
     if let color = pageBackgroundColor { view.underPageBackgroundColor = color }
-    view.onFocus = { [weak self] in self?.emit("focus") }
+    listen(to: view)
     view.frame = bounds
     view.autoresizingMask = [.width, .height]
     addSubview(view)
@@ -158,7 +169,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     if let key = transferKey { WebKitHub.shared.transfers.forgetLive(self, key: key) }
     guard let view = webView else { return }
     webView = nil
-    view.onFocus = nil
+    stopListening(to: view)
     if let key = transferKey, WebKitHub.shared.transfers.isPrepared(key) {
       WebKitHub.shared.transfers.unregister(view)
       view.navigationDelegate = nil
@@ -324,18 +335,6 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     return String(json.dropFirst().dropLast())
   }
 
-  func print() {
-    guard let view = webView, let window else { return }
-    if LaunchConfig.shared.background { return NSLog("[webkit] print panel (background mode, not shown)") }
-    let operation = view.printOperation(with: NSPrintInfo.shared)
-    operation.view?.frame = view.bounds
-    operation.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
-  }
-
-  func runPageCommand(_ name: String) {
-    if name == "systemPrint" { print() }
-  }
-
   func executeJavaScript(_ code: String) {
     webView?.evaluateJavaScript(code, in: nil, in: .page) { _ in }
   }
@@ -345,21 +344,6 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     let body = "return await new Promise((resolve) => { const post = (kind, json) => { if (kind === \"result\") resolve(json); }; setTimeout(() => resolve(null), 3000); try {\n\(code)\n} catch (e) { resolve(null); } });"
     view.callAsyncJavaScript(body, arguments: [:], in: nil, in: WebKitHub.world) { result in
       if case .success(let value) = result { completion(value as? String) } else { completion(nil) }
-    }
-  }
-
-  func capturePicture(_ scale: Double, completion: @escaping ([String: Any]?) -> Void) {
-    guard let view = webView, let window, !view.isHidden else { return completion(nil) }
-    let inWindow = convert(bounds, to: nil)
-    let top = window.contentView?.frame.height ?? 0
-    let frame: [Double] = [inWindow.minX, top - inWindow.maxY, inWindow.width, inWindow.height]
-    let configuration = WKSnapshotConfiguration()
-    configuration.snapshotWidth = NSNumber(value: Double(view.bounds.width) * max(0.1, min(scale, 2)))
-    view.takeSnapshot(with: configuration) { image, _ in
-      guard let image, let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff),
-        let jpeg = bitmap.representation(using: .jpeg, properties: [.compressionFactor: scale < 0.5 ? 0.55 : 0.75])
-      else { return completion(nil) }
-      completion(["data": jpeg.base64EncodedString(), "frame": frame])
     }
   }
 
@@ -443,6 +427,8 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
       let active = dict?["active"] as? Bool ?? false
       autoPictureInPictureRule.reported(active: active)
       emit("pictureInPicture", ["kind": "video", "active": active])
+    case "mediaFault":
+      if let fault = WebKitMediaFaults.event(dict, from: frameInfo, muted: muted, blockerActive: WebKitContentBlocker.shared.isFiltering && !blocked.exemptLoad) { emit("mediaFault", fault) }
     case "status":
       emit("status", ["text": data as? String ?? ""])
     case "icons":

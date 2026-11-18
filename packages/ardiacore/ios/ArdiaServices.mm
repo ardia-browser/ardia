@@ -203,23 +203,16 @@ NSString *StoreFolder(NSString *profile, NSString *extensionId, id version) {
   [panel beginWithCompletionHandler:^(NSModalResponse response) { run(response == NSModalResponseOK ? panel.URL.path : nil); }];
 }
 
-+ (BOOL)profileToggle:(ArdiaProfileToggle)toggle profile:(NSString *)profile {
-  ArdiaCoreProfile *p = ardia_host::LoadedProfile(ardia_host::OriginalProfileName(profile));
-  if (!p) return YES;
-  switch (toggle) {
-    case ArdiaProfileTogglePasswordsOffered: return p.passwordsOffered;
-    case ArdiaProfileToggleAddressesAutofilled: return p.addressesAutofilled;
-    case ArdiaProfileToggleCardsAutofilled: return p.cardsAutofilled;
-  }
-}
-
-+ (void)setProfileToggle:(ArdiaProfileToggle)toggle value:(BOOL)value profile:(NSString *)profile {
-  ArdiaCoreProfile *p = ardia_host::LoadedProfile(ardia_host::OriginalProfileName(profile));
-  switch (toggle) {
-    case ArdiaProfileTogglePasswordsOffered: p.passwordsOffered = value; break;
-    case ArdiaProfileToggleAddressesAutofilled: p.addressesAutofilled = value; break;
-    case ArdiaProfileToggleCardsAutofilled: p.cardsAutofilled = value; break;
-  }
++ (void)profileToggles:(NSString *)profile set:(NSDictionary<NSString *, NSNumber *> *)values reply:(ArdiaServiceReply)reply {
+  NSDictionary<NSString *, NSNumber *> *wanted = [values copy];
+  ArdiaServiceReply done = [reply copy];
+  ardia_host::WithProfile(ardia_host::OriginalProfileName(profile), ^(ArdiaCoreProfile *p) {
+    if (!p || p.destroyed) return done(nil, @"profile not loaded");
+    if (NSNumber *on = wanted[@"passwords"]) p.passwordsOffered = on.boolValue;
+    if (NSNumber *on = wanted[@"addresses"]) p.addressesAutofilled = on.boolValue;
+    if (NSNumber *on = wanted[@"cards"]) p.cardsAutofilled = on.boolValue;
+    done(@{@"passwords" : @(p.passwordsOffered), @"addresses" : @(p.addressesAutofilled), @"cards" : @(p.cardsAutofilled)}, nil);
+  });
 }
 
 + (void)addresses:(NSString *)profile reply:(ArdiaServiceReply)reply {
@@ -342,6 +335,7 @@ NSString *StoreFolder(NSString *profile, NSString *extensionId, id version) {
   NSMutableDictionary *args = [NSMutableDictionary dictionaryWithObject:extensionId forKey:@"id"];
   for (NSString *key in @[ @"pinned", @"incognito", @"fileAccess", @"userScripts", @"siteAccess" ])
     if (options[key]) args[key] = options[key];
+  if ([options[@"pinnedIndex"] isKindOfClass:NSNumber.class]) args[@"pinnedIndex"] = @([options[@"pinnedIndex"] integerValue]);
   [self run:@"ac_extensions_configure" profile:profile args:args event:@"configured" reply:reply];
 }
 
@@ -450,11 +444,14 @@ NSMutableDictionary<NSString *, NSString *> *DownloadProfiles() {
   })];
 }
 
-+ (void)clearBrowsingData:(NSString *)profile types:(NSArray<NSString *> *)types since:(double)sinceMs completion:(void (^)(void))completion {
++ (void)clearBrowsingData:(NSString *)profile types:(NSArray<NSString *> *)types since:(double)sinceMs completion:(void (^)(NSString * _Nullable))completion {
   if ([types containsObject:@"history"]) [ArdiaEarlyWindow forgetPictures];
-  ArdiaCoreProfile *p = ardia_host::LoadedProfile(profile);
-  if (!p) return completion();
-  [p clearBrowsingData:types since:[NSDate dateWithTimeIntervalSince1970:sinceMs / 1000] completion:completion];
+  [self call:@"ac_browsing_data_clear" profile:profile args:@{@"types" : types, @"since" : @(sinceMs)} completion:^(NSDictionary *result) {
+    if (id error = result[@"error"]) return completion([error description]);
+    id ok = result[@"ok"];
+    const BOOL cleared = [ok isKindOfClass:NSNumber.class] && CFGetTypeID((__bridge CFTypeRef)ok) == CFBooleanGetTypeID() && [ok boolValue];
+    completion(cleared ? nil : @"Some browsing data could not be cleared.");
+  }];
 }
 
 @end

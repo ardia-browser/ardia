@@ -5,16 +5,24 @@ import { useTheme } from "../../ui/theme";
 import { useSettings, useTabLayout } from "../../../state/browser/hooks";
 import { updateSettings } from "../../../state/settings/actions";
 import type { Settings } from "../../../state/settings/settings";
-import { Group, Row, SectionHeader } from "../Form";
+import { Group, Row, SectionHeader, SettingToggle } from "../Form";
 import { MiniWindow } from "../MiniWindow";
 import { PictureChoice } from "../PictureChoice";
 import { AmountSlider } from "../ThemeControls";
 import { PAGE_FRAME } from "../../../lib/windowLayout";
+import { FrameSlider, TabCornersSlider } from "./FrameSlider";
 import { BookmarksBarSection } from "./BookmarksBarSection";
+import { InterfaceSizePicker } from "./InterfaceSize";
 import { modePreview, stylePreview } from "../tokens";
 import { useSettingsColors } from "../useSettingsColors";
 import { APP_ICON_SIZE, appIconChoices, chooseAppIcon } from "../../../state/settings/paneData";
 import { useResource } from "../../../state/settings/resources";
+import { useSidebarHighContrast } from "../../../state/sidebar/textLook";
+import { perLook } from "../../ui/tokens";
+import { PLATFORM_TERMS } from "../../../lib/platformTerms";
+import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
+
+const ADDRESS_BAR_IN_MENU = PLATFORM_FEATURES.menuBar ? " Also in View › Show Address Bar in Sidebar." : "";
 
 const MODES: { value: Settings["appearance"]; title: string; description: string }[] = [
   { value: "auto", title: "Automatic", description: "Follow the system appearance setting" },
@@ -45,7 +53,13 @@ export function AppearancePane() {
           </Row>
         </Group>
       </Box>
+      <InterfaceSizePicker />
+      <SidebarTextPicker />
       <InterfaceStylePicker />
+      <SectionHeader title="Minimalism" description={null} />
+      <Group>
+        <SettingToggle anchor="appearance.minimalismMode" />
+      </Group>
       <AddressBarPicker />
       <PageFramePicker />
       <BookmarksBarSection />
@@ -67,7 +81,7 @@ function InterfaceStylePicker() {
   const style = useSettings((s) => s.interfaceStyle);
   const tinted = useSettings((s) => s.glassTintWithTheme);
   const tintAmount = useSettings((s) => s.glassTintAmount);
-  if (!liquidGlass) return null;
+  if (!liquidGlass) return <OutlinesSection />;
   return (
     <>
       <SectionHeader anchor="appearance.interfaceStyle" />
@@ -88,9 +102,18 @@ function InterfaceStylePicker() {
             </View>
           </Row>
         ) : null}
+        <SettingToggle anchor="appearance.elementOutlines" />
         </Group>
       </Box>
     </>
+  );
+}
+
+function OutlinesSection() {
+  return (
+    <Group>
+      <SettingToggle anchor="appearance.elementOutlines" />
+    </Group>
   );
 }
 
@@ -103,7 +126,7 @@ function StyleChoice({ value, title, selected, onPress }: { value: Settings["int
       <MiniWindow layout="none" look={{ window: look.backdrop, bar: look.tile, page: look.tile }}>
         <Box row gap="m" pad="xs" style={STYLE_TILES}>
           {[0, 1, 2].map((i) => (
-            <View key={i} style={[STYLE_TILE, glass ? null : { backgroundColor: look.tile, borderWidth: 1, borderColor: look.tileStroke }]}>
+            <View key={i} style={[STYLE_TILE(), glass ? null : { backgroundColor: look.tile, borderWidth: 1, borderColor: look.tileStroke }]}>
               {glass ? <GlassFill radius={radius.tile} state={i === 0 ? "active" : "rest"} /> : null}
             </View>
           ))}
@@ -114,12 +137,14 @@ function StyleChoice({ value, title, selected, onPress }: { value: Settings["int
 }
 
 const STYLE_TILES = { flex: 1 } as const;
-const STYLE_TILE = { flex: 1, alignSelf: "flex-start", height: 30, borderRadius: radius.tile } as const;
+const STYLE_TILE = perLook(() => ({ flex: 1, alignSelf: "flex-start", height: 30, borderRadius: radius.tile }) as const);
 
 function AddressBarPicker() {
   const addressBar = useSettings((s) => s.addressBar);
   const placement = useSettings((s) => s.commandBarPlacement);
   const compactToolbar = useSettings((s) => s.compactToolbar);
+  const buttons = useSettings((s) => s.addressBarButtons);
+  const translateButton = useSettings((s) => s.showTranslateButton);
   const topTabs = useTabLayout() === "top";
   const choose = (value: Settings["addressBar"]) => updateSettings({ addressBar: value });
   return (
@@ -128,8 +153,8 @@ function AddressBarPicker() {
         anchor="appearance.addressBar"
         description={
           topTabs
-            ? "Tabs are across the top of the window, so the address bar stays in the toolbar. Also in View › Show Address Bar in Sidebar."
-            : "In the sidebar, the page gets the toolbar’s height. While the sidebar is hidden, the address bar is in the toolbar. Also in View › Show Address Bar in Sidebar."
+            ? `Tabs are across the top of the window, so the address bar stays in the toolbar.${ADDRESS_BAR_IN_MENU}`
+            : `In the sidebar, the page gets the toolbar’s height. While the sidebar is hidden, the address bar is in the toolbar.${ADDRESS_BAR_IN_MENU}`
         }
       />
       <Box gap="xl">
@@ -144,23 +169,34 @@ function AddressBarPicker() {
             options={[
               { value: "field", title: "At the address" },
               { value: "centred", title: "In the centre" },
+              { value: "centredOnClick", title: "In the centre, also on click" },
             ]}
             onChange={(v) => updateSettings({ commandBarPlacement: v })}
-            minWidth={160}
+            minWidth={220}
           />
         </Row>
         <Row anchor="appearance.compactToolbar">
           <Toggle value={compactToolbar} onChange={(v) => updateSettings({ compactToolbar: v })} />
+        </Row>
+        <Row anchor="appearance.addressBarButtons">
+          <PopUp
+            value={buttons}
+            options={[
+              { value: "hover", title: "Show on hover" },
+              { value: "always", title: "Always show" },
+            ]}
+            onChange={(v) => updateSettings({ addressBarButtons: v })}
+            minWidth={160}
+          />
+        </Row>
+        <Row anchor="appearance.showTranslateButton">
+          <Toggle value={translateButton} onChange={(v) => updateSettings({ showTranslateButton: v })} />
         </Row>
         </Group>
       </Box>
     </>
   );
 }
-
-const FRAME_SLIDER_WIDTH = 160;
-const FRAME_VALUE_WIDTH = 36;
-const FRAME_CONTROL = { alignItems: "center" } as const;
 
 function PageFramePicker() {
   const frame = useSettings((s) => s.pageFrame);
@@ -175,14 +211,10 @@ function PageFramePicker() {
           <Toggle value={borderless} accessibilityLabel="Borderless mode" onChange={(on) => updateSettings({ borderlessMode: on })} />
         </Row>
         <Row anchor="appearance.pageFrame">
-          <Box row gap="m" style={FRAME_CONTROL}>
-            <View style={{ width: FRAME_SLIDER_WIDTH }}>
-              <AmountSlider value={frame / PAGE_FRAME.max} tooltip={`${frame} pt`} onChange={(v) => updateSettings({ pageFrame: Math.round(v * PAGE_FRAME.max) })} />
-            </View>
-            <Text size="small" tone="textSecondary" style={{ width: FRAME_VALUE_WIDTH, textAlign: "right" }}>
-              {frame === 0 ? "None" : `${frame} pt`}
-            </Text>
-          </Box>
+          <FrameSlider position={frame / PAGE_FRAME.max} tooltip={`${frame} pt`} label={frame === 0 ? "None" : `${frame} pt`} onChange={(v) => updateSettings({ pageFrame: Math.round(v * PAGE_FRAME.max) })} />
+        </Row>
+        <Row anchor="appearance.tabCornerRadius">
+          <TabCornersSlider />
         </Row>
         <Row anchor="appearance.pageFrameZeroInFullScreen">
           <Toggle
@@ -205,8 +237,33 @@ function PageFramePicker() {
   );
 }
 
+const SIDEBAR_TEXT_SIZES: { value: Settings["sidebarTextSize"]; title: string }[] = [
+  { value: "default", title: "Default" },
+  { value: "large", title: "Large" },
+  { value: "larger", title: "Larger" },
+];
+
+function SidebarTextPicker() {
+  const size = useSettings((s) => s.sidebarTextSize);
+  const highContrast = useSidebarHighContrast();
+  return (
+    <>
+      <SectionHeader title="Sidebar Text" />
+      <Group>
+        <Row anchor="appearance.sidebarTextSize">
+          <PopUp value={size} options={SIDEBAR_TEXT_SIZES} onChange={(v) => updateSettings({ sidebarTextSize: v })} minWidth={120} />
+        </Row>
+        <Row anchor="appearance.sidebarTextContrast">
+          <Toggle value={highContrast} accessibilityLabel="Higher contrast sidebar text" onChange={(on) => updateSettings({ sidebarTextContrast: on ? "high" : "standard" })} />
+        </Row>
+      </Group>
+    </>
+  );
+}
+
 function SelectedTabGlowPicker() {
   const glow = useSettings((s) => s.selectedTabGlow);
+  const topApp = useSettings((s) => s.selectedTopApp);
   return (
     <>
       <SectionHeader title="Selected Tab" />
@@ -223,6 +280,18 @@ function SelectedTabGlowPicker() {
             minWidth={120}
           />
         </Row>
+        <Row anchor="appearance.selectedTopApp">
+          <PopUp
+            value={topApp}
+            options={[
+              { value: "ring", title: "Ring" },
+              { value: "fill", title: "Fill only" },
+              { value: "outline", title: "Outline only" },
+            ]}
+            onChange={(v) => updateSettings({ selectedTopApp: v })}
+            minWidth={120}
+          />
+        </Row>
       </Group>
     </>
   );
@@ -230,6 +299,7 @@ function SelectedTabGlowPicker() {
 
 function ScrollBarsPicker() {
   const scrollBars = useSettings((s) => s.pageScrollBars);
+  if (!PLATFORM_FEATURES.thinScrollBars) return null;
   return (
     <>
       <SectionHeader title="Scroll Bars" />
@@ -238,7 +308,7 @@ function ScrollBarsPicker() {
           <PopUp
             value={scrollBars}
             options={[
-              { value: "system", title: "Follow macOS" },
+              { value: "system", title: `Follow ${PLATFORM_TERMS.os}` },
               { value: "thin", title: "Thin" },
             ]}
             onChange={(v) => updateSettings({ pageScrollBars: v })}
@@ -264,7 +334,7 @@ function AppIconPicker() {
   const [choices] = useResource(appIconChoices);
   const icons = choices?.icons ?? [];
   const current = choices?.current ?? null;
-  if (icons.length < 2) return null;
+  if (!PLATFORM_FEATURES.appIcon || icons.length < 2) return null;
   return (
     <>
       <SectionHeader anchor="appearance.appIcon" />

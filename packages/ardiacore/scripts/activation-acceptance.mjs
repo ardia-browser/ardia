@@ -36,8 +36,11 @@ execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days
 const page = (title, body, script = "") =>
   `<!doctype html><html><head><title>${title}</title><link rel="icon" href="data:,"></head><body style="font: 20px sans-serif">${body}<script>${script}</script></body></html>`;
 const conference = `
-  window.__pip = 0; window.__pipClosed = 0; window.__pipError = null;
+  window.__pip = 0; window.__pipClosed = 0; window.__pipError = null; window.__asked = [];
+  const onlyWhenHidden = new URLSearchParams(location.search).has("only-when-hidden");
   navigator.mediaSession.setActionHandler("enterpictureinpicture", async () => {
+    __asked.push(document.visibilityState);
+    if (onlyWhenHidden && document.visibilityState !== "hidden") return;
     __pip++;
     try {
       const w = await documentPictureInPicture.requestWindow({ width: 320, height: 180 });
@@ -48,7 +51,7 @@ const conference = `
     window.__stream = s; const v = document.querySelector("video"); v.srcObject = s; v.play(); return "ok";
   }, (e) => e.name);
   window.state = () => ({ pip: __pip, open: !!documentPictureInPicture.window, closed: __pipClosed, error: __pipError,
-    camera: window.__stream?.getVideoTracks()[0]?.readyState ?? null, visibility: document.visibilityState });`;
+    camera: window.__stream?.getVideoTracks()[0]?.readyState ?? null, visibility: document.visibilityState, asked: __asked });`;
 const asks = `
   window.__asks = [];
   window.ask = (c) => { const e = { state: "pending" }; __asks.push(e);
@@ -224,8 +227,8 @@ const show = async (tabId) => {
 const closeTab = (id) => evalApp(`ac.store.getState().closeTab(${JSON.stringify(id)}); return true`).catch(() => null);
 const prompt = (tabId) => evalApp(`return ac.pageState.getState().pages[${JSON.stringify(tabId)}]?.permission ?? null`);
 const answer = (tabId, id, result) => evalApp(`ac.permissions.answerPermission(${JSON.stringify(tabId)}, ${JSON.stringify(id)}, ${JSON.stringify(result)}); return true`);
-async function joinedCall(windowId = mainWindow) {
-  const url = `${origin()}/conf`;
+async function joinedCall(windowId = mainWindow, query = "") {
+  const url = `${origin()}/conf${query}`;
   const tab = await openTab(url, "Conference", windowId);
   await show(tab);
   const t = await pageTarget(url);
@@ -310,6 +313,32 @@ try {
       return { focusSteps, leave: { handlerCalls: settled.pip - base, chromeActive: chromeAway.windows.map((w) => w.active) }, back: { open: back.open } };
     } finally {
       await closeTab(notes);
+      await closeTab(call.tab);
+    }
+  });
+
+  await check("call-tab-switch-page-hidden", async () => {
+    const call = await joinedCall(mainWindow, "?only-when-hidden");
+    const other = await openTab(`${origin()}/other?t=Other`, "Other");
+    try {
+      const rounds = [];
+      for (let round = 0; round < 3; round++) {
+        await show(other);
+        const popped = await until(`the call popped out (round ${round})`, async () => {
+          const p = await pipState(call.t);
+          return p.open ? p : null;
+        }, 6000).catch(async () => {
+          throw new Error(`leaving the tab didn't pop the call out; the page was asked while: ${JSON.stringify((await pipState(call.t)).asked)}`);
+        });
+        rounds.push(popped.asked.at(-1));
+        await show(call.tab);
+        await until(`closed on coming back (round ${round})`, async () => !(await pipState(call.t)).open, 8000);
+      }
+      const asked = (await pipState(call.t)).asked;
+      if (asked.includes("visible")) throw new Error(`the page was asked to enter PiP while still visible: ${JSON.stringify(asked)}`);
+      return { rounds, asked };
+    } finally {
+      await closeTab(other);
       await closeTab(call.tab);
     }
   });
@@ -787,6 +816,50 @@ try {
     } finally {
       await engine("windows.dev", { window: n, action: "fakeFullScreen:0" }).catch(() => null);
       await closeTab(tab);
+    }
+  });
+
+  await check("keys-after-command-bar", async () => {
+    const urlA = `${origin()}/keys?a`, urlB = `${origin()}/keys?b`;
+    const a = await openTab(urlA, "Keys");
+    const b = await openTab(urlB, "Keys");
+    const n = await engine("tabs.devWindowNumber", { tabId: a });
+    const win = JSON.stringify(mainWindow);
+    const press = (k, keyCode, modifiers = []) =>
+      evalApp(`return ac.shell.devKeyEquivalent(${win}, ${JSON.stringify({ key: k, keyCode, modifiers, send: true, asKey: true, release: true, wait: 400 })})`);
+    const typedInA = async () => {
+      const t = await pageTarget(urlA);
+      await js(t, `__keys = ""; true`);
+      const r = await press("x", 7);
+      return { responder: r.firstResponder, keys: await js(t, "__keys") };
+    };
+    const steps = [];
+    try {
+      await show(a);
+      await evalApp(`ac.actions.focus(${win}); return true`);
+      await engine("tabs.devFocusPage", { tabId: a });
+      steps.push({ step: "before", ...(await typedInA()) });
+      await press("l", 37, ["command"]);
+      await until("the command bar open", () => evalApp(`return ac.store.getState().windowUi[${win}]?.panel.open || null`), 5000);
+      await show(b);
+      await sleep(400);
+      await show(a);
+      await sleep(900);
+      steps.push({ step: "switched with the bar open", ...(await typedInA()) });
+      await press("l", 37, ["command"]);
+      await until("the command bar open", () => evalApp(`return ac.store.getState().windowUi[${win}]?.panel.open || null`), 5000);
+      const [x, y] = await evalApp(`return ac.sidebarRows.measureRow(${win}, ${JSON.stringify(a)}).then((r) => [Math.round(r.x + r.width / 2), Math.round(r.y + r.height / 2)])`);
+      await engine("windows.dev", { window: n, action: `mouse:down:${x},${y}` });
+      await sleep(80);
+      await engine("windows.dev", { window: n, action: `mouse:up:${x},${y}` });
+      await sleep(900);
+      steps.push({ step: "bar closed by a click", ...(await typedInA()) });
+      const lost = steps.filter((s) => s.keys !== "x");
+      if (lost.length) throw new Error(`a key missed the page: ${JSON.stringify(steps)}`);
+      return steps;
+    } finally {
+      await closeTab(b);
+      await closeTab(a);
     }
   });
 

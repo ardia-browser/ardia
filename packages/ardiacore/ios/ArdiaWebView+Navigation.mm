@@ -280,7 +280,8 @@ NSString *PNGDataURL(NSImage *image) {
   NSWindow *window = self.window;
   if (window && text.length) {
     const NSPoint local = [self convertPoint:[window convertPointFromScreen:NSEvent.mouseLocation] fromView:nil];
-    if (NSPointInRect(local, self.bounds)) payload[@"fromBottom"] = @(self.isFlipped ? NSMaxY(self.bounds) - local.y : local.y - NSMinY(self.bounds));
+    if (NSPointInRect(local, self.bounds))
+      payload[@"fromBottom"] = @((self.isFlipped ? NSMaxY(self.bounds) - local.y : local.y - NSMinY(self.bounds)) * RootPointsPerLocalPoint(self));
   }
   [self emit:@"status" payload:payload];
 }

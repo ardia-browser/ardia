@@ -15,5 +15,5 @@
 - Manual: alternate visits between a regular tab and a pin/Top App, then close the newest tab in both
   directions. The newest awake same-space page wins; sleeping pages do not.
 - Related: [native unloading](manual-tab-unloading.md).
-- Replacement: upstream `v0.2.47-nightly.1` adds MRU close selection. The fork keeps its close/activation flow
+- Replacement: upstream `v0.2.47-nightly.5` adds MRU close selection. The fork keeps its close/activation flow
   and split behavior, with the missing awake-page eligibility and cross-section pinned successor rule.

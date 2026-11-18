@@ -119,7 +119,7 @@
       .sensoryFeedback(.success, trigger: model.completions)
       .sensoryFeedback(.error, trigger: model.failures)
       .onAppear {
-        withAnimation(reduceMotion ? .easeOut(duration: 0.2) : Motion.smooth) { isPresented = true }
+        withAnimation(reduceMotion ? Motion.reducedMotion : Motion.smooth) { isPresented = true }
       }
     }
 

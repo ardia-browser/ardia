@@ -12,10 +12,22 @@ import SwiftUI
     @Environment(\.colorScheme) private var colorScheme
     @State private var loaded: FaviconCache.Entry?
 
-    public init(iconURL: String?, pageURL: String?, size: CGFloat = 16) {
+    public struct Prepared: Sendable {
+      fileprivate let entry: FaviconCache.Entry?
+    }
+
+    public init(iconURL: String?, pageURL: String?, size: CGFloat = 16, prepared: Prepared? = nil) {
       self.iconURL = iconURL
       self.pageURL = pageURL
       self.size = size
+      _loaded = State(initialValue: prepared?.entry)
+    }
+
+    public static func prepare(iconURL: String?, pageURL: String?) async -> Prepared {
+      for candidate in candidates(iconURL: iconURL, pageURL: pageURL) {
+        if let entry = await FaviconCache.shared.entry(for: candidate) { return Prepared(entry: entry) }
+      }
+      return Prepared(entry: nil)
     }
 
     public var body: some View {
@@ -38,12 +50,7 @@ import SwiftUI
       .task(id: candidates) {
         if let current = loaded, candidates.contains(current.source) { return }
         loaded = nil
-        for candidate in candidates {
-          if let entry = await FaviconCache.shared.entry(for: candidate) {
-            loaded = entry
-            return
-          }
-        }
+        if let entry = await Self.prepare(iconURL: iconURL, pageURL: pageURL).entry { loaded = entry }
       }
       .accessibilityHidden(true)
     }
@@ -64,6 +71,10 @@ import SwiftUI
     }
 
     private var candidates: [URL] {
+      Self.candidates(iconURL: iconURL, pageURL: pageURL)
+    }
+
+    private static func candidates(iconURL: String?, pageURL: String?) -> [URL] {
       var list: [URL] = []
       if let iconURL, let url = URL(string: iconURL), url.scheme?.hasPrefix("http") == true { list.append(url) }
       if let pageURL, let page = URL(string: pageURL), page.scheme?.hasPrefix("http") == true,

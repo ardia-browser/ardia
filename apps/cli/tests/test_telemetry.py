@@ -208,6 +208,18 @@ class CommandEventTest(TelemetryCase):
         self.assertNotIn("SecretProfileName", self.spool_text())
         self.spawn.assert_called_once()
 
+    def test_a_reader_that_closes_the_pipe_early_is_no_crash(self):
+        def closed(argv):
+            raise BrokenPipeError(32, "Broken pipe")
+
+        with mock.patch.object(cli, "run", closed), mock.patch("ardia_cli.printable.quiet_stdout") as quiet:
+            status, _, _ = self.run_cli("windows")
+        self.assertEqual(status, 141)
+        quiet.assert_called_once()
+        records = self.spool()
+        self.assertEqual([record["event"] for record in records], ["cli_command"])
+        self.assertEqual(records[0]["properties"]["error_code"], "stdout_closed")
+
     def test_subcommands_unknown_commands_and_help(self):
         self.run_cli("config", "path")
         self.run_cli("open-my-secret-site.example")
@@ -218,6 +230,18 @@ class CommandEventTest(TelemetryCase):
         self.assertEqual(self.spool()[-1]["properties"]["exit_code"], 0)
         self.assertNotIn("secret", self.spool_text())
         self.assertNotIn("print", self.spool_text())
+
+    def test_theme_keys_record_names_never_keys_or_values(self):
+        self.run_cli("theme", "set", "icons.zzkey", "zzvalue", "--theme", "zzname")
+        self.run_cli("theme", "get", "icons.chevron.down", "--json")
+        self.run_cli("theme", "unset", "dark.accent")
+        records = self.spool()
+        self.assertEqual([(r["properties"]["command"], r["properties"]["subcommand"]) for r in records], [("theme", "set"), ("theme", "get"), ("theme", "unset")])
+        self.assertEqual([r["properties"]["flags"] for r in records], ["--theme", "--json", ""])
+        self.assertEqual([r["properties"]["exit_code"] for r in records], [1, 1, 1])
+        text = self.spool_text()
+        for secret in ("zzkey", "zzvalue", "zzname", "chevron", "accent"):
+            self.assertNotIn(secret, text)
 
     def test_browse_records_the_command_name_and_known_flags_only(self):
         self.run_cli("browse", "--json", "session", "list", "--hunter2")
@@ -449,7 +473,7 @@ class FlushTest(TelemetryCase):
         resource = {a["key"]: a["value"] for a in body["resourceLogs"][0]["resource"]["attributes"]}
         self.assertEqual(resource["service.name"], {"stringValue": "ardia-cli"})
         self.assertEqual(resource["deployment.environment"], {"stringValue": "development"})
-        self.assertEqual(resource["os.type"], {"stringValue": "darwin"})
+        self.assertEqual(resource["os.type"], {"stringValue": "linux" if sys.platform.startswith("linux") else "darwin"})
         self.assertIn("host.arch", resource)
         scope = body["resourceLogs"][0]["scopeLogs"][0]
         self.assertEqual(scope["scope"], {"name": "ardia.analytics"})

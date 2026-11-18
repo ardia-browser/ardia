@@ -3,7 +3,7 @@ import { useBrowser } from "../browser/store";
 import { DEFAULT_PROFILE_ID } from "../settings/settings";
 import { sanitizeTheme } from "../../lib/profileLook";
 import type { Profile, ProfileTheme } from "../browser/types";
-import { PROFILE, PROFILE_THEME, PROFILE_TOP_APPS, SHARE, profileRecord, topAppsRecord, type TopAppsRecord } from "./records";
+import { PROFILE, PROFILE_OPEN_TABS, PROFILE_THEME, PROFILE_TOP_APPS, SHARE, openTabsRecord, profileRecord, topAppsRecord, type OpenTabsRecord, type TopAppsRecord } from "./records";
 
 const store = () => useBrowser.getState();
 
@@ -134,6 +134,32 @@ export function profileTopAppsAdapter(links: () => Record<string, { syncId: stri
         const key = `${PROFILE_TOP_APPS}${syncId}`;
         const record = changed.has(key) ? topAppsRecord(visible.get(key)) : null;
         if (record) store().updateProfile(id, { shareTopApps: record.on || undefined });
+      }
+    },
+  };
+}
+
+export function profileOpenTabsAdapter(links: () => Record<string, { syncId: string }>): Adapter {
+  const linked = () => Object.entries(links()).filter(([id]) => store().profiles[id]);
+  return {
+    prefix: PROFILE_OPEN_TABS,
+    adoptRemoteOnJoin: true,
+    extract: (base, _queued, _now, known, remote) => {
+      const values = new Map<string, unknown>();
+      for (const [id, { syncId }] of linked()) {
+        const key = `${PROFILE_OPEN_TABS}${syncId}`;
+        const on = !!store().profiles[id]!.syncTabs;
+        const unapplied = known(key) && remote(key) !== null && canonical(remote(key)) !== canonical(base(key) ?? null);
+        if ((on || known(key)) && !unapplied) values.set(key, { on } satisfies OpenTabsRecord);
+      }
+      const mine = new Set(values.keys());
+      return { values, ignore: (key) => !mine.has(key) };
+    },
+    apply: (visible, changed) => {
+      for (const [id, { syncId }] of linked()) {
+        const key = `${PROFILE_OPEN_TABS}${syncId}`;
+        const record = changed.has(key) ? openTabsRecord(visible.get(key)) : null;
+        if (record) store().updateProfile(id, { syncTabs: record.on || undefined });
       }
     },
   };

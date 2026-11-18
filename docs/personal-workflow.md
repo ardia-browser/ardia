@@ -145,6 +145,19 @@ command substitutions to installed copies without copying newer command document
 Compare installed files with the activated bundle plus these substitutions and report any other differences.
 Verify each consuming agent also has the personal-command instruction.
 
+## Fork CI
+
+Require the `checks` summary from [CI](../.github/workflows/ci.yml) on PRs to `main`. Linux runners
+parallelize browser unit tests, typechecks, and the macOS JavaScript bundle. The macOS runner tests
+native packages. Build, sign, and install Ardia Personal locally.
+
+Disable workflows in the fork with `gh workflow disable <file> -R simon-ami/ardia`. Keep the upstream
+workflow files for clean merges. Disable the duplicate Checks workflow, Android, iOS, Linux, Windows,
+and Windows engine inputs. The personal app runs on Mac, and some other jobs need upstream engine assets
+the fork cannot fetch. Disable Deploy and release workflows because the fork ships locally. Disable CLA,
+Linked issue, Vouch, and Vouch manage for the personal fork. Leave scheduled Caches off unless needed.
+Check for new workflows after each upstream merge with `gh workflow list --all -R simon-ami/ardia`.
+
 ## GitHub and rollback
 
 Prepare a fork integration PR for protected `main`. For a useful new product change, also prepare a focused
@@ -164,12 +177,16 @@ Snapshots and the original migration backup stay private and out of Git. Do not 
 
 Preserve README fork notice `2286d63b`, PR CI workflow `84beb05f`, and the personal-build feature record.
 Starting point after setup: fork `main` at `9d18a24e`.
-The installed update targets `v0.2.47-nightly.1`, commit `eea5edb931644dc903bb9118bc8aff52ea6a97a7`.
-The recorded candidate and installed app match current sources; the paired CLI is `0.2.47-personal.1`.
-Simon confirmed the requested manual checks passed, including the adapted upstream switcher, sleeping-tab
-filter, close/unload successors, split panes, and login/settings/script persistence. Use upstream behavior
-with the remaining personal layout and eligibility adaptations. Custom features remain active.
-Private build, installation, checks, and final merge evidence is in
-`apps/browser/build-personal-signed/update-0.2.47-nightly.1/` and update snapshot `20261114-003508-96a0487b`.
-For each update, record its target, candidate, checks, manual result, replacement choices, installed build,
-and final merge. Keep per-feature details in their separate ledger files.
+The installed update targets `v0.2.47-nightly.5`, commit `f6636c47bd20ac2c86d82f5b54898498594b0512`.
+Candidate and installed records match current sources; the paired CLI is `0.2.47-personal.1`.
+All custom features remain active. Upstream strikethrough partially overlaps title fading; Simon confirmed
+that the fork should retain fade-only alongside upstream strikethrough. Unreleased upstream Sleep Tab and cross-space extension recovery are documented in the ledger,
+not imported. No replacement or custom-code removal is approved.
+Workspace typechecks, package tests, personal lifecycle tests, and focused custom-feature tests pass.
+The browser suite's four initial failures were corrected and rechecked. The CLI suite passed except one
+personal-skill length assertion; shortening the text and rerunning its 52 tests passed.
+Hidden signed-candidate checks cover MRU selection, close/unload successors, switcher row closing,
+sleeping filtering, settings persistence, and no background startup warmup after 15 seconds.
+Simon confirmed all requested manual checks passed.
+Evidence: `apps/browser/build-personal-signed/update-0.2.47-nightly.5/`.
+Installation snapshot: `20261117-182424-c196d008`. The managed Ardia skill matches the activated CLI bundle.

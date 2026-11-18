@@ -20,7 +20,13 @@ pnpm preview    # serve dist/
 
 - **A release:** `.claude/skills/release/scripts/site-version.mjs <version>` writes `src/data/release.json` (the
   version and the DMG's size) from the published release. The download button links to
-  `releases/download/v<version>/Ardia-<version>.dmg`.
+  `releases/download/v<version>/Ardia-<version>.dmg`. Run it for a nightly too: it moves only `linux`, the version
+  whose `Ardia-<version>-linux-x64.tar.xz` Linux visitors get, and only when that release has the tarball.
+- **Who sees which download:** `Device.astro` sets `data-device`, `data-os`, `data-pc` (`windows` or `linux` on a
+  desktop) and `data-arch="arm"` (Windows on Arm, when the browser says so through `userAgentData`). The
+  `.not-pc`, `.windows-only`, `.linux-only`, `.x64-only` and `.arm-only` classes in `global.css` follow them; Windows
+  installers come from the `windows-alpha` prerelease, which every release refreshes. Locally, check a platform with a
+  different user agent (devtools' device toolbar).
 - **Release notes:** `/release-notes` renders the repo's `docs/release-notes/<version>.md` (one file per version,
   `src/content.config.ts`), newest first, each at `/release-notes#<version>`. The app opens that anchor after it
   updates, so rebuild and redeploy the site when a release ships (`docs/releasing.md`).

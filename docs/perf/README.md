@@ -15,6 +15,8 @@ All of them are in `apps/browser/scripts/perf/`.
 | `acmark.m` | native | Injected into the bench's copy of the app: marks when a window's React content commits, and (`AC_BENCH_KEYLOG=1`) every key down the app's event loop sees. |
 | `acframes.m`, `frames-phase.mjs`, `frames-phase.test.mjs` | native | The frame rig (`native-bench.mjs --only frames`, `framecounts`): `acframes.m` is injected like `acmark.m` and records display-link ticks, main- and JS-thread run-loop busy time and layout counters; `frames-phase.mjs` drives the interactions and reads them; the test checks the window arithmetic. Rows: [What the frame rows measure](#what-the-frame-rows-measure). |
 | `scroll-frames.mjs` | native | Scroll smoothness on local pages that follow the scroll in script, rAF, canvas, scroll-driven animations, a smooth-scroll library and an inner scroller: real trackpad (phases and momentum, at 120, 90 or 60 events/s), wheel and key scrolls into a hidden instance (`acperf postscroll`, CDP keys), read from Chrome's trace. Rows: compositor draws, main frames, stale draws (a draw with no new main frame since the one before: script-placed content shows the old scroll position), rAF rate and gaps, per app. Its header has the details. |
+| `strip-scroll.mjs`, `acstrip.m` | native | What a two-finger pan and a wheel over the top tab strip cost (25 or 80 tabs, 1 or 2 profiles, mid-strip, at either end, leaving and reaching its start): main- and JS-thread CPU and busy time, the longest main-thread iteration, the process's CPU, UI-manager layout passes and view updates, React commits and renders, and how far the strip moved, sides interleaved gesture by gesture. `acstrip.m` is injected like `acframes.m`: it finds the strip's scroll view, sets its offset, reads thread CPU, and makes the gestures in-process (precise phaseless deltas; `--driver acperf` posts real phased ones when the screen is unlocked). |
+| `sidebar-scroll-bench.mjs` | native | What a flick and a wheel spin over the sidebar's tab list cost at 50, 150 and 300 tabs (pinned tiles and rows, groups, audible and loading tabs), 1 or 2 profiles, with the hover pointer resting over the list: main- and JS-thread CPU and busy time, frames and the longest gap, the process's CPU, root hit tests, view updates and layout passes, React commits and renders, JS tasks from scroll and hover events, and how far the list moved. Runs a production bundle on a Debug app through a stand-in packager; sides interleave with `--append`. `acframes.m` posts the gestures in-process (`gesture` op: phaseless precise pans and wheel notches, which a locked screen still routes) and reads or sets the scroll offset (`scrollpos`). |
 | `tab-actions.mjs`, `actabs.m` | native | Tab actions from the AppKit event to the last paint, on a session that looks like a real one (60 tabs, 2 profiles, pinned tiles and rows, groups, audible and loading tabs, 2 windows): sidebar click, ⌃Tab, ⌘1–9, ⌘T, ⌘-click, ⌘W, the row's ✕, pin and unpin, ⌃⇧PgDn. `--extra-tabs N` adds N plain tabs to it, the many-tab session: J2 (⌘T) and J3 (⌃Tab) must cost the same at 0 and 100 extra (#1330). Sides (a bundle each, `--side-env` for extra environment) alternate launch by launch. Each action is split into event → store, React's commit, layout, the UI blocks on the main thread and AppKit's display + Core Animation commit, plus the shown page's frame, with React renders and commits per action. `actabs.m` is injected like `acmark.m`: it posts the key, mouse and menu events in-process and times every UI-manager flush to its Core Animation commit. |
 | `launch-trace.mjs` | native | Where the engine's start goes, two sides compared: Chrome's startup traces (`native-bench.mjs --only launch --trace-startup <categories>`), milestones from the process's creation (ChromeMain, BrowserMain, each process's first event) and the browser main thread's slices by name. |
 | `acsample.c`, `launch-samples.mjs` | native | The stretch the trace doesn't cover (ChromeMain → BrowserMain, ~100 ms): `acsample.c`, injected with `--env DYLD_INSERT_LIBRARIES`, samples the main thread every ~1 ms from before `main`; `launch-samples.mjs` symbolizes the samples against the unstripped framework (`dist/<v>/symbols`) and compares the functions in a window of two sides. How to run: its header. It found 0.2.31's +20 ms: the platform policy loader waiting on `/usr/bin/profiles`. |
@@ -26,6 +28,7 @@ All of them are in `apps/browser/scripts/perf/`.
 | `census.mjs` | render | Per action of each journey (Cmd-T, keystroke, Cmd-L, tab switch, Enter, page load, hover): components rendered, wasted renders, hooks run, store subscriptions notified, selectors evaluated, native view updates, timers scheduled. Its results and fix list: [render-census.md](render-census.md). |
 | `micro-bench.mjs` | Node | Store-side work that grows with a profile (sidebar entries, group names, omnibox) in Node. No app needed. Its `counts` and `instr` cases feed the ratchet. |
 | `suggest-instr.mjs`, `suggest-hermes.mjs`, `bar-actions.json` | Node, Hermes | One command-bar keystroke on the seed profile (typing `github.com/net` and `react native perf`: site check, the bar's 46 actions, suggestions). `micro-bench.mjs suggest-keys` prints ops and time per key (`SUGGEST_BEFORE=1` runs the code as it was before the J2 hill-climb: the frozen spec `packages/core/src/suggest.reference.ts`); `suggest-instr.mjs` the instructions retired per round; `suggest-hermes.mjs` the same keys in the app's Hermes (the app's babel transform, the `hermes` CLI from Pods), per key, run under the perflab lock. `packages/core/src/suggest.property.test.ts` and `fuzzy.property.test.ts` hold the live code to the frozen spec on random profiles and typing sequences. |
+| `bookmark-move-bench.mjs` | Node | A Bookmarks page drag of a selection into another folder: CPU time of the store update and of the diff sent to Chrome, and how many ops it sends (`--each` and `--slice`/`--flat` time older code). No app needed. |
 | `ratchet.mjs`, `ratchet.json` | ratchet | Ceilings on counts that can only go down, and the commands that check, lower and rebuild them. |
 | `ratchet-app.js`, `ops.mjs` | ratchet | The `launch` scenario the ratchet adds to js-bench, and the builtin-call counter micro-bench uses. |
 
@@ -425,6 +428,38 @@ bookmarks, history and favicons answered after 50 to 75 ms (19 to 28 ms preloade
 paint comes 2.1 to 2.2 s after the switch (0.1 to 0.3 s preloaded), nearly all of it the navigation hold until that
 profile's uBlock Origin rulesets are ready (`held 1 navigations … the first 2060 ms` in the app log), the same on a data
 folder where every profile had run before. Later switches cost what they did before.
+
+## Profiles no window shows (#1367, #1371)
+
+`native-bench.mjs --only profiles` measures what the profiles a window isn't showing cost, and what going back to one
+costs. It seeds one window with `--profile-count` profiles of one local tab each (`profile-seed.mjs`), opens each
+profile once, shows Personal again, and reads the loaded profiles (`profiles.loaded`) and the process tree's physical
+footprint 60 s later and again after `--idle` seconds. Then it switches to the first other profile and times its page:
+shown again when it was kept, first contentful paint when it had to load. `--setting K=V` and `--control-setting K=V`
+put a setting in each side's seeded session, so one app is measured against itself (they also work with `--seed big`,
+for a launch with a setting changed). The bench closes its DevTools sessions before idling: a page being debugged keeps
+its profile loaded. `--profile-visits 0` opens no other profile, which measures what a launch loads.
+
+```sh
+node apps/browser/scripts/perf/native-bench.mjs --app $APP --control $APP \
+  --label unload-5m --control-label unload-never --only profiles --profile-count 4 --runs 2 --idle 450 \
+  --setting unloadProfilesAfter=5m --control-setting unloadProfilesAfter=never --out $OUT/profiles
+```
+
+Unload inactive profiles (Settings › Advanced › Performance, off by default; `state/profiles/profileUnloading.ts`),
+measured 2026-11-14 on a Release build, 4 profiles, 450 s on Personal, two runs a side, load average 45 to 60:
+
+| | Never | After 5 minutes |
+|---|---:|---:|
+| Profiles loaded after the idle | 4 | 1 |
+| Processes | 13 | 6 |
+| Memory, process tree | 653 MB (644 to 662) | 311 MB (308 to 314) |
+| Back to a profile → its page shown | 76 ms (one run; the page was kept) | 634 ms (455 and 813; the profile, its uBlock Origin and the page load again) |
+
+Going back to an unloaded profile is a load, not a switch, which is why the setting is off unless chosen. In a Debug
+build the same return took 0.93 to 1.14 s in three rounds, 0.8 to 1.0 s of it the navigation hold until that profile's
+uBlock Origin rulesets are ready; the page came back at its URL, scroll position and back/forward list, with its
+cookies (session cookies too) and local storage.
 
 ## Rows that don't compare with CEF-era numbers (0.2.21 and older)
 

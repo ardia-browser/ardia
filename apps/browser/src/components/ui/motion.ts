@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Animated, Easing, type EasingFunction } from "react-native";
+import { reduceMotion } from "./reduceMotion";
 
 export const curve = {
   linear: Easing.linear,
@@ -15,6 +16,18 @@ export const curve = {
 
 export const currentValue = (value: Animated.Value): number => (value as unknown as { __getValue(): number }).__getValue();
 
+export const animating = (value: Animated.Value): boolean => (value as unknown as { _animation?: unknown })._animation != null;
+
+export const gateLevel = (on: boolean) => (on ? 1 : 0);
+
+export const gatedNode = (gate: Animated.Value, value: Animated.Value | Animated.AnimatedInterpolation<number>, rest: number) => Animated.add(rest, Animated.multiply(gate, Animated.subtract(value, rest)));
+
+export function useGated(on: boolean, value: Animated.Value | Animated.AnimatedInterpolation<number>, rest: number) {
+  const gate = useRef(new Animated.Value(gateLevel(on))).current;
+  useLayoutEffect(() => gate.setValue(gateLevel(on)), [gate, on]);
+  return useMemo(() => gatedNode(gate, value, rest), [gate, value, rest]);
+}
+
 export const duration = {
   fast: 100,
   base: 150,
@@ -23,6 +36,8 @@ export const duration = {
 } as const;
 
 export const period = { spinner: 900, pulse: 1100 } as const;
+
+export const buttonMotion = { iconPressScale: 0.96, controlPressScale: 0.985 } as const;
 
 export type Fade = { duration: number; easing: EasingFunction; delay?: number };
 
@@ -62,3 +77,31 @@ export const springs = {
   smooth: spring(springSpec.smooth),
   bouncy: spring(springSpec.bouncy),
 } as const;
+
+export function usePressScaleMotion(enabled = true, pressedScale: number = buttonMotion.iconPressScale) {
+  const scale = useRef<Animated.Value | null>(null);
+  if (enabled && !scale.current) scale.current = new Animated.Value(1);
+
+  useEffect(() => {
+    if (enabled) return;
+    scale.current?.stopAnimation();
+    scale.current?.setValue(1);
+  }, [enabled]);
+
+  const animate = (pressed: boolean) => {
+    const value = scale.current;
+    if (!enabled || !value) return;
+    value.stopAnimation();
+    if (reduceMotion() !== false) {
+      value.setValue(1);
+      return;
+    }
+    Animated.spring(value, { toValue: pressed ? pressedScale : 1, ...springs.snappy, useNativeDriver: true }).start();
+  };
+
+  return {
+    scale: enabled ? scale.current : null,
+    onPressIn: enabled ? () => animate(true) : undefined,
+    onPressOut: enabled ? () => animate(false) : undefined,
+  };
+}

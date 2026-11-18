@@ -28,6 +28,33 @@ on:
         description: add-tester mode only, the tester's email address
         type: string
         default: ""
+      version:
+        description: dry-run and upload modes, the release version (0.2.47 or 0.2.47-nightly.2; empty takes the Mac app's MARKETING_VERSION)
+        type: string
+        default: ""
+  workflow_call:
+    inputs:
+      mode:
+        type: string
+        required: true
+      version:
+        type: string
+        required: true
+      build:
+        type: string
+        default: ""
+      default_browser:
+        type: boolean
+        default: false
+      public_testers:
+        type: boolean
+        default: true
+      signing_request:
+        type: string
+        default: ""
+      email:
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -182,6 +209,7 @@ jobs:
       MODE: ${{ inputs.mode }}
       BUILD_INPUT: ${{ inputs.build }}
       DEFAULT_BROWSER: ${{ inputs.default_browser }}
+      RELEASE_VERSION: ${{ inputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -230,13 +258,14 @@ jobs:
           build="$BUILD_INPUT"
           [ -n "$build" ] || build="$(node apps/ios/scripts/asc.mjs next-build)"
           echo "build=$build" >> "$GITHUB_OUTPUT"
-          echo "### Ardia for iPhone, build $build ($MODE)" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Ardia for iPhone ${RELEASE_VERSION:-from MARKETING_VERSION}, build $build ($MODE)" >> "$GITHUB_STEP_SUMMARY"
       - name: Archive, sign${{ inputs.mode == 'upload' && ', upload' || '' }}
         env:
           BUILD: ${{ steps.plan.outputs.build }}
         run: |
           set -euo pipefail
           args=("$BUILD" --out "$OUT")
+          [ -z "$RELEASE_VERSION" ] || args+=(--version "$RELEASE_VERSION")
           [ "$MODE" = upload ] || args+=(--no-upload)
           [ "$DEFAULT_BROWSER" != true ] || args+=(--default-browser)
           scripts/release-ios.sh "${args[@]}" | tee -a "$GITHUB_STEP_SUMMARY"

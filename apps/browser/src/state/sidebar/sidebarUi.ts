@@ -1,5 +1,6 @@
 import type { View } from "react-native";
 import { create } from "zustand";
+import { snappedToDevicePixels } from "../settings/interfaceScale";
 
 export type Anchor = { x: number; y: number; width: number; height: number };
 export type Target = { kind: "tab" | "group" | "live" | "folder"; id: string };
@@ -29,7 +30,7 @@ export const setSidebarUi = (patch: Partial<SidebarUi>) => useSidebarUi.setState
 export function setLiveSidebarWidth(windowId: string, width: number | null) {
   useSidebarUi.setState((u) => {
     const { [windowId]: _, ...rest } = u.dragWidth;
-    return { dragWidth: width === null ? rest : { ...rest, [windowId]: Math.round(width * 2) / 2 } };
+    return { dragWidth: width === null ? rest : { ...rest, [windowId]: snappedToDevicePixels(width) } };
   });
 }
 

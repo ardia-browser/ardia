@@ -1,4 +1,4 @@
-import { call, nativeModule, on, type TabStripTransaction } from "@ardia/ardiacore";
+import { call, nativeModule, on, type TabStripTransaction, type WindowRequest } from "@ardia/ardiacore";
 
 export {
   sendTabStripCommand,
@@ -24,6 +24,7 @@ export {
   type PageSelection,
   type ScrollState,
   type ProtectedMediaRequest,
+  type FairPlayReport,
   type AppBadge,
 } from "@ardia/ardiacore";
 
@@ -39,6 +40,7 @@ export const discardOffered = (adoptId: string) => Tabs.discardOffered(adoptId);
 export const routeLinkTabs = (urls: string[]) => call("tabs.routeLinkTabs", { urls });
 
 export const onTabStripTransaction = (listener: (tx: TabStripTransaction) => void) => on("tabs.strips", listener);
+export const onWindowRequest = (listener: (request: WindowRequest) => void) => on("tabs.windowRequest", listener);
 export const tabStrips = () => call("tabs.strips");
 export const reportPageCommits = (on: boolean) => call("tabs.reportCommits", { on });
 export const lastTabClosesWindow = () => call("tabs.lastTabPolicy").then((r) => r.closesWindow);

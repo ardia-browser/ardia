@@ -1,0 +1,94 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { test } from "node:test";
+const copy = await import("./copy.ts");
+const { copyWords: macWords } = await import("./copyWords.ts");
+const { PHRASES_ONLY_WITH, platformWording, rewordInPlace } = await import("./platformWording.ts");
+const { PLATFORM_TERMS: windowsTerms } = await import("../../lib/platformTerms.windows.ts");
+const { PLATFORM_FEATURES: windowsFeatures } = await import("../../lib/platformFeatures.windows.ts");
+const { PLATFORM_TERMS: macTerms } = await import("../../lib/platformTerms.ts");
+const { PLATFORM_FEATURES: macFeatures } = await import("../../lib/platformFeatures.ts");
+const { windowsKeyText } = await import("../commands/windowsKeyText.ts");
+
+const windowsWords = platformWording(windowsTerms, windowsFeatures, windowsKeyText);
+const pairs = JSON.parse(readFileSync(new URL("./fixtures/whats-sent-windows-2026-11-14.json", import.meta.url), "utf8"));
+const source = readFileSync(new URL("./copy.ts", import.meta.url), "utf8");
+const EXPORTS = ["SHARING_COPY", "WHATS_SENT", "IDENTITY_COPY", "LOCAL_COPY", "WATCH_COPY"];
+
+const KEYS_THE_BRANCH_MISSED = [
+  ["How many times ⌘T kept", "How many times Ctrl+T kept"],
+  ["How many times ⌥↩ in the command bar", "How many times Alt+Enter in the command bar"],
+];
+
+function strings(value, out = []) {
+  if (typeof value === "string") out.push(value);
+  else if (value && typeof value === "object") for (const field of Object.values(value)) strings(field, out);
+  return out;
+}
+
+const live = strings(EXPORTS.map((name) => copy[name]));
+
+test("Windows words every sentence as the branch wrote it by hand on 2026-11-14", () => {
+  assert.equal(pairs.length, 158);
+  for (const [mac, windows] of pairs) {
+    const missed = KEYS_THE_BRANCH_MISSED.find(([before]) => mac.startsWith(before));
+    const expected = missed ? windows.replace(missed[0], missed[1]) : windows;
+    assert.equal(windowsWords(mac), expected);
+  }
+});
+
+test("the Mac's words are its source, byte for byte", () => {
+  for (const [mac] of pairs) assert.equal(macWords(mac), mac);
+  for (const text of live) assert.ok(source.includes(JSON.stringify(text)), `not a literal in copy.ts: ${text.slice(0, 80)}`);
+});
+
+test("the Mac's terms and features through the Windows rules change nothing", () => {
+  const macThroughRules = platformWording(macTerms, macFeatures, (key) => key);
+  for (const text of live) assert.equal(macThroughRules(text), text);
+});
+
+test("no Mac name, Mac-only phrase or key glyph is left in Windows's copy except those kept on purpose", () => {
+  const windows = live.map(windowsWords);
+  for (const text of windows) {
+    assert.doesNotMatch(text, /\b(?:this|the) Mac\b|\bmacOS version\b|\bfrom the Dock\b|\bin Finder\b|[⌃⌥⇧⌘]/u, text);
+    for (const phrase of Object.values(PHRASES_ONLY_WITH)) assert.ok(!text.includes(phrase));
+  }
+  assert.ok(windows.some((text) => text.includes("whether macOS and Ardia agree")));
+  assert.ok(windows.some((text) => text.includes("Dock icon clicks")));
+});
+
+test("each phrase a feature removes is still in the copy, so a reworded sentence fails here instead of leaking", () => {
+  for (const phrase of Object.values(PHRASES_ONLY_WITH)) assert.ok(live.some((text) => text.includes(phrase)), phrase);
+});
+
+test("the rules touch only whole words outside quotes", () => {
+  const cases = [
+    ["Sent from this Macintosh and this MacBook", "Sent from this Macintosh and this MacBook"],
+    ["the Mac's memory and the Mac", "the PC's memory and the PC"],
+    ["“this Mac” stays quoted, this Mac does not", "“this Mac” stays quoted, this PC does not"],
+    ['a site called "⌘ Shop" and ⌘W', 'a site called "⌘ Shop" and Ctrl+W'],
+    ["iMac users and macOS's prompt", "iMac users and macOS's prompt"],
+    ["⇧-clicks, ⌘Keys and ⌘K", "Shift-clicks, ⌘Keys and Ctrl+K"],
+  ];
+  for (const [mac, windows] of cases) assert.equal(windowsWords(mac), windows);
+});
+
+test("the branch's own sentences come last in Usage, after main's", () => {
+  const usage = copy.WHATS_SENT.find((group) => group.title === "Usage");
+  assert.ok(usage);
+  assert.ok(usage.items.at(-1).startsWith("On Windows, how many times a tab you switched to had no page yet"));
+  assert.ok(usage.items.at(-2).startsWith("On Windows, how many sync files waited"));
+  assert.ok(usage.items.at(-16).startsWith("How many times the first-launch intro was shown"));
+});
+
+test("WATCH_COPY, which the platform pass skips, has nothing the rules would change", () => {
+  const watch = strings(copy.WATCH_COPY);
+  for (const text of watch) assert.equal(windowsWords(text), text);
+});
+
+test("rewording in place reaches nested objects and leaves functions alone", () => {
+  const appear = (name) => `You appear as ${name} on this Mac`;
+  const sample = { a: "this Mac", nested: { list: ["the Mac", "x"] }, appear };
+  rewordInPlace(sample, windowsWords);
+  assert.deepEqual(sample, { a: "this PC", nested: { list: ["the PC", "x"] }, appear });
+});

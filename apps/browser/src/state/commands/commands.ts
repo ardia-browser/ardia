@@ -1,5 +1,4 @@
 import { discardTabs } from "../tabs/discardActions";
-import { closeWindow as closeNativeWindow } from "../../platform/windows";
 import { copyText } from "../../platform/clipboard";
 import { openExternalURL } from "../../platform/app";
 import { pickFiles, prompt } from "../../platform/dialogs";
@@ -22,7 +21,8 @@ import {
   toggleSiteMute,
 } from "../browser/actions";
 import { bookmarkAllTabs, bookmarkTab } from "../bookmarks/actions";
-import { exportBookmarksFromWindow } from "../bookmarks/exportHtml";
+import { isBookmarklet, runBookmarklet } from "../bookmarks/bookmarklets";
+import { exportBookmarksFromWindow, toggleDownloadsPanel } from "./platformCommands";
 import { requestClearData } from "../profiles/clearDataRequest";
 import { showHistory } from "../history/showHistory";
 import { openInternalPage } from "../pages/urls";
@@ -37,9 +37,10 @@ import { addFolderToSidebar, restoreArcFolders } from "../bookmarks/bookmarkGrou
 import { withLivePage } from "../tabs/livePage";
 import { webviews } from "../../platform/webviews";
 import { togglePageEngine } from "../engines/actions";
+import { runReaderCommand } from "../reader/reader";
 import { goBack, goForward } from "../tabs/navigation";
 import { awaitsFirstPage } from "../tabs/pendingAddress";
-import { openSplitPane } from "../splits/actions";
+import { focusSplitPane, openSplitPane } from "../splits/actions";
 import { isAppCommand, LITTLE_ARDIA_PAGE_COMMANDS, settingChange, variantArg } from "./commandCatalog";
 import { APP_COMMAND_HANDLERS } from "./appCommands";
 import { runSidebarCommand } from "../sidebar/commands";
@@ -68,6 +69,9 @@ import { peekTabId } from "../peek/peek";
 import { expectFocus, findFocus } from "../focus/focusClaims";
 import { isWebPageUrl } from "../../lib/url";
 import { findStep, openFind } from "../find/actions";
+import { runHidingCommand } from "../site/hiddenElements";
+import { requestWindowClose } from "../windows/windowClose";
+
 const newOrId = (arg: string) => (arg === "new" ? null : arg);
 export class NoCommandWindowError extends Error {}
 
@@ -76,7 +80,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
   const s = useBrowser.getState();
 
   if (isUtilityWindowId(requested)) {
-    if (command === "closeTab") return void closeNativeWindow(requested!);
+    if (command === "closeTab") return requestWindowClose(requested!);
     if (command === "findInPage" && requested === SETTINGS_WINDOW_ID) return focusSettingsSearch();
     requested = null;
   }
@@ -149,8 +153,8 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
   const page = tab?.url ? tab : undefined;
   const web = tabId ? webviews.get(tabId) : undefined;
   const ui = s.windowUi[windowId];
+  if (page && (runHidingCommand(command, page.id) || runReaderCommand(command, page.id))) return;
   if (!targeted && runSidebarCommand(command, arg, windowId)) return;
-
   switch (command) {
     case "newTab":
       if (toggleNewTabBar(windowId)) return;
@@ -236,9 +240,8 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
     case "openSplitPane":
       return void openSplitPane(windowId);
     case "focusNextPane":
-      return s.focusPane(windowId, 1);
     case "focusPreviousPane":
-      return s.focusPane(windowId, -1);
+      return focusSplitPane(windowId, command === "focusNextPane" ? 1 : -1);
     case "toggleSidebar":
       return s.toggleSidebar(windowId);
     case "zoomIn":
@@ -248,7 +251,6 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
     case "zoomReset":
       return page ? void web?.zoomStep(0) : undefined;
     case "devTools":
-      return void web?.showDevTools();
     case "toggleDevTools":
       return void web?.showDevTools("toggle");
     case "inspectElements":
@@ -300,6 +302,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
       return page && arg ? void addBookmarkToFolder(windowId, page.id, arg) : undefined;
     case "openBookmark": {
       const node = arg ? s.bookmarks.nodes[arg] : undefined;
+      if (node?.kind === "url" && isBookmarklet(node.url)) return void runBookmarklet(node.url, windowId, tabId);
       return node?.kind === "url" && tab ? s.navigate(tab.id, node.url) : undefined;
     }
     case "togglePageEngine":
@@ -307,7 +310,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
     case "toggleMute":
       return page ? (arg === "site" ? toggleSiteMute(page.id) : toggleMute(page.id)) : undefined;
     case "downloads":
-      return s.setDownloadsOpen(windowId, !ui?.downloadsOpen);
+      return toggleDownloadsPanel(windowId, !ui?.downloadsOpen);
     case "cast":
       return void toggleCastPicker(windowId, tabId);
     case "showHistory":
@@ -341,7 +344,6 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
       return void requestCreateProfile(windowId).then((id) => id && switchProfile(windowId, id));
   }
 }
-
 function runLittleArdiaCommand(command: string, arg: string | null | undefined, windowId: string): boolean {
   const s = useBrowser.getState();
   const tabId = activeTabId(s, windowId);
@@ -372,7 +374,6 @@ function runLittleArdiaCommand(command: string, arg: string | null | undefined, 
   }
   return false;
 }
-
 async function addBookmarkToFolder(windowId: string, tabId: string, folder: string) {
   const s = useBrowser.getState();
   const tab = s.tabs[tabId];
@@ -386,7 +387,6 @@ async function addBookmarkToFolder(windowId: string, tabId: string, folder: stri
   }
   useBrowser.getState().addBookmark({ profileId, url: tab.url, title: tab.title, favicon: tab.favicon, parentId });
 }
-
 async function openFiles(windowId: string | null) {
   const urls = await pickFiles();
   if (!urls.length) return;

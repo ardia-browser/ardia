@@ -126,8 +126,8 @@ drag or a menu pick. Code: `state/automation/workspace*.ts`.
 `"shown": true`: `{"profile", "profileName", "shown", "activeTab", "topApps", "pinned", "tabs"}`, each list in sidebar
 order. `topApps` holds tiles and tile folders (`{"type": "folder", "id", "name", "items"}`); `pinned` the pinned rows
 and pinned groups, interleaved as shown; `tabs` the rest. A group is `{"type": "group", "id", "name", "label" (the
-shown name, made from its tabs when `name` is empty), "icon" (an emoji, `symbol:<SF Symbol>`, `"none"` for No Icon,
-or null for the default), "color" (`neutral`, `none` or one of Chrome's nine), "collapsed", "pinned", "parent",
+shown name, made from its tabs when `name` is empty), "icon" (an emoji, `symbol:<SF Symbol>`, `"none"`, which draws
+the default folder like null, or null for the default), "color" (`neutral`, `none` or one of Chrome's nine), "collapsed", "pinned", "parent",
 "items"}`, its items its own tabs and child groups in order. A tab is `{"type": "tab", "id", "url", "title",
 "customTitle", "icon", "pin" (`tile`, `row` or null), "pinned" (also true in a pinned group), "folder", "group" (the
 innermost), "split", "active", "muted", "asleep", "index"}`; URLs and titles as in `windows` (internal pages
@@ -215,7 +215,7 @@ profile goes where the store puts moved tabs.
   `bookmarks`, `downloads` or `newtab`. Never `javascript:`, `data:`, `blob:`, `view-source:`, `chrome:`, other
   `ardia://` pages (settings, flags, extensions…) or schemes that open other apps.
 - **Icons** are what the icon picker offers: an emoji from its list (`lib/emojiData.ts`), `symbol:<name>` (an SF
-  Symbol name, lowercase with dots), `"none"` (groups: No Icon) or null. Names are trimmed text of at most 200
+  Symbol name, lowercase with dots), `"none"` (No Icon: pinned rows, which then show their title alone; a group draws its folder) or null. Names are trimmed text of at most 200
   characters without control characters.
 - **Telemetry:** `usage_counts` carries `cli_tab_edits`, `cli_group_edits` (operations applied),
   `cli_edit_failures` (batches refused or stopped) and `cli_pill_shows` (times the control pill appeared: `run` and
@@ -353,12 +353,12 @@ Hooks that answer before something happens, with a deadline after which Ardia do
   `"fullUrls": true`; a program that rewrites query parameters needs it. The runner trims again on its side.
 - **link.opening** decides before any tab exists. At every launch native holds incoming links (no early Little Ardia
   tab, no parked link tabs) until JS reports its link policy with `setHoldIncomingLinks(hold, hooksStamp)`: the app reports it
-  once its hooks are loaded and again on every change, `true` while an active `tab.opening` or `link.opening` hook
-  exists. `hooksStamp` is the stamp (device, inode, size, mtime, ctime) native returned with the hooks.json read the
+  once its hooks are loaded and again on every change, `true` while an active `tab.opening` or `link.opening` hook,
+  an enabled Air Traffic Control rule or an Everything Else choice exists. `hooksStamp` is the stamp (device, inode, size, mtime, ctime) native returned with the hooks.json read the
   rules came from, so a decision is never filed under a newer file; native keeps the fast-path fingerprint only when
-  that stamp is the file's current one. The fingerprint also covers config.json and `automation-approvals.json`, so
-  native takes its fast path before JS loads only when the last report said no hold and none of the three changed
-  since. A routed or rewritten link never adopts contents loaded for it
+  that stamp is the file's current one. The fingerprint also covers config.json, `automation-approvals.json` and
+  `air-traffic.json`, so native takes its fast path before JS loads only when the last report said no hold and none of
+  the four changed since. A routed or rewritten link never adopts contents loaded for it
   under another profile.
 - **Permissions.** A hook can deny or leave the normal prompt; `allow` means "show the prompt", never an unattended
   grant. A deny is answered on the engine's own request id and never remembered. A request dismissed or replaced
@@ -394,6 +394,55 @@ Hooks that answer before something happens, with a deadline after which Ardia do
 - **Floods.** At most 64 pending decisions (16 per runner connection), 200 hooks and 50 rewrite rules per hook; the
   runner runs at most 16 decide programs at once (4 per hook) and gives up at the deadline. Command hooks run at
   most 10 commands per 10 s each, so a hook that triggers itself stops.
+
+## Air Traffic Control
+
+Settings › Air Traffic Control is the same `link.opening` route engine with rules the user makes in Settings, kept in
+the data dir (`air-traffic.json`, version 2: an ordered `rules` list and a `fallback`), not in the config folder.
+
+- **Order.** For a link from another app (after `tab.opening` has had its say): the Settings rules from the top, the
+  first enabled one that fits answering; then the hooks.json `link.opening` hooks as above; then the Everything Else
+  choice when nothing answered (no hook fit, a route hook's profile is gone, or a program hook gave no answer in
+  time). With no Everything Else choice the link takes Ardia's usual routing.
+- **A rule** is `from` (an app by bundle id, or by name when it has none; `null` is any app), a link condition (`any`,
+  a `site` host that also takes its subdomains, matched as `*://*.<host>/*`, or a `pattern`), a profile
+  id (`null` is the profile used last) and `open` (`tab`, `window`, `littleArdia`). Profiles are stored by id, so a
+  rename keeps the rule; a rule or fallback whose profile was deleted, or is private, doesn't apply and the link
+  goes on down the list.
+- **Patterns.** A pattern with `://` (or `<all_urls>`) is a userscript match pattern. One without is a wildcard, case
+  blind, where `*` is any run of characters: with no `/` it matches the link's host (`*git*`, `*.github.com`), with one
+  it matches host, path and query (`github.com/ardia/*`), and one with no `*` matches anywhere in that text (`github`
+  is `*github*`). Spaces are refused.
+- **A tab group.** A rule (or Everything Else) that opens a profile as a tab may name one of that profile's tab groups
+  (`groupKey`: the group's pin key, or its id when it has none, so a pinned group keeps its key when its window closes
+  and comes back). The link opens as a tab in the group's copy in the window shown last, or in a new window of that
+  profile when the group is parked (a pinned group whose window closed), and the group expands if it was collapsed.
+  A rule (or Everything Else) whose group no longer exists in that profile still applies: the link opens as a plain tab
+  in the rule's profile, and its row in Settings says the group isn't open. A copy of the group in a window that is closing
+  doesn't count. The parser drops a `groupKey` without a profile or with another `open`, so the rule keeps working as a
+  plain tab.
+- **No approval.** The user makes these rules in Settings, so they count as approved. hooks.json route hooks still need
+  approval in Advanced › Automation; the pane lists them read-only with their state.
+- **The hold.** An enabled rule or an Everything Else choice turns the incoming-link hold on, reported again on every
+  change, so the native fast path never opens a link before the rules have seen it. `air-traffic.json` is in native's
+  fast-path fingerprint, so a file changed while Ardia was closed holds the first link of the next launch too. A
+  change is saved before the store takes it, so a save that fails changes neither the rules nor the hold.
+- **Versions.** Version 2 added `groupKey`; a version 1 file reads unchanged, its rules naming no group. A build from
+  before a version reads a newer file as no rules, since downgrades aren't supported.
+- **Source apps.** The app (bundle id, name) of the last 20 distinct apps that sent a link is kept in
+  `link-sources.json` for the app picker, on this Mac only and never sent.
+- **Try a Link** runs the same `traceOpening` and `traceLink` the real decision runs (`state/automation/decisions.ts`),
+  so it can't drift: a `tab.opening` rule that cancels or rewrites the link comes first, then it names the rule, hook,
+  Everything Else or usual routing that would take the link and where it would open, tab group included. A program
+  hook can't be asked without sending the link, so it shows what happens if the program doesn't answer.
+- Code: `state/airTraffic/rules.ts` (the pure matching and the saved document), `store.ts`, `sourceApps.ts`,
+  `preview.ts`, `groups.ts` (a profile's groups by key, their names and where they are) and `openAt.ts` (opening a
+  link in a group); `state/littleArdia/actions.ts` opens links from other apps; the pane is
+  `components/settings/panes/AirTraffic.tsx` with its sheet `AirTrafficSheet.tsx`.
+- Telemetry: `usage_counts.air_traffic_rule_links` and `air_traffic_fallback_links` (links from other apps) and
+  `air_traffic_group_links` (those that joined a tab group), and `settings_snapshot`'s `air_traffic_rules` (enabled
+  rules), `air_traffic_wildcard_rules` (enabled rules with a wildcard pattern), `air_traffic_group_rules` (enabled rules
+  that send into a group) and `air_traffic_fallback` (true or false).
 
 ## Approvals
 
@@ -561,6 +610,11 @@ The runner fires them and passes a `schedule.fired` event (it never comes from A
   `hooks.log.1`; stdout and stderr are drained as they come and a single line longer than 64 KB is cut. `hooks run`
   writes the log itself (`--log PATH`, `-` for the terminal), so the plist's `StandardOutPath` and
   `StandardErrorPath` are `/dev/null`: launchd would hold its own descriptor to the file and defeat the rotation.
+- On Linux, `hooks install` writes the systemd user service `dev.ardia.hooks.service` in
+  `${XDG_CONFIG_HOME:-~/.config}/systemd/user` instead (the same command line and environment, `Restart=on-failure`,
+  `RestartSec=10`, `StartLimitIntervalSec=0`, output to `/dev/null` for the same reason), then runs
+  `systemctl --user daemon-reload`, `enable` and `restart`. `uninstall` disables and stops it and removes the unit,
+  and `hooks list` reads `systemctl --user show`. The log is `${XDG_STATE_HOME:-~/.local/state}/ardia/hooks.log`.
 
 ## Tests
 

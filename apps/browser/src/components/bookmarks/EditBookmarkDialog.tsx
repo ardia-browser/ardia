@@ -1,4 +1,3 @@
-import { resolveInput } from "@ardia/core";
 import { useState } from "react";
 import { currentBookmarkRoots, currentBookmarks, currentSettings } from "../../state/browser/current";
 import { addBookmark, addBookmarkFolder, moveBookmark, updateBookmark } from "../../state/bookmarks/actions";
@@ -7,6 +6,7 @@ import { searchUrlPrefix } from "../../state/settings/settings";
 import { Button, Dialog, DialogActions, DialogTitle, TextField } from "../ui";
 import { FormField } from "../settings/Form";
 import { closeBookmarkEditor, useBookmarkEditor, type EditorState } from "../../state/bookmarks/edit";
+import { bookmarkUrlFrom } from "../../state/bookmarks/bookmarklets";
 import { FolderPicker } from "./DialogParts";
 
 export function EditBookmarkDialog() {
@@ -24,7 +24,7 @@ function Sheet({ state }: { state: EditorState }) {
     node?.parentId ?? state.parentId ?? currentBookmarkRoots(state.profileId)?.bar ?? null,
   );
   const close = closeBookmarkEditor;
-  const resolvedUrl = url.trim() ? resolveInput(url, searchUrlPrefix(currentSettings())) : "";
+  const resolvedUrl = bookmarkUrlFrom(url, searchUrlPrefix(currentSettings()));
   const valid = state.folder ? !!title.trim() : !!resolvedUrl;
 
   const save = () => {

@@ -1,6 +1,7 @@
 #import "ArdiaEarlyWindowInternal.h"
 #import "ArdiaChromeWindowHost.h"
 #import "ArdiaEngineBridge.h"
+#import "ArdiaInterfaceScale.h"
 #import "ArdiaTabParking.h"
 #import "ArdiaWebViewInternal.h"
 
@@ -124,6 +125,33 @@ ArdiaEarlyShown *ShownForWindow(NSWindow *window) {
 + (void)setDataDirectory:(NSString *)directory {
   gDirectory = [directory copy];
   gLayoutPath = directory.length ? [directory stringByAppendingPathComponent:@"launch-layout.json"] : nil;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    [NSNotificationCenter.defaultCenter addObserverForName:ArdiaInterfaceScaleDidChange
+                                                    object:nil
+                                                     queue:nil
+                                                usingBlock:^(NSNotification *) {
+                                                  [ArdiaEarlyWindow forgetPicturesOfOtherScales];
+                                                }];
+  });
+}
+
++ (void)forgetPicturesOfOtherScales {
+  if (!gLayoutPath) return;
+  LoadLayouts();
+  [self discardPrefetch];
+  for (NSString *windowId in gLayouts.allKeys) {
+    NSMutableDictionary *layout = [gLayouts[windowId] mutableCopy];
+    if (!layout[@"pictureContent"]) continue;
+    [layout removeObjectForKey:@"pictureContent"];
+    gLayouts[windowId] = layout;
+    DropPictureFile(windowId);
+  }
+  for (ArdiaWindowController *controller in ArdiaWindowController.all) {
+    if (!controller.appWindowId.length || controller.stray || controller.standalone) continue;
+    [self noteLayoutChangeIn:controller.coreWindow.window];
+    break;
+  }
 }
 
 + (void)noteLayoutChangeIn:(NSWindow *)window {
@@ -236,6 +264,7 @@ ArdiaEarlyShown *ShownForWindow(NSWindow *window) {
   const NSRect rect = NSMakeRect(frame[0].doubleValue, frame[1].doubleValue, frame[2].doubleValue, frame[3].doubleValue);
   if (NSWidth(rect) < 300 || NSHeight(rect) < 200) return NO;
   NSWindow *window = [ArdiaChromeWindowHost makeWindowForProfile:profile ?: @""];
+  if (gLittleLayout) [ArdiaChromeWindowHost floatForWindowManagers:window];
   ArdiaWindowController *controller = [ArdiaWindowController forNSWindow:window];
   NSView *host = controller.coreWindow.hostView;
   if (!window || !host) {
@@ -245,7 +274,7 @@ ArdiaEarlyShown *ShownForWindow(NSWindow *window) {
   if (gLittleLayout) {
     NSArray<NSNumber *> *cardInsets = layout[@"card"];
     const double inset = cardInsets.firstObject.doubleValue;
-    gLittleLayout[@"radius"] = @(inset == 0 ? 0 : MAX(ArdiaChromeWindowHost.windowCornerRadius - inset, 2));
+    gLittleLayout[@"radius"] = @(inset == 0 ? 0 : MAX(ArdiaChromeWindowHost.windowCornerRadius - inset, [ArdiaInterfaceScale windowLengthFromRoot:2]));
   }
   controller.appWindowId = windowId;
   [window setFrame:rect display:NO];
@@ -352,10 +381,11 @@ ArdiaEarlyShown *ShownForWindow(NSWindow *window) {
   LoadLayouts();
   NSDictionary *main = windowId.length && [gLayouts[windowId] isKindOfClass:NSDictionary.class] ? gLayouts[windowId] : @{};
   const double pageFrame = PageFrameOf(settings);
-  NSNumber *cardInset = @(pageFrame);
+  NSNumber *cardInset = @([ArdiaInterfaceScale windowLengthFromRoot:pageFrame]);
+  NSNumber *top = @([ArdiaInterfaceScale windowLengthFromRoot:38]);
   NSMutableDictionary *layout = [@{
-    @"page" : @[ cardInset, @38, cardInset, cardInset ],
-    @"card" : @[ cardInset, @38, cardInset, cardInset ],
+    @"page" : @[ cardInset, top, cardInset, cardInset ],
+    @"card" : @[ cardInset, top, cardInset, cardInset ],
     @"curve" : [main[@"curve"] isKindOfClass:NSString.class] ? main[@"curve"] : kCACornerCurveCircular,
     @"lights" : @[ @20, @19 ],
   } mutableCopy];

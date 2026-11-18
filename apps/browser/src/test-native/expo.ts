@@ -1,3 +1,4 @@
+import type { PropsWithChildren } from "react";
 import type * as Expo from "expo-modules-core";
 import { ardiaCoreNativeModules } from "./ardiacore";
 import { shellNativeModules } from "./shell";
@@ -12,4 +13,4 @@ export const requireOptionalNativeModule: typeof Expo.requireOptionalNativeModul
 
 export const uuid = { v4: () => crypto.randomUUID(), v5: () => crypto.randomUUID() } as unknown as typeof Expo.uuid;
 
-export const requireNativeViewManager: typeof Expo.requireNativeViewManager = () => () => null;
+export const requireNativeViewManager: typeof Expo.requireNativeViewManager = () => (props) => (props as PropsWithChildren).children ?? null;

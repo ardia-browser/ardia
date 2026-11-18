@@ -82,7 +82,7 @@ enum WindowMoveProbe {
   ) {
     guard let frameView = window.contentView?.superview, let restoreButtons = installButtons() else { return done(["error": "no frame view"]) }
     let origin = window.frame.origin
-    let local = NSPoint(x: x, y: frameView.bounds.height - top)
+    let local = frameView.convert(SyntheticInput.windowPoint(x: x, top: top, in: window), from: nil)
     let pointer = NSPoint(x: origin.x + local.x, y: origin.y + local.y)
     let hit = frameView.hitTest(local).map { String(describing: type(of: $0)) } ?? "nil"
     let serverOwns = ServerWindowDrag.serverOwnsPress(window, at: local)

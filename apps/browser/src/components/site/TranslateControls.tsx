@@ -26,7 +26,8 @@ import type { ToolbarPalette } from "../ui/toolbarColors";
 export const TranslateButton = memo(function TranslateButton({ tabId, palette, onFocus }: { tabId: string; palette: ToolbarPalette; onFocus: () => void }) {
   const theme = useTheme();
   const state = useTranslateState(tabId);
-  if (!translation || (!state.source && state.status === "idle")) return null;
+  const shown = useSettings((s) => s.showTranslateButton);
+  if (!shown || !translation || (!state.source && state.status === "idle")) return null;
   const translated = state.status !== "idle";
   return (
     <Button variant="icon" toolbar

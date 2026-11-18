@@ -5,8 +5,8 @@ import { describeCliInstall, installCliInBackground, useCli } from "../../../sta
 import { openUrls } from "../../../state/browser/actions";
 import { useSettings } from "../../../state/browser/hooks";
 import { updateSettings } from "../../../state/settings/actions";
-import { openInternalPage } from "../../../state/pages/urls";
-import type { BatterySaverWhen } from "../../../state/settings/settings";
+import { openChromeSettings, openInternalPage } from "../../../state/pages/urls";
+import type { BatterySaverWhen, Settings } from "../../../state/settings/settings";
 import { keepSiteActive, stopKeepingSiteActive, type MemorySaverMode } from "../../../state/tabs/memorySaver";
 import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
 import { Button, DialogActions, DialogTitle, lineHeight, PopUp, Sheet, space, Text, TextField, Toggle } from "../../ui";
@@ -14,13 +14,15 @@ import { Favicon } from "../../favicon/Favicon";
 import { FormField, Group, Row, SectionHeader, SettingToggle } from "../Form";
 import { engineVersion, widevine as widevineComponent } from "../../../state/settings/paneData";
 import { useResource } from "../../../state/settings/resources";
+import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 import { AutomationRules } from "./AutomationRules";
+import { perLook } from "../../ui/tokens";
 
 const REPOSITORY = "https://github.com/mantrakp04/ardia";
 
 const BATTERY_SAVER_DESCRIPTIONS: Record<BatterySaverWhen, string> = {
-  lowBattery: "At 20% battery or less, or in Low Power Mode, busy background tabs pause and animations slow down.",
-  unplugged: "On battery or in Low Power Mode, busy background tabs pause and animations slow down.",
+  lowBattery: `At 20% battery or less, or in ${PLATFORM_TERMS.lowPowerMode}, busy background tabs pause and animations slow down.`,
+  unplugged: `On battery or in ${PLATFORM_TERMS.lowPowerMode}, busy background tabs pause and animations slow down.`,
   never: "Background tabs and animations run at full speed on battery.",
 };
 
@@ -31,9 +33,18 @@ const MEMORY_SAVER_MODES: Record<MemorySaverMode, { title: string; description: 
 };
 const MEMORY_SAVER_OPTIONS = Object.entries(MEMORY_SAVER_MODES).map(([value, { title }]) => ({ value: value as MemorySaverMode, title }));
 
+const UNLOAD_PROFILES_OPTIONS: { value: Settings["unloadProfilesAfter"]; title: string }[] = [
+  { value: "never", title: "Never" },
+  { value: "5m", title: "After 5 minutes" },
+  { value: "15m", title: "After 15 minutes" },
+  { value: "1h", title: "After 1 hour" },
+  { value: "2h", title: "After 2 hours" },
+];
+
 export function AdvancedPane() {
   const hideBookmarksBarImport = useSettings((s) => s.hideBookmarksBarImport);
   const memorySaverMode = useSettings((s) => s.memorySaverMode);
+  const unloadProfilesAfter = useSettings((s) => s.unloadProfilesAfter);
   const batterySaverWhen = useSettings((s) => s.batterySaverWhen);
   const keepActiveSites = useSettings((s) => s.keepActiveSites);
   const warnBeforeMovingTabs = useSettings((s) => s.warnBeforeMovingTabsToProfile);
@@ -78,6 +89,14 @@ export function AdvancedPane() {
           />
         </Row>
         <SettingToggle anchor="advanced.loadProfilesWhenOpened" />
+        <Row anchor="advanced.unloadProfilesAfter">
+          <PopUp
+            value={unloadProfilesAfter}
+            options={UNLOAD_PROFILES_OPTIONS}
+            onChange={(v) => updateSettings({ unloadProfilesAfter: v })}
+            minWidth={190}
+          />
+        </Row>
       </Group>
 
       <KeepActiveSites sites={keepActiveSites} />
@@ -112,6 +131,9 @@ export function AdvancedPane() {
                 : "Not available in this build: video that needs it, like Netflix or Disney+, won't play."
           }
         />
+        <Row anchor="advanced.chromeSettings">
+          <Button title="Open Chrome Settings" onPress={openChromeSettings} />
+        </Row>
       </Group>
 
       <SectionHeader title="Source and licenses" />
@@ -149,7 +171,7 @@ function CommandLineSection() {
         <Row
           anchor="advanced.cliInstall"
           description={
-            <Text selectable size="caption" tone={cli.error && !cli.installing ? "destructive" : "textSecondary"} style={INSTALL_NOTE}>
+            <Text selectable size="caption" tone={cli.error && !cli.installing ? "destructive" : "textSecondary"} style={INSTALL_NOTE()}>
               {describeCliInstall(cli)}
             </Text>
           }
@@ -160,6 +182,7 @@ function CommandLineSection() {
             onPress={() => void installCliInBackground("settings")}
           />
         </Row>
+        <SettingToggle anchor="advanced.compactCliPill" />
       </Group>
     </>
   );
@@ -218,5 +241,5 @@ function KeepActiveSiteSheet() {
   );
 }
 
-const INSTALL_NOTE = { marginTop: space.xxs, lineHeight: lineHeight.caption } as const;
+const INSTALL_NOTE = perLook(() => ({ marginTop: space.xxs, lineHeight: lineHeight.caption }) as const);
 const ERROR = { marginTop: space.ml } as const;

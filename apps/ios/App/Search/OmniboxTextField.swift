@@ -10,6 +10,7 @@ struct OmniboxTextField: UIViewRepresentable {
   var placeholder: String
   var isIncognito: Bool
   var selectsAllOnFocus: Bool
+  var reveal: TrayReveal
   var onSubmit: (String) -> Void
 
   func makeCoordinator() -> Coordinator {
@@ -36,13 +37,28 @@ struct OmniboxTextField: UIViewRepresentable {
     field.addTarget(context.coordinator, action: #selector(Coordinator.editingChanged(_:)), for: .editingChanged)
     field.accessibilityLabel = String(localized: "Search or Enter Address")
     field.text = text
+    field.alpha = reveal.revealsContents ? 1 : 0
+    context.coordinator.isRevealed = reveal.revealsContents
     apply(to: field)
     return field
+  }
+
+  private func applyReveal(to field: UIView, coordinator: Coordinator) {
+    guard coordinator.isRevealed != reveal.revealsContents else { return }
+    coordinator.isRevealed = reveal.revealsContents
+    guard reveal.revealsContents else {
+      field.alpha = 0
+      return
+    }
+    let base = CACurrentMediaTime()
+    field.restartOpacityFade(to: 1, after: Motion.trayRevealFieldDelay, from: base, curve: Motion.trayRevealCurve)
+    reveal.onReveal(base)
   }
 
   func updateUIView(_ field: CompletingTextField, context: Context) {
     let coordinator = context.coordinator
     coordinator.parent = self
+    applyReveal(to: field, coordinator: coordinator)
     apply(to: field)
     if field.markedTextRange == nil, coordinator.echo.isExternal(text, current: field.editor.typed) {
       field.reset(to: text)
@@ -50,12 +66,13 @@ struct OmniboxTextField: UIViewRepresentable {
     coordinator.offer(completion, to: field)
     field.wantsFocus = isFocused
     if isFocused, !field.isFirstResponder, field.window != nil {
-      DispatchQueue.main.async {
-        guard self.isFocused, !field.isFirstResponder else { return }
-        field.becomeFirstResponder()
-      }
+      field.becomeFirstResponderNextTurn(ifStillWanted: { self.isFocused })
     } else if !isFocused, field.isFirstResponder {
-      field.resignFirstResponder()
+      if reveal.isLeaving { field.freezeAppearance() }
+      DispatchQueue.main.async {
+        guard !self.isFocused, field.isFirstResponder else { return }
+        field.resignFirstResponder()
+      }
     }
   }
 
@@ -63,14 +80,13 @@ struct OmniboxTextField: UIViewRepresentable {
     let placeholderStyle = PlaceholderStyle(text: isFocused ? placeholder : "", isIncognito: isIncognito)
     if field.placeholderStyle != placeholderStyle {
       field.placeholderStyle = placeholderStyle
-      let placeholderColor = isIncognito ? UIColor.white.withAlphaComponent(0.45) : UIColor(BrowsePalette.foregroundTertiary)
+      let placeholderColor = isIncognito ? UIColor.incognitoPlaceholder : UIColor(BrowsePalette.foregroundTertiary)
       field.attributedPlaceholder = placeholderStyle.text.isEmpty
         ? nil
         : NSAttributedString(string: placeholderStyle.text, attributes: [.foregroundColor: placeholderColor])
     }
     field.textColor = isIncognito ? .white : UIColor(BrowsePalette.foregroundPrimary)
     field.tintColor = UIColor(BrowsePalette.searchAccent)
-    field.completionColor = UIColor(BrowsePalette.searchAccent).withAlphaComponent(0.3)
     field.keyboardAppearance = isIncognito ? .dark : .default
   }
 
@@ -78,6 +94,7 @@ struct OmniboxTextField: UIViewRepresentable {
   final class Coordinator: NSObject, UITextFieldDelegate {
     var parent: OmniboxTextField
     var echo = BindingEchoFilter()
+    var isRevealed = true
     private var didSelectAllOnFocus = false
 
     init(parent: OmniboxTextField) {
@@ -139,7 +156,7 @@ struct OmniboxTextField: UIViewRepresentable {
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
       guard let field = textField as? CompletingTextField else { return true }
       let submitted = field.editor.display
-      guard !submitted.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
+      guard SearchInput.submission(from: submitted) != nil else { return false }
       parent.onSubmit(submitted)
       return false
     }
@@ -148,7 +165,7 @@ struct OmniboxTextField: UIViewRepresentable {
       if !parent.isFocused { parent.isFocused = true }
       if parent.selectsAllOnFocus, !didSelectAllOnFocus, !(textField.text ?? "").isEmpty {
         didSelectAllOnFocus = true
-        DispatchQueue.main.async { textField.selectAll(nil) }
+        DispatchQueue.main.async { (textField as? CompletingTextField)?.selectAllShowingStart() ?? textField.selectAll(nil) }
       }
     }
 
@@ -177,7 +194,7 @@ struct PlaceholderStyle: Equatable {
 final class CompletingTextField: UITextField {
   var editor = InlineCompletionEditor()
   var placeholderStyle: PlaceholderStyle?
-  var completionColor = UIColor.systemBlue.withAlphaComponent(0.3)
+  private let completionColor = UIColor(BrowsePalette.searchAccent).withAlphaComponent(0.3)
   private(set) var isApplyingCompletion = false
   var wantsFocus = false
   var typedLength: Int { (editor.typed as NSString).length }
@@ -187,9 +204,36 @@ final class CompletingTextField: UITextField {
   override func didMoveToWindow() {
     super.didMoveToWindow()
     guard wantsFocus, window != nil else { return }
+    becomeFirstResponderNextTurn(ifStillWanted: { [weak self] in self?.wantsFocus == true && self?.window != nil })
+  }
+
+  func becomeFirstResponderNextTurn(ifStillWanted isWanted: @escaping () -> Bool) {
     DispatchQueue.main.async { [weak self] in
-      guard let self, self.wantsFocus, self.window != nil, !self.isFirstResponder else { return }
+      guard let self, isWanted(), !self.isFirstResponder else { return }
       self.becomeFirstResponder()
+    }
+  }
+
+  func selectAllShowingStart() {
+    selectedTextRange = textRange(from: beginningOfDocument, to: endOfDocument)
+    UIView.performWithoutAnimation {
+      layoutIfNeeded()
+      for scroller in Self.scrollers(in: self) { scroller.setContentOffset(.zero, animated: false) }
+    }
+  }
+
+  func freezeAppearance() {
+    guard let still = snapshotView(afterScreenUpdates: false) else { return }
+    still.frame = bounds
+    still.isUserInteractionEnabled = false
+    addSubview(still)
+  }
+
+  private static func scrollers(in view: UIView) -> [UIScrollView] {
+    view.subviews.flatMap { child -> [UIScrollView] in
+      let nested = scrollers(in: child)
+      guard let scroller = child as? UIScrollView else { return nested }
+      return [scroller] + nested
     }
   }
 

@@ -19,13 +19,13 @@ type GroupMenuItem = ChoiceItem<GroupChoice>;
 
 const store = () => useBrowser.getState();
 
-export function groupColorItems(current: GroupColor | null, siteColor: string | null | undefined): GroupMenuItem[] {
+export function groupColorItems(current: GroupColor | null, siteColor: string | null | undefined, matchSite = true): GroupMenuItem[] {
   const matched = siteColor ? nearestGroupColor(siteColor) : null;
   const color = (c: GroupColor | null) => ({ kind: "color" as const, color: c });
   return [
     { value: color("none"), title: "None", swatch: NO_GROUP_COLOR_SWATCH, checked: current === "none" },
     { value: color(null), title: "Neutral", swatch: NEUTRAL_GROUP_SWATCH.light, swatchDark: NEUTRAL_GROUP_SWATCH.dark, checked: !current },
-    { value: color(matched), title: "Match Site Color", enabled: !!matched, swatch: matched ? GROUP_COLORS[matched].hex : undefined },
+    ...(matchSite ? [{ value: color(matched), title: "Match Site Color", enabled: !!matched, swatch: matched ? GROUP_COLORS[matched].hex : undefined }] : []),
     { separator: true },
     ...GROUP_COLOR_ORDER.map((c) => ({ value: color(c), title: GROUP_COLORS[c].name, swatch: GROUP_COLORS[c].hex, checked: current === c })),
   ];

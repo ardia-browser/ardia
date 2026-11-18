@@ -1,4 +1,5 @@
 #import "ArdiaChromeWindowInternal.h"
+#import "ArdiaInterfaceScale.h"
 #import "ArdiaLaunchConfig.h"
 #import "ArdiaRuntime.h"
 
@@ -209,7 +210,8 @@ void InstallTitlebarReachingLights(Class frameClass) {
       NSValue *center = objc_getAssociatedObject(window, kLightsCenterKey);
       if (!center) return frame;
       NSButton *close = [window standardWindowButton:NSWindowCloseButton];
-      const CGFloat reach = ceil(center.pointValue.y + (close ? NSHeight(close.frame) : 14) / 2);
+      const NSSize size = close ? close.frame.size : NSMakeSize(14, 14);
+      const CGFloat reach = ceil(LightsCenter(window, center, size).y + size.height / 2);
       const CGFloat top = frameView.isFlipped ? NSMinY(frame) : NSHeight(frameView.bounds) - NSMaxY(frame);
       const CGFloat grow = reach - top - NSHeight(frame);
       if (grow <= 0) return frame;
@@ -334,10 +336,11 @@ NSArray<NSButton *> *TrafficLightButtons(NSWindow *window) {
 }
 
 NSPoint LightsCenter(NSWindow *window, NSValue *center, NSSize size) {
-  if (!center) return NSMakePoint(kTrafficLightInsetX + size.width / 2, kTrafficLightTop + size.height / 2);
+  const CGFloat scale = ArdiaInterfaceScale.scale;
+  if (!center) return NSMakePoint((kTrafficLightInsetX + size.width / 2) * scale, (kTrafficLightTop + size.height / 2) * scale);
   const NSPoint at = center.pointValue;
   const BOOL trailing = objc_getAssociatedObject(window, kLightsTrailingKey) != nil;
-  return trailing ? NSMakePoint(NSWidth(window.frame) - at.x, at.y) : at;
+  return NSMakePoint(trailing ? NSWidth(window.frame) - at.x * scale : at.x * scale, at.y * scale);
 }
 
 void TranslateTrafficLights(NSWindow *window, CGFloat dx) {
@@ -365,7 +368,29 @@ void SettleTrafficLights(NSWindow *window) {
   [CATransaction commit];
 }
 
+void RefitTrafficLights(NSWindow *window) {
+  if (objc_getAssociatedObject(window, kLightsShownKey)) {
+    objc_setAssociatedObject(window, kLightsMoveKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    return SettleTrafficLights(window);
+  }
+  RetileTrafficLights(window);
+}
+
+void FollowInterfaceScaleWithLights() {
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    [NSNotificationCenter.defaultCenter addObserverForName:ArdiaInterfaceScaleDidChange
+                                                    object:nil
+                                                     queue:nil
+                                                usingBlock:^(NSNotification *) {
+                                                  for (NSWindow *window in NSApp.windows)
+                                                    if (objc_getAssociatedObject(window, kInsetLightsKey)) RefitTrafficLights(window);
+                                                }];
+  });
+}
+
 void InsetTrafficLights(NSWindow *window) {
+  FollowInterfaceScaleWithLights();
   objc_setAssociatedObject(window, kInsetLightsKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
   InstallTrafficLightsOrigin([window.contentView.superview class]);
   InstallTitlebarReachingLights([window.contentView.superview class]);
@@ -413,7 +438,7 @@ void ConfigureWindow(NSWindow *window) {
   window.titlebarAppearsTransparent = YES;
   window.titleVisibility = NSWindowTitleHidden;
   window.title = @"Ardia";
-  window.minSize = NSMakeSize(720, 460);
+  [ArdiaChromeWindowHost setInterfaceMinSize:NSMakeSize(500, 460) ofWindow:window];
   window.backgroundColor = WindowColor();
   window.releasedWhenClosed = NO;
   window.tabbingMode = NSWindowTabbingModeDisallowed;

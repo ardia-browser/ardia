@@ -8,30 +8,35 @@ import { openGroupMenu } from "../../state/sidebar/menus";
 import { openFolderMenu } from "../../state/tabs/topStrip";
 import { setMeasuredWidth, useMeasuredWidth } from "../../state/windows/measuredWidths";
 import { groupTint, useSidebarTokens } from "../sidebar/tokens";
-import { NEUTRAL_GROUP_SWATCH } from "../../state/groups/tokens";
-import { ContextMenuArea, Symbol, useHover } from "../ui";
-import { curve } from "../ui/motion";
+import type { GroupColor } from "../../state/browser/types";
+import { AnimatedFolder } from "../sidebar/AnimatedFolder";
+import { ContextMenuArea, Offstage, Symbol, useOffstage, useTooltip } from "../ui";
+import { curve, useGated } from "../ui/motion";
 import { useTheme } from "../ui/theme";
-import { capsule, font, ink, radius, space, weight, withAlpha } from "../ui/tokens";
+import { font, ink, space, weight, withAlpha } from "../ui/tokens";
+import { useChipHover, useChipHovered } from "./reachableHover";
 import { folderKey, type GroupOut } from "./model";
 import type { StripMember } from "../../state/tabs/topStrip";
 import { TabIcon } from "../sidebar/TabIcon";
 import { SplitChip } from "./SplitChip";
 import { MEMBERS_INSET, type DragGeometry } from "./stripGroups";
 import { DraggableChip, TabChip } from "./TabChip";
-import { CHIP_HAIRLINE, FOLDER_HEIGHT, FOLDER_PAD, FOLDER_RADIUS, FOLDER_TITLE_GAP, FOLDER_TITLE_MAX, GROUP_GLYPH, MID, TOP_STRIP_HEIGHT, TUCK_FADE_MS } from "./tokens";
+import { CHIP_HAIRLINE, FOLDER_HEIGHT, FOLDER_PAD, folderRadius, FOLDER_TITLE_GAP, FOLDER_TITLE_MAX, MID, STRIP_FOLDER_SIDE, TOP_STRIP_HEIGHT, TUCK_FADE_MS } from "./tokens";
 
 export function GroupMember({
   member,
   width,
   start,
   offset,
+  clip,
   open,
   interactive,
   shown,
+  parked,
   geometry,
   from,
   chip,
+  tabWidth,
   activeId,
   measured,
   tuck,
@@ -41,22 +46,31 @@ export function GroupMember({
   width: number;
   start: number;
   offset: number;
+  clip: Animated.AnimatedAddition<number> | null;
   open: Animated.Value;
   interactive: boolean;
   shown: boolean;
+  parked: boolean;
   geometry: DragGeometry;
   from: number;
   chip: number;
+  tabWidth: (tabId: string) => number;
   activeId: string;
   measured: boolean;
   tuck?: () => void;
   out: GroupOut;
 }) {
+  const offstage = useOffstage() || !interactive;
   const shownValue = useRef(new Animated.Value(shown ? 1 : 0)).current;
   useEffect(() => {
     Animated.timing(shownValue, { toValue: shown ? 1 : 0, duration: TUCK_FADE_MS, easing: curve.enter, useNativeDriver: false }).start();
   }, [shown]);
-  const left = useMemo(() => open.interpolate({ inputRange: [0, 1], outputRange: [start, start + offset] }), [start, offset]);
+  const visible = useMemo(
+    () => (clip ? Animated.subtract(clip, start + offset).interpolate({ inputRange: [0, width], outputRange: [0, width], extrapolate: "clamp" }) : width),
+    [clip, start, offset, width],
+  );
+  const sliding = useMemo(() => open.interpolate({ inputRange: [0, 1], outputRange: [start, start + offset] }), [open, start, offset]);
+  const left = useGated(shown, sliding, start + offset);
   const opacity = useMemo(
     () =>
       Animated.add(shownValue, open.interpolate({ inputRange: [0, 0.5], outputRange: [0, 1], extrapolate: "clamp" })).interpolate({
@@ -67,26 +81,29 @@ export function GroupMember({
     [],
   );
   return (
-    <Animated.View pointerEvents={interactive ? "box-none" : "none"} style={{ position: "absolute", top: 0, left, width, height: TOP_STRIP_HEIGHT, opacity: measured ? opacity : 0, zIndex: shown ? 2 : 1 }}>
-      {member.kind === "folder" ? (
-        <FolderMember groupId={member.id} chip={chip} shownTab={member.tabIds.includes(activeId) ? activeId : null} tuck={tuck} />
-      ) : member.kind === "split" ? (
-        <SplitChip tabIds={member.tabIds} width={width} geometry={geometry} from={from} group={member.group} />
-      ) : (
-        <DraggableChip tabId={member.id} width={width} geometry={geometry} from={from} group={member.group} tuck={tuck} out={out} />
-      )}
+    <Animated.View pointerEvents={interactive ? "box-none" : "none"} style={{ position: "absolute", top: 0, left, width: visible, overflow: clip ? "hidden" : "visible", height: TOP_STRIP_HEIGHT, opacity: measured ? opacity : 0, zIndex: shown ? 2 : 1, display: parked ? "none" : "flex" }}>
+      <Offstage.Provider value={offstage}>
+        {member.kind === "folder" ? (
+          <FolderMember groupId={member.id} chip={chip} shownTab={member.tabIds.includes(activeId) ? activeId : null} tuck={tuck} />
+        ) : member.kind === "split" ? (
+          <SplitChip tabIds={member.tabIds} width={width} paneWidths={member.tabIds.map(tabWidth)} geometry={geometry} from={from} group={member.group} />
+        ) : (
+          <DraggableChip tabId={member.id} width={width} geometry={geometry} from={from} group={member.group} tuck={tuck} out={out} />
+        )}
+      </Offstage.Provider>
     </Animated.View>
   );
 }
 
 function FolderMember({ groupId, chip, shownTab, tuck }: { groupId: string; chip: number; shownTab: string | null; tuck?: () => void }) {
   const width = useMeasuredWidth(folderKey(groupId)) ?? 0;
+  const hover = useChipHover();
   return (
     <View pointerEvents="box-none" style={{ height: TOP_STRIP_HEIGHT }}>
       <FolderChip groupId={groupId} holding={!!shownTab} />
       {shownTab && (
         <View style={{ position: "absolute", top: 0, left: width + MEMBERS_INSET }}>
-          <TabChip tabId={shownTab} width={chip} tuck={tuck} dragged={false} />
+          <TabChip tabId={shownTab} width={chip} tuck={tuck} dragged={false} hover={hover} />
         </View>
       )}
     </View>
@@ -99,16 +116,18 @@ function FolderChip({ groupId, holding }: { groupId: string; holding: boolean })
   const windowId = useWindowId();
   const group = useGroup(groupId, (g) => g);
   const label = useGroupLabel(groupId);
-  const { hovered, hoverProps } = useHover();
+  const hover = useChipHover();
+  const hovered = useChipHovered(hover);
+  const tip = useTooltip(`${label}\nShow Folder`);
   if (!group) return null;
   const tint = groupTint(group.color);
   const bare = group.color === "none";
   const titleInk = tint ?? (holding ? theme.textPrimary : theme.textTab);
   return (
     <View
-      {...hoverProps}
+      {...hover.hoverProps}
       mouseDownCanMoveWindow={false}
-      tooltip={`${label}\nShow Folder`}
+      tooltip={tip}
       onLayout={(e) => setMeasuredWidth(folderKey(groupId), Math.ceil(e.nativeEvent.layout.width * 2) / 2)}
       style={{ position: "absolute", left: 0, top: MID - FOLDER_HEIGHT / 2, height: FOLDER_HEIGHT }}
     >
@@ -122,14 +141,14 @@ function FolderChip({ groupId, holding }: { groupId: string; holding: boolean })
                 alignItems: "center",
                 paddingLeft: FOLDER_PAD.left,
                 paddingRight: FOLDER_PAD.right,
-                borderRadius: FOLDER_RADIUS,
+                borderRadius: folderRadius(),
                 borderWidth: CHIP_HAIRLINE,
                 borderColor: bare ? ink.clear : theme.pinnedRestingStroke,
                 backgroundColor: pressed ? theme.tabPressed : tint ? withAlpha(tint, hovered ? 0.3 : 0.22) : hovered ? tokens.groupHeaderHover : bare ? ink.clear : tokens.groupFill,
               }}
             >
-              <StripGroupIcon icon={group.icon} tint={tint} />
-              <Text numberOfLines={1} style={{ marginLeft: FOLDER_TITLE_GAP, maxWidth: FOLDER_TITLE_MAX, fontSize: font.small.fontSize, fontWeight: weight.semibold, color: titleInk }}>
+              <StripGroupIcon icon={group.icon} color={group.color} open={false} />
+              <Text numberOfLines={1} style={{ marginLeft: FOLDER_TITLE_GAP, maxWidth: FOLDER_TITLE_MAX, ...font.small, fontWeight: weight.semibold, color: titleInk }}>
                 {label}
               </Text>
               <Symbol name="chevron.down" size={8} weight="semibold" color={withAlpha(titleInk, 0.6)} style={{ marginLeft: space.xs, width: 9, height: 9 }} />
@@ -141,20 +160,10 @@ function FolderChip({ groupId, holding }: { groupId: string; holding: boolean })
   );
 }
 
-export function StripGroupIcon({ icon, tint }: { icon: string | null; tint: string | null | undefined }) {
+export function StripGroupIcon({ icon, color, open }: { icon: string | null; color: GroupColor | null | undefined; open: boolean }) {
   const theme = useTheme();
-  if (!hasOwnGroupIcon(icon)) return <GroupGlyph color={tint ?? (theme.dark ? NEUTRAL_GROUP_SWATCH.dark : NEUTRAL_GROUP_SWATCH.light)} />;
+  if (!hasOwnGroupIcon(icon)) return <AnimatedFolder open={open} color={color} size={STRIP_FOLDER_SIDE} />;
   const symbol = iconSymbol(icon);
-  if (symbol) return <Symbol name={symbol} size={11} weight="medium" color={tint ?? theme.icon} style={{ width: 13, height: 13 }} />;
+  if (symbol) return <Symbol name={symbol} size={11} weight="medium" color={groupTint(color) ?? theme.icon} style={{ width: 13, height: 13 }} />;
   return <TabIcon url="" icon={icon} />;
-}
-
-function GroupGlyph({ color }: { color: string }) {
-  return (
-    <View style={{ width: GROUP_GLYPH.width, height: GROUP_GLYPH.height, flexDirection: "row", alignItems: "center" }}>
-      <View style={{ width: GROUP_GLYPH.sliver, height: GROUP_GLYPH.backHeight, borderRadius: capsule(GROUP_GLYPH.sliver), backgroundColor: color, opacity: 0.5 }} />
-      <View style={{ width: GROUP_GLYPH.sliver, height: GROUP_GLYPH.midHeight, borderRadius: capsule(GROUP_GLYPH.sliver), marginLeft: GROUP_GLYPH.midGap, backgroundColor: color, opacity: 0.75 }} />
-      <View style={{ width: GROUP_GLYPH.face.width, height: GROUP_GLYPH.face.height, borderRadius: radius.hair, marginLeft: GROUP_GLYPH.faceGap, backgroundColor: color }} />
-    </View>
-  );
 }

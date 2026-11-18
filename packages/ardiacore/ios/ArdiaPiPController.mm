@@ -311,7 +311,7 @@ NSString *CornerName(int corner) {
   if (!_animating) [self fitCorners:YES];
   if (_animating || (_swiping && NSProcessInfo.processInfo.systemUptime - _swipeLastAt < 1)) return;
   if (_swiping) [ArdiaPiPController abandonSwipeOn:_window];
-  if (NSEvent.pressedMouseButtons & 1) _sawDrag = YES;
+  if (_dragging || (NSEvent.pressedMouseButtons & 1)) _sawDrag = YES;
   [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(settle) object:nil];
   [self performSelector:@selector(settle) withObject:nil afterDelay:0.12];
 }
@@ -332,7 +332,7 @@ NSString *CornerName(int corner) {
 }
 
 - (void)settle {
-  if (NSEvent.pressedMouseButtons & 1) {
+  if (_dragging || (NSEvent.pressedMouseButtons & 1)) {
     [self performSelector:@selector(settle) withObject:nil afterDelay:0.12];
     return;
   }
@@ -589,7 +589,7 @@ NSString *CornerName(int corner) {
 }
 
 - (NSDictionary *)throwInfo {
-  return @{@"lastThrow" : _lastThrow ?: @{}, @"lastSwipe" : _lastSwipe ?: @{}, @"lastRelease" : _lastRelease ?: @{}, @"lastScreenFit" : _lastScreenFit ?: @{}, @"swiping" : @(_swiping)};
+  return @{@"lastThrow" : _lastThrow ?: @{}, @"lastSwipe" : _lastSwipe ?: @{}, @"lastRelease" : _lastRelease ?: @{}, @"lastScreenFit" : _lastScreenFit ?: @{}, @"lastDrag" : _lastDrag ?: @{}, @"swiping" : @(_swiping)};
 }
 
 @end

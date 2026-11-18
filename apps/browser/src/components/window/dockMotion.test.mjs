@@ -5,7 +5,6 @@ globalThis.__DEV__ = false;
 const dm = { ...(await import("./dockMotion.ts")), ...(await import("./tokens.ts")), ...(await import("../../state/windows/dockMotion.ts")), ...(await import("./cardFrame.ts")) };
 const { PAGE_FRAME, pageFrameOf } = await import("../../lib/windowLayout.ts");
 const DEFAULT_PEEK = dm.cardFrameOf(PAGE_FRAME.default).peek;
-const motion = await import("../ui/motion.ts");
 const { toolbarGeometry } = await import("./geometry.ts");
 const { useBrowser } = await import("../../state/browser/store.ts");
 const stub = await import("../../test-native/index.ts");
@@ -18,21 +17,29 @@ const DIA = [
   [0.0324, 0.316], [0.0657, 0.586], [0.0949, 0.846], [0.1032, 0.973], [0.1365, 1.011], [0.1532, 1.011], [0.1782, 1.005],
 ];
 
-test("the spring follows Dia's measured motion (rms under 4 % of the travel, the recorder's own timing jitter)", () => {
-  const rms = Math.sqrt(DIA.reduce((sum, [t, x]) => sum + (dm.springAt(t) - x) ** 2, 0) / DIA.length);
-  assert.ok(rms < 0.04, `rms ${rms.toFixed(3)}`);
-  assert.ok(dm.springAt(0.1) > 0.88);
-  const peak = Math.max(...Array.from({ length: 60 }, (_, i) => dm.springAt(i / 120)));
-  assert.ok(peak > 1.005 && peak < 1.03, `peak ${peak}`);
-  assert.ok(Math.abs(dm.springAt(0.3) - 1) < 0.003);
+test("the slide follows Dia's measured rise and never passes its final width (#1630: Dia's 1 % overshoot laid pages out 3 pt too wide and back)", () => {
+  const rms = Math.sqrt(DIA.reduce((sum, [t, x]) => sum + (dm.slideAt(t) - Math.min(1, x)) ** 2, 0) / DIA.length);
+  assert.ok(rms < 0.025, `rms ${rms.toFixed(3)} against Dia's trace with its overshoot taken out`);
+  assert.ok(dm.slideAt(0.1) > 0.9, "90 % of the travel in 100 ms, as Dia");
+  let last = 0;
+  for (let ms = 0; ms <= 400; ms++) {
+    const x = dm.slideAt(ms / 1000);
+    assert.ok(x >= last && x <= 1, `${ms} ms: ${x} after ${last}`);
+    last = x;
+  }
+  assert.equal(dm.slideAt(dm.DOCK_SLIDE.duration / 1000), 1, "at rest when the slide ends");
+  const travel = 181;
+  const pastFinal = Math.max(...Array.from({ length: 400 }, (_, ms) => dm.slideAt(ms / 1000) * travel)) - travel;
+  assert.ok(pastFinal <= 0, `the page is never laid out past its final width (${pastFinal} pt)`);
 });
 
-test("React Native's spring parameters are the same spring", () => {
-  const { stiffness, damping, mass } = motion.spring(dm.DOCK_SPRING);
-  assert.equal(mass, 1);
-  const omega = Math.sqrt(stiffness);
-  assert.ok(Math.abs(omega - (2 * Math.PI) / 0.215) < 1e-9);
-  assert.ok(Math.abs(damping / (2 * omega) - 0.79) < 1e-9);
+test("the slide's curve is a cubic Bézier evaluated as CSS and Core Animation do", () => {
+  const ease = dm.cubicBezier(0.25, 0.1, 0.25, 1);
+  assert.equal(ease(0), 0);
+  assert.equal(ease(1), 1);
+  assert.ok(Math.abs(ease(0.5) - 0.8024) < 0.001, `${ease(0.5)}`);
+  const linear = dm.cubicBezier(0, 0, 1, 1);
+  for (const u of [0.1, 0.37, 0.9]) assert.ok(Math.abs(linear(u) - u) < 1e-6);
 });
 
 test("the traffic lights go with the sidebar: at their place when it's shown, past the window's edge when it's hidden", () => {
@@ -106,7 +113,7 @@ test("the card radius follows the native window radius minus the frame, and the 
   assert.equal(dm.cardFrameOf(0).radius, 0, "edge to edge: square corners; the window rounds the page");
   assert.equal(dm.cardFrameOf(12).radius, 7);
   assert.equal(dm.cardFrameOf(4).radius, 15);
-  assert.equal(pageFrameOf(18, 19, dm.PEEK_RADIUS).radius, 2);
+  assert.equal(pageFrameOf(18, 19, dm.peekRadius()).radius, 2);
   assert.ok(dm.cardFrameOf(0).splitGap > 0, "split panes keep a hairline gap edge to edge, so they still read as two pages");
   assert.deepEqual(dm.toolbarLightsCenter(false, 0), [25, 21]);
   assert.deepEqual(dm.toolbarLightsCenter(false), [...dm.LIGHTS_CENTER]);
@@ -138,14 +145,9 @@ test("with the sidebar on the right the window buttons ride it: anchored to the 
   assert.deepEqual(dm.sidebarLightsCenter(true, 240, 100.3, 9), [240 - 25 - 100.5, dm.LIGHTS_CENTER[1] + 9, "right"], "half-point steps, as on the left");
 });
 
-test("the peek's span and hold mirror for a sidebar on the right", () => {
+test("the peek's span mirrors for a sidebar on the right", () => {
   assert.deepEqual(dm.peekSpan(240, false, 1200, 5), [-Infinity, 245]);
   assert.deepEqual(dm.peekSpan(240, true, 1200, 5), [955, Infinity]);
-  const hold = dm.peekHoldWidth(240, 5);
-  assert.equal(dm.inPeekHold(dm.fromSidebarEdgeInStrip(-1, true), 10, hold, 700), true, "leaving the right strip toward the peek stays in the hold");
-  assert.equal(dm.inPeekHold(dm.fromSidebarEdgeInStrip(dm.PEEK_EDGE_STRIP - hold - 1, true), 10, hold, 700), false);
-  assert.equal(dm.inPeekHold(dm.fromSidebarEdgeInStrip(dm.PEEK_EDGE_STRIP + 1, true), 10, hold, 700), false, "past the window's right edge");
-  assert.equal(dm.fromSidebarEdgeInStrip(30, false), 30);
 });
 
 test("the sidebar's own button (address bar in the sidebar) always fits; back, forward and reload as there's room, never overlapping", () => {
@@ -213,8 +215,8 @@ test("Arc's peek slides in on its measured spring and leaves on its ease-in-out;
     const rms = fitT0(motion, hide);
     assert.ok(rms < 0.05, `hide rms ${rms.toFixed(3)}`);
   }
-  const dia = Math.max(...ARC_HIDE.map((m) => fitT0(m, (t) => dm.springAt(t))));
-  assert.ok(dia > 0.06, `Dia's spring against Arc's hide: rms ${dia.toFixed(3)}`);
+  const dia = Math.max(...ARC_HIDE.map((m) => fitT0(m, (t) => dm.slideAt(t))));
+  assert.ok(dia > 0.06, `Dia's slide against Arc's hide: rms ${dia.toFixed(3)}`);
   assert.equal(dm.easeInOutCubic(0), 0);
   assert.equal(dm.easeInOutCubic(0.5), 0.5);
   assert.equal(dm.easeInOutCubic(1), 1);
@@ -296,41 +298,72 @@ test("the dock is fullscreen, docked, peeking, hiding or away, and only a still,
 
 test("while the peek slides away only the window's edge brings it back, not the column it is leaving (#1192)", () => {
   const W = 1000;
-  for (const x of [8, 40, 110, 250]) assert.equal(dm.edgeEventReveals("leaving", x, false, W), false, `left column x ${x}`);
-  for (const x of [-20, 0, 7]) assert.equal(dm.edgeEventReveals("leaving", x, false, W), true, `left edge x ${x}`);
-  for (const x of [W - 9, W - 110]) assert.equal(dm.edgeEventReveals("leaving", x, true, W), false, `right column x ${x}`);
-  for (const x of [W - 8, W - 1, W + 20]) assert.equal(dm.edgeEventReveals("leaving", x, true, W), true, `right edge x ${x}`);
-  for (const state of ["peeking", "away"]) assert.equal(dm.edgeEventReveals(state, 110, false, W), true, state);
-  assert.equal(dm.edgeWatchWidth(false, false, dm.peekHoldWidth(240, 5), 6), dm.PEEK_EDGE_STRIP, "leaving watches the edge strip, not the column");
+  for (const x of [3, 40, 110, 250]) assert.equal(dm.edgeEventReveals("leaving", x, false, W), false, `left column x ${x}`);
+  for (const x of [-20, 0, 2]) assert.equal(dm.edgeEventReveals("leaving", x, false, W), true, `left edge x ${x}`);
+  for (const x of [W - 4, W - 110]) assert.equal(dm.edgeEventReveals("leaving", x, true, W), false, `right column x ${x}`);
+  for (const x of [W - 3, W - 1, W + 20]) assert.equal(dm.edgeEventReveals("leaving", x, true, W), true, `right edge x ${x}`);
+  assert.equal(dm.edgeEventReveals("peeking", 110, false, W), true, "peeking");
+  assert.equal(dm.edgeEventReveals("away", 110, false, W), false, "away: the column it left is no edge either");
+  assert.equal(dm.edgeWatchWidth(false, false, dm.peekHoldWidth(240, 5), 0), dm.PEEK_EDGE_STRIP, "leaving watches the edge strip, not the column");
 });
 
-test("the peek stays out within 24 pt of its right edge, the window's full height", () => {
-  const hold = dm.peekHoldWidth(240, 5);
-  assert.equal(hold, 5 + 240 + 24);
-  assert.equal(dm.inPeekHold(hold - 1, 10, hold, 700), true);
-  assert.equal(dm.inPeekHold(hold, 10, hold, 700), false);
-  assert.equal(dm.inPeekHold(10, 699, hold, 700), true);
-  assert.equal(dm.inPeekHold(10, 700, hold, 700), false);
-  assert.equal(dm.inPeekHold(-1, 10, hold, 700), false);
-  assert.equal(dm.inPeekHold(10, 10, hold, Infinity), true, "before the hold zone has laid out");
+test("only the window's edge reveals the hidden sidebar: the last 3 pt inside it or just past it (#1297: 8 pt opened it before the pointer got there)", () => {
+  const W = 1000;
+  assert.equal(dm.PEEK_EDGE_STRIP, 3);
+  for (const x of [-20, 0, 2.5]) assert.equal(dm.edgeEventReveals("away", x, false, W), true, `left x ${x}`);
+  for (const x of [3, 5, 7, 40]) assert.equal(dm.edgeEventReveals("away", x, false, W), false, `left x ${x}`);
+  for (const x of [W - 3, W + 10]) assert.equal(dm.edgeEventReveals("away", x, true, W), true, `right x ${x}`);
+  assert.equal(dm.edgeEventReveals("away", W - 4, true, W), false);
+  assert.equal(dm.edgeEventReveals("away", 6, false, W, dm.TAB_DRAG_EDGE_STRIP), true, "a dragged tab reveals it from 8 pt, an easier target");
+  assert.equal(dm.edgeEventReveals("peeking", 200, false, W), true, "back in the hold while it's out keeps it out");
 });
 
-test("the native left-edge watch spans the hold while peeking, the edge strip during a tab drag or when the frame is thinner than the strip, nothing otherwise", () => {
+test("the peek stays out within 40 pt of its right edge (#1297: 24 pt snapped it shut just past the panel), and closes 200 ms after the pointer leaves", () => {
+  assert.equal(dm.peekHoldWidth(240, 5), 5 + 240 + 40);
+  assert.equal(dm.PEEK_CLOSE_DELAY_MS, 200);
+});
+
+test("once the peek closes it opens again only after the pointer has left the edge and come back (#1297)", () => {
+  let arm = dm.EDGE_ARMED;
+  arm = dm.edgeSeen(arm, "strip", true);
+  assert.equal(arm.armed, true, "first arrival at the edge reveals");
+  arm = dm.edgeSeen(arm, "strip", false);
+  arm = dm.edgeSeen(arm, "native", true);
+  arm = dm.edgeSeen(arm, "native", false);
+  arm = dm.edgeClosed(arm);
+  assert.equal(arm.armed, true, "closed because the pointer left: the next arrival reveals");
+
+  arm = dm.edgeSeen(dm.EDGE_ARMED, "native", true);
+  arm = dm.edgeClosed(arm);
+  assert.equal(arm.armed, false, "closed with the pointer still at the edge (a menu let go, ⌘S): it doesn't spring back");
+  arm = dm.edgeSeen(arm, "strip", true);
+  assert.equal(arm.armed, false, "the strip reporting the same pointer doesn't count as an arrival");
+  arm = dm.edgeSeen(arm, "native", false);
+  assert.equal(arm.armed, false, "still in the strip");
+  arm = dm.edgeSeen(arm, "strip", false);
+  assert.equal(arm.armed, true, "off the edge: armed");
+  assert.equal(dm.edgeSeen(arm, "native", true).armed, true, "and the return reveals");
+
+  arm = dm.edgeSeen(dm.EDGE_DISARMED, "native", false);
+  assert.equal(arm.armed, true, "after ⌘S hides the sidebar, the watch's first report away from the edge arms it");
+});
+
+test("the native edge watch spans the hold while peeking, 8 pt during a tab drag, the edge strip when the frame is thinner than it, nothing otherwise", () => {
   assert.equal(dm.edgeWatchWidth(true, true, 269, 9), 269);
   assert.equal(dm.edgeWatchWidth(false, true, 269, 9), 8);
   assert.equal(dm.edgeWatchWidth(false, false, 269, 9), 0);
-  assert.equal(dm.edgeWatchWidth(false, false, 269, 0), 8, "edge to edge the strip would cover the page, so the native watch takes it and clicks reach the page");
-  assert.equal(dm.edgeStripOverPage(8), false);
-  assert.equal(dm.edgeStripOverPage(7), true);
+  assert.equal(dm.edgeWatchWidth(false, false, 269, 2), 3, "edge to edge the strip would cover the page, so the native watch takes it and clicks reach the page");
+  assert.equal(dm.edgeStripOverPage(3), false);
+  assert.equal(dm.edgeStripOverPage(2), true);
 });
 
-test("the dock jumps when it can't animate or Arc docks from an open peek, Arc hides on its ease-out, and otherwise springs", () => {
+test("the dock jumps when it can't animate or Arc docks from an open peek, Arc hides on its ease-out, and otherwise slides", () => {
   const mv = (o) => dm.dockMove({ open: true, animated: true, arc: false, peekOut: false, ...o });
   assert.equal(mv({ animated: false }), "jump");
   assert.equal(mv({ animated: false, open: false, arc: true }), "jump");
   assert.equal(mv({ arc: true, peekOut: true }), "jump");
-  assert.equal(mv({ arc: true }), "spring");
+  assert.equal(mv({ arc: true }), "slide");
   assert.equal(mv({ arc: true, open: false, peekOut: true }), "arcHide");
-  assert.equal(mv({ open: false }), "spring");
-  assert.equal(mv({ peekOut: true }), "spring");
+  assert.equal(mv({ open: false }), "slide");
+  assert.equal(mv({ peekOut: true }), "slide");
 });

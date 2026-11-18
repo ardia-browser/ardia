@@ -125,6 +125,8 @@ function safeDecode(text: string) {
   }
 }
 
+const PLATFORM_LABELS: Record<string, string> = { mac: "Mac", "windows x64": "Windows x64", "windows arm64": "Windows Arm", "linux x64": "Linux" };
+
 export async function siteClicks(range: RangeKey, signal?: AbortSignal, zone = UTC) {
   const w = windowFor(range, zone);
   const cur = isCurrent(w);
@@ -140,6 +142,10 @@ export async function siteClicks(range: RangeKey, signal?: AbortSignal, zone = U
        SELECT distinct_id, timestamp, 'location' AS kind, properties['location'] AS key
        FROM telemetry.events
        WHERE event = 'download_clicked' AND ${since(compareStart(w))} AND ${SITE}
+       UNION ALL
+       SELECT distinct_id, timestamp, 'platform' AS kind, concat(if(properties['platform'] = '', 'mac', properties['platform']), if(properties['arch'] = '', '', concat(' ', properties['arch']))) AS key
+       FROM telemetry.events
+       WHERE event = 'download_clicked' AND ${since(compareStart(w))} AND ${SITE}
      )
      GROUP BY kind, key
      ORDER BY kind, n DESC, key
@@ -153,6 +159,9 @@ export async function siteClicks(range: RangeKey, signal?: AbortSignal, zone = U
     locations: of("location")
       .filter((r) => num(r[2]) > 0)
       .map((r) => ({ key: str(r[1]) || "unknown", label: str(r[1]) || "Unknown", value: num(r[3]), secondary: num(r[2]) })),
+    platforms: of("platform")
+      .filter((r) => num(r[2]) > 0)
+      .map((r) => ({ key: str(r[1]), label: PLATFORM_LABELS[str(r[1])] ?? str(r[1]), value: num(r[3]), secondary: num(r[2]) })),
     clicks: CLICK_EVENTS.map(([event, label]) => {
       const r = byEvent.get(event) ?? [];
       return { key: event, label, count: r[2] ?? 0, people: r[3] ?? 0, previousCount: hasPrev ? (r[4] ?? 0) : null, previousPeople: hasPrev ? (r[5] ?? 0) : null };

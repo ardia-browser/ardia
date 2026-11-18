@@ -2,12 +2,14 @@ import { iconTheme, type IconTheme } from "../../platform/favicons";
 import { useEffect, useState } from "react";
 import { useAppearanceDark, useFavicon, useFaviconTheme } from "./favicons";
 import { iconSymbol } from "../../lib/customIcon";
+import { drawnIcon } from "../pins/rowIcons";
 
 export type TileTheme = { theme: IconTheme; image?: string; emoji?: string };
 
 const emojiThemes = new Map<string, Promise<IconTheme | null>>();
 
-export function useTileTheme(url: string, favicon: string | null | undefined, customIcon: string | null | undefined, profileId: string): TileTheme | null {
+export function useTileTheme(url: string, favicon: string | null | undefined, ownIcon: string | null | undefined, profileId: string): TileTheme | null {
+  const customIcon = drawnIcon(ownIcon);
   const emoji = customIcon && !iconSymbol(customIcon) ? customIcon : null;
   useAppearanceDark();
   const resolved = useFavicon(customIcon ? "" : url, favicon, profileId);

@@ -9,7 +9,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from ardia_cli.browse import actions, commands, inputs, js
+from ardia_cli.browse import actions, commands, human, inputs, js
 from ardia_cli.browse.errors import BrowseError, CdpError, Gated, OutcomeUnknown
 from ardia_cli.browse.page import Element
 
@@ -30,7 +30,7 @@ class FakeRenderer:
         self.drag_intercepted = None
         self.dragging = False
         self.input = inputs.Input(self)
-        mouse = inputs.human_mouse_class()(self)
+        mouse = human.Mouse(self)
         mouse._position = (300.0, 300.0)
         self.input.mouse = mouse
 

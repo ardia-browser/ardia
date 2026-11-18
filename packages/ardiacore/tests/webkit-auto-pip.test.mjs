@@ -43,7 +43,7 @@ function pageWithVideos(videos) {
   const window = { document, addEventListener: noop, location: { protocol: "https:", origin: "https://example.test" }, navigator: {}, performance: { now: () => 0 }, setTimeout: noop };
   window.window = window;
   window.top = window;
-  const source = pageScriptSwift.slice(pageScriptSwift.indexOf('#"""') + 4, pageScriptSwift.indexOf('"""#'));
+  const source = pageScriptSwift.slice(pageScriptSwift.indexOf('#"""') + 4, pageScriptSwift.indexOf('"""#')).replace("\\#(WebKitMediaFaults.sitesJSON)", "[]");
   runInNewContext(source, window);
   return window.__ardia;
 }
@@ -73,7 +73,7 @@ test("WebKit tabs follow the user's sight of their window the way Chromium views
   assert.match(sight, /forName: (?:NSNotification\.Name\.)?ArdiaWindowSeenDidChange, object: window/);
   assert.match(sight, /let activeCapture = webView\?\.cameraCaptureState == \.active \|\| webView\?\.microphoneCaptureState == \.active/);
   assert.match(sight, /playing: !playingFrames\.isEmpty \|\| activeCapture/);
-  assert.match(tab, /override func viewDidMoveToWindow\(\) \{ super\.viewDidMoveToWindow\(\); watchSight\(\) \}/);
+  assert.match(tab, /override func viewDidMoveToWindow\(\) \{\n    super\.viewDidMoveToWindow\(\)\n    if window != nil \{ followInterfaceScale\(\) \}\n    watchSight\(\)\n  \}/);
   assert.match(tab, /var visible = true \{ didSet \{ updateHidden\(\); updateSight\(\) \} \}/);
 });
 

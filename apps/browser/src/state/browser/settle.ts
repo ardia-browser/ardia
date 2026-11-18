@@ -3,6 +3,7 @@ import { settleNesting } from "../groups/groups";
 import { settleShownTabs } from "../groups/shownTabs";
 import { forgetClosedWindowMutes } from "../tabs/mute";
 import { forgetClosedWindowCleanUps } from "../pins/tabCleanup";
+import { forgetMovedAnchors } from "../pins/organize";
 import { livePinTables } from "../pins/pinChoices";
 import { settlePeeks } from "../peek/peek";
 import { pinnedTabsLeaveLive, settlePinHomes } from "../pins/pinHomes";
@@ -11,6 +12,7 @@ import { settleSharedPins } from "../pins/pinShare";
 import { settleTileFolders } from "../pins/tileFolders";
 import { mirrorTopApps } from "../pins/topApps";
 import { mirrorTabs, pagesIntoSplits, unshareTabs } from "../tabs/tabShare";
+import { splitsWhereUnavailable } from "../splits/splits";
 
 export type SettleStep = (s: BrowserState, prev: BrowserState) => BrowserState | null;
 
@@ -22,8 +24,10 @@ const patched =
   };
 
 export const SETTLE_STEPS: readonly (readonly [string, SettleStep])[] = [
+  ["splitsWhereUnavailable", patched((s) => splitsWhereUnavailable(s))],
   ["forgetClosedWindowMutes", patched(forgetClosedWindowMutes)],
   ["forgetClosedWindowCleanUps", patched(forgetClosedWindowCleanUps)],
+  ["forgetMovedAnchors", patched(forgetMovedAnchors)],
   ["settleNesting", patched((s, prev) => (s.groups === prev.groups && Object.values(s.windows).every((w) => w.tabIds === prev.windows[w.id]?.tabIds) ? null : settleNesting(s)))],
   ["settleShownTabs", patched(settleShownTabs)],
   ["livePinTables", patched(livePinTables)],

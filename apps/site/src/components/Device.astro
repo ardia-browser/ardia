@@ -26,6 +26,16 @@
     }
     root.dataset.device = device;
     root.dataset.os = os;
+    if (device === "other" && (os === "windows" || os === "linux")) root.dataset.pc = os;
+    var uaData = nav.userAgentData;
+    if (os === "windows" && uaData && uaData.getHighEntropyValues) {
+      uaData.getHighEntropyValues(["architecture", "bitness"]).then(
+        function (values) {
+          if (values.architecture === "arm") root.dataset.arch = "arm";
+        },
+        function () {},
+      );
+    }
     if (/Twitter for iP(hone|ad)/.test(ua)) root.dataset.inapp = "x";
   })();
 </script>

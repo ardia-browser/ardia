@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Fixture Preference Center</title>
+<style>
+  body { margin: 0; font: 16px system-ui; }
+  .onetrust-pc-dark-filter { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 100; }
+  #onetrust-pc-sdk { position: fixed; top: 20px; right: 20px; width: 320px; height: 300px; overflow: auto; background: #fff; z-index: 101; }
+  #search { margin: 300px 0 0 40px; }
+</style>
+</head>
+<body>
+<button id="search">Search</button>
+<pre id="report">{}</pre>
+<div id="onetrust-consent-sdk">
+  <div class="onetrust-pc-dark-filter ot-fade-in"></div>
+  <div id="onetrust-pc-sdk" class="otPcCenter" role="dialog" aria-label="Preference center">
+    <h2>Privacy Preference Center</h2>
+    <p>Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners. Strictly necessary cookies keep the site working; performance cookies count visits; targeting cookies are set by partners.</p>
+    <button id="allow-all">Allow All</button>
+    <button id="reject-all" class="ot-pc-refuse-all-handler">Reject All</button>
+    <button id="confirm">Confirm My Choices</button>
+  </div>
+</div>
+<script>
+  const state = { clicked: [], choice: null };
+  const show = () => { document.getElementById("report").textContent = JSON.stringify(state); };
+  const done = (choice) => () => { state.choice = choice; document.getElementById("onetrust-consent-sdk").remove(); show(); };
+  document.getElementById("reject-all").addEventListener("click", done("reject"));
+  document.getElementById("allow-all").addEventListener("click", done("accept"));
+  document.getElementById("search").addEventListener("click", () => { state.clicked.push("search"); show(); });
+  show();
+</script>
+</body>
+</html>

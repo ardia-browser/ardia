@@ -158,7 +158,8 @@ export function PasswordPrompt({ tabId, right, top }: { tabId: string; right: nu
   const update = prompt.state === "update";
   const username = chosen ?? prompt.username;
   const answer = guard((action: PasswordPromptAnswer) => {
-    void webviews.get(tabId)?.resolvePasswordPrompt(action, action === "save" || action === "update" ? { username } : undefined);
+    const offer = prompt.offer === undefined ? {} : { offer: prompt.offer };
+    void webviews.get(tabId)?.resolvePasswordPrompt(action, action === "save" || action === "update" ? { username, ...offer } : prompt.offer === undefined ? undefined : offer);
     setChosen(null);
     patchPage(tabId, { passwordPrompt: null });
   });
@@ -271,7 +272,7 @@ export function ExternalAppPrompt({ tabId, left, top }: { tabId: string; left: n
     <Popover key={request.id} width={EXTERNAL_APP_WIDTH} top={top} left={left} modal={false}>
       <View>
         <PromptBody
-          icons={request.icon ? [] : [request.app ? "app" : "questionmark.app.dashed"]}
+          icons={request.icon ? [] : ["app"]}
           image={request.icon}
           title={request.title}
           message={request.message}
@@ -279,14 +280,8 @@ export function ExternalAppPrompt({ tabId, left, top }: { tabId: string; left: n
             request.remember ? <CheckRow value={always} onChange={guard(setAlways)} label={request.remember} /> : undefined
           }
         >
-          {request.app ? (
-            <>
-              <Button variant="pill" title="Cancel" onPress={() => answer(false)} />
-              <Button variant="pill" title="Open" primary onPress={() => answer(true)} />
-            </>
-          ) : (
-            <Button variant="pill" title="OK" primary onPress={() => answer(false)} />
-          )}
+          <Button variant="pill" title="Cancel" onPress={() => answer(false)} />
+          <Button variant="pill" title="Open" primary onPress={() => answer(true)} />
         </PromptBody>
         <PanelCloseButton onPress={() => answer(false)} />
       </View>

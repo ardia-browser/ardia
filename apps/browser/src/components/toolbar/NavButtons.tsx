@@ -137,7 +137,7 @@ export const ReloadButton = memo(function ReloadButton({
     if (reduceMotion() !== false) return;
     pressMotion.stopAnimation();
     pressMotion.setValue(RELOAD_BUTTON_MOTION.pressScale);
-    Animated.spring(pressMotion, { toValue: 1, ...springs.bouncy, useNativeDriver: true }).start();
+    Animated.spring(pressMotion, { toValue: 1, ...springs.snappy, useNativeDriver: true }).start();
   };
   return (
     <Button variant="icon" toolbar

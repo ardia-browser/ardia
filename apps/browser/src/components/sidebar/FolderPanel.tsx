@@ -5,7 +5,7 @@ import { useIsActiveTab, useTab } from "../../state/browser/hooks";
 import { plural, tabTitle } from "../../state/browser/model";
 import { useTileFolderLabel, useTileFolderMembers } from "../../state/pins/hooks";
 import { SLIDE } from "../tabstrip/tokens";
-import { buttonMotion, useGated, usePressScaleMotion } from "../ui/motion";
+import { useGated } from "../ui/motion";
 import { ContextMenuArea, HoverCard as HoverPanel, HoverFill, OutsidePressArea, radius, space, useHover } from "../ui";
 import { SectionLabel } from "./SectionLabel";
 import { SidebarListRow, SidebarRowLabel } from "./SidebarRow";
@@ -101,29 +101,23 @@ function MemberRow({ tabId, windowId }: { tabId: string; windowId: string }) {
   const struck = useStruckTitle(tabId);
   const { hovered, hoverProps } = useHover();
   const { wrapper, handle } = useDragItem(`fm:${tabId}`, { kind: "row", tabIds: [tabId], section: "folder" });
-  const pressMotion = usePressScaleMotion(true, buttonMotion.rowPressScale);
-  const rowScale = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
   if (!tab) return null;
   return (
     <Animated.View ref={wrapper.ref} style={wrapper.style} {...handle}>
       <View {...hoverProps}>
         <ContextMenuArea onContextMenu={() => void openTabMenu(windowId, tab)}>
           <Pressable
-            onPressIn={pressMotion.onPressIn}
-            onPressOut={pressMotion.onPressOut}
             onPress={() => {
               closeFolderPanel();
               clickTab(windowId, tabId);
             }}
           >
             {({ pressed }) => (
-              <Animated.View style={rowScale}>
               <SidebarListRow height={layout.rowHeight} padRight={TAB_ROW.contentLeft} fill={active && !pressed ? theme.pinnedSelectedFill : undefined}>
                 <HoverFill shown={pressed || (hovered && !active)} instant={active} color={pressed ? theme.tabPressed : theme.tabHover} radius={radius.tile} />
                 <TabIcon tabId={tabId} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} />
                 <SidebarRowLabel text={tabTitle(tab)} color={active ? theme.textPrimary : theme.textTab} struck={struck} />
               </SidebarListRow>
-              </Animated.View>
             )}
           </Pressable>
         </ContextMenuArea>

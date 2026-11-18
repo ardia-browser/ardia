@@ -134,7 +134,8 @@ function IconButtonView(props: IconProps) {
   ) : icon ? (
     <Symbol name={icon} size={metrics.glyph} weight={weight} color={ink} style={{ width: glyphFrame, height: glyphFrame }} />
   ) : null);
-  const { scale: pressScale, onPressIn, onPressOut } = usePressScaleMotion(!children && (!!icon || !!image));
+  const hasGlyphPressMotion = !children && (!!icon || !!image);
+  const { scale: pressScale, onPressIn, onPressOut } = usePressScaleMotion(hasGlyphPressMotion);
   const handlePressIn = (event: GestureResponderEvent) => {
     onPressIn?.();
     props.onPressIn?.(event);
@@ -144,8 +145,16 @@ function IconButtonView(props: IconProps) {
     props.onPressOut?.(event);
   };
   const plateRadius = hit?.radius ?? (props.capsule ? capsule(plateBox) : metrics.radius);
-  const plate = (pressed: boolean) => (
+  const animatedFace = hasGlyphPressMotion && pressScale ? (
     <Animated.View
+      pointerEvents="none"
+      style={{ width: glyphFrame, height: glyphFrame, alignItems: "center", justifyContent: "center", transform: [{ scale: pressScale }] }}
+    >
+      {face}
+    </Animated.View>
+  ) : face;
+  const plate = (pressed: boolean) => (
+    <View
       style={{
         position: hit ? "absolute" : "relative",
         left: hit?.plateX,
@@ -154,13 +163,12 @@ function IconButtonView(props: IconProps) {
         height: plateBox,
         alignItems: "center",
         justifyContent: "center",
-        transform: pressScale ? [{ scale: pressScale }] : undefined,
       }}
     >
       <HoverFill shown={!disabled && (pressed || !!active || hovered)} instant={!!active} color={pressed || active ? pressedFill : hover} radius={plateRadius} />
-      {face}
+      {animatedFace}
       {badge}
-    </Animated.View>
+    </View>
   );
   if (!props.toolbar)
     return (

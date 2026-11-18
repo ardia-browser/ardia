@@ -17,7 +17,6 @@ import { useDragFolded, useDragItem } from "./DragProvider";
 import { dismissHover } from "../../state/sidebar/hover";
 import { useGroupHover } from "./hoverController";
 import { useHoverFade } from "./hoverMotion";
-import { buttonMotion, usePressScaleMotion } from "../ui/motion";
 import { iconButton } from "../ui/tokens";
 import { openLiveFolderMenu } from "../../state/sidebar/liveMenus";
 import { registerRow } from "../../state/sidebar/sidebarUi";
@@ -125,8 +124,6 @@ function FolderHeader({ folderId, windowId, collapsed }: { folderId: string; win
   const refreshShown = hovered && !updating;
   const refreshOpacity = useHoverFade(refreshShown);
   const [restOpacity] = useState(() => Animated.subtract(1, refreshOpacity));
-  const pressMotion = usePressScaleMotion(true, buttonMotion.rowPressScale);
-  const rowScale = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
   if (!folder) return null;
 
   return (
@@ -138,15 +135,12 @@ function FolderHeader({ folderId, windowId, collapsed }: { folderId: string; win
         }}
       >
         <Pressable
-          onPressIn={pressMotion.onPressIn}
-          onPressOut={pressMotion.onPressOut}
           onPress={() => {
             dismissHover();
             updateFolder(folderId, { collapsed: !collapsed });
           }}
         >
           {() => (
-            <Animated.View style={rowScale}>
             <SidebarRowSurface
               fill={ink.clear}
               cornerRadius={GROUP_INNER_RADIUS}
@@ -175,7 +169,6 @@ function FolderHeader({ folderId, windowId, collapsed }: { folderId: string; win
                 )}
               </View>
             </SidebarRowSurface>
-            </Animated.View>
           )}
         </Pressable>
       </ContextMenuArea>

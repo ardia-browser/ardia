@@ -59,7 +59,7 @@ export function NtpCard({
   }, []);
   useEffect(() => {
     if (!lift || leaving) return;
-    Animated.spring(scale, { toValue: pressed ? LEAVE_SCALE : hovered ? 1.02 : 1, ...springs.bouncy, useNativeDriver: true }).start();
+    Animated.spring(scale, { toValue: pressed ? LEAVE_SCALE : hovered ? 1.02 : 1, ...springs.snappy, useNativeDriver: true }).start();
   }, [hovered, pressed, !!leaving]);
   useEffect(() => {
     if (!leaving) return;

@@ -5064,8 +5064,10 @@ void ShellHostView::LayoutPane(TabBinding* binding) {
   }
   views::WebView* tools = binding->devtools_viewport();
   if (!devtools) return HideDevToolsViewport(binding);
+  bool taken_by_chrome = false;
   if (auto* container = owner_view->GetContentsContainerViewFor(contents)) {
     if (container->devtools_web_view()->web_contents() == devtools) {
+      taken_by_chrome = true;
       container->devtools_web_view()->SetWebContents(nullptr);
       container->devtools_web_view()->SetVisible(false);
     }
@@ -5087,6 +5089,7 @@ void ShellHostView::LayoutPane(TabBinding* binding) {
   }
   tools->SetBoundsRect(tools_bounds + origin);
   tools->SetVisible(true);
+  if (taken_by_chrome && tools->web_contents() == devtools) tools->SetWebContents(nullptr);
   tools->SetWebContents(devtools);
   if (auto* native = devtools->GetNativeView(); native && !native->IsVisible()) native->Show();
   tools->holder()->SetNativeViewCornerRadii(gfx::RoundedCornersF(12.0f));

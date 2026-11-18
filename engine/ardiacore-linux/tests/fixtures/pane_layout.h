@@ -97,6 +97,7 @@ struct Window {
   bool IsVisible() const { return visible; }
   bool visible = true;
   int shows = 0;
+  const void* parent = nullptr;
 };
 }
 
@@ -202,8 +203,15 @@ struct NativeViewHolder { void SetNativeViewCornerRadii(gfx::RoundedCornersF) {}
 class WebView : public View {
  public:
   void SetWebContents(content::WebContents* contents) {
-    if (contents && contents != contents_ && GetVisible()) contents->GetNativeView()->Show();
+    if (contents == contents_) return;
+    if (contents_ && contents_->GetNativeView()->parent == this) {
+      contents_->GetNativeView()->Hide();
+      contents_->GetNativeView()->parent = nullptr;
+    }
     contents_ = contents;
+    if (!contents) return;
+    contents->GetNativeView()->parent = this;
+    if (GetVisible()) contents->GetNativeView()->Show();
   }
   content::WebContents* web_contents() const { return contents_; }
   NativeViewHolder* holder() { return &holder_; }

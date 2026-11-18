@@ -167,6 +167,40 @@ int main(int argc, char** argv) {
     assert(p.tools()->web_contents() == &p.frontend);
     return 0;
   }
+  if (mode == "tab-return") {
+    Pane p;
+    p.Dock();
+    p.host.Show(p.binding, true);
+    auto& chrome = p.host.browser_view_storage.containers[&p.page].devtools;
+    aura::Window& native = p.frontend.native;
+    assert(native.parent == p.tools() && native.IsVisible());
+    for (int round = 0; round < 3; ++round) {
+      p.host.Show(p.binding, false);
+      assert(!p.tools()->GetVisible() && !p.tools()->web_contents() && !native.parent);
+      p.host.Show(p.binding, true);
+      assert(native.parent == p.tools() && native.IsVisible());
+      p.host.OnDevToolsDockChanged(&p.page, &p.frontend);
+      chrome.SetWebContents(&p.frontend);
+      chrome.SetVisible(true);
+      assert(native.parent == &chrome);
+      p.host.LayoutPane(p.binding);
+      assert(!chrome.web_contents() && !chrome.GetVisible());
+      assert(native.parent == p.tools() && native.IsVisible());
+      DrainPosted();
+      assert(p.tools()->GetVisible() && p.tools()->web_contents() == &p.frontend);
+      assert(native.parent == p.tools() && native.IsVisible());
+      assert(p.binding->viewport()->bounds() == gfx::Rect(100, 50, 500, 600));
+    }
+    p.host.Show(p.binding, false);
+    chrome.SetWebContents(&p.frontend);
+    p.host.Show(p.binding, true);
+    assert(!chrome.web_contents() && native.parent == p.tools() && native.IsVisible());
+    DevToolsWindow::docked.clear();
+    p.host.LayoutPane(p.binding);
+    assert(!p.tools()->GetVisible() && !p.tools()->web_contents() && !native.parent);
+    assert(p.binding->viewport()->bounds() == gfx::Rect(100, 50, 800, 600));
+    return 0;
+  }
   assert(false);
 }
 '''
@@ -219,6 +253,9 @@ class PaneLayoutTests(unittest.TestCase):
 
     def test_undocking_releases_the_frontend_before_chrome_moves_it_into_its_window(self):
         self.run_case('undock')
+
+    def test_returning_to_a_tab_takes_its_frontend_back_from_chromes_container(self):
+        self.run_case('tab-return')
 
 if __name__ == '__main__':
     unittest.main()

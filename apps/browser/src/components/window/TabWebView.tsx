@@ -3,8 +3,8 @@ import { type OpenWindowRequest, openFromPage } from "../../state/tabs/openFromP
 import type { PageEngine } from "../../state/engines/engines";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet } from "react-native";
-import { focus, switchToTab } from "../../state/browser/actions";
-import { notePictureInPictureBackToTab, notePictureInPictureClickSkip, notePictureInPictureDragged } from "../../state/telemetry/pictureInPictureCounts";
+import { notePictureInPictureClickSkip, notePictureInPictureDragged } from "../../state/telemetry/pictureInPictureCounts";
+import { answerActivateRequest } from "../../state/tabs/activateRequest";
 import { noteRendererResponsive, noteRendererUnresponsive } from "../../state/telemetry/freezes";
 import { noteFavicon } from "../../state/favicons/favicons";
 import { adoptIconPage, dropOutlivedFavicon, noteIconPage } from "../../state/favicons/iconPage";
@@ -302,13 +302,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine }
         noteDiscarded(tabId, reason);
         noteUnreadPageEnded(tabId);
       }}
-      onActivateRequest={({ reason }) => {
-        const t = tab();
-        if (!t) return;
-        if (reason === "pictureInPicture") notePictureInPictureBackToTab(engine);
-        switchToTab(tabId);
-        focus(t.windowId);
-      }}
+      onActivateRequest={({ reason }) => answerActivateRequest(tabId, reason, engine)}
     />
   );
 }

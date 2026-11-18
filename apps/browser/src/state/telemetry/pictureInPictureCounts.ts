@@ -8,6 +8,7 @@ const backToTab: Record<PageEngine, number> = { chromium: 0, webkit: 0 };
 const noDrags = () => ({ moved: 0, offCursor: 0, slowMove: 0 });
 let drags = noDrags();
 const clickSkips = { back: 0, ahead: 0 };
+const windowActivations = { requests: 0, keptTab: 0 };
 
 export function noteAutoPictureInPictureNothingPlaying() {
   nothingPlaying++;
@@ -15,6 +16,11 @@ export function noteAutoPictureInPictureNothingPlaying() {
 
 export function notePictureInPictureBackToTab(engine: PageEngine) {
   backToTab[engine]++;
+}
+
+export function noteWindowActivationRequest(namedAnotherTab: boolean) {
+  windowActivations.requests++;
+  if (namedAnotherTab) windowActivations.keptTab++;
 }
 
 export function notePictureInPictureDragged(drag: PictureInPictureDrag) {
@@ -41,12 +47,14 @@ export function notePictureInPictureClickSkip(skip: PictureInPictureSkip) {
 }
 
 export function takePictureInPictureCounts() {
-  const taken = { nothingPlaying, backToTab: { ...backToTab }, drags, clickSkips: { ...clickSkips } };
+  const taken = { nothingPlaying, backToTab: { ...backToTab }, drags, clickSkips: { ...clickSkips }, windowActivations: { ...windowActivations } };
   nothingPlaying = 0;
   drags = noDrags();
   backToTab.chromium = 0;
   backToTab.webkit = 0;
   clickSkips.back = 0;
   clickSkips.ahead = 0;
+  windowActivations.requests = 0;
+  windowActivations.keptTab = 0;
   return taken;
 }

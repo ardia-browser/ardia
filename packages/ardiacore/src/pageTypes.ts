@@ -122,7 +122,7 @@ export type PictureInPictureSkip = { seconds: number; epoch: string };
 export type AutoPictureInPictureHold = "onScreen" | "appSwitch" | "nothingPlaying";
 export type MediaFault = { reason: string; muted?: boolean; blockerActive?: boolean };
 export type ControlPress = { clickAt: number; control: number };
-export type ActivateRequest = { reason: "pictureInPicture" };
+export type ActivateRequest = { reason: "page" | "pictureInPicture" | "window" };
 export type DisplayMediaSource = {
   id: string;
   kind: "screen" | "window";

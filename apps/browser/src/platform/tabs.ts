@@ -2,6 +2,7 @@ import { call, nativeModule, on, type TabStripTransaction, type WindowRequest } 
 
 export {
   sendTabStripCommand,
+  type ActivateRequest,
   type LinkRoute,
   type StripTab,
   type StripGroup,

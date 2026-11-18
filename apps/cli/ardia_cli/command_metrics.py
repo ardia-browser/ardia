@@ -10,7 +10,7 @@ DURATIONS = frozenset({
 })
 COUNTS = frozenset({"cdp_calls", "read_data_blocks", "snapshot_nodes", "snapshot_chars", "output_chars", "network_writes_count", "batch_steps",
                     "read_rows", "read_pages", "batch_lines_compacted", "read_tabs_reopened", "skills_installed", "skills_skipped"})
-READ_FLAGS = frozenset({"read_data", "read_data_shaped", "read_scrolled", "read_matched", "read_virtualized_grid", "read_pdf", "read_waited_for_content", "read_beside_busy", "read_bot_check", "read_scroll_guessed", "read_scope_shown", "read_scope_empty", "read_waited_for_requests", "read_partial_page", "read_frame_text", "read_scroll_waited_at_end"})
+READ_FLAGS = frozenset({"read_data", "read_data_shaped", "read_scrolled", "read_matched", "read_virtualized_grid", "read_pdf", "read_waited_for_content", "read_reread_after_navigation", "read_beside_busy", "read_bot_check", "read_scroll_guessed", "read_scope_shown", "read_scope_empty", "read_waited_for_requests", "read_partial_page", "read_frame_text", "read_scroll_waited_at_end"})
 ACT_FLAGS = frozenset({"waited_for_enabled", "fill_picked_option", "fill_inserted_text", "drag_side_given", "drag_list_position",
                        "select_opened_list", "press_targeted", "consent_dismissed", "popup_dismissed", "click_recentered", "dom_click_fallback",
                        "dom_click_behind_modal", "dom_click_waited_for_modal", "input_in_inner_frame", "menu_closed_for_click", "modal_dismissed"})

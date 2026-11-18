@@ -98,6 +98,106 @@ class SameDocumentRead(unittest.TestCase):
         self.assertEqual(run(go()), "Person 2 Engineer 22")
 
 
+class RedirectMidRead(unittest.TestCase):
+    class RedirectingPage:
+        def __init__(self):
+            self.url = "http://s/first"
+            self.main_frame = "F"
+            self.extracts = 0
+
+        async def call(self, function, *args, frame=None, read=False, **kwargs):
+            if not args:
+                return "text/html" if "contentType" in function else ("complete", "7:7", False)
+            self.extracts += 1
+            if self.extracts == 2:
+                self.url = "http://s/second"
+                raise BrowseError("the page navigated while reading it; try again", code="page_navigated")
+            if self.url == "http://s/second":
+                return {"title": "Second", "url": "http://s/second", "text": "the second document " * 20, "matched": 1, "status": 200}
+            return {"title": "First", "url": "http://s/first", "text": "short", "matched": 1, "status": 200}
+
+    def read(self, page):
+        self.metrics = command_metrics.Metrics("read", None, False)
+        token = command_metrics.current.set(self.metrics)
+
+        async def goto(ctx, page, url, timeout, keep_partial=False):
+            return None
+
+        async def settle(page, deadline):
+            await asyncio.sleep(0.3)
+
+        patches = [mock.patch.object(readpages, "goto", goto), mock.patch.object(readpages, "settle", settle),
+                   mock.patch.object(readpages, "THIN_WAIT", 0.2), mock.patch.object(readpages, "THIN_POLL", 0.05)]
+        try:
+            with patches[0], patches[1], patches[2], patches[3]:
+                return run(readpages.read_in(None, page, "http://s/first", None, 5, {}))
+        finally:
+            command_metrics.current.reset(token)
+
+    def rereads(self):
+        return command_metrics.clean(self.metrics.values).get("read_reread_after_navigation")
+
+    def test_a_redirect_that_eats_the_poll_deadline_is_re_extracted(self):
+        record = self.read(self.RedirectingPage())
+        self.assertNotIn("error", record)
+        self.assertEqual(record["title"], "Second")
+        self.assertIn("the second document", record["text"])
+        self.assertEqual(record["finalUrl"], "http://s/second")
+        self.assertTrue(self.rereads())
+
+    def test_a_quiet_commit_after_the_last_extract_is_re_extracted(self):
+        class QuietPage(self.RedirectingPage):
+            async def call(self, function, *args, frame=None, read=False, **kwargs):
+                if not args:
+                    return "text/html" if "contentType" in function else ("complete", "7:7", False)
+                self.extracts += 1
+                if self.extracts == 1:
+                    got = {"title": "First", "url": "http://s/first", "text": "the first document " * 20, "matched": 1, "status": 200}
+                    self.url = "http://s/second"
+                    return got
+                return {"title": "Second", "url": "http://s/second", "text": "the second document " * 20, "matched": 1, "status": 200}
+
+        record = self.read(QuietPage())
+        self.assertNotIn("error", record)
+        self.assertEqual(record["title"], "Second")
+        self.assertIn("the second document", record["text"])
+        self.assertEqual(record["finalUrl"], "http://s/second")
+        self.assertTrue(self.rereads())
+
+    def test_a_still_loading_destination_gets_the_remaining_poll(self):
+        class ShellPage(self.RedirectingPage):
+            async def call(self, function, *args, frame=None, read=False, **kwargs):
+                if not args:
+                    return "text/html" if "contentType" in function else ("complete", "7:7", False)
+                self.extracts += 1
+                if self.extracts == 1:
+                    got = {"title": "First", "url": "http://s/first", "text": "the first document " * 20, "matched": 1, "status": 200}
+                    self.url = "http://s/second"
+                    return got
+                if self.extracts == 2:
+                    return {"title": "", "url": "http://s/second", "text": "Loading…", "matched": 1, "status": 200}
+                return {"title": "Second", "url": "http://s/second", "text": "the second document " * 20, "matched": 1, "status": 200}
+
+        record = self.read(ShellPage())
+        self.assertNotIn("error", record)
+        self.assertEqual(record["title"], "Second")
+        self.assertIn("the second document", record["text"])
+        self.assertEqual(record["finalUrl"], "http://s/second")
+        self.assertTrue(self.rereads())
+
+    def test_a_read_without_a_navigation_does_not_flag(self):
+        class PlainPage(self.RedirectingPage):
+            async def call(self, function, *args, frame=None, read=False, **kwargs):
+                if not args:
+                    return "text/html" if "contentType" in function else ("complete", "7:7", False)
+                return {"title": "First", "url": "http://s/first", "text": "the first document " * 20, "matched": 1, "status": 200}
+
+        record = self.read(PlainPage())
+        self.assertNotIn("error", record)
+        self.assertEqual(record["title"], "First")
+        self.assertFalse(self.rereads())
+
+
 class Urls(unittest.TestCase):
     def test_arguments_and_stdin_lines_dedupe_in_order(self):
         urls = readpages.wanted_urls({"stdin": True}, ["example.com/a", "-"], "# picked\nhttp://x/1 http://x/2\n\nexample.com/a\n")

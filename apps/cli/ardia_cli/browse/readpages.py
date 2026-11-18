@@ -72,7 +72,7 @@ EXTRACT = r"""(selector) => {
   } catch (e) {}
   let scope = "";
   try { scope = ardiaBrowse.scope(); } catch (e) {}
-  return { title: document.title || "", text, matched: roots.length, status, scope };
+  return { title: document.title || "", url: location.href, text, matched: roots.length, status, scope };
 }"""
 
 SETTLE_PROBE = r"""() => {
@@ -590,6 +590,10 @@ def thin(got: dict, selector: str | None) -> bool:
     return (selector and not got.get("matched")) or len((got.get("text") or "").strip()) < MIN_USEFUL
 
 
+def moved(page, got: dict) -> bool:
+    return bool(got.get("url") and page.url and got["url"] != page.url)
+
+
 async def extract_filled(page, selector: str | None, timeout: float) -> dict:
     from ardia_cli import command_metrics
 
@@ -599,15 +603,26 @@ async def extract_filled(page, selector: str | None, timeout: float) -> dict:
     if (got.get("status") or 0) >= 400 or bot_check(got.get("title") or "", got.get("text") or "", got.get("status"), count=False):
         return got
     waited = False
-    while thin(got, selector) and loop.time() + THIN_POLL < deadline:
+    stale = False
+    reread = False
+    while (stale or thin(got, selector) or moved(page, got)) and loop.time() + THIN_POLL < deadline:
         waited = True
+        reread = reread or stale or moved(page, got)
         await asyncio.sleep(THIN_POLL)
         try:
             got = await page.call(EXTRACT, selector, frame=page.main_frame, read=True)
+            stale = False
         except BrowseError as error:
             if error.code not in ("document_changed", "page_navigated", "frame_gone"):
                 raise
+            stale = True
             await settle(page, min(deadline, loop.time() + SETTLE_LIMIT))
+    if stale or moved(page, got):
+        reread = True
+        await settle(page, loop.time() + SETTLE_LIMIT)
+        got = await page.call(EXTRACT, selector, frame=page.main_frame, read=True)
+    if reread:
+        command_metrics.flag("read_reread_after_navigation", True)
     if waited:
         command_metrics.flag("read_waited_for_content", True)
     return got
@@ -633,7 +648,7 @@ async def read_in(ctx, page, url: str, selector: str | None, timeout: float, opt
     except BrowseError as error:
         record["error"] = error.message
         return record
-    record.update(finalUrl=page.url, title=got.get("title") or "", status=got.get("status"), readAt=read_at(),
+    record.update(finalUrl=got.get("url") or page.url, title=got.get("title") or "", status=got.get("status"), readAt=read_at(),
                   text=readurl.post_process(got.get("text") or "", options))
     if got.get("scope"):
         record["scope"] = got["scope"]

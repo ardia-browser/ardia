@@ -1,5 +1,6 @@
 import type { BookmarkValue, DeviceTabs, HistoryValue, SendRecord } from "../../platform/sync";
 import type { ProfileRecord } from "./profileAdapters";
+import type { LinkCondition, OpenAs, SourceApp } from "../airTraffic/rules";
 import { isFields, isNumber, isString, type Fields } from "../../lib/decode";
 
 export type { BookmarkValue, DeviceTabs, HistoryValue, SendRecord };
@@ -9,6 +10,8 @@ export type DeviceRecord = { n: string; k?: string; f?: string[]; o?: string[]; 
 export type PasswordValue = { o: string; u: string; s: string };
 export type TopAppsRecord = { on: boolean };
 export type OpenTabsRecord = { on: boolean };
+export type AirTrafficRuleRecord = { on: boolean; from: SourceApp | null; when: LinkCondition; open: OpenAs; p: string | null; g?: string; pos: string };
+export type AirTrafficFallbackRecord = { t: { p: string | null; open: OpenAs; g?: string } | null; chosen: boolean };
 
 export const SHARE = "share:";
 export const DEVICE = "dev:";
@@ -17,6 +20,9 @@ export const PROFILE = "prof:";
 export const PROFILE_THEME = "pth:";
 export const PROFILE_TOP_APPS = "pta:";
 export const PROFILE_OPEN_TABS = "ptab:";
+export const AIR_TRAFFIC = "atc:";
+export const AIR_TRAFFIC_RULE = "atc:r:";
+export const AIR_TRAFFIC_FALLBACK = "atc:fallback";
 export const BOOKMARK = "bm:";
 export const HISTORY = "h:";
 export const SEND = "send:";
@@ -61,3 +67,20 @@ export const profileRecord = decoder<ProfileRecord>(
 export const topAppsRecord = decoder<TopAppsRecord>((v) => typeof v.on === "boolean");
 
 export const openTabsRecord = decoder<OpenTabsRecord>((v) => typeof v.on === "boolean");
+
+const isProfileRef = (v: unknown) => v === null || isString(v);
+
+export const airTrafficRuleRecord = decoder<AirTrafficRuleRecord>(
+  (v) =>
+    typeof v.on === "boolean" &&
+    (v.from === null || isFields(v.from)) &&
+    isFields(v.when) &&
+    isString(v.open) &&
+    isProfileRef(v.p) &&
+    (v.g === undefined || isString(v.g)) &&
+    isString(v.pos),
+);
+
+export const airTrafficFallbackRecord = decoder<AirTrafficFallbackRecord>(
+  (v) => typeof v.chosen === "boolean" && (v.t === null || (isFields(v.t) && isProfileRef(v.t.p) && isString(v.t.open) && (v.t.g === undefined || isString(v.t.g)))),
+);

@@ -1,6 +1,7 @@
 import { emptyScope, EXTENSION_PREFIX, folderTransport, syncScope, SyncNative, visible, type FolderInfo, type PhraseResult } from "../../platform/sync";
 import { create } from "zustand";
 import { useBrowser } from "../browser/store";
+import { useAirTraffic } from "../airTraffic/store";
 import { engineProfile } from "../browser/model";
 import { historyExpired } from "./historyAdapter";
 import { settingsToReapply } from "./settingsAdapter";
@@ -382,6 +383,9 @@ export function startSync() {
     const closed = !isQuitting() && recordOpenTabCloses(doc, openTabsClosed(s, prev));
     if (closed && !cycle) save();
     if (closed || (!cycle && (s.bookmarks !== prev.bookmarks || s.settings !== prev.settings || s.profiles !== prev.profiles || s.profileOrder !== prev.profileOrder || s.groups !== prev.groups))) scheduleSync();
+  });
+  useAirTraffic.subscribe((s, prev) => {
+    if (doc.enabled && !cycle && s.config !== prev.config) scheduleSync();
   });
   if (__DEV__) {
     (globalThis as { acSync?: object }).acSync = {

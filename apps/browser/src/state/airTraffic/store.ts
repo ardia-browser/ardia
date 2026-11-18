@@ -66,6 +66,14 @@ function saveConfig(change: (config: AirTrafficConfig) => AirTrafficConfig): boo
   return true;
 }
 
+export function applySyncedAirTraffic(config: AirTrafficConfig): boolean {
+  const json = airTrafficJson(config);
+  if (json === airTrafficJson(currentAirTraffic())) return true;
+  if (!write(AIR_TRAFFIC_DOC, json)) return false;
+  useAirTraffic.setState({ config });
+  return true;
+}
+
 const newRuleId = () => `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 
 export type RuleDraft = Omit<AirTrafficRule, "id">;

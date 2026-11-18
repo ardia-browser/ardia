@@ -13,7 +13,7 @@ import { Toolbar } from "./Toolbar";
 import { curve } from "../ui/motion";
 import { reduceMotion, space, Text } from "../ui";
 import { TOOLBAR_MOTION } from "./tokens";
-import { motionStep, tallPage, type MotionValue, type TallPage } from "./toolbarMotion";
+import { motionStep, releaseMotionValues, tallPage, type MotionValue, type TallPage } from "./toolbarMotion";
 import { useToolbarRow } from "./useToolbarRow";
 
 const HIDE_MS = TOOLBAR_MOTION.hide;
@@ -72,15 +72,15 @@ export function useToolbarMotion({
       bar: new Animated.Value(initial.bar),
       fade: new Animated.Value(initial.bar),
     };
-    const { page, bar, fade } = values.current;
-    for (const a of [page, bar, fade]) a.addListener(() => {});
   }
   const v = values.current;
   const translateY = useMemo(() => Animated.multiply(Animated.subtract(v.laid, v.page), room), [room]);
   const bottomShift = useMemo(() => (tall.on ? Animated.multiply(Animated.subtract(v.page, 1), room) : 0), [tall.on, room]);
   useEffect(() => {
+    for (const a of [v.page, v.bar, v.fade]) a.addListener(() => {});
     const keep = (a: Animated.Value, value: number) => Animated.timing(a, { toValue: value, duration: TOOLBAR_MOTION.settle, useNativeDriver: true });
     Animated.parallel([keep(v.page, initial.page), keep(v.laid, initial.page), keep(v.bar, initial.bar), keep(v.fade, initial.bar)]).start();
+    return () => releaseMotionValues(v);
   }, []);
   const was = useRef(mode);
   useLayoutEffect(() => {

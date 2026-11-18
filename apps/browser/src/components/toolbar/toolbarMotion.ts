@@ -33,3 +33,12 @@ export function tallPage(was: TallPage, { enabled, collapsed, doc }: { enabled: 
   const kept = was.doc !== doc || (!enabled && was.on) ? { on: false, doc } : was;
   return enabled && collapsed && !kept.on ? { on: true, doc } : kept;
 }
+
+type Releasable = { removeAllListeners(): void; stopAnimation(): void };
+
+export function releaseMotionValues(values: Record<MotionValue, Releasable>) {
+  for (const value of Object.values(values)) {
+    value.removeAllListeners();
+    value.stopAnimation();
+  }
+}

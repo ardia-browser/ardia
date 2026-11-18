@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-const { motionStep, tallPage } = await import("./toolbarMotion.ts");
+const { motionStep, releaseMotionValues, tallPage } = await import("./toolbarMotion.ts");
 
 test("hiding: the layout jumps to the strip at once and the page, bar and controls glide up together", () => {
   assert.deepEqual(motionStep("shown", "collapsed", false), { set: { laid: 1 }, glide: { page: 1, bar: 1, fade: 1 }, show: false, fit: null });
@@ -49,4 +49,11 @@ test("a new document or turning hiding off fits the page at once", () => {
   assert.deepEqual(tallPage(tall, { enabled: true, collapsed: false, doc: "b" }), { on: false, doc: "b" });
   assert.deepEqual(tallPage(tall, { enabled: false, collapsed: false, doc: "a" }), { on: false, doc: "a" });
   assert.deepEqual(tallPage(tall, { enabled: true, collapsed: true, doc: "b" }), { on: true, doc: "b" });
+});
+
+test("releasing the motion values drops every listener and stops every animation of all four", () => {
+  const calls = [];
+  const value = (name) => ({ removeAllListeners: () => calls.push(`${name}:listeners`), stopAnimation: () => calls.push(`${name}:animation`) });
+  releaseMotionValues({ page: value("page"), laid: value("laid"), bar: value("bar"), fade: value("fade") });
+  assert.deepEqual(calls.sort(), ["bar:animation", "bar:listeners", "fade:animation", "fade:listeners", "laid:animation", "laid:listeners", "page:animation", "page:listeners"]);
 });

@@ -103,10 +103,13 @@ Both surfaces read the seam above and nothing else; `state/plugins/officialView.
 state and the attempt in progress to what a row shows (`officialView.test.mjs`).
 
 - **Settings › Plugins › Official** (`components/settings/panes/OfficialPlugins.tsx`), above the other plugins, which no
-  longer list an official one twice. A row per plugin: **Install…** opens the consent sheet in place and the row turns
-  to installed with no reload; installed shows the version, where the command is (the bin folder the link reported,
-  never an assumed path) and a first command to copy; a failure shows its reason with **Try Again**; coming soon has no
-  button; unsupported shows nothing. Settings search finds it as "Command Line" and "Official plugins".
+  longer list an official one twice. Text is kept to a minimum: a heading, and per row the icon, the seam's title and
+  its blurb on one line. **Install…** opens the consent sheet in place and the row turns to installed with no reload;
+  installed reads "Installed · <version>" beside the title, with a first command in mono and **Copy** (where the
+  command lives is on the plugin's own page, behind the chevron); a failure shows its reason with **Try Again**;
+  coming soon is the title and "Coming soon"; unsupported shows nothing. The list below has one short line, and its
+  empty state is "None yet" with **How to add one**, which shows the folder and the `ardia plugins install` hint.
+  Settings search finds it as "Command Line" and "Official plugins".
 - **Onboarding** has a step between Make it home and the outro (`components/onboarding/PluginsStep.tsx`,
   `state/onboarding/pluginsStep.ts`). The command line starts ticked. **Install** shows the same consent lines inside
   onboarding (`consentLines`, with the same changed-while-open guard) and nothing is installed until **Install** there

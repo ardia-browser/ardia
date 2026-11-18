@@ -69,6 +69,7 @@ function UnavailablePage() {
 
 function PluginList() {
   const order = usePluginsBelowOfficial();
+  const [how, setHow] = useState(false);
   return (
     <View>
       <OfficialPluginsSection />
@@ -77,7 +78,9 @@ function PluginList() {
         {order.length ? (
           order.map((name) => <PluginRow key={name} name={name} />)
         ) : (
-          <Row title="None of your own yet" description={`Put a plugin's folder in ${pluginsFolderPath()}, or run ardia plugins install <folder>.`} />
+          <Row title="None yet" description={how ? `Put a plugin's folder in ${pluginsFolderPath()}, or run ardia plugins install <folder>.` : undefined}>
+            {how ? null : <Button variant="text" look="link" pad="none" title="How to add one" onPress={() => setHow(true)} />}
+          </Row>
         )}
       </Group>
     </View>

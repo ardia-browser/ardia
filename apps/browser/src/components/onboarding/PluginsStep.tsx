@@ -34,7 +34,7 @@ export function PluginsStep() {
     <StepLayout
       pageKey="plugins"
       title={nothingToDo ? "You're already set" : phase === "installed" ? "Installed" : "Want the extras?"}
-      subtitle={nothingToDo ? "Ardia's official plugins are installed. There's nothing to do here." : phase === "installed" ? "Open a new terminal window to use it." : "Official plugins, made by Ardia. Nothing is installed unless you pick it."}
+      subtitle={nothingToDo ? "Nothing to install." : phase === "installed" ? "Open a new terminal to use it." : "Official plugins. Optional."}
       actions={
         <StepActions
           continueTitle={primaryTitle(plugins, { picks, phase })}
@@ -61,8 +61,8 @@ function PluginCard({ plugin, picked }: { plugin: OfficialPlugin; picked: boolea
   const programs = usePluginPrograms(plugin.name);
   const view = officialView(plugin, programs, failure ? { state: "failed", reason: failure } : working ? { state: "installing" } : null);
   if (plugin.state === "available" && phase === "offer")
-    return <OptionCard control="check" icon={plugin.icon} title={officialTitle(plugin)} subtitle={plugin.blurb} subtitleLines={BLURB_LINES} selected={picked} onPress={() => togglePluginPick(plugin)} />;
-  return <StatusCard plugin={plugin} status={view.note === "comingSoon" ? null : (view.status ?? (view.note === "installed" ? "Installed" : null))} failed={view.failed} busy={view.busy} soon={view.note === "comingSoon"} done={view.note === "installed" && !view.failed && !view.busy} />;
+    return <OptionCard control="check" icon={plugin.icon} title={officialTitle(plugin)} subtitle={plugin.blurb} subtitleLines={1} selected={picked} onPress={() => togglePluginPick(plugin)} />;
+  return <StatusCard plugin={plugin} status={view.note === "comingSoon" ? "" : (view.status ?? (view.note === "installed" ? "Installed" : null))} failed={view.failed} busy={view.busy} soon={view.note === "comingSoon"} done={view.note === "installed" && !view.failed && !view.busy} />;
 }
 
 function StatusCard({ plugin, status, failed, busy, soon, done }: { plugin: OfficialPlugin; status: string | null; failed: boolean; busy: boolean; soon: boolean; done: boolean }) {
@@ -76,9 +76,11 @@ function StatusCard({ plugin, status, failed, busy, soon, done }: { plugin: Offi
           <Text weight="medium" color={colors.title}>
             {officialTitle(plugin)}
           </Text>
-          <Text size="small" lines={failed ? undefined : BLURB_LINES} selectable={failed} color={colors.rowSubtitle}>
-            {status ?? plugin.blurb}
-          </Text>
+          {status === "" ? null : (
+            <Text size="small" lines={failed ? undefined : 1} selectable={failed} color={colors.rowSubtitle}>
+              {status ?? plugin.blurb}
+            </Text>
+          )}
         </View>
         {soon ? <Tag title="Coming soon" /> : null}
         {busy ? <ActivitySpinner style={SPINNER} /> : null}
@@ -164,7 +166,6 @@ function Terminal({ plugin }: { plugin: OfficialPlugin | undefined }) {
 }
 
 const SOON_OPACITY = 0.6;
-const BLURB_LINES = 3;
 const SPINNER = { width: 16, height: 16 } as const;
 const WARNING = { width: 18, height: 18 } as const;
 const LINE_ICON = { width: 16, height: 16 } as const;

@@ -3,7 +3,7 @@ import { View } from "react-native";
 import { copyText } from "../../../state/app/system";
 import { installOfficialPlugin, type OfficialPlugin } from "../../../state/plugins/actions";
 import { useOfficialPlugins, usePluginConsent, usePluginOrder, usePluginPrograms } from "../../../state/plugins/hooks";
-import { isOffered, officialTitle, officialView, wasCancelled, type OfficialAttempt } from "../../../state/plugins/officialView";
+import { installedLabel, isOffered, officialTitle, officialView, wasCancelled, type OfficialAttempt } from "../../../state/plugins/officialView";
 import { goToSettingsPane } from "../../../state/settings/settingsWindows";
 import { consentToken, noteOfficialPlugin } from "../../../state/telemetry/officialPluginCounts";
 import { Group, Row, SectionHeader } from "../Form";
@@ -25,7 +25,7 @@ export function OfficialPluginsSection() {
   if (!plugins.length) return null;
   return (
     <View>
-      <SectionHeader anchor="plugins.official" />
+      <SectionHeader anchor="plugins.official" description={null} />
       <Group>
         {plugins.map((plugin) => (
           <OfficialPluginRow key={plugin.name} plugin={plugin} />
@@ -69,30 +69,28 @@ function OfficialPluginRow({ plugin }: { plugin: OfficialPlugin }) {
   useEffect(() => {
     if (offered) noteOfficialPlugin("settings", "shown", plugin.name);
   }, [plugin.name, offered]);
-  const title = `${officialTitle(plugin)}${view.note === "installed" && plugin.version ? ` ${plugin.version}` : ""}`;
   const anchor = ROW_ANCHORS[plugin.name];
   return (
     <Row
       anchor={anchor}
-      title={title}
+      title={
+        <View style={TITLE}>
+          <Text>{officialTitle(plugin)}</Text>
+          {view.note === "installed" ? (
+            <Text size="caption" tone="textSecondary">
+              {installedLabel(plugin)}
+            </Text>
+          ) : null}
+        </View>
+      }
       icon={<IconTile symbol={plugin.icon} size="l" />}
       onPress={view.opens ? () => goToSettingsPane("plugins", null, plugin.name) : undefined}
       description={
-        <View style={DETAIL}>
-          <Text size="caption" tone="textSecondary" style={LINE}>
-            {plugin.blurb}
+        view.note === "comingSoon" ? undefined : (
+          <Text selectable={view.failed} lines={view.failed ? undefined : 1} size="caption" tone={view.failed ? "destructive" : "textSecondary"} style={LINE}>
+            {view.failed && view.status ? view.status : plugin.blurb}
           </Text>
-          {view.status ? (
-            <Text selectable size="caption" tone={view.failed ? "destructive" : "textSecondary"} style={LINE}>
-              {view.status}
-            </Text>
-          ) : view.note === "installed" ? (
-            <Text size="caption" tone="textSecondary" style={LINE}>
-              Installed. It stays on.
-            </Text>
-          ) : null}
-          {view.firstCommand ? <FirstCommand command={view.firstCommand.command} does={view.firstCommand.does} /> : null}
-        </View>
+        )
       }
     >
       {view.busy && view.status ? <ActivitySpinner style={SPINNER} /> : null}
@@ -101,13 +99,14 @@ function OfficialPluginRow({ plugin }: { plugin: OfficialPlugin }) {
           Coming soon
         </Text>
       ) : null}
+      {view.firstCommand ? <FirstCommand command={view.firstCommand} /> : null}
       {view.action === "install" || (view.busy && !view.status) ? <Button title="Install…" disabled={view.busy} onPress={() => void install()} /> : null}
       {view.action === "again" ? <Button title="Try Again" onPress={() => void install()} /> : null}
     </Row>
   );
 }
 
-function FirstCommand({ command, does }: { command: string; does: string }) {
+function FirstCommand({ command }: { command: string }) {
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     if (!copied) return;
@@ -116,11 +115,8 @@ function FirstCommand({ command, does }: { command: string; does: string }) {
   }, [copied]);
   return (
     <View style={COMMAND}>
-      <Text selectable size="caption" style={[monoFace(), COMMAND_TEXT]}>
+      <Text selectable size="small" tone="textSecondary" style={monoFace()}>
         {command}
-      </Text>
-      <Text size="caption" tone="textSecondary" style={COMMAND_NOTE}>
-        {does}
       </Text>
       <Button
         title={copied ? "Copied" : "Copy"}
@@ -133,9 +129,7 @@ function FirstCommand({ command, does }: { command: string; does: string }) {
   );
 }
 
-const DETAIL = { marginTop: space.xxs, gap: space.xxs } as const;
-const LINE = { lineHeight: lineHeight.caption } as const;
+const TITLE = { flexDirection: "row", alignItems: "baseline", gap: space.s } as const;
+const LINE = { marginTop: space.xxs, lineHeight: lineHeight.caption } as const;
 const SPINNER = { width: 14, height: 14 } as const;
-const COMMAND = { flexDirection: "row", alignItems: "center", gap: space.m, marginTop: space.s } as const;
-const COMMAND_TEXT = { flexShrink: 0 } as const;
-const COMMAND_NOTE = { flex: 1 } as const;
+const COMMAND = { flexDirection: "row", alignItems: "center", gap: space.m } as const;

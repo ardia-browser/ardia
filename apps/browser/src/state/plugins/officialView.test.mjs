@@ -6,7 +6,7 @@ const { startPlugins } = await import("./start.ts");
 const { usePlugins } = await import("./store.ts");
 const lifecycle = await import("./lifecycle.ts");
 const { installOfficialPlugin, officialPlugins } = await import("./official.ts");
-const { isOffered, officialView, wasCancelled } = await import("./officialView.ts");
+const { installedLabel, isOffered, officialView, wasCancelled } = await import("./officialView.ts");
 const { noteOfficialPlugin, officialPluginField, takeOfficialPluginCounts, OFFICIAL_EVENTS, OFFICIAL_SURFACES } = await import("../telemetry/officialPluginCounts.ts");
 const { takeHourlyExtras } = await import("../telemetry/hourlyExtras.ts");
 const { WHATS_SENT } = await import("../telemetry/copy.ts");
@@ -31,13 +31,16 @@ test("an available plugin offers Install, waits while its sheet is open, and sho
   assert.deepEqual([failed.action, failed.failed, failed.status], ["again", true, "Couldn't install it: cli can't load."]);
 });
 
-test("an installed plugin says where its command is, with the bin folder the link reported, and offers a first command", () => {
+test("an installed plugin shows no sentence, only a first command to copy when it has one", () => {
   const view = officialView(plugin("installed"), LINKED, null);
-  assert.deepEqual([view.note, view.action, view.failed, view.busy], ["installed", null, false, false]);
-  assert.equal(view.status, "ardia is on your PATH (/Users/me/.local/bin)");
-  assert.equal(view.firstCommand.command, "ardia tabs");
+  assert.deepEqual([view.note, view.action, view.failed, view.busy, view.status], ["installed", null, false, false, null]);
+  assert.equal(view.firstCommand, "ardia tabs");
   assert.equal(officialView(plugin("installed", "tool"), LINKED, null).firstCommand, null);
-  assert.equal(officialView(plugin("installed"), { ...LINKED, binDir: "/opt/bin" }, null).status, "ardia is on your PATH (/opt/bin)");
+});
+
+test("an installed row says so beside its title, with the version when the seam has one", () => {
+  assert.equal(installedLabel(plugin("installed")), "Installed · 0.3.0");
+  assert.equal(installedLabel({ ...plugin("installed"), version: null }), "Installed");
 });
 
 test("an installed plugin whose command isn't on PATH says why and offers Retry", () => {

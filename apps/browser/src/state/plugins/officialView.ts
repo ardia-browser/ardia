@@ -16,12 +16,12 @@ export type OfficialView = {
   busy: boolean;
   action: OfficialAction;
   opens: boolean;
-  firstCommand: { command: string; does: string } | null;
+  firstCommand: string | null;
 };
 
-const FIRST_COMMANDS: Record<string, { command: string; does: string }> = {
-  cli: { command: "ardia tabs", does: "Lists your open tabs. Run it in your terminal." },
-};
+const FIRST_COMMANDS: Record<string, string> = { cli: "ardia tabs" };
+
+export const installedLabel = (plugin: OfficialPlugin) => (plugin.version ? `Installed · ${plugin.version}` : "Installed");
 
 const HIDDEN: OfficialView = { shown: false, note: null, status: null, failed: false, busy: false, action: null, opens: false, firstCommand: null };
 
@@ -29,12 +29,12 @@ const failure = (reason: string) => `Couldn't install it: ${reason}`;
 
 function installedView(plugin: OfficialPlugin, programs: ProgramsState | undefined, attempt: OfficialAttempt): OfficialView {
   const base = { ...HIDDEN, shown: true, note: "installed" as const, opens: true };
-  if (attempt?.state === "installing" || programs?.state === "linking") return { ...base, status: "Putting its command on your PATH…", busy: true };
+  if (attempt?.state === "installing" || programs?.state === "linking") return { ...base, status: "Installing…", busy: true };
   if (programs?.state === "failed") return { ...base, status: `Its command couldn't go on your PATH: ${programs.reason}`, failed: true, action: "again" };
   if (programs?.state === "linked") {
     const refused = Object.values(programs.refused);
     if (refused.length) return { ...base, status: `Its command isn't on your PATH yet: ${refused.join("; ")}`, failed: true, action: "again" };
-    if (programs.linked.length) return { ...base, status: `${programs.linked.join(", ")} is on your PATH (${programs.binDir})`, firstCommand: FIRST_COMMANDS[plugin.name] ?? null };
+    if (programs.linked.length) return { ...base, firstCommand: FIRST_COMMANDS[plugin.name] ?? null };
   }
   if (attempt?.state === "failed") return { ...base, status: failure(attempt.reason), failed: true, action: "again" };
   return base;

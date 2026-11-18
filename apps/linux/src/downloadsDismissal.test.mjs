@@ -8,9 +8,11 @@ function harness({ typing = false } = {}) {
   const pageWatchers = new Set();
   let clock = 0;
   const closes = [];
+  const insidePresses = [];
   const stop = startDownloadsDismissal({
     target,
     inside: (node) => node === bubble,
+    onInsidePress: () => insidePresses.push(clock),
     close: () => closes.push(clock),
     watchPageFocus: (listener) => {
       pageWatchers.add(listener);
@@ -30,7 +32,7 @@ function harness({ typing = false } = {}) {
     target.removeEventListener(type, later);
     return { reached, prevented: event.defaultPrevented };
   };
-  return { target, bubble, pageWatchers, closes, stop, fire, tick: (ms) => void (clock += ms) };
+  return { target, bubble, pageWatchers, closes, insidePresses, stop, fire, tick: (ms) => void (clock += ms) };
 }
 
 test("a press outside the bubble closes it and swallows that press, so the button under it doesn't reopen it", () => {
@@ -38,6 +40,7 @@ test("a press outside the bubble closes it and swallows that press, so the butto
   const outside = { name: "sidebar button" };
   assert.equal(h.fire("pointerdown", outside).reached, false);
   assert.equal(h.closes.length, 1);
+  assert.equal(h.insidePresses.length, 0);
   assert.equal(h.fire("mousedown", outside).reached, false);
   assert.equal(h.fire("pointerup", outside).reached, false);
   assert.equal(h.fire("click", outside).reached, false);
@@ -49,6 +52,7 @@ test("presses inside the bubble reach it and keep it open", () => {
   const h = harness();
   for (const type of ["pointerdown", "mousedown", "pointerup", "click"]) assert.equal(h.fire(type, h.bubble).reached, true);
   assert.equal(h.closes.length, 0);
+  assert.equal(h.insidePresses.length, 1);
   h.stop();
 });
 

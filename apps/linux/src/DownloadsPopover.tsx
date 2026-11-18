@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import type { View } from "react-native";
 import { DownloadsPopover as BrowserDownloadsPopover } from "../../browser/src/components/downloads/Downloads";
 import { useWindowId } from "../../browser/src/state/browser/hooks";
+import { noteLinuxDownloadsPanelInsidePress } from "../../browser/src/state/telemetry/downloadsPanelCounts";
 import { setDownloadsOpen } from "../../browser/src/state/windows/actions";
 import { useWindowUiOf } from "../../browser/src/state/windows/hooks";
 import { startDownloadsDismissal } from "./downloadsDismissal";
@@ -19,6 +20,7 @@ export function DownloadsPopover() {
     return startDownloadsDismissal({
       target: window,
       inside: (node) => node instanceof Node && !!region.current?.contains(node),
+      onInsidePress: noteLinuxDownloadsPanelInsidePress,
       close: () => setDownloadsOpen(windowId, false),
       watchPageFocus,
       activeElement: () => document.activeElement,

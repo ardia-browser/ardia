@@ -10,20 +10,24 @@ type Target = Pick<EventTarget, "addEventListener" | "removeEventListener">;
 export type DownloadsDismissal = {
   target: Target;
   inside: (node: EventTarget | null) => boolean;
+  onInsidePress: () => void;
   close: () => void;
   watchPageFocus: (listener: () => void) => () => void;
   activeElement: () => Pick<Element, "matches"> | null;
   now?: () => number;
 };
 
-export function startDownloadsDismissal({ target, inside, close, watchPageFocus, activeElement, now = () => performance.now() }: DownloadsDismissal) {
+export function startDownloadsDismissal({ target, inside, onInsidePress, close, watchPageFocus, activeElement, now = () => performance.now() }: DownloadsDismissal) {
   let swallowUntil = -Infinity;
   const stop = (event: Event) => {
     event.stopImmediatePropagation();
     event.preventDefault();
   };
   const down = (event: Event) => {
-    if (inside(event.target)) return;
+    if (inside(event.target)) {
+      onInsidePress();
+      return;
+    }
     swallowUntil = now() + SWALLOW_MS;
     stop(event);
     close();

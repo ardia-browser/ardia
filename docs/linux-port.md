@@ -1759,9 +1759,9 @@ A background instance rejects without fetching.
     `downloads.list`; live progress is stored separately from `s.downloads`.
   - Clear removes the rows, but the panel opens again, empty. The engine posts `downloads.changed` for each removed
     item before `downloads.removed`, and `upsertDownload` takes it for a new download.
-  - No telemetry. No existing count tells whether a press inside reached its control.
-    `downloads_panel_press_closes` counts only the shared `OutsidePressArea` path, and the Linux dismissal runs
-    first and stops the press.
+  - With sharing on, `usage_counts.linux_downloads_panel_inside_presses` counts pointer presses classified as inside
+    and allowed through the Linux dismissal handler. Watch for that count to fall toward zero relative to panel
+    opens if the handler starts misclassifying those presses again.
 
 ## Upstream syncs
 

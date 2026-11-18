@@ -38,7 +38,7 @@ test("opening a downloaded zip shows it in Finder once, where Archive Utility un
   assert.deepEqual(mac.calls, [["open", "/d/Report.zip"], ["reveal", "/d/Report.zip"]], "one reveal, at the moment of the click; closing that Finder window is left alone");
   await new Promise((r) => setTimeout(r, 50));
   assert.equal(mac.calls.length, 2, "nothing is revealed after the click");
-  assert.deepEqual(takeDownloadsPanelCounts(), { downloads_panel_press_closes: 0, downloads_panel_held_opens: 0, download_archives_opened: 1 });
+  assert.deepEqual(takeDownloadsPanelCounts(), { downloads_panel_press_closes: 0, downloads_panel_held_opens: 0, download_archives_opened: 1, linux_downloads_panel_inside_presses: 0 });
 });
 
 test("other files only open, and a missing archive isn't revealed", async () => {

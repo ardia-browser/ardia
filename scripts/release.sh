@@ -110,8 +110,8 @@ if [ -n "$dirty" ]; then
 fi
 
 [ -d "$framework_src" ] || die "no ArdiaCore framework at $framework_src (engine/ardiacore/apply.sh, then build chrome_framework)"
-[ "$phase" = sign ] || [[ " $(lipo -archs "$framework_src/Versions/Current/Chromium Framework" 2>/dev/null) " == *" arm64 "* ]] \
-  || die "the ArdiaCore framework at $framework_src has no arm64 slice"
+[ "$phase" = sign ] || [[ " $(lipo -archs "$framework_src/Versions/Current/Chromium Framework" 2>/dev/null) " == *" $ardia_arch "* ]] \
+  || die "the ArdiaCore framework at $framework_src has no $ardia_arch slice"
 if [ "$phase" = sign ]; then
   [ -n "$provisioning_profile" ] || die "--phase sign exports the ad hoc archive --phase build made: set RELEASE_PROVISIONING_PROFILE"
 elif [ -n "$framework_engine" ]; then
@@ -126,7 +126,7 @@ fi
 engine_source=""
 if [ "$phase" != build ]; then
   engine_tree="$("$root/engine/engine-key.sh")"
-  engine_release="$(awk -v t="$engine_tree" '$1 == t { print $2; exit }' "$ardiacore/prebuilt-engines.tsv")"
+  engine_release="$(awk -v t="$engine_tree" '$1 == t { print $2; exit }' "$ardiacore/prebuilt-engines$engine_suffix.tsv")"
   [ "$rc" = 1 ] || [ -n "$engine_release" ] \
     || die "packages/ardiacore/prebuilt-engines.tsv lists no published engine for this engine key (${engine_tree:0:12}): publish it with scripts/publish-engine.sh, commit the table line, then release"
   case "$engine_release" in engine-*) engine_tag="$engine_release" ;; *) engine_tag="v$engine_release" ;; esac
@@ -149,7 +149,7 @@ if [ "$phase" != build ]; then
   fi
 fi
 
-feed_base="${APPCAST_BASE:-$LATEST_DOWNLOAD_URL/appcast.xml}"
+feed_base="${APPCAST_BASE:-$LATEST_DOWNLOAD_URL/appcast$engine_suffix.xml}"
 base_feed="$work/appcast.xml"
 case "$feed_base" in
   none) : > "$base_feed" ;;
@@ -204,7 +204,7 @@ if [ "$notarize" = 1 ]; then
   "$stages/notarize.sh" "$app" "$dist"
 fi
 "$stages/package.sh" "$dist" "$version" "$identity"
-[ "$notarize" = 1 ] && "$stages/notarize.sh" "$dist/Ardia-$version.dmg" "$dist"
+[ "$notarize" = 1 ] && "$stages/notarize.sh" "$dist/Ardia-$version$engine_suffix.dmg" "$dist"
 
 echo "==> Release notes"
 notes_args=()
@@ -225,4 +225,4 @@ echo
 [ "$channel" = nightly ] && [ "$rc" = 0 ] && echo "Nightly: publish it with .claude/skills/release/scripts/publish.sh $version (a prerelease; the feed and ardia.dev/nightly follow)."
 [ "$phase" = sign ] && echo "Not launched yet: remove the signing keys, then run the launch check (--phase check)."
 [ -n "$phased" ] && echo "Phased rollout: $phased s between steps (the appcast item has phasedRolloutInterval; the whole release takes $((phased * 7)) s)."
-du -sh "$app" "$dist/Ardia-$version.dmg" "$dist/Ardia-$version.zip" "$cli_tarball" "$dist/appcast.xml" "$dist/release-notes.md"
+du -sh "$app" "$dist/Ardia-$version$engine_suffix.dmg" "$dist/Ardia-$version$engine_suffix.zip" "$cli_tarball" "$dist/appcast$engine_suffix.xml" "$dist/release-notes.md"

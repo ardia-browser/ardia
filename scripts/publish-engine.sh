@@ -19,7 +19,7 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd -P)"
 . "$root/scripts/lib/releases.sh"
 . "$root/scripts/lib/paths.sh"
-table="$root/packages/ardiacore/prebuilt-engines.tsv"
+table="$root/packages/ardiacore/prebuilt-engines$engine_suffix.tsv"
 die() { echo "error: $*" >&2; exit 1; }
 dry=0 out="" framework=""
 while [ $# -gt 0 ]; do
@@ -40,7 +40,7 @@ run() {
 }
 
 [ -f "$framework/Versions/Current/Chromium Framework" ] || die "no Chromium Framework at $framework"
-[[ " $(lipo -archs "$framework/Versions/Current/Chromium Framework") " == *" arm64 "* ]] || die "$framework has no arm64 slice"
+[[ " $(lipo -archs "$framework/Versions/Current/Chromium Framework") " == *" $ardia_arch "* ]] || die "$framework has no $ardia_arch slice"
 tree="$("$root/engine/engine-key.sh")"
 key_paths=($("$root/engine/engine-key.sh" --paths))
 short="${tree:0:12}"
@@ -53,10 +53,10 @@ git -C "$root" merge-base --is-ancestor "$commit" origin/main || problem "HEAD (
 existing="$(awk -v t="$tree" '$1 == t { print $2; exit }' "$table")"
 [ -z "$existing" ] || problem "prebuilt-engines.tsv already lists this engine key under $existing"
 
-out="${out:-$root/dist/$tag}"
+out="${out:-$root/dist/$tag$engine_suffix}"
 rm -rf "$out" && mkdir -p "$out"
 out="$(cd "$out" && pwd -P)"
-archive="$out/ArdiaCore-$short.tar.xz"
+archive="$out/ArdiaCore-$short$engine_suffix.tar.xz"
 source_archive="$out/ArdiaCore-$short-source.tar.xz"
 symbols_archive="$out/$(engine_symbols_name "$tag")"
 uuids_file="$out/$(engine_uuids_name "$tag")"

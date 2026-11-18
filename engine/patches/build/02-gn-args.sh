@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Step 2: writes out/Release_GN_arm64/args.gn from gn_defines.sh (the complete list) and runs
+# Step 2: writes out/$GN_OUT_CONFIGS/args.gn from gn_defines.sh (the complete list) and runs
 # `gn gen`. Run it after step 4 (the branding file our series adds must exist), and again
 # whenever gn_defines.sh changes.
 set -euo pipefail

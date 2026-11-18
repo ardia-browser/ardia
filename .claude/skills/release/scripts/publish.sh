@@ -16,6 +16,7 @@ done
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(git -C "$here" rev-parse --show-toplevel)"
 . "$root/scripts/lib/releases.sh"
+. "$root/scripts/lib/paths.sh"
 dist="${RELEASE_DIST:-$root/dist/$version}"
 die() { echo "error: $*" >&2; exit 1; }
 run() {
@@ -24,15 +25,16 @@ run() {
 }
 
 channel="$(channel_of "$version")"
-dmg="$dist/Ardia-$version.dmg"
-zip="$dist/Ardia-$version.zip"
-feed="$dist/appcast.xml"
+feed_name="appcast$engine_suffix.xml"
+dmg="$dist/Ardia-$version$engine_suffix.dmg"
+zip="$dist/Ardia-$version$engine_suffix.zip"
+feed="$dist/$feed_name"
 cli="$dist/ardia-cli-$version-macos-arm64.tar.gz"
 
-assets=()
-for file in "$dmg" "$zip" "$feed" "$cli" "$cli.sha256"; do
+assets=("$dmg" "$zip" "$feed")
+[ -z "$engine_suffix" ] && assets+=("$cli" "$cli.sha256")
+for file in "${assets[@]}"; do
   [ -f "$file" ] || die "no $file (scripts/release.sh $version first)"
-  assets+=("$file")
 done
 linux="$dist/linux"
 if [ -d "$linux" ]; then
@@ -105,14 +107,14 @@ trap 'exit 130' INT TERM HUP
 take_lock "$version" "$dry" "$break_lock"
 stable_tag="$(latest_stable_tag)"
 
-built="$dist/appcast.built.xml"
+built="$dist/appcast$engine_suffix.built.xml"
 [ -f "$built" ] || cp "$feed" "$built"
 merged="$feed"
-[ "$dry" = 1 ] && merged="$work/appcast.xml"
-if download_live_feed "$stable_tag" "$work/live"; then
-  appcast merge "$work/live/appcast.xml" "$built" "$version" "$merged"
+[ "$dry" = 1 ] && merged="$work/$feed_name"
+if download_live_feed "$stable_tag" "$work/live" "$feed_name"; then
+  appcast merge "$work/live/$feed_name" "$built" "$version" "$merged"
 else
-  echo "note: $stable_tag has no appcast.xml yet: $version starts it"
+  echo "note: $stable_tag has no $feed_name yet: $version starts it"
   cp "$built" "$merged"
 fi
 appcast check-above "$merged" "$version"
@@ -123,10 +125,37 @@ if [ "$channel" = stable ]; then
   echo "PASS  $version is above the latest stable release ($latest_version)"
 fi
 
+if [ -n "$engine_suffix" ]; then
+  gh release view "v$version" -R "$REPO" >/dev/null 2>&1 \
+    || die "publish the arm64 build of $version first: the $ardia_arch build joins its release"
+  run gh release upload "v$version" -R "$REPO" --clobber "$dmg" "$zip"
+  if [ "$channel" = nightly ]; then
+    cp -c "$dmg" "$work/Ardia-Nightly$engine_suffix.dmg"
+    run gh release upload nightly -R "$REPO" --clobber "$work/Ardia-Nightly$engine_suffix.dmg"
+  fi
+  run gh release upload "$stable_tag" -R "$REPO" --clobber "$merged"
+  [ "$dry" = 1 ] && { echo "dry run: nothing published"; exit 0; }
+  status=0
+  for url in "$LATEST_DOWNLOAD_URL/$feed_name" "https://ardia.dev/$feed_name"; do
+    for _ in $(seq 1 18); do
+      xml="$(curl -fsSL --max-time 20 "$url" 2>/dev/null || true)"
+      grep -q "<sparkle:shortVersionString>$version<" <<<"$xml" && break
+      sleep 10
+    done
+    grep -q "<sparkle:shortVersionString>$version<" <<<"$xml" && echo "PASS  $url lists $version" \
+      || { echo "FAIL  $url lists $version"; status=1; }
+  done
+  exit $status
+fi
+
 if [ "$channel" = nightly ]; then
   release_flags=(--prerelease --latest=false)
 else
   release_flags=(--latest)
+  if download_live_feed "$stable_tag" "$work/intel" appcast-x86_64.xml; then
+    assets+=("$work/intel/appcast-x86_64.xml")
+    echo "PASS  $stable_tag's appcast-x86_64.xml moves to v$version, so Intel copies keep their feed"
+  fi
 fi
 run gh release create "v$version" -R "$REPO" "${release_flags[@]}" --verify-tag --title "Ardia $version" \
   --notes-file "$dist/release-notes.md" "${assets[@]}"

@@ -43,10 +43,10 @@ latest_stable_tag() {
 }
 
 download_live_feed() {
-  local tag="$1" dir="$2" names
+  local tag="$1" dir="$2" feed_name="${3:-appcast.xml}" names
   names="$(gh release view "$tag" -R "$REPO" --json assets -q '.assets[].name')" \
     || { echo "error: couldn't list $tag's assets" >&2; exit 1; }
-  grep -qx appcast.xml <<<"$names" || return 1
+  grep -qxF "$feed_name" <<<"$names" || return 1
   mkdir -p "$dir"
-  gh release download "$tag" -R "$REPO" -p appcast.xml -D "$dir" --clobber
+  gh release download "$tag" -R "$REPO" -p "$feed_name" -D "$dir" --clobber
 }

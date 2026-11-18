@@ -66,6 +66,10 @@
 //                             profiles, 5000 history entries, 1000 bookmarks) instead of one tab, to time what a
 //                             long-time user's launch does. Its active tab is the bench's id=seed page, so the launch
 //                             rows mean the same; the other 199 tabs point at the bench server's /static?id=p-…
+//     --seed profiles         the same, shaped like a heavy user's sidebar instead: 13 profiles, the active one with 15
+//                             pinned rows and 85 unpinned (4 groups), 30 groups in all, 208 tabs, width 242, address bar
+//                             in the toolbar. frames and framecounts take either seed (big by default)
+//     --seed one              the same with one tab in each of the two profiles, for the frame rows at their lightest
 //     --fresh-copy            launch phase only: every launch runs from its own APFS clone of the app (same signature,
 //                             a new path and inodes), removed after, as the first launch after an install or update
 //                             is. Without it only the first launch of a prepared copy is cold; the rest are warm.
@@ -550,7 +554,7 @@ const sideSettings = (side) => parseSettings(side.role === "control" ? opt["cont
 function writeBigSeed(side) {
   const dir = side.template;
   const version = execFileSync("defaults", ["read", join(side.src, "Contents/Info.plist"), "CFBundleShortVersionString"], { encoding: "utf8" }).trim();
-  const files = buildSeed(base(), version);
+  const files = buildSeed(base(), version, opt.seed);
   delete files["perf-probe"];
   const session = files["session.json"];
   Object.assign(session.settings, sideSettings(side));
@@ -561,7 +565,7 @@ function writeBigSeed(side) {
     if (t.pinnedUrl) t.pinnedUrl = t.url;
   }
   for (const [name, value] of Object.entries(files)) writeFileSync(join(dir, name), JSON.stringify(value));
-  log(`seeded the big session (${side.label}): ${session.tabs.length} tabs, ${files["history.json"].history.default.length} history entries`);
+  log(`seeded the ${opt.seed} session (${side.label}): ${session.tabs.length} tabs, ${files["history.json"].history.default.length} history entries`);
 }
 
 async function makeTemplate(side) {
@@ -1267,7 +1271,7 @@ const PHASES = ["launch", "session", ...SESSION_PARTS, ...JOURNEY_PHASES, ...FRA
 const only = new Set(opt.only.split(",").map((p) => p.trim()).filter(Boolean));
 for (const p of only) if (!PHASES.includes(p)) fail(`--only: no phase "${p}"; phases: ${PHASES.join(", ")}`);
 if (only.has("frames") || only.has("framecounts")) opt.seed ??= "big";
-if (opt.seed && opt.seed !== "big") fail(`--seed: only "big" exists, got "${opt.seed}"`);
+if (opt.seed && !["big", "profiles", "one"].includes(opt.seed)) fail(`--seed: "big", "profiles" or "one", got "${opt.seed}"`);
 if (opt["fresh-copy"] && ![...only].every((p) => p === "launch" || p === "prepare")) fail("--fresh-copy works with --only launch");
 if (opt["trace-startup"] && ![...only].every((p) => p === "launch")) fail("--trace-startup works with --only launch");
 if (opt.seed && ![...only].every((p) => p === "launch" || p === "prepare" || JOURNEY_PHASES.includes(p) || FRAME_PHASES.includes(p))) fail("--seed big works with --only launch, newtabkey, navigate, frames and framecounts (the other phases measure a one-tab session)");

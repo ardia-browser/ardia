@@ -40,6 +40,7 @@ static void Flush(void) {
       case 'r': fprintf(gOut, "{\"k\":\"r\",\"th\":\"%c\",\"a\":%.3f,\"d\":%.3f}\n", r.th, r.a, r.b); break;
       case 'l': fprintf(gOut, "{\"k\":\"l\",\"a\":%.3f,\"d\":%.3f}\n", r.a, r.b); break;
       case 'k': fprintf(gOut, "{\"k\":\"key\",\"made\":%.3f,\"seen\":%.3f}\n", r.a, r.b); break;
+      case 'z': fprintf(gOut, "{\"k\":\"z\",\"ts\":%.3f,\"step\":%.0f,\"x\":%.2f,\"edge\":%.2f,\"card\":%.2f}\n", r.a, r.b, r.c, r.d, r.e); break;
     }
   }
   atomic_store(&gTail, t);
@@ -446,6 +447,109 @@ static void FindJSThread(void) {
   };
 }
 
+- (NSArray<NSView *> *)viewsIn:(NSWindow *)w matching:(BOOL (^)(NSView *))match {
+  NSMutableArray<NSView *> *found = [NSMutableArray array];
+  NSMutableArray<NSView *> *todo = [NSMutableArray arrayWithObject:w.contentView.superview ?: w.contentView];
+  while (todo.count) {
+    NSView *v = todo.lastObject;
+    [todo removeLastObject];
+    if (v.isHidden) continue;
+    if (match(v)) [found addObject:v];
+    [todo addObjectsFromArray:v.subviews];
+  }
+  return found;
+}
+
+static IMP FakeClassMethod(Class cls, SEL sel, id block) {
+  Method m = class_getClassMethod(cls, sel);
+  return m ? method_setImplementation(m, imp_implementationWithBlock(block)) : NULL;
+}
+
+static void RestoreClassMethod(Class cls, SEL sel, IMP original) {
+  Method m = class_getClassMethod(cls, sel);
+  if (m && original) method_setImplementation(m, original);
+}
+
+- (void)runResize:(NSDictionary *)cmd id:(NSString *)cid {
+  NSWindow *w = self.appWindow;
+  SEL cursorSel = NSSelectorFromString(@"cursor");
+  const NSInteger colResize = 4;
+  NSArray<NSView *> *handles = [self viewsIn:w matching:^BOOL(NSView *v) {
+    return [v respondsToSelector:cursorSel] && ((NSInteger (*)(id, SEL))objc_msgSend)(v, cursorSel) == colResize && v.frame.size.width <= 16 && v.frame.size.height >= 100;
+  }];
+  NSArray<NSView *> *cards = [self viewsIn:w matching:^BOOL(NSView *v) { return [NSStringFromClass(v.class) isEqualToString:@"ArdiaWebView"] && v.window; }];
+  NSView *card = nil;
+  for (NSView *v in cards)
+    if (!card || v.bounds.size.width * v.bounds.size.height > card.bounds.size.width * card.bounds.size.height) card = v;
+  if (handles.count != 1 || !card) return [self answer:cid with:@{@"ok": @NO, @"error": [NSString stringWithFormat:@"%lu resize handles, %lu cards", (unsigned long)handles.count, (unsigned long)cards.count]}];
+  NSView *handle = handles.firstObject;
+  NSRect at = [handle convertRect:handle.bounds toView:nil];
+  BOOL right = NSMidX(at) > w.contentView.bounds.size.width / 2;
+  double outward = right ? -1 : 1;
+  double distance = [cmd[@"distance"] doubleValue] ?: 120;
+  NSInteger ticks = [cmd[@"ticks"] integerValue] ?: 60, settle = [cmd[@"settleTicks"] integerValue] ?: 24;
+  NSInteger moves = [cmd[@"back"] boolValue] ? ticks * 2 : ticks;
+  NSPoint start = NSMakePoint(NSMidX(at), NSMidY(at));
+  NSView *frameView = w.contentView.superview ?: w.contentView;
+  NSView *hit = [frameView hitTest:[frameView convertPoint:start fromView:nil]];
+  if (hit != handle && ![hit isDescendantOf:handle])
+    return [self answer:cid with:@{@"ok": @NO, @"error": [NSString stringWithFormat:@"the press would land on %@, not the resize handle", NSStringFromClass(hit.class)]}];
+  double (^pointerAt)(NSInteger) = ^double(NSInteger k) {
+    NSInteger along = k <= ticks ? k : 2 * ticks - k;
+    return start.x + outward * distance * along / ticks;
+  };
+  double (^edgeOf)(void) = ^double {
+    NSRect r = [handle convertRect:handle.bounds toView:nil];
+    return NSMidX(r);
+  };
+  double (^cardEdgeOf)(void) = ^double {
+    NSRect r = [card convertRect:card.bounds toView:nil];
+    return right ? NSMaxX(r) : NSMinX(r);
+  };
+  __block NSInteger step = -1, after = 0;
+  __block BOOL held = NO;
+  __block IMP buttons = NULL;
+  NSInteger number = w.windowNumber;
+  NSPoint pointerBefore = gPointer;
+  NSInteger pointerWindowBefore = gPointerWindow;
+  BOOL takesFirstMouse = [handle respondsToSelector:@selector(setAcceptsFirstMouse:)];
+  BOOL firstMouseBefore = takesFirstMouse && [[handle valueForKey:@"acceptsFirstMouse"] boolValue];
+  void (^post)(NSEventType, double) = ^(NSEventType type, double x) {
+    NSPoint p = NSMakePoint(x, start.y);
+    gPointer = [w convertPointToScreen:p];
+    NSEvent *e = [NSEvent mouseEventWithType:type location:p modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:number
+                                     context:nil eventNumber:0 clickCount:1 pressure:type == NSEventTypeLeftMouseUp ? 0 : 1];
+    [NSApp postEvent:e atStart:NO];
+  };
+  _driverId = cid;
+  _driverOp = @"resize";
+  _step = ^(double ts, BOOL *done) {
+    Push('z', 0, ts, MAX(step, 0), pointerAt(MAX(step, 0)), edgeOf(), cardEdgeOf());
+    if (step < 0) {
+      buttons = FakeClassMethod(NSEvent.class, @selector(pressedMouseButtons), ^NSUInteger(id cls) { return held ? 1 : 0; });
+      OverridePointer();
+      gPointer = [w convertPointToScreen:start];
+      gPointerWindow = number;
+      if (takesFirstMouse) [handle setValue:@YES forKey:@"acceptsFirstMouse"];
+      held = YES;
+      post(NSEventTypeLeftMouseDown, start.x);
+      step = 0;
+    } else if (step < moves) {
+      step++;
+      post(NSEventTypeLeftMouseDragged, pointerAt(step));
+    } else if (++after == settle) {
+      held = NO;
+      post(NSEventTypeLeftMouseUp, pointerAt(step));
+    } else if (after >= settle * 2) {
+      RestoreClassMethod(NSEvent.class, @selector(pressedMouseButtons), buttons);
+      if (takesFirstMouse) [handle setValue:@(firstMouseBefore) forKey:@"acceptsFirstMouse"];
+      gPointer = pointerBefore;
+      gPointerWindow = pointerWindowBefore;
+      *done = YES;
+    }
+  };
+}
+
 - (void)runGesture:(NSDictionary *)cmd id:(NSString *)cid {
   NSWindow *w = self.appWindow;
   if (!w) return [self answer:cid with:@{@"ok": @NO, @"error": @"no window"}];
@@ -560,6 +664,8 @@ static void FindJSThread(void) {
     return [self runScroll:cmd id:cid];
   } else if ([op isEqualToString:@"hover"]) {
     return [self runHover:cmd id:cid];
+  } else if ([op isEqualToString:@"resize"]) {
+    return [self runResize:cmd id:cid];
   } else if ([op isEqualToString:@"pointer"]) {
     return [self runPointer:cmd id:cid];
   } else if ([op isEqualToString:@"hidden"]) {

@@ -47,6 +47,7 @@ class Records {
     this.m = [];
     this.j = [];
     this.l = [];
+    this.z = [];
     this.keys = [];
     this.info = null;
   }
@@ -71,6 +72,7 @@ class Records {
       if (r.k === "f") this.f.push(r);
       else if (r.k === "r") (r.th === "m" ? this.m : this.j).push(r);
       else if (r.k === "l") this.l.push(r);
+      else if (r.k === "z") this.z.push(r);
       else if (r.k === "key") this.keys.push(r);
       else if (r.k === "info") this.info = r;
     }
@@ -123,6 +125,30 @@ export function windowStats(rec, a, b, refresh) {
     jsWorst: j.worst,
     layoutMs: l.reduce((n, r) => n + r.d, 0),
   };
+}
+
+export function edgeLag(samples, a, b) {
+  const from = samples.findIndex((s) => s.ts >= a && s.ts <= b);
+  if (from < 0) return { edgeUndragged: true };
+  let to = from + 1;
+  while (to < samples.length && samples[to].step >= samples[to - 1].step) to++;
+  const drag = samples.slice(from, to);
+  const pointer = new Map(drag.map((s) => [s.step, s.x]));
+  const grab = drag[0].x - drag[0].edge;
+  const unit = Math.abs((pointer.get(1) ?? drag[0].x) - drag[0].x) || 1;
+  const last = Math.max(...drag.map((s) => s.step));
+  const travel = Math.max(...drag.map((s) => Math.abs(s.x - drag[0].x)));
+  const reach = Math.max(...drag.map((s) => Math.abs(s.edge - drag[0].edge)));
+  if (reach < travel / 2) return { edgeStill: true };
+  const lags = [];
+  for (const s of drag) {
+    if (s.ts > b || s.step < 1) continue;
+    let shown = s.step;
+    while (shown >= 0 && Math.abs((pointer.get(shown) ?? NaN) - (s.edge + grab)) > unit / 2 + 0.01) shown--;
+    if (shown >= 0) lags.push(s.step - shown);
+    if (s.step === last) break;
+  }
+  return { edgeLag: median(lags), edgeLagWorst: lags.length ? Math.max(...lags) : NaN, edgeMoves: lags.length };
 }
 
 function interactions(c) {
@@ -180,6 +206,8 @@ function interactions(c) {
         return t;
       },
       after: () => probe("pointer", { over: "real" }) },
+    { name: "sidebar resize (edge dragged 120 pt out and back, a move per frame)", window: 1000, before: reset, resize: true,
+      go: async () => { await run(`globalThis.acPerf?.reset(); return 1;`); const t = Date.now(); await probe("resize", { distance: 120, ticks: 60, back: true }); return t; } },
     { name: "sidebar hover (20 rows, 60 ms apart)", window: 1500, before: reset, go: async () => { await run(`globalThis.acPerf?.reset(); return 1;`); const t = Date.now(); await probe("hover", { rows: 20, gapMs: 60 }, false); return t; } },
     { name: "new window", window: 1200, verify: `return ac.store.getState().windowOrder.length > globalThis.__frameWindows;`, before: async () => { await reset(); await run(`globalThis.__frameWindows = ac.store.getState().windowOrder.length; return 1;`); },
       go: () => store(`ac.actions.openWindow({ url: "${base()}/static?id=fw${k++}" })`),
@@ -298,8 +326,11 @@ export async function framesRun(c, side, i, { counts }) {
       await sleep(2500);
       rec.read();
       for (const { t0, extra } of taken) {
-        const stats = { ...windowStats(rec, t0, t0 + it.window, refresh), ...extra, expected: Math.round(it.window / refresh), t0 };
-        if (stats.frames) rows.push(stats);
+        const stats = { ...windowStats(rec, t0, t0 + it.window, refresh), ...(it.resize ? edgeLag(rec.z, t0, t0 + it.window) : {}), ...extra, expected: Math.round(it.window / refresh), t0 };
+        if (stats.edgeStill || stats.edgeUndragged) {
+          log(`${side.tag}frames ${i} ${it.name}: ${stats.edgeUndragged ? "the probe never dragged the edge" : "the edge didn't follow the drag"}; left out`);
+          out.noEffect = (out.noEffect ?? 0) + 1;
+        } else if (stats.frames) rows.push(stats);
       }
       out.interactions[it.name] = rows;
       log(`${side.tag}frames ${i} ${it.name}: ${rows.length} reps, frames ${median(rows.map((r) => r.frames))}, >8.33 ${median(rows.map((r) => r.over8))}, worst ${median(rows.map((r) => r.worst)).toFixed?.(1)} ms, main worst ${median(rows.map((r) => r.mainWorst)).toFixed?.(1)} ms`);
@@ -325,6 +356,8 @@ const METRICS = [
   ["mainWorst", "main thread longest stall", "ms", 1],
   ["jsBusy", "JS thread busy", "ms", 1],
   ["jsWorst", "JS thread longest task", "ms", 1],
+  ["edgeLag", "frames the edge is behind the pointer", "", 0],
+  ["edgeLagWorst", "most frames the edge is behind the pointer", "", 0],
   ["layoutPasses", "layout passes", "", 0],
   ["mountBatches", "mount batches", "", 0],
   ["uiBlocks", "UI blocks run", "", 0],
@@ -334,7 +367,7 @@ const METRICS = [
   ["renders", "React renders", "", 0],
   ["storeUpdates", "store updates", "", 0],
 ];
-const SHOWN = new Set(["frames", "over8", "over16", "worst", "mainBusy", "mainWorst", "jsBusy", "layoutPasses", "commits", "hostUpdates"]);
+const SHOWN = new Set(["frames", "over8", "over16", "worst", "mainBusy", "mainWorst", "jsBusy", "edgeLag", "edgeLagWorst", "layoutPasses", "commits", "hostUpdates"]);
 
 export function frameRows(results) {
   const runs = (results.frames ?? []).filter((r) => !r.skipped);
@@ -360,7 +393,7 @@ export function frameRows(results) {
 
 export function frameTable(resultsByLabel) {
   const labels = Object.keys(resultsByLabel);
-  const keys = ["frames", "over8", "over16", "worst", "mainBusy", "mainWorst", "jsBusy", "jsWorst", "layoutPasses", "mountBatches", "uiBlocks", "commits", "hostUpdates"];
+  const keys = ["frames", "over8", "over16", "worst", "mainBusy", "mainWorst", "jsBusy", "jsWorst", "edgeLag", "edgeLagWorst", "layoutPasses", "mountBatches", "uiBlocks", "commits", "hostUpdates"];
   const names = [...new Set(labels.flatMap((l) => (resultsByLabel[l].frames ?? []).flatMap((r) => Object.keys(r.interactions ?? {}))))];
   const out = [];
   out.push(`| Interaction | App | ${keys.map((k) => METRICS.find((m) => m[0] === k)[1]).join(" | ")} |`);

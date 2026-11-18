@@ -1,6 +1,6 @@
 import type { Settings } from "../settings/settings";
 
-export type OnboardingStep = "intro" | "source" | "layout" | "tabs" | "look" | "searchPrivacy" | "pins" | "home" | "outro";
+export type OnboardingStep = "intro" | "source" | "layout" | "tabs" | "look" | "searchPrivacy" | "pins" | "home" | "plugins" | "outro";
 
 export type QuestionId =
   | "source"
@@ -19,6 +19,7 @@ export type QuestionId =
   | "pins"
   | "default"
   | "links"
+  | "plugins"
   | "outro";
 
 export type Question = { id: QuestionId; keys: readonly (keyof Settings)[]; askedWithPreset?: true };
@@ -56,6 +57,7 @@ export const QUESTIONS: Record<Exclude<OnboardingStep, "intro">, Question[]> = {
     { id: "default", keys: [] },
     { id: "links", keys: ["openLinksInLittleArdia"] },
   ],
+  plugins: [{ id: "plugins", keys: [] }],
   outro: [{ id: "outro", keys: [] }],
 };
 

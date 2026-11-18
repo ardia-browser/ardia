@@ -13,6 +13,7 @@ import { hasSavedSession } from "../session/sessionDocument";
 import { isLiquidGlass } from "../../platform/app";
 import { noteOnboarding } from "../telemetry/usage";
 import { openSettings } from "../settings/settingsWindows";
+import { pluginsStepShown } from "./pluginsOffer";
 
 import { QUESTIONS, QUESTION_ORDER, type OnboardingStep, type Question, type QuestionId } from "./questionList";
 import { markCompleted, readSaved, saveOnboarding as save, type Saved } from "./onboardingDocument";
@@ -32,7 +33,7 @@ export { playIntroMusic, setIntroMusicMuted, stopIntroMusic, type IntroMusicCues
 export { introStartDelayMs };
 export { PRESET_NAMES, PRESETS, presetFor, setsUpLikeBrowser, type BrowserSourceId, type Preset } from "./presets";
 
-export const STEPS: OnboardingStep[] = stepsForThisSurface(["intro", "source", "layout", "tabs", "look", "searchPrivacy", "pins", "home", "outro"]);
+export const STEPS: OnboardingStep[] = stepsForThisSurface(["intro", "source", "layout", "tabs", "look", "searchPrivacy", "pins", "home", "plugins", "outro"]);
 
 const answeredByPreset = (q: Question, preset: Preset) => !q.askedWithPreset && q.keys.length > 0 && q.keys.every((k) => k in PRESETS[preset]);
 
@@ -40,7 +41,7 @@ const SIDEBAR_ONLY: readonly QuestionId[] = ["address", "switcher"];
 export const liquidGlass = isLiquidGlass();
 
 export function questionsFor(step: OnboardingStep): Question[] {
-  if (step === "intro") return [];
+  if (step === "intro" || (step === "plugins" && !pluginsStepShown())) return [];
   const state = useOnboarding.getState();
   const preset = draftPreset(state);
   const asked = preset && setsUpLikeBrowser(state.source) ? QUESTIONS[step].filter((q) => !answeredByPreset(q, preset)) : QUESTIONS[step];

@@ -20,7 +20,7 @@ import {
   showPluginLog,
   showPluginsFolder,
 } from "../../../state/plugins/actions";
-import { usePluginActive, usePluginConsent, usePluginListing, usePluginNeedsReview, usePluginOrder, usePluginProcess, usePluginPrograms, usePluginRecord, usePluginValues } from "../../../state/plugins/hooks";
+import { usePluginActive, usePluginConsent, usePluginListing, usePluginNeedsReview, usePluginProcess, usePluginPrograms, usePluginRecord, usePluginValues } from "../../../state/plugins/hooks";
 import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
 import { goToSettingsPane, SETTINGS_WINDOW_ID, type SettingsPlace } from "../../../state/settings/settingsWindows";
 import { confirm } from "../../../state/app/system";
@@ -29,6 +29,7 @@ import { Group, Row, SectionHeader } from "../Form";
 import { useTheme } from "../../ui/theme";
 import { PaneSubPage } from "./PaneSubPage";
 import { PluginConsentSheet } from "../../plugins/PluginConsentSheet";
+import { OfficialPluginsSection, usePluginsBelowOfficial } from "./OfficialPlugins";
 
 export function PluginsPane({ detail }: SettingsPlace) {
   const consent = usePluginConsent();
@@ -67,15 +68,16 @@ function UnavailablePage() {
 }
 
 function PluginList() {
-  const order = usePluginOrder();
+  const order = usePluginsBelowOfficial();
   return (
     <View>
+      <OfficialPluginsSection />
       <SectionHeader anchor="plugins.plugins" action={<Button title={`Show in ${PLATFORM_TERMS.fileManager}`} onPress={showPluginsFolder} />} />
       <Group of="plugins.plugins">
         {order.length ? (
           order.map((name) => <PluginRow key={name} name={name} />)
         ) : (
-          <Row title="No plugins installed" description={`Put a plugin's folder in ${pluginsFolderPath()}, or run ardia plugins install <folder>.`} />
+          <Row title="None of your own yet" description={`Put a plugin's folder in ${pluginsFolderPath()}, or run ardia plugins install <folder>.`} />
         )}
       </Group>
     </View>

@@ -68,11 +68,15 @@ async function change(profile: string, c: ExtensionChange): Promise<boolean> {
   }
 }
 
-export function extensionsAdapterFor(spaceId: string, context?: () => string): ExtensionsAdapter {
+export function extensionsAdapterFor(spaceId: string, context?: () => string, enabled = () => true): ExtensionsAdapter {
   const space = context ?? (() => engineProfileForSpace(spaceId));
   return extensionsAdapter({
-    read: async () => (profileOpened(space()) ? readLocal(space()) : null),
-    change: (c) => change(space(), c),
+    read: async () => {
+      if (!enabled() || !profileOpened(space())) return null;
+      const local = await readLocal(space());
+      return enabled() ? local : null;
+    },
+    change: (c) => enabled() ? change(space(), c) : Promise.resolve(false),
     intents: () => ({ ...stored().profiles[space()] }),
     settleIntents: (published) => {
       const byId = stored().profiles[space()];
@@ -85,7 +89,7 @@ export function extensionsAdapterFor(spaceId: string, context?: () => string): E
       }
       if (changed) save();
     },
-    keepInstalled: (id) => note(space(), id, "installed"),
+    keepInstalled: (id) => { if (enabled()) note(space(), id, "installed"); },
   });
 }
 

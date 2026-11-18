@@ -132,7 +132,7 @@ export const linuxSessionVersion = (saved: HydrateData): number | undefined => {
 function migratedSession(session: HydrateData, from: number): HydrateData {
   if (from >= SESSION_VERSION) return session;
   const tables = DISK_LISTS.filter((key) => !!session[key] && !Array.isArray(session[key]));
-  const disk = { ...session, ...Object.fromEntries(tables.map((key) => [key, Object.values(session[key]!)])), version: from } as unknown as SavedObject;
+  const disk = { ...session, ...Object.fromEntries(tables.map((key) => [key, Object.values(session[key]!)])), version: from, preserveLegacyPins: true } as unknown as SavedObject;
   const next = upgraded(disk, SESSION_VERSION, SESSION_MIGRATIONS);
   if (!next) return session;
   return withoutAbsent({ ...next, ...Object.fromEntries(tables.map((key) => [key, keyedById(next[key]) ?? {}])) } as unknown as HydrateData);

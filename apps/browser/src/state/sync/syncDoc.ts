@@ -39,22 +39,22 @@ export const typeSyncedFor = (types: Record<DataType, boolean>, type: DataType, 
 export type SpaceLink = {
   syncId: string;
   enabled: boolean;
+  ownerSyncId?: string;
   adopting?: true;
   retire?: boolean;
   themeAdopting?: true;
+  keepPairingColor?: true;
   tabsRetire?: true;
-  pendingProfileId?: string;
-  publishAssignment?: true;
 };
 
-export type ProfileLink = { syncId: string; enabled: boolean; retire?: boolean; adopting?: true; topAppsEnabled: boolean };
+export type ProfileLink = { syncId: string; enabled: boolean; retire?: boolean; adopting?: true };
 
 export { profileScope, spaceScope } from "./records";
 
 export type SyncDoc = {
-  v: 2;
-  protocolReady: boolean;
-  legacyPending?: boolean;
+  v: 3;
+  preview?: true;
+  initialized?: true;
   profiles: Record<string, ProfileLink>;
   enabled: boolean;
   folder: string | null;
@@ -66,6 +66,7 @@ export type SyncDoc = {
   lastSyncedAt: number | null;
   setupAt: number | null;
   joining: boolean;
+  joiningThemeChoices?: string[];
   seqs?: Record<string, number>;
   sends?: Record<string, SendLedger>;
   tabCloses?: Record<string, string[]>;
@@ -76,18 +77,17 @@ export type SyncDoc = {
 export type ProfileRemoval = { keys: Record<string, HLC>; returned?: boolean };
 
 export const DOC = "sync.json";
-export const DOC_VERSION = 2;
-export const DOC_MIGRATIONS: Migrations = { 0: unchanged, 1: unchanged };
-export const STATE = "sync-spaces-state.nns";
-export const JOURNAL = "sync-spaces-journal.nns";
-export const APP_SCOPE = "workspace-v2";
-export const LEGACY_SETTINGS_SCOPE = "legacy-settings";
+export const DOC_VERSION = 3;
+export const DOC_MIGRATIONS: Migrations = { 0: unchanged, 1: unchanged, 2: unchanged };
+export const STATE = "sync-state.nns";
+export const JOURNAL = "sync-journal.nns";
+export const journalPartName = (n: number) => `sync-journal-${n}.nns`;
+export const APP_SCOPE = "app";
 
 export const defaultTypes = (): Record<DataType, boolean> => Object.fromEntries(TYPE_IDS.map((id) => [id, true])) as Record<DataType, boolean>;
 
 export const emptyDoc = (): SyncDoc => ({
-  v: 2,
-  protocolReady: true,
+  v: 3,
   profiles: {},
   enabled: false,
   folder: null,
@@ -101,7 +101,7 @@ export const emptyDoc = (): SyncDoc => ({
   joining: false,
 });
 
-export type SyncStatus = "off" | "upgrade" | "starting" | "updating" | "updated" | "stalled" | "offline" | "locked" | "reset" | "unavailable";
+export type SyncStatus = "off" | "preview" | "starting" | "updating" | "updated" | "stalled" | "offline" | "locked" | "reset" | "unavailable";
 
 export type SyncedDevice = { id: string; name: string; kind: DeviceKind; receivesTabs: boolean; lastSeen: number | null; current: boolean; version?: string; os?: string };
 export type RemoteTabs = { deviceId: string; name: string; kind: DeviceKind; tabs: { url: string; title: string }[] };

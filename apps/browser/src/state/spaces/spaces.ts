@@ -15,7 +15,7 @@ export type SpacesSlice = {
   orphanedProfileData: string[];
 
   createSpace(options: { name: string; color?: ProfileColor; icon?: string | null; profileId?: string; shareTopApps?: boolean }): string;
-  updateSpace(id: string, patch: Partial<Pick<Space, "name" | "color" | "icon" | "theme" | "pinnedCollapsed" | "shareTopApps" | "syncTabs">>): void;
+  updateSpace(id: string, patch: Partial<Pick<Space, "name" | "color" | "icon" | "theme" | "pinnedCollapsed" | "shareTopApps" | "syncTabs" | "syncProfileLocked" | "legacyTopApps">>): void;
   deleteSpace(id: string): void;
   assignSpaceProfile(id: string, profileId: string): void;
   reorderSpaces(ids: string[]): void;
@@ -81,7 +81,7 @@ export const createSpacesSlice: StateCreator<BrowserState, [], [], SpacesSlice> 
 
     assignSpaceProfile(id, profileId) {
       let s = get();
-      if (!s.spaces[id] || !s.profiles[profileId] || s.spaces[id]!.profileId === profileId) return;
+      if (!s.spaces[id] || s.spaces[id]!.syncProfileLocked || !s.profiles[profileId] || s.spaces[id]!.profileId === profileId) return;
       s = parkSpaceTopApps(s, id);
       const tabs = Object.fromEntries(Object.entries(s.tabs).map(([key, tab]) => [key, tab.spaceId === id
         ? { ...tab, page: hasPage(tab) ? loadedPage(navigationTo(tab.url)) : withWake(tab.page, undefined) }

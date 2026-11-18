@@ -9,13 +9,10 @@ namespace ardia::linux_policy {
 
 inline constexpr size_t kDocumentLimit = 8 * 1024 * 1024;
 inline constexpr char kSyncStateDocument[] = "sync-state.nns";
-inline constexpr char kSpacesSyncStateDocument[] = "sync-spaces-state.nns";
 inline constexpr size_t kSyncStateDocumentLimit = 48 * 1024 * 1024;
 
 inline constexpr size_t DocumentLimit(std::string_view name) {
-  return name == kSyncStateDocument || name == kSpacesSyncStateDocument
-             ? kSyncStateDocumentLimit
-             : kDocumentLimit;
+  return name == kSyncStateDocument ? kSyncStateDocumentLimit : kDocumentLimit;
 }
 
 inline bool ValidDocumentName(std::string_view name) {

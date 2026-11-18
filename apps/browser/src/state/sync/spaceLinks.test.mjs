@@ -4,169 +4,113 @@ import { test } from "node:test";
 let sequence = 0;
 globalThis.acTestNativeModules = { ArdiaSync: { newDeviceId: () => `new-${++sequence}` } };
 const { useBrowser } = await import("../browser/store.ts");
-const { emptyScope, visible } = await import("@ardia/sync");
+const { emptyScope } = await import("@ardia/sync");
 const { APP_SCOPE, emptyDoc } = await import("./syncDoc.ts");
-const { addLinkedSpace, linkSpaces, readyToPair } = await import("./spaceLinks.ts");
+const { addLinkedSpace, enableSpace, linkSpaces, readyToPair, sharedDataChain, spaceOwnerMatches } = await import("./spaceLinks.ts");
 const { spacesAdapter } = await import("./spaceAdapters.ts");
-const { appAdapters } = await import("./scopeAdapters.ts");
+const S = () => useBrowser.getState();
 const record = (v) => ({ h: "stamp", v, o: ["remote", 1] });
-const remoteSpace = { n: "School", c: "blue", i: null, p: "personal" };
+const home = { n: "Home", c: "plum", i: null, d: true };
+const work = { n: "Work", c: "blue", i: null };
 
-test("a joining Mac waits for its delayed default Space record before pairing", () => {
-  useBrowser.getState().hydrate({});
-  const doc = { ...emptyDoc(), joining: true, setupAt: Date.now() };
-  const app = { ...emptyScope(), joined: true, records: { "identity:personal": record({ n: "Personal", i: null, seed: true }), "prof:school": record(remoteSpace) } };
-  doc.scopes[APP_SCOPE] = app;
+function fixture(records = {}, additional = {}) {
+  S().hydrate({});
+  const app = { ...emptyScope(), joined: true, records };
+  const doc = { ...emptyDoc(), enabled: true, setupAt: Date.now(), scopes: { [APP_SCOPE]: app }, ...additional };
+  return { app, doc };
+}
+
+test("a joining desktop waits for the default Space and its browsing owner", () => {
+  const { app, doc } = fixture({ "prof:work": record(work) }, { joining: true });
   assert.equal(readyToPair(doc, app), false);
   linkSpaces(doc, app);
   assert.equal(doc.spaces.default, undefined);
-  app.records["prof:home"] = record({ ...remoteSpace, n: "Home", d: true });
+  app.records["prof:home"] = record(home);
+  app.records["share:home"] = record({ o: "owner" });
+  assert.equal(readyToPair(doc, app), false);
+  app.records["prof:owner"] = record({ ...work, n: "Owner" });
+  app.pending = 1;
+  assert.equal(readyToPair(doc, app), false);
+  app.pending = 0;
   assert.equal(readyToPair(doc, app), true);
   linkSpaces(doc, app);
   assert.equal(doc.spaces.default.syncId, "home");
+  assert.equal(doc.spaces.default.ownerSyncId, "owner");
+  assert.equal(doc.profiles.default.syncId, "owner");
+  assert.ok(doc.scopes["p:home"].awaitRemote && doc.scopes["p:owner"].awaitRemote);
 });
 
-test("a joining Mac can create its own default Space link after the pairing deadline", () => {
-  useBrowser.getState().hydrate({});
-  const doc = { ...emptyDoc(), joining: true, setupAt: Date.now() - 2 * 86400000 };
-  const app = { ...emptyScope(), records: { "identity:personal": record({ n: "Personal", i: null, seed: true }), "prof:school": record(remoteSpace) } };
-  doc.scopes[APP_SCOPE] = app;
+test("an empty existing sync folder can start after the pairing deadline", () => {
+  const { app, doc } = fixture({}, { joining: true, setupAt: Date.now() - 2 * 86400000 });
   assert.equal(readyToPair(doc, app), true);
   linkSpaces(doc, app);
-  assert.ok(doc.spaces.default);
-  assert.notEqual(doc.spaces.default.syncId, "school");
+  assert.equal(doc.spaces.default.syncId, doc.profiles.default.syncId);
+  assert.equal(doc.initialized, true);
 });
 
-test("default Profile pairing uses only non-empty string remote Profile IDs", () => {
-  for (const p of [7, true, {}, [], "", " ", "\t\r\n", "personal", " personal "]) {
-    useBrowser.getState().hydrate({});
-    const doc = { ...emptyDoc(), joining: true, setupAt: Date.now() };
-    const app = { ...emptyScope(), records: { "prof:home": record({ ...remoteSpace, d: true, p }) } };
-    doc.scopes[APP_SCOPE] = app;
-    assert.equal(readyToPair(doc, app), typeof p === "string" && !!p.trim());
-    linkSpaces(doc, app);
-    assert.equal(typeof doc.profiles.default.syncId, "string");
-    assert.notEqual(doc.profiles.default.syncId, "");
-    assert.notEqual(doc.profiles.default.syncId.trim(), "");
-    if (typeof p === "string" && p.trim()) {
-      assert.equal(doc.profiles.default.syncId, p);
-      assert.equal(doc.spaces.default.syncId, "home");
-    } else assert.equal(doc.spaces.default, undefined);
+test("a malformed sharing record or unavailable owner holds the Space back", () => {
+  const { app, doc } = fixture({ "prof:home": record(home), "prof:work": record(work) });
+  for (const bad of [{ o: 1 }, { o: "" }, { o: "missing" }]) {
+    app.records["share:work"] = record(bad);
+    assert.equal(sharedDataChain(doc, "work").owner, undefined);
+    assert.equal(addLinkedSpace(doc, "work"), null);
+    assert.equal(S().spaceOrder.length, 1);
   }
+  app.records["share:work"] = record({ o: "home" });
+  assert.equal(sharedDataChain(doc, "work").owner, "home");
 });
 
-test("a malformed default record cannot hide a later valid pairing hint", () => {
-  for (const p of [null, 7, "", " "]) {
-    useBrowser.getState().hydrate({});
-    const doc = { ...emptyDoc(), joining: true, setupAt: Date.now() };
-    const app = { ...emptyScope(), records: {
-      "prof:broken": record({ ...remoteSpace, d: true, p }),
-      "prof:home": record({ ...remoteSpace, d: true }),
-    } };
-    doc.scopes[APP_SCOPE] = app;
-    linkSpaces(doc, app);
-    assert.equal(doc.profiles.default.syncId, "personal");
-    assert.equal(doc.spaces.default.syncId, "home");
-  }
-});
-
-test("empty Space keys cannot make pairing ready or hide a valid default Space", () => {
-  for (const key of ["prof:", "prof: ", "prof:\t"]) {
-    useBrowser.getState().hydrate({});
-    const doc = { ...emptyDoc(), joining: true, setupAt: Date.now() };
-    const app = { ...emptyScope(), records: { [key]: record({ ...remoteSpace, d: true }) } };
-    doc.scopes[APP_SCOPE] = app;
-    assert.equal(readyToPair(doc, app), false);
-    linkSpaces(doc, app);
-    assert.equal(doc.spaces.default, undefined);
-    app.records["prof:home"] = record({ ...remoteSpace, d: true });
-    assert.equal(readyToPair(doc, app), true);
-    linkSpaces(doc, app);
-    assert.equal(doc.spaces.default.syncId, "home");
-  }
-});
-
-test("blank identity seed keys cannot override a valid seed or the default Space hint", () => {
-  for (const key of ["identity:", "identity: ", "identity:\t"]) for (const seeded of [false, true]) {
-    useBrowser.getState().hydrate({});
-    const doc = { ...emptyDoc(), joining: true, setupAt: Date.now() };
-    const app = { ...emptyScope(), records: {
-      [key]: record({ n: "Invalid", i: null, seed: true }),
-      ...(seeded ? { "identity:personal": record({ n: "Personal", i: null, seed: true }) } : {}),
-      "identity:work": record({ n: "Work", i: null }),
-      "prof:home": record({ ...remoteSpace, d: true, p: "work" }),
-    } };
-    doc.scopes[APP_SCOPE] = app;
-    linkSpaces(doc, app);
-    const expected = seeded ? "personal" : "work";
-    assert.equal(doc.profiles.default.syncId, expected);
-    assert.equal(doc.scopes[`data:${expected}`].awaitRemote, true);
-    assert.equal(doc.spaces.default.syncId, "home");
-  }
-});
-
-test("a newly paired default Space waits for its assigned Profile without publishing the old assignment", () => {
-  useBrowser.getState().hydrate({});
-  const doc = { ...emptyDoc(), joining: true, setupAt: Date.now() };
-  const app = { ...emptyScope(), records: {
-    "identity:personal": record({ n: "Personal", i: null, seed: true }),
-    "prof:home": record({ ...remoteSpace, d: true, p: "work" }),
-  } };
-  doc.scopes[APP_SCOPE] = app;
-  linkSpaces(doc, app);
-  assert.equal(doc.profiles.default.syncId, "personal");
-  assert.equal(doc.spaces.default.syncId, "home");
-  assert.equal(doc.spaces.default.adopting, true);
-  app.unapplied = [];
-  appAdapters(doc, false);
-  assert.ok(app.unapplied.includes("prof:home"));
-  const adapter = spacesAdapter(() => doc.spaces, () => doc.profiles);
-  const known = (key) => key in app.records;
-  assert.equal(adapter.extract(() => undefined, () => false, Date.now(), known).values.has("prof:home"), false);
-  assert.equal(adapter.apply(visible(app, "prof:"), new Set(["prof:home"]), () => undefined, { known }), false);
-  app.records["identity:work"] = record({ n: "Work", i: null });
-  linkSpaces(doc, app);
-  assert.equal(adapter.apply(visible(app, "prof:"), new Set(["prof:home"]), () => undefined, { known }), true);
-  const assigned = useBrowser.getState().spaces.default.profileId;
-  assert.equal(doc.profiles[assigned].syncId, "work");
-  assert.equal(doc.profiles[assigned].enabled, false);
-  assert.equal(doc.spaces.default.adopting, undefined);
-});
-
-test("adding a remote Space leaves new Profile data and Top Apps consent off", () => {
-  useBrowser.getState().hydrate({});
-  const doc = emptyDoc();
-  doc.scopes[APP_SCOPE] = { ...emptyScope(), records: { "identity:personal": record({ n: "Remote", i: null }) } };
-  const id = addLinkedSpace(doc, "school", remoteSpace, null);
-  const profileId = useBrowser.getState().spaces[id].profileId;
-  assert.equal(doc.spaces[id].enabled, true);
+test("adding a remote Space reuses its owner and keeps new browsing data off", () => {
+  const { doc } = fixture({
+    "prof:home": record(home), "prof:work": record(work), "share:work": record({ o: "home" }),
+    "identity:home": record({ n: "Personal identity", i: null }), "pta:work": record({ on: false }),
+  });
+  const workId = addLinkedSpace(doc, "work");
+  const homeId = addLinkedSpace(doc, "home");
+  const profileId = S().spaces[workId].profileId;
+  assert.equal(profileId, S().spaces[homeId].profileId);
+  assert.equal(S().profiles[profileId].name, "Personal identity");
   assert.equal(doc.profiles[profileId].enabled, false);
-  assert.equal(doc.profiles[profileId].topAppsEnabled, false);
-  addLinkedSpace(doc, "research", { ...remoteSpace, n: "Research" }, null);
-  assert.equal(doc.profiles[profileId].enabled, false);
+  assert.equal(S().spaces[workId].legacyTopApps, true);
+  assert.equal(S().spaces[workId].shareTopApps, undefined);
+  assert.equal(addLinkedSpace(doc, "work"), null);
 });
 
-test("invalid remote Spaces neither mutate local metadata nor enter the order sort", () => {
-  useBrowser.getState().hydrate({});
-  const doc = { ...emptyDoc(), spaces: { default: { syncId: "home", enabled: true } }, profiles: { default: { syncId: "personal", enabled: true, topAppsEnabled: true } } };
-  const adapter = spacesAdapter(() => doc.spaces, () => doc.profiles);
-  const before = useBrowser.getState().spaces.default;
-  for (const patch of [{ n: 5 }, { c: {} }, { p: " " }, { p: 5 }, { pos: {} }]) {
-    const value = { ...remoteSpace, ...patch };
-    assert.doesNotThrow(() => adapter.apply(new Map([["prof:home", value]]), new Set(["prof:home"]), () => undefined, { known: () => false }));
-    assert.deepEqual(useBrowser.getState().spaces.default, before);
-  }
+test("a local Space remains unlinked after initialization until its own switch is turned on", () => {
+  const { app, doc } = fixture();
+  linkSpaces(doc, app);
+  const localProfile = S().createProfile({ name: "Second" });
+  const local = S().createSpace({ name: "Local", profileId: localProfile });
+  linkSpaces(doc, app);
+  assert.equal(doc.spaces[local], undefined);
+  assert.ok(enableSpace(doc, local));
+  assert.equal(doc.spaces[local].ownerSyncId, doc.spaces[local].syncId);
+  assert.equal(doc.profiles[localProfile].enabled, false);
+  S().assignSpaceProfile(local, "default");
+  assert.equal(S().spaces[local].profileId, localProfile);
+  S().deleteProfile(localProfile, "default");
+  assert.ok(S().profiles[localProfile]);
 });
 
-test("remote Space additions validate metadata and report an already linked Profile", async () => {
-  useBrowser.getState().hydrate({});
-  const { remoteSpaceRecord } = await import("./spaceLinks.ts");
-  const { summarize } = await import("./syncSummary.ts");
-  const doc = { ...emptyDoc(), profiles: { default: { syncId: "personal", enabled: false, topAppsEnabled: false } } };
-  doc.scopes[APP_SCOPE] = { ...emptyScope(), records: { "identity:personal": record({ n: "Personal", i: null }), "prof:school": record(remoteSpace) } };
-  assert.equal(summarize(doc).remoteSpaces[0].sharesWith.added, true);
-  delete doc.profiles.default;
-  assert.equal(summarize(doc).remoteSpaces[0].sharesWith.added, false);
-  doc.scopes[APP_SCOPE].records["prof:school"] = record({ p: "personal" });
-  assert.equal(remoteSpaceRecord(doc, "school"), undefined);
+test("a changed remote owner blocks the existing binding without reassigning local data", () => {
+  const { app, doc } = fixture({ "prof:home": record(home), "prof:work": record(work), "share:work": record({ o: "home" }) });
+  const id = addLinkedSpace(doc, "work");
+  const profileId = S().spaces[id].profileId;
+  assert.ok(spaceOwnerMatches(doc, id));
+  app.records["share:work"] = record(null);
+  assert.equal(spaceOwnerMatches(doc, id), false);
+  linkSpaces(doc, app);
+  assert.equal(S().spaces[id].profileId, profileId);
+  assert.equal(doc.spaces[id].ownerSyncId, "home");
+});
+
+test("a linked workspace adopts an old client's name and publishes the old record shape", () => {
+  const { doc } = fixture({ "prof:home": record(home) }, { joining: true });
+  linkSpaces(doc, doc.scopes[APP_SCOPE]);
+  const adapter = spacesAdapter(() => doc.spaces);
+  adapter.apply(new Map([["prof:home", home]]), new Set(["prof:home"]), () => undefined, { known: () => false });
+  assert.equal(S().spaces.default.name, "Home");
+  S().updateSpace("default", { name: "Renamed" });
+  const extracted = adapter.extract(() => undefined, () => false, Date.now(), () => true, () => home);
+  assert.deepEqual(extracted.values.get("prof:home"), { n: "Renamed", c: "plum", i: null, d: true });
 });

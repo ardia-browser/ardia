@@ -21,6 +21,8 @@ function workspaceFields(value: unknown): unknown {
 
 export function sessionWithSpaces(doc: SavedObject, sync?: SavedObject): SavedObject {
   const version = Number(doc.version ?? 0);
+  const { preserveLegacyPins, ...source } = doc;
+  doc = source;
   doc = sessionWithPinChoiceStamps(sessionWithSettingsMeta(doc));
   if (version < 10) doc = sessionWithNewTabLinksInLittleArdia(doc);
   if (version < 11) doc = sessionWithUnreadCountsOffByDefault(doc);
@@ -45,6 +47,11 @@ export function sessionWithSpaces(doc: SavedObject, sync?: SavedObject): SavedOb
     const profileId = text(saved.dataId) || id;
     spaces[id] = { ...saved, id, profileId, ...(saved.shareTopApps === true || version < 10 && saved.shareTopApps === undefined && !oldMerged.has(id) ? { shareTopApps: true } : {}) };
     delete spaces[id]!.dataId;
+    if (preserveLegacyPins === true) spaces[id]!.legacyTopApps = true;
+    if (sync?.enabled === true && object(object(sync.profiles)[id]).syncId) {
+      spaces[id]!.legacyTopApps = true;
+      spaces[id]!.syncProfileLocked = true;
+    }
     const owner = object(legacy[profileId] ?? saved);
     profiles[profileId] ??= { id: profileId, name: text(owner.name, "Profile"), icon: owner.icon ?? null, engineId: profileId === "default" ? "" : profileId, createdAt: owner.createdAt ?? 0 };
   }
@@ -77,7 +84,7 @@ export function sessionWithSpaces(doc: SavedObject, sync?: SavedObject): SavedOb
   const ordered = [...new Set(windowOrder)].flatMap((id) => list(windows.find((w) => w.id === id)?.tabIds).flatMap((key) => byId.has(text(key)) ? [byId.get(text(key))!] : []));
   const candidates = [...new Set([...ordered, ...tabs])];
   for (const spaceId of order) {
-    if (spaces[spaceId]?.shareTopApps !== true) continue;
+    if (spaces[spaceId]?.shareTopApps !== true || spaces[spaceId]?.legacyTopApps === true) continue;
     const park = object(parkedPins[spaceId]);
     const cached = list(park.tabs).map(object).filter((tab) => !tab.groupId && !tab.pinnedAsRow).map((tab) => {
       const candidate: SavedObject = { ...tab, id: `upgrade:${spaceId}:${text(tab.id)}`, pinKey: tab.id, pinned: true, spaceId, windowId: `upgrade:${spaceId}`, navigation: null, unloaded: true };
@@ -132,17 +139,22 @@ export function liveWithSpaces(doc: SavedObject): SavedObject {
 }
 
 export function syncWithSpaces(doc: SavedObject, session: SavedObject): SavedObject {
-  if (doc.v === 2) return doc;
+  if (doc.v === 3) return doc;
+  if (doc.v === 2) return { ...doc, v: 3, preview: true };
   const old = object(doc.profiles);
   const spaces = object(session.spaces);
   const profiles: Record<string, SavedObject> = {};
   for (const id of Object.keys(object(session.profiles))) {
     const owner = object(old[id]);
-    const contributors = Object.entries(spaces).filter(([, value]) => object(value).profileId === id).map(([key]) => object(old[key]));
-    profiles[id] = { syncId: text(owner.syncId, `data-${id}`), enabled: owner.enabled === true && !owner.retire, ...(owner.retire ? { retire: true } : {}), topAppsEnabled: contributors.length > 0 && contributors.every((link) => link.enabled === true && !link.retire) };
+    if (typeof owner.syncId === "string" && owner.syncId) profiles[id] = { syncId: owner.syncId, enabled: owner.enabled === true && !owner.retire, adopting: true };
   }
-  const forSpaces = (value: unknown): SavedObject | undefined => value === undefined ? undefined : Object.fromEntries(Object.entries(object(value)).map(([scope, data]) => [scope.startsWith("p:") ? `space:${scope.slice(2)}` : scope, data]));
-  return { ...doc, v: 2, profiles, spaces: old, scopes: {}, sends: forSpaces(doc.sends), tabCloses: forSpaces(doc.tabCloses), protocolReady: false, legacyPending: true };
+  const links = Object.fromEntries(Object.entries(old).flatMap(([id, raw]) => {
+    const link = object(raw);
+    if (typeof link.syncId !== "string" || !link.syncId) return [];
+    const owner = profiles[text(object(spaces[id]).profileId)]?.syncId;
+    return [[id, { ...link, ...(owner ? { ownerSyncId: owner } : {}) }]];
+  }));
+  return { ...doc, v: 3, profiles, spaces: links, scopes: {}, ...(doc.enabled && !doc.joining ? { initialized: true } : {}) };
 }
 
 export type DocumentAccess = { read(name: string): string | null; write(name: string, contents: string): void };
@@ -160,7 +172,7 @@ function validateSession(saved: SavedObject, version = WORKSPACE_VERSION): void 
 }
 
 export function upgradeWorkspaceDocuments(io: DocumentAccess): void {
-  for (const [name, field, latest] of [["live.json", "version", 2], ["sync.json", "v", 2]] as const) {
+  for (const [name, field, latest] of [["live.json", "version", 2], ["sync.json", "v", 3]] as const) {
     const value = io.read(name);
     if (value && Number(object(JSON.parse(value))[field] ?? 0) > latest) throw new Error("This workspace needs a newer Ardia build. Your saved data was kept.");
   }
@@ -213,7 +225,7 @@ export function upgradeWorkspaceDocuments(io: DocumentAccess): void {
     const sync = io.read("sync.json");
     if (sync) {
       const state = object(JSON.parse(sync));
-      if (Number(state.v ?? 0) > 2) throw new Error("The saved sync settings need a newer Ardia build. Your saved data was kept.");
+      if (Number(state.v ?? 0) > 3) throw new Error("The saved sync settings need a newer Ardia build. Your saved data was kept.");
       documents["sync.json"] = { before: sync, after: JSON.stringify(syncWithSpaces(state, migrated)) };
     }
     upgrade = { state: "prepared", documents };

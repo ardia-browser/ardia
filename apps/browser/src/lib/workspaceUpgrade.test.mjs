@@ -73,7 +73,7 @@ test("an interrupted upgrade resumes from its prepared transaction", () => {
     upgradeWorkspaceDocuments({ read, write: (name, value) => files.set(name, value) });
     assert.equal(JSON.parse(files.get("session.json")).version, 12);
     assert.equal(JSON.parse(files.get("live.json")).version, 2);
-    assert.equal(JSON.parse(files.get("sync.json")).v, 2);
+    assert.equal(JSON.parse(files.get("sync.json")).v, 3);
     assert.equal(JSON.parse(files.get("workspace-upgrade-v12.json")).state, "complete");
   }
 });
@@ -92,23 +92,22 @@ test("parked tiles move into the Profile even with no open windows, preserving r
   assert.deepEqual(sessionWithSpaces(result), result);
 });
 
-test("merging identities preserves separate data, workspace and Top Apps sync consent", () => {
+test("merging identities preserves separate browsing-data and workspace sync choices", () => {
   const session = sessionWithSpaces(legacy());
   const result = syncWithSpaces({ v: 1, profiles: { default: { syncId: "owner", enabled: true }, school: { syncId: "school", enabled: false, retire: true }, work: { syncId: "work", enabled: true } } }, session);
   assert.equal(result.profiles.default.enabled, true);
-  assert.equal(result.profiles.default.topAppsEnabled, false);
   assert.equal(result.spaces.school.enabled, false);
   assert.equal(result.spaces.school.retire, true);
-  assert.equal(result.protocolReady, false);
-  assert.equal(result.profiles.work.topAppsEnabled, true);
+  assert.equal(result.spaces.school.ownerSyncId, "owner");
+  assert.equal(result.profiles.work.enabled, true);
 });
 
-test("a legacy link keeps outstanding tab sends and closes in its new Space scope", () => {
+test("a legacy link keeps outstanding tab sends and closes under their original scope", () => {
   const session = sessionWithSpaces(legacy());
   const ledger = { outgoing: {}, received: { "send:done": 1 } };
   const result = syncWithSpaces({ v: 1, sends: { "p:owner": ledger }, tabCloses: { "p:owner": ["tab-closed"] } }, session);
-  assert.deepEqual(result.sends, { "space:owner": ledger });
-  assert.deepEqual(result.tabCloses, { "space:owner": ["tab-closed"] });
+  assert.deepEqual(result.sends, { "p:owner": ledger });
+  assert.deepEqual(result.tabCloses, { "p:owner": ["tab-closed"] });
 });
 
 test("future or invalid sessions are kept without any writes", () => {

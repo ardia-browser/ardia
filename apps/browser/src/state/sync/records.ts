@@ -24,8 +24,8 @@ export const SEND = "send:";
 export const RECEIVES_TABS = "send";
 
 export const recordId = (prefix: string, key: string) => key.slice(prefix.length);
-export const profileScope = (syncId: string) => `data:${syncId}`;
-export const spaceScope = (syncId: string) => `space:${syncId}`;
+export const spaceScope = (syncId: string) => `p:${syncId}`;
+export const profileScope = spaceScope;
 
 const decoder =
   <T,>(valid: (v: Fields) => boolean) =>

@@ -28,7 +28,12 @@ globalThis.acTestNativeModules = {
       const here = [...folder].filter(([id, f]) => f.scope === scope && !downloading.has(id));
       const readable = here.filter(([id]) => !damaged.has(id));
       const files = readable.filter(([id]) => !known.includes(id)).map(([id, f]) => ({ id, payload: f.payload }));
-      return { files, pending: [...downloading], damaged: [...damaged].map((id) => ({ id, age: 0 })), present: here.map(([id]) => id) };
+      return {
+        files,
+        pending: [...downloading].filter((id) => folder.get(id)?.scope === scope),
+        damaged: [...damaged].filter((id) => folder.get(id)?.scope === scope).map((id) => ({ id, age: 0 })),
+        present: here.map(([id]) => id),
+      };
     },
     remove: async (_folder, _scope, list) => list.forEach((id) => folder.delete(id)),
     sealLocal: async (text) => `sealed:${text}`,
@@ -39,7 +44,6 @@ globalThis.acTestNativeModules = {
 
 const shell = await import("../../test-native/index.ts");
 const { useBrowser } = await import("../browser/store.ts");
-const { sharingSpaces } = await import("../spaces/spaces.ts");
 const S = () => useBrowser.getState();
 
 class Mac {
@@ -147,7 +151,7 @@ async function joinWhileThemeDownloads(tag, hold = downloading) {
     assert.ok("ok" in (await engineC.enterRecoveryPhrase("/sync", "words")));
     await engineC.syncNow();
     await engineC.syncNow();
-    assert.ok(engineC.useSync.getState().remoteSpaces.every((p) => p.name !== "Personal"), "Personal paired");
+    assert.equal(engineC.useSync.getState().spaces.default, undefined, "ownership is checked after the folder finishes downloading");
     assert.deepEqual(S().spaces.default.theme, THEME_A);
   });
   return { a, c, engineA, engineC };
@@ -168,7 +172,14 @@ test("a joining Mac never publishes its theme while the synced one is still down
       S().updateSpace("default", { theme: edited });
       await engineC.syncNow();
     });
-    assert.ok(themesFrom().includes(JSON.stringify({ t: edited })), "an explicit edit adopts and publishes");
+    assert.ok(neverPublished(edited), "the explicit edit stays local while pairing waits");
+    downloading.clear();
+    await c.with(async () => {
+      await engineC.syncNow();
+      await engineC.syncNow();
+      assert.deepEqual(S().spaces.default.theme, edited);
+    });
+    assert.ok(!neverPublished(edited), "the explicit edit publishes once pairing is safe");
   } finally {
     Date.now = realNow;
   }
@@ -179,8 +190,11 @@ test("a joining Mac keeps adopting across a restart and takes the theme when its
   const restarted = await import("./engine.ts?dlC2restart");
   await c.with(async () => {
     restarted.startSync();
-    await restarted.syncNow();
-    await restarted.syncNow();
+    for (let i = 0; i < 20 && restarted.useSync.getState().status === "starting"; i++) {
+      await new Promise((resolve) => setImmediate(resolve));
+      await restarted.syncNow();
+    }
+    assert.equal(restarted.useSync.getState().status, "updated");
   });
   assert.ok(!themesFrom().includes(JSON.stringify({ t: THEME_A })), "nothing published before or after the restart");
   downloading.clear();
@@ -236,7 +250,7 @@ test("an established space's theme edit publishes while unrelated files are stil
 
 const neverPublished = (theme) => !themesFrom().includes(JSON.stringify({ t: theme }));
 
-test("turning a space's sync off and on again keeps it adopting", async () => {
+test("toggling a Space during pairing never publishes its inherited theme", async () => {
   const { c, engineC } = await joinWhileThemeDownloads("3");
   await c.with(async () => {
     engineC.setSpaceSynced("default", false);
@@ -262,7 +276,14 @@ test("a theme file given up as damaged after a day doesn't end adoption", async 
       S().updateSpace("default", { theme: edited });
       await engineC.syncNow();
     });
-    assert.ok(!neverPublished(edited), "an explicit edit still does");
+    assert.ok(neverPublished(edited), "the explicit edit stays local until ownership can be checked");
+    damaged.clear();
+    await c.with(async () => {
+      await engineC.syncNow();
+      await engineC.syncNow();
+      assert.deepEqual(S().spaces.default.theme, edited);
+    });
+    assert.ok(!neverPublished(edited), "the explicit edit publishes once pairing is safe");
   } finally {
     Date.now = realNow;
   }
@@ -325,7 +346,7 @@ test("a Mac joining sync takes a paired profile's choice to share its Top Apps i
   const engineA = await import("./engine.ts?shareTopAppsA");
   const engineC = await import("./engine.ts?shareTopAppsC");
   await a.with(async () => {
-    S().updateProfile("default", { shareTopApps: true });
+    S().updateSpace("default", { shareTopApps: true });
     engineA.startSync();
     assert.ok("ok" in (await engineA.turnOnSync("/sync")));
     await engineA.syncNow();
@@ -336,14 +357,14 @@ test("a Mac joining sync takes a paired profile's choice to share its Top Apps i
     assert.ok("ok" in (await engineC.enterRecoveryPhrase("/sync", "words")));
     await engineC.syncNow();
     await engineC.syncNow();
-    assert.equal(S().profiles.default.shareTopApps, true, "the paired profile takes the synced choice");
+    assert.equal(S().spaces.default.shareTopApps, true, "the paired Space takes the synced choice");
   });
   for (let i = 0; i < 2; i++) {
     await a.with(() => engineA.syncNow());
     await c.with(() => engineC.syncNow());
   }
-  await a.with(() => assert.equal(S().profiles.default.shareTopApps, true, "the first Mac keeps its choice"));
-  await c.with(() => assert.equal(S().profiles.default.shareTopApps, true));
+  await a.with(() => assert.equal(S().spaces.default.shareTopApps, true, "the first Mac keeps its choice"));
+  await c.with(() => assert.equal(S().spaces.default.shareTopApps, true));
   const records = published("pta:").map((op) => op.v).filter(Boolean);
   assert.ok(records.length && records.every((v) => v.on === true), `the choice is never published away: ${JSON.stringify(records)}`);
 });

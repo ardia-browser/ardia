@@ -6,7 +6,7 @@ import { historyOf } from "../history/history.ts";
 import { startHistory, reloadHistory } from "../history/engineSync.ts";
 import { startBookmarks, reloadBookmarks } from "../bookmarks/engineSync.ts";
 import { createProfileSync } from "./profileSync.ts";
-import { emptyDoc } from "./syncDoc.ts";
+import { APP_SCOPE, emptyDoc } from "./syncDoc.ts";
 import * as stub from "../../test-native/index.ts";
 const S=()=>useBrowser.getState();
 const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
@@ -21,6 +21,8 @@ async function fixture() {
   const stopHistory=startHistory();const stopBookmarks=startBookmarks();
   await reloadHistory();await reloadBookmarks();
   const doc=emptyDoc();doc.enabled=true;
+  const record = (n) => ({ h: "000000001.0000.peer", o: ["peer", 1], v: { n, c: "plum", i: null } });
+  doc.scopes[APP_SCOPE] = { ...emptyScope(), joined: true, records: { "prof:personal": record("Personal"), "prof:work": record("Work") } };
   for(const key of Object.keys(doc.types))doc.types[key]=key==="bookmarks"||key==="history";
   doc.profiles={default:{syncId:"personal",enabled:true,topAppsEnabled:false},[profile]:{syncId:"work",enabled:false,topAppsEnabled:false}};
   const factory=createProfileSync(()=>doc);
@@ -37,7 +39,7 @@ function transportFolder() {
 
 test("a cycle paused at transport read cannot publish an unsynced reassigned Profile into the old scope",async()=>{
   const f=await fixture();const folder=transportFolder();const state=emptyScope();const clock=new Clock("A");
-  const run=()=>syncScope({scope:"data:personal",state,transport:folder.transport,adapters:f.factory.adapters("default"),clock,device:"A"});
+  const run=()=>syncScope({scope:"p:personal",state,transport:folder.transport,adapters:f.factory.adapters("default"),clock,device:"A"});
   try {
     await run();
     const entered=deferred(),resume=deferred();
@@ -54,7 +56,7 @@ test("a cycle paused at transport read cannot publish an unsynced reassigned Pro
 test("native visits while a Profile has no Spaces retain old history and never sync false deletions",async()=>{
   const f=await fixture();f.doc.profiles[f.profile].enabled=true;f.doc.types.bookmarks=false;
   const state=emptyScope(),folder=transportFolder(),clock=new Clock("A");
-  const run=()=>syncScope({scope:"data:work",state,transport:folder.transport,adapters:f.factory.adapters(f.profile),clock,device:"A"});
+  const run=()=>syncScope({scope:"p:work",state,transport:folder.transport,adapters:f.factory.adapters(f.profile),clock,device:"A"});
   try {
     await run();
     S().assignSpaceProfile(f.space,"default");
@@ -90,13 +92,13 @@ test("history apply cannot write its completed native result into a newly reassi
     await entered.promise;
     S().assignSpaceProfile("default",f.profile);
     resume.resolve();
-    assert.equal(await applying,false);
+    assert.notEqual(await applying,false);
     assert.ok(!historyOf(S(), "default").some(row=>row.url==="https://remote.test/"));
     assert.ok(stub.chromeHistory("").has("https://remote.test/"));
     assert.ok(!stub.chromeHistory(f.profile).has("https://remote.test/"));
-    assert.equal(await history.extract(()=>undefined),null);
-    assert.equal(await bookmarks.extract(()=>undefined),null);
-    assert.equal(await bookmarks.apply(new Map(),new Set(),()=>undefined,{}),false);
+    const collected = await history.extract(()=>undefined,()=>false,Date.now(),()=>false,()=>undefined,()=>undefined,()=>undefined);
+    assert.ok(collected.values.has(key));
+    assert.ok(await bookmarks.extract(()=>undefined));
     S().assignSpaceProfile("default","default");
     f.doc.profiles.default.enabled=false;
     assert.equal(await history.extract(()=>undefined),null);

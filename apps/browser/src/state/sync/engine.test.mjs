@@ -79,7 +79,7 @@ test("a crash after a batch lands: after the restart it's sent again as it was, 
   }
   const three = [...folder.values()].map((f) => JSON.parse(f.payload)).find((f) => f.ops?.some((op) => op.v?.t === "Three"));
   assert.deepEqual(three.ops.map((op) => op.v?.t), ["Three"], "only what's new");
-  assert.ok(shell.docs.has("sync-spaces-journal-1.nns"), "the journal keeps the batches the saved state doesn't have yet");
+  assert.ok(shell.docs.has("sync-journal-1.nns"), "the journal keeps the batches the saved state doesn't have yet");
 });
 
 test("a cycle writes its batch as a small journal file and leaves the saved state alone", async () => {
@@ -100,8 +100,8 @@ test("a cycle writes its batch as a small journal file and leaves the saved stat
   } finally {
     delete shell.docs.set;
   }
-  assert.equal(written.filter((name) => name === "sync-spaces-state.nns").length, 0, "the whole state isn't rewritten every cycle");
-  assert.ok(written.filter((name) => /^sync-spaces-journal-\d+\.nns$/.test(name)).length >= 3, "each batch lands in its own journal file");
+  assert.equal(written.filter((name) => name === "sync-state.nns").length, 0, "the whole state isn't rewritten every cycle");
+  assert.ok(written.filter((name) => /^sync-journal-\d+\.nns$/.test(name)).length >= 3, "each batch lands in its own journal file");
 });
 
 test("a batch is published only once the journal holding it is on disk", async () => {

@@ -38,12 +38,13 @@ test("a switch native code showed first is timed from its press, however long JS
   const { useBrowser } = await import("../browser/store.ts");
   const S = () => useBrowser.getState();
   const tab = (id) => ({
-    id, windowId: "w1", profileId: "default", url: `https://${id}.com/`, title: "", favicon: null, pin: null, muted: false, zoom: 1, customTitle: null, customIcon: null,
+    id, windowId: "w1", spaceId: "default", url: `https://${id}.com/`, title: "", favicon: null, pin: null, muted: false, zoom: 1, customTitle: null, customIcon: null,
     pinnedUrl: null, page: { kind: "loaded", nav: { url: `https://${id}.com/`, seq: 1 } }, openerId: null, createdAt: 0, lastActiveAt: 0,
   });
   S().hydrate({
-    profiles: { default: { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 } },
-    windows: { w1: { id: "w1", profileId: "default", kind: "main", tabIds: ["a", "b"], activeTabIds: { default: "a" }, sidebarOpen: true, frame: null, createdAt: 0 } },
+    profiles: { default: { id: "default", engineId: "", name: "Personal", icon: null, createdAt: 0 } },
+    spaces: { default: { id: "default", profileId: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 } },
+    windows: { w1: { id: "w1", spaceId: "default", kind: "main", tabIds: ["a", "b"], activeTabIds: { default: "a" }, sidebarOpen: true, frame: null, createdAt: 0 } },
     tabs: { a: tab("a"), b: tab("b") },
     focusedWindowId: "w1",
   });

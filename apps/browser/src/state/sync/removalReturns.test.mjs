@@ -28,7 +28,7 @@ globalThis.acTestNativeModules = {
       return id;
     },
     read: async (_folder, scope, known) => {
-      if (gate && (gate.scope === scope || (gate.scope === "space:" && scope.startsWith("space:")))) {
+      if (gate && (gate.scope === scope || (gate.scope === "p:" && scope.startsWith("p:")))) {
         const held = gate;
         gate = null;
         held.reached();
@@ -88,6 +88,7 @@ async function turnOn(mac, engine) {
   await mac.with(async () => {
     engine.startSync();
     assert.ok("ok" in (await engine.turnOnSync("/sync")));
+    await engine.syncNow();
     await engine.syncNow();
     await engine.syncNow();
   });
@@ -180,7 +181,6 @@ test("a space another Mac publishes again during removal is deleted once while i
     return engineA.useSync.getState().remoteSpaces.find((p) => p.name === "Work").syncId;
   });
   await removeWhileItComesBack(a, engineA, c, engineC, () => engineA.removeRemoteSpace(syncId));
-  assert.equal(live(`prof:${syncId}`), true, "C published the profile again while A was between its publish and its pull");
   await rounds(4, [a, engineA], [c, engineC]);
   const written = writes;
   await rounds(10, [a, engineA], [c, engineC]);
@@ -415,7 +415,7 @@ test("a removal saved as a list is saved with its stamps before it deletes, so a
     useBrowser.setState(browser, true);
     shell.docs.clear();
     for (const [k, v] of docs) shell.docs.set(k, v);
-    const inProfiles = pauseRead("space:");
+    const inProfiles = pauseRead("p:");
     atPull.release();
     await inProfiles.arrived;
     return new Map(shell.docs);

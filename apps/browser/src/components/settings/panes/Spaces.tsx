@@ -2,9 +2,8 @@ import { chooseFromMenu } from "../../../state/app/menuChoice";
 import { iconSymbol as spaceSymbol } from "../../../lib/customIcon";
 import { requestCreateSpace as createSpace } from "../../../state/spaces/createSpaceRequest";
 import { useProfile, useProfiles } from "../../../state/profiles/hooks";
-import { keepSpaceProfile } from "../../../state/sync/engine";
 import { confirm } from "../../../state/app/system";
-import { ContextMenuArea, Symbol, Box, Button, font, radius, space as spacing, PopUp, Segmented, TextField, useHover } from "../../ui";
+import { ContextMenuArea, Symbol, Box, Button, font, radius, space as spacing, PopUp, Segmented, TextField, Toggle, useHover } from "../../ui";
 import { hapticTick, showMenu } from "../../../state/app/system";
 import { useLayoutEffect, useRef, useState } from "react";
 import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from "react-native";
@@ -245,20 +244,25 @@ export function SpaceDetailsPane({ spaceId }: { spaceId: string }) {
     if (choice && typeof choice === "object") updateSpace(spaceId, { icon: choice.icon });
   };
   const assign = async (profileId: string) => {
-    if (profileId === workspace.profileId) return;
+    if (workspace.syncProfileLocked || profileId === workspace.profileId) return;
     const target = profiles.find((p) => p.id === profileId);
     if (!target) return;
     const { confirmed } = await confirm({ title: "Change This Space's Profile?", message: `Pages in ${workspace.name} will reload using ${target.name}'s logins and browsing data. Unsaved form changes may be lost. Saved rows, folders and the theme stay.`, confirmTitle: "Change Profile" });
-    if (confirmed) { assignSpaceProfile(spaceId, profileId); keepSpaceProfile(spaceId); }
+    if (confirmed) assignSpaceProfile(spaceId, profileId);
   };
   return <Box gap="l">
     <SectionHeader title="Space" />
     <Group>
       <Row title="Name"><TextField value={name} onChangeText={setName} onSubmit={commitName} onBlur={commitName} style={{ width: 220 }} /></Row>
       <Row title="Icon"><Button title="Change…" onPress={() => void pickIcon()} /></Row>
-      <Row title="Profile" description="Spaces using this profile share logins, extensions, history and Top Apps.">
-        <PopUp value={workspace.profileId} options={profiles.map((p) => ({ value: p.id, title: p.name }))} onChange={(id) => void assign(id)} />
+      <Row title="Profile" description={workspace.syncProfileLocked ? "Synced spaces keep the same profile so older devices can open them. You can choose another profile when you create a local space." : "Spaces using this profile share logins, extensions and history."}>
+        <PopUp disabled={workspace.syncProfileLocked} value={workspace.profileId} options={profiles.map((p) => ({ value: p.id, title: p.name }))} onChange={(id) => void assign(id)} />
       </Row>
+      {workspace.legacyTopApps ? (
+        <Row title="Share Top Apps" description="Share Top Apps with opted-in spaces using this profile.">
+          <Toggle value={!!workspace.shareTopApps} onChange={(on) => updateSpace(spaceId, { shareTopApps: on || undefined })} />
+        </Row>
+      ) : null}
       <Row title="Default Space" description="Links from other apps and new windows open in this space.">
         <Button title={isDefault ? "Default" : "Make Default"} disabled={isDefault} onPress={() => setDefaultSpace(spaceId)} />
       </Row>

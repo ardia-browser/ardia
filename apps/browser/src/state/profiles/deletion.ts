@@ -9,6 +9,7 @@ export function profileDeletion(s: BrowserState, id: string) {
   if (profiles.length <= 1) return { blocked: true, message: "Keep at least one profile. Create another profile before deleting this one." };
   if (Object.values(s.windows).some((window) => (window.kind === "private") && window.incognitoEngineId === profile.engineId)) return { blocked: true, message: "Close this profile’s private windows before deleting it. Their browsing session is still in use." };
   const spaces = Object.values(s.spaces).filter((space) => space.profileId === id).sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+  if (spaces.some((space) => space.syncProfileLocked)) return { blocked: true, message: "This profile belongs to a synced space. A synced space keeps its browsing profile so older devices can still use it." };
   const next = profiles[(at + 1) % profiles.length]!;
   const names = spaces.slice(0, 2).map((space) => space.name).join(", ") + (spaces.length > 2 ? ", and others" : "");
   const reassignment = spaces.length ? `This profile is used in ${names}. Delete Anyway will reassign all its spaces to “${next.name}”. Their pages will reload with that profile’s logins. Unsaved form changes may be lost. ` : "";

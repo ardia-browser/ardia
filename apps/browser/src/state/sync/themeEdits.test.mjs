@@ -59,7 +59,7 @@ const THEME_A = look(0.3);
 const THEME_B = look(0.6);
 const THEME_C = look(0.9);
 const justAfter = (h) => `${h.slice(0, 9)}.${(parseInt(h.slice(10, 14), 36) + 1).toString(36).padStart(4, "0")}.devZ`;
-const remoteTheme = (key, h, theme) => folder.set("remote", { scope: "workspace-v2", payload: JSON.stringify({ v: 1, kind: "log", device: "devZ", seq: 1, at: Date.now(), ops: [{ k: key, h, v: { t: theme } }] }) });
+const remoteTheme = (key, h, theme) => folder.set("remote", { scope: "app", payload: JSON.stringify({ v: 1, kind: "log", device: "devZ", seq: 1, at: Date.now(), ops: [{ k: key, h, v: { t: theme } }] }) });
 const opsFor = (key) =>
   [...folder.values()].flatMap(({ payload }) => {
     const file = JSON.parse(payload);
@@ -80,7 +80,7 @@ test("known issue, expected for now: a theme picked while a pull reads is replac
   assert.deepEqual(opsFor(key).at(-1)?.v, { t: THEME_A });
 
   remoteTheme(key, justAfter(opsFor(key).at(-1).h), THEME_B);
-  heldScope = "workspace-v2";
+  heldScope = "app";
   releaseRead = null;
   const cycle = engine.syncNow();
   await until(() => releaseRead);

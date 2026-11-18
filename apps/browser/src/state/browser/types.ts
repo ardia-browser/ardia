@@ -36,6 +36,8 @@ export type Space = {
   theme?: ProfileTheme | null;
   pinnedCollapsed?: boolean;
   shareTopApps?: true;
+  legacyTopApps?: true;
+  syncProfileLocked?: true;
   syncTabs?: true;
   passwordManager?: string;
 };

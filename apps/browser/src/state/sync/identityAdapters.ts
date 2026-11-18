@@ -15,14 +15,18 @@ export function profilesAdapter(links: () => Record<string, ProfileLink>): Adapt
   return {
     prefix: "identity:",
     adoptRemoteOnJoin: true,
-    extract: () => {
+    publishAfterPull: true,
+    extract: (_base, _queued, _now, known) => {
       const profiles = useBrowser.getState().profiles;
       const values = new Map<string, unknown>();
       for (const [id, link] of Object.entries(links())) {
         const p = profiles[id];
-        if (p && !link.adopting) values.set(profileKey(link.syncId), { n: p.name, i: p.icon, ...(id === "default" ? { seed: true } : {}) } satisfies ProfileRecord);
+        const key = profileKey(link.syncId);
+        if (p && (!link.adopting || !known(key))) values.set(key, { n: p.name, i: p.icon } satisfies ProfileRecord);
       }
-      return { values, ignore: (key) => !values.has(key) };
+      return { values, ignore: (key) => !values.has(key), published: (keys) => {
+        for (const link of Object.values(links())) if (keys.has(profileKey(link.syncId))) delete link.adopting;
+      } };
     },
     apply: (visible, changed) => {
       for (const [id, link] of Object.entries(links())) {

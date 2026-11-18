@@ -145,11 +145,7 @@ function remoteFor(host: ArdiaHost): SyncRemote {
     setTypeSynced: (type: DataType, enabled: boolean) => engine.setTypeSynced(type, enabled),
     setProfileSynced: (profileId: string, enabled: boolean) => engine.setProfileSynced(profileId, enabled),
     setSpaceSynced: (spaceId: string, enabled: boolean) => engine.setSpaceSynced(spaceId, enabled),
-    setTopAppsSynced: (profileId: string, enabled: boolean) => engine.setTopAppsSynced(profileId, enabled),
     setOpenTabsSynced: (spaceId: string, enabled: boolean) => engine.setOpenTabsSynced(spaceId, enabled),
-    keepSpaceProfile: (spaceId: string) => engine.keepSpaceProfile(spaceId),
-    acceptSpaceProfile: (spaceId: string) => engine.acceptSpaceProfile(spaceId),
-    upgradeSync: () => engine.upgradeSync(),
     addRemoteSpace: (syncId: string) => engine.addRemoteSpace(syncId),
     removeRemoteProfile: (syncId: string) => engine.removeRemoteProfile(syncId),
     removeSyncedDevice: (deviceId: string) => engine.removeSyncedDevice(deviceId),
@@ -162,7 +158,7 @@ function remoteFor(host: ArdiaHost): SyncRemote {
 
 async function becomeAuthority(host: ArdiaHost) {
   try {
-    await refreshSyncDocuments({ refresh: refreshDocument, remove: deleteDocument });
+    await refreshSyncDocuments({ refresh: refreshDocument, read: readDocument, remove: deleteDocument });
   } catch (error) {
     useSync.setState({ status: "stalled", error: "Ardia couldn’t read this device’s sync files, so sync is paused to keep them." });
     throw error;
@@ -296,24 +292,8 @@ export function setSpaceSynced(spaceId: string, enabled: boolean) {
   quietly(forward("setSpaceSynced", [spaceId, enabled]));
 }
 
-export function setTopAppsSynced(profileId: string, enabled: boolean) {
-  quietly(forward("setTopAppsSynced", [profileId, enabled]));
-}
-
 export function setOpenTabsSynced(spaceId: string, enabled: boolean) {
   quietly(forward("setOpenTabsSynced", [spaceId, enabled]));
-}
-
-export function keepSpaceProfile(spaceId: string) {
-  quietly(forward("keepSpaceProfile", [spaceId]));
-}
-
-export function acceptSpaceProfile(spaceId: string) {
-  return forward("acceptSpaceProfile", [spaceId], INTERACTIVE_CALL_TIMEOUT_MS);
-}
-
-export function upgradeSync() {
-  return forward("upgradeSync", [], INTERACTIVE_CALL_TIMEOUT_MS);
 }
 
 export function addRemoteSpace(syncId: string): string | null {

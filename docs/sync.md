@@ -258,6 +258,27 @@ assigned by keeping the longest increasing run of known positions, so two Macs r
 different items merge. Equal positions (two inserts in the same place) sort by id and are
 separated on the next publish.
 
+## Profiles and Spaces
+
+The desktop splits the old workspace into a Space for layout and a Profile for browsing data. It keeps
+the same recovery phrase, device ID and encrypted `app` and `p:<id>` scopes. Older desktops and iPhones
+still see each synced Space as a profile. `prof:<id>` holds the Space name, colour and icon.
+`share:<id>` points to the workspace whose `p:<id>` holds the shared Profile data. The desktop keeps
+that assignment fixed while the Space is linked. It waits for the owner chain to be readable before
+moving bookmarks, history, passwords or extensions through it.
+
+`identity:<owner id>` holds the separate Profile name and icon. Older versions preserve this record
+without displaying it. Linked Spaces keep the old pin keys and Top Apps sharing switch
+(`pta:<id>`). The Profile data switch covers browsing data independently of the Space switch.
+Availability of each category still depends on the device's data-type switches. A new Space stays
+local after setup until its sync switch is turned on. A Profile needs a linked Space before it can
+share browsing data.
+
+An upgrade opens the existing encrypted checkpoint and journal and saves a new checkpoint before
+the first sync cycle. Outgoing batches and sent-tab history still use their original scope names.
+Sync pauses if it finds data from the earlier Profiles and Spaces preview, which used
+`workspace-v2` and separate encrypted state files. It preserves both sets of files.
+
 ## What syncs
 
 Per profile: each synced profile is its own scope, with its own opt-in (Settings › Sync ›

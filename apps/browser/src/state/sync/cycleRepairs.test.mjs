@@ -73,6 +73,7 @@ test("a cycle within the read interval leaves passwords alone, and Sync Now read
   engine.startSync();
   assert.ok("ok" in (await engine.turnOnSync("/sync")));
   await engine.syncNow();
+  await engine.syncNow();
   passwordReads.length = 0;
   await runScheduledCycle();
   assert.equal(passwordReads.length, 0, "a regular cycle waits out the interval");
@@ -90,7 +91,7 @@ test("Sync Now pressed while a cycle runs reads every space's passwords in the c
   const links = engine.useSync.getState().spaces;
   assert.ok(links.default && links[work], "both spaces sync");
 
-  heldScope = `space:${links[work].syncId}`;
+  heldScope = `p:${links[work].syncId}`;
   const running = runScheduledCycle();
   await settle();
   assert.ok(held, "the regular cycle is reading the second space");
@@ -109,8 +110,8 @@ const GLOW = "set:selectedTabGlow";
 function savedFromOlderBuild({ settings, chosen = false }) {
   const record = { h: "0000000001000.0000.peer", v: { v: "off" }, o: ["peer", 1] };
   const app = { ...emptyScope(), records: { [GLOW]: record }, base: { [GLOW]: canonical(record.v) }, vv: { peer: 1 }, joined: true, seen: { peer: 1 } };
-  shell.docs.set("sync-spaces-state.nns", `sealed:${JSON.stringify({ covers: -1, scopes: { "workspace-v2": app }, version: 1 })}`);
-  const doc = { v: 2, protocolReady: true, profiles: {}, enabled: true, folder: "/sync", deviceId: "me", clock: null, types: { bookmarks: true, history: true, tabs: true, pinned: true, passwords: true, extensions: true, settings }, spaces: {}, lastSyncedAt: null, setupAt: 1, joining: false };
+  shell.docs.set("sync-state.nns", `sealed:${JSON.stringify({ covers: -1, scopes: { "app": app }, version: 1 })}`);
+  const doc = { v: 1, profiles: {}, enabled: true, folder: "/sync", deviceId: "me", clock: null, types: { bookmarks: true, history: true, tabs: true, pinned: true, passwords: true, extensions: true, settings }, spaces: {}, lastSyncedAt: null, setupAt: 1, joining: false };
   shell.docs.set("sync.json", JSON.stringify(doc));
   if (chosen) S().updateSettings({ selectedTabGlow: "soft" });
 }
@@ -154,24 +155,25 @@ test("a setting chosen on this Mac isn't replaced by the one an older build rece
   assert.equal(S().settings.selectedTabGlow, "soft");
 });
 
-test("retrying a failed upgrade checkpoints the legacy records before opening sync", async (t) => {
+test("retrying a failed checkpoint reopens the legacy replica before publishing", async () => {
   reset();
   shell.docs.set("sync.json", JSON.stringify({ v: 1, enabled: true, folder: "/sync", deviceId: "retry-device", types: { settings: false }, profiles: { default: { syncId: "owner", enabled: true } } }));
   const record = (v) => ({ h: "000000001.0000.old", v, o: ["old", 1] });
   shell.docs.set("sync-state.nns", `sealed:${JSON.stringify({ covers: 0, scopes: { app: { ...emptyScope(), records: { "prof:owner": record({ n: "Personal", c: "plum", i: null, d: true }), "set:warnBeforeQuitting": record({ v: false }) } } } })}`);
-  t.mock.method(shell.shellNativeModules.ArdiaDialogs, "confirm", async () => ({ confirmed: true }));
   const native = globalThis.acTestNativeModules.ArdiaSync;
   const sealing = native.sealLocal;
   native.sealLocal = async () => { throw new Error("keychain unavailable"); };
   const engine = await import("./engine.ts?failed-upgrade-retry");
   engine.startSync();
   try {
-    await engine.upgradeSync();
-    assert.equal(engine.useSync.getState().status, "upgrade");
+    await settle();
+    assert.equal(engine.useSync.getState().status, "stalled");
+    assert.equal(folder.size, 0);
+    assert.equal(JSON.parse(shell.docs.get("sync.json")).v, 1);
     native.sealLocal = sealing;
-    await engine.upgradeSync();
-    assert.equal(JSON.parse(shell.docs.get("sync.json")).protocolReady, true);
-    const checkpoint = JSON.parse(shell.docs.get("sync-spaces-state.nns").slice(7));
-    assert.deepEqual(checkpoint.scopes["legacy-settings"].records["set:warnBeforeQuitting"].v, { v: false });
+    await engine.syncNow();
+    assert.equal(JSON.parse(shell.docs.get("sync.json")).v, 3);
+    const checkpoint = JSON.parse(shell.docs.get("sync-state.nns").slice(7));
+    assert.deepEqual(checkpoint.scopes.app.records["set:warnBeforeQuitting"].v, { v: false });
   } finally { native.sealLocal = sealing; }
 });

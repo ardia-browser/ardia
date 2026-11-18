@@ -1,6 +1,6 @@
 import { addHistoryVisits, deleteHistoryUrls } from "../../platform/history";
 import type { Adapter } from "../../platform/sync";
-import { historyOf, historyViewOf, MAX_HISTORY, MAX_VISIT_TIMES, withHistoryList } from "../history/history";
+import { historyViewOf, MAX_HISTORY, MAX_VISIT_TIMES, withHistoryList } from "../history/history";
 import { useBrowser } from "../browser/store";
 import { engineProfile } from "../browser/model";
 import type { HistoryEntry } from "../browser/types";
@@ -51,8 +51,9 @@ function olderThan(view: readonly HistoryEntry[], since: number, keyOf: (e: Hist
 
 export function historyAdapter(profileId: string, context?: { profileId: string; engineId: string; enabled(): boolean }): Adapter {
   const matches = (s: ReturnType<typeof store>) => !context || context.enabled() &&
-    s.spaces[profileId]?.profileId === context.profileId && s.profiles[context.profileId]?.engineId === context.engineId;
-  const ready = () => matches(store()) && !!historyViewOf(store(), profileId)?.ready;
+    s.profiles[context.profileId]?.engineId === context.engineId;
+  const viewOf = (s: ReturnType<typeof store>) => context ? s.history[context.engineId] : historyViewOf(s, profileId);
+  const ready = () => matches(store()) && !!viewOf(store())?.ready;
   const extracts = historyExtractsOf(profileId);
   const { parsed, knownJson } = extracts;
   const knownOf = (key: string, json: string | undefined) => {
@@ -76,7 +77,7 @@ export function historyAdapter(profileId: string, context?: { profileId: string;
       if (!ready()) return null;
       const since = Date.now() - HISTORY_WINDOW_MS;
       const values = new Map<string, unknown>();
-      const { list: view, floor } = historyViewOf(store(), profileId)!;
+      const { list: view, floor } = viewOf(store())!;
       const extractedVisit = (e: HistoryEntry) => {
         let visit = extracts.visits.get(e);
         if (!visit) extracts.visits.set(e, (visit = { key: isWebPageUrl(e.url) ? `${HISTORY}${e.url}` : null, json: undefined, value: null }));
@@ -113,7 +114,7 @@ export function historyAdapter(profileId: string, context?: { profileId: string;
     apply: async (visible, changed) => {
       if (!ready()) return false;
       const since = Date.now() - HISTORY_WINDOW_MS;
-      const byUrl = new Map(historyOf(store(), profileId).map((e) => [e.url, e]));
+      const byUrl = new Map((viewOf(store())?.list ?? []).map((e) => [e.url, e]));
       const add: { url: string; title: string; visitTimes: number[] }[] = [];
       const remove: string[] = [];
       const updates = new Map<string, HistoryEntry | null>();
@@ -148,7 +149,7 @@ export function historyAdapter(profileId: string, context?: { profileId: string;
       if (!matches(store())) return false;
       useBrowser.setState((s) => {
         if (!matches(s)) return {};
-        const current = new Map(historyOf(s, profileId).map((e) => [e.url, e]));
+        const current = new Map((viewOf(s)?.list ?? []).map((e) => [e.url, e]));
         for (const [url, update] of updates) {
           const now = current.get(url);
           if (!update) current.delete(url);

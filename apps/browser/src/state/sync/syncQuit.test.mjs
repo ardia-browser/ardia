@@ -89,8 +89,8 @@ test("a theme pulled while quitting isn't applied after the session froze, so th
     await engine.syncNow();
     await until(() => releaseSeal);
 
-    folder.set("remote", { scope: "workspace-v2", payload: JSON.stringify({ v: 1, kind: "log", device: "devZ", seq: 1, at: Date.now(), ops: [{ k: key, h: stampAt(Date.now() + 60_000), v: { t: THEME_B } }] }) });
-    heldScope = "workspace-v2";
+    folder.set("remote", { scope: "app", payload: JSON.stringify({ v: 1, kind: "log", device: "devZ", seq: 1, at: Date.now(), ops: [{ k: key, h: stampAt(Date.now() + 60_000), v: { t: THEME_B } }] }) });
+    heldScope = "app";
     const cycle = engine.syncNow();
     await until(() => releaseRead);
 
@@ -105,7 +105,7 @@ test("a theme pulled while quitting isn't applied after the session froze, so th
     await settle();
 
     assert.deepEqual(S().spaces.default.theme, frozen, "nothing is applied after the session froze");
-    const saved = JSON.parse(shell.docs.get("sync-spaces-state.nns").slice(7)).scopes["workspace-v2"];
+    const saved = JSON.parse(shell.docs.get("sync-state.nns").slice(7)).scopes["app"];
     assert.equal(saved.base[key], canonical({ t: THEME_A }), "the saved base still matches the frozen session");
     assert.ok(saved.unapplied.includes(key), "and the pulled theme waits to be applied");
   } finally {

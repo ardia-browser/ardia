@@ -1,45 +1,55 @@
 import { type Adapter, type ExtensionsAdapter } from "../../platform/sync";
 import { useBrowser } from "../browser/store";
-import { profileEngine } from "../profiles/current";
 import { bookmarksAdapter, inTodaysNames, passwordsAdapter } from "./adapters";
 import { historyAdapter } from "./historyAdapter";
 import { profileOpened } from "../profiles/profileLoading";
-import { topAppsAdapter } from "./identityAdapters";
 import { extensionsAdapterFor, watchExtensionIntents } from "./extensions";
-import type { SyncDoc } from "./syncDoc";
+import { typeSyncedFor, type DataType, type SyncDoc } from "./syncDoc";
+import { dataOwnerMatches } from "./spaceLinks";
 
 export function createProfileSync(current: () => SyncDoc) {
-  const passwordAdapters = new Map<string, (forced: boolean) => Adapter>();
-  const extensionAdapters = new Map<string, ExtensionsAdapter>();
+  const owners = new Map<string, { engineId: string; passwords: (forced: boolean) => Adapter; extensions: ExtensionsAdapter }>();
+  const enabled = (profileId: string, type: DataType, engineId: string) => {
+    const doc = current();
+    const link = doc.profiles[profileId];
+    return !doc.preview && doc.enabled && !!link?.enabled && !link.retire && typeSyncedFor(doc.types, type, true) &&
+      useBrowser.getState().profiles[profileId]?.engineId === engineId && dataOwnerMatches(doc, profileId);
+  };
+  function of(profileId: string, engineId: string) {
+    const cached = owners.get(profileId);
+    if (cached?.engineId === engineId) return cached;
+    const entry = {
+      engineId,
+      passwords: passwordsAdapter(profileId, undefined, () => engineId, () => enabled(profileId, "passwords", engineId)),
+      extensions: extensionsAdapterFor(profileId, () => engineId, () => enabled(profileId, "extensions", engineId)),
+    };
+    owners.set(profileId, entry);
+    return entry;
+  }
+
   function adapters(profileId: string, forced: boolean): Adapter[] {
-    const s = useBrowser.getState();
-    const representative = s.spaceOrder.find((id) => s.spaces[id]?.profileId === profileId);
-    const link = current().profiles[profileId];
-    if (!link || !s.profiles[profileId]) return [];
-    const context = { profileId, engineId: s.profiles[profileId]!.engineId };
-    const t = current().types;
-    let passwords = passwordAdapters.get(profileId);
-    if (!passwords) passwordAdapters.set(profileId, passwords = passwordsAdapter(profileId, undefined, () => profileEngine(profileId)));
+    const profile = useBrowser.getState().profiles[profileId];
+    if (!profile) return [];
+    const { engineId } = profile;
+    const context = (type: DataType) => ({ profileId, engineId, enabled: () => enabled(profileId, type, engineId) });
+    const { passwords, extensions } = of(profileId, engineId);
     return [
-      ...(t.pinned && link.topAppsEnabled ? [topAppsAdapter(profileId)] : []),
-      ...(t.bookmarks && link.enabled && representative ? [inTodaysNames(bookmarksAdapter(representative, { ...context, enabled: () => !!current().profiles[profileId]?.enabled && current().types.bookmarks }))] : []),
-      ...(t.history && link.enabled && representative ? [inTodaysNames(historyAdapter(representative, { ...context, enabled: () => !!current().profiles[profileId]?.enabled && current().types.history }))] : []),
-      ...(t.passwords && link.enabled ? [passwords(forced)] : []),
-      ...(t.extensions && link.enabled ? [extensionsOf(profileId)] : []),
+      ...(enabled(profileId, "bookmarks", engineId) ? [inTodaysNames(bookmarksAdapter(profileId, context("bookmarks")))] : []),
+      ...(enabled(profileId, "history", engineId) ? [inTodaysNames(historyAdapter(profileId, context("history")))] : []),
+      ...(enabled(profileId, "passwords", engineId) ? [passwords(forced)] : []),
+      ...(enabled(profileId, "extensions", engineId) ? [extensions] : []),
     ];
   }
 
-  async function watchExtensions() {
-    if (!current().enabled || !current().protocolReady || !current().types.extensions) return;
-    const profiles = Object.entries(current().profiles).filter(([id, link]) => link.enabled && useBrowser.getState().profiles[id]).map(([id]) => profileEngine(id)).filter((engine) => profileOpened(engine));
+  function watchExtensions() {
+    const profiles = Object.values(useBrowser.getState().profiles).filter(({ id, engineId }) => profileOpened(engineId) && enabled(id, "extensions", engineId)).map(({ engineId }) => engineId);
     if (profiles.length) watchExtensionIntents(profiles);
   }
 
-  function extensionsOf(profileId: string): ExtensionsAdapter {
-    let adapter = extensionAdapters.get(profileId);
-    if (!adapter) extensionAdapters.set(profileId, adapter = extensionsAdapterFor(profileId, () => profileEngine(profileId)));
-    return adapter;
+  function extensionsOf(profileId: string) {
+    const current = useBrowser.getState().profiles[profileId];
+    return current && enabled(profileId, "extensions", current.engineId) && profileOpened(current.engineId) ? of(profileId, current.engineId).extensions : undefined;
   }
 
-  return { adapters, watchExtensions, extensionsOf, clear: () => { passwordAdapters.clear(); extensionAdapters.clear(); } };
+  return { adapters, watchExtensions, extensionsOf, clear: () => owners.clear() };
 }

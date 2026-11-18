@@ -2,11 +2,8 @@ import { canonical, type Adapter } from "../../platform/sync";
 import { useBrowser } from "../browser/store";
 import { DEFAULT_SPACE_ID } from "../settings/settings";
 import { sanitizeTheme } from "../../lib/profileLook";
-import type { ProfileLink } from "./syncDoc";
-import { profileKey } from "./identityAdapters";
-import { hasLiveSpaceContent } from "./spaceContent";
 import type { Space, ProfileTheme } from "../browser/types";
-import { PROFILE, PROFILE_THEME, SHARE, profileRecord } from "./records";
+import { PROFILE, PROFILE_THEME, profileRecord } from "./records";
 
 const store = () => useBrowser.getState();
 
@@ -44,58 +41,38 @@ export function legacyThemeOf(record: SpaceRecord): Pick<Space, "theme"> | null 
   return theme ? { theme } : null;
 }
 
-export function spacesAdapter(links: () => Record<string, { syncId: string; adopting?: true; pendingProfileId?: string; publishAssignment?: true }>, profiles: () => Record<string, ProfileLink> = () => ({})): Adapter {
+export function spacesAdapter(
+  links: () => Record<string, { syncId: string; ownerSyncId?: string; adopting?: true; keepPairingColor?: true }>,
+  canPublish: (spaceId: string) => boolean = () => true,
+): Adapter {
   const linked = () => Object.entries(links()).filter(([id]) => store().spaces[id]);
   return {
     prefix: PROFILE,
     adoptRemoteOnJoin: true,
-    extract: (_base, _queued, _now, known) => {
+    publishAfterPull: true,
+    extract: (_base, _queued, _now, known, remote) => {
       const values = new Map<string, unknown>();
-      const all = links();
-      for (const [id, { syncId }] of linked()) {
+      for (const [id, { syncId, ownerSyncId, adopting }] of linked()) {
+        if (!ownerSyncId || adopting || !canPublish(id)) continue;
+        if (ownerSyncId !== syncId && !profileRecord(remote(`prof:${ownerSyncId}`))) continue;
+        if (ownerSyncId !== syncId && !known(`share:${syncId}`)) continue;
         const p = store().spaces[id]!;
-        const assignment = profiles()[p.profileId];
-        if (!assignment || all[id]?.adopting || all[id]?.pendingProfileId || !known(profileKey(assignment.syncId))) continue;
-        values.set(`prof:${syncId}`, {
-          n: p.name,
-          c: p.color,
-          i: p.icon,
-          p: assignment.syncId,
-          pos: String(store().spaceOrder.indexOf(id)).padStart(8, "0"),
-          ...(id === DEFAULT_SPACE_ID ? { d: true } : {}),
-        } satisfies SpaceRecord);
+        values.set(`prof:${syncId}`, { n: p.name, c: p.color, i: p.icon, ...(id === DEFAULT_SPACE_ID ? { d: true } : {}) } satisfies SpaceRecord);
       }
-      const mine = new Set(values.keys());
-      return { values, ignore: (key) => !mine.has(key), republish: (key) => linked().some(([, link]) => key === `prof:${link.syncId}` && !!link.publishAssignment), published: (keys) => { for (const [, link] of linked()) if (keys.has(`prof:${link.syncId}`)) delete link.publishAssignment; } };
+      return { values, ignore: (key) => !values.has(key) };
     },
     apply: (visible, changed, _base, records) => {
-      let pending = false;
-      const valid = new Map([...visible].flatMap(([key, value]) => { const record = profileRecord(value); return record ? [[key, record] as const] : []; }));
       for (const [id, link] of linked()) {
         const { syncId } = link;
-        const record = valid.get(`prof:${syncId}`);
-        if (!record || !changed.has(`prof:${syncId}`)) continue;
+        const key = `prof:${syncId}`;
+        const record = profileRecord(visible.get(key));
+        if (!record || !changed.has(key)) continue;
         const legacy = store().spaces[id]!.theme === undefined && !records.known(`pth:${syncId}`) ? legacyThemeOf(record) : null;
-        const profileId = record.p && Object.entries(profiles()).find(([local, link]) => link.syncId === record.p && store().profiles[local])?.[0];
-        if (record.p && !profileId) { pending = true; continue; }
-        if (profileId && store().spaces[id]!.profileId !== profileId) {
-          if (hasLiveSpaceContent(store(), id)) { link.pendingProfileId = profileId; pending = true; }
-          else { store().assignSpaceProfile(id, profileId); delete link.pendingProfileId; }
-        } else delete link.pendingProfileId;
-        store().updateSpace(id, { name: record.n, color: record.c, icon: record.i, ...legacy });
+        store().updateSpace(id, { name: record.n, ...(link.keepPairingColor ? {} : { color: record.c }), icon: record.i, ...legacy });
         delete link.adopting;
+        delete link.keepPairingColor;
       }
-      const order = store().spaceOrder;
-      const slots = order.map((id, i) => links()[id] && valid.has(`prof:${links()[id]!.syncId}`) ? i : -1).filter((i) => i >= 0);
-      const sorted = slots.map((i) => order[i]!).sort((a, b) => {
-        const one = valid.get(`prof:${links()[a]!.syncId}`)!;
-        const two = valid.get(`prof:${links()[b]!.syncId}`)!;
-        return (one.pos ?? "").localeCompare(two.pos ?? "") || links()[a]!.syncId.localeCompare(links()[b]!.syncId);
-      });
-      const next = [...order];
-      slots.forEach((slot, i) => next[slot] = sorted[i]!);
-      if (next.some((id, i) => id !== order[i])) store().reorderSpaces(next);
-      return !pending;
+      return true;
     },
   };
 }

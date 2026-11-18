@@ -299,7 +299,9 @@ function ConnectDeviceSheet() {
       <Box row gap="xl" style={[SECTION_TOP, { alignItems: "center" }]}>
         <View style={syncCodeFrame(theme, qr !== null)}>{qr ? <Image source={{ uri: qr }} style={QR} /> : <Button title="Show Code" onPress={() => void recoveryQrCode().then(setQr)} />}</View>
         <Text size="small" tone="textSecondary" style={QR_NOTE()}>
-          Click Show Code, then scan it with your phone’s camera to copy the words and enter them on your other computer.
+          {PLATFORM_FEATURES.syncsWithPhone
+            ? "On your iPhone, open Ardia, tap Sync With Mac, and scan the code. You can also use your camera to copy the words for another computer."
+            : "Scan the code with your phone’s camera to copy the words and enter them on your other computer."}
         </Text>
       </Box>
       {words ? (

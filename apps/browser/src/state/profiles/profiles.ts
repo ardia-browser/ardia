@@ -44,7 +44,7 @@ export const createProfilesSlice: StateCreator<BrowserState, [], [], ProfilesSli
     const profile = s.profiles[id];
     if (!profile || Object.keys(s.profiles).length <= 1 || Object.values(s.windows).some((window) => (window.kind === "private") && window.incognitoEngineId === profile.engineId)) return;
     const spaces = Object.values(s.spaces).filter((space) => space.profileId === id);
-    if (spaces.length && (!replacementId || replacementId === id || !s.profiles[replacementId])) return;
+    if (spaces.some((space) => space.syncProfileLocked) || spaces.length && (!replacementId || replacementId === id || !s.profiles[replacementId])) return;
     for (const space of spaces) get().assignSpaceProfile(space.id, replacementId!);
     s = get();
     const profiles = without(s.profiles, [id]);

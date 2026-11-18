@@ -1,7 +1,7 @@
 import type { SealedLogin } from "@ardia-real/sync";
 import type { ArdiaHost } from "./host";
 import { hostProfile, invokeHost } from "./host.ts";
-import { DOC, JOURNAL, STATE } from "../../browser/src/state/sync/syncDoc";
+import { DOC, JOURNAL, STATE, journalPartName } from "../../browser/src/state/sync/syncDoc";
 
 export const SYNC_CAPABILITIES = [
   "ArdiaSync.folderInfo",
@@ -178,7 +178,7 @@ export function presentSyncState<S extends { status: string; error: string | nul
 }
 
 export const HELD_LOGINS_DOCUMENT = "sync-held-logins.nns";
-export const SYNC_DOCUMENTS = [DOC, STATE, JOURNAL, "sync-state.nns", "sync-journal.nns", HELD_LOGINS_DOCUMENT] as const;
+export const SYNC_DOCUMENTS = [DOC, STATE, JOURNAL, HELD_LOGINS_DOCUMENT] as const;
 
 export type HeldLogin = { origin: string; username: string; sealed: string; replaced: string | null };
 type HeldByProfile = Record<string, Record<string, HeldLogin>>;
@@ -380,20 +380,23 @@ export async function whileResettingHeldLogins<T>(run: () => Promise<T>, began: 
 }
 
 export const MAX_JOURNAL_PARTS = 1000;
-export const journalPartName = (n: number) => `sync-spaces-journal-${n}.nns`;
 
 export async function refreshSyncDocuments(io: {
   refresh(name: string): Promise<boolean>;
+  read?(name: string): string | null;
   remove(name: string): Promise<void>;
   maxParts?: number;
   batch?: number;
 }): Promise<{ parts: number; removed: string[] }> {
   const maxParts = io.maxParts ?? MAX_JOURNAL_PARTS;
   const batch = io.batch ?? 50;
-  for (const name of SYNC_DOCUMENTS) await io.refresh(name);
-  for (let n = 1; n <= maxParts; n++) {
-    if (!await io.refresh(`sync-journal-${n}.nns`)) break;
+  await io.refresh(DOC);
+  const config = io.read?.(DOC);
+  if (config) {
+    const { v, preview } = JSON.parse(config);
+    if (v === 2 || preview === true) return { parts: 0, removed: [] };
   }
+  for (const name of SYNC_DOCUMENTS.slice(1)) await io.refresh(name);
   const present: boolean[] = [];
   for (let start = 1; start <= maxParts; start += batch) {
     const numbers = Array.from({ length: Math.min(batch, maxParts - start + 1) }, (_, i) => start + i);

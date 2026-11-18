@@ -8,10 +8,14 @@ import { pinKeyOf } from "../browser/model";
 
 const tile = (tab: Tab | undefined): tab is Tab => !!tab && tab.pin?.as === "tile";
 export const isTopApp = (tab: Pick<Tab, "pin">) => tab.pin?.as === "tile";
-const sharingProfile = (s: Pick<BrowserState, "spaces">, id: string) => s.spaces[id]?.shareTopApps ? s.spaces[id]?.profileId : undefined;
+const sharingProfile = (s: Pick<BrowserState, "spaces">, id: string) => s.spaces[id]?.shareTopApps && !s.spaces[id]?.legacyTopApps ? s.spaces[id]?.profileId : undefined;
 const profileOf = (s: BrowserState, tab: Tab) => sharingProfile(s, tab.spaceId);
 
 export function topAppsShared(s: Pick<BrowserState, "spaces">, a: string, b: string): boolean {
+  if (s.spaces[a]?.legacyTopApps || s.spaces[b]?.legacyTopApps) {
+    const one = s.spaces[a], other = s.spaces[b];
+    return !!one?.legacyTopApps && !!other?.legacyTopApps && !!one.shareTopApps && !!other.shareTopApps && one.profileId === other.profileId;
+  }
   const owner = sharingProfile(s, a);
   return owner !== undefined && owner === sharingProfile(s, b);
 }
@@ -27,7 +31,10 @@ export const topAppCircles = (s: Pick<BrowserState, "spaces" | "spaceOrder">) =>
   return [...profiles.values()].filter((ids) => ids.length > 1);
 };
 export const sharingChanged = (s: Pick<BrowserState, "spaces">, prev: Pick<BrowserState, "spaces">) =>
-  s.spaces !== prev.spaces && [...new Set([...Object.keys(s.spaces), ...Object.keys(prev.spaces)])].some((id) => sharingProfile(s, id) !== sharingProfile(prev, id));
+  s.spaces !== prev.spaces && [...new Set([...Object.keys(s.spaces), ...Object.keys(prev.spaces)])].some((id) => {
+    const a = s.spaces[id], b = prev.spaces[id];
+    return a?.legacyTopApps !== b?.legacyTopApps || (a?.shareTopApps ? a.profileId : undefined) !== (b?.shareTopApps ? b.profileId : undefined);
+  });
 const specOf = (tab: Tab): TopApp => ({
   key: pinKeyOf(tab), url: tab.pinnedUrl || tab.url, title: tab.title, favicon: tab.favicon,
   customTitle: tab.customTitle, customIcon: tab.customIcon, ...((tab.pin?.as === "tile" ? tab.pin.folder : undefined) ? { tileFolder: (tab.pin?.as === "tile" ? tab.pin.folder : undefined) } : {}),

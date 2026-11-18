@@ -186,6 +186,61 @@ test("the cache starts over past 3000 pages with the newest icons, and a waiting
   }
 });
 
+test("a page the cache dropped when an import started it over is looked up again, for the row showing it and one shown later", async () => {
+  useBrowser.getState().hydrate({});
+  pruneProfileFavicons("default");
+  const page = "https://dropped.test/";
+  const asked = [];
+  globalThis.faviconsForTest = (profile, pages) => (asked.push(...pages), answering({ [page]: "data:image/png;base64,KEPT" })(profile, pages));
+  globalThis.storedFavicons = [];
+  const rows = [];
+  try {
+    rows.push(mount(() => useFavicon(page, null, "default")));
+    await waitFor(() => cached(page) === "data:image/png;base64,KEPT");
+    adoptFavicons("default", Array.from({ length: 3000 }, (_, i) => ({ page: `https://drop${i}.test/`, icon: "i", png: `D${i}` })));
+    assert.equal(cached(page), undefined);
+    await waitFor(() => cached(page) === "data:image/png;base64,KEPT");
+    assert.deepEqual(asked.filter((p) => p === page), [page, page]);
+    rows.pop().unmount();
+    adoptFavicons("default", Array.from({ length: 3000 }, (_, i) => ({ page: `https://drop-again${i}.test/`, icon: "i", png: `A${i}` })));
+    assert.equal(cached(page), undefined);
+    rows.push(mount(() => useFavicon(page, null, "default")));
+    await waitFor(() => cached(page) === "data:image/png;base64,KEPT");
+    assert.deepEqual(asked.filter((p) => p === page), [page, page, page]);
+  } finally {
+    for (const row of rows) row.unmount();
+    delete globalThis.faviconsForTest;
+    pruneProfileFavicons("default");
+  }
+});
+
+test("a page the cache dropped when a newly seen icon started it over is looked up again", async () => {
+  useBrowser.getState().hydrate({});
+  pruneProfileFavicons("default");
+  const page = "https://dropped-browsing.test/";
+  const linked = "https://linked-browsing.test/";
+  const asked = [];
+  globalThis.faviconsForTest = (profile, pages) => (asked.push(...pages), answering({ [page]: "data:image/png;base64,KEPT" })(profile, pages));
+  globalThis.fetchFaviconForTest = () => Promise.resolve({ uri: "data:image/png;base64,LINKED" });
+  globalThis.storedFavicons = [];
+  const rows = [];
+  try {
+    adoptFavicons("default", Array.from({ length: 2999 }, (_, i) => ({ page: `https://fill${i}.test/`, icon: "i", png: `F${i}` })));
+    rows.push(mount(() => useFavicon(page, null, "default")));
+    await waitFor(() => cached(page) === "data:image/png;base64,KEPT");
+    rows.push(mount(() => useFavicon(linked, `${linked}icon.png`, "default")));
+    await waitFor(() => cached(linked) === "data:image/png;base64,LINKED");
+    assert.equal(cached("https://fill5.test/"), undefined);
+    await waitFor(() => cached(page) === "data:image/png;base64,KEPT");
+    assert.deepEqual(asked.filter((p) => p === page), [page, page]);
+  } finally {
+    for (const row of rows) row.unmount();
+    delete globalThis.faviconsForTest;
+    delete globalThis.fetchFaviconForTest;
+    pruneProfileFavicons("default");
+  }
+});
+
 test("a page that changes its icon right after the appearance flips keeps both, and shows the one for the appearance", async () => {
   const S = () => useBrowser.getState();
   S().hydrate({});
@@ -286,5 +341,35 @@ test("an icon the page reported during a lookup still wins after the cache start
     row.unmount();
   } finally {
     delete globalThis.faviconsForTest;
+  }
+});
+
+test("a row whose lookup answered too late, after the cache started over and dropped its icon, asks again", async () => {
+  const S = () => useBrowser.getState();
+  S().hydrate({});
+  pruneProfileFavicons("default");
+  const page = "https://late-answer.test/";
+  const windowId = S().createWindow({ url: page });
+  const tabId = S().windows[windowId].tabIds[0];
+  S().updateTab(tabId, { url: page });
+  const key = engineProfile(S(), "default");
+  seedFavicons({ images: ["data:image/png;base64,NEW"], profiles: { [key]: { pages: {}, srcs: { "https://late-answer.test/new.png": 0 } } }, themes: {} });
+  const held = heldLookups();
+  globalThis.storedFavicons = [];
+  const row = mount(() => useFavicon(page, null, "default"));
+  try {
+    await waitFor(() => held.some((l) => l.pages.includes(page)));
+    noteFavicon(tabId, "https://late-answer.test/new.png");
+    await settle();
+    adoptFavicons("default", Array.from({ length: 3000 }, (_, i) => ({ page: `https://late${i}.test/`, icon: "i", png: `L${i}` })));
+    assert.equal(cached(page), undefined);
+    held.shift().answer({ [page]: "data:image/png;base64,OLD" });
+    await waitFor(() => held.some((l) => l.pages.includes(page)));
+    held.shift().answer({ [page]: "data:image/png;base64,AGAIN" });
+    await waitFor(() => cached(page) === "data:image/png;base64,AGAIN");
+  } finally {
+    row.unmount();
+    delete globalThis.faviconsForTest;
+    pruneProfileFavicons("default");
   }
 });

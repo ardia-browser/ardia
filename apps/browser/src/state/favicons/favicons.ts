@@ -103,7 +103,7 @@ function lookUpPages(key: string, list: string[]) {
     const entry = inFlight.get(id) ?? { lookups: 0 };
     entry.lookups++;
     inFlight.set(id, entry);
-    return { id, entry, started: entry.wrote };
+    return { id, page, entry, started: entry.wrote };
   });
   void faviconsFor(key, list)
     .then((found) =>
@@ -117,12 +117,14 @@ function lookUpPages(key: string, list: string[]) {
         return writes.length ? { ...icons, pages: withPages(icons.pages, writes) } : icons;
       }, true),
     )
-    .catch((error) => {
-      for (const page of list) asked.delete(`${key}|${page}`);
-      console.warn("[favicons] lookup failed", error);
-    })
-    .finally(() => {
-      for (const { id, entry } of pending) if (--entry.lookups === 0) inFlight.delete(id);
+    .then(() => true, (error) => (console.warn("[favicons] lookup failed", error), false))
+    .then((answered) => {
+      for (const { id, page, entry } of pending) {
+        if (--entry.lookups > 0) continue;
+        inFlight.delete(id);
+        asked.delete(id);
+        if (answered && useFavicons.getState().profiles[key]?.pages[page] === undefined) watchers.get(page)?.forEach(recheck);
+      }
     });
 }
 
@@ -267,6 +269,11 @@ function check(w: Watcher) {
   } else if (w.src && w.profileId && !resolveFavicon(w.url, w.src, w.profileId)) fetchMissing(w.profileId, w.url, w.src);
 }
 
+function recheck(w: Watcher) {
+  w.known = undefined;
+  check(w);
+}
+
 function onFavicons(f: Favicons, prev: Favicons) {
   if (f.profiles === prev.profiles || !watchers.size) return;
   const pairs = changedPages(f, prev);
@@ -371,13 +378,7 @@ export function startFavicons() {
       return { ...icons, pages: Object.fromEntries(Object.entries(icons.pages).filter(([page]) => !gone.has(page))) };
     });
   });
-  const opened = onProfilesOpened(() => {
-    for (const set of [...watchers.values()])
-      for (const w of [...set]) {
-        w.known = undefined;
-        check(w);
-      }
-  });
+  const opened = onProfilesOpened(() => [...watchers.values()].forEach((set) => [...set].forEach(recheck)));
   const stop = useBrowser.subscribe((s, prev) => {
     if (s.ui.appDark !== prev.ui.appDark) appearanceChangedAt = Date.now();
     if (s.windows !== prev.windows && (changes.length || Object.keys(useFavicons.getState().profiles).some(isIncognitoProfile))) {

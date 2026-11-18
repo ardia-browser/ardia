@@ -16,6 +16,7 @@ import { dismissPeek, finishPeek, openPeekAsTab, openPeekInSplit, registerPeekMo
 import { keyText } from "../../state/commands/keyText";
 import { splitViewAvailable } from "../../state/splits/splits";
 import { notePinch } from "../../state/telemetry/usage";
+import { SMALL_BAR_HEIGHT } from "../../state/windows/small";
 
 const INSET_FRACTION = 0.055;
 const MIN_INSET = 16;
@@ -282,7 +283,7 @@ function PeekCard({
         <Animated.View
           style={{
             position: "absolute",
-            top: frame.top,
+            top: frame.top + (SMALL_BAR_HEIGHT - SMALL_BAR_BUTTON) / 2,
             left: buttons === "left" ? frame.left - SIDE_GAP - SMALL_BAR_BUTTON : frame.left + frame.width + SIDE_GAP,
             gap: SIDE_GAP,
             opacity: dim,
@@ -301,9 +302,10 @@ function PeekSideButtons({ windowId }: { windowId: string }) {
   return peekButtonList(windowId, splitFull)
     .reverse()
     .map((b) => (
-      <Panel key={b.tooltip} radius={SMALL_BAR_BUTTON / 2} shadow={shadow.tooltip} style={{ width: SMALL_BAR_BUTTON, height: SMALL_BAR_BUTTON }}>
-        <Button variant="icon" icon={b.icon} box={SMALL_BAR_BUTTON} capsule disabled={b.disabled} tooltip={b.tooltip} onPress={b.onPress} />
-      </Panel>
+      <View key={b.tooltip} style={{ width: SMALL_BAR_BUTTON, height: SMALL_BAR_BUTTON }}>
+        <Panel radius={SMALL_BAR_BUTTON / 2} shadow={shadow.tooltip} style={StyleSheet.absoluteFill} />
+        <Button variant="icon" look="row" icon={b.icon} box={SMALL_BAR_BUTTON} capsule disabled={b.disabled} tooltip={b.tooltip} onPress={b.onPress} />
+      </View>
     ));
 }
 

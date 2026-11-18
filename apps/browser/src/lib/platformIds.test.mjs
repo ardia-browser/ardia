@@ -32,3 +32,8 @@ test("every Settings pane's icon is one Windows can draw", async () => {
   assert.ok(PANES.length >= 7);
   assert.deepEqual(PANES.filter((pane) => !vectorIcon(pane.icon, 13, "semibold")).map((pane) => pane.icon), []);
 });
+
+test("Windows draws the Plugins pane's filled puzzle piece", async () => {
+  const { vectorIcon } = await import("../../../../packages/expo-windows/src/symbol/layers.ts");
+  assert.ok(vectorIcon("puzzlepiece.fill", 13, "semibold"));
+});

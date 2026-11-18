@@ -243,6 +243,7 @@ export const CURATED = {
   printer: "L:printer T:printer P:printer I:printer M:printer-outline",
   puzzlepiece: "L:puzzle T:puzzle P:puzzle-piece I:puzzle M:puzzle-outline",
   "puzzlepiece.extension": "L:puzzle T:puzzle P:puzzle-piece I:puzzle M:puzzle-outline",
+  "puzzlepiece.fill": "PF:puzzle-piece-fill TF:puzzle M:puzzle",
   "questionmark.app.dashed": "L:square-dashed T:square-rounded-dashed P:question M:help-box-outline L:circle-help T:help-square-rounded",
   "questionmark.circle": "L:circle-question-mark T:help-circle P:question I:help-circle M:help-circle-outline L:circle-help",
   "quote.bubble.fill": "TF:message-circle PF:chat-centered-text-fill M:comment-quote PF:quotes-fill TF:message",

@@ -25,7 +25,7 @@ test("sidebar rows, folder headers and tiles hold still under a press", () => {
 const USED_ALL_DAY = ["sidebar", "tabstrip", "toolbar", "omnibox", "ntp"];
 const USED_ALL_DAY_UI = ["Button.tsx", "ButtonKinds.tsx", "Menu.tsx", "Row.tsx", "ListRow.tsx", "Segmented.tsx", "Field.tsx", "HoverFill.tsx", "HoverSlot.tsx"];
 const RARE_LARGER_MOVES = new Set(["sidebar/resizeDrag.ts"]);
-const OVERSHOOTS = /\bspring(?:s|Spec)\s*\.\s*bouncy\b|\bbouncy\b\s*[,}]/;
+const OVERSHOOTS = /\bbouncy\b/;
 
 test("nothing used all day springs past its rest", () => {
   const files = [

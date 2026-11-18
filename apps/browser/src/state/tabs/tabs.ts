@@ -157,7 +157,7 @@ export function removeTabs(s: BrowserState, ids: string[], record: boolean): Bro
       if (!gone.has(activeId)) continue;
       const before = w.tabIds.filter((id) => s.tabs[id]?.profileId === profileId);
       const left = withoutTopApps(s, before.filter((id) => !gone.has(id)));
-      const next = otherPane(s, activeId, gone) ?? lastAwakeTab(s, w.id, profileId, new Set([...gone, ...before.filter((id) => !left.includes(id))])) ?? closeSuccessor(s, activeId, before, left);
+      const next = otherPane(s, activeId, gone) ?? lastAwakeTab(s, w.id, profileId, new Set([...gone, ...before.filter((id) => !left.includes(id))]), s.tabs[activeId]?.openerId) ?? closeSuccessor(s, activeId, before, left);
       if (next) activeTabIds[profileId] = next;
       else delete activeTabIds[profileId];
     }

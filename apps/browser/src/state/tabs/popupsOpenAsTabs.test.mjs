@@ -47,6 +47,7 @@ test("a pop-up from a Peek keeps the Peek's page as a tab, opens in front of it,
   assert.equal(S().tabs[popup].openerId, peek);
   assert.equal(S().windows[w].activeTabIds.default, popup);
   assert.deepEqual(takePopupTabCounts(), { popups_opened_as_tabs: 1 });
+  S().updateTab(peek, { lastActiveAt: S().tabs[page].lastActiveAt });
   S().closeTab(popup);
   assert.equal(S().windows[w].activeTabIds.default, peek);
 });

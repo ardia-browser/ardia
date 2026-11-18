@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import http from "node:http";
 import { once } from "node:events";
+import { setTimeout as delay } from "node:timers/promises";
 
 const GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
@@ -31,7 +32,7 @@ function decodeFrames(buffer) {
   return { frames, rest: buffer.subarray(offset) };
 }
 
-export async function startMockCdp({ targets = [], handlers = {} } = {}) {
+export async function startMockCdp({ targets = [], handlers = {}, handshakeDelay = 0 } = {}) {
   const sockets = new Set();
   const server = http.createServer((request, response) => {
     if (request.url === "/json/list") {
@@ -42,7 +43,8 @@ export async function startMockCdp({ targets = [], handlers = {} } = {}) {
     response.writeHead(404);
     response.end();
   });
-  server.on("upgrade", (request, socket) => {
+  server.on("upgrade", async (request, socket) => {
+    if (handshakeDelay) await delay(handshakeDelay);
     const accept = createHash("sha1").update(`${request.headers["sec-websocket-key"]}${GUID}`).digest("base64");
     socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
     sockets.add(socket);

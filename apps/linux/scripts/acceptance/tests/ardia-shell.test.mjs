@@ -143,6 +143,22 @@ describe("Ardia launch plumbing and shell driver against a mock host", () => {
     }
   });
 
+  it("allows the first DevTools handshake to take longer than five seconds", async () => {
+    const slow = await startMockCdp({ handshakeDelay: 5500 });
+    let app;
+    try {
+      app = await launchArdia({ executable: "/bin/true", scratch, startTimeout: 10000, spawnImpl: (executable, args, options) => {
+        const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { ...options, env: process.env });
+        void writeFile(join(scratch, "DevToolsActivePort"), `${slow.port}\n/devtools/browser/mock\n`);
+        return child;
+      } });
+      assert.deepEqual(await app.browser.send("Target.getTargets"), {});
+    } finally {
+      await app?.close({ graceful: false, timeout: 0 });
+      await slow.close();
+    }
+  });
+
   it("turns core dumps off through a shell wrapper only when asked", async () => {
     const seen = [];
     const recording = (executable, args, options) => {

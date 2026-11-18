@@ -72,7 +72,7 @@ export async function launchArdia({ executable, uiDir, scratch, background = tru
     const active = await until(() => readFile(join(scratch, "DevToolsActivePort"), "utf8").then((text) => text.includes("\n") && text), { timeout: startTimeout, label: "DevToolsActivePort", abort: () => app.exitReason() });
     const [port, path] = active.trim().split("\n");
     app.port = Number(port);
-    app.browser = await connectCdp(`ws://127.0.0.1:${port}${path}`);
+    app.browser = await connectCdp(`ws://127.0.0.1:${port}${path}`, { timeout: startTimeout });
     return app;
   } catch (error) {
     await app.close();

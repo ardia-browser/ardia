@@ -190,5 +190,5 @@ def _alive(pid: int) -> bool:
     except ProcessLookupError:
         return False
     except PermissionError:
-        return False
+        return True
     return True

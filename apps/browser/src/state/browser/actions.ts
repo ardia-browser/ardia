@@ -28,6 +28,10 @@ import { closeKind } from "../tabs/tabs";
 import { noteSplit } from "../telemetry/usage";
 import { consentToken } from "../telemetry/client";
 import { isPeekTab } from "../peek/peek";
+import type { Drop } from "../drag/drops";
+import { movableToProfile } from "../windows/profileMoves";
+import { noteDragToOtherProfile } from "../telemetry/tabPresses";
+import type { Tab } from "./types";
 import { noteTabClosedByUser } from "../sync/openTabCloses";
 
 const store = () => useBrowser.getState();
@@ -138,12 +142,14 @@ async function keptExtensionsNote(): Promise<string> {
 
 type ProfileMove = { windowId: string; fromProfileId: string; title: (profileName: string) => string; confirmTitle: string };
 
+const warnsBeforeMoving = (fromProfileId: string, profileId: string) =>
+  store().settings.warnBeforeMovingTabsToProfile && engineProfile(store(), profileId) !== engineProfile(store(), fromProfileId);
+
 async function profileMoveTarget(move: ProfileMove, target: string | null): Promise<string | null> {
   if (isIncognitoProfile(move.fromProfileId)) return null;
   const profileId = target ?? (await requestCreateProfile(move.windowId));
   if (!profileId || profileId === move.fromProfileId) return null;
-  const shared = engineProfile(useBrowser.getState(), profileId) === engineProfile(useBrowser.getState(), move.fromProfileId);
-  if (!store().settings.warnBeforeMovingTabsToProfile || shared) return profileId;
+  if (!warnsBeforeMoving(move.fromProfileId, profileId)) return profileId;
   const { confirmed, suppressed } = await confirm({
     title: move.title(store().profiles[profileId]?.name ?? "Profile"),
     message: "Moving tabs between profiles could result in some data being lost.",
@@ -155,12 +161,11 @@ async function profileMoveTarget(move: ProfileMove, target: string | null): Prom
   return confirmed ? profileId : null;
 }
 
-export async function moveTabsToProfile(tabIds: string[], target: string | null) {
-  const tabs = tabIds.map((id) => store().tabs[id]).filter((t) => !!t);
+function tabsMoveTarget(tabs: Tab[], target: string | null): Promise<string | null> {
   const first = tabs[0];
-  if (!first) return;
+  if (!first) return Promise.resolve(null);
   const many = tabs.length > 1;
-  const profileId = await profileMoveTarget(
+  return profileMoveTarget(
     {
       windowId: first.windowId,
       fromProfileId: first.profileId,
@@ -169,8 +174,30 @@ export async function moveTabsToProfile(tabIds: string[], target: string | null)
     },
     target,
   );
+}
+
+export async function moveTabsToProfile(tabIds: string[], target: string | null) {
+  const tabs = tabIds.map((id) => store().tabs[id]).filter((t) => !!t);
+  const profileId = await tabsMoveTarget(tabs, target);
   if (!profileId) return;
   for (const tab of tabs) if (!isIncognitoProfile(tab.profileId)) store().moveTabToProfile(tab.id, profileId);
+}
+
+export function tabDropAsksFirst(tabIds: string[], profileId: string): boolean {
+  const first = store().tabs[movableToProfile(store(), tabIds, profileId)[0] ?? ""];
+  return !!first && warnsBeforeMoving(first.profileId, profileId);
+}
+
+export function dropTabsInProfile(tabIds: string[], profileId: string, drop: Drop): boolean {
+  if (!store().dropTabsInProfile(tabIds, profileId, drop)) return false;
+  noteDragToOtherProfile();
+  return true;
+}
+
+export async function dropTabsInProfileOnceConfirmed(tabIds: string[], target: string, drop: Drop): Promise<boolean> {
+  const moving = movableToProfile(store(), tabIds, target);
+  const profileId = await tabsMoveTarget(moving.map((id) => store().tabs[id]!), target);
+  return !!profileId && dropTabsInProfile(moving, profileId, drop);
 }
 
 export const moveTabToProfile = (tabId: string, target: string | null) => moveTabsToProfile([tabId], target);

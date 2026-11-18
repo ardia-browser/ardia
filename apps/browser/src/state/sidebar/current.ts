@@ -5,6 +5,7 @@ import { cleanUpCandidates } from "../pins/tabCleanup";
 import { sharedTabsIn, sharesTabs } from "../tabs/tabShare";
 import { addressBarInSidebar } from "../windows/layout";
 import { splitsOnRow } from "../splits/lanes";
+import { movableToProfile } from "../windows/profileMoves";
 
 const store = () => useBrowser.getState();
 
@@ -17,6 +18,8 @@ export const descendantGroupIds = (groupId: string) => descendantIds(store().gro
 export const resolveDropNow = (source: DragSource, spot: DropSpot | null) => resolveDrop(store(), source, spot);
 
 export const splitsOnRowNow = (tabId: string, rowTabId: string) => splitsOnRow(store(), tabId, rowTabId);
+
+export const tabsMovableTo = (tabIds: string[], profileId: string) => movableToProfile(store(), tabIds, profileId);
 
 export const cleanUpCandidateCount = (windowId: string) => cleanUpCandidates(store(), windowId).length;
 

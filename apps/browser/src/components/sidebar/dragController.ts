@@ -6,6 +6,7 @@ import { movingTabsFrom } from "../../state/sidebar/current";
 import type { TabPlacement } from "../../state/pins/placing";
 import { SLIDE } from "../tabstrip/tokens";
 import { beginTabDrag, cancelTabDrag, endTabDrag, setDragPicture, updateTabDrag } from "../../state/drag/tabDrag";
+import { dropTabsInProfile, dropTabsInProfileOnceConfirmed, tabDropAsksFirst } from "../../state/browser/actions";
 import { noteDragWithoutDrop, noteSidebarDrop } from "../../state/telemetry/tabPresses";
 import { dropTabOnRow } from "../../state/splits/actions";
 import { arrangeLive } from "../../state/sidebar/pinnedOrder";
@@ -14,11 +15,13 @@ import { closeFolderPanel } from "../../state/sidebar/tileFolderUi";
 import { dragMarksOf, markDrag } from "../../state/sidebar/dragMarks";
 import { boxed, type Drop, EDGE, type Item, measure, tabCell, tailKey } from "./dragModel";
 import { DragTargeting } from "./dragTargeting";
-import { type DragSession, newDragSession } from "./dragGeometry";
+import { type DragSession, newDragSession, NO_TARGET } from "./dragGeometry";
 import { captureEscape } from "../../state/drag/dragNative";
 import { entryKey } from "../../state/sidebar/entryKey";
 import { endHeldTabPress } from "../../state/sidebar/heldTabPress";
 import { tabPlace } from "../../state/sidebar/actions";
+
+const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
 export class DragController extends DragTargeting {
   create(key: string): Item {
@@ -36,7 +39,7 @@ export class DragController extends DragTargeting {
     const moving = lead ? movingTabsFrom(lead) : [];
     const sources = moving.length > 1 ? [...this.items.values()].filter((i) => tabCell(i) && i.tabIds.some((id) => moving.includes(id))) : [item];
     this.stopTimers();
-    const session = (this.session = newDragSession(sources, { x, y }, this.scrollY));
+    const session = (this.session = newDragSession(sources, { x, y }, this.scrollY, this.pageId));
     this.token = {};
     suppressHover(true);
     session.escapable = true;
@@ -46,9 +49,9 @@ export class DragController extends DragTargeting {
       const single = sources.length === 1 ? (item.tabIds[0] ?? null) : null;
       seq = beginTabDrag(single, [...new Set(sources.flatMap((i) => i.tabIds))]);
     }
-    await this.measureAll(session);
+    const measured = await this.measureAll(session);
     if (this.session !== session) return;
-    const frame = item.frame ?? { x, y, w: 176, h: 33 };
+    const frame = (measured ? item.frame : null) ?? { x, y, w: 176, h: 33 };
     const grab = (session.grab = { x: x - frame.x, y: y - frame.y });
     const count = new Set(sources.flatMap((s) => s.tabIds)).size;
     const height = boxed(item) ? Math.min(frame.h, item.headerFrame?.h ?? 33) : frame.h;
@@ -64,8 +67,7 @@ export class DragController extends DragTargeting {
     this.setLanding(null);
     this.setSources(new Set(sources.map((s) => s.key)));
     this.setGhost(session.ghost);
-    session.measured = true;
-    this.move(session.pointer.x, session.pointer.y);
+    this.startTargeting(session);
   }
 
   async beginExternal(count: number, x: number, y: number) {
@@ -79,8 +81,38 @@ export class DragController extends DragTargeting {
     await this.measureAll(session);
     if (this.session !== session) return;
     this.setLanding(null);
+    this.startTargeting(session);
+  }
+
+  showPage(pageId: string) {
+    if (this.pageId === pageId) return;
+    this.pageId = pageId;
+    if (this.session) void this.turnPage(this.session);
+  }
+
+  rowsArrived() {
+    if (this.session?.turned) void this.turnPage(this.session);
+  }
+
+  protected startTargeting(session: DragSession) {
+    if (session.turn) return;
     session.measured = true;
     this.move(session.pointer.x, session.pointer.y);
+  }
+
+  protected async turnPage(session: DragSession) {
+    const turn = (session.turn = {});
+    if (!session.turned) session.movedFromHome = this.movedKeys(session.sources);
+    session.turned = true;
+    session.measured = false;
+    this.stopTimers();
+    this.forgetTarget(session);
+    await nextFrame();
+    if (this.session !== session || session.turn !== turn) return;
+    if (!(await this.measureAll(session))) return;
+    for (const source of session.sources) source.frame = source.headerFrame = null;
+    session.turn = null;
+    if (session.ghost || session.external) this.startTargeting(session);
   }
 
   finishExternal(commit: boolean): TabPlacement | null {
@@ -95,34 +127,41 @@ export class DragController extends DragTargeting {
 
   async tilesLaidOut() {
     const session = this.session;
+    const pass = session?.measuring;
     const frame = await measure(this.regions.get("tiles") ?? null);
-    if (!session || this.session !== session) return;
+    if (!session || this.session !== session || session.measuring !== pass) return;
     session.regionFrames.set("tiles", frame);
-    this.retarget();
+    if (session.measured) this.retarget();
   }
 
-  protected async measureAll(session: DragSession) {
-    const [rootFrame, viewport] = await Promise.all([measure(this.root), measure(this.scroll as unknown as View)]);
+  protected async measureAll(session: DragSession): Promise<boolean> {
+    const pass = (session.measuring = {});
+    const items = [...this.items.values()];
+    const regions = [...this.regions];
+    const [rootFrame, viewport, itemFrames, regionFrames] = await Promise.all([
+      measure(this.root),
+      measure(this.scroll as unknown as View),
+      Promise.all(items.map((i) => Promise.all([measure(i.view), measure(i.header)]))),
+      Promise.all(regions.map(([, view]) => measure(view))),
+    ]);
+    if (this.session !== session || session.measuring !== pass) return false;
     this.rootFrame = rootFrame ?? this.rootFrame;
     session.viewport = viewport;
     session.startScrollY = this.scrollY;
-    await Promise.all(
-      [...this.items.values()].map(async (i) => {
-        [i.frame, i.headerFrame] = await Promise.all([measure(i.view), measure(i.header)]);
-      }),
-    );
-    for (const [name, view] of this.regions) session.regionFrames.set(name, await measure(view));
-    const grid = [...this.items.values()].some((i) => i.kind === "tile");
-    session.gridBase = grid ? (session.regionFrames.get("tiles") ?? null) : null;
+    items.forEach((i, n) => ([i.frame, i.headerFrame] = itemFrames[n]!));
+    regions.forEach(([name], n) => session.regionFrames.set(name, regionFrames[n]!));
+    session.gridBase = items.some((i) => i.kind === "tile") ? (session.regionFrames.get("tiles") ?? null) : null;
     session.gridGrowth = 0;
+    return true;
   }
 
   move(x: number, y: number) {
     const session = this.session;
     if (session) session.pointer = { x, y };
     updateTabDrag(x, y);
-    if (!session?.measured || (!session.ghost && !session.external)) return;
+    if (!session || (!session.ghost && !session.external)) return;
     if (session.ghost) session.ghost.position.setValue({ x: this.ghostX(x), y: y - session.grab.y - this.rootFrame.y });
+    if (!session.measured) return;
     this.autoScroll(y);
     this.retarget();
   }
@@ -135,12 +174,14 @@ export class DragController extends DragTargeting {
     const splitDrop = commit ? endTabDrag() : (cancelTabDrag(), false);
     const marks = dragMarksOf(this.marks);
     const leftPanel = sources[0]?.section === "folder" && marks.folderAway;
-    const spot =
-      !splitDrop && measured && ghost && sources.length === 1 && sources[0]!.kind !== "tile" && sources[0]!.section !== "folder" && !into && drop.type !== "split" && drop.type !== "folder"
-        ? this.landingSpot(commit ? drop : NO_DROP)
-        : null;
     const dragged = sources.flatMap((i) => i.tabIds);
     const places = dragged.map(tabPlace).join();
+    const elsewhere = this.crossingTo(session);
+    const asksFirst = !!elsewhere && tabDropAsksFirst(dragged, elsewhere);
+    const spot =
+      !splitDrop && !asksFirst && measured && ghost && sources.length === 1 && sources[0]!.kind !== "tile" && sources[0]!.section !== "folder" && !into && drop.type !== "split" && drop.type !== "folder"
+        ? this.landingSpot(commit ? drop : NO_DROP)
+        : null;
     const dropped = commit && !splitDrop && measured && sources.length > 0;
     if (dropped && drop.type === "none") noteDragWithoutDrop();
     if (dropped && drop.type === "split") {
@@ -151,12 +192,15 @@ export class DragController extends DragTargeting {
     } else if (dropped) {
       const kind = marks.tile ? "tile" : marks.line ? "line" : null;
       if (kind && drop.type !== "none") noteSidebarDrop(kind);
-      dropTabs(dragged, drop);
-      if (drop.sequence) arrangeLive(drop.sequence);
+      if (elsewhere) this.dropElsewhere(dragged, ghost?.item.tabIds[0], elsewhere, drop, asksFirst);
+      else {
+        dropTabs(dragged, drop);
+        if (drop.sequence) arrangeLive(drop.sequence);
+      }
     }
     this.reset();
     const moved = dragged.map(tabPlace).join() !== places;
-    const stayed = commit && !splitDrop && !into && !moved;
+    const stayed = commit && !splitDrop && !into && !elsewhere && !moved;
     endHeldTabPress(dragged, stayed ? release : null);
     if (leftPanel) closeFolderPanel();
     if (!spot || !ghost) {
@@ -178,6 +222,16 @@ export class DragController extends DragTargeting {
     Animated.spring(ghost.position, { toValue: { x: spot.x - this.rootFrame.x, y: spot.y - this.rootFrame.y }, ...SLIDE }).start(done);
   }
 
+  protected dropElsewhere(dragged: string[], lead: string | undefined, profileId: string, drop: Drop, asksFirst: boolean) {
+    if (drop.type === "none") return;
+    const leadFirst = lead ? [lead, ...dragged.filter((id) => id !== lead)] : dragged;
+    const arrange = (moved: boolean) => {
+      if (moved && drop.sequence) arrangeLive(drop.sequence);
+    };
+    if (asksFirst) void dropTabsInProfileOnceConfirmed(leadFirst, profileId, drop).then(arrange);
+    else arrange(dropTabsInProfile(leadFirst, profileId, drop));
+  }
+
   protected stopTimers() {
     clearInterval(this.session?.scrollTimer);
     this.clearHold();
@@ -186,15 +240,12 @@ export class DragController extends DragTargeting {
   protected reset() {
     const session = this.session;
     this.stopTimers();
-    for (const i of this.items.values()) {
-      i.gap.stopAnimation();
-      i.gap.setValue(0);
-    }
+    this.closeGaps();
     this.session = null;
     if (session?.escapable) captureEscape("sidebarDrag", false);
     suppressHover(false);
     this.setSources(new Set());
-    markDrag(this.marks, { dropInto: null, split: null, line: null, tile: null, row: null, pins: false, pinCount: 0, pinBefore: null, folderTarget: null, folderAway: false });
+    markDrag(this.marks, NO_TARGET);
   }
 
   protected landingSpot(drop: Drop): { x: number; y: number } | null {

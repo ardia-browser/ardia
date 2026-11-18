@@ -1,12 +1,12 @@
 import { layout } from "../ui/theme";
 import { currentSettings } from "../../state/browser/current";
-import type { DragSource } from "../../state/drag/drops";
-import { descendantGroupIds, resolveDropNow, splitsOnRowNow } from "../../state/sidebar/current";
+import { NO_DROP, type DragSource } from "../../state/drag/drops";
+import { descendantGroupIds, resolveDropNow, splitsOnRowNow, tabsMovableTo } from "../../state/sidebar/current";
 import { tabDragOutside } from "../../state/drag/tabDrag";
 import { dragMarksOf, markDrag } from "../../state/sidebar/dragMarks";
 import { folderPanel } from "../../state/sidebar/tileFolderUi";
 import { overPins, pinGrid, pinGridHeight } from "./pinZone";
-import { boxed, type Drop, FOLDER_HOLD_MS, folderOf, inside, type Item, pinnedBlock, spring } from "./dragModel";
+import { boxed, type Drop, FOLDER_HOLD_MS, folderOf, inside, type Item, pinnedBlock, spring, tabCell } from "./dragModel";
 import { aimAt, type Pointing } from "./dragZones";
 import { DragGeometry } from "./dragGeometry";
 import { hapticTick } from "../../state/drag/dragNative";
@@ -37,6 +37,15 @@ export class DragTargeting extends DragGeometry {
     }, FOLDER_HOLD_MS);
   }
 
+  protected byY = (a: Item, b: Item) => this.at(a.frame, this.still(a))!.y - this.at(b.frame, this.still(b))!.y || a.frame!.x - b.frame!.x;
+
+  protected movedKeys(sources: Item[]): string[] {
+    return sources
+      .filter((s) => s.frame)
+      .sort(this.byY)
+      .flatMap((s) => (s.kind === "group" || s.kind === "live" || s.kind === "split" ? [s.key] : s.tabIds.map((id) => entryKey("tab", id))));
+  }
+
   protected retarget() {
     const session = this.drag;
     const { x, y } = session.pointer;
@@ -51,18 +60,16 @@ export class DragTargeting extends DragGeometry {
       const f = this.shown(i);
       return f.y + Math.min(f.h, i.headerFrame?.h ?? f.h) / 2;
     };
-    const byY = (a: Item, b: Item) => this.at(a.frame, this.still(a))!.y - this.at(b.frame, this.still(b))!.y || a.frame!.x - b.frame!.x;
+    const { byY } = this;
     const dragged = new Set(sources.flatMap((s) => s.tabIds));
     const firstTab = (i: Item | undefined) => i?.tabIds.find((id) => !dragged.has(id)) ?? null;
     const tabsDrag = source.kind === "row" || source.kind === "tile";
-    const splits = this.splitView && tabsDrag && !external && sources.length === 1 && dragged.size === 1 && !folderOf(source);
+    const elsewhere = this.crossingTo(session);
+    const splits = this.splitView && tabsDrag && !external && !elsewhere && sources.length === 1 && dragged.size === 1 && !folderOf(source);
     const count = external || (folderOf(source) ? 1 : dragged.size);
     const rowPitch = (boxed(source) ? source.foldedHeight() : layout.rowHeight * (source.kind === "split" ? 1 : Math.max(1, session.ghost?.count ?? external ?? 1))) + layout.rowGap;
     const blocks = live.filter(pinnedBlock).sort(byY);
-    const moved = sources
-      .filter((s) => s.frame)
-      .sort(byY)
-      .flatMap((s) => (s.kind === "group" || s.kind === "live" || s.kind === "split" ? [s.key] : s.tabIds.map((id) => entryKey("tab", id))));
+    const moved = session.turned ? session.movedFromHome : this.movedKeys(sources);
     const dragSource: DragSource = {
       kind: source.kind === "group" || source.kind === "split" || source.kind === "live" ? source.kind : "tab",
       groupId: source.kind === "group" ? source.groupId : undefined,
@@ -128,7 +135,8 @@ export class DragTargeting extends DragGeometry {
       leadTab: (key) => this.items.get(key)!.tabIds[0]!,
     };
     const aim = aimAt(pointing);
-    const resolved = resolveDropNow(dragSource, aim.spot);
+    const carried = elsewhere === null || (sources.every(tabCell) && tabsMovableTo([...dragged], elsewhere).length > 0);
+    const resolved = carried ? resolveDropNow(dragSource, aim.spot) : NO_DROP;
     const drop: Drop = resolved.type !== "none" && aim.sequence ? { ...resolved, sequence: aim.sequence } : resolved;
     const dropped = drop.type !== "none";
     const gapKey = dropped ? aim.gapKey : null;

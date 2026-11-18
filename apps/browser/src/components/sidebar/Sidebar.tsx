@@ -78,6 +78,7 @@ export function Sidebar({ width }: { width: number }) {
 
   useRevealTabs(windowId, scroll, scrollY, geometry);
   useLayoutEffect(() => dismissHoverIn(windowId), [windowId, current, paging]);
+  useLayoutEffect(() => drag.current?.showPage(current), [current]);
   useEffect(() => closeAnchoredWhenControlsRowChanges(windowId), [windowId]);
 
   return (

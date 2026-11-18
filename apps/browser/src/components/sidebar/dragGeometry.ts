@@ -26,11 +26,16 @@ export type DragSession = {
   gridGrowth: number;
   external: number;
   escapable: boolean;
+  homePage: string | null;
+  turn: object | null;
+  measuring: object | null;
+  turned: boolean;
+  movedFromHome: string[];
   scrollTimer: ReturnType<typeof setInterval> | undefined;
   hold: { key: string | null; ready: string | null; timer: ReturnType<typeof setTimeout> | undefined };
 };
 
-export const newDragSession = (sources: Item[], pointer: { x: number; y: number }, scrollY: number): DragSession => ({
+export const newDragSession = (sources: Item[], pointer: { x: number; y: number }, scrollY: number, homePage: string | null = null): DragSession => ({
   sources,
   pointer,
   startScrollY: scrollY,
@@ -48,9 +53,16 @@ export const newDragSession = (sources: Item[], pointer: { x: number; y: number 
   gridGrowth: 0,
   external: 0,
   escapable: false,
+  homePage,
+  turn: null,
+  measuring: null,
+  turned: false,
+  movedFromHome: [],
   scrollTimer: undefined,
   hold: { key: null, ready: null, timer: undefined },
 });
+
+export const NO_TARGET = { dropInto: null, split: null, line: null, tile: null, row: null, pins: false, pinCount: 0, pinBefore: null, folderTarget: null, folderAway: false };
 
 export class DragGeometry {
   items = new Map<string, Item>();
@@ -58,6 +70,7 @@ export class DragGeometry {
   root: View | null = null;
   scroll: ScrollView | null = null;
   scrollY = 0;
+  pageId: string | null = null;
   tilesFixed = true;
   tilesRoom = Infinity;
   splitView = splitViewAvailable;
@@ -73,6 +86,28 @@ export class DragGeometry {
 
   protected get drag(): DragSession {
     return this.session!;
+  }
+
+  protected crossingTo(session: DragSession): string | null {
+    return session.homePage !== null && this.pageId !== session.homePage ? this.pageId : null;
+  }
+
+  protected closeGaps() {
+    for (const i of this.items.values()) {
+      i.gap.stopAnimation();
+      i.gap.setValue(0);
+    }
+  }
+
+  protected forgetTarget(session: DragSession) {
+    this.closeGaps();
+    session.gapKey = null;
+    session.pitch = 0;
+    session.into = null;
+    session.dropKey = "";
+    session.drop = NO_DROP;
+    session.gridGrowth = 0;
+    markDrag(this.marks, NO_TARGET);
   }
 
   protected still(i: Item): boolean {

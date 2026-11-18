@@ -13,7 +13,10 @@ export class DragItems {
 
   add(key: string, item: Item) {
     this.own.set(key, item);
-    if (this.live) this.controller.items.set(key, item);
+    if (this.live) {
+      this.controller.items.set(key, item);
+      this.controller.rowsArrived();
+    }
     return () => {
       if (this.own.get(key) === item) this.own.delete(key);
       this.withdraw(key, item);

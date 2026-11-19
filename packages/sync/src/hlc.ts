@@ -14,6 +14,14 @@ function parseHLC(h: HLC): { wall: number; counter: number; device: string } {
 
 export const hlcWall = (h: HLC) => parseInt(h.slice(0, WALL_DIGITS), 36);
 
+const STAMP = /^[0-9a-z]+\.[0-9a-z]+\./;
+
+export function isStamp(h: unknown): h is HLC {
+  if (typeof h !== "string" || !STAMP.test(h)) return false;
+  const { wall, counter } = parseHLC(h);
+  return Number.isSafeInteger(wall) && Number.isSafeInteger(counter);
+}
+
 export class Clock {
   private wall = 0;
   private counter = 0;

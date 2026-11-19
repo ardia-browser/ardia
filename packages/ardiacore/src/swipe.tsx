@@ -49,6 +49,7 @@ export type SwipeAreaProps = ViewProps & {
   tracksUnavailableDirections?: boolean;
   allowsVerticalMotion?: boolean;
   isPager?: boolean;
+  wheelPages?: boolean;
   onSwipe: (event: SwipeEvent) => void;
   nativePager?: NativePagerConfig;
   onPagerPosition?: (event: { nativeEvent: { position: number } }) => void;

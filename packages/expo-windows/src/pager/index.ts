@@ -1,32 +1,12 @@
-import { AccessibilityInfo } from "react-native";
 import { cancelFrame, noteAnimation, requestFrame } from "../animation/motion";
+import { animationEffectsOff } from "../animation/reduceMotion";
 import { PagerRegistry, type PagerSnapshot } from "./pager";
-
-let reduceMotion = false;
-let watchingReduceMotion = false;
-
-function watchReduceMotion() {
-  if (watchingReduceMotion) return;
-  watchingReduceMotion = true;
-  try {
-    AccessibilityInfo.isReduceMotionEnabled().then(
-      (on) => void (reduceMotion = on),
-      () => {},
-    );
-    AccessibilityInfo.addEventListener("reduceMotionChanged", (on) => void (reduceMotion = on));
-  } catch {
-    reduceMotion = false;
-  }
-}
 
 export const pagers = new PagerRegistry({
   now: () => performance.now(),
   requestFrame,
   cancelFrame,
-  reducedMotion: () => {
-    watchReduceMotion();
-    return reduceMotion;
-  },
+  reducedMotion: animationEffectsOff,
   startMotion: () => {
     const running = { __active: true };
     noteAnimation(running);

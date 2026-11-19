@@ -87,6 +87,56 @@ test("a checkpoint saved before it carried a version still loads", async () => {
   assert.deepEqual(doc.scopes.app.records, { "bm:x": record });
 });
 
+function parsedObjectsWhile(run) {
+  const parse = JSON.parse;
+  const made = new Set();
+  const note = (value) => {
+    if (typeof value !== "object" || value === null || made.has(value)) return;
+    made.add(value);
+    for (const inner of Object.values(value)) note(inner);
+  };
+  JSON.parse = (...args) => {
+    const value = parse(...args);
+    note(value);
+    return value;
+  };
+  return run().then(
+    (result) => ((JSON.parse = parse), { made, result }),
+    (error) => {
+      JSON.parse = parse;
+      throw error;
+    },
+  );
+}
+
+test("no map a start loads is an object the parser made, in the saved state or a replayed part, so its keys can be added and removed", async () => {
+  const filesMap = { "f1-1": { d: "devA", k: "log", s: 1, at: 1, b: 10 } };
+  const saved = { ...scope, files: filesMap, damaged: { "f9-9": 3 }, extra: { devB: [4] }, seen: { devA: 5 } };
+  const replayed = { ...scope, seq: 2, vv: { devA: 2 }, files: { ...filesMap, "f2-2": { d: "devA", k: "log", s: 2, at: 2, b: 12 } }, seen: { devA: 6 } };
+  const { records: _records, base: _base, ...rest } = replayed;
+  const added = { h: "000000002.0000.devA", v: { t: "Added" }, o: ["devA", 2] };
+  const docs = {
+    "sync-state.nns": sealed({ version: 1, covers: 1, scopes: { app: saved, "p:s1": saved } }),
+    "sync-journal-1.nns": sealed({ version: 1, id: 2, device: "devA", changes: { app: { records: { "bm:y": added }, base: { "bm:y": '{"t":"Added"}' }, rest } } }),
+  };
+  const doc = newDoc({ profiles: { default: { syncId: "s1", enabled: true } }, seqs: { app: 2, "p:s1": 1 } });
+  const { made } = await parsedObjectsWhile(() => opening({ docs, doc }));
+  assert.ok(made.size > 10, "the parser was watched");
+  for (const [name, state] of Object.entries(doc.scopes)) {
+    for (const [field, value] of Object.entries(state)) {
+      if (typeof value === "object" && value !== null && !Array.isArray(value)) assert.ok(!made.has(value), `${name}.${field} is the parser's own object`);
+    }
+  }
+  assert.deepEqual(doc.scopes.app.records, { "bm:x": record, "bm:y": added });
+  assert.deepEqual(doc.scopes.app.base, { "bm:x": '{"t":"Kept"}', "bm:y": '{"t":"Added"}' });
+  assert.deepEqual(doc.scopes.app.files, replayed.files);
+  assert.deepEqual(doc.scopes.app.seen, { devA: 6 });
+  assert.deepEqual(doc.scopes["p:s1"].records, { "bm:x": record });
+  assert.deepEqual(doc.scopes["p:s1"].files, filesMap);
+  assert.deepEqual(doc.scopes["p:s1"].damaged, { "f9-9": 3 });
+  assert.deepEqual(doc.scopes["p:s1"].extra, { devB: [4] });
+});
+
 test("a checkpoint from a newer app, or one whose scopes are damaged, reads as empty instead of throwing", async () => {
   assert.deepEqual((await opening({ docs: { "sync-state.nns": sealed({ version: 9, covers: 1, scopes: { app: scope } }) } })).doc.scopes.app?.records ?? {}, {});
   const { doc } = await opening({ docs: { "sync-state.nns": sealed({ version: 1, covers: 1, scopes: { app: "broken", other: { records: null } } }) } });
@@ -416,7 +466,7 @@ test("sync turned off while the state seals leaves an empty state file", async (
 test("quitting waits for a part still sealing and the checkpoint queued behind it, up to a deadline", async () => {
   const { finishQuitSaves, saveBeforeQuit } = await import("../app/quit.ts");
   const { doc, files } = await opening();
-  saveBeforeQuit(files.checkpoint);
+  saveBeforeQuit("sync", files.checkpoint);
   const seal = await sealHeld((text) => text.includes('"journal"'));
   doc.scopes.app = { ...emptyScope(), seq: 1, journal: [batch(1)] };
   const persisting = files.persistJournal("app")([batch(1)]);

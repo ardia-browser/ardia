@@ -154,7 +154,7 @@ export function startSharedFolders() {
   if (!sharedFoldersAvailable()) return;
   guardGroupClose(confirmRemovingShared);
   keepGroupsOpen((groupId) => !!sharedFolderOfGroup(store(), groupId));
-  saveBeforeQuit(saveFoldersNow);
+  saveBeforeQuit("shared folders", saveFoldersNow);
   watchBound();
   useSharedFolders.subscribe((s, prev) => {
     if (s.folders !== prev.folders) watchBound();

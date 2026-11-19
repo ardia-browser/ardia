@@ -125,7 +125,18 @@ export type { CaptureOptions };
 
 export function capture(event: string, props: Record<string, unknown>, consent: ConsentToken | null, options: CaptureOptions = {}) {
   const relay = telemetryRelay();
-  if (relay) return relay.capture(event, props, consent, options);
+  return relay ? relay.capture(event, props, consent, options) : void queued(event, props, consent, options);
+}
+
+let heldFromSending: string | null = null;
+export const captureHeld = (event: string, props: Record<string, unknown>, consent: ConsentToken | null) => (heldFromSending = telemetryRelay() ? (capture(event, props, consent), null) : queued(event, props, consent, {}));
+export function releaseHeld(retract: boolean) {
+  if (retract && heldFromSending) queue.events = queue.events.filter((e) => e.uuid !== heldFromSending);
+  if (retract && saved().sharing) persistQueue(true);
+  heldFromSending = null;
+}
+
+function queued(event: string, props: Record<string, unknown>, consent: ConsentToken | null, options: CaptureOptions): string | null {
   try {
     const { installId } = saved();
     const sharing = stillValid(consent);
@@ -140,14 +151,15 @@ export function capture(event: string, props: Record<string, unknown>, consent: 
     recordLocal("event", sharing, { event, uuid: record.uuid, distinct_id: sharing ? installId : null, properties: record.properties }, at);
     if (!sharing) {
       droppedWhileOff++;
-      return;
+      return null;
     }
     loadQueue();
     queue.events.push(record);
     if (queue.events.length > MAX_EVENTS) queue.events.splice(0, queue.events.length - MAX_EVENTS);
     persistQueue(options.persist);
     scheduleFlush(options.urgent ? URGENT_FLUSH_DELAY_MS : FLUSH_DELAY_MS);
-  } catch {}
+    return record.uuid;
+  } catch { return null; }
 }
 
 export function queueLog(level: "warn" | "error", message: string, attributes: Record<string, string | number | boolean>, consent: ConsentToken | null) {
@@ -227,7 +239,7 @@ export async function flush() {
   const gen = generation;
   let result: DrainResult;
   try {
-    result = await drain("events", () => queue.events, eventsBody, (batch) => (queue.events = queue.events.filter((e) => !batch.includes(e))), gen);
+    result = await drain("events", () => queue.events.filter((e) => e.uuid !== heldFromSending), eventsBody, (batch) => (queue.events = queue.events.filter((e) => !batch.includes(e))), gen);
     if (result === "done") result = await drain("logs", () => queue.logs, logsBody, (batch) => (queue.logs = queue.logs.filter((l) => !batch.includes(l))), gen);
   } finally {
     flushing = false;

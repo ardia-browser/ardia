@@ -8,6 +8,8 @@ export const configDirectory = (): string => current().configDirectory;
 
 export const isTestInstance = (): boolean => current().testInstance;
 
+export const recoveredStart = (): boolean => current().recoveredStart === true;
+
 export const feedbackURLOverride = (): string | null => current().feedbackURL ?? null;
 
 export const switchOverride = (name: string): boolean | undefined => current().switches[name];
@@ -18,6 +20,10 @@ export const introStartDelayMs = (): number => {
   const asked = Number(testValue("introStartDelayMs"));
   return Number.isFinite(asked) && asked > 0 ? asked : 0;
 };
+
+export const syncTurnOnRequested = (): boolean => testValue("syncTurnOn") === "1";
+
+export const downloadFlightFromPageCentre = (): boolean => testValue("downloadFlightFromPage") === "1";
 
 export const devTestValue = (key: string): string | null => (typeof __DEV__ !== "undefined" && __DEV__ ? testValue(key) : null);
 

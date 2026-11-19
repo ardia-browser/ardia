@@ -15,7 +15,7 @@ import { windowsExternalAppCounts } from "./engine/domains/externalApps";
 import { windowsLaunchLinks } from "./launchLinks";
 import { noteMissing } from "./missing";
 import { windowsSelfChecks } from "./selfCheck/registered";
-import { stampedSystemInfo, windowsUpdater } from "./updater";
+import { noteDownloadsInProgress, stampedSystemInfo, windowsUpdater } from "./updater";
 import { windowsSwipe } from "./pager";
 import { windowsSync } from "./sync";
 import { setWindowDark } from "./windowDark";
@@ -36,6 +36,12 @@ const around: Record<string, Record<string, (native: Call) => Call>> = {
       const info = stampedSystemInfo(native());
       if (typeof info !== "object" || info === null) return info;
       return { releaseNotesURL: RELEASE_NOTES_PAGE, ...info };
+    },
+  },
+  ArdiaMenus: {
+    setMenuState: (native) => (state) => {
+      noteDownloadsInProgress((state as { downloadsInProgress?: unknown } | null)?.downloadsInProgress);
+      return native(state);
     },
   },
   ArdiaAppWindows: {

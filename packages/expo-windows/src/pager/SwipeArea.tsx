@@ -1,11 +1,25 @@
-import { forwardRef, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { forwardRef, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import type { NativePagerConfig, NativeSwipeAreaProps } from "@ardia/ardiacore";
+import type { EventSubscription } from "expo-modules-core";
 import { View } from "react-native";
+import { WindowIdContext } from "../engine/windowId";
 import { noteFirstWindow, noteMissing } from "../missing";
+import { requireNativeModule } from "../modules";
 import { pagers } from "./index";
+import { wheelSwipe } from "./wheel";
 import type { PagerArea, PagerConfig, PagerStateEvent } from "./pager";
 
 type KeyedConfig = PagerConfig & Pick<NativePagerConfig, "key">;
+
+type SwipeWheelEvent = { type: "swipeWheel"; id: string; point: [number, number]; delta: number };
+type WindowsSwipe = {
+  setSwipeArea(id: string, key: string, on: boolean): Promise<void>;
+  addListener(name: "onWindowEvent", listener: (event: { type: string } & Partial<SwipeWheelEvent>) => void): EventSubscription;
+};
+
+const windowsSwipe = () => requireNativeModule<WindowsSwipe>("ArdiaAppWindows");
+
+let made = 0;
 
 const whole = (value: unknown, fallback: number) => (typeof value === "number" && Number.isFinite(value) ? Math.trunc(value) : fallback);
 
@@ -20,23 +34,28 @@ function readConfig(value: unknown): KeyedConfig | null {
 
 export const SwipeArea = forwardRef<View, NativeSwipeAreaProps>(function SwipeArea(
   {
-    canSwipeBack: _canSwipeBack,
-    canSwipeForward: _canSwipeForward,
+    canSwipeBack,
+    canSwipeForward,
     tracksUnavailableDirections: _tracksUnavailableDirections,
     allowsVerticalMotion: _allowsVerticalMotion,
-    isPager: _isPager,
-    onSwipe: _onSwipe,
+    isPager,
+    wheelPages,
+    onSwipe,
     nativePager,
     onPagerPosition,
     onPagerState,
     pointerEvents,
+    onLayout,
     children,
     ...rest
   },
   ref,
 ) {
-  const handlers = useRef({ onPagerPosition, onPagerState });
-  handlers.current = { onPagerPosition, onPagerState };
+  const windowId = useContext(WindowIdContext);
+  const areaKey = useRef(`swipe-${++made}`).current;
+  const view = useRef<View | null>(null);
+  const handlers = useRef({ onPagerPosition, onPagerState, onSwipe, canSwipeBack, canSwipeForward });
+  handlers.current = { onPagerPosition, onPagerState, onSwipe, canSwipeBack, canSwipeForward };
   const area = useMemo<PagerArea>(
     () => ({
       position(position: number) {
@@ -53,10 +72,11 @@ export const SwipeArea = forwardRef<View, NativeSwipeAreaProps>(function SwipeAr
   );
   const config = readConfig(nativePager);
   const key = config?.key;
+  const paging = !!isPager && !!wheelPages && !!windowId;
 
   useEffect(() => {
     noteFirstWindow();
-    noteMissing("<ArdiaSwipe> swipe gestures");
+    noteMissing("<ArdiaSwipe> finger-following swipe");
   }, []);
 
   useLayoutEffect(() => {
@@ -70,8 +90,36 @@ export const SwipeArea = forwardRef<View, NativeSwipeAreaProps>(function SwipeAr
     if (config) pagers.existing(config.key)?.configure(config);
   }, [key, config?.selected, config?.count, config?.ack, config?.width, config?.order]);
 
+  useEffect(() => {
+    if (!paging) return;
+    void windowsSwipe().setSwipeArea(windowId, areaKey, true).catch(() => {});
+    const subscription = windowsSwipe().addListener("onWindowEvent", (event) => {
+      if (event.type !== "swipeWheel" || event.id !== windowId || typeof event.delta !== "number" || !Array.isArray(event.point)) return;
+      const [x, y] = event.point;
+      const delta = event.delta;
+      view.current?.measureInWindow((left, top, width, height) => {
+        if (width <= 0 || height <= 0 || x < left || y < top || x >= left + width || y >= top + height) return;
+        const { onSwipe: swipe, canSwipeBack: back, canSwipeForward: forward } = handlers.current;
+        swipe?.({ nativeEvent: wheelSwipe(delta, back, forward, width) });
+      });
+    });
+    return () => {
+      subscription.remove();
+      void windowsSwipe().setSwipeArea(windowId, areaKey, false).catch(() => {});
+    };
+  }, [paging, windowId, areaKey]);
+
+  const setRef = useCallback(
+    (node: View | null) => {
+      view.current = node;
+      if (typeof ref === "function") ref(node);
+      else if (ref) ref.current = node;
+    },
+    [ref],
+  );
+
   return (
-    <View {...rest} ref={ref} pointerEvents={pointerEvents ?? "box-none"}>
+    <View {...rest} ref={setRef} onLayout={onLayout} pointerEvents={pointerEvents ?? "box-none"}>
       {children}
     </View>
   );

@@ -7,6 +7,7 @@ import { fieldFocusedIn } from "../appKeyboard";
 import { noteMissing } from "../missing";
 import { requireNativeModule } from "../modules";
 import { coversIn, hiddenByFullScreen, holesFor, onCoversChange, pageRadiusIn, setFullScreenPage } from "./covers";
+import { MISSING_ANSWERS, pageMethod } from "./pageCalls";
 import { callPage, mountPage, showPage, type PageRect, type PageShape } from "./pages";
 import { noteShowStep } from "./showTrace";
 import { CoverAncestry } from "./usePageCover";
@@ -14,51 +15,9 @@ import { WindowIdContext } from "./windowId";
 
 type PageEventsOnWindows = { onPageEvent?: (event: Pick<NativeSyntheticEvent<PageEvent>, "nativeEvent">) => void; onTop?: boolean };
 
-type Props = Pick<NativeProps, "url" | "profile" | "adoptId" | "tabId" | "visible" | "style"> & Partial<Pick<NativeProps, "temporary">> & Partial<Pick<NativeProps, "pageEvents">> & PageEventsOnWindows;
+type Props = Pick<NativeProps, "url" | "profile" | "adoptId" | "tabId" | "visible" | "style" | "contentsBackgroundColor"> & Partial<Pick<NativeProps, "temporary">> & Partial<Pick<NativeProps, "pageEvents">> & PageEventsOnWindows;
 
 
-const ARGUMENTS: Record<string, string[]> = {
-  loadUrl: ["url", "userInitiated"],
-  goBack: [],
-  goForward: [],
-  goToOffset: ["offset"],
-  reload: [],
-  forceReload: [],
-  stopLoading: [],
-  focus: [],
-  setMuted: ["muted"],
-  find: ["text", "forward", "findNext"],
-  stopFinding: ["clear"],
-  zoomStep: ["direction"],
-  executeJavaScript: ["code"],
-  evaluate: ["code"],
-  navigationEntries: [],
-  showDevTools: ["panel"],
-  print: [],
-  runPageCommand: ["name"],
-  getSecurityInfo: [],
-  mediaCommand: ["action", "seconds"],
-  clearSiteData: [],
-  pageCookies: ["urls"],
-  openBlockedPopup: ["id", "always"],
-  discard: ["unload"],
-  sleepIfHidden: ["seconds"],
-  setFrozen: ["frozen"],
-  resolveUnresponsive: ["terminate"],
-};
-const UNWRAPPED: Record<string, (reply: Record<string, unknown> | null) => unknown> = {
-  evaluate: (reply) => reply?.result ?? null,
-  navigationEntries: (reply) => reply?.entries ?? [],
-  pageCookies: (reply) => reply?.cookies ?? [],
-  discard: (reply) => reply?.outcome ?? "refused",
-  sleepIfHidden: (reply) => (Array.isArray(reply?.keptBy) ? reply.keptBy : [-1]),
-  getSecurityInfo: (reply) => (!reply || reply.info === null ? null : reply),
-  clearSiteData: (reply) => reply ?? { cookies: false, storage: false },
-};
-const ANSWERS: Record<string, unknown> = {
-  requestPictureInPicture: false,
-  takeControlPress: false,
-};
 const SETTLE_MS = [0, 50, 200, 500];
 const PICTURE_DEADLINE_MS = 1000;
 
@@ -66,7 +25,7 @@ type Picture = Awaited<ReturnType<WebViewHandle["capturePicture"]>>;
 
 const appWindows = () => requireNativeModule<Pick<AppWindowsModule, "setPageFullScreen" | "capturePage">>("ArdiaAppWindows");
 
-type Shown = { visible: boolean; placed: string; shows: number };
+type Shown = { visible: boolean; placed: string; color: string; shows: number };
 
 function capturePicture(windowId: string, shown: { current: Shown }, scale: number): Promise<Picture> {
   const { visible, placed, shows } = shown.current;
@@ -99,7 +58,7 @@ export const EngineWebView = forwardRef<unknown, Props>(function EngineWebView(p
   const latest = useRef(props);
   latest.current = props;
   const visible = props.visible !== false;
-  const shown = useRef<Shown>({ visible: false, placed: "", shows: 0 });
+  const shown = useRef<Shown>({ visible: false, placed: "", color: "", shows: 0 });
   const fullScreen = useRef(false);
 
   const place = useCallback(() => {
@@ -107,7 +66,7 @@ export const EngineWebView = forwardRef<unknown, Props>(function EngineWebView(p
     if (!wanted) {
       noteShowStep(key, latest.current.visible === false ? "place: not visible" : "place: hidden by full screen");
       if (shown.current.visible) {
-        shown.current = { visible: false, placed: "", shows: shown.current.shows + 1 };
+        shown.current = { visible: false, placed: "", color: "", shows: shown.current.shows + 1 };
         showPage(key, false, null, windowId);
       }
       return;
@@ -125,10 +84,11 @@ export const EngineWebView = forwardRef<unknown, Props>(function EngineWebView(p
             holes: holesFor(page, coversIn(windowId, above.current), latest.current.temporary === true, latest.current.onTop === true),
           };
       const placed = JSON.stringify(shape);
-      if (shown.current.visible && shown.current.placed === placed) return noteShowStep(key, "place: deduped");
-      if (!showPage(key, true, shape, windowId)) return noteShowStep(key, `place: not taken ${width}x${height}`);
+      const color = latest.current.contentsBackgroundColor ?? "";
+      if (shown.current.visible && shown.current.placed === placed && shown.current.color === color) return noteShowStep(key, "place: deduped");
+      if (!showPage(key, true, shape, windowId, color || undefined)) return noteShowStep(key, `place: not taken ${width}x${height}`);
       noteShowStep(key, `place: show ${width}x${height}`);
-      shown.current = { visible: true, placed, shows: shown.current.shows + 1 };
+      shown.current = { visible: true, placed, color, shows: shown.current.shows + 1 };
     });
   }, [key, windowId]);
 
@@ -139,7 +99,7 @@ export const EngineWebView = forwardRef<unknown, Props>(function EngineWebView(p
   useEffect(() => {
     const first = latest.current;
     noteShowStep(key, `mount in ${windowId}`);
-    const unmount = mountPage(key, { url: first.url, profile: first.profile, adopt: first.adoptId, windowId }, (name, data) => {
+    const unmount = mountPage(key, { url: first.url, profile: first.profile, adopt: first.adoptId, contentsBackground: first.contentsBackgroundColor || undefined, windowId }, (name, data) => {
       if (name === "ready") {
         noteShowStep(key, "ready");
         place();
@@ -160,7 +120,7 @@ export const EngineWebView = forwardRef<unknown, Props>(function EngineWebView(p
       now.onPageEvent?.({ nativeEvent: { name, data } });
     });
     return () => {
-      shown.current = { visible: false, placed: "", shows: shown.current.shows + 1 };
+      shown.current = { visible: false, placed: "", color: "", shows: shown.current.shows + 1 };
       if (fullScreen.current) {
         fullScreen.current = false;
         setFullScreenPage(windowId, key, false);
@@ -189,17 +149,11 @@ export const EngineWebView = forwardRef<unknown, Props>(function EngineWebView(p
             if (typeof method !== "string" || method === "then" || method === "$$typeof") return undefined;
             if (method === "capturePicture") return (scale: number) => capturePicture(windowId, shown, scale);
             if (method === "focusIfUnfocused") return async () => !fieldFocusedIn(windowId) && (await callPage(key, "focus", { follow: true })) !== null;
-            const names = ARGUMENTS[method];
-            if (names) {
-              const unwrap = UNWRAPPED[method];
-              return async (...values: unknown[]) => {
-                const reply = await callPage<Record<string, unknown>>(key, method, Object.fromEntries(names.map((name, index) => [name, values[index] ?? null])));
-                return unwrap ? unwrap(reply) : undefined;
-              };
-            }
+            const known = pageMethod(callPage, key, method);
+            if (known) return known;
             return async () => {
               noteMissing(`<ArdiaWebView>.${method}`);
-              return Object.hasOwn(ANSWERS, method) ? ANSWERS[method] : null;
+              return Object.hasOwn(MISSING_ANSWERS, method) ? MISSING_ANSWERS[method] : null;
             };
           },
         },

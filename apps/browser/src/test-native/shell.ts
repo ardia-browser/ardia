@@ -51,6 +51,7 @@ export const launch: LaunchConfig = {
   switches: {},
   trace: [],
   test: {},
+  recoveredStart: false,
 };
 
 export type FakeWindow = OpenWindowOptions & { title?: string; trafficLightsCenter?: [number, number] | null; trafficLightsTrailing?: boolean };

@@ -14,10 +14,10 @@ export async function endByClosingTheLastWindow() {
     await windows().requestClose(LAST_WINDOW_ID);
   } catch (error) {
     console.info(`[ardia windows] self-check: couldn't end by closing the last window (${String(error)}); quitting`);
-    return void windows().quit();
+    return void windows().quit("user");
   }
   setTimeout(() => {
     console.error(`[ardia windows] self-check: the app was still running ${STILL_RUNNING_MS} ms after its last window, Settings, was closed the way a user closes it`);
-    void windows().quit();
+    void windows().quit("user");
   }, STILL_RUNNING_MS);
 }

@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "NativeModules.h"
+#include <winrt/Windows.Data.Json.h>
 
 #include "AppImage.h"
 #include "LaunchConfig.h"
@@ -35,7 +36,7 @@
 
 namespace Ardia {
 
-inline winrt::Microsoft::ReactNative::JSValue LaunchSnapshot(AppLaunch::Config const &config) noexcept {
+inline winrt::Microsoft::ReactNative::JSValue LaunchSnapshot(AppLaunch::Config const &config, bool recoveredStart) noexcept {
   using winrt::Microsoft::ReactNative::JSValue;
   using winrt::Microsoft::ReactNative::JSValueArray;
   using winrt::Microsoft::ReactNative::JSValueObject;
@@ -60,6 +61,7 @@ inline winrt::Microsoft::ReactNative::JSValue LaunchSnapshot(AppLaunch::Config c
   snapshot["trace"] = JSValue{std::move(traceArray)};
   snapshot["test"] = JSValue{std::move(testObject)};
   snapshot["feedbackURL"] = config.feedbackURL.empty() ? JSValue{nullptr} : JSValue{std::string{config.feedbackURL}};
+  snapshot["recoveredStart"] = JSValue{recoveredStart};
   return JSValue{std::move(snapshot)};
 }
 
@@ -334,6 +336,55 @@ inline winrt::Microsoft::ReactNative::JSValue Sample() noexcept {
 
 }
 
+namespace LaunchGuard {
+
+constexpr wchar_t FactsFile[] = L"launch-guard.json";
+constexpr DWORD LargestFacts = 4096;
+
+inline bool SetAsideIn(std::string const &text) noexcept {
+  try {
+    using winrt::Windows::Data::Json::JsonObject;
+    using winrt::Windows::Data::Json::JsonValueType;
+    JsonObject facts{nullptr};
+    if (!JsonObject::TryParse(winrt::to_hstring(text), facts) || !facts) return false;
+    auto setAside = facts.TryLookup(L"restoreStateSetAside");
+    return setAside && setAside.ValueType() == JsonValueType::Boolean && setAside.GetBoolean();
+  } catch (...) {
+    return false;
+  }
+}
+
+inline bool WrittenThisStart(FILETIME written) noexcept {
+  std::optional<double> start = AppDiagnostics::ProcessStart();
+  return start && AppDiagnostics::UnixMilliseconds(written) >= *start;
+}
+
+inline bool ReadRecoveredStart() noexcept {
+  try {
+    std::wstring path = (Paths::DataDirectory() / FactsFile).wstring();
+    winrt::file_handle file{CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr)};
+    if (!file) return false;
+    BY_HANDLE_FILE_INFORMATION info{};
+    if (!GetFileInformationByHandle(file.get(), &info) || (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || info.nFileSizeHigh != 0 || info.nFileSizeLow == 0 ||
+        info.nFileSizeLow > LargestFacts)
+      return false;
+    if (!WrittenThisStart(info.ftLastWriteTime)) return false;
+    std::string text(info.nFileSizeLow, '\0');
+    DWORD read = 0;
+    if (!::ReadFile(file.get(), text.data(), info.nFileSizeLow, &read, nullptr) || read != info.nFileSizeLow) return false;
+    return SetAsideIn(text);
+  } catch (...) {
+    return false;
+  }
+}
+
+inline bool RecoveredStart() noexcept {
+  static const bool recovered = ReadRecoveredStart();
+  return recovered;
+}
+
+}
+
 REACT_STRUCT(SystemInfo)
 struct SystemInfo {
   REACT_FIELD(appName)
@@ -426,7 +477,7 @@ struct AppModule {
 
   REACT_SYNC_METHOD(launchConfig)
   winrt::Microsoft::ReactNative::JSValue launchConfig() noexcept {
-    return LaunchSnapshot(AppLaunch::Shared());
+    return LaunchSnapshot(AppLaunch::Shared(), LaunchGuard::RecoveredStart());
   }
 
   REACT_METHOD(openExternalURL)

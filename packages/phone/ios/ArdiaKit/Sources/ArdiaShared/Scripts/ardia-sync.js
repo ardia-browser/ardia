@@ -53,6 +53,7 @@ function sortKeys(value         )          {
 });
 __define("packages/sync/src/hlc.ts", function (exports, __require) {
   __export(exports, "hlcWall", () => hlcWall);
+  __export(exports, "isStamp", () => isStamp);
   __export(exports, "Clock", () => Clock);
                          
 
@@ -69,6 +70,14 @@ function parseHLC(h     )                                                    {
 }
 
 const hlcWall = (h     ) => parseInt(h.slice(0, WALL_DIGITS), 36);
+
+const STAMP = /^[0-9a-z]+\.[0-9a-z]+\./;
+
+function isStamp(h         )           {
+  if (typeof h !== "string" || !STAMP.test(h)) return false;
+  const { wall, counter } = parseHLC(h);
+  return Number.isSafeInteger(wall) && Number.isSafeInteger(counter);
+}
 
 class Clock {
           wall = 0;
@@ -190,6 +199,7 @@ const { holdsBack, noteFileHealth } = __require("packages/sync/src/fileHealth.ts
 const { baseKeysWith, dropBase, dropRecord, putBase, putRecord, visible, withBaseIndex } = __require("packages/sync/src/scopeKeys.ts");
 
                                                                                                                                          
+const { isLogFile, isSnapshotFile } = __require("packages/sync/src/fileChecks.ts");
 
 const DEFAULTS                                                        = {
   expired: () => false,
@@ -202,15 +212,6 @@ const DEFAULTS                                                        = {
   damagedGiveUp: 86_400_000,
 };
 
-const isObject = (v         )                               => typeof v === "object" && v !== null && !Array.isArray(v);
-const isCount = (v         )              => typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
-const isTime = (v         )              => typeof v === "number" && Number.isFinite(v);
-const isMapOf = (v         , item                         ) => isObject(v) && Object.values(v).every(item);
-const isOrigin = (v         ) => Array.isArray(v) && v.length === 2 && typeof v[0] === "string" && isCount(v[1]);
-const isValue = (o                         ) => Object.prototype.hasOwnProperty.call(o, "v") && o.v !== undefined;
-const isOp = (v         ) => isObject(v) && typeof v.k === "string" && typeof v.h === "string" && isValue(v);
-const isRecord = (v         ) => isObject(v) && typeof v.h === "string" && isOrigin(v.o) && isValue(v);
-
 function parseSyncFile(payload        )                  {
   let file         ;
   try {
@@ -218,12 +219,7 @@ function parseSyncFile(payload        )                  {
   } catch {
     return null;
   }
-  if (!isObject(file) || file.v !== 1 || typeof file.device !== "string" || !isTime(file.at)) return null;
-  if (file.kind === "log") return isCount(file.seq) && Array.isArray(file.ops) && file.ops.every(isOp) ? (file           ) : null;
-  if (file.kind === "snapshot") {
-    return isMapOf(file.vv, isCount) && isMapOf(file.seen, isTime) && isMapOf(file.records, isRecord) ? (file                ) : null;
-  }
-  return null;
+  return isLogFile(file) || isSnapshotFile(file) ? file : null;
 }
 
 const covered = (vv                        , [device, seq]        ) => (vv[device] ?? 0) >= seq;
@@ -724,6 +720,32 @@ const holdsBack = (state            , now        , window        ) =>
 
 const pullSettled = (state            ) =>
   state.pending === 0 && Object.keys(state.damaged).length === 0 && !Object.values(state.files).some((f) => f.k === "bad");
+
+});
+__define("packages/sync/src/fileChecks.ts", function (exports, __require) {
+  __export(exports, "isSyncOp", () => isSyncOp);
+  __export(exports, "isSyncRecord", () => isSyncRecord);
+  __export(exports, "isBaseEntry", () => isBaseEntry);
+  __export(exports, "isSequence", () => isSequence);
+  __export(exports, "isLogFile", () => isLogFile);
+  __export(exports, "isSnapshotFile", () => isSnapshotFile);
+                                                                             
+
+const isObject = (v         )                               => typeof v === "object" && v !== null && !Array.isArray(v);
+const isCount = (v         )              => typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
+const isTime = (v         )              => typeof v === "number" && Number.isFinite(v);
+const isMapOf = (v         , item                         ) => isObject(v) && Object.values(v).every(item);
+const isOrigin = (v         ) => Array.isArray(v) && v.length === 2 && typeof v[0] === "string" && isCount(v[1]);
+const isValue = (o                         ) => Object.prototype.hasOwnProperty.call(o, "v") && o.v !== undefined;
+const isFileOf = (v         , kind        )                               => isObject(v) && v.v === 1 && typeof v.device === "string" && isTime(v.at) && v.kind === kind;
+
+const isSyncOp = (v         )          => isObject(v) && typeof v.k === "string" && typeof v.h === "string" && isValue(v);
+const isSyncRecord = (v         )                  => isObject(v) && typeof v.h === "string" && isOrigin(v.o) && isValue(v);
+const isBaseEntry = (v         )              => typeof v === "string";
+const isSequence = isCount;
+const isLogFile = (v         )               => isFileOf(v, "log") && isCount(v.seq) && Array.isArray(v.ops) && v.ops.every(isSyncOp);
+const isSnapshotFile = (v         )                    =>
+  isFileOf(v, "snapshot") && isMapOf(v.vv, isCount) && isMapOf(v.seen, isTime) && isMapOf(v.records, isSyncRecord);
 
 });
 __define("packages/sync/src/scopeState.ts", function (exports, __require) {

@@ -18,6 +18,7 @@
 #include "chrome/browser/ui/browser_window/public/browser_collection_observer.h"
 #include "chrome/browser/ui/browser_window/public/global_browser_collection.h"
 #include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
+#include "third_party/skia/include/core/SkColor.h"
 #include "ui/base/window_open_disposition.h"
 #include "ui/events/event_handler.h"
 #include "ui/gfx/geometry/rect.h"
@@ -102,6 +103,7 @@ class Host : public TabStripModelObserver,
                           std::string url,
                           std::string profile_name,
                           HWND parent,
+                          std::optional<SkColor> background,
                           Reply reply,
                           Profile* profile);
   base::DictValue ShowTab(const base::DictValue& args, HWND parent);

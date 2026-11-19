@@ -6,6 +6,7 @@
 #include "ardia/win/api.h"
 #include "ardia/win/autoplay.h"
 #include "ardia/win/host.h"
+#include "ardia/win/now_playing.h"
 #include "ardia/win/page_links.h"
 #include "ardia/win/tab_events.h"
 #include "base/functional/bind.h"
@@ -52,6 +53,8 @@ TabState* TabState::Bind(content::WebContents* contents, std::string key) {
   }
   PageLinks::Watch(contents);
   WatchAutoplay(contents);
+  NowPlaying::Watch(contents);
+  NowPlaying::CancelWake(contents);
   state->WatchKeys();
   return state;
 }
@@ -395,6 +398,7 @@ void TabState::BeforeUnloadFired(bool proceed) {
 }
 
 void TabState::WebContentsDestroyed() {
+  NowPlaying::End(web_contents());
   StopWatchingKeys();
   favicon_observation_.Reset();
   Host::Get()->TabDestroyed(this);

@@ -92,11 +92,12 @@ export function startNativeSync() {
     if (e.type === "littleArdiaGlobalShortcut") noteLittleArdiaAppHandoff("globalShortcut");
     if (e.type === "quitWarningSuppressed") s.updateSettings({ warnBeforeQuitting: false });
     if (e.type === "willQuit") {
+      const flushing = Date.now();
       setQuitting(true);
       finishAnimatedCloses();
       flushPersistence({ final: true });
       flushLive();
-      void answerQuitAfterSaves(QUIT_SAVES_WAIT_MS, () => replyToTerminate(true));
+      void answerQuitAfterSaves(QUIT_SAVES_WAIT_MS, () => replyToTerminate(true), Date.now() - flushing);
     }
     if (e.type === "quitCancelled") {
       setQuitting(false);

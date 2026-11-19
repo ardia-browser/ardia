@@ -1,23 +1,25 @@
 import { APP_INGEST_KEY } from "@ardia/core";
-import { installErrorReporting, resetAnonymousId, startTelemetry } from "../../browser/src/state/telemetry/index.ts";
+import { installErrorReporting, startTelemetry } from "../../browser/src/state/telemetry/index.ts";
 import { captureException } from "../../browser/src/state/telemetry/errors";
-import { capture, consentNow, devState, endSession, flush, loadChoice, queueLog, saveQueueNow } from "../../browser/src/state/telemetry/client";
+import { capture, consentNow, devState, flush, loadChoice, queueLog } from "../../browser/src/state/telemetry/client";
 import { reloadChoice, savedChoice, useTelemetry, type ConsentToken } from "../../browser/src/state/telemetry/choice";
 import { DAILY_DOC } from "../../browser/src/state/telemetry/daily";
 import { requestLog } from "../../browser/src/state/telemetry/requestLog";
 import { setTelemetryRelay, type ChoiceChange } from "../../browser/src/state/telemetry/relay";
-import { reopenSession } from "../../browser/src/state/telemetry/sessionControl";
 import { uuidv4 } from "../../browser/src/state/telemetry/ids";
 import { setTelemetryHost } from "../../browser/src/state/telemetry/transport";
-import { emitWindowUsage, sessionEnding } from "../../browser/src/state/telemetry/usage";
+import { emitWindowUsage } from "../../browser/src/state/telemetry/usage";
 import { documentSaved } from "../../browser/src/platform/documents";
 import { withDeadline } from "../../browser/src/lib/deadline";
 import { refreshDocument } from "./shims/shellBase";
 import { hostSupports, invokeHost, type ArdiaHost } from "./host.ts";
-import { startTelemetryLeadership, TELEMETRY_CHANNEL, type LeaderChannel, type LeaderLocks, type TelemetryLeadership, type TelemetryOp } from "./telemetryLeader.ts";
-import { createEndLedger, setTelemetrySettle } from "./telemetrySettle.ts";
-import { parseChoiceChange, shownAfter } from "./telemetryChoice.ts";
-import { applyChoiceDurably, followerChoiceSaved } from "./telemetryChoiceApply.ts";
+import { startTelemetryLeadership, TELEMETRY_CHANNEL, type LeaderChannel, type LeaderLocks, type TelemetryLeadership } from "./telemetryLeader.ts";
+import { setTelemetrySettle } from "./telemetrySettle.ts";
+import { shownAfter } from "./telemetryChoice.ts";
+import { followerChoiceSaved } from "./telemetryChoiceApply.ts";
+import { handleTelemetryOp, saveState, setSessionEnded, setTelemetryAnnouncer } from "./telemetryOps.ts";
+
+export { handleTelemetryOp };
 
 export const TELEMETRY_POST = "ArdiaTelemetry.post";
 export const TELEMETRY_STEP = "telemetry";
@@ -61,43 +63,6 @@ export const reportUncaughtRender = (error: unknown) => captureException(error, 
 const recoveredCause = (error: unknown) => (error instanceof Error && error.cause !== undefined ? error.cause : error);
 
 export const reportRecoverableRender = (error: unknown) => captureException(recoveredCause(error), "react_recovered", { handled: true });
-
-let sessionEnded = false;
-const ends = createEndLedger();
-
-async function saveState() {
-  await saveQueueNow(END_TIMEOUT_MS);
-  await documentSaved(STATE_DOC).catch(report);
-}
-
-export async function handleTelemetryOp(op: TelemetryOp, arg?: string): Promise<unknown> {
-  if (op === "choice") {
-    const change = parseChoiceChange(arg);
-    if (!change) throw Object.assign(new Error("The telemetry choice isn't one this build knows"), { code: "ERR_TELEMETRY_CHOICE" });
-    const durable = await applyChoiceDurably(change);
-    leadership?.announce();
-    return durable;
-  }
-  if (op === "reset") {
-    const installId = await resetAnonymousId();
-    await documentSaved(STATE_DOC);
-    leadership?.announce();
-    return installId;
-  }
-  if (op === "reopen") {
-    if (!ends.reopens(arg)) return false;
-    reopenSession();
-    sessionEnded = false;
-    await documentSaved(STATE_DOC).catch(report);
-    return true;
-  }
-  if (sessionEnded) endSession();
-  else sessionEnding();
-  sessionEnded = true;
-  const token = ends.end();
-  await saveState();
-  return token;
-}
 
 let leadership: TelemetryLeadership | null = null;
 let offeredInstallId: string | null = null;
@@ -152,7 +117,7 @@ export function startHostTelemetry(options: { host: ArdiaHost; candidate: boolea
       await Promise.all(TELEMETRY_DOCUMENTS.map((name) => refreshDocument(name).catch(report)));
       const continuing = await continuesSession(host);
       reloadChoice();
-      sessionEnded = continuing && !savedChoice().sessionOpen;
+      setSessionEnded(continuing && !savedChoice().sessionOpen);
       startTelemetry({ continuing });
       await documentSaved(STATE_DOC).catch(report);
       current.announce();
@@ -161,6 +126,7 @@ export function startHostTelemetry(options: { host: ArdiaHost; candidate: boolea
     report,
   });
   leadership = current;
+  setTelemetryAnnouncer(current, report);
   let announced = shownChoice();
   useTelemetry.subscribe(() => {
     const next = shownChoice();

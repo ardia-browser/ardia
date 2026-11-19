@@ -25,3 +25,10 @@ test("a pop-up button looks like its platform's: the Mac's accent box with two c
   assert.ok(vectorIcon("chevron.down", 8, "bold"), "Windows can draw the chevron");
   assert.ok(vectorIcon("chevron.down", 9, "semibold"), "Windows can draw the chevron of a Settings pop-up");
 });
+
+test("every Settings pane's icon is one Windows can draw", async () => {
+  const { PANES } = await import("../components/settings/settingsIndex.ts");
+  const { vectorIcon } = await import("../../../../packages/expo-windows/src/symbol/layers.ts");
+  assert.ok(PANES.length >= 7);
+  assert.deepEqual(PANES.filter((pane) => !vectorIcon(pane.icon, 13, "semibold")).map((pane) => pane.icon), []);
+});

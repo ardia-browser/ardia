@@ -3,6 +3,7 @@ import { engineBookmarkRoots, folderChildren, isBookmarked, isWithin, ROOT_TITLE
 import type { BrowserState } from "../browser/store";
 import { changedIds } from "../browser/changes";
 import { activeTab, bookmarkProfileId, engineProfile, IDLE_LIVE, isPinnedRow, tabLabel, togglePinTitle, windowTitle, tabLayoutOf, tabsShownIn } from "../browser/model";
+import { downloadsInProgress } from "../downloads/status";
 import { canSwitchEngine, tabEngine } from "../engines/engines";
 import { readerState as readerFor } from "../reader/reader";
 import { peekTabId } from "../peek/peek";
@@ -142,7 +143,7 @@ export function menuState(s: BrowserState, liveOfTab = (id: string) => shownLive
     warnBeforeClosingWindow: s.settings.warnBeforeClosingWindow,
     undoReopensClosedTab: s.settings.undoReopensClosedTab,
     linksOpenInLittleArdia: s.settings.openLinksInLittleArdia,
-    downloadsInProgress: s.downloads.filter((d) => d.state === "downloading").length,
+    downloadsInProgress: downloadsInProgress(s.downloads),
     shortcuts: menuBarBindings(s),
     extensions: extensionMenu(s, windowId) };
 }

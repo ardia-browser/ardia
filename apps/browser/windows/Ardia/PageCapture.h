@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #pragma comment(lib, "crypt32.lib")
@@ -189,6 +190,40 @@ inline std::string Jpeg(Pixels const &pixels, double scale, float quality) noexc
     return Base64(bytes);
   } catch (...) {
     return {};
+  }
+}
+
+struct ColorShare {
+  uint32_t rgb = 0;
+  double share = 0;
+};
+
+struct Colors {
+  UINT width = 0;
+  UINT height = 0;
+  std::vector<ColorShare> most;
+};
+
+inline std::optional<Colors> CountColors(Target const &target, size_t kept) noexcept {
+  HWND page = PageWindow(target.owner, target.screen);
+  if (!page) return std::nullopt;
+  auto pixels = Print(page, target.screen);
+  if (!pixels) return std::nullopt;
+  try {
+    std::unordered_map<uint32_t, size_t> counts;
+    for (size_t i = 0; i + 3 < pixels->bgra.size(); i += 4) {
+      counts[(static_cast<uint32_t>(pixels->bgra[i + 2]) << 16) | (static_cast<uint32_t>(pixels->bgra[i + 1]) << 8) | pixels->bgra[i]]++;
+    }
+    std::vector<std::pair<uint32_t, size_t>> ranked(counts.begin(), counts.end());
+    std::sort(ranked.begin(), ranked.end(), [](auto const &a, auto const &b) { return a.second != b.second ? a.second > b.second : a.first < b.first; });
+    const double total = static_cast<double>(pixels->width) * pixels->height;
+    Colors colors;
+    colors.width = pixels->width;
+    colors.height = pixels->height;
+    for (size_t i = 0; i < ranked.size() && i < kept; i++) colors.most.push_back({ranked[i].first, total > 0 ? ranked[i].second / total : 0});
+    return colors;
+  } catch (...) {
+    return std::nullopt;
   }
 }
 

@@ -411,3 +411,35 @@ test("a tab moved to another window: a show its old window's view asks for late 
   unmountNew();
   await settle();
 });
+
+test("a page's card colour goes with its tab.create and its visible shows, and a page without one sends none", async () => {
+  const restore = quietWarnings();
+  const shape = { x: 0, y: 0, width: 400, height: 300, radius: 0, holes: [] };
+  const unmountColored = mountPage("colored", { url: "", contentsBackground: "#1E2A38", windowId: "w" }, () => {});
+  await settle();
+  const created = calls.filter((call) => call.verb === "tab.create" && call.args.key === "colored").at(-1);
+  assert.deepEqual(created.args, { key: "colored", url: "", profile: "", adopt: "", contentsBackground: "#1E2A38" });
+  showPage("colored", true, shape, "w", "#1E2A38");
+  await settle();
+  showPage("colored", true, shape, "w", "#E8E0D0");
+  await settle();
+  showPage("colored", false, null, "w", "#E8E0D0");
+  await settle();
+  assert.deepEqual(
+    shows("colored").map((call) => call.args),
+    [
+      { key: "colored", visible: true, ...shape, contentsBackground: "#1E2A38" },
+      { key: "colored", visible: true, ...shape, contentsBackground: "#E8E0D0" },
+      { key: "colored", visible: false },
+    ],
+  );
+  const unmountPlain = mountPage("plain", { url: "", windowId: "w" }, () => {});
+  await settle();
+  showPage("plain", true, shape, "w");
+  await settle();
+  assert.equal("contentsBackground" in calls.filter((call) => call.verb === "tab.create" && call.args.key === "plain").at(-1).args, false);
+  assert.equal("contentsBackground" in shows("plain").at(-1).args, false);
+  unmountColored();
+  unmountPlain();
+  restore();
+});

@@ -31,8 +31,9 @@ export function startWindowCloseGuard() {
 let windowsWithoutTabsClosing: Promise<void> = Promise.resolve();
 
 function closeWindowWithoutTabs(windowId: string, onceAgreed?: () => void) {
+  const consent = consentToken();
   const closing = windowsWithoutTabsClosing.then(async () => {
-    if ((await askBeforeQuitting(windowId)) === "cancelled") return;
+    if ((await askBeforeQuitting(windowId, confirm, { consent })) === "cancelled") return;
     onceAgreed?.();
     startClosingWindow(windowId);
     try {
@@ -70,7 +71,7 @@ const cancel = (suppressWarning = false): WindowCloseDecision => ({ decision: "c
 
 export async function decideWindowClose(windowId: string, ask: CloseAsk = confirm): Promise<WindowCloseDecision> {
   const consent = consentToken();
-  let quitWarning = await askBeforeQuitting(windowId, ask);
+  let quitWarning = await askBeforeQuitting(windowId, ask, { consent });
   if (quitWarning === "cancelled") return cancel();
   const asked = new Set<string>();
   let suppressWarning = false;
@@ -87,7 +88,7 @@ export async function decideWindowClose(windowId: string, ask: CloseAsk = confir
     if (answer.decision === "cancel") return cancel(suppressWarning);
     for (const id of closing) asked.add(id);
     if (quitWarning !== "notAsked") continue;
-    quitWarning = await askBeforeQuitting(windowId, ask);
+    quitWarning = await askBeforeQuitting(windowId, ask, { consent });
     if (quitWarning !== "notAsked") noteQuitAskedAfterTabsConfirm(quitWarning === "cancelled", consent);
     if (quitWarning === "cancelled") return cancel(suppressWarning);
   }
@@ -95,8 +96,11 @@ export async function decideWindowClose(windowId: string, ask: CloseAsk = confir
 
 export async function decideLastTabClose(windowId: string, ask: CloseAsk = confirm): Promise<WindowCloseDecision> {
   if (!useBrowser.getState().windows[windowId]) return allow();
-  if (asksBeforeClosingLastTab(windowId)) return askToClose(windowId, ask, unpinnedOpenTabIds(windowId));
-  return (await askBeforeQuitting(windowId, ask)) === "cancelled" ? cancel() : allow();
+  const consent = consentToken();
+  if (!asksBeforeClosingLastTab(windowId)) return (await askBeforeQuitting(windowId, ask, { consent })) === "cancelled" ? cancel() : allow();
+  const tabs = await askToClose(windowId, ask, unpinnedOpenTabIds(windowId));
+  if (tabs.decision === "cancel") return tabs;
+  return (await askBeforeQuitting(windowId, ask, { warning: false, consent })) === "cancelled" ? cancel(tabs.suppressWarning) : tabs;
 }
 
 export function asksBeforeClosingLastTab(windowId: string) {

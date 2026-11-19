@@ -8,7 +8,9 @@ import { copyRecoveryPhrase, revealSyncFolder, type FolderInfo } from "../../../
 import { syncFolder } from "../../../state/settings/paneData";
 import { useResource } from "../../../state/settings/resources";
 import { useProfiles } from "../../../state/browser/hooks";
-import { chooseSyncFolder, folderInfo, setOpenTabsSynced, setTypeSynced, syncNow, turnOnSync, useSync } from "../../../state/sync/engine";
+import { chooseSyncFolder, folderInfo, resumeSync, setOpenTabsSynced, setTypeSynced, syncNow, turnOnSync, useSync } from "../../../state/sync/engine";
+import { SYNC_PAUSED, SYNC_PAUSED_DETAIL } from "../../../state/sync/syncPause";
+import { syncControls } from "../../../state/sync/syncControls";
 import { DATA_TYPES, type SyncStatus } from "../../../state/sync/syncDoc";
 import { deviceDetail } from "../../../state/sync/devices";
 import { Group, Row, SectionHeader } from "../Form";
@@ -27,6 +29,10 @@ function statusLine(status: SyncStatus, lastSyncedAt: number | null, pending: nu
         return "Updating";
       case "offline":
         return "Offline";
+      case "paused":
+        return since ? `Paused · last synced ${since}` : "Paused";
+      case "resuming":
+        return "Resuming";
       case "stalled":
       case "locked":
         return since ? `Not syncing · last synced ${since}` : "Not syncing";
@@ -162,16 +168,23 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
   }, []);
 
   const locked = status === "locked";
+  const paused = useSync((s) => s.paused);
+  const controls = syncControls({ status, paused });
   const advanced = async () => {
-    const choice = await showMenu([
-      { id: "kit", title: "Save Recovery Kit…", symbol: "arrow.down.doc", enabled: !locked },
-      { id: "copy", title: "Copy Recovery Code", symbol: "doc.on.doc", enabled: !locked },
-      { separator: true },
-      { id: "now", title: "Sync Now", symbol: "arrow.triangle.2.circlepath" },
-      { id: "reveal", title: `Show Sync Folder in ${PLATFORM_TERMS.fileManager}`, symbol: "folder", enabled: !!info?.exists },
-      { separator: true },
-      { id: "stop", title: "Stop Syncing…", symbol: "xmark.circle" },
-    ]);
+    const groups = [
+      [
+        { id: "kit", title: "Save Recovery Kit…", symbol: "arrow.down.doc", enabled: controls.keyActions },
+        { id: "copy", title: "Copy Recovery Code", symbol: "doc.on.doc", enabled: controls.keyActions },
+      ],
+      [
+        { id: "now", title: "Sync Now", symbol: "arrow.triangle.2.circlepath" },
+        { id: "reveal", title: `Show Sync Folder in ${PLATFORM_TERMS.fileManager}`, symbol: "folder", enabled: !!info?.exists },
+      ],
+      [{ id: "stop", title: "Stop Syncing…", symbol: "xmark.circle" }],
+    ]
+      .map((group) => group.filter((item) => controls.advanced.some((action) => action === item.id)))
+      .filter((group) => group.length);
+    const choice = await showMenu(groups.flatMap((group, i) => (i ? [{ separator: true } as const, ...group] : group)));
     if (choice === "kit") showRecoveryKit();
     else if (choice === "copy") await copyRecoveryPhrase();
     else if (choice === "now") await syncNow();
@@ -187,31 +200,33 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
     <>
       <SectionHeader title="Sync" />
       <Group>
-        <Row icon={<SyncIcon on={!locked} />} anchor="general.sync" description={statusLine(status, lastSyncedAt, pending)}>
-          {locked ? (
+        <Row icon={<SyncIcon on={!locked && !paused} />} anchor="general.sync" description={status === "paused" ? `${SYNC_PAUSED} ${SYNC_PAUSED_DETAIL}` : statusLine(status, lastSyncedAt, pending)}>
+          {controls.primary === "resume" ? (
+            <Button title={controls.resuming ? "Resuming…" : "Resume"} kind="primary" disabled={controls.resuming} onPress={() => void resumeSync()} />
+          ) : controls.primary === "phrase" ? (
             <Button title="Enter Recovery Phrase…" kind="primary" onPress={() => showPhraseEntry(info)} />
           ) : (
             <Button title="Connect Another Device…" onPress={showConnectDevice} />
           )}
-          <Button title="Advanced…" onPress={() => void advanced()} />
+          {controls.advanced.length ? <Button title="Advanced…" onPress={() => void advanced()} /> : null}
         </Row>
         <Row anchor="general.syncFolder" description={info ? folderLabel(info) : " "} />
         <Checklist
           anchor="general.whatSyncs"
           description={null}
           items={[
-            ...DATA_TYPES.map((t) => ({ key: t.id, label: t.title, value: types[t.id], onChange: (on: boolean) => setTypeSynced(t.id, on) })),
+            ...DATA_TYPES.map((t) => ({ key: t.id, label: t.title, value: types[t.id], disabled: !controls.editable, onChange: (on: boolean) => setTypeSynced(t.id, on) })),
             {
               key: "allOpenTabs",
               label: "All open tabs, not just pinned ones",
               value: synced.length > 0 && allTabs.length === synced.length,
               mixed: allTabs.length > 0 && allTabs.length < synced.length,
-              disabled: !types.tabs || synced.length === 0,
+              disabled: !controls.editable || !types.tabs || synced.length === 0,
               onChange: (on: boolean) => synced.forEach((p) => setOpenTabsSynced(p.id, on)),
             },
           ]}
         />
-        <Row anchor="general.syncDevices" description={devices.length ? undefined : `Just this ${PLATFORM_TERMS.computer} so far. Other devices show here once they sync.`} />
+        <Row anchor="general.syncDevices" description={devices.length ? undefined : paused ? "Your devices show here again once Sync resumes." : `Just this ${PLATFORM_TERMS.computer} so far. Other devices show here once they sync.`} />
         {devices.map((d) => (
           <Row key={d.id} title={d.current ? `${d.name} (This ${PLATFORM_TERMS.computerTitle})` : d.name} description={d.current ? statusLine(status, lastSyncedAt, 0) : deviceDetail(d, ago)}>
             {d.current ? null : <Button title="Remove…" onPress={() => void confirmRemoveDevice(d)} />}

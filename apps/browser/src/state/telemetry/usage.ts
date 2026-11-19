@@ -5,7 +5,8 @@ import { useBrowser } from "../browser/store";
 import { keysOf } from "../browser/changes";
 import { takeOpenTabSyncCounts, takeSnapshotWrites, useSync } from "../sync/engine";
 import { takeSyncCodeCounts } from "../sync/recoveryKit";
-import { capture, consentNow, consentToken, counted, countFor, endSession, fieldsOf, flush, isSharing, markSettingsSnapshot, settingsSnapshotDay, startClient, stillValid, watchConsentBoundary, withHourlyExtras, type ConsentToken } from "./usageClient";
+import { endSessionForQuit, reopenSessionAfterCancelledQuit } from "./sessionQuit";
+import { capture, consentNow, consentToken, counted, countFor, fieldsOf, flush, isSharing, markSettingsSnapshot, settingsSnapshotDay, startClient, stillValid, watchConsentBoundary, withHourlyExtras, type ConsentToken } from "./usageClient";
 import { reportLocalStore, startLocalStore } from "./localStoreReport";
 import { watchExtensionInstalls } from "./extensionInstalls";
 import { nativeConsent } from "./nativeConsent";
@@ -375,7 +376,10 @@ export function startUsage(continuing = false) {
       clearTimeout(launchCrashRead);
       stopContextSamples();
       sessionEnding();
-    } else if (e.type === "quitCancelled") startContextSamples();
+    } else if (e.type === "quitCancelled") {
+      startContextSamples();
+      reopenSessionAfterCancelledQuit();
+    }
   });
 }
 
@@ -384,8 +388,7 @@ export const emitWindowUsage = (consent: ConsentToken | null) => [() => withHour
 export function sessionEnding() {
   emitWindowUsage(consentNow());
   journeysEnding();
-  capture("app_session_ended", { duration_minutes: Math.round((Date.now() - startedAt) / 60_000) }, consentNow());
-  endSession();
+  endSessionForQuit({ duration_minutes: Math.round((Date.now() - startedAt) / 60_000) }, consentNow());
 }
 
 export async function devHourly() {

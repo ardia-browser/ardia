@@ -102,7 +102,7 @@ static int Prepare(const ArdiaEngineApi *engine) {
   SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
   Ardia::LaunchLog::OpenFromCommandLine();
-  Ardia::LaunchLog::Write(L"launch", engine ? L"process started inside the engine" : L"process started");
+  Ardia::LaunchLog::Write(L"launch", std::wstring(engine ? L"process started inside the engine" : L"process started").append(L" pid=").append(std::to_wstring(GetCurrentProcessId())));
   if (!apartment) return Refuse(kNoApartment, L"the UI thread is not a single-threaded apartment");
   Ardia::CrashLog::Install();
   Ardia::PointerLatch::Install();
@@ -153,10 +153,19 @@ static int Prepare(const ArdiaEngineApi *engine) {
   return 0;
 }
 
+static constexpr int kFlushTestHoldMostMs = 15000;
+
 static void ShutDown(Ardia::Host &host) {
   const ULONGLONG flushing = GetTickCount64();
+  if (std::optional<int> held = Ardia::AppLaunch::TestMilliseconds("quitFlushHoldMs", kFlushTestHoldMostMs)) {
+    Ardia::LaunchLog::Write(L"launch", std::wstring(L"test: the flush is held ").append(std::to_wstring(*held)).append(L" ms"));
+    Sleep(static_cast<DWORD>(*held));
+  }
   Ardia::TelemetryLocalStore::Drain();
-  const bool documentsWritten = Ardia::DocumentStore::Flush(false);
+  Ardia::LaunchLog::Write(L"launch", std::wstring(L"telemetry drained in ") + std::to_wstring(GetTickCount64() - flushing) + L" ms");
+  const bool documentsWritten = Ardia::DocumentStore::Flush(false, [](std::wstring const &name, size_t bytes, ULONGLONG milliseconds) {
+    Ardia::LaunchLog::Write(L"launch", std::wstring(L"document ").append(name).append(L" of ").append(std::to_wstring(bytes)).append(L" bytes written at quit in ").append(std::to_wstring(milliseconds)).append(L" ms"));
+  });
   Ardia::LaunchLog::Write(L"launch", std::wstring(L"telemetry and documents written in ") + std::to_wstring(GetTickCount64() - flushing) + L" ms" + (documentsWritten ? L"" : L", some documents still staged"));
   Ardia::Materials::ReportGradientFailuresTo(nullptr);
   host.engine = nullptr;
@@ -224,6 +233,21 @@ __declspec(dllexport) const wchar_t *ArdiaAppStartFailure(void) {
   return StartFailure().c_str();
 }
 
+__declspec(dllexport) int ArdiaAppLaunchArriving(void) {
+  if (!EngineLoopRunning() || !Ardia::Host::Current()) return ARDIA_APP_LAUNCH_KEPT;
+  return Ardia::WindowManager::Shared().LaunchArriving();
+}
+
+__declspec(dllexport) void ArdiaAppAfterLaunchArriving(void) {
+  if (!EngineLoopRunning() || !Ardia::Host::Current()) return;
+  Ardia::WindowManager::Shared().AfterLaunchArriving();
+}
+
+__declspec(dllexport) void ArdiaAppLaunchDelivered(void) {
+  if (!EngineLoopRunning() || !Ardia::Host::Current()) return;
+  Ardia::WindowManager::Shared().LaunchDelivered();
+}
+
 __declspec(dllexport) void ArdiaAppStop(void) {
   int dialogsOpen = Ardia::DialogParts::ModalRegistry::Shared().threads.load();
   int waited = Ardia::DialogParts::StopAllModals();
@@ -247,6 +271,9 @@ static_assert(std::is_same_v<decltype(&ArdiaAppStart), ArdiaAppStartFunction>);
 static_assert(std::is_same_v<decltype(&ArdiaAppPreTranslateMessage), ArdiaAppPreTranslateFunction>);
 static_assert(std::is_same_v<decltype(&ArdiaAppStop), ArdiaAppStopFunction>);
 static_assert(std::is_same_v<decltype(&ArdiaAppStartFailure), ArdiaAppStartFailureFunction>);
+static_assert(std::is_same_v<decltype(&ArdiaAppLaunchArriving), ArdiaAppLaunchArrivingFunction>);
+static_assert(std::is_same_v<decltype(&ArdiaAppLaunchDelivered), ArdiaAppLaunchDeliveredFunction>);
+static_assert(std::is_same_v<decltype(&ArdiaAppAfterLaunchArriving), ArdiaAppAfterLaunchArrivingFunction>);
 
 BOOL APIENTRY DllMain(HMODULE image, DWORD reason, LPVOID) {
   if (reason == DLL_PROCESS_ATTACH) Ardia::AppImage::Handle() = image;

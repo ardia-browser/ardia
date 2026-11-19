@@ -1,7 +1,5 @@
 #pragma once
 
-#include <share.h>
-
 #include "Paths.h"
 
 namespace Ardia {
@@ -17,7 +15,7 @@ struct LaunchLog {
       if (argument.starts_with(logFileSwitch)) Open(std::wstring{argument.substr(logFileSwitch.size())});
     }
     LocalFree(arguments);
-    if (!File()) OpenDefault();
+    if (File() == INVALID_HANDLE_VALUE) OpenDefault();
   }
 
   static std::filesystem::path DefaultPath() noexcept {
@@ -33,13 +31,13 @@ struct LaunchLog {
 
   static void Write(std::wstring_view level, std::wstring_view message) noexcept {
     std::scoped_lock lock{Mutex()};
-    FILE *file = File();
-    if (!file || Written() >= kMaxBytes) return;
+    HANDLE file = File();
+    if (file == INVALID_HANDLE_VALUE || Written() >= kMaxBytes) return;
     std::string line = winrt::to_string(level) + " " + std::to_string(ElapsedMs()) + " " + winrt::to_string(message) + "\n";
     Written() += line.size();
     if (Written() >= kMaxBytes) line.append("warning ").append(std::to_string(ElapsedMs())).append(" the launch log reached its size limit; nothing more is written this run\n");
-    fwrite(line.data(), 1, line.size(), file);
-    fflush(file);
+    DWORD wrote = 0;
+    WriteFile(file, line.data(), static_cast<DWORD>(line.size()), &wrote, nullptr);
   }
 
   static uint64_t ElapsedMs() noexcept {
@@ -75,12 +73,12 @@ struct LaunchLog {
 
   static void Open(const std::wstring &path) noexcept {
     std::scoped_lock lock{Mutex()};
-    if (File()) return;
-    File() = _wfsopen(path.c_str(), L"ab", _SH_DENYNO);
+    if (File() != INVALID_HANDLE_VALUE) return;
+    File() = CreateFileW(path.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
   }
 
-  static FILE *&File() noexcept {
-    static FILE *file = nullptr;
+  static HANDLE &File() noexcept {
+    static HANDLE file = INVALID_HANDLE_VALUE;
     return file;
   }
 

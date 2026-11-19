@@ -1,0 +1,46 @@
+--- a/content/browser/media/session/media_session_impl.cc
++++ b/content/browser/media/session/media_session_impl.cc
+@@ -58,6 +58,10 @@
+ 
+ namespace content {
+ 
++// Ardia: defined by the Windows engine's media session patch in
++// media_session_controller.cc.
++CONTENT_EXPORT extern bool g_ardia_win_keep_media_session_players;
++
+ using blink::mojom::MediaSessionPlaybackState;
+ using media_session::mojom::MediaAudioVideoState;
+ using media_session::mojom::MediaPlaybackState;
+@@ -1152,6 +1156,13 @@
+     info->ignore_for_active_session = true;
+   }
+ 
++  // Ardia: a muted tab keeps its session on Windows, but it never takes the
++  // hardware media keys or the system media controls from a tab that is heard.
++  if (g_ardia_win_keep_media_session_players &&
++      web_contents()->IsAudioMuted()) {
++    info->ignore_for_active_session = true;
++  }
++
+   // The playback state should use `IsActive()` to determine whether we are
+   // playing or not. However, if there is a `routed_service_` which is playing
+   // then we should force the playback state to be playing. We don't generally
+--- a/services/media_session/audio_focus_request.cc
++++ b/services/media_session/audio_focus_request.cc
+@@ -183,10 +183,15 @@
+     mojom::MediaSessionInfoPtr session_info) {
+   bool is_controllable_changed =
+       session_info_->is_controllable != session_info->is_controllable;
++  // Ardia: a session that starts or stops being ignored (a Windows tab muted or
++  // unmuted) moves the active session at once.
++  const bool ardia_ignore_changed =
++      session_info_->ignore_for_active_session !=
++      session_info->ignore_for_active_session;
+ 
+   session_info_ = std::move(session_info);
+ 
+-  if (is_controllable_changed) {
++  if (is_controllable_changed || ardia_ignore_changed) {
+     owner_->MaybeUpdateActiveSession();
+   }
+ }

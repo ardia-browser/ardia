@@ -1,8 +1,8 @@
 import { hostCall, leaveOffersFromUnheard } from "../engine/host";
 import { mountPage } from "../engine/pages";
 import { expectEqual, expectTrue, type Check } from "./check";
-import { click, evaluate, firstWindow, LEFT, listed, pause, RIGHT, show, until } from "./engineSleep";
-import { CTRL, DETACHED_MUTED_VIDEO, LOAD_MS, NEXT_LINK, PER_PAGE_COUNT, PLAY_BUTTON, SETTLE_MS, TOUCH_POINT, TRANSIENT_ACTIVATION_MS, blocked, countsOf, framed, held, loadedAt, mediaCommand, origin, played, playing, port, refusedThenStill, restore, setAutoplay, withMedia } from "./engineAutoplayKit";
+import { click, evaluate, firstWindow, hide, LEFT, listed, pause, RIGHT, show, until } from "./engineSleep";
+import { CTRL, DETACHED_MUTED_VIDEO, LOAD_MS, NEXT_LINK, PER_PAGE_COUNT, PLAY_BUTTON, SETTLE_MS, TOUCH_POINT, TRANSIENT_ACTIVATION_MS, blocked, countsOf, framed, held, loadedAt, origin, played, playing, port, refusedThenStill, restore, setAutoplay, withMedia } from "./engineAutoplayKit";
 
 const raced = (media: string) =>
   `Promise.race([${media}.play().then(() => "played", (error) => error.name), new Promise((resolve) => setTimeout(() => resolve("pending"), 1500))]).then((result) => post("result", JSON.stringify(result)));`;
@@ -20,6 +20,16 @@ async function advances(key: string, what: string) {
   const later = await played(key);
   const going = (state: typeof first) => state.paused === false && state.ended === false && (state.ready ?? 0) >= HAVE_CURRENT_DATA;
   expectEqual({ playing: going(first) && going(later), moved: later.time !== first.time }, { playing: true, moved: true }, `${what} (currentTime ${first.time} then ${later.time}, readyState ${later.ready})`);
+}
+
+async function wokenToPlay(key: string, windowId: string) {
+  await hide(key, windowId);
+  expectEqual((await hostCall<{ outcome?: unknown }>("tab.call", { key, method: "discard" })).outcome, "discarded", "the hidden page is discarded");
+  await hostCall("tab.call", { key, method: "reloadToPlay" });
+  await until("the woken page loads", LOAD_MS, () => listed(key), (tab) => tab?.title === "media page" && tab.loading === false && tab.discarded !== true);
+  await show(key, windowId, LEFT);
+  const answer = await hostCall<{ done?: unknown; byScript?: unknown }>("tab.call", { key, method: "mediaCommand", action: "play" });
+  expectEqual({ done: answer?.done, byScript: answer?.byScript }, { done: true, byScript: true }, "Ardia's play on the woken page, with no media session, goes through the wake allowance");
 }
 
 async function waitingPopupPlays(key: string, meanwhile: () => Promise<void>) {
@@ -50,10 +60,10 @@ async function cutPopupPlays(key: string) {
 
 const askChecks: Check[] = [
   {
-    name: "engine autoplay: on a site that blocks nothing, a muted video Ardia's play control started keeps playing when the page unmutes it",
+    name: "engine autoplay: on a site that blocks nothing, a muted video Ardia's play started, waking its sleeping tab, keeps playing when the page unmutes it",
     run: () =>
-      withMedia("control-unmute", "media?muted", "media page", async (key) => {
-        await mediaCommand(key, "play");
+      withMedia("control-unmute", "media?muted", "media page", async (key, windowId) => {
+        await wokenToPlay(key, windowId);
         await until("Ardia's play control plays the muted video", SETTLE_MS, () => played(key), playing);
         await evaluate(key, 'm.muted = false; post("result", "true");');
         await pause(1000);
@@ -61,21 +71,23 @@ const askChecks: Check[] = [
       }),
   },
   {
-    name: "engine autoplay: Ardia's play toggle that pauses gives the page no user activation",
+    name: "engine autoplay: Ardia's play toggle on muted autoplay, which has no media session, does nothing and gives the page no user activation",
     run: () =>
       withMedia("toggle-pause", "media?auto-muted", "media page", async (key) => {
         await until("the muted autoplay plays", SETTLE_MS, () => played(key), playing);
-        await mediaCommand(key, "toggle");
-        await until("the toggle pauses it", SETTLE_MS, () => played(key), (state) => state.paused === true);
+        const answer = await hostCall<{ done?: unknown }>("tab.call", { key, method: "mediaCommand", action: "toggle" });
+        expectEqual(answer?.done, false, "the toggle with no media session to take it");
+        await pause(1000);
+        await advances(key, "the muted autoplay keeps playing");
         expectEqual(await evaluate(key, 'post("result", JSON.stringify(navigator.userActivation.hasBeenActive));'), false, "the page's navigator.userActivation.hasBeenActive after a pausing toggle");
       }),
   },
   {
-    name: "engine autoplay: media Ardia's play control started before blocking turned on keeps playing",
+    name: "engine autoplay: media Ardia's play started, waking its sleeping tab, before blocking turned on keeps playing",
     run: async () => {
       try {
-        await withMedia("control-then-block", "media?muted", "media page", async (key) => {
-          await mediaCommand(key, "play");
+        await withMedia("control-then-block", "media?muted", "media page", async (key, windowId) => {
+          await wokenToPlay(key, windowId);
           await until("Ardia's play control plays the muted video", SETTLE_MS, () => played(key), playing);
           await setAutoplay("block");
           await pause(1000);

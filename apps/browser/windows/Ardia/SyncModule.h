@@ -121,7 +121,11 @@ struct SyncModule {
 
   REACT_METHOD(unlock)
   void unlock(std::string account, winrt::Microsoft::ReactNative::ReactPromise<bool> promise) noexcept {
-    SyncModuleParts::OnQueue(promise, [account, promise]() { promise.Resolve(SyncVault::Unlock(SyncModuleParts::Shared(), account)); });
+    SyncModuleParts::OnQueue(promise, [account, promise]() {
+      bool unlocked = SyncVault::Unlock(SyncModuleParts::Shared(), account);
+      if (AppLaunch::Shared().testInstance) AppLaunch::Note(unlocked ? L"[sync] unlock finished: unlocked" : L"[sync] unlock finished: not unlocked");
+      promise.Resolve(unlocked);
+    });
   }
 
   REACT_METHOD(forget)

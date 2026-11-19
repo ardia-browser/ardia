@@ -112,3 +112,16 @@ test("redo starts from the current settings, keeps them unless a new browser is 
   assert.equal(onboardingCompletedAt(), completed);
   settle();
 });
+
+test("only an onboarding that starts with the launch is marked as such; one started later or redone is not", () => {
+  const id = S().createWindow();
+  startOnboarding(id, "intro", true);
+  assert.equal(O().atLaunch, true);
+  settle();
+  startOnboarding(id);
+  assert.equal(O().atLaunch, false, "started later, as from the command");
+  settle();
+  redoOnboarding(id);
+  assert.equal(O().atLaunch, false, "redone from Settings");
+  settle();
+});

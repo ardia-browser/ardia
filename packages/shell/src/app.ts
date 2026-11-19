@@ -11,6 +11,7 @@ export type LaunchConfig = {
   trace: string[];
   test: Record<string, string>;
   feedbackURL?: string | null;
+  recoveredStart?: boolean;
 };
 
 export type SystemInfo = {

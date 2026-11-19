@@ -4,6 +4,7 @@ import type { AccessibilityActionEvent, GestureResponderEvent } from "react-nati
 import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { webviews } from "../../platform/webviews";
+import { reloadToPlay } from "../../platform/wakeReload";
 import { useBrowser } from "../browser/store";
 import type { BrowserState } from "../browser/store";
 import { activeTabId } from "../browser/model";
@@ -12,7 +13,7 @@ import { splitOf, splitTabIdsOf } from "../splits/splits";
 import { hostOf } from "@ardia/core";
 import { capture } from "../telemetry/client";
 import { nativeConsent } from "../telemetry/nativeConsent";
-import { noteMediaPositionReport, noteNowPlayingLoopRestart } from "../telemetry/mediaCardCounts";
+import { noteMediaCommandAnswer, noteMediaPositionReport, noteNowPlayingLoopRestart } from "../telemetry/mediaCardCounts";
 import { isSleeping } from "../tabs/sleepingTabs";
 import { notePictureInPictureClosed } from "../telemetry/pictureInPictureCloses";
 import { liveOf, watchLive } from "../tabs/tabLive";
@@ -131,7 +132,7 @@ export function formatTime(seconds: number): string {
 }
 
 export function mediaCommand(tabId: string, action: MediaCommand, seconds?: number) {
-  if (!isSleeping(tabId)) return void webviews.get(tabId)?.mediaCommand(action, seconds);
+  if (!isSleeping(tabId)) return void webviews.get(tabId)?.mediaCommand(action, seconds).then(noteMediaCommandAnswer);
   if (action === "play" || action === "toggle") wakeToPlay(tabId);
 }
 
@@ -156,7 +157,7 @@ function wakeToPlay(tabId: string) {
   };
   const resume = (after: NowPlaying | null) => {
     finish();
-    for (const [action, seconds] of resumeCommands(before, after)) void webviews.get(tabId)?.mediaCommand(action, seconds);
+    for (const [action, seconds] of resumeCommands(before, after)) void webviews.get(tabId)?.mediaCommand(action, seconds).then(noteMediaCommandAnswer);
   };
   const deadline = setTimeout(finish, WAKE_TO_PLAY_MS);
   unsubscribe.push(
@@ -170,7 +171,7 @@ function wakeToPlay(tabId: string) {
       else if (sawLoading) loaded = setTimeout(() => resume(null), LOADED_WITHOUT_SESSION_MS);
     }),
   );
-  void handle.reload().catch(finish);
+  void reloadToPlay(handle).catch(finish);
 }
 
 export function resumeCommands(before: Session | undefined, after: NowPlaying | null): [MediaCommand, number?][] {

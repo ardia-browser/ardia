@@ -1,0 +1,28 @@
+--- a/third_party/blink/renderer/modules/mediasession/media_session.cc
++++ b/third_party/blink/renderer/modules/mediasession/media_session.cc
+@@ -457,9 +457,6 @@
+     LocalFrame::NotifyUserActivation(
+         window->GetFrame(),
+         mojom::blink::UserActivationNotificationType::kInteraction);
+-    // Ardia: a Media Session action from the user is the user's ask in the
+-    // session's document, for every action Chrome grants activation for.
+-    AutoplayPolicy::ArdiaNoteUsedHere(window->GetFrame());
+   }
+ 
+   auto v8_action = MojomActionToActionEnum(action);
+@@ -467,6 +464,15 @@
+   auto iter = action_handlers_.find(v8_action);
+   if (iter == action_handlers_.end())
+     return;
++
++  // Ardia: a play, next track or previous track the page handles is the
++  // user's ask in the session's document; a seek, pause, stop or an action
++  // the page does not handle is not.
++  if (action == MediaSessionAction::kPlay ||
++      action == MediaSessionAction::kNextTrack ||
++      action == MediaSessionAction::kPreviousTrack) {
++    AutoplayPolicy::ArdiaNoteUsedHere(window->GetFrame());
++  }
+ 
+   const auto* blink_details =
+       mojo::TypeConverter<const blink::MediaSessionActionDetails*,

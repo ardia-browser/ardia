@@ -15,7 +15,7 @@ export const pagerState = (key: string): PagerSnapshot | null => Pager.existing(
 export const devPagerState = async (key: string) => Pager.existing(key)?.debug() ?? null;
 
 export const SwipeArea = forwardRef<SwipeAreaHandle, SwipeAreaProps>(function SwipeArea(
-  { onSwipe, onPagerState, onPagerPosition, nativePager, canSwipeBack, canSwipeForward, tracksUnavailableDirections, allowsVerticalMotion, isPager, ...props },
+  { onSwipe, onPagerState, onPagerPosition, nativePager, canSwipeBack, canSwipeForward, tracksUnavailableDirections, allowsVerticalMotion, isPager, wheelPages: _wheelPages, ...props },
   ref,
 ) {
   const node = useRef<HTMLElement | null>(null);

@@ -4,5 +4,6 @@
     <RnwNewArch>true</RnwNewArch>
     <UseExperimentalNuget>true</UseExperimentalNuget>
     <ReactExperimentalFeaturesSet>true</ReactExperimentalFeaturesSet>
+    <HermesVersion>0.0.0-2608.19001-e8893e62</HermesVersion>
   </PropertyGroup>
 </Project>

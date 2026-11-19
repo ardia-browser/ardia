@@ -81,7 +81,7 @@ export const SYNC_WORDING: readonly Wording[] = [
     replacements: [[`export const MONO_FAMILY = "Menlo";`, `export const MONO_FAMILY = "monospace";`]],
   },
   {
-    file: "state/sync/engine.ts",
+    file: "state/sync/syncPause.ts",
     replacements: [["Enter your recovery phrase to keep syncing on this ${PLATFORM_TERMS.computer}.", "Enter your recovery phrase to keep syncing on this device."]],
   },
 ];

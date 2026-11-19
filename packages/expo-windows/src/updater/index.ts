@@ -1,7 +1,7 @@
 import { TurboModuleRegistry, type TurboModule } from "react-native";
 import type { AppNative, ConfirmOptions, DialogsNative, DocumentsNative, UpdateChannel, UpdaterNative, UpdaterState } from "@ardia/shell";
 import type { AppWindowsModule, WindowsUpdateConstants, WindowsUpdateModule } from "../nativeModuleTypes";
-import { failureText, feedNotPublished, folderOf, megabytes, offered, readBuild, readManifest, type BuildIdentity } from "./manifest";
+import { failureText, feedNotPublished, folderOf, installMessage, megabytes, offered, readBuild, readManifest, type BuildIdentity } from "./manifest";
 
 const PUBLISHED_UNDER = "https://github.com/ardia-browser/ardia/releases/download/";
 const FEED = `${PUBLISHED_UNDER}windows-alpha/windows-update.json`;
@@ -23,6 +23,11 @@ let checking = false;
 let declinedBuild = 0;
 let timer: ReturnType<typeof setInterval> | undefined;
 let firstCheck: ReturnType<typeof setTimeout> | undefined;
+let downloadsInProgress = 0;
+
+export function noteDownloadsInProgress(count: unknown) {
+  downloadsInProgress = typeof count === "number" && Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+}
 
 function identity(): BuildIdentity | null {
   if (identityRead === undefined) identityRead = typeof constants().buildFile === "string" ? readBuild(constants().buildFile as string) : null;
@@ -115,19 +120,17 @@ async function check(asked: boolean) {
     }
     const path = await update.download(installer.url, installer.sha256, installer.bytes);
     console.info(`[ardia windows] update ${manifest.build} downloaded`);
-    const install = await ask({
-      title: "The update is ready to install",
-      message: `Ardia closes, installs ${newer} and opens again.`,
-      confirmTitle: "Install and Restart",
-      cancelTitle: "Later",
-    });
+    const askToInstall = (running: number) => ask({ title: "The update is ready to install", message: installMessage(newer, running), confirmTitle: "Install and Restart", cancelTitle: "Later" });
+    const told = downloadsInProgress;
+    let install = await askToInstall(told);
+    if (install && downloadsInProgress > told) install = await askToInstall(downloadsInProgress);
     if (!install) {
       declinedBuild = manifest.build;
       return;
     }
     if (await update.install(path, installer.sha256)) {
       console.info(`[ardia windows] update ${manifest.build} is installing`);
-      await TurboModuleRegistry.get<TurboModule & Pick<AppWindowsModule, "quit">>("ArdiaAppWindows")?.quit();
+      await TurboModuleRegistry.get<TurboModule & Pick<AppWindowsModule, "quit">>("ArdiaAppWindows")?.quit("update");
     }
   } catch (error) {
     console.info(`[ardia windows] update check failed: ${reason(error)}`);

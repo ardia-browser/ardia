@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { PagerRegistry, REST_DISPLACEMENT } from "../../../../packages/expo-windows/src/pager/pager.ts";
+import { wheelSwipe } from "../../../../packages/expo-windows/src/pager/wheel.ts";
 
 const FRAME_MS = 1000 / 60;
 const MAC_SETTLE_ONE_PAGE_MS = 330;
@@ -209,4 +210,10 @@ test("position goes to one area, state to all, and the last area out forgets the
   assert.equal(h.registry.existing("w"), null);
   assert.equal(h.registry.snapshot("w"), null);
   assert.equal(h.moving(), false);
+});
+
+test("a sideways wheel becomes the Mac's wheel swipe: negative is back, a notch is ten points, availability follows the side", () => {
+  assert.deepEqual(wheelSwipe(-120, true, false, 240), { phase: "wheel", direction: "back", distance: 10, dy: 0, velocity: 0, available: true, width: 240 });
+  assert.deepEqual(wheelSwipe(120, true, false, 240), { phase: "wheel", direction: "forward", distance: 10, dy: 0, velocity: 0, available: false, width: 240 });
+  assert.equal(wheelSwipe(18, false, true, 240).distance, 1.5, "a touchpad's small deltas add up in profilePager's burst");
 });

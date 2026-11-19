@@ -8,6 +8,11 @@ extern "C" {
 
 #define ARDIA_ENGINE_API_VERSION 1
 
+#define ARDIA_APP_LAUNCH_TURNED_AWAY 0
+#define ARDIA_APP_LAUNCH_KEPT 1
+#define ARDIA_APP_LAUNCH_KEPT_BY_CANCELLING_QUIT 2
+#define ARDIA_APP_LAUNCH_LEFT_FOR_UPDATE 3
+
 typedef void (*ArdiaEngineReply)(void *context, const char *json);
 typedef void (*ArdiaEngineEventSink)(void *context, const char *topic, const char *json);
 
@@ -25,6 +30,9 @@ typedef int (*ArdiaAppPreTranslateFunction)(const void *message);
 typedef void (*ArdiaAppStopFunction)(void);
 typedef int (*ArdiaAppRunFunction)(void);
 typedef const wchar_t *(*ArdiaAppStartFailureFunction)(void);
+typedef int (*ArdiaAppLaunchArrivingFunction)(void);
+typedef void (*ArdiaAppLaunchDeliveredFunction)(void);
+typedef void (*ArdiaAppAfterLaunchArrivingFunction)(void);
 
 #ifdef __cplusplus
 }

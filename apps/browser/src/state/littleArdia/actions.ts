@@ -18,7 +18,8 @@ import { externalLinkOpen, type ExternalLinkOpen } from "./externalLinkOpen";
 import { noteExternalLink } from "../telemetry/usage";
 import { openInRouteGroup } from "../airTraffic/openAt";
 import { noteLittleArdiaAppHandoff, noteLittleArdiaEscapeClose, type EscapePressedIn } from "../telemetry/littleArdiaEscapes";
-import { askBeforeQuitting, quitWarningMayAsk } from "../windows/quitWarning";
+import { askBeforeQuitting, noteQuitNotAskedWhenHidden, quitWarningMayAsk } from "../windows/quitWarning";
+import { consentToken } from "../telemetry/client";
 
 const store = () => useBrowser.getState();
 
@@ -185,8 +186,11 @@ export async function openLittleArdiaProfileMenu(windowId: string) {
 
 export function closeLittleArdia(windowId: string) {
   if (!isSmall(store(), windowId)) return;
-  if (!quitWarningMayAsk()) return closeWindowAnimated(windowId);
-  void askBeforeQuitting(windowId).then((answer) => {
+  if (!quitWarningMayAsk()) {
+    noteQuitNotAskedWhenHidden(windowId);
+    return closeWindowAnimated(windowId);
+  }
+  void askBeforeQuitting(windowId, undefined, { consent: consentToken() }).then((answer) => {
     if (answer !== "cancelled" && isSmall(store(), windowId) && !isWindowClosing(windowId)) closeWindowAnimated(windowId);
   });
 }

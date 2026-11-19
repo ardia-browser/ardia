@@ -57,8 +57,11 @@ export const FILE_ICON_GLYPH_SHARE = 0.62;
 export const MAGNET = {
   flight: { duration: duration.long, easing: curve.move },
   icon: 44,
+  peakScale: 1.1,
   arc: 90,
   startShare: 0.45,
+  pageEdgeGap: 6,
+  iconWaitMs: 300,
   topStripTarget: { right: 25, y: 21 },
   sidebarTarget: { right: 24 },
   closedTarget: { x: 24, y: 24 },

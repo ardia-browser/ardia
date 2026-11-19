@@ -89,12 +89,14 @@ export function extensionsAdapterFor(profileId: string): ExtensionsAdapter {
   });
 }
 
-let watching = false;
+let watching: ReturnType<typeof onExtensionsSync> | null = null;
 
 export function watchExtensionIntents(profiles: string[]) {
-  if (!watching) {
-    watching = true;
-    onExtensionsSync(({ profile }) => void readLocal(profile));
-  }
+  watching ??= onExtensionsSync(({ profile }) => void readLocal(profile));
   for (const profile of profiles) void readLocal(profile);
+}
+
+export function stopWatchingExtensionIntents() {
+  watching?.remove();
+  watching = null;
 }

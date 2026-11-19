@@ -110,6 +110,7 @@ struct ShellState {
       if (on == lastHighContrast) return;
       lastHighContrast = on;
     }
+    if (context) RunOnUI(context, []() noexcept { WindowManager::Shared().RefreshCaptionColors(); });
     EmitAppEvent(winrt::Microsoft::ReactNative::JSValueObject{{"type", "highContrast"}, {"on", on}});
   }
 

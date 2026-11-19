@@ -16,9 +16,9 @@ import { handPopupAsTab } from "./popupsAsTabs";
 export type PageListener = (name: string, data: unknown) => void;
 export type PageRect = Omit<CoverRect, "radius">;
 export type PageShape = PageRect & { radius: number; holes: number[][] };
-export type PageStart = { url?: string; profile?: string; adopt?: string; windowId: string };
+export type PageStart = { url?: string; profile?: string; adopt?: string; contentsBackground?: string; windowId: string };
 
-type ShowArgs = { key: string; visible: boolean } & Partial<PageShape>;
+type ShowArgs = { key: string; visible: boolean; contentsBackground?: string } & Partial<PageShape>;
 
 export type Page = {
   key: string;
@@ -183,7 +183,7 @@ const offeredByEngine = (adopt: string | undefined) => (adopt?.startsWith("ardia
 
 function start(key: string, from: PageStart): Promise<boolean> {
   const url = from.url ?? "";
-  const create = (adopt: string) => hostCall("tab.create", { key, url, profile: from.profile ?? "", adopt }, from.windowId);
+  const create = (adopt: string) => hostCall("tab.create", { key, url, profile: from.profile ?? "", adopt, ...(from.contentsBackground ? { contentsBackground: from.contentsBackground } : {}) }, from.windowId);
   const offered = offeredByEngine(from.adopt);
   const closing = closings.get(key);
   return (closing ? closing.then(() => create(offered)) : create(offered))
@@ -325,14 +325,15 @@ function closePage(page: Page) {
   closings.set(page.key, closing);
 }
 
-export function showPage(key: string, visible: boolean, shape: PageShape | null, askedIn?: string): boolean {
+export function showPage(key: string, visible: boolean, shape: PageShape | null, askedIn?: string, contentsBackground?: string): boolean {
   const page = pages.get(key);
   if (!page || page.closed) return (noteShowStep(key, page ? "showPage: closed" : "showPage: no page"), false);
   if (askedIn !== undefined && askedIn !== page.windowId) return (noteShowStep(key, `showPage: asked in ${askedIn}, the page is in ${page.windowId}`), false);
-  return (askShow(page, visible && shape ? { key, visible: true, ...shape } : { key, visible: false }), true);
+  if (contentsBackground) page.from = { ...page.from, contentsBackground };
+  return (askShow(page, visible && shape ? { key, visible: true, ...shape, ...(contentsBackground ? { contentsBackground } : {}) } : { key, visible: false }), true);
 }
 
-const REOPENING_METHODS = new Set(["loadUrl", "reload", "forceReload"]);
+const REOPENING_METHODS = new Set(["loadUrl", "reload", "reloadToPlay", "forceReload"]);
 
 function readyOrReopened(page: Page, url: unknown): Promise<boolean> {
   page.ready = page.ready.then((opened) => {

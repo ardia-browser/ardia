@@ -154,6 +154,7 @@ function ThisProfileSection({ profileId }: { profileId: string }) {
   const syncLink = useSync((s) => s.profiles[profileId]);
   const synced = useSync((s) => s.enabled && !!s.profiles[profileId]?.enabled);
   const syncsTabs = useSync((s) => s.types.tabs);
+  const syncPaused = useSync((s) => s.paused);
   const engineProfile = currentEngineProfile(profileId);
   const [downloads] = useResource(downloadSettings, engineProfile);
   const savedName = profile?.name ?? "";
@@ -225,11 +226,11 @@ function ThisProfileSection({ profileId }: { profileId: string }) {
           />
         ) : null}
         <Row anchor="profiles.syncThisProfile" description={sharing ? "Its tabs sync here; the data it shares syncs with the profile that owns it." : undefined}>
-          <Toggle value={!!syncLink?.enabled} disabled={!syncLink} accessibilityLabel={setting("profiles.syncThisProfile").title} onChange={(on) => setProfileSynced(profileId, on)} />
+          <Toggle value={!!syncLink?.enabled} disabled={!syncLink || syncPaused} accessibilityLabel={setting("profiles.syncThisProfile").title} onChange={(on) => setProfileSynced(profileId, on)} />
         </Row>
         {synced ? (
           <Row title="Sync All Open Tabs" description={`Every open tab in this profile, not just pinned ones, is the same on all your ${PLATFORM_TERMS.syncedComputer}s.`}>
-            <Toggle value={!!profile.syncTabs} disabled={!syncsTabs} accessibilityLabel="Sync All Open Tabs" onChange={(on) => setOpenTabsSynced(profileId, on)} />
+            <Toggle value={!!profile.syncTabs} disabled={!syncsTabs || syncPaused} accessibilityLabel="Sync All Open Tabs" onChange={(on) => setOpenTabsSynced(profileId, on)} />
           </Row>
         ) : null}
         <Row

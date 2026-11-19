@@ -14,7 +14,7 @@ $tourFile = Join-Path $Out "tour.md"
 $script:Lines = [System.Collections.Generic.List[string]]::new()
 $script:Sessions = [System.Collections.Generic.List[object]]::new()
 $script:StopNumber = 0
-$script:Required = [System.Collections.Generic.List[string]]::new()
+$script:FailedStops = [System.Collections.Generic.List[string]]::new()
 $script:PreviousSignature = $null
 $script:UiaReady = $null
 $script:LightBrightness = $null
@@ -946,14 +946,21 @@ function Click-Named($Session, [string]$Name) {
 }
 
 function Get-BarGaps($Session, [int]$Mark) {
-  $lines = @(Get-LinesSince $Session $Mark "^(command \d+ newTab|\w+ \d+ \[ardia windows\] new tab bar )")
+  $lines = @(Get-LinesSince $Session $Mark "^(command \d+ newTab|\w+ \d+ \[ardia windows\] (new tab bar |bar field (mount|focus) hero ))")
   $command = $null
   $tab = $null
   $firstTyped = $null
   $mounts = 0
+  $heroTag = $null
+  $heroFocusAt = $null
   $found = [ordered]@{}
   foreach ($line in $lines) {
     if ($line -match "^command (\d+) newTab") { if ($null -eq $command) { $command = [int64]$Matches[1] }; continue }
+    if ($null -ne $command -and $line -match "^\w+ (\d+) \[ardia windows\] bar field (mount|focus) hero tag (\d+)") {
+      if ($Matches[2] -eq "mount" -and $null -eq $heroTag) { $heroTag = $Matches[3] }
+      elseif ($Matches[2] -eq "focus" -and $null -ne $heroTag -and $Matches[3] -eq $heroTag -and $null -eq $heroFocusAt) { $heroFocusAt = [int64]$Matches[1] }
+      continue
+    }
     if ($null -eq $command -or $line -notmatch "^\w+ (\d+) \[ardia windows\] new tab bar (\w+) (\S+)") { continue }
     $at = [int64]$Matches[1]
     $stage = $Matches[2]
@@ -964,14 +971,20 @@ function Get-BarGaps($Session, [int]$Mark) {
     if ($id -ne $tab -and $null -ne $tab) { continue }
     if (-not $found.Contains("$id $stage")) { $found["$id $stage"] = $at }
   }
-  $gaps = [pscustomobject]@{ Text = ""; Tab = $tab; FocusedMs = $null; FirstTyped = $firstTyped; Mounts = 0 }
+  $gaps = [pscustomobject]@{ Text = ""; Tab = $tab; FocusedMs = $null; FocusedFrom = "no focus line"; FirstTyped = $firstTyped; Mounts = 0 }
   if ($null -eq $command) { $gaps.Text = "no newTab command in the log"; return $gaps }
   if ($null -eq $tab) { $gaps.Text = "no new tab page after the command"; return $gaps }
-  if ($found.Contains("$tab focused")) { $gaps.FocusedMs = $found["$tab focused"] - $command }
+  if ($found.Contains("$tab focused")) {
+    $gaps.FocusedMs = $found["$tab focused"] - $command
+    $gaps.FocusedFrom = "'new tab bar focused'"
+  } elseif ($null -ne $heroFocusAt) {
+    $gaps.FocusedMs = $heroFocusAt - $command
+    $gaps.FocusedFrom = "'bar field focus hero tag $heroTag', because the 'new tab bar focused' line is missing (a torn launch-log line, #2426)"
+  }
   $parts = @(foreach ($stage in "page", "committed", "focused", "rest", "typed") { if ($found.Contains("$tab $stage")) { "$stage +$($found["$tab $stage"] - $command) ms" } else { "$stage not logged" } })
   $typedBy = if ($firstTyped) { "the first typed mark after the command: $($firstTyped.Tab) +$($firstTyped.Ms) ms" } else { "no typed mark after the command" }
   $gaps.Mounts = $mounts
-  $gaps.Text = "$tab " + ($parts -join ", ") + "; the page mounted $mounts time(s); $typedBy"
+  $gaps.Text = "$tab " + ($parts -join ", ") + "; focus read from $($gaps.FocusedFrom)$(if ($null -ne $gaps.FocusedMs) { " at +$($gaps.FocusedMs) ms" }); the page mounted $mounts time(s); $typedBy"
   return $gaps
 }
 
@@ -1014,7 +1027,7 @@ function Invoke-BarTypingStop($Session, [string]$Slug, [string]$Title, [string]$
     $stop.Facts.Add("lost a letter in $lost of $Tries tries")
     Set-Seen $stop ($lost -eq 0)
   }
-  if ($stop.Seen -ne "yes") { $script:Required.Add("$($stop.Number) $Title") }
+  if ($stop.Seen -ne "yes") { $script:FailedStops.Add("$($stop.Number) $Title") }
 }
 
 function Close-Bar {
@@ -1025,7 +1038,7 @@ function Close-Bar {
 
 function Invoke-TypingTour {
   $session = Start-Ardia "typing-sidebar" -Onboarded
-  if (-not (Test-Usable $session)) { $script:Required.Add("Typing (typing-sidebar): no usable window") }
+  if (-not (Test-Usable $session)) { $script:FailedStops.Add("Typing (typing-sidebar): no usable window") }
   if (Test-Usable $session) {
     $opened = Invoke-Stop $session "typing-page" "Not a first run: open Example Domain to type over" {
       param($stop)
@@ -1033,14 +1046,14 @@ function Invoke-TypingTour {
       $stop.Expected = "the window's title names example.com, the host Ardia shows for the open page."
       Set-Seen $stop (Open-Page $session $stop "example.com" "example\.com")
     }
-    if ($opened.Seen -ne "yes") { $script:Required.Add("$($opened.Number) Not a first run: open Example Domain to type over") }
+    if ($opened.Seen -ne "yes") { $script:FailedStops.Add("$($opened.Number) Not a first run: open Example Domain to type over") }
     Invoke-BarTypingStop $session "typing-ctrl-l" "Not a first run: Ctrl+L on a page, typing at 80 ms a key, ten tries" "On Example Domain, pressed Ctrl+L, typed example.com from 300 ms after it at 80 ms a key, reading the field after every key, then closed the bar with Escape; ten times." { Send-QuickChord @(0x11) 0x4C } { Close-Bar } 300 80 10
     Invoke-BarTypingStop $session "typing-ctrl-t" "Not a first run: Ctrl+T, typing at 80 ms a key from 100 ms after it, ten tries" "Pressed Ctrl+T, typed example.com from 100 ms after it at 80 ms a key, reading the field after every key, then closed the tab with Ctrl+W; ten times." { Send-QuickChord @(0x11) 0x54 } { Send-Chord @(0x11) 0x57 } 100 80 10
   }
   Stop-Ardia $session
 
   $session = Start-Ardia "typing-top" -Onboarded -Settings @{ tabLayout = "top" }
-  if (-not (Test-Usable $session)) { $script:Required.Add("Typing (typing-top): no usable window") }
+  if (-not (Test-Usable $session)) { $script:FailedStops.Add("Typing (typing-top): no usable window") }
   if (Test-Usable $session) {
     $opened = Invoke-Stop $session "typing-top-page" "Not a first run, tabs on top: open Example Domain to type over" {
       param($stop)
@@ -1048,13 +1061,13 @@ function Invoke-TypingTour {
       $stop.Expected = "the window's title names example.com, the host Ardia shows for the open page."
       Set-Seen $stop (Open-Page $session $stop "example.com" "example\.com")
     }
-    if ($opened.Seen -ne "yes") { $script:Required.Add("$($opened.Number) Not a first run, tabs on top: open Example Domain to type over") }
+    if ($opened.Seen -ne "yes") { $script:FailedStops.Add("$($opened.Number) Not a first run, tabs on top: open Example Domain to type over") }
     Invoke-BarTypingStop $session "typing-toolbar" "Not a first run, tabs on top: Ctrl+L into the toolbar's address field, typing at 80 ms a key, ten tries" "With tabs on top, on Example Domain, pressed Ctrl+L, typed example.com from 300 ms after it at 80 ms a key, reading the field after every key, then closed the bar with Escape; ten times." { Send-QuickChord @(0x11) 0x4C } { Close-Bar } 300 80 10
   }
   Stop-Ardia $session
 
   $session = Start-Ardia "typing-floating" -Onboarded -Settings @{ newTabOpens = "commandBar" }
-  if (-not (Test-Usable $session)) { $script:Required.Add("Typing (typing-floating): no usable window") }
+  if (-not (Test-Usable $session)) { $script:FailedStops.Add("Typing (typing-floating): no usable window") }
   if (Test-Usable $session) {
     Invoke-BarTypingStop $session "typing-floating" "Not a first run, new tabs open the command bar: Ctrl+T into the floating bar, typing at 80 ms a key, ten tries" "With newTabOpens = commandBar, pressed Ctrl+T, typed example.com from 100 ms after it at 80 ms a key, reading the field after every key, then closed the floating bar with Escape; ten times." { Send-QuickChord @(0x11) 0x54 } { Close-Bar } 100 80 10
   }
@@ -1134,7 +1147,7 @@ function Invoke-HoldStop($Session, [string]$Slug, [string]$Title, [string]$Did, 
     Send-Chord @(0x11) 0x57
     Start-Sleep -Milliseconds 500
   }
-  if ($stop.Seen -ne "yes") { $script:Required.Add("$($stop.Number) $Title") }
+  if ($stop.Seen -ne "yes") { $script:FailedStops.Add("$($stop.Number) $Title") }
 }
 
 function Invoke-WholeTextTries($Session, [string]$Slug, [string]$Title, [string]$How) {
@@ -1164,21 +1177,21 @@ function Invoke-WholeTextTries($Session, [string]$Slug, [string]$Title, [string]
     $stop.Facts.Add("the bar read 'example.com' in $kept of 10")
     Set-Seen $stop ($kept -eq 10)
   }
-  if ($stop.Seen -ne "yes") { $script:Required.Add("$($stop.Number) $Title") }
+  if ($stop.Seen -ne "yes") { $script:FailedStops.Add("$($stop.Number) $Title") }
 }
 
 function Invoke-HoldTour {
   $env:ARDIA_TEST = "keyHoldReadyMs=$($script:HoldReadyMs)"
   $session = Start-Ardia "hold" -Onboarded
   $env:ARDIA_TEST = ""
-  if (-not (Test-Usable $session)) { $script:Required.Add("Hold (hold): no usable window"); Stop-Ardia $session; return }
+  if (-not (Test-Usable $session)) { $script:FailedStops.Add("Hold (hold): no usable window"); Stop-Ardia $session; return }
   $opened = Invoke-Stop $session "hold-page" "Key hold: open Example Domain in the first tab" {
     param($stop)
     $stop.Did = "Launched onboarded, opened example.com in a tab."
     $stop.Expected = "the window's title names example.com."
     Set-Seen $stop (Open-Page $session $stop "example.com" "example\.com")
   }
-  if ($opened.Seen -ne "yes") { $script:Required.Add("$($opened.Number) Key hold: open Example Domain in the first tab") }
+  if ($opened.Seen -ne "yes") { $script:FailedStops.Add("$($opened.Number) Key hold: open Example Domain in the first tab") }
 
   Invoke-HoldStop $session "hold-capitals" "Key hold: capitals from a held Shift and from Caps Lock, typed 15 ms after Ctrl+T" "Pressed Ctrl+T, and from 15 ms after it typed A with Shift held, then b, then Caps Lock, c, d, Caps Lock, 30 ms a key." "the new tab's bar reads 'AbCD' (#2099)." {
     param($stop)
@@ -1250,7 +1263,7 @@ function Invoke-HoldTour {
     [ArdiaTour]::PostMessageW($second.Handle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
     Start-Sleep -Milliseconds 800
   } else {
-    $script:Required.Add("Key hold: Ctrl+N opened no second window")
+    $script:FailedStops.Add("Key hold: Ctrl+N opened no second window")
   }
 
   $padsBefore = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match "^notepad$" } | ForEach-Object { $_.Id })
@@ -1299,14 +1312,14 @@ function Invoke-HoldTour {
   Stop-Ardia $session
 
   $live = Start-Ardia "hold-live" -Onboarded
-  if (-not (Test-Usable $live)) { $script:Required.Add("Hold (hold-live): no usable window"); Stop-Ardia $live; return }
+  if (-not (Test-Usable $live)) { $script:FailedStops.Add("Hold (hold-live): no usable window"); Stop-Ardia $live; return }
   $page = Invoke-Stop $live "hold-live-page" "Key hold, runner's own timing: open Example Domain in the first tab" {
     param($stop)
     $stop.Did = "Launched onboarded without a readiness floor, opened example.com in a tab."
     $stop.Expected = "the window's title names example.com."
     Set-Seen $stop (Open-Page $live $stop "example.com" "example\.com")
   }
-  if ($page.Seen -ne "yes") { $script:Required.Add("$($page.Number) Key hold, runner's own timing: open Example Domain") }
+  if ($page.Seen -ne "yes") { $script:FailedStops.Add("$($page.Number) Key hold, runner's own timing: open Example Domain") }
   Invoke-WholeTextTries $live "hold-whole-live" "Key hold, runner's own timing: example.com typed from 15 ms after Ctrl+T, ten tries" "at the runner's own timing, so the first letters are held and the rest arrive live"
   Stop-Ardia $live
 }
@@ -1400,7 +1413,7 @@ function Invoke-TypeStop($Session, [string]$Slug, [string]$Title, [string]$Did, 
     if ($Into -eq "ctrl+t") {
       $focusInTime = $null -ne $gaps.FocusedMs -and $gaps.FocusedMs -le $script:FocusBoundMs
       $firstInNewBar = $null -ne $gaps.FirstTyped -and $gaps.FirstTyped.Tab -eq $gaps.Tab -and $startsRight
-      $stop.Facts.Add("required: focus within $($script:FocusBoundMs) ms: $focusInTime; the first key in the new tab's bar: $firstInNewBar")
+      $stop.Facts.Add("$(if ($JudgeWholeText) { 'report only' } else { 'required' }): focus within $($script:FocusBoundMs) ms: $focusInTime (read from $($gaps.FocusedFrom)); $(if ($JudgeWholeText) { 'report only' } else { 'required' }): the first key in the new tab's bar: $firstInNewBar")
       $firstKeyOk = $focusInTime -and $firstInNewBar
     } else {
       $firstKeyOk = $startsRight
@@ -1426,7 +1439,7 @@ function Invoke-TypeStop($Session, [string]$Slug, [string]$Title, [string]$Did, 
     }
     Set-Seen $stop ($(if ($JudgeLaterLetters) { $laterKept } elseif ($JudgeWholeText) { $whole } elseif ($RequireGoHold) { $firstKeyOk -and [bool]$loaded -and $heldUnderPointer } else { $firstKeyOk }))
   }
-  if ($Required -and $stop.Seen -ne "yes") { $script:Required.Add("$($stop.Number) $Title") }
+  if ($Required -and $stop.Seen -ne "yes") { $script:FailedStops.Add("$($stop.Number) $Title") }
   return $stop
 }
 
@@ -1512,7 +1525,7 @@ function Start-SuggestServer([string]$Log) {
       Start-Sleep -Milliseconds 200
     }
   }
-  if (-not $ready) { $script:Required.Add("the tour's suggest server never answered on port $($script:SuggestPort)") }
+  if (-not $ready) { $script:FailedStops.Add("the tour's suggest server never answered on port $($script:SuggestPort)") }
   return $job
 }
 
@@ -1560,7 +1573,7 @@ function Invoke-FirstRunLaunch([string]$Name, [string]$Exe, [scriptblock]$Body, 
       $stop.Expected = "a window within $LaunchSeconds s."
       $stop.Seen = "no"
     } | Out-Null
-    $script:Required.Add("First run ($Name): no usable window")
+    $script:FailedStops.Add("First run ($Name): no usable window")
   }
   Stop-Ardia $session
 }
@@ -1596,7 +1609,7 @@ function Invoke-FirstRunTour {
       $engineMs = @(Read-LogLines $session.Log | Where-Object { $_ -match "engine" } | Select-Object -First 3)
       Write-Host "[tour] slow launch, first engine lines: $($engineMs -join ' / ')"
       $walk = Walk-OnboardingToOutro $session -SkipEach
-      Invoke-TypeStop $session "slow-engine" "First run under load from a cold copy: Ctrl+T about 400 ms after Get Started, then Enter" "With CPU and disk hogs running and the app copied to a fresh folder (first window $($session.FirstWindowMs) ms after start), skipped to the last onboarding screen ($($walk.Screens)), clicked Get Started, pressed Ctrl+T about 400 ms after the click (the click waits 300 ms after the mouse button comes up, then 100 ms more) and typed example.com from 100 ms after it, 30 ms a key, then pressed Enter." { param($stop) $clicked = Click-Named $session "Get Started"; $stop.Facts.Add("Get Started clicked: $clicked"); Start-Sleep -Milliseconds 100 } "ctrl+t" "Enter" "#2101" -Required | Out-Null
+      Invoke-TypeStop $session "slow-engine" "First run under load from a cold copy: Ctrl+T about 400 ms after Get Started, then Enter" "With CPU and disk hogs running and the app copied to a fresh folder (first window $($session.FirstWindowMs) ms after start), skipped to the last onboarding screen ($($walk.Screens)), clicked Get Started, pressed Ctrl+T about 400 ms after the click (the click waits 300 ms after the mouse button comes up, then 100 ms more) and typed example.com from 100 ms after it, 30 ms a key, then pressed Enter." { param($stop) $clicked = Click-Named $session "Get Started"; $stop.Facts.Add("Get Started clicked: $clicked"); Start-Sleep -Milliseconds 100 } "ctrl+t" "Enter" "#2101, #2059, #2401" -Required -JudgeWholeText | Out-Null
     }
   } finally {
     $hogs | Stop-Job -ErrorAction SilentlyContinue
@@ -1642,7 +1655,7 @@ function Invoke-FirstRunTour {
     $stop.Facts.Add("first letter lost in $($lost.Count) of $($script:FirstLetters.Count); with the bar focused before it: lost in $($lostInTime.Count) of $($inTime.Count)")
     foreach ($try in $lost) { $stop.Facts.Add("stop $($try.Number) $($try.Slug): '$($try.Field)', focus first $($try.FocusFirst), page mounted $($try.Mounts) time(s), first read $($try.FirstRead)") }
     Set-Seen $stop ($lost.Count -eq 0 -and $script:FirstLetters.Count -gt 0)
-  } | ForEach-Object { if ($_.Seen -ne "yes") { $script:Required.Add("$($_.Number) the first letter after Ctrl+T (#2124)") } }
+  } | ForEach-Object { if ($_.Seen -ne "yes") { $script:FailedStops.Add("$($_.Number) the first letter after Ctrl+T (#2124)") } }
 
 }
 
@@ -1765,6 +1778,160 @@ function Invoke-TabClickStop($Session) {
     $lost = $null -ne $wasAfter -and $null -ne $brightness[$selected] -and $wasAfter -lt $brightness[$selected] - 6
     Set-Seen $stop ($became -and $lost -and -not $menuLines.Count)
   } | Out-Null
+}
+
+function Get-SidebarStrip($Client) {
+  $left = $Client.X + [int](16 * $Client.Scale)
+  $width = [int](150 * $Client.Scale)
+  $top = $Client.Y + [int](60 * $Client.Scale)
+  $height = $Client.Height - [int](120 * $Client.Scale)
+  if ($width -le 0 -or $height -le 0) { return $null }
+  $bitmap = New-Object System.Drawing.Bitmap $width, $height
+  $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+  try {
+    $graphics.CopyFromScreen($left, $top, 0, 0, $bitmap.Size)
+    $rows = New-Object double[] $height
+    for ($y = 0; $y -lt $height; $y++) {
+      $sum = 0.0
+      for ($x = 0; $x -lt $width; $x += 3) {
+        $pixel = $bitmap.GetPixel($x, $y)
+        $sum += 0.299 * $pixel.R + 0.587 * $pixel.G + 0.114 * $pixel.B
+      }
+      $rows[$y] = $sum / [Math]::Ceiling($width / 3.0)
+    }
+    return [pscustomobject]@{ Top = $top; Rows = $rows }
+  } finally {
+    $graphics.Dispose()
+    $bitmap.Dispose()
+  }
+}
+
+function Get-StripShift($Before, $After) {
+  if (-not $Before -or -not $After -or $Before.Rows.Count -ne $After.Rows.Count) { return $null }
+  $count = $Before.Rows.Count
+  $limit = [Math]::Min(400, [int]($count / 2))
+  $limit -= $limit % 2
+  $best = 0
+  $bestScore = [double]::MaxValue
+  for ($shift = -$limit; $shift -le $limit; $shift += 2) {
+    $score = 0.0
+    $compared = 0
+    for ($y = [Math]::Max(0, -$shift); $y -lt [Math]::Min($count, $count - $shift); $y += 2) {
+      $score += [Math]::Abs($Before.Rows[$y] - $After.Rows[$y + $shift])
+      $compared++
+    }
+    if ($compared -gt $count / 3) {
+      $score = $score / $compared
+      if ($score -lt $bestScore) { $bestScore = $score; $best = $shift }
+    }
+  }
+  $same = 0.0
+  for ($y = 0; $y -lt $count; $y += 2) { $same += [Math]::Abs($Before.Rows[$y] - $After.Rows[$y]) }
+  return [pscustomobject]@{ Shift = $best; Score = [Math]::Round($bestScore, 2); Unmoved = [Math]::Round($same / [Math]::Ceiling($count / 2.0), 2) }
+}
+
+function Send-Wheel([int]$Notches) {
+  $delta = [int64](120 * $Notches)
+  if ($delta -lt 0) { $delta += 4294967296 }
+  [ArdiaTour]::mouse_event([uint32]0x0800, 0, 0, [uint32]$delta, [UIntPtr]::Zero)
+}
+
+function Invoke-SidebarWheelTour {
+  $session = Start-Ardia "sidebar-wheel" -Onboarded
+  if (-not (Test-Usable $session)) { Stop-Ardia $session; return }
+  Invoke-Stop $session "sidebar-wheel-scroll" "The mouse wheel scrolls a sidebar tab list longer than the sidebar" {
+    param($stop)
+    $stop.Did = "Opened 34 tabs with Ctrl+T, put the pointer over the middle of the sidebar's tab list and turned the wheel 5 notches up, then 5 notches down, reading the list's pixels before and after each."
+    $stop.Expected = "the list moves under the pointer and back: each turn shifts its rows (matching far better shifted than unmoved), and after both the list is back where it began. The rows look alike every row, so the size of the shift is known only up to a row's height."
+    Focus-Window $session $session.Main $stop | Out-Null
+    foreach ($i in 1..34) {
+      Send-Chord @(0x11) 0x54
+      Start-Sleep -Milliseconds 250
+      Send-Escape
+      Start-Sleep -Milliseconds 120
+    }
+    Start-Sleep -Milliseconds 1200
+    $client = Get-Client $session.Main
+    if (-not $client) { $stop.Seen = "no"; $stop.Facts.Add("the window could not be measured"); return }
+    $rows = @(Find-Named $session.Main "New Tab" | Where-Object { $_.X -lt $client.X + [int](190 * $client.Scale) })
+    $stop.Facts.Add("New Tab rows on screen in the sidebar: $($rows.Count)")
+    $x = $client.X + [int](90 * $client.Scale)
+    $y = $client.Y + [int]($client.Height / 2)
+    Send-MouseMove $x $y
+    Start-Sleep -Milliseconds 400
+    $start = Get-SidebarStrip $client
+    Send-Wheel 5
+    Start-Sleep -Milliseconds 900
+    $up = Get-SidebarStrip $client
+    Save-Shot $stop $session.Main | Out-Null
+    Send-Wheel -5
+    Start-Sleep -Milliseconds 900
+    $down = Get-SidebarStrip $client
+    $first = Get-StripShift $start $up
+    $second = Get-StripShift $up $down
+    $stop.Facts.Add("wheel up: the list's rows moved by $($first.Shift) px (match $($first.Score), unmoved $($first.Unmoved))")
+    $stop.Facts.Add("wheel down: the list's rows moved by $($second.Shift) px (match $($second.Score), unmoved $($second.Unmoved))")
+    $moved = { param($s) $s -and $s.Shift -ne 0 -and $s.Score -lt $s.Unmoved / 2 }
+    $back = Get-StripShift $start $down
+    $stop.Facts.Add("after both turns the list differs from where it began by $($back.Unmoved), against $($first.Unmoved) after the first")
+    Set-Seen $stop ((& $moved $first) -and (& $moved $second) -and $back.Unmoved -lt $first.Unmoved / 2)
+  } | Out-Null
+  Stop-Ardia $session
+}
+
+function Read-WindowProfile($Session) {
+  $path = Join-Path $Session.Data "session.json"
+  try {
+    $stream = [System.IO.File]::Open($path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete)
+    try { $text = [System.IO.StreamReader]::new($stream).ReadToEnd() } finally { $stream.Dispose() }
+    $saved = $text | ConvertFrom-Json
+    return [string](@($saved.windows)[0].profileId)
+  } catch {
+    return ""
+  }
+}
+
+function Send-SidewaysWheel([int]$Notches) {
+  $delta = [int64](120 * $Notches)
+  if ($delta -lt 0) { $delta += 4294967296 }
+  [ArdiaTour]::mouse_event([uint32]0x01000, 0, 0, [uint32]$delta, [UIntPtr]::Zero)
+}
+
+function Invoke-SidebarPagerWheelTour {
+  $data = Join-Path (Join-Path $Out "data") "sidebar-pager-wheel"
+  Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $data
+  New-Item -ItemType Directory -Force -Path $data | Out-Null
+  $saved = '{"version":11,"profiles":{"default":{"id":"default","name":"Personal","color":"plum","icon":null,"createdAt":0},"p-work":{"id":"p-work","name":"Work","color":"blue","icon":null,"createdAt":1790812800000,"dataId":"default"}},"profileOrder":["default","p-work"],"settings":{},"windows":[{"id":"w-pager-1","profileId":"default","tabIds":[],"activeTabIds":{},"sidebarOpen":true,"frame":null,"createdAt":1790812800000,"incognito":false}],"windowOrder":["w-pager-1"],"focusedWindowId":"w-pager-1","tabs":[]}'
+  Set-Content -LiteralPath (Join-Path $data "session.json") -Value $saved -Encoding utf8NoBOM
+  $session = Start-Ardia "sidebar-pager-wheel" -Onboarded -KeepData
+  if (-not (Test-Usable $session)) { Stop-Ardia $session; return }
+  Invoke-Stop $session "sidebar-pager-wheel" "A sideways wheel over the sidebar pages between profiles; a vertical one does not" {
+    param($stop)
+    $stop.Did = "Started with two profiles, Personal shown. Over the middle of the sidebar: turned the wheel down 3 notches, then sent a sideways wheel notch right, then one left, reading the window's profile in session.json after each."
+    $stop.Expected = "the vertical wheel leaves Personal; right pages to Work; left pages back to Personal."
+    Focus-Window $session $session.Main $stop | Out-Null
+    $client = Get-Client $session.Main
+    if (-not $client) { $stop.Seen = "no"; $stop.Facts.Add("the window could not be measured"); return }
+    Send-MouseMove ($client.X + [int](90 * $client.Scale)) ($client.Y + [int]($client.Height / 2))
+    Start-Sleep -Milliseconds 400
+    $wait = { param($want) Wait-Until $session { (Read-WindowProfile $session) -eq $want } 4000 | Out-Null; Read-WindowProfile $session }
+    $start = Read-WindowProfile $session
+    $mark = Get-LogCount $session
+    [ArdiaTour]::mouse_event([uint32]0x0800, 0, 0, [uint32]4294966936, [UIntPtr]::Zero)
+    Start-Sleep -Milliseconds 1500
+    $afterVertical = Read-WindowProfile $session
+    Send-SidewaysWheel 1
+    $afterRight = & $wait "p-work"
+    Start-Sleep -Milliseconds 600
+    Save-Shot $stop $session.Main | Out-Null
+    Send-SidewaysWheel -1
+    $afterLeft = & $wait "default"
+    $lines = @(Get-LinesSince $session $mark 'sideways wheel')
+    $stop.Facts.Add("profile at the start: $start; after the vertical wheel: $afterVertical; after right: $afterRight; after left: $afterLeft")
+    $stop.Facts.Add("log lines: $(@($lines | ForEach-Object { $_ -replace '^\w+ \d+ ', '' }) -join '; ')")
+    Set-Seen $stop ($start -eq "default" -and $afterVertical -eq "default" -and $afterRight -eq "p-work" -and $afterLeft -eq "default")
+  } | Out-Null
+  Stop-Ardia $session
 }
 
 function Invoke-ShortcutStop($Session, [string]$Slug, [string]$Title, [string]$Keys, [byte[]]$Modifiers, [byte]$Key, [string]$Command, [string]$Expected, [switch]$WatchBand, [switch]$ClosesOnEscape, [switch]$EscapeCaptured) {
@@ -1910,7 +2077,7 @@ function Invoke-SettingsStops($Session, [string]$Suffix, [string]$Label, [switch
   } | Out-Null
   if (-not $script:SettingsWindow -or -not [ArdiaTour]::IsWindow($script:SettingsWindow)) { return }
   if ($Panes) {
-    foreach ($pane in @(@{ Name = "Appearance"; Slug = "settings-appearance"; Row = 4 }, @{ Name = "Keyboard Shortcuts"; Slug = "settings-shortcuts"; Row = 11 })) {
+    foreach ($pane in @(@{ Name = "Appearance"; Slug = "settings-appearance"; Row = 4 }, @{ Name = "Shortcuts"; Slug = "settings-shortcuts"; Row = 6 })) {
       Invoke-Stop $Session $pane.Slug "Settings window, $($pane.Name)" {
         param($stop)
         $stop.Expected = "the pane changes (more than 5% of the Settings window changes)."
@@ -2187,6 +2354,429 @@ function Open-Page($Session, $Stop, [string]$Address, [string]$TitlePattern) {
   return $loaded
 }
 
+if (-not ([System.Management.Automation.PSTypeName]"ArdiaSwapCapture").Type) {
+  Add-Type -TypeDefinition @"
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Threading;
+
+public static class ArdiaSwapCapture {
+  [StructLayout(LayoutKind.Sequential)] struct Header { public uint Size; public int Width, Height; public ushort Planes, BitCount; public uint Compression, SizeImage; public int XPels, YPels; public uint Used, Important; }
+  [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr window);
+  [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr window, IntPtr dc);
+  [DllImport("user32.dll")] static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
+  [DllImport("gdi32.dll")] static extern IntPtr CreateCompatibleDC(IntPtr dc);
+  [DllImport("gdi32.dll")] static extern bool DeleteDC(IntPtr dc);
+  [DllImport("gdi32.dll")] static extern IntPtr CreateDIBSection(IntPtr dc, ref Header header, uint usage, out IntPtr bits, IntPtr section, uint offset);
+  [DllImport("gdi32.dll")] static extern IntPtr SelectObject(IntPtr dc, IntPtr item);
+  [DllImport("gdi32.dll")] static extern bool DeleteObject(IntPtr item);
+  [DllImport("gdi32.dll")] static extern bool BitBlt(IntPtr dc, int x, int y, int width, int height, IntPtr source, int sx, int sy, uint op);
+  [DllImport("gdi32.dll")] static extern bool GdiFlush();
+
+  public class Frame { public double Ms; public byte[] Pixels; }
+  public class Capture { public DateTime ClickUtc; public int Left, Top, Width, Height; public List<Frame> Frames = new List<Frame>(); }
+
+  public static Capture Run(int left, int top, int width, int height, int milliseconds) {
+    Capture capture = new Capture();
+    capture.Left = left; capture.Top = top; capture.Width = width; capture.Height = height;
+    IntPtr screen = GetDC(IntPtr.Zero);
+    IntPtr memory = CreateCompatibleDC(screen);
+    Header header = new Header();
+    header.Size = (uint)Marshal.SizeOf(typeof(Header));
+    header.Width = width;
+    header.Height = -height;
+    header.Planes = 1;
+    header.BitCount = 32;
+    IntPtr bits;
+    IntPtr section = CreateDIBSection(screen, ref header, 0, out bits, IntPtr.Zero, 0);
+    IntPtr previous = SelectObject(memory, section);
+    try {
+      Stopwatch clock = Stopwatch.StartNew();
+      Grab(capture, memory, screen, bits, -1);
+      mouse_event(2, 0, 0, 0, UIntPtr.Zero);
+      Thread.Sleep(30);
+      mouse_event(4, 0, 0, 0, UIntPtr.Zero);
+      capture.ClickUtc = DateTime.UtcNow;
+      clock.Restart();
+      while (clock.ElapsedMilliseconds < milliseconds) Grab(capture, memory, screen, bits, clock.Elapsed.TotalMilliseconds);
+    } finally {
+      SelectObject(memory, previous);
+      DeleteObject(section);
+      DeleteDC(memory);
+      ReleaseDC(IntPtr.Zero, screen);
+    }
+    return capture;
+  }
+
+  static void Grab(Capture capture, IntPtr memory, IntPtr screen, IntPtr bits, double ms) {
+    if (!BitBlt(memory, 0, 0, capture.Width, capture.Height, screen, capture.Left, capture.Top, 0x40CC0020)) { Thread.Sleep(1); return; }
+    GdiFlush();
+    Frame frame = new Frame();
+    frame.Ms = ms;
+    frame.Pixels = new byte[capture.Width * capture.Height * 4];
+    Marshal.Copy(bits, frame.Pixels, 0, frame.Pixels.Length);
+    capture.Frames.Add(frame);
+  }
+
+  public static double Between(byte[] now, byte[] from, byte[] to) {
+    double moved = 0, total = 0;
+    for (int at = 0; at + 3 < now.Length; at += 4) {
+      int span = Math.Abs(to[at] - from[at]) + Math.Abs(to[at + 1] - from[at + 1]) + Math.Abs(to[at + 2] - from[at + 2]);
+      if (span < 90) continue;
+      moved += Math.Abs(now[at] - from[at]) + Math.Abs(now[at + 1] - from[at + 1]) + Math.Abs(now[at + 2] - from[at + 2]);
+      total += span;
+    }
+    return total > 0 ? moved / total : -1;
+  }
+
+  public static int Differing(byte[] from, byte[] to) {
+    int count = 0;
+    for (int at = 0; at + 3 < from.Length; at += 4) {
+      if (Math.Abs(to[at] - from[at]) + Math.Abs(to[at + 1] - from[at + 1]) + Math.Abs(to[at + 2] - from[at + 2]) >= 90) count++;
+    }
+    return count;
+  }
+}
+"@
+}
+
+if (-not ([System.Management.Automation.PSTypeName]"ArdiaAnimationEffects").Type) {
+  Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+public static class ArdiaAnimationEffects {
+  [DllImport("user32.dll", EntryPoint = "SystemParametersInfoW")] static extern bool Get(uint action, uint parameter, ref int value, uint change);
+  [DllImport("user32.dll", EntryPoint = "SystemParametersInfoW")] static extern bool Set(uint action, uint parameter, IntPtr value, uint change);
+  public static bool On() { int value = 1; Get(0x1042, 0, ref value, 0); return value != 0; }
+  public static bool Turn(bool on) { return Set(0x1043, 0, new IntPtr(on ? 1 : 0), 3); }
+}
+"@
+}
+
+function Save-SwapFrame($Capture, $Frame, [string]$Path) {
+  Add-Type -AssemblyName System.Drawing
+  $zoom = 6
+  $bitmap = [System.Drawing.Bitmap]::new($Capture.Width * $zoom, $Capture.Height * $zoom)
+  try {
+    for ($y = 0; $y -lt $Capture.Height; $y++) {
+      for ($x = 0; $x -lt $Capture.Width; $x++) {
+        $at = ($y * $Capture.Width + $x) * 4
+        $colour = [System.Drawing.Color]::FromArgb(255, $Frame.Pixels[$at + 2], $Frame.Pixels[$at + 1], $Frame.Pixels[$at])
+        for ($dy = 0; $dy -lt $zoom; $dy++) { for ($dx = 0; $dx -lt $zoom; $dx++) { $bitmap.SetPixel($x * $zoom + $dx, $y * $zoom + $dy, $colour) } }
+      }
+    }
+    $bitmap.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
+  } finally {
+    $bitmap.Dispose()
+  }
+}
+
+function Invoke-FolderSwapStop([bool]$EffectsOn) {
+  $was = [ArdiaAnimationEffects]::On()
+  $turned = $false
+  if ($was -ne $EffectsOn) { $turned = [ArdiaAnimationEffects]::Turn($EffectsOn) }
+  try {
+    $name = if ($EffectsOn) { "folder-swap-effects-on" } else { "folder-swap-effects-off" }
+    $session = Start-Ardia $name -Onboarded -Settings @{ appearance = "light" }
+    $title = if ($EffectsOn) { "A group's folder opens and closes over about 0.2 s with Windows' animation effects on (#2645)" } else { "A group's folder swaps at once with Windows' animation effects off (#2645)" }
+    Invoke-Stop $session $name $title {
+      param($stop)
+      $stop.Did = "Windows' animation effects $(if ($EffectsOn) { 'turned on for this launch' } else { 'off, as on the runner' }) (they were on before: $was; changed: $turned). Pressed Ctrl+Alt+G to put the starting tab in a group, named the group 'tourgroup' and pressed Enter. Rested the mouse on the group's name, then clicked it to collapse the group, capturing the folder icon's box (the row left of the name) as fast as it reads for 600 ms."
+      if ($EffectsOn) {
+        $stop.Expected = "the app logs 'folder icon closes over 200 ms'; captures between the open and the closed drawing (part way from one to the other on the pixels where the two differ) for about 0.2 s after the click."
+      } else {
+        $stop.Expected = "the app logs 'folder icon closes over 0 ms'; no capture between the open and the closed drawing."
+      }
+      if (-not (Test-Usable $session)) { $stop.Seen = "no"; $stop.Facts.Add("no usable window"); return }
+      Focus-Window $session $session.Main $stop | Out-Null
+      Send-Chord @(0x11, 0x12) 0x47
+      Start-Sleep -Milliseconds 600
+      Send-Chord @(0x11) 0x41
+      Send-Text "tourgroup"
+      Send-Key 0x0D 0
+      Send-Key 0x0D 2
+      Start-Sleep -Milliseconds 900
+      $label = @(Find-Named $session.Main "tourgroup") | Select-Object -First 1
+      $stop.Facts.Add("the group's name found: $(if ($label) { "$($label.Left),$($label.Top) $($label.Width)x$($label.Height)" } else { 'no' })")
+      if (-not $label) { $stop.Seen = "no"; return }
+      Send-MouseMove $label.X $label.Y
+      Start-Sleep -Milliseconds 900
+      $mark = Get-LogCount $session
+      $left = [Math]::Max(0, $label.Left - 40)
+      $capture = [ArdiaSwapCapture]::Run($left, $label.Top - 6, $label.Left - 2 - $left, $label.Height + 12, 600)
+      Start-Sleep -Milliseconds 500
+      $line = @(Get-LinesSince $session $mark "folder icon (opens|closes) over") | Select-Object -First 1
+      $frames = @($capture.Frames)
+      $first = $frames[0]
+      $last = $frames[-1]
+      $differing = [ArdiaSwapCapture]::Differing($first.Pixels, $last.Pixels)
+      $rows = @($frames | Select-Object -Skip 1 | ForEach-Object { [pscustomobject]@{ Frame = $_; Ms = [int]$_.Ms; Share = [ArdiaSwapCapture]::Between($_.Pixels, $first.Pixels, $last.Pixels) } })
+      $between = @($rows | Where-Object { $_.Share -gt 0.15 -and $_.Share -lt 0.85 })
+      $settled = @($rows | Where-Object { $_.Share -ge 0.85 }) | Select-Object -First 1
+      $started = @($rows | Where-Object { $_.Share -gt 0.15 }) | Select-Object -First 1
+      $stop.Facts.Add("the app logged: '$($line -replace '^.*\[ardia windows\] ', '')'; the box $($capture.Width)x$($capture.Height) at $left,$($capture.Top), $($frames.Count) captures, $differing pixels differ between the first and the last")
+      $stop.Facts.Add("share of the way from the open to the closed drawing (ms after the click): $(($rows | ForEach-Object { "+$($_.Ms) $([Math]::Round($_.Share, 2))" }) -join '; ')")
+      $span = if ($started -and $settled) { $settled.Ms - $started.Ms } else { $null }
+      $stop.Facts.Add("captures part way: $($between.Count); the swap began at +$(if ($started) { $started.Ms } else { '?' }) ms and settled at +$(if ($settled) { $settled.Ms } else { '?' }) ms")
+      $folder = Split-Path -Parent $stop.Shot
+      $prefix = [IO.Path]::GetFileNameWithoutExtension($stop.Shot)
+      Save-SwapFrame $capture $first (Join-Path $folder "$prefix-before.png")
+      foreach ($row in @($between | Select-Object -First 4)) { Save-SwapFrame $capture $row.Frame (Join-Path $folder ("{0}-{1:000}ms.png" -f $prefix, $row.Ms)) }
+      Save-SwapFrame $capture $last (Join-Path $folder "$prefix-after.png")
+      $capture.Frames.Clear()
+      if ($differing -lt 8) { $stop.Seen = "no"; $stop.Facts.Add("the box hardly changed, so the folder didn't swap there"); return }
+      if ($EffectsOn) {
+        Set-Seen $stop ($line -match "closes over 200 ms" -and $between.Count -ge 2 -and $null -ne $span -and $span -ge 80 -and $span -le 400)
+      } else {
+        Set-Seen $stop ($line -match "closes over 0 ms" -and $between.Count -eq 0)
+      }
+    } | Out-Null
+    Stop-Ardia $session
+  } finally {
+    if ($turned) { [ArdiaAnimationEffects]::Turn($was) | Out-Null }
+  }
+}
+
+function Invoke-FolderSwapTour {
+  Invoke-FolderSwapStop $false
+  Invoke-FolderSwapStop $true
+}
+
+if (-not ([System.Management.Automation.PSTypeName]"ArdiaPaintWatch").Type) {
+  Add-Type -TypeDefinition @"
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
+
+public static class ArdiaPaintWatch {
+  [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left, Top, Right, Bottom; }
+  [StructLayout(LayoutKind.Sequential)] struct Header { public uint Size; public int Width, Height; public ushort Planes, BitCount; public uint Compression, SizeImage; public int XPels, YPels; public uint Used, Important; }
+  delegate bool EnumProc(IntPtr window, IntPtr param);
+  [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc proc, IntPtr param);
+  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
+  [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr window);
+  [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr window, out Rect rect);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr window, StringBuilder name, int size);
+  [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr window);
+  [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr window, IntPtr dc);
+  [DllImport("user32.dll")] static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
+  [DllImport("gdi32.dll")] static extern IntPtr CreateCompatibleDC(IntPtr dc);
+  [DllImport("gdi32.dll")] static extern bool DeleteDC(IntPtr dc);
+  [DllImport("gdi32.dll")] static extern IntPtr CreateDIBSection(IntPtr dc, ref Header header, uint usage, out IntPtr bits, IntPtr section, uint offset);
+  [DllImport("gdi32.dll")] static extern IntPtr SelectObject(IntPtr dc, IntPtr item);
+  [DllImport("gdi32.dll")] static extern bool DeleteObject(IntPtr item);
+  [DllImport("gdi32.dll")] static extern bool BitBlt(IntPtr dc, int x, int y, int width, int height, IntPtr source, int sx, int sy, uint op);
+  [DllImport("gdi32.dll")] static extern bool GdiFlush();
+
+  public class Shot { public double Ms; public string Why; public int Width, Height; public byte[] Pixels; }
+  public class Watch {
+    public double WindowMs = -1, PaintedMs = -1, LastWhiteShare = -1;
+    public int Samples, Checks, SkippedWindows;
+    public string PageClass = "";
+    public Rect Page;
+    public List<Shot> Shots = new List<Shot>();
+  }
+
+  static IntPtr FindPage(uint process, Rect app, HashSet<IntPtr> skip, out Rect found, out string className) {
+    IntPtr best = IntPtr.Zero; Rect bestRect = new Rect(); long bestArea = 0; string bestClass = "";
+    EnumWindows((window, param) => {
+      uint owner; GetWindowThreadProcessId(window, out owner);
+      if (owner != process || !IsWindowVisible(window) || skip.Contains(window)) return true;
+      StringBuilder name = new StringBuilder(128); GetClassName(window, name, 128);
+      if (!name.ToString().StartsWith("Chrome_")) return true;
+      Rect rect; if (!GetWindowRect(window, out rect)) return true;
+      int width = rect.Right - rect.Left, height = rect.Bottom - rect.Top;
+      if (width < 200 || height < 150) return true;
+      if (rect.Left < app.Left - 2 || rect.Top < app.Top - 2 || rect.Right > app.Right + 2 || rect.Bottom > app.Bottom + 2) return true;
+      long area = (long)width * height;
+      if (area > bestArea) { bestArea = area; best = window; bestRect = rect; bestClass = name.ToString(); }
+      return true;
+    }, IntPtr.Zero);
+    found = bestRect; className = bestClass;
+    return best;
+  }
+
+  static byte[] Grab(int left, int top, int width, int height) {
+    IntPtr screen = GetDC(IntPtr.Zero);
+    IntPtr memory = CreateCompatibleDC(screen);
+    Header header = new Header();
+    header.Size = (uint)Marshal.SizeOf(typeof(Header));
+    header.Width = width; header.Height = -height; header.Planes = 1; header.BitCount = 32;
+    IntPtr bits;
+    IntPtr section = CreateDIBSection(screen, ref header, 0, out bits, IntPtr.Zero, 0);
+    IntPtr previous = SelectObject(memory, section);
+    byte[] pixels = new byte[width * height * 4];
+    try {
+      BitBlt(memory, 0, 0, width, height, screen, left, top, 0x40CC0020);
+      GdiFlush();
+      Marshal.Copy(bits, pixels, 0, pixels.Length);
+    } finally {
+      SelectObject(memory, previous);
+      DeleteObject(section);
+      DeleteDC(memory);
+      ReleaseDC(IntPtr.Zero, screen);
+    }
+    return pixels;
+  }
+
+  public static Watch Run(uint process, IntPtr appWindow, byte key, int targetR, int targetG, int targetB, bool byColour, int timeoutMs) {
+    Watch watch = new Watch();
+    Rect app; GetWindowRect(appWindow, out app);
+    int appWidth = app.Right - app.Left, appHeight = app.Bottom - app.Top;
+    HashSet<IntPtr> before = new HashSet<IntPtr>();
+    while (true) {
+      Rect shown; string shownClass;
+      IntPtr old = FindPage(process, app, before, out shown, out shownClass);
+      if (old == IntPtr.Zero) break;
+      before.Add(old);
+    }
+    watch.SkippedWindows = before.Count;
+    keybd_event(key, 0, 0, UIntPtr.Zero);
+    keybd_event(key, 0, 2, UIntPtr.Zero);
+    Stopwatch clock = Stopwatch.StartNew();
+    double nextShot = 0;
+    while (clock.ElapsedMilliseconds < timeoutMs) {
+      Rect page; string className;
+      IntPtr found = FindPage(process, app, before, out page, out className);
+      double now = clock.Elapsed.TotalMilliseconds;
+      if (found == IntPtr.Zero) {
+        if (now >= nextShot && watch.Shots.Count < 8) { watch.Shots.Add(new Shot { Ms = now, Why = "no page window", Width = appWidth, Height = appHeight, Pixels = Grab(app.Left, app.Top, appWidth, appHeight) }); nextShot = now + 1500; }
+        Thread.Sleep(8);
+        continue;
+      }
+      if (watch.WindowMs < 0) { watch.WindowMs = now; watch.Page = page; watch.PageClass = className; watch.Shots.Add(new Shot { Ms = now, Why = "page window shown", Width = appWidth, Height = appHeight, Pixels = Grab(app.Left, app.Top, appWidth, appHeight) }); nextShot = now + 1500; }
+      int width = page.Right - page.Left, height = page.Bottom - page.Top;
+      byte[] pixels = Grab(page.Left, page.Top, width, height);
+      int samples = 0, hits = 0, white = 0;
+      for (int y = 4; y < height - 4; y += 6) {
+        for (int x = 4; x < width - 4; x += 6) {
+          int at = (y * width + x) * 4;
+          int b = pixels[at], g = pixels[at + 1], r = pixels[at + 2];
+          samples++;
+          if (r >= 245 && g >= 245 && b >= 245) white++;
+          if (byColour) { if (Math.Abs(r - targetR) + Math.Abs(g - targetG) + Math.Abs(b - targetB) <= 60) hits++; }
+          else if ((255 - r) + (255 - g) + (255 - b) > 150) hits++;
+        }
+      }
+      watch.Checks++;
+      watch.Samples = samples;
+      watch.LastWhiteShare = samples > 0 ? (double)white / samples : -1;
+      bool painted = byColour ? hits * 2 >= samples : hits >= 30;
+      if (painted) {
+        watch.PaintedMs = clock.Elapsed.TotalMilliseconds;
+        watch.Shots.Add(new Shot { Ms = watch.PaintedMs, Why = "painted", Width = appWidth, Height = appHeight, Pixels = Grab(app.Left, app.Top, appWidth, appHeight) });
+        break;
+      }
+      if (now >= nextShot && watch.Shots.Count < 8) { watch.Shots.Add(new Shot { Ms = now, Why = "page window not painted", Width = appWidth, Height = appHeight, Pixels = Grab(app.Left, app.Top, appWidth, appHeight) }); nextShot = now + 1500; }
+      Thread.Sleep(8);
+    }
+    return watch;
+  }
+}
+"@
+}
+
+function Save-PaintShot($Shot, [string]$Path) {
+  Add-Type -AssemblyName System.Drawing
+  $bitmap = [System.Drawing.Bitmap]::new($Shot.Width, $Shot.Height, [System.Drawing.Imaging.PixelFormat]::Format32bppRgb)
+  try {
+    $locked = $bitmap.LockBits([System.Drawing.Rectangle]::new(0, 0, $Shot.Width, $Shot.Height), [System.Drawing.Imaging.ImageLockMode]::WriteOnly, $bitmap.PixelFormat)
+    [System.Runtime.InteropServices.Marshal]::Copy($Shot.Pixels, 0, $locked.Scan0, $Shot.Pixels.Length)
+    $bitmap.UnlockBits($locked)
+    $bitmap.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
+  } finally {
+    $bitmap.Dispose()
+  }
+}
+
+function Measure-PagePaint($Session, [IntPtr]$Window, $Stop, [string]$Label, [string]$Address, [bool]$Local, [switch]$NewTab) {
+  Focus-Window $Session $Window $Stop | Out-Null
+  if ($NewTab) {
+    Send-Chord @(0x11) 0x54
+    Start-Sleep -Milliseconds 700
+  }
+  Send-Address $Address
+  $mark = Get-LogCount $Session
+  $watch = [ArdiaPaintWatch]::Run([uint32]$Session.Process.Id, $Window, [byte]0x0D, 142, 68, 173, $Local, 20000)
+  $folder = Split-Path -Parent $Stop.Shot
+  $prefix = [IO.Path]::GetFileNameWithoutExtension($Stop.Shot)
+  $index = 0
+  foreach ($shot in @($watch.Shots)) {
+    Save-PaintShot $shot (Join-Path $folder ("{0}-{1}-{2}-{3:00000}ms.png" -f $prefix, $Label, $index, [int]$shot.Ms))
+    $index++
+  }
+  $watch.Shots.Clear()
+  $windowText = if ($watch.WindowMs -ge 0) { "+$([int]$watch.WindowMs) ms ($($watch.PageClass), $($watch.Page.Right - $watch.Page.Left)x$($watch.Page.Bottom - $watch.Page.Top))" } else { "never within 20 s" }
+  $paintText = if ($watch.PaintedMs -ge 0) { "+$([int]$watch.PaintedMs) ms" } else { "not within 20 s (white share at the last check $([Math]::Round($watch.LastWhiteShare, 2)))" }
+  $Stop.Facts.Add("${Label}: $Address, the page's window shown $windowText, painted $paintText, $($watch.Checks) checks, $($watch.SkippedWindows) page windows already showing left out")
+  return [pscustomobject]@{ Label = $Label; WindowMs = $watch.WindowMs; PaintedMs = $watch.PaintedMs; Mark = $mark }
+}
+
+function Invoke-PrivatePagesTour {
+  if (-not (Start-TourPages)) {
+    $script:Lines.Add("- The private-pages part found no loopback page server on port $($script:TourPagesPort).")
+    return
+  }
+  $local = "127.0.0.1:$($script:TourPagesPort)/painted"
+  $real = "duckduckgo.com"
+  $session = Start-Ardia "private-pages" -Onboarded -Settings @{ appearance = "light" }
+  Invoke-Stop $session "private-pages-normal" "A page's first painted frame in a normal window: the local page within 5 s, $real reported, first and again (#2653)" {
+    param($stop)
+    $stop.Did = "In the launch's normal window, opened each page in a new tab (Ctrl+T, the address, Enter) and timed from Enter to the page's own window showing and to its first painted frame, read from the screen: the local page counts as painted when its purple covers half the page's window, $real when ink shows on it."
+    $stop.Expected = "the local page painted within 5 s of Enter both times (CI: 0.14 to 0.16 s); $real is report only, since a real site's network can stall on CI (one first visit hung 19 s and ended on ERR_CONNECTION_RESET)."
+    if (-not (Test-Usable $session)) { $stop.Seen = "no"; $stop.Facts.Add("no usable window"); return }
+    $runs = @(
+      (Measure-PagePaint $session $session.Main $stop "normal-local-first" $local $true -NewTab),
+      (Measure-PagePaint $session $session.Main $stop "normal-real-first" $real $false -NewTab),
+      (Measure-PagePaint $session $session.Main $stop "normal-local-again" $local $true -NewTab),
+      (Measure-PagePaint $session $session.Main $stop "normal-real-again" $real $false -NewTab)
+    )
+    $guarded = @($runs | Where-Object { $_.Label -match "-local-" })
+    $stop.Seen = if (@($guarded | Where-Object { $_.PaintedMs -ge 0 -and $_.PaintedMs -le 5000 }).Count -eq $guarded.Count) { "yes" } else { "no" }
+  } | Out-Null
+  Invoke-Stop $session "private-pages-private" "A page's first painted frame in a private window: the local page within 5 s right after the window appears, $real reported a few seconds later, then both again (#2653)" {
+    param($stop)
+    $stop.Did = "Pressed Ctrl+Shift+N; as soon as the private window showed, typed the local page into its first tab and pressed Enter; 3 s later opened $real in a new tab; then each again in new tabs. Timed each as in the normal window, and kept the launch log from Ctrl+Shift+N to the first private page's paint."
+    $stop.Expected = "the local page painted within 5 s of Enter both times, right after the window appears and later (CI: 0.11 to 0.17 s, as fast as the normal window); $real is report only."
+    Focus-Window $session $session.Main $stop | Out-Null
+    $before = @(Get-TopWindows $session)
+    $asked = Get-LogCount $session
+    $clock = [System.Diagnostics.Stopwatch]::StartNew()
+    Send-Chord @(0x11, 0x10) 0x4E
+    $ours = { @(Get-NewWindows $session $before | Where-Object { $_.ClassName -notmatch "^(#32768|Chrome_)" -and $_.Width -ge 300 -and $_.Height -ge 200 }) }
+    $opened = Wait-Until $session { (& $ours).Count -gt 0 } 10000
+    $stop.Facts.Add("the private window showed $([int]$clock.Elapsed.TotalMilliseconds) ms after Ctrl+Shift+N (the chord's own 550 ms included): $opened")
+    if (-not $opened) { $stop.Seen = "no"; return }
+    $private = (& $ours)[0].Handle
+    $barReady = Wait-Until $session { @(Get-LinesSince $session $asked "new tab bar focused").Count -gt 0 } 3000
+    $stop.Facts.Add("its new tab bar logged focus $([int]$clock.Elapsed.TotalMilliseconds) ms after Ctrl+Shift+N: $barReady")
+    $first = Measure-PagePaint $session $private $stop "private-local-first" $local $true
+    Start-Sleep -Milliseconds 3000
+    $runs = @(
+      $first,
+      (Measure-PagePaint $session $private $stop "private-real-first" $real $false -NewTab),
+      (Measure-PagePaint $session $private $stop "private-local-again" $local $true -NewTab),
+      (Measure-PagePaint $session $private $stop "private-real-again" $real $false -NewTab)
+    )
+    $slice = @(Read-LogLines $session.Log | Select-Object -Skip $asked | Select-Object -First ([Math]::Max(1, $runs[1].Mark - $asked)))
+    $slicePath = Join-Path (Split-Path -Parent $stop.Shot) "private-pages-from-ctrl-shift-n.log"
+    Set-Content -LiteralPath $slicePath -Value $slice -Encoding utf8NoBOM
+    $engine = @($slice | Where-Object { $_ -match "host call (profile|tab\.create|tab\.show|window)" } | ForEach-Object { ($_ -replace '^engine 0 host call ', '') -replace '\s+\S+$', '' } | Group-Object | ForEach-Object { "$($_.Name) x$($_.Count)" }) -join ", "
+    $stop.Facts.Add("the log from Ctrl+Shift+N to the second private navigation: $($slice.Count) lines (in private-pages-from-ctrl-shift-n.log); engine calls: $engine")
+    $guarded = @($runs | Where-Object { $_.Label -match "-local-" })
+    $stop.Seen = if (@($guarded | Where-Object { $_.PaintedMs -ge 0 -and $_.PaintedMs -le 5000 }).Count -eq $guarded.Count) { "yes" } else { "no" }
+    [ArdiaTour]::PostMessageW($private, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
+    Start-Sleep -Milliseconds 800
+  } | Out-Null
+  Stop-Ardia $session
+}
+
 function Invoke-PagesTour {
   $session = Start-Ardia "pages" -Onboarded
   Invoke-Stop $session "page-loads" "A page loads in a tab" {
@@ -2335,9 +2925,13 @@ $pages = @{
   "/links" = "<!doctype html><meta charset=utf-8><title>tour links</title><style>body{margin:0;background:#fff}a{position:absolute;left:20px;top:20px;width:320px;height:60px;display:block;background:#cde;font:20px sans-serif}</style><a href='/peeked'>peek this</a>"
   "/peeked" = "<!doctype html><meta charset=utf-8><title>tour peeked</title><style>html,body{margin:0;height:100%;background:#2a7}</style>"
   "/taba" = "<!doctype html><meta charset=utf-8><title>tour tab a</title><style>html,body{margin:0;height:100%;background:#3366cc}a{position:absolute;left:20px;top:20px;width:320px;height:60px;display:block;background:#cde;font:20px sans-serif}</style><a href='/typed'>peek this</a><script>let keys='';addEventListener('keydown',e=>{if(e.key.length===1){keys+=e.key;document.title='a got '+keys}});</script>"
+  "/flightdownload" = "<!doctype html><meta charset=utf-8><title>tour flight page</title><style>html,body{margin:0;height:100%;background:#3366cc}</style><script>setTimeout(()=>{location.href='/download'},3000)</script>"
+  "/startdownload" = "<!doctype html><meta charset=utf-8><title>tour download page</title><style>html,body{margin:0;height:100%;background:#fff}</style><script>setTimeout(()=>{location.href='/download'},300)</script>"
+  "/painted" = "<!doctype html><meta charset=utf-8><title>tour painted</title><style>html,body{margin:0;height:100%;background:#8e44ad}</style>"
   "/tabb" = "<!doctype html><meta charset=utf-8><title>tour tab b</title><style>html,body{margin:0;height:100%;background:#c0392b}</style>"
   "/typed" = "<!doctype html><meta charset=utf-8><title>tour typed</title><style>html,body{margin:0;height:100%;background:#2a7}</style><script>let keys='';addEventListener('keydown',e=>{if(e.key.length===1){keys+=e.key;document.title='peek got '+keys}});</script>"
 }
+$held = [System.Collections.Generic.List[object]]::new()
 $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $Port)
 $listener.Start()
 while ($true) {
@@ -2349,6 +2943,15 @@ while ($true) {
     $request = $reader.ReadLine()
     while ($line = $reader.ReadLine()) { }
     $path = if ($request) { ($request.Split(" ")[1]) -replace '\?.*$', '' } else { "" }
+    if ($path -eq "/download") {
+      $head = [System.Text.Encoding]::ASCII.GetBytes("HTTP/1.1 200 OK`r`nContent-Type: application/octet-stream`r`nX-Content-Type-Options: nosniff`r`nContent-Disposition: attachment; filename=`"tour-download.txt`"`r`nContent-Length: 104857600`r`nConnection: keep-alive`r`n`r`n")
+      $stream.Write($head, 0, $head.Length)
+      $first = [System.Text.Encoding]::ASCII.GetBytes("t" * 65536)
+      $stream.Write($first, 0, $first.Length)
+      $stream.Flush()
+      $held.Add($client)
+      continue
+    }
     $text = $pages[$path]
     $status = if ($text) { "200 OK" } else { "404 Not Found" }
     $body = [System.Text.Encoding]::UTF8.GetBytes([string]$text)
@@ -2356,7 +2959,8 @@ while ($true) {
     $stream.Write($head, 0, $head.Length)
     $stream.Write($body, 0, $body.Length)
     $stream.Flush()
-  } catch { } finally { $client.Close() }
+  } catch { $client.Close() }
+  if (-not $held.Contains($client)) { $client.Close() }
 }
 '@
   $script:TourPages = Start-Process -FilePath (Get-Process -Id $PID).Path -ArgumentList "-NoProfile", "-NonInteractive", "-File", "`"$serve`"", "-Port", $script:TourPagesPort -WindowStyle Hidden -PassThru
@@ -2472,6 +3076,28 @@ function Open-TourPage($Session, $Stop, [string]$Path, [string]$TitlePattern) {
   return $loaded
 }
 
+function Open-TourPageHere($Session, $Stop, [string]$Path, [string]$TitlePattern) {
+  Focus-Window $Session $Session.Main $Stop | Out-Null
+  Send-Address "127.0.0.1:$($script:TourPagesPort)$Path"
+  Send-Key 0x0D 0
+  Send-Key 0x0D 2
+  $how = "typed into the starting tab's focused bar"
+  $loaded = Wait-Until $Session { $null -ne (Get-PageWindow $Session $TitlePattern) } 10000
+  if (-not $loaded) {
+    Focus-Window $Session $Session.Main $Stop | Out-Null
+    Send-Chord @(0x11) 0x4C
+    Start-Sleep -Milliseconds 700
+    Send-Address "127.0.0.1:$($script:TourPagesPort)$Path"
+    Send-Key 0x0D 0
+    Send-Key 0x0D 2
+    $how = "typed into the starting tab's bar, then after Ctrl+L"
+    $loaded = Wait-Until $Session { $null -ne (Get-PageWindow $Session $TitlePattern) } 20000
+  }
+  Start-Sleep -Milliseconds 2000
+  $Stop.Facts.Add("opened $Path in the starting tab ($how; its page window shows: $loaded)")
+  return $loaded
+}
+
 function Switch-Tab($Session, $Stop, [string]$TitlePattern, [string]$Leaving, [string]$Row) {
   Send-Chord @(0x11) 0x09
   $shown = { $null -ne (Get-PageWindow $Session $TitlePattern) -and $null -eq (Get-PageWindow $Session $Leaving) }
@@ -2498,6 +3124,420 @@ function Note-Required($Stop, [string]$Part) {
 }
 
 $script:RequiredFailures = [System.Collections.Generic.List[string]]::new()
+
+function Read-DialogTexts([IntPtr]$Window) {
+  if (-not (Initialize-Uia)) { return @() }
+  $texts = @()
+  try {
+    $root = [System.Windows.Automation.AutomationElement]::FromHandle($Window)
+    foreach ($element in $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)) {
+      try { $name = [string]$element.Current.Name; if ($name.Trim()) { $texts += $name.Trim() } } catch { }
+    }
+  } catch { }
+  return @($texts | Select-Object -Unique)
+}
+
+function Wait-QuitDialog($Session, [int]$Milliseconds) {
+  $found = $null
+  $deadline = (Get-Date).AddMilliseconds($Milliseconds)
+  while (-not $found -and (Get-Date) -lt $deadline -and -not $Session.Process.HasExited) {
+    $found = @(Get-TopWindows $Session | Where-Object { $_.ClassName -eq "#32770" }) | Select-Object -First 1
+    if (-not $found) { Start-Sleep -Milliseconds 150 }
+  }
+  return $found
+}
+
+function Wait-AppEnded($Session, [int]$Milliseconds) {
+  $ended = $Session.Process.WaitForExit($Milliseconds)
+  Start-Sleep -Milliseconds 300
+  $last = [string](@(Read-LogLines $Session.Log) | Select-Object -Last 1)
+  $clean = $ended -and $last -match "process ending"
+  if ($clean) {
+    $Session.Stopping = $true
+    $Session.Summary = "Quit by the tour's close, as it should (exit code $($Session.Process.ExitCode))."
+    Write-Host "[tour] '$($Session.Name)': $($Session.Summary)"
+  }
+  return [pscustomobject]@{ Ended = $ended; LastLine = $last; Clean = $clean }
+}
+
+function Find-DownloadFiles($Session, [datetime]$Since) {
+  $folders = @((Join-Path $Session.Data "Downloads"), (Join-Path ([Environment]::GetFolderPath("UserProfile")) "Downloads"))
+  return @($folders | Where-Object { Test-Path -LiteralPath $_ } | ForEach-Object { Get-ChildItem -LiteralPath $_ -File -ErrorAction SilentlyContinue } | Where-Object { $_.LastWriteTime -ge $Since -and ($_.Name -like "tour-download*" -or $_.Extension -eq ".crdownload") } | ForEach-Object { $_.FullName })
+}
+
+function Wait-DownloadStarted($Session, [datetime]$Since, [int]$Milliseconds) {
+  $listed = $false
+  $files = @()
+  $deadline = (Get-Date).AddMilliseconds($Milliseconds)
+  while ((Get-Date) -lt $deadline -and -not $Session.Process.HasExited) {
+    $listed = @(Find-Named $Session.Main "tour-download.txt").Count -gt 0
+    $files = @(Find-DownloadFiles $Session $Since)
+    if ($listed -or $files.Count) { break }
+    Start-Sleep -Milliseconds 250
+  }
+  return [pscustomobject]@{ Started = $listed -or [bool]$files.Count; Listed = $listed; Files = $files }
+}
+
+function Format-DownloadStart($Download, [int]$Milliseconds) {
+  $files = if ($Download.Files.Count) { ($Download.Files | ForEach-Object { "'$_'" }) -join ", " } else { "none" }
+  return "a download started within $([int]($Milliseconds / 1000)) s: $($Download.Started) (the window lists 'tour-download.txt' through UI Automation: $($Download.Listed); new files in the session's and the user's Downloads folders: $files)"
+}
+
+function Note-QuitWithoutAsking($Session, $Stop) {
+  if (-not $Session.Process.HasExited) { return }
+  $end = Wait-AppEnded $Session 2000
+  if ($end.Clean) { $Session.Summary = "Quit without asking on the tour's close, which the stop counts against it (exit code $($Session.Process.ExitCode))." }
+  $Stop.Facts.Add("the app quit without asking; its launch log's last line: '$($end.LastLine)'")
+}
+
+if (-not ([System.Management.Automation.PSTypeName]"ArdiaFlightCapture").Type) {
+  Add-Type -TypeDefinition @"
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
+
+public static class ArdiaFlightCapture {
+  [StructLayout(LayoutKind.Sequential)] struct Rect { public int Left, Top, Right, Bottom; }
+  [StructLayout(LayoutKind.Sequential)] struct Point { public int X, Y; }
+  [StructLayout(LayoutKind.Sequential)] struct Header { public uint Size; public int Width, Height; public ushort Planes, BitCount; public uint Compression, SizeImage; public int XPels, YPels; public uint Used, Important; }
+  [DllImport("user32.dll")] static extern bool GetClientRect(IntPtr window, out Rect rect);
+  [DllImport("user32.dll")] static extern bool ClientToScreen(IntPtr window, ref Point point);
+  [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr window);
+  [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr window, IntPtr dc);
+  [DllImport("user32.dll")] static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
+  [DllImport("gdi32.dll")] static extern IntPtr CreateCompatibleDC(IntPtr dc);
+  [DllImport("gdi32.dll")] static extern bool DeleteDC(IntPtr dc);
+  [DllImport("gdi32.dll")] static extern IntPtr CreateDIBSection(IntPtr dc, ref Header header, uint usage, out IntPtr bits, IntPtr section, uint offset);
+  [DllImport("gdi32.dll")] static extern IntPtr SelectObject(IntPtr dc, IntPtr item);
+  [DllImport("gdi32.dll")] static extern bool DeleteObject(IntPtr item);
+  [DllImport("gdi32.dll")] static extern bool BitBlt(IntPtr dc, int x, int y, int width, int height, IntPtr source, int sx, int sy, uint op);
+  [DllImport("gdi32.dll")] static extern bool GdiFlush();
+
+  public class Frame { public DateTime Utc; public byte[] Pixels; }
+  public class Capture { public DateTime KeyUtc; public DateTime SeenUtc; public bool Seen; public int Width, Height, OriginX, OriginY, Captures; public List<Frame> Frames = new List<Frame>(); }
+
+  public static Capture Run(IntPtr window, byte key, string logPath, long logOffset, string marker, int ring, int afterMs, int maxMs) {
+    Rect client;
+    GetClientRect(window, out client);
+    Point origin = new Point();
+    ClientToScreen(window, ref origin);
+    Capture capture = new Capture();
+    capture.Width = client.Right - client.Left;
+    capture.Height = client.Bottom - client.Top;
+    capture.OriginX = origin.X;
+    capture.OriginY = origin.Y;
+    int width = capture.Width, height = capture.Height;
+    IntPtr screen = GetDC(IntPtr.Zero);
+    IntPtr memory = CreateCompatibleDC(screen);
+    Header header = new Header();
+    header.Size = (uint)Marshal.SizeOf(typeof(Header));
+    header.Width = width;
+    header.Height = -height;
+    header.Planes = 1;
+    header.BitCount = 32;
+    IntPtr bits;
+    IntPtr section = CreateDIBSection(screen, ref header, 0, out bits, IntPtr.Zero, 0);
+    IntPtr previous = SelectObject(memory, section);
+    List<Frame> recent = new List<Frame>();
+    FileStream log = null;
+    StringBuilder pending = new StringBuilder();
+    byte[] chunk = new byte[65536];
+    try {
+      log = new FileStream(logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+      log.Seek(logOffset, SeekOrigin.Begin);
+      keybd_event(key, 0, 0, UIntPtr.Zero);
+      capture.KeyUtc = DateTime.UtcNow;
+      keybd_event(key, 0, 2, UIntPtr.Zero);
+      Stopwatch clock = Stopwatch.StartNew();
+      long seenAt = -1;
+      while (clock.ElapsedMilliseconds < maxMs && (seenAt < 0 || clock.ElapsedMilliseconds - seenAt < afterMs)) {
+        if (!BitBlt(memory, 0, 0, width, height, screen, origin.X, origin.Y, 0x40CC0020)) { Thread.Sleep(1); continue; }
+        GdiFlush();
+        Frame frame = new Frame();
+        frame.Utc = DateTime.UtcNow;
+        frame.Pixels = new byte[width * height * 4];
+        Marshal.Copy(bits, frame.Pixels, 0, frame.Pixels.Length);
+        capture.Captures++;
+        if (seenAt >= 0) { capture.Frames.Add(frame); continue; }
+        recent.Add(frame);
+        if (recent.Count > ring) recent.RemoveAt(0);
+        int read;
+        while ((read = log.Read(chunk, 0, chunk.Length)) > 0) pending.Append(Encoding.UTF8.GetString(chunk, 0, read));
+        if (pending.ToString().Contains(marker)) {
+          seenAt = clock.ElapsedMilliseconds;
+          capture.Seen = true;
+          capture.SeenUtc = DateTime.UtcNow;
+          capture.Frames.AddRange(recent);
+          recent.Clear();
+        }
+      }
+      if (!capture.Seen) capture.Frames.AddRange(recent);
+    } finally {
+      if (log != null) log.Dispose();
+      SelectObject(memory, previous);
+      DeleteObject(section);
+      DeleteDC(memory);
+      ReleaseDC(IntPtr.Zero, screen);
+    }
+    return capture;
+  }
+
+  public static int Changed(byte[] now, byte[] before, int width, int height, int left, int top, int right, int bottom) {
+    int changed = 0;
+    for (int y = Math.Max(0, top); y < Math.Min(height, bottom); y += 2) {
+      for (int x = Math.Max(0, left); x < Math.Min(width, right); x += 2) {
+        int at = (y * width + x) * 4;
+        if (Math.Abs(now[at] - before[at]) + Math.Abs(now[at + 1] - before[at + 1]) + Math.Abs(now[at + 2] - before[at + 2]) > 48) changed++;
+      }
+    }
+    return changed;
+  }
+}
+"@
+}
+
+function Save-FlightFrame($Capture, $Frame, [string]$Path) {
+  Add-Type -AssemblyName System.Drawing
+  $bitmap = [System.Drawing.Bitmap]::new($Capture.Width, $Capture.Height, [System.Drawing.Imaging.PixelFormat]::Format32bppRgb)
+  try {
+    $locked = $bitmap.LockBits([System.Drawing.Rectangle]::new(0, 0, $Capture.Width, $Capture.Height), [System.Drawing.Imaging.ImageLockMode]::WriteOnly, $bitmap.PixelFormat)
+    [System.Runtime.InteropServices.Marshal]::Copy($Frame.Pixels, 0, $locked.Scan0, $Frame.Pixels.Length)
+    $bitmap.UnlockBits($locked)
+    $bitmap.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
+  } finally {
+    $bitmap.Dispose()
+  }
+}
+
+function Read-FlightLine([string]$Line) {
+  if ($Line -notmatch "download flight start from (-?\d+),(-?\d+) to (-?\d+),(-?\d+) arc (\d+(?:\.\d+)?) icon (\d+) in (\d+)x(\d+) over (\d+) ms (from the page \w+) after (\d+) ms for its icon at (\d+)") { return $null }
+  return [pscustomobject]@{
+    StartX = [double]$Matches[1]; StartY = [double]$Matches[2]; TargetX = [double]$Matches[3]; TargetY = [double]$Matches[4]
+    Arc = [double]$Matches[5]; Icon = [double]$Matches[6]; Width = [double]$Matches[7]; Height = [double]$Matches[8]; Ms = [double]$Matches[9]
+    From = $Matches[10]; WaitedMs = [int]$Matches[11]; AtUtc = [DateTimeOffset]::FromUnixTimeMilliseconds([long]$Matches[12]).UtcDateTime
+  }
+}
+
+function Get-FlightEase([double]$Time) {
+  $t = [Math]::Min(1.0, [Math]::Max(0.0, [double]$Time))
+  if ($t -lt 0.5) { return 2 * $t * $t }
+  return 1 - 2 * (1 - $t) * (1 - $t)
+}
+
+function Get-FlightLevel([double]$Value, [double[]]$Inputs, [double[]]$Outputs) {
+  if ($Value -le $Inputs[0]) { return $Outputs[0] }
+  for ($i = 1; $i -lt $Inputs.Count; $i++) {
+    if ($Value -le $Inputs[$i]) { return $Outputs[$i - 1] + ($Outputs[$i] - $Outputs[$i - 1]) * ($Value - $Inputs[$i - 1]) / ($Inputs[$i] - $Inputs[$i - 1]) }
+  }
+  return $Outputs[-1]
+}
+
+function Get-FlightBox($Flight, [double]$Time, [double]$Scale) {
+  $p = Get-FlightEase $Time
+  $x = $Flight.StartX + ($Flight.TargetX - $Flight.StartX) * $p
+  $y = $Flight.StartY + ($Flight.TargetY - $Flight.StartY) * $p - [Math]::Sin([Math]::PI * $p) * $Flight.Arc
+  $half = $Flight.Icon * (Get-FlightLevel $p @(0, 0.15, 1) @(0.6, 1.1, 0.3)) / 2
+  return [pscustomobject]@{ X = $x * $Scale; Y = $y * $Scale; Left = ($x - $half) * $Scale; Top = ($y - $half) * $Scale; Right = ($x + $half) * $Scale; Bottom = ($y + $half) * $Scale; Opacity = Get-FlightLevel $p @(0, 0.1, 0.8, 1) @(0, 1, 1, 0) }
+}
+
+function Measure-DownloadFlight($Capture, $Flight, $Page) {
+  $scale = $Capture.Width / [Math]::Max(1.0, [double]$Flight.Width)
+  $frames = @($Capture.Frames)
+  $baseline = @($frames | Where-Object { $_.Utc -lt $Flight.AtUtc }) | Select-Object -Last 1
+  $rows = @()
+  foreach ($frame in $frames) {
+    $time = ($frame.Utc - $Flight.AtUtc).TotalMilliseconds / $Flight.Ms
+    if ($time -lt 0 -or $time -gt 1) { continue }
+    $boxes = @(foreach ($offset in @(-0.2, -0.1, 0, 0.05)) { Get-FlightBox $Flight ([Math]::Min(1.0, [Math]::Max(0.0, [double]($time + $offset)))) $scale })
+    $now = Get-FlightBox $Flight $time $scale
+    $left = [int](($boxes | Measure-Object Left -Minimum).Minimum - 4)
+    $top = [int](($boxes | Measure-Object Top -Minimum).Minimum - 4)
+    $right = [int](($boxes | Measure-Object Right -Maximum).Maximum + 4)
+    $bottom = [int](($boxes | Measure-Object Bottom -Maximum).Maximum + 4)
+    $changed = if ($baseline) { [ArdiaFlightCapture]::Changed($frame.Pixels, $baseline.Pixels, $Capture.Width, $Capture.Height, $left, $top, $right, $bottom) } else { 0 }
+    $side = ($now.Right - $now.Left)
+    $needed = [Math]::Max(6, [int](0.15 * $side * $side / 4))
+    $overPage = $Page -and $now.X -ge $Page.Left -and $now.X -lt $Page.Left + $Page.Width -and $now.Y -ge $Page.Top -and $now.Y -lt $Page.Top + $Page.Height
+    $rows += [pscustomobject]@{ Frame = $frame; Ms = [int]($frame.Utc - $Flight.AtUtc).TotalMilliseconds; Time = $time; X = [int]$now.X; Y = [int]$now.Y; OverPage = [bool]$overPage; Changed = $changed; Drawn = $changed -ge $needed }
+  }
+  return [pscustomobject]@{ Baseline = $baseline; Rows = $rows; Scale = $scale }
+}
+
+function Invoke-DownloadFlightStop($Session, [string]$Slug, [string]$Title, [bool]$FromPageEdge) {
+  Invoke-Stop $Session $Slug $Title {
+    param($stop)
+    $where = if ($FromPageEdge) { "the sidebar beside the page" } else { "the middle of the page, as on the Mac (ARDIA_TEST downloadFlightFromPage=1)" }
+    $stop.Did = "One browser window, sidebar on the left, Downloads in its footer (the default). Opened 127.0.0.1:$($script:TourPagesPort)/flightdownload in the starting tab: a blue page that starts the held download 3 s after it loads, so the page's window covers the card when the flight starts at $where. Captured the window as fast as it reads until 900 ms after the app logged the flight, and judged each capture during the flight at the icon's place on its logged path (the move curve, the scale and opacity keyframes), allowing it to trail by up to a fifth of the flight, against the capture just before the flight."
+    if ($FromPageEdge) {
+      $stop.Expected = "the app logs a flight 'from the page edge', started once its icon showed; in every capture from 40% to 58% of the flight (past its fade-in and the first frame's lag on Windows, and before it nears the downloads popover) the icon is drawn at its place, allowing it to trail by up to a fifth of the flight, and that place is never over the page's window."
+    } else {
+      $stop.Expected = "report only: from the page's middle the icon is under the page's window, so captures from 40% to 58% of the flight show nothing at its place (#2603)."
+    }
+    if (-not (Test-Usable $Session)) { $stop.Seen = "no"; $stop.Facts.Add("no usable window"); return }
+    Focus-Window $Session $Session.Main $stop | Out-Null
+    Send-Address "127.0.0.1:$($script:TourPagesPort)/flightdownload"
+    $mark = Get-LogCount $Session
+    $offset = (Get-Item -LiteralPath $Session.Log).Length
+    $capture = [ArdiaFlightCapture]::Run($Session.Main, [byte]0x0D, $Session.Log, $offset, "download flight start", 40, 900, 12000)
+    $page = Get-PageWindow $Session "tour flight page"
+    $pageBox = if ($page) { [pscustomobject]@{ Left = $page.Left - $capture.OriginX; Top = $page.Top - $capture.OriginY; Width = $page.Width; Height = $page.Height } } else { $null }
+    $line = @(Get-LinesSince $Session $mark "download flight start") | Select-Object -First 1
+    $flight = Read-FlightLine $line
+    $stop.Facts.Add("captures: $($capture.Captures), kept $($capture.Frames.Count); the flight logged: $($capture.Seen); the page's window: $(if ($pageBox) { "$($pageBox.Left),$($pageBox.Top) $($pageBox.Width)x$($pageBox.Height) in the client area" } else { 'not found' })")
+    if (-not $flight) { $stop.Seen = "no"; $stop.Facts.Add("no flight line in the log: '$line'"); $capture.Frames.Clear(); return }
+    $stop.Facts.Add("flight $($flight.From) from $($flight.StartX),$($flight.StartY) to $($flight.TargetX),$($flight.TargetY), arc $($flight.Arc), over $($flight.Ms) ms, started $($flight.WaitedMs) ms after the download came, once its icon showed, in a $($flight.Width)x$($flight.Height) layout drawn at $($capture.Width)x$($capture.Height)")
+    $measured = Measure-DownloadFlight $capture $flight $pageBox
+    $rows = @($measured.Rows)
+    $stop.Facts.Add("captures during the flight (ms after it started: the icon's place, over the page or the app, changed samples, drawn): $(($rows | ForEach-Object { "+$($_.Ms) $($_.X),$($_.Y) $(if ($_.OverPage) { 'page' } else { 'app' }) $($_.Changed) $(if ($_.Drawn) { 'drawn' } else { '-' })" }) -join '; ')")
+    $judged = @($rows | Where-Object { $_.Time -ge 0.4 -and $_.Time -le 0.58 })
+    $drawn = @($judged | Where-Object { $_.Drawn }).Count
+    $overPage = @($judged | Where-Object { $_.OverPage }).Count
+    $stop.Facts.Add("from 40% to 58% of the flight: $($judged.Count) captures, the icon drawn in $drawn, its place over the page in $overPage")
+    $folder = Split-Path -Parent $stop.Shot
+    $prefix = [IO.Path]::GetFileNameWithoutExtension($stop.Shot)
+    if ($measured.Baseline) { Save-FlightFrame $capture $measured.Baseline (Join-Path $folder "$prefix-before.png") }
+    $picked = @($rows | Where-Object { $_.Time -le 1 })
+    $every = [Math]::Max(1, [Math]::Ceiling($picked.Count / 12))
+    for ($i = 0; $i -lt $picked.Count; $i += $every) {
+      Save-FlightFrame $capture $picked[$i].Frame (Join-Path $folder ("{0}-{1:000}ms.png" -f $prefix, [Math]::Max(0, $picked[$i].Ms)))
+    }
+    $capture.Frames.Clear()
+    if ($FromPageEdge) {
+      Set-Seen $stop ($flight.From -eq "from the page edge" -and $judged.Count -ge 2 -and $overPage -eq 0 -and $drawn -eq $judged.Count)
+    } else {
+      $stop.Seen = "yes"
+    }
+  } | Out-Null
+}
+
+function Invoke-DownloadFlightTour {
+  if (-not (Start-TourPages)) {
+    $script:Lines.Add("- The download-flight part found no loopback page server on port $($script:TourPagesPort).")
+    return
+  }
+  $env:ARDIA_TEST = "downloadFlightFromPage=1"
+  try { $centre = Start-Ardia "flight-from-page" -Onboarded -Settings @{ appearance = "light" } } finally { $env:ARDIA_TEST = "" }
+  Invoke-DownloadFlightStop $centre "flight-from-page" "A download's flight from the middle of the page, as on the Mac (report only, #2603)" $false
+  Stop-Ardia $centre
+  $edge = Start-Ardia "flight-from-edge" -Onboarded -Settings @{ appearance = "light" }
+  Invoke-DownloadFlightStop $edge "flight-from-edge" "A download started from a page flies to the Downloads button over the app, where the page can't cover it (#2603)" $true
+  Stop-Ardia $edge
+}
+
+function Invoke-QuitDownloadsTour {
+  if (-not (Start-TourPages)) {
+    $script:Lines.Add("- The quit-downloads part found no loopback page server on port $($script:TourPagesPort).")
+    return
+  }
+  $session = Start-Ardia "quit-download" -Onboarded -Settings @{ appearance = "light" }
+  $expectedTitle = "Are you sure you want to quit Ardia?"
+  $expectedMessage = "You have 1 download in progress. If you quit now, this download will be cancelled."
+  Invoke-Stop $session "quit-download" "Alt+F4 with a download running asks before quitting; Cancel keeps Ardia, Quit ends it (#2488)" {
+    param($stop)
+    $stop.Did = "One browser window, Warn before quitting off (the default). Opened 127.0.0.1:$($script:TourPagesPort)/download in a new tab, which sends a 100 MB attachment's first 64 KB (marked nosniff, so the engine doesn't wait to guess its type) and then holds the connection, so the download stays in progress. Waited for the download to show up; pressed Alt+F4 and waited for a dialog; pressed Cancel (TDM_CLICK_BUTTON with IDCANCEL); pressed Alt+F4 again and pressed Quit (TDM_CLICK_BUTTON with 1001)."
+    $stop.Expected = "Alt+F4 asks '$expectedTitle' / '$expectedMessage' in a dialog of the app; after Cancel the window and the process are still there and the dialog is gone; after Quit the process ends and its launch log ends with 'process ending'."
+    if (-not (Test-Usable $session)) { $stop.Seen = "no"; $stop.Facts.Add("no usable window"); return }
+    Focus-Window $session $session.Main $stop | Out-Null
+    $mark = Get-LogCount $session
+    Send-Chord @(0x11) 0x54
+    $opened = Wait-Command $session $mark "newTab"
+    Start-Sleep -Milliseconds 700
+    Send-Address "127.0.0.1:$($script:TourPagesPort)/download"
+    $since = (Get-Date).AddSeconds(-2)
+    Send-Key 0x0D 0
+    Send-Key 0x0D 2
+    $download = Wait-DownloadStarted $session $since 15000
+    Start-Sleep -Milliseconds 1000
+    $stop.Facts.Add("newTab logged: $opened; $(Format-DownloadStart $download 15000)")
+    $panel = Measure-Screen ($stop.Shot -replace '\.png$', '-downloading.png') $session.Main
+    if (-not $download.Started) { $stop.Seen = "no download started"; $stop.Facts.Add("didn't press Alt+F4: with no download there is nothing for the question to be about"); return }
+    Focus-Window $session $session.Main $stop | Out-Null
+    Send-Chord @(0x12) 0x73
+    $dialog = Wait-QuitDialog $session 8000
+    if (-not $dialog) {
+      $stop.Seen = "no"
+      $stop.Facts.Add("no dialog within 8 s of Alt+F4; the app is still running: $(-not $session.Process.HasExited); windows: $(Format-Windows (Get-TopWindows $session))")
+      Note-QuitWithoutAsking $session $stop
+      return
+    }
+    $asked = Measure-Screen ($stop.Shot -replace '\.png$', '-asked.png') $dialog.Handle
+    $texts = @(Read-DialogTexts $dialog.Handle)
+    $words = ($texts -contains $expectedTitle) -and ($texts -contains $expectedMessage)
+    $stop.Facts.Add("dialog '$($dialog.Title)' ($($dialog.ClassName)); its text read with UI Automation: $(($texts | ForEach-Object { "'$_'" }) -join ', '); the Mac's title and message both there: $words")
+    [ArdiaTour]::PostMessageW($dialog.Handle, 0x0466, [IntPtr]2, [IntPtr]::Zero) | Out-Null
+    Start-Sleep -Milliseconds 1500
+    $gone = -not @(Get-TopWindows $session | Where-Object { $_.Handle -eq $dialog.Handle }).Count
+    $kept = (-not $session.Process.HasExited) -and [ArdiaTour]::IsWindow($session.Main) -and [ArdiaTour]::IsWindowVisible($session.Main)
+    $stop.Facts.Add("after Cancel: the dialog is gone: $gone; the window is still shown and the process alive: $kept")
+    Save-Shot $stop $session.Main | Out-Null
+    if (-not ($gone -and $kept)) { $stop.Seen = "no"; return }
+    Focus-Window $session $session.Main $stop | Out-Null
+    Send-Chord @(0x12) 0x73
+    $again = Wait-QuitDialog $session 8000
+    if (-not $again) { $stop.Seen = "no"; $stop.Facts.Add("the second Alt+F4 showed no dialog; the app is still running: $(-not $session.Process.HasExited)"); return }
+    [ArdiaTour]::PostMessageW($again.Handle, 0x0466, [IntPtr]1001, [IntPtr]::Zero) | Out-Null
+    $end = Wait-AppEnded $session 20000
+    $stop.Facts.Add("after Quit: the process ended within 20 s: $($end.Ended); the launch log's last line: '$($end.LastLine)'")
+    Set-Seen $stop ($words -and $end.Clean)
+  } | Out-Null
+  if (-not $session.Stopping) { Stop-Ardia $session }
+
+  $lastTab = Start-Ardia "quit-last-tab" -Onboarded -Settings @{ appearance = "light" }
+  Invoke-Stop $lastTab "quit-last-tab" "Ctrl+W on the only tab with a download running: Close 1 tab?, then the downloads question; Cancel keeps the window (#2488, defaults)" {
+    param($stop)
+    $stop.Did = "One browser window, default settings (Warn before closing the last tab on, Warn before quitting off). Opened 127.0.0.1:$($script:TourPagesPort)/startdownload in the window's only tab; the page starts the held download from that tab and stays. Waited for the download to show up; pressed Ctrl+W, answered the first dialog with its confirm button (TDM_CLICK_BUTTON 1001), then answered the second with Cancel (IDCANCEL)."
+    $stop.Expected = "a first dialog asking 'Close 1 tab?', then a second asking '$expectedMessage'; after Cancel the window, its tab and the process are still there."
+    if (-not (Test-Usable $lastTab)) { $stop.Seen = "no"; $stop.Facts.Add("no usable window"); return }
+    $since = (Get-Date).AddSeconds(-2)
+    $opened = Open-TourPageHere $lastTab $stop "/startdownload" "tour download page"
+    $download = Wait-DownloadStarted $lastTab $since 15000
+    $stop.Facts.Add("the page shows: $opened; $(Format-DownloadStart $download 15000); the window's title: '$([ArdiaTour]::TitleOf($lastTab.Main))'")
+    if (-not $download.Started) { $stop.Seen = "no download started"; $stop.Facts.Add("didn't press Ctrl+W: with no download there is nothing for the question to be about"); return }
+    if ([ArdiaTour]::TitleOf($lastTab.Main) -match '& \d+ Tabs?$') { $stop.Seen = "not the only tab"; $stop.Facts.Add("didn't press Ctrl+W: the window holds other tabs, so closing this one doesn't close the window and nothing should ask"); return }
+    Focus-Window $lastTab $lastTab.Main $stop | Out-Null
+    Send-Chord @(0x11) 0x57
+    $first = Wait-QuitDialog $lastTab 8000
+    if (-not $first) { $stop.Seen = "no"; $stop.Facts.Add("no dialog within 8 s of Ctrl+W; the app is still running: $(-not $lastTab.Process.HasExited)"); Note-QuitWithoutAsking $lastTab $stop; return }
+    $firstTexts = @(Read-DialogTexts $first.Handle)
+    $stop.Facts.Add("first dialog's text: $(($firstTexts | ForEach-Object { "'$_'" }) -join ', ')")
+    [ArdiaTour]::PostMessageW($first.Handle, 0x0466, [IntPtr]1001, [IntPtr]::Zero) | Out-Null
+    Start-Sleep -Milliseconds 800
+    $second = Wait-QuitDialog $lastTab 8000
+    if (-not $second -or $second.Handle -eq $first.Handle) { $stop.Seen = "no"; $stop.Facts.Add("no second dialog after confirming the first; the app is still running: $(-not $lastTab.Process.HasExited)"); return }
+    Measure-Screen ($stop.Shot -replace '\.png$', '-asked.png') $second.Handle | Out-Null
+    $secondTexts = @(Read-DialogTexts $second.Handle)
+    $stop.Facts.Add("second dialog's text: $(($secondTexts | ForEach-Object { "'$_'" }) -join ', ')")
+    [ArdiaTour]::PostMessageW($second.Handle, 0x0466, [IntPtr]2, [IntPtr]::Zero) | Out-Null
+    Start-Sleep -Milliseconds 1500
+    $kept = (-not $lastTab.Process.HasExited) -and [ArdiaTour]::IsWindow($lastTab.Main) -and [ArdiaTour]::IsWindowVisible($lastTab.Main)
+    $page = $null -ne (Get-PageWindow $lastTab "tour download page")
+    $stop.Facts.Add("after Cancel: the window shown and the process alive: $kept; the tab's page window still shows: $page")
+    Save-Shot $stop $lastTab.Main | Out-Null
+    $firstRight = @($firstTexts | Where-Object { $_ -match "^Close 1 tab\?" }).Count -gt 0
+    Set-Seen $stop ($firstRight -and ($secondTexts -contains $expectedMessage) -and $kept -and $page)
+  } | Out-Null
+  if (-not $lastTab.Stopping) { Stop-Ardia $lastTab }
+
+  $control = Start-Ardia "quit-no-download" -Onboarded -Settings @{ appearance = "light" }
+  Invoke-Stop $control "quit-no-download" "Alt+F4 with no download running and the warning off quits without a question (#2488's control)" {
+    param($stop)
+    $stop.Did = "One browser window, Warn before quitting off, no download. Pressed Alt+F4 and watched for a dialog for 4 s."
+    $stop.Expected = "no dialog; the process ends and its launch log ends with 'process ending'."
+    if (-not (Test-Usable $control)) { $stop.Seen = "no"; $stop.Facts.Add("no usable window"); return }
+    Focus-Window $control $control.Main $stop | Out-Null
+    Send-Chord @(0x12) 0x73
+    $dialog = Wait-QuitDialog $control 4000
+    if ($dialog) { [ArdiaTour]::PostMessageW($dialog.Handle, 0x0466, [IntPtr]1001, [IntPtr]::Zero) | Out-Null }
+    $end = Wait-AppEnded $control 20000
+    $stop.Facts.Add("a dialog showed: $(if ($dialog) { "yes, '$($dialog.Title)'" } else { 'no' }); the process ended within 20 s: $($end.Ended); the launch log's last line: '$($end.LastLine)'")
+    Set-Seen $stop ((-not $dialog) -and $end.Clean)
+  } | Out-Null
+  if (-not $control.Stopping) { Stop-Ardia $control }
+}
 
 function Invoke-PeekTabsTour {
   if (-not (Start-TourPages)) {
@@ -2781,7 +3821,10 @@ $tours = @(
   @{ Name = "top tabs"; Run = { Invoke-LayoutTour "top-tabs" @{ tabLayout = "top" } "Tabs in a top strip" "the window buttons sit at the end of the strip, and the gap beside them is a caption region." } },
   @{ Name = "sidebar on the right"; Run = { Invoke-LayoutTour "sidebar-right" @{ sidebarSide = "right" } "Sidebar on the right" "the window buttons sit in the sidebar's header, and the gap beside them is a caption region." } },
   @{ Name = "dark"; Run = { Invoke-DarkTour } },
-  @{ Name = "motion"; Run = { Invoke-MotionTour } }
+  @{ Name = "motion"; Run = { Invoke-MotionTour } },
+  @{ Name = "sidebar wheel"; Run = { Invoke-SidebarWheelTour } },
+  @{ Name = "sidebar pager wheel"; Run = { Invoke-SidebarPagerWheelTour } },
+  @{ Name = "folder-swap"; Run = { Invoke-FolderSwapTour } }
 )
 
 if (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $App) "chrome.dll")) {
@@ -2791,6 +3834,9 @@ if (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $App) "chrome.dll")) {
   $tours += @{ Name = "peek"; Run = { Invoke-PeekTour "peek-light" @{ appearance = "light" } "light" } }
   $tours += @{ Name = "peek-dark"; Run = { Invoke-PeekTour "peek-dark" @{ appearance = "dark" } "dark" } }
   $tours += @{ Name = "peek-tabs"; Run = { Invoke-PeekTabsTour } }
+  $tours += @{ Name = "quit-downloads"; Run = { Invoke-QuitDownloadsTour } }
+  $tours += @{ Name = "private-pages"; Run = { Invoke-PrivatePagesTour } }
+  $tours += @{ Name = "download-flight"; Run = { Invoke-DownloadFlightTour } }
   $tours += @{ Name = "peek-layouts"; Run = {
       Invoke-PeekTour "peek-sidebar-address" @{ appearance = "light"; addressBar = "sidebar" } "light, address bar in the sidebar"
       Invoke-PeekTour "peek-borderless" @{ appearance = "light"; borderlessMode = $true } "light, Borderless"
@@ -2813,7 +3859,7 @@ foreach ($tour in $tours) {
   } catch {
     $script:Lines.Add("- The $($tour.Name) part stopped early: $($_.Exception.Message)")
     Write-Host "[tour] the $($tour.Name) part stopped early: $($_.Exception.Message)"
-    if ($tour.Required) { $script:Required.Add("the $($tour.Name) part stopped early: $($_.Exception.Message)") }
+    if ($tour.Required) { $script:FailedStops.Add("the $($tour.Name) part stopped early: $($_.Exception.Message)") }
   } finally {
     foreach ($session in @($script:Sessions | Where-Object { -not $_.Stopping })) { Stop-Ardia $session }
   }
@@ -2832,10 +3878,10 @@ Write-Tour
 $elapsed = [Math]::Round(((Get-Date) - $script:Started).TotalSeconds)
 $crashed = @($script:Sessions | Where-Object { $_.Crashed })
 Write-Host "[tour] $($script:StopNumber) stops in $elapsed s; tour.md and the screenshots are in $Out"
-if ($script:Required.Count) {
-  foreach ($failed in $script:Required) { Write-Host "::error::required tour stop failed: $failed" }
+if ($script:FailedStops.Count) {
+  foreach ($failed in $script:FailedStops) { Write-Host "::error::required tour stop failed: $failed" }
 }
-if ($crashed.Count -or $script:Required.Count) {
+if ($crashed.Count -or $script:FailedStops.Count) {
   foreach ($session in $crashed) { Write-Host "::error::the app crashed or exited on its own during the '$($session.Name)' launch: $($session.Summary)" }
   exit 1
 }

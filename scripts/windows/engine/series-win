@@ -20,3 +20,11 @@ chromium chromium-win-discard-asks-the-host.patch
 chromium chromium-win-devtools-other-clients.patch
 chromium chromium-win-autoplay-policy.patch
 chromium chromium-win-hosted-theme-change.patch
+chromium chromium-win-media-session-asks.patch
+chromium chromium-win-media-session-page-actions.patch
+chromium chromium-win-media-session-keeps-players.patch
+chromium chromium-win-media-session-muted-ignored.patch
+chromium chromium-win-media-session-page-state.patch
+chromium chromium-win-hand-off-asks-the-app.patch
+chromium chromium-win-hung-predecessor-not-killed.patch
+chromium chromium-win-contents-background.patch

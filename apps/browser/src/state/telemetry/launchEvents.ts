@@ -1,6 +1,7 @@
 import { useBrowser } from "../browser/store";
 import { capture, type ConsentToken, type startClient } from "./usageClient";
-import { contextProperties, hardwareProperties, launchGuardProperties } from "./diagnostics";
+import { contextProperties, hardwareProperties } from "./diagnostics";
+import { launchGuardProperties } from "./launchGuard";
 import { topAppsSharingAtLaunch } from "./topAppsSharing";
 import { appInfo } from "./transport";
 

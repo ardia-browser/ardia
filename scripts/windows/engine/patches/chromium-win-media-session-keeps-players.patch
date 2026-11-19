@@ -1,0 +1,88 @@
+--- a/content/browser/media/session/media_session_controller.cc
++++ b/content/browser/media/session/media_session_controller.cc
+@@ -17,6 +17,13 @@
+ 
+ namespace content {
+ 
++// Ardia: the Windows engine sets this at startup, for every WebContents in
++// the process. A muted tab keeps its heard players in its media session, and
++// a persistent player that reaches its end stays in it paused, so the playing
++// card still reports and controls them, as on the Mac.
++CONTENT_EXPORT extern bool g_ardia_win_keep_media_session_players;
++CONTENT_EXPORT bool g_ardia_win_keep_media_session_players = false;
++
+ int MediaSessionController::player_count_ = 0;
+ 
+ MediaSessionController::MediaSessionController(const MediaPlayerId& id,
+@@ -206,7 +213,12 @@
+ void MediaSessionController::OnPlaybackPaused(bool reached_end_of_stream) {
+   is_paused_ = true;
+ 
+-  if (reached_end_of_stream) {
++  // Ardia: short clips (transient) are still dropped at their end, so a
++  // page's notification sound leaves no paused session behind.
++  const bool ardia_keeps_ended_player =
++      g_ardia_win_keep_media_session_players &&
++      media_content_type_ == media::MediaContentType::kPersistent;
++  if (reached_end_of_stream && !ardia_keeps_ended_player) {
+     is_playback_in_progress_ = false;
+     AddOrRemovePlayer();
+   }
+@@ -215,6 +227,14 @@
+   // in response to or while a pause from the browser is in flight.
+   if (media_session_->IsActive())
+     media_session_->OnPlayerPaused(this, player_id_);
++
++  // Ardia: with other players in the session, the session drops a paused
++  // player; a kept player that ended and was dropped stays out, so a later
++  // mute, Picture-in-Picture or metadata change does not add it back.
++  if (reached_end_of_stream && ardia_keeps_ended_player &&
++      !media_session_->ArdiaWinHoldsPlayer(this, player_id_)) {
++    is_playback_in_progress_ = false;
++  }
+ }
+ 
+ void MediaSessionController::PictureInPictureStateChanged(
+@@ -290,7 +310,10 @@
+ 
+   // We want to make sure we do not request audio focus on a muted tab as it
+   // would break user expectations by pausing/ducking other playbacks.
+-  return has_audio_ && !web_contents_->IsAudioMuted();
++  // Ardia: audio focus is not enforced on Windows, so a muted tab's session
++  // ducks and pauses nothing there; has_audio_ already means it was heard.
++  return has_audio_ && (g_ardia_win_keep_media_session_players ||
++                        !web_contents_->IsAudioMuted());
+ }
+ 
+ bool MediaSessionController::AddOrRemovePlayer() {
+--- a/content/browser/media/session/media_session_impl.h
++++ b/content/browser/media/session/media_session_impl.h
+@@ -388,6 +388,10 @@
+   base::WeakPtr<MediaSessionImpl> GetWeakPtr();
+ 
+   CONTENT_EXPORT bool HasImageCacheForTest(const GURL& image_url) const;
++
++  // Ardia: whether the session still holds the player, of any kind.
++  bool ArdiaWinHoldsPlayer(MediaSessionPlayerObserver* observer,
++                           int player_id) const;
+ 
+   // Make sure that all observers have received any pending callbacks from us,
+   // that might otherwise be sitting in a message pipe somewhere.
+--- a/content/browser/media/session/media_session_impl.cc
++++ b/content/browser/media/session/media_session_impl.cc
+@@ -2411,6 +2411,15 @@
+       player_id, *last_auto_picture_in_picture_info_);
+ }
+ 
++bool MediaSessionImpl::ArdiaWinHoldsPlayer(
++    MediaSessionPlayerObserver* observer,
++    int player_id) const {
++  const PlayerIdentifier identifier(observer, player_id);
++  return normal_players_.contains(identifier) ||
++         one_shot_players_.contains(identifier) ||
++         ambient_players_.contains(identifier);
++}
++
+ bool MediaSessionImpl::HasImageCacheForTest(const GURL& image_url) const {
+   return GetPageData(web_contents()->GetPrimaryPage()).GetImageCache(image_url);
+ }

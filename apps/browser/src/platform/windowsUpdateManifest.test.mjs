@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { failureText, feedNotPublished, folderOf, megabytes, offered, readBuild, readManifest } from "../../../../packages/expo-windows/src/updater/manifest.ts";
+import { failureText, feedNotPublished, folderOf, installMessage, megabytes, offered, readBuild, readManifest } from "../../../../packages/expo-windows/src/updater/manifest.ts";
 import { noteReleaseNotesHeldForFirstRun, takeFirstRunCounts } from "../state/telemetry/firstRunCounts.ts";
 
 const under = "https://github.com/ardia-browser/ardia/releases/download/";
@@ -93,4 +93,10 @@ test("release notes held back for a first run are counted and reset once taken",
   noteReleaseNotesHeldForFirstRun();
   assert.deepEqual(takeFirstRunCounts(), { release_notes_held_for_first_run: 1 });
   assert.deepEqual(takeFirstRunCounts(), { release_notes_held_for_first_run: 0 });
+});
+
+test("the install question says a running download will be cancelled", () => {
+  assert.equal(installMessage("0.2.48, Windows alpha 12", 0), "Ardia closes, installs 0.2.48, Windows alpha 12 and opens again.");
+  assert.equal(installMessage("0.2.48, Windows alpha 12", 1), "Ardia closes, installs 0.2.48, Windows alpha 12 and opens again. Your download in progress will be cancelled.");
+  assert.equal(installMessage("0.2.48, Windows alpha 12", 3), "Ardia closes, installs 0.2.48, Windows alpha 12 and opens again. Your 3 downloads in progress will be cancelled.");
 });

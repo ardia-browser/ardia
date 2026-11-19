@@ -4,6 +4,7 @@ import { isFields, type Fields } from "../engine/domains/calling";
 import { requireNativeModule } from "../modules";
 import { expectEqual, expectTrue, type Check } from "./check";
 import { linkPeekStage } from "./engineLinkPeekStage";
+import { mediaStage } from "./engineMediaStage";
 
 const ONE = { origin: "https://ardia-self-check-one.example", username: "one", password: "self-check-one" };
 const TWO = { origin: "https://ardia-self-check-two.example", username: "two", password: "self-check-two" };
@@ -56,6 +57,7 @@ const savedChecks: Check[] = [
 
 const stages: Record<string, Check[]> = {
   linkPeeks: linkPeekStage,
+  media: mediaStage,
   blocklistedAndFederated: [
     {
       name: "passwords: a site never to save and a federated sign-in, both stored with no password, leave Sync's read whole and out of its list",

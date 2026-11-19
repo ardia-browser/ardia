@@ -13,5 +13,6 @@ export function hostLaunchConfig(host?: ArdiaHost): LaunchConfig {
     switches: { ...config?.switches, newTabPrewarm: false },
     trace: [],
     test: {},
+    recoveredStart: false,
   };
 }

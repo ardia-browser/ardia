@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cmath>
@@ -8,6 +9,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -32,10 +34,38 @@
 #include "WindowFade.h"
 #include "WindowPlacement.h"
 
+#pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "dwmapi.lib")
+#pragma comment(lib, "gdi32.lib")
 #pragma comment(lib, "shcore.lib")
 
 namespace Ardia {
+
+struct ThemedErase {
+  static constexpr UINT_PTR kSubclassId = 0xA2D1C;
+  static constexpr COLORREF kDark = RGB(32, 32, 32);
+  static constexpr COLORREF kLight = RGB(243, 243, 243);
+
+  static LRESULT CALLBACK Erase(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR, DWORD_PTR dark) noexcept {
+    if (message == WM_ERASEBKGND) {
+      RECT client{};
+      HDC dc = reinterpret_cast<HDC>(wParam);
+      if (dc && GetClientRect(hwnd, &client)) {
+        SetDCBrushColor(dc, dark ? kDark : kLight);
+        FillRect(dc, &client, static_cast<HBRUSH>(GetStockObject(DC_BRUSH)));
+      }
+      return 1;
+    }
+    if (message == WM_NCDESTROY) RemoveWindowSubclass(hwnd, &Erase, kSubclassId);
+    return DefSubclassProc(hwnd, message, wParam, lParam);
+  }
+
+  static void Apply(HWND hwnd, bool dark) noexcept {
+    if (!hwnd) return;
+    SetWindowSubclass(hwnd, &Erase, kSubclassId, dark ? 1 : 0);
+    InvalidateRect(hwnd, nullptr, TRUE);
+  }
+};
 
 struct OpenWindowRequest {
   std::string id;
@@ -72,6 +102,7 @@ struct ManagedWindow {
   std::vector<std::function<void()>> exits;
   std::vector<std::function<void()>> revealWaiters;
   int closeGeneration{0};
+  std::set<std::string> swipeAreas;
 
   bool IsBrowser() const noexcept {
     return kind == "browser" || kind == "small";
@@ -102,6 +133,7 @@ struct WindowManager {
 
   void Attach(winrt::Microsoft::ReactNative::ReactContext const &context) noexcept {
     m_context = context;
+    m_answersOwed = 0;
   }
 
   void Detach() noexcept {
@@ -193,7 +225,19 @@ struct WindowManager {
     SetWindowPos(hwnd, atTopOfBand ? HWND_TOP : after, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
   }
 
-  void Open(OpenWindowRequest const &request) noexcept {
+  void Open(OpenWindowRequest const &request, bool heldForTest = false) noexcept {
+    if (m_quitting) {
+      try {
+        m_opensDuringQuit.push_back(request);
+      } catch (...) {
+      }
+      LaunchLog::Write(L"window", std::wstring(L"held ").append(Paths::Wide(request.id)).append(L" until the quit ends: it opens if the quit is cancelled"));
+      return;
+    }
+    if (!heldForTest && HoldOpenForTest(request)) return;
+    m_hadWindow = true;
+    m_quitWaitNoted = false;
+    if (!m_launchesUndelivered) m_launchHoldSince = 0;
     if (ManagedWindow *existing = Find(request.id)) {
       bool wasClosing = !existing->exits.empty() || (existing->fade && (existing->fade->phase == WindowFade::Phase::Leaving || existing->fade->phase == WindowFade::Phase::Lingering));
       StopClosing(*existing);
@@ -233,6 +277,7 @@ struct WindowManager {
       HWND openedFrom = request.focusWhenFront.empty() ? nullptr : Hwnd(request.focusWhenFront);
       bool entrance = request.animated || entry.kind != "browser";
       bool fades = entrance && WindowMotion::SystemAnimates();
+      bool waitsForFirstFrame = !fades && !Background();
       HWND hwnd = entry.hwnd;
       auto appWindow = entry.appWindow;
       m_order.push_back(entry.id);
@@ -242,7 +287,7 @@ struct WindowManager {
           if (ManagedWindow *found = Find(id); found && found->window == window) Mount(*found);
         });
       }
-      if (fades) BeginEntrance(placed->second);
+      if (fades || waitsForFirstFrame) BeginEntrance(placed->second, fades);
       bool quietPopup = !activate && placed->second.kind == "popup";
       if (quietPopup) ShowAboveOpener(hwnd, openedFrom);
       if (maximize) ShowMaximized(placed->second, activate);
@@ -260,7 +305,7 @@ struct WindowManager {
       }
       if (m_activeId.empty()) m_activeId = request.id;
       LaunchLog::Write(L"window", std::wstring(L"opened ").append(Paths::Wide(request.id)));
-      if (entrance && !fades) LaunchLog::Write(L"window", std::wstring(L"window ").append(Paths::Wide(request.id)).append(L" shown at once: animations are off in Windows"));
+      if (entrance && !fades) LaunchLog::Write(L"window", std::wstring(L"window ").append(Paths::Wide(request.id)).append(L" shows without a fade: animations are off in Windows"));
     } catch (winrt::hresult_error const &error) {
       LaunchLog::Write(L"error", std::wstring(L"window could not open: ").append(error.message()));
     } catch (...) {
@@ -328,6 +373,7 @@ struct WindowManager {
   }
 
   void Focus(std::string_view id) noexcept {
+    if (m_quitting) return;
     if (ManagedWindow *closing = Find(id)) StopClosing(*closing);
     ManagedWindow *entry = Find(id);
     if (!entry) return;
@@ -356,6 +402,7 @@ struct WindowManager {
   }
 
   void RestoreFullScreen(std::vector<std::string> const &ids, std::optional<std::string> const &focus) noexcept {
+    if (m_quitting) return;
     for (auto const &id : ids) {
       ManagedWindow *entry = Find(id);
       if (!entry) continue;
@@ -382,6 +429,12 @@ struct WindowManager {
       }
     } catch (...) {
     }
+  }
+
+  void RefreshCaptionColors() noexcept {
+    bool contrast = HighContrastOn();
+    for (auto &[id, entry] : m_windows) ApplyTheme(entry, m_dark);
+    LaunchLog::Write(L"window", contrast ? L"caption buttons take the app's stronger contrast colours" : L"caption buttons take the app's usual colours again");
   }
 
   void SetDark(bool dark) noexcept {
@@ -430,6 +483,13 @@ struct WindowManager {
     ManagedWindow *entry = Find(id);
     if (!entry || Background()) return;
     ToggleMaximized(*entry);
+  }
+
+  void SetSwipeArea(std::string const &id, std::string const &key, bool on) noexcept {
+    ManagedWindow *entry = Find(id);
+    if (!entry) return;
+    if (on) entry->swipeAreas.insert(key);
+    else entry->swipeAreas.erase(key);
   }
 
   void SetCaptionRegions(std::string const &id, std::vector<std::array<double, 4>> regions) noexcept {
@@ -493,22 +553,124 @@ struct WindowManager {
     return entry && entry->IsPopup();
   }
 
-  void ReplyToTerminate(bool ok) noexcept {
-    if (!m_quitting) return;
-    if (ok) return Finish();
-    m_quitting = false;
-    m_quitGeneration++;
-    EmitApp("quitCancelled");
+  void AnswerTerminate(bool ok) noexcept {
+    std::optional<int> held = AppLaunch::TestMilliseconds("quitAnswerHoldMs", kQuitTestHoldMostMs);
+    if (!held) return ReplyToTerminate(ok);
+    LaunchLog::Write(L"quit", std::wstring(L"test: the app's answer is held ").append(std::to_wstring(*held)).append(L" ms"));
+    After(std::chrono::milliseconds(*held), [this, ok]() noexcept { ReplyToTerminate(ok); });
   }
 
-  void Quit() noexcept {
-    if (m_quitting) return;
+  void ReplyToTerminate(bool ok) noexcept {
+    if (m_answersOwed > 0) m_answersOwed--;
+    if (!m_quitting || m_finished) {
+      LaunchLog::Write(L"quit", L"an answer came after its quit was cancelled or had finished; ignored");
+      return;
+    }
+    if (m_answersOwed > 0) {
+      LaunchLog::Write(L"quit", L"an answer to an earlier, cancelled quit came during this one; ignored");
+      return;
+    }
+    if (!ok) {
+      NoteQuitWait(L"the app answered no");
+      return CancelQuit();
+    }
+    NoteQuitWait(L"the app answered yes");
+    m_quitAnswer = kAnsweredYes;
+    if (m_quitHeldUntil && GetTickCount64() < m_quitHeldUntil) return;
+    Finish();
+  }
+
+  void Quit(std::string_view reason) noexcept {
+    const std::string_view asked = reason == kUpdateQuit ? kUpdateQuit : kUserQuit;
+    if (m_quitting) {
+      if (asked == kUpdateQuit && m_quitReason != kUpdateQuit && !m_finished) {
+        m_quitReason = kUpdateQuit;
+        TellEngineQuitting("asking");
+        LaunchLog::Write(L"quit", L"the quit under way is now an update's quit; a launch no longer cancels it");
+      }
+      return;
+    }
+    if (m_launchesUndelivered > 0) {
+      if (!m_quitWaitNoted) LaunchLog::Write(L"quit", L"waits: a launch this Ardia took hasn't reached the app yet");
+      m_quitWaitNoted = true;
+      After(std::chrono::milliseconds(kUndeliveredRecheckMs), [this, asked]() noexcept { Quit(asked); });
+      return;
+    }
     m_quitting = true;
-    if (!m_context) return Finish();
-    EmitApp("willQuit");
-    After(std::chrono::milliseconds(3000), [this, generation = ++m_quitGeneration]() noexcept {
-      if (m_quitting && generation == m_quitGeneration) Finish();
+    m_quitWaitNoted = false;
+    m_quitReason = asked;
+    m_quitAskedAt = GetTickCount64();
+    m_quitWaitMs = 0;
+    m_quitAnswer = m_context ? kAnswerPending : kNoAppToAsk;
+    TellEngineQuitting("asking");
+    std::optional<int> held = AppLaunch::TestMilliseconds("quitWaitMs", kQuitTestHoldMostMs);
+    LaunchLog::Write(L"quit", std::wstring(L"began (").append(Paths::Wide(m_quitReason)).append(m_context ? L"), asking the app to save" : L"), with no app to ask"));
+    if (!m_context && !held) return Finish();
+    if (held) {
+      m_quitHeldUntil = m_quitAskedAt + static_cast<ULONGLONG>(*held);
+      LaunchLog::Write(L"launch", std::wstring(L"test: the quit waits ").append(std::to_wstring(*held)).append(L" ms before it unloads"));
+    }
+    if (m_context) {
+      m_answersOwed++;
+      EmitApp("willQuit");
+    }
+    const int wait = held.value_or(kQuitAnswerWaitMs);
+    After(std::chrono::milliseconds(wait), [this, wait, generation = ++m_quitGeneration]() noexcept {
+      if (!m_quitting || generation != m_quitGeneration) return;
+      if (m_quitAnswer == kAnswerPending) {
+        m_quitWaitMs = wait;
+        m_quitAnswer = kNoAnswer;
+        LaunchLog::Write(L"quit", std::wstring(L"no answer in ").append(std::to_wstring(wait)).append(L" ms (").append(Paths::Wide(m_quitReason)).append(L"); quitting"));
+      }
+      Finish();
     });
+  }
+
+  int LaunchArriving() noexcept {
+    if (m_quitReason == kUpdateQuit && (m_quitting || m_finished)) {
+      m_updateLaunchesToNote++;
+      return ARDIA_APP_LAUNCH_LEFT_FOR_UPDATE;
+    }
+    if (m_finished) return ARDIA_APP_LAUNCH_TURNED_AWAY;
+    m_launchesUndelivered++;
+    if (!m_quitting) return ARDIA_APP_LAUNCH_KEPT;
+    m_quitting = false;
+    m_quitHeldUntil = 0;
+    m_quitGeneration++;
+    m_quitWaitMs = static_cast<int>((std::min)(GetTickCount64() - m_quitAskedAt, static_cast<ULONGLONG>(3600000)));
+    m_cancelledByLaunch = true;
+    return ARDIA_APP_LAUNCH_KEPT_BY_CANCELLING_QUIT;
+  }
+
+  void AfterLaunchArriving() noexcept {
+    for (; m_updateLaunchesToNote > 0; m_updateLaunchesToNote--) LaunchLog::Write(L"quit", L"a launch during an update's quit is left to the installer's own start");
+    if (m_cancelledByLaunch) {
+      m_cancelledByLaunch = false;
+      LaunchLog::Write(L"quit", std::wstring(L"cancelled by a relaunch after ").append(std::to_wstring(m_quitWaitMs)).append(L" ms (").append(Paths::Wide(m_quitReason)).append(L")"));
+      AnnounceCancelledQuit(true);
+    }
+    ArmLaunchHold();
+  }
+
+  void LaunchDelivered() noexcept {
+    if (m_launchesUndelivered > 0) m_launchesUndelivered--;
+    if (NoWindowStays()) HoldQuitForLaunch();
+    else if (!m_launchesUndelivered) m_launchHoldSince = 0;
+  }
+
+  void QuitByTestMessage() noexcept {
+    LaunchLog::Write(L"quit", L"test: asked to quit by a message");
+    Quit(WindowlessQuitReason());
+  }
+
+  static std::string_view WindowlessQuitReason() noexcept {
+    std::optional<std::string> reason = AppLaunch::TestValue("quitReason");
+    return reason && *reason == kUpdateQuit ? kUpdateQuit : kUserQuit;
+  }
+
+  static UINT TestQuitMessage() noexcept {
+    static const UINT message = AppLaunch::TestFlag("quitByMessage") ? RegisterWindowMessageW(L"ArdiaTestQuit") : 0;
+    return message;
   }
 
   HWND TakePageLeftBySecondaryPress(HWND app, ULONGLONG withinMs) noexcept {
@@ -528,6 +690,17 @@ struct WindowManager {
   };
 
   static constexpr UINT_PTR kSubclassId = 0xA2D1A;
+  static constexpr int kQuitAnswerWaitMs = 3000;
+  static constexpr int kLastWindowWaitMs = 400;
+  static constexpr ULONGLONG kLaunchWindowWaitMs = 5000;
+  static constexpr int kUndeliveredRecheckMs = 50;
+  static constexpr int kQuitTestHoldMostMs = 15000;
+  static constexpr std::string_view kUserQuit = "user";
+  static constexpr std::string_view kUpdateQuit = "update";
+  static constexpr std::string_view kAnswerPending = "pending";
+  static constexpr std::string_view kAnsweredYes = "yes";
+  static constexpr std::string_view kNoAnswer = "timeout";
+  static constexpr std::string_view kNoAppToAsk = "none";
   static constexpr double kPopupMinWidth = 200;
   static constexpr double kPopupMinPageHeight = 150;
   static constexpr double kPopupChromeHeight = 60;
@@ -604,8 +777,6 @@ struct WindowManager {
       auto titleBar = entry.appWindow.TitleBar();
       titleBar.ExtendsContentIntoTitleBar(true);
       titleBar.PreferredHeightOption(winrt::Microsoft::UI::Windowing::TitleBarHeightOption::Standard);
-      titleBar.ButtonBackgroundColor(winrt::Windows::UI::Color{0, 0, 0, 0});
-      titleBar.ButtonInactiveBackgroundColor(winrt::Windows::UI::Color{0, 0, 0, 0});
       if (presenter) presenter.SetBorderAndTitleBar(true, false);
       if (entry.IsBrowser()) {
         if (presenter) {
@@ -814,14 +985,40 @@ struct WindowManager {
     WindowPlacement::Save(*m_lastPlacement);
   }
 
+  static bool HighContrastOn() noexcept {
+    HIGHCONTRASTW contrast{};
+    contrast.cbSize = sizeof(contrast);
+    return SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof(contrast), &contrast, 0) && (contrast.dwFlags & HCF_HIGHCONTRASTON) != 0;
+  }
+
+  static void ApplyCaptionColors(winrt::Microsoft::UI::Windowing::AppWindowTitleBar const &titleBar, bool dark, bool contrast) {
+    using winrt::Windows::UI::Color;
+    Color clear{0, 0, 0, 0};
+    Color glyph = dark ? Color{255, 255, 255, 255} : Color{255, 27, 27, 27};
+    Color resting = contrast ? glyph : dark ? Color{255, 128, 128, 128} : Color{255, 138, 138, 138};
+    uint8_t hoverAlpha = contrast ? 46 : 23;
+    uint8_t pressedAlpha = contrast ? 92 : 46;
+    Color hover = dark ? Color{hoverAlpha, 255, 255, 255} : Color{hoverAlpha, 0, 0, 0};
+    Color pressed = dark ? Color{pressedAlpha, 255, 255, 255} : Color{pressedAlpha, 0, 0, 0};
+    titleBar.ButtonBackgroundColor(clear);
+    titleBar.ButtonInactiveBackgroundColor(clear);
+    titleBar.ButtonForegroundColor(glyph);
+    titleBar.ButtonInactiveForegroundColor(resting);
+    titleBar.ButtonHoverBackgroundColor(hover);
+    titleBar.ButtonHoverForegroundColor(glyph);
+    titleBar.ButtonPressedBackgroundColor(pressed);
+    titleBar.ButtonPressedForegroundColor(glyph);
+  }
+
   static void ApplyTheme(ManagedWindow &entry, bool dark) noexcept {
     static constexpr DWORD kUseImmersiveDarkMode = 20;
     BOOL useDark = dark ? TRUE : FALSE;
     DwmSetWindowAttribute(entry.hwnd, kUseImmersiveDarkMode, &useDark, sizeof(useDark));
+    ThemedErase::Apply(entry.hwnd, dark);
     try {
-      entry.appWindow.TitleBar().PreferredTheme(
-          dark ? winrt::Microsoft::UI::Windowing::TitleBarTheme::Dark : winrt::Microsoft::UI::Windowing::TitleBarTheme::Light);
+      ApplyCaptionColors(entry.appWindow.TitleBar(), dark, HighContrastOn());
     } catch (...) {
+      LaunchLog::Write(L"warning", L"caption button colours could not be set");
     }
   }
 
@@ -885,6 +1082,7 @@ struct WindowManager {
     entry.destroying = entry.appWindow.Destroying(
         [this, id](winrt::Microsoft::UI::Windowing::AppWindow const &, winrt::Windows::Foundation::IInspectable const &) noexcept { Closed(id); });
     SetWindowSubclass(entry.hwnd, &WindowManager::WindowProc, kSubclassId, reinterpret_cast<DWORD_PTR>(this));
+    WatchSwipeWheel(entry);
   }
 
   static void Mount(ManagedWindow &entry) {
@@ -936,9 +1134,9 @@ struct WindowManager {
     for (auto &waiter : revealWaiters) waiter();
     After(std::chrono::milliseconds(1), [closedWindow]() noexcept {});
     if (m_windows.empty() && !m_quitting) {
-      After(std::chrono::milliseconds(400), [this]() noexcept {
-        if (m_windows.empty()) Quit();
-      });
+      std::optional<int> stretched = AppLaunch::TestMilliseconds("lastWindowWaitMs", kQuitTestHoldMostMs);
+      if (stretched) LaunchLog::Write(L"launch", std::wstring(L"test: the quit waits ").append(std::to_wstring(*stretched)).append(L" ms after the last window closed"));
+      After(std::chrono::milliseconds(stretched.value_or(kLastWindowWaitMs)), [this]() noexcept { QuitWhenWindowless(); });
     }
   }
 
@@ -1279,6 +1477,10 @@ struct WindowManager {
       manager->m_systemMove = false;
       manager->m_captionPressed = nullptr;
     }
+    if (UINT quitMessage = TestQuitMessage(); quitMessage && message == quitMessage) {
+      manager->QuitByTestMessage();
+      return 0;
+    }
     if (message == WM_ACTIVATE && LOWORD(wParam) != WA_INACTIVE && DialogParts::BringModalForward(hwnd)) return 0;
     if (message == WM_ACTIVATE && LOWORD(wParam) != WA_INACTIVE) manager->Activated(hwnd, reinterpret_cast<HWND>(lParam));
     if (message == WM_SIZE && wParam != SIZE_MINIMIZED) manager->ArrangeToClient(hwnd, LOWORD(lParam), HIWORD(lParam));
@@ -1503,6 +1705,43 @@ struct WindowManager {
     if (entry) LaunchLog::Write(L"window", std::wstring(L"system move began on ").append(Paths::Wide(entry->id)));
   }
 
+  void WatchSwipeWheel(ManagedWindow &entry) noexcept {
+    try {
+      auto island = entry.window.ReactNativeIsland().Island();
+      if (!island) {
+        LaunchLog::Write(L"window", std::wstring(L"sideways wheel not watched for ").append(Paths::Wide(entry.id)).append(L": no content island"));
+        return;
+      }
+      std::string id = entry.id;
+      winrt::Microsoft::UI::Input::InputPointerSource::GetForIsland(island).PointerWheelChanged(
+          [this, id](winrt::Microsoft::UI::Input::InputPointerSource const &, winrt::Microsoft::UI::Input::PointerEventArgs const &args) noexcept {
+            try {
+              SwipeWheel(id, args);
+            } catch (...) {
+            }
+          });
+    } catch (...) {
+      LaunchLog::Write(L"window", std::wstring(L"sideways wheel not watched for ").append(Paths::Wide(entry.id)));
+    }
+  }
+
+  void SwipeWheel(std::string const &id, winrt::Microsoft::UI::Input::PointerEventArgs const &args) {
+    ManagedWindow *entry = Find(id);
+    if (!entry || entry->swipeAreas.empty()) return;
+    auto point = args.CurrentPoint();
+    auto properties = point.Properties();
+    int32_t delta = properties.MouseWheelDelta();
+    if (!properties.IsHorizontalMouseWheel() || delta == 0) return;
+    auto position = point.Position();
+    winrt::Microsoft::ReactNative::JSValueObject event;
+    event["type"] = "swipeWheel";
+    event["id"] = id;
+    event["point"] = winrt::Microsoft::ReactNative::JSValueArray{static_cast<double>(position.X), static_cast<double>(position.Y)};
+    event["delta"] = delta;
+    EmitWindow(std::move(event));
+    LaunchLog::Write(L"window", std::wstring(L"sideways wheel ").append(std::to_wstring(delta)).append(L" in ").append(Paths::Wide(id)));
+  }
+
   void EmitWindow(winrt::Microsoft::ReactNative::JSValueObject &&event) noexcept {
     if (m_context) EmitEvent(m_context, L"ArdiaAppWindows", L"onWindowEvent", std::move(event));
   }
@@ -1624,21 +1863,31 @@ struct WindowManager {
     }
   }
 
-  void BeginEntrance(ManagedWindow &entry) noexcept {
+  void BeginEntrance(ManagedWindow &entry, bool fadesIn) noexcept {
     auto fade = std::make_shared<WindowFade>();
     fade->phase = WindowFade::Phase::Revealing;
     fade->hwnd = entry.hwnd;
-    fade->opacity = 0;
+    fade->fadesIn = fadesIn;
+    fade->revealTimeout = fadesIn ? WindowMotion::kRevealTimeout : WindowMotion::kFirstFrameTimeout;
+    fade->opacity = fadesIn ? 0 : WindowMotion::kWaitingOpacity;
     fade->started = std::chrono::steady_clock::now();
-    fade->layered.Hold(entry.hwnd, 0, false);
+    fade->layered.Hold(entry.hwnd, WindowMotion::Alpha(fade->opacity), false);
     entry.fade = fade;
     if (StartFadeTimer(entry.id, fade)) return;
     entry.fade.reset();
     LogFade(entry.id, L" shown at once: no timer");
   }
 
-  void Reveal(ManagedWindow &entry) noexcept {
+  void Reveal(ManagedWindow &entry, bool drawn) noexcept {
     WindowFade &fade = *entry.fade;
+    if (!fade.fadesIn) {
+      std::wstring after = std::to_wstring(fade.Elapsed(std::chrono::steady_clock::now()).count());
+      LogFade(entry.id, drawn ? std::wstring(L" shown with its first frame ").append(after).append(L" ms after it opened")
+                              : std::wstring(L" shown without a first frame: none came in ").append(after).append(L" ms"));
+      EndFade(entry);
+      RunRevealWaiters(entry);
+      return;
+    }
     fade.phase = WindowFade::Phase::Entering;
     fade.from = 0;
     fade.opacity = 0;
@@ -1726,7 +1975,7 @@ struct WindowManager {
     switch (fade->phase) {
       case WindowFade::Phase::Revealing:
         HoldOpacity(*fade, true, false);
-        if (HasContent(*entry) || fade->Elapsed(now) >= WindowMotion::kRevealTimeout) Reveal(*entry);
+        if (bool drawn = HasContent(*entry); drawn || fade->Elapsed(now) >= fade->revealTimeout) Reveal(*entry, drawn);
         return;
       case WindowFade::Phase::Entering: {
         double progress = fade->Progress(now);
@@ -1755,19 +2004,136 @@ struct WindowManager {
     }
   }
 
+  bool NoWindowStays() const noexcept {
+    for (auto const &item : m_windows) {
+      ManagedWindow const &entry = item.second;
+      bool closing = !entry.exits.empty() || (entry.fade && (entry.fade->phase == WindowFade::Phase::Leaving || entry.fade->phase == WindowFade::Phase::Lingering));
+      if (!closing) return false;
+    }
+    return true;
+  }
+
+  bool LaunchHoldsQuit() const noexcept {
+    if (m_launchesUndelivered > 0) return true;
+    return m_launchHoldSince && GetTickCount64() - m_launchHoldSince < kLaunchWindowWaitMs && NoWindowStays();
+  }
+
+  void HoldQuitForLaunch() noexcept {
+    if (!m_launchHoldSince) m_launchHoldSince = GetTickCount64();
+    ArmLaunchHold();
+  }
+
+  void ArmLaunchHold() noexcept {
+    const ULONGLONG since = m_launchHoldSince;
+    if (!since || m_launchHoldArmedFor == since) return;
+    m_launchHoldArmedFor = since;
+    const ULONGLONG waited = GetTickCount64() - since;
+    const ULONGLONG left = waited < kLaunchWindowWaitMs ? kLaunchWindowWaitMs - waited : 0;
+    After(std::chrono::milliseconds(static_cast<long long>(left)), [this, since]() noexcept { LaunchHoldEnded(since); });
+  }
+
+  void LaunchHoldEnded(ULONGLONG since) noexcept {
+    if (m_launchHoldSince != since) return;
+    m_launchHoldSince = 0;
+    if (m_launchesUndelivered > 0 || m_quitting || m_finished || !m_hadWindow || !NoWindowStays()) return;
+    LaunchLog::Write(L"quit", std::wstring(L"no window opened within ").append(std::to_wstring(kLaunchWindowWaitMs)).append(L" ms of the launch that kept this Ardia; quitting"));
+    Quit(kUserQuit);
+  }
+
+  void QuitWhenWindowless() noexcept {
+    if (!m_windows.empty() || m_quitting) return;
+    if (LaunchHoldsQuit()) {
+      const ULONGLONG waited = m_launchHoldSince ? GetTickCount64() - m_launchHoldSince : 0;
+      const ULONGLONG recheck = m_launchesUndelivered > 0 || waited >= kLaunchWindowWaitMs ? kUndeliveredRecheckMs : kLaunchWindowWaitMs - waited;
+      if (!m_quitWaitNoted) LaunchLog::Write(L"quit", L"not begun: a launch arrived after the last window closed, and its window is on its way");
+      m_quitWaitNoted = true;
+      After(std::chrono::milliseconds(static_cast<long long>(recheck)), [this]() noexcept { QuitWhenWindowless(); });
+      return;
+    }
+    Quit(WindowlessQuitReason());
+  }
+
+  void NoteQuitWait(std::wstring const &outcome) noexcept {
+    m_quitWaitMs = static_cast<int>((std::min)(GetTickCount64() - m_quitAskedAt, static_cast<ULONGLONG>(3600000)));
+    LaunchLog::Write(L"quit", std::wstring(outcome).append(L" after ").append(std::to_wstring(m_quitWaitMs)).append(L" ms (").append(Paths::Wide(m_quitReason)).append(L")"));
+  }
+
+  void CancelQuit() noexcept {
+    m_quitting = false;
+    m_quitHeldUntil = 0;
+    m_quitGeneration++;
+    AnnounceCancelledQuit(false);
+  }
+
+  void AnnounceCancelledQuit(bool byLaunch) noexcept {
+    TellEngineQuitting("cancelled");
+    EmitApp("quitCancelled");
+    if (!byLaunch && NoWindowStays()) HoldQuitForLaunch();
+    std::vector<OpenWindowRequest> remembered = std::move(m_opensDuringQuit);
+    m_opensDuringQuit.clear();
+    if (remembered.empty()) return;
+    try {
+      Host::Current()->queue.DispatcherQueue().TryEnqueue([this, remembered = std::move(remembered)]() noexcept {
+        for (auto const &request : remembered) Open(request, true);
+      });
+    } catch (...) {
+    }
+  }
+
+  bool HoldOpenForTest(OpenWindowRequest const &request) noexcept {
+    std::optional<int> held = AppLaunch::TestMilliseconds("windowOpenHoldMs", kQuitTestHoldMostMs);
+    if (!held) return false;
+    LaunchLog::Write(L"window", std::wstring(L"test: opening ").append(Paths::Wide(request.id)).append(L" waits ").append(std::to_wstring(*held)).append(L" ms"));
+    After(std::chrono::milliseconds(*held), [this, request]() noexcept { Open(request, true); });
+    return true;
+  }
+
   void Finish() noexcept {
     if (m_finished) return;
     m_finished = true;
+    TellEngineFinal();
+    if (!m_opensDuringQuit.empty()) {
+      LaunchLog::Write(L"window", std::to_wstring(m_opensDuringQuit.size()).append(L" window(s) asked for during the quit stay closed: the quit went ahead"));
+      m_opensDuringQuit.clear();
+    }
     SavePlacement();
     LaunchLog::Write(L"launch", L"quitting");
     try {
       auto unloading = Host::Current()->reactHost.UnloadInstance();
       unloading.Completed([](auto const &, auto const &) noexcept {
-        Host::Current()->queue.DispatcherQueue().TryEnqueue([]() noexcept { EndLoop(); });
+        Host::Current()->queue.DispatcherQueue().TryEnqueue([]() noexcept { WindowManager::Shared().EndLoopAfterTestHold(); });
       });
     } catch (...) {
       EndLoop();
     }
+  }
+
+  void EndLoopAfterTestHold() noexcept {
+    std::optional<int> held = AppLaunch::TestMilliseconds("quitUnloadHoldMs", kQuitTestHoldMostMs);
+    if (!held) return EndLoop();
+    LaunchLog::Write(L"launch", std::wstring(L"test: the engine is asked to quit ").append(std::to_wstring(*held)).append(L" ms after the unload"));
+    After(std::chrono::milliseconds(*held), []() noexcept { EndLoop(); });
+  }
+
+  void TellEngineQuitting(std::string_view phase) const noexcept {
+    const ArdiaEngineApi *engine = Host::Engine();
+    if (!engine || !engine->hostCall) return;
+    std::string args = std::string("{\"phase\":\"").append(phase).append("\",\"reason\":\"").append(m_quitReason).append("\"}");
+    engine->hostCall("app.quitting", args.c_str(), 0, nullptr, nullptr);
+  }
+
+  void TellEngineFinal() const noexcept {
+    const ArdiaEngineApi *engine = Host::Engine();
+    if (!engine || !engine->hostCall) return;
+    std::string_view answer = m_quitAnswer == kAnswerPending ? kNoAnswer : m_quitAnswer;
+    std::string args = std::string("{\"phase\":\"final\",\"reason\":\"")
+                           .append(m_quitReason)
+                           .append("\",\"waitMs\":")
+                           .append(std::to_string(m_quitWaitMs))
+                           .append(",\"answer\":\"")
+                           .append(answer)
+                           .append("\"}");
+    engine->hostCall("app.quitting", args.c_str(), 0, nullptr, nullptr);
   }
 
   static void EndLoop() noexcept {
@@ -1807,7 +2173,21 @@ struct WindowManager {
   winrt::Windows::Graphics::PointInt32 m_dragOrigin{};
   std::string m_dragId;
   int m_quitGeneration{0};
+  int m_answersOwed{0};
+  int m_launchesUndelivered{0};
+  int m_quitWaitMs{0};
+  ULONGLONG m_quitAskedAt{0};
+  ULONGLONG m_quitHeldUntil{0};
+  ULONGLONG m_launchHoldSince{0};
+  ULONGLONG m_launchHoldArmedFor{0};
+  int m_updateLaunchesToNote{0};
+  bool m_cancelledByLaunch{false};
+  bool m_quitWaitNoted{false};
+  std::string_view m_quitReason{kUserQuit};
+  std::string_view m_quitAnswer{kNoAppToAsk};
+  std::vector<OpenWindowRequest> m_opensDuringQuit;
   bool m_finished{false};
+  bool m_hadWindow{false};
 };
 
 }

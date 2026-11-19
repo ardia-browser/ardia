@@ -1,5 +1,7 @@
 import type { Download } from "./actions";
 
+export const downloadsInProgress = (downloads: readonly Pick<Download, "state">[]) => downloads.filter((d) => d.state === "downloading").length;
+
 export const awaitsKeep = (d: Pick<Download, "state" | "dangerous">) => d.state === "downloading" && d.dangerous === true;
 
 function formatBytes(n: number) {

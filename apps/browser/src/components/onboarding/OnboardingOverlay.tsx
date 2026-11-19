@@ -18,6 +18,7 @@ import { isWebDemo } from "../../state/onboarding/demoSteps";
 import { ToolTour } from "./tour/ToolTour";
 import { ONBOARDING_CARD, OnboardingCardContext, useOnboardingColors } from "./Parts";
 import { DevResetOnboarding } from "./DevResetOnboarding";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 
 const FLOATING_MIN_HEIGHT = 620;
 
@@ -38,11 +39,14 @@ function Overlay({ session }: { session: number }) {
   const colors = useOnboardingColors();
   const step = useOnboarding((s) => s.step);
   const leaving = useOnboarding((s) => s.leaving);
+  const atLaunch = useOnboarding((s) => s.atLaunch);
+  const opaqueAtStart = useRef(PLATFORM_FEATURES.onboardingOpaqueAtLaunch && atLaunch).current;
   const [size, setSize] = useState({ width: 0, height: 0 });
-  const presence = useRef(new Animated.Value(0)).current;
+  const presence = useRef(new Animated.Value(opaqueAtStart ? 1 : 0)).current;
   const card = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    if (opaqueAtStart) return;
     Animated.timing(presence, { toValue: 1, duration: onboardingMotion.overlayIn, easing: curve.enter, useNativeDriver: true }).start();
   }, []);
 

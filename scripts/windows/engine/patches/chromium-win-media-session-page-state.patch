@@ -1,0 +1,90 @@
+--- a/content/browser/media/session/media_session_impl.h
++++ b/content/browser/media/session/media_session_impl.h
+@@ -392,7 +392,15 @@
+   // Ardia: whether the session still holds the player, of any kind.
+   bool ArdiaWinHoldsPlayer(MediaSessionPlayerObserver* observer,
+                            int player_id) const;
++
++  // Ardia: whether every player in the session, and its routed frame, belong
++  // to the primary page, so a page navigated away from is never reported as
++  // the new page's.
++  bool ArdiaWinOnPrimaryPage();
+ 
++  // Ardia: the artwork the session declares now.
++  std::vector<media_session::MediaImage> ArdiaWinArtwork() const;
++
+   // Make sure that all observers have received any pending callbacks from us,
+   // that might otherwise be sitting in a message pipe somewhere.
+   void flush_observers_for_testing() { observers_.FlushForTesting(); }
+--- a/content/browser/media/session/media_session_impl.cc
++++ b/content/browser/media/session/media_session_impl.cc
+@@ -28,6 +28,7 @@
+ #include "content/public/browser/media_session_client.h"
+ #include "content/public/browser/media_session_player_observer.h"
+ #include "content/public/browser/navigation_handle.h"
++#include "content/public/browser/page.h"
+ #include "content/public/browser/render_frame_host.h"
+ #include "content/public/browser/web_contents.h"
+ #include "content/public/browser/web_contents_delegate.h"
+@@ -2429,8 +2430,38 @@
+   return normal_players_.contains(identifier) ||
+          one_shot_players_.contains(identifier) ||
+          ambient_players_.contains(identifier);
++}
++
++bool MediaSessionImpl::ArdiaWinOnPrimaryPage() {
++  const auto on_primary_page = [](RenderFrameHost* frame) {
++    return frame && frame->IsActive() && frame->GetPage().IsPrimary();
++  };
++  for (const auto& player : normal_players_) {
++    if (!on_primary_page(player.first.observer->render_frame_host())) {
++      return false;
++    }
++  }
++  for (const auto& player : one_shot_players_) {
++    if (!on_primary_page(player.observer->render_frame_host())) {
++      return false;
++    }
++  }
++  for (const auto& player : ambient_players_) {
++    if (!on_primary_page(player.observer->render_frame_host())) {
++      return false;
++    }
++  }
++  return !routed_service_ ||
++         on_primary_page(routed_service_->GetRenderFrameHost());
+ }
+ 
++std::vector<media_session::MediaImage> MediaSessionImpl::ArdiaWinArtwork()
++    const {
++  const auto artwork = images_.find(MediaSessionImageType::kArtwork);
++  return artwork != images_.end() ? artwork->second
++                                  : std::vector<media_session::MediaImage>();
++}
++
+ bool MediaSessionImpl::HasImageCacheForTest(const GURL& image_url) const {
+   return GetPageData(web_contents()->GetPrimaryPage()).GetImageCache(image_url);
+ }
+@@ -2468,4 +2499,22 @@
+   return session && session->ShouldRouteAction(action);
+ }
+ 
++// Ardia: whether the tab's media session belongs wholly to its primary page;
++// the Windows host reports a session only then.
++CONTENT_EXPORT bool ArdiaWinMediaSessionOnPrimaryPage(WebContents* contents) {
++  MediaSessionImpl* session =
++      contents ? MediaSessionImpl::FromWebContents(contents) : nullptr;
++  return session && session->ArdiaWinOnPrimaryPage();
++}
++
++// Ardia: the artwork the tab's media session declares now, which the Windows
++// host reports and lets the app download.
++CONTENT_EXPORT std::vector<media_session::MediaImage>
++ArdiaWinMediaSessionArtwork(WebContents* contents) {
++  MediaSessionImpl* session =
++      contents ? MediaSessionImpl::FromWebContents(contents) : nullptr;
++  return session ? session->ArdiaWinArtwork()
++                 : std::vector<media_session::MediaImage>();
++}
++
+ }  // namespace content

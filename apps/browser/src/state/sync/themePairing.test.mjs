@@ -179,6 +179,7 @@ test("a joining Mac keeps adopting across a restart and takes the theme when its
   const restarted = await import("./engine.ts?dlC2restart");
   await c.with(async () => {
     restarted.startSync();
+    for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
     await restarted.syncNow();
     await restarted.syncNow();
   });

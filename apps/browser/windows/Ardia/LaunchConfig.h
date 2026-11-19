@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdlib>
 #include <filesystem>
 #include <map>
 #include <optional>
@@ -68,9 +69,11 @@ inline std::vector<std::string_view> const &TestKeys() noexcept {
       "externalProtocolNoLaunch", "externalProtocolApp", "mediaRouteProvider", "systemMediaPermission", "applyProfileGate", "contextMenu",
       "loginsDelay", "loginsReleaseAfter", "cdpTabsVisible",
       "pipSelfTest", "pipHover", "selfCheckOnly", "meadowWebGL", "meadowReadyMs", "introStartDelayMs", "fakeFullScreenMs", "shadersKeyWindow", "peekStrict", "importSecret", "importDiaBundleId", "importDiaWindows",
-      "cliInstallScript", "legacySource", "legacyCrashAfter", "bangsUrl", "onboarding", "whatsNew", "telemetry",
-      "liveMock", "calendarFixture", "appMenu", "appDialog", "loginsTimeout", "externalAppLaunch", "nativeDragRefused", "httpPages", "selfCheckStage",
-      "keyHold", "keyHoldReadyMs",
+      "cliInstallScript", "legacySource", "legacyCrashAfter", "bangsUrl", "onboarding", "whatsNew", "telemetry", "syncTurnOn",
+      "liveMock", "calendarFixture", "appMenu", "appDialog", "loginsTimeout", "externalAppLaunch", "nativeDragRefused", "httpPages", "publicPages", "httpsPages", "selfCheckStage",
+      "keyHold", "keyHoldReadyMs", "quitWaitMs", "quitUnloadHoldMs", "quitFlushHoldMs", "handOffHoldMs", "handOffDeliveryHoldMs", "handOffTimeoutMs", "lastWindowWaitMs",
+      "windowOpenHoldMs", "quitReason", "quitByMessage", "quitAnswerHoldMs",
+      "fadeLab", "rawBackgrounds", "downloadFlightFromPage",
   };
   return keys;
 }
@@ -236,6 +239,15 @@ inline std::optional<std::string> TestValue(std::string_view key) noexcept {
 inline bool TestFlag(std::string_view key) noexcept {
   std::optional<std::string> value = TestValue(key);
   return value && Truthy(*value);
+}
+
+inline std::optional<int> TestMilliseconds(std::string_view key, int most) noexcept {
+  std::optional<std::string> value = TestValue(key);
+  if (!value || value->empty()) return std::nullopt;
+  char *end = nullptr;
+  long parsed = std::strtol(value->c_str(), &end, 10);
+  if (!end || *end != '\0' || parsed <= 0) return std::nullopt;
+  return static_cast<int>(parsed > most ? most : parsed);
 }
 
 }

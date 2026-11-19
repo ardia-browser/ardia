@@ -64,3 +64,9 @@ export const feedNotPublished = (error: unknown) => /\banswered 404\b/.test(fail
 export const folderOf = (address: string) => address.slice(0, address.lastIndexOf("/") + 1);
 
 export const megabytes = (bytes: number) => Math.max(1, Math.round(bytes / (1024 * 1024)));
+
+export function installMessage(newer: string, downloadsInProgress: number) {
+  const closes = `Ardia closes, installs ${newer} and opens again.`;
+  if (downloadsInProgress < 1) return closes;
+  return `${closes} ${downloadsInProgress === 1 ? "Your download in progress will be cancelled." : `Your ${downloadsInProgress} downloads in progress will be cancelled.`}`;
+}

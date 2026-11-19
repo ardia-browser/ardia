@@ -35,7 +35,6 @@ import { clearDownloads, dismissDownloadsByPress, setDownloadsOpen } from "../..
 import { watchNewDownloads } from "../../state/windows/downloadWatch";
 import { useDownload } from "../../state/downloads/hooks";
 import { useDownloadsInSidebarFooter, useTabLayout, useToolbarLightsCenter } from "../../state/windows/layout";
-import { SIDEBAR_FOOTER_DOWNLOADS } from "../sidebar/geometry";
 import { PROFILE_DOTS_HEIGHT } from "../profiles/ProfileDots";
 import { openInternalPage } from "../../state/pages/urls";
 import { useSidebarWidth } from "../../state/sidebar/hooks";
@@ -48,12 +47,14 @@ import { FooterButton } from "./FooterButton";
 import { useDownloadsPlacement } from "./useDownloadsPlacement";
 import { sameSize, useSettled, type Size } from "../ui/useSettled";
 import { DOWNLOADS_LIST as L, FILE_ICON_GLYPH_SHARE, MAGNET, useDownloadsColors } from "./tokens";
+import { magnetPath, magnetPoint } from "./magnetPath";
+import { downloadFlightFromPageEdge, downloadFlightWaitsForIcon, markDownloadFlight } from "../../state/downloads/downloadFlight";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 
 const rowFill = (theme: Theme, hovered: boolean, pressed: boolean) => (hovered || pressed ? menuRowFill(theme, pressed) : undefined);
 
 const iconCache = new Map<string, string | null>();
-export const FileIcon = memo(function FileIcon({ path, size = L.fileIcon }: { path: string; size?: number }) {
+export const FileIcon = memo(function FileIcon({ path, size = L.fileIcon, onShown }: { path: string; size?: number; onShown?: () => void }) {
   const theme = useTheme();
   const key = `${path}@${size}`;
   const [uri, setUri] = useState(() => iconCache.get(key) ?? null);
@@ -69,7 +70,7 @@ export const FileIcon = memo(function FileIcon({ path, size = L.fileIcon }: { pa
     };
   }, [key]);
   return uri ? (
-    <Image source={{ uri }} style={{ width: size, height: size }} />
+    <Image source={{ uri }} style={{ width: size, height: size }} onLoad={onShown} onError={onShown} />
   ) : (
     <Symbol name="doc" size={size * FILE_ICON_GLYPH_SHARE} color={theme.icon} style={{ width: size, height: size }} />
   );
@@ -275,38 +276,53 @@ export function DownloadMagnet() {
   const sidebarWidth = useSidebarWidth(windowId);
   const topStrip = useTabLayout() === "top";
   const right = useSidebarSide(windowId) === "right";
-  const addressBar = useDownloadsInSidebarFooter();
+  const footer = useDownloadsInSidebarFooter();
   const lightsY = useToolbarLightsCenter()[1];
   const [flight, setFlight] = useState<{ id: string; path: string } | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const settleSize = useSettled((next: Size) => setSize((prev) => (sameSize(prev, next) ? prev : next)));
   const t = useRef(new Animated.Value(0)).current;
+  const path = magnetPath({ ...size, sidebarOpen, sidebarWidth, right, topStrip, footer, lightsY }, downloadFlightFromPageEdge());
+  const flightMark = { ...path, icon: MAGNET.icon, width: size.width, height: size.height, ms: MAGNET.flight.duration };
+  const mark = useRef(flightMark);
+  mark.current = flightMark;
+  const waiting = useRef<{ id: string; at: number; timer: ReturnType<typeof setTimeout> } | null>(null);
+
+  const fly = (id: string) => {
+    const asked = waiting.current;
+    if (!asked || asked.id !== id) return;
+    clearTimeout(asked.timer);
+    waiting.current = null;
+    const started = { ...mark.current, waitedMs: Date.now() - asked.at };
+    markDownloadFlight("start", started);
+    Animated.timing(t, { toValue: 1, ...MAGNET.flight, useNativeDriver: true }).start(({ finished }) => {
+      if (!finished) return;
+      markDownloadFlight("landed", started);
+      setFlight(null);
+    });
+  };
 
   useEffect(() => {
-    return watchNewDownloads(windowId, (fresh) => {
+    const stop = watchNewDownloads(windowId, (fresh) => {
       t.setValue(0);
+      if (waiting.current) clearTimeout(waiting.current.timer);
       setFlight({ id: fresh.id, path: fresh.path || fresh.filename });
-      Animated.timing(t, { toValue: 1, ...MAGNET.flight, useNativeDriver: true }).start(({ finished }) => finished && setFlight(null));
+      const waitsForIcon = downloadFlightWaitsForIcon();
+      waiting.current = { id: fresh.id, at: Date.now(), timer: setTimeout(() => fly(fresh.id), waitsForIcon ? MAGNET.iconWaitMs : 0) };
+      if (!waitsForIcon) fly(fresh.id);
     });
+    return () => {
+      stop();
+      if (waiting.current) clearTimeout(waiting.current.timer);
+      waiting.current = null;
+    };
   }, [windowId]);
 
-  const sidebar = !topStrip && sidebarOpen ? sidebarWidth : 0;
-  const sidebarLeft = right ? size.width - sidebarWidth : 0;
-  const footer = { x: sidebarLeft + SIDEBAR_FOOTER_DOWNLOADS.left + SIDEBAR_FOOTER_DOWNLOADS.size / 2, y: size.height - SIDEBAR_FOOTER_DOWNLOADS.bottom - SIDEBAR_FOOTER_DOWNLOADS.size / 2 };
-  const target = topStrip
-    ? { x: size.width - MAGNET.topStripTarget.right, y: MAGNET.topStripTarget.y }
-    : addressBar
-      ? footer
-      : sidebarOpen
-        ? { x: sidebarLeft + sidebarWidth - MAGNET.sidebarTarget.right, y: lightsY }
-        : right
-          ? { x: size.width - MAGNET.closedTarget.x, y: MAGNET.closedTarget.y }
-          : MAGNET.closedTarget;
-  const start = { x: (right ? 0 : sidebar) + (size.width - sidebar) / 2, y: size.height * MAGNET.startShare };
   const icon = MAGNET.icon;
   const steps = [0, 0.25, 0.5, 0.75, 1];
-  const x = t.interpolate({ inputRange: steps, outputRange: steps.map((p) => start.x + (target.x - start.x) * p - icon / 2) });
-  const y = t.interpolate({ inputRange: steps, outputRange: steps.map((p) => start.y + (target.y - start.y) * p - Math.sin(Math.PI * p) * MAGNET.arc - icon / 2) });
+  const points = steps.map((p) => magnetPoint(path, p));
+  const x = t.interpolate({ inputRange: steps, outputRange: points.map((point) => point.x - icon / 2) });
+  const y = t.interpolate({ inputRange: steps, outputRange: points.map((point) => point.y - icon / 2) });
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill} onLayout={(e) => settleSize({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}>
@@ -319,10 +335,10 @@ export function DownloadMagnet() {
             width: icon,
             height: icon,
             opacity: t.interpolate({ inputRange: [0, 0.1, 0.8, 1], outputRange: [0, 1, 1, 0] }),
-            transform: [{ translateX: x }, { translateY: y }, { scale: t.interpolate({ inputRange: [0, 0.15, 1], outputRange: [0.6, 1.1, 0.3] }) }],
+            transform: [{ translateX: x }, { translateY: y }, { scale: t.interpolate({ inputRange: [0, 0.15, 1], outputRange: [0.6, MAGNET.peakScale, 0.3] }) }],
           }}
         >
-          <FileIcon path={flight.path} size={icon} />
+          <FileIcon path={flight.path} size={icon} onShown={() => fly(flight.id)} />
         </Animated.View>
       )}
     </View>

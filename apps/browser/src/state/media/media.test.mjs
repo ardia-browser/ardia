@@ -3,6 +3,7 @@ import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const { webviews } = await import("../../platform/webviews.ts");
 const media = await import("./media.ts");
+const { useLifecycle } = await import("../tabs/sleepingTabs.ts");
 
 const S = () => useBrowser.getState();
 const M = () => media.useMedia.getState();
@@ -298,6 +299,23 @@ test("a page's report moving back is counted, a loop's restart and the card's ow
 
   media.seekTo(b, M().sessions[b], 0);
   assert.deepEqual(positions(), { now_playing_loop_restarts: 0, media_position_rewinds: 0, media_reports_past_end: 0 }, "the card's own seek isn't a page report");
+});
+
+test("play on a sleeping tab wakes it through the shared reload with no argument", async () => {
+  S().hydrate({});
+  const w = S().createWindow({ url: "a.com" });
+  const b = S().newTab(w, { url: "b.com", background: true });
+  const calls = [];
+  webviews.set(b, { reload: async (...args) => void calls.push(["reload", args]), reloadToPlay: async () => void calls.push(["reloadToPlay"]), mediaCommand: async () => void calls.push(["mediaCommand"]) });
+  useLifecycle.setState({ discarded: { [b]: true } });
+  try {
+    media.mediaCommand(b, "play");
+    await tick();
+    assert.deepEqual(calls, [["reload", []]]);
+  } finally {
+    useLifecycle.setState({ discarded: {} });
+    webviews.delete(b);
+  }
 });
 
 async function playingInAnotherProfile(across) {

@@ -51,10 +51,10 @@ test("launch configuration is a complete synchronous copy with Linux test and pr
   const config = resolveHostModule(host, "ArdiaApp", "launchConfig")();
   assert.equal(Object.getPrototypeOf(config), Object.prototype);
   assert.equal(config.then, undefined);
-  assert.deepEqual(config, { dataDirectory: "/scratch/Ardia", configDirectory: "/scratch/config", background: true, isolated: true, testInstance: false, instance: { downloadsDir: "/downloads" }, switches: { newTabPrewarm: false, lazySidebarRows: false }, trace: [], test: {} });
+  assert.deepEqual(config, { dataDirectory: "/scratch/Ardia", configDirectory: "/scratch/config", background: true, isolated: true, testInstance: false, instance: { downloadsDir: "/downloads" }, switches: { newTabPrewarm: false, lazySidebarRows: false }, trace: [], test: {}, recoveredStart: false });
   config.switches.lazySidebarRows = true;
   assert.equal(hostLaunchConfig(host).switches.lazySidebarRows, false);
-  assert.deepEqual(Object.keys(hostLaunchConfig()).sort(), ["background", "configDirectory", "dataDirectory", "instance", "isolated", "switches", "test", "testInstance", "trace"].sort());
+  assert.deepEqual(Object.keys(hostLaunchConfig()).sort(), ["background", "configDirectory", "dataDirectory", "instance", "isolated", "recoveredStart", "switches", "test", "testInstance", "trace"].sort());
 });
 
 test("domain events deliver envelopes once and listener removal survives reuse and mutation", () => {

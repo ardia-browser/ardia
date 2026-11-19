@@ -1,0 +1,18 @@
+--- a/content/browser/media/session/media_session_impl.cc
++++ b/content/browser/media/session/media_session_impl.cc
+@@ -2437,4 +2437,15 @@
+          session->GetRoutedFrame() == contents->GetPrimaryMainFrame();
+ }
+ 
++// Ardia: whether the page itself handles |action| in the tab's routed media
++// session, unlike the actions Chrome adds for the players underneath; the
++// Windows host routes Ardia's media commands by it.
++CONTENT_EXPORT bool ArdiaWinPageHandlesMediaSessionAction(
++    WebContents* contents,
++    media_session::mojom::MediaSessionAction action) {
++  MediaSessionImpl* session =
++      contents ? MediaSessionImpl::FromWebContents(contents) : nullptr;
++  return session && session->ShouldRouteAction(action);
++}
++
+ }  // namespace content

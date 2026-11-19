@@ -15,6 +15,7 @@ import { Image, View } from "react-native";
 import { useTheme } from "../../ui/theme";
 import { addRemoteProfile, enterRecoveryPhrase, removeRemoteProfile, removeSyncedDevice, stopSync, useSync } from "../../../state/sync/engine";
 import type { RemoteProfile, SyncedDevice } from "../../../state/sync/syncDoc";
+import { STOP_WHILE_PAUSED, syncControls } from "../../../state/sync/syncControls";
 import { ProfileBadge } from "../../profiles/ProfileIcons";
 import { Group, Row } from "../Form";
 import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
@@ -333,14 +334,23 @@ export function showStopSync() {
 }
 
 function StopSheet() {
+  const status = useSync((s) => s.status);
+  const paused = useSync((s) => s.paused);
+  const controls = syncControls({ status, paused });
+  const [busy, setBusy] = useState(false);
+  const stop = async () => {
+    if (controls.stopOffersDelete) return showSettingsSheet(<DeleteDataSheet />);
+    setBusy(true);
+    await stopSync({ deleteData: false });
+    closeSettingsSheet();
+  };
+  const subtitle = `Syncing will stop on this device. To re-enable sync, you’ll need another device that is currently syncing, or the recovery phrase from your Recovery Kit. Everything on this ${PLATFORM_TERMS.computer} stays as it is.`;
   return (
     <Sheet size="s" onClose={closeSettingsSheet}>
-      <DialogTitle subtitle={`Syncing will stop on this device. To re-enable sync, you’ll need another device that is currently syncing, or the recovery phrase from your Recovery Kit. Everything on this ${PLATFORM_TERMS.computer} stays as it is.`}>
-        Stop Syncing This Device?
-      </DialogTitle>
-      <DialogActions leading={<Button title="Save Recovery Kit" onPress={() => showSettingsSheet(<RecoveryKitSheet />)} />}>
+      <DialogTitle subtitle={controls.stopOffersDelete ? subtitle : `${subtitle} ${STOP_WHILE_PAUSED}`}>Stop Syncing This Device?</DialogTitle>
+      <DialogActions leading={controls.stopOffersKit ? <Button title="Save Recovery Kit" onPress={() => showSettingsSheet(<RecoveryKitSheet />)} /> : undefined}>
         <Button title="Cancel" onPress={closeSettingsSheet} />
-        <Button title="Stop Syncing" kind="destructive" onPress={() => showSettingsSheet(<DeleteDataSheet />)} />
+        <Button title="Stop Syncing" kind="destructive" disabled={busy} onPress={() => void stop()} />
       </DialogActions>
     </Sheet>
   );

@@ -215,6 +215,7 @@ inline bool RemoveFile(std::filesystem::path const &path) noexcept {
 class DocumentStore {
  public:
   using Done = std::function<void(std::optional<std::string> const &)>;
+  using Landed = std::function<void(std::wstring const &name, size_t bytes, ULONGLONG milliseconds)>;
 
   static std::optional<std::filesystem::path> Url(std::string_view name) noexcept {
     std::wstring wide = Paths::Wide(name);
@@ -359,7 +360,7 @@ class DocumentStore {
     State().closed = true;
   }
 
-  static bool Flush(bool notifyWaiters = true) noexcept {
+  static bool Flush(bool notifyWaiters = true, Landed const &landed = nullptr) noexcept {
     std::vector<std::wstring> keys;
     {
       std::lock_guard<std::mutex> guard(State().mutex);
@@ -367,12 +368,19 @@ class DocumentStore {
     }
     for (auto const &key : keys) {
       std::optional<uint64_t> generation;
+      size_t bytes = 0;
       {
         std::lock_guard<std::mutex> guard(State().mutex);
         auto found = State().staged.find(key);
-        if (found != State().staged.end()) generation = found->second.generation;
+        if (found != State().staged.end()) {
+          generation = found->second.generation;
+          bytes = found->second.contents.size();
+        }
       }
-      if (generation) Land(key, *generation, FlushAttempt, notifyWaiters);
+      if (!generation) continue;
+      const ULONGLONG started = GetTickCount64();
+      Land(key, *generation, FlushAttempt, notifyWaiters);
+      if (landed) landed(key, bytes, GetTickCount64() - started);
     }
     std::lock_guard<std::mutex> guard(State().mutex);
     return State().staged.empty();

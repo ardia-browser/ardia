@@ -24,7 +24,7 @@ export type DragRegions = { rootTag: number; scale: number; nonClient: boolean; 
 export type SidebarEdgeWatch = { running: boolean; windows: string[] };
 
 export type AppWindowsOnWindows = {
-  quit(): Promise<void>;
+  quit(reason: "user" | "update"): Promise<void>;
   requestClose(id: string): Promise<void>;
   setPageFullScreen(windowId: string, on: boolean): Promise<unknown>;
   beginWindowDrag(rootTag: number): Promise<void>;
@@ -35,7 +35,10 @@ export type AppWindowsOnWindows = {
   debugSidebarEdgeWatch(): Promise<SidebarEdgeWatch | null>;
   debugWindowFade(id: string): Promise<WindowFade | null>;
   capturePage(windowId: string, x: number, y: number, width: number, height: number, scale: number): Promise<string>;
+  debugPageColors(windowId: string, x: number, y: number, width: number, height: number): Promise<PageColors | null>;
 };
+
+export type PageColors = { width: number; height: number; most: { color: string; share: number }[] };
 
 export type AppWindowsModule = WindowsNative & WindowControlsNative & AppWindowsOnWindows;
 

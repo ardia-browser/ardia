@@ -1,0 +1,63 @@
+--- a/chrome/browser/ui/views/frame/contents_web_view.cc
++++ b/chrome/browser/ui/views/frame/contents_web_view.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "chrome/browser/ui/views/frame/contents_web_view.h"
+ 
++#include <optional>
++
+ #include "base/debug/dump_without_crashing.h"
+ #include "build/build_config.h"
+ #include "chrome/browser/ui/color/chrome_color_id.h"
+@@ -32,6 +34,13 @@
+ #include "chrome/browser/actor/actor_util.h"  // nogncheck
+ #endif
+ 
++#if BUILDFLAG(IS_WIN)
++// Ardia: the Windows host (//ardia/win) gives a tab the app's colour for its
++// page area, behind the page and before its first frame.
++std::optional<SkColor> (*g_ardia_win_contents_background)(
++    content::WebContents* contents) = nullptr;
++#endif
++
+ DEFINE_CLASS_ELEMENT_IDENTIFIER_VALUE(ContentsWebView,
+                                       kContentsWebViewElementId);
+ 
+@@ -201,9 +210,21 @@
+ #endif
+ 
+ void ContentsWebView::UpdateBackgroundColor() {
+-  const SkColor color = GetColorProvider()->GetColor(
++  SkColor color = GetColorProvider()->GetColor(
+       is_letterboxing() ? kColorWebContentsBackgroundLetterboxing
+                         : kColorWebContentsBackground);
++#if BUILDFLAG(IS_WIN)
++  // Ardia: a tab the app gave a colour shows it here instead of the theme's.
++  bool ardia_colored = false;
++  if (g_ardia_win_contents_background && web_contents() &&
++      !is_letterboxing()) {
++    if (const std::optional<SkColor> ardia =
++            g_ardia_win_contents_background(web_contents())) {
++      color = *ardia;
++      ardia_colored = true;
++    }
++  }
++#endif
+   // `color` must be opaque, see RenderWidgetHostView::SetBackgroundColor() for
+   // details.
+   // TODO(crbug.com/456309057): Update this to be a CHECK.
+@@ -218,6 +239,14 @@
+   background_layer->SetColor(
+       SkColor4f::FromColor(background_visible_ ? color : SK_ColorTRANSPARENT));
+ 
++#if BUILDFLAG(IS_WIN)
++  // Ardia: //ardia/win sets that tab's page view colour itself; it is
++  // transparent while the prewarmed blank shows this layer through it.
++  if (ardia_colored) {
++    return;
++  }
++#endif
++
+   SafeInvoke(web_contents())
+       .Then(&content::WebContents::GetRenderWidgetHostView)
+       .Then(&content::RenderWidgetHostView::SetBackgroundColor,

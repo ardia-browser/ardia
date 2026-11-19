@@ -1,0 +1,35 @@
+--- a/chrome/browser/process_singleton_win.cc
++++ b/chrome/browser/process_singleton_win.cc
+@@ -42,6 +42,7 @@
+ #include "ui/base/l10n/l10n_util.h"
+ #include "ui/base/resource/scoped_startup_resource_bundle.h"
+ #include "ui/gfx/win/hwnd_util.h"
++#include "ardia/win/hooks.h"  // nogncheck
+ 
+ namespace {
+ 
+@@ -364,6 +365,13 @@
+           RUNNING_PROCESS_NOTIFY_ERROR);
+       return PROCESS_NONE;
+     case NotifyChromeResult::kWindowHung:
++      // Ardia: the Ardia that doesn't answer is quitting or flushing, never a
++      // wedged browser to clear away, so it is never killed: this launch reads
++      // the profile as in use, and //ardia/win waits for that process to end.
++      if (g_ardia_win_answers_hand_off) {
++        remote_window_ = NULL;
++        return PROFILE_IN_USE;
++      }
+       // Fall through and potentially terminate the hung browser.
+       break;
+   }
+@@ -423,6 +431,10 @@
+       return PROCESS_NONE;  // This is the single browser process.
+     }
+     ProcessSingleton::NotifyResult result = NotifyOtherProcess();
++    // Ardia: a hung Ardia is never retried into the kill above.
++    if (result == PROFILE_IN_USE) {
++      return result;
++    }
+     if (result == PROCESS_NOTIFIED || result == LOCK_ERROR) {
+       if (result == PROCESS_NOTIFIED) {
+         DEPRECATED_UMA_HISTOGRAM_MEDIUM_TIMES(

@@ -78,6 +78,7 @@ type OnboardingState = {
   sub: number;
   leaving: boolean;
   session: number;
+  atLaunch: boolean;
   tourAfter: boolean;
   redo: boolean;
   redoSource: BrowserSourceId | null;
@@ -107,6 +108,7 @@ export const useOnboarding = create<OnboardingState>()(() => ({
   sub: 0,
   leaving: false,
   session: 0,
+  atLaunch: false,
   tourAfter: false,
   redo: false,
   redoSource: null,
@@ -276,11 +278,11 @@ const FRESH = {
   prefill: "preset",
 } satisfies Partial<OnboardingState>;
 
-export function startOnboarding(windowId?: string | null, step: OnboardingStep = "intro") {
+export function startOnboarding(windowId?: string | null, step: OnboardingStep = "intro", atLaunch = false) {
   const id = resolveWindowId(useBrowser.getState(), windowId);
   if (!id) return;
   endToolTour();
-  useOnboarding.setState((s) => ({ ...FRESH, windowId: id, step, sub: 0, leaving: false, tourAfter: false, session: s.session + 1 }));
+  useOnboarding.setState((s) => ({ ...FRESH, windowId: id, step, sub: 0, leaving: false, tourAfter: false, session: s.session + 1, atLaunch }));
   save({ step, sub: 0, source: null, preset: "dia", picked: {} });
 }
 
@@ -298,6 +300,7 @@ export function redoOnboarding(windowId?: string | null) {
     leaving: false,
     tourAfter: false,
     session: s.session + 1,
+    atLaunch: false,
     redo: true,
     redoSource: source,
     source,
@@ -332,6 +335,7 @@ function resumeOnboarding(saved: Saved) {
     leaving: false,
     tourAfter: false,
     session: s.session + 1,
+    atLaunch: true,
   }));
   const next = activeSteps().find((s) => STEPS.indexOf(s) >= STEPS.indexOf(step)) ?? "outro";
   if (next !== step) return goToStep(next);
@@ -372,6 +376,6 @@ export function maybeStartOnboarding(): boolean {
   }
   if (__DEV__ && devTestValue("onboarding") !== "1") return false;
   save({ startedAt: Date.now() });
-  startOnboarding();
+  startOnboarding(null, "intro", true);
   return true;
 }

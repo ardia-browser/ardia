@@ -2,6 +2,7 @@
 
 #include "NativeModules.h"
 
+#include <cstdio>
 #include <thread>
 
 #include "Events.h"
@@ -111,7 +112,7 @@ struct WindowsModule {
 
   REACT_METHOD(replyToTerminate)
   void replyToTerminate(bool ok, Promise promise) noexcept {
-    OnUI(promise, [ok]() noexcept { WindowManager::Shared().ReplyToTerminate(ok); });
+    OnUI(promise, [ok]() noexcept { WindowManager::Shared().AnswerTerminate(ok); });
   }
 
   REACT_METHOD(beginWindowDrag)
@@ -122,6 +123,11 @@ struct WindowsModule {
   REACT_METHOD(pressDragArea)
   void pressDragArea(double rootTag, Promise promise) noexcept {
     OnUI(promise, [rootTag]() noexcept { WindowManager::Shared().PressDragArea(static_cast<int64_t>(rootTag)); });
+  }
+
+  REACT_METHOD(setSwipeArea)
+  void setSwipeArea(std::string id, std::string key, bool on, Promise promise) noexcept {
+    OnUI(promise, [id, key, on]() noexcept { WindowManager::Shared().SetSwipeArea(id, key, on); });
   }
 
   REACT_METHOD(setCaptionRegions)
@@ -189,14 +195,47 @@ struct WindowsModule {
     });
   }
 
+  REACT_METHOD(debugPageColors)
+  void debugPageColors(std::string id, double x, double y, double width, double height, winrt::Microsoft::ReactNative::ReactPromise<JSValue> promise) noexcept {
+    RunOnUI(m_context, [id, x, y, width, height, promise]() noexcept {
+      if (!WindowManager::Shared().DebugAvailable()) return promise.Resolve(JSValue{nullptr});
+      auto target = PageCapture::TargetIn(WindowManager::Shared().Hwnd(id), x, y, width, height, 1);
+      if (!target) return promise.Resolve(JSValue{nullptr});
+      try {
+        std::thread([target = *target, promise]() noexcept {
+          bool com = SUCCEEDED(CoInitializeEx(nullptr, COINIT_MULTITHREADED));
+          auto colors = PageCapture::CountColors(target, 8);
+          if (com) CoUninitialize();
+          if (!colors) return promise.Resolve(JSValue{nullptr});
+          winrt::Microsoft::ReactNative::JSValueArray most;
+          for (auto const &entry : colors->most) {
+            char hex[8]{};
+            snprintf(hex, sizeof(hex), "#%06X", static_cast<unsigned>(entry.rgb));
+            winrt::Microsoft::ReactNative::JSValueObject item;
+            item["color"] = std::string(hex);
+            item["share"] = entry.share;
+            most.push_back(std::move(item));
+          }
+          winrt::Microsoft::ReactNative::JSValueObject report;
+          report["width"] = static_cast<int64_t>(colors->width);
+          report["height"] = static_cast<int64_t>(colors->height);
+          report["most"] = std::move(most);
+          promise.Resolve(JSValue{std::move(report)});
+        }).detach();
+      } catch (...) {
+        promise.Resolve(JSValue{nullptr});
+      }
+    });
+  }
+
   REACT_METHOD(toggleMaximize)
   void toggleMaximize(double rootTag, Promise promise) noexcept {
     OnUI(promise, [rootTag]() noexcept { WindowManager::Shared().ToggleMaximize(static_cast<int64_t>(rootTag)); });
   }
 
   REACT_METHOD(quit)
-  void quit(Promise promise) noexcept {
-    OnUI(promise, []() noexcept { WindowManager::Shared().Quit(); });
+  void quit(std::string reason, Promise promise) noexcept {
+    OnUI(promise, [reason]() noexcept { WindowManager::Shared().Quit(reason); });
   }
 
  private:

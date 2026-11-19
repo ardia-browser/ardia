@@ -5,6 +5,7 @@
 #include <optional>
 
 #include "base/win/windows_types.h"
+#include "content/common/content_export.h"
 #include "ui/base/window_open_disposition.h"
 
 namespace base {
@@ -29,6 +30,8 @@ class RenderFrameHost;
 class WeakDocumentPtr;
 class WebContents;
 struct ContextMenuParams;
+
+CONTENT_EXPORT extern bool g_ardia_win_keep_media_session_players;
 }
 
 namespace url {
@@ -67,5 +70,11 @@ extern std::unique_ptr<RenderViewContextMenuBase> (*g_ardia_win_context_menu)(
 
 extern bool (*g_ardia_win_relaunched)(const base::CommandLine& command_line,
                                       const base::FilePath& cur_dir);
+
+enum class ArdiaHandOff { kTurnedAway, kTaken, kNotOurs };
+
+extern ArdiaHandOff (*g_ardia_win_answers_hand_off)(
+    const base::CommandLine& command_line,
+    const base::FilePath& current_directory);
 
 #endif

@@ -3,12 +3,14 @@
 #include <windows.h>
 
 #include <knownfolders.h>
-#include <share.h>
 #include <shlobj.h>
 #include <stdio.h>
 
+#include <algorithm>
 #include <cwctype>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "base/command_line.h"
 #include "base/files/file_path.h"
@@ -46,16 +48,33 @@ constexpr int kLockFilePollMs = 100;
 constexpr int kLockFileGraceMs = 2000;
 constexpr int kOwnerStartWaitMs = 10000;
 constexpr wchar_t kStartsFile[] = L"launch-starts.txt";
+constexpr wchar_t kRefusedStartsFile[] = L"launch-refused.txt";
+constexpr wchar_t kLastQuitFile[] = L"last-quit.json";
+constexpr int kMostRefusedStarts = 1000;
+constexpr int kLockFileFreePollMs = 50;
 constexpr wchar_t kLogFolder[] = L"Logs";
 constexpr wchar_t kLogFile[] = L"launch.log";
 constexpr wchar_t kPreviousLogFile[] = L"launch.previous.log";
+
+struct OwnerRecord {
+  DWORD process_id = 0;
+  DWORD reserved = 0;
+  uint64_t created = 0;
+};
 
 struct GuardState {
   HANDLE alive = nullptr;
   bool owns_alive = false;
   HANDLE exiting = nullptr;
+  HANDLE updating = nullptr;
+  HANDLE owner = nullptr;
+  std::wstring key;
   std::wstring exiting_name;
+  std::wstring chromium_user_data_dir;
+  std::vector<std::string> waiting_lines;
   bool settled = false;
+  bool became_browser = false;
+  bool turned_away = false;
   LaunchGuardFacts facts;
 };
 
@@ -183,13 +202,76 @@ void AppendLog(const std::string& line) {
   if (path.empty()) {
     return;
   }
-  FILE* file = _wfsopen(path.c_str(), L"ab", _SH_DENYNO);
-  if (!file) {
+  HANDLE file = ::CreateFileW(
+      path.c_str(), FILE_APPEND_DATA,
+      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+      OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+  if (file == INVALID_HANDLE_VALUE) {
     return;
   }
-  const std::string text = "engine 0 " + line + "\n";
-  fwrite(text.data(), 1, text.size(), file);
-  fclose(file);
+  const std::string text = LaunchLogLine(line);
+  DWORD wrote = 0;
+  ::WriteFile(file, text.data(), static_cast<DWORD>(text.size()), &wrote,
+              nullptr);
+  ::CloseHandle(file);
+}
+
+void NoteAfterRotation(const std::string& line) {
+  LOG(WARNING) << "Ardia " << line;
+  State().waiting_lines.push_back(line);
+}
+
+void WriteWaitingLines() {
+  std::vector<std::string> lines = std::move(State().waiting_lines);
+  State().waiting_lines.clear();
+  for (const std::string& line : lines) {
+    AppendLog(line);
+  }
+}
+
+uint64_t ProcessCreated(HANDLE process) {
+  FILETIME created = {};
+  FILETIME exited = {};
+  FILETIME kernel = {};
+  FILETIME user = {};
+  if (!::GetProcessTimes(process, &created, &exited, &kernel, &user)) {
+    return 0;
+  }
+  return (static_cast<uint64_t>(created.dwHighDateTime) << 32) |
+         created.dwLowDateTime;
+}
+
+std::wstring UpdatingName(const std::wstring& key) {
+  return L"Local\\ArdiaBrowser." + key + L".updating";
+}
+
+std::wstring OwnerName(const std::wstring& key) {
+  return L"Local\\ArdiaBrowser." + key + L".owner";
+}
+
+void PublishOwner() {
+  GuardState& state = State();
+  if (state.key.empty()) {
+    return;
+  }
+  if (!state.owner) {
+    state.owner = ::CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr,
+                                       PAGE_READWRITE, 0, sizeof(OwnerRecord),
+                                       OwnerName(state.key).c_str());
+  }
+  if (!state.owner) {
+    return;
+  }
+  void* view =
+      ::MapViewOfFile(state.owner, FILE_MAP_WRITE, 0, 0, sizeof(OwnerRecord));
+  if (!view) {
+    return;
+  }
+  OwnerRecord record;
+  record.process_id = ::GetCurrentProcessId();
+  record.created = ProcessCreated(::GetCurrentProcess());
+  *static_cast<OwnerRecord*>(view) = record;
+  ::UnmapViewOfFile(view);
 }
 
 bool Acquired(DWORD wait) {
@@ -253,13 +335,10 @@ bool WaitForStartingOwner(const std::wstring& chromium_user_data_dir) {
   const int waited =
       static_cast<int>((base::TimeTicks::Now() - started).InMilliseconds());
   if (waited >= kLockFilePollMs) {
-    const std::string line =
-        "launch guard: waited " + std::to_string(waited) +
-        " ms for the Ardia starting on this profile" +
-        (acquired ? std::string(", then took its place")
-                  : std::string(", then handed over to it"));
-    LOG(WARNING) << "Ardia " << line;
-    AppendLog(line);
+    NoteAfterRotation("launch guard: waited " + std::to_string(waited) +
+                      " ms for the Ardia starting on this profile" +
+                      (acquired ? std::string(", then took its place")
+                                : std::string(", then handed over to it")));
   }
   return acquired;
 }
@@ -268,6 +347,7 @@ bool WaitForExitingPredecessor(const std::wstring& key,
                                const std::wstring& chromium_user_data_dir) {
   GuardState& state = State();
   const std::wstring alive_name = L"Local\\ArdiaBrowser." + key + L".alive";
+  state.key = key;
   state.exiting_name = L"Local\\ArdiaBrowser." + key + L".exiting";
   state.alive = ::CreateMutexW(nullptr, FALSE, alive_name.c_str());
   if (!state.alive) {
@@ -325,8 +405,7 @@ bool WaitForExitingPredecessor(const std::wstring& key,
     line = "launch guard: waited " + std::to_string(waited) +
            " ms for the previous Ardia on this profile to finish exiting";
   }
-  LOG(WARNING) << "Ardia " << line;
-  AppendLog(line);
+  NoteAfterRotation(line);
   if (stayed) {
     return WaitForStartingOwner(chromium_user_data_dir);
   }
@@ -392,6 +471,12 @@ bool HandsOverToDeElevatedCopy(const base::CommandLine& command_line) {
 void GuardBrowserLaunch(const std::wstring& chromium_user_data_dir,
                         base::CommandLine* command_line) {
   GuardState& state = State();
+  state.chromium_user_data_dir = Trimmed(chromium_user_data_dir);
+  state.key = ProfileKey(chromium_user_data_dir);
+  if (UpdateUnderWay()) {
+    state.facts.update_under_way = true;
+    return;
+  }
   const bool primary =
       WaitForExitingPredecessor(ProfileKey(chromium_user_data_dir),
                                 chromium_user_data_dir);
@@ -403,10 +488,15 @@ void GuardBrowserLaunch(const std::wstring& chromium_user_data_dir,
     state.facts.predecessor_wait_ms = inherited;
   }
   command_line->RemoveSwitch(kWaitedForPreviousSwitch);
+  const bool de_elevates = HandsOverToDeElevatedCopy(*command_line);
+  if (de_elevates && state.facts.restarted_after_refusal) {
+    command_line->AppendSwitch(kRestartedAfterRefusalSwitch);
+  }
   if (!primary) {
+    WriteWaitingLines();
     return;
   }
-  if (HandsOverToDeElevatedCopy(*command_line)) {
+  if (de_elevates) {
     if (state.owns_alive) {
       ::ReleaseMutex(state.alive);
       state.owns_alive = false;
@@ -416,9 +506,11 @@ void GuardBrowserLaunch(const std::wstring& chromium_user_data_dir,
           kWaitedForPreviousSwitch,
           base::NumberToString(state.facts.predecessor_wait_ms));
     }
+    WriteWaitingLines();
     return;
   }
   if (!state.owns_alive) {
+    WriteWaitingLines();
     const std::string line =
         "launch guard: this launch doesn't own the profile's guard; this "
         "start is not counted and nothing is recovered";
@@ -427,6 +519,7 @@ void GuardBrowserLaunch(const std::wstring& chromium_user_data_dir,
     return;
   }
   if (ProfileHeldByAnotherBrowser(chromium_user_data_dir)) {
+    WriteWaitingLines();
     state.facts.profile_held_by_another = true;
     const std::string line =
         "launch guard: another Ardia still holds this profile; this start "
@@ -436,6 +529,7 @@ void GuardBrowserLaunch(const std::wstring& chromium_user_data_dir,
     return;
   }
   RotateLaunchLog();
+  WriteWaitingLines();
   const std::wstring data_dir = AppDataDirectory();
   if (data_dir.empty()) {
     return;
@@ -482,6 +576,7 @@ void ClaimGuard() {
   if (Acquired(::WaitForSingleObject(state.alive, 0))) {
     state.owns_alive = true;
     ResetLeftoverExiting(state.exiting_name);
+    PublishOwner();
   }
 }
 
@@ -489,14 +584,76 @@ bool OwnsGuard() {
   return State().owns_alive;
 }
 
-void ClearExiting() {
+void PublishOwnerIfOwned() {
+  if (State().owns_alive) {
+    PublishOwner();
+  }
+}
+
+void LetGoOfGuard() {
   GuardState& state = State();
-  if (!state.exiting) {
+  if (!state.owns_alive) {
     return;
   }
-  ::ResetEvent(state.exiting);
-  ::CloseHandle(state.exiting);
-  state.exiting = nullptr;
+  ::ReleaseMutex(state.alive);
+  state.owns_alive = false;
+}
+
+void MarkUpdating() {
+  GuardState& state = State();
+  if (state.updating || state.key.empty()) {
+    return;
+  }
+  state.updating =
+      ::CreateEventW(nullptr, TRUE, TRUE, UpdatingName(state.key).c_str());
+  if (state.updating) {
+    ::SetEvent(state.updating);
+  }
+}
+
+bool UpdateUnderWay() {
+  const GuardState& state = State();
+  if (state.key.empty()) {
+    return false;
+  }
+  HANDLE updating =
+      ::OpenEventW(SYNCHRONIZE, FALSE, UpdatingName(state.key).c_str());
+  if (!updating) {
+    return false;
+  }
+  const bool set = ::WaitForSingleObject(updating, 0) == WAIT_OBJECT_0;
+  ::CloseHandle(updating);
+  return set;
+}
+
+void NoteBecameBrowser() {
+  State().became_browser = true;
+}
+
+void NoteTurnedAway() {
+  State().turned_away = true;
+}
+
+std::string LaunchLogLine(const std::string& text) {
+  const GuardState& state = State();
+  if ((state.owns_alive || state.became_browser) && !state.turned_away) {
+    return "engine 0 " + text + "\n";
+  }
+  FILETIME now = {};
+  ::GetSystemTimeAsFileTime(&now);
+  const uint64_t now_ticks =
+      (static_cast<uint64_t>(now.dwHighDateTime) << 32) | now.dwLowDateTime;
+  const uint64_t created_ticks = ProcessCreated(::GetCurrentProcess());
+  const uint64_t since_start =
+      created_ticks && now_ticks > created_ticks
+          ? (now_ticks - created_ticks) / 10000
+          : 0;
+  return "refused " + std::to_string(since_start) + " pid=" +
+         std::to_string(::GetCurrentProcessId()) + " " + text + "\n";
+}
+
+void NoteRestartedAfterRefusal() {
+  State().facts.restarted_after_refusal = true;
 }
 
 void MarkStartSettled() {
@@ -513,6 +670,142 @@ void MarkStartSettled() {
 
 const LaunchGuardFacts& GuardFacts() {
   return State().facts;
+}
+
+bool FindQuittingOwner(QuittingOwner* owner) {
+  GuardState& state = State();
+  *owner = QuittingOwner();
+  if (state.key.empty()) {
+    return false;
+  }
+  HANDLE mapping =
+      ::OpenFileMappingW(FILE_MAP_READ, FALSE, OwnerName(state.key).c_str());
+  if (!mapping) {
+    return false;
+  }
+  OwnerRecord record;
+  if (const void* view =
+          ::MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, sizeof(OwnerRecord))) {
+    record = *static_cast<const OwnerRecord*>(view);
+    ::UnmapViewOfFile(view);
+  }
+  ::CloseHandle(mapping);
+  if (!record.process_id || record.process_id == ::GetCurrentProcessId()) {
+    return false;
+  }
+  HANDLE process = ::OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION,
+                                 FALSE, record.process_id);
+  if (!process) {
+    return false;
+  }
+  if (ProcessCreated(process) != record.created) {
+    ::CloseHandle(process);
+    return false;
+  }
+  owner->process = process;
+  owner->process_id = record.process_id;
+  HANDLE exiting =
+      ::OpenEventW(SYNCHRONIZE, FALSE, state.exiting_name.c_str());
+  if (exiting) {
+    owner->exiting = ::WaitForSingleObject(exiting, 0) == WAIT_OBJECT_0;
+    ::CloseHandle(exiting);
+  }
+  return true;
+}
+
+bool WaitForOwnerToEnd(const QuittingOwner& owner,
+                       int budget_ms,
+                       int* waited_ms) {
+  *waited_ms = 0;
+  if (!owner.process) {
+    return true;
+  }
+  const base::TimeTicks started = base::TimeTicks::Now();
+  const DWORD ended = ::WaitForSingleObject(
+      owner.process, static_cast<DWORD>(budget_ms < 0 ? 0 : budget_ms));
+  *waited_ms =
+      static_cast<int>((base::TimeTicks::Now() - started).InMilliseconds());
+  return ended == WAIT_OBJECT_0;
+}
+
+void CloseOwner(QuittingOwner* owner) {
+  if (owner->process) {
+    ::CloseHandle(owner->process);
+  }
+  *owner = QuittingOwner();
+}
+
+bool WaitForLockFileFree(int most_ms) {
+  const std::wstring& folder = State().chromium_user_data_dir;
+  if (folder.empty()) {
+    return true;
+  }
+  const std::wstring lock = ChromiumLockFile(folder);
+  for (int waited = 0;; waited += kLockFileFreePollMs) {
+    if (!LockFileHeld(lock)) {
+      return true;
+    }
+    if (waited >= most_ms) {
+      return false;
+    }
+    ::Sleep(kLockFileFreePollMs);
+  }
+}
+
+void CountRefusedStart() {
+  const std::wstring data_dir = AppDataDirectory();
+  if (data_dir.empty()) {
+    return;
+  }
+  ::CreateDirectoryW(data_dir.c_str(), nullptr);
+  const std::wstring path = Joined(data_dir, kRefusedStartsFile);
+  const int recorded = ReadUnfinishedStarts(path);
+  WriteUnfinishedStarts(path, std::min(recorded + 1, kMostRefusedStarts));
+}
+
+int TakeRefusedStarts() {
+  const std::wstring data_dir = AppDataDirectory();
+  if (data_dir.empty()) {
+    return 0;
+  }
+  const std::wstring path = Joined(data_dir, kRefusedStartsFile);
+  const int recorded = ReadUnfinishedStarts(path);
+  if (recorded > 0) {
+    ::DeleteFileW(path.c_str());
+  }
+  return std::min(recorded, kMostRefusedStarts);
+}
+
+void SaveLastQuit(const std::string& json) {
+  const std::wstring data_dir = AppDataDirectory();
+  if (data_dir.empty()) {
+    return;
+  }
+  ::CreateDirectoryW(data_dir.c_str(), nullptr);
+  const std::wstring path = Joined(data_dir, kLastQuitFile);
+  const std::wstring temp = path + L".tmp";
+  FILE* file = nullptr;
+  if (_wfopen_s(&file, temp.c_str(), L"wb") != 0 || !file) {
+    return;
+  }
+  fwrite(json.data(), 1, json.size(), file);
+  fclose(file);
+  ::MoveFileExW(temp.c_str(), path.c_str(),
+                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+}
+
+std::string TakeLastQuit() {
+  const std::wstring data_dir = AppDataDirectory();
+  if (data_dir.empty()) {
+    return std::string();
+  }
+  const std::wstring path = Joined(data_dir, kLastQuitFile);
+  std::string json;
+  if (!base::ReadFileToStringWithMaxSize(base::FilePath(path), &json, 4096)) {
+    json.clear();
+  }
+  ::DeleteFileW(path.c_str());
+  return json;
 }
 
 }

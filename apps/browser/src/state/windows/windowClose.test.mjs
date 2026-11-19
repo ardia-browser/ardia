@@ -316,7 +316,7 @@ test("Settings and Import closes are decided one at a time, so two at once can't
   assert.equal(windows.open.has("settings"), false);
   assert.equal(windows.open.has("import"), false);
   const close = readFileSync(new URL("./windowClose.ts", import.meta.url), "utf8");
-  assert.match(close, /const closing = windowsWithoutTabsClosing\.then\(async \(\) => \{\n\s+if \(\(await askBeforeQuitting\(windowId\)\) === "cancelled"\) return;\n\s+onceAgreed\?\.\(\);\n\s+startClosingWindow\(windowId\);/);
+  assert.match(close, /const closing = windowsWithoutTabsClosing\.then\(async \(\) => \{\n\s+if \(\(await askBeforeQuitting\(windowId, confirm, \{ consent \}\)\) === "cancelled"\) return;\n\s+onceAgreed\?\.\(\);\n\s+startClosingWindow\(windowId\);/);
 });
 
 test("the Windows self-check closes Settings, Import and a pop-up the ways users and pages do, and ends by closing its last window", () => {

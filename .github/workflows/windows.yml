@@ -325,7 +325,7 @@ jobs:
     needs: [gate, identity, javascript, app]
     if: needs.gate.outputs.run == 'true'
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     permissions:
       contents: write
     env:
@@ -388,6 +388,10 @@ jobs:
         if: env.COMPILED == 'true' && env.PART == 'launch'
         shell: pwsh
         run: scripts/windows/rebundle.ps1 -App $env:APP -Hermes $env:HERMES -Javascript "${{ runner.temp }}/javascript" -Verify
+      - name: The Hermes pin holds
+        if: env.PART == 'launch'
+        shell: pwsh
+        run: scripts/windows/hermes-pin-check.ps1 -App $env:APP -Hermes $env:HERMES -Cpu $env:SLUG -GeneratorRuns $(if ($env:SLUG -eq 'x64') { 5 } else { 0 })
       - if: env.PART == 'launch'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
@@ -444,7 +448,7 @@ jobs:
       - name: Close and reopen the installed app
         id: relaunch
         if: ${{ !cancelled() && steps.installer.outcome == 'success' }}
-        timeout-minutes: 15
+        timeout-minutes: 22
         shell: pwsh
         run: |
           scripts/windows/relaunch-check.ps1 -Setup "${{ runner.temp }}/installer/Ardia-Setup-$env:SLUG.exe" -Out "${{ runner.temp }}/relaunch"
@@ -454,6 +458,21 @@ jobs:
         with:
           name: relaunch-${{ env.SLUG }}
           path: ${{ runner.temp }}/relaunch
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Pause Sync on a recovered start
+        id: sync-pause
+        if: ${{ !cancelled() && steps.installer.outcome == 'success' }}
+        timeout-minutes: 20
+        shell: pwsh
+        run: |
+          scripts/windows/sync-pause-check.ps1 -Setup "${{ runner.temp }}/installer/Ardia-Setup-$env:SLUG.exe" -Out "${{ runner.temp }}/sync-pause" -SettleCheck:($env:FULL -eq 'true')
+          if (Test-Path "${{ runner.temp }}/sync-pause/sync-pause.md") { "### Sync on a recovered start ($env:SLUG)" >> $env:GITHUB_STEP_SUMMARY; Get-Content "${{ runner.temp }}/sync-pause/sync-pause.md" | ForEach-Object { "- $_" } >> $env:GITHUB_STEP_SUMMARY }
+      - if: ${{ !cancelled() && steps.sync-pause.outcome != 'skipped' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: sync-pause-${{ env.SLUG }}
+          path: ${{ runner.temp }}/sync-pause
           if-no-files-found: ignore
           retention-days: 14
       - name: Name it for a release
@@ -479,7 +498,7 @@ jobs:
           retention-days: 14
       - name: Launch it with the engine
         if: ${{ !cancelled() && steps.engine.outcome == 'success' }}
-        timeout-minutes: 12
+        timeout-minutes: 20
         shell: pwsh
         run: scripts/windows/launch-smoke.ps1 -App "${{ runner.temp }}/Ardia/Ardia.exe" -Out "${{ runner.temp }}/launch-engine" -Part $env:PART -NoInput:($env:NO_INPUT -eq 'true')
       - name: Tour the pages
@@ -488,7 +507,7 @@ jobs:
         timeout-minutes: 20
         shell: pwsh
         run: |
-          scripts/windows/tour.ps1 -App "${{ runner.temp }}/Ardia/Ardia.exe" -Out "${{ runner.temp }}/tour-engine" -Only pages,peek,peek-dark,peek-tabs,peek-layouts
+          scripts/windows/tour.ps1 -App "${{ runner.temp }}/Ardia/Ardia.exe" -Out "${{ runner.temp }}/tour-engine" -Only pages,peek,peek-dark,peek-tabs,peek-layouts,quit-downloads,download-flight,private-pages
           if (Test-Path "${{ runner.temp }}/tour-engine/tour.md") { Get-Content "${{ runner.temp }}/tour-engine/tour.md" >> $env:GITHUB_STEP_SUMMARY }
       - name: Tour the first run
         if: ${{ !cancelled() && env.SLUG == 'x64' && env.PART == 'launch' && env.FULL == 'true' && steps.engine.outcome == 'success' }}

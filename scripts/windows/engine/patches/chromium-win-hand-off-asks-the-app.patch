@@ -1,0 +1,43 @@
+--- a/chrome/browser/chrome_browser_main.cc
++++ b/chrome/browser/chrome_browser_main.cc
+@@ -358,7 +358,19 @@
+ #include "chrome/browser/optimization_guide/model_execution/optimization_guide_global_state.h"
+ #include "components/component_updater/component_updater_service.h"
+ #endif
++
++#if BUILDFLAG(IS_WIN)
++#include "ardia/win/hooks.h"  // nogncheck
+ 
++// Ardia: set by //ardia/win. It answers a launch inside the window message
++// whose reply the launching process reads: turned away (false), taken (true:
++// //ardia/win delivers it with its own task, so no taken launch waits on
++// Chromium's posted callback), or not ours (Chromium's own path below).
++ArdiaHandOff (*g_ardia_win_answers_hand_off)(
++    const base::CommandLine& command_line,
++    const base::FilePath& current_directory) = nullptr;
++#endif
++
+ namespace {
+ 
+ #if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX) || \
+@@ -579,6 +591,20 @@
+ bool ProcessSingletonNotificationCallback(
+     base::CommandLine command_line,
+     const base::FilePath& current_directory) {
++#if BUILDFLAG(IS_WIN)
++  // Ardia: first, so Chromium's own drops below don't apply to a launch the
++  // app answers; an update's quit takes and drops one even while it shuts down.
++  if (g_ardia_win_answers_hand_off) {
++    switch (g_ardia_win_answers_hand_off(command_line, current_directory)) {
++      case ArdiaHandOff::kTurnedAway:
++        return false;
++      case ArdiaHandOff::kTaken:
++        return true;
++      case ArdiaHandOff::kNotOurs:
++        break;
++    }
++  }
++#endif
+   // Drop the request if the browser process is already shutting down.
+   // Note that we're going to post an async task below. Even if the browser
+   // process isn't shutting down right now, it could be by the time the task

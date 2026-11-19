@@ -55,6 +55,7 @@ export function ProfileSwipeArea({ surface, style, pageWidth }: { surface: "side
       canSwipeForward={next}
       tracksUnavailableDirections={multiple}
       isPager={multiple}
+      wheelPages={surface === "sidebar"}
       onSwipe={onSwipe}
       nativePager={nativePager}
       onPagerPosition={nativePager && onPagerPosition}

@@ -92,6 +92,7 @@
       "setCommandScrollZoom",
       "setLittleArdiaOpensNewTabLinks",
       "setAutoPictureInPicture",
+      "setPictureInPictureButton",
       "setVideoUpscaling",
       "setVideoUpscalingTestConditions",
       "takeContentDrift",

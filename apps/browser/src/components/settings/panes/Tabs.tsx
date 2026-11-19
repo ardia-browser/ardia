@@ -160,6 +160,7 @@ function TabsAndTopAppsSection() {
         <SettingToggle anchor="tabs.showTabHoverMenu" />
         <SettingToggle anchor="tabs.showFullUrlInTabHoverMenu" />
         <SettingToggle anchor="tabs.autoPictureInPicture" />
+        <SettingToggle anchor="tabs.pictureInPictureButton" />
         <SettingToggle anchor="tabs.playingNowAcrossProfiles" />
         <SettingToggle anchor="tabs.videoUpscaling" />
       </Group>

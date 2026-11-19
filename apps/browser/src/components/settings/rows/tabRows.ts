@@ -95,6 +95,12 @@ export const tabRows = {
           description: "Videos and calls pop out when you switch tabs or leave the window.",
           keywords: ["pip", "video", "floating", "mini player"],
         },
+        pictureInPictureButton: {
+          title: "Picture in Picture button on videos",
+          description: "Point at a video to show a button that pops it out.",
+          keywords: ["pip button", "video button", "pop out", "overlay"],
+          shown: () => PLATFORM_FEATURES.pictureInPictureButton,
+        },
         playingNowAcrossProfiles: {
           title: "Keep Playing now across profiles",
           explained: true,

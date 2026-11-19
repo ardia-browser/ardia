@@ -628,6 +628,161 @@
   addEventListener("resize", () => eyeField && requestAnimationFrame(placeEye));
   addEventListener("pagehide", conceal);
 
+  const PIP_SIZE = 32;
+  const PIP_IDLE_MS = 2500;
+  const PIP_SHADOW_SEARCH_MS = 200;
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const svgNode = (tag, attrs) => {
+    const el = document.createElementNS(SVG_NS, tag);
+    for (const name in attrs) el.setAttribute(name, attrs[name]);
+    return el;
+  };
+  const pipGlyph = () => {
+    const svg = svgNode("svg", { viewBox: "0 0 16 16", width: "16", height: "16", fill: "none", stroke: "currentColor", "stroke-width": "1.35", "stroke-linecap": "round", "stroke-linejoin": "round" });
+    svg.append(
+      svgNode("rect", { x: "1.5", y: "2.5", width: "13", height: "11", rx: "2" }),
+      svgNode("rect", { x: "8", y: "8", width: "5", height: "3.5", rx: "1", fill: "currentColor", stroke: "none" }),
+    );
+    return svg;
+  };
+  const pageVideos = document.getElementsByTagName("video");
+  let pipButtonOn = false;
+  let pipHost = null;
+  let pipButton = null;
+  let pipVideo = null;
+  let pipIdle = 0;
+  let pipPoint = null;
+  let pipShadowSearchAt = -Infinity;
+  const pipRefused = new WeakSet();
+  const pageAddress = (href) => href.split("#")[0];
+  const leadsAway = (a) => !!a && /^https?:/.test(a.href) && pageAddress(a.href) !== pageAddress(location.href);
+  const insideLink = (el) => {
+    for (let n = el; n; n = n.getRootNode().host) if (leadsAway(n.closest("a[href]"))) return true;
+    return false;
+  };
+  const pipFits = (v, r) =>
+    document.pictureInPictureEnabled && v.readyState > 0 && r.width >= 200 && r.height >= 112 && !insideLink(v);
+  const videoUnder = (videos, x, y) => {
+    for (let i = videos.length - 1; i >= 0; i--) {
+      const v = videos[i];
+      const r = v.getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom && pipFits(v, r)) return v;
+    }
+    return null;
+  };
+  const shadowVideoAt = (root, x, y, seen) => {
+    for (const el of root.elementsFromPoint(x, y)) {
+      const shadow = el.shadowRoot;
+      if (!shadow || seen.has(shadow)) continue;
+      seen.add(shadow);
+      const v = videoUnder(shadow.querySelectorAll("video"), x, y) || (seen.size < 16 && shadowVideoAt(shadow, x, y, seen));
+      if (v) return v;
+    }
+    return null;
+  };
+  const shadowVideoAtMostEvery = (x, y) => {
+    const now = performance.now();
+    if (now - pipShadowSearchAt < PIP_SHADOW_SEARCH_MS) return pipVideo && videoUnder([pipVideo], x, y);
+    pipShadowSearchAt = now;
+    return shadowVideoAt(document, x, y, new Set());
+  };
+  const videoAt = (x, y) => videoUnder(pageVideos, x, y) || shadowVideoAtMostEvery(x, y);
+  const inPictureInPicture = (v) => v.getRootNode().pictureInPictureElement === v;
+  const placePip = () => {
+    if (!pipHost || !pipVideo) return;
+    const r = pipVideo.getBoundingClientRect();
+    const top = Math.max(r.top, 0);
+    const bottom = Math.min(r.bottom, innerHeight);
+    const right = Math.min(r.right, innerWidth);
+    const inset = Math.max(8, Math.min(16, r.width * 0.02));
+    if (!pipVideo.isConnected || bottom - top < PIP_SIZE || right - Math.max(r.left, 0) < PIP_SIZE + inset) return hidePip();
+    pipHost.style.left = right - inset - PIP_SIZE + "px";
+    pipHost.style.top = top + (bottom - top) * 0.6 - PIP_SIZE / 2 + "px";
+  };
+  const hidePip = () => {
+    clearTimeout(pipIdle);
+    if (pipHost) pipHost.style.display = "none";
+    pipVideo = null;
+  };
+  const idlePip = () => (pipHost && pipHost.matches(":hover") ? (pipIdle = setTimeout(idlePip, PIP_IDLE_MS)) : hidePip());
+  const ensurePip = () => {
+    if (pipHost && pipHost.isConnected) return;
+    pipHost = document.createElement("ardia-pip");
+    pipHost.style.cssText = "all:initial;position:fixed;z-index:2147483647;display:none;";
+    const root = pipHost.attachShadow({ mode: "closed" });
+    const style = document.createElement("style");
+    style.textContent =
+      "button{all:initial;box-sizing:border-box;display:flex;align-items:center;justify-content:center;width:" + PIP_SIZE + "px;height:" + PIP_SIZE + "px;" +
+      "border-radius:8px;color:#fff;background:rgba(0,0,0,.5);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);" +
+      "box-shadow:0 0 0 .5px rgba(255,255,255,.18) inset,0 1px 4px rgba(0,0,0,.3);cursor:default;opacity:.9;transition:opacity .12s,background-color .12s}" +
+      "button:hover{opacity:1;background:rgba(0,0,0,.7)}button:active{background:rgba(0,0,0,.82)}";
+    pipButton = document.createElement("button");
+    pipButton.type = "button";
+    pipButton.tabIndex = -1;
+    pipButton.append(pipGlyph());
+    root.append(style, pipButton);
+    pipButton.addEventListener("mousedown", (e) => e.preventDefault());
+    for (const type of ["pointerdown", "pointerup", "mousedown", "mouseup"]) pipButton.addEventListener(type, (e) => e.stopPropagation());
+    pipButton.addEventListener(
+      "click",
+      guard((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const v = pipVideo;
+        hidePip();
+        if (!v) return;
+        send("pipButtonPress", {});
+        if (inPictureInPicture(v)) document.exitPictureInPicture().catch(() => {});
+        else {
+          v.disablePictureInPicture = false;
+          v.requestPictureInPicture().catch(() => {
+            pipRefused.add(v);
+            showPip(v);
+          });
+        }
+      }),
+    );
+    document.documentElement.appendChild(pipHost);
+  };
+  const showPip = (v) => {
+    ensurePip();
+    pipVideo = v;
+    const refused = pipRefused.has(v);
+    pipButton.title = refused ? "This video can't play in Picture in Picture" : inPictureInPicture(v) ? "Exit Picture in Picture" : "Picture in Picture";
+    pipButton.style.opacity = refused ? ".4" : "";
+    pipHost.style.display = "block";
+    placePip();
+    clearTimeout(pipIdle);
+    pipIdle = setTimeout(idlePip, PIP_IDLE_MS);
+  };
+  const trackPip = guard(() => {
+    const p = pipPoint;
+    pipPoint = null;
+    if (!pipButtonOn || !p) return;
+    const v = document.fullscreenElement ? null : videoAt(p.x, p.y);
+    if (v) showPip(v);
+    else if (pipVideo) hidePip();
+  });
+  const onPipPointer = (e) => {
+    if (!pipPoint) requestAnimationFrame(trackPip);
+    pipPoint = { x: e.clientX, y: e.clientY };
+  };
+  const placePipGuarded = guard(placePip);
+  const onPipScroll = () => pipVideo && requestAnimationFrame(placePipGuarded);
+  const onPipOut = (e) => !e.relatedTarget && hidePip();
+  handlers.pipButton = (on) => {
+    on = on === true;
+    if (on === pipButtonOn) return;
+    pipButtonOn = on;
+    const toggle = on ? addEventListener : removeEventListener;
+    toggle("pointermove", onPipPointer, { passive: true, capture: true });
+    toggle("scroll", onPipScroll, { passive: true, capture: true });
+    toggle("resize", onPipScroll);
+    toggle("mouseout", onPipOut, true);
+    toggle("fullscreenchange", hidePip, true);
+    if (!on) hidePip();
+  };
+
   let pageNotification = null;
   const installNotifications = () => {
     const NativeNotification = window.Notification;
@@ -1285,6 +1440,7 @@
     else restoreDisplayMedia();
     if (config.fieldTiming) setFieldTiming(true);
     if (typeof config.selectionPopover === "boolean" && handlers.selectionPopover) handlers.selectionPopover(config.selectionPopover);
+    if (config.pipButton) handlers.pipButton(true);
   };
   send("hello", { top: isTop, url: location.href });
   const tellExclusive = guard(() => send("exclusive", { held: !!(document.pointerLockElement || document.fullscreenElement) }));

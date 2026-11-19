@@ -31,6 +31,7 @@ BOOL gDisplayMediaPicker = YES;
 }
 
 static BOOL gSelectionPopover = YES;
+static BOOL gPictureInPictureButton = NO;
 static BOOL gBlockAutoplayEverywhere = NO;
 static char kScriptFramesKey;
 
@@ -67,6 +68,7 @@ void AnswerHello(ArdiaCoreTab *tab, NSString *profile, NSString *frameId, BOOL m
     if (gDisplayMediaPicker) config[@"displayMediaPicker"] = @YES;
     if (main && ArdiaFieldTimingEnabled()) config[@"fieldTiming"] = @YES;
     if (main) config[@"selectionPopover"] = @(gSelectionPopover);
+    if (gPictureInPictureButton) config[@"pipButton"] = @YES;
     config[@"peek"] = gPeekModifier;
     config[@"split"] = SplitLinkModifier();
     config[@"peekOtherSites"] = @([ArdiaTabRegistry viewForTab:to].peeksLinksToOtherSites);
@@ -109,6 +111,14 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
   if (enabled == gSelectionPopover) return;
   gSelectionPopover = enabled;
   for (ArdiaWebView *view in LiveViews().allObjects) [view pushSelectionPopover];
+}
+
++ (void)setPictureInPictureButtonEnabled:(BOOL)enabled {
+  if (enabled == gPictureInPictureButton) return;
+  gPictureInPictureButton = enabled;
+  NSString *json = enabled ? @"true" : @"false";
+  for (ArdiaWebView *view in LiveViews().allObjects)
+    for (NSString *frameId in [ScriptFramesOf(view->_tab) copy]) [view callFrame:frameId kind:@"pipButton" json:json];
 }
 
 - (void)tab:(ArdiaCoreTab *)tab
@@ -213,6 +223,8 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
     if (!Finite(dict, @"scale", &scale) || scale <= 0) return;
     _reports.pinchScale = MIN(scale, 100);
     [self emitZoom];
+  } else if ([kind isEqualToString:@"pipButtonPress"]) {
+    [self emit:@"pictureInPictureButtonPress" payload:@{}];
   } else if ([kind isEqualToString:@"pipTrace"]) {
     if (TracingPictureInPicture())
       [_tab tracePictureInPicture:[NSString stringWithFormat:@"page (%@): %@", main ? @"main frame" : @"subframe", JSONText(dict ?: @{})]

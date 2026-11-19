@@ -162,6 +162,45 @@ test("closing a pinned tab selects the regular tab the window showed last, not t
   assert.ok(S().tabs[q].page.nav, "the other pinned tab keeps its page");
 });
 
+test("closing a pinned row shows the pinned row used before it while its page is loaded, even over a regular tab used since", () => {
+  reset();
+  const [w, a, b, n] = setup("a", "b", "n");
+  S().pinTabs([a, b], true, true);
+  S().activate(b);
+  S().activate(n);
+  S().activate(a);
+  S().closeTab(a);
+  assert.equal(model.activeTabId(S(), w), b);
+  assert.ok(!S().tabs[a].page.nav, "the closed row is unloaded");
+});
+
+test("closing a pinned row with no other loaded row goes to the regular tab", () => {
+  reset();
+  const [w, a, b, n] = setup("a", "b", "n");
+  S().pinTabs([a, b], true, true);
+  S().activate(b);
+  S().activate(n);
+  S().activate(a);
+  S().closeTab(b);
+  assert.ok(!S().tabs[b].page.nav, "the other row is unloaded first");
+  S().closeTab(a);
+  assert.equal(model.activeTabId(S(), w), n);
+  assert.ok(!S().tabs[b].page.nav, "the unloaded row stays unloaded");
+});
+
+test("closing a pane of a pinned split unloads both panes and shows the other loaded row, not a regular tab", () => {
+  reset();
+  const [w, a, b, n, r] = setup("a", "b", "n", "r");
+  S().pinTabs([a, b], true, true);
+  S().createSplit([a, n]);
+  S().activate(b);
+  S().activate(r);
+  S().activate(a);
+  S().closeTab(a);
+  assert.equal(model.activeTabId(S(), w), b);
+  assert.ok(!S().tabs[a].page.nav && !S().tabs[n].page.nav, "both panes are unloaded");
+});
+
 test("groups stay contiguous; splits need two panes", () => {
   reset();
   const w = S().createWindow({ url: "a.com" });

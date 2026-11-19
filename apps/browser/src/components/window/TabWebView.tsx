@@ -20,6 +20,7 @@ import { webviewRef, webviews } from "../../state/tabs/webviewHandles";
 import { noteIssued, takeStartedNavigation } from "../../state/tabs/earlyNavigate";
 import { currentEngineProfile, currentTab, isTabSilenced } from "../../state/browser/current";
 import { updateLive, updateTab } from "../../state/tabs/actions";
+import { liveOf } from "../../state/tabs/tabLive";
 import { returnRefusedMove, setFind } from "../../state/windows/actions";
 import { activateFocusedPane, currentTabEngine, downloadNavigated, useTabEngine } from "../../state/windows/card";
 import { setPageProgress } from "../../state/tabs/pageProgress";
@@ -47,6 +48,7 @@ import { releaseTranslation, translateCrashContext } from "../../state/site/tran
 import { notePagePress, notePagePressRefused } from "../../state/telemetry/tabPresses";
 import { noteWebKitFocusRestore } from "../../state/telemetry/pageFocusReturns";
 import { noteAutoPictureInPictureKept, notePageOverlay, noteReopenedPage, noteSiteControls, noteWebKitPageKeptHidden } from "../../state/telemetry/usage";
+import { noteSamePageTint } from "../../state/telemetry/toolbarTintChanges";
 import { noteWebKitMediaFault } from "../../state/telemetry/webkitMediaFaults";
 import { isAdoptKind } from "../../state/tabs/adoptIds";
 import { firstPagePending, isBlankAddress, noteFirstPagePending, reportedAddress, reportedTitle } from "../../state/tabs/pendingAddress";
@@ -199,6 +201,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine }
         }
         if (fromNewTab.current && url && !isBlankAddress(url)) patchPage(tabId, { backToNewTab: true });
         const shownTitle = !title && restoring ? (tab()?.title ?? title) : title;
+        noteSamePageTint({ previous: liveOf(tabId).themeColor, shown: shownTheme, url, lastPage: lastPage.current, isLoading });
         updateTab(tabId, { url, title: shownTitle }, { isLoading, canGoBack, canGoForward, themeColor: shownTheme });
         dropOutlivedFavicon(tabId, url, isLoading);
         if (engine === "webkit") noteWebKitPage(tabId, { url, title, isLoading, committedUrl: committedUrl ?? "" });

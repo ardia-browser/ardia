@@ -364,6 +364,23 @@ test("Escape with the window as first responder cancels the sheet drawn in that 
   assert.equal(T().phase, "offer");
 });
 
+test("a Settings confirm the plugin store refuses to save closes the sheet and tells the Official row why", async () => {
+  await scanned([{ name: "cli", text: CLI, ...BUILT_IN }]);
+  const waiting = installOfficialPlugin("cli", { showSheet: false });
+  const asked = P().consent;
+  assert.equal(owner(), "settings");
+  refusedWrites.on = true;
+  assert.equal(surface.confirmConsentAs("settings", asked.id), false);
+  refusedWrites.on = false;
+  assert.equal(P().consent, null, "the sheet closes");
+  const answer = await waiting;
+  assert.equal(answer.ok, false);
+  assert.equal(answer.cancelled, undefined);
+  assert.ok([surface.CONFIRM_REFUSED, "plugins.json couldn't be saved. Try again."].includes(answer.reason), answer.reason);
+  assert.ok(lifecycle.requestPluginConsent("cli"), "and the next ask is accepted");
+  lifecycle.dismissPluginConsent("cli");
+});
+
 test("each offered plugin counts as shown once per visit, even when the list changes under it", async () => {
   await atOffer();
   step.notePluginsShown(["cli", "ai"]);

@@ -1,8 +1,7 @@
 import { create } from "zustand";
-import { askConsentInOnboarding, confirmConsentAs, dismissConsentAs, ownsConsent, releaseOnboardingConsent } from "../plugins/consentSurface";
+import { askConsentInOnboarding, CONFIRM_REFUSED, confirmConsentAs, dismissConsentAs, releaseOnboardingConsent } from "../plugins/consentSurface";
 import { installOfficialPlugin, type OfficialPlugin } from "../plugins/official";
 import { officialTitle, wasCancelled } from "../plugins/officialView";
-import { currentPlugins } from "../plugins/store";
 import { consentToken, type ConsentToken } from "../telemetry/consentPeriod";
 import { noteOfficialPlugin } from "../telemetry/officialPluginCounts";
 import { activeSteps, confirmAnswer, goToStep, skipStep, STEPS, useOnboarding } from "./onboarding";
@@ -22,30 +21,15 @@ type PluginsStepState = {
 
 type InstallOutcome = Awaited<ReturnType<typeof installOfficialPlugin>>;
 
-export const REFUSED_REASON = "Can't install it right now.";
+export const REFUSED_REASON = CONFIRM_REFUSED;
 
 const FRESH = { picks: {}, phase: "offer", current: null, failures: {}, installed: [], shown: [] } satisfies Omit<PluginsStepState, "run">;
 
-const refusals = new Map<number, (outcome: InstallOutcome) => void>();
-
 function installOrRefusal(name: string, run: number): Promise<InstallOutcome> {
-  let refuse: (outcome: InstallOutcome) => void = () => {};
-  const refused = new Promise<InstallOutcome>((resolve) => {
-    refuse = resolve;
-  });
-  const { result: installed, id } = askConsentInOnboarding(name, useOnboarding.getState().windowId, () => inPluginsStep(run), () => installOfficialPlugin(name, { showSheet: false }));
-  if (id === null) return installed;
-  refusals.set(id, refuse);
-  return Promise.race([installed, refused]).finally(() => refusals.delete(id));
+  return askConsentInOnboarding(name, useOnboarding.getState().windowId, () => inPluginsStep(run), () => installOfficialPlugin(name, { showSheet: false })).result;
 }
 
-export function confirmPluginConsent(id: number): boolean {
-  if (!ownsConsent("onboarding", id)) return false;
-  if (confirmConsentAs("onboarding", id)) return true;
-  refusals.get(id)?.({ ok: false, reason: REFUSED_REASON });
-  dismissConsentAs("onboarding", id);
-  return false;
-}
+export const confirmPluginConsent = (id: number): boolean => confirmConsentAs("onboarding", id);
 
 export const cancelPluginConsent = (id: number): boolean => dismissConsentAs("onboarding", id);
 

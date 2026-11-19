@@ -1,3 +1,4 @@
+import { settleInstall } from "./installWaiters";
 import { confirmConsentRequest, dismissConsentRequest } from "./lifecycle";
 import { currentPlugins, type PluginsStore } from "./store";
 
@@ -55,7 +56,18 @@ const owns = (owner: ConsentOwner, id: number) => {
   return consent?.id === id && consentOwner(consent) === owner;
 };
 
-export const confirmConsentAs = (owner: ConsentOwner, id: number): boolean => owns(owner, id) && confirmConsentRequest(id);
+export const CONFIRM_REFUSED = "Can't install it right now.";
+
+export function confirmConsentAs(owner: ConsentOwner, id: number): boolean {
+  if (!owns(owner, id)) return false;
+  if (confirmConsentRequest(id)) return true;
+  const still = currentPlugins().consent;
+  if (still?.id === id) {
+    settleInstall(still.name, { ok: false, reason: CONFIRM_REFUSED });
+    dismissConsentRequest(id);
+  }
+  return false;
+}
 
 export const dismissConsentAs = (owner: ConsentOwner, id: number): boolean => owns(owner, id) && dismissConsentRequest(id);
 

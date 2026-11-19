@@ -8,8 +8,8 @@ export const LINUX_WORDING: readonly Wording[] = [
     file: "state/live/engine.ts",
     replacements: [
       [
-        "    case \"signedOut\":\n      return `Sign back in to ${name}`;\n",
-        "    case \"signedOut\":\n      return `Sign back in to ${name}`;\n    case \"keyringLocked\":\n      return `Unlock your keyring to refresh ${name}`;\n    case \"keyringUnavailable\":\n      return `Start your keyring to refresh ${name}`;\n",
+        "    case \"signedOut\":\n      return source === \"github\" ? \"Sign in to github.com in this profile\" : `Sign back in to ${name}`;\n",
+        "    case \"signedOut\":\n      return source === \"github\" ? \"Sign in to github.com in this profile\" : `Sign back in to ${name}`;\n    case \"keyringLocked\":\n      return `Unlock your keyring to refresh ${name}`;\n    case \"keyringUnavailable\":\n      return `Start your keyring to refresh ${name}`;\n",
       ],
     ],
   },

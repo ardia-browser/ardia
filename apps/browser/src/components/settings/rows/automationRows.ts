@@ -62,11 +62,6 @@ export const automationRows = {
           description: "Right-click the sidebar and choose New Live Folder.",
           keywords: ["new live folder", "hidden", "refresh", "stack", "stacked pull requests", "group stacked pull requests", "completed", "merged", "closed", "show completed pull requests"],
         },
-        github: {
-          title: "GitHub",
-          description: "Your pull requests and review requests.",
-          keywords: ["pull requests", "connect"],
-        },
         bitbucket: {
           title: "Bitbucket",
           description: "Your open pull requests.",

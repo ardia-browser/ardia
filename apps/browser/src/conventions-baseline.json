@@ -9,6 +9,8 @@
   "store-reads": {},
   "store-shape": {},
   "size": {
+    "apps/browser/src/state/live/engine.ts": 1,
+    "apps/browser/src/state/live/store.ts": 1,
     "packages/phone/ios/ArdiaKit/Sources/ArdiaBrowser/Blocking/FilterListConverter.swift": 1,
     "packages/phone/ios/ArdiaKit/Sources/ArdiaBrowser/Blocking/FilterLists.swift": 1,
     "packages/phone/ios/ArdiaKit/Sources/ArdiaBrowser/Tabs/TabStore.swift": 1,

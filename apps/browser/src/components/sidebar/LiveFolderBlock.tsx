@@ -1,6 +1,6 @@
 import { memo, useMemo, useState } from "react";
 import { Animated, Pressable, View } from "react-native";
-import { errorText, manualRefresh, statusText } from "../../state/live/engine";
+import { errorText, manualRefresh, openGithubSignIn, statusText } from "../../state/live/engine";
 import { folderRows, type FolderRow } from "../../state/live/rows";
 import { updateFolder, useLive } from "../../state/live/store";
 import type { FolderStatus, LiveItem } from "../../state/live/types";
@@ -116,8 +116,17 @@ function FolderNote({ folderId, windowId }: { folderId: string; windowId: string
   const status = useLive((s) => s.status[folderId]);
   const kind = useLive((s) => s.folders[folderId]?.kind);
   const hidden = useLive((s) => s.hidden[folderId]?.length ?? 0);
+  const githubSignedOut = useLive((s) => s.status[folderId]?.error?.kind === "signedOut" && s.status[folderId]?.error?.source === "github");
+  const profileId = useLive((s) => s.folders[folderId]?.profileId);
   if (!status || status.state === "initializing" || (status.state === "updating" && !status.lastFetch)) return <NoteRow text="Loading…" spinner />;
-  if (status.error) return <NoteRow text={errorText(status.error.kind, status.error.source)} onPress={() => fixError(windowId, status.error)} icon="exclamationmark.triangle.fill" />;
+  if (status.error)
+    return (
+      <NoteRow
+        text={errorText(status.error.kind, status.error.source)}
+        onPress={githubSignedOut && profileId ? () => openGithubSignIn(profileId) : () => fixError(windowId, status.error)}
+        icon="exclamationmark.triangle.fill"
+      />
+    );
   if (hidden) return <NoteRow text={`${hidden} hidden until you refresh`} onPress={() => void manualRefresh(folderId)} />;
   return <NoteRow text={kind === "pullRequests" ? "No open pull requests" : "No recent documents"} />;
 }

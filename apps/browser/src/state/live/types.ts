@@ -39,11 +39,12 @@ export type PullRequestInfo = {
   review: "approved" | "changesRequested" | "required" | null;
   mergeable: "mergeable" | "conflicting" | "unknown";
   checks: PullRequestCheck[];
-  comments: number;
+  comments: number | null;
   unresolvedThreads: number;
   additions: number;
   deletions: number;
   changedFiles: number;
+  labels?: { name: string; color: string }[];
   stack?: { id: string; position: number; size: number };
 };
 

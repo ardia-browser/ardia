@@ -88,6 +88,15 @@ function PullRequestPreview({ item, folderId, windowId }: { item: LiveItem; fold
         {item.title}
       </Text>
 
+      {pr.labels?.length ? (
+        <Box row gap="xs" style={LABELS}>
+          {pr.labels.slice(0, 3).map((label) => (
+            <Badge key={label.name} size="s" outline text={label.name} color={label.color.startsWith("#") ? label.color : `#${label.color}`} />
+          ))}
+          {pr.labels.length > 3 ? <Badge size="s" outline tone="chip" text={`+${pr.labels.length - 3}`} /> : null}
+        </Box>
+      ) : null}
+
       {summary ? (
         <Box gap="s">
           <CIProgressBar checks={pr.checks} colors={colors} />
@@ -130,11 +139,18 @@ function PullRequestPreview({ item, folderId, windowId }: { item: LiveItem; fold
           style={COMMENTS}
         >
           <Symbol name="bubble.left" size={10.5} color={theme.textSecondary} style={GLYPH_14} />
-          <Text size="caption" tone="textSecondary" style={SHRINK}>
-            {pr.comments === 1 ? "1 comment" : `${pr.comments} comments`}
-            {pr.unresolvedThreads ? ` · ${pr.unresolvedThreads} unresolved` : ""}
-          </Text>
+          {pr.comments == null && !pr.unresolvedThreads ? null : (
+            <Text size="caption" tone="textSecondary" style={SHRINK}>
+              {pr.comments === 1 ? "1 comment" : `${pr.comments ?? 0} comments`}
+              {pr.unresolvedThreads ? ` · ${pr.unresolvedThreads} unresolved` : ""}
+            </Text>
+          )}
         </Pressable>
+        {item.updatedAt ? (
+          <Text size="caption" tone="textSecondary">
+            Updated {ago(item.updatedAt, Date.now())}
+          </Text>
+        ) : null}
         {pr.additions || pr.deletions ? (
           <Text size="caption" tone="textSecondary" style={DIFF_STAT}>
             <Span style={{ color: colors.success }}>+{pr.additions}</Span> <Span style={{ color: colors.failure }}>−{pr.deletions}</Span>
@@ -152,6 +168,7 @@ const CENTER = { alignItems: "center" } as const;
 const PREVIEW = { gap: PREVIEW_GAP } as const;
 const FOOTER = { flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" } as const;
 const COMMENTS = { flexDirection: "row", alignItems: "center", maxWidth: "100%", gap: space.xs } as const;
+const LABELS = { flexWrap: "wrap" } as const;
 const DIFF_STAT: TextStyle = { maxWidth: "100%", fontVariant: ["tabular-nums"] };
 const GLYPH_12 = { width: 12, height: 12 } as const;
 const GLYPH_14 = { width: 14, height: 14 } as const;

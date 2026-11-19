@@ -153,6 +153,7 @@ export function useSuggestions({
       currentUrl,
       scope,
       preventInline,
+      prioritizeOpenTabs: true,
       bangs,
       providers,
     }));

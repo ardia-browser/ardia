@@ -140,6 +140,19 @@ test("open tabs are marked so the bar can switch to them, except the bar's own t
   assert.ok(!own.items.some((i) => i.kind === "page" && i.tabId));
 });
 
+test("prioritized open tabs switch first for typed and completed addresses", () => {
+  const url = "https://gmail.com/";
+  const tabs = [{ id: "gmail", url, title: "Gmail", favicon: null }];
+  const visited = [{ url, title: "Gmail", favicon: null, visits: 4, lastVisit: now - 1000 }];
+  for (const typed of ["gmail", "gmail.com", "https://gmail.com"]) {
+    const { items } = buildSuggestions(typed, { tabs, history: visited }, { now, prioritizeOpenTabs: true });
+    assert.equal(items[0]?.kind === "page" && items[0].tabId, "gmail", typed);
+    assert.equal(items[0]?.kind === "page" && items[0].url, url, typed);
+  }
+  const own = buildSuggestions("gmail.com", { tabs, history: visited }, { now, prioritizeOpenTabs: true, currentTabId: "gmail" });
+  assert.equal(own.items[0]?.kind === "page" && own.items[0].tabId, undefined);
+});
+
 const pageRows = (items: Suggestion[]) => items.flatMap((i) => (i.kind === "page" ? [{ url: i.url, title: i.title, tabId: i.tabId }] : []));
 
 test("a renamed tab is found by its custom title, with or without a history or bookmark row for its URL", () => {

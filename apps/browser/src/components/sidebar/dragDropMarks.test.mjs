@@ -185,6 +185,8 @@ test("a group's only tab held over its group's header edge stays in its group, w
   const header = frameOf(m, entryKey("group", G));
   const r = await dragOver(m, entryKey("tab", W.id.solo), { x: header.x + 40, y: header.y + ROW * 0.92 });
   assert.equal(r.gapKey, tailKey({ group: G }));
+  const landing = await r.c.landingSpot(r.drop);
+  assert.ok(landing && landing.y >= header.y, `the ghost lands inside its group, not a group's height above it (${landing?.y} vs header ${header.y})`);
   r.c.end(true);
   await D.settle();
   assert.deepEqual(S().groups[G].tabIds, [W.id.solo]);

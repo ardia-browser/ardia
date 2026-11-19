@@ -12,7 +12,7 @@ import { arrangeLive } from "../../state/sidebar/pinnedOrder";
 import { suppressHover } from "../../state/sidebar/hover";
 import { closeFolderPanel } from "../../state/sidebar/tileFolderUi";
 import { dragMarksOf, markDrag } from "../../state/sidebar/dragMarks";
-import { boxed, type Drop, EDGE, type Item, measure, spring, tabCell } from "./dragModel";
+import { boxed, type Drop, EDGE, type Item, measure, spring, tabCell, tailKey } from "./dragModel";
 import { DragTargeting } from "./dragTargeting";
 import { edgeAt, edgeStep } from "./dragProfiles";
 import { type DragSession, newDragSession } from "./dragGeometry";
@@ -351,7 +351,8 @@ export class DragController extends DragTargeting {
     let closing = 0;
     for (const i of this.items.values()) if (i.frame && i.section !== "tiles" && (i === ref || i.frame.y < top)) closing += now(i.gap);
     const group = source.parentGroup ? this.items.get(entryKey("group", source.parentGroup)) : undefined;
-    const emptied = !!group && group.tabIds.every((id) => source.tabIds.includes(id)) && !!group.frame && group.frame.y < top && group !== ref;
+    const insideGroup = !!source.parentGroup && (ref.parentGroup === source.parentGroup || ref.key === tailKey({ group: source.parentGroup }));
+    const emptied = !!group && !insideGroup && group.tabIds.every((id) => source.tabIds.includes(id)) && !!group.frame && group.frame.y < top && group !== ref;
     if (!emptied && source !== ref && source.frame && source.frame.y < top)
       closing += now(source.size);
     const container = ref.kind === "tail" ? [...this.items.values()].find((i) => i !== source && i.kind !== "tail" && i.frame && i.section === ref.section && i.parentGroup === ref.parentGroup) : ref;

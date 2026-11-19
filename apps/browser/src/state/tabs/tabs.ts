@@ -1,7 +1,7 @@
 import type { BrowserState } from "../browser/store";
 import { leaveGroups } from "../groups/groups";
 import { withShownTab } from "../groups/shownTabs";
-import { byRecentUse, inPinnedContainer, makeTab, navigationTo, TILE_PIN, viewTabIds, without } from "../browser/model";
+import { byRecentUse, inPinnedContainer, makeTab, navigationTo, profileWithTabsAfter, TILE_PIN, viewTabIds, without } from "../browser/model";
 import { closeSuccessor, forgetOpeners, insertionIndex } from "./openers";
 import { onUrlChange, pruneSelection } from "../pins/organize";
 import { isClosedPin } from "../pins/tabCleanup";
@@ -70,7 +70,7 @@ function withoutTopApps(s: BrowserState, ids: string[]): string[] {
   return others.length ? others : ids;
 }
 
-export function closingTabs(s: BrowserState, ids: string[], { lastClosesWindow = false, keepTopApps = s.settings.keepTopAppsRunning }: CloseOptions = {}): [BrowserState, string[]] {
+export function closingTabs(s: BrowserState, ids: string[], { lastClosesWindow = false, keepTopApps = s.settings.keepTopAppsRunning }: CloseOptions = {}): [BrowserState, string[], [string, string][]] {
   let next = s;
   for (const id of ids) {
     const source = peekSourceOf(next, id);
@@ -81,17 +81,20 @@ export function closingTabs(s: BrowserState, ids: string[], { lastClosesWindow =
   const gone = asked.filter((id) => !inPinnedContainer(next, id));
   const goneIds = new Set(gone);
   const closedWindows = new Set<string>();
+  const profileSwitches: [string, string][] = [];
   for (const w of Object.values(next.windows)) {
     const view = viewTabIds(next, w.id);
     const shown = view.filter((id) => goneIds.has(id));
     const keptRunning = keepTopApps && view.some((id) => !goneIds.has(id) && runningKept(next, id));
     if (!shown.length || !view.every((id) => goneIds.has(id) || isAsleep(next.tabs[id]) || (keptRunning && keptWithTopApp(next, id)))) continue;
     const keepsWindow = keptRunning || !lastClosesWindow || leavesEmptyWindow(shown.length > 1 ? removeTabs(next, shown.slice(1), false) : next, shown[0]!);
+    const takesOver = keepsWindow ? undefined : profileWithTabsAfter(next, w.id, goneIds);
     if (keepsWindow) next = withNewTab(next, w.id)[0];
+    else if (takesOver) profileSwitches.push([w.id, takesOver]);
     else closedWindows.add(w.id);
   }
   const removed = gone.filter((id) => !closedWindows.has(next.tabs[id]!.windowId));
-  return [removeTabs(next, removed, true), [...closedWindows]];
+  return [removeTabs(next, removed, true), [...closedWindows], profileSwitches];
 }
 
 function pinnedInsertionIndex(s: BrowserState, w: BrowserWindow): number {

@@ -155,6 +155,35 @@ test("a pinned item in the profile the window doesn't show keeps nothing open", 
   assert.equal(S().windows[w], undefined);
 });
 
+test("⌘W on a profile's last tab switches the window to the next profile with tabs, and keeps that profile's tabs", async () => {
+  for (const close of [(id) => S().closeTab(id), (id) => closeTab(id)]) {
+    const { w, ids: [only] } = windowWith("only");
+    const first = S().windows[w].profileId;
+    const skipped = S().createProfile({ name: "Skipped" });
+    const other = S().createProfile({ name: "Other" });
+    const kept = [
+      S().newTab(w, { url: "https://kept-one.com/", profileId: other, background: true }),
+      S().newTab(w, { url: "https://kept-two.com/", profileId: other, background: true }),
+    ];
+    await close(only);
+    assert.ok(S().windows[w], "the window stays open");
+    assert.equal(S().tabs[only], undefined, "the closed tab is gone");
+    assert.equal(S().windows[w].profileId, other, "it shows the next profile that has tabs");
+    assert.notEqual(S().windows[w].profileId, skipped);
+    assert.deepEqual(viewTabIds(S(), w), kept, "that profile's tabs are all still there");
+    assert.ok(kept.includes(activeTabId(S(), w)));
+  }
+});
+
+test("⌘W on a profile's last tab still closes the window when other profiles only have pinned items in it", () => {
+  const { w, ids: [only] } = windowWith("only");
+  const other = S().createProfile({ name: "Other" });
+  const pinned = S().newTab(w, { url: "https://pinned.com/", profileId: other, background: true });
+  S().pinTabs([pinned], true);
+  S().closeTab(only);
+  assert.equal(S().windows[w], undefined);
+});
+
 const shownTab = (w) => S().tabs[activeTabId(S(), w)];
 
 test("with Keep Top Apps running on, ⌘W on a Top App switches away and leaves its page loaded; off, it unloads as before", async () => {

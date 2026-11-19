@@ -110,8 +110,9 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
   },
 
   closeTabs(ids, options) {
-    const [next, closedWindows] = closingTabs(get(), ids, options);
+    const [next, closedWindows, profileSwitches] = closingTabs(get(), ids, options);
     set(next);
+    for (const [windowId, profileId] of profileSwitches) get().switchProfile(windowId, profileId);
     for (const windowId of closedWindows) get().closeWindow(windowId);
   },
 

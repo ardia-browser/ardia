@@ -122,7 +122,22 @@ export function closesWindow(s: BrowserState, id: string): boolean {
   const tab = s.tabs[id];
   const w = tab && s.windows[tab.windowId];
   if (!tab || !w || tab.profileId !== w.profileId || inPinnedContainer(s, id)) return false;
-  return viewTabIds(s, w.id).every((t) => t === id || s.tabs[t]!.page.kind === "asleep");
+  return viewTabIds(s, w.id).every((t) => t === id || s.tabs[t]!.page.kind === "asleep") && !profileWithTabsAfter(s, w.id, [id]);
+}
+
+export function profileWithTabsAfter(s: BrowserState, windowId: string, closing: Iterable<string>): string | undefined {
+  const w = s.windows[windowId];
+  if (!w || w.kind !== "main") return undefined;
+  const gone = new Set(closing);
+  const peeks = new Set(Object.values(s.peeks).map((p) => p.tabId));
+  const withTabs = new Set<string>();
+  for (const id of w.tabIds) {
+    const t = s.tabs[id];
+    if (t && t.profileId !== w.profileId && s.profiles[t.profileId] && !gone.has(id) && !peeks.has(id) && !inPinnedContainer(s, id)) withTabs.add(t.profileId);
+  }
+  const at = s.profileOrder.indexOf(w.profileId);
+  const order = [...s.profileOrder.slice(at + 1), ...s.profileOrder.slice(0, Math.max(at, 0))];
+  return order.find((p) => withTabs.has(p));
 }
 
 export function activeTabId(s: BrowserState, windowId: string, profileId?: string): string | undefined {

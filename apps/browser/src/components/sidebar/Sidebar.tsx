@@ -14,7 +14,6 @@ import { PROFILE_DOTS_HEIGHT, ProfileDots, useProfileDotsShown } from "../profil
 import { SidebarAddressRow, SidebarHeaderTools } from "./AddressBar";
 import { DragGhost } from "./DragGhost";
 import { EdgeGlow } from "./EdgeGlow";
-import { DropLine } from "./DropMarks";
 import { DragProvider } from "./DragProvider";
 import type { DragController } from "./dragController";
 import type { Ghost } from "./dragModel";
@@ -172,7 +171,6 @@ export function Sidebar({ width }: { width: number }) {
                   <DragGhost ghost={ghost} />
                 </ClipView>
               ) : null}
-              <DropLine />
             </SidebarTextScope>
           </SidebarDropArea>
           </SidebarRowLookContext.Provider>

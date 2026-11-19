@@ -1,10 +1,10 @@
 import type { ScrollView, View } from "react-native";
 import { layout } from "../ui/theme";
 import { currentSettings } from "../../state/browser/current";
-import { createDragMarks, dragMarksOf, type DropLineMark, markDrag, type SplitHalfMark } from "../../state/sidebar/dragMarks";
+import { createDragMarks, dragMarksOf, markDrag, type SplitHalfMark } from "../../state/sidebar/dragMarks";
 import { overPins, pinGrid, pinSlot, TILE_GAP } from "./pinZone";
 import { SCROLL_EDGE } from "./ScrollEdge";
-import { pinSlotPitch, type Drop, type Frame, type Ghost, type Item, type Pointed, tailKey } from "./dragModel";
+import { apart, SPLIT_HOLD_MS, pinSlotPitch, type Drop, type Frame, type Ghost, type Item, type Pointed, tailKey } from "./dragModel";
 import { NO_DROP } from "../../state/drag/drops";
 import { splitViewAvailable } from "../../state/splits/splits";
 import type { DragHome } from "../../state/sidebar/current";
@@ -31,12 +31,14 @@ export type DragSession = {
   escapable: boolean;
   scrollTimer: ReturnType<typeof setInterval> | undefined;
   hold: { key: string | null; ready: string | null; timer: ReturnType<typeof setTimeout> | undefined };
+  splitHold: { key: string | null; ready: boolean; at: { x: number; y: number }; timer: ReturnType<typeof setTimeout> | undefined };
   home: DragHome | null;
   shown: string | null;
   overProfile: string | null;
   hopping: { id: string; by: DragProfileHold } | null;
   edge: Edge | null;
   edgeSpent: boolean;
+  closedInFrames: boolean;
   measures: number;
 };
 
@@ -60,12 +62,14 @@ export const newDragSession = (sources: Item[], pointer: { x: number; y: number 
   escapable: false,
   scrollTimer: undefined,
   hold: { key: null, ready: null, timer: undefined },
+  splitHold: { key: null, ready: false, at: { x: 0, y: 0 }, timer: undefined },
   home: null,
   shown: null,
   overProfile: null,
   hopping: null,
   edge: null,
   edgeSpent: false,
+  closedInFrames: false,
   measures: 0,
 });
 
@@ -78,6 +82,7 @@ export class DragGeometry {
   tilesFixed = true;
   tilesRoom = Infinity;
   splitView = splitViewAvailable;
+  splitHoldMs = SPLIT_HOLD_MS;
   setGhost: (ghost: Ghost | null) => void = () => {};
   marks = createDragMarks();
   readonly profiles = new ProfileTargets(this.marks);
@@ -125,8 +130,8 @@ export class DragGeometry {
     return !!list && overPins(y, list.y, this.rowPinning);
   }
 
-  protected opensGap(i: Item) {
-    return i.section === "tiles" && !this.drag.gridBase;
+  protected inGrid(i: Item) {
+    return i.section === "tiles" && !!this.drag.gridBase;
   }
 
   protected get pinning() {
@@ -140,7 +145,24 @@ export class DragGeometry {
   }
 
   protected shown(i: Item): Frame {
-    return this.at(i.frame, this.still(i))!;
+    const f = this.at(i.frame, this.still(i))!;
+    const { dropKey, gapKey, pitch, sources } = this.drag;
+    if (!dropKey) return f;
+    const [top, bottom] = [i.frame!.y, i.frame!.y + i.frame!.h];
+    let dy = 0;
+    let dh = 0;
+    const gap = gapKey ? this.items.get(gapKey) : undefined;
+    if (gap?.frame && !this.inGrid(gap) && !apart(gap, i)) {
+      if (gap.frame.y <= top) dy += pitch;
+      else if (gap.frame.y < bottom) dh += pitch;
+    }
+    for (const s of this.crossed || this.drag.closedInFrames ? [] : sources) {
+      if (s.kind === "tile" || !s.frame || s === i || apart(s, i)) continue;
+      const closed = s.frame.h + layout.rowGap;
+      if (s.frame.y < top) dy -= closed;
+      else if (s.frame.y < bottom) dh -= closed;
+    }
+    return { ...f, y: f.y + dy, h: f.h + dh };
   }
 
   protected splitTarget(live: Item[], x: number, y: number): SplitHalfMark | null {
@@ -150,15 +172,6 @@ export class DragGeometry {
       if (x >= f.x && x <= f.x + f.w && y > f.y + f.h * 0.25 && y < f.y + f.h * 0.75) return { key: i.key, side: x < f.x + f.w / 2 ? "left" : "right" };
     }
     return null;
-  }
-
-  protected lineAt(target: Item | undefined): DropLineMark | null {
-    if (!target?.frame || target.section === "tiles") return null;
-    const f = this.shown(target);
-    const y = target.kind === "tail" ? f.y + layout.rowGap / 2 : f.y - layout.rowGap / 2;
-    const viewport = this.drag.viewport;
-    const shown = this.still(target) || !viewport ? y : Math.min(Math.max(y, viewport.y), viewport.y + viewport.h);
-    return { x: f.x - this.rootFrame.x, y: shown - this.rootFrame.y, w: f.w };
   }
 
   protected pointed(tiles: Frame, cells: Item[], count: number, home: number | null, x: number, y: number, folders: boolean): Pointed | null {

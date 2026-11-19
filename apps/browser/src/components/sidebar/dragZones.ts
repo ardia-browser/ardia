@@ -103,7 +103,7 @@ const group: Zone = (p) => {
 const split: Zone = (p) => {
   if (!p.splits) return null;
   const target = p.splitTarget();
-  return target ? { spot: { zone: "split", targetId: p.leadTab(target.key), side: target.side }, gapKey: null, split: target } : null;
+  return target ? { spot: { zone: "split", targetId: p.leadTab(target.key), side: target.side }, gapKey: p.kept.gapKey, pitch: p.kept.pitch, split: target } : null;
 };
 
 const pinnedRows: Zone = (p) => {

@@ -26,6 +26,7 @@ export type Item = ItemSpec & {
   view: View | null;
   header: View | null;
   gap: Animated.Value;
+  size: Animated.Value;
   frame: Frame | null;
   headerFrame: Frame | null;
 };
@@ -38,6 +39,7 @@ export const boxed = (i: Item): i is Extract<Item, { kind: "group" | "live" }> =
 export const isGroupItem = (i: Item): i is Extract<Item, { kind: "group" }> => i.kind === "group";
 export const folderOf = (i: Item): string | undefined => (i.kind === "tile" ? i.folderId : undefined);
 export const tabCell = (i: Item) => (i.kind === "row" || i.kind === "tile") && !folderOf(i);
+export const apart = (a: Item, b: Item) => a.section !== b.section && (a.section === "folder" || b.section === "folder");
 export const tailKey = (place: Exclude<Section, "pinnedRows"> | { group: string }) => (typeof place === "string" ? `tail:${place}` : `tail:group:${place.group}`);
 export const cellKey = (cell: string) => {
   const folderId = folderIdOfCell(cell);
@@ -50,7 +52,10 @@ export const restingTail = perLook(() => ({ marginTop: -layout.rowGap }));
 export const pinSlotPitch = () => layout.pinnedHeight + TILE_GAP;
 export const EDGE = 28;
 export const FOLDER_HOLD_MS = 400;
+export const SPLIT_HOLD_MS = 250;
+export const SPLIT_REST_SLOP = 4;
 export const spring = (value: Animated.Value, toValue: number) => Animated.spring(value, { toValue, ...SLIDE });
+export const ROOM_SPRING = { ...SLIDE, restDisplacementThreshold: 0.002, restSpeedThreshold: 0.02 } as const;
 
 export const inside = (f: Frame, x: number, y: number, slop = 0) => x >= f.x - slop && x <= f.x + f.w + slop && y >= f.y - slop && y <= f.y + f.h + slop;
 export const measure = (view: View | null): Promise<Frame | null> =>

@@ -911,8 +911,8 @@ right split"; the numbers are from the pixels.
   one Chrome strip command, and the tab settles into its place on the same spring, the store moving it as it lands.
   The dragged item draws over its neighbours: React Native macOS's `zIndex` sets the layer's zPosition, which AppKit
   ignores between sibling views, so `raiseView` (packages/shell) puts its view and layer last among its siblings while
-  dragged. The sidebar's rows hold still instead (2026-11-19, Arc's drop marks below), and the dropped row's ghost
-  settles into its place before the row shows there. With nothing pinned, the pin target is an overlay in room the sidebar already has (the
+  dragged. The sidebar's rows part the same way (Dia's drop gap, back on 2026-11-19 after a day of Arc's insertion line,
+  below), and the dropped row's ghost settles into its place before the row shows there. With nothing pinned, the pin target is an overlay in room the sidebar already has (the
   band above the first row, or over the address field) instead of a grid that pushed every row down ~45 pt as a drag
   began and back up as it ended.
 - **In the strip** (both layouts): an item takes its neighbour's place once its leading edge passes the neighbour's
@@ -926,6 +926,17 @@ right split"; the numbers are from the pixels.
   under a press in an inactive window lets AppKit move the window itself).
 
 #### Arc's sidebar drop marks (Arc, the owner's 120 fps 2x recording, 2026-11-19)
+
+The insertion line below was removed the same day at the owner's request ("just make space for the tab like Dia"):
+the sidebar opens Dia's gap again. From the owner's Dia recording (`rec/dia-gap.mov`, 60 Hz updates): the dragged row
+lifts out and its slot closes; a row it passes slides into place 77 % in 17 ms, 95 % in 50 ms, still by ~83 ms
+(critically damped, ω ≈ 90, the reorder spring); a dropped row settles in ~0.12 s (88 % at 90 ms, ω ≈ 45), but ours
+lands on the reorder spring too: the softer landing read as lag. The split
+halves, the ghost and Top Apps measurements below still hold, except that a half lights only once the pointer
+rests in a row's middle (0.25 s within 4 pt): passing rows only reorders. Dia's own slot changes as the dragged
+row's leading edge passes the neighbour's resting centre (`rec/dia-smooth.mov`: the neighbour slides 65 % in 28 ms,
+89 % in 61 ms, still by ~120 ms); ours changes as the pointer passes the neighbour's centre where it is drawn, which
+keeps a row's height of hysteresis, so a pointer moving one way never flips the slot back.
 
 Measured in pixels from 2x frames (3456 × 2234), divided by 2. Rows never move during a drag: the dragged row stays
 in its place at full strength while a translucent copy follows the pointer.

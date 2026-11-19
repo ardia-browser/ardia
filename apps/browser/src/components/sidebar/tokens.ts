@@ -1,6 +1,6 @@
 import { Easing } from "react-native";
 import { useTheme } from "../ui/theme";
-import { duration } from "../ui/motion";
+import { duration, spring } from "../ui/motion";
 import { font, ink, radius, shadow, sidebarFont, sidebarIconSize, sidebarPoints, space, withAlpha, type ShadowLevel } from "../ui/tokens";
 import type { GroupColor } from "../../state/browser/types";
 import { GROUP_COLORS } from "../../state/groups/tokens";
@@ -16,8 +16,8 @@ const DARK = {
   multiSelectedStroke: "rgba(255,255,255,0.14)",
   dragBorder: "rgba(255,255,255,0.33)",
   dragSilhouette: "#0F0F14",
-  dropLine: "rgba(255,255,255,0.93)",
-  edgeGlow: "rgba(255,255,255,0.07)",
+  dropMark: "rgba(255,255,255,0.93)",
+  edgeGlow: "rgba(255,255,255,0.105)",
   dragGhostFill: "rgba(255,255,255,0.15)",
   dragGhostTileLift: "rgba(255,255,255,0.29)",
   dragGhostBorder: null as string | null,
@@ -52,8 +52,8 @@ const LIGHT: typeof DARK = {
   multiSelectedStroke: "rgba(0,0,0,0.08)",
   dragBorder: "rgba(0,0,0,0.28)",
   dragSilhouette: "#FFFFFF",
-  dropLine: "rgba(0,0,0,0.8)",
-  edgeGlow: "rgba(0,0,0,0.04)",
+  dropMark: "rgba(0,0,0,0.8)",
+  edgeGlow: "rgba(0,0,0,0.1)",
   dragGhostFill: "rgba(255,255,255,0.5)",
   dragGhostTileLift: "rgba(255,255,255,0.5)",
   dragGhostBorder: "rgba(0,0,0,0.08)",
@@ -142,9 +142,10 @@ export const SIDEBAR_MOTION = { liveFold: duration.long, fold: duration.base, li
 
 export const SLEEPING_TITLE_OPACITY = 0.6;
 
-export const DROP_LINE = { stroke: 2, ring: 8, inset: 7, trailing: 2 } as const;
-
 export const SPLIT_DROP = { gap: 14 } as const;
+
+export const SPLIT_PREVIEW = { response: 0.1, damping: 1 } as const;
+
 
 export const GHOST_TILE_MORPH = { response: 0.1, damping: 1 } as const;
 

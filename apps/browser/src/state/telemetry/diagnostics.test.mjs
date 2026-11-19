@@ -491,7 +491,7 @@ test("tab presses count clicks, drags turned into clicks, drags and presses that
   presses.noteRangeSelect(false);
   presses.notePagePressRefused();
   presses.noteDragWithoutDrop();
-  for (const kind of ["line", "line", "split_left", "split_right", "split_right", "split_pinned", "split_unpinned", "split_unpinned", "tile", "other_profile", "other_profile", "profile_icon"]) presses.noteSidebarDrop(kind);
+  for (const kind of ["gap", "gap", "split_left", "split_right", "split_right", "split_pinned", "split_unpinned", "split_unpinned", "tile", "other_profile", "other_profile", "profile_icon"]) presses.noteSidebarDrop(kind);
   presses.noteDragProfileSwitch("icon");
   presses.noteDragProfileSwitch(null);
   presses.noteDragProfileSwitch("icon");
@@ -500,7 +500,7 @@ test("tab presses count clicks, drags turned into clicks, drags and presses that
   await client.saveQueueNow();
   const props = events("tab_presses").at(-1).properties;
   assert.equal(props.drags_without_drop, 1);
-  assert.deepEqual([props.drops_line, props.drops_split_left, props.drops_split_right, props.drops_split_pinned, props.drops_split_unpinned, props.drops_tile], [2, 1, 2, 1, 2, 1]);
+  assert.deepEqual([props.drops_gap, props.drops_split_left, props.drops_split_right, props.drops_split_pinned, props.drops_split_unpinned, props.drops_tile], [2, 1, 2, 1, 2, 1]);
   assert.deepEqual([props.drops_other_profile, props.drops_profile_icon, props.drag_profile_switches, props.drag_profile_holds, props.drag_profile_edge_holds], [2, 1, 4, 2, 1]);
   assert.deepEqual([props.range_selects, props.range_from_shown], [2, 1]);
   assert.deepEqual([props.repeat_presses, props.repeat_on_new_tab, props.repeat_gap_ms_p50, props.repeat_landed_on], [1, 1, 600, "RCTView<Surface"]);

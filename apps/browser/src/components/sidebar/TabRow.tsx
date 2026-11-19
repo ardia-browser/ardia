@@ -15,6 +15,8 @@ import { hidesRowIcon } from "../../state/pins/rowIcons";
 import { commitRename, endRename, startRename } from "../../state/sidebar/actions";
 import { useDragItem, useDropSplit } from "./DragProvider";
 import { SplitDropHalf } from "./DropMarks";
+import { SplitPreview, useSplitPreview } from "./SplitPreview";
+import { SPLIT_PANE, splitPaneShape } from "./splitPaneGeometry";
 import { useShift, type EntryMotion } from "./EntryMotion";
 import { useRowHover } from "./hoverController";
 import { pressPaneClose, pressTabClose, useTabCloseControlWhile } from "../../state/sidebar/closeControl";
@@ -90,6 +92,7 @@ export const TabRow = memo(function TabRow({
   const pinActionMotion = usePressScaleMotion(resettable, buttonMotion.iconPressScale);
   const pinActionScale = pinActionMotion.scale ? { transform: [{ scale: pinActionMotion.scale }] } : undefined;
   const struck = useStruckTitle(tabId, flags & ICON_MARKS);
+  const preview = useSplitPreview(splitSide, 1);
   if (!tab) return null;
   const resetting = resettable && backToPin.hovered && !renaming;
   const title = resetting ? "Back to Pinned URL" : tab.customTitle ? tabTitle(tab) : titleWithoutUnread(tabTitle(tab), unread);
@@ -122,6 +125,7 @@ export const TabRow = memo(function TabRow({
             padLeft={(textOnly ? TAB_ROW.contentLeft - TAB_ROW.titleGap : TAB_ROW.contentLeft) - border}
             padRight={TAB_ROW.trailing - border}
           >
+            <Animated.View style={[ROW_CONTENT, { opacity: preview.values ? preview.values.hidden : 1 }]}>
             <View {...(tab.pinnedUrl ? backToPin.hoverProps : null)} style={textOnly ? NO_SLOT : undefined}>
               {resettable ? (
                 <Pressable
@@ -182,16 +186,20 @@ export const TabRow = memo(function TabRow({
                 </>
               ) : null}
             </HoverSlot>
+            </Animated.View>
           </SidebarRowSurface>
         </>
       )}
       </TabPressArea>
-      <SplitDropHalf side={splitSide} fill={tokens.splitDropFill} />
+      {preview.values ? <SplitPreview panes={SINGLE(tabId)} values={preview.values} /> : null}
     </View>
   );
 });
 
 const AWAY_FRAME = { flex: 1, marginLeft: TAB_ROW.titleGap } as const;
+const ROW_CONTENT = { flex: 1, alignSelf: "stretch", flexDirection: "row", alignItems: "center" } as const;
+const singles = new Map<string, string[]>();
+const SINGLE = (tabId: string) => singles.get(tabId) ?? (singles.set(tabId, [tabId]), singles.get(tabId)!);
 const NO_SLOT = { display: "none" } as const;
 
 function StatusIconButton({ icon, color, tooltip, onPress }: { icon: string; color: string; tooltip: string; onPress: (event: GestureResponderEvent) => void }) {
@@ -279,6 +287,7 @@ export const SplitRowItem = memo(function SplitRowItem({
   const tabIds = useSplitRowPanes(splitId);
   const { wrapper, handle } = useDragItem(entryKey("split", splitId), { kind: "split", tabIds, section, parentGroup }, motion?.clip);
   const splitSide = useDropSplit(entryKey("split", splitId));
+  const preview = useSplitPreview(splitSide, tabIds.length);
   const theme = useTheme();
   const tokens = useSidebarTokens();
   const profileId = usePageProfileId();
@@ -297,19 +306,20 @@ export const SplitRowItem = memo(function SplitRowItem({
           padLeft={SPLIT_PANE.inset - splitBorder}
           padRight={SPLIT_PANE.inset - splitBorder}
         >
-          {tabIds.map((id, i) => (
-            <View key={id} style={i > 0 ? SPLIT_SLOT_AFTER : SPLIT_SLOT}>
-              <SplitPane tabId={id} windowId={windowId} rowActive={active} />
-            </View>
-          ))}
+          <Animated.View style={[ROW_CONTENT, { opacity: preview.values ? preview.values.hidden : 1 }]}>
+            {tabIds.map((id, i) => (
+              <View key={id} style={i > 0 ? SPLIT_SLOT_AFTER : SPLIT_SLOT}>
+                <SplitPane tabId={id} windowId={windowId} rowActive={active} />
+              </View>
+            ))}
+          </Animated.View>
         </SidebarRowSurface>
-        <SplitDropHalf side={splitSide} fill={tokens.splitDropFill} />
+        {preview.values ? <SplitPreview panes={tabIds} values={preview.values} /> : <SplitDropHalf side={splitSide} fill={tokens.splitDropFill} />}
       </View>
     </Animated.View>
   );
 });
 
-const SPLIT_PANE = { inset: space.xs, gap: space.xs, closeInset: space.xxs } as const;
 
 function rowGapSlop(inset: number) {
   const reach = inset + layout.rowGap / 2;
@@ -319,11 +329,6 @@ const SPLIT_SLOT = { flex: 1, flexDirection: "row", alignItems: "center", minWid
 const SPLIT_SLOT_AFTER = { ...SPLIT_SLOT, marginLeft: SPLIT_PANE.gap } as const;
 const CLOSE_SLOT = { marginLeft: SPLIT_PANE.closeInset } as const;
 
-function splitPaneShape() {
-  const height = layout.rowHeight - SPLIT_PANE.inset * 2;
-  const corner = Math.max(0, radius.chrome - SPLIT_PANE.inset);
-  return { height, corner, closeBox: height - SPLIT_PANE.closeInset * 2, closeCorner: Math.max(0, corner - SPLIT_PANE.closeInset) };
-}
 
 function SplitPane({ tabId, windowId, rowActive }: { tabId: string; windowId: string; rowActive: boolean }) {
   const theme = useTheme();

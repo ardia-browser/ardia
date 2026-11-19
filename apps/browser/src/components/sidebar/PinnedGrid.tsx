@@ -79,13 +79,13 @@ export function PinFieldZone({ top, height }: { top: number; height: number }) {
         borderRadius: radius.chrome,
         borderWidth: active ? 1.5 : 1,
         borderStyle: "dashed",
-        borderColor: active ? tokens.dropLine : tokens.dragBorder,
+        borderColor: active ? tokens.dropMark : tokens.dragBorder,
         backgroundColor: tokens.dragSilhouette,
         alignItems: "center",
         justifyContent: "center",
       }}
     >
-      <PinGlyph color={active ? tokens.dropLine : theme.textSecondary} />
+      <PinGlyph color={active ? tokens.dropMark : theme.textSecondary} />
     </View>
   );
 }
@@ -126,13 +126,13 @@ export function PinSlotZone({ top = 0 }: { top?: number }) {
           borderRadius: radius.pinned,
           borderWidth: 1.5,
           borderStyle: "dashed",
-          borderColor: tokens.dropLine,
+          borderColor: tokens.dropMark,
           backgroundColor: theme.dropZoneFill,
           alignItems: "center",
           justifyContent: "center",
         }}
       >
-        <PinGlyph color={tokens.dropLine} />
+        <PinGlyph color={tokens.dropMark} />
       </Animated.View>
     </>
   );

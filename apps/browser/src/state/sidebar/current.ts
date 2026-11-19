@@ -5,6 +5,7 @@ import { cleanUpCandidates } from "../pins/tabCleanup";
 import { sharedTabsIn, sharesTabs } from "../tabs/tabShare";
 import { addressBarInSidebar } from "../windows/layout";
 import { splitsOnRow } from "../splits/lanes";
+import { splitOf } from "../splits/splits";
 import { isRegularWindow } from "../windows/small";
 import { isIncognitoProfile } from "../browser/model";
 
@@ -33,6 +34,8 @@ export function profileBeside(profileId: string, step: -1 | 1): string | null {
   const at = order.indexOf(profileId);
   return at < 0 ? null : (order[at + step] ?? null);
 }
+
+export const splitIdOfNow = (tabId: string) => splitOf(store(), tabId)?.id ?? null;
 
 export const shownProfileOf = (windowId: string) => store().windows[windowId]?.profileId ?? null;
 

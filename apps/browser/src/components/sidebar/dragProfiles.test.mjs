@@ -94,7 +94,7 @@ test("holding a dragged tab over another profile's icon lights it, switches afte
   c.move(60, 300);
   c.move(overDot(1).x, overDot(1).y);
   assert.equal(dragMarksOf(c.marks).profileHold, m.work);
-  assert.equal(D.readDrag(c).marks.line, null, "no drop line while over the switcher");
+  assert.equal(D.readDrag(c).gapKey, null, "no gap opens while over the switcher");
   t.mock.timers.tick(PROFILE_HOLD_MS - 1);
   assert.equal(S().windows[m.w].profileId, "default", "not before the hold");
   t.mock.timers.tick(1);
@@ -106,7 +106,7 @@ test("holding a dragged tab over another profile's icon lights it, switches afte
   c.move(60, z.y + 2);
   const read = D.readDrag(c);
   assert.deepEqual(read.drop, { type: "tabs", placement: { pinned: false, beforeId: m.id.z }, sequence: read.drop.sequence });
-  assert.ok(read.marks.line, "the other profile's rows get the line");
+  assert.equal(read.gapKey, entryKey("tab", m.id.z), "the other profile's rows open the gap");
   c.end(true);
   await settle();
   assert.equal(ghosts.at(-1), null, "no landing slide into a page it never left");
@@ -352,6 +352,105 @@ test("a row's split halves are not offered in the edge band", async () => {
   assert.deepEqual(D.readDrag(c).marks.split, { key: entryKey("tab", m.id.d), side: "right" }, "the right half, outside the band");
   c.move(185, d.y + d.h / 2);
   assert.equal(c.session.edge, "right");
-  assert.equal(D.readDrag(c).marks.split, null, "inside the band: no half, the line instead");
+  assert.equal(D.readDrag(c).marks.split, null, "inside the band: no half, a gap instead");
   c.end(false);
+});
+
+function sharedSpaces() {
+  S().hydrate({});
+  S().updateSettings({ warnBeforeMovingTabsToProfile: true });
+  S().updateProfile("default", { shareTopApps: true });
+  const w = S().createWindow({ url: "https://mail.com/" });
+  const [mail] = S().windows[w].tabIds;
+  const docs = S().newTab(w, { url: "https://docs.com/", background: true });
+  const a = S().newTab(w, { url: "https://a.com/", background: true });
+  S().pinTabs([mail, docs], true);
+  const work = S().createProfile({ name: "Work", shareTopApps: true, shareWith: "default" });
+  S().switchProfile(w, work);
+  const x = S().newTab(w, { url: "https://x.com/", background: true });
+  const y = S().newTab(w, { url: "https://y.com/", background: true });
+  const copy = viewTabIds(S(), w, work).find((t) => S().tabs[t].pinnedUrl === "https://mail.com/");
+  S().activate(copy);
+  S().switchProfile(w, "default");
+  S().activate(mail);
+  const layout = (profileId) => {
+    const L = sceneLayout({ top: 60 });
+    const ids = viewTabIds(S(), w, profileId);
+    const grid = L.tiles(ids.filter((t) => S().tabs[t].pin?.as === "tile")).frame;
+    L.skip(20);
+    const top = L.y;
+    for (const t of ids.filter((t) => !S().tabs[t].pin)) L.row(t);
+    L.tail("list");
+    return { L, regions: { tiles: grid, ...regionsOf(L, { list: [top, L.y] }) } };
+  };
+  return { w, mail, docs, a, x, y, work, layout };
+}
+
+const hostOf = (t) => (S().tabs[t].pinnedUrl || S().tabs[t].url ? new URL(S().tabs[t].pinnedUrl || S().tabs[t].url).hostname.replace(".com", "") : "new");
+const pinned = (w, p) => viewTabIds(S(), w, p).map((t) => [hostOf(t), S().tabs[t].pin?.as ?? null]);
+
+async function sharedDrag(t, finish) {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const m = sharedSpaces();
+  const home = m.layout("default");
+  const { c, ghosts } = mount({ entries: home.L.entries, regions: home.regions });
+  for (const [i, profileId] of S().profileOrder.entries()) c.profiles.views.set(profileId, fakeView(dotFrame(i)));
+  c.profileShown("default");
+  const before = { tabs: [...S().windows[m.w].tabIds], home: pinned(m.w, "default"), shown: S().windows[m.w].activeTabIds.default };
+  const tile = home.L.entries.find((e) => e.key === entryKey("tab", m.mail)).frame;
+  await c.begin(entryKey("tab", m.mail), tile.x + 10, tile.y + 10);
+  c.move(60, 300);
+  c.move(overDot(1).x, overDot(1).y);
+  t.mock.timers.tick(PROFILE_HOLD_MS);
+  assert.equal(S().windows[m.w].profileId, m.work);
+  const away = m.layout(m.work);
+  await showPage(c, m.work, itemsOf(c, away), away.regions);
+  await finish(c, m, away);
+  await settle();
+  await settle();
+  return { m, c, ghosts, before };
+}
+
+test("a shared Top App dragged into the other profile's list lands there even though the switch handed its live tab over", async (t) => {
+  const { m } = await sharedDrag(t, async (c, m, away) => {
+    assert.equal(S().tabs[m.mail].profileId, m.work, "the switch swapped the live tile into Work");
+    const y = away.L.entries.find((e) => e.key === entryKey("tab", m.y)).frame;
+    c.move(60, y.y + 2);
+    assert.equal(D.readDrag(c).drop.type, "tabs");
+    c.end(true);
+  });
+  assert.equal(S().windows[m.w].profileId, m.work, "it stays in Work");
+  const work = pinned(m.w, m.work);
+  assert.deepEqual(work.filter(([h]) => ["x", "mail", "y"].includes(h)), [["x", null], ["mail", null], ["y", null]]);
+  assert.equal(S().tabs[S().windows[m.w].activeTabIds[m.work]].pinnedUrl ?? S().tabs[S().windows[m.w].activeTabIds[m.work]].url, "https://mail.com/");
+});
+
+test("a shared Top App dragged to another Top Apps slot in the other profile reorders it there", async (t) => {
+  const { m } = await sharedDrag(t, async (c, m, away) => {
+    const docsTile = away.L.entries.find((e) => e.kind !== "tail" && e.spec.kind === "tile" && S().tabs[e.spec.tabIds[0]].pinnedUrl === "https://docs.com/").frame;
+    c.move(docsTile.x + docsTile.w - 3, docsTile.y + docsTile.h / 2);
+    const drop = D.readDrag(c).drop;
+    assert.equal(drop.type, "tabs");
+    assert.equal(drop.placement.pinned, true);
+    c.end(true);
+  });
+  assert.equal(S().windows[m.w].profileId, m.work);
+  assert.deepEqual(pinned(m.w, m.work).filter(([, pin]) => pin === "tile").map(([h]) => h), ["docs", "mail"]);
+});
+
+test("Escape on a shared Top App after the switch puts both profiles back, the live tile home again", async (t) => {
+  const { m, before } = await sharedDrag(t, async (c) => c.end(false));
+  assert.equal(S().windows[m.w].profileId, "default");
+  assert.deepEqual(pinned(m.w, "default"), before.home);
+  assert.equal(S().tabs[m.mail].profileId, "default", "the live tab is back in its own profile");
+  assert.equal(S().windows[m.w].activeTabIds.default, before.shown);
+});
+
+test("a shared Top App let go on the icon of the profile it was handed to stays there, nothing paged back", async (t) => {
+  const { m } = await sharedDrag(t, async (c) => {
+    c.move(overDot(1).x, overDot(1).y);
+    c.end(true);
+  });
+  assert.equal(S().windows[m.w].profileId, m.work);
+  assert.deepEqual(pinned(m.w, m.work).filter(([, pin]) => pin === "tile").map(([h]) => h), ["mail", "docs"]);
 });

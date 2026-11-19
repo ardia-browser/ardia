@@ -90,13 +90,17 @@ test("the slot decides the pin: list unpins, pinned rows pin as a row, Top Apps 
   }
 });
 
-test("into another profile's group at a member, and a private window's tab or a tab already there changes nothing", () => {
-  const { id, work } = spaces();
+test("into another profile's group at a member; a tab already there is only placed, and a private window's tab changes nothing", () => {
+  const { w, id, work } = spaces();
   const g = S().groupTabs([id.y, id.z], { name: "W", pinned: false });
   S().dropTabsInProfile([id.a], work, drop("group", id.z, { groupId: g }));
   assert.deepEqual(S().groups[g].tabIds.map(host), ["y", "a", "z"]);
+  const page = S().tabs[id.x].page;
+  assert.equal(S().dropTabsInProfile([id.x], work, drop("list", null)), true);
+  assert.equal(S().tabs[id.x].page, page, "placed, not opened again");
+  assert.equal(view(w, work).at(-1), "x");
   const before = S();
-  assert.equal(S().dropTabsInProfile([id.x], work, drop("list", null)), false);
+  assert.equal(S().dropTabsInProfile([id.x], work, { type: "none" }), false, "no slot and nothing to move");
   assert.equal(S(), before);
   const p = S().createWindow({ kind: "private", url: "https://p.com/" });
   const priv = S().windows[p].tabIds[0];

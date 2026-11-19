@@ -21,7 +21,7 @@ const empty = () => ({
   drag_clicks: 0,
   drags: 0,
   drags_without_drop: 0,
-  drops_line: 0,
+  drops_gap: 0,
   drops_split_left: 0,
   drops_split_right: 0,
   drops_split_pinned: 0,
@@ -177,7 +177,7 @@ export const notePagePressRefused = () => void tally.page_refused++;
 
 export const noteDragWithoutDrop = () => void tally.drags_without_drop++;
 
-export type SidebarDropKind = "line" | "split_left" | "split_right" | "split_pinned" | "split_unpinned" | "tile" | "other_profile" | "profile_icon";
+export type SidebarDropKind = "gap" | "split_left" | "split_right" | "split_pinned" | "split_unpinned" | "tile" | "other_profile" | "profile_icon";
 
 export const noteSidebarDrop = (kind: SidebarDropKind) => void tally[`drops_${kind}`]++;
 

@@ -25,23 +25,32 @@ test("away: the 40 pt bound is strict on both sides, and a drag outside the wind
   assert.equal(at(zones["away outside window"], "move 60,-3000").drop.type, "none");
 });
 
-test("split: the middle half of a row, strictly, its side by the row's halves, with no line", () => {
+test("split: the middle half of a row, strictly, its side by the row's halves; beside it or outside the band a gap", () => {
   const t = zones["split bounds"];
-  for (const label of ["move 60,325", "move 60,316.6", "move 60,333.4"]) assert.deepEqual([at(t, label).drop.type, at(t, label).drop.side, at(t, label).line], ["split", "left", null], label);
+  for (const label of ["move 60,325", "move 60,316.6", "move 60,333.4"]) assert.deepEqual([at(t, label).drop.type, at(t, label).drop.side], ["split", "left"], label);
   for (const label of ["move 5,325", "move 239,325"]) {
     assert.notEqual(at(t, label).drop.type, "split", `${label}: beside the row, not over it`);
-    assert.ok(at(t, label).line, label);
+    assert.ok(at(t, label).gapKey, label);
   }
-  assert.deepEqual([at(zones["away bounds"], "move 240,330").drop.type, at(zones["away bounds"], "move 240,330").split], ["tabs", null], "right of the row, short of the away zone: the line");
+  assert.deepEqual([at(zones["away bounds"], "move 240,330").drop.type, at(zones["away bounds"], "move 240,330").split], ["tabs", null], "right of the row, short of the away zone: a gap");
   assert.notEqual(at(t, "move 60,333.5").drop.type, "split");
   assert.notEqual(at(t, "move 60,316.5").drop.type, "split");
-  assert.ok(at(t, "move 60,316.5").line, "outside the band: the line");
+  assert.ok(at(t, "move 60,316.5").gapKey, "outside the band: a gap");
   assert.equal(at(zones["split overlap"], "move 60,222").split.key, "t:a", "overlapping rows: the first registered");
 });
 
-test("rows hold still: no row opens a gap and the dragged row keeps its place for any drag", () => {
-  for (const [title, steps] of Object.entries(zones)) for (const s of states(steps)) assert.deepEqual(Object.keys(s.gaps ?? {}), [], `${title} ${s.step}`);
-  for (const s of moves(zones["list row sweep"])) assert.ok(s.drop.type === "split" ? s.line === null : s.line !== null, s.step);
+test("gaps: only the slot's row opens one, a split half keeps the gap it had, and none is left after a drag", () => {
+  for (const [title, steps] of Object.entries(zones))
+    for (const s of states(steps)) {
+      const open = Object.keys(s.gaps ?? {});
+      assert.ok(open.length <= 1, `${title} ${s.step}: ${open}`);
+      if (open.length) assert.equal(open[0], s.gapKey, `${title} ${s.step}`);
+      if (/^end /.test(s.step)) assert.deepEqual(open, [], `${title} ${s.step}`);
+    }
+  const sweep = moves(zones["list row sweep"]);
+  sweep.forEach((s, i) => {
+    if (s.drop.type === "split" && i > 0) assert.equal(s.gapKey, sweep[i - 1].gapKey, `${s.step}: the gap stays while a half is lit`);
+  });
 });
 
 test("pinned rows: tabs keep 6 pt of hysteresis over the list's edge, groups use the edge itself", () => {
@@ -147,10 +156,10 @@ test("external: counted, no ghost, a placement only on commit, never over an int
   assert.equal(at(life, "external over an internal drag").external, 0);
 });
 
-test("landing: a cancel or a list drop slides home or to its slot; split, tile and pin drops don't; a row that stays never hides", () => {
+test("landing: a cancel or a list drop slides home or to its slot; split, tile and pin drops don't; the row stays hidden until its ghost lands", () => {
   const cases = Object.fromEntries(session["landing cases"].map((c) => [c.label, c.landed !== null]));
   const hidden = Object.fromEntries(session["landing cases"].map((c) => [c.label, c.landing !== null]));
-  assert.deepEqual(hidden, { ...Object.fromEntries(Object.keys(hidden).map((k) => [k, false])), "row to the list": true, "row into the pinned rows": true });
+  assert.deepEqual(hidden, cases);
   assert.deepEqual(cases, {
     "row to the list": true,
     "row on a row's right half": false,

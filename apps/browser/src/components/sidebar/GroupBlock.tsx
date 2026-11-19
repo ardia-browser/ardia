@@ -12,7 +12,7 @@ import { MeetingTimeLabel, useMeetingCountdown } from "../live/MeetingCountdown"
 import { HoverSlot } from "../ui/HoverSlot";
 import { Button, ContextMenuArea, FadeLabel, ink, space, Symbol, Text, weight, withAlpha } from "../ui";
 import { commitRename, endRename } from "../../state/sidebar/actions";
-import { useDragItem, useDropInto } from "./DragProvider";
+import { useDragFolded, useDragItem, useDropInto } from "./DragProvider";
 import { useShift, type EntryMotion } from "./EntryMotion";
 import { Fold, useFold } from "./Fold";
 import { GROUP_BORDER, GROUP_INNER_RADIUS, GROUP_INDENT, GROUP_INSET, GROUP_RADIUS, groupMembersPadBottom } from "./geometry";
@@ -72,7 +72,8 @@ export const GroupBlock = memo(function GroupBlock({
 }) {
   const windowId = useWindowId();
   const tokens = useSidebarTokens();
-  const collapsed = useGroup(groupId, (g) => !!g?.collapsed);
+  const stored = useGroup(groupId, (g) => !!g?.collapsed);
+  const collapsed = useDragFolded(entryKey("group", groupId)) || stored;
   const color = useGroup(groupId, (g) => g?.color ?? null);
   const tabIds = useGroupTabIds(groupId);
   const [captured] = useState(newCapture);
@@ -81,7 +82,7 @@ export const GroupBlock = memo(function GroupBlock({
   const profileId = usePageProfileId();
   const keptEntries = useKeptEntries(windowId, profileId, groupId);
   const foldedHeight = () => foldedGroupHeight(windowId, profileId, groupId);
-  const { wrapper, handle, headerRef } = useDragItem(entryKey("group", groupId), { kind: "group", tabIds, section, groupId, collapsed, foldedHeight, parentGroup }, own?.clip);
+  const { wrapper, handle, headerRef } = useDragItem(entryKey("group", groupId), { kind: "group", tabIds, section, groupId, collapsed: stored, foldedHeight, parentGroup }, own?.clip);
   const tail = useDragItem(tailKey({ group: groupId }), { kind: "tail", tabIds: [], section, parentGroup: groupId });
 
   const fold = useFold(collapsed);

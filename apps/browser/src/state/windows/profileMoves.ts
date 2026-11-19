@@ -36,13 +36,19 @@ export function intoProfile(s: BrowserState, tabId: string, profileId: string): 
   };
 }
 
+const movable = (s: BrowserState, ids: string[]) =>
+  ids.map((id) => s.tabs[id]).filter((t): t is Tab => !!t && !isIncognitoProfile(t.profileId) && isRegularWindow(s.windows[t.windowId]));
+
+const arriving = (s: BrowserState, t: Tab, profileId: string) => t.profileId !== profileId && !sharedTopAppCopy(s, t, profileId);
+
+export const movesAcrossProfiles = (s: BrowserState, tabIds: string[], profileId: string) => movable(s, tabIds).some((t) => arriving(s, t, profileId));
+
 export function droppedInProfile(s: BrowserState, tabIds: string[], profileId: string, drop: Drop): BrowserState {
   if (!s.profiles[profileId]) return s;
-  const tabs = tabIds.map((id) => s.tabs[id]).filter((t): t is Tab => !!t && t.profileId !== profileId && !isIncognitoProfile(t.profileId) && isRegularWindow(s.windows[t.windowId]));
-  if (!tabs.length) return s;
-  const copies = new Map(tabs.map((t) => [t.id, sharedTopAppCopy(s, t, profileId)]));
-  const placed = tabs.map((t) => copies.get(t.id) ?? t.id);
-  let next = tabs.reduce((acc, t) => (copies.get(t.id) ? acc : intoProfile(acc, t.id, profileId)), s);
+  const tabs = movable(s, tabIds);
+  if (!tabs.length || (drop.type === "none" && tabs.every((t) => t.profileId === profileId))) return s;
+  const placed = tabs.map((t) => (t.profileId === profileId ? t.id : (sharedTopAppCopy(s, t, profileId) ?? t.id)));
+  let next = tabs.reduce((acc, t) => (arriving(s, t, profileId) ? intoProfile(acc, t.id, profileId) : acc), s);
   next = dropping(next, placed, drop);
   const last = findLast(placed, (id) => next.tabs[id]?.profileId === profileId);
   return last ? apply(next, activated(next, last)) : next;

@@ -30,6 +30,7 @@ import { consentToken, stillValid } from "../telemetry/client";
 import { isPeekTab } from "../peek/peek";
 import { noteTabClosedByUser } from "../sync/openTabCloses";
 import type { Drop } from "../drag/drops";
+import { movesAcrossProfiles } from "../windows/profileMoves";
 import { noteSidebarDrop } from "../telemetry/tabPresses";
 
 const store = () => useBrowser.getState();
@@ -184,11 +185,13 @@ export async function dropTabsInProfile(tabIds: string[], target: string, drop: 
   const move = tabsMove(tabIds);
   if (!move) return;
   const consent = consentToken();
-  const profileId = await profileMoveTarget(move, target);
+  const placesOnly = !movesAcrossProfiles(store(), tabIds, target);
+  const profileId = placesOnly ? target : await profileMoveTarget({ ...move, fromProfileId: home }, target);
   if (profileId && store().dropTabsInProfile(tabIds, profileId, drop)) {
     if (stillValid(consent)) noteSidebarDrop(onIcon ? "profile_icon" : "other_profile");
     return;
   }
+  if (placesOnly && drop.type === "none") return;
   const w = store().windows[move.windowId];
   if (w && w.profileId !== home && store().profiles[home]) switchProfile(move.windowId, home, true);
 }

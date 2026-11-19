@@ -13,7 +13,7 @@ import { useLiveColors } from "../live/tokens";
 import { TabRow } from "./TabRow";
 import { Fold, useFold, type FoldEntry } from "./Fold";
 import { GROUP_BORDER, GROUP_INNER_RADIUS, GROUP_RADIUS, LIVE_FOLDER_PAD } from "./geometry";
-import { useDragItem } from "./DragProvider";
+import { useDragFolded, useDragItem } from "./DragProvider";
 import { dismissHover } from "../../state/sidebar/hover";
 import { useGroupHover } from "./hoverController";
 import { useHoverFade } from "./hoverMotion";
@@ -41,7 +41,8 @@ export const LiveFolderBlock = memo(function LiveFolderBlock({ folderId, windowI
   const folder = useLive((s) => s.folders[folderId]);
   const items = useLive((s) => s.items[folderId] ?? EMPTY);
   const showAll = useLive((s) => s.showAll);
-  const collapsed = !!folder?.collapsed;
+  const folded = useDragFolded(entryKey("live", folderId));
+  const collapsed = folded || !!folder?.collapsed;
   const rows = useMemo(() => (folder ? folderRows(folder, items, showAll) : []), [folder, items, showAll]);
   const itemIds = useMemo(() => new Set(items.map((i) => i.id)), [items]);
   const hiddenList = useLive((s) => s.hidden[folderId] ?? EMPTY);

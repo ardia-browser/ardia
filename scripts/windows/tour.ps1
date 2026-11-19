@@ -2245,9 +2245,9 @@ function Invoke-PagesTour {
 
   Invoke-Stop $session "page-back-to-first" "Back to the first tab" {
     param($stop)
-    $stop.Did = "Pressed Ctrl+Shift+Tab to go up to the tab above this one."
+    $stop.Did = "Pressed Ctrl+Tab to go to the tab used before this one."
     $stop.Expected = "the window's title names the first page's site again."
-    Send-Chord @(0x11, 0x10) 0x09
+    Send-Chord @(0x11) 0x09
     $back = Wait-Title $session "example\.com" 8000
     Start-Sleep -Milliseconds 800
     Save-Shot $stop $session.Main | Out-Null

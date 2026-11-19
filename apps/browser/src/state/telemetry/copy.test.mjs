@@ -8,3 +8,15 @@ const MAC_NOTE =
 test("the Mac's What's Sent keeps its ten-minute note word for word", () => {
   assert.ok(WHATS_SENT.some((group) => group.items.includes(MAC_NOTE)));
 });
+
+const items = WHATS_SENT.flatMap((group) => group.items);
+const translation = items.filter((item) => item.startsWith("When a page's translation ends"));
+
+test("What's Sent says a translation that fails records the step it reached, a fixed reason and the model's kinds of error, never text", () => {
+  assert.equal(translation.length, 1);
+  const [line] = translation;
+  for (const part of ["turned away before it starts", "was turned away or failed", "the step it reached", "one label from a short fixed list", "the language pair isn't available", "no window to ask about the language download in", "the page wasn't ready", "the translation model didn't answer", "the page closed", "which kinds of error the translation model reported", "names from a fixed list"])
+    assert.ok(line.includes(part), part);
+  assert.ok(line.endsWith("Never the page, its text or address, or an error's own words"));
+  assert.ok(!items.some((item) => item.startsWith("When a page's first translation pass ends")), "the old line is replaced, not repeated");
+});

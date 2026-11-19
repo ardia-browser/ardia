@@ -13,6 +13,13 @@ struct IconSource: Equatable {
     self.emoji = emoji
   }
 
+  var storedAddress: String? {
+    guard emoji?.isEmpty != false, let uri, ArdiaFaviconStore.holds(uri) else { return nil }
+    return uri
+  }
+
+  var drawsOffMain: Bool { storedAddress != nil && Thread.isMainThread }
+
   var key: String { emoji.map { "e:\($0)" } ?? "u:\(uri ?? "")" }
 
   func load() -> CGImage? {
@@ -33,7 +40,9 @@ struct IconSource: Equatable {
     }
     guard let uri else { return nil }
     let image: NSImage?
-    if uri.hasPrefix("data:") {
+    if ArdiaFaviconStore.holds(uri) {
+      return StoredIcons.image(uri)
+    } else if uri.hasPrefix("data:") {
       image = NSImage(dataURL: uri)
     } else if let url = URL(string: uri), url.isFileURL {
       image = NSImage(contentsOfFile: url.path)

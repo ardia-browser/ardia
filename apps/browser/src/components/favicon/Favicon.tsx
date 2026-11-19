@@ -1,7 +1,8 @@
 import { displayHost, hostOf } from "@ardia/core";
 import { memo, useState } from "react";
 import { Image, Text, View } from "react-native";
-import { faviconFailed, useAppearanceDark, useFavicon, useFaviconTheme } from "../../state/favicons/favicons";
+import { faviconFailed, useAppearanceDark, useFavicon } from "../../state/favicons/favicons";
+import { useFaviconTheme } from "../../state/favicons/faviconTheme";
 import { radius, Symbol, useTheme, weight } from "../ui";
 import { typeFace } from "../ui/tokens";
 import { bundledSiteIcon } from "./siteIcons";

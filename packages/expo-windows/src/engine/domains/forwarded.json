@@ -22,10 +22,6 @@
       "syncState": "ac_extensions_sync_state",
       "syncApply": "ac_extensions_sync_apply"
     },
-    "favicons": {
-      "get": "ac_favicons_get",
-      "set": "ac_favicons_set"
-    },
     "history": {
       "query": "ac_history_query",
       "add": "ac_history_add",

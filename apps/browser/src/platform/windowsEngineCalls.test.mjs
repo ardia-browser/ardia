@@ -422,6 +422,16 @@ test("engine.info answers from the engine host in the Mac's shape", async () => 
   assert.deepEqual(engine.hosted, ["host.info"]);
 });
 
+test("favicons.get and favicons.set never ask Chromium about internal pages", async () => {
+  const engine = fakeEngine(() => JSON.stringify({ pages: {}, icons: {}, stored: true }));
+  const favicons = calling(engine, "favicons");
+  assert.deepEqual(await favicons("get", { pages: ["ardia://notes/today", "about:blank"], icons: ["ardia://notes/icon"], size: 32 }), { pages: {}, icons: {} });
+  assert.deepEqual(await favicons("set", { page: "ardia://notes/today", icon: "https://a.test/i.png", png: "AAAA" }), { stored: false });
+  assert.deepEqual(engine.calls, []);
+  await favicons("get", { pages: ["ardia://notes/today", "https://a.test/"], icons: [], size: 32 }, "work");
+  assert.deepEqual(engine.calls, [{ name: "ac_favicons_get", profile: "work", args: { pages: ["https://a.test/"], icons: [], size: 32 } }]);
+});
+
 test("favicons.fetch answers the icon Chromium stored for that address, with its size", async () => {
   const url = "https://a.example/favicon.ico";
   const engine = fakeEngine(() => JSON.stringify({ pages: {}, icons: { [url]: { png: ONE_PIXEL_PNG } } }));

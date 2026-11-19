@@ -139,11 +139,11 @@ using namespace ardia_runtime;
 }
 
 - (void)downloadFavicon:(NSString *)url name:(NSString *)name completion:(void (^)(NSDictionary<NSString *, id> *))completion {
-  [ArdiaFavicons fetch:url profile:_profile name:name completion:completion];
+  [ArdiaFavicons fetch:url profile:_profile page:nil completion:completion];
 }
 
 - (void)downloadImage:(NSString *)url maxPixels:(NSInteger)maxPixels completion:(void (^)(NSDictionary<NSString *, id> *))completion {
-  [ArdiaFavicons fetch:url profile:_profile name:nil completion:completion];
+  [ArdiaFavicons fetchImage:url profile:_profile completion:completion];
 }
 
 - (void)mediaCommand:(NSString *)action seconds:(double)seconds {

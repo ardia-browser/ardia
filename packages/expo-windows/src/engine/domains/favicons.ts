@@ -36,9 +36,21 @@ export function pngImage(base64: string): { uri: string; width: number; height: 
   return width && height ? { uri: PNG_DATA + base64, width, height } : null;
 }
 
+const hasNoIcon = (url: string) => !/^[a-z][a-z0-9+.-]*:/i.test(url) || /^(?:ardia|ardia-favicon|about|blob|data|javascript):/i.test(url);
+const withIcons = (urls: unknown): string[] => (Array.isArray(urls) ? urls.filter((url): url is string => typeof url === "string" && !hasNoIcon(url)) : []);
+
 const later = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export const faviconCalls: Handlers = {
+  get: async (args, engine) => {
+    const pages = withIcons(args.values.pages);
+    const icons = withIcons(args.values.icons);
+    if (!pages.length && !icons.length) return ok({ pages: {}, icons: {} });
+    return ok(await served(engine, "ac_favicons_get", args.profile, { ...args.values, pages, icons }));
+  },
+  set: async (args, engine) => (hasNoIcon(args.text("page")) ? ok({ stored: false }) : ok(await served(engine, "ac_favicons_set", args.profile, args.values))),
+  forget: async () => ok(null),
+  counts: async () => ok({ memory: 0, resolved: 0, missed: 0, kept: 0, refused: 0, snapshot: 0 }),
   fetch: async (args, engine) => {
     const url = args.text("url");
     if (url.startsWith(PNG_DATA)) return ok(pngImage(url.slice(PNG_DATA.length)));

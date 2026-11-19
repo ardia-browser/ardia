@@ -546,6 +546,8 @@ const fakeModules = {
     get: ({ profile, ...args }) => faviconsFor(profile, args),
     set: () => ({ stored: true }),
     fetch: () => null,
+    forget: () => null,
+    counts: () => ({ memory: 0, resolved: 0, missed: 0, kept: 0, refused: 0, snapshot: 0 }),
   }),
   ArdiaWebView: domain("webView", {
     setDisplayMediaPicker: () => null,

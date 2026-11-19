@@ -153,7 +153,7 @@ Moved to `docs/testing.md` › "ArdiaCore acceptance".
 | page-events | `zoomStep` → `onZoom`, `getSecurityInfo` and `onSecurity`, an app link with no app → `onExternalApp`, Esc the page leaves → `onCommand escape` |
 | notifications | A page's `Notification` → `onNotification`, the app's click reaches the page, `close()` → `onNotificationClose` |
 | now-playing | `<audio>` with Media Session metadata (tab muted) → `onNowPlaying`; the app's `mediaCommand("pause")` pauses it |
-| images | `downloadImage`, `downloadFavicon`, `fetchFavicon` as `data:` PNGs |
+| images | `downloadImage` as a `data:` PNG; `downloadFavicon`, `fetchFavicon` as an `ardia-favicon:` address of the stored PNG |
 | frozen | `setFrozen(true/false)` on a background page: the page sees freeze and resume |
 | discard | A background tab discarded in place → `onDiscarded` |
 | permission-prompt, popup-blocked | A permission request → the app's prompt → Chrome; a popup without a gesture → `onPopupBlocked` → `openBlockedPopup` |
@@ -235,7 +235,7 @@ and sent only when changed, progress at most 10 times a second, a held report fl
 | `setMuted`, `zoomStep`, `find`, `stopFinding`, `showDevTools` | done | DevTools dock in the tab's view |
 | `executeJavaScript`, `evaluate`, `navigationEntries` | done | ArdiaCore's renderer side (`ACContentRendererClient`, a mojo channel) |
 | `getSecurityInfo`, `openBlockedPopup`, `clearSiteData`, `discard`, `setFrozen` | done | `discard` answers what happened (`discarded`, `already`, `refused`; `unload` is `unsupported`: ArdiaCore keeps a regular profile loaded), and a woken tab sends `onReady` again |
-| `downloadFavicon`, `downloadImage` | done | `data:` PNGs; Chrome's FaviconService keeps icons |
+| `downloadFavicon`, `downloadImage` | done | an `ardia-favicon:` address (`ArdiaFaviconStore`) and a `data:` PNG; Chrome's FaviconService keeps icons |
 | `mediaCommand`, `notificationAction` | done | |
 | `print`, `runPageCommand` | partial | Chrome's commands (print preview, save page, system print, caret browsing): dialogs in a hidden run |
 | `requestPictureInPicture`, `exitPictureInPicture` | partial | Through the page script with a user gesture; a PiP window shows on screen |
@@ -259,7 +259,7 @@ over, `-[ArdiaCoreTab setTemporarySource:]`) is the tab a closed window's entry 
 | `engineCall`, `onEngineEvent` | done | `//chrome/browser/ardia`'s C exports, the same code as CEF's |
 | `components`, `listTasks`, `beginTracing`, `endTracing`, `isTracing` | done | |
 | `setSearchEngineName` | done | |
-| `fetchFavicon` | done | `(url, profile)` → `data:` PNG |
+| `fetchFavicon` | done | `(url, profile, page?)` → an `ardia-favicon:` address; with a page, the icon is also stored for it in Chrome |
 | `onDownload`, `cancelDownload`, `pauseDownload`, `resumeDownload` | done | `ac_downloads_*` over Chrome's DownloadManager |
 | `onPermission`, `resolvePermission` | done | One answer per prompt (`ac_permissions.mm`): a page's permission element (Chrome's embedded flow) reaches the app only for its site question; the steps after Allow ("ask macOS", "open System Settings", policy) stay in the engine, as Chrome's own view does, and a later step is never a question even if the site's setting was reset meanwhile. 0.2.21 answered those steps with a second Accept and aborted (`camera-mic-allow`, `permission-answer-once`, `permission-element-allow`) |
 | `getExternalAppAllowances`, `removeExternalAppAllowance` | done | |

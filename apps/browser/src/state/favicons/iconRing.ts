@@ -1,11 +1,11 @@
-import { iconTheme } from "../../platform/favicons";
+import { iconTheme, isStoredFavicon } from "../../platform/favicons";
 import { useEffect, useState } from "react";
 import type { TileTheme } from "./tileTheme";
 
 const rings = new Map<string, Promise<TileTheme | null>>();
 
 function readableUri(uri: string): Promise<string | null> {
-  if (uri.startsWith("data:") || uri.startsWith("file:")) return Promise.resolve(uri);
+  if (uri.startsWith("data:") || uri.startsWith("file:") || isStoredFavicon(uri)) return Promise.resolve(uri);
   return fetch(uri)
     .then((response) => response.blob())
     .then(

@@ -1,6 +1,7 @@
 #import "ArdiaHostInternal.h"
 #import "ArdiaLaunchConfig.h"
 #import "ArdiaEarlyWindow.h"
+#import "ArdiaFaviconStore.h"
 #import "ArdiaServices.h"
 #import "ArdiaNavigationDownloads.h"
 #import "ArdiaStartup.h"
@@ -121,6 +122,7 @@ static void (^gQuitCancelledHandler)(void);
   ArdiaCoreProfile *p = ardia_host::LoadedProfile(profile);
   if (!profile.length || !engine) return completion(@[ @"data" ]);
   [DeletedProfiles() addObject:profile];
+  [ArdiaFaviconStore retireProfile:profile];
   void (^remove)(ArdiaCoreProfile *) = ^(ArdiaCoreProfile *loaded) {
     if (!loaded) {
       NSString *path = [gDataDirectory stringByAppendingPathComponent:ardia_host::ProfileDirectoryName(profile)];
@@ -130,6 +132,7 @@ static void (^gQuitCancelledHandler)(void);
     [engine deleteProfile:loaded completion:^(BOOL deleted) {
       if (deleted) [Profiles() removeObjectForKey:profile];
       else [DeletedProfiles() removeObject:profile];
+      if (!deleted) [ArdiaFaviconStore restoreProfile:profile];
       completion(deleted ? @[] : @[ @"data" ]);
     }];
   };
@@ -150,6 +153,7 @@ static void (^gQuitCancelledHandler)(void);
     [ProfileWaiters() removeObjectForKey:profile];
     for (void (^waiter)(ArdiaCoreProfile *) in waiting) waiter(nil);
     ardia_host::ForgetPrivateNavigationDownloads(profile);
+    [ArdiaFaviconStore retireProfile:profile];
     if ([Profiles().allValues containsObject:p]) return;
   }
   if (p) [engine releaseProfile:p];

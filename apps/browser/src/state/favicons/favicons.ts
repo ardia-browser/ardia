@@ -1,12 +1,10 @@
-import { faviconsFor, fetchFavicon, iconTheme, storeFavicon, type IconTheme } from "../../platform/favicons";
+import { faviconsFor, fetchFavicon, forgetFavicons, storeFavicon } from "../../platform/favicons";
 import { withoutFragment } from "../../lib/url";
 import { onHistoryChanged } from "../../platform/history";
-import { readDocument, removeDocument } from "../../platform/documents";
 import { useEffect } from "react";
-import { create } from "zustand";
-import { batchStoreUpdates, useBrowser, type BrowserState } from "../browser/store";
+import { useBrowser } from "../browser/store";
 import { ALL, useKeyed, watchAppDark } from "../browser/keyedWatch";
-import { engineProfile, isIncognitoProfile } from "../browser/model";
+import { isIncognitoProfile } from "../browser/model";
 import { DEFAULT_PROFILE_ID } from "../settings/settings";
 import { webviews } from "../../platform/webviews";
 import { changedPages, pagesWrittenSince, withPages, type PagesPair } from "./pagesWritten";
@@ -14,61 +12,20 @@ import { onProfilesOpened, profileOpened } from "../profiles/profileLoading";
 import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
 import { fetchFailedBefore, forgetAsked, markAsked, noteFetchFailed, unmarkAsked } from "./askedFavicons";
+import { removeLegacyFaviconFiles } from "./legacyFaviconFiles";
+import { cacheKey, capped, EMPTY_ICONS, faviconChangesQueued, hasNoIcon, MAX_ICONS, queueFaviconChange, updateIcons as update, useFavicons, type Favicons } from "./faviconStore";
+import { noteFaviconFailure, noteFaviconLookup, noteFaviconsHeld } from "../telemetry/faviconWork";
+import { heldUris, withoutPages } from "./faviconRemoval";
 
-type Icons = {
-  pages: Record<string, string | null>;
-  srcs: Record<string, string>;
-  appearances: Record<string, [string, string]>;
-};
+export { cacheKey, EMPTY_ICONS, knownFaviconTheme, useFavicons, type Favicons } from "./faviconStore";
 
-export const EMPTY_ICONS: Icons = { pages: {}, srcs: {}, appearances: {} };
 const APPEARANCE_SWAP_MS = 5000;
-const MAX_ICONS = 3000;
 const LOOKUP_DELAY_MS = 16;
 const LOOKUP_BATCH = 200;
 let appearanceChangedAt = -Infinity;
 
-export type Favicons = {
-  profiles: Record<string, Icons>;
-  themes: Record<string, IconTheme | null>;
-};
-
-export const useFavicons = create<Favicons>()(() => ({ profiles: {}, themes: {} }));
-
-export const knownFaviconTheme = (uri: string) => useFavicons.getState().themes[uri];
-
-export const cacheKey = (profileId: string) => (isIncognitoProfile(profileId) ? profileId : engineProfile(useBrowser.getState(), profileId));
 const siteOf = (url: string) => /^[a-z][\w+.-]*:\/\/[^/?#]*/i.exec(url)?.[0].toLowerCase() ?? "";
 export const faviconOutlived = (iconPage: string | null, url: string) => !!iconPage && !!url && siteOf(iconPage) !== siteOf(url);
-
-type Change = (f: Favicons) => Favicons;
-const FLUSH_MS = 16;
-const changes: Change[] = [];
-let flushTimer: ReturnType<typeof setTimeout> | undefined;
-
-function queue(change: Change, now = false) {
-  changes.push(change);
-  if (now) flush();
-  else flushTimer ??= setTimeout(flush, FLUSH_MS);
-}
-
-function flush() {
-  clearTimeout(flushTimer);
-  flushTimer = undefined;
-  const all = changes.splice(0);
-  if (all.length) batchStoreUpdates(() => useFavicons.setState((f) => all.reduce((s, change) => change(s), f)));
-}
-
-function update(key: string, change: (icons: Icons) => Icons, now = false) {
-  queue((f) => {
-    const before = f.profiles[key] ?? EMPTY_ICONS;
-    const after = change(before);
-    return after === before ? f : { ...f, profiles: { ...f.profiles, [key]: after } };
-  }, now);
-}
-
-const capped = <T,>(map: Record<string, T>, key: string, value: T): Record<string, T> =>
-  Object.keys(map).length >= MAX_ICONS ? { [key]: value } : { ...map, [key]: value };
 
 let watching = false;
 
@@ -108,7 +65,8 @@ function lookUpPages(key: string, list: string[]) {
     return { id, entry, started: entry.wrote };
   });
   void faviconsFor(key, list)
-    .then((found) =>
+    .then((found) => {
+      const started = performance.now();
       update(key, (icons) => {
         const writes: [string, string | null][] = [];
         for (const [i, page] of list.entries()) {
@@ -117,8 +75,10 @@ function lookUpPages(key: string, list: string[]) {
           if (icons.pages[page] !== uri) writes.push([page, uri]);
         }
         return writes.length ? { ...icons, pages: withPages(icons.pages, writes) } : icons;
-      }, true),
-    )
+      }, true);
+      noteFaviconLookup(list.length, performance.now() - started, consent);
+      noteFaviconsHeld(Object.keys(useFavicons.getState().profiles[key]?.pages ?? EMPTY_ICONS.pages).length, consent);
+    })
     .catch((error) => {
       for (const page of list) unmarkAsked(key, page);
       warnFor(consent, "[favicons] lookup failed", error);
@@ -132,7 +92,7 @@ const inflight = new Map<string, Promise<string | null>>();
 
 export function noteFavicon(tabId: string, src: string) {
   const tab = useBrowser.getState().tabs[tabId];
-  if (!tab?.url || !src) return;
+  if (!tab?.url || !src || hasNoIcon(tab.url)) return;
   const key = cacheKey(tab.profileId);
   const page = withoutFragment(tab.url);
   const known = useFavicons.getState().profiles[key]?.srcs[src];
@@ -153,7 +113,7 @@ export function noteFavicon(tabId: string, src: string) {
 }
 
 function remember(key: string, page: string, src: string, uri: string) {
-  const icons = changes.length ? undefined : useFavicons.getState().profiles[key];
+  const icons = faviconChangesQueued() ? undefined : useFavicons.getState().profiles[key];
   if (icons && icons.pages[page] === uri && icons.srcs[src] === uri) return;
   const dark = useBrowser.getState().ui.appDark;
   const swapped = Date.now() - appearanceChangedAt < APPEARANCE_SWAP_MS;
@@ -189,7 +149,11 @@ export function adoptFavicons(profileId: string, known: KnownFavicon[]) {
     return { ...icons, pages };
   }, true);
   void (async () => {
-    for (const [page, f] of found) await storeFavicon(key, page, f.icon, f.png).catch(() => null);
+    for (const [page, f] of found) {
+      const inline = `${PNG_DATA_URI}${f.png}`;
+      const uri = await storeFavicon(key, page, f.icon, f.png).catch(() => null);
+      if (uri && uri !== inline) update(key, (icons) => (icons.pages[page] === inline ? { ...icons, pages: withPages(icons.pages, [[page, uri]]) } : icons));
+    }
   })();
 }
 
@@ -198,7 +162,7 @@ function fetchMissing(profileId: string, url: string, src: string) {
   if (isIncognitoProfile(profileId) || !/^https?:/i.test(src) || !profileOpened(key)) return;
   const id = `${key}|${src}`;
   if (inflight.has(id) || fetchFailedBefore(id)) return;
-  const pending = fetchFavicon(src, key)
+  const pending = fetchFavicon(src, key, withoutFragment(url))
     .then((image) => {
       if (image?.uri.startsWith(PNG_DATA_URI)) void storeFavicon(key, withoutFragment(url), src, image.uri.slice(PNG_DATA_URI.length)).catch(() => null);
       return image?.uri ?? null;
@@ -213,6 +177,7 @@ function fetchMissing(profileId: string, url: string, src: string) {
 }
 
 export function faviconFailed(profileId: string, uri: string) {
+  noteFaviconFailure(consentToken());
   update(cacheKey(profileId), (icons) => {
     if (!Object.values(icons.pages).includes(uri) && !Object.values(icons.srcs).includes(uri)) return icons;
     return {
@@ -240,7 +205,7 @@ function lookupOrder(profileId?: string): string[] {
 }
 
 export function resolveFavicon(url: string, src?: string | null, profileId?: string): ResolvedFavicon | null {
-  if (!url) return null;
+  if (!url || hasNoIcon(url)) return null;
   for (const id of lookupOrder(profileId)) {
     const uri = lookupIn(cacheKey(id), url, src);
     if (uri) return { uri, profileId: id };
@@ -317,62 +282,36 @@ export function useFavicon(url: string, src?: string | null, profileId?: string)
     const found = resolveFavicon(url, src, profileId);
     return found ? `${found.profileId} ${found.uri}` : null;
   });
-  const missing = !!url && !key;
+  const missing = !!url && !key && !hasNoIcon(url);
   const order = missing ? lookupOrder(profileId).join(" ") : "";
   useEffect(() => (missing ? watch({ url, src, profileId }) : undefined), [missing, order, profileId, url, src]);
   const split = key?.indexOf(" ") ?? -1;
   return key ? { profileId: key.slice(0, split), uri: key.slice(split + 1) } : null;
 }
 
-const theming = new Set<string>();
-
-export function useFaviconTheme(url: string, src?: string | null, profileId?: string): IconTheme | null | undefined {
-  const uri = useFavicons(() => resolveFavicon(url, src, profileId)?.uri ?? null);
-  const theme = useFavicons((f) => (uri ? f.themes[uri] : undefined));
-  const pending = !!uri && theme === undefined;
-  useEffect(() => {
-    if (!pending || !uri || theming.has(uri)) return;
-    theming.add(uri);
-    void iconTheme({ uri })
-      .catch(() => null)
-      .then((found) => queue((f) => (f.themes[uri] === (found ?? null) ? f : { ...f, themes: capped(f.themes, uri, found ?? null) })))
-      .finally(() => theming.delete(uri));
-  }, [pending, uri]);
-  return theme;
-}
-
 function forget(key: string) {
   forgetAsked(key);
   for (const [id, pending] of inFlight) if (id.startsWith(`${key}|`)) pending.wrote = ++writeSeq;
   update(key, () => EMPTY_ICONS, true);
+  void forgetFavicons(key).catch(() => null);
 }
 
 export const pruneEngineFavicons = (engine: string) => forget(engine);
 
-function removeLegacyFiles(s: Pick<BrowserState, "profiles">) {
-  for (const id of Object.keys(s.profiles)) {
-    const doc = `favicons-${id}.json`;
-    try {
-      if (readDocument(doc) === null) continue;
-      removeDocument(doc);
-    } catch (error) {
-      console.warn(`[favicons] couldn't remove ${doc}`, error);
-    }
-  }
-}
-
 export function startFavicons() {
-  removeLegacyFiles(useBrowser.getState());
+  removeLegacyFaviconFiles(useBrowser.getState(), consentToken());
   const history = onHistoryChanged((change) => {
     if (change.kind !== "deleted") return;
     if (change.all) return forget(change.profile);
     const gone = new Set(change.urls.map(withoutFragment));
     const key = change.profile;
-    for (const page of gone) unmarkAsked(key, page);
-    update(key, (icons) => {
-      if (!Object.keys(icons.pages).some((page) => gone.has(page))) return icons;
-      return { ...icons, pages: Object.fromEntries(Object.entries(icons.pages).filter(([page]) => !gone.has(page))) };
-    });
+    for (const page of gone) {
+      unmarkAsked(key, page);
+      wrote(key, page);
+    }
+    const shown = new Set(Object.values(useBrowser.getState().tabs).flatMap((t) => (cacheKey(t.profileId) === key ? [t.favicon] : [])));
+    update(key, (icons) => withoutPages(icons, gone, shown));
+    void forgetFavicons(key).catch(() => null);
   });
   const opened = onProfilesOpened(() => {
     for (const set of [...watchers.values()])
@@ -383,12 +322,14 @@ export function startFavicons() {
   });
   const stop = useBrowser.subscribe((s, prev) => {
     if (s.ui.appDark !== prev.ui.appDark) appearanceChangedAt = Date.now();
-    if (s.windows !== prev.windows && (changes.length || Object.keys(useFavicons.getState().profiles).some(isIncognitoProfile))) {
+    if (s.windows !== prev.windows && (faviconChangesQueued() || Object.keys(useFavicons.getState().profiles).some(isIncognitoProfile))) {
       const open = new Set(Object.values(s.windows).map((w) => w.profileId));
       for (const t of Object.values(s.tabs)) open.add(t.profileId);
-      queue((f) => {
+      queueFaviconChange((f) => {
         const gone = Object.keys(f.profiles).filter((id) => isIncognitoProfile(id) && !open.has(id));
-        return gone.length ? { ...f, profiles: Object.fromEntries(Object.entries(f.profiles).filter(([id]) => !gone.includes(id))) } : f;
+        if (!gone.length) return f;
+        const dropped = new Set(gone.flatMap((id) => heldUris(f.profiles[id] ?? EMPTY_ICONS)));
+        return { profiles: Object.fromEntries(Object.entries(f.profiles).filter(([id]) => !gone.includes(id))), themes: Object.fromEntries(Object.entries(f.themes).filter(([uri]) => !dropped.has(uri))) };
       }, true);
     }
   });

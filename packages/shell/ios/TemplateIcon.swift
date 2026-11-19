@@ -3,11 +3,11 @@ import CoreImage
 import ExpoModulesCore
 
 enum TemplateIcon {
-  private static let cache = NSCache<NSString, CGImage>()
+  private static let cache = IconDerived<IconImage>("template")
 
   static func of(_ source: IconSource) -> CGImage? {
-    if let cached = cache.object(forKey: source.key as NSString) { return cached }
-    guard let image = source.load(),
+    if let cached = cache.value(for: source) { return cached.image }
+    guard !source.drawsOffMain, let image = source.load(),
       let context = CGContext(
         data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: 0,
         space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
@@ -18,7 +18,7 @@ enum TemplateIcon {
     context.setFillColor(.white)
     context.fill(rect)
     guard let white = context.makeImage() else { return nil }
-    cache.setObject(white, forKey: source.key as NSString)
+    cache.set(IconImage(white), for: source)
     return white
   }
 }

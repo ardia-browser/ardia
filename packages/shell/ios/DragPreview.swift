@@ -68,6 +68,7 @@ final class DragPreview {
     let icon: NSImage? = favicon.flatMap { spec -> NSImage? in
       guard let url = URL(string: spec) else { return nil }
       if url.isFileURL { return NSImage(contentsOf: url) }
+      if ArdiaFaviconStore.holds(spec) { return ArdiaFaviconStore.heldPNG(spec).flatMap { NSImage(data: $0) } }
       if url.scheme == "data", let data = try? Data(contentsOf: url) { return NSImage(data: data) }
       return nil
     } ?? NSImage(systemSymbolName: "globe", accessibilityDescription: nil)

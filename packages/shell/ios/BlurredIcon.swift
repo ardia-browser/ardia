@@ -6,7 +6,7 @@ final class BlurredIcon {
   let plain: CGImage
   let darkRing: CGImage
 
-  private static let cache = NSCache<NSString, BlurredIcon>()
+  private static let cache = IconDerived<BlurredIcon>("blurred")
   private static let context = CIContext()
 
   private init(plain: CGImage, darkRing: CGImage) {
@@ -15,10 +15,10 @@ final class BlurredIcon {
   }
 
   static func of(_ source: IconSource) -> BlurredIcon? {
-    if let cached = cache.object(forKey: source.key as NSString) { return cached }
-    guard let image = source.load(), let plain = blur(image), let darkRing = colorControls(plain) else { return nil }
+    if let cached = cache.value(for: source) { return cached }
+    guard !source.drawsOffMain, let image = source.load(), let plain = blur(image), let darkRing = colorControls(plain) else { return nil }
     let icon = BlurredIcon(plain: plain, darkRing: darkRing)
-    cache.setObject(icon, forKey: source.key as NSString)
+    cache.set(icon, for: source)
     return icon
   }
 

@@ -1,4 +1,5 @@
 #import "ArdiaWebViewInternal.h"
+#import "ArdiaFaviconStore.h"
 #import "ArdiaEarlyWindow.h"
 #import "ArdiaFieldTiming.h"
 #import "ArdiaNavigationDownloads.h"
@@ -198,7 +199,7 @@ NSString *PNGDataURL(NSImage *image) {
   NSImage *image = tab.favicon;
   if (!image) return;
   NSString *url = tab.faviconURL;
-  if (url.length) [ArdiaFavicons noteImage:image forURL:url profile:_profile];
+  if (url.length) [ArdiaFaviconStore noteTab:tab profile:_profile];
   else url = PNGDataURL(image);
   if (!url.length || [url isEqualToString:_sent.favicon]) return;
   _sent.favicon = url;

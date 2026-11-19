@@ -5073,8 +5073,13 @@ try {
     const favicon = await evalApp(`return ac.webviews.get("${first.id}").downloadFavicon("${base}/icon.png")`);
     const fetched = await engine("favicons.fetch", { profile: "", url: `${base}/icon.png` });
     const isData = (r) => JSON.stringify(r ?? null).includes("data:image/png");
-    if (!isData(image) || !isData(favicon) || !isData(fetched)) throw new Error(`not data URLs: ${JSON.stringify({ image, favicon, fetched }).slice(0, 300)}`);
-    return { image: true, favicon: true, fetched: true };
+    const isStored = (r) => /^ardia-favicon:\/\/icon\/[0-9a-f]{24}\/icon\/[A-Za-z0-9%._~-]+\?v=[0-9a-f]{16}$/.test(r?.uri ?? "") && r.width > 0 && r.height > 0;
+    if (!isData(image)) throw new Error(`the image is not a data URL: ${JSON.stringify(image).slice(0, 300)}`);
+    if (!isStored(favicon) || !isStored(fetched)) throw new Error(`not stored icon addresses: ${JSON.stringify({ favicon, fetched }).slice(0, 300)}`);
+    if (favicon.uri !== fetched.uri) throw new Error(`one icon, two addresses: ${favicon.uri} and ${fetched.uri}`);
+    const bytes = await evalApp(`return fetch(${JSON.stringify(fetched.uri)}).then((r) => r.blob()).then((b) => b.size)`);
+    if (!(bytes > 0)) throw new Error(`the address doesn't read back: ${JSON.stringify(bytes)}`);
+    return { image: true, favicon: true, fetched: true, readBack: true };
   });
 
   await check("favicon-fetch", async () => {
@@ -5135,9 +5140,9 @@ try {
     const fetchIcon = async (url, profile = "") => {
       const started = Date.now();
       const r = await evalApp(`return ac.engine.call("favicons.fetch", ${JSON.stringify({ profile, url })}).catch(() => null)`, 60000);
-      return { uri: typeof r?.uri === "string" ? r.uri.slice(0, 22) : null, width: r?.width ?? null, ms: Date.now() - started };
+      return { uri: typeof r?.uri === "string" ? r.uri.slice(0, 21) : null, width: r?.width ?? null, ms: Date.now() - started };
     };
-    const ok = (r) => r.uri === "data:image/png;base64,";
+    const ok = (r) => r.uri === "ardia-favicon://icon/" && r.width > 0;
     let privateWindow = null;
     try {
       await evalApp(`const h = (globalThis.acFaviconHang = { started: Date.now() });
@@ -5187,11 +5192,11 @@ try {
       const privately = await fetchIcon(`${favBase}/icon.png?private`, privateProfile);
       if (!ok(privately)) throw new Error(`the private window's fetch failed: ${JSON.stringify(privately)}`);
       const stored = await engineOrError("favicons.set", { profile: privateProfile, page: `${favBase}/private-page`, icon: `${favBase}/icon.png?private`, png: "AA==" }).catch((e) => ({ refused: String(e) }));
-      if (!stored?.error) throw new Error(`a private profile wrote Chrome's favicon store: ${JSON.stringify(stored)}`);
-      const timedOut = await until("the hung request's end", () => evalApp(`const h = globalThis.acFaviconHang; return h.ms ? { uri: h.uri ? h.uri.slice(0, 22) : null, ms: h.ms } : null`), 50000);
+      if (!stored?.error && stored?.stored !== false) throw new Error(`a private profile wrote Chrome's favicon store: ${JSON.stringify(stored)}`);
+      const timedOut = await until("the hung request's end", () => evalApp(`const h = globalThis.acFaviconHang; return h.ms ? { uri: h.uri ? h.uri.slice(0, 21) : null, ms: h.ms } : null`), 50000);
       if (timedOut.uri !== null || timedOut.ms < 25000 || timedOut.ms > 50000) throw new Error(`the hung request: ${JSON.stringify(timedOut)}`);
       const ms = (o) => Object.fromEntries(Object.entries(o).map(([k, r]) => [k, r.ms]));
-      return { accepted: ms(accepted), refused: ms(refused), timedOutMs: timedOut.ms, remote, private: { noWindow: null, open: "data", storeSet: stored.error } };
+      return { accepted: ms(accepted), refused: ms(refused), timedOutMs: timedOut.ms, remote, private: { noWindow: null, open: "stored", storeSet: stored.error ?? "refused" } };
     } finally {
       if (privateWindow) await evalApp(`ac.store.getState().closeWindow("${privateWindow}"); return true`).catch(() => null);
       for (const res of hung) res.destroy();

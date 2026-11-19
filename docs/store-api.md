@@ -117,7 +117,9 @@ store but through `storeAction` wrappers in each domain's `actions.ts` (`newTab`
 - History (Chrome's; state/history/engineSync.ts reads it and follows its `history.changed` events, and moved the old `history.json`
   into it once): `removeHistory` (deletes from Chrome too), `clearHistory(profileId, since?)` (the view; Clear Browsing
   Data deletes from Chrome), `importHistory` (Chrome's importer path). Favicons are Chrome's too: state/favicons/favicons.ts is
-  an in-memory cache by page, plus the icons live tabs show and the light/dark pick. Settings: `updateSettings`
+  an in-memory cache by page, plus the icons live tabs show and the light/dark pick. On the Mac its values are short
+  `ardia-favicon:` addresses the native icon store answers (`ArdiaFaviconStore`, one session per profile); elsewhere they
+  are `data:` URIs. Settings: `updateSettings`
   (`bookmarksBar`, `shortcuts` = remapped menu keys read by MainMenu+Shortcuts.swift, …).
 
 ## Hooks (state/browser/hooks.ts and state/<domain>/hooks.ts)

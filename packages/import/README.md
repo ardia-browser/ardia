@@ -59,6 +59,7 @@ Shared code: `Model.swift` (`ImportKind`, `ImportResult` and the other result ty
    `importNative`, which calls `writeImported`. Before any tab is made, the result's `favicons` for the pages that
    profile gets go to `adoptFavicons` (`apps/browser/src/state/favicons/favicons.ts`): into the sidebar's icon cache at once, and
    into the profile's Chrome favicon database with `ac_favicons_set`, so they survive a relaunch without a page load.
+   On the Mac the cache then swaps each one for the stored icon's address.
    `apps/browser/src/platform/importModule.ts` loads the package lazily.
 6. Extensions: `listExtensions(browserId, profileId)` returns every extension of a source profile with whether the user
    turned it off there (`DISABLE_USER_ACTION`, 1 << 0, in the `disable_reasons` list or the legacy bitmask), its toolbar

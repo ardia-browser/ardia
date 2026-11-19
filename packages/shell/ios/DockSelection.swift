@@ -108,6 +108,9 @@ final class DockSelection: ExpoView {
     let width = (strokeWidth * scale).rounded() / scale
     let big = bounds.insetBy(dx: -bounds.width * 0.75, dy: -bounds.height * 0.75)
     let blurred = kind == "blur" ? source.flatMap(BlurredIcon.of) : nil
+    if let source, source.storedAddress != nil, kind == "blur" ? blurred == nil : kind == "template" && TemplateIcon.of(source) == nil {
+      StoredIcons.prepare(source, kind: kind) { [weak self] in self?.apply() }
+    }
     if glass {
       applyGlass(radius: radius, rimWidth: width, big: big)
       if colorRing { applyRing(radius: radius, width: width, big: big, blurred: blurred) }

@@ -2,6 +2,7 @@ import type { Adapter } from "../../platform/sync";
 import { consentToken, isSharing, stillValid, onConsentPeriodChange, type ConsentToken } from "./choice";
 import { countFor, fieldName } from "./countFor";
 import { takePopupProtectedMediaCounts } from "./popupProtectedMedia";
+import { takeFaviconWorkCounts } from "./faviconWork";
 
 export type SyncWorkKind = "bookmark" | "history";
 type Phase = "extract" | "apply";
@@ -107,4 +108,4 @@ export function takeLiveWorkCounts() {
   };
 }
 
-export const takeWorkCounts = () => ({ ...takeSyncWorkCounts(), ...takeLiveWorkCounts(), ...takePopupProtectedMediaCounts() });
+export const takeWorkCounts = () => ({ ...takeSyncWorkCounts(), ...takeLiveWorkCounts(), ...takePopupProtectedMediaCounts(), ...takeFaviconWorkCounts() });

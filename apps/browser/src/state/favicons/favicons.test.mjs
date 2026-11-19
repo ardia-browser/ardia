@@ -8,11 +8,12 @@ globalThis.__DEV__ = false;
 const native = import.meta.resolve("../../platform/favicons.ts");
 const stub = `export * from ${JSON.stringify(native)};
 export const faviconsFor = (profile, pages) => globalThis.faviconsForTest(profile, pages);
-export const storeFavicon = (...args) => (globalThis.storedFavicons.push(args), Promise.resolve({ stored: true }));
+export const storeFavicon = (...args) => (globalThis.storedFavicons.push(args), Promise.resolve(globalThis.storedFaviconUri ?? "data:image/png;base64," + args[3]));
+export const forgetFavicons = (...args) => ((globalThis.forgottenFavicons ??= []).push(args), Promise.resolve(null));
 export const fetchFavicon = (src, profile) => (globalThis.fetchFaviconForTest ? globalThis.fetchFaviconForTest(src, profile) : Promise.resolve(null));`;
 registerHooks({
   resolve(specifier, context, next) {
-    if (specifier === "../../platform/favicons" && context.parentURL?.endsWith("/state/favicons/favicons.ts"))
+    if (specifier === "../../platform/favicons" && /\/state\/favicons\/favicons\.ts$/.test(context.parentURL ?? ""))
       return { url: `data:text/javascript,${encodeURIComponent(stub)}`, shortCircuit: true };
     return next(specifier, context);
   },

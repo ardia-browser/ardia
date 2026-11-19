@@ -177,9 +177,11 @@ export type EngineCalls = {
   "bookmarks.watch": [Profile, Done];
   "bookmarks.exportHtml": [Profile, string | null];
 
-  "favicons.get": [Profile & { pages: string[]; icons: string[]; size: number }, { pages: Record<string, { png: string; icon: string }>; icons: Record<string, { png: string }> }];
-  "favicons.set": [Profile & { page: string; icon: string; png: string }, { stored: boolean }];
-  "favicons.fetch": [Profile & { url: string }, FaviconImage | null];
+  "favicons.get": [Profile & { pages: string[]; icons: string[]; size: number }, { pages: Record<string, { png?: string; uri?: string; icon: string }>; icons: Record<string, { png?: string; uri?: string }> }];
+  "favicons.set": [Profile & { page: string; icon: string; png: string }, { stored: boolean; uri?: string }];
+  "favicons.fetch": [Profile & { url: string; page?: string }, FaviconImage | null];
+  "favicons.forget": [Profile, null];
+  "favicons.counts": [{}, Record<"memory" | "resolved" | "missed" | "kept" | "refused" | "snapshot", number>];
 
   "webView.setDisplayMediaPicker": [{ enabled: boolean }, null];
   "webView.setPeekModifier": [{ modifier: "alt" | "shift" | "off" }, null];

@@ -74,7 +74,7 @@ extension WebKitTab: PageTab {
   func showDevTools(panel: String?) {}
 
   func downloadImage(_ url: String, maxPixels: Int, completion: @escaping ([String: Any]?) -> Void) {
-    downloadFavicon(url, completion: completion)
+    ArdiaFavicons.fetchImage(url, profile: profile) { completion($0) }
   }
 
   func requestPictureInPicture(clickAt: Double, control: Int, _ completion: @escaping (Bool) -> Void) {

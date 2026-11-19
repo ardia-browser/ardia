@@ -3,10 +3,10 @@ import CoreImage
 import ExpoModulesCore
 
 enum GlassGlow {
-  private static let cache = NSCache<NSString, CGImage>()
+  private static let cache = IconDerived<IconImage>("glow")
 
   static func of(_ source: IconSource, blurred: CGImage) -> CGImage? {
-    if let cached = cache.object(forKey: source.key as NSString) { return cached }
+    if let cached = cache.value(for: source) { return cached.image }
     let scale = min(1, 64 / Double(max(blurred.width, blurred.height, 1)))
     let w = max(1, Int(Double(blurred.width) * scale)), h = max(1, Int(Double(blurred.height) * scale))
     guard let context = CGContext(
@@ -25,7 +25,7 @@ enum GlassGlow {
       bytes[i + 3] = UInt8((alpha * 255).rounded())
     }
     guard let image = context.makeImage() else { return nil }
-    cache.setObject(image, forKey: source.key as NSString)
+    cache.set(IconImage(image), for: source)
     return image
   }
 

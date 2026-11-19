@@ -1,5 +1,5 @@
 import { readDocument, writeDocument } from "../../platform/documents";
-import { versionedJson, upgraded, type Migrations } from "../../lib/savedDocument";
+import { versionedJson, upgraded, type Migrations, type SavedObject } from "../../lib/savedDocument";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { isIncognitoProfile } from "../browser/model";
 import { isPeekTab } from "../peek/peek";
@@ -10,8 +10,9 @@ import { isRegularWindow } from "./small";
 import { liveOf, setLive, shownLiveOf } from "../tabs/tabLive";
 
 const DOCUMENT = "launch-look.json";
-const VERSION = 2;
-const MIGRATIONS: Migrations = {};
+const VERSION = 3;
+const withoutFavicons = (look: SavedObject) => ({ ...look, favicons: { images: [], profiles: {}, themes: {} } });
+const MIGRATIONS: Migrations = { 2: withoutFavicons };
 const DOCUMENT_LIMIT = 1100 * 1024;
 const THEME_LIMIT = 200;
 const COLOR_LENGTH_LIMIT = 64;

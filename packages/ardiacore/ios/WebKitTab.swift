@@ -367,7 +367,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
   }
 
   func downloadFavicon(_ url: String, completion: @escaping ([String: Any]?) -> Void) {
-    ArdiaFavicons.fetch(url, profile: profile, name: nil) { completion($0) }
+    ArdiaFavicons.fetch(url, profile: profile, page: nil) { completion($0) }
   }
 
   private var nowPlayingSubframe: WKFrameInfo? {

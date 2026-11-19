@@ -454,6 +454,52 @@ try {
     }
   });
 
+  async function spaceSwipePopsOut(call, win) {
+    const appStaysActive = async () => {
+      const r = await win("fakeAppActive:1");
+      if (r !== "1") throw new Error(`fakeAppActive: ${JSON.stringify(r)}`);
+    };
+    try {
+      await appStaysActive();
+      await win("fakeOcclusion:visible");
+      await win("fakeWindowServer:shows");
+      await sleep(800);
+      const base = (await pipState(call.t)).pip;
+      await win("fakeActiveSpace:1");
+      await sleep(2500);
+      const stayed = await pipState(call.t);
+      if (stayed.pip !== base || stayed.open) throw new Error(`a Space change with the window still on its Space popped the call out: ${JSON.stringify(stayed)}`);
+      await win("fakeActiveSpace:0");
+      await until("the call popped out once its window was on another Space", async () => {
+        const p = await pipState(call.t);
+        return p.pip > base && p.open ? p : null;
+      }, 8000);
+      await win("fakeActiveSpace:1");
+      await until("closed on coming back to its Space", async () => !(await pipState(call.t)).open, 8000);
+      return { stayed: true, swipePopsOut: true, backCloses: true };
+    } finally {
+      for (const action of ["fakeActiveSpace:off", "fakeWindowServer:hides", "fakeOcclusion:off"]) await win(action).catch(() => null);
+    }
+  }
+
+  await check("call-space-swipe-app-stays-active", async () => {
+    const call = await joinedCall();
+    const n = await engine("tabs.devWindowNumber", { tabId: call.tab });
+    const win = (action) => engine("windows.dev", { window: n, action });
+    try {
+      const normal = await spaceSwipePopsOut(call, win);
+      await win("fakeFullScreen:1");
+      await until("the window in full screen", async () => JSON.parse(await win("fullScreen")).fullScreen === true || null, 6000);
+      const fullScreen = await spaceSwipePopsOut(call, win);
+      return { normal, fullScreen };
+    } finally {
+      await win("fakeActiveSpace:off").catch(() => null);
+      await win("fakeFullScreen:0").catch(() => null);
+      await until("out of full screen", async () => JSON.parse(await win("fullScreen")).fullScreen === false || null, 6000).catch(() => null);
+      await closeTab(call.tab);
+    }
+  });
+
   await check("call-app-switch-little-ardia", async () => {
     const before = new Set(await evalApp(`return Object.keys(ac.store.getState().windows)`));
     await evalApp(`ac.runCommand({ command: "newLittleArdia" }); return true`);

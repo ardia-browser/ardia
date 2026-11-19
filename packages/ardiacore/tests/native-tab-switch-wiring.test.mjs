@@ -26,6 +26,11 @@ const pageView = read("../ios/PageViewDefinition.swift");
 const menuTarget = read("../../shell/ios/MenuTarget.swift");
 const mainMenu = read("../../shell/ios/MainMenu.swift");
 const ledger = read("../ios/ArdiaRevealLedger.h");
+const windowSight = read("../ios/ArdiaWindowFullScreen.mm");
+const windowInternal = read("../ios/ArdiaChromeWindowInternal.h");
+const windowDev = read("../ios/ArdiaChromeWindowHost+Dev.mm");
+const windowSightMath = read("../ios/ArdiaWindowSightMath.h");
+const activationAcceptance = read("../scripts/activation-acceptance.mjs");
 
 const body = (text, signature) => {
   const start = text.indexOf(signature);
@@ -360,4 +365,52 @@ test("menus, Services, the Touch Bar, drops and accessibility are closed to both
   assert.match(body(input, "- (void)acceptDropsIfShown"), /const BOOL accept = _visible && \(_standalone \|\| !\[ArdiaWebView revealGapIn:self\.window\]\);/);
   assert.match(body(menuTarget, "private func forwardEdit(_ action: Selector, from sender: Any?)"), /if Self\.pageIsCovered \{ return \}/);
   assert.match(body(menuTarget, "func validateMenuItem(_ menuItem: NSMenuItem) -> Bool"), /FocusHandoff\.editActions\.contains\(action\), Self\.pageIsCovered \{ return false \}/);
+});
+
+test("a macOS Space swipe that leaves Ardia the active app takes the window out of sight (#1092)", () => {
+  const init = body(windowSight, "- (instancetype)initWithCoreWindow:(ArdiaCoreWindow *)coreWindow");
+  assert.match(init, /NSWorkspace\.sharedWorkspace\.notificationCenter\s+addObserverForName:NSWorkspaceActiveSpaceDidChangeNotification/);
+  assert.match(init, /\[weakSelf spaceChanged\]/);
+  const dealloc = body(windowSight, "- (void)dealloc");
+  assert.match(dealloc, /for \(id observer in _workspaceObservers\) \[NSWorkspace\.sharedWorkspace\.notificationCenter removeObserver:observer\];/);
+  assert.match(dealloc, /for \(id observer in _observers\) \[NSNotificationCenter\.defaultCenter removeObserver:observer\];/);
+  const changed = body(windowSight, "- (void)spaceChanged");
+  assert.match(changed, /NoteFocusChange\(@"space change", window\)/);
+  assert.match(changed, /\[self reconsiderSight\];/);
+  assert.match(changed, /dispatch_after\(.*kSpaceSettle.*\^\{\s*\[weakSelf reconsiderSight\];/s);
+  const visible = body(windowSight, "- (BOOL)windowVisible");
+  assert.match(visible, /ardia_window_sight::WindowShown\(NSApp\.isActive, appKitShows, windowServerShows, !OffActiveSpace\(window\)\)/);
+  const update = body(windowSight, "- (void)updateSeen");
+  assert.match(update, /const BOOL shown = !_settling && \[self windowVisible\];/, "mid-transition the window server is still not asked, as before");
+  assert.match(update, /ardia_window_sight::SeenByUser\(_settling, shown, NSApp\.isActive, IsWindowFullScreen\(window\), !OffActiveSpace\(window\)\)/);
+  assert.doesNotMatch(update, /NSApp\.isActive && IsWindowFullScreen/);
+  const wants = body(windowSight, "- (BOOL)wantsWindowServer");
+  assert.match(wants, /if \(NSApp\.isActive && !OffActiveSpace\(window\) && \(window\.occlusionState & NSWindowOcclusionStateVisible\) != 0\) return NO;/);
+  assert.match(wants, /playsForAutoPictureInPictureInWindow:window/);
+});
+
+test("the Space rule is a pure function that the C++ test pins, and settling still wins", () => {
+  const shown = body(windowSightMath, "inline bool WindowShown(");
+  assert.match(shown, /if \(!onActiveSpace\) return false;/);
+  assert.match(shown, /return appActive \? appKitShows \|\| windowServerShows : windowServerShows;/);
+  const seen = body(windowSightMath, "inline bool SeenByUser(");
+  assert.match(seen, /return settling \|\| \(onActiveSpace && \(shown \|\| \(appActive && fullScreen\)\)\);/);
+});
+
+test("the acceptance dev hook can move a window off the active Space, and a check swipes away with Ardia still active", () => {
+  assert.match(windowInternal, /void ActActiveSpace\(NSWindow \*window, NSNumber \*onSpace\);/);
+  const act = body(windowSight, "void ActActiveSpace(NSWindow *window, NSNumber *onSpace)");
+  assert.match(act, /objc_setAssociatedObject\(window, kActedActiveSpaceKey, onSpace,/);
+  assert.match(act, /NSWorkspace\.sharedWorkspace\.notificationCenter postNotificationName:NSWorkspaceActiveSpaceDidChangeNotification/);
+  const off = body(windowSight, "BOOL OffActiveSpace(NSWindow *window)");
+  assert.match(off, /if \(!window\.visible\) return NO;/);
+  assert.match(off, /kActedActiveSpaceKey/);
+  assert.match(off, /kActedOcclusionKey\)\) return NO;/);
+  assert.match(off, /return !window\.isOnActiveSpace;/);
+  assert.match(windowDev, /@"fakeActiveSpace" : \^NSString \*\(NSWindow \*w, NSString \*to\) \{/);
+  assert.match(windowDev, /ActActiveSpace\(w, \[to isEqualToString:@"off"\] \? nil : @\(\[to isEqualToString:@"1"\]\)\);/);
+  const swipe = body(activationAcceptance, 'await check("call-space-swipe-app-stays-active"');
+  assert.match(swipe, /fakeActiveSpace/);
+  assert.match(swipe, /fakeFullScreen/);
+  assert.doesNotMatch(swipe, /fakeAppActive:0/, "the app stays the active app throughout");
 });

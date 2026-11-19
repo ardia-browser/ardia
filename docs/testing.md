@@ -148,7 +148,9 @@ Launch with `scripts/agent/ac launch <app> --data <dir> [--instance K=V] [--test
 - **`fakeFullScreenMs`**: length of the acted-out full-screen transition (the window takes the screen's frame as it
   starts and its old frame back on the way out, as AppKit does). Dev actions (`devWindow`): `fakeFullScreen:<1|0>[:<ms>]`,
   `fakeFullScreenMs:<ms>`, `fakeOcclusion:<visible|occluded|off>` (macOS's occlusion state; a test window otherwise
-  counts as seen), `fakeFullScreenOcclusionMs:<ms>` (acted transitions occlude the window, visible again `<ms>` after
+  counts as seen), `fakeActiveSpace:<1|0|off>` (whether the window is on the Space on screen, posting the
+  notification a trackpad swipe posts; acceptance `call-space-swipe-app-stays-active`),
+  `fakeFullScreenOcclusionMs:<ms>` (acted transitions occlude the window, visible again `<ms>` after
   they end, as a real Space animation), `pageCover:<1|0>` (the page's picture over it through transitions,
   `ArdiaPageCover`; 0 is 0.2.30's behaviour), `fullScreenProbe:<ms>` then `fullScreenProbe` (per display frame, what
   an in-process render of the window, all AppKit's transition shows, has in the page's place: an 8 × 6 colour grid,

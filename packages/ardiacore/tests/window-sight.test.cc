@@ -63,6 +63,31 @@ int main() {
   CHECK(!CountsAsCover(1000, 1));
   CHECK(!CountsAsCover(-1, 1));
 
+  CHECK(WindowShown(true, true, false, true));
+  CHECK(WindowShown(true, false, true, true));
+  CHECK(!WindowShown(true, false, false, true));
+  CHECK(WindowShown(false, false, true, true));
+  CHECK(!WindowShown(false, true, false, true));
+  CHECK(!WindowShown(true, true, false, false));
+  CHECK(!WindowShown(true, true, true, false));
+  CHECK(!WindowShown(true, false, true, false));
+  CHECK(!WindowShown(false, false, true, false));
+
+  CHECK(SeenByUser(false, true, true, false, true));
+  CHECK(!SeenByUser(false, false, true, false, true));
+  CHECK(SeenByUser(false, false, true, true, true));
+  CHECK(!SeenByUser(false, false, false, true, true));
+  CHECK(!SeenByUser(false, false, false, false, true));
+  CHECK(!SeenByUser(false, false, true, true, false));
+  CHECK(!SeenByUser(false, true, true, true, false));
+  CHECK(SeenByUser(true, false, true, true, false));
+  CHECK(SeenByUser(true, false, false, false, false));
+  for (int bits = 0; bits < 16; bits++) {
+    const bool shown = bits & 1, appActive = bits & 2, fullScreen = bits & 4, settling = bits & 8;
+    CHECK(SeenByUser(settling, shown, appActive, fullScreen, true) == (settling || shown || (appActive && fullScreen)));
+    CHECK(SeenByUser(settling, shown, appActive, fullScreen, false) == settling);
+  }
+
   Random random{0x1236};
   for (int round = 0; round < 3000; round++) {
     const Rect w{random.uniform(-200, 3000), random.uniform(-300, 900), random.uniform(50, 1500), random.uniform(50, 1000)};

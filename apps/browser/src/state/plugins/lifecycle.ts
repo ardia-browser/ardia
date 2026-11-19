@@ -99,6 +99,7 @@ export function rescanPlugins(consent: ConsentToken | null): Promise<void> {
         return null;
       });
       if (entries) applyListings(listingsOf(entries), asked);
+      if (!currentPlugins().scanned) usePlugins.setState({ scanned: true });
       scan = nextScan;
     }
   })().finally(() => {

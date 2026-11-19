@@ -1,14 +1,15 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { View } from "react-native";
-import { consentLines, dismissPluginConsent, enablePlugin, type OfficialPlugin } from "../../state/plugins/actions";
+import { consentLines, dismissPluginConsent, type OfficialPlugin } from "../../state/plugins/actions";
 import { useOfficialPlugins, usePluginConsent, usePluginListing, usePluginPrograms } from "../../state/plugins/hooks";
+import { usePlugins } from "../../state/plugins/store";
+import { CLOSED_GATE, consentPressCounts, consentPressStarted, consentShown } from "../../state/onboarding/consentGate";
 import { isOffered, officialTitle, officialView } from "../../state/plugins/officialView";
-import { offeredInOnboarding } from "../../state/onboarding/pluginsOffer";
-import { finishPluginsStep, installPickedPlugins, isPicked, leavePluginsStep, primaryTitle, installPluginAgain, skipPluginsStep, togglePluginPick, usePluginsStep } from "../../state/onboarding/pluginsStep";
-import { noteOfficialPlugin } from "../../state/telemetry/officialPluginCounts";
+import { offeredInOnboarding, pluginsCatalogueKnown } from "../../state/onboarding/pluginsOffer";
+import { confirmPluginConsent, finishPluginsStep, installPickedPlugins, isPicked, leavePluginsStep, notePluginsShown, passEmptyPluginsStep, primaryTitle, installPluginAgain, skipPluginsStep, togglePluginPick, usePluginsStep } from "../../state/onboarding/pluginsStep";
 import { ActivitySpinner, Checkbox, IconTile, Symbol, Text } from "../ui";
 import { monoFace, radius, space } from "../ui/tokens";
-import { PrimaryButton, SecondaryButton } from "./Buttons";
+import { PrimaryButton, SecondaryButton, type PressGate } from "./Buttons";
 import { ChoiceCard } from "./ChoiceCard";
 import { OptionCard } from "./OptionCard";
 import { Tag, useOnboardingColors } from "./Parts";
@@ -21,12 +22,16 @@ export function PluginsStep() {
   const current = usePluginsStep((s) => s.current);
   const consent = usePluginConsent();
   const asking = phase === "working" && !!current && consent?.name === current ? consent : null;
+  const known = usePlugins(() => pluginsCatalogueKnown());
   const names = plugins.filter(isOffered).map((p) => p.name).join(" ");
   useEffect(() => {
-    for (const name of names ? names.split(" ") : []) noteOfficialPlugin("onboarding", "shown", name);
+    notePluginsShown(names ? names.split(" ") : []);
   }, [names]);
+  useEffect(() => {
+    if (known) passEmptyPluginsStep();
+  }, [known, names]);
   useEffect(() => leavePluginsStep, []);
-  const nothingToDo = phase === "offer" && !plugins.some((p) => p.state === "available");
+  const nothingToDo = known && phase === "offer" && !plugins.some((p) => p.state === "available");
   const subject = plugins.find((p) => p.name === current) ?? plugins[0];
 
   if (asking && subject) return <ConsentPage plugin={subject} hash={asking.hash} />;
@@ -38,7 +43,7 @@ export function PluginsStep() {
       actions={
         <StepActions
           continueTitle={primaryTitle(plugins, { picks, phase })}
-          disabled={phase === "working"}
+          disabled={phase === "working" || !known}
           onContinue={() => (phase === "offer" ? void installPickedPlugins(plugins) : finishPluginsStep(plugins))}
           onSkip={phase === "installed" || nothingToDo ? undefined : () => skipPluginsStep(plugins)}
         />
@@ -100,19 +105,37 @@ function StatusCard({ plugin, status, failed, busy, soon, done }: { plugin: Offi
   );
 }
 
+function useConsentGate(): { gate: PressGate; shown: () => void } {
+  const state = useRef(CLOSED_GATE);
+  const [api] = useState(() => ({
+    gate: {
+      started: () => {
+        state.current = consentPressStarted(state.current, performance.now());
+      },
+      counts: () => consentPressCounts(state.current),
+    },
+    shown: () => {
+      state.current = consentShown(state.current, performance.now());
+    },
+  }));
+  return api;
+}
+
 function ConsentPage({ plugin, hash }: { plugin: OfficialPlugin; hash: string }) {
   const colors = useOnboardingColors();
+  const { gate, shown } = useConsentGate();
   const listing = usePluginListing(plugin.name);
   const manifest = listing?.manifest;
   const changed = !manifest || listing?.hash !== hash;
   return (
     <StepLayout
       pageKey="plugins-consent"
+      onRevealed={shown}
       title={`Install ${officialTitle(plugin)}?`}
       subtitle={plugin.blurb}
       actions={
         <>
-          <PrimaryButton title="Install" disabled={changed} onPress={() => void enablePlugin(plugin.name, hash)} />
+          <PrimaryButton title="Install" disabled={changed} gate={gate} onPress={() => void confirmPluginConsent(plugin.name, hash)} />
           <SecondaryButton title="Cancel" onPress={() => void dismissPluginConsent(plugin.name)} />
         </>
       }

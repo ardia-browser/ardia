@@ -24,10 +24,14 @@ export function useOnboardingCard() {
   return { ...card, compact: !!card.crowded || card.height < ONBOARDING_CARD.compactBelow, clearTop: Math.max(0, ONBOARDING_CARD.titleBarClearance - card.inset) };
 }
 
-export function Reveal({ delay = 0, children, style }: { delay?: number; children: ReactNode; style?: StyleProp<ViewStyle> }) {
+export function Reveal({ delay = 0, children, style, onShown }: { delay?: number; children: ReactNode; style?: StyleProp<ViewStyle>; onShown?: () => void }) {
   const t = useRef(new Animated.Value(0)).current;
+  const shown = useRef(onShown);
+  shown.current = onShown;
   useEffect(() => {
-    Animated.timing(t, { toValue: 1, duration: onboardingMotion.reveal, delay, easing: curve.enter, useNativeDriver: true }).start();
+    Animated.timing(t, { toValue: 1, duration: onboardingMotion.reveal, delay, easing: curve.enter, useNativeDriver: true }).start(({ finished }) => {
+      if (finished) shown.current?.();
+    });
   }, []);
   return (
     <Animated.View style={[style, { opacity: t, transform: [{ translateY: t.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] }]}>

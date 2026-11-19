@@ -52,3 +52,7 @@ export function officialView(plugin: OfficialPlugin, programs: ProgramsState | u
 export const officialTitle = (plugin: OfficialPlugin) => plugin.title || plugin.name;
 
 export const isOffered = (plugin: OfficialPlugin) => plugin.state === "available" || plugin.state === "comingSoon";
+
+export const officialInSettings = (plugins: readonly OfficialPlugin[], name?: string) => plugins.some((p) => p.state !== "unsupported" && (name === undefined || p.name === name));
+
+export const officialNamesInSettings = (plugins: readonly OfficialPlugin[]) => plugins.filter((p) => p.state !== "unsupported").map((p) => p.name);

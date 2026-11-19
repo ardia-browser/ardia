@@ -35,6 +35,7 @@ export type PluginRecord = {
 
 export type PluginsStore = {
   loaded: boolean;
+  scanned: boolean;
   listings: Record<string, PluginListing>;
   order: string[];
   records: Record<string, PluginRecord>;
@@ -45,6 +46,7 @@ export type PluginsStore = {
 
 export const usePlugins = create<PluginsStore>()(() => ({
   loaded: false,
+  scanned: false,
   listings: {},
   order: [],
   records: {},

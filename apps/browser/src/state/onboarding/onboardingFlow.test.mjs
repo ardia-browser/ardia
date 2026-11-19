@@ -21,6 +21,9 @@ import {
 } from "./onboarding.ts";
 import { adoptSetupChoices } from "./setupCodeChoices.ts";
 import { readSaved } from "./onboardingDocument.ts";
+import { usePlugins } from "../plugins/store.ts";
+
+usePlugins.setState({ scanned: true });
 
 const S = () => useBrowser.getState();
 const O = () => useOnboarding.getState();

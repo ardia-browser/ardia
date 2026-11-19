@@ -348,3 +348,18 @@ test("Minimalism mode turns up for every word people use for it", () => {
 test("autoplay and notification blocking are found through each profile's Site settings", () => {
   for (const query of ["block autoplay on every site", "block requests to send notifications", "camera", "autoplay"]) assert.equal(first(query), "profiles.siteSettings", query);
 });
+
+test("search leaves out the official plugins when Settings › Plugins doesn't draw them, as on a build without the bundled command line", async () => {
+  const { unshownSettings } = await import("./settingsIndex.ts");
+  const { DEFAULT_SETTINGS } = await import("../../state/settings/settings.ts");
+  const unshown = (env) => new Set(unshownSettings(DEFAULT_SETTINGS, env).split("\n").filter(Boolean));
+  const without = unshown({ top: false, officialPlugins: [] });
+  assert.ok(without.has("plugins.commandLine"));
+  assert.ok(without.has("plugins.official"));
+  const onlyAi = unshown({ top: false, officialPlugins: ["ai"] });
+  assert.ok(onlyAi.has("plugins.commandLine"));
+  assert.ok(!onlyAi.has("plugins.official"));
+  const bundled = unshown({ top: false, officialPlugins: ["cli"] });
+  assert.ok(!bundled.has("plugins.commandLine"));
+  assert.ok(!bundled.has("plugins.official"));
+});

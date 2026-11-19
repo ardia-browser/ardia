@@ -18,6 +18,9 @@ import { PopUp } from "../ui/Field";
 import { Text } from "../ui/Text";
 import { updateSettings } from "../../state/settings/actions";
 import type { Settings } from "../../state/settings/settings";
+import { officialPlugins } from "../../state/plugins/official";
+import { officialNamesInSettings } from "../../state/plugins/officialView";
+import { usePlugins } from "../../state/plugins/store";
 import { settingsMotion } from "./tokens";
 
 export const SettingsPaneContext = createContext<SettingsPane | null>(null);
@@ -26,7 +29,8 @@ export function useUnshownSettings(): ReadonlySet<string> {
   const top = useTabLayout() === "top";
   const syncOn = useSync((s) => s.enabled);
   const calendarAccess = useCalendar((s) => s.access === "fullAccess" || s.access === "fixture");
-  const ids = useSettings((s) => unshownSettings(s, { top, glass: liquidGlass, syncOn, calendarAccess }));
+  const official = usePlugins((s) => officialNamesInSettings(officialPlugins(s)).join(" "));
+  const ids = useSettings((s) => unshownSettings(s, { top, glass: liquidGlass, syncOn, calendarAccess, officialPlugins: official ? official.split(" ") : [] }));
   return useMemo(() => new Set(ids ? ids.split("\n") : []), [ids]);
 }
 

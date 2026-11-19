@@ -3,7 +3,7 @@ import { View } from "react-native";
 import { copyText } from "../../../state/app/system";
 import { installOfficialPlugin, type OfficialPlugin } from "../../../state/plugins/actions";
 import { useOfficialPlugins, usePluginConsent, usePluginOrder, usePluginPrograms } from "../../../state/plugins/hooks";
-import { installedLabel, isOffered, officialTitle, officialView, wasCancelled, type OfficialAttempt } from "../../../state/plugins/officialView";
+import { installedLabel, isOffered, officialInSettings, officialTitle, officialView, wasCancelled, type OfficialAttempt } from "../../../state/plugins/officialView";
 import { goToSettingsPane } from "../../../state/settings/settingsWindows";
 import { consentToken, noteOfficialPlugin } from "../../../state/telemetry/officialPluginCounts";
 import { Group, Row, SectionHeader } from "../Form";
@@ -21,8 +21,9 @@ export function usePluginsBelowOfficial(): string[] {
 }
 
 export function OfficialPluginsSection() {
-  const plugins = useOfficialPlugins().filter((p) => p.state !== "unsupported");
-  if (!plugins.length) return null;
+  const all = useOfficialPlugins();
+  const plugins = all.filter((p) => officialInSettings([p]));
+  if (!officialInSettings(all)) return null;
   return (
     <View>
       <SectionHeader anchor="plugins.official" description={null} />

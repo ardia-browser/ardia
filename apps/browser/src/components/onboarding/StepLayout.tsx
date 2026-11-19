@@ -25,6 +25,7 @@ export function StepLayout({
   footer,
   preview,
   previewOptional,
+  onRevealed,
 }: {
   title: string;
   subtitle?: string;
@@ -35,6 +36,7 @@ export function StepLayout({
   footer?: ReactNode;
   preview: ReactNode;
   previewOptional?: boolean;
+  onRevealed?: () => void;
 }) {
   const outer = useContext(OnboardingCardContext);
   const [crowded, setCrowded] = useState(!!outer.crowded);
@@ -50,6 +52,7 @@ export function StepLayout({
         footer={footer}
         preview={preview}
         previewOptional={previewOptional}
+        onRevealed={onRevealed}
         onOverflow={() => setCrowded(true)}
       >
         {children}
@@ -68,6 +71,7 @@ function StepColumns({
   footer,
   preview,
   previewOptional,
+  onRevealed,
   onOverflow,
 }: {
   title: string;
@@ -79,10 +83,12 @@ function StepColumns({
   footer?: ReactNode;
   preview: ReactNode;
   previewOptional?: boolean;
+  onRevealed?: () => void;
   onOverflow: () => void;
 }) {
   const colors = useOnboardingColors();
   const card = useOnboardingCard();
+  const revealed = useRevealedTogether(2, onRevealed);
   const { compact } = card;
   const more = useMoreBelow(compact ? undefined : onOverflow);
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
@@ -101,7 +107,7 @@ function StepColumns({
           </View>
         ) : null}
       </Reveal>
-      <Reveal delay={140} style={compact ? { gap: space.l, marginTop: space.l } : { gap: space.xl, marginTop: space.xxxl }}>
+      <Reveal delay={140} onShown={revealed} style={compact ? { gap: space.l, marginTop: space.l } : { gap: space.xl, marginTop: space.xxxl }}>
         {children}
       </Reveal>
     </>
@@ -124,7 +130,7 @@ function StepColumns({
       </ScrollView>
       <ScrollEdgeLine opacity={more.opacity} />
       {footer ? <Reveal style={{ paddingTop: compact ? space.m : space.l }}>{footer}</Reveal> : null}
-      <Reveal delay={240} style={{ flexDirection: "row", alignItems: "center", gap: space.ml, paddingTop: compact ? space.l : space.xl }}>
+      <Reveal delay={240} onShown={revealed} style={{ flexDirection: "row", alignItems: "center", gap: space.ml, paddingTop: compact ? space.l : space.xl }}>
         {actions}
       </Reveal>
     </>
@@ -164,6 +170,19 @@ function StepColumns({
       )}
     </View>
   );
+}
+
+function useRevealedTogether(parts: number, onRevealed?: () => void) {
+  const latest = useRef(onRevealed);
+  latest.current = onRevealed;
+  const [part] = useState(() => {
+    let left = parts;
+    return () => {
+      left -= 1;
+      if (left === 0) latest.current?.();
+    };
+  });
+  return part;
 }
 
 function useMoreBelow(onOverflow?: () => void) {

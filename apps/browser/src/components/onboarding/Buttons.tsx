@@ -6,7 +6,9 @@ import { useOnboardingColors } from "./Parts";
 import { onboardingButton } from "./tokens";
 import { usePressScaleMotion } from "../ui/motion";
 
-function PressScale({ title, onPress, disabled, scale, tooltip, pressRef, children }: { title: string; onPress: () => void; disabled?: boolean; scale: number; tooltip?: string; pressRef?: Ref<View>; children: (state: { hovered: boolean; pressed: boolean }) => ReactNode }) {
+export type PressGate = { started: () => void; counts: () => boolean };
+
+function PressScale({ title, onPress, disabled, scale, tooltip, pressRef, gate, children }: { title: string; onPress: () => void; disabled?: boolean; scale: number; tooltip?: string; pressRef?: Ref<View>; gate?: PressGate; children: (state: { hovered: boolean; pressed: boolean }) => ReactNode }) {
   const { hovered, hoverProps } = useHover();
   const pressMotion = usePressScaleMotion(!disabled, scale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
@@ -15,8 +17,15 @@ function PressScale({ title, onPress, disabled, scale, tooltip, pressRef, childr
       <Pressable
         ref={pressRef}
         disabled={disabled}
-        onPress={onPress}
-        onPressIn={pressMotion.onPressIn}
+        onPress={gate ? () => gate.counts() && onPress() : onPress}
+        onPressIn={
+          gate
+            ? () => {
+                gate.started();
+                pressMotion.onPressIn?.();
+              }
+            : pressMotion.onPressIn
+        }
         onPressOut={pressMotion.onPressOut}
         accessibilityRole="button"
         accessibilityLabel={title}
@@ -31,10 +40,10 @@ function PressScale({ title, onPress, disabled, scale, tooltip, pressRef, childr
   );
 }
 
-export function PrimaryButton({ title, onPress, disabled, icon }: { title: string; onPress: () => void; disabled?: boolean; icon?: string }) {
+export function PrimaryButton({ title, onPress, disabled, icon, gate }: { title: string; onPress: () => void; disabled?: boolean; icon?: string; gate?: PressGate }) {
   const colors = useOnboardingColors();
   return (
-    <PressScale title={title} onPress={onPress} disabled={!!disabled} scale={onboardingButton.pressScale}>
+    <PressScale title={title} onPress={onPress} disabled={!!disabled} scale={onboardingButton.pressScale} gate={gate}>
       {({ hovered }) => (
         <View
           style={{

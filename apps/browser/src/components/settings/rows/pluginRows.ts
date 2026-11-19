@@ -1,5 +1,4 @@
 import type { SettingSection } from "./types";
-import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import type { SettingsPane } from "../../../state/settings/settingsWindows";
 
 export const pluginRows = {
@@ -10,13 +9,13 @@ export const pluginRows = {
         official: {
           title: "Official plugins",
           keywords: ["official", "plugins", "built in", "first party", "ardia plugins", "install"],
-          shown: () => PLATFORM_FEATURES.plugins,
+          shown: (_, env) => !!env.officialPlugins?.length,
         },
         commandLine: {
           title: "Command Line",
           description: "The ardia command (CLI) for your terminal or shell.",
           keywords: ["install the ardia command", "official plugin", "built in plugin", "path"],
-          shown: () => PLATFORM_FEATURES.plugins,
+          shown: (_, env) => !!env.officialPlugins?.includes("cli"),
         },
       },
     },

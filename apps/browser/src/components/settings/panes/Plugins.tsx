@@ -29,10 +29,12 @@ import { Group, Row, SectionHeader } from "../Form";
 import { useTheme } from "../../ui/theme";
 import { PaneSubPage } from "./PaneSubPage";
 import { PluginConsentSheet } from "../../plugins/PluginConsentSheet";
+import { settingsOwnsConsent } from "../../../state/plugins/consentSurface";
 import { OfficialPluginsSection, usePluginsBelowOfficial } from "./OfficialPlugins";
 
 export function PluginsPane({ detail }: SettingsPlace) {
-  const consent = usePluginConsent();
+  const asked = usePluginConsent();
+  const consent = settingsOwnsConsent(asked) ? asked : null;
   const showing = useRef(false);
   const owned = useRef<string | null>(null);
   useEffect(

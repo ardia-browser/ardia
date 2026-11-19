@@ -1,3 +1,4 @@
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { officialPlugins, type OfficialPlugin } from "../plugins/official";
 import { currentPlugins } from "../plugins/store";
 
@@ -7,4 +8,6 @@ export const offeredInOnboarding = (plugins: readonly OfficialPlugin[]) => plugi
 
 export const pluginsStepHasSomething = (plugins: readonly OfficialPlugin[]) => plugins.some((p) => p.state === "available" || p.state === "installed");
 
-export const pluginsStepShown = () => pluginsStepHasSomething(officialPlugins(currentPlugins()));
+export const pluginsCatalogueKnown = (supported: boolean = PLATFORM_FEATURES.plugins) => !supported || currentPlugins().scanned;
+
+export const pluginsStepShown = () => !pluginsCatalogueKnown() || pluginsStepHasSomething(officialPlugins(currentPlugins()));

@@ -15,7 +15,7 @@ export function SplitEmptyState({ tabId, focused }: { tabId: string; focused: bo
   const theme = useTheme();
   const [typing, setTyping] = useState(focused);
   const [text, setText] = useState("");
-  const suggestions = useSplitSuggestions(tabId);
+  const suggestions = useSplitSuggestions(tabId, text);
   const windowId = useWindowId();
   const input = useRef<TextInput>(null);
   const wasFocused = useRef(focused);

@@ -22,12 +22,32 @@ export function askConsentInOnboarding<T>(name: string, windowId: string | null,
   return { result, id };
 }
 
-const orphaned = (consent: ConsentRequest) => onboarding?.id === consent.id && !onboarding.alive();
+let settingsPresenters = 0;
+
+const onboardingOwned = (consent: ConsentRequest) => onboarding?.id === consent.id || (consent.name === asking?.name && consent.id !== asking.before);
+
+const orphaned = (consent: ConsentRequest) => {
+  if (onboarding?.id === consent.id) return !onboarding.alive();
+  return !onboardingOwned(consent) && settingsPresenters === 0;
+};
+
+export function presentSettingsConsent(): () => void {
+  settingsPresenters += 1;
+  return () => {
+    settingsPresenters -= 1;
+    const consent = currentPlugins().consent;
+    if (consent && settingsPresenters === 0 && !onboardingOwned(consent)) dismissConsentRequest(consent.id);
+  };
+}
+
+export function releaseOrphanedConsent(): boolean {
+  const consent = currentPlugins().consent;
+  return !!consent && orphaned(consent) && dismissConsentRequest(consent.id);
+}
 
 export function consentOwner(consent: ConsentRequest | null): ConsentOwner | null {
   if (!consent || orphaned(consent)) return null;
-  if (onboarding?.id === consent.id || (consent.name === asking?.name && consent.id !== asking.before)) return "onboarding";
-  return "settings";
+  return onboardingOwned(consent) ? "onboarding" : "settings";
 }
 
 const owns = (owner: ConsentOwner, id: number) => {
@@ -41,10 +61,6 @@ export const dismissConsentAs = (owner: ConsentOwner, id: number): boolean => ow
 
 export const ownsConsent = owns;
 
-export function dismissOrphanedConsent(): boolean {
-  const consent = currentPlugins().consent;
-  return !!consent && orphaned(consent) && dismissConsentRequest(consent.id);
-}
 
 export function releaseOnboardingConsent(): boolean {
   const consent = currentPlugins().consent;

@@ -59,6 +59,7 @@ setConsentPeriod(true, "test-epoch");
 S().hydrate({});
 host.folders = [{ name: "cli", text: CLI, ...BUILT_IN }, { name: "other", status: "ok", text: OTHER, folderId: "1:2" }];
 startPlugins();
+(await import("./consentSurface.ts")).presentSettingsConsent();
 await settle();
 const launch = { sweeps: host.sweeps.map((s) => [...s]), links: host.links.map((l) => ({ ...l })) };
 const hidden = () => false;

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { View } from "react-native";
 import type { PluginManifest, RowSpec } from "../../../lib/pluginManifest";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
@@ -19,43 +19,17 @@ import {
   showPluginLog,
   showPluginsFolder,
 } from "../../../state/plugins/actions";
-import { usePluginActive, usePluginConsent, usePluginListing, usePluginNeedsReview, usePluginProcess, usePluginPrograms, usePluginRecord, usePluginValues } from "../../../state/plugins/hooks";
-import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
+import { usePluginActive, usePluginListing, usePluginNeedsReview, usePluginProcess, usePluginPrograms, usePluginRecord, usePluginValues } from "../../../state/plugins/hooks";
 import { goToSettingsPane, SETTINGS_WINDOW_ID, type SettingsPlace } from "../../../state/settings/settingsWindows";
 import { confirm } from "../../../state/app/system";
 import { Button, PopUp, Symbol, TextField, Toggle } from "../../ui";
 import { Group, Row, SectionHeader } from "../Form";
 import { useTheme } from "../../ui/theme";
 import { PaneSubPage } from "./PaneSubPage";
-import { PluginConsentSheet } from "../../plugins/PluginConsentSheet";
-import { confirmConsentAs, consentOwner, dismissConsentAs, dismissOrphanedConsent } from "../../../state/plugins/consentSurface";
+import { releaseOrphanedConsent } from "../../../state/plugins/consentSurface";
 import { OfficialPluginsSection, usePluginsBelowOfficial } from "./OfficialPlugins";
 
 export function PluginsPane({ detail }: SettingsPlace) {
-  const asked = usePluginConsent();
-  const consent = consentOwner(asked) === "settings" ? asked : null;
-  const showing = useRef(false);
-  const owned = useRef<number | null>(null);
-  useEffect(
-    () => () => {
-      if (owned.current !== null) dismissConsentAs("settings", owned.current);
-      if (showing.current) closeSettingsSheet();
-    },
-    [],
-  );
-  useEffect(() => {
-    dismissOrphanedConsent();
-  }, [asked?.id]);
-  useEffect(() => {
-    owned.current = consent?.id ?? null;
-    if (consent) {
-      showing.current = true;
-      showSettingsSheet(<PluginConsentSheet key={`${consent.id}:${consent.hash}`} request={consent} onCancel={(id) => dismissConsentAs("settings", id)} onConfirm={(id) => confirmConsentAs("settings", id)} onClosed={closeSettingsSheet} />);
-    } else if (showing.current) {
-      showing.current = false;
-      closeSettingsSheet();
-    }
-  }, [consent?.id, consent?.hash]);
   if (!PLATFORM_FEATURES.plugins) return <UnavailablePage />;
   return detail ? <PluginPage name={detail} /> : <PluginList />;
 }
@@ -125,7 +99,10 @@ function statusOf(m: PluginManifest | null, problems: string[], active: boolean,
 }
 
 function setOn(name: string, on: boolean) {
-  if (on) requestPluginConsent(name);
+  if (on) {
+    releaseOrphanedConsent();
+    requestPluginConsent(name);
+  }
   else disablePlugin(name);
 }
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ScrollView, View } from "react-native";
 import { consentLines, isAlwaysOn } from "../../state/plugins/actions";
-import { CONSENT_KEYS, consentKey, type ConsentButton } from "../../state/plugins/consentKeys";
+import { CONSENT_KEYS, CONSENT_KEYS_UP, consentKeyDown, consentKeyUp, FRESH_CONSENT_KEYS, type ConsentButton } from "../../state/plugins/consentKeys";
 import { usePluginListing } from "../../state/plugins/hooks";
 import type { PluginsStore } from "../../state/plugins/store";
 import { Box, Button, DialogActions, DialogTitle, Sheet, Symbol, Text } from "../ui";
@@ -17,6 +17,7 @@ export function PluginConsentSheet({ request, onCancel, onConfirm, onClosed }: {
   const m = listing?.manifest;
   const install = isAlwaysOn(listing);
   const [selected, setSelected] = useState<ConsentButton | null>(null);
+  const keyState = useRef(FRESH_CONSENT_KEYS);
   const keys = useRef<View>(null);
   useEffect(() => keys.current?.focus(), []);
   const close = () => {
@@ -33,11 +34,16 @@ export function PluginConsentSheet({ request, onCancel, onConfirm, onClosed }: {
         focusable
         enableFocusRing={false}
         keyDownEvents={CONSENT_KEYS}
+        keyUpEvents={CONSENT_KEYS_UP}
         onKeyDown={(e) => {
-          const next = consentKey(selected, e.nativeEvent.key, !!e.nativeEvent.shiftKey, !changed);
-          setSelected(next.selected);
+          const next = consentKeyDown(keyState.current, e.nativeEvent, !changed);
+          keyState.current = next.state;
+          setSelected(next.state.selected);
           if (next.press === "cancel") close();
           else if (next.press === "install") confirm();
+        }}
+        onKeyUp={(e) => {
+          keyState.current = consentKeyUp(keyState.current, e.nativeEvent);
         }}
         style={KEYS}
       >

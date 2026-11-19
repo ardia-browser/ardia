@@ -33,6 +33,7 @@ const offered = (soon = false) => offeredInOnboarding(officialPlugins(P(), true,
 setConsentPeriod(true, "test-epoch");
 S().hydrate({});
 const windowId = S().createWindow();
+let closeSettings = surface.presentSettingsConsent();
 
 async function scanned(folders) {
   host.linkResult = null;
@@ -189,17 +190,69 @@ test("when the only official plugin disappears while its consent is open, the re
   assert.equal(outcome, "settled");
 });
 
-test("a request onboarding left behind is dismissed by whoever notices", async () => {
+test("a request onboarding left behind is cleared by the next ask", async () => {
   await atOffer();
   const done = step.installPickedPlugins(offered());
   await settle();
   const asked = P().consent;
   useOnboarding.setState({ step: "outro" });
   assert.equal(owner(), null, "its owner is gone, so neither surface owns it");
-  assert.ok(surface.dismissOrphanedConsent());
-  assert.equal(P().consent, null);
+  assert.ok(lifecycle.requestPluginConsent("cli") === false, "a bare request still sees it");
+  assert.equal(surface.releaseOrphanedConsent(), true);
   await done;
+  assert.equal(P().consent, null);
   assert.notEqual(P().consent?.id, asked.id);
+});
+
+test("a consent with no Settings window to show it doesn't block: the next ask is accepted and the first waiter hears Cancelled", async () => {
+  await scanned([{ name: "cli", text: CLI, ...BUILT_IN }]);
+  closeSettings();
+  const first = installOfficialPlugin("cli", { showSheet: false });
+  assert.ok(P().consent);
+  assert.equal(owner(), null, "nothing is drawing it");
+  const second = installOfficialPlugin("cli", { showSheet: false });
+  assert.deepEqual(await first, { ok: false, reason: "Cancelled.", cancelled: true });
+  assert.ok(P().consent, "the second ask is accepted");
+  closeSettings = surface.presentSettingsConsent();
+  assert.equal(owner(), "settings");
+  lifecycle.dismissPluginConsent("cli");
+  await second;
+});
+
+test("the command line opens Settings, the window closes before the pane mounts, and the retry is accepted and opens Settings", async () => {
+  await scanned([{ name: "cli", text: CLI, ...BUILT_IN }]);
+  closeSettings();
+  assert.deepEqual(pluginSocketMethod("plugins.enable", { name: "cli" }), { result: { waiting: true } });
+  const stranded = P().consent;
+  assert.ok(stranded);
+  assert.deepEqual(pluginSocketMethod("plugins.enable", { name: "cli" }), { result: { waiting: true } }, "the retry isn't refused");
+  assert.notEqual(P().consent.id, stranded.id);
+  closeSettings = surface.presentSettingsConsent();
+  assert.equal(owner(), "settings", "the reopened Settings draws it");
+  lifecycle.dismissPluginConsent("cli");
+});
+
+test("another Settings sheet finishing doesn't hide an open consent: what draws it is the request", async () => {
+  await scanned([{ name: "cli", text: CLI, ...BUILT_IN }]);
+  const { showSettingsSheet, closeSettingsSheet, useSettingsSheet } = await import("../settings/sheet.ts");
+  const waiting = installOfficialPlugin("cli", { showSheet: false });
+  const asked = P().consent;
+  showSettingsSheet("another sheet");
+  closeSettingsSheet();
+  assert.equal(useSettingsSheet.getState().sheet, null);
+  assert.equal(P().consent.id, asked.id);
+  assert.equal(owner(), "settings");
+  lifecycle.dismissPluginConsent("cli");
+  await waiting;
+});
+
+test("Settings closing with its sheet up dismisses it and settles its waiter", async () => {
+  await scanned([{ name: "cli", text: CLI, ...BUILT_IN }]);
+  const waiting = installOfficialPlugin("cli", { showSheet: false });
+  closeSettings();
+  assert.equal(P().consent, null);
+  assert.deepEqual(await waiting, { ok: false, reason: "Cancelled.", cancelled: true });
+  closeSettings = surface.presentSettingsConsent();
 });
 
 test("a long consent is still one request with every entry, for the sheet to scroll", async () => {
@@ -267,19 +320,36 @@ test("a manifest that changes under an open request closes it with a reason", as
 });
 
 test("the consent sheet's keys: Tab and Shift-Tab reach Cancel and Install, Space presses only what Tab reached, Escape cancels", async () => {
-  const { consentKey } = await import("../plugins/consentKeys.ts");
-  assert.deepEqual(consentKey(null, " ", false, true), { selected: null, press: null }, "a Space held over from before presses nothing");
-  const cancel = consentKey(null, "Tab", false, true);
+  const { consentKeyDown, consentKeyUp, FRESH_CONSENT_KEYS } = await import("../plugins/consentKeys.ts");
+  const down = (state, e, can = true) => consentKeyDown(state, e, can);
+  assert.deepEqual(down(FRESH_CONSENT_KEYS, { key: " " }).press, null, "a Space with nothing selected presses nothing");
+  const cancel = down(FRESH_CONSENT_KEYS, { key: "Tab" }).state;
   assert.equal(cancel.selected, "cancel");
-  const install = consentKey(cancel.selected, "Tab", false, true);
+  const install = down(cancel, { key: "Tab" }).state;
   assert.equal(install.selected, "install");
-  assert.equal(consentKey(install.selected, "Tab", false, true).selected, "cancel");
-  assert.equal(consentKey(null, "Tab", true, true).selected, "install");
-  assert.equal(consentKey("cancel", "Tab", true, true).selected, "install");
-  assert.deepEqual(consentKey("install", " ", false, true), { selected: "install", press: "install" });
-  assert.equal(consentKey(null, "Tab", false, false).selected, "cancel");
-  assert.equal(consentKey("cancel", "Tab", false, false).selected, "cancel", "a disabled Install is skipped");
-  assert.deepEqual(consentKey(null, "Escape", false, true), { selected: null, press: "cancel" });
+  assert.equal(down(install, { key: "Tab" }).state.selected, "cancel");
+  assert.equal(down(FRESH_CONSENT_KEYS, { key: "Tab", shiftKey: true }).state.selected, "install");
+  assert.equal(down(cancel, { key: "Tab", shiftKey: true }).state.selected, "install");
+  assert.equal(down(FRESH_CONSENT_KEYS, { key: "Tab" }, false).state.selected, "cancel");
+  assert.equal(down(cancel, { key: "Tab" }, false).state.selected, "cancel", "a disabled Install is skipped");
+  assert.equal(down(FRESH_CONSENT_KEYS, { key: "Escape" }).press, "cancel");
+  const pressed = down(install, { key: " " });
+  assert.equal(pressed.press, "install");
+  assert.equal(down(pressed.state, { key: " " }).press, null, "a held Space presses once");
+  assert.equal(down(consentKeyUp(pressed.state, { key: " " }), { key: " " }).press, "install", "a new press after letting go counts");
+});
+
+test("the consent sheet ignores any modified key: Option, Control or Command with Space, Tab or Escape, and Shift with Space or Escape", async () => {
+  const { consentKeyDown } = await import("../plugins/consentKeys.ts");
+  const install = { selected: "install", spaceDown: false };
+  for (const mod of ["altKey", "ctrlKey", "metaKey"]) {
+    for (const key of [" ", "Tab", "Escape"]) {
+      const r = consentKeyDown(install, { key, [mod]: true }, true);
+      assert.deepEqual([r.press, r.state], [null, install], `${mod} + ${JSON.stringify(key)}`);
+    }
+  }
+  assert.equal(consentKeyDown(install, { key: " ", shiftKey: true }, true).press, null, "Shift-Space");
+  assert.equal(consentKeyDown(install, { key: "Escape", shiftKey: true }, true).press, null, "Shift-Escape");
 });
 
 test("Escape with the window as first responder cancels the sheet drawn in that window, and only that one", async () => {

@@ -4,6 +4,7 @@ import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import { experimentOn } from "../../platform/killSwitches";
 import { openSettings } from "../settings/settingsWindows";
 import { waitForInstall, type InstallResult } from "./installWaiters";
+import { releaseOrphanedConsent } from "./consentSurface";
 import { ALREADY_ASKING, requestPluginConsent } from "./lifecycle";
 import { relinkPrograms } from "./programs";
 import { activeManifest, currentPlugins, isAlwaysOn, isInstalled, usePlugins, type PluginListing, type PluginsStore } from "./store";
@@ -91,7 +92,8 @@ export function installOfficialPlugin(name: string, options: { showSheet?: boole
     return linked(name);
   }
   if (!listing.manifest || !listing.hash) return Promise.resolve({ ok: false, reason: listing.problems[0] ?? "It can't load." });
-  if (s.consent) return Promise.resolve({ ok: false, reason: ALREADY_ASKING });
+  releaseOrphanedConsent();
+  if (currentPlugins().consent) return Promise.resolve({ ok: false, reason: ALREADY_ASKING });
   if (!requestPluginConsent(name)) return Promise.resolve({ ok: false, reason: "Can't install it right now." });
   const done = waitForInstall(name);
   if (options.showSheet !== false) openSettings("plugins", null, name);

@@ -1,9 +1,11 @@
+import { countFor, type ConsentToken } from "./consentPeriod";
+
 const NONE = { sent: 0, held: 0, rateLimited: 0, detailsFetched: 0, detailsReused: 0, blockedListings: 0 };
 let counts = { ...NONE };
 
 export const noteLiveGithubRequest = (outcome: "sent" | "held" | "rateLimited") => void counts[outcome]++;
 
-export const noteLiveGithubBlocked = () => void counts.blockedListings++;
+export const noteLiveGithubBlocked = (consent?: ConsentToken | null) => countFor(consent, () => void counts.blockedListings++, { live_github_blocked_listings: 1 });
 
 export function noteLiveGithubDetails(fetched: number, reused: number) {
   counts.detailsFetched += fetched;

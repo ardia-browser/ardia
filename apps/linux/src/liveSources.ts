@@ -28,7 +28,7 @@ export function linuxLiveSources(client: LiveClient) {
     name: "GitHub",
     kind: "pullRequests",
     site: "https://github.com",
-    fetch: (folder, options) => githubClient.fetchFolder(githubScope(), folder, !!options?.interactive),
+    fetch: (folder, options) => githubClient.fetchFolder(githubScope(), folder, !!options?.interactive, options?.consent),
     async resolveGone(items, options) {
       if (!items.some((it) => it.source === "github")) return {};
       return githubClient.resolveGone(githubScope(), items, !!options?.interactive);

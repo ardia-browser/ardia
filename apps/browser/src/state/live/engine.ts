@@ -13,6 +13,7 @@ import { LiveError, type CompletionState, type LiveFolder, type LiveFolderKind, 
 import { noteLiveCompletedTabsClosed } from "../telemetry/liveCompletedTabs";
 import { noteLiveSourceFetch } from "../telemetry/workCounts";
 import { consentToken } from "../telemetry/client";
+import type { ConsentToken } from "../telemetry/consentPeriod";
 import { warnFor } from "../telemetry/logs";
 import { isPlaying, useMedia } from "../media/media";
 import { usePages } from "../tabs/pageState";
@@ -28,12 +29,12 @@ const inflight = new Map<string, Promise<void>>();
 const fetchedSources = new Map<string, Set<LiveSourceId>>();
 const sharedFetches = new Map<string, Promise<LiveItem[]>>();
 
-function fetchSource(source: LiveSourceId, folder: LiveFolder, interactive: boolean): Promise<LiveItem[]> {
+function fetchSource(source: LiveSourceId, folder: LiveFolder, interactive: boolean, consent: ConsentToken | null): Promise<LiveItem[]> {
   const key = JSON.stringify([source, live().accounts[source]?.connectedAt ?? null, folder.filters]);
   const running = sharedFetches.get(key);
   noteLiveSourceFetch(!!running);
   if (running) return running;
-  const task = SOURCES[source].fetch(folder, { interactive }).finally(() => sharedFetches.delete(key));
+  const task = SOURCES[source].fetch(folder, { interactive, consent }).finally(() => sharedFetches.delete(key));
   sharedFetches.set(key, task);
   return task;
 }
@@ -74,6 +75,7 @@ function claimRefresh(folderId: string) {
 
 async function run(folderId: string, interactive: boolean) {
   if (!live().folders[folderId]) return;
+  const consent = consentToken();
   const claim = claimRefresh(folderId);
   let fence = claim ? await claim : undefined;
   if (fence === null) return;
@@ -81,7 +83,7 @@ async function run(folderId: string, interactive: boolean) {
   if (!folder) return;
   const before = live();
   setStatus(folderId, { state: before.status[folderId]?.lastFetch ? "updating" : "initializing" });
-  const results = await Promise.allSettled(folder.sources.map((id) => fetchSource(id, folder, interactive)));
+  const results = await Promise.allSettled(folder.sources.map((id) => fetchSource(id, folder, interactive, consent)));
 
   const fetched: LiveItem[] = [];
   const failed: { source: LiveSourceId; error: unknown }[] = [];

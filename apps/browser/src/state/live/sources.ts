@@ -3,6 +3,7 @@ import { createGithubClient } from "./githubClient";
 import { basic, deleteSecret, endpoints, form, getSecret, request, setSecret } from "./net";
 import { live, setAccount, updateConfig } from "./store";
 import { LiveError, type CompletionState, type LiveAccount, type LiveFolder, type LiveItem, type LiveSourceId } from "./types";
+import type { ConsentToken } from "../telemetry/consentPeriod";
 
 export type LiveSource = {
   id: LiveSourceId;
@@ -15,7 +16,7 @@ export type LiveSource = {
   warning?(): LiveError | null;
 };
 
-export type FetchOptions = { interactive?: boolean };
+export type FetchOptions = { interactive?: boolean; consent?: ConsentToken | null };
 
 async function secret(source: LiveSourceId): Promise<string> {
   const value = await getSecret(source);
@@ -33,7 +34,7 @@ const github: LiveSource = {
   kind: "pullRequests",
   site: "https://github.com",
   async fetch(folder, options) {
-    return githubClient.fetchFolder(await secret("github"), folder, !!options?.interactive);
+    return githubClient.fetchFolder(await secret("github"), folder, !!options?.interactive, options?.consent);
   },
   async resolveGone(items, options) {
     if (!items.some((it) => it.source === "github")) return {};

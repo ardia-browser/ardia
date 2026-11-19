@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { createGithubClient, DETAILS_FRESH_MS, LIST_SHARED_MS, PENDING_FRESH_MS } from "./githubClient.ts";
 import { createGithubLimits, FALLBACK_COOLDOWN_MS, graphqlRateLimited, retryAtFromHeaders } from "./githubLimits.ts";
 import { takeLiveGithubCounts } from "../telemetry/liveGithub.ts";
+import { consentToken, recordStaleCountsWith, setConsentPeriod } from "../telemetry/consentPeriod.ts";
 import { request } from "./net.ts";
 import { LiveError } from "./types.ts";
 
@@ -135,6 +136,30 @@ test("pull requests an organization's token policy hides drop out and the folder
   assert.equal(client.warning()?.kind, "tokenBlocked");
   assert.equal(client.warning()?.message, message);
   assert.equal(takeLiveGithubCounts().live_github_blocked_listings, 1);
+});
+
+test("a blocked listing is counted only while the consent period the refresh started in still holds", async () => {
+  const message = "The 'acme' organization forbids access via a fine-grained personal access tokens if the token's lifetime is greater than 366 days.";
+  const stale = [];
+  recordStaleCountsWith((event, fields) => stale.push({ event, fields }));
+  try {
+    for (const [name, ends, counted] of [["holds", false, 1], ["ends while the searches are in flight", true, 0]]) {
+      const { gh, client } = setup();
+      gh.list.data.authored.nodes[0] = null;
+      gh.blockSearch("list", [{ type: "FORBIDDEN", message, path: ["search", "nodes", 0] }]);
+      setConsentPeriod(true, "epoch-a");
+      const started = consentToken();
+      const fetching = client.fetchFolder("t", folder, true, started);
+      if (ends) setConsentPeriod(true, "epoch-b");
+      await fetching;
+      assert.equal(client.warning()?.kind, "tokenBlocked", name);
+      assert.equal(takeLiveGithubCounts().live_github_blocked_listings, counted, name);
+    }
+    assert.deepEqual(stale, [{ event: "usage_counts", fields: { live_github_blocked_listings: 1 } }]);
+  } finally {
+    setConsentPeriod(false, null);
+    recordStaleCountsWith(() => {});
+  }
 });
 
 test("a listing GitHub hides entirely for SAML says Single Sign-On, and clears once access comes back", async () => {

@@ -5,7 +5,7 @@ import { Pressable, View } from "react-native";
 import { cacheKey, pruneEngineFavicons } from "../../state/favicons/favicons";
 import { isIncognitoProfile } from "../../state/browser/model";
 import { useProfileName, useProfileOrder } from "../../state/profiles/hooks";
-import { clearHistory } from "../../state/history/actions";
+import { clearHistory, skipInRunningImports } from "../../state/history/actions";
 import { noteBrowsingDataCleared } from "../../state/telemetry/historyRemovalCounts";
 import { consentToken } from "../../state/telemetry/client";
 import { Box, Button, Checkbox, Dialog, DialogActions, DialogTitle, Group, PopUp, Row, space, Text } from "../ui";
@@ -48,6 +48,7 @@ export function ClearDataDialog({ profileId, onClose }: { profileId: string; onC
     const icons = cacheKey(profileId);
     const types: BrowsingDataType[] = [...(history ? ["history" as const] : []), ...(siteData ? ["siteData" as const, "cache" as const] : [])];
     let cleared = false;
+    if (history) skipInRunningImports(profile, since, startedAt);
     try {
       if (!isIncognitoProfile(profileId)) {
         await clearBrowsingData(profile, types, since);

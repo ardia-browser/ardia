@@ -343,4 +343,6 @@ export function startHistory() {
   };
 }
 
+export const reloadEngineHistory = (engine: string) => (loaded.has(engine) || loads.has(engine) ? load(engine) : Promise.resolve());
+
 export const reloadHistory = () => Promise.all(openedEngineProfiles(store()).map(load));

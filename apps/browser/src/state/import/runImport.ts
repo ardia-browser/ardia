@@ -301,7 +301,7 @@ async function runImportJob(wanted: ReadonlySet<ImportKind>, withoutKey: boolean
       const dest = members[plan.dataPartition]?.[0] ?? (await nextDestination(result.profile?.name ?? profile.name, result.profile?.color));
       members[plan.dataPartition] ??= [dest];
       arc.home ||= dest;
-      add(await applyResult(dest, { ...result, favorites: [] }, source.name, profileKinds, refused));
+      add(await applyResult(dest, { ...result, favorites: [] }, source.name, profileKinds, refused, consent));
       let essentials = 0;
       plan.favorites.forEach((tabs, partition) => {
         const group = members[partition] ?? [];
@@ -321,7 +321,7 @@ async function runImportJob(wanted: ReadonlySet<ImportKind>, withoutKey: boolean
       profileDest = dest;
     } else {
       const dest = await nextDestination(result.profile?.name ?? profile.name, result.profile?.color ?? profile.color);
-      add(await applyResult(dest, result, source.name, profileKinds, refused));
+      add(await applyResult(dest, result, source.name, profileKinds, refused, consent));
       if (readsSidebarFile(profile) && !sidebarMissed && result.spaces.length) {
         const r = await importDiaSpaces(dest, result, nextDestination, signal, consent);
         if (signal.aborted) return;

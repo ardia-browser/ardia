@@ -112,6 +112,7 @@ function emitCounts(consent: ConsentToken | null) {
       shares_picked_tab: counts.sharesPickedTab,
       shares_picked_window: counts.sharesPickedWindow,
       shares_picked_screen: counts.sharesPickedScreen,
+      recorded_windows_kept_drawing: counts.sharesPickedWindow + counts.sharesPickedScreen,
       share_picker_screen_recording_missing: counts.screenRecordingMissing,
       share_picker_screen_recording_asked: counts.screenRecordingAsked,
       extension_install_prompts: counts.extensionInstallPrompts, extension_install_prompts_stale: counts.extensionInstallPromptsStale, extension_profile_page_opens: counts.extensionProfilePageOpens, extension_profile_page_reroutes: counts.extensionProfilePageReroutes,

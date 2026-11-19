@@ -252,7 +252,9 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
   - Page content: `scripts/agent/ac page <data dir> <url part> '<expression>'`, or CDP on the instance's port
     (`http://localhost:<port>/json`, `Runtime.evaluate`, `Page.captureScreenshot`). A `ARDIA_BACKGROUND` instance's windows answer NO to
     `-[NSWindow isOccluded]` (`ArdiaHost+Launch.mm`), so a covered window shows a tab at once instead of after Chrome's 1 s
-    occlusion delay; launch with `--instance allowOcclusion` to test occlusion itself.
+    occlusion delay; launch with `--instance allowOcclusion` to test occlusion itself. A window Ardia's picker is sharing (a
+    `window:` or `screen:` source, kept per page) answers NO the same way until the share ends (`ArdiaWindowCapture.mm`, #1105), which also
+    stops `allowOcclusion` from showing a shared window as occluded.
   - CDP (`ARDIA_REMOTE_DEBUGGING_PORT`), argv and `ARDIA_INSTANCE` `chromiumSwitches` only reach Chrome where it runs on its mock
     keychain: a scratch `ARDIA_DATA_DIR`, or a build without a team signature (ad hoc copies such as carryover.sh's). A
     team-signed build on its real data dir forwards none of them (`ArdiaHost+Launch.mm`), and its browser process removes

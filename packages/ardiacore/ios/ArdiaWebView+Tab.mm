@@ -1,4 +1,5 @@
 #import "ArdiaWebViewInternal.h"
+#import "ArdiaChromeWindowInternal.h"
 #import "ArdiaEarlyWindow.h"
 
 #import <objc/runtime.h>
@@ -382,6 +383,7 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
 
 - (void)tabWillClose:(ArdiaCoreTab *)tab {
   [ArdiaEarlyWindow dropPage:tab];
+  ardia_window::SetCaptureLive(tab, NO);
   if (_life.closed() || tab != _tab) return;
   [self detach];
   [self emit:@"windowClose" payload:@{}];

@@ -1,4 +1,5 @@
 #import "ArdiaWebViewInternal.h"
+#import "ArdiaChromeWindowInternal.h"
 #import "ArdiaInterfaceScale.h"
 #import "ArdiaRuntime.h"
 #import "ArdiaLaunchConfig.h"

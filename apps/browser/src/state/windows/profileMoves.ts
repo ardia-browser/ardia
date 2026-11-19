@@ -51,6 +51,9 @@ const movable = (s: BrowserState, ids: string[]) =>
 
 const arriving = (s: BrowserState, t: Tab, profileId: string) => t.profileId !== profileId && !sharedTopAppCopy(s, t, profileId) && !parkedTopAppCopy(s, t, profileId);
 
+export const placedCopies = (s: BrowserState, tabIds: string[], profileId: string): Record<string, string> =>
+  Object.fromEntries(movable(s, tabIds).map((t) => [t.id, t.profileId === profileId ? t.id : (sharedTopAppCopy(s, t, profileId) ?? t.id)]));
+
 export const movesAcrossProfiles = (s: BrowserState, tabIds: string[], profileId: string) => movable(s, tabIds).some((t) => arriving(s, t, profileId));
 
 export function droppedInProfile(before: BrowserState, tabIds: string[], profileId: string, drop: Drop): BrowserState {
@@ -59,7 +62,8 @@ export function droppedInProfile(before: BrowserState, tabIds: string[], profile
   if (!dragged.length || (drop.type === "none" && dragged.every((t) => t.profileId === profileId))) return before;
   const s = withParkedPinsShown(before, dragged, profileId);
   const tabs = movable(s, tabIds);
-  const placed = tabs.map((t) => (t.profileId === profileId ? t.id : (sharedTopAppCopy(s, t, profileId) ?? t.id)));
+  const copies = placedCopies(s, tabIds, profileId);
+  const placed = tabs.map((t) => copies[t.id] ?? t.id);
   let next = tabs.reduce((acc, t) => (arriving(s, t, profileId) ? intoProfile(acc, t.id, profileId) : acc), s);
   next = dropping(next, placed, drop);
   const last = findLast(placed, (id) => next.tabs[id]?.profileId === profileId);

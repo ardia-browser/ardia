@@ -108,7 +108,7 @@ test("into another profile's group at a member; a tab already there is only plac
   assert.equal(S().dropTabsInProfile([id.b], "nobody", drop("list", null)), false);
 });
 
-test("a Top App shared with the other profile takes its copy there instead of making a second tile", () => {
+test("a Top App shared with the other profile takes its copy there instead of making a second tile", async () => {
   S().hydrate({});
   S().updateProfile("default", { shareTopApps: true });
   const w = S().createWindow({ url: "https://mail.com/" });
@@ -120,6 +120,8 @@ test("a Top App shared with the other profile takes its copy there instead of ma
   const copy = model.viewTabIds(S(), w, work).find((t) => S().tabs[t].pinnedUrl === "https://mail.com/");
   assert.ok(copy && copy !== mail);
   S().switchProfile(w, "default");
+  const { placedCopies } = await import("./profileMoves.ts");
+  assert.deepEqual(placedCopies(S(), [mail], work), { [mail]: copy }, "the live-folder sequence takes the copy's place, not the dragged tile's");
   S().dropTabsInProfile([mail], work, drop("tiles", null));
   assert.equal(S().tabs[mail].profileId, "default");
   assert.equal(model.viewTabIds(S(), w, work).filter((t) => S().tabs[t].pinnedUrl === "https://mail.com/").length, 1);

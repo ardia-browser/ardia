@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { holdConsentOutsideSettings } from "../plugins/consentSurface";
+import { askConsentInOnboarding, onboardingOwnsConsent } from "../plugins/consentSurface";
 import { dismissPluginConsent, enablePlugin } from "../plugins/lifecycle";
 import { installOfficialPlugin, type OfficialPlugin } from "../plugins/official";
 import { officialTitle, wasCancelled } from "../plugins/officialView";
@@ -35,14 +35,16 @@ function installOrRefusal(name: string): Promise<InstallOutcome> {
     refuse = resolve;
   });
   refusals.set(name, refuse);
-  const release = holdConsentOutsideSettings(name);
-  return Promise.race([installOfficialPlugin(name, { showSheet: false }), refused]).finally(() => {
+  const { result: installed, release } = askConsentInOnboarding(name, () => installOfficialPlugin(name, { showSheet: false }));
+  return Promise.race([installed, refused]).finally(() => {
     release();
     if (refusals.get(name) === refuse) refusals.delete(name);
   });
 }
 
 export function confirmPluginConsent(name: string, hash: string): boolean {
+  const asked = currentPlugins().consent;
+  if (!onboardingOwnsConsent(asked) || asked.name !== name || asked.hash !== hash) return false;
   if (enablePlugin(name, hash)) return true;
   refusals.get(name)?.({ ok: false, reason: REFUSED_REASON });
   dismissPluginConsent(name);

@@ -1,8 +1,29 @@
-const heldElsewhere = new Set<string>();
+import { currentPlugins, type PluginsStore } from "./store";
 
-export function holdConsentOutsideSettings(name: string): () => void {
-  heldElsewhere.add(name);
-  return () => heldElsewhere.delete(name);
+type ConsentRequest = NonNullable<PluginsStore["consent"]>;
+
+let asking: string | null = null;
+let onboardingRequest: ConsentRequest | null = null;
+
+export function askConsentInOnboarding<T>(name: string, ask: () => T): { result: T; release: () => void } {
+  asking = name;
+  let result: T;
+  try {
+    result = ask();
+  } finally {
+    asking = null;
+  }
+  const request = currentPlugins().consent;
+  const mine = request?.name === name ? request : null;
+  if (mine) onboardingRequest = mine;
+  return {
+    result,
+    release: () => {
+      if (mine && onboardingRequest === mine) onboardingRequest = null;
+    },
+  };
 }
 
-export const settingsOwnsConsent = (consent: { name: string } | null): boolean => !!consent && !heldElsewhere.has(consent.name);
+export const onboardingOwnsConsent = (consent: ConsentRequest | null): consent is ConsentRequest => !!consent && consent === onboardingRequest;
+
+export const settingsOwnsConsent = (consent: ConsentRequest | null): boolean => !!consent && consent !== onboardingRequest && consent.name !== asking;

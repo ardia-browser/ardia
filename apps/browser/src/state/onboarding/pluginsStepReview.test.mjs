@@ -5,8 +5,8 @@ const { refusedWrites } = await import("../../test-native/shell.ts");
 const { useBrowser } = await import("../browser/store.ts");
 const { usePlugins } = await import("../plugins/store.ts");
 const lifecycle = await import("../plugins/lifecycle.ts");
-const { officialPlugins } = await import("../plugins/official.ts");
-const { settingsOwnsConsent } = await import("../plugins/consentSurface.ts");
+const { installOfficialPlugin, officialPlugins } = await import("../plugins/official.ts");
+const { onboardingOwnsConsent, settingsOwnsConsent } = await import("../plugins/consentSurface.ts");
 const { activeSteps, maybeStartOnboarding, startOnboarding, useOnboarding } = await import("./onboarding.ts");
 const { readSaved, saveOnboarding } = await import("./onboardingDocument.ts");
 const { offeredInOnboarding } = await import("./pluginsOffer.ts");
@@ -89,18 +89,60 @@ test("a confirm the plugin store refuses to save is a failure with a reason, wit
   assert.equal(T().phase, "installed");
 });
 
-test("a consent onboarding asked for belongs to onboarding: the Settings pane doesn't show it, and does show its own", async () => {
+test("a consent onboarding asked for belongs to onboarding: its sheet shows over onboarding, Settings doesn't show it, and does show its own", async () => {
   await atOffer();
   const done = step.installPickedPlugins(offered());
   await settle();
   assert.equal(P().consent?.name, "cli");
+  assert.equal(onboardingOwnsConsent(P().consent), true);
   assert.equal(settingsOwnsConsent(P().consent), false);
   step.skipPluginsStep(offered());
   await done;
   assert.equal(P().consent, null);
   assert.ok(lifecycle.requestPluginConsent("cli"));
   assert.equal(settingsOwnsConsent(P().consent), true);
+  assert.equal(onboardingOwnsConsent(P().consent), false);
   lifecycle.dismissPluginConsent("cli");
+});
+
+test("Install in Settings while onboarding asks for the same plugin hands the request to Settings: its sheet shows, onboarding's goes, and onboarding says why", async () => {
+  await atOffer();
+  const done = step.installPickedPlugins(offered());
+  await settle();
+  const onboardingAsk = P().consent;
+  assert.equal(onboardingOwnsConsent(onboardingAsk), true);
+  const settings = installOfficialPlugin("cli", { showSheet: false });
+  const settingsAsk = P().consent;
+  assert.notEqual(settingsAsk, onboardingAsk);
+  assert.equal(settingsOwnsConsent(settingsAsk), true);
+  assert.equal(onboardingOwnsConsent(settingsAsk), false);
+  assert.equal(step.confirmPluginConsent("cli", settingsAsk.hash), false, "onboarding can't confirm a request Settings owns");
+  assert.equal(P().records.cli, undefined);
+  await done;
+  assert.equal(T().phase, "failed");
+  assert.deepEqual(T().failures, { cli: "Another install started." });
+  assert.ok(lifecycle.enablePlugin("cli", settingsAsk.hash));
+  assert.deepEqual(await settings, { ok: true });
+});
+
+test("onboarding enables a plugin only through its own consent request, with the hash that request showed", async () => {
+  await scanned([{ name: "cli", text: CLI, ...BUILT_IN }]);
+  const hash = P().listings.cli.hash;
+  assert.equal(P().consent, null);
+  assert.equal(step.confirmPluginConsent("cli", hash), false, "no request, no install");
+  assert.equal(P().records.cli, undefined);
+  step.resetPluginsStep();
+  startOnboarding(windowId, "plugins");
+  const done = step.installPickedPlugins(offered());
+  await settle();
+  const asked = P().consent;
+  assert.equal(asked.hash, hash);
+  assert.equal(step.confirmPluginConsent("cli", "a-different-manifest"), false, "a hash the sheet didn't show is refused");
+  assert.equal(P().records.cli, undefined);
+  assert.ok(step.confirmPluginConsent("cli", asked.hash));
+  await done;
+  assert.equal(P().records.cli.approved, asked.hash);
+  assert.equal(T().phase, "installed");
 });
 
 test("each offered plugin counts as shown once per visit, even when the list changes under it", async () => {

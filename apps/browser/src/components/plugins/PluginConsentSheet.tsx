@@ -3,7 +3,7 @@ import { usePluginListing } from "../../state/plugins/hooks";
 import { Box, Button, DialogActions, DialogTitle, Sheet, Symbol, Text } from "../ui";
 import { useTheme } from "../ui/theme";
 
-export function PluginConsentSheet({ name, hash, onClosed }: { name: string; hash: string; onClosed: () => void }) {
+export function PluginConsentSheet({ name, hash, onClosed, confirm = enablePlugin }: { name: string; hash: string; onClosed: () => void; confirm?: (name: string, hash: string) => boolean }) {
   const theme = useTheme();
   const listing = usePluginListing(name);
   const m = listing?.manifest;
@@ -36,7 +36,7 @@ export function PluginConsentSheet({ name, hash, onClosed }: { name: string; has
           kind="primary"
           disabled={changed}
           onPress={() => {
-            if (enablePlugin(name, hash)) onClosed();
+            if (confirm(name, hash)) onClosed();
           }}
         />
       </DialogActions>

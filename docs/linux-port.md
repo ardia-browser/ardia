@@ -1236,7 +1236,8 @@ Linux reads calendars from Evolution Data Server, which GNOME Online Accounts, G
 - **Native requests.** GitHub, Bitbucket, Notion, Confluence and Google Drive are reached from the browser process
   (`ac_linux_live.cc`, `ac_linux_live_service.cc`), never by renderer `fetch`. The shell keeps `connect-src 'none'`.
   - The Linux UI swaps the shared `state/live/sources.ts` and `net.ts` for `apps/linux/src/liveSources.ts` and
-    `liveNet.ts`. These ask for fixed operations through `ArdiaLive.request`, `connect`, `cancel` and `disconnect`.
+    `liveNet.ts`. These ask for fixed operations through `ArdiaLive.request`, `connect`, `cancel`, `disconnect` and
+    `legacy`. Every call except `cancel` names the Ardia profile it acts for.
   - Native code builds every URL and adds the credential.
   - A GitHub GraphQL query must be read-only.
 - **Transport limits.**
@@ -1245,12 +1246,20 @@ Linux reads calendars from Evolution Data Server, which GNOME Online Accounts, G
   - 8 requests in flight and 256 queued.
   - Confluence sites must be `https://`.
 - **Tokens.** Connect verifies a token with the provider before storing it. Tokens are kept in the Secret Service as
-  "Ardia Live Folder Token" items (schema `dev.ardia.linux.LiveToken`, account = source).
+  "Ardia Live Folder Token" items (schema `dev.ardia.linux.LiveToken`, account = `<source>:<profileId>`). Profile ids
+  are 1 to 128 letters, digits, `-` or `_`; native code refuses any other.
+  - Each profile connects its own accounts. `live.canonical.json` (version 2) keeps them as
+    `accounts: {profileId: {source: account}}`, with no secret fields.
+  - The token saved before accounts belonged to a profile keeps its old item (account = source). The document
+    migration moves its account to `legacyAccounts`. `ArdiaLive.legacy` copies that token natively to each profile it
+    is owed to, and deletes the old item only after `live.canonical.json` has saved the result and no profile is
+    owed it. The renderer never reads the token.
+  - Account changes for one profile and source wait on a Web Lock shared by every window.
   - Background test instances with an explicit `--user-data-dir` use a 0600 file instead.
   - Tokens are cached natively, wiped when freed and never returned to a renderer.
   - Google Drive tokens are renewed natively, and concurrent renewals share one request.
   - A locked keyring answers `ERR_LIVE_KEYRING_LOCKED` and never deletes a stored token.
-- **Ordering.** A per-source generation counter keeps a late renewal from bringing back a disconnected token. A
+- **Ordering.** A per-account generation counter keeps a late renewal from bringing back a disconnected token. A
   cancelled connect restores the previous token.
 - **Private windows** get `ERR_PRIVATE_SERVICE`.
 - **Rate limits.** GitHub's secondary rate limit and Drive's documented usage-limit 403s read as rate limited, not

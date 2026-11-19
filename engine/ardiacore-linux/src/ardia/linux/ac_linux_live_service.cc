@@ -108,16 +108,16 @@ linux_sync::KeyStore& Keys(const std::string& directory) {
 
 class KeyCredentials final : public live::CredentialStore {
  public:
-  void Load(live::Source source, Loaded done) override {
+  void Load(live::Account account, Loaded done) override {
     KeyRunner()->PostTaskAndReplyWithResult(
         FROM_HERE,
         base::BindOnce(
-            [](std::string directory, live::Source source) {
+            [](std::string directory, live::Account account) {
               std::optional<live::Credential> credential;
-              const auto status = live::LoadCredential(Keys(directory), source, &credential);
+              const auto status = live::LoadCredential(Keys(directory), account, &credential);
               return std::make_pair(status, std::move(credential));
             },
-            Directory(), source),
+            Directory(), std::move(account)),
         base::BindOnce(
             [](Loaded done, std::pair<linux_sync::KeyStatus, std::optional<live::Credential>> result) {
               done(result.first, std::move(result.second));
@@ -136,12 +136,12 @@ class KeyCredentials final : public live::CredentialStore {
         base::BindOnce([](Stored done, linux_sync::KeyStatus status) { done(status); }, std::move(done)));
   }
 
-  void Delete(live::Source source, Stored done) override {
+  void Delete(live::Account account, Stored done) override {
     KeyRunner()->PostTaskAndReplyWithResult(
         FROM_HERE,
-        base::BindOnce([](std::string directory, live::Source source) {
-          return live::DeleteCredential(Keys(directory), source);
-        }, Directory(), source),
+        base::BindOnce([](std::string directory, live::Account account) {
+          return live::DeleteCredential(Keys(directory), account);
+        }, Directory(), std::move(account)),
         base::BindOnce([](Stored done, linux_sync::KeyStatus status) { done(status); }, std::move(done)));
   }
 
@@ -250,8 +250,8 @@ bool ValidRendererId(std::string_view id) {
 }
 
 std::optional<size_t> RequestIdIndex(std::string_view method) {
-  if (method == "ArdiaLive.request") return 3;
-  if (method == "ArdiaLive.connect") return 2;
+  if (method == "ArdiaLive.request") return 4;
+  if (method == "ArdiaLive.connect") return 3;
   if (method == "ArdiaLive.cancel") return 0;
   return std::nullopt;
 }
@@ -277,7 +277,7 @@ void LinuxLiveInvoke(const LinuxLiveCaller& caller, Profile* app_profile, const 
   if (!live::IsLiveMethod(method)) return Fail(std::move(done), live::kErrUnknownCall, "Unknown Live operation");
   if (caller.private_window || !app_profile || app_profile->IsOffTheRecord() || app_profile->ShutdownStarted())
     return Fail(std::move(done), "ERR_PRIVATE_SERVICE", "Live Folders aren't available in private windows");
-  if (values.size() > 4) return Fail(std::move(done), live::kErrArgument, "Too many Live arguments");
+  if (values.size() > 5) return Fail(std::move(done), live::kErrArgument, "Too many Live arguments");
   const auto text = base::WriteJson(base::Value(values.Clone()));
   if (!text || text->size() > kMaxArgumentBytes)
     return Fail(std::move(done), live::kErrArgument, "Unsupported Live arguments");

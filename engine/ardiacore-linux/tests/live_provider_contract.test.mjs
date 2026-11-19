@@ -10,7 +10,7 @@ import { after, before, beforeEach, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { hostLiveClient, LIVE_CAPABILITIES } from "../../../apps/linux/src/hostLive.ts";
 import { linuxLiveSources } from "../../../apps/linux/src/liveSources.ts";
-import { live, setAccount } from "../../../apps/browser/src/state/live/store.ts";
+import { accountOf, live, setAccount } from "../../../apps/browser/src/state/live/store.ts";
 import { LiveError } from "../../../apps/browser/src/state/live/types.ts";
 
 const TOOL = process.env.LIVE_HOST_TOOL;
@@ -78,7 +78,7 @@ function call(method, args) {
 }
 
 const host = { bootstrap: { windowId: "w1", profileId: "default", capabilities: [...LIVE_CAPABILITIES] }, invoke: (method, { args }) => call(method, args) };
-const client = hostLiveClient(host, (source) => !!live().accounts[source]);
+const client = hostLiveClient(host, (source, profileId) => !!accountOf(profileId, source));
 const linux = linuxLiveSources(client);
 const { SOURCES } = linux;
 
@@ -91,7 +91,7 @@ const rejectsWith = async (promise, kind, message) => {
 };
 
 function storedFields(source) {
-  const path = join(keys, `live-token-${source}`);
+  const path = join(keys, `live-token-${source}:default`);
   if (!existsSync(path)) return null;
   const lines = readFileSync(path, "utf8").trim().split("\n").slice(1);
   return Object.fromEntries(lines.map((line) => {
@@ -173,8 +173,8 @@ after(async () => {
 });
 
 test("GitHub: a token connects from the documented viewer reply and a folder maps the documented pull request shape", async () => {
-  await linux.connectGithub(CREDENTIALS.github);
-  assert.deepEqual([live().accounts.github.login, live().accounts.github.name], ["octocat", "The Octocat"]);
+  await linux.connectGithub("default", CREDENTIALS.github);
+  assert.deepEqual([live().accounts.default.github.login, live().accounts.default.github.name], ["octocat", "The Octocat"]);
   const items = await SOURCES.github.fetch(prFolder);
   assert.deepEqual(items.map((it) => [it.title, it.url, it.pr.repo, it.pr.checks[0].state]), [["Amazing new feature", "https://github.com/octocat/Hello-World/pull/1347", "octocat/Hello-World", "success"]]);
   const graphql = requests.filter((r) => r.host === "api.github.com");
@@ -192,38 +192,38 @@ test("GitHub: bad credentials, the primary and secondary rate limits and SAML en
   await rejectsWith(SOURCES.github.fetch(prFolder), "rateLimited");
   serve("api.github.com /graphql", "secondaryRateLimitNoRetryAfter");
   await rejectsWith(SOURCES.github.fetch(prFolder), "rateLimited");
-  assert.ok(live().accounts.github, "a refresh failure never drops the account");
+  assert.ok(live().accounts.default.github, "a refresh failure never drops the account");
 });
 
 test("GitHub: the device flow waits the documented interval, connects and keeps the token native-side", async () => {
-  setAccount("github", null);
+  setAccount("default", "github", null);
   const started = Date.now();
-  const flow = await linux.startGithubDeviceFlow("Iv1.contract");
+  const flow = await linux.startGithubDeviceFlow("default", "Iv1.contract");
   assert.equal(flow.userCode, "WDJB-MJHT");
   assert.equal(flow.verificationUri, "https://github.com/login/device");
   await flow.done;
   assert.ok(Date.now() - started >= 4900, "the first poll waits the documented 5 s interval");
-  assert.equal(live().accounts.github.login, "octocat");
+  assert.equal(live().accounts.default.github.login, "octocat");
   assert.equal(storedFields("github").token, PROVIDERS.github.deviceToken.body.access_token);
   const viewer = requests.filter((r) => r.host === "api.github.com").at(-1);
   assert.equal(viewer.headers.authorization, `Bearer ${PROVIDERS.github.deviceToken.body.access_token}`);
 });
 
 test("Bitbucket: an API token with the account email connects, the first page of pull requests maps with build statuses", async () => {
-  await linux.connectBitbucket(CREDENTIALS.bitbucketEmail, CREDENTIALS.bitbucket);
-  assert.equal(live().accounts.bitbucket.login, "557058:c0b72ad0-1cb5-4018-9cdc-0cde8492c443");
+  await linux.connectBitbucket("default", CREDENTIALS.bitbucketEmail, CREDENTIALS.bitbucket);
+  assert.equal(live().accounts.default.bitbucket.login, "557058:c0b72ad0-1cb5-4018-9cdc-0cde8492c443");
   const items = await SOURCES.bitbucket.fetch(prFolder);
   assert.deepEqual(items.map((it) => [it.title, it.url, it.pr.headRef, it.pr.checks.map((c) => c.state)]), [["Add retry to the uploader", "https://bitbucket.org/acme/uploader/pull-requests/42", "feature/retry", ["success", "pending"]]]);
   const listed = requests.filter((r) => r.path.startsWith("/2.0/pullrequests/"));
   assert.deepEqual(listed.map((r) => [r.path, r.search]), [["/2.0/pullrequests/557058%3Ac0b72ad0-1cb5-4018-9cdc-0cde8492c443", "?state=OPEN&pagelen=50"]]);
   assert.equal(listed[0].headers.authorization, `Basic ${Buffer.from(`${CREDENTIALS.bitbucketEmail}:${CREDENTIALS.bitbucket}`).toString("base64")}`);
   assert.deepEqual(requests.filter((r) => r.path.endsWith("/statuses")).map((r) => r.path + r.search), ["/2.0/repositories/acme/uploader/pullrequests/42/statuses?pagelen=50"]);
-  assert.deepEqual(await SOURCES.bitbucket.resolveGone(items), { [items[0].id]: "merged" });
+  assert.deepEqual(await SOURCES.bitbucket.resolveGone(prFolder, items), { [items[0].id]: "merged" });
 });
 
 test("Notion: an internal integration connects as its workspace and search maps pages and databases, skipping trashed ones", async () => {
-  await linux.connectNotion(CREDENTIALS.notion);
-  assert.equal(live().accounts.notion.login, "Acme Docs");
+  await linux.connectNotion("default", CREDENTIALS.notion);
+  assert.equal(live().accounts.default.notion.login, "Acme Docs");
   const items = await SOURCES.notion.fetch(docFolder);
   assert.deepEqual(items.map((it) => [it.title, it.doc.kind, it.icon, it.doc.editedBy]), [
     ["Launch plan", "Page", "🚀", "Avocado Lovelace"],
@@ -236,8 +236,8 @@ test("Notion: an internal integration connects as its workspace and search maps 
 });
 
 test("Confluence: an API token connects to the site and CQL search maps the expanded space and history", async () => {
-  await linux.connectConfluence("acme.atlassian.net", CREDENTIALS.bitbucketEmail, CREDENTIALS.confluence);
-  assert.equal(live().accounts.confluence.login, "5b10ac8d82e05b22cc7d4ef5");
+  await linux.connectConfluence("default", "acme.atlassian.net", CREDENTIALS.bitbucketEmail, CREDENTIALS.confluence);
+  assert.equal(live().accounts.default.confluence.login, "5b10ac8d82e05b22cc7d4ef5");
   const items = await SOURCES.confluence.fetch(docFolder);
   assert.deepEqual(items.map((it) => [it.title, it.url, it.subtitle, it.doc.editedBy, it.updatedAt]), [
     ["Quarterly planning", "https://acme.atlassian.net/wiki/spaces/ENG/pages/393217/Quarterly+planning", "Engineering", "Emma Example", Date.parse("2026-10-27T12:34:56.789Z")],
@@ -248,8 +248,8 @@ test("Confluence: an API token connects to the site and CQL search maps the expa
 });
 
 test("Google Drive: the documented code exchange connects, files map, and a refresh reply without a refresh token keeps the stored one", async () => {
-  await linux.connectGoogle(CREDENTIALS.googleClient, CREDENTIALS.googleSecret, CREDENTIALS.googleCode, CREDENTIALS.googleVerifier, REDIRECT);
-  assert.equal(live().accounts.gdrive.login, "emma@acme.example");
+  await linux.connectGoogle("default", CREDENTIALS.googleClient, CREDENTIALS.googleSecret, CREDENTIALS.googleCode, CREDENTIALS.googleVerifier, REDIRECT);
+  assert.equal(live().accounts.default.gdrive.login, "emma@acme.example");
   const exchange = Object.fromEntries(new URLSearchParams(requests.find((r) => r.host === "oauth2.googleapis.com").body));
   assert.deepEqual([exchange.grant_type, exchange.redirect_uri, exchange.code], ["authorization_code", REDIRECT, CREDENTIALS.googleCode]);
   const items = await SOURCES.gdrive.fetch(docFolder);
@@ -278,5 +278,5 @@ test("Google Drive: a revoked or expired refresh token reads as signed out", asy
   await call("Tool.advance", [3600_000]);
   serve("oauth2.googleapis.com /token", "invalidGrant");
   await rejectsWith(SOURCES.gdrive.fetch(docFolder), "signedOut", /revoked/);
-  assert.ok(live().accounts.gdrive);
+  assert.ok(live().accounts.default.gdrive);
 });

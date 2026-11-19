@@ -1,5 +1,6 @@
 #include "ardia/linux/ac_linux_document_reducer.h"
 
+#include <optional>
 #include <set>
 #include <utility>
 
@@ -54,6 +55,7 @@ std::string ApplyOne(base::DictValue& envelope, const base::DictValue& op,
   const auto* target = Text(op, "target");
   bool folder_change = false;
   bool global_change = false;
+  std::optional<std::string> profile_change;
   if (*type == "create") {
     const auto* incarnation = Text(op, "incarnation");
     const auto* value = op.FindDict("value");
@@ -155,13 +157,22 @@ std::string ApplyOne(base::DictValue& envelope, const base::DictValue& op,
       folders.Set(*id, std::move(folder));
       payload.Set("folders", std::move(folders));
       folder_change = true;
+    } else if (*target == "account") {
+      if (op.size() != 6 || !id) return "invalid";
+      auto accounts = payload.FindDict("accounts")->Clone();
+      auto profile = accounts.FindDict(*id) ? accounts.FindDict(*id)->Clone() : base::DictValue();
+      if (!Same(profile.Find(*field), expected)) return "conflict";
+      if (value->is_none()) profile.Remove(*field); else profile.Set(*field, value->Clone());
+      if (!profile.size()) accounts.Remove(*id); else accounts.Set(*id, std::move(profile));
+      payload.Set("accounts", std::move(accounts));
+      profile_change = *id;
     } else {
       if (*target == "calendar" || *target == "config") {
         if (op.size() != 5 || *field == "hiddenCalendarIds") return "invalid";
         key = *target;
       } else {
         if (op.size() != 6 || !id || *field != "value") return "invalid";
-        if (*target == "account") key = "accounts";
+        if (*target == "legacyAccount") key = "legacyAccounts";
         else if (*target == "meetingGroup") key = "meetingGroups";
         else if (*target == "expandedStack") key = "expandedStacks";
         else if (*target == "dismissedNow") key = "dismissedNow";
@@ -172,7 +183,7 @@ std::string ApplyOne(base::DictValue& envelope, const base::DictValue& op,
       if (!Same(record.Find(name), expected)) return "conflict";
       if (value->is_none()) record.Remove(name); else record.Set(name, value->Clone());
       payload.Set(key, std::move(record));
-      global_change = key == "accounts" || key == "config";
+      global_change = key == "config";
     }
   } else if (*type == "member") {
     const auto* member = Text(op, "member");
@@ -246,7 +257,10 @@ std::string ApplyOne(base::DictValue& envelope, const base::DictValue& op,
   if (!normalized) return "invalid";
   envelope.Set("payload", std::move(*normalized));
   if (folder_change && !Advance(envelope, *id)) return "limit";
-  if (global_change) for (const auto& [folder, record] : *envelope.FindDict("payload")->FindDict("folders")) if (!Advance(envelope, std::string(folder))) return "limit";
+  for (const auto& [folder, record] : *envelope.FindDict("payload")->FindDict("folders")) {
+    const auto* owner = record.GetDict().FindString("profileId");
+    if ((global_change || (profile_change && owner && *owner == *profile_change)) && !Advance(envelope, std::string(folder))) return "limit";
+  }
   return {};
 }
 

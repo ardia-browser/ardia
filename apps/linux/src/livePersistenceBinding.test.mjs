@@ -14,6 +14,7 @@ const listeners = new Set();
 let payload = { folders: {}, folderOrder: [], items: {}, known: {}, unread: {}, hidden: {}, completed: {}, expandedStacks: {}, accounts: {}, config: {}, calendar: { showPreview: true, showTimeToNext: true, hiddenCalendarIds: [] }, meetingGroups: {}, dismissedAlerts: [], version: 1 };
 let revision = 0, watermark = 0;
 let failCommit = false;
+let refuse = () => false;
 const snapshot = () => ({ document: "live.json", scope: "native", epoch: "epoch", clientId: "native-client", revision, watermark, payload, incarnations: Object.fromEntries(Object.keys(payload.folders).map((id) => [id, `folder:${id}`])), generations: {} });
 globalThis.window = { __ardiaHost: {
   bootstrap: { windowId: "main", profileId: "default" },
@@ -24,12 +25,14 @@ globalThis.window = { __ardiaHost: {
     if (name === "documents.flush") return JSON.stringify(snapshot());
     assert.equal(name, "documents.commit");
     if (failCommit) throw new Error("Storage unavailable");
+    if (args.operations.some(refuse)) throw Object.assign(new Error("Invalid document operations"), { code: "ERR_DOCUMENT_REQUEST" });
     payload = projectLiveIntent(payload, args.operations);
     revision++; watermark++;
     return JSON.stringify({ status: "committed", requestId: args.requestId, snapshot: snapshot() });
   },
 } };
-const { live, setLive, createFolder, removeFolder, setRepoHidden, updateCalendarSettings, dismissNowBadge } = await import("../../browser/src/state/live/store.ts");
+const { live, setLive, createFolder, removeFolder, setRepoHidden, updateCalendarSettings, dismissNowBadge, setAccount, setLegacyAccount, removeProfileAccounts, saveLiveDurably } = await import("../../browser/src/state/live/store.ts");
+const { liveDocumentLoaded, liveDurability } = await import("./livePersistence.ts");
 const { flushLinuxDocuments } = await import("./documentFlush.ts");
 
 test("Linux binding uses the canonical shared store, suppresses write echoes and preserves transient state", async () => {
@@ -106,6 +109,71 @@ test("Linux binding keeps a folder's hidden repos and their pull requests throug
   assert.equal(id in payload.repoHidden, false);
 });
 
+
+
+test("Linux binding saves each profile's accounts and the old account durably, and says so when the document drops one", async () => {
+  await liveDocumentLoaded;
+  const octo = { login: "octo", name: null, avatar: null, connectedAt: 1 };
+  setAccount("default", "github", octo);
+  setAccount("work", "bitbucket", { ...octo, user: "me@work.test" });
+  setLegacyAccount("github", { ...octo, owedTo: ["work"] });
+  await saveLiveDurably();
+  assert.deepEqual(payload.accounts, { default: { github: octo }, work: { bitbucket: { ...octo, user: "me@work.test" } } });
+  assert.deepEqual(payload.legacyAccounts, { github: { ...octo, owedTo: ["work"] } });
+  removeProfileAccounts("work");
+  setAccount("default", "github", null);
+  await saveLiveDurably();
+  assert.deepEqual(payload.accounts, {});
+  refuse = (op) => op.target === "legacyAccount";
+  const report = console.error;
+  console.error = () => {};
+  try {
+    setLegacyAccount("github", null);
+    await assert.rejects(saveLiveDurably(), (error) => error.code === "ERR_DOCUMENT_REJECTED");
+  } finally {
+    console.error = report;
+    refuse = () => false;
+  }
+  assert.deepEqual(live().legacyAccounts, { github: { ...octo, owedTo: ["work"] } }, "the store falls back to the saved old account");
+  setLegacyAccount("github", null);
+  await saveLiveDurably();
+  assert.equal(payload.legacyAccounts.github, undefined);
+});
+
+test("a window that starts closing while the old account is being copied keeps the old item, since the copy never reached the document", async () => {
+  await liveDocumentLoaded;
+  const { linuxLiveSources } = await import("./liveSources.ts");
+  const { quiesceLinuxDocuments, resumeLinuxDocuments } = await import("./documentFlush.ts");
+  const octo = { login: "octo", name: null, avatar: null, connectedAt: 1 };
+  setLegacyAccount("notion", octo);
+  await saveLiveDurably();
+  let finishCopy;
+  const forgotten = [];
+  const native = {
+    available: () => true,
+    legacyExists: async () => true,
+    adoptLegacy: () => new Promise((resolve) => (finishCopy = () => resolve("copied"))),
+    forgetLegacy: async (source) => { forgotten.push(source); },
+    disconnect: async () => {},
+  };
+  const linux = linuxLiveSources(native, { durable: liveDurability });
+  const adoption = linux.adoptLegacyAccounts(["default"]);
+  for (let i = 0; i < 50 && !finishCopy; i++) await new Promise((resolve) => setImmediate(resolve));
+  quiesceLinuxDocuments("closing");
+  try {
+    finishCopy();
+    await adoption;
+  } finally {
+    resumeLinuxDocuments("closing");
+  }
+  assert.deepEqual(forgotten, [], "the old item is deleted although the document never got the copy");
+  assert.equal(payload.legacyAccounts.notion?.login, "octo");
+  native.adoptLegacy = async () => "same";
+  await linux.adoptLegacyAccounts(["default"]);
+  assert.deepEqual(forgotten, ["notion"]);
+  assert.equal(payload.accounts.default.notion.login, "octo");
+  assert.equal(payload.legacyAccounts.notion, undefined);
+});
 
 test("Linux save telemetry describes queued intent on failure and does not recount retries", async () => {
   const { createLivePersistence } = await import("./livePersistence.ts");

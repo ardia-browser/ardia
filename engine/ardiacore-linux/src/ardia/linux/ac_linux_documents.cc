@@ -45,6 +45,7 @@ LinuxDocumentResult LinuxDocuments::Load() {
     auto next = stored.value.Clone();
     if (const auto* payload = next.FindDict("payload"))
       if (auto current = NormalizeLinuxLive(*payload)) next.Set("payload", std::move(*current));
+    if (next.FindDict("clients")) next.Set("clients", base::DictValue());
     if (!ValidLinuxLiveEnvelope(next) || !Fits(next))
       return Error("ERR_DOCUMENT_DATA", "Invalid canonical document");
     next.Set("epoch", epoch_);

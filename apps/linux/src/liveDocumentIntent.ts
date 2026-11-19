@@ -43,7 +43,15 @@ export function captureLiveIntent(before: LiveProjection, after: LiveProjection,
       for (const key of new Set([...left.keys(), ...right.keys()])) if (!equalDocumentValue(left.get(key), right.get(key))) operations.push({ type: "entry", target, id, incarnation: incarnation(id), key, expected: value(left.get(key)), value: value(right.get(key)) });
     }
   }
-  for (const [key, target] of [["accounts", "account"], ["meetingGroups", "meetingGroup"], ["expandedStacks", "expandedStack"], ["dismissedNow", "dismissedNow"]] as const) {
+  const accountsBefore = record(before.accounts), accountsAfter = record(after.accounts);
+  for (const id of new Set([...Object.keys(accountsBefore), ...Object.keys(accountsAfter)])) {
+    const a = record(accountsBefore[id]), b = record(accountsAfter[id]);
+    for (const source of new Set([...Object.keys(a), ...Object.keys(b)])) {
+      if (equalDocumentValue(a[source], b[source])) continue;
+      operations.push({ type: "field", target: "account", id, field: source, expected: value(a[source]), value: value(b[source]) });
+    }
+  }
+  for (const [key, target] of [["legacyAccounts", "legacyAccount"], ["meetingGroups", "meetingGroup"], ["expandedStacks", "expandedStack"], ["dismissedNow", "dismissedNow"]] as const) {
     const a = record(before[key]), b = record(after[key]);
     for (const id of new Set([...Object.keys(a), ...Object.keys(b)])) {
       if (equalDocumentValue(a[id], b[id])) continue;
@@ -95,10 +103,17 @@ export function projectLiveIntent(payload: LiveProjection, operations: DocumentO
       for (const key of ["folders", "items", "hidden", "repoHidden", "completed", "known", "unread", "expandedStacks"]) delete (result[key] ?? {})[op.id];
       result.folderOrder = list(result.folderOrder).filter((id) => id !== op.id);
     }
+    if (op.type === "field" && op.target === "account") {
+      const accounts = result.accounts ??= {};
+      const profile = { ...record(accounts[op.id!]) };
+      if (op.value === null) delete profile[op.field]; else profile[op.field] = op.value;
+      if (Object.keys(profile).length) accounts[op.id!] = profile; else delete accounts[op.id!];
+      continue;
+    }
     if (op.type === "field") {
-      const target = op.target === "folder" ? (result.folders ??= {})[op.id!] : op.target === "account" ? result.accounts ??= {} : op.target === "meetingGroup" ? result.meetingGroups ??= {} : op.target === "expandedStack" ? result.expandedStacks ??= {} : result[op.target] ??= {};
+      const target = op.target === "folder" ? (result.folders ??= {})[op.id!] : op.target === "legacyAccount" ? result.legacyAccounts ??= {} : op.target === "meetingGroup" ? result.meetingGroups ??= {} : op.target === "expandedStack" ? result.expandedStacks ??= {} : result[op.target] ??= {};
       if (!target) continue;
-      const key = ["account", "meetingGroup", "expandedStack", "dismissedNow"].includes(op.target) ? op.id! : op.field;
+      const key = ["legacyAccount", "meetingGroup", "expandedStack", "dismissedNow"].includes(op.target) ? op.id! : op.field;
       if (key.startsWith("filters.")) (target.filters ??= {})[key.slice(8)] = op.value;
       else if (op.value === null) delete target[key]; else target[key] = op.value;
     }

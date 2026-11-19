@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { docs } from "../../test-native/index.ts";
+import { docs, failedSaves } from "../../test-native/index.ts";
+import { createLivePersistence } from "../../platform/livePersistence.ts";
 import { updateCalendarSettings, live, setLive } from "./store.ts";
 
 test("default persistence keeps its 800ms debounce and versioned projection", (context) => {
@@ -16,7 +17,7 @@ test("default persistence keeps its 800ms debounce and versioned projection", (c
   assert.equal(docs.has("live.json"), false);
   context.mock.timers.tick(1);
   const saved = JSON.parse(docs.get("live.json"));
-  assert.equal(saved.version, 2);
+  assert.equal(saved.version, 3);
   assert.equal(saved.calendar.showPreview, false);
   assert.equal(saved.calendar.showTimeToNext, false);
   for (const key of ["status", "completing", "showAll"]) assert.equal(key in saved, false);
@@ -45,4 +46,31 @@ test("default engine keeps its completion animation timer and ordinary saved cle
     context.mock.timers.tick(800);
     assert.deepEqual(JSON.parse(docs.get("live.json")).items[id], []);
   } finally { SOURCES.github.fetch = previousFetch; SOURCES.github.resolveGone = previousGone; }
+});
+
+test("when two durable saves fail together, the retry writes the newer one", async (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  const binding = createLivePersistence();
+  docs.delete("live.json");
+  failedSaves.on = true;
+  const older = binding.saveDurably({ accounts: { work: { github: { login: "work" } } } });
+  const newer = binding.saveDurably({ accounts: { work: { github: { login: "work" } }, home: { github: { login: "home" } } } });
+  await assert.rejects(older);
+  await assert.rejects(newer);
+  failedSaves.on = false;
+  context.mock.timers.tick(800);
+  assert.deepEqual(Object.keys(JSON.parse(docs.get("live.json")).accounts), ["work", "home"]);
+});
+
+test("a debounced save after a durable one still writes a document equal to an earlier one", async (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  const binding = createLivePersistence();
+  const before = { accounts: {} };
+  const connected = { accounts: { work: { github: { login: "work" } } } };
+  binding.changed(before, before);
+  context.mock.timers.tick(800);
+  await binding.saveDurably(connected);
+  binding.changed(connected, before);
+  context.mock.timers.tick(800);
+  assert.deepEqual(JSON.parse(docs.get("live.json")).accounts, {});
 });

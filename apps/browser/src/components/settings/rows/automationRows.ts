@@ -59,7 +59,7 @@ export const automationRows = {
         liveFolders: {
           title: "Live folders",
           explained: true,
-          description: "Right-click the sidebar and choose New Live Folder.",
+          description: "Right-click the sidebar and choose New Live Folder. Each profile has its own folders and accounts.",
           keywords: ["new live folder", "hidden", "refresh", "stack", "stacked pull requests", "group stacked pull requests", "completed", "merged", "closed", "show completed pull requests"],
         },
         github: {

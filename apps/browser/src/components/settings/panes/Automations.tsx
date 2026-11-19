@@ -8,7 +8,7 @@ export function AutomationsPane({ profileId }: SettingsPlace) {
   return (
     <View>
       <CalendarSection />
-      <LiveFoldersSection />
+      <LiveFoldersSection profileId={profileId} />
       <LinkRoutingSection profileId={profileId} />
     </View>
   );

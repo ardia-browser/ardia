@@ -150,6 +150,7 @@
     "apps/browser/src/state/history/engineSync.ts": 1,
     "apps/browser/src/state/live/engine.ts": 1,
     "apps/browser/src/state/live/githubClient.ts": 1,
+    "apps/browser/src/state/live/sources.ts": 1,
     "apps/browser/src/state/pins/tabCleanup.ts": 1,
     "apps/browser/src/state/plugins/tools.ts": 1,
     "apps/browser/src/state/reader/reader.ts": 1,
@@ -182,6 +183,7 @@
     "apps/browser/src/state/windows/windowClose.ts": 1,
     "apps/linux/src/hostSession.ts": 1,
     "apps/linux/src/liveDocumentClient.ts": 1,
+    "apps/linux/src/liveSources.ts": 1,
     "apps/linux/src/syncEngine.ts": 1
   },
   "unstampedEvents": {

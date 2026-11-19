@@ -1,7 +1,7 @@
 import { LiveError, type LiveErrorKind, type LiveSourceId } from "../../browser/src/state/live/types";
 import { ardiaHost, hostSupports, invokeHost, type ArdiaHost } from "./host.ts";
 
-export const LIVE_CAPABILITIES = ["ArdiaLive.request", "ArdiaLive.connect", "ArdiaLive.cancel", "ArdiaLive.disconnect"] as const;
+export const LIVE_CAPABILITIES = ["ArdiaLive.request", "ArdiaLive.connect", "ArdiaLive.cancel", "ArdiaLive.disconnect", "ArdiaLive.legacy"] as const;
 
 export const UNAVAILABLE_MESSAGE = "Live folder services are unavailable in this Linux host";
 
@@ -18,11 +18,18 @@ const KINDS: Record<string, LinuxLiveErrorKind> = {
 
 export type LiveCallOptions = { signal?: AbortSignal };
 
+export type LegacyAdoption = "copied" | "same" | "differs" | "missing";
+
+const ADOPTIONS: readonly string[] = ["copied", "same", "differs", "missing"] satisfies LegacyAdoption[];
+
 export type LiveClient = {
   available(): boolean;
-  request<T>(source: LiveSourceId, operation: string, params?: Record<string, unknown>, options?: LiveCallOptions): Promise<T>;
-  connect<T>(source: LiveSourceId, fields: Record<string, unknown>, options?: LiveCallOptions): Promise<T>;
-  disconnect(source: LiveSourceId): Promise<void>;
+  request<T>(source: LiveSourceId, profileId: string, operation: string, params?: Record<string, unknown>, options?: LiveCallOptions): Promise<T>;
+  connect<T>(source: LiveSourceId, profileId: string, fields: Record<string, unknown>, options?: LiveCallOptions): Promise<T>;
+  disconnect(source: LiveSourceId, profileId: string): Promise<void>;
+  legacyExists(source: LiveSourceId): Promise<boolean>;
+  adoptLegacy(source: LiveSourceId, profileId: string): Promise<LegacyAdoption>;
+  forgetLegacy(source: LiveSourceId): Promise<void>;
 };
 
 export function liveError(error: unknown, connected: boolean): LiveError {
@@ -42,9 +49,9 @@ export function liveRequestId(random: () => number = Math.random): string {
   return `live-${salt}-${++sequence}`;
 }
 
-export function hostLiveClient(host: ArdiaHost | undefined = ardiaHost, connected: (source: LiveSourceId) => boolean = () => false): LiveClient {
+export function hostLiveClient(host: ArdiaHost | undefined = ardiaHost, connected: (source: LiveSourceId, profileId: string) => boolean = () => false): LiveClient {
   const available = () => !!host && LIVE_CAPABILITIES.every((method) => hostSupports(method, host));
-  const call = <T>(method: string, args: unknown[], source: LiveSourceId, signal?: AbortSignal, id?: string): Promise<T> => {
+  const call = <T>(method: string, args: unknown[], isConnected: () => boolean, signal?: AbortSignal, id?: string): Promise<T> => {
     if (!available()) return Promise.reject(new LiveError("other", UNAVAILABLE_MESSAGE));
     if (signal?.aborted) return Promise.reject(cancelled());
     return new Promise<T>((resolve, reject) => {
@@ -68,16 +75,16 @@ export function hostLiveClient(host: ArdiaHost | undefined = ardiaHost, connecte
           if (settled) return;
           settled = true;
           if (id && typeof (error as { code?: unknown })?.code !== "string") void invokeHost("ArdiaLive.cancel", { args: [id] }, host).catch(() => {});
-          reject(liveError(error, connected(source)));
+          reject(liveError(error, isConnected()));
         },
       );
     });
   };
   return {
     available,
-    async request<T>(source: LiveSourceId, operation: string, params: Record<string, unknown> = {}, options: LiveCallOptions = {}) {
+    async request<T>(source: LiveSourceId, profileId: string, operation: string, params: Record<string, unknown> = {}, options: LiveCallOptions = {}) {
       const id = liveRequestId();
-      const reply = await call<{ body?: unknown }>("ArdiaLive.request", [source, operation, params, id], source, options.signal, id);
+      const reply = await call<{ body?: unknown }>("ArdiaLive.request", [source, profileId, operation, params, id], () => connected(source, profileId), options.signal, id);
       if (!reply || typeof reply.body !== "string") throw new LiveError("other", "The service sent an unreadable reply");
       try {
         return JSON.parse(reply.body) as T;
@@ -85,12 +92,25 @@ export function hostLiveClient(host: ArdiaHost | undefined = ardiaHost, connecte
         throw new LiveError("other", "The service sent an unreadable reply");
       }
     },
-    connect<T>(source: LiveSourceId, fields: Record<string, unknown>, options: LiveCallOptions = {}) {
+    connect<T>(source: LiveSourceId, profileId: string, fields: Record<string, unknown>, options: LiveCallOptions = {}) {
       const id = liveRequestId();
-      return call<T>("ArdiaLive.connect", [source, fields, id], source, options.signal, id);
+      return call<T>("ArdiaLive.connect", [source, profileId, fields, id], () => connected(source, profileId), options.signal, id);
     },
-    async disconnect(source: LiveSourceId) {
-      await call<unknown>("ArdiaLive.disconnect", [source], source);
+    async disconnect(source: LiveSourceId, profileId: string) {
+      await call<unknown>("ArdiaLive.disconnect", [source, profileId], () => connected(source, profileId));
+    },
+    async legacyExists(source: LiveSourceId) {
+      const exists = await call<unknown>("ArdiaLive.legacy", [source, "exists"], () => true);
+      if (typeof exists !== "boolean") throw new LiveError("other", "The service sent an unreadable reply");
+      return exists;
+    },
+    async adoptLegacy(source: LiveSourceId, profileId: string) {
+      const outcome = await call<unknown>("ArdiaLive.legacy", [source, "adopt", profileId], () => true);
+      if (typeof outcome !== "string" || !ADOPTIONS.includes(outcome)) throw new LiveError("other", "The service sent an unreadable reply");
+      return outcome as LegacyAdoption;
+    },
+    async forgetLegacy(source: LiveSourceId) {
+      await call<unknown>("ArdiaLive.legacy", [source, "forget"], () => true);
     },
   };
 }

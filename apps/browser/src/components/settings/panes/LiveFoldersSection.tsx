@@ -1,15 +1,17 @@
+import { useEffect } from "react";
 import { View } from "react-native";
 import { useShallow } from "zustand/react/shallow";
 import { deleteLiveFolder, manualRefresh, statusText } from "../../../state/live/engine";
 import { isMocked } from "../../../state/live/net";
 import { disconnect, SOURCES } from "../../../state/live/sources";
 import { updateFolder, useLive } from "../../../state/live/store";
+import { extensionsProfileId } from "../../../state/extensions/store";
 import type { LiveAccount, LiveFolder, LiveSourceId } from "../../../state/live/types";
 import { useProfileRecords } from "../../../state/profiles/hooks";
 import { showSettingsSheet } from "../../../state/settings/sheet";
 import { Box, Button, space, Text, Toggle } from "../../ui";
 import { Favicon } from "../../favicon/Favicon";
-import { Group, Row, SectionHeader } from "../Form";
+import { Group, ProfilePicker, Row, SectionHeader, useSettingsProfile } from "../Form";
 import { ConnectAccountSheet } from "./ConnectAccountSheet";
 
 const ACCOUNTS: LiveSourceId[] = ["github", "bitbucket", "notion", "confluence", "gdrive"];
@@ -19,18 +21,22 @@ const PR_OPTIONS = {
   showCompleted: { title: "Show completed pull requests", description: "Merged, closed and reviewed pull requests stay listed for a day under Completed." },
 } as const;
 
-export function LiveFoldersSection() {
-  const folders = useLive(useShallow((s) => s.folderOrder.map((id) => s.folders[id]!).filter(Boolean)));
-  const profiles = useProfileRecords();
+export function LiveFoldersSection({ profileId: chosen }: { profileId: string | null }) {
+  const [profileId, setProfileId] = useSettingsProfile(extensionsProfileId(chosen));
+  const profileExists = useProfileRecords((profiles) => !!profiles[profileId]);
+  useEffect(() => {
+    if (!profileExists) setProfileId(extensionsProfileId(null));
+  }, [profileExists, setProfileId]);
+  const folders = useLive(useShallow((s) => s.folderOrder.map((id) => s.folders[id]!).filter((f) => f?.profileId === profileId)));
   useLive((s) => s.status);
   useLive((s) => s.hidden);
   return (
     <View>
-      <SectionHeader anchor="automations.liveFolders" />
+      <SectionHeader anchor="automations.liveFolders" action={<ProfilePicker value={profileId} onChange={setProfileId} />} />
       {folders.length ? (
         <Box gap="xl">
           {folders.map((f) => (
-            <FolderGroup key={f.id} folder={f} profileName={profiles[f.profileId]?.name ?? "Profile"} />
+            <FolderGroup key={f.id} folder={f} />
           ))}
         </Box>
       ) : (
@@ -42,7 +48,7 @@ export function LiveFoldersSection() {
       <SectionHeader title="Connected accounts" description="Live folders read from these accounts." />
       <Group>
         {ACCOUNTS.map((id) => (
-          <AccountRow key={id} id={id} />
+          <AccountRow key={id} id={id} profileId={profileId} />
         ))}
       </Group>
       {isMocked ? (
@@ -54,10 +60,10 @@ export function LiveFoldersSection() {
   );
 }
 
-function FolderGroup({ folder, profileName }: { folder: LiveFolder; profileName: string }) {
+function FolderGroup({ folder }: { folder: LiveFolder }) {
   return (
     <Group>
-      <Row title={folder.name} description={`${profileName} · ${folder.sources.map((s) => SOURCES[s].name).join(", ")} · ${statusText(folder.id)}`}>
+      <Row title={folder.name} description={`${folder.sources.map((s) => SOURCES[s].name).join(", ")} · ${statusText(folder.id)}`}>
         <Box row gap="s">
           <Button title="Refresh" onPress={() => void manualRefresh(folder.id)} />
           <Button title="Delete" kind="destructive" onPress={() => deleteLiveFolder(folder.id)} />
@@ -87,12 +93,12 @@ function connectedAs(id: LiveSourceId, account: LiveAccount): string {
   return id === "github" || id === "gdrive" ? `${account.name} (${account.login})` : account.name;
 }
 
-function AccountRow({ id }: { id: LiveSourceId }) {
-  const account = useLive((s) => s.accounts[id]);
+function AccountRow({ id, profileId }: { id: LiveSourceId; profileId: string }) {
+  const account = useLive((s) => s.accounts[profileId]?.[id]);
   const source = SOURCES[id];
   return (
     <Row anchor={`automations.${id}`} icon={<Favicon url={source.site} size={18} />} title={source.name} description={account ? `Connected as ${connectedAs(id, account)}` : undefined}>
-      {account ? <Button title="Disconnect" onPress={() => void disconnect(id)} /> : <Button title="Connect…" onPress={() => showSettingsSheet(<ConnectAccountSheet id={id} />)} />}
+      {account ? <Button title="Disconnect" onPress={() => void disconnect(profileId, id)} /> : <Button title="Connect…" onPress={() => showSettingsSheet(<ConnectAccountSheet id={id} profileId={profileId} />)} />}
     </Row>
   );
 }

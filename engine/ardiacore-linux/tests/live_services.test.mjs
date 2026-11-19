@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,7 +9,8 @@ import { after, before, test } from "node:test";
 import { createLiveServices, LIVE_FIXTURE, liveSecretValues } from "../../../apps/linux/scripts/acceptance/lib/liveServices.mjs";
 import { hostLiveClient, LIVE_CAPABILITIES } from "../../../apps/linux/src/hostLive.ts";
 import { linuxLiveSources } from "../../../apps/linux/src/liveSources.ts";
-import { live, setAccount, updateConfig } from "../../../apps/browser/src/state/live/store.ts";
+import { accountOf, live, setAccount, setLegacyAccount } from "../../../apps/browser/src/state/live/store.ts";
+import { useBrowser } from "../../../apps/browser/src/state/browser/store.ts";
 import { LiveError } from "../../../apps/browser/src/state/live/types.ts";
 
 const TOOL = process.env.LIVE_HOST_TOOL;
@@ -43,12 +44,12 @@ function call(method, args) {
 }
 
 const host = { bootstrap: { windowId: "w1", profileId: "default", capabilities: [...LIVE_CAPABILITIES] }, invoke: (method, { args }) => call(method, args) };
-const client = hostLiveClient(host, (source) => !!live().accounts[source]);
+const client = hostLiveClient(host, (source, profileId) => !!accountOf(profileId, source));
 const linux = linuxLiveSources(client);
 const { SOURCES } = linux;
 
-function storedFields(source) {
-  const path = join(keys, `live-token-${source}`);
+function storedFields(source, profileId = "default") {
+  const path = join(keys, `live-token-${source}${profileId ? `:${profileId}` : ""}`);
   if (!existsSync(path)) return null;
   const lines = readFileSync(path, "utf8").trim().split("\n").slice(1);
   return Object.fromEntries(lines.map((line) => {
@@ -110,20 +111,23 @@ after(async () => {
 
 test("each advertised provider connects through the native service and keeps its token native-side", async () => {
   const f = LIVE_FIXTURE;
-  await linux.connectGithub(` ${f.github.token} `);
-  await linux.connectBitbucket(f.bitbucket.user, f.bitbucket.token);
-  await linux.connectNotion(f.notion.token);
-  await linux.connectConfluence("acme.atlassian.net/", f.confluence.email, f.confluence.token);
-  await linux.connectGoogle(f.gdrive.clientId, f.gdrive.clientSecret, f.gdrive.code, "fixture-verifier-0123456789", "http://127.0.0.1:53682/ardia-oauth");
-  const accounts = live().accounts;
+  await linux.connectGithub("default", ` ${f.github.token} `);
+  await linux.connectBitbucket("default", f.bitbucket.user, f.bitbucket.token);
+  await linux.connectNotion("default", f.notion.token);
+  await linux.connectConfluence("default", "acme.atlassian.net/", f.confluence.email, f.confluence.token);
+  await linux.connectGoogle("default", f.gdrive.clientId, f.gdrive.clientSecret, f.gdrive.code, "fixture-verifier-0123456789", "http://127.0.0.1:53682/ardia-oauth");
+  const accounts = live().accounts.default;
   assert.equal(accounts.github.login, f.github.login);
   assert.equal(accounts.bitbucket.login, f.bitbucket.accountId);
   assert.equal(accounts.notion.login, f.notion.workspace);
   assert.equal(accounts.confluence.login, f.confluence.accountId);
   assert.equal(accounts.gdrive.login, f.gdrive.email);
-  assert.equal(live().config.confluenceSite, "https://acme.atlassian.net");
+  assert.equal(accounts.confluence.site, "https://acme.atlassian.net");
+  assert.equal(accounts.confluence.user, f.confluence.email);
+  assert.equal(accounts.bitbucket.user, f.bitbucket.user);
+  assert.equal(accounts.gdrive.clientId, f.gdrive.clientId);
   const stored = readdirSync(keys).sort();
-  assert.deepEqual(stored, ["live-token-bitbucket", "live-token-confluence", "live-token-gdrive", "live-token-github", "live-token-notion"]);
+  assert.deepEqual(stored, ["live-token-bitbucket:default", "live-token-confluence:default", "live-token-gdrive:default", "live-token-github:default", "live-token-notion:default"]);
   for (const name of stored) assert.equal(statSync(join(keys, name)).mode & 0o777, 0o600, name);
   const disk = stored.map((name) => readFileSync(join(keys, name), "utf8")).join("\n");
   const replies = lines.join("\n");
@@ -185,7 +189,7 @@ test("google access renews once for concurrent refreshes, after expiry and after
 test("revoked tokens read as signed out and keep the account so Settings asks to sign back in", async () => {
   services.revokeGithub();
   await rejectsWith(SOURCES.github.fetch(prFolder), "signedOut");
-  assert.ok(live().accounts.github);
+  assert.ok(live().accounts.default.github);
   services.revokeGoogleRefresh();
   services.expireGoogleAccess();
   await rejectsWith(SOURCES.gdrive.fetch(docFolder), "signedOut", /revoked/);
@@ -204,7 +208,7 @@ test("offline refreshes fail as network errors and the next refresh recovers", a
 test("cancelling a request aborts it natively and frees its slot", async () => {
   services.state.delayMs.set("api.notion.com", 3000);
   const abort = new AbortController();
-  const pending = rejectsWith(client.request("notion", "search", {}, { signal: abort.signal }), "other", /Cancelled/);
+  const pending = rejectsWith(client.request("notion", "default", "search", {}, { signal: abort.signal }), "other", /Cancelled/);
   await new Promise((resolve) => setTimeout(resolve, 200));
   abort.abort();
   await pending;
@@ -218,7 +222,7 @@ test("cancelling a request aborts it natively and frees its slot", async () => {
 test("the native queue bounds concurrent provider requests", async () => {
   services.state.delayMs.set("api.bitbucket.org", 150);
   services.state.maxActive.set("api.bitbucket.org", 0);
-  const repeats = await Promise.all(Array.from({ length: 30 }, () => client.request("bitbucket", "statuses", { repo: "fixture/service", id: 7 })));
+  const repeats = await Promise.all(Array.from({ length: 30 }, () => client.request("bitbucket", "default", "statuses", { repo: "fixture/service", id: 7 })));
   assert.equal(repeats.length, 30);
   const peak = services.state.maxActive.get("api.bitbucket.org");
   assert.ok(peak <= 8, `saw ${peak} concurrent requests`);
@@ -227,14 +231,14 @@ test("the native queue bounds concurrent provider requests", async () => {
 });
 
 test("the device flow polls through pending and slow-down, connects, and can be cancelled", async () => {
-  setAccount("github", null);
-  const flow = await linux.startGithubDeviceFlow(LIVE_FIXTURE.github.clientId);
+  setAccount("default", "github", null);
+  const flow = await linux.startGithubDeviceFlow("default", LIVE_FIXTURE.github.clientId);
   assert.equal(flow.userCode, "FIXT-0001");
   await flow.done;
-  assert.equal(live().accounts.github.login, LIVE_FIXTURE.github.login);
+  assert.equal(live().accounts.default.github.login, LIVE_FIXTURE.github.login);
   assert.equal(services.state.devicePolls, 3);
   assert.equal((await SOURCES.github.fetch(prFolder)).length, 2);
-  const cancelled = await linux.startGithubDeviceFlow(LIVE_FIXTURE.github.clientId);
+  const cancelled = await linux.startGithubDeviceFlow("default", LIVE_FIXTURE.github.clientId);
   cancelled.cancel();
   await rejectsWith(cancelled.done, "signedOut", /Cancelled/);
   await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -243,36 +247,46 @@ test("the device flow polls through pending and slow-down, connects, and can be 
 
 test("privileged requests outside the fixed provider contract are refused", async () => {
   const refuse = (method, args) => call(method, args).then(() => null, (e) => e.code);
-  assert.equal(await refuse("ArdiaLive.request", ["github", "graphql", { query: "mutation { deleteRepository(input: {}) { clientMutationId } }" }, "r1"]), "ERR_LIVE_ARGUMENT");
-  assert.equal(await refuse("ArdiaLive.request", ["github", "fetch", { url: "https://example.com" }, "r2"]), "ERR_LIVE_ARGUMENT");
-  assert.equal(await refuse("ArdiaLive.request", ["bitbucket", "user", {}, "r3"]), "ERR_LIVE_ARGUMENT");
-  assert.equal(await refuse("ArdiaLive.request", ["bitbucket", "statuses", { repo: "../../user", id: 1 }, "r4"]), "ERR_LIVE_ARGUMENT");
-  assert.equal(await refuse("ArdiaLive.request", ["gmail", "search", {}, "r5"]), "ERR_LIVE_ARGUMENT");
-  assert.equal(await refuse("ArdiaLive.connect", ["confluence", { site: "http://acme.atlassian.net", email: "a@b.c", token: "t" }, "r6"]), "ERR_LIVE_ARGUMENT");
-  assert.equal(await refuse("ArdiaLive.connect", ["confluence", { site: "https://evil.test/steal", email: "a@b.c", token: "t" }, "r7"]), "ERR_LIVE_ARGUMENT");
-  assert.equal(await refuse("ArdiaLive.connect", ["gdrive", { clientId: "c", clientSecret: "s", code: "x", verifier: "v", redirectUri: "https://evil.test/cb" }, "r8"]), "ERR_LIVE_ARGUMENT");
-  assert.equal(await refuse("ArdiaLive.request", ["github", "graphql", { query: "query { viewer { login } }" }, "bad id!"]), "ERR_LIVE_ARGUMENT");
+  assert.equal(await refuse("ArdiaLive.request", ["github", "default", "graphql", { query: "mutation { deleteRepository(input: {}) { clientMutationId } }" }, "r1"]), "ERR_LIVE_ARGUMENT");
+  assert.equal(await refuse("ArdiaLive.request", ["github", "default", "fetch", { url: "https://example.com" }, "r2"]), "ERR_LIVE_ARGUMENT");
+  assert.equal(await refuse("ArdiaLive.request", ["bitbucket", "default", "user", {}, "r3"]), "ERR_LIVE_ARGUMENT");
+  assert.equal(await refuse("ArdiaLive.request", ["bitbucket", "default", "statuses", { repo: "../../user", id: 1 }, "r4"]), "ERR_LIVE_ARGUMENT");
+  assert.equal(await refuse("ArdiaLive.request", ["gmail", "default", "search", {}, "r5"]), "ERR_LIVE_ARGUMENT");
+  assert.equal(await refuse("ArdiaLive.connect", ["confluence", "default", { site: "http://acme.atlassian.net", email: "a@b.c", token: "t" }, "r6"]), "ERR_LIVE_ARGUMENT");
+  assert.equal(await refuse("ArdiaLive.connect", ["confluence", "default", { site: "https://evil.test/steal", email: "a@b.c", token: "t" }, "r7"]), "ERR_LIVE_ARGUMENT");
+  assert.equal(await refuse("ArdiaLive.connect", ["gdrive", "default", { clientId: "c", clientSecret: "s", code: "x", verifier: "v", redirectUri: "https://evil.test/cb" }, "r8"]), "ERR_LIVE_ARGUMENT");
+  assert.equal(await refuse("ArdiaLive.request", ["github", "default", "graphql", { query: "query { viewer { login } }" }, "bad id!"]), "ERR_LIVE_ARGUMENT");
+  for (const profile of ["", "../default", "a:b", "a/b", "a b", "x".repeat(129), 7]) {
+    assert.equal(await refuse("ArdiaLive.request", ["notion", profile, "search", {}, "r9"]), "ERR_LIVE_ARGUMENT", `profile ${profile}`);
+    assert.equal(await refuse("ArdiaLive.connect", ["notion", profile, { token: "secret_x" }, "r10"]), "ERR_LIVE_ARGUMENT", `profile ${profile}`);
+    assert.equal(await refuse("ArdiaLive.disconnect", ["notion", profile]), "ERR_LIVE_ARGUMENT", `profile ${profile}`);
+    assert.equal(await refuse("ArdiaLive.legacy", ["notion", "adopt", profile]), "ERR_LIVE_ARGUMENT", `profile ${profile}`);
+  }
+  assert.equal(await refuse("ArdiaLive.request", ["notion", "search", {}, "r11"]), "ERR_LIVE_ARGUMENT", "the old request shape without a profile");
+  assert.equal(await refuse("ArdiaLive.disconnect", ["notion"]), "ERR_LIVE_ARGUMENT", "the old disconnect shape without a profile");
+  assert.equal(await refuse("ArdiaLive.legacy", ["notion", "read"]), "ERR_LIVE_ARGUMENT");
+  assert.equal(await refuse("ArdiaLive.legacy", ["notion", "forget", "default"]), "ERR_LIVE_ARGUMENT");
   assert.equal(await refuse("ArdiaLive.fetch", ["https://example.com"]), "ERR_UNKNOWN_CALL");
-  await rejectsWith(linux.connectConfluence("http://acme.atlassian.net", "a@b.c", "t"), "other", /https/);
+  await rejectsWith(linux.connectConfluence("default", "http://acme.atlassian.net", "a@b.c", "t"), "other", /https/);
 });
 
 test("a locked keyring is an explicit failure, never a silent success", async () => {
   await call("Tool.locked", [true]);
   await call("Tool.restart", []);
   await rejectsWith(SOURCES.notion.fetch(docFolder), "keyringLocked", /Unlock your keyring/);
-  setAccount("notion", null);
-  await rejectsWith(linux.connectNotion(LIVE_FIXTURE.notion.token), "keyringLocked", /Unlock your keyring/);
-  assert.equal(live().accounts.notion, undefined);
+  setAccount("default", "notion", null);
+  await rejectsWith(linux.connectNotion("default", LIVE_FIXTURE.notion.token), "keyringLocked", /Unlock your keyring/);
+  assert.equal(live().accounts.default.notion, undefined);
   await call("Tool.locked", [false]);
-  await linux.connectNotion(LIVE_FIXTURE.notion.token);
-  assert.equal(live().accounts.notion.login, LIVE_FIXTURE.notion.workspace);
+  await linux.connectNotion("default", LIVE_FIXTURE.notion.token);
+  assert.equal(live().accounts.default.notion.login, LIVE_FIXTURE.notion.workspace);
 });
 
 test("a connect cancelled while its token is being saved keeps the previous token", async () => {
   assert.equal(storedFields("notion").token, LIVE_FIXTURE.notion.token);
   await call("Tool.holdWrites", [true]);
   const abort = new AbortController();
-  const pending = rejectsWith(client.connect("notion", { token: LIVE_FIXTURE.notion.altToken }, { signal: abort.signal }), "other", /Cancelled/);
+  const pending = rejectsWith(client.connect("notion", "default", { token: LIVE_FIXTURE.notion.altToken }, { signal: abort.signal }), "other", /Cancelled/);
   await eventually(async () => (await heldWrites()) >= 1, "the connect's save to be posted");
   abort.abort();
   await pending;
@@ -290,7 +304,7 @@ test("a Google renewal that lands after a reconnect cannot overwrite the new tok
   await eventually(() => services.state.googleRenewals > renewals, "the renewal to start");
   await call("Tool.holdWrites", [true]);
   const f = LIVE_FIXTURE.gdrive;
-  const connecting = linux.connectGoogle(f.clientId, f.clientSecret, f.code, "fixture-verifier-0123456789", "http://127.0.0.1:53682/ardia-oauth");
+  const connecting = linux.connectGoogle("default", f.clientId, f.clientSecret, f.code, "fixture-verifier-0123456789", "http://127.0.0.1:53682/ardia-oauth");
   await eventually(async () => (await heldWrites()) >= 1, "the reconnect's save to be posted");
   await new Promise((resolve) => setTimeout(resolve, 1800));
   await call("Tool.holdWrites", [false]);
@@ -302,26 +316,86 @@ test("a Google renewal that lands after a reconnect cannot overwrite the new tok
   assert.equal(services.state.googleIssuedBy[storedFields("gdrive").token], "authorization_code", JSON.stringify({ stored: storedFields("gdrive").token, issued: services.state.googleIssuedBy, renewals: services.state.googleRenewals - renewals }));
 });
 
+test("two profiles keep their own native tokens, each refresh sends its own, and a disconnect removes only one", async () => {
+  const work = useBrowser.getState().createProfile({ name: "Work" });
+  const workFolder = { ...prFolder, id: "lf-work", profileId: work };
+  const personal = storedFields("github").token;
+  const other = [LIVE_FIXTURE.github.token, LIVE_FIXTURE.github.deviceToken].find((token) => token !== personal);
+  for (const token of [personal, other]) services.state.githubTokens.add(token);
+  await linux.connectGithub(work, other);
+  assert.equal(storedFields("github", work).token, other);
+  const sent = () => services.requests().filter((r) => r.host === "api.github.com").at(-1).headers.authorization;
+  await SOURCES.github.fetch(workFolder);
+  assert.equal(sent(), `Bearer ${other}`);
+  await SOURCES.github.fetch(prFolder);
+  assert.equal(sent(), `Bearer ${personal}`);
+  await linux.disconnect(work, "github");
+  assert.equal(storedFields("github", work), null);
+  assert.equal(storedFields("github").token, personal);
+  await rejectsWith(SOURCES.github.fetch(workFolder), "notConfigured");
+  assert.equal((await SOURCES.github.fetch(prFolder)).length, 2);
+  useBrowser.getState().deleteProfile(work);
+});
+
+test("the token saved before profiles is copied natively to every profile, never to the renderer, and its item goes once nobody is owed it", async () => {
+  const work = useBrowser.getState().createProfile({ name: "Work" });
+  await linux.disconnect("default", "notion");
+  const hex = Buffer.from(LIVE_FIXTURE.notion.token).toString("hex");
+  const legacyPath = join(keys, "live-token-notion");
+  writeFileSync(legacyPath, `ardia-live-1\ntoken=${hex}\n`);
+  chmodSync(legacyPath, 0o600);
+  setLegacyAccount("notion", { login: LIVE_FIXTURE.notion.workspace, name: LIVE_FIXTURE.notion.workspace, avatar: null, connectedAt: 1 });
+  const replies = lines.length;
+  await linux.adoptLegacyAccounts(["default", work]);
+  assert.equal(storedFields("notion").token, LIVE_FIXTURE.notion.token);
+  assert.equal(storedFields("notion", work).token, LIVE_FIXTURE.notion.token);
+  assert.equal(existsSync(legacyPath), false);
+  assert.equal(live().legacyAccounts.notion, undefined);
+  assert.equal(live().accounts[work].notion.login, LIVE_FIXTURE.notion.workspace);
+  assert.ok(!lines.slice(replies).join("\n").includes(LIVE_FIXTURE.notion.token), "the old token came back to the renderer");
+  assert.equal((await SOURCES.notion.fetch({ ...docFolder, profileId: work })).length, 1);
+  await linux.forgetProfileAccounts(work);
+  assert.equal(storedFields("notion", work), null);
+  assert.equal(live().accounts[work], undefined);
+  useBrowser.getState().deleteProfile(work);
+});
+
+test("a delete the keyring refuses leaves the token readable, so the old item and a disconnected profile's token are tried again", async () => {
+  const hex = Buffer.from(LIVE_FIXTURE.notion.token).toString("hex");
+  const legacyPath = join(keys, "live-token-notion");
+  writeFileSync(legacyPath, `ardia-live-1\ntoken=${hex}\n`);
+  chmodSync(legacyPath, 0o600);
+  await call("Tool.restart", []);
+  assert.equal(await call("ArdiaLive.legacy", ["notion", "exists"]), true);
+  await call("Tool.locked", [true]);
+  await assert.rejects(call("ArdiaLive.legacy", ["notion", "forget"]), { code: "ERR_LIVE_KEYRING_LOCKED" });
+  await assert.rejects(call("ArdiaLive.disconnect", ["notion", "default"]), { code: "ERR_LIVE_KEYRING_LOCKED" });
+  await call("Tool.locked", [false]);
+  assert.equal(await call("ArdiaLive.legacy", ["notion", "exists"]), true);
+  assert.equal(existsSync(legacyPath), true);
+  assert.equal((await SOURCES.notion.fetch(docFolder)).length, 1);
+  assert.equal(await call("ArdiaLive.legacy", ["notion", "forget"]), true);
+  assert.equal(await call("ArdiaLive.legacy", ["notion", "exists"]), false);
+});
+
 test("disconnecting cancels in-flight work, deletes the protected token and survives a restart", async () => {
   services.state.delayMs.set("api.notion.com", 3000);
   const inflight = rejectsWith(SOURCES.notion.fetch(docFolder), "other", /Cancelled/);
   await new Promise((resolve) => setTimeout(resolve, 200));
-  await linux.disconnect("notion");
+  await linux.disconnect("default", "notion");
   await inflight;
   services.state.delayMs.delete("api.notion.com");
-  for (const source of ["github", "bitbucket", "confluence", "gdrive"]) await linux.disconnect(source);
+  for (const source of ["github", "bitbucket", "confluence", "gdrive"]) await linux.disconnect("default", source);
   assert.deepEqual(readdirSync(keys), []);
   await call("Tool.restart", []);
-  for (const source of ["github", "notion", "gdrive"]) {
+  for (const source of ["github", "notion", "gdrive", "confluence"]) {
     await rejectsWith(SOURCES[source].fetch(source === "github" ? prFolder : docFolder), "notConfigured");
   }
-  updateConfig({ confluenceSite: "" });
-  await rejectsWith(SOURCES.confluence.fetch(docFolder), "notConfigured");
-  assert.equal(existsSync(join(keys, "live-token-github")), false);
+  assert.equal(existsSync(join(keys, "live-token-github:default")), false);
 });
 
 test("an unavailable host is reported, not faked", async () => {
   const bare = linuxLiveSources(hostLiveClient({ ...host, bootstrap: { ...host.bootstrap, capabilities: [] } }));
   await rejectsWith(bare.SOURCES.github.fetch(prFolder), "other", /unavailable/);
-  await rejectsWith(bare.connectNotion("secret_x"), "other", /unavailable/);
+  await rejectsWith(bare.connectNotion("default", "secret_x"), "other", /unavailable/);
 });

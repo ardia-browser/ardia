@@ -18,6 +18,8 @@ function authority() {
     if (op.type === "field" && ["calendar", "config"].includes(op.target)) return JSON.stringify(payload[op.target][op.field] ?? null) !== JSON.stringify(op.expected);
     if (op.type !== "create" && op.incarnation && (!payload.folders[op.id] || op.incarnation !== `folder:${op.id}`)) return true;
     if (op.type === "field" && op.target === "folder") return JSON.stringify(payload.folders[op.id][op.field] ?? null) !== JSON.stringify(op.expected);
+    if (op.type === "field" && op.target === "account") return JSON.stringify(payload.accounts?.[op.id]?.[op.field] ?? null) !== JSON.stringify(op.expected);
+    if (op.type === "field" && op.target === "legacyAccount") return JSON.stringify(payload.legacyAccounts?.[op.id] ?? null) !== JSON.stringify(op.expected);
     if (op.type !== "place") return false;
     if (op.after !== null && (op.after === op.id || !payload.folders[op.after])) return true;
     const at = payload.folderOrder.indexOf(op.id);
@@ -192,6 +194,47 @@ test("a batch the authority rejects as invalid is dropped and reported instead o
   assert.equal(native.commits.length, 2);
   assert.equal(native.commits[0].requestId, native.commits[1].requestId);
   assert.equal(a.client.state().dirty, false);
+});
+
+test("each profile's account saves as its own field, so windows connecting different profiles both land and an emptied profile leaves the document", async () => {
+  const native = authority(), a = bind(native.connect("a")), b = bind(native.connect("b"));
+  await Promise.all([a.client.reconnect(), b.client.reconnect()]);
+  const octo = { login: "octo", name: null, avatar: null, connectedAt: 1 };
+  const acme = { login: "Acme", name: "Acme", avatar: null, connectedAt: 2 };
+  a.edit({ accounts: { default: { github: octo } } });
+  b.edit({ accounts: { work: { notion: acme } } });
+  await Promise.all([a.client.flush(), b.client.flush()]);
+  assert.deepEqual(native.payload.accounts, { default: { github: octo }, work: { notion: acme } });
+  assert.deepEqual(a.state().accounts, native.payload.accounts);
+  assert.deepEqual(native.commits.flatMap((c) => c.operations).filter((op) => op.target === "account").map(({ id, field, expected }) => [id, field, expected]), [["default", "github", null], ["work", "notion", null]]);
+  b.edit({ accounts: { ...b.state().accounts, default: {} } });
+  await b.client.flush();
+  assert.deepEqual(native.payload.accounts, { work: { notion: acme } });
+  const legacy = { ...octo, owedTo: ["default", "work"] };
+  a.edit({ legacyAccounts: { github: legacy } });
+  await a.client.flush();
+  assert.deepEqual(native.payload.legacyAccounts, { github: legacy });
+  assert.deepEqual(native.commits.at(-1).operations, [{ type: "field", target: "legacyAccount", id: "github", field: "value", expected: null, value: legacy }]);
+  b.edit({ legacyAccounts: { github: { ...legacy, owedTo: ["work"] } } });
+  a.edit({ legacyAccounts: { github: { ...legacy, owedTo: ["default"] } } });
+  await Promise.all([a.client.flush(), b.client.flush()]);
+  assert.deepEqual(a.state().legacyAccounts, b.state().legacyAccounts, "a stale owed list is rebased on the saved one instead of blocking");
+});
+
+test("a durable save fails when the saved document drops one of its changes, and the next one succeeds", async () => {
+  const native = authority(), a = bind(native.connect("a"));
+  await a.client.reconnect();
+  native.invalid = (op) => op.target === "legacyAccount";
+  const report = console.error;
+  console.error = () => {};
+  try {
+    a.edit({ legacyAccounts: { github: { login: "octo", name: null, avatar: null, connectedAt: 1, owedTo: [] } } });
+    await assert.rejects(a.client.flushDurably(), (error) => error.code === "ERR_DOCUMENT_REJECTED");
+  } finally { console.error = report; }
+  assert.equal(a.state().legacyAccounts, undefined);
+  a.edit({ calendar: { ...a.state().calendar, showPreview: false } });
+  await a.client.flushDurably();
+  assert.equal(native.payload.calendar.showPreview, false);
 });
 
 test("a lost reply after the source saw its canonical event settles without a duplicate commit", async () => {

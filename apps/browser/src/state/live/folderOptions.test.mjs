@@ -148,7 +148,7 @@ test("a refresh doesn't ask whether pull requests its filters leave out have clo
   updateFolder(id, { filters: { authored: false, reviewRequests: true } });
   const asked = [];
   const resolveGone = SOURCES.bitbucket.resolveGone;
-  SOURCES.bitbucket.resolveGone = async (items) => (asked.push(...items.map((it) => it.id)), { x: "merged", y: "merged" });
+  SOURCES.bitbucket.resolveGone = async (_folder, items) => (asked.push(...items.map((it) => it.id)), { x: "merged", y: "merged" });
   try {
     await refreshFolder(id);
   } finally {
@@ -175,7 +175,7 @@ test("a refresh doesn't ask about hidden pull requests from a source the folder 
   updateFolder(id, { sources: ["github"] });
   const asked = [];
   const resolveGone = SOURCES.bitbucket.resolveGone;
-  SOURCES.bitbucket.resolveGone = async (items) => (asked.push(...items.map((it) => it.id)), { x: "merged" });
+  SOURCES.bitbucket.resolveGone = async (_folder, items) => (asked.push(...items.map((it) => it.id)), { x: "merged" });
   try {
     await refreshFolder(id);
   } finally {
@@ -207,18 +207,18 @@ test("rows asking whether their pull request is open read the tab list once, not
   assert.equal(scans, 1);
 });
 
-test("folders in different profiles refreshing at once share one fetch per service, and each lists the pull requests", async () => {
-  const ids = ["p1", "p2", "p3"].map((profile) => createFolder(profile, "pullRequests", ["github"]));
+test("folders of one profile refreshing at once share one fetch per service, and another profile's folder fetches with its own account", async () => {
+  const ids = ["p1", "p1", "p1", "p2"].map((profile) => createFolder(profile, "pullRequests", ["github"]));
   const { fetch } = SOURCES.github;
   let calls = 0;
   SOURCES.github.fetch = async () => (calls++, [pr("shared", 1, "one", "main")]);
   try {
     await Promise.all(ids.map(refreshFolder));
-    assert.equal(calls, 1);
+    assert.equal(calls, 2);
     for (const id of ids) assert.deepEqual(live().items[id].map((it) => it.id), ["shared"]);
     updateFolder(ids[2], { filters: { authored: true, reviewRequests: false } });
     await Promise.all(ids.map(refreshFolder));
-    assert.equal(calls, 3);
+    assert.equal(calls, 5);
   } finally {
     SOURCES.github.fetch = fetch;
     ids.forEach(removeFolder);
@@ -270,7 +270,7 @@ test("a hidden repo stays out through fetches and manual refreshes, keeps its op
   const { fetch, resolveGone } = SOURCES.bitbucket;
   const asked = [];
   SOURCES.bitbucket.fetch = async () => [work, personal];
-  SOURCES.bitbucket.resolveGone = async (items) => (asked.push(...items.map((it) => it.id)), {});
+  SOURCES.bitbucket.resolveGone = async (_folder, items) => (asked.push(...items.map((it) => it.id)), {});
   try {
     await refreshFolder(id);
     setRepoHidden(id, "bitbucket:me/dotfiles", true);
@@ -457,11 +457,11 @@ test("a live folder's menu has a group's Color submenu, without Match Site Color
 test("picking a colour from a live folder's menu saves it, Neutral clears it, None saves none, and each pick is counted", async () => {
   const { shellNativeModules } = await import("../../test-native/shell.ts");
   const { openLiveFolderMenu } = await import("../sidebar/liveMenus.ts");
-  const { takeLiveHideCounts } = await import("../telemetry/liveHides.ts");
+  const { takeLiveFolderCounts } = await import("../telemetry/liveFolders.ts");
   const id = createFolder("p", "pullRequests", []);
   const shell = shellNativeModules.ArdiaMenus;
   const real = shell.showMenu;
-  takeLiveHideCounts();
+  takeLiveFolderCounts();
   const pick = async (title) => {
     shell.showMenu = (shown) => Promise.resolve(shown.find((it) => it.id === "color").children.find((it) => it.title === title).id);
     try {
@@ -474,6 +474,6 @@ test("picking a colour from a live folder's menu saves it, Neutral clears it, No
   assert.equal(await pick("Green"), "green");
   assert.equal(await pick("Neutral"), null);
   assert.equal(await pick("None"), "none");
-  assert.equal(takeLiveHideCounts().live_folder_color_picks, 3);
+  assert.equal(takeLiveFolderCounts().live_folder_color_picks, 3);
   removeFolder(id);
 });

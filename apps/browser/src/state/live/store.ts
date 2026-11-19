@@ -2,7 +2,7 @@ import { createLivePersistence, type LivePersistenceIntent, type LiveProjection 
 import { create } from "zustand";
 import { noteLiveSave } from "../telemetry/workCounts";
 import { repoKey, stackMembers } from "./rows";
-import type { CompletedItem, CompletionState, FolderStatus, LiveAccount, LiveFolder, LiveFolderKind, LiveItem, LiveSourceId } from "./types";
+import type { CompletedItem, CompletionState, FolderStatus, LegacyAccount, LiveAccount, LiveFolder, LiveFolderKind, LiveItem, LiveSourceId, ProfileAccounts } from "./types";
 import { DEFAULT_COUNTDOWN_LEAD, keepDismissedNow, type DismissedNow } from "./meetings";
 
 export type LiveConfig = {
@@ -46,7 +46,8 @@ type LiveState = {
   status: Record<string, FolderStatus>;
   expandedStacks: Record<string, boolean>;
   showAll: Record<string, boolean>;
-  accounts: Partial<Record<LiveSourceId, LiveAccount>>;
+  accounts: Record<string, ProfileAccounts>;
+  legacyAccounts: Partial<Record<LiveSourceId, LegacyAccount>>;
   config: LiveConfig;
   calendar: CalendarSettings;
   meetingGroups: Record<string, MeetingGroup>;
@@ -66,7 +67,7 @@ export const DEFAULT_CALENDAR: CalendarSettings = {
   prompted: false,
 };
 
-const PERSISTED = ["folders", "folderOrder", "items", "known", "unread", "hidden", "repoHidden", "completed", "expandedStacks", "accounts", "config", "calendar", "meetingGroups", "dismissedAlerts", "dismissedNow"] as const;
+const PERSISTED = ["folders", "folderOrder", "items", "known", "unread", "hidden", "repoHidden", "completed", "expandedStacks", "accounts", "legacyAccounts", "config", "calendar", "meetingGroups", "dismissedAlerts", "dismissedNow"] as const;
 const persistence = createLivePersistence(noteLiveSave);
 const saved = persistence.load() as Partial<LiveState>;
 
@@ -89,6 +90,7 @@ export const useLive = create<LiveState>()(() => ({
   expandedStacks: saved.expandedStacks ?? {},
   showAll: {},
   accounts: saved.accounts ?? {},
+  legacyAccounts: saved.legacyAccounts ?? {},
   config: { ...DEFAULT_CONFIG, ...saved.config },
   calendar: { ...DEFAULT_CALENDAR, ...saved.calendar },
   meetingGroups: saved.meetingGroups ?? {},
@@ -135,6 +137,7 @@ persistence.start((payload, invalidated = []) => {
 });
 export const beginLiveRefresh = (folderId: string) => persistence.beginRefresh(folderId);
 export const flushLive = () => persistence.flush();
+export const saveLiveDurably = () => persistence.saveDurably(projection(live()));
 
 export const FOLDER_DEFAULTS: Record<LiveFolderKind, { name: string; sources: LiveSourceId[] }> = {
   pullRequests: { name: "Pull Requests", sources: ["github"] },
@@ -369,14 +372,12 @@ export function unhide(folderId: string) {
   });
 }
 
-export function setAccount(source: LiveSourceId, account: LiveAccount | null) {
-  setLive((s) => {
-    const accounts = { ...s.accounts };
-    if (account) accounts[source] = account;
-    else delete accounts[source];
-    return { accounts };
-  });
-}
+export const accountOf = (profileId: string, source: LiveSourceId): LiveAccount | undefined => live().accounts[profileId]?.[source];
+export const setAccount = (profileId: string, source: LiveSourceId, account: LiveAccount | null) =>
+  setLive((s) => ({ accounts: { ...s.accounts, [profileId]: account ? { ...s.accounts[profileId], [source]: account } : without({ ...s.accounts[profileId] }, source) } }));
+export const setLegacyAccount = (source: LiveSourceId, account: LegacyAccount | null) =>
+  setLive((s) => ({ legacyAccounts: account ? { ...s.legacyAccounts, [source]: account } : without(s.legacyAccounts, source) }));
+export const removeProfileAccounts = (profileId: string) => setLive((s) => (s.accounts[profileId] ? { accounts: without(s.accounts, profileId) } : {}));
 
 export const updateConfig = (patch: Partial<LiveConfig>) => setLive((s) => ({ config: { ...s.config, ...patch } }));
 export const updateCalendarSettings = (patch: Partial<CalendarSettings>) => setLive((s) => ({ calendar: { ...s.calendar, ...patch } }));

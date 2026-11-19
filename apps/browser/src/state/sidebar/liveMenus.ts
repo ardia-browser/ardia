@@ -9,7 +9,7 @@ import { ALERT_LEADS, nowBadgeEvent } from "../live/meetings";
 import { SOURCES } from "../live/sources";
 import { dismissNowBadge, live, markRead, markUnread, setRepoHidden, updateCalendarSettings, updateFolder } from "../live/store";
 import { folderRepos, setShowNewRepos, showAllRepos } from "../live/repoFilter";
-import { noteLiveFolderColorPick, noteLiveRepoMenuPick } from "../telemetry/liveHides";
+import { noteLiveFolderColorPick, noteLiveRepoMenuPick } from "../telemetry/liveFolders";
 import { consentToken } from "../telemetry/client";
 import type { LiveItem, LiveSourceId } from "../live/types";
 import type { GroupColor } from "../browser/types";
@@ -123,7 +123,7 @@ export function liveFolderMenuItems(windowId: string, folderId: string): MenuIte
         symbol: pr ? "arrow.triangle.pull" : "doc.text",
         children: SOURCE_GROUPS[folder.kind].map((id) => ({
           id: `source:${id}`,
-          title: s.accounts[id] ? SOURCES[id].name : `${SOURCES[id].name} (Not Connected)`,
+          title: s.accounts[folder.profileId]?.[id] ? SOURCES[id].name : `${SOURCES[id].name} (Not Connected)`,
           checked: folder.sources.includes(id),
         })),
       },
@@ -182,7 +182,7 @@ export async function openLiveFolderMenu(windowId: string, folderId: string) {
     void refreshFolder(folderId);
   } else if (choice.startsWith("source:")) {
     const id = choice.slice(7) as LiveSourceId;
-    if (!live().accounts[id]) return openSettings("automations");
+    if (!live().accounts[folder.profileId]?.[id]) return openSettings("automations", folder.profileId);
     const sources = folder.sources.includes(id) ? folder.sources.filter((x) => x !== id) : [...folder.sources, id];
     updateFolder(folderId, { sources: sources.length ? sources : folder.sources });
     void refreshFolder(folderId);
@@ -198,7 +198,7 @@ export async function openLiveFolderMenu(windowId: string, folderId: string) {
   else if (choice === "read") markRead(folderId);
   else if (choice === "up") moveLiveFolder(windowId, folderId, -1);
   else if (choice === "down") moveLiveFolder(windowId, folderId, 1);
-  else if (choice === "settings") openSettings("automations");
+  else if (choice === "settings") openSettings("automations", folder.profileId);
   else if (choice === "delete") deleteLiveFolder(folderId);
 }
 

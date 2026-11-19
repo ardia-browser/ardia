@@ -79,6 +79,7 @@ export const LINUX_WORDING: readonly Wording[] = [
         "plus the engine version that crashed, how long the process had run, and the signal that ended it",
       ],
       ["A random install ID, made on this Mac once", "A random install ID, made on this computer once"],
+      ["had that copy refused by the keychain", "had that copy refused by the keyring"],
       ["App version and build, macOS version, chip", "App version and build, operating system version, chip"],
       [
         "Every 10 minutes Ardia notes on this Mac its tab, window and profile counts, its memory use, rough free disk space, the Mac's memory pressure, how long it has been open, and which of Ardia's own pages (like Settings or History) the tab in front was on, never a website's address. Ardia also takes that note when you open or leave one of those pages, and keeps the last 3 of those pages with how many minutes ago you were on each. That note is sent only with a crash report, or at the next launch after Ardia didn't quit cleanly, with whether the Mac restarted since.",

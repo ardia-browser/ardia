@@ -33,6 +33,7 @@
     ["ArdiaLive.request", 180000],
     ["ArdiaLive.connect", 180000],
     ["ArdiaLive.disconnect", 180000],
+    ["ArdiaLive.legacy", 180000],
     ["ArdiaCalendar.requestAccess", 120000],
     ["ArdiaCalendar.sources", 60000],
     ["ArdiaCalendar.objects", 120000],

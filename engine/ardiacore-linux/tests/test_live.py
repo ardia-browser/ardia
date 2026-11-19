@@ -63,7 +63,7 @@ class LiveServiceTests(unittest.TestCase):
                 'DBUS_SESSION_BUS_ADDRESS': bus, 'DBUS_SYSTEM_BUS_ADDRESS': bus, 'DISPLAY': '',
                 'ASAN_OPTIONS': 'detect_leaks=0'})
             self.assertIn('secret service without a bus: unavailable', secret)
-        self.node_suite('live_services.test.mjs', 15)
+        self.node_suite('live_services.test.mjs', 18)
 
     def test_core_against_documented_provider_replies(self):
         self.node_suite('live_provider_contract.test.mjs', 9)

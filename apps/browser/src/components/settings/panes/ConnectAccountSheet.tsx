@@ -4,7 +4,7 @@ import { copyText } from "../../../state/app/system";
 import { focusWindow } from "../../../state/windows/nativeWindow";
 import { connectGoogleDrive } from "../../../state/live/googleAuth";
 import { connectBitbucket, connectConfluence, connectGithub, connectNotion, SOURCES, startGithubDeviceFlow, type DeviceFlow } from "../../../state/live/sources";
-import { live, updateConfig } from "../../../state/live/store";
+import { accountOf, live, updateConfig } from "../../../state/live/store";
 import type { LiveSourceId } from "../../../state/live/types";
 import { openUrlFromSettings, settingsBrowserWindow } from "../../../state/settings/settingsWindows";
 import { closeSettingsSheet } from "../../../state/settings/sheet";
@@ -14,7 +14,7 @@ import { Favicon } from "../../favicon/Favicon";
 import { FormField } from "../Form";
 import { settingsType } from "../tokens";
 
-export function ConnectAccountSheet({ id }: { id: LiveSourceId }) {
+export function ConnectAccountSheet({ id, profileId }: { id: LiveSourceId; profileId: string }) {
   const source = SOURCES[id];
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,19 +33,19 @@ export function ConnectAccountSheet({ id }: { id: LiveSourceId }) {
   let body: ReactNode;
   switch (id) {
     case "github":
-      body = <GithubConnect busy={busy} run={run} />;
+      body = <GithubConnect profileId={profileId} busy={busy} run={run} />;
       break;
     case "bitbucket":
-      body = <BitbucketConnect busy={busy} run={run} />;
+      body = <BitbucketConnect profileId={profileId} busy={busy} run={run} />;
       break;
     case "notion":
-      body = <NotionConnect busy={busy} run={run} />;
+      body = <NotionConnect profileId={profileId} busy={busy} run={run} />;
       break;
     case "confluence":
-      body = <ConfluenceConnect busy={busy} run={run} />;
+      body = <ConfluenceConnect profileId={profileId} busy={busy} run={run} />;
       break;
     case "gdrive":
-      body = <GoogleConnect busy={busy} run={run} />;
+      body = <GoogleConnect profileId={profileId} busy={busy} run={run} />;
       break;
   }
   return (
@@ -61,7 +61,7 @@ export function ConnectAccountSheet({ id }: { id: LiveSourceId }) {
   );
 }
 
-type ConnectProps = { busy: boolean; run(task: () => Promise<void>): Promise<void> };
+type ConnectProps = { profileId: string; busy: boolean; run(task: () => Promise<void>): Promise<void> };
 
 const NOTE_TOP = { marginTop: space.ml } as const;
 const BODY_TOP = { marginTop: space.l } as const;
@@ -77,7 +77,7 @@ function Help({ children }: { children: ReactNode }) {
   );
 }
 
-function GithubConnect({ busy, run }: ConnectProps) {
+function GithubConnect({ profileId, busy, run }: ConnectProps) {
   const [token, setToken] = useState("");
   const [clientId, setClientId] = useState(live().config.githubClientId);
   const [flow, setFlow] = useState<DeviceFlow | null>(null);
@@ -86,10 +86,10 @@ function GithubConnect({ busy, run }: ConnectProps) {
   const signIn = () =>
     run(async () => {
       updateConfig({ githubClientId: clientId.trim() });
-      const f = await startGithubDeviceFlow(clientId.trim());
+      const f = await startGithubDeviceFlow(profileId, clientId.trim());
       setFlow(f);
       copyText(f.userCode);
-      openUrlFromSettings(f.verificationUri);
+      openUrlFromSettings(f.verificationUri, profileId);
       await f.done;
     });
 
@@ -102,7 +102,7 @@ function GithubConnect({ busy, run }: ConnectProps) {
         </Text>
         <DialogActions>
           <Button title="Cancel" onPress={() => (flow.cancel(), setFlow(null))} />
-          <Button title="Open GitHub" kind="primary" onPress={() => openUrlFromSettings(flow.verificationUri)} />
+          <Button title="Open GitHub" kind="primary" onPress={() => openUrlFromSettings(flow.verificationUri, profileId)} />
         </DialogActions>
       </View>
     );
@@ -113,11 +113,11 @@ function GithubConnect({ busy, run }: ConnectProps) {
         Paste a personal access token (classic: "repo" and "read:org" scopes; fine-grained: read access to pull requests, checks and metadata).
       </Help>
       <FormField label="Personal access token">
-        <TextField value={token} onChangeText={setToken} placeholder="ghp_…" secure onSubmit={() => token && void run(() => connectGithub(token))} />
+        <TextField value={token} onChangeText={setToken} placeholder="ghp_…" secure onSubmit={() => token && void run(() => connectGithub(profileId, token))} />
       </FormField>
       <DialogActions>
         <Button title="Cancel" onPress={closeSettingsSheet} />
-        <Button title={busy ? "Checking…" : "Connect"} kind="primary" disabled={!token.trim() || busy} onPress={() => void run(() => connectGithub(token))} />
+        <Button title={busy ? "Checking…" : "Connect"} kind="primary" disabled={!token.trim() || busy} onPress={() => void run(() => connectGithub(profileId, token))} />
       </DialogActions>
       <Divider thick style={SPLIT} />
       <Help>Or sign in with your own GitHub OAuth app (Settings › Developer settings › OAuth Apps, with Device Flow enabled).</Help>
@@ -131,10 +131,10 @@ function GithubConnect({ busy, run }: ConnectProps) {
   );
 }
 
-function BitbucketConnect({ busy, run }: ConnectProps) {
-  const [user, setUser] = useState(live().config.bitbucketUser);
+function BitbucketConnect({ profileId, busy, run }: ConnectProps) {
+  const [user, setUser] = useState("");
   const [token, setToken] = useState("");
-  const go = () => void run(() => connectBitbucket(user, token));
+  const go = () => void run(() => connectBitbucket(profileId, user, token));
   return (
     <View>
       <Help>Create an API token (bitbucket.org › Personal settings › API tokens, with read access to pull requests and repositories), then enter your Atlassian account email with it. Bitbucket can't search review requests across repositories, so the folder lists your own pull requests.</Help>
@@ -152,9 +152,9 @@ function BitbucketConnect({ busy, run }: ConnectProps) {
   );
 }
 
-function NotionConnect({ busy, run }: ConnectProps) {
+function NotionConnect({ profileId, busy, run }: ConnectProps) {
   const [token, setToken] = useState("");
-  const go = () => void run(() => connectNotion(token));
+  const go = () => void run(() => connectNotion(profileId, token));
   return (
     <View>
       <Help>Create an internal integration at notion.so/my-integrations (read content; read user information for editor names), copy its secret, and share the pages or teamspaces you want with it (••• › Connections).</Help>
@@ -169,12 +169,11 @@ function NotionConnect({ busy, run }: ConnectProps) {
   );
 }
 
-function ConfluenceConnect({ busy, run }: ConnectProps) {
-  const config = live().config;
-  const [site, setSite] = useState(config.confluenceSite);
-  const [email, setEmail] = useState(config.confluenceEmail);
+function ConfluenceConnect({ profileId, busy, run }: ConnectProps) {
+  const [site, setSite] = useState("");
+  const [email, setEmail] = useState("");
   const [token, setToken] = useState("");
-  const go = () => void run(() => connectConfluence(site, email, token));
+  const go = () => void run(() => connectConfluence(profileId, site, email, token));
   return (
     <View>
       <Help>Create an API token at id.atlassian.com › Security › API tokens, then enter your Confluence Cloud site and account email.</Help>
@@ -195,15 +194,15 @@ function ConfluenceConnect({ busy, run }: ConnectProps) {
   );
 }
 
-function GoogleConnect({ busy, run }: ConnectProps) {
-  const [clientId, setClientId] = useState(live().config.googleClientId);
+function GoogleConnect({ profileId, busy, run }: ConnectProps) {
+  const [clientId, setClientId] = useState(accountOf(profileId, "gdrive")?.clientId ?? "");
   const [secret, setSecret] = useState("");
   const go = () =>
     void run(async () => {
-      const windowId = settingsBrowserWindow();
+      const windowId = settingsBrowserWindow(profileId);
       if (!windowId) throw new Error("Open a browser window first");
       void focusWindow(windowId);
-      await connectGoogleDrive(windowId, clientId, secret);
+      await connectGoogleDrive(windowId, profileId, clientId, secret);
     });
   return (
     <View>

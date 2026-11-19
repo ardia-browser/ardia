@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <initializer_list>
 #include <set>
 #include <string_view>
 #include <utility>
@@ -108,6 +109,47 @@ bool Item(const base::Value& entry) {
                   Fields(doc->GetDict(), "|kind|editedBy|place|", "", ""));
 }
 
+bool ProfileKey(std::string_view id) {
+  if (id.empty() || id.size() > kLinuxLiveMaxProfileId) return false;
+  for (const char c : id)
+    if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_')) return false;
+  return true;
+}
+
+bool LiveSource(std::string_view id) {
+  return std::set<std::string_view>{"github", "bitbucket", "notion", "confluence", "gdrive"}.contains(id);
+}
+
+bool Account(const base::Value& entry, bool legacy) {
+  if (!entry.is_dict()) return false;
+  const auto& account = entry.GetDict();
+  if (!Shape(account, legacy ? "|login|name|avatar|connectedAt|user|site|clientId|owedTo|" : "|login|name|avatar|connectedAt|user|site|clientId|") ||
+      !account.FindString("login") || !Fields(account, "|login|name|avatar|user|site|clientId|", "", "|connectedAt|")) return false;
+  const auto* owed = account.Find("owedTo");
+  if (!owed) return true;
+  if (!Strings(*owed)) return false;
+  for (const auto& id : owed->GetList()) if (!ProfileKey(id.GetString())) return false;
+  return true;
+}
+
+base::DictValue LegacyAccounts(const base::DictValue& accounts, const base::DictValue* config) {
+  const auto text = [&](std::string_view field) {
+    const auto* value = config ? config->FindString(field) : nullptr;
+    return value ? *value : std::string();
+  };
+  base::DictValue legacy = accounts.Clone();
+  const auto lift = [&](std::string_view source, std::initializer_list<std::pair<std::string_view, std::string>> fields) {
+    if (!legacy.FindDict(source)) return;
+    auto account = legacy.FindDict(source)->Clone();
+    for (const auto& [field, value] : fields) account.Set(field, value);
+    legacy.Set(source, std::move(account));
+  };
+  lift("bitbucket", {{"user", text("bitbucketUser")}});
+  lift("confluence", {{"user", text("confluenceEmail")}, {"site", text("confluenceSite")}});
+  lift("gdrive", {{"clientId", text("googleClientId")}});
+  return legacy;
+}
+
 bool Folder(base::DictValue& folder, const std::string& id) {
   if (!Shape(folder, "|id|profileId|kind|name|icon|collapsed|sources|filters|groupStacks|showCompleted|hiddenRepos|showNewRepos|shownRepos|createdAt|after|") ||
       !folder.FindString("id") || *folder.FindString("id") != id ||
@@ -138,13 +180,13 @@ int LinuxDocumentInteger(const base::DictValue& value, std::string_view key,
 
 std::optional<base::DictValue> NormalizeLinuxLive(const base::DictValue& payload) {
   int version = LinuxDocumentInteger(payload, "version", 0);
-  if (version < 0 || version > 1 || (payload.Find("version") && !payload.Find("version")->is_int()) ||
-      !Shape(payload, "|version|folders|folderOrder|items|known|unread|hidden|repoHidden|completed|expandedStacks|accounts|config|calendar|meetingGroups|dismissedAlerts|dismissedNow|")) return std::nullopt;
+  if (version < 0 || version > kLinuxLiveDocumentVersion || (payload.Find("version") && !payload.Find("version")->is_int()) ||
+      !Shape(payload, "|version|folders|folderOrder|items|known|unread|hidden|repoHidden|completed|expandedStacks|accounts|legacyAccounts|config|calendar|meetingGroups|dismissedAlerts|dismissedNow|")) return std::nullopt;
   size_t nodes = 0;
   if (!JsonSafe(base::Value(payload.Clone()), 0, nodes)) return std::nullopt;
   base::DictValue result;
-  result.Set("version", base::Value(1));
-  for (auto key : {"folders", "items", "known", "unread", "hidden", "repoHidden", "completed", "expandedStacks", "accounts", "config", "calendar", "meetingGroups", "dismissedNow"}) {
+  result.Set("version", base::Value(kLinuxLiveDocumentVersion));
+  for (auto key : {"folders", "items", "known", "unread", "hidden", "repoHidden", "completed", "expandedStacks", "accounts", "legacyAccounts", "config", "calendar", "meetingGroups", "dismissedNow"}) {
     if (payload.Find(key) && !payload.FindDict(key)) return std::nullopt;
     result.Set(key, payload.FindDict(key) ? payload.FindDict(key)->Clone() : base::DictValue());
   }
@@ -182,11 +224,24 @@ std::optional<base::DictValue> NormalizeLinuxLive(const base::DictValue& payload
     }
   }
   for (const auto& [id, entry] : *result.FindDict("expandedStacks")) if (!entry.is_bool()) return std::nullopt;
-  for (const auto& [id, entry] : *result.FindDict("accounts")) {
-    if (std::set<std::string_view>{"github", "bitbucket", "notion", "confluence", "gdrive"}.count(id) == 0 ||
-        !entry.is_dict() || !Shape(entry.GetDict(), "|login|name|avatar|connectedAt|") ||
-        !Fields(entry.GetDict(), "|login|name|avatar|", "", "|connectedAt|")) return std::nullopt;
+  if (version < kLinuxLiveDocumentVersion) {
+    for (const auto& [id, entry] : *result.FindDict("accounts")) {
+      if (!LiveSource(id) || !entry.is_dict() || !Shape(entry.GetDict(), "|login|name|avatar|connectedAt|") ||
+          !Fields(entry.GetDict(), "|login|name|avatar|", "", "|connectedAt|")) return std::nullopt;
+    }
+    result.Set("legacyAccounts", LegacyAccounts(*result.FindDict("accounts"), payload.FindDict("config")));
+    result.Set("accounts", base::DictValue());
   }
+  base::DictValue accounts;
+  for (const auto& [profile, entries] : *result.FindDict("accounts")) {
+    if (!ProfileKey(profile) || !entries.is_dict()) return std::nullopt;
+    for (const auto& [source, entry] : entries.GetDict())
+      if (!LiveSource(source) || !Account(entry, false)) return std::nullopt;
+    if (entries.GetDict().size()) accounts.Set(profile, entries.GetDict().Clone());
+  }
+  result.Set("accounts", std::move(accounts));
+  for (const auto& [source, entry] : *result.FindDict("legacyAccounts"))
+    if (!LiveSource(source) || !Account(entry, true)) return std::nullopt;
   for (const auto& [id, entry] : *result.FindDict("meetingGroups")) {
     if (!entry.is_dict() || !Shape(entry.GetDict(), "|groupId|callTabId|occurrence|title|start|end|endedAt|") ||
         !Fields(entry.GetDict(), "|groupId|callTabId|occurrence|title|", "", "|start|end|endedAt|")) return std::nullopt;
@@ -256,15 +311,20 @@ bool FieldValue(const std::string& target, const std::string& field,
     return std::set<std::string>{"showPreview", "showTimeToNext", "prompted"}.contains(field) && value.is_bool();
   }
   if (target == "config") return std::set<std::string>{"githubClientId", "bitbucketUser", "confluenceSite", "confluenceEmail", "googleClientId"}.contains(field) && value.is_string();
+  if (target == "account") {
+    if (!ProfileKey(id) || !LiveSource(field)) return false;
+    return value.is_none() || Account(value, false);
+  }
+  if (target == "legacyAccount") return field == "value" && LiveSource(id) && (value.is_none() || Account(value, true));
   if (field != "value" || id.empty()) return false;
   if (target == "expandedStack") return value.is_none() || value.is_bool();
   if (target == "dismissedNow") return value.is_none() || DismissedNowEnd(value);
-  if (target != "account" && target != "meetingGroup") return false;
+  if (target != "meetingGroup") return false;
   if (value.is_none()) return true;
   base::DictValue payload;
   base::DictValue entries;
   entries.Set(id, value.Clone());
-  payload.Set(target == "account" ? "accounts" : "meetingGroups", std::move(entries));
+  payload.Set("meetingGroups", std::move(entries));
   return NormalizeLinuxLive(payload).has_value();
 }
 

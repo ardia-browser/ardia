@@ -7,10 +7,10 @@ import { pinnedGroupMembers } from "../browser/structure";
 import { shownTabIds } from "../tabs/shownTabs";
 import { repoKey } from "./rows";
 import { hideNewRepos } from "./repoFilter";
-import { SOURCES } from "./sources";
-import { beginLiveRefresh, applyFetch, createFolder, finishCompleting, live, markRead, removeFolder, setStatus, unhide, useLive } from "./store";
+import { adoptLegacyAccounts, forgetMissingProfiles, legacyAccountsFor, SOURCES } from "./sources";
+import { accountOf, beginLiveRefresh, applyFetch, createFolder, finishCompleting, live, markRead, removeFolder, setStatus, unhide, useLive } from "./store";
 import { LiveError, type CompletionState, type LiveFolder, type LiveFolderKind, type LiveItem, type LiveSourceId, type PullRequestSection } from "./types";
-import { noteLiveCompletedTabsClosed } from "../telemetry/liveCompletedTabs";
+import { noteLiveFolders } from "../telemetry/liveFolders";
 import { noteLiveSourceFetch } from "../telemetry/workCounts";
 import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
@@ -29,7 +29,7 @@ const fetchedSources = new Map<string, Set<LiveSourceId>>();
 const sharedFetches = new Map<string, Promise<LiveItem[]>>();
 
 function fetchSource(source: LiveSourceId, folder: LiveFolder, interactive: boolean): Promise<LiveItem[]> {
-  const key = JSON.stringify([source, live().accounts[source]?.connectedAt ?? null, folder.filters]);
+  const key = JSON.stringify([source, folder.profileId, accountOf(folder.profileId, source)?.connectedAt ?? null, folder.filters]);
   const running = sharedFetches.get(key);
   noteLiveSourceFetch(!!running);
   if (running) return running;
@@ -107,7 +107,7 @@ async function run(folderId: string, interactive: boolean) {
   for (const source of new Set(missing.map((it) => it.source))) {
     const resolve = SOURCES[source].resolveGone;
     if (!resolve) continue;
-    Object.assign(gone, await resolve(missing.filter((it) => it.source === source), { interactive }).catch(() => ({})));
+    Object.assign(gone, await resolve(folder, missing.filter((it) => it.source === source), { interactive }).catch(() => ({})));
   }
 
   const folderBeforeHiding = live().folders[folderId];
@@ -192,11 +192,11 @@ export function newLiveFolder(windowId: string, kind: LiveFolderKind): string | 
 }
 
 export function newProfileLiveFolder(profileId: string, kind: LiveFolderKind, sources?: LiveSourceId[]): string {
-  const s = live();
+  const accounts = live().accounts[profileId] ?? {};
   const connected: LiveSourceId[] =
     kind === "pullRequests"
-      ? (["github", "bitbucket"] as const).filter((id) => s.accounts[id])
-      : (["notion", "confluence", "gdrive"] as const).filter((id) => s.accounts[id]);
+      ? (["github", "bitbucket"] as const).filter((id) => accounts[id])
+      : (["notion", "confluence", "gdrive"] as const).filter((id) => accounts[id]);
   const id = createFolder(profileId, kind, sources ?? (connected.length ? connected : undefined));
   void refreshFolder(id, true);
   return id;
@@ -279,7 +279,7 @@ function closeCompletedTabs() {
     .map((t) => t.id);
   if (!tabs.length) return;
   s.closeTabs(tabs);
-  noteLiveCompletedTabsClosed(tabs.length);
+  noteLiveFolders("live_completed_tabs_closed", tabs.length);
 }
 
 let started = false;
@@ -307,7 +307,11 @@ export function startLiveEngine() {
     if (s.groups !== prev.groups) syncLiveHomes();
     if (s.profiles === prev.profiles) return;
     for (const f of Object.values(live().folders)) if (!s.profiles[f.profileId]) removeFolder(f.id);
+    forgetMissingProfiles(Object.keys(prev.profiles));
   });
+  forgetMissingProfiles();
+
+  if (Object.keys(live().legacyAccounts).length) void adoptLegacyAccounts(Object.keys(useBrowser.getState().profiles));
 
   const due = (id: string, maxAge: number) => {
     const f = live().folders[id];

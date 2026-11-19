@@ -24,7 +24,8 @@ class DocumentsTests(unittest.TestCase):
             'claim': [{'type': 'claim', 'id': 'lf-a', 'incarnation': 'folder:lf-a'}],
             'hidden_a': [{'type': 'member', 'target': 'hiddenCalendarIds', 'member': 'a', 'present': True}],
             'hidden_b': [{'type': 'member', 'target': 'hiddenCalendarIds', 'member': 'b', 'present': True}],
-            'secret': [{'type': 'field', 'target': 'account', 'id': 'github', 'field': 'value', 'expected': None, 'value': {'login': 'x', 'token': 'forbidden'}}],
+            'secret': [{'type': 'field', 'target': 'account', 'id': 'default', 'field': 'github', 'expected': None, 'value': {'login': 'x', 'token': 'forbidden'}}],
+            'legacy_secret': [{'type': 'field', 'target': 'legacyAccount', 'id': 'github', 'field': 'value', 'expected': None, 'value': {'login': 'x', 'connectedAt': 1, 'refreshToken': 'forbidden'}}],
         }
         for suffix in ['b', 'c', 'd']:
             operations['create_' + suffix] = [{'type': 'create', 'id': 'lf-' + suffix, 'incarnation': 'folder:lf-' + suffix, 'value': {**folder, 'id': 'lf-' + suffix}}]
@@ -121,6 +122,7 @@ int main() {
   assert(commit(c, 2, hidden_b).ok());
   assert(disk->FindDict("payload")->FindDict("calendar")->Find("hiddenCalendarIds")->GetList().size() == 2);
   assert(commit(c, 3, secret).code == "ERR_DOCUMENT_REQUEST");
+  assert(commit(c, 3, legacy_secret).code == "ERR_DOCUMENT_REQUEST");
   base::DictValue flush;
   flush.Set("document", "live.json"); flush.Set("epoch", "epoch");
   flush.Set("watermark", base::Value(4));
@@ -180,7 +182,7 @@ int main() {
   assert(LinuxDocuments::Reserved("live.json"));
   assert(LinuxDocuments::Reserved("live.canonical.json"));
   assert(!LinuxDocuments::Reserved("sync-state.nns"));
-  base::DictValue newer; newer.Set("version", base::Value(2));
+  base::DictValue newer; newer.Set("version", base::Value(3));
   assert(!NormalizeLinuxLive(newer));
   assert(NormalizeLinuxLive(base::DictValue()));
   std::optional<base::DictValue> migrated;
@@ -206,7 +208,7 @@ int main() {
   auto* imported_folder = migrated->FindDict("payload")->FindDict("folders")->FindDict("lf-a");
   assert(imported_folder->Find("groupStacks")->GetBool());
   assert(imported_folder->Find("showCompleted")->GetBool());
-  assert(LinuxDocumentInteger(*migrated->FindDict("payload"), "version") == 1);
+  assert(LinuxDocumentInteger(*migrated->FindDict("payload"), "version") == 2);
   base::DictValue erase;
   erase.Set("document", "live.json"); erase.Set("epoch", "epoch");
   erase.Set("requestId", "a:1"); erase.Set("observedRevision", base::Value(0));
@@ -229,7 +231,7 @@ int main() {
         result.value = imported_disk->Clone();
       } else if (name == kLinuxLiveDocument) {
         result.state = LinuxDocumentRead::State::kFound;
-        if (kind == 0) result.value.Set("version", base::Value(2));
+        if (kind == 0) result.value.Set("version", base::Value(3));
         if (kind == 1) result.value.Set("version", base::Value("malformed"));
         if (kind == 2) result.value.Set("calendar", base::Value("malformed"));
         if (kind == 3) result.value.Set("version", base::Value(1));
@@ -238,7 +240,7 @@ int main() {
     };
     LinuxDocuments fallback("scope", "epoch", bad_read, [&](const auto& value) { imported_disk = value.Clone(); return true; });
     assert(fallback.Watch(a, [](auto) {}).ok());
-    assert(LinuxDocumentInteger(*imported_disk->FindDict("payload"), "version") == 1);
+    assert(LinuxDocumentInteger(*imported_disk->FindDict("payload"), "version") == 2);
     assert(imported_disk->FindDict("payload")->FindDict("folders")->size() == 0);
   }
   assert(!events.empty());
@@ -388,6 +390,113 @@ int main() {
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             result = subprocess.run([str(binary)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_profile_accounts_and_the_pre_profile_account_move(self):
+        compiler = shutil.which('clang++') or shutil.which('c++')
+        self.assertIsNotNone(compiler)
+        folder = lambda id, profile: {'id': id, 'profileId': profile, 'kind': 'pullRequests', 'name': id, 'icon': None, 'collapsed': False, 'sources': ['github'], 'filters': {'authored': True, 'reviewRequests': True}, 'createdAt': 0}
+        account = lambda login: {'login': login, 'name': None, 'avatar': None, 'connectedAt': 1}
+        old_payload = {
+            'version': 1,
+            'folders': {'lf-a': folder('lf-a', 'default'), 'lf-b': folder('lf-b', 'work')},
+            'folderOrder': ['lf-a', 'lf-b'],
+            'accounts': {'github': account('octo'), 'bitbucket': account('acc-1'), 'confluence': account('conf-1'), 'gdrive': account('me@example.com')},
+            'config': {'bitbucketUser': 'me@example.com', 'confluenceSite': 'https://acme.atlassian.net', 'confluenceEmail': 'me@acme.test', 'googleClientId': 'client-A'},
+        }
+        old_receipt = {'sequence': 1, 'requestId': 'a:1', 'operations': [{'type': 'field', 'target': 'account', 'id': 'github', 'field': 'value', 'expected': None, 'value': account('octo')}]}
+        envelope = {'format': 1, 'epoch': 'old', 'revision': 4, 'payload': old_payload, 'incarnations': {'lf-a': 'folder:lf-a', 'lf-b': 'folder:lf-b'}, 'tombstones': {}, 'generations': {}, 'owners': {}, 'clients': {'a': old_receipt}}
+        set_account = lambda profile, source, expected, value: [{'type': 'field', 'target': 'account', 'id': profile, 'field': source, 'expected': expected, 'value': value}]
+        set_legacy = lambda source, expected, value: [{'type': 'field', 'target': 'legacyAccount', 'id': source, 'field': 'value', 'expected': expected, 'value': value}]
+        connected = {**account('octo-work'), 'user': 'me@work.test'}
+        operations = {
+            'envelope': envelope,
+            'old_payload': old_payload,
+            'connect_default': set_account('default', 'github', None, account('octo')),
+            'connect_default_again': set_account('default', 'github', None, account('other')),
+            'connect_work': set_account('work', 'bitbucket', None, connected),
+            'disconnect_default': set_account('default', 'github', account('octo'), None),
+            'bad_profile': set_account('../x', 'github', None, account('x')),
+            'empty_profile': set_account('', 'github', None, account('x')),
+            'bad_source': set_account('default', 'gmail', None, account('x')),
+            'bad_field': set_account('default', 'github', None, {**account('x'), 'owedTo': []}),
+            'no_login': set_account('default', 'github', None, {'name': None}),
+            'old_shape': [{'type': 'field', 'target': 'account', 'id': 'github', 'field': 'value', 'expected': None, 'value': account('x')}],
+            'owe_bad': set_legacy('github', None, {**account('x'), 'owedTo': ['a b']}),
+            'legacy_github': {'login': 'octo', 'name': None, 'avatar': None, 'connectedAt': 1},
+            'owe_default': set_legacy('github', {'login': 'octo', 'name': None, 'avatar': None, 'connectedAt': 1}, {**account('octo'), 'owedTo': ['default']}),
+            'forget_github': set_legacy('github', {**account('octo'), 'owedTo': ['default']}, None),
+            'empty_profile_record': {'version': 2, 'accounts': {'default': {}, 'work': {'notion': account('n')}}},
+        }
+        main = r'''
+#include <cassert>
+#include <optional>
+#include "ardia/linux/ac_linux_documents.h"
+#include "ardia/linux/ac_linux_document_reducer.h"
+using namespace ardia;
+int main() {
+'''
+        main += '\n'.join(f'auto {name} = {cpp_value(value)};' for name, value in operations.items())
+        main += r'''
+  auto migrated = NormalizeLinuxLive(old_payload.GetDict());
+  assert(migrated);
+  assert(LinuxDocumentInteger(*migrated, "version") == 2);
+  assert(migrated->FindDict("accounts")->size() == 0);
+  const auto* legacy = migrated->FindDict("legacyAccounts");
+  assert(legacy->size() == 4);
+  assert(*legacy->FindDict("github")->FindString("login") == "octo" && !legacy->FindDict("github")->Find("user"));
+  assert(*legacy->FindDict("bitbucket")->FindString("user") == "me@example.com");
+  assert(*legacy->FindDict("confluence")->FindString("user") == "me@acme.test");
+  assert(*legacy->FindDict("confluence")->FindString("site") == "https://acme.atlassian.net");
+  assert(*legacy->FindDict("gdrive")->FindString("clientId") == "client-A");
+  assert(*NormalizeLinuxLive(*migrated) == *migrated);
+  auto compact = NormalizeLinuxLive(empty_profile_record.GetDict());
+  assert(compact && !compact->FindDict("accounts")->contains("default") && compact->FindDict("accounts")->contains("work"));
+
+  std::optional<base::DictValue> disk = envelope.GetDict().Clone();
+  auto read = [&](std::string_view name) {
+    LinuxDocumentRead result;
+    if (name == kLinuxLiveEnvelope && disk) { result.state = LinuxDocumentRead::State::kFound; result.value = disk->Clone(); }
+    return result;
+  };
+  auto write = [&](const base::DictValue& value) { disk = value.Clone(); return true; };
+  LinuxDocuments service("scope", "epoch", read, write);
+  LinuxDocumentClient a{"a", "scope", true, true};
+  assert(service.Watch(a, [](auto) {}).ok());
+  assert(disk->FindDict("clients")->size() == 0);
+  assert(*disk->FindDict("payload") == *migrated);
+  auto commit = [&](int sequence, const base::Value& ops) {
+    base::DictValue request;
+    request.Set("document", "live.json"); request.Set("epoch", "epoch");
+    request.Set("requestId", "a:" + std::to_string(sequence));
+    request.Set("observedRevision", base::Value(0)); request.Set("operations", ops.Clone());
+    return service.Commit(a, request);
+  };
+  const auto generation = [&](const char* id) { return LinuxDocumentInteger(*disk->FindDict("generations"), id, 0); };
+  for (const auto* refused : {&bad_profile, &empty_profile, &bad_source, &bad_field, &no_login, &old_shape, &owe_bad})
+    assert(commit(1, *refused).code == "ERR_DOCUMENT_REQUEST");
+  const int default_before = generation("lf-a"), work_before = generation("lf-b");
+  assert(commit(1, connect_default).ok());
+  assert(*disk->FindDict("payload")->FindDict("accounts")->FindDict("default")->FindDict("github")->FindString("login") == "octo");
+  assert(generation("lf-a") == default_before + 1 && generation("lf-b") == work_before);
+  assert(*commit(2, connect_default_again).value.FindString("status") == "conflict");
+  assert(commit(2, connect_work).ok());
+  assert(*disk->FindDict("payload")->FindDict("accounts")->FindDict("work")->FindDict("bitbucket")->FindString("user") == "me@work.test");
+  assert(generation("lf-b") == work_before + 1);
+  assert(commit(3, disconnect_default).ok());
+  assert(!disk->FindDict("payload")->FindDict("accounts")->contains("default"));
+  const int before_legacy = generation("lf-a");
+  assert(commit(4, owe_default).ok());
+  assert(disk->FindDict("payload")->FindDict("legacyAccounts")->FindDict("github")->Find("owedTo")->GetList().size() == 1);
+  assert(generation("lf-a") == before_legacy);
+  assert(commit(5, forget_github).ok());
+  assert(!disk->FindDict("payload")->FindDict("legacyAccounts")->contains("github"));
+  assert(ValidLinuxLiveEnvelope(*disk));
+  LinuxDocuments reopened("scope", "next", read, write);
+  assert(reopened.Watch(a, [](auto) {}).ok());
+  assert(*disk->FindDict("payload")->FindDict("accounts")->FindDict("work")->FindDict("bitbucket")->FindString("login") == "octo-work");
+}
+'''
+        self.run_main(compiler, main)
 
     def test_repo_filter_state(self):
         compiler = shutil.which('clang++') or shutil.which('c++')

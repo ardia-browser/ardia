@@ -23,6 +23,7 @@ export function createLiveDocumentClient(host: ArdiaHost) {
   const closeTokens = new Set<string>();
   let failure: unknown;
   let captureFailure: unknown;
+  let dropped = 0;
   let connection = 0;
   let apply: (payload: LiveProjection, invalidated?: LiveCompletionInvalidation[]) => void = () => {};
   let active: Promise<void> | undefined;
@@ -105,7 +106,7 @@ export function createLiveDocumentClient(host: ArdiaHost) {
         return [{ ...op, expected }];
       }
       if (op.type === "field") {
-        const target = op.target === "folder" ? payload.folders?.[op.id!] : op.target === "account" ? payload.accounts : op.target === "meetingGroup" ? payload.meetingGroups : op.target === "expandedStack" ? payload.expandedStacks : payload[op.target];
+        const target = op.target === "folder" ? payload.folders?.[op.id!] : op.target === "account" ? payload.accounts?.[op.id!] : op.target === "legacyAccount" ? payload.legacyAccounts : op.target === "meetingGroup" ? payload.meetingGroups : op.target === "expandedStack" ? payload.expandedStacks : payload[op.target];
         const expected = op.field.startsWith("filters.") ? target?.filters?.[op.field.slice(8)] : target?.[op.field === "value" ? op.id! : op.field];
         return [{ ...op, expected: expected ?? null }];
       }
@@ -145,6 +146,7 @@ export function createLiveDocumentClient(host: ArdiaHost) {
         catch (error) {
           if (attemptConnection === connection && (error as { code?: unknown } | null)?.code === "ERR_DOCUMENT_REQUEST") {
             errorFor(batch.consent, documentError("ERR_DOCUMENT_REJECTED", `Dropped a Live change the saved document rejected: ${(error as Error).message}`));
+            dropped++;
             retire(batch);
             continue;
           }
@@ -190,11 +192,17 @@ export function createLiveDocumentClient(host: ArdiaHost) {
     });
     return active;
   };
+  const flush = async () => {
+    do { await drain(); } while (pending.length || active);
+    if (captureFailure || failure) throw captureFailure ?? failure;
+    await invoke("flush", { document: "live.json", epoch: canonical.epoch, watermark });
+    return watermark;
+  };
   reconnect();
   return {
     start: (callback: typeof apply) => { apply = callback; if (!loading) publish(); },
     changed: (before: LiveProjection, after: LiveProjection, intent?: LivePersistenceIntent) => {
-      if (closeTokens.size) { publish(); return; }
+      if (closeTokens.size) { dropped++; publish(); return; }
       try {
         const operations = captureLiveIntent(before, after, canonical, intent);
         if (operations.length) { pending.push({ operations, consent: consentToken(), completion: completions.capture(intent, before, after, canonical) }); void drain().catch(() => {}); }
@@ -213,11 +221,14 @@ export function createLiveDocumentClient(host: ArdiaHost) {
       if (claim.skipped) return null;
       return { generation: canonical.generations[id]!, owner: canonical.clientId, incarnation };
     },
-    flush: async () => {
-      do { await drain(); } while (pending.length || active);
-      if (captureFailure || failure) throw captureFailure ?? failure;
-      await invoke("flush", { document: "live.json", epoch: canonical.epoch, watermark });
-      return watermark;
+    flush,
+    drops: () => dropped,
+    flushDurably: async (since = dropped) => {
+      const closing = () => documentError("ERR_DOCUMENT_CLOSING", "Document producers are quiesced");
+      if (closeTokens.size) throw closing();
+      await flush();
+      if (closeTokens.size) throw closing();
+      if (dropped !== since) throw documentError("ERR_DOCUMENT_REJECTED", "A Live change didn't reach the saved document");
     },
     completionFence: (folderId: string, ids: string[], fence: unknown) => closeTokens.size ? null : completions.completionFence(folderId, ids, fence, canonical),
     quiesce: (token: string) => { closeTokens.add(token); },

@@ -8,6 +8,8 @@
 
 namespace ardia {
 
+inline constexpr int kLinuxLiveDocumentVersion = 2;
+inline constexpr size_t kLinuxLiveMaxProfileId = 128;
 inline constexpr int kLinuxLiveMaxGeneration = 2147483000;
 inline constexpr size_t kLinuxLiveMaxDismissedNow = 50;
 inline constexpr size_t kLinuxLiveMaxOccurrence = 1024;

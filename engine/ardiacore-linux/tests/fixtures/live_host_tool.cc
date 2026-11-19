@@ -212,12 +212,12 @@ class LoopStore final : public live::CredentialStore {
  public:
   LoopStore(Loop& loop, std::unique_ptr<keys::KeyStore> store) : loop_(loop), store_(std::move(store)) {}
 
-  void Load(live::Source source, Loaded done) override {
+  void Load(live::Account account, Loaded done) override {
     ++loads_;
-    loop_.Post([this, source, done = std::move(done)] {
+    loop_.Post([this, account = std::move(account), done = std::move(done)] {
       if (locked_) return done(keys::KeyStatus::kLocked, std::nullopt);
       std::optional<live::Credential> credential;
-      const auto status = live::LoadCredential(*store_, source, &credential);
+      const auto status = live::LoadCredential(*store_, account, &credential);
       done(status, std::move(credential));
     });
   }
@@ -229,10 +229,10 @@ class LoopStore final : public live::CredentialStore {
     });
   }
 
-  void Delete(live::Source source, Stored done) override {
-    Write([this, source, done = std::move(done)] {
+  void Delete(live::Account account, Stored done) override {
+    Write([this, account = std::move(account), done = std::move(done)] {
       if (locked_) return done(keys::KeyStatus::kLocked);
-      done(live::DeleteCredential(*store_, source));
+      done(live::DeleteCredential(*store_, account));
     });
   }
 
@@ -339,6 +339,17 @@ int SelfTest() {
   confluence.user = "a:b";
   EXPECT(!live::ValidCredential(confluence));
   EXPECT(live::ValidLiveAccount("gdrive") && !live::ValidLiveAccount("../gdrive"));
+  EXPECT(live::ValidLiveAccount("gdrive:p-lz3k9x2a-1") && live::ValidLiveAccount("github:default"));
+  EXPECT(!live::ValidLiveAccount("gdrive:") && !live::ValidLiveAccount("gdrive:../x") && !live::ValidLiveAccount("gdrive:a:b"));
+  EXPECT(!live::ValidLiveAccount("gdrive:a/b") && !live::ValidLiveAccount("gmail:default"));
+  EXPECT(!live::ValidLiveAccount("github:" + std::string(live::kMaxProfileIdBytes + 1, 'a')));
+  EXPECT(live::AccountName({live::Source::kNotion, ""}) == "notion");
+  EXPECT(live::AccountName({live::Source::kNotion, "p-1"}) == "notion:p-1");
+  drive.profile = "p-1";
+  EXPECT(live::ValidCredential(drive));
+  drive.profile = "p 1";
+  EXPECT(!live::ValidCredential(drive));
+  drive.profile.clear();
   EXPECT(live::LiveKeySchema().name == std::string("dev.ardia.linux.LiveToken"));
   EXPECT(keys::SyncKeySchema().name == std::string("dev.ardia.linux.SyncKey"));
   std::string error;
@@ -373,7 +384,7 @@ int main(int argc, char** argv) {
     auto store = keys::MakeSecretServiceKeyStore(argv[2], live::LiveKeySchema());
     std::optional<live::Credential> credential;
     std::cout << "secret service without a bus: "
-              << keys::KeyStatusName(live::LoadCredential(*store, live::Source::kGithub, &credential)) << std::endl;
+              << keys::KeyStatusName(live::LoadCredential(*store, live::Account{live::Source::kGithub, "default"}, &credential)) << std::endl;
     return 0;
   }
   if (argc != 3) {

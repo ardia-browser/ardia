@@ -3,6 +3,7 @@ import test from "node:test";
 import { hostLiveClient, LIVE_CAPABILITIES, liveError, liveRequestId, UNAVAILABLE_MESSAGE } from "./hostLive.ts";
 import { linuxLiveSources, normalizeConfluenceSite } from "./liveSources.ts";
 import { LiveError } from "../../browser/src/state/live/types.ts";
+import { accountOf, live } from "../../browser/src/state/live/store.ts";
 
 function fakeHost(handler, capabilities = [...LIVE_CAPABILITIES]) {
   const calls = [];
@@ -45,8 +46,9 @@ test("an unavailable host fails explicitly and never invokes", async () => {
   const { host, calls } = fakeHost(() => Promise.resolve({ body: "{}" }), []);
   const client = hostLiveClient(host);
   assert.equal(client.available(), false);
-  await assert.rejects(client.request("github", "graphql", { query: "query { viewer { login } }" }), (error) => error instanceof LiveError && error.message === UNAVAILABLE_MESSAGE);
-  await assert.rejects(client.disconnect("github"), LiveError);
+  await assert.rejects(client.request("github", "default", "graphql", { query: "query { viewer { login } }" }), (error) => error instanceof LiveError && error.message === UNAVAILABLE_MESSAGE);
+  await assert.rejects(client.disconnect("github", "default"), LiveError);
+  await assert.rejects(client.adoptLegacy("github", "default"), LiveError);
   assert.deepEqual(calls, []);
 });
 
@@ -55,18 +57,18 @@ test("aborting cancels the same native request and ignores its late reply", asyn
   const { host, calls } = fakeHost((method) => (method === "ArdiaLive.cancel" ? Promise.resolve(true) : new Promise((resolve) => (release = resolve))));
   const client = hostLiveClient(host);
   const abort = new AbortController();
-  const pending = client.request("notion", "search", {}, { signal: abort.signal });
+  const pending = client.request("notion", "default", "search", {}, { signal: abort.signal });
   await Promise.resolve();
   await Promise.resolve();
   abort.abort();
   await assert.rejects(pending, (error) => error instanceof LiveError && error.message === "Cancelled");
   release({ body: "{\"results\":[]}" });
   assert.equal(calls[0].method, "ArdiaLive.request");
-  assert.deepEqual(calls[1], { method: "ArdiaLive.cancel", args: [calls[0].args[3]] });
+  assert.deepEqual(calls[1], { method: "ArdiaLive.cancel", args: [calls[0].args[4]] });
   const before = calls.length;
   const aborted = new AbortController();
   aborted.abort();
-  await assert.rejects(client.request("notion", "search", {}, { signal: aborted.signal }), LiveError);
+  await assert.rejects(client.request("notion", "default", "search", {}, { signal: aborted.signal }), LiveError);
   assert.equal(calls.length, before, "an already-aborted request never reaches the host");
 });
 
@@ -74,9 +76,9 @@ test("replies are parsed from the bounded native body and unreadable bodies are 
   const replies = [{ body: "{\"ok\":1}" }, { body: "not json" }, { nobody: true }];
   const { host } = fakeHost(() => Promise.resolve(replies.shift()));
   const client = hostLiveClient(host);
-  assert.deepEqual(await client.request("notion", "users"), { ok: 1 });
-  await assert.rejects(client.request("notion", "users"), /unreadable/);
-  await assert.rejects(client.request("notion", "users"), /unreadable/);
+  assert.deepEqual(await client.request("notion", "default", "users"), { ok: 1 });
+  await assert.rejects(client.request("notion", "default", "users"), /unreadable/);
+  await assert.rejects(client.request("notion", "default", "users"), /unreadable/);
 });
 
 test("sources call only fixed provider operations and never pass a token back out", async () => {
@@ -85,10 +87,12 @@ test("sources call only fixed provider operations and never pass a token back ou
     return Promise.resolve({ body: JSON.stringify({ results: [], _links: { base: "https://acme.atlassian.net/wiki" } }) });
   });
   const linux = linuxLiveSources(hostLiveClient(host));
-  await linux.connectConfluence(" acme.atlassian.net// ", " a@b.c ", " token ");
-  assert.deepEqual(calls[0].args.slice(0, 2), ["confluence", { site: "https://acme.atlassian.net", email: "a@b.c", token: "token" }]);
-  assert.deepEqual(await linux.SOURCES.confluence.fetch({ sources: ["confluence"], filters: { authored: true, reviewRequests: true } }), []);
-  assert.deepEqual(calls[1].args.slice(0, 3), ["confluence", "search", {}]);
+  await linux.connectConfluence("default", " acme.atlassian.net// ", " a@b.c ", " token ");
+  assert.deepEqual(calls[0].args.slice(0, 3), ["confluence", "default", { site: "https://acme.atlassian.net", email: "a@b.c", token: "token" }]);
+  assert.deepEqual(accountOf("default", "confluence"), { ...accountOf("default", "confluence"), login: "acc", name: "Alice", user: "a@b.c", site: "https://acme.atlassian.net" });
+  assert.deepEqual(await linux.SOURCES.confluence.fetch({ profileId: "default", sources: ["confluence"], filters: { authored: true, reviewRequests: true } }), []);
+  assert.deepEqual(calls[1].args.slice(0, 4), ["confluence", "default", "search", {}]);
+  assert.ok(!JSON.stringify(live().accounts).includes("token"), "the token stays out of the document");
   assert.equal(normalizeConfluenceSite("https://x.atlassian.net/"), "https://x.atlassian.net");
   assert.equal(normalizeConfluenceSite("http://x.atlassian.net"), "http://x.atlassian.net");
 });
@@ -96,10 +100,35 @@ test("sources call only fixed provider operations and never pass a token back ou
 test("a bridge timeout cancels the native call so a late save cannot land", async () => {
   const { host, calls } = fakeHost((method) => (method === "ArdiaLive.cancel" ? Promise.resolve(true) : Promise.reject(new Error("Native request timed out: ArdiaLive.connect"))));
   const client = hostLiveClient(host);
-  await assert.rejects(client.connect("notion", { token: "secret_x" }), /timed out/);
+  await assert.rejects(client.connect("notion", "default", { token: "secret_x" }), /timed out/);
   assert.deepEqual(calls.map((c) => c.method), ["ArdiaLive.connect", "ArdiaLive.cancel"]);
-  assert.deepEqual(calls[1].args, [calls[0].args[2]]);
+  assert.deepEqual(calls[1].args, [calls[0].args[3]]);
   const native = fakeHost(() => Promise.reject(Object.assign(new Error("Signed out"), { code: "ERR_LIVE_SIGNED_OUT" })));
-  await assert.rejects(hostLiveClient(native.host).request("notion", "users"), LiveError);
+  await assert.rejects(hostLiveClient(native.host).request("notion", "default", "users"), LiveError);
   assert.deepEqual(native.calls.map((c) => c.method), ["ArdiaLive.request"]);
+});
+
+test("a missing account reads as signed out only for the profile that connected it", async () => {
+  const { host } = fakeHost(() => Promise.reject(Object.assign(new Error("Not signed in"), { code: "ERR_LIVE_NOT_CONNECTED" })));
+  const client = hostLiveClient(host, (source, profileId) => source === "notion" && profileId === "work");
+  await assert.rejects(client.request("notion", "work", "users"), (error) => error.kind === "signedOut");
+  await assert.rejects(client.request("notion", "default", "users"), (error) => error.kind === "notConfigured");
+});
+
+test("the old account's native operations carry only the source and the profile, and odd replies are errors", async () => {
+  const replies = [true, "copied", true, "stolen-token", 7];
+  const { host, calls } = fakeHost(() => Promise.resolve(replies.shift()));
+  const client = hostLiveClient(host);
+  assert.equal(await client.legacyExists("github"), true);
+  assert.equal(await client.adoptLegacy("github", "work"), "copied");
+  await client.forgetLegacy("github");
+  await assert.rejects(client.adoptLegacy("github", "work"), /unreadable/);
+  await assert.rejects(client.legacyExists("github"), /unreadable/);
+  assert.deepEqual(calls.map((c) => [c.method, c.args]), [
+    ["ArdiaLive.legacy", ["github", "exists"]],
+    ["ArdiaLive.legacy", ["github", "adopt", "work"]],
+    ["ArdiaLive.legacy", ["github", "forget"]],
+    ["ArdiaLive.legacy", ["github", "adopt", "work"]],
+    ["ArdiaLive.legacy", ["github", "exists"]],
+  ]);
 });

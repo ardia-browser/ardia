@@ -21,6 +21,10 @@ const linuxName = `Ardia-${version}-linux-x64.tar.xz`;
 if (assets.some((asset) => asset.name === linuxName)) release.linux = version;
 else console.log(`note: v${version} has no ${linuxName}, so the Linux download stays on ${release.linux}`);
 
+const intelName = `Ardia-${version}-x86_64.dmg`;
+if (stable && assets.some((asset) => asset.name === intelName)) release.intel = version;
+else if (stable) console.log(`note: v${version} has no ${intelName}, so the Intel download stays on ${release.intel ?? "nothing (no Intel link)"}`);
+
 if (nightly) {
   writeFileSync(releasePath, `${JSON.stringify(release)}\n`);
   console.log(`site: Linux ${release.linux}; the Mac download stays on ${release.version}`);
@@ -45,4 +49,4 @@ const updated = readme
   .replace(/\d+ MB DMG/g, `${megabytes} MB DMG`)
   .replace(/It’s \d+ MB/g, `It’s ${megabytes} MB`);
 writeFileSync(readmePath, updated);
-console.log(`site and README: Ardia ${version}, ${megabytes} MB (${dmg.size} bytes); Linux ${release.linux}`);
+console.log(`site and README: Ardia ${version}, ${megabytes} MB (${dmg.size} bytes); Linux ${release.linux}; Intel ${release.intel ?? "none"}`);

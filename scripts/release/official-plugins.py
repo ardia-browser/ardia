@@ -20,7 +20,13 @@ VERSION = re.compile(r"^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}(-[a-z]{1,16}\.[0-9]{1
 SHA = re.compile(r"^[0-9a-f]{64}$")
 FILE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 RELEASE = re.compile(r"^https://github\.com/[A-Za-z0-9-]+/[A-Za-z0-9._-]+/releases/download/[A-Za-z0-9._-]+$")
-ARTIFACTS = {"macos-arm64": "the plugin folder Ardia bundles on macOS", "linux-x64": "the command's tarball Linux installs", "installer": "install.sh"}
+ARTIFACTS = {
+    "macos-arm64": "the plugin folder Ardia bundles on Apple Silicon Macs",
+    "macos-x64": "the plugin folder Ardia bundles on Intel Macs",
+    "linux-x64": "the command's tarball Linux installs",
+    "installer": "install.sh",
+}
+MACOS_PLATFORMS = {"arm64": "macos-arm64", "x86_64": "macos-x64"}
 LIMIT = 512 * 1024 * 1024
 DESCRIPTION = """Fetches and verifies the official plugins pinned in apps/browser/official-plugins.json: every byte that reaches a
 release goes through fetch(), which refuses an artifact whose SHA-256 isn't the pinned one.
@@ -28,17 +34,28 @@ release goes through fetch(), which refuses an artifact whose SHA-256 isn't the 
   check                         the pin file is well formed, and apps/cli/install.sh is the pinned installer
   published <name> <artifact>   exits 0 when that artifact has a pinned SHA-256, 1 while it isn't published yet
   describe                      one provenance line per pinned plugin: name, version and the macOS folder's SHA-256
-  fetch <name> <artifact> <out> one pinned artifact (macos-arm64, linux-x64 or installer), verified
-  bundle <out dir>              every plugin's macos-arm64 folder, verified and unpacked into <out dir>/<name>
+  bundled <name>                exits 0 when <name> pins a folder for this Mac build's platform, so bundle includes it
+  fetch <name> <artifact> <out> one pinned artifact (macos-arm64, macos-x64, linux-x64 or installer), verified
+  bundle <out dir>              every plugin's macOS folder, verified and unpacked into <out dir>/<name>
   pin <name> <version>          writes the SHA-256s of <version>'s artifacts into the pin file
   linux-cli <app version> <out> the pinned linux-x64 ardia command, verified and renamed ardia-cli-<app version>, the
                                 name and top folder the Linux engine's installer expects (ac_linux_cli.cc)
+
+The macOS platform is macos-arm64, or macos-x64 under ARDIA_ARCH=x86_64 (an Intel build). A plugin that pins no folder
+for it isn't bundled, and that build ships without it; a pinned folder without its SHA-256 is still refused.
 
 --from <dir> reads artifacts from a folder instead of the plugin's GitHub release (a dry run, or a local build)."""
 
 
 def fail(message):
     sys.exit(f"official-plugins: {message}")
+
+
+def macos_platform():
+    arch = os.environ.get("ARDIA_ARCH") or "arm64"
+    if arch not in MACOS_PLATFORMS:
+        fail(f"ARDIA_ARCH is arm64 or x86_64, got {arch!r}")
+    return MACOS_PLATFORMS[arch]
 
 
 def load(path=PIN):
@@ -169,16 +186,18 @@ def unpack(archive, dest, top):
 
 
 def bundle(pin, out, origin=None):
+    platform = macos_platform()
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     for plugin in pin["plugins"]:
-        if "macos-arm64" not in plugin["artifacts"]:
+        if platform not in plugin["artifacts"]:
+            print(f"{plugin['name']} {plugin['version']}: no {platform} folder pinned, so this build ships without it")
             continue
         name = plugin["name"]
         dest = out / name
         if dest.exists() or dest.is_symlink():
             fail(f"{dest} already exists")
-        archive = fetch(plugin, "macos-arm64", out / f".{name}.tar.gz", origin)
+        archive = fetch(plugin, platform, out / f".{name}.tar.gz", origin)
         try:
             unpack(archive, dest, name)
         finally:
@@ -252,6 +271,8 @@ def main():
     published = commands.add_parser("published")
     published.add_argument("name")
     published.add_argument("artifact", choices=sorted(ARTIFACTS))
+    bundled = commands.add_parser("bundled")
+    bundled.add_argument("name")
     one = commands.add_parser("fetch")
     one.add_argument("name")
     one.add_argument("artifact", choices=sorted(ARTIFACTS))
@@ -275,9 +296,14 @@ def main():
     if args.command == "published":
         artifact = plugin_of(pin, args.name)["artifacts"].get(args.artifact) or {}
         sys.exit(0 if artifact.get("sha256") else 1)
+    if args.command == "bundled":
+        sys.exit(0 if macos_platform() in plugin_of(pin, args.name)["artifacts"] else 1)
     if args.command == "describe":
+        platform = macos_platform()
         for plugin in pin["plugins"]:
-            print(f"plugin {plugin['name']} {plugin['version']} {(plugin['artifacts'].get('macos-arm64') or {}).get('sha256')}")
+            artifact = plugin["artifacts"].get(platform)
+            sha = artifact.get("sha256") if artifact else f"none (no {platform} folder pinned)"
+            print(f"plugin {plugin['name']} {plugin['version']} {sha}")
         return
     if args.command == "fetch":
         fetch(plugin_of(pin, args.name), args.artifact, args.out, args.origin)

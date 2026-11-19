@@ -2,6 +2,7 @@ import os
 import plistlib
 import re
 import stat
+import subprocess
 import sys
 import tarfile
 
@@ -20,7 +21,11 @@ TOP_FILES = {"provenance.txt"}
 ARCHIVE_DIRS = {ARCHIVE, f"{ARCHIVE}/Products", f"{ARCHIVE}/Products/Applications", f"{ARCHIVE}/dSYMs"}
 PLUGINS = "plugins"
 BUILT_IN_PLUGIN = re.compile(rf"^{PLUGINS}/[a-z0-9][a-z0-9-]{{0,63}}(/|$)")
-REQUIRED_PLUGINS = (f"{PLUGINS}/cli/plugin.json",)
+PINS_CLI = subprocess.run(
+    [sys.executable, "-I", os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../scripts/release/official-plugins.py"), "bundled", "cli"],
+    stdout=subprocess.DEVNULL,
+).returncode == 0
+REQUIRED_PLUGINS = (f"{PLUGINS}/cli/plugin.json",) if PINS_CLI else ()
 
 
 def fail(message):

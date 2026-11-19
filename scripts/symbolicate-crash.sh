@@ -8,7 +8,8 @@
 # The UUID and the offsets are what the crash records for the image: "Chromium Framework + 0x2e2334" is the offset
 # 0x2e2334, and a leading + is accepted. scripts/publish-engine.sh uploads ArdiaCore-<tree:12>-uuids.txt (one
 # "<uuid> <arch> <DWARF file>" row per image) and ArdiaCore-<tree:12>-symbols.tar.xz (the build's dSYMs) to each
-# engine-<tree:12> prerelease; every release is searched newest first, or --tag names one. Each run downloads into its
+# engine-<tree:12> prerelease (an Intel engine's names end in -x86_64: ArdiaCore-<tree:12>-x86_64-uuids.txt); every
+# release is searched newest first, or --tag names one. Each run downloads into its
 # own folder and moves only the image it checked into --cache (default dist/engine-symbols), so runs can share a
 # cache. Prints "<offset> <frame>" per offset and warns about any atos could not name.
 set -euo pipefail
@@ -50,9 +51,12 @@ mkdir -p "$cache"
 run="$(mktemp -d "$cache/.run.XXXXXX")"
 trap 'rm -rf "$run"' EXIT
 
+arch_suffixes=("" "-x86_64")
+suffix=""
+
 lists_image() {
   local candidate="$1" name sidecar
-  name="$(engine_uuids_name "$candidate")"
+  name="$(engine_uuids_name "$candidate" "$2")"
   sidecar="$cache/$candidate/$name"
   if [ ! -f "$sidecar" ]; then
     mkdir -p "$run/$candidate" "$cache/$candidate"
@@ -65,10 +69,15 @@ lists_image() {
 
 row=""
 if [ -n "$tag" ]; then
-  status=0
-  lists_image "$tag" || status=$?
-  [ "$status" != 2 ] || die "$tag has no $(engine_uuids_name "$tag"): its symbols weren't published"
-  [ "$status" = 0 ] || die "$tag's symbols don't list the image $uuid"
+  published=0
+  for candidate_suffix in "${arch_suffixes[@]}"; do
+    status=0
+    lists_image "$tag" "$candidate_suffix" || status=$?
+    [ "$status" = 2 ] || published=1
+    if [ "$status" = 0 ]; then suffix="$candidate_suffix"; break; fi
+  done
+  [ "$published" = 1 ] || die "$tag has no $(engine_uuids_name "$tag"): its symbols weren't published"
+  [ -n "$row" ] || die "$tag's symbols don't list the image $uuid"
 else
   page=1 engines=0
   while [ -z "$row" ]; do
@@ -78,11 +87,15 @@ else
     while IFS=$'\t' read -r candidate assets; do
       [[ "$candidate" == engine-* ]] || continue
       engines=$((engines + 1))
-      [[ " $assets " == *" $(engine_uuids_name "$candidate") "* ]] || continue
-      if lists_image "$candidate"; then
-        tag="$candidate"
-        break
-      fi
+      for candidate_suffix in "${arch_suffixes[@]}"; do
+        [[ " $assets " == *" $(engine_uuids_name "$candidate" "$candidate_suffix") "* ]] || continue
+        if lists_image "$candidate" "$candidate_suffix"; then
+          tag="$candidate"
+          suffix="$candidate_suffix"
+          break
+        fi
+      done
+      [ -z "$row" ] || break
     done <<<"$releases"
     page=$((page + 1))
   done
@@ -91,9 +104,9 @@ fi
 [ -n "$row" ] || die "no engine release lists the image $uuid: its symbols weren't published (releases before the symbols were uploaded have none)"
 
 IFS=$'\t' read -r _ arch rel <<<"$row"
-binary="$cache/$tag/symbols/$rel"
+binary="$cache/$tag$suffix/symbols/$rel"
 if [ "$(image_uuid "$binary" "$arch" 2>/dev/null || true)" != "$uuid" ]; then
-  name="$(engine_symbols_name "$tag")"
+  name="$(engine_symbols_name "$tag" "$suffix")"
   mkdir -p "$run/$tag/symbols"
   gh release download "$tag" -R "$REPO" -p "$name" -D "$run/$tag" || die "couldn't download $name from $tag"
   tar -xJf "$run/$tag/$name" -C "$run/$tag/symbols" "$rel" || die "couldn't unpack $rel from $name"

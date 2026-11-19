@@ -300,6 +300,238 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  intel-engine:
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      found: ${{ steps.look.outputs.found }}
+    env:
+      TREE: ${{ needs.preflight.outputs.tree }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - id: look
+        run: |
+          if awk -v t="$TREE" '$1 == t { found = 1 } END { exit !found }' packages/ardiacore/prebuilt-engines-x86_64.tsv; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::no Intel engine for ${TREE:0:12} in prebuilt-engines-x86_64.tsv, so v$VERSION ships for Apple silicon only: build it (AC_TARGET_CPU=x64, docs/engine-build.md), publish it with ARDIA_ARCH=x86_64 scripts/publish-engine.sh and run ARDIA_ARCH=x86_64 scripts/release.sh, then publish.sh"
+            echo "- Intel: skipped (no Intel engine for ${TREE:0:12})" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  intel-build:
+    needs: [preflight, intel-engine]
+    if: ${{ needs.intel-engine.outputs.found == 'true' }}
+    runs-on: xcode-27
+    timeout-minutes: 120
+    env:
+      ARDIA_ARCH: x86_64
+      CAS_PATH: ${{ github.workspace }}/.xcode-cas
+      DERIVED_DATA: ${{ github.workspace }}/apps/browser/build-release-ci
+      TREE: ${{ needs.preflight.outputs.tree }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - id: paths
+        run: |
+          if [ "$DRY_RUN" = true ]; then dist="dist/$VERSION-rc-x86_64"; else dist="dist/$VERSION-x86_64"; fi
+          echo "dist=$dist" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: apps/browser/build-ardiacore/prebuilt
+          key: engine-x86_64-${{ env.TREE }}
+      - name: Engine
+        run: |
+          framework=$(packages/ardiacore/scripts/fetch-engine.sh)
+          { echo "ARDIACORE_FRAMEWORK=$framework"; echo "ARDIACORE_FRAMEWORK_ENGINE=$TREE"; } >> "$GITHUB_ENV"
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: uv
+        run: curl -LsSf https://astral.sh/uv/0.12.15/install.sh | sh
+      - id: cas-key
+        run: echo "prefix=xcode-cas-release-x86_64-$(xcodebuild -version | awk '/Build version/ { print $3 }')-$(date -u +%Y-%m)-" >> "$GITHUB_OUTPUT"
+      - id: cas
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: .xcode-cas
+          key: ${{ steps.cas-key.outputs.prefix }}${{ github.sha }}
+          restore-keys: ${{ steps.cas-key.outputs.prefix }}
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            apps/browser/macos/Pods
+            ~/Library/Caches/CocoaPods
+          key: pods-${{ hashFiles('apps/browser/macos/Podfile', 'apps/browser/macos/Podfile.lock', 'pnpm-lock.yaml', 'patches/**') }}
+          restore-keys: pods-
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: packages/ardiacore/vendor/ubo
+          key: ubo-${{ hashFiles('packages/ardiacore/scripts/ubo.sh') }}
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: packages/ardiacore/vendor/ubol-webkit
+          key: ubol-webkit-${{ hashFiles('packages/ardiacore/scripts/ubol.sh', 'packages/ardiacore/scripts/ubol-webkit.py') }}
+      - name: Pods
+        working-directory: apps/browser/macos
+        run: pod install
+      - name: Tree is clean
+        run: |
+          pbx=apps/browser/macos/Ardia.xcodeproj/project.pbxproj
+          unquote() { sed -E 's/^[-+]//; s/"//g'; }
+          removed=$(git diff -U0 -- "$pbx" | { grep '^-[^-]' || true; } | unquote)
+          added=$(git diff -U0 -- "$pbx" | { grep '^+[^+]' || true; } | unquote)
+          if [ -n "$removed$added" ] && [ "$removed" = "$added" ]; then
+            git update-index --assume-unchanged "$pbx"
+          fi
+          dirty=$(git status --porcelain -- apps/browser apps/cli packages engine scripts/dmg | grep -v ' apps/browser/build' || true)
+          [ -z "$dirty" ] || { echo "::error::installing changed tracked files:"; echo "$dirty"; exit 1; }
+      - name: Build
+        run: |
+          args=("$VERSION" --phase build)
+          if [ "$DRY_RUN" = true ]; then args+=(--rc); fi
+          if ! curl -fsIL -o /dev/null "https://github.com/$GITHUB_REPOSITORY/releases/latest/download/appcast-x86_64.xml"; then
+            echo "::notice::the latest release has no appcast-x86_64.xml: this release starts it"
+            export APPCAST_BASE=none
+          fi
+          export RELEASE_BUILD_DIR="$DERIVED_DATA"
+          export RELEASE_BUILD_SETTINGS="COMPILATION_CACHE_ENABLE_CACHING=YES COMPILATION_CACHE_CAS_PATH=$CAS_PATH"
+          scripts/release.sh "${args[@]}"
+      - name: Pack the build
+        env:
+          DIST: ${{ steps.paths.outputs.dist }}
+        run: |
+          COPYFILE_DISABLE=1 tar --no-mac-metadata -cf "$RUNNER_TEMP/build.tar" -C "$DIST" Ardia.xcarchive provenance.txt plugins
+      - if: always() && steps.cas.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: .xcode-cas
+          key: ${{ steps.cas-key.outputs.prefix }}${{ github.sha }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: build-x86_64
+          path: ${{ runner.temp }}/build.tar
+          if-no-files-found: error
+          retention-days: 3
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: build-x86_64-logs
+          path: ${{ steps.paths.outputs.dist }}/*.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  intel-sign:
+    needs: [preflight, intel-build]
+    runs-on: xcode-27
+    timeout-minutes: 150
+    env:
+      ARDIA_ARCH: x86_64
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - id: paths
+        run: |
+          if [ "$DRY_RUN" = true ]; then dist="dist/$VERSION-rc-x86_64"; else dist="dist/$VERSION-x86_64"; fi
+          echo "dist=$dist" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: build-x86_64
+          path: ${{ runner.temp }}/build-download
+      - name: Unpack the build
+        run: |
+          /usr/bin/python3 -I .github/release/unpack-build.py "$RUNNER_TEMP/build-download/build.tar" "$RUNNER_TEMP/build-in" "$VERSION"
+          rm -rf "$RUNNER_TEMP/build-download"
+      - name: Rosetta
+        run: /usr/bin/arch -x86_64 /usr/bin/true 2>/dev/null || softwareupdate --install-rosetta --agree-to-license
+      - name: Sparkle's tools
+        run: |
+          tarball="$RUNNER_TEMP/Sparkle-2.9.6.tar.xz"
+          curl -fsSL --retry 3 -o "$tarball" https://github.com/sparkle-project/Sparkle/releases/download/2.9.6/Sparkle-2.9.6.tar.xz
+          [ "$(shasum -a 256 "$tarball" | awk '{ print $1 }')" = 52bf9e88cdd972fc0c81501377a880e90d47031bd8ca5462488f843e2609e192 ] \
+            || { echo "::error::Sparkle-2.9.6.tar.xz didn't match its pinned SHA-256"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/sparkle"
+          tar -xJf "$tarball" -C "$RUNNER_TEMP/sparkle" bin
+          echo "SPARKLE_BIN=$RUNNER_TEMP/sparkle/bin" >> "$GITHUB_ENV"
+      - name: Signing
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_PROVISIONING_PROFILE: ${{ secrets.MACOS_PROVISIONING_PROFILE }}
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER: ${{ secrets.NOTARY_ISSUER }}
+          ALLOW_MISSING_NOTARY: ${{ inputs.dry_run && '1' || '0' }}
+        run: .github/release/signing.sh setup
+      - name: Sign, notarize, package
+        env:
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER: ${{ secrets.NOTARY_ISSUER }}
+        run: |
+          export RELEASE_BUILD_INPUT="$RUNNER_TEMP/build-in"
+          args=("$VERSION" --phase sign)
+          if [ "$DRY_RUN" = true ]; then args+=(--rc); fi
+          if ! curl -fsIL -o /dev/null "https://github.com/$GITHUB_REPOSITORY/releases/latest/download/appcast-x86_64.xml"; then
+            export APPCAST_BASE=none
+          fi
+          scripts/release.sh "${args[@]}"
+      - if: always()
+        name: Remove signing
+        run: |
+          secrets="$RUNNER_TEMP/release-signing"
+          if [ -f "$secrets/release.keychain-db" ]; then security delete-keychain "$secrets/release.keychain-db" || true; fi
+          rm -rf "$secrets"
+          printf '%s=\n' RELEASE_PROVISIONING_PROFILE SPARKLE_KEY_FILE NOTARY_KEY >> "$GITHUB_ENV"
+          [ ! -e "$secrets" ] || { echo "::error::couldn't remove $secrets"; exit 1; }
+          if security find-identity -v -p codesigning | grep -q 'Developer ID Application: .*(U5L5T3NGVV)'; then
+            echo "::error::a Developer ID identity is still in the keychain search list"
+            exit 1
+          fi
+      - name: Checkout untouched
+        run: |
+          changed=$(git status --porcelain --untracked-files=all -- . ':!dist')
+          [ -z "$changed" ] || { echo "::error::signing changed files in the checkout:"; echo "$changed"; exit 1; }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+      - name: Launch check (under Rosetta)
+        run: |
+          args=("$VERSION" --phase check)
+          if [ "$DRY_RUN" = true ]; then args+=(--rc); fi
+          scripts/release.sh "${args[@]}"
+      - name: Update signature
+        env:
+          DIST: ${{ steps.paths.outputs.dist }}
+        run: .github/release/check-sparkle.sh "$DIST" "$VERSION"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: release-x86_64
+          path: |
+            ${{ steps.paths.outputs.dist }}/Ardia-${{ inputs.version }}-x86_64.dmg
+            ${{ steps.paths.outputs.dist }}/Ardia-${{ inputs.version }}-x86_64.zip
+            ${{ steps.paths.outputs.dist }}/appcast-x86_64.xml
+            ${{ steps.paths.outputs.dist }}/release-notes.md
+            ${{ steps.paths.outputs.dist }}/provenance.txt
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: sign-x86_64-logs
+          path: ${{ steps.paths.outputs.dist }}/*.log
+          if-no-files-found: ignore
+          retention-days: 14
+
   linux:
     needs: preflight
     runs-on: ubuntu-24.04
@@ -445,6 +677,35 @@ jobs:
             .claude/skills/release/scripts/publish.sh "$VERSION" --dry-run
           else
             .claude/skills/release/scripts/publish.sh "$VERSION"
+          fi
+
+  intel-publish:
+    needs: [preflight, publish, intel-sign]
+    if: ${{ !cancelled() && needs.publish.result == 'success' && needs.intel-sign.result == 'success' }}
+    runs-on: macos-15
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      ARDIA_ARCH: x86_64
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: release-x86_64
+          path: dist/${{ inputs.version }}-x86_64
+      - name: Publish the Intel build
+        run: |
+          export RELEASE_DIST="$GITHUB_WORKSPACE/dist/$VERSION-x86_64"
+          if [ "$DRY_RUN" = true ]; then
+            .claude/skills/release/scripts/publish.sh "$VERSION" --dry-run
+            echo "- Intel: Ardia-$VERSION-x86_64.dmg built and signed, not published" >> "$GITHUB_STEP_SUMMARY"
+          else
+            .claude/skills/release/scripts/publish.sh "$VERSION"
+            echo "- Intel: Ardia-$VERSION-x86_64.dmg published, appcast-x86_64.xml lists it" >> "$GITHUB_STEP_SUMMARY"
           fi
 
   windows-update:

@@ -7,6 +7,7 @@ archive="${2:?$usage}"
 identity="${3:?$usage}"
 provisioning_profile="${4:-}"
 . "$(dirname "$0")/lib.sh"
+. "$root/scripts/lib/paths.sh"
 app="$dist/export/Ardia.app"
 
 if [ -n "$provisioning_profile" ]; then
@@ -27,7 +28,7 @@ else
     sleep 10
   done
 fi
-[ "$(lipo -archs "$app/Contents/MacOS/Ardia")" = arm64 ] || die "the app's executable is $(lipo -archs "$app/Contents/MacOS/Ardia"), not arm64"
+[ "$(lipo -archs "$app/Contents/MacOS/Ardia")" = "$ardia_arch" ] || die "the app's executable is $(lipo -archs "$app/Contents/MacOS/Ardia"), not $ardia_arch"
 
 echo "==> Built-in plugins"
 bundled="$app/Contents/Resources/Plugins"

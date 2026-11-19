@@ -1,4 +1,4 @@
-import { DISCORD, MIN_MACOS, REPO } from "./release";
+import { DISCORD, MAC_CHIPS, MIN_MACOS, REPO } from "./release";
 
 export const SITE = "ardia.dev";
 export const FIRST_RELEASE = "25 September 2026";
@@ -6,13 +6,13 @@ export const MAKER = "Mantra Patel";
 
 export const SHORT =
   "Ardia is a free, open-source Mac browser with Arc’s sidebar and Dia’s polish, built on Chromium.";
-export const LONG = `Ardia is a web browser for the Mac with Arc’s sidebar and Dia’s polish, built on Chromium and Chrome’s own framework, so sites, extensions and DevTools behave as they do in Chrome. The full uBlock Origin is built in, so ads, trackers and cookie banners stay out, and Google’s background services are compiled out. Profiles keep work and home apart, and Sync runs end to end encrypted through the user’s own iCloud Drive. Ardia is free and open source under the GPL-3.0, notarized by Apple, and runs on Apple Silicon Macs with ${MIN_MACOS} or later. The first public build shipped on ${FIRST_RELEASE}.`;
+export const LONG = `Ardia is a web browser for the Mac with Arc’s sidebar and Dia’s polish, built on Chromium and Chrome’s own framework, so sites, extensions and DevTools behave as they do in Chrome. The full uBlock Origin is built in, so ads, trackers and cookie banners stay out, and Google’s background services are compiled out. Profiles keep work and home apart, and Sync runs end to end encrypted through the user’s own iCloud Drive. Ardia is free and open source under the GPL-3.0, notarized by Apple, and runs on ${MAC_CHIPS} Macs with ${MIN_MACOS} or later. The first public build shipped on ${FIRST_RELEASE}.`;
 
 export const FACTS: { term: string; value: string; href?: string }[] = [
   { term: "Name", value: "Ardia" },
   { term: "What", value: "A web browser for the Mac" },
   { term: "Engine", value: "Chromium, on Chrome’s own framework" },
-  { term: "Runs on", value: `Apple Silicon, ${MIN_MACOS} or later` },
+  { term: "Runs on", value: `${MAC_CHIPS}, ${MIN_MACOS} or later` },
   { term: "Price", value: "Free" },
   { term: "Licence", value: "GPL-3.0 (Ardia’s own code: Apache-2.0)" },
   { term: "First release", value: FIRST_RELEASE },

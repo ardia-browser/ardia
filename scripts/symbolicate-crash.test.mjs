@@ -292,15 +292,20 @@ test("publish-engine.sh copies the dSYMs with the framework, packs them before s
   const strip = source.indexOf('strip-engine.sh" "$work/Ardia.app" "$out/symbols"');
   assert.ok(copy > 0 && locked > copy, "the dSYMs are copied in the same locked command as the framework");
   assert.ok(pack > locked && strip > pack, "pack-symbols.sh runs on the copies, before strip-engine.sh");
-  assert.match(source, /^symbols_archive="\$out\/\$\(engine_symbols_name "\$tag"\)"$/m);
-  assert.match(source, /^uuids_file="\$out\/\$\(engine_uuids_name "\$tag"\)"$/m);
+  assert.match(source, /^symbols_archive="\$out\/\$\(engine_symbols_name "\$tag" "\$engine_suffix"\)"$/m);
+  assert.match(source, /^uuids_file="\$out\/\$\(engine_uuids_name "\$tag" "\$engine_suffix"\)"$/m);
   assert.match(source, /^assets=\("\$archive" "\$archive\.sha256" "\$symbols_archive" "\$uuids_file" "\$source_archive"\)$/m);
   assert.match(source, /^run gh release upload "\$tag" -R "\$REPO" --clobber "\$\{assets\[@\]\}"$/m);
 });
 
 test("the release names the symbolicate script looks for are the ones publish-engine.sh uploads", () => {
-  const names = execFileSync("bash", ["-c", `. "${join(scripts, "lib/releases.sh")}"; engine_symbols_name engine-4f3a9c0d1e2b; engine_uuids_name engine-4f3a9c0d1e2b`], {
+  const names = execFileSync("bash", ["-c", `. "${join(scripts, "lib/releases.sh")}"; engine_symbols_name engine-4f3a9c0d1e2b; engine_uuids_name engine-4f3a9c0d1e2b; engine_symbols_name engine-4f3a9c0d1e2b -x86_64; engine_uuids_name engine-4f3a9c0d1e2b -x86_64`], {
     encoding: "utf8",
   }).trimEnd().split("\n");
-  assert.deepEqual(names, ["ArdiaCore-4f3a9c0d1e2b-symbols.tar.xz", "ArdiaCore-4f3a9c0d1e2b-uuids.txt"]);
+  assert.deepEqual(names, [
+    "ArdiaCore-4f3a9c0d1e2b-symbols.tar.xz",
+    "ArdiaCore-4f3a9c0d1e2b-uuids.txt",
+    "ArdiaCore-4f3a9c0d1e2b-x86_64-symbols.tar.xz",
+    "ArdiaCore-4f3a9c0d1e2b-x86_64-uuids.txt",
+  ]);
 });

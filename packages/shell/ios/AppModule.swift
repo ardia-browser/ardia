@@ -65,6 +65,7 @@ public class AppModule: Module {
         "osVersion": "\(os.majorVersion).\(os.minorVersion).\(os.patchVersion)",
         "osBuild": Self.osBuild,
         "arch": Self.arch,
+        "translated": Self.translated,
         "model": String(cString: model),
         "memoryGB": Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824,
         "locale": Locale.current.identifier,
@@ -119,6 +120,12 @@ public class AppModule: Module {
     #else
     "x86_64"
     #endif
+  }
+
+  private static var translated: Bool {
+    var value: Int32 = 0
+    var size = MemoryLayout<Int32>.size
+    return sysctlbyname("sysctl.proc_translated", &value, &size, nil, 0) == 0 && value == 1
   }
 
   private static var inApplicationsFolder: Bool {

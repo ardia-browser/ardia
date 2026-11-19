@@ -22,6 +22,7 @@ export type SystemInfo = {
   osVersion: string;
   osBuild: string;
   arch: string;
+  translated?: boolean;
   model: string;
   memoryGB: number;
   locale: string;

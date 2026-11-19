@@ -10,6 +10,9 @@ export const DISCORD = "https://discord.gg/TdhuXrbcA6";
 export const RELEASES = `${REPO}/releases/latest`;
 export const DMG = `${REPO}/releases/download/v${VERSION}/Ardia-${VERSION}.dmg`;
 export const NIGHTLY = "/nightly";
+export const INTEL_VERSION: string | null = "intel" in release && typeof release.intel === "string" ? release.intel : null;
+export const INTEL_DMG = INTEL_VERSION ? `${REPO}/releases/download/v${INTEL_VERSION}/Ardia-${INTEL_VERSION}-x86_64.dmg` : null;
+export const MAC_CHIPS = INTEL_DMG ? "Apple Silicon or Intel" : "Apple Silicon";
 const DOWNLOADS = "https://github.com/ardia-browser/ardia/releases/download";
 export const WINDOWS_SETUP = {
   x64: `${DOWNLOADS}/windows-alpha/Ardia-Setup-x64.exe`,

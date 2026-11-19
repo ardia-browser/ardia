@@ -5,10 +5,18 @@ import Sparkle
 public final class AppUpdater: NSObject {
   public static let shared = AppUpdater()
 
+  #if arch(x86_64)
+  static let feedFileName = "appcast-x86_64.xml"
+  static let defaultFeed: String? = "https://ardia.dev/\(feedFileName)"
+  #else
+  static let feedFileName = "appcast.xml"
+  static let defaultFeed: String? = nil
+  #endif
+
   static var feedOverride: String? {
     let config = LaunchConfig.shared
     if let feed = config.instance("updateFeed") ?? UserDefaults.standard.string(forKey: "ACUpdateFeedURL") { return feed }
-    return config.background ? "https://github.com/mantrakp04/ardia/releases/latest/download/appcast.xml" : nil
+    return config.background ? "https://github.com/mantrakp04/ardia/releases/latest/download/\(feedFileName)" : defaultFeed
   }
 
   static let channelDefaultsKey = "ACUpdateChannel"

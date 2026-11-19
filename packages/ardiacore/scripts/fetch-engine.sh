@@ -4,7 +4,8 @@ here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../../.." && pwd)
 repo=${ARDIACORE_PREBUILT_REPO:-mantrakp04/ardia}
 assets=${ARDIACORE_PREBUILT_ASSETS:-https://github.com/$repo/releases/download}
-table="$here/../prebuilt-engines.tsv"
+. "$root/scripts/lib/paths.sh"
+table="$here/../prebuilt-engines$engine_suffix.tsv"
 store="$root/apps/browser/build-ardiacore/prebuilt"
 name="Chromium Framework"
 die() { echo "error: $*" >&2; exit 1; }
@@ -36,7 +37,7 @@ lookup() {
   [ -n "$1" ] || return 0
   line=$(awk -v t="$1" '$1 == t { print; exit }' "$table" 2>/dev/null || true)
   if [ -z "$line" ]; then
-    [ -n "$remote_table" ] || remote_table=$(curl -fsL --retry 2 "https://raw.githubusercontent.com/$repo/main/packages/ardiacore/prebuilt-engines.tsv" || echo "#")
+    [ -n "$remote_table" ] || remote_table=$(curl -fsL --retry 2 "https://raw.githubusercontent.com/$repo/main/packages/ardiacore/prebuilt-engines$engine_suffix.tsv" || echo "#")
     line=$(awk -v t="$1" '$1 == t { print; exit }' <<<"$remote_table")
   fi
   echo "$line"
@@ -66,16 +67,16 @@ $version's engine anyway, or build the engine"
 fi
 read -r tree version sha <<<"$entry"
 short=${tree:0:12}
-dest="$store/$short"
+dest="$store/$short$engine_suffix"
 if [ ! -f "$dest/.complete" ]; then
-  file="ArdiaCore-$short.tar.xz"
+  file="ArdiaCore-$short$engine_suffix.tar.xz"
   url="$assets/$(release_tag "$version")/$file"
   tmp="$store/.tmp-$$"
   rm -rf "$tmp" && mkdir -p "$tmp"
   trap 'rm -rf "$tmp"' EXIT
   echo "downloading the engine from $version ($url)" >&2
   curl -fL --retry 3 --progress-bar -o "$tmp/$file" "$url" || die "couldn't download $url"
-  [ "$(shasum -a 256 "$tmp/$file" | awk '{ print $1 }')" = "$sha" ] || die "$file doesn't match its SHA-256 in prebuilt-engines.tsv"
+  [ "$(shasum -a 256 "$tmp/$file" | awk '{ print $1 }')" = "$sha" ] || die "$file doesn't match its SHA-256 in $(basename "$table")"
   tar -xJf "$tmp/$file" -C "$tmp" || die "couldn't unpack $file"
   [ -f "$tmp/$name.framework/Versions/Current/$name" ] || die "$file holds no $name.framework"
   rm -f "$tmp/$file"
@@ -84,7 +85,10 @@ if [ ! -f "$dest/.complete" ]; then
   mv "$tmp" "$dest"
   trap - EXIT
   for old in "$store"/*/; do
-    [ "${old%/}" = "$dest" ] || rm -rf "${old%/}"
+    old="${old%/}"
+    case "$(basename "$old")" in
+      ????????????"$engine_suffix") [ "$old" = "$dest" ] || rm -rf "$old" ;;
+    esac
   done
 fi
 echo "$dest/$name.framework"

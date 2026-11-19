@@ -20,6 +20,7 @@ export function context(): Record<string, unknown> {
     $os: telemetryHost().os,
     $os_version: info.osVersion,
     arch: info.arch,
+    ...(info.arch === "x86_64" ? { rosetta: info.translated === true } : {}),
     engine_version: engineVersion,
     $environment: environment(),
     $process_person_profile: false,

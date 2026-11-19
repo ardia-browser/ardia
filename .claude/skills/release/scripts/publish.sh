@@ -16,7 +16,8 @@ done
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(git -C "$here" rev-parse --show-toplevel)"
 . "$root/scripts/lib/releases.sh"
-dist="${RELEASE_DIST:-$root/dist/$version}"
+. "$root/scripts/lib/paths.sh"
+dist="${RELEASE_DIST:-$root/dist/$version$engine_suffix}"
 die() { echo "error: $*" >&2; exit 1; }
 run() {
   echo "+ $*"
@@ -24,9 +25,10 @@ run() {
 }
 
 channel="$(channel_of "$version")"
-dmg="$dist/Ardia-$version.dmg"
-zip="$dist/Ardia-$version.zip"
-feed="$dist/appcast.xml"
+feed_name="appcast$engine_suffix.xml"
+dmg="$dist/Ardia-$version$engine_suffix.dmg"
+zip="$dist/Ardia-$version$engine_suffix.zip"
+feed="$dist/$feed_name"
 
 assets=()
 for file in "$dmg" "$zip" "$feed"; do
@@ -34,7 +36,10 @@ for file in "$dmg" "$zip" "$feed"; do
   assets+=("$file")
 done
 linux="$dist/linux"
-if [ -d "$linux" ]; then
+windows="$dist/windows"
+if [ -n "$engine_suffix" ]; then
+  [ ! -d "$linux" ] && [ ! -d "$windows" ] || die "$dist holds Linux or Windows files: they join the arm64 build's release, not the $ardia_arch one"
+elif [ -d "$linux" ]; then
   linux_package="$linux/Ardia-$version-linux-x64.tar.xz"
   linux_cli="$linux/ardia-cli-$version-linux-x64.tar.gz"
   linux_deb="$linux/Ardia-$version-linux-x64.deb"
@@ -64,8 +69,9 @@ if [ -d "$linux" ]; then
 else
   echo "note: no $linux: the release ships without the Linux tarball"
 fi
-windows="$dist/windows"
-if [ -d "$windows" ]; then
+if [ -n "$engine_suffix" ]; then
+  :
+elif [ -d "$windows" ]; then
   windows_assets=()
   for cpu in x64 arm64; do
     windows_setup="Ardia-$version-windows-$cpu-setup.exe"
@@ -104,28 +110,69 @@ trap 'exit 130' INT TERM HUP
 take_lock "$version" "$dry" "$break_lock"
 stable_tag="$(latest_stable_tag)"
 
-built="$dist/appcast.built.xml"
+built="$dist/appcast$engine_suffix.built.xml"
 [ -f "$built" ] || cp "$feed" "$built"
 merged="$feed"
-[ "$dry" = 1 ] && merged="$work/appcast.xml"
-if download_live_feed "$stable_tag" "$work/live"; then
-  appcast merge "$work/live/appcast.xml" "$built" "$version" "$merged"
+[ "$dry" = 1 ] && merged="$work/$feed_name"
+if download_live_feed "$stable_tag" "$work/live" "$feed_name"; then
+  appcast merge "$work/live/$feed_name" "$built" "$version" "$merged"
 else
-  echo "note: $stable_tag has no appcast.xml yet: $version starts it"
+  echo "note: $stable_tag has no $feed_name yet: $version starts it"
   cp "$built" "$merged"
 fi
 appcast check-above "$merged" "$version"
-if [ "$channel" = stable ]; then
+if [ "$channel" = stable ] && [ -z "$engine_suffix" ]; then
   latest_version="${stable_tag#v}"
   [ "$version" != "$latest_version" ] && [ "$(printf '%s\n%s\n' "$latest_version" "$version" | sort -V | tail -1)" = "$version" ] \
     || die "$version isn't above the latest stable release ($latest_version): publishing it as latest would move every download and feed backward"
   echo "PASS  $version is above the latest stable release ($latest_version)"
 fi
 
+if [ -n "$engine_suffix" ]; then
+  if ! gh release view "v$version" -R "$REPO" >/dev/null 2>&1; then
+    [ "$dry" = 1 ] || die "publish the arm64 build of $version first: the $ardia_arch build joins its release"
+    echo "note: v$version isn't published yet: a real run needs the arm64 build published first"
+  fi
+  run gh release upload "v$version" -R "$REPO" --clobber "$dmg" "$zip"
+  min_macos="$(sed -n 's/.*MACOSX_DEPLOYMENT_TARGET = \([0-9]*\)\.0;/\1/p' "$root/apps/browser/macos/Ardia.xcodeproj/project.pbxproj" | sort -u)"
+  intel_line="Intel Macs: $(basename "$dmg"), macOS $min_macos or later."
+  gh release view "v$version" -R "$REPO" --json body -q .body >"$work/notes.md" 2>/dev/null || cp "$dist/release-notes.md" "$work/notes.md"
+  if ! grep -qF "$(basename "$dmg")" "$work/notes.md"; then
+    printf '\n%s\n' "$intel_line" >>"$work/notes.md"
+    run gh release edit "v$version" -R "$REPO" --notes-file "$work/notes.md"
+  fi
+  if [ "$channel" = nightly ]; then
+    cp -c "$dmg" "$work/Ardia-Nightly$engine_suffix.dmg"
+    run gh release upload nightly -R "$REPO" --clobber "$work/Ardia-Nightly$engine_suffix.dmg"
+  fi
+  run gh release upload "$stable_tag" -R "$REPO" --clobber "$merged"
+  [ "$dry" = 1 ] && { echo "dry run: nothing published"; exit 0; }
+  status=0
+  for url in "$LATEST_DOWNLOAD_URL/$feed_name" "https://ardia.dev/$feed_name"; do
+    for _ in $(seq 1 18); do
+      xml="$(curl -fsSL --max-time 20 "$url" 2>/dev/null || true)"
+      grep -q "<sparkle:shortVersionString>$version<" <<<"$xml" && break
+      sleep 10
+    done
+    grep -q "<sparkle:shortVersionString>$version<" <<<"$xml" && echo "PASS  $url lists $version" \
+      || { echo "FAIL  $url lists $version"; status=1; }
+  done
+  if [ "$channel" = nightly ]; then
+    size="$(curl -fsSLI --max-time 30 "$NIGHTLY_DMG_URL_X86_64" | awk 'tolower($1) == "content-length:" { n = $2 } END { print n + 0 }')"
+    [ "$size" = "$(stat -f %z "$dmg")" ] && echo "PASS  $NIGHTLY_DMG_URL_X86_64 is $version's Intel DMG" \
+      || { echo "FAIL  $NIGHTLY_DMG_URL_X86_64 is $version's Intel DMG (size $size, expected $(stat -f %z "$dmg"))"; status=1; }
+  fi
+  exit $status
+fi
+
 if [ "$channel" = nightly ]; then
   release_flags=(--prerelease --latest=false)
 else
   release_flags=(--latest)
+  if download_live_feed "$stable_tag" "$work/intel" appcast-x86_64.xml; then
+    assets+=("$work/intel/appcast-x86_64.xml")
+    echo "PASS  $stable_tag's appcast-x86_64.xml moves to v$version, so Intel copies keep their feed"
+  fi
 fi
 run gh release create "v$version" -R "$REPO" "${release_flags[@]}" --verify-tag --title "Ardia $version" \
   --notes-file "$dist/release-notes.md" "${assets[@]}"

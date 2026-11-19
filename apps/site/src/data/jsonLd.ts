@@ -1,4 +1,4 @@
-import { MIN_MACOS, VERSION } from "./release";
+import { MAC_CHIPS, MIN_MACOS, VERSION } from "./release";
 
 export const breadcrumbs = (home: string, ...crumbs: [name: string, url: string][]) => ({
   "@context": "https://schema.org",
@@ -17,7 +17,7 @@ export const aboutArdiaPage = ({ home, url, title, description }: { home: string
     "@type": "SoftwareApplication",
     name: "Ardia",
     applicationCategory: "BrowserApplication",
-    operatingSystem: `${MIN_MACOS} or later, Apple Silicon`,
+    operatingSystem: `${MIN_MACOS} or later, ${MAC_CHIPS}`,
     softwareVersion: VERSION,
     url: home,
   },

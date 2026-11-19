@@ -3,9 +3,10 @@ set -euo pipefail
 
 dist="${1:?usage: check-sparkle.sh <dist> <version>}"
 version="${2:?usage: check-sparkle.sh <dist> <version>}"
-feed="$dist/appcast.xml"
-zip="$dist/Ardia-$version.zip"
 root="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
+. "$root/scripts/lib/paths.sh"
+feed="$dist/appcast$engine_suffix.xml"
+zip="$dist/Ardia-$version$engine_suffix.zip"
 work="$(mktemp -d "${TMPDIR:-/tmp}/ac-sparkle.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 

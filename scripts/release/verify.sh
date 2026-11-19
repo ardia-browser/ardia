@@ -44,7 +44,11 @@ for folder in "$app"/Contents/Resources/Plugins/*/; do
     [ "$(sed -n 's/^TeamIdentifier=//p' <<<"$signed")" = "$team" ] || die "$exe isn't signed by the app's team ($team)"
   done
 done
-[ -f "$app/Contents/Resources/Plugins/cli/plugin.json" ] || die "the app has no built-in Command Line plugin"
+if python3 -I "$root/scripts/release/official-plugins.py" bundled cli; then
+  [ -f "$app/Contents/Resources/Plugins/cli/plugin.json" ] || die "the app has no built-in Command Line plugin"
+else
+  [ ! -e "$app/Contents/Resources/Plugins/cli" ] || die "the app has a built-in Command Line plugin its platform pins none of"
+fi
 [ -f "$app/Contents/Resources/Extensions/ublock/manifest.json" ] || die "no uBlock Origin in the app"
 [ -f "$app/Contents/Resources/ContentRules/rulesets.json" ] || die "no WebKit content rules in the app"
 for file in "$root"/LICENSE* "$root/NOTICE"; do

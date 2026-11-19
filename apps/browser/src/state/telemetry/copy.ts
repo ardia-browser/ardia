@@ -34,7 +34,7 @@ export const WHATS_SENT: { title: string; items: string[] }[] = [
     items: [
       "A random install ID, made on this Mac once and kept through updates. Nothing is sent with it while sharing is off, except a problem report you send and the 14 days of sharing you can agree to with it",
       "A random ID for each time Ardia opens, so one session's events can be read together",
-      "App version and build, macOS version, chip (arm64 or x86_64), engine version",
+      "App version and build, macOS version, chip (arm64 or x86_64, and for x86_64 whether it runs through Rosetta), engine version",
       "Whether it's a test build",
       "During the 14 days you agreed to after a problem report: that report's reference (like FB-1234)",
     ],

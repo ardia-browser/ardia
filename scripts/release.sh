@@ -30,7 +30,7 @@ stages="$(cd "$(dirname "$0")/release" && pwd -P)"
 . "$root/scripts/lib/paths.sh"
 channel="$(channel_of "$version")"
 
-if [ "$rc" = 1 ]; then dist="$root/dist/$version-rc"; else dist="$root/dist/$version"; fi
+if [ "$rc" = 1 ]; then dist="$root/dist/$version-rc$engine_suffix"; else dist="$root/dist/$version$engine_suffix"; fi
 [ "$rc" = 1 ] && [ -n "${RC_DIST:-}" ] && dist="$(cd "$root" && mkdir -p "$RC_DIST" && cd "$RC_DIST" && pwd)"
 app="$dist/export/Ardia.app"
 build_input="${RELEASE_BUILD_INPUT:-}"
@@ -109,8 +109,8 @@ if [ -n "$dirty" ]; then
 fi
 
 [ -d "$framework_src" ] || die "no ArdiaCore framework at $framework_src (engine/ardiacore/apply.sh, then build chrome_framework)"
-[ "$phase" = sign ] || [[ " $(lipo -archs "$framework_src/Versions/Current/Chromium Framework" 2>/dev/null) " == *" arm64 "* ]] \
-  || die "the ArdiaCore framework at $framework_src has no arm64 slice"
+[ "$phase" = sign ] || [[ " $(lipo -archs "$framework_src/Versions/Current/Chromium Framework" 2>/dev/null) " == *" $ardia_arch "* ]] \
+  || die "the ArdiaCore framework at $framework_src has no $ardia_arch slice"
 if [ "$phase" = sign ]; then
   [ -n "$provisioning_profile" ] || die "--phase sign exports the ad hoc archive --phase build made: set RELEASE_PROVISIONING_PROFILE"
 elif [ -n "$framework_engine" ]; then
@@ -125,9 +125,9 @@ fi
 engine_source=""
 if [ "$phase" != build ]; then
   engine_tree="$("$root/engine/engine-key.sh")"
-  engine_release="$(awk -v t="$engine_tree" '$1 == t { print $2; exit }' "$ardiacore/prebuilt-engines.tsv")"
+  engine_release="$(awk -v t="$engine_tree" '$1 == t { print $2; exit }' "$ardiacore/prebuilt-engines$engine_suffix.tsv")"
   [ "$rc" = 1 ] || [ -n "$engine_release" ] \
-    || die "packages/ardiacore/prebuilt-engines.tsv lists no published engine for this engine key (${engine_tree:0:12}): publish it with scripts/publish-engine.sh, commit the table line, then release"
+    || die "packages/ardiacore/prebuilt-engines$engine_suffix.tsv lists no published engine for this engine key (${engine_tree:0:12}): publish it with${engine_suffix:+ ARDIA_ARCH=$ardia_arch} scripts/publish-engine.sh, commit the table line, then release"
   case "$engine_release" in engine-*) engine_tag="$engine_release" ;; *) engine_tag="v$engine_release" ;; esac
   [ -n "$engine_release" ] \
     && engine_source="$REPO_URL/releases/download/$engine_tag/ArdiaCore-${engine_tree:0:12}-source.tar.xz"
@@ -148,7 +148,7 @@ if [ "$phase" != build ]; then
   fi
 fi
 
-feed_base="${APPCAST_BASE:-$LATEST_DOWNLOAD_URL/appcast.xml}"
+feed_base="${APPCAST_BASE:-$LATEST_DOWNLOAD_URL/appcast$engine_suffix.xml}"
 base_feed="$work/appcast.xml"
 case "$feed_base" in
   none) : > "$base_feed" ;;
@@ -194,7 +194,12 @@ if [ "$phase" = sign ] && [ -n "$build_input" ]; then
   [ -d "$build_input/plugins" ] || die "no plugins in $build_input"
   ditto "$build_input/plugins" "$dist/plugins"
 fi
-[ -f "$dist/plugins/cli/plugin.json" ] || die "no official plugins in $dist/plugins from --phase build"
+if python3 -I "$stages/official-plugins.py" bundled cli; then
+  [ -f "$dist/plugins/cli/plugin.json" ] || die "no official plugins in $dist/plugins from --phase build"
+else
+  [ ! -e "$dist/plugins/cli" ] || die "$dist/plugins has a Command Line plugin this platform pins none of"
+  echo "note: apps/browser/official-plugins.json pins no Command Line folder for ${ARDIA_ARCH:-arm64}: this build ships without it"
+fi
 
 "$stages/export-sign.sh" "$dist" "$archive" "$identity" ${provisioning_profile:+"$provisioning_profile"}
 "$stages/verify.sh" "$app" "$archive" "$version" "$release_build"
@@ -204,7 +209,7 @@ if [ "$notarize" = 1 ]; then
   "$stages/notarize.sh" "$app" "$dist"
 fi
 "$stages/package.sh" "$dist" "$version" "$identity"
-[ "$notarize" = 1 ] && "$stages/notarize.sh" "$dist/Ardia-$version.dmg" "$dist"
+[ "$notarize" = 1 ] && "$stages/notarize.sh" "$dist/Ardia-$version$engine_suffix.dmg" "$dist"
 
 echo "==> Release notes"
 notes_args=()
@@ -222,7 +227,7 @@ SPARKLE_BIN="$sparkle" SPARKLE_KEY_FILE="$sparkle_key_file" "$stages/appcast.sh"
 echo
 [ "$notarize" = 1 ] && echo "Notarized and stapled." || echo "NOT notarized."
 [ "$rc" = 1 ] && echo "Release candidate: never publish dist/$version-rc."
-[ "$channel" = nightly ] && [ "$rc" = 0 ] && echo "Nightly: publish it with .claude/skills/release/scripts/publish.sh $version (a prerelease; the feed and ardia.dev/nightly follow)."
+[ "$channel" = nightly ] && [ "$rc" = 0 ] && echo "Nightly: publish it with${engine_suffix:+ ARDIA_ARCH=$ardia_arch} .claude/skills/release/scripts/publish.sh $version (a prerelease; the feed and ardia.dev/nightly follow)."
 [ "$phase" = sign ] && echo "Not launched yet: remove the signing keys, then run the launch check (--phase check)."
 [ -n "$phased" ] && echo "Phased rollout: $phased s between steps (the appcast item has phasedRolloutInterval; the whole release takes $((phased * 7)) s)."
-du -sh "$app" "$dist/Ardia-$version.dmg" "$dist/Ardia-$version.zip" "$dist/appcast.xml" "$dist/release-notes.md"
+du -sh "$app" "$dist/Ardia-$version$engine_suffix.dmg" "$dist/Ardia-$version$engine_suffix.zip" "$dist/appcast$engine_suffix.xml" "$dist/release-notes.md"

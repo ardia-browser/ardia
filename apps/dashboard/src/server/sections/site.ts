@@ -125,7 +125,7 @@ function safeDecode(text: string) {
   }
 }
 
-const PLATFORM_LABELS: Record<string, string> = { mac: "Mac", "windows x64": "Windows x64", "windows arm64": "Windows Arm", "linux x64": "Linux" };
+const PLATFORM_LABELS: Record<string, string> = { mac: "Mac", "mac x86_64": "Mac Intel", "windows x64": "Windows x64", "windows arm64": "Windows Arm", "linux x64": "Linux" };
 
 export async function siteClicks(range: RangeKey, signal?: AbortSignal, zone = UTC) {
   const w = windowFor(range, zone);

@@ -146,6 +146,34 @@ with `scripts/agent/engine-build` and the next app build picks it up. Don't call
 script caps siso's parallel jobs by RAM, and siso's defaults ran ~150 mojom generators at once and ran this 32 GB Mac out
 of memory (two kernel watchdog panics, 2026-11-11).
 
+### Intel Macs
+
+An Apple Silicon Mac cross-compiles the Intel engine the way Chrome builds its own: `AC_TARGET_CPU=x64` makes the
+engine steps (`target_config.py`) write and build `out/Release_GN_x64` (`target_cpu="x64"`) beside
+`out/Release_GN_arm64`, in the same tree and under the same chromium lock. PGO uses `chrome/build/mac.pgo.txt`'s
+profile (the arm64 build uses `mac-arm.pgo.txt`); the Mac sync's DEPS hooks fetch both. A full x64 build is about
+140,000 steps, more than arm64's because it also builds the arm64 host tools.
+
+`ARDIA_ARCH=x86_64` does the rest for Intel (unset, it's `arm64`): `scripts/lib/paths.sh` sets `AC_TARGET_CPU=x64` and
+`out/Release_GN_x64`, so `scripts/agent/engine-build`, `pnpm macos`, `pnpm build`, `scripts/agent/build-app` and the
+release scripts build and check the x86_64 slice. Intel engines are published and fetched beside the arm64 ones, on the
+same `engine-<key:12>` prerelease: `prebuilt-engines-x86_64.tsv`, `ArdiaCore-<key:12>-x86_64.tar.xz` and its
+`-x86_64-symbols.tar.xz` and `-x86_64-uuids.txt` (`scripts/symbolicate-crash.sh` searches both). The engine's source
+archive is the arm64 one: the same sources. The engine key is the same for both, so one key can have an arm64 engine
+and no Intel one; the Release workflow then ships Apple Silicon only and says so.
+
+Intel copies update from their own feed, `https://ardia.dev/appcast-x86_64.xml` (`AppUpdater.swift` picks it when
+compiled for x86_64), so an arm64 update never reaches them and an Intel one never reaches Apple Silicon. Sparkle 2.9's
+`hardwareRequirements` can only hide items from Intel (it knows `arm64` alone), so one shared feed couldn't keep Intel
+items away from Apple Silicon copies. With `ARDIA_ARCH=x86_64`, `scripts/release.sh` builds into
+`dist/<version>-x86_64` and writes `Ardia-<version>-x86_64.dmg`, `Ardia-<version>-x86_64.zip` and
+`appcast-x86_64.xml`, building on the published Intel feed. `publish.sh` then adds the DMG and zip to the arm64 build's
+release, which must be published first, notes the Intel DMG in its release notes, and puts the merged feed on the latest
+stable release beside `appcast.xml`; a nightly's DMG also goes to the `nightly` release as `Ardia-Nightly-x86_64.dmg`.
+Publishing a stable carries `appcast-x86_64.xml` to the new release. The CLI and the Homebrew cask stay arm64-only: the
+CLI's installer refuses an Intel Mac with a message. Rosetta runs the Intel app on Apple Silicon for a first check, not
+an Intel GPU.
+
 ## Our hooks in Chrome's code
 
 Where our patches and `engine/ardiacore/apply.sh` let ArdiaCore decide something in Chrome's code, the hook is a

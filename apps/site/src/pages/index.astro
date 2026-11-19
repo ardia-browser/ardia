@@ -11,7 +11,7 @@ import Voices from "../components/Voices.astro";
 import Closing from "../components/Closing.astro";
 import ComputerUse from "../components/ComputerUse.astro";
 import Footer from "../components/Footer.astro";
-import { DMG, DMG_SIZE, MIN_MACOS, REPO, VERSION } from "../data/release";
+import { DMG, DMG_SIZE, MAC_CHIPS, MIN_MACOS, REPO, VERSION } from "../data/release";
 import { HERO_POSTERS } from "../data/heroPoster";
 import { faqJsonLd } from "../data/faq";
 
@@ -27,7 +27,7 @@ const jsonLd = [
     url: home,
     image: new URL("og.png", home).href,
     applicationCategory: "BrowserApplication",
-    operatingSystem: `${MIN_MACOS} or later, Apple Silicon`,
+    operatingSystem: `${MIN_MACOS} or later, ${MAC_CHIPS}`,
     softwareVersion: VERSION,
     downloadUrl: DMG,
     fileSize: DMG_SIZE,

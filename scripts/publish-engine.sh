@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Publishes this checkout's arm64 engine for CI releases: packs the local Chromium Framework (stripped, unpruned, as
+# Publishes this checkout's engine for CI releases (arm64; ARDIA_ARCH=x86_64 the Intel one, every name below then
+# gaining -x86_64 and its table being prebuilt-engines-x86_64.tsv): packs the local Chromium Framework (stripped, unpruned, as
 # release.sh packs it), the dSYMs the build wrote beside it (ArdiaCore-<key:12>-symbols.tar.xz, with
 # ArdiaCore-<key:12>-uuids.txt naming the dSYM of each image by its UUID: scripts/symbolicate-crash.sh reads them) and
 # its source, then uploads them to the GitHub prerelease engine-<engine key:12> (never latest) and appends the key's
@@ -19,7 +20,7 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd -P)"
 . "$root/scripts/lib/releases.sh"
 . "$root/scripts/lib/paths.sh"
-table="$root/packages/ardiacore/prebuilt-engines.tsv"
+table="$root/packages/ardiacore/prebuilt-engines$engine_suffix.tsv"
 die() { echo "error: $*" >&2; exit 1; }
 dry=0 out="" framework=""
 while [ $# -gt 0 ]; do
@@ -40,7 +41,7 @@ run() {
 }
 
 [ -f "$framework/Versions/Current/Chromium Framework" ] || die "no Chromium Framework at $framework"
-[[ " $(lipo -archs "$framework/Versions/Current/Chromium Framework") " == *" arm64 "* ]] || die "$framework has no arm64 slice"
+[[ " $(lipo -archs "$framework/Versions/Current/Chromium Framework") " == *" $ardia_arch "* ]] || die "$framework has no $ardia_arch slice"
 tree="$("$root/engine/engine-key.sh")"
 key_paths=($("$root/engine/engine-key.sh" --paths))
 short="${tree:0:12}"
@@ -51,15 +52,15 @@ commit="$(git -C "$root" rev-parse HEAD)"
 git -C "$root" fetch -q origin main || problem "couldn't fetch origin"
 git -C "$root" merge-base --is-ancestor "$commit" origin/main || problem "HEAD ($commit) isn't on origin/main: push it first, the tag $tag points at it"
 existing="$(awk -v t="$tree" '$1 == t { print $2; exit }' "$table")"
-[ -z "$existing" ] || problem "prebuilt-engines.tsv already lists this engine key under $existing"
+[ -z "$existing" ] || problem "$(basename "$table") already lists this engine key under $existing"
 
-out="${out:-$root/dist/$tag}"
+out="${out:-$root/dist/$tag$engine_suffix}"
 rm -rf "$out" && mkdir -p "$out"
 out="$(cd "$out" && pwd -P)"
-archive="$out/ArdiaCore-$short.tar.xz"
+archive="$out/ArdiaCore-$short$engine_suffix.tar.xz"
 source_archive="$out/ArdiaCore-$short-source.tar.xz"
-symbols_archive="$out/$(engine_symbols_name "$tag")"
-uuids_file="$out/$(engine_uuids_name "$tag")"
+symbols_archive="$out/$(engine_symbols_name "$tag" "$engine_suffix")"
+uuids_file="$out/$(engine_uuids_name "$tag" "$engine_suffix")"
 work="$out/pack"
 mkdir -p "$work/Ardia.app/Contents/Frameworks"
 echo "==> Copy the engine"
@@ -81,6 +82,10 @@ echo "$sha  $(basename "$archive")" >"$archive.sha256"
 echo "==> Source"
 "$root/scripts/engine-source.sh" "$tag" "$source_archive" >/dev/null
 assets=("$archive" "$archive.sha256" "$symbols_archive" "$uuids_file" "$source_archive")
+if [ -n "$engine_suffix" ] && gh release view "$tag" -R "$REPO" --json assets -q '.assets[].name' 2>/dev/null | grep -qxF "$(basename "$source_archive")"; then
+  assets=("$archive" "$archive.sha256" "$symbols_archive" "$uuids_file")
+  echo "note: $tag already has $(basename "$source_archive") from the arm64 engine: the same sources, kept"
+fi
 line="$(printf '%s\t%s\t%s' "$tree" "$tag" "$sha")"
 
 echo "==> Publish"
@@ -95,6 +100,6 @@ if [ "$dry" = 1 ]; then
 else
   [ "$(gh release view "$tag" -R "$REPO" --json isPrerelease -q .isPrerelease)" = true ] || die "$tag isn't a prerelease"
   printf '%s\n' "$line" >>"$table"
-  echo "Published $tag. Commit packages/ardiacore/prebuilt-engines.tsv (appended: $line)."
+  echo "Published $tag. Commit packages/ardiacore/$(basename "$table") (appended: $line)."
 fi
 du -sh "${assets[@]}"

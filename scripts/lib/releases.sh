@@ -2,6 +2,7 @@ REPO="mantrakp04/ardia"
 REPO_URL="https://github.com/$REPO"
 LATEST_DOWNLOAD_URL="$REPO_URL/releases/latest/download"
 NIGHTLY_DMG_URL="$REPO_URL/releases/download/nightly/Ardia-Nightly.dmg"
+NIGHTLY_DMG_URL_X86_64="$REPO_URL/releases/download/nightly/Ardia-Nightly-x86_64.dmg"
 RELEASE_NOTES_URL="https://ardia.dev/release-notes"
 APPCAST_PY="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/.claude/skills/release/scripts/appcast.py"
 
@@ -29,8 +30,8 @@ mac_marketing_version() {
 
 appcast() { python3 -I "$APPCAST_PY" "$@"; }
 
-engine_symbols_name() { echo "ArdiaCore-${1#engine-}-symbols.tar.xz"; }
-engine_uuids_name() { echo "ArdiaCore-${1#engine-}-uuids.txt"; }
+engine_symbols_name() { echo "ArdiaCore-${1#engine-}${2:-}-symbols.tar.xz"; }
+engine_uuids_name() { echo "ArdiaCore-${1#engine-}${2:-}-uuids.txt"; }
 
 latest_stable_tag() {
   local tag
@@ -43,10 +44,10 @@ latest_stable_tag() {
 }
 
 download_live_feed() {
-  local tag="$1" dir="$2" names
+  local tag="$1" dir="$2" feed_name="${3:-appcast.xml}" names
   names="$(gh release view "$tag" -R "$REPO" --json assets -q '.assets[].name')" \
     || { echo "error: couldn't list $tag's assets" >&2; exit 1; }
-  grep -qx appcast.xml <<<"$names" || return 1
+  grep -qxF "$feed_name" <<<"$names" || return 1
   mkdir -p "$dir"
-  gh release download "$tag" -R "$REPO" -p appcast.xml -D "$dir" --clobber
+  gh release download "$tag" -R "$REPO" -p "$feed_name" -D "$dir" --clobber
 }

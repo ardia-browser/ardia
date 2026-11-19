@@ -451,6 +451,25 @@ cause is outside the code, dispatch `windows.yml` at `v<version>` with `-f versi
 in the code, fix it on `main` and Windows ships with the next release. If only `windows-update` failed, re-run that
 job alone.
 
+### 5f. Intel Macs
+
+The Release workflow's `intel-engine` job looks the release commit's engine key up in
+`packages/ardiacore/prebuilt-engines-x86_64.tsv`. With no row it says so and the release ships for Apple Silicon only,
+like a missing Linux or Windows build; say so in the report. With one, `intel-build` and `intel-sign` run
+`scripts/release.sh` with `ARDIA_ARCH=x86_64` beside the arm64 jobs (same runners, `dist/<version>-x86_64`,
+`Ardia-<version>-x86_64.dmg`, `.zip` and `appcast-x86_64.xml`; the launch check runs under Rosetta), and after
+`publish` the `intel-publish` job runs `ARDIA_ARCH=x86_64 publish.sh`: the DMG and zip join the arm64 build's release,
+its notes gain an "Intel Macs" line, the merged Intel feed goes on the latest stable release, and a nightly's DMG
+also becomes `Ardia-Nightly-x86_64.dmg` on the `nightly` release. It never touches `appcast.xml`, the CLI or the
+Homebrew tap. A failed Intel leg never blocks the Mac release.
+
+The Intel engine is built with the Mac's, on the same key: `AC_TARGET_CPU=x64` in the same Chromium tree
+(`docs/engine-build.md` › Intel Macs), then `ARDIA_ARCH=x86_64 scripts/publish-engine.sh` and commit its
+`prebuilt-engines-x86_64.tsv` line. To add Intel to a release that shipped without it: at `v<version>`, with that
+engine, run `ARDIA_ARCH=x86_64 scripts/release.sh <version>`, smoke it (`ARDIA_ARCH=x86_64 smoke.sh`, which also
+checks every Mach-O in the bundle has an x86_64 slice) and `ARDIA_ARCH=x86_64 publish.sh <version>`. Rosetta on
+Apple Silicon is the smoke test's machine: it can't show Intel GPU or video-decode problems.
+
 ## 6. Deploy the site
 
 The download buttons and the root `README.md` (the landing page on GitHub) link the DMG of one tag
@@ -462,7 +481,8 @@ older version until this step. After a stable publish, point both at it:
 ```
 
 It reads the published DMG's size from GitHub, writes `apps/site/src/data/release.json` (`VERSION` and `DMG_SIZE`
-in `release.ts` come from it, and `linux`, the Linux download, when the release has its tarball) and rewrites the README's links, labels and sizes. Commit both. If a release changes a
+in `release.ts` come from it, `linux`, the Linux download, when the release has its tarball, and `intel`, the Intel Mac link, when it has
+`Ardia-<version>-x86_64.dmg`) and rewrites the README's links, labels and sizes. Commit both. If a release changes a
 claim on the landing page (below), change the README's matching line too.
 
 **Bring the landing page's claims up to date.** The home page makes specific promises; a release can make

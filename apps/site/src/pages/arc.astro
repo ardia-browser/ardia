@@ -5,7 +5,7 @@ import Header from "../components/Header.astro";
 import DownloadButton from "../components/DownloadButton.astro";
 import Closing from "../components/Closing.astro";
 import Footer from "../components/Footer.astro";
-import { MIN_MACOS } from "../data/release";
+import { INTEL_DMG, MAC_CHIPS, MIN_MACOS } from "../data/release";
 import { aboutArdiaPage, breadcrumbs } from "../data/jsonLd";
 
 const home = homeUrl(Astro.site);
@@ -47,7 +47,7 @@ const timeline = [
           <DownloadButton location="arc" />
           <a class="link" href={`${base}/try/`}>Try the sidebar first</a>
         </div>
-        <p class="label fine not-phone">{MIN_MACOS} or later · Apple Silicon · Notarized by Apple</p>
+        <p class="label fine not-phone">{MIN_MACOS} or later · {MAC_CHIPS} · Notarized by Apple</p>
       </div>
     </section>
 
@@ -105,7 +105,7 @@ const timeline = [
         <ul class="plain">
           <li><strong>Boosts and Easels.</strong> There’s no Boosts editor and no Easels.</li>
           <li><strong>Arc Max.</strong> Ardia has no AI, on purpose.</li>
-          <li><strong>Windows and Intel Macs.</strong> Ardia needs Apple Silicon and {MIN_MACOS} or later.</li>
+          {!INTEL_DMG && <li><strong>Windows and Intel Macs.</strong> Ardia needs Apple Silicon and {MIN_MACOS} or later.</li>}
         </ul>
       </div>
     </section>

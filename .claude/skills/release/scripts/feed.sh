@@ -6,9 +6,11 @@ shift
 before=0
 if [ "${1:-}" = "--before-publish" ]; then before=1; shift; fi
 root="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
-app="${1:-$root/dist/$version/export/Ardia.app}"
+. "$root/scripts/lib/paths.sh"
+app="${1:-$root/dist/$version$engine_suffix/export/Ardia.app}"
 
 feed="$(/usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$app/Contents/Info.plist")"
+[ -z "$engine_suffix" ] || feed="${feed%/appcast.xml}/appcast$engine_suffix.xml"
 case "$feed" in
   https://*) ;;
   *) echo "FAIL  feed URL is https  ($feed)"; exit 1 ;;

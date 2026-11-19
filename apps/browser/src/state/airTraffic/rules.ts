@@ -1,4 +1,4 @@
-import { displayHost } from "@ardia/core";
+import { displayHost, punycodeEncode } from "@ardia/core";
 import { isFields } from "../../lib/decode";
 import { sourceMatches, type LinkSource } from "../../lib/linkSource";
 import { globMatches, matchesUrl, parseMatchPattern, type MatchSpec } from "../../lib/matchPattern";
@@ -17,11 +17,11 @@ export type LinkTextKind = "contains" | "equals";
 export type LinkCondition = { kind: "any" } | { kind: "site"; host: string } | { kind: "pattern"; pattern: string } | { kind: "contains"; text: string } | { kind: "equals"; text: string };
 export type AirTrafficTarget = { profileId: string | null; open: OpenAs; groupKey?: string };
 export type AirTrafficRule = AirTrafficTarget & { id: string; enabled: boolean; from: SourceApp | null; when: LinkCondition };
-export type AirTrafficConfig = { rules: AirTrafficRule[]; fallback: AirTrafficTarget | null; fallbackChosen?: true };
+export type AirTrafficConfig = { rules: AirTrafficRule[]; fallback: AirTrafficTarget | null; fallbackChosen?: true; inAppLinks: boolean };
 export type TargetUsable = (profileId: string, groupKey: string | null) => boolean;
 export type AirTrafficMatch = { by: "rule"; rule: AirTrafficRule; index: number; target: AirTrafficTarget } | { by: "fallback"; target: AirTrafficTarget };
 
-export const NO_AIR_TRAFFIC: AirTrafficConfig = { rules: [], fallback: null };
+export const NO_AIR_TRAFFIC: AirTrafficConfig = { rules: [], fallback: null, inAppLinks: false };
 
 export function siteHost(input: string): string | null {
   let text = input.trim().toLowerCase();
@@ -153,6 +153,70 @@ export function airTrafficFallback(config: AirTrafficConfig, usable: TargetUsabl
 
 export const fallbackChosen = (config: AirTrafficConfig) => !!config.fallbackChosen || config.fallback !== null;
 
+export type PageLinkPattern = [source: string, flags: string];
+
+const regexEscape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const globSource = (glob: string, star = "[^#]*") => regexEscape(glob).replace(/\\\*/g, star);
+
+const asciiGlob = (glob: string) =>
+  glob.split(".").map((label) => (/^[\x00-\x7f]*$/.test(label) ? label : `xn--${punycodeEncode(label)}`)).join(".");
+
+function pageHostPatterns(host: string): PageLinkPattern[] {
+  return [...new Set([host, displayHost(host)])].map((h) => [`^https?://(?:[^/?#@]*\\.)?${regexEscape(h)}(?=[:/?#]|$)`, ""]);
+}
+
+const portSource = (spec: MatchSpec) => (spec.port === "*" ? "" : spec.port === "80" || spec.port === "443" ? `(?::${spec.port})?` : `:${spec.port}`);
+
+function matchPatternPatterns(pattern: string): PageLinkPattern[] {
+  const spec = parseMatchPattern(pattern);
+  if ("error" in spec) return [];
+  if (spec.all) return [["^https?:", ""]];
+  const schemes = spec.schemes.filter((s) => s === "http" || s === "https");
+  if (!schemes.length) return [];
+  const host = !spec.host ? "[^/?#@]*" : spec.sub ? `(?:[^/?#@]*\\.)?${regexEscape(spec.host)}` : regexEscape(spec.host);
+  const body = `${host}${portSource(spec)}`;
+  const endings = new Set([`${body}${globSource(spec.path)}`]);
+  const encoded = encodeURI(spec.path);
+  if (encoded !== spec.path) endings.add(`${body}${globSource(encoded)}`);
+  return [...endings].map((ending) => [`^(?:${schemes.join("|")})://${ending}(?=#|$)`, ""]);
+}
+
+function wildcardPatterns(pattern: string): PageLinkPattern[] {
+  const lower = pattern.toLowerCase();
+  const out: PageLinkPattern[] = [];
+  for (const glob of new Set([lower, asciiGlob(lower)])) {
+    if (glob.includes("/")) out.push([`^https?://${globSource(glob)}(?=#|$)`, "i"]);
+    else out.push([`^https?://${globSource(glob, "[^/?#@:]*")}(?=[:/?#]|$)`, ""]);
+  }
+  return out;
+}
+
+export function pageLinkPatterns(when: LinkCondition): PageLinkPattern[] {
+  if (when.kind === "any") return [["^https?:", ""]];
+  if (when.kind === "site") return pageHostPatterns(when.host);
+  if (when.kind === "contains" || when.kind === "equals") return [];
+  if (isWildcardPattern(when.pattern)) return wildcardPatterns(when.pattern);
+  return matchPatternPatterns(when.pattern);
+}
+
+export function inAppLinkPatterns(config: AirTrafficConfig, sourceProfileId: string, usable: TargetUsable, lastProfile: string): PageLinkPattern[] {
+  const seen = new Set<string>();
+  const out: PageLinkPattern[] = [];
+  for (const rule of config.rules) {
+    if (!rule.enabled || rule.from) continue;
+    const target = rule.profileId ?? lastProfile;
+    if (target === sourceProfileId || !usable(target, null)) continue;
+    for (const pattern of pageLinkPatterns(rule.when)) {
+      const key = pattern.join("|");
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(pattern);
+    }
+  }
+  return out;
+}
+
 export const airTrafficHolds = (config: AirTrafficConfig) => !!config.fallback || config.rules.some((r) => r.enabled);
 
 const isOpenAs = (v: unknown): v is OpenAs => OPEN_AS.includes(v as OpenAs);
@@ -197,8 +261,8 @@ export function parseAirTraffic(json: string | null | undefined): AirTrafficConf
     .filter((r): r is AirTrafficRule => !!r && !seen.has(r.id) && !!seen.add(r.id))
     .slice(0, MAX_AIR_TRAFFIC_RULES);
   const fallback = doc.fallback === null || doc.fallback === undefined ? null : targetFrom(doc.fallback);
-  return { rules, fallback, ...(doc.fallbackChosen === true ? { fallbackChosen: true as const } : {}) };
+  return { rules, fallback, inAppLinks: doc.inAppLinks === true, ...(doc.fallbackChosen === true ? { fallbackChosen: true as const } : {}) };
 }
 
 export const airTrafficJson = (config: AirTrafficConfig) =>
-  versionedJson({ rules: config.rules, fallback: config.fallback, ...(config.fallbackChosen ? { fallbackChosen: true } : {}) }, AIR_TRAFFIC_VERSION);
+  versionedJson({ rules: config.rules, fallback: config.fallback, inAppLinks: config.inAppLinks, ...(config.fallbackChosen ? { fallbackChosen: true } : {}) }, AIR_TRAFFIC_VERSION);

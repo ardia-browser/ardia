@@ -91,6 +91,7 @@ type NativeEvents = {
   onFieldProviderOpened: FieldProviderOpened;
   onFieldProviderHint: { state?: string };
   onVerificationCodeFound: VerificationCodeFound;
+  onAirTrafficLink: { url: string };
 };
 export type Handlers = keyof NativeEvents;
 export type PageEvent = { name: string; data: unknown };
@@ -150,6 +151,7 @@ const PAGE_EVENTS = {
   onFieldProviderOpened: "fieldProviderOpened",
   onFieldProviderHint: "fieldProviderHint",
   onVerificationCodeFound: "verificationCodeFound",
+  onAirTrafficLink: "airTrafficLink",
 } as const satisfies Record<Handlers, string>;
 export type PageEventName = (typeof PAGE_EVENTS)[Handlers];
 export const pageEventOf = (handler: Handlers): PageEventName => PAGE_EVENTS[handler];
@@ -163,6 +165,7 @@ const unwrap: { [K in Handlers]: (e: NativeEvents[K]) => Parameters<NonNullable<
   onNowPlaying: (e) => [e.state],
   onMediaAccess: (e) => [e],
   onOpenWindow: (e) => [{ ...e, url: toAppUrl(e.url) }],
+  onAirTrafficLink: (e) => [{ url: toAppUrl(e.url) }],
   onPopupBlocked: (e) => [{ ...e, url: toAppUrl(e.url) }],
   onFindResult: (e) => [e],
   onFullscreen: (e) => [e.fullscreen],

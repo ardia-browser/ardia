@@ -98,6 +98,11 @@ export const automationRows = {
           description: "The first rule that matches a link decides where it opens.",
           keywords: [...LINK_WORDS, "work profile", "rule", "add rule", "tab group", "group", "link rules", "hooks", "hooks.json", "link.opening", "automation", "link hooks from hooks.json"],
         },
+        inAppLinks: {
+          title: "Also route links you open inside Ardia",
+          description: "Rules for Any app also apply to links you click, addresses you type and links a page opens in a new tab.",
+          keywords: ["arc", "air traffic control", "atc", "inside ardia", "in-app", "new tab", "target=_blank", "typed", "address bar"],
+        },
         testLink: {
           title: "Test a link",
           explained: true,

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Image, View } from "react-native";
 import { useAirTrafficConfig, useLinkHooks, useRoutableProfiles, useRouteGroupName, useWatchRouteTargets, type LinkHookRow, type LinkHookState, type RoutableProfile } from "../../../state/airTraffic/hooks";
-import { moveAirTrafficRule, removeAirTrafficRule, setAirTrafficFallback, updateAirTrafficRule } from "../../../state/airTraffic/store";
+import { moveAirTrafficRule, removeAirTrafficRule, setAirTrafficFallback, setAirTrafficInAppLinks, updateAirTrafficRule } from "../../../state/airTraffic/store";
 import { previewLink, type LinkPreview } from "../../../state/airTraffic/preview";
 import type { OpeningTrace } from "../../../state/automation/decisions";
 import type { AirTrafficRule, AirTrafficTarget, SourceApp } from "../../../state/airTraffic/rules";
@@ -40,7 +40,7 @@ export function LinkRoutingSection({ profileId }: { profileId: string | null }) 
   const profiles = useRoutableProfiles();
   return (
     <View>
-      <SectionHeader title="Link routing" description="Choose where links from other apps open." />
+      <SectionHeader title="Link routing" description="Send links from other apps to the profile you want. Links you click and addresses you type inside Ardia stay where they are, unless you turn the switch below on." />
       <Box gap="xl">
         <Group>
           <Row anchor="automations.linkRules">
@@ -58,6 +58,7 @@ export function LinkRoutingSection({ profileId }: { profileId: string | null }) 
             rules.map((rule, i) => <RuleRow key={rule.id} rule={rule} index={i} last={i === rules.length - 1} profiles={profiles} />)
           )}
         </Group>
+        <InAppLinksRow />
         <TestLink />
         <FallbackGroup profiles={profiles} />
       </Box>
@@ -211,6 +212,17 @@ function caughtBy(preview: Extract<LinkPreview, { ok: true }>): {
     title: "No rule catches it",
     detail: `Ardia's usual routing. ${lands}`,
   };
+}
+
+function InAppLinksRow() {
+  const { inAppLinks } = useAirTrafficConfig();
+  return (
+    <Group>
+      <Row anchor="automations.inAppLinks" title="Also route links you open inside Ardia">
+        <Toggle value={inAppLinks} accessibilityLabel="Also route links you open inside Ardia" onChange={setAirTrafficInAppLinks} />
+      </Row>
+    </Group>
+  );
 }
 
 function TestLink() {

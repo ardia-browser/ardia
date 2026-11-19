@@ -1606,6 +1606,23 @@
       const url = linkUrl(link);
       if (url && apply(test, /^https?:/i, [url])) send("newTabLink", { url });
     };
+    let linkFilters = [];
+    const linkRouted = (url) => {
+      for (let i = 0; i < linkFilters.length; i++) if (apply(test, linkFilters[i], [url])) return true;
+      return false;
+    };
+    handlers.airTrafficConfig = (config) => {
+      linkFilters = [];
+      const pairs = config && config.patterns;
+      if (!pairs || !pairs.length) return;
+      for (let i = 0; i < pairs.length && linkFilters.length < 100; i++) {
+        const pair = pairs[i];
+        if (!pair || pair.length !== 2) continue;
+        try {
+          linkFilters.push(new RegExp(pair[0], pair[1] ? String(pair[1]).replace(/[^gimsuy]/g, "") : ""));
+        } catch {}
+      }
+    };
     addEventListener(
       "click",
       guard((e) => {
@@ -1621,6 +1638,14 @@
         const decide = guard((ev) => {
           if (ev !== e || decided) return;
           decided = true;
+          if (replacesPage(link)) {
+            const routed = linkUrl(link);
+            if (linkRouted(routed) && !defaultPrevented(e)) {
+              apply(preventDefault, e, []);
+              send("airTrafficLink", { url: routed });
+              return;
+            }
+          }
           if (forSite && replacesPage(link)) return peekSiteLink(e, link);
           noteNewTabLink(e, link);
         });
@@ -1630,6 +1655,14 @@
             apply(unlisten, window, ["click", decide]);
             if (decided) return;
             decided = true;
+            if (replacesPage(link)) {
+              const routed = linkUrl(link);
+              if (linkRouted(routed) && !defaultPrevented(e)) {
+                apply(preventDefault, e, []);
+                send("airTrafficLink", { url: routed });
+                return;
+              }
+            }
             if (forSite && replacesPage(link)) return trace("the click never reached the window", {});
             noteNewTabLink(e, link);
           }),
@@ -1793,6 +1826,7 @@
 
   handlers.config = (config) => {
     handlers.peekConfig({ modifier: config.peek, split: config.split, trace: config.peekTrace, otherSites: config.peekOtherSites });
+    handlers.airTrafficConfig(config);
     blockAutoplay = !!config.blockAutoplay;
     pipTrace = !!config.pipTrace;
     if (pipTrace && pipHandlerSet !== null)

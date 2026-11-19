@@ -191,6 +191,7 @@ export type EngineCalls = {
   "webView.setPeekModifier": [{ modifier: "alt" | "shift" | "off" }, null];
   "webView.setSplitLinkModifier": [{ modifier: "alt" | "altShift" }, null];
   "webView.setPeekOtherSiteTabs": [{ tabIds: string[] }, null];
+  "webView.setInAppLinkPatterns": [Profile & { patterns: [string, string][] }, null];
   "webView.setSelectionPopover": [{ enabled: boolean }, null];
   "webView.setBlockAutoplayEverywhere": [{ enabled: boolean }, null];
   "webView.setCommandScrollZoom": [{ enabled: boolean }, null];

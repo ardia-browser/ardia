@@ -109,7 +109,7 @@ function openUrlsFromApps(urls: string[], routed: RoutedLinks, pointer?: [number
   openLinksInMainWindow(urls, profileId, routed.adoptIds, gated);
 }
 
-function openLinksInMainWindow(urls: string[], profileId: string, adoptIds: (string | undefined)[], gated = false) {
+export function openLinksInMainWindow(urls: string[], profileId: string, adoptIds: (string | undefined)[], gated = false) {
   let target = mainWindowFor(store(), profileId);
   urls.forEach((url, i) => {
     const s = store();

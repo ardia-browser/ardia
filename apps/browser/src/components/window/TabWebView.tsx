@@ -1,5 +1,5 @@
 import { WebView } from "../ui";
-import { type OpenWindowRequest, openFromPage } from "../../state/tabs/openFromPage";
+import { type OpenWindowRequest, openFromPage, routedInAppClick } from "../../state/tabs/openFromPage";
 import type { PageEngine } from "../../state/engines/engines";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet } from "react-native";
@@ -19,7 +19,7 @@ import { noteWebKitPage, offerWebKit, persistEngine } from "../../state/engines/
 import { webviewRef, webviews } from "../../state/tabs/webviewHandles";
 import { noteIssued, takeStartedNavigation } from "../../state/tabs/earlyNavigate";
 import { currentEngineProfile, currentTab, isTabSilenced } from "../../state/browser/current";
-import { updateLive, updateTab } from "../../state/tabs/actions";
+import { updateLive, updateTab, navigate } from "../../state/tabs/actions";
 import { returnRefusedMove, setFind } from "../../state/windows/actions";
 import { activateFocusedPane, currentTabEngine, downloadNavigated, useTabEngine } from "../../state/windows/card";
 import { setPageProgress } from "../../state/tabs/pageProgress";
@@ -297,6 +297,11 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine }
       }}
       onWindowClose={() => pageAskedToClose(tabId)}
       onTransferRefused={(from) => returnRefusedMove(tabId, from)}
+      onAirTrafficLink={({ url }) => {
+        const t = tab();
+        if (!t) return;
+        if (!routedInAppClick(url, { windowId: t.windowId, profileId: t.profileId, tabId })) navigate(tabId, url, { userInitiated: false });
+      }}
       onNotification={(notification) => showWebNotification(tabId, notification)}
       onCommand={({ command, text, modifiers, share, anchor, point }) => {
         if (command === "search") searchSelection(tabId, text, modifiers);

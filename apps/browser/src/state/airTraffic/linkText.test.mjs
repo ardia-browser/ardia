@@ -28,7 +28,7 @@ test("a fallback the person sets, even back to Ardia's usual routing, is remembe
   store.setAirTrafficFallback(null);
   assert.equal(store.currentAirTraffic().fallbackChosen, true);
   const saved = rules.parseAirTraffic(rules.airTrafficJson(store.currentAirTraffic()));
-  assert.deepEqual(saved, { rules: [], fallback: null, fallbackChosen: true });
+  assert.deepEqual(saved, { rules: [], fallback: null, inAppLinks: false, fallbackChosen: true });
   assert.equal(rules.fallbackChosen({ rules: [], fallback: { profileId: "p", open: "tab" } }), true, "a fallback set before choices were remembered counts as chosen");
   assert.equal(rules.fallbackChosen(rules.parseAirTraffic(rules.airTrafficJson({ rules: [], fallback: null }))), false);
 });

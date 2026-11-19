@@ -4,6 +4,7 @@ import { webviews } from "../../platform/webviews";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { isEmptyCardTab, NEW_TAB_BAR_POLICY, newTabOpensBar } from "./newTabBarPolicy";
+import { commitTypedUrl } from "./openFromBar";
 import { hasPage } from "../tabs/pageSession";
 import { isSmall } from "../windows/small";
 import type { NewTabTarget } from "../browser/types";
@@ -57,7 +58,7 @@ export function openFromNewTabBar(windowId: string, target: NewTabTarget, url: s
   s.closePanel(windowId);
   const into = target.kind === "into" ? s.tabs[target.tabId] : undefined;
   if (into && into.windowId === windowId && isEmptyCardTab(s, into)) {
-    store().navigate(into.id, url);
+    commitTypedUrl(url, { windowId, profileId: into.profileId, tabId: into.id });
     return noteBarLoad(into.id);
   }
   const group = target.kind === "group" ? s.groups[target.groupId] : undefined;

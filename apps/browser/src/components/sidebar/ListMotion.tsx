@@ -201,7 +201,9 @@ function useMotion({ devKey, entries, from, planner, height, enabled, nativeTail
   if (enabled) devRegister("sidebarMotion", devKey, { slides, ghosts, clipped });
 
   const now = Date.now();
-  if (settleSlides(slides.values(), now)) noteSidebarMotion("overrun");
+  const settled = settleSlides(slides.values(), now);
+  if (settled.overrun) noteSidebarMotion("overrun");
+  if (settled.stopped) noteSidebarMotion("stopped", settled.stopped);
   if (ghosts.current.some((g) => g.until && now >= g.until)) ghosts.current = ghosts.current.filter((g) => !g.until || now < g.until);
 
   const prepare = (plan: Plan, at: number) => {

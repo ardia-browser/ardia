@@ -16,7 +16,7 @@ import { type ToolbarGeometry } from "../window/geometry";
 import { usePage, usePages, type PageState } from "../../state/tabs/pageState";
 import { togglePopover } from "../../state/tabs/popoverDismiss";
 import { useHistoryAvailability } from "../../state/tabs/navigation";
-import { toggleBookmarkOfTab } from "../../state/bookmarks/actions";
+import { pressBookmarkButton } from "../../state/bookmarks/actions";
 import { useBookmarksShown } from "../../state/bookmarks/hooks";
 import { copyPageUrl } from "../../state/site/selection";
 import { closePane, openSplitPane, showSplitMenu } from "../../state/splits/actions";
@@ -325,7 +325,7 @@ function BookmarkButton({ tab, palette, windowId }: PageButtonProps) {
   const bookmarkHint = useShortcutHint("bookmarkPage");
   const bookmarked = useIsBookmarked(tab.url);
   return (
-    <Button variant="icon" toolbar palette={palette} icon={bookmarked ? "bookmark.fill" : "bookmark"} look="field" onPress={() => toggleBookmarkOfTab(windowId, tab.id)} tooltip={bookmarked ? "Remove Bookmark" : withShortcut("Bookmark This Page", bookmarkHint)} />
+    <Button variant="icon" toolbar palette={palette} icon={bookmarked ? "bookmark.fill" : "bookmark"} look="field" onPress={() => pressBookmarkButton(windowId, tab.id)} tooltip={withShortcut(bookmarked ? "Edit Bookmark" : "Bookmark This Page", bookmarkHint)} />
   );
 }
 

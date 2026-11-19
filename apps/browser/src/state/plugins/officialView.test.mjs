@@ -27,8 +27,8 @@ test("an available plugin offers Install, waits while its sheet is open, and sho
   assert.deepEqual([asking.action, asking.busy, asking.status], [null, true, null]);
   const installing = officialView(plugin("available"), undefined, { state: "installing" });
   assert.deepEqual([installing.action, installing.busy, installing.status], [null, true, "Installing…"]);
-  const failed = officialView(plugin("available"), undefined, { state: "failed", reason: "cli can't load." });
-  assert.deepEqual([failed.action, failed.failed, failed.status], ["again", true, "Couldn't install it: cli can't load."]);
+  const failed = officialView(plugin("available"), undefined, { state: "failed", reason: "It can't load." });
+  assert.deepEqual([failed.action, failed.failed, failed.status], ["again", true, "It can't load."]);
 });
 
 test("an installed plugin shows no sentence, only a first command to copy when it has one", () => {
@@ -47,9 +47,9 @@ test("an installed plugin whose command isn't on PATH says why and offers Retry"
   const linking = officialView(plugin("installed"), { state: "linking", hash: "h", request: 1 }, null);
   assert.deepEqual([linking.busy, linking.action, linking.firstCommand], [true, null, null]);
   const failed = officialView(plugin("installed"), { state: "failed", hash: "h", reason: "busy" }, null);
-  assert.deepEqual([failed.failed, failed.action, failed.status, failed.firstCommand], [true, "again", "Its command couldn't go on your PATH: busy", null]);
+  assert.deepEqual([failed.failed, failed.action, failed.status, failed.firstCommand], [true, "again", "Not on your PATH: busy", null]);
   const refused = officialView(plugin("installed"), { ...LINKED, linked: [], refused: { ardia: "ardia is someone else's command" } }, null);
-  assert.deepEqual([refused.failed, refused.action, refused.status], [true, "again", "Its command isn't on your PATH yet: ardia is someone else's command"]);
+  assert.deepEqual([refused.failed, refused.action, refused.status], [true, "again", "Not on your PATH: ardia is someone else's command"]);
   const bare = officialView(plugin("installed"), undefined, null);
   assert.deepEqual([bare.note, bare.status, bare.action], ["installed", null, null]);
 });

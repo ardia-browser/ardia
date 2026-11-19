@@ -25,18 +25,16 @@ export const installedLabel = (plugin: OfficialPlugin) => (plugin.version ? `Ins
 
 const HIDDEN: OfficialView = { shown: false, note: null, status: null, failed: false, busy: false, action: null, opens: false, firstCommand: null };
 
-const failure = (reason: string) => `Couldn't install it: ${reason}`;
-
 function installedView(plugin: OfficialPlugin, programs: ProgramsState | undefined, attempt: OfficialAttempt): OfficialView {
   const base = { ...HIDDEN, shown: true, note: "installed" as const, opens: true };
   if (attempt?.state === "installing" || programs?.state === "linking") return { ...base, status: "Installing…", busy: true };
-  if (programs?.state === "failed") return { ...base, status: `Its command couldn't go on your PATH: ${programs.reason}`, failed: true, action: "again" };
+  if (programs?.state === "failed") return { ...base, status: `Not on your PATH: ${programs.reason}`, failed: true, action: "again" };
   if (programs?.state === "linked") {
     const refused = Object.values(programs.refused);
-    if (refused.length) return { ...base, status: `Its command isn't on your PATH yet: ${refused.join("; ")}`, failed: true, action: "again" };
+    if (refused.length) return { ...base, status: `Not on your PATH: ${refused.join("; ")}`, failed: true, action: "again" };
     if (programs.linked.length) return { ...base, firstCommand: FIRST_COMMANDS[plugin.name] ?? null };
   }
-  if (attempt?.state === "failed") return { ...base, status: failure(attempt.reason), failed: true, action: "again" };
+  if (attempt?.state === "failed") return { ...base, status: attempt.reason, failed: true, action: "again" };
   return base;
 }
 
@@ -47,7 +45,7 @@ export function officialView(plugin: OfficialPlugin, programs: ProgramsState | u
   const base = { ...HIDDEN, shown: true, opens: true };
   if (attempt?.state === "asking") return { ...base, busy: true };
   if (attempt?.state === "installing") return { ...base, status: "Installing…", busy: true };
-  if (attempt?.state === "failed") return { ...base, status: failure(attempt.reason), failed: true, action: "again" };
+  if (attempt?.state === "failed") return { ...base, status: attempt.reason, failed: true, action: "again" };
   return { ...base, action: "install" };
 }
 

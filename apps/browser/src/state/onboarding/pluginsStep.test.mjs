@@ -135,7 +135,7 @@ test("a failed install shows its reason, can be tried again, and never blocks fi
   lifecycle.enablePlugin("cli", P().consent.hash);
   await done;
   assert.equal(T().phase, "failed");
-  assert.equal(T().failures.cli, "It's installed, but its commands couldn't go on PATH: busy");
+  assert.equal(T().failures.cli, "Installed, but not on your PATH: busy");
   assert.equal(step.primaryTitle(offered(), T()), "Continue");
   host.linkResult = null;
   await step.installPluginAgain("cli");

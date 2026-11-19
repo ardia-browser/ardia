@@ -11,6 +11,7 @@ import {
 import { useBrowser, type BrowserState } from "../browser/store";
 import { changedIds } from "../browser/changes";
 import { chromeChanged, groupStep, stripActual, stripPlan, type GroupBindings } from "./liveTabs";
+import { recordAppSelection, judgeStripSelection } from "./stripBounce";
 
 let started = false;
 const mirror = new Map<number, StripState>();
@@ -24,6 +25,7 @@ const groups: GroupBindings = new Map();
 const tried = new Map<string, { sig: string; since: number }>();
 const changedAt = new Map<number, number>();
 const madeInFront = new Map<number, { browser: number; over: string | null }>();
+let applyingStrip = false;
 
 if (__DEV__) {
   (globalThis as { acChromeTabs?: unknown }).acChromeTabs = {
@@ -53,6 +55,7 @@ export function startChromeTabs() {
     scheduleProject();
   });
   useBrowser.subscribe((s, prev) => {
+    if (!applyingStrip) recordAppSelection(prev, s);
     if (s.groups !== prev.groups) for (const [token, id] of groups) if (!s.groups[id]) groups.delete(token);
     if (s.windows !== prev.windows || s.groups !== prev.groups || placed(s, prev)) scheduleProject();
   });
@@ -106,7 +109,15 @@ function receive(tx: TabStripTransaction) {
     for (const t of strip.tabs) if (t.key) seen.add(t.key);
   }
   if (seen.size > 2 * Object.keys(s.tabs).length + 64) for (const key of seen) if (!s.tabs[key]) seen.delete(key);
-  if (s !== start) useBrowser.setState(s);
+  if (s !== start) {
+    judgeStripSelection(start, s);
+    applyingStrip = true;
+    try {
+      useBrowser.setState(s);
+    } finally {
+      applyingStrip = false;
+    }
+  }
   scheduleProject();
 }
 

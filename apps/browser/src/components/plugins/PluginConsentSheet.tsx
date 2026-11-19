@@ -72,7 +72,7 @@ export function PluginConsentSheet({ request, onCancel, onConfirm, onClosed }: {
 }
 
 function Ring({ on, color, children }: { on: boolean; color: string; children: ReactNode }) {
-  return <View style={{ borderRadius: radius.control + RING, borderWidth: RING, borderColor: on ? color : ink.clear, margin: -RING }}>{children}</View>;
+  return <View style={{ borderRadius: radius.control + RING * 2, borderWidth: RING, padding: RING, borderColor: on ? color : ink.clear, margin: -RING * 2 }}>{children}</View>;
 }
 
 const RING = 2;

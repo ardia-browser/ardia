@@ -20,7 +20,7 @@ import { captureEscape, hapticTick } from "../../state/drag/dragNative";
 import { entryKey } from "../../state/sidebar/entryKey";
 import { endHeldTabPress } from "../../state/sidebar/heldTabPress";
 import { tabPlace } from "../../state/sidebar/actions";
-import { dropTabsInProfile, placedInProfile, switchProfile } from "../../state/browser/actions";
+import { dropTabsInProfile, switchProfile } from "../../state/browser/actions";
 
 export class DragController extends DragTargeting {
   protected arriving: { key: string; from: number } | null = null;
@@ -268,7 +268,7 @@ export class DragController extends DragTargeting {
     if (dropped && drop.type === "none" && !toIcon) noteDragWithoutDrop();
     if (home && toIcon) void dropTabsInProfile(dragged, toIcon, NO_DROP, home.profileId, true);
     else if (home && crossed) {
-      if (dropped && drop.type === "tabs") void dropTabsInProfile(dragged, shown!, drop, home.profileId, false).then((moved) => moved && drop.sequence && arrangeLive(placedSequence(drop.sequence, dragged, shown!)));
+      if (dropped && drop.type === "tabs") void dropTabsInProfile(dragged, shown!, drop, home.profileId, false).then((placed) => placed && drop.sequence && arrangeLive(placedSequence(drop.sequence, placed)));
       else if (!splitDrop && !interrupted) switchProfile(home.windowId, home.profileId, true);
     } else if (dropped && drop.type === "split") {
       const shift = this.splitShift(marks.split?.key);
@@ -392,7 +392,7 @@ export class DragController extends DragTargeting {
   }
 }
 
-function placedSequence(sequence: string[], tabIds: string[], profileId: string) {
-  const relabel = new Map(Object.entries(placedInProfile(tabIds, profileId)).map(([from, to]) => [entryKey("tab", from), entryKey("tab", to)]));
+function placedSequence(sequence: string[], placed: Record<string, string>) {
+  const relabel = new Map(Object.entries(placed).map(([from, to]) => [entryKey("tab", from), entryKey("tab", to)]));
   return sequence.map((e) => relabel.get(e) ?? e);
 }

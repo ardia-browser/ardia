@@ -56,10 +56,13 @@ export const placedCopies = (s: BrowserState, tabIds: string[], profileId: strin
 
 export const movesAcrossProfiles = (s: BrowserState, tabIds: string[], profileId: string) => movable(s, tabIds).some((t) => arriving(s, t, profileId));
 
-export function droppedInProfile(before: BrowserState, tabIds: string[], profileId: string, drop: Drop): BrowserState {
-  if (!before.profiles[profileId]) return before;
+export type ProfileDrop = { state: BrowserState; placed: Record<string, string> };
+
+export function droppedInProfile(before: BrowserState, tabIds: string[], profileId: string, drop: Drop): ProfileDrop {
+  const none = { state: before, placed: {} };
+  if (!before.profiles[profileId]) return none;
   const dragged = movable(before, tabIds);
-  if (!dragged.length || (drop.type === "none" && dragged.every((t) => t.profileId === profileId))) return before;
+  if (!dragged.length || (drop.type === "none" && dragged.every((t) => t.profileId === profileId))) return none;
   const s = withParkedPinsShown(before, dragged, profileId);
   const tabs = movable(s, tabIds);
   const copies = placedCopies(s, tabIds, profileId);
@@ -67,5 +70,5 @@ export function droppedInProfile(before: BrowserState, tabIds: string[], profile
   let next = tabs.reduce((acc, t) => (arriving(s, t, profileId) ? intoProfile(acc, t.id, profileId) : acc), s);
   next = dropping(next, placed, drop);
   const last = findLast(placed, (id) => next.tabs[id]?.profileId === profileId);
-  return last ? apply(next, activated(next, last)) : next;
+  return { state: last ? apply(next, activated(next, last)) : next, placed: copies };
 }

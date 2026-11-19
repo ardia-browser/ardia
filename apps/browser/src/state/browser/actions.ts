@@ -30,7 +30,7 @@ import { consentToken, stillValid } from "../telemetry/client";
 import { isPeekTab } from "../peek/peek";
 import { noteTabClosedByUser } from "../sync/openTabCloses";
 import type { Drop } from "../drag/drops";
-import { movesAcrossProfiles, placedCopies } from "../windows/profileMoves";
+import { movesAcrossProfiles } from "../windows/profileMoves";
 import { noteSidebarDrop } from "../telemetry/tabPresses";
 
 const store = () => useBrowser.getState();
@@ -181,23 +181,22 @@ export async function moveTabsToProfile(tabIds: string[], target: string | null)
   }
 }
 
-export async function dropTabsInProfile(tabIds: string[], target: string, drop: Drop, home: string, onIcon: boolean): Promise<boolean> {
+export async function dropTabsInProfile(tabIds: string[], target: string, drop: Drop, home: string, onIcon: boolean): Promise<Record<string, string> | null> {
   const move = tabsMove(tabIds);
-  if (!move) return false;
+  if (!move) return null;
   const consent = consentToken();
   const placesOnly = !movesAcrossProfiles(store(), tabIds, target);
   const profileId = placesOnly ? target : await profileMoveTarget({ ...move, fromProfileId: home }, target);
-  if (profileId && store().dropTabsInProfile(tabIds, profileId, drop)) {
+  const placed = profileId ? store().dropTabsInProfile(tabIds, profileId, drop) : null;
+  if (placed) {
     if (stillValid(consent)) noteSidebarDrop(onIcon ? "profile_icon" : "other_profile");
-    return true;
+    return placed;
   }
-  if (placesOnly && drop.type === "none") return false;
+  if (placesOnly && drop.type === "none") return null;
   const w = store().windows[move.windowId];
   if (w && w.profileId !== home && store().profiles[home]) switchProfile(move.windowId, home, true);
-  return false;
+  return null;
 }
-
-export const placedInProfile = (tabIds: string[], profileId: string) => placedCopies(store(), tabIds, profileId);
 
 export const moveTabToProfile = (tabId: string, target: string | null) => moveTabsToProfile([tabId], target);
 

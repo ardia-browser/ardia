@@ -72,7 +72,7 @@ export type WindowsSlice = {
   moveTabsToWindow(tabIds: string[], windowId: string | null, options?: MoveOptions): string | undefined;
   returnRefusedMove(tabId: string, fromWindowId: string): void;
   moveTabToProfile(tabId: string, profileId: string, options?: MoveOptions): void;
-  dropTabsInProfile(tabIds: string[], profileId: string, drop: Drop): boolean;
+  dropTabsInProfile(tabIds: string[], profileId: string, drop: Drop): Record<string, string> | null;
   moveGroupToWindow(groupId: string, windowId: string | null, options?: MoveOptions): string | undefined;
   moveGroupToProfile(groupId: string, profileId: string, options?: MoveOptions): void;
   mergeAllWindows(windowId: string): void;
@@ -296,10 +296,10 @@ export const createWindowsSlice: StateCreator<BrowserState, [], [], WindowsSlice
 
   dropTabsInProfile(tabIds, profileId, drop) {
     const s = get();
-    const next = droppedInProfile(s, tabIds, profileId, drop);
-    if (next === s) return false;
+    const { state: next, placed } = droppedInProfile(s, tabIds, profileId, drop);
+    if (next === s) return null;
     set(next);
-    return true;
+    return placed;
   },
 
   moveGroupToWindow(groupId, windowId, options) {

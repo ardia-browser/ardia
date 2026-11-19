@@ -1,5 +1,6 @@
 #import "ArdiaSwipeInternal.h"
 #import "ArdiaChromeWindowHost.h"
+#import "ArdiaLaunchConfig.h"
 
 using namespace ardia_swipe;
 
@@ -67,6 +68,41 @@ NSView *ReactRoot(NSView *view, NSWindow *window) {
   if (root && [view isDescendantOf:root]) return root;
   while (view.superview && view.superview != window.contentView) view = view.superview;
   return view;
+}
+
+static NSGestureRecognizer *TouchHandlerIn(NSView *view, int levels) {
+  static Class handler = NSClassFromString(@"RCTTouchHandler");
+  for (NSGestureRecognizer *recognizer in view.gestureRecognizers)
+    if ([recognizer isKindOfClass:handler]) return recognizer;
+  if (levels > 0)
+    for (NSView *sub in view.subviews)
+      if (NSGestureRecognizer *found = TouchHandlerIn(sub, levels - 1)) return found;
+  return nil;
+}
+
+static NSUInteger ButtonOf(NSEvent *press) {
+  switch (press.type) {
+    case NSEventTypeLeftMouseDown:
+    case NSEventTypeLeftMouseUp:
+    case NSEventTypeLeftMouseDragged:
+      return 0;
+    case NSEventTypeRightMouseDown:
+    case NSEventTypeRightMouseUp:
+    case NSEventTypeRightMouseDragged:
+      return 1;
+    default:
+      return (NSUInteger)press.buttonNumber;
+  }
+}
+
+BOOL ReactPressHeld() {
+  static const BOOL postsItsOwnPresses = ArdiaLaunchConfig.shared.testInstance;
+  const NSUInteger buttonsDown = NSEvent.pressedMouseButtons;
+  if (!buttonsDown && !postsItsOwnPresses) return NO;
+  for (NSWindow *window in NSApp.windows)
+    for (NSEvent *press in [TouchHandlerIn([ArdiaChromeWindowHost rootViewOfWindow:window] ?: window.contentView, 3) valueForKey:@"_nativeTouches"])
+      if (((buttonsDown >> ButtonOf(press)) & 1) || (postsItsOwnPresses && press.eventNumber == 0)) return YES;
+  return NO;
 }
 
 NSView<ArdiaSwipeTarget> *MisroutedRendererTarget(NSWindow *window, NSPoint location, NSView *hit) {

@@ -384,6 +384,29 @@ BOOL HandleDiscreteSwipe(NSWindow *window, NSPoint location, CGFloat deltaX) {
 
 namespace {
 
+BOOL gKeptFromAppKit = NO;
+
+BOOL BeginsScrollSequence(NSEvent *event) {
+  const NSEventPhase phase = event.phase;
+  return (phase & (NSEventPhaseMayBegin | NSEventPhaseBegan)) || (phase == NSEventPhaseNone && event.momentumPhase == NSEventPhaseNone);
+}
+
+}
+
+namespace ardia_swipe {
+
+NSEvent *ScrollForAppKit(NSEvent *event, NSEvent *unhandled) {
+  const BOOL held = ReactPressHeld();
+  gKeptFromAppKit = held || (gKeptFromAppKit && !BeginsScrollSequence(event));
+  if (!gKeptFromAppKit || !unhandled) return unhandled;
+  Diag(@{@"diag" : @"keptFromAppKit", @"phase" : @(event.phase)});
+  return nil;
+}
+
+}
+
+namespace {
+
 void InstallMonitor() {
   if (gMonitor) return;
   gMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskScrollWheel | NSEventMaskSwipe
@@ -398,7 +421,7 @@ void InstallMonitor() {
                                                      });
                                                      NSEvent *out = event.type == NSEventTypeSwipe
                                                                         ? (HandleDiscreteSwipe(event.window, event.locationInWindow, event.deltaX) ? nil : event)
-                                                                        : HandleScroll(event, event.window, event.locationInWindow, NO);
+                                                                        : ScrollForAppKit(event, HandleScroll(event, event.window, event.locationInWindow, NO));
                                                      Diag(@{@"diag" : @"monitorExit", @"resultWindow" : out ? @(out.window.windowNumber) : @(-1), @"swallowed" : @(out == nil)});
                                                      return out;
                                                    }];

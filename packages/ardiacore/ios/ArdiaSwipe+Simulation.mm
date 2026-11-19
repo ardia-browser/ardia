@@ -150,7 +150,7 @@ NSEvent *SyntheticScroll(NSWindow *window, NSPoint inWindow, NSDictionary *step,
           @"targetWindow" : @(gGesture.target.window.windowNumber),
         }];
       } else {
-        NSEvent *out = HandleScroll(event, event.window, event.locationInWindow, ignoreSystemPreference);
+        NSEvent *out = ScrollForAppKit(event, HandleScroll(event, event.window, event.locationInWindow, ignoreSystemPreference));
         [log addObject:@{
           @"phase" : phase,
           @"time" : @(event.timestamp),

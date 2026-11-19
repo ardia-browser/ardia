@@ -13,6 +13,7 @@ import { DragItems } from "./dragItems";
 import { onAppEvent } from "../../state/drag/dragNative";
 import { WindowDropGlow } from "../tabstrip/WindowDropGlow";
 import { TAB_CLICK_SLOP } from "../../state/sidebar/heldTabPress";
+import { noteDragCancelled } from "../../state/telemetry/tabPresses";
 
 const dropGlowPlace = perLook(() => ({ left: 5, right: 5, top: 44, bottom: 6, borderRadius: radius.chrome }));
 
@@ -107,7 +108,10 @@ export function useDragItem(key: string, spec: ItemSpec, clip: ClipSource | null
         controller?.move(g.moveX, g.moveY);
       },
       onPanResponderRelease: (e, g) => controller?.end(true, Math.max(reach(g.moveX, g.moveY), reach(e.nativeEvent.pageX, e.nativeEvent.pageY)) <= TAB_CLICK_SLOP ? e : null),
-      onPanResponderTerminate: () => controller?.end(false),
+      onPanResponderTerminate: () => {
+        if (controller?.active) noteDragCancelled();
+        controller?.end(false);
+      },
       onPanResponderTerminationRequest: () => false,
     });
   }, [controller, key]);

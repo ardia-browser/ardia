@@ -144,7 +144,7 @@ BOOL WindowServerShows(NSWindow *window) {
   NSArray<NSDictionary *> *above = CFBridgingRelease(CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenAboveWindow | kCGWindowListOptionIncludingWindow, number));
   CGRect mine = CGRectNull;
   std::vector<ardia_window_sight::Rect> covers;
-  const pid_t minePid = NSApplication.processIdentifier;
+  const pid_t minePid = getpid();
   NSMutableDictionary<NSNumber *, NSNumber *> *regularPids = [NSMutableDictionary dictionary];
   for (NSDictionary *info in above) {
     CGRect bounds;

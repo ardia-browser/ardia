@@ -218,7 +218,7 @@ int main(int argc, char** argv) {
     chrome.SetWebContents(&p.frontend);
     chrome.SetWebContents(nullptr);
     p.host.LayoutPane(p.binding);
-    assert(p.tools()->holder()->Holds(&p.frontend.native));
+    assert(p.tools()->holder()->Holds(&p.frontend.native) && views::focused_detaches == 0);
     assert(views::focus_manager.focused == p.tools() && p.frontend.focuses == 2);
     p.binding->viewport()->RequestFocus();
     chrome.SetWebContents(&p.frontend);

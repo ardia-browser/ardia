@@ -220,6 +220,7 @@ class FocusManager {
 };
 inline FocusManager focus_manager;
 inline bool detach_advances_focus = false;
+inline int focused_detaches = 0;
 inline void View::RequestFocus() { focus_manager.focused = this; }
 struct NativeViewHolder {
   void SetNativeViewCornerRadii(gfx::RoundedCornersF) {}
@@ -253,7 +254,10 @@ class WebView : public View {
     if (contents == contents_) return;
     if (contents_) holder_.Detach();
     contents_ = contents;
-    if (!contents && detach_advances_focus && focus_manager.focused == this) focus_manager.focused = nullptr;
+    if (!contents && detach_advances_focus && focus_manager.focused == this) {
+      focused_detaches++;
+      focus_manager.focused = nullptr;
+    }
     if (!contents) return;
     holder_.Attach(contents->GetNativeView());
     if (GetVisible()) contents->GetNativeView()->Show();

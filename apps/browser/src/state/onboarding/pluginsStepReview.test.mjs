@@ -12,6 +12,7 @@ const { activeSteps, maybeStartOnboarding, startOnboarding, useOnboarding } = aw
 const { readSaved, saveOnboarding } = await import("./onboardingDocument.ts");
 const { offeredInOnboarding } = await import("./pluginsOffer.ts");
 const step = await import("./pluginsStep.ts");
+const { pluginSocketMethod } = await import("../plugins/socketMethods.ts");
 const { takeOfficialPluginCounts } = await import("../telemetry/officialPluginCounts.ts");
 const { setConsentPeriod } = await import("../telemetry/consentPeriod.ts");
 
@@ -106,26 +107,36 @@ test("a consent onboarding asked for belongs to onboarding: its sheet shows over
   lifecycle.dismissPluginConsent("cli");
 });
 
-test("Install in Settings while onboarding asks for the same plugin hands the request to Settings; onboarding can't confirm or cancel it, even leaving right after", async () => {
+test("while onboarding's sheet is up, Install in Settings and the command line are refused; the sheet stays and still installs", async () => {
   await atOffer();
   const done = step.installPickedPlugins(offered());
   await settle();
-  const onboardingAsk = P().consent;
+  const asked = P().consent;
   assert.equal(owner(), "onboarding");
-  const settings = installOfficialPlugin("cli", { showSheet: false });
-  const settingsAsk = P().consent;
-  assert.notEqual(settingsAsk.id, onboardingAsk.id);
-  assert.equal(settingsAsk.hash, onboardingAsk.hash);
-  assert.equal(owner(), "settings");
-  assert.equal(step.confirmPluginConsent(settingsAsk.id), false, "onboarding can't confirm Settings' request");
-  assert.equal(step.cancelPluginConsent(settingsAsk.id), false, "or cancel it");
-  assert.equal(step.confirmPluginConsent(onboardingAsk.id), false, "its own old id is no longer the request");
+  assert.deepEqual(await installOfficialPlugin("cli", { showSheet: false }), { ok: false, reason: lifecycle.ALREADY_ASKING });
+  assert.deepEqual(pluginSocketMethod("plugins.enable", { name: "cli" }), { error: { code: "refused", message: lifecycle.ALREADY_ASKING } });
+  assert.deepEqual(P().consent, asked, "same id, same owner");
+  assert.ok(step.confirmPluginConsent(asked.id));
   await done;
-  assert.deepEqual(T().failures, { cli: "Another install started." });
-  step.leavePluginsStep();
-  assert.equal(P().consent?.id, settingsAsk.id, "leaving onboarding leaves Settings' request alone");
-  assert.ok(surface.confirmConsentAs("settings", settingsAsk.id));
-  assert.deepEqual(await settings, { ok: true });
+  assert.equal(T().phase, "installed");
+});
+
+test("while Settings' sheet is up, onboarding's Install is refused with the reason and Try Again works once it closes", async () => {
+  await atOffer();
+  assert.ok(lifecycle.requestPluginConsent("cli"));
+  const settingsAsk = P().consent;
+  assert.equal(owner(), "settings");
+  await step.installPickedPlugins(offered());
+  assert.equal(T().phase, "failed");
+  assert.deepEqual(T().failures, { cli: lifecycle.ALREADY_ASKING });
+  assert.equal(P().consent.id, settingsAsk.id);
+  assert.ok(surface.dismissConsentAs("settings", settingsAsk.id));
+  const again = step.installPluginAgain("cli");
+  await settle();
+  assert.equal(owner(), "onboarding");
+  assert.ok(step.confirmPluginConsent(P().consent.id));
+  await again;
+  assert.equal(T().phase, "installed");
 });
 
 test("a Settings confirm can't accept onboarding's request, even for the same plugin and hash", async () => {
@@ -198,6 +209,89 @@ test("a long consent is still one request with every entry, for the sheet to scr
   const lines = consentLines(P().listings.long.manifest);
   assert.ok(lines.length >= 12, `${lines.length} entries`);
   assert.ok(lines.reduce((n, l) => n + l.text.length, 0) > 2400, "well over thirty wrapped lines at the sheet's width");
+});
+
+test("owner gone, next request succeeds: onboarding skipped", async () => {
+  await atOffer();
+  const done = step.installPickedPlugins(offered());
+  await settle();
+  step.skipPluginsStep(offered());
+  assert.deepEqual(await done.then(() => P().consent), null);
+  assert.ok(lifecycle.requestPluginConsent("cli"));
+  lifecycle.dismissPluginConsent("cli");
+});
+
+test("owner gone, next request succeeds: onboarding's window closes with its sheet up", async () => {
+  await atOffer();
+  const done = step.installPickedPlugins(offered());
+  await settle();
+  step.leavePluginsStep();
+  await done;
+  assert.equal(P().consent, null);
+  assert.ok(lifecycle.requestPluginConsent("cli"));
+  lifecycle.dismissPluginConsent("cli");
+});
+
+test("owner gone, next request succeeds: Settings closes or its pane unmounts with its sheet up", async () => {
+  await scanned([{ name: "cli", text: CLI, ...BUILT_IN }]);
+  const waiting = installOfficialPlugin("cli", { showSheet: false });
+  const asked = P().consent;
+  assert.equal(owner(), "settings");
+  assert.ok(surface.dismissConsentAs("settings", asked.id), "what the pane does when it goes away");
+  assert.deepEqual(await waiting, { ok: false, reason: "Cancelled.", cancelled: true });
+  assert.ok(lifecycle.requestPluginConsent("cli"));
+  lifecycle.dismissPluginConsent("cli");
+});
+
+test("owner gone, next request succeeds: a command-line request whose sheet is dismissed doesn't hold the slot", async () => {
+  await scanned([{ name: "cli", text: CLI, ...BUILT_IN }]);
+  assert.deepEqual(pluginSocketMethod("plugins.enable", { name: "cli" }), { result: { waiting: true } });
+  const asked = P().consent;
+  assert.equal(owner(), "settings", "Settings draws it");
+  assert.ok(surface.dismissConsentAs("settings", asked.id));
+  assert.equal(P().consent, null);
+  assert.deepEqual(pluginSocketMethod("plugins.enable", { name: "cli" }), { result: { waiting: true } });
+  lifecycle.dismissPluginConsent("cli");
+});
+
+test("a manifest that changes under an open request closes it with a reason", async () => {
+  await scanned([{ name: "cli", text: CLI, ...BUILT_IN }]);
+  const waiting = installOfficialPlugin("cli", { showSheet: false });
+  const asked = P().consent;
+  host.folders = [{ name: "cli", text: CLI.replace('"0.3.0"', '"0.3.1"'), ...BUILT_IN }];
+  await lifecycle.rescanPlugins(null);
+  await settle();
+  assert.equal(P().consent, null);
+  assert.deepEqual(await waiting, { ok: false, reason: "It changed while installing. Try again." });
+  assert.equal(lifecycle.enablePlugin("cli", asked.hash), false);
+});
+
+test("the consent sheet's keys: Tab and Shift-Tab reach Cancel and Install, Space presses only what Tab reached, Escape cancels", async () => {
+  const { consentKey } = await import("../plugins/consentKeys.ts");
+  assert.deepEqual(consentKey(null, " ", false, true), { selected: null, press: null }, "a Space held over from before presses nothing");
+  const cancel = consentKey(null, "Tab", false, true);
+  assert.equal(cancel.selected, "cancel");
+  const install = consentKey(cancel.selected, "Tab", false, true);
+  assert.equal(install.selected, "install");
+  assert.equal(consentKey(install.selected, "Tab", false, true).selected, "cancel");
+  assert.equal(consentKey(null, "Tab", true, true).selected, "install");
+  assert.equal(consentKey("cancel", "Tab", true, true).selected, "install");
+  assert.deepEqual(consentKey("install", " ", false, true), { selected: "install", press: "install" });
+  assert.equal(consentKey(null, "Tab", false, false).selected, "cancel");
+  assert.equal(consentKey("cancel", "Tab", false, false).selected, "cancel", "a disabled Install is skipped");
+  assert.deepEqual(consentKey(null, "Escape", false, true), { selected: null, press: "cancel" });
+});
+
+test("Escape with the window as first responder cancels the sheet drawn in that window, and only that one", async () => {
+  await atOffer();
+  const done = step.installPickedPlugins(offered());
+  await settle();
+  assert.equal(surface.cancelConsentOnEscape("settings", "settings"), false);
+  assert.ok(P().consent);
+  assert.ok(surface.cancelConsentOnEscape(windowId, "settings"));
+  await done;
+  assert.equal(P().consent, null);
+  assert.equal(T().phase, "offer");
 });
 
 test("each offered plugin counts as shown once per visit, even when the list changes under it", async () => {

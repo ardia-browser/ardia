@@ -97,18 +97,16 @@ test("the seam: unsupported where plugins aren't, coming soon only behind its fl
   await scan([{ name: "cli", text: CLI, ...BUILT_IN }, { name: "other", status: "ok", text: OTHER, folderId: "1:2" }]);
 });
 
-test("cancelling the sheet installs nothing and says so; a second ask or another plugin's sheet settles the first", async () => {
+test("cancelling the sheet installs nothing and says so; while a sheet is up, a second ask or another plugin's is refused and the first keeps its sheet", async () => {
   reset();
   const first = installOfficialPlugin("cli", { showSheet: false });
-  assert.equal(P().consent.name, "cli");
-  const second = installOfficialPlugin("cli", { showSheet: false });
-  assert.deepEqual(await first, { ok: false, reason: "Another install started." });
-  assert.ok(lifecycle.requestPluginConsent("other"));
-  assert.deepEqual(await second, { ok: false, reason: "Another install started." });
-  const stale = P().listings.cli.hash;
-  assert.equal(lifecycle.enablePlugin("cli", stale), false, "a replaced sheet can't approve");
+  const asked = P().consent;
+  assert.equal(asked.name, "cli");
+  assert.deepEqual(await installOfficialPlugin("cli", { showSheet: false }), { ok: false, reason: lifecycle.ALREADY_ASKING });
+  assert.equal(lifecycle.requestPluginConsent("other"), false);
+  assert.deepEqual(P().consent, asked, "the open sheet stays exactly as it was");
   lifecycle.dismissPluginConsent("cli");
-  assert.equal(P().consent.name, "other", "a replaced sheet's Cancel leaves the newer sheet");
+  assert.deepEqual(await first, { ok: false, reason: "Cancelled.", cancelled: true }, "the first requester's waiter was kept");
   const third = installOfficialPlugin("cli", { showSheet: false });
   lifecycle.dismissPluginConsent();
   assert.deepEqual(await third, { ok: false, reason: "Cancelled.", cancelled: true });
@@ -154,17 +152,18 @@ test("a plugin that goes away while it links doesn't report success", async () =
   reset();
 });
 
-test("closing the Settings sheet's owner settles its install; a replaced sheet's Cancel leaves the new one", async () => {
+test("closing the Settings sheet's owner settles its install and frees the slot for the next ask", async () => {
   const done = installOfficialPlugin("cli", { showSheet: false });
-  assert.ok(lifecycle.requestPluginConsent("other"));
-  assert.equal(lifecycle.dismissPluginConsent("cli"), false, "cli's sheet was replaced, so its Cancel owns nothing");
-  assert.equal(P().consent.name, "other");
+  assert.equal(lifecycle.requestPluginConsent("other"), false, "another plugin waits its turn");
+  assert.equal(lifecycle.dismissPluginConsent("other"), false, "and can't close a sheet that isn't its own");
+  assert.equal(lifecycle.dismissPluginConsent("cli"), true);
+  assert.deepEqual(await done, { ok: false, reason: "Cancelled.", cancelled: true });
+  assert.ok(lifecycle.requestPluginConsent("other"), "the next ask is accepted");
   assert.equal(lifecycle.dismissPluginConsent("other"), true);
-  assert.deepEqual(await done, { ok: false, reason: "Another install started." });
   assert.equal(lifecycle.dismissPluginConsent("cli"), true, "with no sheet open, Cancel just closes");
 });
 
-test("only a closed sheet counts as cancelled: Cancel and a closed Settings window say so, a failure or a replaced sheet doesn't", async () => {
+test("only a closed sheet counts as cancelled: Cancel and a closed Settings window say so, a failure or a refusal doesn't", async () => {
   const closed = installOfficialPlugin("cli", { showSheet: false });
   lifecycle.dismissPluginConsent("cli");
   assert.deepEqual(await closed, { ok: false, reason: "Cancelled.", cancelled: true }, "Cancel on the sheet");
@@ -172,11 +171,10 @@ test("only a closed sheet counts as cancelled: Cancel and a closed Settings wind
   const owned = P().consent.name;
   lifecycle.dismissPluginConsent(owned);
   assert.deepEqual(await settingsClosed, { ok: false, reason: "Cancelled.", cancelled: true }, "the Plugins pane dismisses the request it owns when Settings closes");
-  const replaced = installOfficialPlugin("cli", { showSheet: false });
   assert.ok(lifecycle.requestPluginConsent("other"));
-  const answer = await replaced;
-  assert.equal(answer.ok, false);
-  assert.equal(answer.cancelled, undefined);
+  const refused = await installOfficialPlugin("cli", { showSheet: false });
+  assert.equal(refused.ok, false);
+  assert.equal(refused.cancelled, undefined, "a refusal isn't a cancel");
   lifecycle.dismissPluginConsent("other");
   assert.equal((await installOfficialPlugin("not-a-plugin", { showSheet: false })).cancelled, undefined, "a plugin that isn't official fails, not cancels");
 });

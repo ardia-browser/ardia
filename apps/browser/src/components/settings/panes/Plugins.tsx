@@ -50,12 +50,12 @@ export function PluginsPane({ detail }: SettingsPlace) {
     owned.current = consent?.id ?? null;
     if (consent) {
       showing.current = true;
-      showSettingsSheet(<PluginConsentSheet request={consent} onCancel={(id) => dismissConsentAs("settings", id)} onConfirm={(id) => confirmConsentAs("settings", id)} onClosed={closeSettingsSheet} />);
+      showSettingsSheet(<PluginConsentSheet key={`${consent.id}:${consent.hash}`} request={consent} onCancel={(id) => dismissConsentAs("settings", id)} onConfirm={(id) => confirmConsentAs("settings", id)} onClosed={closeSettingsSheet} />);
     } else if (showing.current) {
       showing.current = false;
       closeSettingsSheet();
     }
-  }, [consent?.id]);
+  }, [consent?.id, consent?.hash]);
   if (!PLATFORM_FEATURES.plugins) return <UnavailablePage />;
   return detail ? <PluginPage name={detail} /> : <PluginList />;
 }

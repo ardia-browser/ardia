@@ -33,7 +33,7 @@ function installOrRefusal(name: string, run: number): Promise<InstallOutcome> {
   const refused = new Promise<InstallOutcome>((resolve) => {
     refuse = resolve;
   });
-  const { result: installed, id } = askConsentInOnboarding(name, () => inPluginsStep(run), () => installOfficialPlugin(name, { showSheet: false }));
+  const { result: installed, id } = askConsentInOnboarding(name, useOnboarding.getState().windowId, () => inPluginsStep(run), () => installOfficialPlugin(name, { showSheet: false }));
   if (id === null) return installed;
   refusals.set(id, refuse);
   return Promise.race([installed, refused]).finally(() => refusals.delete(id));

@@ -3,7 +3,7 @@ import { contributionsOf } from "../../lib/pluginManifest";
 import { failure } from "../automation/automationMethods";
 import type { Body } from "../automation/controlSocket";
 import { openSettings } from "../settings/settingsWindows";
-import { disablePlugin, removePlugin, requestPluginConsent } from "./lifecycle";
+import { ALREADY_ASKING, disablePlugin, removePlugin, requestPluginConsent } from "./lifecycle";
 import { activeManifest, currentPlugins, isAlwaysOn, isInstalled, needsReview, recordOf } from "./store";
 import { officialPlugins } from "./official";
 import { pluginRecordsSaved } from "./savedState";
@@ -44,6 +44,7 @@ export function pluginSocketMethod(method: string, params: Record<string, unknow
     case "plugins.enable":
       if (!known) return failure("bad_request", `There's no plugin ${String(name)}.`);
       if (activeManifest(currentPlugins(), name)) return { result: { ok: true } };
+      if (currentPlugins().consent) return failure("refused", ALREADY_ASKING);
       if (!requestPluginConsent(name)) return failure("refused", `${name} has problems, so it can't be turned on.`);
       openSettings("plugins", null, name);
       return { result: { waiting: true } };

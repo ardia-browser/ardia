@@ -111,7 +111,7 @@ export function OnboardingConsentSheet() {
   const step = useOnboarding((s) => s.step);
   const asked = usePluginConsent();
   if (step !== "plugins" || !asked || consentOwner(asked) !== "onboarding") return null;
-  return <PluginConsentSheet request={asked} onCancel={cancelPluginConsent} onConfirm={confirmPluginConsent} onClosed={() => {}} />;
+  return <PluginConsentSheet key={`${asked.id}:${asked.hash}`} request={asked} onCancel={cancelPluginConsent} onConfirm={confirmPluginConsent} onClosed={() => {}} />;
 }
 
 const TERMINAL_WIDTH = 320;

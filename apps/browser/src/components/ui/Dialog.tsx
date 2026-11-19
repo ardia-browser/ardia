@@ -18,7 +18,6 @@ export function Dialog({
   maxHeight,
   place,
   backdropCloses = true,
-  closesOnEscape = false,
   children,
 }: {
   width: SheetSize;
@@ -30,7 +29,6 @@ export function Dialog({
   maxHeight?: DimensionValue;
   place?: Pick<ViewStyle, "top" | "left" | "right" | "bottom">;
   backdropCloses?: boolean;
-  closesOnEscape?: boolean;
   children: ReactNode;
 }) {
   const theme = useTheme();
@@ -42,15 +40,14 @@ export function Dialog({
     if (animated) Animated.timing(appear, { toValue: 1, duration: duration.base, easing: curve.enter, useNativeDriver: true }).start();
     return () => restore.current?.();
   }, []);
-  const keyed = !!onSubmit || closesOnEscape;
-  const content = keyed ? (
+  const content = onSubmit ? (
     <DialogKeys onDismiss={onDismiss} onSubmit={onSubmit} pad={pad}>
       {children}
     </DialogKeys>
   ) : (
     children
   );
-  const padding = keyed ? undefined : space[pad];
+  const padding = onSubmit ? undefined : space[pad];
   const surface = (
     <Panel
       radius={radius.sheet}
@@ -87,7 +84,7 @@ export function Dialog({
 const DIALOG_KEYS = [{ key: "Escape" }, { key: "Enter" }, { key: "Tab" }, { key: "Tab", shiftKey: true }];
 const targetTag = (event: object) => (event as { target?: number }).target;
 
-function DialogKeys({ onDismiss, onSubmit, pad, children }: { onDismiss?: () => void; onSubmit?: () => void; pad: Space; children: ReactNode }) {
+function DialogKeys({ onDismiss, onSubmit, pad, children }: { onDismiss?: () => void; onSubmit: () => void; pad: Space; children: ReactNode }) {
   const keys = useRef<View>(null);
   useEffect(() => keys.current?.focus(), []);
   return (
@@ -98,18 +95,18 @@ function DialogKeys({ onDismiss, onSubmit, pad, children }: { onDismiss?: () => 
       keyDownEvents={DIALOG_KEYS}
       onKeyDown={(e) => {
         if (e.nativeEvent.key === "Escape") onDismiss?.();
-        else if (e.nativeEvent.key === "Enter" && targetTag(e.nativeEvent) === findNodeHandle(keys.current)) onSubmit?.();
+        else if (e.nativeEvent.key === "Enter" && targetTag(e.nativeEvent) === findNodeHandle(keys.current)) onSubmit();
       }}
-      style={{ padding: space[pad], flexShrink: 1 }}
+      style={{ padding: space[pad] }}
     >
       {children}
     </View>
   );
 }
 
-export function Sheet({ size = "m", onClose, backdropCloses, closesOnEscape, children }: { size?: SheetSize; onClose: () => void; backdropCloses?: boolean; closesOnEscape?: boolean; children: ReactNode }) {
+export function Sheet({ size = "m", onClose, backdropCloses, children }: { size?: SheetSize; onClose: () => void; backdropCloses?: boolean; children: ReactNode }) {
   return (
-    <Dialog width={size} maxHeight="90%" onDismiss={onClose} backdropCloses={backdropCloses} closesOnEscape={closesOnEscape}>
+    <Dialog width={size} maxHeight="90%" onDismiss={onClose} backdropCloses={backdropCloses}>
       {children}
     </Dialog>
   );

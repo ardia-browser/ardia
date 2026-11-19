@@ -1103,3 +1103,30 @@ test("the panel's own lookup answering after a newer answer for the same tab use
     checkInvariants(x, newerSays);
   }
 });
+
+test("Manage Extension opens its details after a Settings search", async () => {
+  const { w } = setup();
+  const { showExtensionMenu } = await import("./actions.ts");
+  const { currentSettingsSearch, previewSetting, setSettingsQuery } = await import("../settings/searchState.ts");
+  const { useSettingsNav } = await import("../settings/settingsWindows.ts");
+  const { shellNativeModules } = await import("../../test-native/shell.ts");
+  const menus = shellNativeModules.ArdiaMenus;
+  const showMenu = menus.showMenu;
+  const target = { id: "appearance.theme", pane: "appearance", section: "theme" };
+  menus.showMenu = async () => "manage";
+  try {
+    setSettingsQuery("theme");
+    previewSetting(target);
+    assert.equal(useSettingsNav.getState().pane, "appearance");
+
+    await showExtensionMenu(w, EXT);
+    previewSetting(target);
+
+    assert.equal(currentSettingsSearch().query, "");
+    assert.equal(useSettingsNav.getState().pane, "profiles");
+    assert.equal(useSettingsNav.getState().detail, "extension:ext");
+  } finally {
+    menus.showMenu = showMenu;
+    setSettingsQuery("");
+  }
+});

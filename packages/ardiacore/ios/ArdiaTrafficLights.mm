@@ -197,6 +197,20 @@ void InstallTrafficLightsOrigin(Class frameClass) {
   });
 }
 
+void InstallTuckAfterButtonLayout(Class frameClass) {
+  static NSMutableSet<Class> *installed = [NSMutableSet set];
+  if (!frameClass || [installed containsObject:frameClass]) return;
+  [installed addObject:frameClass];
+  const SEL sel = NSSelectorFromString(@"_updateButtonPositions");
+  if (!class_getInstanceMethod(frameClass, sel)) return;
+  ReplaceMethod(frameClass, sel, ^id(IMP standard) {
+    return ^(NSView *frameView) {
+      ((void (*)(id, SEL))standard)(frameView, sel);
+      if (NSWindow *window = frameView.window; window && objc_getAssociatedObject(window, kInsetLightsKey)) TuckTrafficLightsOutsideWindow(window);
+    };
+  });
+}
+
 void InstallTitlebarReachingLights(Class frameClass) {
   static NSMutableSet<Class> *installed = [NSMutableSet set];
   if (!frameClass || [installed containsObject:frameClass]) return;
@@ -352,6 +366,23 @@ void TranslateTrafficLights(NSWindow *window, CGFloat dx) {
   [CATransaction commit];
 }
 
+bool TrafficLightsOutsideWindow(NSWindow *window, NSArray<NSButton *> *buttons) {
+  if (!buttons.count || !objc_getAssociatedObject(window, kInsetLightsKey) || (window.styleMask & NSWindowStyleMaskFullScreen)) return false;
+  id shown = objc_getAssociatedObject(window, kLightsShownKey);
+  NSValue *center = shown ? (shown == NSNull.null ? nil : shown) : objc_getAssociatedObject(window, kLightsCenterKey);
+  const NSSize size = buttons.firstObject.frame.size;
+  const NSPoint at = LightsCenter(window, center, size);
+  const CGFloat left = at.x - size.width / 2, span = NSMaxX(buttons.lastObject.frame) - NSMinX(buttons.firstObject.frame);
+  return left + span <= 0 || left >= NSWidth(window.frame) || at.y + size.height / 2 <= 0;
+}
+
+void TuckTrafficLightsOutsideWindow(NSWindow *window) {
+  NSArray<NSButton *> *buttons = TrafficLightButtons(window);
+  const BOOL tucked = TrafficLightsOutsideWindow(window, buttons);
+  for (NSButton *button in buttons)
+    if (button.hidden != tucked) button.hidden = tucked;
+}
+
 }
 
 namespace {
@@ -394,6 +425,7 @@ void InsetTrafficLights(NSWindow *window) {
   objc_setAssociatedObject(window, kInsetLightsKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
   InstallTrafficLightsOrigin([window.contentView.superview class]);
   InstallTitlebarReachingLights([window.contentView.superview class]);
+  InstallTuckAfterButtonLayout([window.contentView.superview class]);
   InstallSharingIndicatorBounds([window.contentView.superview class]);
   InstallSharingWindowBounds();
   RetileTrafficLights(window);
@@ -417,9 +449,11 @@ bool MoveTrafficLights(NSWindow *window, NSValue *center) {
   if (to.x == laidOut.x) {
     objc_setAssociatedObject(window, kLightsShownKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(window, kLightsMoveKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    TuckTrafficLightsOutsideWindow(window);
     return true;
   }
   objc_setAssociatedObject(window, kLightsShownKey, center ?: NSNull.null, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  TuckTrafficLightsOutsideWindow(window);
   NSObject *move = [[NSObject alloc] init];
   objc_setAssociatedObject(window, kLightsMoveKey, move, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
   __weak NSWindow *weakWindow = window;

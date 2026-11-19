@@ -47,6 +47,7 @@ NSArray<NSButton *> *TrafficLightButtons(NSWindow *window);
 NSPoint LightsCenter(NSWindow *window, NSValue *center, NSSize size);
 void TranslateTrafficLights(NSWindow *window, CGFloat dx);
 void RetileTrafficLights(NSWindow *window);
+void TuckTrafficLightsOutsideWindow(NSWindow *window);
 bool MoveTrafficLights(NSWindow *window, NSValue *center);
 
 NSMenuItem *ReservedMenuItemForEvent(NSEvent *event);

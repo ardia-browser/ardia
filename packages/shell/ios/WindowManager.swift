@@ -144,7 +144,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     if let lights = lightsCenters[id] { ChromeWindows.setTrafficLightsCenter(lights.center, trailing: lights.trailing, in: window) }
     window.title = title
     Self.identify(window, id: id, kind: entry.kind)
-    if small, frame == nil { placeSmall(window, id: id, size: smallSize, pointer: smallPointer) } else if frame != nil || !window.isVisible { place(window, frame: frame, display: display) }
+    if small, frame == nil { placeSmall(window, id: id, size: smallSize, pointer: smallPointer) } else if frame != nil || !window.isVisible { place(window, frame: frame, display: display, small: small, id: id) }
     relayoutRoot(window)
     managed[id] = entry
     if !small { lastPlaced = window }
@@ -339,11 +339,11 @@ final class WindowManager: NSObject, NSWindowDelegate {
     let mouse = pointer ?? NSEvent.mouseLocation
     let screen = (pointer == nil && NSApp.isActive ? NSApp.keyWindow?.screen : nil)
       ?? NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
-    guard let visible = screen?.visibleFrame else { return window.center() }
-    let width = min(max(size?.width ?? 900, window.minSize.width), visible.width)
-    let height = min(max(size?.height ?? 640, window.minSize.height), visible.height)
-    let origin = NSPoint(x: (visible.midX - width / 2).rounded(), y: (visible.midY - height / 2).rounded())
-    window.setFrame(NSRect(origin: origin, size: NSSize(width: width.rounded(), height: height.rounded())), display: false)
+    guard let screen else { return window.center() }
+    let visible = screen.visibleFrame
+    let fitted = LittleWindowFit.size(size ?? CGSize(width: 900, height: 640), minimum: window.minSize, visible: visible.size)
+    let origin = NSPoint(x: (visible.midX - fitted.width / 2).rounded(), y: (visible.midY - fitted.height / 2).rounded())
+    window.setFrame(NSRect(origin: origin, size: fitted), display: false)
     hostFitSizes[id] = window.frame.size
   }
   func moveToSavedDisplay(_ id: String) {
@@ -352,12 +352,13 @@ final class WindowManager: NSObject, NSWindowDelegate {
     else { return }
     entry.window.setFrame(ArdiaDisplayIdentity.frame(entry.window.frame, on: screen), display: false)
   }
-  private func place(_ window: NSWindow, frame: CGRect?, display: String? = nil) {
+  private func place(_ window: NSWindow, frame: CGRect?, display: String? = nil, small: Bool = false, id: String? = nil) {
     if let frame {
       let saved = ArdiaDisplayIdentity.screen(withIdentifier: display)
       window.setFrame(saved.map { ArdiaDisplayIdentity.frame(frame, on: $0) } ?? frame, display: false)
       if let screen = saved ?? window.screen ?? NSScreen.main {
         window.setFrame(window.constrainFrameRect(window.frame, to: screen), display: false)
+        if small, let id, LittleWindowFit.cap(window, on: screen) { hostFitSizes[id] = window.frame.size }
       }
     } else if let source = [NSApp.keyWindow, NSApp.mainWindow, lastPlaced].compactMap({ $0 }).first(where: { isMainWindow($0) })
                 ?? managed.values.map(\.window).first(where: { $0.isVisible && isMainWindow($0) }) {

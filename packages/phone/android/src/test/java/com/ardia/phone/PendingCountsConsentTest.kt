@@ -60,6 +60,35 @@ class PendingCountsConsentTest {
     }
 
     @Test
+    fun sharingCannotTurnOffBetweenACountsConsentCheckAndItsWrite() {
+        val kept = HashMap<String, Int>()
+        var consentDuringTheWrite: Long? = null
+        var turnOff: Thread? = null
+        PendingCounts.storeForTests = object : PendingCounts.Store {
+            override fun all(): Map<String, Int> = kept.toMap()
+            override fun add(field: String, by: Int): Boolean {
+                turnOff = Thread { UsageConsent.set(app, false) }.also { it.start() }
+                turnOff!!.join(300)
+                consentDuringTheWrite = UsageConsent.window(app)
+                kept[field] = (kept[field] ?: 0) + by
+                return true
+            }
+            override fun clear(): Boolean {
+                kept.clear()
+                return true
+            }
+        }
+        UsageConsent.set(app, true)
+        val window = UsageConsent.window(app)
+        PendingCounts.add(app, PendingCounts.TABS_SENT, window)
+        turnOff!!.join(5_000)
+        assertEquals("the turn-off waited for the write it raced", window, consentDuringTheWrite)
+        assertEquals(false, turnOff!!.isAlive)
+        assertEquals(false to window!! + 1, UsageConsent.state(app))
+        assertEquals("the turn-off cleared the count written before it", emptyMap<String, Int>(), PendingCounts.take(app))
+    }
+
+    @Test
     fun aClearThatFailsHandsNothingOverSoACountCanBeLostButNeverDoubled() {
         val kept = HashMap<String, Int>()
         PendingCounts.storeForTests = object : PendingCounts.Store {

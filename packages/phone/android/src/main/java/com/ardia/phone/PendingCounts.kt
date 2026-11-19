@@ -9,14 +9,13 @@ object UsageConsent {
 
     private fun preferences(context: Context) = (context.applicationContext ?: context).getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
 
-    fun set(context: Context, sharing: Boolean) {
-        val turnedOff = synchronized(this) {
+    fun set(context: Context, sharing: Boolean) = synchronized(PendingCounts) {
+        synchronized(this) {
             val stored = preferences(context)
-            if (stored.getBoolean(SHARING, false) == sharing && stored.contains(GENERATION)) return@synchronized false
+            if (stored.getBoolean(SHARING, false) == sharing && stored.contains(GENERATION)) return@synchronized
             stored.edit().putBoolean(SHARING, sharing).putLong(GENERATION, stored.getLong(GENERATION, 0L) + 1).commit()
-            !sharing
+            if (!sharing) PendingCounts.clear(context)
         }
-        if (turnedOff) PendingCounts.clear(context)
     }
 
     fun state(context: Context): Pair<Boolean, Long> = synchronized(this) {

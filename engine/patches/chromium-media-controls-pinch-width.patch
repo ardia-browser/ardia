@@ -1,0 +1,33 @@
+A video's native controls stay as wide as the video after a pinch zoom on a page whose horizontal overflow is hidden or
+clipped (`overflow-x: hidden` or `clip` on the body or root; #1018, #1086). `LayoutMedia::ComputePanelWidth` shortens the
+controls panel when the video's bottom left and bottom right corners disagree about being visible. It compared the
+corners' x, which are in layout space and don't change with the page scale, with `VisualViewport::VisibleWidth()`, which
+is the window's width divided by the page scale. After a pinch the right corner was past that width, so the panel was
+cut to `visibleWidth - videoX` (a 559 px video's controls host measured about 183 px at 1.7 in #1086): the gradient ended
+at a hard edge and the buttons laid out again in the narrow panel. It now compares with the layout viewport's visible
+width, which is in the same space as the corners and doesn't change with the page scale. At page scale 1 the two widths
+are equal, so a video that runs past the right edge of a page that can't scroll sideways still gets a panel shortened to
+the visible part (crbug.com/771379).
+
+--- a/third_party/blink/renderer/core/layout/layout_media.cc
++++ b/third_party/blink/renderer/core/layout/layout_media.cc
+@@ -33,6 +33,7 @@
+ #include "third_party/blink/renderer/core/html/media/media_controls.h"
+ #include "third_party/blink/renderer/core/layout/layout_view.h"
+ #include "third_party/blink/renderer/core/page/page.h"
++#include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
+ 
+ namespace blink {
+ 
+@@ -138,7 +139,10 @@
+ 
+   // TODO(crbug.com/771379): This code assumes the video is in the main frame.
+   // On desktop, this will include scrollbars when they stay visible.
+-  const LayoutUnit visible_width(page->GetVisualViewport().VisibleWidth());
++  const PaintLayerScrollableArea* layout_viewport = page_view->LayoutViewport();
++  if (!layout_viewport)
++    return media_rect.Width();
++  const LayoutUnit visible_width(layout_viewport->VisibleWidth());
+   // The bottom left corner of the video.
+   const gfx::PointF bottom_left_point(
+       LocalToAbsolutePoint(gfx::PointF(media_rect.X(), media_rect.Bottom()),

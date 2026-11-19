@@ -301,6 +301,7 @@ a Windows build needs.
 | `chromium-media-session-main-frame-handler.patch` | applies | OS-neutral | Shared; nothing more |
 | `chromium-pip-user-agent-ignores-page-opt-out.patch` | applies | OS-neutral | Shared; nothing more |
 | `chromium-widevine-without-cdm.patch` | applies | OS-neutral | Shared; nothing more |
+| `chromium-media-controls-pinch-width.patch` | applies | OS-neutral | Shared; nothing more |
 | `chromium-angle-metal-shader-cache.patch` | applies | OS-neutral | None: it is in the Mac framework's bundle data |
 | `chromium-ungoogled-disable-default-extensions.patch` | applies | OS-neutral | Shared; nothing more |
 | `chromium-ungoogled-disable-missing-key-warning.patch` | applies | OS-neutral | Shared; nothing more |

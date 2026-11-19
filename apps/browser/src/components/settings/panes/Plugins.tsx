@@ -14,12 +14,13 @@ import {
   canRelink,
   removePlugin,
   requestPluginConsent,
+  UNSAVED,
   restartPlugin,
   setPluginValue,
   showPluginLog,
   showPluginsFolder,
 } from "../../../state/plugins/actions";
-import { usePluginActive, usePluginListing, usePluginNeedsReview, usePluginProcess, usePluginPrograms, usePluginRecord, usePluginValues } from "../../../state/plugins/hooks";
+import { usePluginActive, usePluginListing, usePluginNeedsReview, usePluginProcess, usePluginPrograms, usePluginRecord, usePluginUnsaved, usePluginValues } from "../../../state/plugins/hooks";
 import { goToSettingsPane, SETTINGS_WINDOW_ID, type SettingsPlace } from "../../../state/settings/settingsWindows";
 import { confirm } from "../../../state/app/system";
 import { Button, PopUp, Symbol, TextField, Toggle } from "../../ui";
@@ -91,8 +92,9 @@ function originText(listing: PluginListing | undefined, active: boolean): string
   return listing?.replacesBundled ? "Replaces the built-in plugin" : null;
 }
 
-function statusOf(m: PluginManifest | null, problems: string[], active: boolean, review: boolean, p: ProcessState | undefined): string {
+function statusOf(m: PluginManifest | null, problems: string[], active: boolean, review: boolean, p: ProcessState | undefined, unsaved: boolean): string {
   if (!m) return problems.slice(0, 2).join("; ") || "This plugin can't load";
+  if (unsaved && !active) return UNSAVED;
   if (review) return "Its plugin.json changed. Review it to turn it back on.";
   const running = active ? processText(p) : null;
   return [m.description, running].filter(Boolean).join(" · ");
@@ -113,12 +115,13 @@ function PluginRow({ name }: { name: string }) {
   const active = usePluginActive(name);
   const review = usePluginNeedsReview(name);
   const process = usePluginProcess(name);
+  const unsaved = usePluginUnsaved(name);
   const m = listing?.manifest ?? null;
   return (
     <Row
       title={m ? `${m.title}${m.version ? ` ${m.version}` : ""}` : name}
-      description={[originText(listing, active), statusOf(m, listing?.problems ?? [], active, review, process)].filter(Boolean).join(" · ")}
-      icon={<Symbol name={m?.page?.icon ?? "puzzlepiece"} size={14} color={theme.icon} style={ICON} />}
+      description={[originText(listing, active), statusOf(m, listing?.problems ?? [], active, review, process, unsaved)].filter(Boolean).join(" · ")}
+      icon={<Symbol name={m?.icon ?? m?.page?.icon ?? "puzzlepiece"} size={14} color={theme.icon} style={ICON} />}
       onPress={() => goToSettingsPane("plugins", null, name)}
     >
       {isAlwaysOn(listing) ? (
@@ -160,6 +163,7 @@ function PluginPage({ name }: { name: string }) {
   const active = usePluginActive(name);
   const review = usePluginNeedsReview(name);
   const process = usePluginProcess(name);
+  const unsaved = usePluginUnsaved(name);
   const programs = usePluginPrograms(name);
   const values = usePluginValues(name);
   const m = listing?.manifest ?? null;
@@ -170,7 +174,7 @@ function PluginPage({ name }: { name: string }) {
       <Group>
         <Row
           title={isAlwaysOn(listing) ? (active ? "Installed" : "Not installed") : active ? "On" : review ? "Changed since you turned it on" : "Off"}
-          description={[originText(listing, active), statusOf(m, listing.problems, active, review, process)].filter(Boolean).join(" · ")}
+          description={[originText(listing, active), statusOf(m, listing.problems, active, review, process, unsaved)].filter(Boolean).join(" · ")}
         >
           {isAlwaysOn(listing) ? (
             active ? null : <Button title="Install…" onPress={() => void installOfficialPlugin(name, { showSheet: false })} />

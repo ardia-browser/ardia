@@ -111,6 +111,8 @@ export function rescanPlugins(consent: ConsentToken | null): Promise<void> {
 
 let lastConsentId = 0;
 
+export const UNSAVED = "plugins.json couldn't be saved. Try again.";
+
 export const ALREADY_ASKING = "Ardia is already asking about a plugin. Answer that first, then try again.";
 
 function closeChangedConsent() {
@@ -123,7 +125,7 @@ function closeChangedConsent() {
 export function requestPluginConsent(name: string): boolean {
   const listing = currentPlugins().listings[name];
   if (currentPlugins().consent || !listing?.manifest || !listing.hash || isInstalled(currentPlugins(), name)) return false;
-  usePlugins.setState({ consent: { id: ++lastConsentId, name, hash: listing.hash } });
+  usePlugins.setState({ consent: { id: ++lastConsentId, name, hash: listing.hash }, unsaved: null });
   return true;
 }
 
@@ -157,7 +159,11 @@ export function enablePlugin(name: string, hash: string): boolean {
   const records = kept || !before.enabled ? currentPlugins().records : spliceApplied(currentPlugins().records, name);
   const plan = kept ? { patch: {}, applied: before.applied } : planEnable(manifest, records, name, before.applied);
   const builtIn = isAlwaysOn(listing) ? { installed: true, ...(before.controlGranted ? { controlGranted: true } : {}) } : {};
-  if (!saveRecords({ ...records, [name]: { enabled: true, approved: hash, values, applied: plan.applied, ...builtIn } }, consent)) return false;
+  if (!saveRecords({ ...records, [name]: { enabled: true, approved: hash, values, applied: plan.applied, ...builtIn } }, consent)) {
+    usePlugins.setState({ consent: null, unsaved: name });
+    settleInstall(name, { ok: false, reason: UNSAVED });
+    return false;
+  }
   const asksControl = manifest.permissions.includes("control");
   applySettingsPatch(kept || !asksControl || useBrowser.getState().settings.cliControl ? plan.patch : { ...plan.patch, cliControl: true });
   usePlugins.setState({ consent: null });

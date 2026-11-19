@@ -42,6 +42,7 @@ export type PluginsStore = {
   processes: Record<string, ProcessState>;
   programs: Record<string, ProgramsState>;
   consent: { id: number; name: string; hash: string } | null;
+  unsaved: string | null;
 };
 
 export const usePlugins = create<PluginsStore>()(() => ({
@@ -53,6 +54,7 @@ export const usePlugins = create<PluginsStore>()(() => ({
   processes: {},
   programs: {},
   consent: null,
+  unsaved: null,
 }));
 
 export const NO_RECORD: PluginRecord = { enabled: false, approved: null, values: {}, applied: {} };

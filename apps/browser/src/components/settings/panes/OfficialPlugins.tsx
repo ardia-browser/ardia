@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
 import { copyText } from "../../../state/app/system";
-import { installOfficialPlugin, type OfficialPlugin } from "../../../state/plugins/actions";
-import { useOfficialPlugins, usePluginConsent, usePluginOrder, usePluginPrograms } from "../../../state/plugins/hooks";
+import { installOfficialPlugin, UNSAVED, type OfficialPlugin } from "../../../state/plugins/actions";
+import { useOfficialPlugins, usePluginConsent, usePluginOrder, usePluginPrograms, usePluginUnsaved } from "../../../state/plugins/hooks";
 import { installedLabel, isOffered, officialInSettings, officialTitle, officialView, wasCancelled, type OfficialAttempt } from "../../../state/plugins/officialView";
 import { goToSettingsPane } from "../../../state/settings/settingsWindows";
 import { consentToken, noteOfficialPlugin } from "../../../state/telemetry/officialPluginCounts";
@@ -58,7 +58,8 @@ function useInstall(plugin: OfficialPlugin) {
     setBusy(false);
     setFailure(result.ok || wasCancelled(result) ? null : result.reason);
   };
-  const attempt: OfficialAttempt = busy ? { state: asking ? "asking" : "installing" } : failure ? { state: "failed", reason: failure } : null;
+  const unsaved = usePluginUnsaved(plugin.name);
+  const attempt: OfficialAttempt = busy ? { state: asking ? "asking" : "installing" } : failure ? { state: "failed", reason: failure } : unsaved ? { state: "failed", reason: UNSAVED } : null;
   return { attempt, install };
 }
 

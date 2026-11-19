@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { CLI_PLUGIN, describeCliInstall, installCliInBackground, useCli } from "../../../state/app/cliControl";
 import { usePluginActive, usePluginListing, usePluginPrograms } from "../../../state/plugins/hooks";
 import { canRelink, relinkPrograms } from "../../../state/plugins/actions";
 import type { PluginListing, ProgramsState } from "../../../state/plugins/store";
+import { olderProgramsInstalled } from "../../../state/plugins/programs";
 import { goToSettingsPane, type SettingsPlace } from "../../../state/settings/settingsWindows";
 import { useSettings } from "../../../state/browser/hooks";
 import { updateSettings } from "../../../state/settings/actions";
@@ -135,9 +136,9 @@ function PerformanceSection() {
 
 const viaPlugin = PLATFORM_FEATURES.plugins;
 
-function pluginCommandLine(plugin: PluginListing | undefined, programs: ProgramsState | undefined, installed: boolean): string {
+function pluginCommandLine(plugin: PluginListing | undefined, programs: ProgramsState | undefined, installed: boolean, older: boolean): string {
   if (!plugin?.manifest) return "Not in this build.";
-  if (!installed) return "Not installed.";
+  if (!installed) return older ? "An older ardia is installed. Install Command Line in Plugins to update it." : "Not installed.";
   if (programs?.state === "linked") return programs.linked.includes("ardia") ? "On your PATH. It can control Ardia." : Object.values(programs.refused).join("; ");
   if (programs?.state === "failed") return `Not on your PATH: ${programs.reason}`;
   return "Putting it on your PATH…";
@@ -149,13 +150,22 @@ function PluginCommandRow() {
   const programs = usePluginPrograms(CLI_PLUGIN);
   const installed = usePluginActive(CLI_PLUGIN);
   const failed = canRelink(programs);
+  const [older, setOlder] = useState(false);
+  useEffect(() => {
+    if (installed) return setOlder(false);
+    let current = true;
+    void olderProgramsInstalled().then((found) => current && setOlder(found));
+    return () => {
+      current = false;
+    };
+  }, [installed]);
   return (
     <Row
       anchor="advanced.ardiaCommand"
       description={
         <View>
           <Text selectable size="caption" tone={failed ? "destructive" : "textSecondary"} style={NOTE()}>
-            {pluginCommandLine(plugin, programs, installed)}
+            {pluginCommandLine(plugin, programs, installed, older)}
           </Text>
           {cli.server?.state === "external" ? (
             <Text size="caption" tone="textSecondary" style={NOTE()}>

@@ -126,6 +126,8 @@ function keepControlWhileInstalled() {
 
 const ownsReservedProgram = (name: string) => !!currentPlugins().listings[name]?.manifest?.programs.some((p) => RESERVED_PROGRAMS[p.name] === name);
 
+export const olderProgramsInstalled = () => legacyProgramsInstalled().catch(() => false);
+
 export async function adoptLegacyInstalls(consent: ConsentToken | null): Promise<boolean> {
   const s = currentPlugins();
   if (adoptionChecked || !s.order.length) return false;

@@ -208,6 +208,26 @@ int main(int argc, char** argv) {
     assert(p.binding->viewport()->bounds() == gfx::Rect(100, 50, 800, 600));
     return 0;
   }
+  if (mode == "tab-return-focus") {
+    views::detach_advances_focus = true;
+    Pane p;
+    p.Dock();
+    p.host.Show(p.binding, true);
+    auto& chrome = p.host.browser_view_storage.containers[&p.page].devtools;
+    assert(views::focus_manager.focused == p.tools() && p.frontend.focuses == 1);
+    chrome.SetWebContents(&p.frontend);
+    chrome.SetWebContents(nullptr);
+    p.host.LayoutPane(p.binding);
+    assert(p.tools()->holder()->Holds(&p.frontend.native));
+    assert(views::focus_manager.focused == p.tools() && p.frontend.focuses == 2);
+    p.binding->viewport()->RequestFocus();
+    chrome.SetWebContents(&p.frontend);
+    chrome.SetWebContents(nullptr);
+    p.host.LayoutPane(p.binding);
+    assert(p.tools()->holder()->Holds(&p.frontend.native));
+    assert(views::focus_manager.focused == p.binding->viewport() && p.frontend.focuses == 2);
+    return 0;
+  }
   assert(false);
 }
 '''
@@ -266,6 +286,9 @@ class PaneLayoutTests(unittest.TestCase):
 
     def test_returning_to_a_tab_takes_its_frontend_back_when_views_do_not_manage_layers(self):
         self.run_case('tab-return-unmanaged')
+
+    def test_taking_the_frontend_back_keeps_keyboard_focus_where_it_was(self):
+        self.run_case('tab-return-focus')
 
 if __name__ == '__main__':
     unittest.main()

@@ -88,6 +88,7 @@ export function unavailableSettingIds(capabilities: LinuxCapabilities, settingId
   if (!capabilities.cliControl) for (const id of ["advanced.ardiaCommand", "advanced.compactCliPill"]) ids.add(id);
   if (!capabilities.peekOtherSites) ids.add("tabs.peekLinksToOtherSites");
   if (!capabilities.popupsOpenAsTabs) ids.add("tabs.popupsOpenAsTabs");
+  if (!capabilities.littleArdiaNewTabLinks) ids.add("tabs.littleArdiaOpensNewTabLinks");
   if (!capabilities.linksFromOtherApps) for (const id of ["tabs.openLinksInLittleArdia", "tabs.appLinksFirst"]) ids.add(id);
   if (!capabilities.webkit) for (const id of WEB_ENGINE_SETTINGS) if (settingIds.includes(id)) ids.add(id);
   return ids;

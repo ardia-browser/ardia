@@ -1604,7 +1604,7 @@ Both are ports of the Mac's native code (`ArdiaWebView+Peek.mm`, `ArdiaWebView+T
   - With the setting off, or in a tab that isn't on the list, the page script never holds a click back and nothing
     here runs. Link clicks have their own message allowance per document (64, refilled at 32 a second), so a page
     that floods the channel can't make a held click vanish.
-- **`webView.setLittleArdiaOpensNewTabLinks {enabled}`** (Settings › General › Keep new-tab links inside a Little
+- **`webView.setLittleArdiaOpensNewTabLinks {enabled}`** (Settings › Tabs › Links › Keep new-tab links inside a Little
   Ardia window). The setting is one for the whole app, as on the Mac. A window is a Little Ardia window when its
   shell opened it with `kind: "small"`.
   - The page script notes each link it expects to open a tab (`newTabLink`: a `target` click or a `window.open` with

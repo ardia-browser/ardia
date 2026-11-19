@@ -229,6 +229,7 @@ function LinksSection() {
               : `A link from ${PLATFORM_TERMS.linkSourceExamples} opens as a new tab in the ${APP} window you used last.`
           }
         />
+        <SettingToggle anchor="tabs.littleArdiaOpensNewTabLinks" />
         <Row anchor="tabs.peekLinksToOtherSites">
           <PopUp value={peekOtherSites ? "peek" : "same"} options={OTHER_SITE_LINKS} onChange={(v) => updateSettings({ peekLinksToOtherSites: v === "peek" })} />
         </Row>

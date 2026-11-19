@@ -297,8 +297,9 @@ function releaseByGap() {
 function onWheel(e: WheelEvent) {
   if (e.ctrlKey || !targets.size) return;
   const t = e.timeStamp / 1000;
-  const scrollingDx = -e.deltaX;
-  const scrollingDy = -e.deltaY;
+  const shiftScrollsSideways = e.shiftKey && e.deltaX === 0;
+  const scrollingDx = -(shiftScrollsSideways ? e.deltaY : e.deltaX);
+  const scrollingDy = shiftScrollsSideways ? 0 : -e.deltaY;
   if (!isPrecise(e)) {
     if (Math.abs(scrollingDx) <= Math.abs(scrollingDy)) return;
     const hit = e.target instanceof Element ? e.target : null;

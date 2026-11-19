@@ -155,6 +155,7 @@ export function AutoHideToolbar({
   windowId,
   geometry,
   inSplit,
+  paneWidth,
   focused,
   mode,
   motion,
@@ -163,6 +164,7 @@ export function AutoHideToolbar({
   windowId: string;
   geometry: ToolbarGeometry;
   inSplit: boolean;
+  paneWidth?: number;
   focused: boolean;
   mode: ToolbarMode;
   motion: Pick<ToolbarMotion, "bar" | "fade">;
@@ -205,7 +207,7 @@ export function AutoHideToolbar({
         onMouseLeave={() => modeNow.current === "peek" && peekLater(false, UNPEEK_DELAY)}
         style={{ position: "absolute", left: 0, right: 0, top: 0, height: H, opacity: anim ? anim.controls : 1, transform: anim ? anim.shrink : undefined }}
       >
-        <Toolbar tabId={tabId} geometry={geometry} windowId={windowId} inSplit={inSplit} focused={focused} bare loadFill={addressFieldShownIn(mode)} />
+        <Toolbar tabId={tabId} geometry={geometry} windowId={windowId} inSplit={inSplit} paneWidth={paneWidth} focused={focused} bare loadFill={addressFieldShownIn(mode)} />
       </Animated.View>
       {anim && (
         <Animated.View pointerEvents={collapsed ? "auto" : "none"} style={{ position: "absolute", left: 0, right: 0, top: 0, height: STRIP_HEIGHT, opacity: anim.label }}>

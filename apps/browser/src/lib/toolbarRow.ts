@@ -20,3 +20,20 @@ export const toolbarRowOf = (compact: boolean): ToolbarRow => (compact ? TOOLBAR
 export const urlFieldOf = (row: ToolbarRow) => ({ top: row.center - row.field / 2, height: row.field });
 
 export const compactLift = (row: ToolbarRow) => Math.round((TOOLBAR_ROWS.regular.center - row.center) * 2) / 2;
+
+export const EXTENSION_GAP = 2;
+const EXTENSIONS_INSET = 6;
+export const MIN_URL_FIELD = 120;
+
+export const extensionsWidthOf = (count: number, button: number) => (count ? count * (button + EXTENSION_GAP) - EXTENSION_GAP + EXTENSIONS_INSET : 0);
+
+export const urlFieldRight = (inSplit: boolean, extensionsWidth: number, row: ToolbarRow) => (inSplit ? 12 + 2 * (row.button - 2) : 12) + extensionsWidth;
+
+type SplitPane = { width: number; urlLeft: number; trailing: number; row: ToolbarRow };
+
+export const splitFieldWidth = ({ width, urlLeft, trailing, row }: SplitPane, extensionsWidth: number) => width - urlLeft - urlFieldRight(true, extensionsWidth, row) - trailing;
+
+export function splitExtensionsLimit(pane: SplitPane) {
+  const room = splitFieldWidth(pane, 0) - MIN_URL_FIELD;
+  return Math.max(1, Math.floor((room - EXTENSIONS_INSET + EXTENSION_GAP) / (pane.row.extensionButton + EXTENSION_GAP)));
+}

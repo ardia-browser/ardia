@@ -140,7 +140,7 @@ export const TabPane = memo(function TabPane({
         backgroundColor: visible && !fullscreen && !seeThrough ? theme.card : undefined,
       }}
     >
-      {bar.kind === "toolbar" && <Toolbar tabId={tabId} geometry={geometry} windowId={windowId} inSplit={inSplit} focused={focused || !inSplit} />}
+      {bar.kind === "toolbar" && <Toolbar tabId={tabId} geometry={geometry} windowId={windowId} inSplit={inSplit} paneWidth={frame.width} focused={focused || !inSplit} />}
       {bar.kind === "backdrop" && <ToolbarBackdrop tabId={tabId} />}
       {bar.kind === "spacer" && <View style={{ height: toolbarHeight }} />}
       {developerBar && <DeveloperBar tabId={tabId} windowId={windowId} />}
@@ -181,7 +181,7 @@ export const TabPane = memo(function TabPane({
         </View>
       </Animated.View>
       {hideBar && <AutoHideBackdrop tabId={tabId} mode={mode} motion={motion} />}
-      {autoLayout && bar.bar === "pane" && <AutoHideToolbar tabId={tabId} geometry={geometry} windowId={windowId} inSplit={inSplit} focused={focused || !inSplit} mode={mode} motion={motion} />}
+      {autoLayout && bar.bar === "pane" && <AutoHideToolbar tabId={tabId} geometry={geometry} windowId={windowId} inSplit={inSplit} paneWidth={frame.width} focused={focused || !inSplit} mode={mode} motion={motion} />}
     </View>
   );
 });

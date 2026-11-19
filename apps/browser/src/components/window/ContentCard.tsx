@@ -16,7 +16,7 @@ import { FrozenPage } from "./FrozenPage";
 import { setCardAnchor, setUrlAnchor, useAddressBarInSidebar, useCardCaptionRoom, useMinimalism, usePageFrameInset, useTabLayout, watchToolbarExtensionsWidth, onFullScreenLeft, onInterfaceScaleChange, windowRootShape } from "../../state/windows/layout";
 import { startSelectionTools } from "../../state/site/selection";
 import { startMedia } from "../../state/media/pip";
-import { urlFieldRight } from "../toolbar/Toolbar";
+import { urlFieldRight } from "../../lib/toolbarRow";
 import { WindowToolbar } from "../toolbar/WindowToolbar";
 import { useToolbarRow } from "../toolbar/useToolbarRow";
 import "../dev/devExpose";

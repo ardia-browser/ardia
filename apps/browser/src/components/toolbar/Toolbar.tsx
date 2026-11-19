@@ -4,7 +4,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, type ReactNode } from "r
 import { useShallow } from "zustand/react/shallow";
 import { Animated, Pressable, StyleSheet, View, type ViewStyle } from "react-native";
 import { useTheme } from "../ui/theme";
-import { TOOLBAR_ROWS, urlFieldOf, type ToolbarRow } from "../../lib/toolbarRow";
+import { splitExtensionsLimit, TOOLBAR_ROWS, urlFieldOf, urlFieldRight } from "../../lib/toolbarRow";
 import { ToolbarRowContext } from "../ui/toolbarRowContext";
 import { activate } from "../../state/tabs/actions";
 import { toggleSidebar } from "../../state/windows/actions";
@@ -27,7 +27,7 @@ import { setToolbarExtensionsWidth } from "../../state/windows/layout";
 import { SIDEBAR_FIELD } from "../sidebar/geometry";
 import { FieldSiteButton, SidebarFieldFill } from "../sidebar/SidebarField";
 import { showUrlBarMenu } from "../../state/omnibox/paste";
-import { ToolbarExtensions, useToolbarExtensionsWidth } from "../extensions/ToolbarExtensions";
+import { ToolbarExtensions, useToolbarExtensionsOverflow, useToolbarExtensionsWidth } from "../extensions/ToolbarExtensions";
 import { GlassFill, useGlass } from "../ui/Glass";
 import { TranslateButton } from "../site/TranslateControls";
 import { ReaderButton } from "../site/ReaderControls";
@@ -37,7 +37,7 @@ import { buttonMotion, curve, usePressScaleMotion } from "../ui/motion";
 import { FieldLoadFill } from "./FieldLoadFill";
 import { fieldButtonsShown, sidebarFieldButtons } from "./fieldButtons";
 import { useFieldExtensionsHeld } from "../../state/extensions/store";
-import { noteSiteControls } from "../../state/telemetry/usage";
+import { noteSiteControls, noteSplit } from "../../state/telemetry/usage";
 import { HistoryButton, ReloadButton } from "./NavButtons";
 import { FIELD_LOAD, TOOLBAR_MOTION } from "./tokens";
 import { useToolbarRow } from "./useToolbarRow";
@@ -51,7 +51,6 @@ const toolbarTab = (t: Tab | undefined): ToolbarTab | undefined =>
 const isWebUrl = (url: string) => /^https?:/i.test(url);
 export const useToolbarTab = (tabId: string | undefined) => useTab(tabId, useShallow(toolbarTab));
 
-export const urlFieldRight = (inSplit: boolean, extensionsWidth: number, row: ToolbarRow) => (inSplit ? 12 + 2 * (row.button - 2) : 12) + extensionsWidth;
 const LOCK = { left: 7, width: 18, gap: space.xs } as const;
 const SIDEBAR_TEXT_GAP = 6;
 const SIDEBAR_TEXT_ALONE = space.ml;
@@ -70,6 +69,7 @@ export function Toolbar({
   geometry,
   windowId,
   inSplit,
+  paneWidth,
   focused,
   bare,
   loadFill = true,
@@ -78,6 +78,7 @@ export function Toolbar({
   geometry: ToolbarGeometry;
   windowId: string;
   inSplit: boolean;
+  paneWidth?: number;
   focused: boolean;
   bare?: boolean;
   loadFill?: boolean;
@@ -91,8 +92,15 @@ export function Toolbar({
   const band = useEasedColor(bare ? null : palette.background);
   const history = useHistoryAvailability(tabId);
   const row = useToolbarRow();
-  const extensionsWidth = useToolbarExtensionsWidth(windowId, Infinity);
-  useEffect(() => setToolbarExtensionsWidth(windowId, extensionsWidth), [windowId, extensionsWidth]);
+  const extensionsLimit = inSplit && paneWidth !== undefined ? splitExtensionsLimit({ width: paneWidth, urlLeft: geometry.urlLeft, trailing: geometry.trailing, row }) : Infinity;
+  const extensionsWidth = useToolbarExtensionsWidth(windowId, extensionsLimit);
+  const extensionsCapped = useToolbarExtensionsOverflow(windowId, extensionsLimit) && inSplit;
+  useEffect(() => {
+    if (extensionsCapped) noteSplit("splitToolbarOverflows");
+  }, [extensionsCapped]);
+  useEffect(() => {
+    if (focused) setToolbarExtensionsWidth(windowId, extensionsWidth);
+  }, [windowId, extensionsWidth, focused]);
   const dim = useRef(new Animated.Value(focused ? 1 : 0.5)).current;
   const dimmedFor = useRef(focused);
   useEffect(() => {
@@ -132,7 +140,7 @@ export function Toolbar({
         <HistoryButton place={at.back} tabId={tab.id} windowId={tab.windowId} direction={-1} disabled={!history.back} palette={palette} onFocus={focus} closesTab={history.backCloses} />
         <HistoryButton place={at.forward} tabId={tab.id} windowId={tab.windowId} direction={1} disabled={!history.forward} palette={palette} onFocus={focus} />
         <ReloadButton place={at.reload} tab={tab} loading={isLoading} palette={palette} onFocus={focus} />
-        <ToolbarExtensions tabId={tab.id} windowId={windowId} palette={palette} top={row.center - row.extensionButton / 2} right={(inSplit ? 8 + 2 * row.button : 8) + geometry.trailing} />
+        <ToolbarExtensions tabId={tab.id} windowId={windowId} palette={palette} top={row.center - row.extensionButton / 2} right={(inSplit ? 8 + 2 * row.button : 8) + geometry.trailing} limit={extensionsLimit} />
         <View nativeID={PAGE_IDENTITY_TAG} collapsable={false} pointerEvents="box-none" style={StyleSheet.absoluteFill}>
           {tab.url ? (
             <ToolbarUrlField tab={tab} palette={palette} windowId={windowId} inSplit={inSplit} loadFill={loadFill} onFocus={focus} style={urlStyle} />

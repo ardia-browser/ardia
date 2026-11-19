@@ -12,6 +12,7 @@ import { buttonMotion, usePressScaleMotion } from "../ui/motion";
 import { BADGE_FALLBACK_FILL, TOOLBAR_DRAG_START } from "./tokens";
 import { SLIDE } from "../tabstrip/tokens";
 import { isLight } from "../../lib/color";
+import { EXTENSION_GAP as GAP, extensionsWidthOf } from "../../lib/toolbarRow";
 import { dropToolbarAnchor, setToolbarAnchor } from "../../state/extensions/toolbarAnchors";
 import { onInterfaceScaleSettled } from "../../state/settings/interfaceScale";
 import {
@@ -35,7 +36,6 @@ const BUTTON = 28;
 const GLYPH = 14;
 const GLYPH_BOX = 18;
 const IMAGE = 16;
-const GAP = 2;
 const PITCH = BUTTON + GAP;
 
 function useToolbarExtensions(windowId: string, limit: number) {
@@ -53,11 +53,13 @@ function useToolbarExtensions(windowId: string, limit: number) {
 
 export const extensionsFitting = (room: number) => Math.max(1, Math.floor((room + GAP) / PITCH));
 
+export const useToolbarExtensionsOverflow = (windowId: string, limit: number) => useToolbarExtensions(windowId, limit).overflow;
+
 export function useToolbarExtensionsWidth(windowId: string, limit = Infinity): number {
   const { pinned, overflow, casting } = useToolbarExtensions(windowId, limit);
   const button = useToolbarRowContext().extensionButton;
   const count = pinned.length + (overflow ? 1 : 0) + (casting ? 1 : 0);
-  return count ? count * (button + GAP) - GAP + 6 : 0;
+  return extensionsWidthOf(count, button);
 }
 
 type ToolbarExtensionsProps = {

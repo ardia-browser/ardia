@@ -1200,7 +1200,7 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..a36d86861e3004008128b546ad35c807
    self.placeholderAttributedString = [[NSAttributedString alloc] initWithString:self.placeholder ?: @""
  																	 attributes:[self _placeholderTextAttributes]];
 +  NSTextView *editor = (NSTextView *)self.currentEditor;
-+  if (editor) { // [Ardia: the field editor keeps the placeholder it was set up with while it holds text, so a colour change (dark to light) left the old one, invisible, once the field was emptied. Setting it up again also paints its text and typing attributes in the cell's textColor (the system one, not this field's), so they are put back as they were Ardia]
++  if (editor && ![self.cell isKindOfClass:NSSecureTextFieldCell.class]) { // [Ardia: the field editor keeps the placeholder it was set up with while it holds text, so a colour change (dark to light) left the old one, invisible, once the field was emptied. Setting it up again also paints its text and typing attributes in the cell's textColor (the system one, not this field's), so they are put back as they were Ardia]
 +    NSAttributedString *shown = [editor.textStorage copy];
 +    NSDictionary<NSAttributedStringKey, id> *typing = editor.typingAttributes;
 +    [self.cell setUpFieldEditorAttributes:editor];

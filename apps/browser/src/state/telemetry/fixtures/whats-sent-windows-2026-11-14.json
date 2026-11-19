@@ -260,8 +260,8 @@
   "How many pinned tabs and split views an import from Arc brought over, and for an import with spaces (Arc or Zen) how many spaces came over, how many went to a profile of their own because their Zen container keeps its own cookies, how many profiles with their own data they filled, and how many Essentials came over, summed up once an hour. Never which pages or names"
  ],
  [
-  "How many screen shares picked a tab, a window or a whole screen, how many times the share picker opened without Screen Recording permission, and how many times its Open System Settings button was pressed, summed up once an hour. Never which tab, window or screen",
-  "How many screen shares picked a tab, a window or a whole screen, how many times the share picker opened without Screen Recording permission, and how many times its Open System Settings button was pressed, summed up once an hour. Never which tab, window or screen"
+  "How many screen shares picked a tab, a window or a whole screen, which of the picker's Tabs, Windows and Entire Screen segments the picked card was in, how many times the share picker opened without Screen Recording permission, and how many times its Open System Settings button was pressed, summed up once an hour. Never which tab, window or screen",
+  "How many screen shares picked a tab, a window or a whole screen, which of the picker's Tabs, Windows and Entire Screen segments the picked card was in, how many times the share picker opened without Screen Recording permission, and how many times its Open System Settings button was pressed, summed up once an hour. Never which tab, window or screen"
  ],
  [
   "How many automation rules waiting for approval had their notice held until the first window opened, summed up once an hour",

@@ -1,32 +1,42 @@
 import {
-  getDisplayMediaSources,
-  type DisplayMediaAudio,
-  type DisplayMediaSource,
+  getDisplayMediaThumbnailsFor,
+  noteShareSegmentOf,
   answerDisplayMedia,
   askForScreenRecording,
   noteScreenRecordingMissing,
   screenRecordingAllowed,
   shareableTabs,
   shareTab,
+  type DisplayMediaAudio,
+  type DisplayMediaSource,
 } from "../../state/media/screenShare";
 import { runningAppIcon } from "../../state/app/system";
-import { Symbol, Button, Checkbox, PANEL, PanelHeader, Popover, POPOVER_MARGIN, Text, useHover } from "../ui";
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Animated, Image, Pressable, ScrollView, View, type TextStyle } from "react-native";
+import { Badge, Symbol, Button, Checkbox, PANEL, PanelHeader, Popover, POPOVER_MARGIN, Segmented, Text, useHover } from "../ui";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Image, Pressable, ScrollView, View } from "react-native";
 import { useTheme } from "../ui/theme";
-import { concentric, radius, space } from "../ui/tokens";
+import { concentric, ink, radius, space } from "../ui/tokens";
 import { useMediaTokens } from "./tokens";
 import { Favicon } from "../favicon/Favicon";
 import { useMedia } from "../../state/media/media";
 import { originForSecurityDisplay } from "../../lib/url";
-import { buttonMotion, usePressScaleMotion } from "../ui/motion";
+import { lastPicture, onPicturesChanged } from "../../state/tabs/tabPictures";
 
-const WIDTH = 460;
+const WIDTH = 600;
 const REFRESH_MS = 2500;
+const THUMB_WIDTH = 320;
+const FOCUS_MS = 50;
 const TAB = "tab:";
+const ASPECT = 10 / 16;
 const AUDIO_SHARED_BY_DEFAULT = { tab: true, screen: false, window: false };
 
 type SourceKind = keyof typeof AUDIO_SHARED_BY_DEFAULT;
+type Segment = "tabs" | "windows" | "screen";
+const SEGMENTS: { value: Segment; title: string }[] = [
+  { value: "tabs", title: "Tabs" },
+  { value: "windows", title: "Windows" },
+  { value: "screen", title: "Entire Screen" },
+];
 
 const audioLabel = (kind: SourceKind, audio: DisplayMediaAudio) =>
   kind === "tab" ? "Also share tab audio" : kind === "window" && audio.window === "application" ? "Also share application audio" : "Also share system audio";
@@ -38,19 +48,24 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
   const theme = useTheme();
   const tokens = useMediaTokens();
   const request = useMedia((m) => m.displayRequests[tabId]);
+  const [segment, setSegment] = useState<Segment>("tabs");
   const [sources, setSources] = useState<DisplayMediaSource[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [shareAudio, setShareAudio] = useState(AUDIO_SHARED_BY_DEFAULT);
   const [icons, setIcons] = useState<Record<number, string | null>>({});
+  const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [screenAccess, setScreenAccess] = useState<boolean | null>(null);
   const list = useRef<ScrollView>(null);
+  const asked = useRef(new Set<string>());
 
   useEffect(() => {
     if (!request) return;
     setSources(request.sources);
-    setSelected(null);
+    setSelected(TAB + tabId);
     setShareAudio(AUDIO_SHARED_BY_DEFAULT);
     setScreenAccess(null);
+    setThumbs({});
+    asked.current = new Set();
     let live = true;
     void screenRecordingAllowed().then((allowed) => {
       if (!live) return;
@@ -58,10 +73,9 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
       if (!allowed) noteScreenRecordingMissing();
     });
     const t = setInterval(() => {
-      void getDisplayMediaSources().then((next) => live && setSources(next));
       void screenRecordingAllowed().then((allowed) => live && setScreenAccess(allowed));
     }, REFRESH_MS);
-    const focusList = setTimeout(() => (list.current as unknown as { focus?: () => void } | null)?.focus?.(), 50);
+    const focusList = setTimeout(() => (list.current as unknown as { focus?: () => void } | null)?.focus?.(), FOCUS_MS);
     return () => {
       live = false;
       clearInterval(t);
@@ -78,25 +92,45 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
   }, [sources]);
 
   if (!request) return null;
-  const tabs = shareableTabs(tabId);
+  const tabs = [ ...shareableTabs(tabId) ].sort((a, b) => (a.id === tabId ? -1 : b.id === tabId ? 1 : b.lastActiveAt - a.lastActiveAt));
   const screens = screenAccess ? sources.filter((s) => s.kind === "screen") : [];
   const windows = screenAccess ? sources.filter((s) => s.kind === "window") : [];
   const isTab = (id: string | null) => !!id && id.startsWith(TAB) && tabs.some((t) => TAB + t.id === id);
-  const offered = [...screens, ...windows];
-  const kindOf = (id: string | null): SourceKind | null => (isTab(id) ? "tab" : (offered.find((s) => s.id === id)?.kind ?? null));
+  const kindOf = (id: string | null): SourceKind | null => (isTab(id) ? "tab" : ([...screens, ...windows].find((s) => s.id === id)?.kind ?? null));
   const valid = !!kindOf(selected);
   const selectedKind = kindOf(selected);
   const audioFor = (kind: SourceKind | null) => !!kind && audioOffered(kind, request.audio) && shareAudio[kind];
   const share = (id: string | null = selected) => {
     const kind = kindOf(id);
     if (!id || !kind) return;
+    noteShareSegmentOf(id);
     if (kind === "tab") return void shareTab(tabId, id.slice(TAB.length), audioFor(kind));
     answerDisplayMedia(tabId, id, audioFor(kind));
   };
   const cancel = () => answerDisplayMedia(tabId, null);
   const frameHost = request.frameOrigin ? originForSecurityDisplay(request.frameOrigin) : "";
-  const receiver = frameHost && frameHost !== originForSecurityDisplay(request.origin) ? `${frameHost}, a frame on this page,` : "The site";
+  const receiver = frameHost && frameHost !== originForSecurityDisplay(request.origin) ? `${frameHost}, a frame on this page,` : originForSecurityDisplay(request.origin);
   const width = Math.min(WIDTH, paneWidth - 24);
+  const columns = width < 560 ? 2 : 3;
+  const cardWidth = (width - 2 * PANEL.inset - (columns - 1) * space.m) / columns;
+  const cards =
+    segment === "tabs"
+      ? tabs.map((t) => ({ id: TAB + t.id, title: t.title || t.url, badge: t.id === tabId ? "This Tab" : null, kind: "tab" as const, source: null, icon: null }))
+      : segment === "screen"
+        ? screens.map((s) => ({ id: s.id, title: screenTitle(s), badge: null, kind: "screen" as const, source: s, icon: null }))
+        : windows.map((s) => ({ id: s.id, title: s.name || s.app || "Window", badge: null, kind: "window" as const, source: s, icon: s.pid !== undefined ? (icons[s.pid] ?? null) : null }));
+  const needsAccess = segment !== "tabs" && screenAccess === false;
+  const pickSegment = (next: Segment) => {
+    setSegment(next);
+    setSelected(null);
+    const focusList = setTimeout(() => (list.current as unknown as { focus?: () => void } | null)?.focus?.(), FOCUS_MS);
+    clearTimeout(focusList);
+  };
+  const missingThumbs = cards.filter((c) => c.kind !== "tab" && !(c.id in thumbs) && !asked.current.has(c.id)).map((c) => c.id);
+  if (missingThumbs.length) {
+    for (const id of missingThumbs) asked.current.add(id);
+    void getDisplayMediaThumbnailsFor(missingThumbs, THUMB_WIDTH).then((found) => setThumbs((current) => ({ ...current, ...found })));
+  }
 
   return (
     <Popover key={request.id} width={width} top={POPOVER_MARGIN} left={(paneWidth - width) / 2} onDismiss={cancel}>
@@ -108,7 +142,7 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
               <Symbol name="rectangle.inset.filled.and.person.filled" size={15} color={theme.icon} style={{ width: 22, height: 22 }} />
             </View>
           }
-          title={`Share your screen with ${originForSecurityDisplay(request.origin)}`}
+          title="Share your screen"
           subtitle={
             audioFor(selectedKind)
               ? `${receiver} will see and hear what you choose.`
@@ -118,60 +152,52 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
           }
         />
 
+        <View style={{ paddingHorizontal: PANEL.inset, marginTop: space.xs, marginBottom: space.s }}>
+          <Segmented options={SEGMENTS} value={segment} onChange={pickSegment} />
+        </View>
+
         <ScrollView
           ref={list}
           focusable
           enableFocusRing={false}
-          keyDownEvents={[{ key: "Escape" }, { key: "Enter" }]}
-          onKeyDown={(e) => (e.nativeEvent.key === "Escape" ? cancel() : share())}
-          style={{ maxHeight: 340, marginTop: space.xs }}
-          contentContainerStyle={{ paddingHorizontal: PANEL.rowInset }}
+          keyDownEvents={[{ key: "Escape" }, { key: "Enter" }, { key: "ArrowLeft" }, { key: "ArrowRight" }, { key: "ArrowUp" }, { key: "ArrowDown" }]}
+          onKeyDown={(e) => {
+            const key = e.nativeEvent.key;
+            if (key === "Escape") return cancel();
+            if (key === "Enter") return share();
+            const at = cards.findIndex((c) => c.id === selected);
+            const first = cards[0]?.id;
+            if (at < 0) return first !== undefined && setSelected(first);
+            const column = key === "ArrowRight" ? 1 : key === "ArrowLeft" ? -1 : 0;
+            const row = key === "ArrowDown" ? 1 : key === "ArrowUp" ? -1 : 0;
+            const next = Math.min(cards.length - 1, Math.max(0, at + row * columns + column));
+            const picked = cards[next]?.id;
+            if (picked !== undefined && picked !== selected) setSelected(picked);
+          }}
+          style={{ maxHeight: 360 }}
+          contentContainerStyle={{ paddingHorizontal: PANEL.rowInset, paddingTop: space.xs }}
         >
-          {tabs.length ? (
-            <>
-              <SectionTitle title="Tabs" />
-              {tabs.map((t) => (
-                <SourceRow
-                  key={t.id}
-                  leading={
-                    <View style={{ width: PANEL.iconSlot, alignItems: "center" }}>
-                      <Favicon url={t.url} />
-                    </View>
-                  }
-                  title={t.title || t.url}
-                  detail={t.id === tabId ? "This Tab" : null}
-                  selected={TAB + t.id === selected}
-                  onSelect={() => setSelected(TAB + t.id)}
-                  onShare={() => share(TAB + t.id)}
+          {needsAccess ? (
+            <ScreenRecordingNeeded />
+          ) : cards.length ? (
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.m }}>
+              {cards.map((c) => (
+                <SourceCard
+                  key={c.id}
+                  card={c}
+                  width={cardWidth}
+                  thumb={thumbs[c.id] ?? null}
+                  selected={c.id === selected}
+                  onSelect={() => setSelected(c.id)}
+                  onShare={() => share(c.id)}
                 />
               ))}
-            </>
-          ) : null}
-          {screens.length ? (
-            <>
-              <SectionTitle title={screens.length === 1 ? "Screen" : "Screens"} />
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.m }}>
-                {screens.map((s) => (
-                  <ScreenTile key={s.id} source={s} width={(width - 2 * PANEL.rowInset - space.m) / 2} selected={s.id === selected} onSelect={() => setSelected(s.id)} onShare={() => share(s.id)} />
-                ))}
-              </View>
-            </>
-          ) : null}
-          {windows.length ? (
-            <>
-              <SectionTitle title="Windows" />
-              {windows.map((s) => (
-                <WindowRow key={s.id} source={s} icon={s.pid !== undefined ? icons[s.pid] : null} selected={s.id === selected} onSelect={() => setSelected(s.id)} onShare={() => share(s.id)} />
-              ))}
-            </>
-          ) : null}
-          {screenAccess === false ? (
-            <>
-              <SectionTitle title="Screens and Windows" />
-              <ScreenRecordingNeeded />
-            </>
-          ) : null}
-          {screenAccess !== false && !screens.length && !windows.length && !tabs.length ? <Text size="small" tone="textSecondary" style={EMPTY}>Nothing can be shared right now.</Text> : null}
+            </View>
+          ) : (
+            <Text size="small" tone="textSecondary" style={EMPTY}>
+              {segment === "tabs" ? "No other tabs can be shared right now." : "Nothing can be shared right now."}
+            </Text>
+          )}
         </ScrollView>
 
         <View style={{ flexDirection: "row", alignItems: "center", gap: space.m, paddingHorizontal: PANEL.inset, marginTop: space.l }}>
@@ -194,7 +220,12 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
 }
 
 const EMPTY = { padding: space.l, textAlign: "center" } as const;
-const NOTICE = { paddingHorizontal: PANEL.rowPadding, paddingBottom: space.s, gap: space.m, alignItems: "flex-start" } as const;
+const NOTICE = { paddingHorizontal: PANEL.rowPadding, paddingVertical: space.m, gap: space.m, alignItems: "flex-start" } as const;
+
+function screenTitle(source: DisplayMediaSource) {
+  if (source.name && !/^Screen \d+$/.test(source.name)) return source.name;
+  return "Built-in Display";
+}
 
 function ScreenRecordingNeeded() {
   return (
@@ -206,119 +237,71 @@ function ScreenRecordingNeeded() {
     </View>
   );
 }
-const SECTION_TITLE = { paddingHorizontal: PANEL.rowPadding, marginTop: space.s, marginBottom: space.s } as const;
 
-function SectionTitle({ title }: { title: string }) {
-  return (
-    <Text size="caption" weight="semibold" tone="textSecondary" style={SECTION_TITLE}>
-      {title}
-    </Text>
-  );
-}
+type Card = { id: string; title: string; badge: string | null; kind: SourceKind; source: DisplayMediaSource | null; icon: string | null };
 
-function ScreenTile({ source, width, selected, onSelect, onShare }: { source: DisplayMediaSource; width: number; selected: boolean; onSelect(): void; onShare(): void }) {
+const CARD_NAME = { marginTop: space.s, flexDirection: "row", alignItems: "center", gap: space.s } as const;
+const CARD_TITLE = { flexShrink: 1 } as const;
+
+function SourceCard({ card, width, thumb, selected, onSelect, onShare }: { card: Card; width: number; thumb: string | null; selected: boolean; onSelect(): void; onShare(): void }) {
   const theme = useTheme();
   const tokens = useMediaTokens();
   const { hovered, hoverProps } = useHover();
-  const pressMotion = usePressScaleMotion(true, buttonMotion.iconPressScale);
-  const iconScaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
-  const aspect = source.width && source.height ? source.height / source.width : 10 / 16;
   const previewWidth = width - 2 * space.m;
+  const previewHeight = previewWidth * ASPECT;
+  const picture = card.kind === "tab" ? useSyncExternalStore(onPicturesChanged, () => lastPicture(card.id.slice(TAB.length))) : null;
   return (
     <View {...hoverProps} onDoubleClick={onShare}>
-      <Pressable onPress={onSelect} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut}>
-        <View style={{ width, padding: space.m, borderRadius: radius.panel, alignItems: "center", backgroundColor: selected ? tokens.pickerSelected : hovered ? theme.rowHover : undefined }}>
+      <Pressable onPress={onSelect}>
+        <View
+          style={{
+            width,
+            padding: space.m,
+            borderRadius: concentric(radius.tile, 2),
+            borderWidth: 2,
+            borderColor: selected ? theme.accent : ink.clear,
+            backgroundColor: selected ? tokens.pickerSelected : hovered ? theme.rowHover : undefined,
+          }}
+        >
           <View
             style={{
               width: previewWidth,
-              height: Math.min(previewWidth * aspect, 80),
-              borderRadius: concentric(radius.panel, space.m),
-              borderWidth: selected ? 2 : 1,
+              height: previewHeight,
+              borderRadius: radius.control,
+              borderWidth: 1,
               borderColor: selected ? theme.accent : tokens.previewBorder,
               backgroundColor: tokens.previewFill,
               alignItems: "center",
               justifyContent: "center",
+              overflow: "hidden",
             }}
           >
-            <Animated.View pointerEvents="none" style={iconScaleStyle}>
-              <Symbol name="display" size={22} color={theme.textSecondary} style={{ width: 30, height: 30 }} />
-            </Animated.View>
+            {picture ? (
+              <Image source={{ uri: `data:image/jpeg;base64,${picture.data}` }} resizeMode="cover" style={{ width: previewWidth, height: previewHeight }} />
+            ) : thumb ? (
+              <Image source={{ uri: `data:image/jpeg;base64,${thumb}` }} resizeMode="cover" style={{ width: previewWidth, height: previewHeight }} />
+            ) : card.kind === "tab" ? (
+              <Favicon url={tabUrlOf(card.id)} size={32} />
+            ) : card.kind === "window" && card.icon ? (
+              <Image source={{ uri: card.icon }} style={{ width: 28, height: 28 }} />
+            ) : (
+              <Symbol name={card.kind === "screen" ? "display" : "macwindow"} size={20} color={theme.textSecondary} style={{ width: 28, height: 28 }} />
+            )}
           </View>
-          <Text lines={1} size="small" style={TILE_NAME}>
-            {source.name}
-          </Text>
-          {source.width ? (
-            <Text lines={1} size="tiny" tone="textTertiary" style={TILE_RESOLUTION}>
-              {source.width} × {source.height}
+          <View style={CARD_NAME}>
+            {card.kind === "tab" ? <Favicon url={tabUrlOf(card.id)} size={16} /> : card.kind === "window" && card.icon ? <Image source={{ uri: card.icon }} style={{ width: 16, height: 16 }} /> : <Symbol name={card.kind === "screen" ? "display" : "macwindow"} size={12} color={theme.textSecondary} style={{ width: 16, height: 16 }} />}
+            <Text lines={1} size="small" style={CARD_TITLE}>
+              {card.title}
             </Text>
-          ) : null}
+            {card.badge ? <Badge text={card.badge} size="s" /> : null}
+          </View>
         </View>
       </Pressable>
     </View>
   );
 }
 
-const TILE_NAME = { marginTop: space.s } as const;
-const TILE_RESOLUTION: TextStyle = { fontVariant: ["tabular-nums"] };
-const ROW_TITLE = { flexShrink: 1 } as const;
-const ROW_DETAIL = { flexShrink: 2 } as const;
-
-function WindowRow({ source, icon, selected, onSelect, onShare }: { source: DisplayMediaSource; icon: string | null | undefined; selected: boolean; onSelect(): void; onShare(): void }) {
-  const theme = useTheme();
-  const title = source.name || source.app || "Window";
-  const app = source.app && source.app !== title ? source.app : null;
-  return (
-    <SourceRow
-      leading={icon ? <Image source={{ uri: icon }} style={{ width: 20, height: 20 }} /> : <Symbol name="macwindow" size={14} color={theme.textSecondary} style={{ width: 20, height: 20 }} />}
-      title={title}
-      detail={app}
-      detailShrinks
-      selected={selected}
-      onSelect={onSelect}
-      onShare={onShare}
-    />
-  );
-}
-
-function SourceRow({
-  leading,
-  title,
-  detail,
-  detailShrinks,
-  selected,
-  onSelect,
-  onShare,
-}: {
-  leading: ReactNode;
-  title: string;
-  detail: string | null;
-  detailShrinks?: boolean;
-  selected: boolean;
-  onSelect(): void;
-  onShare(): void;
-}) {
-  const theme = useTheme();
-  const tokens = useMediaTokens();
-  const { hovered, hoverProps } = useHover();
-  const pressMotion = usePressScaleMotion(true, buttonMotion.iconPressScale);
-  const iconScaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
-  return (
-    <View {...hoverProps} onDoubleClick={onShare}>
-      <Pressable onPress={onSelect} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut}>
-        <View style={{ height: 34, borderRadius: PANEL.rowRadius, flexDirection: "row", alignItems: "center", gap: PANEL.iconGap, paddingHorizontal: PANEL.rowPadding, backgroundColor: selected ? tokens.pickerSelected : hovered ? theme.rowHover : undefined }}>
-          <Animated.View pointerEvents="none" style={iconScaleStyle}>{leading}</Animated.View>
-          <Text lines={1} style={ROW_TITLE}>
-            {title}
-          </Text>
-          {detail ? (
-            <Text lines={1} size="small" tone="textSecondary" style={detailShrinks ? ROW_DETAIL : undefined}>
-              {detail}
-            </Text>
-          ) : null}
-          <View style={{ flex: 1 }} />
-          {selected ? <Symbol name="checkmark" size={11} weight="semibold" color={theme.accent} style={{ width: 16, height: 16 }} /> : null}
-        </View>
-      </Pressable>
-    </View>
-  );
+function tabUrlOf(id: string) {
+  const shared = id.slice(TAB.length);
+  return shareableTabs(shared).find((t) => t.id === shared)?.url ?? "";
 }

@@ -1,5 +1,5 @@
 import { changeCaptureSource, requestScreenRecording, stopCapture, type DisplayMediaRequest } from "../../platform/media";
-import { noteScreenRecordingAsked, noteSharePicked } from "../telemetry/usage";
+import { noteScreenRecordingAsked, noteSharePicked, noteShareSegment } from "../telemetry/usage";
 import { consentToken, type ConsentToken } from "../telemetry/client";
 import { webviews } from "../../platform/webviews";
 import { useBrowser } from "../browser/store";
@@ -9,6 +9,7 @@ import { useMedia, type TabShare } from "./media";
 import { useBrowserWhile, useStoreWhile } from "../tabs/tabWatch";
 
 export { getDisplayMediaSources, screenRecordingAllowed, type DisplayMediaAudio, type DisplayMediaSource } from "../../platform/media";
+export { getDisplayMediaThumbnails as getDisplayMediaThumbnailsFor } from "../../platform/media";
 export { noteScreenRecordingMissing } from "../telemetry/usage";
 
 export function useShareFor(tabId: string): [string, TabShare] | null {
@@ -137,6 +138,13 @@ export function answerDisplayMedia(tabId: string, sourceId: string | null, audio
     delete displayRequests[tabId];
     return { displayRequests };
   });
+}
+
+export const shareSegmentKind = (sourceId: string): "tabs" | "windows" | "screen" =>
+  sourceId.startsWith("tab:") ? "tabs" : sourceId.startsWith("window:") ? "windows" : "screen";
+
+export function noteShareSegmentOf(sourceId: string) {
+  noteShareSegment(shareSegmentKind(sourceId));
 }
 
 export async function shareTab(tabId: string, sharedTabId: string, audio: boolean) {

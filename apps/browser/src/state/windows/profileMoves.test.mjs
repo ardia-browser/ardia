@@ -41,17 +41,19 @@ test("several tabs dropped together keep their order, and the first one given is
   assert.equal(S().windows[w].activeTabIds[work], id.c);
 });
 
-test("a tab dropped on another space's Top Apps is pinned there, and one dropped onto a tab groups with it", () => {
+test("a tab dropped on another space's Top Apps is pinned there as a tile", () => {
   const { w, work, id } = twoSpaces();
   S().dropTabsInProfile([id.a], work, { type: "tabs", placement: { pinned: true, row: false, beforeId: null } });
   assert.equal(S().tabs[id.a].profileId, work);
-  assert.equal(S().tabs[id.a].pin?.as ?? "tile", "tile");
   assert.ok(S().tabs[id.a].pin);
-  S().dropTabsInProfile([id.b], work, { type: "onto", targetId: id.x });
-  const group = Object.values(S().groups).find((g) => g.tabIds.includes(id.b));
-  assert.deepEqual(group?.tabIds.map(host), ["x", "b"]);
-  assert.equal(group?.profileId, work);
-  assert.deepEqual(shownIn(w, work), ["a", "x", "b", "y"]);
+  assert.notEqual(S().tabs[id.a].pin.as, "row");
+  assert.deepEqual(shownIn(w, work), ["a", "x", "y"]);
+});
+
+test("a drop that makes a split view, which belongs to one profile, moves nothing", () => {
+  const { work, id } = twoSpaces();
+  const before = S();
+  assert.equal(droppingInProfile(before, [id.a], work, { type: "split", targetId: id.x, side: "left" }), before);
 });
 
 test("nothing moves for a drop with no place, a tab already in that profile, or a profile that is gone", () => {

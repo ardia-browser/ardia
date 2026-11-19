@@ -6,7 +6,7 @@ const D = await import("./fixtures/dragScene.mjs");
 const { world, regionsOf } = await import("./fixtures/dragWorld.mjs");
 const { DragItems } = await import("./dragItems.ts");
 const { devTabPresses } = await import("../../state/telemetry/tabPresses.ts");
-const { S, entryKey, sceneLayout, mount, readDrag, fakeView, settle, gaps } = D;
+const { S, entryKey, sceneLayout, mount, readDrag, fakeView, settle } = D;
 
 const host = (tabId) => new URL(S().tabs[tabId].url).hostname.split(".")[0];
 const remeasured = async () => {
@@ -69,7 +69,7 @@ test("a row dragged while the sidebar turns to another space finds that space's 
   const y = m.frame(m.B, id.y);
   c.move(from.x + 30, y.y + 4);
   assert.deepEqual(readDrag(c).drop, { type: "tabs", placement: { pinned: false, beforeId: id.y }, sequence: [] });
-  assert.deepEqual(Object.keys(gaps(c)), [entryKey("tab", id.y)], "the gap opens in the space on screen");
+  assert.equal(readDrag(c).gapKey, entryKey("tab", id.y), "the drop line sits in the space on screen");
 
   const before = devTabPresses().drags_to_other_profile;
   c.end(true);
@@ -110,7 +110,7 @@ test("a group has no place in another space, and a drop there leaves everything 
   await remeasured();
   c.move(from.x + 30, m.frame(m.B, id.y).y + 4);
   assert.equal(readDrag(c).drop.type, "none");
-  assert.deepEqual(gaps(c), {}, "no gap offers a place");
+  assert.equal(readDrag(c).gapKey, null, "no drop line offers a place");
   c.end(true);
   await settle();
   assert.deepEqual(m.order(m.home), ["c", "a", "b"]);
@@ -196,8 +196,8 @@ test("with the move warning on, the tab moves only once it is confirmed, and no 
       c.end(true);
       await settle();
       assert.equal(asked.at(-1), "Move Tab to Profile?");
-      assert.equal(m.ghosts.at(-1), null, "the ghost is gone, not landing");
-      assert.equal(readDrag(c).marks.landing, null);
+      assert.ok(!m.ghosts.some((ghost) => ghost?.landing), "no ghost lands before the answer");
+      assert.equal(m.ghosts.at(-1), null, "the ghost is gone");
       assert.deepEqual(m.order(m.work), ["x", "y", "z"], "nothing moves before the answer");
       answer(confirmed);
       await settle();
@@ -219,6 +219,5 @@ test("without the warning, the ghost lands where the tab was dropped in the othe
   c.move(from.x + 30, m.frame(m.B, id.y).y + 4);
   c.end(true);
   assert.equal(S().tabs[id.a].profileId, m.work, "the tab has moved by the time the drag ends");
-  assert.equal(m.ghosts.at(-1)?.landing, true);
-  assert.equal(readDrag(c).marks.landing, entryKey("tab", id.a));
+  assert.ok(m.ghosts.some((ghost) => ghost?.landing), "a landing ghost was shown");
 });

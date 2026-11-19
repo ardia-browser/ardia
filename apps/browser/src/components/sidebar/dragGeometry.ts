@@ -7,6 +7,9 @@ import { SCROLL_EDGE } from "./ScrollEdge";
 import { pinSlotPitch, type Drop, type Frame, type Ghost, type Item, type Pointed, tailKey } from "./dragModel";
 import { NO_DROP } from "../../state/drag/drops";
 import { splitViewAvailable } from "../../state/splits/splits";
+import type { DragHome } from "../../state/sidebar/current";
+import type { DragProfileHold } from "../../state/telemetry/tabPresses";
+import { EDGE_HOLD_MS, type Edge, HeldTimer, ProfileTargets } from "./dragProfiles";
 
 export type DragSession = {
   sources: Item[];
@@ -28,6 +31,13 @@ export type DragSession = {
   escapable: boolean;
   scrollTimer: ReturnType<typeof setInterval> | undefined;
   hold: { key: string | null; ready: string | null; timer: ReturnType<typeof setTimeout> | undefined };
+  home: DragHome | null;
+  shown: string | null;
+  overProfile: string | null;
+  hopping: { id: string; by: DragProfileHold } | null;
+  edge: Edge | null;
+  edgeSpent: boolean;
+  measures: number;
 };
 
 export const newDragSession = (sources: Item[], pointer: { x: number; y: number }, scrollY: number): DragSession => ({
@@ -50,6 +60,13 @@ export const newDragSession = (sources: Item[], pointer: { x: number; y: number 
   escapable: false,
   scrollTimer: undefined,
   hold: { key: null, ready: null, timer: undefined },
+  home: null,
+  shown: null,
+  overProfile: null,
+  hopping: null,
+  edge: null,
+  edgeSpent: false,
+  measures: 0,
 });
 
 export class DragGeometry {
@@ -63,6 +80,9 @@ export class DragGeometry {
   splitView = splitViewAvailable;
   setGhost: (ghost: Ghost | null) => void = () => {};
   marks = createDragMarks();
+  readonly profiles = new ProfileTargets(this.marks);
+  readonly edges = new HeldTimer<Edge>(EDGE_HOLD_MS, (edgeHold) => markDrag(this.marks, { edgeHold }));
+  profile: string | null = null;
   setSources = (sources: Set<string>) => markDrag(this.marks, { sources });
   setLanding = (landing: string | null) => markDrag(this.marks, { landing });
 
@@ -73,6 +93,11 @@ export class DragGeometry {
 
   protected get drag(): DragSession {
     return this.session!;
+  }
+
+  protected get crossed(): boolean {
+    const { home, shown } = this.drag;
+    return !!home && shown !== home.profileId;
   }
 
   protected still(i: Item): boolean {

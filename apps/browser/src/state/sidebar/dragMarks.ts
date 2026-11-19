@@ -17,9 +17,12 @@ export type DragMarks = {
   pinBefore: string | null;
   folderTarget: string | null;
   folderAway: boolean;
+  profileHold: string | null;
+  overProfiles: boolean;
+  edgeHold: "left" | "right" | null;
 };
 
-const NO_MARKS: DragMarks = { sources: new Set(), dropInto: null, split: null, line: null, tile: null, row: null, landing: null, pins: false, pinCount: 0, pinBefore: null, folderTarget: null, folderAway: false };
+const NO_MARKS: DragMarks = { sources: new Set(), dropInto: null, split: null, line: null, tile: null, row: null, landing: null, pins: false, pinCount: 0, pinBefore: null, folderTarget: null, folderAway: false, profileHold: null, overProfiles: false, edgeHold: null };
 
 export const createDragMarks = () => create<DragMarks>()(() => NO_MARKS);
 

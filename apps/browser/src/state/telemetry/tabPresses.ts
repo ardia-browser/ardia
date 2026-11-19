@@ -27,6 +27,11 @@ const empty = () => ({
   drops_split_pinned: 0,
   drops_split_unpinned: 0,
   drops_tile: 0,
+  drops_other_profile: 0,
+  drops_profile_icon: 0,
+  drag_profile_switches: 0,
+  drag_profile_holds: 0,
+  drag_profile_edge_holds: 0,
   unanswered: 0,
   drop_no_release: 0,
   drop_not_dragged: 0,
@@ -172,9 +177,17 @@ export const notePagePressRefused = () => void tally.page_refused++;
 
 export const noteDragWithoutDrop = () => void tally.drags_without_drop++;
 
-export type SidebarDropKind = "line" | "split_left" | "split_right" | "split_pinned" | "split_unpinned" | "tile";
+export type SidebarDropKind = "line" | "split_left" | "split_right" | "split_pinned" | "split_unpinned" | "tile" | "other_profile" | "profile_icon";
 
 export const noteSidebarDrop = (kind: SidebarDropKind) => void tally[`drops_${kind}`]++;
+
+export type DragProfileHold = "icon" | "edge";
+
+export function noteDragProfileSwitch(by: DragProfileHold | null) {
+  tally.drag_profile_switches++;
+  if (by === "icon") tally.drag_profile_holds++;
+  else if (by === "edge") tally.drag_profile_edge_holds++;
+}
 
 export function emitTabPresses(consent: ConsentToken | null) {
   settleUnansweredPressOut();

@@ -75,6 +75,20 @@ export const usePinnedCount = (cells: string[]) =>
   useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => cells.reduce((n, cell) => n + (m.sources.has(cellKey(cell)) ? 0 : 1), 0) + m.pinCount);
 export const useFolderTarget = (key: string) => useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => m.folderTarget === key);
 export const useFolderAway = () => useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => m.folderAway);
+export const useEdgeHold = () => useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => m.edgeHold);
+export const useOverProfiles = () => useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => m.overProfiles);
+export const useProfileHold = (profileId: string) => useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => m.profileHold === profileId);
+export const useProfileTarget = (profileId: string) => {
+  const controller = useContext(DragContext);
+  return useCallback(
+    (view: View | null) => {
+      if (!controller) return;
+      if (view) controller.profiles.views.set(profileId, view);
+      else controller.profiles.views.delete(profileId);
+    },
+    [controller, profileId],
+  );
+};
 export const useDragging = () => useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => m.sources.size > 0);
 
 export function useDragItem(key: string, spec: ItemSpec, clip: ClipSource | null = null) {
@@ -107,7 +121,7 @@ export function useDragItem(key: string, spec: ItemSpec, clip: ClipSource | null
         controller?.move(g.moveX, g.moveY);
       },
       onPanResponderRelease: (e, g) => controller?.end(true, Math.max(reach(g.moveX, g.moveY), reach(e.nativeEvent.pageX, e.nativeEvent.pageY)) <= TAB_CLICK_SLOP ? e : null),
-      onPanResponderTerminate: () => controller?.end(false),
+      onPanResponderTerminate: () => controller?.interrupt(),
       onPanResponderTerminationRequest: () => false,
     });
   }, [controller, key]);

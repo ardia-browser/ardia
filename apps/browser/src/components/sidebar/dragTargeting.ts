@@ -55,7 +55,8 @@ export class DragTargeting extends DragGeometry {
     const dragged = new Set(sources.flatMap((s) => s.tabIds));
     const firstTab = (i: Item | undefined) => i?.tabIds.find((id) => !dragged.has(id)) ?? null;
     const tabsDrag = source.kind === "row" || source.kind === "tile";
-    const splits = this.splitView && tabsDrag && !external && sources.length === 1 && dragged.size === 1 && !folderOf(source);
+    const crossed = this.crossed;
+    const splits = this.splitView && tabsDrag && !external && !crossed && !session.edge && sources.length === 1 && dragged.size === 1 && !folderOf(source);
     const count = external || (folderOf(source) ? 1 : dragged.size);
     const rowPitch = (boxed(source) ? source.foldedHeight() : layout.rowHeight * (source.kind === "split" ? 1 : Math.max(1, session.ghost?.count ?? external ?? 1))) + layout.rowGap;
     const blocks = live.filter(pinnedBlock).sort(byY);
@@ -73,7 +74,7 @@ export class DragTargeting extends DragGeometry {
     const sidebar = session.viewport ?? this.rootFrame;
     const tiles = this.at(regionFrames.get("tiles") ?? null, this.tilesFixed);
     const balanced = currentSettings().balancedTopApps;
-    const away = x > sidebar.x + sidebar.w + 40 || x < sidebar.x - 40 || tabDragOutside();
+    const away = x > sidebar.x + sidebar.w + 40 || x < sidebar.x - 40 || tabDragOutside() || !!session.overProfile;
     const cells = live.filter((i) => i.kind === "tile").sort(byY);
     const { gridBase } = session;
     const overTiles = !away && tabsDrag && !!tiles && (gridBase ? overPins(y, this.pinFloor(live, tiles), this.pinning) : inside(tiles, x, y, 6));
@@ -85,8 +86,8 @@ export class DragTargeting extends DragGeometry {
     const wasAway = dragMarksOf(this.marks).folderAway;
     const inPanel = !away && !wasAway && tabsDrag && !external && !!panelFrame && inside(panelFrame, x, y);
     const folderAway = source.section === "folder" && !inPanel;
-    const canFolder = tabsDrag && !external && !folderOf(source);
-    const home = source.section === "tiles" && source.frame ? cells.filter((c) => byY(c, source) < 0).length : null;
+    const canFolder = tabsDrag && !external && !crossed && !folderOf(source);
+    const home = source.section === "tiles" && source.frame && !crossed ? cells.filter((c) => byY(c, source) < 0).length : null;
     const spot = !away && tabsDrag && overTiles && tiles ? this.pointed(tiles, cells, count, home, x, y, canFolder) : null;
     const target = spot?.part === "centre" ? spot.cell : null;
     if (target) this.holdOver(target);

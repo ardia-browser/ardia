@@ -10,9 +10,9 @@ import type { Ghost } from "./dragModel";
 import { FolderOrIcon } from "./AnimatedFolder";
 import { FolderMosaic } from "./FolderTile";
 import { TabIcon } from "./TabIcon";
-import { GHOST_ROW_POINTER, GHOST_TILE_MORPH, SIDEBAR_SHADOW, SIDEBAR_TYPE, TAB_ROW, useSidebarTokens } from "./tokens";
+import { GHOST_OVER_PROFILES, GHOST_ROW_POINTER, GHOST_TILE_MORPH, SIDEBAR_SHADOW, SIDEBAR_TYPE, TAB_ROW, useSidebarTokens } from "./tokens";
 import { spring } from "../ui/motion";
-import { useDropRow, useDropTile } from "./DragProvider";
+import { useDropRow, useDropTile, useOverProfiles } from "./DragProvider";
 import type { GhostShapeMark } from "../../state/sidebar/dragMarks";
 import { folderOf } from "./dragModel";
 import { ghostIcon, ghostTileIcon } from "../../state/pins/rowIcons";
@@ -34,6 +34,7 @@ export function DragGhost({ ghost }: { ghost: Ghost }) {
   const tileDrawn = folderTile || groupId ? null : ghostTileIcon(tab);
   const textOnly = item.kind === "row" && !drawn;
   const onPage = useTabDrag((d) => d.phase === "tab" && d.onPage);
+  const overProfiles = useOverProfiles();
   const tileTarget = useDropTile();
   const rowTarget = useDropRow();
   const morphs = item.kind === "row" || (tile && !folderTile);
@@ -56,7 +57,7 @@ export function DragGhost({ ghost }: { ghost: Ghost }) {
         top: 0,
         width: toward(width, shape?.w ?? width),
         height: toward(height, shape?.h ?? height),
-        opacity: onPage ? 0 : 1,
+        opacity: onPage ? 0 : overProfiles ? GHOST_OVER_PROFILES : 1,
         transform: [...position.getTranslateTransform(), { translateX: toward(0, grab.x - (anchor?.x ?? 0)) }, { translateY: toward(0, grab.y - (anchor?.y ?? 0)) }],
       }}
     >

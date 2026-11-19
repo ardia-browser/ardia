@@ -17,6 +17,7 @@ const DARK = {
   dragBorder: "rgba(255,255,255,0.33)",
   dragSilhouette: "#0F0F14",
   dropLine: "rgba(255,255,255,0.93)",
+  edgeGlow: "rgba(255,255,255,0.07)",
   dragGhostFill: "rgba(255,255,255,0.15)",
   dragGhostTileLift: "rgba(255,255,255,0.29)",
   dragGhostBorder: null as string | null,
@@ -52,6 +53,7 @@ const LIGHT: typeof DARK = {
   dragBorder: "rgba(0,0,0,0.28)",
   dragSilhouette: "#FFFFFF",
   dropLine: "rgba(0,0,0,0.8)",
+  edgeGlow: "rgba(0,0,0,0.04)",
   dragGhostFill: "rgba(255,255,255,0.5)",
   dragGhostTileLift: "rgba(255,255,255,0.5)",
   dragGhostBorder: "rgba(0,0,0,0.08)",
@@ -147,6 +149,14 @@ export const SPLIT_DROP = { gap: 14 } as const;
 export const GHOST_TILE_MORPH = { response: 0.1, damping: 1 } as const;
 
 export const GHOST_ROW_POINTER = 0.37;
+export const GHOST_OVER_PROFILES = 0.3;
+export const EDGE_GLOW = {
+  width: 36,
+  inMs: 180,
+  outMs: 150,
+  fill: [[0, 0], [0.2, 1], [0.8, 1], [1, 0]],
+  fade: [[0, 1], [0.15, 0.75], [0.35, 0.42], [0.6, 0.15], [1, 0]],
+} as const;
 
 export const TAB_ROW = {
   contentLeft: 9,

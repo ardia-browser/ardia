@@ -213,7 +213,10 @@ owner's Mac ──▶ ardia.dev/_ch/ (read-only ClickHouse user)   ardia.dev/_re
     chips, `down_switches` (the press switched to the tab on mouse down), `clicks` (the press opened the tab),
     `drag_clicks` (it became a drag and was rescued as a click), `drags`, `drags_without_drop` (sidebar drags let go
     inside the window with no place to drop and no split: on Linux every drag in a space other than the one the window
-    opened in, until #2341), `unanswered` (a press that got neither before
+    opened in, until #2341), `drag_profile_switches` (profile switches during a sidebar tab drag, by any means) and `drag_profile_holds`
+    (those made by holding the tab over a profile's icon), `drag_profile_edge_holds` (those made by holding it at the
+    sidebar's left or right edge), `drops_other_profile` (tabs dropped at a slot in another profile's
+    sidebar) and `drops_profile_icon` (tabs let go on another profile's icon), `unanswered` (a press that got neither before
     the next one), `lost_releases` (presses anywhere in the app's own UI whose mouse up a menu or drag session took, ended when
     the menu began tracking or at that button's next mouse down instead of swallowing that click), `repeat_presses` (a tab or New Tab row press within 3 s and 12 pt
     of a mouse down that reached no row: the click-twice report), `repeat_on_new_tab` (those with an empty New Tab showing),

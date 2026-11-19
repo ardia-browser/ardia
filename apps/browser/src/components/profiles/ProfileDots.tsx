@@ -15,9 +15,11 @@ import { openProfileItemMenu } from "./profileMenu";
 import { profileSwitcherShown } from "../../state/profiles/switcherShown";
 import { profileSwitcher } from "./tokens";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
+import { useProfileHold, useProfileTarget } from "../sidebar/DragProvider";
+import { useSidebarTokens } from "../sidebar/tokens";
 
 export const PROFILE_DOTS_HEIGHT = profileSwitcher.height;
-const { band: BAND, dotTooltipLift } = profileSwitcher;
+const { band: BAND, dotTooltipLift, holdPlate } = profileSwitcher;
 const SIDE_ROOM = layout.sidebarInset;
 const SIDE_ROOM_BESIDE_DOWNLOADS = SIDEBAR_FOOTER_DOWNLOADS.left + SIDEBAR_FOOTER_DOWNLOADS.size + 4;
 
@@ -50,11 +52,14 @@ function Dot({ id, windowId, icon, page, pos }: { id: string; windowId: string; 
   useNativePagerPosition(windowId);
   const name = useProfile(id, (p) => p?.name ?? "");
   const { hovered, hoverProps } = useHover();
+  const holding = useProfileHold(id);
+  const target = useProfileTarget(id);
+  const tokens = useSidebarTokens();
   const pressMotion = usePressScaleMotion(true, buttonMotion.iconPressScale);
   const [pressed, setPressed] = useState(false);
   if (pressed && !hovered) setPressed(false);
   const levels = icon ? profileSwitcher.icons : profileSwitcher.dots;
-  const rest = hovered ? levels.hovered : levels.idle;
+  const rest = hovered || holding ? levels.hovered : levels.idle;
   const opacity = page
     ? pos.interpolate({ inputRange: [page.slot - 1, page.slot, page.slot + 1], outputRange: [rest, levels.selected, rest], extrapolate: "clamp" })
     : rest;
@@ -75,7 +80,13 @@ function Dot({ id, windowId, icon, page, pos }: { id: string; windowId: string; 
             switchProfile(windowId, id, true);
           }}
         >
-          <View style={{ width: cell, height: BAND, alignItems: "center", justifyContent: "center" }}>
+          <View ref={target} style={{ width: cell, height: BAND, alignItems: "center", justifyContent: "center" }}>
+            {holding ? (
+              <View
+                pointerEvents="none"
+                style={{ position: "absolute", width: icon ? cell : holdPlate.dot, height: icon ? holdPlate.icon : holdPlate.dot, borderRadius: icon ? holdPlate.radius : holdPlate.dot / 2, backgroundColor: tokens.multiSelected }}
+              />
+            ) : null}
             <Animated.View style={[{ opacity }, pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : null]}>
               <SwitcherMark icon={icon} color={theme.mark} />
             </Animated.View>

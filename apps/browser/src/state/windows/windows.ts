@@ -14,8 +14,7 @@ import {
   without,
 } from "../browser/model";
 import { MAX_CLOSED_WINDOWS, restoringGroup } from "../pins/closedTabs";
-import { markPinned } from "../pins/pinChoices";
-import { hasLoadedPage, hasPage, IDLE, isAsleep, loadedPage, withWake } from "../tabs/pageSession";
+import { hasLoadedPage, hasPage, IDLE, isAsleep, loadedPage } from "../tabs/pageSession";
 import { adoptParkedPins, parkWindowPins } from "../pins/parkedPins";
 import { settleMovedPins } from "../pins/pinMirror";
 import { holderOf, returnSharedPages, swapPinPage } from "../pins/pinShare";
@@ -37,6 +36,8 @@ import { commonGroup, orderSections } from "../groups/groups";
 import { groupOf } from "../pins/tabGrouping";
 import { focusedWindowOf } from "./ui";
 import { closedWindowOf, withoutLastWindowMarks } from "./closedWindow";
+import type { Drop } from "../drag/drops";
+import { droppedInProfile, intoProfile } from "./profileMoves";
 
 export type CreateWindowOptions = {
   profileId?: string;
@@ -71,6 +72,7 @@ export type WindowsSlice = {
   moveTabsToWindow(tabIds: string[], windowId: string | null, options?: MoveOptions): string | undefined;
   returnRefusedMove(tabId: string, fromWindowId: string): void;
   moveTabToProfile(tabId: string, profileId: string, options?: MoveOptions): void;
+  dropTabsInProfile(tabIds: string[], profileId: string, drop: Drop): boolean;
   moveGroupToWindow(groupId: string, windowId: string | null, options?: MoveOptions): string | undefined;
   moveGroupToProfile(groupId: string, profileId: string, options?: MoveOptions): void;
   mergeAllWindows(windowId: string): void;
@@ -139,28 +141,6 @@ function afterGroupOf(s: BrowserState, tabIds: string[], tabId: string | undefin
   let i = from;
   while (tabId && i < tabIds.length && commonGroup(s.groups, [tabId, tabIds[i]!])) i++;
   return i;
-}
-
-function intoProfile(s: BrowserState, tabId: string, profileId: string): BrowserState {
-  const tab = s.tabs[tabId];
-  const w = tab && s.windows[tab.windowId];
-  if (!tab || !w || w.kind === "private" || !s.profiles[profileId] || tab.profileId === profileId) return s;
-  const next = removeTabs(s, [tabId], false);
-  const base = next.windows[w.id] ?? { ...w, tabIds: [], activeTabIds: {} };
-  const loaded = hasLoadedPage(tab);
-  const moved: Tab = { ...tab, profileId, page: loaded ? loadedPage(navigationTo(tab.url)) : hasPage(tab) ? IDLE : withWake(tab.page, undefined), lastActiveAt: Date.now() };
-  const pinChoices = tab.pin ? markPinned(next.pinChoices, profileId, { tabs: [pinKeyOf(moved)], placed: [pinKeyOf(moved)] }) : next.pinChoices;
-  const tabs = { ...next.tabs, [tabId]: moved };
-  const index = Math.min(w.tabIds.indexOf(tabId), base.tabIds.length);
-  const tabIds = [...base.tabIds];
-  tabIds.splice(index, 0, tabId);
-  return {
-    ...next,
-    tabs,
-    pinChoices,
-    windows: { ...next.windows, [w.id]: { ...base, tabIds: orderSections(tabIds, tabs, next.groups) } },
-    windowOrder: next.windowOrder.includes(w.id) ? next.windowOrder : s.windowOrder,
-  };
 }
 
 export const createWindowsSlice: StateCreator<BrowserState, [], [], WindowsSlice> = (set, get) => ({
@@ -312,6 +292,14 @@ export const createWindowsSlice: StateCreator<BrowserState, [], [], WindowsSlice
     }
     const next = intoProfile(s, tabId, profileId);
     if (next !== s) set(background ? next : apply(next, activated(next, tabId)));
+  },
+
+  dropTabsInProfile(tabIds, profileId, drop) {
+    const s = get();
+    const next = droppedInProfile(s, tabIds, profileId, drop);
+    if (next === s) return false;
+    set(next);
+    return true;
   },
 
   moveGroupToWindow(groupId, windowId, options) {

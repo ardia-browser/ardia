@@ -8,7 +8,7 @@ import { evenPair, resize, type Divider, type Rect } from "../window/geometry";
 import { capsule, OverPage, space, Symbol, Text, Toast, withAlpha } from "../ui";
 import { hideToast, useToasts } from "../../state/app/toasts";
 import { noteSplit } from "../../state/telemetry/usage";
-import { useWindowId } from "../../state/browser/hooks";
+import { useTab, useWindowId, useWindowProfileId } from "../../state/browser/hooks";
 import { useCardFrame } from "../window/cardFrame";
 import type { Size } from "../ui/useSettled";
 import { overPeek } from "../../state/windows/dockMotion";
@@ -174,6 +174,9 @@ export function DropTargets({ panes, origin }: { panes: Record<string, Rect>; or
   const lifted = useTabDrag((s) => (s.phase === "tab" ? s.lifted : null));
   const outside = useTabDrag((s) => s.phase === "tab" && s.outside);
   const target = useTabDrag((s) => (s.phase === "tab" ? s.target : null));
+  const draggedProfile = useTab(dragging ?? undefined, (t) => t?.profileId);
+  const windowProfile = useWindowProfileId();
+  const foreign = !!dragging && draggedProfile !== windowProfile;
   const full = Object.keys(panes).length >= 3;
   const fallback = useDragFallbackPane(dragging, panes, windowId);
   const candidates = useMemo((): [string, Rect][] => {
@@ -184,7 +187,7 @@ export function DropTargets({ panes, origin }: { panes: Record<string, Rect>; or
   const px = origin ? x - origin.x : -1;
   const py = origin ? y - origin.y : -1;
   const overPage = !!origin && x >= 0 && !overPeek(windowId, x) && Object.values(panes).some((r) => px >= r.x && px <= r.x + r.width && py >= r.y && py <= r.y + r.height);
-  const shown = !!dragging && !!origin && !full && !outside && candidates.length > 0 && (lifted ?? overPage);
+  const shown = !!dragging && !foreign && !!origin && !full && !outside && candidates.length > 0 && (lifted ?? overPage);
   const [grown, setGrown] = useState(false);
   useEffect(() => {
     setGrown(false);
@@ -196,7 +199,7 @@ export function DropTargets({ panes, origin }: { panes: Record<string, Rect>; or
   const hit = splitViewAvailable && shown && grown && overPage ? zoneHit(candidates, px, py, target) : null;
   const preview = shown && overPage;
   const resolver = useRef({ candidates, origin, panes, ready: false });
-  resolver.current = { candidates, origin, panes, ready: !!dragging && !!origin && !full && candidates.length > 0 && grown && lifted !== false };
+  resolver.current = { candidates, origin, panes, ready: !!dragging && !foreign && !!origin && !full && candidates.length > 0 && grown && lifted !== false };
   useEffect(() => {
     if (!dragging) return;
     setTargetResolver((x, y, current, outside) => {

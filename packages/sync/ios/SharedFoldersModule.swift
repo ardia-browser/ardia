@@ -23,13 +23,27 @@ public class SharedFoldersModule: Module {
       ]
     }
 
-    AsyncFunction("read") { (path: String, identity: [String: Int]?) -> [String: Any] in
-      SharedFolderDirectory(root: URL(fileURLWithPath: path, isDirectory: true), identity: identity).read()
-    }.runOnQueue(Self.work)
+    AsyncFunction("read") { (path: String, identity: [String: Int]?, promise: Promise) in
+      Self.folderQueue(path).async {
+        guard let identity else { return promise.resolve(["exists": false, "error": Self.unconfirmed]) }
+        promise.resolve(SharedFolderDirectory(root: URL(fileURLWithPath: path, isDirectory: true), identity: identity).read())
+      }
+    }
 
-    AsyncFunction("apply") { (path: String, ops: String, identity: [String: Int]?) throws -> [String: Any] in
-      try SharedFolderDirectory(root: URL(fileURLWithPath: path, isDirectory: true), identity: identity).apply(json: ops)
-    }.runOnQueue(Self.work)
+    AsyncFunction("apply") { (path: String, ops: String, identity: [String: Int]?, token: String?, promise: Promise) in
+      Self.folderQueue(path).async {
+        defer { if let token { Self.cancellations.forget(token) } }
+        guard let identity else { return promise.reject("ERR_SHARED_FOLDER", Self.unconfirmed) }
+        let cancelled = { token.map(Self.cancellations.isCancelled) ?? false }
+        do {
+          promise.resolve(try SharedFolderDirectory(root: URL(fileURLWithPath: path, isDirectory: true), identity: identity, cancelled: cancelled).apply(json: ops))
+        } catch {
+          promise.reject("ERR_SHARED_FOLDER", error.localizedDescription)
+        }
+      }
+    }
+
+    Function("cancel") { (token: String) in Self.cancellations.cancel(token) }
 
     AsyncFunction("resolve") { (path: String, promise: Promise) in
       do {
@@ -54,6 +68,20 @@ public class SharedFoldersModule: Module {
     OnDestroy { [weak self] in self?.watcher?.stop() }
   }
 
+  static let cancellations = SharedFolderCancellations()
+  private static let queuesLock = NSLock()
+  nonisolated(unsafe) private static var queues: [String: DispatchQueue] = [:]
+
+  static func folderQueue(_ path: String) -> DispatchQueue {
+    queuesLock.lock()
+    defer { queuesLock.unlock() }
+    if let queue = queues[path] { return queue }
+    let queue = DispatchQueue(label: "ardia.shared-folders.folder", qos: .utility)
+    queues[path] = queue
+    return queue
+  }
+
+  private static let unconfirmed = "Ardia can’t confirm which folder this is any more. Stop syncing it, then add it again."
   private static let dataDirectory = LaunchConfig.shared.dataDirectory.map { URL(fileURLWithPath: $0, isDirectory: true) }
   private static let testParent = LaunchConfig.shared.instance("sharedFolders").map { URL(fileURLWithPath: $0, isDirectory: true) }
 

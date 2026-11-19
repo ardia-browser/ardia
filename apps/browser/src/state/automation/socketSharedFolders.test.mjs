@@ -20,7 +20,7 @@ globalThis.acTestNativeModules = {
 const { useBrowser } = await import("../browser/store.ts");
 const { startAutomation } = await import("./controlSocket.ts");
 const { startPersistence } = await import("../session/persist.ts");
-const { bindFolder } = await import("../sharedFolders/store.ts");
+const { sharedFolderOf } = await import("../sharedFolders/store.ts");
 const { pinKeyOf } = await import("../browser/model.ts");
 const stub = await import("../../test-native/index.ts");
 
@@ -58,18 +58,46 @@ async function setup() {
   return { windowId, tab };
 }
 
-test("shared folders over the socket: list reads the sidebar's shared folders; the writes wait for the follow-up", async () => {
-  const { tab, windowId } = await setup();
-  assert.deepEqual(await ok("sharedFolders.list"), []);
+test("shared folders: share a pinned folder, list it, sync it, stop it; the group stays", async () => {
+  const { tab } = await setup();
   const group = S().groupTabs([tab], { pinned: true, name: "Team" });
-  const profileId = S().groups[group].profileId;
-  bindFolder(profileId, pinKeyOf(S().groups[group]), "/scratch/Ardia Shared/Team", { device: 1, inode: 7 });
-  const rows = await ok("sharedFolders.list");
-  assert.equal(rows.length, 1);
-  assert.equal(rows[0].path, "/scratch/Ardia Shared/Team");
-  assert.equal(rows[0].url, "file:///scratch/Ardia%20Shared/Team/");
-  assert.deepEqual(rows[0].groups, [group]);
-  assert.equal(rows[0].name, "Team");
-  for (const method of ["sharedFolders.share", "sharedFolders.add", "sharedFolders.sync", "sharedFolders.stop"]) assert.equal(await code(method, { group, path: "/scratch/x", window: windowId }), "unknown_method", method);
-  assert.equal(created.length, 0, "nothing on disk was made");
+  const loose = S().groupTabs([S().newTab(S().tabs[tab].windowId, { url: "https://two.example/", background: true })], { pinned: false, name: "Loose" });
+  assert.deepEqual(await ok("sharedFolders.list"), []);
+  assert.equal(await code("sharedFolders.share", { group: loose }), "bad_request");
+  assert.equal(await code("sharedFolders.share", { group: "nope" }), "no_window");
+  assert.equal(await code("sharedFolders.share", { group, parent: "relative/path" }), "bad_request");
+  const shared = await ok("sharedFolders.share", { group });
+  assert.deepEqual(created.at(-1), ["/scratch/Ardia Shared", "Team"]);
+  assert.equal(shared.path, "/scratch/Ardia Shared/Team");
+  assert.equal(shared.url, "file:///scratch/Ardia%20Shared/Team/");
+  assert.deepEqual(shared.groups, [group]);
+  assert.equal(shared.name, "Team");
+  assert.deepEqual((await ok("sharedFolders.list")).map((f) => f.path), ["/scratch/Ardia Shared/Team"]);
+  assert.equal((await ok("sharedFolders.sync", { group })).path, shared.path);
+  await ok("sharedFolders.stop", { group });
+  assert.equal(sharedFolderOf(S().groups[group].profileId, pinKeyOf(S().groups[group])), undefined);
+  assert.ok(S().groups[group], "the group stays in the sidebar");
+  assert.equal(await code("sharedFolders.stop", { group }), "bad_request");
+});
+
+test("shared folders: with iCloud Drive off, share needs a parent; add brings in a folder someone shared", async () => {
+  const { windowId } = await setup();
+  const tab = S().newTab(windowId, { url: "https://three.example/", background: true });
+  const group = S().groupTabs([tab], { pinned: true, name: "Plans" });
+  iCloud = false;
+  try {
+    assert.equal(await code("sharedFolders.share", { group }), "refused");
+    const shared = await ok("sharedFolders.share", { group, parent: "/Users/me/Dropbox" });
+    assert.equal(shared.path, "/Users/me/Dropbox/Plans");
+  } finally {
+    iCloud = true;
+  }
+  const added = await ok("sharedFolders.add", { path: "/scratch/Ardia Shared/From Sam/", window: windowId });
+  assert.equal(added.path, "/scratch/Ardia Shared/From Sam");
+  assert.equal(added.groups.length, 1);
+  assert.equal(S().groups[added.groups[0]].name, "From Sam");
+  assert.ok(S().groups[added.groups[0]].pinned);
+  const again = await ok("sharedFolders.add", { path: "/scratch/Ardia Shared/From Sam" });
+  assert.deepEqual(again.groups, added.groups, "adding it twice keeps one folder");
+  assert.equal(await code("sharedFolders.add", { path: "../escape" }), "bad_request");
 });

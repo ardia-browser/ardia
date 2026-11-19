@@ -1,8 +1,8 @@
 import { confirm, pickFolder } from "../../platform/dialogs";
 import { sharePage } from "../../platform/share";
-import { createSharedFolder, discardSharedFolder, identityOf, resolveSharedFolder, revealSharedFolder, sharedFoldersAvailable, sharedLocation } from "../../platform/sharedFolders";
+import { createSharedFolder, discardSharedFolder, identityOf, resolveSharedFolder, revealSharedFolder, sharedFoldersAvailable, sharedLocation, type ResolvedSharedFolder } from "../../platform/sharedFolders";
 import { errorText } from "../../lib/errors";
-import { bindingAt } from "./bindings";
+import { addKey, bindingAt, boundWithIdentity, oneAtATime } from "./bindings";
 import { useBrowser, type BrowserState } from "../browser/store";
 import type { Tab } from "../browser/types";
 import { isIncognitoProfile, makeTab, newId, pinKeyOf } from "../browser/model";
@@ -14,8 +14,8 @@ import { ASLEEP } from "../tabs/pageSession";
 import { isRegularWindow } from "../windows/small";
 import { measureRow } from "../sidebar/sidebarUi";
 import { EMPTY_FOLDER_URL } from "./applyFolder";
-import { syncFolderAfterNow, syncFolderNow } from "./engine";
-import { bindFolder, bindFolderIfUnbound, folderRef, sharedFolderOf, unbindFolder, useSharedFolders } from "./store";
+import { stopSyncing, syncFolderAfterNow, syncFolderNow } from "./engine";
+import { bindFolder, bindFolderIfUnbound, folderRef, reconnectFolder, sharedFolderOf, useSharedFolders, type SharedFolder } from "./store";
 import { canShareGroup, sharedFolderOfGroup } from "./removal";
 import { showToast } from "../app/toasts";
 
@@ -68,20 +68,31 @@ export async function addSharedFolder(windowId: string) {
     return null;
   });
   if (!found) return;
-  const { path } = found;
   const profileId = store().windows[windowId]?.profileId ?? w.profileId;
-  const known = await bindingAt(profileId, found);
-  if (known) {
-    const g = Object.values(store().groups).find((x) => x.profileId === profileId && x.pinned && pinKeyOf(x) === known.key);
-    showToast(windowId, `“${(g && groupLabel(store(), g)) || path.split("/").at(-1)}” is already in your sidebar`, undefined, { icon: "person.2" });
-    return syncFolderNow(profileId, known.key);
-  }
-  const [next, groupId] = withSharedGroup(store(), windowId, path.split("/").filter(Boolean).at(-1) ?? "Shared Folder");
-  if (!groupId) return;
+  return oneAtATime(addKey(found), async () => {
+    const known = await bindingAt(profileId, found);
+    if (known) {
+      const g = Object.values(store().groups).find((x) => x.profileId === profileId && x.pinned && pinKeyOf(x) === known.key);
+      showToast(windowId, `“${(g && groupLabel(store(), g)) || found.path.split("/").at(-1)}” is already in your sidebar`, undefined, { icon: "person.2" });
+      return syncFolderNow(profileId, known.key);
+    }
+    if (store().windows[windowId]?.profileId !== profileId) return;
+    const elsewhere = syncedElsewhereText(found);
+    if (elsewhere) return showToast(windowId, "Couldn’t add this folder", elsewhere, { icon: "exclamationmark.icloud" });
+    const key = addFolderGroup(windowId, found);
+    if (key) await syncFolderNow(profileId, key);
+  });
+}
+
+export function addFolderGroup(windowId: string, found: ResolvedSharedFolder): string | null {
+  const w = store().windows[windowId];
+  if (!isRegularWindow(w) || boundWithIdentity(found)) return null;
+  const [next, groupId] = withSharedGroup(store(), windowId, found.path.split("/").filter(Boolean).at(-1) ?? "Shared Folder");
+  if (!groupId) return null;
   useBrowser.setState(next);
   const key = pinKeyOf(store().groups[groupId]!);
-  bindFolder(profileId, key, path, identityOf(found));
-  await syncFolderNow(profileId, key);
+  bindFolder(w.profileId, key, found.path, identityOf(found));
+  return key;
 }
 
 export async function shareFolder(windowId: string, groupId: string) {
@@ -118,7 +129,35 @@ export function revealGroupFolder(groupId: string) {
   if (shared) void revealSharedFolder(shared.folder.path);
 }
 
-export function stopSyncingGroup(groupId: string) {
+export function stopSyncingGroup(groupId: string): Promise<boolean> {
   const shared = sharedFolderOfGroup(store(), groupId);
-  if (shared) unbindFolder(shared.profileId, shared.key);
+  return shared ? stopSyncing(shared.profileId, shared.key) : Promise.resolve(true);
+}
+
+export function syncedElsewhereText(found: ResolvedSharedFolder): string | null {
+  const bound = boundWithIdentity(found);
+  if (!bound) return null;
+  const s = store();
+  const g = Object.values(s.groups).find((x) => x.profileId === bound.profileId && x.pinned && !x.parentId && pinKeyOf(x) === bound.key);
+  const name = (g && groupLabel(s, g)) || bound.folder.path.split("/").at(-1) || "A folder";
+  const profile = s.profiles[bound.profileId]?.name ?? "another profile";
+  return `“${name}” in ${profile} already syncs this folder; a folder syncs with one profile at a time.`;
+}
+
+export async function reconnectSharedFolder(windowId: string, groupId: string) {
+  const shared = sharedFolderOfGroup(store(), groupId);
+  if (!shared || shared.folder.identity) return;
+  const was: SharedFolder = shared.folder;
+  const picked = await pickFolder(was.path.split("/").slice(0, -1).join("/") || null, "Reconnect");
+  if (!picked) return;
+  const found = await resolveSharedFolder(picked).catch((error: unknown) => {
+    showToast(windowId, "Couldn’t reconnect this folder", errorText(error), { icon: "exclamationmark.icloud" });
+    return null;
+  });
+  if (!found) return;
+  return oneAtATime(addKey(found), async () => {
+    const elsewhere = syncedElsewhereText(found);
+    if (elsewhere) return showToast(windowId, "Couldn’t reconnect this folder", elsewhere, { icon: "exclamationmark.icloud" });
+    if (reconnectFolder(shared.profileId, shared.key, was, found)) await syncFolderNow(shared.profileId, shared.key);
+  });
 }

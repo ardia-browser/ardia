@@ -8,7 +8,7 @@ import type { BaseEntry } from "./tree";
 export type SharedFolder = { path: string; base: BaseEntry[]; addedAt: number; identity?: SharedFolderIdentity };
 
 export type SharedFolderSync = {
-  state: "syncing" | "synced" | "waiting" | "paused" | "missing" | "error";
+  state: "syncing" | "synced" | "waiting" | "paused" | "missing" | "reconnect" | "error";
   waiting: number;
   error: string | null;
   at: number;
@@ -106,9 +106,9 @@ export function bindFolderIfUnbound(profileId: string, key: string, folder: Reso
   return true;
 }
 
-export function upgradeFolder(profileId: string, key: string, was: SharedFolder, found: ResolvedSharedFolder): boolean {
+export function reconnectFolder(profileId: string, key: string, was: SharedFolder, found: ResolvedSharedFolder): boolean {
   if (sharedFolderOf(profileId, key) !== was || was.identity) return false;
-  patchFolders(profileId, key, { ...was, path: found.path, identity: identityOfFolder(found) });
+  patchFolders(profileId, key, { path: found.path, base: [], addedAt: Date.now(), identity: identityOfFolder(found) });
   return true;
 }
 

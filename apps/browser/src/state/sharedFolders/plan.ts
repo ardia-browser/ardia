@@ -1,6 +1,6 @@
 import type { SharedFolderOp } from "../../platform/sharedFolders";
 import { newLinkId, weblocText } from "../../lib/webloc";
-import { MANIFEST, manifestText, nameOfFile, uniqueFileName, type BaseEntry, type Dropped, type TargetEntry, type TargetLevel } from "./tree";
+import { fileKey, MANIFEST, manifestText, nameOfFile, uniqueFileName, type BaseEntry, type Dropped, type TargetEntry, type TargetLevel } from "./tree";
 import { weave } from "./merge";
 
 export type Planned = { ops: SharedFolderOp[]; base: BaseEntry[] };
@@ -31,13 +31,13 @@ function dropOps(prefix: string, d: Dropped, ops: SharedFolderOp[]) {
 type Move = { from: string; to: string; kind: "link" | "dir" };
 
 function moveOps(prefix: string, moves: Move[], reserved: Set<string>, ops: SharedFolderOp[]) {
-  const sources = new Set(moves.map((m) => m.from.toLowerCase()));
-  const tangled = moves.some((m) => sources.has(m.to.toLowerCase()));
+  const sources = new Set(moves.map((m) => fileKey(m.from)));
+  const tangled = moves.some((m) => sources.has(fileKey(m.to)));
   if (!tangled) {
     for (const m of moves) ops.push({ op: "move", path: `${prefix}${m.from}`, to: `${prefix}${m.to}` });
     return;
   }
-  const taken = new Set([...reserved, ...sources, ...moves.map((m) => m.to.toLowerCase())]);
+  const taken = new Set([...reserved, ...sources, ...moves.map((m) => fileKey(m.to))]);
   const parked = moves.map((m) => ({ ...m, via: uniqueFileName(`${nameOfFile(m.from, m.kind)} (moving)`, m.kind, taken) }));
   for (const m of parked) ops.push({ op: "move", path: `${prefix}${m.from}`, to: `${prefix}${m.via}` });
   for (const m of parked) ops.push({ op: "move", path: `${prefix}${m.via}`, to: `${prefix}${m.to}` });
@@ -51,10 +51,10 @@ function planLevel(prefix: string, level: TargetLevel, ops: SharedFolderOp[], pa
   const referenced = new Set(entries.map((e) => e.file).filter((f): f is string => !!f));
   const droppedFiles = new Set(level.dropped.map((d) => d.file));
   const kept = (level.remote?.entries ?? []).map((r) => r.file).filter((f) => !referenced.has(f) && !droppedFiles.has(f));
-  const taken = new Set(kept.map((f) => f.toLowerCase()));
+  const taken = new Set(kept.map(fileKey));
   const finals = new Map<TargetEntry, string>();
   const held = (e: TargetEntry) => e.kind === "link" && e.heldName !== null;
-  for (const e of entries) if (e.file && (!e.renamed || held(e))) (finals.set(e, e.file), taken.add(e.file.toLowerCase()));
+  for (const e of entries) if (e.file && (!e.renamed || held(e))) (finals.set(e, e.file), taken.add(fileKey(e.file)));
   for (const e of entries) if (!finals.has(e)) finals.set(e, uniqueFileName(e.name, e.kind, taken));
   const ids = new Map<TargetEntry, string | null>();
   const { seen } = pass;

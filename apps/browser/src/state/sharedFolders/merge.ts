@@ -1,5 +1,6 @@
 import {
   EMPTY_REMOTE,
+  fileKey,
   nameOfFile,
   remoteOrder,
   type BaseDir,
@@ -32,7 +33,7 @@ const holdsArrival = (level: RemoteLevel, ctx: Context): boolean =>
 const sameThing = (b: BaseEntry, r: RemoteEntry) =>
   b.kind === "link" ? r.kind === "link" && r.url === b.url : r.kind === "dir" && b.children.some((c) => r.level.entries.some((x) => x.file === c.file));
 
-const twinOf = (l: LocalEntry, r: RemoteEntry) => (l.kind === "link" ? r.kind === "link" && r.url === l.url : r.kind === "dir" && r.file.toLowerCase() === l.name.toLowerCase());
+const twinOf = (l: LocalEntry, r: RemoteEntry) => (l.kind === "link" ? r.kind === "link" && r.url === l.url : r.kind === "dir" && fileKey(r.file) === fileKey(l.name));
 
 function mergeLevel(base: BaseEntry[], local: LocalEntry[], remote: RemoteLevel, ctx: Context): TargetLevel {
   const localByKey = new Map(local.map((l) => [l.key, l]));

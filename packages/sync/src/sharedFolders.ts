@@ -27,7 +27,8 @@ export const SHARED_FOLDER_REFUSED = "ERR_SHARED_FOLDER_REFUSED";
 type SharedFoldersNative = {
   location(): SharedLocation;
   read(path: string, identity: SharedFolderIdentity | null): Promise<SharedListing>;
-  apply(path: string, ops: string, identity: SharedFolderIdentity | null): Promise<{ conflicts: string[] }>;
+  apply(path: string, ops: string, identity: SharedFolderIdentity | null, token: string | null): Promise<{ conflicts: string[]; cancelled?: boolean }>;
+  cancel(token: string): void;
   create(parent: string, parentIdentity: SharedFolderIdentity | null, name: string): Promise<ResolvedSharedFolder>;
   resolve(path: string): Promise<ResolvedSharedFolder>;
   discard(path: string, identity: SharedFolderIdentity): Promise<boolean>;

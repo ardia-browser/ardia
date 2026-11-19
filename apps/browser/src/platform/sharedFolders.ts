@@ -8,8 +8,9 @@ const Native = () => SharedFoldersNative!;
 
 export const sharedFoldersAvailable = () => !!SharedFoldersNative;
 export const sharedLocation = () => Native().location();
-export const readSharedFolder = (path: string, identity: SharedFolderIdentity | null = null) => Native().read(path, identity);
-export const writeSharedFolder = (path: string, ops: SharedFolderOp[], identity: SharedFolderIdentity | null = null) => Native().apply(path, JSON.stringify(ops), identity);
+export const readSharedFolder = (path: string, identity: SharedFolderIdentity) => Native().read(path, identity);
+export const writeSharedFolder = (path: string, ops: SharedFolderOp[], identity: SharedFolderIdentity, token: string) => Native().apply(path, JSON.stringify(ops), identity, token);
+export const cancelSharedFolderWrite = (token: string) => Native().cancel(token);
 export const identityOf = (folder: ResolvedSharedFolder): SharedFolderIdentity => ({ device: folder.device, inode: folder.inode });
 export const resolveSharedFolder = async (path: string) => Native().resolve(path);
 export const discardSharedFolder = async (folder: ResolvedSharedFolder) => Native().discard(folder.path, identityOf(folder));

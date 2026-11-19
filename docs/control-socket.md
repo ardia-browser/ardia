@@ -187,7 +187,7 @@ changes it today, 🔍 read only, 🗺️ designed below, ⛔ deliberately not e
 | Autofill | addresses, cards | Chrome's Web Data | 🔍 `autofill.list` (no card numbers); ⛔ card numbers |
 | Cookies and site data | cookies, storage per origin | Chrome's Cookies and storage | ✅ `sites.clearData`; ⛔ cookie values |
 | Favicons | icon per page | Chrome's Favicons database, app cache | 🔍 `favicons.get` |
-| Shared folders | groups backed by a folder, their identities | `shared-folders.json`, `.ardia-folder.json` | 🔍 `sharedFolders.list`; 🗺️ share, add, sync, stop |
+| Shared folders | groups backed by a folder, their identities | `shared-folders.json`, `.ardia-folder.json` | ✅ `sharedFolders.*` |
 | Live folders | pull request and document folders, their items, hidden and read state, connected accounts | `live.json` | ✅ `live.*`; ⛔ account tokens |
 | Sidebar layout | width, side, pinned collapsed, auto-hide | `settings` (`sidebarWidth`, `sidebarSide`, `autoHideTabs`), profiles (`pinnedCollapsed`) | ✅ through `settings.set`, `profiles.update`, `windows.setLayout` |
 | Presets and themes | setup codes, profile looks, theme files | `settings`, `themes/*.json`, profiles (`theme`) | ✅ `profiles.setLook`, `presets.apply`, `presets.describe` |
@@ -242,7 +242,7 @@ changes it today, 🔍 read only, 🗺️ designed below, ⛔ deliberately not e
 | passwords, autofill | `passwords.list {profile?}`, `autofill.list {profile?}` | `passwords.remove {origin, username}` |
 | pins (tile folders) | `pins.folders {window?}` | `pins.createFolder {tabs, name?}`, `pins.renameFolder {folder, name}`, `pins.removeFolder {folder}`, `pins.addToFolder {folder, tabs}`, `pins.removeFromFolder {tabs}` |
 | favicons | `favicons.get {url, profile?}` | none |
-| sharedFolders | `sharedFolders.list` | none yet; `share`, `add`, `sync` and `stop` are designed under Next |
+| sharedFolders | `sharedFolders.list` | `sharedFolders.share {group, parent?}`, `sharedFolders.add {path, window?}`, `sharedFolders.sync {group}`, `sharedFolders.stop {group}` |
 | live | `live.list {profile?}`, `live.items {folder, limit?, offset?}` | `live.create {kind, profile?, sources?, name?}`, `live.update`, `live.remove`, `live.refresh`, `live.hide {folder, items}`, `live.unhide`, `live.markRead {folder, items?}`, `live.setRepoHidden {folder, repo, hidden}`, `live.open {folder, item, window?}` |
 | presets | `presets.describe {code}` | `presets.apply {code, window?}` |
 | airTraffic | `airTraffic.rules`, `airTraffic.test {url, from?}` | `airTraffic.addRule`, `airTraffic.updateRule {id, …}`, `airTraffic.removeRule {id}`, `airTraffic.moveRule {id, index}`, `airTraffic.setFallback {open, profile?, group?}` |
@@ -272,13 +272,64 @@ Each area is its own file: `socketPins.ts`, `socketFavicons.ts`, `socketSharedFo
 - **Favicons.** `favicons.get` answers from the app's icon cache (`resolveFavicon`) and otherwise from the profile's
   icon database (`faviconsFor`), with `{found, mime, data}` (base64). It never fetches from the network, so reading
   icons can't tell a site the page is open.
-- **Shared folders** (`state/sharedFolders`). `sharedFolders.list` reads the sidebar's folders backed by a folder on
-  disk, with each one's path, file URL, groups, link count and sync state; nothing over the socket writes to a shared
-  folder yet (see Next). The sidebar's own sync goes through the native layer (`SharedFolderDirectory.swift`), which
-  opens the root once with `O_NOFOLLOW`, checks its device and inode, and does every scan, read, write, rename, mkdir
-  and unlink relative to folder descriptors it holds while descending (`openat`, `fstatat`, `renameatx_np`,
-  `unlinkat`), so a root or subfolder swapped after the check is never followed. Binding is compare-and-set: whichever
-  finishes making a folder second keeps the first one's binding and removes its own.
+- **Shared folders** (`state/sharedFolders`). `share` makes the folder in iCloud Drive's Ardia folder (or `parent`
+  when iCloud Drive is off) and syncs it once; instead of the macOS share sheet, the reply carries the folder's path and
+  file URL for the command to share. `add` binds a folder someone shared as a new pinned folder, as Add Shared Folder
+  does without its folder picker. `stop` is Stop Syncing: the group and the files stay. It cancels the batch being
+  written, if any, and answers only once that batch has finished; when it can't confirm that within 10 seconds it
+  answers `failed`, with the binding already gone.
+  Paths are resolved once to the real folder (`resolve` in `SharedFoldersModule.swift`): the binding stores that path and
+  the folder's device and inode. The native layer (`SharedFolderDirectory.swift`) opens the root once with `O_NOFOLLOW`,
+  checks its device and inode, and does every scan, read, write, rename, mkdir and unlink relative to folder descriptors
+  it holds while descending (`openat`, `fstatat`, `renameatx_np`, `unlinkat`), so a root or subfolder swapped after the
+  check is never followed, and two spellings of one folder are one binding. `/`, system folders and home folders are
+  refused by device and inode as well as by path, so `/System/Volumes/Data/Users` and the home folder's data-volume path are refused too (`resolve` rejects with `ERR_SHARED_FOLDER_REFUSED`, answered as `refused`); `parent` must already exist and is
+  held by descriptor and checked against its identity through creation, never recreated. `create` returns the new
+  folder's identity in the same call, and a folder `share` made but couldn't use is removed only while it is still that
+  empty folder. A binding made before identities existed (from the sidebar, or an older Ardia) is never filled in from
+  whatever is at its old path now: it shows "Pick the folder again to keep syncing" (`state: "reconnect"`), reads and
+  writes nothing, and the sidebar's Reconnect Folder… asks the person to pick it; the reconnected binding starts from
+  a fresh merge base. `add` with the old path finds that binding instead of making another. A folder syncs with one
+  profile at a time: `add` in another profile answers `refused`, naming the group that has it. Binding is compare-and-set for the sidebar and the
+  socket alike: whichever finishes making a folder second keeps the first one's binding and removes its own. `add` reads
+  the folder before saving anything, so a missing, unreadable or too big folder (over 20,000 items or 32 MB of links and
+  order files, counted while listing) answers an error and adds nothing. Requests for one group run one at a time;
+  `share` re-checks the group after making the folder and removes the folder it made when the group changed or control
+  went off. A sync started by the socket stops before writing once control is off, its retries keep that check, and a
+  write already under way when control goes off commits nothing. When the first sync fails, `share` answers `failed`
+  with the reason instead of the URL, as the sidebar shows a toast instead of the share sheet; the binding stays, as it
+  does there.
+  The native `read` and `apply` refuse a missing identity rather than open a path.
+  Folder names drop control characters (NUL included), `/` and `:`, and `create` tries at most 1,000 numbered names.
+  `create` compares the identity it `fstatat`s right after `mkdirat` with the folder it then opens. A rename checks the
+  source's identity just before `renameatx_np` with `RENAME_EXCL` and moves it back if what landed isn't that file; a
+  folder is removed by renaming it to a unique hidden name, checking its identity there, and only then removing it (a
+  replacement is renamed back). `rmdir` checks the folder's identity before it touches the order file or any other
+  housekeeping file in it, and puts them back if it can't remove the folder. Replacing a link swaps the new file in
+  with `renameatx_np(RENAME_SWAP)` after checking the old one's identity, then checks that what it swapped out is that
+  file and swaps back if not; deleting a link renames it to a hidden name, checks its identity and URL there, and only
+  then unlinks it. What remains is the moment between the last check and the rename or swap, and a rename back that
+  fails because the name was taken in between, which leaves the other file under the hidden name; nothing is ever
+  removed in that case. `mkdir` and `rmdir` check that the parent's path still names the held folder, and `mkdir` onto
+  a folder that already exists is a conflict, so a name another device made (in another Unicode form, say) is merged
+  on the next read instead of written into. The planner reserves names the way APFS compares them (Unicode
+  normalization and case together). File coordination and iCloud download requests stay path-based, because
+  `NSFileCoordinator` and iCloud work by path; each coordinated read, write and delete first checks that the path
+  still names the held folder, and a folder whose path moved is a conflict or an error, never a write elsewhere. Staged
+  files land with `renameatx_np` into the held descriptor. iCloud download requests (`startDownloadingUbiquitousItem`)
+  stay path-based outside the checked callbacks: at worst they ask iCloud to download a file in the folder now at that
+  path, and nothing is read or written there. Every byte read while scanning counts toward the 32 MB cap, whether or
+  not it decodes, and so does a binary link's size once converted to XML (over 64 KB, it's held as unreadable). A scan
+  stops after 30 seconds, and a file that doesn't answer its coordination in time is an error for that read, not a
+  missing link. Each folder has its own native queue, so a slow folder never holds up the others. A socket round's
+  write batch carries a cancel token: the engine cancels it as soon as the round's control check fails or the binding
+  changes, and native `apply` checks it before each change and again after each file-coordination wait, then stops
+  with `cancelled`, committing nothing. Add, from the sidebar or the socket, runs one at a time per folder identity and binds only
+  when no binding in the profile has that identity. `add` checks control after every await before it changes anything.
+  A sidebar change made by a socket round (remote links applied) is tagged with that round's guard. A follow-up the
+  store starts runs under that guard, and any later round, from the store, the folder watcher or the minute poll,
+  writes nothing for a tagged change whose guard was revoked: the disk side wins, and the round only records the
+  folder as it is on disk.
   A group bound to a shared folder syncs to disk whenever it changes, so the socket leaves it alone: `apply` answers
   `refused` ("shared folder groups change only from the sidebar") for any op that would change such a group's members,
   their order, a tab or group title inside it, or its nesting, including moving a tab or group into or out of it,
@@ -360,12 +411,6 @@ the user's live sessions on every site. Both are a different consent than "contr
 
 Designed, not built in this round, each in its own file under `state/automation/socket<Area>.ts`:
 
-- **Shared folder writes:** `sharedFolders.share {group, parent?}`, `sharedFolders.add {path, window?}`,
-  `sharedFolders.sync {group}` and `sharedFolders.stop {group}`, in the follow-up to this round,
-  #2836 (`full-control/app-socket-2a-shared`). They wait for the shared-folder sync engine and its native layer to hold up
-  under a writer outside the sidebar: control checks after every await, no store-triggered round outliving its guard,
-  no sync without a folder identity, sanitized names, one Add per folder identity, refusal by device and inode, and
-  identity-checked renames, removals and creates.
 - **Window geometry:** `windows.setFrame {window, frame}`, `windows.setMaximized`, `windows.setFullScreen`. The store's
   `frame`, `maximized` and `fullScreen` follow the native window (`windows/windowSync.ts`), so these need a native
   call that moves the window (`ArdiaWindows`), which doesn't exist yet; `run` covers full screen through its command.

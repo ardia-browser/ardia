@@ -14,6 +14,6 @@ export function useSharedFolderMark(groupId: string): SharedFolderMark | null {
     const [profileId, key] = ref.split("\u0001") as [string, string];
     if (!s.folders[profileId]?.[key]) return null;
     const state = s.sync[ref]?.state;
-    return state === "error" || state === "missing" ? "error" : state === "waiting" ? "waiting" : "shared";
+    return state === "error" || state === "missing" || state === "reconnect" ? "error" : state === "waiting" ? "waiting" : "shared";
   });
 }

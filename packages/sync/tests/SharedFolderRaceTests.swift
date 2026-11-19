@@ -80,10 +80,11 @@ final class SharedFolderRaceTests: XCTestCase {
     let root = try folder("root")
     let directory = try bound(root)
     SharedFolderDirectory.pausePoint = { point in if point == "op:New.webloc" { self.swapForImpostor(root) } }
-    _ = try? directory.apply(json: try ops([["op": "write", "path": "New.webloc", "text": webloc("https://new.example/"), "create": true, "expect": NSNull()]]))
+    let result = try? directory.apply(json: try ops([["op": "write", "path": "New.webloc", "text": webloc("https://new.example/"), "create": true, "expect": NSNull()]]))
     XCTAssertFalse(fm.fileExists(atPath: outside.appendingPathComponent("New.webloc").path))
     XCTAssertFalse(fm.fileExists(atPath: root.appendingPathComponent("New.webloc").path), "the impostor at the bound path stays untouched")
-    XCTAssertTrue(fm.fileExists(atPath: scratch.appendingPathComponent("root-moved/New.webloc").path), "the write lands in the folder that was checked")
+    XCTAssertFalse(fm.fileExists(atPath: scratch.appendingPathComponent("root-moved/New.webloc").path), "a folder its path no longer names isn't written either")
+    XCTAssertEqual(result?["conflicts"] as? [String], ["New.webloc"])
   }
 
   func testADescendantReplacedBeforeAWriteOrDeleteIsNeverTouched() throws {
@@ -158,5 +159,86 @@ final class SharedFolderRaceTests: XCTestCase {
         XCTAssertTrue(error is SharedFolderDirectory.Refused, "\(path): \(error)")
       }
     }
+  }
+
+  func testDataVolumeAliasesOfSystemAndHomeFoldersAreRefused() {
+    for path in ["/System/Volumes/Data", "/System/Volumes/Data/Users", "/System/Volumes/Data" + NSHomeDirectory()] where FileManager.default.fileExists(atPath: path) {
+      XCTAssertThrowsError(try SharedFolderDirectory.resolve(path)) { error in
+        XCTAssertTrue(error is SharedFolderDirectory.Refused, "\(path): \(error)")
+      }
+    }
+  }
+
+  func testNamesWithControlCharactersAreSanitizedAndCreateFinishes() throws {
+    let parent = try folder("parent")
+    XCTAssertEqual(SharedFolderDirectory.folderName("Team\u{0}One\u{7}/Two:Three"), "Team-One--Two-Three")
+    let made = try SharedFolderDirectory.create(inParent: parent.path, parentIdentity: nil, named: "Team\u{0}One")
+    XCTAssertEqual(made["path"] as? String, parent.appendingPathComponent("Team-One").path)
+    let again = try SharedFolderDirectory.create(inParent: parent.path, parentIdentity: nil, named: "Team\u{0}One")
+    XCTAssertEqual(again["path"] as? String, parent.appendingPathComponent("Team-One 2").path)
+  }
+
+  func testCreateRefusesAFolderSwappedRightAfterItWasMade() throws {
+    let parent = try folder("parent")
+    SharedFolderDirectory.pausePoint = { point in if point == "create:Team" { self.swapForImpostor(parent.appendingPathComponent("Team")) } }
+    XCTAssertThrowsError(try SharedFolderDirectory.create(inParent: parent.path, parentIdentity: nil, named: "Team"))
+  }
+
+  func testRemovingAnEmptiedFolderNeverRemovesItsReplacement() throws {
+    let root = try folder("root")
+    let sub = try folder("root/Sub")
+    let directory = try bound(root)
+    SharedFolderDirectory.pausePoint = { point in if point == "rmdir:Sub" { self.swapForImpostor(sub) } }
+    _ = try directory.apply(json: try ops([["op": "rmdir", "path": "Sub"]]))
+    XCTAssertTrue(fm.fileExists(atPath: sub.path), "the replacement stays")
+    XCTAssertEqual(try fm.contentsOfDirectory(atPath: root.path).filter { $0.hasPrefix(".ardia-removing") }, [])
+  }
+
+  func testDiscardNeverRemovesAReplacement() throws {
+    let parent = try folder("parent")
+    let made = try SharedFolderDirectory.create(inParent: parent.path, parentIdentity: nil, named: "Team")
+    let identity = ["device": made["device"] as! Int, "inode": made["inode"] as! Int]
+    swapForImpostor(URL(fileURLWithPath: made["path"] as! String))
+    XCTAssertFalse(SharedFolderDirectory.discard(made["path"] as! String, identity: identity))
+    XCTAssertTrue(fm.fileExists(atPath: made["path"] as! String))
+  }
+
+  func testARenameNeverMovesAReplacedSource() throws {
+    let root = try folder("root")
+    let source = root.appendingPathComponent("A.webloc")
+    try webloc("https://mine.example/").write(to: source, atomically: true, encoding: .utf8)
+    let directory = try bound(root)
+    SharedFolderDirectory.pausePoint = { point in
+      guard point == "move:A.webloc" else { return }
+      try? self.fm.removeItem(at: source)
+      try? self.webloc("https://replacement.example/").write(to: source, atomically: true, encoding: .utf8)
+    }
+    let result = try directory.apply(json: try ops([["op": "move", "path": "A.webloc", "to": "B.webloc"]]))
+    XCTAssertEqual(result["conflicts"] as? [String], ["B.webloc"])
+    XCTAssertTrue(try String(contentsOf: source, encoding: .utf8).contains("replacement.example"))
+    XCTAssertFalse(fm.fileExists(atPath: root.appendingPathComponent("B.webloc").path))
+  }
+
+  func testASubfolderWhosePathMovedIsAnErrorNotARead() throws {
+    let root = try folder("root")
+    let sub = try folder("root/Sub")
+    try webloc("https://mine.example/").write(to: sub.appendingPathComponent("Mine.webloc"), atomically: true, encoding: .utf8)
+    let directory = try bound(root)
+    SharedFolderDirectory.pausePoint = { point in if point == "scan:Sub" { self.swapForImpostor(sub) } }
+    let listing = String(describing: directory.read())
+    XCTAssertTrue(listing.contains("moved while Ardia read it"), listing)
+    XCTAssertFalse(listing.contains("mine.example"))
+  }
+
+  func testUndecodableBytesCountTowardTheScanCap() throws {
+    let root = try folder("root")
+    let manifest = Data(repeating: 0xFF, count: SharedFolderDirectory.maxManifestBytes - 16)
+    for i in 0...(SharedFolderDirectory.maxScanBytes / manifest.count) {
+      let sub = try folder("root/D\(i)")
+      fm.createFile(atPath: sub.appendingPathComponent(SharedFolderDirectory.manifestName).path, contents: manifest)
+    }
+    let listing = try bound(root).read()
+    XCTAssertEqual(listing["exists"] as? Bool, false)
+    XCTAssertTrue((listing["error"] as? String)?.contains("more than") == true)
   }
 }

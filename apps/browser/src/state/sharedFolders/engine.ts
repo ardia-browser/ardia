@@ -6,13 +6,12 @@ import { saveBeforeQuit } from "../app/quit";
 import { guardGroupClose, keepGroupsOpen } from "../groups/closeGuard";
 import { confirmRemovingShared, sharedFolderOfGroup } from "./removal";
 import { isRegularWindow } from "../windows/small";
-import { onSharedFolderChange, readSharedFolder, sharedFoldersAvailable, watchSharedFolders, writeSharedFolder } from "../../platform/sharedFolders";
+import { cancelSharedFolderWrite, onSharedFolderChange, readSharedFolder, sharedFoldersAvailable, watchSharedFolders, writeSharedFolder } from "../../platform/sharedFolders";
 import { APPLIED_FIELDS, withFolder } from "./applyFolder";
 import { knownNames, localFolder, signatureOf } from "./local";
 import { mergeFolder } from "./merge";
 import { planFiles } from "./plan";
 import { remoteLevel } from "./remote";
-import { upgradeLegacy } from "./bindings";
 import { boundFolders, folderRef, saveFoldersNow, setFolderBase, setFolderSync, sharedFolderOf, unbindFolder, useSharedFolders } from "./store";
 
 type Place = { kind: "shown"; groupId: string } | { kind: "hidden" } | { kind: "gone" };
@@ -21,6 +20,8 @@ const LOCAL_SETTLE_MS = 300;
 const REMOTE_SETTLE_MS = 150;
 const POLL_MS = 60_000;
 const CONFLICT_RETRY_MS = 3000;
+const CANCEL_CHECK_MS = 50;
+export const STOP_WAIT_MS = 10_000;
 
 const store = () => useBrowser.getState();
 const always = () => true;
@@ -47,6 +48,10 @@ const signatures = new Map<string, string>();
 const timers = new Map<string, { timer: ReturnType<typeof setTimeout>; allowed: Guard }>();
 const running = new Map<string, Promise<void>>();
 const queued = new Map<string, Guard>();
+const producedBy = new Map<string, { signature: string; allowed: Guard }>();
+const writes = new Map<string, string>();
+let nextToken = 0;
+export const RECONNECT = "Ardia can’t confirm which folder this is any more. Pick it again with Reconnect Folder to keep syncing it.";
 
 const either = (a: Guard | undefined, b: Guard): Guard => (!a || a === b ? b : a === always || b === always ? always : () => a() || b());
 
@@ -96,7 +101,7 @@ export function syncFolderNow(profileId: string, key: string, allowed: Guard = a
 
 async function round(profileId: string, key: string, allowed: Guard) {
   const ref = folderRef(profileId, key);
-  const folder = await upgradeLegacy(profileId, key);
+  const folder = sharedFolderOf(profileId, key);
   if (!folder) return;
   const place = folderPlace(store(), profileId, key);
   if (place.kind !== "shown") {
@@ -105,7 +110,9 @@ async function round(profileId: string, key: string, allowed: Guard) {
     else setFolderSync(profileId, key, { state: "paused" });
     return;
   }
-  const listing = await readSharedFolder(folder.path, folder.identity ?? null);
+  if (!folder.identity) return setFolderSync(profileId, key, { state: "reconnect", error: RECONNECT });
+  const identity = folder.identity;
+  const listing = await readSharedFolder(folder.path, identity);
   const stale = () => sharedFolderOf(profileId, key) !== folder;
   if (!allowed()) return;
   if (stale()) return queue(ref, allowed);
@@ -121,10 +128,17 @@ async function round(profileId: string, key: string, allowed: Guard) {
   if (!allowed()) return;
   const local = localFolder(s, here.groupId, knownNames(folder.base));
   if (!local) return;
+  const tag = producedBy.get(ref);
+  const diskWins = !!tag && !tag.allowed() && signatureOf(local) === tag.signature;
   const { level, waiting } = mergeFolder(folder.base, local.entries, remote);
   const next = withFolder(s, here.groupId, level, local);
-  if (next !== s) fromSync(() => useBrowser.setState(Object.fromEntries(APPLIED_FIELDS.map((f) => [f, next[f]]))));
-  const { ops, base } = planFiles(level, folder.base);
+  if (next !== s) {
+    fromSync(() => useBrowser.setState(Object.fromEntries(APPLIED_FIELDS.map((f) => [f, next[f]]))));
+    producedBy.set(ref, { signature: signatureOf(localFolder(store(), here.groupId, knownNames(folder.base))), allowed });
+  }
+  const planned = planFiles(level, folder.base);
+  const { base } = planned;
+  const ops = diskWins ? [] : planned.ops;
   const settled = signatureOf(localFolder(store(), here.groupId, knownNames(base)));
   const saved = await sessionSaved();
   if (!allowed()) return;
@@ -133,17 +147,51 @@ async function round(profileId: string, key: string, allowed: Guard) {
     return setFolderSync(profileId, key, { state: "syncing", error: null });
   }
   if (stale()) return queue(ref, allowed);
-  const { conflicts } = ops.length ? await writeSharedFolder(folder.path, ops, folder.identity ?? null) : { conflicts: [] };
+  const { conflicts, cancelled } = ops.length ? await guardedWrite(ref, folder.path, ops, identity, () => allowed() && !stale()) : { conflicts: [], cancelled: false };
   if (stale()) return queue(ref, allowed);
-  if (!allowed()) return;
+  if (!allowed() || cancelled) return;
   if (conflicts.length) {
     schedule(profileId, key, CONFLICT_RETRY_MS, allowed);
     return setFolderSync(profileId, key, { state: "syncing", error: null });
   }
   setFolderBase(profileId, key, base);
   signatures.set(ref, settled);
+  producedBy.delete(ref);
   checkLocal();
   setFolderSync(profileId, key, { state: waiting ? "waiting" : "synced", waiting, error: null });
+}
+
+async function guardedWrite(ref: string, path: string, ops: Parameters<typeof writeSharedFolder>[1], identity: Parameters<typeof writeSharedFolder>[2], still: Guard) {
+  const token = `w${++nextToken}`;
+  writes.set(ref, token);
+  const watch = setInterval(() => {
+    if (!still()) cancelSharedFolderWrite(token);
+  }, CANCEL_CHECK_MS);
+  try {
+    const result = await writeSharedFolder(path, ops, identity, token);
+    return { conflicts: result.conflicts, cancelled: !!result.cancelled };
+  } finally {
+    clearInterval(watch);
+    if (writes.get(ref) === token) writes.delete(ref);
+  }
+}
+
+export async function stopSyncing(profileId: string, key: string): Promise<boolean> {
+  const ref = folderRef(profileId, key);
+  clearTimeout(timers.get(ref)?.timer);
+  timers.delete(ref);
+  queued.delete(ref);
+  producedBy.delete(ref);
+  unbindFolder(profileId, key);
+  const token = writes.get(ref);
+  if (token) cancelSharedFolderWrite(token);
+  const busy = running.get(ref);
+  if (!busy) return true;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<boolean>((resolve) => (timer = setTimeout(() => resolve(false), STOP_WAIT_MS)));
+  const finished = await Promise.race([busy.then(() => true, () => true), timedOut]);
+  clearTimeout(timer);
+  return finished;
 }
 
 function checkLocal() {
@@ -151,7 +199,10 @@ function checkLocal() {
   for (const { profileId, key, folder } of boundFolders()) {
     const place = folderPlace(s, profileId, key);
     const signature = place.kind === "shown" ? signatureOf(localFolder(s, place.groupId, knownNames(folder.base))) : place.kind;
-    if (signature !== signatures.get(folderRef(profileId, key))) schedule(profileId, key, LOCAL_SETTLE_MS);
+    const ref = folderRef(profileId, key);
+    if (signature === signatures.get(ref)) continue;
+    const produced = producedBy.get(ref);
+    schedule(profileId, key, LOCAL_SETTLE_MS, produced?.signature === signature ? produced.allowed : always);
   }
 }
 

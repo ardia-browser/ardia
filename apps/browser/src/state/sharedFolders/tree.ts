@@ -42,6 +42,8 @@ function capBytes(text: string, limit: number): string {
 
 export const EMPTY_REMOTE: RemoteLevel = { entries: [], manifest: null, manifestPending: false };
 
+export const fileKey = (file: string) => file.normalize("NFD").toUpperCase().toLowerCase().normalize("NFD");
+
 export const isLinkFile = (file: string) => file.toLowerCase().endsWith(LINK_EXTENSION);
 
 export const nameOfFile = (file: string, kind: "link" | "dir") => (kind === "link" && isLinkFile(file) ? file.slice(0, -LINK_EXTENSION.length) : file);
@@ -62,8 +64,8 @@ export function uniqueFileName(name: string, kind: "link" | "dir", taken: Set<st
   const first = fileNameFor(name, kind);
   const stem = nameOfFile(first, kind);
   let file = first;
-  for (let n = 2; taken.has(file.toLowerCase()); n++) file = kind === "link" ? `${stem} ${n}${LINK_EXTENSION}` : `${stem} ${n}`;
-  taken.add(file.toLowerCase());
+  for (let n = 2; taken.has(fileKey(file)); n++) file = kind === "link" ? `${stem} ${n}${LINK_EXTENSION}` : `${stem} ${n}`;
+  taken.add(fileKey(file));
   return file;
 }
 

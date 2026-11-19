@@ -36,7 +36,7 @@ test("2 resetting the anonymous ID while sharing stays on drops journey state fr
 
 test("2 an identity reset while sharing stays on forgets switcher presses, so a later switch isn't credited to one made before", () => {
   sharingOn();
-  switcher.noteSwitcherPress("w", "p", true);
+  switcher.noteSwitcherPress("w", "p", { icons: true, mixed: false });
   client.replaceInstallId();
   assert.deepEqual(switcher.switcherSwitchProperties("w", "p"), { via_switcher: false });
 });

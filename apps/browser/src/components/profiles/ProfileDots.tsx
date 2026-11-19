@@ -10,7 +10,8 @@ import { useNativePagerPosition, usePagerPages, type PagerPage } from "../../sta
 import { ContextMenuArea, useHover } from "../ui";
 import { TooltipAbove } from "../ui/TooltipAbove";
 import { SIDEBAR_FOOTER_DOWNLOADS } from "../sidebar/geometry";
-import { switcherCellWidth, switcherIcons, SwitcherMark } from "./ProfileIcons";
+import { SwitcherMark } from "./ProfileIcons";
+import { switcherLayout, type SwitcherLayout } from "./switcherLayout";
 import { openProfileItemMenu } from "./profileMenu";
 import { profileSwitcherShown } from "../../state/profiles/switcherShown";
 import { profileSwitcher } from "./tokens";
@@ -34,20 +35,20 @@ export function ProfileDots({ windowId, width, besideDownloads }: { windowId: st
   const ids = useProfileOrder(useShallow((o) => o));
   const saved = useProfileRecords(useShallow((profiles) => ids.map((id) => profiles[id]?.icon ?? null)));
   const shown = useSettings((s) => s.profileSwitcherIcons);
-  const icons = switcherIcons(saved, shown, width - 2 * (besideDownloads ? SIDE_ROOM_BESIDE_DOWNLOADS : SIDE_ROOM));
+  const row = switcherLayout(saved, shown, width - 2 * (besideDownloads ? SIDE_ROOM_BESIDE_DOWNLOADS : SIDE_ROOM));
   const { pages, pager } = usePagerPages(windowId);
   return (
     <View style={{ height: PROFILE_DOTS_HEIGHT, alignItems: "center" }}>
       <View style={{ marginTop: (PROFILE_DOTS_HEIGHT - 3 - BAND) / 2, height: BAND, flexDirection: "row" }}>
         {ids.map((id, i) => (
-          <Dot key={id} id={id} windowId={windowId} icon={icons[i] ?? null} page={pages.find((p) => p.id === id)} pos={pager.pos} />
+          <Dot key={id} id={id} windowId={windowId} icon={row.marks[i] ?? null} row={row} page={pages.find((p) => p.id === id)} pos={pager.pos} />
         ))}
       </View>
     </View>
   );
 }
 
-function Dot({ id, windowId, icon, page, pos }: { id: string; windowId: string; icon: string | null; page: PagerPage | undefined; pos: Animated.Value }) {
+function Dot({ id, windowId, icon, row, page, pos }: { id: string; windowId: string; icon: string | null; row: SwitcherLayout; page: PagerPage | undefined; pos: Animated.Value }) {
   const theme = useTheme();
   useNativePagerPosition(windowId);
   const name = useProfile(id, (p) => p?.name ?? "");
@@ -63,7 +64,7 @@ function Dot({ id, windowId, icon, page, pos }: { id: string; windowId: string; 
   const opacity = page
     ? pos.interpolate({ inputRange: [page.slot - 1, page.slot, page.slot + 1], outputRange: [rest, levels.selected, rest], extrapolate: "clamp" })
     : rest;
-  const cell = switcherCellWidth(icon);
+  const { cell } = row;
   const mark = useRef<View>(null);
   return (
     <View {...hoverProps} ref={mark}>
@@ -76,7 +77,7 @@ function Dot({ id, windowId, icon, page, pos }: { id: string; windowId: string; 
           onPressOut={pressMotion.onPressOut}
           onPress={() => {
             setPressed(true);
-            noteSwitcherPress(windowId, id, !!icon);
+            noteSwitcherPress(windowId, id, { icons: row.icons, mixed: row.mixed });
             switchProfile(windowId, id, true);
           }}
         >
@@ -84,7 +85,7 @@ function Dot({ id, windowId, icon, page, pos }: { id: string; windowId: string; 
             {holding ? (
               <View
                 pointerEvents="none"
-                style={{ position: "absolute", width: icon ? cell : holdPlate.dot, height: icon ? holdPlate.icon : holdPlate.dot, borderRadius: icon ? holdPlate.radius : holdPlate.dot / 2, backgroundColor: tokens.multiSelected }}
+                style={{ position: "absolute", width: row.icons ? cell : holdPlate.dot, height: row.icons ? holdPlate.icon : holdPlate.dot, borderRadius: row.icons ? holdPlate.radius : holdPlate.dot / 2, backgroundColor: tokens.multiSelected }}
               />
             ) : null}
             <Animated.View style={[{ opacity }, pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : null]}>

@@ -15,6 +15,7 @@ export const profileSwitcher = {
   dot: 6,
   iconCell: 26,
   icon: 11,
+  ink: 13,
   dotTooltipLift: 18.25,
   dots: { selected: 0.85, hovered: 0.4, idle: 0.2 },
   icons: { selected: 1, hovered: 0.7, idle: 0.42 },

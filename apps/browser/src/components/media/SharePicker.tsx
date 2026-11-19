@@ -91,40 +91,42 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
     );
   }, [sources]);
 
-  if (!request) return null;
   const tabs = [ ...shareableTabs(tabId) ].sort((a, b) => (a.id === tabId ? -1 : b.id === tabId ? 1 : b.lastActiveAt - a.lastActiveAt));
-  const screens = screenAccess ? sources.filter((s) => s.kind === "screen") : [];
-  const windows = screenAccess ? sources.filter((s) => s.kind === "window") : [];
+  const screens = request && screenAccess ? sources.filter((s) => s.kind === "screen") : [];
+  const windows = request && screenAccess ? sources.filter((s) => s.kind === "window") : [];
   const isTab = (id: string | null) => !!id && id.startsWith(TAB) && tabs.some((t) => TAB + t.id === id);
   const kindOf = (id: string | null): SourceKind | null => (isTab(id) ? "tab" : ([...screens, ...windows].find((s) => s.id === id)?.kind ?? null));
   const valid = !!kindOf(selected);
   const selectedKind = kindOf(selected);
-  const audioFor = (kind: SourceKind | null) => !!kind && audioOffered(kind, request.audio) && shareAudio[kind];
+  const audioFor = (kind: SourceKind | null) => !!kind && !!request && audioOffered(kind, request.audio) && shareAudio[kind];
   const share = (id: string | null = selected) => {
     const kind = kindOf(id);
-    if (!id || !kind) return;
+    if (!id || !kind || !request) return;
     noteShareSegmentOf(id);
     if (kind === "tab") return void shareTab(tabId, id.slice(TAB.length), audioFor(kind));
     answerDisplayMedia(tabId, id, audioFor(kind));
   };
   const cancel = () => answerDisplayMedia(tabId, null);
-  const frameHost = request.frameOrigin ? originForSecurityDisplay(request.frameOrigin) : "";
-  const receiver = frameHost && frameHost !== originForSecurityDisplay(request.origin) ? `${frameHost}, a frame on this page,` : originForSecurityDisplay(request.origin);
   const width = Math.min(WIDTH, paneWidth - 24);
   const columns = width < 560 ? 2 : 3;
   const cardWidth = (width - 2 * PANEL.inset - (columns - 1) * space.m) / columns;
-  const cards =
-    segment === "tabs"
+  const cards = !request
+    ? []
+    : segment === "tabs"
       ? tabs.map((t) => ({ id: TAB + t.id, title: t.title || t.url, badge: t.id === tabId ? "This Tab" : null, kind: "tab" as const, source: null, icon: null }))
       : segment === "screen"
         ? screens.map((s) => ({ id: s.id, title: screenTitle(s), badge: null, kind: "screen" as const, source: s, icon: null }))
         : windows.map((s) => ({ id: s.id, title: s.name || s.app || "Window", badge: null, kind: "window" as const, source: s, icon: s.pid !== undefined ? (icons[s.pid] ?? null) : null }));
   const needsAccess = segment !== "tabs" && screenAccess === false;
+  const loneCardId = request && cards.length === 1 && !needsAccess ? cards[0]!.id : null;
+  useEffect(() => {
+    if (loneCardId && selected !== loneCardId) setSelected(loneCardId);
+  }, [loneCardId, selected]);
   const pickSegment = (next: Segment) => {
     setSegment(next);
-    setSelected(null);
-    const focusList = setTimeout(() => (list.current as unknown as { focus?: () => void } | null)?.focus?.(), FOCUS_MS);
-    clearTimeout(focusList);
+    const nextCards = next === "tabs" ? tabs.map((t) => TAB + t.id) : next === "screen" ? screens.map((s) => s.id) : windows.map((s) => s.id);
+    setSelected(nextCards.length === 1 ? nextCards[0]! : null);
+    setTimeout(() => (list.current as unknown as { focus?: () => void } | null)?.focus?.(), FOCUS_MS);
   };
   const missingThumbs = cards.filter((c) => c.kind !== "tab" && !(c.id in thumbs) && !asked.current.has(c.id)).map((c) => c.id);
   if (missingThumbs.length) {
@@ -132,6 +134,9 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
     void getDisplayMediaThumbnailsFor(missingThumbs, THUMB_WIDTH).then((found) => setThumbs((current) => ({ ...current, ...found })));
   }
 
+  if (!request) return null;
+  const frameHost = request.frameOrigin ? originForSecurityDisplay(request.frameOrigin) : "";
+  const receiver = frameHost && frameHost !== originForSecurityDisplay(request.origin) ? `${frameHost}, a frame on this page,` : originForSecurityDisplay(request.origin);
   return (
     <Popover key={request.id} width={width} top={POPOVER_MARGIN} left={(paneWidth - width) / 2} onDismiss={cancel}>
       <View style={{ paddingBottom: PANEL.inset }}>
@@ -153,7 +158,7 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
         />
 
         <View style={{ paddingHorizontal: PANEL.inset, marginTop: space.xs, marginBottom: space.s }}>
-          <Segmented options={SEGMENTS} value={segment} onChange={pickSegment} />
+          <Segmented options={SEGMENTS} value={segment} onChange={pickSegment} fill />
         </View>
 
         <ScrollView

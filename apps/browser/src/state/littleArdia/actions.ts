@@ -17,6 +17,8 @@ import { linkGate, type LinkGateResult, type LinkRouteChoice, type LinkSourceInf
 import { externalLinkOpen, type ExternalLinkOpen } from "./externalLinkOpen";
 import { noteExternalLink } from "../telemetry/usage";
 import { openInRouteGroup } from "../airTraffic/openAt";
+import { noteAirTrafficLink } from "../telemetry/airTrafficCounts";
+import { consentToken, type ConsentToken } from "../telemetry/client";
 import { noteLittleArdiaAppHandoff, noteLittleArdiaEscapeClose, type EscapePressedIn } from "../telemetry/littleArdiaEscapes";
 import { askBeforeQuitting, quitWarningMayAsk } from "../windows/quitWarning";
 
@@ -33,6 +35,7 @@ export function openExternalUrls(given: string[], pointer?: [number, number], so
   const settings = store().settings;
   const urls = settings.allowJavaScriptFromAppleEvents ? given : given.filter((url) => !runsJavaScript(url, settings));
   if (!urls.length) return;
+  const consent = consentToken();
   const gate = linkGate();
   const app = returnTo ?? source?.bundleId ?? undefined;
   if (!gate) return openUndecided(urls, pointer, false, app);
@@ -47,7 +50,7 @@ export function openExternalUrls(given: string[], pointer?: [number, number], so
     const plain: string[] = [];
     results.forEach((result, i) => {
       if (!result) return;
-      if (result.route) return openRoutedUrl(result.url, result.route, pointer, app);
+      if (result.route) return openRoutedUrl(result.url, result.route, consent, pointer, app);
       if (result.url !== urls[i]) return openUrlsFromApps([result.url], { profileId: null, adoptIds: [undefined] }, pointer, true, app);
       plain.push(result.url);
     });
@@ -55,7 +58,7 @@ export function openExternalUrls(given: string[], pointer?: [number, number], so
   });
 }
 
-function openRoutedUrl(url: string, route: LinkRouteChoice, pointer?: [number, number], app?: string) {
+function openRoutedUrl(url: string, route: LinkRouteChoice, consent: ConsentToken | null, pointer?: [number, number], app?: string) {
   const profileId = route.profileId ?? lastActiveProfile(store());
   if (route.windowId && store().windows[route.windowId]) {
     noteExternalLink("tab", store().settings.openLinksInLittleArdia);
@@ -69,7 +72,9 @@ function openRoutedUrl(url: string, route: LinkRouteChoice, pointer?: [number, n
   const open = decideExternal([url], route.open);
   if (open === "littleArdia") return void openLittleArdia(url, profileId, undefined, pointer, app);
   if (open === "window") return focus(openWindow({ url, profileId }));
-  openLinksInMainWindow([url], profileId, [undefined], true);
+  const usedLast = mainWindowFor(store());
+  if (usedLast && store().windows[usedLast]!.profileId !== profileId) noteAirTrafficLink("profile_switch", consent);
+  openLinksInWindow(usedLast, [url], profileId, [undefined], true);
 }
 
 function decideExternal(urls: string[], ruled: ExternalLinkOpen | null = null): ExternalLinkOpen {
@@ -104,11 +109,11 @@ function openUrlsFromApps(urls: string[], routed: RoutedLinks, pointer?: [number
   const [url] = urls;
   const profileId = routed.profileId ?? lastActiveProfile(store());
   if (decideExternal(urls) === "littleArdia" && url) return void openLittleArdia(url, profileId, asAdoptId(routed.adoptIds[0]), pointer, app);
-  openLinksInMainWindow(urls, profileId, routed.adoptIds, gated);
+  openLinksInWindow(mainWindowFor(store(), profileId), urls, profileId, routed.adoptIds, gated);
 }
 
-function openLinksInMainWindow(urls: string[], profileId: string, adoptIds: (string | undefined)[], gated = false) {
-  let target = mainWindowFor(store(), profileId);
+function openLinksInWindow(windowId: string | undefined, urls: string[], profileId: string, adoptIds: (string | undefined)[], gated = false) {
+  let target = windowId;
   urls.forEach((url, i) => {
     const s = store();
     const adoptId = asAdoptId(adoptIds[i]);

@@ -1,12 +1,15 @@
 import { currentAirTraffic } from "../airTraffic/store";
 import { isWildcardPattern, type AirTrafficConfig } from "../airTraffic/rules";
+import type { ConsentToken } from "./choice";
+import { countFor } from "./countFor";
 
-export type AirTrafficRouted = "rule" | "fallback" | "group";
+export type AirTrafficRouted = "rule" | "fallback" | "group" | "profile_switch";
 
-const counts: Record<AirTrafficRouted, number> = { rule: 0, fallback: 0, group: 0 };
-const ROUTED: readonly AirTrafficRouted[] = ["rule", "fallback", "group"];
+const counts: Record<AirTrafficRouted, number> = { rule: 0, fallback: 0, group: 0, profile_switch: 0 };
+const ROUTED: readonly AirTrafficRouted[] = ["rule", "fallback", "group", "profile_switch"];
 
-export const noteAirTrafficLink = (by: AirTrafficRouted) => void counts[by]++;
+export const noteAirTrafficLink = (by: AirTrafficRouted, consent?: ConsentToken | null) =>
+  countFor(consent, () => void counts[by]++, { [`air_traffic_${by}_links`]: 1 });
 
 export function takeAirTrafficCounts() {
   const taken = Object.fromEntries(ROUTED.map((by) => [`air_traffic_${by}_links`, counts[by]]));

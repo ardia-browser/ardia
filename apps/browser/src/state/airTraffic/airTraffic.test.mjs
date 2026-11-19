@@ -26,7 +26,7 @@ const slackApp = { bundleId: "com.tinyspeck.slackmacgap", name: "Slack" };
 
 let next = 0;
 const rule = (over = {}) => ({ id: `t${++next}`, enabled: true, from: null, when: { kind: "any" }, profileId: null, open: "tab", ...over });
-const counted = (over) => ({ air_traffic_rule_links: 0, air_traffic_fallback_links: 0, air_traffic_group_links: 0, ...over });
+const counted = (over) => ({ air_traffic_rule_links: 0, air_traffic_fallback_links: 0, air_traffic_group_links: 0, air_traffic_profile_switch_links: 0, ...over });
 
 function fresh({ rules: list = [], fallback = null, hooks = [] } = {}) {
   S().hydrate({ profiles: { default: PERSONAL }, profileOrder: ["default"] });
@@ -337,6 +337,47 @@ test("a link from another app with a group rule joins the group's copy in the wi
   const [again] = tabsAt("https://mail.example/2");
   const copy = Object.values(S().groups).find((g) => (g.pinKey ?? g.id) === key);
   assert.ok(again && copy?.tabIds.includes(again.id), "a parked pinned group comes back in a new window and takes the link");
+});
+
+test("a routed link opens in the window used last and turns it to the rule's profile, even when another window already shows that profile", async () => {
+  const { openExternalUrls } = await import("../littleArdia/actions.ts");
+  const work = fresh({
+    rules: [(w) => rule({ when: { kind: "site", host: "mail.example" }, profileId: w, open: "tab" })],
+    fallback: (w) => ({ profileId: w, open: "tab" }),
+  });
+  startDecideHooks();
+  const used = S().createWindow({ url: "https://home.example/", profileId: "default" });
+  const newer = S().createWindow({ url: "https://inbox.example/", profileId: work });
+  const landed = async (url) => {
+    openExternalUrls([url], undefined, MAIL);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    return Object.values(S().tabs).find((t) => (t.page?.nav?.url ?? t.url) === url);
+  };
+  const client = await import("../telemetry/client.ts");
+  client.loadChoice();
+  client.setSharing(true, "settings");
+  try {
+    S().setFocusedWindow(used);
+    takeAirTrafficCounts();
+    const ruled = await landed("https://mail.example/1");
+    assert.equal(ruled?.windowId, used, "a rule's link goes to the window used last, not the newer one showing the profile");
+    assert.equal(ruled.profileId, work);
+    assert.equal(S().windows[used].profileId, work, "the window used last turns to the rule's profile");
+    assert.equal(S().ui.focusOrder[0], used);
+    assert.deepEqual(takeAirTrafficCounts(), counted({ air_traffic_rule_links: 1, air_traffic_profile_switch_links: 1 }));
+    S().activate(S().windows[used].activeTabIds.default);
+    S().setFocusedWindow(used);
+    const fellBack = await landed("https://other.example/2");
+    assert.equal(fellBack?.windowId, used, "Everything Else follows the window used last too");
+    assert.equal(fellBack.profileId, work);
+    assert.deepEqual(takeAirTrafficCounts(), counted({ air_traffic_fallback_links: 1, air_traffic_profile_switch_links: 1 }));
+    S().setFocusedWindow(newer);
+    const shown = await landed("https://mail.example/3");
+    assert.equal(shown?.windowId, newer, "the window used last keeps the link when it already shows the profile");
+    assert.deepEqual(takeAirTrafficCounts(), counted({ air_traffic_rule_links: 1 }));
+  } finally {
+    client.setSharing(false, "settings");
+  }
 });
 
 test("Everything Else with a tab group routes into it, and opens a plain tab in its profile once the group is gone", () => {

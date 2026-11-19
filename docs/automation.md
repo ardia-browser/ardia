@@ -422,6 +422,9 @@ the data dir (`air-traffic.json`, version 2: an ordered `rules` list and a `fall
   in the rule's profile, and its row in Settings says the group isn't open. A copy of the group in a window that is closing
   doesn't count. The parser drops a `groupKey` without a profile or with another `open`, so the rule keeps working as a
   plain tab.
+- **Which window.** A link a rule, a hook or Everything Else opens as a tab goes to the window used last, which turns to
+  the rule's profile when it shows another one, even when another window already shows that profile. A tab group is
+  the exception: the link joins the group's copy in the window shown last among those that have it.
 - **No approval.** The user makes these rules in Settings, so they count as approved. hooks.json route hooks still need
   approval in Advanced › Automation; the pane lists them read-only with their state.
 - **The hold.** An enabled rule or an Everything Else choice turns the incoming-link hold on, reported again on every
@@ -441,7 +444,8 @@ the data dir (`air-traffic.json`, version 2: an ordered `rules` list and a `fall
   link in a group); `state/littleArdia/actions.ts` opens links from other apps; the pane is
   `components/settings/panes/AirTraffic.tsx` with its sheet `AirTrafficSheet.tsx`.
 - Telemetry: `usage_counts.air_traffic_rule_links` and `air_traffic_fallback_links` (links from other apps) and
-  `air_traffic_group_links` (those that joined a tab group), and `settings_snapshot`'s `air_traffic_rules` (enabled
+  `air_traffic_group_links` (those that joined a tab group), `air_traffic_profile_switch_links` (routed links that
+  turned the window used last to another profile), and `settings_snapshot`'s `air_traffic_rules` (enabled
   rules), `air_traffic_wildcard_rules` (enabled rules with a wildcard pattern), `air_traffic_group_rules` (enabled rules
   that send into a group) and `air_traffic_fallback` (true or false).
 

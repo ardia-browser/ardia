@@ -13,7 +13,7 @@ export function PluginConsentSheet({ name, hash, onClosed, confirm = enablePlugi
   };
   const changed = !m || listing?.hash !== hash;
   return (
-    <Sheet onClose={close}>
+    <Sheet onClose={close} backdropCloses={false}>
       <DialogTitle icon={<Symbol name={m?.icon ?? "puzzlepiece.fill"} size={22} color={theme.icon} style={TITLE_ICON} />} subtitle={m?.description || undefined}>
         {`${install ? "Install" : "Turn on"} ${m?.title ?? name}?`}
       </DialogTitle>

@@ -3,7 +3,8 @@ import { advanceCrashCursor, capture, consentNow, consentToken, crashCursor, loa
 import { contextAt, contextProperties, recentWebuiPages, sessionStart } from "./diagnostics";
 import type { SavedContext } from "./savedContext";
 import { logConsent, recordLog } from "./logs";
-import { errorCode, errorMessage, errorType, jsFatalKind, nativeCrashExceptions, nativeCrashTermination, parseStack, type ExceptionFrame } from "./sanitize";
+import { errorCode, errorMessage, errorType, jsFatalKind, nativeCrashExceptions, nativeCrashTermination, parseStack, stampBundle, type ExceptionFrame } from "./sanitize";
+import { appInfo } from "./transport";
 
 type Mechanism = "onerror" | "onunhandledrejection" | "react" | "react_recovered" | "console" | "native_crash" | "helper_crash";
 
@@ -34,7 +35,8 @@ export function captureException(error: unknown, mechanism: Mechanism, { fatal =
     }
     const type = errorType(error);
     const value = errorMessage(error) || type;
-    const frames = parseStack(error && typeof error === "object" ? (error as { stack?: unknown }).stack : undefined);
+    const parsed = parseStack(error && typeof error === "object" ? (error as { stack?: unknown }).stack : undefined);
+    const frames = mechanism === "onunhandledrejection" ? stampBundle(parsed, appInfo().appBuild) : parsed;
     const code = errorCode(error);
     const key = `${type}|${value}|${code ?? ""}|${frames.at(-1)?.function ?? ""}`;
     if (seen.has(key) || seen.size >= MAX_PER_SESSION) return;

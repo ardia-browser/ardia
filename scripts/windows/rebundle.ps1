@@ -2,6 +2,7 @@ param(
   [Parameter(Mandatory = $true)][string]$App,
   [Parameter(Mandatory = $true)][string]$Hermes,
   [Parameter(Mandatory = $true)][string]$Javascript,
+  [string]$MapOut,
   [switch]$Verify
 )
 
@@ -19,6 +20,7 @@ $appRoot = (Resolve-Path -LiteralPath $App).Path
 $compiler = (Resolve-Path -LiteralPath $Hermes).Path
 $shipped = Join-Path $appRoot "Bundle"
 $shippedMaps = Join-Path $appRoot "sourcemaps\react"
+$packagerMap = Join-Path $Javascript "$bundleName.packager.map"
 
 function Test-HermesBytecode([string]$path) {
   $stream = [System.IO.File]::OpenRead($path)
@@ -50,11 +52,24 @@ try {
   & $compiler -emit-binary -out $bytecode $javascript -O -output-source-map
   if ($LASTEXITCODE -ne 0) { throw "Hermes did not compile $bundleName" }
   if (-not (Test-HermesBytecode $bytecode)) { throw "$bytecode is not Hermes bytecode" }
-  Remove-Item -LiteralPath "$bytecode.map" -Force
+  $hermesMap = Join-Path $scratch "$bundleName.hbc.map"
+  Move-Item -LiteralPath "$bytecode.map" -Destination $hermesMap -Force
   Move-Item -LiteralPath $bytecode -Destination $javascript -Force
   $made = Get-Digests $fresh
   $megabytes = [math]::Round((Get-Item -LiteralPath $javascript).Length / 1MB, 1)
   $summary = "$bundleName ($megabytes MB of Hermes bytecode, SHA-256 $($made[$bundleName])) and $($made.Count - 1) assets"
+
+  if ($MapOut) {
+    New-Item -ItemType Directory -Path $MapOut -Force | Out-Null
+    Copy-Item -LiteralPath $hermesMap -Destination $MapOut -Force
+    if (Test-Path -LiteralPath $packagerMap -PathType Leaf) {
+      Copy-Item -LiteralPath $packagerMap -Destination $MapOut -Force
+    } else {
+      Write-Host "rebundle: no $bundleName.packager.map was bundled with the JavaScript, so only Hermes's map is kept"
+    }
+    "$($made[$bundleName])  $bundleName" | Set-Content -LiteralPath (Join-Path $MapOut "$bundleName.sha256") -Encoding ascii
+    Write-Host "rebundle: kept Hermes's source map for $bundleName in $MapOut"
+  }
 
   if ($Verify) {
     $built = Get-Digests $shipped

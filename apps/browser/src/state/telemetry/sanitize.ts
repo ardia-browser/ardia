@@ -142,6 +142,8 @@ export type ExceptionFrame = {
   resolved: boolean;
   in_app: boolean;
   image_offset?: string;
+  bundle_build?: string | null;
+  bundle_offset?: number | null;
 };
 
 function frameFunction(name: string | undefined): string {
@@ -192,6 +194,13 @@ export function parseStack(stack: unknown, limit = 50): ExceptionFrame[] {
     if (frames.length >= limit) break;
   }
   return frames.reverse();
+}
+
+const BUNDLE_BUILD = /^[\w.-]{1,32}$/;
+
+export function stampBundle(frames: ExceptionFrame[], build: string | undefined): ExceptionFrame[] {
+  const bundleBuild = build && BUNDLE_BUILD.test(build) ? build : null;
+  return frames.map((frame) => (frame.in_app ? { ...frame, bundle_build: bundleBuild, bundle_offset: frame.colno } : frame));
 }
 
 export type NativeFrame = { image: string; symbol?: string; symbolOffset?: number; offset?: number };

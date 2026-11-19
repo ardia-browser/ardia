@@ -44,6 +44,7 @@ export const WHATS_SENT: { title: string; items: string[] }[] = [
     items: [
       "The error's type and message, with web addresses, paths, file names, quoted text and long numbers taken out",
       "Function names, script file names and line numbers from the stack trace",
+      "When a promise in Ardia's own interface code fails and nothing handles it: the app's build number and the position in its script bundle for each step of the stack trace that is in the app's own code. Never any text from the error",
       "After a crash: the exception type and name (never its message), and the function names where it was thrown and on the crashing thread, from this app's crash report",
       "The same for crashes of Ardia's page, graphics and helper processes, plus the version that crashed, how long the process had run, the total size of its writable memory regions, and how the system ended it (its termination reason, like a signal or a code-signing kill)",
       "When a page's process stops (crashed, killed, out of memory or failed to start): why, its exit code, whether the tab was on screen, how many tabs, windows and profiles were open, and whether that tab was translating (and at which step) and how many other tabs were translating or translated",

@@ -6,6 +6,7 @@ const stub = await import("../../test-native/index.ts");
 Object.assign(stub.appInfo, { appVersion: "0.3.0", osVersion: "27.0.1", arch: "arm64", isolatedInstance: false });
 const { setSharing } = await import("./client.ts");
 const { captureException, reportNativeCrashes } = await import("./errors.ts");
+const { appInfo } = await import("./transport.ts");
 
 globalThis.fetch = async () => ({ status: 200 });
 setSharing(true, "settings");
@@ -152,5 +153,53 @@ test("a browser crash carries the kind of JS fatal that stopped it as crash_js_f
     assert.equal("crash_js_reason" in props, false);
     const json = JSON.stringify(sent);
     for (const leak of ["example.com", "secret", "/Users", "someone", "page.json", "native module", "Max heap size", "cannot read"]) assert.equal(json.includes(leak), false, leak);
+  }
+});
+
+const hermesRejectionStack = [
+  "TypeError: Cannot read property 'password' of undefined",
+  "    at anonymous (address at index.windows:1:3049129)",
+  "    at tryCallOne (address at InternalBytecode.js:1:27609)",
+  "    at anonymous (address at InternalBytecode.js:1:36971)",
+].join("\n");
+
+const rejection = (message = "Cannot read property 'password' of undefined") => {
+  const error = new TypeError(message);
+  error.stack = hermesRejectionStack.replace("Cannot read property 'password' of undefined", message);
+  return error;
+};
+
+test("an unhandled rejection names the bundle build and the raw offset on its app frame, and nothing it quotes", () => {
+  appInfo().appBuild = "5256";
+  captureException(rejection(), "onunhandledrejection");
+  const sent = queued().at(-1);
+  const frames = sent.properties.$exception_list[0].stacktrace.frames;
+  assert.equal(sent.properties.$exception_list[0].mechanism.type, "onunhandledrejection");
+  assert.equal(sent.properties.$exception_list[0].value, "Cannot read property <text>");
+  assert.equal(frames.length, 3);
+  assert.deepEqual(frames.filter((f) => f.in_app).map((f) => [f.filename, f.bundle_build, f.bundle_offset, f.colno]), [["index.windows", "5256", 3049129, 3049129]]);
+  for (const frame of frames.filter((f) => !f.in_app)) {
+    assert.equal("bundle_build" in frame, false);
+    assert.equal("bundle_offset" in frame, false);
+  }
+  assert.equal(JSON.stringify(sent).includes("password"), false);
+});
+
+test("the bundle build and offset are only recorded for unhandled rejections", () => {
+  appInfo().appBuild = "5256";
+  captureException(rejection("Cannot read title of null"), "onerror");
+  const frames = queued().at(-1).properties.$exception_list[0].stacktrace.frames;
+  assert.equal(frames.some((f) => "bundle_build" in f || "bundle_offset" in f), false);
+});
+
+test("a build that isn't a plain identifier is sent as null, the offset still is", () => {
+  for (const [n, build] of [["a", "5256 (nightly) alice@example.com"], ["b", ""], ["c", "x".repeat(33)]]) {
+    appInfo().appBuild = build;
+    captureException(rejection(`Cannot read property of ${n}`), "onunhandledrejection");
+    const sent = queued().at(-1);
+    const app = sent.properties.$exception_list[0].stacktrace.frames.find((f) => f.in_app);
+    assert.equal(app.bundle_build, null);
+    assert.equal(app.bundle_offset, 3049129);
+    assert.equal(JSON.stringify(sent.properties.$exception_list).includes("alice"), false);
   }
 });

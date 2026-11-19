@@ -84,7 +84,7 @@ test("a confirm the plugin store refuses to save is a failure with a reason, wit
   await done;
   assert.equal(P().consent, null, "the consent page closes");
   assert.equal(T().phase, "failed");
-  assert.ok([step.REFUSED_REASON, "plugins.json couldn't be saved."].includes(T().failures.cli), T().failures.cli);
+  assert.ok([step.REFUSED_REASON, "plugins.json couldn't be saved. Try again."].includes(T().failures.cli), T().failures.cli);
   assert.equal(step.primaryTitle(offered(), T()), "Continue");
   assert.deepEqual(takeOfficialPluginCounts(), { official_plugin_onboarding_failed_cli: 1 });
   const again = step.installPluginAgain("cli");

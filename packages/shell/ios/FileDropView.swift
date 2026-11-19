@@ -48,7 +48,15 @@ final class FileDropView: ExpoView {
 
   override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
     count = enabled ? dropped(sender.draggingPasteboard).count : 0
-    guard count > 0 else { return [] }
+    guard count > 0 else {
+      if !DroppedLinks.fileURLs(sender.draggingPasteboard).isEmpty {
+        ShellEvents.send(.app, ArdiaConsentStamp.begin().onto(["type": "fileDropRefused", "phase": "refused", "area": accepts]))
+        #if DEBUG
+        NSLog("[FileDropView] refused a file drag: %@ (accepts: %@)", NSStringFromClass(type(of: self)), accepts)
+        #endif
+      }
+      return []
+    }
     emit("enter", sender)
     return operation(sender)
   }

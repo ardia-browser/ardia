@@ -278,7 +278,7 @@ test("the native bootstrap advertises every route list, and every shared perform
   const used = uses.map((use) => use.name);
   for (const call of ["engine.memorySaver", "engine.validateKeepActiveSite", "engine.tasks"]) assert.ok(used.includes(call), call);
   const gated = { "engine.beginTracing": "performanceRecording", "engine.endTracing": "performanceRecording", "engine.isTracing": "performanceRecording" };
-  const macOnlyEvents = new Set(["engine.hoverLost", "engine.cursorRestored", "engine.pressLoopLong", "engine.windowUnpainted", "engine.popupProtectedMedia", "engine.devToolsKeyKept"]);
+  const macOnlyEvents = new Set(["engine.hoverLost", "engine.cursorRestored", "engine.pressLoopLong", "engine.windowUnpainted", "engine.popupProtectedMedia", "engine.devToolsKeyKept", "engine.pageDropTypesChanged"]);
   for (const name of macOnlyEvents) assert.deepEqual(uses.filter((use) => use.name === name).map((use) => use.kind), ["on"], `${name} is only listened to`);
   const none = linuxCapabilities(fakeHost().host);
   for (const call of used) {

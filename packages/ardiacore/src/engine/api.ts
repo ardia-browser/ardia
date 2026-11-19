@@ -216,6 +216,7 @@ export type EngineEvents = {
   "engine.hoverLost": HoverLostEpisode;
   "engine.popupProtectedMedia": PopupProtectedMedia;
   "engine.devToolsKeyKept": { epoch: string };
+  "engine.pageDropTypesChanged": { epoch: string; unregistered: number; reregistered: number };
   "engine.cursorRestored": CursorRestore;
   "engine.windowUnpainted": WindowUnpaintedRecord;
   "engine.pressLoopLong": PressLoopLongReport;

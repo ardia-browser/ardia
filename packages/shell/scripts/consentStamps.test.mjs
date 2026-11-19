@@ -4,7 +4,7 @@ import { test } from "node:test";
 
 const IOS = new URL("../ios/", import.meta.url);
 const read = (name) => readFileSync(new URL(name, IOS), "utf8");
-const COUNTED = ["centeredResize", "windowTitleRead", "windowDragLoop"];
+const COUNTED = ["centeredResize", "windowTitleRead", "windowDragLoop", "fileDropRefused"];
 
 test("every app event JS telemetry counts is sent through a consent stamp", () => {
   for (const name of readdirSync(IOS).filter((n) => n.endsWith(".swift"))) {
@@ -25,6 +25,17 @@ test("a window drag loop is stamped as it begins, before the loop runs", () => {
   const move = read("WindowMove.swift");
   const begin = move.indexOf('ShellEvents.send(.app, ArdiaConsentStamp.begin().onto(["type": "windowDragLoop"]))');
   assert.ok(begin > 0 && begin < move.indexOf("let start = screenPoint(event)"), "the drag loop is reported with the epoch from its start");
+});
+
+test("a file drag a drop area refuses is reported with its area kind only, and only when the drag holds files", () => {
+  const drop = read("FileDropView.swift");
+  const refused = drop.indexOf("if !DroppedLinks.fileURLs(sender.draggingPasteboard).isEmpty {");
+  const sent = drop.indexOf('ShellEvents.send(.app, ArdiaConsentStamp.begin().onto(["type": "fileDropRefused", "phase": "refused", "area": accepts]))');
+  assert.ok(refused > 0 && sent > refused && sent - refused < 200, "the report is gated on the drag holding file URLs");
+  assert.ok(drop.lastIndexOf("guard count > 0 else {", sent) > 0 && drop.indexOf("return []", sent) > sent, "it is reported where the drag is refused, which still returns no operation");
+  const reports = drop.split("\n").filter((line) => line.includes("fileDropRefused"));
+  assert.equal(reports.length, 1);
+  assert.match(reports[0], /\.onto\(\["type": "fileDropRefused", "phase": "refused", "area": accepts\]\)\)$/, "the body is the kind of area and nothing about the files");
 });
 
 test("a refused paste carries a consent stamp: the gate's epoch for input held in a hand-off, taken before any hop to the main thread", () => {

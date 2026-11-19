@@ -22,6 +22,21 @@ NSMutableDictionary<NSNumber *, NSMutableArray *> *RecentEvents() {
 }
 
 const char kDropTypesKey = 0;
+
+void TallyDropTypes(NSView *root, BOOL accept, NSUInteger &unregistered, NSUInteger &reregistered) {
+  if (!root) return;
+  NSArray<NSPasteboardType> *held = objc_getAssociatedObject(root, &kDropTypesKey);
+  if (accept && held) {
+    objc_setAssociatedObject(root, &kDropTypesKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [root registerForDraggedTypes:held];
+    reregistered++;
+  } else if (!accept && !held && root.registeredDraggedTypes.count) {
+    objc_setAssociatedObject(root, &kDropTypesKey, root.registeredDraggedTypes, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [root unregisterDraggedTypes];
+    unregistered++;
+  }
+  for (NSView *sub in root.subviews) TallyDropTypes(sub, accept, unregistered, reregistered);
+}
 }
 
 namespace ardia_web_view {
@@ -111,16 +126,11 @@ void NoteEvent(int browserId, NSString *name, NSDictionary *payload) {
 }
 
 void AcceptDrops(NSView *root, BOOL accept) {
-  if (!root) return;
-  NSArray<NSPasteboardType> *held = objc_getAssociatedObject(root, &kDropTypesKey);
-  if (accept && held) {
-    objc_setAssociatedObject(root, &kDropTypesKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    [root registerForDraggedTypes:held];
-  } else if (!accept && !held && root.registeredDraggedTypes.count) {
-    objc_setAssociatedObject(root, &kDropTypesKey, root.registeredDraggedTypes, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    [root unregisterDraggedTypes];
-  }
-  for (NSView *sub in root.subviews) AcceptDrops(sub, accept);
+  NSUInteger unregistered = 0;
+  NSUInteger reregistered = 0;
+  TallyDropTypes(root, accept, unregistered, reregistered);
+  if (!unregistered && !reregistered) return;
+  [ArdiaEvents emit:@"engine.pageDropTypesChanged" data:[ArdiaConsentStamp.begin onto:@{@"unregistered" : @(unregistered), @"reregistered" : @(reregistered)}]];
 }
 }
 

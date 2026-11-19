@@ -9,6 +9,7 @@ export const onSystemState = (listener: (state: SystemState) => void) => on("eng
 export const onHoverLost = (listener: (episode: HoverLostEpisode) => void) => on("engine.hoverLost", listener);
 export const onPopupProtectedMedia = (listener: (media: PopupProtectedMedia) => void) => on("engine.popupProtectedMedia", listener);
 export const onDevToolsKeyKept = (listener: (kept: { epoch: string }) => void) => on("engine.devToolsKeyKept", listener);
+export const onPageDropTypesChanged = (listener: (changed: { epoch: string; unregistered: number; reregistered: number }) => void) => on("engine.pageDropTypesChanged", listener);
 export const onCursorRestored = (listener: (restore: CursorRestore) => void) => on("engine.cursorRestored", listener);
 export const onWindowUnpainted = (listener: (record: WindowUnpaintedRecord) => void) => on("engine.windowUnpainted", listener);
 export const onPressLoopLong = (listener: (report: PressLoopLongReport) => void) => on("engine.pressLoopLong", listener);

@@ -30,6 +30,21 @@ static void EndFailedPageDragsAtMouseUp() {
   if (!installed) NSLog(@"[ardiacore] page drag session override not installed: WebContentsViewCocoa has no %@", NSStringFromSelector(begin));
 }
 
+#if DEBUG
+static void LogPageDragEnters() {
+  const SEL enter = @selector(draggingEntered:);
+  for (NSString *name in @[ @"WebContentsViewCocoa", @"RenderWidgetHostViewCocoa" ]) {
+    const bool installed = ardia_runtime::ReplaceMethod(NSClassFromString(name), enter, ^id(IMP original) {
+      return ^NSDragOperation(NSView *view, id<NSDraggingInfo> info) {
+        NSLog(@"[ardiacore] page drag entered: %@", NSStringFromClass(view.class));
+        return ((NSDragOperation(*)(NSView *, SEL, id<NSDraggingInfo>))original)(view, enter, info);
+      };
+    });
+    if (!installed) NSLog(@"[ardiacore] page drag-enter log not installed: %@ has no %@", name, NSStringFromSelector(enter));
+  }
+}
+#endif
+
 @implementation ArdiaHostEngineDelegate
 
 - (void)engineDidStart {
@@ -39,6 +54,9 @@ static void EndFailedPageDragsAtMouseUp() {
   WatchReservedShortcuts();
   ardia_host::InstallActivationGuardsLate();
   EndFailedPageDragsAtMouseUp();
+#if DEBUG
+  LogPageDragEnters();
+#endif
   if (gScratchDataDir && ardia_host::Background())
     ardia_host::InstallTestCrashGuard([gDataDirectory stringByDeletingLastPathComponent]);
   ArdiaCoreEngine *engine = ArdiaCoreEngine.sharedEngine;

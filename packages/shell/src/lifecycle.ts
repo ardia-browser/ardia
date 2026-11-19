@@ -26,6 +26,7 @@ export type AppEvent =
   | { type: "keyHoldReplay"; tag: number; count: number }
   | { type: "littleArdiaGlobalShortcut" }
   | { type: "windowDragLoop"; epoch: string }
+  | { type: "fileDropRefused"; area: string; epoch: string }
   | {
       type: "pasteRefused";
       reason: string;

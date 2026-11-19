@@ -60,9 +60,13 @@ export class ProfileTargets {
     this.timer = new HeldTimer(PROFILE_HOLD_MS, (profileHold) => dragMarksOf(marks).profileHold !== profileHold && markDrag(marks, { profileHold }));
   }
 
-  async measure() {
+  async measured(): Promise<Map<string, Frame>> {
     const measured = await Promise.all([...this.views].map(async ([id, view]) => [id, await measure(view)] as const));
-    this.frames = new Map(measured.filter((entry): entry is readonly [string, Frame] => !!entry[1]));
+    return new Map(measured.filter((entry): entry is readonly [string, Frame] => !!entry[1]));
+  }
+
+  use(frames: Map<string, Frame>) {
+    this.frames = frames;
   }
 
   under(x: number, y: number): string | null {

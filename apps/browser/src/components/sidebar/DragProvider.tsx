@@ -7,7 +7,7 @@ import { useShallow } from "zustand/react/shallow";
 import { perLook, radius } from "../ui";
 import { useClipped, type ClipSource } from "./EntryMotion";
 import { noDragMarks } from "../../state/sidebar/dragMarks";
-import { cellKey, restingTail, type Ghost, type ItemSpec } from "./dragModel";
+import { cellKey, dragItemStyle, restingTail, type Ghost, type ItemSpec } from "./dragModel";
 import { DragController } from "./dragController";
 import { DragItems } from "./dragItems";
 import { onAppEvent } from "../../state/drag/dragNative";
@@ -58,6 +58,7 @@ export const useDropInto = (groupId: string) => useStore(useContext(DragContext)
 export const useDropSplit = (key: string) => useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => (m.split?.key === key ? m.split.side : null));
 export const useDropTile = () => useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => m.tile);
 export const useDropRow = () => useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => m.row);
+export const useDropPane = () => useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => m.pane);
 export const useDropPins = () => useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => m.pins);
 export const usePinSlots = (cells: string[]) =>
   useStore(
@@ -149,23 +150,12 @@ export function useDragItem(key: string, spec: ItemSpec, clip: ClipSource | null
   const source = useStore(marks, (m) => m.sources.has(key));
   const landing = useStore(marks, (m) => m.landing === key);
   const clipped = useClipped(clip);
-  const horizontal = spec.kind === "tile";
   useScopedTheme();
   const inFold = useContext(FoldEntryContext);
   const rowGap = layout.rowGap;
   const tailOffset = useMemo(() => item && Animated.add(item.gap, -rowGap), [item, rowGap]);
   const style = item
-    ? {
-        ...(horizontal ? null : { marginTop: spec.kind === "tail" ? tailOffset! : item.gap }),
-        ...(source
-          ? horizontal
-            ? { opacity: 0 }
-            : { height: item.size, marginBottom: inFold ? 0 : -rowGap, opacity: 0, overflow: "hidden" as const }
-          : landing
-            ? { opacity: 0 }
-            : null),
-        ...(clipped && !source && !landing ? { marginTop: -rowGap, paddingTop: rowGap, overflow: "hidden" as const } : null),
-      }
+    ? dragItemStyle(item, { source, landing, clipped, inFold, rowGap, tailOffset: tailOffset! })
     : spec.kind === "tail"
       ? restingTail()
       : {};

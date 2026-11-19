@@ -125,3 +125,25 @@ test("a Top App shared with the other profile takes its copy there instead of ma
   assert.equal(model.viewTabIds(S(), w, work).filter((t) => S().tabs[t].pinnedUrl === "https://mail.com/").length, 1);
   assert.equal(model.activeTabId(S(), w), copy);
 });
+
+test("a shared Top App dropped on the icon of a profile this window hasn't shown takes that profile's own copy, and each keeps one tile", async () => {
+  const { NO_DROP } = await import("../drag/drops.ts");
+  S().hydrate({});
+  S().updateProfile("default", { shareTopApps: true });
+  const w = S().createWindow({ url: "https://mail.com/" });
+  const [mail] = S().windows[w].tabIds;
+  S().newTab(w, { url: "https://a.com/" });
+  S().pinTabs([mail], true);
+  const work = S().createProfile({ name: "Work", shareTopApps: true, shareWith: "default" });
+  assert.ok(S().parkedPins[work]?.tabs.some((p) => p.pinnedUrl === "https://mail.com/" || p.url === "https://mail.com/"), "the unvisited profile holds its copy parked");
+  const mails = (p) => model.viewTabIds(S(), w, p).filter((t) => S().tabs[t].pinnedUrl === "https://mail.com/");
+  const { movesAcrossProfiles } = await import("./profileMoves.ts");
+  assert.equal(movesAcrossProfiles(S(), [mail], work), false, "showing a copy asks nothing");
+  assert.equal(S().dropTabsInProfile([mail], work, NO_DROP), true);
+  assert.equal(S().tabs[mail].profileId, "default", "the dragged tile stays in its profile");
+  assert.deepEqual(mails("default"), [mail]);
+  assert.equal(mails(work).length, 1, "the destination has one copy");
+  assert.notEqual(mails(work)[0], mail);
+  assert.equal(S().windows[w].profileId, work);
+  assert.equal(model.activeTabId(S(), w), mails(work)[0], "and shows it");
+});

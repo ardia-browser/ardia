@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import { useTheme } from "../ui/theme";
-import { FadeLabel, sidebarFont, sidebarLineHeight, space } from "../ui";
+import { FadeLabel, radius, sidebarFont, sidebarLineHeight, space } from "../ui";
 import { previewSlots, SPLIT_MAX_PANES, SPLIT_PANE, splitPaneShape } from "./splitPaneGeometry";
 import { spring } from "../ui/motion";
 import { useTab } from "../../state/browser/hooks";
 import { tabTitle } from "../../state/browser/model";
 import type { SplitDropSide } from "../../state/drag/drops";
 import { TabIcon } from "./TabIcon";
-import { ROW_GLYPH, SPLIT_PREVIEW, useSidebarTokens } from "./tokens";
+import { ROW_GLYPH, SPLIT_PREVIEW } from "./tokens";
+import { profileSurfaces } from "./profileSurfaces";
 
 type PreviewValues = { shown: Animated.Value; hidden: Animated.AnimatedInterpolation<number>; toLeft: Animated.Value };
 export type SplitPreviewMotion = { side: SplitDropSide | null; values: PreviewValues | null };
@@ -46,8 +47,9 @@ export function useSplitPreview(side: SplitDropSide | null, panes: number): Spli
   return { side: drawn, values: drawn ? values.current : null };
 }
 
-export function SplitPreview({ panes, values }: { panes: string[]; values: PreviewValues }) {
-  const tokens = useSidebarTokens();
+export function SplitPreview({ panes, values, rowActive }: { panes: string[]; values: PreviewValues; rowActive: boolean }) {
+  const theme = useTheme();
+  const surfaces = profileSurfaces(theme);
   const [width, setWidth] = useState(0);
   const shape = splitPaneShape();
   const { slot, pitch } = previewSlots(width, panes.length);
@@ -61,9 +63,10 @@ export function SplitPreview({ panes, values }: { panes: string[]; values: Previ
     <Animated.View pointerEvents="none" onLayout={(e) => setWidth(e.nativeEvent.layout.width)} style={[StyleSheet.absoluteFill, { opacity: width ? values.shown : 0 }]}>
       {width ? (
         <>
-          <Animated.View style={[pane, { backgroundColor: tokens.splitDropFill, transform: [{ translateX: empty }] }]} />
+          {rowActive ? null : <View style={[StyleSheet.absoluteFill, { borderRadius: radius.chrome, backgroundColor: theme.tabSelected }]} />}
+          <Animated.View style={[pane, { backgroundColor: surfaces.emptySlot, transform: [{ translateX: empty }] }]} />
           {panes.map((id, i) => (
-            <Animated.View key={id} style={[pane, PANE_ROW, { transform: [{ translateX: placed[i]! }] }]}>
+            <Animated.View key={id} style={[pane, PANE_ROW, { backgroundColor: surfaces.activePanes.rest, transform: [{ translateX: placed[i]! }] }]}>
               <PanePreview tabId={id} />
             </Animated.View>
           ))}
@@ -75,16 +78,16 @@ export function SplitPreview({ panes, values }: { panes: string[]; values: Previ
   );
 }
 
-function PanePreview({ tabId }: { tabId: string }) {
+export function PanePreview({ tabId, color }: { tabId: string; color?: string }) {
   const theme = useTheme();
   const tab = useTab(tabId);
   if (!tab) return null;
   return (
     <>
       <TabIcon tabId={tab.id} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} compact />
-      <FadeLabel text={tabTitle(tab)} fontSize={sidebarFont.small.fontSize} color={theme.textTab} style={{ flex: 1, height: Math.max(ROW_GLYPH.box, sidebarLineHeight.small + 1), marginLeft: space.xs }} />
+      <FadeLabel text={tabTitle(tab)} fontSize={sidebarFont.small.fontSize} color={color ?? theme.textTab} style={{ flex: 1, height: Math.max(ROW_GLYPH.box, sidebarLineHeight.small + 1), marginLeft: space.xs }} />
     </>
   );
 }
 
-const PANE_ROW = { flexDirection: "row", alignItems: "center", paddingLeft: space.s, paddingRight: SPLIT_PANE.closeInset, overflow: "hidden" } as const;
+export const PANE_ROW = { flexDirection: "row", alignItems: "center", paddingLeft: space.s, paddingRight: SPLIT_PANE.closeInset } as const;

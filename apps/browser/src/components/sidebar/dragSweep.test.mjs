@@ -33,7 +33,9 @@ function overlaps(c) {
   return out;
 }
 
-async function sweep(splitView, from, to, step, splitHoldMs = SPLIT_HOLD_MS) {
+const FRAME_MS = 16;
+
+async function sweep(t, splitView, from, to, step, splitHoldMs = SPLIT_HOLD_MS, frameMs = FRAME_MS) {
   const hosts = ["a", "b", "c", "d", "e", "f", "g"];
   const m = listScene(hosts);
   const keys = hosts.map((h) => entryKey("tab", m.id[h]));
@@ -45,6 +47,7 @@ async function sweep(splitView, from, to, step, splitHoldMs = SPLIT_HOLD_MS) {
   const overlapped = [];
   for (let y = from; step > 0 ? y <= to : y >= to; y += step) {
     c.move(d.x + 40, y);
+    t.mock.timers.tick(frameMs);
     seen.push([y, slotOf(m, keys, readDrag(c))]);
     overlapped.push(...overlaps(c));
   }
@@ -65,12 +68,13 @@ const flips = (seen, down) => {
 };
 
 for (const splitView of [false, true]) {
-  test(`a slow sweep down and up the list moves the slot one way only (split view ${splitView ? "on" : "off"})`, async () => {
+  test(`a slow sweep down and up the list moves the slot one way only (split view ${splitView ? "on" : "off"})`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
     for (const hold of [SPLIT_HOLD_MS, 0]) {
-      const down = await sweep(splitView, 90, 400, 0.5, hold);
+      const down = await sweep(t, splitView, 90, 400, 0.5, hold);
       assert.deepEqual(flips(down, true), [], JSON.stringify(down.filter((s, i, a) => i === 0 || s[1] !== a[i - 1][1])));
       assert.deepEqual(down.overlapped, [], "no row is ever drawn over another");
-      const up = await sweep(splitView, 400, 90, -0.5, hold);
+      const up = await sweep(t, splitView, 400, 90, -0.5, hold);
       assert.deepEqual(flips(up, false), [], JSON.stringify(up.filter((s, i, a) => i === 0 || s[1] !== a[i - 1][1])));
       assert.deepEqual(up.overlapped, []);
     }
@@ -78,9 +82,11 @@ for (const splitView of [false, true]) {
 }
 
 test("passing over rows never lights a half: only a pointer resting in a row's middle arms it, and moving to another row starts over", async (t) => {
-  const down = await sweep(true, 90, 400, 0.5);
-  assert.ok(down.every(([, slot]) => slot === null || Number.isInteger(slot)), "no split while sweeping");
   t.mock.timers.enable({ apis: ["setTimeout"] });
+  const down = await sweep(t, true, 90, 400, 0.5);
+  assert.ok(down.every(([, slot]) => slot === null || Number.isInteger(slot)), "no split while sweeping a frame at a time");
+  const resting = await sweep(t, true, 90, 400, 0.5, SPLIT_HOLD_MS, 40);
+  assert.ok(resting.some(([, slot]) => slot !== null && !Number.isInteger(slot)), "a crawl slow enough to rest 0.25 s within the slop does light a half, so the sweep runs the hold");
   const hosts = ["a", "b", "c", "d", "e"];
   const m = listScene(hosts);
   const keys = hosts.map((h) => entryKey("tab", m.id[h]));

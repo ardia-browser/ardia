@@ -18,9 +18,7 @@ const DARK = {
   dragSilhouette: "#0F0F14",
   dropMark: "rgba(255,255,255,0.93)",
   edgeGlow: "rgba(255,255,255,0.105)",
-  dragGhostFill: "rgba(255,255,255,0.15)",
-  dragGhostTileLift: "rgba(255,255,255,0.29)",
-  dragGhostBorder: null as string | null,
+  folderDropFill: "rgba(255,255,255,0.08)",
   splitDropFill: "rgba(255,255,255,0.42)",
   badge: "rgba(255,255,255,0.9)",
   newTabLabel: "#FFFFFF8C",
@@ -54,9 +52,7 @@ const LIGHT: typeof DARK = {
   dragSilhouette: "#FFFFFF",
   dropMark: "rgba(0,0,0,0.8)",
   edgeGlow: "rgba(0,0,0,0.1)",
-  dragGhostFill: "rgba(255,255,255,0.5)",
-  dragGhostTileLift: "rgba(255,255,255,0.5)",
-  dragGhostBorder: "rgba(0,0,0,0.08)",
+  folderDropFill: "rgba(0,0,0,0.05)",
   splitDropFill: "rgba(0,0,0,0.08)",
   badge: "rgba(0,0,0,0.75)",
   newTabLabel: "#00000080",
@@ -94,7 +90,7 @@ export function useSidebarTokens(): SidebarTokens {
 
 
 export const SIDEBAR_SHADOW = {
-  dragGhost: { color: ink.black, opacity: { dark: 0.3, light: 0.14 }, radius: 16, offset: [0, 6] },
+  dragGhost: { color: ink.black, opacity: { dark: 0.45, light: 0.18 }, radius: 10, offset: [0, 4] },
   card: shadow.card,
   searchTabs: shadow.dialog,
   tabSwitcher: { ...shadow.dialog, opacity: { dark: 0.45, light: 0.45 }, radius: 32, offset: [0, 14] },
@@ -151,6 +147,7 @@ export const GHOST_TILE_MORPH = { response: 0.1, damping: 1 } as const;
 
 export const GHOST_ROW_POINTER = 0.37;
 export const GHOST_OVER_PROFILES = 0.3;
+export const GHOST_OPACITY = 0.96;
 export const EDGE_GLOW = {
   width: 36,
   inMs: 180,

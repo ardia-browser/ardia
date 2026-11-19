@@ -75,7 +75,7 @@ function setup(options) {
   const frame = (key) => [...m.home.L.entries, ...m.away.L.entries].find((e) => e.key === key).frame;
   const toAway = () => showPage(c, m.work, awayItems, m.away.regions);
   const toHome = () => showPage(c, "default", homeItems, m.home.regions);
-  return { m, c, ghosts, frame, toAway, toHome };
+  return { m, c, ghosts, frame, toAway, toHome, awayItems };
 }
 
 const counts = () => {
@@ -454,3 +454,79 @@ test("a shared Top App let go on the icon of the profile it was handed to stays 
   assert.equal(S().windows[m.w].profileId, m.work);
   assert.deepEqual(pinned(m.w, m.work).filter(([, pin]) => pin === "tile").map(([h]) => h), ["mail", "docs"]);
 });
+
+test("a slow measurement from an earlier switch never overwrites the page measured after it", async () => {
+  const { m, c, frame, toAway, toHome, awayItems } = setup();
+  const b = frame(entryKey("tab", m.id.b));
+  const yKey = entryKey("tab", m.id.y);
+  const y = frame(yKey);
+  const moved = { ...y, y: y.y + 3 * D.PITCH };
+  await c.begin(entryKey("tab", m.id.b), b.x + 20, b.y + 10);
+  c.move(60, 300);
+  const slow = fakeView(y);
+  slow.held = true;
+  awayItems.get(yKey).view = slow;
+  S().switchProfile(m.w, m.work);
+  await toAway();
+  S().switchProfile(m.w, "default");
+  await toHome();
+  awayItems.get(yKey).view = fakeView(moved);
+  S().switchProfile(m.w, m.work);
+  await toAway();
+  assert.deepEqual(awayItems.get(yKey).frame, moved, "the latest switch measured the row where it is now");
+  slow.release();
+  await settle();
+  await settle();
+  assert.deepEqual(awayItems.get(yKey).frame, moved, "the earlier switch's late answer is dropped");
+  c.move(60, moved.y + 2);
+  assert.equal(D.readDrag(c).gapKey, yKey, "the slot follows the row's current place");
+  c.end(false);
+});
+
+test("a tab carried into another profile and let go before its live folder lands before it there, as the gap showed, after the warning too", async () => {
+  for (const warn of [false, true]) await liveFolderDrop(warn);
+});
+
+async function liveFolderDrop(warn) {
+  const live = await import("../../state/live/store.ts");
+  const { anchorKey, pinnedSequence } = await import("../../state/sidebar/pinnedOrder.ts");
+  const { shellNativeModules } = await import("../../test-native/shell.ts");
+  const answer = shellNativeModules.ArdiaDialogs.confirm;
+  const asked = [];
+  shellNativeModules.ArdiaDialogs.confirm = (options) => {
+    asked.push(options.title);
+    return new Promise((resolve) => setImmediate(() => resolve({ confirmed: true, suppressed: false })));
+  };
+  const m = spaces({ warn });
+  S().pinTabs([m.id.x, m.id.y], true, true);
+  const LF = live.createFolder(m.work, "pullRequests");
+  live.arrangeFolders([{ id: LF, after: anchorKey(S(), entryKey("tab", m.id.x)) }]);
+  const workSequence = () => pinnedSequence(S(), live.live().folders, live.live().folderOrder, m.w, m.work);
+  assert.deepEqual(workSequence(), [entryKey("tab", m.id.x), entryKey("live", LF), entryKey("tab", m.id.y)]);
+  const away = sceneLayout({ top: 60 });
+  away.row(m.id.x, { section: "pinnedRows" }).live(LF).row(m.id.y, { section: "pinnedRows" });
+  const pinnedEnd = away.y;
+  away.skip(10);
+  const listTop = away.y;
+  away.row(m.id.z).tail("list");
+  const awayRegions = regionsOf(away, { pinnedGroups: [60, pinnedEnd], list: [listTop, away.y] });
+  const { c } = mount({ entries: m.home.L.entries, regions: m.home.regions });
+  for (const [i, profileId] of S().profileOrder.entries()) c.profiles.views.set(profileId, fakeView(dotFrame(i)));
+  c.profileShown("default");
+  const b = m.home.L.entries.find((e) => e.key === entryKey("tab", m.id.b)).frame;
+  await c.begin(entryKey("tab", m.id.b), b.x + 20, b.y + 10);
+  c.move(60, 300);
+  S().switchProfile(m.w, m.work);
+  await showPage(c, m.work, itemsOf(c, { L: away }), awayRegions);
+  const lf = away.entries.find((e) => e.key === entryKey("live", LF)).frame;
+  c.move(60, lf.y + 2);
+  const read = D.readDrag(c);
+  assert.equal(read.gapKey, entryKey("live", LF), "the gap opens above the live folder");
+  assert.deepEqual(read.drop.sequence, [entryKey("tab", m.id.x), entryKey("tab", m.id.b), entryKey("live", LF), entryKey("tab", m.id.y)]);
+  c.end(true);
+  for (let i = 0; i < 4; i++) await settle();
+  shellNativeModules.ArdiaDialogs.confirm = answer;
+  assert.equal(asked.length, warn ? 1 : 0, `warn ${warn}`);
+  assert.equal(S().tabs[m.id.b].profileId, m.work);
+  assert.deepEqual(workSequence(), [entryKey("tab", m.id.x), entryKey("tab", m.id.b), entryKey("live", LF), entryKey("tab", m.id.y)], `warn ${warn}: it lands where the gap was`);
+}

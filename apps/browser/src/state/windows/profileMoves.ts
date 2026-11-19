@@ -8,10 +8,20 @@ import { activated, apply, removeTabs } from "../tabs/tabs";
 import { orderSections } from "../groups/groups";
 import { dropping, type Drop } from "../drag/drops";
 import { isRegularWindow } from "./small";
+import { adoptParkedPins } from "../pins/parkedPins";
 
 function sharedTopAppCopy(s: BrowserState, tab: Tab, profileId: string): string | undefined {
   if (!isTopApp(tab) || !topAppsShared(s, tab.profileId, profileId)) return undefined;
   return s.windows[tab.windowId]?.tabIds.find((id) => s.tabs[id]?.profileId === profileId && isTopApp(s.tabs[id]!) && pinKeyOf(s.tabs[id]!) === pinKeyOf(tab));
+}
+
+const parkedTopAppCopy = (s: BrowserState, tab: Tab, profileId: string) =>
+  isTopApp(tab) && topAppsShared(s, tab.profileId, profileId) && !!s.parkedPins[profileId]?.tabs.some((p) => !p.groupId && p.id === pinKeyOf(tab));
+
+const unvisited = (s: BrowserState, windowId: string, profileId: string) => !s.windows[windowId]?.tabIds.some((id) => s.tabs[id]?.profileId === profileId);
+
+function withParkedPinsShown(s: BrowserState, tabs: Tab[], profileId: string): BrowserState {
+  return [...new Set(tabs.map((t) => t.windowId))].reduce((acc, windowId) => (unvisited(acc, windowId, profileId) ? adoptParkedPins(acc, windowId, profileId) : acc), s);
 }
 
 export function intoProfile(s: BrowserState, tabId: string, profileId: string): BrowserState {
@@ -39,14 +49,16 @@ export function intoProfile(s: BrowserState, tabId: string, profileId: string): 
 const movable = (s: BrowserState, ids: string[]) =>
   ids.map((id) => s.tabs[id]).filter((t): t is Tab => !!t && !isIncognitoProfile(t.profileId) && isRegularWindow(s.windows[t.windowId]));
 
-const arriving = (s: BrowserState, t: Tab, profileId: string) => t.profileId !== profileId && !sharedTopAppCopy(s, t, profileId);
+const arriving = (s: BrowserState, t: Tab, profileId: string) => t.profileId !== profileId && !sharedTopAppCopy(s, t, profileId) && !parkedTopAppCopy(s, t, profileId);
 
 export const movesAcrossProfiles = (s: BrowserState, tabIds: string[], profileId: string) => movable(s, tabIds).some((t) => arriving(s, t, profileId));
 
-export function droppedInProfile(s: BrowserState, tabIds: string[], profileId: string, drop: Drop): BrowserState {
-  if (!s.profiles[profileId]) return s;
+export function droppedInProfile(before: BrowserState, tabIds: string[], profileId: string, drop: Drop): BrowserState {
+  if (!before.profiles[profileId]) return before;
+  const dragged = movable(before, tabIds);
+  if (!dragged.length || (drop.type === "none" && dragged.every((t) => t.profileId === profileId))) return before;
+  const s = withParkedPinsShown(before, dragged, profileId);
   const tabs = movable(s, tabIds);
-  if (!tabs.length || (drop.type === "none" && tabs.every((t) => t.profileId === profileId))) return s;
   const placed = tabs.map((t) => (t.profileId === profileId ? t.id : (sharedTopAppCopy(s, t, profileId) ?? t.id)));
   let next = tabs.reduce((acc, t) => (arriving(s, t, profileId) ? intoProfile(acc, t.id, profileId) : acc), s);
   next = dropping(next, placed, drop);

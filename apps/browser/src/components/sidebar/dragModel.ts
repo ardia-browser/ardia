@@ -49,6 +49,23 @@ export const cellKey = (cell: string) => {
 export type Ghost = { item: Item; count: number; width: number; height: number; grab: { x: number; y: number }; position: Animated.ValueXY; landing?: boolean };
 
 export const restingTail = perLook(() => ({ marginTop: -layout.rowGap }));
+
+type ItemLook = { source: boolean; landing: boolean; clipped: boolean; inFold: boolean; rowGap: number; tailOffset: Animated.AnimatedAddition<number> };
+
+export function dragItemStyle(item: Item, { source, landing, clipped, inFold, rowGap, tailOffset }: ItemLook) {
+  const horizontal = item.kind === "tile";
+  return {
+    ...(horizontal ? null : { marginTop: item.kind === "tail" ? tailOffset : item.gap }),
+    ...(source
+      ? horizontal
+        ? { opacity: 0 }
+        : { height: item.size, marginBottom: inFold ? 0 : -rowGap, opacity: 0, overflow: "hidden" as const }
+      : landing
+        ? { opacity: 0 }
+        : null),
+    ...(clipped && !source && !landing ? { marginTop: horizontal ? -rowGap : tailOffset, paddingTop: rowGap, overflow: "hidden" as const } : null),
+  };
+}
 export const pinSlotPitch = () => layout.pinnedHeight + TILE_GAP;
 export const EDGE = 28;
 export const FOLDER_HOLD_MS = 400;

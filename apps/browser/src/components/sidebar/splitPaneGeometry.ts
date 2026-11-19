@@ -15,3 +15,10 @@ export function previewSlots(width: number, panes: number) {
   const slot = (width - SPLIT_PANE.inset * 2 - SPLIT_PANE.gap * (slots - 1)) / slots;
   return { slot, pitch: slot + SPLIT_PANE.gap };
 }
+
+export function previewPaneSlot(row: { x: number; y: number; w: number }, panes: number, side: "left" | "right") {
+  if (panes >= SPLIT_MAX_PANES) return null;
+  const { slot, pitch } = previewSlots(row.w, panes);
+  const { height, corner } = splitPaneShape();
+  return { x: row.x + SPLIT_PANE.inset + (side === "left" ? 0 : panes * pitch), y: row.y + SPLIT_PANE.inset, w: Math.max(0, slot), h: height, corner };
+}

@@ -4,7 +4,7 @@ import { currentSettings } from "../../state/browser/current";
 import type { DragSource } from "../../state/drag/drops";
 import { descendantGroupIds, resolveDropNow, splitsOnRowNow } from "../../state/sidebar/current";
 import { tabDragOutside } from "../../state/drag/tabDrag";
-import { dragMarksOf, markDrag } from "../../state/sidebar/dragMarks";
+import { dragMarksOf, markDrag, type SplitHalfMark } from "../../state/sidebar/dragMarks";
 import { folderPanel } from "../../state/sidebar/tileFolderUi";
 import { overPins, pinGrid, pinGridHeight } from "./pinZone";
 import { boxed, type Drop, FOLDER_HOLD_MS, ROOM_SPRING, SPLIT_REST_SLOP, folderOf, inside, type Item, pinnedBlock, spring } from "./dragModel";
@@ -12,6 +12,7 @@ import { aimAt, type Pointing } from "./dragZones";
 import { DragGeometry } from "./dragGeometry";
 import { hapticTick } from "../../state/drag/dragNative";
 import { entryKey } from "../../state/sidebar/entryKey";
+import { previewPaneSlot } from "./splitPaneGeometry";
 
 export class DragTargeting extends DragGeometry {
   protected clearHold() {
@@ -225,7 +226,7 @@ export class DragTargeting extends DragGeometry {
     if (folderAway !== marks.folderAway) markDrag(this.marks, { folderAway });
     if (JSON.stringify(row) !== JSON.stringify(marks.row)) markDrag(this.marks, { row });
     const key = JSON.stringify(drop);
-    if (key === session.dropKey && gapKey === session.gapKey) return;
+    if (key === session.dropKey && gapKey === session.gapKey) return this.markPane(split);
     if (session.dropKey && drop.type !== "none") hapticTick();
     session.dropKey = key;
     session.drop = drop;
@@ -239,5 +240,13 @@ export class DragTargeting extends DragGeometry {
       session.pitch = pitch;
       this.moveRoom();
     }
+    this.markPane(split);
+  }
+
+  protected markPane(split: SplitHalfMark | null) {
+    const target = split ? this.items.get(split.key) : undefined;
+    const row = target?.frame ? this.shown(target) : null;
+    const slot = split && target && row ? previewPaneSlot({ x: row.x - this.rootFrame.x, y: row.y - this.rootFrame.y, w: row.w }, target.kind === "split" ? target.tabIds.length : 1, split.side) : null;
+    if (JSON.stringify(slot) !== JSON.stringify(dragMarksOf(this.marks).pane)) markDrag(this.marks, { pane: slot });
   }
 }

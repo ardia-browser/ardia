@@ -11,6 +11,8 @@ const { addToTileFolder, tileFolderOf } = await import("../../state/pins/tileFol
 const { useFolderPanel } = await import("../../state/sidebar/tileFolderUi.ts");
 const { devTabPresses } = await import("../../state/telemetry/tabPresses.ts");
 const { S, entryKey, tailKey, mount, sceneLayout, readDrag, ROW, TILE, PITCH } = D;
+const { dragMarksOf } = await import("../../state/sidebar/dragMarks.ts");
+const paneOf = (c) => dragMarksOf(c.marks).pane;
 
 const frameOf = (m, key) => m.L.entries.find((e) => e.key === key).frame;
 const at = (f, fx, fy) => ({ x: f.x + f.w * fx, y: f.y + f.h * fy });
@@ -427,4 +429,66 @@ test("a split made from below the row it joins starts where the preview showed a
   } finally {
     D.animations.held = false;
   }
+});
+
+test("an armed split half turns the ghost into the pane the tab will be: half the row for two panes, a third for three, in the empty slot, and lets go off the half", async () => {
+  const { previewSlots, SPLIT_PANE, splitPaneShape } = await import("./splitPaneGeometry.ts");
+  const shape = splitPaneShape();
+  const m = mixedScene();
+  const bKey = entryKey("tab", m.id.b);
+  const b = frameOf(m, bKey);
+  const r = await dragOver(m, entryKey("tab", m.id.c), at(b, 0.75, 0.5));
+  const shownB = r.c.shown(r.c.items.get(bKey));
+  const two = previewSlots(b.w, 1);
+  assert.equal(two.slot * 2 + SPLIT_PANE.gap + SPLIT_PANE.inset * 2, b.w, "half the row");
+  assert.deepEqual(paneOf(r.c), { x: shownB.x + SPLIT_PANE.inset + two.pitch, y: shownB.y + SPLIT_PANE.inset, w: two.slot, h: shape.height, corner: shape.corner }, "the right slot");
+  r.c.move(b.x + b.w * 0.25, b.y + b.h / 2);
+  assert.deepEqual(readDrag(r.c).marks.split, { key: bKey, side: "left" });
+  assert.equal(paneOf(r.c).x, shownB.x + SPLIT_PANE.inset, "the left slot");
+  r.c.move(b.x + b.w / 2, b.y + b.h * 0.1);
+  assert.equal(paneOf(r.c), null, "a gap is no pane");
+  r.c.end(false);
+  assert.equal(paneOf(r.c), null);
+
+  const n = mixedScene();
+  const spKey = entryKey("split", n.SP);
+  const sp = frameOf(n, spKey);
+  const r2 = await dragOver(n, entryKey("tab", n.id.c), at(sp, 0.9, 0.5));
+  const shownSp = r2.c.shown(r2.c.items.get(spKey));
+  const three = previewSlots(sp.w, 2);
+  assert.equal(three.slot * 3 + SPLIT_PANE.gap * 2 + SPLIT_PANE.inset * 2, sp.w, "a third of the row");
+  assert.deepEqual(paneOf(r2.c), { x: shownSp.x + SPLIT_PANE.inset + 2 * three.pitch, y: shownSp.y + SPLIT_PANE.inset, w: three.slot, h: shape.height, corner: shape.corner });
+  r2.c.move(sp.x + sp.w * 0.1, sp.y + sp.h / 2);
+  assert.equal(paneOf(r2.c).x, shownSp.x + SPLIT_PANE.inset);
+  r2.c.move(400, sp.y);
+  assert.equal(paneOf(r2.c), null, "away from the sidebar");
+  r2.c.end(false);
+
+  const full = mixedScene();
+  const fullKey = entryKey("split", full.SP);
+  const { c } = mount({ entries: full.L.entries, regions: full.regions });
+  c.items.get(fullKey).tabIds = [full.id.s1, full.id.s2, full.id.a];
+  const f = frameOf(full, entryKey("tab", full.id.c));
+  await c.begin(entryKey("tab", full.id.c), f.x + 20, f.y + 10);
+  c.move(...Object.values(at(frameOf(full, fullKey), 0.9, 0.5)));
+  assert.equal(readDrag(c).drop.type, "split");
+  assert.equal(paneOf(c), null, "a full split shows no pane");
+  c.end(false);
+});
+
+test("a clipped row that becomes the drop slot still opens its gap, and the clip keeps the row gap above it", async () => {
+  const { dragItemStyle } = await import("./dragModel.ts");
+  const { Animated } = await import("react-native");
+  const { layout } = await import("../ui/theme.ts");
+  const m = mixedScene();
+  const { c } = mount({ entries: m.L.entries, regions: m.regions });
+  const row = c.items.get(entryKey("tab", m.id.b));
+  const look = (clipped) => dragItemStyle(row, { source: false, landing: false, clipped, inFold: false, rowGap: layout.rowGap, tailOffset: Animated.add(row.gap, -layout.rowGap) });
+  const top = (style) => (typeof style.marginTop === "number" ? style.marginTop : style.marginTop.__getValue());
+  assert.equal(top(look(false)), 0);
+  assert.equal(top(look(true)), -layout.rowGap, "at rest the clip lifts the row into its gap");
+  row.gap.setValue(PITCH);
+  assert.equal(top(look(false)), PITCH);
+  assert.equal(top(look(true)), PITCH - layout.rowGap, "the opened gap shows through the clip");
+  assert.equal(look(true).paddingTop, layout.rowGap);
 });

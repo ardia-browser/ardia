@@ -13,8 +13,8 @@ export function withPasteRow(rows: TrayRow[], typed: string, offer: PasteOffer |
 
 export type PasteTap = { go: string | null; count: Counted };
 
-export function pasteTap(offer: PasteOffer, pasted: string | null | undefined): PasteTap {
+export function pasteTap(pasted: string | null | undefined, opensAddress: (text: string) => boolean): PasteTap {
   const text = pasted?.trim() ?? "";
   if (!text) return { go: null, count: "paste_and_go_unread" };
-  return { go: text, count: offer === "link" ? "paste_and_go_links" : "paste_and_go_texts" };
+  return { go: text, count: opensAddress(text) ? "paste_and_go_links" : "paste_and_go_texts" };
 }

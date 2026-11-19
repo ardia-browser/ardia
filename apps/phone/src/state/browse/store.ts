@@ -180,9 +180,10 @@ export function activateRow(row: TrayRow) {
     if (session === null) return;
     const startedIncognito = useTabs.getState().incognito;
     void settled(() => pasteForGo(), "").then((pasted) => {
-      const tap = pasteTap(row.offer, pasted);
+      const tap = pasteTap(pasted, (text) => enterTarget(text)?.origin === "typed");
+      if (!endPasteRead(session, tap.go !== null)) return;
       if (!startedIncognito && !useTabs.getState().incognito) countUsage(tap.count);
-      if (endPasteRead(session, tap.go !== null) && tap.go) submitSearch(tap.go);
+      if (tap.go) submitSearch(tap.go);
     });
     return;
   }

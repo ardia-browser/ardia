@@ -103,6 +103,31 @@ test("a paste that lands after its tray has gone opens nothing, and a tap begun 
   expect(counted).not.toHaveBeenCalled();
 });
 
+test("an Incognito paste that lands while its tray is open opens a private tab and is never counted", async () => {
+  act(() => useTabs.setState({ incognito: true }));
+  const row = await trayOffering("text", true);
+  const privates = currentTabs().privates.length;
+  act(() => activateRow(row));
+  await answer(reads, "sea otters");
+  expect(currentTabs().privates.length).toBe(privates + 1);
+  expect(counted).not.toHaveBeenCalled();
+});
+
+test("a paste that lands after its tray has gone is not counted", async () => {
+  const row = await trayOffering("link");
+  act(() => activateRow(row));
+  act(() => dismissSearch());
+  await answer(reads, "https://ardia.dev/");
+  expect(counted).not.toHaveBeenCalled();
+});
+
+test("a row that offered a link but pasted text counts text", async () => {
+  const row = await trayOffering("link");
+  act(() => activateRow(row));
+  await answer(reads, "sea otters");
+  expect(counted.mock.calls.filter(([field]) => field.startsWith("paste_and_go"))).toEqual([["paste_and_go_texts"]]);
+});
+
 test("a refusal after the tray moved on leaves the new tray's paste row", async () => {
   const row = await trayOffering("link");
   act(() => activateRow(row));

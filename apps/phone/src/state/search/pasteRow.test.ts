@@ -20,11 +20,13 @@ test("the paste row goes once anything is typed, or with nothing copied", () => 
   assert.deepEqual(withPasteRow([recent], "", null), [recent]);
 });
 
-test("a tap goes to what was pasted, counted as the link or text the row offered", () => {
-  assert.deepEqual(pasteTap("link", "  https://ardia.dev/ \n"), { go: "https://ardia.dev/", count: "paste_and_go_links" });
-  assert.deepEqual(pasteTap("text", "sea otters"), { go: "sea otters", count: "paste_and_go_texts" });
+const opensAddress = (text: string) => text.startsWith("https://");
+
+test("a tap goes to what was pasted, counted as a link or text by where it goes, not by what the row offered", () => {
+  assert.deepEqual(pasteTap("  https://ardia.dev/ \n", opensAddress), { go: "https://ardia.dev/", count: "paste_and_go_links" });
+  assert.deepEqual(pasteTap("sea otters", opensAddress), { go: "sea otters", count: "paste_and_go_texts" });
 });
 
 test("a tap that reads nothing, as when the paste prompt is refused, goes nowhere", () => {
-  for (const pasted of [null, undefined, "", "  \n"]) assert.deepEqual(pasteTap("link", pasted), { go: null, count: "paste_and_go_unread" });
+  for (const pasted of [null, undefined, "", "  \n"]) assert.deepEqual(pasteTap(pasted, opensAddress), { go: null, count: "paste_and_go_unread" });
 });

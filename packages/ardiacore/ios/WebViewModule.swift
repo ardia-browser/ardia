@@ -28,6 +28,7 @@ public class WebViewModule: Module {
     "setLittleArdiaOpensNewTabLinks": setting { ArdiaWebView.setLittleArdiaOpensNewTabLinks(try $0.bool("enabled")) },
     "setPopupsOpenAsTabs": setting { ArdiaWebView.setPopupsOpenAsTabs(try $0.bool("enabled")) },
     "setAutoPictureInPicture": setting { ArdiaWebView.setAutoPictureInPictureEnabled(try $0.bool("enabled")) },
+    "setPictureInPictureButton": setting { ArdiaWebView.setPictureInPictureButtonEnabled(try $0.bool("enabled")) },
     "setVideoUpscaling": setting { ArdiaWebView.setVideoUpscalingEnabled(try $0.bool("enabled")) },
     "setVideoUpscalingTestConditions": setting { args in
       var conditions: [String: NSNumber] = [:]

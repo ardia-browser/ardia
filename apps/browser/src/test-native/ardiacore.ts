@@ -558,6 +558,7 @@ const fakeModules = {
     setLittleArdiaOpensNewTabLinks: () => null,
     setPopupsOpenAsTabs: () => null,
     setAutoPictureInPicture: () => null,
+    setPictureInPictureButton: () => null,
     setVideoUpscaling: () => null,
     setVideoUpscalingTestConditions: () => null,
     videoUpscalingState: () => null,

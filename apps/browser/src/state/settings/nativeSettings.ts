@@ -1,5 +1,6 @@
 import { setAppearance, setThinScrollBars } from "../../platform/app";
-import { setAutoPictureInPicture, setVideoUpscaling } from "../../platform/media";
+import { setAutoPictureInPicture, setPictureInPictureButton, setVideoUpscaling } from "../../platform/media";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { setCommandScrollZoom } from "../../platform/siteSettings";
 import { setPopupsOpenAsTabs } from "../../platform/pageOptions";
 import { setBlockAutoplayEverywhere } from "../../platform/pageOptions";
@@ -14,6 +15,7 @@ const mirror = <K extends keyof Settings>(key: K, send: (value: Settings[K]) => 
 const NATIVE_SETTINGS: Mirror[] = [
   mirror("appearance", setAppearance),
   mirror("autoPictureInPicture", setAutoPictureInPicture),
+  ...(PLATFORM_FEATURES.pictureInPictureButton ? [mirror("pictureInPictureButton", setPictureInPictureButton)] : []),
   mirror("videoUpscaling", setVideoUpscaling),
   mirror("popupsOpenAsTabs", setPopupsOpenAsTabs),
   mirror("blockAutoplayEverywhere", setBlockAutoplayEverywhere),

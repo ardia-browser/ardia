@@ -186,7 +186,7 @@ test("one click: Install on the sheet installs it, links ardia adopting the old 
   takePluginCounts();
   host.linkResult = { ok: true, linked: ["ardia"], refused: {}, binDir: "/home/.local/bin", adopted: true };
   const done = installOfficialPlugin("cli", { showSheet: false });
-  assert.deepEqual(P().consent, { name: "cli", hash: P().listings.cli.hash });
+  assert.deepEqual({ name: P().consent.name, hash: P().consent.hash }, { name: "cli", hash: P().listings.cli.hash });
   assert.ok(lifecycle.enablePlugin("cli", P().consent.hash));
   assert.deepEqual(await done, { ok: true });
   await settle();

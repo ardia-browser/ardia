@@ -7,7 +7,6 @@ import type { PluginListing, ProcessState, ProgramsState } from "../../../state/
 import {
   consentLines,
   disablePlugin,
-  dismissPluginConsent,
   installOfficialPlugin,
   isAlwaysOn,
   pluginsFolderPath,
@@ -29,31 +28,34 @@ import { Group, Row, SectionHeader } from "../Form";
 import { useTheme } from "../../ui/theme";
 import { PaneSubPage } from "./PaneSubPage";
 import { PluginConsentSheet } from "../../plugins/PluginConsentSheet";
-import { settingsOwnsConsent } from "../../../state/plugins/consentSurface";
+import { confirmConsentAs, consentOwner, dismissConsentAs, dismissOrphanedConsent } from "../../../state/plugins/consentSurface";
 import { OfficialPluginsSection, usePluginsBelowOfficial } from "./OfficialPlugins";
 
 export function PluginsPane({ detail }: SettingsPlace) {
   const asked = usePluginConsent();
-  const consent = settingsOwnsConsent(asked) ? asked : null;
+  const consent = consentOwner(asked) === "settings" ? asked : null;
   const showing = useRef(false);
-  const owned = useRef<string | null>(null);
+  const owned = useRef<number | null>(null);
   useEffect(
     () => () => {
-      if (owned.current) dismissPluginConsent(owned.current);
+      if (owned.current !== null) dismissConsentAs("settings", owned.current);
       if (showing.current) closeSettingsSheet();
     },
     [],
   );
   useEffect(() => {
-    owned.current = consent?.name ?? null;
+    dismissOrphanedConsent();
+  }, [asked?.id]);
+  useEffect(() => {
+    owned.current = consent?.id ?? null;
     if (consent) {
       showing.current = true;
-      showSettingsSheet(<PluginConsentSheet name={consent.name} hash={consent.hash} onClosed={closeSettingsSheet} />);
+      showSettingsSheet(<PluginConsentSheet request={consent} onCancel={(id) => dismissConsentAs("settings", id)} onConfirm={(id) => confirmConsentAs("settings", id)} onClosed={closeSettingsSheet} />);
     } else if (showing.current) {
       showing.current = false;
       closeSettingsSheet();
     }
-  }, [consent?.name, consent?.hash]);
+  }, [consent?.id]);
   if (!PLATFORM_FEATURES.plugins) return <UnavailablePage />;
   return detail ? <PluginPage name={detail} /> : <PluginList />;
 }

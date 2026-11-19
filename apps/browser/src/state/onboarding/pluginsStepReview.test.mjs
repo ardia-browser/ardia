@@ -6,7 +6,8 @@ const { useBrowser } = await import("../browser/store.ts");
 const { usePlugins } = await import("../plugins/store.ts");
 const lifecycle = await import("../plugins/lifecycle.ts");
 const { installOfficialPlugin, officialPlugins } = await import("../plugins/official.ts");
-const { onboardingOwnsConsent, settingsOwnsConsent } = await import("../plugins/consentSurface.ts");
+const surface = await import("../plugins/consentSurface.ts");
+const owner = () => surface.consentOwner(P().consent);
 const { activeSteps, maybeStartOnboarding, startOnboarding, useOnboarding } = await import("./onboarding.ts");
 const { readSaved, saveOnboarding } = await import("./onboardingDocument.ts");
 const { offeredInOnboarding } = await import("./pluginsOffer.ts");
@@ -24,6 +25,8 @@ const settle = async () => {
 };
 const CLI = JSON.stringify({ manifest: 1, name: "cli", title: "Command Line", version: "0.3.0", alwaysOn: true, official: true, icon: "terminal.fill", permissions: ["control"], programs: [{ name: "ardia", path: "bin/ardia" }] });
 const BUILT_IN = { status: "ok", folderId: "bundled", bundled: true };
+const LONG_STEP = ["refresh", "--with-a-very-long-option-name", "and-another-argument-that-goes-on", "--plus-one-more-flag", "value-number-one", "value-number-two", "value-number-three", "--and-finally-this"];
+const LONG_CONSENT = JSON.stringify({ manifest: 1, name: "long", title: "Long", version: "1.0.0", alwaysOn: true, official: true, permissions: ["control", "network", "tabs", "fullUrls", "commands"], programs: Array.from({ length: 4 }, (_, i) => ({ name: `long-tool-${i}`, path: `bin/l${i}`, afterUpdate: Array.from({ length: 4 }, () => LONG_STEP) })) });
 const offered = (soon = false) => offeredInOnboarding(officialPlugins(P(), true, () => soon));
 
 setConsentPeriod(true, "test-epoch");
@@ -74,7 +77,7 @@ test("a confirm the plugin store refuses to save is a failure with a reason, wit
   await settle();
   assert.equal(P().consent?.name, "cli");
   refusedWrites.on = true;
-  assert.equal(step.confirmPluginConsent("cli", P().consent.hash), false);
+  assert.equal(step.confirmPluginConsent(P().consent.id), false);
   refusedWrites.on = false;
   await done;
   assert.equal(P().consent, null, "the consent page closes");
@@ -84,7 +87,7 @@ test("a confirm the plugin store refuses to save is a failure with a reason, wit
   assert.deepEqual(takeOfficialPluginCounts(), { official_plugin_onboarding_failed_cli: 1 });
   const again = step.installPluginAgain("cli");
   await settle();
-  assert.ok(step.confirmPluginConsent("cli", P().consent.hash));
+  assert.ok(step.confirmPluginConsent(P().consent.id));
   await again;
   assert.equal(T().phase, "installed");
 });
@@ -94,42 +97,57 @@ test("a consent onboarding asked for belongs to onboarding: its sheet shows over
   const done = step.installPickedPlugins(offered());
   await settle();
   assert.equal(P().consent?.name, "cli");
-  assert.equal(onboardingOwnsConsent(P().consent), true);
-  assert.equal(settingsOwnsConsent(P().consent), false);
+  assert.equal(owner(), "onboarding");
   step.skipPluginsStep(offered());
   await done;
   assert.equal(P().consent, null);
   assert.ok(lifecycle.requestPluginConsent("cli"));
-  assert.equal(settingsOwnsConsent(P().consent), true);
-  assert.equal(onboardingOwnsConsent(P().consent), false);
+  assert.equal(owner(), "settings");
   lifecycle.dismissPluginConsent("cli");
 });
 
-test("Install in Settings while onboarding asks for the same plugin hands the request to Settings: its sheet shows, onboarding's goes, and onboarding says why", async () => {
+test("Install in Settings while onboarding asks for the same plugin hands the request to Settings; onboarding can't confirm or cancel it, even leaving right after", async () => {
   await atOffer();
   const done = step.installPickedPlugins(offered());
   await settle();
   const onboardingAsk = P().consent;
-  assert.equal(onboardingOwnsConsent(onboardingAsk), true);
+  assert.equal(owner(), "onboarding");
   const settings = installOfficialPlugin("cli", { showSheet: false });
   const settingsAsk = P().consent;
-  assert.notEqual(settingsAsk, onboardingAsk);
-  assert.equal(settingsOwnsConsent(settingsAsk), true);
-  assert.equal(onboardingOwnsConsent(settingsAsk), false);
-  assert.equal(step.confirmPluginConsent("cli", settingsAsk.hash), false, "onboarding can't confirm a request Settings owns");
-  assert.equal(P().records.cli, undefined);
+  assert.notEqual(settingsAsk.id, onboardingAsk.id);
+  assert.equal(settingsAsk.hash, onboardingAsk.hash);
+  assert.equal(owner(), "settings");
+  assert.equal(step.confirmPluginConsent(settingsAsk.id), false, "onboarding can't confirm Settings' request");
+  assert.equal(step.cancelPluginConsent(settingsAsk.id), false, "or cancel it");
+  assert.equal(step.confirmPluginConsent(onboardingAsk.id), false, "its own old id is no longer the request");
   await done;
-  assert.equal(T().phase, "failed");
   assert.deepEqual(T().failures, { cli: "Another install started." });
-  assert.ok(lifecycle.enablePlugin("cli", settingsAsk.hash));
+  step.leavePluginsStep();
+  assert.equal(P().consent?.id, settingsAsk.id, "leaving onboarding leaves Settings' request alone");
+  assert.ok(surface.confirmConsentAs("settings", settingsAsk.id));
   assert.deepEqual(await settings, { ok: true });
 });
 
-test("onboarding enables a plugin only through its own consent request, with the hash that request showed", async () => {
+test("a Settings confirm can't accept onboarding's request, even for the same plugin and hash", async () => {
+  await atOffer();
+  const done = step.installPickedPlugins(offered());
+  await settle();
+  const asked = P().consent;
+  assert.equal(owner(), "onboarding");
+  assert.equal(surface.confirmConsentAs("settings", asked.id), false);
+  assert.equal(surface.dismissConsentAs("settings", asked.id), false);
+  assert.equal(P().records.cli, undefined);
+  assert.equal(P().consent?.id, asked.id);
+  assert.ok(step.cancelPluginConsent(asked.id));
+  await done;
+  assert.equal(T().phase, "offer");
+});
+
+test("onboarding enables a plugin only through its own consent request, by that request's id and its hash", async () => {
   await scanned([{ name: "cli", text: CLI, ...BUILT_IN }]);
   const hash = P().listings.cli.hash;
   assert.equal(P().consent, null);
-  assert.equal(step.confirmPluginConsent("cli", hash), false, "no request, no install");
+  assert.equal(step.confirmPluginConsent(1), false, "no request, no install");
   assert.equal(P().records.cli, undefined);
   step.resetPluginsStep();
   startOnboarding(windowId, "plugins");
@@ -137,12 +155,49 @@ test("onboarding enables a plugin only through its own consent request, with the
   await settle();
   const asked = P().consent;
   assert.equal(asked.hash, hash);
-  assert.equal(step.confirmPluginConsent("cli", "a-different-manifest"), false, "a hash the sheet didn't show is refused");
+  assert.equal(step.confirmPluginConsent(asked.id + 1), false, "an id that isn't the request is refused");
   assert.equal(P().records.cli, undefined);
-  assert.ok(step.confirmPluginConsent("cli", asked.hash));
+  assert.ok(step.confirmPluginConsent(asked.id));
   await done;
   assert.equal(P().records.cli.approved, asked.hash);
   assert.equal(T().phase, "installed");
+});
+
+test("when the only official plugin disappears while its consent is open, the request is settled before the step moves on", async () => {
+  await atOffer();
+  const done = step.installPickedPlugins(offered());
+  await settle();
+  assert.equal(owner(), "onboarding");
+  host.folders = [];
+  await lifecycle.rescanPlugins(null);
+  await settle();
+  step.passEmptyPluginsStep();
+  assert.equal(O().step, "outro");
+  assert.equal(P().consent, null, "no request is left without an owner");
+  const outcome = await Promise.race([done.then(() => "settled"), new Promise((resolve) => setTimeout(() => resolve("pending"), 50))]);
+  assert.equal(outcome, "settled");
+});
+
+test("a request onboarding left behind is dismissed by whoever notices", async () => {
+  await atOffer();
+  const done = step.installPickedPlugins(offered());
+  await settle();
+  const asked = P().consent;
+  useOnboarding.setState({ step: "outro" });
+  assert.equal(owner(), null, "its owner is gone, so neither surface owns it");
+  assert.ok(surface.dismissOrphanedConsent());
+  assert.equal(P().consent, null);
+  await done;
+  assert.notEqual(P().consent?.id, asked.id);
+});
+
+test("a long consent is still one request with every entry, for the sheet to scroll", async () => {
+  await scanned([{ name: "long", text: LONG_CONSENT, ...BUILT_IN }]);
+  const { consentLines } = await import("../plugins/consent.ts");
+  assert.deepEqual(P().listings.long.problems, []);
+  const lines = consentLines(P().listings.long.manifest);
+  assert.ok(lines.length >= 12, `${lines.length} entries`);
+  assert.ok(lines.reduce((n, l) => n + l.text.length, 0) > 2400, "well over thirty wrapped lines at the sheet's width");
 });
 
 test("each offered plugin counts as shown once per visit, even when the list changes under it", async () => {

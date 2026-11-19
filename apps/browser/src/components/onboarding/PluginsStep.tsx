@@ -1,14 +1,14 @@
 import { useEffect } from "react";
 import { View } from "react-native";
 import type { OfficialPlugin } from "../../state/plugins/actions";
-import { onboardingOwnsConsent } from "../../state/plugins/consentSurface";
+import { consentOwner } from "../../state/plugins/consentSurface";
 import { useOfficialPlugins, usePluginConsent, usePluginPrograms } from "../../state/plugins/hooks";
 import { usePlugins } from "../../state/plugins/store";
 import { useOnboarding } from "../../state/onboarding/onboarding";
 import { PluginConsentSheet } from "../plugins/PluginConsentSheet";
 import { isOffered, officialTitle, officialView } from "../../state/plugins/officialView";
 import { offeredInOnboarding, pluginsCatalogueKnown } from "../../state/onboarding/pluginsOffer";
-import { confirmPluginConsent, finishPluginsStep, installPickedPlugins, isPicked, leavePluginsStep, notePluginsShown, passEmptyPluginsStep, primaryTitle, installPluginAgain, skipPluginsStep, togglePluginPick, usePluginsStep } from "../../state/onboarding/pluginsStep";
+import { cancelPluginConsent, confirmPluginConsent, finishPluginsStep, installPickedPlugins, isPicked, leavePluginsStep, notePluginsShown, passEmptyPluginsStep, primaryTitle, installPluginAgain, skipPluginsStep, togglePluginPick, usePluginsStep } from "../../state/onboarding/pluginsStep";
 import { ActivitySpinner, Checkbox, IconTile, Symbol, Text } from "../ui";
 import { monoFace, radius, space } from "../ui/tokens";
 import { SecondaryButton } from "./Buttons";
@@ -23,7 +23,7 @@ export function PluginsStep() {
   const picks = usePluginsStep((s) => s.picks);
   const current = usePluginsStep((s) => s.current);
   const consent = usePluginConsent();
-  const asking = phase === "working" && !!current && onboardingOwnsConsent(consent) && consent.name === current;
+  const asking = phase === "working" && !!current && consentOwner(consent) === "onboarding" && consent?.name === current;
   const shownPhase = asking ? "offer" : phase;
   const known = usePlugins(() => pluginsCatalogueKnown());
   const names = plugins.filter(isOffered).map((p) => p.name).join(" ");
@@ -110,8 +110,8 @@ function StatusCard({ plugin, status, failed, busy, soon, done }: { plugin: Offi
 export function OnboardingConsentSheet() {
   const step = useOnboarding((s) => s.step);
   const asked = usePluginConsent();
-  if (step !== "plugins" || !onboardingOwnsConsent(asked)) return null;
-  return <PluginConsentSheet name={asked.name} hash={asked.hash} confirm={confirmPluginConsent} onClosed={() => {}} />;
+  if (step !== "plugins" || !asked || consentOwner(asked) !== "onboarding") return null;
+  return <PluginConsentSheet request={asked} onCancel={cancelPluginConsent} onConfirm={confirmPluginConsent} onClosed={() => {}} />;
 }
 
 const TERMINAL_WIDTH = 320;

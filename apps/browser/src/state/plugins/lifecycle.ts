@@ -108,12 +108,14 @@ export function rescanPlugins(consent: ConsentToken | null): Promise<void> {
   return scanning;
 }
 
+let lastConsentId = 0;
+
 export function requestPluginConsent(name: string): boolean {
   const listing = currentPlugins().listings[name];
   if (!listing?.manifest || !listing.hash || isInstalled(currentPlugins(), name)) return false;
   const before = currentPlugins().consent;
   if (before && before.name !== name) settleInstall(before.name, { ok: false, reason: "Another install started." });
-  usePlugins.setState({ consent: { name, hash: listing.hash } });
+  usePlugins.setState({ consent: { id: ++lastConsentId, name, hash: listing.hash } });
   return true;
 }
 
@@ -123,6 +125,16 @@ export function dismissPluginConsent(name?: string): boolean {
   usePlugins.setState({ consent: null });
   if (before) settleInstall(before.name, { ok: false, reason: "Cancelled.", cancelled: true });
   return true;
+}
+
+export function dismissConsentRequest(id: number): boolean {
+  const asked = currentPlugins().consent;
+  return asked?.id === id && dismissPluginConsent(asked.name);
+}
+
+export function confirmConsentRequest(id: number): boolean {
+  const asked = currentPlugins().consent;
+  return asked?.id === id && enablePlugin(asked.name, asked.hash);
 }
 
 export function enablePlugin(name: string, hash: string): boolean {

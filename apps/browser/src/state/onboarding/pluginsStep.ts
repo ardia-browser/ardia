@@ -1,6 +1,5 @@
 import { create } from "zustand";
-import { askConsentInOnboarding, onboardingOwnsConsent } from "../plugins/consentSurface";
-import { dismissPluginConsent, enablePlugin } from "../plugins/lifecycle";
+import { askConsentInOnboarding, confirmConsentAs, dismissConsentAs, ownsConsent, releaseOnboardingConsent } from "../plugins/consentSurface";
 import { installOfficialPlugin, type OfficialPlugin } from "../plugins/official";
 import { officialTitle, wasCancelled } from "../plugins/officialView";
 import { currentPlugins } from "../plugins/store";
@@ -27,29 +26,28 @@ export const REFUSED_REASON = "Can't install it right now.";
 
 const FRESH = { picks: {}, phase: "offer", current: null, failures: {}, installed: [], shown: [] } satisfies Omit<PluginsStepState, "run">;
 
-const refusals = new Map<string, (outcome: InstallOutcome) => void>();
+const refusals = new Map<number, (outcome: InstallOutcome) => void>();
 
-function installOrRefusal(name: string): Promise<InstallOutcome> {
+function installOrRefusal(name: string, run: number): Promise<InstallOutcome> {
   let refuse: (outcome: InstallOutcome) => void = () => {};
   const refused = new Promise<InstallOutcome>((resolve) => {
     refuse = resolve;
   });
-  refusals.set(name, refuse);
-  const { result: installed, release } = askConsentInOnboarding(name, () => installOfficialPlugin(name, { showSheet: false }));
-  return Promise.race([installed, refused]).finally(() => {
-    release();
-    if (refusals.get(name) === refuse) refusals.delete(name);
-  });
+  const { result: installed, id } = askConsentInOnboarding(name, () => inPluginsStep(run), () => installOfficialPlugin(name, { showSheet: false }));
+  if (id === null) return installed;
+  refusals.set(id, refuse);
+  return Promise.race([installed, refused]).finally(() => refusals.delete(id));
 }
 
-export function confirmPluginConsent(name: string, hash: string): boolean {
-  const asked = currentPlugins().consent;
-  if (!onboardingOwnsConsent(asked) || asked.name !== name || asked.hash !== hash) return false;
-  if (enablePlugin(name, hash)) return true;
-  refusals.get(name)?.({ ok: false, reason: REFUSED_REASON });
-  dismissPluginConsent(name);
+export function confirmPluginConsent(id: number): boolean {
+  if (!ownsConsent("onboarding", id)) return false;
+  if (confirmConsentAs("onboarding", id)) return true;
+  refusals.get(id)?.({ ok: false, reason: REFUSED_REASON });
+  dismissConsentAs("onboarding", id);
   return false;
 }
+
+export const cancelPluginConsent = (id: number): boolean => dismissConsentAs("onboarding", id);
 
 export function notePluginsShown(names: readonly string[]) {
   const fresh = names.filter((name) => !now().shown.includes(name));
@@ -89,7 +87,7 @@ async function installEach(names: readonly string[], run: number, consent: Conse
   for (const name of names) {
     if (!inPluginsStep(run)) return "left";
     usePluginsStep.setState((s) => ({ phase: "working", current: name, failures: Object.fromEntries(Object.entries(s.failures).filter(([failed]) => failed !== name)) }));
-    const result = await installOrRefusal(name);
+    const result = await installOrRefusal(name, run);
     if (wasCancelled(result)) return inPluginsStep(run) ? "cancelled" : "left";
     noteOfficialPlugin("onboarding", result.ok ? "installed" : "failed", name, consent);
     if (!inPluginsStep(run)) continue;
@@ -135,22 +133,20 @@ export function finishPluginsStep(plugins: readonly OfficialPlugin[]) {
 export function skipPluginsStep(plugins: readonly OfficialPlugin[]) {
   if (useOnboarding.getState().step !== "plugins") return;
   const state = now();
-  const asking = state.phase === "working" && state.current && currentPlugins().consent?.name === state.current ? state.current : null;
   if (state.phase !== "working") for (const plugin of plugins) if (plugin.state === "available" && !(plugin.name in state.failures)) noteOfficialPlugin("onboarding", "skipped", plugin.name);
+  releaseOnboardingConsent();
   resetPluginsStep();
-  if (asking) dismissPluginConsent(asking);
   skipStep();
 }
 
 export function leavePluginsStep() {
-  const state = now();
-  const asking = state.phase === "working" && state.current && currentPlugins().consent?.name === state.current ? state.current : null;
+  releaseOnboardingConsent();
   resetPluginsStep();
-  if (asking) dismissPluginConsent(asking);
 }
 
 export function passEmptyPluginsStep() {
   if (useOnboarding.getState().step !== "plugins" || pluginsStepShown()) return;
+  releaseOnboardingConsent();
   resetPluginsStep();
   goToStep(activeSteps().find((step) => STEPS.indexOf(step) > STEPS.indexOf("plugins")) ?? "outro");
 }

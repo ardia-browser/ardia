@@ -1,0 +1,71 @@
+name: Mac packages
+
+on:
+  pull_request:
+    paths:
+      - "packages/ardiacore/**"
+      - ".github/workflows/mac-packages.yml"
+  push:
+    branches: [main]
+    paths:
+      - "packages/ardiacore/**"
+      - ".github/workflows/mac-packages.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mac-packages-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run: ${{ steps.vouch.outputs.run }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: .github
+      - id: vouch
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        with:
+          retries: 3
+          script: |
+            const vouch = require(`${process.env.GITHUB_WORKSPACE}/.github/vouch/vouch.cjs`);
+            await vouch.gate({ github, context, core });
+
+  ardiacore:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: xcode-27
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Toolchain
+        run: |
+          swiftc --version
+          clang++ --version
+          node --version
+      - name: ArdiaCore tests, vault Swift suites included
+        working-directory: packages/ardiacore
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: pnpm run test

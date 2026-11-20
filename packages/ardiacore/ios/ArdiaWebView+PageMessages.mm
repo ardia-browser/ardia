@@ -134,6 +134,7 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
     [self noteVaultDocumentInFrame:frameId tab:tab main:main origin:verifiedOrigin];
     [self callFrame:frameId kind:@"peekConfig" json:PeekConfigJSON(self)];
     AnswerHello(tab, _profile, frameId, main, verifiedOrigin);
+    if (main) [self notePasskeyDocumentInFrame:frameId origin:verifiedOrigin];
     if (main) _firstPaint.scripted = YES;
     if (main && _firstPaint.held) [self callFrame:frameId kind:@"firstPaint" json:@"{}"];
   } else if ([kind isEqualToString:@"displayMediaHello"]) {

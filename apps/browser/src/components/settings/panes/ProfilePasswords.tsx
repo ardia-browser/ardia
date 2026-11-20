@@ -43,6 +43,7 @@ import { BrandBadge } from "../../vaults/VaultParts";
 import { VaultLoginSheet } from "../../vaults/VaultLoginSheet";
 import { LoginFormSheet } from "../../vaults/LoginFormSheet";
 import { VerificationCodesSection } from "../../vaults/VerificationCodes";
+import { PasskeysSection } from "../../vaults/VaultPasskeys";
 import { VAULT_SETTINGS } from "../../vaults/tokens";
 
 function passwordManagerAppsNote() {
@@ -236,6 +237,7 @@ function ArdiaExtras({ query, profile, onNewCode }: { query: string; profile: st
   return (
     <>
       <GeneratedPasswordsSection query={query} profile={profile} />
+      <PasskeysSection query={query} />
       <VerificationCodesSection query={query} onAdd={onNewCode} />
     </>
   );

@@ -16,6 +16,7 @@ public class VaultsModule: Module {
       VaultAutoLock.shared.start()
       DispatchQueue.main.async { MainActor.assumeIsolated { VaultClipboard.clearLeftover() } }
       Task { await VaultBroker.shared.resumeAfterQuit() }
+      DispatchQueue.main.async { MainActor.assumeIsolated { VaultPasskeys.install() } }
     }
 
     OnDestroy {
@@ -363,6 +364,28 @@ public class VaultsModule: Module {
       let profile = args.profile
       VaultsModule.answer(reply) {
         await VaultsModule.createLogin(website: website, username: username, passwordDraft: passwordDraft, profile: profile, codeToken: codeToken)
+      }
+    },
+    "passkeys": { _, reply in VaultsModule.answer(reply) { await VaultPasskeys.list() } },
+    "deletePasskey": { args, reply in
+      let id = try args.text("id")
+      VaultsModule.answer(reply) { await VaultPasskeys.delete(id: id) }
+    },
+    "passkeyAnswer": { args, reply in
+      let requestId = try args.text("requestId")
+      let choice = try args.text("choice")
+      let target = try args.optionalText("target")
+      Task { @MainActor in reply.ok(await VaultPasskeys.shared.answer(requestId: requestId, choice: choice, target: target)) }
+    },
+    "setPasskeys": { args, reply in
+      let source = try args.optionalText("source")
+      let extensions = (args.values["extensions"] as? [Any] ?? []).compactMap { raw -> VaultPasskeyExtension? in
+        guard let entry = raw as? [String: Any], let id = entry["id"] as? String, VaultPasskeyExtension.isId(id) else { return nil }
+        return VaultPasskeyExtension(id: id, name: VaultPasskey.cleaned(entry["name"] as? String ?? ""), known: entry["known"] as? Bool == true)
+      }
+      Task { @MainActor in
+        if let source { VaultPasskeys.shared.configure(source: source, extensions: extensions) }
+        reply.ok([String: Any]())
       }
     },
     "codes": { _, reply in VaultsModule.answer(reply) { await VaultArdiaCodes.standaloneList() } },

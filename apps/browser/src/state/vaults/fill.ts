@@ -7,6 +7,7 @@ import { isCodeItem } from "./standaloneCodesModel";
 import { unlockProvider, openPasswordSettings, wasCancelled } from "./actions";
 import { noteFilledUsername, rememberVaultAccount } from "./accounts";
 import { prefetchVaultCode } from "./codes";
+import { pickPasskeyFromMenu } from "./passkeys";
 import {
   AFTER_FILL_QUIET_MS,
   dismissVaultMenu,
@@ -163,6 +164,7 @@ function activateRow(tabId: string, row: VaultRow, how: VaultFillHow, consent: C
   }
   switch (row.kind) {
     case "login":
+      if (row.item.passkey) return void pickPasskeyFromMenu(tabId, menu, row, row.item);
       return void fillItem(tabId, menu, row, row.item, row.userChose || menu.mode === "search", how, consent);
     case "otp":
       return void fillItem(tabId, menu, row, row.item, row.userChose, how, consent);

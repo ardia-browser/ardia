@@ -27,6 +27,11 @@ public class PasswordsModule: Module {
     }.runOnQueue(.main)
   }
 
+  @MainActor
+  static func fillsFromMenu(_ profile: String) -> Bool {
+    ArdiaWebView.fieldProvider(profile: profile)?["fill"] as? String == "menu"
+  }
+
   static let calls = CallTable(domain: "passwords", handlers: [
     "list": { args, reply in ArdiaServices.listPasswords(profile: args.profile) { reply.service($0, $1) } },
     "unlock": { args, reply in
@@ -69,7 +74,11 @@ public class PasswordsModule: Module {
       let session = try args.text("session")
       let profiles = try args.dicts("profiles")
       let applied = ArdiaWebView.setFieldProviders(profiles, generation: generation, session: session)
-      if applied { WebKitHub.shared.transfers.liveTabs.forEach { $0.pushFieldProvider() } }
+      if applied {
+        WebKitHub.shared.transfers.liveTabs.forEach { $0.pushFieldProvider() }
+        let names = profiles.compactMap { $0["profile"] as? String }
+        MainActor.assumeIsolated { VaultPasskeys.shared.providersChanged(anyMenu: names.contains { PasswordsModule.fillsFromMenu($0) }) }
+      }
       reply.ok(["applied": applied])
     },
     "showSystemPanel": { args, reply in

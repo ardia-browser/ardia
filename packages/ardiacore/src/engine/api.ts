@@ -20,7 +20,7 @@ import type { ClearSiteDataResult, SiteSettings, SiteSettingType, SiteSettingVal
 import type { LinkRoute, TabStripCommand, TabStripTransaction, WindowRequest } from "../tabs";
 import type { PageCookie, PageEngine, PasskeyAccess } from "../webkit";
 import type { ChromeDropdownShown, DisplayMediaSource, VaultPasswordStyle } from "../pageTypes";
-import type { VaultAddTotpResult, VaultCreateLoginResult, VaultEditResult, VaultStandaloneCode, VaultStandaloneCodeAdded, VaultStandaloneCodeEdited, VaultCodeRead, VaultCodeSource, VaultCopyResult, VaultRemoveTotpResult, VaultGeneratedPassword, VaultGeneratedSaveResult, VaultItem, VaultProviderId, VaultProviderState, VaultSecretField, VaultSyncResult, VaultTotp, VaultBackupStatus, VaultBackupChange, VaultBackupDeleteResult, VaultRestoreResult } from "../vaults";
+import type { VaultPasskey, VaultPasskeyAnswer, VaultPasskeyDone, VaultPasskeyRequest, VaultAddTotpResult, VaultCreateLoginResult, VaultEditResult, VaultStandaloneCode, VaultStandaloneCodeAdded, VaultStandaloneCodeEdited, VaultCodeRead, VaultCodeSource, VaultCopyResult, VaultRemoveTotpResult, VaultGeneratedPassword, VaultGeneratedSaveResult, VaultItem, VaultProviderId, VaultProviderState, VaultSecretField, VaultSyncResult, VaultTotp, VaultBackupStatus, VaultBackupChange, VaultBackupDeleteResult, VaultRestoreResult } from "../vaults";
 
 type Profile = { profile: string };
 type Done = Record<string, never> | null;
@@ -282,6 +282,10 @@ export type EngineCalls = {
   "vaults.addCode": [{ token: string; label: string; issuer?: string; website?: string }, VaultStandaloneCodeAdded];
   "vaults.editCode": [{ id: string; label: string; website?: string }, VaultStandaloneCodeEdited];
   "vaults.deleteCode": [{ id: string }, { deleted: boolean; error?: "notFound" | "declined" | "failed" }];
+  "vaults.passkeys": [{}, VaultPasskey[]];
+  "vaults.deletePasskey": [{ id: string }, { deleted: boolean; error?: "notFound" | "declined" | "failed" }];
+  "vaults.passkeyAnswer": [{ requestId: string; choice: string; target?: string }, VaultPasskeyAnswer];
+  "vaults.setPasskeys": [{ source?: string; extensions?: { id: string; name: string; known?: boolean }[] }, Record<string, never>];
 };
 
 export type EngineEvents = {
@@ -318,6 +322,9 @@ export type EngineEvents = {
   "vaults.generatedChanged": Record<string, never>;
   "vaults.backupChanged": VaultBackupChange;
   "vaults.codesChanged": Record<string, never>;
+  "vaults.passkeyRequest": VaultPasskeyRequest;
+  "vaults.passkeyOffer": VaultPasskeyRequest;
+  "vaults.passkeyDone": VaultPasskeyDone;
   "vaults.passkeysChanged": Record<string, never>;
 };
 

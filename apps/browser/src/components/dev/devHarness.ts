@@ -181,6 +181,9 @@ export function startDevHarness() {
     get vaultStore(): typeof import("../../state/vaults/store") {
       return require("../../state/vaults/store");
     },
+    get vaultPasskeys(): typeof import("../vaults/VaultPasskeys") & typeof import("../../state/vaults/passkeys") {
+      return { ...require("../vaults/VaultPasskeys"), ...require("../../state/vaults/passkeys") };
+    },
     get vaultDropdowns(): typeof import("../../state/vaults/chromeDropdown") & typeof import("../../state/vaults/menuDropdown") & typeof import("../../state/vaults/saveOffer") & typeof import("../../state/telemetry/vaultCounts") {
       return { ...require("../../state/vaults/chromeDropdown"), ...require("../../state/vaults/menuDropdown"), ...require("../../state/vaults/saveOffer"), ...require("../../state/telemetry/vaultCounts") };
     },

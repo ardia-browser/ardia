@@ -1,0 +1,70 @@
+import Foundation
+
+extension VaultBroker {
+  func passkeyCandidates(rpId: String?) -> [VaultPasskeyCandidate] {
+    var found: [VaultPasskeyCandidate] = []
+    for provider in VaultRegistry.providers where provider is BitwardenVault && isReady(provider.id) {
+      for item in cachedItems[provider.id] ?? [] {
+        for passkey in item.passkeys ?? [] where passkey.counter == 0 && (rpId == nil || passkey.rpId == rpId) {
+          guard let raw = VaultBase64URL.decode(passkey.credentialId) else { continue }
+          found.append(VaultPasskeyCandidate(provider: provider.id, credentialId: raw, item: item.id, rpId: passkey.rpId,
+                                             userName: passkey.userName.isEmpty ? item.username : passkey.userName,
+                                             displayName: passkey.displayName, discoverable: passkey.discoverable))
+        }
+      }
+    }
+    return found.sorted { ($0.userName.lowercased(), $0.id) < ($1.userName.lowercased(), $1.id) }
+  }
+
+  func passkeySigner(_ candidate: VaultPasskeyCandidate) async -> VaultPasskeySigner? {
+    guard let item = candidate.item, let provider = VaultRegistry.provider(candidate.provider) as? BitwardenVault, isReady(provider.id),
+      cachedItems[provider.id]?.contains(where: { $0.id == item && ($0.passkeys ?? []).contains { $0.credentialId == candidate.id } }) == true
+    else { return nil }
+    if sessions.session(provider.id) == nil { await reconnect(provider) }
+    guard sessions.session(provider.id) != nil, let cli = VaultCLI.make(for: provider, sessions: sessions) else { return nil }
+    yieldLaneToFill(provider.id)
+    do {
+      let signer = try await lane(provider.id).run { try await provider.passkeySigner(cli, item: item, credential: candidate.credentialId) }
+      guard isCurrent(cli.ticket) else { return nil }
+      sessions.touch(provider.id)
+      return signer
+    } catch {
+      await fail(provider, error, ticket: cli.ticket)
+      return nil
+    }
+  }
+}
+
+extension VaultBroker {
+  enum PasskeySaveError: Error {
+    case unavailable
+    case failed(String)
+  }
+
+  func saveBitwardenPasskey(_ credential: BitwardenPasskeys.NewCredential, origin: String) async -> Result<String, PasskeySaveError> {
+    guard let provider = VaultRegistry.providers.first(where: { $0 is BitwardenVault }) as? BitwardenVault, isReady(provider.id) else {
+      return .failure(.unavailable)
+    }
+    if sessions.session(provider.id) == nil { await reconnect(provider) }
+    guard sessions.session(provider.id) != nil, let cli = VaultCLI.make(for: provider, sessions: sessions) else { return .failure(.unavailable) }
+    let wanted = credential.userName.lowercased()
+    let match = (cachedItems[provider.id] ?? []).first { item in
+      (item.passkeys ?? []).isEmpty && !wanted.isEmpty && item.username.lowercased() == wanted
+        && VaultOriginMatch.tier(item.urls, modes: item.urlMatch, origin: origin) >= .subdomain
+    }
+    let title = VaultOriginMatch.siteName(of: origin) ?? credential.rpId
+    yieldLaneToFill(provider.id)
+    do {
+      let itemId = try await lane(provider.id).run {
+        try await provider.savePasskey(cli, credential: credential, attachTo: match?.id, title: title, url: origin)
+      }
+      sessions.touch(provider.id)
+      _ = await fetchItems(provider)
+      return .success(itemId)
+    } catch {
+      await fail(provider, error, ticket: cli.ticket)
+      if case VaultError.failed(let message) = error { return .failure(.failed(message)) }
+      return .failure(.failed("Bitwarden couldn't save the passkey."))
+    }
+  }
+}

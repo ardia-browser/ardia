@@ -95,7 +95,7 @@ inline constexpr CommandRow kCommandRows[] = {
     {"useSelectionForFind", "Use Selection for Find", "Edit > Find", "cmd+e", "ctrl+e"},
     {"jumpToSelection", "Jump to Selection", "Edit > Find", "cmd+j", "none"},
     {"autofill:contact", "Contact" ARDIA_ELLIPSIS, "Edit > AutoFill", "", ""},
-    {"autofill:passwords", "Passwords" ARDIA_ELLIPSIS, "Edit > AutoFill", "", ""},
+    {"autofill:passwords", "Passwords" ARDIA_ELLIPSIS, "Edit > AutoFill", "cmd+\\", "none"},
     {"autofill:creditCard", "Credit Card" ARDIA_ELLIPSIS, "Edit > AutoFill", "", ""},
 
     {"setAppearance:auto", "Automatic", "View > Appearance", "", ""},

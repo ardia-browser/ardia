@@ -138,6 +138,8 @@
   },
   "queues": {
     "apps/browser/src/components/settings/panes/FilterListsSheet.tsx": 1,
+    "apps/browser/src/components/vaults/VaultMenu.tsx": 1,
+    "apps/browser/src/components/vaults/VaultRows.tsx": 1,
     "apps/browser/src/lib/afterFirstWindow.ts": 1,
     "apps/browser/src/state/app/transientUi.ts": 1,
     "apps/browser/src/state/automation/automationEvents.ts": 1,

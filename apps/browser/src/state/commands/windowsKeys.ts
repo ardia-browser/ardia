@@ -19,6 +19,7 @@ export const WINDOWS_KEYS: Readonly<Record<string, readonly (string | null)[]>> 
   cleanUpTabs: ["Ctrl+Alt+K"],
   share: ["Ctrl+Alt+S"],
   emailPageLocation: [null],
+  "autofill:passwords": [null],
   print: ["Ctrl+P"],
   printWithSystemDialog: ["Ctrl+Shift+P"],
   copyUrl: ["Ctrl+Shift+C"],

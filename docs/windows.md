@@ -444,8 +444,12 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
   `useNativeDriver: true` with the JS driver, which sets the view's real props every frame, as the sidebar's slide
   always did. The exceptions are endless loops of one animation (the loading and refresh spinners), which stay native
   and cost the JS thread nothing.
-  - Frames are paced: React Native's `requestAnimationFrame` is a zero timeout here, so an animation would step as
-    fast as the threads allow. `motion.ts` runs every frame callback of a turn together, 60 times a second.
+  - Frames come from the display: React Native's `requestAnimationFrame` is a zero timeout here, so `motion.ts`
+    replaces it with the `ArdiaFrames` module (`FramesModule.h`). While a callback waits, JavaScript asks for one
+    frame; a native thread waits for the compositor clock (`DCompositionWaitForCompositorClock` on Windows 11,
+    `DwmFlush` before it) and posts `onFrame` with that tick's time on the performance counter and the display's
+    refresh period. Every callback of a turn runs with that time, so motion runs at the display's own rate (60, 120,
+    144 Hz) and nothing ticks while nothing animates.
   - A scale, rotation or skew turns around the view's centre, as on the Mac: React Native for Windows applies a
     transform from the top-left corner, so `pivot.ts` wraps any transform that is not at rest in a half-size translate
     there and back. `transformOrigin` then means what it means on the Mac, and the command panel grows out of its
@@ -454,7 +458,7 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
     (`followMotion`), so the page window and the holes cut in it follow what moves: the toolbar that hides while
     scrolling, a peek, a popover that grows in. Endless loops do not count.
   - The launch log says `[ardia windows] motion <n> frames in <ms> ms, longest <ms> ms, <n> long` when a burst of
-    animation ends: how many frames it got, the longest gap between two, and how many gaps were over 2.5 frames.
+    animation ends: how many frames it got, the longest gap between two, and how many gaps were over 2.5 of the display's refresh periods.
     The same numbers go to telemetry, where sharing is on, as `animation_bursts` and `animation_long_frames` in the
     hourly `usage_counts` (`platform/motion.windows.ts`, the `ArdiaMotion` module): a rising share of long frames
     per burst is the sign that animations stutter in the field.
@@ -488,8 +492,10 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
 - Switching profiles slides the sidebar's pages and crossfades the tint as on the Mac. The Mac's native pager
   (`Pager.swift`) has a TypeScript version in `packages/expo-windows/src/pager`: the `ArdiaSwipe` view and module with
   the same events (`onPagerPosition` every frame, `onPagerState` on select and settle), sequence numbers and spring
-  (critically damped, a quarter-second period), stepped on the app's 60 Hz frames. With Windows' animations off it
-  lands at once. Swipe gestures (two-finger scroll, the rubber band, haptics) have no input on Windows yet, so only
+  (critically damped, a quarter-second period), placed by each display frame's time. The state machine is the one the
+  Mac and Linux run (`PagerMachine` in `packages/ardiacore/src/pagerModel.ts`, mirrored by `PagerModel.swift`, both
+  held to `packages/ardiacore/tests/fixtures/pager-transitions.json`). With animations off it lands at once, as on the
+  Mac and Linux. Swipe gestures (two-finger scroll, the rubber band, haptics) have no input on Windows yet, so only
   clicks, shortcuts and outside switches page.
 - Shadows of the views drawn in TypeScript (`Surface`, popover bubbles) are rounded rings drawn behind the fill
   (`src/views/shadowLayers.ts`), fading like a Gaussian blur of the edge: React Native for Windows casts a view's shadow

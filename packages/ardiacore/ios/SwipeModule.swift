@@ -22,7 +22,29 @@ public class SwipeModule: Module {
       Pager.existing(key)?.step(delta, wrap: wrap, order: order) ?? false
     }.runOnQueue(.main)
 
+    AsyncFunction("leadPager") { (key: String, open: Bool, animated: Bool) -> Bool in
+      Pager.existing(key)?.lead(open, animated: animated) ?? false
+    }.runOnQueue(.main)
+
     Function("pagerState") { (key: String) -> [String: Any]? in Pager.snapshot(key) }
+
+    AsyncFunction("morphPager") { (key: String, config: MorphConfig?) -> Bool in
+      guard let pager = Pager.existing(key) else { return false }
+      pager.configureMorph(config, uiManager: self.appContext?.reactBridge?.uiManager)
+      return true
+    }.runOnQueue(.main)
+
+    Function("takeMorphCounts") { () -> [String: Int] in PagerMorph.takeCounts() }
+
+    AsyncFunction("devMorph") { (key: String, clear: Bool, hoverPasses: Int) -> [String: Any]? in
+      #if DEBUG
+      var out = Pager.existing(key)?.morphDebug(clear: clear) ?? [:]
+      if hoverPasses > 0 { out["hoverCheckMs"] = ArdiaMorphLayout.hoverCheckMilliseconds(hoverPasses) }
+      return out
+      #else
+      return nil
+      #endif
+    }.runOnQueue(.main)
 
     AsyncFunction("devPagerState") { (key: String) -> [String: Any]? in
       #if DEBUG

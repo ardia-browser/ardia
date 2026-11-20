@@ -15,7 +15,16 @@ function readConfig(value: unknown): KeyedConfig | null {
   if (typeof config.key !== "string" || config.key.length === 0) return null;
   const order = Array.isArray(config.order) && config.order.every((id) => typeof id === "string") ? (config.order as string[]) : undefined;
   const width = typeof config.width === "number" && Number.isFinite(config.width) ? config.width : 0;
-  return { key: config.key, selected: whole(config.selected, 0), count: whole(config.count, 1), ack: whole(config.ack, 0), width, order };
+  return {
+    key: config.key,
+    selected: whole(config.selected, 0),
+    count: whole(config.count, 1),
+    ack: whole(config.ack, 0),
+    width,
+    order,
+    leading: config.leading === true,
+    library: config.library === true,
+  };
 }
 
 export const SwipeArea = forwardRef<View, NativeSwipeAreaProps>(function SwipeArea(
@@ -39,10 +48,10 @@ export const SwipeArea = forwardRef<View, NativeSwipeAreaProps>(function SwipeAr
   handlers.current = { onPagerPosition, onPagerState };
   const area = useMemo<PagerArea>(
     () => ({
-      position(position: number) {
+      position(position: number, leading: number) {
         const handler = handlers.current.onPagerPosition;
         if (!handler) return false;
-        handler({ nativeEvent: { position } });
+        handler({ nativeEvent: { position, leading } });
         return true;
       },
       state(event: PagerStateEvent) {
@@ -68,7 +77,7 @@ export const SwipeArea = forwardRef<View, NativeSwipeAreaProps>(function SwipeAr
 
   useLayoutEffect(() => {
     if (config) pagers.existing(config.key)?.configure(config);
-  }, [key, config?.selected, config?.count, config?.ack, config?.width, config?.order]);
+  }, [key, config?.selected, config?.count, config?.ack, config?.width, config?.order, config?.leading, config?.library]);
 
   return (
     <View {...rest} ref={ref} pointerEvents={pointerEvents ?? "box-none"}>

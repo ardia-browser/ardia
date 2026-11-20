@@ -1,0 +1,277 @@
+[
+  {
+    "name": "a first configure reports the profile it starts on",
+    "steps": [
+      { "configure": { "selected": 2, "count": 3, "order": ["a", "b", "c"] } },
+      { "expect": { "states": [["selected", 2, false, "c"]], "snapshot": { "selected": 2, "position": 2, "phase": "idle", "leading": false, "lead": 0, "profileId": "c" } } }
+    ]
+  },
+  {
+    "name": "a switch reports the selection at once and the settle when the pages rest",
+    "steps": [
+      { "configure": { "selected": 0, "count": 3, "order": ["a", "b", "c"] } },
+      { "switchTo": 1, "returns": true },
+      { "expect": { "states": [["selected", 0, false, "a"], ["selected", 1, false, "b"]], "snapshot": { "phase": "settling", "selected": 1 }, "moving": true } },
+      { "settle": true },
+      { "expect": { "states": [["settled", 1, false, "b"]], "snapshot": { "phase": "idle", "position": 1, "profileId": "b" }, "moving": false, "smooth": 0.12, "monotonic": true } }
+    ]
+  },
+  {
+    "name": "targets clamp to the page range and steps stop at the ends unless they wrap",
+    "steps": [
+      { "configure": { "selected": 0, "count": 3, "order": ["a", "b", "c"] } },
+      { "switchTo": 9, "returns": true },
+      { "settle": true },
+      { "expect": { "snapshot": { "selected": 2, "position": 2 } } },
+      { "step": 1, "wrap": false, "returns": true },
+      { "expect": { "moving": false, "snapshot": { "selected": 2 } } },
+      { "step": 1, "wrap": true, "returns": true },
+      { "settle": true },
+      { "expect": { "snapshot": { "selected": 0, "profileId": "a" } } }
+    ]
+  },
+  {
+    "name": "an unconfigured pager refuses so the app falls back",
+    "steps": [
+      { "switchTo": 1, "returns": false },
+      { "step": 1, "wrap": false, "returns": false },
+      { "select": "a", "order": ["a"], "returns": false },
+      { "lead": true, "returns": false }
+    ]
+  },
+  {
+    "name": "an outside selection jumps at once",
+    "steps": [
+      { "configure": { "selected": 0, "count": 3, "order": ["a", "b", "c"] } },
+      { "select": "c", "order": ["a", "b", "c"], "returns": true },
+      { "expect": { "moving": false, "snapshot": { "selected": 2, "position": 2, "profileId": "c" } } },
+      { "select": "z", "order": ["a", "b", "c"], "returns": false }
+    ]
+  },
+  {
+    "name": "props catch up only once the app has acknowledged the pager's own selection",
+    "steps": [
+      { "configure": { "selected": 0, "count": 3, "order": ["a", "b", "c"] } },
+      { "switchTo": 1, "returns": true },
+      { "settle": true },
+      { "configure": { "selected": 0, "count": 3, "order": ["a", "b", "c"], "ackOffset": -1 } },
+      { "expect": { "snapshot": { "selected": 1 } } },
+      { "configure": { "selected": 2, "count": 3, "order": ["a", "b", "c"], "ackOffset": 0 } },
+      { "expect": { "snapshot": { "selected": 2, "position": 2 } } }
+    ]
+  },
+  {
+    "name": "the Library opens from a later profile while the pages hold still, and closing returns to that profile",
+    "steps": [
+      { "configure": { "selected": 1, "count": 3, "order": ["a", "b", "c"], "leading": true } },
+      { "lead": true, "returns": true },
+      { "settle": true },
+      { "expect": { "snapshot": { "selected": -1, "position": 0, "leading": true, "lead": 1, "profileId": null }, "debug": { "anchor": 1, "home": 1 }, "pagesStill": 1 } },
+      { "lead": false, "returns": true },
+      { "settle": true },
+      { "expect": { "snapshot": { "selected": 1, "position": 1, "leading": false, "lead": 0, "profileId": "b" }, "debug": { "anchor": null } } }
+    ]
+  },
+  {
+    "name": "a step back from the first profile opens the Library only where the pager has one",
+    "steps": [
+      { "configure": { "selected": 0, "count": 3, "order": ["a", "b", "c"], "leading": true } },
+      { "step": -1, "wrap": false, "returns": true },
+      { "settle": true },
+      { "expect": { "snapshot": { "selected": -1, "leading": true } } },
+      { "step": -1, "wrap": false, "returns": true },
+      { "expect": { "moving": false } },
+      { "step": 1, "wrap": false, "returns": true },
+      { "settle": true },
+      { "expect": { "snapshot": { "selected": 0, "leading": false, "profileId": "a" } } }
+    ]
+  },
+  {
+    "name": "lead refuses to open where the pager has no Library page",
+    "steps": [
+      { "configure": { "selected": 0, "count": 3, "order": ["a", "b", "c"] } },
+      { "lead": true, "returns": false },
+      { "lead": false, "returns": true },
+      { "step": -1, "wrap": false, "returns": true },
+      { "expect": { "moving": false, "snapshot": { "selected": 0 } } }
+    ]
+  },
+  {
+    "name": "Previous Profile with the Library open pages from the profile the Library opened on",
+    "steps": [
+      { "configure": { "selected": 1, "count": 3, "order": ["a", "b", "c"], "leading": true } },
+      { "lead": true, "returns": true },
+      { "settle": true },
+      { "step": -1, "wrap": true, "order": ["a", "b", "c"], "returns": true },
+      { "settle": true },
+      { "expect": { "snapshot": { "leading": false, "profileId": "a" } } }
+    ]
+  },
+  {
+    "name": "Next Profile with the Library open pages from the profile the Library opened on",
+    "steps": [
+      { "configure": { "selected": 1, "count": 3, "order": ["a", "b", "c"], "leading": true } },
+      { "lead": true, "returns": true },
+      { "settle": true },
+      { "step": 1, "wrap": true, "order": ["a", "b", "c"], "returns": true },
+      { "settle": true },
+      { "expect": { "snapshot": { "leading": false, "profileId": "c" } } }
+    ]
+  },
+  {
+    "name": "a selection at the Library re-anchors it over the chosen profile, and a switch closes onto another",
+    "steps": [
+      { "configure": { "selected": 0, "count": 3, "order": ["a", "b", "c"], "leading": true } },
+      { "lead": true, "returns": true },
+      { "settle": true },
+      { "select": "c", "order": ["a", "b", "c"], "returns": true },
+      { "expect": { "debug": { "anchor": 2, "home": 2 }, "snapshot": { "leading": true, "selected": -1 } } },
+      { "switchTo": 1, "returns": true },
+      { "settle": true },
+      { "expect": { "snapshot": { "selected": 1, "leading": false, "profileId": "b" }, "debug": { "anchor": null } } }
+    ]
+  },
+  {
+    "name": "reordering profiles while the Library is open keeps it open over the moved profile",
+    "steps": [
+      { "configure": { "selected": 0, "count": 3, "order": ["a", "b", "c"], "leading": true } },
+      { "lead": true, "returns": true },
+      { "settle": true },
+      { "configure": { "selected": 1, "count": 3, "order": ["b", "a", "c"], "leading": true, "library": true } },
+      { "expect": { "snapshot": { "selected": -1, "leading": true, "lead": 1 }, "debug": { "anchor": 1, "home": 1 } } },
+      { "lead": false, "returns": true },
+      { "settle": true },
+      { "expect": { "snapshot": { "selected": 1, "profileId": "a" } } }
+    ]
+  },
+  {
+    "name": "a new order sent with a switch while the Library is open on the first profile resolves the Library's own profile",
+    "steps": [
+      { "configure": { "selected": 0, "count": 3, "order": ["a", "b", "c"], "leading": true } },
+      { "lead": true, "returns": true },
+      { "settle": true },
+      { "switchTo": 1, "order": ["d", "a", "b", "c"], "returns": true },
+      { "settle": true },
+      { "expect": { "snapshot": { "selected": 1, "leading": false, "profileId": "a" } } }
+    ]
+  },
+  {
+    "name": "a new order sent with a step while the Library is open on a later profile keeps that profile",
+    "steps": [
+      { "configure": { "selected": 2, "count": 3, "order": ["a", "b", "c"], "leading": true } },
+      { "lead": true, "returns": true },
+      { "settle": true },
+      { "step": 1, "wrap": true, "order": ["c", "a", "b"], "returns": true },
+      { "settle": true },
+      { "expect": { "snapshot": { "leading": false, "profileId": "a" } } }
+    ]
+  },
+  {
+    "name": "turning off the leading page at the Library settles home once, however often it is configured",
+    "steps": [
+      { "configure": { "selected": 1, "count": 3, "order": ["a", "b", "c"], "leading": true } },
+      { "lead": true, "returns": true },
+      { "settle": true },
+      { "configure": { "selected": 1, "count": 3, "order": ["a", "b", "c"], "leading": false } },
+      { "frames": 1 },
+      { "configure": { "selected": 1, "count": 3, "order": ["a", "b", "c"], "leading": false } },
+      { "configure": { "selected": 1, "count": 3, "order": ["a", "b", "c"], "leading": false } },
+      { "expect": { "motions": 1 } },
+      { "settle": true },
+      { "expect": { "snapshot": { "leading": false, "profileId": "b" }, "debug": { "anchor": null } } }
+    ]
+  },
+  {
+    "name": "a pager configured while the Library is open starts on the Library and says so",
+    "steps": [
+      { "configure": { "selected": 1, "count": 3, "order": ["a", "b", "c"], "leading": true, "library": true } },
+      { "expect": { "states": [["selected", -1, true, null]], "snapshot": { "selected": -1, "leading": true, "lead": 1 }, "debug": { "home": 1 } } }
+    ]
+  },
+  {
+    "name": "closing the Library without animation lands on its profile at once",
+    "steps": [
+      { "configure": { "selected": 1, "count": 3, "order": ["a", "b", "c"], "leading": true } },
+      { "lead": true, "returns": true },
+      { "settle": true },
+      { "lead": false, "animated": false, "returns": true },
+      { "expect": { "moving": false, "snapshot": { "phase": "idle", "selected": 1, "position": 1, "lead": 0, "profileId": "b" }, "debug": { "anchor": null } } }
+    ]
+  },
+  {
+    "name": "opening the Library while the pages still slide to a profile finishes the slide, then opens over that profile without a jump",
+    "steps": [
+      { "configure": { "selected": 0, "count": 3, "order": ["a", "b", "c"], "leading": true } },
+      { "switchTo": 1, "returns": true },
+      { "frames": 4 },
+      { "lead": true, "returns": true },
+      { "settle": true },
+      { "expect": { "snapshot": { "selected": -1, "leading": true, "lead": 1 }, "debug": { "home": 1, "anchor": 1 }, "smooth": 0.12 } }
+    ]
+  },
+  {
+    "name": "closing the Library before a deferred open starts leaves the pages on the profile",
+    "steps": [
+      { "configure": { "selected": 0, "count": 3, "order": ["a", "b", "c"], "leading": true } },
+      { "switchTo": 1, "returns": true },
+      { "frames": 4 },
+      { "lead": true, "returns": true },
+      { "lead": false, "returns": true },
+      { "settle": true },
+      { "expect": { "snapshot": { "selected": 1, "leading": false, "profileId": "b" }, "debug": { "anchor": null } } }
+    ]
+  },
+  {
+    "name": "with Reduce Motion the pager lands at once and still reports the settle",
+    "steps": [
+      { "reduceMotion": true },
+      { "configure": { "selected": 0, "count": 3, "order": ["a", "b", "c"], "leading": true } },
+      { "switchTo": 2, "returns": true },
+      { "expect": { "moving": false, "states": [["selected", 0, false, "a"], ["selected", 2, false, "c"], ["settled", 2, false, "c"]], "snapshot": { "position": 2, "phase": "idle" } } },
+      { "lead": true, "returns": true },
+      { "expect": { "moving": false, "snapshot": { "leading": true, "lead": 1, "phase": "idle" } } }
+    ]
+  },
+  {
+    "name": "a stalled display lands where the time since the switch says",
+    "steps": [
+      { "configure": { "selected": 0, "count": 3, "order": ["a", "b", "c"] } },
+      { "switchTo": 2, "returns": true },
+      { "frames": 1, "gap": 5 },
+      { "expect": { "moving": false, "snapshot": { "position": 2, "phase": "idle" } } }
+    ]
+  },
+  {
+    "name": "a drag whose area goes away springs back to the page it started on",
+    "steps": [
+      { "configure": { "selected": 1, "count": 3, "order": ["a", "b", "c"] } },
+      { "expect": { "states": [["selected", 1, false, "b"]] } },
+      { "track": 1.4 },
+      { "expect": { "states": [["began", 1, false, "b"]], "snapshot": { "phase": "tracking", "position": 1.4 } } },
+      { "cancelTracking": true, "returns": true },
+      { "expect": { "states": [], "snapshot": { "phase": "settling", "selected": 1 }, "moving": true } },
+      { "settle": true },
+      { "expect": { "states": [["settled", 1, false, "b"]], "snapshot": { "phase": "idle", "position": 1, "profileId": "b" }, "moving": false } }
+    ]
+  },
+  {
+    "name": "a drag into the Library whose area goes away settles back closed",
+    "steps": [
+      { "configure": { "selected": 0, "count": 2, "order": ["a", "b"], "leading": true } },
+      { "track": -0.6 },
+      { "expect": { "snapshot": { "phase": "tracking" } } },
+      { "cancelTracking": true, "returns": true },
+      { "settle": true },
+      { "expect": { "snapshot": { "phase": "idle", "selected": 0, "leading": false, "lead": 0, "position": 0 }, "moving": false } }
+    ]
+  },
+  {
+    "name": "cancelling a drag when nothing is being dragged changes nothing",
+    "steps": [
+      { "configure": { "selected": 0, "count": 2, "order": ["a", "b"] } },
+      { "expect": { "states": [["selected", 0, false, "a"]] } },
+      { "cancelTracking": true, "returns": false },
+      { "expect": { "states": [], "snapshot": { "phase": "idle", "position": 0 }, "moving": false } }
+    ]
+  }
+]

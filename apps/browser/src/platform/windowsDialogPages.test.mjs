@@ -138,8 +138,10 @@ test("a dialog counts as settled only once its window shows and its thread's las
   assert.match(thread, /ModalWatch::NoteShown\(\);\n\s+if \(ModalWatch::SettledNow\(\)\) NoteModalSettled\(m_owner\);/);
   assert.match(thread, /if \(!dialog\) dialogs\.settled\.erase\(owner\);/, "a closed dialog leaves the settled count");
   assert.match(native("DialogsModule.h"), /REACT_SYNC_METHOD\(settledCount\)\n\s+int settledCount\(\) noexcept \{ return DialogParts::SettledDialogCount\(\); \}/);
-  assert.match(native("AppModule.h"), /const int windowsApiVersion = 24;/);
-  assert.match(readFileSync(new URL("./nativeApi.ts", import.meta.url), "utf8"), /export const WINDOWS_NATIVE_API_VERSION = 24;/);
+  const nativeVersion = native("AppModule.h").match(/const int windowsApiVersion = (\d+);/)?.[1];
+  const jsVersion = readFileSync(new URL("./nativeApi.ts", import.meta.url), "utf8").match(/export const WINDOWS_NATIVE_API_VERSION = (\d+);/)?.[1];
+  assert.ok(nativeVersion && Number(nativeVersion) >= 24, "the Windows native API reports the version that has settledCount");
+  assert.equal(jsVersion, nativeVersion, "the app asks for the Windows native API version the native side reports");
 });
 
 test("a switcher whose key was let go while a menu was open commits when the menu closes, read from the keyboard on the UI thread", () => {

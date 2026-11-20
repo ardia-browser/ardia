@@ -5,11 +5,7 @@ private let trackingScale = 0.5
 private let rubberDimension = 255.0
 private let rubberCoefficient = 0.15
 private let flickVelocity = 5.0
-private let omega = 2 * Double.pi / 0.25
-private let restDisplacement = 0.003
-private let restSpeed = 0.1
 private let historyWindow = 0.1
-private let linkStall = 0.05
 
 private func rubberBand(_ value: Double, _ dimension: Double) -> Double {
   (1 - 1 / (value * rubberCoefficient / dimension + 1)) * dimension
@@ -17,31 +13,18 @@ private func rubberBand(_ value: Double, _ dimension: Double) -> Double {
 
 private final class PagerFrames: NSObject {
   weak var pager: Pager?
-  let generation: Int
 
-  init(_ pager: Pager, generation: Int) {
-    self.pager = pager
-    self.generation = generation
-  }
+  init(_ pager: Pager) { self.pager = pager }
 
   @objc func frame(_ link: CADisplayLink) {
-    guard let pager, pager.frame(generation: generation, fromLink: true) else { return link.invalidate() }
+    guard let pager, pager.frame(from: link) else { return link.invalidate() }
   }
 }
 
-final class Pager {
-  enum Phase: String { case idle, tracking, holding, settling }
-
+final class Pager: PagerModelHost {
   private struct Drag {
     var start = 0.0, lo = 0, hi = 0, home = 0, detent = 0
     weak var area: SwipeArea?
-  }
-
-  private struct Spring {
-    let from: Double
-    let target: Int
-    let velocity: Double
-    let start: CFTimeInterval
   }
 
   private static var pagers: [String: Pager] = [:]
@@ -65,112 +48,101 @@ final class Pager {
   }
 
   let key: String
+  private let model = PagerModel()
   private let areas = NSHashTable<SwipeArea>.weakObjects()
-  private var configured = false
-  private var count = 1
-  private var order: [String]?
-  private var selected = 0
-  private var position = 0.0
-  private var velocity = 0.0
-  private var phase = Phase.idle
-  private var sequence = 0
-  private var selectionSequence = 0
-  private var propSelected = 0
-  private var propAck = 0
   private var drag = Drag()
   private var history: [(time: TimeInterval, position: Double)] = []
-  private var spring: Spring?
   private var link: CADisplayLink?
-  private var lastLinkFrame: CFTimeInterval = 0
-  private var timer: Timer?
-  private var generation = 0
+  private weak var linkWindow: NSWindow?
+  private weak var linkArea: SwipeArea?
+  private var frameWatch = FrameWatch()
+  private var deadlineCheck: DispatchWorkItem?
+  private var occlusion: NSObjectProtocol?
+  private var morph: PagerMorph?
+  private var currentFrame: MorphFrame?
   #if DEBUG
   private var lastInput: [String: Any] = [:]
   #endif
 
-  private init(key: String) { self.key = key }
+  private init(key: String) {
+    self.key = key
+    model.host = self
+  }
 
   func attach(_ area: SwipeArea) {
     areas.add(area)
-    if configured { area.onPagerPosition(["position": position]) }
+    if model.configured { area.onPagerPosition(positionEvent) }
   }
 
   func detach(_ area: SwipeArea) {
     areas.remove(area)
+    if drag.area === area {
+      if model.cancelTracking() { publish() } else { drag.area = nil }
+    }
+    areasChanged()
+  }
+
+  func areaLeftWindow(_ area: SwipeArea) {
+    if drag.area === area, model.cancelTracking() { publish() }
+    if linkArea === area { restartFrames() }
+  }
+
+  func areasChanged() {
+    if model.phase == .tracking, drag.area == nil, model.cancelTracking() { publish() }
+    if link != nil, !(linkArea.map { areas.contains($0) && $0.window === linkWindow } ?? false) { restartFrames() }
     prune()
   }
 
   func prune() {
     guard areas.allObjects.isEmpty, Pager.pagers[key] === self else { return }
-    stopSpring()
+    model.stop()
+    stopFrames()
+    morph?.release()
+    morph = nil
     Pager.pagers[key] = nil
     Pager.lock.lock()
     Pager.snapshots[key] = nil
     Pager.lock.unlock()
   }
 
-  func configure(selected newSelected: Int, count newCount: Int, ack: Int, order newOrder: [String]?) {
-    let count = max(1, newCount)
-    propSelected = min(max(newSelected, 0), count - 1)
-    propAck = max(propAck, ack)
-    if !configured {
-      configured = true
-      self.count = count
-      order = newOrder
-      selected = propSelected
-      position = Double(selected)
-      sequence = Pager.next()
-      publish()
-      emitPosition()
-      return
-    }
-    if count != self.count || (newOrder != nil && newOrder != order) {
-      var index = propSelected
-      let old = order
-      self.count = count
-      order = newOrder
-      if propAck < selectionSequence, let old, selected < old.count, let moved = order?.firstIndex(of: old[selected]) {
-        index = moved
-      }
-      cancelMotion()
-      jump(to: index)
-      return
-    }
-    reconcile()
-  }
-
-  private func reconcile() {
-    guard phase == .idle, propAck >= selectionSequence, propSelected != selected else { return }
-    jump(to: propSelected)
-  }
-
-  private func jump(to index: Int, selection: Bool = false) {
-    announceActivity()
-    selected = index
-    position = Double(index)
-    velocity = 0
-    sequence = Pager.next()
-    if selection { selectionSequence = sequence }
+  func configure(selected: Int, count: Int, ack: Int, order: [String]?, leading: Bool, library: Bool) {
+    model.configure(selected: selected, count: count, ack: ack, order: order, leading: leading, library: library)
     publish()
-    emitPosition()
+  }
+
+  func switchTo(_ index: Int, order: [String]? = nil) -> Bool {
+    defer { publish() }
+    return model.switchTo(index, order: order)
+  }
+
+  func select(_ profileId: String, order ids: [String]) -> Bool {
+    defer { publish() }
+    return model.select(profileId, order: ids)
+  }
+
+  func step(_ delta: Int, wrap: Bool, order: [String]? = nil) -> Bool {
+    defer { publish() }
+    return model.step(delta, wrap: wrap, order: order)
+  }
+
+  func lead(_ open: Bool, animated: Bool = true) -> Bool {
+    defer { publish() }
+    return model.lead(open, animated: animated)
   }
 
   func input(from area: SwipeArea, phase input: String, distance: Double, direction: Int, timestamp: TimeInterval) {
     #if DEBUG
     lastInput = ["phase": input, "distance": distance, "direction": direction, "timestamp": timestamp]
     #endif
+    defer { publish() }
     switch input {
     case "prepare":
       announceActivity { ArdiaWebView.wakeNeighbourPages(in: $0, seconds: 1, committed: false) }
-      if phase == .settling {
-        stopSpring()
-        phase = .holding
-        publish()
-      }
+      model.hold()
     case "abandon":
-      if phase == .holding {
-        settle(to: selected, velocity: 0)
-      } else if phase == .tracking, drag.area === area {
+      if model.phase == .holding {
+        model.settle(to: model.selected, velocity: 0)
+      } else if model.phase == .tracking, drag.area === area {
         release(velocity: 0, cancelled: false)
       } else {
         announceActivity { ArdiaWebView.releaseNeighbourPages(in: $0) }
@@ -179,10 +151,10 @@ final class Pager {
       begin(area)
       track(distance, direction, timestamp, sample: true)
     case "changed":
-      guard phase == .tracking, drag.area === area else { return }
+      guard model.phase == .tracking, drag.area === area else { return }
       track(distance, direction, timestamp, sample: true)
     case "ended", "cancelled":
-      guard phase == .tracking, drag.area === area else { return }
+      guard model.phase == .tracking, drag.area === area else { return }
       track(distance, direction, timestamp, sample: false)
       release(velocity: releaseVelocity(at: timestamp), cancelled: input == "cancelled")
     default:
@@ -192,18 +164,14 @@ final class Pager {
 
   private func begin(_ area: SwipeArea) {
     announceActivity()
-    stopSpring()
-    let home = selected
-    let x = position
-    let lo = max(0, min(home - 1, Int(x.rounded(.down))))
-    let hi = min(count - 1, max(home + 1, Int(x.rounded(.up))))
-    drag = Drag(start: x, lo: lo, hi: hi, home: home, detent: min(max(Int(x.rounded()), lo), hi), area: area)
-    history = []
-    velocity = 0
-    phase = .tracking
-    sequence = Pager.next()
-    publish()
-    emitState("began")
+    model.beginTracking {
+      let home = model.selected
+      let x = model.position
+      let lo = max(model.floorIndex, min(home - 1, Int(x.rounded(.down))))
+      let hi = min(model.count - 1, max(home + 1, Int(x.rounded(.up))))
+      drag = Drag(start: x, lo: lo, hi: hi, home: home, detent: min(max(Int(x.rounded()), lo), hi), area: area)
+      history = []
+    }
   }
 
   private func track(_ distance: Double, _ direction: Int, _ timestamp: TimeInterval, sample: Bool) {
@@ -215,7 +183,6 @@ final class Pager {
     let x = raw > hi ? hi + rubberBand((raw - hi) * width, rubberDimension) / width
       : raw < lo ? lo - rubberBand((lo - raw) * width, rubberDimension) / width
       : raw
-    position = x
     if sample {
       let time = max(timestamp, history.last?.time ?? timestamp)
       history.append((time, x))
@@ -226,8 +193,7 @@ final class Pager {
       drag.detent = nearest
       ArdiaSwipe.performHaptic("alignment")
     }
-    publish()
-    emitPosition()
+    model.track(to: x)
   }
 
   private func releaseVelocity(at timestamp: TimeInterval) -> Double {
@@ -238,155 +204,167 @@ final class Pager {
 
   private func release(velocity v: Double, cancelled: Bool) {
     let home = drag.home
-    let area = drag.area
-    let width = area?.pageWidth ?? 0
+    let width = drag.area?.pageWidth ?? 0
     drag.area = nil
     var target = home
     if !cancelled {
       let flick = abs(v * width) >= flickVelocity
+      let position = model.position
       target = !flick ? Int(position.rounded()) : v > 0 ? Int(position.rounded(.down)) + 1 : Int(position.rounded(.up)) - 1
-      target = max(0, home - 1, min(count - 1, home + 1, target))
+      target = max(model.floorIndex, home - 1, min(model.count - 1, home + 1, target))
     }
-    settle(to: target, velocity: towards(target, v), from: area)
+    model.settle(to: target, velocity: model.towards(target, v))
   }
 
-  private func towards(_ target: Int, _ v: Double) -> Double {
-    let d = Double(target) - position
-    return d != 0 && v != 0 && (d > 0) == (v > 0) ? v : 0
+  fileprivate func frame(from link: CADisplayLink) -> Bool {
+    guard link === self.link else { return false }
+    frameWatch.framed(at: CACurrentMediaTime())
+    currentFrame = MorphFrame(link)
+    model.frame(at: link.targetTimestamp)
+    currentFrame = nil
+    publish()
+    return link === self.link
   }
 
-  func switchTo(_ index: Int, order newOrder: [String]? = nil) -> Bool {
-    guard configured else { return false }
-    sync(order: newOrder)
-    let target = min(max(index, 0), count - 1)
-    drag.area = nil
-    let v = phase == .settling ? velocity : 0
-    settle(to: target, velocity: towards(target, v))
-    return true
+  var now: TimeInterval { CACurrentMediaTime() }
+
+  var reducesMotion: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion || frameArea == nil }
+
+  func nextSequence() -> Int {
+    Pager.counter += 1
+    return Pager.counter
   }
 
-  private func sync(order newOrder: [String]?) {
-    guard let ids = newOrder, ids != order, !ids.isEmpty else { return }
-    let current = order.flatMap { selected < $0.count ? $0[selected] : nil }
-    let id = current.flatMap { ids.contains($0) ? $0 : nil } ?? ids[min(max(propSelected, 0), ids.count - 1)]
-    _ = select(id, order: ids)
+  private var frameArea: SwipeArea? {
+    let seen = areas.allObjects.filter { $0.window?.occlusionState.contains(.visible) ?? false }
+    if let dragged = drag.area, seen.contains(where: { $0 === dragged }) { return dragged }
+    return seen.first
   }
 
-  func select(_ profileId: String, order ids: [String]) -> Bool {
-    guard configured else { return false }
-    guard let index = ids.firstIndex(of: profileId) else { return false }
-    cancelMotion()
-    count = ids.count
-    order = ids
-    jump(to: index, selection: true)
-    emitState("selected")
-    return true
-  }
-
-  func step(_ delta: Int, wrap: Bool, order newOrder: [String]? = nil) -> Bool {
-    guard configured else { return false }
-    sync(order: newOrder)
-    let target = wrap ? ((selected + delta) % count + count) % count : min(max(selected + delta, 0), count - 1)
-    return target == selected || switchTo(target)
-  }
-
-  private func settle(to target: Int, velocity v: Double, from origin: SwipeArea? = nil) {
+  func startFrames() {
     announceActivity()
-    if target != selected {
-      selected = target
-      sequence = Pager.next()
-      selectionSequence = sequence
-      publish()
-      emitState("selected")
+    guard link == nil else { return }
+    guard let area = frameArea, let window = area.window else { return model.finishMotion() }
+    let link = area.displayLink(target: PagerFrames(self), selector: #selector(PagerFrames.frame(_:)))
+    let fps = Float(max(60, NSScreen.screens.map(\.maximumFramesPerSecond).max() ?? 60))
+    link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: fps, preferred: fps)
+    link.add(to: .main, forMode: .common)
+    self.link = link
+    linkWindow = window
+    linkArea = area
+    frameWatch.started(at: CACurrentMediaTime())
+    checkFrames(after: FrameWatch.deadline)
+    occlusion = NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main) {
+      [weak self] _ in
+      MainActor.assumeIsolated { self?.windowSightChanged() }
     }
-    stopSpring()
-    phase = .settling
-    velocity = v
-    spring = Spring(from: position, target: target, velocity: v, start: CACurrentMediaTime())
-    let generation = self.generation
-    if let screen = origin?.window?.screen ?? areas.allObjects.lazy.compactMap({ $0.window?.screen }).first {
-      let link = screen.displayLink(target: PagerFrames(self, generation: generation), selector: #selector(PagerFrames.frame(_:)))
-      let fps = Float(max(60, screen.maximumFramesPerSecond))
-      link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: fps, preferred: fps)
-      link.add(to: .main, forMode: .common)
-      self.link = link
-      lastLinkFrame = CACurrentMediaTime()
-    }
-    let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] timer in
-      guard let self else { return timer.invalidate() }
-      if self.link != nil, CACurrentMediaTime() - self.lastLinkFrame < linkStall { return }
-      if !self.frame(generation: generation) { timer.invalidate() }
-    }
-    RunLoop.main.add(timer, forMode: .common)
-    self.timer = timer
-    publish()
   }
 
-  fileprivate func frame(generation: Int, fromLink: Bool = false) -> Bool {
-    guard generation == self.generation, spring != nil else { return false }
-    if fromLink { lastLinkFrame = CACurrentMediaTime() }
-    step()
-    return generation == self.generation
-  }
-
-  private func step() {
-    guard let s = spring else { return }
-    let t = CACurrentMediaTime() - s.start
-    let x0 = s.from - Double(s.target)
-    let b = s.velocity + omega * x0
-    let decay = exp(-omega * t)
-    let x = (x0 + b * t) * decay
-    let v = (s.velocity - omega * b * t) * decay
-    if abs(x) < restDisplacement && abs(v) < restSpeed {
-      stopSpring()
-      position = Double(s.target)
-      velocity = 0
-      phase = .idle
-      sequence = Pager.next()
-      publish()
-      emitPosition()
-      emitState("settled")
-      reconcile()
-      return
-    }
-    position = Double(s.target) + x
-    velocity = v
-    publish()
-    emitPosition()
-  }
-
-  private func stopSpring() {
-    generation += 1
+  func stopFrames() {
     link?.invalidate()
     link = nil
-    timer?.invalidate()
-    timer = nil
-    spring = nil
+    linkWindow = nil
+    linkArea = nil
+    frameWatch.forget()
+    deadlineCheck?.cancel()
+    deadlineCheck = nil
+    if let occlusion { NotificationCenter.default.removeObserver(occlusion) }
+    occlusion = nil
   }
 
-  private func cancelMotion() {
-    stopSpring()
-    drag.area = nil
-    phase = .idle
-    velocity = 0
+  private func restartFrames() {
+    let watch = frameWatch
+    stopFrames()
+    frameWatch = watch
+    guard model.moving else { return }
+    startFrames()
+    publish()
   }
 
-  private static func next() -> Int {
-    counter += 1
-    return counter
+  private func checkFrames(after seconds: Double) {
+    deadlineCheck?.cancel()
+    let check = DispatchWorkItem { [weak self] in self?.frameDeadlinePassed() }
+    deadlineCheck = check
+    DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: check)
   }
 
-  private func emitPosition() {
-    let area = phase == .tracking ? drag.area : nil
+  private func frameDeadlinePassed() {
+    deadlineCheck = nil
+    guard link != nil, model.moving else { return }
+    switch frameWatch.check(at: CACurrentMediaTime()) {
+    case .waiting(let seconds):
+      checkFrames(after: seconds)
+    case .restart:
+      restartFrames()
+    case .finish:
+      stopFrames()
+      model.finishMotion()
+      publish()
+    }
+  }
+
+  private func windowSightChanged() {
+    guard model.moving, let linkWindow, !linkWindow.occlusionState.contains(.visible) else { return }
+    restartFrames()
+  }
+
+  func pagerMoved(page: Double, lead: Double) {
+    publish()
+    let area = model.phase == .tracking ? drag.area : nil
     let all = areas.allObjects
-    (area ?? all.first { $0.window != nil } ?? all.first)?.onPagerPosition(["position": position])
+    (area ?? all.first { $0.window != nil } ?? all.first)?.onPagerPosition(["position": page, "leading": lead])
+    morph?.follow(lead: lead, leading: model.atLeading, moving: model.phase != .idle, frame: currentFrame)
   }
 
-  private func emitState(_ name: String) {
-    var event: [String: Any] = ["phase": name, "sequence": sequence, "position": position, "selected": selected, "velocity": velocity]
-    if order != nil { event["profileId"] = selectedId }
-    for area in areas.allObjects { area.onPagerState(event) }
+  func pagerState(_ event: PagerModel.StateEvent) {
+    publish()
+    var payload: [String: Any] = [
+      "phase": event.phase, "sequence": event.sequence, "position": event.position, "selected": event.selected, "velocity": event.velocity,
+      "leading": event.leading,
+    ]
+    if case .some(let id) = event.profileId { payload["profileId"] = id ?? NSNull() }
+    for area in areas.allObjects { area.onPagerState(payload) }
+    morph?.follow(lead: model.leadProgress, leading: model.atLeading, moving: model.phase != .idle)
   }
+
+  func pagerEndedTracking() {
+    drag.area = nil
+  }
+
+  func pagerShifted(by shift: Int) {
+    history = history.map { ($0.time, $0.position + Double(shift)) }
+    guard model.phase == .tracking else { return }
+    drag.start += Double(shift)
+    drag.lo += shift
+    drag.hi = min(model.count - 1, drag.hi + shift)
+    drag.home += shift
+    drag.detent += shift
+  }
+
+  private var positionEvent: [String: Any] { ["position": model.pagePosition, "leading": model.leadProgress] }
+
+  func configureMorph(_ config: MorphConfig?, uiManager: AnyObject?) {
+    guard let config else {
+      morph?.release()
+      morph = nil
+      return
+    }
+    let view = areas.allObjects.first { $0.window != nil }
+    if let morph {
+      morph.update(config, uiManager: uiManager, from: view)
+    } else {
+      let made = PagerMorph(config: config, uiManager: uiManager, view: view)
+      morph = made
+      made.follow(lead: model.leadProgress, leading: model.atLeading, moving: false)
+    }
+  }
+
+  #if DEBUG
+  func morphDebug(clear: Bool) -> [String: Any]? {
+    defer { if clear { morph?.clearLog() } }
+    return morph?.debug()
+  }
+  #endif
 
   private func announceActivity(_ tell: (NSWindow) -> Void = { ArdiaWebView.wakeNeighbourPages(in: $0) }) {
     var windows: [NSWindow] = []
@@ -395,30 +373,33 @@ final class Pager {
   }
 
   private func publish() {
+    let s = model.snapshot
     var state: [String: Any] = [
-      "sequence": sequence, "selectionSequence": selectionSequence, "position": position, "selected": selected,
-      "phase": phase.rawValue, "velocity": velocity, "count": count,
+      "sequence": s.sequence, "selectionSequence": s.selectionSequence, "position": s.position, "selected": s.selected,
+      "phase": s.phase.rawValue, "velocity": s.velocity, "count": s.count, "leading": s.leading, "lead": s.lead,
     ]
-    if order != nil { state["profileId"] = selectedId }
+    if case .some(let id) = s.profileId { state["profileId"] = id ?? NSNull() }
     Pager.lock.lock()
     Pager.snapshots[key] = state
     Pager.lock.unlock()
-  }
-
-  private var selectedId: Any {
-    guard let ids = order, selected >= 0, selected < ids.count else { return NSNull() }
-    return ids[selected]
   }
 
   #if DEBUG
   func debug() -> [String: Any] {
     var out = Pager.snapshot(key) ?? [:]
     out["areas"] = areas.allObjects.count
-    out["propSelected"] = propSelected
-    out["propAck"] = propAck
+    out["propSelected"] = model.propSelected
+    out["propAck"] = model.propAck
+    out["propLibrary"] = model.propLibrary
+    out["leadingOn"] = model.leading
+    out["anchor"] = model.anchor ?? NSNull()
+    out["pagePosition"] = model.pagePosition
+    out["home"] = model.home
+    out["leadOnRest"] = model.leadOnRest
     out["history"] = history.count
     out["lastInput"] = lastInput
-    if phase == .tracking {
+    out["frames"] = link == nil ? "idle" : "display link"
+    if model.phase == .tracking {
       out["drag"] = ["start": drag.start, "lo": drag.lo, "hi": drag.hi, "home": drag.home, "detent": drag.detent]
     }
     return out

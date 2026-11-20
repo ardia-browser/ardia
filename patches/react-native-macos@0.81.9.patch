@@ -2089,7 +2089,7 @@ index 152e76da136756ebc962ece4cc84e84df7cfce0e..4e38bf09796d31dfc63cf79a081e40ea
   * Hide subviews if they are outside the view bounds.
   * This is an optimisation used predominantly with RKScrollViews
 diff --git a/React/Views/RCTView.m b/React/Views/RCTView.m
-index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..6fe598a779a504c6ad8d46805cb215fc4c2a5211 100644
+index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..f98fab6ed05edb7e88b5c7b96c0adc81f7d43b14 100644
 --- a/React/Views/RCTView.m
 +++ b/React/Views/RCTView.m
 @@ -136,6 +136,95 @@ - (RCTPlatformView *)react_findClipView // [macOS]
@@ -2217,7 +2217,26 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..6fe598a779a504c6ad8d46805cb215fc
    BOOL needsHitSubview = !(_pointerEvents == RCTPointerEventsNone || _pointerEvents == RCTPointerEventsBoxOnly);
    if (needsHitSubview && (![self clipsToBounds] || isPointInside)) {
      // Take z-index into account when calculating the touch target.
-@@ -784,16 +888,38 @@ - (void)viewDidMoveToWindow
+@@ -733,11 +837,18 @@ - (void)setShadowColor:(CGColorRef)shadowColor
+ {
+     if (_shadowColor != shadowColor)
+     {
++        CGColorRetain(shadowColor);
++        CGColorRelease(_shadowColor);
+         _shadowColor = shadowColor;
+         [self didUpdateShadow];
+     }
+ }
+ 
++- (void)dealloc
++{
++    CGColorRelease(_shadowColor);
++}
++
+ - (void)setShadowOffset:(CGSize)shadowOffset
+ {
+     if (!CGSizeEqualToSize(_shadowOffset, shadowOffset))
+@@ -784,16 +895,38 @@ - (void)viewDidMoveToWindow
    // scroll event occurs either due to trackpad/gesture based scrolling or a scrollwheel event
    // both of which would not cause the mouseExited to be invoked.
  
@@ -2260,7 +2279,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..6fe598a779a504c6ad8d46805cb215fc
    }
  
    [self reactViewDidMoveToWindow]; // [macOS] Github#1412
-@@ -801,41 +927,69 @@ - (void)viewDidMoveToWindow
+@@ -801,41 +934,69 @@ - (void)viewDidMoveToWindow
    [super viewDidMoveToWindow];
  }
  
@@ -2359,7 +2378,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..6fe598a779a504c6ad8d46805cb215fc
      }
    }
  }
-@@ -943,28 +1097,63 @@ - (void)react_updateClippedSubviewsWithClipRect:(CGRect)clipRect relativeToView:
+@@ -943,28 +1104,63 @@ - (void)react_updateClippedSubviewsWithClipRect:(CGRect)clipRect relativeToView:
  
  - (void)setRemoveClippedSubviews:(BOOL)removeClippedSubviews
  {
@@ -2423,7 +2442,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..6fe598a779a504c6ad8d46805cb215fc
  }
  
  - (void)layoutSubviews
-@@ -1196,11 +1385,41 @@ - (void)reactSetFrame:(CGRect)frame
+@@ -1196,12 +1392,42 @@ - (void)reactSetFrame:(CGRect)frame
    // be rendered as a stretchable image, we'll need to re-render.
    // TODO: detect up-front if re-rendering is necessary
    CGSize oldSize = self.bounds.size;
@@ -2448,8 +2467,8 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..6fe598a779a504c6ad8d46805cb215fc
 +  if ([ArdiaBorderImageViews() containsObject:self]) { // [Ardia: a border image follows the new backing density. Ardia]
 +    [self.layer setNeedsDisplay];
 +  }
-+}
-+
+ }
+ 
 +// [Ardia: displayLayer is the only place that copies clipsToBounds to the layer, and nothing asked for one when
 +// overflow changed. A view that stopped clipping at the same size (a group's rows once its fold animation ends)
 +// kept masking its children, which cut the selected row's glow. Ardia]
@@ -2460,12 +2479,13 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..6fe598a779a504c6ad8d46805cb215fc
 +  }
 +  [super setClipsToBounds:clipsToBounds];
 +  [self.layer setNeedsDisplay];
- }
++}
 +#endif
- 
++
  - (void)displayLayer:(CALayer *)layer
  {
-@@ -1248,17 +1467,8 @@ - (void)displayLayer:(CALayer *)layer
+   if (CGSizeEqualToSize(layer.bounds.size, CGSizeZero)) {
+@@ -1248,17 +1474,8 @@ - (void)displayLayer:(CALayer *)layer
    RCTUIColor *backgroundColor = _backgroundColor;
  #endif // macOS]
  
@@ -2485,7 +2505,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..6fe598a779a504c6ad8d46805cb215fc
  
    if (useIOSBorderRendering) {
      layer.cornerRadius = cornerRadii.topLeftHorizontal;
-@@ -1293,9 +1503,10 @@ - (void)displayLayer:(CALayer *)layer
+@@ -1293,9 +1510,10 @@ - (void)displayLayer:(CALayer *)layer
    layer.contents = (id)image.CGImage;
    layer.contentsScale = image.scale;
  #else // [macOS
@@ -2497,7 +2517,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..6fe598a779a504c6ad8d46805cb215fc
  #endif // macOS]
    layer.needsDisplayOnBoundsChange = YES;
    layer.magnificationFilter = kCAFilterNearest;
-@@ -1514,6 +1725,20 @@ - (BOOL)acceptsFirstResponder
+@@ -1514,6 +1732,20 @@ - (BOOL)acceptsFirstResponder
  	return [self focusable] || [super acceptsFirstResponder];
  }
  
@@ -2518,7 +2538,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..6fe598a779a504c6ad8d46805cb215fc
  - (void)updateTrackingAreas
  {
    BOOL hasMouseHoverEvent = self.onMouseEnter || self.onMouseLeave;
-@@ -1522,22 +1747,295 @@ - (void)updateTrackingAreas
+@@ -1522,22 +1754,315 @@ - (void)updateTrackingAreas
    if (!wouldRecreateIdenticalTrackingArea) {
      if (_trackingArea) {
        [self removeTrackingArea:_trackingArea];
@@ -2556,6 +2576,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..6fe598a779a504c6ad8d46805cb215fc
 +      ArdiaHoverViews = [NSHashTable weakObjectsHashTable];
 +    }
 +    [ArdiaHoverViews addObject:self];
++    [RCTView ardia_installHoverWatch];
 +  } else {
 +    [ArdiaHoverViews removeObject:self];
 +  }
@@ -2617,25 +2638,44 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..6fe598a779a504c6ad8d46805cb215fc
 +  [self ardia_markHoverDirty];
 +}
 +
+++ (void)ardia_installHoverWatch
++{
++  if (ArdiaHoverInstalled) {
++    return;
++  }
++  ArdiaHoverInstalled = YES;
++  NSEventMask hoverEvents = NSEventMaskMouseMoved | NSEventMaskLeftMouseDragged | NSEventMaskRightMouseDragged |
++                            NSEventMaskOtherMouseDragged | NSEventMaskLeftMouseUp | NSEventMaskRightMouseUp | NSEventMaskOtherMouseUp;
++  [NSEvent addLocalMonitorForEventsMatchingMask:hoverEvents
++                                        handler:^NSEvent *(NSEvent *event) {
++                                          if (event.type == NSEventTypeMouseMoved || event.type == NSEventTypeLeftMouseDragged ||
++                                              event.type == NSEventTypeRightMouseDragged || event.type == NSEventTypeOtherMouseDragged ||
++                                              ArdiaHoverHeld) {
++                                            [RCTView ardia_markHoverDirty];
++                                          }
++                                          return event;
++                                        }];
++  NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
++  for (NSNotificationName name in @[
++         NSApplicationDidBecomeActiveNotification, NSApplicationDidResignActiveNotification, NSWindowDidBecomeKeyNotification,
++         NSWindowDidResignKeyNotification, NSWindowDidChangeOcclusionStateNotification
++       ]) {
++    [center addObserverForName:name
++                        object:nil
++                         queue:[NSOperationQueue mainQueue]
++                    usingBlock:^(__unused NSNotification *notification) {
++                      [RCTView ardia_markHoverDirty];
++                    }];
++  }
++}
++
 ++ (void)ardia_markHoverDirty
 +{
 +  if (ArdiaHoverDirty || (ArdiaHoverViews.count == 0 && !ArdiaClipDirty)) {
 +    return;
 +  }
 +  ArdiaHoverDirty = YES;
-+  if (!ArdiaHoverInstalled) {
-+    ArdiaHoverInstalled = YES;
-+    NSEventMask hoverEvents = NSEventMaskLeftMouseDragged | NSEventMaskRightMouseDragged | NSEventMaskOtherMouseDragged |
-+                              NSEventMaskLeftMouseUp | NSEventMaskRightMouseUp | NSEventMaskOtherMouseUp;
-+    [NSEvent addLocalMonitorForEventsMatchingMask:hoverEvents
-+                                          handler:^NSEvent *(NSEvent *event) {
-+                                            if (event.type == NSEventTypeLeftMouseDragged || event.type == NSEventTypeRightMouseDragged ||
-+                                                event.type == NSEventTypeOtherMouseDragged || ArdiaHoverHeld) {
-+                                              [RCTView ardia_markHoverDirty];
-+                                            }
-+                                            return event;
-+                                          }];
-+  }
++  [self ardia_installHoverWatch];
 +  dispatch_async(dispatch_get_main_queue(), ^{
 +    ArdiaHoverDirty = NO;
 +    if (ArdiaClipDirty) {
@@ -2815,7 +2855,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..6fe598a779a504c6ad8d46805cb215fc
    _hasMouseOver = YES;
    [self sendMouseEventWithBlock:self.onMouseEnter
                     locationInfo:[self locationInfoFromEvent:event]
-@@ -1547,6 +2045,9 @@ - (void)mouseEntered:(NSEvent *)event
+@@ -1547,6 +2072,9 @@ - (void)mouseEntered:(NSEvent *)event
  
  - (void)mouseExited:(NSEvent *)event
  {
@@ -2825,7 +2865,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..6fe598a779a504c6ad8d46805cb215fc
    _hasMouseOver = NO;
    [self sendMouseEventWithBlock:self.onMouseLeave
                     locationInfo:[self locationInfoFromEvent:event]
-@@ -1768,7 +2269,7 @@ - (BOOL)handleKeyboardEvent:(NSEvent *)event {
+@@ -1768,7 +2296,7 @@ - (BOOL)handleKeyboardEvent:(NSEvent *)event {
    static const char kRCTViewKeyboardEventEmittedKey = 0;
    NSNumber *emitted = objc_getAssociatedObject(event, &kRCTViewKeyboardEventEmittedKey);
    BOOL alreadyEmitted = [emitted boolValue];
@@ -2834,7 +2874,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..6fe598a779a504c6ad8d46805cb215fc
      [_eventDispatcher sendEvent:keyboardEvent];
      objc_setAssociatedObject(event, &kRCTViewKeyboardEventEmittedKey, @(YES), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
    }
-@@ -1794,3 +2295,19 @@ - (void)keyUp:(NSEvent *)event {
+@@ -1794,3 +2322,19 @@ - (void)keyUp:(NSEvent *)event {
  #endif // macOS]
  
  @end

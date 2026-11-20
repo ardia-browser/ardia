@@ -7,4 +7,6 @@ struct PagerConfig: Record {
   @Field var width: Double = 0
   @Field var ack: Int = 0
   @Field var order: [String]?
+  @Field var leading: Bool = false
+  @Field var library: Bool = false
 }

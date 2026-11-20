@@ -21,10 +21,11 @@ final class SwipeArea: ExpoView, ArdiaSwipeTarget {
   override func viewDidMoveToWindow() {
     super.viewDidMoveToWindow()
     if window != nil { ArdiaSwipe.addTarget(self) } else { ArdiaSwipe.removeTarget(self) }
+    if window == nil { pager?.areaLeftWindow(self) }
   }
 
   deinit {
-    if let pager { DispatchQueue.main.async { pager.prune() } }
+    if let pager { DispatchQueue.main.async { pager.areasChanged() } }
   }
 
   func swipeEvent(_ event: [String: Any]) {
@@ -49,6 +50,8 @@ final class SwipeArea: ExpoView, ArdiaSwipeTarget {
       pager!.attach(self)
     }
     pagerWidth = CGFloat(config.width)
-    pager!.configure(selected: config.selected, count: config.count, ack: config.ack, order: config.order)
+    pager!.configure(
+      selected: config.selected, count: config.count, ack: config.ack, order: config.order, leading: config.leading, library: config.library
+    )
   }
 }

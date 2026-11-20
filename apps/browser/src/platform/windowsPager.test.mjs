@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { PagerRegistry, REST_DISPLACEMENT } from "../../../../packages/expo-windows/src/pager/pager.ts";
+import { PagerRegistry, REST_DISPLACEMENT, springAt } from "../../../../packages/expo-windows/src/pager/pager.ts";
+import { stepAction } from "../../../../packages/ardiacore/src/pagerModel.ts";
 
-const FRAME_MS = 1000 / 60;
+const FRAME_MS = 1000 / 120;
 const MAC_SETTLE_ONE_PAGE_MS = 330;
 
 function harness({ reduced = false } = {}) {
@@ -10,8 +11,9 @@ function harness({ reduced = false } = {}) {
   let frames = new Map();
   let lastId = 0;
   let motions = 0;
+  let starts = 0;
   const registry = new PagerRegistry({
-    now: () => time,
+    now: () => time / 1000,
     requestFrame: (frame) => {
       frames.set(++lastId, frame);
       return lastId;
@@ -20,6 +22,7 @@ function harness({ reduced = false } = {}) {
     reducedMotion: () => reduced,
     startMotion: () => {
       motions += 1;
+      starts += 1;
       return () => void (motions -= 1);
     },
   });
@@ -30,7 +33,7 @@ function harness({ reduced = false } = {}) {
     time += ms;
     const due = [...frames.values()];
     frames.clear();
-    for (const frame of due) frame();
+    for (const frame of due) frame(time / 1000);
     return due.length > 0;
   };
   const runToRest = (ms = FRAME_MS, limit = 600) => {
@@ -38,7 +41,7 @@ function harness({ reduced = false } = {}) {
     while (frames.size && count < limit) tick(ms), (count += 1);
     return count;
   };
-  return { registry, positions, states, area, tick, runToRest, elapsed: () => time, moving: () => frames.size > 0, motions: () => motions };
+  return { registry, positions, states, area, tick, runToRest, elapsed: () => time, moving: () => frames.size > 0, motions: () => motions, starts: () => starts };
 }
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
@@ -68,12 +71,11 @@ test("a switch settles on the target within the Mac's time and never overshoots"
   assert.equal(h.registry.snapshot("w").phase, "idle");
   assert.equal(h.motions(), 0);
   await flush();
-  assert.deepEqual(h.states.map((s) => s.phase), ["selected", "settled"]);
-  assert.equal(h.states[1].profileId, "b");
-  assert.equal(h.states[1].selected, 1);
+  assert.deepEqual(h.states.map((s) => [s.phase, s.selected]), [["selected", 0], ["selected", 1], ["settled", 1]]);
+  assert.equal(h.states.at(-1).profileId, "b");
 });
 
-test("a slow frame does not slow the motion, and a long stall is clamped", () => {
+test("motion follows the display's frame times: slow frames do not slow it and a stall lands at once", () => {
   const steady = harness();
   configured(steady).switchTo(2);
   steady.runToRest();
@@ -84,8 +86,19 @@ test("a slow frame does not slow the motion, and a long stall is clamped", () =>
   const stalled = harness();
   configured(stalled).switchTo(2);
   stalled.tick(5000);
-  assert.ok(stalled.moving(), "a five second stall jumped to the end");
-  assert.ok(stalled.positions.at(-1) > 0 && stalled.positions.at(-1) < 2);
+  assert.equal(stalled.moving(), false, "a five second stall left the pages still moving");
+  assert.equal(stalled.positions.at(-1), 2);
+});
+
+test("each display frame moves the pages by the time since the switch, at any refresh rate", () => {
+  for (const hz of [60, 120, 144]) {
+    const h = harness();
+    configured(h).switchTo(1);
+    h.tick(1000 / hz);
+    h.tick(1000 / hz);
+    const { offset } = springAt(0, 1, 0, 2 / hz);
+    assert.ok(Math.abs(h.positions.at(-1) - (1 + offset)) < 1e-9, `${hz} Hz at ${h.positions.at(-1)}`);
+  }
 });
 
 test("a new request mid-flight retargets from where the page is, without a jump", () => {
@@ -162,7 +175,7 @@ test("an outside selection jumps at once and answers with a higher sequence", as
   assert.equal(snapshot.profileId, "c");
   assert.equal(pager.select("z", ["a", "b", "c"]), false);
   await flush();
-  assert.deepEqual(h.states.map((s) => s.phase), ["selected"]);
+  assert.deepEqual(h.states.map((s) => [s.phase, s.profileId]), [["selected", "a"], ["selected", "c"]]);
 });
 
 test("props catch up only once the app has acknowledged the pager's own selection", () => {
@@ -185,7 +198,7 @@ test("with animations off the pager lands at once and still reports the settle",
   assert.equal(h.moving(), false);
   assert.equal(h.positions.at(-1), 2);
   await flush();
-  assert.deepEqual(h.states.map((s) => s.phase), ["selected", "settled"]);
+  assert.deepEqual(h.states.map((s) => s.phase), ["selected", "selected", "settled"]);
 });
 
 test("position goes to one area, state to all, and the last area out forgets the pager", async () => {
@@ -199,7 +212,7 @@ test("position goes to one area, state to all, and the last area out forgets the
   h.runToRest();
   await flush();
   assert.equal(second.positions.length, 1);
-  assert.equal(second.states.length, h.states.length);
+  assert.equal(second.states.length, h.states.length - 1);
   pager.detach(h.area);
   assert.equal(h.registry.existing("w"), pager);
   pager.switchTo(0);
@@ -209,4 +222,141 @@ test("position goes to one area, state to all, and the last area out forgets the
   assert.equal(h.registry.existing("w"), null);
   assert.equal(h.registry.snapshot("w"), null);
   assert.equal(h.moving(), false);
+});
+
+function withLibrary(h, selected = 0) {
+  const pager = h.registry.named("w");
+  const leads = [];
+  pager.attach({ position: (p, lead) => (h.positions.push(p), leads.push(lead), true), state: (e) => h.states.push(e) });
+  pager.configure({ selected, count: 3, ack: 0, width: 200, order: ["a", "b", "c"], leading: true, library: false });
+  return { pager, leads };
+}
+
+test("the Library opens from a later profile while the pages hold still, and closing returns to that profile", async () => {
+  const h = harness();
+  const { pager, leads } = withLibrary(h, 1);
+  const start = h.positions.length;
+  assert.equal(pager.lead(true), true);
+  h.runToRest();
+  assert.ok(h.positions.slice(start).every((p) => p === 1), "pages moved while the Library opened");
+  assert.equal(leads.at(-1), 1);
+  const open = h.registry.snapshot("w");
+  assert.deepEqual([open.selected, open.position, open.leading, open.lead, open.profileId], [-1, 0, true, 1, null]);
+  assert.equal(pager.lead(false), true);
+  h.runToRest();
+  const closed = h.registry.snapshot("w");
+  assert.deepEqual([closed.selected, closed.position, closed.leading, closed.lead, closed.profileId], [1, 1, false, 0, "b"]);
+  await flush();
+  assert.deepEqual(h.states.map((s) => [s.phase, s.selected, s.leading]), [["selected", 1, false], ["selected", -1, true], ["settled", -1, true], ["selected", 1, false], ["settled", 1, false]]);
+});
+
+test("a selection at the Library re-anchors it over the chosen profile, and a switch closes onto another", async () => {
+  const h = harness();
+  const { pager } = withLibrary(h);
+  pager.lead(true);
+  h.runToRest();
+  assert.equal(pager.select("c", ["a", "b", "c"]), true);
+  assert.equal(h.positions.at(-1), 2);
+  assert.deepEqual([pager.debug().anchor, pager.debug().home, h.registry.snapshot("w").leading], [2, 2, true]);
+  assert.equal(pager.switchTo(1), true);
+  h.runToRest();
+  const settled = h.registry.snapshot("w");
+  assert.deepEqual([settled.selected, settled.leading, settled.profileId, pager.debug().anchor], [1, false, "b", null]);
+});
+
+test("a step back from the first profile opens the Library only where the pager has one", () => {
+  const h = harness();
+  const { pager } = withLibrary(h);
+  assert.equal(pager.step(-1, false), true);
+  h.runToRest();
+  assert.deepEqual([h.registry.snapshot("w").selected, h.registry.snapshot("w").leading], [-1, true]);
+  const plain = harness();
+  const without = configured(plain);
+  assert.equal(without.step(-1, false), true);
+  assert.equal(without.lead(true), false);
+  assert.deepEqual([plain.registry.snapshot("w").selected, plain.registry.snapshot("w").phase], [0, "idle"]);
+});
+
+test("Previous and Next Profile with the Library open page from the profile the Library opened on", async () => {
+  for (const [delta, landing] of [[-1, "a"], [1, "c"]]) {
+    const h = harness();
+    const { pager } = withLibrary(h, 1);
+    pager.lead(true);
+    h.runToRest();
+    assert.equal(pager.step(delta, true, ["a", "b", "c"]), true);
+    h.runToRest();
+    const done = h.registry.snapshot("w");
+    assert.deepEqual([done.leading, done.profileId], [false, landing]);
+  }
+});
+
+test("stepAction wraps from the Library's own profile", () => {
+  assert.deepEqual(stepAction({ anchor: 1, selected: 0, leading: true, count: 3 }, -1, true), { kind: "switch", index: 0 });
+  assert.deepEqual(stepAction({ anchor: 1, selected: 0, leading: true, count: 3 }, 1, true), { kind: "switch", index: 2 });
+  assert.deepEqual(stepAction({ anchor: null, selected: 0, leading: true, count: 1 }, 1, true), { kind: "stay" });
+});
+
+test("turning off the leading page at the Library settles home once, however often it is configured", () => {
+  const h = harness();
+  const { pager } = withLibrary(h, 1);
+  pager.lead(true);
+  h.runToRest();
+  const off = { selected: 1, count: 3, ack: 0, width: 200, order: ["a", "b", "c"], leading: false, library: false };
+  pager.configure(off);
+  const started = h.starts();
+  h.tick();
+  pager.configure(off);
+  pager.configure(off);
+  assert.equal(h.starts(), started);
+  h.runToRest();
+  const done = h.registry.snapshot("w");
+  assert.deepEqual([done.leading, done.profileId, pager.debug().anchor], [false, "b", null]);
+});
+
+test("turning off the leading page while the Library closes lets the close run on without a restart", () => {
+  const h = harness();
+  const { pager } = withLibrary(h, 1);
+  pager.lead(true);
+  h.runToRest();
+  pager.lead(false);
+  for (let i = 0; i < 4; i += 1) h.tick();
+  const started = h.starts();
+  pager.configure({ selected: 1, count: 3, ack: 0, width: 200, order: ["a", "b", "c"], leading: false, library: false });
+  assert.equal(h.starts(), started);
+  h.runToRest();
+  const done = h.registry.snapshot("w");
+  assert.deepEqual([done.leading, done.profileId, pager.debug().anchor], [false, "b", null]);
+});
+
+test("a pager configured while the Library is open starts on the Library and says so", async () => {
+  const h = harness();
+  const pager = h.registry.named("w");
+  pager.attach(h.area);
+  pager.configure({ selected: 1, count: 3, ack: 0, width: 200, order: ["a", "b", "c"], leading: true, library: true });
+  const snapshot = h.registry.snapshot("w");
+  assert.deepEqual([snapshot.selected, snapshot.leading, snapshot.lead, pager.debug().home], [-1, true, 1, 1]);
+  await flush();
+  assert.deepEqual(h.states.map((e) => [e.leading, e.selected]), [[true, -1]]);
+});
+
+test("a first configure reports the profile it starts on", async () => {
+  const h = harness();
+  configured(h, { selected: 2 });
+  await flush();
+  assert.deepEqual(h.states.map((e) => [e.phase, e.selected, e.leading, e.profileId]), [["selected", 2, false, "c"]]);
+});
+
+test("the library prop with a new selection lands on the Library over that profile", () => {
+  const h = harness();
+  const { pager } = withLibrary(h);
+  pager.configure({ selected: 2, count: 3, ack: 0, width: 200, order: ["a", "b", "c"], leading: true, library: true });
+  assert.deepEqual([h.registry.snapshot("w").leading, pager.debug().home], [true, 2]);
+});
+
+test("the library prop with a reorder ends on the Library", () => {
+  const h = harness();
+  const { pager } = withLibrary(h);
+  pager.configure({ selected: 1, count: 3, ack: 0, width: 200, order: ["b", "a", "c"], leading: true, library: true });
+  h.runToRest();
+  assert.deepEqual([h.registry.snapshot("w").leading, pager.debug().home], [true, 1]);
 });

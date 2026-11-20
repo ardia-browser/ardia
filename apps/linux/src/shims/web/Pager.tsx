@@ -10,6 +10,8 @@ export const stepPager = async (key: string, delta: -1 | 1, wrap = false, order?
 
 export const selectPager = async (key: string, profileId: string, order: readonly string[]) => Pager.existing(key)?.select(profileId, order) ?? false;
 
+export const leadPager = async (key: string, open: boolean, animated = true) => Pager.existing(key)?.lead(open, animated) ?? false;
+
 export const pagerState = (key: string): PagerSnapshot | null => Pager.existing(key)?.snapshot() ?? null;
 
 export const devPagerState = async (key: string) => Pager.existing(key)?.debug() ?? null;
@@ -26,7 +28,7 @@ export const SwipeArea = forwardRef<SwipeAreaHandle, SwipeAreaProps>(function Sw
   const area = useRef<PagerArea>({
     pageWidth: () => latest.current.nativePager?.width || node.current?.getBoundingClientRect().width || 0,
     attached: () => !!node.current?.isConnected,
-    onPosition: (position) => (latest.current.onPagerPosition as ((e: unknown) => void) | undefined)?.({ nativeEvent: { position } }),
+    onPosition: (position, leading) => (latest.current.onPagerPosition as ((e: unknown) => void) | undefined)?.({ nativeEvent: { position, leading } }),
     onState: (event) => latest.current.onPagerState?.(event),
   }).current;
 
@@ -59,7 +61,7 @@ export const SwipeArea = forwardRef<SwipeAreaHandle, SwipeAreaProps>(function Sw
 
   useEffect(() => {
     if (nativePager && pager.current?.key === nativePager.key) pager.current.configure(nativePager);
-  }, [nativePager?.key, nativePager?.selected, nativePager?.count, nativePager?.ack, nativePager?.order, nativePager?.width]);
+  }, [nativePager?.key, nativePager?.selected, nativePager?.count, nativePager?.ack, nativePager?.order, nativePager?.width, nativePager?.leading, nativePager?.library]);
 
   return <View pointerEvents="box-none" ref={(view) => void (node.current = view as unknown as HTMLElement | null)} {...props} />;
 });

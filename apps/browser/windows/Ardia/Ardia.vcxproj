@@ -141,6 +141,7 @@
     <ClInclude Include="FileDropModule.h" />
     <ClInclude Include="FileDropTarget.h" />
     <ClInclude Include="FocusModule.h" />
+    <ClInclude Include="FramesModule.h" />
     <ClInclude Include="ImportAutofill.h" />
     <ClInclude Include="ImportFiles.h" />
     <ClInclude Include="ImportFirefox.h" />

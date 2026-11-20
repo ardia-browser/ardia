@@ -1,5 +1,5 @@
 import { AccessibilityInfo } from "react-native";
-import { cancelFrame, noteAnimation, requestFrame } from "../animation/motion";
+import { cancelFrame, frames, noteAnimation, requestFrame } from "../animation/motion";
 import { PagerRegistry, type PagerSnapshot } from "./pager";
 
 let reduceMotion = false;
@@ -20,8 +20,8 @@ function watchReduceMotion() {
 }
 
 export const pagers = new PagerRegistry({
-  now: () => performance.now(),
-  requestFrame,
+  now: () => frames.now() / 1000,
+  requestFrame: (frame) => requestFrame((time) => frame(time / 1000)),
   cancelFrame,
   reducedMotion: () => {
     watchReduceMotion();
@@ -48,6 +48,9 @@ export const windowsSwipe = {
   selectPager(key: string, profileId: string, order: readonly string[]): Promise<boolean> {
     const ids = strings(order);
     return Promise.resolve(ids ? (pagers.existing(key)?.select(profileId, ids) ?? false) : false);
+  },
+  leadPager(key: string, open: boolean, animated?: boolean): Promise<boolean> {
+    return Promise.resolve(pagers.existing(key)?.lead(!!open, animated !== false) ?? false);
   },
   pagerState(key: string): PagerSnapshot | null {
     return pagers.snapshot(key);

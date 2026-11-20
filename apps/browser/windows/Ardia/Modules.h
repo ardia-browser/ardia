@@ -8,6 +8,7 @@
 #include "ExternalAppsModule.h"
 #include "FileDropModule.h"
 #include "FocusModule.h"
+#include "FramesModule.h"
 #include "ImportModule.h"
 #include "IntroMusicModule.h"
 #include "KeychainModule.h"

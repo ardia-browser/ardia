@@ -21,7 +21,18 @@ export type SwipeStep = {
   delayMs?: number;
 };
 
-export type NativePagerConfig = { key: string; selected: number; count: number; width?: number; ack?: number; order?: readonly string[] };
+export type NativePagerConfig = {
+  key: string;
+  selected: number;
+  count: number;
+  width?: number;
+  ack?: number;
+  order?: readonly string[];
+  leading?: boolean;
+  library?: boolean;
+};
+
+export type MorphConfig = { clip: number; spacer: number; sidebar: number; library: number; still: boolean; right: boolean; content: number };
 
 export type PagerStateEvent = {
   phase: "began" | "selected" | "settled";
@@ -30,6 +41,7 @@ export type PagerStateEvent = {
   selected: number;
   profileId?: string | null;
   velocity: number;
+  leading?: boolean;
 };
 
 export type PagerSnapshot = {
@@ -41,6 +53,8 @@ export type PagerSnapshot = {
   profileId?: string | null;
   velocity: number;
   count: number;
+  leading?: boolean;
+  lead?: number;
 };
 
 export type SwipeAreaProps = ViewProps & {
@@ -51,7 +65,7 @@ export type SwipeAreaProps = ViewProps & {
   isPager?: boolean;
   onSwipe: (event: SwipeEvent) => void;
   nativePager?: NativePagerConfig;
-  onPagerPosition?: (event: { nativeEvent: { position: number } }) => void;
+  onPagerPosition?: (event: { nativeEvent: { position: number; leading: number } }) => void;
   onPagerState?: (event: PagerStateEvent) => void;
 };
 
@@ -72,7 +86,11 @@ export type SwipeModule = {
   switchPager(key: string, index: number, order?: readonly string[]): Promise<boolean>;
   stepPager(key: string, delta: number, wrap: boolean, order?: readonly string[]): Promise<boolean>;
   selectPager(key: string, profileId: string, order: readonly string[]): Promise<boolean>;
+  leadPager(key: string, open: boolean, animated: boolean): Promise<boolean>;
   pagerState(key: string): PagerSnapshot | null;
+  morphPager?(key: string, config: MorphConfig | null): Promise<boolean>;
+  takeMorphCounts?(): { frames: number; late: number };
+  devMorph?(key: string, clear: boolean, hoverPasses: number): Promise<unknown>;
   devPagerState(key: string): Promise<unknown>;
   devSimulate(x: number, y: number, windowNumber: number, steps: SwipeStep[], ignorePreference: boolean): Promise<unknown>;
 };
@@ -90,7 +108,12 @@ export const stepPager = (key: string, delta: -1 | 1, wrap = false, order?: read
   Module.stepPager(key, delta, wrap, order);
 export const selectPager = (key: string, profileId: string, order: readonly string[]): Promise<boolean> =>
   Module.selectPager(key, profileId, order);
+export const leadPager = (key: string, open: boolean, animated = true): Promise<boolean> => Module.leadPager(key, open, animated);
 export const pagerState = (key: string): PagerSnapshot | null => Module.pagerState(key);
+export const nativeMorph = typeof Module.morphPager === "function";
+export const morphPager = (key: string, config: MorphConfig | null): Promise<boolean> => Module.morphPager?.(key, config) ?? Promise.resolve(false);
+export const takeMorphCounts = (): { frames: number; late: number } => Module.takeMorphCounts?.() ?? { frames: 0, late: 0 };
+export const devMorph = (key: string, clear = false, hoverPasses = 0): Promise<unknown> => Module.devMorph?.(key, clear, hoverPasses) ?? Promise.resolve(null);
 
 export const SwipeArea = forwardRef<SwipeAreaHandle, SwipeAreaProps>(function SwipeArea({ onSwipe, onPagerState, ...props }, ref) {
   const handle = useRef<NativeHandle>(null);

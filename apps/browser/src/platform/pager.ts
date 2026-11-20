@@ -1,1 +1,1 @@
-export { switchPager, stepPager, selectPager, pagerState, type NativePagerConfig, type PagerSnapshot, type PagerStateEvent, type SwipeEvent } from "@ardia/ardiacore";
+export { leadPager, switchPager, stepPager, selectPager, pagerState, nativeMorph, morphPager, takeMorphCounts, devMorph, type MorphConfig, type NativePagerConfig, type PagerSnapshot, type PagerStateEvent, type SwipeEvent } from "@ardia/ardiacore";

@@ -629,6 +629,7 @@ const fakeModules = {
     switchPager: () => Promise.resolve(false),
     stepPager: () => Promise.resolve(false),
     selectPager: () => Promise.resolve(false),
+    leadPager: () => Promise.resolve(false),
     pagerState: () => null,
     devPagerState: () => Promise.resolve(null),
     devSimulate: () => unfaked("ArdiaSwipe", "devSimulate"),

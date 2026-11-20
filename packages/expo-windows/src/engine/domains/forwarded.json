@@ -37,6 +37,11 @@
       "suggest": "ac_search_suggest",
       "stopSuggest": "ac_search_suggest_stop"
     },
+    "sites": {
+      "readStorage": "ac_local_storage_read",
+      "writeStorage": "ac_local_storage_write",
+      "registrableDomains": "ac_registrable_domains"
+    },
     "tabs": {
       "lastTabPolicy": "ac_tabs_last_tab_policy"
     }

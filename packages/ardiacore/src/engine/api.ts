@@ -18,7 +18,7 @@ import type { ChromeWindowState } from "../windows";
 import type { FieldProviderProfile, PasswordExportStatus, SavedPassword, SystemPanelResult, VerificationCodeSetupResult } from "../passwords";
 import type { ClearSiteDataResult, SiteSettings, SiteSettingType, SiteSettingValue } from "../siteSettings";
 import type { LinkRoute, TabStripCommand, TabStripTransaction, WindowRequest } from "../tabs";
-import type { PageCookie, PageEngine, PasskeyAccess } from "../webkit";
+import type { PageCookie, PageEngine, PasskeyAccess, StorageItems } from "../webkit";
 import type { DisplayMediaSource } from "../pageTypes";
 
 type Profile = { profile: string };
@@ -90,6 +90,9 @@ export type EngineCalls = {
   "sites.reset": [Profile & { origin: string }, null];
   "sites.clearData": [Profile & { origin: string; engine: PageEngine }, ClearSiteDataResult];
   "sites.zoomLevels": [Profile, Record<string, number>];
+  "sites.readStorage": [Profile & { origin: string }, { items: StorageItems | null }];
+  "sites.writeStorage": [Profile & { origin: string; set: StorageItems; remove: string[] }, { written: number }];
+  "sites.registrableDomains": [Profile & { hosts: string[] }, { domains: string[] }];
   "sites.setZoom": [Profile & { host: string; zoom: number }, null];
   "sites.preloadPages": [Profile, boolean];
   "sites.setPreloadPages": [Profile & { on: boolean }, null];

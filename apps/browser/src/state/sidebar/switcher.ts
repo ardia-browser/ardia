@@ -14,9 +14,11 @@ import { consentToken } from "../telemetry/client";
 import { isWindowClosing } from "../windows/closingWindows";
 import { setSidebarUi, sidebarUi } from "./sidebarUi";
 
+const PREWARM_AFTER_MS = 75;
 const SHOW_AFTER_MS = 140;
 const SESSION_START = Date.now();
 const POINTER_POLL_MS = 50;
+let prewarmTimer: ReturnType<typeof setTimeout> | undefined;
 let showTimer: ReturnType<typeof setTimeout> | undefined;
 let pointerTimer: ReturnType<typeof setInterval> | undefined;
 let hoveredRow: number | null = null;
@@ -33,12 +35,17 @@ export function switcherStep(windowId: string, backward: boolean) {
   const from = activeTabId(s, windowId);
   if (from) void rememberPicture(from);
   if (from && tabEngine(s, from) === "webkit") noteTabSwitcherOpenedInWebKit();
-  setSidebarUi({ switcher: { windowId, ids, index: backward ? ids.length - 1 : 1, visible: false } });
+  setSidebarUi({ switcher: { windowId, ids, index: backward ? ids.length - 1 : 1, prewarm: false, visible: false } });
   void setSwitcherCapture(true);
+  clearTimeout(prewarmTimer);
   clearTimeout(showTimer);
+  prewarmTimer = setTimeout(() => {
+    const s = sidebarUi().switcher;
+    if (s && !s.prewarm) setSidebarUi({ switcher: { ...s, prewarm: true } });
+  }, PREWARM_AFTER_MS);
   showTimer = setTimeout(() => {
     const s = sidebarUi().switcher;
-    if (s) setSidebarUi({ switcher: { ...s, visible: true } });
+    if (s) setSidebarUi({ switcher: { ...s, prewarm: true, visible: true } });
   }, SHOW_AFTER_MS);
 }
 
@@ -78,7 +85,8 @@ export function subscribeSwitcherTabChanges(windowId: string) {
 export function moveSwitcher(step: 1 | -1) {
   const s = sidebarUi().switcher;
   if (!s) return;
-  focusSwitcherRow(s.index + step);
+  clearTimeout(prewarmTimer);
+  focusSwitcherRow(s.index + step, true);
   stopPointerWatch();
   pointerStale = true;
   const move = ++keyboardMoves;
@@ -89,11 +97,11 @@ export function moveSwitcher(step: 1 | -1) {
   });
 }
 
-export function focusSwitcherRow(index: number) {
+export function focusSwitcherRow(index: number, prewarm = false) {
   const s = sidebarUi().switcher;
   if (!s) return;
   const n = s.ids.length;
-  setSidebarUi({ switcher: { ...s, index: (index + n) % n } });
+  setSidebarUi({ switcher: { ...s, index: (index + n) % n, prewarm: s.prewarm || prewarm } });
 }
 
 export function hoverSwitcherRow(index: number) {
@@ -157,6 +165,7 @@ export function cancelSwitcher() {
 }
 
 function endSwitcher() {
+  clearTimeout(prewarmTimer);
   clearTimeout(showTimer);
   stopPointerWatch();
   hoveredRow = null;

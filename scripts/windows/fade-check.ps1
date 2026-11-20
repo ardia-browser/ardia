@@ -7,7 +7,7 @@ $ErrorActionPreference = "Stop"
 
 $lab = @{ Tile = 48; Slot = 64; Left = 24; Rows = @(96, 176); Rounds = 6; FadeMs = 250 }
 $variants = @("plain", "blur", "layout", "blur+layout", "overlay", "plain later", "blur later", "layout later", "blur+layout later", "overlay later")
-$probes = @("state", "setNativeProps", "inside background", "inside clear", "inside zIndex", "inside background+zIndex", "inside v1 panel", "helper background+zIndex")
+$probes = @("state", "setNativeProps", "inside background", "inside clear", "inside zIndex", "inside background+zIndex", "inside v1 panel", "helper background+zIndex", "helper background", "helper background with a child below zero", "helper setNativeProps background")
 $slots = $variants.Count + 1
 $captureMs = 30000
 $labMs = 16000
@@ -227,7 +227,7 @@ function Measure-Fades([string]$Label, [switch]$Onboarded) {
     $bitmap.Dispose()
   }
   $csv = [System.Text.StringBuilder]::new()
-  [void]$csv.AppendLine("ms," + ((@("marker") + $variants + $probes + @(1..($slots - $probes.Count) | ForEach-Object { "row2-$_" })) -join ","))
+  [void]$csv.AppendLine("ms," + ((@("marker") + $variants + $probes + @(if ($slots -gt $probes.Count) { 1..($slots - $probes.Count) | ForEach-Object { "row2-$_" } })) -join ","))
   foreach ($sample in @($run.Samples)) { [void]$csv.AppendLine("$($sample.Ms - $run.WindowMs)," + ($sample.Values -join ",")) }
   Set-Content -LiteralPath (Join-Path $Out "fade-$Label-samples.csv") -Value $csv.ToString() -Encoding utf8NoBOM
   Start-Sleep -Milliseconds 800
@@ -254,14 +254,14 @@ function Measure-Fades([string]$Label, [switch]$Onboarded) {
   $byRound = @($intervals | ForEach-Object { $from = $_[0]; $to = $_[1]; , @($samples | Where-Object { $_.Ms -ge $from -and $_.Ms -lt $to }) })
   $columns = @()
   for ($v = 0; $v -lt $variants.Count; $v++) { $columns += [pscustomobject]@{ Name = $variants[$v]; Column = $v + 1; Rule = "fade" } }
-  for ($v = 0; $v -lt $probes.Count; $v++) { $columns += [pscustomobject]@{ Name = $probes[$v]; Column = $slots + $v; Rule = $(if ($probes[$v] -eq "helper background+zIndex") { "shown" } else { "log" }) } }
+  for ($v = 0; $v -lt $probes.Count; $v++) { $columns += [pscustomobject]@{ Name = $probes[$v]; Column = $slots + $v; Rule = $(if ($probes[$v].StartsWith("helper")) { "shown" } else { "log" }) } }
   $rawColumn = $slots + [array]::IndexOf($probes, "inside background+zIndex")
   $rawMissed = 0
   for ($r = 1; $r -lt $intervals.Count; $r++) {
     $rawWhite = @($byRound[$r] | Where-Object { $_.Values[$rawColumn] -ge $whiteAt })
     if ($rawWhite.Count -eq 0) { $rawMissed++ }
   }
-  Write-Host "fades, $Label`: a raw view with a background and zIndex still hides a child mounted later in $rawMissed of $([Math]::Max(0, $intervals.Count - 1)) rounds (React Native Windows 0.81.38 ViewComponentView::MountChildComponentView); when this reads 0, BackedView can go"
+  Write-Host "fades, $Label`: a raw view with a background and zIndex still hides a child mounted later in $rawMissed of $([Math]::Max(0, $intervals.Count - 1)) rounds (React Native Windows 0.81.38 ViewComponentView::MountChildComponentView); when this reads 0, the backed View in packages/expo-windows/metroResolution.js can go"
   foreach ($entry in $columns) {
     $column = $entry.Column
     $rows = @()

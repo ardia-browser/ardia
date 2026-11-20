@@ -38,7 +38,6 @@ export { TooltipAbove } from "./TooltipAbove";
 export { Offstage, useHover, useOffstage, useTooltip } from "./useHover";
 export {
   ActivitySpinner,
-  BackedView,
   ClipView,
   ContextMenuArea,
   DIA_SPECTRUM,

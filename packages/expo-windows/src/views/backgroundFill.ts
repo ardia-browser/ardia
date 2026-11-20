@@ -2,35 +2,62 @@ import type { ViewStyle } from "react-native";
 
 export type Flat = ViewStyle & Record<string, unknown>;
 
-export const FILL_Z_INDEX = -2147483647;
+export type Backed = { fill: Flat; own: Flat };
 
-type Corner = { key: "borderTopLeftRadius" | "borderTopRightRadius" | "borderBottomLeftRadius" | "borderBottomRightRadius"; names: string[]; vertical: "top" | "bottom"; horizontal: "left" | "right" };
+export type ColorDraws = (color: unknown) => boolean;
 
-const CORNERS: Corner[] = [
-  { key: "borderTopLeftRadius", names: ["borderTopLeftRadius", "borderTopStartRadius", "borderStartStartRadius"], vertical: "top", horizontal: "left" },
-  { key: "borderTopRightRadius", names: ["borderTopRightRadius", "borderTopEndRadius", "borderStartEndRadius"], vertical: "top", horizontal: "right" },
-  { key: "borderBottomLeftRadius", names: ["borderBottomLeftRadius", "borderBottomStartRadius", "borderEndStartRadius"], vertical: "bottom", horizontal: "left" },
-  { key: "borderBottomRightRadius", names: ["borderBottomRightRadius", "borderBottomEndRadius", "borderEndEndRadius"], vertical: "bottom", horizontal: "right" },
-];
+export const FILL_Z_INDEX = -2147483648;
+
+const CLEAR = "transparent";
+
+export const drawsByName: ColorDraws = (color) => color != null && color !== CLEAR;
+
+export const processedColorDraws = (processed: unknown) => processed != null && (typeof processed !== "number" || processed >>> 24 !== 0);
+
+const isBorderKey = (key: string) => key.startsWith("border");
+
+const isBorderColor = (key: string) => isBorderKey(key) && key.endsWith("Color");
+
+const isBorderShape = (key: string) => isBorderKey(key) && (key.endsWith("Radius") || key === "borderCurve" || key === "borderStyle");
 
 const width = (value: unknown, fallback: number) => (typeof value === "number" && Number.isFinite(value) ? value : fallback);
 
-export function backgroundFill(flat: Flat): ViewStyle | null {
-  const color = flat.backgroundColor;
-  if (color == null || color === "transparent") return null;
+function borderWidths(flat: Flat) {
   const all = width(flat.borderWidth, 0);
-  const sides = {
+  return {
     top: width(flat.borderTopWidth, all),
     bottom: width(flat.borderBottomWidth, all),
-    left: width(flat.borderLeftWidth, width(flat.borderStartWidth, all)),
-    right: width(flat.borderRightWidth, width(flat.borderEndWidth, all)),
+    left: width(flat.borderStartWidth, width(flat.borderLeftWidth, all)),
+    right: width(flat.borderEndWidth, width(flat.borderRightWidth, all)),
   };
-  const fill: Flat = { position: "absolute", top: 0, bottom: 0, left: 0, right: 0, zIndex: FILL_Z_INDEX, backgroundColor: color };
-  for (const corner of CORNERS) {
-    const outer = corner.names.map((name) => flat[name]).find((radius) => radius != null) ?? flat.borderRadius;
-    if (typeof outer === "number") fill[corner.key] = Math.max(0, outer - Math.max(sides[corner.vertical], sides[corner.horizontal]));
-    else if (typeof outer === "string") fill[corner.key] = outer;
-  }
-  if (flat.borderCurve) fill.borderCurve = flat.borderCurve;
-  return fill;
+}
+
+const outward = (side: number) => -side || 0;
+
+function withoutPaint(style: Flat, clearBorder: boolean): Flat {
+  const own: Flat = {};
+  for (const key of Object.keys(style)) if (key !== "backgroundColor" && !isBorderColor(key)) own[key] = style[key];
+  if (clearBorder) own.borderColor = CLEAR;
+  return own;
+}
+
+export function backedStyles(flat: Flat | undefined, draws: ColorDraws = drawsByName): Backed | null {
+  if (!flat || !draws(flat.backgroundColor)) return null;
+  const sides = borderWidths(flat);
+  const fill: Flat = { position: "absolute", top: outward(sides.top), bottom: outward(sides.bottom), left: outward(sides.left), right: outward(sides.right), zIndex: FILL_Z_INDEX, backgroundColor: flat.backgroundColor };
+  for (const key of Object.keys(flat)) if (isBorderKey(key)) fill[key] = flat[key];
+  const bordered = Object.values(sides).some((side) => side > 0);
+  return { fill, own: withoutPaint(flat, bordered) };
+}
+
+const isPaint = (key: string) => key === "backgroundColor" || isBorderColor(key) || isBorderShape(key);
+
+export function nativePaint(style: Flat | undefined): Backed | null {
+  if (!style) return null;
+  const sent: Flat = {};
+  for (const key of Object.keys(style)) sent[key] = style[key] === undefined && isPaint(key) ? null : style[key];
+  const fill: Flat = {};
+  for (const key of Object.keys(sent)) if (isPaint(key)) fill[key] = sent[key];
+  if (!Object.keys(fill).length) return null;
+  return { fill, own: withoutPaint(sent, false) };
 }

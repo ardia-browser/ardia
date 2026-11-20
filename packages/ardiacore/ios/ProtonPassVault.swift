@@ -1,0 +1,316 @@
+import Foundation
+
+struct ProtonPassVault: VaultProvider {
+  let id = "protonpass"
+  let name = "Proton Pass"
+  let binaryName = "pass-cli"
+  let capabilities = VaultCapabilities(totp: true, save: true, selfHosted: false, masterPassword: false, touchID: true)
+  let install = VaultInstall(command: "brew install protonpass/tap/pass-cli", url: "https://protonpass.github.io/pass-cli/")
+  let setup: VaultSetup? = VaultSetup(kind: .browserSignIn)
+  let readsOffline = false
+
+  private static let tool = "Proton Pass CLI"
+  private static let marker = "protonpass-session"
+  private static let loginTimeout: TimeInterval = 660
+  private static let approvalWait: TimeInterval = 30
+  private static let readTimeout: TimeInterval = 90
+  private static let writeTimeout: TimeInterval = 60
+  private static let listDeadline: TimeInterval = 180
+  private static let personalVaultName = "personal"
+  private static let signedOutHints = [
+    "requires an authenticated client", "session has been invalidated", "log in again", "not logged in", "no session",
+  ]
+  private static let sessionLockHints = ["session is locked", "sessionlocked"]
+  private static let missingHints = [
+    "error retrieving item", "no totp fields", "is not a totp field", "invalid item reference", "item not found", "field does not exist",
+  ]
+  private static let sessionLockMessage = "Proton Pass has a session lock on. Run pass-cli session unlock in Terminal, then try again."
+
+  var environment: [String: String] { ["PROTON_PASS_NO_UPDATE_CHECK": "1", "PROTON_PASS_DISABLE_TELEMETRY": "1"] }
+
+  func isolatedEnvironment(_ directory: String) -> [String: String] {
+    ["PROTON_PASS_SESSION_DIR": directory, "PROTON_PASS_KEY_PROVIDER": "fs"]
+  }
+
+  func state(_ cli: VaultCLI) async -> VaultProviderState {
+    let current = await info(cli)
+    if let fields = current.fields {
+      let account = VaultJSON.string(fields["email"]) ?? VaultJSON.string(fields["username"])
+        ?? VaultJSON.string(fields["personal_access_token_name"])
+      return makeState(cli.session == nil ? .locked : .unlocked, account: account)
+    }
+    if VaultMessages.mentions(current.result, Self.sessionLockHints) { return makeState(.locked, message: Self.sessionLockMessage) }
+    if VaultMessages.mentions(current.result, Self.signedOutHints) {
+      let message = cli.isSigningIn ? "Finish signing in to Proton in the tab Ardia opened." : cli.value("signInMessage")
+      return makeState(.signedOut, message: message)
+    }
+    return makeState(.unavailable, message: Self.problem(current.result))
+  }
+
+  func signIn(_ cli: VaultCLI, fields: VaultSignInFields) async -> VaultSignInResult {
+    if let token = Self.accessToken(fields) {
+      let extraPassword = fields.clientSecret == nil ? nil : fields.password
+      return await tokenSignIn(cli, token: token, extraPassword: extraPassword)
+    }
+    let current = await info(cli)
+    if current.fields != nil {
+      guard await cli.confirmOwner("unlock Proton Pass") else { return failed("Proton Pass stayed locked.") }
+      cli.remember(session: Self.marker)
+      return signedIn()
+    }
+    if VaultMessages.mentions(current.result, Self.sessionLockHints) { return failed(Self.sessionLockMessage) }
+    if current.result.succeeded { return failed(Self.problem(current.result), state: .unavailable) }
+    return await webSignIn(cli, extraPassword: fields.password)
+  }
+
+  func unlock(_ cli: VaultCLI, password: String?) async -> VaultSignInResult {
+    let current = await info(cli)
+    guard current.fields != nil else {
+      if VaultMessages.mentions(current.result, Self.sessionLockHints) { return failed(Self.sessionLockMessage) }
+      if VaultMessages.mentions(current.result, Self.signedOutHints) { return failed("Sign in to Proton Pass first.", state: .signedOut) }
+      return failed(Self.problem(current.result), state: .unavailable)
+    }
+    guard await cli.confirmOwner("unlock Proton Pass") else { return failed("Proton Pass stayed locked.") }
+    cli.remember(session: Self.marker)
+    return signedIn()
+  }
+
+  func signOut(_ cli: VaultCLI) async {
+    cli.cancelSigningIn()
+    _ = await cli.run(["logout"])
+  }
+
+  func items(_ cli: VaultCLI) async throws -> VaultItemList {
+    guard cli.session != nil else { throw VaultError.locked }
+    let deadline = Date().addingTimeInterval(Self.listDeadline)
+    var listing = VaultItemList(items: [])
+    for vault in try await vaults(cli) {
+      guard let share = VaultJSON.string(vault["share_id"]), Self.isIdentifier(share) else { continue }
+      let remaining = deadline.timeIntervalSinceNow
+      guard remaining > 1 else { throw VaultError.failed("Proton Pass took too long to list your logins. Try again.") }
+      let listed = try await listedEntries(cli, share: share, timeout: min(Self.readTimeout, remaining))
+      let vaultName = VaultJSON.string(vault["name"])
+      for entry in listed {
+        guard let item = loginItem(entry, share: share, vault: vaultName) else { continue }
+        listing.items.append(item)
+        let login = Self.login(in: entry)
+        if let password = login.flatMap({ $0["password"] as? String }), !password.isEmpty { listing.passwords[item.id] = password }
+        if let totp = Self.totpURI(in: entry), VaultTotpSecret(totp) != nil { listing.totps[item.id] = totp }
+      }
+    }
+    return listing
+  }
+
+  private func listedEntries(_ cli: VaultCLI, share: String, timeout: TimeInterval) async throws -> [[String: Any]] {
+    let arguments = ["item", "list", "--share-id=\(share)", "--filter-type=login", "--filter-state=active", "--output=json"]
+    var result = await cli.run(arguments + ["--show-secrets"], timeout: timeout)
+    if !result.succeeded, !result.timedOut, !result.cancelled, VaultMessages.mentions(result, VaultMessages.outdatedHints + ["show-secrets", "show secrets"]) {
+      result = await cli.run(arguments, timeout: timeout)
+    }
+    try check(result)
+    return try VaultJSON.list(in: try VaultJSON.record(result.stdout, from: Self.tool), at: "items", from: Self.tool)
+  }
+
+  func secret(_ cli: VaultCLI, id: String, field: VaultField) async throws -> String {
+    guard cli.session != nil else { throw VaultError.locked }
+    guard let reference = Self.reference(id) else { throw VaultError.notFound }
+    let target = ["--share-id=\(reference.share)", "--item-id=\(reference.item)"]
+    if field == .totp {
+      let result = await cli.run(["item", "totp"] + target + ["--field=totp", "--output=json"])
+      try check(result)
+      guard let code = VaultJSON.string(try VaultJSON.record(result.stdout, from: Self.tool)["totp"]) else { throw VaultError.notFound }
+      return code
+    }
+    let result = await cli.run(["item", "view"] + target + ["--output=json"])
+    try check(result)
+    let root = try VaultJSON.record(result.stdout, from: Self.tool)
+    let item = VaultJSON.dict(root["item"]) ?? root
+    guard let login = Self.login(in: item) else { throw VaultError.notFound }
+    let value: String?
+    switch field {
+    case .username: value = VaultJSON.string(login["username"]) ?? VaultJSON.string(login["email"])
+    case .password: value = login["password"] as? String
+    case .totp: value = nil
+    }
+    guard let value, !value.isEmpty else { throw VaultError.notFound }
+    return value
+  }
+
+  func save(_ cli: VaultCLI, login: VaultNewLogin) async throws -> VaultItem {
+    guard cli.session != nil else { throw VaultError.locked }
+    let vault = try Self.vaultForNewItems(try await vaults(cli))
+    guard let share = VaultJSON.string(vault["share_id"]) else { throw VaultError.failed("No Proton Pass vault takes new items.") }
+    let isEmail = login.username.contains("@") && !login.username.contains(where: { $0.isWhitespace })
+    var template: [String: Any] = ["title": login.title, "password": login.password, "urls": [login.url], "extra_fields": [Any]()]
+    template[isEmail ? "email" : "username"] = login.username
+    guard let input = VaultJSON.data(template) else { throw VaultError.failed("Ardia couldn't prepare the login for Proton Pass.") }
+    let result = await cli.run(["item", "create", "login", "--share-id=\(share)", "--from-template=-"], input: input, timeout: Self.writeTimeout)
+    try check(result, redacting: [login.password])
+    let vaultName = VaultJSON.string(vault["name"])
+    if let itemId = Self.createdId(in: result) {
+      return VaultItem(
+        provider: id, id: "\(share)/\(itemId)", title: login.title, username: login.username, urls: [login.url], hasTotp: false,
+        vault: vaultName, updatedAt: Date().timeIntervalSince1970 * 1000)
+    }
+    let listed = (try? await listedEntries(cli, share: share, timeout: Self.readTimeout)) ?? []
+    let matches = listed.compactMap { loginItem($0, share: share, vault: vaultName) }
+      .filter { $0.title == login.title && $0.username == login.username && $0.urls.contains(login.url) }
+    guard let found = matches.max(by: { ($0.updatedAt ?? 0) < ($1.updatedAt ?? 0) }) else {
+      throw VaultError.failed("Proton Pass saved the login but didn't say where. Check Proton Pass before saving it again.")
+    }
+    return found
+  }
+
+  static func createdId(in result: VaultCommandResult) -> String? {
+    if let record = try? VaultJSON.record(result.stdout, from: tool) {
+      for key in ["item_id", "id"] {
+        if let id = VaultJSON.string(record[key]) ?? VaultJSON.string(VaultJSON.dict(record["item"])?[key]), isIdentifier(id) { return id }
+      }
+    }
+    guard let line = result.trimmedOutput.split(whereSeparator: \.isNewline).last else { return nil }
+    let word = line.split(whereSeparator: { $0 == " " || $0 == ":" }).last.map(String.init) ?? ""
+    return isIdentifier(word) && word.count >= 8 ? word : nil
+  }
+
+  static func vaultForNewItems(_ vaults: [[String: Any]]) throws -> [String: Any] {
+    let usable = vaults.filter { VaultJSON.string($0["share_id"]).map(isIdentifier) ?? false }
+    if let personal = usable.first(where: { (VaultJSON.string($0["name"]) ?? "").lowercased() == personalVaultName }) { return personal }
+    let owned = usable.filter { vault in
+      let owner = VaultJSON.bool(vault["owner"]) ?? VaultJSON.bool(vault["is_owner"])
+      let shared = VaultJSON.bool(vault["shared"])
+      return owner == true || shared == false
+    }
+    if let only = owned.count == 1 ? owned.first : nil { return only }
+    if let only = usable.count == 1 ? usable.first : nil { return only }
+    throw VaultError.failed(usable.isEmpty ? "No Proton Pass vault takes new items."
+      : "Ardia couldn't tell which Proton Pass vault is yours, so save this login in Proton Pass.")
+  }
+
+  private func info(_ cli: VaultCLI) async -> (fields: [String: Any]?, result: VaultCommandResult) {
+    let result = await cli.run(["info", "--output=json"])
+    return (result.succeeded ? try? VaultJSON.record(result.stdout, from: Self.tool) : nil, result)
+  }
+
+  private func vaults(_ cli: VaultCLI) async throws -> [[String: Any]] {
+    let result = await cli.run(["vault", "list", "--output=json"], timeout: Self.readTimeout)
+    try check(result)
+    return try VaultJSON.list(in: try VaultJSON.record(result.stdout, from: Self.tool), at: "vaults", from: Self.tool)
+  }
+
+  private func webSignIn(_ cli: VaultCLI, extraPassword: String?) async -> VaultSignInResult {
+    let first = VaultFirstValue()
+    var extra: [String: String] = [:]
+    if let extraPassword { extra["PROTON_PASS_EXTRA_PASSWORD"] = extraPassword }
+    cli.setValue("signInMessage", nil)
+    cli.start(
+      ["login"], environment: extra, timeout: Self.loginTimeout,
+      onOutput: { text in
+        if let url = Self.approvalURL(in: text) { first.offer(url) }
+      },
+      completion: { result in
+        if result.succeeded {
+          cli.remember(session: Self.marker)
+        } else if !result.cancelled {
+          cli.setValue("signInMessage", Self.loginMessage(result, redacting: extraPassword.map { [$0] } ?? []))
+        }
+        first.offer(nil)
+        cli.announceChange()
+      })
+    guard let url = await first.wait(timeout: Self.approvalWait) else {
+      if cli.session != nil { return signedIn() }
+      cli.cancelSigningIn()
+      return failed(cli.value("signInMessage") ?? "Proton Pass didn't start signing in. Try again.", state: .signedOut)
+    }
+    return needs(.approval, "Finish signing in to Proton in the new tab.", approvalURL: url, state: .signedOut)
+  }
+
+  private func tokenSignIn(_ cli: VaultCLI, token: String, extraPassword: String?) async -> VaultSignInResult {
+    var environment = ["PROTON_PASS_PERSONAL_ACCESS_TOKEN": token]
+    if let extraPassword { environment["PROTON_PASS_EXTRA_PASSWORD"] = extraPassword }
+    let result = await cli.runSigningIn(["login"], environment: environment, timeout: Self.readTimeout)
+    if result.cancelled { return stopped(state: .signedOut) }
+    guard result.succeeded else {
+      if VaultMessages.mentions(result, ["invalid", "unauthorized", "expired"]) {
+        return failed("Proton didn't accept that access token.", state: .signedOut)
+      }
+      return failed(VaultMessages.failure(result, tool: Self.tool, redacting: [token] + (extraPassword.map { [$0] } ?? [])), state: .signedOut)
+    }
+    cli.remember(session: Self.marker)
+    return signedIn()
+  }
+
+  private static func problem(_ result: VaultCommandResult) -> String {
+    result.succeeded ? VaultJSON.unreadableMessage(tool) : VaultMessages.failure(result, tool: tool)
+  }
+
+  private func check(_ result: VaultCommandResult, redacting secrets: [String] = []) throws {
+    try checked(result, tool: Self.tool, locked: Self.sessionLockHints, signedOut: Self.signedOutHints, missing: Self.missingHints,
+                redacting: secrets)
+  }
+
+  private func loginItem(_ entry: [String: Any], share: String, vault: String?) -> VaultItem? {
+    guard let itemId = VaultJSON.string(entry["id"]), Self.isIdentifier(itemId), let content = VaultJSON.dict(entry["content"]),
+      let login = Self.login(in: entry)
+    else { return nil }
+    if let state = VaultJSON.string(entry["state"]), state != "Active" { return nil }
+    var urls = VaultJSON.strings(login["urls"])
+    for autofill in VaultJSON.dicts(login["autofill_urls"]) where VaultJSON.string(autofill["mode"]) != "Never" {
+      if let url = VaultJSON.string(autofill["url"]), !urls.contains(url) { urls.append(url) }
+    }
+    let totp = Self.totpURI(in: entry)
+    var item = VaultItem(
+      provider: id, id: "\(share)/\(itemId)", title: VaultJSON.string(content["title"]) ?? "",
+      username: VaultJSON.string(login["username"]) ?? VaultJSON.string(login["email"]) ?? "", urls: urls, hasTotp: totp != nil,
+      vault: vault, updatedAt: VaultJSON.milliseconds(entry["modify_time"]))
+    item.totpPeriod = totp.flatMap { VaultTotp.period(fromURI: $0) }
+    return item
+  }
+
+  private static func totpURI(in item: [String: Any]) -> String? {
+    guard let content = VaultJSON.dict(item["content"]) else { return nil }
+    if let uri = login(in: item).flatMap({ VaultJSON.string($0["totp_uri"]) }), !uri.isEmpty { return uri }
+    return VaultJSON.dicts(content["extra_fields"]).compactMap { field -> String? in
+      guard let kind = VaultJSON.dict(field["content"]) else { return nil }
+      return VaultJSON.string(kind["Totp"])
+    }.first
+  }
+
+  private static func login(in item: [String: Any]?) -> [String: Any]? {
+    guard let content = VaultJSON.dict(item?["content"]), let inner = VaultJSON.dict(content["content"]) else { return nil }
+    return VaultJSON.dict(inner["Login"])
+  }
+
+  private static func accessToken(_ fields: VaultSignInFields) -> String? {
+    guard fields.method == "accessToken" else { return nil }
+    return fields.clientSecret ?? fields.password
+  }
+
+  private static func reference(_ id: String) -> (share: String, item: String)? {
+    guard let slash = id.firstIndex(of: "/") else { return nil }
+    let share = String(id[id.startIndex..<slash])
+    let item = String(id[id.index(after: slash)...])
+    guard isIdentifier(share), isIdentifier(item) else { return nil }
+    return (share, item)
+  }
+
+  private static func isIdentifier(_ text: String) -> Bool {
+    !text.isEmpty && text.count <= 200 && text.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || "-_=+".contains($0)) }
+  }
+
+  static func approvalURL(in text: String) -> String? {
+    for match in text.matches(of: #/https://[^\s"'<>]+/#) {
+      let candidate = String(match.output).trimmingCharacters(in: CharacterSet(charactersIn: ".,;:!?)]}"))
+      guard let host = URLComponents(string: candidate)?.host?.lowercased(), host == "proton.me" || host.hasSuffix(".proton.me") else { continue }
+      return candidate
+    }
+    return nil
+  }
+
+  private static func loginMessage(_ result: VaultCommandResult, redacting secrets: [String]) -> String {
+    if result.timedOut { return "Signing in to Proton took too long. Try again." }
+    if VaultMessages.mentions(result, ["extra password"]) {
+      return "Your Proton Pass account has an extra password. Enter it and sign in again."
+    }
+    return VaultMessages.failure(result, tool: Self.tool, redacting: secrets)
+  }
+}

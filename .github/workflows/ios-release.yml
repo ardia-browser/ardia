@@ -17,7 +17,7 @@ on:
         type: boolean
         default: false
       public_testers:
-        description: upload mode only, also put the build in the Public Testers group and submit it for Beta App Review (refused until the owner moves the Expo app to public testers)
+        description: Uploads go to Internal. Use public-link to submit the processed build to Public Testers.
         type: boolean
         default: false
       signing_request:
@@ -33,7 +33,7 @@ on:
         type: string
         default: ""
       version:
-        description: dry-run and upload modes, the release version (0.2.47 or 0.2.47-nightly.2; empty takes the Mac app's MARKETING_VERSION)
+        description: Device build version. Leave empty to use the Mac app's MARKETING_VERSION for a USB build or the pinned version for TestFlight.
         type: string
         default: ""
   workflow_call:
@@ -43,7 +43,7 @@ on:
         required: true
       version:
         type: string
-        required: true
+        default: ""
       build:
         type: string
         default: ""
@@ -217,14 +217,24 @@ jobs:
       BUILD_INPUT: ${{ inputs.build }}
       DEFAULT_BROWSER: ${{ inputs.default_browser }}
       RELEASE_VERSION: ${{ inputs.version }}
+      TESTFLIGHT_VERSION: 1.0.1
     steps:
       - if: inputs.mode == 'device'
         name: Mask the UDID
         run: jq -r '.inputs.udid // empty' "$GITHUB_EVENT_PATH" | sed 's/^/::add-mask::/'
+      - if: inputs.mode != 'device'
+        name: Use the pinned TestFlight version
+        run: |
+          set -euo pipefail
+          if [ -n "$RELEASE_VERSION" ] && [ "$RELEASE_VERSION" != "$TESTFLIGHT_VERSION" ]; then
+            echo "::error::Leave version empty for TestFlight. This workflow uses $TESTFLIGHT_VERSION (docs/phone.md)."
+            exit 1
+          fi
+          echo "RELEASE_VERSION=$TESTFLIGHT_VERSION" >> "$GITHUB_ENV"
       - name: Uploads go to the Internal group first
         if: inputs.mode == 'upload' && inputs.public_testers
         run: |
-          echo "::error::an upload goes to the Internal group only until the owner moves the Expo app to public testers: run it with public_testers=false"
+          echo "::error::Upload with public_testers=false. Use public-link after App Store Connect processes the build."
           exit 1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -304,7 +314,9 @@ jobs:
         name: Wait for App Store Connect to process the build
         env:
           BUILD: ${{ steps.plan.outputs.build }}
-        run: node apps/phone/scripts/asc.mjs wait --build "$BUILD" --timeout 2400 | tee -a "$GITHUB_STEP_SUMMARY"
+        run: |
+          set -euo pipefail
+          node apps/phone/scripts/asc.mjs wait --build "$BUILD" --timeout 2400 | tee -a "$GITHUB_STEP_SUMMARY"
       - if: inputs.mode == 'upload' && inputs.public_testers
         name: Send the build to public testers
         env:

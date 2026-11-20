@@ -3,10 +3,10 @@ set -euo pipefail
 
 vendor="$(cd "$(dirname "$0")/.." && pwd)/vendor"
 
-UBO_VERSION="1.76.0"
-UBO_SHA256="e76a1912426caa7b8679ad11dd140d1529c23db22ddbe892b6f901e9b7763456"
+UBO_VERSION="1.76.4"
+UBO_SHA256="4b1b27ed82e734d508ae6d255933c334f62f256e8a8aece92724b826828e3d5f"
 UBO_KEY="MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv1MPdIgJjIsN4Y0N/20GDNPfN4J//aknk5dsH8Y1LBxSnz3Jp/BT187Gub5cv6lee5CUVDmVBa3Yiqow8GMna5KwX+ZP+yc1pt/ewzyNxm2BzoQPgWz+1DgZaahz56/szi1EEtWVYxd3wNxFN4wPDqwV6aqlnV4R3RnxlF1ocw1kDgJ+8BxR1EY+MB+H8bymdef+xB3TNifBZIVmZt81cC3UMOG6KWRTU1wtIXsW+ZqSv5zaeFHLkjG4MPB7EfcMGrvO80ElJBZZLdrTmYOL4uUPsz2Wy6GiPWzpDmzzI9RfsZm11sLiJo63blcPF0Cz3sM0wQfxJPPcQuqkZDReswIDAQAB"
-UBO_PATCH="25"
+UBO_PATCH="27"
 ubo="$vendor/ubo"
 stamp="$UBO_VERSION-$UBO_PATCH"
 installed() { [ -f "$ubo/.version" ] && [ "$(cat "$ubo/.version")" = "$stamp" ]; }
@@ -119,27 +119,24 @@ patch("js/diff-updater.js",
       "    return patchURL.pathname.startsWith(parent);\n"
       "};\n"
       "\n"
-      "const ardiaPatchCacheKey = assetDetails =>\n"
-      "    [ assetDetails.assetKey, assetDetails.patchPath, ...(assetDetails.patchURLs || assetDetails.cdnURLs || []) ].join('\\n');\n"
-      "\n"
       "const resolveURL = (path, url) => {\n")
 patch("js/diff-updater.js",
-      "    const patchFile = basename(patchPath);\n"
-      "    return patchFile !== '' && patches.has(patchFile);\n",
-      "    const patchFile = basename(patchPath);\n"
-      "    return patchFile !== '' && patches.has(ardiaPatchCacheKey(assetDetails));\n")
+      "    const canonicalPatchURL = resolveURL(patchPath, patchURLs?.[0] || cdnURLs[0]);\n"
+      "    if ( Boolean(canonicalPatchURL) === false ) { return; }\n"
+      "    return canonicalPatchURL.href.replace(/#.*$/, '');\n",
+      "    if ( typeof assetDetails.assetKey !== 'string' ) { return; }\n"
+      "    const ardiaPatchTargets = [];\n"
+      "    for ( const base of patchURLs || cdnURLs ) {\n"
+      "        const patchURL = resolveURL(patchPath, base);\n"
+      "        if ( patchURL === undefined ) { continue; }\n"
+      "        if ( ardiaPatchAllowed(patchPath, base, patchURL) === false ) { continue; }\n"
+      "        ardiaPatchTargets.push(patchURL.href.replace(/#.*$/, ''));\n"
+      "    }\n"
+      "    if ( ardiaPatchTargets.length === 0 ) { return; }\n"
+      "    return [ assetDetails.assetKey, ...ardiaPatchTargets ].join('\\n');\n")
 patch("js/diff-updater.js",
-      "    if ( patches.has(patchFile) ) {\n"
-      "        return patches.get(patchFile);\n"
-      "    }\n"
-      "    const patchDetailsPromise = fetchPatchDetailsFromCDNs(assetDetails);\n"
-      "    patches.set(patchFile, patchDetailsPromise);\n",
-      "    const patchCacheKey = ardiaPatchCacheKey(assetDetails);\n"
-      "    if ( patches.has(patchCacheKey) ) {\n"
-      "        return patches.get(patchCacheKey);\n"
-      "    }\n"
-      "    const patchDetailsPromise = fetchPatchDetailsFromCDNs(assetDetails);\n"
-      "    patches.set(patchCacheKey, patchDetailsPromise);\n")
+      "    return canonicalPatchURL && patches.has(canonicalPatchURL);\n",
+      "    return Boolean(canonicalPatchURL) && patches.has(canonicalPatchURL);\n")
 patch("js/diff-updater.js",
       "        const patchURL = resolveURL(patchPath, cdnURL);\n"
       "        if ( patchURL === undefined ) { continue; }\n",
@@ -157,7 +154,7 @@ patch("js/diff-updater.js",
       "        const controller = new AbortController();\n"
       "        const deadline = setTimeout(( ) => { controller.abort(); }, 30000);\n"
       "        const stop = ( ) => { clearTimeout(deadline); controller.abort(); };\n"
-      "        const response = await fetch(patchURL, { signal: controller.signal }).catch(reason => {\n"
+      "        const response = await fetch(patchURL, { signal: controller.signal, redirect: 'error' }).catch(reason => {\n"
       "            console.error(reason, patchURL);\n"
       "        });\n"
       "        const sameOrigin = response !== undefined && typeof response.url === 'string' &&\n"

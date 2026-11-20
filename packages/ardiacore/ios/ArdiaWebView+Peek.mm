@@ -308,3 +308,17 @@ static NSString *LinkKeyAction(NSString *key) {
 }
 
 @end
+
+@implementation ArdiaWebView (PaintedFrame)
+
+- (BOOL)showsPaintedFrame {
+  NSView *page = _tab.view;
+  if (!page || page.superview != self || page.hidden) return NO;
+  NSView *widget = RenderWidgetIn(page);
+  if (!widget || widget.hidden) return NO;
+  for (CALayer *tree in widget.layer.sublayers)
+    if (tree.sublayers.count) return YES;
+  return NO;
+}
+
+@end

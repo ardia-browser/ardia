@@ -83,6 +83,7 @@ using namespace ardia_runtime;
                       : [panel isEqualToString:@"toggle"]  ? 40237
                                                            : 0;
   if (command && _tab) [self runChromeCommand:command];
+  else if ([panel isEqualToString:@"network"]) [_tab showDevToolsPanel:panel];
   else [_tab showDevTools];
 }
 

@@ -9,7 +9,7 @@ import { usePreferences } from "../../state/settings/hooks";
 import { popSettings, pushSettings } from "../../state/settings/nav";
 import { matchMyMac } from "../../state/sync/actions";
 import { useSyncEnabled } from "../../state/sync/hooks";
-import { deckGridOffered, setDeckGrid, useDeckGrid } from "../../state/browse/deckGrid";
+import { setDeckGrid, useDeckGrid } from "../../state/browse/deckGrid";
 import { useIncognito } from "../../state/tabs/hooks";
 import { capsule, font, PROFILE_COLORS, settingsLayout, settingsMotion, settingsTint, space, Symbol, useProfileLook, useTheme, type ProfileColor } from "../ui";
 import { Divider, Group, IconTile, NavRow, SettingsPage, ToggleRow } from "./SettingsKit";
@@ -39,7 +39,7 @@ export function AppearancePage() {
         <ColorRow labelled={false} />
         {syncEnabled ? <MatchMyMac labelled={false} /> : null}
       </Group>
-      <Group header="Interface Style" footer={offersSync ? "Match My Mac follows your Mac. Reduce Transparency in iOS Settings always uses Classic." : undefined}>
+      <Group header="Interface Style" footer={offersSync ? "Match My Mac follows your Mac." : undefined}>
         {styleChoices.map((choice, index) => (
           <CheckRow key={choice} title={INTERFACE_STYLE_NAMES[choice]} checked={style === choice} divider={index < styleChoices.length - 1} onPress={() => setInterfaceStyle(choice)} />
         ))}
@@ -49,12 +49,10 @@ export function AppearancePage() {
           <CheckRow key={choice} title={SCHEME_NAMES[choice]} checked={scheme === choice} divider={index < schemeChoices.length - 1} onPress={() => setSchemeChoice(choice)} />
         ))}
       </Group>
-      {deckGridOffered() ? (
-        <Group header="Tabs" footer={TABS_STYLE_FOOTER}>
-          <CheckRow title="Stack" checked={!grid} divider onPress={() => setDeckGrid(false, !incognito)} />
-          <CheckRow title="Grid" checked={grid} divider={false} onPress={() => setDeckGrid(true, !incognito)} />
-        </Group>
-      ) : null}
+      <Group header="Tabs" footer={TABS_STYLE_FOOTER}>
+        <CheckRow title="Stack" checked={!grid} divider onPress={() => setDeckGrid(false, !incognito)} />
+        <CheckRow title="Grid" checked={grid} divider={false} onPress={() => setDeckGrid(true, !incognito)} />
+      </Group>
     </SettingsPage>
   );
 }

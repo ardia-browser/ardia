@@ -1,5 +1,9 @@
 import { Platform } from "react-native";
+import { FLOATING_BAR_PLACE } from "../../lib/deckGeometry";
+import { ANDROID_MENU_SIZES, IPHONE_MENU_SIZES } from "../../lib/menuPlace";
 export const ink = { white: "#FFFFFF", black: "#000000", clear: "#00000000", knobShadow: "rgba(0,0,0,0.25)" } as const;
+
+const ANDROID_DARK_SURFACE = "#1E1B1D";
 
 export const toggleLayout = { width: 51, height: 31, knob: 27, inset: 2 } as const;
 
@@ -119,12 +123,11 @@ export const menuLayout = {
   iconSlot: 26,
   zoomButton: { width: 40, height: 34 },
   zoomReset: 48,
-  sheetTopGap: Platform.OS === "ios" ? 0 : 24,
-  sheetMaxShare: Platform.OS === "ios" ? 0.9 : 1,
+  sheetTopGap: Platform.OS === "ios" ? 10 : 24,
   sheetGrabber: Platform.OS === "ios" ? { width: 36, height: 5, top: 6 } : null,
 } as const;
 
-export const pageMenuLayout = { actionGlyph: 24, barSpacing: 8, groupSpacing: 16, zoomHeight: 32, zoomButtonWidth: 40, zoomReset: 48, rowInset: 16, accessibilityBottom: 24, accessibilityTextScale: 1.6, pressedScale: 0.94 } as const;
+export const pageMenuLayout = { actionGlyph: 24, barSpacing: 8, groupSpacing: 16, zoomHeight: 32, zoomButtonWidth: 40, zoomReset: 48, rowInset: 16, accessibilityBottom: 24, pressedScale: 0.94 } as const;
 
 export const pageMenuInk = {
   light: { sheet: "#FFFFFF", group: "#FFFFFF", rowPressed: "rgba(120,120,128,0.2)" },
@@ -143,7 +146,7 @@ export const readerInk = {
 
 export const readerLayout = { minLeadAspect: 0.75, maxWidth: 680, topBar: 52, chromeBand: 46, chromeSide: 16, chromeButton: 44, chromeCapsulePadding: 16, leadRadius: 12, lineHeight: 1.52, titleScale: 1.55, titleLine: 1.2, paragraphGap: 0.9, headerGap: 1.2 } as const;
 
-export const dialogLayout = { width: 312, radius: 28, fieldHeight: 48, choiceHeight: 48 } as const;
+export const dialogLayout = { width: 312, radius: 28, fieldHeight: 48 } as const;
 
 export const settingsLayout = {
   expoListTop: 12,
@@ -191,6 +194,173 @@ export const faviconInk = { letter: "#FFFFFF", lightPlate: "rgba(255,255,255,0.9
 
 export const menuShadow = { opacity: 0.18, radius: 24, offsetY: 8 } as const;
 
+const iPhoneMenuLook = {
+  width: 250,
+  radius: 30.5,
+  rim: 0.5,
+  ...IPHONE_MENU_SIZES,
+  labelInset: 29,
+  labelInsetChecked: 43.7,
+  labelInsetIcon: 65,
+  trailingInset: 26.7,
+  iconCentre: 40,
+  iconSlot: 24,
+  iconSize: 19,
+  checkSide: "leading" as "leading" | "trailing",
+  checkLeft: 22.3,
+  checkSize: 11,
+  chevronSize: 12,
+  pressInset: 10,
+  pressRadius: 21,
+  dividerInset: 24,
+  dividerLine: 1,
+  label: { fontSize: 17, lineHeight: 20 } as { fontSize: number; lineHeight: number; letterSpacing?: number },
+  labelLines: 3,
+  iconSide: "leading" as "leading" | "trailing",
+  disabledOpacity: 0.4,
+  frost: "thin" as const,
+  frosted: true,
+  shadow: "0px 10px 40px rgba(0,0,0,0.12)",
+};
+
+const androidMenuLook: typeof iPhoneMenuLook = {
+  width: 250,
+  radius: 16,
+  rim: 0.5,
+  ...ANDROID_MENU_SIZES,
+  labelInset: 16,
+  labelInsetChecked: 16,
+  labelInsetIcon: 52,
+  trailingInset: 16,
+  iconCentre: 28,
+  iconSlot: 24,
+  iconSize: 20,
+  checkSide: "trailing",
+  checkLeft: 16,
+  checkSize: 14,
+  chevronSize: 12,
+  pressInset: 0,
+  pressRadius: 0,
+  dividerInset: 0,
+  dividerLine: 0,
+  label: { fontSize: 16, lineHeight: 24, letterSpacing: 0.5 },
+  labelLines: 1,
+  iconSide: "leading",
+  disabledOpacity: 0.38,
+  frost: "thin",
+  frosted: false,
+  shadow: "0px 2px 6px 2px rgba(0,0,0,0.15), 0px 1px 2px 0px rgba(0,0,0,0.3)",
+};
+
+export const menuLook = Platform.OS === "android" ? androidMenuLook : iPhoneMenuLook;
+
+const iPhoneMenuInk = {
+  light: {
+    fill: "rgba(255,255,255,0.57)",
+    solid: "#F8F6F7",
+    label: "#0A090A",
+    icon: "#0A090A",
+    destructive: "#FE373C",
+    highlight: "rgba(0,0,0,0.11)",
+    divider: "rgba(0,0,0,0.08)",
+    rim: "rgba(0,0,0,0.37)",
+    specular: "rgba(255,255,255,0.7)",
+    heading: "rgba(60,60,67,0.6)",
+    dim: "rgba(0,0,0,0.2)",
+  },
+  dark: {
+    fill: "rgba(150,150,150,0.26)",
+    solid: "#504C4D",
+    label: "#F9F8F8",
+    icon: "#F9F8F8",
+    destructive: "#FF6567",
+    highlight: "rgba(255,255,255,0.11)",
+    divider: "rgba(255,255,255,0.08)",
+    rim: "rgba(0,0,0,0.85)",
+    specular: "rgba(255,255,255,0.11)",
+    heading: "rgba(235,235,245,0.6)",
+    dim: "rgba(0,0,0,0.48)",
+  },
+};
+
+const androidMenuInk: typeof iPhoneMenuInk = {
+  light: {
+    fill: "#F3EDF0",
+    solid: "#F3EDF0",
+    label: "#1F1A1D",
+    icon: "#4F4449",
+    destructive: "#BA1A1A",
+    highlight: "rgba(31,26,29,0.1)",
+    divider: "#D3C2C8",
+    rim: ink.clear,
+    specular: ink.clear,
+    heading: "#4F4449",
+    dim: ink.clear,
+  },
+  dark: {
+    fill: ANDROID_DARK_SURFACE,
+    solid: ANDROID_DARK_SURFACE,
+    label: "#EBE0E4",
+    icon: "#D3C2C8",
+    destructive: "#FFB4AB",
+    highlight: "rgba(235,224,228,0.1)",
+    divider: "#3D3539",
+    rim: "rgba(255,255,255,0.12)",
+    specular: ink.clear,
+    heading: "#D3C2C8",
+    dim: ink.clear,
+  },
+};
+
+export const menuInk = Platform.OS === "android" ? androidMenuInk : iPhoneMenuInk;
+
+export const actionSheetLook = {
+  width: 240.3,
+  radius: 31,
+  rim: 0.33,
+  side: 31,
+  top: 19,
+  messageGap: 5.7,
+  buttonGap: 19,
+  buttonSide: 16.3,
+  buttonBottom: 17.6,
+  buttonHeight: 43.5,
+  buttonsBetween: 8,
+  screenMargin: 16,
+  title: { fontSize: 17, lineHeight: 22, fontWeight: "600" },
+  message: { fontSize: 15, lineHeight: 20 },
+  button: { fontSize: 17, lineHeight: 22 },
+  frost: "thin",
+  shadow: "0px 10px 40px rgba(0,0,0,0.1)",
+} as const;
+
+export const actionSheetInk = {
+  light: { fill: "rgba(255,252,253,0.92)", solid: "#F9F9F9", rim: "#9E9E9E", title: "#000000", message: "#989898", button: "#DFDFDF", destructive: "#F22F32" },
+  dark: { fill: "rgba(72,72,72,0.92)", solid: "#484848", rim: "#2A2A2A", title: "#FFFFFF", message: "#C8C8C8", button: "#555555", destructive: "#FFB8B9" },
+} as const;
+
+export const materialDialogLook = {
+  maxWidth: 560,
+  radius: 28,
+  padding: 24,
+  messageGap: 16,
+  buttonsGap: 24,
+  buttonHeight: 40,
+  buttonSide: 12,
+  buttonsBetween: 8,
+  screenMargin: 24,
+  title: { fontSize: 24, lineHeight: 32 },
+  message: { fontSize: 14, lineHeight: 20, letterSpacing: 0.25 },
+  button: { fontSize: 14, lineHeight: 20, fontWeight: "500", letterSpacing: 0.1 },
+  enterScale: 0.92,
+  shadow: "0px 4px 8px 3px rgba(0,0,0,0.15), 0px 1px 3px 0px rgba(0,0,0,0.3)",
+} as const;
+
+export const materialDialogInk = {
+  light: { surface: "#EDE7EA", title: "#1F1A1D", message: "#4F4449", dismiss: "#4F4449", action: "#894A67", destructive: "#BA1A1A", ripple: "rgba(137,74,103,0.12)", scrim: "rgba(0,0,0,0.32)" },
+  dark: { surface: ANDROID_DARK_SURFACE, title: "#EBE0E4", message: "#D3C2C8", dismiss: "#D3C2C8", action: "#FFB0D0", destructive: "#FFB4AB", ripple: "rgba(255,176,208,0.12)", scrim: "rgba(0,0,0,0.32)" },
+} as const;
+
 export const trayShadow = { opacity: 0.14, radius: 24, offsetY: -4, elevation: 12 } as const;
 
 export const scanInk = {
@@ -233,10 +403,9 @@ export const archiveCardLayout = { radius: 16, tile: 28, maxWidth: 520, aboveBar
 export const onboardingArt = { appIcon: 60, linkCardWidth: 210, linkCardRadius: 18, stripHeight: 64, arrowLift: 26, shadowRadius: 12, sheetRadius: 38 } as const;
 
 export const floatingBarLayout = {
-  control: 48,
-  gap: 8,
-  edgeInset: 12,
-  bottomGap: 21.5,
+  control: FLOATING_BAR_PLACE.control,
+  gap: FLOATING_BAR_PLACE.gap,
+  bottomGap: FLOATING_BAR_PLACE.bottomGap,
   glyph: 19,
   menuGlyph: 17,
   plusSymbol: 23.6,
@@ -251,7 +420,7 @@ export const floatingBarLayout = {
 
 export const floatingPanelLayout = {
   inset: 8,
-  radius: 26,
+  radius: 32.75,
   aboveKeyboard: 8,
   departLift: 120,
   departMs: 200,
@@ -273,7 +442,6 @@ export const startLayout = {
   pageDotsAboveBar: 60,
   barCircle: 48,
   barPlus: { width: 77, height: 48 },
-  barSideInset: 12,
   barGap: 8,
   circleGlyph: 19.2,
   plusGlyph: 22.4,
@@ -291,7 +459,6 @@ export const startLayout = {
   badgeSymbolShare: 0.85,
   badgeSymbolWidth: 1.25,
   badgeEmojiShare: 0.8,
-  badgeInitialShare: 0.55,
   titleSpacing: 8,
   chevron: 12,
   pageDot: 7,
@@ -308,17 +475,15 @@ export const deckChromeLayout = {
   pillHeight: 38,
   pillPadding: 14,
   pillSpacing: 8,
-  pillGlyph: 16,
+  pillSpecs: 20,
   barCircle: 48,
-  barSideInset: 12,
   barGap: 8,
   searchLead: 13,
   searchTrail: 16,
   searchTrailFilled: 8,
   searchSpacing: 8,
   searchGlyph: 16.8,
-  incognitoGlyph: 30,
-  incognitoOn: 38,
+  incognitoEyes: 30,
   clearGlyph: 22.8,
   clearHit: 32,
   archiveCenter: 78.5,
@@ -340,15 +505,15 @@ export const deckChromeInk = { pill: "#FFFFFF" } as const;
 
 export const startInk = {
   veil: "rgba(255,255,255,0.34)",
-  light: { pageDot: "rgba(0,0,0,0.32)", badge: "#FFFFFF", badgeInk: "#000000" },
-  dark: { pageDot: "rgba(255,255,255,0.32)", badge: "#1C1C1E", badgeInk: "#FFFFFF" },
+  light: { pageDot: "rgba(0,0,0,0.32)", badgeInk: "#000000" },
+  dark: { pageDot: "rgba(255,255,255,0.32)", badgeInk: "#FFFFFF" },
 } as const;
 
-export const chromeLayout = { edge: 0.5, shadowRadius: 10, shadowY: 2 } as const;
+export const chromeLayout = { edge: 0.5, shadowRadius: 10, shadowY: 2, barSideInset: 24 } as const;
 
 export const chromeInk = {
   light: { surface: "#FFFFFF", edge: "rgba(0,0,0,0.12)", shadow: "rgba(0,0,0,0.12)", foreground: "rgba(14,15,16,0.9)", secondary: "rgba(0,0,0,0.5)", notSecure: lightRoles.destructive },
-  dark: { surface: "#000000", edge: "rgba(255,255,255,0.12)", shadow: "rgba(0,0,0,0.4)", foreground: "rgba(255,255,255,0.8)", secondary: "rgba(255,255,255,0.5)", notSecure: darkRoles.destructive },
+  dark: { surface: Platform.OS === "android" ? ANDROID_DARK_SURFACE : "#000000", edge: "rgba(255,255,255,0.12)", shadow: "rgba(0,0,0,0.4)", foreground: "rgba(255,255,255,0.8)", secondary: "rgba(255,255,255,0.5)", notSecure: darkRoles.destructive },
 } as const;
 
 export const syncSketch = {
@@ -463,6 +628,10 @@ export const tabsLayout = {
   cardRadius: 13,
   displayCornerRadius: 55,
   faviconSize: 16,
+  specsChip: 20,
+  specsIcon: 14,
+  specsCompact: 14,
+  specsFace: 44,
   headerSpacing: 6,
   headerGap: 8,
   headerHeight: 20,

@@ -8,7 +8,7 @@ import { editPageQuery, menuBack, menuForward, menuReload, menuStop, openPageMen
 import { useIncognito, useSelectedTab } from "../../state/tabs/hooks";
 import { isSyncableUrl, type BrowserTab } from "../../state/tabs/tabModels";
 import { shownTone } from "../../lib/pageTone";
-import { capsule, chromeInk, ChromeSurface, isDarkColor, PressScale, rolesFor, Symbol, useTheme, type SymbolName } from "../ui";
+import { capsule, chromeInk, ChromeSurface, IncognitoSpecs, isDarkColor, PressScale, rolesFor, Symbol, useTheme, type SymbolName } from "../ui";
 import { barAddress, spokenAddress, type BarAddress } from "../browsing/FloatingBar";
 import { NotSecureLock } from "../browsing/NotSecureLock";
 import { DUO } from "./duoLayout";
@@ -98,7 +98,7 @@ export function HostLabel({ address, dark }: { address: BarAddress | null; dark:
   const roles = rolesFor(dark);
   return (
     <View testID="duoHost" style={styles.host} pointerEvents="none">
-      {address?.isPrivate ? <Symbol name="eyeglasses" size={DUO.hostLock} color={roles.foregroundSecondary} /> : null}
+      {address?.isPrivate ? <IncognitoSpecs size={DUO.hostLock} color={roles.foregroundSecondary} /> : null}
       {address?.insecure ? (
         <NotSecureLock testID="duoHostNotSecure" size={DUO.hostLock} color={ink.notSecure} />
       ) : address?.isPrivate ? null : address?.pageUrl ? (

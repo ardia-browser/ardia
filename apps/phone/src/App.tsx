@@ -19,14 +19,14 @@ import { useLibrary } from "./state/library/store";
 import { SettingsView } from "./components/settings/SettingsView";
 import { SpacesView } from "./components/sync/SpacesView";
 import { ToastHost } from "./components/toasts/ToastHost";
-import { appDesign, tabsMotion, useDesign, useTheme, DEFAULT_PROFILE_COLOR, FrostSource, FullSheet, OverlayHost, PROFILE_PRESETS, onNativeMenuOpened, ProfileLookContext, Shade, SheetBackground, SURFACES_FROST } from "./components/ui";
+import { appDesign, tabsMotion, useDesign, useTheme, DEFAULT_PROFILE_COLOR, FrostSource, FullSheet, OverlayHost, PROFILE_PRESETS, onDrawnMenuOpened, onNativeMenuOpened, ProfileLookContext, Shade, SheetBackground, SURFACES_FROST } from "./components/ui";
 import { useLook } from "./state/sync/hooks";
 import { startSettingsSources } from "./state/settings/actions";
 import { startSync } from "./state/sync/actions";
 import { setSpacesDesign } from "./state/sync/store";
 import { setAppearanceDesign, useDarkScheme } from "./state/settings/appearance";
 import { useSettingsNav } from "./state/settings/hooks";
-import { offerSyncPages } from "./state/settings/nav";
+import { offerBrowseForMePage, offerPageSummaryPage, offerSyncPages } from "./state/settings/nav";
 import { useOnboarding } from "./state/onboarding/hooks";
 import { bootApp, useBoot } from "./state/app/boot";
 import { startLinks } from "./state/links/links";
@@ -54,11 +54,17 @@ import { countUsage, reportLaunch, startTelemetry } from "./state/telemetry/tele
 import { useIncognito, useSelectedTab } from "./state/tabs/hooks";
 import { setRootSize } from "./state/app/rootSize";
 import { syncOffered } from "./state/sync/offer";
+import { countDrawnMenu, countNativeMenu } from "./state/browse/menuCounts";
+import { browseForMeOffered } from "./state/browseForMe/offer";
+import { pageSummaryChoiceOffered } from "./state/pageSummary/store";
+import { listenForBrowseForMe } from "./state/browseForMe/events";
 
 export default function App() {
   useState(() =>
     bootApp(() => {
       offerSyncPages(syncOffered);
+      offerBrowseForMePage(browseForMeOffered);
+      offerPageSummaryPage(pageSummaryChoiceOffered);
       setSpacesDesign(appDesign);
       setAppearanceDesign(appDesign);
       startTelemetry();
@@ -67,6 +73,7 @@ export default function App() {
       startSettingsSources();
       if (syncOffered()) startSync();
       startLinks();
+      listenForBrowseForMe();
       runLaunchScenario();
     }),
   );
@@ -107,7 +114,8 @@ export default function App() {
 
 const SYSTEM_SHEETS = Platform.OS === "ios";
 
-onNativeMenuOpened(() => countUsage("native_menus_opened"));
+onNativeMenuOpened(countNativeMenu);
+onDrawnMenuOpened(countDrawnMenu);
 
 export function Surfaces() {
   const surface = useSurface();
@@ -117,7 +125,7 @@ export function Surfaces() {
   const leaving = useLeavingTab();
   const design = useDesign();
   const column = useColumn();
-  const pageOverDeck = PAGE_LAYERED && design === "redesigned" && !column;
+  const pageOverDeck = design === "redesigned" && !column;
   const pageUnderDeck = surface === "deck" && tab !== null && (tab.id === opening || tab.id === leaving);
   const settingsOpen = useSettingsNav((s) => s.open);
   const onboarding = useOnboarding((s) => s.showing);
@@ -150,12 +158,7 @@ export function Surfaces() {
           <Shade shaded={searching}>
             <FrostSource name={SURFACES_FROST} style={StyleSheet.absoluteFill} pointerEvents="box-none" collapsable={false}>
               {duo && surface !== "start" ? <DuoBrowsing /> : null}
-              {PAGE_LAYERED ? (pageOverDeck ? [deck, pageLayer] : [pageLayer, deck]) : (
-                <>
-                  {page}
-                  {deck}
-                </>
-              )}
+              {pageOverDeck ? [deck, pageLayer] : [pageLayer, deck]}
               {surface === "start" ? <StartScreen /> : null}
             </FrostSource>
           </Shade>
@@ -181,7 +184,6 @@ export function Surfaces() {
   );
 }
 
-const PAGE_LAYERED = Platform.OS === "ios";
 const PAGE_UNSEEN_AWAY = 100_000;
 
 function PageLayer({ away, unseen, children }: { away: boolean; unseen: boolean; children: ReactNode }) {

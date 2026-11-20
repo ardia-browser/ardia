@@ -8,7 +8,6 @@ GitHub Actions. Each has these assets:
 - `Ardia-<version>.dmg`: what people download (the app and an `/Applications` link, in a window with the
   site's poster behind them: `scripts/dmg`, where `render.sh` redraws the picture and `layout.sh` the layout).
 - `Ardia-<version>.zip`: the archive Sparkle installs updates from.
-- `ardia-cli-<version>-macos-arm64.tar.gz` and its `.sha256`: the `ardia` command (`docs/cli.md`).
 - `appcast.xml`: the Sparkle feed, both channels' items in one file. The latest stable release's appcast is the feed
   (a nightly rewrites that asset; "Channels" below). Builds after 0.2.13 poll
   `https://ardia.dev/appcast.xml` (`SUFeedURL`), which counts the check by version and day (and whether
@@ -84,7 +83,7 @@ every copy on Stable sees only stable items. A copy on Nightly allows `nightly` 
 
 ## Every platform
 
-One version string names a release everywhere, and the same two channel names, Stable and Nightly, go with it. On the
+Desktop releases share a version across Mac, Linux and Windows. Ardia uses the Stable and Nightly channels. On the
 phones a build that isn't a release says Dev.
 
 - **Mac.** The channels above. Debug builds (local and agent builds) carry their own icon, `AppIcon-Dev.icon` (the sun
@@ -92,25 +91,21 @@ phones a build that isn't a release says Dev.
   app's defaults, so a Debug build ignores the picked app icon variant and keeps its own in the Dock
   (`IconStyle.shown`); Settings still previews the variants. Release builds, which every release is, keep
   `AppIcon.icon`. A Debug build still shows the committed version in About and Settings, nightly or not.
-- **iPhone.** The Mac's version, with `-nightly.<n>` dropped because Apple takes only `<major>.<minor>.<patch>`
-  (`apple_version_of` in `scripts/lib/releases.sh`); the full version rides in the `ArdiaReleaseVersion` Info.plist key.
-  The same build moves from TestFlight to the App Store, so the channel is read at run time: from TestFlight the app
-  calls itself Nightly ("0.2.47 Nightly 2"), from the App Store it's Stable ("0.2.47"). The Release workflow builds it
-  in the same run when dispatched with `iphone=true`: a dry run builds and signs it, a real run sends it to TestFlight
-  and its public testers after the Mac release publishes. If that job fails after the Mac release is out, re-run the
-  failed jobs of the same run, or dispatch iOS Release with `mode=upload` and the version; never re-run the whole
-  release. Builds already in TestFlight under the iPhone app's old 1.0 don't block the shared version, since nothing
-  was released on the App Store; any App Store version drafted under 1.0 has to move to the shared version before it
-  is submitted. Sending a build to App Store review stays a step a person takes (`docs/phone.md` › TestFlight). On the
-  Expo branch the iPhone app is the Expo app, and an upload with public testers is refused until the owner moves it
-  to them, so a real run with `iphone=true` stops at that job.
+- **iPhone.** TestFlight uses version `1.0.1` until the owner asks to change it. App Store Connect supplies the next
+  build number. Upload only when the owner asks for TestFlight. When it is part of a desktop release,
+  `iphone=true` opts in to the same TestFlight version. The dry run signs the iPhone archive and the real run uploads
+  to Internal after the desktop release publishes. The Public Testers submission is a separate `public-link` run.
+  If the iPhone job fails after the desktop release publishes, rerun the failed job or dispatch iOS Release on the
+  same commit. For a direct install on the owner's iPhone, use a local Xcode development build or the `device` IPA
+  over USB or Xcode's paired wireless connection. See [iPhone release and direct installs](phone.md#testflight-the-workflow-its-certificate-and-its-testers).
 - **Android.** The Expo app's release version is its versionName, and its versionCode is major × 100,000,000 + minor ×
   1,000,000 + patch × 1,000 plus the nightly number, or 999 for a stable (0.2.47-nightly.2 is 2047002, 0.2.47 is
   2047999; `apps/phone/scripts/android-version.ts`). A build without one is Dev. It ships as an APK on GitHub Releases
   through `android-release.yml`, as a draft prerelease `android-v<version>` that only the owner publishes
   (`docs/phone.md` › Android release). No Play listing.
-- **CLI.** It follows the app: the app installs the CLI of its own version, with the digest pinned in its bundle
-  (`docs/cli.md`), so a Nightly Mac runs the nightly CLI.
+- **CLI.** It has its own version and releases in ardia-browser/plugins (`cli-v<version>`). Each Ardia release, nightly
+  or stable, bundles the version pinned in `apps/browser/official-plugins.json` and signs it with the app
+  (`docs/cli.md`); a new command reaches users when the pin moves and the next Ardia release ships.
 - **Windows.** Every release, nightly or stable, builds it in the Release workflow's `windows` job, attaches
   `Ardia-<version>-windows-<cpu>-setup.exe` for x64 and arm64 with the engine's source
   `Ardia-<version>-windows-source.tar.xz` (`scripts/windows/engine-source.sh`), and refreshes the one feed its updater reads, on the
@@ -171,7 +166,7 @@ stays up. That's GPL-3.0 §6(d) for the GPL parts (uBlock Origin today), and it'
 3. Commit both ("Release <version>" or "Nightly <version>"), push, and dispatch the Release workflow ("CI releases"
    below), which runs the rest. Or run it here: `scripts/release.sh <version>` (a `-nightly.<n>`
    version is a nightly). It stops right away if the notes file is missing or lacks its `date` and
-   `headline`, if the tree under `apps/browser`, `apps/cli`, `packages`, `engine` or `scripts/dmg` has uncommitted changes, or if the engine
+   `headline`, if the tree under `apps/browser`, `plugins`, `packages`, `engine` or `scripts/dmg` has uncommitted changes, or if the engine
    framework is older than the tree's ArdiaCore sources or the Chromium tree differs from `engine/ardiacore`
    (`apply.sh --check`), if the version doesn't fit the channel or the notes' `channel`, if it can't read the published
    appcast, if the build number isn't above every build in it, or (outside `--rc`) if `prebuilt-engines.tsv` lists no
@@ -230,7 +225,7 @@ stays up. That's GPL-3.0 §6(d) for the GPL parts (uBlock Origin today), and it'
 4. Tag and publish (the Release workflow does this itself): `git tag v<version> && git push origin main v<version>`,
    then `.claude/skills/release/scripts/publish.sh <version>` (`--dry-run` prints what it would do). It merges the
    appcast onto the feed as published right now (`appcast.py merge`), creates the release (a stable one as latest, a
-   nightly as a prerelease that's never latest) with the DMG, zip, appcast and CLI tarball,
+   nightly as a prerelease that's never latest) with the DMG, zip and appcast,
    and checks the feed lists the version on GitHub and on ardia.dev. A nightly also re-uploads the merged feed onto the
    latest stable release and `Ardia-Nightly.dmg` onto the `nightly` release. A new engine tree is published before the release
    by `scripts/publish-engine.sh` (`engine-<tree:12>`), never packed by release.sh. Last,
@@ -264,13 +259,14 @@ The Linux package ships on the same GitHub release. The Release workflow's `linu
 `scripts/linux/release.sh <version> --engine exact`, and `publish.sh` attaches the assets when it creates the release:
 
 - `Ardia-<version>-linux-x64.tar.xz` and its `.sha256`: the browser, with `lib/ardia/VERSION` and the bundled CLI.
+- `ardia-cli-<version>-linux-x64.tar.gz` and its `.sha256`: the pinned `ardia` command (its own version inside), named
+  for this release as the Linux package bundles it.
 - `Ardia-<version>-linux-x64.deb` and `Ardia-<version>-linux-x64.AppImage`, each with its `.sha256`: the same build
   as a Debian package (setuid sandbox helper, polkit policy, AppArmor profile, computed `Depends`) and as an AppImage.
   The `.deb` is installed and purged in Debian 13 and Ubuntu 24.04 containers first; one that fails is left out and
   the rest ships ([linux-ci.md](linux-ci.md) › Linux releases).
 - `ardia-bin-<version>.src.tar.gz` and its `.sha256`: the Arch PKGBUILD and `.SRCINFO` pinned to that tarball, for
   `makepkg -si` without the AUR.
-- `ardia-cli-<version>-linux-x64.tar.gz` and its `.sha256`: the `ardia` command for Linux.
 
 How users install each one: [linux-port.md](linux-port.md#installing-on-linux).
 
@@ -291,7 +287,7 @@ The first stable release after that creates `ardia-bin` on the AUR. To create it
 
 The script refuses what `release.sh` refuses: a missing notes file or one whose frontmatter doesn't read, a
 `MARKETING_VERSION` other than `<version>`, and uncommitted changes (here under `apps/browser`, `apps/linux`,
-`apps/cli`, `packages`, `engine` or `scripts/linux`). It uses the exact Linux engine for HEAD's engine key
+`plugins`, `packages`, `engine` or `scripts/linux`). It uses the exact Linux engine for HEAD's engine key
 (`engine/engine-key.sh`), published in ardia-browser/ardia. Without one the `linux` job fails and the macOS release
 ships alone; build the engine, then run `scripts/linux/release.sh <version>` on a Linux machine at the release commit
 and the `gh release upload` command it prints. A nightly and a stable go the same way.
@@ -308,14 +304,16 @@ the engine if `engine/` changed (below).
   out yet.
 - **checks**: `pnpm typecheck`, `pnpm test`, `pnpm shaders:check`.
 - **build**, on the `xcode-27` runner (Xcode 27.1, the same build as here), with no secrets: fetches the engine for
-  this exact `engine/` tree (`fetch-engine.sh`), installs (pnpm, Pods, uv), runs
-  `scripts/release.sh <version> --phase build` (the archive, signed ad hoc, and the CLI tarball)
-  and uploads them as one tar. Caches: pnpm, Pods with Hermes, uBO, the engine, the CLI's downloads and Xcode's
+  this exact `engine/` tree (`fetch-engine.sh`), installs (pnpm, Pods), runs
+  `scripts/release.sh <version> --phase build` (the archive, signed ad hoc, and the official plugins pinned in
+  `apps/browser/official-plugins.json`, fetched and SHA-256 checked by `scripts/release/official-plugins.py bundle`)
+  and uploads them as one tar. Caches: pnpm, Pods with Hermes, uBO, the engine and Xcode's
   compilation cache (per Xcode build and month).
 - **sign** installs nothing and restores no cache, so no dependency code runs next to the keys. It
   treats the build as untrusted: `.github/release/unpack-build.py` unpacks it into a new directory outside the checkout
-  only if every member is the archive, `provenance.txt` or the CLI tarball and its `.sha256`, with no absolute or `..`
-  path, hard link, device or path through a symlink, and every symlink resolving inside its own app or dSYM bundle;
+  only if every member is the archive, `provenance.txt` or a file or folder under `plugins/<name>/` (no symlinks there;
+  `plugins/cli/plugin.json` must be there), with no absolute or `..` path, hard link, device or path through a symlink,
+  and every symlink resolving inside its own app or dSYM bundle;
   the app's bundle id, executable and version must be `com.ardia.browser`, `Ardia` and the input version.
   `release.sh --phase sign` reads it from there (`RELEASE_BUILD_INPUT`) into a `dist` it creates fresh, and the export
   takes the expected bundle id as an argument instead of reading it from the build. It takes Sparkle's tools from Sparkle's own 2.9.6 release (SHA-256 pinned; `SPARKLE_BIN`), sets up
@@ -332,7 +330,7 @@ the engine if `engine/` changed (below).
   run if the checkout changed, and only then it runs the launch check (`--phase check`, the final app opened hidden, uBO
   must be ready, the signature must survive), checks the zip's EdDSA signature against the app's `SUPublicEDKey`
   (`.github/release/check-sparkle.sh <dist> <version>`, so a `SPARKLE_ED_PRIVATE_KEY` that doesn't match the app
-  fails here instead of on every update) and uploads the DMG, zip, appcast, notes and CLI tarball. A failed launch check
+  fails here instead of on every update) and uploads the DMG, zip, appcast and notes. A failed launch check
   fails the run, so nothing publishes.
   Every `actions/*` step is pinned by commit SHA.
 - **publish** tags the commit and runs `publish.sh`. Before creating anything, `publish.sh` refuses a build that isn't

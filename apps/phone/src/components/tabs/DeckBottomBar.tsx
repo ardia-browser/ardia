@@ -7,9 +7,9 @@ import { menuOpenedHaptic } from "../../state/browse/tabMenus";
 import { useCanReopen, useIncognito } from "../../state/tabs/hooks";
 import { countUsage } from "../../state/telemetry/telemetry";
 import { noteDeckBarTop, watchDeckBar } from "../../state/toasts/store";
-import { capsule, ChromeSurface, deckChromeLayout, deckChromeMotion, font, ink, iPhoneOr, PressScale, rolesFor, startLayout, Symbol, tabsCurve, tabsInk, tabsLayout, useTheme, type MenuItem, SystemGlyph } from "../ui";
+import { capsule, chromeLayout, ChromeSurface, deckChromeLayout, deckChromeMotion, font, ink, iPhoneOr, PressScale, rolesFor, startLayout, tabsCurve, tabsInk, tabsLayout, useTheme, type MenuItem, Symbol, SystemGlyph } from "../ui";
 import { MenuTrigger } from "../ui/MenuTrigger";
-import { useKeyboardHeight } from "../search/useKeyboardHeight";
+import { useKeyboardTopFromBottom } from "../search/useKeyboardHeight";
 import { FadingGlyphs, GlassPlusButton, type ChromeFade } from "./ChromeButtons";
 
 type Props = {
@@ -30,11 +30,11 @@ export function plusMenu(incognito: boolean, canReopen: boolean): MenuItem[] {
   ];
 }
 
-export function PlusMenuButton({ width, label, testID, dark, incognito = false, place, menusShown = true, onMenu, ...fade }: { width: number; label: string; testID: string; dark: boolean; incognito?: boolean; place: ViewStyle; menusShown?: boolean; onMenu?: (open: boolean) => void } & ChromeFade) {
+export function PlusMenuButton({ width, label, testID, dark, incognito = false, place, menusShown = true, frost, onMenu, ...fade }: { width: number; label: string; testID: string; dark: boolean; incognito?: boolean; place: ViewStyle; menusShown?: boolean; frost?: string | null; onMenu?: (open: boolean) => void } & ChromeFade) {
   const tabIncognito = useIncognito();
   const canReopen = useCanReopen();
   return (
-    <MenuTrigger items={plusMenu(tabIncognito, canReopen)} trigger="longPress" haptic={menuOpenedHaptic} disabled={!menusShown} onOpen={() => onMenu?.(true)} onClose={() => onMenu?.(false)} place={place} style={{ width, height: startLayout.barPlus.height }}>
+    <MenuTrigger items={plusMenu(tabIncognito, canReopen)} trigger="longPress" haptic={menuOpenedHaptic} disabled={!menusShown} frost={frost} onOpen={() => onMenu?.(true)} onClose={() => onMenu?.(false)} place={place} style={{ width, height: startLayout.barPlus.height }}>
       {({ onLongPress }) => <GlassPlusButton width={width} label={label} testID={testID} dark={dark} incognito={incognito} {...fade} onPress={newTab} onLongPress={onLongPress ?? noop} />}
     </MenuTrigger>
   );
@@ -49,7 +49,7 @@ export function IncognitoSwitch({ incognito, dark, glassShown, glassShownMs, gly
       <ChromeSurface testID="deckBarIncognito" shape="circle" cornerRadius={capsule(deckChromeLayout.barCircle)} incognito={incognito} dark={dark || incognito} shown={glassShown} shownMs={glassShownMs} style={[styles.centered, size]}>
         <FadingGlyphs testID="deckBarIncognitoGlyph" pointerEvents="none" fade={glyphFade} style={[styles.centered, size]}>
           {incognito ? <View testID="deckBarIncognitoOn" style={[styles.switchOn, { backgroundColor: dark ? ink.white : tabsInk.incognitoCard }]} /> : null}
-          <Symbol name="eyes" size={deckChromeLayout.incognitoGlyph} color={incognito ? (dark ? tabsInk.incognitoCard : ink.white) : rolesFor(dark).label} />
+          <Symbol name={incognito ? "eyesClosed" : "eyes"} size={deckChromeLayout.incognitoEyes} color={incognito ? (dark ? tabsInk.incognitoCard : ink.white) : rolesFor(dark).label} />
         </FadingGlyphs>
       </ChromeSurface>
     </PressScale>
@@ -132,7 +132,7 @@ export function DeckBottomBar({ shown, barCenterY, deckHeight, safeSide, incogni
   const search = useSearchTabs(shown, incognito, onQuery);
   const { focused } = search;
   const row = useRef<ViewInstance>(null);
-  const keyboard = useKeyboardHeight(shown);
+  const keyboard = useKeyboardTopFromBottom(shown);
   const lift = focused && keyboard > 0 ? Math.max(0, barCenterY - deckBarAboveKeyboard(deckHeight, keyboard)) : 0;
   const rise = useSharedValue(0);
   useEffect(() => {
@@ -149,10 +149,10 @@ export function DeckBottomBar({ shown, barCenterY, deckHeight, safeSide, incogni
   }, []);
   return (
     <Animated.View pointerEvents="box-none" style={[styles.place, { top: barCenterY - deckChromeLayout.barCircle / 2 }, riseStyle]}>
-      <View ref={row} testID="deckBottomBar" onLayout={measure} pointerEvents="box-none" style={[styles.bar, { paddingHorizontal: safeSide + deckChromeLayout.barSideInset }]}>
+      <View ref={row} testID="deckBottomBar" onLayout={measure} pointerEvents="box-none" style={[styles.bar, { paddingHorizontal: safeSide + chromeLayout.barSideInset }]}>
         <IncognitoSwitch incognito={incognito} dark={dark} {...fade} />
         <SearchTabsField search={search} style={styles.searchHit} {...fade} />
-        <PlusMenuButton width={deckChromeLayout.barCircle} label={incognito ? "New Incognito Tab" : "New Tab"} testID="deckBarPlus" dark={dark} place={{ bottom: deckHeight - barCenterY + deckChromeLayout.barCircle / 2 + deckChromeLayout.menuGap, right: deckChromeLayout.barSideInset, width: tabsLayout.menuWidth }} menusShown={menusShown} onMenu={onMenu} {...fade} />
+        <PlusMenuButton width={deckChromeLayout.barCircle} label={incognito ? "New Incognito Tab" : "New Tab"} testID="deckBarPlus" dark={dark} place={{ bottom: deckHeight - barCenterY + deckChromeLayout.barCircle / 2 + deckChromeLayout.menuGap, right: chromeLayout.barSideInset, width: tabsLayout.menuWidth }} menusShown={menusShown} onMenu={onMenu} {...fade} />
       </View>
     </Animated.View>
   );
@@ -161,7 +161,7 @@ export function DeckBottomBar({ shown, barCenterY, deckHeight, safeSide, incogni
 const styles = StyleSheet.create({
   place: { position: "absolute", left: 0, right: 0 },
   centered: { alignItems: "center", justifyContent: "center" },
-  switchOn: { position: "absolute", width: deckChromeLayout.incognitoOn, height: deckChromeLayout.incognitoOn, borderRadius: capsule(deckChromeLayout.incognitoOn) },
+  switchOn: { position: "absolute", width: deckChromeLayout.barCircle, height: deckChromeLayout.barCircle, borderRadius: capsule(deckChromeLayout.barCircle) },
   bar: { height: deckChromeLayout.barCircle, flexDirection: "row", alignItems: "center", gap: deckChromeLayout.barGap },
   searchHit: { flex: 1, height: deckChromeLayout.barCircle },
   search: { flex: 1, paddingLeft: deckChromeLayout.searchLead },

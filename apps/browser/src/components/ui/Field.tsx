@@ -216,7 +216,7 @@ export function PopUp<T extends string>({
         {({ pressed }) =>
           native ? (
             <View style={[PLAIN_POPUP, { backgroundColor: pressed ? theme.controlPressed : hovered ? theme.controlHover : undefined }]}>
-              <Text numberOfLines={1} style={{ ...typeScale.body, color: theme.textSecondary, flexShrink: 1 }}>
+              <Text numberOfLines={1} style={{ ...typeScale.body, color: theme.textPrimary, flexShrink: 1 }}>
                 {current?.title ?? ""}
               </Text>
               <Symbol name={POP_UP_CHROME.indicator === "chevronDown" ? "chevron.down" : "chevron.up.chevron.down"} size={9} weight="semibold" color={theme.textSecondary} style={PLAIN_POPUP_GLYPH} />

@@ -190,6 +190,14 @@ object PhonePages {
         if (views[pageId]?.get() === view) views.remove(pageId)
     }
 
+    fun summarize(pageId: String): Boolean = views[pageId]?.get()?.takeIf { it.page?.id == pageId }?.summarize(PageSummarySession.Trigger.Menu) == true
+
+    fun dismissSummaries() {
+        for (view in views.values.mapNotNull { it.get() }) view.dismissSummary(animated = true)
+    }
+
+    fun report(pageId: String, name: String, vararg fields: Pair<String, Any?>) = send(pageId, name, *fields)
+
     fun discardBackgroundPages(keeping: String?) {
         val engine = shared ?: return
         keeping?.let(::activate)

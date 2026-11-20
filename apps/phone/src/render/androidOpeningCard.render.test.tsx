@@ -300,17 +300,14 @@ onAndroid("without ArdiaOpeningCard, Android opens a card as before: no opening 
   unmount(root);
 });
 
-test("while a deck card grows into the page, Android draws the page bar's own buttons at the screen's bottom, so the bar never goes blank; iPhone, which opens through the opening card, doesn't", () => {
+test("while a deck card grows into the page, neither phone draws a second page bar: the deck's own bar stays until the page's bar takes over", () => {
   jest.spyOn(launchFlags, "launchArguments").mockImplementation(() => NO_LAUNCH_ARGUMENTS);
   const root = renderSurface(<Surfaces />);
   const ghost = () => root.root.findAll((node) => node.props.testID === "pageBarGhost" && typeof node.type !== "string")[0];
   expect(ghost()).toBeUndefined();
   act(() => sendDeckCommand({ kind: "openFocused" }));
-  advance(16);
-  if (Platform.OS === "android") {
-    expect(ghost()).toBeDefined();
-    expect(ghost()!.findAll((node) => node.props.accessibilityLabel === "Tabs").length).toBeGreaterThan(0);
-  } else {
+  for (let frame = 0; frame < 12; frame++) {
+    advance(16);
     expect(ghost()).toBeUndefined();
   }
   unmount(root);

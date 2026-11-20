@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "plugins": [
+    {
+      "name": "cli",
+      "title": "Command Line",
+      "blurb": "Drive Ardia from your terminal or an agent.",
+      "icon": "terminal.fill",
+      "version": "0.3.0",
+      "release": "https://github.com/ardia-browser/plugins/releases/download/cli-v0.3.0",
+      "artifacts": {
+        "macos-arm64": {
+          "file": "cli-plugin-0.3.0-macos-arm64.tar.gz",
+          "sha256": "076c2139d35b59acc826ea4db8dbce4526f6406bc8e3b2ef5de440d0d28be022"
+        },
+        "linux-x64": {
+          "file": "ardia-cli-0.3.0-linux-x64.tar.gz",
+          "sha256": "a02dd77418a1c1ccdab4a2b22be45d336d4095f951c264d6711bd889d9162afb"
+        },
+        "installer": {
+          "file": "install.sh",
+          "sha256": "7e865385ba438f1623a14e7278b7d84e30b837855e0370e3c0d81727e60cb54d"
+        }
+      }
+    }
+  ],
+  "comingSoon": [
+    {
+      "name": "ai",
+      "title": "AI",
+      "blurb": "Chat that can use your tabs, on your Claude plan.",
+      "icon": "sparkles",
+      "experiment": "officialPluginsAi"
+    }
+  ]
+}

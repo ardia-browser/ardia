@@ -2,6 +2,8 @@ import { appUrlOrigin, breadcrumb, displayHost, hostOf, urlForDisplay } from "@a
 
 export const withoutFragment = (url: string) => url.replace(/#.*$/, "");
 
+export const withoutUserInfo = (url: string) => url.replace(/^([a-z][a-z0-9+.-]*:\/\/)[^@/?#]*@/i, "$1");
+
 export const samePage = (a: string, b: string) => withoutFragment(a).replace(/\/$/, "") === withoutFragment(b).replace(/\/$/, "");
 
 export const isWebPageUrl = (url: string) => /^(https?|file):/i.test(url);

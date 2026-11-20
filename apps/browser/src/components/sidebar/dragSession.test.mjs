@@ -96,7 +96,6 @@ test("a cancelled row slides home under a fresh token; a new drag before it land
   c.end(true);
   await D.settle();
   r.snap("committed, landing");
-  animations.step(c.items.get(entryKey("tab", m.id.a)).gap, 10);
   animations.held = false;
   animations.finish();
   await D.settle();
@@ -110,7 +109,7 @@ test("landing: which drops slide the ghost to its spot and which drop it at once
   const out = [];
   const cases = [
     ["row to the list", (m) => entryKey("tab", m.id.a), (m) => ({ x: 60, y: frameOf(m, entryKey("tab", m.id.c)).y + 30 })],
-    ["row onto a row", (m) => entryKey("tab", m.id.a), (m) => D.centre(frameOf(m, entryKey("tab", m.id.c)))],
+    ["row on a row's right half", (m) => entryKey("tab", m.id.a), (m) => D.centre(frameOf(m, entryKey("tab", m.id.c)))],
     ["row into the pinned rows", (m) => entryKey("tab", m.id.c), (m) => ({ x: 60, y: frameOf(m, entryKey("tab", m.id.p1)).y + 3 })],
     ["row into the tiles", (m) => entryKey("tab", m.id.c), (m) => D.centre(frameOf(m, entryKey("tab", m.id.t2)), 0)],
     ["tile along the grid", (m) => entryKey("tab", m.id.t1), (m) => ({ x: frameOf(m, entryKey("tab", m.id.t2)).x + 70, y: 80 })],

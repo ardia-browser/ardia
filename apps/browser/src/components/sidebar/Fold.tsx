@@ -4,6 +4,7 @@ import { curve } from "../ui/motion";
 import { layout } from "../ui/theme";
 import { FoldedAway } from "./hoverController";
 import { SIDEBAR_MOTION } from "./tokens";
+import { FoldEntryContext, useCollapsingSlot } from "./DragProvider";
 
 const FOLD_MS = SIDEBAR_MOTION.fold;
 const FOLD_EASING = curve.enter;
@@ -105,7 +106,7 @@ export function Fold({
           if (!stays && !mountAll) return null;
           return (
             <FoldedAway.Provider key={key} value={parentAway || ((collapsed || moving) && !stays)}>
-              <Animated.View style={folding && !stays ? (moving ? foldingStyle(heightOf(key)) : closed) : null} pointerEvents={collapsed && !stays ? "none" : "auto"}>
+              <FoldSlot entryKey={key} gap={gap} style={folding && !stays ? (moving ? foldingStyle(heightOf(key)) : closed) : null} pointerEvents={collapsed && !stays ? "none" : "auto"}>
                 {measuring ? (
                   <View
                     onLayout={(e) => {
@@ -119,12 +120,21 @@ export function Fold({
                 ) : (
                   node
                 )}
-              </Animated.View>
+              </FoldSlot>
             </FoldedAway.Provider>
           );
         })}
         {footer}
       </View>
+    </Animated.View>
+  );
+}
+
+function FoldSlot({ entryKey, gap, style, pointerEvents, children }: { entryKey: string; gap: number; style: object | null; pointerEvents: "none" | "auto"; children: ReactNode }) {
+  const collapsing = useCollapsingSlot(entryKey, gap);
+  return (
+    <Animated.View style={collapsing ? [style, collapsing] : style} pointerEvents={pointerEvents}>
+      <FoldEntryContext.Provider value>{children}</FoldEntryContext.Provider>
     </Animated.View>
   );
 }

@@ -112,6 +112,40 @@
                 android:value="false" />
         </service>
 
+        <service
+            android:name=".system.VoiceSearchTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_shortcut_voice"
+            android:label="@string/tile_voice_search"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="false" />
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="false" />
+        </service>
+
+        <service
+            android:name=".system.IncognitoTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_shortcut_incognito"
+            android:label="@string/tile_incognito"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="false" />
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="false" />
+        </service>
+
         <receiver
             android:name=".system.SearchWidgetReceiver"
             android:exported="true"

@@ -7,7 +7,7 @@ import { StartScreen } from "../components/search/StartScreen";
 import { TabDeck } from "../components/tabs/TabDeck";
 import { deckHeaderBottom } from "../components/tabs/DeckHeader";
 import { DesignProvider, Symbol } from "../components/ui";
-import { deckGeometry } from "../lib/deckGeometry";
+import { deckGeometry, redesignedBarCenterFromBottom } from "../lib/deckGeometry";
 import { setRootSize } from "../state/app/rootSize";
 import { columnCenterX, columnContentWidth, SCREEN_COLUMN, useScreenLayout, type ScreenColumn } from "../state/app/screenLayout";
 import * as browse from "../state/browse/store";
@@ -178,7 +178,7 @@ test("the start page in a trailing column: spaces 382 wide on the left, the dots
   const root = redesigned(<StartScreen />);
   expect(flat(host(root, "startContent"))).toMatchObject({ left: 0, right: 84, width: 382 });
   const dots = flat(host(root, "startPageDots"));
-  expect((dots.top as number) + (dots.height as number) / 2).toBe(678 - 20 - 11);
+  expect((dots.top as number) + (dots.height as number) / 2).toBe(678 - redesignedBarCenterFromBottom(20, Platform.OS));
   const stack = flat(host(root, "startColumn"));
   expect(stack).toMatchObject({ top: 166, width: 48, gap: 7 });
   expect((stack.left as number) + 24).toBe(418);

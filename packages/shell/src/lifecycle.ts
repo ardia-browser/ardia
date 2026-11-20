@@ -21,10 +21,11 @@ export type AppEvent =
   | { type: "appLinkOpened"; windowId: string | null }
   | { type: "littleArdiaReturnedToApp" }
   | { type: "littleArdiaReturnDropped"; count: number }
-  | { type: "littleArdiaLinkKeptBehind"; when: "activation" | "arrival" | "open" | "released" }
+  | { type: "littleArdiaLinkKeptBehind"; when: "activation" | "arrival" | "open" | "released" | "stageManager" }
   | { type: "windowTitleRead"; epoch: string }
   | { type: "keyHoldReplay"; tag: number; count: number }
   | { type: "littleArdiaGlobalShortcut" }
+  | { type: "littleArdiaGlobalShortcutBehind" }
   | { type: "windowDragLoop"; epoch: string }
   | {
       type: "pasteRefused";

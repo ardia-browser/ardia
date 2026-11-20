@@ -97,7 +97,8 @@ createServer(async (req, res) => {
     }
     if (query.includes("LiveFolderGone")) return send(res, 200, { data: { nodes: variables.ids.map((id) => ({ id, state: state[id] ?? "OPEN" })) } });
     if (!query.includes("search(")) return send(res, 200, { data: { viewer: github.data.viewer } });
-    return send(res, 200, github);
+    const key = variables.q.includes("user-review-requested") ? "direct" : variables.q.includes("review-requested") ? "review" : "authored";
+    return send(res, 200, { data: { search: { nodes: github.data[key].nodes } } });
   }
 
   if (p.startsWith("/notion/")) {

@@ -341,6 +341,16 @@ void DocumentEntered(ArdiaWebView *view, ArdiaConsentStamp *stamp) {
   else if ([action isEqual:@"framing"]) return DevFraming(controller);
   else if ([action isEqual:@"throw"]) return DevJSON([controller throwInfo]);
   else if ([action isEqual:@"skip"]) return DevJSON([controller skipInfo]);
+  else if ([action isEqual:@"resizeCursor"]) return DevJSON([controller.resizeCursor probe]);
+  else if ([action hasPrefix:@"resizeCursor:"]) controller.resizeCursor.enabled = [[action substringFromIndex:13] isEqual:@"on"];
+  else if ([action isEqual:@"interactive"]) {
+    if (!ArdiaLaunchConfig.shared.testInstance) return @"test instances only";
+    NSWindow *window = controller.window;
+    auto setAlpha = (void (*)(id, SEL, CGFloat))class_getMethodImplementation(window.class, @selector(setAlphaValue:));
+    setAlpha(window, @selector(setAlphaValue:), 1);
+    window.ignoresMouseEvents = NO;
+    return DevShowAlpha(window, 1);
+  }
   else if ([action hasPrefix:@"skip:"]) {
     const NSPoint centre = NSMakePoint(NSWidth(controller.window.frame) / 2, NSHeight(controller.window.frame) / 2);
     return [controller skipBy:[action substringFromIndex:5].doubleValue at:centre clickCount:0] ? @"started" : @"no page";

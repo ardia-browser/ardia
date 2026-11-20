@@ -160,6 +160,7 @@
     "apps/browser/src/state/sidebar/hover.ts": 1,
     "apps/browser/src/state/site/permissions.ts": 1,
     "apps/browser/src/state/sync/openTabs.ts": 1,
+    "apps/browser/src/state/tabs/chromeTabs.ts": 1,
     "apps/browser/src/state/tabs/pendingAddress.ts": 1,
     "apps/browser/src/state/tabs/tabLifecycle.ts": 1,
     "apps/browser/src/state/telemetry/dockCounts.ts": 1,

@@ -728,7 +728,7 @@ void OpenBlockedPopup(content::WebContents* contents,
                                           CONTENT_SETTING_ALLOW);
     }
     popups->ShowBlockedPopup(id_number,
-                             WindowOpenDisposition::NEW_FOREGROUND_TAB);
+                             WindowOpenDisposition::kNewForegroundTab);
   }
   std::move(reply).Run(Ok());
 }

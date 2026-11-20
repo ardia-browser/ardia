@@ -114,17 +114,18 @@ onAndroid("the hand-built redesigned Settings, which Android keeps until its tur
   unmount(root);
 });
 
-onAndroid("on the hand-built Appearance Android keeps, the page has main's choices: Color, Interface Style (Match My Mac, Glass, Classic) and Light or Dark (Match My Mac, System, Light, Dark), with main's footers", () => {
+onAndroid("on the hand-built Appearance Android keeps, the page has main's choices: Color, Interface Style (Match My Mac, Glass, Classic), Light or Dark (Match My Mac, System, Light, Dark) and Tabs (Stack, Grid), with main's footers", () => {
   openSettings({ page: "appearance" });
   const root = settings("redesigned");
   const text = textOf(root);
   if (Platform.OS === "android") expect(text).toContain("Appearance");
   for (const line of ["Color", "Interface Style", "Light or Dark", "Glass", "Classic", "System", "Light", "Dark"]) expect(text).toContain(line);
-  expect(text).toContain("Match My Mac follows your Mac. Reduce Transparency in iOS Settings always uses Classic.");
+  expect(text).toContain("Match My Mac follows your Mac.");
+  expect(text).not.toContain("Reduce Transparency");
   expect(text).toContain("Match My Mac follows your Mac. System follows this device.");
   const choices = root.root.findAll((node) => node.props.accessibilityRole === "button" && node.props.accessibilityState && typeof node.props.onPress === "function").map((node) => node.props.accessibilityLabel);
-  expect(choices).toEqual(["Match My Mac", "Glass", "Classic", "Match My Mac", "System", "Light", "Dark"]);
-  expect(text).not.toContain("How your open tabs are laid out.");
+  expect(choices).toEqual(["Match My Mac", "Glass", "Classic", "Match My Mac", "System", "Light", "Dark", "Stack", "Grid"]);
+  expect(text).toContain("How your open tabs are laid out.");
   expect(root.root.findAll((node) => node.props.testID === "swatchRing" && typeof node.type === "string").length).toBe(9);
   expect(root.root.findAll((node) => node.props.accessibilityRole === "switch" && node.props.accessibilityLabel === "Match My Mac").length).toBe(0);
   unmount(root);

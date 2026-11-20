@@ -12,7 +12,7 @@ on:
         type: boolean
         default: true
       iphone:
-        description: Also build the iPhone app at this version; a real run sends it to TestFlight after the Mac release publishes
+        description: Also build the pinned iPhone TestFlight version. Enable only when the owner asks for TestFlight. A real run uploads to Internal after the Mac release publishes.
         type: boolean
         default: false
 
@@ -60,7 +60,7 @@ jobs:
             echo "### Ardia $VERSION ($channel)"
             echo "- commit \`$GITHUB_SHA\`, engine tree \`${tree:0:12}\`"
             if [ "$DRY_RUN" = true ]; then echo "- dry run: a release candidate, nothing published"; else echo "- publishes"; fi
-            if [ "$IPHONE" = true ]; then echo "- iPhone: $(apple_version_of "$VERSION"), $([ "$DRY_RUN" = true ] && echo "built and signed, not uploaded" || echo "sent to TestFlight after the Mac release")"; fi
+            if [ "$IPHONE" = true ]; then echo "- iPhone: TestFlight's pinned version, $([ "$DRY_RUN" = true ] && echo "built and signed, not uploaded" || echo "sent to TestFlight's Internal group after the Mac release")"; fi
           } >> "$GITHUB_STEP_SUMMARY"
 
   checks:
@@ -121,8 +121,6 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: uv
-        run: curl -LsSf https://astral.sh/uv/0.12.15/install.sh | sh
       - id: cas-key
         run: echo "prefix=xcode-cas-release-$(xcodebuild -version | awk '/Build version/ { print $3 }')-$(date -u +%Y-%m)-" >> "$GITHUB_OUTPUT"
       - id: cas
@@ -146,10 +144,6 @@ jobs:
         with:
           path: packages/ardiacore/vendor/ubol-webkit
           key: ubol-webkit-${{ hashFiles('packages/ardiacore/scripts/ubol.sh', 'packages/ardiacore/scripts/ubol-webkit.py') }}
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: ~/Library/Caches/ardia-cli-build
-          key: ardia-cli-${{ hashFiles('apps/cli/scripts/build.sh', 'apps/cli/requirements.lock') }}
       - name: Pods
         working-directory: apps/browser/macos
         run: pod install
@@ -163,11 +157,11 @@ jobs:
             echo "::notice::pod install only quoted MARKETING_VERSION: kept, not counted as changes"
             git update-index --assume-unchanged "$pbx"
           fi
-          dirty=$(git status --porcelain -- apps/browser apps/cli packages engine scripts/dmg | grep -v ' apps/browser/build' || true)
+          dirty=$(git status --porcelain -- apps/browser packages engine scripts/dmg | grep -v ' apps/browser/build' || true)
           [ -z "$dirty" ] || {
             echo "::error::installing changed tracked files, so release.sh would refuse the tree:"
             echo "$dirty"
-            git diff -- apps/browser apps/cli packages engine scripts/dmg | head -150
+            git diff -- apps/browser packages engine scripts/dmg | head -150
             exit 1
           }
       - name: Build
@@ -185,8 +179,7 @@ jobs:
         env:
           DIST: ${{ steps.paths.outputs.dist }}
         run: |
-          COPYFILE_DISABLE=1 tar --no-mac-metadata -cf "$RUNNER_TEMP/build.tar" -C "$DIST" Ardia.xcarchive provenance.txt \
-            "ardia-cli-$VERSION-macos-arm64.tar.gz" "ardia-cli-$VERSION-macos-arm64.tar.gz.sha256"
+          COPYFILE_DISABLE=1 tar --no-mac-metadata -cf "$RUNNER_TEMP/build.tar" -C "$DIST" Ardia.xcarchive provenance.txt plugins
       - if: always() && steps.cas.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -296,8 +289,6 @@ jobs:
             ${{ steps.paths.outputs.dist }}/appcast.xml
             ${{ steps.paths.outputs.dist }}/release-notes.md
             ${{ steps.paths.outputs.dist }}/provenance.txt
-            ${{ steps.paths.outputs.dist }}/ardia-cli-${{ inputs.version }}-macos-arm64.tar.gz
-            ${{ steps.paths.outputs.dist }}/ardia-cli-${{ inputs.version }}-macos-arm64.tar.gz.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
@@ -334,14 +325,8 @@ jobs:
           restore-keys: engine-linux-x64-v3-
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          path: ~/.cache/ardia-cli-build
-          key: ardia-cli-build-linux-x64-${{ hashFiles('apps/cli/scripts/build.sh', 'apps/cli/requirements.lock') }}
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
           path: packages/ardiacore/vendor/ubo
           key: ubo-linux-${{ hashFiles('packages/ardiacore/scripts/ubo.sh') }}
-      - name: uv
-        run: curl -LsSf https://astral.sh/uv/0.12.15/install.sh | sh
       - name: Build, package, smoke
         run: |
           if ! scripts/linux/release.sh "$VERSION" --engine exact --out "$RUNNER_TEMP/linux"; then
@@ -544,6 +529,4 @@ jobs:
     uses: ./.github/workflows/ios-release.yml
     with:
       mode: ${{ inputs.dry_run && 'dry-run' || 'upload' }}
-      version: ${{ inputs.version }}
-      public_testers: true
     secrets: inherit

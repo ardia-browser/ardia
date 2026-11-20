@@ -7,7 +7,7 @@ import { showDeck } from "../../state/browse/store";
 import { useSearchOpen } from "../../state/search/hooks";
 import { openSettings } from "../../state/settings/hooks";
 import { useIncognito } from "../../state/tabs/hooks";
-import { LookBackdrop, LookBackdropBase, space, startLayout, startMotion, tabsCurve, tabsLayout, useReduceMotion, useTheme } from "../ui";
+import { chromeLayout, LookBackdrop, LookBackdropBase, space, startLayout, startMotion, tabsCurve, tabsLayout, useReduceMotion, useTheme } from "../ui";
 import { GlassCircleButton } from "../tabs/ChromeButtons";
 import { PlusMenuButton } from "../tabs/DeckBottomBar";
 import { StartSpaces, startBarCenterY, type StartGeometry } from "./StartSpaces";
@@ -50,7 +50,7 @@ export function StartPage() {
           <StartColumn column={column} width={width} dark={dark} incognito={incognito} menusShown={!trayUp} />
         </Animated.View>
       ) : (
-        <Animated.View testID="startBar" {...hidden} style={[styles.bar, { top: barTop, paddingHorizontal: geometry.safeSide + startLayout.barSideInset }, barStyle]}>
+        <Animated.View testID="startBar" {...hidden} style={[styles.bar, { top: barTop, paddingHorizontal: geometry.safeSide + chromeLayout.barSideInset }, barStyle]}>
           <GlassCircleButton icon="squareOnSquare" label="Tabs" testID="startBarTabs" dark={dark} incognito={incognito} onPress={showDeck} />
           <PlusMenuButton
             width={startLayout.barPlus.width}

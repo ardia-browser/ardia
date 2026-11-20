@@ -36,7 +36,7 @@ test("a paint check is stamped with the epoch when it is scheduled, and its reco
 
 const IOS = new URL("../ios/", import.meta.url);
 const sources = () => readdirSync(IOS).filter((name) => /\.(mm|swift)$/.test(name)).map((name) => [name, readFileSync(new URL(name, IOS), "utf8")]);
-const STAMPED = ["engine.devToolsKeyKept", "engine.hoverLost", "engine.pressLoopLong", "engine.windowUnpainted", "engine.cursorRestored", "engine.popupProtectedMedia", "pictureInPictureDragged", "pictureInPictureSkip", "autoPictureInPictureKept"];
+const STAMPED = ["engine.devToolsKeyKept", "engine.hoverLost", "engine.pressLoopLong", "engine.windowUnpainted", "engine.cursorRestored", "engine.popupProtectedMedia", "pictureInPictureDragged", "pictureInPictureResized", "pictureInPictureSkip", "autoPictureInPictureKept"];
 
 test("ArdiaConsentStamp takes the epoch once, when an episode begins, and puts it on the payload sent later", () => {
   const header = read("../ios/ArdiaEvents.h");

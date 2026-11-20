@@ -29,3 +29,9 @@ test("What’s Sent says the day’s counts are for the last day Ardia was used,
   assert.match(usage.text, /last day you used Ardia/);
   assert.doesNotMatch(usage.text, /day before/);
 });
+
+test("What’s Sent says in its own words that menu and confirmation opens are counted, and never while browsing privately", () => {
+  const usage = PHONE_WHATS_SENT.flatMap((section) => section.items).find((item) => item.fields.includes("drawn_menus_opened"))!;
+  assert.match(usage.text, /opened a menu or a confirmation/);
+  assert.match(usage.text, /never while browsing privately/);
+});

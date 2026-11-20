@@ -33,7 +33,7 @@ ARDIA_BACKGROUND=1, a throwaway profile and HOME, the sandbox on) without
                     for an AppImage its type 2 header, AppRun and no setuid helper
   app-version       systemInfo.appVersion is lib/ardia/VERSION (skip: a package without VERSION)
   cli-install       the bundled installer installs the bundled CLI into a scratch home, ardia --version
-                    prints the package version, and a second install is a no-op (skip: no lib/ardia/cli)
+                    prints its own version (the CLI is versioned apart from the app), and a second install is a no-op (skip: no lib/ardia/cli)
   cli-control       in an instance driven over --remote-debugging-pipe (the token server never starts
                     with --remote-debugging-port), once settings.cliControl is on ardia windows works,
                     ardia browse opens the fixture in a background tab and reads its title, and
@@ -107,6 +107,7 @@ export function userScriptSource() {
 export const CLI_INSTALLER = "ardia-cli-install.sh";
 export const CLI_DIGEST = "ardia-cli.sha256";
 export const cliTarball = (version) => `ardia-cli-${version}-linux-x64.tar.gz`;
+export const CLI_VERSION_LINE = /^ardia [0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$/;
 const BRIDGE_DIR = new URL("../../engine/ardiacore-linux/content-blocker/", import.meta.url);
 const DEFAULT_TIMEOUT_MS = 300000;
 
@@ -844,7 +845,7 @@ class Smoke {
       if (current !== this.version) throw new Error(`${this.cliEnv.ARDIA_CLI_HOME}/current points at ${JSON.stringify(current)}, not ${this.version}`);
       this.cliBin = bin;
       const reported = await this.ardia(["--version"], { timeout: 30000 });
-      if (reported.code !== 0 || reported.stdout.trim() !== `ardia ${this.version}`) throw new Error(`ardia --version exited ${reported.code} and printed ${JSON.stringify((reported.stdout + reported.stderr).trim())}, not "ardia ${this.version}"`);
+      if (reported.code !== 0 || !CLI_VERSION_LINE.test(reported.stdout.trim())) throw new Error(`ardia --version exited ${reported.code} and printed ${JSON.stringify((reported.stdout + reported.stderr).trim())}, not "ardia <its own version>"`);
       const second = await install();
       if (second.code !== 0 || (second.stdout.trim().split("\n").at(-1) ?? "") !== `installed ${bin}`) throw new Error(`the second install exited ${second.code}: ${(second.stdout + second.stderr).trim().split("\n").slice(-3).join(" | ")}`);
       if (installerRanAgain(second.stdout)) throw new Error(`the second install of the current version wasn't a no-op: ${second.stdout.trim().split("\n").join(" | ")}`);

@@ -209,7 +209,7 @@ export function syncFiles(current: () => SyncDoc) {
       const list = (journal.batches[scope] ??= []);
       const fresh = batches.filter((file) => !list.some((f) => f.seq === file.seq));
       if (!fresh.length) return;
-      list.push(...fresh);
+      for (const file of fresh) list.push(file);
       try {
         await writePart({ journal: { [scope]: fresh } });
       } catch (error) {

@@ -27,10 +27,9 @@ channel="$(channel_of "$version")"
 dmg="$dist/Ardia-$version.dmg"
 zip="$dist/Ardia-$version.zip"
 feed="$dist/appcast.xml"
-cli="$dist/ardia-cli-$version-macos-arm64.tar.gz"
 
 assets=()
-for file in "$dmg" "$zip" "$feed" "$cli" "$cli.sha256"; do
+for file in "$dmg" "$zip" "$feed"; do
   [ -f "$file" ] || die "no $file (scripts/release.sh $version first)"
   assets+=("$file")
 done

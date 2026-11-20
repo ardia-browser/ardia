@@ -72,6 +72,7 @@ public final class WebTab: DiscardablePage, Identifiable {
   public private(set) var failureReason: PageNetworkReason?
   public private(set) var pageZoom = 1.0
   public private(set) var isFindingInPage = false
+  public private(set) var navigationGeneration = 0
   public var request: PageRequest?
   public let blockedResources = BlockedResourceCounter()
 
@@ -342,6 +343,7 @@ public final class WebTab: DiscardablePage, Identifiable {
       if let value = tab.progressThrottle.offer(view.estimatedProgress, at: .now) { tab.progress = value }
     }
     watch(\.isLoading) { tab, view in
+      if view.isLoading, !tab.isLoading { tab.navigationGeneration += 1 }
       if tab.isLoading != view.isLoading { tab.isLoading = view.isLoading }
       if !view.isLoading {
         tab.progressThrottle.reset()
@@ -360,6 +362,7 @@ public final class WebTab: DiscardablePage, Identifiable {
     guard let newURL, newURL != url else { return }
     let previous = url
     url = newURL
+    navigationGeneration += 1
     if let webView { securityChanged(webView) }
     engine?.tabs.update(id, url: newURL.absoluteString)
     if !isPrivate, let language = PageTranslation.chosenLanguage(in: newURL) { engine?.preferences.rememberTranslation(into: language) }

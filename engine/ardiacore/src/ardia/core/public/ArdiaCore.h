@@ -357,6 +357,7 @@ ARDIACORE_EXPORT
 - (BOOL)executeChromeCommand:(int)command;
 - (void)openBlockedPopup:(NSString*)popupId always:(BOOL)always;
 - (void)showDevTools;
+- (void)showDevToolsPanel:(NSString*)panel;
 - (void)closeDevTools;
 @property(readonly, nullable) NSView* devToolsView;
 - (void)devToolsLayoutForSize:(NSSize)size

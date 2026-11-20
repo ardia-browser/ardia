@@ -7,7 +7,6 @@ import android.widget.FrameLayout
 import android.widget.TextView
 import expo.modules.kotlin.AppContext
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -49,15 +48,4 @@ class ReactChildrenLayoutTest {
 
     @Test
     fun theDeckChromeFadeKeepsTheBarAtTheBottomWhenAndroidLaysItOutAgain() = keepsItsOnlyChildWhereReactPutIt(MotionView(activity, appContext))
-
-    @Test
-    fun aPressTheDeckTakesOverNeverOpensTheMenuOnItsOwnTimer() {
-        assertFalse(
-            "the gesture system's pan takes the touch without an UP or CANCEL reaching this view, so a long-press timer here opened the card's menu as a deck drag ended; the long press comes from the gesture system instead",
-            NativeContextMenuView(activity, appContext).opensOnItsOwnTimer,
-        )
-    }
-
-    @Test
-    fun aNativeContextMenuKeepsTheViewItWrapsWhereReactPutIt() = keepsItsOnlyChildWhereReactPutIt(NativeContextMenuView(activity, appContext))
 }

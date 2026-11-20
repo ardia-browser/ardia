@@ -53,7 +53,7 @@ const styles = StyleSheet.create({
   buttonText: { fontWeight: "600" },
 });
 
-export type Confirmation = { title: string; message: string; action: string; run: () => void; destructive?: boolean };
+export type Confirmation = { title: string; message: string; action: string; run: () => void; destructive?: boolean; opener?: unknown };
 
 export function ConfirmDialog({ confirmation, onClose }: { confirmation: Confirmation; onClose: () => void }) {
   return (

@@ -91,6 +91,7 @@ const HOST_SHELL_METHODS: Record<string, (host?: ArdiaHost) => ShellMethod> = { 
 
 const LINUX_SHELL_METHODS: Record<string, ShellMethod> = {
   windowCornerRadius: () => LINUX_WINDOW_CORNER_RADIUS,
+  drawnWindowCornerRadius: () => LINUX_WINDOW_CORNER_RADIUS,
   updateMenu: resolved,
   watchSidebarEdge: (id: string, on: boolean, hold = 0, right = false) => {
     watchSidebarEdge(id, on, hold, right);

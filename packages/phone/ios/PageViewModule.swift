@@ -203,6 +203,14 @@ public final class PageViewModule: Module {
       }
     }.runOnQueue(.main)
 
+    AsyncFunction("summarizePage") { (pageID: String) -> Bool in
+      MainActor.assumeIsolated { PageView.host(of: pageID)?.summarize(.menu) ?? false }
+    }.runOnQueue(.main)
+
+    AsyncFunction("dismissPageSummaries") { () in
+      MainActor.assumeIsolated { PageView.dismissAllSummaries() }
+    }.runOnQueue(.main)
+
     AsyncFunction("snapshot") { (pageID: String, options: SnapshotOptionsRecord, promise: Promise) in
       Self.main(promise) { try await PhonePages.shared.snapshot(pageID, maxWidth: options.maxWidth, quality: options.quality) }
     }.runOnQueue(.main)

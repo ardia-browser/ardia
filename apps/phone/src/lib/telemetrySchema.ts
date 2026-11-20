@@ -65,6 +65,7 @@ export const EVENT_FIELDS = {
     site_permissions_revoked: { kind: "count" },
     card_opens_waited: { kind: "count" },
     native_menus_opened: { kind: "count" },
+    drawn_menus_opened: { kind: "count" },
     library_opened: { kind: "count" },
     deck_grid_shown: { kind: "count" },
     landscape_shown: { kind: "count" },
@@ -81,6 +82,25 @@ export const EVENT_FIELDS = {
     deck_incognito_switches: { kind: "count" },
     deck_bar_swipes_returned: { kind: "count" },
     deck_pulls_hitched: { kind: "count" },
+    browse_for_me_opened: { kind: "count" },
+    browse_answers_chatgpt: { kind: "count" },
+    browse_answers_on_device: { kind: "count" },
+    browse_answers_excerpts: { kind: "count" },
+    browse_answers_failed: { kind: "count" },
+    browse_chatgpt_fallbacks: { kind: "count" },
+    page_summaries_pinched: { kind: "count" },
+    page_summaries_from_menu: { kind: "count" },
+    page_summaries_on_device: { kind: "count" },
+    page_summaries_excerpts: { kind: "count" },
+    page_summaries_failed: { kind: "count" },
+    page_summaries_chatgpt: { kind: "count" },
+    page_summaries_chatgpt_fallbacks: { kind: "count" },
+    paste_and_go_links: { kind: "count" },
+    paste_and_go_texts: { kind: "count" },
+    paste_and_go_unread: { kind: "count" },
+    search_tile_taps: { kind: "count" },
+    voice_tile_taps: { kind: "count" },
+    incognito_tile_taps: { kind: "count" },
   },
 } as const satisfies Record<string, Record<string, FieldRule>>;
 
@@ -174,7 +194,7 @@ export function resourceFor(device: DeviceFacts): Record<(typeof RESOURCE_FIELDS
   };
 }
 
-export const COUNTED = ["tabs_opened", "searches", "pins_to_mac", "tabs_sent", "page_processes_gone", "links_given_up", "pages_reloaded_online", "find_opened_system", "find_opened_bar", "spaces_swiped", "tray_hidden_rows_opened", "deck_pictures_late", "tray_back_swiped", "search_tabs_opened", "spaces_picked", "tabs_moved_to_space", "pages_printed", "pages_translated", "pinned_tabs_refound", "site_permissions_revoked", "card_opens_waited", "native_menus_opened", "library_opened", "deck_grid_shown", "landscape_shown", "duo_layout_shown", "list_sheets_late", "list_pages_added", "search_reveals_late", "address_field_scrolled", "deck_bar_swipes", "tabs_swiped_closed", "tabs_swiped_reopened", "page_menu_tapped_away", "new_tab_search_opened", "deck_incognito_switches", "deck_bar_swipes_returned", "deck_pulls_hitched"] as const;
+export const COUNTED = ["tabs_opened", "searches", "pins_to_mac", "tabs_sent", "page_processes_gone", "links_given_up", "pages_reloaded_online", "find_opened_system", "find_opened_bar", "spaces_swiped", "tray_hidden_rows_opened", "deck_pictures_late", "tray_back_swiped", "search_tabs_opened", "spaces_picked", "tabs_moved_to_space", "pages_printed", "pages_translated", "pinned_tabs_refound", "site_permissions_revoked", "card_opens_waited", "native_menus_opened", "drawn_menus_opened", "library_opened", "deck_grid_shown", "landscape_shown", "duo_layout_shown", "list_sheets_late", "list_pages_added", "search_reveals_late", "address_field_scrolled", "deck_bar_swipes", "tabs_swiped_closed", "tabs_swiped_reopened", "page_menu_tapped_away", "new_tab_search_opened", "deck_incognito_switches", "deck_bar_swipes_returned", "deck_pulls_hitched", "browse_for_me_opened", "browse_answers_chatgpt", "browse_answers_on_device", "browse_answers_excerpts", "browse_answers_failed", "browse_chatgpt_fallbacks", "page_summaries_pinched", "page_summaries_from_menu", "page_summaries_on_device", "page_summaries_excerpts", "page_summaries_failed", "page_summaries_chatgpt", "page_summaries_chatgpt_fallbacks", "paste_and_go_links", "paste_and_go_texts", "paste_and_go_unread", "search_tile_taps", "voice_tile_taps", "incognito_tile_taps"] as const;
 
 export type Counted = (typeof COUNTED)[number];
 
@@ -192,9 +212,39 @@ export function pendingUsage(pending: Record<string, unknown>): Counted[] {
 
 export type DailyCounts = { day: string } & Record<Counted, number>;
 
+export type BrowseForMeOutcome = "chatgpt" | "on_device" | "excerpts" | "failed";
+
+const BROWSE_ANSWERS: Record<BrowseForMeOutcome, Counted> = {
+  chatgpt: "browse_answers_chatgpt",
+  on_device: "browse_answers_on_device",
+  excerpts: "browse_answers_excerpts",
+  failed: "browse_answers_failed",
+};
+
+export const browseForMeCounts = (outcome: BrowseForMeOutcome, chatGPTFellBack: boolean): Counted[] =>
+  chatGPTFellBack ? [BROWSE_ANSWERS[outcome], "browse_chatgpt_fallbacks"] : [BROWSE_ANSWERS[outcome]];
+
+export type PageSummaryTrigger = "pinch" | "menu";
+
+export type PageSummaryOutcome = "chatgpt" | "on_device" | "excerpts" | "failed";
+
+const SUMMARY_OPENED: Record<PageSummaryTrigger, Counted> = { pinch: "page_summaries_pinched", menu: "page_summaries_from_menu" };
+
+const SUMMARY_WRITTEN: Record<PageSummaryOutcome, Counted> = { chatgpt: "page_summaries_chatgpt", on_device: "page_summaries_on_device", excerpts: "page_summaries_excerpts", failed: "page_summaries_failed" };
+
+export const pageSummaryOpenedCount = (trigger: string): Counted | null => SUMMARY_OPENED[trigger as PageSummaryTrigger] ?? null;
+
+export const pageSummarySettledCount = (outcome: string): Counted | null => SUMMARY_WRITTEN[outcome as PageSummaryOutcome] ?? null;
+
+export function pageSummarySettledCounts(outcome: string, chatGPTFellBack: boolean | undefined): Counted[] {
+  const written = pageSummarySettledCount(outcome);
+  if (!written) return [];
+  return chatGPTFellBack === true && outcome !== "chatgpt" && outcome !== "failed" ? [written, "page_summaries_chatgpt_fallbacks"] : [written];
+}
+
 export const utcDay = (at: number) => new Date(at).toISOString().slice(0, 10);
 
-export const emptyDay = (day: string): DailyCounts => ({ day, tabs_opened: 0, searches: 0, pins_to_mac: 0, tabs_sent: 0, page_processes_gone: 0, links_given_up: 0, pages_reloaded_online: 0, find_opened_system: 0, find_opened_bar: 0, spaces_swiped: 0, tray_hidden_rows_opened: 0, deck_pictures_late: 0, tray_back_swiped: 0, search_tabs_opened: 0, spaces_picked: 0, tabs_moved_to_space: 0, pages_printed: 0, pages_translated: 0, pinned_tabs_refound: 0, site_permissions_revoked: 0, card_opens_waited: 0, native_menus_opened: 0, library_opened: 0, deck_grid_shown: 0, landscape_shown: 0, duo_layout_shown: 0, list_sheets_late: 0, list_pages_added: 0, search_reveals_late: 0, address_field_scrolled: 0, deck_bar_swipes: 0, tabs_swiped_closed: 0, tabs_swiped_reopened: 0, page_menu_tapped_away: 0, new_tab_search_opened: 0, deck_incognito_switches: 0, deck_bar_swipes_returned: 0, deck_pulls_hitched: 0 });
+export const emptyDay = (day: string): DailyCounts => ({ day, tabs_opened: 0, searches: 0, pins_to_mac: 0, tabs_sent: 0, page_processes_gone: 0, links_given_up: 0, pages_reloaded_online: 0, find_opened_system: 0, find_opened_bar: 0, spaces_swiped: 0, tray_hidden_rows_opened: 0, deck_pictures_late: 0, tray_back_swiped: 0, search_tabs_opened: 0, spaces_picked: 0, tabs_moved_to_space: 0, pages_printed: 0, pages_translated: 0, pinned_tabs_refound: 0, site_permissions_revoked: 0, card_opens_waited: 0, native_menus_opened: 0, drawn_menus_opened: 0, library_opened: 0, deck_grid_shown: 0, landscape_shown: 0, duo_layout_shown: 0, list_sheets_late: 0, list_pages_added: 0, search_reveals_late: 0, address_field_scrolled: 0, deck_bar_swipes: 0, tabs_swiped_closed: 0, tabs_swiped_reopened: 0, page_menu_tapped_away: 0, new_tab_search_opened: 0, deck_incognito_switches: 0, deck_bar_swipes_returned: 0, deck_pulls_hitched: 0, browse_for_me_opened: 0, browse_answers_chatgpt: 0, browse_answers_on_device: 0, browse_answers_excerpts: 0, browse_answers_failed: 0, browse_chatgpt_fallbacks: 0, page_summaries_pinched: 0, page_summaries_from_menu: 0, page_summaries_on_device: 0, page_summaries_excerpts: 0, page_summaries_failed: 0, page_summaries_chatgpt: 0, page_summaries_chatgpt_fallbacks: 0, paste_and_go_links: 0, paste_and_go_texts: 0, paste_and_go_unread: 0, search_tile_taps: 0, voice_tile_taps: 0, incognito_tile_taps: 0 });
 
 const anyCounted = (counts: DailyCounts) => COUNTED.some((field) => counts[field] > 0);
 
@@ -210,7 +260,7 @@ export function counted(state: DailyCounts | null, field: Counted, today: string
 }
 
 export function usageProps(counts: DailyCounts): EventProps<"usage_counts"> {
-  return { tabs_opened: counts.tabs_opened, searches: counts.searches, pins_to_mac: counts.pins_to_mac, tabs_sent: counts.tabs_sent, page_processes_gone: counts.page_processes_gone, links_given_up: counts.links_given_up, pages_reloaded_online: counts.pages_reloaded_online, find_opened_system: counts.find_opened_system, find_opened_bar: counts.find_opened_bar, spaces_swiped: counts.spaces_swiped, tray_hidden_rows_opened: counts.tray_hidden_rows_opened, deck_pictures_late: counts.deck_pictures_late, tray_back_swiped: counts.tray_back_swiped, search_tabs_opened: counts.search_tabs_opened, spaces_picked: counts.spaces_picked, tabs_moved_to_space: counts.tabs_moved_to_space, pages_printed: counts.pages_printed, pages_translated: counts.pages_translated, pinned_tabs_refound: counts.pinned_tabs_refound, site_permissions_revoked: counts.site_permissions_revoked, card_opens_waited: counts.card_opens_waited, native_menus_opened: counts.native_menus_opened, library_opened: counts.library_opened, deck_grid_shown: counts.deck_grid_shown, landscape_shown: counts.landscape_shown, duo_layout_shown: counts.duo_layout_shown, list_sheets_late: counts.list_sheets_late, list_pages_added: counts.list_pages_added, search_reveals_late: counts.search_reveals_late, address_field_scrolled: counts.address_field_scrolled, deck_bar_swipes: counts.deck_bar_swipes, tabs_swiped_closed: counts.tabs_swiped_closed, tabs_swiped_reopened: counts.tabs_swiped_reopened, page_menu_tapped_away: counts.page_menu_tapped_away, new_tab_search_opened: counts.new_tab_search_opened, deck_incognito_switches: counts.deck_incognito_switches, deck_bar_swipes_returned: counts.deck_bar_swipes_returned, deck_pulls_hitched: counts.deck_pulls_hitched };
+  return { tabs_opened: counts.tabs_opened, searches: counts.searches, pins_to_mac: counts.pins_to_mac, tabs_sent: counts.tabs_sent, page_processes_gone: counts.page_processes_gone, links_given_up: counts.links_given_up, pages_reloaded_online: counts.pages_reloaded_online, find_opened_system: counts.find_opened_system, find_opened_bar: counts.find_opened_bar, spaces_swiped: counts.spaces_swiped, tray_hidden_rows_opened: counts.tray_hidden_rows_opened, deck_pictures_late: counts.deck_pictures_late, tray_back_swiped: counts.tray_back_swiped, search_tabs_opened: counts.search_tabs_opened, spaces_picked: counts.spaces_picked, tabs_moved_to_space: counts.tabs_moved_to_space, pages_printed: counts.pages_printed, pages_translated: counts.pages_translated, pinned_tabs_refound: counts.pinned_tabs_refound, site_permissions_revoked: counts.site_permissions_revoked, card_opens_waited: counts.card_opens_waited, native_menus_opened: counts.native_menus_opened, drawn_menus_opened: counts.drawn_menus_opened, library_opened: counts.library_opened, deck_grid_shown: counts.deck_grid_shown, landscape_shown: counts.landscape_shown, duo_layout_shown: counts.duo_layout_shown, list_sheets_late: counts.list_sheets_late, list_pages_added: counts.list_pages_added, search_reveals_late: counts.search_reveals_late, address_field_scrolled: counts.address_field_scrolled, deck_bar_swipes: counts.deck_bar_swipes, tabs_swiped_closed: counts.tabs_swiped_closed, tabs_swiped_reopened: counts.tabs_swiped_reopened, page_menu_tapped_away: counts.page_menu_tapped_away, new_tab_search_opened: counts.new_tab_search_opened, deck_incognito_switches: counts.deck_incognito_switches, deck_bar_swipes_returned: counts.deck_bar_swipes_returned, deck_pulls_hitched: counts.deck_pulls_hitched, browse_for_me_opened: counts.browse_for_me_opened, browse_answers_chatgpt: counts.browse_answers_chatgpt, browse_answers_on_device: counts.browse_answers_on_device, browse_answers_excerpts: counts.browse_answers_excerpts, browse_answers_failed: counts.browse_answers_failed, browse_chatgpt_fallbacks: counts.browse_chatgpt_fallbacks, page_summaries_pinched: counts.page_summaries_pinched, page_summaries_from_menu: counts.page_summaries_from_menu, page_summaries_on_device: counts.page_summaries_on_device, page_summaries_excerpts: counts.page_summaries_excerpts, page_summaries_failed: counts.page_summaries_failed, page_summaries_chatgpt: counts.page_summaries_chatgpt, page_summaries_chatgpt_fallbacks: counts.page_summaries_chatgpt_fallbacks, paste_and_go_links: counts.paste_and_go_links, paste_and_go_texts: counts.paste_and_go_texts, paste_and_go_unread: counts.paste_and_go_unread, search_tile_taps: counts.search_tile_taps, voice_tile_taps: counts.voice_tile_taps, incognito_tile_taps: counts.incognito_tile_taps };
 }
 
 export function parseDaily(raw: string | null | undefined): DailyCounts | null {

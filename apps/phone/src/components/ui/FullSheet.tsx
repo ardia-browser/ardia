@@ -18,6 +18,7 @@ import { iPhoneOr, reducedMotionMs, tabsCurve, tabsMotion } from "./motion";
 import { screenCornerRadius } from "../../state/app/displayCorner";
 import { useTheme } from "./theme";
 import { sheetInk, sheetLayout, tabsLayout } from "./tokens";
+import { MenuFrostProvider } from "./Menu";
 
 const SHEET_REDUCED_MS = reducedMotionMs(tabsMotion.sheetReduced);
 
@@ -153,7 +154,9 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, childr
           }}
           style={[styles.sheet, { top, left: insets.left, right: insets.right, borderBottomLeftRadius: bottomCorner, borderBottomRightRadius: bottomCorner }, slide]}
         >
-          <SheetFrameContext.Provider value={frame}>{children(shown)}</SheetFrameContext.Provider>
+          <SheetFrameContext.Provider value={frame}>
+            <MenuFrostProvider value={null}>{children(shown)}</MenuFrostProvider>
+          </SheetFrameContext.Provider>
         </Animated.View>
       </GestureDetector>
     </View>

@@ -138,7 +138,9 @@ async function run(folderId: string, interactive: boolean) {
   fetchedSources.set(folderId, succeeded);
   applyFetch(folderId, order(next), gone, Date.now(), quiet, fence, succeeded);
   markCompletedTabs(folderId, gone, ids);
-  if (firstFailure) setStatus(folderId, { state: "error", error: describe(firstFailure.source, firstFailure.error) });
+  const warned = firstFailure ? null : folder.sources.map((source) => ({ source, error: SOURCES[source].warning?.() ?? null })).find((w) => w.error);
+  const problem = firstFailure ?? warned;
+  if (problem) setStatus(folderId, { state: "error", error: describe(problem.source, problem.error) });
   const leaving = Object.keys(gone);
   if (leaving.length) setTimeout(() => finishCompleting(folderId, leaving, fence), COMPLETION_MS);
 }
@@ -172,6 +174,8 @@ export function errorText(kind: LiveError["kind"], source: LiveSourceId, now = D
       return `Sign back in to ${name}`;
     case "sso":
       return `${name} needs Single Sign-On for this organization`;
+    case "tokenBlocked":
+      return `An organization's token policy hides its pull requests. Update your ${name} token.`;
     case "rateLimited": {
       const until = SOURCES[source].pausedUntil?.() ?? null;
       const minutes = until === null ? 0 : Math.ceil((until - now) / 60_000);

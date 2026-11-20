@@ -1,4 +1,5 @@
 import { curve, duration } from "../ui/motion";
+import { TOOLBAR_ROWS } from "../../lib/toolbarRow";
 
 export const GLYPH = 13;
 
@@ -12,7 +13,6 @@ export const RELOAD_BUTTON_MOTION = {
   stateIn: duration.base,
   stateOut: duration.slow,
   breatheCycle: 1420,
-  pressScale: 0.76,
   hiddenScale: 0.72,
   breatheScale: [0.96, 1.06],
   breatheOpacity: [0.86, 1],
@@ -53,4 +53,19 @@ export const HISTORY_BUTTON_MOTION = {
   incomingDelay: 35,
   travel: 4,
   pressTravel: 1.5,
+} as const;
+
+export const DEVELOPER_ROW = { ...TOOLBAR_ROWS.compact, height: 34, center: 17, button: 24, buttonRadius: 6, extensionButton: 24 };
+
+export const DEVELOPER_BAR = {
+  height: DEVELOPER_ROW.height,
+  stripeOpacity: { lightInk: 0.025, darkInk: 0.035 },
+  urlSize: 11,
+  dividerLength: 14,
+  leadingEdge: 7,
+  trailingEdge: 5,
+  urlGap: 6,
+  groupGap: 7.5,
+  glyph: 15,
+  extensionsGlyph: 14,
 } as const;

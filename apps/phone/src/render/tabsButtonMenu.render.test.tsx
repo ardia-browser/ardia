@@ -8,7 +8,8 @@ jest.mock("@ardia/phone-native", () => require("./nativeMenusMock").nativeMenusM
 const { BottomBar } = require("../components/browsing/BottomBar") as typeof import("../components/browsing/BottomBar");
 const { FloatingBar } = require("../components/browsing/FloatingBar") as typeof import("../components/browsing/FloatingBar");
 const { tabsMenuItems } = require("../components/browsing/tabsMenu") as typeof import("../components/browsing/tabsMenu");
-const { rolesFor } = require("../components/ui") as typeof import("../components/ui");
+const { FloatingMenu, rolesFor } = require("../components/ui") as typeof import("../components/ui");
+type MenuItem = import("../components/ui").MenuItem;
 const tabMenus = require("../state/browse/tabMenus") as typeof import("../state/browse/tabMenus");
 const { currentTabs } = require("../state/tabs/store") as typeof import("../state/tabs/store");
 const { deckOrder } = require("../state/tabs/tabsState") as typeof import("../state/tabs/tabsState");
@@ -79,12 +80,17 @@ onIos("the classic bar's tabs button gets the same native menu", () => {
   unmount(root);
 });
 
-test("without the system's menus the tabs button keeps today's long press, which opens the drawn menu", () => {
+test("without the system's menus, as on Android, the tabs button's long press opens the drawn menu of the same items at the finger, dimmed", () => {
   const calls: string[] = [];
   const root = floatingBar(calls);
   expect(contextMenus(root)).toHaveLength(0);
   const button: ReactTestInstance = root.root.findAll((node) => node.props.accessibilityLabel === "Tabs" && typeof node.props.onLongPress === "function")[0]!;
-  act(() => button.props.onLongPress());
-  expect(calls).toEqual(["menu"]);
+  act(() => button.props.onLongPress({ nativeEvent: { pageX: 40, pageY: 800 } }));
+  const menu = root.root.findAll((node) => node.type === FloatingMenu)[0]!;
+  expect(menu.props.at).toEqual({ x: 40, y: 800 });
+  expect(menu.props.dimmed).toBe(true);
+  const labels = (items: MenuItem[]) => items.map((item) => (item === "divider" ? item : "label" in item ? item.label : item.heading));
+  expect(labels(menu.props.items)).toEqual(labels(tabsMenuItems(order())));
+  expect(calls).toEqual([]);
   unmount(root);
 });

@@ -5,7 +5,7 @@ on:
     paths:
       - "apps/linux/**"
       - "apps/browser/**"
-      - "apps/cli/**"
+      - "scripts/release/official-plugins.py"
       - "packages/**"
       - "engine/**"
       - "scripts/linux/**"
@@ -26,7 +26,7 @@ on:
     paths:
       - "apps/linux/**"
       - "apps/browser/**"
-      - "apps/cli/**"
+      - "scripts/release/official-plugins.py"
       - "packages/**"
       - "engine/**"
       - "scripts/linux/**"
@@ -142,10 +142,6 @@ jobs:
           restore-keys: engine-linux-x64-v3-
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          path: ~/.cache/ardia-cli-build
-          key: ardia-cli-build-linux-x64-${{ hashFiles('apps/cli/scripts/build.sh', 'apps/cli/requirements.lock') }}
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
           path: packages/ardiacore/vendor/ubo
           key: ubo-linux-${{ hashFiles('packages/ardiacore/scripts/ubo.sh') }}
       - name: Engine
@@ -171,16 +167,23 @@ jobs:
           fi
           { echo "ENGINE=$engine"; echo "PACKAGE_NAME=Ardia-linux-x64-$label"; } >> "$GITHUB_ENV"
       - run: pnpm --filter @ardia/linux build
-      - name: uv
-        run: curl -LsSf https://astral.sh/uv/0.12.15/install.sh | sh
-      - name: ardia CLI
-        run: apps/cli/scripts/build.sh "$VERSION" "$RUNNER_TEMP/dist" --platform linux-x64
+      - name: ardia command (pinned)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/dist"
+          if python3 -I scripts/release/official-plugins.py published cli linux-x64; then
+            python3 -I scripts/release/official-plugins.py linux-cli "$VERSION" "$RUNNER_TEMP/dist/$CLI_NAME"
+            echo "CLI_ARGS=--cli $RUNNER_TEMP/dist/$CLI_NAME" >> "$GITHUB_ENV"
+          else
+            echo "::warning::the pinned ardia command isn't published yet (apps/browser/official-plugins.json): packaging without it, so the smoke skips cli-install, cli-control and cli-scripts"
+            echo "CLI_ARGS=" >> "$GITHUB_ENV"
+          fi
       - name: Package
         run: |
           set -euo pipefail
           blocker=$(scripts/linux/fetch-ubo.sh)
           python3 scripts/linux/package.py --out "$ENGINE" --ui apps/linux/dist --content-blocker "$blocker" \
-            --version "$VERSION" --cli "$RUNNER_TEMP/dist/$CLI_NAME" --destination "$RUNNER_TEMP/dist/$PACKAGE_NAME.tar.xz" \
+            --version "$VERSION" $CLI_ARGS --destination "$RUNNER_TEMP/dist/$PACKAGE_NAME.tar.xz" \
             --deb "$RUNNER_TEMP/dist/$PACKAGE_NAME.deb" --appimage "$RUNNER_TEMP/dist/$PACKAGE_NAME.AppImage"
           for built in tar.xz deb AppImage; do
             (cd "$RUNNER_TEMP/dist" && sha256sum "$PACKAGE_NAME.$built" > "$PACKAGE_NAME.$built.sha256")
@@ -208,8 +211,6 @@ jobs:
             ${{ runner.temp }}/dist/${{ env.PACKAGE_NAME }}.deb.sha256
             ${{ runner.temp }}/dist/${{ env.PACKAGE_NAME }}.AppImage
             ${{ runner.temp }}/dist/${{ env.PACKAGE_NAME }}.AppImage.sha256
-            ${{ runner.temp }}/dist/${{ env.CLI_NAME }}
-            ${{ runner.temp }}/dist/${{ env.CLI_NAME }}.sha256
             ${{ runner.temp }}/smoke/results.json
             ${{ runner.temp }}/smoke/deb/results.json
             ${{ runner.temp }}/smoke/appimage/results.json

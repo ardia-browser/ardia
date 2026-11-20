@@ -13,7 +13,8 @@ import { useArchiveDays, useArchiveLoaded } from "../../state/tabs/hooks";
 import { AUTO_ARCHIVE_INTERVALS, autoArchiveTitle, type AutoArchiveInterval, type BrowserTab } from "../../state/tabs/tabModels";
 import { clearArchivedTabs, loadArchive, searchArchive, setAutoArchiveInterval } from "../../state/tabs/store";
 import { MenuTrigger, confirmInSheet } from "../ui/MenuTrigger";
-import { ConfirmDialog, Favicon, FloatingMenu, font, LookBackdrop, radius, space, SwipeToDelete, Symbol, tabsLayout, tabsMotion, useSheetFrame, useTheme, type Confirmation, type MenuItem } from "../ui";
+import { ConfirmSheet, Favicon, FloatingMenu, font, LookBackdrop, radius, space, SwipeToDelete, Symbol, tabsLayout, tabsMotion, useSheetFrame, useTheme, type Confirmation, type MenuItem } from "../ui";
+import type { Point } from "../../lib/menuPlace";
 
 const time = (at: number) => new Date(at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
@@ -26,7 +27,7 @@ export function ArchiveView() {
   const loaded = useArchiveLoaded();
   const interval = usePreferences((p) => p.autoArchiveInterval);
   const [query, setQuery] = useState("");
-  const [rowMenu, setRowMenu] = useState<{ tab: BrowserTab; y: number } | null>(null);
+  const [rowMenu, setRowMenu] = useState<{ tab: BrowserTab; at: Point } | null>(null);
   useEffect(() => loadArchive(), []);
   const [searched, setSearched] = useState("");
   useEffect(() => {
@@ -147,9 +148,9 @@ export function ArchiveView() {
               <ArchiveRow
                 tab={item}
                 faviconSize={ROW_FAVICON * Math.min(fontScale, ROW_FAVICON_SCALE_CAP)}
-                onMenu={(y) => {
+                onMenu={(at) => {
                   menuOpenedHaptic();
-                  setRowMenu({ tab: item, y });
+                  setRowMenu({ tab: item, at });
                 }}
               />
             )}
@@ -159,11 +160,13 @@ export function ArchiveView() {
       {rowMenu ? (
         <FloatingMenu
           items={rowMenuItems(rowMenu.tab)}
-          place={{ top: rowMenu.y, left: space.xl, width: Math.min(tabsLayout.menuWidth, width - space.xl * 2) }}
+          at={rowMenu.at}
+          dimmed
+          place={{ width: Math.min(tabsLayout.menuWidth, width - space.xl * 2) }}
           onDismiss={() => setRowMenu(null)}
         />
       ) : null}
-      {confirmation ? <ConfirmDialog confirmation={confirmation} onClose={() => setConfirmation(null)} /> : null}
+      {confirmation ? <ConfirmSheet confirmation={confirmation} onClose={() => setConfirmation(null)} /> : null}
     </View>
   );
 }
@@ -188,7 +191,7 @@ function restoreRow(tab: BrowserTab) {
   openArchivedTab(tab);
 }
 
-function ArchiveRow({ tab, faviconSize, onMenu }: { tab: BrowserTab; faviconSize: number; onMenu: (y: number) => void }) {
+function ArchiveRow({ tab, faviconSize, onMenu }: { tab: BrowserTab; faviconSize: number; onMenu: (at: Point) => void }) {
   const theme = useTheme();
   const shown = display(tab.url);
   return (
@@ -197,7 +200,7 @@ function ArchiveRow({ tab, faviconSize, onMenu }: { tab: BrowserTab; faviconSize
         accessibilityRole="button"
         accessibilityHint="Reopens the tab."
         onPress={() => restoreRow(tab)}
-        onLongPress={(event) => onMenu(event.nativeEvent.pageY)}
+        onLongPress={(event) => onMenu({ x: event.nativeEvent.pageX, y: event.nativeEvent.pageY })}
         delayLongPress={tabsMotion.longPress}
         style={({ pressed }) => [styles.row, pressed ? { backgroundColor: theme.rowHighlight } : null]}
       >

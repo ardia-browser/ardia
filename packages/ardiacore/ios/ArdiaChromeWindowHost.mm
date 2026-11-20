@@ -128,6 +128,10 @@ NSView *ArdiaWindowRootView(NSWindow *window) {
   return WindowCornerRadius(nil);
 }
 
++ (CGFloat)drawnWindowCornerRadius {
+  return DrawnWindowCornerRadius(nil);
+}
+
 + (CGFloat)frameCornerRadiusOfWindow:(NSWindow *)window {
   if (window.styleMask & NSWindowStyleMaskFullScreen) return 0;
   NSView *frame = window.contentView.superview;
@@ -254,6 +258,7 @@ NSView *ArdiaWindowRootView(NSWindow *window) {
     objc_setAssociatedObject(window, kLightsShownKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(window, kLightsMoveKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     TranslateTrafficLights(window, 0);
+    TuckTrafficLightsOutsideWindow(window);
   }
   if (!placed) {
     objc_setAssociatedObject(window, kLightsTrailingKey, trailing ? @YES : nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);

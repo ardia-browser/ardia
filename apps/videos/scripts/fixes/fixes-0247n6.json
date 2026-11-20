@@ -1,0 +1,73 @@
+{
+  "id": "fixes-0247n6",
+  "segments": [
+    {
+      "scene": "s6busy",
+      "title": "A pressed tab shows its page at once",
+      "body": "A tab pressed in the sidebar while Ardia's interface is busy for two seconds. nightly.5 showed the page only once the interface caught up. Now the page is on screen at the press, and the sidebar and address follow.",
+      "cam": [
+        0,
+        0,
+        1100,
+        720
+      ],
+      "lead": 1.6,
+      "tail": 4.0,
+      "ripple": true
+    },
+    {
+      "scene": "s6settings",
+      "title": "Settings fits in a handful of panes",
+      "body": "The pointer runs down the list of panes, then opens Tabs and Appearance. nightly.5 had sixteen panes with the advanced ones shown. Now there are seven, plus Plugins, with one line per row.",
+      "cam": [
+        120,
+        20,
+        860,
+        680
+      ],
+      "lead": 1.2,
+      "tail": 10.0
+    },
+    {
+      "scene": "s6pill",
+      "title": "A pill points to the selected tab",
+      "body": "The tab list scrolls until the selected tab is out of view. nightly.5 left no sign of where it went. Now a pill with its icon points the way, and a click glides the list back.",
+      "cam": [
+        0,
+        0,
+        560,
+        440
+      ],
+      "lead": 0.8,
+      "tail": 8.2,
+      "ripple": true
+    },
+    {
+      "scene": "s6sleep",
+      "title": "Sleep Tab is in the tab menu",
+      "body": "Right-click a background tab. nightly.5 had no way to put one tab to sleep. Now Sleep Tab puts it to sleep, and the row is struck through because Strike through sleeping tabs is on.",
+      "cam": [
+        0,
+        0,
+        1100,
+        720
+      ],
+      "lead": 1.2,
+      "tail": 6.8
+    },
+    {
+      "scene": "s6newtab",
+      "title": "The New Tab field stays off the page",
+      "body": "From a New Tab, a click on another tab, with Ardia busy just after the switch. nightly.5 put the New Tab field back over the page until the interface caught up. Now the page stays clear.",
+      "cam": [
+        0,
+        0,
+        1100,
+        720
+      ],
+      "lead": 1.4,
+      "tail": 3.4,
+      "ripple": true
+    }
+  ]
+}

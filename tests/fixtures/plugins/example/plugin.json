@@ -3,7 +3,7 @@
   "manifest": 1,
   "name": "example",
   "title": "Example",
-  "description": "Uses every contribution: settings, commands, a page, a helper, hooks and tools.",
+  "description": "Uses every contribution: settings, commands, a page, a helper, a command-line program, hooks and tools.",
   "version": "1.0.0",
   "permissions": [
     "tabs",
@@ -106,6 +106,12 @@
     ],
     "memoryMB": 256
   },
+  "programs": [
+    {
+      "name": "ardia-example",
+      "path": "bin/ardia-example"
+    }
+  ],
   "hooks": [
     "tab.activated",
     "tab.opened"

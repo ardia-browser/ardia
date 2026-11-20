@@ -6,8 +6,8 @@ import { forgetPicturePainted, notePicturePainted, noteSnapshotAspect, noteSnaps
 import { tabsMotion } from "./motion";
 import { isDarkColor } from "../../lib/color";
 import { Favicon } from "./Favicon";
-import { Symbol } from "./Symbol";
-import { font, space, tabsInk, type ColorRoles } from "./tokens";
+import { IncognitoSpecs } from "./IncognitoSpecs";
+import { font, space, tabsInk, tabsLayout, type ColorRoles } from "./tokens";
 
 export type TabFaceTab = { url: string; title: string; isPrivate: boolean; snapshotFileName: string | null; themeColorHex: string | null; faviconUrl: string | null };
 
@@ -33,7 +33,7 @@ function PlainFace({ tab, title, host, fill, roles, compact }: { tab: TabFaceTab
   if (tab.isPrivate) {
     return (
       <View style={[StyleSheet.absoluteFill, styles.private, { backgroundColor: fill }]}>
-        <Symbol name="eyes" size={compact ? 12 : 44} color={tabsInk.onDark} />
+        <IncognitoSpecs size={compact ? tabsLayout.specsCompact : tabsLayout.specsFace} color={tabsInk.onDark} />
         {compact ? null : (
           <>
             <Text style={[font.footnote, styles.privateTitle]}>Incognito Tab</Text>

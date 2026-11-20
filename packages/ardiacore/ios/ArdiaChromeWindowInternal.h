@@ -39,6 +39,7 @@ extern BOOL (^gRefusesUnhandledKey)(NSWindow *, NSEvent *);
 void ConfigureWindow(NSWindow *window);
 void InsetUtilityTrafficLights(NSWindow *window);
 CGFloat WindowCornerRadius(NSWindow *window);
+CGFloat DrawnWindowCornerRadius(NSWindow *window);
 extern const void *kLightsCenterKey;
 extern const void *kLightsShownKey;
 extern const void *kLightsMoveKey;
@@ -47,6 +48,7 @@ NSArray<NSButton *> *TrafficLightButtons(NSWindow *window);
 NSPoint LightsCenter(NSWindow *window, NSValue *center, NSSize size);
 void TranslateTrafficLights(NSWindow *window, CGFloat dx);
 void RetileTrafficLights(NSWindow *window);
+void TuckTrafficLightsOutsideWindow(NSWindow *window);
 bool MoveTrafficLights(NSWindow *window, NSValue *center);
 
 NSMenuItem *ReservedMenuItemForEvent(NSEvent *event);

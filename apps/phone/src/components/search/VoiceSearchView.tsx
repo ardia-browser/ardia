@@ -4,7 +4,8 @@ import Animated, { Easing, FadeIn, FadeOut, useAnimatedStyle, useSharedValue, wi
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { copy } from "../../lib/platformCopy";
 import { PROBLEM_TEXT, voiceControl, type Dictation } from "../../state/voice/dictation";
-import { closeVoiceSearch, openSpeechSettings, searchSpoken, startListening, stopListening, useDictation, useVoiceLevels, useVoicePresented } from "../../state/voice/store";
+import { browseSpoken, closeVoiceSearch, openSpeechSettings, searchSpoken, startListening, stopListening, useDictation, useVoiceLevels, useVoicePresented } from "../../state/voice/store";
+import { browseForMeOffered } from "../../state/browseForMe/offer";
 import { ArdiaLogo, capsule, font, FrostSource, LookBackdrop, LookFrost, space, Symbol, useCoverFocus, voiceInk, voiceLayout, type SymbolName, useReduceMotion } from "../ui";
 
 export function VoiceSearchView() {
@@ -115,6 +116,7 @@ function Controls({ dictation }: { dictation: Dictation }) {
     <View style={styles.controls}>
       {control?.kind === "done" ? <GlassPill title="Done" icon="stopFill" onPress={stopListening} /> : null}
       {control?.kind === "search" ? <GlassPill title="Search" onPress={() => searchSpoken(control.text)} /> : null}
+      {control?.kind === "search" && browseForMeOffered() ? <GlassPill title="Browse for Me" icon="sparkleMagnifyingglass" onPress={() => browseSpoken(control.text)} /> : null}
       {control?.kind === "tryAgain" ? <GlassPill title="Try Again" icon="micFill" onPress={() => void startListening()} /> : null}
     </View>
   );
@@ -151,7 +153,7 @@ const styles = StyleSheet.create({
   transcript: { backgroundColor: voiceInk.transcript, borderRadius: voiceLayout.transcriptRadius, paddingHorizontal: space.xl, paddingVertical: space.m, overflow: "hidden" },
   wave: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: voiceLayout.barGap, height: voiceLayout.waveHeight, alignSelf: "stretch" },
   bar: { width: voiceLayout.bar, borderRadius: voiceLayout.bar / 2, backgroundColor: voiceInk.bar },
-  controls: { alignSelf: "stretch", minHeight: voiceLayout.pill },
+  controls: { alignSelf: "stretch", minHeight: voiceLayout.pill, gap: space.m },
   pillHit: { alignSelf: "stretch" },
   pill: {
     flexDirection: "row",

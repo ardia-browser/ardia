@@ -36,7 +36,14 @@ export const DECK_REDESIGN = { barReserve: 67, chromeGap: 21, minSafeBottom: 20,
 export const BUTTON_NAVIGATION_INSET = 32;
 const BAR_HALF_HEIGHT = 22;
 const BAR_GAP = 6;
-const REDESIGNED_BAR_HALF_HEIGHT = 24;
+
+export const FLOATING_BAR_PLACE = { control: 48, gap: 8, bottomGap: 21.5 } as const;
+
+export function floatingBarCenter(navigationInset: number, os: string): number {
+  const resting = FLOATING_BAR_PLACE.bottomGap + FLOATING_BAR_PLACE.control / 2;
+  if (os === "android" && navigationInset > BUTTON_NAVIGATION_INSET) return Math.max(resting, navigationInset + FLOATING_BAR_PLACE.gap + FLOATING_BAR_PLACE.control / 2);
+  return resting;
+}
 
 export function deckBarCenterFromBottom(navigationInset: number, os: string = "android"): number {
   if (os === "android" && navigationInset > BUTTON_NAVIGATION_INSET) return navigationInset + BAR_HALF_HEIGHT + BAR_GAP;
@@ -44,9 +51,8 @@ export function deckBarCenterFromBottom(navigationInset: number, os: string = "a
 }
 
 export function redesignedBarCenterFromBottom(navigationInset: number, os: string = "android"): number {
-  const iPhonePlacement = Math.max(navigationInset, DECK_REDESIGN.minSafeBottom) + DECK_REDESIGN.barAboveSafeBottom;
-  if (os === "android" && navigationInset > BUTTON_NAVIGATION_INSET) return Math.max(iPhonePlacement, navigationInset + BAR_GAP + REDESIGNED_BAR_HALF_HEIGHT);
-  return iPhonePlacement;
+  if (os === "android") return floatingBarCenter(navigationInset, os);
+  return Math.max(navigationInset, DECK_REDESIGN.minSafeBottom) + DECK_REDESIGN.barAboveSafeBottom;
 }
 
 function reach(peek: number, spacing: number): number {

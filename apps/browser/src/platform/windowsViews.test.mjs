@@ -58,7 +58,7 @@ test("a label asked to strike its text through draws the line, and one not asked
   assert.equal(labelTextStyle({}, true).color, "rgba(255,255,255,0.85)");
 });
 
-const NOT_ON_WINDOWS_YET = ["downloadFavicon", "executeExtensionAction", "exitPictureInPicture", "mediaCaptureSourceId", "nativeTag", "notificationAction", "resolveAutofillPrompt", "resolveDisplayMedia", "resolvePasswordPrompt"];
+const NOT_ON_WINDOWS_YET = ["executeExtensionAction", "exitPictureInPicture", "mediaCaptureSourceId", "nativeTag", "notificationAction", "resolveAutofillPrompt", "resolveDisplayMedia", "resolvePasswordPrompt"];
 
 const tableKeys = (source, name) => {
   const from = source.indexOf(`const ${name}:`);

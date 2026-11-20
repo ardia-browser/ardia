@@ -118,7 +118,7 @@ class PageMessageTests(unittest.TestCase):
         forget = host[host.index('  void ForgetRendererPageOptions() {'):]
         self.assertIn('PushPeekSiteTabs(peek_site_tabs_.Clear());', forget[:forget.index('\n  }\n')])
         self.assertIn('if (link && page_ && owner_->OpensNewTabLinksInPlace())', host)
-        self.assertIn('ReportOpened(opened, url, target, disposition == WindowOpenDisposition::NEW_FOREGROUND_TAB);', host)
+        self.assertIn('ReportOpened(opened, url, target, disposition == WindowOpenDisposition::kNewForegroundTab);', host)
 
     def test_a_link_kept_in_place_closes_its_tab_once_chromium_has_put_it_in_a_strip(self):
         host = (SOURCE / 'ardia/linux/ac_linux_host.cc').read_text()

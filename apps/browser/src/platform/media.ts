@@ -14,6 +14,7 @@ export {
   type ControlPress,
   type PictureInPictureState,
   type PictureInPictureDrag,
+  type PictureInPictureResize,
   type PictureInPictureSkip,
 } from "@ardia/ardiacore";
 

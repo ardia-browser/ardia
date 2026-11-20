@@ -1,13 +1,16 @@
 import { useState } from "react";
 import { View } from "react-native";
-import { describeCliInstall, installCliInBackground, useCli } from "../../../state/app/cliControl";
+import { CLI_PLUGIN, describeCliInstall, installCliInBackground, useCli } from "../../../state/app/cliControl";
+import { usePluginActive, usePluginListing, usePluginPrograms } from "../../../state/plugins/hooks";
+import { canRelink, relinkPrograms } from "../../../state/plugins/actions";
+import type { PluginListing, ProgramsState } from "../../../state/plugins/store";
+import { goToSettingsPane, type SettingsPlace } from "../../../state/settings/settingsWindows";
 import { useSettings } from "../../../state/browser/hooks";
 import { updateSettings } from "../../../state/settings/actions";
 import { openChromeSettings } from "../../../state/pages/urls";
 import type { BatterySaverWhen, Settings } from "../../../state/settings/settings";
 import { keepSiteActive, stopKeepingSiteActive, type MemorySaverMode } from "../../../state/tabs/memorySaver";
 import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
-import type { SettingsPlace } from "../../../state/settings/settingsWindows";
 import { Button, DialogActions, DialogTitle, lineHeight, PopUp, Sheet, space, Text, TextField, Toggle } from "../../ui";
 import { perLook } from "../../ui/tokens";
 import { Favicon } from "../../favicon/Favicon";
@@ -130,6 +133,44 @@ function PerformanceSection() {
   );
 }
 
+const viaPlugin = PLATFORM_FEATURES.plugins;
+
+function pluginCommandLine(plugin: PluginListing | undefined, programs: ProgramsState | undefined, installed: boolean): string {
+  if (!plugin?.manifest) return "Not in this build.";
+  if (!installed) return "Not installed.";
+  if (programs?.state === "linked") return programs.linked.includes("ardia") ? "On your PATH. It can control Ardia." : Object.values(programs.refused).join("; ");
+  if (programs?.state === "failed") return `Not on your PATH: ${programs.reason}`;
+  return "Putting it on your PATH…";
+}
+
+function PluginCommandRow() {
+  const cli = useCli();
+  const plugin = usePluginListing(CLI_PLUGIN);
+  const programs = usePluginPrograms(CLI_PLUGIN);
+  const installed = usePluginActive(CLI_PLUGIN);
+  const failed = canRelink(programs);
+  return (
+    <Row
+      anchor="advanced.ardiaCommand"
+      description={
+        <View>
+          <Text selectable size="caption" tone={failed ? "destructive" : "textSecondary"} style={NOTE()}>
+            {pluginCommandLine(plugin, programs, installed)}
+          </Text>
+          {cli.server?.state === "external" ? (
+            <Text size="caption" tone="textSecondary" style={NOTE()}>
+              This instance has its own DevTools port.
+            </Text>
+          ) : null}
+          {plugin?.manifest && !installed ? <Button variant="text" look="link" pad="none" title="Open Plugins" onPress={() => goToSettingsPane("plugins")} /> : null}
+        </View>
+      }
+    >
+      {failed ? <Button title="Try Again" onPress={() => relinkPrograms(CLI_PLUGIN)} /> : null}
+    </Row>
+  );
+}
+
 function CommandLineSection() {
   const on = useSettings((s) => s.cliControl);
   const cli = useCli();
@@ -150,10 +191,13 @@ function CommandLineSection() {
     updateSettings({ cliControl: next });
     if (next && !cli.installing && (!cli.installedVersion || cli.error)) void installCliInBackground("settings");
   };
+  const tryAgain = () => void installCliInBackground("settings");
+  const installLine = on || cli.installedVersion || cli.installing || failed ? describeCliInstall(cli) : null;
   return (
     <>
       <SectionHeader title="Command line and automation" />
       <Group>
+        {viaPlugin ? <PluginCommandRow /> : (
         <Row
           anchor="advanced.ardiaCommand"
           description={
@@ -161,18 +205,19 @@ function CommandLineSection() {
               <Text size="caption" tone="textSecondary" style={NOTE()}>
                 {serverNote}
               </Text>
-              {on || cli.installedVersion || cli.installing || failed ? (
+              {installLine ? (
                 <Text selectable size="caption" tone={failed ? "destructive" : "textSecondary"} style={NOTE()}>
-                  {describeCliInstall(cli)}
+                  {installLine}
                 </Text>
               ) : null}
             </View>
           }
         >
-          {on && failed ? <Button title="Try Again" onPress={() => void installCliInBackground("settings")} /> : null}
+          {failed && on ? <Button title="Try Again" onPress={tryAgain} /> : null}
           {on && !failed && cli.installedVersion && !cli.installing ? <Button title="Reinstall" onPress={() => void installCliInBackground("settings")} /> : null}
           <Toggle value={on} accessibilityLabel="ardia command" onChange={setOn} />
         </Row>
+        )}
         <SettingToggle anchor="advanced.compactCliPill" />
         {ruleRows}
       </Group>

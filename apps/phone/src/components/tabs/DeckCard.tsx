@@ -1,6 +1,6 @@
-import { memo, useEffect, useState, type ReactNode } from "react";
+import { memo, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { countRender } from "../../state/app/interactionPerf";
-import { PixelRatio, Platform, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { PixelRatio, Platform, StyleSheet, Text, View, type StyleProp, type ViewInstance, type ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, useDerivedValue, useSharedValue, type SharedValue } from "react-native-reanimated";
 import { isUnseenReceived } from "../../lib/tabFace";
 import { DECK, DECK_HEADER, deckBarBand, deckFlyLift, deckHeaderIconReveal, deckLeaveFade, deckStatusStrip, deckHeaderLeading, deckHeaderPlacement, deckLeading, deckSlot, deckVisibleWidth, lerp, titleReveal, type DeckGeometry, type DeckLeaving, type DeckSlots } from "../../lib/deckGeometry";
@@ -10,7 +10,7 @@ import { display } from "../../state/search/omnibox";
 import type { BrowserTab } from "../../state/tabs/tabModels";
 import { shownTone } from "../../lib/pageTone";
 import { snapshotPageTop } from "../../lib/shownSnapshots";
-import { barHeight, FadeView, Favicon, font, iPhoneOr, motionReportsNearEnd, MotionView, screenReaderActions, space, Symbol, TabFace, tabsInk, tabsLayout, tabsMotion, useDesign, usePageUnderBars, useTheme, isDarkColor, type MenuItem, type MotionCurve } from "../ui";
+import { barHeight, FadeView, Favicon, font, iPhoneOr, motionReportsNearEnd, MotionView, screenReaderActions, space, Symbol, IncognitoSpecs, TabFace, tabsInk, tabsLayout, tabsMotion, useDesign, usePageUnderBars, useTheme, isDarkColor, type MenuItem, type MotionCurve } from "../ui";
 import { MenuTrigger, nativeMenus, spaceSystemImage, type MenuHandlers } from "../ui/MenuTrigger";
 import { hideArchiveCard } from "../../state/browse/archiveCard";
 import { OPENING_COVER_ID } from "../../state/browse/store";
@@ -157,6 +157,7 @@ type Props = {
   onOpen: (index: number) => void;
   onClose: (index: number) => void;
   onCloseNow: (index: number) => void;
+  onMenu?: (index: number, card: RefObject<ViewInstance | null>) => void;
 };
 
 type Pose = { x: number; y: number; scale: number; corner: number; opacity: number; header: number; visible: number; lift: number; fade: number };
@@ -194,7 +195,8 @@ export function cardPose(g: DeckGeometry, role: DeckRole, relative: number, sp: 
   return { x, y, scale, corner, opacity, header: Math.min(1, settle) * Math.min(1, liftFade) * shown, visible: deckVisibleWidth(g, relative, isLast), lift, fade: 1 - shown };
 }
 
-export const DeckCard = memo(function DeckCard({ tab, index, geometry: g, motion, onOpen, onClose, onCloseNow }: Props) {
+export const DeckCard = memo(function DeckCard({ tab, index, geometry: g, motion, onOpen, onClose, onCloseNow, onMenu }: Props) {
+  const reach = useRef<ViewInstance>(null);
   countRender("DeckCard");
   const theme = useTheme();
   const design = useDesign();
@@ -291,6 +293,7 @@ export const DeckCard = memo(function DeckCard({ tab, index, geometry: g, motion
         )}
       </Animated.View>
       <Animated.View
+        ref={reach}
         accessible
         accessibilityRole="button"
         accessibilityLabel={title}
@@ -299,6 +302,7 @@ export const DeckCard = memo(function DeckCard({ tab, index, geometry: g, motion
         {...screenReaderActions([
           { name: "activate", run: () => onOpen(index) },
           { name: "close", label: "Close Tab", run: () => onCloseNow(index) },
+          ...(onMenu ? [{ name: "menu", label: CARD_MENU_ACTION, run: () => onMenu(index, reach) }] : []),
         ])}
         pointerEvents="none"
         style={[styles.reach, { width: g.cardWidth, height: g.cardHeight }, reachStyle]}
@@ -357,11 +361,13 @@ export function CardMenu({ tab, close, testID, haptic, style, children }: CardMe
   const profiles = useSyncView().profiles;
   const spaces = moveTargets(tabSpaces, profiles, tab);
   return (
-    <MenuTrigger testID={testID} items={cardMenuItems(tab, { devices, pinned, syncEnabled, spaces }, close)} trigger="longPress" haptic={haptic} onOpen={hideArchiveCard} style={style}>
+    <MenuTrigger testID={testID} items={cardMenuItems(tab, { devices, pinned, syncEnabled, spaces }, close)} trigger="longPress" haptic={haptic} privately={tab.isPrivate} onOpen={hideArchiveCard} style={style}>
       {children}
     </MenuTrigger>
   );
 }
+
+export const CARD_MENU_ACTION = "Tab Options";
 
 export function DeckCardMenu({ tab, index, onClose, fill, children }: { tab: BrowserTab; index: number; onClose: (index: number) => void; fill: string; children: ReactNode }) {
   return (
@@ -376,7 +382,7 @@ export const deckHeaderTitle = (tab: BrowserTab, title: string): string => (tab.
 export function CardIcon({ tab }: { tab: BrowserTab }) {
   return tab.isPrivate ? (
     <View style={[styles.privateIcon, { backgroundColor: tabsInk.incognitoCardRaised }]}>
-      <Symbol name="eyes" size={tabsLayout.faviconSize - 4} color={tabsInk.onDark} />
+      <IncognitoSpecs size={tabsLayout.specsIcon} color={tabsInk.onDark} />
     </View>
   ) : (
     <Favicon iconUrl={tab.faviconUrl} pageUrl={tab.url} size={tabsLayout.faviconSize} />

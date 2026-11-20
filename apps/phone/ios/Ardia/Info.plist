@@ -77,6 +77,8 @@
 	<string>Ardia uses the microphone when you search with your voice, and for websites that ask to use it.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Ardia saves images you choose to your photo library.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Ardia uses your photo library when you choose photos or videos to upload to a website.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Ardia turns what you say into a search when you use Voice Search.</string>
 	<key>NSUserActivityTypes</key>

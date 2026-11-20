@@ -7,7 +7,7 @@ import { haptics } from "../../state/app/haptics";
 import { TabsMenuTrigger } from "./tabsMenu";
 import { display } from "../../state/search/omnibox";
 import type { BrowserTab } from "../../state/tabs/tabModels";
-import { capsule, chromeInk, ChromeSurface, Favicon, floatingBarLayout, PressScale, Symbol, type ColorRoles } from "../ui";
+import { capsule, chromeInk, chromeLayout, ChromeSurface, Favicon, floatingBarLayout, PressScale, Symbol, type ColorRoles } from "../ui";
 import { TabStack } from "./BottomBar";
 import { barReturnedToPage } from "../../state/browse/deckPull";
 import { useDeckOwnsBar } from "../../state/browse/hooks";
@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: floatingBarLayout.gap,
-    paddingHorizontal: floatingBarLayout.edgeInset,
+    paddingHorizontal: chromeLayout.barSideInset,
     height: floatingBarLayout.control,
   },
   circleHit: { width: floatingBarLayout.control, height: floatingBarLayout.control },

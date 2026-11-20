@@ -19,8 +19,8 @@ import { pressButton, renderSurface, textOf, unmount, withTabs } from "../../tes
 
 const realWindow = Dimensions.get("window");
 
-const page = (url: string) =>
-  usePages.setState((state) => ({ ...state, navigation: { t0: { url, title: "Site 0", canGoBack: false, canGoForward: false, isLoading: false, pageZoom: 1, isDesktopSite: false, blockedRequests: 0 } as never } }));
+const page = (url: string, isLoading = false) =>
+  usePages.setState((state) => ({ ...state, navigation: { t0: { url, title: "Site 0", canGoBack: false, canGoForward: false, isLoading, pageZoom: 1, isDesktopSite: false, blockedRequests: 0 } as never } }));
 
 let printed: jest.SpyInstance;
 let counted: jest.SpyInstance;
@@ -194,6 +194,62 @@ test("a private page prints but is never counted, and a print that didn't open i
   expect(printed).toHaveBeenCalledTimes(2);
   expect(counted).not.toHaveBeenCalledWith("pages_printed");
   unmount(again);
+});
+
+test("Summarize Page shows only where the phone summarizes, under Find on Page", async () => {
+  const absent = await openMenu("redesigned");
+  expect(wordRows(absent)).not.toContain("Summarize Page");
+  unmount(absent);
+  jest.spyOn(pages, "canSummarize").mockReturnValue(true);
+  const root = await openMenu("redesigned");
+  const rows = wordRows(root);
+  expect(rows[rows.indexOf("Find on Page") + 1]).toBe("Summarize Page");
+  expect(host(root, "pageMenuRow:Summarize Page")!.props.accessibilityState).toMatchObject({ disabled: false });
+  unmount(root);
+});
+
+test("Summarize Page closes the menu, then summarizes the current page once the sheet has gone, and leaves counting to the page's own events", async () => {
+  jest.spyOn(pages, "canSummarize").mockReturnValue(true);
+  const summarized = jest.spyOn(pages, "summarize").mockResolvedValue(true);
+  const root = await openMenu("redesigned");
+  await pressButton(root, "Summarize Page");
+  expect(usePageUi.getState().menuOpen).toBe(false);
+  expect(summarized).not.toHaveBeenCalled();
+  await act(async () => {
+    jest.advanceTimersByTime(1000);
+  });
+  expect(summarized).toHaveBeenCalledTimes(1);
+  expect(summarized).toHaveBeenCalledWith("t0");
+  expect(counted).not.toHaveBeenCalledWith("page_summaries_from_menu");
+  unmount(root);
+});
+
+test("the original menu offers Summarize Page where the phone can summarize", async () => {
+  jest.spyOn(pages, "canSummarize").mockReturnValue(true);
+  const root = await openMenu("original");
+  expect(textOf(root)).toContain("Summarize Page");
+  unmount(root);
+});
+
+test("a reload during the menu dismissal cancels the summary request", async () => {
+  jest.spyOn(pages, "canSummarize").mockReturnValue(true);
+  const summarized = jest.spyOn(pages, "summarize").mockResolvedValue(true);
+  const root = await openMenu("redesigned");
+  await pressButton(root, "Summarize Page");
+  await act(async () => {
+    page("https://site0.example/", true);
+    jest.advanceTimersByTime(1000);
+  });
+  expect(summarized).not.toHaveBeenCalled();
+  unmount(root);
+});
+
+test("Summarize Page is off on a page that isn't on the web", async () => {
+  jest.spyOn(pages, "canSummarize").mockReturnValue(true);
+  page("about:blank");
+  const root = await openMenu("redesigned");
+  expect(host(root, "pageMenuRow:Summarize Page")!.props.accessibilityState).toMatchObject({ disabled: true });
+  unmount(root);
 });
 
 test("a print asked for and then given up by reopening the menu doesn't run later", async () => {

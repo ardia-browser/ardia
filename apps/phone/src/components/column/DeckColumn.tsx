@@ -56,10 +56,10 @@ export function DeckColumn({ column, width, shown, incognito, hasTabs, onQuery, 
       </Animated.View>
       <SideColumn column={column} width={width} testID="deckColumn">
         <GlassCircleButton icon="magnifyingglass" label="Search Tabs" testID="deckColumnSearch" diameter={SCREEN_COLUMN.button} dark={dark} {...fade} onPress={() => search.input.current?.focus()} />
-        <MenuTrigger items={deckMoreMenuItems({ syncEnabled, canReopen, hasTabs, onCloseAll })} trigger="tap" {...menu} place={{ ...columnMenuPlace(column, width, moreTop), width: tabsLayout.menuWidth }}>
+        <MenuTrigger items={deckMoreMenuItems({ syncEnabled, canReopen, hasTabs, onCloseAll })} trigger="tap" frost={null} {...menu} place={{ ...columnMenuPlace(column, width, moreTop), width: tabsLayout.menuWidth }}>
           {({ onPress }) => <GlassCircleButton icon="ellipsis" label="More" testID="deckColumnMore" diameter={SCREEN_COLUMN.button} dark={dark} {...fade} onPress={onPress ?? noop} />}
         </MenuTrigger>
-        <PlusMenuButton width={SCREEN_COLUMN.button} label={incognito ? "New Incognito Tab" : "New Tab"} testID="deckColumnPlus" dark={dark} place={{ ...columnMenuPlace(column, width, plusTop), width: tabsLayout.menuWidth }} menusShown={menusShown} onMenu={onMenu} {...fade} />
+        <PlusMenuButton frost={null} width={SCREEN_COLUMN.button} label={incognito ? "New Incognito Tab" : "New Tab"} testID="deckColumnPlus" dark={dark} place={{ ...columnMenuPlace(column, width, plusTop), width: tabsLayout.menuWidth }} menusShown={menusShown} onMenu={onMenu} {...fade} />
       </SideColumn>
     </>
   );

@@ -102,8 +102,10 @@ package job red after almost every merge.
   1. reads the version from `MARKETING_VERSION` in the Xcode project, as `scripts/release.sh` does;
   2. fetches the engine (cached per engine key and table);
   3. builds `apps/linux/dist`;
-  4. installs uv and builds the CLI with `apps/cli/scripts/build.sh <version> <dist> --platform linux-x64`; its Python
-     and esbuild downloads are cached;
+  4. fetches the `ardia` command pinned in `apps/browser/official-plugins.json` (its linux-x64 tarball, from
+     ardia-browser/plugins' release, SHA-256 checked) and names it `ardia-cli-<version>-linux-x64.tar.gz` for the package
+     (`scripts/release/official-plugins.py linux-cli`); until the pin is published it packages without the CLI, with a
+     warning, and the smoke skips the `cli-*` assertions;
   5. prepares uBlock Origin with `scripts/linux/fetch-ubo.sh` (cached);
   6. runs `scripts/linux/package.py --out <engine> --version <version> --cli <CLI tarball> --deb <path> --appimage
      <path>`, which seeds the packaged uBlock Origin by running the staged `chrome` once (`scripts/linux/ubo-seed.mjs`);
@@ -112,7 +114,7 @@ package job red after almost every merge.
   8. installs the `.deb` with `scripts/linux/deb-install-test.sh` in Debian 13 and Ubuntu 24.04 containers
      (dependencies resolve, every library is found, `chrome-sandbox` is setuid root, the AppArmor profile only where
      the 4.0 ABI is, `apt purge` leaves nothing), about a minute; a failure fails the job;
-  9. uploads the tarball, the `.deb`, the AppImage, the CLI tarball, their SHA-256 files and `results.json` for seven
+  9. uploads the tarball, the `.deb`, the AppImage, their SHA-256 files and `results.json` for seven
      days.
 
   Its apt list covers the libraries `chrome` links (`readelf -d`) plus GTK and libsecret, which it loads at runtime.
@@ -188,7 +190,8 @@ it:
 7. runs the smoke gate on the tarball, the `.deb` and the AppImage.
 
 Everything goes to `dist/<version>/linux/`, or to `--out`. It never uploads. It prints the `gh release upload` command
-for the tarball, the `.deb`, the AppImage, the Arch source package, the CLI tarball and their `.sha256` files, and for
+for the tarball, the `.deb`, the AppImage, the Arch source package, the CLI tarball (the pinned command, renamed for
+this version) and their `.sha256` files, and for
 a stable the AUR update. `--allow-dirty` builds from a dirty tree for testing.
 The key's paths must still be clean for a fetched engine, so pass an engine dir then.
 
@@ -239,7 +242,7 @@ hand. The one-time setup is in [releasing.md](releasing.md#linux-package).
 ## Triggers and gating
 
 - **When it runs.** On pull requests and pushes to `main` that touch what the Linux build reads: `apps/linux`,
-  `apps/browser`, `apps/cli`, `packages`, `engine`, `scripts/linux`, `scripts/lib`, `scripts/agent/locked`,
+  `apps/browser`, `plugins`, `packages`, `engine`, `scripts/linux`, `scripts/lib`, `scripts/agent/locked`,
   `infra/feedback/lib`, `patches`, the workspace manifests and lockfile, the Linux setup action and the workflow itself.
   Mac-only changes elsewhere skip it. It can still be started by hand, with `exact` to require this commit's engine.
 - **Gate.** Like `ios.yml` and `android.yml`, a `gate` job runs `vouch.gate` first, and both jobs need it. An unvouched

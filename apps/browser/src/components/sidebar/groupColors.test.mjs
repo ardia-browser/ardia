@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { TAB_GROUP_COLORS } from "@ardia/core";
-import { groupBoxAtRest, groupSurface, groupTint } from "./tokens.ts";
+import { folderPalette, groupBoxAtRest, groupSurface, groupTint } from "./tokens.ts";
 import { GROUP_COLORS } from "../../state/groups/tokens.ts";
 
 const TOKENS = { groupFill: "rgba(255,255,255,0.1)", groupStroke: "rgba(255,255,255,0.1)" };
@@ -21,4 +21,15 @@ test("a neutral group keeps Dia's look, its box only under the pointer, and None
   assert.equal(groupBoxAtRest("none"), false);
   assert.deepEqual(groupSurface(null, TOKENS), { fill: TOKENS.groupFill, stroke: TOKENS.groupStroke });
   assert.deepEqual(groupSurface("none", TOKENS), { fill: "transparent", stroke: "transparent" });
+});
+
+test("a folder with no colour of its own is drawn in #443AFF, and a coloured one in its group's tint", () => {
+  for (const color of [null, undefined, "none"]) {
+    assert.equal(folderPalette(color, false).stroke, "#443AFF", String(color));
+    assert.deepEqual(folderPalette(color, true), folderPalette(null, true), String(color));
+  }
+  for (const color of TAB_GROUP_COLORS) {
+    assert.equal(folderPalette(color, false).stroke, GROUP_COLORS[color].hex, color);
+    assert.notDeepEqual(folderPalette(color, true), folderPalette(null, true), color);
+  }
 });

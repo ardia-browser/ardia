@@ -86,3 +86,34 @@ onAndroid("on Android a page's alert stays the drawn dialog", () => {
   expect(root.root.findAll((node) => typeof node.type === "string" && node.props.accessibilityRole === "button").length).toBeGreaterThan(0);
   unmount(root);
 });
+
+onAndroid("on Android a file input that offers the camera asks in the drawn action sheet, as iPhone's system sheet does, and its Cancel dismisses", () => {
+  const sheet = jest.spyOn(ActionSheetIOS, "showActionSheetWithOptions").mockImplementation(() => undefined);
+  ask({ ...base, kind: "fileChooser", offersPhoto: true, offersVideo: false, capturesDirectly: false, allowsMultiple: false } as Request);
+  const root = renderSurface(<PageRequestHost tabId="p1" />);
+  expect(sheet).not.toHaveBeenCalled();
+  expect(root.root.findAll((node) => node.props.testID === "drawnActionSheet" && typeof node.type === "string")).toHaveLength(1);
+  const button = (label: string) => root.root.findAll((node) => node.props.accessibilityRole === "button" && node.props.accessibilityLabel === label && typeof node.props.onPress === "function")[0]!;
+  act(() => button("Take Photo").props.onPress());
+  expect(answered).toHaveBeenLastCalledWith("p1", expect.objectContaining({ id: "r1" }), { type: "takePhoto" });
+  act(() => root.root.findAll((node) => node.props.testID === "drawnConfirmationOutside" && typeof node.props.onPress === "function")[0]!.props.onPress());
+  expect(answered).toHaveBeenLastCalledWith("p1", expect.objectContaining({ id: "r1" }), { type: "dismiss" });
+  unmount(root);
+});
+
+test("a page link's long press opens the drawn menu at the finger, dimmed, inside the safe screen, with its origin at the finger", () => {
+  const { PressMenu } = require("../components/browsing/PageRequests") as typeof import("../components/browsing/PageRequests");
+  const { Menu } = require("../components/ui") as typeof import("../components/ui");
+  const { usePageUi } = require("../state/page/store") as typeof import("../state/page/store");
+  act(() => usePageUi.setState({ press: { tabId: "p1", target: { kind: "link", url: "https://example.com/a", text: "A" } as never, x: 360, y: 790 } }));
+  const root = renderSurface(<PressMenu width={393} height={873} />);
+  const menu = root.root.findAll((node) => node.type === Menu)[0]!;
+  expect(menu.props.dimmed).toBe(true);
+  const placed = menu.props.placer(300);
+  expect(placed.origin).toBe("right bottom");
+  expect(placed.place.left + 250).toBeLessThanOrEqual(393 - 8);
+  expect(placed.place.top + placed.maxHeight).toBeLessThanOrEqual(873 - 24 - 8);
+  expect(placed.place.top).toBeGreaterThanOrEqual(40 + 8);
+  act(() => usePageUi.setState({ press: null }));
+  unmount(root);
+});

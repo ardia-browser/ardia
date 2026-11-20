@@ -957,10 +957,6 @@ std::optional<Failure> ReadFirefoxLoginsDatabase(const std::string& directory, c
                                                  ScratchDirectory& scratch, ImportObserver& observer,
                                                  std::string_view primary_password, FirefoxLoginsRead* out,
                                                  bool* cancelled) {
-  SecretBytes key;
-  const FirefoxKey opened = FirefoxNamedKey(database.global_salt, database.check, database.rows, primary_password,
-                                            kFirefoxLoginsKeyLabel, &key);
-  if (opened != FirefoxKey::kOk) return FirefoxKeyFailure(opened, "logins.db");
   FileRead status = FileRead::kOk;
   std::unique_ptr<Database> db = Database::Snapshot(Join(directory, "logins.db"), scratch, observer, &status);
   if (!db) return SnapshotFailure(status, "logins.db");
@@ -977,9 +973,17 @@ std::optional<Failure> ReadFirefoxLoginsDatabase(const std::string& directory, c
   }
   Statement rows(db->get(), sql);
   if (!rows.ok()) return Failure{"unsupported", "logins.db has an unexpected layout"};
+  if (!rows.Step()) {
+    if (rows.failed()) return Failure{"unreadable", "Couldn't read logins.db"};
+    return Failure{"empty", "No saved logins in this profile"};
+  }
+  SecretBytes key;
+  const FirefoxKey opened = FirefoxNamedKey(database.global_salt, database.check, database.rows, primary_password,
+                                            kFirefoxLoginsKeyLabel, &key);
+  if (opened != FirefoxKey::kOk) return FirefoxKeyFailure(opened, "logins.db");
   size_t added = 0;
   int seen = 0;
-  while (rows.Step()) {
+  do {
     if (++seen % kCancelRows == 0 && observer.Cancelled()) {
       *cancelled = true;
       out->credentials.clear();
@@ -1014,7 +1018,7 @@ std::optional<Failure> ReadFirefoxLoginsDatabase(const std::string& directory, c
     credential.times_used = static_cast<int>(std::clamp<int64_t>(rows.Int(6), 0, 1 << 30));
     if (added++ >= kMaxCredentials) break;
     out->credentials.push_back(std::move(credential));
-  }
+  } while (rows.Step());
   if (rows.failed()) return Failure{"unreadable", "Couldn't read logins.db"};
   return std::nullopt;
 }
@@ -1135,7 +1139,9 @@ std::optional<Failure> ReadFirefoxLogins(const std::string& directory, ScratchDi
   if (*cancelled) return std::nullopt;
   if ((!json || json_failure) && (!database || database_failure)) return json_failure ? json_failure : database_failure;
   if (json_failure) out->notes.push_back("logins.json couldn't be read: " + json_failure->message);
-  if (database_failure) out->notes.push_back("logins.db couldn't be read: " + database_failure->message);
+  if (database_failure && database_failure->code != "empty") {
+    out->notes.push_back("logins.db couldn't be read: " + database_failure->message);
+  }
   std::stable_sort(out->credentials.begin(), out->credentials.end(), [](const Credential& a, const Credential& b) {
     return std::max(a.last_used, a.created) > std::max(b.last_used, b.created);
   });

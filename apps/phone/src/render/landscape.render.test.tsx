@@ -59,14 +59,15 @@ test("an iPhone 17 Pro on its side gets main's landscape deck: a 520.3 by 240 ca
   expect(g.safeSide).toBe(59);
 });
 
-test("in landscape the deck's header and bottom bar pad by the wider side inset plus 12 on both sides, and on iPhone the grid by it plus 16", () => {
+test("in landscape the deck's header and its bottom bar pad by the wider side inset plus the bars' 24 on both sides, and on iPhone the grid by it plus 16", () => {
   act(() => browse.useBrowse.setState({ surface: "deck", sheet: null, deckEntrance: null, frozenOrder: null, opening: null, leaving: null }));
   const root = redesigned(<TabDeck />);
-  expect(flat(hosts(root, "deckBottomBar")[0]!).paddingHorizontal).toBe(59 + 12);
+  expect(flat(hosts(root, "deckBottomBar")[0]!).paddingHorizontal).toBe(59 + 24);
   const header = root.root.findAll((node) => typeof node.type === "string" && typeof node.props.testID === "string" && node.props.testID.startsWith("deckHeader"));
   expect(header.length).toBeGreaterThan(0);
   const sides = header.map(flat).flatMap((style) => [style.paddingHorizontal, style.left, style.right, style.paddingLeft, style.paddingRight]).filter((value) => typeof value === "number");
-  expect(sides).toContain(59 + 12);
+  expect(sides).toContain(59 + 24);
+  expect(sides).not.toContain(59 + 12);
   if (Platform.OS !== "ios") return unmount(root);
   act(() => deckGrid.setDeckGrid(true));
   act(() => jest.advanceTimersByTime(1000));
@@ -75,16 +76,16 @@ test("in landscape the deck's header and bottom bar pad by the wider side inset 
   unmount(root);
 });
 
-test("in landscape the page bar stays one centred row: the wider side inset on both sides, then the bar's own 12, leaving main's 598-point address capsule on an 852 screen", () => {
+test("in landscape the page bar stays one centred row: the wider side inset on both sides, then the bars' own 24, leaving a 574-point address capsule on an 852 screen", () => {
   act(() => browse.useBrowse.setState({ surface: "browsing", sheet: null, deckEntrance: null, frozenOrder: null, opening: null }));
   const root = redesigned(<BrowsingScreen tab={currentTabs().open[0]!} />);
   const bar = root.root.findAll((node) => node.type === FloatingBar)[0]!;
   let controls: ReactTestInstance | null = bar.parent;
   while (controls && (typeof controls.type !== "string" || flat(controls).bottom === undefined)) controls = controls.parent;
   expect(flat(controls!).paddingHorizontal).toBe(59);
-  const row = bar.findAll((node) => typeof node.type === "string" && flat(node).flexDirection === "row" && flat(node).paddingHorizontal === 12)[0]!;
+  const row = bar.findAll((node) => typeof node.type === "string" && flat(node).flexDirection === "row" && flat(node).paddingHorizontal === 24)[0]!;
   const { gap, height } = flat(row) as { gap: number; height: number };
-  expect(LANDSCAPE.width - 2 * (59 + 12) - 2 * height - 2 * gap).toBe(598);
+  expect(LANDSCAPE.width - 2 * (59 + 24) - 2 * height - 2 * gap).toBe(574);
   unmount(root);
 });
 
@@ -107,7 +108,7 @@ test("turning to landscape is counted once a launch, and a portrait window never
   forgetLandscapeCount();
 });
 
-test("in landscape the archive capsule shrinks the deck's cards to main's 407.6 by 188, as main's geometry takes the capsule's bottom as the chrome; in portrait on a 402 by 874 iPhone they go from 279.6 to 273.2", () => {
+test("in landscape the archive capsule shrinks the deck's cards to main's 407.6 by 188 on iPhone (smaller on Android, whose deck bar sits where the browsing bar does), as main's geometry takes the capsule's bottom as the chrome; in portrait on a 402 by 874 iPhone they go from 279.6 to 273.2", () => {
   const archive = deckGeometry(852, 393, 0, 21, 59, "ios", "redesigned", deckArchiveBottom());
   expect(archive.cardWidth).toBeCloseTo(407.6, 1);
   expect(archive.cardHeight).toBeCloseTo(188, 1);
@@ -117,8 +118,9 @@ test("in landscape the archive capsule shrinks the deck's cards to main's 407.6 
   act(() => useArchiveCard.setState({ showing: true }));
   const root = redesigned(<TabDeck />);
   const card = root.root.findAll((node) => node.props.testID === "deckCard" && typeof node.type === "string")[0]!;
-  expect(flat(card).width).toBeCloseTo(407.6, 1);
-  expect(flat(card).height).toBeCloseTo(188, 1);
+  const shown = deckGeometry(852, 393, 0, 21, 59, Platform.OS, "redesigned", deckArchiveBottom());
+  expect(flat(card).width).toBeCloseTo(shown.cardWidth, 1);
+  expect(flat(card).height).toBeCloseTo(shown.cardHeight, 1);
   unmount(root);
   act(() => useArchiveCard.setState({ showing: false }));
 });
@@ -147,7 +149,7 @@ test("in landscape a sheet stops at the side insets and fits the shorter window,
   act(() => Dimensions.set({ window: { ...PORTRAIT, ...LANDSCAPE }, screen: { ...PORTRAIT, ...LANDSCAPE } }));
   const after = flat(panel(root));
   expect(after).toMatchObject({ left: 59, right: 59, paddingBottom: 21 });
-  expect(after.maxHeight).toBe(Math.min(LANDSCAPE.height - INSETS.top - (Platform.OS === "ios" ? 0 : 24), LANDSCAPE.height * (Platform.OS === "ios" ? 0.9 : 1)));
+  expect(after.maxHeight).toBe(LANDSCAPE.height - INSETS.top - (Platform.OS === "ios" ? 10 : 24));
   expect(after.maxHeight as number).toBeLessThan(before.maxHeight as number);
   unmount(root);
 });

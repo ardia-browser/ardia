@@ -208,8 +208,7 @@ export function endTabDrag(): boolean {
   }
   if (target && tabId) {
     dragPreview.end();
-    dropTabIntoSplit(tabId, target.tabId, target.side);
-    return true;
+    return !!dropTabIntoSplit(tabId, target.tabId, target.side);
   }
   if (!(outside || onPage)) {
     if (shown) dragPreview.end();

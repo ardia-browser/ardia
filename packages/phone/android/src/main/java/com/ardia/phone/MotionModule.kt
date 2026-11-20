@@ -8,6 +8,8 @@ import android.graphics.Outline
 import android.view.View
 import android.view.ViewOutlineProvider
 import android.view.animation.LinearInterpolator
+import com.facebook.react.uimanager.PointerEvents
+import com.facebook.react.uimanager.ReactPointerEventsView
 import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -36,7 +38,14 @@ class MotionCurveRecord : Record {
     fun curve(): MotionCurve = if (type == "spring") MotionCurve.Spring(response, dampingFraction) else MotionCurve.Timing(durationMs.toLong(), curve?.map { it.toFloat() })
 }
 
-class MotionView(context: Context, appContext: AppContext) : ExpoView(context, appContext), MotionSurface {
+class MotionView(context: Context, appContext: AppContext) : ExpoView(context, appContext), MotionSurface, ReactPointerEventsView {
+    override var pointerEvents: PointerEvents = PointerEvents.AUTO
+        private set
+
+    fun takePointerEvents(value: String?) {
+        pointerEvents = runCatching { PointerEvents.parsePointerEvents(value) }.getOrDefault(PointerEvents.AUTO)
+    }
+
     private val onMotionEnd by EventDispatcher()
     private val onMotionNearEnd by EventDispatcher()
     private val runner = MotionRunner(this).apply {
@@ -205,6 +214,8 @@ class MotionModule : Module() {
             Prop("motion") { view: MotionView, curve: MotionCurveRecord -> view.curve(curve.curve()) }
 
             Prop("nearEndPx") { view: MotionView, pixels: Double? -> view.nearEnd(pixels) }
+
+            Prop("pointerEvents") { view: MotionView, value: String? -> view.takePointerEvents(value) }
 
             OnViewDidUpdateProps { view: MotionView -> view.applyProps() }
         }

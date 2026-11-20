@@ -7,7 +7,15 @@ export type PluginListing = {
   problems: string[];
   hash: string | null;
   folderId: string;
+  bundled?: boolean;
+  replacesBundled?: boolean;
+  ignoresUserFolder?: boolean;
 };
+
+export type ProgramsState =
+  | { state: "linking"; hash: string; request: number }
+  | { state: "linked"; hash: string; linked: string[]; refused: Record<string, string>; binDir: string }
+  | { state: "failed"; hash: string; reason: string };
 
 export type ProcessState =
   | { state: "starting" | "running"; run: number; since: number }
@@ -21,23 +29,29 @@ export type PluginRecord = {
   approved: string | null;
   values: Record<string, string | boolean>;
   applied: Record<string, { value: unknown; previous: unknown; order: number; over: string | null }>;
+  controlGranted?: boolean;
+  installed?: boolean;
 };
 
 export type PluginsStore = {
   loaded: boolean;
+  scanned: boolean;
   listings: Record<string, PluginListing>;
   order: string[];
   records: Record<string, PluginRecord>;
   processes: Record<string, ProcessState>;
-  consent: { name: string; hash: string } | null;
+  programs: Record<string, ProgramsState>;
+  consent: { id: number; name: string; hash: string } | null;
 };
 
 export const usePlugins = create<PluginsStore>()(() => ({
   loaded: false,
+  scanned: false,
   listings: {},
   order: [],
   records: {},
   processes: {},
+  programs: {},
   consent: null,
 }));
 
@@ -47,8 +61,16 @@ const ownRecord = (s: Pick<PluginsStore, "records">, name: string): PluginRecord
 
 export const recordOf = (s: Pick<PluginsStore, "records">, name: string): PluginRecord => ownRecord(s, name) ?? NO_RECORD;
 
+export const isAlwaysOn = (listing: PluginListing | undefined): boolean => !!listing?.bundled && !!listing.manifest?.alwaysOn && !!listing.hash;
+
+export function isInstalled(s: Pick<PluginsStore, "listings" | "records">, name: string): boolean {
+  const listing = Object.hasOwn(s.listings, name) ? s.listings[name] : undefined;
+  return isAlwaysOn(listing) && (!!listing!.manifest!.autoInstall || ownRecord(s, name)?.installed === true);
+}
+
 export function activeManifest(s: Pick<PluginsStore, "listings" | "records">, name: string): PluginManifest | null {
   const listing = Object.hasOwn(s.listings, name) ? s.listings[name] : undefined;
+  if (isAlwaysOn(listing)) return isInstalled(s, name) ? listing!.manifest : null;
   const record = ownRecord(s, name);
   if (!listing?.manifest || !listing.hash || !record?.enabled || record.approved !== listing.hash) return null;
   return listing.manifest;
@@ -58,6 +80,7 @@ export const activeNames = (s: Pick<PluginsStore, "listings" | "records" | "orde
 
 export function needsReview(s: Pick<PluginsStore, "listings" | "records">, name: string): boolean {
   const listing = Object.hasOwn(s.listings, name) ? s.listings[name] : undefined;
+  if (isAlwaysOn(listing)) return false;
   const record = ownRecord(s, name);
   return !!record?.enabled && !!listing?.hash && record.approved !== listing.hash;
 }

@@ -80,7 +80,7 @@ export function sfSymbol(name: string | null, known: (symbol: string) => boolean
   return symbol && known(symbol) ? symbol : null;
 }
 
-const SF_NAMES: Record<string, string> = Object.entries(SF_SYMBOLS).reduce<Record<string, string>>((names, [sf, symbol]) => (symbol in names ? names : { ...names, [symbol]: sf }), {});
+const SF_NAMES: Record<string, string> = Object.entries(SF_SYMBOLS).reduce<Record<string, string>>((names, [sf, symbol]) => (symbol in names ? names : { ...names, [symbol]: sf }), { eyeglassesThin: "eyeglasses" });
 
 export function sfName(symbol: string | null | undefined): string | undefined {
   return symbol ? SF_NAMES[symbol] : undefined;

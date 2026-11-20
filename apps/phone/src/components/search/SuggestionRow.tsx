@@ -4,6 +4,7 @@ import { queryPrefixLength, type TrayRow } from "../../state/search/omnibox";
 import { countRender } from "../../state/app/interactionPerf";
 import type { Design } from "../../lib/design";
 import { browseLayout, Favicon, font, radius, screenReaderActions, space, Symbol, tabsMotion, useDesign, type ColorRoles, type SymbolName } from "../ui";
+import type { Point } from "../../lib/menuPlace";
 
 const ROW_LOOK: Record<Design, { glyph: number; favicon: number; switchGlyph: boolean; title3: TextStyle; body: TextStyle; subheadline: TextStyle }> = {
   original: { glyph: 19, favicon: 20, switchGlyph: true, title3: font.title3, body: font.body, subheadline: font.subheadline },
@@ -17,7 +18,7 @@ const ROW_LOOK: Record<Design, { glyph: number; favicon: number; switchGlyph: bo
   },
 };
 
-const LEADING: Record<TrayRow["kind"], SymbolName> = { query: "magnifyingglass", page: "globe", calc: "equalCircleFill", paste: "docOnDoc" };
+const LEADING: Record<TrayRow["kind"], SymbolName> = { query: "magnifyingglass", page: "globe", calc: "equalCircleFill", paste: "docOnDoc", browseForMe: "sparkleMagnifyingglass" };
 
 type Props = {
   row: TrayRow;
@@ -28,7 +29,7 @@ type Props = {
   menu?: readonly { label: string; run: () => void }[];
   onActivate: (row: TrayRow) => void;
   onRefine: (row: TrayRow) => void;
-  onMenu: (row: TrayRow, y: number) => void;
+  onMenu: (row: TrayRow, at: Point) => void;
 };
 
 export const SuggestionRow = memo(function SuggestionRow({ row, typed, roles, interactive = true, highlightsPress = true, menu = [], onActivate, onRefine, onMenu }: Props) {
@@ -56,7 +57,7 @@ export const SuggestionRow = memo(function SuggestionRow({ row, typed, roles, in
     <Pressable
       accessibilityRole="button"
       onPress={() => onActivate(row)}
-      onLongPress={(event) => onMenu(row, event.nativeEvent.pageY)}
+      onLongPress={(event) => onMenu(row, { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY })}
       delayLongPress={tabsMotion.longPress}
       {...screenReaderActions(menuActions)}
       style={({ pressed }) => [styles.row, { backgroundColor: pressed && highlightsPress ? roles.rowHighlight : undefined }]}

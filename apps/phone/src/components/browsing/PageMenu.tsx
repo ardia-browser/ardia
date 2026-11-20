@@ -5,6 +5,7 @@ import Animated, { FadeIn, FadeOut, LayoutAnimationConfig } from "react-native-r
 import { copy } from "../../lib/platformCopy";
 import {
   canPrintPages,
+  canSummarizePages,
   printCurrentPage,
   closeMenuSubpage,
   closePageMenu,
@@ -27,6 +28,7 @@ import {
   shareCurrentPage,
   showFind,
   showReader,
+  summarizeCurrentPage,
   translatePage,
   zoomIn,
   zoomOut,
@@ -77,6 +79,7 @@ export function PageMenu({ tabId, open, onHidden }: { tabId: string; open: boole
 function MenuMain({ tabId, model, onTranslate }: { tabId: string; model: MenuModel; onTranslate: () => void }) {
   const { fontScale } = useWindowDimensions();
   const large = fontScale >= copy().menuLargeTextScale;
+  const offersSummary = canSummarizePages();
   return (
     <ScrollView contentContainerStyle={styles.column} bounces={false}>
       <NavigationCapsule tabId={tabId} />
@@ -94,7 +97,8 @@ function MenuMain({ tabId, model, onTranslate }: { tabId: string; model: MenuMod
         </View>
       )}
       <Group>
-        <Row icon="textMagnifyingglass" title="Find on Page" enabled={model.find} divider={model.pageRows} onPress={showFind} />
+        <Row icon="textMagnifyingglass" title="Find on Page" enabled={model.find} divider={offersSummary || model.pageRows} onPress={showFind} />
+        {offersSummary ? <Row icon="sparkles" title="Summarize Page" enabled={model.summarize} divider={model.pageRows} onPress={summarizeCurrentPage} /> : null}
         {model.pageRows ? <SendRow tabId={tabId} enabled={model.isWebPage} /> : null}
         {model.pageRows ? <Row icon="translate" title={model.translateTitle} enabled={model.translate} divider={canPrintPages()} onPress={onTranslate} /> : null}
         {model.pageRows && canPrintPages() ? <Row icon="printer" title="Print" enabled={model.print} divider={false} onPress={printCurrentPage} /> : null}

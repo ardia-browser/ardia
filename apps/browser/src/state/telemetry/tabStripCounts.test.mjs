@@ -26,6 +26,7 @@ const ZERO = {
   tab_strip_scrolls: 0,
   tab_strip_scroll_stalls: 0,
   tab_strip_reveals_held_for_scroll: 0,
+  tab_strip_commands_refused: 0,
 };
 
 test("group collapses and expands from the strip are counted, and taking them starts over", () => {

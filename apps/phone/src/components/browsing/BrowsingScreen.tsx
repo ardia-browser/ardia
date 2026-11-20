@@ -27,7 +27,6 @@ import {
   barHeight,
   browseLayout,
   ink,
-  iPhoneOr,
   isDarkColor,
   LoadingLine,
   type LoadWatch,
@@ -130,12 +129,12 @@ export const BrowsingScreen = memo(function BrowsingScreen({ tab }: { tab: Brows
   };
   const incognito = useIncognito();
   const reduceMotion = useReduceMotion();
-  const pulls = Platform.OS === "ios" && design === "redesigned" && !column;
+  const pulls = design === "redesigned" && !column;
   const tracks = pulls && !reduceMotion;
   useEffect(() => {
     if (!pulls) return;
     armDeckPull(tab.id, reduceMotion);
-    return () => disarmDeckPull(tab.id);
+    return () => disarmDeckPull(tab.id, deckPullSettled);
   }, [pulls, reduceMotion, tab.id]);
   const barCenter = barCenterFromBottom(insets.bottom, design);
   const barTop = barCenter + floatingBarLayout.control / 2;
@@ -198,7 +197,7 @@ export const BrowsingScreen = memo(function BrowsingScreen({ tab }: { tab: Brows
               style={[styles.bar, { height: barHeight(insets.bottom, design) }, underBar ? null : barStyle, collapse.style]}
             >
               {design === "redesigned" ? (
-                <BarControls style={[styles.controls, { bottom: barCenterFromBottom(insets.bottom, design) - floatingBarLayout.control / 2, paddingHorizontal: safeSide }, pulls ? barShift : null]} pointerEvents="box-none">
+                <Animated.View style={[styles.controls, { bottom: barCenterFromBottom(insets.bottom, design) - floatingBarLayout.control / 2, paddingHorizontal: safeSide }, pulls ? barShift : null]} pointerEvents="box-none">
                   <Animated.View
                     testID="floatingBarFold"
                     collapsable={false}
@@ -234,7 +233,7 @@ export const BrowsingScreen = memo(function BrowsingScreen({ tab }: { tab: Brows
                       <HostPill tab={tab} dark={barDark} shown={collapse.collapsed} anchors={collapse.collapsed} contentStyle={collapse.fold.pillContent} onExpand={collapse.expand} />
                     </Animated.View>
                   ) : null}
-                </BarControls>
+                </Animated.View>
               ) : (
                 <>
                   <View style={[StyleSheet.absoluteFill, { backgroundColor: barDark ? tabsInk.barShadeOnDark : tabsInk.barShadeOnLight }]} />
@@ -253,6 +252,7 @@ export const BrowsingScreen = memo(function BrowsingScreen({ tab }: { tab: Brows
         <Menu
           items={tabsMenuItems(barOrder)}
           place={column ? { ...columnMenuPlace(column, width, SCREEN_COLUMN.top), width: Math.min(tabsLayout.menuWidth, pageWidth - space.l * 2) } : { bottom: barHeight(insets.bottom, design) + space.xs, left: space.l, width: Math.min(tabsLayout.menuWidth, width - space.l * 2) }}
+          frost={null}
           onDismiss={() => setTabsMenu(false)}
         />
       ) : null}
@@ -264,7 +264,6 @@ export const BrowsingScreen = memo(function BrowsingScreen({ tab }: { tab: Brows
   );
 });
 
-const BarControls = iPhoneOr<typeof Animated.View>(Animated.View, View as unknown as typeof Animated.View);
 
 const COLUMN_PAGE = { pageBottom: 0, toneBottom: 0 };
 const COLUMN_OBSCURED = { top: 0, bottom: 0 };
@@ -330,13 +329,11 @@ export function barSwipeUp(enabled: boolean, pagerActive: { value: number }, ope
       });
   }
   const { id, prepare, began, released, settled } = pull;
+  const frameRelease = Platform.OS === "android";
   return pan
     .onBegin(() => {
       deckPull.warm.value = true;
       if (deckPull.target.value?.id !== id) runOnJS(prepare)();
-    })
-    .onFinalize(() => {
-      deckPull.warm.value = false;
     })
     .onStart((event) => {
       if (pagerActive.value) return;
@@ -349,8 +346,17 @@ export function barSwipeUp(enabled: boolean, pagerActive: { value: number }, ope
     .onUpdate((event) => {
       trackDeckPull(event.translationY);
     })
-    .onEnd((event, success) => {
-      releaseDeckPull(id, event.velocityY, success, released, settled);
+    .onFinalize((event, success) => {
+      deckPull.warm.value = false;
+      const velocity = Number.isFinite(event.velocityY) ? event.velocityY : 0;
+      if (frameRelease) {
+        requestAnimationFrame(() => {
+          "worklet";
+          releaseDeckPull(id, velocity, success, released, settled);
+        });
+      } else {
+        releaseDeckPull(id, velocity, success, released, settled);
+      }
     });
 }
 

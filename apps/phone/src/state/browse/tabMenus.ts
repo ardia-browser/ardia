@@ -10,7 +10,7 @@ import { recentOtherTabs, tabMenuTitle } from "../tabs/tabsState";
 import { showToast } from "../toasts/store";
 import { openPage, openTab, reopenArchived } from "./store";
 
-export type RowAction = { label: string; icon: "eyes" | "squareOnSquare" | "link" | "squareAndArrowUp" | "docOnDoc"; run: () => void };
+export type RowAction = { label: string; icon: "eyeglassesThin" | "squareOnSquare" | "link" | "squareAndArrowUp" | "docOnDoc"; run: () => void };
 
 function openSwitchingMode(url: string, origin: "search" | "typed") {
   setIncognito(!useTabs.getState().incognito);
@@ -19,12 +19,12 @@ function openSwitchingMode(url: string, origin: "search" | "typed") {
 
 export function trayRowActions(row: TrayRow): RowAction[] {
   const incognito = useTabs.getState().incognito;
-  const icon = incognito ? "squareOnSquare" : "eyes";
+  const icon = incognito ? "squareOnSquare" : "eyeglassesThin";
   if (row.kind === "query") {
     return [{ label: incognito ? "Search in New Tab" : "Search in Incognito Tab", icon, run: () => openSwitchingMode(row.url, "search") }];
   }
   if (row.kind === "calc") return [{ label: "Copy", icon: "docOnDoc", run: () => quietly(() => copyText(row.value)) }];
-  if (row.kind === "paste") return [];
+  if (row.kind === "paste" || row.kind === "browseForMe") return [];
   return [
     { label: incognito ? "Open in New Tab" : "Open in Incognito Tab", icon, run: () => openSwitchingMode(row.url, "typed") },
     { label: "Copy Link", icon: "link", run: () => copyLink(row.url) },

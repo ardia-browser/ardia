@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { haptics } from "../../state/app/haptics";
-import { Pressable, ScrollView, type ScrollViewInstance, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, type ScrollViewInstance, StyleSheet, Text, View, type ViewInstance } from "react-native";
 import Animated, { FadeOut, LinearTransition, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import type { DeckGeometry } from "../../lib/deckGeometry";
 import { shownTone } from "../../lib/pageTone";
@@ -10,7 +10,8 @@ import { display } from "../../state/search/omnibox";
 import type { BrowserTab } from "../../state/tabs/tabModels";
 import { isUnseenReceived } from "../../lib/tabFace";
 import { capsule, ChromeSurface, deckChromeLayout, FadeView, font, screenReaderActions, Symbol, TabFace, tabsLayout, tabsMotion, useTheme } from "../ui";
-import { CardIcon, CardMenu, ReceivedBadge, type Reads } from "./DeckCard";
+import { CARD_MENU_ACTION, CardIcon, CardMenu, ReceivedBadge, type Reads } from "./DeckCard";
+import { nativeMenus } from "../ui/MenuTrigger";
 import { deckHeaderBottom } from "./DeckHeader";
 import { centredGridOffset, tabGridColumns, tabGridInk, tabGridInsets, tabGridLayout, tabGridMotion, tabGridRowHeight, tabGridStartOffset } from "./tabGridLayout";
 
@@ -113,6 +114,7 @@ const TabGridCell = memo(function TabGridCell({ tab, selected, width, aspect, co
   const open = () => onOpen(tab.id);
   const close = () => onClose(tab.id);
   const scale = useSharedValue(1);
+  const card = useRef<ViewInstance>(null);
   const id = tab.id;
   const pressStyle = useAnimatedStyle(() => ({ opacity: covering && covering.value === id ? 0 : 1, transform: [{ scale: scale.value }] }), [covering, id]);
   const press = (to: number) => {
@@ -133,8 +135,9 @@ const TabGridCell = memo(function TabGridCell({ tab, selected, width, aspect, co
         </Pressable>
       </View>
       <CardMenu testID="tabGridCardMenu" tab={tab} close={close} haptic={menuOpenedHaptic}>
-        {({ onLongPress }) => (
+        {({ onLongPress, openFor }) => (
           <Pressable
+            ref={card}
             testID="tabGridCard"
             accessibilityRole="button"
             accessibilityLabel={title}
@@ -143,6 +146,7 @@ const TabGridCell = memo(function TabGridCell({ tab, selected, width, aspect, co
             {...screenReaderActions([
               { name: "activate", run: open },
               { name: "close", label: "Close Tab", run: close },
+              ...(onLongPress && !nativeMenus() ? [{ name: "menu", label: CARD_MENU_ACTION, run: () => (openFor ? openFor(card.current) : onLongPress()) }] : []),
             ])}
             onPress={open}
             onLongPress={onLongPress}

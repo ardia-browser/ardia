@@ -84,12 +84,6 @@ public struct SpaceGlyph: View {
         Text(emoji)
           .font(.system(size: size * 0.8))
           .frame(width: size, height: size)
-      } else {
-        Text(Self.initial(of: space.name))
-          .font(.system(size: size * 0.55, weight: .bold))
-          .foregroundStyle(TabsPalette.spaceBadgeInk)
-          .frame(width: size, height: size)
-          .background(TabsPalette.spaceBadge, in: .circle)
       }
     }
     .accessibilityHidden(true)
@@ -102,6 +96,10 @@ public struct SpaceGlyph: View {
   nonisolated public static func filled(_ symbol: String) -> String {
     let fill = symbol + ".fill"
     return symbol.hasSuffix(".fill") || UIImage(systemName: fill) == nil ? symbol : fill
+  }
+
+  nonisolated public static func hasIcon(_ space: SyncedProfile) -> Bool {
+    SpaceColors.symbol(space.icon) != nil || emoji(space.icon) != nil
   }
 
   nonisolated public static func emoji(_ icon: String?) -> String? {
@@ -128,7 +126,9 @@ public struct SpaceTitle: View {
 
   public var body: some View {
     HStack(spacing: 8) {
-      SpaceGlyph(space: space)
+      if SpaceGlyph.hasIcon(space) {
+        SpaceGlyph(space: space)
+      }
       Text(space.name)
         .font(.headline)
         .foregroundStyle(TabsPalette.headerText)

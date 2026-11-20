@@ -9,6 +9,7 @@ import { renderSurface, unmount } from "../../test/render/harness";
 const onIos = Platform.OS === "ios" ? test : test.skip;
 const onAndroid = Platform.OS === "android" ? test : test.skip;
 const SCREEN = 873;
+const TOP_INSET = 40;
 
 beforeEach(() => jest.useFakeTimers());
 afterEach(() => {
@@ -50,15 +51,15 @@ function tallSheet(onDismiss: () => void, onTapAway?: () => void) {
   return root;
 }
 
-onIos("on iPhone a sheet stops at 90% of the screen's height, so the page shows above it, and draws a grabber", () => {
-  expect(sheetMaxHeight(SCREEN, 59)).toBe(Math.round(SCREEN * 0.9 * 10) / 10);
-  expect(sheetMaxHeight(568, 20)).toBeCloseTo(568 * 0.9);
+onIos("on iPhone a tall sheet stops 10 points below the safe top and draws a grabber", () => {
+  expect(sheetMaxHeight(SCREEN, 59)).toBe(SCREEN - 59 - 10);
+  expect(sheetMaxHeight(568, 20)).toBe(568 - 20 - 10);
   const root = renderSurface(
     <Sheet open onDismiss={() => undefined} onHidden={() => undefined}>
       <Text>Menu</Text>
     </Sheet>,
   );
-  expect(flat(panelOf(root)).maxHeight).toBeLessThanOrEqual(SCREEN * 0.9 + 0.01);
+  expect(flat(panelOf(root)).maxHeight).toBe(SCREEN - TOP_INSET - 10);
   expect(root.root.findAll((node) => node.props.testID === "sheetGrabber" && typeof node.type === "string")).toHaveLength(1);
   unmount(root);
 });

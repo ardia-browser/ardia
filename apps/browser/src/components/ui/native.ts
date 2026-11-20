@@ -1,11 +1,13 @@
 export {
   ActivitySpinner,
+  BackedView,
   ClipView,
   ContextMenuArea,
   DockSelection,
   FileDropArea,
   FolderIcon,
   MagnifyArea,
+  PeekStage,
   MouseArea,
   OutsidePressArea,
   PageCoverGate,
@@ -19,6 +21,9 @@ export {
   type DroppedItem,
   type DropUpdate,
   type MagnifyUpdate,
+  type PeekStageGeometry,
+  type PeekStageHandle,
+  type PeekStageState,
   type SurfaceProps,
 } from "@ardia/shell";
 

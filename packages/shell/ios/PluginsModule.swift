@@ -29,6 +29,16 @@ public class PluginsModule: Module {
 
     Function("call") { (name: String, run: Int, line: String) in PluginHost.shared.call(name, run: run, line) }
 
+    AsyncFunction("linkPrograms") { (spec: [String: Any], promise: Promise) in PluginProgramLinks.link(spec) { promise.resolve($0) } }
+
+    AsyncFunction("legacyProgramsInstalled") { (promise: Promise) in PluginProgramLinks.legacyInstalled { promise.resolve($0) } }
+
+    AsyncFunction("sweepPrograms") { (active: [String], promise: Promise) in PluginProgramLinks.sweep(keeping: active) { promise.resolve(nil) } }
+
+    AsyncFunction("unlinkPrograms") { (name: String, programs: [String], remove: Bool, promise: Promise) in
+      PluginProgramLinks.unlink(name, programs: programs, remove: remove) { promise.resolve($0) }
+    }
+
     AsyncFunction("remove") { (name: String, promise: Promise) in Self.remove(name, promise) }
       .runOnQueue(.main)
 

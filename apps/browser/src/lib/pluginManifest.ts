@@ -7,7 +7,7 @@ export { compareVersions } from "./versions";
 export const MANIFEST_VERSION = 1;
 export const MANIFEST_FILE = "plugin.json";
 
-export const PLUGIN_PERMISSIONS = ["tabs", "fullUrls", "commands", "network"] as const;
+export const PLUGIN_PERMISSIONS = ["tabs", "fullUrls", "commands", "network", "control"] as const;
 export type PluginPermission = (typeof PLUGIN_PERMISSIONS)[number];
 
 export const ROW_TYPES = ["toggle", "text", "choice"] as const;
@@ -29,6 +29,8 @@ export const LIMITS = {
   argv: 32,
   argBytes: 1024,
   memoryMB: [64, 4096],
+  programs: 4,
+  afterUpdate: [4, 8],
 } as const;
 
 export const NAME_PATTERN = "^[a-z0-9][a-z0-9-]{0,39}$";
@@ -56,6 +58,7 @@ export type CommandSpec = { name: string; title: string; icon: string; keywords:
 export type ToolSpec = { name: string; title: string; description: string; timeout: number };
 export type PageSpec = { title: string; icon: string; source: { file: string } };
 export type ProcessSpec = { run: string[]; memoryMB: number };
+export type ProgramSpec = { name: string; path: string; afterUpdate: string[][] };
 
 export type PluginManifest = {
   manifest: number;
@@ -69,6 +72,8 @@ export type PluginManifest = {
   commands: CommandSpec[];
   page: PageSpec | null;
   process: ProcessSpec | null;
+  programs: ProgramSpec[];
+  alwaysOn: boolean; official: boolean; autoInstall: boolean; icon: string | null;
   hooks: string[];
   tools: ToolSpec[];
 };
@@ -262,17 +267,15 @@ function pageOf(c: Check, value: unknown): PageSpec | null {
   return { title, icon, source: { file: doc.file as string } };
 }
 
+const isArgument = (arg: unknown): arg is string => typeof arg === "string" && arg.length > 0 && isWellFormed(arg) && new TextEncoder().encode(arg).length <= LIMITS.argBytes && !arg.includes("\0");
+
 function processOf(c: Check, value: unknown): ProcessSpec | null {
   if (value === undefined) return null;
   const doc = object(c, "process", value);
   if (!doc) return null;
   only(c, "process", doc, ["run", "memoryMB"]);
   const run = doc.run;
-  const okArgs =
-    Array.isArray(run) &&
-    run.length > 0 &&
-    run.length <= LIMITS.argv &&
-    run.every((arg) => typeof arg === "string" && arg.length > 0 && isWellFormed(arg) && new TextEncoder().encode(arg).length <= LIMITS.argBytes && !arg.includes("\0"));
+  const okArgs = Array.isArray(run) && run.length > 0 && run.length <= LIMITS.argv && run.every(isArgument);
   if (!okArgs) {
     c.problems.push(`process.run must be a list of 1 to ${LIMITS.argv} arguments, the program first`);
     return null;
@@ -281,6 +284,16 @@ function processOf(c: Check, value: unknown): ProcessSpec | null {
   if (!program.startsWith("/") && program.includes("/") && !isPluginPath(program)) c.problems.push("process.run[0] must be a file in the plugin's folder, an absolute path or a program name");
   const memoryMB = integer(c, "process.memoryMB", doc.memoryMB, LIMITS.memoryMB, 1024);
   return { run: run as string[], memoryMB };
+}
+
+function program(c: Check, path: string, value: unknown): ProgramSpec | null {
+  const doc = object(c, path, value);
+  if (!doc) return null;
+  only(c, path, doc, ["name", "path", "afterUpdate"]);
+  const name = matching(c, `${path}.name`, doc.name, NAME, NAME_RULE);
+  const file = typeof doc.path === "string" && isPluginPath(doc.path) ? doc.path : (c.problems.push(`${path}.path must be a file in the plugin's folder, like bin/tool`), null);
+  const after = doc.afterUpdate === undefined ? [] : Array.isArray(doc.afterUpdate) && doc.afterUpdate.length <= LIMITS.afterUpdate[0] && doc.afterUpdate.every((a) => Array.isArray(a) && a.length > 0 && a.length <= LIMITS.afterUpdate[1] && a.every(isArgument)) ? (doc.afterUpdate as string[][]) : (c.problems.push(`${path}.afterUpdate must be a list of at most ${LIMITS.afterUpdate[0]} argument lists of 1 to ${LIMITS.afterUpdate[1]}`), null);
+  return name && file && after ? { name, path: file, afterUpdate: after } : null;
 }
 
 function permissionsOf(c: Check, value: unknown): PluginPermission[] {
@@ -295,7 +308,7 @@ function permissionsOf(c: Check, value: unknown): PluginPermission[] {
   return out;
 }
 
-const TOP_KEYS = ["$schema", "manifest", "name", "title", "description", "version", "requires", "permissions", "settings", "commands", "page", "process", "hooks", "tools"];
+const TOP_KEYS = ["$schema", "manifest", "name", "title", "description", "version", "requires", "permissions", "settings", "commands", "page", "process", "programs", "alwaysOn", "official", "autoInstall", "icon", "hooks", "tools"];
 
 export function checkManifest(raw: Fields): { manifest: PluginManifest | null; problems: string[] } {
   const c: Check = { problems: [] };
@@ -313,6 +326,10 @@ export function checkManifest(raw: Fields): { manifest: PluginManifest | null; p
   unique(c, "commands", commands.map((x) => x.name), "commands");
   const page = pageOf(c, raw.page);
   const process = processOf(c, raw.process);
+  const [alwaysOn, official, autoInstall] = (["alwaysOn", "official", "autoInstall"] as const).map((k) => (raw[k] === undefined ? false : raw[k] === true || (c.problems.push(`${k} must be true`), false)));
+  const icon = matching(c, "icon", raw.icon, SYMBOL, "an SF Symbol name", false);
+  const programs = list(c, "programs", raw.programs, LIMITS.programs).flatMap((p, i) => program(c, at("programs", i), p) ?? []);
+  unique(c, "programs", programs.map((p) => p.name), "programs");
   const hooks = list(c, "hooks", raw.hooks, 64).flatMap((h, i) => (typeof h === "string" && h ? [h] : (c.problems.push(`${at("hooks", i)} must be an event name`), [])));
   commands.forEach((x, i) => {
     const action = x.action;
@@ -331,7 +348,7 @@ export function checkManifest(raw: Fields): { manifest: PluginManifest | null; p
   for (const [what, used] of needsProcess) if (used && !process) c.problems.push(`${what} needs a process`);
   if (c.problems.length || !name || !title) return { manifest: null, problems: c.problems };
   return {
-    manifest: { manifest: MANIFEST_VERSION, name, title, description, version, requires, permissions, settings, commands, page, process, hooks, tools },
+    manifest: { manifest: MANIFEST_VERSION, name, title, description, version, requires, permissions, settings, commands, page, process, programs, alwaysOn: !!alwaysOn, official: !!official, autoInstall: !!autoInstall, icon, hooks, tools },
     problems: [],
   };
 }
@@ -355,8 +372,8 @@ export function readManifest(text: string): ManifestRead {
   return { manifest, problems: problems.map((p) => `${MANIFEST_FILE}: ${p}`), newer: false };
 }
 
-export type Contribution = "settings" | "commands" | "page" | "process" | "hooks" | "tools";
-export const CONTRIBUTIONS: readonly Contribution[] = ["settings", "commands", "page", "process", "hooks", "tools"];
+export type Contribution = "settings" | "commands" | "page" | "process" | "programs" | "hooks" | "tools";
+export const CONTRIBUTIONS: readonly Contribution[] = ["settings", "commands", "page", "process", "programs", "hooks", "tools"];
 
 export function contributionsOf(m: PluginManifest): Contribution[] {
   const has: Record<Contribution, boolean> = {
@@ -364,6 +381,7 @@ export function contributionsOf(m: PluginManifest): Contribution[] {
     commands: m.commands.length > 0,
     page: m.page !== null,
     process: m.process !== null,
+    programs: m.programs.length > 0,
     hooks: m.hooks.length > 0,
     tools: m.tools.length > 0,
   };

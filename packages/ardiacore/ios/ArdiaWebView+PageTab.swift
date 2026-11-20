@@ -1,11 +1,6 @@
 import AppKit
 
 extension ArdiaWebView: PageTab {
-  var selected: Bool {
-    get { true }
-    set {}
-  }
-
   func startPage() {}
 
   func closePage() { closeBrowser() }

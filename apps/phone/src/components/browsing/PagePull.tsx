@@ -4,7 +4,7 @@ import Animated, { runOnJS, useAnimatedReaction, useAnimatedStyle, useDerivedVal
 import { DECK } from "../../lib/deckGeometry";
 import { pullBarGhosts, pullBarGlyphs, pullBarShift, pullClearsBar, pullPagePose, pullRise } from "../../lib/deckPull";
 import { deckPull, PULL_STAGE, pullFades, setDeckOwnsBar } from "../../state/browse/deckPull";
-import { iPhoneOr, tabsInk, useTheme } from "../ui";
+import { tabsInk, useTheme } from "../ui";
 
 const PULL_OFFSTAGE = 100_000;
 const SHADOW_FULL_AT = 0.3;
@@ -70,7 +70,7 @@ export function PullBlocker() {
 
 type GlyphsProps = { style?: StyleProp<ViewStyle>; children: ReactNode };
 
-function usePulledBar(barTop: number, drop: number) {
+export function usePullBarShift(barTop: number, drop: number) {
   return useAnimatedStyle(() => {
     const target = deckPull.target.value;
     const stage = deckPull.stage.value;
@@ -80,13 +80,7 @@ function usePulledBar(barTop: number, drop: number) {
   }, [barTop, drop]);
 }
 
-function useStillBar(): ReturnType<typeof useAnimatedStyle> | null {
-  return null;
-}
-
-export const usePullBarShift = iPhoneOr<(barTop: number, drop: number) => ReturnType<typeof useAnimatedStyle> | null>(usePulledBar, useStillBar);
-
-function PulledGlyphs({ style, children }: GlyphsProps) {
+export function PullGlyphs({ style, children }: GlyphsProps) {
   const fade = useAnimatedStyle(() => {
     const target = deckPull.target.value;
     const stage = deckPull.stage.value;
@@ -101,11 +95,7 @@ function PulledGlyphs({ style, children }: GlyphsProps) {
   );
 }
 
-function PlainGlyphs({ children }: GlyphsProps): ReactNode {
-  return children;
-}
-
-function PulledGhost({ style, children }: GlyphsProps) {
+export function PullGhost({ style, children }: GlyphsProps) {
   const fade = useAnimatedStyle(() => {
     const target = deckPull.target.value;
     const stage = deckPull.stage.value;
@@ -120,14 +110,6 @@ function PulledGhost({ style, children }: GlyphsProps) {
     </Animated.View>
   );
 }
-
-function NoGhost(_props: GlyphsProps): ReactNode {
-  return null;
-}
-
-export const PullGhost = iPhoneOr<(props: GlyphsProps) => ReactNode>(PulledGhost, NoGhost);
-
-export const PullGlyphs = iPhoneOr<(props: GlyphsProps) => ReactNode>(PulledGlyphs, PlainGlyphs);
 
 const CARD_SCALE = DECK.cardWidthRatio;
 

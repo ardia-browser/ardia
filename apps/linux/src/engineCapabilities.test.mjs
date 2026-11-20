@@ -93,7 +93,7 @@ test("with every new capability on, each Settings row the engine unlocks is show
     { defaultBrowser: capabilities.defaultBrowser, launchAtLogin: capabilities.launchAtLogin, thinScrollBars: capabilities.thinScrollBars, externalLinks: capabilities.externalLinks, commandScrollZoom: capabilities.commandScrollZoom, littleArdiaNewTabLinks: capabilities.littleArdiaNewTabLinks, peekOtherSites: capabilities.peekOtherSites, linksFromOtherApps: capabilities.linksFromOtherApps, fullScreen: capabilities.fullScreen, pageEdits: capabilities.pageEdits },
     { defaultBrowser: true, launchAtLogin: true, thinScrollBars: true, externalLinks: true, commandScrollZoom: true, littleArdiaNewTabLinks: true, peekOtherSites: true, linksFromOtherApps: true, fullScreen: true, pageEdits: true },
   );
-  const unlocked = ["general.defaultBrowser", "general.openAtLogin", "tabs.peekLinksToOtherSites", "tabs.openLinksInLittleArdia", "tabs.appLinksFirst", "automations.meetingAlertCondition"];
+  const unlocked = ["general.defaultBrowser", "general.openAtLogin", "tabs.peekLinksToOtherSites", "tabs.openLinksInLittleArdia", "tabs.littleArdiaOpensNewTabLinks", "tabs.appLinksFirst", "automations.meetingAlertCondition"];
   const searchable = new Set(settings.SETTINGS_INDEX.map((item) => item.entry.id));
   const without = unavailableSettingIds(linuxCapabilities(bare), sharedSettings.SETTINGS.map((entry) => entry.id));
   for (const id of unlocked) {

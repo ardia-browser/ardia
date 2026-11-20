@@ -31,13 +31,12 @@ describe("the deck", () => {
     unmount(root);
   });
 
-  test("an Incognito card's header reads Incognito on iPhone's Incognito side, as main's SwiftUI deck does, and keeps the page's title on Android, as main's Compose deck does", () => {
-    useTabs.setState({ ...launchTabs([...someTabs(2), ...someTabs(1, true)], 0), incognito: Platform.OS === "ios", listing: 0 });
+  test("on the Incognito side, which both phones' redesigned decks have, an Incognito card's header reads Incognito on iPhone, as main's SwiftUI deck does, and keeps the page's title on Android, as main's Compose deck does", () => {
+    useTabs.setState({ ...launchTabs([...someTabs(2), ...someTabs(1, true)], 0), incognito: true, listing: 0 });
     useBrowse.setState({ surface: "deck", sheet: null, deckEntrance: null, frozenOrder: null });
     const root = renderSurface(<TabDeck />);
     const titles = root.root.findAll((node) => typeof node.type === "string" && node.props.testID === "deckHeaderTitle").map((node) => node.props.children);
-    expect(titles).toContain(Platform.OS === "ios" ? "Incognito" : "Site 0");
-    expect(titles.filter((title) => title === "Site 0")).toHaveLength(Platform.OS === "ios" ? 0 : 2);
+    expect(titles).toEqual([Platform.OS === "ios" ? "Incognito" : "Site 0"]);
     unmount(root);
   });
 });

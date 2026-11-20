@@ -170,6 +170,7 @@ NSString *CornerName(int corner) {
     __weak ArdiaPiPController *weakSelf = self;
     _overlay.handle.onClick = ^{ [weakSelf unstash]; };
     [root addSubview:_overlay];
+    _resizeCursor = [[ArdiaPiPResizeCursor alloc] initWithWindow:window view:_overlay];
     objc_setAssociatedObject(window, kControllerKey, self, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
@@ -194,7 +195,7 @@ NSString *CornerName(int corner) {
     [_observers addObject:[center addObserverForName:NSWindowWillStartLiveResizeNotification
                                               object:window
                                                queue:nil
-                                          usingBlock:^(NSNotification *) { [weakSelf stopMotion]; }]];
+                                          usingBlock:^(NSNotification *) { [weakSelf stopMotion]; [weakSelf resizeStarted]; }]];
     [_observers addObject:[center addObserverForName:NSWindowWillCloseNotification
                                               object:window
                                                queue:nil
@@ -210,6 +211,7 @@ NSString *CornerName(int corner) {
   [_observers removeAllObjects];
   [NSObject cancelPreviousPerformRequestsWithTarget:self];
   [_slide invalidate];
+  [_resizeCursor detach];
   [_overlay removeFromSuperview];
   objc_setAssociatedObject(_window, kControllerKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }

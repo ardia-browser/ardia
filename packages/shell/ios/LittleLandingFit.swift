@@ -4,11 +4,15 @@ import ArdiaCore
 final class LittleLandingFit {
   private let currentWindow: () -> NSWindow?
   private let apply: (NSWindow, NSRect) -> Void
+  private let wanted: CGSize?
+  private var placed: NSRect?
   private var observers: [(center: NotificationCenter, token: NSObjectProtocol)] = []
   private var stopped = false
 
-  init(window: @escaping () -> NSWindow?, apply: @escaping (NSWindow, NSRect) -> Void) {
+  init(window: @escaping () -> NSWindow?, placement: (wanted: CGSize, placed: NSRect)?, apply: @escaping (NSWindow, NSRect) -> Void) {
     currentWindow = window
+    wanted = placement?.wanted
+    placed = placement?.placed
     self.apply = apply
   }
 
@@ -16,6 +20,7 @@ final class LittleLandingFit {
 
   func start() {
     listen(NSWorkspace.shared.notificationCenter, NSWorkspace.activeSpaceDidChangeNotification) { [weak self] _ in self?.fit() }
+    listen(NotificationCenter.default, NSApplication.didChangeScreenParametersNotification) { [weak self] _ in self?.stop() }
     for name in [NSWindow.willMoveNotification, NSWindow.willStartLiveResizeNotification, WindowMove.willDrag] {
       listen(NotificationCenter.default, name) { [weak self] note in
         guard let self, let window = note.object as? NSWindow, window === self.currentWindow() else { return }
@@ -27,8 +32,10 @@ final class LittleLandingFit {
 
   func fit() {
     guard !stopped, let window = currentWindow(), window.isVisible, !window.styleMask.contains(.fullScreen),
-      let frame = ArdiaChromeWindowHost.littleFrameFittingLanding(of: window, minimumSize: window.minSize)?.rectValue
+      let frame = ArdiaChromeWindowHost.littleFrameFittingLanding(of: window, minimumSize: window.minSize, wantedSize: wanted.map { NSValue(size: $0) },
+        placedFrame: placed.map { NSValue(rect: $0) })?.rectValue
     else { return }
+    if placed != nil { placed = frame }
     apply(window, frame)
   }
 

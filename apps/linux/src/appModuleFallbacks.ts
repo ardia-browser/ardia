@@ -85,6 +85,10 @@ const MODULE_FALLBACKS: Record<string, Record<string, Fallback>> = {
     event: now(undefined),
     call: now(undefined),
     remove: answer({ ok: false, reason: "plugins aren't available on Linux yet" }),
+    linkPrograms: answer({ ok: false, reason: "plugins aren't available on Linux yet" }),
+    unlinkPrograms: answer({ ok: true }),
+    sweepPrograms: answer(undefined),
+    legacyProgramsInstalled: answer(false),
     revealLog: now(undefined),
     revealFolder: now(undefined),
     devSnapshotPage: answer(false),
@@ -100,7 +104,7 @@ const MODULE_FALLBACKS: Record<string, Record<string, Fallback>> = {
   },
 };
 
-const DEVELOPER_MODULES = new Set(["ArdiaApp", "ArdiaMagnifyArea", "ArdiaFileDrop", "ArdiaLocation"]);
+const DEVELOPER_MODULES = new Set(["ArdiaApp", "ArdiaMagnifyArea", "ArdiaPeekStage", "ArdiaFileDrop", "ArdiaLocation"]);
 
 export function appModuleFallback(host: ArdiaHost, name: string, method: string): Fallback | undefined {
   if (hostSupports(`${name}.${method}`, host)) return undefined;

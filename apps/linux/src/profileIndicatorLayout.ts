@@ -19,17 +19,15 @@ export function headerIndicatorLayout({ room, textWidth, named, menuInHeader }: 
   return { ...layout, menuInHeader, width: layout.shown ? layout.nameWidth : 0 };
 }
 
-export const INDICATOR_GAP = 9;
+export const HEADER_MENU = { width: MENU_WIDTH, height: 34 } as const;
 
 const CONTROLS_GAP = 3;
 
-export function sidebarHeaderSplit({ width, captionRoom, controls, indicator, toggleOnly, menuInHeader }: { width: number; captionRoom: number; controls: number; indicator: number; toggleOnly: number; menuInHeader: boolean }) {
+export function sidebarHeaderSplit({ width, captionRoom, controls, toggleOnly, menuInHeader, slot }: { width: number; captionRoom: number; controls: number; toggleOnly: number; menuInHeader: boolean; slot: { edge: number; button: number; pitch: number } }) {
   if (menuInHeader) {
-    const navigation = Math.max(114, width - 136);
-    return { tools: true, navigation, indicatorRoom: Math.max(36, width - navigation - INDICATOR_GAP) };
+    const menuCenter = width - slot.edge - slot.button / 2;
+    return { tools: true, navigation: Math.max(toggleOnly, width - slot.pitch), menuLeft: Math.max(toggleOnly, menuCenter - MENU_WIDTH / 2) };
   }
-  if (captionRoom && width - controls - CONTROLS_GAP < toggleOnly) return { tools: false, navigation: 0, indicatorRoom: 0 };
-  const room = width - captionRoom;
-  const navigation = Math.max(toggleOnly, room - (indicator ? indicator + INDICATOR_GAP : 0));
-  return { tools: true, navigation, indicatorRoom: Math.max(0, room - navigation - INDICATOR_GAP) };
+  if (captionRoom && width - controls - CONTROLS_GAP < toggleOnly) return { tools: false, navigation: 0, menuLeft: 0 };
+  return { tools: true, navigation: width - captionRoom, menuLeft: 0 };
 }

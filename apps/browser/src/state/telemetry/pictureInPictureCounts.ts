@@ -1,4 +1,4 @@
-import type { PictureInPictureDrag, PictureInPictureSkip } from "../../platform/media";
+import type { PictureInPictureDrag, PictureInPictureResize, PictureInPictureSkip } from "../../platform/media";
 import type { PageEngine } from "../engines/engines";
 import { capture, counted } from "./client";
 import { nativeConsent } from "./nativeConsent";
@@ -8,6 +8,8 @@ const backToTab: Record<PageEngine, number> = { chromium: 0, webkit: 0 };
 const noDrags = () => ({ moved: 0, offCursor: 0, slowMove: 0 });
 let drags = noDrags();
 const clickSkips = { back: 0, ahead: 0 };
+const noResizes = () => ({ started: 0, withoutCursor: 0 });
+let resizes = noResizes();
 
 export function noteAutoPictureInPictureNothingPlaying() {
   nothingPlaying++;
@@ -30,6 +32,18 @@ export function notePictureInPictureDragged(drag: PictureInPictureDrag) {
   );
 }
 
+export function notePictureInPictureResized(resize: PictureInPictureResize) {
+  const withoutCursor = resize.inside && !resize.cursorShown;
+  counted(
+    nativeConsent(resize),
+    () => {
+      resizes.started++;
+      if (withoutCursor) resizes.withoutCursor++;
+    },
+    () => capture("usage_counts", { pip_resizes: 1, pip_resizes_without_cursor: withoutCursor ? 1 : 0 }, null),
+  );
+}
+
 export function notePictureInPictureClickSkip(skip: PictureInPictureSkip) {
   const direction = skip.seconds < 0 ? "back" : skip.seconds > 0 ? "ahead" : null;
   if (!direction) return;
@@ -41,9 +55,10 @@ export function notePictureInPictureClickSkip(skip: PictureInPictureSkip) {
 }
 
 export function takePictureInPictureCounts() {
-  const taken = { nothingPlaying, backToTab: { ...backToTab }, drags, clickSkips: { ...clickSkips } };
+  const taken = { nothingPlaying, backToTab: { ...backToTab }, drags, resizes, clickSkips: { ...clickSkips } };
   nothingPlaying = 0;
   drags = noDrags();
+  resizes = noResizes();
   backToTab.chromium = 0;
   backToTab.webkit = 0;
   clickSkips.back = 0;

@@ -9,10 +9,12 @@ import { warnFor } from "../telemetry/consoleConsent";
 import { listingOf } from "./appChecks";
 import { applySettingsPatch, planDisable, planEnable, spliceApplied } from "./defaults";
 import { pluginRecordsSaved, writePluginRecords } from "./savedState";
-import { activeManifest, currentPlugins, NO_RECORD, recordOf, usePlugins, type PluginListing, type PluginRecord } from "./store";
+import { settleInstall } from "./installWaiters";
+import { activeManifest, currentPlugins, isAlwaysOn, isInstalled, NO_RECORD, recordOf, usePlugins, type PluginListing, type PluginRecord } from "./store";
 import { stopProcess, superviseProcess, supervisedNames } from "./process";
 import { dropCalls } from "./tools";
 import { sendValues } from "./channel";
+import { adoptLegacyInstalls, reconcilePrograms, removePrograms } from "./programs";
 
 export const MAX_PLUGINS = 64;
 
@@ -29,7 +31,12 @@ export function listingsOf(entries: PluginFolderEntry[]): PluginListing[] {
   const version = systemInfo().appVersion;
   return entries
     .slice(0, MAX_PLUGINS)
-    .map((e) => listingOf(e.name, e.status === "ok" ? (e.text ?? "") : null, e.status === "ok" ? null : READ_PROBLEMS[e.status], settings, version, e.folderId ?? ""));
+    .map((e) => ({
+      ...listingOf(e.name, e.status === "ok" ? (e.text ?? "") : null, e.status === "ok" ? null : READ_PROBLEMS[e.status], settings, version, e.folderId ?? ""),
+      ...(e.bundled ? { bundled: true } : {}),
+      ...(e.replacesBundled ? { replacesBundled: true } : {}),
+      ...(e.ignoresUserFolder ? { ignoresUserFolder: true } : {}),
+    }));
 }
 
 function saveRecords(records: Record<string, PluginRecord>, consent: ConsentToken | null): boolean {
@@ -57,6 +64,7 @@ export function reconcilePlugins(consent: ConsentToken | null) {
     else stopProcess(name, consent);
   }
   for (const name of supervisedNames()) if (!active.has(name)) stopProcess(name, consent);
+  reconcilePrograms(consent);
 }
 
 const toForget = new Set<string>();
@@ -70,6 +78,7 @@ export function applyListings(listings: PluginListing[], consent: ConsentToken |
   usePlugins.setState({ listings: byName, order: listings.map((l) => l.name).sort() });
   forgetRemoved(consent);
   reconcilePlugins(consent);
+  void adoptLegacyInstalls(consent).then((adopted) => adopted && reconcilePlugins(consent));
 }
 
 let scanning: Promise<void> | null = null;
@@ -90,6 +99,8 @@ export function rescanPlugins(consent: ConsentToken | null): Promise<void> {
         return null;
       });
       if (entries) applyListings(listingsOf(entries), asked);
+      closeChangedConsent();
+      if (!currentPlugins().scanned) usePlugins.setState({ scanned: true });
       scan = nextScan;
     }
   })().finally(() => {
@@ -98,18 +109,46 @@ export function rescanPlugins(consent: ConsentToken | null): Promise<void> {
   return scanning;
 }
 
+let lastConsentId = 0;
+
+export const ALREADY_ASKING = "Ardia is already asking about a plugin. Answer that first, then try again.";
+
+function closeChangedConsent() {
+  const asked = currentPlugins().consent;
+  if (!asked || currentPlugins().listings[asked.name]?.hash === asked.hash) return;
+  usePlugins.setState({ consent: null });
+  settleInstall(asked.name, { ok: false, reason: "It changed while installing. Try again." });
+}
+
 export function requestPluginConsent(name: string): boolean {
   const listing = currentPlugins().listings[name];
-  if (!listing?.manifest || !listing.hash) return false;
-  usePlugins.setState({ consent: { name, hash: listing.hash } });
+  if (currentPlugins().consent || !listing?.manifest || !listing.hash || isInstalled(currentPlugins(), name)) return false;
+  usePlugins.setState({ consent: { id: ++lastConsentId, name, hash: listing.hash } });
   return true;
 }
 
-export const dismissPluginConsent = () => usePlugins.setState({ consent: null });
+export function dismissPluginConsent(name?: string): boolean {
+  const before = currentPlugins().consent;
+  if (name !== undefined && before && before.name !== name) return false;
+  usePlugins.setState({ consent: null });
+  if (before) settleInstall(before.name, { ok: false, reason: "Cancelled.", cancelled: true });
+  return true;
+}
+
+export function dismissConsentRequest(id: number): boolean {
+  const asked = currentPlugins().consent;
+  return asked?.id === id && dismissPluginConsent(asked.name);
+}
+
+export function confirmConsentRequest(id: number): boolean {
+  const asked = currentPlugins().consent;
+  return asked?.id === id && enablePlugin(asked.name, asked.hash);
+}
 
 export function enablePlugin(name: string, hash: string): boolean {
   const listing = currentPlugins().listings[name];
-  if (!listing?.manifest || listing.hash !== hash || removing.has(name)) return false;
+  const asked = currentPlugins().consent;
+  if (!listing?.manifest || listing.hash !== hash || asked?.name !== name || asked.hash !== hash || removing.has(name) || isInstalled(currentPlugins(), name)) return false;
   const manifest = listing.manifest;
   const before = recordOf(currentPlugins(), name);
   const values = { ...defaultValues(manifest), ...before.values };
@@ -117,15 +156,19 @@ export function enablePlugin(name: string, hash: string): boolean {
   const kept = before.enabled && before.approved === hash;
   const records = kept || !before.enabled ? currentPlugins().records : spliceApplied(currentPlugins().records, name);
   const plan = kept ? { patch: {}, applied: before.applied } : planEnable(manifest, records, name, before.applied);
-  if (!saveRecords({ ...records, [name]: { enabled: true, approved: hash, values, applied: plan.applied } }, consent)) return false;
-  applySettingsPatch(plan.patch);
+  const builtIn = isAlwaysOn(listing) ? { installed: true, ...(before.controlGranted ? { controlGranted: true } : {}) } : {};
+  if (!saveRecords({ ...records, [name]: { enabled: true, approved: hash, values, applied: plan.applied, ...builtIn } }, consent)) return false;
+  const asksControl = manifest.permissions.includes("control");
+  applySettingsPatch(kept || !asksControl || useBrowser.getState().settings.cliControl ? plan.patch : { ...plan.patch, cliControl: true });
   usePlugins.setState({ consent: null });
   notePlugin("plugin_enables", consent);
   reconcilePlugins(consent);
+  settleInstall(name, { ok: true });
   return true;
 }
 
 export function disablePlugin(name: string, consent: ConsentToken | null): boolean {
+  if (isAlwaysOn(currentPlugins().listings[name])) return !isInstalled(currentPlugins(), name);
   const before = recordOf(currentPlugins(), name);
   if (!before.enabled) return true;
   const patch = planDisable(currentPlugins().records, name);
@@ -141,11 +184,13 @@ const removing = new Set<string>();
 
 export async function removePlugin(name: string): Promise<{ ok: boolean; removed?: boolean; reason?: string }> {
   if (removing.has(name)) return { ok: false, reason: "It is already being removed." };
+  if (currentPlugins().listings[name]?.bundled) return { ok: false, reason: isAlwaysOn(currentPlugins().listings[name]) ? "It's built into Ardia and always on." : "It's built into Ardia: turn it off instead." };
   const consent = consentToken();
   if (!disablePlugin(name, consent)) return { ok: false, reason: "It couldn't be turned off, because plugins.json couldn't be saved." };
   removing.add(name);
   try {
     if (!(await pluginRecordsSaved(consent))) return { ok: false, reason: "It couldn't be turned off, because plugins.json couldn't be saved." };
+    await removePrograms(name, consent);
     const removed = await removePluginFiles(name).catch((error: unknown) => ({ ok: false as const, reason: String(error) }));
     if (!removed.ok) return removed;
     const forgotten = updateRecord(name, () => null, consent) && (await pluginRecordsSaved(consent));

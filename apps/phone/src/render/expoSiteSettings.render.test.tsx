@@ -2,7 +2,7 @@ import { Platform } from "react-native";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { SettingsView } from "../components/settings/SettingsView";
 import { pages } from "../platform/pages";
-import { openSettings } from "../state/settings/nav";
+import { openSettings, openSettingsPage, settingsNav } from "../state/settings/nav";
 import * as telemetry from "../state/telemetry/telemetry";
 import { renderSurface, unmount, withTabs } from "../../test/render/harness";
 
@@ -62,5 +62,19 @@ onIos("a site's swipe Revoke takes all its access, counts once, and leaves the l
   expect(revoked).toEqual([["https://meet.example", undefined]]);
   expect(counts.mock.calls.filter(([field]) => field === "site_permissions_revoked")).toHaveLength(2);
   expect(within(page(root), (props) => typeof props.text === "string").map((node) => node.props.text)).toContain("None");
+  unmount(root);
+});
+
+onIos("Site Settings from the page menu is the Settings sheet's first page, with Settings' Done, and Done closes it", async () => {
+  openSettingsPage({ page: "siteSettings" });
+  const root = renderSurface(<SettingsView />);
+  await act(async () => undefined);
+  const stack = hosts(root, (props) => Array.isArray(props.path))[0]!;
+  expect(stack.props.path).toEqual([]);
+  expect(titlesIn(stack)).toContain("Block Ads");
+  expect(titlesIn(stack)).not.toContain("Search Engine");
+  const done = within(stack, (props) => typeof (props.onButtonPress ?? props.onPress) === "function").find((node) => node.findAll((inner) => inner.props.text === "Done").length > 0)!;
+  await press(done);
+  expect(settingsNav().open).toBe(false);
   unmount(root);
 });

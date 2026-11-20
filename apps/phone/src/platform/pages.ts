@@ -9,6 +9,7 @@ export type {
   PageScrollPosition,
   PageSnapshot,
   PageState,
+  PageSummaryProvider,
   PageTone,
   PageViewHandle,
   PressTarget,

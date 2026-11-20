@@ -29,9 +29,14 @@ export class Unlocks {
 
 function secretWarnings(result: Result, kind: ImportKind, outcome: Secrets, noun: string, browser: Browser) {
   if (outcome.undecryptable > 0) result.warnings.push({ kind, code: "undecryptable", message: `${plural(outcome.undecryptable, noun)} couldn't be decrypted` });
-  if (outcome.appBound > 0)
+  if (outcome.appBound > 0 && kind === "cookies")
+    result.warnings.push({ kind, code: "undecryptable", message: `Skipped ${plural(outcome.appBound, noun)} locked by ${browser.name}'s app-bound encryption, which only ${browser.name} can read: sites that used ${outcome.appBound === 1 ? "it" : "them"} will ask you to sign in again` });
+  else if (outcome.appBound > 0)
     result.warnings.push({ kind, code: "undecryptable", message: `${plural(outcome.appBound, noun)} use ${browser.name}'s app-bound encryption, which only ${browser.name} can read` });
 }
+
+const appBoundCookiesToo = (appBound: number, browser: Browser) =>
+  appBound > 0 ? `, and ${appBound} more ${appBound === 1 ? "is" : "are"} locked by ${browser.name}'s app-bound encryption, which only ${browser.name} can read: sites that used ${appBound === 1 ? "it" : "them"} will ask you to sign in again` : "";
 
 async function cookieFile(host: ImportHost, dir: string): Promise<string> {
   const network = join(dir, "Network");
@@ -174,7 +179,7 @@ export async function importProfile(
         if (outcome.token) result.vaultToken = outcome.token;
         count = outcome.count;
         secretWarnings(result, kind, outcome, "cookie", browser);
-        if (!count && outcome.undecryptable > 0) throw new ImportFailure("locked", `The ${browser.name} key didn't decrypt any cookies`);
+        if (!count && outcome.undecryptable > 0) throw new ImportFailure("locked", `The ${browser.name} key didn't decrypt any cookies${appBoundCookiesToo(outcome.appBound, browser)}`);
       } else {
         throw new ImportFailure("unsupported", `${browser.name} has no ${kind} to import on Windows`);
       }

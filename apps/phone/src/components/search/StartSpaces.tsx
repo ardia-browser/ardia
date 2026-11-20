@@ -262,15 +262,10 @@ function SpaceGlyph({ space: profile, dark }: { space: SyncedProfile; dark: bool
       </View>
     );
   const emoji = emojiOf(profile.icon);
-  if (emoji)
-    return (
-      <View testID="startSpaceGlyph" style={[styles.centered, { width: size, height: size }]}>
-        <Text style={{ fontSize: size * startLayout.badgeEmojiShare }}>{emoji}</Text>
-      </View>
-    );
+  if (!emoji) return null;
   return (
-    <View testID="startSpaceGlyph" style={[styles.centered, { width: size, height: size, borderRadius: capsule(size), backgroundColor: ink.badge }]}>
-      <Text style={[styles.initial, { fontSize: size * startLayout.badgeInitialShare, color: ink.badgeInk }]}>{initialOf(profile.name)}</Text>
+    <View testID="startSpaceGlyph" style={[styles.centered, { width: size, height: size }]}>
+      <Text style={{ fontSize: size * startLayout.badgeEmojiShare }}>{emoji}</Text>
     </View>
   );
 }
@@ -332,8 +327,6 @@ export function emojiOf(icon: string | null): string | null {
   return icon;
 }
 
-export const initialOf = (name: string) => name.trim().charAt(0).toUpperCase() || "•";
-
 const styles = StyleSheet.create({
   switcherRow: { position: "absolute", left: 0, right: 0, alignItems: "center", justifyContent: "center" },
   title: { flexDirection: "row", alignItems: "center", gap: startLayout.titleSpacing, minHeight: browseLayout.hitTarget },
@@ -343,7 +336,6 @@ const styles = StyleSheet.create({
   tile: { height: startLayout.tileHeight, alignItems: "center", justifyContent: "center" },
   pressed: { transform: [{ scale: startLayout.tilePressScale }] },
   centered: { alignItems: "center", justifyContent: "center" },
-  initial: { fontWeight: "700" },
   dots: { position: "absolute", left: 0, right: 0, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: startLayout.pageDotSpacing },
   dot: { width: startLayout.pageDot, height: startLayout.pageDot, borderRadius: capsule(startLayout.pageDot) },
   invitation: { minHeight: startLayout.barCircle, paddingHorizontal: startLayout.invitationPadding, justifyContent: "center" },

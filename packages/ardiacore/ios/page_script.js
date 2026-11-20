@@ -60,7 +60,39 @@
   let displaySeq = 0;
   let displayMediaShim = null;
   let nativeGetDisplayMedia = null;
+  const controllerTracks = new WeakMap();
+  const usedControllers = new WeakSet();
+  let zoomLevelsShim = null;
+  let nativeZoomLevels = null;
+  const controllerProto = () => {
+    const Controller = window.CaptureController;
+    return typeof Controller === "function" ? Controller.prototype : null;
+  };
+  const installZoomLevels = () => {
+    const proto = controllerProto();
+    if (!proto || typeof proto.getSupportedZoomLevels !== "function" || zoomLevelsShim) return;
+    const trackProto = window.MediaStreamTrack && window.MediaStreamTrack.prototype;
+    const readyState = trackProto && Object.getOwnPropertyDescriptor(trackProto, "readyState");
+    const readyStateOf = readyState && readyState.get;
+    const settingsOf = trackProto && trackProto.getSettings;
+    if (!readyStateOf || !settingsOf) return;
+    if (!nativeZoomLevels) nativeZoomLevels = proto.getSupportedZoomLevels;
+    zoomLevelsShim = asNative(nativeZoomLevels, (target, self, args) => {
+      const track = controllerTracks.get(self);
+      if (!track || apply(readyStateOf, track, []) !== "live") return apply(target, self, args);
+      if (apply(settingsOf, track, []).displaySurface !== "browser") throw new DOMException("Not a supported surface type.", "NotSupportedError");
+      return [];
+    });
+    proto.getSupportedZoomLevels = zoomLevelsShim;
+  };
+  const restoreZoomLevels = () => {
+    const proto = controllerProto();
+    if (!proto || !zoomLevelsShim || proto.getSupportedZoomLevels !== zoomLevelsShim) return;
+    proto.getSupportedZoomLevels = nativeZoomLevels;
+    zoomLevelsShim = null;
+  };
   const restoreDisplayMedia = () => {
+    restoreZoomLevels();
     const devices = navigator.mediaDevices;
     const proto = devices && Object.getPrototypeOf(devices);
     if (!proto || !displayMediaShim || proto.getDisplayMedia !== displayMediaShim) return;
@@ -70,15 +102,39 @@
   const installDisplayMedia = () => {
     const devices = navigator.mediaDevices;
     const proto = devices && Object.getPrototypeOf(devices);
-    if (!proto || !proto.getDisplayMedia || displayMediaShim) return;
+    if (!proto || !proto.getDisplayMedia) return;
+    if (displayMediaShim) {
+      installZoomLevels();
+      return;
+    }
     nativeGetDisplayMedia = proto.getDisplayMedia;
     const getUserMedia = proto.getUserMedia;
+    const streamProto = window.MediaStream && window.MediaStream.prototype;
+    const videoTracksOf = streamProto && streamProto.getVideoTracks;
     const activation = navigator.userActivation;
     const activationProto = activation && Object.getPrototypeOf(activation);
     const activationState = activationProto && Object.getOwnPropertyDescriptor(activationProto, "isActive");
     const isActive = activationState && activationState.get;
     const policy = document.featurePolicy;
     const allowsFeature = policy && policy.allowsFeature;
+    installZoomLevels();
+    const isPrototypeOf = Object.prototype.isPrototypeOf;
+    const NativeTypeError = TypeError;
+    const isController = (value) => {
+      if ((typeof value !== "object" && typeof value !== "function") || value === null) return false;
+      if (!nativeZoomLevels) {
+        const controllerPrototype = controllerProto();
+        return !!controllerPrototype && apply(isPrototypeOf, controllerPrototype, [value]);
+      }
+      try {
+        apply(nativeZoomLevels, value, []);
+        return true;
+      } catch (error) {
+        return !(error instanceof NativeTypeError);
+      }
+    };
+    const badController = () =>
+      Promise.reject(new NativeTypeError("Failed to execute 'getDisplayMedia' on 'MediaDevices': Failed to read the 'controller' property from 'DisplayMediaStreamOptions': Failed to convert value to 'CaptureController'."));
     const nativeRejects = (self, options) =>
       self !== devices ||
       (options !== undefined && options !== null && typeof options !== "object" && typeof options !== "function") ||
@@ -86,17 +142,34 @@
     displayMediaShim = asNative(nativeGetDisplayMedia, (target, self, args) => {
       const constraints = args[0];
       if (nativeRejects(self, constraints)) return apply(target, self, args);
+      let controller;
+      try {
+        controller = constraints !== undefined && constraints !== null ? constraints.controller : undefined;
+      } catch (error) {
+        return Promise.reject(error);
+      }
+      if (controller !== undefined) installZoomLevels();
+      if (controller !== undefined && !isController(controller)) return badController();
       if (activation && isActive && !apply(isActive, activation, []))
         return Promise.reject(new DOMException("getDisplayMedia() requires transient activation (user gesture).", "InvalidStateError"));
+      if (controller !== undefined && usedControllers.has(controller))
+        return Promise.reject(new DOMException("A CaptureController object may only be used with a single getDisplayMedia() invocation.", "InvalidStateError"));
+      if (controller !== undefined) usedControllers.add(controller);
       return new Promise((resolve, reject) => {
         const id = ++displaySeq;
         const options = constraints || {};
-        displayRequests.set(id, { self, resolve, reject, constraints: options });
+        displayRequests.set(id, { self, resolve, reject, constraints: options, controller });
         const windowAudio = options.windowAudio === "exclude" || options.windowAudio === "window" ? options.windowAudio : "system";
-        send("displayMedia", { id, audio: !!options.audio, systemAudio: options.systemAudio !== "exclude", windowAudio });
+        send("displayMedia", { id, audio: !!options.audio, systemAudio: options.systemAudio !== "exclude", windowAudio, controller: controller !== undefined });
       });
     });
     proto.getDisplayMedia = displayMediaShim;
+    const bindController = (controller, stream) => {
+      if (controller === undefined || !videoTracksOf) return stream;
+      const track = apply(videoTracksOf, stream, [])[0];
+      if (track) controllerTracks.set(controller, track);
+      return stream;
+    };
     handlers.displayMedia = ({ id, sourceId, audio }) => {
       const request = displayRequests.get(id);
       if (!request) return;
@@ -112,7 +185,7 @@
           audio: audio === true ? { mandatory: { chromeMediaSource: "desktop" } } : false,
           video: { mandatory: { chromeMediaSource: "desktop", chromeMediaSourceId: sourceId, maxWidth: 3840, maxHeight: 2160, maxFrameRate: +frameRate || 30 } },
         },
-      ]).then(request.resolve, request.reject);
+      ]).then((stream) => request.resolve(bindController(request.controller, stream)), request.reject);
     };
   };
   installDisplayMedia();

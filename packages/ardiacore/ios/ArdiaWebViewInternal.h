@@ -153,6 +153,7 @@ struct ArdiaPageFocusState {
   NSString *_pageColor;
   NSString *_shownURL;
   BOOL _visible;
+  BOOL _selected;
   BOOL _warm;
   BOOL _neighbour;
   BOOL _autoPictureInPicture;

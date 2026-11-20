@@ -131,12 +131,12 @@ test("the schema closes every block it describes", () => {
   assert.equal(schema.properties.commands.items.additionalProperties, false);
 });
 
-test("the CLI's plugin schema fixture is what the app writes", async () => {
+test("docs/plugin.schema.json, which plugins check against, is what the app writes", async () => {
   const { PLUGIN_EVENTS } = await import("../state/automation/eventNames.ts");
   const { pluginSchemaJson } = await import("./pluginSchema.ts");
   const { PLUGIN_RULES } = await import("../state/plugins/appChecks.ts");
-  const fixture = readFileSync(new URL("../../../cli/ardia_cli/schemas/plugin.schema.json", import.meta.url), "utf8");
-  assert.equal(pluginSchemaJson(PLUGIN_EVENTS, PLUGIN_RULES), fixture, "regenerate apps/cli/ardia_cli/schemas/plugin.schema.json");
+  const published = readFileSync(new URL("../../../../docs/plugin.schema.json", import.meta.url), "utf8");
+  assert.equal(pluginSchemaJson(PLUGIN_EVENTS, PLUGIN_RULES), published, "regenerate docs/plugin.schema.json: node --import ./src/test-loader.mjs scripts/write-plugin-schema.mjs");
 });
 
 test("every manifest in the shared rejected list is refused, the same list ardia plugins check refuses", async () => {
@@ -162,4 +162,24 @@ test("a path with a lone surrogate is a manifest problem, not a crash", () => {
     assert.doesNotThrow(() => (found = problems({ ...base(), ...patch })), JSON.stringify(patch));
     assert.ok(found.length > 0, JSON.stringify(patch));
   }
+});
+
+test("programs: a name like a plugin's and a file in the plugin's folder", () => {
+  const ok = readManifest(JSON.stringify({ ...base(), programs: [{ name: "ardia", path: "bin/ardia" }] }));
+  assert.deepEqual(ok.problems, []);
+  assert.deepEqual(ok.manifest.programs, [{ name: "ardia", path: "bin/ardia", afterUpdate: [] }]);
+  assert.deepEqual(readManifest(JSON.stringify({ ...base(), programs: [{ name: "a", path: "a", afterUpdate: [["skills", "refresh"], ["x"]] }] })).manifest.programs[0].afterUpdate, [["skills", "refresh"], ["x"]]);
+  for (const afterUpdate of [["x"], [[]], [Array(9).fill("x")], Array(5).fill(["x"]), [[""]]]) assert.ok(problems({ ...base(), programs: [{ name: "a", path: "a", afterUpdate }] }).some((p) => p.includes("programs[0].afterUpdate")), JSON.stringify(afterUpdate));
+  assert.equal(readManifest(JSON.stringify({ ...base(), alwaysOn: true })).manifest.alwaysOn, true);
+  assert.equal(readManifest(FIXTURE).manifest.alwaysOn, false);
+  assert.ok(problems({ ...base(), alwaysOn: false }).includes("plugin.json: alwaysOn must be true"));
+  assert.ok(problems({ ...base(), programs: [{ name: "Ardia", path: "bin/ardia" }] }).some((p) => p.includes("programs[0].name")));
+  for (const path of ["/usr/bin/true", "../escape", "bin/../../x", "", "a\\b"]) assert.ok(problems({ ...base(), programs: [{ name: "a", path }] }).some((p) => p.includes("programs[0].path")), path);
+  assert.ok(problems({ ...base(), programs: [{ name: "a", path: "a" }, { name: "a", path: "b" }] }).some((p) => p.includes("two programs named a")));
+  assert.ok(problems({ ...base(), programs: Array.from({ length: 5 }, (_, i) => ({ name: `p${i}`, path: "a" })) }).some((p) => p.includes("programs must be a list of at most 4")));
+  assert.ok(problems({ ...base(), programs: [{ name: "a", path: "a", run: ["x"] }] }).some((p) => p.includes("programs[0].run isn't a key")));
+});
+
+test("control is a permission of its own and needs nothing else", () => {
+  assert.deepEqual(readManifest(JSON.stringify({ ...base(), permissions: [...base().permissions, "control"] })).problems, []);
 });

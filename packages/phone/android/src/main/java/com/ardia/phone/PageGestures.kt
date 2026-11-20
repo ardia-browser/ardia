@@ -106,6 +106,8 @@ internal class PageGestures(private val owner: ViewGroup, private val host: View
     var reopensPastForward: Boolean = false
     var onSwipedPastHistory: ((SwipeDirection) -> Unit)? = null
 
+    val isDragging: Boolean get() = decided != null || busy
+
     private var downX = 0f
     private var downY = 0f
     private var downAt = 0L
@@ -164,7 +166,10 @@ internal class PageGestures(private val owner: ViewGroup, private val host: View
                 tracker?.recycle()
                 tracker = VelocityTracker.obtain().also { it.addMovement(event) }
             }
-            MotionEvent.ACTION_POINTER_DOWN -> deciding = false
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                deciding = false
+                pending = null
+            }
             MotionEvent.ACTION_MOVE -> {
                 val waiting = pending
                 if (waiting != null) {

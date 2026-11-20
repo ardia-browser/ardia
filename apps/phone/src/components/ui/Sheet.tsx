@@ -22,6 +22,7 @@ import { reducedMotionMs, tabsCurve, tabsMotion, trayMotion } from "./motion";
 import { useTheme } from "./theme";
 import { menuLayout } from "./tokens";
 import { useReduceMotion } from "./contrast";
+import { MenuFrostProvider } from "./Menu";
 
 const SHEET_REDUCED_MS = reducedMotionMs(trayMotion.reduced);
 
@@ -29,7 +30,7 @@ const HIDE_FALLBACK_MS = 900;
 const DIM_TRAVEL_RADII = 8;
 const AT_TOP_SLOP = 0.5;
 
-export const sheetMaxHeight = (height: number, safeTop: number) => Math.max(Math.min(height - safeTop - menuLayout.sheetTopGap, height * menuLayout.sheetMaxShare), 0);
+export const sheetMaxHeight = (height: number, safeTop: number) => Math.max(height - safeTop - menuLayout.sheetTopGap, 0);
 
 export const sheetPullTranslation = (translationY: number, scrolls: boolean, atTop: boolean) => {
   "worklet";
@@ -220,7 +221,9 @@ export function Sheet({ open, onDismiss, onHidden, fill, onTapAway, children }: 
           ]}
         >
           {fill ? <View testID="sheetFill" style={[StyleSheet.absoluteFill, { backgroundColor: fill }]} /> : <LookBackdrop />}
-          <SheetScrollContext.Provider value={grabber ? scroll : null}>{children}</SheetScrollContext.Provider>
+          <SheetScrollContext.Provider value={grabber ? scroll : null}>
+            <MenuFrostProvider value={null}>{children}</MenuFrostProvider>
+          </SheetScrollContext.Provider>
           {grabber ? (
             <View
               testID="sheetGrabber"

@@ -22,7 +22,7 @@ import { consentToken, type ConsentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
 import { cliTabTargets } from "../../platform/cli";
 import { TAB_IDLE_EVENTS, USER_IDLE_EVENTS, type AutomationEventName } from "./eventNames";
-import { commands, failure, hello, parseRequest, parseSubscription, planRun, type RequestId, type Subscription } from "./automationMethods";
+import { clientProtocolProblem, commands, failure, hello, parseRequest, parseSubscription, planRun, type RequestId, type Subscription } from "./automationMethods";
 import { feedNeeds, stopFeed, updateFeed } from "./automationFeed";
 import { answerDecision, dropResponder, serveHooks, stopResponders } from "./decideSocket";
 import { launchToReplay, recordLaunch, runLaunchActions } from "./lifecycleEvents";
@@ -180,6 +180,8 @@ function subscribe(connection: number, params: Record<string, unknown>): Body {
 function answer(connection: number, method: string, params: Record<string, unknown>): Body | Promise<Body> {
   switch (method) {
     case "hello": {
+      const tooOld = clientProtocolProblem(params, systemInfo().appVersion);
+      if (tooOld) return { error: tooOld };
       const caller = parseCliCaller(params.caller);
       if (caller) callers.set(connection, caller);
       return { result: hello(systemInfo().appVersion) };

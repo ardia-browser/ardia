@@ -74,7 +74,7 @@ export function createGithubLimits(clock: () => number = Date.now, concurrency =
   function rateLimited(scope: string, retryAt?: number) {
     const now = clock();
     const previous = pauses.get(scope);
-    const attempt = (previous?.attempt ?? 0) + 1;
+    const attempt = previous && previous.retryAt > now ? previous.attempt : (previous?.attempt ?? 0) + 1;
     const proposed = retryAt !== undefined && retryAt > now ? retryAt : now + fallbackCooldownMs(attempt);
     pauses.set(scope, { attempt, retryAt: previous && previous.retryAt > now ? Math.max(previous.retryAt, proposed) : proposed });
   }

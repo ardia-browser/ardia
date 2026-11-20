@@ -7,7 +7,8 @@ import { shownSidebarWidth } from "../../lib/windowLayout";
 import { systemIncreaseContrast } from "../app/systemContrast";
 import { isNavigationOrFunctionKey, storedShortcut } from "../commands/shortcuts";
 import { currentInterfaceScale } from "../settings/interfaceScale";
-import { INTERFACE_SCALE, interfaceScalePercent, rootLength } from "../../lib/interfaceScale";
+import { INTERFACE_SCALE, interfaceScalePercent, rootLength, windowLength } from "../../lib/interfaceScale";
+import { drawnWindowCornerRadius } from "../../platform/windows";
 
 export const SETTINGS_SNAPSHOT_EVENT = "settings_snapshot";
 
@@ -49,6 +50,7 @@ export function settingsSnapshot(settings: Settings): Record<string, string> {
     setting_interfaceScale: String(interfaceScalePercent(currentInterfaceScale())),
     default_interfaceScale: String(interfaceScalePercent(INTERFACE_SCALE.default)),
     system_increase_contrast: encode(systemIncreaseContrast())!,
+    window_corner_radius: encode(windowLength(drawnWindowCornerRadius(), currentInterfaceScale())) ?? "unknown",
     unread_hidden_sites: String(Array.isArray(settings.unreadHiddenSites) ? settings.unreadHiddenSites.length : 0),
     custom_new_tab_url: customNewTabUrl({ newTabOpens: "page", minimalismMode: false, newTabUrl: typeof settings.newTabUrl === "string" ? settings.newTabUrl : "" }) ? "true" : "false",
   };

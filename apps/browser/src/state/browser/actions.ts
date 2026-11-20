@@ -26,9 +26,12 @@ import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import { splitOf } from "../splits/splits";
 import { closeKind } from "../tabs/tabs";
 import { noteSplit } from "../telemetry/usage";
-import { consentToken } from "../telemetry/client";
+import { consentToken, stillValid } from "../telemetry/client";
 import { isPeekTab } from "../peek/peek";
 import { noteTabClosedByUser } from "../sync/openTabCloses";
+import type { Drop } from "../drag/drops";
+import { movesAcrossProfiles } from "../windows/profileMoves";
+import { noteSidebarDrop } from "../telemetry/tabPresses";
 
 const store = () => useBrowser.getState();
 
@@ -155,22 +158,44 @@ async function profileMoveTarget(move: ProfileMove, target: string | null): Prom
   return confirmed ? profileId : null;
 }
 
-export async function moveTabsToProfile(tabIds: string[], target: string | null) {
+function tabsMove(tabIds: string[]): ProfileMove | null {
   const tabs = tabIds.map((id) => store().tabs[id]).filter((t) => !!t);
   const first = tabs[0];
-  if (!first) return;
+  if (!first) return null;
   const many = tabs.length > 1;
-  const profileId = await profileMoveTarget(
-    {
-      windowId: first.windowId,
-      fromProfileId: first.profileId,
-      title: () => (many ? `Move ${tabs.length} Tabs to Profile?` : "Move Tab to Profile?"),
-      confirmTitle: many ? "Move Tabs" : "Move Tab",
-    },
-    target,
-  );
+  return {
+    windowId: first.windowId,
+    fromProfileId: first.profileId,
+    title: () => (many ? `Move ${tabs.length} Tabs to Profile?` : "Move Tab to Profile?"),
+    confirmTitle: many ? "Move Tabs" : "Move Tab",
+  };
+}
+
+export async function moveTabsToProfile(tabIds: string[], target: string | null) {
+  const move = tabsMove(tabIds);
+  const profileId = move && (await profileMoveTarget(move, target));
   if (!profileId) return;
-  for (const tab of tabs) if (!isIncognitoProfile(tab.profileId)) store().moveTabToProfile(tab.id, profileId);
+  for (const id of tabIds) {
+    const tab = store().tabs[id];
+    if (tab && !isIncognitoProfile(tab.profileId)) store().moveTabToProfile(id, profileId);
+  }
+}
+
+export async function dropTabsInProfile(tabIds: string[], target: string, drop: Drop, home: string, onIcon: boolean): Promise<Record<string, string> | null> {
+  const move = tabsMove(tabIds);
+  if (!move) return null;
+  const consent = consentToken();
+  const placesOnly = !movesAcrossProfiles(store(), tabIds, target);
+  const profileId = placesOnly ? target : await profileMoveTarget({ ...move, fromProfileId: home }, target);
+  const placed = profileId ? store().dropTabsInProfile(tabIds, profileId, drop) : null;
+  if (placed) {
+    if (stillValid(consent)) noteSidebarDrop(onIcon ? "profile_icon" : "other_profile");
+    return placed;
+  }
+  if (placesOnly && drop.type === "none") return null;
+  const w = store().windows[move.windowId];
+  if (w && w.profileId !== home && store().profiles[home]) switchProfile(move.windowId, home, true);
+  return null;
 }
 
 export const moveTabToProfile = (tabId: string, target: string | null) => moveTabsToProfile([tabId], target);

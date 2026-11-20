@@ -78,6 +78,7 @@ class TabEvents : public content::WebContentsObserver,
   explicit TabEvents(content::WebContents* contents);
 
   void Observe();
+  blocked_content::PopupBlockerTabHelper* LivePopups();
   bool Listened() const;
   void Send(std::string_view name, base::DictValue data);
   void CheckSecurity();
@@ -86,7 +87,7 @@ class TabEvents : public content::WebContentsObserver,
 
   raw_ptr<find_in_page::FindTabHelper> find_helper_ = nullptr;
   raw_ptr<zoom::ZoomController> zoom_ = nullptr;
-  raw_ptr<blocked_content::PopupBlockerTabHelper> popups_ = nullptr;
+  raw_ptr<blocked_content::PopupBlockerTabHelper, DisableDanglingPtrDetection> popups_ = nullptr;
   base::CallbackListSubscription audible_subscription_;
   std::string security_;
   std::optional<std::pair<int, int>> unresponsive_;

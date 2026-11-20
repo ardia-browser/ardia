@@ -1,5 +1,6 @@
 import { Button } from "../../ui";
 import { APP } from "../model";
+import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { ErrorText, Handoff, Spacer, Title } from "../Parts";
 import { backTo, importsBySpaces, type ImportFlow } from "../../../state/import/flow";
 import { skipEncryptedData, unlockAndImport } from "../../../state/import/runImport";
@@ -13,7 +14,11 @@ export function UnlockBody({ flow }: { flow: ImportFlow }) {
     <>
       <Title
         title="Unlock your data for import"
-        subtitle={`${APP} can securely import logins, cookies and cards from your previous browser, so you stay signed in and don't have to enter your passwords again.`}
+        subtitle={
+          PLATFORM_FEATURES.importedCookiesKeepSignIns
+            ? `${APP} can securely import logins, cookies and cards from your previous browser, so you stay signed in and don't have to enter your passwords again.`
+            : `${APP} can securely import logins, cookies and cards from your previous browser, so you don't have to enter your passwords again.`
+        }
       />
       <Handoff
         iconPath={source.iconPath}

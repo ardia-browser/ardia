@@ -44,6 +44,7 @@ final class PageGestures: NSObject, UIGestureRecognizerDelegate {
   }
 
   var onSwipedPastHistory: ((SwipeNavigationDirection) -> Void)?
+  var ignoresTouch: ((UITouch) -> Bool)?
 
   var isSwiping: Bool { state != nil }
 
@@ -118,6 +119,10 @@ final class PageGestures: NSObject, UIGestureRecognizerDelegate {
       guard !Task.isCancelled else { return }
       self?.endRefreshing()
     }
+  }
+
+  func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+    ignoresTouch?(touch) != true
   }
 
   func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {

@@ -1,5 +1,5 @@
 import { Profiler } from "react";
-import { BackHandler, Platform, StyleSheet } from "react-native";
+import { BackHandler, StyleSheet } from "react-native";
 import { getAnimatedStyle } from "react-native-reanimated";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { Surfaces } from "../App";
@@ -63,7 +63,7 @@ const settle = () => act(() => jest.advanceTimersByTime(tabsMotion.deckStandby +
 
 const loading = (progress: number) => ({ url: "https://slow.example/", title: "Slow", isLive: true, isLoading: true, progress, failure: null, canGoBack: false, canGoForward: false }) as unknown as PageState;
 
-const pulls = (design: Design) => Platform.OS === "ios" && design === "redesigned";
+const pulls = (design: Design) => design === "redesigned";
 const PARKED = 100_000;
 const parkedAt = (node: ReactTestInstance) => ((getAnimatedStyle(node).transform ?? []) as { translateX?: number }[]).find((move) => move.translateX !== undefined)?.translateX;
 

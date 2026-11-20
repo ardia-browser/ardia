@@ -28,6 +28,7 @@ public class AppWindowsModule: Module {
     }
 
     Function("windowCornerRadius") { () -> Double in Double(InterfaceScale.rootLength(fromWindow: ArdiaChromeWindowHost.windowCornerRadius)) }
+    Function("drawnWindowCornerRadius") { () -> Double in Double(InterfaceScale.rootLength(fromWindow: ArdiaChromeWindowHost.drawnWindowCornerRadius)) }
     AsyncFunction("frameCornerRadius") { (id: String) -> Double in
       guard let window = WindowManager.shared.window(id) else { return 0 }
       return Double(InterfaceScale.rootLength(fromWindow: ArdiaChromeWindowHost.frameCornerRadius(of: window)))

@@ -1676,6 +1676,7 @@ class ShellHostView : public views::View,
   void OnCompositingShuttingDown(ui::Compositor* compositor) override { presentation_observation_.Reset(); }
   void ReportWindowGeometry();
   void LayoutOverlay();
+  void RoundUtilityCorners();
   void HideCaptionButtons();
   void ShellPainted();
   void LiftCurtain();
@@ -1706,6 +1707,7 @@ class ShellHostView : public views::View,
   std::vector<gfx::Rect> shell_pass_;
   std::unique_ptr<ShellTransparency> shell_transparency_;
   raw_ptr<views::View> curtain_ = nullptr;
+  gfx::RoundedCornersF utility_corners_;
   base::OneShotTimer curtain_timer_;
   raw_ptr<HostMessageHandler> handler_ = nullptr;
   uint64_t renderer_generation_ = 0;
@@ -2755,7 +2757,7 @@ void ShellHostView::OpenStartupTab(linux_startup_tab::StartupTab saved, std::str
       contents->GetController().LoadURLWithParams(params);
     } else {
       NavigateParams navigation(browser_.get(), url, ui::PAGE_TRANSITION_TYPED);
-      navigation.disposition = WindowOpenDisposition::NEW_BACKGROUND_TAB;
+      navigation.disposition = WindowOpenDisposition::kNewBackgroundTab;
       navigation.window_action = NavigateParams::WindowAction::kNoAction;
       const auto weak = GetWeakPtr();
       app_operation_ = true;
@@ -3333,10 +3335,22 @@ void ShellHostView::LayoutOverlay() {
   shell_->SetBoundsRect(GetLocalBounds());
   if (glass_) glass_->SetBoundsRect(GetLocalBounds());
   if (curtain_) curtain_->SetBoundsRect(GetLocalBounds());
+  RoundUtilityCorners();
   browser_view_->GetActiveContentsWebView()->SetVisible(false);
   if (extension_surfaces_) extension_surfaces_->Relayout();
   Restack();
   HideCaptionButtons();
+}
+
+void ShellHostView::RoundUtilityCorners() {
+  if (!is_utility() || !browser_view_->browser_widget()) return;
+  BrowserFrameView* frame = browser_view_->browser_widget()->GetFrameView();
+  const gfx::RoundedCornersF corners = frame ? frame->GetWindowRoundedCorners() : gfx::RoundedCornersF();
+  if (corners == utility_corners_) return;
+  utility_corners_ = corners;
+  SetBackground(views::CreateRoundedRectBackground(kColorWebContentsBackground, corners));
+  shell_->holder()->SetNativeViewCornerRadii(corners);
+  if (curtain_) curtain_->layer()->SetRoundedCornerRadius(corners);
 }
 
 void ShellHostView::ShellPainted() {
@@ -3365,6 +3379,7 @@ void ShellHostView::HideCaptionButtons() {
 
 void ShellHostView::OnWidgetThemeChanged(views::Widget*) {
   HideCaptionButtons();
+  if (browser_view_) RoundUtilityCorners();
 }
 
 void ShellHostView::OnViewIsDeleting(views::View*) {
@@ -5622,7 +5637,7 @@ void ShellHostView::CreateTabIn(
     }
     if (!contents) {
       NavigateParams navigation(member, url, ui::PAGE_TRANSITION_TYPED);
-      navigation.disposition = WindowOpenDisposition::NEW_BACKGROUND_TAB;
+      navigation.disposition = WindowOpenDisposition::kNewBackgroundTab;
       navigation.window_action = NavigateParams::WindowAction::kNoAction;
       Navigate(&navigation);
       contents = navigation.navigated_or_inserted_contents;
@@ -7731,13 +7746,13 @@ void TabBinding::DidOpenRequestedURL(
   if (!contents_ || !opened) return;
   std::string_view target;
   switch (disposition) {
-    case WindowOpenDisposition::NEW_FOREGROUND_TAB: target = "foreground"; break;
-    case WindowOpenDisposition::NEW_BACKGROUND_TAB: target = "background"; break;
-    case WindowOpenDisposition::NEW_POPUP: target = "popup"; break;
-    case WindowOpenDisposition::NEW_WINDOW: target = "window"; break;
+    case WindowOpenDisposition::kNewForegroundTab: target = "foreground"; break;
+    case WindowOpenDisposition::kNewBackgroundTab: target = "background"; break;
+    case WindowOpenDisposition::kNewPopup: target = "popup"; break;
+    case WindowOpenDisposition::kNewWindow: target = "window"; break;
     default: return;
   }
-  ReportOpened(opened, url, target, disposition == WindowOpenDisposition::NEW_FOREGROUND_TAB);
+  ReportOpened(opened, url, target, disposition == WindowOpenDisposition::kNewForegroundTab);
 }
 
 void TabBinding::ReportOpened(content::WebContents* opened, const GURL& url,

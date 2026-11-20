@@ -77,17 +77,18 @@ onIos("on iPhone the row itself takes no tap, as SwiftUI's Toggle, but VoiceOver
   unmount(root);
 });
 
-test("at large text the tiles become rows and the zoom controls stack under their label: 1.3× on Android as Compose, accessibility sizes on iPhone as SwiftUI", async () => {
+test("at large text the menu takes its large layout, the title under the navigation capsule and the zoom controls stacked under their label: from 1.3× on Android as Compose, at accessibility sizes on iPhone as SwiftUI", async () => {
   textSize(1.4);
   const root = await openMenu();
-  const zoomStacked = () => StyleSheet.flatten(host(root, "menuZoom").props.style).flexDirection !== "row";
-  const readerIsRow = () => root.root.findAll((node) => typeof node.type === "string" && node.props.accessibilityRole === "button" && textOf({ root: node } as never) === "Reader").some((node) => StyleSheet.flatten(node.props.style)?.flexDirection === "row");
-  expect(readerIsRow()).toBe(Platform.OS === "android");
-  expect(zoomStacked()).toBe(Platform.OS === "android");
+  const zoomStacked = (menu: typeof root) => StyleSheet.flatten(host(menu, "menuZoom").props.style).flexDirection !== "row";
+  const titleBelow = (menu: typeof root) => host(menu, "pageMenuCapsuleRow").findAll((node) => node.props.testID === "pageMenuTitle").length === 0 && host(menu, "pageMenuCapsule").findAll((node) => node.props.testID === "pageMenuTitle").length > 0;
+  expect(zoomStacked(root)).toBe(Platform.OS === "android");
+  expect(titleBelow(root)).toBe(Platform.OS === "android");
   unmount(root);
   textSize(1.7);
   const larger = await openMenu();
-  expect(StyleSheet.flatten(host(larger, "menuZoom").props.style).flexDirection).not.toBe("row");
+  expect(zoomStacked(larger)).toBe(true);
+  expect(titleBelow(larger)).toBe(true);
   unmount(larger);
 });
 

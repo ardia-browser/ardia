@@ -4,6 +4,7 @@ declare module "react-test-renderer" {
   export type ReactTestInstance = {
     type: unknown;
     props: Record<string, any>;
+    instance: unknown;
     parent: ReactTestInstance | null;
     children: (ReactTestInstance | string)[];
     findAll(predicate: (node: ReactTestInstance) => boolean): ReactTestInstance[];

@@ -6,6 +6,8 @@ import { captureSnapshot, newTab, openArchive, openPage, openSpaces, openTab, sh
 import { openLibrary } from "../library/store";
 import { openPageMenu, showReader } from "../page/actions";
 import { presentSearch } from "../search/store";
+import { startBrowseForMe } from "../browseForMe/store";
+import { presentHeardVoiceSearch } from "../voice/store";
 import { trustSite } from "../settings/actions";
 import { openSettings, settingsRouteFromKey } from "../settings/nav";
 import { acceptsPreference, type ColorChoice } from "../settings/preferences";
@@ -93,8 +95,10 @@ async function runDemoScenario(args: LaunchArguments) {
 
 async function runLaunchHooks(args: LaunchArguments) {
   if (args.trustedSitesSample) for (const host of TRUSTED_SITES_SAMPLE) void trustSite(host, true);
-  if (!args.opensSettings && args.settingsPage === null && args.openSheet === null && args.toast === null) return;
+  if (!args.opensSettings && args.settingsPage === null && args.openSheet === null && args.toast === null && args.browseResearch === null && args.voiceHeard === null) return;
   await wait(LAUNCH_TIMING.sheetMs);
+  if (args.browseResearch !== null) startBrowseForMe(args.browseResearch);
+  if (args.voiceHeard !== null) presentHeardVoiceSearch(args.voiceHeard);
   if (args.opensSettings || args.openSheet === "settings") openSettings();
   const page = args.settingsPage === null ? null : settingsRouteFromKey(args.settingsPage);
   if (page) openSettings(page);

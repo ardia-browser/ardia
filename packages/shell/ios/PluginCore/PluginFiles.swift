@@ -80,8 +80,9 @@ enum PluginFiles {
     SHA256.hash(data: Data("\(text)\u{0}\(folderId)".utf8)).map { String(format: "%02x", $0) }.joined()
   }
 
-  static func approvedFolder(_ path: String, folderId: String, approved: String) -> Result<OpenedFolder, FolderRefusal> {
-    guard let folder = openFolder(path) else { return .failure(FolderRefusal(reason: "its folder is missing")) }
+  static func approvedFolder(_ path: String, folderId: String, approved: String, identity: String? = nil) -> Result<OpenedFolder, FolderRefusal> {
+    guard let opened = openFolder(path) else { return .failure(FolderRefusal(reason: "its folder is missing")) }
+    let folder = identity.map { OpenedFolder(fd: opened.fd, path: opened.path, id: $0) } ?? opened
     guard folder.id == folderId else {
       folder.close()
       return .failure(FolderRefusal(reason: "its folder was replaced since you approved it"))
@@ -118,8 +119,8 @@ enum PluginFiles {
 
   static let maxPageFile = 10 << 20
 
-  static func readPageFile(_ path: String, folderId: String, approved: String, relative: String) -> Data? {
-    guard case .success(let folder) = approvedFolder(path, folderId: folderId, approved: approved) else { return nil }
+  static func readPageFile(_ path: String, folderId: String, approved: String, relative: String, identity: String? = nil) -> Data? {
+    guard case .success(let folder) = approvedFolder(path, folderId: folderId, approved: approved, identity: identity) else { return nil }
     defer { folder.close() }
     let fd = openBeneath(folder.fd, relative, flags: O_RDONLY | O_NONBLOCK)
     guard fd >= 0 else { return nil }

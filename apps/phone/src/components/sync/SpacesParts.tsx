@@ -6,13 +6,14 @@ import { openRemote } from "../../state/sync/actions";
 import { remoteTitle } from "../../state/sync/spaces";
 import type { PinnedTile, SyncedProfile } from "../../state/sync/store";
 import { capsule, Favicon, font, isSymbolName, screenReaderActions, space, spacesLayout, Symbol, useTheme } from "../ui";
+import type { Point } from "../../lib/menuPlace";
 
 const TILE_MIN_WIDTH = 72;
 const TILE_HEIGHT = 56;
 const TILE_HEIGHT_MAX = 72;
 export const SPACES_LARGE_TEXT = 1.5;
 
-export function Tiles({ tiles, profileId, onFolder, onLink }: { tiles: PinnedTile[]; profileId: string; onFolder: (tile: PinnedTile, anchor: RefObject<ViewInstance | null>) => void; onLink: (url: string, title: string, y: number) => void }) {
+export function Tiles({ tiles, profileId, onFolder, onLink }: { tiles: PinnedTile[]; profileId: string; onFolder: (tile: PinnedTile, anchor: RefObject<ViewInstance | null>) => void; onLink: (url: string, title: string, at: Point | null) => void }) {
   const { width, fontScale } = useWindowDimensions();
   const height = Math.min(TILE_HEIGHT * fontScale, TILE_HEIGHT_MAX);
   const titled = fontScale < SPACES_LARGE_TEXT;
@@ -48,7 +49,7 @@ function TileButton({
   height: number;
   titled: boolean;
   onFolder: (tile: PinnedTile, anchor: RefObject<ViewInstance | null>) => void;
-  onLink: (url: string, title: string, y: number) => void;
+  onLink: (url: string, title: string, at: Point | null) => void;
 }) {
   const theme = useTheme();
   const anchor = useRef<ViewInstance>(null);
@@ -60,8 +61,8 @@ function TileButton({
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={() => (folder ? onFolder(tile, anchor) : openRemote(tile.url, tile.title, profileId, tile.key))}
-      onLongPress={folder ? undefined : (event) => onLink(tile.url, tile.title, event.nativeEvent.pageY)}
-      {...(folder ? {} : screenReaderActions([{ name: "longpress", run: () => onLink(tile.url, tile.title, 0) }]))}
+      onLongPress={folder ? undefined : (event) => onLink(tile.url, tile.title, { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY })}
+      {...(folder ? {} : screenReaderActions([{ name: "longpress", run: () => onLink(tile.url, tile.title, null) }]))}
       style={styles.tile}
     >
       <View testID="spaceTileFace" style={[styles.tileFace, { height, backgroundColor: theme.groupFill }]}>

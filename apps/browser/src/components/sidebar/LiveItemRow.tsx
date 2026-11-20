@@ -12,7 +12,7 @@ import type { CloseControl } from "../../state/sidebar/closeControl";
 import { noteLiveRowHide } from "../../state/telemetry/liveHides";
 import { HoverSlot } from "../ui/HoverSlot";
 import { Badge, Button, ContextMenuArea, Dot, hairline, HoverFill, ink, radius, space, Symbol, Text, useHover, withAlpha } from "../ui";
-import { buttonMotion, curve, springs, usePressScaleMotion } from "../ui/motion";
+import { curve, springs } from "../ui/motion";
 import { hex, layout, useTheme } from "../ui/theme";
 import { useLiveColors, type LiveColors } from "../live/tokens";
 import { modifiersOf } from "../../lib/keys";
@@ -55,8 +55,6 @@ export function LiveItemRow({ folderId, item, windowId, inStack = false }: { fol
   }, [completion]);
   const fill = active ? (quiet ? tokens.quietWash : theme.tabSelected) : ink.clear;
   const hoverFill = quiet ? tokens.quietHover : theme.tabHover;
-  const pressMotion = usePressScaleMotion(true, buttonMotion.rowPressScale);
-  const rowScale = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
   const border = active && !quiet ? 0.5 : 0;
   const pressedFill = quiet ? tokens.quietPressed : theme.tabPressed;
   const titleColor = completion ? theme.textSecondary : quiet ? hex(withAlpha(theme.textTab, active ? tokens.quietActiveText : tokens.quietText)) : active ? theme.rowSelectedText : theme.textTab;
@@ -74,15 +72,13 @@ export function LiveItemRow({ folderId, item, windowId, inStack = false }: { fol
           }}
         >
           <Pressable
-            onPressIn={pressMotion.onPressIn}
-            onPressOut={pressMotion.onPressOut}
             onPress={(e) => {
               dismissHover();
               openLiveItem(windowId, folderId, item, { background: modifiersOf(e).metaKey });
             }}
           >
             {({ pressed }) => (
-              <Animated.View style={rowScale}>
+              <>
               <HoverFill shown={!active && (hovered || pressed)} instant={active} color={pressed ? pressedFill : hoverFill} radius={radius.chrome} />
               <SidebarRowSurface fill={fill} selected={active && !quiet} border={border} padLeft={TAB_ROW.contentLeft + indent - border} padRight={TAB_ROW.trailing - border}>
                 {unread ? <Dot size={5} color={theme.accent} style={{ position: "absolute", left: UNREAD_DOT_LEFT + indent - border }} /> : null}
@@ -118,7 +114,7 @@ export function LiveItemRow({ folderId, item, windowId, inStack = false }: { fol
                   <Trailing item={item} completion={completion} colors={colors} />
                 </HoverSlot>
               </SidebarRowSurface>
-              </Animated.View>
+              </>
             )}
           </Pressable>
         </ContextMenuArea>
@@ -166,7 +162,7 @@ function ItemIcon({ item, completion, colors }: { item: LiveItem; completion: Co
   useEffect(() => {
     if (!completion) return;
     pop.setValue(0);
-    Animated.spring(pop, { toValue: 1, ...springs.bouncy, useNativeDriver: true }).start();
+    Animated.spring(pop, { toValue: 1, ...springs.snappy, useNativeDriver: true }).start();
   }, [completion]);
   if (completion) {
     const glyph = COMPLETION_GLYPH[completion];

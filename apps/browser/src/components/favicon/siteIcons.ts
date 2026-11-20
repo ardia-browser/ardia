@@ -23,6 +23,7 @@ const ICONS: Record<string, Icon> = {
   "outlook.live.com": OUTLOOK,
   "youtube.com": require("../../../assets/site-icons/youtube.png"),
   "open.spotify.com": require("../../../assets/site-icons/spotify.png"),
+  "git.cafe": require("../../../assets/site-icons/gitcafe.png"),
   "google.com": require("../../../assets/site-icons/google.png"),
   "bing.com": require("../../../assets/site-icons/bing.png"),
   "duckduckgo.com": require("../../../assets/site-icons/duckduckgo.png"),

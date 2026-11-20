@@ -6,22 +6,30 @@ import { shownTone } from "../../lib/pageTone";
 import { usePageTone } from "../../state/browse/hooks";
 import { useDeckOrder } from "../../state/tabs/hooks";
 import type { BrowserTab } from "../../state/tabs/tabModels";
-import { barCenterFromBottom, barHeight, browseLayout, isDarkColor, rolesFor, useTheme } from "../ui";
+import { barCenterFromBottom, barHeight, browseLayout, floatingBarLayout, isDarkColor, rolesFor, useDesign, useTheme } from "../ui";
 import { BottomBar } from "./BottomBar";
+import { FloatingBar } from "./FloatingBar";
 
 const noop = () => undefined;
 
 export function PageBarGhost({ tab, positionProgress }: { tab: BrowserTab; positionProgress: SharedValue<number> }) {
   const theme = useTheme();
+  const design = useDesign();
   const insets = useSafeAreaInsets();
   const order = useDeckOrder();
   const tone = shownTone(usePageTone(tab.id), tab.themeColorHex);
-  const dark = isDarkColor(tone?.bottom ?? theme.surface);
+  const redesigned = design === "redesigned";
+  const dark = redesigned && !tone?.bottom ? theme.dark : isDarkColor(tone?.bottom ?? theme.surface);
+  const control = redesigned ? floatingBarLayout.control : browseLayout.hitTarget;
   const style = useAnimatedStyle(() => ({ opacity: pageBarGhostOpacity(positionProgress.value) }));
   return (
-    <Animated.View testID="pageBarGhost" pointerEvents="none" importantForAccessibility="no-hide-descendants" accessibilityElementsHidden style={[styles.bar, { height: barHeight(insets.bottom, "original") }, style]}>
-      <View style={[styles.controls, { bottom: barCenterFromBottom(insets.bottom, "original") - browseLayout.hitTarget / 2, paddingHorizontal: Math.max(insets.left, insets.right) }]}>
-        <BottomBar order={order} roles={rolesFor(dark)} showsPlus onTabs={noop} onTabsMenu={noop} onStep={noop} onPlus={noop} onMore={noop} />
+    <Animated.View testID="pageBarGhost" pointerEvents="none" importantForAccessibility="no-hide-descendants" accessibilityElementsHidden style={[styles.bar, { height: barHeight(insets.bottom, design) }, style]}>
+      <View style={[styles.controls, { bottom: barCenterFromBottom(insets.bottom, design) - control / 2, paddingHorizontal: Math.max(insets.left, insets.right) }]}>
+        {redesigned ? (
+          <FloatingBar tab={tab} order={order} roles={rolesFor(dark)} dark={dark} showsPlus anchors={false} onTabs={noop} onTabsMenu={noop} onStep={noop} onAddress={noop} onPlus={noop} onMore={noop} />
+        ) : (
+          <BottomBar order={order} roles={rolesFor(dark)} showsPlus onTabs={noop} onTabsMenu={noop} onStep={noop} onPlus={noop} onMore={noop} />
+        )}
       </View>
     </Animated.View>
   );

@@ -15,7 +15,7 @@ import type { CaptionRegion } from "../../platform/windowControls";
 import { sidebarWidthIn } from "../sidebar/shownWidth";
 import { onWindowRootSizes, windowRootWidth } from "./rootSize";
 
-export { frameCornerRadius, windowCornerRadius, windowFrame } from "../../platform/windows";
+export { drawnWindowCornerRadius, frameCornerRadius, windowCornerRadius, windowFrame } from "../../platform/windows";
 export { onInterfaceScaleChange } from "../settings/interfaceScale";
 
 export const windowRootShape = (windowId: string): Promise<{ width: number; height: number; radius: number } | null> =>

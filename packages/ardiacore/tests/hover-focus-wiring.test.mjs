@@ -39,11 +39,11 @@ test("applyPainting takes focus from a lingering pane only after it unhides the 
   assert.ok(taken > committed, "takeFocusFromLingeringPane runs before the page is unhidden, so focusPage is skipped for a hidden page");
 });
 
-test("taking focus from a lingering pane gives it to the page when the page is visible and shown", () => {
+test("taking focus from a lingering pane gives it to the page when the page is visible, selected and shown", () => {
   const take = body(painting, "- (void)takeFocusFromLingeringPane {");
   assert.match(take, /if \(\[window makeFirstResponder:nil\]\) \[self focusAfterLingeringPane\];/);
   const after = body(focus, "- (void)focusAfterLingeringPane {");
-  assert.match(after, /if \(!window \|\| !_visible \|\| _standalone \|\| !page \|\| page\.superview != self \|\| page\.isHiddenOrHasHiddenAncestor \|\| \[ArdiaWebView onScreenAheadIn:window\]\) return;/);
+  assert.match(after, /if \(!window \|\| !_visible \|\| !_selected \|\| _standalone \|\| !page \|\| page\.superview != self \|\| page\.isHiddenOrHasHiddenAncestor \|\| \[ArdiaWebView onScreenAheadIn:window\]\) return;/);
   assert.match(after, /\[self focusPage\];/);
 });
 

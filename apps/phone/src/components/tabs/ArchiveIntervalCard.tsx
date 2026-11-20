@@ -72,7 +72,7 @@ function intervalItems(interval: AutoArchiveInterval): MenuItem[] {
   }));
 }
 
-export function ArchiveCapsule({ centerY, safeSide }: { centerY: number; safeSide: number }) {
+export function ArchiveCapsule({ centerY, safeSide, sideInset }: { centerY: number; safeSide: number; sideInset: number }) {
   const theme = useTheme();
   const reduceMotion = useReduceMotion();
   const interval = usePreferences((p) => p.autoArchiveInterval);
@@ -83,14 +83,14 @@ export function ArchiveCapsule({ centerY, safeSide }: { centerY: number; safeSid
       exiting={reduceMotion ? FadeOut.duration(tabsMotion.fade) : capsuleOut}
       pointerEvents="box-none"
       testID="archiveCapsulePlace"
-      style={[styles.capsulePlace, { top: centerY - deckChromeLayout.archiveHeight / 2, paddingHorizontal: safeSide + deckChromeLayout.headerSide }]}
+      style={[styles.capsulePlace, { top: centerY - deckChromeLayout.archiveHeight / 2, paddingHorizontal: safeSide + sideInset }]}
     >
       <ChromeSurface testID="archiveCapsule" shape="capsule" cornerRadius={capsule(deckChromeLayout.archiveHeight)} interactive={false} dark={theme.dark} style={styles.capsule}>
         <View {...screenReaderActions([{ name: "dismiss", label: "Dismiss", run: () => dismissArchiveCard() }])} style={styles.capsuleRow}>
           <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={deckChromeLayout.archiveTextMinScale} style={[styles.capsuleText, { color: theme.headerText }]}>
             Archive inactive tabs
           </Text>
-          <MenuTrigger items={intervalItems(interval)} trigger="tap" fixedOrder place={{ right: safeSide + deckChromeLayout.headerSide, width: tabsLayout.menuWidth }}>
+          <MenuTrigger items={intervalItems(interval)} trigger="tap" fixedOrder place={{ right: safeSide + sideInset, width: tabsLayout.menuWidth }}>
             {({ onPress }) => (
               <Pressable accessibilityRole="button" accessibilityLabel={`Archive inactive tabs, ${title}`} onPress={onPress} style={styles.capsulePicker}>
                 <Text style={[styles.capsuleChoice, { color: theme.formAccent }]}>{title}</Text>

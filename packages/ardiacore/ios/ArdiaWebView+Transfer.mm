@@ -329,7 +329,13 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
       if (other == self || ![other.transferKey isEqualToString:_transferKey] || !other->_tab) continue;
       if (![self canTake:other->_tab]) return ArdiaTransferNone;
       if (!other->_tab.closed && [self holdTransferOf:other->_tab]) return ArdiaTransferHeld;
+      const BOOL sameWindow = other.window && other.window == self.window;
+      if (sameWindow && NSIsEmptyRect(self.bounds)) {
+        _life.waitingForSize = YES;
+        return ArdiaTransferHeld;
+      }
       tab = other->_tab;
+      other->_life.keepsPageOnDetach = sameWindow;
       [other detach];
       break;
     }

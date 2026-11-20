@@ -1,12 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View, type TextInputInstance } from "react-native";
+import { type GestureResponderEvent, Pressable, StyleSheet, Text, TextInput, View, type TextInputInstance } from "react-native";
 import { acknowledgeSyncReset, changeSyncFolder, pastedText, setDeviceName, stopSyncing, syncNow } from "../../state/sync/actions";
 import { useSyncStatus, useSyncView } from "../../state/sync/hooks";
 import { haptics } from "../../state/app/haptics";
 import { useSync } from "../../state/sync/store";
 import { syncNowFeedback, connectMessage, deviceIcon, inboxNotice, shownProfile, deviceSeen, isSyncConnected, isSyncOff, orderedDevices, sendReceivers, syncHeroSubtitle } from "../../state/sync/syncRules";
 import { popSettings, pushSettings } from "../../state/settings/nav";
-import { capsule, ConfirmDialog, font, PasteButton, showActionSheet, useWarningInk, pasteButtonIsNative, settingsLayout, settingsTint, space, Symbol, useTheme, type Confirmation, type SymbolName } from "../ui";
+import { capsule, ConfirmSheet, font, PasteButton, showActionSheet, useWarningInk, pasteButtonIsNative, settingsLayout, settingsTint, space, Symbol, useTheme, type Confirmation, type SymbolName } from "../ui";
 import { copy } from "../../lib/platformCopy";
 import { ButtonRow, Divider, Group, IconTile, NavRow, SettingsPage, ValueRow } from "../settings/SettingsKit";
 
@@ -152,7 +152,7 @@ export function SyncPage() {
       setStopping(false);
     },
   };
-  const confirmStop = () => (copy().stopSyncAsActionSheet ? showActionSheet(stopConfirmation) : setConfirmation(stopConfirmation));
+  const confirmStop = (event?: GestureResponderEvent) => (copy().stopSyncAsActionSheet ? showActionSheet(stopConfirmation) : setConfirmation({ ...stopConfirmation, opener: event?.currentTarget }));
   return (
     <SettingsPage title="Sync With Mac" onBack={popSettings} onRefresh={status.isEnabled ? syncNow : undefined} heroTitle>
       <SyncHero title="Sync With Mac" subtitle={hero.text} warning={hero.isWarning}>
@@ -225,7 +225,7 @@ export function SyncPage() {
           </Group>
         </>
       ) : null}
-      {confirmation ? <ConfirmDialog confirmation={confirmation} onClose={() => setConfirmation(null)} /> : null}
+      {confirmation ? <ConfirmSheet confirmation={confirmation} onClose={() => setConfirmation(null)} /> : null}
     </SettingsPage>
   );
 }

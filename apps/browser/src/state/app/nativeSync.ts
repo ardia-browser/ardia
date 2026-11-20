@@ -90,6 +90,7 @@ export function startNativeSync() {
     if (e.type === "littleArdiaReturnDropped") noteLittleArdiaReturnsDropped(e.count);
     if (e.type === "littleArdiaLinkKeptBehind") noteLittleArdiaLinkKeptBehind(e.when);
     if (e.type === "littleArdiaGlobalShortcut") noteLittleArdiaAppHandoff("globalShortcut");
+    if (e.type === "littleArdiaGlobalShortcutBehind") noteLittleArdiaAppHandoff("globalShortcutBehind");
     if (e.type === "quitWarningSuppressed") s.updateSettings({ warnBeforeQuitting: false });
     if (e.type === "willQuit") {
       const flushing = Date.now();

@@ -3,8 +3,10 @@ import { contributionsOf } from "../../lib/pluginManifest";
 import { failure } from "../automation/automationMethods";
 import type { Body } from "../automation/controlSocket";
 import { openSettings } from "../settings/settingsWindows";
-import { disablePlugin, removePlugin, requestPluginConsent } from "./lifecycle";
-import { activeManifest, currentPlugins, needsReview, recordOf } from "./store";
+import { releaseOrphanedConsent } from "./consentSurface";
+import { ALREADY_ASKING, disablePlugin, removePlugin, requestPluginConsent } from "./lifecycle";
+import { activeManifest, currentPlugins, isAlwaysOn, isInstalled, needsReview, recordOf } from "./store";
+import { officialPlugins } from "./official";
 import { pluginRecordsSaved } from "./savedState";
 import { callTool } from "./tools";
 
@@ -32,6 +34,7 @@ export function pluginList() {
 
 export function pluginSocketMethod(method: string, params: Record<string, unknown>): Body | Promise<Body> | null {
   if (method === "plugins") return { result: pluginList() };
+  if (method === "plugins.official") return { result: officialPlugins(currentPlugins()) };
   if (!method.startsWith("plugins.")) return null;
   const name = nameOf(params);
   const plugins = currentPlugins();
@@ -42,11 +45,14 @@ export function pluginSocketMethod(method: string, params: Record<string, unknow
     case "plugins.enable":
       if (!known) return failure("bad_request", `There's no plugin ${String(name)}.`);
       if (activeManifest(currentPlugins(), name)) return { result: { ok: true } };
+      releaseOrphanedConsent();
+      if (currentPlugins().consent) return failure("refused", ALREADY_ASKING);
       if (!requestPluginConsent(name)) return failure("refused", `${name} has problems, so it can't be turned on.`);
       openSettings("plugins", null, name);
       return { result: { waiting: true } };
     case "plugins.disable": {
       if (!known && !leftOn) return failure("bad_request", `There's no plugin ${String(name)}.`);
+      if (isAlwaysOn(currentPlugins().listings[name])) return isInstalled(currentPlugins(), name!) ? failure("refused", `${name} is built into Ardia: once installed it stays.`) : { result: { ok: true } };
       const consent = consentNow();
       if (!disablePlugin(name, consent)) return failure("failed", "Couldn't save plugins.json.");
       return pluginRecordsSaved(consent).then((saved) => (saved ? { result: { ok: true } } : failure("failed", "It's off for now, but plugins.json couldn't be saved, so it may be on again after Ardia restarts.")));

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { closeSettings, followSettingsPath, offerSyncPages, openSettings, pushSettings, settingsNav, settingsPath, settingsRouteFromKey, settingsRouteKey, type SettingsRoute } from "./nav.ts";
+import { closeSettings, followSettingsPath, offerBrowseForMePage, offerSyncPages, openSettings, pushSettings, settingsNav, settingsPath, settingsRouteFromKey, settingsRouteKey, type SettingsRoute } from "./nav.ts";
 
 test("every settings route turns into a path key and back, a filter list keeping its id", () => {
   const routes: SettingsRoute[] = [{ page: "appearance" }, { page: "siteSettings" }, { page: "filterList", id: "easylist:v2" }, { page: "syncConnect" }, { page: "whatsSent" }];
@@ -36,4 +36,20 @@ test("where sync isn't offered, the sync pages are never opened or pushed, and t
   pushSettings({ page: "sync" });
   assert.deepEqual(settingsNav().stack.map((route) => route.page), ["root", "appearance", "sync"]);
   closeSettings();
+});
+
+test("Browse for Me's page opens only where the phone offers it, as on iPhone, and never on Android", () => {
+  closeSettings();
+  assert.deepEqual(settingsRouteFromKey("browseForMe"), { page: "browseForMe" });
+  offerBrowseForMePage(() => false);
+  openSettings({ page: "browseForMe" });
+  assert.equal(settingsNav().open, false);
+  openSettings();
+  pushSettings({ page: "browseForMe" });
+  assert.deepEqual(settingsNav().stack.map((route) => route.page), ["root"]);
+  offerBrowseForMePage(() => true);
+  pushSettings({ page: "browseForMe" });
+  assert.deepEqual(settingsNav().stack.map((route) => route.page), ["root", "browseForMe"]);
+  closeSettings();
+  offerBrowseForMePage(() => false);
 });

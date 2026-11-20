@@ -112,6 +112,12 @@ export function settleDeckPull(lands: boolean, velocityY: number, settled: PullS
   });
 }
 
+export function abandonDeckPull(id: string, settled: PullSettled) {
+  "worklet";
+  if (deckPull.stage.value !== PULL_STAGE.tracking || deckPull.id.value !== id) return;
+  settleDeckPull(false, 0, settled);
+}
+
 export function releaseDeckPull(id: string, velocityY: number, success: boolean, released: (lands: boolean) => void, settled: PullSettled) {
   "worklet";
   if (deckPull.stage.value !== PULL_STAGE.tracking || deckPull.id.value !== id) return;
@@ -329,8 +335,9 @@ export function armDeckPull(id: string | null, fades = false) {
 
 export const deckPullFades = () => armedFades;
 
-export function disarmDeckPull(id: string) {
+export function disarmDeckPull(id: string, settled: PullSettled) {
   if (armedId === id) armedId = null;
+  runOnUI(abandonDeckPull)(id, settled);
 }
 
 export const deckPullArmed = () => armedId;

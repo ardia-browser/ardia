@@ -1,6 +1,6 @@
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useState, type ReactNode } from "react";
 import { countRender } from "../../state/app/interactionPerf";
-import { Platform, StyleSheet } from "react-native";
+import { Platform, StyleSheet, useWindowDimensions, View, type LayoutChangeEvent } from "react-native";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { PAGE_COVER, pageCoverNeeded } from "../../lib/pageCover";
 import { usePageTone } from "../../state/browse/hooks";
@@ -12,12 +12,39 @@ import type { BrowserTab } from "../../state/tabs/tabModels";
 import { TabFace, useTheme } from "../ui";
 import { PageLoadingPlaceholder } from "./PageLoadingPlaceholder";
 
+export type CoverFace = { kind: "card"; picture: string | null; title: string; host: string; cardWidth: number | null } | { kind: "placeholder" };
+
+export type OpeningCard = { cardWidth: number | null };
+
+export function coverFace(tab: Pick<BrowserTab, "title" | "url">, picture: string | null, card: OpeningCard | null): CoverFace {
+  if (!picture && !card) return { kind: "placeholder" };
+  const host = display(tab.url).host;
+  return { kind: "card", picture, title: tab.title || host || "New Tab", host, cardWidth: card?.cardWidth ?? null };
+}
+
+const openingCardOf = (id: string): OpeningCard | null => {
+  const { opening, openingCardWidth } = useBrowse.getState();
+  return opening === id ? { cardWidth: openingCardWidth } : null;
+};
+
+type Box = { width: number; height: number };
+
+function AtCardScale({ cardWidth, box, children }: { cardWidth: number | null; box: Box; children: ReactNode }) {
+  if (!cardWidth || box.width <= 0 || box.height <= 0) return children;
+  const scale = box.width / cardWidth;
+  return <View testID="pageCoverCardFace" style={[styles.cardFace, { width: cardWidth, height: box.height / scale, transform: [{ scale }] }]}>{children}</View>;
+}
+
 export const PageCover = memo(function PageCover({ tab }: { tab: BrowserTab }) {
   countRender("PageCover");
   const theme = useTheme();
   const tone = usePageTone(tab.id);
   const [frozen] = useState(() => launchArguments().loadFreeze !== null);
   const [needed] = useState(() => frozen || pageCoverNeeded(pageNavigation(tab.id), Boolean(tab.snapshotFileName)));
+  const [face] = useState(() => coverFace(tab, frozen ? null : tab.snapshotFileName, openingCardOf(tab.id)));
+  const window = useWindowDimensions();
+  const [box, setBox] = useState<Box>(() => ({ width: window.width, height: window.height }));
+  const laidOut = ({ nativeEvent: { layout } }: LayoutChangeEvent) => setBox((was) => (was.width === layout.width && was.height === layout.height ? was : { width: layout.width, height: layout.height }));
   const [gone, setGone] = useState(!needed);
   const opacity = useSharedValue(needed ? 1 : 0);
   useEffect(() => {
@@ -73,9 +100,7 @@ export const PageCover = memo(function PageCover({ tab }: { tab: BrowserTab }) {
   };
   const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
   if (gone) return null;
-  const shown = display(tab.url);
-  const picture = frozen ? null : tab.snapshotFileName;
-  const spoken = !picture && Platform.OS === "ios";
+  const spoken = face.kind === "placeholder" && Platform.OS === "ios";
   return (
     <Animated.View
       testID="pageCover"
@@ -83,13 +108,18 @@ export const PageCover = memo(function PageCover({ tab }: { tab: BrowserTab }) {
       pointerEvents="none"
       importantForAccessibility="no-hide-descendants"
       accessibilityElementsHidden={!spoken}
+      onLayout={face.kind === "card" && face.cardWidth ? laidOut : undefined}
       style={[StyleSheet.absoluteFill, { backgroundColor: theme.surface }, style]}
     >
-      {picture ? (
-        <TabFace tab={tab} title={tab.title || shown.host} host={shown.host} tone={tone?.top ?? null} roles={theme} paintedAs={`cover:${tab.id}`} />
+      {face.kind === "card" ? (
+        <AtCardScale cardWidth={face.cardWidth} box={box}>
+          <TabFace tab={{ ...tab, snapshotFileName: face.picture }} title={face.title} host={face.host} tone={tone?.top ?? null} roles={theme} paintedAs={`cover:${tab.id}`} />
+        </AtCardScale>
       ) : (
         <PageLoadingPlaceholder tab={tab} />
       )}
     </Animated.View>
   );
 });
+
+const styles = StyleSheet.create({ cardFace: { position: "absolute", left: 0, top: 0, transformOrigin: "left top" } });

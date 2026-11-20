@@ -35,26 +35,10 @@ index 1ae22ed66776941c33b2c0a78038b2b997506aa7..632a0f284e88e2d3034f3eeb50cf2acf
          selection?.end ?? -1,
        );
 diff --git a/Libraries/Image/RCTImageView.mm b/Libraries/Image/RCTImageView.mm
-index 879e36bc2483226756011b21948f2dd1760d7cf8..bc861ed4b95cbcf7cd787cf9a8d7e47ad87f0184 100644
+index 879e36bc2483226756011b21948f2dd1760d7cf8..383f676c62b23f008964002aeb3940f1f55f8907 100644
 --- a/Libraries/Image/RCTImageView.mm
 +++ b/Libraries/Image/RCTImageView.mm
-@@ -17,6 +17,15 @@
- #import <React/RCTUtils.h>
- #import <React/UIView+React.h>
- 
-+#if TARGET_OS_OSX // [macOS
-+// [Ardia: an image is decoded for the view's own backing density, which includes the interface size its root is drawn
-+// at, and loads again when that size changes. Ardia]
-+static CGFloat ArdiaBackingDensity(NSView *view)
-+{
-+  return view.window != nil ? [view convertSizeToBacking:NSMakeSize(1, 1)].width : [NSScreen mainScreen].backingScaleFactor;
-+}
-+#endif // macOS]
-+
- /**
-  * Determines whether an image of `currentSize` should be reloaded for display
-  * at `idealSize`.
-@@ -149,6 +158,12 @@ - (instancetype)initWithBridge:(RCTBridge *)bridge
+@@ -149,6 +149,12 @@ - (instancetype)initWithBridge:(RCTBridge *)bridge
      _imageView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
      [self addSubview:_imageView];
  
@@ -67,7 +51,7 @@ index 879e36bc2483226756011b21948f2dd1760d7cf8..bc861ed4b95cbcf7cd787cf9a8d7e47a
  #if !TARGET_OS_OSX // [macOS]
      NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
      [center addObserver:self
-@@ -197,7 +212,7 @@ - (void)updateWithImage:(RCTPlatformImage *)image // [macOS]
+@@ -197,7 +203,7 @@ - (void)updateWithImage:(RCTPlatformImage *)image // [macOS]
      image.resizingMode = NSImageResizingModeTile;
    } else if (_resizeMode == RCTResizeModeCover) {
      if (!NSEqualSizes(self.bounds.size, NSZeroSize)) {
@@ -76,7 +60,7 @@ index 879e36bc2483226756011b21948f2dd1760d7cf8..bc861ed4b95cbcf7cd787cf9a8d7e47a
      }
  #endif // macOS]
    } else if (!UIEdgeInsetsEqualToEdgeInsets(UIEdgeInsetsZero, _capInsets)) {
-@@ -363,7 +378,7 @@ - (RCTImageSource *)imageSourceForSize:(CGSize)size
+@@ -363,7 +369,7 @@ - (RCTImageSource *)imageSourceForSize:(CGSize)size
  #if !TARGET_OS_OSX // [macOS]
    const CGFloat scale = RCTScreenScale();
  #else // [macOS
@@ -85,7 +69,7 @@ index 879e36bc2483226756011b21948f2dd1760d7cf8..bc861ed4b95cbcf7cd787cf9a8d7e47a
  #endif // macOS]
    const CGFloat targetImagePixels = size.width * size.height * scale * scale;
  
-@@ -429,7 +444,7 @@ - (void)reloadImage
+@@ -429,7 +435,7 @@ - (void)reloadImage
  #if !TARGET_OS_OSX // [macOS]
      CGFloat imageScale = RCTScreenScale();
  #else // [macOS
@@ -94,7 +78,7 @@ index 879e36bc2483226756011b21948f2dd1760d7cf8..bc861ed4b95cbcf7cd787cf9a8d7e47a
  #endif // macOS]
      if (!UIEdgeInsetsEqualToEdgeInsets(_capInsets, UIEdgeInsetsZero)) {
        // Don't resize images that use capInsets
-@@ -558,7 +573,7 @@ - (void)reactSetFrame:(CGRect)frame
+@@ -558,7 +564,7 @@ - (void)reactSetFrame:(CGRect)frame
          imageSize, imageScale, frame.size, RCTScreenScale(), RCTResizeModeFromUIViewContentMode(self.contentMode), YES);
  #else // [macOS
      CGSize idealSize = RCTTargetSize(
@@ -103,7 +87,7 @@ index 879e36bc2483226756011b21948f2dd1760d7cf8..bc861ed4b95cbcf7cd787cf9a8d7e47a
  #endif // macOS]
  
      // Don't reload if the current image or target image size is close enough
-@@ -621,8 +636,18 @@ - (void)didMoveToWindow
+@@ -621,8 +627,18 @@ - (void)didMoveToWindow
  #if TARGET_OS_OSX // [macOS
  - (void)viewDidChangeBackingProperties
  {
@@ -348,6 +332,221 @@ index bbee6d1e1865359b350da78b745c6c0061a2dc5d..c645bfead1814173bef35608504aa5ec
  };
  
  function convertPointerEventToMouseEvent(input: PointerEvent): MouseEvent {
+diff --git a/Libraries/Text/Text/RCTTextView.h b/Libraries/Text/Text/RCTTextView.h
+index 3de368b73b6bbad86f1b27dd0ba56abb516f89e8..58ec2e0f64379d83989e5915b3ee44041be53f48 100644
+--- a/Libraries/Text/Text/RCTTextView.h
++++ b/Libraries/Text/Text/RCTTextView.h
+@@ -12,6 +12,10 @@
+ 
+ NS_ASSUME_NONNULL_BEGIN
+ 
++#if TARGET_OS_OSX // [Ardia
++RCT_EXTERN CGFloat RCTTextOpticalLift(NSFont *_Nullable font, CGFloat scale);
++#endif // Ardia]
++
+ @interface RCTTextView : RCTUIView // [macOS]
+ 
+ - (instancetype)initWithEventDispatcher:(id<RCTEventDispatcherProtocol>)eventDispatcher; // [macOS]
+diff --git a/Libraries/Text/Text/RCTTextView.mm b/Libraries/Text/Text/RCTTextView.mm
+index abff88e692bd8ec88f4e5b292234b23133962d46..9bb23098ddd7f5b2b4143a1d964188c973a90d55 100644
+--- a/Libraries/Text/Text/RCTTextView.mm
++++ b/Libraries/Text/Text/RCTTextView.mm
+@@ -37,6 +37,97 @@ - (BOOL)canBecomeKeyView
+ 
+ @end
+ 
++// [Ardia: a line box is centred on its cap height, so lowercase text reads low next to an icon. The text is drawn a
++// whole number of device pixels higher, (cap height - x-height) * 0.375, without touching layout. Ardia]
++CGFloat RCTTextOpticalLift(NSFont *_Nullable font, CGFloat scale)
++{
++  if (font == nil || scale <= 0) {
++    return 0;
++  }
++  return MAX(0, round((font.capHeight - font.xHeight) * 0.375 * scale)) / scale;
++}
++
++static NSArray<NSValue *> *RCTTextShownCharacters(NSAttributedString *text, NSLayoutManager *_Nullable layoutManager, NSTextContainer *_Nullable textContainer)
++{
++  if (layoutManager == nil || textContainer == nil) {
++    return @[ [NSValue valueWithRange:NSMakeRange(0, text.length)] ];
++  }
++  NSMutableIndexSet *shownCharacters = [NSMutableIndexSet indexSet];
++  NSMutableIndexSet *hiddenCharacters = [NSMutableIndexSet indexSet];
++  NSRange glyphs = [layoutManager glyphRangeForTextContainer:textContainer];
++  for (NSUInteger glyph = glyphs.location; glyph < NSMaxRange(glyphs); glyph++) {
++    if ([layoutManager notShownAttributeForGlyphAtIndex:glyph]) {
++      [hiddenCharacters addIndex:[layoutManager characterIndexForGlyphAtIndex:glyph]];
++    }
++  }
++  for (NSUInteger glyph = glyphs.location; glyph < NSMaxRange(glyphs); glyph++) {
++    if ([layoutManager notShownAttributeForGlyphAtIndex:glyph]) {
++      continue;
++    }
++    NSRange characters = [layoutManager characterRangeForGlyphRange:NSMakeRange(glyph, 1) actualGlyphRange:NULL];
++    if (![hiddenCharacters intersectsIndexesInRange:characters]) {
++      [shownCharacters addIndexesInRange:characters];
++    }
++  }
++  NSMutableArray<NSValue *> *shown = [NSMutableArray array];
++  [shownCharacters enumerateRangesUsingBlock:^(NSRange range, __unused BOOL *stop) {
++    [shown addObject:[NSValue valueWithRange:range]];
++  }];
++  return shown;
++}
++
++static NSFont *RCTTextDominantFont(NSAttributedString *text, NSArray<NSValue *> *shown)
++{
++  NSString *string = text.string;
++  NSCharacterSet *blank = NSCharacterSet.whitespaceAndNewlineCharacterSet;
++  NSCharacterSet *control = NSCharacterSet.controlCharacterSet;
++  NSMutableDictionary<NSFont *, NSNumber *> *counts = [NSMutableDictionary dictionary];
++  __block NSFont *dominant = nil;
++  __block NSUInteger most = 0;
++  for (NSValue *part in shown) {
++    [text enumerateAttribute:NSFontAttributeName
++                     inRange:part.rangeValue
++                     options:NSAttributedStringEnumerationLongestEffectiveRangeNotRequired
++                  usingBlock:^(NSFont *font, NSRange range, __unused BOOL *stop) {
++                    if (font == nil) {
++                      return;
++                    }
++                    __block NSUInteger visible = 0;
++                    [string enumerateSubstringsInRange:range
++                                               options:NSStringEnumerationByComposedCharacterSequences | NSStringEnumerationSubstringNotRequired
++                                            usingBlock:^(__unused NSString *substring, NSRange character, __unused NSRange enclosing, __unused BOOL *innerStop) {
++                                              unichar first = [string characterAtIndex:character.location];
++                                              if (![blank characterIsMember:first] && ![control characterIsMember:first]) {
++                                                visible++;
++                                              }
++                                            }];
++                    NSUInteger total = counts[font].unsignedIntegerValue + visible;
++                    counts[font] = @(total);
++                    if (total > most) {
++                      most = total;
++                      dominant = font;
++                    }
++                  }];
++  }
++  return dominant;
++}
++
++static BOOL RCTTextHasAttachments(NSAttributedString *text)
++{
++  __block BOOL found = NO;
++  [text enumerateAttribute:NSAttachmentAttributeName
++                   inRange:NSMakeRange(0, text.length)
++                   options:0
++                usingBlock:^(id attachment, __unused NSRange range, BOOL *stop) {
++                  if (attachment != nil) {
++                    found = YES;
++                    *stop = YES;
++                  }
++                }];
++  return found;
++}
++// Ardia]
++
+ #endif // macOS]
+ 
+ #if !TARGET_OS_OSX // [macOS]
+@@ -62,6 +153,9 @@ @implementation RCTTextView {
+   NSArray<RCTUIView *> *_Nullable _descendantViews; // [macOS]
+   NSTextStorage *_Nullable _textStorage;
+   CGRect _contentFrame;
++#if TARGET_OS_OSX // [Ardia
++  NSFont *_Nullable _opticalFont;
++#endif // Ardia]
+ }
+ 
+ // [macOS
+@@ -171,6 +265,9 @@ - (void)setTextStorage:(NSTextStorage *)textStorage
+ #if TARGET_OS_OSX // [macOS
+   NSLayoutManager *layoutManager = textStorage.layoutManagers.firstObject;
+   NSTextContainer *textContainer = layoutManager.textContainers.firstObject;
++  _opticalFont = descendantViews.count > 0 || RCTTextHasAttachments(textStorage) // [Ardia: inline views and attachments are placed apart from the glyphs, so text that has them isn't lifted
++      ? nil
++      : RCTTextDominantFont(textStorage, RCTTextShownCharacters(textStorage, layoutManager, textContainer)); // Ardia]
+ 
+   [_textView replaceTextContainer:textContainer];
+ 
+@@ -187,7 +284,7 @@ - (void)setTextStorage:(NSTextStorage *)textStorage
+ 
+   _textView.minSize = contentFrame.size;
+   _textView.maxSize = contentFrame.size;
+-  _textView.frame = contentFrame;
++  _textView.frame = [self ardia_liftedContentFrame]; // [Ardia Ardia]
+   _textView.textStorage.attributedString = textStorage;
+ #endif // macOS]
+ 
+@@ -205,6 +302,33 @@ - (void)setTextStorage:(NSTextStorage *)textStorage
+   [self setNeedsDisplay];
+ }
+ 
++#if TARGET_OS_OSX // [Ardia
++- (CGRect)ardia_liftedContentFrame
++{
++  CGFloat lift = RCTTextOpticalLift(_opticalFont, ArdiaBackingDensity(self));
++  return CGRectOffset(_contentFrame, 0, self.isFlipped ? -lift : lift);
++}
++
++- (void)ardia_applyOpticalLift
++{
++  CGRect lifted = [self ardia_liftedContentFrame];
++  if (!CGRectEqualToRect(_textView.frame, lifted)) {
++    _textView.frame = lifted;
++  }
++}
++
++- (void)ardia_interfaceScaleDidChange:(NSNotification *)notification
++{
++  [self ardia_applyOpticalLift];
++}
++
++- (void)viewDidChangeBackingProperties
++{
++  [super viewDidChangeBackingProperties];
++  [self ardia_applyOpticalLift];
++}
++#endif // Ardia]
++
+ - (void)drawRect:(CGRect)rect
+ {
+   [super drawRect:rect];
+@@ -293,6 +417,11 @@ - (NSNumber *)reactTagAtPoint:(CGPoint)point
+   CGFloat fraction;
+   NSLayoutManager *layoutManager = _textStorage.layoutManagers.firstObject;
+   NSTextContainer *textContainer = layoutManager.textContainers.firstObject;
++#if TARGET_OS_OSX // [Ardia: the layout manager answers in its text container's points, inside the (lifted) text view
++  NSPoint inTextView = [self convertPoint:point toView:_textView];
++  NSPoint containerOrigin = _textView.textContainerOrigin;
++  point = CGPointMake(inTextView.x - containerOrigin.x, inTextView.y - containerOrigin.y);
++#endif // Ardia]
+   NSUInteger characterIndex = [layoutManager characterIndexForPoint:point
+                                                     inTextContainer:textContainer
+                            fractionOfDistanceBetweenInsertionPoints:&fraction];
+@@ -310,6 +439,12 @@ - (NSNumber *)reactTagAtPoint:(CGPoint)point
+ - (void)didMoveToWindow
+ {
+   [super didMoveToWindow];
++#if TARGET_OS_OSX // [Ardia: follows the interface size only while drawn in a window
++  [NSNotificationCenter.defaultCenter removeObserver:self name:@"ArdiaInterfaceScaleDidChange" object:nil];
++  if (self.window) {
++    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(ardia_interfaceScaleDidChange:) name:@"ArdiaInterfaceScaleDidChange" object:nil];
++  }
++#endif // Ardia]
+ 
+   if (!self.window) {
+     self.layer.contents = nil;
+@@ -318,6 +453,9 @@ - (void)didMoveToWindow
+       _highlightLayer = nil;
+     }
+   } else if (_textStorage) {
++#if TARGET_OS_OSX // [Ardia
++    [self ardia_applyOpticalLift];
++#endif // Ardia]
+     [self setNeedsDisplay];
+   }
+ }
 diff --git a/Libraries/Text/TextInput/RCTBackedTextInputDelegateAdapter.mm b/Libraries/Text/TextInput/RCTBackedTextInputDelegateAdapter.mm
 index 18bbe64f657a36596563b3eb6d135284e28c674a..a4046a33e13d35cac155e306f368e04ef8d1f51e 100644
 --- a/Libraries/Text/TextInput/RCTBackedTextInputDelegateAdapter.mm
@@ -631,6 +830,55 @@ index fac5699dedeaaa35bb22b8f8d5d96a3817ca92b1..692ea640ba83db5b0bfe3fc1a24fda68
      RCTExecuteOnUIManagerQueue(^{
        RCTBaseTextInputShadowView *shadowView =
            (RCTBaseTextInputShadowView *)[self.bridge.uiManager shadowViewForReactTag:viewTag];
+diff --git a/Libraries/Text/TextInput/Singleline/RCTSinglelineTextInputView.mm b/Libraries/Text/TextInput/Singleline/RCTSinglelineTextInputView.mm
+index 9973da7611fc92df7e66010350504bf077a9f2d9..628bc4c403f84a01abe1f687bf85002450f5a204 100644
+--- a/Libraries/Text/TextInput/Singleline/RCTSinglelineTextInputView.mm
++++ b/Libraries/Text/TextInput/Singleline/RCTSinglelineTextInputView.mm
+@@ -26,7 +26,9 @@ - (instancetype)initWithBridge:(RCTBridge *)bridge
+     self.submitBehavior = @"blurAndSubmit";
+ 
+     _backedTextInputView = [[RCTUITextField alloc] initWithFrame:self.bounds];
++#if !TARGET_OS_OSX // [Ardia: on the Mac the field's frame comes only from -ardia_layoutBackedField, never from autoresizing, so its optical lift can't feed back into its layout rect
+     _backedTextInputView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
++#endif // Ardia]
+ #if TARGET_OS_OSX // [macOS
+     _backedTextInputView.cell.scrollable = YES;
+     _backedTextInputView.cell.usesSingleLineMode = YES;
+@@ -57,10 +59,21 @@ - (void)setReactBorderInsets:(UIEdgeInsets)reactBorderInsets
+ {
+   [super setReactBorderInsets:reactBorderInsets];
+   // We apply `borderInsets` as `backedTextInputView`'s layout offset on mac.
+-  ((RCTUITextField*)self.backedTextInputView).frame = UIEdgeInsetsInsetRect(self.bounds, reactBorderInsets);
++  [self ardia_layoutBackedField]; // [Ardia Ardia]
+   [self setNeedsLayout];
+ }
+ 
++- (void)ardia_layoutBackedField // [Ardia
++{
++  _backedTextInputView.frame = UIEdgeInsetsInsetRect(self.bounds, self.reactBorderInsets);
++}
++
++- (void)resizeSubviewsWithOldSize:(NSSize)oldSize
++{
++  [super resizeSubviewsWithOldSize:oldSize];
++  [self ardia_layoutBackedField];
++} // Ardia]
++
+ - (void)setUseSecureTextField:(BOOL)useSecureTextField {
+   if (_useSecureTextField != useSecureTextField) {
+     _useSecureTextField = useSecureTextField;
+@@ -84,10 +97,10 @@ - (void)setUseSecureTextField:(BOOL)useSecureTextField {
+     _backedTextInputView.selectionColor = previousTextField.selectionColor;
+     _backedTextInputView.textAlignment = previousTextField.textAlignment;
+     _backedTextInputView.textContainerInset = previousTextField.textContainerInset;
+-    _backedTextInputView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+     _backedTextInputView.textInputDelegate = self;
+     _backedTextInputView.text = previousTextField.text;
+     [self replaceSubview:previousTextField with:_backedTextInputView];
++    [self ardia_layoutBackedField]; // [Ardia Ardia]
+   }
+ }
+ 
 diff --git a/Libraries/Text/TextInput/Singleline/RCTSinglelineTextInputViewManager.mm b/Libraries/Text/TextInput/Singleline/RCTSinglelineTextInputViewManager.mm
 index 386405335b411e70a82909033febc7dd5b4adabe..2b8d3d5576b83c20e6387c189943e1722cfad5ce 100644
 --- a/Libraries/Text/TextInput/Singleline/RCTSinglelineTextInputViewManager.mm
@@ -649,10 +897,18 @@ index 386405335b411e70a82909033febc7dd5b4adabe..2b8d3d5576b83c20e6387c189943e172
 +
  @end
 diff --git a/Libraries/Text/TextInput/Singleline/RCTUITextField.mm b/Libraries/Text/TextInput/Singleline/RCTUITextField.mm
-index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..8dd0ed47d79287cd7fcaad15ba3b1eca6f5ac6b9 100644
+index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..a36d86861e3004008128b546ad35c8079e0a921f 100644
 --- a/Libraries/Text/TextInput/Singleline/RCTUITextField.mm
 +++ b/Libraries/Text/TextInput/Singleline/RCTUITextField.mm
-@@ -17,8 +17,119 @@
+@@ -10,6 +10,7 @@
+ #import <React/RCTBackedTextInputDelegateAdapter.h>
+ #import <React/RCTBackedTextInputDelegate.h> // [macOS]
+ #import <React/RCTTextAttributes.h>
++#import <React/RCTTextView.h> // [Ardia Ardia]
+ #import <React/RCTUtils.h>
+ #import <React/UIView+React.h>
+ 
+@@ -17,8 +18,119 @@
  
  #if TARGET_OS_OSX // [macOS
  
@@ -772,7 +1028,7 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..8dd0ed47d79287cd7fcaad15ba3b1eca
  @property (nonatomic, assign) UIEdgeInsets textContainerInset;
  @property (nonatomic, getter=isAutomaticTextReplacementEnabled) BOOL automaticTextReplacementEnabled;
  @property (nonatomic, getter=isAutomaticSpellingCorrectionEnabled) BOOL automaticSpellingCorrectionEnabled;
-@@ -29,7 +140,29 @@ @interface RCTUITextFieldCell : NSTextFieldCell
+@@ -29,7 +141,29 @@ @interface RCTUITextFieldCell : NSTextFieldCell
  
  @end
  
@@ -803,7 +1059,16 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..8dd0ed47d79287cd7fcaad15ba3b1eca
  
  - (NSRect)titleRectForBounds:(NSRect)rect
  {
-@@ -155,6 +288,11 @@ - (BOOL)hasMarkedText
+@@ -84,6 +218,8 @@ @implementation RCTUITextField {
+ #if TARGET_OS_OSX // [macOS
+   BOOL _isUpdatingPlaceholderText;
+   NSArray<NSPasteboardType> *_readablePasteboardTypes;
++  NSRect _ardiaLayoutFrame; // [Ardia Ardia]
++  BOOL _ardiaHasLayoutFrame; // [Ardia Ardia]
+ #endif // macOS]
+ }
+ 
+@@ -155,6 +291,11 @@ - (BOOL)hasMarkedText
  	return ((NSTextView *)self.currentEditor).validAttributesForMarkedText ?: @[];
  }
  
@@ -815,7 +1080,112 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..8dd0ed47d79287cd7fcaad15ba3b1eca
  #endif // macOS]
  
  #pragma mark - Accessibility
-@@ -330,7 +468,9 @@ - (void)setPlaceholder:(NSString *)placeholder
+@@ -304,8 +445,104 @@ - (RCTUIColor*)cursorColor
+ - (void)setFont:(UIFont *)font
+ {
+   ((RCTUITextFieldCell*)self.cell).font = font;
++#if TARGET_OS_OSX // [Ardia
++  [self ardia_applyOpticalLift];
++#endif // Ardia]
++}
++
++#if TARGET_OS_OSX
++// [Ardia: typed and placeholder text get RCTTextView's optical lift. The field grows upward by the lift inside its
++// unchanged layout box, so its text sits that much higher and the caret, which AppKit clips to the field's bounds,
++// keeps its full height.
++- (NSRect)ardia_liftedFrame:(NSRect)frame
++{
++  CGFloat lift = RCTTextOpticalLift(self.font, ArdiaBackingDensity(self.superview ?: self));
++  BOOL flipped = self.superview == nil || self.superview.isFlipped;
++  return NSMakeRect(frame.origin.x, flipped ? frame.origin.y - lift : frame.origin.y, frame.size.width, frame.size.height + lift);
++}
++
++- (void)ardia_setLiftedFrame:(NSRect)lifted
++{
++  if (NSEqualRects(super.frame, lifted)) {
++    return;
++  }
++  [super setFrame:lifted];
++  if (lifted.size.height <= _ardiaLayoutFrame.size.height) {
++    return;
++  }
++  NSView *viewport = self.currentEditor.superview;
++  if (![viewport isKindOfClass:NSClipView.class] || viewport.superview != self) {
++    return;
++  }
++  CGFloat drift = [self.cell titleRectForBounds:self.bounds].origin.y - viewport.frame.origin.y;
++  if (drift != 0) {
++    [viewport setFrameOrigin:NSMakePoint(viewport.frame.origin.x, viewport.frame.origin.y + drift)];
++  }
++}
++
++- (void)ardia_applyOpticalLift
++{
++  if (_ardiaHasLayoutFrame) {
++    [self ardia_setLiftedFrame:[self ardia_liftedFrame:_ardiaLayoutFrame]];
++  }
++}
++
++- (void)setFrame:(NSRect)frame
++{
++  _ardiaLayoutFrame = frame;
++  _ardiaHasLayoutFrame = YES;
++  [self ardia_setLiftedFrame:[self ardia_liftedFrame:frame]];
++}
++
++- (NSRect)ardia_layoutBounds
++{
++  NSRect bounds = self.bounds;
++  if (!_ardiaHasLayoutFrame) {
++    return bounds;
++  }
++  CGFloat lift = bounds.size.height - _ardiaLayoutFrame.size.height;
++  return NSMakeRect(bounds.origin.x, self.isFlipped ? bounds.origin.y + lift : bounds.origin.y, bounds.size.width, _ardiaLayoutFrame.size.height);
++}
++
++- (NSRect)focusRingMaskBounds
++{
++  return [self ardia_layoutBounds];
++}
++
++- (void)drawFocusRingMask
++{
++  [self.cell drawFocusRingMaskWithFrame:[self ardia_layoutBounds] inView:self];
++}
++
++- (void)ardia_interfaceScaleDidChange:(NSNotification *)notification
++{
++  [self ardia_applyOpticalLift];
+ }
+ 
++- (void)viewDidMoveToWindow
++{
++  [super viewDidMoveToWindow];
++  [NSNotificationCenter.defaultCenter removeObserver:self name:@"ArdiaInterfaceScaleDidChange" object:nil];
++  if (self.window) {
++    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(ardia_interfaceScaleDidChange:) name:@"ArdiaInterfaceScaleDidChange" object:nil];
++  }
++  [self ardia_applyOpticalLift];
++}
++
++- (void)viewDidChangeBackingProperties
++{
++  [super viewDidChangeBackingProperties];
++  [self ardia_applyOpticalLift];
++}
++
++- (void)viewDidMoveToSuperview
++{
++  [super viewDidMoveToSuperview];
++  [self ardia_applyOpticalLift];
++}
++// Ardia]
++#endif
++
+ - (UIFont *)font
+ {
+   return ((RCTUITextFieldCell*)self.cell).font;
+@@ -330,7 +567,9 @@ - (void)setPlaceholder:(NSString *)placeholder
  #if !TARGET_OS_OSX // [macOS]
    [super setPlaceholder:placeholder];
  #else // [macOS
@@ -825,7 +1195,7 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..8dd0ed47d79287cd7fcaad15ba3b1eca
  #endif // macOS]
    [self _updatePlaceholder];
  }
-@@ -385,6 +525,20 @@ - (void)_updatePlaceholder
+@@ -385,6 +624,20 @@ - (void)_updatePlaceholder
    _isUpdatingPlaceholderText = YES;
    self.placeholderAttributedString = [[NSAttributedString alloc] initWithString:self.placeholder ?: @""
  																	 attributes:[self _placeholderTextAttributes]];
@@ -846,7 +1216,7 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..8dd0ed47d79287cd7fcaad15ba3b1eca
    _isUpdatingPlaceholderText = NO;
  #endif // macOS]
  }
-@@ -710,6 +864,9 @@ - (void)keyUp:(NSEvent *)event {
+@@ -710,6 +963,9 @@ - (void)keyUp:(NSEvent *)event {
  - (void)setReadablePasteBoardTypes:(NSArray<NSPasteboardType> *)readablePasteboardTypes
  {
    _readablePasteboardTypes = readablePasteboardTypes;
@@ -1193,6 +1563,22 @@ index b85ee3dd203f88bf2daaa47e912031ea200ff910..fdd49042170be0c7850fea3ea8550c32
    [self interactionsBegan:[NSSet setWithObject:event]];
  }
    
+diff --git a/React/Base/RCTUIKit.h b/React/Base/RCTUIKit.h
+index 8f1094a71ed431fcecb6f760ffe8d6da643f04cb..67404c8656b69d9cf28d9eb5862e991400be8276 100644
+--- a/React/Base/RCTUIKit.h
++++ b/React/Base/RCTUIKit.h
+@@ -604,6 +604,11 @@ NS_INLINE RCTPlatformView *RCTUIViewHitTestWithEvent(RCTPlatformView *view, CGPo
+   return [view hitTest:pointInSuperview];
+ }
+ 
++NS_INLINE CGFloat ArdiaBackingDensity(NSView *view) // [Ardia: device pixels per point where the view is drawn, interface size included
++{
++  return view.window != nil ? [view convertSizeToBacking:NSMakeSize(1, 1)].width : [NSScreen mainScreen].backingScaleFactor;
++} // Ardia]
++
+ NS_INLINE void RCTUIViewSetContentModeRedraw(RCTPlatformView *view)
+ {
+   view.layerContentsRedrawPolicy = NSViewLayerContentsRedrawDuringViewResize;
 diff --git a/React/Base/macOS/RCTUIKit.m b/React/Base/macOS/RCTUIKit.m
 index a37a1c106a04752c1baeb6dd2170402ce5f34f71..4b0fa1207d50724979fdb0122a4a88eed20374cd 100644
 --- a/React/Base/macOS/RCTUIKit.m

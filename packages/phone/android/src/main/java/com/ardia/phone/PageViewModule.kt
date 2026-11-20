@@ -189,6 +189,17 @@ class PageViewModule : Module() {
             PagePrinting.print(activity, page).also { shown -> if (PhoneLab.isOn) android.util.Log.i("PAGELAB", "PAGELAB print ${if (shown) "sheet shown" else "refused"} for page $pageId") }
         }.runOnQueue(Queues.MAIN)
 
+        AsyncFunction("summarizePage") { pageId: String -> PhonePages.summarize(pageId) }.runOnQueue(Queues.MAIN)
+
+        AsyncFunction("dismissPageSummaries") { -> PhonePages.dismissSummaries() }.runOnQueue(Queues.MAIN)
+
+        AsyncFunction("pageSummaryProvider") { -> PageSummaryChoice.stored(context).raw }.runOnQueue(Queues.MAIN)
+
+        AsyncFunction("setPageSummaryProvider") { provider: String ->
+            PageSummaryChoice.choose(context, PageSummaryProvider.of(provider))
+            PageSummaryChoice.stored(context).raw
+        }.runOnQueue(Queues.MAIN)
+
         AsyncFunction("translation") { -> PhonePages.translation(context).state() }.runOnQueue(Queues.MAIN)
 
         AsyncFunction("translationUrl") { pageUrl: String -> PhonePages.translation(context).url(pageUrl) }.runOnQueue(Queues.MAIN)

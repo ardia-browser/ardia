@@ -13,6 +13,7 @@ import { usePagerPages } from "../../state/windows/profilePager";
 import { PROFILE_DOTS_HEIGHT, ProfileDots, useProfileDotsShown } from "../profiles/ProfileDots";
 import { SidebarAddressRow, SidebarHeaderTools } from "./AddressBar";
 import { DragGhost } from "./DragGhost";
+import { EdgeGlow } from "./EdgeGlow";
 import { DragProvider } from "./DragProvider";
 import type { DragController } from "./dragController";
 import type { Ghost } from "./dragModel";
@@ -77,6 +78,7 @@ export function Sidebar({ width }: { width: number }) {
 
   useRevealTabs(windowId, scroll, scrollY, geometry);
   useLayoutEffect(() => dismissHoverIn(windowId), [windowId, current, paging]);
+  useLayoutEffect(() => void (current && drag.current?.profileShown(current)), [current]);
   useEffect(() => closeAnchoredWhenControlsRowChanges(windowId), [windowId]);
 
   return (
@@ -161,9 +163,14 @@ export function Sidebar({ width }: { width: number }) {
                 <PinSlotZone top={header - sidebarHeaderOf(addressBar, lightsY, false)} />
               )
             ) : null}
+            {ghost ? <EdgeGlow /> : null}
             <SidebarTextScope>
               <FolderPanel windowId={windowId} />
-              {ghost ? <DragGhost ghost={ghost} /> : null}
+              {ghost ? (
+                <ClipView pointerEvents="none" style={GHOST_CLIP}>
+                  <DragGhost ghost={ghost} />
+                </ClipView>
+              ) : null}
             </SidebarTextScope>
           </SidebarDropArea>
           </SidebarRowLookContext.Provider>
@@ -172,3 +179,5 @@ export function Sidebar({ width }: { width: number }) {
     </DragProvider>
   );
 }
+
+const GHOST_CLIP = { ...StyleSheet.absoluteFillObject, overflow: "hidden" } as const;

@@ -1,6 +1,6 @@
-import { Platform } from "react-native";
 import { act } from "react-test-renderer";
 import { SearchTray } from "../components/search/SearchTray";
+import { DesignProvider } from "../components/ui";
 import * as browse from "../state/browse/store";
 import { history } from "../state/history/store";
 import { feedSources, presentSearch, useSearch } from "../state/search/store";
@@ -183,7 +183,7 @@ test("an answer for text the field has since typed past stays on offer, as main'
   unmount(root);
 });
 
-test("a row for an open tab says Switch to Tab under its title, with main's glyph rules on each platform", () => {
+test("a row for an open tab says Switch to Tab under its title, with main's glyph rules on both phones in the redesign: no switch arrow, a 25-point search glyph and the favicon at 82% of its slot", () => {
   presentSearch("start", "");
   const root = renderSurface(<SearchTray />);
   const field = typingField(root);
@@ -193,15 +193,25 @@ test("a row for an open tab says Switch to Tab under its title, with main's glyp
   expect(textOf(root)).toContain("Site 1");
   expect(textOf(root)).toContain("Switch to Tab");
   const query = symbols.find((node) => node.props.name === "magnifyingglass")!;
-  if (Platform.OS === "ios") {
-    expect(symbols.some((node) => node.props.name === "arrowRightCircle")).toBe(false);
-    expect(query.props.size).toBe(25);
-    expect(favicons[0]!.props.size).toBeCloseTo(18.04, 2);
-  } else {
-    expect(symbols.some((node) => node.props.name === "arrowRightCircle")).toBe(true);
-    expect(query.props.size).toBe(19);
-    expect(favicons[0]!.props.size).toBe(20);
-  }
+  expect(symbols.some((node) => node.props.name === "arrowRightCircle")).toBe(false);
+  expect(query.props.size).toBe(25);
+  expect(favicons[0]!.props.size).toBeCloseTo(18.04, 2);
+  unmount(root);
+});
+
+test("the classic design keeps Compose's row: the switch arrow, a 19-point search glyph and a 20-point favicon", () => {
+  presentSearch("start", "");
+  const root = renderSurface(
+    <DesignProvider design="original">
+      <SearchTray />
+    </DesignProvider>,
+  );
+  typingField(root).type("site 1");
+  const symbols = root.root.findAll((node) => (node.type as { name?: string })?.name === "Symbol");
+  const favicons = root.root.findAll((node) => (node.type as { type?: { name?: string } })?.type?.name === "Favicon" || (node.type as { name?: string })?.name === "Favicon");
+  expect(symbols.some((node) => node.props.name === "arrowRightCircle")).toBe(true);
+  expect(symbols.find((node) => node.props.name === "magnifyingglass")!.props.size).toBe(19);
+  expect(favicons[0]!.props.size).toBe(20);
   unmount(root);
 });
 

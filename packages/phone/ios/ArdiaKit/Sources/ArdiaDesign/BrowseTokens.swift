@@ -54,8 +54,8 @@ public enum BrowseLayout {
   public static let barCollapsedScale: CGFloat = 0.62
   public static let classicBarShadowRadius: CGFloat = 10
   public static let panelInset: CGFloat = 8
-  public static let panelRadius: CGFloat = 26
   public static let panelFieldInset: CGFloat = 9
+  public static let panelRadius: CGFloat = panelFieldInset + searchFieldHeight / 2
   public static let panelAboveKeyboard: CGFloat = 8
   public static let panelTintShare: Double = 0.55
   public static let panelIncognitoShare: Double = 0.85

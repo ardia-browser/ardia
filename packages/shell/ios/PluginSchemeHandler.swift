@@ -25,8 +25,8 @@ final class PluginSchemeHandler: NSObject, WKURLSchemeHandler {
   }
 
   func contents(of url: URL) -> (path: String, data: Data)? {
-    guard let relative = Self.relativePath(of: url, plugin: plugin), let path = PluginFolders.current()?.lexicalFolder(plugin),
-      let data = PluginFiles.readPageFile(path, folderId: folderId, approved: approved, relative: relative)
+    guard let relative = Self.relativePath(of: url, plugin: plugin), let folders = PluginFolders.current(),
+      let data = folders.readPageFile(plugin, folderId: folderId, approved: approved, relative: relative)
     else { return nil }
     return (relative, data)
   }

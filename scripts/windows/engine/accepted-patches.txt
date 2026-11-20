@@ -40,6 +40,8 @@ chromium-helium-onboarding-off.patch
 chromium-helium-services-page-off.patch
 chromium-helium-search-assets-off.patch
 chromium-helium-bangs-off.patch
+chromium-helium-web-push-off.patch
+chromium-helium-translate-providers-off.patch
 chromium-helium-rlz-for-cdm-storage-id.patch
 chromium-helium-ntp-third-party.patch
 chromium-helium-context-menu-cast.patch
@@ -47,6 +49,7 @@ chromium-helium-devtools-inspect-shortcut.patch
 chromium-neterror-game.patch
 chromium-branding.patch
 chromium-safe-storage-name.patch
+chromium-safe-storage-one-key-for-every-data-dir.patch
 chromium-pref-hash-safe-storage-key-change.patch
 chromium-password-bubble-hook.patch
 chromium-password-generation-local.patch

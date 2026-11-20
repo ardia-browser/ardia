@@ -151,6 +151,13 @@ export const tabRows = {
           title: "Open links from other apps in Little Ardia",
           keywords: ["little ardia", "little arc", "arc", "little window", "small window", "mini window", "external links", "links from other apps", "open links", "discord", "slack", "mail", "messages"],
         },
+        littleArdiaOpensNewTabLinks: {
+          title: "Keep new-tab links inside a Little Ardia window",
+          explained: true,
+          description: `A link in Little Ardia that would open a new tab loads right there. ${keyText("⌘")}-click still opens it behind.`,
+          keywords: ["target blank", "new tab", "links", "inside"],
+          shown: () => PLATFORM_FEATURES.keepsNewTabLinksInLittleArdia,
+        },
         peekLinksToOtherSites: {
           title: "Links to other sites open in",
           explained: true,

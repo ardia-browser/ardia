@@ -3,7 +3,7 @@ import { act } from "react-test-renderer";
 import { BottomBar } from "../components/browsing/BottomBar";
 import { BrowsingScreen } from "../components/browsing/BrowsingScreen";
 import { barAddress, FloatingBar } from "../components/browsing/FloatingBar";
-import { appDesign, DesignProvider, Symbol } from "../components/ui";
+import { appDesign, chromeInk, DesignProvider, Symbol } from "../components/ui";
 import { storeFullscreen, storeNavigation, storeTone, usePages, type PageState } from "../state/pages/store";
 import { usePageUi } from "../state/page/store";
 import { setPreference } from "../state/settings/store";
@@ -40,9 +40,9 @@ const page = (design: Design, tab = currentTabs().open[0]!) =>
 
 const host = (root: ReturnType<typeof renderSurface>, testID: string) => root.root.findAll((node) => node.props.testID === testID && typeof node.type === "string")[0];
 
-test("the design is chosen in one place: the redesign on iPhone and the original on Android, and the app runs the one its phone gets", () => {
+test("the design is chosen in one place: the redesign on both phones, as the owner decided on 2026-11-15, and the app runs the one its phone gets", () => {
   expect(designFor("ios")).toBe("redesigned");
-  expect(designFor("android")).toBe("original");
+  expect(designFor("android")).toBe("redesigned");
   expect(appDesign).toBe(designFor(Platform.OS));
 });
 
@@ -53,10 +53,10 @@ test.each(DESIGNS)("the %s design draws its own page bar and only that one", (de
   unmount(root);
 });
 
-test("the redesigned bar is three glass pieces, 48 points tall, 8 apart and 12 in from the sides, their bottom 21.5 points above the screen's edge on iPhone and 8 above Android's 3-button bar", () => {
+test("the redesigned bar is three glass pieces, 48 points tall, 8 apart and 24 in from the sides, their bottom 21.5 points above the screen's edge on iPhone and 8 above Android's 3-button bar", () => {
   const root = page("redesigned");
   const row = StyleSheet.flatten(host(root, "floatingBar")!.props.style);
-  expect(row).toMatchObject({ gap: 8, paddingHorizontal: 12, height: 48 });
+  expect(row).toMatchObject({ gap: 8, paddingHorizontal: 24, height: 48 });
   let place = host(root, "floatingBar")!.parent;
   while (place && (typeof place.type !== "string" || StyleSheet.flatten(place.props.style)?.bottom === undefined)) place = place.parent;
   expect(StyleSheet.flatten(place!.props.style).bottom).toBe(Platform.OS === "android" ? 34 + 8 : 21.5);
@@ -187,7 +187,7 @@ test("the bar's glass and glyphs follow the page's sampled bottom colour, not th
   unmount(light);
   act(() => storeTone(tab.id, { top: "#101418", bottom: "#101418" }));
   const dark = page("redesigned", tab);
-  expect(StyleSheet.flatten(host(dark, "floatingBarTabs")!.props.style).backgroundColor).toBe("#000000");
+  expect(StyleSheet.flatten(host(dark, "floatingBarTabs")!.props.style).backgroundColor).toBe(chromeInk.dark.surface);
   unmount(dark);
 });
 
@@ -196,7 +196,7 @@ test("before a page has reported a colour, the redesigned bar takes the app's ow
   for (const scheme of ["light", "dark"] as const) {
     const spy = jest.spyOn(require("react-native"), "useColorScheme").mockReturnValue(scheme);
     const root = page("redesigned", tab);
-    expect(StyleSheet.flatten(host(root, "floatingBarTabs")!.props.style).backgroundColor).toBe(scheme === "dark" ? "#000000" : "#FFFFFF");
+    expect(StyleSheet.flatten(host(root, "floatingBarTabs")!.props.style).backgroundColor).toBe(scheme === "dark" ? chromeInk.dark.surface : chromeInk.light.surface);
     unmount(root);
     spy.mockRestore();
   }

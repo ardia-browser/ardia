@@ -24,6 +24,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy, nullable) NSString *pageColor;
 @property (nonatomic, copy, nullable) NSString *shownURL;
 @property (nonatomic) BOOL visible;
+@property (nonatomic) BOOL selected;
 @property (nonatomic) BOOL warm;
 @property (nonatomic) BOOL neighbour;
 @property (nonatomic) BOOL autoPictureInPicture;
@@ -90,6 +91,10 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)setAppWideKeys:(nullable BOOL (^)(NSEvent *event))perform;
 + (void)installRevealGuards;
 + (NSUInteger)guardedAccessibilityCalls;
+@end
+
+@interface ArdiaWebView (PaintedFrame)
+@property (nonatomic, readonly) BOOL showsPaintedFrame;
 @end
 
 @interface ArdiaWebView (NeighbourPages)

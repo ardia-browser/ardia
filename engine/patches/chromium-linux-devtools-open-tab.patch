@@ -1,6 +1,6 @@
 --- a/chrome/browser/devtools/devtools_window.cc
 +++ b/chrome/browser/devtools/devtools_window.cc
-@@ -140,6 +140,13 @@
+@@ -143,6 +143,13 @@
  using content::GlobalRenderFrameHostId;
  using content::WebContents;
  
@@ -14,10 +14,10 @@
  namespace {
  
  typedef std::vector<DevToolsWindow*> DevToolsWindows;
-@@ -2106,9 +2113,25 @@
-       content::OpenURLParams::CreateBrowserInitiated(
-           fixed_url, WindowOpenDisposition::NEW_FOREGROUND_TAB,
-           ui::PAGE_TRANSITION_LINK);
+@@ -2141,9 +2148,25 @@
+     // destination, so the navigation is treated as cross-site.
+     params.initiator_origin = url::Origin();
+   }
 +#if BUILDFLAG(IS_LINUX)
 +  WebContents* const linux_opened =
 +      inspected_web_contents ? inspected_web_contents->OpenURL(params, {})

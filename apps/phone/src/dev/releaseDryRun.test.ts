@@ -40,3 +40,15 @@ test("the upload is the only step that sends anything, and the dry run reads the
   assert.ok(nextBuild.length > 0);
   assert.doesNotMatch(nextBuild, /\bpost\(|\bpatch\(|method: "(POST|PATCH|DELETE)"/, "next-build only reads");
 });
+
+test("TestFlight dry runs and uploads build one pinned version, and the desktop release passes none of its own", () => {
+  assert.equal([...workflow.matchAll(/TESTFLIGHT_VERSION: \d+\.\d+\.\d+\n/g)].length, 1, "one pin");
+  assert.match(workflow, /if \[ -n "\$RELEASE_VERSION" \] && \[ "\$RELEASE_VERSION" != "\$TESTFLIGHT_VERSION" \]; then[\s\S]*?exit 1/, "any other version is refused");
+  assert.match(workflow, /if: inputs\.mode != 'device'\n\s+name: Use the pinned TestFlight version/, "USB builds skip the pin");
+  assert.match(workflow, /echo "RELEASE_VERSION=\$TESTFLIGHT_VERSION" >> "\$GITHUB_ENV"/, "the archive gets the pin");
+  assert.match(workflow, /if: inputs\.mode == 'upload' && inputs\.public_testers\n\s+run: \|\n\s+echo "::error::/, "an upload with public testers is still refused");
+  const release = read("../../../../.github/workflows/release.yml");
+  const iphone = release.match(/^  iphone:\n(?:    .*\n)*/m)?.[0] ?? "";
+  assert.match(iphone, /if: \$\{\{ inputs\.iphone \}\}/, "the iPhone stays opt-in");
+  assert.doesNotMatch(iphone, /version:|public_testers:/, "the release takes the pin and uploads to Internal only");
+});

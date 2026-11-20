@@ -25,7 +25,9 @@ import { addressFieldShownIn, revealToolbar } from "../../state/windows/toolbarA
 import { useToolbarRow } from "../toolbar/useToolbarRow";
 import { TabWebView } from "./TabWebView";
 import { withoutFragment } from "../../lib/url";
-import { paneBar, type CardChrome } from "./paneChrome";
+import { developerBarShown, paneBar, type CardChrome } from "./paneChrome";
+import { DeveloperBar } from "../toolbar/DeveloperBar";
+import { useDeveloperMode } from "../../state/site/developerMode";
 import { PageOverlays } from "./PageOverlays";
 import { useProfileTheme } from "./ThemeScope";
 import { useCardFrame } from "./cardFrame";
@@ -108,6 +110,7 @@ export const TabPane = memo(function TabPane({
   const sidebarField = useSidebarField();
   const sidebarOpen = useTabsShown(windowId);
   const sidebarFieldShown = !!sidebarField && sidebarOpen && !fullscreen && focused;
+  const developerBar = developerBarShown(chrome, { developerMode: useDeveloperMode(own.url), small, fullscreen });
   const bookmarksBar = bookmarksBarShown(barMode, own.exists ? own : undefined) && !fullscreen && !inSplit && !small;
   const barHeight = useBookmarksBarHeight();
   const cardRadius = useCardFrame().radius;
@@ -140,6 +143,7 @@ export const TabPane = memo(function TabPane({
       {bar.kind === "toolbar" && <Toolbar tabId={tabId} geometry={geometry} windowId={windowId} inSplit={inSplit} focused={focused || !inSplit} />}
       {bar.kind === "backdrop" && <ToolbarBackdrop tabId={tabId} />}
       {bar.kind === "spacer" && <View style={{ height: toolbarHeight }} />}
+      {developerBar && <DeveloperBar tabId={tabId} windowId={windowId} />}
       {!autoLayout && bookmarksBar && <BookmarksBar tabId={tabId} placeholder={!visible} />}
       <Animated.View style={autoLayout ? motion.groupStyle : { flex: 1 }}>
         {autoLayout && bookmarksBar && <BookmarksBar tabId={tabId} placeholder={!visible} />}

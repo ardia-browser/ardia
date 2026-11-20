@@ -9,8 +9,11 @@ import {
   type TabStripTransaction,
 } from "../../platform/tabs";
 import { useBrowser, type BrowserState } from "../browser/store";
+import { consentToken, stillValid, type ConsentToken } from "../telemetry/client";
+import { noteTabStripCommandRefused } from "../telemetry/tabStripCounts";
 import { changedIds } from "../browser/changes";
 import { chromeChanged, groupStep, stripActual, stripPlan, type GroupBindings } from "./liveTabs";
+import { recordAppSelection, judgeStripSelection } from "./stripBounce";
 
 let started = false;
 const mirror = new Map<number, StripState>();
@@ -24,6 +27,7 @@ const groups: GroupBindings = new Map();
 const tried = new Map<string, { sig: string; since: number }>();
 const changedAt = new Map<number, number>();
 const madeInFront = new Map<number, { browser: number; over: string | null }>();
+let applyingStrip = false;
 
 if (__DEV__) {
   (globalThis as { acChromeTabs?: unknown }).acChromeTabs = {
@@ -53,6 +57,7 @@ export function startChromeTabs() {
     scheduleProject();
   });
   useBrowser.subscribe((s, prev) => {
+    if (!applyingStrip) recordAppSelection(prev, s);
     if (s.groups !== prev.groups) for (const [token, id] of groups) if (!s.groups[id]) groups.delete(token);
     if (s.windows !== prev.windows || s.groups !== prev.groups || placed(s, prev)) scheduleProject();
   });
@@ -106,7 +111,15 @@ function receive(tx: TabStripTransaction) {
     for (const t of strip.tabs) if (t.key) seen.add(t.key);
   }
   if (seen.size > 2 * Object.keys(s.tabs).length + 64) for (const key of seen) if (!s.tabs[key]) seen.delete(key);
-  if (s !== start) useBrowser.setState(s);
+  if (s !== start) {
+    judgeStripSelection(start, s);
+    applyingStrip = true;
+    try {
+      useBrowser.setState(s);
+    } finally {
+      applyingStrip = false;
+    }
+  }
   scheduleProject();
 }
 
@@ -148,6 +161,13 @@ function project(s: BrowserState) {
   }
 }
 
+const stripCommandRefused = (strip: number, consent: ConsentToken | null) => (cmd: number) => {
+  if (stillValid(consent)) noteTabStripCommandRefused();
+  if (inflight.get(strip)?.cmd !== cmd) return;
+  inflight.delete(strip);
+  scheduleProject();
+};
+
 function sentAlready(strip: number, kind: Kind, sig: string) {
   const last = tried.get(`${strip}:${kind}`);
   return last?.sig === sig && last.since === (changedAt.get(strip) ?? 0);
@@ -156,5 +176,5 @@ function sentAlready(strip: number, kind: Kind, sig: string) {
 function send(strip: number, kind: Kind, sig: string, command: TabStripCommand, makes?: string, successor?: boolean, moves?: boolean) {
   if (sentAlready(strip, kind, sig)) return;
   tried.set(`${strip}:${kind}`, { sig, since: changedAt.get(strip) ?? 0 });
-  inflight.set(strip, { kind, cmd: sendTabStripCommand(command), ...(command.op !== "activate" ? { keys: command.keys } : {}), makes, successor, moves });
+  inflight.set(strip, { kind, cmd: sendTabStripCommand(command, stripCommandRefused(strip, consentToken())), ...(command.op !== "activate" ? { keys: command.keys } : {}), makes, successor, moves });
 }

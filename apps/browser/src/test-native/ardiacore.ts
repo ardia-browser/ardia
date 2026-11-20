@@ -363,7 +363,7 @@ const fakeModules = {
     "tabs",
     {
       routeLinkTabs: () => linkRoute.next,
-      stripCommand: ({ id, command }) => (tabStripHost().command(command, id), null),
+      stripCommand: async ({ id, command }) => (await tabStripHost().command(command, id), null),
       strips: () => tabStripHost().snapshot(),
       lastTabPolicy: () => ({ closesWindow: true }),
     },

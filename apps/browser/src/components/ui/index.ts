@@ -38,6 +38,7 @@ export { TooltipAbove } from "./TooltipAbove";
 export { Offstage, useHover, useOffstage, useTooltip } from "./useHover";
 export {
   ActivitySpinner,
+  BackedView,
   ClipView,
   ContextMenuArea,
   DIA_SPECTRUM,
@@ -46,6 +47,7 @@ export {
   FileDropArea,
   FolderIcon,
   MagnifyArea,
+  PeekStage,
   Meadow,
   meadowTextStyle,
   MouseArea,
@@ -69,6 +71,9 @@ export {
   type MagnifyUpdate,
   type MeadowIntro,
   type MeadowIntroEvent,
+  type PeekStageGeometry,
+  type PeekStageHandle,
+  type PeekStageState,
   type MeadowTone,
   type SurfaceProps,
   type SwipeAreaHandle,

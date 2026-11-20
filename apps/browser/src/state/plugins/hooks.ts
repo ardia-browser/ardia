@@ -5,11 +5,13 @@ import { useBrowser } from "../browser/store";
 import { valuesOf } from "./values";
 
 export const usePluginOrder = () => usePlugins((s) => s.order);
+export { useOfficialPlugins } from "./official";
 export const usePluginListing = (name: string) => usePlugins((s) => s.listings[name]);
 export const usePluginRecord = (name: string) => usePlugins((s) => recordOf(s, name));
 export const usePluginActive = (name: string) => usePlugins((s) => !!activeManifest(s, name));
 export const usePluginNeedsReview = (name: string) => usePlugins((s) => needsReview(s, name));
 export const usePluginProcess = (name: string) => usePlugins((s) => s.processes[name]);
+export const usePluginPrograms = (name: string) => usePlugins((s) => s.programs[name]);
 export const usePluginConsent = () => usePlugins((s) => s.consent);
 export const usePluginValues = (name: string) => usePlugins(useShallow((s: PluginsStore) => valuesOf(s, name)));
 export function usePluginPageContext(tabId: string, name: string): string {

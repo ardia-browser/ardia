@@ -18,6 +18,7 @@ export const PINNABLE_SITES: PinnableSite[] = [
   { id: "outlook", title: "Outlook", url: "https://outlook.office.com/mail/" },
   { id: "youtube", title: "YouTube", url: "https://www.youtube.com/" },
   { id: "spotify", title: "Spotify", url: "https://open.spotify.com/" },
+  { id: "gitcafe", title: "GitCafe", url: "https://git.cafe/" },
 ];
 
 export function pinnedHosts(windowId: string): Set<string> {

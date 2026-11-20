@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { renderSurface, unmount, withTabs } from "../../test/render/harness";
 import { idOf, itemOf, mockNative, resetNativeMenus, titles, type NativeItem } from "./nativeMenusMock";
@@ -6,7 +7,7 @@ jest.mock("@ardia/phone-native", () => require("./nativeMenusMock").nativeMenusM
 
 const { ArchiveView } = require("../components/tabs/ArchiveView") as typeof import("../components/tabs/ArchiveView");
 const { PickerRow } = require("../components/settings/SettingsKit") as typeof import("../components/settings/SettingsKit");
-const { ConfirmDialog, FloatingMenu } = require("../components/ui") as typeof import("../components/ui");
+const { ConfirmSheet, FloatingMenu } = require("../components/ui") as typeof import("../components/ui");
 type MenuItem = import("../components/ui").MenuItem;
 const tabStore = require("../state/tabs/store") as typeof import("../state/tabs/store");
 
@@ -26,12 +27,14 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
+const nativeTest = Platform.OS === "ios" ? test : test.skip;
+
 const contextMenus = (root: Root) => root.root.findAll((node) => node.type === ("ContextMenuView" as never));
 const items = (menu: ReactTestInstance): NativeItem[] => menu.props.items;
 const pressOptions = (root: Root) => act(() => root.root.findAll((node) => node.props.accessibilityLabel === "Options" && typeof node.props.onPress === "function")[0]!.props.onPress());
 const drawnMenu = (root: Root): MenuItem[] => root.root.findAll((node) => node.type === FloatingMenu)[0]!.props.items;
 
-test("the Archive's Options menu is main's: an Archive Inactive Tabs submenu of the intervals, then Delete All…, off while the Archive is empty", () => {
+nativeTest("on iPhone the Archive's Options menu is main's: an Archive Inactive Tabs submenu of the intervals, then Delete All…, off while the Archive is empty", () => {
   resetNativeMenus(true);
   const root = renderSurface(<ArchiveView />);
   const options = contextMenus(root).find((menu) => menu.findAll((node) => node.props.accessibilityLabel === "Options").length > 0)!;
@@ -48,7 +51,7 @@ test("the Archive's Options menu is main's: an Archive Inactive Tabs submenu of 
   unmount(root);
 });
 
-test("without the system's menus the Options menu is the drawn one with the same items, and Delete All… asks in the drawn dialog", () => {
+test("without the system's menus, as on Android, the Options menu is the drawn one with the same items, and Delete All… asks in the drawn action sheet", () => {
   act(() => tabStore.useTabs.setState((state) => ({ ...state, archivedCount: 2 })));
   const root = renderSurface(<ArchiveView />);
   expect(contextMenus(root)).toHaveLength(0);
@@ -59,9 +62,9 @@ test("without the system's menus the Options menu is the drawn one with the same
   expect(submenu.children.every((item) => typeof item === "object" && "label" in item)).toBe(true);
   const clear = jest.spyOn(tabStore, "clearArchivedTabs").mockImplementation(() => undefined);
   act(() => (drawn[2] as { onPress: () => void }).onPress());
-  const dialog = root.root.findAll((node) => node.type === ConfirmDialog)[0]!;
-  expect(dialog.props.confirmation).toMatchObject({ title: "Delete All Archived Tabs?", action: "Delete All" });
-  act(() => dialog.props.confirmation.run());
+  const sheet = root.root.findAll((node) => node.type === ConfirmSheet)[0]!;
+  expect(sheet.props.confirmation).toMatchObject({ title: "Delete All Archived Tabs?", action: "Delete All" });
+  act(() => root.root.findAll((node) => node.props.accessibilityLabel === "Delete All" && typeof node.props.onPress === "function")[0]!.props.onPress());
   expect(clear).toHaveBeenCalledTimes(1);
   expect(mockNative.sheets).toHaveLength(0);
   unmount(root);
@@ -79,6 +82,10 @@ test("a settings picker row is a tap menu of its options with the chosen one che
   ]);
   act(() => options[1]!.onPress());
   unmount(drawn);
+  if (Platform.OS !== "ios") {
+    expect(chosen).toEqual(["all"]);
+    return;
+  }
   resetNativeMenus(true);
   const native = renderSurface(row());
   const menu = contextMenus(native)[0]!;

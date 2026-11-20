@@ -24,6 +24,123 @@ test("a JS error is on disk the moment it's captured, so a crash right after can
   assert.equal(props.$exception_list[0].value, "Attempting to run JS driven animation on a native node");
 });
 
+test("an error that wraps a cause, like React's recovered render error, sends the cause after it", () => {
+  const before = queued().length;
+  const cause = new TypeError("Cannot read properties of undefined (reading 'title')");
+  const wrapper = new Error("Minified React error #520; visit https://react.dev/errors/520 for the full message", { cause });
+  captureException(wrapper, "onerror");
+  const looping = new Error("outer loop");
+  looping.cause = looping;
+  captureException(looping, "onerror");
+  const events = queued();
+  assert.equal(events.length, before + 2);
+  const props = events.at(-2).properties;
+  assert.deepEqual(props.$exception_types, ["Error", "TypeError"]);
+  assert.equal(props.$exception_list[0].value.startsWith("Minified React error #520"), true);
+  assert.equal(props.$exception_list[1].type, "TypeError");
+  assert.equal(props.$exception_list[1].mechanism.type, "onerror");
+  assert.deepEqual(events.at(-1).properties.$exception_types, ["Error"]);
+});
+
+test("a cause's message is scrubbed exactly as the error's own message is", () => {
+  const raw = "Failed to load https://mail.example.com/u/0/inbox?id=42 for 'someone@example.com'";
+  const cause = new Error(raw);
+  captureException(new Error("outer wrapper", { cause }), "onerror");
+  captureException(new RangeError(raw), "onerror");
+  const events = queued();
+  const asCause = events.at(-2).properties.$exception_list[1].value;
+  const asError = events.at(-1).properties.$exception_list[0].value;
+  assert.equal(asCause, asError);
+  assert.equal(asCause.includes("mail.example.com") || asCause.includes("someone@example.com"), false);
+});
+
+test("only error objects are followed as causes, a cause that throws ends the chain, and chains that only join the same are different reports", () => {
+  const before = queued().length;
+  captureException(new Error("wrapper of text", { cause: "Unreleased acquisition plan" }), "onerror");
+  const throwing = new Error("wrapper of a broken cause", { cause: Object.defineProperty(new Error("x"), "message", { get() { throw new Error("getter"); } }) });
+  captureException(throwing, "onerror");
+  const deep = new Error("d0", { cause: new Error("d1", { cause: new Error("d2", { cause: Object.defineProperty(new Error("d3"), "cause", { get() { throw new Error("getter"); } }) }) }) });
+  captureException(deep, "onerror");
+  captureException(new Error("same", { cause: new Error("one|TypeError|two") }), "onerror");
+  captureException(new Error("same", { cause: new Error("one", { cause: new TypeError("two") }) }), "onerror");
+  const events = queued().slice(before);
+  assert.equal(events.length, 5);
+  assert.deepEqual(events[0].properties.$exception_values, ["wrapper of text"]);
+  assert.deepEqual(events[1].properties.$exception_values, ["wrapper of a broken cause"]);
+  assert.deepEqual(events[2].properties.$exception_values, ["d0", "d1", "d2", "d3"]);
+  assert.equal(events[4].properties.$exception_types.length, 3);
+});
+
+test("an error's own message never reaches its frames, even across lines or with no frames, and a plain object is not a cause", () => {
+  const before = queued().length;
+  const multi = new Error("Failed\n    at Quarterly budget draft (customer.example:2:4)");
+  captureException(multi, "onerror");
+  const bare = new Error("Failed for someone@customer.example");
+  bare.stack = "Error: Failed for someone@customer.example";
+  captureException(bare, "onerror");
+  captureException(new Error("wrapper of a record", { cause: { name: "CustomerAlias", message: "Quarterly budget draft" } }), "onerror");
+  const events = queued().slice(before);
+  assert.equal(events.length, 3);
+  const frames = JSON.stringify(events.map((e) => e.properties.$exception_list.map((x) => x.stacktrace.frames)));
+  for (const secret of ["Quarterly", "customer.example", "someone"]) assert.equal(frames.includes(secret), false, secret);
+  assert.deepEqual(events[2].properties.$exception_values, ["wrapper of a record"]);
+});
+
+test("frames never carry the message when the header has no name, the message changed after the stack, or a cause only claims to be an Error", () => {
+  const before = queued().length;
+  const nameless = new Error("Failed\n    at Quarterly budget draft (customer.example:2:4)");
+  nameless.name = "";
+  nameless.stack = `${nameless.message}\n    at choose (index.bundle:1:2)`;
+  captureException(nameless, "onerror");
+  const changed = new Error("Failed\n    at Quarterly budget draft (customer.example:2:4)");
+  changed.message = "Changed later";
+  captureException(changed, "onerror");
+  const spoof = { message: "Quarterly budget draft", [Symbol.toStringTag]: "Error" };
+  captureException(new Error("wrapper of a lookalike", { cause: spoof }), "onerror");
+  const jsc = new Error("from Safari");
+  jsc.stack = "choose@index.bundle:1:2\napply@[native code]";
+  captureException(jsc, "onerror");
+  const events = queued().slice(before);
+  assert.equal(events.length, 4);
+  const frames = JSON.stringify(events.map((e) => e.properties.$exception_list.map((x) => x.stacktrace.frames)));
+  for (const secret of ["Quarterly", "customer.example"]) assert.equal(frames.includes(secret), false, secret);
+  assert.deepEqual(events[0].properties.$exception_list[0].stacktrace.frames.map((f) => f.function), ["choose"]);
+  assert.deepEqual(events[2].properties.$exception_values, ["wrapper of a lookalike"]);
+  assert.deepEqual(events[3].properties.$exception_list[0].stacktrace.frames.map((f) => f.function), ["choose"]);
+});
+
+test("a frame made of message text never goes out, even when the message was shortened after the stack was taken", () => {
+  const before = queued().length;
+  const shortened = new Error("Failed to save the draft\n    at Quarterly budget draft (customer.example:2:4)\n    at Another line of notes (notes.js:1:1)\n    at PrivateDraft (sensitive-project.js:2:4)\n    at PrivateDraft (Private Project.js:2:4)\n    at PrivateDraft (sensitive-project.bundle:2:4)\n    at PrivateReport (https://example.com/index.bundle/PrivateReport.js:2:4)\n    at PrivateReport (http://localhost:8081/index.bundle/PrivateReport.js:2:4)\n    at PrivateReport (https://example.com/index.bundle:2:4)");
+  void shortened.stack;
+  shortened.message = "Failed to save the draft";
+  captureException(shortened, "onerror");
+  const events = queued().slice(before);
+  const frames = events[0].properties.$exception_list[0].stacktrace.frames;
+  const json = JSON.stringify(frames);
+  for (const secret of ["Quarterly", "customer.example", "Another line", "notes.js", "PrivateDraft", "sensitive-project", "PrivateReport"]) assert.equal(json.includes(secret), false, secret);
+});
+
+test("frames from Ardia's own code on each platform are sent, and nothing else", () => {
+  const before = queued().length;
+  const error = new Error("Platform frames");
+  error.stack = [
+    "Error: Platform frames",
+    "    at choose (http://localhost:8081/index.bundle//&platform=macos&dev=true&minify=false:123:45)",
+    "    at release (address at /Applications/Ardia.app/Contents/Resources/main.jsbundle:1:9876)",
+    "    at windows (index.windows.bundle:2:3)",
+    "    at linux (chrome://ardia/assets/index-AbC123xy.js:4:5)",
+    "    at bytecode (InternalBytecode.js:6:7)",
+    "    at apply (native)",
+    "    at PrivateDraft (sensitive-project.bundle:2:4)",
+    "    at PrivateDraft (Private Project.js:2:4)",
+    "    at PrivateDraft (https://example.com/app.js:2:4)",
+  ].join("\n");
+  captureException(error, "onerror");
+  const frames = queued().slice(before)[0].properties.$exception_list[0].stacktrace.frames;
+  assert.deepEqual(frames.map((f) => f.function).reverse(), ["choose", "release", "windows", "linux", "bytecode", "apply"]);
+});
+
 test("a native crash names its exception and the app's images at the top level, never its reason", async () => {
   stub.shellNativeModules.ArdiaApp.crashReports = async () => [
     {

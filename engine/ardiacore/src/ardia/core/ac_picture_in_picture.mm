@@ -26,6 +26,7 @@
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "chrome/browser/ui/browser_window/public/browser_collection_observer.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/browser_window/public/desktop_browser_window_capabilities.h"
 #include "chrome/browser/ui/browser_window/public/global_browser_collection.h"
 #include "chrome/browser/ui/views/overlay/video_overlay_window_views.h"
 #include "content/public/browser/picture_in_picture_window_controller.h"
@@ -186,7 +187,7 @@ class DocumentPipBrowsers : public BrowserCollectionObserver {
   DocumentPipBrowsers() { observation_.Observe(GlobalBrowserCollection::GetInstance()); }
 
   void OnBrowserCreated(BrowserWindowInterface* browser) override {
-    if (browser->GetType() != BrowserWindowInterface::TYPE_PICTURE_IN_PICTURE ||
+    if (!DesktopBrowserWindowCapabilities::IsDocumentPictureInPicture(browser) ||
         WindowHost::ForBrowser(browser) || !browser->GetWindow()) {
       return;
     }

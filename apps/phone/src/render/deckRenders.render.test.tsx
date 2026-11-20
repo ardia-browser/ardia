@@ -1,4 +1,4 @@
-import { Platform, StyleSheet } from "react-native";
+import { StyleSheet } from "react-native";
 import { getByGestureTestId } from "react-native-gesture-handler/jest-utils";
 import { getAnimatedStyle } from "react-native-reanimated";
 import { act } from "react-test-renderer";
@@ -100,7 +100,7 @@ test("a touch in the band above the deck bar starts no card gesture, the clearan
   unmount(root);
 });
 
-(Platform.OS === "ios" ? test : test.skip)("on iPhone, an opened card is the deck's own card growing from its place on the UI thread, the reverse of the swipe, with no second card mounted over it and no card rendered again; the page is made when the card has landed, not while it grows, and takes over then", () => {
+test("an opened card is the deck's own card growing from its place on the UI thread, the reverse of the swipe, with no second card mounted over it and no card rendered again; the page is made when the card has landed, not while it grows, and takes over then", () => {
   useBrowse.setState({ surface: "deck", sheet: null, deckEntrance: null, frozenOrder: null, opening: null });
   const root = renderSurface(<TabDeck />);
   renders = [];
@@ -127,7 +127,7 @@ test("a touch in the band above the deck bar starts no card gesture, the clearan
   unmount(root);
 });
 
-(Platform.OS === "android" ? test : test.skip)("on Android, a card hands over to its page once it is within 2% of full size, not when its spring comes to rest, so the page takes over as the card lands", () => {
+test("on both phones, a card hands over to its page as its growth lands, before its spring comes to rest, so the page takes over as the card lands", () => {
   useBrowse.setState({ surface: "deck", sheet: null, deckEntrance: null, frozenOrder: null, opening: null });
   const root = renderSurface(<TabDeck />);
   act(() => sendDeckCommand({ kind: "openFocused" }));
@@ -137,9 +137,7 @@ test("a touch in the band above the deck bar starts no card gesture, the clearan
     if (useBrowse.getState().opening !== null) handedAt = frame * 16;
   }
   expect(useBrowse.getState().opening).toBeTruthy();
-  const [landed, rest] = Platform.OS === "ios" ? [192, 216] : [304, 336];
   expect(handedAt).toBeGreaterThan(120);
-  expect(handedAt).toBeLessThanOrEqual(landed);
-  expect(handedAt).toBeLessThan(rest);
+  expect(handedAt).toBeLessThan(216);
   unmount(root);
 });

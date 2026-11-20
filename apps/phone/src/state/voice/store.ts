@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { canUseSpeech, openAppSettings, speech, type SpeechEvent } from "../../platform/voice";
 import { searchFor } from "../browse/store";
+import { startBrowseForMe } from "../browseForMe/store";
 import { settled } from "../pages/store";
 import {
   accessResolved,
@@ -93,6 +94,10 @@ export function presentVoiceSearch(): boolean {
   return true;
 }
 
+export function presentHeardVoiceSearch(transcript: string) {
+  useVoice.setState((state) => ({ presented: true, dictation: { ...DICTATION_IDLE, phase: "finished", transcript, attempt: state.dictation.attempt + 1 }, levels: quiet() }));
+}
+
 export function closeVoiceSearch() {
   if (!useVoice.getState().presented) return;
   stopListening();
@@ -104,6 +109,11 @@ export function closeVoiceSearch() {
 export function searchSpoken(text: string) {
   closeVoiceSearch();
   searchFor(text);
+}
+
+export function browseSpoken(text: string) {
+  closeVoiceSearch();
+  startBrowseForMe(text);
 }
 
 export const openSpeechSettings = () => void settled(() => openAppSettings(), undefined);

@@ -6,8 +6,9 @@ import { eligibleKind, isEligibleTab, lastFocusedEligibleWindow } from "./automa
 import { AUTOMATION_EVENTS, MIN_IDLE_SECONDS, NAMED_ONLY_EVENTS, type AutomationEventName } from "./eventNames";
 
 export const PROTOCOL = 4;
+export const MIN_CLIENT_PROTOCOL = 4;
 
-export type ErrorCode = "bad_request" | "unknown_method" | "unknown_command" | "refused" | "no_window" | "failed";
+export type ErrorCode = "bad_request" | "unknown_method" | "unknown_command" | "refused" | "no_window" | "failed" | "unsupported_protocol";
 export type MethodError = { code: ErrorCode; message: string };
 export type RequestId = number | string | null;
 export type ParsedRequest = { id: RequestId; method: string; params: Record<string, unknown> };
@@ -40,7 +41,14 @@ export function parseRequest(line: string): ParsedRequest | { id: RequestId; err
   return { id, method: doc.method, params: (doc.params as Record<string, unknown> | undefined) ?? {} };
 }
 
-export const hello = (version: string) => ({ app: "Ardia", version, protocol: PROTOCOL });
+export const hello = (version: string) => ({ app: "Ardia", version, protocol: PROTOCOL, minClientProtocol: MIN_CLIENT_PROTOCOL });
+
+export function clientProtocolProblem(params: Record<string, unknown>, version: string): MethodError | null {
+  const asked = params.protocol === undefined ? PROTOCOL : params.protocol;
+  if (typeof asked !== "number" || !Number.isSafeInteger(asked) || asked < 1) return { code: "bad_request", message: "protocol must be a whole number." };
+  if (asked >= MIN_CLIENT_PROTOCOL) return null;
+  return { code: "unsupported_protocol", message: `This ardia command speaks control protocol ${asked}, and Ardia ${version} needs ${MIN_CLIENT_PROTOCOL} or later: update the command (Settings › Plugins, or its install.sh).` };
+}
 
 export const commands = automationCommands;
 

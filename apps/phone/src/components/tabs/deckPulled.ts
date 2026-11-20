@@ -1,7 +1,6 @@
 import { useDerivedValue, type SharedValue } from "react-native-reanimated";
 import { deckPull, PULL_STAGE, pullFades } from "../../state/browse/deckPull";
 import { pullHeld } from "../../lib/deckPull";
-import { iPhoneOr } from "../ui";
 import { DECK_PHASE, type Reads } from "./DeckCard";
 
 type Base = {
@@ -25,23 +24,7 @@ export type DeckPulled = {
   waking: Reads<boolean>;
 };
 
-const NOT_PULLING: Reads<boolean> = { value: false };
-
-function useUnpulledDeck(base: Base): DeckPulled {
-  return {
-    phase: base.phase,
-    expandedIndex: base.expandedIndex,
-    scaleProgress: base.scaleProgress,
-    positionProgress: base.positionProgress,
-    riseProgress: base.positionProgress,
-    revealProgress: base.positionProgress,
-    covering: base.covering,
-    pulling: NOT_PULLING,
-    waking: NOT_PULLING,
-  };
-}
-
-function usePulledDeck(base: Base): DeckPulled {
+export function useDeckPulled(base: Base): DeckPulled {
   const { orderIds } = base;
   const pulling = useDerivedValue(() => deckPull.stage.value !== PULL_STAGE.idle);
   const waking = useDerivedValue(() => pulling.value || deckPull.warm.value);
@@ -61,14 +44,6 @@ function usePulledDeck(base: Base): DeckPulled {
   return { phase, expandedIndex, scaleProgress, positionProgress, riseProgress: positionProgress, revealProgress, covering, pulling, waking };
 }
 
-function usePulledBarGlyphs(pulling: Reads<boolean>, chrome: Reads<number>): Reads<number> {
+export function useBarGlyphFade(pulling: Reads<boolean>, chrome: Reads<number>): Reads<number> {
   return useDerivedValue(() => (pulling.value ? (deckPull.barCleared.value || deckPull.barOwned.value || deckPull.stage.value === PULL_STAGE.handed ? 1 : 0) : chrome.value));
 }
-
-function useChromeBarGlyphs(_pulling: Reads<boolean>, chrome: Reads<number>): Reads<number> {
-  return chrome;
-}
-
-export const useBarGlyphFade = iPhoneOr(usePulledBarGlyphs, useChromeBarGlyphs);
-
-export const useDeckPulled: (base: Base) => DeckPulled = iPhoneOr(usePulledDeck, useUnpulledDeck);

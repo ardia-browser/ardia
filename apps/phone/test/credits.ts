@@ -18,6 +18,7 @@ const NATIVE_LIBRARIES: { group: string; name: string; license: string; url: str
   { group: "org.jetbrains.kotlinx", name: "Kotlin coroutines and serialization", license: "Apache-2.0", url: "https://github.com/Kotlin" },
   { group: "com.google.re2j", name: "RE2/J", license: "BSD-3-Clause", url: "https://github.com/google/re2j" },
   { group: "com.google.zxing", name: "ZXing", license: "Apache-2.0", url: "https://github.com/zxing/zxing" },
+  { group: "com.google.mlkit", name: "Google ML Kit GenAI Prompt API", license: "ML Kit Terms of Service", url: "https://developers.google.com/ml-kit/terms" },
 ];
 
 const BUNDLED_WITH_NPM = ["com.facebook.react"];

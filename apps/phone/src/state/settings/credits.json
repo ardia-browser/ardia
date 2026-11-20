@@ -1,5 +1,5 @@
 {
-  "inputs": "84eff2d2918d2f1f866c07fa2841565caa54c9beaa4c59bcffca9a252cdf542b",
+  "inputs": "5365fe7145a264544240881bc6353d4c99ffea2612bac2cce698a35921913f6a",
   "packages": [
     {
       "name": "@babel/runtime",
@@ -245,6 +245,7 @@
         "androidx.core:core",
         "androidx.webkit:webkit",
         "androidx.work:work-runtime-ktx",
+        "androidx.browser:browser",
         "androidx.camera:camera-core",
         "androidx.camera:camera-camera2",
         "androidx.camera:camera-lifecycle",
@@ -256,6 +257,14 @@
       ],
       "license": "Apache-2.0",
       "url": "https://developer.android.com/jetpack/androidx"
+    },
+    {
+      "name": "Google ML Kit GenAI Prompt API",
+      "artifacts": [
+        "com.google.mlkit:genai-prompt"
+      ],
+      "license": "ML Kit Terms of Service",
+      "url": "https://developers.google.com/ml-kit/terms"
     },
     {
       "name": "Kotlin coroutines and serialization",

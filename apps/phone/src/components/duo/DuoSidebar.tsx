@@ -16,7 +16,7 @@ import { tabsInSpace } from "../../state/tabs/spaces";
 import { useTabs } from "../../state/tabs/store";
 import { recencyOrder, type BrowserTab } from "../../state/tabs/tabModels";
 import { countUsage } from "../../state/telemetry/telemetry";
-import { capsule, ChromeSurface, ConfirmDialog, Favicon, font, rolesFor, startInk, startLayout, Symbol, tabsInk, tabsLayout, useTheme, type Confirmation, type MenuItem } from "../ui";
+import { capsule, ChromeSurface, ConfirmSheet, Favicon, font, IncognitoSpecs, rolesFor, startInk, startLayout, Symbol, tabsInk, tabsLayout, useTheme, type Confirmation, type MenuItem } from "../ui";
 import { confirmInSheet, MenuTrigger, spaceSystemImage } from "../ui/MenuTrigger";
 import { barAddress, spokenAddress } from "../browsing/FloatingBar";
 import { spaceMenuSymbol, SpaceTitle } from "../search/StartSpaces";
@@ -66,7 +66,7 @@ export function DuoSidebar({ variant, onClose }: Props) {
       <View testID="duoSidebarHeader" style={[styles.header, { marginTop: variant === "overlay" ? DUO.sidebarHeaderTop : DUO.panelTop }]}>
         <View style={styles.switcher}>
           {current && spaces.length > 1 ? (
-            <MenuTrigger
+            <MenuTrigger frost={null}
               items={spaces.map((space) => ({ label: space.name, icon: spaceMenuSymbol(space) ?? undefined, systemImage: spaceSystemImage(space.name, space.icon), checked: space.syncId === current.syncId, onPress: () => choose(space.syncId) }))}
               trigger="tap"
               fixedOrder
@@ -101,7 +101,7 @@ export function DuoSidebar({ variant, onClose }: Props) {
         <AddressField dark={dark} onClose={onClose} />
       </View>
       <SpacePages spaces={spaces} current={current} showsTiles={variant === "overlay"} dark={dark} onChoose={choose} onClose={onClose} />
-      {confirmation ? <ConfirmDialog confirmation={confirmation} onClose={() => setConfirmation(null)} /> : null}
+      {confirmation ? <ConfirmSheet confirmation={confirmation} onClose={() => setConfirmation(null)} /> : null}
     </View>
   );
 }
@@ -119,7 +119,7 @@ function MoreMenu({ dark, hasTabs, syncEnabled, onCloseAll }: { dark: boolean; h
     { label: "Settings", onPress: () => openSettings() },
   ];
   return (
-    <MenuTrigger items={items} trigger="tap" fixedOrder haptic={menuOpenedHaptic} dark={dark} place={{ width: tabsLayout.menuWidth }}>
+    <MenuTrigger frost={null} items={items} trigger="tap" fixedOrder haptic={menuOpenedHaptic} dark={dark} place={{ width: tabsLayout.menuWidth }}>
       {({ onPress }) => (
         <Pressable testID="duoSidebarMore" accessibilityRole="button" accessibilityLabel="More" onPress={onPress} style={styles.headerButton}>
           <Symbol name="ellipsis" size={DUO.sidebarMoreGlyph} color={rolesFor(dark).foregroundPrimary} />
@@ -262,7 +262,7 @@ function TabRow({ tab, dark, selected, onOpen, onCloseTab }: { tab: BrowserTab; 
   const title = tabTitle(tab);
   const host = barAddress(tab).host;
   return (
-    <MenuTrigger items={[{ label: "Close Tab", destructive: true, onPress: onCloseTab }]} haptic={menuOpenedHaptic} dark={dark} place={{ width: tabsLayout.menuWidth }} style={styles.rowPitch}>
+    <MenuTrigger frost={null} items={[{ label: "Close Tab", destructive: true, onPress: onCloseTab }]} haptic={menuOpenedHaptic} dark={dark} place={{ width: tabsLayout.menuWidth }} style={styles.rowPitch}>
       {({ onLongPress }) => (
         <View testID={`duoSidebarRow:${tab.id}`} style={styles.row}>
           {selected ? <ChromeSurface testID="duoSidebarRowGlass" shape="rounded" cornerRadius={DUO.sidebarRowRadius} interactive={false} dark={dark} style={StyleSheet.absoluteFill} /> : null}
@@ -275,7 +275,7 @@ function TabRow({ tab, dark, selected, onOpen, onCloseTab }: { tab: BrowserTab; 
             onLongPress={onLongPress}
             style={styles.rowHit}
           >
-            <View style={styles.rowIcon}>{tab.isPrivate ? <Symbol name="eyeglasses" size={DUO.sidebarPrivateGlyph} color={roles.secondaryLabel} /> : <Favicon iconUrl={tab.faviconUrl} pageUrl={tab.url || null} size={DUO.sidebarRowIcon} />}</View>
+            <View style={styles.rowIcon}>{tab.isPrivate ? <IncognitoSpecs size={DUO.sidebarPrivateGlyph} color={roles.secondaryLabel} /> : <Favicon iconUrl={tab.faviconUrl} pageUrl={tab.url || null} size={DUO.sidebarRowIcon} />}</View>
             <Text numberOfLines={1} style={[font.body, styles.rowTitle, { color: roles.foregroundPrimary }]}>
               {title}
             </Text>
@@ -326,7 +326,7 @@ function SidebarTile({ tile, dark, onOpen }: { tile: PinnedTile; dark: boolean; 
   );
   if (!folder) return face(() => onOpen(tile));
   return (
-    <MenuTrigger items={folder.map((tab) => ({ label: remoteTitle(tab.title, tab.url), onPress: () => onOpen(tab) }))} trigger="tap" haptic={menuOpenedHaptic} dark={dark} place={{ width: tabsLayout.menuWidth }} style={styles.tileSlot}>
+    <MenuTrigger frost={null} items={folder.map((tab) => ({ label: remoteTitle(tab.title, tab.url), onPress: () => onOpen(tab) }))} trigger="tap" haptic={menuOpenedHaptic} dark={dark} place={{ width: tabsLayout.menuWidth }} style={styles.tileSlot}>
       {({ onPress }) => face(onPress ?? (() => undefined))}
     </MenuTrigger>
   );

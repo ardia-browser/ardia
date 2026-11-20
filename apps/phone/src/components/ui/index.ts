@@ -8,9 +8,10 @@ export { barCenterFromBottom, barHeight, deckCenterFromBottom } from "./barGeome
 export { CodeCamera } from "./CodeCamera";
 export { Favicon } from "./Favicon";
 export { LoadingLine, type LoadWatch } from "./LoadingLine";
-export { barReturnMotion, deckChromeMotion, duration, iPhoneOr, moveTo, pageMenuMotion, trayLandingDelayMs, settingsMotion, spring, springs, stageMotion, startMotion, tabsCurve, tabsMotion, toastMotion, trayMotion } from "./motion";
+export { barReturnMotion, deckChromeMotion, duration, menuMotion, iPhoneOr, moveTo, pageMenuMotion, trayLandingDelayMs, settingsMotion, spring, springs, stageMotion, startMotion, tabsCurve, tabsMotion, toastMotion, trayMotion } from "./motion";
 export { ConfirmDialog, Dialog, showActionSheet, type Confirmation, type DialogButton } from "./Dialog";
-export { FloatingMenu, Menu, type MenuAction, type MenuItem, type MenuSubmenu } from "./Menu";
+export { FloatingMenu, Menu, menuExitMs, MenuFloorProvider, MenuFrostProvider, pointPlacer, type MenuPlacer, onDrawnMenuOpened, type MenuAction, type MenuItem, type MenuSubmenu } from "./Menu";
+export { ActionSheet, ConfirmSheet, type SheetAction } from "./ActionSheet";
 export { confirmInSheet, MenuTrigger, nativeMenus, onNativeMenuOpened, spaceSystemImage, type MenuHandlers } from "./MenuTrigger";
 export { Shade } from "./Shade";
 export { measureAnchor, OverlayHost, Portal } from "./Overlay";
@@ -20,12 +21,14 @@ export { screenReaderActions, type ScreenReaderAction } from "./screenReaderActi
 export { PageView, type PageNavigationState, type PageTone, type PageViewHandle } from "./Page";
 export { PressScale } from "./PressScale";
 export { Symbol } from "./Symbol";
+export { IncognitoSpecs } from "./IncognitoSpecs";
 export { SystemGlyph, systemGlyphsAvailable, type SystemGlyphWeight } from "./SystemGlyph";
 export { placeholderTint, TabFace, tabFill } from "./TabFace";
 export { isSymbolName, type SymbolName } from "./symbolPaths";
 export { DEFAULT_PROFILE_COLOR, PROFILE_PRESETS, ProfileLookContext, rolesFor, useProfileLook, useTheme, type StartBackdrop, type Theme } from "./theme";
-export { appIconLayout, browseLayout, capsule, font, ink, radius, space, dialogLayout, menuLayout, pageInk, pageMenuInk, pageMenuLayout, readerInk, readerLayout, settingsLayout, settingsTint, PROFILE_COLORS, scanInk, scanLayout, shadowRadius, spacesLayout, expoSpacesLayout, syncInk, tabsInk, voiceInk, voiceLayout, failureLayout, archiveCardLayout, onboardingArt, syncSketch, chromeInk, chromeLayout, floatingBarLayout, floatingPanelLayout, deckChromeInk, deckChromeLayout, startInk, startLayout, tabsLayout, toastLayout, trayShadow, type ColorRoles, type ProfileColor } from "./tokens";
-export { useCoverFocus } from "./coverFocus";
+export { appIconLayout, browseLayout, capsule, font, ink, radius, space, dialogLayout, actionSheetLook, menuLayout, menuLook, pageInk, pageMenuInk, pageMenuLayout, readerInk, readerLayout, settingsLayout, settingsTint, PROFILE_COLORS, scanInk, scanLayout, shadowRadius, spacesLayout, expoSpacesLayout, syncInk, tabsInk, voiceInk, voiceLayout, failureLayout, archiveCardLayout, onboardingArt, syncSketch, chromeInk, chromeLayout, floatingBarLayout, floatingPanelLayout, deckChromeInk, deckChromeLayout, startInk, startLayout, tabsLayout, toastLayout, trayShadow, type ColorRoles, type ProfileColor } from "./tokens";
+export { focusForScreenReader, useCoverFocus } from "./coverFocus";
+export { useFocusReturn } from "./focusReturn";
 export { FullSheet, SheetBackground, useSheetFrame } from "./FullSheet";
 export { SwipeToDelete } from "./SwipeToDelete";
 export { useIncreasedContrast, useReduceMotion, useReduceTransparency } from "./contrast";
@@ -34,4 +37,4 @@ export { ChromeSurface, DeckLookBackdrop, DeckLookBackdropBase, LookBackdrop, Lo
 export { appDesign, DesignProvider, useDesign, usePageUnderBars } from "./design";
 export { FadeView, fadeIsNative, FrostSource, motionReportsNearEnd, pageObscuresInsets, pageReportsDrawn, PasteButton, pasteButtonIsNative, ScrollActions } from "@ardia/phone-native";
 export { MotionView, type MotionCurve, type MotionTarget } from "@ardia/phone-native";
-export { AppIconPreview, CheckmarkLabel, chromeSurface, ColorSwatch, contentMargins, FilterTextEditor, FullScreenCover, GlassCircleButton, legibleInk, minListRowHeight, modifierList, navigationBarBackButtonHidden, PinnedTiles, pressableStyle, profileLook, settingsChrome, SettingsHeroContent, SettingsIconTile, settingsPage, SettingsRowLabel, SettingsShortcuts, settingsSwitchStyle, settingsUIAvailable, SetupStepRow, spaceBackdrop, spaceColor, spaceMenuSymbol, SpacePageDots, spaceSymbol, SpaceTitle, type ProfilePresetName, type SettingsTintName, type SetupProgress } from "./settingsPieces";
+export { AppIconPreview, BrowseForMeSettings, CheckmarkLabel, chromeSurface, ColorSwatch, contentMargins, FilterTextEditor, FullScreenCover, GlassCircleButton, legibleInk, minListRowHeight, modifierList, navigationBarBackButtonHidden, PinnedTiles, pressableStyle, profileLook, settingsChrome, SettingsHeroContent, SettingsIconTile, settingsPage, SettingsRowLabel, SettingsShortcuts, settingsSwitchStyle, settingsUIAvailable, SetupStepRow, spaceBackdrop, spaceColor, spaceMenuSymbol, SpacePageDots, spaceSymbol, SpaceTitle, type ProfilePresetName, type SettingsTintName, type SetupProgress } from "./settingsPieces";

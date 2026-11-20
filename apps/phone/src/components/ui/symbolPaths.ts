@@ -10,15 +10,28 @@ const polyline = (...points: number[]) =>
 
 const circle = (cx: number, cy: number, r: number) => `M${cx - r} ${cy}A${r} ${r} 0 1 1 ${cx + r} ${cy}A${r} ${r} 0 1 1 ${cx - r} ${cy}Z`;
 
+const EYES_SIDE = 24;
+const EYE = { width: EYES_SIDE * 0.2, height: EYES_SIDE * 0.42, gap: EYES_SIDE * 0.12, pupil: (EYES_SIDE * 0.13) / 2, pupilLift: EYES_SIDE * 0.04, lidAt: 0.62, lidSag: 0.24, lidReach: 0.6 };
+const EYES_LEFT = (EYES_SIDE - EYE.width * 2 - EYE.gap) / 2;
+const EYES_TOP = (EYES_SIDE - EYE.height) / 2;
+const eyeLeft = (index: number) => EYES_LEFT + index * (EYE.width + EYE.gap);
+
 function incognitoEyes(): string {
-  const side = 24;
-  const eye = { width: side * 0.2, height: side * 0.42, gap: side * 0.12, pupil: (side * 0.13) / 2, pupilLift: side * 0.04 };
-  const left = (side - eye.width * 2 - eye.gap) / 2;
-  const top = (side - eye.height) / 2;
   return [0, 1]
     .map((index) => {
-      const x = left + index * (eye.width + eye.gap);
-      return roundRect(x, top, eye.width, eye.height, eye.width / 2) + circle(x + eye.width / 2, top + eye.height - eye.pupilLift - eye.pupil, eye.pupil);
+      const x = eyeLeft(index);
+      return roundRect(x, EYES_TOP, EYE.width, EYE.height, EYE.width / 2) + circle(x + EYE.width / 2, EYES_TOP + EYE.height - EYE.pupilLift - EYE.pupil, EYE.pupil);
+    })
+    .join("");
+}
+
+function incognitoEyesClosed(): string {
+  const lid = EYES_TOP + EYE.height * EYE.lidAt;
+  return [0, 1]
+    .map((index) => {
+      const from = eyeLeft(index) - EYE.lidReach;
+      const to = eyeLeft(index) + EYE.width + EYE.lidReach;
+      return `M${from} ${lid}Q${(from + to) / 2} ${lid + EYE.height * EYE.lidSag} ${to} ${lid}`;
     })
     .join("");
 }
@@ -102,6 +115,7 @@ export const SYMBOLS = {
   ],
   ellipsis: [{ d: circle(5.5, 12, 1.75) + circle(12, 12, 1.75) + circle(18.5, 12, 1.75), fill: true }],
   eyes: [{ d: incognitoEyes(), fill: true, evenOdd: true }],
+  eyesClosed: [{ d: incognitoEyesClosed(), stroke: STROKE }],
   chevronDown: [{ d: polyline(5.5, 8.5, 12, 15, 18.5, 8.5), stroke: BOLD }],
   minus: [{ d: line(5, 12, 19, 12), stroke: BOLD }],
   link: [{ d: roundRect(3.6, 9.2, 9.8, 5.6, 2.8) + roundRect(10.6, 9.2, 9.8, 5.6, 2.8), stroke: STROKE, rotate: -45 }],
@@ -194,6 +208,11 @@ export const SYMBOLS = {
   magnifyingglass: [
     { d: circle(10.5, 10.5, 6.5), stroke: STROKE },
     { d: line(15.3, 15.3, 20, 20), stroke: 2.2 },
+  ],
+  sparkleMagnifyingglass: [
+    { d: circle(10.5, 10.5, 6.5), stroke: STROKE },
+    { d: line(15.3, 15.3, 20, 20), stroke: 2.2 },
+    { d: sparkle(10.5, 10.5, 3.6), fill: true },
   ],
   globe: [
     {

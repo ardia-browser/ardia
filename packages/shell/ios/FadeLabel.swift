@@ -26,11 +26,43 @@ final class FadeLabel: ExpoView {
     "ultraLight": .ultraLight, "thin": .thin, "light": .light, "regular": .regular, "medium": .medium,
     "semibold": .semibold, "bold": .bold, "heavy": .heavy, "black": .black,
   ]
+  private struct FontKey: Hashable {
+    let family: String
+    let weight: String
+    let size: Double
+  }
+  @MainActor private static var fonts: [FontKey: NSFont] = [:]
+
+  static func opticalLift(_ font: NSFont, scale: CGFloat) -> CGFloat {
+    guard scale > 0 else { return 0 }
+    return max(0, ((font.capHeight - font.xHeight) * 0.375 * scale).rounded()) / scale
+  }
+
+  @MainActor private static func resolvedFont(family: String, weight: String, size: Double) -> NSFont {
+    let key = FontKey(family: family, weight: weight, size: size)
+    if let font = fonts[key] { return font }
+    let fontWeight = weights[weight] ?? .regular
+    if let font = familyFont(family, weight: fontWeight, size: size) {
+      fonts[key] = font
+      return font
+    }
+    let font = NSFont.monospacedDigitSystemFont(ofSize: size, weight: fontWeight)
+    if family.isEmpty { fonts[key] = font }
+    return font
+  }
+
+  private static func familyFont(_ family: String, weight: NSFont.Weight, size: Double) -> NSFont? {
+    guard !family.isEmpty else { return nil }
+    let descriptor = NSFontDescriptor(fontAttributes: [.family: family, .traits: [NSFontDescriptor.TraitKey.weight: weight]])
+    guard let font = NSFont(descriptor: descriptor, size: size), font.familyName == family else { return nil }
+    return font
+  }
 
   private let ink = LabelInk()
   private let fade = CAGradientLayer()
   private var font = NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .regular)
   private var fitting = NSSize.zero
+  private var lift: CGFloat = 0
 
   var text = "" {
     didSet {
@@ -93,7 +125,9 @@ final class FadeLabel: ExpoView {
     let scale = backingDensity
     guard scale != ink.contentsScale else { return }
     ink.contentsScale = scale
+    lift = Self.opticalLift(font, scale: scale)
     ink.setNeedsDisplay()
+    relayout()
   }
 
   private func load(_ field: NSTextField) {
@@ -111,8 +145,8 @@ final class FadeLabel: ExpoView {
   }
 
   private func update() {
-    let fontWeight = Self.weights[weight] ?? .regular
-    font = familyFont(weight: fontWeight) ?? .monospacedDigitSystemFont(ofSize: fontSize, weight: fontWeight)
+    font = Self.resolvedFont(family: fontFamily, weight: weight, size: fontSize)
+    lift = Self.opticalLift(font, scale: ink.contentsScale)
     let field = Self.field
     load(field)
     fitting = field.frame(forAlignmentRect: NSRect(origin: .zero, size: field.intrinsicContentSize)).size
@@ -128,18 +162,11 @@ final class FadeLabel: ExpoView {
       .joined(separator: " ")
   }
 
-  private func familyFont(weight: NSFont.Weight) -> NSFont? {
-    guard !fontFamily.isEmpty else { return nil }
-    let descriptor = NSFontDescriptor(fontAttributes: [.family: fontFamily, .traits: [NSFontDescriptor.TraitKey.weight: weight]])
-    guard let font = NSFont(descriptor: descriptor, size: fontSize), font.familyName == fontFamily else { return nil }
-    return font
-  }
-
   private func relayout() {
     CATransaction.begin()
     CATransaction.setDisableActions(true)
     if ink.superlayer !== layer { layer?.addSublayer(ink) }
-    ink.frame = CGRect(x: 0, y: (bounds.height - fitting.height) / 2, width: max(bounds.width, fitting.width), height: fitting.height)
+    ink.frame = CGRect(x: 0, y: inkTop(), width: max(bounds.width, fitting.width), height: fitting.height)
     if bounds.width > 0, fitting.width > bounds.width + 0.5 {
       fade.frame = CGRect(x: 0, y: 0, width: bounds.width, height: fitting.height)
       let start = max(0, 1 - fadeWidth / bounds.width)
@@ -149,6 +176,11 @@ final class FadeLabel: ExpoView {
       ink.mask = nil
     }
     CATransaction.commit()
+  }
+
+  private func inkTop() -> CGFloat {
+    let centered = (bounds.height - fitting.height) / 2
+    return isFlipped ? centered - lift : centered + lift
   }
 
   private func paint(_ ctx: CGContext) {

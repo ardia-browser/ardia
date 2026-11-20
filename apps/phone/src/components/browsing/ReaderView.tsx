@@ -66,7 +66,7 @@ export function ReaderView({ tabId }: { tabId: string }) {
     <Animated.View entering={rise} exiting={fall} style={[StyleSheet.absoluteFill, { backgroundColor: ink.background, paddingTop: insets.top }]}>
       <View style={styles.top}>
         {load.kind === "loaded" ? (
-          <MenuTrigger items={items} trigger="tap" fixedOrder dark={shown === "dark"} place={{ top: insets.top + readerLayout.chromeBand, left: readerLayout.chromeSide }}>
+          <MenuTrigger items={items} trigger="tap" fixedOrder frost={null} dark={shown === "dark"} place={{ top: insets.top + readerLayout.chromeBand, left: readerLayout.chromeSide }}>
             {({ onPress }) => (
               <Pressable accessibilityRole="button" accessibilityLabel="Text Appearance" onPress={onPress}>
                 <ChromeSurface shape="circle" cornerRadius={readerLayout.chromeButton / 2} dark={shown === "dark"} style={styles.circle}>

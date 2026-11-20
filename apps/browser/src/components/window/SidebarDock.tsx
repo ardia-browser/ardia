@@ -348,7 +348,7 @@ function SidebarDock({
         />
       )}
       <Animated.View
-        pointerEvents={moving || ((fullscreen || !open) && !holding) ? "none" : "auto"}
+        pointerEvents={moving || ((fullscreen || !open) && !holding) ? "none" : "box-none"}
         style={{
           position: "absolute",
           ...(away ? { left: -10_000 } : { [edgeSide]: peeking ? peekAt.left : 0 }),

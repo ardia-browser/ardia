@@ -29,6 +29,7 @@ export type MenuModel = {
   tiles: boolean;
   find: boolean;
   print: boolean;
+  summarize: boolean;
   pageRows: boolean;
   translate: boolean;
   translateTitle: string;
@@ -65,6 +66,7 @@ export function menuModel(input: MenuInput): MenuModel {
     tiles: isWebPage,
     find: isWebPage,
     print: web,
+    summarize: web && !input.isLoading,
     pageRows: input.hasPage,
     translate: web,
     translateTitle: input.translationLanguageName ? `Translate to ${input.translationLanguageName}` : "Translate",

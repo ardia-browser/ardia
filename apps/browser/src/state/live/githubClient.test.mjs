@@ -1,14 +1,19 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createGithubClient, DETAILS_FRESH_MS, LIST_SHARED_MS } from "./githubClient.ts";
+import { createGithubClient, DETAILS_FRESH_MS, LIST_SHARED_MS, PENDING_FRESH_MS } from "./githubClient.ts";
 import { createGithubLimits, FALLBACK_COOLDOWN_MS, graphqlRateLimited, retryAtFromHeaders } from "./githubLimits.ts";
 import { takeLiveGithubCounts } from "../telemetry/liveGithub.ts";
+import { setConsentPeriod } from "../telemetry/consentPeriod.ts";
 import { request } from "./net.ts";
 import { LiveError } from "./types.ts";
 
 const fixture = JSON.parse(await import("node:fs").then((fs) => fs.readFileSync(new URL("./fixtures/github.json", import.meta.url), "utf8")));
 const folder = { id: "f", filters: { authored: true, reviewRequests: true } };
 const headers = (values = {}) => ({ get: (name) => values[name.toLowerCase()] ?? null });
+const searchKey = (q) => (q.includes("user-review-requested") ? "direct" : q.includes("review-requested") ? "review" : "authored");
+const searchAnswer = (data, variables, extra = {}) => ({ data: { ...extra, search: { nodes: data[searchKey(variables.q)].nodes } } });
+const queryKind = (query, variables) =>
+  query.includes("LiveFolderDetails") ? "details" : query.includes("LiveFolderGone") ? "gone" : query.includes("search(") ? (searchKey(variables.q) === "authored" ? "list" : "search") : "viewer";
 
 function fakeGithub(clock) {
   const list = structuredClone(fixture);
@@ -16,10 +21,11 @@ function fakeGithub(clock) {
   const calls = [];
   let quota = { limit: 5000, remaining: 4000, reset: Math.floor((clock.now + 3_600_000) / 1000) };
   let limitNext = null;
+  let blockedSearch = null;
   const closed = new Set();
   globalThis.fetch = async (_url, init) => {
     const { query, variables } = JSON.parse(init.body);
-    const kind = query.includes("LiveFolderDetails") ? "details" : query.includes("LiveFolderGone") ? "gone" : query.includes("LiveFolder") ? "list" : "viewer";
+    const kind = queryKind(query, variables);
     calls.push({ kind, ids: variables?.ids });
     const h = { "x-ratelimit-limit": String(quota.limit), "x-ratelimit-remaining": String(quota.remaining), "x-ratelimit-reset": String(quota.reset), "x-ratelimit-resource": "graphql" };
     if (limitNext) {
@@ -28,10 +34,10 @@ function fakeGithub(clock) {
       return new Response(JSON.stringify({ message: "You have exceeded a secondary rate limit" }), { status, headers: { ...h, ...extra } });
     }
     const body =
-      kind === "list"
-        ? list
+      kind === "list" || kind === "search"
+        ? { ...searchAnswer(list.data, variables), ...(blockedSearch && kind === blockedSearch.kind ? { errors: blockedSearch.errors } : {}) }
         : kind === "details"
-          ? { data: { nodes: variables.ids.map((id) => ({ ...all().find((n) => n.id === id), state: closed.has(id) ? "MERGED" : "OPEN" })) } }
+          ? { data: { nodes: variables.ids.map((id) => ({ ...all().find((n) => n?.id === id), state: closed.has(id) ? "MERGED" : "OPEN" })) } }
           : { data: { viewer: { login: "me", name: null, avatarUrl: "" } } };
     return new Response(JSON.stringify(body), { status: 200, headers: h });
   };
@@ -41,12 +47,17 @@ function fakeGithub(clock) {
     closed,
     setQuota: (q) => (quota = { ...quota, ...q }),
     limitNext: (status, extra = {}) => (limitNext = { status, extra }),
+    blockSearch: (kind, errors) => (blockedSearch = { kind, errors }),
     detailIds: () => calls.filter((c) => c.kind === "details").flatMap((c) => c.ids),
   };
 }
 
 const sendThroughFetch = (token, payload, onHeaders) =>
   request("https://api.github.test/graphql", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(payload) }, onHeaders);
+
+const settleAll = (gh) => {
+  for (const n of [...gh.list.data.authored.nodes, ...gh.list.data.review.nodes]) n.commits.nodes[0].commit.statusCheckRollup = { state: "SUCCESS", contexts: { nodes: [] } };
+};
 
 const setup = (send = sendThroughFetch) => {
   const clock = { now: 1_800_000_000_000 };
@@ -73,16 +84,88 @@ test("unchanged pull requests keep their details; a changed one is read again", 
   assert.equal(counts.live_github_details_reused, ids.length - 1);
 });
 
-test("a check finishing reads that pull request again even when its rollup state stays the same", async () => {
+test("a pull request with checks still running is read again after a minute; a settled one waits for a change", async () => {
   const { clock, gh, client } = setup();
-  const pr = gh.list.data.authored.nodes[0];
-  pr.commits.nodes[0].commit.statusCheckRollup.contexts.checkRunCountsByState = [{ state: "IN_PROGRESS", count: 2 }];
+  const [running, settled] = gh.list.data.authored.nodes;
+  settled.commits.nodes[0].commit.statusCheckRollup = { state: "SUCCESS", contexts: { nodes: [{ __typename: "CheckRun", name: "build", status: "COMPLETED", conclusion: "SUCCESS", detailsUrl: null }] } };
+  running.commits.nodes[0].commit.statusCheckRollup = { state: "PENDING", contexts: { nodes: [{ __typename: "CheckRun", name: "build", status: "IN_PROGRESS", conclusion: null, detailsUrl: null }] } };
+  await client.fetchFolder("t", folder, false);
+  const before = gh.detailIds().length;
+  clock.now += PENDING_FRESH_MS;
+  await client.fetchFolder("t", folder, false);
+  const reread = gh.detailIds().slice(before);
+  assert.ok(reread.includes(running.id));
+  assert.ok(!reread.includes(settled.id));
+});
+
+test("a new head commit or a settled rollup reads that pull request again", async () => {
+  const { clock, gh, client } = setup();
+  const [pushed, finished] = gh.list.data.authored.nodes;
   await client.fetchFolder("t", folder, false);
   const before = gh.detailIds().length;
   clock.now += LIST_SHARED_MS;
-  pr.commits.nodes[0].commit.statusCheckRollup.contexts.checkRunCountsByState = [{ state: "IN_PROGRESS", count: 1 }, { state: "SUCCESS", count: 1 }];
+  pushed.headRefOid = "new-head";
+  finished.commits.nodes[0].commit.statusCheckRollup.state = "FAILURE";
   await client.fetchFolder("t", folder, false);
-  assert.deepEqual(gh.detailIds().slice(before), [pr.id]);
+  assert.deepEqual(gh.detailIds().slice(before).sort(), [pushed.id, finished.id].sort());
+});
+
+test("the listing's three searches go out side by side, not one after another", async () => {
+  const { gh, client } = setup();
+  let inFlight = 0;
+  let peak = 0;
+  const fetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    peak = Math.max(peak, ++inFlight);
+    await new Promise((r) => setTimeout(r, 5));
+    inFlight--;
+    return fetch(url, init);
+  };
+  await client.fetchFolder("t", folder, true);
+  assert.equal(gh.calls.filter((c) => c.kind === "list" || c.kind === "search").length, 3);
+  assert.ok(peak >= 3);
+});
+
+test("pull requests an organization's token policy hides drop out and the folder says why; the rest still show", async () => {
+  const { gh, client } = setup();
+  const message = "The 'acme' organization forbids access via a fine-grained personal access tokens if the token's lifetime is greater than 366 days. Please adjust your token's lifetime at the following URL: https://github.com/settings/personal-access-tokens/1";
+  gh.list.data.authored.nodes[0] = null;
+  gh.blockSearch("list", [{ type: "FORBIDDEN", message, path: ["search", "nodes", 0] }]);
+  setConsentPeriod(true, "github-blocked-test");
+  const items = await client.fetchFolder("t", folder, true);
+  setConsentPeriod(false, null);
+  assert.ok(items.length > 0);
+  assert.equal(client.warning()?.kind, "tokenBlocked");
+  assert.equal(client.warning()?.message, message);
+  assert.equal(takeLiveGithubCounts().live_github_blocked_listings, 1);
+});
+
+test("a blocked listing that started while sharing was off is not counted", async () => {
+  const { gh, client } = setup();
+  gh.list.data.authored.nodes[0] = null;
+  gh.blockSearch("list", [{ type: "FORBIDDEN", message: "Forbidden by the organization's token policy", path: ["search", "nodes", 0] }]);
+  takeLiveGithubCounts();
+  setConsentPeriod(false, null);
+  const listing = client.fetchFolder("t", folder, true);
+  setConsentPeriod(true, "github-blocked-late-test");
+  await listing;
+  setConsentPeriod(false, null);
+  assert.equal(client.warning()?.kind, "tokenBlocked");
+  assert.equal(takeLiveGithubCounts().live_github_blocked_listings, 0);
+});
+
+test("a listing GitHub hides entirely for SAML says Single Sign-On, and clears once access comes back", async () => {
+  const { clock, gh, client } = setup();
+  const full = structuredClone(gh.list.data);
+  for (const key of ["authored", "review", "direct"]) gh.list.data[key].nodes = gh.list.data[key].nodes.map(() => null);
+  gh.blockSearch("list", [{ type: "FORBIDDEN", message: "Resource protected by organization SAML enforcement. You must grant your Personal Access token access to this organization.", path: ["search", "nodes", 0] }]);
+  assert.deepEqual(await client.fetchFolder("t", folder, true), []);
+  assert.equal(client.warning()?.kind, "sso");
+  Object.assign(gh.list.data, full);
+  gh.blockSearch(null, []);
+  clock.now += LIST_SHARED_MS;
+  assert.ok((await client.fetchFolder("t", folder, false)).length > 0);
+  assert.equal(client.warning(), null);
 });
 
 test("details older than the freshness window are read again even when nothing changed", async () => {
@@ -210,6 +293,7 @@ test("a pull request that closed between the search and its details drops out", 
 
 test("details of pull requests that left the search are let go, and a new account starts clean", async () => {
   const { clock, gh, client } = setup();
+  settleAll(gh);
   await client.fetchFolder("t", folder, false);
   const before = gh.detailIds().length;
   const gone = gh.list.data.authored.nodes.shift();
@@ -233,7 +317,7 @@ test("without headers (Linux's host) the quota comes from the answer's rateLimit
     calls.push(query);
     const rateLimit = { limit: 5000, remaining, resetAt: reset };
     if (query.includes("LiveFolderDetails")) return { data: { rateLimit, nodes: variables.ids.map((id) => ({ ...[...fixture.data.authored.nodes, ...fixture.data.review.nodes].find((n) => n.id === id), state: "OPEN" })) } };
-    return { data: { ...structuredClone(fixture).data, rateLimit } };
+    return searchAnswer(structuredClone(fixture).data, variables, { rateLimit });
   };
   const client = createGithubClient(send, () => clock.now);
   await client.fetchFolder("host", folder, false);
@@ -250,13 +334,16 @@ test("without headers (Linux's host) the quota comes from the answer's rateLimit
 test("a rate limit the host reports pauses background reads with the fallback backoff", async () => {
   const clock = { now: 0 };
   let fail = true;
-  const send = async () => {
+  const send = async (_scope, { variables }) => {
     if (fail) throw new LiveError("rateLimited", "host says slow down");
-    return structuredClone(fixture);
+    return searchAnswer(structuredClone(fixture).data, variables);
   };
   const client = createGithubClient(send, () => clock.now);
   await assert.rejects(client.fetchFolder("host", folder, false), (e) => e.kind === "rateLimited");
   assert.equal(client.pausedUntil(), FALLBACK_COOLDOWN_MS);
+  clock.now = FALLBACK_COOLDOWN_MS;
+  await assert.rejects(client.fetchFolder("host", folder, false), (e) => e.kind === "rateLimited");
+  assert.equal(client.pausedUntil(), FALLBACK_COOLDOWN_MS * 3);
   fail = false;
   await assert.rejects(client.fetchFolder("host", folder, false), (e) => e.kind === "rateLimited");
 });

@@ -20,9 +20,16 @@ export function useKeyboardHeight(listening = true): number {
   return height;
 }
 
+export const keyboardTopFromBottom = (keyboard: number, inset: number): number => (!keyboard ? 0 : Platform.OS === "android" ? keyboard + inset : Math.max(keyboard, inset));
+
+export function useKeyboardTopFromBottom(listening = true): number {
+  const keyboard = useKeyboardHeight(listening);
+  return keyboardTopFromBottom(keyboard, useSafeAreaInsets().bottom);
+}
+
 export function useBottomLift(): { lift: number; keyboard: boolean } {
   const keyboard = useKeyboardHeight();
   const inset = useSafeAreaInsets().bottom;
   if (!keyboard) return { lift: inset, keyboard: false };
-  return { lift: Platform.OS === "android" ? keyboard + inset : Math.max(keyboard, inset), keyboard: true };
+  return { lift: keyboardTopFromBottom(keyboard, inset), keyboard: true };
 }

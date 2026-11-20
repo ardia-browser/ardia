@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
-import { capsule, font, space, Symbol, tabsInk, tabsLayout, useTheme } from "../ui";
+import { capsule, font, IncognitoSpecs, space, tabsInk, tabsLayout, useTheme } from "../ui";
 
 export function deckEmptyWords(searching: boolean, incognito: boolean): { title: string; detail: string | null } {
   if (searching) return { title: "No Matching Tabs", detail: null };
@@ -35,7 +35,7 @@ export function IncognitoChip({ count, top, onPress }: { count: number; top: num
         onPress={onPress}
         style={[styles.chip, { backgroundColor: tabsInk.incognitoCard, borderRadius: capsule(tabsLayout.chipHeight) }]}
       >
-        <Symbol name="eyes" size={16} color={tabsInk.onDark} />
+        <IncognitoSpecs size={tabsLayout.specsChip} color={tabsInk.onDark} />
         <Text style={[font.subheadline, styles.bold, styles.chipText]}>Incognito</Text>
         <Text style={[font.subheadline, styles.bold, { color: tabsInk.onDarkChip }]}>{count}</Text>
       </Pressable>

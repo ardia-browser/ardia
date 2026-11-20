@@ -73,6 +73,28 @@ export function pluginSchema(eventNames: readonly string[], rules: PluginRules):
         },
         ["run"],
       ),
+      programs: {
+        type: "array",
+        maxItems: LIMITS.programs,
+        description: "Commands Ardia puts on your PATH while the plugin is on",
+        items: closed(
+          {
+            name: { ...name, description: "The command's name on PATH" },
+            path: { type: "string", pattern: "^[^/\\\\][^\\\\]*$", description: "An executable file in the plugin's folder, like bin/tool" },
+            afterUpdate: {
+              type: "array",
+              maxItems: LIMITS.afterUpdate[0],
+              items: { type: "array", minItems: 1, maxItems: LIMITS.afterUpdate[1], items: { type: "string", pattern: "^[^\\u0000]{1,1024}$" } },
+              description: "Built-in plugins only: argument lists Ardia runs the program with, once per new version",
+            },
+          },
+          ["name", "path"],
+        ),
+      },
+      alwaysOn: { const: true, description: "Built-in plugins only: once installed, no switch turns it off" },
+      official: { const: true, description: "Built-in plugins only: listed among Ardia's official plugins" },
+      autoInstall: { const: true, description: "Built-in plugins only, with alwaysOn: installed on a new profile with no click" },
+      icon: symbol,
       hooks: { type: "array", maxItems: 64, items: { enum: [...eventNames] } },
       tools: {
         type: "array",

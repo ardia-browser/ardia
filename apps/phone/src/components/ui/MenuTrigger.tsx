@@ -1,16 +1,15 @@
-import { actionSheet, ContextMenuView, nativeMenusAvailable, settingsUI, type ContextMenuHandle, type MenuItem as NativeMenuItem } from "@ardia/phone-native";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Platform, StyleSheet, View, type StyleProp, type ViewInstance, type ViewStyle } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { runOnJS } from "react-native-reanimated";
+import { actionSheet, ContextMenuView, nativeMenusAvailable, settingsUI, type MenuItem as NativeMenuItem } from "@ardia/phone-native";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { findNodeHandle, Platform, View, type GestureResponderEvent, type StyleProp, type ViewInstance, type ViewStyle } from "react-native";
+import type { MenuAlign, Point } from "../../lib/menuPlace";
 import { sfName } from "../../lib/sfSymbols";
+import { handFocusOver } from "./coverFocus";
+import { useFocusReturn } from "./focusReturn";
 import type { Confirmation } from "./Dialog";
-import { FloatingMenu, isSubmenu, Menu, type MenuAction, type MenuItem, type MenuSubmenu } from "./Menu";
-import { tabsMotion } from "./motion";
-import { Portal } from "./Overlay";
+import { FloatingMenu, isSubmenu, useMenuFloor, useMenuFrost, type MenuAction, type MenuItem, type MenuSubmenu } from "./Menu";
 import { useTheme } from "./theme";
 
-export type MenuHandlers = { onPress?: () => void; onLongPress?: () => void };
+export type MenuHandlers = { onPress?: (event?: GestureResponderEvent) => void; onLongPress?: (event?: GestureResponderEvent) => void; openFor?: (opener: unknown) => void };
 
 type Props = {
   items: MenuItem[];
@@ -20,6 +19,10 @@ type Props = {
   onClose?: () => void;
   haptic?: () => void;
   disabled?: boolean;
+  privately?: boolean;
+  align?: MenuAlign;
+  frost?: string | null;
+  restoresAfterChoice?: boolean;
   place?: ViewStyle;
   dark?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -29,7 +32,7 @@ type Props = {
 
 export type NativeMenu = { items: NativeMenuItem[]; actions: Map<string, () => void> };
 
-export const nativeMenus = () => nativeMenusAvailable().contextMenu;
+export const nativeMenus = () => Platform.OS === "ios" && nativeMenusAvailable().contextMenu;
 
 export const spaceSystemImage = (name: string, icon: string | null): string | undefined => settingsUI.spaceMenuSymbol(name, icon) ?? undefined;
 
@@ -66,9 +69,9 @@ function submenu(item: MenuSubmenu, id: string, actions: Map<string, () => void>
 
 const withoutEmpty = (item: NativeMenuItem): NativeMenuItem => Object.fromEntries(Object.entries(item).filter(([, value]) => value !== undefined && value !== false)) as NativeMenuItem;
 
-let nativeMenuOpened: () => void = () => undefined;
+let nativeMenuOpened: (privately: boolean) => void = () => undefined;
 
-export const onNativeMenuOpened = (handler: () => void) => {
+export const onNativeMenuOpened = (handler: (privately: boolean) => void) => {
   nativeMenuOpened = handler;
 };
 
@@ -76,84 +79,87 @@ export function MenuTrigger(props: Props) {
   return nativeMenus() ? <NativeTrigger {...props} /> : <DrawnTrigger {...props} />;
 }
 
-function NativeTrigger({ items, trigger = "longPress", fixedOrder, onOpen, onClose, disabled, dark, style, testID, children }: Props) {
+function NativeTrigger({ items, trigger = "longPress", fixedOrder, onOpen, onClose, disabled, privately = false, dark, style, testID, children }: Props) {
   const theme = useTheme();
   const menu = nativeMenu(items);
   const actions = useRef(menu.actions);
   actions.current = menu.actions;
   const select = useCallback((id: string) => actions.current.get(id)?.(), []);
   const opened = useCallback(() => {
-    nativeMenuOpened();
+    nativeMenuOpened(privately);
     onOpen?.();
-  }, [onOpen]);
-  const native = useRef<ContextMenuHandle>(null);
-  const show = useCallback(() => void native.current?.show(), []);
-  const showAt = useCallback((x: number, y: number) => void native.current?.show(x, y), []);
-  const android = Platform.OS === "android";
-  const handlers: MenuHandlers = !android || disabled ? {} : trigger === "tap" ? { onPress: show } : { onLongPress: show };
-  const press = useMemo(
-    () =>
-      Gesture.LongPress()
-        .withTestId(testID ? `${testID}LongPress` : "menuLongPress")
-        .enabled(android && trigger === "longPress" && !disabled)
-        .minDuration(tabsMotion.longPress)
-        .onStart((event) => {
-          runOnJS(showAt)(event.x, event.y);
-        }),
-    [android, trigger, disabled, testID, showAt],
-  );
-  const content = children(handlers);
+  }, [onOpen, privately]);
   return (
-    <ContextMenuView ref={native} testID={testID} style={style} collapsable={false} items={disabled ? [] : menu.items} trigger={trigger} fixedOrder={fixedOrder} onSelect={select} onOpen={opened} onClose={onClose} appearance={{ dark: dark ?? theme.dark }}>
-      {android && trigger === "longPress" ? (
-        <GestureDetector gesture={press}>
-          <View style={styles.pressArea} collapsable={false}>
-            {content}
-          </View>
-        </GestureDetector>
-      ) : (
-        content
-      )}
+    <ContextMenuView testID={testID} style={style} collapsable={false} items={disabled ? [] : menu.items} trigger={trigger} fixedOrder={fixedOrder} onSelect={select} onOpen={opened} onClose={onClose} appearance={{ dark: dark ?? theme.dark }}>
+      {children({})}
     </ContextMenuView>
   );
 }
 
-function DrawnTrigger({ items, trigger = "longPress", onOpen, onClose, haptic, disabled = false, place, style, testID, children }: Props) {
+const pressPoint = (event?: GestureResponderEvent): Point | null => {
+  const touch = event?.nativeEvent;
+  return touch && typeof touch.pageX === "number" && typeof touch.pageY === "number" ? { x: touch.pageX, y: touch.pageY } : null;
+};
+
+function DrawnTrigger({ items, trigger = "longPress", onOpen, onClose, haptic, disabled = false, place, privately, align, frost: frostHere, restoresAfterChoice = false, style, testID, children }: Props) {
   const anchor = useRef<ViewInstance>(null);
-  const [opened, setOpened] = useState(false);
+  const opener = useRef<unknown>(null);
+  const cancelRestore = useRef<() => void>(() => undefined);
+  const returnFocus = useFocusReturn();
+  useEffect(() => () => cancelRestore.current(), []);
+  const frostAround = useMenuFrost();
+  const frost = frostHere === undefined ? frostAround : frostHere;
+  const floor = useMenuFloor();
+  const [opened, setOpened] = useState<{ at: Point | null } | null>(null);
   useEffect(() => {
-    if (!disabled || !opened) return;
-    setOpened(false);
+    if (!disabled) return;
+    cancelRestore.current();
+    if (!opened) return;
+    setOpened(null);
     onClose?.();
   }, [disabled]);
-  const open = useCallback(() => {
-    if (disabled) return;
-    haptic?.();
-    setOpened(true);
-    onOpen?.();
-  }, [disabled, haptic, onOpen]);
-  const dismiss = useCallback(() => {
-    setOpened(false);
-    onClose?.();
-  }, [onClose]);
+  const open = useCallback(
+    (event?: GestureResponderEvent, explicitOpener?: unknown) => {
+      if (disabled) return;
+      cancelRestore.current();
+      haptic?.();
+      opener.current = explicitOpener ?? event?.currentTarget ?? null;
+      setOpened({ at: trigger === "longPress" ? pressPoint(event) : null });
+      onOpen?.();
+    },
+    [disabled, haptic, onOpen, trigger],
+  );
+  const dismiss = useCallback(
+    (chosen?: boolean) => {
+      setOpened(null);
+      onClose?.();
+      cancelRestore.current();
+      const target = () => (opener.current ?? anchor.current) as Parameters<typeof findNodeHandle>[0];
+      if (chosen && !restoresAfterChoice) {
+        handFocusOver(target);
+        return;
+      }
+      const stopRestore = returnFocus(target);
+      cancelRestore.current = () => {
+        stopRestore();
+        cancelRestore.current = () => undefined;
+      };
+    },
+    [onClose, restoresAfterChoice, returnFocus],
+  );
+  const held = trigger === "longPress";
   return (
     <View ref={anchor} testID={testID} style={style} collapsable={false}>
-      {children(trigger === "tap" ? { onPress: open } : { onLongPress: open })}
-      {opened && !disabled ? (
-        place && (place.top !== undefined || place.bottom !== undefined) ? (
-          <Portal>
-            <Menu items={items} place={place} onDismiss={dismiss} />
-          </Portal>
-        ) : (
-          <FloatingMenu items={items} anchor={anchor} place={place ?? {}} onDismiss={dismiss} />
-        )
-      ) : null}
+      {children(held ? { onLongPress: open, openFor: (target) => open(undefined, target) } : { onPress: open, openFor: (target) => open(undefined, target) })}
+      {opened && !disabled ? <FloatingMenu items={items} anchor={anchor} at={opened.at} floor={floor} align={align} place={place ?? {}} dimmed={held} privately={privately} frost={frost} onDismiss={dismiss} /> : null}
     </View>
   );
 }
 
+const nativeActionSheet = () => Platform.OS === "ios" && nativeMenusAvailable().actionSheet;
+
 export function confirmInSheet(confirmation: Confirmation, drawn: () => void) {
-  if (!nativeMenusAvailable().actionSheet) {
+  if (!nativeActionSheet()) {
     drawn();
     return;
   }
@@ -169,4 +175,3 @@ export function confirmInSheet(confirmation: Confirmation, drawn: () => void) {
   });
 }
 
-const styles = StyleSheet.create({ pressArea: { flexGrow: 1, alignSelf: "stretch" } });

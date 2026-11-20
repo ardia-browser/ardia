@@ -28,6 +28,9 @@ def module(name, path):
 target = module('target', BUILD / 'target_config.py')
 series = module('series', BUILD.parent / 'series.py')
 helium = module('helium', BUILD / '03-helium.py')
+ARDIA_THEME = REPO / 'engine/chromium/src/chrome/app/theme'
+LINUX_LOGOS = {f'chrome/app/theme/chromium/linux/product_logo_{size}.png': ARDIA_THEME / f'chromium/product_logo_{size}.png' for size in (24, 48, 64, 128, 256)}
+LINUX_LOGOS.update({f'chrome/app/theme/default_100_percent/chromium/linux/product_logo_{size}.png': ARDIA_THEME / f'default_100_percent/chromium/product_logo_{size}.png' for size in (16, 32)})
 packaging = module('packaging', REPO / 'scripts/linux/package.py')
 formats = packaging.linux_formats
 
@@ -124,6 +127,9 @@ class TargetTests(unittest.TestCase):
             env = dict(os.environ, CHROMIUM_SRC=str(root))
             def apply(*args):
                 return subprocess.run([str(layer / 'apply.sh'), *args], env=env, text=True, capture_output=True)
+            for path in LINUX_LOGOS:
+                (root / path).parent.mkdir(parents=True, exist_ok=True)
+                (root / path).write_bytes(b'helium logo\n')
             result = apply()
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             for path, directory in series.layer_paths(str(layer)):
@@ -140,6 +146,44 @@ class TargetTests(unittest.TestCase):
             self.assertIn('assert(is_linux)', build)
             self.assertNotIn('frameworks', build)
             self.assertNotIn('//ardia/linux"', build)
+
+    def test_linux_layer_replaces_helium_window_logos_with_ardia(self):
+        layer = REPO / 'engine/ardiacore-linux'
+        self.assertLessEqual(set(LINUX_LOGOS), {path for path, directory in series.layer_paths(str(layer)) if not directory})
+        with tempfile.TemporaryDirectory() as scratch:
+            root = pathlib.Path(scratch)
+            env = dict(os.environ, CHROMIUM_SRC=str(root))
+            def apply(*args):
+                return subprocess.run([str(layer / 'apply.sh'), *args], env=env, text=True, capture_output=True)
+            for path in LINUX_LOGOS:
+                (root / path).parent.mkdir(parents=True, exist_ok=True)
+                (root / path).write_bytes(b'helium logo\n')
+            result = apply()
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            for path, source in LINUX_LOGOS.items():
+                self.assertEqual((root / path).read_bytes(), source.read_bytes(), path)
+            result = apply('--check')
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            for path in LINUX_LOGOS:
+                original = (root / path).read_bytes()
+                (root / path).write_bytes(b'helium logo\n')
+                self.assertIn(f'drift: {path}', apply('--check').stderr)
+                (root / path).unlink()
+                self.assertIn(f'drift: {path}', apply('--check').stderr)
+                untouched = [other for other in LINUX_LOGOS if other != path]
+                for other in untouched:
+                    (root / other).write_bytes(b'helium logo\n')
+                result = apply()
+                self.assertNotEqual(result.returncode, 0, path)
+                self.assertIn(f"{path} isn't in the tree", result.stderr)
+                self.assertFalse((root / path).exists(), path)
+                for other in untouched:
+                    self.assertEqual((root / other).read_bytes(), b'helium logo\n', other)
+                (root / path).write_bytes(original)
+                result = apply()
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                result = apply('--check')
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 class SeriesFixtureTests(unittest.TestCase):

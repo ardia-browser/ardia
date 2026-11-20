@@ -7,7 +7,7 @@ import { usePreferences } from "../../state/settings/hooks";
 import { matchMyMac } from "../../state/sync/actions";
 import { useSyncEnabled } from "../../state/sync/hooks";
 import { syncOffered } from "../../state/sync/offer";
-import { deckGridOffered, setDeckGrid, useDeckGrid } from "../../state/browse/deckGrid";
+import { setDeckGrid, useDeckGrid } from "../../state/browse/deckGrid";
 import { useIncognito } from "../../state/tabs/hooks";
 import { CheckmarkLabel, ColorSwatch, contentMargins, modifierList, PROFILE_COLORS, settingsChrome, settingsLayout, settingsSwitchStyle, settingsUIAvailable, useProfileLook, type ProfileColor } from "../ui";
 
@@ -53,12 +53,10 @@ export function ExpoAppearancePage() {
           <Choice key={choice} title={SCHEME_NAMES[choice]} checked={scheme === choice} onPress={() => setSchemeChoice(choice)} />
         ))}
       </Section>
-      {deckGridOffered() ? (
-        <Section title="Tabs" footer={<Text>{TABS_STYLE_FOOTER}</Text>}>
-          <Choice title="Stack" checked={!grid} onPress={() => setDeckGrid(false, !incognito)} />
-          <Choice title="Grid" checked={grid} onPress={() => setDeckGrid(true, !incognito)} />
-        </Section>
-      ) : null}
+      <Section title="Tabs" footer={<Text>{TABS_STYLE_FOOTER}</Text>}>
+        <Choice title="Stack" checked={!grid} onPress={() => setDeckGrid(false, !incognito)} />
+        <Choice title="Grid" checked={grid} onPress={() => setDeckGrid(true, !incognito)} />
+      </Section>
     </Form>
   );
 }

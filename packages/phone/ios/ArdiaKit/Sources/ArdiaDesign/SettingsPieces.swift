@@ -147,14 +147,21 @@ public extension View {
   }
 }
 
-private struct SettingsChrome: ViewModifier {
-  @Environment(\.profileLook) private var look
+public enum SettingsSurface {
+  #if canImport(UIKit)
+  public static let page = Color(uiColor: .systemGroupedBackground)
+  #else
+  public static let page = Color(nsColor: .windowBackgroundColor)
+  #endif
+}
 
+private struct SettingsChrome: ViewModifier {
   func body(content: Content) -> some View {
     content
-      .lookBackdrop()
+      .scrollContentBackground(.hidden)
+      .background { SettingsSurface.page.ignoresSafeArea() }
       .scrollEdgeEffectStyle(.hard, for: .top)
-      .toolbarBackground(look.surface, for: .navigationBar)
+      .toolbarBackground(SettingsSurface.page, for: .navigationBar)
       .toolbarBackgroundVisibility(.visible, for: .navigationBar)
   }
 }

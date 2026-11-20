@@ -41,6 +41,7 @@ import {
   type SymbolName,
   useReduceMotion,
 } from "../ui";
+import type { Point } from "../../lib/menuPlace";
 
 const BANNER_ICONS: Record<BannerIcon, SymbolName> = { folder: "folderFill", lock: "lockFill", reset: "arrowClockwise", warning: "exclamationmarkTriangle", offline: "wifiSlash" };
 const IPHONE_BANNER_ICONS: Record<BannerIcon, SymbolName> = { folder: "folderBadgeQuestionmark", lock: "lockFill", reset: "exclamationmarkArrowTriangle2Circlepath", warning: "exclamationmarkIcloud", offline: "wifiSlash" };
@@ -51,7 +52,7 @@ const INDENT = 20;
 const SPACE_ROWS_FIRST = 16;
 const SPACE_ROWS_WINDOW = 5;
 
-type RowMenu = { items: MenuItem[]; y: number; anchor?: RefObject<ViewInstance | null> };
+type RowMenu = { items: MenuItem[]; at: Point | null; anchor?: RefObject<ViewInstance | null> };
 
 export function SpacesView() {
   const theme = useTheme();
@@ -160,7 +161,7 @@ export function SpacesView() {
         )}
         {view.profiles.length > 1 && profile ? <Switcher profiles={view.profiles} selected={profile.syncId} onChoose={choose} bottom={insets.bottom} /> : null}
       </View>
-      {menu ? <FloatingMenu items={menu.items} anchor={menu.anchor} place={{ top: menu.y, left: space.xl, width: tabsLayout.menuWidth }} onDismiss={() => setMenu(null)} /> : null}
+      {menu ? <FloatingMenu items={menu.items} anchor={menu.anchor} at={menu.at} dimmed={menu.at !== null} place={{ top: 0, left: space.xl, width: tabsLayout.menuWidth }} onDismiss={() => setMenu(null)} /> : null}
     </View>
   );
 }
@@ -193,7 +194,7 @@ function SpacePage({ profile, isShown, onMenu, bottom }: { profile: SyncedProfil
     return before ? new Set([...now].filter((key) => !before.has(key))) : new Set<string>();
   }, [rows]);
   const toggle = (key: string) => toggleSpaceRow(profile.syncId, key);
-  const linkMenu = (url: string, title: string, y: number) => {
+  const linkMenu = (url: string, title: string, at: Point | null) => {
     menuOpenedHaptic();
     const sharing: MenuItem[] = /^https?:\/\//i.test(url)
       ? [
@@ -201,7 +202,7 @@ function SpacePage({ profile, isShown, onMenu, bottom }: { profile: SyncedProfil
           { label: "Share", icon: "squareAndArrowUp", onPress: () => shareUrl(url, title) },
         ]
       : [];
-    onMenu({ items: [{ label: "Open", icon: "arrowUpForward", onPress: () => openRemote(url, title, profile.syncId) }, ...sharing], y });
+    onMenu({ items: [{ label: "Open", icon: "arrowUpForward", onPress: () => openRemote(url, title, profile.syncId) }, ...sharing], at });
   };
   return (
     <FlatList
@@ -230,7 +231,7 @@ function SpacePage({ profile, isShown, onMenu, bottom }: { profile: SyncedProfil
             onToggle={toggle}
             onShowAll={(id) => showAllDeviceTabs(profile.syncId, id)}
             onLongPress={linkMenu}
-            onFolder={(tile, anchor) => onMenu({ items: (tile.folder ?? []).map((tab) => ({ label: remoteTitle(tab.title, tab.url), onPress: () => openRemote(tab.url, tab.title, profile.syncId, tab.key) })), y: 0, anchor })}
+            onFolder={(tile, anchor) => onMenu({ items: (tile.folder ?? []).map((tab) => ({ label: remoteTitle(tab.title, tab.url), onPress: () => openRemote(tab.url, tab.title, profile.syncId, tab.key) })), at: null, anchor })}
             tint={theme.secondaryLabel}
           />
         </Appearing>
@@ -245,7 +246,7 @@ type RowProps = {
   tint: string;
   onToggle: (key: string) => void;
   onShowAll: (deviceId: string) => void;
-  onLongPress: (url: string, title: string, y: number) => void;
+  onLongPress: (url: string, title: string, at: Point | null) => void;
   onFolder: (tile: PinnedTile, anchor: RefObject<ViewInstance | null>) => void;
 };
 
@@ -284,8 +285,8 @@ function Row({ row, profileId, tint, onToggle, onShowAll, onLongPress, onFolder 
         <Pressable
           accessibilityRole="button"
           onPress={() => openRemote(row.url, row.title, profileId, row.pinnedKey)}
-          onLongPress={(event) => onLongPress(row.url, row.title, event.nativeEvent.pageY)}
-          {...screenReaderActions([{ name: "longpress", run: () => onLongPress(row.url, row.title, 0) }])}
+          onLongPress={(event) => onLongPress(row.url, row.title, { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY })}
+          {...screenReaderActions([{ name: "longpress", run: () => onLongPress(row.url, row.title, null) }])}
           style={({ pressed }) => [styles.row, { paddingLeft: space.l + INDENT * row.depth }, pressed ? { backgroundColor: theme.rowHighlight } : null]}
         >
           <View testID="spaceTabIcon" style={[styles.tabSymbol, { width: iconSide, height: iconSide }]}>

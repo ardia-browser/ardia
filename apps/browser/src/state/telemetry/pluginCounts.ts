@@ -13,6 +13,12 @@ const NONE = {
   plugin_tool_failures: 0,
   plugin_page_opens: 0,
   plugin_split_opens: 0,
+  program_links: 0,
+  program_link_failures: 0,
+  program_unlinks: 0,
+  program_adoptions: 0,
+  plugin_adoptions: 0,
+  plugin_adoptions_waiting: 0,
 };
 
 export type PluginCount = keyof typeof NONE;

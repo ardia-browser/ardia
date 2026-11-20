@@ -11,7 +11,7 @@ export function StartColumn({ column, width, dark, incognito, menusShown }: { co
   return (
     <SideColumn column={column} width={width} testID="startColumn">
       <GlassCircleButton icon="squareOnSquare" label="Tabs" testID="startBarTabs" diameter={SCREEN_COLUMN.button} dark={dark} incognito={incognito} onPress={showDeck} />
-      <PlusMenuButton
+      <PlusMenuButton frost={null}
         width={SCREEN_COLUMN.button}
         label={incognito ? "New Incognito Tab" : "New Tab"}
         testID="startBarPlus"

@@ -37,6 +37,8 @@ registerHooks({
 const unhandled = [];
 process.on("unhandledRejection", (reason) => unhandled.push(reason));
 
+const { PLATFORM_FEATURES } = await import("../../lib/platformFeatures.ts");
+PLATFORM_FEATURES.plugins = false;
 const { readDocument } = await import("../../platform/documents.ts");
 const { firstWindowCommitted } = await import("../../lib/afterFirstWindow.ts");
 const cli = await import("./cliControl.ts");

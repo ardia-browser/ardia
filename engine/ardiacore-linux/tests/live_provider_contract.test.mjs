@@ -112,8 +112,9 @@ function pick(route, fallback) {
 
 function defaultFor(host, method, path, body) {
   if (host === "api.github.com") {
-    const query = JSON.parse(body).query;
-    return ["github", query.includes("LiveFolderDetails") ? "details" : query.includes("LiveFolder") ? "folder" : "viewer"];
+    const { query, variables } = JSON.parse(body);
+    if (query.includes("search(")) return ["github", /(^|\s)author:@me(\s|$)/.test(variables.q) ? "folder" : "emptySearch"];
+    return ["github", query.includes("LiveFolderDetails") ? "details" : "viewer"];
   }
   if (host === "github.com") return ["github", path === "/login/device/code" ? "deviceCode" : "deviceToken"];
   if (host === "api.bitbucket.org") {

@@ -18,7 +18,7 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
-const ANDROID_NAMES = new Set(["activate", "longpress", "previousTab", "nextTab", "close", "dismiss", "remove", "refine", "menu0", "menu1", "menu2"]);
+const ANDROID_NAMES = new Set(["activate", "longpress", "previousTab", "nextTab", "close", "dismiss", "remove", "refine", "menu", "menu0", "menu1", "menu2"]);
 
 function actionNames(root: ReturnType<typeof renderSurface>): string[] {
   return root.root

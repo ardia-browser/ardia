@@ -34,6 +34,7 @@ export function linuxLiveSources(client: LiveClient) {
       return githubClient.resolveGone(githubScope(), items, !!options?.interactive);
     },
     pausedUntil: () => githubClient.pausedUntil(),
+    warning: () => githubClient.warning(),
   };
 
   const bitbucket: LiveSource = {

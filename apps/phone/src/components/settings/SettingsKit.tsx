@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type TextStyle } from "react-native";
+import { ActivityIndicator, type GestureResponderEvent, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type TextStyle } from "react-native";
 import Animated, { FadeIn, FadeOut, LayoutAnimationConfig, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { rememberSettingsScroll, settingsScroll } from "../../state/settings/nav";
@@ -194,7 +194,7 @@ export function ToggleRow({ title, icon, tint, divider, value, onChange, detail 
   );
 }
 
-export function ButtonRow({ title, onPress, destructive, enabled = true, busy, divider }: { title: string; onPress: () => void; destructive?: boolean; enabled?: boolean; busy?: boolean; divider?: boolean }) {
+export function ButtonRow({ title, onPress, destructive, enabled = true, busy, divider }: { title: string; onPress: (event?: GestureResponderEvent) => void; destructive?: boolean; enabled?: boolean; busy?: boolean; divider?: boolean }) {
   const theme = useTheme();
   const color = !enabled ? theme.tertiaryLabel : destructive ? theme.destructive : theme.formAccent;
   return (
@@ -230,7 +230,7 @@ export function PickerRow<T extends string>({ title, icon, tint, divider, option
   const items: MenuItem[] = options.map((option) => ({ label: option.title, checked: option.id === selected, onPress: () => onSelect(option.id) }));
   return (
     <View>
-      <MenuTrigger items={items} trigger="tap" place={{ right: space.l * 2, width: Math.min(tabsLayout.menuWidth, width - space.huge * 2) }}>
+      <MenuTrigger items={items} trigger="tap" restoresAfterChoice align={{ trailing: true, inset: settingsLayout.rowInset }} place={{ width: Math.min(tabsLayout.menuWidth, width - space.huge * 2) }}>
         {({ onPress }) => (
           <Pressable accessibilityRole="button" accessibilityLabel={title} accessibilityValue={{ text: current }} onPress={onPress} style={({ pressed }) => [styles.row, pressed ? { backgroundColor: theme.rowHighlight } : null]}>
             <Label title={title} icon={icon} tint={tint} />

@@ -21,7 +21,7 @@ gh release upload command for the assets.
   --out DIR          where the assets go (default dist/<version>/linux); an
                      existing DIR must be empty or an earlier output of this script
   --allow-dirty      build with uncommitted changes under apps/browser,
-                     apps/linux, apps/cli, packages, engine or scripts/linux
+                     apps/linux, packages, engine or scripts/linux
                      (a test build, never a release)
   -h, --help         show this help
 
@@ -61,10 +61,10 @@ project_version=$(sed -n 's/.*MARKETING_VERSION = "\{0,1\}\([^";]*\)"\{0,1\};/\1
   || die "MARKETING_VERSION is '$project_version', not $version: the Linux release follows the macOS release of the same version"
 [ -f "docs/release-notes/$version.md" ] || die "no release notes: write docs/release-notes/$version.md first"
 
-dirty=$(git status --porcelain -- apps/browser apps/linux apps/cli packages engine scripts/linux | grep -v ' apps/browser/build' || true)
+dirty=$(git status --porcelain -- apps/browser apps/linux packages engine scripts/linux | grep -v ' apps/browser/build' || true)
 if [ -n "$dirty" ]; then
   echo "$dirty" >&2
-  [ "$allow_dirty" = 1 ] || die "uncommitted changes under apps/browser, apps/linux, apps/cli, packages, engine or scripts/linux (above)"
+  [ "$allow_dirty" = 1 ] || die "uncommitted changes under apps/browser, apps/linux, packages, engine or scripts/linux (above)"
   warn "building with the uncommitted changes above: a test build, never a release"
 fi
 
@@ -81,11 +81,11 @@ node scripts/lib/release-note.mjs "docs/release-notes/$version.md" headline >/de
 
 release_output_entry() {
   case $1 in
-    provenance.txt|ui-build.log|cli-build.log|ubo.log|smoke|smoke-deb|smoke-appimage) return 0 ;;
+    provenance.txt|ui-build.log|ubo.log|smoke|smoke-deb|smoke-appimage) return 0 ;;
     Ardia-*-linux-x64.tar.xz|Ardia-*-linux-x64.tar.xz.sha256) return 0 ;;
     Ardia-*-linux-x64.deb|Ardia-*-linux-x64.deb.sha256|Ardia-*-linux-x64.AppImage|Ardia-*-linux-x64.AppImage.sha256) return 0 ;;
     ardia-bin-*.src.tar.gz|ardia-bin-*.src.tar.gz.sha256) return 0 ;;
-    ardia-cli-*-linux-x64.tar.gz|ardia-cli-*-linux-x64.tar.gz.sha256|ardia-cli-*-linux-x64.tar.gz.part) return 0 ;;
+    ardia-cli-*-linux-x64.tar.gz|ardia-cli-*-linux-x64.tar.gz.sha256) return 0 ;;
   esac
   return 1
 }
@@ -146,10 +146,9 @@ echo "==> UI (apps/linux/dist)"
 pnpm --filter @ardia/linux build >"$out/ui-build.log" 2>&1 \
   || { tail -20 "$out/ui-build.log" >&2; die "building apps/linux/dist failed ($out/ui-build.log)"; }
 
-echo "==> ardia CLI"
-apps/cli/scripts/build.sh "$version" "$out" --platform linux-x64 >"$out/cli-build.log" 2>&1 \
-  || { tail -20 "$out/cli-build.log" >&2; die "building the ardia CLI failed ($out/cli-build.log)"; }
-[ -f "$out/$cli_name" ] && [ -f "$out/$cli_name.sha256" ] || die "the CLI build left no $cli_name and .sha256 in $out"
+echo "==> ardia command (pinned in apps/browser/official-plugins.json)"
+python3 -I scripts/release/official-plugins.py ${OFFICIAL_PLUGINS_FROM:+--from "$OFFICIAL_PLUGINS_FROM"} linux-cli "$version" "$out/$cli_name" \
+  || die "the pinned ardia command couldn't be fetched and verified"
 
 echo "==> uBlock Origin"
 blocker=$(scripts/linux/fetch-ubo.sh 2>"$out/ubo.log") \
@@ -179,7 +178,7 @@ done
   echo "deb $(cut -d' ' -f1 "$out/$deb_name.sha256")  $deb_name"
   echo "appimage $(cut -d' ' -f1 "$out/$appimage_name.sha256")  $appimage_name"
   echo "arch $(cut -d' ' -f1 "$out/$srcpkg_name.sha256")  $srcpkg_name"
-  echo "cli $(cut -d' ' -f1 "$out/$cli_name.sha256")  $cli_name"
+  echo "cli $(cut -d' ' -f1 "$out/$cli_name.sha256")  $cli_name, from $(python3 -I scripts/release/official-plugins.py describe | grep '^plugin cli ')"
 } > "$out/provenance.txt"
 
 echo "==> Smoke"

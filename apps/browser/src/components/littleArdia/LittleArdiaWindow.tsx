@@ -3,7 +3,6 @@ import { setTrafficLightsCenter } from "../../state/windows/nativeWindow";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import { useTheme } from "../ui/theme";
-import { useProfileOrder } from "../../state/profiles/hooks";
 import { openPanel } from "../../state/windows/actions";
 import { useActiveTab, useSettings, useWindowFullScreen, useWindowId, useWindowProfile, useWindowUi } from "../../state/browser/hooks";
 import type { Tab } from "../../state/browser/types";
@@ -17,6 +16,7 @@ import { setUrlAnchor, usePageFrameInset, windowCornerRadius } from "../../state
 import { showUrlBarMenu } from "../../state/omnibox/paste";
 import { copyPageUrl } from "../../state/site/selection";
 import { ProfileBadge } from "../profiles/ProfileIcons";
+import { useProfileDotsShown } from "../profiles/ProfileDots";
 import { closeLittleArdia, openInMainWindow, openLittleArdiaProfileMenu } from "../../state/littleArdia/actions";
 import { isWindowClosing } from "../../state/windows/closeAnimated";
 import { notePinch, noteSwipeClose } from "../../state/telemetry/usage";
@@ -156,7 +156,7 @@ function LittleArdiaBar() {
   const windowId = useWindowId();
   const tab = useActiveTab();
   const panelOpen = useWindowUi().panel.open;
-  const severalProfiles = useProfileOrder((order) => order.length > 1);
+  const switcherShown = useProfileDotsShown();
   const [copied, setCopied] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
@@ -182,7 +182,7 @@ function LittleArdiaBar() {
         { icon: copied ? "checkmark" : "link", disabled: !tab?.url, tooltip: `Copy Link (${keyText("⇧⌘C")})`, onPress: copy },
         { icon: "arrow.up.left.and.arrow.down.right", tooltip: `Open in Ardia (${keyText("⌘O")})`, onPress: () => openInMainWindow(windowId) },
       ]}
-      trailing={severalProfiles ? <ProfileButton windowId={windowId} /> : undefined}
+      trailing={switcherShown ? <ProfileButton windowId={windowId} /> : undefined}
     >
       <WindowDragRegion style={StyleSheet.absoluteFill} />
       {tab ? <HistoryButtons tabId={tab.id} windowId={windowId} /> : null}
@@ -196,7 +196,7 @@ function HistoryButtons({ tabId, windowId }: { tabId: string; windowId: string }
   const history = useHistoryAvailability(tabId);
   return (
     <>
-      <HistoryButton place={BACK_AT()} tabId={tabId} windowId={windowId} direction={-1} disabled={!history.back} palette={palette} onFocus={alreadyFocused} />
+      <HistoryButton place={BACK_AT()} tabId={tabId} windowId={windowId} direction={-1} disabled={!history.back} palette={palette} onFocus={alreadyFocused} closesTab={history.backCloses} />
       <HistoryButton place={FORWARD_AT()} tabId={tabId} windowId={windowId} direction={1} disabled={!history.forward} palette={palette} onFocus={alreadyFocused} />
     </>
   );

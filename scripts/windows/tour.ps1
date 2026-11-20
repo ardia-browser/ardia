@@ -784,12 +784,34 @@ function Invoke-OnboardingTour {
   } | Out-Null
 
   $seenKeys = @{}
+  $pinsToggled = $false
   for ($screen = 0; $screen -lt 32; $screen++) {
     if (-not (Test-Usable $session)) { break }
     $state = Read-Onboarding $session
     if (-not $state -or $state.Completed) { break }
     if ($seenKeys.ContainsKey($state.Key) -and $seenKeys[$state.Key] -ge 2) { break }
     $seenKeys[$state.Key] = 1 + [int]$seenKeys[$state.Key]
+    if ($state.Step -eq "pins" -and -not $pinsToggled) {
+      $pinsToggled = $true
+      $passes = @(
+        [pscustomobject]@{ Slug = "onboarding-pins-select"; Title = "Onboarding: pins, a site tile selected"; Did = "Clicked the Gmail tile"; Button = "Pin 1 Tab" },
+        [pscustomobject]@{ Slug = "onboarding-pins-deselect"; Title = "Onboarding: pins, the same tile deselected"; Did = "Clicked the Gmail tile again"; Button = "Continue" }
+      )
+      foreach ($pass in $passes) {
+        Invoke-Stop $session $pass.Slug $pass.Title {
+          param($stop)
+          $stop.Did = "$($pass.Did), then shot the screen 150 ms later."
+          $stop.Expected = "The tile's checkbox and border draw above its fill at once (#2197), and the primary button reads '$($pass.Button)'."
+          Focus-Window $session $session.Main $stop | Out-Null
+          $hits = @(Find-Named $session.Main "Gmail")
+          if (-not $hits.Count) { throw "the Gmail tile was not found by UI Automation" }
+          Send-Click $hits[0].X $hits[0].Y
+          Start-Sleep -Milliseconds 150
+          Save-Shot $stop $session.Main | Out-Null
+          Set-Seen $stop (@(Find-Named $session.Main $pass.Button).Count -gt 0)
+        } | Out-Null
+      }
+    }
     $slug = "onboarding-$($state.Step)-$($state.Sub + 1)"
     $result = Invoke-Stop $session $slug "Onboarding: $($state.Step), question $($state.Sub + 1)" {
       param($stop)

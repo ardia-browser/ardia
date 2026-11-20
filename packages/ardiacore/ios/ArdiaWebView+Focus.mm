@@ -41,7 +41,9 @@ static BOOL InTabPage(NSView *view) {
     if (view.window != window || !view->_visible || view->_standalone || !page || page.superview != view ||
         page.isHiddenOrHasHiddenAncestor)
       continue;
-    if (!chosen || (view->_focus.page == ArdiaPageFocus::Page && chosen->_focus.page != ArdiaPageFocus::Page)) chosen = view;
+    const BOOL preferred = !chosen || (view->_selected && !chosen->_selected) ||
+                           (view->_selected == chosen->_selected && view->_focus.page == ArdiaPageFocus::Page && chosen->_focus.page != ArdiaPageFocus::Page);
+    if (preferred) chosen = view;
   }
   if (!chosen) return NO;
   [chosen focusPage];
@@ -112,7 +114,7 @@ static BOOL InTabPage(NSView *view) {
     _focus.onActivate = NO;
     return;
   }
-  if (!_visible || page.isHiddenOrHasHiddenAncestor) return;
+  if (!_visible || !_selected || page.isHiddenOrHasHiddenAncestor) return;
   if ([ArdiaWebView onScreenAheadIn:window]) return;
   [self takeFocusFromLingeringPane];
   _focus.onActivate = NO;
@@ -134,12 +136,16 @@ static BOOL InTabPage(NSView *view) {
 - (void)focusAfterLingeringPane {
   NSWindow *window = self.window;
   NSView *page = _tab.view;
-  if (!window || !_visible || _standalone || !page || page.superview != self || page.isHiddenOrHasHiddenAncestor || [ArdiaWebView onScreenAheadIn:window]) return;
+  if (!window || !_visible || !_selected || _standalone || !page || page.superview != self || page.isHiddenOrHasHiddenAncestor || [ArdiaWebView onScreenAheadIn:window]) return;
   if (![self focusRememberedDevToolsIn:window]) [self focusPage];
 }
 
 - (void)focusAfterLoad {
   if (!_tab) return;
+  if (_visible && !_selected) {
+    if (TraceVisibility()) NSLog(@"[ardiacore-vis] %@ loads in a pane that isn't selected and leaves focus alone", _transferKey);
+    return;
+  }
   if (_visible) return [self focusPage];
   _focus.page = ArdiaPageFocus::Page;
   _focus.devTools = nil;

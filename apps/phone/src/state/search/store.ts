@@ -7,11 +7,11 @@ import { idleMacTabs, macTabIndex, mergeSyncedHistory, syncedBookmarks } from ".
 import { selectedProfile, syncData } from "../sync/store";
 import { idleRows, remoteSuggestions, setSearchEngine, setSources, setSyncedSearch, suggest, type SuggestContext, type TrayRow } from "./omnibox";
 import { withPasteRow, type PasteOffer } from "./pasteRow";
-import { copy } from "../../lib/platformCopy";
 import { clipboardOffer } from "../../platform/system";
 import { settled } from "../pages/store";
 import { buildSources, recentSearches, sourcesKey } from "./sources";
 import { spaceTabs } from "../tabs/tabsState";
+import { browseForMeOffered } from "../browseForMe/offer";
 
 export type SearchOrigin = "home" | "start" | "page";
 
@@ -56,6 +56,7 @@ let inFlight: AbortController | null = null;
 let fedSources = "";
 let context: SuggestContext = { currentUrl: null, currentTabId: null };
 let paste: PasteOffer | null = null;
+let pasteReadIn: number | null = null;
 
 export function feedSources() {
   const key = `${sourcesKey(useTabs.getState().listing, history().revision(), syncData().revision)}:${useTabs.getState().spaces.current}`;
@@ -70,25 +71,41 @@ export function feedSources() {
 
 function suggestionsFor(text: string, remoteValues: readonly string[]): { rows: TrayRow[]; completion: string } {
   if (!text.trim()) return { rows: rowsFor(text, remoteValues), completion: "" };
-  return suggest(text, remoteValues, context, macTabIndex(selectedProfile(), syncData().view.devices));
+  return suggest(text, remoteValues, context, macTabIndex(selectedProfile(), syncData().view.devices), browseForMeOffered());
 }
 
 function rowsFor(text: string, remoteValues: readonly string[]): TrayRow[] {
   const profile = selectedProfile();
-  if (text.trim()) return suggest(text, remoteValues, context, macTabIndex(profile, syncData().view.devices)).rows;
+  if (text.trim()) return suggest(text, remoteValues, context, macTabIndex(profile, syncData().view.devices), browseForMeOffered()).rows;
   const idle = useTabs.getState().incognito ? [] : idleRows(recentSearches(history().summary()), idleMacTabs(profile, syncData().view.devices));
   return withPasteRow(idle, text, paste);
 }
 
 function offerPaste(session: number) {
-  paste = null;
-  if (!copy().offersPasteAndGo) return;
   void settled(() => clipboardOffer(), null).then((offer) => {
     const state = useSearch.getState();
     if (!offer || !state.open || state.session !== session) return;
     paste = offer;
     if (!state.text.trim()) useSearch.setState({ rows: rowsFor(state.text, []) });
   });
+}
+
+export function beginPasteRead(): number | null {
+  const { open, session } = useSearch.getState();
+  if (!open || pasteReadIn === session) return null;
+  pasteReadIn = session;
+  return session;
+}
+
+export function endPasteRead(session: number, pasted: boolean): boolean {
+  if (pasteReadIn === session) pasteReadIn = null;
+  const state = useSearch.getState();
+  if (!state.open || state.session !== session) return false;
+  if (!pasted) {
+    paste = null;
+    if (!state.text.trim()) useSearch.setState({ rows: rowsFor(state.text, []) });
+  }
+  return true;
 }
 
 export const refreshSearchRows = () => useSearch.setState((state) => ({ rows: rowsFor(state.text, []) }));
@@ -104,6 +121,7 @@ export function presentSearch(origin: SearchOrigin, text = "", incognitoOnCancel
   inFlight?.abort();
   remote = { text: "", values: [] };
   context = page ?? { currentUrl: null, currentTabId: null };
+  paste = null;
   feedSources();
   useSearch.setState((state) => ({
     open: true,

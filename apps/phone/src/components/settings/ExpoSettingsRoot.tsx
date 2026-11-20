@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { PlatformColor } from "react-native";
-import { Button, Form, HStack, Image, LabeledContent, NavigationLink, Picker, Section, Text, Toggle, Toolbar, ToolbarItem, VStack } from "@expo/ui/swift-ui";
+import { Button, Form, HStack, Image, LabeledContent, NavigationLink, Picker, Section, Text, Toggle, VStack } from "@expo/ui/swift-ui";
 import { accessibilityElement, contentTransition, font, foregroundStyle, frame, listRowBackground, listRowInsets, listSectionSpacing, multilineTextAlignment, navigationBarTitleDisplayMode, navigationTitle, padding, pickerStyle, tag, tint } from "@expo/ui/swift-ui/modifiers";
 import { refreshDefaultBrowser, useDefaultBrowser } from "../../state/settings/defaultBrowser";
 import { offersDefaultBrowser } from "../../state/settings/settingsRules";
@@ -17,7 +17,9 @@ import { PHONE_SHARING_COPY } from "../../lib/telemetryCopy";
 import { setUsageSharing, useUsageSharing } from "../../state/telemetry/telemetry";
 import { contentMargins, modifierList, PROFILE_COLORS, settingsChrome, settingsLayout, SettingsIconTile, SettingsShortcuts, settingsSwitchStyle, settingsTint, settingsUIAvailable, useWarningInk, type ProfileColor } from "../ui";
 import { ExpoRowLabel } from "./ExpoRowLabel";
+import { ExpoSettingsDone } from "./ExpoSettingsDone";
 import { syncOffered } from "../../state/sync/offer";
+import { browseForMeOffered, refreshChatGPTConnected, useChatGPTConnected } from "../../state/browseForMe/store";
 
 const INTERVALS = (Object.keys(AUTO_ARCHIVE_INTERVALS) as AutoArchiveInterval[]).map((id) => ({ id, title: autoArchiveTitle(id) }));
 const APP_LINKS = [
@@ -48,8 +50,12 @@ export function ExpoSettingsRoot() {
   const synced = useSyncView().search;
   const engineName = syncEnabled && synced ? syncedEngineName(synced, engines) : (engines.find((engine) => engine.id === engineId)?.name ?? "");
   const appearance = useAppearanceSummary(colorName);
+  const chatGPT = useChatGPTConnected();
+  useEffect(() => {
+    void refreshChatGPTConnected();
+  }, []);
   return (
-    <Toolbar>
+    <ExpoSettingsDone>
       <Form modifiers={modifierList(navigationTitle("Settings"), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
         {syncOffered() ? (
           <Section modifiers={[listSectionSpacing(TOP_SECTION_SPACING)]}>
@@ -61,14 +67,12 @@ export function ExpoSettingsRoot() {
         <Section modifiers={[listRowBackground("clear"), listRowInsets({ top: 0, leading: 0, bottom: 0, trailing: 0 }), listSectionSpacing(TOP_SECTION_SPACING)]}>
           <SettingsShortcuts shortcuts={syncOffered() ? SHORTCUTS : ARCHIVE_ONLY} onPress={(id) => leaveFor(id === "archive" ? openArchive : openSpaces)} />
         </Section>
-        <Section>
+        <Section title="General">
           <NavigationLink value={link({ page: "appearance" })}>
             <LabeledContent label={<ExpoRowLabel title="Appearance" systemImage="paintpalette.fill" tint="swatch" />}>
               <Text>{appearance}</Text>
             </LabeledContent>
           </NavigationLink>
-        </Section>
-        <Section>
           <NavigationLink value={link({ page: "siteSettings" })}>
             <ExpoRowLabel title="Site Settings" systemImage="globe" tint="neutral" />
           </NavigationLink>
@@ -77,33 +81,6 @@ export function ExpoSettingsRoot() {
               <ExpoRowLabel title="Default Browser" systemImage="safari.fill" tint="defaultBrowser" />
             </NavigationLink>
           ) : null}
-        </Section>
-        <Section>
-          <NavigationLink value={link({ page: "searchEngine" })}>
-            <LabeledContent label={<ExpoRowLabel title="Search Engine" systemImage="magnifyingglass" tint="search" />}>
-              <Text>{engineName}</Text>
-            </LabeledContent>
-          </NavigationLink>
-          <Toggle isOn={suggestions} onIsOnChange={setSearchSuggestions} modifiers={modifierList(settingsSwitchStyle())}>
-            <ExpoRowLabel title="Search Suggestions" systemImage="text.magnifyingglass" tint="blue" />
-          </Toggle>
-          <Toggle isOn={keyboard} onIsOnChange={setAutoOpenKeyboard} modifiers={modifierList(settingsSwitchStyle())}>
-            <ExpoRowLabel title="Auto-Open Keyboard" systemImage="keyboard.fill" tint="keyboard" />
-          </Toggle>
-        </Section>
-        <Section>
-          <Picker
-            label={<ExpoRowLabel title="Archive Inactive Tabs" systemImage="archivebox.fill" tint="archive" />}
-            selection={interval}
-            onSelectionChange={(next: AutoArchiveInterval) => setArchiveInterval(next)}
-            modifiers={[pickerStyle("menu"), tint("secondary")]}
-          >
-            {INTERVALS.map((option) => (
-              <Text key={option.id} modifiers={[tag(option.id)]}>
-                {option.title}
-              </Text>
-            ))}
-          </Picker>
           <Picker
             label={<ExpoRowLabel title="Open App Links In" systemImage="arrow.up.forward.app.fill" tint="appLinks" />}
             selection={appLinks}
@@ -116,14 +93,41 @@ export function ExpoSettingsRoot() {
               </Text>
             ))}
           </Picker>
-          <NavigationLink value={link({ page: "clearData" })}>
-            <ExpoRowLabel title="Clear Browsing Data" systemImage="eraser.fill" tint="clearData" />
+        </Section>
+        <Section title="Search">
+          <NavigationLink value={link({ page: "searchEngine" })}>
+            <LabeledContent label={<ExpoRowLabel title="Search Engine" systemImage="magnifyingglass" tint="search" />}>
+              <Text>{engineName}</Text>
+            </LabeledContent>
           </NavigationLink>
+          <Toggle isOn={suggestions} onIsOnChange={setSearchSuggestions} modifiers={modifierList(settingsSwitchStyle())}>
+            <ExpoRowLabel title="Search Suggestions" systemImage="text.magnifyingglass" tint="blue" />
+          </Toggle>
+          <Toggle isOn={keyboard} onIsOnChange={setAutoOpenKeyboard} modifiers={modifierList(settingsSwitchStyle())}>
+            <ExpoRowLabel title="Auto-Open Keyboard" systemImage="keyboard.fill" tint="keyboard" />
+          </Toggle>
+        </Section>
+        <Section title="Tabs">
+          <Picker
+            label={<ExpoRowLabel title="Archive Inactive Tabs" systemImage="archivebox.fill" tint="archive" />}
+            selection={interval}
+            onSelectionChange={(next: AutoArchiveInterval) => setArchiveInterval(next)}
+            modifiers={[pickerStyle("menu"), tint("secondary")]}
+          >
+            {INTERVALS.map((option) => (
+              <Text key={option.id} modifiers={[tag(option.id)]}>
+                {option.title}
+              </Text>
+            ))}
+          </Picker>
           <Button onPress={exportOpenTabs} modifiers={[tint("primary")]}>
             <ExpoRowLabel title="Export Open Tabs" systemImage="square.and.arrow.up.fill" tint="export" />
           </Button>
         </Section>
-        <Section footer={<Text>{PHONE_SHARING_COPY.summary}</Text>}>
+        <Section title="Privacy">
+          <NavigationLink value={link({ page: "clearData" })}>
+            <ExpoRowLabel title="Clear Browsing Data" systemImage="eraser.fill" tint="clearData" />
+          </NavigationLink>
           <Toggle isOn={sharing} onIsOnChange={(on) => setUsageSharing(on, "settings")} modifiers={modifierList(settingsSwitchStyle())}>
             <ExpoRowLabel title={PHONE_SHARING_COPY.toggle} systemImage="checkmark.shield" tint="neutral" />
           </Toggle>
@@ -131,7 +135,16 @@ export function ExpoSettingsRoot() {
             <ExpoRowLabel title={PHONE_SHARING_COPY.whatsSent} systemImage="info" tint="neutral" />
           </NavigationLink>
         </Section>
-        <Section footer={<Text modifiers={[frame({ maxWidth: Number.MAX_SAFE_INTEGER }), multilineTextAlignment("center")]}>{appVersion()}</Text>}>
+        {browseForMeOffered() ? (
+          <Section title="Experimental">
+            <NavigationLink value={link({ page: "browseForMe" })}>
+              <LabeledContent label={<ExpoRowLabel title="Browse for Me" systemImage="sparkle.magnifyingglass" tint="nightShade" />}>
+                <Text>{chatGPT ? "ChatGPT" : "On iPhone"}</Text>
+              </LabeledContent>
+            </NavigationLink>
+          </Section>
+        ) : null}
+        <Section title="About" footer={<Text modifiers={[frame({ maxWidth: Number.MAX_SAFE_INTEGER }), multilineTextAlignment("center")]}>{appVersion()}</Text>}>
           <Button onPress={showOnboarding} modifiers={[tint("primary")]}>
             <ExpoRowLabel title="Show Onboarding" systemImage="hand.wave.fill" tint="onboarding" />
           </Button>
@@ -140,14 +153,7 @@ export function ExpoSettingsRoot() {
           </NavigationLink>
         </Section>
       </Form>
-      <Toolbar.Content>
-        <ToolbarItem placement="confirmationAction">
-          <Button onPress={closeSettings} modifiers={[font({ weight: "semibold" }), tint(PlatformColor("systemBlue"))]}>
-            <Text>Done</Text>
-          </Button>
-        </ToolbarItem>
-      </Toolbar.Content>
-    </Toolbar>
+    </ExpoSettingsDone>
   );
 }
 

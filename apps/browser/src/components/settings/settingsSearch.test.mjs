@@ -12,7 +12,7 @@ const TOP = [
   ["shell", ["advanced.ardiaCommand"]],
   ["devtools", ["advanced.ardiaCommand"]],
   ["remote debugging", ["advanced.ardiaCommand"]],
-  ["command line", ["advanced.ardiaCommand"]],
+  ["command line", ["plugins.commandLine"]],
   ["terminal", ["advanced.ardiaCommand"]],
   ["ardia command", ["advanced.ardiaCommand"]],
   ["dark", ["appearance.theme"]],
@@ -156,7 +156,7 @@ test("results that land on the same place collapse into one", () => {
 test("rows named by the query stay apart even when they share a place", () => {
   const tabs = search(SETTINGS_INDEX, "tabs").filter((h) => h.entry.section === "Layout" && h.title.length);
   assert.ok(tabs.length >= 2, "several Layout rows say tabs in their names");
-  assert.equal(first("command line"), "advanced.ardiaCommand");
+  assert.equal(first("command line"), "plugins.commandLine");
   assert.equal(first("devtools"), "advanced.ardiaCommand");
 });
 
@@ -219,6 +219,13 @@ test("a long matching text shows the part around its match", () => {
   const cut = snippetAround(text, [{ start: at, end: at + 4 }], 30);
   assert.ok(cut.text.startsWith("…"));
   assert.equal(cut.text.slice(cut.ranges[0].start, cut.ranges[0].end), "Live");
+});
+
+test("the official plugins turn up for the words people use for the command line", () => {
+  for (const query of ["command line", "cli", "terminal", "plugins", "ardia command", "official plugins"]) assert.ok(ids(query).includes("plugins.commandLine") || ids(query).includes("plugins.official"), query);
+  for (const query of ["command line", "cli", "terminal"]) assert.ok(ids(query).includes("plugins.commandLine"), query);
+  assert.ok(ids("plugins").includes("plugins.official"));
+  assert.equal(first("official plugins"), "plugins.official");
 });
 
 test("every pane has settings", () => {
@@ -340,4 +347,19 @@ test("Minimalism mode turns up for every word people use for it", () => {
 
 test("autoplay and notification blocking are found through each profile's Site settings", () => {
   for (const query of ["block autoplay on every site", "block requests to send notifications", "camera", "autoplay"]) assert.equal(first(query), "profiles.siteSettings", query);
+});
+
+test("search leaves out the official plugins when Settings › Plugins doesn't draw them, as on a build without the bundled command line", async () => {
+  const { unshownSettings } = await import("./settingsIndex.ts");
+  const { DEFAULT_SETTINGS } = await import("../../state/settings/settings.ts");
+  const unshown = (env) => new Set(unshownSettings(DEFAULT_SETTINGS, env).split("\n").filter(Boolean));
+  const without = unshown({ top: false, officialPlugins: [] });
+  assert.ok(without.has("plugins.commandLine"));
+  assert.ok(without.has("plugins.official"));
+  const onlyAi = unshown({ top: false, officialPlugins: ["ai"] });
+  assert.ok(onlyAi.has("plugins.commandLine"));
+  assert.ok(!onlyAi.has("plugins.official"));
+  const bundled = unshown({ top: false, officialPlugins: ["cli"] });
+  assert.ok(!bundled.has("plugins.commandLine"));
+  assert.ok(!bundled.has("plugins.official"));
 });

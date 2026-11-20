@@ -16,6 +16,7 @@ final class LinkActivationOrder: NSObject {
     case onArrival = "arrival"
     case onOpen = "open"
     case released = "released"
+    case stageManager = "stageManager"
   }
 
   private static let pairing: TimeInterval = 3
@@ -71,7 +72,7 @@ final class LinkActivationOrder: NSObject {
     placements = Self.placements()
     activatedAt = nil
     keptEarly = false
-    holdPending = !littleLinkExpected && activationMayCarryLink
+    holdPending = !littleLinkExpected && activationMayCarryLink && !stageManagerOrdersWindows
     if littleLinkExpected || holdPending { hideBeforeRaise() }
   }
 
@@ -102,6 +103,18 @@ final class LinkActivationOrder: NSObject {
   private static var activatedWithoutWindows: Bool {
     guard let event = NSApp.currentEvent, event.type == .appKitDefined, event.subtype == .applicationActivated else { return false }
     return event.data2 & activatedWithoutWindowsFlag != 0
+  }
+
+  private var stageManagerOrdersWindows: Bool {
+    guard Self.stageManagerOn else { return false }
+    Self.report(.stageManager)
+    return true
+  }
+
+  private static var stageManagerOn: Bool {
+    let domain = "com.apple.WindowManager" as CFString
+    CFPreferencesAppSynchronize(domain)
+    return CFPreferencesGetAppBooleanValue("GloballyEnabled" as CFString, domain, nil)
   }
 
   private var littleLinkExpected: Bool {

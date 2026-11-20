@@ -49,6 +49,8 @@ export const shareText = (text: string, title: string) => Share.share({ message:
 
 export const pasteText = () => getStringAsync();
 
+export const pasteForGo = async (): Promise<string> => (clipboard.readsOnTap() ? ((await clipboard.read()) ?? "") : getStringAsync());
+
 const readsClipOffers = requireOptionalNativeModule("ArdiaPhoneClipboard") !== null;
 
 export async function clipboardOffer(): Promise<ClipboardOffer | null> {

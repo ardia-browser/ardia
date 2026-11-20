@@ -3,11 +3,11 @@ import { capsule, deckChromeLayout, font, ink, iPhoneOr, rolesFor, startLayout, 
 
 export function IncognitoGlyph({ incognito, dark }: { incognito: boolean; dark: boolean }) {
   const theme = useTheme();
-  if (!incognito) return <Symbol name="eyes" size={deckChromeLayout.incognitoGlyph} color={rolesFor(dark).label} />;
+  if (!incognito) return <Symbol name="eyes" size={deckChromeLayout.incognitoEyes} color={rolesFor(dark).label} />;
   return (
     <View style={styles.switch}>
       <View style={[styles.switchOn, { backgroundColor: theme.dark ? ink.white : tabsInk.incognitoCard }]} />
-      <Symbol name="eyes" size={deckChromeLayout.incognitoGlyph} color={theme.dark ? tabsInk.incognitoCard : ink.white} />
+      <Symbol name="eyesClosed" size={deckChromeLayout.incognitoEyes} color={theme.dark ? tabsInk.incognitoCard : ink.white} />
     </View>
   );
 }
@@ -30,7 +30,7 @@ export function PlusGlyph({ dark }: { dark: boolean }) {
 
 const styles = StyleSheet.create({
   switch: { width: deckChromeLayout.barCircle, height: deckChromeLayout.barCircle, alignItems: "center", justifyContent: "center" },
-  switchOn: { position: "absolute", width: deckChromeLayout.incognitoOn, height: deckChromeLayout.incognitoOn, borderRadius: capsule(deckChromeLayout.incognitoOn) },
+  switchOn: { position: "absolute", width: deckChromeLayout.barCircle, height: deckChromeLayout.barCircle, borderRadius: capsule(deckChromeLayout.barCircle) },
   search: { flex: 1, alignSelf: "stretch", flexDirection: "row", alignItems: "center", gap: deckChromeLayout.searchSpacing, paddingLeft: deckChromeLayout.searchLead, paddingRight: deckChromeLayout.searchTrail },
   words: { flex: 1 },
 });

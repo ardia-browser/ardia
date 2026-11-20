@@ -25,6 +25,7 @@ import type {
   PasswordPrompt,
   PictureInPictureState,
   PictureInPictureDrag,
+  PictureInPictureResize,
   PictureInPictureSkip,
   ProtectedMediaRequest,
   ScrollState,
@@ -59,6 +60,7 @@ type NativeEvents = {
   onPictureInPicture: PictureInPictureState;
   onAutoPictureInPictureKept: { appSwitch?: boolean; reason?: string; epoch?: string };
   onPictureInPictureDragged: PictureInPictureDrag;
+  onPictureInPictureResized: PictureInPictureResize;
   onPictureInPictureSkip: PictureInPictureSkip;
   onMediaFault: MediaFault;
   onActivateRequest: ActivateRequest;
@@ -112,6 +114,7 @@ const PAGE_EVENTS = {
   onPictureInPicture: "pictureInPicture",
   onAutoPictureInPictureKept: "autoPictureInPictureKept",
   onPictureInPictureDragged: "pictureInPictureDragged",
+  onPictureInPictureResized: "pictureInPictureResized",
   onPictureInPictureSkip: "pictureInPictureSkip",
   onMediaFault: "mediaFault",
   onActivateRequest: "activateRequest",
@@ -163,6 +166,7 @@ const unwrap: { [K in Handlers]: (e: NativeEvents[K]) => Parameters<NonNullable<
   onPictureInPicture: (e) => [e],
   onAutoPictureInPictureKept: (e) => [e.reason === "nothingPlaying" ? "nothingPlaying" : e.appSwitch ? "appSwitch" : "onScreen", typeof e.epoch === "string" ? e.epoch : ""],
   onPictureInPictureDragged: (e) => [{ offCursor: !!e.offCursor, slowMove: !!e.slowMove, epoch: e.epoch }],
+  onPictureInPictureResized: (e) => [{ inside: !!e.inside, cursorShown: !!e.cursorShown, epoch: e.epoch }],
   onPictureInPictureSkip: (e) => [{ seconds: e.seconds, epoch: e.epoch }],
   onMediaFault: (e) => [e],
   onActivateRequest: (e) => [e],

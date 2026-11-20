@@ -24,6 +24,7 @@ std::optional<Failure> ParseChromiumSession(std::string_view data, const SecretB
 std::optional<Failure> ParseFirefoxSession(std::string_view json, OpenTabs* out);
 bool ChromiumSessionNeedsKey(const std::string& profile);
 std::optional<Failure> ReadChromiumTabs(const std::string& profile, const SecretBytes* key, OpenTabs* out);
+std::string FirefoxSessionFile(const std::string& profile);
 std::optional<Failure> ReadFirefoxTabs(const std::string& profile, OpenTabs* out);
 
 }

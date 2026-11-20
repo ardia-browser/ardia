@@ -29,6 +29,10 @@ import { consentToken } from "../telemetry/client";
 import type { CliCaller } from "./cliCaller";
 import { noteCliConnections } from "../automation/offscreen";
 
+export const CLI_PLUGIN = "cli";
+
+const installsItself = PLATFORM_FEATURES.ardiaCommand && !PLATFORM_FEATURES.plugins;
+
 const DOC = "ardia-cli.json";
 const DOC_VERSION = 1;
 const DOC_MIGRATIONS: Migrations = { 0: unchanged };
@@ -79,7 +83,7 @@ export const useCli = create<CliState>()(() => ({
   server: null,
   installing: null,
   step: null,
-  installedVersion: installedCliVersion(),
+  installedVersion: installsItself ? installedCliVersion() : null,
   binPath: saved.binPath ?? null,
   error: saved.error ?? null,
 }));
@@ -287,7 +291,7 @@ export function startCliControl() {
   });
   useCli.subscribe(pushActiveTab);
   usePages.subscribe(pushActiveTab);
-  if (PLATFORM_FEATURES.ardiaCommand) afterFirstWindow(() => setTimeout(installOrUpgrade, UPGRADE_DELAY_MS));
+  if (installsItself) afterFirstWindow(() => setTimeout(installOrUpgrade, UPGRADE_DELAY_MS));
 }
 
 if (__DEV__) (globalThis as { acCli?: unknown }).acCli = { store: useCli, indicator: useCliIndicator, install: installCliInBackground, installOrUpgrade };

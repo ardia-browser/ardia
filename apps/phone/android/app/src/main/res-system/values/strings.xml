@@ -9,6 +9,8 @@
 
     <string name="tile_search">Search</string>
     <string name="tile_search_description">Start a search in Ardia.</string>
+    <string name="tile_voice_search">Voice Search</string>
+    <string name="tile_incognito">Incognito Tab</string>
 
     <string name="process_text_search">Search in Ardia</string>
 

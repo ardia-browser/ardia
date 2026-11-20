@@ -1,4 +1,4 @@
-import { Platform, StyleSheet } from "react-native";
+import { StyleSheet } from "react-native";
 import { getAnimatedStyle } from "react-native-reanimated";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { Surfaces } from "../App";
@@ -39,7 +39,7 @@ const cards = (root: Root) => root.root.findAll((node) => node.props.testID === 
 const opacity = (node: ReactTestInstance) => (getAnimatedStyle(node).opacity as number | undefined) ?? 1;
 const picture = (root: Root) => cards(root).findAll((node) => node.props.source?.uri === PICTURE && typeof node.props.onLoad === "function" && typeof node.type !== "string")[0]!;
 
-const PAGE_OVER_DECK = Platform.OS === "ios";
+const PAGE_OVER_DECK = true;
 
 async function openDeck(root: Root) {
   armDeckPull(null);

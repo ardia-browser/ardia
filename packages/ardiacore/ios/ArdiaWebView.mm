@@ -156,6 +156,7 @@ void AcceptDrops(NSView *root, BOOL accept) {
   if ((self = [super initWithFrame:frameRect])) {
     _profile = @"";
     _visible = YES;
+    _selected = YES;
     _tabIndex = -1;
     self.wantsLayer = YES;
     __weak ArdiaWebView *weakSelf = self;
@@ -225,6 +226,12 @@ void AcceptDrops(NSView *root, BOOL accept) {
 - (void)setAdoptId:(NSString *)adoptId {
   _adoptId = [adoptId copy];
   if (self.window) [self ensureTab];
+}
+
+- (void)setSelected:(BOOL)selected {
+  if (_selected == selected) return;
+  _selected = selected;
+  if (selected && _visible && !_standalone) [self requestFocusRestore];
 }
 
 - (void)setNeighbour:(BOOL)neighbour {

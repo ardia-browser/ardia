@@ -1,9 +1,9 @@
 {
   "platforms": ["android", "ios"],
   "android": {
-    "modules": ["com.ardia.phone.PageViewModule", "com.ardia.phone.BlockingModule", "com.ardia.phone.DownloadsModule", "com.ardia.phone.SyncModule", "com.ardia.phone.SystemModule", "com.ardia.phone.DefaultBrowserModule", "com.ardia.phone.ScanModule", "com.ardia.phone.SpeechModule", "com.ardia.phone.FaviconModule", "com.ardia.phone.NetworkModule", "com.ardia.phone.ClipboardModule", "com.ardia.phone.LookModule", "com.ardia.phone.LegacyModule", "com.ardia.phone.KeyboardModule", "com.ardia.phone.CompletingFieldModule", "com.ardia.phone.AccessibilityModule", "com.ardia.phone.FadeModule", "com.ardia.phone.BackModule", "com.ardia.phone.SettingsUIModule", "com.ardia.phone.MotionModule", "com.ardia.phone.MenusModule"]
+    "modules": ["com.ardia.phone.PageViewModule", "com.ardia.phone.BlockingModule", "com.ardia.phone.DownloadsModule", "com.ardia.phone.SyncModule", "com.ardia.phone.SystemModule", "com.ardia.phone.DefaultBrowserModule", "com.ardia.phone.ScanModule", "com.ardia.phone.SpeechModule", "com.ardia.phone.FaviconModule", "com.ardia.phone.NetworkModule", "com.ardia.phone.ClipboardModule", "com.ardia.phone.LookModule", "com.ardia.phone.LegacyModule", "com.ardia.phone.KeyboardModule", "com.ardia.phone.CompletingFieldModule", "com.ardia.phone.AccessibilityModule", "com.ardia.phone.FadeModule", "com.ardia.phone.BackModule", "com.ardia.phone.SettingsUIModule", "com.ardia.phone.MotionModule", "com.ardia.phone.BrowseForMeModule"]
   },
   "ios": {
-    "modules": ["PageViewModule", "BlockingModule", "DownloadsModule", "SystemModule", "DefaultBrowserModule", "LegacyModule", "SyncModule", "ScanModule", "LookModule", "SpeechModule", "CompletingFieldModule", "PhoneNetworkModule", "FadeModule", "PasteButtonModule", "MenusModule", "MotionModule", "SettingsUIModule", "ScreenLayoutModule", "SearchStageModule"]
+    "modules": ["PageViewModule", "BlockingModule", "DownloadsModule", "SystemModule", "DefaultBrowserModule", "LegacyModule", "SyncModule", "ScanModule", "LookModule", "SpeechModule", "CompletingFieldModule", "PhoneNetworkModule", "FadeModule", "PasteButtonModule", "PhoneClipboardModule", "MenusModule", "MotionModule", "SettingsUIModule", "ScreenLayoutModule", "SearchStageModule", "BrowseForMeModule"]
   }
 }

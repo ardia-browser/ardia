@@ -8,6 +8,7 @@ import type {
   PageRequestAnswer,
   PageSetup,
   PageSnapshot,
+  PageSummaryProvider,
   PageScrollPosition,
   PageState,
   PageToneInsets,
@@ -70,6 +71,10 @@ type PagesNative = {
   download(pageId: string, url: string): Promise<void>;
   readableContent(pageId: string): Promise<ReadableContent | null>;
   print?(pageId: string): Promise<boolean>;
+  summarizePage?(pageId: string): Promise<boolean>;
+  dismissPageSummaries?(): Promise<void>;
+  pageSummaryProvider?(): Promise<string>;
+  setPageSummaryProvider?(provider: PageSummaryProvider): Promise<string>;
   translation?(): Promise<PageTranslationState>;
   translationUrl?(pageUrl: string): Promise<string | null>;
   confirmTranslation?(): Promise<void>;
@@ -159,6 +164,12 @@ export const pages = {
     native().revokeSitePermission?.(origin, permission ?? null) ?? Promise.resolve(false),
   print: (pageId: string): Promise<boolean> => native().print?.(pageId) ?? Promise.resolve(false),
   canPrint: (): boolean => typeof native().print === "function",
+  summarize: (pageId: string): Promise<boolean> => native().summarizePage?.(pageId) ?? Promise.resolve(false),
+  canSummarize: (): boolean => typeof native().summarizePage === "function",
+  dismissSummaries: (): Promise<void> => native().dismissPageSummaries?.() ?? Promise.resolve(),
+  choosesSummaryProvider: (): boolean => typeof native().setPageSummaryProvider === "function",
+  summaryProvider: async (): Promise<PageSummaryProvider> => ((await native().pageSummaryProvider?.()) === "chatgpt" ? "chatgpt" : "on_device"),
+  setSummaryProvider: async (provider: PageSummaryProvider): Promise<PageSummaryProvider> => ((await native().setPageSummaryProvider?.(provider)) === "chatgpt" ? "chatgpt" : "on_device"),
   translation: (): Promise<PageTranslationState | null> => native().translation?.() ?? Promise.resolve(null),
   translationUrl: (pageUrl: string): Promise<string | null> => native().translationUrl?.(pageUrl) ?? Promise.resolve(null),
   confirmTranslation: (): Promise<void> => native().confirmTranslation?.() ?? Promise.resolve(),

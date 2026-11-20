@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { renderSurface, unmount, withTabs } from "../../test/render/harness";
 import { idOf, mockNative, resetNativeMenus, titles, type NativeItem } from "./nativeMenusMock";
@@ -5,7 +6,7 @@ import { idOf, mockNative, resetNativeMenus, titles, type NativeItem } from "./n
 jest.mock("@ardia/phone-native", () => require("./nativeMenusMock").nativeMenusModule(jest.requireActual("@ardia/phone-native")));
 
 const { StartScreen } = require("../components/search/StartScreen") as typeof import("../components/search/StartScreen");
-const { DesignProvider } = require("../components/ui") as typeof import("../components/ui");
+const { DesignProvider, FloatingMenu } = require("../components/ui") as typeof import("../components/ui");
 const { haptics } = require("../state/app/haptics") as typeof import("../state/app/haptics");
 const browse = require("../state/browse/store") as typeof import("../state/browse/store");
 const tabMenus = require("../state/browse/tabMenus") as typeof import("../state/browse/tabMenus");
@@ -74,7 +75,10 @@ const menuAround = (root: Root, label: string) => contextMenus(root).find((menu)
 const items = (menu: ReactTestInstance): NativeItem[] => menu.props.items;
 const choose = (menu: ReactTestInstance, title: string) => act(() => menu.props.onSelect(idOf(menu.props.items, title)));
 
-test("the start page's plus keeps its tap, and its long press is the system menu of main's PlusButton, a regular tab first while private", () => {
+
+const nativeTest = Platform.OS === "ios" ? test : test.skip;
+
+nativeTest("the start page's plus keeps its tap, and its long press is the system menu of main's PlusButton, a regular tab first while private", () => {
   jest.spyOn(tabHooks, "useCanReopen").mockReturnValue(true);
   const opened = jest.spyOn(browse, "newTab").mockImplementation(() => undefined);
   const regular = jest.spyOn(browse, "newRegularTab").mockImplementation(() => undefined);
@@ -105,7 +109,18 @@ test("the space's name opens no menu of the spaces, with one space or several", 
   unmount(root);
 });
 
-test("a folder tile's tap opens a menu of its tabs, a link tile's long press offers Copy Link and Share, and a tile that isn't a web link has none", () => {
+test("a space's name stands alone when it has no icon of its own, with no initial in a circle beside it, and its icon shows when it has one", () => {
+  withSpaces([profile("home", "Home")]);
+  const plain = start();
+  expect(plain.root.findAll((node) => node.props.testID === "startSpaceGlyph")).toHaveLength(0);
+  unmount(plain);
+  withSpaces([profile("garden", "Garden", [], "🌱")]);
+  const marked = start();
+  expect(marked.root.findAll((node) => node.props.testID === "startSpaceGlyph" && typeof node.type === "string")).toHaveLength(1);
+  unmount(marked);
+});
+
+nativeTest("a folder tile's tap opens a menu of its tabs, a link tile's long press offers Copy Link and Share, and a tile that isn't a web link has none", () => {
   withSpaces([profile("work", "Work", [tile(0), tile(1, [{ key: "f0", title: "Inside", url: "https://inside.example/", icon: null }]), tile(2, null, "file:///notes.txt")])]);
   const open = jest.spyOn(syncActions, "openRemote").mockImplementation(() => undefined);
   const copied = jest.spyOn(tabMenus, "copyLink").mockImplementation(() => undefined);
@@ -125,5 +140,34 @@ test("a folder tile's tap opens a menu of its tabs, a link tile's long press off
   expect(open).toHaveBeenCalledWith("https://inside.example/", "Inside", "work", "f0");
   expect(menuAround(root, "Pin 2")).toBeUndefined();
   expect(mockNative.sheets).toHaveLength(0);
+  unmount(root);
+});
+
+const drawnTest = Platform.OS === "android" ? test : test.skip;
+
+drawnTest("on Android a pinned link tile's long press opens Copy Link and Share drawn at the finger, dimmed, and a folder tile's tap opens its tabs beside it", () => {
+  withSpaces([profile("work", "Work", [tile(0), tile(1, [{ key: "f0", title: "Inside", url: "https://inside.example/", icon: null }])])]);
+  const copied = jest.spyOn(tabMenus, "copyLink").mockImplementation(() => undefined);
+  const root = start();
+  expect(contextMenus(root)).toHaveLength(0);
+  const floating = () => root.root.findAll((node) => node.type === FloatingMenu);
+  const link = root.root.findAll((node) => node.props.accessibilityLabel === "Pin 0" && typeof node.props.onLongPress === "function")[0]!;
+  act(() => link.props.onLongPress({ nativeEvent: { pageX: 70, pageY: 420 } }));
+  const held = floating()[0]!;
+  expect(held.props.at).toEqual({ x: 70, y: 420 });
+  expect(held.props.dimmed).toBe(true);
+  const heldItems = held.props.items as { label: string; onPress: () => void }[];
+  expect(heldItems.map((item) => item.label)).toEqual(["Copy Link", "Share"]);
+  const copyRow = root.root.findAll((node) => node.props.accessibilityRole === "menuitem" && node.props.accessibilityLabel === "Copy Link" && typeof node.props.onPress === "function")[0]!;
+  act(() => copyRow.props.onPress());
+  expect(copied).toHaveBeenCalledTimes(1);
+  expect(copied).toHaveBeenCalledWith("https://pin0.example/");
+  expect(floating()).toHaveLength(0);
+  const folder = root.root.findAll((node) => node.props.accessibilityLabel === "Pin 1" && typeof node.props.onPress === "function")[0]!;
+  act(() => folder.props.onPress());
+  const tapped = floating()[0]!;
+  expect(tapped.props.at).toBeNull();
+  expect(tapped.props.dimmed).toBe(false);
+  expect((tapped.props.items as { label: string }[]).map((item) => item.label)).toEqual(["Inside"]);
   unmount(root);
 });

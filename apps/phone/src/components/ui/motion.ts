@@ -60,6 +60,23 @@ export const tabsMotion = {
   deckStandby: 600,
 } as const;
 
+export const menuMotion = {
+  open: spring(0.3, 0.76),
+  fromScale: 0.18,
+  contentFade: 67,
+  glassFade: 33,
+  close: 200,
+  heldOpen: 280,
+  heldClose: 270,
+  sheetOut: 270,
+} as const;
+
+export const materialMenuMotion = { openMs: 250, fromScale: 0.8, closeMs: 150, dialogInMs: 250, dialogOutMs: 150 } as const;
+
+export const materialEnter = WorkletEasing.bezier(0.05, 0.7, 0.1, 1);
+
+export const materialExit = WorkletEasing.bezier(0.3, 0, 0.8, 0.15);
+
 export const trayMotion = {
   settle: iPhoneOr(spring(0.26, 1), spring(0.34, 0.86)),
   dismiss: iPhoneOr(spring(0.14, 1), spring(0.32, 1)),

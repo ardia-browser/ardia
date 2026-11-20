@@ -17,7 +17,10 @@
 #include "ardia/linux/ac_linux_import_keyring.h"
 #include "ardia/linux/ac_linux_import_readers.h"
 #include "ardia/linux/ac_linux_import_secrets.h"
+#include "ardia/linux/ac_linux_import_zen.h"
+#include "base/json/json_reader.h"
 #include "base/values.h"
+#include "third_party/boringssl/src/include/openssl/evp.h"
 
 using namespace ardia::linux_import;
 
@@ -28,6 +31,41 @@ std::string FixtureSecret(std::string_view prefix) {
   std::string secret(prefix);
   for (int i = 0; i < 24; ++i) secret.push_back("0123456789abcdefghijklmnopqrstuvwxyz"[engine() % 36]);
   return secret;
+}
+
+std::string Base64Url(std::string_view data) {
+  std::string text = Base64Encode(data);
+  for (char& c : text) {
+    if (c == '+') c = '-';
+    if (c == '/') c = '_';
+  }
+  while (!text.empty() && text.back() == '=') text.pop_back();
+  return text;
+}
+
+std::string FromHex(std::string_view hex) {
+  std::string out;
+  for (size_t i = 0; i + 1 < hex.size(); i += 2) out.push_back(static_cast<char>(std::stoi(std::string(hex.substr(i, 2)), nullptr, 16)));
+  return out;
+}
+
+std::string FirefoxJwe(std::string_view key, std::string_view plain) {
+  const std::string header = Base64Url("{\"alg\":\"dir\",\"enc\":\"A256GCM\"}");
+  const std::string iv(12, '\x07');
+  std::string cipher(plain.size(), '\0');
+  std::string tag(16, '\0');
+  int written = 0;
+  int last = 0;
+  EVP_CIPHER_CTX* context = EVP_CIPHER_CTX_new();
+  const auto bytes = [](std::string_view text) { return reinterpret_cast<const unsigned char*>(text.data()); };
+  const bool ok = EVP_EncryptInit_ex(context, EVP_aes_256_gcm(), nullptr, bytes(key), bytes(iv)) == 1 &&
+                  EVP_EncryptUpdate(context, nullptr, &written, bytes(header), static_cast<int>(header.size())) == 1 &&
+                  EVP_EncryptUpdate(context, reinterpret_cast<unsigned char*>(cipher.data()), &written, bytes(plain),
+                                    static_cast<int>(plain.size())) == 1 &&
+                  EVP_EncryptFinal_ex(context, reinterpret_cast<unsigned char*>(cipher.data()) + written, &last) == 1 &&
+                  EVP_CIPHER_CTX_ctrl(context, EVP_CTRL_GCM_GET_TAG, 16, tag.data()) == 1;
+  EVP_CIPHER_CTX_free(context);
+  return ok ? header + ".." + Base64Url(iv) + "." + Base64Url(cipher) + "." + Base64Url(tag) : std::string();
 }
 
 std::string Slurp(const char* path) {
@@ -274,6 +312,10 @@ int main(int argc, char** argv) {
     Units();
     return 0;
   }
+  if (command == "jwe" && argc > 3) {
+    std::printf("%s\n", FirefoxJwe(FromHex(argv[2]), argv[3]).c_str());
+    return 0;
+  }
   if (command == "key") {
     for (unsigned char byte : kChromiumBasicKey) std::printf("%02x", byte);
     std::printf("\n");
@@ -317,6 +359,19 @@ int main(int argc, char** argv) {
     std::cout << base::ToJson(out) << "\n";
     return 0;
   }
+  if (command == "space-ids") {
+    std::optional<base::Value> given = base::JSONReader::Read(Slurp(argv[2]));
+    std::optional<std::vector<std::string>> ids;
+    base::DictValue out;
+    out.Set("valid", given && RequestedSpaceIds(&*given, &ids));
+    if (ids) {
+      base::ListValue list;
+      for (const std::string& id : *ids) list.Append(id);
+      out.Set("ids", std::move(list));
+    }
+    std::cout << base::ToJson(out) << "\n";
+    return 0;
+  }
   if (command == "sweep") {
     std::printf("%d\n", RemoveStaleScratch(argv[2], std::atoll(argv[3]), std::atoll(argv[4])));
     return 0;
@@ -336,6 +391,7 @@ int main(int argc, char** argv) {
     if (argc > 13 && std::string(argv[13]) != "-") options.firefox_primary_password = SecretBytes(argv[13]);
     options.now_ms = argc > 14 ? std::atof(argv[14]) : 1700000000000.0;
     if (argc > 15 && std::string(argv[15]) != "-") options.firefox_card_key = SecretBytes(Unhex(argv[15]));
+    if (argc > 16 && std::string(argv[16]) != "-") options.space_ids = Split(argv[16]);
     ImportOutcome outcome = ReadBrowserProfile(environment, argv[6], argv[7], Split(argv[8]), options, recorder);
     base::DictValue out;
     out.Set("cancelled", outcome.cancelled);

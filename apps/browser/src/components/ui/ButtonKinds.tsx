@@ -177,7 +177,16 @@ export function PushButtonView({ title, onPress, kind = "default", disabled, ico
   const textColor = primary ? theme.onAccent : kind === "destructive" ? theme.destructive : plain ? theme.formAccent : theme.textPrimary;
   return (
     <View {...hoverProps} style={[{ opacity: disabled ? opacity.disabled : 1 }, style]}>
-      <Pressable disabled={disabled} onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut}>
+      <Pressable
+        disabled={disabled}
+        onPress={onPress}
+        onAccessibilityTap={disabled ? undefined : onPress}
+        accessibilityRole="button"
+        accessibilityLabel={title}
+        accessibilityState={{ disabled: !!disabled }}
+        onPressIn={pressMotion.onPressIn}
+        onPressOut={pressMotion.onPressOut}
+      >
         {({ pressed }) => (
           <Animated.View
             style={[{

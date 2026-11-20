@@ -15,11 +15,13 @@ import { ExpoSyncPage } from "./ExpoSyncPage";
 import { ExpoSyncConnectPage } from "./ExpoSyncConnectPage";
 import { ExpoPhrasePage } from "./ExpoPhrasePage";
 import { ExpoSearchEnginePage } from "./ExpoSearchEnginePage";
+import { ExpoBrowseForMePage } from "./ExpoBrowseForMePage";
 import { ExpoFilterListPage, ExpoFilterListsPage, ExpoMyFiltersPage, ExpoTrustedSitesPage } from "./ExpoBlockingPages";
 import { ExpoClearDataPage } from "./ExpoClearDataPage";
 import { ExpoAboutPage, ExpoLicensesPage } from "./ExpoAboutPages";
 import { ExpoDefaultBrowserPage, ExpoWhatsSentPage } from "./ExpoInfoPages";
 import { ExpoSettingsRoot } from "./ExpoSettingsRoot";
+import { ExpoSettingsDone } from "./ExpoSettingsDone";
 import { SettingsHostedContext } from "./SettingsKit";
 import { SettingsPageFor } from "./SettingsView";
 
@@ -30,6 +32,7 @@ const CONVERTED: Partial<Record<SettingsRoute["page"], (props: { route: Settings
   syncConnect: ExpoSyncConnectPage,
   syncWords: ExpoPhrasePage,
   searchEngine: ExpoSearchEnginePage,
+  browseForMe: ExpoBrowseForMePage,
   filterLists: ExpoFilterListsPage,
   filterList: ExpoFilterListPage,
   trustedSites: ExpoTrustedSitesPage,
@@ -45,6 +48,8 @@ const TITLES: Record<SettingsRoute["page"], string> = {
   root: "Settings",
   appearance: "Appearance",
   searchEngine: "Search Engine",
+  browseForMe: "Browse for Me",
+  pageSummary: "Pinch to Summarize",
   siteSettings: "Site Settings",
   filterLists: "Filter Lists",
   filterList: "Filter List",
@@ -103,13 +108,23 @@ function SettingsNavigation() {
   const path = settingsPath(open ? stack : kept.current);
   return (
     <NavigationStack path={path} onPathChange={followSettingsPath} modifiers={modifierList(profileLook({ ...nativeLookColors(look), usesGlass: glass }))}>
-      <ExpoSettingsRoot />
+      <StackRoot route={(open ? stack : kept.current)[0]} />
       {path.map((key) => (
         <NavigationDestination key={key} value={key}>
           <Destination routeKey={key} />
         </NavigationDestination>
       ))}
     </NavigationStack>
+  );
+}
+
+function StackRoot({ route }: { route: SettingsRoute | undefined }) {
+  const Converted = route && route.page !== "root" ? CONVERTED[route.page] : undefined;
+  if (!route || !Converted) return <ExpoSettingsRoot />;
+  return (
+    <ExpoSettingsDone>
+      <Converted route={route} />
+    </ExpoSettingsDone>
   );
 }
 

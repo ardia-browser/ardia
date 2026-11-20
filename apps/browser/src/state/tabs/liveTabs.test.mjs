@@ -18,7 +18,11 @@ class FakeChrome {
   snapshot() {
     return Promise.resolve({ rev: this.rev, cmd: null, strips: [...this.strips.keys()].map((id) => this.state(id)) });
   }
+  refusing = new Set();
+  refuseOnce = 0;
   command(command, id) {
+    if (this.refusing.has(command.strip)) throw new Error("The strip is not owned by this window");
+    if (this.refuseOnce > 0 && this.refuseOnce--) return new Promise((_, reject) => setTimeout(() => reject(new Error("The strip is not owned by this window")), 20));
     this.sent++;
     this.commands.push({ id, command });
   }
@@ -370,6 +374,51 @@ test("a command on its way wins over Chrome's earlier change; stale transactions
   const before = S().windows[win.w];
   chrome.listener({ rev: chrome.rev - 1, cmd: null, strips: [{ ...chrome.state(win.strip), tabs: [] }] });
   assert.equal(S().windows[win.w], before);
+});
+
+test("a command Chrome refuses is counted while sharing is on, and doesn't hold back the next one for that strip", async () => {
+  const { takeTabStripCounts } = await import("../telemetry/tabStripCounts.ts");
+  const { setSharing } = await import("../telemetry/client.ts");
+  const fetched = globalThis.fetch;
+  globalThis.fetch = async () => ({ status: 200 });
+  takeTabStripCounts();
+  const win = windowWith("a", "b", "c", "d");
+  await settle(win);
+  const [, b, c, d] = S().windows[win.w].tabIds;
+  chrome.refusing.add(win.strip);
+  S().activate(c);
+  await settle(win);
+  assert.equal(chromeShown(win.strip), "a", "the refused switch never reached Chrome");
+  assert.equal(takeTabStripCounts().tab_strip_commands_refused, 0, "nothing is counted with sharing off");
+  setSharing(true, "settings");
+  try {
+    S().activate(d);
+    await settle(win);
+    assert.equal(takeTabStripCounts().tab_strip_commands_refused, 1);
+  } finally {
+    setSharing(false, "settings");
+    globalThis.fetch = fetched;
+  }
+  chrome.refusing.delete(win.strip);
+  S().activate(b);
+  await settle(win);
+  assert.equal(chromeShown(win.strip), "b", "the next switch reaches Chrome");
+  assert.equal(shown(win.w), "b");
+});
+
+test("a switch made while a refused command was on its way goes out once the refusal comes back", async () => {
+  const win = windowWith("a", "b", "c");
+  await settle(win);
+  const [, b, c] = S().windows[win.w].tabIds;
+  chrome.refuseOnce = 1;
+  S().activate(b);
+  await tick();
+  S().activate(c);
+  await settle(win);
+  await new Promise((r) => setTimeout(r, 40));
+  await settle(win);
+  assert.equal(chromeShown(win.strip), "c");
+  assert.equal(shown(win.w), "c");
 });
 
 test("an extension's tab groups reach the sidebar, and the sidebar's groups reach Chrome", async () => {

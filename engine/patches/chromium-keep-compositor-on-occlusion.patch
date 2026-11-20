@@ -83,7 +83,7 @@ compositor is held and every held one is released (a `base::MemoryConsumer`, whi
 +
 +constexpr base::MemoryConsumerTraits kHeldCompositorTraits(
 +    base::MemoryConsumerTraits::EstimatedMemoryUsage::kMedium,
-+    base::MemoryConsumerTraits::ReleaseMemoryCost::kFreesPagesWithoutTraversal,
++    base::MemoryConsumerTraits::ReleaseMemoryDataAccess::kNone,
 +    base::MemoryConsumerTraits::InformationRetention::kLossless,
 +    base::MemoryConsumerTraits::ExecutionType::kSynchronous,
 +    base::MemoryConsumerTraits::InProcess::kNo,

@@ -120,6 +120,18 @@ test("Picture in Picture drags and click skips from an earlier consent period ar
   assert.deepEqual(skips.map((r) => r.sent), [false]);
 });
 
+test("Picture in Picture resizes count the ones begun inside the window without the resize cursor, and an earlier consent period's stay local", async () => {
+  pip.takePictureInPictureCounts();
+  const stale = staleEpoch();
+  pip.notePictureInPictureResized({ inside: true, cursorShown: false, epoch: stale });
+  pip.notePictureInPictureResized({ inside: true, cursorShown: true, epoch: client.consentEpoch() });
+  pip.notePictureInPictureResized({ inside: false, cursorShown: false, epoch: client.consentEpoch() });
+  pip.notePictureInPictureResized({ inside: true, cursorShown: false, epoch: client.consentEpoch() });
+  assert.deepEqual(pip.takePictureInPictureCounts().resizes, { started: 3, withoutCursor: 1 });
+  const stalePrints = await local("usage_counts", (p) => p.pip_resizes === 1 && p.pip_resizes_without_cursor === 1);
+  assert.deepEqual(stalePrints.map((r) => r.sent), [false]);
+});
+
 test("popup protected media reported in an earlier consent period, or with no epoch, isn't counted for this one and stays in the local copy", async () => {
   popup.takePopupProtectedMediaCounts();
   const stale = staleEpoch();

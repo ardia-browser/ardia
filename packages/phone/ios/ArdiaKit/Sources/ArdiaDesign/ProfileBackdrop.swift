@@ -111,13 +111,6 @@ public struct LookFrost: View {
   }
 }
 
-public extension View {
-  func lookBackdrop() -> some View {
-    scrollContentBackground(.hidden)
-      .background { ProfileBackdrop().ignoresSafeArea() }
-  }
-}
-
 public struct FilmGrain: View {
   public var opacity: Double
 

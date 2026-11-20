@@ -486,10 +486,10 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
     first child at the padding box (an absolute child's offsets already start inside the border), with each corner's
     radius less the borders that meet there and the lowest `zIndex`, so later children land above it. Its background
     has to come through `style`: one set with `setNativeProps` or an animated `backgroundColor` reaches the outer view
-    and brings the fault back. Corners assume left-to-right. It's registered as `ArdiaBackedView`; nothing uses it yet.
-    A shared view would adopt it through the shell, like `ClipView`: a `packages/shell/src/backedView.ts` exporting
-    React Native's `View`, a `backedView.windows.ts` exporting `requireNativeViewManager("ArdiaBackedView")`, and an
-    export from `index.tsx`.
+    and brings the fault back. Corners assume left-to-right. It's registered as `ArdiaBackedView`, and the shell
+    exports it like `ClipView`: `packages/shell/src/backedView.ts` is React Native's `View` on the Mac, Linux and the
+    web, and `backedView.windows.ts` is `requireNativeViewManager("ArdiaBackedView")`. Onboarding's `ChoiceCard` renders
+    through it, so a card's checkbox, mounted once the card is selected, draws above the card's fill.
   - **Check:** `scripts/windows/fade-check.ps1`, in the launch check, launches with `ARDIA_TEST fadeLab` and fails if a
     child mounted into a `BackedView` with a background and `zIndex` isn't drawn within 100 ms and still drawn at the
     round's end, judging only samples where our window is the one at the lab (arm64 runners are covered by Windows'
@@ -1204,7 +1204,10 @@ artwork) is a `tab.call` too, answered by the browser's own cookieless fetch of 
 
 Answered in TypeScript on Windows since this list was made: `engine.info` (from `host.info`), `favicons.fetch` (the
 icon Chromium stored for that address, from `ac_favicons_get`, asked again after 0.4 and 1.5 s while Chromium writes
-it), and `profiles.deleteData`.
+it), and `profiles.deleteData`. The page call `downloadFavicon` (a page's favicon event) asks the same `favicons.fetch`
+with the page's profile (`engine/pageFavicon.ts`), so a tab shows its site's icon as soon as Chromium stores it rather
+than a letter tile until the next lookup by page address. `usage_counts` carries `page_favicon_downloads` and
+`page_favicon_downloads_empty` (every platform): on Windows the empty share should fall from all of them to a few.
 
 Answered on Windows since the engine took Windows paths (`windows-engine-20261112-2`), in `domains/exports.ts`,
 `unpacked.ts` and `systemState.ts`, with the dialogs, file reads and power reading passed in as the domain engine's

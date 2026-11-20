@@ -10,7 +10,6 @@ public enum TabsPalette {
   public static let archiveTile = Color(hex: 0xB059EE)
   public static let receivedBadge = Palette.primaryAction
   public static let pageDot = Color.primary.opacity(0.32)
-  public static let spaceBadge = Color.adaptive(light: .white, dark: Color(hex: 0x1C1C1E))
   public static let spaceBadgeInk = Color.adaptive(light: .black, dark: .white)
   public static let poof = Color(hex: 0xF7F5FF)
   public static let placeholderTints: [UInt32] = [0xE8E6FB, 0xFBE7EE, 0xE3F0FB, 0xE6F5EA, 0xFDF0DD, 0xEFE6F8]

@@ -3,7 +3,7 @@ import { View } from "react-native";
 import { startChromeTabs } from "../../state/tabs/chromeTabs";
 import { useIsSmallWindow, useSplitOf } from "../../state/windows/card";
 import { usePeekOpenedFrom } from "../../state/peek/hooks";
-import { useActiveTabId, useSettings, useWindowFullScreen, useWindowId } from "../../state/browser/hooks";
+import { useActiveTabId, useSettings, useTab, useWindowFullScreen, useWindowId } from "../../state/browser/hooks";
 import { useBookmarksBarHeight } from "../bookmarks/barSize";
 import { useBookmarksBarMode } from "../../state/bookmarks/hooks";
 import { POPOVER_MARGIN } from "../ui";
@@ -23,7 +23,9 @@ import "../dev/devExpose";
 import { PeekOverlay } from "../peek/PeekOverlay";
 import { dismissPeek, startPeeks } from "../../state/peek/actions";
 import { usePaneLayout } from "./usePaneLayout";
-import { cardChrome } from "./paneChrome";
+import { cardChrome, developerBarShown } from "./paneChrome";
+import { DEVELOPER_BAR } from "../toolbar/tokens";
+import { useDeveloperMode } from "../../state/site/developerMode";
 import { TabPane } from "./TabPane";
 import { BesidePeekPopovers, PeekPage } from "./PageOverlays";
 import { besidePeekSpan } from "./pageAnchors";
@@ -68,6 +70,8 @@ export function ContentCard() {
     () => cardChrome({ addressInSidebar, small, minimal, split: !!split, fullscreen: !!fullscreenTab, hideWhileScrolling }),
     [addressInSidebar, small, minimal, !!split, !!fullscreenTab, hideWhileScrolling],
   );
+  const activeDeveloperMode = useDeveloperMode(useTab(activeId, (t) => t?.url ?? ""));
+  const activeDeveloperBar = developerBarShown(chrome, { developerMode: activeDeveloperMode, small, fullscreen: false }) ? DEVELOPER_BAR.height : 0;
   const geometryFor = (rect: Rect | undefined): ToolbarGeometry => {
     if (chrome.kind === "none") return NO_TOOLBAR;
     const leading = !!rect && rect.x === 0 && rect.y === 0;
@@ -175,7 +179,7 @@ export function ContentCard() {
         <WindowToolbar windowId={windowId} tabId={activeId} geometry={geometryFor(panes[activeId])} autoHide={chrome.autoHide} />
       )}
       {size.width > 0 && !split && !fullscreenTab && (
-        <FrozenPage windowId={windowId} tabId={activeId} top={(chrome.kind !== "none" && !chrome.autoHide ? toolbarRow.height : 0) + (barMode === "always" && !small && !hideWhileScrolling ? barHeight : 0)} />
+        <FrozenPage windowId={windowId} tabId={activeId} top={(chrome.kind !== "none" && !chrome.autoHide ? toolbarRow.height : activeDeveloperBar) + (barMode === "always" && !small && !hideWhileScrolling ? barHeight : 0)} />
       )}
       {split && !fullscreenTab && <SplitDividers split={split} dividers={dividers} width={size.width} height={size.height} />}
       {split && !fullscreenTab && activeRect && <SplitFocusRing rect={activeRect} origin={origin} windowShape={windowFullScreen ? null : windowShape} />}

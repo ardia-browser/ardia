@@ -9,6 +9,7 @@ let mostTitledTabs = 0;
 let scrolls = 0;
 let revealsHeldForScroll = 0;
 let scrollStalls = 0;
+let commandsRefused = 0;
 let lastScrollAt = -Infinity;
 
 const NEW_SCROLL_GAP_MS = 250;
@@ -46,6 +47,10 @@ export function noteTabStripTitledTabs(tabs: number) {
   mostTitledTabs = Math.max(mostTitledTabs, tabs);
 }
 
+export function noteTabStripCommandRefused() {
+  commandsRefused++;
+}
+
 export function noteTabStripRevealHeldForScroll() {
   revealsHeldForScroll++;
 }
@@ -70,6 +75,7 @@ export function takeTabStripCounts() {
     tab_strip_scrolls: scrolls,
     tab_strip_scroll_stalls: scrollStalls,
     tab_strip_reveals_held_for_scroll: revealsHeldForScroll,
+    tab_strip_commands_refused: commandsRefused,
   };
   groupToggles = 0;
   textOnlyRows = 0;
@@ -82,5 +88,6 @@ export function takeTabStripCounts() {
   scrolls = 0;
   scrollStalls = 0;
   revealsHeldForScroll = 0;
+  commandsRefused = 0;
   return taken;
 }

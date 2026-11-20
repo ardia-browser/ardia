@@ -3,7 +3,7 @@ import { advanceCrashCursor, capture, consentNow, consentToken, crashCursor, loa
 import { contextAt, contextProperties, recentWebuiPages, sessionStart } from "./diagnostics";
 import type { SavedContext } from "./savedContext";
 import { logConsent, recordLog } from "./logs";
-import { errorCode, errorMessage, errorType, jsFatalKind, nativeCrashExceptions, nativeCrashTermination, parseStack, type ExceptionFrame } from "./sanitize";
+import { errorCode, errorFrames, errorMessage, errorType, jsFatalKind, nativeCrashExceptions, nativeCrashTermination, type ExceptionFrame } from "./sanitize";
 
 type Mechanism = "onerror" | "onunhandledrejection" | "react" | "react_recovered" | "console" | "native_crash" | "helper_crash";
 
@@ -26,24 +26,53 @@ function exceptionProperties(entries: ExceptionEntry[], mechanism: Mechanism, ha
   };
 }
 
+const MAX_CAUSES = 3;
+
+function entryOf(error: unknown): ExceptionEntry {
+  const type = errorType(error);
+  return { type, value: errorMessage(error) || type, frames: errorFrames(error) };
+}
+
+function causeOf(error: unknown): object | null {
+  try {
+    const cause = error && typeof error === "object" ? (error as { cause?: unknown }).cause : undefined;
+    return cause instanceof Error ? cause : null;
+  } catch {
+    return null;
+  }
+}
+
+function causeChain(error: unknown): ExceptionEntry[] {
+  const entries = [entryOf(error)];
+  const visited = new Set<unknown>([error]);
+  for (let cause = causeOf(error); cause && !visited.has(cause) && entries.length <= MAX_CAUSES; cause = causeOf(cause)) {
+    visited.add(cause);
+    try {
+      entries.push(entryOf(cause));
+    } catch {
+      break;
+    }
+  }
+  return entries;
+}
+
 export function captureException(error: unknown, mechanism: Mechanism, { fatal = false, handled = false, consent }: { fatal?: boolean; handled?: boolean; consent?: ConsentToken | null } = {}) {
   try {
     if (error && typeof error === "object") {
       if (reported.has(error)) return;
       reported.add(error);
     }
-    const type = errorType(error);
-    const value = errorMessage(error) || type;
-    const frames = parseStack(error && typeof error === "object" ? (error as { stack?: unknown }).stack : undefined);
+    const entries = causeChain(error);
+    const { type, value, frames } = entries[0]!;
     const code = errorCode(error);
-    const key = `${type}|${value}|${code ?? ""}|${frames.at(-1)?.function ?? ""}`;
+    const key = JSON.stringify([type, value, code ?? "", frames.at(-1)?.function ?? "", entries.slice(1).map((e) => [e.type, e.value])]);
     if (seen.has(key) || seen.size >= MAX_PER_SESSION) return;
     seen.add(key);
     capture(
       "$exception",
       { $exception_level: fatal ? "fatal" : "error", source: mechanism, error_code: code },
       consent === undefined ? consentNow() : consent,
-      { urgent: true, persist: true, raw: exceptionProperties([{ type, value, frames }], mechanism, handled) },
+      { urgent: true, persist: true, raw: exceptionProperties(entries, mechanism, handled) },
     );
   } catch {}
 }

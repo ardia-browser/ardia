@@ -70,7 +70,7 @@ const PRESET_FIELD: Field<Preset> = { key: "p", values: ["arc", "dia", "chrome",
 const COLOR_FIELD: Field<ProfileColor> = { key: "x", values: ["plum", "blue", "purple", "pink", "red", "orange", "yellow", "green", "neutral"] };
 const PINS_KEY = "f";
 
-export const SETUP_PIN_SITES = ["gmail", "calendar", "slack", "notion", "figma", "github", "linear", "docs", "drive", "outlook", "youtube", "spotify"] as const;
+export const SETUP_PIN_SITES = ["gmail", "calendar", "slack", "notion", "figma", "github", "linear", "docs", "drive", "outlook", "youtube", "spotify", "gitcafe"] as const;
 
 const ENTRY = /([a-z])(\d{1,9})/y;
 const MAX_ENUM_DIGITS = 2;

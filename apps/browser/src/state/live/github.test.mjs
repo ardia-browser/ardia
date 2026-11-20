@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { detailNodes, listingOf, mapGithub, sectioned } from "./github.ts";
+import { blockedError, blockedLink, blockedNodes, detailNodes, listingOf, mapGithub, sectioned } from "./github.ts";
 import { LiveError } from "./types.ts";
 
 const fixture = JSON.parse(await import("node:fs").then((fs) => fs.readFileSync(new URL("./fixtures/github.json", import.meta.url), "utf8")));
@@ -60,4 +60,22 @@ test("sections follow the search: authored first, then review requests, each pul
   assert.equal(new Set(rows.map((r) => r.id)).size, rows.length);
   assert.deepEqual(rows.map((r) => [`github:${r.id}`, r.section]), mapGithub(fixture, filters).map((it) => [it.id, it.section]));
   assert.deepEqual(sectioned(listing, { authored: false, reviewRequests: true }).map((r) => r.section).filter((s) => s === "authored"), []);
+});
+
+test("search nodes GitHub withheld (null) are skipped, not read", () => {
+  const json = structuredClone(fixture);
+  json.data.authored.nodes.unshift(null);
+  json.data.direct.nodes.push(null);
+  assert.deepEqual(listingOf(json).authored, listingOf(fixture).authored);
+});
+
+test("an organization's policy reads as Single Sign-On or a blocked token, with GitHub's fix link", () => {
+  const at = (message) => ({ type: "FORBIDDEN", message, path: ["search", "nodes", 0] });
+  const lifetime = at("The 'acme' organization forbids access via a fine-grained personal access tokens if the token's lifetime is greater than 366 days. Please adjust your token's lifetime at the following URL: https://github.com/settings/personal-access-tokens/23148248");
+  assert.equal(blockedError(blockedNodes([lifetime])).kind, "tokenBlocked");
+  assert.equal(blockedError(blockedNodes([at("Resource protected by organization SAML enforcement.")])).kind, "sso");
+  assert.equal(blockedError(blockedNodes([{ ...lifetime, path: ["search", "nodes", 0, "commits"] }])), null);
+  assert.equal(blockedError(blockedNodes([{ type: "NOT_FOUND", message: "x", path: ["search", "nodes", 0] }])), null);
+  assert.equal(blockedLink(lifetime.message), "https://github.com/settings/personal-access-tokens/23148248");
+  assert.equal(blockedLink("no link here"), null);
 });

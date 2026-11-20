@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { Gesture } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming, type SharedValue } from "react-native-reanimated";
 import { incomingPose, outgoingPose, PAGER, resolvedOffset, snapTarget } from "../../lib/pagerPhysics";
@@ -8,7 +8,7 @@ import { haptics } from "../../state/app/haptics";
 import { usePageTone } from "../../state/browse/hooks";
 import { display } from "../../state/search/omnibox";
 import type { BrowserTab } from "../../state/tabs/tabModels";
-import { TabFace, tabsCurve, tabsInk, tabsLayout, tabsMotion, trayMotion, useTheme, useReduceMotion } from "../ui";
+import { TabFace, tabsCurve, tabsLayout, tabsMotion, trayMotion, useTheme, useReduceMotion } from "../ui";
 
 export type TabPager = {
   offset: SharedValue<number>;
@@ -138,7 +138,7 @@ const EDGE_SHADOW_TRAILING = `linear-gradient(to left, ${EDGE_SHADOW_STOPS.join(
 
 export function PagerBackdrop() {
   const theme = useTheme();
-  return <View testID="pagerBackdrop" style={[StyleSheet.absoluteFill, { backgroundColor: Platform.OS === "ios" ? theme.surface : tabsInk.pagerBlack }]} />;
+  return <View testID="pagerBackdrop" style={[StyleSheet.absoluteFill, { backgroundColor: theme.surface }]} />;
 }
 
 const cornerRadius = screenCornerRadius(tabsLayout.displayCornerRadius);

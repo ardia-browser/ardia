@@ -151,6 +151,10 @@ NSView *LingeringPaneOver(NSView *view) {
 - (void)setFrameSize:(NSSize)newSize {
   [super setFrameSize:newSize];
   [ArdiaInterfaceScale fitPageHost:self];
+  if (_life.waitingForSize && !NSIsEmptyRect(self.bounds)) {
+    _life.waitingForSize = NO;
+    if (!_tab) [self ensureTab];
+  }
   [self layoutPage];
   if (_visible) [ArdiaEarlyWindow noteLayoutChangeIn:self.window];
 }

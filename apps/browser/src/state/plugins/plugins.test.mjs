@@ -251,7 +251,7 @@ test("socket methods list, enable (through the sheet), disable and remove", asyn
   const list = pluginSocketMethod("plugins", {}).result;
   assert.equal(list[0].name, "example");
   assert.equal(list[0].active, true);
-  assert.deepEqual(list[0].contributes, ["settings", "commands", "page", "process", "hooks", "tools"]);
+  assert.deepEqual(list[0].contributes, ["settings", "commands", "page", "process", "programs", "hooks", "tools"]);
   assert.deepEqual(await pluginSocketMethod("plugins.disable", { name: "example" }), { result: { ok: true } });
   assert.deepEqual(pluginSocketMethod("plugins.enable", { name: "example" }), { result: { waiting: true } });
   assert.equal(activeManifest(P(), "example"), null, "enabling from the CLI only opens the sheet");

@@ -565,7 +565,7 @@ async function syncScopeIndexed(args                                 )          
     heldApply ||= applyHeld();
     const applied = !heldApply && (await applyAdapter(state, adapter, keys, now(), 2 * (options?.tombstoneTTL ?? DEFAULTS.tombstoneTTL), applyHeld));
     heldApply ||= applyHeld();
-    if (!applied) unapplied.push(...[...keys].filter((k) => k.startsWith(adapter.prefix)));
+    if (!applied) for (const key of keys) if (key.startsWith(adapter.prefix)) unapplied.push(key);
   }
   state.unapplied = [...unapplied, ...[...keys].filter((k) => !adapters.some((a) => k.startsWith(a.prefix)))];
   if (!heldApply && (!state.awaitRemote || Object.keys(state.seen).some((d) => d !== device))) {

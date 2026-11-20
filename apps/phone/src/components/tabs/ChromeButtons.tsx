@@ -21,9 +21,9 @@ export function plusMenuItems(incognito: boolean, canReopen: boolean): MenuItem[
     ...(incognito
       ? [
           { label: "New Tab", icon: "plus" as const, onPress: newRegularTab },
-          { label: "New Incognito Tab", icon: "eyes" as const, onPress: newTab },
+          { label: "New Incognito Tab", icon: "eyeglassesThin" as const, onPress: newTab },
         ]
-      : [{ label: "New Incognito Tab", icon: "eyes" as const, onPress: newIncognitoTab }]),
+      : [{ label: "New Incognito Tab", icon: "eyeglassesThin" as const, onPress: newIncognitoTab }]),
     ...(canReopen ? [{ label: "Reopen Closed Tab", icon: "arrowUturnBackward" as const, onPress: reopenLastClosed }] : []),
   ];
 }

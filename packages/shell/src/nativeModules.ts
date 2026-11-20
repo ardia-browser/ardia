@@ -24,6 +24,7 @@ import type { UpdaterNative } from "./updater";
 import type { UserScriptsNative } from "./userScripts";
 import type { WindowsNative } from "./windows";
 import type { DockSelectionNative, GlassEffectNative } from "./views";
+import type { PeekStageNative } from "./peekStage";
 
 export type ShellNativeModules = {
   ArdiaShell: ShellNative;
@@ -46,6 +47,7 @@ export type ShellNativeModules = {
   ArdiaInlineCompletion: InlineCompletionNative;
   ArdiaTranslate: TranslationModule;
   ArdiaMagnifyArea: MagnifyAreaNative;
+  ArdiaPeekStage: PeekStageNative;
   ArdiaFileDrop: FileDropNative;
   ArdiaCli: CliNative;
   ArdiaUserScripts: UserScriptsNative;

@@ -26,6 +26,9 @@ def side_clip(scene, side, lead, tail, public, video_id, sync="go"):
     else:
         shutil.copyfile(os.path.join(src, f"{scene}.mov"), os.path.join(dst, f"{scene}.mov"))
     events = [{k: v for k, v in e.items() if k != "mark" or v != "go"} for e in rec["events"]]
+    if "crop" in rec:
+        cx, cy = rec["crop"][0], rec["crop"][1]
+        events = [{**e, "x": round(e["x"] - cx, 1), "y": round(e["y"] - cy, 1)} if "x" in e and "y" in e else e for e in events]
     events = [e for e in events if len(e) > 1]
     overlays = []
     for e in [e for e in events if "overlay" in e]:

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { enterTarget, idleRows, ROW_LIMIT, rowTarget, setSources, suggest, withTypedQuery, type TrayRow } from "./omnibox.ts";
+import { BROWSE_FOR_ME, enterTarget, idleRows, offersBrowseForMe, ROW_LIMIT, rowTarget, setSources, suggest, withBrowseForMe, withTypedQuery, type TrayRow } from "./omnibox.ts";
 
 const context = { currentUrl: null, currentTabId: null };
 
@@ -81,4 +81,32 @@ test("a calculation reads as = value and keeps the value to copy; a Mac's tab sh
   assert.equal(mac.detail, "swift.org");
   assert.equal(mac.fromMac, "MacBook Pro");
   assert.equal(rowTarget(mac)?.origin, "sync");
+});
+
+test("a plain search of three letters or more offers Browse for Me, an address, a bang or a short word doesn't, as main's SwiftUI offersResearch", () => {
+  for (const text of ["otter facts", "how tall is everest", "abc", "  otters  "]) assert.equal(offersBrowseForMe(text), true, text);
+  for (const text of ["ot", "example.com", "https://example.com/a", "!w otters", "otters !w", "", "   "]) assert.equal(offersBrowseForMe(text), false, text);
+});
+
+test("Browse for Me sits right under the typed search, carries the query, opens no address of its own and keeps the tray to nine rows", () => {
+  setSources({ tabs: [], history: [], bookmarks: [] });
+  const rows = suggest("otter facts", ["otter facts for kids", "otter facts sea"], context, new Map(), true).rows;
+  const typed = rows.findIndex((row) => row.kind === "query" && row.title === "otter facts");
+  const browse = rows[typed + 1]!;
+  assert.equal(browse.kind, "browseForMe");
+  assert.equal(browse.title, BROWSE_FOR_ME);
+  assert.equal(browse.detail, "otter facts");
+  assert.equal(browse.kind === "browseForMe" ? browse.query : null, "otter facts");
+  assert.equal(rowTarget(browse), null);
+  assert.equal(rows.filter((row) => row.kind === "browseForMe").length, 1);
+  const page = (n: number): TrayRow => ({ key: `p:${n}`, kind: "page", title: `Otter ${n}`, detail: "example.com", url: `https://example.com/${n}`, favicon: null, tabId: null, switchesTab: false });
+  const full = withBrowseForMe(withTypedQuery(Array.from({ length: 12 }, (_, n) => page(n)), "otters"), "otters");
+  assert.equal(full.length, ROW_LIMIT);
+  assert.equal(full[2]!.kind, "browseForMe");
+});
+
+test("without the native page, as on Android, the tray never shows Browse for Me", () => {
+  setSources({ tabs: [], history: [], bookmarks: [] });
+  assert.equal(suggest("otter facts", [], context).rows.some((row) => row.kind === "browseForMe"), false);
+  assert.equal(suggest("example.com", [], context, new Map(), true).rows.some((row) => row.kind === "browseForMe"), false);
 });

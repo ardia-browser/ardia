@@ -48,7 +48,7 @@ export function ClearDataDialog({ profileId, onClose }: { profileId: string; onC
     const icons = cacheKey(profileId);
     const types: BrowsingDataType[] = [...(history ? ["history" as const] : []), ...(siteData ? ["siteData" as const, "cache" as const] : [])];
     let cleared = false;
-    if (history) skipInRunningImports(profile, since, startedAt);
+    const importAgain = history ? skipInRunningImports(profile, since, startedAt) : undefined;
     try {
       if (!isIncognitoProfile(profileId)) {
         await clearBrowsingData(profile, types, since);
@@ -60,6 +60,7 @@ export function ClearDataDialog({ profileId, onClose }: { profileId: string; onC
       }
       cleared = true;
     } catch {
+      importAgain?.();
       noteBrowsingDataCleared(false, consent);
       if (!left.current) setError(true);
     } finally {

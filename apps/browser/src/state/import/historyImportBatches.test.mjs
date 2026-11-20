@@ -285,3 +285,17 @@ test("a new profile's first history read that lands at any moment around the end
     assert.equal(historyOf(S(), dest).length, rows.length, `query released ${microtasks} microtasks after the import replies`);
   }
 });
+
+test("a Clear Browsing Data that fails stops keeping its range out of the batches still to go", async () => {
+  const consent = freshImport();
+  const release = holdEngineReplies();
+  const rows = zenSizedHistory(30_000);
+  const importing = applyResult(P, importResult(rows), "Zen", ["history"], () => {}, consent);
+  await new Promise((r) => setTimeout(r, 5));
+  const importAgain = skipInRunningImports("", undefined, Date.now());
+  importAgain();
+  release();
+  const counts = await importing;
+  assert.equal(stub.chromeHistory("").size, rows.length);
+  assert.equal(counts.history, rows.length);
+});

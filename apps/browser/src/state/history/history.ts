@@ -80,7 +80,12 @@ const runningImports = new Set<RunningImport>();
 const importsInto = (engine: string) => [...runningImports].filter((run) => run.engine === engine);
 
 export function skipInRunningImports(engine: string, since: number | undefined, until: number) {
-  for (const run of importsInto(engine)) run.cleared.push({ since: since ?? -Infinity, until });
+  const range = { since: since ?? -Infinity, until };
+  const runs = importsInto(engine);
+  for (const run of runs) run.cleared.push(range);
+  return () => {
+    for (const run of runs) run.cleared = run.cleared.filter((r) => r !== range);
+  };
 }
 
 export const createHistorySlice: StateCreator<BrowserState, [], [], HistorySlice> = (set, get) => ({

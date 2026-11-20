@@ -3,12 +3,14 @@ import { create } from "zustand";
 import { snappedToDevicePixels } from "../settings/interfaceScale";
 
 export type Anchor = { x: number; y: number; width: number; height: number };
-export type Target = { kind: "tab" | "group" | "live" | "folder"; id: string };
+export type LibraryItemKind = "media" | "download" | "visit";
+export type SidebarTarget = { kind: "tab" | "group" | "live" | "folder"; id: string };
+export type Target = SidebarTarget | { kind: LibraryItemKind; id: string };
 export type Hover = Target & { windowId: string; anchor: Anchor };
 
 type SidebarUi = {
-  renaming: (Target & { windowId: string }) | null;
-  iconPicker: (Target & { windowId: string; anchor: Anchor | null }) | null;
+  renaming: (SidebarTarget & { windowId: string }) | null;
+  iconPicker: (SidebarTarget & { windowId: string; anchor: Anchor | null }) | null;
   hover: Hover | null;
   searchTabs: string | null;
   switcher: { windowId: string; ids: string[]; index: number; visible: boolean } | null;

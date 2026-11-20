@@ -67,3 +67,17 @@ test("a stale picker's close leaves the picker opened after it alone", () => {
   closeProfileIconPickerIfShown(shown);
   assert.equal(useProfileIconPicker.getState().picker, null);
 });
+
+test("in the Library the same verbs, with Move Left and Move Right, New Profile… beside Profile Settings…, and Delete Profile… last", () => {
+  const items = render(profileMenuItems({ ...base, place: "library", moves: { left: false, right: true } }));
+  assert.deepEqual(items.slice(5), [
+    "---",
+    "Move Left [chevron.left] (off)",
+    "Move Right [chevron.right]",
+    "---",
+    "New Profile… [plus]",
+    "Profile Settings… [gearshape]",
+    "---",
+    "Delete Profile… [trash]",
+  ]);
+});

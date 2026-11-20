@@ -1,5 +1,6 @@
 import type { OutsidePressEvent } from "../../platform/windows";
 import { storeAction, useBrowser } from "../browser/store";
+import { forgetThumbnails } from "../app/thumbnails";
 import { noteDownloadsPanel } from "../telemetry/downloadsPanelCounts";
 
 export const toggleSidebar = storeAction("toggleSidebar");
@@ -10,7 +11,14 @@ export const setDownloadsOpen = storeAction("setDownloadsOpen");
 export const setFind = storeAction("setFind");
 export const returnRefusedMove = storeAction("returnRefusedMove");
 export const removeDownload = storeAction("removeDownload");
-export const clearDownloads = storeAction("clearDownloads");
+const clearListedDownloads = storeAction("clearDownloads");
+
+export function clearDownloads(windowId?: string) {
+  const before = useBrowser.getState().downloads;
+  clearListedDownloads(windowId);
+  const kept = new Set(useBrowser.getState().downloads);
+  forgetThumbnails(before.filter((d) => !kept.has(d)).map((d) => d.path));
+}
 
 let downloadsPressedAway: { windowId: string; pressedAt: number } | null = null;
 

@@ -7,21 +7,26 @@ final class FolderWatch {
     case failed(Int32)
   }
 
-  private let path: String
+  let path: String
   private let queue: DispatchQueue
   private let changed: () -> Void
   private let openFolder: (String) -> Int32
+  private let waitsForAbsentFolder: Bool
   private var source: DispatchSourceFileSystemObject?
   private var watched: (device: UInt64, inode: UInt64)?
+  private var ancestor: FolderWatch?
   private(set) var binding = Binding.absent
 
   init(path: String, queue: DispatchQueue = .main, open openFolder: @escaping (String) -> Int32 = { open($0, O_EVTONLY | O_NONBLOCK | O_DIRECTORY | O_CLOEXEC) },
-       changed: @escaping () -> Void) {
+       waitsForAbsentFolder: Bool = false, changed: @escaping () -> Void) {
     self.path = path
     self.queue = queue
     self.openFolder = openFolder
+    self.waitsForAbsentFolder = waitsForAbsentFolder
     self.changed = changed
   }
+
+  var watchedAncestor: String? { ancestor?.path }
 
   deinit { source?.cancel() }
 
@@ -31,6 +36,13 @@ final class FolderWatch {
     source?.cancel()
     source = nil
     watched = nil
+    ancestor?.stop()
+    ancestor = nil
+  }
+
+  func retry() {
+    guard binding != .watching else { return }
+    bind()
   }
 
   private func bind(tries: Int = 3) {
@@ -39,6 +51,7 @@ final class FolderWatch {
     guard descriptor >= 0 else {
       let failure = errno
       binding = failure == ENOENT || failure == ENOTDIR ? .absent : .failed(failure)
+      if binding == .absent { followAncestor() }
       return queue.async { [weak self] in self?.changed() }
     }
     var info = stat()
@@ -69,6 +82,36 @@ final class FolderWatch {
   private func handle(_ events: DispatchSource.FileSystemEvent) {
     guard events.isDisjoint(with: [.delete, .rename, .revoke]), pathIsWatchedObject else { return bind() }
     changed()
+  }
+
+  private func followAncestor() {
+    guard waitsForAbsentFolder, let nearest = Self.nearestFolder(above: path) else { return }
+    if ancestor?.path == nearest { return }
+    ancestor?.stop()
+    let watch = FolderWatch(path: nearest, queue: queue, open: openFolder) { [weak self] in self?.ancestorChanged() }
+    ancestor = watch
+    watch.start()
+  }
+
+  private func ancestorChanged() {
+    guard source == nil, ancestor != nil else { return }
+    if Self.isFolder(path) { return bind() }
+    followAncestor()
+  }
+
+  private static func isFolder(_ path: String) -> Bool {
+    var info = stat()
+    return stat(path, &info) == 0 && (info.st_mode & S_IFMT) == S_IFDIR
+  }
+
+  private static func nearestFolder(above path: String) -> String? {
+    var current = (path as NSString).standardizingPath
+    while current != "/" {
+      current = (current as NSString).deletingLastPathComponent
+      if current.isEmpty { return nil }
+      if isFolder(current) { return current }
+    }
+    return nil
   }
 
   private var pathIsWatchedObject: Bool {

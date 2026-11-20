@@ -12,7 +12,7 @@ const sourcesIn = (folder) =>
     .map((file) => read(folder + file));
 
 const ASKED_BY = ["packages/shell/src/", "packages/ardiacore/src/", "packages/shaders/src/", "packages/import/src/", "packages/sync/src/"];
-const DRAWN_AS_NOTHING_ON_WINDOWS = ["ArdiaMeadow", "ArdiaPlugins", "ArdiaPowerUp", "ArdiaReport", "ArdiaWebKit"];
+const DRAWN_AS_NOTHING_ON_WINDOWS = ["ArdiaEdgeFade", "ArdiaMeadow", "ArdiaPlugins", "ArdiaPowerUp", "ArdiaProgressiveBlur", "ArdiaReport", "ArdiaWebKit"];
 
 const asked = () => {
   const names = new Set();

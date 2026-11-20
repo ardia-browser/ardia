@@ -8,6 +8,12 @@ public class SystemModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ArdiaSystem")
 
+    OnCreate { Task { await ThumbnailCache.shared.trim() } }
+
+    OnDestroy { FolderMediaWatches.shared.stopAll() }
+
+    Events("onFolderChange")
+
     Constant("backgroundInstance") { () -> Bool in LaunchConfig.shared.background }
 
     AsyncFunction("isDefaultBrowser") { () -> Bool in
@@ -90,7 +96,29 @@ public class SystemModule: Module {
         ? NSWorkspace.shared.icon(forFile: path)
         : NSWorkspace.shared.icon(for: .init(filenameExtension: (path as NSString).pathExtension) ?? .data)
       return icon.pngDataURL(points: CGFloat(size), scale: 2)
-    }.runOnQueue(.main)
+    }.runOnQueue(DispatchQueue.global(qos: .userInitiated))
+
+    AsyncFunction("fileThumbnail") { (path: String, size: Double, ephemeral: Bool?) async -> String? in
+      await ThumbnailCache.shared.thumbnail(path: path, points: size, scale: 2, ephemeral: ephemeral ?? false)
+    }
+
+    AsyncFunction("forgetThumbnails") { (paths: [String]?) async in
+      await ThumbnailCache.shared.forget(paths: paths)
+    }
+
+    AsyncFunction("imageSize") { (path: String) -> [String: Int]? in
+      ThumbnailCache.pixelSize(path)
+    }.runOnQueue(DispatchQueue.global(qos: .utility))
+
+    AsyncFunction("listFolderMedia") { (folder: String, limit: Int) -> [String: Any] in
+      FolderMedia.list(folder, limit: limit)
+    }.runOnQueue(DispatchQueue.global(qos: .userInitiated))
+
+    Function("watchFolder") { [weak self] (token: String, folder: String) in
+      FolderMediaWatches.shared.watch(token: token, folder: folder) { self?.sendEvent("onFolderChange", ["token": $0]) }
+    }
+
+    Function("unwatchFolder") { (token: String) in FolderMediaWatches.shared.stop(token: token) }
 
     AsyncFunction("runningAppIcon") { (pid: Int, size: Double) -> String? in
       NSRunningApplication(processIdentifier: pid_t(pid))?.icon?.pngDataURL(points: CGFloat(size), scale: 2)

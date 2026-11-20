@@ -19,8 +19,10 @@ export { ActivitySpinner } from "./web/motion/ActivitySpinner";
 export {
   ContextMenuArea,
   DockSelection,
+  edgeFadeView,
   GlassEffect,
   OutsidePressArea,
+  progressiveBlurView,
   Surface,
   VisualEffect,
   WindowDragRegion,

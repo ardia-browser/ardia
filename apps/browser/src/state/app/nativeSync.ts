@@ -14,6 +14,8 @@ import { openingLightsCenter } from "../windows/layout";
 import { createWindowSync, type WindowPort } from "../windows/windowSync";
 import { closeLittleArdiaForAppLink, openExternalUrls } from "../littleArdia/actions";
 import { startUnclaimedEscape } from "../windows/unclaimedEscape";
+import { startLibraryWatch } from "../library/actions";
+import { useLibrary } from "../library/library";
 import { SMALL_LIGHTS_CENTER } from "../windows/small";
 import { runCommand } from "../commands/commands";
 import { setMenuBarShortcuts } from "../commands/commandShortcuts";
@@ -65,6 +67,7 @@ export function startNativeSync() {
   onOpenURLs((urls, pointer, source, returnTo) => openExternalUrls(urls, pointer, source, returnTo));
   onWindowRequest(({ request, profile, fromWindow }) => openFromWindowlessPage(request, profile, fromWindow));
   startUnclaimedEscape();
+  startLibraryWatch();
   startKeyboardFollows();
   void lastTabClosesWindow()
     .catch(() => true)
@@ -157,6 +160,9 @@ export function startNativeSync() {
   });
   useReader.subscribe(() => {
     menuTimer ??= setTimeout(syncMenu, 120);
+  });
+  useLibrary.subscribe((l, prev) => {
+    if (l.windows !== prev.windows) menuTimer ??= setTimeout(syncMenu, 120);
   });
   void windows.sweep();
   startCaptionRegionSync();

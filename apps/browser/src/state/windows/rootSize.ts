@@ -32,3 +32,9 @@ export function useWindowRootWidth(windowId: string): number | undefined {
   const scale = useInterfaceScale((s) => s.scale);
   return useRootSizes((sizes) => sizes[windowId]?.width ?? (frameWidth === undefined ? undefined : frameWidth / scale));
 }
+
+export function useWindowRootHeight(windowId: string): number | undefined {
+  const frameHeight = useBrowser((s) => s.windows[windowId]?.frame?.[3]);
+  const scale = useInterfaceScale((s) => s.scale);
+  return useRootSizes((sizes) => sizes[windowId]?.height ?? (frameHeight === undefined ? undefined : frameHeight / scale));
+}

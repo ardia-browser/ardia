@@ -215,5 +215,7 @@
   "arrivalStamps": {
     "apps/linux/src/hostPageEvents.ts | pictureInPicture": 1
   },
-  "unclearedCounters": {}
+  "unclearedCounters": {
+    "apps/linux/src/shims/ardiacore.tsx | takeMorphCounts": 1
+  }
 }

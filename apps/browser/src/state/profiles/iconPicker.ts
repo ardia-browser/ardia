@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { currentProfile } from "../browser/current";
 import { setSwitcherIcon, updateProfile } from "./actions";
 import type { ProfileMenuPlace } from "./profileMenu";
+import { noteLibraryProfileEdit } from "../telemetry/libraryCounts";
 
 export type IconPickerAnchor = { x: number; y: number; width: number; height: number };
 export type ProfileIconPicker = { profileId: string; windowId: string; place: ProfileMenuPlace; anchor: IconPickerAnchor | null };
@@ -35,5 +36,6 @@ export function closeProfileIconPickerIn(windowId: string) {
 export function chooseProfileIcon({ profileId, place }: ProfileIconPicker, icon: string | null) {
   if (place === "sidebar") setSwitcherIcon(profileId, icon);
   else updateProfile(profileId, { icon });
+  if (place === "library") noteLibraryProfileEdit("icon");
   closeProfileIconPicker();
 }

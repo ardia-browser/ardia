@@ -1,12 +1,22 @@
-import { pagerState, selectPager, stepPager, switchPager, type NativePagerConfig, type PagerSnapshot, type PagerStateEvent, type SwipeEvent } from "../../platform/pager";
+import { leadPager, morphPager, nativeMorph, pagerState, selectPager, stepPager, switchPager, type MorphConfig, type NativePagerConfig, type PagerSnapshot, type PagerStateEvent, type SwipeEvent } from "../../platform/pager";
 import { notePagerSettle } from "../telemetry/pagerCounts";
+import { noteLibraryOpenRefused } from "../telemetry/libraryCounts";
 import { useEffect, useLayoutEffect, useMemo } from "react";
 import { Animated, unstable_batchedUpdates } from "react-native";
 import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { useBrowser } from "../browser/store";
+import { libraryOf, markLibraryOpen, useLibrary, type LibraryEntry, type LibraryExit } from "../library/library";
+import { saveBeforeQuit } from "../app/quit";
+import { consentToken } from "../telemetry/client";
+import type { ConsentToken } from "../telemetry/choice";
+import { useLibraryAvailable, useLibraryOpen } from "../library/hooks";
+import { setLibraryPagerDriver, setLibraryPagerIntent, type LibraryHeading } from "../library/pagerBridge";
+import { libraryShowableIn } from "../library/showable";
 
 export type PagerPage = { id: string; slot: number; resting?: boolean };
+type LibraryCause = LibraryEntry | LibraryExit;
+type LibraryRequest = { open: boolean; cause: LibraryCause; consent: ConsentToken | null; landed?: boolean };
 
 function restPages(current: string | null, order: string[]): PagerPage[] {
   if (!current) return [];
@@ -25,6 +35,9 @@ const selectionOf = (r: NativeReport) => ("selectionSequence" in r ? r.selection
 
 class ProfilePager {
   readonly pos: Animated.Value;
+  readonly lead = new Animated.Value(0, { useNativeDriver: true });
+  private nativeLeading = false;
+  private libraryRequests: LibraryRequest[] = [];
   readonly state = create<{ pages: PagerPage[] | null; ack: number }>()(() => ({ pages: null, ack: 0 }));
   private surfaces = 0;
   private switching = false;
@@ -35,6 +48,7 @@ class ProfilePager {
   private externalGeneration = 0;
   private seen = 0;
   private switchedSinceBegan = false;
+  private swiping = false;
 
   readonly windowId: string;
 
@@ -63,8 +77,11 @@ class ProfilePager {
   }
 
   readonly onNativeState = (event: PagerStateEvent) => {
+    if (event.phase === "began") this.swiping = true;
     if (this.external) return;
-    this.commitNative(pagerState(this.windowId) ?? event, event);
+    const snapshot = this.nativeSnapshot();
+    this.commitNative(snapshot ?? event, event, consentToken());
+    if (event.phase === "settled" || (event.phase === "selected" && snapshot?.phase === "idle")) this.swiping = false;
   };
 
   private selectExternal(profileId: string, order: string[]) {
@@ -72,15 +89,17 @@ class ProfilePager {
     if (index >= 0) this.pos.setValue(index);
     const generation = ++this.externalGeneration;
     this.external = generation;
-    const done = (ok: boolean) => {
+    const consent = consentToken();
+    const done = () => {
       if (this.external !== generation) return;
       this.external = 0;
-      if (ok) this.commitNative(pagerState(this.windowId));
+      this.commitNative(this.nativeSnapshot(), undefined, consent);
+      this.libraryRequests = this.libraryRequests.filter((r) => !r.landed);
     };
-    selectPager(this.windowId, profileId, order).then(done, () => done(false));
+    selectPager(this.windowId, profileId, order).then(done, done);
   }
 
-  private commitNative(report: NativeReport | null, event?: PagerStateEvent) {
+  private commitNative(report: NativeReport | null, event?: PagerStateEvent, consent?: ConsentToken | null) {
     if (!report || report.sequence <= this.seen) return;
     this.seen = report.sequence;
     if (__DEV__) this.lastEvent = { native: event ?? null, snapshot: report };
@@ -91,7 +110,8 @@ class ProfilePager {
     const ack = selectionOf(report);
     if (event?.phase === "began") this.switchedSinceBegan = false;
     if (event?.phase === "settled") notePagerSettle(this.switchedSinceBegan || switches);
-    if (!switches && ack <= this.state.getState().ack) return;
+    const leading = !!report.leading;
+    if (!switches && ack <= this.state.getState().ack && leading === this.nativeLeading) return;
     unstable_batchedUpdates(() => {
       if (switches) {
         this.switchedSinceBegan = true;
@@ -102,8 +122,105 @@ class ProfilePager {
           this.switching = false;
         }
       }
+      this.commitLibrary(leading, consent);
       if (ack > this.state.getState().ack) this.state.setState({ ack });
     });
+  }
+
+  private nativeSnapshot() {
+    const snapshot = pagerState(this.windowId);
+    if (!snapshot) this.nativeLeading = false;
+    return snapshot;
+  }
+
+  private get windowGone() {
+    return !useBrowser.getState().windows[this.windowId];
+  }
+
+  private commitLibrary(leading: boolean, consent?: ConsentToken | null) {
+    if (this.windowGone || leading === this.nativeLeading) return;
+    this.nativeLeading = leading;
+    const request = this.swiping ? undefined : this.libraryRequests.find((r) => r.open === leading);
+    if (request) this.dropLibraryRequest(request);
+    if (leading && !libraryShowableIn(this.windowId)) return this.leadBackClosed(request ? request.consent : consent);
+    if (libraryOf(this.windowId).open !== leading) markLibraryOpen(this.windowId, leading, request?.cause ?? "swipe", request ? request.consent : consent);
+  }
+
+  private leadBackClosed(consent?: ConsentToken | null) {
+    noteLibraryOpenRefused(consent);
+    this.libraryRequests = this.libraryRequests.filter((r) => !r.open);
+    void leadPager(this.windowId, false, false).catch(() => false);
+  }
+
+  settledLead(): number | null {
+    const snapshot = pagerState(this.windowId);
+    return snapshot?.phase === "idle" && typeof snapshot.lead === "number" ? Math.min(1, Math.max(0, snapshot.lead)) : null;
+  }
+
+  morph(config: MorphConfig | null): Promise<boolean> {
+    return morphPager(this.windowId, config);
+  }
+
+  get drivesLibraryNatively() {
+    return this.active && pagerState(this.windowId) !== null;
+  }
+
+  releaseLibraryForQuit(): boolean {
+    const shown = this.nativeLeading || !!this.nativeSnapshot()?.leading || this.libraryRequests.some((r) => r.open);
+    this.libraryRequests = [];
+    this.nativeLeading = false;
+    return shown;
+  }
+
+  get libraryHeading(): LibraryHeading | undefined {
+    const request = this.libraryRequests.at(-1);
+    if (request) return { open: request.open, cause: request.cause };
+    if (!this.drivesLibraryNatively) return undefined;
+    return { open: !!pagerState(this.windowId)?.leading, cause: "swipe" };
+  }
+
+  driveLibrary(open: boolean, cause: LibraryCause): boolean {
+    if (!this.drivesLibraryNatively) return false;
+    const consent = consentToken();
+    if (!this.libraryRequests.length) {
+      this.nativeLeading = !!this.nativeSnapshot()?.leading;
+      if (this.nativeLeading === open) {
+        if (libraryOf(this.windowId).open !== open) markLibraryOpen(this.windowId, open, cause, consent);
+        return true;
+      }
+    }
+    const request: LibraryRequest = { open, cause, consent };
+    this.swiping = false;
+    this.libraryRequests.push(request);
+    let led: Promise<boolean>;
+    try {
+      led = leadPager(this.windowId, open);
+    } catch {
+      led = Promise.resolve(false);
+    }
+    led.then(
+      (ok) => (ok ? this.landLibrary(request) : this.libraryFallback(request)),
+      () => this.libraryFallback(request),
+    );
+    return true;
+  }
+
+  private dropLibraryRequest(request: LibraryRequest) {
+    this.libraryRequests = this.libraryRequests.filter((r) => r !== request);
+  }
+
+  private landLibrary(request: LibraryRequest) {
+    if (!this.libraryRequests.includes(request)) return;
+    if (this.external) return void (request.landed = true);
+    this.commitNative(this.nativeSnapshot(), undefined, request.consent);
+    this.dropLibraryRequest(request);
+  }
+
+  private libraryFallback(request: LibraryRequest) {
+    const superseded = this.libraryRequests.at(-1) !== request;
+    this.dropLibraryRequest(request);
+    if (superseded || this.windowGone || libraryOf(this.windowId).open === request.open) return;
+    if (!request.open || libraryShowableIn(this.windowId)) markLibraryOpen(this.windowId, request.open, request.cause, request.consent);
   }
 
   private index() {
@@ -165,6 +282,9 @@ class ProfilePager {
   }
 
   private dispose() {
+    const closing = this.libraryRequests.filter((r) => !r.open).at(-1);
+    this.libraryRequests = [];
+    if (closing && libraryOf(this.windowId).open) markLibraryOpen(this.windowId, false, closing.cause, closing.consent);
     this.external = 0;
     this.externalGeneration++;
     this.unsubscribe();
@@ -185,6 +305,34 @@ export function pagerFor(windowId: string): ProfilePager {
   pagers.set(windowId, (pager = new ProfilePager(windowId)));
   return pager;
 }
+
+async function hideLibrariesForQuit() {
+  const consent = consentToken();
+  const windowIds = [...new Set([...Object.keys(useLibrary.getState().windows), ...pagers.keys()])];
+  const native: string[] = [];
+  let changed = false;
+  for (const windowId of windowIds) {
+    const pager = pagers.get(windowId);
+    const nativeShown = pager?.releaseLibraryForQuit() ?? false;
+    if (!libraryOf(windowId).open && !nativeShown) continue;
+    changed = true;
+    markLibraryOpen(windowId, false, "quit", consent);
+    if (!pager) continue;
+    pager.lead.stopAnimation();
+    pager.lead.setValue(0);
+    if (nativeShown && pager.drivesLibraryNatively) native.push(windowId);
+  }
+  if (!changed) return;
+  await Promise.all(native.map((windowId) => leadPager(windowId, false, false).catch(() => false)));
+  await new Promise((settled) => requestAnimationFrame(() => requestAnimationFrame(settled)));
+}
+
+saveBeforeQuit(hideLibrariesForQuit);
+
+setLibraryPagerDriver((windowId: string, open: boolean, cause?: LibraryCause) => pagers.get(windowId)?.driveLibrary(open, cause ?? "button") ?? false);
+setLibraryPagerIntent((windowId: string) => pagers.get(windowId)?.libraryHeading);
+
+export const pagerMorphsNatively = nativeMorph;
 
 export function pageToProfile(windowId: string, profileId: string) {
   pagerFor(windowId).switchTo(profileId);
@@ -208,6 +356,8 @@ export function usePagerPages(windowId: string): { pages: PagerPage[]; paging: b
 export function usePagerNativeConfig(windowId: string, width?: number): NativePagerConfig | undefined {
   const pager = pagerFor(windowId);
   const ack = pager.state((s) => s.ack);
+  const leading = useLibraryAvailable(windowId);
+  const library = useLibraryOpen(windowId);
   const [selected, count, order] = useBrowser(
     useShallow((s) => {
       const w = s.windows[windowId];
@@ -216,8 +366,8 @@ export function usePagerNativeConfig(windowId: string, width?: number): NativePa
     }),
   );
   return useMemo(
-    () => (selected >= 0 ? { key: windowId, selected, count, width: width || undefined, ack, order } : undefined),
-    [windowId, selected, count, width, ack, order],
+    () => (selected >= 0 ? { key: windowId, selected, count, width: width || undefined, ack, order, leading, library } : undefined),
+    [windowId, selected, count, width, ack, order, leading, library],
   );
 }
 
@@ -229,7 +379,7 @@ export function useNativePagerPosition(windowId: string) {
 export function usePageStyle(windowId: string, slot: number, width: number) {
   const { pos } = pagerFor(windowId);
   useNativePagerPosition(windowId);
-  return useMemo(() => ({ transform: [{ translateX: Animated.multiply(Animated.add(pos, -slot), -width) }] }), [pos, slot, width]);
+  return useMemo(() => ({ translateX: Animated.multiply(Animated.add(pos, -slot), -width) }), [pos, slot, width]);
 }
 
 if (__DEV__) {

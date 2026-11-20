@@ -108,6 +108,7 @@ export const COMMANDS = {
   togglePageEngine: { title: "Open Page in WebKit" },
   toggleReader: { title: "Show Reader", barTitle: "Toggle Reading Mode", symbol: "doc.plaintext", keys: ["⌥⌘R"], ...pageInLittleArdia },
   downloads: { title: "Downloads", symbol: "arrow.down.circle", keys: ["⇧⌘J", "⌥⌘L"], scope: "window", littleArdia: "page" },
+  toggleLibrary: { title: "Show Library", barTitle: "Toggle Library", symbol: "archivebox", ...windowOffInLittleArdia },
   mergeAllWindows: { title: "Merge All Windows", symbol: "rectangle.stack", ...windowOffInLittleArdia },
   switchProfile: inWindow,
   nextProfile: { title: "Next Profile", keys: ["⌥⌘→"], ...inWindow },

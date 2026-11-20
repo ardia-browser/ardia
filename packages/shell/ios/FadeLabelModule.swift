@@ -31,7 +31,7 @@ public class EdgeFadeMaskModule: Module {
   }
 }
 
-private final class MaskKeepingLayer: CALayer {
+final class MaskKeepingLayer: CALayer {
   var kept: CALayer?
 
   override init() { super.init() }

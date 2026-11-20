@@ -54,7 +54,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
   const topGap = listTopGap(useSidebarField() === "top");
   const pinnedShown = useSidebarPart("pinned");
   const newTabShown = useSidebarPart("newTab");
-  const pageStyle = usePageStyle(windowId, slot, width);
+  const paged = usePageStyle(windowId, slot, width);
   const sharedTiles = useSharedTilesStyle(windowId, slot, width, paging);
   const [lazy] = useState(() => switchOn("lazySidebarRows"));
   const [beside, setBeside] = useState(() => startsOffScreen(lazy, current));
@@ -170,7 +170,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
   return (
     <Animated.View
       pointerEvents={current ? "auto" : "none"}
-      style={{ position: "absolute", top: 0, bottom: 0, left: 0, width, display: resting ? "none" : "flex", ...pageStyle }}
+      style={{ position: "absolute", top: 0, bottom: 0, left: 0, width, display: resting ? "none" : "flex", transform: [paged] }}
     >
       <PageProfileContext.Provider value={profileId}>
         <ThemeScope page>

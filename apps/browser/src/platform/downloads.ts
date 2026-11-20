@@ -8,6 +8,16 @@ export const pauseDownload = (id: string) => call("downloads.pause", { id });
 export const resumeDownload = (id: string) => call("downloads.resume", { id });
 export const keepDownload = (id: string) => call("downloads.keep", { id });
 export const getDownloadSettings = (profile = "") => call("downloads.settings", { profile });
+const settingsListeners = new Set<(profile: string) => void>();
+
+export function onDownloadSettingsChange(listener: (profile: string) => void): () => void {
+  settingsListeners.add(listener);
+  return () => void settingsListeners.delete(listener);
+}
+
 export const setDownloadSettings = (patch: Partial<Pick<DownloadSettings, "folder" | "askWhereToSave">>, profile = "") =>
-  call("downloads.setSettings", { ...patch, profile });
+  call("downloads.setSettings", { ...patch, profile }).then((next) => {
+    for (const listener of settingsListeners) listener(profile);
+    return next;
+  });
 export const removeDownloadStaging = (path: string) => call("webKit.removeDownloadStaging", { path });

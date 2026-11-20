@@ -19,7 +19,7 @@ import { NO_ROW_ICON } from "../pins/rowIcons";
 import type { BookmarkFolderChoice } from "./menuParts";
 import { DEFAULT_SIDEBAR_WIDTH } from "../../lib/windowLayout";
 import { activeLook } from "../../lib/activeLook";
-import { measureRow, setSidebarUi, sidebarUi, type Target } from "./sidebarUi";
+import { measureRow, setSidebarUi, sidebarUi, type SidebarTarget as Target } from "./sidebarUi";
 
 const store = () => useBrowser.getState();
 

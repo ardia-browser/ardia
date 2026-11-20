@@ -20,6 +20,8 @@ import { menuBarBindings } from "./commandShortcuts";
 import { focusedWindowOf } from "../windows/ui";
 import { clearableRecentlyClosed, closedWindowTitle, newestClosed, recentlyClosedIn } from "../windows/recentlyClosedList";
 import { BOOKMARK_COMMANDS, bookmarksShown } from "../bookmarks/visibility";
+import { libraryAvailable, libraryOpenIn } from "../library/library";
+import { pageFullscreenIn } from "../library/showable";
 
 function menuBookmarks(b: Bookmarks, folderId: string, depth = 0): MenuBookmark[] {
   return folderChildren(b, folderId).map((n: BookmarkNode) =>
@@ -106,6 +108,8 @@ export function menuState(s: BrowserState, liveOfTab = (id: string) => shownLive
   const reader = page ? readerFor(page.id) : undefined;
   if (reader?.active) titles.toggleReader = "Hide Reader";
   if (!reader?.active && !reader?.available) disabled.push("toggleReader");
+  if (w && libraryOpenIn(w.id)) titles.toggleLibrary = "Hide Library";
+  if (!w || !libraryAvailable(s, w.id) || pageFullscreenIn(s, w.id)) disabled.push("toggleLibrary");
   if (page?.url && isBookmarked(s, bookmarkProfile, page.url)) {
     titles.bookmarkPage = "Edit Bookmark…";
   }

@@ -227,7 +227,7 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
       pointerEvents={current ? "box-none" : "none"}
       onMouseEnter={() => void (pointerIn.current = current)}
       onMouseLeave={leave}
-      style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: pageWidth + flare * 2, display: resting ? "none" : "flex", ...pageStyle }}
+      style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: pageWidth + flare * 2, display: resting ? "none" : "flex", transform: [pageStyle] }}
     >
       <PageProfileContext.Provider value={profileId}>
         <ThemeScope page>

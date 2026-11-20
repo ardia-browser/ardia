@@ -24,9 +24,16 @@ export function historyRowMenuItems(count: number): MenuItem[] {
   );
 }
 
-export async function openHistoryRowMenu(entries: Link[], windowId: string, onMoreFromSite: (url: string) => void, onRemove: (urls: string[]) => void) {
+export async function openHistoryRowMenu(
+  entries: Link[],
+  windowId: string,
+  onMoreFromSite: (url: string) => void,
+  onRemove: (urls: string[]) => void,
+  onOpen?: (choice: string) => boolean,
+) {
   if (!entries.length) return;
   const choice = await showMenu(historyRowMenuItems(entries.length));
+  if (choice && onOpen?.(choice)) return;
   if (runLinkChoice(choice, entries, windowId)) return;
   if (choice === "more") onMoreFromSite(entries[0]!.url);
   if (choice === "remove") {

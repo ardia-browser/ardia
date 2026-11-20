@@ -137,6 +137,27 @@ export function VisualEffect({ material = "popover", cornerRadius, style, ...pro
   return <View ref={mark} {...props} style={[glass, style]} />;
 }
 
+export type ProgressiveBlurProps = ViewProps & { radius?: number; solidShare?: number };
+
+function ProgressiveBlur({ radius = 12, solidShare = 0.25, style, ...props }: ProgressiveBlurProps) {
+  const solid = `${Math.round(solidShare * 100)}%`;
+  const mask = `linear-gradient(to bottom, black 0%, black ${solid}, transparent 100%)`;
+  const blur: Style = { backdropFilter: `blur(${radius / 2}px)`, WebkitBackdropFilter: `blur(${radius / 2}px)`, maskImage: mask, WebkitMaskImage: mask };
+  return <View {...props} pointerEvents="none" style={[blur, style]} />;
+}
+
+export const progressiveBlurView = () => ProgressiveBlur;
+
+export type EdgeFadeProps = ViewProps & { fadeHeight?: number; active?: boolean };
+
+function EdgeFade({ fadeHeight = 24, active = false, style, ...props }: EdgeFadeProps) {
+  const mask = active ? `linear-gradient(to bottom, transparent 0, black ${fadeHeight}px)` : "none";
+  const fade: Style = { maskImage: mask, WebkitMaskImage: mask };
+  return <View {...props} style={[style, fade]} />;
+}
+
+export const edgeFadeView = () => EdgeFade;
+
 export type GlassEffectProps = ViewProps & { cornerRadius?: number; tint?: string; glassStyle?: "regular" | "clear"; dark?: boolean };
 
 type GlassLook = { saturate: number; slope: number; offset: number; rim: RimProfile; shade: ShadeProfile };

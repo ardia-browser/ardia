@@ -1,11 +1,10 @@
 import { copyText } from "../../platform/clipboard";
 import { openExternalURL } from "../../platform/app";
-import { pickFiles, prompt } from "../../platform/dialogs";
 import type { CommandEvent } from "../../platform/commands";
 import { markdownLink } from "@ardia/core";
 import { useBrowser } from "../browser/store";
 import { requestCreateProfile } from "../profiles/createProfileRequest";
-import { activeTabId, bookmarkProfileId, isPinnedRow, resolveWindowId } from "../browser/model";
+import { activeTabId, isPinnedRow, resolveWindowId } from "../browser/model";
 import {
   closeGroup,
   closeTab,
@@ -70,6 +69,8 @@ import { isWebPageUrl } from "../../lib/url";
 import { findStep, openFind } from "../find/actions";
 import { runHidingCommand } from "../site/hiddenElements";
 import { requestWindowClose } from "../windows/windowClose";
+import { addBookmarkToFolder, openFiles } from "./pickerCommands";
+import { toggleLibrary } from "../library/actions";
 
 const newOrId = (arg: string) => (arg === "new" ? null : arg);
 
@@ -308,6 +309,8 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
       return page ? (arg === "site" ? toggleSiteMute(page.id) : toggleMute(page.id)) : undefined;
     case "downloads":
       return toggleDownloadsPanel(windowId, !ui?.downloadsOpen);
+    case "toggleLibrary":
+      return toggleLibrary(windowId, "command");
     case "cast":
       return void toggleCastPicker(windowId, tabId);
     case "showHistory":
@@ -371,29 +374,4 @@ function runLittleArdiaCommand(command: string, arg: string | null | undefined, 
       return true;
   }
   return false;
-}
-
-async function addBookmarkToFolder(windowId: string, tabId: string, folder: string) {
-  const s = useBrowser.getState();
-  const tab = s.tabs[tabId];
-  if (!tab?.url) return;
-  const profileId = bookmarkProfileId(s, s.windows[windowId]);
-  let parentId = folder;
-  if (folder === "new") {
-    const title = await prompt({ title: "New Folder", placeholder: "Folder name", confirmTitle: "Create", windowId });
-    if (!title) return;
-    parentId = useBrowser.getState().addBookmarkFolder({ profileId, title });
-  }
-  useBrowser.getState().addBookmark({ profileId, url: tab.url, title: tab.title, favicon: tab.favicon, parentId });
-}
-
-async function openFiles(windowId: string | null) {
-  const urls = await pickFiles();
-  if (!urls.length) return;
-  const s = useBrowser.getState();
-  const target = resolveWindowId(s, windowId);
-  if (!target) return void openWindow({ url: urls[0] });
-  let last: string | undefined;
-  for (const url of urls) last = useBrowser.getState().newTab(target, { url });
-  if (last) useBrowser.getState().activate(last);
 }

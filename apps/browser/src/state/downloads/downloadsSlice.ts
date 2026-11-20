@@ -8,6 +8,9 @@ import { focusedWindowOf, patchWindowUi } from "../windows/ui";
 import { awaitsKeep } from "./status";
 import { noteDownloadsPanel } from "../telemetry/downloadsPanelCounts";
 import { forgetDownloadProgress, showDownloadProgress, withoutProgress } from "./progress";
+import { libraryOf, libraryShows, mediaKindOf, showLibrarySection, type LibrarySection } from "../library/library";
+import { mediaTypeOf } from "../library/items";
+import { rememberOffTheRecordPath } from "../library/offTheRecordPaths";
 
 export type DownloadsSlice = {
   downloads: Download[];
@@ -35,6 +38,14 @@ export function downloadVisibleIn(s: Pick<BrowserState, "profiles">, d: Pick<Dow
 const sessionOpen = (s: Pick<BrowserState, "windows" | "profiles">, session: string) =>
   Object.values(s.windows).some((w) => w.kind === "private" && privateSession(s, w.profileId) === session);
 const endedPrivateDownloads = new Set<string>();
+const LIBRARY_SHOWS_DOWNLOADS: readonly LibrarySection[] = ["downloads", "media"];
+
+function listedInShownMedia(windowId: string, d: Download): boolean {
+  if (d.state !== "finished") return false;
+  const media = mediaTypeOf(d);
+  const kind = mediaKindOf(libraryOf(windowId));
+  return !!media && (kind === "all" || kind === media);
+}
 
 export function withoutRepeats<Row extends Pick<Download, "url" | "path" | "profile" | "startTime">>(downloads: readonly Row[]): Row[] {
   const seen = new Set<string>();
@@ -47,17 +58,19 @@ export function withoutRepeats<Row extends Pick<Download, "url" | "path" | "prof
   });
 }
 
-const shownDownloads = new WeakMap<BrowserState["downloads"], Map<string, { window: BrowserWindow | undefined; profiles: BrowserState["profiles"]; shown: BrowserState["downloads"] }>>();
+type VisibleDownloads = { profiles: BrowserState["profiles"]; kind: BrowserWindow["kind"] | undefined; profileId: string | undefined; list: Download[] };
 
-export function downloadsIn(s: Pick<BrowserState, "downloads" | "windows" | "profiles">, windowId: string): BrowserState["downloads"] {
+const visibleDownloads = new WeakMap<readonly Download[], Map<string, VisibleDownloads>>();
+
+export function downloadsIn(s: Pick<BrowserState, "downloads" | "windows" | "profiles">, windowId: string): Download[] {
   const window = s.windows[windowId];
-  let byWindow = shownDownloads.get(s.downloads);
-  const hit = byWindow?.get(windowId);
-  if (hit && hit.window === window && hit.profiles === s.profiles) return hit.shown;
-  const shown = s.downloads.filter((d) => downloadVisibleIn(s, d, window));
-  if (!byWindow) shownDownloads.set(s.downloads, (byWindow = new Map()));
-  byWindow.set(windowId, { window, profiles: s.profiles, shown });
-  return shown;
+  let byWindow = visibleDownloads.get(s.downloads);
+  if (!byWindow) visibleDownloads.set(s.downloads, (byWindow = new Map()));
+  const kept = byWindow.get(windowId);
+  if (kept && kept.profiles === s.profiles && kept.kind === window?.kind && kept.profileId === window?.profileId) return kept.list;
+  const list = s.downloads.filter((d) => downloadVisibleIn(s, d, window));
+  byWindow.set(windowId, { profiles: s.profiles, kind: window?.kind, profileId: window?.profileId, list });
+  return list;
 }
 
 export const createDownloadsSlice: StateCreator<BrowserState, [], [], DownloadsSlice> = (set, get) => ({
@@ -65,12 +78,14 @@ export const createDownloadsSlice: StateCreator<BrowserState, [], [], DownloadsS
 
   upsertDownload(d) {
     const before = get().downloads;
+    let turnLibraryToDownloads: string | null = null;
     set((s) => {
       const listed = s.downloads.find((x) => x.id === d.id);
       if (!d.path && (d.state === "downloading" || d.state === "cancelled")) {
         return listed && d.state === "cancelled" ? { downloads: s.downloads.filter((x) => x.id !== d.id) } : s;
       }
       const session = downloadSession(s, d);
+      if (session !== null && d.path) rememberOffTheRecordPath(d.path);
       if (!listed && session !== null && (!sessionOpen(s, session) || endedPrivateDownloads.has(d.id))) {
         endedPrivateDownloads.add(d.id);
         return s;
@@ -80,10 +95,15 @@ export const createDownloadsSlice: StateCreator<BrowserState, [], [], DownloadsS
       const downloads = listed ? s.downloads.map((x) => (x.id === d.id ? record : x)) : [record, ...s.downloads].slice(0, MAX_DOWNLOADS);
       const focused = focusedWindowOf(s);
       const newlyHeld = awaitsKeep(d) && !s.downloads.some((x) => x.id === d.id && awaitsKeep(x));
-      const open = (!listed || newlyHeld) && focused && downloadVisibleIn(s, d, s.windows[focused]) && !s.windowUi[focused]?.downloadsOpen;
+      const wanted = (!listed || newlyHeld) && focused && downloadVisibleIn(s, d, s.windows[focused]) && !s.windowUi[focused]?.downloadsOpen;
+      const inLibrary = !!wanted && libraryShows(focused, LIBRARY_SHOWS_DOWNLOADS);
+      if (inLibrary) noteDownloadsPanel("libraryShown");
+      if (inLibrary && (newlyHeld || (libraryShows(focused, ["media"]) && !listedInShownMedia(focused, d)))) turnLibraryToDownloads = focused;
+      const open = wanted && !inLibrary;
       if (open && newlyHeld) noteDownloadsPanel("heldOpen");
       return { downloads, ...(open ? patchWindowUi(s, focused, { downloadsOpen: true }) : {}) };
     });
+    if (turnLibraryToDownloads) showLibrarySection(turnLibraryToDownloads, "downloads");
     if (d.state === "downloading" && get().downloads.some((x) => x.id === d.id && x.state === "downloading")) showDownloadProgress(d);
     else forgetDownloadProgress([d.id]);
     const added = get().downloads !== before && !before.some((x) => x.id === d.id);

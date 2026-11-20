@@ -283,6 +283,7 @@ const dev: Modules["ArdiaDev"] = {
   devURLDelivery: () => Promise.resolve({}),
 };
 
+const systemEvents = nativeEvents();
 const system: Modules["ArdiaSystem"] = {
   isDefaultBrowser: () => Promise.resolve(false),
   setAsDefaultBrowser: () => Promise.resolve(false),
@@ -293,7 +294,12 @@ const system: Modules["ArdiaSystem"] = {
   revealFile: () => Promise.resolve(false),
   moveToTrash: () => Promise.resolve(false),
   fileIcon: () => Promise.resolve(null),
+  fileThumbnail: () => Promise.resolve(null),
   runningAppIcon: () => Promise.resolve(null),
+  listFolderMedia: () => Promise.resolve([]),
+  watchFolder: () => {},
+  unwatchFolder: () => {},
+  addListener: systemEvents.addListener,
   hapticTick: () => {},
   setThinScrollBars: () => Promise.resolve(),
 };

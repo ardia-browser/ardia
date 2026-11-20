@@ -6,6 +6,9 @@ export const FILE_STATUS_FRESH_MS = 2000;
 const FILE_STATUS_BATCH_MS = 16;
 const FILE_STATUS_BATCH = 64;
 const FILE_STATUS_CACHE = 512;
+const LIST_FOLDER_MEDIA = "ArdiaSystem.listFolderMedia";
+const WATCH_FOLDER = "ArdiaSystem.watchFolder";
+const UNWATCH_FOLDER = "ArdiaSystem.unwatchFolder";
 const ICON = /^data:image\/png;base64,[A-Za-z0-9+/]+=*$/;
 
 type Clock = { now(): number; schedule(run: () => void, ms: number): unknown };
@@ -26,6 +29,12 @@ export type HostFiles = {
   moveToTrash(path: string): Promise<boolean>;
   fileIcon(path: string, size: number): Promise<string | null>;
   appIcon(pid: number, size: number): Promise<string | null>;
+  fileThumbnail(path: string, size: number, ephemeral?: boolean): Promise<string | null>;
+  forgetThumbnails(paths: string[] | null): Promise<void>;
+  imageSize(path: string): Promise<{ width: number; height: number } | null>;
+  listFolderMedia(folder: string, limit: number): Promise<unknown[]>;
+  watchFolder(token: string, folder: string): void;
+  unwatchFolder(token: string): void;
   onChange(listener: () => void): () => void;
 };
 
@@ -126,6 +135,25 @@ export function createHostFiles(host: ArdiaHost, clock: Clock = realClock, notic
       );
     },
     appIcon: async () => null,
+    fileThumbnail: async () => null,
+    forgetThumbnails: async () => {},
+    imageSize: async () => null,
+    listFolderMedia(folder, limit) {
+      if (!localPath(folder) || !Number.isFinite(limit) || limit <= 0 || !hostSupports(LIST_FOLDER_MEDIA, host)) return Promise.resolve([]);
+      return invokeHost<unknown>(LIST_FOLDER_MEDIA, { args: [folder, limit] }, host).then(
+        (reply) => (Array.isArray(reply) ? reply.slice(0, limit) : []),
+        (error) => {
+          reportHostError(error);
+          return [];
+        },
+      );
+    },
+    watchFolder(token, folder) {
+      if (localPath(folder) && hostSupports(WATCH_FOLDER, host)) void invokeHost(WATCH_FOLDER, { args: [token, folder] }, host).catch(reportHostError);
+    },
+    unwatchFolder(token) {
+      if (hostSupports(UNWATCH_FOLDER, host)) void invokeHost(UNWATCH_FOLDER, { args: [token] }, host).catch(reportHostError);
+    },
     onChange(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -141,7 +169,7 @@ export function hostFiles(host: ArdiaHost): HostFiles {
   return files;
 }
 
-const SYSTEM_METHODS = new Set(["fileExists", "openFile", "revealFile", "moveToTrash", "fileIcon", "appIcon"]);
+const SYSTEM_METHODS = new Set(["fileExists", "openFile", "revealFile", "moveToTrash", "fileIcon", "appIcon", "fileThumbnail", "forgetThumbnails", "imageSize", "listFolderMedia", "watchFolder", "unwatchFolder"]);
 
 export function linuxSystemMethod(host: ArdiaHost, method: string): unknown {
   if (!SYSTEM_METHODS.has(method)) return undefined;

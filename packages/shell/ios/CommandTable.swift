@@ -67,6 +67,7 @@ enum CommandTable {
     case togglePageEngine
     case toggleReader
     case downloads
+    case toggleLibrary
     case mergeAllWindows
     case switchProfile
     case nextProfile
@@ -186,6 +187,7 @@ enum CommandTable {
     "togglePageEngine": "Open Page in WebKit",
     "toggleReader": "Show Reader",
     "downloads": "Downloads",
+    "toggleLibrary": "Show Library",
     "mergeAllWindows": "Merge All Windows",
     "nextProfile": "Next Profile",
     "previousProfile": "Previous Profile",

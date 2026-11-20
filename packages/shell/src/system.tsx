@@ -1,4 +1,4 @@
-import { requireNativeViewManager } from "expo-modules-core";
+import { requireNativeViewManager, type EventSubscription } from "expo-modules-core";
 import { forwardRef, type Ref } from "react";
 import type { View, ViewProps } from "react-native";
 import { nativeModule } from "./nativeModules";
@@ -9,6 +9,11 @@ export type MenuShortcut = { id: string; title: string; path: string[] } & (
 );
 
 export type ShortcutModifier = "control" | "option" | "shift" | "command" | "function";
+
+export type FolderMediaKind = "image" | "video" | "audio";
+export type FolderMediaFile = { path: string; name: string; size: number; added: number; modified: number; kind: FolderMediaKind };
+export type FolderMediaStatus = "ok" | "missing" | "denied" | "unavailable";
+export type FolderMediaListing = { status: FolderMediaStatus; files: FolderMediaFile[] };
 
 type LaunchAtLoginStatus = "enabled" | "requiresApproval" | "notRegistered" | "notFound";
 
@@ -23,7 +28,14 @@ export type SystemNative = {
   revealFile(path: string): Promise<boolean>;
   moveToTrash(path: string): Promise<boolean>;
   fileIcon(path: string, size: number): Promise<string | null>;
+  fileThumbnail(path: string, size: number, ephemeral?: boolean): Promise<string | null>;
+  forgetThumbnails?(paths: string[] | null): Promise<void>;
+  imageSize?(path: string): Promise<{ width: number; height: number } | null>;
   runningAppIcon(pid: number, size: number): Promise<string | null>;
+  listFolderMedia(folder: string, limit: number): Promise<FolderMediaListing | FolderMediaFile[]>;
+  watchFolder(token: string, folder: string): void;
+  unwatchFolder(token: string): void;
+  addListener(name: "onFolderChange", listener: (event: { token: string }) => void): EventSubscription;
   hapticTick(): void;
   setThinScrollBars(thin: boolean): Promise<void>;
 };
@@ -41,7 +53,37 @@ export const openFile = (path: string) => System.openFile(path);
 export const revealFile = (path: string) => System.revealFile(path);
 export const moveToTrash = (path: string) => System.moveToTrash(path);
 export const fileIcon = (path: string, size = 32) => System.fileIcon(path, size);
+export const fileThumbnail = (path: string, size: number, ephemeral = false) => System.fileThumbnail(path, size, ephemeral);
+export const forgetThumbnails = async (paths?: readonly string[]): Promise<void> => {
+  if (typeof System.forgetThumbnails === "function") await System.forgetThumbnails(paths ? [...paths] : null);
+};
+export const imageSize = async (path: string): Promise<{ width: number; height: number } | null> =>
+  typeof System.imageSize === "function" ? System.imageSize(path) : null;
 export const runningAppIcon = (pid: number, size = 32) => System.runningAppIcon(pid, size);
+const FOLDER_STATUSES: ReadonlySet<string> = new Set<FolderMediaStatus>(["ok", "missing", "denied", "unavailable"]);
+
+export function folderMediaListing(reply: unknown): FolderMediaListing {
+  if (Array.isArray(reply)) return { status: "ok", files: reply };
+  if (!reply || typeof reply !== "object") return { status: "unavailable", files: [] };
+  const { status, files } = reply as { status?: unknown; files?: unknown };
+  if (typeof status !== "string" || !FOLDER_STATUSES.has(status)) return { status: "unavailable", files: [] };
+  return { status: status as FolderMediaStatus, files: status === "ok" && Array.isArray(files) ? files : [] };
+}
+
+export const listFolderMedia = async (folder: string, limit: number): Promise<FolderMediaListing> => folderMediaListing(await System.listFolderMedia(folder, limit));
+
+let folderWatches = 0;
+
+export function watchFolder(folder: string, onChange: () => void): () => void {
+  const token = `folder-${++folderWatches}`;
+  const subscription = System.addListener("onFolderChange", (event) => event.token === token && onChange());
+  System.watchFolder(token, folder);
+  return () => {
+    subscription.remove();
+    System.unwatchFolder(token);
+  };
+}
+
 export const hapticTick = () => System.hapticTick();
 export const setThinScrollBars = (thin: boolean) => System.setThinScrollBars(thin);
 

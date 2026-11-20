@@ -212,3 +212,23 @@ test("a file downloaded again to a path known to be missing reads as present at 
   files.expect("/d/again.zip");
   assert.equal(files.fileExists("/d/again.zip"), true);
 });
+
+test("folder media listing goes to the host only when it offers it, and answers an empty list otherwise", async () => {
+  const bare = fixture();
+  const files = createHostFiles(bare.host, bare.clock);
+  assert.deepEqual(await files.listFolderMedia("/home/me/Downloads", 500), []);
+  files.watchFolder("folder-1", "/home/me/Downloads");
+  files.unwatchFolder("folder-1");
+  assert.deepEqual(bare.invokes, []);
+
+  const able = fixture(["ArdiaSystem.fileStatus", "ArdiaSystem.listFolderMedia", "ArdiaSystem.watchFolder", "ArdiaSystem.unwatchFolder"]);
+  const listed = [{ path: "/home/me/Downloads/a.png", name: "a.png", size: 1, added: 2, modified: 2, kind: "image" }];
+  able.handlers.set("ArdiaSystem.listFolderMedia", () => listed);
+  const hosted = createHostFiles(able.host, able.clock);
+  assert.deepEqual(await hosted.listFolderMedia("/home/me/Downloads", 500), listed);
+  assert.deepEqual(await hosted.listFolderMedia("relative/path", 500), []);
+  hosted.watchFolder("folder-2", "/home/me/Downloads");
+  hosted.unwatchFolder("folder-2");
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(able.invokes.map((i) => i.method), ["ArdiaSystem.listFolderMedia", "ArdiaSystem.watchFolder", "ArdiaSystem.unwatchFolder"]);
+});

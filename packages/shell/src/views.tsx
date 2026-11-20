@@ -1,4 +1,5 @@
 import { requireNativeViewManager } from "expo-modules-core";
+import type { ComponentType } from "react";
 import type { ViewProps } from "react-native";
 import { nativeModule } from "./nativeModules";
 import type { MiddleClickEvent } from "./system";
@@ -32,6 +33,8 @@ export type SymbolProps = ViewProps & {
   size?: number;
   weight?: "light" | "regular" | "medium" | "semibold" | "bold";
   color?: string;
+  bounce?: number;
+  replace?: boolean;
 };
 
 export const Symbol = requireNativeViewManager<SymbolProps>("ArdiaSymbol");
@@ -128,6 +131,30 @@ export type VisualEffectProps = ViewProps & {
 };
 
 export const VisualEffect = requireNativeViewManager<VisualEffectProps>("ArdiaVisualEffect");
+
+export type EdgeFadeProps = ViewProps & { fadeHeight?: number; active?: boolean };
+
+let NativeEdgeFade: ComponentType<EdgeFadeProps> | null | undefined;
+
+export function edgeFadeView(): ComponentType<EdgeFadeProps> | null {
+  if (NativeEdgeFade === undefined) {
+    const native = (globalThis as { expo?: { modules?: Record<string, unknown> } }).expo?.modules?.ArdiaEdgeFade;
+    NativeEdgeFade = native ? requireNativeViewManager<EdgeFadeProps>("ArdiaEdgeFade") : null;
+  }
+  return NativeEdgeFade;
+}
+
+export type ProgressiveBlurProps = ViewProps & { radius?: number; solidShare?: number };
+
+let NativeProgressiveBlur: ComponentType<ProgressiveBlurProps> | null | undefined;
+
+export function progressiveBlurView(): ComponentType<ProgressiveBlurProps> | null {
+  if (NativeProgressiveBlur === undefined) {
+    const native = (globalThis as { expo?: { modules?: Record<string, unknown> } }).expo?.modules?.ArdiaProgressiveBlur;
+    NativeProgressiveBlur = native ? requireNativeViewManager<ProgressiveBlurProps>("ArdiaProgressiveBlur") : null;
+  }
+  return NativeProgressiveBlur;
+}
 
 export type GlassEffectProps = ViewProps & {
   cornerRadius?: number;

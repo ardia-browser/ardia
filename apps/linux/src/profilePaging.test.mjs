@@ -9,6 +9,22 @@ const { Pager } = await import("./shims/web/motion/pager.ts");
 const { useBrowser } = await import("../../browser/src/state/browser/store.ts");
 const { initialHostSession } = await import("./hostSession.ts");
 const { stepAction } = await import("../../../packages/ardiacore/src/pagerModel.ts");
+const { ardiaCoreNativeModules } = await import("../../browser/src/test-native/ardiacore.ts");
+const { pagerFor } = await import("../../browser/src/state/windows/profilePager.ts");
+const { libraryAvailable, libraryOf, useLibrary } = await import("../../browser/src/state/library/library.ts");
+const { closeLibrary, toggleLibrary } = await import("../../browser/src/state/library/actions.ts");
+const { takeLibraryCounts } = await import("../../browser/src/state/telemetry/libraryCounts.ts");
+const telemetry = await import("../../browser/src/state/telemetry/client.ts");
+
+const whileSharing = async (run) => {
+  telemetry.loadChoice();
+  telemetry.setSharing(true, "settings");
+  try {
+    return await run();
+  } finally {
+    telemetry.setSharing(false, "settings");
+  }
+};
 
 const S = () => useBrowser.getState();
 const flush = () => new Promise((resolve) => setImmediate(resolve));
@@ -288,6 +304,189 @@ test("stepAction wraps from the Library's own profile", () => {
   assert.deepEqual(stepAction({ anchor: null, selected: 0, leading: true, count: 1 }, 1, true), { kind: "stay" });
 });
 
+const hop = () => new Promise((resolve) => setTimeout(resolve, 0));
+const swipeModule = ardiaCoreNativeModules.ArdiaSwipe;
+Object.assign(swipeModule, {
+  leadPager: async (key, open, animated) => (await hop(), Pager.existing(key)?.lead(open, animated) ?? false),
+  stepPager: async (key, delta, wrap, order) => (await hop(), Pager.existing(key)?.step(delta, wrap, order) ?? false),
+  selectPager: async (key, profileId, order) => (await hop(), Pager.existing(key)?.select(profileId, order) ?? false),
+  switchPager: async (key, index, order) => (await hop(), Pager.existing(key)?.switchTo(index, order) ?? false),
+  pagerState: (key) => Pager.existing(key)?.snapshot() ?? null,
+});
+
+function libraryWindow() {
+  S().hydrate(initialHostSession({ bootstrap: { windowId: `lib-${++keys}`, profileId: "default", startup: false } }, null));
+  S().updateSettings({ sidebarLibrary: true, tabLayout: "sidebar", autoHideTabs: false });
+  const windowId = Object.keys(S().windows)[0];
+  takeLibraryCounts();
+  return windowId;
+}
+
+function mountArea(windowId, { propDelay = 0 } = {}) {
+  const profilePager = pagerFor(windowId);
+  const detachSurface = profilePager.attach();
+  let mounted = true;
+  const area = { pageWidth: () => 200, attached: () => true, onPosition: () => {}, onState: (e) => setTimeout(() => mounted && profilePager.onNativeState(e), 0) };
+  const named = Pager.named(windowId);
+  named.attach(area);
+  const render = () => {
+    const s = S();
+    if (!mounted || !s.windows[windowId]) return;
+    const leading = libraryAvailable(s, windowId);
+    named.configure({ key: windowId, selected: s.profileOrder.indexOf(s.windows[windowId].profileId), count: s.profileOrder.length, ack: profilePager.state.getState().ack, order: s.profileOrder, leading, library: leading && libraryOf(windowId).open });
+  };
+  render();
+  const later = () => setTimeout(render, propDelay);
+  const unsubscribe = [useBrowser.subscribe(later), useLibrary.subscribe(later), profilePager.state.subscribe(later)];
+  return {
+    named,
+    unmount() {
+      mounted = false;
+      unsubscribe.forEach((stop) => stop());
+      named.detach(area);
+      detachSurface();
+    },
+  };
+}
+
+const quiet = async (named) => {
+  for (let i = 0; i < 4; i++) await hop();
+  await settled(named);
+  for (let i = 0; i < 4; i++) await hop();
+};
+
+test("a double Toggle Library within the native round trip closes the Library again", async () => {
+  const windowId = libraryWindow();
+  const { named, unmount } = mountArea(windowId);
+  toggleLibrary(windowId, "command");
+  toggleLibrary(windowId, "command");
+  await quiet(named);
+  assert.deepEqual([libraryOf(windowId).open, named.snapshot().leading], [false, false]);
+  unmount();
+});
+
+test("a Library reopened after its pager was rebuilt stays open", async () => {
+  const windowId = libraryWindow();
+  let mounted = mountArea(windowId);
+  toggleLibrary(windowId, "command");
+  await quiet(mounted.named);
+  assert.equal(libraryOf(windowId).open, true);
+  mounted.unmount();
+  mounted = mountArea(windowId);
+  await quiet(mounted.named);
+  assert.equal(mounted.named.snapshot().leading, true);
+  closeLibrary(windowId, "escape");
+  await quiet(mounted.named);
+  assert.deepEqual([libraryOf(windowId).open, mounted.named.snapshot().leading], [false, false]);
+  toggleLibrary(windowId, "command");
+  await quiet(mounted.named);
+  assert.deepEqual([libraryOf(windowId).open, mounted.named.snapshot().leading], [true, true]);
+  mounted.unmount();
+});
+
+test("a Library request that lands without moving the pager leaves no cause for the next swipe", () => whileSharing(async () => {
+  takeLibraryCounts();
+  const windowId = libraryWindow();
+  const { named, unmount } = mountArea(windowId);
+  const lead = swipeModule.leadPager;
+  swipeModule.leadPager = async () => (await hop(), true);
+  toggleLibrary(windowId, "command");
+  await quiet(named);
+  swipeModule.leadPager = lead;
+  assert.equal(libraryOf(windowId).open, false);
+  named.lead(true);
+  await quiet(named);
+  const counts = takeLibraryCounts();
+  assert.deepEqual([libraryOf(windowId).open, counts.library_opens_swipe, counts.library_opens_command], [true, 1, 0]);
+  unmount();
+}));
+
+const withLead = async (lead, run) => {
+  const original = swipeModule.leadPager;
+  swipeModule.leadPager = lead;
+  try {
+    return await run();
+  } finally {
+    swipeModule.leadPager = original;
+  }
+};
+
+test("a Library closed as its pager unmounts, then reopened by a swipe on the rebuilt pager, stays open", async () => {
+  const windowId = libraryWindow();
+  let mounted = mountArea(windowId);
+  toggleLibrary(windowId, "command");
+  await quiet(mounted.named);
+  const gone = mounted;
+  await withLead(async (key, open, animated) => {
+    await hop();
+    const ok = Pager.existing(key)?.lead(open, animated) ?? false;
+    gone.unmount();
+    await hop();
+    return ok;
+  }, async () => {
+    closeLibrary(windowId, "layout");
+    for (let i = 0; i < 6; i++) await hop();
+  });
+  assert.equal(libraryOf(windowId).open, false);
+  mounted = mountArea(windowId);
+  await quiet(mounted.named);
+  mounted.named.lead(true);
+  await quiet(mounted.named);
+  assert.deepEqual([libraryOf(windowId).open, mounted.named.snapshot().leading], [true, true]);
+  mounted.unmount();
+});
+
+test("a Library opened while a profile selection fails still opens", () => whileSharing(async () => {
+  takeLibraryCounts();
+  const windowId = libraryWindow();
+  S().createProfile({ name: "Work" });
+  const { named, unmount } = mountArea(windowId);
+  await quiet(named);
+  const select = swipeModule.selectPager;
+  swipeModule.selectPager = async () => (await hop(), await hop(), await hop(), false);
+  try {
+    toggleLibrary(windowId, "command");
+    S().switchProfile(windowId, S().profileOrder[1]);
+    await quiet(named);
+  } finally {
+    swipeModule.selectPager = select;
+  }
+  await quiet(named);
+  assert.deepEqual([libraryOf(windowId).open, named.snapshot().leading, takeLibraryCounts().library_opens_command], [true, true, 1]);
+  unmount();
+}));
+
+test("a double toggle whose open the pager refuses before its Library page arrives ends closed", async () => {
+  const windowId = libraryWindow();
+  S().updateSettings({ sidebarLibrary: false });
+  const { named, unmount } = mountArea(windowId, { propDelay: 30 });
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  S().updateSettings({ sidebarLibrary: true });
+  toggleLibrary(windowId, "command");
+  toggleLibrary(windowId, "command");
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  await quiet(named);
+  assert.deepEqual([libraryOf(windowId).open, named.snapshot().leading], [false, false]);
+  unmount();
+});
+
+test("turning the Library off while an open is on its way leaves it closed", async () => {
+  const windowId = libraryWindow();
+  const { named, unmount } = mountArea(windowId);
+  await quiet(named);
+  await withLead(async (key, open, animated) => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    return Pager.existing(key)?.lead(open, animated) ?? false;
+  }, async () => {
+    toggleLibrary(windowId, "command");
+    S().updateSettings({ sidebarLibrary: false });
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    await quiet(named);
+  });
+  assert.deepEqual([libraryOf(windowId).open, named.snapshot().leading], [false, false]);
+  unmount();
+});
+
 test("the library prop with a new selection lands on the Library over that profile", () => {
   const { named } = libraryPager();
   named.configure({ key: named.key, selected: 2, count: ORDER.length, ack: 0, order: ORDER, leading: true, library: true });
@@ -299,6 +498,19 @@ test("the library prop with a reorder ends on the Library", async () => {
   named.configure({ key: named.key, selected: 1, count: 3, ack: 0, order: ["work", "default", "side"], leading: true, library: true });
   await settled(named);
   assert.deepEqual([named.snapshot().leading, named.debug().home], [true, 1]);
+});
+
+test("a Library request that lands after its window closed leaves no Library state behind", async () => {
+  const windowId = libraryWindow();
+  const { named, unmount } = mountArea(windowId);
+  await quiet(named);
+  await withLead(async () => (await hop(), await hop(), false), async () => {
+    toggleLibrary(windowId, "command");
+    unmount();
+    S().hydrate(initialHostSession({ bootstrap: { windowId: `lib-${++keys}`, profileId: "default", startup: false } }, null));
+    for (let i = 0; i < 6; i++) await hop();
+  });
+  assert.equal(useLibrary.getState().windows[windowId], undefined);
 });
 
 test("a swipe whose area goes away mid-drag springs back instead of staying in the drag", async () => {

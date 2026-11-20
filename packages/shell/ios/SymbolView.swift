@@ -3,17 +3,50 @@ import ArdiaCore
 import Carbon.HIToolbox
 import ExpoModulesCore
 
+private enum SymbolReplace {
+  static let outDuration = 0.16
+  static let outScale = 0.5
+  static let inScale = 0.5
+  static let stiffness: CGFloat = 380
+  static let damping: CGFloat = 26
+  static let fadeDuration = 0.15
+}
+
+private struct GlyphSnapshot {
+  let contents: Any?
+  let frame: CGRect
+  let scale: CGFloat
+  let opacity: Float
+
+  init(_ layer: CALayer) {
+    contents = layer.contents
+    frame = layer.frame
+    scale = layer.contentsScale
+    opacity = layer.opacity
+  }
+}
+
 final class SymbolView: ExpoView {
   private let imageView = NSImageView()
   private let glyph = CALayer()
   private var image: NSImage?
-  var name = "questionmark" { didSet { update() } }
+  var name = "questionmark" {
+    didSet {
+      if name != oldValue { update(replacing: replace) }
+    }
+  }
+  var replace = false
   var pointSize: Double = 14 { didSet { update() } }
   var weight = "regular" { didSet { update() } }
+  var bounce = 0 {
+    didSet {
+      if bounce != oldValue { playBounce() }
+    }
+  }
   var tint: NSColor? {
     didSet {
       imageView.contentTintColor = tint
-      render()
+      if !SymbolView.sameColor(tint, oldValue) { update() } else { render() }
     }
   }
 
@@ -35,6 +68,13 @@ final class SymbolView: ExpoView {
   override func layout() {
     super.layout()
     imageView.frame = bounds
+  }
+
+  private static func sameColor(_ a: NSColor?, _ b: NSColor?) -> Bool {
+    guard let a, let b else { return a == nil && b == nil }
+    guard let x = a.usingColorSpace(.sRGB), let y = b.usingColorSpace(.sRGB) else { return a == b }
+    let close = { (p: CGFloat, q: CGFloat) in abs(p - q) < 0.002 }
+    return close(x.redComponent, y.redComponent) && close(x.greenComponent, y.greenComponent) && close(x.blueComponent, y.blueComponent) && close(x.alphaComponent, y.alphaComponent)
   }
 
   override func setFrameSize(_ newSize: NSSize) {
@@ -62,14 +102,100 @@ final class SymbolView: ExpoView {
     update()
   }
 
-  private func update() {
+  private func playBounce() {
+    guard window != nil, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+    if !imageView.isHidden {
+      imageView.removeAllSymbolEffects(options: .nonRepeating, animated: false)
+      imageView.addSymbolEffect(.bounce.down.byLayer, options: .nonRepeating)
+      return
+    }
+    let squash = CAKeyframeAnimation(keyPath: "transform.scale")
+    squash.values = [1, 0.8, 1.1, 0.99, 1]
+    squash.keyTimes = [0, 0.25, 0.53, 0.78, 1]
+    squash.timingFunctions = Array(repeating: CAMediaTimingFunction(name: .easeInEaseOut), count: 4)
+    squash.duration = 0.56
+    glyph.add(squash, forKey: "bounce")
+  }
+
+  private func update(replacing: Bool = false) {
     let weights: [String: NSFont.Weight] = [
       "light": .light, "regular": .regular, "medium": .medium, "semibold": .semibold, "bold": .bold,
     ]
-    let config = NSImage.SymbolConfiguration(pointSize: pointSize, weight: weights[weight] ?? .regular)
-    image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(config)
-    imageView.image = image
+    var config = NSImage.SymbolConfiguration(pointSize: pointSize, weight: weights[weight] ?? .regular)
+    if let tint { config = config.applying(NSImage.SymbolConfiguration(paletteColors: [tint])) }
+    let next = NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(config)
+    let animates = replacing && window != nil && image != nil && next != nil
+    let calm = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    let shown = GlyphSnapshot(glyph)
+    image = next
+    if animates, let next, !imageView.isHidden, !calm {
+      if #available(macOS 15.0, *) {
+        imageView.setSymbolImage(next, contentTransition: .replace.magic(fallback: .replace.downUp.byLayer))
+      } else {
+        imageView.setSymbolImage(next, contentTransition: .replace.downUp.byLayer)
+      }
+    } else {
+      if animates, !imageView.isHidden { crossfade(imageView.layer) }
+      imageView.image = next
+    }
     render()
+    if animates, imageView.isHidden { replaceGlyph(from: shown, calm: calm) }
+  }
+
+  private func crossfade(_ target: CALayer?) {
+    let fade = CATransition()
+    fade.type = .fade
+    fade.duration = SymbolReplace.fadeDuration
+    target?.add(fade, forKey: "replace")
+  }
+
+  private func replaceGlyph(from shown: GlyphSnapshot, calm: Bool) {
+    guard let layer, let contents = shown.contents else { return }
+    let ghost = CALayer()
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    ghost.contents = contents
+    ghost.frame = shown.frame
+    ghost.contentsScale = shown.scale
+    ghost.contentsGravity = .resize
+    ghost.opacity = 0
+    layer.insertSublayer(ghost, below: glyph)
+    CATransaction.commit()
+    CATransaction.begin()
+    CATransaction.setCompletionBlock { ghost.removeFromSuperlayer() }
+    let out = CAAnimationGroup()
+    out.duration = calm ? SymbolReplace.fadeDuration : SymbolReplace.outDuration
+    out.timingFunction = CAMediaTimingFunction(name: .easeOut)
+    out.animations = [Self.ramp("opacity", from: shown.opacity, to: 0)] + (calm ? [] : [Self.ramp("transform.scale", from: 1, to: SymbolReplace.outScale)])
+    ghost.add(out, forKey: "replace")
+    if calm {
+      let fadeIn = Self.ramp("opacity", from: 0, to: glyph.opacity)
+      fadeIn.duration = SymbolReplace.fadeDuration
+      glyph.add(fadeIn, forKey: "replace")
+    } else {
+      let grow = CASpringAnimation(keyPath: "transform.scale")
+      grow.fromValue = SymbolReplace.inScale
+      grow.toValue = 1
+      grow.mass = 1
+      grow.stiffness = SymbolReplace.stiffness
+      grow.damping = SymbolReplace.damping
+      grow.duration = grow.settlingDuration
+      let fadeIn = Self.ramp("opacity", from: 0, to: glyph.opacity)
+      fadeIn.duration = SymbolReplace.outDuration
+      fadeIn.timingFunction = CAMediaTimingFunction(name: .easeOut)
+      let incoming = CAAnimationGroup()
+      incoming.duration = grow.duration
+      incoming.animations = [grow, fadeIn]
+      glyph.add(incoming, forKey: "replace")
+    }
+    CATransaction.commit()
+  }
+
+  private static func ramp(_ keyPath: String, from: Any, to: Any) -> CABasicAnimation {
+    let ramp = CABasicAnimation(keyPath: keyPath)
+    ramp.fromValue = from
+    ramp.toValue = to
+    return ramp
   }
 
   private func render() {

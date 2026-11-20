@@ -156,6 +156,8 @@
 	<string>Websites may ask to use your camera.</string>
 	<key>NSDockTilePlugIn</key>
 	<string>ArdiaDockTile.plugin</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>Ardia saves your downloads there, and the Library's Media shows the photos, videos and audio in it.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Ardia finds Cast devices on your network so you can cast tabs to them.</string>
 	<key>NSLocationUsageDescription</key>

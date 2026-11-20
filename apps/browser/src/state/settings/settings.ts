@@ -30,6 +30,7 @@ import { COMMAND_BAR_START_SCHEMA, isCommandBarStart, type CommandBarStart } fro
 import { noteAutoHideTabsChosen } from "../telemetry/autoHideTabsChoices";
 import { READER_FONTS, READER_SIZE_NAMES } from "../reader/tokens";
 import { noteMinimalismToggled } from "../telemetry/minimalismCounts";
+import { DEFAULT_LIBRARY_VIEWS, isLibraryViews, LIBRARY_VIEWS_SCHEMA, type LibraryViews } from "../library/views";
 
 export const DEFAULT_PROFILE_ID = "default";
 
@@ -47,6 +48,7 @@ const engineRecords = (keys: string[]): JsonSchema => ({
   type: "array",
   items: { type: "object", properties: Object.fromEntries(keys.map((k) => [k, { type: "string" }])), required: keys },
 });
+const EXTENSION_ENGINE_KEYS = ["profile", "extensionId", "name", "keyword", "url"];
 const recordOf = (item: JsonSchema): JsonSchema => ({ type: "object", additionalProperties: item });
 
 const flag = (d: boolean, synced = false): SettingSpec<boolean> => ({ default: d, valid: (v) => typeof v === "boolean", synced, schema: { type: "boolean" } });
@@ -70,16 +72,15 @@ export const SETTING_SPECS = {
   searchEngine: text("google", SYNCED),
   customSearchUrl: text("", SYNCED),
   customSearchEngines: shaped<CustomSearchEngine[]>([], (v) => Array.isArray(v) && v.every((e) => hasStrings(e, ["id", "name", "keyword", "url"])), engineRecords(["id", "name", "keyword", "url"]), SYNCED),
-  extensionSearchEngines: shaped<ExtensionSearchEngine[]>(
-    [],
-    (v) => Array.isArray(v) && v.every((e) => hasStrings(e, ["profile", "extensionId", "name", "keyword", "url"])),
-    engineRecords(["profile", "extensionId", "name", "keyword", "url"]),
-  ),
+  extensionSearchEngines: shaped<ExtensionSearchEngine[]>([], (v) => Array.isArray(v) && v.every((e) => hasStrings(e, EXTENSION_ENGINE_KEYS)), engineRecords(EXTENSION_ENGINE_KEYS)),
   searchSuggestions: flag(true, SYNCED),
   commandBarHistory: flag(true, SYNCED),
   showSelectionSearch: flag(true, SYNCED),
   tabLayout: oneOf(["sidebar", "top"], "sidebar", SYNCED),
   sidebarSide: oneOf(["left", "right"], "left", SYNCED),
+  sidebarLibrary: flag(false, SYNCED),
+  sidebarLibraryAllProfiles: flag(true, SYNCED),
+  sidebarLibraryViews: shaped<LibraryViews>(DEFAULT_LIBRARY_VIEWS, isLibraryViews, LIBRARY_VIEWS_SCHEMA, SYNCED),
   autoHideTabs: flag(false, SYNCED),
   hideToolbarWhileScrolling: flag(true, SYNCED),
   newTabPosition: oneOf(["top", "bottom", "nextToCurrent"], "bottom", SYNCED),

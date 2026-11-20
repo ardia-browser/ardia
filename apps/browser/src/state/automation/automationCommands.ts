@@ -70,6 +70,7 @@ export const AUTOMATION: Readonly<Record<BrowserCommand, AutomationDecision>> = 
   togglePageEngine: "changesEngine",
   toggleReader: "run",
   downloads: "run",
+  toggleLibrary: "run",
   mergeAllWindows: "run",
   switchProfile: "needsArgument",
   nextProfile: "run",

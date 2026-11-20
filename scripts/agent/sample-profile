@@ -1,0 +1,622 @@
+#!/usr/bin/env node
+// A data dir full of sample data for trying the Library (Media, Downloads, Profiles, History), and a way to open it.
+//
+//   scripts/agent/sample-profile [--data DIR] [--app APP] [--metro PORT] [--reuse] [--verify] [--open]
+//
+//   --data DIR    the data dir, default ardia-library-data/sample beside the repo, so it stays off the startup
+//                 disk. It is wiped and reseeded only when it is empty or was made by this script (.ardia-sample).
+//   --app APP     a Debug build, default the newest Build/Products/Debug/Ardia.app in apps/browser/build-* or a
+//                 sibling of the repo. Never /Applications.
+//   --metro PORT  the Metro that serves the build's JS, default 8095
+//   --reuse       keep DIR as it is when it was already seeded (with --open: just open it)
+//   --verify      relaunch hidden on DIR, print what the Library lists in each section and filter, save a snapshot
+//                 of each to $TMPDIR/ardia-sample-verify, and quit
+//   --open        launch a visible instance on DIR: ARDIA_DATA_DIR=DIR ARDIA_INSTANCE=jsLocation=localhost:PORT
+//
+// Seeding runs in hidden instances (scripts/lib/instance.mjs) and drives the real app: settings (Library on, sidebar
+// layout, every profile's download folder DIR/Downloads), three profiles with icons, pinned and open tabs, downloads
+// from a local server that this script starts and stops (finished, cancelled, failed, repeated names), history over
+// three weeks through the store's importHistory, then backdates the download records and the files' dates.
+// DIR/Downloads also gets photos, videos, audio and documents (sips, ffmpeg), hidden files and a subfolder.
+import { execFile, execFileSync, spawnSync } from "node:child_process";
+import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, copyFileSync } from "node:fs";
+import { createServer } from "node:http";
+import { homedir, tmpdir } from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+import { randomBytes } from "node:crypto";
+
+const here = fileURLToPath(import.meta.url);
+const repo = resolve(dirname(here), "../..");
+const { launch, sleep, processInfo } = await import(join(repo, "scripts/lib/instance.mjs"));
+const run = promisify(execFile);
+
+const help = () => {
+  const lines = readFileSync(here, "utf8").split("\n").slice(1);
+  console.log(lines.slice(0, lines.findIndex((l) => !l.startsWith("//"))).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"));
+};
+const argv = process.argv.slice(2);
+if (argv.includes("-h") || argv.includes("--help")) {
+  help();
+  process.exit(0);
+}
+const flags = {};
+for (let i = 0; i < argv.length; i++) {
+  const a = argv[i];
+  if (["--reuse", "--verify", "--open"].includes(a)) flags[a.slice(2)] = true;
+  else if (["--data", "--app", "--metro"].includes(a)) flags[a.slice(2)] = argv[++i];
+  else {
+    console.error(`unknown argument ${a} (--help)`);
+    process.exit(64);
+  }
+}
+
+const MARKER = ".ardia-sample";
+const DAY = 86_400_000;
+const data = resolve(flags.data ?? join(dirname(repo), "ardia-library-data", "sample"));
+const metro = Number(flags.metro ?? 8095);
+const folder = join(data, "Downloads");
+const served = join(data, "sample-served");
+const log = (...a) => console.log(`[sample] ${a.join(" ")}`);
+const fail = (message) => {
+  console.error(`sample-profile: ${message}`);
+  process.exit(1);
+};
+
+function newestBuild() {
+  const roots = [join(repo, "apps/browser"), dirname(repo)];
+  const found = [];
+  for (const root of roots)
+    for (const entry of readdirSync(root, { withFileTypes: true })) {
+      if (!entry.isDirectory() || (root === roots[0] && !entry.name.startsWith("build-"))) continue;
+      const app = join(root, entry.name, "Build/Products/Debug/Ardia.app");
+      if (existsSync(join(app, "Contents/Info.plist"))) found.push({ app, at: statSync(join(app, "Contents/Info.plist")).mtimeMs });
+    }
+  return found.sort((a, b) => b.at - a.at)[0]?.app;
+}
+const app = resolve(flags.app ?? newestBuild() ?? fail("no Debug build found: pass --app"));
+if (/^\/Applications\//.test(app)) fail("never an installed app: pass a build");
+if (!existsSync(join(app, "Contents/Info.plist"))) fail(`${app} is not an app`);
+if ([homedir(), join(homedir(), "ardia-library-try"), join(homedir(), "Downloads")].includes(data)) fail(`refusing ${data}`);
+
+const seeded = () => existsSync(join(data, MARKER));
+const running = () => {
+  try {
+    const { pid } = JSON.parse(readFileSync(join(data, "instance.json"), "utf8"));
+    return processInfo(pid) ? pid : null;
+  } catch {
+    return null;
+  }
+};
+
+function prepare() {
+  if (running()) fail(`an instance is running on ${data} (pid ${running()}): quit it first`);
+  if (existsSync(data) && readdirSync(data).length && !seeded()) fail(`${data} has files this script didn't make; pass another --data`);
+  rmSync(data, { recursive: true, force: true });
+  mkdirSync(folder, { recursive: true });
+  mkdirSync(served, { recursive: true });
+  writeFileSync(join(data, MARKER), `${new Date().toISOString()}\n`);
+}
+
+const at = (daysAgo, hour, minute = 0) => {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  d.setHours(hour, minute, (hour * 7 + minute) % 60, 0);
+  return d.getTime() < Date.now() ? d.getTime() : Date.now() - (24 - hour) * 10 * 60_000;
+};
+
+const pad = (n) => String(n).padStart(2, "0");
+const dayName = (daysAgo) => {
+  const d = new Date(at(daysAgo, 12));
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+const shotName = (daysAgo, hour, minute) => `Screenshot ${dayName(daysAgo)} at ${hour}.${pad(minute)}.${pad((minute * 7) % 60)}.png`;
+
+function systemPictures() {
+  const dir = "/System/Library/Desktop Pictures";
+  const list = (d, test) => (existsSync(d) ? readdirSync(d).filter(test).map((f) => join(d, f)) : []);
+  const large = list(dir, (f) => f.endsWith(".heic") && statSync(join(dir, f)).size > 1_000_000);
+  const scenic = list(join(dir, ".thumbnails"), (f) => f.endsWith(".heic") && !/Light|Dark|Grid|Chroma|Motion|hello|Mac |iMac|Radial|Gradient/.test(f));
+  return { large, scenic };
+}
+
+const ffmpeg = (...args) => run("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", ...args]);
+const sips = (...args) => run("sips", args);
+const lavfi = (spec, seconds) => ["-f", "lavfi", "-t", String(seconds), "-i", spec];
+const h264 = ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "veryfast", "-crf", "26", "-movflags", "+faststart"];
+const withTone = (freq, seconds) => ["-f", "lavfi", "-t", String(seconds), "-i", `sine=frequency=${freq}:sample_rate=44100`];
+
+function folderPlan({ large, scenic }) {
+  const pick = (list, i) => list[i % Math.max(list.length, 1)];
+  const photo = (name, source, size, daysAgo, hour) => ({ name, daysAgo, hour, make: (out) => source
+    ? sips("-s", "format", name.toLowerCase().endsWith(".heic") ? "heic" : name.toLowerCase().endsWith(".png") ? "png" : "jpeg", "-Z", String(size), source, "--out", out)
+    : ffmpeg(...lavfi(`gradients=s=${size}x${Math.round(size * 0.66)}:seed=${daysAgo * 31 + hour}`, 1), "-frames:v", "1", out) });
+  const still = (name, spec, daysAgo, hour) => ({ name, daysAgo, hour, make: (out) => ffmpeg(...lavfi(spec, 1), "-frames:v", "1", out) });
+  const gif = (name, spec, seconds, daysAgo, hour) => ({ name, daysAgo, hour, make: (out) => ffmpeg(...lavfi(spec, seconds), "-loop", "0", out) });
+  const video = (name, spec, seconds, daysAgo, hour, tone) => ({ name, daysAgo, hour, make: (out) => ffmpeg(...lavfi(spec, seconds),
+    ...(tone ? withTone(tone, seconds) : []), ...(name.endsWith(".webm") ? ["-c:v", "libvpx-vp9", "-b:v", "600k", "-deadline", "realtime"] : h264),
+    ...(tone ? ["-c:a", name.endsWith(".webm") ? "libopus" : "aac", "-shortest"] : ["-an"]), out) });
+  const kenBurns = (name, source, seconds, daysAgo, hour) => ({ name, daysAgo, hour, make: async (out) => {
+    if (!source) return ffmpeg(...lavfi("gradients=s=1280x720:speed=0.02", seconds), ...h264, out);
+    const frame = out.replace(/\.[^.]+$/, ".src.jpg");
+    await sips("-s", "format", "jpeg", "-Z", "1920", source, "--out", frame);
+    await ffmpeg("-i", frame, "-vf", `scale=2560:-2,zoompan=z='min(zoom+0.0015,1.3)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${seconds * 30}:s=1280x720:fps=30`,
+      "-frames:v", String(seconds * 30), ...h264, out);
+    rmSync(frame, { force: true });
+  } });
+  const audio = (name, spec, seconds, daysAgo, hour) => ({ name, daysAgo, hour, make: (out) => ffmpeg(...lavfi(spec, seconds),
+    ...(name.endsWith(".mp3") ? ["-c:a", "libmp3lame", "-b:a", "128k"] : name.endsWith(".wav") ? [] : ["-c:a", "aac", "-b:a", "96k"]), out) });
+  const doc = (name, daysAgo, hour, make) => ({ name, daysAgo, hour, make });
+  const pdfOf = (source) => async (out) => {
+    const png = out.replace(/\.pdf$/, ".src.png");
+    await (source ? sips("-s", "format", "png", "-Z", "1100", source, "--out", png) : ffmpeg(...lavfi("color=c=white:s=850x1100", 1), "-frames:v", "1", png));
+    await sips("-s", "format", "pdf", png, "--out", out);
+    rmSync(png, { force: true });
+  };
+  const text = (body) => async (out) => writeFileSync(out, body);
+  const zipOf = (megabytes, ...names) => async (out) => {
+    const dir = `${out}.d`;
+    mkdirSync(dir, { recursive: true });
+    for (const n of names) writeFileSync(join(dir, n), `${n}\n`.repeat(200));
+    writeFileSync(join(dir, "payload.bin"), randomBytes(Math.round(megabytes * 1_048_576)));
+    await run("zip", ["-qr", out, "."], { cwd: dir });
+    rmSync(dir, { recursive: true, force: true });
+  };
+  return {
+    folder: [
+      photo("IMG_4821.jpg", pick(large, 0), 3024, 20, 18),
+      photo("IMG_4822.jpg", pick(large, 1), 3024, 20, 18),
+      photo("IMG_4907.HEIC", pick(scenic, 3), 2048, 17, 11),
+      photo("DSC09114.jpg", pick(scenic, 4), 2400, 16, 15),
+      photo("DSC09115.jpg", pick(scenic, 5), 2400, 16, 15),
+      photo("Big Sur Coastline.jpg", pick(scenic, 0), 1600, 14, 9),
+      photo("wallpaper-sonoma-5k.jpg", pick(large, 2), 5120, 12, 20),
+      photo("Catalina Sunset.jpg", pick(scenic, 1), 1600, 11, 21),
+      photo("mood-board-03.jpg", pick(scenic, 6), 1400, 9, 14),
+      photo("profile-picture.png", pick(scenic, 7), 800, 8, 10),
+      still(shotName(7, 10, 41), "testsrc2=s=1512x982", 7, 10),
+      still(shotName(7, 10, 42), "gradients=s=1512x982:seed=7", 7, 10),
+      photo("vacation-lake-tahoe.jpg", pick(scenic, 8), 2400, 6, 17),
+      photo("IMG_5101.jpg", pick(large, 3), 3024, 4, 12),
+      photo("IMG_5102.jpg", pick(scenic, 9), 3024, 4, 12),
+      gif("reaction.gif", "life=s=240x160:mold=10:rate=10:ratio=0.3:death_color=#202040:life_color=#a0e0ff", 2, 3, 22),
+      photo("iridescence-wallpaper.png", pick(scenic, 10), 2560, 2, 8),
+      photo(shotName(1, 16, 3), pick(large, 4), 1512, 1, 16),
+      kenBurns("IMG_4830.MOV", pick(scenic, 2), 4, 20, 19),
+      video(`screen-recording-${dayName(13)}.mov`, "testsrc2=s=1280x800:rate=30", 3, 13, 11),
+      video("drone-clip-sunset.mp4", "gradients=s=1280x720:speed=0.03:seed=4:rate=30", 5, 10, 19),
+      video("mandelbrot-zoom.mp4", "mandelbrot=s=960x540:rate=30", 3, 5, 23, 330),
+      video("bug-repro-sidebar.mp4", "testsrc=s=1280x720:rate=30", 2, 2, 14),
+      video("game-of-life.webm", "life=s=640x360:mold=10:rate=30:ratio=0.2:death_color=#101018:life_color=#ffb050", 4, 1, 20),
+      audio(`Voice Memo ${dayName(14)}.m4a`, "sine=frequency=220:beep_factor=4:sample_rate=44100", 5, 14, 8),
+      audio("lofi-loop-90bpm.mp3", "aevalsrc=0.3*sin(2*PI*220*t)*(0.5+0.5*sin(2*PI*1.5*t))|0.3*sin(2*PI*277*t)*(0.5+0.5*sin(2*PI*1.5*t)):s=44100", 4, 9, 22),
+      audio("notification-chime.wav", "aevalsrc=0.4*sin(2*PI*880*t)*exp(-3*t):s=44100", 2, 6, 13),
+      audio("meeting-dictation.m4a", "sine=frequency=180:sample_rate=44100", 3, 0, 9),
+      doc("Lease-Agreement-2026.pdf", 19, 10, pdfOf(null)),
+      doc("budget-2026.csv", 15, 21, text("month,rent,food,travel\nJan,2100,640,0\nFeb,2100,610,450\n")),
+      doc("notes.txt", 3, 9, text("Library sample notes\n")),
+      doc("old-site-backup.zip", 12, 12, zipOf(3.4, "index.html", "styles.css")),
+    ],
+    hidden: [
+      doc(".DS_Store", 20, 9, text("")),
+      photo(".hidden-snapshot.jpg", pick(scenic, 11), 800, 1, 9),
+      doc(".partial-upload.mp4", 0, 8, text("")),
+    ],
+    subfolder: [
+      photo("Old Screenshots/Screenshot 2026-09-01 at 09.00.00.png", pick(scenic, 12), 1200, 20, 9),
+      photo("Old Screenshots/IMG_3001.jpg", pick(scenic, 13), 1200, 20, 9),
+      video("Old Screenshots/clip.mp4", "testsrc2=s=640x360:rate=30", 2, 20, 9),
+    ],
+    served: [
+      photo("team-offsite-group-photo.jpg", pick(large, 5), 3024),
+      doc("Quarterly-Report-2026-Q3-final.pdf", 0, 0, pdfOf(pick(scenic, 14))),
+      doc("Quarterly-Report-2026-Q3-final-v2-reviewed-by-legal-and-finance.pdf", 0, 0, pdfOf(pick(scenic, 15))),
+      doc("macOS-wallpapers-collection-4k.zip", 0, 0, zipOf(1, "a.txt")),
+      kenBurns("product-demo-recording-2026-11-02-1080p.mp4", pick(scenic, 16), 5),
+      audio("podcast-episode-142-the-browser-wars.mp3", "aevalsrc=0.25*sin(2*PI*196*t)*(0.6+0.4*sin(2*PI*0.5*t)):s=44100", 5),
+      doc("customer-analytics-export-2026-10-full-archive.zip", 0, 0, zipOf(6, "export.csv")),
+      doc("ardia-design-assets.zip", 0, 0, zipOf(8.7, "logo.svg", "palette.json", "icon.png")),
+      photo("IMG_5012.jpg", pick(scenic, 17), 3024),
+      photo("IMG_5013.jpg", pick(scenic, 18), 3024),
+      doc("Ardia-0.43.0-nightly.12-arm64.dmg", 0, 0, zipOf(4, "Ardia.app")),
+      doc("invoice-INV-2026-1107.pdf", 0, 0, pdfOf(null)),
+      photo("brand-palette-v3.png", pick(scenic, 19), 1600),
+      doc("lyrics-draft.pdf", 0, 0, pdfOf(pick(scenic, 20))),
+      video("sunset-timelapse.mov", "gradients=s=1920x1080:speed=0.05:seed=11:rate=30", 4, 0, 0),
+      doc("Ardia-0.43.0-nightly.14-arm64.dmg", 0, 0, zipOf(24.6, "Ardia.app")),
+      doc("Ardia-0.41.0-arm64.dmg", 0, 0, zipOf(23.1, "Ardia.app")),
+    ],
+  };
+}
+
+const DOWNLOADS = [
+  { name: "Ardia-0.41.0-arm64.dmg", profile: "personal", daysAgo: 20, hour: 10, host: "releases.ardia.test" },
+  { name: "team-offsite-group-photo.jpg", profile: "personal", daysAgo: 18, hour: 19, host: "photos.northwind.test" },
+  { name: "Quarterly-Report-2026-Q3-final.pdf", profile: "work", daysAgo: 15, hour: 9, host: "drive.northwind.test" },
+  { name: "Quarterly-Report-2026-Q3-final.pdf", profile: "work", daysAgo: 15, hour: 11, host: "drive.northwind.test" },
+  { name: "Quarterly-Report-2026-Q3-final-v2-reviewed-by-legal-and-finance.pdf", profile: "work", daysAgo: 14, hour: 16, host: "drive.northwind.test" },
+  { name: "macOS-wallpapers-collection-4k.zip", profile: "personal", daysAgo: 12, hour: 21, host: "cdn.wallpapers.test", end: "cancel" },
+  { name: "product-demo-recording-2026-11-02-1080p.mp4", profile: "work", daysAgo: 10, hour: 14, host: "drive.northwind.test" },
+  { name: "podcast-episode-142-the-browser-wars.mp3", profile: "personal", daysAgo: 9, hour: 7, host: "feeds.podcast.test" },
+  { name: "customer-analytics-export-2026-10-full-archive.zip", profile: "work", daysAgo: 7, hour: 17, host: "drive.northwind.test", end: "fail" },
+  { name: "ardia-design-assets.zip", profile: "studio", daysAgo: 5, hour: 11, host: "files.studio.test" },
+  { name: "brand-palette-v3.png", profile: "studio", daysAgo: 5, hour: 12, host: "files.studio.test" },
+  { name: "IMG_5012.jpg", profile: "personal", daysAgo: 3, hour: 18, host: "photos.northwind.test" },
+  { name: "IMG_5013.jpg", profile: "personal", daysAgo: 3, hour: 18, host: "photos.northwind.test" },
+  { name: "lyrics-draft.pdf", profile: "studio", daysAgo: 3, hour: 20, host: "files.studio.test" },
+  { name: "Ardia-0.43.0-nightly.12-arm64.dmg", profile: "personal", daysAgo: 2, hour: 9, host: "releases.ardia.test", end: "fail" },
+  { name: "invoice-INV-2026-1107.pdf", profile: "work", daysAgo: 1, hour: 10, host: "billing.northwind.test" },
+  { name: "sunset-timelapse.mov", profile: "personal", daysAgo: 0, hour: 8, host: "photos.northwind.test" },
+  { name: "Ardia-0.43.0-nightly.14-arm64.dmg", profile: "personal", daysAgo: 0, hour: 9, host: "releases.ardia.test" },
+];
+
+const PROFILES = {
+  personal: { name: "Personal", color: "green", icon: "🏡" },
+  work: { name: "Northwind", color: "blue", icon: "symbol:briefcase.fill" },
+  studio: { name: "Studio", color: "orange", icon: "symbol:paintpalette.fill" },
+};
+
+const TABS = {
+  personal: {
+    pinned: ["https://mail.google.com/", "https://calendar.google.com/", "https://www.youtube.com/"],
+    open: ["https://en.wikipedia.org/wiki/Web_browser", "https://news.ycombinator.com/", "https://www.apple.com/macbook-pro/", "https://www.nytimes.com/section/technology"],
+  },
+  work: {
+    pinned: ["https://github.com/", "https://linear.app/", "https://www.figma.com/"],
+    open: ["https://react.dev/learn", "https://github.com/facebook/react-native", "https://developer.chrome.com/docs"],
+  },
+  studio: {
+    pinned: ["https://dribbble.com/", "https://fonts.google.com/"],
+    open: ["https://www.behance.net/", "https://coolors.co/", "https://unsplash.com/"],
+  },
+};
+
+const HISTORY = {
+  personal: [
+    ["https://en.wikipedia.org/wiki/Arc_(web_browser)", "Arc (web browser) - Wikipedia"],
+    ["https://en.wikipedia.org/wiki/Chromium_(web_browser)", "Chromium (web browser) - Wikipedia"],
+    ["https://news.ycombinator.com/item?id=41001234", "Show HN: A browser with a sidebar library | Hacker News"],
+    ["https://news.ycombinator.com/item?id=41009876", "The case for vertical tabs | Hacker News"],
+    ["https://www.nytimes.com/2026/11/02/technology/browsers-ai.html", "The Browser Wars Are Back - The New York Times"],
+    ["https://www.seriouseats.com/the-food-lab-best-chocolate-chip-cookie-recipe", "The Food Lab's Chocolate Chip Cookies | Serious Eats"],
+    ["https://www.bonappetit.com/recipe/bas-best-bolognese", "BA's Best Bolognese Recipe | Bon Appétit"],
+    ["https://www.youtube.com/watch?v=dQw4w9WgXcQ", "Rick Astley - Never Gonna Give You Up - YouTube"],
+    ["https://www.youtube.com/watch?v=jNQXAC9IVRw", "Me at the zoo - YouTube"],
+    ["https://www.reddit.com/r/macapps/", "r/macapps"],
+    ["https://www.reddit.com/r/MechanicalKeyboards/", "r/MechanicalKeyboards"],
+    ["https://www.apple.com/iphone/", "iPhone - Apple"],
+    ["https://www.apple.com/airpods-pro/", "AirPods Pro - Apple"],
+    ["https://www.theverge.com/tech", "Tech - The Verge"],
+    ["https://www.theverge.com/2026/11/10/macbook-pro-review", "MacBook Pro review: the fastest Mac yet - The Verge"],
+    ["https://www.airbnb.com/s/Lake-Tahoe/homes", "Lake Tahoe Vacation Rentals - Airbnb"],
+    ["https://www.google.com/maps/place/Lake+Tahoe", "Lake Tahoe - Google Maps"],
+    ["https://www.weather.gov/rev/", "Reno, NV - National Weather Service"],
+    ["https://www.goodreads.com/book/show/40121378-atomic-habits", "Atomic Habits by James Clear | Goodreads"],
+    ["https://open.spotify.com/playlist/37i9dQZF1DX0XUsuxWHRQd", "RapCaviar | Spotify Playlist"],
+    ["https://www.imdb.com/title/tt0816692/", "Interstellar (2014) - IMDb"],
+    ["https://letterboxd.com/film/past-lives/", "Past Lives (2023) - Letterboxd"],
+    ["https://www.strava.com/dashboard", "Dashboard | Strava"],
+    ["https://www.amazon.com/dp/B0BSHF7WHW", "Apple AirTag 4 Pack - Amazon.com"],
+    ["https://www.etsy.com/listing/1234567/ceramic-mug", "Handmade Ceramic Mug - Etsy"],
+    ["https://mail.google.com/mail/u/0/#inbox", "Inbox (3) - Gmail"],
+    ["https://calendar.google.com/calendar/u/0/r/week", "Google Calendar - Week of November 9"],
+    ["https://www.wikipedia.org/", "Wikipedia"],
+    ["https://www.duolingo.com/learn", "Duolingo - Learn"],
+    ["https://www.nps.gov/yose/index.htm", "Yosemite National Park (U.S. National Park Service)"],
+  ],
+  work: [
+    ["https://github.com/northwind/web/pull/1842", "Library panel: media grid by northwind-dev · Pull Request #1842"],
+    ["https://github.com/northwind/web/pull/1851", "Fix download progress ring by northwind-dev · Pull Request #1851"],
+    ["https://github.com/northwind/web/issues/1790", "Downloads list forgets cancelled items · Issue #1790"],
+    ["https://github.com/northwind/web/actions", "Actions · northwind/web"],
+    ["https://github.com/facebook/react-native/releases", "Releases · facebook/react-native"],
+    ["https://linear.app/northwind/issue/NW-412", "NW-412 Library search ignores accents"],
+    ["https://linear.app/northwind/issue/NW-418", "NW-418 Media filter chips"],
+    ["https://linear.app/northwind/view/current-cycle", "Current cycle · Linear"],
+    ["https://www.figma.com/design/abc123/Library-Panel", "Library Panel – Figma"],
+    ["https://www.figma.com/design/def456/Sidebar-v4", "Sidebar v4 – Figma"],
+    ["https://react.dev/reference/react/useDeferredValue", "useDeferredValue – React"],
+    ["https://react.dev/reference/react/useMemo", "useMemo – React"],
+    ["https://developer.apple.com/documentation/foundation/urlresourcevalues", "URLResourceValues | Apple Developer Documentation"],
+    ["https://developer.apple.com/design/human-interface-guidelines/sidebars", "Sidebars | Apple Developer Documentation"],
+    ["https://developer.chrome.com/docs/extensions/reference/api/downloads", "chrome.downloads | API | Chrome for Developers"],
+    ["https://developer.mozilla.org/en-US/docs/Web/API/Intl/DateTimeFormat", "Intl.DateTimeFormat - JavaScript | MDN"],
+    ["https://stackoverflow.com/questions/1077347/hello-world-in-objective-c", "Hello World in Objective-C - Stack Overflow"],
+    ["https://docs.expo.dev/modules/overview/", "Expo Modules API: Overview - Expo Documentation"],
+    ["https://zustand.docs.pmnd.rs/guides/prevent-rerenders-with-use-shallow", "Prevent rerenders with useShallow - Zustand"],
+    ["https://www.notion.so/northwind/Q4-Roadmap", "Q4 Roadmap · Notion"],
+    ["https://www.notion.so/northwind/Weekly-Sync-Nov-10", "Weekly Sync – Nov 10 · Notion"],
+    ["https://northwind.slack.com/archives/C0123/p1699999999", "#design-crit | Slack"],
+    ["https://vercel.com/northwind/web/deployments", "Deployments – web – Vercel"],
+    ["https://sentry.io/organizations/northwind/issues/", "Issues — Sentry"],
+    ["https://docs.google.com/spreadsheets/d/1abc/edit", "Q3 Metrics - Google Sheets"],
+  ],
+  studio: [
+    ["https://dribbble.com/shots/popular/web-design", "Popular Web Design shots on Dribbble"],
+    ["https://dribbble.com/shots/23011234-Media-Library-UI", "Media Library UI by Studio Lane on Dribbble"],
+    ["https://www.behance.net/gallery/180001/Brand-Identity", "Brand Identity :: Behance"],
+    ["https://fonts.google.com/specimen/Inter", "Inter - Google Fonts"],
+    ["https://fonts.google.com/specimen/Fraunces", "Fraunces - Google Fonts"],
+    ["https://coolors.co/palette/264653-2a9d8f-e9c46a-f4a261-e76f51", "Palette 264653 – Coolors"],
+    ["https://unsplash.com/s/photos/mountains", "Mountains Pictures | Download Free Images on Unsplash"],
+    ["https://unsplash.com/photos/a-lake-surrounded-by-trees", "A lake surrounded by trees photo – Unsplash"],
+    ["https://www.awwwards.com/websites/sites_of_the_day/", "Sites of the Day | Awwwards"],
+    ["https://www.pinterest.com/search/pins/?q=moodboard", "Moodboard on Pinterest"],
+    ["https://www.are.na/studio-lane/references", "References — Are.na"],
+    ["https://www.typewolf.com/site-of-the-day", "Site of the Day – Typewolf"],
+    ["https://www.figma.com/community/file/1234/ios-27-ui-kit", "iOS 27 UI Kit | Figma Community"],
+    ["https://www.instagram.com/studiolane/", "Studio Lane (@studiolane) • Instagram"],
+    ["https://vimeo.com/channels/staffpicks", "Vimeo Staff Picks"],
+    ["https://www.soundcloud.com/discover", "Discover on SoundCloud"],
+    ["https://www.etsy.com/shop/StudioLanePrints", "StudioLanePrints - Etsy"],
+    ["https://www.canva.com/design/xyz/brand-kit", "Brand Kit - Canva"],
+  ],
+};
+
+async function makeFiles() {
+  const plan = folderPlan(systemPictures());
+  const jobs = [
+    ...plan.folder.map((f) => ({ ...f, out: join(folder, f.name) })),
+    ...plan.hidden.map((f) => ({ ...f, out: join(folder, f.name) })),
+    ...plan.subfolder.map((f) => ({ ...f, out: join(folder, f.name) })),
+    ...plan.served.map((f) => ({ ...f, out: join(served, f.name) })),
+  ];
+  for (const j of jobs) mkdirSync(dirname(j.out), { recursive: true });
+  const queue = [...jobs];
+  const worker = async () => {
+    for (let j; (j = queue.shift()); ) {
+      try {
+        await j.make(j.out);
+      } catch (e) {
+        throw new Error(`making ${j.name}: ${(e.stderr || e.message).toString().trim()}`);
+      }
+      if (!existsSync(j.out)) throw new Error(`making ${j.name} left no file`);
+    }
+  };
+  await Promise.all(Array.from({ length: 6 }, worker));
+  log(`made ${plan.folder.length} files in Downloads, ${plan.hidden.length} hidden, ${plan.subfolder.length} in a subfolder, ${plan.served.length} to download`);
+  return [...plan.folder, ...plan.hidden, ...plan.subfolder].map((f) => ({ path: join(folder, f.name), time: at(f.daysAgo, f.hour, 17) }));
+}
+
+const MIME = { ".jpg": "image/jpeg", ".png": "image/png", ".pdf": "application/pdf", ".zip": "application/zip", ".mp4": "video/mp4",
+  ".mov": "video/quicktime", ".mp3": "audio/mpeg", ".dmg": "application/x-apple-diskimage" };
+
+function startServer() {
+  const server = createServer((req, res) => {
+    const parts = new URL(req.url, "http://x").pathname.split("/").filter(Boolean).map(decodeURIComponent);
+    const [mode, , name] = parts;
+    const file = name && join(served, basename(name));
+    if (!file || !existsSync(file)) {
+      res.writeHead(404);
+      return res.end();
+    }
+    const size = statSync(file).size;
+    const type = MIME[name.slice(name.lastIndexOf(".")).toLowerCase()] ?? "application/octet-stream";
+    const disposition = `attachment; filename="${name}"`;
+    if (mode === "cancel") {
+      res.writeHead(200, { "content-type": type, "content-length": String(400_000_000), "content-disposition": disposition });
+      const timer = setInterval(() => res.write(Buffer.alloc(4096)), 100);
+      res.on("close", () => clearInterval(timer));
+      return;
+    }
+    if (mode === "fail") {
+      res.writeHead(200, { "content-type": type, "content-length": String(size * 4 + 2_000_000), "content-disposition": disposition });
+      res.write(Buffer.alloc(Math.max(size, 500_000)));
+      return void setTimeout(() => res.socket?.destroy(), 400);
+    }
+    res.writeHead(200, { "content-type": type, "content-length": String(size), "content-disposition": disposition });
+    createReadStream(file).pipe(res);
+  });
+  return new Promise((r) => server.listen(0, "127.0.0.1", () => r(server)));
+}
+
+const js = (args, body) => `const A = ${JSON.stringify(args)};\n${body}`;
+
+async function seed() {
+  const files = await makeFiles();
+  const server = await startServer();
+  const port = server.address().port;
+  const hosts = [...new Set(DOWNLOADS.map((d) => d.host))];
+  log(`serving downloads on 127.0.0.1:${port}`);
+  const instance = await launch(app, {
+    data, metroPort: metro, onboarded: true,
+    switches: [`--host-resolver-rules=${hosts.map((h) => `MAP ${h} 127.0.0.1:${port}`).join(",")}`],
+  });
+  log(`hidden instance pid ${instance.pid} port ${instance.port}`);
+  const ev = (args, body, timeout = 30000) => instance.eval(js(args, body), { timeout });
+  try {
+    const ids = await ev({ PROFILES, folder }, `
+      const s = ac.store.getState();
+      s.updateSettings({ sidebarLibrary: true, tabLayout: "sidebar", autoHideTabs: false });
+      const w = s.windowOrder[0];
+      s.updateProfile("default", { name: A.PROFILES.personal.name, icon: A.PROFILES.personal.icon });
+      s.setProfileLook("default", { color: A.PROFILES.personal.color });
+      const ids = { personal: "default", window: w, firstTab: s.windows[w].tabIds[0] };
+      for (const key of ["work", "studio"]) ids[key] = s.createProfile(A.PROFILES[key]);
+      return ids;`);
+    const engineOf = (key) => (key === "personal" ? "" : ids[key]);
+    for (const key of ["work", "studio", "personal"]) {
+      await ev({ w: ids.window, id: ids[key] }, `ac.store.getState().switchProfile(A.w, A.id); return true;`);
+      await sleep(1500);
+      const settings = await ev({ folder, profile: engineOf(key) }, `
+        return ac.engine.call("downloads.setSettings", { folder: A.folder, askWhereToSave: false, profile: A.profile })
+          .then(() => ac.engine.call("downloads.settings", { profile: A.profile }));`);
+      if (settings?.folder !== folder) throw new Error(`the ${key} profile's download folder is ${settings?.folder}, not ${folder}`);
+    }
+    log("settings, profiles and download folders set");
+
+    const downloaded = [];
+    for (const [i, d] of DOWNLOADS.entries()) {
+      const url = `http://${d.host}/${d.end ?? "file"}/${i}/${encodeURIComponent(d.name)}`;
+      await ev({ w: ids.window, url, profileId: ids[d.profile] }, `ac.store.getState().newTab(A.w, { url: A.url, profileId: A.profileId, background: true }); return true;`);
+      let record = null;
+      for (const end = Date.now() + 60000; Date.now() < end; await sleep(250)) {
+        record = await ev({ url }, `const d = ac.store.getState().downloads.find((x) => x.url === A.url); return d ? { id: d.id, state: d.state, dangerous: !!d.dangerous, path: d.path, filename: d.filename } : null;`);
+        if (record?.dangerous && record.state === "downloading") await ev({ id: record.id }, `return ac.engine.call("downloads.keep", { id: A.id }).then(() => true);`);
+        if (record && d.end === "cancel" && record.state === "downloading" && !record.dangerous) {
+          await sleep(800);
+          await ev({ id: record.id }, `return ac.engine.call("downloads.cancel", { id: A.id }).then(() => true);`);
+        }
+        if (record && record.state !== "downloading") break;
+      }
+      const wanted = { cancel: "cancelled", fail: "failed" }[d.end] ?? "finished";
+      if (record?.state !== wanted) throw new Error(`${d.name} ended ${record?.state ?? "never started"}, expected ${wanted}`);
+      const time = at(d.daysAgo, d.hour, 3 + i);
+      await ev({ id: record.id, time }, `const s = ac.store.getState(); const d = s.downloads.find((x) => x.id === A.id); s.upsertDownload({ ...d, startTime: A.time }); return true;`);
+      if (wanted === "finished") downloaded.push({ path: record.path, time });
+      log(`${wanted.padEnd(9)} ${d.profile.padEnd(8)} ${record.filename}`);
+    }
+
+    for (const key of ["work", "studio", "personal"]) {
+      const tabs = TABS[key];
+      await ev({ w: ids.window, id: ids[key], tabs, first: ids.firstTab }, `
+        const s = ac.store.getState();
+        s.switchProfile(A.w, A.id);
+        for (const url of A.tabs.pinned) s.newTab(A.w, { url, profileId: A.id, pinned: true, background: true });
+        for (const url of A.tabs.open) s.newTab(A.w, { url, profileId: A.id, background: true });
+        const after = ac.store.getState();
+        const mine = after.windows[A.w].tabIds.filter((t) => after.tabs[t]?.profileId === A.id && !after.tabs[t]?.pin && after.tabs[t]?.url === A.tabs.open[0]);
+        if (A.id === "default" && after.tabs[A.first]) after.closeTabs([A.first]);
+        return mine;`);
+      await sleep(1500);
+      const now = Date.now();
+      const entries = HISTORY[key].map(([url, title], n) => {
+        const daysAgo = (n * 5 + key.length) % 21;
+        const lastVisit = Math.min(at(daysAgo, 8 + ((n * 5) % 14), (n * 13) % 60), now - (n + 1) * 60_000);
+        return { url, title, visits: 1 + ((n * 3) % 7), lastVisit };
+      });
+      const added = await ev({ id: ids[key], entries, hosts }, `
+        const s = ac.store.getState();
+        const added = s.importHistory(A.id, A.entries);
+        const local = (ac.store.getState().history[A.id === "default" ? "" : A.id]?.list ?? []).filter((h) => A.hosts.some((host) => h.url.includes(host)) || h.url.includes("127.0.0.1"));
+        if (local.length) s.removeHistory(A.id, local.map((h) => h.url));
+        return added;`);
+      log(`${key}: ${TABS[key].pinned.length} pinned, ${TABS[key].open.length} open, ${added} history entries`);
+    }
+    await ev({ w: ids.window, id: "default" }, `
+      const s = ac.store.getState();
+      s.switchProfile(A.w, A.id);
+      const blank = Object.values(ac.store.getState().tabs).filter((t) => !t.url && !t.pin).map((t) => t.id);
+      if (blank.length) s.closeTabs(blank);
+      const w = ac.store.getState().windows[A.w];
+      const open = w.tabIds.find((t) => ac.store.getState().tabs[t]?.profileId === A.id && !ac.store.getState().tabs[t]?.pin);
+      if (open) s.activate(open);
+      return true;`);
+    await sleep(4000);
+    const summary = await ev({}, `
+      const s = ac.store.getState();
+      return { profiles: s.profileOrder.length, tabs: Object.keys(s.tabs).length, downloads: s.downloads.length,
+        history: Object.fromEntries(Object.entries(s.history).map(([k, v]) => [k || "default", v.list.length])) };`);
+    log(`in the store: ${JSON.stringify(summary)}`);
+    return [...files, ...downloaded];
+  } finally {
+    await instance.quit();
+    server.close();
+  }
+}
+
+const DATE_SCRIPT = `
+import ctypes, ctypes.util, json, os, struct, sys
+libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
+class AttrList(ctypes.Structure):
+    _fields_ = [("bitmapcount", ctypes.c_ushort), ("reserved", ctypes.c_uint16), ("commonattr", ctypes.c_uint32),
+                ("volattr", ctypes.c_uint32), ("dirattr", ctypes.c_uint32), ("fileattr", ctypes.c_uint32), ("forkattr", ctypes.c_uint32)]
+ATTR_CMN_CRTIME = 0x00000200
+ATTR_CMN_ADDEDTIME = 0x10000000
+for row in json.load(sys.stdin):
+    seconds = int(row["time"] / 1000)
+    os.utime(row["path"], (seconds, seconds), follow_symlinks=False)
+    for attr in (ATTR_CMN_CRTIME, ATTR_CMN_ADDEDTIME):
+        value = struct.pack("qq", seconds, 0)
+        if libc.setattrlist(row["path"].encode(), ctypes.byref(AttrList(5, 0, attr, 0, 0, 0, 0)), value, len(value), 0) != 0:
+            sys.exit("setattrlist %s: errno %d" % (row["path"], ctypes.get_errno()))
+`;
+
+function backdate(rows) {
+  const dirs = [...new Set(rows.map((r) => dirname(r.path)).filter((d) => d !== folder))].map((path) => ({ path, time: at(20, 9) }));
+  const result = spawnSync("python3", ["-I", "-c", DATE_SCRIPT], { input: JSON.stringify([...rows.filter((r) => existsSync(r.path)), ...dirs]) });
+  if (result.status !== 0) throw new Error(`backdating files: ${result.stderr}`);
+  log(`backdated ${rows.length} files`);
+}
+
+const FIND = `
+  const registry = __r.getModules();
+  const find = (name) => { for (const [id, m] of (registry instanceof Map ? registry.entries() : Object.entries(registry))) if (m && m.verboseName === name) return __r(Number(id)); return null; };`;
+
+async function verify() {
+  const instance = await launch(app, { data, metroPort: metro });
+  const shots = join(tmpdir(), "ardia-sample-verify");
+  rmSync(shots, { recursive: true, force: true });
+  mkdirSync(shots, { recursive: true });
+  const ev = (args, body, timeout = 30000) => instance.eval(js(args, `${FIND}\n${body}`), { timeout });
+  try {
+    await sleep(3000);
+    const { window, order } = await ev({}, `const s = ac.store.getState(); return { window: s.windowOrder[0], order: s.profileOrder };`);
+    const rows = [];
+    for (const profileId of [...order.slice(1), order[0]]) {
+      await ev({ w: window, profileId }, `ac.store.getState().switchProfile(A.w, A.profileId); return true;`);
+      await sleep(2500);
+      rows.push(await ev({ w: window, profileId }, `
+        const items = find("src/state/library/items.ts");
+        const library = find("src/state/library/library.ts");
+        const filesApi = find("src/platform/files.ts");
+        const dl = find("src/platform/downloads.ts");
+        const model = find("src/state/browser/model.ts");
+        const slice = find("src/state/downloads/downloadsSlice.ts");
+        const s = ac.store.getState();
+        const engine = model.engineProfile(s, A.profileId);
+        return dl.getDownloadSettings(engine).then((settings) => filesApi.listFolderMedia(settings.folder, 500).then((files) => {
+          const downloads = s.downloads.filter((d) => slice.downloadVisibleIn(s, d, s.windows[A.w]));
+          const history = (s.history[engine] && s.history[engine].list) || [];
+          const days = (list) => items.dayGroups(list, Date.now()).length;
+          const tabs = Object.values(s.tabs).filter((t) => t.profileId === A.profileId);
+          return { profile: s.profiles[A.profileId].name, icon: s.profiles[A.profileId].icon, color: s.profiles[A.profileId].color, folder: settings.folder,
+            media: Object.fromEntries(library.MEDIA_KINDS.map((k) => [k, items.mediaItems(downloads, k, files).length])),
+            downloads: items.downloadItems(downloads).length, downloadDays: days(items.downloadItems(downloads)),
+            downloadStates: downloads.reduce((n, d) => ({ ...n, [d.state]: (n[d.state] || 0) + 1 }), {}),
+            history: history.length, historyDays: days(history), pinned: tabs.filter((t) => t.pin).length, open: tabs.filter((t) => !t.pin).length,
+            profilesListed: items.profileItems(s.profileOrder, s.profiles, {}, null).length, sidebarLibrary: s.settings.sidebarLibrary, tabLayout: s.settings.tabLayout };
+        }));`, 60000));
+    }
+    for (const [section, filter] of [["media", "all"], ["media", "image"], ["media", "video"], ["media", "audio"], ["downloads"], ["profiles"], ["history"]]) {
+      await ev({ w: window, section, filter }, `
+        const actions = find("src/state/library/actions.ts");
+        actions.openLibrary(A.w, "command", A.section);
+        if (A.filter) actions.setLibraryFilter(A.w, A.filter);
+        return true;`);
+      await sleep(1500);
+      const file = join(shots, `${section}${filter ? `-${filter}` : ""}.png`);
+      if (!(await ev({ w: window, file }, `return ac.shell.devSnapshotWindow(A.w, A.file);`))) log(`snapshot of ${section} failed`);
+    }
+    for (const r of rows)
+      log(`${r.profile.padEnd(10)} media ${JSON.stringify(r.media)} · downloads ${r.downloads} over ${r.downloadDays} days ${JSON.stringify(r.downloadStates)} · history ${r.history} over ${r.historyDays} days · ${r.pinned} pinned, ${r.open} open`);
+    log(`profiles listed ${rows[0].profilesListed}, sidebarLibrary ${rows[0].sidebarLibrary}, tabLayout ${rows[0].tabLayout}, download folder ${rows[0].folder}`);
+    log(`snapshots in ${shots}`);
+  } finally {
+    await instance.quit();
+    for (const f of ["instance.json", "dev-eval.js", "dev-eval-result.json"]) rmSync(join(data, f), { force: true });
+  }
+}
+
+function openVisible() {
+  if (running()) fail(`an instance is already running on ${data} (pid ${running()})`);
+  for (const f of ["instance.json", "dev-eval.js", "dev-eval-result.json"]) rmSync(join(data, f), { force: true });
+  execFileSync("open", ["-n", "--env", `ARDIA_DATA_DIR=${data}`, "--env", `ARDIA_INSTANCE=jsLocation=localhost:${metro}`, app]);
+  log(`opened ${app} on ${data}`);
+}
+
+try {
+  if (!(flags.reuse && seeded())) {
+    log(`seeding ${data} with ${app}`);
+    prepare();
+    backdate(await seed());
+    rmSync(served, { recursive: true, force: true });
+    for (const f of ["instance.json", "dev-eval.js", "dev-eval-result.json"]) rmSync(join(data, f), { force: true });
+    log(`ready: ${data}`);
+  } else log(`reusing ${data}`);
+  if (flags.verify) await verify();
+  if (flags.open) openVisible();
+} catch (e) {
+  fail(e.stack ?? e.message);
+}

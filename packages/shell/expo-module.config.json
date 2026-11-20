@@ -21,6 +21,8 @@
       "PeekStageModule",
       "SurfaceModule",
       "VisualEffectModule",
+      "ProgressiveBlurModule",
+      "EdgeFadeModule",
       "GlassEffectModule",
       "GlassGroupModule",
       "PopoverBubbleModule",

@@ -64,6 +64,7 @@ export type BrowserCommand =
   | "togglePageEngine"
   | "toggleReader"
   | "downloads"
+  | "toggleLibrary"
   | "mergeAllWindows"
   | "switchProfile"
   | "nextProfile"

@@ -68,7 +68,7 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
   }
   const needsTitle = held.current?.needsTitle ?? liveNeeds;
   shownNeeds.current = needsTitle;
-  const holding = held.current ? heldWideTab(entries, held.current.wide) : null;
+  const holding = held.current ? heldWideTab(entries, held.current.wide, held.current.overflow.hidden) : null;
   const wideId = holding?.tabId ?? activeId;
   const measures = { groupChip: chipOf, folderChip, needsTitle };
   const heldFit = held.current ? withActiveShown(held.current.overflow, activeId) : null;

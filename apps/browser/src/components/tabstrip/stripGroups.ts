@@ -349,8 +349,8 @@ export function underPressure({ hidden, selectedMin }: StripOverflow): boolean {
   return hidden.size > 0 || selectedMin < SELECTED_MIN_CHIP;
 }
 
-export function heldWideTab(entries: StripEntry[], wide: { tabId: string; slot: number }): { tabId: string; atEnd: boolean } {
-  const rows = entries.filter((e): e is StripGroupEntry | StripMember => e.kind !== "dock");
+export function heldWideTab(entries: StripEntry[], wide: { tabId: string; slot: number }, hidden: ReadonlySet<string> = NO_OVERFLOW): { tabId: string; atEnd: boolean } {
+  const rows = withoutTabs(entries, hidden).filter((e): e is StripGroupEntry | StripMember => e.kind !== "dock");
   const atEnd = wide.slot >= rows.length;
   const row = rows[Math.min(wide.slot, rows.length - 1)];
   if (!row || row.kind === "group") return { tabId: wide.tabId, atEnd: false };

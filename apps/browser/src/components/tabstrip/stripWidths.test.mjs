@@ -239,3 +239,17 @@ test("after the strip widens, a long group name gets its full room back even bes
   tight = step(true, released, measured);
   assert.equal(tight, false, "widened: the long name runs to 120 pt again");
 });
+
+test("with earlier tabs in the open tabs menu, closing the selected tab holds its slot for the next visible tab, not a hidden one", () => {
+  const tabs = ["a", "b", "c", "d", "e", "f"].map(tab);
+  const needs = tabs.map((t) => t.id);
+  const fit = stripOverflow(tabs, "e", 400, measured(needs), null);
+  assert.deepEqual([...fit.hidden].sort(), ["a", "b", "c"]);
+  const shown = layoutStrip(withoutTabs(tabs, fit.hidden), "e", 400, measured(needs), null, undefined, "e", fit.selectedMin);
+  const wide = { tabId: "e", slot: shown.top.slots.findIndex((s) => s.tabIds.includes("e")) };
+  const closedE = tabs.filter((t) => t.id !== "e");
+  const holding = heldWideTab(closedE, wide, fit.hidden);
+  assert.deepEqual(holding, { tabId: "f", atEnd: false });
+  const held = layoutStrip(withoutTabs(closedE, fit.hidden), "f", 400, measured(needs), null, shown.widths, holding.tabId, fit.selectedMin);
+  assert.equal(held.tabWidth("f"), shown.tabWidth("e"));
+});

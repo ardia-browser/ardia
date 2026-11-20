@@ -36,6 +36,7 @@ export type SearchScope = {
   url: string;
   engineId?: string;
   providerId?: string;
+  keyword?: string;
 };
 
 export type KeywordProvider = { id: string; title: string; keyword: string; host?: string; url?: string };
@@ -92,6 +93,13 @@ function engineScope(e: SearchEngine): SearchScope {
   return { kind: "engine", name: e.name, host: engineHost(e), url: e.url, engineId: e.id };
 }
 
+function engineKeywordScope(text: string, engines: readonly SearchEngine[]): SearchScope | null {
+  const t = text.trim().toLowerCase();
+  const matches = engines.filter((x) => x.keyword.toLowerCase() === t);
+  const e = matches.find((x) => x.custom) ?? matches[0];
+  return e ? { ...engineScope(e), keyword: e.keyword } : null;
+}
+
 export function scopedSearchUrl(scope: SearchScope, query: string, defaultEngine: Pick<SearchEngine, "url">): string {
   if (scope.kind === "history") return searchUrl(defaultEngine, `site:${scope.host} ${query.trim()}`);
   if (scope.kind === "provider" && !scope.url) return searchUrl(defaultEngine, query);
@@ -101,7 +109,7 @@ export function scopedSearchUrl(scope: SearchScope, query: string, defaultEngine
 export function offeredSiteSearch(typed: string, completion: string, sources: ScopeSources): SearchScope | null {
   const t = typed.trim();
   if (!t || /\s/.test(t)) return null;
-  return providerScope(typed, sources.providers) ?? findScope(typed + completion, sources);
+  return providerScope(typed, sources.providers) ?? engineKeywordScope(t, sources.engines) ?? findScope(typed + completion, sources);
 }
 
 export type SiteSearchKeyState = {
@@ -133,7 +141,7 @@ export function asksForBackspace(scope: SearchScope | null): boolean {
 export function siteSearchKey(key: string, modifiers: SiteSearchKeyModifiers, state: SiteSearchKeyState): SiteSearchKey | null {
   const { shiftKey, altKey, metaKey, ctrlKey } = modifiers;
   if (key === "Tab" && !shiftKey && !ctrlKey) {
-    if (!state.scope && state.offered) return { kind: "enter", scope: state.offered, from: state.typed + state.completion };
+    if (!state.scope && state.offered) return { kind: "enter", scope: state.offered, from: state.offered.keyword ? state.typed : state.typed + state.completion };
     if (state.completion) return { kind: "accept", text: state.typed + state.completion };
     return null;
   }

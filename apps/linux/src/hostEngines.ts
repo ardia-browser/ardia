@@ -15,4 +15,4 @@ export const recommendedEngineFor: typeof shared.recommendedEngineFor = (s, url)
 export const engineForUrl: typeof shared.engineForUrl = (s, url) => (webkit ? shared.engineForUrl(s, url) : "chromium");
 export const tabEngine: typeof shared.tabEngine = (s, tabId) => (webkit ? shared.tabEngine(s, tabId) : "chromium");
 export const typedNavigationEngine: typeof shared.typedNavigationEngine = (s, tab, url) => (webkit ? shared.typedNavigationEngine(s, tab, url) : "chromium");
-export const engineMark: typeof shared.engineMark = (s, tabId) => (webkit ? shared.engineMark(s, tabId) : null);
+export const switchableEngine: typeof shared.switchableEngine = (s, url) => webkit && shared.switchableEngine(s, url);

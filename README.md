@@ -81,7 +81,7 @@ Not WebKit. Not Electron. Every window is Chrome’s own, so sites, extensions a
 | Sync | End-to-end encrypted, through your own iCloud Drive. | ✓ Yes |
 | Translate | On your Mac. Nothing leaves it. | ✓ macOS 26 |
 | Passkeys | Touch ID yes. iCloud Keychain waits on Apple. | ~ Partly |
-| Netflix and DRM | Streaming sites open in WebKit, where they play. Widevine in Chromium waits on Google. | ~ Partly |
+| Netflix and DRM | Protected video plays in WebKit with FairPlay; streaming sites open there. Chromium has no Widevine. | ~ Partly |
 | Intel Macs | Apple Silicon only. | ✗ No |
 
 <h3 align="center">

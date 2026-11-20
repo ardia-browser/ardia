@@ -14,11 +14,11 @@ const SYSTEM: OpenDownloadDeps = { open: openFile, reveal: revealFile };
 
 export const isArchive = (path: string) => ARCHIVE.test(path);
 
-export async function openDownload(path: string, deps: OpenDownloadDeps = SYSTEM): Promise<boolean> {
+export async function openDownload(path: string, deps: OpenDownloadDeps = SYSTEM, mayGoOn: () => boolean = () => true): Promise<boolean> {
   if (!PLATFORM_FEATURES.unpacksArchivesSilently || !isArchive(path)) return deps.open(path);
   const consent = consentToken();
   if (!(await deps.open(path))) return false;
   noteDownloadsPanel("archiveOpen", consent);
-  await deps.reveal(path);
+  if (mayGoOn()) await deps.reveal(path);
   return true;
 }

@@ -10,7 +10,7 @@ import { Symbol, Text, Panel } from "../ui";
 import { useTheme } from "../ui/theme";
 import { TabIcon } from "./TabIcon";
 import { revealedOffset } from "./switcherScroll";
-import { SIDEBAR_SHADOW, TAB_SWITCHER as T, TAB_SWITCHER_SCROLL_ID } from "./tokens";
+import { SIDEBAR_SHADOW, TAB_SWITCHER as T, TAB_SWITCHER_SCROLL_ID, tabSwitcherColors } from "./tokens";
 
 const SHOT = Math.round(T.card / T.shotAspect);
 const SHOT_WIDTH = T.card - 2 * T.cardInset;
@@ -47,7 +47,7 @@ export function TabSwitcher({ windowId, windowWidth, windowHeight }: { windowId:
       }}
     >
       <Panel
-        fill={theme.dark ? T.fill.dark : T.fill.light}
+        fill={tabSwitcherColors(theme.dark).fill}
         radius={T.panelRadius}
         border={theme.panelBorder}
         shadow={SIDEBAR_SHADOW.tabSwitcher}
@@ -119,6 +119,7 @@ function SwitcherRow({ ids, index, viewport, overflows, accent }: { ids: string[
 
 const SwitcherCard = memo(function SwitcherCard({ tabId, index, focused, accent, overflows }: { tabId: string; index: number; focused: boolean; accent: string; overflows: boolean }) {
   const tab = useTab(tabId);
+  const colors = tabSwitcherColors(useTheme().dark);
   const picture = useSyncExternalStore(onPicturesChanged, () => lastPicture(tabId));
   useEffect(() => () => leaveSwitcherRow(index), [index]);
   if (!tab) return null;
@@ -135,14 +136,14 @@ const SwitcherCard = memo(function SwitcherCard({ tabId, index, focused, accent,
         onMouseEnter={() => hoverSwitcherRow(index)}
         onMouseLeave={() => leaveSwitcherRow(index)}
       >
-        <View style={{ width: T.card, padding: T.cardInset, borderRadius: T.cardRadius, backgroundColor: focused ? T.focusFill : undefined }}>
+        <View style={{ width: T.card, padding: T.cardInset, borderRadius: T.cardRadius, backgroundColor: focused ? colors.focusFill : undefined }}>
           <View
             style={{
               width: SHOT_WIDTH,
               height: SHOT,
               borderRadius: T.previewRadius,
               overflow: "hidden",
-              backgroundColor: url ? T.pageFill : T.blankFill,
+              backgroundColor: url ? colors.pageFill : colors.blankFill,
               alignItems: "center",
               justifyContent: "center",
             }}
@@ -154,7 +155,7 @@ const SwitcherCard = memo(function SwitcherCard({ tabId, index, focused, accent,
                 style={[StyleSheet.absoluteFill, { borderRadius: T.previewRadius }]}
               />
             ) : (
-              <TabIcon tabId={tab.id} url={url} favicon={tab.favicon} icon={tab.customIcon} profileId={tab.profileId} size={T.icon.preview} color={url ? T.onPage : T.onPanel} />
+              <TabIcon tabId={tab.id} url={url} favicon={tab.favicon} icon={tab.customIcon} profileId={tab.profileId} size={T.icon.preview} color={url ? colors.onPage : colors.onPanel} />
             )}
             <View
               pointerEvents="none"
@@ -163,18 +164,18 @@ const SwitcherCard = memo(function SwitcherCard({ tabId, index, focused, accent,
                 {
                   borderRadius: T.previewRadius,
                   borderWidth: focused ? T.ring.focused : T.ring.rest,
-                  borderColor: focused ? accent : T.restRing,
+                  borderColor: focused ? accent : colors.restRing,
                 },
               ]}
             />
           </View>
           <View style={{ height: T.label, flexDirection: "row", alignItems: "center", gap: T.labelGap, paddingHorizontal: T.labelInset }}>
             {url || tab.customIcon ? (
-              <TabIcon tabId={tab.id} url={url} favicon={tab.favicon} icon={tab.customIcon} profileId={tab.profileId} size={T.icon.label} color={T.onPanel} />
+              <TabIcon tabId={tab.id} url={url} favicon={tab.favicon} icon={tab.customIcon} profileId={tab.profileId} size={T.icon.label} color={colors.onPanel} />
             ) : (
-              <Symbol name="globe" size={T.icon.globe} color={T.onPanel} style={{ width: T.icon.label, height: T.icon.label }} />
+              <Symbol name="globe" size={T.icon.globe} color={colors.onPanel} style={{ width: T.icon.label, height: T.icon.label }} />
             )}
-            <Text lines={1} weight="semibold" color={T.title} style={{ flex: 1, fontSize: T.titleSize }}>
+            <Text lines={1} weight="semibold" color={colors.title} style={{ flex: 1, fontSize: T.titleSize }}>
               {tabTitle(tab)}
             </Text>
           </View>

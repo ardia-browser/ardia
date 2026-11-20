@@ -25,18 +25,27 @@ test("a neutral group keeps Dia's look, its box only under the pointer, and None
   assert.deepEqual(groupSurface("none", TOKENS), { fill: "transparent", stroke: "transparent" });
 });
 
-test("a folder with no colour of its own is drawn in #443AFF, and a coloured one in its group's tint, darkened in light mode only as far as a 3:1 outline needs", () => {
+const PROFILE = "#0A84FF";
+const OTHER_PROFILE = "#C07A98";
+const tray = (tint) => over(withAlpha(tint, 0.16), "#F2F2F2");
+
+function assertOutline(stroke, tint, label) {
+  assert.ok(contrastRatio(stroke, tray(tint)) >= 3, label);
+  assert.equal(stroke, contrastRatio(tint, tray(tint)) >= 3 ? tint : stroke, label);
+  assert.ok(contrastRatio(mix(stroke, tint, 0.2), tray(tint)) < 3 || stroke === tint, label);
+}
+
+test("a folder with no colour of its own takes the profile's colour, and a coloured one its group's tint, each darkened in light mode only as far as a 3:1 outline needs", () => {
   for (const color of [null, undefined, "none"]) {
-    assert.equal(folderPalette(color, false).stroke, "#443AFF", String(color));
-    assert.deepEqual(folderPalette(color, true), folderPalette(null, true), String(color));
+    assertOutline(folderPalette(color, false, PROFILE).stroke, PROFILE, String(color));
+    assert.deepEqual(folderPalette(color, true, PROFILE), folderPalette(null, true, PROFILE), String(color));
   }
+  assert.notDeepEqual(folderPalette(null, true, PROFILE), folderPalette(null, true, OTHER_PROFILE));
+  assert.notEqual(folderPalette(null, false, PROFILE).stroke, folderPalette(null, false, OTHER_PROFILE).stroke);
   for (const color of TAB_GROUP_COLORS) {
-    const tint = GROUP_COLORS[color].hex;
-    const tray = over(withAlpha(tint, 0.16), "#F2F2F2");
-    const stroke = folderPalette(color, false).stroke;
-    assert.ok(contrastRatio(stroke, tray) >= 3, color);
-    assert.equal(stroke, contrastRatio(tint, tray) >= 3 ? tint : stroke, color);
-    assert.ok(contrastRatio(mix(stroke, tint, 0.2), tray) < 3 || stroke === tint, color);
-    assert.notDeepEqual(folderPalette(color, true), folderPalette(null, true), color);
+    assertOutline(folderPalette(color, false, PROFILE).stroke, GROUP_COLORS[color].hex, color);
+    assert.deepEqual(folderPalette(color, false, PROFILE), folderPalette(color, false, OTHER_PROFILE), color);
+    assert.deepEqual(folderPalette(color, true, PROFILE), folderPalette(color, true, OTHER_PROFILE), color);
+    assert.notDeepEqual(folderPalette(color, true, PROFILE), folderPalette(null, true, PROFILE), color);
   }
 });

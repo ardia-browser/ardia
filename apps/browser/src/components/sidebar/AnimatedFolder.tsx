@@ -17,7 +17,7 @@ export const AnimatedFolder = memo(function AnimatedFolder({ open, color, size }
   const mark = Math.round((side * FOLDER_MARK) / FOLDER_SIDE);
   return (
     <View style={{ width: side, height: side, alignItems: "center", justifyContent: "center" }}>
-      <FolderIcon open={open} {...folderPalette(color, theme.dark)} style={{ width: mark, height: mark }} />
+      <FolderIcon open={open} {...folderPalette(color, theme.dark, theme.powerUpColor ?? theme.accent)} style={{ width: mark, height: mark }} />
     </View>
   );
 });

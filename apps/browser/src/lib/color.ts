@@ -57,11 +57,16 @@ export function contrastRatio(a: string, b: string): number {
 
 export function darkenToContrast(color: string, backdrop: string, ratio: number): string {
   const black = toHex([0, 0, 0]);
-  for (let step = 0; step <= 20; step++) {
-    const darker = mix(color, black, step / 20);
-    if (contrastRatio(darker, backdrop) >= ratio) return darker;
+  if (contrastRatio(color, backdrop) >= ratio) return color;
+  if (contrastRatio(black, backdrop) < ratio) return black;
+  let lighter = 0;
+  let darker = 1;
+  for (let i = 0; i < 24; i++) {
+    const middle = (lighter + darker) / 2;
+    if (contrastRatio(mix(color, black, middle), backdrop) >= ratio) darker = middle;
+    else lighter = middle;
   }
-  return black;
+  return mix(color, black, darker);
 }
 
 export function toContrast(color: string, backdrop: string, ratio: number): string {

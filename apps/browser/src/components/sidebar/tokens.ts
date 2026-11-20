@@ -121,7 +121,10 @@ export const TAB_SWITCHER = {
   get titleSize() {
     return font.small.fontSize;
   },
-  fill: { dark: "#1C1C1EF2", light: "#2A2A2CF2" },
+} as const;
+
+const TAB_SWITCHER_DARK = {
+  fill: "#1C1C1EF2",
   focusFill: "rgba(255,255,255,0.14)",
   restRing: "rgba(255,255,255,0.12)",
   pageFill: "#FFFFFF",
@@ -129,7 +132,20 @@ export const TAB_SWITCHER = {
   onPanel: "#FFFFFFB3",
   onPage: "#000000A6",
   title: "#FFFFFF",
-} as const;
+};
+
+const TAB_SWITCHER_LIGHT: typeof TAB_SWITCHER_DARK = {
+  fill: "#F2F2F7F2",
+  focusFill: "rgba(0,0,0,0.18)",
+  restRing: "rgba(0,0,0,0.1)",
+  pageFill: "#FFFFFF",
+  blankFill: "#D1D1D6",
+  onPanel: "#000000A6",
+  onPage: "#000000A6",
+  title: "#000000D9",
+};
+
+export const tabSwitcherColors = (dark: boolean) => (dark ? TAB_SWITCHER_DARK : TAB_SWITCHER_LIGHT);
 
 export const SELECTED_ROW_SHADOW_OFFSET: [number, number] = [0, 0.5];
 
@@ -215,13 +231,11 @@ export function groupTint(color: GroupColor | null | undefined): string | null {
 
 export const groupBoxAtRest = (color: GroupColor | null | undefined) => groupTint(color) !== null;
 
-const FOLDER_ACCENT = "#443AFF";
-
 const LIGHT_FOLDER_BACKDROP = "#F2F2F2";
 const FOLDER_OUTLINE_CONTRAST = 3;
 
-export function folderPalette(color: GroupColor | null | undefined, dark: boolean) {
-  const tint = groupTint(color) ?? FOLDER_ACCENT;
+export function folderPalette(color: GroupColor | null | undefined, dark: boolean, profileTint: string) {
+  const tint = groupTint(color) ?? profileTint;
   return dark
     ? { stroke: mix("#FFFFFF", tint, 0.64), face: mix("#211E29", tint, 0.12), insideTop: mix("#211E29", tint, 0.4), insideBottom: mix("#15121E", tint, 0.24) }
     : { stroke: darkenToContrast(tint, over(withAlpha(tint, 0.16), LIGHT_FOLDER_BACKDROP), FOLDER_OUTLINE_CONTRAST), face: mix("#FFFFFF", tint, 0.06), insideTop: mix("#FFFFFF", tint, 0.34), insideBottom: mix("#FFFFFF", tint, 0.64) };

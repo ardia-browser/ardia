@@ -53,22 +53,22 @@ export function persistEngine(tabId: string, engine: PageEngine) {
   if (t && !t.engine) store().updateTab(tabId, { engine });
 }
 
-async function mayLeavePage(t: Tab, title: string, message: string, confirmTitle: string): Promise<boolean> {
+async function mayLeavePage(t: Tab, title: string, message: string, confirmTitle: string, ask: typeof confirm = confirm): Promise<boolean> {
   if (!wantsPage(t) || !(await hasUnsavedWork(t.id))) return true;
-  const { confirmed } = await confirm({ title, message, confirmTitle, cancelTitle: "Stay on Page", windowId: t.windowId });
+  const { confirmed } = await ask({ title, message, confirmTitle, cancelTitle: "Stay on Page", windowId: t.windowId });
   return confirmed;
 }
 
 const pageUrl = (t: Tab | undefined) => t?.url || navigationOf(t)?.url || "";
 
-export async function goBackAcrossEngines(tabId: string): Promise<boolean> {
+export async function goBackAcrossEngines(tabId: string, mayAct: () => boolean = () => true, ask: typeof confirm = confirm): Promise<boolean> {
   const back = pageOf(tabId).engineBack;
   const t = store().tabs[tabId];
   if (!back || !t) return false;
   const from = pageUrl(t);
-  const leaving = await mayLeavePage(t, "Go back to the previous page?", `It opens in ${ENGINE_NAMES[back.engine]}, so changes you made on this page may not be saved.`, "Go Back");
+  const leaving = await mayLeavePage(t, "Go back to the previous page?", `It opens in ${ENGINE_NAMES[back.engine]}, so changes you made on this page may not be saved.`, "Go Back", ask);
   const now = store().tabs[tabId];
-  if (!leaving || !now || pageUrl(now) !== from || pageOf(tabId).engineBack !== back) return false;
+  if (!leaving || !now || pageUrl(now) !== from || pageOf(tabId).engineBack !== back || !mayAct()) return false;
   patchPage(tabId, { engineBack: null });
   store().updateTab(tabId, { engine: back.engine, page: loadedPage(navigationTo(back.url, true)) });
   return true;

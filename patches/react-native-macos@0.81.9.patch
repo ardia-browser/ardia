@@ -348,10 +348,10 @@ index 3de368b73b6bbad86f1b27dd0ba56abb516f89e8..58ec2e0f64379d83989e5915b3ee4404
  
  - (instancetype)initWithEventDispatcher:(id<RCTEventDispatcherProtocol>)eventDispatcher; // [macOS]
 diff --git a/Libraries/Text/Text/RCTTextView.mm b/Libraries/Text/Text/RCTTextView.mm
-index abff88e692bd8ec88f4e5b292234b23133962d46..9bb23098ddd7f5b2b4143a1d964188c973a90d55 100644
+index abff88e692bd8ec88f4e5b292234b23133962d46..b279ebb05127338f69027c09e915acf865e7f705 100644
 --- a/Libraries/Text/Text/RCTTextView.mm
 +++ b/Libraries/Text/Text/RCTTextView.mm
-@@ -37,6 +37,97 @@ - (BOOL)canBecomeKeyView
+@@ -37,6 +37,108 @@ - (BOOL)canBecomeKeyView
  
  @end
  
@@ -444,12 +444,23 @@ index abff88e692bd8ec88f4e5b292234b23133962d46..9bb23098ddd7f5b2b4143a1d964188c9
 +                }];
 +  return found;
 +}
++
++static BOOL RCTTextShowsLowercase(NSString *string, NSArray<NSValue *> *shown)
++{
++  NSCharacterSet *lowercase = NSCharacterSet.lowercaseLetterCharacterSet;
++  for (NSValue *part in shown) {
++    if ([string rangeOfCharacterFromSet:lowercase options:0 range:part.rangeValue].location != NSNotFound) {
++      return YES;
++    }
++  }
++  return NO;
++}
 +// Ardia]
 +
  #endif // macOS]
  
  #if !TARGET_OS_OSX // [macOS]
-@@ -62,6 +153,9 @@ @implementation RCTTextView {
+@@ -62,6 +164,9 @@ @implementation RCTTextView {
    NSArray<RCTUIView *> *_Nullable _descendantViews; // [macOS]
    NSTextStorage *_Nullable _textStorage;
    CGRect _contentFrame;
@@ -459,17 +470,18 @@ index abff88e692bd8ec88f4e5b292234b23133962d46..9bb23098ddd7f5b2b4143a1d964188c9
  }
  
  // [macOS
-@@ -171,6 +265,9 @@ - (void)setTextStorage:(NSTextStorage *)textStorage
+@@ -171,6 +276,10 @@ - (void)setTextStorage:(NSTextStorage *)textStorage
  #if TARGET_OS_OSX // [macOS
    NSLayoutManager *layoutManager = textStorage.layoutManagers.firstObject;
    NSTextContainer *textContainer = layoutManager.textContainers.firstObject;
-+  _opticalFont = descendantViews.count > 0 || RCTTextHasAttachments(textStorage) // [Ardia: inline views and attachments are placed apart from the glyphs, so text that has them isn't lifted
++  NSArray<NSValue *> *shown = descendantViews.count > 0 || RCTTextHasAttachments(textStorage) // [Ardia: inline views and attachments are placed apart from the glyphs, and text with no lowercase has no x-height to centre, so neither is lifted
 +      ? nil
-+      : RCTTextDominantFont(textStorage, RCTTextShownCharacters(textStorage, layoutManager, textContainer)); // Ardia]
++      : RCTTextShownCharacters(textStorage, layoutManager, textContainer);
++  _opticalFont = shown != nil && RCTTextShowsLowercase(textStorage.string, shown) ? RCTTextDominantFont(textStorage, shown) : nil; // Ardia]
  
    [_textView replaceTextContainer:textContainer];
  
-@@ -187,7 +284,7 @@ - (void)setTextStorage:(NSTextStorage *)textStorage
+@@ -187,7 +296,7 @@ - (void)setTextStorage:(NSTextStorage *)textStorage
  
    _textView.minSize = contentFrame.size;
    _textView.maxSize = contentFrame.size;
@@ -478,7 +490,7 @@ index abff88e692bd8ec88f4e5b292234b23133962d46..9bb23098ddd7f5b2b4143a1d964188c9
    _textView.textStorage.attributedString = textStorage;
  #endif // macOS]
  
-@@ -205,6 +302,33 @@ - (void)setTextStorage:(NSTextStorage *)textStorage
+@@ -205,6 +314,33 @@ - (void)setTextStorage:(NSTextStorage *)textStorage
    [self setNeedsDisplay];
  }
  
@@ -512,7 +524,7 @@ index abff88e692bd8ec88f4e5b292234b23133962d46..9bb23098ddd7f5b2b4143a1d964188c9
  - (void)drawRect:(CGRect)rect
  {
    [super drawRect:rect];
-@@ -293,6 +417,11 @@ - (NSNumber *)reactTagAtPoint:(CGPoint)point
+@@ -293,6 +429,11 @@ - (NSNumber *)reactTagAtPoint:(CGPoint)point
    CGFloat fraction;
    NSLayoutManager *layoutManager = _textStorage.layoutManagers.firstObject;
    NSTextContainer *textContainer = layoutManager.textContainers.firstObject;
@@ -524,7 +536,7 @@ index abff88e692bd8ec88f4e5b292234b23133962d46..9bb23098ddd7f5b2b4143a1d964188c9
    NSUInteger characterIndex = [layoutManager characterIndexForPoint:point
                                                      inTextContainer:textContainer
                             fractionOfDistanceBetweenInsertionPoints:&fraction];
-@@ -310,6 +439,12 @@ - (NSNumber *)reactTagAtPoint:(CGPoint)point
+@@ -310,6 +451,12 @@ - (NSNumber *)reactTagAtPoint:(CGPoint)point
  - (void)didMoveToWindow
  {
    [super didMoveToWindow];
@@ -537,7 +549,7 @@ index abff88e692bd8ec88f4e5b292234b23133962d46..9bb23098ddd7f5b2b4143a1d964188c9
  
    if (!self.window) {
      self.layer.contents = nil;
-@@ -318,6 +453,9 @@ - (void)didMoveToWindow
+@@ -318,6 +465,9 @@ - (void)didMoveToWindow
        _highlightLayer = nil;
      }
    } else if (_textStorage) {

@@ -1,3 +1,4 @@
+import { consentToken } from "../telemetry/client";
 import { isFields } from "../../lib/decode";
 import { minimizedUrl, originOf as urlOrigin, urlParts } from "../../lib/urlParts";
 import { anyMatches, matchesUrl } from "../../lib/matchPattern";
@@ -36,7 +37,7 @@ function decidingHook<A>(event: DecideEvent, plan: Plan<A>): Deciding<A> | null 
 function askHook<A>(hook: HookSpec, event: DecideEvent, data: Record<string, unknown>, plan: Plan<A>, signal?: AbortSignal): Promise<A | null> | null {
   if (servingConnection(hook) === null) return null;
   const sent = hook.fullUrls || typeof data.url !== "string" ? data : { ...data, url: minimizedUrl(data.url) };
-  return requestDecision(hook, event, sent, DECIDE_DEADLINE_MS[event], signal).then(
+  return requestDecision(hook, event, sent, DECIDE_DEADLINE_MS[event], signal, consentToken()).then(
     (answer) => (answer === undefined || answer === null ? null : plan.answer(answer)),
     () => null,
   );

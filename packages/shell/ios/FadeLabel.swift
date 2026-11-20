@@ -25,11 +25,6 @@ final class FadeLabel: ExpoView {
   }
   @MainActor private static var fonts: [FontKey: NSFont] = [:]
 
-  static func opticalLift(_ font: NSFont, scale: CGFloat) -> CGFloat {
-    guard scale > 0 else { return 0 }
-    return max(0, ((font.capHeight - font.xHeight) * 0.375 * scale).rounded()) / scale
-  }
-
   @MainActor private static func resolvedFont(family: String, weight: String, size: Double) -> NSFont {
     let key = FontKey(family: family, weight: weight, size: size)
     if let font = fonts[key] { return font }
@@ -71,7 +66,6 @@ final class FadeLabel: ExpoView {
   private let fade = CAGradientLayer()
   private var font = NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .regular)
   private var prepared: Prepared?
-  private var lift: CGFloat = 0
 
   var text = "" {
     didSet {
@@ -134,14 +128,12 @@ final class FadeLabel: ExpoView {
     let scale = backingDensity
     guard scale != ink.contentsScale else { return }
     ink.contentsScale = scale
-    lift = Self.opticalLift(font, scale: scale)
     ink.setNeedsDisplay()
     relayout()
   }
 
   private func update() {
     font = Self.resolvedFont(family: fontFamily, weight: weight, size: fontSize)
-    lift = Self.opticalLift(font, scale: ink.contentsScale)
     prepare()
     ink.setNeedsDisplay()
     relayout()
@@ -202,8 +194,7 @@ final class FadeLabel: ExpoView {
   }
 
   private func inkTop(_ fitting: NSSize) -> CGFloat {
-    let centered = (bounds.height - fitting.height) / 2
-    return isFlipped ? centered - lift : centered + lift
+    (bounds.height - fitting.height) / 2
   }
 
   private func paint(_ ctx: CGContext) {

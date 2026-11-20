@@ -8,13 +8,15 @@ import { watchPageContexts } from "./pages";
 
 let started = false;
 
+export const registerPluginSocketMethods = () => handlePluginSocketMethods(pluginSocketMethod);
+
 export function startPlugins() {
   if (started || !PLATFORM_FEATURES.plugins) return;
   started = true;
   loadPluginRecords();
   startChannels();
   watchPageContexts();
-  handlePluginSocketMethods(pluginSocketMethod);
+  registerPluginSocketMethods();
   watchPluginFolder();
   void rescanPlugins(consentToken());
 }

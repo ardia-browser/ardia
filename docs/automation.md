@@ -42,8 +42,9 @@ default applies at once.
 
 Newline-delimited JSON, UTF-8, one object per line, `\n` terminated.
 
-- Requests: `{"id": 1, "method": "…", "params": {…}}`. `id` is a safe integer or a string, echoed in the reply;
-  `params` is optional.
+- Requests: `{"id": 1, "method": "…", "params": {…}}`. `id` is a safe integer or a well-formed string (no lone surrogate) of at most 256 UTF-8
+  bytes, echoed in the reply; any other id is refused with `bad_request` and `"id": null`, so no reply grows past the line limit
+  because of its id. `params` is optional.
 - Replies: `{"id": 1, "result": …}` or `{"id": 1, "error": {"code": "…", "message": "…"}}`. A line that isn't a JSON
   object, or has no usable `id`, gets an error with `"id": null` and the connection stays open.
 - Events: `{"event": "tab.opened", "time": 1730400000000, "data": {…}}`, in the order the store changed. Subscribing
@@ -82,6 +83,10 @@ bookmark searches) and their fixed page title.
 - `commands` → `[{"id", "title", "scope", "variants": [ids] | null}]`: the automatable commands. `title` is the menu
   title (else the command bar's, else the id), `scope` is `"page"`, `"window"` or `null`.
 - `run` `{"command", "arg"?, "window"?, "tab"?}` → `{"ok": true}` once the command was dispatched (not necessarily finished).
+  In a background instance `run` answers `refused` for every command ("run isn't available in background instances;
+  use the dedicated methods"), since a menu command can open UI or start a page load nobody can answer; a visible
+  instance runs it, and a question it asks shows in its window while the reply still comes at dispatch, as for a
+  click on the menu.
   `command` is a catalog id, `arg` one of its variant ids. It runs through `runCommand`, exactly as the menu or a
   shortcut would. `window` must be an eligible window id, else `no_window` (no fallback to another window); without
   it, the last focused eligible window (windows never focused come after, in window order); with no browser window
@@ -193,8 +198,8 @@ profile goes where the store puts moved tabs.
 | `tab.pin` / `tab.unpin` | `tabs`, `as`? (`tile`/`row`) | `pinTabs`; unpinning a tab of a pinned group takes it out (`placeTabs`), as Unpin does. A split's panes pin together, as rows: `as: "tile"` on one is `bad_request` |
 | `tab.activate` | `tab` | `activate` |
 | `tab.mute` / `tab.unmute` | `tabs` | `setMuted`; unmute also unmutes the site, as the menu does |
-| `tab.sleep` | `tabs` | Pinned tabs unload (`closeTabs`, as their ✕); others are discarded by Chrome. A tab is left alone (`shown`) when it, a pinned copy sharing its page, or a pane of its split is shown in any window. `outcomes`: `asleep`, `already`, `shown`, `refused`, `unsupported` |
-| `tab.wake` | `tabs` | Loads a sleeping tab in the background (`updateTab` with its woken page, or a reload for a discarded one). `outcomes`: `awake`, `already`, `failed` |
+| `tab.sleep` | `tabs` | Pinned tabs unload (`closeTabs`, as their ✕); others are discarded by Chrome. A tab is left alone (`shown`) when it, a pinned copy sharing its page, or a pane of its split is shown in any window. `outcomes`: `asleep`, `already`, `shown`, `refused`, `unsupported`. Each tab's discard has 10 s: past that the op fails (`failed`, "outcome unknown"; `changed` lists the tabs it did put to sleep) and the batch stops there, so a stuck engine call never holds up other clients' batches. The tab stays busy (`refused`) until the engine answers, it closes, control goes off or 60 s pass, and the next `apply` on the same connection reports that answer once under `late` |
+| `tab.wake` | `tabs` | Loads a sleeping tab in the background (`updateTab` with its woken page, or a reload for a discarded one). `outcomes`: `awake` (reloaded, view still attached), `loading` (its page was asked to load), `no_view` (its view is known gone), `reload_unverified` (reloaded, attachment can't be checked on this platform), `already`, `failed`. A reload has 10 s, as `tab.sleep`'s discard does |
 | `tab.close` | `tabs` | `closeTabs`: as ✕, so pinned tabs unload; never closes a window (a window left empty gets a New Tab) |
 | `tab.rename` / `tab.icon` | `tab`, `title` / `icon` (null resets) | `updateTab` `customTitle` / `customIcon`, as Rename… and Change Icon… |
 | `group.create` | `tabs`?, `urls`?, `window`?, `profile`?, `parent`?, `pinned`? (default true, like New Group with Tab), `name`?, `icon`?, `color`?, `collapsed`?, `before`?/`after`? | Opens `urls`, else one New Tab when no `tabs`; places them (out of their old groups, into the parent), `groupTabs`, then `updateGroup`. With no anchor and no parent, a group made from tabs of another group goes just above that group's outermost group (its first tab left), so groups made one after another from one group keep their creation order and the group, with the tabs left in it, stays below them; `group.ungroup` of it then leaves those tabs where they are, as the sidebar's Ungroup does. A group made from loose tabs goes where its first tab was. An anchor decides where the group goes, by the rule above: next to a pinned row or a top-level pinned group it is a pinned group there; next to a tab or group inside group P it is nested in P; next to a Top Apps tile it is refused; a `pinned` or `parent` that contradicts that is `bad_request`, before anything opens. Top Apps tiles in `tabs` are refused. The post-check covers its parent, pinned state and side of the anchor; if it fails, or a URL doesn't open (a `tab.opening` rule cancelled it: `refused`), the tabs it opened are closed again and the tabs it was given stay where they were moved (`error.changed`) |
@@ -220,7 +225,9 @@ profile goes where the store puts moved tabs.
   characters without control characters.
 - **Telemetry:** `usage_counts` carries `cli_tab_edits`, `cli_group_edits` (operations applied),
   `cli_edit_failures` (batches refused or stopped) and `cli_pill_shows` (times the control pill appeared: `run` and
-  DevTools sessions only, never `apply`); the CLI's `cli_command` has the subcommand and `batch_steps`.
+  DevTools sessions only, never `apply`); the CLI's `cli_command` has the subcommand and `batch_steps`. Every socket
+  request also counts once in `cli_socket_calls_<family>` and, when it answers an error, in `cli_socket_call_failures`
+  (`docs/control-socket.md`).
 
 ### Which commands
 

@@ -16,6 +16,7 @@ type ComingSoon = Entry & { experiment: "officialPluginsAi" };
 
 export const OFFICIAL_CATALOGUE: readonly Entry[] = [
   { name: "cli", title: "Command Line", blurb: "Drive Ardia from your terminal or an agent.", icon: "terminal.fill" },
+  { name: "apple-passwords", title: "Apple Passwords", blurb: "Fill logins and verification codes from the Passwords app on every site.", icon: "key.fill" },
 ];
 
 export const COMING_SOON: readonly ComingSoon[] = [

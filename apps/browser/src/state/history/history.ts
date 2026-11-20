@@ -12,7 +12,7 @@ export type HistoryView = { list: HistoryEntry[]; floor: number; ready: boolean 
 export type HistorySlice = {
   history: Record<string, HistoryView>;
 
-  removeHistory(profileId: string, urls: string[]): void;
+  removeHistory(profileId: string, urls: string[]): Promise<void>;
   clearHistory(profileId: string, since?: number, until?: number): void;
   importHistory(profileId: string, entries: Omit<HistoryEntry, "favicon">[]): Promise<HistoryImportOutcome>;
   importCleanedTabs(entries: ClosedTab[]): { added: number; already: number };
@@ -92,11 +92,13 @@ export const createHistorySlice: StateCreator<BrowserState, [], [], HistorySlice
   history: {},
 
   removeHistory(profileId, urls) {
-    if (!urls.length || isIncognitoProfile(profileId)) return;
+    if (!urls.length || isIncognitoProfile(profileId)) return Promise.resolve();
     const gone = new Set(urls);
     for (const run of importsInto(engineProfile(get(), profileId))) for (const url of urls) run.removed.add(url);
     set((s) => withHistoryList(s, engineProfile(s, profileId), historyOf(s, profileId).filter((h) => !gone.has(h.url))));
-    void deleteHistoryUrls(engineProfile(get(), profileId), urls).catch(failed("delete"));
+    const deleted = deleteHistoryUrls(engineProfile(get(), profileId), urls).then(() => undefined);
+    deleted.catch(failed("delete"));
+    return deleted;
   },
 
   importCleanedTabs(entries) {

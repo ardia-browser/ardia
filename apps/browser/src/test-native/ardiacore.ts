@@ -1,5 +1,6 @@
 import type {
   ActionState,
+  SiteSettings,
   BookmarkOp,
   CallArgs,
   CallName,
@@ -142,6 +143,14 @@ const providerFakes = {
 };
 export const current = { device: null as string | null };
 
+export const siteSettingsDb = new Map<string, Record<string, string>>();
+export const siteZoomDb = new Map<string, number>();
+const SITE_SETTING_TYPES = ["popups", "camera", "microphone", "location", "notifications", "sound", "autoplay", "javascript", "images", "clipboard", "automaticDownloads", "cookies", "midi", "sensors", "windowManagement", "localFonts", "idleDetection", "storageAccess", "fileSystem", "keyboardLock", "pointerLock", "cameraPanTiltZoom"];
+const siteSettingsOf = (profile: string, origin: string) => {
+  const own = siteSettingsDb.get(`${profile}\n${origin}`) ?? {};
+  return Object.fromEntries(SITE_SETTING_TYPES.map((t) => [t, own[t] && own[t] !== "default" ? { value: own[t], isDefault: false } : { value: "ask", isDefault: true }]));
+};
+
 type Login = { origin: string; url: string; username: string; password: string; created: number };
 export const passwordStores = new Map<string | null, Map<string, Login>>();
 const logins = () => passwordStores.get(current.device)!;
@@ -177,7 +186,10 @@ function addVisit(profile: string, url: string, title: string, at: number) {
 }
 export const chromeVisit = (profile: string, url: string, title: string, at = Date.now()) => addVisit(profile, url, title, at);
 
+export const historyQueries: { profile: string; maxUrls: number; maxVisits: number }[] = [];
+
 function queryHistory(profile: string, { maxUrls = 5000, maxVisits = 50 }: { maxUrls?: number; maxVisits?: number }) {
+  historyQueries.push({ profile, maxUrls, maxVisits });
   const entries = [...chromeHistory(profile)]
     .map(([u, r]) => ({ u, t: r.title, n: r.visits.length, v: r.visits.slice(-maxVisits) }))
     .sort((a, b) => (b.v.at(-1) ?? 0) - (a.v.at(-1) ?? 0))
@@ -220,7 +232,13 @@ function importHistoryRows(profile: string, { rows }: { rows: { u: string; t: st
   return heldHistoryImports.reply ? heldHistoryImports.reply.then(() => ({})) : {};
 }
 
+export const historyDeletes = { failNext: false };
+
 function deleteHistoryUrls(profile: string, { urls }: { urls: string[] }) {
+  if (historyDeletes.failNext) {
+    historyDeletes.failNext = false;
+    throw new Error("the history database couldn't be written");
+  }
   for (const url of urls) chromeHistory(profile).delete(url);
   chromeHistoryEvent({ kind: "deleted", profile, all: false, urls });
   return {};
@@ -337,6 +355,8 @@ const cliStatus = (on: boolean | null): CliControlStatus =>
 const cliControl = (on: boolean | null) => testGlobals.acTestCliControl?.(on) ?? cliStatus(on);
 
 export const cancelledDownloads: string[] = [];
+export const downloadSettingsWrites: { profile: string; folder?: string; askWhereToSave?: boolean }[] = [];
+export const clearedSiteData: { profile: string; origin: string }[] = [];
 export const endedWebKitSessions: string[] = [];
 export const removedStagings: string[] = [];
 export const stagingRemovals = { ok: true };
@@ -448,7 +468,7 @@ const fakeModules = {
     resume: () => null,
     keep: () => null,
     settings: () => ({ folder: "", askWhereToSave: false, managed: false }),
-    setSettings: () => ({ folder: "", askWhereToSave: false, managed: false }),
+    setSettings: (args) => (downloadSettingsWrites.push(args), { folder: "", askWhereToSave: false, managed: false }),
   }),
   ArdiaPermissions: domain("permissions", {
     resolve: ({ id, result, remember }) => (resolvedPermissions.push({ id, result, remember }), null),
@@ -472,12 +492,13 @@ const fakeModules = {
     clearBrowsingData: () => null,
   }),
   ArdiaSites: domain("sites", {
-    setSetting: () => null,
-    origins: () => [],
-    reset: () => null,
-    clearData: () => ({ cookies: 0, storage: true }),
-    zoomLevels: () => ({}),
-    setZoom: () => null,
+    settings: ({ profile, origin }) => siteSettingsOf(profile, origin) as SiteSettings,
+    setSetting: ({ profile, origin, type, value }) => (siteSettingsDb.set(`${profile}\n${origin}`, { ...(siteSettingsDb.get(`${profile}\n${origin}`) ?? {}), [type]: value }), null),
+    origins: ({ profile }) => [...siteSettingsDb.keys()].filter((k) => k.startsWith(`${profile}\n`)).map((k) => k.slice(profile.length + 1)),
+    reset: ({ profile, origin }) => (siteSettingsDb.delete(`${profile}\n${origin}`), null),
+    clearData: ({ profile, origin }) => (clearedSiteData.push({ profile, origin }), { cookies: 0, storage: true }),
+    zoomLevels: ({ profile }) => Object.fromEntries([...siteZoomDb].filter(([k]) => k.startsWith(`${profile}\n`)).map(([k, v]) => [k.slice(profile.length + 1), v])),
+    setZoom: ({ profile, host, zoom }) => (siteZoomDb.set(`${profile}\n${host}`, zoom), null),
     preloadPages: () => false,
     setPreloadPages: () => null,
   }),

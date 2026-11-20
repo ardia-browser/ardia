@@ -8,7 +8,7 @@ import { AUTOMATION_EVENTS, MIN_IDLE_SECONDS, NAMED_ONLY_EVENTS, type Automation
 export const PROTOCOL = 4;
 export const MIN_CLIENT_PROTOCOL = 4;
 
-export type ErrorCode = "bad_request" | "unknown_method" | "unknown_command" | "refused" | "no_window" | "failed" | "unsupported_protocol";
+export type ErrorCode = "bad_request" | "unknown_method" | "unknown_command" | "refused" | "no_window" | "failed" | "password_manager_plugin" | "unsupported_protocol";
 export type MethodError = { code: ErrorCode; message: string };
 export type RequestId = number | string | null;
 export type ParsedRequest = { id: RequestId; method: string; params: Record<string, unknown> };
@@ -25,6 +25,26 @@ export const failure = (code: ErrorCode, message: string) => ({ error: { code, m
 
 const isFields = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 
+export const MAX_ID_BYTES = 256;
+
+const utf8 = new TextEncoder();
+
+function wellFormed(text: string): boolean {
+  for (let i = 0; i < text.length; i++) {
+    const unit = text.charCodeAt(i);
+    if (unit >= 0xdc00 && unit <= 0xdfff) return false;
+    if (unit >= 0xd800 && unit <= 0xdbff) {
+      const next = text.charCodeAt(i + 1);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) return false;
+      i++;
+    }
+  }
+  return true;
+}
+
+const usableId = (id: unknown): id is number | string =>
+  typeof id === "string" ? id.length <= MAX_ID_BYTES && wellFormed(id) && utf8.encode(id).length <= MAX_ID_BYTES : typeof id === "number" && Number.isSafeInteger(id);
+
 export function parseRequest(line: string): ParsedRequest | { id: RequestId; error: MethodError } {
   let doc: unknown;
   try {
@@ -34,8 +54,7 @@ export function parseRequest(line: string): ParsedRequest | { id: RequestId; err
   }
   if (!isFields(doc)) return { id: null, ...failure("bad_request", "A request is a JSON object.") };
   const id = doc.id;
-  const usable = typeof id === "string" || (typeof id === "number" && Number.isSafeInteger(id));
-  if (!usable) return { id: null, ...failure("bad_request", "A request needs an id: a safe integer or a string.") };
+  if (!usableId(id)) return { id: null, ...failure("bad_request", `A request needs an id: a safe integer, or a well-formed string of at most ${MAX_ID_BYTES} UTF-8 bytes.`) };
   if (typeof doc.method !== "string") return { id, ...failure("bad_request", "A request needs a method.") };
   if (doc.params !== undefined && !isFields(doc.params)) return { id, ...failure("bad_request", "params must be an object.") };
   return { id, method: doc.method, params: (doc.params as Record<string, unknown> | undefined) ?? {} };

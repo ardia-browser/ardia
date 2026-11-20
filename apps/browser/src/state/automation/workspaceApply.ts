@@ -323,7 +323,7 @@ function removeGroup(results: OpResult[], op: Op): OpResult {
   return { ...named, tabs };
 }
 
-export function runOp(results: OpResult[], op: Op): OpResult | Promise<OpResult> {
+export function runOp(results: OpResult[], op: Op, stillOn: () => boolean = () => true, owner = 0): OpResult | Promise<OpResult> {
   switch (op.op) {
     case "open":
       return open(results, op);
@@ -343,9 +343,9 @@ export function runOp(results: OpResult[], op: Op): OpResult | Promise<OpResult>
     case "tab.unmute":
       return mute(results, op, false);
     case "tab.sleep":
-      return sleep(results, op);
+      return sleep(results, op, stillOn, owner);
     case "tab.wake":
-      return wake(results, op);
+      return wake(results, op, stillOn, owner);
     case "tab.close":
       return closeTabs(results, op);
     case "tab.rename":

@@ -55,6 +55,7 @@ export const WebView = forwardRef<WebViewHandle, WebViewProps>(function WebView(
       goBack: () => call(undefined, (n) => n.goBack()),
       goForward: () => call(undefined, (n) => n.goForward()),
       goToOffset: (offset) => call(undefined, (n) => n.goToOffset(offset)),
+      isAttached: () => native.current !== null,
       reload: () => call(undefined, (n) => n.reload()),
       forceReload: () => call(undefined, (n) => n.forceReload()),
       stopLoading: () => call(undefined, (n) => n.stopLoading()),

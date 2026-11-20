@@ -25,7 +25,7 @@ import { exportBookmarksFromWindow, toggleDownloadsPanel } from "./platformComma
 import { requestClearData } from "../profiles/clearDataRequest";
 import { showHistory } from "../history/showHistory";
 import { openInternalPage } from "../pages/urls";
-import { isUtilityWindowId, openImport, openSettings, SETTINGS_WINDOW_ID } from "../settings/settingsWindows";
+import { openImport, openSettings } from "../settings/settingsWindows";
 import { focusSettingsSearch } from "../settings/searchState";
 import { closePanelToHeroBar, focusHeroBar } from "../omnibox/barState";
 import { closeNewTabBar, isEmptyCardTab, showNewTabBar, toggleNewTabBar } from "../omnibox/newTabBar";
@@ -40,7 +40,7 @@ import { runReaderCommand } from "../reader/reader";
 import { goBack, goForward } from "../tabs/navigation";
 import { awaitsFirstPage } from "../tabs/pendingAddress";
 import { focusSplitPane, openSplitPane } from "../splits/actions";
-import { isAppCommand, LITTLE_ARDIA_PAGE_COMMANDS, settingChange, variantArg } from "./commandCatalog";
+import { isAppCommand, settingChange, variantArg } from "./commandCatalog";
 import { APP_COMMAND_HANDLERS } from "./appCommands";
 import { runSidebarCommand } from "../sidebar/commands";
 import { numberedTabs } from "../sidebar/entries";
@@ -54,40 +54,40 @@ import { groupOf } from "../pins/tabGrouping";
 import { selectedTabIds } from "../pins/organize";
 import { noteSelectionClosedByKey } from "../telemetry/usage";
 import { noteUrlCopied } from "../telemetry/urlCopies";
-import { isSmall, mainWindowFor, newWindowProfile, originalProfile } from "../windows/small";
-import {
-  closeLittleArdia,
-  cycleLittleArdiaProfile,
-  moveLittleArdiaToProfile,
-  openInMainWindow,
-  openLittleArdia,
-  openLittleArdiaProfileMenu,
-} from "../littleArdia/actions";
+import { newWindowProfile, originalProfile } from "../windows/small";
+import { openLittleArdia } from "../littleArdia/actions";
 import { runPeekCommand } from "../peek/actions";
-import { peekTabId } from "../peek/peek";
 import { expectFocus, findFocus } from "../focus/focusClaims";
 import { isWebPageUrl } from "../../lib/url";
 import { findStep, openFind } from "../find/actions";
 import { runHidingCommand } from "../site/hiddenElements";
 import { requestWindowClose } from "../windows/windowClose";
+import { commandTarget } from "./commandTarget";
+import { runLittleArdiaCommand } from "./littleArdiaCommands";
 
 const newOrId = (arg: string) => (arg === "new" ? null : arg);
 
 export class NoCommandWindowError extends Error {}
 
-export function runCommand({ command, arg, windowId: requested }: CommandEvent, { strictWindow = false, tabId: targetTab = null }: { strictWindow?: boolean; tabId?: string | null } = {}) {
-  if (isAppCommand(command)) return APP_COMMAND_HANDLERS[command](requested);
+export function runCommand({ command, arg, windowId: given }: CommandEvent, { strictWindow = false, tabId: targetTab = null }: { strictWindow?: boolean; tabId?: string | null } = {}) {
+  if (isAppCommand(command)) return APP_COMMAND_HANDLERS[command](given);
   const s = useBrowser.getState();
-
-  if (isUtilityWindowId(requested)) {
-    if (command === "closeTab") return requestWindowClose(requested!);
-    if (command === "findInPage" && requested === SETTINGS_WINDOW_ID) return focusSettingsSearch();
-    requested = null;
+  const target = commandTarget(s, command, given, targetTab);
+  switch (target.kind) {
+    case "app":
+      return;
+    case "missingTab":
+      throw new NoCommandWindowError(`Tab ${targetTab} isn't open in that window.`);
+    case "utility":
+      if (command === "closeTab") return requestWindowClose(target.windowId);
+      return focusSettingsSearch();
+    case "little":
+      return void runLittleArdiaCommand(command, arg, target.windowId);
+    case "peek":
+      return void runPeekCommand(command, target.windowId);
   }
-  const targeted = targetTab && s.tabs[targetTab] && (!requested || s.tabs[targetTab]!.windowId === requested) ? targetTab : null;
-  if (targetTab && !targeted) throw new NoCommandWindowError(`Tab ${targetTab} isn't open in that window.`);
-  if (!targeted && isSmall(s, requested) && runLittleArdiaCommand(command, arg, requested!)) return;
-  if (!targeted && runPeekCommand(command, resolveWindowId(s, requested) ?? "")) return;
+  const requested = target.invokedFrom;
+  const targeted = target.targeted;
   const settings = settingChange(command, arg, s.settings);
   if (settings) return s.updateSettings(settings);
 
@@ -126,10 +126,9 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
   }
 
   const invokedFrom = requested;
-  if (!targeted && isSmall(s, requested) && !LITTLE_ARDIA_PAGE_COMMANDS.has(command)) {
-    requested = mainWindowFor(s, s.windows[requested!]!.profileId) ?? null;
-    if (!requested && strictWindow) throw new NoCommandWindowError(`${command} needs a main window and none is open.`);
-    if (requested) focus(requested);
+  if (target.redirected) {
+    if (!target.requested && strictWindow) throw new NoCommandWindowError(`${command} needs a main window and none is open.`);
+    if (target.requested) focus(target.requested);
   }
 
   if (command === "addFolderToSidebar" || command === "restoreArcFolders") {
@@ -139,7 +138,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
     return;
   }
 
-  const windowId = resolveWindowId(s, requested);
+  const windowId = target.windowId;
   if (!windowId) {
     if (command === "newTab") openWindow();
     if (command === "reopenClosedTab" || command === "restoreClosed") {
@@ -148,7 +147,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
     }
     return;
   }
-  const tabId = targeted ?? ((LITTLE_ARDIA_PAGE_COMMANDS.has(command) && peekTabId(s, windowId)) || activeTabId(s, windowId));
+  const tabId = target.tabId ?? undefined;
   const tab = tabId ? s.tabs[tabId] : undefined;
   const page = tab?.url ? tab : undefined;
   const web = tabId ? webviews.get(tabId) : undefined;
@@ -340,37 +339,6 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
     case "newProfile":
       return void requestCreateProfile(windowId).then((id) => id && switchProfile(windowId, id));
   }
-}
-
-function runLittleArdiaCommand(command: string, arg: string | null | undefined, windowId: string): boolean {
-  const s = useBrowser.getState();
-  const tabId = activeTabId(s, windowId);
-  const tab = tabId ? s.tabs[tabId] : undefined;
-  switch (command) {
-    case "closeTab":
-      if (s.windowUi[windowId]?.panel.open && tab?.url) s.closePanel(windowId);
-      else closeLittleArdia(windowId);
-      return true;
-    case "focusCommandBar":
-      s.openPanel(windowId, tab?.url ?? "");
-      return true;
-    case "openFile":
-      openInMainWindow(windowId);
-      return true;
-    case "switchProfile":
-      if (arg) moveLittleArdiaToProfile(windowId, arg);
-      return true;
-    case "nextProfile":
-      cycleLittleArdiaProfile(windowId, 1);
-      return true;
-    case "previousProfile":
-      cycleLittleArdiaProfile(windowId, -1);
-      return true;
-    case "openProfileMenu":
-      void openLittleArdiaProfileMenu(windowId);
-      return true;
-  }
-  return false;
 }
 
 async function addBookmarkToFolder(windowId: string, tabId: string, folder: string) {

@@ -112,12 +112,12 @@ export function toggleSiteMute(tabId: string) {
   if (tab) s.setSiteMuted(tabId, !isSiteMuted(s, tab));
 }
 
-export async function deleteProfile(profileId: string, windowId?: string) {
+export async function deleteProfile(profileId: string, windowId?: string, mayDelete: () => boolean = () => true, ask: typeof confirm = confirm) {
   const s = store();
   const profile = s.profiles[profileId];
   if (!profile || s.profileOrder.length <= 1) return;
   const sharing = sharingProfiles(s, profileId).map((id) => s.profiles[id]!.name);
-  const { confirmed } = await confirm({
+  const { confirmed } = await ask({
     title: `Delete “${profile.name}”?`,
     message: sharing.length
       ? `Its tabs will be closed. Its cookies, passwords, extensions, bookmarks and history stay with ${profileNames(sharing)}, which share them.`
@@ -126,7 +126,7 @@ export async function deleteProfile(profileId: string, windowId?: string) {
     destructive: true,
     windowId,
   });
-  if (!confirmed) return;
+  if (!confirmed || !mayDelete()) return;
   store().deleteProfile(profileId);
 }
 

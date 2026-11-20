@@ -1,3 +1,4 @@
+import ArdiaCore
 import Darwin
 import Foundation
 
@@ -60,20 +61,24 @@ final class PluginProcess: PluginRun {
 
   static func errnoText(_ code: Int32 = errno) -> String { String(cString: strerror(code)) }
 
-  static func environment(name: String, data: String) -> [String] {
-    [
-      "PATH=" + PluginSandbox.searchPath.joined(separator: ":"),
-      "HOME=" + (data as NSString).appendingPathComponent("home"),
-      "TMPDIR=" + (data as NSString).appendingPathComponent("tmp") + "/",
-      "LANG=en_US.UTF-8",
-      "ARDIA_PLUGIN_NAME=" + name,
-      "ARDIA_PLUGIN_FD=\(channelFd)",
-      "ARDIA_PLUGIN_PROTOCOL=1",
-    ]
+  static let certificateCache = PluginCertificateCache()
+
+  static func prepareCertificates(for spec: Spec, deliverOn queue: DispatchQueue, then: @escaping (PluginSandbox.PreparedCertificates) -> Void) {
+    guard spec.network else { return then(.offline) }
+    certificateCache.prepare(for: LaunchConfig.shared.environmentForChildProcesses, deliverOn: queue, then: then)
+  }
+
+  static func environment(name: String, data: OpenedFolder, network: Bool, certificates: PluginSandbox.PreparedCertificates) -> [String] {
+    let built = PluginSandbox.helperEnvironment(
+      name: name, data: data, channelFd: channelFd, network: network, given: LaunchConfig.shared.environmentForChildProcesses, certificates: certificates)
+    if !built.droppedProxies.isEmpty {
+      NSLog("[plugins] %@: %@ carries a user name or password, so its helper doesn't get it", name, built.droppedProxies.joined(separator: ", "))
+    }
+    return built.variables
   }
 
   static func spawn(
-    _ spec: Spec, run: Int, folders: PluginFolders, queue: DispatchQueue,
+    _ spec: Spec, run: Int, folders: PluginFolders, queue: DispatchQueue, certificates: PluginSandbox.PreparedCertificates,
     onLine: @escaping (PluginProcess, String) -> Void, onExit: @escaping (PluginProcess, Int32?, Int32?, Bool) -> Void
   ) -> Result<PluginProcess, Failure> {
     let folder: OpenedFolder
@@ -151,7 +156,7 @@ final class PluginProcess: PluginRun {
       NSLog("[plugins] %@: macOS's responsibility calls aren't available, so its processes are tracked by group and descendants only", spec.name)
     }
     let argv = ["/usr/bin/sandbox-exec"] + sandboxArguments + [launched] + spec.run.dropFirst()
-    let env = environment(name: spec.name, data: data)
+    let env = environment(name: spec.name, data: dataFolder, network: spec.network, certificates: certificates)
     var pid: pid_t = 0
     let result = withCStrings(argv) { cArgv in withCStrings(env) { cEnv in posix_spawn(&pid, "/usr/bin/sandbox-exec", &actions, &attributes, cArgv, cEnv) } }
     guard result == 0 else {

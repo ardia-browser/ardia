@@ -21,7 +21,7 @@ import { holderOf, returnSharedPages, swapPinPage } from "../pins/pinShare";
 import { isTopApp, topAppsShared } from "../pins/topApps";
 import { joinedWithCurrent, newTabPlacement } from "../tabs/openers";
 import { handOverTabs, tabsClosedWithWindow } from "../tabs/sharedWindowClose";
-import { isLastRegularWindow, isOpenRegularWindow, isRegularWindow, isSmall, isSmallWindow, lastActiveProfile, linkProfileOf, mainWindowFor } from "./small";
+import { isOnlyRegularWindow, isOpenRegularWindow, isRegularWindow, isSmall, isSmallWindow, lastActiveProfile, linkProfileOf, mainWindowFor } from "./small";
 import { activated, apply, removeTabs, withNewTab } from "../tabs/tabs";
 import type { AdoptId, BrowserWindow, ClosedWindow, Frame, ParkedPins, Tab, WindowKind } from "../browser/types";
 import { emptyWindow, smallWindow, withWindow } from "./newWindow";
@@ -64,6 +64,7 @@ export type WindowsSlice = {
 
   createWindow(options?: CreateWindowOptions): string;
   closeWindow(id: string, options?: CloseWindowOptions): void;
+  dropStaleLastWindowMark(): void;
   setWindowFrame(id: string, frame: Frame, restored?: Frame, fitted?: boolean): void;
   setWindowMaximized(id: string, on: boolean): void;
   setWindowFullScreen(id: string, on: boolean, display?: string): void;
@@ -194,7 +195,7 @@ export const createWindowsSlice: StateCreator<BrowserState, [], [], WindowsSlice
     if (!w) return;
     const tabs = tabsClosedWithWindow(s, id);
     const small = isSmallWindow(w);
-    const last = isLastRegularWindow(s, id);
+    const last = isOnlyRegularWindow(s, id);
     const keeps = last && keepsLastWindow && w.tabIds.some((t) => s.tabs[t]?.url);
     const entry = w.kind !== "private" && !small && (keeps || tabs.some((t) => t.url)) ? closedWindowOf(s, w, tabs, keeps) : null;
     const kept = last ? withoutLastWindowMarks(s.closedWindows) : s.closedWindows;
@@ -214,6 +215,12 @@ export const createWindowsSlice: StateCreator<BrowserState, [], [], WindowsSlice
         lastProfileId: lastProfileAfterClosing(s, id),
       },
     });
+  },
+
+  dropStaleLastWindowMark() {
+    const s = get();
+    if (!s.closedWindows.some((c) => c.lastWindow) || !Object.values(s.windows).some(isRegularWindow)) return;
+    set({ closedWindows: withoutLastWindowMarks(s.closedWindows) });
   },
 
   setWindowFrame(id, frame, restored, fitted) {

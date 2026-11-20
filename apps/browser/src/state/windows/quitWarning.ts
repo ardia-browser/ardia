@@ -28,7 +28,7 @@ export const quitWarningMayAsk = () => PLATFORM_FEATURES.quitsWithLastWindow && 
 
 const asking = new Set<string>();
 
-export async function askBeforeQuitting(windowId: string, ask: typeof confirm = confirm): Promise<QuitWarning> {
+export async function askBeforeQuitting(windowId: string, ask: typeof confirm = confirm, mayWrite: () => boolean = () => true): Promise<QuitWarning> {
   if (!quitWarningMayAsk()) return "notAsked";
   if (asking.has(windowId)) return "cancelled";
   asking.add(windowId);
@@ -40,7 +40,7 @@ export async function askBeforeQuitting(windowId: string, ask: typeof confirm = 
     const staysOpen = windowsStayingOpen(openWindowIds, windowId, new Set(Object.keys(s.windows)), isWindowClosing);
     if (!asksBeforeQuit({ quitsWithLastWindow: true, background: false, warns: s.settings.warnBeforeQuitting, staysOpen })) return "notAsked";
     const { confirmed, suppressed } = await ask({ ...QUIT_WARNING, windowId });
-    if (suppressed) useBrowser.getState().updateSettings({ warnBeforeQuitting: false });
+    if (suppressed && mayWrite()) useBrowser.getState().updateSettings({ warnBeforeQuitting: false });
     return confirmed ? "confirmed" : "cancelled";
   } finally {
     asking.delete(windowId);

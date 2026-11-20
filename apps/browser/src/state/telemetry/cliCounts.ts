@@ -1,5 +1,6 @@
 import type { ConsentToken } from "./choice";
 import { countFor } from "./countFor";
+import { SOCKET_FAMILIES, type SocketFamily } from "../automation/socketCatalog";
 
 export type CliInstallReason = "auto" | "settings" | "upgrade";
 
@@ -15,6 +16,10 @@ const NONE = {
   cli_settings_install_failures: 0,
   windowless_pages_given_geometry: 0,
   windowless_pages_missing_geometry: 0,
+  cli_socket_call_failures: 0,
+  cli_socket_lines_shrunk: 0,
+  cli_socket_password_manager_refusals: 0,
+  ...(Object.fromEntries(SOCKET_FAMILIES.map((family) => [`cli_socket_calls_${family}`, 0])) as Record<`cli_socket_calls_${SocketFamily}`, number>),
 };
 
 const FIELDS = {
@@ -31,6 +36,14 @@ export function noteCliPillShown(compact: boolean) {
   counts.cli_pill_shows++;
   if (compact) counts.cli_pill_compact_shows++;
 }
+export function noteSocketCall(family: SocketFamily, failed: boolean, consent?: ConsentToken | null) {
+  const field = `cli_socket_calls_${family}` as const;
+  countFor(consent, () => void counts[field]++, { [field]: 1 });
+  if (failed) countFor(consent, () => void counts.cli_socket_call_failures++, { cli_socket_call_failures: 1 });
+}
+export const noteSocketLineShrunk = (consent: ConsentToken | null) => countFor(consent, () => void counts.cli_socket_lines_shrunk++, { cli_socket_lines_shrunk: 1 });
+export const noteSocketPasswordManagerRefused = (consent: ConsentToken | null) =>
+  countFor(consent, () => void counts.cli_socket_password_manager_refusals++, { cli_socket_password_manager_refusals: 1 });
 export const noteCliAutoEnabled = () => void counts.cli_auto_enables++;
 
 export function noteWindowlessPages(totals: { given: number; missed: number } | undefined) {

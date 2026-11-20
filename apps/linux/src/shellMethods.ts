@@ -121,6 +121,7 @@ const LINUX_SHELL_METHODS: Record<string, ShellMethod> = {
   startDictation: unavailable("Dictation"),
   dictationAvailable: () => linuxCapabilities().dictation,
   pickFiles: unavailable("Choosing files to open"),
+  dismissShownOnly: unavailable("Taking away a question Ardia asked on the control socket's behalf"),
   replyToTerminate: resolved,
   readText: readClipboardText,
 };

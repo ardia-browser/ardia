@@ -1632,10 +1632,10 @@ index 8f1094a71ed431fcecb6f760ffe8d6da643f04cb..67404c8656b69d9cf28d9eb5862e9914
  {
    view.layerContentsRedrawPolicy = NSViewLayerContentsRedrawDuringViewResize;
 diff --git a/React/Base/macOS/RCTPlatformDisplayLink.m b/React/Base/macOS/RCTPlatformDisplayLink.m
-index 6ee09fde67a60082ac45764f6c66b7c4ca97e5b9..16aa54f49c24eeb4158b2f41393558bbd37a42d8 100644
+index 6ee09fde67a60082ac45764f6c66b7c4ca97e5b9..7be99774457f158b490d96cc477f7458b754c257 100644
 --- a/React/Base/macOS/RCTPlatformDisplayLink.m
 +++ b/React/Base/macOS/RCTPlatformDisplayLink.m
-@@ -10,27 +10,58 @@
+@@ -10,27 +10,66 @@
  
  #import "RCTPlatformDisplayLink.h"
  
@@ -1650,19 +1650,21 @@ index 6ee09fde67a60082ac45764f6c66b7c4ca97e5b9..16aa54f49c24eeb4158b2f41393558bb
 -
  #import <os/lock.h>
  
--@interface RCTPlatformDisplayLink ()
-+// [Ardia: the link is the screen's own CADisplayLink (macOS 14), rebuilt for the key window's screen whenever that
-+// changes, asking for that screen's fastest rate, so animations run at 120 Hz on ProMotion and on whichever display
-+// the window is on. It replaced a CVDisplayLink made for the active displays, which ticked at the main display's rate.
++// [Ardia: the link is the CADisplayLink (macOS 14) of the key window's screen, or of the frontmost visible window's
++// while the app is inactive, at that screen's fastest rate, rebuilt when that screen or its rate changes. It replaced a
++// CVDisplayLink made for the active displays, which ticked at the main display's rate. Main picks the screen and
++// builds the link paused; the link's own run loop installs it, pauses it and reads its timing, and drops ticks from a
++// link it has replaced.
 +@interface RCTPlatformDisplayLinkTicks : NSObject
 +@property (nonatomic, weak) RCTPlatformDisplayLink *owner;
 +@end
- 
--@property (nonatomic, strong) NSRunLoop *runLoop;
-+@interface RCTPlatformDisplayLink ()
++
+ @interface RCTPlatformDisplayLink ()
 +- (void)tickWith:(CADisplayLink *)link;
 +@end
  
+-@property (nonatomic, strong) NSRunLoop *runLoop;
+-
 +@implementation RCTPlatformDisplayLinkTicks
 +- (void)tick:(CADisplayLink *)link
 +{
@@ -1673,6 +1675,12 @@ index 6ee09fde67a60082ac45764f6c66b7c4ca97e5b9..16aa54f49c24eeb4158b2f41393558bb
 +static NSScreen *RCTPacingScreen(void)
 +{
 +  NSWindow *window = NSApp.keyWindow ?: NSApp.mainWindow;
++  for (NSWindow *candidate in window == nil ? NSApp.orderedWindows : @[]) {
++    if (candidate.isVisible && candidate.screen != nil) {
++      window = candidate;
++      break;
++    }
++  }
 +  return window.screen ?: NSScreen.mainScreen ?: NSScreen.screens.firstObject;
 +}
 +
@@ -1700,7 +1708,7 @@ index 6ee09fde67a60082ac45764f6c66b7c4ca97e5b9..16aa54f49c24eeb4158b2f41393558bb
    os_unfair_lock _lock; // OS_UNFAIR_LOCK_INIT == 0
  }
  
-@@ -39,116 +70,164 @@ + (RCTPlatformDisplayLink *)displayLinkWithTarget:(id)target selector:(SEL)sel
+@@ -39,116 +78,204 @@
    RCTPlatformDisplayLink *displayLink = [self.class new];
    displayLink->_target = target;
    displayLink->_selector = sel;
@@ -1737,48 +1745,79 @@ index 6ee09fde67a60082ac45764f6c66b7c4ca97e5b9..16aa54f49c24eeb4158b2f41393558bb
 +  RCTAssertMainQueue();
 +  if (screen == nil) {
 +    return;
-+  }
+   }
+-  return kCVReturnSuccess;
 +  CGDirectDisplayID display = RCTDisplayOfScreen(screen);
 +  NSInteger fastest = MAX(1, screen.maximumFramesPerSecond);
 +  os_unfair_lock_lock(&_lock);
 +  NSRunLoop *runLoop = _runLoop;
-+  NSArray<NSRunLoopMode> *modes = [_modes copy];
-+  BOOL current = _link != nil && _display == display && _fastest == fastest;
-+  BOOL paused = _paused;
 +  os_unfair_lock_unlock(&_lock);
-+  if (runLoop == nil || current) {
++  if (runLoop == nil || (_display == display && _fastest == fastest)) {
 +    return;
 +  }
++  _display = display;
++  _fastest = fastest;
 +  _ticks = _ticks ?: [RCTPlatformDisplayLinkTicks new];
 +  _ticks.owner = self;
 +  CADisplayLink *link = [screen displayLinkWithTarget:_ticks selector:@selector(tick:)];
 +  link.preferredFrameRateRange = CAFrameRateRangeMake(MIN(60.0f, (float)fastest), (float)fastest, (float)fastest);
-+  link.paused = paused;
-+  for (NSRunLoopMode mode in modes) {
-+    [link addToRunLoop:runLoop forMode:mode];
++  link.paused = YES;
++  if (runLoop == NSRunLoop.currentRunLoop) {
++    [self install:link];
++    return;
 +  }
-+  os_unfair_lock_lock(&_lock);
-+  CADisplayLink *old = _runLoop != nil ? _link : link;
-+  if (_runLoop != nil) {
-+    link.paused = _paused;
-+    _link = link;
-+    _display = display;
-+    _fastest = fastest;
-+    _duration = 1.0 / fastest;
-   }
--  return kCVReturnSuccess;
-+  os_unfair_lock_unlock(&_lock);
-+  [old invalidate];
++  __weak RCTPlatformDisplayLink *weakSelf = self;
++  CFRunLoopRef cfRunLoop = runLoop.getCFRunLoop;
++  CFRunLoopPerformBlock(cfRunLoop, kCFRunLoopCommonModes, ^{
++    RCTPlatformDisplayLink *strongSelf = weakSelf;
++    if (strongSelf != nil) {
++      [strongSelf install:link];
++    } else {
++      [link invalidate];
++    }
++  });
++  CFRunLoopWakeUp(cfRunLoop);
  }
  
 -- (void)dealloc
-+- (void)startFollowingScreens
++- (void)install:(CADisplayLink *)link
  {
 -  if (_displayLink != NULL) {
 -    CVDisplayLinkStop(_displayLink);
 -    CVDisplayLinkRelease(_displayLink);
 -    _displayLink = NULL;
++  os_unfair_lock_lock(&_lock);
++  NSRunLoop *runLoop = _runLoop;
++  NSArray<NSRunLoopMode> *modes = [_modes copy];
++  CADisplayLink *old = _link;
++  BOOL live = runLoop != nil;
++  if (live) {
++    _link = link;
+   }
++  BOOL paused = _paused;
++  os_unfair_lock_unlock(&_lock);
++  if (!live) {
++    [link invalidate];
++    return;
++  }
++  for (NSRunLoopMode mode in modes) {
++    [link addToRunLoop:runLoop forMode:mode];
++  }
++  link.paused = paused;
++  [old invalidate];
+ }
+ 
+-- (void)addToRunLoop:(NSRunLoop *)runloop forMode:(NSRunLoopMode)mode
++- (void)startFollowingScreens
+ {
 +  RCTAssertMainQueue();
+   os_unfair_lock_lock(&_lock);
+-  _runLoop = runloop;
++  BOOL live = _runLoop != nil;
++  os_unfair_lock_unlock(&_lock);
++  if (!live) {
++    return;
++  }
 +  if (_observers == nil) {
 +    __weak RCTPlatformDisplayLink *weakSelf = self;
 +    void (^follow)(NSNotification *) = ^(__unused NSNotification *note) {
@@ -1791,12 +1830,23 @@ index 6ee09fde67a60082ac45764f6c66b7c4ca97e5b9..16aa54f49c24eeb4158b2f41393558bb
 +      [center addObserverForName:NSWindowDidChangeScreenNotification object:nil queue:main usingBlock:follow],
 +      [center addObserverForName:NSApplicationDidChangeScreenParametersNotification object:nil queue:main usingBlock:follow],
 +    ];
-   }
++  }
++  _display = 0;
++  _fastest = 0;
 +  [self followScreen:RCTPacingScreen()];
- }
++}
  
+-  if (_displayLink != NULL) {
+-    [_modes addObject:mode];
+-    os_unfair_lock_unlock(&_lock);
 +- (void)tickWith:(CADisplayLink *)link
 +{
++  os_unfair_lock_lock(&_lock);
++  BOOL current = link == _link;
++  os_unfair_lock_unlock(&_lock);
++  if (!current) {
+     return;
+   }
 +  _timestamp = link.timestamp;
 +  CFTimeInterval frame = link.targetTimestamp - link.timestamp;
 +  if (frame > 0) {
@@ -1805,23 +1855,17 @@ index 6ee09fde67a60082ac45764f6c66b7c4ca97e5b9..16aa54f49c24eeb4158b2f41393558bb
 +  [self tick];
 +}
 +// Ardia]
-+
- - (void)addToRunLoop:(NSRunLoop *)runloop forMode:(NSRunLoopMode)mode
- {
-   os_unfair_lock_lock(&_lock);
-   _runLoop = runloop;
--
--  if (_displayLink != NULL) {
--    [_modes addObject:mode];
--    os_unfair_lock_unlock(&_lock);
--    return;
+ 
+-  _modes = @[mode].mutableCopy;
++- (void)addToRunLoop:(NSRunLoop *)runloop forMode:(NSRunLoopMode)mode
++{
++  os_unfair_lock_lock(&_lock);
++  _runLoop = runloop;
 +  CADisplayLink *link = _link;
 +  BOOL first = _modes == nil;
 +  if (first) {
 +    _modes = [NSMutableArray new];
-   }
--
--  _modes = @[mode].mutableCopy;
++  }
 +  [_modes addObject:mode];
    os_unfair_lock_unlock(&_lock);
 -  CVReturn ret = CVDisplayLinkCreateWithActiveCGDisplays(&_displayLink);
@@ -1830,24 +1874,25 @@ index 6ee09fde67a60082ac45764f6c66b7c4ca97e5b9..16aa54f49c24eeb4158b2f41393558bb
 +  if (link != nil) {
 +    [link addToRunLoop:runloop forMode:mode];
 +    return;
-+  }
+   }
+-  RCTAssert(ret == kCVReturnSuccess, @"Cannot create display link");
+-  CVDisplayLinkSetOutputCallback(_displayLink, &RCTPlatformDisplayLinkCallBack, (__bridge void *)(self));
+-  CVDisplayLinkStart(_displayLink);
 +  if (!first) {
 +    return;
 +  }
 +  if (NSThread.isMainThread) {
 +    [self startFollowingScreens];
 +    return;
-   }
--  RCTAssert(ret == kCVReturnSuccess, @"Cannot create display link");
--  CVDisplayLinkSetOutputCallback(_displayLink, &RCTPlatformDisplayLinkCallBack, (__bridge void *)(self));
--  CVDisplayLinkStart(_displayLink);
++  }
 +  __weak RCTPlatformDisplayLink *weakSelf = self;
 +  dispatch_async(dispatch_get_main_queue(), ^{
 +    [weakSelf startFollowingScreens];
 +  });
  }
  
- - (void)removeFromRunLoop:(__unused NSRunLoop *)runloop forMode:(NSRunLoopMode)mode
+-- (void)removeFromRunLoop:(__unused NSRunLoop *)runloop forMode:(NSRunLoopMode)mode
++- (void)removeFromRunLoop:(NSRunLoop *)runloop forMode:(NSRunLoopMode)mode
  {
 +  os_unfair_lock_lock(&_lock);
    [_modes removeObject:mode];
@@ -1880,7 +1925,6 @@ index 6ee09fde67a60082ac45764f6c66b7c4ca97e5b9..16aa54f49c24eeb4158b2f41393558bb
 +  _modes = nil;
 +  CADisplayLink *link = _link;
 +  _link = nil;
-+  _display = 0;
 +  os_unfair_lock_unlock(&_lock);
 +  [link invalidate];
  }
@@ -1891,18 +1935,21 @@ index 6ee09fde67a60082ac45764f6c66b7c4ca97e5b9..16aa54f49c24eeb4158b2f41393558bb
 -    CVDisplayLinkStop(_displayLink);
 -  } else {
 -    CVDisplayLinkStart(_displayLink);
--  }
 +  os_unfair_lock_lock(&_lock);
++  BOOL changed = _paused != paused;
 +  _paused = paused;
-+  _link.paused = paused;
++  CADisplayLink *link = _link;
 +  os_unfair_lock_unlock(&_lock);
++  if (changed) {
++    link.paused = paused;
+   }
  }
  
  - (BOOL)isPaused
  {
 -  return !CVDisplayLinkIsRunning(_displayLink);
 +  os_unfair_lock_lock(&_lock);
-+  BOOL paused = _link != nil ? _link.paused : _paused;
++  BOOL paused = _paused;
 +  os_unfair_lock_unlock(&_lock);
 +  return paused;
  }
@@ -1931,6 +1978,13 @@ index 6ee09fde67a60082ac45764f6c66b7c4ca97e5b9..16aa54f49c24eeb4158b2f41393558bb
  }
  
  #pragma clang diagnostic push
+@@ -162,4 +289,4 @@
+ #pragma clang diagnostic pop
+ 
+ @end
+-#endif
+\ No newline at end of file
++#endif
 diff --git a/React/Base/macOS/RCTUIKit.m b/React/Base/macOS/RCTUIKit.m
 index a37a1c106a04752c1baeb6dd2170402ce5f34f71..4b0fa1207d50724979fdb0122a4a88eed20374cd 100644
 --- a/React/Base/macOS/RCTUIKit.m

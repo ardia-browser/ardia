@@ -65,15 +65,15 @@ test("a save that drops pins keeps them in pins-backup.json, ready to park again
   flushPersistence();
   stop();
   const [kept] = backups();
-  assert.equal(kept.profileId, profileId);
-  assert.equal(kept.dropped, 3, "the pin, the folder and its tab");
-  assert.deepEqual(kept.pins.tabs.map((t) => t.url).sort(), ["https://folder.com", "https://pin.com"]);
-  assert.deepEqual(kept.pins.groups.map((g) => g.name), ["Folder"]);
+  assert.deepEqual(kept.dropped, { [profileId]: 3 }, "the pin, the folder and its tab");
+  const pins = kept.pins[profileId];
+  assert.deepEqual(pins.tabs.map((t) => t.url).sort(), ["https://folder.com", "https://pin.com"]);
+  assert.deepEqual(pins.groups.map((g) => g.name), ["Folder"]);
   const counts = takeSessionWrites();
   assert.equal(counts.session_pin_backups, 1);
   assert.equal(counts.session_pins_backed_up, 3);
   S().closeWindow(w);
-  useBrowser.setState({ parkedPins: { ...S().parkedPins, [profileId]: kept.pins } });
+  useBrowser.setState({ parkedPins: { ...S().parkedPins, [profileId]: pins } });
   const n = S().createWindow({ url: "https://b1.com" });
   assert.ok(pinsIn(n, profileId).includes("https://pin.com"), "parking the backup brings the pin back");
   assert.deepEqual(foldersIn(n, profileId), [["Folder", ["https://folder.com"]]]);
@@ -97,4 +97,53 @@ test("closing a window whose pins stay in another window or the park, or deletin
   flushPersistence();
   stop();
   assert.equal(backups().filter((x) => x.profileId === work).length, 0, "a deleted profile's pins aren't backed up");
+});
+
+function dropPins(ids) {
+  const s = S();
+  const gone = new Set(ids);
+  useBrowser.setState({
+    tabs: Object.fromEntries(Object.entries(s.tabs).filter(([id]) => !gone.has(id))),
+    windows: Object.fromEntries(Object.entries(s.windows).map(([id, w]) => [id, { ...w, tabIds: w.tabIds.filter((t) => !gone.has(t)) }])),
+  });
+}
+
+test("the backup keeps two pins of the same page that parking would merge", () => {
+  stub.docs.clear();
+  const stop = startPersistence();
+  const w = S().createWindow({ url: "https://a1.com" });
+  const one = S().newTab(w, { url: "https://example.com/page", background: true });
+  const two = S().newTab(w, { url: "https://example.com/page#notes", background: true });
+  S().pinTabs([one, two], true);
+  const profileId = S().windows[w].profileId;
+  flushPersistence();
+  dropPins([one, two]);
+  flushPersistence();
+  stop();
+  const [kept] = backups();
+  assert.deepEqual(kept.pins[profileId].tabs.map((t) => t.url).sort(), ["https://example.com/page", "https://example.com/page#notes"]);
+});
+
+test("when saving fails, the drop is backed up once writes work again", () => {
+  stub.docs.clear();
+  const stop = startPersistence();
+  const w = S().createWindow({ url: "https://a1.com" });
+  const pin = S().newTab(w, { url: "https://pin.com", background: true });
+  S().pinTabs([pin], true);
+  const profileId = S().windows[w].profileId;
+  flushPersistence();
+  stub.refusedWrites.on = true;
+  try {
+    dropPins([pin]);
+    flushPersistence();
+  } finally {
+    stub.refusedWrites.on = false;
+  }
+  assert.equal(backups().length, 0, "nothing could be written");
+  S().newTab(w, { url: "https://other.com", background: true });
+  flushPersistence();
+  stop();
+  const kept = backups();
+  assert.equal(kept.length, 1);
+  assert.deepEqual(kept[0].pins[profileId].tabs.map((t) => t.url), ["https://pin.com"]);
 });

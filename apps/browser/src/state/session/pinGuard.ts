@@ -11,10 +11,10 @@ export const MAX_PIN_BACKUPS = 20;
 
 export type PinState = Pick<BrowserState, "windows" | "tabs" | "groups" | "splits" | "parkedPins" | "profiles" | "history">;
 export type PinCensus = Map<string, Set<string>>;
-export type PinBackup = { at: number; profileId: string; dropped: number; pins: ParkedPins };
+export type PinBackup = { at: number; dropped: Record<string, number>; pins: Record<string, ParkedPins> };
 export type PinBackups = { version: number; backups: PinBackup[] };
 
-export const pinSources = (s: PinState): unknown[] => [s.windows, s.tabs, s.groups, s.parkedPins];
+export const pinSources = (s: PinState): unknown[] => [s.windows, s.tabs, s.groups, s.splits, s.parkedPins];
 
 export function pinCensus(s: PinState): PinCensus {
   const census: PinCensus = new Map();
@@ -28,7 +28,7 @@ export function pinCensus(s: PinState): PinCensus {
     if (!isRegularWindow(w)) continue;
     for (const id of w.tabIds) {
       const t = s.tabs[id];
-      if (t?.pin) add(t.profileId, pinKeyOf(t));
+      if (t?.pin) add(t.profileId, `t:${pinKeyOf(t)}`);
     }
   }
   for (const g of Object.values(s.groups)) {
@@ -36,11 +36,11 @@ export function pinCensus(s: PinState): PinCensus {
     add(g.profileId, `g:${pinKeyOf(g)}`);
     for (const id of g.tabIds) {
       const t = s.tabs[id];
-      if (t) add(t.profileId, pinKeyOf(t));
+      if (t) add(t.profileId, `t:${pinKeyOf(t)}`);
     }
   }
   for (const [profileId, park] of Object.entries(s.parkedPins)) {
-    for (const t of park.tabs) add(profileId, t.id);
+    for (const t of park.tabs) add(profileId, `t:${t.id}`);
     for (const g of park.groups) add(profileId, `g:${g.id}`);
   }
   return census;
@@ -60,27 +60,35 @@ export function droppedPins(before: PinCensus, after: PinCensus, profiles: PinSt
 
 export function pinsOf(s: PinState, profileIds: string[]): Record<string, ParkedPins> {
   const wanted = new Set(profileIds);
-  let parked: Record<string, ParkedPins> = Object.fromEntries(Object.entries(s.parkedPins).filter(([p]) => wanted.has(p)));
-  for (const w of Object.values(s.windows)) if (isRegularWindow(w)) parked = parkWindowPins(parked, w, { ...s, windows: { [w.id]: w } });
-  return Object.fromEntries(
-    Object.entries(parked)
-      .filter(([p]) => wanted.has(p))
-      .map(([p, park]) => [p, { ...park, tabs: park.tabs.map(({ restoreFrom: _, ...t }) => t) }]),
-  );
+  const profilesIn = (w: PinState["windows"][string]) => w.tabIds.some((id) => wanted.has(s.tabs[id]?.profileId ?? ""));
+  let live: Record<string, ParkedPins> = {};
+  for (const w of Object.values(s.windows)) if (isRegularWindow(w) && profilesIn(w)) live = parkWindowPins(live, w, { ...s, windows: { [w.id]: w } }, { keepSamePage: true });
+  const pins: Record<string, ParkedPins> = {};
+  for (const profileId of wanted) {
+    const own = live[profileId] ?? { tabs: [], groups: [] };
+    const old = s.parkedPins[profileId] ?? { tabs: [], groups: [] };
+    const tabIds = new Set(own.tabs.map((t) => t.id));
+    const groupIds = new Set(own.groups.map((g) => g.id));
+    const tabs = [...own.tabs, ...old.tabs.filter((t) => !tabIds.has(t.id))].map(({ restoreFrom: _, ...t }) => t);
+    const groups = [...own.groups, ...old.groups.filter((g) => !groupIds.has(g.id))];
+    const splits = [...(own.splits ?? []), ...(old.splits ?? [])];
+    if (tabs.length || groups.length) pins[profileId] = { tabs, groups, ...(splits.length ? { splits } : {}) };
+  }
+  return pins;
 }
 
 export function parsePinBackups(json: string | null | undefined): PinBackup[] {
   try {
     const raw: unknown = json ? JSON.parse(json) : null;
     if (!isFields(raw) || !Array.isArray(raw.backups)) return [];
-    return raw.backups.filter((b): b is PinBackup => isFields(b) && typeof b.profileId === "string" && isFields(b.pins) && Array.isArray(b.pins.tabs));
+    return raw.backups.filter((b): b is PinBackup => isFields(b) && isFields(b.pins) && isFields(b.dropped));
   } catch {
     return [];
   }
 }
 
-export function withPinBackups(existing: PinBackup[], previous: PinState, dropped: Map<string, number>, at: number): PinBackups {
+export function withPinBackup(existing: PinBackup[], previous: PinState, dropped: Map<string, number>, at: number): PinBackups {
   const pins = pinsOf(previous, [...dropped.keys()]);
-  const added = [...dropped].filter(([p]) => pins[p]).map(([profileId, n]): PinBackup => ({ at, profileId, dropped: n, pins: pins[profileId]! }));
-  return { version: PINS_BACKUP_VERSION, backups: [...existing, ...added].slice(-MAX_PIN_BACKUPS) };
+  const kept = Object.fromEntries([...dropped].filter(([p]) => pins[p]));
+  return { version: PINS_BACKUP_VERSION, backups: [...existing, { at, dropped: kept, pins }].slice(-MAX_PIN_BACKUPS) };
 }

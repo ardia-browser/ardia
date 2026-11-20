@@ -15,7 +15,7 @@ import { downloadSession, withoutRepeats } from "../downloads/downloadsSlice";
 import { anyDownloadProgress, withLiveProgress } from "../downloads/progress";
 import { noteDownloadHistoryWrite } from "../telemetry/downloadWork";
 import { noteSessionWrite } from "../telemetry/sessionWrites";
-import { droppedPins, parsePinBackups, pinCensus, pinSources, PINS_BACKUP_DOCUMENT, withPinBackups, type PinCensus, type PinState } from "./pinGuard";
+import { droppedPins, parsePinBackups, pinCensus, pinSources, PINS_BACKUP_DOCUMENT, withPinBackup, type PinCensus, type PinState } from "./pinGuard";
 import { noteSavedTopAppsMerged } from "../telemetry/topAppsSharing";
 import { parseSaved, unchanged, type Migrations, type SavedObject } from "../../lib/savedDocument";
 import { sessionWithCleanUpMinutes } from "../settings/cleanUpAfter";
@@ -198,9 +198,9 @@ function write(name: string, json: string): boolean {
   }
 }
 
-function keepPinBackups(previous: PinState, dropped: Map<string, number>): boolean {
+function keepPinBackup(previous: PinState, dropped: Map<string, number>): boolean {
   try {
-    writeDocument(PINS_BACKUP_DOCUMENT, JSON.stringify(withPinBackups(parsePinBackups(readDocument(PINS_BACKUP_DOCUMENT)), previous, dropped, Date.now())));
+    writeDocument(PINS_BACKUP_DOCUMENT, JSON.stringify(withPinBackup(parsePinBackups(readDocument(PINS_BACKUP_DOCUMENT)), previous, dropped, Date.now())));
     return true;
   } catch {
     return false;
@@ -314,17 +314,26 @@ export function startPersistence(overrides: LaunchOverrides = {}) {
   let pinsSaved: PinState = useBrowser.getState();
   let pinSourcesSaved = pinSources(pinsSaved);
   let censusSaved: PinCensus | null = null;
-  const keepDroppedPins = (s: BrowserState): number => {
+  let backedUp: PinState | null = null;
+  const keepDroppedPins = (s: BrowserState): { kept: number; commit: () => void } => {
     const sources = pinSources(s);
-    if (sources.every((v, i) => v === pinSourcesSaved[i])) return 0;
+    if (sources.every((v, i) => v === pinSourcesSaved[i])) return { kept: 0, commit: () => {} };
     const census = pinCensus(s);
     const dropped = droppedPins(censusSaved ?? pinCensus(pinsSaved), census, s.profiles);
-    const kept = dropped.size > 0 && keepPinBackups(pinsSaved, dropped);
-    if (dropped.size && !kept) return 0;
-    pinsSaved = s;
-    pinSourcesSaved = sources;
-    censusSaved = census;
-    return kept ? [...dropped.values()].reduce((a, n) => a + n, 0) : 0;
+    let kept = 0;
+    if (dropped.size && backedUp !== pinsSaved) {
+      if (!keepPinBackup(pinsSaved, dropped)) return { kept: 0, commit: () => {} };
+      backedUp = pinsSaved;
+      kept = [...dropped.values()].reduce((a, n) => a + n, 0);
+    }
+    return {
+      kept,
+      commit: () => {
+        pinsSaved = s;
+        pinSourcesSaved = sources;
+        censusSaved = census;
+      },
+    };
   };
 
   const lastSources = new Map<string, unknown[]>();
@@ -351,10 +360,11 @@ export function startPersistence(overrides: LaunchOverrides = {}) {
     for (const doc of DOCS.filter((d) => dirty.has(d))) {
       const json = doc.json(s);
       const saved = lastJson.get(doc.name) === json;
-      const pinsKept = !saved && doc.name === SESSION_DOCUMENT ? keepDroppedPins(s) : 0;
+      const pins = !saved && doc.name === SESSION_DOCUMENT ? keepDroppedPins(s) : null;
       if (saved || write(doc.name, json)) {
+        pins?.commit();
         if (!saved && doc.name === DOWNLOADS_DOCUMENT) noteDownloadHistoryWrite(json.length);
-        if (!saved && doc.name === SESSION_DOCUMENT) noteSessionWrite(json.length, cosmeticOnly, pinsKept);
+        if (!saved && doc.name === SESSION_DOCUMENT) noteSessionWrite(json.length, cosmeticOnly, pins?.kept ?? 0);
         lastJson.set(doc.name, json);
         dirty.delete(doc);
       }

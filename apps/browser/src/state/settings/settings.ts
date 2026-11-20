@@ -17,6 +17,7 @@ import { PROVIDERS_SCHEMA } from "../omnibox/providerSchema";
 import { COMMAND_BAR_START_SCHEMA, isCommandBarStart, type CommandBarStart } from "../omnibox/commandBarStart";
 import { PRESS_MOTIONS } from "../../lib/pressMotion";
 import { noteAutoHideTabsChosen } from "../telemetry/autoHideTabsChoices";
+import { windowsInLineWithAutoHideTabs } from "../windows/autoHideTabsInLine";
 import { READER_FONTS, READER_SIZE_NAMES } from "../reader/tokens";
 import { noteMinimalismToggled } from "../telemetry/minimalismCounts";
 import { checkedSettingsPatch, keptSettingsPatch } from "./settingsPatch";
@@ -338,11 +339,6 @@ export const sessionWithNewTabLinksInLittleArdia = (doc: SavedObject) => without
 
 export const sessionWithUnreadCountsOffByDefault = (doc: SavedObject) => withoutUntouchedSetting(doc, "showUnreadCounts", true);
 
-function windowsFollowingAutoHideTabs(s: Pick<BrowserState, "settings" | "windows">, patch: Partial<Settings>): Pick<BrowserState, "windows"> | {} {
-  if (patch.autoHideTabs === undefined || patch.autoHideTabs === s.settings.autoHideTabs) return {};
-  return { windows: Object.fromEntries(Object.entries(s.windows).map(([id, { autoHideTabs: _, ...w }]) => [id, w])) };
-}
-
 export type SettingsSlice = {
   settings: Settings;
   settingsMeta: SettingsMeta;
@@ -362,7 +358,7 @@ export const createSettingsSlice: StateCreator<BrowserState, [], [], SettingsSli
   updateSettings(raw, { fromSync = false, inferred = false } = {}) {
     const { patch } = writableSettingsPatch(raw);
     set((s) => {
-      const windows = windowsFollowingAutoHideTabs(s, patch);
+      const windows = windowsInLineWithAutoHideTabs(s, patch.autoHideTabs, fromSync);
       if (fromSync) return { settings: { ...s.settings, ...settledPatch(s.settings, patch) }, ...windows };
       return { ...choose(s, withLinkKeysApart(s.settings, patch), { inferring: inferred }), ...windows };
     });

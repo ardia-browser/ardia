@@ -25,9 +25,30 @@ public class WebKitModule: Module {
       let cookies = try args.dicts("cookies")
       WebKitHub.shared.importCookies(cookies, profile: args.profile, storeKey: try args.text("storeKey")) { reply.ok($0) }
     },
+    "exportCookies": { args, reply in
+      let urls = try args.strings("urls").compactMap(URL.init(string:))
+      let keys = (args.values["keys"] as? [String]).map(Set.init)
+      WebKitHub.shared.exportCookies(profile: args.profile, urls: urls, keys: keys) { reply.ok($0) }
+    },
     "setFraudWarnings": { args, reply in
       WebKitFraudWarnings.set(try args.bool("enabled"))
       reply.ok()
+    },
+    "watchSiteData": { args, reply in
+      WebKitSiteData.shared.setWatching(try args.bool("enabled"))
+      reply.ok()
+    },
+    "siteDataReady": { args, reply in
+      WebKitSiteData.shared.release(try args.text("id"))
+      reply.ok()
+    },
+    "readSiteData": { args, reply in
+      let origins = try args.strings("origins").compactMap(URL.init(string:)).filter { WebKitSiteData.origin(of: $0) != nil }
+      WebKitSiteData.shared.read(profile: args.profile, domains: try args.strings("domains"), origins: Array(origins.prefix(16))) { reply.ok($0) }
+    },
+    "writeSiteData": { args, reply in
+      let storage = (try args.dict("storage")).compactMapValues { $0 as? [String: Any] }
+      WebKitSiteData.shared.write(profile: args.profile, set: try args.dicts("set"), remove: try args.dicts("remove"), storage: storage) { reply.ok($0) }
     },
     "setZoom": { args, reply in
       WebKitHub.shared.setZoom(try args.double("zoom"), profile: args.profile, host: try args.text("host").lowercased())

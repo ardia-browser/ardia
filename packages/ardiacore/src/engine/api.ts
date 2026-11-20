@@ -18,7 +18,9 @@ import type { ChromeWindowState } from "../windows";
 import type { FieldProviderProfile, PasswordExportStatus, SavedPassword, SystemPanelResult, VerificationCodeSetupResult } from "../passwords";
 import type { ClearSiteDataResult, SiteSettings, SiteSettingType, SiteSettingValue } from "../siteSettings";
 import type { LinkRoute, TabStripCommand, TabStripTransaction, WindowRequest } from "../tabs";
-import type { PageCookie, PageEngine, PasskeyAccess, StorageItems, WebKitCount } from "../webkit";
+import type {
+  CookieRemoval, PageCookie, PageEngine, PasskeyAccess, SiteData, SiteDataWritten, StorageChange, StorageItems, WebKitCount,
+} from "../webkit";
 import type { DisplayMediaSource, OpenWindowRequest, WebNotification } from "../pageTypes";
 
 type Profile = { profile: string };
@@ -209,6 +211,11 @@ export type EngineCalls = {
   "webKit.endPrivateSession": [{ session: string }, null];
   "webKit.cookieStoreKey": [Profile, string];
   "webKit.importCookies": [Profile & { storeKey: string; cookies: PageCookie[] }, number];
+  "webKit.exportCookies": [Profile & { urls: string[]; keys?: string[] }, number];
+  "webKit.watchSiteData": [{ enabled: boolean }, null];
+  "webKit.siteDataReady": [{ id: string }, null];
+  "webKit.readSiteData": [Profile & { domains: string[]; origins: string[] }, SiteData | null];
+  "webKit.writeSiteData": [Profile & { set: PageCookie[]; remove: CookieRemoval[]; storage: Record<string, StorageChange> }, SiteDataWritten | null];
   "webKit.setZoom": [Profile & { host: string; zoom: number }, null];
   "webKit.setFraudWarnings": [{ enabled: boolean }, null];
   "webKit.devStoreExists": [Profile, boolean];
@@ -235,6 +242,8 @@ export type EngineEvents = {
   "permissions.requested": PermissionRequest;
   "permissions.dismissed": { id: string };
   "webKit.counted": { name: WebKitCount; epoch?: string };
+  "webKit.siteDataWanted": { id: string; profile: string; origin: string; epoch?: string };
+  "webKit.siteCookiesChanged": { profile: string; domains: string[]; epoch?: string };
   "webKit.notification": { profile: string; notification: WebNotification; epoch?: string };
   "webKit.notificationClose": { id: string };
   "webKit.openWindow": OpenWindowRequest & { profile: string };

@@ -54,6 +54,7 @@ protocol PageTab: NSView {
 
   func securityInfo(_ completion: @escaping ([String: Any]) -> Void)
   func pageCookies(_ urls: [String], completion: @escaping ([[String: Any]]?) -> Void)
+  func siteData(_ request: [String: Any], completion: @escaping ([String: Any]?) -> Void)
   func openBlockedPopup(_ popupId: String, always: Bool)
   func clearSiteData(_ reply: @escaping (Any?, String?) -> Void)
 

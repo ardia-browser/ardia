@@ -80,7 +80,7 @@ test("a streaming site moves to WebKit quietly: the old page is held until the n
   webviews.clear();
 });
 
-test("the protected-video offer shows only while its setting is on", async () => {
+test("the protected-video offer shows only while its setting is on, and a switch brings cookies along only while that one is", async () => {
   S().hydrate({});
   const tabId = liveTab("https://films.example/watch/1", "chromium");
   S().updateSettings({ offerWebKitForProtectedVideo: false });
@@ -89,8 +89,23 @@ test("the protected-video offer shows only while its setting is on", async () =>
   S().updateSettings({ offerWebKitForProtectedVideo: true });
   offerWebKit(tabId, { keySystem: "com.widevine.alpha", main: true });
   assert.equal(useEngineOffers.getState()[tabId]?.host, "films.example");
+  S().updateSettings({ engineSwitchCarriesSiteData: false });
+  engineCalls.length = 0;
+  assert.equal(await openPageIn(tabId, "webkit"), true);
+  assert.deepEqual(engineCalls.filter(carryCall), []);
+  dropSwap(tabId);
+  S().updateSettings({ engineSwitchCarriesSiteData: true });
+  assert.equal(await openPageIn(tabId, "chromium"), true);
+  dropSwap(tabId);
+  const back = liveTab("https://films.example/watch/2", "chromium");
+  engineCalls.length = 0;
+  assert.equal(await openPageIn(back, "webkit"), true);
+  assert.ok(engineCalls.some(carryCall));
+  dropSwap(back);
   webviews.clear();
 });
+
+const carryCall = (c) => c.domain === "webKit" && c.verb !== "setZoom";
 
 function liveTab(url, engine, unsaved = false) {
   const w = S().createWindow({ url });

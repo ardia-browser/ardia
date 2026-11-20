@@ -17,6 +17,26 @@ export type PageCookie = {
 };
 
 export type StorageItems = [string, string][];
+export type SiteStorage = Record<string, StorageItems | null>;
+export type SiteData = { cookies: PageCookie[]; storage: SiteStorage };
+export type StorageChange = { set: StorageItems; remove: string[] };
+export type CookieRemoval = { name: string; domain: string; path: string };
+export type ChromiumCookieWrite = {
+  name: string;
+  value: string;
+  url?: string;
+  domain?: string;
+  path: string;
+  secure: boolean;
+  httpOnly: boolean;
+  sameSite?: "Strict" | "Lax" | "None";
+  expires?: number;
+};
+export type ChromiumSiteDataRequest =
+  | { op: "read"; domains: string[]; origins: string[] }
+  | { op: "write"; cookies: ChromiumCookieWrite[]; remove: CookieRemoval[]; storage: Record<string, StorageChange> };
+export type ChromiumSiteDataReply = Partial<SiteData> & { cookiesWritten?: number; removed?: number; storageWritten?: number };
+export type SiteDataWritten = { cookies: number; removed: number; storage: number };
 
 export type PasskeyAccessStatus = "entitlementRequired" | "deviceNotConfigured" | "notDetermined" | "authorized" | "denied";
 export type PasskeyAccess = { entitled: boolean; status: PasskeyAccessStatus };
@@ -41,6 +61,7 @@ export type WebKitCount =
   | "autofillUpdate"
   | "autofillNever"
   | "passwordsLeftToManager"
+  | "cookieReplaced"
   | "workerNotification"
   | "workerShownNotification"
   | "workerClick"

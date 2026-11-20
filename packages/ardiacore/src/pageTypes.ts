@@ -1,7 +1,7 @@
 import type { ViewProps } from "react-native";
 import type { ExternalAppRequest } from "./permissions";
 import type { FaviconImage } from "./favicons";
-import type { PageCookie, PageEngine } from "./webkit";
+import type { ChromiumSiteDataReply, ChromiumSiteDataRequest, PageCookie, PageEngine } from "./webkit";
 
 export type NavigationState = {
   url: string;
@@ -275,6 +275,7 @@ export type WebViewHandle = {
 
   getSecurityInfo(): Promise<SecurityInfo | null>;
   pageCookies(urls: string[]): Promise<PageCookie[]>;
+  siteData(request: ChromiumSiteDataRequest): Promise<ChromiumSiteDataReply | null>;
   openBlockedPopup(id: string, always?: boolean): Promise<void>;
   clearSiteData(): Promise<{ cookies: number | false; storage: boolean }>;
 

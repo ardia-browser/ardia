@@ -24,14 +24,15 @@ import {
 } from "./engines";
 import { engineProfile, isIncognitoProfile, navigationTo } from "../browser/model";
 import type { Tab } from "../browser/types";
-import { carrySignInToWebKit, signInCarryOn } from "./engineSignIn";
+import { carrySignIn } from "./engineSignIn";
+import { carriesSiteData, carryRecentSites, noteWebKitPageSettled } from "./siteData";
 import { dropSwap, holdPageForSwap } from "./engineSwap";
 import { wantsPage } from "../tabs/tabPages";
 import { webviews } from "../../platform/webviews";
 import { withDeadline } from "../../lib/deadline";
 import { loadedPage, navigationOf } from "../tabs/pageSession";
 import { noteEngineModeChange, noteEngineModeVideoNotice } from "../telemetry/engineSwitchCounts";
-import { consentToken } from "../telemetry/client";
+import { consentToken, type ConsentToken } from "../telemetry/client";
 import { showToast } from "../app/toasts";
 import { openSettings } from "../settings/settingsWindows";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
@@ -51,6 +52,12 @@ const hostLabel = (site: string) => new URL(site).hostname.replace(/^www\./, "")
 export const useEngineModeSwitch = create<{ pending: EngineMode | null }>()(() => ({ pending: null }));
 
 let modeGeneration = 0;
+let modeRequests = 0;
+
+function stillThisSwitch(mode: EngineMode): () => boolean {
+  const request = ++modeRequests;
+  return () => request === modeRequests && (useEngineModeSwitch.getState().pending ?? engineMode(store())) === mode;
+}
 
 function modeStillHolds(): () => boolean {
   const generation = modeGeneration;
@@ -137,6 +144,7 @@ export async function openPageIn(tabId: string, engine: PageEngine, options: Mov
 }
 
 async function movePage(tabId: string, engine: PageEngine, options: MoveOptions): Promise<boolean> {
+  const consent = consentToken();
   const t = store().tabs[tabId];
   if (!t) return false;
   const url = t.url || navigationOf(t)?.url || "";
@@ -152,7 +160,7 @@ async function movePage(tabId: string, engine: PageEngine, options: MoveOptions)
   const holds = modeStillHolds();
   if (options.checkWork !== false && !(await mayLeavePage(t, `Open this page in ${ENGINE_NAMES[engine]}?`, `The page reloads in ${ENGINE_NAMES[engine]}, so changes you made on it may not be saved.`, `Open in ${ENGINE_NAMES[engine]}`))) return false;
   if (!holds()) return false;
-  if (engine === "webkit" && signInCarryOn()) await carrySignInToWebKit(tabId, url);
+  if (carriesSiteData()) await carrySignIn(tabId, url, engine, consent, holds);
   if (!holds()) return false;
   const from = tabEngine(store(), tabId);
   const held = from !== engine && wantsPage(store().tabs[tabId]) ? await holdPageForSwap(tabId, from, engine, url, true, holds) : null;
@@ -273,15 +281,15 @@ export function modeSwitchConfirm(mode: EngineMode, unsavedPages: number, window
   return { title: `Switch to ${MODE_NAMES[mode]}?`, message: `${pages}, so the changes may be lost.`, confirmTitle: `Switch to ${MODE_NAMES[mode]}`, cancelTitle: "Cancel", windowId };
 }
 
-async function carryEachSite(moves: { tab: Tab; to: PageEngine; url: string }[]) {
-  if (!signInCarryOn()) return;
+async function carryEachSite(moves: { tab: Tab; to: PageEngine; url: string }[], consent: ConsentToken | null) {
+  if (!carriesSiteData()) return;
   const carried = new Set<string>();
   await Promise.all(
     moves.map(({ tab, to, url }) => {
-      const key = `${tab.profileId}|${siteOf(url)}`;
-      if (to !== "webkit" || carried.has(key)) return;
+      const key = `${tab.profileId}|${siteOf(url)}|${to}`;
+      if (carried.has(key)) return;
       carried.add(key);
-      return carrySignInToWebKit(tab.id, url);
+      return carrySignIn(tab.id, url, to, consent);
     }),
   );
 }
@@ -302,7 +310,8 @@ export async function setEngineMode(mode: EngineMode, options: { windowId?: stri
       noteEngineModeChange({ cancelled: true, moved: 0 }, consent);
       return false;
     }
-    await carryEachSite(live);
+    await carryEachSite(live, consent);
+    if (carriesSiteData() && mode !== "automatic") await withDeadline(carryRecentSites(mode, consent, stillThisSwitch(mode)), 1500, undefined);
     const holds = new Map(await Promise.all(live.map(async (m) => [m.tab.id, await holdPageForSwap(m.tab.id, m.from, m.to, m.url, true)] as const)));
     let moved = 0;
     storeTransaction(() => {
@@ -360,4 +369,5 @@ export function noteWebKitPage(tabId: string, page: WebKitPage) {
   visitedTabs.add(tabId);
   const profile = isIncognitoProfile(t.profileId) ? null : engineProfile(useBrowser.getState(), t.profileId);
   visits.note(tabId, profile, page);
+  if (profile !== null && page.url === page.committedUrl) noteWebKitPageSettled(tabId, page.url, page.isLoading);
 }

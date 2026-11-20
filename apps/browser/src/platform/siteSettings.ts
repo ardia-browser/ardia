@@ -30,3 +30,7 @@ export const resolveExternalApp = (id: string, open: boolean, remember = false) 
 export const getExternalAppAllowances = (profile: string) => call("permissions.externalAppAllowances", { profile });
 export const removeExternalAppAllowance = (profile: string, origin: string, scheme: string) =>
   call("permissions.removeExternalAppAllowance", { profile, origin, scheme }).then(() => {});
+export const registrableDomainsOf = (profile: string, hosts: string[]) => call("sites.registrableDomains", { profile, hosts });
+export const readChromiumStorage = (profile: string, origin: string) => call("sites.readStorage", { profile, origin });
+export const writeChromiumStorage = (profile: string, origin: string, set: [string, string][], remove: string[]) =>
+  call("sites.writeStorage", { profile, origin, set, remove });

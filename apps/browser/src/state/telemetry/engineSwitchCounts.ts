@@ -1,5 +1,6 @@
 import { isWebKitAutofillCount, noteWebKitAutofillCount, takeWebKitAutofillCounts, type WebKitAutofillCount } from "./webKitAutofillCounts";
 import { isWebKitContentBlockerCount, noteWebKitContentBlockerCount, takeWebKitContentBlockerCounts, type WebKitContentBlockerCount } from "./webKitContentBlockerCounts";
+import { takeSiteDataCounts } from "./siteDataCounts";
 import { onWebKitCount } from "../../platform/webkit";
 import { counted, onConsentPeriodChange, type ConsentToken } from "./choice";
 import { nativeConsent } from "./nativeConsent";
@@ -15,6 +16,8 @@ const none = () => ({
   switchTimeouts: 0,
   scrollCarried: 0,
   zoomCarried: 0,
+  cookiesToWebKit: 0,
+  cookiesToChromium: 0,
   webKitAutofillFills: 0,
   webKitAutofillSaveOffers: 0,
   webKitAutofillSaves: 0,
@@ -23,6 +26,7 @@ const none = () => ({
   webKitAutofillUpdates: 0,
   webKitAutofillNevers: 0,
   webKitPasswordsLeftToManager: 0,
+  webKitCookiesReplaced: 0,
   webKitWorkerNotifications: 0,
   webKitWorkerShownNotifications: 0,
   webKitWorkerClicks: 0,
@@ -101,6 +105,10 @@ function addSwap(to: "chromium" | "webkit", swap: EngineSwap) {
   tally.switchMsMax = Math.max(tally.switchMsMax, ms);
 }
 
+export function noteCookiesCarried(to: "chromium" | "webkit", count: number, consent: ConsentToken | null) {
+  if (count > 0) counted(consent, () => void (tally[to === "webkit" ? "cookiesToWebKit" : "cookiesToChromium"] += count));
+}
+
 export function noteEngineModeChange({ cancelled, moved }: { cancelled: boolean; moved: number }, consent: ConsentToken | null) {
   counted(consent, () => {
     if (cancelled) return void tally.modeChangesCancelled++;
@@ -134,6 +142,7 @@ export function takeEngineSwitchCounts() {
   return {
     ...takeWebKitAutofillCounts(),
     ...takeWebKitContentBlockerCounts(),
+    ...takeSiteDataCounts(),
     engine_switches: taken.switches,
     engine_switches_to_webkit: taken.switchesToWebKit,
     engine_switches_hidden: taken.switchesHidden,
@@ -142,6 +151,8 @@ export function takeEngineSwitchCounts() {
     engine_switch_timeouts: taken.switchTimeouts,
     engine_switch_scroll_carried: taken.scrollCarried,
     engine_switch_zoom_carried: taken.zoomCarried,
+    engine_switch_cookies_to_webkit: taken.cookiesToWebKit,
+    engine_switch_cookies_to_chromium: taken.cookiesToChromium,
     webkit_autofill_fills: taken.webKitAutofillFills,
     webkit_autofill_save_offers: taken.webKitAutofillSaveOffers,
     webkit_autofill_saves: taken.webKitAutofillSaves,
@@ -150,6 +161,7 @@ export function takeEngineSwitchCounts() {
     webkit_autofill_updates: taken.webKitAutofillUpdates,
     webkit_autofill_nevers: taken.webKitAutofillNevers,
     webkit_passwords_left_to_manager: taken.webKitPasswordsLeftToManager,
+    webkit_cookies_replaced: taken.webKitCookiesReplaced,
     webkit_worker_notifications: taken.webKitWorkerNotifications,
     webkit_worker_shown_notifications: taken.webKitWorkerShownNotifications,
     webkit_worker_clicks: taken.webKitWorkerClicks,

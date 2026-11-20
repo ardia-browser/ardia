@@ -6,7 +6,7 @@ import type { FaviconImage } from "./favicons";
 import { ArdiaError, ardiaError } from "@ardia/core";
 import { deliverPageEvent, isPageEventProp, pageEventOf, type NativeProps, type PageEvent } from "./pageEvents";
 import type { DiscardOutcome, DiscardRefusal, WebViewHandle, WebViewProps } from "./pageTypes";
-import type { PageCookie } from "./webkit";
+import type { ChromiumSiteDataReply, PageCookie } from "./webkit";
 
 type NativeHandle = Omit<
   WebViewHandle,
@@ -87,6 +87,7 @@ export const WebView = forwardRef<WebViewHandle, WebViewProps>(function WebView(
       exitPictureInPicture: () => call(undefined, (n) => n.exitPictureInPicture()),
       getSecurityInfo: () => call(null, (n) => n.getSecurityInfo()),
       pageCookies: (urls) => call<PageCookie[]>([], (n) => n.pageCookies(urls)),
+      siteData: (request) => call<ChromiumSiteDataReply | null>(null, (n) => (typeof n.siteData === "function" ? n.siteData(request) : Promise.resolve(null))),
       openBlockedPopup: (id, always) => call(undefined, (n) => n.openBlockedPopup(id, always)),
       clearSiteData: () => call({ cookies: false, storage: false }, (n) => n.clearSiteData()),
       resolvePasswordPrompt: (answer, edits) =>

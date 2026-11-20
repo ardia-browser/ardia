@@ -7,6 +7,7 @@ globalThis.fetch = async () => ({ status: 503 });
 
 const client = await import("./client.ts");
 const { noteEngineModeChange, noteWebKitCount, takeEngineSwitchCounts } = await import("./engineSwitchCounts.ts");
+const { noteSiteDataSkip } = await import("./siteDataCounts.ts");
 after(() => client.setSharing(false, "settings"));
 
 test("engine and WebKit counts land only under the consent period they started in, and a new period starts from zero", () => {
@@ -16,6 +17,7 @@ test("engine and WebKit counts land only under the consent period they started i
   takeEngineSwitchCounts();
   noteWebKitCount("contextMenu", before);
   noteWebKitCount("blockerStrictBlocked", before);
+  noteSiteDataSkip("blocked", before);
   noteEngineModeChange({ cancelled: false, moved: 2 }, before);
 
   client.setSharing(false, "settings");
@@ -28,6 +30,7 @@ test("engine and WebKit counts land only under the consent period they started i
   const counts = takeEngineSwitchCounts();
   assert.equal(counts.webkit_context_menus, 1);
   assert.equal(counts.webkit_blocker_strict_blocks, 0);
+  assert.equal(counts.site_data_blocked, 0);
   assert.equal(counts.engine_mode_changes, 0);
   assert.equal(counts.engine_mode_tabs_moved, 0);
 });

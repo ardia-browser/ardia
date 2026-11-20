@@ -7,6 +7,7 @@ export type WebKitCount =
   | "autofillUpdate"
   | "autofillNever"
   | "passwordsLeftToManager"
+  | "cookieReplaced"
   | "workerNotification"
   | "workerShownNotification"
   | "workerClick"
@@ -63,6 +64,7 @@ export const WEBKIT_COUNTS = {
   autofillUpdate: "webKitAutofillUpdates",
   autofillNever: "webKitAutofillNevers",
   passwordsLeftToManager: "webKitPasswordsLeftToManager",
+  cookieReplaced: "webKitCookiesReplaced",
   workerNotification: "webKitWorkerNotifications",
   workerShownNotification: "webKitWorkerShownNotifications",
   workerClick: "webKitWorkerClicks",

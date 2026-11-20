@@ -49,6 +49,7 @@ export function WebEngineSection() {
       <Group>
         <SettingToggle anchor="advanced.engineSwitchKeepsPage" />
         <SettingToggle anchor="advanced.engineSwitchAsksAboutUnsavedWork" />
+        <SettingToggle anchor="advanced.engineSwitchCarriesSiteData" />
       </Group>
       <SectionHeader title="WebKit pages" />
       <Group>

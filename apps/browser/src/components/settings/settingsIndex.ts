@@ -12,6 +12,7 @@ import { profileRows } from "./rows/profileRows";
 import { shortcutRows } from "./rows/shortcutRows";
 import { tabRows } from "./rows/tabRows";
 import type { SettingSection, SettingsEnv } from "./rows/types";
+import type { SettingsCapabilities } from "../../state/settings/capabilities";
 
 type PaneTint = Exclude<keyof typeof paneTints, "ink">;
 
@@ -34,7 +35,7 @@ const SECTIONS = ROWS as unknown as Record<SettingsPane, SettingSection[]>;
 type RowKeysOf<P extends SettingsPane> = (typeof ROWS)[P][number] extends infer S ? (S extends { rows: infer R } ? keyof R & string : never) : never;
 export type SettingId = { [P in SettingsPane]: `${P}.${RowKeysOf<P>}` }[SettingsPane];
 
-export type SettingEntry = Searchable & { id: SettingId; pane: SettingsPane; section: string; explained?: boolean; needs?: string; shown?: (settings: Settings, env: SettingsEnv) => boolean };
+export type SettingEntry = Searchable & { id: SettingId; pane: SettingsPane; section: string; explained?: boolean; needs?: string | ((settings: Settings) => string); unlock?: string | ((settings: Settings) => string); offered?: (env: SettingsEnv) => boolean; capability?: keyof SettingsCapabilities; shown?: (settings: Settings, env: SettingsEnv) => boolean };
 
 export const paneTitle = (pane: SettingsPane) => PANE_LOOKS[pane].title;
 
@@ -62,9 +63,30 @@ export function setting(id: SettingId): SettingEntry {
 
 export const SETTINGS_INDEX = prepare(SETTINGS);
 
-export const unshownSettings = (settings: Settings, env: SettingsEnv) =>
-  SETTINGS.filter((e) => e.shown && !e.shown(settings, env))
+const capabilityOf = (e: SettingEntry, env: SettingsEnv) => (e.capability ? (env.capabilities?.[e.capability] ?? "loading") : "available");
+
+const unsupported = (e: SettingEntry, env: SettingsEnv) => (e.offered && !e.offered(env)) || capabilityOf(e, env) === "unavailable";
+
+export const loadingSettings = (env: SettingsEnv) =>
+  SETTINGS.filter((e) => !unsupported(e, env) && capabilityOf(e, env) === "loading")
     .map((e) => e.id)
     .join("\n");
+
+export const unsupportedSettings = (env: SettingsEnv) =>
+  SETTINGS.filter((e) => unsupported(e, env))
+    .map((e) => e.id)
+    .join("\n");
+
+export const unshownSettings = (settings: Settings, env: SettingsEnv) =>
+  SETTINGS.filter((e) => unsupported(e, env) || (e.shown && !e.shown(settings, env)))
+    .map((e) => e.id)
+    .join("\n");
+
+export const needsOf = (entry: SettingEntry, settings: Settings) => (typeof entry.needs === "function" ? entry.needs(settings) : (entry.needs ?? null));
+
+export const unlockOf = (entry: SettingEntry, settings: Settings) => (typeof entry.unlock === "function" ? entry.unlock(settings) : (entry.unlock ?? null));
+
+export const hiddenFromSearch = (unshown: ReadonlySet<string>, unsupported: ReadonlySet<string>): ReadonlySet<string> =>
+  new Set([...unshown].filter((id) => unsupported.has(id) || !findSetting(id)?.needs));
 
 export const sectionEntries = (pane: SettingsPane, section: string) => SETTINGS.filter((s) => s.pane === pane && s.section === section);

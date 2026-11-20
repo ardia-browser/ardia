@@ -10,6 +10,7 @@ export const MONO_FAMILY = "Menlo";
 export const SIDEBAR_TEXT_SIZES = ["default", "large", "larger"] as const;
 export type SidebarTextSize = (typeof SIDEBAR_TEXT_SIZES)[number];
 const SIDEBAR_TEXT_SCALE: Record<SidebarTextSize, number> = { default: 1, large: 15 / 13, larger: 17 / 13 };
+export const sidebarTextScale = (size: SidebarTextSize): number => SIDEBAR_TEXT_SCALE[size] ?? 1;
 
 export type TypeSizeName = keyof typeof TYPE_SIZES;
 export type WeightName = keyof typeof WEIGHTS;

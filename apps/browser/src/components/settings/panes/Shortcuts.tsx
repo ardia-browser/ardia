@@ -15,6 +15,7 @@ import { useResource } from "../../../state/settings/resources";
 import { formatShortcut, sameShortcut, type Shortcut } from "../../../state/commands/shortcuts";
 import { splitLinkModifierOf, type PeekModifier, type SplitLinkModifier } from "../../../state/settings/settings";
 import { keyText } from "../../../state/commands/keyText";
+import { useSettingsColors } from "../useSettingsColors";
 import type { SettingsPlace } from "../../../state/settings/settingsWindows";
 
 type Filter = "all" | "customized" | "conflicts";
@@ -184,19 +185,20 @@ function ClicksSection() {
 
 function ShortcutField({ combo, remappable, recording, onRecord, onClear }: { combo: Shortcut; remappable: boolean; recording: boolean; onRecord: () => void; onClear: () => void }) {
   const theme = useTheme();
+  const colors = useSettingsColors();
   const { hovered, hoverProps } = useHover();
   const text = recording ? "Type Shortcut" : formatShortcut(combo);
   if (!remappable) {
     return (
       <View style={FIXED_KEYS} tooltip="(not remappable)">
-        <Text tone="textTertiary">{text || "—"}</Text>
+        <Text color={colors.secondaryText}>{text || "—"}</Text>
       </View>
     );
   }
   return (
     <View {...hoverProps} style={KEY_FIELD}>
       <Pressable onPress={onRecord}>
-        <KeyCap keys={[text || "None"]} editing={recording} empty={!text} hovered={hovered} />
+        <KeyCap keys={[text || "None"]} editing={recording} empty={!text} hovered={hovered} emptyColor={colors.secondaryText} />
       </Pressable>
       {hovered && !recording && combo.key ? (
         <Pressable onPress={onClear} tooltip="Remove Shortcut" style={CLEAR}>

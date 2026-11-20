@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 const { tabCardAddress } = await import("./tabCardAddress.ts");
+const { filePathLabel } = await import("../../lib/url.ts");
 
 const search = "https://www.google.com/search?q=ardia+browser&hl=en";
 
@@ -17,7 +18,8 @@ test("a page without a host keeps its full address, in both modes", () => {
     assert.equal(tabCardAddress(url, false), tabCardAddress(url, true));
     assert.ok(tabCardAddress(url, false).length > 0, url);
   }
-  assert.equal(tabCardAddress("file:///Users/me/notes.html", false), "/Users/me/notes.html");
+  assert.equal(tabCardAddress("file:///Users/me/notes.html", false), filePathLabel("file:///Users/me/notes.html"));
+  assert.ok(tabCardAddress("file:///Users/me/projects/ardia/pages/notes.html", false).endsWith("notes.html"));
 });
 
 test("a tab without an address shows no address line", () => {

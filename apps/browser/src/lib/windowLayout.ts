@@ -12,6 +12,8 @@ export const sidebarWidthLimit = (windowWidth: number | null | undefined): numbe
 
 export const shownSidebarWidth = (saved: number, windowWidth: number | null | undefined): number => Math.min(saved, sidebarWidthLimit(windowWidth));
 
+export const textScaledSidebarWidth = (width: number, textScale: number): number => Math.min(SIDEBAR_MAX_WIDTH, Math.round(width * textScale));
+
 export const CARD_INSET = 9;
 
 export const PAGE_FRAME = { min: 0, max: 12, default: CARD_INSET } as const;

@@ -174,7 +174,7 @@ export function PushButtonView({ title, onPress, kind = "default", disabled, ico
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : null;
   const primary = kind === "primary";
   const plain = kind === "plain";
-  const textColor = primary ? theme.onAccent : kind === "destructive" ? theme.destructive : plain ? theme.formAccent : theme.textPrimary;
+  const textColor = primary ? theme.onAccent : kind === "destructive" ? theme.destructive : plain ? theme.formAccentInk : theme.textPrimary;
   return (
     <View {...hoverProps} style={[{ opacity: disabled ? opacity.disabled : 1 }, style]}>
       <Pressable

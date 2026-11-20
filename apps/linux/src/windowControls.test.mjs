@@ -8,6 +8,7 @@ function state(settings = {}, window = {}, extra = {}) {
   return {
     windows: { w: { id: "w", kind: "main", profileId: "p", fullScreen: false, ...window } },
     windowOrder: ["w"], ui: { focusOrder: ["w"] }, profiles: { p: { id: "p", name: "Personal" } }, profileOrder: ["p"], downloads: [], windowUi: {},
+    settingsMeta: { chosen: ["sidebarWidth"], inferred: [] },
     ...extra,
     settings: { pageFrame: 9, tabLayout: "sidebar", sidebarSide: "left", addressBar: "toolbar", compactToolbar: false, hideToolbarWhileScrolling: false, autoHideTabs: false, sidebarWidth: 190, ...settings },
   };

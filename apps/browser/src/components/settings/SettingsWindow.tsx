@@ -1,15 +1,16 @@
 import { Button, ListRow, NativeFormContext, space, Symbol, Text, VisualEffect, WindowDragRegion } from "../ui";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
-import { useTheme } from "../ui/theme";
 import { useProfile } from "../../state/browser/hooks";
 import { usePluginTitle } from "../../state/plugins/hooks";
 import { trackSettingsSection } from "../../state/telemetry/track";
 import { preparePane, usePaneLoaded } from "../../state/settings/paneData";
-import { clearSettingsReveal, flashSetting, useSettingsSearch } from "../../state/settings/searchState";
-import { anchorView } from "./anchors";
-import { findSetting, PANES, paneTitle } from "./settingsIndex";
-import { SettingsPaneContext } from "./Form";
+import { clearSettingsReveal, flashSetting, noteSettingsRevealWaited, revealIsCurrent, sameSettingsPlace, useSettingsSearch } from "../../state/settings/searchState";
+import { createRevealGuard, measureWithin, startReveal, type RevealHost, type RevealRect } from "./revealRunner";
+import { anchorView, sectionAnchorId, whenAnchorMounts } from "./anchors";
+import { findSetting, PANES, paneTitle, SETTINGS } from "./settingsIndex";
+import { revealOffset } from "./revealScroll";
+import { SettingsPaneContext, useHiddenSetting } from "./Form";
 import { PageToolbar } from "../pages/PageLayout";
 import { SettingsSearchField, SettingsSearchResults } from "./SettingsSearch";
 import { AdvancedPane } from "./panes/Advanced";
@@ -27,7 +28,7 @@ import { closeProfileIconPickerIn } from "../../state/profiles/iconPicker";
 import { ProfileIconPicker } from "../profiles/ProfileIconPicker";
 import { settingsProfileFor } from "../../state/extensions/store";
 import { useSettingsColors } from "./useSettingsColors";
-import { paneTile, paneTints, settingsLayout } from "./tokens";
+import { paneGlyph, paneTile, paneTints, settingsLayout, settingsReveal } from "./tokens";
 import { pageToolbar } from "../pages/tokens";
 import { WINDOW_CHROME, WINDOW_CONTROLS, windowControlsWidth } from "../../lib/windowChrome";
 import { markCaptionRegions } from "../../state/windows/controls";
@@ -42,7 +43,6 @@ const SIDEBAR_TOP = WINDOW_CHROME.leadingWidth ? TOOLBAR : space.ml;
 const TITLE_LEFT = SIDEBAR + 96;
 const CONTROLS_ROOM = WINDOW_CONTROLS.edge + windowControlsWidth() + WINDOW_CONTROLS.gap;
 const HOLD_CAP_MS = 250;
-const REVEAL_MARGIN = 16;
 
 const shownKey = (s: SettingsPlace) => `${s.pane}:${s.profileId ?? ""}:${s.detail ?? ""}`;
 const pageKey = (s: SettingsPlace) => (s.pane === "profiles" && !s.detail ? "profiles::" : shownKey(s));
@@ -92,34 +92,71 @@ export function SettingsWindow() {
   useLayoutEffect(() => scroller.current?.scrollTo({ y: 0, animated: false }), [page]);
   useEffect(() => closeProfileIconPickerIn(SETTINGS_WINDOW_ID), [key]);
   const content = useRef<View>(null);
+  const contentHeight = useRef(0);
   const scrollTop = useRef(0);
   const viewport = useRef(0);
   const query = useSettingsSearch((s) => s.query);
   const reveal = useSettingsSearch((s) => s.reveal);
-  const revealPane = reveal ? (findSetting(reveal.id)?.pane ?? null) : null;
+  const destination: SettingsPlace = { pane: nav.pane, profileId: nav.profileId, detail: nav.detail };
+  const destinationKey = shownKey(destination);
+  const hidden = useHiddenSetting();
+  const hiddenNow = useRef(hidden);
+  hiddenNow.current = hidden;
+  const targetGone = !!reveal && hidden(findSetting(reveal.id));
+  const guard = useRef(createRevealGuard()).current;
+  if (reveal) guard.observe(reveal.request, targetGone);
   const switched = useRef(key);
   useEffect(() => {
     if (!reveal) return;
-    if (nav.pane !== revealPane) return void clearSettingsReveal();
-    if (shown?.pane !== revealPane) return;
+    const { request } = reveal;
+    if (targetGone || !sameSettingsPlace(reveal.place, destination)) return void clearSettingsReveal(request);
+    if (!shown || !sameSettingsPlace(shown, reveal.place)) return;
+    const container = content.current;
+    if (!container) return;
     const animated = switched.current === key;
-    const frame = requestAnimationFrame(() => {
-      const target = anchorView(reveal.id);
-      const container = content.current;
-      if (!target || !container) return flashSetting("");
-      target.measureLayout(
-        container,
-        (_x, y, _w, h) => {
-          const top = animated ? scrollTop.current : 0;
-          const inView = y >= top + REVEAL_MARGIN && y + h <= top + viewport.current - REVEAL_MARGIN;
-          if (!inView) scroller.current?.scrollTo({ y: Math.max(0, y - viewport.current / 3), animated });
-          flashSetting(reveal.id);
-        },
-        () => flashSetting(reveal.id),
-      );
+    const entry = findSetting(reveal.id);
+    const current = () => guard.current(request, revealIsCurrent(request), hiddenNow.current(entry));
+    const measure = (view: View, done: (rect: RevealRect | null) => void) => view.measureLayout(container, (_x, y, _w, h) => done({ y, h }), () => done(null));
+    const host: RevealHost<View> = {
+      find: anchorView,
+      whenMounted: whenAnchorMounts,
+      measure,
+      nextFrame: (then) => {
+        const frame = requestAnimationFrame(then);
+        return () => cancelAnimationFrame(frame);
+      },
+      after: (ms, then) => {
+        const timer = setTimeout(then, ms);
+        return () => clearTimeout(timer);
+      },
+      current,
+    };
+    const sections = entry ? [...new Set(SETTINGS.filter((s) => s.pane === entry.pane).map((s) => s.section))] : [];
+    const headerOf = (section: string) => (entry ? anchorView(sectionAnchorId(entry.pane, section)) : undefined);
+    return startReveal(reveal.id, host, {
+      onWaited: noteSettingsRevealWaited,
+      onGiveUp: () => clearSettingsReveal(request),
+      onLost: () => clearSettingsReveal(request),
+      extra: () =>
+        Promise.all([
+          measureWithin(host, entry ? headerOf(entry.section) : undefined, settingsReveal.measureDeadlineMs),
+          Promise.all(sections.map((section) => measureWithin(host, headerOf(section), settingsReveal.measureDeadlineMs))),
+        ]),
+      finish: (row, [header, headers]) => {
+        const offset = revealOffset({
+          rowTop: row.y,
+          rowHeight: row.h,
+          headerTop: header?.y ?? null,
+          headerTops: headers.flatMap((h) => (h ? [h.y] : [])),
+          scrollTop: animated ? scrollTop.current : 0,
+          viewport: viewport.current,
+          contentHeight: contentHeight.current + settingsLayout.paneBottom,
+        });
+        if (offset !== null) scroller.current?.scrollTo({ y: offset, animated });
+        flashSetting(reveal.id, request);
+      },
     });
-    return () => cancelAnimationFrame(frame);
-  }, [reveal, key]);
+  }, [reveal?.request, destinationKey, key, targetGone]);
   useEffect(() => {
     switched.current = key;
   }, [key]);
@@ -158,7 +195,7 @@ export function SettingsWindow() {
           }}
           onLayout={(e) => void (viewport.current = e.nativeEvent.layout.height)}
           contentContainerStyle={PANE_SCROLL}>
-          <View key={page} ref={content} collapsable={false} style={PANE_COLUMN}>
+          <View key={page} ref={content} collapsable={false} style={PANE_COLUMN} onLayout={(e) => void (contentHeight.current = e.nativeEvent.layout.height)}>
             {shown ? (
               <NativeFormContext.Provider value>
                 <SettingsPaneContext.Provider value={shown.pane}>
@@ -200,7 +237,7 @@ function SidebarItem({ title, icon, tint, selected, onPress }: { title: string; 
   return (
     <ListRow height={SIDEBAR_ITEM_HEIGHT} selected={selected} selectedTone="accent" onPress={onPress}>
       <View style={[PANE_TILE, { backgroundColor: tint }]}>
-        <Symbol name={icon} size={paneTile.symbol} weight="semibold" color={paneTints.ink} style={PANE_TILE_SYMBOL} />
+        <Symbol name={icon} size={paneGlyph[icon]?.size ?? paneTile.symbol} weight={paneGlyph[icon]?.weight ?? "semibold"} color={paneTints.ink} style={PANE_TILE_SYMBOL} />
       </View>
       <Text tone={selected ? "onAccent" : "textPrimary"}>{title}</Text>
     </ListRow>

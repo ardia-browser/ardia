@@ -248,6 +248,9 @@ export function AmountSlider({ value, onChange, tooltip }: { value: number; onCh
   );
 }
 
+const SLIDER_STEP = 0.05;
+const SLIDER_ACTIONS = [{ name: "increment" }, { name: "decrement" }];
+
 function Track({
   value,
   onChange,
@@ -271,6 +274,11 @@ function Track({
       onMouseEnter={measure}
       tooltip={tooltip}
       style={{ paddingHorizontal: THUMB / 2 }}
+      accessible
+      accessibilityRole="adjustable"
+      accessibilityValue={{ min: 0, max: 100, now: Math.round(value * 100) }}
+      accessibilityActions={SLIDER_ACTIONS}
+      onAccessibilityAction={(e) => onChange(clamp01(value + (e.nativeEvent.actionName === "increment" ? SLIDER_STEP : -SLIDER_STEP)), true)}
       onStartShouldSetResponder={() => true}
       onResponderGrant={(e) => {
         measure();

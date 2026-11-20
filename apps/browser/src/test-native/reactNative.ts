@@ -1,6 +1,11 @@
-import type { ComponentProps, PropsWithChildren } from "react";
+import { createElement, type ComponentProps, type PropsWithChildren } from "react";
 
-export const View = ({ children }: PropsWithChildren) => children ?? null;
+export const View = ({ children, testID, accessibilityRole, accessibilityState }: PropsWithChildren<{ testID?: string; accessibilityRole?: string; accessibilityState?: { disabled?: boolean } }>) =>
+  testID
+    ? createElement("x-view", { "data-testid": testID }, children)
+    : accessibilityRole === "adjustable"
+      ? createElement("x-press", { "data-disabled": accessibilityState?.disabled ? "true" : undefined }, children)
+      : (children ?? null);
 export const Text = () => null;
 export const Image = () => null;
 export const ScrollView = () => null;
@@ -11,7 +16,7 @@ export const PixelRatio = { get: () => 2, roundToNearestPixel: (size: number) =>
 export const pressables: ComponentProps<typeof import("react-native").Pressable>[] = [];
 export const Pressable = (props: (typeof pressables)[number]) => {
   pressables.push(props);
-  return null;
+  return createElement("x-press", { "data-disabled": props.disabled ? "true" : undefined });
 };
 
 export const turboModules: Record<string, unknown> = {};
@@ -185,6 +190,15 @@ export const Animated = {
   add: (a: Readable, b: Readable) => combined(() => read(a) + read(b)),
   subtract: (a: Readable, b: Readable) => combined(() => read(a) - read(b)),
   multiply: (a: Readable, b: Readable) => combined(() => read(a) * read(b)),
+  divide: (a: Readable, b: Readable) => combined(() => read(a) / read(b)),
+  sequence: (list: Animation[]): Animation => ({ start: (done) => together(list, done), stop: () => list.forEach((a) => a.stop()) }),
+  delay: (_ms: number): Animation => ({ start: (done) => done?.({ finished: true }), stop: () => {} }),
+  loop: (animation: Animation): Animation => animation,
+  event: () => () => {},
+  View,
+  Text,
+  Image,
+  ScrollView,
 };
 
 export const findNodeHandle = () => null;
@@ -208,6 +222,8 @@ export const Easing = {
 };
 
 export const AppState = { currentState: "active", addEventListener: () => ({ remove() {} }) };
+
+export const Linking = { openURL: async () => {}, canOpenURL: async () => false, getInitialURL: async () => null, addEventListener: () => ({ remove() {} }) };
 
 export const AccessibilityInfo = {
   isHighContrastEnabled: async () => false,

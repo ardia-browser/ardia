@@ -1,7 +1,7 @@
 import { Children, forwardRef, type ReactNode } from "react";
 import { Animated, Image, Pressable, View, type AccessibilityActionEvent, type GestureResponderEvent, type StyleProp, type ViewStyle } from "react-native";
 import { useTheme } from "../ui/theme";
-import { capsule, ContextMenuArea, Dot, GlassFill, hairline, menuRowFill, opacity, PANEL, radius, space, Symbol, Text, useGlass, useHover } from "../ui";
+import { capsule, ContextMenuArea, Dot, GlassFill, hairline, menuRowFill, opacity, PANEL, radius, space, Symbol, Text, useGlass, useHover, withAlpha } from "../ui";
 import { useSiteTokens } from "./tokens";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
 
@@ -50,12 +50,13 @@ export function Tile({
   return (
     <Animated.View
       style={[
-        { height, borderRadius: corner, backgroundColor: glass ? undefined : fill, borderWidth: stroke && !glass ? hairline.ring : 0, borderColor: stroke ? site.tileStroke : undefined },
+        { height, borderRadius: corner, backgroundColor: glass ? undefined : fill },
         style,
       ]}
     >
       {glass && fill ? <GlassFill radius={corner} state={lit ? "pressed" : hovered ? "lit" : "rest"} /> : null}
       {children}
+      {stroke ? <View pointerEvents="none" style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: corner, borderWidth: hairline.ring, borderColor: withAlpha(theme.strongEdge, site.tileEdgeAlpha) }} /> : null}
     </Animated.View>
   );
 }

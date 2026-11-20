@@ -271,6 +271,11 @@ function withPageFrameDependencies(settings: Settings, patch: Partial<Settings>)
   return patch;
 }
 
+export function unchosen(meta: SettingsMeta, key: keyof Settings): SettingsMeta {
+  if (!meta.chosen.includes(key) && !meta.inferred.includes(key)) return meta;
+  return { chosen: meta.chosen.filter((k) => k !== key), inferred: meta.inferred.filter((k) => k !== key) };
+}
+
 export function choose(s: Pick<BrowserState, "settings" | "settingsMeta">, patch: Partial<Settings>): Pick<BrowserState, "settings" | "settingsMeta"> {
   const { chosen, inferred } = s.settingsMeta;
   if (patch.autoHideTabs !== undefined && patch.autoHideTabs !== s.settings.autoHideTabs) noteAutoHideTabsChosen();

@@ -24,9 +24,7 @@ function useShownAfterDelay(active: boolean) {
   return shown && active;
 }
 
-export function TooltipAbove({ text, active, centerX, bottom }: { text: string; active: boolean; centerX: number; bottom: number }) {
-  const theme = surfaceTheme(useTheme());
-  const shown = useShownAfterDelay(active && text.length > 0);
+function useFadeIn(shown: boolean) {
   const opacity = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (!shown) {
@@ -37,31 +35,60 @@ export function TooltipAbove({ text, active, centerX, bottom }: { text: string; 
     fade.start();
     return () => fade.stop();
   }, [shown, opacity]);
+  return opacity;
+}
+
+function TooltipBubble({ text }: { text: string }) {
+  const theme = surfaceTheme(useTheme());
+  return (
+    <Surface
+      cornerRadius={TOOLTIP.radius + RING}
+      borderColor={hex(theme.tooltipRing)}
+      borderWidth={RING}
+      shadowColor={shadow.tooltip.color}
+      shadowOpacity={theme.dark ? shadow.tooltip.opacity.dark : shadow.tooltip.opacity.light}
+      shadowRadius={shadow.tooltip.radius}
+      shadowOffset={shadow.tooltip.offset}
+      style={{ padding: RING }}
+    >
+      <Surface
+        fill={hex(theme.tooltipFill)}
+        cornerRadius={TOOLTIP.radius}
+        borderColor={hex(theme.panelBorder)}
+        borderWidth={1}
+        style={{ paddingHorizontal: TOOLTIP.padX, paddingVertical: TOOLTIP.padY }}
+      >
+        <Text numberOfLines={1} style={{ ...font.small, fontWeight: weight.medium, color: theme.tooltipText }}>
+          {text}
+        </Text>
+      </Surface>
+    </Surface>
+  );
+}
+
+export function TooltipAbove({ text, active, centerX, bottom }: { text: string; active: boolean; centerX: number; bottom: number }) {
+  const shown = useShownAfterDelay(active && text.length > 0);
+  const opacity = useFadeIn(shown);
   if (!shown) return null;
   return (
     <Animated.View pointerEvents="none" style={{ position: "absolute", left: centerX - SPAN / 2, width: SPAN, bottom: bottom - RING, alignItems: "center", opacity }}>
-      <Surface
-        cornerRadius={TOOLTIP.radius + RING}
-        borderColor={hex(theme.tooltipRing)}
-        borderWidth={RING}
-        shadowColor={shadow.tooltip.color}
-        shadowOpacity={theme.dark ? shadow.tooltip.opacity.dark : shadow.tooltip.opacity.light}
-        shadowRadius={shadow.tooltip.radius}
-        shadowOffset={shadow.tooltip.offset}
-        style={{ padding: RING }}
-      >
-        <Surface
-          fill={hex(theme.tooltipFill)}
-          cornerRadius={TOOLTIP.radius}
-          borderColor={hex(theme.panelBorder)}
-          borderWidth={1}
-          style={{ paddingHorizontal: TOOLTIP.padX, paddingVertical: TOOLTIP.padY }}
-        >
-          <Text numberOfLines={1} style={{ ...font.small, fontWeight: weight.medium, color: theme.tooltipText }}>
-            {text}
-          </Text>
-        </Surface>
-      </Surface>
+      <TooltipBubble text={text} />
+    </Animated.View>
+  );
+}
+
+export function TooltipBeside({ text, active, right, centerY }: { text: string; active: boolean; right: number; centerY: number }) {
+  const shown = useShownAfterDelay(active && text.length > 0);
+  const opacity = useFadeIn(shown);
+  const [height, setHeight] = useState(0);
+  if (!shown) return null;
+  return (
+    <Animated.View
+      pointerEvents="none"
+      onLayout={(e) => setHeight(e.nativeEvent.layout.height)}
+      style={{ position: "absolute", right: right - RING, top: centerY - height / 2, opacity: height ? opacity : 0 }}
+    >
+      <TooltipBubble text={text} />
     </Animated.View>
   );
 }

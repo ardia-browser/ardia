@@ -1,9 +1,8 @@
 import type { SearchScope } from "@ardia/core";
 import { memo, type ReactNode, type RefObject } from "react";
-import { View } from "react-native";
-import { Button, capsule, ContextMenuArea, ink, useHover, useTheme } from "../ui";
+import { StyleSheet, View } from "react-native";
+import { Button, capsule, concentric, ContextMenuArea, ink, radius, useHover, useTheme } from "../ui";
 import { GlassFill, useGlass } from "../ui/Glass";
-import { GoButton } from "./GoButton";
 import { ScopeChip } from "./ScopeChip";
 import { BAR, GO_BUTTON } from "./tokens";
 
@@ -20,13 +19,14 @@ type FrameProps = {
 
 const ICON_SLOT = { width: BAR.iconSlot, alignItems: "center" } as const;
 
-export function DropdownFrame({ rootRef, onContextMenu, leadingIcon, scope, field, list, rowsHover, pulse, onSiteControls }: FrameProps & { onSiteControls: (() => void) | null }) {
+export function DropdownFrame({ rootRef, onContextMenu, leadingIcon, scope, field, list, rowsHover, pulse, onSiteControls, submit }: FrameProps & { onSiteControls: (() => void) | null; submit: ReactNode }) {
   const theme = useTheme();
   return (
     <View ref={rootRef}>
       {pulse}
       <ContextMenuArea captureDescendants onContextMenu={onContextMenu}>
         <View style={{ flexDirection: "row", alignItems: "center", height: BAR.dropdown.height, paddingLeft: BAR.dropdown.left, paddingRight: BAR.dropdown.right, gap: BAR.dropdown.gap }}>
+          <FocusRing inset={BAR.focusRing.dropdownInset} outerRadius={radius.panel} />
           <View style={ICON_SLOT}>{leadingIcon}</View>
           {scope && <ScopeChip scope={scope} large={false} />}
           {field}
@@ -45,9 +45,17 @@ export function DropdownFrame({ rootRef, onContextMenu, leadingIcon, scope, fiel
       </ContextMenuArea>
       <View collapsable={false} {...rowsHover}>
         {list}
+        {submit ? <View style={DROPDOWN_FOOTER}>{submit}</View> : null}
       </View>
     </View>
   );
+}
+
+const DROPDOWN_FOOTER = { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", height: BAR.dropdown.footer, paddingRight: BAR.dropdown.right } as const;
+
+function FocusRing({ inset, outerRadius }: { inset: number; outerRadius: number }) {
+  const theme = useTheme();
+  return <View pointerEvents="none" style={{ position: "absolute", left: inset, right: inset, top: inset, bottom: inset, borderRadius: concentric(outerRadius, inset), borderWidth: BAR.focusRing.width, borderColor: theme.formAccentInk }} />;
 }
 
 export function PanelFrame({ rootRef, onContextMenu, leadingIcon, scope, field, list, rowsHover, pulse, hero, rowHeight, bottom }: FrameProps & { hero: boolean; rowHeight: number; bottom: ReactNode }) {
@@ -65,6 +73,7 @@ export function PanelFrame({ rootRef, onContextMenu, leadingIcon, scope, field, 
             gap: hero ? BAR.panel.heroGap : BAR.panel.gap,
           }}
         >
+          {hero ? null : <FocusRing inset={BAR.focusRing.panelInset} outerRadius={radius.hero} />}
           <View style={ICON_SLOT}>{leadingIcon}</View>
           {scope && <ScopeChip scope={scope} large={hero} />}
           {field}
@@ -78,7 +87,7 @@ export function PanelFrame({ rootRef, onContextMenu, leadingIcon, scope, field, 
   );
 }
 
-export function BottomRow({ hero, addChip, onDictate, label, enabled, onGo }: { hero: boolean; addChip: ReactNode; onDictate?: () => void; label: string; enabled: boolean; onGo(): void }) {
+export function BottomRow({ hero, empty, addChip, onDictate, go }: { hero: boolean; empty: boolean; addChip: ReactNode; onDictate?: () => void; go: ReactNode }) {
   return (
     <View
       style={{
@@ -88,12 +97,13 @@ export function BottomRow({ hero, addChip, onDictate, label, enabled, onGo }: { 
         paddingRight: hero ? BAR.bottom.heroRight : BAR.bottom.right,
         height: hero ? BAR.bottom.heroHeight : BAR.bottom.height,
         marginBottom: hero ? BAR.bottom.heroBelow : 0,
+        marginTop: empty && !hero ? -BAR.bottom.emptyTuck : 0,
       }}
     >
       {addChip}
       <View style={{ flex: 1 }} />
       {onDictate && <DictateButton onPress={onDictate} />}
-      <GoButton label={label} enabled={enabled} onPress={onGo} />
+      {go}
     </View>
   );
 }
@@ -102,18 +112,19 @@ const DictateButton = memo(function DictateButton({ onPress }: { onPress(): void
   const theme = useTheme();
   const glass = useGlass();
   const { hovered, hoverProps } = useHover();
-  if (!glass) return <Button variant="icon" icon="mic" glyph={BAR.bottom.mic} color={theme.textTertiary} tooltip="Dictate" onPress={onPress} />;
+  if (!glass) return <Button variant="icon" icon="mic" glyph={BAR.bottom.mic} color={theme.textSecondary} tooltip="Dictate" onPress={onPress} />;
   return (
     <View {...hoverProps}>
       <GlassFill radius={capsule(GO_BUTTON.height)} state={hovered ? "lit" : "rest"} />
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: capsule(GO_BUTTON.height), borderWidth: GO_BUTTON.idleBorder, borderColor: hovered ? theme.strongEdge : theme.chipBorder }]} />
       <Button
         variant="icon"
         icon="mic"
         box={GO_BUTTON.height}
         capsule
         glyph={BAR.bottom.mic}
-        color={theme.textTertiary}
-        palette={{ icon: theme.textTertiary, iconDisabled: theme.iconDisabled, hover: ink.clear, pressed: theme.toolbarPressed }}
+        color={theme.textSecondary}
+        palette={{ icon: theme.textSecondary, iconDisabled: theme.iconDisabled, hover: ink.clear, pressed: theme.toolbarPressed }}
         tooltip="Dictate"
         onPress={onPress}
       />

@@ -33,16 +33,33 @@ function transpiledTsx(url) {
   return outputText;
 }
 
+const LOCAL_REQUIRE = 'import { createRequire as __testCreateRequire } from "node:module"; const require = (id) => (/\\.(png|jpe?g|gif|svg|mp4|mp3|wav)$/.test(id) ? { testAsset: id } : __testCreateRequire(import.meta.url)(id));\n';
+
+function withLocalRequire(source) {
+  return /\brequire\(/.test(source) && !/\bconst require\b|\bcreateRequire\b/.test(source) ? LOCAL_REQUIRE + source : source;
+}
+
+const platform = process.env.ARDIA_TEST_PLATFORM;
+const platformTwinsUnder = new URL("./lib/", import.meta.url).href;
+
+function onPlatform(resolved, parentURL) {
+  if (!platform || !resolved.url.startsWith(platformTwinsUnder) || !resolved.url.endsWith(".ts")) return resolved;
+  const base = resolved.url.replace(/\.(windows|linux|web)\.ts$/, ".ts");
+  if (parentURL?.startsWith(base.replace(/\.ts$/, "."))) return resolved;
+  const twin = base.replace(/\.ts$/, `.${platform}.ts`);
+  return existsSync(new URL(twin)) ? { ...resolved, url: twin } : resolved;
+}
+
 registerHooks({
   resolve(specifier, context, next) {
     if (fakes.has(specifier)) return { url: fakes.get(specifier), shortCircuit: true };
     try {
-      return next(specifier, context);
+      return onPlatform(next(specifier, context), context.parentURL);
     } catch (error) {
       if (specifier.startsWith(".")) {
         for (const ext of [".ts", ".tsx", "/index.ts", "/index.tsx"]) {
           try {
-            return next(specifier + ext, context);
+            return onPlatform(next(specifier + ext, context), context.parentURL);
           } catch {}
         }
       }
@@ -50,7 +67,11 @@ registerHooks({
     }
   },
   load(url, context, next) {
-    if (url.startsWith("file:") && url.endsWith(".tsx")) return { format: "module", source: transpiledTsx(url), shortCircuit: true };
+    if (url.startsWith("file:") && url.endsWith(".tsx")) return { format: "module", source: withLocalRequire(transpiledTsx(url)), shortCircuit: true };
+    if (url.startsWith("file:") && url.endsWith(".ts") && !url.includes("/node_modules/")) {
+      const source = readFileSync(new URL(url), "utf8");
+      if (/\brequire\(/.test(source) && !/\bcreateRequire\b/.test(source)) return { format: "module-typescript", source: withLocalRequire(source), shortCircuit: true };
+    }
     return next(url, context);
   },
 });

@@ -10,10 +10,33 @@ export const isWebPageUrl = (url: string) => /^(https?|file):/i.test(url);
 
 export const displayHostOf = (url: string) => displayHost(hostOf(url));
 
-export const pageHostLabel = (url: string) => (url.startsWith("file:") ? "File" : breadcrumb(url).host);
+export const isLocalFileUrl = (url: string) => url.startsWith("file:");
+
+const HOME_FOLDER = /^(\/Users\/[^/]+|\/home\/[^/]+|[A-Za-z]:\/Users\/[^/]+)(?=\/|$)/;
+const SHORT_PATH_KEEPS = 2;
+
+function filePathOf(url: string): string {
+  const path = decodedOr(url.slice("file://".length).replace(/[?#].*$/, ""));
+  return /^\/[A-Za-z]:\//.test(path) ? path.slice(1) : path;
+}
+
+export function shortFilePath(path: string): string {
+  const home = path.replace(HOME_FOLDER, "~");
+  const parts = home.split("/");
+  const root = parts[0] === "" ? "" : parts[0]!;
+  const rest = parts.slice(1).filter(Boolean);
+  if (rest.length <= SHORT_PATH_KEEPS + 1) return home;
+  return [root, "…", ...rest.slice(-SHORT_PATH_KEEPS)].join("/");
+}
+
+export const filePathLabel = (url: string) => shortFilePath(filePathOf(url));
+
+export const fullFilePath = (url: string) => filePathOf(url);
+
+export const pageHostLabel = (url: string) => (isLocalFileUrl(url) ? "File" : breadcrumb(url).host);
 
 export function urlTrail(url: string, title: string, { hovered, showFullUrl }: { hovered: boolean; showFullUrl: boolean }): string {
-  const isFile = url.startsWith("file:");
+  const isFile = isLocalFileUrl(url);
   const host = pageHostLabel(url);
   const full = isFile ? ` ${decodedOr(url.slice("file://".length))}` : urlForDisplay(url);
   const path = !isFile && full.startsWith(host) ? full.slice(host.length) : full;

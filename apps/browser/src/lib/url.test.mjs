@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-const { pageHostLabel, urlTrail } = await import("./url.ts");
+const { filePathLabel, pageHostLabel, shortFilePath, urlTrail } = await import("./url.ts");
 
 const rest = { hovered: false, showFullUrl: false };
 const full = { hovered: false, showFullUrl: true };
@@ -37,4 +37,13 @@ test("a local file shows File and its decoded path on hover or with Show Full UR
   assert.equal(urlTrail("file:///Users/me/a%20b.html", "a b.html", rest), "");
   assert.equal(urlTrail("file:///Users/me/a%20b.html", "", hover), " /Users/me/a b.html");
   assert.equal(urlTrail("file:///Users/me/100%.html", "", full), " /Users/me/100%.html");
+});
+
+test("a file path starts at the home folder and keeps its last two parts", () => {
+  assert.equal(filePathLabel("file:///Users/me/scratch/center/pages/memo.html"), "~/…/pages/memo.html");
+  assert.equal(filePathLabel("file:///Users/me/Documents/memo.html"), "~/Documents/memo.html");
+  assert.equal(filePathLabel("file:///home/me/a/b/c/d.txt"), "~/…/c/d.txt");
+  assert.equal(filePathLabel("file:///C:/Users/me/Desktop/notes/today/x.html"), "~/…/today/x.html");
+  assert.equal(filePathLabel("file:///var/log/a/b/c.log"), "/…/b/c.log");
+  assert.equal(shortFilePath("/tmp/x"), "/tmp/x");
 });

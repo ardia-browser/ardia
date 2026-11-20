@@ -7,15 +7,17 @@ import { pressGroupClose, useGroupCloseControl } from "../../state/sidebar/close
 import { openGroupMenu } from "../../state/sidebar/menus";
 import { moveInGroup, tuckGroup, useHasTuckTarget } from "../../state/tabs/topStrip";
 import { groupTint, useSidebarTokens } from "../sidebar/tokens";
-import { Button, ContextMenuArea, Divider, useTooltip } from "../ui";
+import { Button, ContextMenuArea, Divider, FadeLabel, useTooltip } from "../ui";
 import { useTheme } from "../ui/theme";
 import { font, ink, weight, withAlpha } from "../ui/tokens";
 import { GroupMember, StripGroupIcon } from "./GroupMember";
 import type { StripGroupEntry, StripMember } from "../../state/tabs/topStrip";
-import { dragGeometry, dropIndex, GROUP_MARGIN_LEFT, GROUP_MARGIN_RIGHT, groupLayout, holds, MEMBERS_INSET, memberInteractive, TAIL_EXPANDED, tabsOf, type DragGeometry } from "./stripGroups";
-import { CHIP_HAIRLINE, GAP, GROUP_CHIP_PAD, GROUP_DIVIDER_LENGTH, GROUP_SPRING, GROUP_TITLE_GAP, GROUP_TITLE_MAX, ITEM_HEIGHT, ITEM_TOP, MID, STRIP_COLORS, tabRadius, TOP_STRIP_HEIGHT } from "./tokens";
+import { hasVisibleMembers, overflowCountRoom, dragGeometry, dropIndex, GROUP_MARGIN_LEFT, GROUP_MARGIN_RIGHT, groupLayout, holds, MEMBERS_INSET, memberInteractive, TAIL_EXPANDED, tabsOf, type DragGeometry } from "./stripGroups";
+import { CHIP_HAIRLINE, GAP, GROUP_CHIP_PAD, GROUP_DIVIDER_LENGTH, GROUP_SPRING, GROUP_OVERFLOW_GAP, GROUP_TITLE_GAP, GROUP_TITLE_MAX, GROUP_TITLE_TIGHT, GROUP_TRAY_ALPHA, ITEM_HEIGHT, ITEM_TOP, MID, STRIP_COLORS, tabRadius, TOP_STRIP_HEIGHT } from "./tokens";
 import { noteTabStripGroupToggle } from "../../state/telemetry/tabStripCounts";
 import { useStripDrag } from "./useStripDrag";
+import { nameKey } from "./model";
+import { setMeasuredWidth } from "../../state/windows/measuredWidths";
 import { useChipHover, useChipHovered, type ChipHover } from "./reachableHover";
 
 export function StripGroup({
@@ -29,6 +31,8 @@ export function StripGroup({
   onChipWidth,
   memberWidth,
   folderMeasured,
+  overflowCount,
+  tightName,
 }: {
   entry: StripGroupEntry;
   geometry: DragGeometry;
@@ -40,6 +44,8 @@ export function StripGroup({
   onChipWidth: (width: number) => void;
   memberWidth: (m: StripMember) => number;
   folderMeasured: (groupId: string) => boolean;
+  overflowCount: number;
+  tightName: boolean;
 }) {
   const theme = useTheme();
   const windowId = useWindowId();
@@ -51,7 +57,7 @@ export function StripGroup({
   const chipTip = useTooltip(expanded ? "Collapse Group" : "Expand Group");
   const widths = entry.members.map(memberWidth);
   const shown = entry.members.findIndex((m) => holds(m, activeId));
-  const chipSize = chipWidth ?? 0;
+  const chipSize = chipWidth === undefined ? 0 : chipWidth + overflowCountRoom(overflowCount);
   const { offsets, width } = groupLayout(chipSize, widths, GAP, expanded, shown);
   const members = useMemo(() => dragGeometry(entry.members.map((m, i) => ({ tabIds: tabsOf(m), width: widths[i]! })), GAP), [entry.members, widths.join()]);
   const tuckable = useHasTuckTarget(!expanded && shown >= 0, windowId, profileId, entry.id);
@@ -106,6 +112,7 @@ export function StripGroup({
   const tint = groupTint(group.color);
   const bare = group.color === "none";
   const divider = STRIP_COLORS[theme.dark ? "dark" : "light"].groupDivider;
+  const membersShown = hasVisibleMembers(entry);
   const tuck = () => tuckGroup(windowId, profileId, entry.id);
   return (
     <Animated.View
@@ -113,7 +120,7 @@ export function StripGroup({
       style={{ width: size, height: TOP_STRIP_HEIGHT, marginLeft: GROUP_MARGIN_LEFT, marginRight: GROUP_MARGIN_RIGHT, zIndex: drag.style.zIndex, transform: drag.style.transform, opacity: chipWidth === undefined ? 0 : 1 }}
     >
       <GroupFill hover={hover} width={size} tint={tint} bare={bare} />
-      <Animated.View pointerEvents="none" style={{ position: "absolute", left: chipSize + 0.75, top: MID - 7.5, width: 0.5, height: 15, backgroundColor: divider, opacity: fade }} />
+      {membersShown ? <Animated.View pointerEvents="none" style={{ position: "absolute", left: chipSize + 0.75, top: MID - 7.5, width: 0.5, height: 15, backgroundColor: divider, opacity: fade }} /> : null}
       {entry.members.map((m, i) => (
         <GroupMember
           key={m.id}
@@ -136,16 +143,18 @@ export function StripGroup({
           out={{ top: geometry, slot: from, chip: chipSize, expanded, left: (geometry.lefts[from] ?? 0) + chipSize + MEMBERS_INSET + (expanded ? offsets[i]! : 0) }}
         />
       ))}
-      <Animated.View pointerEvents={expanded ? "box-none" : "none"} mouseDownCanMoveWindow={false} style={{ position: "absolute", top: ITEM_TOP, height: ITEM_HEIGHT, left: tail, flexDirection: "row", alignItems: "center", opacity: fade }}>
-        <Divider vertical length={GROUP_DIVIDER_LENGTH} color={divider} />
-        {groupClose && <Button variant="icon" icon={groupClose.icon} size="m" glyph={font.badge.fontSize} weight="semibold" onPress={() => pressGroupClose(entry.id)} tooltip={groupClose.tooltip} />}
-      </Animated.View>
+      {membersShown ? (
+        <Animated.View pointerEvents={expanded ? "box-none" : "none"} mouseDownCanMoveWindow={false} style={{ position: "absolute", top: ITEM_TOP, height: ITEM_HEIGHT, left: tail, flexDirection: "row", alignItems: "center", opacity: fade }}>
+          <Divider vertical length={GROUP_DIVIDER_LENGTH} color={divider} />
+          {groupClose && <Button variant="icon" icon={groupClose.icon === "xmark" ? "xmark.square" : "minus.square"} size="m" glyph={font.badge.fontSize} weight="semibold" onPress={() => pressGroupClose(entry.id)} tooltip={groupClose.tooltip} />}
+        </Animated.View>
+      ) : null}
       <View
         {...hover.hoverProps}
         {...drag.panHandlers}
         mouseDownCanMoveWindow={false}
         tooltip={chipTip}
-        onLayout={(e) => onChipWidth(Math.ceil(e.nativeEvent.layout.width * 2) / 2)}
+        onLayout={(e) => onChipWidth(Math.ceil((e.nativeEvent.layout.width - overflowCountRoom(overflowCount)) * 2) / 2)}
         style={{ position: "absolute", left: 0, top: ITEM_TOP, height: ITEM_HEIGHT }}
       >
         <ContextMenuArea onContextMenu={() => void openGroupMenu(windowId, entry.id)}>
@@ -157,13 +166,45 @@ export function StripGroup({
             style={{ height: ITEM_HEIGHT, flexDirection: "row", alignItems: "center", paddingLeft: GROUP_CHIP_PAD.left, paddingRight: GROUP_CHIP_PAD.right }}
           >
             <StripGroupIcon icon={group.icon} color={group.color} open={expanded} />
-            <Text numberOfLines={1} style={{ marginLeft: GROUP_TITLE_GAP, maxWidth: GROUP_TITLE_MAX, ...font.small, fontWeight: weight.semibold, color: tint ?? (shown >= 0 ? theme.textPrimary : theme.textTab) }}>
-              {group.name || `${group.tabIds.length} ${group.tabIds.length === 1 ? "Tab" : "Tabs"}`}
-            </Text>
+            <GroupName
+              name={group.name || `${group.tabIds.length} ${group.tabIds.length === 1 ? "Tab" : "Tabs"}`}
+              cap={tightName ? GROUP_TITLE_TIGHT : GROUP_TITLE_MAX}
+              color={shown >= 0 ? theme.textPrimary : theme.textTab}
+              onNatural={(width) => setMeasuredWidth(nameKey(entry.id), width)}
+            />
+            {overflowCount > 0 ? <OverflowCount count={overflowCount} /> : null}
           </Pressable>
         </ContextMenuArea>
       </View>
     </Animated.View>
+  );
+}
+
+function GroupName({ name, cap, color, onNatural }: { name: string; cap: number; color: string; onNatural: (width: number) => void }) {
+  const [natural, setNatural] = useState<number | null>(null);
+  const width = natural === null ? 0 : Math.min(natural, cap) + GROUP_NAME_INSET * 2;
+  return (
+    <View style={{ marginLeft: GROUP_TITLE_GAP - GROUP_NAME_INSET, width, height: ITEM_HEIGHT, justifyContent: "center" }}>
+      <View pointerEvents="none" accessibilityElementsHidden style={NAME_MEASURE}>
+        <Text accessible={false} numberOfLines={1} onLayout={(e) => { const width = Math.ceil(e.nativeEvent.layout.width * 2) / 2; setNatural(width); onNatural(width); }} style={{ ...font.small, fontWeight: weight.semibold, fontVariant: ["tabular-nums"] }}>
+          {name}
+        </Text>
+      </View>
+      <FadeLabel text={name} fontSize={font.small.fontSize} weight="semibold" color={color} style={{ width, height: 16 }} />
+    </View>
+  );
+}
+
+const GROUP_NAME_INSET = 2;
+const NAME_MEASURE = { position: "absolute", left: 0, top: 0, width: 10000, flexDirection: "row", opacity: 0 } as const;
+
+function OverflowCount({ count }: { count: number }) {
+  const theme = useTheme();
+  const label = `${count} more ${count === 1 ? "tab" : "tabs"} in the open tabs menu`;
+  return (
+    <Text numberOfLines={1} accessibilityLabel={label} style={{ width: overflowCountRoom(count), paddingLeft: GROUP_OVERFLOW_GAP, ...font.small, fontWeight: weight.medium, fontVariant: ["tabular-nums"], color: theme.textTab }}>
+      {`+${count}`}
+    </Text>
   );
 }
 
@@ -183,7 +224,7 @@ function GroupFill({ hover, width, tint, bare }: { hover: ChipHover; width: Anim
         borderRadius: tabRadius(),
         borderWidth: CHIP_HAIRLINE,
         borderColor: bare ? ink.clear : theme.pinnedRestingStroke,
-        backgroundColor: tint ? withAlpha(tint, hovered ? 0.24 : 0.18) : hovered ? tokens.groupHeaderHover : bare ? ink.clear : tokens.groupFill,
+        backgroundColor: tint ? withAlpha(tint, hovered ? 0.24 : GROUP_TRAY_ALPHA) : hovered ? tokens.groupHeaderHover : bare ? ink.clear : tokens.groupFill,
       }}
     />
   );

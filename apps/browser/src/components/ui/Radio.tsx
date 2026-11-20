@@ -21,7 +21,7 @@ export const Radio = memo(function Radio({ on, look = "form" }: { on: boolean; l
           height: COMPACT.box,
           borderRadius: capsule(COMPACT.box),
           borderWidth: on ? 0 : 1,
-          borderColor: theme.fieldBorder,
+          borderColor: theme.strongEdge,
           backgroundColor: on ? theme.formAccent : theme.control,
           alignItems: "center",
           justifyContent: "center",
@@ -40,7 +40,7 @@ export const Radio = memo(function Radio({ on, look = "form" }: { on: boolean; l
         justifyContent: "center",
         backgroundColor: on ? theme.formAccent : theme.control,
         borderWidth: on ? 0 : 1,
-        borderColor: theme.controlBorder,
+        borderColor: theme.strongEdge,
       }}
     >
       {on && <Dot size={FORM.dot} color={theme.onAccent} />}

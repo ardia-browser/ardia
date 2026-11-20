@@ -162,7 +162,7 @@ function PluginCommandRow() {
               This instance has its own DevTools port.
             </Text>
           ) : null}
-          {plugin?.manifest && !installed ? <Button variant="text" look="link" pad="none" title="Open Plugins" onPress={() => goToSettingsPane("plugins")} /> : null}
+          {plugin?.manifest && !installed ? <Button variant="text" look="link" pad="none" tone="formAccentInk" title="Open Plugins" onPress={() => goToSettingsPane("plugins")} /> : null}
         </View>
       }
     >

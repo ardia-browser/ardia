@@ -33,6 +33,9 @@ type IconBase = {
   radius?: number;
   weight?: SymbolProps["weight"];
   tooltip?: string;
+  label?: string;
+  hint?: string;
+  onFocusChange?: (focused: boolean) => void;
   palette?: IconPalette;
   color?: string;
   style?: StyleProp<ViewStyle>;
@@ -59,6 +62,7 @@ type TextProps = {
   size?: TypeSize;
   weight?: Weight;
   tone?: ColorRole;
+  color?: string;
   hoverTone?: ColorRole;
   label?: string;
 };
@@ -118,7 +122,7 @@ function useIconMetrics(props: IconProps) {
 }
 
 function IconButtonView(props: IconProps) {
-  const { icon, disabled, active, glyphBox, weight = "regular", tooltip, palette, color, style, hit, image, asset, badge, children } = props;
+  const { icon, disabled, active, glyphBox, weight = "regular", tooltip, label = tooltip, hint, onFocusChange, palette, color, style, hit, image, asset, badge, children } = props;
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
   const tip = useTooltip(tooltip);
@@ -178,7 +182,19 @@ function IconButtonView(props: IconProps) {
   if (!props.toolbar)
     return (
       <View tooltip={tip} style={style} {...hoverProps}>
-        <Pressable onPress={props.onPress} onPressIn={handlePressIn} onPressOut={handlePressOut} disabled={disabled} accessibilityRole="button" accessibilityLabel={tooltip} style={hit ? { width: hit.width, height: hit.height } : undefined}>
+        <Pressable
+          onPress={props.onPress}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          disabled={disabled}
+          accessibilityRole="button"
+          accessibilityLabel={label}
+          accessibilityHint={hint}
+          focusable={onFocusChange ? !disabled : undefined}
+          onFocus={onFocusChange ? () => onFocusChange(true) : undefined}
+          onBlur={onFocusChange ? () => onFocusChange(false) : undefined}
+          style={hit ? { width: hit.width, height: hit.height } : undefined}
+        >
           {({ pressed }) => plate(pressed)}
         </Pressable>
       </View>
@@ -192,7 +208,8 @@ function IconButtonView(props: IconProps) {
       onLongPress={onLongPress}
       delayLongPress={450}
       disabled={disabled}
-      accessibilityLabel={tooltip}
+      accessibilityLabel={label}
+      accessibilityHint={hint}
       style={hit ? { width: hit.width, height: hit.height } : undefined}
     >
       {({ pressed }) => plate(pressed)}
@@ -223,6 +240,7 @@ function TextButtonView(props: TextProps) {
   const weight = props.weight ?? base?.weight ?? "medium";
   const tone = props.tone ?? base?.tone ?? "textPrimary";
   const theme = useTheme();
+  const ink = props.color ?? theme[tone];
   const { hovered, hoverProps } = useHover();
   const pressMotion = usePressScaleMotion(true, buttonMotion.controlPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : null;
@@ -232,7 +250,7 @@ function TextButtonView(props: TextProps) {
     return (
       <View {...hoverProps}>
         <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} disabled={disabled} {...a11y}>
-          <Animated.Text style={[textStyle(hovered && hoverTone ? theme[hoverTone] : theme[tone]), { paddingVertical: padY ? space[padY] : undefined }, look === "link" && hovered ? UNDERLINE : null, scaleStyle]}>{title}</Animated.Text>
+          <Animated.Text style={[textStyle(hovered && hoverTone ? theme[hoverTone] : ink), { paddingVertical: padY ? space[padY] : undefined }, look === "link" && hovered ? UNDERLINE : null, scaleStyle]}>{title}</Animated.Text>
         </Pressable>
       </View>
     );
@@ -243,7 +261,7 @@ function TextButtonView(props: TextProps) {
         {({ pressed }) => (
           <Animated.View style={[{ height, paddingHorizontal: space[pad], justifyContent: "center" }, scaleStyle]}>
             <HoverFill shown={lit(pressed)} color={plate === "toolbar" && pressed ? theme.toolbarPressed : theme.toolbarHover} radius={radii.control} />
-            <Text style={textStyle(disabled ? theme.iconDisabled : hovered && hoverTone ? theme[hoverTone] : theme[tone])}>{title}</Text>
+            <Text style={textStyle(disabled ? theme.iconDisabled : hovered && hoverTone ? theme[hoverTone] : ink)}>{title}</Text>
           </Animated.View>
         )}
       </Pressable>

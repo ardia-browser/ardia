@@ -38,6 +38,7 @@ export const advancedRows = {
           keywords: ["sleep", "never sleep", "keep awake", "exceptions", "discard", "hibernate", "memory saver", "memory", "always keep these sites active"],
           shown: (s) => s.memorySaver,
           needs: "Turn on Memory Saver to use this",
+          unlock: "advanced.memorySaver",
         },
         batterySaver: {
           title: "Battery Saver",
@@ -49,17 +50,17 @@ export const advancedRows = {
       section: "Web engine",
       rows: {
         pageEngine: {
-          title: "Open pages in",
+          title: "Default engine",
           explained: true,
           description: "Unless a website rule says otherwise.",
           keywords: ["engine", "webkit", "chromium", "safari", "drm", "netflix", "fairplay", "widevine", "reset", "recommended", "use recommended default", "cookies", "site data", "sign in", "logged out", "separate sign-ins", "extensions", "ad blocker", "ublock", "content blocker", "extensions and ad blocking are chromium only", "passkey", "webauthn", "icloud keychain", "passwords app", "security key", "passkeys"],
-          shown: webKitOffered,
+          offered: webKitOffered,
         },
         websiteEngines: {
           title: "Engine per site",
           description: "Sites that always open in a chosen engine.",
           keywords: ["opens in", "site engine", "rule", "webkit", "chromium", "website rules", "drm", "netflix", "disney", "hbo", "max", "prime video", "hulu", "spotify", "apple tv", "apple music", "fairplay", "widevine", "streaming", "tencent video", "v.qq.com", "open streaming sites in webkit"],
-          shown: webKitOffered,
+          offered: webKitOffered,
         },
       },
     },
@@ -69,14 +70,14 @@ export const advancedRows = {
         ardiaCommand: {
           title: "ardia command",
           keywords: ["cli", "command line", "terminal", "shell", "install", "the ardia command", "devtools", "automation", "remote debugging", "let the ardia command control ardia"],
-          shown: () => PLATFORM_FEATURES.ardiaCommand,
+          offered: () => PLATFORM_FEATURES.ardiaCommand,
         },
         compactCliPill: {
           title: "Show the control pill as an icon and Stop",
           explained: true,
           description: "While a command drives Ardia, the pill shows just an icon and Stop.",
           keywords: ["cli", "control pill", "is controlling", "agent", "claude code", "codex", "hide", "smaller", "compact", "minimize", "indicator", "stop"],
-          shown: () => PLATFORM_FEATURES.ardiaCommand,
+          offered: () => PLATFORM_FEATURES.ardiaCommand,
         },
         automationRules: {
           title: "Automation rules",

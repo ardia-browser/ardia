@@ -9,11 +9,13 @@ import { SHARING_COPY } from "../../../state/telemetry/copy";
 import { engineVersion, followUpdater, setUpdaterPrefs, updater, widevine as widevineComponent } from "../../../state/settings/paneData";
 import { checkNowControl, switchCheckLine, updaterBusy } from "../../../state/settings/updateStatus";
 import { useResource } from "../../../state/settings/resources";
+import { updateChannelCapability, updatesCapability } from "../../../state/settings/capabilities";
 import { UI_LOCALE } from "../../../lib/uiLocale";
 import { Group, Row, SectionHeader } from "../Form";
 import { setting } from "../settingsIndex";
 
 const APP = "Ardia";
+const CHECKING = "Checking this build’s updater…";
 const REPOSITORY = "https://github.com/mantrakp04/ardia";
 
 export function UpdatesSection() {
@@ -28,6 +30,8 @@ export function UpdatesSection() {
     if (busy) followUpdater();
   }, [busy]);
   const live = state?.available ? state : null;
+  const updates = updatesCapability(state);
+  const channels = updateChannelCapability(state);
   const ready = !!live?.configured;
   const lastCheck = live?.lastCheck
     ? `Last checked ${new Date(live.lastCheck).toLocaleString(UI_LOCALE, { dateStyle: "medium", timeStyle: "short" })}.`
@@ -44,12 +48,14 @@ export function UpdatesSection() {
     <>
       <SectionHeader title="Updates" description={live && !ready ? "Updates aren't set up for this build." : undefined} />
       <Group>
+        {updates === "loading" ? <Row anchor="general.autoUpdate" description={CHECKING} /> : null}
         {live && (
           <Row anchor="general.autoUpdate" description={`${setting("general.autoUpdate").description} ${SHARING_COPY.updateChecks} ${SHARING_COPY.switchFile}`}>
             <Toggle value={ready && live.automaticChecks && live.automaticDownloads} disabled={!ready} accessibilityLabel={setting("general.autoUpdate").title} onChange={setAutoInstall} />
           </Row>
         )}
-        {live?.channel && (
+        {channels === "loading" ? <Row anchor="general.updateChannel" description={CHECKING} /> : null}
+        {live?.channel && channels === "available" && (
           <Row anchor="general.updateChannel">
             <Segmented
               value={live.channel}
@@ -95,8 +101,8 @@ function VersionDetails({ status }: { status: string | null }) {
         </Text>
       ) : null}
       <View style={LINKS}>
-        <Button variant="text" look="link" pad="none" title="Source code" onPress={() => openUrls([`${REPOSITORY}/tree/v${systemInfo().appVersion}`])} />
-        <Button variant="text" look="link" pad="none" title="Licenses" onPress={() => openUrls(["chrome://credits"])} />
+        <Button variant="text" look="link" pad="none" tone="formAccentInk" title="Source code" onPress={() => openUrls([`${REPOSITORY}/tree/v${systemInfo().appVersion}`])} />
+        <Button variant="text" look="link" pad="none" tone="formAccentInk" title="Licenses" onPress={() => openUrls(["chrome://credits"])} />
       </View>
     </View>
   );

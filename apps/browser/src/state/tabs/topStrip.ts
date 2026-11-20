@@ -27,7 +27,7 @@ export function tuckTarget(s: BrowserState, windowId: string, profileId: string,
 
 
 export type StripMember = { kind: "tab"; id: string; group: string | null } | { kind: "split" | "folder"; id: string; tabIds: string[]; group: string | null };
-export type StripGroupEntry = { kind: "group"; id: string; collapsed: boolean; members: StripMember[] };
+export type StripGroupEntry = { kind: "group"; id: string; collapsed: boolean; members: StripMember[]; memberTabIds?: string[] };
 export type StripDock = { kind: "dock"; ids: string[]; members: Map<string, string[]> };
 export type StripEntry = StripDock | StripGroupEntry | StripMember;
 

@@ -25,10 +25,11 @@ import { trailingClearance } from "../../lib/windowChrome";
 const RIGHT_OF_URL = 40;
 const ABOVE_PANE = 5.5;
 const MIN_WIDTH = 420;
+const MAX_WIDTH = 700;
 const WINDOW_MARGIN = space.l;
 const DROPDOWN_MIN_WIDTH = 350;
 const DROPDOWN_PAST_FIELD = 137;
-const PANEL_OPEN_HEIGHT = 107;
+const PANEL_OPEN_HEIGHT = BAR.panel.height + BAR.bottom.height;
 const CENTRED_TOP_SHARE = 0.22;
 
 type Box = { left: number; top: number; width: number; height: number };
@@ -93,7 +94,7 @@ export function CommandPanel({ windowWidth }: { windowWidth: number }) {
   const left = Math.max(WINDOW_MARGIN, anchor.left + urlTextLeft(insecure) - PANEL_TEXT_LEFT);
   const top = Math.max(0.5, anchor.top - ABOVE_PANE);
   const covering = anchor.left + anchor.width + RIGHT_OF_URL - left;
-  const width = Math.min(Math.max(covering, MIN_WIDTH), room(left, top, covering));
+  const width = Math.min(Math.max(Math.min(covering, MAX_WIDTH), MIN_WIDTH), room(left, top, covering));
   const field = urlFieldOf(toolbarRow);
   const lift = compactLift(toolbarRow);
   const from = hasField ? { left: anchor.left, top: anchor.top + field.top, width: anchor.width, height: field.height } : null;

@@ -27,7 +27,8 @@ import { setPopover } from "../../state/tabs/pageState";
 import { AddChip } from "./AddChip";
 import { INCOGNITO_ICON } from "../ntp/IncognitoHeading";
 import { BarField } from "./BarField";
-import { destinationLabel } from "./GoButton";
+import { submitButton } from "./GoButton";
+import { returnAction } from "./submitAction";
 import { BottomRow, DropdownFrame, PanelFrame } from "./OmniboxFrame";
 import { ScopePulse } from "./ScopePulse";
 import { barKeyDown, barKeyDownEvents, type BarKeyEvent } from "./omniboxKeys";
@@ -77,7 +78,7 @@ export function Omnibox({
   useEffect(() => () => bangEnter.cancel(), [bangEnter]);
   useEffect(() => bangEnter.cancel(), [bangEnter, typed, selected, scope]);
   const root = useRef<View>(null);
-  const { items, completion, via, inline, shownCompletion, value, selectedIndex, current, tabScope, previewing, rowsHover, rowsHeld, releaseRows, shownUrl } = useBarItems({
+  const { items, completion, via, inline, shownCompletion, value, selectedIndex, current, tabScope, previewing, rowsHover, rowsHeld, releaseRows, shownUrl, providerEmpty } = useBarItems({
     input,
     caret: () => selection.current,
     typed,
@@ -94,7 +95,7 @@ export function Omnibox({
   });
 
   useHeldSelection(items, typed, scope, selectedIndex, dispatch);
-  const waitForProvider = useProviderEnter(items, typed, scope, (s, disposition) => choose(s, disposition));
+  const waitForProvider = useProviderEnter(items, typed, scope, providerEmpty, (s, disposition) => choose(s, disposition));
 
   const snapshot = useRef<BarSnapshot | null>(null);
   snapshot.current = { typed, edited, selection: selection.current, selected, scope, scopeFrom };
@@ -153,22 +154,20 @@ export function Omnibox({
     if (disposition !== "current") dismiss();
   };
 
+  const submitText = edited ? value : initialText || value;
+  const returnFor = (hasRow: boolean) => returnAction({ hasRow, text: submitText, typed, scope: scope ? (scope.kind === "provider" ? "provider" : "other") : null, providerSettled: providerEmpty, searchUrl: engine.url });
   const choose = (s: Suggestion | undefined, disposition: Disposition = "current", byEnter = false) => {
     bangEnter.cancel();
     if (s || !scope) trackSuggestionChosen(s, s && via?.[suggestionKey(s)]);
     const typedSearch = !s || (byEnter && selectedIndex === 0 && s.kind === "search" && !s.bang && !s.suggested);
-    if (!scope && typedSearch) {
-      const text = edited ? value : initialText || value;
-      if (mayBeBang(text)) {
-        const fallback = s?.kind === "search" ? s.url : resolveInput(text, engine.url);
-        bangEnter.submit(text, (url) => go(url ?? fallback, disposition));
-        return;
-      }
+    if (!scope && typedSearch && mayBeBang(submitText)) {
+      const fallback = s?.kind === "search" ? s.url : resolveInput(submitText, engine.url);
+      bangEnter.submit(submitText, (url) => go(url ?? fallback, disposition));
+      return;
     }
     if (!s) {
-      if (scope) return void waitForProvider(disposition);
-      const text = edited ? value : initialText || value;
-      return go(resolveInput(text, engine.url), disposition);
+      const action = returnFor(false);
+      return action.kind === "pending" ? void waitForProvider(disposition) : action.kind === "url" ? go(action.url, disposition) : undefined;
     }
     switch (s.kind) {
       case "page":
@@ -337,12 +336,13 @@ export function Omnibox({
     <SuggestionList
       items={items}
       selectedIndex={selectedIndex}
-      trailing={tabScope ? `Search ${tabScope.name}  ⇥` : null}
+      scopeHint={tabScope ? `Search ${tabScope.name}` : null}
+      empty={providerEmpty && scope ? `No results from ${scope.name}` : null}
       dropdown={dropdown}
       actions={rowActions}
     />
   );
-
+  const submitControl = submitButton({ hero, current, rowShown: !listAway && !!current, action: returnFor(!!current), onPress: barActions.choose });
   const onBarContextMenu = () => void onContextMenu();
   const pulse = <ScopePulse scope={scope} shape={variant} profileId={profileId} />;
   if (dropdown)
@@ -356,7 +356,7 @@ export function Omnibox({
         list={suggestionList}
         rowsHover={rowsHover}
         pulse={pulse}
-        onSiteControls={currentUrl ? barActions.siteControls : null}
+        onSiteControls={currentUrl ? barActions.siteControls : null} submit={submitControl}
       />
     );
   return (
@@ -374,11 +374,10 @@ export function Omnibox({
       bottom={
         <BottomRow
           hero={hero}
+          empty={listAway || !items.length}
           addChip={<AddChip onPress={barActions.openTabOrFile} />}
           onDictate={dictationAvailable() ? barActions.dictate : undefined}
-          label={destinationLabel(current)}
-          enabled={!hero || !!typed.trim() || previewing}
-          onGo={barActions.choose}
+          go={submitControl}
         />
       }
     />

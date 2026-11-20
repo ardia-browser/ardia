@@ -11,6 +11,7 @@ export type SwitchLook = {
   knob: number;
   inset: number;
   offColor: string;
+  offEdge?: string;
   onColor: string;
   knobBorder?: string;
   duration: number;
@@ -75,6 +76,7 @@ function Switch({
     >
       <View pointerEvents="none" style={{ width: look.width, height: look.height, borderRadius: radius, backgroundColor: look.offColor, overflow: "hidden" }}>
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: look.onColor, opacity: progress }]} />
+        {look.offEdge ? <Animated.View style={[StyleSheet.absoluteFill, { borderRadius: radius, borderWidth: StyleSheet.hairlineWidth * 2, borderColor: look.offEdge, opacity: progress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }]} /> : null}
         <Animated.View
           style={{
             position: "absolute",
@@ -124,7 +126,7 @@ export function Toggle({
         disabled={disabled}
         accessibilityLabel={accessibilityLabel}
         asksFirst={asksFirst}
-        look={{ width: 30, height: 17, knob: 14, inset: 1.5, offColor: theme.toggleOff, onColor: theme.accent, duration: duration.base, easing: curve.enter }}
+        look={{ width: 30, height: 17, knob: 14, inset: 1.5, offColor: theme.toggleOff, offEdge: theme.strongEdge, onColor: theme.accent, duration: duration.base, easing: curve.enter }}
       />
     );
   return (
@@ -135,7 +137,7 @@ export function Toggle({
       accessibilityLabel={accessibilityLabel}
       asksFirst={asksFirst}
       animateExternalChanges={false}
-      look={{ ...(native ? NATIVE_FORM_SWITCH : FORM_SWITCH), offColor: theme.switchOff, onColor: theme.formAccent, knobBorder: theme.knobBorder, duration: duration.base, easing: curve.enter }}
+      look={{ ...(native ? NATIVE_FORM_SWITCH : FORM_SWITCH), offColor: theme.switchOff, offEdge: theme.strongEdge, onColor: theme.formAccent, knobBorder: theme.knobBorder, duration: duration.base, easing: curve.enter }}
     />
   );
 }

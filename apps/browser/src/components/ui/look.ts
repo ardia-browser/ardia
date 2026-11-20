@@ -101,6 +101,11 @@ export const sidebarPoints = (value: number): number => {
   return scale === 1 ? value : Math.round(value * scale);
 };
 
+export const sidebarInset = (value: number): number => {
+  const scale = activeLook().sidebarScale;
+  return scale <= 1 ? value : Math.round(value / scale);
+};
+
 export const sidebarIconSize = (value: number): number => {
   const scale = activeLook().sidebarScale;
   return scale === 1 ? value : Math.round((value * scale) / 2) * 2;

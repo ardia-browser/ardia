@@ -2,7 +2,7 @@ import { memo, useContext, useLayoutEffect, useRef, type ReactNode } from "react
 import { Animated, Pressable, StyleSheet, View } from "react-native";
 import { toggleMute } from "../../state/browser/actions";
 import { useIsActiveTab, useSettings, useTab, useTabLive, useWindowId } from "../../state/browser/hooks";
-import { useMuteState } from "../../state/tabs/hooks";
+import { useMuteState, useTabGroupColor } from "../../state/tabs/hooks";
 import { muteTitle, type MuteState } from "../../state/tabs/mute";
 import { firstStaying } from "../../state/drag/drops";
 import { pressTabClose, useTabCloseControl } from "../../state/sidebar/closeControl";
@@ -10,11 +10,14 @@ import { currentMovingTabIds } from "../../state/tabs/topStrip";
 import { TabBadges } from "../media/TabBadges";
 import { TabIcon } from "../sidebar/TabIcon";
 import { Button, FadeLabel, HoverFill, Symbol, useTooltip } from "../ui";
-import { HoverSlot } from "../ui/HoverSlot";
 import { surfaceTheme, useTheme } from "../ui/theme";
 import { ThemeOverride } from "../ui/ThemeOverride";
 import { toolbarPalette, useEasedColor } from "../ui/toolbarColors";
-import { font, iconButton } from "../ui/tokens";
+import { font, ink, radius, withAlpha } from "../ui/tokens";
+import { over } from "../../lib/color";
+import type { GroupColor } from "../../state/browser/types";
+import { groupTint, useSidebarTokens, type SidebarTokens } from "../sidebar/tokens";
+import { GROUP_TRAY_ALPHA } from "./tokens";
 import { DockContext, FloatingStrip } from "./context";
 import { tabIn, tileHold } from "./dockCross";
 import { FadeIn } from "./FadeIn";
@@ -161,6 +164,8 @@ export const TabChip = memo(function TabChip({ tabId, width, drawn, tuck, dragge
   const chipHover = hover ?? ownHover;
   const unread = useTabUnread(tabId);
   const struck = useStruckTitle(tabId);
+  const groupColor = useTabGroupColor(tabId);
+  const tokens = useSidebarTokens();
   if (!tab) return null;
   const title = tab.customTitle ? tabTitle(tab) : titleWithoutUnread(tabTitle(tab), unread);
   const away = rowAwayTitle(tab);
@@ -169,6 +174,7 @@ export const TabChip = memo(function TabChip({ tabId, width, drawn, tuck, dragge
   const closable = active || !!tuck || width >= CLOSE_MIN_CHIP;
   const onBand = active && !floating && !!palette.background;
   const ink = onBand ? palette.text : active ? theme.tabSelectedText : theme.textTab;
+  const plate = active ? (onBand ? palette.background! : theme.card) : over(theme.tabHover, over(groupTray(groupColor, tokens), theme.windowTint[0]));
   return (
     <ThemeOverride theme={theme}>
       <Animated.View {...chipHover.hoverProps} style={{ width: drawn ?? width, height: TOP_STRIP_HEIGHT }}>
@@ -184,6 +190,7 @@ export const TabChip = memo(function TabChip({ tabId, width, drawn, tuck, dragge
               quiet={active}
               pressed={pressed && !active}
               inset={compact ? (width - FAVICON) / 2 : undefined}
+              plate={plate}
               action={closable &&
                 <Button variant="icon"
                   icon={tuck ? "minus" : closeControl.icon}
@@ -197,7 +204,7 @@ export const TabChip = memo(function TabChip({ tabId, width, drawn, tuck, dragge
               badge={<UnreadCount unread={unread} ink={ink} />}
             >
               <View pointerEvents="none">
-                <TabIcon tabId={tab.id} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} />
+                <TabIcon tabId={tab.id} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} color={active ? ink : undefined} />
                 <TabBadges tabId={tab.id} />
                 {compact && (playing || mute) ? <AudioBadge mute={mute} color={theme.textTab} plate={theme.windowTint[0]} /> : null}
               </View>
@@ -244,6 +251,7 @@ function ChipRow({
   quiet,
   pressed,
   inset,
+  plate,
   action,
   badge,
   children,
@@ -253,21 +261,33 @@ function ChipRow({
   quiet: boolean;
   pressed: boolean;
   inset?: number;
+  plate: string;
   action: ReactNode;
   badge: ReactNode;
   children: ReactNode;
 }) {
   const hovered = useChipHovered(hover);
+  const closing = inset === undefined && hovered && !!action;
   return (
     <ItemRow hovered={(hovered || dragged) && !quiet} pressed={pressed} inset={inset}>
       {children}
-      {inset === undefined && (
-        <HoverSlot hovered={hovered && !!action} width={action ? iconButton.xs.box : 0} reserve="hover" hover={action || null}>
-          {badge}
-        </HoverSlot>
-      )}
+      {inset === undefined && !closing ? badge : null}
+      {closing ? (
+        <View pointerEvents="box-none" style={CLOSE_OVERLAY}>
+          <View style={{ borderRadius: radius.control, backgroundColor: plate }}>{action}</View>
+        </View>
+      ) : null}
     </ItemRow>
   );
+}
+
+const CLOSE_OVERLAY = { position: "absolute", right: CHIP_PAD.right, top: 0, bottom: 0, justifyContent: "center" } as const;
+
+function groupTray(color: GroupColor | null | undefined, tokens: SidebarTokens): string {
+  if (color === undefined) return ink.clear;
+  if (color === "none") return ink.clear;
+  const tint = groupTint(color);
+  return tint ? withAlpha(tint, GROUP_TRAY_ALPHA) : tokens.groupFill;
 }
 
 export function ItemRow({ hovered, pressed, padded = true, inset, children }: { hovered: boolean; pressed: boolean; padded?: boolean; inset?: number; children: React.ReactNode }) {

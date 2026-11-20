@@ -42,7 +42,7 @@ export function WebEngineSection() {
                 {setting("advanced.pageEngine").description}
               </Text>
               <View style={HELP_LINK}>
-                <Button variant="text" look="link" pad="none" title="How engines differ" onPress={() => showSettingsSheet(<EnginesDifferSheet />)} />
+                <Button variant="text" look="link" pad="none" tone="formAccentInk" title="How engines differ" onPress={() => showSettingsSheet(<EnginesDifferSheet />)} />
               </View>
             </View>
           }

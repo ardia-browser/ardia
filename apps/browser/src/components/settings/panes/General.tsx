@@ -3,11 +3,14 @@ import { AppState, View } from "react-native";
 import type { DownloadSettings } from "../../../state/downloads/actions";
 import { setLaunchAtLogin } from "../../../state/app/appSettings";
 import { confirm, pickFolder } from "../../../state/app/system";
-import { Button, PopUp, Toggle } from "../../ui";
+import { Button, PopUp, space, Symbol, Text, Toggle } from "../../ui";
+import { useSettingsColors } from "../useSettingsColors";
+import { useTheme } from "../../ui/theme";
 import { updateSettings } from "../../../state/settings/actions";
 import { currentEngineProfile } from "../../../state/browser/current";
 import { useProfiles, useSettings } from "../../../state/browser/hooks";
-import { Group, Row, SectionHeader } from "../Form";
+import { Group, Row, SectionHeader, useHiddenSetting } from "../Form";
+import { findSetting } from "../settingsIndex";
 import { defaultBrowser, downloadFoldersDiffer, downloadSettings, loginItem, makeDefaultBrowser, setDownloadsFor } from "../../../state/settings/paneData";
 import { useResource } from "../../../state/settings/resources";
 import { goToSettingsPane, openImport, SETTINGS_DETAIL, type SettingsPlace } from "../../../state/settings/settingsWindows";
@@ -61,14 +64,35 @@ function DefaultBrowserSection() {
       focus.remove();
     };
   }, []);
-  if (isDefault !== false) return null;
+  const theme = useTheme();
+  const colors = useSettingsColors();
+  const hidden = useHiddenSetting()(findSetting("general.defaultBrowser"));
+  if (isDefault === undefined || hidden) return null;
+  if (isDefault)
+    return (
+      <View style={CONFIRMED_GROUP}>
+        <Group>
+          <Row anchor="general.defaultBrowser">
+            <View style={CONFIRMED}>
+              <Symbol name="checkmark.circle" size={14} weight="semibold" color={colors.confirmed} style={STATUS_GLYPH} />
+              <Text color={colors.secondaryText}>{`${APP} is your default`}</Text>
+            </View>
+          </Row>
+        </Group>
+      </View>
+    );
   return (
     <>
       <SectionHeader title="Default browser" />
       <Group>
-        <Row anchor="general.defaultBrowser">
+        <Row
+          anchor="general.defaultBrowser"
+          title={`${APP} isn't your default browser`}
+          description="Links you open in other apps open in another browser."
+          icon={<Symbol name="info.circle" size={15} color={theme.textSecondary} style={STATUS_GLYPH} />}
+        >
           <Button
-            title={PLATFORM_FEATURES.setsDefaultBrowser ? `Set ${APP} as Default` : `Choose in ${PLATFORM_TERMS.os} Settings…`}
+            title={PLATFORM_FEATURES.setsDefaultBrowser ? "Make Default" : `Open ${PLATFORM_TERMS.os} Settings…`}
             kind="primary"
             onPress={() => void makeDefaultBrowser()}
           />
@@ -77,6 +101,10 @@ function DefaultBrowserSection() {
     </>
   );
 }
+
+const STATUS_GLYPH = { width: 18, height: 18 } as const;
+const CONFIRMED = { flexDirection: "row", alignItems: "center", gap: space.xs } as const;
+const CONFIRMED_GROUP = { marginTop: space.xxl } as const;
 
 function StartupSection() {
   const restoreSession = useSettings((s) => s.restoreSession);

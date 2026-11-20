@@ -173,7 +173,7 @@ export const TabRow = memo(function TabRow({
             ) : away ? (
               <AwayTitleLabel away={away} color={titleColor} fontSize={quiet ? SIDEBAR_TYPE.compact : SIDEBAR_TYPE.title} height={TAB_ROW.titleHeight} struck={struck} style={AWAY_FRAME} />
             ) : (
-              <SidebarRowLabel text={title} color={titleColor} compact={quiet} struck={struck && !resetting} />
+              <SidebarRowLabel text={title} color={titleColor} weight={active ? "medium" : undefined} compact={quiet} struck={struck && !resetting} />
             )}
             <HoverSlot
               hovered={hovered && !renaming}

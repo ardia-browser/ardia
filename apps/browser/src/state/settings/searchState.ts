@@ -1,21 +1,42 @@
 import { create } from "zustand";
-import { goToSettingsPane, type SettingsPane, useSettingsNav } from "./settingsWindows";
+import { goToSettingsPane, type SettingsPane, type SettingsPlace, useSettingsNav } from "./settingsWindows";
 import { settingsProfileFor } from "../extensions/store";
 import { noteSettingsSearch, noteSettingsSearchReveal } from "../telemetry/usage";
+
+export const noteSettingsRevealWaited = () => noteSettingsSearch("revealWaited");
 
 type SearchUi = {
   query: string;
   selected: number;
   keyboardMove: number;
   focusRequest: number;
-  reveal: { id: string; at: number } | null;
+  reveal: RevealRequest | null;
   flash: { id: string; at: number } | null;
+  spotlight: string | null;
+  held: string | null;
   revealedSections: string[];
   previewSection: string | null;
   previewing: boolean;
 };
 
 type Target = { id: string; pane: SettingsPane; section: string };
+
+export type RevealRequest = { id: string; at: number; request: number; place: SettingsPlace };
+
+let lastRequest = 0;
+
+function requestReveal(id: string): RevealRequest {
+  const { pane, profileId, detail } = useSettingsNav.getState();
+  return { id, at: Date.now(), request: ++lastRequest, place: { pane, profileId, detail } };
+}
+
+export const sameSettingsPlace = (a: SettingsPlace, b: SettingsPlace) =>
+  a.pane === b.pane && (a.profileId ?? null) === (b.profileId ?? null) && (a.detail ?? null) === (b.detail ?? null);
+
+export const revealStillWanted = (reveal: RevealRequest | null, request: number, destination: SettingsPlace) =>
+  !!reveal && reveal.request === request && sameSettingsPlace(reveal.place, destination);
+
+export const revealIsCurrent = (request: number) => revealStillWanted(useSettingsSearch.getState().reveal, request, useSettingsNav.getState());
 
 export const useSettingsSearch = create<SearchUi>()(() => ({
   query: "",
@@ -24,6 +45,8 @@ export const useSettingsSearch = create<SearchUi>()(() => ({
   focusRequest: 0,
   reveal: null,
   flash: null,
+  spotlight: null,
+  held: null,
   revealedSections: [],
   previewSection: null,
   previewing: false,
@@ -41,7 +64,7 @@ export function setSettingsQuery(query: string) {
     emptyNoted = false;
     noteSettingsSearch("started");
   }
-  useSettingsSearch.setState({ query, selected: 0, keyboardMove: 0, ...(query.trim() ? {} : { previewing: false }) });
+  useSettingsSearch.setState({ query, selected: 0, keyboardMove: 0, ...(query.trim() ? {} : { previewing: false, spotlight: null, held: null }) });
 }
 
 export function noteSettingsSearchEmpty() {
@@ -59,7 +82,7 @@ export const moveSettingsSelection = (step: number, count: number) =>
 
 export const selectSettingsResult = (index: number) => useSettingsSearch.setState({ selected: index });
 
-export const clearSettingsReveal = () => useSettingsSearch.setState({ reveal: null });
+export const clearSettingsReveal = (request: number) => useSettingsSearch.setState((s) => (s.reveal?.request === request ? { reveal: null } : {}));
 
 export function revealSetting({ id, pane, section }: Target, via: "keyboard" | "click", rank: number, unshown = false) {
   noteSettingsSearchReveal(via, rank, unshown);
@@ -67,7 +90,13 @@ export function revealSetting({ id, pane, section }: Target, via: "keyboard" | "
   useSettingsSearch.setState((s) => (s.revealedSections.includes(key) ? {} : { revealedSections: [...s.revealedSections, key] }));
   if (!useSettingsSearch.getState().previewing) goToSettingsPane(pane, settingsProfileFor(pane, useSettingsNav.getState()));
   else showWithoutHistory(pane);
-  useSettingsSearch.setState({ reveal: { id, at: Date.now() }, previewing: false });
+  useSettingsSearch.setState({ reveal: requestReveal(id), previewing: false, spotlight: null, held: id });
+}
+
+export function showUnlockingSetting({ id, pane }: Target) {
+  noteSettingsSearch("unlockJump");
+  goToSettingsPane(pane, settingsProfileFor(pane, useSettingsNav.getState()));
+  useSettingsSearch.setState({ reveal: requestReveal(id), previewing: false, spotlight: null });
 }
 
 export function previewSetting({ id, pane, section }: Target) {
@@ -75,7 +104,7 @@ export function previewSetting({ id, pane, section }: Target) {
   if (reveal?.id === id && previewing && useSettingsNav.getState().pane === pane) return;
   if (!previewing) goToSettingsPane(pane, settingsProfileFor(pane, useSettingsNav.getState()));
   else showWithoutHistory(pane);
-  useSettingsSearch.setState({ previewSection: settingsSectionKey(pane, section), previewing: true, reveal: { id, at: Date.now() } });
+  useSettingsSearch.setState({ previewSection: settingsSectionKey(pane, section), previewing: true, spotlight: id, held: id, reveal: requestReveal(id) });
 }
 
 function showWithoutHistory(pane: SettingsPane) {
@@ -84,4 +113,5 @@ function showWithoutHistory(pane: SettingsPane) {
   if (nav.pane !== pane || nav.profileId !== profileId || nav.detail) useSettingsNav.setState({ pane, profileId, detail: null, forward: [] });
 }
 
-export const flashSetting = (id: string) => useSettingsSearch.setState({ reveal: null, flash: { id, at: Date.now() } });
+export const flashSetting = (id: string, request: number) =>
+  useSettingsSearch.setState((s) => (s.reveal?.request === request ? { reveal: null, flash: { id, at: Date.now() } } : {}));

@@ -117,7 +117,7 @@ function FallbackGroup({ profiles }: { profiles: RoutableProfile[] }) {
   return (
     <Group>
       <FallbackRow profiles={profiles} />
-      {fallbackOpensTabIn ? <FallbackGroupRow /> : null}
+      {fallbackOpensTabIn ? <FallbackGroupRow /> : <Row anchor="automations.linkFallbackGroup" />}
     </Group>
   );
 }

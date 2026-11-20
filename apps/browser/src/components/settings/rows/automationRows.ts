@@ -3,7 +3,7 @@ import type { SettingsPane } from "../../../state/settings/settingsWindows";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 
 const calendarOffered = () => PLATFORM_FEATURES.calendar;
-const calendarOn = (_: unknown, env: SettingsEnv) => PLATFORM_FEATURES.calendar && !!env.calendarAccess;
+const calendarOn = (_: unknown, env: SettingsEnv) => !!env.calendarAccess;
 const LINK_WORDS = ["arc", "air traffic control", "atc", "links from other apps", "route links", "open links in profile", "default browser"];
 
 export const automationRows = {
@@ -14,42 +14,52 @@ export const automationRows = {
         calendarAccess: {
           title: "Calendar access",
           keywords: ["connect calendar", "google calendar", "outlook", "icloud"],
-          shown: calendarOffered,
+          offered: calendarOffered,
         },
         meetingAlert: {
           title: "Meeting alert",
           keywords: ["reminder", "join", "popup", "show next meeting alert"],
+          offered: calendarOffered,
           shown: calendarOn,
           needs: "Allow calendar access to use this",
+          unlock: "automations.calendarAccess",
         },
         meetingAlertCondition: {
           title: "Show alerts",
           explained: true,
           description: "With Always, alerts also show while you're in another app.",
           keywords: ["system alerts", "banner"],
+          offered: calendarOffered,
           shown: calendarOn,
           needs: "Allow calendar access to use this",
+          unlock: "automations.calendarAccess",
         },
         calendarPreview: {
           title: "Show calendar preview",
           description: "Hover a pinned calendar tab to see your day.",
           keywords: ["hover"],
+          offered: calendarOffered,
           shown: calendarOn,
           needs: "Allow calendar access to use this",
+          unlock: "automations.calendarAccess",
         },
         countdown: {
           title: "Countdown to next meeting",
           description: "How long before a meeting the badge appears.",
           keywords: ["countdown", "minutes", "lead time", "next meeting", "start countdown", "now", "dismiss", "show time to next meeting"],
+          offered: calendarOffered,
           shown: calendarOn,
           needs: "Allow calendar access to use this",
+          unlock: "automations.calendarAccess",
         },
         groupMeetingTabs: {
           title: "Group tabs for meetings",
           description: "Joining a call puts its tabs in a group.",
           keywords: ["zoom", "meet", "call", "tab groups", "automatically group tabs for meetings", "calendar"],
+          offered: calendarOffered,
           shown: calendarOn,
           needs: "Allow calendar access to use this",
+          unlock: "automations.calendarAccess",
         },
       },
     },
@@ -114,6 +124,9 @@ export const automationRows = {
           title: "Tab group",
           description: "The group these links join.",
           keywords: ["everything else", "fallback", "tab group", "group"],
+          shown: (_, env) => !!env.fallbackOpensTab,
+          needs: "Open everything else as a tab in a profile to use this",
+          unlock: "automations.linkFallback",
         },
         appLinks: {
           title: "Apps that open links",

@@ -6,6 +6,8 @@ import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 
 const inSidebar = (_: unknown, env: SettingsEnv) => !env.top;
 const syncOn = (_: unknown, env: SettingsEnv) => !!env.syncOn;
+const syncOffered = () => PLATFORM_FEATURES.sync;
+const syncSettingsOffered = (env: SettingsEnv) => PLATFORM_FEATURES.sync && env.syncAvailable !== false;
 const blockerOffered = () => PLATFORM_FEATURES.contentBlocker;
 
 export const generalRows = {
@@ -43,11 +45,12 @@ export const generalRows = {
       section: "Downloads",
       rows: {
         downloadsFolder: {
-          title: "Downloads folder",
+          title: "Default downloads folder",
           description: "Where downloaded files are saved.",
           keywords: ["download location", "save to", "path", "folder"],
           shown: (s) => !s.separateDownloadFolders,
           needs: "Turn off Separate folder for each profile to set one folder here",
+          unlock: "general.separateDownloadFolders",
         },
         separateDownloadFolders: {
           title: "Separate folder for each profile",
@@ -66,24 +69,24 @@ export const generalRows = {
         blockAds: {
           title: "Block ads",
           keywords: ["ad blocker", "adblock", "ublock origin", "easylist"],
-          shown: blockerOffered,
+          offered: blockerOffered,
         },
         blockTrackers: {
           title: "Block trackers",
           keywords: ["tracking", "easyprivacy", "fingerprinting"],
-          shown: blockerOffered,
+          offered: blockerOffered,
         },
         blockCookieBanners: {
           title: "Block cookie banners",
           keywords: ["cookies", "consent", "gdpr", "popups"],
-          shown: blockerOffered,
+          offered: blockerOffered,
         },
         filterLists: {
           title: "Filter lists",
           explained: true,
           description: "Extra filter lists for the blocker.",
           keywords: ["filter lists", "annoyances", "malware", "regional", "ad block settings", "custom filter list", "add filter list", "import list", "subscribe", "advanced settings", "sites without blocking", "allowlist", "exceptions", "hidden elements", "hide element"],
-          shown: blockerOffered,
+          offered: blockerOffered,
         },
       },
     },
@@ -95,26 +98,33 @@ export const generalRows = {
           explained: true,
           description: `Keep your profiles, tabs and settings the same on every ${PLATFORM_TERMS.syncedComputer}.`,
           keywords: [PLATFORM_TERMS.cloudDrive.toLowerCase(), "recovery phrase", "devices", "turn on sync", "end to end", "encrypted"],
+          offered: syncOffered,
         },
         syncFolder: {
           title: "Sync folder",
           keywords: ["icloud drive", "dropbox", "folder"],
+          offered: syncSettingsOffered,
           shown: syncOn,
           needs: "Turn on Sync to use this",
+          unlock: "general.sync",
         },
         whatSyncs: {
           title: "What syncs",
           description: "What to sync.",
           keywords: ["unpinned tabs", "regular tabs", "today tabs", "arc", "spaces", `tabs on every ${PLATFORM_TERMS.syncedComputer.toLowerCase()}`, "same tabs", `continue on another ${PLATFORM_TERMS.syncedComputer.toLowerCase()}`, "sync all open tabs", "open tabs", "data types"],
+          offered: syncSettingsOffered,
           shown: syncOn,
           needs: "Turn on Sync to use this",
+          unlock: "general.sync",
         },
         syncDevices: {
           title: "Devices",
           description: "Computers syncing with this one.",
           keywords: ["devices", "computers", "macs", "remove device"],
+          offered: syncSettingsOffered,
           shown: syncOn,
           needs: "Turn on Sync to use this",
+          unlock: "general.sync",
         },
       },
     },
@@ -126,12 +136,14 @@ export const generalRows = {
           explained: true,
           description: "Installs updates on the next restart.",
           keywords: ["update", "install", "sparkle", "check for updates automatically", "automatic updates"],
+          capability: "updates",
         },
         updateChannel: {
           title: "Update channel",
           explained: true,
           description: "Nightly gets fixes first.",
           keywords: ["nightly", "stable", "beta"],
+          capability: "updateChannel",
         },
         version: {
           title: "Version",
@@ -147,9 +159,9 @@ export const generalRows = {
           keywords: ["telemetry", "analytics", "diagnostics", "crash", "share anonymous crash reports and usage stats"],
         },
         crashDetails: {
-          title: "Details",
+          title: "What's sent and kept",
           description: "What's sent and what's kept on this computer.",
-          keywords: ["telemetry", "data collection", "analytics", "usage data", "what's sent", "install id", "identity", "reset id", "avatar", "anonymous name", "your anonymous id", "view my data", "local copy", "export", "download my data", "telemetry log", "diagnostics", "events", "the last 7 days", "whats sent", "anonymous id", "logs", "privacy"],
+          keywords: ["telemetry", "data collection", "analytics", "usage data", "details", "crash report details", "what's sent", "install id", "identity", "reset id", "avatar", "anonymous name", "your anonymous id", "view my data", "local copy", "export", "download my data", "telemetry log", "diagnostics", "events", "the last 7 days", "whats sent", "anonymous id", "logs", "privacy"],
         },
       },
     },

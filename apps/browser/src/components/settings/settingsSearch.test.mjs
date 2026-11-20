@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 import { editDistance, search, snippetAround, splitByRanges } from "./searchMatch.ts";
-import { SETTINGS, SETTINGS_INDEX } from "./settingsIndex.ts";
+import { needsOf, SETTINGS, SETTINGS_INDEX, unlockOf } from "./settingsIndex.ts";
+import { DEFAULT_SETTINGS } from "../../state/settings/settings.ts";
 
 const ids = (query) => search(SETTINGS_INDEX, query).map((h) => h.entry.id);
 const first = (query) => ids(query)[0];
@@ -362,4 +363,14 @@ test("search leaves out the official plugins when Settings › Plugins doesn't d
   const bundled = unshown({ top: false, officialPlugins: ["cli"] });
   assert.ok(!bundled.has("plugins.commandLine"));
   assert.ok(!bundled.has("plugins.official"));
+});
+
+test("every setting hidden behind another names the setting that unlocks it", () => {
+  const byId = new Map(SETTINGS.map((s) => [s.id, s]));
+  const missing = [];
+  for (const minimalismMode of [false, true]) {
+    const settings = { ...DEFAULT_SETTINGS, minimalismMode };
+    for (const s of SETTINGS) if (s.needs && (!needsOf(s, settings) || !byId.has(unlockOf(s, settings)))) missing.push(`${s.id}${minimalismMode ? " (Minimalism mode)" : ""}`);
+  }
+  assert.deepEqual(missing, []);
 });

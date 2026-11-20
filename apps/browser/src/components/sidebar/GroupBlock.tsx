@@ -15,7 +15,7 @@ import { commitRename, endRename } from "../../state/sidebar/actions";
 import { useDragFolded, useDragItem, useDropInto } from "./DragProvider";
 import { useShift, type EntryMotion } from "./EntryMotion";
 import { Fold, useFold } from "./Fold";
-import { GROUP_BORDER, GROUP_INNER_RADIUS, GROUP_INDENT, GROUP_INSET, GROUP_RADIUS, groupMembersPadBottom } from "./geometry";
+import { GROUP_BORDER, GROUP_INNER_RADIUS, groupIndent, GROUP_INSET, GROUP_RADIUS, groupMembersPadBottom } from "./geometry";
 import { entryHeightNow, foldedGroupHeight, headGap } from "../../state/sidebar/geometry";
 import { dismissHover } from "../../state/sidebar/hover";
 import { useGroupHover, useRowHover } from "./hoverController";
@@ -125,7 +125,7 @@ export const GroupBlock = memo(function GroupBlock({
             rowHeight={(key) => entryHeightNow(windowId, profileId, key)}
             padTop={headGap(collapsed && keptEntries.length ? keptEntries[0] : entries[0])}
             padBottom={groupMembersPadBottom(collapsed ? keptEntries.length : entries.length)}
-            indent={GROUP_INDENT}
+            indent={groupIndent()}
             indentEnd={GROUP_INSET}
             mountClosed={selectedInside}
             footer={<Animated.View ref={tail.wrapper.ref} style={tail.wrapper.style} />}

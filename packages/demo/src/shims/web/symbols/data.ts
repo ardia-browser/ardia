@@ -346,6 +346,7 @@ const BODIES: readonly string[] = [
   "<path d=\"M248,152a8,8,0,0,1-8,8H224v16a8,8,0,0,1-16,0V160H192a8,8,0,0,1,0-16h16V128a8,8,0,0,1,16,0v16h16A8,8,0,0,1,248,152ZM56,72H72V88a8,8,0,0,0,16,0V72h16a8,8,0,0,0,0-16H88V40a8,8,0,0,0-16,0V56H56a8,8,0,0,0,0,16ZM184,192h-8v-8a8,8,0,0,0-16,0v8h-8a8,8,0,0,0,0,16h8v8a8,8,0,0,0,16,0v-8h8a8,8,0,0,0,0-16ZM219.31,80,80,219.31a16,16,0,0,1-22.62,0L36.68,198.63a16,16,0,0,1,0-22.63L176,36.69a16,16,0,0,1,22.63,0l20.68,20.68A16,16,0,0,1,219.31,80ZM208,68.69,187.31,48l-32,32L176,100.69Z\"/>",
   "<path d=\"M224,48H32A16,16,0,0,0,16,64V192a16,16,0,0,0,16,16H224a16,16,0,0,0,16-16V64A16,16,0,0,0,224,48ZM64,168H48a8,8,0,0,1,0-16H64a8,8,0,0,1,0,16Zm96,0H96a8,8,0,0,1,0-16h64a8,8,0,0,1,0,16Zm48,0H192a8,8,0,0,1,0-16h16a8,8,0,0,1,0,16Zm0-32H48a8,8,0,0,1,0-16H208a8,8,0,0,1,0,16Zm0-32H48a8,8,0,0,1,0-16H208a8,8,0,0,1,0,16Z\"/>",
   "<path d=\"M165.78,224H208a16,16,0,0,0,16-16V170.35A8,8,0,0,0,212.94,163a23.37,23.37,0,0,1-8.94,1.77c-13.23,0-24-11.1-24-24.73s10.77-24.73,24-24.73a23.37,23.37,0,0,1,8.94,1.77A8,8,0,0,0,224,109.65V72a16,16,0,0,0-16-16H171.78a35.36,35.36,0,0,0,.22-4,36,36,0,0,0-72,0,35.36,35.36,0,0,0,.22,4H64A16,16,0,0,0,48,72v32.22a35.36,35.36,0,0,0-4-.22,36,36,0,0,0,0,72,35.36,35.36,0,0,0,4-.22V208a16,16,0,0,0,16,16h42.22\"/>",
+  "<path d=\"M208,32H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32Zm0,176H48V48H208V208Zm-32-80a8,8,0,0,1-8,8H88a8,8,0,0,1,0-16h80A8,8,0,0,1,176,128Z\"/>"
 ];
 
 const ENCODED: Record<string, readonly EncodedLayer[]> = {
@@ -656,6 +657,7 @@ const ENCODED: Record<string, readonly EncodedLayer[]> = {
   "xmark.circle": [[331,256,1,1,0,[[1.2182,1,-0.0113,0.0094,0.0015,0,1],[1.2182,1,-0.0019,0.0019,0.0098,0,1],[1.2107,1,0.0028,-0.0037,0.0233,0,1],[1.207,1,0.0075,-0.0094,0.0352,0,1],[1.2032,1,0.0169,-0.0131,0.0518,0,1]]]],
   "xmark.circle.fill": [[332,256,1,1,0,[[1.1957,1,-0.0113,0.0113,0.009,0,1],[1.222,1,-0.0019,0.0019,0.0053,0,1],[1.2388,1,0.0047,-0.0037,0.0023,0,1],[1.2538,1,0.0094,-0.0075,0.0008,0,1],[1.2688,1,0.015,-0.0122,0.0015,0,1]]]],
   "xmark.square": [[333,256,1,1,0,[[1.1781,1,0.0194,-0.0194,0.0038,0,1],[1.18,1,-0.0152,0.0152,0.0075,0,1],[1.1931,0.9975,-0.0059,0.0087,0.0195,0,1],[1.1725,1,-0.0002,0.0002,0.0308,0,1],[1.165,1,0.0073,-0.0073,0.0405,0,1]]]],
+  "minus.square": [[342,256,1,1,0,[[1.1781,1,0.0194,-0.0194,0.0038,0,1],[1.18,1,-0.0152,0.0152,0.0075,0,1],[1.1931,0.9975,-0.0059,0.0087,0.0195,0,1],[1.1725,1,-0.0002,0.0002,0.0308,0,1],[1.165,1,0.0073,-0.0073,0.0405,0,1]]]],
   "gearshape.fill": [[336,256,1,1,0,[[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1]]]],
   "square.on.square.fill": [[90,256,1,1,0,[[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1]]]],
   "wand.and.rays": [[339,256,1,1,0,[[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1]]]],
@@ -1002,6 +1004,7 @@ const NUDGES: Record<string, string> = {
   "xmark.circle": "ccg8cceag8ccg8ccg8ccg8cccccccccccccccc8gccea8gcc8gcc8gcc8gcccccccccccccccc8gccea8gcc8gcc8gcc8gccccccccccccdccc8gccea8gcc8gcc8gcc8gcccccccccccccb",
   "xmark.circle.fill": "ccg8cceag8ccg8ccg8ccg8cccccccccccccccc8gccea8gcc8gcc8gcc8gcccccccccccccccc8gccea8gcc8gcc8gcc8gcccccccccccccccc8gccea8gcc8gcc8gcc8gcccbcbcbcbcbcb",
   "xmark.square": "aedbh7bdcch8dbg8ccg8bdf9f9eadbdccck4aedb9fbddcg8ccg8bcg8bdf8eadacbbcbbcd9fdb9fbddb8gccg8bdf9bdeaeadbccccbdbd9fdb9faedb8gcc7hbdf9aef9eadbccccbdae",
+  "minus.square": "aedbh7bdcch8dbg8ccg8bdf9f9eadbdccck4aedb9fbddcg8ccg8bcg8bdf8eadacbbcbbcd9fdb9fbddb8gccg8bdf9bdeaeadbccccbdbd9fdb9faedb8gcc7hbdf9aef9eadbccccbdae",
   "gearshape.fill": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
   "square.on.square.fill": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
   "wand.and.rays": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",

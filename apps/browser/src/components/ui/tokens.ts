@@ -3,7 +3,7 @@ import type { ProfileColor } from "../../lib/profileLook";
 import { parseColor } from "../../lib/color";
 import { font, radius, weight, withFace, withMono } from "./look";
 
-export { font, lineHeight, monoFace, perLook, proseLineHeight, radius, sidebarFont, sidebarIconSize, sidebarLineHeight, sidebarPoints, typeFace, weight, withFace, withMono } from "./look";
+export { font, lineHeight, monoFace, perLook, proseLineHeight, radius, sidebarFont, sidebarIconSize, sidebarInset, sidebarLineHeight, sidebarPoints, typeFace, weight, withFace, withMono } from "./look";
 
 export function withAlpha(color: string, alpha: number): string {
   const [r, g, b] = parseColor(color);
@@ -11,6 +11,8 @@ export function withAlpha(color: string, alpha: number): string {
 }
 
 export const ink = { white: "#FFFFFF", black: "#000000", clear: "#00000000", neutralGrey: "#808080A6" } as const;
+
+export const LOCAL_FILE_SYMBOL = "doc";
 
 export const HIGH_CONTRAST_INK = { tab: 1, icon: 1, placeholder: 0.82, secondary: 0.82, tertiary: 0.7 } as const;
 
@@ -23,8 +25,8 @@ const darkRoles = {
 
   textPrimary: "#FFFFFF",
   textTab: "#FFFFFFC7",
-  textSecondary: "#FFFFFF80",
-  textTertiary: "#FFFFFF59",
+  textSecondary: "#FFFFFF99",
+  textTertiary: "#FFFFFF73",
   icon: "#F7F5FFC6",
   iconDisabled: "#F7F5FF4D",
   mark: "#FFFFFF",
@@ -55,8 +57,8 @@ const darkRoles = {
   commandBarSelected: "rgba(255,255,255,0.145)",
   commandBarHover: "rgba(120,125,134,0.32)",
   selection: "rgba(120,125,134,0.7)",
-  placeholder: "#FFFFFF87",
-  chipBorder: "rgba(255,255,255,0.15)",
+  placeholder: "#FFFFFF99",
+  chipBorder: "rgba(255,255,255,0.36)",
   chipText: "#FFFFFF99",
   goButton: "#DCCBD8",
   goButtonHover: "#E6D8E2",
@@ -97,11 +99,15 @@ const darkRoles = {
   controlPressed: "rgba(255,255,255,0.2)",
   controlBorder: "rgba(255,255,255,0.08)",
   field: "rgba(0,0,0,0.25)",
-  fieldBorder: "rgba(255,255,255,0.12)",
+  fieldBorder: "rgba(255,255,255,0.3)",
   switchOff: "rgba(255,255,255,0.14)",
   knobBorder: "rgba(0,0,0,0.12)",
-  formAccent: "#0A84FF",
-  formAccentPressed: "#0060D0",
+  formAccent: "#0A6FE6",
+  formAccentPressed: "#0052B8",
+  formAccentInk: "#4DA3FF",
+  formSelection: "#0058D0",
+  formSelectionEdge: "#66B0FF",
+  strongEdge: "rgba(255,255,255,0.4)",
   onAccent: "#FFFFFF",
   destructive: "#FF453A",
   warning: "#FF9F0A",
@@ -124,8 +130,8 @@ const lightRoles: ColorRoles = {
 
   textPrimary: "#000000",
   textTab: "#000000AD",
-  textSecondary: "#00000080",
-  textTertiary: "#00000059",
+  textSecondary: "#00000099",
+  textTertiary: "#00000075",
   icon: "#000000C6",
   iconDisabled: "#0000004D",
   mark: "#000000",
@@ -156,8 +162,8 @@ const lightRoles: ColorRoles = {
   commandBarSelected: "rgba(15,24,44,0.08)",
   commandBarHover: "rgba(15,24,44,0.05)",
   selection: "rgba(120,125,134,0.4)",
-  placeholder: "#00000066",
-  chipBorder: "rgba(0,0,0,0.12)",
+  placeholder: "#00000099",
+  chipBorder: "rgba(0,0,0,0.44)",
   chipText: "#00000099",
   goButton: "#0F182C",
   goButtonHover: "#1B2640",
@@ -198,11 +204,15 @@ const lightRoles: ColorRoles = {
   controlPressed: "#EBEBEB",
   controlBorder: "rgba(0,0,0,0.14)",
   field: "#FFFFFF",
-  fieldBorder: "rgba(0,0,0,0.14)",
+  fieldBorder: "rgba(0,0,0,0.36)",
   switchOff: "rgba(0,0,0,0.1)",
   knobBorder: "rgba(0,0,0,0.12)",
-  formAccent: "#007AFF",
-  formAccentPressed: "#0060D0",
+  formAccent: "#0064E1",
+  formAccentPressed: "#0052B8",
+  formAccentInk: "#0064E1",
+  formSelection: "#0064E1",
+  formSelectionEdge: "#0064E1",
+  strongEdge: "rgba(0,0,0,0.52)",
   onAccent: "#FFFFFF",
   destructive: "#FF3B30",
   warning: "#FF9500",
@@ -236,7 +246,7 @@ export type SiteToolbarRoles = {
 export const siteToolbarRoles: { onLight: SiteToolbarRoles; onDark: SiteToolbarRoles } = {
   onLight: {
     text: "#000000E6",
-    secondary: "#00000080",
+    secondary: "#00000099",
     icon: "#000000C6",
     iconDisabled: "#00000040",
     hover: "rgba(0,0,0,0.07)",
@@ -374,3 +384,5 @@ export type SheetSize = keyof typeof sheetWidth;
 export const toastLayout = { bottom: space.xxxl, maxWidth: 420 } as const;
 
 export const POPOVER_WIDTH = { s: 300, m: 340, l: 360 } as const;
+
+export const SELECTION_MARK = { width: 2, inset: 3, vertical: 8, contrast: 3, dark: "#409CFF", light: "#0064D2" } as const;

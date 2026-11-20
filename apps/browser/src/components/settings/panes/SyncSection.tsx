@@ -133,6 +133,9 @@ function SyncOff({ info }: { info: FolderInfo | null }) {
             <Button title="Choose…" onPress={() => void chooseSyncFolder()} />
           </Row>
         ) : null}
+        <Row anchor="general.syncFolder" />
+        <Row anchor="general.whatSyncs" />
+        <Row anchor="general.syncDevices" />
       </Group>
       {failure ? (
         <Text size="caption" tone="destructive" style={FAILURE}>

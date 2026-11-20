@@ -9,13 +9,13 @@ export const pluginRows = {
         official: {
           title: "Official plugins",
           keywords: ["official", "plugins", "built in", "first party", "ardia plugins", "install"],
-          shown: (_, env) => !!env.officialPlugins?.length,
+          offered: (env) => !!env.officialPlugins?.length,
         },
         commandLine: {
           title: "Command Line",
           description: "The ardia command (CLI) for your terminal or shell.",
           keywords: ["install the ardia command", "official plugin", "built in plugin", "path"],
-          shown: (_, env) => !!env.officialPlugins?.includes("cli"),
+          offered: (env) => !!env.officialPlugins?.includes("cli"),
         },
       },
     },

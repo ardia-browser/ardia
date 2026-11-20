@@ -10,6 +10,7 @@ import { useTheme } from "./theme";
 import { capsule, monoFace, opacity, perLook, proseLineHeight, radius, space, font as typeScale } from "./tokens";
 import { useHover } from "./useHover";
 import { useNativeForm } from "./nativeForm";
+import { HoverSwap } from "./HoverFill";
 
 const SEARCH_KEYS = [{ key: "Escape" }];
 const SEARCH_KEYS_WITH_ENTER = [{ key: "Escape" }, { key: "Enter" }, { key: "Enter", shiftKey: true }];
@@ -77,7 +78,7 @@ export function SearchField({
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={bare ? theme.placeholder : theme.textTertiary}
+        placeholderTextColor={theme.placeholder}
         selectionColor={theme.selection}
         autoFocus={autoFocus}
         enableFocusRing={false}
@@ -155,7 +156,7 @@ export function TextField({
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
-          placeholderTextColor={theme.textTertiary}
+          placeholderTextColor={theme.placeholder}
           selectionColor={theme.selection}
           autoFocus={autoFocus}
           secureTextEntry={secure}
@@ -215,7 +216,8 @@ export function PopUp<T extends string>({
       <Pressable disabled={disabled} onPress={open} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} accessibilityRole="button" {...labelled}>
         {({ pressed }) =>
           native ? (
-            <View style={[PLAIN_POPUP, { backgroundColor: pressed ? theme.controlPressed : hovered ? theme.controlHover : undefined }]}>
+            <View style={[PLAIN_POPUP, { borderColor: theme.controlBorder }]}>
+              <HoverSwap shown={!disabled && (pressed || hovered)} rest={theme.control} color={pressed ? theme.controlPressed : theme.controlHover} radius={radius.control} underBorder={StyleSheet.hairlineWidth * 2} />
               <Text numberOfLines={1} style={{ ...typeScale.body, color: theme.textPrimary, flexShrink: 1 }}>
                 {current?.title ?? ""}
               </Text>
@@ -262,7 +264,7 @@ const POP_UP_INDICATOR = { width: 16, height: 16 } as const;
 const POP_UP_TITLE = POP_UP_CHROME.growsToItsTitle ? ({ flexGrow: 1, flexShrink: 1 } as const) : ({ flex: 1 } as const);
 
 const CLEAR_GLYPH = { width: 16, height: 16 } as const;
-const PLAIN_POPUP = { height: 22, maxWidth: 260, borderRadius: radius.control, paddingLeft: space.s, paddingRight: space.xxs, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: space.xs } as const;
+const PLAIN_POPUP = { height: 22, maxWidth: 260, borderRadius: radius.control, borderWidth: StyleSheet.hairlineWidth * 2, paddingLeft: space.ml, paddingRight: space.s, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: space.s } as const;
 const PLAIN_POPUP_GLYPH = { width: 10, height: 14 } as const;
 
 const CHECK_RING = { s: { box: 14, glyph: 8 }, m: { box: 18, glyph: 10 } } as const;
@@ -324,7 +326,7 @@ export function Checkbox({
             justifyContent: "center",
             backgroundColor: on ? theme.formAccent : theme.control,
             borderWidth: on ? 0 : StyleSheet.hairlineWidth * 2,
-            borderColor: theme.controlBorder,
+            borderColor: theme.strongEdge,
           }}
         >
           {on && <Symbol name={mixed && !value ? "minus" : "checkmark"} size={9} weight="bold" color={theme.onAccent} style={{ width: 14, height: 14 }} />}

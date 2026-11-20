@@ -1,5 +1,5 @@
 import type { AppIcon } from "../../../state/app/appSettings";
-import { Box, GlassFill, PopUp, radius, space, Toggle, type Option } from "../../ui";
+import { Box, GlassFill, PopUp, radius, space, Text, Toggle, type Option } from "../../ui";
 import { Image, View } from "react-native";
 import { useTheme } from "../../ui/theme";
 import { useSettings } from "../../../state/browser/hooks";
@@ -16,6 +16,7 @@ import { InterfaceSizeControl } from "./InterfaceSize";
 import { modePreview, stylePreview } from "../tokens";
 import { APP_ICON_SIZE, appIconChoices, chooseAppIcon } from "../../../state/settings/paneData";
 import { useResource } from "../../../state/settings/resources";
+import { appIconCapability } from "../../../state/settings/capabilities";
 import { useSidebarHighContrast } from "../../../state/sidebar/textLook";
 import { perLook } from "../../ui/tokens";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
@@ -266,7 +267,18 @@ function AppIconPicker() {
   const [choices] = useResource(appIconChoices);
   const icons = choices?.icons ?? [];
   const current = choices?.current ?? null;
-  if (icons.length < 2) return null;
+  const capability = appIconCapability(choices);
+  if (capability === "unavailable") return null;
+  if (capability === "loading")
+    return (
+      <Anchor id="appearance.appIcon" shape="card">
+        <FormField label={setting("appearance.appIcon").title}>
+          <Text size="small" tone="textSecondary">
+            Loading icons…
+          </Text>
+        </FormField>
+      </Anchor>
+    );
   return (
     <Anchor id="appearance.appIcon" shape="card">
       <FormField label={setting("appearance.appIcon").title}>

@@ -29,15 +29,15 @@ export const shortcutRows = {
       section: "Clicks",
       rows: {
         peekModifier: {
-          title: "Peek a link with",
+          title: "Peek gesture",
           description: "Opens the link in a preview over the page.",
           keywords: ["peek", "preview", "shift click", "option click", "arc"],
         },
         splitLinkModifier: {
-          title: "Open a link in split view with",
+          title: "Split view gesture",
           description: "Opens the link in a pane beside the page.",
-          keywords: ["split view", "split screen", "side by side", "option click", "alt click", "option shift click", "download", "dia"],
-          shown: () => splitViewAvailable,
+          keywords: ["split view", "split screen", "side by side", "option click", "alt click", "option shift click", "dia"],
+          offered: () => splitViewAvailable,
         },
         cmdClickCreatesTabGroup: {
           title: `${keyText("⌘")}-clicking links creates tab groups`,

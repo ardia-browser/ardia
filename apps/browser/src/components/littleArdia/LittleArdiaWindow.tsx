@@ -23,7 +23,7 @@ import { notePinch, noteSwipeClose } from "../../state/telemetry/usage";
 import { SwipeCloseContext } from "../window/swipeClose";
 import { useCardFrame } from "../window/cardFrame";
 import { startLittleArdiaNewTabLinks } from "../../state/littleArdia/newTabLinks";
-import { PageLabel, SMALL_BAR_BUTTON, SmallBar } from "./SmallChrome";
+import { OPEN_IN_BROWSER_SYMBOL, PageLabel, SMALL_BAR_BUTTON, SmallBar } from "./SmallChrome";
 import { SMALL_LIGHTS_CENTER } from "../../state/windows/small";
 import { littleArdiaBarLayout } from "./barLayout";
 import { HistoryButton } from "../toolbar/NavButtons";
@@ -179,8 +179,8 @@ function LittleArdiaBar() {
       fieldLeft={BAR.fieldLeft}
       field={tab ? <PageField tab={tab} windowId={windowId} hidden={panelOpen} /> : null}
       buttons={[
-        { icon: copied ? "checkmark" : "link", disabled: !tab?.url, tooltip: `Copy Link (${keyText("⇧⌘C")})`, onPress: copy },
-        { icon: "arrow.up.left.and.arrow.down.right", tooltip: `Open in Ardia (${keyText("⌘O")})`, onPress: () => openInMainWindow(windowId) },
+        { icon: copied ? "checkmark" : "link", disabled: !tab?.url, tooltip: "Copy Link", shortcut: keyText("⇧⌘C"), onPress: copy },
+        { icon: OPEN_IN_BROWSER_SYMBOL, tooltip: "Open in Ardia", shortcut: keyText("⌘O"), onPress: () => openInMainWindow(windowId) },
       ]}
       trailing={switcherShown ? <ProfileButton windowId={windowId} /> : undefined}
     >

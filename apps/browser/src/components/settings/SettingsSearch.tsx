@@ -14,7 +14,7 @@ import {
   useSettingsSearch,
 } from "../../state/settings/searchState";
 import { SETTINGS_INDEX, type SettingEntry } from "./settingsIndex";
-import { useUnshownSettings } from "./Form";
+import { useLoadingSettings, useSearchHiddenSettings, useUnshownSettings } from "./Form";
 import { settingsInk } from "./tokens";
 import { PREVIEW_DELAY_MS, RESULT_GAP, RESULT_MIN_HEIGHT, RESULTS_BOTTOM, RESULTS_TOP, scrollToShow } from "./searchResultLayout";
 
@@ -25,6 +25,7 @@ export function SettingsSearchField() {
   const focusRequest = useSettingsSearch((s) => s.focusRequest);
   const input = useRef<TextInput>(null);
   const unshown = useUnshownSettings();
+  const hidden = useSearchHiddenSettings();
   useEffect(() => {
     if (!focusRequest) return;
     input.current?.focus();
@@ -39,11 +40,11 @@ export function SettingsSearchField() {
         placeholder="Search"
         onSubmit={() => {
           const { query, selected } = currentSettingsSearch();
-          const hit = settingsResults(query, unshown)[selected];
+          const hit = settingsResults(query, hidden)[selected];
           if (hit) revealSetting(hit.entry, "keyboard", selected, unshown.has(hit.entry.id));
         }}
         onArrow={(step) => {
-          const count = settingsResults(currentSettingsSearch().query, unshown).length;
+          const count = settingsResults(currentSettingsSearch().query, hidden).length;
           if (count) moveSettingsSelection(step, count);
         }}
         onEscape={() => {
@@ -56,11 +57,11 @@ export function SettingsSearchField() {
 
 const FIELD = { marginHorizontal: space.ml, marginBottom: space.ml } as const;
 
-let cached: { query: string; unshown: ReadonlySet<string>; results: SettingsHit[] } = { query: "", unshown: new Set(), results: [] };
+let cached: { query: string; hidden: ReadonlySet<string>; results: SettingsHit[] } = { query: "", hidden: new Set(), results: [] };
 
-export function settingsResults(query: string, unshown: ReadonlySet<string>): SettingsHit[] {
-  if (cached.query !== query || cached.unshown !== unshown) {
-    cached = { query, unshown, results: search(SETTINGS_INDEX.filter((p) => !unshown.has(p.entry.id) || p.entry.needs), query) };
+export function settingsResults(query: string, hidden: ReadonlySet<string>): SettingsHit[] {
+  if (cached.query !== query || cached.hidden !== hidden) {
+    cached = { query, hidden, results: search(SETTINGS_INDEX.filter((p) => !hidden.has(p.entry.id)), query) };
   }
   return cached.results;
 }
@@ -69,7 +70,8 @@ export function SettingsSearchResults({ query }: { query: string }) {
   const selected = useSettingsSearch((s) => s.selected);
   const keyboardMove = useSettingsSearch((s) => s.keyboardMove);
   const unshown = useUnshownSettings();
-  const results = settingsResults(query, unshown);
+  const loading = useLoadingSettings();
+  const results = settingsResults(query, useSearchHiddenSettings());
   const scroller = useRef<ScrollView>(null);
   const viewport = useRef({ offset: 0, height: 0 });
   const rows = useRef<{ top: number; height: number }[]>([]);
@@ -111,7 +113,7 @@ export function SettingsSearchResults({ query }: { query: string }) {
     >
       {results.map((hit, index) => (
         <View key={hit.entry.id} style={ROW_GAP} onLayout={(e) => void (rows.current[index] = { top: e.nativeEvent.layout.y, height: e.nativeEvent.layout.height })}>
-          <ResultRow hit={hit} selected={index === selected} rank={index} needs={unshown.has(hit.entry.id) ? (hit.entry.needs ?? null) : null} />
+          <ResultRow hit={hit} selected={index === selected} rank={index} locked={unshown.has(hit.entry.id) && !!hit.entry.needs} loading={loading.has(hit.entry.id)} />
         </View>
       ))}
     </ScrollView>
@@ -121,13 +123,13 @@ export function SettingsSearchResults({ query }: { query: string }) {
 const RESULTS = { paddingHorizontal: space.ml, paddingTop: RESULTS_TOP, paddingBottom: RESULTS_BOTTOM } as const;
 const ROW_GAP = { marginBottom: RESULT_GAP } as const;
 
-function ResultRow({ hit, selected, rank, needs }: { hit: SettingsHit; selected: boolean; rank: number; needs: string | null }) {
+function ResultRow({ hit, selected, rank, locked, loading }: { hit: SettingsHit; selected: boolean; rank: number; locked: boolean; loading: boolean }) {
   const theme = useTheme();
   const { entry } = hit;
   const primary = selected ? theme.onAccent : theme.textPrimary;
   const secondary = selected ? settingsInk.onAccentSecondary : theme.textSecondary;
   const showSection = entry.section !== entry.title && entry.section !== entry.paneTitle;
-  const keyword = hit.note && entry.keywords?.includes(hit.note.text);
+  const keyword = !!hit.note && !!entry.keywords?.includes(hit.note.text);
   const note = hit.note ? snippetAround(hit.note.text, hit.note.ranges) : null;
   return (
     <ListRow
@@ -135,30 +137,30 @@ function ResultRow({ hit, selected, rank, needs }: { hit: SettingsHit; selected:
       selectedTone="accent"
       onPress={() => {
         selectSettingsResult(rank);
-        revealSetting(entry, "click", rank, !!needs);
+        revealSetting(entry, "click", rank, locked);
       }}
     >
       <View style={RESULT_TEXT}>
-        <Text lines={3} color={primary}>
+        <Text lines={1} color={primary}>
           <Marked text={entry.title} ranges={hit.title} color={primary} />
         </Text>
-        <Text size="caption" lines={2} color={secondary}>
-          {entry.paneTitle}
-          {showSection ? " › " : ""}
-          {showSection ? <Marked text={entry.section} ranges={hit.section} color={secondary} /> : null}
-        </Text>
-        {note ? (
-          <Text size="caption" lines={2} color={secondary}>
-            {keyword ? "Also called “" : ""}
+        {loading ? (
+          <Text size="caption" lines={1} color={secondary}>
+            {`${entry.paneTitle} · Checking…`}
+          </Text>
+        ) : note ? (
+          <Text size="caption" lines={1} color={secondary}>
+            {keyword ? "Also called “" : "“"}
             <Marked text={note.text} ranges={note.ranges} color={secondary} />
-            {keyword ? "”" : ""}
+            {"”"}
           </Text>
-        ) : null}
-        {needs ? (
-          <Text size="caption" lines={2} color={secondary}>
-            {needs}
+        ) : (
+          <Text size="caption" lines={1} color={secondary}>
+            {entry.paneTitle}
+            {showSection ? " › " : ""}
+            {showSection ? <Marked text={entry.section} ranges={hit.section} color={secondary} /> : null}
           </Text>
-        ) : null}
+        )}
       </View>
     </ListRow>
   );

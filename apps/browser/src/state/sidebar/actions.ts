@@ -18,6 +18,7 @@ import { noteTextOnlyRow } from "../telemetry/tabStripCounts";
 import { NO_ROW_ICON } from "../pins/rowIcons";
 import type { BookmarkFolderChoice } from "./menuParts";
 import { DEFAULT_SIDEBAR_WIDTH } from "../../lib/windowLayout";
+import { unchosen } from "../settings/settings";
 import { activeLook } from "../../lib/activeLook";
 import { measureRow, setSidebarUi, sidebarUi, type Target } from "./sidebarUi";
 
@@ -36,7 +37,11 @@ export function tabPlace(tabId: string): string {
   return JSON.stringify([tab?.windowId, tab && s.windows[tab.windowId]?.tabIds, tab?.pin, groupOf(s, tabId)?.id ?? null]);
 }
 
-export const resetSidebarWidth = () => store().updateSettings({ sidebarWidth: activeLook().sidebarWidth ?? DEFAULT_SIDEBAR_WIDTH });
+export function resetSidebarWidth() {
+  const themed = activeLook().sidebarWidth;
+  if (themed != null) return store().updateSettings({ sidebarWidth: themed });
+  useBrowser.setState((s) => ({ settings: { ...s.settings, sidebarWidth: DEFAULT_SIDEBAR_WIDTH }, settingsMeta: unchosen(s.settingsMeta, "sidebarWidth") }));
+}
 
 export function returnFocusToPage(windowId: string) {
   const s = store();

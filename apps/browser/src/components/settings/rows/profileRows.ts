@@ -5,6 +5,7 @@ import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 
 const syncOn = (_: unknown, env: SettingsEnv) => !!env.syncOn;
+const syncSettingsOffered = (env: SettingsEnv) => PLATFORM_FEATURES.sync && env.syncAvailable !== false;
 
 export const profileRows = {
   profiles: [
@@ -50,21 +51,24 @@ export const profileRows = {
         syncThisProfile: {
           title: "Sync this profile",
           keywords: ["sync profile", "sync"],
+          offered: syncSettingsOffered,
           shown: syncOn,
           needs: "Turn on Sync to use this",
+          unlock: "general.sync",
         },
         profileDownloadsFolder: {
-          title: "Downloads folder",
+          title: "Profile downloads folder",
           keywords: ["download location", "save to", "folder"],
           shown: (s) => s.separateDownloadFolders,
           needs: "Turn on Separate folder for each profile in General",
+          unlock: "general.separateDownloadFolders",
         },
         preloadPages: {
           title: "Preload pages",
           explained: true,
           description: "Links open faster, but pages you may never visit are fetched too.",
           keywords: ["preload", "prerender", "preconnect", "prefetch", "speed", "faster", "slow connection", "latency", "network predictions"],
-          shown: () => PLATFORM_FEATURES.preloadPages,
+          offered: () => PLATFORM_FEATURES.preloadPages,
         },
         siteSettings: {
           title: "Site settings",
@@ -106,13 +110,13 @@ export const profileRows = {
           title: "Password manager",
           description: "Ardia's own, a password manager plugin, or none when an extension handles logins.",
           keywords: ["password manager", "passwords app", "passkeys", "verification codes", "2fa", "one time code", "autofill passwords"],
-          shown: () => PLATFORM_FEATURES.systemPasswordManagers && PLATFORM_FEATURES.plugins,
+          offered: () => PLATFORM_FEATURES.systemPasswordManagers && PLATFORM_FEATURES.plugins,
         },
         offerToSavePasswords: {
           title: "Save and fill passwords",
           description: "Offers to save logins and fills saved ones.",
           keywords: ["password manager", "logins", "credentials", "keychain", "offer to save and fill passwords"],
-          shown: () => PLATFORM_FEATURES.passwordAutofillSwitch,
+          offered: () => PLATFORM_FEATURES.passwordAutofillSwitch,
         },
         passwords: {
           title: "Passwords",
@@ -163,7 +167,7 @@ export const profileRows = {
           title: "Export bookmarks",
           description: "As an HTML file any browser can import.",
           keywords: ["backup", "html", "netscape", "bookmarks.html", "save bookmarks", "transfer"],
-          shown: () => PLATFORM_FEATURES.exportsBookmarksAndPasswords,
+          offered: () => PLATFORM_FEATURES.exportsBookmarksAndPasswords,
         },
         clearBrowsingData: {
           title: "Clear browsing data",

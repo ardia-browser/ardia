@@ -42,7 +42,7 @@ export function useBarItems({
   currentUrl: string;
 }) {
   const { hovered: overRows, hoverProps: rowsHover } = useHover();
-  const { items: suggested, completion: suggestedCompletion, via } = useSuggestions({
+  const { items: suggested, completion: suggestedCompletion, via, providerAnswered } = useSuggestions({
     text: typed,
     active: edited || !!scope,
     windowId,
@@ -71,7 +71,8 @@ export function useBarItems({
     [scope, edited, previewing, typed, shownCompletion, windowId],
   );
   const shownUrl = fullUrlShown(value, current);
+  const providerEmpty = providerAnswered && !!typed.trim() && !items.length;
   useEffect(() => void copyFieldAs(shownUrl && value, shownUrl), [value, shownUrl]);
   useEffect(() => () => void copyFieldAs(null, null), []);
-  return { items, completion, via, inline, shownCompletion, value, selectedIndex, current, tabScope, previewing, rowsHover, rowsHeld: rows.held, releaseRows: rows.release, shownUrl };
+  return { items, completion, via, inline, shownCompletion, value, selectedIndex, current, tabScope, previewing, rowsHover, rowsHeld: rows.held, releaseRows: rows.release, shownUrl, providerEmpty };
 }

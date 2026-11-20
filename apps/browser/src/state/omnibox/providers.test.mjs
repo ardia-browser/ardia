@@ -53,6 +53,32 @@ test("queries stream per provider; a slow one hits its deadline and never holds 
   assert.equal(slowSignal.aborted, true, "its signal aborts at the deadline");
 });
 
+test("a provider that fails, gives no list or misses its deadline is reported as failed; an aborted run reports nothing", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const queries = createProviderQueries(60);
+  const answered = [];
+  const failed = [];
+  queries.run("hi", [
+    { id: "fast", title: "Fast", query: async () => [] },
+    { id: "slow", title: "Slow", query: () => new Promise(() => {}) },
+    { id: "throws", title: "Throws", query: () => { throw new Error("boom"); } },
+    { id: "rejects", title: "Rejects", query: async () => { throw new Error("boom"); } },
+    { id: "odd", title: "Odd", query: async () => "not rows" },
+  ], (s) => answered.push(s.id), (p) => failed.push(p.id));
+  await flush();
+  assert.deepEqual(answered, ["fast"], "an empty list is an answer");
+  assert.deepEqual(failed.sort(), ["odd", "rejects", "throws"]);
+  t.mock.timers.tick(60);
+  await flush();
+  assert.deepEqual(failed.sort(), ["odd", "rejects", "slow", "throws"], "the deadline fails the slow one");
+  const late = [];
+  queries.run("a", [{ id: "p", title: "P", query: () => new Promise(() => {}) }], () => {}, (p) => late.push(p.id));
+  queries.cancel();
+  t.mock.timers.tick(60);
+  await flush();
+  assert.deepEqual(late, [], "closing the bar is not a failure");
+});
+
 test("every run aborts the previous one's queries and drops their late answers", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));

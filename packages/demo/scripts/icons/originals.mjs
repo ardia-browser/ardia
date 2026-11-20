@@ -40,6 +40,11 @@ export const ORIGINALS = {
     params: { ...SQUARE, x: P(4, 0.2, 2, 7) },
     make: (p) => rr(C, C, p.S, p.S, p.r) + line(C - p.x, C - p.x, C + p.x, C + p.x) + line(C + p.x, C - p.x, C - p.x, C + p.x),
   },
+  "square-minus": {
+    paint: "stroke",
+    params: { ...SQUARE, x: P(4.5, 0.2, 2, 7) },
+    make: (p) => rr(C, C, p.S, p.S, p.r) + line(C - p.x, C, C + p.x, C),
+  },
   macwindow: {
     paint: "stroke",
     params: { ...FRAME, dr: P(0.95, 0.1, 0.5, 1.6), dl: P(3.6, 0.2, 2, 6), dt: P(3.5, 0.2, 2, 6), dg: P(2.6, 0.15, 1.6, 4) },

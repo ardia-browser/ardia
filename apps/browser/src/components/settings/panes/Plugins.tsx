@@ -59,7 +59,7 @@ function PluginList() {
           order.map((name) => <PluginRow key={name} name={name} />)
         ) : (
           <Row title="None yet" description={how ? `Put a plugin's folder in ${pluginsFolderPath()}, or run ardia plugins install <folder>.` : undefined}>
-            {how ? null : <Button variant="text" look="link" pad="none" title="How to add one" onPress={() => setHow(true)} />}
+            {how ? null : <Button variant="text" look="link" pad="none" tone="formAccentInk" title="How to add one" onPress={() => setHow(true)} />}
           </Row>
         )}
       </Group>

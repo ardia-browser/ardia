@@ -18,9 +18,9 @@ export const AddChip = memo(function AddChip({ onPress }: { onPress(): void }) {
           style={[{
             height: ADD_CHIP.height,
             borderRadius: ADD_CHIP.radius,
-            borderWidth: glass ? 0 : ADD_CHIP.border,
-            borderColor: theme.chipBorder,
-            backgroundColor: !glass && hovered ? theme.rowHover : undefined,
+            borderWidth: ADD_CHIP.border,
+            borderColor: hovered ? theme.strongEdge : theme.chipBorder,
+            backgroundColor: hovered ? theme.rowHover : undefined,
             flexDirection: "row",
             alignItems: "center",
             paddingLeft: ADD_CHIP.left,

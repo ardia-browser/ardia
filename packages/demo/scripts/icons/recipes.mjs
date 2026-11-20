@@ -21,6 +21,7 @@ export const RECIPES = {
 
   app: one(O("square")),
   "xmark.square": one(O("square-x")),
+  "minus.square": one(O("square-minus")),
   "app.badge": one(O("square", at(1.333, -0.03, 0.03)), badge("orig:dot", 1.333, 0.4, -0.4)),
   "questionmark.app.dashed": { recipes: [[O("square-dashed"), L("tabler:question-mark", at(0.6, 0, 0))], [O("square-dashed"), L("phosphor:question", at(0.6, 0, 0))]] },
   macwindow: one(O("macwindow")),

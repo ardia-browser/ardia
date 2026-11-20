@@ -1,5 +1,5 @@
-import { Button, FadeLabel, Symbol, Text, ToolbarRowContext } from "../ui";
-import type { ReactNode } from "react";
+import { Button, FadeLabel, Symbol, Text, ToolbarRowContext, TooltipBeside, useHover } from "../ui";
+import { useEffect, useState, type ReactNode } from "react";
 import { View } from "react-native";
 import { useTheme } from "../ui/theme";
 import { CARD_INSET } from "../../lib/windowLayout";
@@ -7,18 +7,21 @@ import { pageHostLabel } from "../../lib/url";
 import type { Tab } from "../../state/browser/types";
 import { usePage } from "../../state/tabs/pageState";
 import { font, radius, space } from "../ui/tokens";
-import { SMALL_BAR_BUTTON, SMALL_BAR_GAP, SMALL_FIELD_GAP, SMALL_FIELD_HEIGHT as FIELD_HEIGHT, smallBarRow } from "./tokens";
+import { pageTitleInk, SMALL_BAR_BUTTON, SMALL_BAR_GAP, SMALL_FIELD_GAP, SMALL_FIELD_HEIGHT as FIELD_HEIGHT, smallBarRow } from "./tokens";
 import { Favicon } from "../favicon/Favicon";
 import { FieldLoadFill } from "../toolbar/FieldLoadFill";
 import { insecureLevel } from "../toolbar/Toolbar";
 import { SMALL_BAR_HEIGHT } from "../../state/windows/small";
 
 export const SMALL_INSET = CARD_INSET;
+export const OPEN_IN_BROWSER_SYMBOL = "macwindow";
 export { SMALL_BAR_BUTTON, SMALL_BAR_GAP, SMALL_FIELD_GAP, SMALL_WINDOW_FRAME, smallWindowRadius } from "./tokens";
 const HOST = { flexShrink: 0, maxWidth: "60%" } as const;
 const FLEX = { flex: 1 } as const;
 
-export type SmallBarButton = { icon: string; tooltip: string; onPress: () => void; disabled?: boolean };
+export type SmallBarButton = { icon: string; tooltip: string; shortcut?: string; onPress: () => void; disabled?: boolean };
+
+const tooltipText = (b: SmallBarButton) => (b.shortcut ? `${b.tooltip} (${b.shortcut})` : b.tooltip);
 
 export function SmallBar({
   fieldLeft,
@@ -41,19 +44,46 @@ export function SmallBar({
   const buttonsWidth = count * SMALL_BAR_BUTTON + Math.max(0, count - 1) * SMALL_BAR_GAP;
   const mid = height / 2;
   const right = SMALL_INSET + trailingRoom;
+  const [tipFor, setTipFor] = useState<{ index: number; via: "hover" | "focus" } | null>(null);
+  const tipButton = tipFor ? buttons[tipFor.index] : undefined;
+  const tipRight = tipFor ? right + buttonsWidth - tipFor.index * (SMALL_BAR_BUTTON + SMALL_BAR_GAP) + SMALL_TOOLTIP_GAP : 0;
+  const tipChange = (index: number, via: "hover" | "focus") => (on: boolean) =>
+    setTipFor((now) => (on ? { index, via } : now?.index === index && now.via === via ? null : now));
   return (
     <ToolbarRowContext.Provider value={smallBarRow()}>
       <View style={{ height }}>
         {children}
         <View style={{ position: "absolute", left: fieldLeft, right: right + buttonsWidth + SMALL_FIELD_GAP, top: mid - FIELD_HEIGHT / 2, height: FIELD_HEIGHT }}>{field}</View>
         <View style={{ position: "absolute", right, top: mid - SMALL_BAR_BUTTON / 2, flexDirection: "row", gap: SMALL_BAR_GAP }}>
-          {buttons.map((b) => (
-            <Button variant="icon" key={b.tooltip} icon={b.icon} look="row" disabled={b.disabled} tooltip={b.tooltip} onPress={b.onPress} />
+          {buttons.map((b, index) => (
+            <SmallBarIcon key={b.tooltip} button={b} onHover={tipChange(index, "hover")} onFocus={tipChange(index, "focus")} />
           ))}
           {trailing}
         </View>
+        <TooltipBeside text={tipButton ? tooltipText(tipButton) : ""} active={!!tipButton} right={tipRight} centerY={mid} />
       </View>
     </ToolbarRowContext.Provider>
+  );
+}
+
+const SMALL_TOOLTIP_GAP = 5;
+
+function SmallBarIcon({ button, onHover, onFocus }: { button: SmallBarButton; onHover: (on: boolean) => void; onFocus: (on: boolean) => void }) {
+  const { hovered, hoverProps } = useHover();
+  useEffect(() => onHover(hovered), [hovered]);
+  return (
+    <View {...hoverProps}>
+      <Button
+        variant="icon"
+        icon={button.icon}
+        look="row"
+        disabled={button.disabled}
+        label={button.tooltip}
+        hint={button.shortcut ? `Shortcut: ${button.shortcut}` : undefined}
+        onFocusChange={onFocus}
+        onPress={button.onPress}
+      />
+    </View>
   );
 }
 
@@ -89,7 +119,7 @@ export function PageLabel({ tab, hovered = false, label }: { tab: Tab; hovered?:
           <Text accessible={!!label} accessibilityLabel={label} lines={1} ellipsizeMode="head" weight="medium" style={HOST}>
             {host}
           </Text>
-          {title && title !== host ? <FadeLabel text={`  ${title}`} fontSize={font.body.fontSize} color={theme.textSecondary} fadeWidth={14} style={{ flex: 1, height: 18 }} /> : null}
+          {title && title !== host ? <FadeLabel text={`  ${title}`} fontSize={font.body.fontSize} color={pageTitleInk[theme.dark ? "dark" : "light"]} fadeWidth={14} style={{ flex: 1, height: 18 }} /> : null}
         </View>
       ) : (
         <Text lines={1} tone="placeholder" style={FLEX}>

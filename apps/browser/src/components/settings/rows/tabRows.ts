@@ -105,7 +105,7 @@ export const tabRows = {
           title: "Video upscaling",
           description: "Sharpens low-resolution video in the tab you're watching, on Apple silicon.",
           keywords: ["super resolution", "sharpen", "video quality"],
-          shown: () => PLATFORM_FEATURES.videoUpscaling,
+          offered: () => PLATFORM_FEATURES.videoUpscaling,
         },
       },
     },
@@ -123,7 +123,8 @@ export const tabRows = {
           description: "A page to open instead of the New Tab page. Leave empty for the default.",
           keywords: ["custom new tab", "new tab url", "home page", "homepage", "start page", "custom url", "cmd t", "new tab page address"],
           shown: (s) => newTabOpensOf(s) === "page",
-          needs: "Set New tab opens to New Tab page",
+          needs: (s) => (s.minimalismMode ? "Turn off Minimalism mode to use this" : "Set New tab opens to New Tab page"),
+          unlock: (s) => (s.minimalismMode ? "appearance.minimalismMode" : "tabs.newTabOpens"),
         },
         newTabPosition: {
           title: "Add new tabs",
@@ -156,7 +157,7 @@ export const tabRows = {
           explained: true,
           description: `A link in Little Ardia that would open a new tab loads right there. ${keyText("⌘")}-click still opens it behind.`,
           keywords: ["target blank", "new tab", "links", "inside"],
-          shown: () => PLATFORM_FEATURES.keepsNewTabLinksInLittleArdia,
+          offered: () => PLATFORM_FEATURES.keepsNewTabLinksInLittleArdia,
         },
         peekLinksToOtherSites: {
           title: "Links to other sites open in",
@@ -198,6 +199,7 @@ export const tabRows = {
           keywords: ["upsell", "tidy", "suggestion", "don't show again", "card", "inactive tabs", "suggest cleaning up when tabs pile up"],
           shown: (s) => s.cleanUpInactiveTabsAfterMinutes === null,
           needs: "Set Close unused tabs after to Never",
+          unlock: "tabs.cleanUp",
         },
         tidyTabs: {
           title: "Tidy Tabs",

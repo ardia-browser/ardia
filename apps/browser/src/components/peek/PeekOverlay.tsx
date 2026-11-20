@@ -10,7 +10,7 @@ import { useActiveTabId, useSettings, useTab } from "../../state/browser/hooks";
 import { useFullscreenTab } from "../../state/tabs/pageState";
 import type { Peek } from "../../state/peek/peek";
 import { PEEK_SCRIM } from "./tokens";
-import { PageLabel, SMALL_BAR_BUTTON, SMALL_INSET, SMALL_WINDOW_FRAME, SmallBar, smallWindowRadius, type SmallBarButton } from "../littleArdia/SmallChrome";
+import { OPEN_IN_BROWSER_SYMBOL, PageLabel, SMALL_BAR_BUTTON, SMALL_INSET, SMALL_WINDOW_FRAME, SmallBar, smallWindowRadius, type SmallBarButton } from "../littleArdia/SmallChrome";
 import { dismissPeek, finishPeek, openPeekAsTab, openPeekInSplit, promotePeekNow, registerPeekMotion } from "../../state/peek/actions";
 import { keyText } from "../../state/commands/keyText";
 import { splitViewAvailable } from "../../state/splits/splits";
@@ -37,8 +37,8 @@ const sideRoomFor = (buttons: PeekButtons) => ({ left: buttons === "left" ? SIDE
 function peekButtonList(windowId: string, splitFull: boolean): SmallBarButton[] {
   return [
     ...(splitViewAvailable ? [{ icon: "rectangle.split.2x1", disabled: splitFull, tooltip: "Open in Split View", onPress: () => openPeekInSplit(windowId) }] : []),
-    { icon: "arrow.up.left.and.arrow.down.right", tooltip: `Open as Tab (${keyText("⌘O")})`, onPress: () => openPeekAsTab(windowId) },
-    { icon: "xmark", tooltip: "Close (Esc)", onPress: () => dismissPeek(windowId) },
+    { icon: OPEN_IN_BROWSER_SYMBOL, tooltip: "Open as Tab", shortcut: keyText("⌘O"), onPress: () => openPeekAsTab(windowId) },
+    { icon: "xmark", tooltip: "Close", shortcut: "Esc", onPress: () => dismissPeek(windowId) },
   ];
 }
 

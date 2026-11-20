@@ -4,7 +4,7 @@ import type { OmniboxProvider } from "./providers";
 export const PROVIDER_DEADLINE_MS = 1500;
 
 export type ProviderQueries = {
-  run(text: string, providers: readonly OmniboxProvider[], onSection: (section: ProviderSection) => void): void;
+  run(text: string, providers: readonly OmniboxProvider[], onSection: (section: ProviderSection) => void, onFailed?: (provider: OmniboxProvider) => void): void;
   cancel(): void;
 };
 
@@ -30,7 +30,7 @@ export function createProviderQueries(deadlineMs: number = PROVIDER_DEADLINE_MS)
   };
   return {
     cancel,
-    run(text, providers, onSection) {
+    run(text, providers, onSection, onFailed) {
       cancel();
       const run = new AbortController();
       current = run;
@@ -42,13 +42,18 @@ export function createProviderQueries(deadlineMs: number = PROVIDER_DEADLINE_MS)
           answer = Promise.resolve(provider.query(text, signal));
         } catch {
           done();
+          onFailed?.(provider);
           continue;
         }
         Promise.race([answer, deadline])
           .then((rows) => {
-            if (!run.signal.aborted && !signal.aborted && Array.isArray(rows)) onSection({ id: provider.id, title: provider.title, rows });
+            if (run.signal.aborted) return;
+            if (!signal.aborted && Array.isArray(rows)) onSection({ id: provider.id, title: provider.title, rows });
+            else onFailed?.(provider);
           })
-          .catch(() => {})
+          .catch(() => {
+            if (!run.signal.aborted) onFailed?.(provider);
+          })
           .finally(done);
       }
     },

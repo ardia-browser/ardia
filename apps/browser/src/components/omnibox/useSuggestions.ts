@@ -74,7 +74,7 @@ export function useSuggestions({
   currentUrl?: string;
   scope: SearchScope | null;
   preventInline?: boolean;
-}): SuggestionResult {
+}): SuggestionResult & { providerAnswered: boolean } {
   const allTabs = useTabs((tabs) => tabs);
   const historyOn = useSettings((st) => st.commandBarHistory);
   const history = useSuggestionHistory(historyOn ? profileId : null);
@@ -163,5 +163,6 @@ export function useSuggestions({
   useEffect(() => {
     if (siteListed) noteSiteSuggestionShown();
   }, [siteListed, query]);
-  return result;
+  const providerAnswered = scope?.kind === "provider" && providers.some((s) => s.id === scope.providerId);
+  return { ...result, providerAnswered };
 }

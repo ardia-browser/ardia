@@ -27,14 +27,14 @@ export function useHeldSelection(items: Suggestion[], typed: string, scope: Sear
   });
 }
 
-export function useProviderEnter(items: Suggestion[], typed: string, scope: SearchScope | null, choose: (s: Suggestion, disposition: Disposition) => void) {
+export function useProviderEnter(items: Suggestion[], typed: string, scope: SearchScope | null, answeredEmpty: boolean, choose: (s: Suggestion, disposition: Disposition) => void) {
   const pending = useRef<{ typed: string; scope: SearchScope; disposition: Disposition } | null>(null);
   const latest = useRef(choose);
   latest.current = choose;
   useLayoutEffect(() => {
     const wait = pending.current;
     if (!wait) return;
-    if (wait.typed !== typed || wait.scope !== scope) {
+    if (wait.typed !== typed || wait.scope !== scope || answeredEmpty) {
       pending.current = null;
       return;
     }
@@ -42,9 +42,9 @@ export function useProviderEnter(items: Suggestion[], typed: string, scope: Sear
     if (first?.kind !== "provider") return;
     pending.current = null;
     latest.current(first, wait.disposition);
-  }, [items, typed, scope]);
+  }, [items, typed, scope, answeredEmpty]);
   return (disposition: Disposition): boolean => {
-    if (scope?.kind !== "provider" || !typed.trim()) return false;
+    if (scope?.kind !== "provider" || !typed.trim() || answeredEmpty) return false;
     pending.current = { typed, scope, disposition };
     return true;
   };

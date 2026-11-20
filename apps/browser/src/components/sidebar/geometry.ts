@@ -2,12 +2,13 @@ import { GROUP_MEMBERS_PAD_BOTTOM, SIDEBAR_GROUP } from "../../lib/sidebarMetric
 import { LIGHTS_CENTER } from "../../state/windows/dockMotion";
 import { layout } from "../ui/theme";
 import { radius } from "../ui/tokens";
+import { sidebarInset } from "../ui/look";
 import { profileSwitcher } from "../profiles/tokens";
 import type { ToolbarRow } from "../../lib/toolbarRow";
 import { SCROLL_EDGE } from "./ScrollEdge";
 
 export const LIVE_FOLDER_PAD = 2;
-export const GROUP_INDENT = SIDEBAR_GROUP.indent;
+export const groupIndent = () => sidebarInset(SIDEBAR_GROUP.indent);
 export const GROUP_BORDER = SIDEBAR_GROUP.border;
 export const GROUP_RADIUS = SIDEBAR_GROUP.radius;
 export const GROUP_INNER_RADIUS = GROUP_RADIUS - GROUP_BORDER;

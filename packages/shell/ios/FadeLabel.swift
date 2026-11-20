@@ -14,14 +14,6 @@ private final class LabelInk: CALayer {
 }
 
 final class FadeLabel: ExpoView {
-  private static let field: NSTextField = {
-    let field = NSTextField(labelWithString: "")
-    field.lineBreakMode = .byClipping
-    field.maximumNumberOfLines = 1
-    field.cell?.truncatesLastVisibleLine = false
-    field.isSelectable = false
-    return field
-  }()
   private static let weights: [String: NSFont.Weight] = [
     "ultraLight": .ultraLight, "thin": .thin, "light": .light, "regular": .regular, "medium": .medium,
     "semibold": .semibold, "bold": .bold, "heavy": .heavy, "black": .black,
@@ -58,10 +50,27 @@ final class FadeLabel: ExpoView {
     return font
   }
 
+  private static let cellInset: CGFloat = 2
+  private static let inkBleed: CGFloat = 3
+  private static let minimumShownWidth: CGFloat = 1
+
+  private struct Prepared {
+    let text: String
+    let font: NSFont
+    let color: NSColor
+    let strikethrough: Bool
+    let line: NSAttributedString
+    let measured: NSSize
+
+    func matches(_ text: String, _ font: NSFont, _ color: NSColor, _ strikethrough: Bool) -> Bool {
+      self.text == text && self.font == font && self.color == color && self.strikethrough == strikethrough
+    }
+  }
+
   private let ink = LabelInk()
   private let fade = CAGradientLayer()
   private var font = NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .regular)
-  private var fitting = NSSize.zero
+  private var prepared: Prepared?
   private var lift: CGFloat = 0
 
   var text = "" {
@@ -74,14 +83,14 @@ final class FadeLabel: ExpoView {
   var fontSize: Double = 13 { didSet { if fontSize != oldValue { update() } } }
   var weight = "regular" { didSet { if weight != oldValue { update() } } }
   var fontFamily = "" { didSet { if fontFamily != oldValue { update() } } }
-  var color: NSColor = .labelColor { didSet { if color != oldValue { ink.setNeedsDisplay() } } }
+  var color: NSColor = .labelColor { didSet { if color != oldValue { prepare(); ink.setNeedsDisplay() } } }
   var strikethrough = false { didSet { if strikethrough != oldValue { update() } } }
   var fadeWidth: Double = 24 { didSet { if fadeWidth != oldValue { relayout() } } }
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     wantsLayer = true
-    clipsToBounds = true
+    clipsToBounds = false
     ink.paint = { [weak self] ctx in self?.paint(ctx) }
     ink.needsDisplayOnBoundsChange = true
     ink.contentsScale = backingDensity
@@ -130,28 +139,32 @@ final class FadeLabel: ExpoView {
     relayout()
   }
 
-  private func load(_ field: NSTextField) {
-    field.font = font
-    field.textColor = color
-    let line = Self.singleLine(text)
-    if strikethrough {
-      field.attributedStringValue = NSAttributedString(string: line, attributes: [
-        .font: font, .foregroundColor: color,
-        .strikethroughStyle: NSUnderlineStyle.single.rawValue, .strikethroughColor: color,
-      ])
-    } else {
-      field.stringValue = line
-    }
-  }
-
   private func update() {
     font = Self.resolvedFont(family: fontFamily, weight: weight, size: fontSize)
     lift = Self.opticalLift(font, scale: ink.contentsScale)
-    let field = Self.field
-    load(field)
-    fitting = field.frame(forAlignmentRect: NSRect(origin: .zero, size: field.intrinsicContentSize)).size
+    prepare()
     ink.setNeedsDisplay()
     relayout()
+  }
+
+  private func prepare() {
+    let line = Self.singleLine(text)
+    if let prepared, prepared.matches(line, font, color, strikethrough) { return }
+    let style = NSMutableParagraphStyle()
+    style.lineBreakMode = .byClipping
+    var attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color, .paragraphStyle: style]
+    if strikethrough {
+      attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
+      attributes[.strikethroughColor] = color
+    }
+    let drawn = NSAttributedString(string: line, attributes: attributes)
+    let measured: NSSize
+    if let prepared, prepared.text == line, prepared.font == font, prepared.strikethrough == strikethrough {
+      measured = prepared.measured
+    } else {
+      measured = drawn.boundingRect(with: NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude), options: [.usesLineFragmentOrigin]).size
+    }
+    prepared = Prepared(text: line, font: font, color: color, strikethrough: strikethrough, line: drawn, measured: measured)
   }
 
   static func singleLine(_ text: String) -> String {
@@ -163,12 +176,15 @@ final class FadeLabel: ExpoView {
   }
 
   private func relayout() {
+    let fitting = fittingSize()
     CATransaction.begin()
     CATransaction.setDisableActions(true)
     if ink.superlayer !== layer { layer?.addSublayer(ink) }
-    ink.frame = CGRect(x: 0, y: inkTop(), width: max(bounds.width, fitting.width), height: fitting.height)
+    let height = fitting.height + Self.inkBleed * 2
+    ink.isHidden = bounds.width < Self.minimumShownWidth
+    ink.frame = CGRect(x: 0, y: inkTop(fitting) - Self.inkBleed, width: max(bounds.width, fitting.width), height: height)
     if bounds.width > 0, fitting.width > bounds.width + 0.5 {
-      fade.frame = CGRect(x: 0, y: 0, width: bounds.width, height: fitting.height)
+      fade.frame = CGRect(x: 0, y: 0, width: bounds.width, height: height)
       let start = max(0, 1 - fadeWidth / bounds.width)
       fade.locations = [0, NSNumber(value: start), 1]
       ink.mask = fade
@@ -178,16 +194,21 @@ final class FadeLabel: ExpoView {
     CATransaction.commit()
   }
 
-  private func inkTop() -> CGFloat {
+  private func fittingSize() -> NSSize {
+    guard let measured = prepared?.measured else { return .zero }
+    let density = ink.contentsScale
+    let scale = density.isFinite && density > 0 ? density : 1
+    return NSSize(width: ceil(measured.width * scale) / scale + Self.cellInset * 2, height: ceil(measured.height))
+  }
+
+  private func inkTop(_ fitting: NSSize) -> CGFloat {
     let centered = (bounds.height - fitting.height) / 2
     return isFlipped ? centered - lift : centered + lift
   }
 
   private func paint(_ ctx: CGContext) {
     let size = ink.bounds.size
-    guard size.width > 0, size.height > 0 else { return }
-    let field = Self.field
-    load(field)
+    guard size.width > 0, size.height > 0, let line = prepared?.line else { return }
     if !ink.contentsAreFlipped() {
       ctx.translateBy(x: 0, y: size.height)
       ctx.scaleBy(x: 1, y: -1)
@@ -195,7 +216,7 @@ final class FadeLabel: ExpoView {
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: true)
     effectiveAppearance.performAsCurrentDrawingAppearance {
-      field.cell?.draw(withFrame: NSRect(origin: .zero, size: size), in: field)
+      line.draw(with: NSRect(x: Self.cellInset, y: Self.inkBleed, width: max(0, size.width - Self.cellInset * 2), height: size.height - Self.inkBleed * 2), options: [.usesLineFragmentOrigin])
     }
     NSGraphicsContext.restoreGraphicsState()
   }

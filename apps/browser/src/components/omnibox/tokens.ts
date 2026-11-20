@@ -6,6 +6,12 @@ export const PANEL_TEXT_LEFT = 48;
 const PANEL_ICON_LEFT = 21;
 const FIELD_TEXT_INSET = 2.5;
 const ICON_SLOT = 18;
+const ROW_PAD_X = 13;
+const ROW_ICON_BOX = 16;
+const ROW_GAP = 11;
+const DROPDOWN_LIST_X = space.s;
+const DROPDOWN_ICON_LEFT = DROPDOWN_LIST_X + ROW_PAD_X + ROW_ICON_BOX / 2 - ICON_SLOT / 2;
+const DROPDOWN_TEXT_LEFT = DROPDOWN_LIST_X + ROW_PAD_X + ROW_ICON_BOX + ROW_GAP;
 
 const pulseRadius = perLook(() => ({ panel: radius.hero, hero: concentric(radius.hero, 0.5), sidebar: radius.panel }));
 
@@ -31,9 +37,10 @@ export const BAR = {
     heroGap: space.m,
     gap: PANEL_TEXT_LEFT - FIELD_TEXT_INSET - PANEL_ICON_LEFT - ICON_SLOT,
   },
-  dropdown: { height: 44, left: 13, right: 9, gap: 9 },
+  dropdown: { height: 44, footer: 44, left: DROPDOWN_ICON_LEFT, right: 9, gap: DROPDOWN_TEXT_LEFT - FIELD_TEXT_INSET - DROPDOWN_ICON_LEFT - ICON_SLOT },
   siteControls: { glyph: 15 },
-  bottom: { left: 14, heroLeft: 13, right: 13, heroRight: 15, height: 52, heroHeight: 43, heroBelow: space.m, mic: 14 },
+  bottom: { left: 14, heroLeft: 13, right: 13, heroRight: 15, height: 44, heroHeight: 43, heroBelow: space.m, mic: 14, emptyTuck: 9 },
+  focusRing: { width: 2, panelInset: 6, dropdownInset: 4 },
 } as const;
 
 export const ADD_CHIP = {
@@ -59,6 +66,7 @@ export const GO_BUTTON = {
   glyph: 11,
   glyphBox: 14,
   glyphAlpha: "99",
+  idleBorder: 1,
 } as const;
 
 export const SCOPE_CHIP = {
@@ -74,17 +82,22 @@ export const SCOPE_CHIP = {
 
 export const SUGGESTION = {
   listX: 8,
-  dropdownListX: space.s,
+  dropdownListX: DROPDOWN_LIST_X,
   listBelow: space.xxs,
   dropdownListBelow: space.s,
   height: 36,
+  stackedHeight: 46,
+  stackGap: 2.5,
   gapY: 2,
   get radius() { return radius.tile; },
-  padX: 13,
-  gap: 11,
+  padX: ROW_PAD_X,
+  gap: ROW_GAP,
   icon: 13,
   calcIcon: 14,
-  iconBox: 16,
+  iconBox: ROW_ICON_BOX,
+  returnGlyph: 11,
+  returnBox: 14,
+  trailingGap: space.m,
 } as const;
 
 export const SELECTED_SUGGESTION_ALPHA = { dark: 0.56, light: 0.3 } as const;

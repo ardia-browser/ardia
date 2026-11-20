@@ -2,8 +2,10 @@ import { useRef, useState, type ReactNode } from "react";
 import { markHoverProps } from "../../lib/hoverMarks";
 import { Pressable, View, type GestureResponderEvent } from "react-native";
 import { useTheme } from "./theme";
-import { radius, space } from "./tokens";
+import { ink, radius, space } from "./tokens";
 import { HoverFill } from "./HoverFill";
+
+const SELECTION_EDGE = 1;
 
 export type ListRowState = { hovered: boolean; pressed: boolean; selected: boolean };
 
@@ -52,7 +54,9 @@ export function ListRow({
               flexDirection: "row",
               alignItems: "center",
               gap: space.m,
-              backgroundColor: selected ? (selectedTone === "accent" ? theme.formAccent : theme.rowSelected) : undefined,
+              backgroundColor: selected ? (selectedTone === "accent" ? theme.formSelection : theme.rowSelected) : undefined,
+              borderWidth: selectedTone === "accent" ? SELECTION_EDGE : 0,
+              borderColor: selected ? theme.formSelectionEdge : ink.clear,
             }}
           >
             <HoverFill shown={hovered && !selected} instant={selected} color={theme.rowHover} radius={radius.tile} />

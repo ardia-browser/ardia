@@ -20,14 +20,16 @@ export const appearanceRows = {
           title: "Interface style",
           description: "Glass uses Liquid Glass. Classic is flat, like Dia.",
           keywords: ["liquid glass", "glass", "classic", "flat", "translucent", "transparency", "glow", "frosted"],
-          shown: (_, env) => !!env.glass,
+          offered: (env) => !!env.glass,
         },
         glassTint: {
           title: "Glass tint",
           description: "How much the profile color tints the glass.",
           keywords: ["liquid glass", "tint", "strength", "intensity", "colour", "color", "glossy", "tint amount", "profile colour", "theme", "tint glass with the profile colour"],
-          shown: (s, env) => !!env.glass && s.interfaceStyle === "glass",
+          offered: (env) => !!env.glass,
+          shown: (s) => s.interfaceStyle === "glass",
           needs: "Choose the Glass style to use this",
+          unlock: "appearance.interfaceStyle",
         },
         elementOutlines: {
           title: "Outlines around tiles and fields",
@@ -54,7 +56,8 @@ export const appearanceRows = {
           title: "App Icon",
           description: "Shown in the Dock and the app switcher.",
           keywords: ["dock icon", "logo"],
-          shown: () => PLATFORM_FEATURES.appIcon,
+          offered: () => PLATFORM_FEATURES.appIcon,
+          capability: "appIcon",
         },
       },
     },
@@ -66,7 +69,7 @@ export const appearanceRows = {
           explained: true,
           description: "Resizes Ardia, not web pages.",
           keywords: ["scale", "scaling", "ui scale", "ui size", "interface scale", "zoom", "zoom interface", "fractional scaling", "1440p", "4k", "high resolution", "retina", "bigger", "smaller", "larger", "display", "monitor", "density", "accessibility", "low vision"],
-          shown: () => PLATFORM_FEATURES.interfaceSize && interfaceScaleAdjustable(),
+          offered: () => PLATFORM_FEATURES.interfaceSize && interfaceScaleAdjustable(),
         },
         sidebarTextSize: {
           title: "Sidebar text size",
@@ -74,6 +77,7 @@ export const appearanceRows = {
           keywords: ["bigger text", "larger text", "large text", "text size", "small text", "readability", "readable", "low vision", "accessibility", "a11y", "tab titles", "arc"],
           shown: inSidebar,
           needs: "Use vertical tabs to change this",
+          unlock: "tabs.layout",
         },
         sidebarTextContrast: {
           title: "Higher contrast text",
@@ -81,6 +85,7 @@ export const appearanceRows = {
           keywords: ["contrast", "high contrast", "increase contrast", "grey text", "gray text", "light text", "faint", "readability", "readable", "low vision", "accessibility", "a11y", "wcag", "bold"],
           shown: inSidebar,
           needs: "Use vertical tabs to change this",
+          unlock: "tabs.layout",
         },
       },
     },
@@ -93,6 +98,7 @@ export const appearanceRows = {
           keywords: ["url bar", "location bar", "toolbar", "address bar"],
           shown: inSidebar,
           needs: "Use vertical tabs to change this",
+          unlock: "tabs.layout",
         },
         compactToolbar: {
           title: "Compact toolbar",
@@ -101,6 +107,7 @@ export const appearanceRows = {
           keywords: ["toolbar height", "smaller toolbar", "thin toolbar", "slim", "dense", "helium", "video", "16:9", "black bars", "url bar"],
           shown: (s, env) => env.top || s.addressBar === "toolbar",
           needs: "Put the address bar in the toolbar to use this",
+          unlock: "appearance.addressBar",
         },
         commandBarPlacement: {
           title: `${keyText("⌘L")} opens the command bar`,
@@ -141,6 +148,7 @@ export const appearanceRows = {
           keywords: ["fullscreen", "full screen", "borderless", "edge to edge", "zero", "none", "frame", "inset", "margin", "zero in full screen", "auto hide", "autohide", "sidebar", "tabs hidden", "zero in full screen when tabs are hidden"],
           shown: (s) => !s.borderlessMode,
           needs: "Set Frame around the page above 0",
+          unlock: "appearance.pageFrame",
         },
         tabCornerRadius: {
           title: "Tab corners",

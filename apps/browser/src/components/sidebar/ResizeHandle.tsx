@@ -22,7 +22,8 @@ export function ResizeHandle({ windowId }: { windowId: string }) {
     pointerFromEdge: (e) => e.nativeEvent.locationX - HALF,
     onLive: (w) => setLiveSidebarWidth(windowId, w),
     onCommit: (w, dragged) => {
-      if (dragged) noteSidebarResize();
+      if (!dragged) return;
+      noteSidebarResize();
       updateSettings({ sidebarWidth: keptSidebarWidth(w, limit) });
     },
   });

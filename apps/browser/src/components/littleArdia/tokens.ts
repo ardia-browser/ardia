@@ -11,6 +11,8 @@ export const SMALL_WINDOW_FRAME = {
 export const TRAFFIC_LIGHT_PITCH = 23;
 export const NAV_CENTER_PAST_ZOOM = 27;
 
+export const pageTitleInk = { dark: "#FFFFFF99", light: "#000000A3" } as const;
+
 export const SMALL_BAR_BUTTON = 28;
 export const SMALL_BAR_GAP = 2;
 export const SMALL_FIELD_GAP = 6;

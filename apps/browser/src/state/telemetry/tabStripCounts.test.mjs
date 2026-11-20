@@ -23,6 +23,7 @@ const ZERO = {
   tab_strip_most_tabs: 0,
   tab_strip_held_closes: 0,
   tab_strip_most_titled_tabs: 0,
+  tab_strip_most_tabs_in_overflow: 0,
   tab_strip_scrolls: 0,
   tab_strip_scroll_stalls: 0,
   tab_strip_reveals_held_for_scroll: 0,

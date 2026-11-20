@@ -50,6 +50,29 @@ export function luminance(color: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+export function contrastRatio(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+export function darkenToContrast(color: string, backdrop: string, ratio: number): string {
+  const black = toHex([0, 0, 0]);
+  for (let step = 0; step <= 20; step++) {
+    const darker = mix(color, black, step / 20);
+    if (contrastRatio(darker, backdrop) >= ratio) return darker;
+  }
+  return black;
+}
+
+export function toContrast(color: string, backdrop: string, ratio: number): string {
+  const toward = toHex(isLight(backdrop) ? [0, 0, 0] : [255, 255, 255]);
+  for (let step = 0; step <= 20; step++) {
+    const moved = mix(color, toward, step / 20);
+    if (contrastRatio(moved, backdrop) >= ratio) return moved;
+  }
+  return toward;
+}
+
 export function isLight(color: string): boolean {
   const l = luminance(color);
   return 1.05 / (l + 0.05) < (l + 0.05) / 0.05;

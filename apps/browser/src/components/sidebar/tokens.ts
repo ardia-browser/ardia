@@ -2,12 +2,13 @@ import { Easing } from "react-native";
 import { useTheme } from "../ui/theme";
 import { duration, spring } from "../ui/motion";
 import { font, ink, radius, shadow, sidebarFont, sidebarIconSize, sidebarPoints, space, withAlpha, type ShadowLevel } from "../ui/tokens";
+import { sidebarInset } from "../ui/look";
 import type { GroupColor } from "../../state/browser/types";
 import { GROUP_COLORS } from "../../state/groups/tokens";
-import { mix } from "../../lib/color";
+import { darkenToContrast, mix, over } from "../../lib/color";
 
 const DARK = {
-  groupFill: "rgba(255,255,255,0.1)",
+  groupFill: "rgba(255,255,255,0.065)",
   groupFillEmphasized: "rgba(255,255,255,0.12)",
   groupHeaderHover: "rgba(255,255,255,0.12)",
   groupStroke: "rgba(255,255,255,0.1)",
@@ -21,8 +22,8 @@ const DARK = {
   folderDropFill: "rgba(255,255,255,0.08)",
   splitDropFill: "rgba(255,255,255,0.42)",
   badge: "rgba(255,255,255,0.9)",
-  newTabLabel: "#FFFFFF8C",
-  newTabIcon: "#FFFFFF40",
+  newTabLabel: "#FFFFFFA8",
+  newTabIcon: "#FFFFFFA8",
   liveDotRing: "rgba(0,0,0,0.3)",
   engineMarkPlate: "#2C2C2E",
   selectedRowPillFill: "#141617",
@@ -41,7 +42,7 @@ const DARK = {
 };
 
 const LIGHT: typeof DARK = {
-  groupFill: "rgba(0,0,0,0.05)",
+  groupFill: "rgba(0,0,0,0.035)",
   groupFillEmphasized: "rgba(0,0,0,0.07)",
   groupHeaderHover: "rgba(255,255,255,0.4)",
   groupStroke: "rgba(0,0,0,0.1)",
@@ -55,8 +56,8 @@ const LIGHT: typeof DARK = {
   folderDropFill: "rgba(0,0,0,0.05)",
   splitDropFill: "rgba(0,0,0,0.08)",
   badge: "rgba(0,0,0,0.75)",
-  newTabLabel: "#00000080",
-  newTabIcon: "#00000042",
+  newTabLabel: "#0000009E",
+  newTabIcon: "#0000009E",
   liveDotRing: "rgba(0,0,0,0.1)",
   engineMarkPlate: "#FFFFFF",
   selectedRowPillFill: "#FFFFFF",
@@ -74,7 +75,7 @@ const LIGHT: typeof DARK = {
   quietFaintText: 0.2,
 };
 
-type SidebarTokens = typeof DARK;
+export type SidebarTokens = typeof DARK;
 
 const HIGH_CONTRAST_DARK: SidebarTokens = { ...DARK, groupTitle: "#FFFFFF", newTabLabel: "#FFFFFFD1", newTabIcon: "#FFFFFFB3", badge: "#FFFFFF" };
 const HIGH_CONTRAST_LIGHT: SidebarTokens = { ...LIGHT, groupTitle: "#000000", newTabLabel: "#000000D1", newTabIcon: "#000000B3", badge: "#000000" };
@@ -157,9 +158,13 @@ export const EDGE_GLOW = {
 } as const;
 
 export const TAB_ROW = {
-  contentLeft: 9,
+  get contentLeft() {
+    return sidebarInset(9);
+  },
   trailing: 6,
-  titleGap: 5,
+  get titleGap() {
+    return sidebarInset(5);
+  },
   get titleHeight() {
     return sidebarPoints(18);
   },
@@ -212,17 +217,20 @@ export const groupBoxAtRest = (color: GroupColor | null | undefined) => groupTin
 
 const FOLDER_ACCENT = "#443AFF";
 
+const LIGHT_FOLDER_BACKDROP = "#F2F2F2";
+const FOLDER_OUTLINE_CONTRAST = 3;
+
 export function folderPalette(color: GroupColor | null | undefined, dark: boolean) {
   const tint = groupTint(color) ?? FOLDER_ACCENT;
   return dark
     ? { stroke: mix("#FFFFFF", tint, 0.64), face: mix("#211E29", tint, 0.12), insideTop: mix("#211E29", tint, 0.4), insideBottom: mix("#15121E", tint, 0.24) }
-    : { stroke: tint, face: mix("#FFFFFF", tint, 0.06), insideTop: mix("#FFFFFF", tint, 0.34), insideBottom: mix("#FFFFFF", tint, 0.64) };
+    : { stroke: darkenToContrast(tint, over(withAlpha(tint, 0.16), LIGHT_FOLDER_BACKDROP), FOLDER_OUTLINE_CONTRAST), face: mix("#FFFFFF", tint, 0.06), insideTop: mix("#FFFFFF", tint, 0.34), insideBottom: mix("#FFFFFF", tint, 0.64) };
 }
 
 export function groupSurface(color: GroupColor | null | undefined, tokens: SidebarTokens): { fill: string; stroke: string } {
   if (color === "none") return { fill: "transparent", stroke: "transparent" };
   const tint = groupTint(color);
-  return tint ? { fill: withAlpha(tint, 0.16), stroke: withAlpha(tint, 0.3) } : { fill: tokens.groupFill, stroke: tokens.groupStroke };
+  return tint ? { fill: withAlpha(tint, 0.1), stroke: withAlpha(tint, 0.26) } : { fill: tokens.groupFill, stroke: tokens.groupStroke };
 }
 
 export { SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH } from "../../lib/windowLayout";

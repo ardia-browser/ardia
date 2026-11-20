@@ -20,6 +20,7 @@ function state(settings = {}, window = {}, extra = {}) {
     profileOrder: ["p"],
     downloads: [],
     windowUi: {},
+    settingsMeta: { chosen: [], inferred: [] },
     ...extra,
     settings: { pageFrame: 9, ...SETTINGS, ...settings },
   };

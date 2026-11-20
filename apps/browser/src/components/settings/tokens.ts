@@ -1,5 +1,5 @@
 import { duration } from "../ui/motion";
-import { display, font, space } from "../ui/tokens";
+import { colorRoles, display, font, space, withAlpha } from "../ui/tokens";
 
 const dark = {
   windowFill: "#1E1E1E",
@@ -8,8 +8,11 @@ const dark = {
   miniBar: "rgba(255,255,255,0.22)",
   miniField: "rgba(255,255,255,0.14)",
   miniPage: "rgba(255,255,255,0.08)",
-  warningFill: "rgba(255,159,10,0.12)",
+  get warningFill() { return withAlpha(colorRoles.dark.warning, 0.12); },
   dashedBorder: "rgba(255,255,255,0.25)",
+  secondaryText: "rgba(255,255,255,0.62)",
+  confirmed: colorRoles.dark.success,
+  lockedLink: "#6CB4FF",
 };
 
 export type SettingsColors = typeof dark;
@@ -21,8 +24,11 @@ const light: SettingsColors = {
   miniBar: "rgba(0,0,0,0.16)",
   miniField: "rgba(0,0,0,0.08)",
   miniPage: "#FFFFFF",
-  warningFill: "rgba(255,149,0,0.1)",
+  get warningFill() { return withAlpha(colorRoles.light.warning, 0.1); },
   dashedBorder: "rgba(0,0,0,0.2)",
+  secondaryText: "rgba(0,0,0,0.62)",
+  confirmed: "#248A3D",
+  lockedLink: "#0052AD",
 };
 
 export const settingsColors = { dark, light } as const;
@@ -42,11 +48,22 @@ const stylePreviewLight: typeof stylePreviewDark = { backdrop: "#E6CED2", tile: 
 
 export const stylePreview = { dark: stylePreviewDark, light: stylePreviewLight } as const;
 
+export const paneTints = {
+  gray: "#8E8E93",
+  get blue() { return colorRoles.dark.formAccent; },
+  orange: "#D97706",
+  indigo: "#5856D6",
+  purple: "#AF52DE",
+  pink: "#FF2D55",
+  teal: "#1F9BB0",
+  get ink() { return colorRoles.light.onAccent; },
+} as const;
+
 export const settingsInk = {
-  onAccentSecondary: "rgba(255,255,255,0.8)",
+  onAccentSecondary: "rgba(255,255,255,0.9)",
   knobOutline: "rgba(0,0,0,0.25)",
   thumbBorder: "rgba(0,0,0,0.2)",
-  customSwatch: "#8E8E93",
+  get customSwatch() { return paneTints.gray; },
 } as const;
 
 export const settingsType = {
@@ -54,6 +71,8 @@ export const settingsType = {
   get lead() { return font.small; },
   get code() { return display.code; },
 } as const;
+
+export const settingsReveal = { inset: 12, margin: 16, layoutFrames: 10, measureDeadlineMs: 300, mountDeadlineMs: 10000, get headerGap() { return space.xxl; } } as const;
 
 export const settingsMotion = {
   searchFlashIn: duration.fast,
@@ -85,18 +104,18 @@ export const miniWindow: Record<"s" | "m" | "l", MiniWindowGeometry> = {
   l: { scale: 0.5, pad: space.m, gap: space.xs, side: "26%", sideTop: space.ml, sideFieldTop: space.xs, bar: 7, barGap: space.xs, tab: 10, tabsLeft: space.xxxl, sideField: 10, toolbar: 16, toolbarField: 9, nav: { width: 18, height: 5 } },
 };
 
-export const paneTints = {
-  gray: "#8E8E93",
-  blue: "#0A84FF",
-  orange: "#FF9500",
-  indigo: "#5856D6",
-  purple: "#AF52DE",
-  pink: "#FF2D55",
-  teal: "#30B0C7",
-  ink: "#FFFFFF",
-} as const;
-
 export const paneTile = { size: 20, radius: 5, symbol: 11 } as const;
+
+export const paneGlyph: Record<string, { size: number; weight: "regular" | "medium" | "semibold" | "bold" }> = {
+  "gearshape.fill": { size: 13, weight: "medium" },
+  "person.2.fill": { size: 11.5, weight: "semibold" },
+  "square.on.square.fill": { size: 12.5, weight: "semibold" },
+  "circle.lefthalf.filled": { size: 13, weight: "semibold" },
+  "wand.and.rays": { size: 13, weight: "bold" },
+  "puzzlepiece.fill": { size: 11, weight: "medium" },
+  "keyboard.fill": { size: 12, weight: "semibold" },
+  "slider.horizontal.3": { size: 14, weight: "bold" },
+};
 
 export const settingsLayout = { emptyTop: 40, sidebarWidth: 214, paneMaxWidth: 600, paneBottom: 40 } as const;
 

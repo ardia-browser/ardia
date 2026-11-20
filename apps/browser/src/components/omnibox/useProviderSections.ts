@@ -38,13 +38,13 @@ export function useProviderSections({
 
   useEffect(() => {
     if (!targets.length) return queries.cancel();
-    queries.run(query, targets, (section) =>
+    const answer = (section: ProviderSection) =>
       setAnswered((prev) => {
         const kept = prev.query === query && prev.targets === targets ? prev.sections.filter((s) => s.id !== section.id) : [];
         const rank = (s: ProviderSection) => order.current.findIndex((p) => p.id === s.id);
         return { query, targets, sections: [...kept, section].sort((a, b) => rank(a) - rank(b)) };
-      }),
-    );
+      });
+    queries.run(query, targets, answer, (provider) => answer({ id: provider.id, title: provider.title, rows: [] }));
   }, [query, targets, queries]);
   useEffect(() => () => queries.cancel(), [queries]);
 

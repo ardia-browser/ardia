@@ -60,4 +60,34 @@ final class SingleLineInkTests: XCTestCase {
     let ink = inkRows(field, size: SingleLineInk.fitting(field))
     XCTAssertGreaterThanOrEqual(CGFloat(ink.bottom - ink.top + 1) / 2, glyphHeight(large) - 1)
   }
+
+  func testTitlesInScriptsTheSystemFontDrawsWithAFallbackKeepTheirDescendersAtEverySidebarTextSize() {
+    let field = SingleLineInk.labelField()
+    field.textColor = .black
+    let titles = ["Devanagari": "नमस्ते दुनिया gyp", "Thai": "สวัสดีชาวโลก gyp", "Arabic": "مرحبا بالعالم gyp", "CJK": "你好世界 日本語 gyp", "emoji": "Trip 🎉🙂🇯🇵 gyp"]
+    for (script, title) in titles {
+      for (name, points) in sidebarTitleSizes {
+        field.font = NSFont.monospacedDigitSystemFont(ofSize: points, weight: .regular)
+        field.stringValue = title
+        let box = SingleLineInk.fitting(field)
+        let fitted = inkRows(field, size: box)
+        let roomy = inkRows(field, size: NSSize(width: box.width, height: box.height + 20))
+        XCTAssertEqual(fitted.bottom, roomy.bottom, "\(script) at \(name) \(points) pt: \(roomy.bottom - fitted.bottom) pixel rows lost at the bottom")
+      }
+    }
+  }
+
+  func testALatinTitleSkipsTheFallbackMeasureAndKeepsItsBox() {
+    let field = SingleLineInk.labelField()
+    for title in ["Trip plan — Docpad", "Café • Ångström “quoted” – naïve"] {
+      for (_, points) in sidebarTitleSizes {
+        let font = NSFont.monospacedDigitSystemFont(ofSize: points, weight: .regular)
+        field.font = font
+        field.stringValue = title
+        XCTAssertFalse(SingleLineInk.needsFallback(title, font: font), title)
+        XCTAssertEqual(SingleLineInk.fitting(field), field.frame(forAlignmentRect: NSRect(origin: .zero, size: field.intrinsicContentSize)).size, title)
+      }
+    }
+    XCTAssertTrue(SingleLineInk.needsFallback("नमस्ते", font: .systemFont(ofSize: 13)))
+  }
 }

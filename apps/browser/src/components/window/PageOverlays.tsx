@@ -6,16 +6,16 @@ import { CliControlPill } from "./CliControlPill";
 import { LoadingPill } from "./LoadingPill";
 import { NewTabNotice } from "./NewTabNotice";
 import { FindBar } from "../find/FindBar";
-import { POPOVER_MARGIN } from "../ui";
+import { POPOVER_MARGIN, usePanelsPresence, type PanelPresence } from "../ui";
 import { NO_TOOLBAR, type ToolbarGeometry } from "./geometry";
-import { usePages } from "../../state/tabs/pageState";
+import { usePage, usePages } from "../../state/tabs/pageState";
 import { startPopoverEscape } from "../../state/tabs/popoverDismiss";
 import { SadTab, StatusBubble } from "./PaneOverlays";
 import { AutofillPrompt, BLOCKED_POPUPS_WIDTH, BlockedPopupsPrompt, EXTERNAL_APP_WIDTH, ExternalAppPrompt, PasswordPrompt, PERMISSION_PROMPT_WIDTH, PermissionPrompt, VerificationCodePrompt } from "../site/Prompts";
-import { SiteControls } from "../site/SiteControls";
+import { SiteControlsPanel } from "../site/SiteControls";
 import { SITE_PANEL } from "../site/SiteControlsParts";
-import { ZOOM_POPOVER_WIDTH, ZoomPopover } from "../site/ZoomControls";
-import { HIDDEN_ELEMENTS_WIDTH, HiddenElementsPopover } from "../site/HiddenElements";
+import { ZOOM_POPOVER_WIDTH, ZoomPanel } from "../site/ZoomControls";
+import { HIDDEN_ELEMENTS_WIDTH, HiddenElementsPanel } from "../site/HiddenElements";
 import { SelectionPopover } from "../site/SelectionPopover";
 import { SharePicker } from "../media/SharePicker";
 import { CastPicker } from "../media/CastPicker";
@@ -50,6 +50,8 @@ export function PageOverlays({
   loadingPill?: boolean;
 }) {
   const popover = usePages((s) => s.popover[tabId] ?? null);
+  const panel = usePanelsPresence(popover, SITE_PANELS);
+  const verificationCode = usePage(tabId, (p) => !!p.verificationCode);
   const zoom = useTabValue(tabId, (t) => t?.zoom ?? 1);
   const sidebarRight = useSidebarSide(windowId) === "right";
   const anchor: PageAnchor = { toolbar: toolbar ? geometry : null, sidebarRight };
@@ -67,14 +69,12 @@ export function PageOverlays({
       {!newTabShown && <PermissionPrompt tabId={tabId} {...at("prompt", PERMISSION_PROMPT_WIDTH)} />}
       <PasswordPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
       <AutofillPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
-      <VerificationCodePrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
+      {verificationCode && <VerificationCodePrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />}
       <NewTabNotice windowId={windowId} tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
       {!newTabShown && <ExternalAppPrompt tabId={tabId} {...at("prompt", EXTERNAL_APP_WIDTH)} />}
       {!newTabShown && <EngineOfferPrompt tabId={tabId} {...at("prompt", ENGINE_OFFER_WIDTH)} />}
-      {popovers && <SiteControls tabId={tabId} open={popover === "siteControls"} {...at("siteButton", SITE_PANEL.width)} />}
       {popovers && popover === "popups" && <BlockedPopupsPrompt tabId={tabId} {...at("siteButton", BLOCKED_POPUPS_WIDTH)} />}
-      {popovers && <ZoomPopover tabId={tabId} open={popover === "zoom"} {...at("siteButton", ZOOM_POPOVER_WIDTH)} />}
-      {popovers && <HiddenElementsPopover tabId={tabId} open={popover === "hiddenElements"} {...at("siteButton", HIDDEN_ELEMENTS_WIDTH)} />}
+      {popovers && sitePanels(tabId, panel, (panelWidth) => at("siteButton", panelWidth))}
       <SharePicker tabId={tabId} paneWidth={width} />
       {!newTabShown && <DeviceChooser tabId={tabId} {...at("prompt", DEVICE_CHOOSER_WIDTH)} />}
       <CastPicker tabId={tabId} paneWidth={width} />
@@ -84,15 +84,29 @@ export function PageOverlays({
   );
 }
 
+const SITE_PANELS = ["siteControls", "zoom", "hiddenElements"] as const;
+
+function sitePanels(tabId: string, panel: (kind: (typeof SITE_PANELS)[number]) => PanelPresence | null, place: (panelWidth: number) => { left: number; top: number }) {
+  const siteControls = panel("siteControls");
+  const zoom = panel("zoom");
+  const hiddenElements = panel("hiddenElements");
+  return (
+    <>
+      {siteControls && <SiteControlsPanel tabId={tabId} {...place(SITE_PANEL.width)} {...siteControls} />}
+      {zoom && <ZoomPanel tabId={tabId} {...place(ZOOM_POPOVER_WIDTH)} {...zoom} />}
+      {hiddenElements && <HiddenElementsPanel tabId={tabId} {...place(HIDDEN_ELEMENTS_WIDTH)} {...hiddenElements} />}
+    </>
+  );
+}
+
 export function BesidePeekPopovers({ tabId, windowId, left, top, room }: { tabId: string; windowId: string; left: number; top: number; room: number }) {
   const popover = usePages((s) => s.popover[tabId] ?? null);
+  const panel = usePanelsPresence(popover, SITE_PANELS);
   const fit = (width: number) => ({ left: fitLeft(left, room, width), top });
   return (
     <>
-      <SiteControls tabId={tabId} open={popover === "siteControls"} {...fit(SITE_PANEL.width)} />
       {popover === "popups" && <BlockedPopupsPrompt tabId={tabId} {...fit(BLOCKED_POPUPS_WIDTH)} />}
-      <ZoomPopover tabId={tabId} open={popover === "zoom"} {...fit(ZOOM_POPOVER_WIDTH)} />
-      <HiddenElementsPopover tabId={tabId} open={popover === "hiddenElements"} {...fit(HIDDEN_ELEMENTS_WIDTH)} />
+      {sitePanels(tabId, panel, fit)}
       <HistoryPopover tabId={tabId} windowId={windowId} top={top} left={() => fitLeft(left, room, HISTORY_MENU_WIDTH)} />
     </>
   );

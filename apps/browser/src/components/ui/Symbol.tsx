@@ -5,7 +5,9 @@ import { hex, useScopedTheme } from "./theme";
 
 export type { SymbolProps };
 
+export const drawnSymbol = (props: SymbolProps) => <NativeSymbol {...props} name={iconName(props.name)} color={props.color && hex(props.color)} />;
+
 export const Symbol = memo(function Symbol(props: SymbolProps) {
   useScopedTheme();
-  return <NativeSymbol {...props} name={iconName(props.name)} color={props.color && hex(props.color)} />;
+  return drawnSymbol(props);
 });

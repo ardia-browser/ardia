@@ -1,12 +1,18 @@
 import { spawnSync } from "node:child_process";
 
 const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
+const ROW = /^\s*(\d+)\s+(\d+)\s+\w{3}\s+(\w{3})\s+(\d+)\s+(\d\d):(\d\d):(\d\d)\s+(\d{4})\s+(.*)$/;
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-export function processTable() {
-  const out = spawnSync("ps", ["-axww", "-o", "pid=,ppid=,command="], { encoding: "utf8" }).stdout ?? "";
-  return out.split("\n").map((line) => line.match(/^\s*(\d+)\s+(\d+)\s(.*)$/)).filter(Boolean)
-    .map((m) => ({ pid: +m[1], ppid: +m[2], command: m[3] }));
+export function parseTable(text) {
+  return text.split("\n").map((line) => line.match(ROW)).filter(Boolean).map((m) => ({
+    pid: +m[1], ppid: +m[2], command: m[9],
+    started: new Date(+m[8], MONTHS.indexOf(m[3]), +m[4], +m[5], +m[6], +m[7]).getTime(),
+  }));
 }
+
+export const processTable = () =>
+  parseTable(spawnSync("ps", ["-A", "-ww", "-o", "pid=,ppid=,lstart=,command="], { encoding: "utf8", env: { ...process.env, LC_ALL: "C" } }).stdout ?? "");
 
 export function descendants(root, table = processTable()) {
   const children = new Map();
@@ -19,23 +25,43 @@ export function descendants(root, table = processTable()) {
 
 export const insideApp = (command, app) => command.startsWith(`${app.replace(/\/+$/, "")}/Contents/`);
 
+export const sameProcess = (a, b) => !!a && !!b && a.pid === b.pid && a.started === b.started && a.command === b.command;
+
 export function launchedTree(pid, app, table = processTable()) {
   const root = table.find((p) => p.pid === pid);
   return [...(root ? [root] : []), ...descendants(pid, table)].filter((p) => insideApp(p.command, app));
 }
 
+export function orphansSince(app, launchedAt, table = processTable()) {
+  const since = Math.floor(launchedAt / 1000) * 1000;
+  return table.filter((p) => p.ppid === 1 && insideApp(p.command, app) && p.started >= since);
+}
+
 export function survivors(tree, app, table = processTable()) {
-  const alive = new Map(table.map((p) => [p.pid, p.command]));
-  return tree.filter((p) => alive.get(p.pid) === p.command && insideApp(p.command, app)).map((p) => p.pid);
+  const alive = new Map(table.map((p) => [p.pid, p]));
+  return tree.filter((p) => sameProcess(alive.get(p.pid), p) && insideApp(p.command, app));
+}
+
+export function signalIfSame(entry, signal, table = processTable()) {
+  if (!sameProcess(table.find((p) => p.pid === entry.pid), entry)) return false;
+  try {
+    process.kill(entry.pid, signal);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function listenerPid(port) {
+  const out = spawnSync("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-t"], { encoding: "utf8" }).stdout ?? "";
+  const pids = [...new Set(out.split("\n").filter(Boolean).map(Number))];
+  return pids.length === 1 ? pids[0] : null;
 }
 
 export async function stopTree(tree, app, { graceMs = 10_000, pollMs = 100 } = {}) {
   for (const end = Date.now() + graceMs; Date.now() < end && survivors(tree, app).length; ) await sleep(pollMs);
-  const left = survivors(tree, app);
-  for (const pid of left) {
-    try {
-      process.kill(pid, "SIGKILL");
-    } catch {}
-  }
-  return left;
+  const table = processTable();
+  const left = survivors(tree, app, table);
+  for (const entry of left) signalIfSame(entry, "SIGKILL", table);
+  return left.map((p) => p.pid);
 }

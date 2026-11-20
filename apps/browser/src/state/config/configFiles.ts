@@ -239,12 +239,12 @@ export function startConfigFiles(roles: RolePalettes, launch = true) {
   if (defaults) return;
   defaults = roles;
   reconcileConfig(launch);
-  stopWatchingSidebarText = useBrowser.subscribe((s, prev) => {
+  stopWatchingSidebarText = useBrowser.subscribeTo(["settings"], (s, prev) => {
     if (s.settings.sidebarTextSize !== prev.settings.sidebarTextSize) applyTheme(theme);
   });
-  unsubscribers.push(useBrowser.subscribe((s, prev) => s.settings.elementOutlines !== prev.settings.elementOutlines && applyTheme(theme)));
-  unsubscribers.push(useBrowser.subscribe((s, prev) => s.settings.tabCornerRadius !== prev.settings.tabCornerRadius && applyTheme(theme)));
-  stopWatchingMinimalism = useBrowser.subscribe((s, prev) => {
+  unsubscribers.push(useBrowser.subscribeTo(["settings"], (s, prev) => s.settings.elementOutlines !== prev.settings.elementOutlines && applyTheme(theme)));
+  unsubscribers.push(useBrowser.subscribeTo(["settings"], (s, prev) => s.settings.tabCornerRadius !== prev.settings.tabCornerRadius && applyTheme(theme)));
+  stopWatchingMinimalism = useBrowser.subscribeTo(["settings"], (s, prev) => {
     if (s.settings.minimalismMode !== prev.settings.minimalismMode) applyTheme(theme);
   });
   afterFirstWindow(() => {
@@ -252,7 +252,7 @@ export function startConfigFiles(roles: RolePalettes, launch = true) {
     onConfigChange(changed);
     watchNames();
     writeSchemas();
-    unsubscribers.push(useToasts.subscribe(toastsChanged), useBrowser.subscribe((next, previous) => next.windowOrder !== previous.windowOrder && windowsChanged()));
+    unsubscribers.push(useToasts.subscribe(toastsChanged), useBrowser.subscribeTo(["windowOrder"], (next, previous) => next.windowOrder !== previous.windowOrder && windowsChanged()));
     showProblems();
   });
 }

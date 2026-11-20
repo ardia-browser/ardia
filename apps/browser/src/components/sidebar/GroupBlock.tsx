@@ -10,7 +10,7 @@ import { newCapture } from "../../state/sidebar/listCapture";
 import { useCapturedGroupEntries, useGroupTabIds, useKeptEntries, useShowsExtraTabs } from "../../state/sidebar/hooks";
 import { MeetingTimeLabel, useMeetingCountdown } from "../live/MeetingCountdown";
 import { HoverSlot } from "../ui/HoverSlot";
-import { Button, ContextMenuArea, FadeLabel, ink, space, Symbol, Text, weight, withAlpha } from "../ui";
+import { Button, ContextMenuArea, ink, Symbol, weight, withAlpha } from "../ui";
 import { commitRename, endRename } from "../../state/sidebar/actions";
 import { useDragFolded, useDragItem, useDropInto } from "./DragProvider";
 import { useShift, type EntryMotion } from "./EntryMotion";
@@ -27,12 +27,13 @@ import { openGroupMenu } from "../../state/sidebar/menus";
 import { registerRow, useSidebarUi } from "../../state/sidebar/sidebarUi";
 import { FolderOrIcon } from "./AnimatedFolder";
 import { RenameField, SplitRowItem, TabRowItem } from "./TabRow";
-import { groupBoxAtRest, groupSurface, SIDEBAR_TYPE, TAB_ROW, TABULAR_NUMS, useSidebarTokens } from "./tokens";
+import { groupBoxAtRest, groupSurface, useSidebarTokens } from "./tokens";
 import { SidebarRowSurface } from "./SidebarRow";
 import { entryKey, parseEntry } from "../../state/sidebar/entryKey";
 import { LiveFolderBlock } from "./LiveFolderBlock";
 import { tailKey, type RowSection } from "./dragModel";
 import { SharedFolderMark } from "./SharedFolderMark";
+import { FolderHeaderTitle } from "./FolderHeaderTitle";
 
 const NO_GROUPS: ReadonlySet<string> = new Set();
 
@@ -159,7 +160,6 @@ export const SidebarEntry = memo(function SidebarEntry({
   return <TabRowItem tabId={id} section={rowSection} parentGroup={parentGroup} motion={motion} />;
 });
 
-const MEASURE_LABEL = { opacity: 0, fontVariant: TABULAR_NUMS } as const;
 const CHEVRON_BOX = { width: 10, height: 10, alignItems: "center", justifyContent: "center" } as const;
 
 const GroupHeader = memo(function GroupHeader({ groupId, windowId, collapsed, open }: { groupId: string; windowId: string; collapsed: boolean; open: Animated.Value }) {
@@ -211,18 +211,12 @@ const GroupHeader = memo(function GroupHeader({ groupId, windowId, collapsed, op
                   onDone={(text) => (text === null ? endRename(target) : commitRename(target, text))}
                 />
               ) : (
-                <Animated.View style={{ flex: 1, height: TAB_ROW.titleHeight, marginLeft: TAB_ROW.titleGap, flexDirection: "row", alignItems: "center", transform: [{ rotate: countdown.rotate }] }}>
-                  <View style={{ flexShrink: 1, height: TAB_ROW.titleHeight, paddingRight: space.m, justifyContent: "center" }}>
-                    <Text lines={1} weight="medium" style={MEASURE_LABEL}>
-                      {label}
-                    </Text>
-                    <FadeLabel text={label} fontSize={SIDEBAR_TYPE.title} weight="medium" color={tokens.groupTitle} style={{ position: "absolute", left: 0, right: 0, top: 0, height: TAB_ROW.titleHeight }} />
-                  </View>
+                <FolderHeaderTitle label={label} color={tokens.groupTitle} style={{ transform: [{ rotate: countdown.rotate }] }}>
                   <SharedFolderMark groupId={groupId} />
                   <Animated.View style={chevronTurn}>
                     <Symbol name="chevron.down" size={9} weight="semibold" color={withAlpha(tokens.groupTitle, 0.5)} style={{ width: 10, height: 10 }} />
                   </Animated.View>
-                </Animated.View>
+                </FolderHeaderTitle>
               )}
               <HoverSlot
                 hovered={hovered && !renaming}

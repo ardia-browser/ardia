@@ -233,7 +233,7 @@ const size = (o: object) => keysOf(o).length;
 function watchStore() {
   let tabCount = size(useBrowser.getState().tabs);
   let windowCount = size(useBrowser.getState().windows);
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["tabs", "windows", "groups", "splits", "windowUi"], (s, prev) => {
     if (s.tabs !== prev.tabs) {
       const now = size(s.tabs);
       counts.tabs += Math.max(0, now - tabCount);

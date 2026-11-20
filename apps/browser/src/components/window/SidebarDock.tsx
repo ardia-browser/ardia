@@ -7,7 +7,7 @@ import { curve, useGated } from "../ui/motion";
 import { Panel, reduceMotion, WindowBackdrop, WindowDragRegion } from "../ui";
 import { useSidebarSide, useWindowFullScreen, useWindowId } from "../../state/browser/hooks";
 import { useSidebarDockState } from "../../state/windows/hooks";
-import { useSidebarWidth } from "../../state/sidebar/hooks";
+import { useShownSidebarWidth } from "../../state/sidebar/shownWidth";
 import { useCardTopInset, useSidebarControlsRowIn, useToolbarLightsCenter } from "../../state/windows/layout";
 import { Sidebar } from "../sidebar/Sidebar";
 import { ResizeHandle } from "../sidebar/ResizeHandle";
@@ -20,7 +20,6 @@ import {
   noteFullScreenPeekClosed,
   notePageFullScreenPeek,
   noteSidebarPeekClosedWhileResizing,
-  noteSidebarPeekResize,
   noteSidebarPeekRevealHeldBack,
   noteSidebarScreenEdge,
   noteSidebarSlide,
@@ -121,7 +120,8 @@ export function DockedLayout({
   const [open, addressBar] = useSidebarDockState(windowId);
   const right = useSidebarSide(windowId) === "right";
   const dragWidth = useSidebarUi((u) => u.dragWidth[windowId]);
-  const width = useSidebarWidth(windowId);
+  const shownWidth = useShownSidebarWidth(windowId);
+  const width = dragWidth ?? shownWidth;
   const arc = addressBar && !topTabs && switchOn("sidebarSlide");
   const toolbarLights = useToolbarLightsCenter();
   const lights = addressBar && !topTabs ? ARC_LIGHTS_CENTER : toolbarLights;
@@ -265,11 +265,12 @@ function SidebarDock({
       if (e.type !== "sidebarEdge" || e.id !== windowId) return;
       if (e.screenEdge) noteSidebarScreenEdge(e.screenEdge);
       const at = latestReveal.current;
-      if (e.over && !edgeEventReveals(at.state, e.point[0], at.right, at.windowWidth, at.band)) return;
+      if (e.over && e.screenEdge !== "returned" && !edgeEventReveals(at.state, e.point[0], at.right, at.windowWidth, at.band)) return;
       edgeOver.current = e.over;
       arm.current = edgeSeen(arm.current, "native", e.over);
+      if (e.screenEdge === "crossed") dismissHoverIn(windowId);
       if (e.over) latestReveal.current.reveal();
-      else latestPeek.current.hide();
+      else latestPeek.current.hide(e.screenEdge === "crossed");
     });
     watchSidebarEdge(windowId, true, nativeHold, right, holding || draggingTab);
     return () => {
@@ -281,10 +282,6 @@ function SidebarDock({
   useEffect(() => {
     if (!open) arm.current = EDGE_DISARMED;
   }, [open]);
-  const resizing = useSidebarUi((u) => windowId in u.dragWidth);
-  useEffect(() => {
-    if (resizing && peek.live) noteSidebarPeekResize();
-  }, [resizing]);
   useEffect(() => setPeekLeaving(windowId, state === "leaving"), [windowId, state]);
   useEffect(() => () => setPeekLeaving(windowId, false), [windowId]);
   useEffect(() => setPeekShown(windowId, peek.live, peekSpan(width, right, windowWidth, peekAt.left)), [windowId, peek.live, width, right, windowWidth, peekAt.left]);

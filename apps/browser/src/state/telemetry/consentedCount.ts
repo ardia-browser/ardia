@@ -12,3 +12,16 @@ export function consentedCount() {
     },
   };
 }
+
+export function consentedMax() {
+  let most = 0;
+  onConsentPeriodChange(() => (most = 0));
+  return {
+    note: (value: number) => void (isSharing() && (most = Math.max(most, value))),
+    take: () => {
+      const taken = most;
+      most = 0;
+      return taken;
+    },
+  };
+}

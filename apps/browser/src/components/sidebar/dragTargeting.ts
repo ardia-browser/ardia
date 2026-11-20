@@ -10,7 +10,7 @@ import { overPins, pinGrid, pinGridHeight } from "./pinZone";
 import { boxed, type Drop, FOLDER_HOLD_MS, ROOM_SPRING, SPLIT_REST_SLOP, folderOf, inside, type Item, pinnedBlock, spring } from "./dragModel";
 import { aimAt, type Pointing } from "./dragZones";
 import { DragGeometry } from "./dragGeometry";
-import { hapticTick } from "../../state/drag/dragNative";
+import { reorderTick } from "../../state/drag/reorderTick";
 import { entryKey } from "../../state/sidebar/entryKey";
 import { previewPaneSlot } from "./splitPaneGeometry";
 
@@ -227,7 +227,7 @@ export class DragTargeting extends DragGeometry {
     if (JSON.stringify(row) !== JSON.stringify(marks.row)) markDrag(this.marks, { row });
     const key = JSON.stringify(drop);
     if (key === session.dropKey && gapKey === session.gapKey) return this.markPane(split);
-    if (session.dropKey && drop.type !== "none") hapticTick();
+    if (session.dropKey && drop.type !== "none") reorderTick();
     session.dropKey = key;
     session.drop = drop;
     session.into = into;

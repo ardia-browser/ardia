@@ -73,7 +73,7 @@ export function startActionStates() {
     flushSoon();
   });
   AppState.addEventListener("change", (state) => state === "active" && flushSoon());
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["windows", "ui", "tabs"], (s, prev) => {
     if (s.windows !== prev.windows || focusedWindowOf(s) !== focusedWindowOf(prev)) return void refreshActionStates();
     if (s.tabs === prev.tabs) return;
     const navigated = s.windowOrder.filter((id) => {

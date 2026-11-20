@@ -5,11 +5,13 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { engineSaved, storeBytes, uboStoreDir, UBO_ENGINE_KEYS, UBO_ID } from "./ubo-cache.mjs";
 
-test("the engine counts as saved only when all three selfie keys are stored", () => {
-  assert.equal(engineSaved([]), false);
-  assert.equal(engineSaved(["compiledMagic", "selfieMagic"]), false);
-  assert.equal(engineSaved(UBO_ENGINE_KEYS.slice(0, 2)), false);
-  assert.equal(engineSaved([...UBO_ENGINE_KEYS, "selfieMagic"]), true);
+test("the engine counts as saved only when all three selfies are in both storage.local and uBO's IndexedDB", () => {
+  assert.equal(engineSaved(), false);
+  assert.equal(engineSaved({ local: ["compiledMagic", "selfieMagic"], indexedDB: [] }), false);
+  assert.equal(engineSaved({ local: UBO_ENGINE_KEYS.slice(0, 2), indexedDB: UBO_ENGINE_KEYS }), false);
+  assert.equal(engineSaved({ local: UBO_ENGINE_KEYS, indexedDB: [] }), false);
+  assert.equal(engineSaved({ local: UBO_ENGINE_KEYS, indexedDB: UBO_ENGINE_KEYS.slice(1) }), false);
+  assert.equal(engineSaved({ local: [...UBO_ENGINE_KEYS, "selfieMagic"], indexedDB: UBO_ENGINE_KEYS }), true);
 });
 
 test("the store is uBO's own extension settings folder, and its size is the sum of its files", () => {

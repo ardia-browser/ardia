@@ -21,7 +21,7 @@ export function watchRevealTargets(windowId: string, found: (targets: RevealTarg
 }
 
 const watchStoreTargets = (windowId: string, found: (targets: RevealTargets, viaPill: boolean) => void) =>
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["windows", "tabs"], (s, prev) => {
     if (s.windows === prev.windows && s.tabs === prev.tabs) return;
     const targets = revealTargets(s, prev, windowId);
     if (targets.switched || targets.opened) found(targets, false);
@@ -32,7 +32,7 @@ export const selectedTabIn = (windowId: string) => activeTabId(useBrowser.getSta
 const pinsMoved = (s: BrowserState, prev: BrowserState) => changedIds(s.tabs, prev.tabs).some((id) => s.tabs[id]?.pin !== prev.tabs[id]?.pin);
 
 export function watchRowsMoved(moved: () => void) {
-  const stopBrowser = useBrowser.subscribe((s, prev) => {
+  const stopBrowser = useBrowser.subscribeTo(["windows", "groups", "tabs"], (s, prev) => {
     if (s.windows !== prev.windows || s.groups !== prev.groups || pinsMoved(s, prev)) moved();
   });
   const stopLive = useLive.subscribe((l, prev) => {

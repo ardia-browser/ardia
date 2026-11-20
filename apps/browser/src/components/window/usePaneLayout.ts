@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { newTabLingeringOver, successorWhenLeaving, useMountedTabIds, useShownPaneKeys, useSplitsOf, useWarmTabIds, wakePanes } from "../../state/windows/card";
 import { pagerFor } from "../../state/windows/profilePager";
 import { useTabDrag } from "../../state/drag/tabDrag";
 import type { SplitView } from "../../state/browser/types";
 import { splitGeometry, type Rect } from "./geometry";
-import { useCardFrame } from "./cardFrame";
 import { splitTabIds } from "../../state/splits/splits";
 import { notePageOverlay } from "../../state/telemetry/usage";
 import { consentToken } from "../../state/telemetry/client";
@@ -12,9 +11,8 @@ import { consentToken } from "../../state/telemetry/client";
 const NEW_TAB_LINGER_MS = 400;
 const NEW_TAB_LINGER_LATE_MS = 100;
 
-export function usePaneLayout(windowId: string, activeId: string | undefined, split: SplitView | undefined, fullscreenTab: string | undefined, size: { width: number; height: number }) {
+export function usePaneLayout(windowId: string, activeId: string | undefined, split: SplitView | undefined, fullscreenTab: string | undefined, size: { width: number; height: number }, gap: number) {
   const mounted = useMountedTabIds(windowId);
-  const gap = useCardFrame().splitGap;
 
   const mountedIds = useMemo(() => new Set(mounted), [mounted]);
 
@@ -30,16 +28,23 @@ export function usePaneLayout(windowId: string, activeId: string | undefined, sp
 
   useEffect(() => wakePanes(Object.keys(panes)), [panes]);
 
-  const [linger, setLinger] = useState<{ from: string | undefined; id?: string }>({ from: activeId });
-  if (linger.from !== activeId) setLinger({ from: activeId, id: fullscreenTab ? undefined : newTabLingeringOver(windowId, linger.from, activeId, mounted) });
-  const lingerId = linger.from === activeId ? linger.id : undefined;
+  const shownBefore = useRef(activeId);
+  const linger = useMemo(() => {
+    const from = shownBefore.current;
+    return { id: from === activeId || fullscreenTab ? undefined : newTabLingeringOver(windowId, from, activeId, mounted) };
+  }, [activeId]);
+  useEffect(() => {
+    shownBefore.current = activeId;
+  }, [activeId]);
+  const [expired, setExpired] = useState<typeof linger | null>(null);
+  const lingerId = expired === linger ? undefined : linger.id;
   useEffect(() => {
     if (!linger.id) return;
     const consent = consentToken();
     const due = Date.now() + NEW_TAB_LINGER_MS;
     const timer = setTimeout(() => {
       if (Date.now() - due > NEW_TAB_LINGER_LATE_MS) notePageOverlay("newTabLingerLate", consent);
-      setLinger((now) => (now === linger ? { from: now.from } : now));
+      setExpired(linger);
     }, NEW_TAB_LINGER_MS);
     return () => clearTimeout(timer);
   }, [linger]);

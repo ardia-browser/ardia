@@ -75,7 +75,7 @@ export function startWebStoreIntegration() {
       listen(id, tab.url);
     }
   };
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["tabs"], (s, prev) => {
     if (s.tabs !== prev.tabs) sync(s, changedIds(s.tabs, prev.tabs));
   });
   onLiveChange((id) => sync(useBrowser.getState(), [id]));

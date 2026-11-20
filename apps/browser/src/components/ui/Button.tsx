@@ -1,12 +1,12 @@
 import { ContextMenuArea } from "@ardia/shell";
-import { Symbol, type SymbolProps } from "./Symbol";
-import { memo, type ReactNode } from "react";
+import { drawnSymbol, type SymbolProps } from "./Symbol";
+import { memo, useState, type ReactNode } from "react";
 import { Animated, Image, Pressable, Text, View, type GestureResponderEvent, type ImageSourcePropType, type StyleProp, type ViewStyle } from "react-native";
 import { modifiersOf, type ClickModifiers } from "../../lib/keys";
 import { useToolbarRowContext } from "./toolbarRowContext";
 import { useHover, useTooltip } from "./useHover";
 import { HoverFill } from "./HoverFill";
-import { TintedImage } from "./TintedImage";
+import { tintedImage } from "./TintedImage";
 import { CloseButtonView, PillButtonView, PushButtonView, StepperButtonView } from "./ButtonKinds";
 import { useTheme } from "./theme";
 import { buttonMotion, usePressMotion, usePressScaleMotion } from "./motion";
@@ -131,38 +131,25 @@ function IconButtonView(props: IconProps) {
   const ink = color ?? (disabled ? (palette ? palette.iconDisabled : theme.iconDisabled) : palette ? palette.icon : theme.icon);
   const face = children ?? (asset ? (
     <View pointerEvents="none">
-      <TintedImage source={asset} tint={ink} style={{ width: metrics.glyph, height: metrics.glyph }} />
+      {tintedImage({ source: asset, tint: ink, style: { width: metrics.glyph, height: metrics.glyph } })}
     </View>
   ) : image ? (
     <View pointerEvents="none">
       <Image source={{ uri: image }} style={{ width: IMAGE_SIZE, height: IMAGE_SIZE, opacity: disabled ? opacity.disabled : 1 }} />
     </View>
   ) : icon ? (
-    <Symbol name={icon} size={metrics.glyph} weight={weight} color={ink} style={{ width: glyphFrame, height: glyphFrame }} />
+    drawnSymbol({ name: icon, size: metrics.glyph, weight, color: ink, style: { width: glyphFrame, height: glyphFrame } })
   ) : null);
-  const hasGlyphPressMotion = !children && (!!icon || !!image || !!asset);
-  const { scale: pressScale, onPressIn, onPressOut } = usePressScaleMotion(hasGlyphPressMotion);
-  const plateScale = usePressMotion() === "bounce" ? pressScale : null;
+  const [lit, setLit] = useState(() => !disabled && !!active);
+  if (!lit && !disabled && (hovered || !!active)) setLit(true);
   const handlePressIn = (event: GestureResponderEvent) => {
-    onPressIn?.();
+    if (!lit) setLit(true);
     props.onPressIn?.(event);
   };
-  const handlePressOut = (event: GestureResponderEvent) => {
-    onPressOut?.();
-    props.onPressOut?.(event);
-  };
+  const handlePressOut = (event: GestureResponderEvent) => props.onPressOut?.(event);
   const plateRadius = hit?.radius ?? (props.capsule ? capsule(plateBox) : metrics.radius);
-  const animatedFace = hasGlyphPressMotion && pressScale && !plateScale ? (
-    <Animated.View
-      pointerEvents="none"
-      style={{ width: glyphFrame, height: glyphFrame, alignItems: "center", justifyContent: "center", transform: [{ scale: pressScale }] }}
-    >
-      {face}
-    </Animated.View>
-  ) : face;
-  const Plate = plateScale ? Animated.View : View;
   const plate = (pressed: boolean) => (
-    <Plate
+    <View
       style={{
         position: hit ? "absolute" : "relative",
         left: hit?.plateX,
@@ -171,13 +158,12 @@ function IconButtonView(props: IconProps) {
         height: plateBox,
         alignItems: "center",
         justifyContent: "center",
-        transform: plateScale ? [{ scale: plateScale }] : undefined,
       }}
     >
-      <HoverFill shown={!disabled && (pressed || !!active || hovered)} instant={!!active} color={pressed || active ? pressedFill : hover} radius={plateRadius} />
-      {animatedFace}
+      {lit ? <HoverFill shown={!disabled && (pressed || !!active || hovered)} instant={!!active} color={pressed || active ? pressedFill : hover} radius={plateRadius} /> : null}
+      {face}
       {badge}
-    </Plate>
+    </View>
   );
   if (!props.toolbar)
     return (
@@ -228,27 +214,35 @@ function TextButtonView(props: TextProps) {
   const tone = props.tone ?? base?.tone ?? "textPrimary";
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
-  const pressMotion = usePressScaleMotion(true, buttonMotion.controlPressScale);
+  const pressMotion = usePressScaleMotion(usePressMotion() === "bounce", buttonMotion.controlPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : null;
+  const [lit, setLit] = useState(false);
+  if (!lit && !disabled && hovered) setLit(true);
+  const pressIn = () => {
+    if (!lit) setLit(true);
+    pressMotion.onPressIn?.();
+  };
+  const Plate = scaleStyle ? Animated.View : View;
+  const Label = scaleStyle ? Animated.Text : Text;
   const a11y = label ? ({ accessibilityRole: "button", accessibilityLabel: label } as const) : undefined;
   const textStyle = (color: string) => ({ ...typeScale[size], ...(weight === "regular" ? null : { fontWeight: weights[weight] }), color });
   if (plate === "none")
     return (
       <View {...hoverProps}>
         <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} disabled={disabled} {...a11y}>
-          <Animated.Text style={[textStyle(hovered && hoverTone ? theme[hoverTone] : theme[tone]), { paddingVertical: padY ? space[padY] : undefined }, look === "link" && hovered ? UNDERLINE : null, scaleStyle]}>{title}</Animated.Text>
+          <Label style={[textStyle(hovered && hoverTone ? theme[hoverTone] : theme[tone]), { paddingVertical: padY ? space[padY] : undefined }, look === "link" && hovered ? UNDERLINE : null, scaleStyle]}>{title}</Label>
         </Pressable>
       </View>
     );
-  const lit = (pressed: boolean) => !disabled && ((plate === "toolbar" && pressed) || hovered);
+  const shows = (pressed: boolean) => !disabled && ((plate === "toolbar" && pressed) || hovered);
   return (
     <View {...hoverProps}>
-      <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} disabled={disabled} {...a11y}>
+      <Pressable onPress={onPress} onPressIn={pressIn} onPressOut={pressMotion.onPressOut} disabled={disabled} {...a11y}>
         {({ pressed }) => (
-          <Animated.View style={[{ height, paddingHorizontal: space[pad], justifyContent: "center" }, scaleStyle]}>
-            <HoverFill shown={lit(pressed)} color={plate === "toolbar" && pressed ? theme.toolbarPressed : theme.toolbarHover} radius={radii.control} />
+          <Plate style={[{ height, paddingHorizontal: space[pad], justifyContent: "center" }, scaleStyle]}>
+            {lit ? <HoverFill shown={shows(pressed)} color={plate === "toolbar" && pressed ? theme.toolbarPressed : theme.toolbarHover} radius={radii.control} /> : null}
             <Text style={textStyle(disabled ? theme.iconDisabled : hovered && hoverTone ? theme[hoverTone] : theme[tone])}>{title}</Text>
-          </Animated.View>
+          </Plate>
         )}
       </Pressable>
     </View>

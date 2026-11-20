@@ -63,7 +63,7 @@ const changed = () => useHiddenElements.setState((s) => ({ changes: s.changes + 
 const privateWindowOf = (profile: string) => (isIncognitoProfile(profile) ? profile.slice("incognito:".length, profile.indexOf("@")) : null);
 
 export function startHiddenElements() {
-  return useBrowser.subscribe((s, prev) => {
+  return useBrowser.subscribeTo(["windows"], (s, prev) => {
     if (s.windows === prev.windows) return;
     const session = useHiddenElements.getState().session;
     const kept = Object.entries(session).filter(([profile]) => {
@@ -208,7 +208,7 @@ function applySessionHiding(s: BrowserState, session: Record<string, string[]>, 
   if (selectors.length) void webviews.get(tab.id)?.evaluate(pickerCall("apply", selectors));
 }
 
-useBrowser.subscribe((s, prev) => {
+useBrowser.subscribeTo(["tabs"], (s, prev) => {
   const session = s.tabs === prev.tabs ? null : sessionFilters();
   if (!session) return;
   for (const tabId of changedIds(s.tabs, prev.tabs)) {

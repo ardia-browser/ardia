@@ -47,7 +47,7 @@ async function drain() {
 export function startProfileDataCleanup() {
   failed.clear();
   void drain();
-  return useBrowser.subscribe((s, prev) => {
+  return useBrowser.subscribeTo(["orphanedProfileData"], (s, prev) => {
     if (s.orphanedProfileData !== prev.orphanedProfileData) void drain();
   });
 }

@@ -2820,6 +2820,24 @@ try {
     }
   });
 
+  await check("content-blocker-unload-cycles", async () => {
+    const pageIdleMs = 36000;
+    const profile = `blocker-unload-cycles-${Date.now() % 1000}`;
+    const cycles = [];
+    for (let cycle = 0; cycle < 2; cycle++) {
+      await engine("contentBlocker.hiddenElements", { profile });
+      await sleep(pageIdleMs);
+      const unload = await engine("profiles.unloadIdle", { profile });
+      await until("the profile unloaded", async () => ((await engine("profiles.loaded")).profiles.includes(profile) ? null : true), 20000);
+      await engine("contentBlocker.setAllowed", { host: "unload-cycles.test", allowed: true });
+      await engine("contentBlocker.setAllowed", { host: "unload-cycles.test", allowed: false });
+      cycles.push(unload.status);
+    }
+    const state = await engine("contentBlocker.state");
+    if (!state?.stats?.ready) throw new Error("the blocker isn't ready after the profile unloaded twice");
+    return { profile, cycles };
+  });
+
   await check("content-blocker-private", async () => {
     const origin = `http://adpage.test:${server.address().port}`;
     const out = [];

@@ -81,7 +81,7 @@ export function startProfileLoading(): () => void {
       },
     );
   }
-  const shown = useBrowser.subscribe((next, prev) => {
+  const shown = useBrowser.subscribeTo(["windows", "profiles"], (next, prev) => {
     if (next.windows === prev.windows && next.profiles === prev.profiles) return;
     for (const engine of shownEngineProfiles(next)) openProfile(engine);
   });

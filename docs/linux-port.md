@@ -870,11 +870,11 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
     window, and treating that exit as leaving made the strip flicker at the top corner. Leaving through the top corner
     never reveals a hidden strip.
   - Switching the sidebar's side re-evaluates the last pointer position and drops a pending 90 ms settle.
-  - No stop at a shared screen edge. macOS holds the pointer at a screen edge another display shares so the peek opens
-    (#1816) and reports `screenEdge` (`stopped`, `passed`) for its telemetry. Linux peeks when the pointer leaves the
+  - No screen-edge crossing watch. macOS lets the pointer cross a screen edge another display shares, peeks when it comes
+    straight back, and reports `screenEdge` (`crossed`, `returned`) for its telemetry. Linux peeks when the pointer leaves the
     window on the sidebar side, so a fast pointer that crosses to the other display still opens it; a Wayland client
     can't warp the pointer or know its global position anyway. The engine never sends `screenEdge`
-    (`shellMethods.test.mjs`), so `sidebar_screen_edge_stops` and `sidebar_screen_edge_pass_throughs` stay macOS only.
+    (`shellMethods.test.mjs`), so `sidebar_screen_edge_crossings` and `sidebar_screen_edge_returns` stay macOS only.
   - The watch takes the shared arguments (window id, on, hold, right, whilePressed) and reports the shared
     `sidebarEdge` window event, so the shared UI calls it directly. As on macOS, while a mouse button is held the
     edge isn't over unless the watch passed `whilePressed` (the shared UI passes it while the peek is held or a tab

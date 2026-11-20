@@ -57,7 +57,7 @@ export function startCast() {
     for (const profile of profiles) watched.delete(profile);
   });
   watch(useBrowser.getState());
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["windowOrder", "windows"], (s, prev) => {
     if (s.windowOrder !== prev.windowOrder || s.windows !== prev.windows) watch(s);
   });
 }

@@ -1,38 +1,29 @@
 import Foundation
 
 struct ScreenEdgeCrossing {
-  static let flingSpeed: CGFloat = 1200
-  static let pushDistance: CGFloat = 64
-  static let speedWindow: TimeInterval = 0.05
+  static let reach: CGFloat = 96
+  static let returnWithin: TimeInterval = 0.7
 
-  private var samples: [(x: CGFloat, at: TimeInterval)] = []
-  private(set) var pushed: CGFloat = 0
-
-  mutating func track(_ point: CGPoint, at time: TimeInterval) {
-    samples.removeAll { time - $0.at > Self.speedWindow || $0.at > time }
-    samples.append((point.x, time))
+  enum Move: Equatable {
+    case crossed
+    case returned
   }
 
-  mutating func forget() {
-    samples = []
-    pushed = 0
-  }
+  private var wasInside = false
+  private var leftAt: TimeInterval?
+  func awaitingReturn(at time: TimeInterval) -> Bool { leftAt.map { time - $0 <= Self.returnWithin } ?? false }
 
-  func speed(right: Bool) -> CGFloat {
-    guard let first = samples.first, let last = samples.last, last.at > first.at else { return 0 }
-    return (right ? last.x - first.x : first.x - last.x) / CGFloat(last.at - first.at)
-  }
-
-  func isFling(right: Bool) -> Bool {
-    speed(right: right) >= Self.flingSpeed
-  }
-
-  mutating func startPush() {
-    pushed = 0
-  }
-
-  mutating func push(by overshoot: CGFloat) -> Bool {
-    pushed += max(0, overshoot)
-    return pushed >= Self.pushDistance
+  mutating func track(past: CGFloat, at time: TimeInterval) -> Move? {
+    let inside = past <= 0
+    defer { wasInside = inside }
+    if !inside {
+      if past > Self.reach { leftAt = nil }
+      guard wasInside else { return nil }
+      if past <= Self.reach { leftAt = time }
+      return .crossed
+    }
+    guard let since = leftAt else { return nil }
+    leftAt = nil
+    return time - since <= Self.returnWithin && past >= -Self.reach ? .returned : nil
   }
 }

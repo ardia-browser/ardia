@@ -30,6 +30,7 @@ type Store = {
   pipOpen: Record<string, PictureInPictureState["kind"]>;
   displayRequests: Record<string, DisplayMediaRequest>;
   tabShares: Record<string, TabShare>;
+  sharedTabs: Record<string, true>;
 };
 
 export type TabShare = {
@@ -38,7 +39,7 @@ export type TabShare = {
   dismissed: Record<string, true>;
 };
 
-const noMedia = (): Store => ({ sessions: {}, dismissed: {}, leftPaused: {}, pip: {}, pipOpen: {}, displayRequests: {}, tabShares: {} });
+const noMedia = (): Store => ({ sessions: {}, dismissed: {}, leftPaused: {}, pip: {}, pipOpen: {}, displayRequests: {}, tabShares: {}, sharedTabs: {} });
 const PER_TAB = Object.keys(noMedia()) as (keyof Store)[];
 
 export const useMedia = create<Store>()(noMedia);
@@ -320,7 +321,7 @@ export function usePictureInPicture(tabId: string): [boolean, (press: GestureRes
   return [on, (press) => void togglePictureInPicture(tabId, controlPress(press))];
 }
 
-useBrowser.subscribe((s, prev) => {
+useBrowser.subscribeTo(["tabs"], (s, prev) => {
   if (s.tabs === prev.tabs) return;
   const m = useMedia.getState();
   const gone = [...new Set(PER_TAB.flatMap((k) => Object.keys(m[k])))].filter((id) => !s.tabs[id]);

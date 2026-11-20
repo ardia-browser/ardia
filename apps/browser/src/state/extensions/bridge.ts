@@ -42,7 +42,7 @@ export function startExtensionsBridge() {
     }
   };
   loadProfiles(useBrowser.getState());
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["windows", "tabs"], (s, prev) => {
     if (s.windows !== prev.windows) loadProfiles(s);
     if (s.windows !== prev.windows || s.tabs !== prev.tabs) pruneToolbarAnchors(s);
   });
@@ -81,7 +81,7 @@ function startSidePanels() {
     else closeSidePanel(windowId, extensionId);
   });
   const active = (s: BrowserState) => s.windowOrder.map((id) => `${id}:${shownPageId(s, id) ?? ""}`).join(",");
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["windows", "tabs"], (s, prev) => {
     if (s.windows === prev.windows && s.tabs === prev.tabs) return;
     if (active(s) === active(prev)) return;
     for (const [windowId] of wantedSidePanels()) {

@@ -23,29 +23,31 @@ const install = (data, folder, version) => {
 const MB = 1048576;
 const good = { sizes: { uboStoreMB: 34.6, uboBlobsMB: 21.2, uboLogMB: 0.004 }, components: { CertificateRevocation: { version: "10918", checked: true } } };
 
-test("components settle only when each is installed or the updater has checked it", withData((data) => {
+test("components settle only when each is installed: the updater's answer alone, written before its downloads, doesn't count", withData((data) => {
   mkdirSync(join(data, "Chromium", "CertificateRevocation"), { recursive: true });
   assert.equal(componentsState(data).settled, false);
   install(data, "CertificateRevocation", "10918");
   install(data, "PKIMetadata", "1839");
-  assert.equal(componentsState(data).settled, false);
   const ssl = Object.keys(STARTUP_COMPONENTS).find((id) => STARTUP_COMPONENTS[id] === "SSLErrorAssistant");
   writeFileSync(join(data, "Chromium", "Local State"), JSON.stringify({ updateclientdata: { apps: { [ssl]: { dlrc: 7263, pv: "0" } } } }));
-  const state = componentsState(data);
-  assert.equal(state.settled, true);
-  assert.deepEqual(state.components.SSLErrorAssistant, { version: null, checked: true });
-  assert.equal(state.components.PKIMetadata.version, "1839");
+  const answered = componentsState(data);
+  assert.equal(answered.settled, false);
+  assert.deepEqual(answered.components.SSLErrorAssistant, { version: null, checked: true });
+  mkdirSync(join(data, "Chromium", "SSLErrorAssistant", "7"), { recursive: true });
+  assert.equal(componentsState(data).settled, false);
+  install(data, "SSLErrorAssistant", "7");
+  assert.equal(componentsState(data).settled, true);
 }));
 
 test("waiting for components fails at its deadline instead of saving a template without them", withData(async (data) => {
-  await assert.rejects(waitForStartupComponents({ dataDir: data, launchedAt: Date.now(), deadlineMs: 50, pollMs: 10 }), /first check/);
+  await assert.rejects(waitForStartupComponents({ dataDir: data, launchedAt: Date.now(), deadlineMs: 50, pollMs: 10 }), /installed every startup component/);
 }));
 
 test("a template saved mid-write is refused, a settled one passes", () => {
   assert.deepEqual(templateProblems(good), []);
   const midWrite = { sizes: { uboStoreMB: 66.0, uboBlobsMB: 7.8, uboLogMB: 3.4 }, components: good.components };
   assert.equal(templateProblems(midWrite).length, 3);
-  assert.match(templateProblems({ ...good, components: { PKIMetadata: { version: null, checked: false } } })[0], /PKIMetadata/);
+  assert.match(templateProblems({ ...good, components: { PKIMetadata: { version: null, checked: true } } })[0], /PKIMetadata isn't installed/);
 });
 
 test("two sides whose uBO stores differ by more than a fifth are refused", () => {

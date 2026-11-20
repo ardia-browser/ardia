@@ -318,7 +318,7 @@ export function startHistory() {
   };
   if (moving) afterFirstWindow(migrate);
   else migrate();
-  const stop = useBrowser.subscribe((s, prev) => {
+  const stop = useBrowser.subscribeTo(["profiles"], (s, prev) => {
     if (s.profiles === prev.profiles) return;
     const inStore = engineProfiles(s);
     for (const engine of loaded) if (!inStore.includes(engine)) loaded.delete(engine);

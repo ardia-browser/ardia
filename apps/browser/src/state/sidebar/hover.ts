@@ -234,8 +234,10 @@ const scrolledAt = new Map<string, number>();
 const settleTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const heldEnters = new Map<string, Map<object, () => void>>();
 
+const stillFor = (windowId: string) => Date.now() - (scrolledAt.get(windowId) ?? -Infinity);
+
 function settleWhenStill(windowId: string) {
-  const left = (scrolledAt.get(windowId) ?? 0) + SCROLL_SETTLE_MS - Date.now();
+  const left = SCROLL_SETTLE_MS - stillFor(windowId);
   if (left > 0) return void settleTimers.set(windowId, setTimeout(() => settleWhenStill(windowId), left));
   settleTimers.delete(windowId);
   scrolledAt.delete(windowId);
@@ -248,17 +250,17 @@ export function noteRowsScrolled(windowId: string) {
   const now = Date.now();
   noteSidebarScrolled(now);
   scrolledAt.set(windowId, now);
-  if (!settleTimers.has(windowId)) settleTimers.set(windowId, setTimeout(() => settleWhenStill(windowId), SCROLL_SETTLE_MS));
 }
 
-export const rowsScrolling = (windowId: string) => scrolledAt.has(windowId);
+export const forgetRowsScrolled = (windowId: string) => void scrolledAt.delete(windowId);
 
 export function holdEnterWhileScrolling(windowId: string, row: object, enter: () => void): boolean {
-  if (!scrolledAt.has(windowId)) return false;
+  if (stillFor(windowId) >= SCROLL_SETTLE_MS) return false;
   let held = heldEnters.get(windowId);
   if (!held) heldEnters.set(windowId, (held = new Map()));
   if (!held.has(row)) noteSidebarHoverHeld();
   held.set(row, enter);
+  if (!settleTimers.has(windowId)) settleWhenStill(windowId);
   return true;
 }
 

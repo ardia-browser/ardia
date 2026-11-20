@@ -72,7 +72,7 @@ export function dismissStripHover() {
   hide();
 }
 
-useBrowser.subscribe((s, prev) => {
+useBrowser.subscribeTo(["settings"], (s, prev) => {
   if (!s.settings.showTabHoverMenu && prev.settings.showTabHoverMenu) dismissStripHover();
 });
 

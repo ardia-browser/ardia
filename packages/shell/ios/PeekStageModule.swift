@@ -72,6 +72,8 @@ public class PeekStageModule: Module {
       let top = NSScreen.screens.first?.frame.maxY ?? 0
       guard let event = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1, wheel1: Int32(dy), wheel2: 0, wheel3: 0) else { return ["error": "no event"] }
       event.location = CGPoint(x: screen.x, y: top - screen.y)
+      PeekInputRoute.setWindowLocation?(event, CGPoint(x: point.x, y: window.frame.height - point.y))
+      event.setIntegerValueField(CGEventField(rawValue: 51)!, value: Int64(window.windowNumber))
       event.setIntegerValueField(.mouseEventWindowUnderMousePointer, value: Int64(window.windowNumber))
       event.setIntegerValueField(.mouseEventWindowUnderMousePointerThatCanHandleThisEvent, value: Int64(window.windowNumber))
       guard let ns = NSEvent(cgEvent: event) else { return ["error": "no NSEvent"] }

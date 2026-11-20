@@ -347,7 +347,7 @@ export function startAutomation() {
   recordLaunch();
   runLaunchActions();
   sync();
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["settings"], (s, prev) => {
     if (s.settings !== prev.settings) sync();
   });
 }

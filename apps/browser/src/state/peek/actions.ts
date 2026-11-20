@@ -142,7 +142,7 @@ export function startPeeks() {
   };
   sync();
   useBrowser.subscribe(sync);
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["peeks", "tabs"], (s, prev) => {
     if (s.peeks !== prev.peeks) bumpOnFirstLoad(s);
     if (s.tabs !== prev.tabs || s.peeks !== prev.peeks) landBackOnSite(s);
   });
@@ -153,7 +153,7 @@ export function startPeeks() {
     landBackOnSite(s);
   });
   useBrowser.subscribe(refocusAfterClose);
-  useBrowser.subscribe(countPeeksShownAgain);
+  useBrowser.subscribeTo(["windows"], countPeeksShownAgain);
 }
 
 function countPeeksShownAgain(s: BrowserState, prev: BrowserState) {

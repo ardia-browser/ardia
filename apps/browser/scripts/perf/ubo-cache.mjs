@@ -35,7 +35,26 @@ export function uboSignature(dataDir) {
 
 export const uboSettled = (dataDir) => uboLogBytes(dataDir) < UBO_LOG_FLUSHED_BYTES;
 
-export const engineSaved = (keys) => UBO_ENGINE_KEYS.every((key) => keys.includes(key));
+export const UBO_IDB_NAME = "uBlock0CacheStorage";
+
+export const engineSaved = ({ local = [], indexedDB = [] } = {}) =>
+  UBO_ENGINE_KEYS.every((key) => local.includes(key) && indexedDB.includes(key));
+
+const STORED_KEYS = `(async () => {
+  const wanted = ${JSON.stringify(UBO_ENGINE_KEYS)};
+  const local = Object.keys(await chrome.storage.local.get(wanted));
+  const names = (await indexedDB.databases()).map((d) => d.name);
+  if (!names.includes(${JSON.stringify(UBO_IDB_NAME)})) return { local, indexedDB: [] };
+  const db = await new Promise((ok, fail) => { const r = indexedDB.open(${JSON.stringify(UBO_IDB_NAME)}); r.onsuccess = () => ok(r.result); r.onerror = () => fail(r.error); });
+  try {
+    if (!db.objectStoreNames.contains(${JSON.stringify(UBO_IDB_NAME)})) return { local, indexedDB: [] };
+    const store = db.transaction(${JSON.stringify(UBO_IDB_NAME)}, "readonly").objectStore(${JSON.stringify(UBO_IDB_NAME)});
+    const found = await Promise.all(wanted.map((key) => new Promise((ok) => { const q = store.getKey(key); q.onsuccess = () => ok(q.result === undefined ? null : key); q.onerror = () => ok(null); })));
+    return { local, indexedDB: found.filter(Boolean) };
+  } finally {
+    db.close();
+  }
+})()`;
 
 async function storedKeys(port) {
   let targets = [];
@@ -53,7 +72,7 @@ async function storedKeys(port) {
       const timer = setTimeout(() => ok(null), 5000);
       socket.onmessage = (m) => (clearTimeout(timer), ok(JSON.parse(m.data)));
       socket.send(JSON.stringify({ id: 1, method: "Runtime.evaluate", params: {
-        expression: `chrome.storage.local.get(${JSON.stringify(UBO_ENGINE_KEYS)}).then((found) => Object.keys(found))`,
+        expression: STORED_KEYS,
         awaitPromise: true, returnByValue: true,
       } }));
     });
@@ -69,11 +88,13 @@ export async function waitForUboEngine({ port, dataDir, deadlineMs = 120_000, qu
   const start = Date.now();
   const end = start + deadlineMs;
   let saved = false;
+  let stored = null;
   while (!saved && Date.now() < end) {
-    saved = engineSaved((await storedKeys(port)) ?? []);
+    stored = (await storedKeys(port)) ?? stored;
+    saved = engineSaved(stored ?? undefined);
     if (!saved) await sleep(pollMs);
   }
-  if (!saved) throw new Error(`uBlock Origin didn't save its compiled engine within ${deadlineMs / 1000} s; the template would start every run with a cold uBO cache`);
+  if (!saved) throw new Error(`uBlock Origin didn't save its compiled engine to both of its stores within ${deadlineMs / 1000} s (${JSON.stringify(stored)}); the template would start every run on a cold or fallback uBO cache`);
   let signature = uboSignature(dataDir);
   let still = Date.now();
   while (Date.now() - still < quietMs || !uboSettled(dataDir)) {
@@ -84,5 +105,5 @@ export async function waitForUboEngine({ port, dataDir, deadlineMs = 120_000, qu
   }
   const secs = (Date.now() - start) / 1000;
   log(`uBO saved its compiled engine and its storage is settled (${Math.round(storeBytes(uboStoreDir(dataDir)) / 1048576)} MB store, ${Math.round(storeBytes(uboBlobDir(dataDir), true) / 1048576)} MB blobs, ${secs.toFixed(1)} s)`);
-  return { secs };
+  return { secs, selfies: stored };
 }

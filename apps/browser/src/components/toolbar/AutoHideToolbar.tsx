@@ -10,7 +10,7 @@ import { useSitePalette } from "./useSitePalette";
 import { useToolbarHeld } from "../../state/app/transientUi";
 import { addressFieldShownIn, revealToolbar, setToolbarPeek, STRIP_HEIGHT, toolbarMode, useToolbarAutoHide, type ToolbarMode } from "../../state/windows/toolbarAutoHide";
 import { Toolbar } from "./Toolbar";
-import { curve } from "../ui/motion";
+import { curve, releaseNativeValue } from "../ui/motion";
 import { reduceMotion, space, Text } from "../ui";
 import { TOOLBAR_MOTION } from "./tokens";
 import { motionStep, tallPage, type MotionValue, type TallPage } from "./toolbarMotion";
@@ -82,6 +82,7 @@ export function useToolbarMotion({
   useEffect(() => {
     const keep = (a: Animated.Value, value: number) => Animated.timing(a, { toValue: value, duration: TOOLBAR_MOTION.settle, useNativeDriver: true });
     Animated.parallel([keep(v.page, initial.page), keep(v.laid, initial.page), keep(v.bar, initial.bar), keep(v.fade, initial.bar)]).start();
+    return () => Object.values(v).forEach(releaseNativeValue);
   }, []);
   const was = useRef(mode);
   useLayoutEffect(() => {

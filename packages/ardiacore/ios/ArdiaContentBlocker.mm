@@ -128,7 +128,8 @@ NSString *const kFollow =
      "})";
 
 void ForgetGoneProfiles() {
-  for (NSString *profile in LoadedProfiles().array) {
+  NSArray<NSString *> *loaded = [LoadedProfiles().array copy];
+  for (NSString *profile in loaded) {
     ArdiaCoreProfile *now = ardia_host::LoadedProfile(profile);
     if (now && now == [LoadedInto() objectForKey:profile] && !ardia_host::IsDeletedProfile(profile)) continue;
     [LoadedProfiles() removeObject:profile];

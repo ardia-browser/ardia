@@ -1,4 +1,4 @@
-import { create, type StateCreator } from "zustand";
+import { create, type StateCreator, type StoreApi, type UseBoundStore } from "zustand";
 import { setHeldReportsTransaction } from "../../platform/nativeEvents";
 import { createBookmarksSlice, ensureRoots, type BookmarksSlice } from "../bookmarks/bookmarks";
 import { changedIds } from "./changes";
@@ -20,7 +20,7 @@ import { activated, apply } from "../tabs/tabs";
 import { createTabsSlice, type TabsSlice } from "../tabs/tabsSlice";
 import { bindLiveToBrowser, forgetAllLive } from "../tabs/tabLive";
 import { settle, SettleDidNotConverge } from "./settle";
-import { transactional } from "./transaction";
+import { transactional, type SubscribeTo } from "./transaction";
 import { actionsApart } from "./actionsApart";
 import type { BrowserWindow, Tab } from "./types";
 import { createUiSlice, type UiSlice } from "../windows/ui";
@@ -103,7 +103,7 @@ export const afterStoreTransactionIdempotent = transactions.afterTransactionIdem
 export const inStoreTransaction = transactions.inTransaction;
 setHeldReportsTransaction(storeTransaction);
 
-export const useBrowser = create<BrowserState>()(actionsApart(transactions.middleware(batched((...a) => ({
+const createdBrowser = create<BrowserState>()(actionsApart(transactions.middleware(batched((...a) => ({
   ...createProfilesSlice(...a),
   ...createWindowsSlice(...a),
   ...createTabsSlice(...a),
@@ -205,6 +205,7 @@ export const useBrowser = create<BrowserState>()(actionsApart(transactions.middl
     set(next);
   },
 })))));
+export const useBrowser = createdBrowser as UseBoundStore<StoreApi<BrowserState>> & { subscribeTo: SubscribeTo<BrowserState> };
 bindLiveToBrowser(useBrowser, transactions.afterTransactionIdempotent);
 
 export type { CreateWindowOptions } from "../windows/windows";

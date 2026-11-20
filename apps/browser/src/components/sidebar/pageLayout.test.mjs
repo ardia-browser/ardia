@@ -61,3 +61,15 @@ test("the sidebar page makes its first dock guess from the entries once, without
   assert.match(page, /if \(!dockGuessed && canDock && height > 0\) \{/);
   assert.match(page, /clearlyOverflows\(sidebarListLengthNow\(windowId, profileId\), height\)/);
 });
+
+test("the dock reads its free space from the filler's child, whose frame moves only when that space changes, not with every row added", () => {
+  const page = readFileSync(new URL("./SidebarPage.tsx", import.meta.url), "utf8");
+  assert.match(page, /<ContextMenuArea style=\{\{ flex: 1 \}\} onLayout=\{onSlack\}/);
+  assert.doesNotMatch(page, /<View key=\{[^}]*\}[^>]*onLayout=\{onSlack\}/);
+});
+
+test("a free-space reading that arrives before the sidebar has a height is kept and applied once it does", () => {
+  const page = readFileSync(new URL("./SidebarPage.tsx", import.meta.url), "utf8");
+  assert.match(page, /slack\.current = e\.nativeEvent\.layout\.height;\n\s*applySlack\(\);/);
+  assert.match(page, /useEffect\(applySlack, \[height > 0, canDock, resting\]\);/);
+});

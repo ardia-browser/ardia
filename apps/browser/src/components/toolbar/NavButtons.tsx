@@ -4,14 +4,15 @@ import { webviews } from "../../state/tabs/webviewHandles";
 import { withLivePage } from "../../state/tabs/livePage";
 import { newTab } from "../../state/tabs/actions";
 import type { Tab } from "../../state/browser/types";
-import { Button, curve, MouseArea, nativeLoop, reduceMotion, reduceMotionKnown, springs, Symbol, type ButtonHit } from "../ui";
+import { useScopedTheme } from "../ui/theme";
+import { Button, curve, drawnSymbol, MouseArea, nativeLoop, reduceMotion, reduceMotionKnown, springs, type ButtonHit } from "../ui";
 
 export type NavPlace = { style?: ViewStyle; hit?: ButtonHit };
 import type { ClickModifiers } from "../../lib/keys";
 import { closeHistoryMenu, goBack, goForward, historyItems, toggleHistoryMenu } from "../../state/tabs/navigation";
 import { openModeFor, openUrl } from "../../state/bookmarks/actions";
 import type { ToolbarPalette } from "../ui/toolbarColors";
-import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
+import { withShortcut } from "../../state/commands/commandShortcuts";
 import { GLYPH, HISTORY_GLYPH, HISTORY_BUTTON_MOTION, RELOAD_BUTTON_MOTION, SYMBOL_BOX } from "./tokens";
 import { showReloadMenu } from "../../state/site/reloadMenu";
 
@@ -22,7 +23,8 @@ const SYMBOL_FRAME = { width: SYMBOL_BOX, height: SYMBOL_BOX };
 const ReloadGlyphColor = createContext("");
 
 function ReloadSymbol({ name }: { name: "arrow.clockwise" | "xmark" }) {
-  return <Symbol name={name} size={GLYPH} weight="regular" color={useContext(ReloadGlyphColor)} style={SYMBOL_FRAME} />;
+  useScopedTheme();
+  return drawnSymbol({ name, size: GLYPH, weight: "regular", color: useContext(ReloadGlyphColor), style: SYMBOL_FRAME });
 }
 
 const ReloadGlyph = memo(function ReloadGlyph({ loading, color }: { loading: boolean; color: string }) {
@@ -123,15 +125,16 @@ export const ReloadButton = memo(function ReloadButton({
   palette,
   place,
   onFocus,
+  reloadHint,
 }: {
   tab: Pick<Tab, "id" | "url" | "windowId">;
   loading: boolean;
   palette: ToolbarPalette;
   place?: NavPlace;
   onFocus: () => void;
+  reloadHint: string | undefined;
 }) {
   const web = () => webviews.get(tab.id);
-  const reloadHint = useShortcutHint("reload");
   return (
     <Button variant="icon" toolbar
       style={place?.style}
@@ -165,6 +168,7 @@ export const HistoryButton = memo(function HistoryButton({
   place,
   onFocus,
   closesTab = false,
+  historyHint,
 }: {
   tabId: string;
   windowId: string;
@@ -174,6 +178,7 @@ export const HistoryButton = memo(function HistoryButton({
   place?: NavPlace;
   onFocus: () => void;
   closesTab?: boolean;
+  historyHint: string | undefined;
 }) {
   const handoffMotion = useRef(new Animated.Value(0)).current;
   const pressOffsetMotion = useRef(new Animated.Value(0)).current;
@@ -218,7 +223,6 @@ export const HistoryButton = memo(function HistoryButton({
       handoffMotion.setValue(0);
     });
   };
-  const historyHint = useShortcutHint(direction < 0 ? "back" : "forward");
   const openMenu = () => {
     onFocus();
     toggleHistoryMenu(tabId, direction);
@@ -248,10 +252,10 @@ export const HistoryButton = memo(function HistoryButton({
       >
         <Animated.View style={[ICON_CENTER, { transform: [{ translateX: pressOffsetMotion }] }]}>
           <Animated.View pointerEvents="none" style={[ICON_LAYER, { opacity: handoffFadeOut, transform: [{ translateX: handoffOutX }] }]}>
-            <Symbol name={icon} size={HISTORY_GLYPH.size} weight={HISTORY_GLYPH.weight} color={iconColor} style={SYMBOL_FRAME} />
+            {drawnSymbol({ name: icon, size: HISTORY_GLYPH.size, weight: HISTORY_GLYPH.weight, color: iconColor, style: SYMBOL_FRAME })}
           </Animated.View>
           <Animated.View pointerEvents="none" style={[ICON_LAYER, { opacity: handoffFadeIn, transform: [{ translateX: handoffInX }] }]}>
-            <Symbol name={icon} size={HISTORY_GLYPH.size} weight={HISTORY_GLYPH.weight} color={iconColor} style={SYMBOL_FRAME} />
+            {drawnSymbol({ name: icon, size: HISTORY_GLYPH.size, weight: HISTORY_GLYPH.weight, color: iconColor, style: SYMBOL_FRAME })}
           </Animated.View>
         </Animated.View>
       </Button>

@@ -182,7 +182,7 @@ export function startSharedFolders() {
   onSharedFolderChange((paths) => {
     for (const { profileId, key, folder } of boundFolders()) if (paths.includes(folder.path)) schedule(profileId, key, REMOTE_SETTLE_MS);
   });
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["tabs", "groups", "windows", "ui"], (s, prev) => {
     if (s.tabs === prev.tabs && s.groups === prev.groups && s.windows === prev.windows && s.ui.focusOrder === prev.ui.focusOrder) return;
     if (!boundFolders().length) return;
     clearTimeout(checkTimer);

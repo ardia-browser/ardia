@@ -1,7 +1,7 @@
 import { memo, useState, type ReactNode } from "react";
 import { Animated, Pressable, View } from "react-native";
 import { useTheme } from "../ui/theme";
-import { ContextMenuArea, Divider, sidebarLineHeight, space, Symbol, Text, TintedImage, useHover } from "../ui";
+import { ContextMenuArea, Divider, drawnSymbol, sidebarLineHeight, space, Symbol, Text, tintedImage, useHover } from "../ui";
 import { TAB_ROW } from "./tokens";
 import { HoverSlot } from "../ui/HoverSlot";
 import { closeAllTabs } from "../../state/sidebar/clearTabs";
@@ -61,7 +61,7 @@ export const ClearDivider = memo(function ClearDivider({ windowId, profileId, li
                     title="Tidy"
                     label="Tidy Tabs"
                     onPress={() => tidyTabs(windowId, "tabs", profileId)}
-                    icon={(color) => <TintedImage source={BROOM} tint={color} style={{ width: 11, height: 11, marginRight: space.xs }} />}
+                    icon={(color) => tintedImage({ source: BROOM, tint: color, style: { width: 11, height: 11, marginRight: space.xs } })}
                   />
                 ) : null}
                 {tidy && clear ? <Divider vertical thick length={9} style={ACTIONS_DIVIDER} /> : null}
@@ -95,7 +95,7 @@ function FoldButton({ pinned, onPress }: { pinned: PinnedFold; onPress: () => vo
           return (
             <View style={{ height: bandHeight(), flexDirection: "row", alignItems: "center", paddingRight: space.m }}>
               <Animated.View style={{ width: 10, height: 10, marginRight: space.xs, alignItems: "center", justifyContent: "center", transform: [{ rotate }] }}>
-                <Symbol name="chevron.down" size={8} weight="semibold" color={color} style={{ width: 10, height: 10 }} />
+                {drawnSymbol({ name: "chevron.down", size: 8, weight: "semibold", color, style: CHEVRON })}
               </Animated.View>
               <Text size="tiny" weight="medium" color={color}>
                 Pinned
@@ -129,3 +129,5 @@ function DividerButton({ title, label, onPress, icon }: { title: string; label: 
     </View>
   );
 }
+
+const CHEVRON = { width: 10, height: 10 } as const;

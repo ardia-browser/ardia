@@ -34,5 +34,5 @@ export function startNativeSettings() {
     }
   };
   sync(useBrowser.getState().settings);
-  return useBrowser.subscribe((s, prev) => s.settings !== prev.settings && sync(s.settings));
+  return useBrowser.subscribeTo(["settings"], (s, prev) => s.settings !== prev.settings && sync(s.settings));
 }

@@ -289,7 +289,7 @@ export function startPasswordManager() {
   };
   watchPendingOfferToSave(watchReady);
   watchReady(pendingOfferToSave() > 0);
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["profiles", "windows"], (s, prev) => {
     if (s.profiles !== prev.profiles) syncProfiles();
     if (s.windows !== prev.windows) syncWindows();
   });

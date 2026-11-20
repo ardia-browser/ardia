@@ -137,7 +137,7 @@ export function useFullscreenTab(windowId: string): string | undefined {
   });
 }
 
-useBrowser.subscribe((s, prev) => {
+useBrowser.subscribeTo(["tabs"], (s, prev) => {
   if (s.tabs === prev.tabs) return;
   for (const id of iconPages.keys()) if (!s.tabs[id]) iconPages.delete(id);
   const { pages, ready, popover } = usePages.getState();

@@ -348,7 +348,7 @@ export function startLiveEngine() {
   });
   closeCompletedTabs();
 
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["groups", "profiles"], (s, prev) => {
     if (s.groups !== prev.groups) syncLiveHomes();
     if (s.profiles === prev.profiles) return;
     for (const f of Object.values(live().folders)) if (!s.profiles[f.profileId]) removeFolder(f.id);
@@ -372,7 +372,7 @@ export function startLiveEngine() {
     if (e.type === "focus") for (const id of live().folderOrder) if (due(id, STALE_ON_FOCUS_MS)) void refreshFolder(id);
   });
 
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["windows", "splits", "peeks"], (s, prev) => {
     if (s.windows !== prev.windows || s.splits !== prev.splits || s.peeks !== prev.peeks) closeCompletedTabs();
   });
   onLiveChange((id, now, was) => {
@@ -383,7 +383,7 @@ export function startLiveEngine() {
     if (m.pipOpen !== prev.pipOpen || m.sessions !== prev.sessions || m.tabShares !== prev.tabShares) closeCompletedTabs();
   });
 
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["windows"], (s, prev) => {
     if (s.windows === prev.windows) return;
     for (const windowId of s.windowOrder) {
       const before = activeTabId(prev, windowId);

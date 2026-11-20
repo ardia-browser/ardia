@@ -100,14 +100,16 @@ function overflowOneByOne(entries, activeId, pageWidth, measured, wideId = activ
   const fitsIn = (strip) => strip.tabsEnd + GAP + NEW_TAB_ROOM <= pageWidth + 0.5;
   const fits = (hidden, selectedMin) => fitsIn(layout(hidden, selectedMin));
   const tight = SELECTED_STEPS.at(-1);
-  if (layout(new Set(), tight).compactShown) {
-    const readable = (selectedMin, titledMin) => fitsIn(layout(new Set(), selectedMin, titledMin, TITLE_MIN_CHIP));
-    const step = SELECTED_STEPS.find((s) => readable(s, TITLED_CHIP));
+  const readable = (hidden, selectedMin, titledMin) => fitsIn(layout(hidden, selectedMin, titledMin, TITLE_MIN_CHIP));
+  const favicons = layout(new Set(), tight).compactShown > 0;
+  if (favicons) {
+    const step = SELECTED_STEPS.find((s) => readable(new Set(), s, TITLED_CHIP));
     if (step !== undefined) return { hidden: new Set(), selectedMin: step, titledMin: TITLED_CHIP, compactMin: TITLE_MIN_CHIP };
-    if (readable(tight, TITLE_MIN_CHIP)) return { hidden: new Set(), selectedMin: tight, titledMin: TITLE_MIN_CHIP, compactMin: TITLE_MIN_CHIP };
+    if (readable(new Set(), tight, TITLE_MIN_CHIP)) return { hidden: new Set(), selectedMin: tight, titledMin: TITLE_MIN_CHIP, compactMin: TITLE_MIN_CHIP };
   }
   const roomy = SELECTED_STEPS.find((step) => fits(new Set(), step));
   if (roomy !== undefined) return { hidden: new Set(), selectedMin: roomy, titledMin: TITLED_CHIP, compactMin: COMPACT_CHIP };
+  if (!favicons && readable(new Set(), tight, TITLE_MIN_CHIP)) return { hidden: new Set(), selectedMin: tight, titledMin: TITLE_MIN_CHIP, compactMin: TITLE_MIN_CHIP };
   const shown = entries.flatMap((e) => (e.kind === "group" ? (e.collapsed ? [] : e.members) : [e]));
   const order = shown.flatMap((m) => (m.kind === "tab" ? [m.id] : m.tabIds));
   const anchor = Math.max(0, order.indexOf(wideId));
@@ -124,6 +126,8 @@ function overflowOneByOne(entries, activeId, pageWidth, measured, wideId = activ
     hidden.add(id);
     if (fits(hidden, tight)) break;
   }
+  if (favicons && readable(hidden, tight, TITLED_CHIP)) return { hidden, selectedMin: tight, titledMin: TITLED_CHIP, compactMin: TITLE_MIN_CHIP };
+  if (favicons && readable(hidden, tight, TITLE_MIN_CHIP)) return { hidden, selectedMin: tight, titledMin: TITLE_MIN_CHIP, compactMin: TITLE_MIN_CHIP };
   return { hidden, selectedMin: tight, titledMin: TITLED_CHIP, compactMin: COMPACT_CHIP };
 }
 
@@ -159,23 +163,23 @@ test("the overflow hides exactly what laying the strip out after each hidden tab
   }
 });
 
-test("a thousand titled tabs at 600 pt overflow in about a single layout's time", () => {
+const countingCalls = (m) => {
+  const calls = { n: 0 };
+  return [{ groupChip: (id) => (calls.n++, m.groupChip(id)), folderChip: (id) => (calls.n++, m.folderChip(id)), needsTitle: (id) => (calls.n++, m.needsTitle(id)) }, calls];
+};
+const callsOf = (m, run) => {
+  const [counted, calls] = countingCalls(m);
+  run(counted);
+  return calls.n;
+};
+
+test("a thousand titled tabs at 600 pt overflow for about one layout's work, counted in calls into the strip's measures", () => {
   const tabs = Array.from({ length: 1000 }, (_, i) => tab(`t${i}`));
-  const needs = tabs.map((t) => t.id);
-  const m = measured(needs);
-  const fastest = (run) => {
-    run();
-    let best = Infinity;
-    for (let i = 0; i < 9; i++) {
-      const start = performance.now();
-      run();
-      best = Math.min(best, performance.now() - start);
-    }
-    return best;
-  };
-  const layout = fastest(() => layoutStrip(tabs, "t500", 600, m, null));
-  const overflow = fastest(() => stripOverflow(tabs, "t500", 600, m, null));
-  assert.ok(overflow < 4 * layout, `overflow took ${overflow.toFixed(2)} ms against ${layout.toFixed(2)} ms for one layout`);
+  const m = measured(tabs.map((t) => t.id));
+  const layout = callsOf(m, (c) => layoutStrip(tabs, "t500", 600, c, null));
+  const overflow = callsOf(m, (c) => stripOverflow(tabs, "t500", 600, c, null));
+  assert.ok(layout <= 2 * tabs.length, `one layout made ${layout} calls for ${tabs.length} tabs`);
+  assert.ok(overflow <= 2 * layout, `the overflow made ${overflow} calls against ${layout} for one layout`);
 });
 
 test("a group whose members all moved into the open tabs menu keeps them as its drop anchor, and its span stays the header's", () => {
@@ -189,28 +193,17 @@ test("a group whose members all moved into the open tabs menu keeps them as its 
   assert.equal(withoutTabs(entries, new Set(["a"]))[0], group, "an untouched group stays the same entry");
 });
 
-test("strips with a thousand groups overflow in about a single layout's time, chip widths found by key", () => {
+test("strips with a thousand groups overflow for about one layout's work, chip widths found by key", () => {
   const entries = Array.from({ length: 1000 }, (_, g) => ({ kind: "group", id: `g${g}`, collapsed: g % 3 === 0, members: [tab(`g${g}a`), tab(`g${g}b`), tab(`g${g}c`)] }));
   const ids = new Set(entries.flatMap((e) => e.members.map((m) => m.id)));
   const groupIds = entries.map((e) => e.id);
   const widths = groupIds.map((_, i) => 70 + (i % 40));
-  const direct = new Map(groupIds.map((id, i) => [id, widths[i]]));
   assert.equal(keyedWidths(groupIds, widths)("g41"), 71);
   assert.equal(keyedWidths(groupIds, widths)("missing"), undefined);
-  const fastest = (run) => {
-    run();
-    let best = Infinity;
-    for (let i = 0; i < 7; i++) {
-      const start = performance.now();
-      run();
-      best = Math.min(best, performance.now() - start);
-    }
-    return best;
-  };
-  const layout = fastest(() => layoutStrip(entries, "g1a", 600, { groupChip: (id) => direct.get(id), folderChip: () => undefined, needsTitle: (id) => ids.has(id) }, null));
   const keyed = { groupChip: keyedWidths(groupIds, widths), folderChip: keyedWidths([], []), needsTitle: (id) => ids.has(id) };
-  const overflow = fastest(() => stripOverflow(entries, "g1a", 600, keyed, null));
-  assert.ok(overflow < 4 * layout, `overflow took ${overflow.toFixed(2)} ms against ${layout.toFixed(2)} ms for one layout`);
+  const layout = callsOf(keyed, (c) => layoutStrip(entries, "g1a", 600, c, null));
+  const overflow = callsOf(keyed, (c) => stripOverflow(entries, "g1a", 600, c, null));
+  assert.ok(overflow <= 2 * layout, `the overflow made ${overflow} calls against ${layout} for one layout`);
 });
 
 test("a group whose members all overflowed takes no member room from its neighbours and stays expanded with its anchor", () => {
@@ -343,4 +336,44 @@ test("a group in the filmed strip keeps a tab showing while any tab outside it c
   const lettersOnly = stripAfter(entries, noFavicons, [760]);
   assert.ok(entries[3].members.some((t) => !lettersOnly.fit.hidden.has(t.id)), `at 760 pt before favicons load the group keeps a tab: ${JSON.stringify(lettersOnly.widths)}`);
   assert.ok(Object.values(lettersOnly.widths).every((w) => w === "menu" || w >= TITLE_MIN_CHIP));
+});
+
+const readableAt = (entries, activeId, page, m, hidden) =>
+  layoutStrip(withoutTabs(entries, hidden), activeId, page, withOverflowCounts(m, entries, hidden), null, { chip: TITLE_MIN_CHIP, titled: TITLE_MIN_CHIP, selected: SELECTED_STEPS.at(-1) }).tabsEnd + GAP + NEW_TAB_ROOM <= page + 0.5;
+
+test("seven letter-icon tabs that all fit at a readable 80 pt stay in a 720 pt strip, with no favicon tab among them", () => {
+  const tabs = Array.from({ length: 7 }, (_, i) => tab(`t${i}`));
+  const m = measured(tabs.map((t) => t.id));
+  assert.ok(readableAt(tabs, "t0", 720, m, new Set()));
+  const fit = stripOverflow(tabs, "t0", 720, m, null);
+  assert.deepEqual([...fit.hidden], []);
+  const strip = layoutStrip(tabs, "t0", 720, m, null, undefined, "t0", fit.selectedMin, fit.titledMin, fit.compactMin);
+  assert.ok(tabs.every((t) => strip.tabWidth(t.id) >= TITLE_MIN_CHIP), JSON.stringify(tabs.map((t) => strip.tabWidth(t.id))));
+});
+
+test("after tabs move into the open tabs menu, favicon tabs left in a 442 pt strip keep their titles when the rest fit at 80 pt", () => {
+  const tabs = Array.from({ length: 8 }, (_, i) => tab(`t${i}`));
+  const m = measured(tabs.slice(3).map((t) => t.id));
+  const fit = stripOverflow(tabs, "t0", 442, m, null);
+  assert.ok(fit.hidden.size > 0);
+  const strip = layoutStrip(withoutTabs(tabs, fit.hidden), "t0", 442, withOverflowCounts(m, tabs, fit.hidden), null, undefined, "t0", fit.selectedMin, fit.titledMin, fit.compactMin);
+  assert.ok(["t1", "t2"].every((id) => strip.tabWidth(id) >= TITLE_MIN_CHIP), `t1 ${strip.tabWidth("t1")} pt, t2 ${strip.tabWidth("t2")} pt`);
+  assert.ok(strip.tabsEnd + GAP + NEW_TAB_ROOM <= 442.5);
+});
+
+test("across strips of favicon and letter-icon tabs, nothing moves into the menu while every tab fits at 80 pt, and no tab shows only its icon while the tabs left fit at 80 pt", () => {
+  for (const n of [4, 7, 8, 12, 20]) {
+    for (const favicons of [0, 1, 3, n - 1]) {
+      const tabs = Array.from({ length: n }, (_, i) => tab(`t${i}`));
+      const m = measured(tabs.slice(favicons).map((t) => t.id));
+      for (let page = 300; page <= 1600; page += 7) {
+        const fit = stripOverflow(tabs, "t0", page, m, null);
+        const where = `${n} tabs, ${favicons} favicons, ${page} pt`;
+        if (fit.hidden.size) assert.ok(!readableAt(tabs, "t0", page, m, new Set()), `${where}: ${[...fit.hidden]} moved into the menu though every tab fits at 80 pt`);
+        const strip = layoutStrip(withoutTabs(tabs, fit.hidden), "t0", page, withOverflowCounts(m, tabs, fit.hidden), null, undefined, "t0", fit.selectedMin, fit.titledMin, fit.compactMin);
+        const iconOnly = tabs.filter((t) => !fit.hidden.has(t.id) && t.id !== "t0" && strip.tabWidth(t.id) < TITLE_MIN_CHIP);
+        if (iconOnly.length) assert.ok(!readableAt(tabs, "t0", page, m, fit.hidden), `${where}: ${iconOnly.map((t) => t.id)} show only an icon though the tabs left fit at 80 pt`);
+      }
+    }
+  }
 });

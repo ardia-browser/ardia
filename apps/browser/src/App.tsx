@@ -2,7 +2,7 @@ import { WindowBackdrop } from "./components/ui";
 import { useEffect, useMemo, useState } from "react";
 import { StyleSheet } from "react-native";
 import { CommandPanel } from "./components/omnibox/CommandPanel";
-import { WindowOverlays } from "./components/window/WindowOverlays";
+import { windowOverlays } from "./components/window/WindowOverlays";
 import { ContentCard } from "./components/window/ContentCard";
 import { BrowserWindowControls } from "./components/window/BrowserWindowControls";
 import { BookmarkDialog } from "./components/bookmarks/BookmarkDialog";
@@ -98,20 +98,20 @@ function BrowserWindow() {
         {card}
       </DockedLayout>
       <CommandPanel windowWidth={width} />
-      <WindowOverlays>
-        <FolderMenus />
-        <DownloadsPopover />
-        <ExtensionOverlays />
-        <DownloadMagnet />
-        <BookmarkDialog />
-        <EditBookmarkDialog />
-        <CreateProfileHost />
-        <SidebarOverlays windowWidth={width} />
-      </WindowOverlays>
+      {windowOverlays(
+        <>
+          <FolderMenus />
+          <DownloadsPopover />
+          <ExtensionOverlays />
+          <DownloadMagnet />
+          <BookmarkDialog />
+          <EditBookmarkDialog />
+          <CreateProfileHost />
+          <SidebarOverlays windowWidth={width} />
+        </>,
+      )}
       <OnboardingOverlay />
-      <WindowOverlays>
-        <ReportSheetHost />
-      </WindowOverlays>
+      {windowOverlays(<ReportSheetHost />)}
       <BrowserWindowControls />
     </CrxDropArea>
   );

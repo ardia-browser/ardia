@@ -316,12 +316,22 @@ function smallSession(dataDir) {
   writeFileSync(file, JSON.stringify(session));
 }
 
+export function appendRefusal(existing, revision = BENCH_REVISION) {
+  if (!existing) return null;
+  return existing.benchRevision === revision ? null
+    : `--append onto a bench revision ${existing.benchRevision ?? "unknown"} report would pool its runs with revision ${revision}'s; write to a new --out or --label`;
+}
+
 const ALL = ["startup", "persistence", "idle", "typing", "switchTabs", "openClose", "scroll", "pageLoad", "hover", "profileSwipe", "storeUpdate", "idleLate"];
 
 async function run() {
   const { app, bundle: jsbundle, label, runs = "5", port = "47817", out = defaultOut } = flags;
   if (!app || !jsbundle || !label) throw new Error("run needs --app, --bundle and --label");
   const scenarios = flags.scenarios ? flags.scenarios.split(",") : ALL;
+  const file = join(out, `${label}.json`);
+  const existing = flags.append && existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : null;
+  const refusal = appendRefusal(existing);
+  if (refusal) throw new Error(refusal);
   const clone = prepareApp(app, join(out, "apps", label), { bundle: jsbundle });
   const version = execFileSync("/usr/libexec/PlistBuddy", ["-c", "Print CFBundleShortVersionString", join(clone, "Contents/Info.plist")], { encoding: "utf8" }).trim();
   const origin = `http://127.0.0.1:${port}`;
@@ -360,8 +370,7 @@ async function run() {
     server.close();
   }
   const bundleSize = statSync(jsbundle).size;
-  const file = join(out, `${label}.json`);
-  if (flags.append && existsSync(file)) results.unshift(...JSON.parse(readFileSync(file, "utf8")).results);
+  if (existing) results.unshift(...existing.results);
   const revisions = [...new Set(results.map(runRevision))];
   if (revisions.length > 1) console.log(`WARNING: these runs mix probe revisions ${revisions.join(", ")}; their numbers don't compare`);
   const report = {

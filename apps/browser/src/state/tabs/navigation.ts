@@ -7,7 +7,8 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { changedIds } from "../browser/changes";
 import { activeTabId, inPinnedContainer } from "../browser/model";
 import { noteBackCloseToOpener } from "../telemetry/usage";
-import { useTabLive } from "../browser/hooks";
+import { useTab, useTabLive } from "../browser/hooks";
+import { useBrowserWhile } from "./tabWatch";
 import type { TabLive } from "../browser/types";
 import { isAppPage, tabDestination } from "../pages/urls";
 import { pageOf, patchPage, usePage } from "./pageState";
@@ -39,11 +40,13 @@ export function canGoForward(tabId: string, live: Pick<TabLive, "canGoForward">)
 }
 
 export function useHistoryAvailability(tabId: string) {
-  const back = useTabLive(tabId, (l) => l.canGoBack);
-  const forward = useTabLive(tabId, (l) => l.canGoForward);
+  const moves = useTabLive(tabId, (l) => (l.canGoBack ? 1 : 0) | (l.canGoForward ? 2 : 0));
+  const back = !!(moves & 1);
+  const forward = !!(moves & 2);
   const shown = usePage(tabId, (p) => !!p.newTabShown);
   const backToNewTab = usePage(tabId, (p) => p.backToNewTab || !!p.engineBack);
-  const closes = useBrowser((s) => backClosesTab(s, tabId));
+  const opened = useTab(tabId, (t) => !!t?.openerId);
+  const closes = useBrowserWhile(opened, (s) => opened && backClosesTab(s, tabId));
   return { back: !shown && (back || backToNewTab || closes), forward: shown || forward, backCloses: !shown && !back && !backToNewTab && closes };
 }
 
@@ -123,7 +126,7 @@ function hideNewTab(tabId: string) {
   store().updateTab(tabId, { url: kept.url, title: kept.title, favicon: kept.favicon });
 }
 
-useBrowser.subscribe((s, prev) => {
+useBrowser.subscribeTo(["tabs"], (s, prev) => {
   for (const id of changedIds(s.tabs, prev.tabs)) {
     const tab = s.tabs[id];
     const before = prev.tabs[id];

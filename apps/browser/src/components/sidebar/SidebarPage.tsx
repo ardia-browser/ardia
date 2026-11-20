@@ -15,7 +15,7 @@ import { usePageStyle } from "../../state/windows/profilePager";
 import { useSharedTilesStyle } from "../../state/sidebar/sharedTiles";
 import { DragPage, DragScope, useDragController, useDragging, usePinnedCount } from "./DragProvider";
 import { openSidebarMenu } from "../../state/sidebar/menus";
-import { noteRowsScrolled } from "../../state/sidebar/hover";
+import { forgetRowsScrolled, noteRowsScrolled } from "../../state/sidebar/hover";
 import { PinnedGrid } from "./PinnedGrid";
 import { pinGridHeight } from "./pinZone";
 import { SCROLL_EDGE, ScrollEdgeLine, useScrollEdge, useScrollEdgeBelow } from "./ScrollEdge";
@@ -119,6 +119,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
   isCurrent.current = current;
   const windowRef = useRef(windowId);
   windowRef.current = windowId;
+  useEffect(() => () => forgetRowsScrolled(windowRef.current), []);
   const page = useRef<PageGeometry>({ scrollY: 0, viewport: 0, regions: { pinnedGroups: 0, list: 0 } }).current;
   const scrollView = useRef<ScrollView | null>(null);
   const [listViewport] = useState<ListViewport>(() => ({
@@ -153,14 +154,19 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
   );
   const edge = useMemo(() => scrollY.interpolate({ inputRange: [0, 1], outputRange: [0, GLOW_ROOM - edgeLift], extrapolate: "clamp" }), [scrollY, edgeLift]);
   const unedge = useMemo(() => Animated.multiply(edge, -1), [edge]);
-  const onSlack = (e: LayoutChangeEvent) => {
-    if (resting || !canDock || height <= 0) return;
-    const filler = e.nativeEvent.layout.height;
-    const next = dockedAfter(docked, filler, playerTab && playerMotion.expandedSlot.current ? SIDEBAR_PLAYER_GROWTH : 0);
+  const slack = useRef<number | null>(null);
+  const applySlack = () => {
+    if (resting || !canDock || height <= 0 || slack.current === null) return;
+    const next = dockedAfter(docked, slack.current, playerTab && playerMotion.expandedSlot.current ? SIDEBAR_PLAYER_GROWTH : 0);
     if (next === docked) return;
     setDockedNow(next);
     if (current) noteNewTabDocked(next);
   };
+  const onSlack = (e: LayoutChangeEvent) => {
+    slack.current = e.nativeEvent.layout.height;
+    applySlack();
+  };
+  useEffect(applySlack, [height > 0, canDock, resting]);
   const inlineNewTab = !docked && newTabShown;
 
   return (
@@ -228,8 +234,8 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
                           regions={page.regions}
                           viewport={listViewport}
                         />
-                        <View key={`${docked ? "docked" : "inline"}${canDock ? "" : ":fixed"}${resting ? ":resting" : ""}`} onLayout={onSlack} style={{ flexGrow: 1, minHeight: !canDock && inlineNewTab ? 24 : 0 }}>
-                          <ContextMenuArea style={{ flex: 1 }} onContextMenu={() => void openSidebarMenu(windowId)}>
+                        <View key={`${docked ? "docked" : "inline"}${canDock ? "" : ":fixed"}${resting ? ":resting" : ""}`} style={{ flexGrow: 1, minHeight: !canDock && inlineNewTab ? 24 : 0 }}>
+                          <ContextMenuArea style={{ flex: 1 }} onLayout={onSlack} onContextMenu={() => void openSidebarMenu(windowId)}>
                             <WindowDragRegion style={{ flex: 1 }} titleBarDoubleClick={false} onRegionDoubleClick={() => toggleNewTabBar(windowId) || newTab(windowId, { newTabCommand: true })} />
                           </ContextMenuArea>
                         </View>

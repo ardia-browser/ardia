@@ -165,7 +165,7 @@ onConsentPeriodChange(() => {
   hoverLostEvents = windowUnpaintedEvents = 0;
 });
 
-useBrowser.subscribe((s, prev) => {
+useBrowser.subscribeTo(["profiles"], (s, prev) => {
   if (s.profiles === prev.profiles || size(s.profiles) >= size(prev.profiles)) return;
   forgetContext();
   saveContext(null);
@@ -183,7 +183,7 @@ function recordForWebuiPage() {
 
 function watchWebuiPage() {
   shownPage = activeWebuiPage();
-  unwatchWebuiPage = useBrowser.subscribe((s, prev) => {
+  unwatchWebuiPage = useBrowser.subscribeTo(["tabs", "windows", "ui"], (s, prev) => {
     if (s.tabs === prev.tabs && s.windows === prev.windows && s.ui === prev.ui) return;
     const page = activeWebuiPage(s);
     if (page === shownPage) return;

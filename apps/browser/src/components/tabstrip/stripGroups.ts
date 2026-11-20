@@ -152,6 +152,7 @@ export type StripLayout = {
   tabsShrink: boolean;
   wideShown: boolean;
   compactShown: number;
+  titledShown: number;
 };
 
 const dockEntry = (entries: StripEntry[]) => entries.find((e): e is StripDock => e.kind === "dock");
@@ -176,12 +177,14 @@ export function layoutStrip(entries: StripEntry[], activeId: string, pageWidth: 
   const tabUnits = visibleTabs.length;
   const wideShown = visibleTabs.includes(wideId);
   const others = visibleTabs.filter((id) => id !== wideId);
+  const compactShown = others.filter((id) => !needsTitle(id)).length;
+  const titledShown = others.length - compactShown;
   const widths = held ?? stripTabWidths({
     pageWidth,
     dockWidth: dockSpan(dock),
     groups: rows.flatMap((e) => (e.kind === "group" ? [{ chip: groupChip(e), expanded: !e.collapsed && hasVisibleMembers(e), shown: e.members.some((m) => holds(m, activeId)) }] : [])),
-    compactUnits: others.filter((id) => !needsTitle(id)).length,
-    titledUnits: others.filter(needsTitle).length,
+    compactUnits: compactShown,
+    titledUnits: titledShown,
     selectedShown: wideShown,
     fixed: visible.reduce((n, m) => n + (m.kind === "folder" ? folderChip(m) + (holds(m, activeId) ? MEMBERS_INSET : GAP) : 0), 0),
     gap: GAP,
@@ -224,7 +227,7 @@ export function layoutStrip(entries: StripEntry[], activeId: string, pageWidth: 
     return [left + groupChip(row) + MEMBERS_INSET + offsets[at]!, widths[at]!];
   };
   const end = top.slots.length ? top.lefts.at(-1)! + top.slots.at(-1)!.width : 0;
-  return { chip, selected, widths, tabWidth, top, memberWidth, spanOf, tabsEnd: dockSpan(dock) + end, tabsShrink: tabUnits > 0, wideShown, compactShown: others.filter((id) => !needsTitle(id)).length };
+  return { chip, selected, widths, tabWidth, top, memberWidth, spanOf, tabsEnd: dockSpan(dock) + end, tabsShrink: tabUnits > 0, wideShown, compactShown, titledShown };
 }
 
 export function nameGrowth(natural: number | undefined): number {
@@ -276,16 +279,18 @@ export function stripOverflow(entries: StripEntry[], activeId: string, pageWidth
   const least = layout(NO_OVERFLOW, tight, { chip: COMPACT_CHIP, titled: TITLED_CHIP, selected: tight });
   const tightEnd = least.tabsEnd;
   const step = (end: number, selected: number) => end + (least.wideShown ? selected - tight : 0);
+  const readableEnd = tightEnd + least.compactShown * (TITLE_MIN_CHIP - COMPACT_CHIP);
+  const evenEnd = readableEnd - least.titledShown * (TITLED_CHIP - TITLE_MIN_CHIP);
+  const readable = (hidden: ReadonlySet<string>, selectedMin: number, titledMin: number) => layout(hidden, selectedMin, undefined, titledMin, TITLE_MIN_CHIP).tabsEnd <= limit;
+  const even = () => evenEnd <= limit && readable(NO_OVERFLOW, tight, TITLE_MIN_CHIP);
   if (least.compactShown) {
-    const readable = (selectedMin: number, titledMin: number) => layout(NO_OVERFLOW, selectedMin, undefined, titledMin, TITLE_MIN_CHIP).tabsEnd <= limit;
-    const readableEnd = layout(NO_OVERFLOW, tight, { chip: TITLE_MIN_CHIP, titled: TITLED_CHIP, selected: tight }).tabsEnd;
-    const readableStep = SELECTED_STEPS.find((selected) => step(readableEnd, selected) <= limit && readable(selected, TITLED_CHIP));
+    const readableStep = SELECTED_STEPS.find((selected) => step(readableEnd, selected) <= limit && readable(NO_OVERFLOW, selected, TITLED_CHIP));
     if (readableStep !== undefined) return { hidden: NO_OVERFLOW, selectedMin: readableStep, titledMin: TITLED_CHIP, compactMin: TITLE_MIN_CHIP };
-    const evenEnd = layout(NO_OVERFLOW, tight, { chip: TITLE_MIN_CHIP, titled: TITLE_MIN_CHIP, selected: tight }).tabsEnd;
-    if (evenEnd <= limit && readable(tight, TITLE_MIN_CHIP)) return { hidden: NO_OVERFLOW, selectedMin: tight, titledMin: TITLE_MIN_CHIP, compactMin: TITLE_MIN_CHIP };
+    if (even()) return { hidden: NO_OVERFLOW, selectedMin: tight, titledMin: TITLE_MIN_CHIP, compactMin: TITLE_MIN_CHIP };
   }
   const roomy = SELECTED_STEPS.find((selected) => step(tightEnd, selected) <= limit && fits(NO_OVERFLOW, selected));
   if (roomy !== undefined) return { hidden: NO_OVERFLOW, selectedMin: roomy, titledMin: TITLED_CHIP, compactMin: COMPACT_CHIP };
+  if (!least.compactShown && even()) return { hidden: NO_OVERFLOW, selectedMin: tight, titledMin: TITLE_MIN_CHIP, compactMin: TITLE_MIN_CHIP };
   const candidates = overflowCandidates(entries, activeId, wideId, needsTitle);
   const order: string[] = [];
   const membersLeft = new Map<string, number>();
@@ -312,7 +317,12 @@ export function stripOverflow(entries: StripEntry[], activeId: string, pageWidth
   } else {
     while (count < candidates.length && !fits(first(++count), tight));
   }
-  return { hidden: first(count), selectedMin: tight, titledMin: TITLED_CHIP, compactMin: COMPACT_CHIP };
+  const hidden = first(count);
+  if (least.compactShown) {
+    if (readable(hidden, tight, TITLED_CHIP)) return { hidden, selectedMin: tight, titledMin: TITLED_CHIP, compactMin: TITLE_MIN_CHIP };
+    if (readable(hidden, tight, TITLE_MIN_CHIP)) return { hidden, selectedMin: tight, titledMin: TITLE_MIN_CHIP, compactMin: TITLE_MIN_CHIP };
+  }
+  return { hidden, selectedMin: tight, titledMin: TITLED_CHIP, compactMin: COMPACT_CHIP };
 }
 
 type OverflowCandidate = { id: string; at: number; group: StripGroupEntry | null; last: number };

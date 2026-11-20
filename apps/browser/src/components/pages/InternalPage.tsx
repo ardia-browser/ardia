@@ -12,7 +12,7 @@ import { INTERNAL_PAGES, internalPageOf, internalQuery, pluginPageOf, tabDestina
 import { usePluginPageSpec } from "../../state/plugins/hooks";
 import { PluginPage } from "../plugins/PluginPage";
 
-export function InternalPage({ tabId }: { tabId: string }) {
+export function InternalPage({ contentAreaOf: tabId }: { contentAreaOf: string }) {
   const url = useTab(tabId, (t) => (t ? tabDestination(t) : ""));
   const page = internalPageOf(url);
   const plugin = page ? null : pluginPageOf(url);

@@ -80,6 +80,12 @@ export const tabRows = {
           description: "Hold one Top App over another to make a folder.",
           keywords: ["folder", "folders", "top apps", "pinned tiles", "favorites", "group", "tile folder", "stack"],
         },
+        tabReorderHaptics: {
+          title: "Haptic feedback when reordering tabs",
+          description: "The trackpad ticks as a dragged tab moves to a new place or over another window.",
+          keywords: ["haptic", "haptics", "trackpad", "force touch", "tick", "vibration", "feedback", "drag", "reorder", "move tabs"],
+          shown: () => PLATFORM_FEATURES.haptics,
+        },
         showTabHoverMenu: {
           title: "Show tab hover menu",
           description: "Rest on a tab to see its address and quick actions.",

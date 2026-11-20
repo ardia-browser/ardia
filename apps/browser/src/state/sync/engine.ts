@@ -380,7 +380,7 @@ export function startSync() {
     watchExtensions();
     scheduleSync();
   });
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["tabs", "bookmarks", "settings", "profiles", "profileOrder", "groups"], (s, prev) => {
     if (!doc.enabled) return;
     const closed = !isQuitting() && recordOpenTabCloses(doc, openTabsClosed(s, prev));
     if (closed && !cycle) save();

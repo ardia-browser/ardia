@@ -171,7 +171,7 @@ export function startUserScripts() {
     if (on) void schedule();
   };
   sync(useBrowser.getState());
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["settings", "profileOrder", "profiles"], (s, prev) => {
     if (s.settings.cliControl !== prev.settings.cliControl || s.profileOrder !== prev.profileOrder || s.profiles !== prev.profiles) sync(s);
   });
   onProfilesOpened(() => sync(useBrowser.getState()));

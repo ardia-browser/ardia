@@ -106,7 +106,7 @@ export const handOffPinPage = (copyId: string, commit: () => void) => (users > 0
 export const requestPinHandOff = (copyId: string, mayCommit: () => boolean = () => true) => handOff(copyId, () => store().handOffPin(copyId), mayCommit);
 
 export function startPinHandoff() {
-  if (users++ === 0) stopWatching = useBrowser.subscribe((s, prev) => {
+  if (users++ === 0) stopWatching = useBrowser.subscribeTo(["windows", "windowUi", "tabs"], (s, prev) => {
     if (s.windows !== prev.windows || s.windowUi !== prev.windowUi) {
       for (const [id, w] of Object.entries(s.windows)) {
         const was = prev.windows[id];

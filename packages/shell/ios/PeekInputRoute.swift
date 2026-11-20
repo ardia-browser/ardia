@@ -9,6 +9,10 @@ enum PeekInputRoute {
 
   static var routed: Routed?
 
+  typealias SetWindowLocation = @convention(c) (CGEvent, CGPoint) -> Void
+  static let setWindowLocation = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGEventSetWindowLocation")
+    .map { unsafeBitCast($0, to: SetWindowLocation.self) }
+
   private static let mask: NSEvent.EventTypeMask = [
     .leftMouseDown, .leftMouseUp, .leftMouseDragged, .rightMouseDown, .rightMouseUp, .rightMouseDragged,
     .otherMouseDown, .otherMouseUp, .otherMouseDragged, .mouseMoved, .scrollWheel,
@@ -48,6 +52,7 @@ enum PeekInputRoute {
       let screen = window.convertPoint(toScreen: windowPoint)
       let top = NSScreen.screens.first?.frame.maxY ?? 0
       copy.location = CGPoint(x: screen.x, y: top - screen.y)
+      setWindowLocation?(copy, CGPoint(x: windowPoint.x, y: window.frame.height - windowPoint.y))
       copy.setIntegerValueField(.mouseEventWindowUnderMousePointer, value: Int64(window.windowNumber))
       copy.setIntegerValueField(.mouseEventWindowUnderMousePointerThatCanHandleThisEvent, value: Int64(window.windowNumber))
       guard let mapped = NSEvent(cgEvent: copy), mapped.window === window || event.window == nil else { return nil }

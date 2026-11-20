@@ -54,9 +54,11 @@ export const GlassFill = memo(function GlassFill({
   panelFill,
   dark,
   theme: shownTheme,
+  tint: tintOverride,
   children,
 }: {
   radius: number;
+  tint?: string;
   border?: number;
   state?: GlassState;
   panelFill?: string;
@@ -74,7 +76,7 @@ export const GlassFill = memo(function GlassFill({
       pointerEvents="none"
       glassStyle={GLASS_STYLE[panelFill ? "panel" : "control"]}
       cornerRadius={radius}
-      tint={panelFill ? panelGlassTint(theme, panelFill, tint) : controlGlassTint(theme, state, tint)}
+      tint={tintOverride ?? (panelFill ? panelGlassTint(theme, panelFill, tint) : controlGlassTint(theme, state, tint))}
       dark={shownDark}
       style={[frame, children ? HOSTED_CONTENT : panelFill ? null : { opacity: CONTROL_GLASS_STRENGTH }]}
     >

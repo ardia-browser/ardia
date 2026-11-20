@@ -5,6 +5,7 @@ export { Dialog, DialogActions, DialogTitle, Sheet } from "./Dialog";
 export { Divider } from "./Divider";
 export { Dot } from "./Dot";
 export { EmptyState } from "./EmptyState";
+export { Crossfade, Expand, useCrossfade, useListPresence } from "./Expand";
 export { Checkbox, PopUp, SearchField, TextField, type Option } from "./Field";
 export { GlassFill, GlassLookContext, liquidGlass, useGlass, useGlassLook, type GlassLook } from "./Glass";
 export { HoverCard, type HoverCardProps } from "./HoverCard";
@@ -19,7 +20,7 @@ export { PinchArea, pinchSettle } from "./PinchArea";
 export { pinchFollow, pinchScale, type PinchMotion } from "./pinch";
 export { ProgressTrack } from "./ProgressTrack";
 export { GradientFill, type GradientStop } from "./GradientFill";
-export { curve, duration, legsEasing, nativeLoop, period, spring, springs, springSpec, usePresence, type Fade, type LoopLeg, type SpringSpec } from "./motion";
+export { anchoredClose, anchoredOpen, curve, duration, legsEasing, nativeLoop, period, selectionSlide, spring, springs, springSpec, usePresence, type Fade, type LoopLeg, type SpringSpec } from "./motion";
 export { reduceMotion, reduceMotionKnown } from "./reduceMotion";
 export { PANEL, PanelCloseButton, PanelHeader, Popover, POPOVER_MARGIN, POPOVER_MOTION, PopoverSurface, PopoverValue, usePopoverMotion, usePopoverMotionStyle, usePopoverPresence } from "./Popover";
 export { Radio } from "./Radio";
@@ -60,6 +61,9 @@ export {
   SwipeArea,
   Symbol,
   ThemeSwatch,
+  useSecretEntry,
+  VaultPasswordField,
+  VaultTouchID,
   VisualEffect,
   WebView,
   WindowBackdrop,
@@ -78,6 +82,7 @@ export {
   type SwipeAreaHandle,
   type SwipeEvent,
   type SymbolProps,
+  type VaultPasswordFieldHandle,
   type WebViewHandle,
 } from "./native";
 export { OverPage } from "./OverPage";

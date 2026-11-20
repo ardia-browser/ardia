@@ -323,7 +323,7 @@ export const SplitToast = memo(function SplitToast({ windowId }: { windowId: str
     if (!toast || toast.sticky) return;
     const timer = setTimeout(() => setClosing(true), toast.action ? TOAST_ACTION_MS : TOAST_MS);
     return () => clearTimeout(timer);
-  }, [toast?.id]);
+  }, [toast?.id, toast?.sticky]);
   if (!shown) return null;
   const action = shown.action;
   return (
@@ -332,6 +332,7 @@ export const SplitToast = memo(function SplitToast({ windowId }: { windowId: str
       title={shown.title}
       message={shown.message ?? undefined}
       icon={shown.icon ?? "rectangle.split.3x1"}
+      loading={!!shown.loading}
       action={action?.title}
       onAction={() => {
         action?.run();

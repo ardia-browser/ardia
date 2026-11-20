@@ -1,12 +1,13 @@
-import { type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Surface, VisualEffect } from "@ardia/shell";
 import { Symbol } from "./Symbol";
-import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle } from "react-native";
+import { Crossfade } from "./Expand";
 import { useHover } from "./useHover";
 import { HoverFill, HoverSwap } from "./HoverFill";
 import { hex, useTheme, type Theme } from "./theme";
-import { capsule, closeOnArt, opacity, pillHeight, radius as radii, space, stepperSize, font as typeScale, weight as weights } from "./tokens";
-import { buttonMotion, usePressScaleMotion } from "./motion";
+import { capsule, closeOnArt, opacity, pillHeight, radius as radii, space, stepperSize, font as typeScale, weight as weights, withAlpha } from "./tokens";
+import { buttonMotion, crossfade, curve, period, usePressScaleMotion } from "./motion";
 import type { CloseProps, PillProps, PushProps, StepperProps } from "./Button";
 
 function ScaledGlyph({ scale, size, children }: { scale: Animated.Value | null; size: number; children: ReactNode }) {
@@ -55,7 +56,7 @@ export function StepperButtonView({ icon, onPress, width = stepperSize.width, he
 const CHIP_DIM = 0.85;
 
 export function PillButtonView(props: PillProps) {
-  const { onPress, title, primary = false, size } = props;
+  const { onPress, title, primary = false, size, reserve } = props;
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
   const pressMotion = usePressScaleMotion(true, buttonMotion.controlPressScale);
@@ -85,7 +86,7 @@ export function PillButtonView(props: PillProps) {
               >
                 <HoverSwap shown={pressed || hovered} rest={rest.fill} color={look.fill} radius={capsule(chipHeight)} />
                 {icon ? <Symbol name={icon} size={10.5} weight="semibold" color={ink} style={{ width: 14, height: 14 }} /> : null}
-                <Text style={{ ...typeScale.small, fontWeight: weights.medium, color: ink }}>{title}</Text>
+                <TitleSwap title={title} reserve={reserve} style={{ ...typeScale.small, fontWeight: weights.medium, color: ink }} />
               </Animated.View>
             );
           }}
@@ -102,9 +103,7 @@ export function PillButtonView(props: PillProps) {
           return (
             <Animated.View style={[{ height, paddingHorizontal: space.l, alignItems: "center", justifyContent: "center" }, scaleStyle]}>
               <HoverSwap shown={pressed || hovered} rest={pillLook(theme, "prompt", primary, false, false).fill} color={look.fill} radius={size ? capsule(height) : radii.tile} />
-              <Text numberOfLines={1} style={{ ...typeScale.body, fontWeight: weights.medium, color: look.text }}>
-                {title}
-              </Text>
+              <TitleSwap title={title} reserve={reserve} lines={1} style={{ ...typeScale.body, fontWeight: weights.medium, color: look.text }} />
             </Animated.View>
           );
         }}
@@ -167,23 +166,39 @@ const ART_CLOSE_BOX = 22;
 const HUD_PLATE = { width: HUD_CLOSE_BOX, height: HUD_CLOSE_BOX, borderRadius: capsule(HUD_CLOSE_BOX), overflow: "hidden", alignItems: "center", justifyContent: "center" } as const;
 const HUD_GLYPH = { width: HUD_CLOSE_BOX, height: HUD_CLOSE_BOX } as const;
 
-export function PushButtonView({ title, onPress, kind = "default", disabled, icon, style }: PushProps) {
+export function TitleSwap({ title, reserve, lines, style }: { title: string; reserve?: readonly string[]; lines?: number; style: StyleProp<TextStyle> }) {
+  const text = (value: string) => (
+    <Text key={value} numberOfLines={lines} style={reserve?.length ? [style, CENTERED] : style}>
+      {value}
+    </Text>
+  );
+  return (
+    <Crossfade id={title} reserve={reserve?.length ? reserve.map(text) : undefined}>
+      {text(title)}
+    </Crossfade>
+  );
+}
+
+const CENTERED = { textAlign: "center" } as const;
+
+export function PushButtonView({ title, onPress, kind = "default", disabled, icon, style, reserve, busy = false, label }: PushProps) {
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
-  const pressMotion = usePressScaleMotion(!disabled, buttonMotion.controlPressScale);
+  const pressMotion = usePressScaleMotion(!disabled && !busy, buttonMotion.controlPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : null;
   const primary = kind === "primary";
   const plain = kind === "plain";
   const textColor = primary ? theme.onAccent : kind === "destructive" ? theme.destructive : plain ? theme.formAccent : theme.textPrimary;
+  const textStyle = { ...typeScale.body, color: textColor, textDecorationLine: plain && hovered && !disabled && !busy ? "underline" : "none" } as const;
   return (
-    <View {...hoverProps} style={[{ opacity: disabled ? opacity.disabled : 1 }, style]}>
+    <View {...hoverProps} style={[{ opacity: disabled && !busy ? opacity.disabled : 1 }, style]}>
       <Pressable
-        disabled={disabled}
+        disabled={disabled || busy}
         onPress={onPress}
-        onAccessibilityTap={disabled ? undefined : onPress}
+        onAccessibilityTap={disabled || busy ? undefined : onPress}
         accessibilityRole="button"
-        accessibilityLabel={title}
-        accessibilityState={{ disabled: !!disabled }}
+        accessibilityLabel={label ?? title}
+        accessibilityState={{ disabled: !!(disabled || busy), busy }}
         onPressIn={pressMotion.onPressIn}
         onPressOut={pressMotion.onPressOut}
       >
@@ -197,17 +212,66 @@ export function PushButtonView({ title, onPress, kind = "default", disabled, ico
               alignItems: "center",
               justifyContent: "center",
               gap: space.xs,
-              backgroundColor: primary ? (pressed ? theme.formAccentPressed : theme.formAccent) : undefined,
+              backgroundColor: primary ? (pressed && !busy ? theme.formAccentPressed : theme.formAccent) : undefined,
               borderWidth: plain || primary ? 0 : StyleSheet.hairlineWidth * 2,
               borderColor: theme.controlBorder,
             }, scaleStyle]}
           >
-            {plain || primary ? null : <HoverSwap shown={!disabled && (pressed || hovered)} rest={theme.control} color={pressed ? theme.controlPressed : theme.controlHover} radius={radii.control} underBorder={StyleSheet.hairlineWidth * 2} />}
-            {icon ? <Symbol name={icon} size={11} color={textColor} style={{ width: 13, height: 13 }} /> : null}
-            <Text style={{ ...typeScale.body, color: textColor, textDecorationLine: plain && hovered ? "underline" : "none" }}>{title}</Text>
+            {plain || primary ? null : <HoverSwap shown={!disabled && !busy && (pressed || hovered)} rest={theme.control} color={pressed ? theme.controlPressed : theme.controlHover} radius={radii.control} underBorder={StyleSheet.hairlineWidth * 2} />}
+            {icon && !busy ? <Symbol name={icon} size={11} color={textColor} style={{ width: 13, height: 13 }} /> : null}
+            <BusySwap busy={busy} color={textColor}>
+              <TitleSwap title={title} reserve={reserve} style={textStyle} />
+            </BusySwap>
           </Animated.View>
         )}
       </Pressable>
     </View>
+  );
+}
+
+const SPINNER = { box: 12, stroke: 1.5, trackAlpha: 0.3 } as const;
+
+function BusySwap({ busy, color, children }: { busy: boolean; color: string; children: ReactNode }) {
+  const shown = useRef(new Animated.Value(busy ? 1 : 0)).current;
+  useEffect(() => {
+    const run = Animated.timing(shown, { toValue: busy ? 1 : 0, ...crossfade, useNativeDriver: true });
+    run.start();
+    return () => run.stop();
+  }, [busy]);
+  return (
+    <View>
+      <Animated.View style={{ opacity: shown.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }}>{children}</Animated.View>
+      {busy ? (
+        <Animated.View pointerEvents="none" style={[BUSY_OVERLAY, { opacity: shown }]}>
+          <ButtonSpinner color={color} />
+        </Animated.View>
+      ) : null}
+    </View>
+  );
+}
+
+const BUSY_OVERLAY = { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, alignItems: "center", justifyContent: "center" } as const;
+
+export function ButtonSpinner({ color, box = SPINNER.box, stroke = SPINNER.stroke }: { color: string; box?: number; stroke?: number }) {
+  const turn = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(Animated.timing(turn, { toValue: 1, duration: period.spinner, easing: curve.linear, useNativeDriver: true }));
+    loop.start();
+    return () => loop.stop();
+  }, []);
+  return (
+    <Animated.View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={{
+        width: box,
+        height: box,
+        borderRadius: box / 2,
+        borderWidth: stroke,
+        borderColor: withAlpha(color, SPINNER.trackAlpha),
+        borderTopColor: color,
+        transform: [{ rotate: turn.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] }) }],
+      }}
+    />
   );
 }

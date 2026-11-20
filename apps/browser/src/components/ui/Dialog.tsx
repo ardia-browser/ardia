@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Animated, findNodeHandle, Pressable, StyleSheet, View, type DimensionValue, type StyleProp, type ViewStyle } from "react-native";
 import { curve, duration } from "./motion";
+import { reduceMotion } from "./reduceMotion";
 import { Panel } from "./Panel";
 import { Text } from "./Text";
 import { useTheme } from "./theme";
@@ -14,6 +15,7 @@ export function Dialog({
   onDismiss,
   onSubmit,
   restoreFocus,
+  focusInside = false,
   animated = false,
   maxHeight,
   place,
@@ -25,6 +27,7 @@ export function Dialog({
   onDismiss?: () => void;
   onSubmit?: () => void;
   restoreFocus?: () => void;
+  focusInside?: boolean;
   animated?: boolean;
   maxHeight?: DimensionValue;
   place?: Pick<ViewStyle, "top" | "left" | "right" | "bottom">;
@@ -41,7 +44,7 @@ export function Dialog({
     return () => restore.current?.();
   }, []);
   const content = onSubmit ? (
-    <DialogKeys onDismiss={onDismiss} onSubmit={onSubmit} pad={pad}>
+    <DialogKeys onDismiss={onDismiss} onSubmit={onSubmit} pad={pad} focusInside={focusInside}>
       {children}
     </DialogKeys>
   ) : (
@@ -76,7 +79,7 @@ export function Dialog({
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: appear, backgroundColor: theme.scrim }]}>
         <Pressable focusable={false} style={StyleSheet.absoluteFill} onPress={onDismiss} />
       </Animated.View>
-      <Animated.View style={{ opacity: appear, transform: [{ scale: appear.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] }}>{surface}</Animated.View>
+      <Animated.View style={reduceMotion() === true ? { opacity: appear } : { opacity: appear, transform: [{ scale: appear.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] }}>{surface}</Animated.View>
     </View>
   );
 }
@@ -84,9 +87,11 @@ export function Dialog({
 const DIALOG_KEYS = [{ key: "Escape" }, { key: "Enter" }, { key: "Tab" }, { key: "Tab", shiftKey: true }];
 const targetTag = (event: object) => (event as { target?: number }).target;
 
-function DialogKeys({ onDismiss, onSubmit, pad, children }: { onDismiss?: () => void; onSubmit: () => void; pad: Space; children: ReactNode }) {
+function DialogKeys({ onDismiss, onSubmit, pad, focusInside, children }: { onDismiss?: () => void; onSubmit: () => void; pad: Space; focusInside: boolean; children: ReactNode }) {
   const keys = useRef<View>(null);
-  useEffect(() => keys.current?.focus(), []);
+  useEffect(() => {
+    if (!focusInside) keys.current?.focus();
+  }, []);
   return (
     <View
       ref={keys}

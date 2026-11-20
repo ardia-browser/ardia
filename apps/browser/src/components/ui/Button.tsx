@@ -1,12 +1,12 @@
 import { ContextMenuArea } from "@ardia/shell";
 import { Symbol, type SymbolProps } from "./Symbol";
 import { memo, type ReactNode } from "react";
-import { Animated, Image, Pressable, Text, View, type GestureResponderEvent, type ImageSourcePropType, type StyleProp, type ViewStyle } from "react-native";
+import { Animated, Image, Pressable, View, type GestureResponderEvent, type ImageSourcePropType, type StyleProp, type ViewStyle } from "react-native";
 import { modifiersOf, type ClickModifiers } from "../../lib/keys";
 import { useToolbarRowContext } from "./toolbarRowContext";
 import { useHover, useTooltip } from "./useHover";
 import { HoverFill } from "./HoverFill";
-import { CloseButtonView, PillButtonView, PushButtonView, StepperButtonView } from "./ButtonKinds";
+import { CloseButtonView, PillButtonView, PushButtonView, StepperButtonView, TitleSwap } from "./ButtonKinds";
 import { useTheme } from "./theme";
 import { buttonMotion, usePressScaleMotion } from "./motion";
 import { capsule, iconButton, opacity, radius as radii, space, font as typeScale, weight as weights, type ColorRole, type IconButtonSize, type Space, type TypeSize, type Weight } from "./tokens";
@@ -61,11 +61,12 @@ type TextProps = {
   tone?: ColorRole;
   hoverTone?: ColorRole;
   label?: string;
+  reserve?: readonly string[];
 };
 
 export type PillSize = "m" | "l" | "xl";
 
-export type PillProps = { variant: "pill"; onPress: () => void; title: string; primary?: boolean; size?: PillSize } & ({ tone?: "prompt" } | { tone: "chip"; icon?: string; height?: number });
+export type PillProps = { variant: "pill"; onPress: () => void; title: string; primary?: boolean; size?: PillSize; reserve?: readonly string[] } & ({ tone?: "prompt" } | { tone: "chip"; icon?: string; height?: number });
 
 export type StepperProps = { variant: "stepper"; icon: string; onPress: () => void; width?: number; height?: number; tooltip: string; disabled?: boolean };
 
@@ -82,6 +83,9 @@ export type PushProps = {
   disabled?: boolean;
   icon?: string;
   style?: StyleProp<ViewStyle>;
+  reserve?: readonly string[];
+  busy?: boolean;
+  label?: string;
 };
 
 export type ButtonProps = IconProps | TextProps | PillProps | StepperProps | CloseProps | PushProps;
@@ -214,7 +218,7 @@ const TEXT_LOOKS: Record<TextLook, { plate: "toolbar" | "hover" | "none"; height
 const UNDERLINE = { textDecorationLine: "underline" } as const;
 
 function TextButtonView(props: TextProps) {
-  const { title, onPress, disabled, look, hoverTone, padY, label } = props;
+  const { title, onPress, disabled, look, hoverTone, padY, label, reserve } = props;
   const base = look ? TEXT_LOOKS[look] : null;
   const plate = props.plate ?? base?.plate ?? "toolbar";
   const height = props.height ?? base?.height;
@@ -232,7 +236,9 @@ function TextButtonView(props: TextProps) {
     return (
       <View {...hoverProps}>
         <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} disabled={disabled} {...a11y}>
-          <Animated.Text style={[textStyle(hovered && hoverTone ? theme[hoverTone] : theme[tone]), { paddingVertical: padY ? space[padY] : undefined }, look === "link" && hovered ? UNDERLINE : null, scaleStyle]}>{title}</Animated.Text>
+          <Animated.View style={scaleStyle}>
+            <TitleSwap title={title} reserve={reserve} style={[textStyle(!disabled && hovered && hoverTone ? theme[hoverTone] : theme[tone]), { paddingVertical: padY ? space[padY] : undefined }, look === "link" && !disabled && hovered ? UNDERLINE : null]} />
+          </Animated.View>
         </Pressable>
       </View>
     );
@@ -243,7 +249,7 @@ function TextButtonView(props: TextProps) {
         {({ pressed }) => (
           <Animated.View style={[{ height, paddingHorizontal: space[pad], justifyContent: "center" }, scaleStyle]}>
             <HoverFill shown={lit(pressed)} color={plate === "toolbar" && pressed ? theme.toolbarPressed : theme.toolbarHover} radius={radii.control} />
-            <Text style={textStyle(disabled ? theme.iconDisabled : hovered && hoverTone ? theme[hoverTone] : theme[tone])}>{title}</Text>
+            <TitleSwap title={title} reserve={reserve} style={textStyle(disabled ? theme.iconDisabled : hovered && hoverTone ? theme[hoverTone] : theme[tone])} />
           </Animated.View>
         )}
       </Pressable>

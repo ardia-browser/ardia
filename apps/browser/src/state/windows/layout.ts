@@ -12,7 +12,7 @@ import { BROWSER_WINDOW_BUTTONS, captionClearTop, captionRoom, WINDOW_CHROME, WI
 import { toolbarRowOf } from "../../lib/toolbarRow";
 import { SMALL_BAR_HEIGHT } from "./small";
 import type { CaptionRegion } from "../../platform/windowControls";
-import { savedSidebarWidth, sidebarWidthIn } from "../sidebar/shownWidth";
+import { sidebarWidthIn } from "../sidebar/shownWidth";
 import { onWindowRootSizes, windowRootWidth } from "./rootSize";
 
 export { drawnWindowCornerRadius, frameCornerRadius, windowCornerRadius, windowFrame } from "../../platform/windows";
@@ -169,7 +169,7 @@ export function captionRegions(s: BrowserState, windowId: string, overlaid = fal
   if (ui?.panel.open || ui?.downloadsOpen) return [];
   const controls = windowControlsWidth(BROWSER_WINDOW_BUTTONS) + WINDOW_CONTROLS.edge;
   const beside = controls + WINDOW_CONTROLS.gap;
-  const leadingRoom = savedSidebarWidth(s) - beside;
+  const leadingRoom = sidebarWidthIn(s, windowId) - beside;
   const regions: CaptionRegion[] = !windowControlsLeading(s, windowId, chrome)
     ? [[-(chrome.trailingWidth - 2), 0, beside, windowControlsBottom(place)]]
     : leadingRoom > 0

@@ -1,10 +1,11 @@
 import { displayHost, displayUrl, hostOf, type Suggestion } from "@ardia/core";
-import { memo } from "react";
-import { Image, Pressable, Text as NativeText, View } from "react-native";
+import { memo, useEffect, useRef } from "react";
+import { AccessibilityInfo, Image, Pressable, Text as NativeText, View } from "react-native";
 import { Button, Symbol, Text, useHover, useTheme, withAlpha, type Theme } from "../ui";
 import { Favicon, LocalFileIcon } from "../favicon/Favicon";
 import { filePathLabel, fullFilePath, isLocalFileUrl } from "../../lib/url";
 import { SELECTED_SUGGESTION_ALPHA, SUGGESTION } from "./tokens";
+import { emptyAnnouncement } from "./emptyAnnouncement";
 
 const ICON_BOX = { width: SUGGESTION.iconBox, height: SUGGESTION.iconBox } as const;
 const NO_SHRINK = { flexShrink: 0 } as const;
@@ -84,6 +85,12 @@ export const SuggestionList = memo(function SuggestionList({
   dropdown: boolean;
   actions: RowActions;
 }) {
+  const announced = useRef<string | null>(null);
+  useEffect(() => {
+    const step = emptyAnnouncement(announced.current, items.length ? null : empty, items.length > 0);
+    announced.current = step.announced;
+    if (step.say) AccessibilityInfo.announceForAccessibility(step.say);
+  }, [empty, items.length]);
   const frame = { paddingHorizontal: dropdown ? SUGGESTION.dropdownListX : SUGGESTION.listX, paddingBottom: dropdown ? SUGGESTION.dropdownListBelow : SUGGESTION.listBelow };
   if (!items.length) return empty ? <View style={frame}><EmptyRow text={empty} /></View> : null;
   return (
@@ -104,7 +111,7 @@ export const SuggestionList = memo(function SuggestionList({
 function EmptyRow({ text }: { text: string }) {
   const theme = useTheme();
   return (
-    <View accessibilityRole="text" style={EMPTY_ROW}>
+    <View accessibilityRole="text" accessibilityLiveRegion="polite" style={EMPTY_ROW}>
       <Symbol name="magnifyingglass" size={SUGGESTION.icon} color={theme.textSecondary} style={ICON_BOX} />
       <Text lines={1} size="title" tone="textSecondary" style={{ flexShrink: 1 }}>{text}</Text>
     </View>

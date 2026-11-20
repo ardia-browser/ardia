@@ -14,12 +14,15 @@ test("with Show full address on, the hover card shows the path and query too", (
 });
 
 test("a page without a host keeps its full address, in both modes", () => {
-  for (const url of ["file:///Users/me/notes.html", "about:blank"]) {
-    assert.equal(tabCardAddress(url, false), tabCardAddress(url, true));
-    assert.ok(tabCardAddress(url, false).length > 0, url);
-  }
-  assert.equal(tabCardAddress("file:///Users/me/notes.html", false), filePathLabel("file:///Users/me/notes.html"));
-  assert.ok(tabCardAddress("file:///Users/me/projects/ardia/pages/notes.html", false).endsWith("notes.html"));
+  assert.equal(tabCardAddress("about:blank", false), tabCardAddress("about:blank", true));
+  assert.ok(tabCardAddress("about:blank", false).length > 0);
+});
+
+test("a local file shows its short path by default and its whole decoded path with Show full address on", () => {
+  const file = "file:///Users/me/projects/ardia/pages/my%20notes.html";
+  assert.equal(tabCardAddress(file, false), filePathLabel(file));
+  assert.equal(tabCardAddress(file, false), "~/…/pages/my notes.html");
+  assert.equal(tabCardAddress(file, true), "/Users/me/projects/ardia/pages/my notes.html");
 });
 
 test("a tab without an address shows no address line", () => {

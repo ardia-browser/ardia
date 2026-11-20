@@ -9,6 +9,7 @@ const { littleArdiaBarLayout } = await import("../../components/littleArdia/barL
 const { SMALL_FIELD_HEIGHT, SMALL_BAR_BUTTON } = await import("../../components/littleArdia/tokens.ts");
 const { BROWSER_WINDOW_BUTTONS, trailingClearance, WINDOW_CONTROLS, windowControlsWidth } = await import("../../lib/windowChrome.ts");
 const { syncCaptionRegions } = await import("./captionRegions.ts");
+const { savedSidebarWidth, sidebarWidthIn } = await import("../sidebar/shownWidth.ts");
 
 const SETTINGS = { tabLayout: "sidebar", sidebarSide: "left", addressBar: "toolbar", compactToolbar: false, hideToolbarWhileScrolling: false, autoHideTabs: false, sidebarWidth: 190 };
 function state(settings = {}, window = {}, extra = {}) {
@@ -139,6 +140,14 @@ test("on Windows the gap beside the window buttons and the gutter above the card
   assert.deepEqual(regions({ addressBar: "sidebar", autoHideTabs: true }), [[...SPACER, 29]]);
   assert.deepEqual(regions({ tabLayout: "top" }), [[...SPACER, 35.75]]);
   assert.deepEqual(regions({}, { kind: "small" }), [[...SPACER, 33]]);
+});
+
+test("on Windows the leading caption region stops at the sidebar's shown width, not its saved one", () => {
+  const narrow = state({ addressBar: "sidebar", sidebarWidth: 300 }, { frame: [0, 0, 500, 800] });
+  assert.equal(savedSidebarWidth(narrow), 300);
+  assert.equal(sidebarWidthIn(narrow, "w"), 190, "a 500 pt window shows a 190 pt sidebar");
+  const [leading] = captionRegions(narrow, "w", false, windows);
+  assert.deepEqual(leading, [144, 0, -(190 - 144), 39], "the drag region ends at the shown sidebar's edge, not over the page");
 });
 
 test("on Windows a caption region never covers the window buttons or reaches below their row", () => {

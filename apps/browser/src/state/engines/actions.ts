@@ -29,6 +29,7 @@ import type { Tab } from "../browser/types";
 import { carrySignIn } from "./engineSignIn";
 import { carriesSiteData, carryRecentSites, noteWebKitPageSettled } from "./siteData";
 import { dropSwap, holdPageForSwap } from "./engineSwap";
+import { syncExtensionsToWebKit } from "./webKitExtensions";
 import { wantsPage } from "../tabs/tabPages";
 import { webviews } from "../../platform/webviews";
 import { withDeadline } from "../../lib/deadline";
@@ -372,8 +373,10 @@ export function noteWebKitPage(tabId: string, page: WebKitPage) {
   const t = store().tabs[tabId];
   if (!t) return;
   watchClosedTabs();
+  const firstVisit = !visitedTabs.has(tabId);
   visitedTabs.add(tabId);
   const profile = isIncognitoProfile(t.profileId) ? null : engineProfile(useBrowser.getState(), t.profileId);
+  if (firstVisit && profile !== null) void syncExtensionsToWebKit(profile);
   visits.note(tabId, profile, page);
   noteWebKitSite(tabId, page.url);
   if (profile !== null && page.url === page.committedUrl) noteWebKitPageSettled(tabId, page.url, page.isLoading);

@@ -3,6 +3,7 @@ import { openWindow } from "../browser/actions";
 import { useBrowser } from "../browser/store";
 import { engineProfile } from "../browser/model";
 import { asAdoptId } from "../tabs/adoptIds";
+import { answerWebKitTabs } from "./webKitTabs";
 
 type Request<A extends TabsRequest["action"]> = Extract<TabsRequest, { action: A }>;
 
@@ -16,6 +17,8 @@ export function openRequestedTab(request: TabsRequest) {
       return openChromeMadeTab(request);
     case "adopt":
       return adoptStrayTab(request);
+    case "webKit":
+      return answerWebKitTabs(request);
   }
 }
 

@@ -26,7 +26,7 @@ export type InstallRequest = { key: number; windowId: string; profile: string; s
 type ExtensionsStore = {
   lists: Record<string, InstalledExtension[]>;
   actions: Record<string, Record<string, ActionState>>;
-  popup: { windowId: string; pageProfile: string; extensionId: string; url: string; anchor: Anchor; opened?: number } | null;
+  popup: { windowId: string; pageProfile: string; extensionId: string; url: string; anchor: Anchor; opened?: number; engine?: "webkit" } | null;
   install: InstallRequest | null;
   pinDialog: { windowId: string } | null;
   sidePanels: Record<string, SidePanel>;

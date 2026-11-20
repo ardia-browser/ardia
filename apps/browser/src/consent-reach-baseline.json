@@ -57,7 +57,7 @@
     "apps/browser/src/state/app/linuxCommandInstall.ts": 1,
     "apps/browser/src/state/app/programControl.ts": 1,
     "apps/browser/src/state/automation/downloadHooks.ts": 1,
-    "apps/browser/src/state/bookmarks/engineSync.ts": 2,
+    "apps/browser/src/state/bookmarks/engineSync.ts": 1,
     "apps/browser/src/state/bookmarks/exportHtml.ts": 2,
     "apps/browser/src/state/browser/actions.ts": 1,
     "apps/browser/src/state/config/configFiles.ts": 2,

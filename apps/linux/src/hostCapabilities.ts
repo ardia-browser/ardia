@@ -91,6 +91,7 @@ export const WEB_ENGINE_SETTINGS = [
   "advanced.engineSwitchAsksAboutUnsavedWork",
   "advanced.engineSwitchCarriesSiteData",
   "advanced.webKitFraudWarnings",
+  "advanced.webKitExtensions",
   "advanced.enginesDiffer",
 ] as const;
 

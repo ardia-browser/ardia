@@ -10,6 +10,7 @@ import { onSyncedExtensionChange } from "../sync/extensions";
 import { openRequestedTab } from "./tabsRequests";
 import { pruneToolbarAnchors, toolbarAnchor } from "./toolbarAnchors";
 import { startWebStoreIntegration } from "./webStore";
+import { startWebKitTabs } from "./webKitTabs";
 import * as state from "./actions";
 import {
   activateExtension,
@@ -51,6 +52,7 @@ export function startExtensionsBridge() {
   startSidePanels();
   startActionPopups();
   startWebStoreIntegration();
+  startWebKitTabs();
   watchExtensionInstallFailures();
   if (__DEV__) Object.assign(globalThis, { acExtensionsApp: { ...state, bridge: { openExtensionFromMenu } } });
 }
@@ -61,10 +63,10 @@ export function openExtensionFromMenu(windowId: string, extensionId: string, tab
 }
 
 function startActionPopups() {
-  onExtensionActionPopup(({ tabId, extensionId }) => {
+  onExtensionActionPopup(({ tabId, extensionId, url, engine }) => {
     const windowId = tabId ? useBrowser.getState().tabs[tabId]?.windowId : undefined;
     if (!tabId || !windowId) return console.warn(`action.openPopup for ${extensionId}: ${tabId ? "its tab has no window" : "no app tab"}`);
-    void toolbarAnchor(windowId, extensionId, tabId).then((anchor) => state.openActionPopup(windowId, extensionId, anchor, tabId));
+    void toolbarAnchor(windowId, extensionId, tabId).then((anchor) => (url ? state.showActionPopup(windowId, extensionId, anchor, url, engine) : state.openActionPopup(windowId, extensionId, anchor, tabId)));
   });
   onExtensionActionShortcut(({ tabId, extensionId }) => {
     const windowId = tabId ? useBrowser.getState().tabs[tabId]?.windowId : undefined;

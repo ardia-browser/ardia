@@ -11,7 +11,20 @@ import { useCurrentInterfaceScale } from "../../state/settings/interfaceScale";
 const MIN = { width: 25, height: 25 };
 const MAX = { width: 800, height: 600 };
 
-export function ActionPopup({ windowId, pageProfile, url, anchor }: { windowId: string; pageProfile: string; extensionId: string; url: string; anchor: { x: number; y: number; width: number; height: number } }) {
+export function ActionPopup({
+  windowId,
+  pageProfile,
+  url,
+  anchor,
+  engine,
+}: {
+  windowId: string;
+  pageProfile: string;
+  extensionId: string;
+  url: string;
+  anchor: { x: number; y: number; width: number; height: number };
+  engine?: "webkit";
+}) {
   const colors = useExtensionColors();
   const web = useRef<WebViewHandle>(null);
   const scale = useCurrentInterfaceScale();
@@ -78,6 +91,7 @@ export function ActionPopup({ windowId, pageProfile, url, anchor }: { windowId: 
               ref={web}
               style={StyleSheet.absoluteFill}
               url={url}
+              engine={engine}
               profile={pageProfile}
               standalone
               extensionHost="popup"

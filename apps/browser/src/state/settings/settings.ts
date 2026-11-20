@@ -183,6 +183,7 @@ export const SETTING_SPECS = {
   engineSwitchAsksAboutUnsavedWork: flag(true),
   engineSwitchCarriesSiteData: flag(true),
   webKitFraudWarnings: flag(false),
+  webKitExtensions: flag(true),
   launchActions: shaped<string[]>([], (v) => isStringList(v) && v.length <= 20, { type: "array", items: { type: "string" }, maxItems: 20 }),
   omniboxProviders: shaped<ProviderEntry[]>([], isProviderEntryList, PROVIDERS_SCHEMA),
   readerTextSize: oneOf(READER_SIZE_NAMES, "medium", SYNCED),

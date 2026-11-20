@@ -8,6 +8,7 @@ const { dropSwap, firstPaintScript, heldBySwap, holdPageForSwap, swapping, SWAP_
 const { liveOf } = await import("../tabs/tabLive.ts");
 const { pageProgressOf } = await import("../tabs/pageProgress.ts");
 const { takeEngineSwitchCounts } = await import("../telemetry/engineSwitchCounts.ts");
+const { forWebKit } = await import("./webKitExtensions.ts");
 const { setConsentPeriod } = await import("../telemetry/consentPeriod.ts");
 setConsentPeriod(true, "engine-swap-test");
 
@@ -162,4 +163,20 @@ test("dropping someone else's swap leaves the current one, and a closed tab's sw
   assert.equal(takeEngineSwitchCounts().engine_switches ?? 0, 0);
   dropSwap(tabId, second);
   webviews.clear();
+});
+
+test("WebKit gets the extensions that are on, with Chromium's site access", () => {
+  const ext = (id, more) => ({ id, name: id, version: "1.0", enabled: true, state: "ENABLED", path: null, sites: [], siteAccess: "ON_ALL_SITES", incognito: false, ...more });
+  const list = forWebKit([
+    ext("bbbb", { siteAccess: "ON_SPECIFIC_SITES", sites: ["https://b.example/*", "https://a.example/*"] }),
+    ext("aaaa", { path: "/Users/me/dev/ext" }),
+    ext("cccc", { enabled: false, state: "DISABLED" }),
+    ext("dddd", { blockedByPolicy: true }),
+    ext("eeee", { siteAccess: "ON_CLICK", sites: ["https://c.example/*"] }),
+  ]);
+  assert.deepEqual(list.map((x) => x.id), ["aaaa", "bbbb", "eeee"]);
+  assert.equal(list[0].path, "/Users/me/dev/ext");
+  assert.deepEqual(list[1].sites, ["https://a.example/*", "https://b.example/*"]);
+  assert.equal(list[1].allSites, false);
+  assert.deepEqual([list[2].allSites, list[2].sites], [false, []]);
 });

@@ -1,6 +1,7 @@
 import { isWebKitAutofillCount, noteWebKitAutofillCount, takeWebKitAutofillCounts, type WebKitAutofillCount } from "./webKitAutofillCounts";
 import { isWebKitContentBlockerCount, noteWebKitContentBlockerCount, takeWebKitContentBlockerCounts, type WebKitContentBlockerCount } from "./webKitContentBlockerCounts";
 import { takeSiteDataCounts } from "./siteDataCounts";
+import { isWebKitExtensionTabCount, noteWebKitExtensionTabCount, takeWebKitExtensionTabCounts, type WebKitExtensionTabCount } from "./webKitExtensionTabCounts";
 import { onWebKitCount } from "../../platform/webkit";
 import { counted, onConsentPeriodChange, type ConsentToken } from "./choice";
 import { nativeConsent } from "./nativeConsent";
@@ -18,6 +19,9 @@ const none = () => ({
   zoomCarried: 0,
   cookiesToWebKit: 0,
   cookiesToChromium: 0,
+  webKitExtensionsLoaded: 0,
+  webKitExtensionsFailed: 0,
+  webKitExtensionActions: 0,
   webKitAutofillFills: 0,
   webKitAutofillSaveOffers: 0,
   webKitAutofillSaves: 0,
@@ -31,6 +35,25 @@ const none = () => ({
   webKitWorkerShownNotifications: 0,
   webKitWorkerClicks: 0,
   webKitTranslations: 0,
+  webKitShimDownloads: 0,
+  webKitShimHistory: 0,
+  webKitShimBookmarks: 0,
+  webKitShimTabGroups: 0,
+  webKitShimSidePanel: 0,
+  webKitShimRuntime: 0,
+  webKitShimManagement: 0,
+  webKitShimIdle: 0,
+  webKitShimTopSites: 0,
+  webKitShimSearch: 0,
+  webKitShimSessions: 0,
+  webKitShimBrowsingData: 0,
+  webKitShimDns: 0,
+  webKitShimTts: 0,
+  webKitShimOffscreen: 0,
+  webKitShimStorage: 0,
+  webKitShimIdentity: 0,
+  webKitShimCommands: 0,
+  webKitExtensionShortcuts: 0,
   webKitSiteSettingsApplied: 0,
   webKitUploadsFiltered: 0,
   webKitScreenShareRequests: 0,
@@ -40,7 +63,11 @@ const none = () => ({
   webKitPagesSaved: 0,
   webKitSavePageFailures: 0,
   webKitQuarantineFailures: 0,
+  webKitNativeHostLaunches: 0,
+  webKitNativeHostFailures: 0,
+  webKitPrivateExtensionsLoaded: 0,
   webKitContextMenus: 0,
+  webKitContextMenuExtensionPicks: 0,
   webKitLinkPeeks: 0,
   webKitLinkSplits: 0,
   webKitLittleArdiaLinks: 0,
@@ -109,6 +136,13 @@ export function noteCookiesCarried(to: "chromium" | "webkit", count: number, con
   if (count > 0) counted(consent, () => void (tally[to === "webkit" ? "cookiesToWebKit" : "cookiesToChromium"] += count));
 }
 
+export function noteWebKitExtensions(loaded: number, failed: number, consent: ConsentToken | null) {
+  counted(consent, () => {
+    tally.webKitExtensionsLoaded = Math.max(tally.webKitExtensionsLoaded, loaded);
+    tally.webKitExtensionsFailed = Math.max(tally.webKitExtensionsFailed, failed);
+  });
+}
+
 export function noteEngineModeChange({ cancelled, moved }: { cancelled: boolean; moved: number }, consent: ConsentToken | null) {
   counted(consent, () => {
     if (cancelled) return void tally.modeChangesCancelled++;
@@ -121,9 +155,10 @@ export function noteEngineModeVideoNotice(event: "shown" | "opened", consent: Co
   counted(consent, () => void tally[event === "shown" ? "modeVideoNotices" : "modeVideoNoticeOpens"]++);
 }
 
-export function noteWebKitCount(name: WebKitCount | WebKitAutofillCount | WebKitContentBlockerCount, consent: ConsentToken | null) {
+export function noteWebKitCount(name: WebKitCount | WebKitExtensionTabCount | WebKitAutofillCount | WebKitContentBlockerCount, consent: ConsentToken | null) {
   if (isWebKitContentBlockerCount(name)) return noteWebKitContentBlockerCount(name, consent);
   if (isWebKitAutofillCount(name)) return noteWebKitAutofillCount(name, consent);
+  if (isWebKitExtensionTabCount(name)) return noteWebKitExtensionTabCount(name, consent);
   const key = webKitCountKeys[name];
   if (key) counted(consent, () => void tally[key]++);
 }
@@ -140,6 +175,7 @@ export function takeEngineSwitchCounts() {
   const taken = tally;
   tally = none();
   return {
+    ...takeWebKitExtensionTabCounts(),
     ...takeWebKitAutofillCounts(),
     ...takeWebKitContentBlockerCounts(),
     ...takeSiteDataCounts(),
@@ -153,6 +189,9 @@ export function takeEngineSwitchCounts() {
     engine_switch_zoom_carried: taken.zoomCarried,
     engine_switch_cookies_to_webkit: taken.cookiesToWebKit,
     engine_switch_cookies_to_chromium: taken.cookiesToChromium,
+    webkit_extensions_loaded: taken.webKitExtensionsLoaded,
+    webkit_extensions_failed: taken.webKitExtensionsFailed,
+    webkit_extension_actions: taken.webKitExtensionActions,
     webkit_autofill_fills: taken.webKitAutofillFills,
     webkit_autofill_save_offers: taken.webKitAutofillSaveOffers,
     webkit_autofill_saves: taken.webKitAutofillSaves,
@@ -166,6 +205,25 @@ export function takeEngineSwitchCounts() {
     webkit_worker_shown_notifications: taken.webKitWorkerShownNotifications,
     webkit_worker_clicks: taken.webKitWorkerClicks,
     webkit_translations: taken.webKitTranslations,
+    webkit_extension_downloads_calls: taken.webKitShimDownloads,
+    webkit_extension_history_calls: taken.webKitShimHistory,
+    webkit_extension_bookmarks_calls: taken.webKitShimBookmarks,
+    webkit_extension_tab_groups_calls: taken.webKitShimTabGroups,
+    webkit_extension_side_panel_calls: taken.webKitShimSidePanel,
+    webkit_extension_runtime_calls: taken.webKitShimRuntime,
+    webkit_extension_management_calls: taken.webKitShimManagement,
+    webkit_extension_idle_calls: taken.webKitShimIdle,
+    webkit_extension_top_sites_calls: taken.webKitShimTopSites,
+    webkit_extension_search_calls: taken.webKitShimSearch,
+    webkit_extension_sessions_calls: taken.webKitShimSessions,
+    webkit_extension_browsing_data_calls: taken.webKitShimBrowsingData,
+    webkit_extension_dns_calls: taken.webKitShimDns,
+    webkit_extension_tts_calls: taken.webKitShimTts,
+    webkit_extension_offscreen_calls: taken.webKitShimOffscreen,
+    webkit_extension_storage_calls: taken.webKitShimStorage,
+    webkit_extension_identity_calls: taken.webKitShimIdentity,
+    webkit_extension_commands_calls: taken.webKitShimCommands,
+    webkit_extension_shortcuts: taken.webKitExtensionShortcuts,
     webkit_site_settings_applied: taken.webKitSiteSettingsApplied,
     webkit_uploads_filtered: taken.webKitUploadsFiltered,
     webkit_screen_share_requests: taken.webKitScreenShareRequests,
@@ -175,7 +233,11 @@ export function takeEngineSwitchCounts() {
     webkit_pages_saved: taken.webKitPagesSaved,
     webkit_save_page_failures: taken.webKitSavePageFailures,
     webkit_quarantine_failures: taken.webKitQuarantineFailures,
+    webkit_native_host_launches: taken.webKitNativeHostLaunches,
+    webkit_native_host_failures: taken.webKitNativeHostFailures,
+    webkit_private_extensions_loaded: taken.webKitPrivateExtensionsLoaded,
     webkit_context_menus: taken.webKitContextMenus,
+    webkit_context_menu_extension_picks: taken.webKitContextMenuExtensionPicks,
     webkit_link_peeks: taken.webKitLinkPeeks,
     webkit_link_splits: taken.webKitLinkSplits,
     webkit_little_ardia_links: taken.webKitLittleArdiaLinks,

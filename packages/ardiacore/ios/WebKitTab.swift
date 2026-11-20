@@ -13,7 +13,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
   var initialURL: String?
   var adoptId: String?
   var transferKey: String?
-  var visible = true { didSet { updateHidden(); wakeIfShown(was: oldValue); updateSight(); noteShownChanged(); showNextDialog(); if !visible { WebKitHub.shared.logins.closeDropdowns(for: self) } } }
+  var visible = true { didSet { updateHidden(); wakeIfShown(was: oldValue); updateSight(); noteShownChanged(); noteExtensionTabShown(); showNextDialog(); if !visible { WebKitHub.shared.logins.closeDropdowns(for: self) } } }
   var selected = true { didSet { noteShownChanged() } }
   var wasShown = true
   var autoPictureInPicture = false { didSet { autoPictureInPictureInputsChanged() } }
@@ -96,12 +96,12 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
       return
     }
     if let id = adoptId, WebKitHeldPopup.closedBeforeAdoption(id) {
-      attach(makeView())
+      attach(makeView(for: nil))
       emit("ready", [:])
       emit("windowClose")
       return
     }
-    let created = makeView()
+    let created = makeView(for: initialURL)
     attach(created)
     emit("ready", [:])
     if let url = initialURL, !url.isEmpty { startFirstPage(url, in: created) }
@@ -114,8 +114,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     cancelDialogs()
     WebKitHub.shared.permissions.drop(browserId: browserId)
     if let key = transferKey { WebKitHub.shared.transfers.forgetLive(self, key: key) }
-    WebKitHub.shared.logins.forget(self)
-    WebKitAutofill.shared.forget(self)
+    noteExtensionTabClosed()
     webView = nil
     stopListening(to: view)
     WebKitHub.shared.transfers.unregister(view)
@@ -152,6 +151,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     prepareFirstPaint(view)
     if effectiveMuted { applyMute() }
     checkSoundRule()
+    noteExtensionTabOpened()
     WebKitHub.shared.permissions.reconcileCapture(view, profile: profile)
     pushFieldProvider()
     updateSight()
@@ -196,8 +196,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     WebKitHub.shared.permissions.drop(browserId: browserId)
     if let key = transferKey { WebKitHub.shared.transfers.forgetLive(self, key: key) }
     guard let view = webView else { return }
-    WebKitHub.shared.logins.forget(self)
-    WebKitAutofill.shared.forget(self)
+    noteExtensionTabClosed()
     webView = nil
     stopListening(to: view)
     if let key = transferKey, WebKitHub.shared.transfers.isPrepared(key) {
@@ -238,6 +237,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     if committedStatus > 0 && !showingError { navigation["httpStatus"] = committedStatus }
     WebKitTabHistory.scheduleSave(self)
     emit("navigation", navigation)
+    noteExtensionTabChanged()
   }
 
   static func hex(_ color: NSColor) -> String? {
@@ -462,7 +462,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     guard let url = action.request.url else { return decide(.allow) }
     if mainFrame { safety.target.began(url) }
     let scheme = url.scheme?.lowercased() ?? ""
-    let webSchemes: Set<String> = ["http", "https", "file", "about", "data", "blob", "javascript", "webkit-pdfjs-viewer"]
+    let webSchemes: Set<String> = ["http", "https", "file", "about", "data", "blob", "javascript", "webkit-pdfjs-viewer", "webkit-extension"]
     if !webSchemes.contains(scheme) {
       decide(.cancel)
       let fromMainFrame = action.sourceFrame.isMainFrame || action.targetFrame?.isMainFrame == true

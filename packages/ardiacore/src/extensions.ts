@@ -76,7 +76,45 @@ export type TabsRequest =
   | { action: "adopt"; adoptId: string; url: string; profile: string }
   | { action: "adoptInto"; chromeWindow: string; adoptId: string; url: string; profile: string; active: boolean; focused: boolean }
   | { action: "moveInto"; chromeWindow: string; tabId: string; focused: boolean }
-  | { action: "closeWindow"; chromeWindow: string };
+  | { action: "closeWindow"; chromeWindow: string }
+  | WebKitTabsRequest;
+
+export type WebKitTabsOrder = { key: string; pinned: boolean }[];
+
+type WebKitTabsAsk = { action: "webKit"; request: string; profile: string; private: boolean };
+
+export type WebKitTabsRequest = WebKitTabsAsk &
+  (
+    | { op: "close"; tabIds: string[] }
+    | { op: "activate"; tabId: string }
+    | { op: "opener"; tabId: string; openerId: string | null }
+    | { op: "arrange"; windowId: string; before: WebKitTabsOrder; after: WebKitTabsOrder }
+    | { op: "duplicate"; tabId: string; active: boolean }
+    | {
+        op: "create";
+        url?: string;
+        adoptId?: string;
+        active: boolean;
+        pinned: boolean;
+        windowId?: string;
+        beforeId?: string;
+        afterId?: string;
+        nearTabId?: string;
+        openerId?: string;
+      }
+    | { op: "createWindow"; focused: boolean; tabIds: string[]; urls: string[]; adoptIds: string[]; nearTabId?: string }
+    | { op: "closeWindow"; windowId: string }
+    | { op: "focusWindow"; windowId: string }
+  );
+
+export type WebKitTabsReply = { tabId?: string; windowId?: string; error?: string };
+
+export type WebKitTabLayout = {
+  windows: { id: string; tabs: string[]; pinned: string[] }[];
+  openers: Record<string, string>;
+  focus: string[];
+  chromiumTabs: Record<string, string[]>;
+};
 
 export type ExtensionInstallPrompt = {
   requestId: string;
@@ -165,4 +203,4 @@ export type ExtensionsSyncApplied = {
 
 export type SidePanelRequest = { tabId: string | null; extensionId: string; open: boolean };
 
-export type ActionPopupRequest = { tabId: string | null; extensionId: string };
+export type ActionPopupRequest = { tabId: string | null; extensionId: string; url?: string; engine?: "webkit" };

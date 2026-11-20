@@ -8,7 +8,7 @@ type Phase = "extract" | "apply";
 
 const phase = () => ({ runs: 0, msTotal: 0, msMax: 0 });
 const work = () => ({ extract: phase(), apply: phase(), recordsMax: 0 });
-const noSync = () => ({ bookmark: work(), history: work() });
+const noSync = () => ({ bookmark: work(), history: work(), historyTitlesKept: 0 });
 
 let syncPending = noSync();
 
@@ -33,6 +33,9 @@ function timed<T>(run: () => T, done: (result: Awaited<T>, ms: number) => void):
   return result;
 }
 
+export const noteSyncHistoryTitlesKept = (kept: number, consent: ConsentToken | null) =>
+  countFor(consent, () => void (isSharing() && (syncPending.historyTitlesKept += kept)), { sync_history_titles_kept: kept });
+
 export function withSyncWorkCounts(kind: SyncWorkKind, adapter: Adapter): Adapter {
   return {
     ...adapter,
@@ -56,7 +59,7 @@ export function takeSyncWorkCounts(): Record<string, number> {
       [`sync_${kind}_records_max`]: recordsMax,
     };
   };
-  return { ...fields("bookmark"), ...fields("history") };
+  return { ...fields("bookmark"), ...fields("history"), sync_history_titles_kept: taken.historyTitlesKept };
 }
 
 const none = () => ({

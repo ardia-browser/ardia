@@ -20,7 +20,7 @@ import { settleMovedPins } from "../pins/pinMirror";
 import { holderOf, returnSharedPages, swapPinPage } from "../pins/pinShare";
 import { isTopApp, topAppsShared } from "../pins/topApps";
 import { joinedWithCurrent, newTabPlacement } from "../tabs/openers";
-import { handOverTabs, tabsClosedWithWindow } from "../tabs/sharedWindowClose";
+import { handOverPins, handOverTabs, tabsClosedWithWindow } from "../tabs/sharedWindowClose";
 import { isOnlyRegularWindow, isOpenRegularWindow, isRegularWindow, isSmall, isSmallWindow, lastActiveProfile, linkProfileOf, mainWindowFor } from "./small";
 import { activated, apply, removeTabs, withNewTab } from "../tabs/tabs";
 import type { AdoptId, BrowserWindow, ClosedWindow, Frame, ParkedPins, Tab, WindowKind } from "../browser/types";
@@ -190,7 +190,8 @@ export const createWindowsSlice: StateCreator<BrowserState, [], [], WindowsSlice
   },
 
   closeWindow(id, { keepsLastWindow = false } = {}) {
-    const s = handOverTabs(returnSharedPages(get(), id), id, isOpenRegularWindow);
+    const before = returnSharedPages(get(), id);
+    const s = handOverTabs(before, id, isOpenRegularWindow);
     const w = s.windows[id];
     if (!w) return;
     const tabs = tabsClosedWithWindow(s, id);
@@ -201,20 +202,20 @@ export const createWindowsSlice: StateCreator<BrowserState, [], [], WindowsSlice
     const kept = last ? withoutLastWindowMarks(s.closedWindows) : s.closedWindows;
     const closedWindows = entry ? [...kept, entry].slice(-MAX_CLOSED_WINDOWS) : kept;
     const next = removeTabs(s, w.tabIds, small);
-    set({
+    set(handOverPins({
       ...next,
       windows: without(next.windows, [id]),
       windowOrder: next.windowOrder.filter((w) => w !== id),
       windowUi: without(next.windowUi, [id]),
       closedWindows,
-      parkedPins: small ? s.parkedPins : parkWindowPins(s.parkedPins, w, s),
+      parkedPins: small ? s.parkedPins : parkWindowPins(s.parkedPins, before.windows[id]!, before),
       closedTabs: w.kind === "private" ? next.closedTabs.filter((c) => c.windowId !== id) : next.closedTabs,
       ui: {
         ...next.ui,
         focusOrder: next.ui.focusOrder.filter((f) => f !== id),
         lastProfileId: lastProfileAfterClosing(s, id),
       },
-    });
+    }, before, id, isOpenRegularWindow));
   },
 
   dropStaleLastWindowMark() {

@@ -256,7 +256,7 @@ node apps/browser/scripts/perf/ratchet.mjs run --own --app dist/<version>-rc/exp
 ```
 
 `--own` runs the app's own `main.jsbundle`, so it checks what ships. It must print `ratchet: ok`. It runs the launch,
-idle, command bar, tab switch, navigate, scroll and hover scenarios in a hidden instance, and a count over its ceiling
+idle, command bar, tab switch, navigate, scroll, hover and native-node churn scenarios in a hidden instance, and a count over its ceiling
 gets one more run (a stray window event isn't a regression; a count over in both is). A failure is a real regression
 (find the commit that added the commit, render, store update or timer, and fix it) or an intended increase: raise that
 one ceiling by hand in `apps/browser/scripts/perf/ratchet.json` and say why in the commit and the release report. When

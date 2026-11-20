@@ -8,7 +8,7 @@ import { useActiveTab, useSettings, useWindowFullScreen, useWindowId, useWindowP
 import type { Tab } from "../../state/browser/types";
 import { CommandPanel } from "../omnibox/CommandPanel";
 import { ContentCard } from "../window/ContentCard";
-import { BrowserWindowControls } from "../window/BrowserWindowControls";
+import { browserWindowControls } from "../window/BrowserWindowControls";
 import { DownloadsPopover } from "../downloads/Downloads";
 import { ExtensionOverlays } from "../extensions/ExtensionOverlays";
 import { ToolbarPopupAnchor } from "../extensions/ToolbarExtensions";
@@ -86,7 +86,7 @@ export function LittleArdiaWindow() {
       <CommandPanel windowWidth={size.width} />
       <DownloadsPopover />
       <ExtensionOverlays />
-      <BrowserWindowControls />
+      {browserWindowControls()}
     </View>
   );
 }

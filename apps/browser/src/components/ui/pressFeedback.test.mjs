@@ -22,8 +22,12 @@ test("a pressed glyph dips a little and comes back without a bounce", () => {
   assert.match(source("./motion.ts"), /toValue: pressed \? pressedScale : 1, \.\.\.springs\.snappy/);
 });
 
-test("sidebar rows, folder headers and tiles hold still under a press unless pressMotion is bounce", () => {
-  for (const file of ["TabPressArea.tsx", "GroupBlock.tsx", "LiveFolderBlock.tsx", "LiveItemRow.tsx", "FolderPanel.tsx", "FolderTile.tsx"]) {
+test("tab rows and tiles answer a press with their pressed fill and never squish", () => {
+  for (const file of ["TabPressArea.tsx", "TabRow.tsx"]) assert.doesNotMatch(source(`../sidebar/${file}`), /usePressScaleMotion\(resettable|useSquish|Squish\b/, file);
+});
+
+test("folder headers and folder tiles hold still under a press unless pressMotion is bounce", () => {
+  for (const file of ["GroupBlock.tsx", "LiveFolderBlock.tsx", "LiveItemRow.tsx", "FolderPanel.tsx", "FolderTile.tsx"]) {
     const text = source(`../sidebar/${file}`);
     assert.doesNotMatch(text, /usePressScaleMotion|PressScale/, file);
     assert.match(text, /useSquish\(/, `${file} reaches a scale only through useSquish, which stays still unless pressMotion is bounce`);
@@ -97,7 +101,6 @@ test("pressMotion bounce restores nightly.6's dips, springs and shortest visible
 });
 
 test("a row being renamed doesn't squish, so a pressMotion change can't remount its rename field", () => {
-  assert.match(source("../sidebar/TabRow.tsx"), /<TabPressArea windowId=\{windowId\} tab=\{tab\} squish=\{renaming \? undefined : "row"\}/);
   assert.match(source("../sidebar/GroupBlock.tsx"), /useSquish\(renaming \? null : "row"\)/);
 });
 

@@ -28,10 +28,41 @@ export function SidebarRowSurface({
   padRight?: number;
   children: SurfaceProps["children"];
 }) {
+  const surface = useRowSurfaceLayer({ fill, selected, border, stroke, cornerRadius });
+  return (
+    <View style={rowSurfaceFrame(padLeft, padRight)}>
+      {surface}
+      {children}
+    </View>
+  );
+}
+
+const surfaceFrames = new Map<string, ViewStyle>();
+
+export function rowSurfaceFrame(padLeft: number = TAB_ROW.contentLeft, padRight: number = TAB_ROW.trailing): ViewStyle {
+  const key = `${layout.rowHeight}:${padLeft}:${padRight}`;
+  let frame = surfaceFrames.get(key);
+  if (!frame) surfaceFrames.set(key, (frame = { height: layout.rowHeight, flexDirection: "row", alignItems: "center", paddingLeft: padLeft, paddingRight: padRight }));
+  return frame;
+}
+
+export function useRowSurfaceLayer({
+  fill,
+  selected = false,
+  border = 0,
+  stroke,
+  cornerRadius = radius.chrome,
+}: {
+  fill: string;
+  selected?: boolean;
+  border?: number;
+  stroke?: string;
+  cornerRadius?: number;
+}) {
   const theme = useTheme();
   const { shadowColor, shadowOpacity, shadowRadius } = useSelectedTabGlow();
   const selectedBorder = theme.tabSelectedBorder;
-  const surface = useMemo(
+  return useMemo(
     () => (
       <Surface
         pointerEvents="none"
@@ -48,12 +79,6 @@ export function SidebarRowSurface({
       />
     ),
     [fill, cornerRadius, border, stroke, selected, selectedBorder, shadowColor, shadowOpacity, shadowRadius],
-  );
-  return (
-    <View style={{ height: layout.rowHeight, flexDirection: "row", alignItems: "center", paddingLeft: padLeft, paddingRight: padRight }}>
-      {surface}
-      {children}
-    </View>
   );
 }
 

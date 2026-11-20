@@ -55,6 +55,19 @@ test("the sync wrapper passes results through and counts passes, records and asy
   assert.ok(Object.values(takeSyncWorkCounts()).every((n) => n === 0), "taking the counts starts them again at zero");
 });
 
+test("a page title Sync left as this device had it is counted while sharing is on, and never after sharing went off", async () => {
+  client.setSharing(true, "onboarding");
+  takeSyncWorkCounts();
+  work.noteSyncHistoryTitlesKept(2, client.consentToken());
+  work.noteSyncHistoryTitlesKept(1, client.consentToken());
+  assert.equal(takeSyncWorkCounts().sync_history_titles_kept, 3);
+  const before = client.consentToken();
+  client.setSharing(false, "settings");
+  work.noteSyncHistoryTitlesKept(1, before);
+  work.noteSyncHistoryTitlesKept(1, client.consentToken());
+  assert.equal(takeSyncWorkCounts().sync_history_titles_kept, 0);
+});
+
 test("live and extension work reaches usage_counts once, then resets", async () => {
   client.setSharing(true, "onboarding");
   await usageCounts();

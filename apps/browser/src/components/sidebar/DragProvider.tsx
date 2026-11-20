@@ -6,7 +6,8 @@ import { useStore } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { perLook, radius } from "../ui";
 import { useClipped, type ClipSource } from "./EntryMotion";
-import { noDragMarks } from "../../state/sidebar/dragMarks";
+import { LANDING, markNow, noDragMarks, SOURCE, SPLIT_LEFT, SPLIT_RIGHT, watchMarks, type SplitHalfMark } from "../../state/sidebar/dragMarks";
+import { useKeyed } from "../../state/browser/keyedWatch";
 import { cellKey, dragItemStyle, restingTail, type Ghost, type ItemSpec } from "./dragModel";
 import { DragController } from "./dragController";
 import { DragItems } from "./dragItems";
@@ -19,6 +20,7 @@ const dropGlowPlace = perLook(() => ({ left: 5, right: 5, top: 44, bottom: 6, bo
 const DragContext = createContext<DragController | null>(null);
 const DragItemsContext = createContext<DragItems | null>(null);
 export const FoldEntryContext = createContext(false);
+
 
 export function DragProvider({ children }: { children: (ghost: Ghost | null, controller: DragController) => ReactNode }) {
   const controller = useMemo(() => new DragController(), []);
@@ -55,7 +57,6 @@ export function DragScope({ enabled, children }: { enabled: boolean; children: R
 
 export const useDragController = () => useContext(DragContext) ?? undefined;
 export const useDropInto = (groupId: string) => useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => m.dropInto === groupId);
-export const useDropSplit = (key: string) => useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => (m.split?.key === key ? m.split.side : null));
 export const useDropTile = () => useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => m.tile);
 export const useDropRow = () => useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => m.row);
 export const useDropPane = () => useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => m.pane);
@@ -147,8 +148,10 @@ export function useDragItem(key: string, spec: ItemSpec, clip: ClipSource | null
     [item],
   );
 
-  const source = useStore(marks, (m) => m.sources.has(key));
-  const landing = useStore(marks, (m) => m.landing === key);
+  const mark = useKeyed(watchMarks(marks), key, () => markNow(marks, key));
+  const source = !!(mark & SOURCE);
+  const landing = !!(mark & LANDING);
+  const scoped = !!useContext(DragContext);
   const clipped = useClipped(clip);
   useScopedTheme();
   const inFold = useContext(FoldEntryContext);
@@ -159,5 +162,6 @@ export function useDragItem(key: string, spec: ItemSpec, clip: ClipSource | null
     : spec.kind === "tail"
       ? restingTail()
       : {};
-  return { wrapper: { ref, style }, handle: responder.panHandlers, headerRef, dragging: source, gap: item?.gap };
+  const splitSide: SplitHalfMark["side"] | null = !scoped ? null : mark & SPLIT_LEFT ? "left" : mark & SPLIT_RIGHT ? "right" : null;
+  return { wrapper: { ref, style }, handle: responder.panHandlers, headerRef, dragging: source, gap: item?.gap, splitSide };
 }

@@ -67,3 +67,8 @@ export const watchWindowSettings = keyedWatch(browser, (s: BrowserState, prev: B
 });
 export const useWindowSettings = <T,>(windowId: string, read: (s: BrowserState) => T): T => useKeyed(watchWindowSettings, windowId, () => read(useBrowser.getState()));
 export const ALL = "";
+export const watchFocusedWindowSettings = keyedWatch(browser, (s: BrowserState, prev: BrowserState) =>
+  s.settings !== prev.settings || s.windows !== prev.windows || s.windowOrder !== prev.windowOrder || s.ui.focusOrder !== prev.ui.focusOrder ? true : undefined,
+);
+export const useWindowOrFocusedSettings = <T,>(windowId: string | null | undefined, read: (s: BrowserState) => T): T =>
+  useKeyed(windowId ? watchWindowSettings : watchFocusedWindowSettings, windowId || ALL, () => read(useBrowser.getState()));

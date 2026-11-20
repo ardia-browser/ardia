@@ -6,6 +6,7 @@ globalThis.fetch = async () => ({ status: 503 });
 const client = await import("./client.ts");
 import { noteTabLayoutSwitch } from "./tabLayoutCounts.ts";
 import {
+  noteTabStripCommandRefused,
   noteTabStripCompact,
   noteTabStripReadable,
   noteTabStripEdgeScroll,
@@ -93,28 +94,37 @@ test("tab layout switches go out with the strip's counts, and taking them starts
   assert.deepEqual(takeTabStripCounts(), ZERO);
 });
 
-test("with sharing off, the strip's compact and readable layouts and its tabs in the open tabs menu are not counted", () => {
-  sharing(false);
-  noteTabStripCompact();
-  noteTabStripReadable();
-  noteTabStripTabsInOverflow(7);
-  const taken = takeTabStripCounts();
-  assert.deepEqual([taken.tab_strip_compact_layouts, taken.tab_strip_readable_layouts, taken.tab_strip_most_tabs_in_overflow], [0, 0, 0]);
-  sharing(true);
-  noteTabStripCompact();
-  noteTabStripReadable();
-  noteTabStripTabsInOverflow(3);
-  const counted = takeTabStripCounts();
-  assert.deepEqual([counted.tab_strip_compact_layouts, counted.tab_strip_readable_layouts, counted.tab_strip_most_tabs_in_overflow], [1, 1, 3]);
-});
+let clock = 1e9;
+const EVERY_FIELD = [
+  ["tab_strip_group_toggles", () => noteTabStripGroupToggle(), 1],
+  ["pinned_rows_made_text_only", () => noteTextOnlyRow(), 1],
+  ["tab_strip_compact_layouts", () => noteTabStripCompact(), 1],
+  ["tab_strip_readable_layouts", () => noteTabStripReadable(), 1],
+  ["tab_strip_edge_scroll_drags", () => noteTabStripEdgeScroll(), 1],
+  ["tab_strip_reveals_after_press", () => noteTabStripRevealAfterPress(), 1],
+  ["tab_strip_most_tabs", () => noteTabStripOverflow(40), 40],
+  ["tab_strip_held_closes", () => noteTabStripHeldClose(), 1],
+  ["tab_strip_most_titled_tabs", () => noteTabStripTitledTabs(6), 6],
+  ["tab_strip_most_tabs_in_overflow", () => noteTabStripTabsInOverflow(7), 7],
+  ["tab_strip_scrolls", () => noteTabStripScrolled((clock += 10_000)), 1],
+  ["tab_strip_scroll_stalls", () => (noteTabStripScrolled((clock += 10_000)), noteTabStripScrolled((clock += 100))), 1],
+  ["tab_strip_reveals_held_for_scroll", () => noteTabStripRevealHeldForScroll(), 1],
+  ["tab_strip_commands_refused", () => noteTabStripCommandRefused(), 1],
+];
 
-test("turning sharing off drops the strip's counts noted before it", () => {
+test("every tab strip count stays at zero while sharing is off, counts once sharing is on, and turning sharing off drops what was counted", () => {
   sharing(true);
-  noteTabStripCompact();
-  noteTabStripReadable();
-  noteTabStripTabsInOverflow(5);
-  sharing(false);
-  sharing(true);
-  const taken = takeTabStripCounts();
-  assert.deepEqual([taken.tab_strip_compact_layouts, taken.tab_strip_readable_layouts, taken.tab_strip_most_tabs_in_overflow], [0, 0, 0]);
+  takeTabStripCounts();
+  for (const [field, note, counted] of EVERY_FIELD) {
+    sharing(false);
+    note();
+    assert.equal(takeTabStripCounts()[field], 0, `${field} counted with sharing off`);
+    sharing(true);
+    note();
+    assert.equal(takeTabStripCounts()[field], counted, `${field} with sharing on`);
+    note();
+    sharing(false);
+    sharing(true);
+    assert.equal(takeTabStripCounts()[field], 0, `${field} kept what was counted before sharing went off`);
+  }
 });

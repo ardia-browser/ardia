@@ -36,11 +36,13 @@ final class WindowManager: NSObject, NSWindowDelegate {
 
   func linkArrivedFromOtherApp(_ urls: [URL]) { linkActivation.linkArrived(urls) }
 
-  private func kind(of window: NSWindow?) -> WindowKind? { id(of: window).flatMap { managed[$0]?.kind } }
+  func kind(of window: NSWindow?) -> WindowKind? { id(of: window).flatMap { managed[$0]?.kind } }
 
   private func isBrowserWindow(_ window: NSWindow?) -> Bool { kind(of: window)?.isBrowser == true }
 
   func isMainWindow(_ window: NSWindow?) -> Bool { kind(of: window) == .browser }
+
+  func isSteadyBrowserWindow(_ window: NSWindow?) -> Bool { isBrowserWindow(window) && id(of: window).flatMap { managed[$0]?.exit } == nil }
 
   var keyWindowKind: WindowKind? { keyWindowId.flatMap { managed[$0]?.kind } }
 
@@ -397,9 +399,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
   private func motionStyle(_ kind: WindowKind) -> WindowMotion.Style { kind == .small ? .little : .main }
 
   private func nextKeyWindow(after closing: NSWindow) -> NSWindow? {
-    NSApp.orderedWindows.first {
-      $0 !== closing && $0.isVisible && !$0.isMiniaturized && $0.canBecomeKey && isBrowserWindow($0) && id(of: $0).flatMap { managed[$0]?.exit } == nil
-    }
+    NSApp.orderedWindows.first { $0 !== closing && $0.isVisible && !$0.isMiniaturized && $0.canBecomeKey && isSteadyBrowserWindow($0) }
   }
   func close(id: String) {
     if let index = pending.firstIndex(where: { $0.id == id }) {

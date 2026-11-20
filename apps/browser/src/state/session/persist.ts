@@ -15,6 +15,7 @@ import { downloadSession, withoutRepeats } from "../downloads/downloadsSlice";
 import { anyDownloadProgress, withLiveProgress } from "../downloads/progress";
 import { noteDownloadHistoryWrite } from "../telemetry/downloadWork";
 import { noteSessionWrite } from "../telemetry/sessionWrites";
+import { pinGuard } from "./pinGuard";
 import { noteSavedTopAppsMerged } from "../telemetry/topAppsSharing";
 import { parseSaved, unchanged, type Migrations, type SavedObject } from "../../lib/savedDocument";
 import { sessionWithCleanUpMinutes } from "../settings/cleanUpAfter";
@@ -282,6 +283,12 @@ export async function sessionSaved(): Promise<boolean> {
   }
 }
 
+export function holdPersistence(): boolean {
+  const saving = flushPersistence();
+  frozen = true;
+  return saving;
+}
+
 export function resumePersistence() {
   frozen = false;
   resume();
@@ -301,6 +308,7 @@ export function startPersistence(overrides: LaunchOverrides = {}) {
   useBrowser.getState().hydrate(loaded ?? {});
   restoreLaunchLook();
 
+  const keepDroppedPins = pinGuard(useBrowser.getState());
   const lastSources = new Map<string, unknown[]>();
   const lastJson = new Map<string, string>();
   const dirty = new Set<Doc>();
@@ -325,9 +333,11 @@ export function startPersistence(overrides: LaunchOverrides = {}) {
     for (const doc of DOCS.filter((d) => dirty.has(d))) {
       const json = doc.json(s);
       const saved = lastJson.get(doc.name) === json;
+      const pins = !saved && doc.name === SESSION_DOCUMENT ? keepDroppedPins(s) : null;
       if (saved || write(doc.name, json)) {
+        pins?.commit();
         if (!saved && doc.name === DOWNLOADS_DOCUMENT) noteDownloadHistoryWrite(json.length);
-        if (!saved && doc.name === SESSION_DOCUMENT) noteSessionWrite(json.length, cosmeticOnly);
+        if (!saved && doc.name === SESSION_DOCUMENT) noteSessionWrite(json.length, cosmeticOnly, pins?.kept ?? 0);
         lastJson.set(doc.name, json);
         dirty.delete(doc);
       }

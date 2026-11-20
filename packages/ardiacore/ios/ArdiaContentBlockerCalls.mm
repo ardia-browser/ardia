@@ -12,6 +12,7 @@ using namespace ardia_content_blocker;
 @property BOOL failNext;
 @property NSTimeInterval deadline;
 @property NSUInteger attempt;
+@property BOOL loadsProfile;
 @end
 
 @implementation ArdiaContentBlockerOp
@@ -225,7 +226,9 @@ bool Retriable(NSString *error, ArdiaContentBlockerPage *page) {
 void Attempt(ArdiaContentBlockerOp *op) {
   NSString *profile = op.profile;
   if (!ArdiaHost.isStarted) return Finish(op, nil, @"unavailable");
+  ForgetIfGone(profile);
   if (![LoadedProfiles() containsObject:profile]) {
+    if (!op.loadsProfile) return Finish(op, nil, @"profile gone");
     return LoadIntoProfile(profile, ^(NSString *error) {
       if (error) Finish(op, nil, error);
       else Attempt(op);
@@ -272,8 +275,9 @@ void Pump(NSString *profile) {
 
 namespace ardia_content_blocker {
 
-void Call(NSString *profile, NSString *expression, void (^completion)(id value, NSString *error)) {
+void Call(NSString *profile, NSString *expression, void (^completion)(id value, NSString *error), bool loadsProfile) {
   ArdiaContentBlockerOp *op = [ArdiaContentBlockerOp new];
+  op.loadsProfile = loadsProfile;
   op.profile = profile;
   op.expression = expression;
   op.completion = completion;

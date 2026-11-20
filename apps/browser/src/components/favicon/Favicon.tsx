@@ -1,7 +1,8 @@
 import { displayHost, hostOf } from "@ardia/core";
 import { memo, useState } from "react";
 import { Image, View } from "react-native";
-import { faviconFailed, useAppearanceDark, useFavicon, useFaviconTheme } from "../../state/favicons/favicons";
+import { faviconFailed, useAppearanceDark } from "../../state/favicons/favicons";
+import { useFavicon, useFaviconTheme } from "../../state/favicons/faviconHooks";
 import { drawnSymbol, radius, tintedImage, useTheme, weight } from "../ui";
 import { CapCenteredLetter } from "../glyph/CapCenteredLetter";
 import { bundledSiteIcon } from "./siteIcons";

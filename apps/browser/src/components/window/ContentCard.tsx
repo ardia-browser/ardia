@@ -88,7 +88,7 @@ export function ContentCard() {
     if (chrome.kind === "none") return NO_TOOLBAR;
     const leading = !!rect && rect.x === 0 && rect.y === 0;
     const trailing = !!rect && rect.y === 0 && rect.x + rect.width === size.width ? captionRoom : 0;
-    return toolbarGeometry({ sidebarButton: leading && showSidebarButton, trailing });
+    return toolbarGeometry({ sidebarButton: leading && showSidebarButton, trailing, cardRadius: frame.radius });
   };
 
   const focusedRect = activeId ? panes[activeId] : undefined;
@@ -99,10 +99,10 @@ export function ContentCard() {
       setUrlAnchor(windowId, {
         left: origin.x + focusedRect.x + g.urlLeft,
         top: origin.y + focusedRect.y,
-        width: focusedRect.width - g.urlLeft - urlFieldRight(!!split, extensionsWidth, toolbarRow) - g.trailing,
+        width: focusedRect.width - g.urlLeft - urlFieldRight(!!split, extensionsWidth, toolbarRow, g.cardRadius) - g.trailing,
       });
     return watchToolbarExtensionsWidth(windowId, place);
-  }, [origin, focusedRect?.x, focusedRect?.y, focusedRect?.width, tabLayout, chrome.kind, !!split, showSidebarButton, toolbarRow, captionRoom]);
+  }, [origin, focusedRect?.x, focusedRect?.y, focusedRect?.width, tabLayout, chrome.kind, !!split, showSidebarButton, toolbarRow, captionRoom, frame.radius]);
 
   useEffect(() => {
     if (origin && size.width > 0) setCardAnchor(windowId, { left: origin.x, top: origin.y, width: size.width, height: size.height });

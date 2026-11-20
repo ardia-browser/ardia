@@ -1,10 +1,13 @@
 import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
+import { join } from "node:path";
 
 const list = (entries) =>
   Object.entries(entries)
     .filter(([, value]) => value !== undefined && value !== null && value !== false)
     .map(([key, value]) => (value === true ? key : `${key}=${value}`))
     .join(",");
+
+export const scratchInstance = (data, instance = {}) => ({ downloadsDir: join(data, "Downloads"), ...instance });
 
 export function launchVariables({ instance = {}, test = {}, trace = [], switchOverrides = {} } = {}) {
   const env = {};

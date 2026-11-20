@@ -5,7 +5,9 @@ const { rowAway, visibleSpan } = await import("./selectedRow.ts");
 const { GLOW_ROOM } = await import("./pageLayout.ts");
 import { mount } from "../../test-hooks.mjs";
 globalThis.require ??= (id) => ({ asset: id });
-const { useListFrame } = await import("./SelectedRowPill.tsx");
+globalThis.requestAnimationFrame ??= (run) => setTimeout(run, 0);
+globalThis.cancelAnimationFrame ??= (id) => clearTimeout(id);
+const { useSelectedRowAway } = await import("./SelectedRowPill.tsx");
 
 const row = (y, height = 34) => ({ y, height });
 
@@ -34,34 +36,94 @@ test("no pill without a selected row in the list, or before the list is laid out
   assert.equal(rowAway(row(900), 0, 0), null);
 });
 
-test("the pill's shown state lives in the pill, so its showing never re-renders the sidebar page", () => {
+test("the sidebar page measures no frame for the pill and never re-renders to show it", () => {
+  const page = readFileSync(new URL("./SidebarPage.tsx", import.meta.url), "utf8");
+  assert.match(page, /\{geometry \? <SelectedRowPill windowId=\{windowId\} tracker=\{selectedRow\}/);
+  assert.match(page, /useSelectedRowAway\(windowId, geometry, scrollView, \(\) => page\.scrollY\)/);
+  assert.doesNotMatch(page, /listFrame|useListFrame|pillNeeded/);
+});
+
+test("the pill reads no store while it shows: no external-store hook, no tab hooks, no store listener", () => {
   const pill = readFileSync(new URL("./SelectedRowPill.tsx", import.meta.url), "utf8");
-  const page = readFileSync(new URL("./SidebarPage.tsx", import.meta.url), "utf8");
-  const tracker = pill.slice(pill.indexOf("export function useSelectedRowAway"), pill.indexOf("export function SelectedRowPill"));
-  assert.doesNotMatch(tracker, /useState<RowAway>/);
-  assert.match(pill, /const away = useSyncExternalStore\(source\.subscribe, source\.read, source\.read\);/);
-  assert.match(page, /<SelectedRowPillFrame frame=\{listFrame\} lift=\{edgeLift\} windowId=\{windowId\} away=\{selectedRow\.away\}/);
+  assert.doesNotMatch(pill, /useSyncExternalStore|useActiveTabId|useTab\(|useBrowser|watchRowsMoved/);
+  assert.match(pill, /watchWindowRecord\(windowId, tracker\.selectionMoved\)/);
+  assert.match(pill, /if \(!away \|\| frame\) return;/, "a window change waits a frame only while the pill shows");
 });
 
-test("the list's frame for the pill lives outside the page's state, so a list layout at launch never re-renders the sidebar page", () => {
-  const page = readFileSync(new URL("./SidebarPage.tsx", import.meta.url), "utf8");
-  assert.match(page, /const listFrame = useListFrame\(\);/);
-  assert.match(page, /onLayout=\{listFrame\.onLayout\}/);
-  assert.doesNotMatch(page, /setListFrame/);
+test("the pill's icon keeps what the row's icon shows: the engine badge, the faded look, a tint only through tintedImage", () => {
+  const pill = readFileSync(new URL("./SelectedRowPill.tsx", import.meta.url), "utf8");
+  assert.match(pill, /const engine = markedEngine\(tab\.marks\);/);
+  assert.match(pill, /\{engine \? <EngineMark mark=\{engine\} size=\{size\} \/> : null\}/);
+  assert.match(pill, /tab\.marks & FADED \? SLEEPING_OPACITY : 1/);
+  assert.match(pill, /return tintedImage\(\{/);
 });
 
-test("the list frame notifies the pill only when the list's top or height changes", (t) => {
-  const frame = mount(() => useListFrame());
-  t.after(() => frame.unmount());
-  const source = frame.value;
-  let notified = 0;
-  source.subscribe(() => notified++);
-  const layout = (y, height) => source.onLayout({ nativeEvent: { layout: { x: 0, y, width: 200, height } } });
-  layout(40, 600);
-  layout(40, 600);
-  assert.equal(notified, 1);
-  assert.deepEqual(source.read(), { top: 40, height: 600 });
-  layout(40, 520);
-  assert.equal(notified, 2);
-  assert.deepEqual(source.read(), { top: 40, height: 520 });
+test("the tracker hands the pill the selected tab only while its row is out of view, and keeps quiet otherwise", async (t) => {
+  await import("../../test-native/index.ts");
+  const { useBrowser } = await import("../../state/browser/store.ts");
+  const S = () => useBrowser.getState();
+  S().hydrate({});
+  const w = S().createWindow({ url: "https://a.com/" });
+  const ids = [S().windows[w].tabIds[0]];
+  for (let i = 0; i < 30; i++) ids.push(S().newTab(w, { url: `https://t${i}.com/` }));
+  S().activate(ids[0]);
+  const geometry = { current: { viewport: 200, regions: { pinnedGroups: 0, list: 0 }, newTabAtTop: false, tilesFixed: false, edgeLift: 0 } };
+  let scrollY = 0;
+  const hook = mount(() => useSelectedRowAway(w, geometry, { current: null }, () => scrollY));
+  t.after(() => hook.unmount());
+  const tracker = hook.value;
+  const seen = [];
+  const detach = tracker.attach((away) => seen.push(away));
+  tracker.judge();
+  assert.deepEqual(seen, [null], "in view at the top: the pill hears nothing new");
+  scrollY = 900;
+  tracker.judge();
+  tracker.judge();
+  assert.equal(seen.length, 2, "one change, however many scroll events");
+  assert.equal(seen.at(-1)?.side, "above");
+  assert.equal(seen.at(-1)?.tab.id, ids[0]);
+  scrollY = 0;
+  tracker.judge();
+  assert.equal(seen.at(-1), null);
+  detach();
+});
+
+test("the pill animates its value only while it is on screen, and builds its motion once per phase, so no native value is left with no view to hold it", async (t) => {
+  const { Animated } = await import("react-native");
+  const { SelectedRowPill } = await import("./SelectedRowPill.tsx");
+  const timing = Animated.timing;
+  const proto = Object.getPrototypeOf(new Animated.Value(0));
+  const interpolate = proto.interpolate;
+  let animations = 0;
+  let interpolations = 0;
+  Animated.timing = (value, config) => (animations++, timing(value, config));
+  proto.interpolate = function (config) {
+    interpolations++;
+    return interpolate.call(this, config);
+  };
+  t.after(() => {
+    Animated.timing = timing;
+    proto.interpolate = interpolate;
+  });
+  let sink = () => {};
+  const tracker = { attach: (next) => ((sink = next), next(null), () => {}), judge() {}, relocate() {} };
+  const pill = mount(() => SelectedRowPill({ windowId: "w", tracker, lift: 0 }));
+  t.after(() => pill.unmount());
+  assert.equal(pill.value, null);
+  assert.equal(animations, 0, "a hidden pill starts no animation, so its value never becomes native without a view");
+  const tab = { id: "t", url: "https://a.com/", favicon: null, icon: null, profileId: "default", faviconUri: null, template: false, marks: 0 };
+  for (let i = 0; i < 20; i++) {
+    sink({ side: "above", tab });
+    pill.value;
+    pill.rerender();
+    sink(null);
+    pill.value;
+    pill.rerender();
+  }
+  assert.equal(animations, 40, "one enter and one exit per show, none while hidden");
+  assert.ok(interpolations <= 20 * 2 * 3, "the motion's interpolations are built once per phase, not on every render");
+  const settled = animations;
+  sink(null);
+  pill.value;
+  assert.equal(animations, settled, "hiding an already hidden pill animates nothing");
 });

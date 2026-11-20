@@ -1,5 +1,5 @@
 import { ContextMenuArea } from "@ardia/shell";
-import { Symbol, type SymbolProps } from "./Symbol";
+import { drawnSymbol, type SymbolProps } from "./Symbol";
 import { memo, useState, type ReactNode } from "react";
 import { Animated, Image, Pressable, Text, View, type GestureResponderEvent, type ImageSourcePropType, type StyleProp, type ViewStyle } from "react-native";
 import { modifiersOf, type ClickModifiers } from "../../lib/keys";
@@ -138,7 +138,7 @@ function IconButtonView(props: IconProps) {
       <Image source={{ uri: image }} style={{ width: IMAGE_SIZE, height: IMAGE_SIZE, opacity: disabled ? opacity.disabled : 1 }} />
     </View>
   ) : icon ? (
-    <Symbol name={icon} size={metrics.glyph} weight={weight} color={ink} style={{ width: glyphFrame, height: glyphFrame }} />
+    drawnSymbol({ name: icon, size: metrics.glyph, weight, color: ink, style: { width: glyphFrame, height: glyphFrame } })
   ) : null);
   const [lit, setLit] = useState(() => !disabled && !!active);
   if (!lit && !disabled && (hovered || !!active)) setLit(true);

@@ -4,6 +4,7 @@ import { inPinnedContainer } from "../browser/model";
 import { tabEngine } from "../engines/engines";
 import { withSharedFamily } from "../pins/pinShare";
 import { noteTabsSleptFromMenu } from "../telemetry/tabSleepCounts";
+import { keptAwakeReason, onlyAutomaticProtections, type KeptAwakeReason } from "./sleepRefusals";
 import { consentToken } from "../telemetry/client";
 import { splitOf, splitTabIdsOf, withPinnedPanes } from "../splits/splits";
 import { inUse } from "./loadedTabBudget";
@@ -22,17 +23,32 @@ export function canSleep(s: BrowserState, id: string): boolean {
   return !!t && hasLoadedPage(t) && webviews.has(id) && !isSleeping(id) && tabEngine(s, id) === "chromium" && !visibleWith(s, id);
 }
 
-export async function sleepTab(id: string, { keepProtected = false, mayWrite }: { keepProtected?: boolean; mayWrite?: () => boolean } = {}): Promise<string> {
+export type MenuSleep = { outcome: string; keptBy?: KeptAwakeReason; pastAutomatic?: boolean };
+
+export async function sleepAsked(id: string): Promise<MenuSleep> {
+  const s = useBrowser.getState();
+  if (!s.tabs[id]) return { outcome: "gone" };
+  if (visibleWith(s, id)) return { outcome: "shown" };
+  const view = webviews.get(id);
+  if (!view) return { outcome: "already" };
+  if (inUse(s, id)) return { outcome: "kept", keptBy: "playingOrSharing" };
+  const keptBy = await view.sleepIfHidden(0).catch(() => [-1]);
+  if (!keptBy.length) return { outcome: "asleep" };
+  if (!onlyAutomaticProtections(keptBy)) return { outcome: "kept", keptBy: keptAwakeReason(keptBy) };
+  const after = useBrowser.getState();
+  if (!after.tabs[id] || webviews.get(id) !== view) return { outcome: "gone" };
+  if (visibleWith(after, id)) return { outcome: "shown" };
+  if (inUse(after, id)) return { outcome: "kept", keptBy: "playingOrSharing" };
+  const discarded = await view.discard().catch(() => "refused" as const);
+  if (discarded === "already") return { outcome: "asleep" };
+  return discarded === "discarded" ? { outcome: "asleep", pastAutomatic: true } : { outcome: "kept", keptBy: "other" };
+}
+
+export async function sleepTab(id: string, { mayWrite }: { mayWrite?: () => boolean } = {}): Promise<string> {
   const s = useBrowser.getState();
   if (!s.tabs[id]) return "gone";
   if (visibleWith(s, id)) return "shown";
   const view = webviews.get(id);
-  if (keepProtected) {
-    if (!view) return "already";
-    if (inUse(s, id)) return "kept";
-    const keptBy = await view.sleepIfHidden(0).catch(() => [-1]);
-    return keptBy.length ? "kept" : "asleep";
-  }
   if (inPinnedContainer(s, id)) {
     if (mayWrite && !mayWrite()) return "refused";
     s.closeTabs([id]);
@@ -44,6 +60,6 @@ export async function sleepTab(id: string, { keepProtected = false, mayWrite }: 
 
 export async function sleepTabsFromMenu(ids: string[], from: "tab" | "group") {
   const consent = consentToken();
-  const outcomes = await Promise.all(ids.map((id) => sleepTab(id, { keepProtected: true })));
-  noteTabsSleptFromMenu(from, outcomes.filter((outcome) => outcome === "kept").length, consent);
+  const results = await Promise.all(ids.map(sleepAsked));
+  noteTabsSleptFromMenu(from, results, consent);
 }

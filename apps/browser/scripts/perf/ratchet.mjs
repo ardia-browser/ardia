@@ -11,7 +11,7 @@ const appDir = process.env.RATCHET_APP_DIR ? resolve(process.env.RATCHET_APP_DIR
 const repo = resolve(appDir, "../..");
 const ceilingsFile = join(here, "ratchet.json");
 
-export const JOURNEYS = ["startup", "launch", "idle", "typing", "switchTabs", "scroll", "hover", "pageLoad", "openClose"];
+export const JOURNEYS = ["startup", "launch", "idle", "typing", "switchTabs", "scroll", "hover", "pageLoad", "openClose", "nodeChurn"];
 const OPTIONS = '{"seconds":5}';
 
 const EXACT_SHARE = 1;
@@ -71,6 +71,10 @@ export function flatten(result, prefix = "") {
     ran.add("openClose");
     flattenStats(out, "open", result.openClose.openStats);
     flattenStats(out, "close", result.openClose.closeStats);
+  }
+  if (typeof result.nodeChurn?.left === "number") {
+    ran.add("nodeChurn");
+    out["nodeChurn.nativeNodesLeft"] = result.nodeChurn.left;
   }
   if (result.pageLoad?.runs) {
     ran.add("pageLoad");

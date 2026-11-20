@@ -2239,3 +2239,46 @@ test("history: an unchanged page's visits are matched in one pass, not each agai
   assert.deepEqual(values.get(`h:${url}`), known);
   assert.ok(abs.mock.callCount() <= visitTimes.length, `${abs.mock.callCount()} comparisons`);
 });
+
+const syncedHistory = (url, title, seen) => {
+  S().hydrate({});
+  stub.historyDbs.clear();
+  stub.chromeHistory("").set(url, { title, visits: [seen] });
+  useBrowser.setState({ history: { "": { list: [{ url, title, favicon: null, visits: 1, lastVisit: seen, visitTimes: [seen] }], floor: -Infinity, ready: true } } });
+  return { known: () => true, now: Date.now(), horizon: 0, joined: true };
+};
+
+test("history: a title synced from another Mac doesn't replace the one this Mac's Chrome keeps, so the command bar finds the page without a restart", async () => {
+  const url = "https://notes.example/5f3c9a";
+  const fresh = "https://notes.example/8e21d0";
+  const seen = Date.now() - 3_600_000;
+  const known = syncedHistory(url, "Journal: Tuesday", seen);
+  const telemetry = await import("../telemetry/client.ts");
+  const { takeSyncWorkCounts } = await import("../telemetry/workCounts.ts");
+  telemetry.setSharing(true, "onboarding");
+  takeSyncWorkCounts();
+  const elsewhere = seen + 60_000;
+  const visits = new Map([
+    [`h:${url}`, { t: "Notion", n: 2, vt: [seen, elsewhere] }],
+    [`h:${fresh}`, { t: "Reading list", n: 1, vt: [elsewhere] }],
+  ]);
+  await adapters.historyAdapter("default").apply(visits, new Set(visits.keys()), () => undefined, known);
+  const entry = (u) => historyOf(S(), "default").find((h) => h.url === u);
+  assert.equal(stub.chromeHistory("").get(url).title, "Journal: Tuesday", "Chrome keeps its own title");
+  assert.equal(entry(url).title, "Journal: Tuesday", "and the list shows that title, not the other Mac's");
+  assert.deepEqual(entry(url).visitTimes, [seen, elsewhere], "while the other Mac's visit still lands");
+  assert.equal(entry(fresh).title, "Reading list", "a page this Mac hasn't seen takes the synced title");
+  assert.equal(takeSyncWorkCounts().sync_history_titles_kept, 1, "the kept title is counted, the new page's isn't");
+  telemetry.setSharing(false, "settings");
+});
+
+test("history: a title Chrome reports while synced visits are being written stays in the list", async () => {
+  const url = "https://notes.example/5f3c9a";
+  const seen = Date.now() - 3_600_000;
+  const known = syncedHistory(url, "", seen);
+  const visits = new Map([[`h:${url}`, { t: "", n: 2, vt: [seen, seen + 60_000] }]]);
+  const applying = adapters.historyAdapter("default").apply(visits, new Set(visits.keys()), () => undefined, known);
+  useBrowser.setState((s) => ({ history: { ...s.history, "": { ...s.history[""], list: s.history[""].list.map((h) => (h.url === url ? { ...h, title: "Journal: Tuesday" } : h)) } } }));
+  await applying;
+  assert.equal(historyOf(S(), "default").find((h) => h.url === url).title, "Journal: Tuesday");
+});

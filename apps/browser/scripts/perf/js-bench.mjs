@@ -64,7 +64,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const appDir = resolve(here, "../..");
 const repo = resolve(appDir, "../..");
 const defaultOut = process.env.AC_PERF_OUT ?? "/tmp/ac-perf-js";
-const BENCH_REVISION = 4;
+const BENCH_REVISION = 5;
 const ACTIVE_PAGE_DELAY_MS = 400;
 
 const [command, ...rest] = process.argv.slice(2);
@@ -393,7 +393,7 @@ const top = (counter, n = 6) =>
     .map(([k, v]) => `${k} ${Math.round(v)}`)
     .join(", ");
 
-export const isHarnessTimer = (name) => name.includes("pollDevEval") || name === "setInterval:anonymous";
+export const isHarnessTimer = (name) => name.includes("pollDevEval") || name.includes("benchSettleStep") || name.includes("benchSleep") || name === "setInterval:anonymous";
 const harnessMs = (stats) => sum(Object.fromEntries(Object.entries(stats.timerMs ?? {}).filter(([k]) => isHarnessTimer(k))));
 
 function statLine(stats) {

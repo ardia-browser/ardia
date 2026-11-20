@@ -66,14 +66,17 @@ test("stopping a launched tree kills its helpers and spares a process whose argu
   mkdirSync(join(app, "Contents", "MacOS"), { recursive: true });
   symlinkSync(process.execPath, exe);
   const { NODE_OPTIONS, ...env } = process.env;
-  const helper = spawn(exe, ["-e", "setTimeout(() => {}, 30000)"], { stdio: "ignore", env });
-  const decoy = spawn("/bin/sh", ["-c", "sleep 30", exe], { stdio: "ignore" });
+  const idle = "setTimeout(() => {}, 30000)";
+  const helper = spawn(exe, ["-e", idle], { stdio: "ignore", env });
+  const decoy = spawn(process.execPath, ["-e", idle, exe], { stdio: "ignore", env });
   const helperGone = new Promise((ok) => helper.once("exit", (code, signal) => ok(signal)));
   try {
     const tree = await until(() => {
       const found = processTable().filter((p) => p.pid === helper.pid && p.command.startsWith(exe));
       return found.length ? found : null;
     }, "the helper's exec");
+    const decoyCommand = await until(() => processTable().find((p) => p.pid === decoy.pid && p.command.includes(exe))?.command, "the decoy's exec");
+    assert.equal(insideApp(decoyCommand, app), false);
     assert.deepEqual(await stopTree(tree, app, { graceMs: 200 }), [helper.pid]);
     assert.equal(await Promise.race([helperGone, new Promise((ok) => setTimeout(() => ok("still running"), 10_000))]), "SIGKILL");
     assert.equal(decoy.exitCode, null);

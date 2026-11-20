@@ -30,6 +30,7 @@ type Store = {
   pipOpen: Record<string, PictureInPictureState["kind"]>;
   displayRequests: Record<string, DisplayMediaRequest>;
   tabShares: Record<string, TabShare>;
+  sharedTabs: Record<string, true>;
 };
 
 export type TabShare = {
@@ -38,7 +39,7 @@ export type TabShare = {
   dismissed: Record<string, true>;
 };
 
-const noMedia = (): Store => ({ sessions: {}, dismissed: {}, leftPaused: {}, pip: {}, pipOpen: {}, displayRequests: {}, tabShares: {} });
+const noMedia = (): Store => ({ sessions: {}, dismissed: {}, leftPaused: {}, pip: {}, pipOpen: {}, displayRequests: {}, tabShares: {}, sharedTabs: {} });
 const PER_TAB = Object.keys(noMedia()) as (keyof Store)[];
 
 export const useMedia = create<Store>()(noMedia);
@@ -224,7 +225,7 @@ export function hasPlayer(m: Pick<Store, "sessions" | "dismissed">, tabId: strin
 function isHiddenPlayerTab(s: BrowserState, tabId: string): boolean {
   const tab = s.tabs[tabId];
   const w = tab && s.windows[tab.windowId];
-  return !!w && !isTabShown(s, tabId, s.settings.playingNowAcrossProfiles ? w.profileId : tab.profileId);
+  return !!w && s.settings.sidebarMediaControls && !isTabShown(s, tabId, s.settings.playingNowAcrossProfiles ? w.profileId : tab.profileId);
 }
 
 let hiddenBefore = new Set<string>();
@@ -352,4 +353,7 @@ export const useHiddenPlayerTabs = (windowId: string, profileId: string, session
 export const sidebarPlayerCandidates = (m: Pick<Store, "leftPaused">, hidden: string[]) => hidden.filter((id) => !m.leftPaused[id]);
 
 export const usePinnedWithMediaControls = (tabId: string | undefined) =>
-  useKeyed(watchTabRecord, tabId, () => !!tabId && !!useBrowser.getState().tabs[tabId]?.pin);
+  useKeyed(watchTabRecord, tabId, () => {
+    const s = useBrowser.getState();
+    return !!tabId && !!s.tabs[tabId]?.pin && s.settings.sidebarMediaControls;
+  });

@@ -177,7 +177,7 @@ function FieldExtensions({ tabId, windowId, width, palette, onActivate }: { tabI
   const extensionsWidth = useToolbarExtensionsWidth(windowId, limit);
   if (!extensionsWidth) return null;
   return (
-    <View style={{ width: extensionsWidth - 6, height: 28 }}>
+    <View style={{ width: extensionsWidth, height: 28 }}>
       <ToolbarExtensions tabId={tabId} windowId={windowId} palette={palette} top={0} right={0} limit={limit} onActivate={onActivate} />
     </View>
   );

@@ -21,7 +21,7 @@ export type AppEvent =
   | { type: "appLinkOpened"; windowId: string | null }
   | { type: "littleArdiaReturnedToApp" }
   | { type: "littleArdiaReturnDropped"; count: number }
-  | { type: "littleArdiaLinkKeptBehind"; when: "activation" | "arrival" | "open" | "released" | "stageManager" }
+  | { type: "littleArdiaLinkKeptBehind"; when: "activation" | "arrival" | "open" | "released" | "stageManager" | "keyRestored" | "windowManager" }
   | { type: "windowTitleRead"; epoch: string }
   | { type: "keyHoldReplay"; tag: number; count: number }
   | { type: "littleArdiaGlobalShortcut" }

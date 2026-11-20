@@ -132,6 +132,31 @@ NS_ASSUME_NONNULL_BEGIN
     NS_SWIFT_NAME(resolveDisplayMedia(_:sourceId:audio:));
 @end
 
+@interface ArdiaWebView (VaultPageMessages)
+- (nullable NSString *)vaultOriginOfFrame:(NSString *)frameId NS_SWIFT_NAME(vaultOrigin(ofFrame:));
+- (void)fillVaultFrame:(NSString *)frameId
+                origin:(NSString *)origin
+                values:(NSDictionary<NSString *, NSString *> *)values
+                submit:(BOOL)submit
+           contextMenu:(BOOL)contextMenu
+            completion:(void (^)(NSArray<NSString *> *filled))completion
+    NS_SWIFT_NAME(fillVault(frame:origin:values:submit:contextMenu:completion:));
+- (void)setVaultMenuInFrame:(NSString *)frameId
+                       open:(BOOL)open
+                highlighted:(BOOL)highlighted NS_SWIFT_NAME(setVaultMenu(frameId:open:highlighted:));
+- (void)keepVaultLogin:(NSString *)username password:(NSString *)password origin:(NSString *)origin
+    NS_SWIFT_NAME(keepVaultLogin(username:password:origin:));
+- (void)keepGeneratedVaultPassword:(NSString *)password origin:(NSString *)origin
+    NS_SWIFT_NAME(keepGeneratedVaultPassword(_:origin:));
+- (nullable NSDictionary<NSString *, NSString *> *)takeVaultLogin:(NSString *)origin NS_SWIFT_NAME(takeVaultLogin(origin:));
+- (nullable NSDictionary<NSString *, NSString *> *)peekVaultLogin:(NSString *)origin NS_SWIFT_NAME(peekVaultLogin(origin:));
+- (nullable NSString *)generatedVaultPasswordFor:(NSString *)origin NS_SWIFT_NAME(generatedVaultPassword(origin:));
++ (void)setGeneratedVaultSubmitHandler:(nullable void (^)(NSString *password, NSString *username, NSString *origin))handler
+    NS_SWIFT_NAME(setGeneratedVaultSubmitHandler(_:));
+- (void)discardVaultLogin:(NSString *)origin NS_SWIFT_NAME(discardVaultCapture(origin:));
++ (void)wipeVaultCaptures NS_SWIFT_NAME(wipeVaultCaptures());
+@end
+
 @interface ArdiaWebView (FieldProviders)
 @property(class, nonatomic, readonly) NSDictionary<NSString *, NSNumber *> *systemPanelAvailability;
 @property(class, nonatomic, readonly, nullable) NSString *otpauthHandlerName;
@@ -190,6 +215,28 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)setSearchEngineName:(NSString *)name;
 + (void)removeSharedImage:(NSURL *)file NS_SWIFT_NAME(removeSharedImage(_:));
 + (void)removeSharedImages;
+@end
+
+@interface ArdiaWebView (VaultContextMenu)
++ (void)setVaultContextAutofill:(BOOL)autofill
+                     generators:(NSArray<NSDictionary<NSString *, id> *> *)generators
+                       anyField:(BOOL)anyField NS_SWIFT_NAME(setVaultContextMenu(autofill:generators:anyField:));
+- (void)setVaultContextMenuInFrame:(NSString *)frameId
+                            origin:(NSString *)origin
+                              menu:(NSDictionary<NSString *, id> *)menu NS_SWIFT_NAME(setVaultContextMenu(frameId:origin:menu:));
+@end
+
+typedef void (^ArdiaVaultCodeAnswer)(NSDictionary<NSString *, NSString *> *_Nullable code);
+typedef void (^ArdiaVaultCodeReader)(CGImageRef _Nullable image, NSString *_Nullable text, NSString *origin, ArdiaVaultCodeAnswer answer);
+
+@interface ArdiaWebView (VaultCodeSetup)
++ (void)setVaultCodeSetup:(BOOL)enabled NS_SWIFT_NAME(setVaultCodeSetup(_:));
++ (void)setVaultCodeReader:(nullable ArdiaVaultCodeReader)reader NS_SWIFT_NAME(setVaultCodeReader(_:));
+@property(nonatomic, readonly, nullable) NSString *vaultTabId;
++ (void)copyVaultCodePictureOfTab:(NSString *)tabId
+                       completion:(void (^)(CGImageRef _Nullable picture))completion NS_SWIFT_NAME(copyVaultCodePicture(ofTab:_:));
+- (void)setVaultCodeMenuForToken:(NSString *)token
+                            menu:(NSDictionary<NSString *, id> *)menu NS_SWIFT_NAME(setVaultCodeMenu(token:menu:));
 @end
 
 @interface ArdiaWebView (PictureInPicture)

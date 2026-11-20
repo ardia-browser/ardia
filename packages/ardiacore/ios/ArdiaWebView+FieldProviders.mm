@@ -19,7 +19,13 @@ NSString *const kInsertFromPasswordsAction = @"_handleInsertFromPasswordsCommand
 const CFTimeInterval kSystemPanelInterval = 0.6;
 const NSUInteger kVerificationCodesPerPage = 8;
 
+NSString *const kFillSystem = @"system";
+NSString *const kFillMenu = @"menu";
+
+BOOL FillsFromSystemPanel(NSDictionary *provider) { return [provider[@"fill"] isEqual:kFillSystem]; }
+
 BOOL ProviderWants(NSDictionary *provider, NSString *field) {
+  if (!FillsFromSystemPanel(provider)) return NO;
   if ([field isEqualToString:@"code"]) return Flag(provider, @"oneTimeCode");
   if ([field isEqualToString:@"username"] || [field isEqualToString:@"password"]) return Flag(provider, @"login");
   return NO;
@@ -136,9 +142,15 @@ static NSDictionary *OpenSystemPanel(NSView *page) {
     NSString *profile = Field<NSString>(entry, @"profile");
     NSArray *fields = Field<NSArray>(entry, @"fields") ?: @[];
     const BOOL login = [fields containsObject:@"login"], oneTimeCode = [fields containsObject:@"oneTimeCode"], codeSetup = Flag(entry, @"codeSetup");
+    NSString *fill = [Field<NSString>(entry, @"fill") isEqualToString:kFillMenu] ? kFillMenu : kFillSystem;
     if (!profile || !(login || oneTimeCode || codeSetup)) continue;
-    providers[ardia_host::OriginalProfileName(profile)] =
-        @{@"login" : @(login), @"oneTimeCode" : @(oneTimeCode), @"codeSetup" : @(codeSetup), @"generation" : @(generation)};
+    providers[ardia_host::OriginalProfileName(profile)] = @{
+      @"login" : @(login),
+      @"oneTimeCode" : @(oneTimeCode),
+      @"codeSetup" : @(codeSetup && [fill isEqualToString:kFillSystem]),
+      @"generation" : @(generation),
+      @"fill" : fill
+    };
   }
   const BOOL changed = newSession || generation != gFieldProviderGeneration || ![providers isEqualToDictionary:gFieldProviders];
   gFieldProviderSession = [session copy];
@@ -197,7 +209,7 @@ static NSDictionary *OpenSystemPanel(NSView *page) {
                 generation:(double)generation
                        ask:(void (^)(NSString *query))ask
                 completion:(void (^)(NSDictionary *result))completion {
-  if (!FieldProviderFor(profile)) return completion(@{@"shown" : @NO, @"reason" : @"noProvider"});
+  if (!FillsFromSystemPanel(FieldProviderFor(profile))) return completion(@{@"shown" : @NO, @"reason" : @"noProvider"});
   if (generation >= 0 && generation != gFieldProviderGeneration) return completion(@{@"shown" : @NO, @"reason" : @"stale"});
   NSMutableDictionary *page = FieldProviderPage(owner);
   NSDictionary *superseded = page[@"queryPending"];
@@ -250,7 +262,7 @@ static NSDictionary *OpenSystemPanel(NSView *page) {
 
 + (NSDictionary *)requestSystemPanelIn:(NSView *)page owner:(id)owner profile:(NSString *)profile field:(NSString *)field generation:(double)generation {
   NSDictionary *provider = FieldProviderFor(profile);
-  if (!provider) return @{@"shown" : @NO, @"reason" : @"noProvider"};
+  if (!FillsFromSystemPanel(provider)) return @{@"shown" : @NO, @"reason" : @"noProvider"};
   if ((field || generation >= 0) && generation != gFieldProviderGeneration) return @{@"shown" : @NO, @"reason" : @"stale"};
   NSString *focus = FieldProviderPage(owner)[@"focus"];
   if (!ProviderWants(provider, focus) || (field && ![field isEqualToString:focus])) return @{@"shown" : @NO, @"reason" : @"notFocused"};

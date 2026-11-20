@@ -13,6 +13,9 @@ const sourcesIn = (folder) =>
 
 const ASKED_BY = ["packages/shell/src/", "packages/ardiacore/src/", "packages/shaders/src/", "packages/import/src/", "packages/sync/src/"];
 const DRAWN_AS_NOTHING_ON_WINDOWS = ["ArdiaMeadow", "ArdiaPlugins", "ArdiaPowerUp", "ArdiaReport", "ArdiaWebKit"];
+const PASSWORD_MANAGER_VIEWS = ["ArdiaAutofillCardField", "ArdiaVaultPasswordField", "ArdiaVaults"];
+const PASSWORD_MANAGER_PAGE_CALLS = ["discardVaultCapture", "fillFromVault", "fillGeneratedPassword", "saveToVault", "setVaultCodeMenu", "setVaultContextMenu", "setVaultMenu", "stageVaultPassword", "updateVaultPassword"];
+const passwordManagersOnWindows = () => /systemPasswordManagers: true\b/.test(read("apps/browser/src/lib/platformFeatures.windows.ts"));
 
 const asked = () => {
   const names = new Set();
@@ -28,7 +31,8 @@ const known = () => {
 
 test("every native view the shared UI asks for is one Windows draws, or one it is listed as drawing nothing for", () => {
   const drawn = known();
-  const unanswered = asked().filter((name) => !drawn.has(name) && !DRAWN_AS_NOTHING_ON_WINDOWS.includes(name));
+  assert.equal(passwordManagersOnWindows(), false, "the password manager views are left out only while Windows hides password managers");
+  const unanswered = asked().filter((name) => !drawn.has(name) && !DRAWN_AS_NOTHING_ON_WINDOWS.includes(name) && !PASSWORD_MANAGER_VIEWS.includes(name));
   assert.deepEqual(unanswered, [], "a view the Mac added: without a Windows view it draws an empty box");
   assert.deepEqual(DRAWN_AS_NOTHING_ON_WINDOWS.filter((name) => drawn.has(name)), [], "listed as drawing nothing, but Windows draws it");
   assert.ok(asked().length > 20);
@@ -62,6 +66,7 @@ test("every call the shared UI can make on a page is one Windows carries out or 
   const view = read("packages/expo-windows/src/engine/EngineWebView.tsx");
   const has = new Set([...tableKeys(view, "ARGUMENTS"), ...tableKeys(view, "ANSWERS"), ...[...view.matchAll(/if \(method === "([A-Za-z]+)"\) return /g)].map(([, name]) => name)]);
   assert.ok(asked.length > 30 && has.size > 25);
-  assert.deepEqual(asked.filter((name) => !has.has(name) && !NOT_ON_WINDOWS_YET.includes(name)), [], "a page call the Mac added: on Windows it does nothing and answers null");
+  assert.equal(passwordManagersOnWindows(), false, "the password manager page calls are left out only while Windows hides password managers");
+  assert.deepEqual(asked.filter((name) => !has.has(name) && !NOT_ON_WINDOWS_YET.includes(name) && !PASSWORD_MANAGER_PAGE_CALLS.includes(name)), [], "a page call the Mac added: on Windows it does nothing and answers null");
   assert.deepEqual(NOT_ON_WINDOWS_YET.filter((name) => has.has(name) || !asked.includes(name)), [], "listed as missing, but Windows has it or the Mac dropped it");
 });

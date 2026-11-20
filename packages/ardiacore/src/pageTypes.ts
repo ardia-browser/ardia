@@ -2,6 +2,10 @@ import type { ViewProps } from "react-native";
 import type { ExternalAppRequest } from "./permissions";
 import type { FaviconImage } from "./favicons";
 import type { PageCookie, PageEngine } from "./webkit";
+import type { VaultEditResult } from "./vaults";
+import type { VaultPasswordStyle, VaultFillRequest, VaultFillTarget, VaultContextField, VaultContextAction, VaultContextMenu, VaultCodeFound, VaultCodeAction, VaultCodeMenu, VaultFillResult, VaultSaveRequest, VaultPasswordDraft, VaultSaveResult, VaultUpdateRequest } from "./pageVaultTypes";
+
+export type * from "./pageVaultTypes";
 
 export type NavigationState = {
   url: string;
@@ -236,6 +240,11 @@ export type WebViewProps = ViewProps & {
   onAutofillPrompt?: (prompt: AutofillPrompt | null, id: number) => void;
   onExternalApp?: (request: ExternalAppRequest) => void;
   onPreferredSize?: (size: { width: number; height: number }) => void;
+  onVaultContext?: (field: VaultContextField) => void;
+  onVaultContextAction?: (action: VaultContextAction) => void;
+  onVaultCode?: (code: VaultCodeFound) => void;
+  onVaultCodeAction?: (action: VaultCodeAction) => void;
+  onAutofillSuggestions?: (count: number, kinds: ChromeDropdownShown[], hidden: boolean, logins: string[]) => void;
   onTransferRefused?: (fromWindowId: string) => void;
   onAppBadge?: (badge: AppBadge) => void;
   onFieldProviderOpened?: (opened: FieldProviderOpened) => void;
@@ -289,8 +298,28 @@ export type WebViewHandle = {
   discard(options?: { unload?: boolean }): Promise<DiscardOutcome>;
   sleepIfHidden(seconds: number): Promise<DiscardRefusal[]>;
   setFrozen(frozen: boolean): Promise<void>;
+
+  fillFromVault(request: VaultFillRequest): Promise<VaultFillResult>;
+  fillGeneratedPassword(request: {
+    frameId: string;
+    origin: string;
+    style?: VaultPasswordStyle;
+    maxLength?: number;
+    target?: VaultFillTarget;
+  }): Promise<Pick<VaultFillResult, "filled">>;
+  setVaultContextMenu(request: { frameId: string; origin: string; menu: VaultContextMenu }): Promise<void>;
+  setVaultCodeMenu(request: { token: string; menu: VaultCodeMenu }): Promise<void>;
+  setVaultMenu(request: { frameId: string; open: boolean; highlighted: boolean }): Promise<void>;
+  saveToVault(request: VaultSaveRequest): Promise<VaultSaveResult>;
+  updateVaultPassword(request: VaultUpdateRequest): Promise<VaultEditResult>;
+  discardVaultCapture(request: { origin: string }): Promise<void>;
+  stageVaultPassword(request: { origin: string }): Promise<VaultPasswordDraft>;
 };
 
 export type DiscardOutcome = "discarded" | "already" | "refused" | "unsupported";
 export type DiscardRefusal = number;
 export type DiscardReason = "external" | "urgent" | "proactive" | "suggested" | "frozen";
+
+export type ChromeDropdownKind = "login" | "passkey" | "history" | "address" | "card";
+export type ChromeDropdownShown = ChromeDropdownKind | "other";
+export type ChromeDropdownEvent = { count: number; kinds?: ChromeDropdownShown[]; hidden?: boolean; logins?: string[] };

@@ -86,6 +86,7 @@
       "devPagePhase",
       "devClosePage"
     ],
+    "vaults": ["claimChromeDropdowns", "providers", "refresh", "items", "lock", "signOut", "configure", "cancelSignIn", "copy", "totp", "biometrics", "keychainCounts", "sync", "syncStatus", "backupStatus", "restoreBackup", "updateFromBackup", "deleteBackup", "resumeBackup", "warm", "generate", "export", "setOptions", "listGenerated", "copyGenerated", "saveGenerated", "deleteGenerated", "setGeneratedRetention", "addTotp", "edit", "removeTotp", "readCode", "forgetCode", "copyCode", "ardiaLoginChanged", "copyConcealed", "dropTouchGrant", "newPasswordDraft", "dropPasswordDraft", "createLogin", "codes", "addCode", "editCode", "deleteCode", "importCodes"],
     "webView": [
       "setDisplayMediaPicker",
       "setSelectionPopover",
@@ -95,6 +96,7 @@
       "setVideoUpscaling",
       "setVideoUpscalingTestConditions",
       "takeContentDrift",
+      "setVaultContextMenu",
       "takeFirstPaintHolds",
       "videoUpscalingState"
     ],

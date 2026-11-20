@@ -64,5 +64,18 @@ protocol PageTab: NSView {
   func notificationAction(_ notificationId: String, action: String)
   func resolveUnresponsive(terminate: Bool)
   func discard(unload: Bool) -> String
+
+  func fillFromVault(frameId: String, origin: String, provider: String, id: String, fields: [String], userChose: Bool, submit: Bool,
+                     contextMenu: Bool, _ completion: @escaping ([String: Any]) -> Void)
+  func fillGeneratedPassword(frameId: String, origin: String, style: String, maxLength: Int?, contextMenu: Bool,
+                             _ completion: @escaping ([String: Any]) -> Void)
+  func setVaultContextMenu(frameId: String, origin: String, menu: [String: Any])
+  func setVaultCodeMenu(token: String, menu: [String: Any])
+  func setVaultMenu(frameId: String, open: Bool, highlighted: Bool)
+  func saveToVault(provider: String, origin: String, title: String?, username: String?, _ completion: @escaping ([String: Any]) -> Void)
+  func updateVaultPassword(provider: String, id: String, origin: String, _ completion: @escaping ([String: Any]) -> Void)
+  func discardVaultCapture(origin: String)
+  func stageVaultPassword(origin: String) -> [String: Any]
+
   func sleepIfHidden(for seconds: Double) -> [NSNumber]
 }

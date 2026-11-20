@@ -103,5 +103,33 @@ extension WebKitTab: PageTab {
 
   func discard(unload: Bool) -> String { Self.unsupported }
 
+  func fillFromVault(frameId: String, origin: String, provider: String, id: String, fields: [String], userChose: Bool, submit: Bool,
+                     contextMenu: Bool, _ completion: @escaping ([String: Any]) -> Void) {
+    completion(["filled": [String](), "error": VaultFillError.failed.rawValue])
+  }
+
+  func fillGeneratedPassword(frameId: String, origin: String, style: String, maxLength: Int?, contextMenu: Bool,
+                             _ completion: @escaping ([String: Any]) -> Void) {
+    completion(["filled": [String]()])
+  }
+
+  func setVaultContextMenu(frameId: String, origin: String, menu: [String: Any]) {}
+
+  func setVaultCodeMenu(token: String, menu: [String: Any]) {}
+
+  func setVaultMenu(frameId: String, open: Bool, highlighted: Bool) {}
+
+  func saveToVault(provider: String, origin: String, title: String?, username: String?, _ completion: @escaping ([String: Any]) -> Void) {
+    completion(["saved": false, "error": VaultFillError.notFound.rawValue])
+  }
+
+  func updateVaultPassword(provider: String, id: String, origin: String, _ completion: @escaping ([String: Any]) -> Void) {
+    completion(VaultEditResult.failure(.notFound).jsonObject())
+  }
+
+  func discardVaultCapture(origin: String) {}
+
+  func stageVaultPassword(origin: String) -> [String: Any] { ["token": "", "length": 0] }
+
   func sleepIfHidden(for seconds: Double) -> [NSNumber] { [-1] }
 }

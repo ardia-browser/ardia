@@ -185,6 +185,16 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
     `/tmp/ac-<name>.holder` says who holds a lock. Every `scripts/agent` script takes `--help`.
     When the main session runs the build train (`scripts/agent/train serve`: one shared build of the tree), don't
     build yourself: `train request --as <you>`, then `train wait --as <you>` prints the app to run.
+  - Signing: `--sign team` (default) uses the project's team profile and gets the `…​.passwords` keychain access
+    group. A Mac without that profile builds with `--sign dev` or `--sign adhoc` (`ARDIA_BUILD_SIGN=dev` makes it the
+    default in your shell). `dev` signs with your own Apple Development identity (`ARDIA_DEV_SIGN_IDENTITY`, a SHA-1
+    from `security find-identity -v -p codesigning`, else the first Apple Development one) through
+    `apps/browser/macos/DevSigned.xcconfig`: no profile, no entitlements, and a signature that stays the same across
+    rebuilds, so the login keychain's Always Allow sticks (an ad hoc signature is the binary's hash, so every rebuild
+    is a new app to the keychain and asks again). `adhoc` uses `AdHoc.xcconfig`; its password-manager secrets live in
+    a sealed file in the data dir and never touch the keychain (`docs/password-managers.md` › Where secrets live).
+    A dev signed build has a team id, so with no `ARDIA_DATA_DIR` Chrome uses the real "Ardia Safe Storage" item;
+    always run it on a scratch data dir. Switching a derived data between modes rebuilds it once.
   - Run: `scripts/agent/ac launch apps/browser/build-<you>/Build/Products/Debug/Ardia.app --data <scratch>/data`
     (hidden: `open -g -n`, `ARDIA_BACKGROUND=1`, its own data dir and DevTools port; prints the pid and port).
     `ac eval|page|quit|status` take that data dir (`--help`); scripts use `scripts/lib/instance.mjs` (`launch`,
@@ -311,6 +321,8 @@ The only variables the app and engine read, through `ArdiaLaunchConfig` (`packag
 | `ARDIA_TEST` | `keychain=file` (+ `keychainHiddenReads=<n>`, `keychainFail=decode\|denied\|interaction\|entitlement\|io`) | A file-backed keychain in the data dir instead of the login keychain |
 | | `safeStorageAnswer=start-over` | Answers the Safe Storage dialog with Start Over (background mode) |
 | | `reauth=granted` | Grants macOS re-auth requests in background mode (otherwise refused) |
+| | `touchID=granted` | The fill menu's fingerprint acts as if touched a moment after it arms (background mode only) |
+| | `vaultCloudDirectory=<dir>` · `vaultSyncedKey=<file>` | Ardia's iCloud backup goes to this folder instead of iCloud Drive · the backup's synced key is read from and written to this file instead of iCloud Keychain (`docs/password-managers.md`) |
 | | `bluetoothChooser` · `mediaRouteProvider` · `externalProtocolNoLaunch` · `systemMediaPermission=denied\|ask\|ask-slow` | Engine fakes: Bluetooth chooser events, a test Cast sink, external protocols recorded instead of opened, camera and microphone permission |
 | | `externalProtocolApp=<app path>` | With `externalProtocolNoLaunch`, the app that answers for a link no installed app opens (an `obsidian://` link without Obsidian), so its prompt and recorded launch can be tested |
 | | `applyProfileGate` | Applies the real-profile switch gate on the mock keychain too |

@@ -56,3 +56,9 @@ test("every event in api.ts is emitted natively under that name, and nothing els
   for (const [, topic] of between("ForwardedTopics()", "];").matchAll(/@"([^"]+)"/g)) emitted.add(renamed.get(topic) ?? topic);
   assert.deepEqual(sorted(emitted), sorted(keysOf(typeBody("EngineEvents"))));
 });
+
+test("no call handler reads the profile from its JSON arguments, since call() sends it on its own", () => {
+  assert.match(src("./call.ts"), /const \{ profile = "", \.\.\.rest \}/, "call() moves profile out of the arguments");
+  const readers = nativeFiles.filter((f) => /args\.(text|optionalText|bool|optionalBool)\("profile"\)/.test(native(f)));
+  assert.deepEqual(readers, [], "these read a profile that never arrives; use args.profile");
+});

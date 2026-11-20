@@ -58,6 +58,14 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
+@interface ArdiaHost (ChromeDropdowns)
+
++ (NSDictionary<NSString *, id> *)claimChromeDropdowns:(NSArray<NSString *> *)kinds
+                                            usernames:(nullable NSArray<NSString *> *)usernames
+                                                tabId:(NSString *)tabId NS_SWIFT_NAME(claimChromeDropdowns(_:usernames:tabId:));
+
+@end
+
 @interface ArdiaHost (Launch)
 
 + (int)runWithArgc:(int)argc

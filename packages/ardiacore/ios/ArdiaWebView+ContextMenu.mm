@@ -1,6 +1,11 @@
 #import "ArdiaWebViewInternal.h"
+#import "ArdiaWebView+VaultContextMenu.h"
 #import "ArdiaRuntime.h"
 #import "ArdiaLaunchConfig.h"
+#import "ArdiaHost.h"
+
+#include <map>
+#include <string>
 
 #include <fcntl.h>
 #include <sys/file.h>
@@ -9,6 +14,148 @@
 
 using namespace ardia_web_view;
 using namespace ardia_runtime;
+
+namespace {
+
+struct DropdownClaim {
+  NSSet<NSString *> *kinds;
+  NSSet<NSString *> *logins;
+};
+
+struct ShownDropdown {
+  NSArray<NSString *> *kinds;
+  NSArray<NSString *> *logins;
+};
+
+std::map<std::string, DropdownClaim> &DropdownClaims() {
+  static std::map<std::string, DropdownClaim> claims;
+  return claims;
+}
+
+std::map<std::string, ShownDropdown> &ShownDropdowns() {
+  static std::map<std::string, ShownDropdown> shown;
+  return shown;
+}
+
+std::string TabKey(NSString *tabId) { return tabId.UTF8String ?: ""; }
+
+NSString *DropdownKindOf(NSString *type) {
+  if ([type isEqualToString:@"kUndoOrClear"]) return nil;
+  if ([type containsString:@"Webauthn"] || [type containsString:@"Passkey"]) return @"passkey";
+  if ([type containsString:@"Password"]) return @"login";
+  if ([type isEqualToString:@"kAutocompleteEntry"]) return @"history";
+  if ([type containsString:@"CreditCard"] || [type containsString:@"Iban"]) return @"card";
+  if ([type containsString:@"Address"]) return @"address";
+  return @"other";
+}
+
+NSArray<NSString *> *DropdownKinds(NSArray<NSDictionary<NSString *, NSString *> *> *items) {
+  NSMutableOrderedSet<NSString *> *kinds = [NSMutableOrderedSet orderedSet];
+  for (NSDictionary<NSString *, NSString *> *item in items)
+    if (NSString *kind = DropdownKindOf(Field<NSString>(item, @"type") ?: @"")) [kinds addObject:kind];
+  return kinds.array;
+}
+
+BOOL IsSavedLogin(NSString *type) { return [type isEqualToString:@"kPasswordEntry"] || [type isEqualToString:@"kAccountStoragePasswordEntry"]; }
+
+NSArray<NSString *> *DropdownLogins(NSArray<NSDictionary<NSString *, NSString *> *> *items) {
+  NSMutableOrderedSet<NSString *> *logins = [NSMutableOrderedSet orderedSet];
+  for (NSDictionary<NSString *, NSString *> *item in items)
+    if (IsSavedLogin(Field<NSString>(item, @"type") ?: @"")) [logins addObject:(Field<NSString>(item, @"label") ?: @"").lowercaseString];
+  return logins.array;
+}
+
+BOOL Claims(NSString *tabId, NSArray<NSString *> *kinds, NSArray<NSString *> *logins) {
+  auto found = DropdownClaims().find(TabKey(tabId));
+  if (found == DropdownClaims().end() || !kinds.count) return NO;
+  const DropdownClaim &claim = found->second;
+  if (![[NSSet setWithArray:kinds] isSubsetOfSet:claim.kinds]) return NO;
+  return !claim.logins || [[NSSet setWithArray:logins] isSubsetOfSet:claim.logins];
+}
+
+void ApplyClaimToEngine(ArdiaCoreTab *tab, NSString *tabId) {
+  if (!tab || ![tab respondsToSelector:NSSelectorFromString(@"setSuppressedAutofillLogins:")]) return;
+  auto found = DropdownClaims().find(TabKey(tabId));
+  BOOL claimed = found != DropdownClaims().end();
+  [tab setValue:claimed ? found->second.logins : nil forKey:@"suppressedAutofillLogins"];
+  [tab setValue:claimed ? found->second.kinds : [NSSet set] forKey:@"suppressedAutofillKinds"];
+}
+
+NSWindow *ChromeDropdownWindow(NSWindow *window) {
+  for (NSWindow *child in window.childWindows)
+    if (child.visible && [NSStringFromClass(child.class) hasPrefix:@"NativeWidgetMac"]) return child;
+  return nil;
+}
+
+NSView *PageWidgetView(NSView *root) {
+  static Class widgetClass = NSClassFromString(@"RenderWidgetHostViewCocoa");
+  NSMutableArray<NSView *> *queue = [NSMutableArray arrayWithObject:root];
+  while (queue.count) {
+    NSView *view = queue.firstObject;
+    [queue removeObjectAtIndex:0];
+    if ([view isKindOfClass:widgetClass]) return view;
+    [queue addObjectsFromArray:view.subviews];
+  }
+  return nil;
+}
+
+NSEvent *EscapeKey(NSWindow *window, NSEventType type) {
+  return [NSEvent keyEventWithType:type location:NSZeroPoint modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime
+                      windowNumber:window.windowNumber context:nil characters:@"\x1b" charactersIgnoringModifiers:@"\x1b"
+                         isARepeat:NO keyCode:53];
+}
+
+__weak NSWindow *gClosingDropdown;
+
+BOOL CloseChromeDropdown(ArdiaCoreTab *tab) {
+  NSWindow *window = tab.view.window;
+  NSView *page = tab.view ? PageWidgetView(tab.view) : nil;
+  NSWindow *dropdown = window ? ChromeDropdownWindow(window) : nil;
+  if (!page || !dropdown) return NO;
+  if (dropdown == gClosingDropdown) return YES;
+  gClosingDropdown = dropdown;
+  [page keyDown:EscapeKey(window, NSEventTypeKeyDown)];
+  [page keyUp:EscapeKey(window, NSEventTypeKeyUp)];
+  return YES;
+}
+
+}
+
+namespace ardia_host {
+
+void ApplyChromeDropdownClaim(ArdiaCoreTab *tab, NSString *tabId) {
+  if (tabId.length) ApplyClaimToEngine(tab, tabId);
+}
+
+}
+
+@implementation ArdiaHost (ChromeDropdowns)
+
++ (NSDictionary<NSString *, id> *)claimChromeDropdowns:(NSArray<NSString *> *)kinds
+                                            usernames:(NSArray<NSString *> *)usernames
+                                                tabId:(NSString *)tabId {
+  if (kinds.count) {
+    NSMutableSet<NSString *> *names = nil;
+    if (usernames) {
+      names = [NSMutableSet set];
+      for (NSString *name in usernames) [names addObject:name.lowercaseString];
+    }
+    DropdownClaims()[TabKey(tabId)] = {[NSSet setWithArray:kinds], names};
+  } else {
+    DropdownClaims().erase(TabKey(tabId));
+    ShownDropdowns().erase(TabKey(tabId));
+  }
+  ArdiaCoreTab *tab = ardia_host::TabWithAppTabId(tabId);
+  ApplyClaimToEngine(tab, tabId);
+  BOOL up = tab.view.window && ChromeDropdownWindow(tab.view.window);
+  auto shown = ShownDropdowns().find(TabKey(tabId));
+  NSArray<NSString *> *showing = up && shown != ShownDropdowns().end() ? shown->second.kinds : @[];
+  NSArray<NSString *> *logins = up && shown != ShownDropdowns().end() ? shown->second.logins : @[];
+  BOOL hidden = tab && Claims(tabId, showing, logins) && CloseChromeDropdown(tab);
+  return @{@"hidden" : @(hidden), @"showing" : hidden ? @[] : showing, @"logins" : hidden ? @[] : logins};
+}
+
+@end
 
 namespace {
 
@@ -196,6 +343,24 @@ NSDictionary *FindMenuItem(NSArray *items, NSString *label) {
   }
   return nil;
 }
+
+NSArray *WithVaultItems(NSArray *items, NSArray *ours) {
+  if (!ours.count) return items;
+  NSMutableArray<NSString *> *titles = [NSMutableArray arrayWithCapacity:items.count];
+  for (id item in items) {
+    NSDictionary *entry = [item isKindOfClass:NSDictionary.class] ? item : nil;
+    [titles addObject:!entry || MenuItemType(entry) == kMenuSeparator ? @"" : MenuTitle(Field<NSString>(entry, @"label") ?: @"")];
+  }
+  const NSUInteger at = ArdiaVaultContextIndex(titles);
+  NSDictionary *separator = @{@"id" : @0, @"label" : @"", @"type" : @(kMenuSeparator)};
+  NSMutableArray *block = [NSMutableArray arrayWithArray:ours];
+  if (at > 0) [block insertObject:separator atIndex:0];
+  NSDictionary *next = at < items.count && [items[at] isKindOfClass:NSDictionary.class] ? items[at] : nil;
+  if (at < items.count && (!next || MenuItemType(next) != kMenuSeparator)) [block addObject:separator];
+  NSMutableArray *shown = [NSMutableArray arrayWithArray:items];
+  [shown insertObjects:block atIndexes:[NSIndexSet indexSetWithIndexesInRange:NSMakeRange(at, block.count)]];
+  return shown;
+}
 }
 
 @implementation ArdiaWebView (ContextMenu)
@@ -257,7 +422,14 @@ NSDictionary *FindMenuItem(NSArray *items, NSString *label) {
 }
 
 - (void)tab:(ArdiaCoreTab *)tab didShowAutofillSuggestions:(NSArray<NSDictionary<NSString *, NSString *> *> *)items {
-  NoteEvent(ardia_host::BrowserId(tab), @"autofillSuggestions", @{@"items" : items ?: @[]});
+  NSArray<NSString *> *kinds = DropdownKinds(items ?: @[]);
+  NSArray<NSString *> *logins = DropdownLogins(items ?: @[]);
+  NSString *tabId = self.transferKey ?: @"";
+  ShownDropdowns()[TabKey(tabId)] = {kinds, logins};
+  ApplyClaimToEngine(tab, tabId);
+  BOOL hidden = Claims(tabId, kinds, logins) && CloseChromeDropdown(tab);
+  NoteEvent(ardia_host::BrowserId(tab), @"autofillSuggestions", @{@"items" : items ?: @[], @"kinds" : kinds, @"hidden" : @(hidden)});
+  [self emit:@"autofillSuggestions" payload:@{@"count" : @(items.count), @"kinds" : kinds, @"logins" : logins, @"hidden" : @(hidden)}];
 }
 
 - (void)tab:(ArdiaCoreTab *)tab didShowContextMenu:(NSArray<NSDictionary *> *)items {
@@ -266,12 +438,15 @@ NSDictionary *FindMenuItem(NSArray *items, NSString *label) {
 
 - (NSDictionary<NSString *, id> *)tab:(ArdiaCoreTab *)tab runContextMenu:(NSDictionary<NSString *, id> *)menu {
   NSArray *items = Field<NSArray>(menu, @"items") ?: @[];
-  NoteEvent(ardia_host::BrowserId(tab), @"contextMenu", @{@"items" : items});
+  NSArray<NSMenuItem *> *vault = [self takeVaultContextMenuItems];
+  NSArray *ours = [self describeVaultContextItems:vault];
+  NSArray *shown = WithVaultItems(items, ours);
+  NoteEvent(ardia_host::BrowserId(tab), @"contextMenu", @{@"items" : shown});
   ArdiaLaunchConfig *config = ArdiaLaunchConfig.shared;
   if (![config testFlag:@"contextMenu"]) {
     if (ardia_host::Background()) {
       NSMutableArray<NSString *> *titles = [NSMutableArray array];
-      for (NSDictionary *item in items)
+      for (NSDictionary *item in shown)
         if (MenuItemType(item) != kMenuSeparator && Field<NSString>(item, @"label").length) [titles addObject:MenuTitle(item[@"label"])];
       ardia_host::LogActivation([NSString stringWithFormat:@"context menu (not shown): %@", [titles componentsJoinedByString:@" | "]]);
     }
@@ -282,13 +457,19 @@ NSDictionary *FindMenuItem(NSArray *items, NSString *label) {
   NSDictionary *dump = @{
     @"url" : Field<NSString>(menu, @"url") ?: tab.url ?: @"",
     @"link" : Field<NSString>(menu, @"link") ?: @"",
-    @"items" : DescribeMenu(items),
+    @"items" : DescribeMenu(shown),
   };
   [JSONText(dump) writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil];
+  void (^redump)(NSArray<NSDictionary *> *) = ^(NSArray<NSDictionary *> *described) {
+    NSMutableDictionary *again = [dump mutableCopy];
+    again[@"items"] = DescribeMenu(WithVaultItems(items, described));
+    [JSONText(again) writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil];
+  };
   NSString *pick = [NSString stringWithContentsOfFile:pickPath encoding:NSUTF8StringEncoding error:nil];
   [NSFileManager.defaultManager removeItemAtPath:pickPath error:nil];
   pick = [pick stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
   NSArray<NSString *> *parts = [pick componentsSeparatedByString:@"\t"];
+  if (vault.count && [self pickVaultContextMenu:pick.length ? parts[0] : @"" redump:redump]) return nil;
   NSDictionary *found = pick.length ? FindMenuItem(items, parts[0]) : nil;
   if (!found) return nil;
   return @{@"command" : found[@"command"], @"path" : found[@"path"], @"flags" : @(parts.count > 1 ? parts[1].intValue : 0)};

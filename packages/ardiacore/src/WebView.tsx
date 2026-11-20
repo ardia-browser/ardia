@@ -5,12 +5,42 @@ import { findNodeHandle, type NativeSyntheticEvent } from "react-native";
 import type { FaviconImage } from "./favicons";
 import { ArdiaError, ardiaError } from "@ardia/core";
 import { deliverPageEvent, isPageEventProp, pageEventOf, type NativeProps, type PageEvent } from "./pageEvents";
-import type { DiscardOutcome, DiscardRefusal, WebViewHandle, WebViewProps } from "./pageTypes";
+import type {
+  DiscardOutcome,
+  DiscardRefusal,
+  VaultCodeMenu,
+  VaultContextMenu,
+  VaultFillResult,
+  VaultFillTarget,
+  VaultPasswordDraft,
+  VaultPasswordStyle,
+  VaultSaveResult,
+  WebViewHandle,
+  WebViewProps,
+} from "./pageTypes";
 import type { PageCookie } from "./webkit";
+import type { VaultEditResult } from "./vaults";
 
 type NativeHandle = Omit<
   WebViewHandle,
-  "evaluate" | "loadUrl" | "downloadFavicon" | "resolvePasswordPrompt" | "discard" | "sleepIfHidden" | "nativeTag" | "requestPictureInPicture" | "takeControlPress"
+  | "evaluate"
+  | "loadUrl"
+  | "downloadFavicon"
+  | "resolvePasswordPrompt"
+  | "discard"
+  | "sleepIfHidden"
+  | "nativeTag"
+  | "requestPictureInPicture"
+  | "takeControlPress"
+  | "fillFromVault"
+  | "fillGeneratedPassword"
+  | "setVaultMenu"
+  | "setVaultContextMenu"
+  | "setVaultCodeMenu"
+  | "saveToVault"
+  | "updateVaultPassword"
+  | "discardVaultCapture"
+  | "stageVaultPassword"
 > & {
   requestPictureInPicture(clickAt: number, control: number): Promise<boolean>;
   takeControlPress(clickAt: number, control: number): Promise<boolean>;
@@ -19,6 +49,30 @@ type NativeHandle = Omit<
   loadUrl(url: string, userInitiated?: boolean): Promise<void>;
   resolvePasswordPrompt(answer: string, username: string | null, password: string | null): Promise<void>;
   discard(unload: boolean): Promise<DiscardOutcome>;
+  fillFromVault(
+    frameId: string,
+    origin: string,
+    provider: string,
+    id: string,
+    fields: string[],
+    userChose: boolean,
+    submit: boolean,
+    target: VaultFillTarget | null,
+  ): Promise<VaultFillResult>;
+  fillGeneratedPassword(
+    frameId: string,
+    origin: string,
+    style: VaultPasswordStyle,
+    maxLength: number | null,
+    target: VaultFillTarget | null,
+  ): Promise<Pick<VaultFillResult, "filled">>;
+  setVaultContextMenu(frameId: string, origin: string, menu: VaultContextMenu): Promise<void>;
+  setVaultCodeMenu(token: string, menu: VaultCodeMenu): Promise<void>;
+  setVaultMenu(frameId: string, open: boolean, highlighted: boolean): Promise<void>;
+  saveToVault(provider: string, origin: string, title: string | null, username: string | null): Promise<VaultSaveResult>;
+  updateVaultPassword(provider: string, id: string, origin: string): Promise<VaultEditResult>;
+  discardVaultCapture(origin: string): Promise<void>;
+  stageVaultPassword(origin: string): Promise<VaultPasswordDraft>;
   sleepIfHidden(seconds: number): Promise<DiscardRefusal[]>;
 };
 
@@ -100,6 +154,22 @@ export const WebView = forwardRef<WebViewHandle, WebViewProps>(function WebView(
       discard: (options) => call<DiscardOutcome>("refused", (n) => n.discard(options?.unload ?? false)),
       sleepIfHidden: (seconds) => call<DiscardRefusal[]>([NO_PAGE_TO_DISCARD], (n) => n.sleepIfHidden(seconds)),
       setFrozen: (frozen) => call(undefined, (n) => n.setFrozen(frozen)),
+      fillFromVault: (r) =>
+        call<VaultFillResult>({ filled: [], error: "failed" }, (n) =>
+          n.fillFromVault(r.frameId, r.origin, r.provider, r.id, r.fields, r.userChose ?? false, r.submit === true, r.target ?? null),
+        ),
+      fillGeneratedPassword: (r) =>
+        call<Pick<VaultFillResult, "filled">>({ filled: [] }, (n) =>
+          n.fillGeneratedPassword(r.frameId, r.origin, r.style ?? "strong", r.maxLength ?? null, r.target ?? null),
+        ),
+      setVaultContextMenu: (r) => call(undefined, (n) => n.setVaultContextMenu(r.frameId, r.origin, r.menu)),
+      setVaultCodeMenu: (r) => call(undefined, (n) => n.setVaultCodeMenu(r.token, r.menu)),
+      setVaultMenu: (r) => call(undefined, (n) => n.setVaultMenu(r.frameId, r.open, r.open && r.highlighted)),
+      saveToVault: (r) =>
+        call<VaultSaveResult>({ saved: false, error: "failed" }, (n) => n.saveToVault(r.provider, r.origin, r.title ?? null, r.username ?? null)),
+      updateVaultPassword: (r) => call<VaultEditResult>({ edited: false, error: "failed" }, (n) => n.updateVaultPassword(r.provider, r.id, r.origin)),
+      discardVaultCapture: (r) => call(undefined, (n) => n.discardVaultCapture(r.origin)),
+      stageVaultPassword: (r) => call<VaultPasswordDraft>({ token: "", length: 0 }, (n) => n.stageVaultPassword(r.origin)),
     };
   });
 

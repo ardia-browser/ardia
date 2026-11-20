@@ -65,10 +65,11 @@ const RESOLVES_AT = 1800;
 ac.settingsData.defaultBrowser.fetch = () => new Promise((done) => setTimeout(() => done(false), Math.max(0, t0 + RESOLVES_AT - Date.now())));
 ac.settingsData.appIconChoices.fetch = () => new Promise((done) => setTimeout(() => done({ icons: [], current: null }), 4000));
 const seen = [];
+let navigating = false;
 const at = () => Date.now() - t0;
 const stop = s.useSettingsSearch.subscribe((now, before) => {
-  if (now.reveal !== before.reveal) seen.push({ at: at(), what: "reveal:" + (now.reveal ? now.reveal.id : "") });
-  if (now.flash !== before.flash) seen.push({ at: at(), what: "flash:" + (now.flash ? now.flash.id : "") });
+  if (now.reveal !== before.reveal) seen.push({ at: at(), duringNav: navigating, what: "reveal:" + (now.reveal ? now.reveal.id + "#" + now.reveal.request : "") });
+  if (now.flash !== before.flash) seen.push({ at: at(), duringNav: navigating, what: "flash:" + (now.flash ? now.flash.id : "") });
 });
 ac.openSettings("appearance");
 let leftAt = 0;
@@ -82,16 +83,20 @@ return wait(900)
       stop();
       return { armed: false, seen, pending: before };
     }
+    const checked = { field: "useSettingsSearch.reveal", id: before.id, request: before.request };
     const cur = nav.getState();
     const here = { pane: cur.pane, profileId: cur.profileId, detail: cur.detail };
+    leftAt = at();
+    navigating = true;
     ${leave === "back"
       ? `const prev = cur.back[cur.back.length - 1]; nav.setState({ ...prev, back: cur.back.slice(0, -1), forward: [here, ...cur.forward] });`
       : `nav.setState({ pane: "general", profileId: null, detail: "filterLists", back: [...cur.back, here], forward: [] });`}
-    leftAt = at();
+    navigating = false;
+    const navReturnedAt = at();
     return wait(1500).then(() => {
       stop();
       const n = nav.getState();
-      return { armed: true, seen, leftAt, nav: { pane: n.pane, detail: n.detail }, pending: s.useSettingsSearch.getState().reveal };
+      return { armed: true, checked, seen, leftAt, navReturnedAt, nav: { pane: n.pane, detail: n.detail }, pending: s.useSettingsSearch.getState().reveal };
     });
   });`;
 
@@ -128,11 +133,12 @@ for (const [leave, label] of [["back", "pressing Back"], ["detail", "opening a d
   await rep.check(`${label} while the destination loads cancels the reveal`, async () => {
     let out;
     for (let attempt = 1; attempt <= RACE_ATTEMPTS && !out?.armed; attempt++) out = await inFreshInstance(`${leave}-${attempt}`, RACE(leave));
-    if (!out.armed) throw new Error(`the reveal wasn't still pending when it was time to leave, in ${RACE_ATTEMPTS} tries, so cancellation was never exercised: ${out.seen.map((e) => `${e.what}@${e.at}`).join(" ")}`);
+    if (!out.armed) throw new Error(`useSettingsSearch.reveal wasn't still pending for ${TARGET} when it was time to leave, in ${RACE_ATTEMPTS} tries, so cancellation was never exercised: ${out.seen.map((e) => `${e.what}@${e.at}`).join(" ")}`);
     const late = out.seen.filter((e) => e.at >= out.leftAt && e.what === `flash:${TARGET}`);
     if (late.length) throw new Error(`the old pane's row flashed ${late[0].at - out.leftAt} ms after leaving: ${out.seen.map((e) => `${e.what}@${e.at}`).join(" ")}`);
     if (out.pending) throw new Error(`a reveal is still pending: ${JSON.stringify(out.pending)}`);
-    return `${out.seen.map((e) => `${e.what}@${e.at}`).join(" ")}; left at ${out.leftAt}, now on ${out.nav.pane}${out.nav.detail ? ` › ${out.nav.detail}` : ""}`;
+    const events = out.seen.map((e) => `${e.what}@${e.at}${e.duringNav ? " (during navigation)" : ""}`).join(" ");
+    return `${out.checked.field} #${out.checked.request} pending for ${out.checked.id} when leaving at ${out.leftAt} (navigation returned at ${out.navReturnedAt}); ${events}; now on ${out.nav.pane}${out.nav.detail ? ` › ${out.nav.detail}` : ""}`;
   });
 }
 

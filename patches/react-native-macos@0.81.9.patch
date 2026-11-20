@@ -1635,7 +1635,7 @@ diff --git a/React/Base/macOS/RCTPlatformDisplayLink.m b/React/Base/macOS/RCTPla
 index 6ee09fde67a60082ac45764f6c66b7c4ca97e5b9..16aa54f49c24eeb4158b2f41393558bbd37a42d8 100644
 --- a/React/Base/macOS/RCTPlatformDisplayLink.m
 +++ b/React/Base/macOS/RCTPlatformDisplayLink.m
-@@ -10,27 +10,57 @@
+@@ -10,27 +10,58 @@
  
  #import "RCTPlatformDisplayLink.h"
  
@@ -1688,6 +1688,7 @@ index 6ee09fde67a60082ac45764f6c66b7c4ca97e5b9..16aa54f49c24eeb4158b2f41393558bb
 +  CADisplayLink *_link;
 +  RCTPlatformDisplayLinkTicks *_ticks;
 +  CGDirectDisplayID _display;
++  NSInteger _fastest;
    SEL _selector;
    __weak id _target;
    NSRunLoop *_runLoop;
@@ -1699,7 +1700,7 @@ index 6ee09fde67a60082ac45764f6c66b7c4ca97e5b9..16aa54f49c24eeb4158b2f41393558bb
    os_unfair_lock _lock; // OS_UNFAIR_LOCK_INIT == 0
  }
  
-@@ -39,116 +69,163 @@ + (RCTPlatformDisplayLink *)displayLinkWithTarget:(id)target selector:(SEL)sel
+@@ -39,116 +70,164 @@ + (RCTPlatformDisplayLink *)displayLinkWithTarget:(id)target selector:(SEL)sel
    RCTPlatformDisplayLink *displayLink = [self.class new];
    displayLink->_target = target;
    displayLink->_selector = sel;
@@ -1738,10 +1739,11 @@ index 6ee09fde67a60082ac45764f6c66b7c4ca97e5b9..16aa54f49c24eeb4158b2f41393558bb
 +    return;
 +  }
 +  CGDirectDisplayID display = RCTDisplayOfScreen(screen);
++  NSInteger fastest = MAX(1, screen.maximumFramesPerSecond);
 +  os_unfair_lock_lock(&_lock);
 +  NSRunLoop *runLoop = _runLoop;
 +  NSArray<NSRunLoopMode> *modes = [_modes copy];
-+  BOOL current = _link != nil && _display == display;
++  BOOL current = _link != nil && _display == display && _fastest == fastest;
 +  BOOL paused = _paused;
 +  os_unfair_lock_unlock(&_lock);
 +  if (runLoop == nil || current) {
@@ -1750,8 +1752,7 @@ index 6ee09fde67a60082ac45764f6c66b7c4ca97e5b9..16aa54f49c24eeb4158b2f41393558bb
 +  _ticks = _ticks ?: [RCTPlatformDisplayLinkTicks new];
 +  _ticks.owner = self;
 +  CADisplayLink *link = [screen displayLinkWithTarget:_ticks selector:@selector(tick:)];
-+  float fastest = (float)MAX(1, screen.maximumFramesPerSecond);
-+  link.preferredFrameRateRange = CAFrameRateRangeMake(MIN(60.0f, fastest), fastest, fastest);
++  link.preferredFrameRateRange = CAFrameRateRangeMake(MIN(60.0f, (float)fastest), (float)fastest, (float)fastest);
 +  link.paused = paused;
 +  for (NSRunLoopMode mode in modes) {
 +    [link addToRunLoop:runLoop forMode:mode];
@@ -1759,8 +1760,10 @@ index 6ee09fde67a60082ac45764f6c66b7c4ca97e5b9..16aa54f49c24eeb4158b2f41393558bb
 +  os_unfair_lock_lock(&_lock);
 +  CADisplayLink *old = _runLoop != nil ? _link : link;
 +  if (_runLoop != nil) {
++    link.paused = _paused;
 +    _link = link;
 +    _display = display;
++    _fastest = fastest;
 +    _duration = 1.0 / fastest;
    }
 -  return kCVReturnSuccess;
@@ -1891,9 +1894,8 @@ index 6ee09fde67a60082ac45764f6c66b7c4ca97e5b9..16aa54f49c24eeb4158b2f41393558bb
 -  }
 +  os_unfair_lock_lock(&_lock);
 +  _paused = paused;
-+  CADisplayLink *link = _link;
++  _link.paused = paused;
 +  os_unfair_lock_unlock(&_lock);
-+  link.paused = paused;
  }
  
  - (BOOL)isPaused

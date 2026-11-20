@@ -326,8 +326,9 @@ test("only the window's edge reveals the hidden sidebar: the last 3 pt inside it
   assert.equal(dm.edgeEventReveals("peeking", 200, false, W), true, "back in the hold while it's out keeps it out");
 });
 
-test("the peek stays out within 40 pt of its right edge (#1297: 24 pt snapped it shut just past the panel), and closes 200 ms after the pointer leaves", () => {
-  assert.equal(dm.peekHoldWidth(240, 5), 5 + 240 + 40);
+test("the peek stays out within 75 pt of its right edge (#1297, matching Dia), and dismisses immediately on leave while top strip keeps 200 ms", () => {
+  assert.equal(dm.peekHoldWidth(240, 5), 5 + 240 + 75);
+  assert.equal(dm.SIDEBAR_PEEK_CLOSE_DELAY_MS, 0);
   assert.equal(dm.PEEK_CLOSE_DELAY_MS, 200);
 });
 

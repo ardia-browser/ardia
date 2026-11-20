@@ -31,8 +31,9 @@ export function useEmptyWindowPeek(windowId: string, enabled: boolean, peek: { c
   useEffect(() => {
     if (empty && enabledNow.current) return showForEmpty();
     count.ask(false);
-    if (shown.current) peek.current.hide();
+    const wasShown = shown.current;
     shown.current = false;
+    if (wasShown) peek.current.hide();
   }, [empty]);
   useEffect(() => {
     if (!enabled) shown.current = false;

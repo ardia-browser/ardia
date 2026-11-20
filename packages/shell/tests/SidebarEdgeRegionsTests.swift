@@ -8,6 +8,7 @@ final class SidebarEdgeRegionsTests: XCTestCase {
   private func geometry(
     right: Bool = false,
     hold: CGFloat = 0,
+    edgeBand: CGFloat = 0,
     appActive: Bool = true,
     peeking: Bool = false,
     immediate: Bool = false
@@ -17,6 +18,7 @@ final class SidebarEdgeRegionsTests: XCTestCase {
       screen: screen,
       right: right,
       hold: hold,
+      edgeBand: edgeBand,
       innerReveal: SidebarEdgeRegions.innerRevealWidth,
       innerExpanded: SidebarEdgeRegions.innerExpandedWidth,
       outerApproach: SidebarEdgeRegions.outerApproachReach,
@@ -36,18 +38,20 @@ final class SidebarEdgeRegionsTests: XCTestCase {
     at time: TimeInterval,
     right: Bool = false,
     hold: CGFloat = 0,
+    edgeBand: CGFloat = 0,
     appActive: Bool = true,
     peeking: Bool = false,
     immediate: Bool = false,
     initial: Bool = false
   ) -> SidebarEdgeTracker.Decision {
     let point = CGPoint(x: x, y: y)
-    let g = geometry(right: right, hold: hold, appActive: appActive, peeking: peeking, immediate: immediate)
+    let g = geometry(right: right, hold: hold, edgeBand: edgeBand, appActive: appActive, peeking: peeking, immediate: immediate)
     let r = tracker.regions(for: point, geometry: g)
     return tracker.step(
       point: point,
       at: time,
       inInnerBand: r.inInnerBand,
+      inInnerEdge: r.inInnerEdge,
       inOuterBand: r.inOuterBand,
       inWindow: r.inWindow,
       peeking: peeking,
@@ -157,6 +161,7 @@ final class SidebarEdgeRegionsTests: XCTestCase {
       screen: screen,
       right: false,
       hold: 209,
+      edgeBand: 0,
       innerReveal: 3,
       innerExpanded: 9,
       outerApproach: 50,
@@ -169,5 +174,69 @@ final class SidebarEdgeRegionsTests: XCTestCase {
     )
     XCTAssertTrue(tracker.regions(for: CGPoint(x: 0, y: 400), geometry: g).inOuterBand)
     XCTAssertFalse(tracker.regions(for: CGPoint(x: -1, y: 400), geometry: g).inOuterBand)
+  }
+
+  func testInnerEdgeExpandsImmediatelyOnEntryWithoutBlockingDirect5PtInside() {
+    var tracker = SidebarEdgeTracker()
+    XCTAssertFalse(step(&tracker, x: 500, at: 1.0).over)
+    XCTAssertNil(step(&tracker, x: 305, at: 1.01).nextDeadline)
+
+    let entered = step(&tracker, x: 302, at: 1.02)
+    XCTAssertFalse(entered.over)
+    XCTAssertNotNil(entered.nextDeadline)
+
+    let rebound = step(&tracker, x: 306, at: 1.04)
+    XCTAssertFalse(rebound.over)
+    XCTAssertEqual(rebound.nextDeadline ?? -1, 1.12, accuracy: 0.001)
+
+    let revealed = step(&tracker, x: 306, at: 1.12)
+    XCTAssertTrue(revealed.over)
+    XCTAssertTrue(revealed.atEdge)
+  }
+
+  func testEnteringInnerEdgeFromOutsideUsesExpanded9PtBand() {
+    var tracker = SidebarEdgeTracker()
+    let outside = step(&tracker, x: 295, at: 2.0)
+    XCTAssertFalse(outside.over)
+    XCTAssertNotNil(outside.nextDeadline)
+
+    let crossed = step(&tracker, x: 306, at: 2.02)
+    XCTAssertFalse(crossed.over)
+    XCTAssertEqual(crossed.nextDeadline ?? -1, 2.10, accuracy: 0.001)
+
+    let revealed = step(&tracker, x: 306, at: 2.10)
+    XCTAssertTrue(revealed.over)
+    XCTAssertTrue(revealed.atEdge)
+  }
+
+  func testSubPointTremorDoesNotResetStopTimer() {
+    var tracker = SidebarEdgeTracker()
+    XCTAssertFalse(step(&tracker, x: 500, at: 3.0).over)
+    let first = step(&tracker, x: 301.0, y: 400.0, at: 3.02)
+    XCTAssertFalse(first.over)
+    XCTAssertEqual(first.nextDeadline ?? -1, 3.10, accuracy: 0.001)
+
+    let jitter = step(&tracker, x: 301.4, y: 400.5, at: 3.07)
+    XCTAssertFalse(jitter.over)
+    XCTAssertEqual(jitter.nextDeadline ?? -1, 3.10, accuracy: 0.001)
+
+    let revealed = step(&tracker, x: 301.2, y: 400.2, at: 3.10)
+    XCTAssertTrue(revealed.over)
+    XCTAssertTrue(revealed.atEdge)
+  }
+
+  func testAtEdgeDistinguishesEdgeBandFromWideHoldColumn() {
+    var tracker = SidebarEdgeTracker()
+    let edge = step(&tracker, x: 302, at: 4.0, hold: 244, peeking: true, immediate: true)
+    XCTAssertTrue(edge.over)
+    XCTAssertTrue(edge.atEdge)
+
+    let column = step(&tracker, x: 380, at: 4.05, hold: 244, peeking: true, immediate: true)
+    XCTAssertTrue(column.over)
+    XCTAssertFalse(column.atEdge)
+
+    let outer = step(&tracker, x: 260, at: 4.10, hold: 244, peeking: true, immediate: true)
+    XCTAssertTrue(outer.over)
+    XCTAssertTrue(outer.atEdge)
   }
 }

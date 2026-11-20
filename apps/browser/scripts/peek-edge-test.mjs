@@ -8,7 +8,7 @@ import { launch, reporter, session } from "../../../scripts/lib/instance.mjs";
 const args = process.argv.slice(2);
 const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
-  console.error("usage: node peek-edge-test.mjs <Debug Ardia.app> [--port=<DevTools port>] [--keep-data]\n\nThe auto-hidden sidebar's peek, through the native edge watcher: a pointer resting on the window's bottom or top edge beside the peek keeps it out instead of flicking it shut and open, one that goes well past the edge closes it, an edge crossing outside the sidebar's column never opens it, once it slides away only the window's edge brings it back, in a full-screen window the pointer resting at the screen's edge keeps it out, pressing the other space's dot keeps it out, and with the window against a screen edge another display shares, the pointer stops at that edge to show the sidebar, a second push or 64 pt of pushing goes on through, and a fast sweep crosses without stopping. Also (#1297, #1393, #1679): only the last 3 pt or past the edge open it, it stays out 40 pt past its edge and closes 200 ms after the pointer leaves, a drag on its edge resizes it instead of closing it, and Reveal hidden tabs on hover off leaves the edge alone.");
+  console.error("usage: node peek-edge-test.mjs <Debug Ardia.app> [--port=<DevTools port>] [--keep-data]\n\nThe auto-hidden sidebar's peek, through the native edge watcher: a pointer resting on the window's bottom or top edge beside the peek keeps it out instead of flicking it shut and open, one that goes well past the edge closes it, an edge crossing outside the sidebar's column never opens it, once it slides away only the window's edge brings it back, in a full-screen window the pointer resting at the screen's edge keeps it out, pressing the other space's dot keeps it out, and with the window against a screen edge another display shares, the pointer stops at that edge to show the sidebar, a second push or 64 pt of pushing goes on through, and a fast sweep crosses without stopping. Also (#1297, #1393, #1679): only the last 3 pt or past the edge open it, natural 3..9 pt edge rebound completes the reveal, it stays out 75 pt past its edge and dismisses immediately once the pointer leaves, a drag on its edge resizes it instead of closing it, and Reveal hidden tabs on hover off leaves the edge alone.");
   process.exit(2);
 }
 const appPath = resolve(appArg);
@@ -57,25 +57,29 @@ try {
 
   await rep.check("once it starts sliding away, only the window's edge brings it back, not the column it is leaving (#1192)", async () => {
     assert.equal(await run(`return peek();`), true);
-    const back = await run(`return at(700, 400).then(() => settle(260)).then(() => at(80, 400)).then(() => settle(700)).then(live);`);
+    const back = await run(`return at(700, 400).then(() => settle(50)).then(() => at(80, 400)).then(() => settle(700)).then(live);`);
     assert.equal(back, false, "back into the old column mid-slide");
     assert.equal(await run(`return peek();`), true);
-    const edge = await run(`return at(700, 400).then(() => settle(260)).then(() => at(2, 400)).then(() => settle(700)).then(live);`);
+    const edge = await run(`return at(700, 400).then(() => settle(50)).then(() => at(2, 400)).then(() => settle(700)).then(live);`);
     assert.equal(edge, true, "the edge mid-slide");
     assert.equal(await run(`return away();`), false);
   });
 
-  await rep.check("only the window's edge opens it: 5 pt in doesn't, 2 pt in and past the edge do (#1297)", async () => {
+  await rep.check("only the window's edge opens it: 5 pt in doesn't, 2 pt in and past the edge do, and 3..9 pt rebound completes the reveal (#1297)", async () => {
     assert.equal(await run(`return at(300, 400).then(() => settle(300)).then(() => at(5, 400)).then(() => settle(500)).then(live);`), false, "5 pt in");
     assert.equal(await run(`return at(2, 400).then(() => settle(500)).then(live);`), true, "2 pt in");
     assert.equal(await run(`return away();`), false);
+    assert.equal(await run(`return at(300, 400).then(() => settle(120)).then(() => at(2, 400)).then(() => settle(20)).then(() => at(6, 400)).then(() => settle(300)).then(live);`), true, "3..9 pt inner rebound during dwell");
+    assert.equal(await run(`return away();`), false);
+    assert.equal(await run(`return at(300, 400).then(() => settle(120)).then(() => at(2, 400)).then(() => settle(100)).then(() => at(80, 400)).then(() => settle(400)).then(live);`), true, "immediate sweep onto sidebar right after reveal");
+    assert.equal(await run(`return away();`), false);
   });
 
-  await rep.check("it stays out 30 pt past its edge, closes past 40 pt, and a quick overshoot within 200 ms doesn't close it (#1297)", async () => {
+  await rep.check("it stays out 65 pt past its edge (Dia 75 pt slack) and closes past 75 pt without a 200 ms stall (#1297)", async () => {
     assert.equal(await run(`return peek();`), true);
-    assert.equal(await run(`return at(9 + 160 + 30, 400).then(() => settle(600)).then(live);`), true, "30 pt past the panel");
-    assert.equal(await run(`return at(9 + 160 + 80, 400).then(() => settle(120)).then(() => at(120, 400)).then(() => settle(600)).then(live);`), true, "out and back within 120 ms");
-    assert.equal(await run(`return at(9 + 160 + 45, 400).then(() => settle(600)).then(live);`), false, "45 pt past the panel");
+    assert.equal(await run(`return at(9 + 160 + 30, 400).then(() => settle(400)).then(live);`), true, "30 pt past the panel");
+    assert.equal(await run(`return at(9 + 160 + 65, 400).then(() => settle(400)).then(live);`), true, "65 pt past the panel");
+    assert.equal(await run(`return at(9 + 160 + 85, 400).then(() => settle(400)).then(live);`), false, "85 pt past the panel");
   });
 
   await rep.check("a drag that starts on the peek's edge resizes it and keeps it out, even with the pointer ahead of the panel (#1679)", async () => {

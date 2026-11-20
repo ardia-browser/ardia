@@ -20,6 +20,8 @@ final class SidebarEdgeWatcher {
   private var pressedInside: Set<String> = []
   private var unreported: Set<String> = []
   private var trackers: [String: SidebarEdgeTracker] = [:]
+  private var lastPeekHold: [String: CGFloat] = [:]
+  private var pendingHoldUntil: [String: TimeInterval] = [:]
   private var dwellWorkItem: DispatchWorkItem?
   private var buttonHeld = false
   private var wasPressed = false
@@ -46,8 +48,15 @@ final class SidebarEdgeWatcher {
 
   func watch(id: String, on: Bool, hold: CGFloat, right: Bool, whilePressed: Bool) {
     if on {
+      let clampedHold = max(0, hold)
+      if clampedHold > SidebarEdgeRegions.tabDragBandWidth {
+        lastPeekHold[id] = clampedHold
+        pendingHoldUntil[id] = nil
+      } else if (watched[id]?.rootHold ?? 0) > SidebarEdgeRegions.tabDragBandWidth {
+        pendingHoldUntil[id] = nil
+      }
       let wasWatched = watched[id] != nil
-      watched[id] = Watch(rootHold: max(0, hold), right: right, whilePressed: whilePressed)
+      watched[id] = Watch(rootHold: clampedHold, right: right, whilePressed: whilePressed)
       if !wasWatched {
         unreported.insert(id)
         trackers[id] = SidebarEdgeTracker()
@@ -56,6 +65,7 @@ final class SidebarEdgeWatcher {
       watched[id] = nil
       over.remove(id)
       overSince[id] = nil
+      pendingHoldUntil[id] = nil
       trackers[id] = nil
       unreported.remove(id)
     }
@@ -77,11 +87,16 @@ final class SidebarEdgeWatcher {
     checkPointer()
   }
 
+  private func canPressHold(_ id: String, at nowTime: TimeInterval) -> Bool {
+    watched[id]?.whilePressed == true || (pendingHoldUntil[id] ?? 0) > nowTime
+  }
+
   private func noteButtons(_ event: NSEvent) {
     switch event.type {
     case .leftMouseDown, .rightMouseDown, .otherMouseDown:
       buttonHeld = true
-      pressedInside.formUnion(over.filter { watched[$0]?.whilePressed == true })
+      let nowTime = ProcessInfo.processInfo.systemUptime
+      pressedInside.formUnion(over.filter { canPressHold($0, at: nowTime) })
     case .leftMouseDragged, .rightMouseDragged, .otherMouseDragged: buttonHeld = true
     case .leftMouseUp, .rightMouseUp, .otherMouseUp, .mouseMoved:
       buttonHeld = false
@@ -93,9 +108,22 @@ final class SidebarEdgeWatcher {
   private func check(_ pointer: NSPoint, live: Bool) {
     let nowTime = ProcessInfo.processInfo.systemUptime
     let (point, screenEdge) = stopAtScreenEdge(pointer, live: live)
-    lazy var onDock = live && NSApp.isActive && isOnDock(point)
+    var cachedHit: Int?
+    let hitAtPoint: () -> Int = {
+      if let cached = cachedHit { return cached }
+      let number = Self.windowNumber(at: point)
+      cachedHit = number
+      return number
+    }
+    var cachedOnDock: Bool?
+    let onDock: () -> Bool = {
+      if let cached = cachedOnDock { return cached }
+      let value = live && NSApp.isActive && self.isDock(hitAtPoint())
+      cachedOnDock = value
+      return value
+    }
     let pressed = buttonHeld || (live && NSEvent.pressedMouseButtons != 0)
-    if pressed && !wasPressed { pressedInside.formUnion(over.filter { watched[$0]?.whilePressed == true }) }
+    if pressed && !wasPressed { pressedInside.formUnion(over.filter { canPressHold($0, at: nowTime) }) }
     wasPressed = pressed
     var earliestDeadline: TimeInterval?
     for (id, watch) in watched {
@@ -103,11 +131,20 @@ final class SidebarEdgeWatcher {
         watched[id] = nil
         over.remove(id)
         overSince[id] = nil
+        lastPeekHold[id] = nil
+        pendingHoldUntil[id] = nil
         trackers[id] = nil
         unreported.remove(id)
         continue
       }
       if !pressed { pressedInside.remove(id) }
+      if let until = pendingHoldUntil[id] {
+        if nowTime >= until {
+          pendingHoldUntil[id] = nil
+        } else {
+          earliestDeadline = earliestDeadline.map { min($0, until) } ?? until
+        }
+      }
       var tracker = trackers[id] ?? SidebarEdgeTracker()
       let fresh = unreported.remove(id) != nil
       let edgeNote = screenEdge?.id == id ? screenEdge?.note : nil
@@ -118,6 +155,7 @@ final class SidebarEdgeWatcher {
         id: id,
         live: live,
         pressed: pressed,
+        hitAtPoint: hitAtPoint,
         onDock: onDock,
         tracker: &tracker,
         time: nowTime,
@@ -129,10 +167,22 @@ final class SidebarEdgeWatcher {
       }
       let now = evaluation.over
       guard fresh || now != over.contains(id) || edgeNote != nil else { continue }
-      if now, !over.contains(id) { overSince[id] = nowTime }
-      if now { over.insert(id) } else { over.remove(id) }
+      if now, !over.contains(id) {
+        overSince[id] = nowTime
+        if !fresh && watch.rootHold <= SidebarEdgeRegions.tabDragBandWidth {
+          let until = nowTime + SidebarEdgeRegions.pendingHoldDuration
+          pendingHoldUntil[id] = until
+          earliestDeadline = earliestDeadline.map { min($0, until) } ?? until
+        }
+      }
+      if now {
+        over.insert(id)
+      } else {
+        over.remove(id)
+        pendingHoldUntil[id] = nil
+      }
       let inRoot = InterfaceScale.rootPoint(fromScreen: point, in: window)
-      var event: [String: Any] = ["type": "sidebarEdge", "id": id, "over": now, "point": [inRoot.x, inRoot.y]]
+      var event: [String: Any] = ["type": "sidebarEdge", "id": id, "over": now, "point": [inRoot.x, inRoot.y], "edge": evaluation.atEdge]
       if let edgeNote { event["screenEdge"] = edgeNote }
       ShellEvents.send(.window, event)
     }
@@ -224,9 +274,9 @@ final class SidebarEdgeWatcher {
     point.y >= frame.minY && point.y < frame.maxY
   }
 
-  private static func inColumn(_ point: NSPoint, _ frame: NSRect, _ watch: Watch) -> Bool {
-    let width = max(watch.hold, InterfaceScale.windowLength(fromRoot: SidebarEdgeRegions.innerRevealWidth))
-    return watch.right ? point.x >= frame.maxX - width : point.x < frame.minX + width
+  private static func inColumn(_ point: NSPoint, _ frame: NSRect, right: Bool, hold: CGFloat) -> Bool {
+    let width = max(hold, InterfaceScale.windowLength(fromRoot: SidebarEdgeRegions.innerRevealWidth))
+    return right ? point.x >= frame.maxX - width : point.x < frame.minX + width
   }
 
   private static func insideEdge(_ frame: NSRect, _ right: Bool, y: CGFloat) -> NSPoint {
@@ -245,27 +295,35 @@ final class SidebarEdgeWatcher {
     id: String,
     live: Bool,
     pressed: Bool,
-    onDock: Bool,
+    hitAtPoint: () -> Int,
+    onDock: () -> Bool,
     tracker: inout SidebarEdgeTracker,
     time: TimeInterval,
     initial: Bool
   ) -> SidebarEdgeTracker.Decision {
     if pressed && pressedInside.contains(id) {
       tracker.holdActive()
-      return SidebarEdgeTracker.Decision(over: true, nextDeadline: nil)
+      return SidebarEdgeTracker.Decision(over: true, atEdge: false, nextDeadline: nil)
     }
     guard window.isVisible, !window.isMiniaturized, let screen = window.screen else {
-      return tracker.step(point: point, at: time, inInnerBand: false, inOuterBand: false, inWindow: false, peeking: false, immediate: false, initial: false)
+      return tracker.step(point: point, at: time, inInnerBand: false, inInnerEdge: false, inOuterBand: false, inWindow: false, peeking: false, immediate: false, initial: false)
     }
     let frame = window.frame
     let tabDragBand = InterfaceScale.windowLength(fromRoot: SidebarEdgeRegions.tabDragBandWidth)
-    let peeking = watch.hold > tabDragBand
+    let pendingActive = (pendingHoldUntil[id] ?? 0) > time
+    let effectiveRootHold = (pendingActive && watch.rootHold <= SidebarEdgeRegions.tabDragBandWidth)
+      ? max(watch.rootHold, lastPeekHold[id] ?? SidebarEdgeRegions.defaultPendingHoldWidth)
+      : watch.rootHold
+    let effectiveHold = InterfaceScale.windowLength(fromRoot: effectiveRootHold)
+    let peeking = effectiveHold > tabDragBand
+    let edgeBand = watch.rootHold <= SidebarEdgeRegions.tabDragBandWidth ? watch.hold : 0
     let immediate = watch.whilePressed || stoppedAtScreenEdge == id
     let g = SidebarEdgeTracker.Geometry(
       frame: frame,
       screen: screen.frame,
       right: watch.right,
-      hold: watch.hold,
+      hold: effectiveHold,
+      edgeBand: edgeBand,
       innerReveal: InterfaceScale.windowLength(fromRoot: SidebarEdgeRegions.innerRevealWidth),
       innerExpanded: InterfaceScale.windowLength(fromRoot: SidebarEdgeRegions.innerExpandedWidth),
       outerApproach: InterfaceScale.windowLength(fromRoot: SidebarEdgeRegions.outerApproachReach),
@@ -277,36 +335,40 @@ final class SidebarEdgeWatcher {
       immediate: immediate
     )
     let regions = tracker.regions(for: point, geometry: g)
-    let inWindowHit = regions.inWindow && (!live || Self.isWindowOrChild(Self.windowNumber(at: point), of: window))
+    let inWindowHit = regions.inWindow && (!live || (NSApp.isActive && window.isKeyWindow && !regions.inInnerBand && !regions.inOuterBand) || Self.isWindowOrChild(hitAtPoint(), of: window))
     var inInnerHit = false
+    var inInnerEdgeHit = false
     var inOuterHit = false
     if watch.whilePressed || !pressed {
       let insideY = min(max(point.y, frame.minY), frame.maxY - 1)
       if regions.inInnerBand {
         if !live {
           inInnerHit = true
-        } else if Self.isWindowOrChild(Self.windowNumber(at: NSPoint(x: point.x, y: insideY)), of: window),
-          insideY == point.y || !Self.overAnotherOfOurs(point, besides: window)
-        {
-          inInnerHit = true
+        } else {
+          let hitNumber = insideY == point.y ? hitAtPoint() : Self.windowNumber(at: NSPoint(x: point.x, y: insideY))
+          if Self.isWindowOrChild(hitNumber, of: window), insideY == point.y || !Self.overAnotherOfOurs(hitAtPoint(), besides: window) {
+            inInnerHit = true
+          }
         }
+        inInnerEdgeHit = inInnerHit && regions.inInnerEdge
       }
       if regions.inOuterBand {
         if !live || ((NSApp.isActive || Self.besideScreenEdge(window, screen, right: watch.right))
           && Self.isWindowOrChild(Self.windowNumber(at: Self.insideEdge(frame, watch.right, y: insideY)), of: window)
-          && !Self.overAnotherOfOurs(point, besides: window))
+          && !Self.overAnotherOfOurs(hitAtPoint(), besides: window))
         {
           inOuterHit = true
         }
       }
-      let inColumn = Self.inColumn(point, frame, watch) && screen.frame.contains(point)
-      if inColumn && onDock {
+      let inColumn = Self.inColumn(point, frame, right: watch.right, hold: effectiveHold) && screen.frame.contains(point)
+      if inColumn && onDock() {
         let topBeneathDock = (regions.inInnerBand || regions.inOuterBand) && isTopBeneathDock(point, of: window, right: watch.right)
         if over.contains(id) || topBeneathDock {
           if watch.right ? point.x >= frame.maxX : point.x < frame.minX {
             inOuterHit = true
           } else {
             inInnerHit = true
+            if regions.inInnerEdge { inInnerEdgeHit = true }
           }
         }
       }
@@ -315,6 +377,7 @@ final class SidebarEdgeWatcher {
           inOuterHit = true
         } else {
           inInnerHit = true
+          inInnerEdgeHit = true
         }
       }
     }
@@ -322,6 +385,7 @@ final class SidebarEdgeWatcher {
       point: point,
       at: time,
       inInnerBand: inInnerHit,
+      inInnerEdge: inInnerEdgeHit,
       inOuterBand: inOuterHit,
       inWindow: inWindowHit,
       peeking: peeking,
@@ -330,9 +394,8 @@ final class SidebarEdgeWatcher {
     )
   }
 
-  private static func overAnotherOfOurs(_ point: NSPoint, besides window: NSWindow) -> Bool {
-    let under = windowNumber(at: point)
-    return under != window.windowNumber && NSApp.window(withWindowNumber: under) != nil
+  private static func overAnotherOfOurs(_ under: Int, besides window: NSWindow) -> Bool {
+    under != window.windowNumber && NSApp.window(withWindowNumber: under) != nil
   }
 
   private static func windowNumber(at point: NSPoint, below start: Int = 0) -> Int {
@@ -343,10 +406,6 @@ final class SidebarEdgeWatcher {
       number = below
     }
     return number
-  }
-
-  private func isOnDock(_ point: NSPoint) -> Bool {
-    isDock(Self.windowNumber(at: point))
   }
 
   private func isTopBeneathDock(_ point: NSPoint, of window: NSWindow, right: Bool) -> Bool {
@@ -459,6 +518,8 @@ final class SidebarEdgeWatcher {
     pressedInside = []
     unreported = []
     trackers = [:]
+    lastPeekHold = [:]
+    pendingHoldUntil = [:]
     dwellWorkItem?.cancel()
     dwellWorkItem = nil
     stoppedAtScreenEdge = nil

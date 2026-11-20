@@ -70,7 +70,6 @@ export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, 
   const collapsed = usePinnedCollapsed(profileId);
   const pinnedFold = useFold(collapsed);
   const kept = usePinnedKept(windowId, profileId, pinned);
-  const pinnedGap = collapsed && !kept && !pinnedFold.moving ? 0 : layout.rowGap;
   const newTabButtonAtTop = useNewTabAtTop();
   const animated = current && !offScreen;
   const motion = useListMotion(windowId, profileId, all, captured, animated, viewport, newTabButtonAtTop && inlineNewTab ? rowPitch() : 0);
@@ -90,7 +89,7 @@ export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, 
             controller?.regions.set("pinnedGroups", v);
           }}
           onLayout={(e) => void (regions.pinnedGroups = e.nativeEvent.layout.y)}
-          style={{ marginTop: tiles.length && pinnedSection ? space.s : 0, gap: pinnedGap }}
+          style={{ marginTop: tiles.length && pinnedSection ? space.s : 0 }}
         >
           {pinnedSection ? (
             <Fold
@@ -98,6 +97,7 @@ export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, 
               collapsed={collapsed}
               entries={pinned.map((entry) => ({ key: entry, node: <SidebarEntry entry={entry} section="pinnedGroups" rowSection="pinnedRows" /> }))}
               keep={kept}
+              padBottom={layout.rowGap}
               estimate={(key) => entryHeightNow(windowId, profileId, key)}
             />
           ) : null}

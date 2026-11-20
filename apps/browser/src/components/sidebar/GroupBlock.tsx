@@ -22,6 +22,7 @@ import { useGroupHover, useRowHover } from "./hoverController";
 import { useHoverFade } from "./hoverMotion";
 import { Squish, useSquish } from "../ui/Squish";
 import { GhostSlot, ListMotionContext, useGroupMotion } from "./ListMotion";
+import { EntryGhost, snapshotEntry } from "./GhostEntry";
 import { pressGroupClose, useGroupCloseControlWhile } from "../../state/sidebar/closeControl";
 import { openGroupMenu } from "../../state/sidebar/menus";
 import { registerRow, useSidebarUi } from "../../state/sidebar/sidebarUi";
@@ -89,6 +90,7 @@ export const GroupBlock = memo(function GroupBlock({
   const fold = useFold(collapsed);
   const scope = useContext(ListMotionContext);
   const onShownPage = useWindowProfileId() === profileId;
+  const beforeChange = captured.pending?.state;
   const motion = useGroupMotion(windowId, profileId, groupId, entries, captured, section === "list" && !parentGroup ? scope : NO_SLIDE_BELOW, onShownPage && !collapsed);
   const [moved, movedRef] = useShift(own?.shift ?? null);
   const box = useGroupHover(windowId, groupId);
@@ -130,6 +132,14 @@ export const GroupBlock = memo(function GroupBlock({
             indentEnd={GROUP_INSET}
             mountClosed={selectedInside}
             footer={<Animated.View ref={tail.wrapper.ref} style={tail.wrapper.style} />}
+            farewell={
+              beforeChange
+                ? (key) => {
+                    const shot = snapshotEntry(beforeChange, windowId, profileId, key);
+                    return shot ? <EntryGhost snapshot={shot} /> : null;
+                  }
+                : undefined
+            }
           />
         </InnerGroupHover.Provider>
         {motion.tail ? <Animated.View style={{ marginTop: motion.tail }} /> : null}

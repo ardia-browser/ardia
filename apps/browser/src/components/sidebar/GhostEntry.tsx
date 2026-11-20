@@ -81,6 +81,11 @@ export function snapshotEntry(s: BrowserState, windowId: string, profileId: stri
   };
 }
 
+export function EntryGhost({ snapshot }: { snapshot: EntrySnapshot }) {
+  const theme = useTheme();
+  return <View pointerEvents="none">{ghostEntry(snapshot, theme, 0)}</View>;
+}
+
 export function ghostEntry(snapshot: EntrySnapshot, theme: ReturnType<typeof useTheme>, top: number) {
   if (snapshot.kind === "tab") return tabGhost(snapshot, theme, top);
   return <View style={{ marginTop: top }}>{snapshot.kind === "split" ? <SplitGhost shot={snapshot} /> : <GroupGhost shot={snapshot} />}</View>;

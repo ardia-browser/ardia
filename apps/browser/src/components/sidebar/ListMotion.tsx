@@ -16,7 +16,7 @@ import { splitTabIdsOf } from "../../state/splits/splits";
 import { noteSidebarMotion } from "../../state/telemetry/usage";
 import { settleSlides, type Slide } from "./slideSettle";
 import { seenSliding, shiftedBand, type ListViewport } from "./listViewport";
-import { offsets, prefixHeight, sharedPrefix, type Height, type Offsets } from "./listOffsets";
+import { heldIn, offsets, prefixHeight, sharedPrefix, type Height, type Offsets } from "./listOffsets";
 
 export const SLIDE_MS = SIDEBAR_MOTION.listSlide;
 export const FADE_MS = SIDEBAR_MOTION.listFade;
@@ -24,7 +24,7 @@ export const SLIDE_EASING = curve.cssEase;
 export const FADE_EASING = curve.cssEaseOut;
 const TAIL = "~tail";
 const FRAME_SLACK_MS = 50;
-const devScale = () => (__DEV__ ? ((globalThis as { sidebarMotionScale?: number }).sidebarMotionScale ?? 1) : 1);
+export const devScale = () => (__DEV__ ? ((globalThis as { sidebarMotionScale?: number }).sidebarMotionScale ?? 1) : 1);
 
 type Ghost = { key: string; anchor: string | null; y: number; snapshot: EntrySnapshot; opacity: Animated.Value; until: number };
 type Snapshot = ListSnapshot;
@@ -350,7 +350,8 @@ export function useListMotion(windowId: string, profileId: string, entries: stri
     if (!removed.every(closedIn(before.state, after.state)) || !added.every(openedIn(before.state, after.state))) return null;
     const grown = [...changes].flatMap(([e, c]) => (c === "grown" ? [e] : []));
     if (!removed.length && !added.length && !grown.length) return null;
-    const now: Height = (s, e) => (changes.get(e) === "extended" ? height(before.state, e) : height(s, e));
+    const held = heldIn(before.state, after.state, height);
+    const now: Height = (s, e) => (changes.get(e) === "extended" ? height(before.state, e) : held(s, e));
     const base = prefixHeight(after.state, after.list, start, now);
     const old = offsets(before.state, before.list, height, start, base);
     const next = offsets(after.state, after.list, now, start, base);
@@ -374,7 +375,7 @@ export function useGroupMotion(windowId: string, profileId: string, groupId: str
     if (!removed.length === !added.length) return null;
     if (!removed.every(closedIn(before.state, after.state)) || !added.every(openedIn(before.state, after.state))) return null;
     const old = offsets(before.state, before.list, height);
-    const next = offsets(after.state, after.list, height);
+    const next = offsets(after.state, after.list, heldIn(before.state, after.state, height));
     const snapshot = (e: string) => snapshotEntry(before.state, windowId, profileId, e);
     const atEnd = !removed.length && groupGrowsAtEnd(before.state, after.state, groupId);
     const plan = buildPlan({ before, after, old, next, removed, added, slides, ghosts, t, tail: !atEnd, snapshot, clipAfter: [], start: 0 });

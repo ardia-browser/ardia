@@ -17,10 +17,7 @@ export const CREDENTIAL_WORDING: readonly Wording[] = [
   },
   {
     file: "components/settings/panes/ProfileAutofill.tsx",
-    replacements: [
-      ["Card numbers are kept in ${PLATFORM_TERMS.secretStore}.", "Card numbers are encrypted by Chromium with a key from your system keyring when one answers."],
-      ["`Its number is removed from ${PLATFORM_TERMS.secretStore} too.`", `"Its saved number is deleted too."`],
-    ],
+    replacements: [["Card numbers are kept in ${PLATFORM_TERMS.secretStore}.", "Card numbers are encrypted by Chromium with a key from your system keyring when one answers."]],
   },
   {
     file: "components/settings/rows/profileRows.ts",

@@ -23,7 +23,7 @@ export type ArdiaCoreNativeModules = {
     save(profile: string, origin: string, username: string, password: string): Secret;
     update(profile: string, origin: string, username: string, newUsername: string | null, newPassword: string | null): Secret;
   };
-  ArdiaAutofill: { saveCard(profile: string, card: CardInput, number: string | null): Secret };
+  ArdiaAutofill: { saveCard(profile: string, card: CardInput, numberEntry: string | null): Secret };
   ArdiaVaults: {
     signIn(provider: string, fieldsJSON: string): Secret;
     unlock(provider: string, passwordEntry: string | null, handOnTab: string | null, handOnOrigin: string | null): Secret;

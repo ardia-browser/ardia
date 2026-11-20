@@ -26,6 +26,7 @@ import { TabWebView } from "./TabWebView";
 import { fitLeft, pageSurfaceLeft, type PageAnchor, type PageSurface } from "./pageAnchors";
 import { useSidebarSide } from "../../state/browser/hooks";
 import { VaultMenuHost } from "../vaults/VaultMenu";
+import { AutofillMenuHost } from "../autofill/AutofillMenu";
 import { VaultFieldBadgeHost } from "../vaults/VaultFieldBadge";
 import { VaultSaveOffer } from "../vaults/VaultSaveOffer";
 import { VaultPasskeySheet } from "../vaults/VaultPasskeySheet";
@@ -88,6 +89,7 @@ export function PageOverlays({
       <SelectionPopover tabId={tabId} zoom={zoom} />
       <VaultFieldBadgeHost tabId={tabId} zoom={zoom} />
       <VaultMenuHost tabId={tabId} zoom={zoom} />
+      <AutofillMenuHost tabId={tabId} />
     </>
   );
 }

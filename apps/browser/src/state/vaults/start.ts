@@ -12,6 +12,7 @@ import { startPasskeys } from "./passkeys";
 import { startVaultBackupWatch } from "./sync";
 import { startVaultCodeSetup } from "./totpSetup";
 import { startVaultWarming } from "./warm";
+import { startAutofillMenus } from "../autofill/fieldMenu";
 import { vaultsSupported } from "./enabled";
 
 export function startVaults() {
@@ -30,4 +31,5 @@ export function startVaults() {
   startVaultWarming();
   startStandaloneCodes();
   startPasskeys();
+  startAutofillMenus();
 }

@@ -62,6 +62,7 @@ export {
   Symbol,
   ThemeSwatch,
   useSecretEntry,
+  CardNumberField,
   VaultPasswordField,
   VaultTouchID,
   VisualEffect,
@@ -83,6 +84,7 @@ export {
   type SwipeEvent,
   type SymbolProps,
   type VaultPasswordFieldHandle,
+  type CardNumberFieldHandle,
   type WebViewHandle,
 } from "./native";
 export { OverPage } from "./OverPage";

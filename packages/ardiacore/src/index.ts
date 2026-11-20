@@ -21,6 +21,7 @@ export * from "./webkit";
 export * from "./vaults";
 export * from "./vaultTouchID";
 export * from "./vaultPasswordField";
+export * from "./autofillCardField";
 export { call, on, type CallArgs, type CallName, type CallResult, type EventData, type EventName } from "./engine/call";
 export type { EngineCalls, EngineEvents, LinuxHostEvents, WindowsHostEvents } from "./engine/api";
 export { nativeModule, type ArdiaCoreNativeModules } from "./nativeModules";

@@ -137,11 +137,13 @@
     "apps/linux/src/hostTelemetry.ts": 1
   },
   "queues": {
+    "apps/browser/src/components/autofill/AutofillMenu.tsx": 1,
     "apps/browser/src/components/settings/panes/FilterListsSheet.tsx": 1,
     "apps/browser/src/components/vaults/VaultMenu.tsx": 1,
     "apps/browser/src/components/vaults/VaultRows.tsx": 1,
     "apps/browser/src/lib/afterFirstWindow.ts": 1,
     "apps/browser/src/state/app/transientUi.ts": 1,
+    "apps/browser/src/state/autofill/fieldMenu.ts": 1,
     "apps/browser/src/state/automation/automationEvents.ts": 1,
     "apps/browser/src/state/automation/decideSocket.ts": 1,
     "apps/browser/src/state/automation/hookRules.ts": 1,

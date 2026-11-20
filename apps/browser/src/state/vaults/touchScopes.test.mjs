@@ -4,6 +4,7 @@ import { test } from "node:test";
 
 const SHARED = JSON.parse(readFileSync(new URL("../../../../../packages/ardiacore/tests/fixtures/vault-touch-scopes.json", import.meta.url), "utf8"));
 const { touchScope } = await import("./touchScopes.ts");
+const { touchScopeOfAutofill } = await import("../autofill/fieldMenu.ts");
 
 const built = ({ kind, parts }) => {
   if (kind === "fill") return touchScope.fill(parts.provider, parts.item, parts.origin, parts.tab);
@@ -22,3 +23,9 @@ for (const row of SHARED.scopes) {
     assert.equal(built(row), row.scope);
   });
 }
+
+test("the card menu asks for the card scope the native fill takes", () => {
+  const card = SHARED.scopes.find((row) => row.kind === "card");
+  assert.equal(touchScopeOfAutofill(card.parts.tab, { kind: "card", card: { id: card.parts.card } }), card.scope);
+  assert.equal(touchScopeOfAutofill(card.parts.tab, undefined), "", "no card row, no grant");
+});

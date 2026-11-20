@@ -42,7 +42,7 @@
     }
   },
   "missing": {
-    "autofill": ["settings", "setSettings", "showSuggestions"],
+    "autofill": ["settings", "setSettings", "showSuggestions", "revealCard", "copyCard", "fill", "claimMenuKeys"],
     "contentBlocker": ["state", "setEnabled", "setListEnabled", "isAllowed", "setAllowed", "hiddenElements", "hideElements", "restoreElements", "addList", "removeList", "devFailNextMessage", "devDelayNextLoad"],
     "engine": ["beginTracing", "endTracing", "isTracing", "cliTabTargets", "cliOwnsTab", "cliMoveOffscreen", "cliCloseOffscreenTabs"],
     "extensions": ["resolveInstallPrompt", "actionStates", "sidePanelUrl"],

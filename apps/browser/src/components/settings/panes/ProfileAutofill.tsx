@@ -1,55 +1,82 @@
-import {
-  cardNetworkName,
-  deleteAddress,
-  deleteCard,
-  revealCardNumber,
-  saveAddress,
-  saveCard,
-  type SavedAddress,
-  type SavedCard,
-} from "../../../state/site/autofill";
-import { orWarn } from "../../../lib/fallback";
-import { PLATFORM_TERMS } from "../../../lib/platformTerms";
-import { confirm, copyText } from "../../../state/app/system";
-import { Box, Button, DialogActions, DialogTitle, type Option, PopUp, Sheet, space, Symbol, Text, TextField } from "../../ui";
-import { useState, type ReactNode } from "react";
-import { View } from "react-native";
-import { useTheme } from "../../ui/theme";
+import { memo, useMemo, useState } from "react";
+import type { SavedAddress, SavedCard } from "../../../state/site/autofill";
+import { addressDetail, addressMatches, addressTitle } from "../../../state/autofill/addresses";
+import { cardExpiry, cardMatches, cardsInOrder, cardTitle } from "../../../state/autofill/cards";
 import { currentEngineProfile } from "../../../state/browser/current";
-import { Group, Row, SectionHeader } from "../Form";
-import { NetworkBadge } from "../../site/Autofill";
+import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 import { addresses as addressList, cards as cardList } from "../../../state/settings/paneData";
 import { useResource } from "../../../state/settings/resources";
-import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
+import { showSettingsSheet } from "../../../state/settings/sheet";
+import { useGrowingRows } from "../../../state/settings/growingRows";
+import { Box, Button, SearchField, tabularNums, Text } from "../../ui";
+import { AddressGlyph } from "../../autofill/AutofillParts";
+import { AddressSheet } from "../../autofill/AddressSheet";
+import { CardSheet } from "../../autofill/CardSheet";
+import { NetworkBadge } from "../../site/Autofill";
+import { Group, Row, SectionHeader } from "../Form";
 import { setting } from "../settingsIndex";
 import { ProfileSubPage } from "./ProfileSubPage";
 
+const SEARCH_FROM = 7;
+const SEARCH_WIDTH = 160;
+
+const AddressRow = memo(function AddressRow({ address, profile }: { address: SavedAddress; profile: string }) {
+  const detail = addressDetail(address);
+  return (
+    <Row
+      icon={<AddressGlyph address={address} />}
+      title={addressTitle(address)}
+      description={detail || undefined}
+      onPress={() => showSettingsSheet(<AddressSheet profile={profile} saved={address} />)}
+    />
+  );
+});
+
+const CardRow = memo(function CardRow({ card, profile, now }: { card: SavedCard; profile: string; now: Date }) {
+  const expiry = cardExpiry(card, now);
+  return (
+    <Row icon={<NetworkBadge network={card.network} />} title={cardTitle(card)} description={card.name?.trim() || undefined} onPress={() => showSettingsSheet(<CardSheet profile={profile} saved={card} />)}>
+      {expiry.expired ? (
+        <Text size="small" tone="destructive">
+          Expired
+        </Text>
+      ) : expiry.label ? (
+        <Text size="small" tone="textSecondary" style={tabularNums}>
+          {expiry.label}
+        </Text>
+      ) : null}
+    </Row>
+  );
+});
+
+function ListActions({ count, query, onQuery, addTitle, onAdd }: { count: number; query: string; onQuery: (q: string) => void; addTitle: string; onAdd: () => void }) {
+  return (
+    <Box row gap="s" center>
+      {count >= SEARCH_FROM || query ? <SearchField value={query} onChangeText={onQuery} placeholder="Search" width={SEARCH_WIDTH} /> : null}
+      <Button title={addTitle} onPress={onAdd} />
+    </Box>
+  );
+}
+
 export function AddressesPage({ profileId }: { profileId: string }) {
-  const theme = useTheme();
   const profile = currentEngineProfile(profileId);
-  const [addresses, reload] = useResource(addressList, profile);
-  const load = () => void reload();
+  const [list] = useResource(addressList, profile);
+  const [query, setQuery] = useState("");
+  const shown = useMemo(() => (list ?? []).filter((a) => addressMatches(a, query)), [list, query]);
+  const rows = useGrowingRows(shown.length, `${profile}|${query}`);
 
   return (
     <ProfileSubPage>
       <SectionHeader
         title="Addresses"
         description={setting("profiles.addresses").description}
-        action={<Button title="Add Address…" onPress={() => showSettingsSheet(<AddressSheet profile={profile} onChanged={load} />)} />}
+        action={<ListActions count={list?.length ?? 0} query={query} onQuery={setQuery} addTitle="Add Address…" onAdd={() => showSettingsSheet(<AddressSheet profile={profile} />)} />}
       />
       <Group>
-        {addresses && !addresses.length ? (
-          <Row title="No saved addresses" description="Addresses you enter in forms can be saved here." />
+        {list && !shown.length ? (
+          <Row title={query ? "No addresses match" : "No saved addresses"} description={query ? undefined : "Addresses you enter in forms can be saved here."} />
         ) : (
-          (addresses ?? []).map((a) => (
-            <Row
-              key={a.id}
-              icon={<Symbol name="person.crop.circle" size={15} color={theme.icon} style={PERSON_ICON} />}
-              title={a.name || firstLine(a.street) || a.email || "Address"}
-              description={addressSummary(a)}
-              onPress={() => showSettingsSheet(<AddressSheet profile={profile} saved={a} onChanged={load} />)}
-            />
-          ))
+          shown.slice(0, rows).map((a) => <AddressRow key={a.id} address={a} profile={profile} />)
         )}
       </Group>
     </ProfileSubPage>
@@ -58,237 +85,26 @@ export function AddressesPage({ profileId }: { profileId: string }) {
 
 export function CardsPage({ profileId }: { profileId: string }) {
   const profile = currentEngineProfile(profileId);
-  const [cards, reload] = useResource(cardList, profile);
-  const load = () => void reload();
+  const [list] = useResource(cardList, profile);
+  const [query, setQuery] = useState("");
+  const now = useMemo(() => new Date(), [list]);
+  const shown = useMemo(() => cardsInOrder(list ?? [], now).filter((c) => cardMatches(c, query)), [list, query, now]);
+  const rows = useGrowingRows(shown.length, `${profile}|${query}`);
 
   return (
     <ProfileSubPage>
       <SectionHeader
         title="Cards"
         description={`${setting("profiles.cards").description} Card numbers are kept in ${PLATFORM_TERMS.secretStore}.`}
-        action={<Button title="Add Card…" onPress={() => showSettingsSheet(<CardSheet profile={profile} onChanged={load} />)} />}
+        action={<ListActions count={list?.length ?? 0} query={query} onQuery={setQuery} addTitle="Add Card…" onAdd={() => showSettingsSheet(<CardSheet profile={profile} />)} />}
       />
       <Group>
-        {cards && !cards.length ? (
-          <Row title="No saved cards" description="Cards you enter at checkout can be saved here." />
+        {list && !shown.length ? (
+          <Row title={query ? "No cards match" : "No saved cards"} description={query ? undefined : "Cards you enter at checkout can be saved here."} />
         ) : (
-          (cards ?? []).map((c) => (
-            <Row
-              key={c.id}
-              icon={<NetworkBadge network={c.network} />}
-              title={`${cardNetworkName(c.network)} •••• ${c.last4}`}
-              description={cardSummary(c)}
-              onPress={() => showSettingsSheet(<CardSheet profile={profile} saved={c} onChanged={load} />)}
-            />
-          ))
+          shown.slice(0, rows).map((c) => <CardRow key={c.id} card={c} profile={profile} now={now} />)
         )}
       </Group>
     </ProfileSubPage>
-  );
-}
-
-const PERSON_ICON = { width: 22, height: 22 } as const;
-
-const firstLine = (street?: string) => street?.split("\n")[0] ?? "";
-
-function addressSummary(a: SavedAddress) {
-  const place = [a.city, a.state, a.postalCode].filter(Boolean).join(" ");
-  return [a.name ? firstLine(a.street) : "", place, a.email].filter(Boolean).join(", ");
-}
-
-const pad = (n: number) => String(n).padStart(2, "0");
-
-function isExpired(c: SavedCard) {
-  if (!c.expMonth || !c.expYear) return false;
-  const now = new Date();
-  return c.expYear < now.getFullYear() || (c.expYear === now.getFullYear() && c.expMonth < now.getMonth() + 1);
-}
-
-function cardSummary(c: SavedCard) {
-  const expiry = c.expMonth && c.expYear ? `${isExpired(c) ? "Expired" : "Expires"} ${pad(c.expMonth)}/${pad(c.expYear % 100)}` : "";
-  return [expiry, c.name].filter(Boolean).join(" · ");
-}
-
-function formatCardNumber(digits: string) {
-  const groups = /^3[47]/.test(digits) ? [4, 6, 5] : [4, 4, 4, 4, 3];
-  const out: string[] = [];
-  let i = 0;
-  for (const g of groups) {
-    if (i >= digits.length) break;
-    out.push(digits.slice(i, i + g));
-    i += g;
-  }
-  if (i < digits.length) out.push(digits.slice(i));
-  return out.join(" ");
-}
-
-function FormRow({ title, children }: { title: string; children: ReactNode }) {
-  return <Row title={title}>{children}</Row>;
-}
-
-async function confirmDelete(title: string, message: string) {
-  const { confirmed } = await confirm({ title, message, confirmTitle: "Delete", destructive: true });
-  return confirmed;
-}
-
-function SheetButtons({ canDelete, onDelete, onSave, saveDisabled }: { canDelete: boolean; onDelete: () => void; onSave: () => void; saveDisabled?: boolean }) {
-  return (
-    <DialogActions leading={canDelete ? <Button title="Delete" kind="destructive" onPress={onDelete} /> : null}>
-      <Button title="Cancel" onPress={closeSettingsSheet} />
-      <Button title="Save" kind="primary" disabled={saveDisabled} onPress={onSave} />
-    </DialogActions>
-  );
-}
-
-const ADDRESS_FIELDS: { key: keyof SavedAddress | "line1" | "line2"; title: string }[] = [
-  { key: "name", title: "Name" },
-  { key: "organization", title: "Organization" },
-  { key: "line1", title: "Street Address" },
-  { key: "line2", title: "Apt, Suite, etc." },
-  { key: "city", title: "City" },
-  { key: "state", title: "State / Province" },
-  { key: "postalCode", title: "ZIP / Postal Code" },
-  { key: "country", title: "Country / Region" },
-  { key: "phone", title: "Phone" },
-  { key: "email", title: "Email" },
-];
-
-function AddressSheet({ profile, saved, onChanged }: { profile: string; saved?: SavedAddress; onChanged: () => void }) {
-  const [lines] = useState(() => (saved?.street ?? "").split("\n"));
-  const [values, setValues] = useState<Record<string, string>>(() => ({
-    name: saved?.name ?? "",
-    organization: saved?.organization ?? "",
-    line1: lines[0] ?? "",
-    line2: lines.slice(1).join(", "),
-    city: saved?.city ?? "",
-    state: saved?.state ?? "",
-    postalCode: saved?.postalCode ?? "",
-    country: saved?.country ?? "",
-    phone: saved?.phone ?? "",
-    email: saved?.email ?? "",
-  }));
-  const set = (key: string) => (text: string) => setValues((v) => ({ ...v, [key]: text }));
-  const empty = Object.values(values).every((v) => !v.trim());
-
-  const save = async () => {
-    const { line1, line2, ...rest } = values;
-    const street = [line1, line2].map((l) => l!.trim()).filter(Boolean).join("\n");
-    await saveAddress(profile, { ...rest, street, id: saved?.id }).catch(orWarn(null));
-    onChanged();
-    closeSettingsSheet();
-  };
-  const remove = async () => {
-    if (!saved || !(await confirmDelete("Delete this address?", "It won't be offered in forms any more."))) return;
-    await deleteAddress(profile, saved.id).catch(orWarn(undefined));
-    onChanged();
-    closeSettingsSheet();
-  };
-
-  return (
-    <Sheet size="l" onClose={closeSettingsSheet}>
-      <DialogTitle>{saved ? "Edit Address" : "Add Address"}</DialogTitle>
-      <View style={SHEET_BODY}>
-        <Group>
-          {ADDRESS_FIELDS.map((f, i) => (
-            <FormRow key={f.key} title={f.title}>
-              <TextField value={values[f.key] ?? ""} onChangeText={set(f.key)} autoFocus={i === 0 && !saved} onSubmit={() => !empty && void save()} width={FIELD_WIDTH} />
-            </FormRow>
-          ))}
-        </Group>
-      </View>
-      <SheetButtons canDelete={!!saved} onDelete={() => void remove()} onSave={() => void save()} saveDisabled={empty} />
-    </Sheet>
-  );
-}
-
-const MONTHS: Option<string>[] = [{ value: "", title: "Month" }, ...Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), title: pad(i + 1) }))];
-function yearOptions(current?: number): Option<string>[] {
-  const now = new Date().getFullYear();
-  const years = Array.from({ length: 16 }, (_, i) => now + i);
-  if (current && !years.includes(current)) years.unshift(current);
-  return [{ value: "", title: "Year" }, ...years.map((y) => ({ value: String(y), title: String(y) }))];
-}
-
-const FIELD_WIDTH = 250;
-const SHEET_BODY = { marginTop: space.xl } as const;
-const ERROR = { marginTop: space.ml } as const;
-
-function CardSheet({ profile, saved, onChanged }: { profile: string; saved?: SavedCard; onChanged: () => void }) {
-  const [number, setNumber] = useState(saved ? null : "");
-  const [name, setName] = useState(saved?.name ?? "");
-  const [month, setMonth] = useState(saved?.expMonth ? String(saved.expMonth) : "");
-  const [year, setYear] = useState(saved?.expYear ? String(saved.expYear) : "");
-  const [error, setError] = useState("");
-  const digits = (number ?? "").replace(/\D/g, "");
-
-  const reveal = async () => {
-    if (!saved) return;
-    const full = await revealCardNumber(profile, saved.id).catch(() => null);
-    if (full) setNumber(formatCardNumber(full));
-  };
-  const save = async () => {
-    const card = { id: saved?.id, name: name.trim(), expMonth: month ? Number(month) : undefined, expYear: year ? Number(year) : undefined };
-    const id = await saveCard(profile, card, number === null ? undefined : digits).catch(orWarn(null));
-    if (!id) return setError("That isn't a valid card number.");
-    onChanged();
-    closeSettingsSheet();
-  };
-  const remove = async () => {
-    if (!saved || !(await confirmDelete("Delete this card?", `Its number is removed from ${PLATFORM_TERMS.secretStore} too.`))) return;
-    await deleteCard(profile, saved.id).catch(orWarn(undefined));
-    onChanged();
-    closeSettingsSheet();
-  };
-
-  return (
-    <Sheet size="l" onClose={closeSettingsSheet}>
-      <DialogTitle icon={saved ? <NetworkBadge network={saved.network} /> : undefined}>{saved ? `${cardNetworkName(saved.network)} •••• ${saved.last4}` : "Add Card"}</DialogTitle>
-      <View style={SHEET_BODY}>
-        <Group>
-          <FormRow title="Card Number">
-            {number === null ? (
-              <Box row center gap="xs">
-                <Text>{`•••• •••• •••• ${saved?.last4 ?? ""}`}</Text>
-                <Button variant="icon" icon="eye" size="m" onPress={() => void reveal()} tooltip="Show Card Number" />
-              </Box>
-            ) : (
-              <Box row center gap="xs">
-                <TextField
-                  value={number}
-                  onChangeText={(t) => {
-                    setError("");
-                    setNumber(formatCardNumber(t.replace(/\D/g, "").slice(0, 19)));
-                  }}
-                  placeholder="1234 5678 9012 3456"
-                  autoFocus={!saved}
-                  width={saved ? FIELD_WIDTH - 28 : FIELD_WIDTH}
-                />
-                {saved ? <Button variant="icon" icon="doc.on.doc" size="m" onPress={() => copyText(digits)} tooltip="Copy Card Number" /> : null}
-              </Box>
-            )}
-          </FormRow>
-          <FormRow title="Name on Card">
-            <TextField value={name} onChangeText={setName} width={FIELD_WIDTH} />
-          </FormRow>
-          <FormRow title="Expiration Date">
-            <Box row gap="s">
-              <PopUp value={month} options={MONTHS} onChange={setMonth} minWidth={90} />
-              <PopUp value={year} options={yearOptions(saved?.expYear)} onChange={setYear} minWidth={90} />
-            </Box>
-          </FormRow>
-        </Group>
-      </View>
-      {error ? (
-        <Text size="caption" tone="destructive" style={ERROR}>
-          {error}
-        </Text>
-      ) : null}
-      <SheetButtons
-        canDelete={!!saved}
-        onDelete={() => void remove()}
-        onSave={() => void save()}
-        saveDisabled={number !== null && digits.length < 12}
-      />
-    </Sheet>
   );
 }

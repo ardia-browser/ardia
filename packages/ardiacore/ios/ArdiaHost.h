@@ -40,6 +40,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property(class, readonly) NSArray<NSString *> *loadedProfiles;
 + (BOOL)stopCapture:(NSString *)tabId NS_SWIFT_NAME(stopCapture(tabId:));
 + (BOOL)showAutofillSuggestions:(NSString *)tabId passwords:(BOOL)passwords NS_SWIFT_NAME(showAutofillSuggestions(tabId:passwords:));
++ (BOOL)fillAutofillEntry:(NSString *)tabId kind:(NSString *)kind id:(NSString *)entryId NS_SWIFT_NAME(fillAutofillEntry(tabId:kind:id:));
++ (void)claimAutofillMenuKeys:(NSString *)tabId claim:(BOOL)claim NS_SWIFT_NAME(claimAutofillMenuKeys(tabId:claim:));
 + (int)chromeTabIdOfTab:(NSString *)tabId NS_SWIFT_NAME(chromeTabId(ofTab:));
 + (void)cliTabTargets:(NSArray<NSString *> *)tabIds completion:(void (^)(NSDictionary<NSString *, id> *targets))completion
     NS_SWIFT_NAME(cliTabTargets(_:completion:));

@@ -367,6 +367,15 @@ const setProfileToggle = (profile: string, name: AutofillToggle, on: boolean | u
   if (on !== undefined) profileToggles.user.set(profile, { ...profileToggles.user.get(profile), [name]: on });
 };
 
+export const autofillFakes = {
+  suggestionsShown: [] as string[],
+  addresses: [] as CallResult<"autofill.addresses">["addresses"],
+  cards: [] as CallResult<"autofill.cards">["cards"],
+  fills: [] as CallArgs<"autofill.fill">[],
+  nextFill: { filled: true } as CallResult<"autofill.fill">,
+  keyClaims: [] as CallArgs<"autofill.claimMenuKeys">[],
+};
+
 const extensionEngine = () => testGlobals.acTestUserScripts?.engine;
 function withStrips<Fake extends FakeDomain>(fake: Fake): Fake {
   const addListener = fake.addListener;
@@ -559,12 +568,15 @@ const fakeModules = {
         setProfileToggle(profile, "cards", cards);
         return null;
       },
-      addresses: () => ({ addresses: [] }),
+      addresses: () => ({ addresses: autofillFakes.addresses }),
       saveAddress: () => ({ id: `address-${++autofillIds}` }),
-      cards: () => ({ cards: [] }),
+      cards: () => ({ cards: autofillFakes.cards }),
       remove: () => ({ ok: true }),
-      cardNumber: () => ({ number: null }),
-      showSuggestions: () => false,
+      revealCard: () => ({ revealed: false, declined: true }),
+      copyCard: () => ({ copied: false }),
+      fill: (args) => (autofillFakes.fills.push({ ...args }), autofillFakes.nextFill),
+      claimMenuKeys: (args) => (autofillFakes.keyClaims.push({ ...args }), null),
+      showSuggestions: ({ tabId }) => (autofillFakes.suggestionsShown.push(tabId), false),
     },
     { saveCard: async () => JSON.stringify({ id: `card-${++autofillIds}` }) },
   ),

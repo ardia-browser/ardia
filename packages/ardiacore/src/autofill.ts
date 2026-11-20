@@ -31,5 +31,14 @@ export type CardInput = { id?: string; name?: string; expMonth?: number; expYear
 
 const Autofill = nativeModule("ArdiaAutofill");
 
-export const saveCard = async (profile: string, card: CardInput, number?: string) =>
-  (await decodeReply<{ id: string }>(Autofill.saveCard(profile, card, number ?? null))).id;
+export type CardNumberSummary = { digits: number; network: CardNetwork; complete: boolean; luhn: boolean };
+export type CardReveal = ({ revealed: true } & CardNumberSummary) | { revealed: false; declined: boolean };
+
+export type AutofillFieldKind = "address" | "card";
+export type AutofillFieldPart = "name" | "organization" | "street" | "city" | "state" | "postalCode" | "country" | "phone" | "email" | "number" | "expiry" | "cvc";
+export type AutofillFieldRect = { x: number; y: number; width: number; height: number };
+export type AutofillFieldEvent = { tabId: string; epoch?: string } & ({ focused: true; trigger: "focus" | "ask"; kind: AutofillFieldKind; part: AutofillFieldPart; rect: AutofillFieldRect } | { focused: false });
+export type AutofillFillResult = { filled: boolean; declined?: boolean };
+
+export const saveCard = async (profile: string, card: CardInput, numberEntry?: string) =>
+  (await decodeReply<{ id: string }>(Autofill.saveCard(profile, card, numberEntry ?? null))).id;

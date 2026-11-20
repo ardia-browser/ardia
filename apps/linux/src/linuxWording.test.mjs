@@ -54,7 +54,7 @@ const EXPECTED = [
   ["components/settings/panes/General.tsx", ["label: \"Quitting with Ctrl+Shift+Q\""], ["Quitting with ${keyText(\"⌘Q\")}"]],
   ["components/settings/rows/shortcutRows.ts", ["title: `Ctrl-clicking links creates tab groups`"], []],
   ["components/settings/rows/profileRows.ts", ["description: \"Showing a saved card number asks for your system password.\"", "\"keyring\""], ["\"keychain\""]],
-  ["components/settings/panes/ProfileAutofill.tsx", ["encrypted by Chromium with a key from your system keyring", "\"Its saved number is deleted too.\""], []],
+  ["components/settings/panes/ProfileAutofill.tsx", ["encrypted by Chromium with a key from your system keyring"], []],
   ["components/settings/panes/Shortcuts.tsx", ["title: `Shift-click`", "title: `Alt-click`", "title: `Alt+Shift-click`", "`Alt-click (Peek moves to Shift-click)`", "`Alt-click (split view moves to Alt+Shift-click)`", "`Alt-click opens a split now: choosing it here moves split view back to Alt+Shift-click.`"], []],
   ["components/onboarding/LayoutSteps.tsx", ["title: `Shift-click`"], []],
   ["components/settings/rows/appearanceRows.ts", ["Below the toolbar. Ctrl+Shift+B toggles it.", "no toolbar. Ctrl+Super+M toggles it."], ["⇧⌘B", "⌃⌘M"]],

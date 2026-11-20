@@ -1632,7 +1632,7 @@ index 8f1094a71ed431fcecb6f760ffe8d6da643f04cb..67404c8656b69d9cf28d9eb5862e9914
  {
    view.layerContentsRedrawPolicy = NSViewLayerContentsRedrawDuringViewResize;
 diff --git a/React/Base/macOS/RCTPlatformDisplayLink.m b/React/Base/macOS/RCTPlatformDisplayLink.m
-index 6ee09fde67a60082ac45764f6c66b7c4ca97e5b9..3927f1d8e31a42cb266f004f2deccd3de5bcb72b 100644
+index 6ee09fde67a60082ac45764f6c66b7c4ca97e5b9..1bdce30afbb4e19b052ac25ef007065c87311b8a 100644
 --- a/React/Base/macOS/RCTPlatformDisplayLink.m
 +++ b/React/Base/macOS/RCTPlatformDisplayLink.m
 @@ -10,27 +10,66 @@
@@ -1708,7 +1708,7 @@ index 6ee09fde67a60082ac45764f6c66b7c4ca97e5b9..3927f1d8e31a42cb266f004f2deccd3d
    os_unfair_lock _lock; // OS_UNFAIR_LOCK_INIT == 0
  }
  
-@@ -39,116 +78,213 @@
+@@ -39,116 +78,214 @@
    RCTPlatformDisplayLink *displayLink = [self.class new];
    displayLink->_target = target;
    displayLink->_selector = sel;
@@ -1751,8 +1751,9 @@ index 6ee09fde67a60082ac45764f6c66b7c4ca97e5b9..3927f1d8e31a42cb266f004f2deccd3d
 +  NSInteger fastest = MAX(1, screen.maximumFramesPerSecond);
 +  os_unfair_lock_lock(&_lock);
 +  NSRunLoop *runLoop = _runLoop;
++  NSArray<NSRunLoopMode> *modes = [_modes copy];
 +  os_unfair_lock_unlock(&_lock);
-+  if (runLoop == nil || (_display == display && _fastest == fastest)) {
++  if (runLoop == nil || modes.count == 0 || (_display == display && _fastest == fastest)) {
 +    return;
 +  }
 +  _display = display;
@@ -1768,7 +1769,7 @@ index 6ee09fde67a60082ac45764f6c66b7c4ca97e5b9..3927f1d8e31a42cb266f004f2deccd3d
 +  }
 +  __weak RCTPlatformDisplayLink *weakSelf = self;
 +  CFRunLoopRef cfRunLoop = runLoop.getCFRunLoop;
-+  CFRunLoopPerformBlock(cfRunLoop, kCFRunLoopCommonModes, ^{
++  CFRunLoopPerformBlock(cfRunLoop, (__bridge CFArrayRef)modes, ^{
 +    RCTPlatformDisplayLink *strongSelf = weakSelf;
 +    if (strongSelf != nil) {
 +      [strongSelf install:link];
@@ -1987,7 +1988,7 @@ index 6ee09fde67a60082ac45764f6c66b7c4ca97e5b9..3927f1d8e31a42cb266f004f2deccd3d
  }
  
  #pragma clang diagnostic push
-@@ -162,4 +298,4 @@
+@@ -162,4 +299,4 @@
  #pragma clang diagnostic pop
  
  @end

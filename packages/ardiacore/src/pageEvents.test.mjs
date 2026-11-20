@@ -14,6 +14,7 @@ const PAGE_EVENTS = collect([table], /^ {2}on[A-Za-z]+: "([A-Za-z]+)",$/gm);
 
 const chromiumView = files(/^ArdiaWebView.*\.mm$/).map(native);
 const chromiumEmitters = files(/\.mm$/).map(native);
+const hostEmitters = files(/^PageTabHost.*\.swift$/).map(native);
 const webKitTab = files(/^WebKitTab.*\.swift$/).map(native);
 const pageScript = native("page_script.js");
 const messageReceivers = ["ArdiaWebView+PageMessages.mm", "ArdiaWebView+Peek.mm"].map(native);
@@ -21,9 +22,10 @@ const messageReceivers = ["ArdiaWebView+PageMessages.mm", "ArdiaWebView+Peek.mm"
 const WEBKIT_ONLY_EVENTS = new Set(["mediaFault", "focusRestore"]);
 const WINDOWS_ENGINE_ONLY_EVENTS = new Set(["autoplayBlocked"]);
 
-test("the Chromium view emits every page event in PAGE_EVENTS except the WebKit-only and Windows-engine-only ones, and nothing else", () => {
+test("the Chromium view and the page host emit every page event in PAGE_EVENTS except the WebKit-only and Windows-engine-only ones, and nothing else", () => {
   const expected = [...PAGE_EVENTS].filter((name) => !WEBKIT_ONLY_EVENTS.has(name) && !WINDOWS_ENGINE_ONLY_EVENTS.has(name));
-  assert.deepEqual(sorted(collect(chromiumEmitters, /\bemit:@"([A-Za-z]+)"\s+payload:/g)), sorted(expected));
+  const emitted = [...collect(chromiumEmitters, /\bemit:@"([A-Za-z]+)"\s+payload:/g), ...collect(hostEmitters, /\bsend\("([A-Za-z]+)", payload:/g)];
+  assert.deepEqual(sorted(new Set(emitted)), sorted(expected));
 });
 
 test("the WebKit tab emits only page events in PAGE_EVENTS, and every WebKit-only event", () => {

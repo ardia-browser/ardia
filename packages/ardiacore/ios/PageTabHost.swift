@@ -4,6 +4,12 @@ import ExpoModulesCore
 class PageTabHost: ExpoView {
   let page: PageTab
   var pageEvents: Set<String> = []
+  var captureOverlay: CaptureOverlay?
+  var captureAreaObserver: NSObjectProtocol?
+  var captureStarting = false
+  var captureAttempt = 0
+  var captureStartedAt: CFTimeInterval = 0
+  var pageCommittedAt: Double?
   private var propsReady = false
 
   class func makePage() -> PageTab {
@@ -29,6 +35,11 @@ class PageTabHost: ExpoView {
     page.frame = bounds
   }
 
+  override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+    if window == nil { endCapture() }
+  }
+
   func propsDidUpdate() {
     guard !propsReady else { return }
     propsReady = true
@@ -38,6 +49,7 @@ class PageTabHost: ExpoView {
   }
 
   func send(_ name: String, payload: [String: Any]) {
+    if name == "navigation" { notePageNavigation(payload) }
     PageEvents.send(pageEventDispatcher, wanted: pageEvents, name: name, payload: payload)
   }
 }

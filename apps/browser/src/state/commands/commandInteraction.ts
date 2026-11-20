@@ -67,6 +67,7 @@ export const COMMAND_INTERACTION: Readonly<Record<BrowserCommand, CommandInterac
   toggleMute: "quiet",
   togglePageEngine: "interactive",
   toggleReader: "quiet",
+  capture: "interactive",
   downloads: "quiet",
   mergeAllWindows: "quiet",
   switchProfile: "quiet",

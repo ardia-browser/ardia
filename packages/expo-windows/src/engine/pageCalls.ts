@@ -28,6 +28,7 @@ export const NOT_ON_WINDOWS_YET = {
   resolveDisplayMedia: answeredWithoutWindows("resolveDisplayMedia", undefined),
   mediaCaptureSourceId: answeredWithoutWindows("mediaCaptureSourceId", null),
   notificationAction: answeredWithoutWindows("notificationAction", undefined),
+  toggleCapture: answeredWithoutWindows("toggleCapture", false),
 } satisfies Partial<EnginePageView>;
 
 const badReply = (method: string, field: string) => Object.assign(new EngineError(`the engine's ${method} answered a ${field} of the wrong type`), { code: "ERR_BAD_REPLY" });

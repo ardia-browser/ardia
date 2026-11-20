@@ -106,4 +106,20 @@ extension WebKitTab: PageTab {
   func discard(unload: Bool) -> String { Self.unsupported }
 
   func sleepIfHidden(for seconds: Double) -> [NSNumber] { [-1] }
+
+  var captureArea: NSView? { webView }
+
+  func evaluateInCaptureWorld(_ code: String, completion: @escaping (String?) -> Void) { evaluate(code, completion: completion) }
+
+  func copyCapturePicture(_ completion: @escaping (CGImage?, NSRect) -> Void) {
+    guard let view = webView, window != nil, !view.isHidden else { return completion(nil, .zero) }
+    let frame = view.frame
+    let configuration = WKSnapshotConfiguration()
+    configuration.afterScreenUpdates = false
+    view.takeSnapshot(with: configuration) { image, _ in
+      guard let image else { return completion(nil, .zero) }
+      var proposed = CGRect(origin: .zero, size: image.size)
+      completion(image.cgImage(forProposedRect: &proposed, context: nil, hints: nil), frame)
+    }
+  }
 }

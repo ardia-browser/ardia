@@ -6,6 +6,7 @@ import type {
   AppBadge,
   AutofillPrompt,
   BlockedPopup,
+  CaptureResult,
   ContentBlockedState,
   CrashInfo,
   DiscardReason,
@@ -89,6 +90,7 @@ type NativeEvents = {
   onFieldProviderOpened: FieldProviderOpened;
   onFieldProviderHint: { state?: string };
   onVerificationCodeFound: VerificationCodeFound;
+  onCapture: CaptureResult;
 };
 export type Handlers = keyof NativeEvents;
 export type PageEvent = { name: string; data: unknown };
@@ -147,6 +149,7 @@ const PAGE_EVENTS = {
   onFieldProviderOpened: "fieldProviderOpened",
   onFieldProviderHint: "fieldProviderHint",
   onVerificationCodeFound: "verificationCodeFound",
+  onCapture: "capture",
 } as const satisfies Record<Handlers, string>;
 export type PageEventName = (typeof PAGE_EVENTS)[Handlers];
 export const pageEventOf = (handler: Handlers): PageEventName => PAGE_EVENTS[handler];
@@ -209,6 +212,7 @@ const unwrap: { [K in Handlers]: (e: NativeEvents[K]) => Parameters<NonNullable<
   ],
   onFieldProviderHint: (e) => [{ state: e.state === "dismissed" ? "dismissed" : "shown" } as FieldProviderHint],
   onVerificationCodeFound: (e) => [{ token: String(e.token), app: String(e.app ?? ""), main: e.main === true }],
+  onCapture: (e) => [e],
 };
 
 export const isPageEventProp = (key: string): key is Handlers => key in unwrap;

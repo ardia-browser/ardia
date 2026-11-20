@@ -52,6 +52,7 @@ import { noteAutoPictureInPictureKept, notePageOverlay, noteReopenedPage, noteSi
 import { noteWebKitMediaFault } from "../../state/telemetry/webkitMediaFaults";
 import { isAdoptKind } from "../../state/tabs/adoptIds";
 import { firstPagePending, isBlankAddress, noteFirstPagePending, reportedAddress, reportedTitle } from "../../state/tabs/pendingAddress";
+import { captureEnded } from "../../state/capture/actions";
 import { STATUS_FLIP_BAND } from "./tokens";
 import { startHidingElement } from "../../state/site/hiddenElements";
 import { forgetPeekHandover, notePeekRecipient, peekDonorTaken } from "../../state/peek/donors";
@@ -304,6 +305,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine }
         else if (command === "hideElement" && point) void startHidingElement(tabId, point);
       }}
       onSelection={(selection) => setPageSelection(tabId, selection)}
+      onCapture={(result) => captureEnded(tabId, result)}
       onScroll={(state) => noteScroll(tabId, state)}
       onProtectedMedia={(request) => offerWebKit(tabId, request)}
       onAutoplayBlocked={(count) => noteSiteControls("autoplayPlaysBlocked", count)}

@@ -345,7 +345,8 @@ recording: of three unpinned tabs, the two unselected close and the selected one
   and only change colour, as in Dia (see "Pressed" above). An icon button's glyph dips to 0.96 and a pill, push or
   text button to 0.985 on `springs.snappy`, with no overshoot. The Arc-style squish (rows to 0.975, tiles to 0.94,
   a bounce back of about 13 %) shipped in 0.2.47-nightly.6 and was removed at the owner's request: with the row
-  scaling about its centre, a folder's icon slid 4 pt sideways and sprang back on every click.
+  scaling about its centre, a folder's icon slid 4 pt sideways and sprang back on every click. It stays reachable,
+  off by default and with no Settings row, as `pressMotion: "bounce"` in `config.json` (`docs/config.md`).
   A New Tab card's lift and a finished live item's check mark settle on `springs.snappy` too. Since 2026-11-19,
   pressing Reload highlights the toolbar plate while the glyph stays the same size. `springs.bouncy` stays for rare, larger moves: an unread or
   live badge appearing, import's check mark, and the sidebar's edge springing back from a resize past its limit.

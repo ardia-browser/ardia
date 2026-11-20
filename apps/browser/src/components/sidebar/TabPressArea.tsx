@@ -11,6 +11,7 @@ import { clickHeldTabPress, holdTabPress, pressOutTabPress, type TabPress } from
 import { tabPressTag } from "../../state/tabs/tabReveal";
 import { useSplitOf } from "../../state/windows/card";
 import { ContextMenuArea } from "../ui";
+import { Squish, useSquish, type SquishKind } from "../ui/Squish";
 
 export function TabPressArea({
   windowId,
@@ -18,6 +19,7 @@ export function TabPressArea({
   style,
   pressStyle,
   tooltip,
+  squish,
   hitSlop,
   selected = false,
   children,
@@ -27,6 +29,7 @@ export function TabPressArea({
   style?: StyleProp<ViewStyle>;
   pressStyle?: StyleProp<ViewStyle>;
   tooltip?: string;
+  squish?: SquishKind;
   hitSlop?: Insets;
   selected?: boolean;
   children: ReactNode | ((state: { pressed: boolean }) => ReactNode);
@@ -34,6 +37,8 @@ export function TabPressArea({
   const press = useRef<TabPress | null>(null);
   const inSplit = !!useSplitOf(tab.id);
   const plainTooltip = useSettings((s) => !s.showTabHoverMenu);
+  const squishMotion = useSquish(squish);
+  const scale = squishMotion.scale;
   return (
     <ContextMenuArea
       onMiddleClick={() => middleClickTab(tab.id)}
@@ -45,17 +50,21 @@ export function TabPressArea({
     >
       <Pressable
         onPressIn={(e) => {
+          squishMotion.onPressIn?.();
           press.current = holdTabPress(windowId, tab.id, e, press.current);
         }}
         onPress={(e) => clickHeldTabPress(windowId, tab.id, e, press.current)}
-        onPressOut={(e) => pressOutTabPress(press.current, e)}
+        onPressOut={(e) => {
+          squishMotion.onPressOut?.();
+          pressOutTabPress(press.current, e);
+        }}
         style={pressStyle}
         nativeID={tabPressTag(tab.id, selected, inSplit)}
         collapsable={false}
         hitSlop={hitSlop}
         tooltip={tooltip ?? (plainTooltip ? titleTooltip(tab) : undefined)}
       >
-        {children}
+        {scale ? (state) => <Squish scale={scale}>{typeof children === "function" ? children(state) : children}</Squish> : children}
       </Pressable>
     </ContextMenuArea>
   );

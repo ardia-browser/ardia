@@ -19,10 +19,11 @@ import { useDragFolded, useDragItem } from "./DragProvider";
 import { dismissHover } from "../../state/sidebar/hover";
 import { useGroupHover } from "./hoverController";
 import { useHoverFade } from "./hoverMotion";
+import { Squish, useSquish } from "../ui/Squish";
 import { iconButton } from "../ui/tokens";
 import { openLiveFolderMenu } from "../../state/sidebar/liveMenus";
 import { registerRow } from "../../state/sidebar/sidebarUi";
-import { FolderOrIcon } from "./AnimatedFolder";
+import { LiveFolderIcon } from "./LiveFolderIcon";
 import { groupBoxAtRest, groupSurface, TAB_ROW, useSidebarTokens } from "./tokens";
 import { RefreshSpinner } from "./RefreshSpinner";
 import { SidebarRowLabel, SidebarRowSurface } from "./SidebarRow";
@@ -132,6 +133,7 @@ function FolderHeader({ folderId, windowId, collapsed }: { folderId: string; win
   const refreshShown = hovered && !updating;
   const refreshOpacity = useHoverFade(refreshShown);
   const [restOpacity] = useState(() => Animated.subtract(1, refreshOpacity));
+  const squish = useSquish("row");
   if (!folder) return null;
 
   return (
@@ -143,18 +145,21 @@ function FolderHeader({ folderId, windowId, collapsed }: { folderId: string; win
         }}
       >
         <Pressable
+          onPressIn={squish.onPressIn}
+          onPressOut={squish.onPressOut}
           onPress={() => {
             dismissHover();
             updateFolder(folderId, { collapsed: !collapsed });
           }}
         >
           {() => (
+            <Squish scale={squish.scale}>
             <SidebarRowSurface
               fill={ink.clear}
               cornerRadius={GROUP_INNER_RADIUS}
               padLeft={TAB_ROW.contentLeft + PAD}
             >
-              <FolderOrIcon icon={folder.icon} open={!collapsed} color={folder.color} />
+              <LiveFolderIcon folder={folder} open={!collapsed} />
               <SidebarRowLabel text={folder.name} weight="medium" color={tokens.groupTitle} />
               {status?.error ? (
                 <Pressable onPress={() => fixError(windowId, status.error)} tooltip={errorText(status.error.kind, status.error.source)} style={{ marginRight: space.xxs }}>
@@ -177,6 +182,7 @@ function FolderHeader({ folderId, windowId, collapsed }: { folderId: string; win
                 )}
               </View>
             </SidebarRowSurface>
+            </Squish>
           )}
         </Pressable>
       </ContextMenuArea>

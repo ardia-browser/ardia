@@ -114,7 +114,7 @@ export const TabRow = memo(function TabRow({
       style={moved.style as object}
       onDoubleClick={() => void startRename(windowId, { kind: "tab", id: tabId })}
     >
-      <TabPressArea windowId={windowId} tab={tab} hitSlop={rowGapSlop(0)} selected={selected}>
+      <TabPressArea windowId={windowId} tab={tab} squish={renaming ? undefined : "row"} hitSlop={rowGapSlop(0)} selected={selected}>
       {({ pressed }) => (
         <>
           <HoverFill shown={plain && (hovered || pressed)} instant={!plain} color={pressed ? pressedFill : hoverFill} radius={radius.chrome} />

@@ -9,7 +9,7 @@ test("Linux Settings shares navigation actions and opens the requested native ut
   assert.equal(linux.useSettingsNav, shared.useSettingsNav);
   assert.equal(linux.goToSettingsPane, shared.goToSettingsPane);
   windows.open.clear();
-  shared.useSettingsNav.setState({ pane: "general", profileId: null, detail: null, back: [], forward: [] });
+  shared.useSettingsNav.setState({ pane: "general", profileId: null, detail: null, scroll: 0, visit: 1, back: [], forward: [] });
   let saved;
   setSessionFlush(() => new Promise((resolve) => { saved = resolve; }));
 
@@ -24,7 +24,7 @@ test("Linux Settings shares navigation actions and opens the requested native ut
     title: "Settings",
     settings: { pane: "profiles", profileId: "work", detail: null },
   });
-  assert.deepEqual(shared.useSettingsNav.getState().back, [{ pane: "general", profileId: null, detail: null }]);
+  assert.deepEqual(shared.useSettingsNav.getState().back, [{ pane: "general", profileId: null, detail: null, scroll: 0, visit: 1 }]);
 
   linux.settingsBack();
   assert.equal(shared.useSettingsNav.getState().pane, "general");

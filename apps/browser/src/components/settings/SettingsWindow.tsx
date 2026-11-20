@@ -1,5 +1,5 @@
 import { Button, ListRow, NativeFormContext, space, Symbol, Text, VisualEffect, WindowDragRegion } from "../ui";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { useTheme } from "../ui/theme";
 import { useProfile } from "../../state/browser/hooks";
@@ -22,7 +22,7 @@ import { ShortcutsPane } from "./panes/Shortcuts";
 import { TabsPane } from "./panes/Tabs";
 import { useSettingsSheet } from "../../state/settings/sheet";
 import { SettingsConsentSheet } from "../plugins/SettingsConsentSheet";
-import { goToSettingsPane, SETTINGS_WINDOW_ID, settingsBack, settingsForward, useSettingsNav, type SettingsPane, type SettingsPlace } from "../../state/settings/settingsWindows";
+import { forgetSettingsScroll, goToSettingsPane, SETTINGS_WINDOW_ID, settingsScrollFor, settingsBack, settingsForward, settingsPageKey, settingsPlaceKey, useSettingsNav, type SettingsPane, type SettingsPlace } from "../../state/settings/settingsWindows";
 import { closeProfileIconPickerIn } from "../../state/profiles/iconPicker";
 import { ProfileIconPicker } from "../profiles/ProfileIconPicker";
 import { settingsProfileFor } from "../../state/extensions/store";
@@ -35,6 +35,7 @@ import { LIGHTS_CENTER } from "../../state/windows/dockMotion";
 import { setTrafficLightsCenter } from "../../state/windows/nativeWindow";
 import { WindowControls } from "../window/WindowControls";
 import { noteSettingsScroll } from "../../state/settings/growingRows";
+import { paneScroll } from "../../state/settings/paneScroll";
 
 const SIDEBAR = settingsLayout.sidebarWidth;
 const TOOLBAR = pageToolbar.window.height;
@@ -44,23 +45,23 @@ const CONTROLS_ROOM = WINDOW_CONTROLS.edge + windowControlsWidth() + WINDOW_CONT
 const HOLD_CAP_MS = 250;
 const REVEAL_MARGIN = 16;
 
-const shownKey = (s: SettingsPlace) => `${s.pane}:${s.profileId ?? ""}:${s.detail ?? ""}`;
-const pageKey = (s: SettingsPlace) => (s.pane === "profiles" && !s.detail ? "profiles::" : shownKey(s));
 
-function useShownPane(): SettingsPlace | null {
+type ShownPane = SettingsPlace & { visit: number };
+
+function useShownPane(): ShownPane | null {
   const nav = useSettingsNav();
-  const target = { pane: nav.pane, profileId: nav.profileId, detail: nav.detail };
-  const key = shownKey(target);
+  const target = { pane: nav.pane, profileId: nav.profileId, detail: nav.detail, visit: nav.visit };
+  const key = settingsPlaceKey(target);
   const loaded = usePaneLoaded(nav.pane, nav.profileId);
   const [expired, setExpired] = useState<string | null>(null);
-  const [last, setLast] = useState<SettingsPlace | null>(null);
+  const [last, setLast] = useState<ShownPane | null>(null);
   const ready = loaded || expired === key;
   useEffect(() => {
     if (ready) return setLast(target);
     void preparePane(target.pane, target.profileId);
     const timer = setTimeout(() => setExpired(key), HOLD_CAP_MS);
     return () => clearTimeout(timer);
-  }, [key, ready]);
+  }, [key, nav.visit, ready]);
   return ready ? target : last;
 }
 
@@ -87,9 +88,21 @@ export function SettingsWindow() {
   useEffect(() => markCaptionRegions(SETTINGS_WINDOW_ID, [[TITLE_LEFT, 0, CONTROLS_ROOM, TOOLBAR]]), []);
   useEffect(() => void setTrafficLightsCenter(SETTINGS_WINDOW_ID, [LIGHTS_CENTER[0], TOOLBAR / 2]), []);
   const scroller = useRef<ScrollView>(null);
-  const key = shown ? shownKey(shown) : "";
-  const page = shown ? pageKey(shown) : "";
-  useLayoutEffect(() => scroller.current?.scrollTo({ y: 0, animated: false }), [page]);
+  const key = shown ? settingsPlaceKey(shown) : "";
+  const page = shown ? settingsPageKey(shown) : "";
+  const visit = shown?.visit ?? 0;
+  const paneScroller = useMemo(() => paneScroll(visit, settingsScrollFor(visit)), [visit]);
+  const contentHeight = useRef(0);
+  const laidOutPage = useRef("");
+  const settle = (height: number, evenToTop: boolean) => {
+    const y = paneScroller.firstLayout(viewport.current, height + settingsLayout.paneBottom);
+    if (y !== null && (y > 0 || evenToTop)) scroller.current?.scrollTo({ y, animated: false });
+  };
+  useLayoutEffect(() => {
+    if (laidOutPage.current === page) return settle(contentHeight.current, true);
+    scroller.current?.scrollTo({ y: 0, animated: false });
+  }, [visit]);
+  useEffect(() => forgetSettingsScroll, []);
   useEffect(() => closeProfileIconPickerIn(SETTINGS_WINDOW_ID), [key]);
   const content = useRef<View>(null);
   const scrollTop = useRef(0);
@@ -154,11 +167,21 @@ export function SettingsWindow() {
           scrollEventThrottle={16}
           onScroll={({ nativeEvent: { contentOffset, layoutMeasurement, contentSize } }) => {
             scrollTop.current = contentOffset.y;
+            paneScroller.scrolled(contentOffset.y);
             noteSettingsScroll(contentOffset.y, layoutMeasurement.height, contentSize.height);
           }}
           onLayout={(e) => void (viewport.current = e.nativeEvent.layout.height)}
           contentContainerStyle={PANE_SCROLL}>
-          <View key={page} ref={content} collapsable={false} style={PANE_COLUMN}>
+          <View
+            key={page}
+            ref={content}
+            collapsable={false}
+            style={PANE_COLUMN}
+            onLayout={(e) => {
+              contentHeight.current = e.nativeEvent.layout.height;
+              laidOutPage.current = page;
+              settle(contentHeight.current, false);
+            }}>
             {shown ? (
               <NativeFormContext.Provider value>
                 <SettingsPaneContext.Provider value={shown.pane}>

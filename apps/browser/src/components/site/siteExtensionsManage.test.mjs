@@ -49,7 +49,7 @@ test("the Extensions header has a visible Manage button that closes the panel, t
   const { work, workWindow, tabId } = workWindowBehindDefaultWindow();
   client.setSharing(true, "onboarding");
   windows.open.delete(SETTINGS_WINDOW_ID);
-  useSettingsNav.setState({ pane: "general", profileId: null, detail: null, back: [], forward: [] });
+  useSettingsNav.setState({ pane: "general", profileId: null, detail: null, scroll: 0, visit: 0, back: [], forward: [] });
   const events = [];
   const pressable = renderPanel(workWindow, tabId, () => events.push(windows.open.has(SETTINGS_WINDOW_ID) ? "close after open" : "close"));
   const manage = pressable("Manage Extensions");

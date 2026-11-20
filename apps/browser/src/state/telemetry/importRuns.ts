@@ -6,6 +6,7 @@ let kindsDone = 0;
 let kindsFailed = 0;
 let secretsLeft = 0;
 let untitledBookmarks = 0;
+let secretStops = 0;
 let diaProfilesMatched = 0;
 let diaProfilesWithoutFolder = 0;
 let diaSidebarFiles = 0;
@@ -18,13 +19,14 @@ let firefoxFavicons = 0;
 let historyImportCalls = 0;
 let historyImportCallsFailed = 0;
 
-export function noteImportRun(run: { done: number; failed: number; secretsLeft: number }, consent?: ConsentToken | null) {
+export function noteImportRun(run: { done: number; failed: number; secretsLeft: number; withheld: number }, consent?: ConsentToken | null) {
   countFor(consent, () => {
     runs += 1;
     kindsDone += run.done;
     kindsFailed += run.failed;
     secretsLeft += run.secretsLeft;
-  }, { import_runs: 1, import_kinds_done: run.done, import_kinds_failed: run.failed, import_secrets_left: run.secretsLeft });
+    secretStops += run.withheld;
+  }, { import_runs: 1, import_kinds_done: run.done, import_kinds_failed: run.failed, import_secrets_left: run.secretsLeft, import_withheld: run.withheld });
 }
 
 export function noteUntitledBookmarks(count: number, consent?: ConsentToken | null) {
@@ -73,6 +75,7 @@ export function takeImportRuns() {
     import_kinds_failed: kindsFailed,
     import_secrets_left: secretsLeft,
     import_untitled_bookmarks: untitledBookmarks,
+    import_withheld: secretStops,
     import_dia_profiles_matched: diaProfilesMatched,
     import_dia_profiles_without_folder: diaProfilesWithoutFolder,
     import_dia_sidebar_files: diaSidebarFiles,
@@ -90,6 +93,7 @@ export function takeImportRuns() {
   kindsFailed = 0;
   secretsLeft = 0;
   untitledBookmarks = 0;
+  secretStops = 0;
   diaProfilesMatched = 0;
   diaProfilesWithoutFolder = 0;
   diaSidebarFiles = 0;

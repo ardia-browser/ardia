@@ -108,6 +108,7 @@ type AppTabs = { result: DiaTabsResult } | { note: string };
 const NOT_BROUGHT = "Dia's tabs couldn't be brought over:";
 const SIDEBAR_UNREAD = "Dia's sidebar file couldn't be read, so Ardia asked Dia for its open and pinned tabs: their folders, custom names and split views stay in Dia.";
 const FAVORITES_LOCKED = "Dia's Favorites weren't imported: they're in its sidebar file, which needs the keychain access you skipped.";
+const HELD_BACK = "what looked like a password, cookie or card number turned up where it shouldn't, so Ardia held it all back to keep it private. Importing again without passwords, cookies and cards should work.";
 
 function readAppTabs(): Promise<AppTabs> {
   return importModule()
@@ -218,6 +219,7 @@ async function runImportJob(wanted: ReadonlySet<ImportKind>, withoutKey: boolean
   let profileDest = "";
   const extensionGroups: ExtensionGroup[] = [];
   let secretsLeft = 0;
+  let withheld = 0;
   const app: { read: Promise<AppTabs> | null } = { read: null };
   const askApp = () => (app.read ??= readAppTabs());
   if (appUpFront) void askApp();
@@ -242,7 +244,11 @@ async function runImportJob(wanted: ReadonlySet<ImportKind>, withoutKey: boolean
         },
       });
     } catch (e) {
-      if (ardiaError(e).code === "cancelled") return;
+      const { code } = ardiaError(e);
+      if (code === "cancelled") return;
+      const heldBack = code === "ERR_SECRET_IN_REPLY";
+      if (heldBack) left.push(`Nothing ${selected.length > 1 ? `from ${profile.name} ` : ""}was imported: ${HELD_BACK}`);
+      withheld += heldBack ? 1 : 0;
       if (readsSidebarFile(profile) && fromApp.length) {
         result = nothingRead(source.id, profile.id, profileKinds);
       } else {
@@ -380,7 +386,7 @@ async function runImportJob(wanted: ReadonlySet<ImportKind>, withoutKey: boolean
   }
   updateStatus(signal, (st) => Object.fromEntries(Object.entries(st).map(([k, v]) => [k, failed.has(k as ImportKind) ? "failed" : v === "failed" ? v : "done"])));
   api.forgetUnlockedKeys();
-  noteImportRun({ done: order.filter((k) => !failed.has(k)).length, failed: failed.size, secretsLeft }, consent);
+  noteImportRun({ done: order.filter((k) => !failed.has(k)).length, failed: failed.size, secretsLeft, withheld }, consent);
   if (total.bookmarks > 0) useBrowser.getState().updateSettings({ bookmarksImportDismissed: true });
   const listing = await listFoundExtensions(extensionGroups, consent).catch(orWarn(null));
   if (signal.aborted) return;

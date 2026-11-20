@@ -79,7 +79,7 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
 
 | Feature | State | Tracked in |
 | --- | --- | --- |
-| Command bar (history, open tabs, suggestions) | Works | |
+| Command bar (history, open tabs, suggestions) | Works. With the address bar in the toolbar, a press and drag in the field selects text instead of moving the window (#2799, seen on a Windows 11 VM) | #2799 |
 | Inline completion in the command bar | Works (top match completes inline) | #1520 |
 | Find in page | Works: the app's find bar, from a page or the app's UI (Ctrl+F); count, Enter, Shift+Enter, F3 and Shift+F3 step; Escape gives the page the keyboard back; private windows too | #1758 |
 | Page loading in the address field | Works (#1865's build 0bcabc63e, run 43642845254, 125%): while a slow page loads the glow fills the toolbar field, a Split View pane's field, a Peek's bar and Little Ardia's field, sweeps across when the load ends and fades; a load under 150 ms shows nothing; the tab's spinner and the stop button as before | #1820 |

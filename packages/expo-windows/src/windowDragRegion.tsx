@@ -2,11 +2,11 @@ import { createElement, forwardRef, useContext, useEffect, useMemo, useRef, type
 import type { WindowDragRegionProps } from "@ardia/shell";
 import { RootTagContext, View } from "react-native";
 import type { EventSubscription } from "./events";
-import type { Fiber } from "./fiber";
 import { requireNativeModule } from "./modules";
 import type { AppWindowsModule } from "./nativeModuleTypes";
+import { claimsTitleBandPress, fiberOf, hostPath, type HostFiber, type Press } from "./titleBandPress";
 
-type Press = { nativeEvent: { pageX: number; pageY: number } };
+export { hostPath, type HostFiber } from "./titleBandPress";
 
 export type DragOptions = Pick<WindowDragRegionProps, "onRegionDoubleClick" | "clickable" | "onRegionClick"> &
   Required<Pick<WindowDragRegionProps, "titleBarDoubleClick">> & { claims?: (press: Press) => boolean };
@@ -15,21 +15,10 @@ type LatestOptions = { current: DragOptions };
 
 type Props = Record<string, unknown>;
 
-export type HostFiber = Fiber & {
-  tag: number;
-  type: unknown;
-  return: HostFiber | null;
-  memoizedProps?: Props | null;
-  stateNode?: { canonical?: { currentProps?: Props | null; nativeTag?: number; publicInstance?: unknown } | null } | null;
-};
-
 type TitleBandPress = { rootTag?: unknown; button?: unknown; x?: unknown; y?: unknown; shiftKey?: unknown; ctrlKey?: unknown; altKey?: unknown };
 
 const DOUBLE_CLICK_MS = 500;
 const CLICK_SLOP = 4;
-const TITLE_BAND_HEIGHT = 32;
-const HOST_COMPONENT = 5;
-const MOST_ANCESTORS = 512;
 const RIGHT_BUTTON = 2;
 
 const windows = () => requireNativeModule<Pick<AppWindowsModule, "beginWindowDrag" | "pressDragArea" | "toggleMaximize" | "addListener">>("ArdiaAppWindows");
@@ -98,15 +87,6 @@ function useWindowDrag(options: DragOptions) {
 
 const propsOf = (fiber: HostFiber): Props => fiber.stateNode?.canonical?.currentProps ?? fiber.memoizedProps ?? {};
 
-export function hostPath(target: HostFiber | null | undefined): HostFiber[] {
-  const path: HostFiber[] = [];
-  let fiber = target ?? null;
-  for (let steps = 0; fiber && steps < MOST_ANCESTORS; steps++, fiber = fiber.return) {
-    if (fiber.tag === HOST_COMPONENT) path.push(fiber);
-  }
-  return path;
-}
-
 function dispatchCapture(path: HostFiber[], name: string, nativeEvent: object) {
   let stopped = false;
   for (const fiber of [...path].reverse()) {
@@ -162,8 +142,6 @@ export function pressThroughTitleBand(path: HostFiber[], press: TitleBandPress) 
   dispatchCapture(path, "onTouchStartCapture", nativeEvent);
 }
 
-const fiberOf = (instance: unknown) => (instance as { __internalInstanceHandle?: HostFiber | null } | null)?.__internalInstanceHandle ?? null;
-
 function titleBandPressed(payload: unknown) {
   const press = (payload ?? {}) as TitleBandPress;
   if (typeof press.rootTag !== "number") return;
@@ -183,11 +161,9 @@ export const WindowDragRegion = forwardRef<View, WindowDragRegionProps>(function
   return createElement(View as ComponentType<Record<string, unknown>>, { ...rest, ref, ...handlers });
 });
 
-export const inTitleBand = (press: Press) => press.nativeEvent.pageY <= TITLE_BAND_HEIGHT;
-
 export function TitleBandDrag({ children }: { children?: ReactNode }) {
   const rootTag = useContext(RootTagContext) as unknown as number;
-  const handlers = useWindowDrag({ titleBarDoubleClick: true, claims: inTitleBand });
+  const handlers = useWindowDrag({ titleBarDoubleClick: true, claims: claimsTitleBandPress });
   const host = useRef<unknown>(null);
   useEffect(() => {
     bands.set(rootTag, host);

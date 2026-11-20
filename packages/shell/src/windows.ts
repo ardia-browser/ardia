@@ -14,6 +14,10 @@ export type WindowControlsNative = {
   setCaptionRegions(windowId: string, regions: readonly CaptionRegion[]): Promise<void>;
 };
 
+export type TitleBandPresses = { taken: number; leftToText: number };
+
+export type TitleBandNative = { takePresses(): TitleBandPresses };
+
 export type WindowEvent =
   | { type: "focus"; id: string; fromPage?: boolean }
   | { type: "close"; id: string }

@@ -1,3 +1,5 @@
+import { titleBand } from "../../platform/titleBand";
+
 const live = new Map<string, number>();
 let doubled = 0;
 
@@ -13,7 +15,8 @@ export function noteWindowRoot(windowId: string) {
 }
 
 export function takeWindowRootCounts() {
-  const taken = { window_roots_doubled: doubled };
+  const presses = titleBand.takePresses();
+  const taken = { window_roots_doubled: doubled, window_title_band_presses: presses.taken, window_title_band_text_presses: presses.leftToText };
   doubled = 0;
   return taken;
 }

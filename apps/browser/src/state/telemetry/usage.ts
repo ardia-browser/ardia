@@ -386,7 +386,6 @@ export function startUsage(continuing = false) {
 }
 
 export const emitWindowUsage = (consent: ConsentToken | null) => [() => withHourlyExtras(() => emitCounts(consent), consent), () => emitOmniboxLatency(consent), () => emitTabPresses(consent)].forEach((emit) => emit());
-
 export function sessionEnding() {
   emitWindowUsage(consentNow());
   journeysEnding();

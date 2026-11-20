@@ -11,7 +11,7 @@ import {
   type DisplayMediaSource,
 } from "../../state/media/screenShare";
 import { runningAppIcon } from "../../state/app/system";
-import { Badge, Symbol, Button, Checkbox, DialogActions, PANEL, PanelHeader, Popover, POPOVER_MARGIN, Segmented, Text, useHover } from "../ui";
+import { Badge, Symbol, Button, Checkbox, DialogActions, PANEL, PanelHeader, Popover, POPOVER_MARGIN, Text, useHover } from "../ui";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Image, Pressable, ScrollView, View } from "react-native";
 import { useTheme } from "../ui/theme";
@@ -155,7 +155,7 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
         />
 
         <View style={{ paddingHorizontal: PANEL.inset, marginTop: space.xs, marginBottom: space.s }}>
-          <Segmented options={SEGMENTS} value={segment} onChange={pickSegment} fill />
+          <SegmentRow options={SEGMENTS} value={segment} onChange={pickSegment} />
         </View>
 
         <ScrollView
@@ -223,6 +223,33 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
 
 const EMPTY = { paddingHorizontal: PANEL.inset, paddingTop: space.xs } as const;
 const NOTICE = { paddingHorizontal: PANEL.inset, paddingTop: space.xs, gap: space.xs, alignItems: "flex-start" } as const;
+const SEGMENT_ROW = { flexDirection: "row", gap: space.xxs } as const;
+const SEGMENT_PAD = { paddingHorizontal: space.s, paddingVertical: space.xs, borderRadius: radius.chrome } as const;
+
+function SegmentRow<T extends string>({ options, value, onChange }: { options: { value: T; title: string }[]; value: T; onChange: (value: T) => void }) {
+  const theme = useTheme();
+  return (
+    <View style={SEGMENT_ROW}>
+      {options.map((o) => {
+        const selected = o.value === value;
+        return (
+          <Pressable
+            key={o.value}
+            accessibilityRole="button"
+            accessibilityLabel={o.title}
+            accessibilityState={{ selected }}
+            onPress={() => onChange(o.value)}
+            style={[SEGMENT_PAD, { backgroundColor: selected ? theme.tabSelected : undefined }]}
+          >
+            <Text size="small" weight={selected ? "medium" : "regular"} tone={selected ? "rowSelected" : "textSecondary"}>
+              {o.title}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
 
 function screenTitle(source: DisplayMediaSource) {
   if (source.name && !/^Screen \d+$/.test(source.name)) return source.name;
@@ -301,8 +328,12 @@ function SourceCard({ card, width, thumb, selected, onSelect, onShare }: { card:
             <Text lines={1} size="small" style={CARD_TITLE}>
               {card.title}
             </Text>
-            {card.badge ? <Badge text={card.badge} size="s" /> : null}
           </View>
+          {card.badge ? (
+            <View pointerEvents="none" style={{ position: "absolute", top: 2 * space.m, left: 2 * space.m }}>
+              <Badge text={card.badge} size="s" tone="chip" />
+            </View>
+          ) : null}
         </View>
       </Pressable>
     </View>

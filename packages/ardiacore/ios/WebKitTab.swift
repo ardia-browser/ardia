@@ -475,7 +475,10 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     if let policy = linkPolicy(for: action, url: url) { return decide(policy) }
     applyHTTPSPolicy(action, preferences: preferences)
     if action.targetFrame?.isMainFrame == true, !applyBlockerPolicy(action, preferences: preferences, in: webView) { return decide(.cancel) }
-    applySiteSettings(action, preferences: preferences, in: webView) { decide(action.shouldPerformDownload ? .download : .allow) }
+    applySiteSettings(action, preferences: preferences, in: webView) { [weak self, weak webView] in
+      guard !action.shouldPerformDownload, action.targetFrame?.isMainFrame == true, let self else { return decide(action.shouldPerformDownload ? .download : .allow) }
+      WebKitSiteData.shared.gate(profile: self.profile, url: url, from: webView?.backForwardList.currentItem?.url) { decide(.allow) }
+    }
   }
 
   func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {

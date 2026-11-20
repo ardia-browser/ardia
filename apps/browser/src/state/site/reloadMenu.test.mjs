@@ -62,35 +62,26 @@ function pendingClear(engine) {
   return { id, work, view, engineCalls, asked, finish };
 }
 
-test("Clear Cookies and Site Data clears the site the confirmation named, also when the tab moved on meanwhile", async () => {
-  const stay = pendingClear();
-  assert.deepEqual(stay.asked, ["Clear cookies and site data for a.com?"]);
-  assert.equal(await stay.finish(true), 0);
-  assert.deepEqual(stay.engineCalls, [{ verb: "clearData", profile: stay.work, origin: "https://a.com", engine: "chromium" }]);
-  assert.equal(stay.view.reloaded, 1, "the page reloads without its data");
+const clears = (calls) => calls.filter((c) => c.verb === "clearData").map((c) => [c.origin, c.engine]).sort();
 
-  const moved = pendingClear();
-  S().updateTab(moved.id, { url: "https://b.com/", title: "B" }, {});
-  await moved.finish(true);
-  assert.deepEqual(moved.engineCalls.map((c) => c.origin), ["https://a.com"], "a.com, never b.com");
-  assert.equal(moved.view.cleared, 0, "the page's own clear, which takes whatever it shows now, isn't used");
-  assert.equal(moved.view.reloaded, 0, "and b.com isn't reloaded");
+for (const engine of [undefined, "webkit"])
+  test(`Clear Cookies and Site Data clears the site the confirmation named in both engines, also when the tab moved on meanwhile (${engine ?? "chromium"} tab)`, async () => {
+    const stay = pendingClear(engine);
+    assert.deepEqual(stay.asked, ["Clear cookies and site data for a.com?"]);
+    assert.equal(await stay.finish(true), 0);
+    assert.deepEqual(clears(stay.engineCalls), [["https://a.com", "chromium"], ["https://a.com", "webkit"]]);
+    assert.ok(stay.engineCalls.filter((c) => c.verb === "clearData").every((c) => c.profile === stay.work));
+    assert.equal(stay.view.cleared, 0, "not the view's own clear, which reads the page's host when native runs it");
+    assert.equal(stay.view.reloaded, 1, "the page reloads without its data");
 
-  const declined = pendingClear();
-  assert.equal(await declined.finish(false), null);
-  assert.deepEqual(declined.engineCalls, []);
-});
+    const moved = pendingClear(engine);
+    S().updateTab(moved.id, { url: "https://b.com/", title: "B" }, {});
+    await moved.finish(true);
+    assert.deepEqual(clears(moved.engineCalls), [["https://a.com", "chromium"], ["https://a.com", "webkit"]], "a.com, never b.com");
+    assert.equal(moved.view.cleared, 0);
+    assert.equal(moved.view.reloaded, 0, "and b.com isn't reloaded");
 
-test("a WebKit tab clears the origin its confirmation named in its profile's store, never the page it shows when the clear runs", async () => {
-  const stay = pendingClear("webkit");
-  assert.equal(await stay.finish(true), 0);
-  assert.deepEqual(stay.engineCalls, [{ verb: "clearData", profile: stay.work, origin: "https://a.com", engine: "webkit" }]);
-  assert.equal(stay.view.cleared, 0, "not the view's own clear, which reads the page's host when native runs it");
-  assert.equal(stay.view.reloaded, 1);
-  const moved = pendingClear("webkit");
-  S().updateTab(moved.id, { url: "https://b.com/", title: "B" }, {});
-  await moved.finish(true);
-  assert.deepEqual(moved.engineCalls.map((c) => [c.origin, c.engine]), [["https://a.com", "webkit"]]);
-  assert.equal(moved.view.cleared, 0);
-  assert.equal(moved.view.reloaded, 0);
-});
+    const declined = pendingClear(engine);
+    assert.equal(await declined.finish(false), null);
+    assert.deepEqual(declined.engineCalls, []);
+  });

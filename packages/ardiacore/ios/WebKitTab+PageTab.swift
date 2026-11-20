@@ -105,7 +105,11 @@ extension WebKitTab: PageTab {
 
   func exitPictureInPicture() { setPictureInPicture(false) { _ in } }
 
-  func pageCookies(_ urls: [String], completion: @escaping ([[String: Any]]?) -> Void) { completion([]) }
+  func pageCookies(_ urls: [String], completion: @escaping ([[String: Any]]?) -> Void) {
+    WebKitHub.shared.engineCookies(profile: profile, urls: urls.compactMap(URL.init(string:)), completion: completion)
+  }
+
+  func siteData(_ request: [String: Any], completion: @escaping ([String: Any]?) -> Void) { completion(nil) }
 
   func openBlockedPopup(_ popupId: String, always: Bool) { openBlocked(popupId, always: always) }
 

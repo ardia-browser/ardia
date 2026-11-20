@@ -262,6 +262,12 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)seekPictureInPictureBy:(double)seconds;
 @end
 
+@interface ArdiaWebView (SiteData)
+- (void)siteData:(NSDictionary<NSString *, id> *)request
+      completion:(void (^)(NSDictionary<NSString *, id> *_Nullable reply))completion
+    NS_SWIFT_NAME(siteData(_:completion:));
+@end
+
 @interface ArdiaWebView (Site)
 - (void)securityInfo:(void (^)(NSDictionary<NSString *, id> *info))completion NS_SWIFT_NAME(securityInfo(_:));
 - (void)pageCookies:(NSArray<NSString *> *)urls

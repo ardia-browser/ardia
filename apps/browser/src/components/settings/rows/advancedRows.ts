@@ -95,6 +95,13 @@ export const advancedRows = {
           keywords: ["unsaved", "form", "input", "confirm", "warn", "stay on page", "switch engine", "switching engines"],
           shown: webKitOffered,
         },
+        engineSwitchCarriesSiteData: {
+          title: "Bring sign-ins along",
+          explained: true,
+          description: "A page that switches engines takes its site's cookies and saved data with it, so you stay signed in.",
+          keywords: ["bring sign-ins", "cookies", "site data", "sign in", "logged out", "local storage", "session", "switch engine", "separate sign-ins"],
+          shown: webKitOffered,
+        },
       },
     },
     {

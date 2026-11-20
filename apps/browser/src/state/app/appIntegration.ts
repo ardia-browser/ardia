@@ -12,6 +12,7 @@ import { startWebKitCounts } from "../telemetry/engineSwitchCounts";
 import { startNotificationResponses } from "./notificationResponses";
 import { startHandoff } from "./handoff";
 import { startScripting } from "./scripting";
+import { startSiteData } from "../engines/siteData";
 import { noteReleaseNotesHeldForFirstRun } from "../telemetry/firstRunCounts";
 import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
@@ -21,6 +22,7 @@ export function startAppIntegration() {
   if (PLATFORM_FEATURES.webKit) {
     startWebKitNotifications();
     startWebKitCounts();
+    startSiteData();
   }
   startHandoff();
   startScripting();

@@ -194,6 +194,7 @@ final class WebKitHub: NSObject, WKScriptMessageHandler {
     let removed = stores.forgetProfile(profile)
     WebKitTabHistory.forget(profile: profile)
     certificates.forgetTransportSecurity(profile: profile)
+    WebKitSiteData.shared.forget(profile: profile)
     downloads.cancelAll(profile: profile)
     if let host = stores.takeResumeHost(of: profile) { Self.close(host) }
     let removeStore = {

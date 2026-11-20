@@ -129,6 +129,7 @@ const TOP = [
   ["phishing", ["advanced.webKitFraudWarnings"]],
   ["unsaved", ["advanced.engineSwitchAsksAboutUnsavedWork"]],
   ["seamless", ["advanced.engineSwitchKeepsPage"]],
+  ["bring sign-ins", ["advanced.engineSwitchCarriesSiteData"]],
   ["drm prompt", ["advanced.offerWebKitForProtectedVideo"]],
   ["webkit limitations", ["advanced.enginesDiffer", "general.engineMode"]],
 ];
@@ -319,7 +320,7 @@ test("a row its pane doesn't draw is left out of search, by the same rule the pa
   assert.ok(!unshown({ addressBar: "sidebar" }, { top: true }).has("appearance.compactToolbar"));
   const chromiumOnly = unshown({ engineMode: "chromium" }, { top: false });
   for (const id of ["advanced.pageEngine", "advanced.websiteEngines", "advanced.enginesDiffer", "advanced.offerWebKitForProtectedVideo", "advanced.webKitFraudWarnings"]) assert.ok(chromiumOnly.has(id), id);
-  for (const id of ["general.engineMode", "advanced.engineSwitchKeepsPage", "advanced.engineSwitchAsksAboutUnsavedWork"]) assert.ok(!chromiumOnly.has(id), id);
+  for (const id of ["general.engineMode", "advanced.engineSwitchKeepsPage", "advanced.engineSwitchAsksAboutUnsavedWork", "advanced.engineSwitchCarriesSiteData"]) assert.ok(!chromiumOnly.has(id), id);
   const webkitOnly = unshown({ engineMode: "webkit" }, { top: false });
   for (const id of ["advanced.pageEngine", "advanced.websiteEngines", "advanced.offerWebKitForProtectedVideo"]) assert.ok(webkitOnly.has(id), id);
   for (const id of ["general.engineMode", "advanced.enginesDiffer", "advanced.webKitFraudWarnings"]) assert.ok(!webkitOnly.has(id), id);
